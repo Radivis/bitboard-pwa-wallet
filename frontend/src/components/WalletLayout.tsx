@@ -9,10 +9,10 @@ interface WalletLayoutProps {
   children: ReactNode
 }
 
-const THEME_ICON_MAP = {
+const NEXT_THEME_ICON = {
   light: Moon,
-  dark: Sun,
-  system: Monitor,
+  dark: Monitor,
+  system: Sun,
 } as const
 
 const THEME_CYCLE_LABELS = { light: 'dark', dark: 'system', system: 'light' } as const
@@ -35,7 +35,7 @@ function WalletThemeToggle() {
   const toggleTheme = useThemeStore((state) => state.toggleTheme)
   const resolvedTheme = useResolvedTheme()
 
-  const Icon = THEME_ICON_MAP[themeMode]
+  const Icon = NEXT_THEME_ICON[themeMode]
 
   return (
     <Button
