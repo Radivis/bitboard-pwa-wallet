@@ -1,27 +1,35 @@
 import { type ReactNode } from 'react'
-import { Sun, Moon } from 'lucide-react'
-import { useTheme } from '@/contexts/ThemeContext'
+import { Sun, Moon, Monitor } from 'lucide-react'
+import { useThemeStore, useResolvedTheme } from '@/stores/themeStore'
 import { Button } from '@/components/ui/button'
 
 interface WalletLayoutProps {
   children: ReactNode
 }
 
+const THEME_ICON_MAP = {
+  light: Moon,
+  dark: Sun,
+  system: Monitor,
+} as const
+
 function WalletThemeToggle() {
-  const { mode, toggleTheme } = useTheme()
+  const themeMode = useThemeStore((state) => state.themeMode)
+  const toggleTheme = useThemeStore((state) => state.toggleTheme)
+  const resolvedTheme = useResolvedTheme()
+
+  const Icon = THEME_ICON_MAP[themeMode]
+
+  const NEXT_LABEL = { light: 'dark', dark: 'system', system: 'light' } as const
 
   return (
     <Button
       variant="ghost"
       size="icon"
       onClick={toggleTheme}
-      aria-label={`Switch to ${mode === 'light' ? 'dark' : 'light'} mode`}
+      aria-label={`Switch to ${NEXT_LABEL[themeMode]} mode (currently ${themeMode}${themeMode === 'system' ? `, resolved: ${resolvedTheme}` : ''})`}
     >
-      {mode === 'dark' ? (
-        <Sun className="h-5 w-5" />
-      ) : (
-        <Moon className="h-5 w-5" />
-      )}
+      <Icon className="h-5 w-5" />
     </Button>
   )
 }

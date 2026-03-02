@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createRootRoute, Outlet } from '@tanstack/react-router'
 import { lazy, Suspense } from 'react'
-import { ThemeProvider } from '@/contexts/ThemeContext'
+import { ThemeSynchronizer } from '@/stores/themeStore'
 import { WalletLayout } from '@/components/WalletLayout'
 
 const TanStackRouterDevtools = import.meta.env.DEV
@@ -28,14 +28,13 @@ export const Route = createRootRoute({
 function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
-      <ThemeProvider>
-        <WalletLayout>
-          <Outlet />
-        </WalletLayout>
-        <Suspense>
-          <TanStackRouterDevtools position="bottom-right" />
-        </Suspense>
-      </ThemeProvider>
+      <ThemeSynchronizer />
+      <WalletLayout>
+        <Outlet />
+      </WalletLayout>
+      <Suspense>
+        <TanStackRouterDevtools position="bottom-right" />
+      </Suspense>
     </QueryClientProvider>
   )
 }
