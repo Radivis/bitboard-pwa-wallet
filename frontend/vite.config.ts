@@ -42,9 +42,6 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
-        // Raised from 2MB default because legacy deps (MUI, swagger-ui) inflate the bundle.
-        // Revert to default after Phase 5 cleanup removes them.
-        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,

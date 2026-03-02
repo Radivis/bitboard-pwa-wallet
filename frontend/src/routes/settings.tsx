@@ -3,6 +3,7 @@ import { Sun, Moon, Monitor } from 'lucide-react'
 import { useThemeStore, type ThemeMode } from '@/stores/themeStore'
 import { useWalletStore, NETWORK_LABELS, type NetworkMode } from '@/stores/walletStore'
 import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 
 export const Route = createFileRoute('/settings')({
   component: SettingsPage,
@@ -63,32 +64,35 @@ function SettingsPage() {
     <div className="space-y-6">
       <h2 className="text-2xl font-bold tracking-tight">Settings</h2>
 
-      <div className="rounded-lg border border-border bg-card p-6 text-card-foreground shadow-sm">
-        <h3 className="text-lg font-medium">Network</h3>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Select the Bitcoin network to connect to.
-        </p>
-        <div className="mt-4">
+      <Card>
+        <CardHeader>
+          <CardTitle>Network</CardTitle>
+          <CardDescription>Select the Bitcoin network to connect to.</CardDescription>
+        </CardHeader>
+        <CardContent>
           <NetworkSelector />
-        </div>
-      </div>
+        </CardContent>
+      </Card>
 
-      <div className="rounded-lg border border-border bg-card p-6 text-card-foreground shadow-sm">
-        <h3 className="text-lg font-medium">Appearance</h3>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Choose your preferred color scheme.
-        </p>
-        <div className="mt-4">
+      <Card>
+        <CardHeader>
+          <CardTitle>Appearance</CardTitle>
+          <CardDescription>Choose your preferred color scheme.</CardDescription>
+        </CardHeader>
+        <CardContent>
           <ThemeSelector />
-        </div>
-      </div>
+        </CardContent>
+      </Card>
 
-      <div className="rounded-lg border border-border bg-card p-6 text-card-foreground shadow-sm">
-        <h3 className="text-lg font-medium">About</h3>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Bitboard Wallet &mdash; A Progressive Web App Bitcoin wallet.
-        </p>
-      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>About</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2 text-sm text-muted-foreground">
+          <p>Bitboard Wallet &mdash; A Progressive Web App Bitcoin wallet.</p>
+          <p>Version 0.1.0</p>
+        </CardContent>
+      </Card>
     </div>
   )
 }
