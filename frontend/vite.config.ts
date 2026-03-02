@@ -1,30 +1,80 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import { VitePWA } from 'vite-plugin-pwa'
 
-// Get backend port from environment variable, default to 8000
-const backendPort = process.env.BACKEND_PORT || '8000';
-const backendUrl = `http://127.0.0.1:${backendPort}`;
-
-console.log(`[VITE CONFIG] Backend proxy target: ${backendUrl}`);
-
-// https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react(),
+    VitePWA({
+      registerType: 'autoUpdate',
+      manifest: {
+        name: 'Bitboard Wallet',
+        short_name: 'Bitboard',
+        description: 'A Progressive Web App Bitcoin wallet',
+        theme_color: '#1a1a2e',
+        background_color: '#1a1a2e',
+        display: 'standalone',
+        scope: '/',
+        start_url: '/',
+        icons: [
+          {
+            src: '/pwa-192x192.png',
+            sizes: '192x192',
+            type: 'image/png',
+          },
+          {
+            src: '/pwa-512x512.png',
+            sizes: '512x512',
+            type: 'image/png',
+          },
+          {
+            src: '/pwa-512x512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'maskable',
+          },
+        ],
+      },
+      workbox: {
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        // Raised from 2MB default because legacy deps (MUI, swagger-ui) inflate the bundle.
+        // Revert to default after Phase 5 cleanup removes them.
+        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
+        runtimeCaching: [
+          {
+            urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'google-fonts-cache',
+              expiration: {
+                maxEntries: 10,
+                maxAgeSeconds: 60 * 60 * 24 * 365,
+              },
+              cacheableResponse: {
+                statuses: [0, 200],
+              },
+            },
+          },
+          {
+            urlPattern: /^https:\/\/fonts\.gstatic\.com\/.*/i,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'google-fonts-webfonts',
+              expiration: {
+                maxEntries: 30,
+                maxAgeSeconds: 60 * 60 * 24 * 365,
+              },
+              cacheableResponse: {
+                statuses: [0, 200],
+              },
+            },
+          },
+        ],
+      },
+    }),
+  ],
   server: {
     port: 3000,
-    proxy: {
-      // Proxy all /api requests to backend
-      // All other routes are served by React Router (SPA)
-      '/api': {
-        target: backendUrl,
-        changeOrigin: true,
-      },
-      // Health check endpoint (not under /api)
-      '/health_check': {
-        target: backendUrl,
-        changeOrigin: true,
-      },
-    },
   },
   build: {
     outDir: 'dist',
