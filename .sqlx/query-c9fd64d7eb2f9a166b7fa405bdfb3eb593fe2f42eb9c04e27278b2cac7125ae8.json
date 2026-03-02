@@ -1,0 +1,62 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT \n            bp.id,\n            bp.title,\n            bp.content,\n            bp.status,\n            bp.author_id,\n            u.username as author_username,\n            bp.created_at,\n            bp.updated_at\n        FROM blog_posts bp\n        INNER JOIN users u ON bp.author_id = u.user_id\n        ORDER BY bp.created_at DESC\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "title",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "content",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "status",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "author_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "author_username",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "c9fd64d7eb2f9a166b7fa405bdfb3eb593fe2f42eb9c04e27278b2cac7125ae8"
+}

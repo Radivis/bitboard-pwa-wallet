@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT subscription_token\n            FROM subscription_tokens\n            WHERE subscriber_id = (\n                SELECT id FROM subscriptions WHERE email = $1\n            )\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "subscription_token",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "b67def84d29591610f6843bad09c15cca368227be2f9752b3a2e52fa1b3596e4"
+}

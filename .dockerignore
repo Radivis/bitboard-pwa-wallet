@@ -1,0 +1,13 @@
+.env
+target/
+tests/
+Dockerfile
+scripts/
+frontend/node_modules/
+frontend/dist/
+frontend/playwright-report/
+frontend/test-results/
+.git/
+.github/
+.cursor/
+doc/

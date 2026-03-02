@@ -1,0 +1,40 @@
+---
+description: Applies to reviews and fixes for pull requests
+alwaysApply: false
+---
+# PR Review Workflow
+
+## Phase 1: Agent Code Review → Agent Fixes
+1. Tell agent: "Do a code quality review of PR #X"
+2. Agent MUST:
+   - Perform independent analysis
+   - Look for: DRY violations, magic numbers, architectural issues - also see coding-codex.mdc
+   - Document findings separately in .cursor/pr-reviews
+   - Get approval before fixing (to avoid scope creep)
+3. Rationale: Agentic reviews catch many issues first; saves human time.
+
+## Phase 2: Agent Security Review → Agent Fixes
+1. Tell agent: "Do a security review of PR #X"
+2. Agent MUST:
+   - Check that existing security measures are not weakened by the changes
+   - Identify security implications of new/changed code (auth, inputs, data exposure, etc.)
+   - Suggest improvements for hardening the new code where feasible
+   - Document findings separately; get approval before fixing
+3. Scope: Quick hardening pass—not a substitute for full security audit or penetration testing.
+
+## Phase 3: Human Review → Agent Fixes
+1. Human does manual PR review, leaves comments via GitHub
+2. Tell agent: "Address all review comments in PR #X"
+3. Agent MUST:
+   - Read comments.json first
+   - Summarize all comments with categories
+   - Ask for priority confirmation if needed
+   - Address comments systematically (batches of 5-10)
+   - Update tracking document after each batch
+   - Mark comments as resolved
+
+## Phase 4: Final Verification
+1. Run all tests (`cargo test`, `npm test`)
+2. Check linter errors
+3. Review tracking document—confirm Phase 1, 2, and 3 issues addressed
+4. PR ready for merge

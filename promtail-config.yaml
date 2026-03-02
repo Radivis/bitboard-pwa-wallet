@@ -1,0 +1,64 @@
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+  log_level: info
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+  - job_name: docker
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        refresh_interval: 5s
+    
+    relabel_configs:
+      # Extract container name
+      - source_labels: ['__meta_docker_container_name']
+        regex: '/(.*)'
+        target_label: 'container_name'
+      
+      # Extract compose service name
+      - source_labels: ['__meta_docker_container_label_com_docker_compose_service']
+        target_label: 'compose_service'
+      
+      # Extract compose project name
+      - source_labels: ['__meta_docker_container_label_com_docker_compose_project']
+        target_label: 'compose_project'
+      
+      # Extract container image
+      - source_labels: ['__meta_docker_container_label_com_docker_compose_image']
+        target_label: 'image'
+      
+      # Add job label
+      - replacement: 'docker'
+        target_label: 'job'
+    
+    pipeline_stages:
+      # Parse JSON logs automatically
+      - json:
+          expressions:
+            level: level
+            msg: msg
+            timestamp: timestamp
+            target: target
+            span: span
+      
+      # Use timestamp from JSON if available
+      - timestamp:
+          source: timestamp
+          format: RFC3339Nano
+      
+      # Extract log level as a label
+      - labels:
+          level:
+          target:
+      
+      # Optional: Drop health check logs to reduce noise
+      # Uncomment the following lines if you want to filter out health checks
+      # - drop:
+      #     source: msg
+      #     expression: ".*health_check.*"

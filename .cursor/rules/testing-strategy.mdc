@@ -1,0 +1,43 @@
+---
+description: When implementing a feature, testing also needs to be a primary concern
+alwaysApply: true
+---
+# Testing Strategy
+
+## Priority Order
+1. Backend API integration tests (TDD required)
+2. Frontend component tests (TDD when requirements are clear)
+3. E2E tests (critical paths only)
+4. Unit tests (only for complex logic)
+
+## Backend Testing (STRICT TDD)
+
+When adding or modifying backend API endpoints:
+1. **ALWAYS write integration tests FIRST** before implementation
+2. Tests should call HTTP endpoints (like existing tests in `tests/api/`)
+3. Test the complete request/response cycle, including:
+   - Success cases with valid data
+   - Error cases (401, 400, 404, 500)
+   - Edge cases (empty strings, special characters, etc.)
+   - Authentication/authorization requirements
+4. Run tests with `cargo test` - they must fail before implementation
+5. Implementation is done only after tests exist and fail appropriately
+
+**Example test structure:**
+```rust
+#[tokio::test]
+async fn create_blog_post_returns_201() { /* test first */ }
+
+#[tokio::test] 
+async fn draft_posts_not_visible_publicly() { /* test first */ }
+```
+
+As a general rule of thumb, we want to make sure that the API works as intended, so we focus on integration tests to make sure that it does. We only use unit tests where the implementation details are complicated and covering them with integration tests would be excessive.
+
+## Frontend Testing
+
+Frontend development is often more experimental than backend development, because it's not obvious how the app feels and looks right. That's why we only apply TDD when the specifications are sufficiently clear from the start.
+
+The core functionality (in particular the happy paths) of frontend behavior needs to be covered by end-to-end tests. We use Playwright for that.
+
+Basic component functionality should be covered by component tests using Vitest instead.

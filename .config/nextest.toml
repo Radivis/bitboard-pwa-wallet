@@ -1,0 +1,14 @@
+# .config/nextest.toml
+[store]
+# Keep test artifacts (including our logs!) between runs
+dir = "target/nextest"
+
+[[profile.default.overrides]]
+filter = "test(^zero2prod::)"
+
+[profile.ci]
+junit = { path = "target/nextest/junit.xml" }
+failure-output = "immediate"
+# Do not cancel the test run on the first failure.
+fail-fast = false
+retries = 2

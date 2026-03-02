@@ -1,0 +1,21 @@
+---
+description: Always consider this when planning and debugging
+alwaysApply: false
+---
+# Spec Strategy
+
+The desired behavior of the app - at least where it's not obvious from established best practices - should be documented in the doc directory. The core idea is to use yaml files in a rather intuitive way to describe the intended behavior of the app before starting with the implementation plan.
+
+These yaml files contain:
+- User stories
+- Requirements
+- For pages:
+  - (URI/Navigation) path
+  - Visible elements
+  - Action descriptions for interactive elements
+
+Other details can also be added, when clarification seems useful. Just don't go into excruciating detail - such details may be placed in comments within files, functions, or the OpenAPI documentation.
+
+For an instructive example, see doc/features/blog.yaml
+
+Tests should cover the visibility of specified visible elements and the behavior of the described actions. Defining the functionality covered by tests is the primary purpose of the specification files!

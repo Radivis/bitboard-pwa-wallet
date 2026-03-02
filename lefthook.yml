@@ -1,0 +1,42 @@
+# EXAMPLE USAGE:
+#
+#   Refer for explanation to following link:
+#   https://lefthook.dev/configuration/
+#
+# pre-push:
+#   jobs:
+#     - name: packages audit
+#       tags:
+#         - frontend
+#         - security
+#       run: yarn audit
+#
+#     - name: gems audit
+#       tags:
+#         - backend
+#         - security
+#       run: bundle audit
+#
+output:
+  - execution  # Verbose output
+  - failure    # Always shows errors (default, but explicit is good)
+
+pre-commit:
+  parallel: false
+  commands:
+    fmt:
+      run: cargo fmt
+      stage_fixed: true
+    sqlx:
+      run: cargo sqlx prepare --check --workspace -- --all-targets
+    clippy:
+      run: cargo clippy --workspace --all-targets
+    test-compile:
+      run: cargo test --workspace --no-run
+
+post-commit:
+  commands:
+    e2e-reminder:
+      run: ./scripts/e2e-reminder.sh
+      # Reminds developers to run E2E tests manually
+      priority: 1

@@ -1,0 +1,40 @@
+name: Security audit
+on:
+  schedule:
+    - cron: '0 0 * * *'
+  push:
+    paths:
+      - '**/Cargo.toml'
+      - '**/Cargo.lock'
+      - '**/package.json'
+      - '**/package-lock.json'
+jobs:
+  rust_security_audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: taiki-e/install-action@cargo-deny
+      - name: Scan for vulnerabilities
+        run: cargo deny check advisories
+
+  node_security_audit:
+    runs-on: ubuntu-latest
+    # Socket.dev requires an API token for authentication.
+    # To set this up:
+    # 1. Create a free Socket.dev account at https://socket.dev
+    # 2. Generate an API token from the Socket dashboard
+    # 3. Add the token as a GitHub repository secret named SOCKET_SECURITY_API_KEY
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install Socket CLI
+        run: npm install -g @socketsecurity/cli
+      - name: Run Socket security scan
+        run: |
+          cd frontend
+          socket npm audit --strict
+        env:
+          SOCKET_SECURITY_API_KEY: ${{ secrets.SOCKET_SECURITY_API_KEY }}

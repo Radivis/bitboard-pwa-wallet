@@ -1,0 +1,20 @@
+---
+alwaysApply: false
+globs: ["**/*.rs"]
+---
+Always reason step-by-step about ownership, borrowing, lifetimes, Send/Sync.
+
+Prioritize:
+- Safety: No unwrap/panic in hot paths; use anyhow/thiserror.
+- Async: Prefer spawn_blocking for sync work; avoid blocking the executor.
+- Axum: Use proper extractors (State, Json, Path); handle rejections gracefully.
+- Tests: Check for happy path + error cases + idempotency.
+
+When reviewing code apply the following:
+Severity scale:
+- Critical (breaks compile/run)
+- High (potential bug)
+- Medium (style/perf)
+- Nit (optional)
+
+Output concise, actionable feedback with code diffs where helpful.

@@ -1,0 +1,20 @@
+---
+description: Everything related to CSS, styling, and themeing
+globs: ["frontend/**/*.tsx", "frontend/**/*.ts", "frontend/**/*.css"]
+alwaysApply: false
+---
+
+## MUI as Default for Styling
+We use MUI with light customization for styling to keep things simple. Components should use styled() instead of sx as a general rule of thumb. Use sx for one-off spacing adjustments or simple overrides.
+Only use theme overrides as last resort.
+
+## Color Definitions
+Reasoning with hsl colors is generally easier than reasoning using rgb colors, so colors should be defined via hsl, respectively hsla.
+Colors should always be named, and never be defined inline.
+
+## Themes
+There is a light and a dark theme, but they are both based on identical hues. The primary hue is 255, which is right between blue and violet. The secondary hue is orange in the interval between 15 and 30. With this definition the dark theme results from the light theme via basically inverting the lightness value in hsl scheme.
+
+The theme should feel comfy and provide a contrast that makes it easy to read long texts.
+
+Everything theme related should be placed in the frontend/src/theme/ directory.

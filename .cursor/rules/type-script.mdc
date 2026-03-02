@@ -1,0 +1,21 @@
+---
+alwaysApply: false
+globs: ["frontend/**/*.ts", "frontend/**/*.tsx"]
+---
+TypeScript is JavaScript with types. Please make smart use of types and avoid cheap copouts like using "any".
+
+When using objects as source of truth for possible values, make use of the "as const" and "keyof" features, instead of declaring separate types / interfaces / enums.
+
+Use modern async / await, where appropriate, but always add catch blocks or clauses when awaiting something (even if you are just rethrowing an error - doing this explicity indicates intent)!
+
+Using functional programming is cool, but where performance is critical, go for iterators or just simple for loops.
+
+## React
+
+Always use functional components and extract complex logic into custom hooks.
+
+Always use TanStack / Query when using the REST API.
+
+Avoid complex conditional logic in render functions. Preferably use an early return pattern with a renderContent helper function like in frontend/src/pages/UnsubscribeConfirm.tsx. This keeps the actual return block of the component simple.
+
+

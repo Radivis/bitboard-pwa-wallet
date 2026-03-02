@@ -1,0 +1,21 @@
+/.cursor/cache/
+/.cursor/sessions/
+/.cursor/logs/
+/.cursor/*.log
+# Implementations plans and task summaries are secondary to specifications
+/.cursor/plans/
+/.cursor/task-summaries/
+# PR reviews are performed locally - no need to spam the repo with them
+/.cursor/pr-reviews/
+
+/target
+.env
+!/scripts/README.md
+# Coverage reports
+lcov.info
+/coverage/
+/target/
+/tests/logs/
+/frontend/test-results/
+/frontend/playwright-report/
+/frontend/tests/logs/

@@ -1,0 +1,21 @@
+application:
+  port: 8000
+  # [...]
+  # You need to set the `APP_APPLICATION__HMAC_SECRET` environment variable
+  # on Digital Ocean as well for production!
+  hmac_secret: "long-and-very-secret-random-key-needed-to-verify-message-integrity"
+database:
+  host: "localhost"
+  port: 5432
+  username: "postgres"
+  password: "STOPSERG!2345already"
+  database_name: "newsletter"
+email_client:
+  base_url: "localhost"
+  sender_email: "test@gmail.com"
+  # We are only setting the development value,
+  # we'll deal with the production token outside of version control
+  # (given that it's a sensitive secret!)
+  authorization_token: "my-secret-token"
+  timeout_milliseconds: 10000
+redis_uri: "redis://127.0.0.1:6379"

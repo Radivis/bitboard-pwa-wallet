@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE idempotency\n        SET\n            created_at = $1\n        WHERE\n            user_id = $2 AND\n            idempotency_key = $3\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e8c6ba9424e5adc9e077cd8ed6fc975d40acc6e6362abc11570630e0eb3dc1f0"
+}
