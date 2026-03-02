@@ -37,8 +37,8 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
   const [mode, setMode] = useState<ThemeMode>(getInitialTheme)
 
   useEffect(() => {
-    // Save to localStorage whenever mode changes
     localStorage.setItem(THEME_STORAGE_KEY, mode)
+    document.documentElement.classList.toggle('dark', mode === 'dark')
   }, [mode])
 
   const toggleTheme = () => {
