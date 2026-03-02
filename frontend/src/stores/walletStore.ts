@@ -1,5 +1,6 @@
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
+import { createJSONStorage, persist } from 'zustand/middleware'
+import { indexedDbStorage } from '@/db/storage-adapter'
 
 export type NetworkMode = 'regtest' | 'signet' | 'testnet' | 'mainnet'
 
@@ -21,6 +22,9 @@ export const useWalletStore = create<WalletState>()(
       networkMode: 'signet',
       setNetworkMode: (mode) => set({ networkMode: mode }),
     }),
-    { name: 'wallet-storage' },
+    {
+      name: 'wallet-storage',
+      storage: createJSONStorage(() => indexedDbStorage),
+    },
   ),
 )
