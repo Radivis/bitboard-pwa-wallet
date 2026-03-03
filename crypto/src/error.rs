@@ -22,3 +22,15 @@ impl From<CryptoError> for JsValue {
         JsValue::from_str(&error.to_string())
     }
 }
+
+impl From<bdk_wallet::keys::bip39::Error> for CryptoError {
+    fn from(e: bdk_wallet::keys::bip39::Error) -> Self {
+        CryptoError::Mnemonic(e.to_string())
+    }
+}
+
+impl From<bdk_wallet::descriptor::DescriptorError> for CryptoError {
+    fn from(e: bdk_wallet::descriptor::DescriptorError) -> Self {
+        CryptoError::Descriptor(e.to_string())
+    }
+}

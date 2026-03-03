@@ -10,6 +10,38 @@ alwaysApply: true
 3. E2E tests (critical paths only)
 4. Unit tests (only for complex logic)
 
+## TDD procedure
+
+The red-green-refactor cycle must strictly be followed
+
+### Preparation
+Create a new md file in .cursor/tdd-protocols with a name fitting the current task.
+There you add a table with four columns:
+- Test name
+- Red
+- Green
+- Refactor
+
+### Red Phase
+1. Implement the tests
+2. Add one line in the tdd-protocols table for each test in which only the test name is entered
+3. Run the tests to check that they fail
+4. If the tests fail, because of a compiler failure, address the compiler error first by adding stubs - in Rust use functions with `todo!()` as function body for example
+5. Once the test actually fails - and definitely not due to a compiler error - you add an "x" in the column "Red" of the tdd-protocols table
+6. The first time an "x" is added to the "Red" column, spawn a subagent called "Green/Refactor Worker" with the prompt described in "Green Phase"
+7. Continue your work until every test has failed as described in step 5 and every test has an "x" in the tdd-protocols table
+
+### Green/Refactor Phase
+Your task is to implement the functionality required to pass the tests listed in [enter path to the tdd-protocols file].
+1. Select a test, which has an "x" in the column "Red" and make the necessary implementation changes to make that test pass.
+2. Once that test actually passes, you add an "x" in the column "Green" in the line of that test.
+3. If the changes you made also made other tests pass that previously had an "x" in the colum "Red", but not in the column "Green", then add an "x" in the column "Green".
+4. Select a test, which has an "x" in the column "Green" and refactor the new code you produced to make it cleaner and align with the best practices explained in .cursor/rules/coding-codex.mdc.
+5. Rerun the test and make sure it still passes. If it fails, fix it, until it passes again and then go back to step 4.
+6. Once you are done with the previous step, you add an "x" in the column "Refactor" in the line of the test picked in step 4.
+7. Continue with step 1 until all tests have an "x" in the column "Green" and an "x" in the column "Refactor". If there is no new test with an "x" in the column "Red", but no "x" in the column "Green", sleep for 5 seconds.
+8. If step 7 is completed, report back to your parent agent that your job is done.
+
 ## Backend Testing (STRICT TDD)
 
 When adding or modifying backend API endpoints:
@@ -20,8 +52,8 @@ When adding or modifying backend API endpoints:
    - Error cases (401, 400, 404, 500)
    - Edge cases (empty strings, special characters, etc.)
    - Authentication/authorization requirements
-4. Run tests with `cargo test` - they must fail before implementation
-5. Implementation is done only after tests exist and fail appropriately
+4. Run tests with `cargo test` - they must successfully compile, but fail before implementation
+5. Implementation is done only after tests exist and fail appropriately - do not count compilation errors as failed tests!
 
 **Example test structure:**
 ```rust
