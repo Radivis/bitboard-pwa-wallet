@@ -5,6 +5,7 @@
 # Implementations plans and task summaries are secondary to specifications
 /.cursor/plans/
 /.cursor/task-summaries/
+/.cursor/tdd-protocols/
 # PR reviews are performed locally - no need to spam the repo with them
 /.cursor/pr-reviews/
 

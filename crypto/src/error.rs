@@ -34,3 +34,9 @@ impl From<bdk_wallet::descriptor::DescriptorError> for CryptoError {
         CryptoError::Descriptor(e.to_string())
     }
 }
+
+impl From<serde_json::Error> for CryptoError {
+    fn from(e: serde_json::Error) -> Self {
+        CryptoError::Serialization(e.to_string())
+    }
+}

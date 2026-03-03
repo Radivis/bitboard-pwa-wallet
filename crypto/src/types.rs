@@ -78,3 +78,23 @@ pub struct DescriptorPair {
     pub external: String,
     pub internal: String,
 }
+
+/// Wallet balance broken down by confirmation status.
+/// All amounts are in satoshis.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct BalanceInfo {
+    pub confirmed: u64,
+    pub trusted_pending: u64,
+    pub untrusted_pending: u64,
+    pub immature: u64,
+    pub total: u64,
+}
+
+/// Result returned to JS after creating a new wallet.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CreateWalletResult {
+    pub external_descriptor: String,
+    pub internal_descriptor: String,
+    pub first_address: String,
+    pub changeset_json: String,
+}
