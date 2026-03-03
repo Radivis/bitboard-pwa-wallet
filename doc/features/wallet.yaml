@@ -1,0 +1,179 @@
+feature:
+  name: Wallet
+  description: "Non-custodial Bitcoin wallet with on-chain support"
+  user_stories:
+    - As a user, I want to create a new wallet with a BIP39 mnemonic so I can start using Bitcoin
+    - As a user, I want to import an existing wallet from a mnemonic so I can restore my funds
+    - As a user, I want to choose between Taproot (BIP86) and SegWit (BIP84) address types
+    - As a user, I want to lock my wallet with a password so my funds are protected
+    - As a user, I want to unlock my wallet to access my funds
+    - As a user, I want to receive Bitcoin by displaying an address and QR code
+    - As a user, I want to send Bitcoin to an address
+    - As a user, I want to see my wallet balance and sync status
+    - As a user, I want to view my transaction history
+    - As a user, I want to switch between networks (regtest, signet, testnet, mainnet)
+    - As a user, I want to configure a custom Esplora endpoint
+    - As a user, I want to back up my mnemonic from Settings
+  requirements:
+    - Mnemonic must be 12 or 24 words (BIP39 English wordlist)
+    - All sensitive data encrypted at rest with user password (AES-256-GCM via Argon2id KDF)
+    - Crypto operations run off-main-thread in a Web Worker
+    - Default address type is Taproot (BIP86)
+    - Default network is Signet
+  pages:
+    - CreateWallet:
+      - description: "Multi-step flow to create a new wallet"
+      - path: /setup/create
+      - file: frontend/src/routes/setup/create.tsx
+      - visible_elements:
+        - step indicator showing current step out of total steps
+        - Step 1 - Generate:
+          - word count selector (12 or 24 words)
+          - generate button
+            - click_event:
+              - generate BIP39 mnemonic and advance to step 2
+        - Step 2 - Backup:
+          - mnemonic word grid displaying all words with numbered positions
+          - warning text advising user to write down the words
+          - continue button
+            - click_event:
+              - advance to step 3
+        - Step 3 - Confirm:
+          - prompt to enter specific words by position (e.g. "Enter word #3, #7, #11")
+          - input fields for the requested words
+          - confirm button (disabled until correct words entered)
+            - click_event:
+              - validate words match and advance to step 4
+        - Step 4 - Password:
+          - password input field
+          - password confirmation input field
+          - password strength indicator
+          - create wallet button (disabled until passwords match and meet minimum strength)
+            - click_event:
+              - encrypt mnemonic with password, create wallet, persist to IndexedDB
+              - navigate to Dashboard
+    - ImportWallet:
+      - description: "Import an existing wallet by entering a BIP39 mnemonic"
+      - path: /setup/import
+      - file: frontend/src/routes/setup/import.tsx
+      - visible_elements:
+        - mnemonic input (textarea or individual word inputs)
+        - word count selector (12 or 24 words)
+        - validation indicator showing whether mnemonic is valid
+        - password input field
+        - password confirmation input field
+        - password strength indicator
+        - restore wallet button (disabled until mnemonic is valid and passwords match)
+          - click_event:
+            - validate mnemonic, encrypt with password, restore wallet, persist to IndexedDB
+            - navigate to Dashboard
+    - Dashboard:
+      - description: "Main wallet view showing balance, sync status, and recent transactions"
+      - path: /
+      - file: frontend/src/routes/index.tsx
+      - visible_elements:
+        - wallet balance in BTC and sats
+        - sync status indicator (last synced timestamp, syncing spinner when active)
+        - sync button
+          - click_event:
+            - trigger wallet sync against configured Esplora endpoint
+        - recent transactions list
+          - each transaction shows: direction (sent/received), amount, date, confirmation status
+          - click_event per transaction:
+            - expand to show transaction details (txid, fee, block height)
+        - receive button
+          - click_event:
+            - navigate to Receive page
+        - send button
+          - click_event:
+            - navigate to Send page
+      - requirements:
+        - Wallet must be unlocked to view
+        - If no wallet exists, redirect to CreateWallet or ImportWallet choice
+        - If wallet is locked, show unlock prompt (password input)
+    - Receive:
+      - description: "Display a Bitcoin address and QR code for receiving payments"
+      - path: /receive
+      - file: frontend/src/routes/receive.tsx
+      - visible_elements:
+        - current receive address displayed as text
+        - QR code encoding the current receive address (bitcoin: URI)
+        - copy button
+          - click_event:
+            - copy address to clipboard, show confirmation toast
+        - new address button
+          - click_event:
+            - derive next unused address, update display
+        - address type indicator (Taproot or SegWit)
+      - requirements:
+        - Wallet must be unlocked
+    - Send:
+      - description: "Send Bitcoin to a recipient address"
+      - path: /send
+      - file: frontend/src/routes/send.tsx
+      - visible_elements:
+        - Step 1 - Compose:
+          - recipient address input field with validation
+          - paste button
+            - click_event:
+              - paste address from clipboard
+          - amount input field with BTC/sats toggle
+          - available balance display
+          - send max button
+            - click_event:
+              - set amount to maximum spendable balance minus fees
+          - fee rate selector (low / medium / high / custom sat/vB)
+          - review button (disabled until address is valid and amount is positive)
+            - click_event:
+              - build PSBT, advance to review step
+        - Step 2 - Review:
+          - summary showing recipient, amount, fee, total
+          - confirm and broadcast button
+            - click_event:
+              - sign PSBT, broadcast transaction via Esplora
+              - show success with txid, navigate to Dashboard
+          - back button
+            - click_event:
+              - return to compose step
+      - requirements:
+        - Wallet must be unlocked
+        - Address validation for the current network
+        - Insufficient funds must show clear error
+    - Settings:
+      - description: "Wallet configuration and management"
+      - path: /settings
+      - file: frontend/src/routes/settings.tsx
+      - visible_elements:
+        - Network section:
+          - network selector dropdown (regtest, signet, testnet, mainnet)
+            - click_event:
+              - change active network, re-sync wallet
+          - Esplora endpoint input field with current URL displayed
+          - save endpoint button
+            - click_event:
+              - persist custom Esplora URL for the selected network
+          - reset to default button
+            - click_event:
+              - reset Esplora URL to the default for the selected network
+        - Address type section:
+          - address type selector (Taproot / SegWit)
+            - click_event:
+              - change address derivation type (requires wallet re-creation warning)
+        - Backup section:
+          - show seed phrase button
+            - click_event:
+              - prompt for password confirmation
+              - on success: display mnemonic words in a secure modal
+          - warning text about seed phrase security
+        - Wallet management section:
+          - lock wallet button
+            - click_event:
+              - clear decrypted wallet data from memory, return to locked state
+      - requirements:
+        - Wallet must exist for backup and lock sections to appear
+        - Network and address type settings are available even without a wallet
+        - Default Esplora endpoints per network:
+          - regtest: "http://localhost:3002"
+          - signet: "https://mutinynet.ltbl.io/api"
+          - testnet: "https://mempool.space/testnet/api"
+          - mainnet: "https://mempool.space/api"
