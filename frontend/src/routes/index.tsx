@@ -3,6 +3,7 @@ import { Wallet } from 'lucide-react'
 import { useWalletStore, NETWORK_LABELS } from '@/stores/walletStore'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { greet } from '@/wasm-pkg/bitboard_crypto'
 
 export const Route = createFileRoute('/')({
   component: DashboardPage,
@@ -52,11 +53,19 @@ function RecentTransactions() {
 }
 
 function DashboardPage() {
+  // WASM smoke test - temporary verification
+  const wasmGreeting = greet('Bitboard')
+  console.log('[WASM Smoke Test]', wasmGreeting)
+
   return (
     <div className="space-y-6">
       <h2 className="text-2xl font-bold tracking-tight">Dashboard</h2>
       <BalanceCard />
       <RecentTransactions />
+      {/* Temporary WASM verification message */}
+      <div className="text-xs text-muted-foreground font-mono">
+        WASM Status: {wasmGreeting}
+      </div>
     </div>
   )
 }
