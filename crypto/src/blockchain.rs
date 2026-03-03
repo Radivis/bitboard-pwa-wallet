@@ -7,13 +7,15 @@ use crate::error::CryptoError;
 /// Abstraction over blockchain data sources (e.g. Esplora).
 ///
 /// Decouples wallet operations from the HTTP client, enabling
-/// deterministic testing via `MockBlockchainClient` (generated
-/// by `mockall`) or `wiremock`-backed implementations.
+/// deterministic testing via mock implementations or `wiremock`.
+///
+/// On native targets, futures must be `Send` and the trait requires
+/// `Send + Sync` for thread-safe trait objects. On WASM (single-threaded),
+/// these bounds are relaxed because browser APIs produce `!Send` futures.
+#[cfg(not(target_arch = "wasm32"))]
 #[cfg_attr(test, mockall::automock)]
 #[async_trait]
 pub trait BlockchainClient: Send + Sync {
-    /// Perform a full scan of all wallet script pubkeys against the
-    /// blockchain, returning an update to apply to the wallet.
     async fn full_scan(
         &self,
         wallet: &Wallet,
@@ -21,14 +23,30 @@ pub trait BlockchainClient: Send + Sync {
         parallel_requests: usize,
     ) -> Result<Update, CryptoError>;
 
-    /// Perform an incremental sync of revealed script pubkeys, known
-    /// txids, and known outpoints against the blockchain.
     async fn sync(
         &self,
         wallet: &Wallet,
         parallel_requests: usize,
     ) -> Result<Update, CryptoError>;
 
-    /// Broadcast a fully signed transaction to the network.
+    async fn broadcast(&self, tx: &Transaction) -> Result<Txid, CryptoError>;
+}
+
+#[cfg(target_arch = "wasm32")]
+#[async_trait(?Send)]
+pub trait BlockchainClient {
+    async fn full_scan(
+        &self,
+        wallet: &Wallet,
+        stop_gap: usize,
+        parallel_requests: usize,
+    ) -> Result<Update, CryptoError>;
+
+    async fn sync(
+        &self,
+        wallet: &Wallet,
+        parallel_requests: usize,
+    ) -> Result<Update, CryptoError>;
+
     async fn broadcast(&self, tx: &Transaction) -> Result<Txid, CryptoError>;
 }

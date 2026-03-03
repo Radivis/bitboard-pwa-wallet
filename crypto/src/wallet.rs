@@ -1,7 +1,8 @@
+use bdk_wallet::chain::ChainPosition;
 use bdk_wallet::{ChangeSet, KeychainKind, Wallet};
 
 use crate::error::CryptoError;
-use crate::types::{BalanceInfo, BitcoinNetwork};
+use crate::types::{BalanceInfo, BitcoinNetwork, TransactionDetails};
 
 /// Create a new BDK wallet from external and internal descriptor strings.
 ///
@@ -70,4 +71,33 @@ pub fn serialize_changeset(changeset: &ChangeSet) -> Result<String, CryptoError>
 /// Deserialize a `ChangeSet` from a JSON string.
 pub fn deserialize_changeset(json: &str) -> Result<ChangeSet, CryptoError> {
     serde_json::from_str(json).map_err(Into::into)
+}
+
+/// Return a list of all relevant wallet transactions with summary details.
+pub fn get_transaction_list(wallet: &Wallet) -> Vec<TransactionDetails> {
+    wallet
+        .transactions()
+        .map(|wallet_tx| {
+            let tx = &wallet_tx.tx_node.tx;
+            let txid = tx.compute_txid();
+            let (sent, received) = wallet.sent_and_received(tx);
+            let fee = wallet.calculate_fee(tx).ok();
+
+            let (is_confirmed, confirmation_block_height) = match &wallet_tx.chain_position {
+                ChainPosition::Confirmed { anchor, .. } => {
+                    (true, Some(anchor.block_id.height))
+                }
+                ChainPosition::Unconfirmed { .. } => (false, None),
+            };
+
+            TransactionDetails {
+                txid: txid.to_string(),
+                sent_sats: sent.to_sat(),
+                received_sats: received.to_sat(),
+                fee_sats: fee.map(|f| f.to_sat()),
+                confirmation_block_height,
+                is_confirmed,
+            }
+        })
+        .collect()
 }

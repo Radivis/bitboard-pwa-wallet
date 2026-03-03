@@ -7,7 +7,10 @@ use wasm_bindgen::prelude::*;
 pub mod blockchain;
 pub mod descriptors;
 pub mod error;
+pub mod esplora;
 pub mod mnemonic;
+pub mod sync;
+pub mod transaction;
 pub mod types;
 pub mod wallet;
 
@@ -188,4 +191,144 @@ pub fn export_changeset() -> Result<String, JsValue> {
     ACCUMULATED_CHANGESET.with(|cs| {
         wallet::serialize_changeset(&cs.borrow()).map_err(JsValue::from)
     })
+}
+
+// ---------------------------------------------------------------------------
+// Sync & transaction wrappers (Phase 5)
+// ---------------------------------------------------------------------------
+
+const PARALLEL_REQUESTS: usize = 5;
+
+fn to_js<T: serde::Serialize>(value: &T) -> Result<JsValue, JsValue> {
+    serde_wasm_bindgen::to_value(value).map_err(|e| JsValue::from_str(&e.to_string()))
+}
+
+/// Sync the active wallet against an Esplora server (incremental).
+///
+/// Returns a `SyncResult` with updated balance and changeset JSON.
+#[wasm_bindgen]
+pub async fn sync_wallet(esplora_url: &str) -> Result<JsValue, JsValue> {
+    let client = esplora::EsploraClient::new(esplora_url).map_err(JsValue::from)?;
+
+    let sync_request = with_wallet(|w| w.start_sync_with_revealed_spks())?;
+
+    use bdk_esplora::EsploraAsyncExt;
+    let update: bdk_wallet::Update = client
+        .inner()
+        .sync(sync_request, PARALLEL_REQUESTS)
+        .await
+        .map_err(|e| JsValue::from_str(&e.to_string()))?
+        .into();
+
+    with_wallet_mut(|w| {
+        w.apply_update(update)
+            .map_err(|e| error::CryptoError::Blockchain(e.to_string()))
+    })?
+    .map_err(JsValue::from)?;
+
+    accumulate_staged_changes();
+    build_sync_result()
+}
+
+/// Full scan the active wallet against an Esplora server.
+///
+/// Use after wallet creation or import to discover historical transactions.
+/// Returns a `SyncResult` with updated balance and changeset JSON.
+#[wasm_bindgen]
+pub async fn full_scan_wallet(esplora_url: &str, stop_gap: usize) -> Result<JsValue, JsValue> {
+    let client = esplora::EsploraClient::new(esplora_url).map_err(JsValue::from)?;
+
+    let scan_request = with_wallet(|w| w.start_full_scan())?;
+
+    use bdk_esplora::EsploraAsyncExt;
+    let update: bdk_wallet::Update = client
+        .inner()
+        .full_scan(scan_request, stop_gap, PARALLEL_REQUESTS)
+        .await
+        .map_err(|e| JsValue::from_str(&e.to_string()))?
+        .into();
+
+    with_wallet_mut(|w| {
+        w.apply_update(update)
+            .map_err(|e| error::CryptoError::Blockchain(e.to_string()))
+    })?
+    .map_err(JsValue::from)?;
+
+    accumulate_staged_changes();
+    build_sync_result()
+}
+
+fn build_sync_result() -> Result<JsValue, JsValue> {
+    let balance = with_wallet(|w| wallet::get_balance(w))?;
+    let changeset_json = export_changeset()?;
+    let result = types::SyncResult {
+        balance,
+        changeset_json,
+    };
+    to_js(&result)
+}
+
+/// Build a transaction from the active wallet.
+///
+/// Returns the PSBT serialized as a base64 string.
+#[wasm_bindgen]
+pub fn build_transaction(
+    recipient_address: &str,
+    amount_sats: u64,
+    fee_rate_sat_per_vb: f64,
+    network: &str,
+) -> Result<String, JsValue> {
+    let net = types::BitcoinNetwork::try_from(network).map_err(JsValue::from)?;
+    let psbt = with_wallet_mut(|w| {
+        transaction::build_transaction(w, recipient_address, amount_sats, fee_rate_sat_per_vb, net.into())
+    })?
+    .map_err(JsValue::from)?;
+
+    accumulate_staged_changes();
+    Ok(psbt.to_string())
+}
+
+/// Sign a PSBT and extract the finalized transaction.
+///
+/// Takes a PSBT as base64 string, returns the signed raw transaction as hex.
+#[wasm_bindgen]
+pub fn sign_and_extract_transaction(psbt_base64: &str) -> Result<String, JsValue> {
+    let mut psbt: bitcoin::Psbt = psbt_base64
+        .parse()
+        .map_err(|e: bitcoin::psbt::PsbtParseError| JsValue::from_str(&e.to_string()))?;
+
+    with_wallet(|w| transaction::sign_transaction(w, &mut psbt))?
+        .map_err(JsValue::from)?;
+
+    let tx = transaction::extract_transaction(psbt).map_err(JsValue::from)?;
+    Ok(bitcoin::consensus::encode::serialize_hex(&tx))
+}
+
+/// Broadcast a signed transaction via an Esplora server.
+///
+/// Takes the raw transaction hex and Esplora URL, returns the txid string.
+#[wasm_bindgen]
+pub async fn broadcast_transaction(
+    raw_tx_hex: &str,
+    esplora_url: &str,
+) -> Result<String, JsValue> {
+    let tx_bytes = bitcoin::consensus::encode::deserialize_hex::<bitcoin::Transaction>(raw_tx_hex)
+        .map_err(|e| JsValue::from_str(&e.to_string()))?;
+
+    let client = esplora::EsploraClient::new(esplora_url).map_err(JsValue::from)?;
+
+    use crate::blockchain::BlockchainClient;
+    let txid = client
+        .broadcast(&tx_bytes)
+        .await
+        .map_err(JsValue::from)?;
+
+    Ok(txid.to_string())
+}
+
+/// Return all wallet transactions as a JSON array of `TransactionDetails`.
+#[wasm_bindgen]
+pub fn get_transaction_list() -> Result<JsValue, JsValue> {
+    let tx_list = with_wallet(|w| wallet::get_transaction_list(w))?;
+    to_js(&tx_list)
 }

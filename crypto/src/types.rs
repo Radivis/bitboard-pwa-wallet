@@ -98,3 +98,21 @@ pub struct CreateWalletResult {
     pub first_address: String,
     pub changeset_json: String,
 }
+
+/// Result returned to JS after syncing/scanning the wallet.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SyncResult {
+    pub balance: BalanceInfo,
+    pub changeset_json: String,
+}
+
+/// Summary of a single wallet transaction, returned as part of transaction history.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TransactionDetails {
+    pub txid: String,
+    pub sent_sats: u64,
+    pub received_sats: u64,
+    pub fee_sats: Option<u64>,
+    pub confirmation_block_height: Option<u32>,
+    pub is_confirmed: bool,
+}
