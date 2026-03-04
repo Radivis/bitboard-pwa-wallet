@@ -5,6 +5,14 @@ use bdk_wallet::chain::Merge;
 use bdk_wallet::{ChangeSet, Wallet as BdkWallet};
 use wasm_bindgen::prelude::*;
 
+/// Current Unix time in seconds, sourced from JavaScript's `Date.now()`.
+///
+/// `std::time::SystemTime::now()` panics on `wasm32-unknown-unknown`, so we
+/// must obtain the wall-clock time from the JS host instead.
+fn unix_seconds_now() -> u64 {
+    (js_sys::Date::now() / 1000.0) as u64
+}
+
 pub mod blockchain;
 pub mod descriptors;
 pub mod error;
@@ -34,7 +42,9 @@ where
     F: FnOnce(&BdkWallet) -> R,
 {
     ACTIVE_WALLET.with(|w| {
-        let borrow = w.borrow();
+        let borrow = w.try_borrow().map_err(|_| {
+            JsValue::from_str("Wallet is already borrowed — likely a previous operation panicked")
+        })?;
         let wallet_ref = borrow
             .as_ref()
             .ok_or_else(|| JsValue::from_str("No active wallet. Call create_wallet or load_wallet first."))?;
@@ -47,7 +57,9 @@ where
     F: FnOnce(&mut BdkWallet) -> R,
 {
     ACTIVE_WALLET.with(|w| {
-        let mut borrow = w.borrow_mut();
+        let mut borrow = w.try_borrow_mut().map_err(|_| {
+            JsValue::from_str("Wallet is already borrowed — likely a previous operation panicked")
+        })?;
         let wallet_ref = borrow
             .as_mut()
             .ok_or_else(|| JsValue::from_str("No active wallet. Call create_wallet or load_wallet first."))?;
@@ -220,7 +232,7 @@ fn to_js<T: serde::Serialize>(value: &T) -> Result<JsValue, JsValue> {
 pub async fn sync_wallet(esplora_url: &str) -> Result<JsValue, JsValue> {
     let client = esplora::EsploraClient::new(esplora_url).map_err(JsValue::from)?;
 
-    let sync_request = with_wallet(|w| w.start_sync_with_revealed_spks())?;
+    let sync_request = with_wallet(|w| w.start_sync_with_revealed_spks_at(unix_seconds_now()))?;
 
     use bdk_esplora::EsploraAsyncExt;
     let update: bdk_wallet::Update = client
@@ -248,7 +260,7 @@ pub async fn sync_wallet(esplora_url: &str) -> Result<JsValue, JsValue> {
 pub async fn full_scan_wallet(esplora_url: &str, stop_gap: usize) -> Result<JsValue, JsValue> {
     let client = esplora::EsploraClient::new(esplora_url).map_err(JsValue::from)?;
 
-    let scan_request = with_wallet(|w| w.start_full_scan())?;
+    let scan_request = with_wallet(|w| w.start_full_scan_at(unix_seconds_now()))?;
 
     use bdk_esplora::EsploraAsyncExt;
     let update: bdk_wallet::Update = client
