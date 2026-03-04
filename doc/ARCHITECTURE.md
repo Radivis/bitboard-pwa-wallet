@@ -22,7 +22,9 @@ End to end tests: Playwright
 ### Backend / Crypto
 Language: Rust → WASM (via wasm-bindgen)
 Off-main-thread execution: Web Workers (with Comlink for RPC-like interface)
-Database: IndexedDB + Dexie.js (with encryption for sensitive data)
+Database: Sqlite via OPFS and wa-sqlite + AccessHandlePoolVFS (with encryption for sensitive data)
+Query builder: Kysely
+Encryption: AES-256-GCM + Argon2id (via argon2-browser)
 Crypto primitives: BDK (Bitcoin) + LDK (Lightning) via WASM bindings
 Key generation: Web Crypto API (crypto.getRandomValues)
 Blockchain API: Esplora (light client sync for on-chain)
