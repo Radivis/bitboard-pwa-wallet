@@ -1,5 +1,5 @@
 import { type ReactNode } from 'react'
-import { Link, useMatchRoute } from '@tanstack/react-router'
+import { Link, useMatchRoute, useLocation } from '@tanstack/react-router'
 import { Home, ArrowDownLeft, ArrowUpRight, Settings, Sun, Moon, Monitor, type LucideIcon } from 'lucide-react'
 import { useThemeStore, useResolvedTheme } from '@/stores/themeStore'
 import { Button } from '@/components/ui/button'
@@ -81,6 +81,9 @@ function BottomNavigation() {
 }
 
 export function WalletLayout({ children }: WalletLayoutProps) {
+  const location = useLocation()
+  const isSetupRoute = location.pathname.startsWith('/setup')
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <header className="sticky top-0 z-50 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -92,11 +95,14 @@ export function WalletLayout({ children }: WalletLayoutProps) {
         </div>
       </header>
 
-      <main className="mx-auto max-w-screen-xl px-4 py-6 pb-20">
+      <main className={cn(
+        'mx-auto max-w-screen-xl px-4 py-6',
+        !isSetupRoute && 'pb-20',
+      )}>
         {children}
       </main>
 
-      <BottomNavigation />
+      {!isSetupRoute && <BottomNavigation />}
     </div>
   )
 }

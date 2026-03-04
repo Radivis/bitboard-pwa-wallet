@@ -9,11 +9,20 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as SetupRouteImport } from './routes/setup'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SendRouteImport } from './routes/send'
 import { Route as ReceiveRouteImport } from './routes/receive'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as SetupIndexRouteImport } from './routes/setup/index'
+import { Route as SetupImportRouteImport } from './routes/setup/import'
+import { Route as SetupCreateRouteImport } from './routes/setup/create'
 
+const SetupRoute = SetupRouteImport.update({
+  id: '/setup',
+  path: '/setup',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
@@ -34,18 +43,40 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SetupIndexRoute = SetupIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => SetupRoute,
+} as any)
+const SetupImportRoute = SetupImportRouteImport.update({
+  id: '/import',
+  path: '/import',
+  getParentRoute: () => SetupRoute,
+} as any)
+const SetupCreateRoute = SetupCreateRouteImport.update({
+  id: '/create',
+  path: '/create',
+  getParentRoute: () => SetupRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/receive': typeof ReceiveRoute
   '/send': typeof SendRoute
   '/settings': typeof SettingsRoute
+  '/setup': typeof SetupRouteWithChildren
+  '/setup/create': typeof SetupCreateRoute
+  '/setup/import': typeof SetupImportRoute
+  '/setup/': typeof SetupIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/receive': typeof ReceiveRoute
   '/send': typeof SendRoute
   '/settings': typeof SettingsRoute
+  '/setup/create': typeof SetupCreateRoute
+  '/setup/import': typeof SetupImportRoute
+  '/setup': typeof SetupIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -53,13 +84,41 @@ export interface FileRoutesById {
   '/receive': typeof ReceiveRoute
   '/send': typeof SendRoute
   '/settings': typeof SettingsRoute
+  '/setup': typeof SetupRouteWithChildren
+  '/setup/create': typeof SetupCreateRoute
+  '/setup/import': typeof SetupImportRoute
+  '/setup/': typeof SetupIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/receive' | '/send' | '/settings'
+  fullPaths:
+    | '/'
+    | '/receive'
+    | '/send'
+    | '/settings'
+    | '/setup'
+    | '/setup/create'
+    | '/setup/import'
+    | '/setup/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/receive' | '/send' | '/settings'
-  id: '__root__' | '/' | '/receive' | '/send' | '/settings'
+  to:
+    | '/'
+    | '/receive'
+    | '/send'
+    | '/settings'
+    | '/setup/create'
+    | '/setup/import'
+    | '/setup'
+  id:
+    | '__root__'
+    | '/'
+    | '/receive'
+    | '/send'
+    | '/settings'
+    | '/setup'
+    | '/setup/create'
+    | '/setup/import'
+    | '/setup/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -67,10 +126,18 @@ export interface RootRouteChildren {
   ReceiveRoute: typeof ReceiveRoute
   SendRoute: typeof SendRoute
   SettingsRoute: typeof SettingsRoute
+  SetupRoute: typeof SetupRouteWithChildren
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/setup': {
+      id: '/setup'
+      path: '/setup'
+      fullPath: '/setup'
+      preLoaderRoute: typeof SetupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/settings': {
       id: '/settings'
       path: '/settings'
@@ -99,14 +166,50 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/setup/': {
+      id: '/setup/'
+      path: '/'
+      fullPath: '/setup/'
+      preLoaderRoute: typeof SetupIndexRouteImport
+      parentRoute: typeof SetupRoute
+    }
+    '/setup/import': {
+      id: '/setup/import'
+      path: '/import'
+      fullPath: '/setup/import'
+      preLoaderRoute: typeof SetupImportRouteImport
+      parentRoute: typeof SetupRoute
+    }
+    '/setup/create': {
+      id: '/setup/create'
+      path: '/create'
+      fullPath: '/setup/create'
+      preLoaderRoute: typeof SetupCreateRouteImport
+      parentRoute: typeof SetupRoute
+    }
   }
 }
+
+interface SetupRouteChildren {
+  SetupCreateRoute: typeof SetupCreateRoute
+  SetupImportRoute: typeof SetupImportRoute
+  SetupIndexRoute: typeof SetupIndexRoute
+}
+
+const SetupRouteChildren: SetupRouteChildren = {
+  SetupCreateRoute: SetupCreateRoute,
+  SetupImportRoute: SetupImportRoute,
+  SetupIndexRoute: SetupIndexRoute,
+}
+
+const SetupRouteWithChildren = SetupRoute._addFileChildren(SetupRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ReceiveRoute: ReceiveRoute,
   SendRoute: SendRoute,
   SettingsRoute: SettingsRoute,
+  SetupRoute: SetupRouteWithChildren,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

@@ -32,5 +32,7 @@ export interface TransactionDetails {
   received_sats: number;
   fee_sats: number | null;
   confirmation_block_height: number | null;
+  /** Unix timestamp (seconds) of the block that confirmed this transaction. */
+  confirmation_time: number | null;
   is_confirmed: boolean;
 }

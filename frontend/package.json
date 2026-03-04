@@ -20,7 +20,10 @@
     "test:e2e:headed": "HEADED=true playwright test",
     "test:e2e:sequential": "E2E_SEQUENTIAL=true playwright test",
     "test:e2e:ui": "playwright test --ui",
-    "test:e2e:debug": "playwright test --debug"
+    "test:e2e:debug": "playwright test --debug",
+    "test:regtest:start": "../scripts/start-regtest.sh",
+    "test:regtest:stop": "docker rm -f bitboard-regtest",
+    "test:e2e:regtest": "npm run test:regtest:start && playwright test --grep @regtest"
   },
   "dependencies": {
     "@subframe7536/sqlite-wasm": "^0.5.8",
@@ -30,17 +33,22 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "comlink": "^4.4.2",
+    "date-fns": "^4.1.0",
     "kysely": "^0.28.11",
     "kysely-wasqlite-worker": "^1.2.1",
     "lucide-react": "^0.576.0",
+    "next-themes": "^0.4.6",
+    "qrcode.react": "^4.2.0",
     "radix-ui": "^1.4.3",
     "react": "19.2.4",
     "react-dom": "19.2.4",
+    "sonner": "^2.0.7",
     "tailwind-merge": "^3.5.0",
     "tailwindcss": "^4.2.1",
     "vite-plugin-pwa": "^1.2.0",
     "vite-plugin-wasm": "^3.5.0",
-    "zustand": "^5.0.11"
+    "zustand": "^5.0.11",
+    "zxcvbn": "^4.4.2"
   },
   "devDependencies": {
     "@playwright/test": "1.58.2",
@@ -53,6 +61,7 @@
     "@types/node": "^25.3.3",
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
+    "@types/zxcvbn": "^4.4.5",
     "@typescript-eslint/eslint-plugin": "6.21.0",
     "@typescript-eslint/parser": "6.21.0",
     "@vitejs/plugin-react": "5.1.4",

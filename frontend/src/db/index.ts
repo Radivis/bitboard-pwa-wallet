@@ -10,3 +10,9 @@ export {
 } from './hooks'
 export { walletKeys } from './query-keys'
 export type { Wallet, NewWallet, WalletUpdate, Setting } from './schema'
+export {
+  saveWalletSecrets,
+  loadWalletSecrets,
+  deleteWalletSecrets,
+} from './wallet-persistence'
+export type { WalletSecrets } from './wallet-persistence'
