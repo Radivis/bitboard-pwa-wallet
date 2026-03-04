@@ -32,11 +32,10 @@ Add a table with four columns:
 5. Run tests again. Once a test actually fails at runtime (not due to compilation), add an "x" in the "Red" column for that test in the tdd-protocols table.
 6. If during test writing you discover fundamental design issues, you may revise earlier tests and restart the Red Phase. Document the reason in the tdd-protocols file.
 7. Continue until every test has failed at runtime and every test has an "x" in the Red column.
-8. Once ALL tests have an "x" in the Red column, spawn a subagent called "Green/Refactor Worker" with the prompt described in "Green/Refactor Phase". Include the full path to the tdd-protocols file in the prompt.
-9. Wait for the subagent to complete and report back.
+8. Once ALL tests have an "x" in the Red column, proceed to the green phase below.
 
-### Green/Refactor Phase
-Your task is to implement the functionality required to pass the tests listed in [enter path to the tdd-protocols file].
+### Green Phase
+Implement the functionality required to pass the tests.
 
 **Selection Strategy:** Always prioritize tests in this order:
 1. Tests without "x" in Green column (implement first)
@@ -51,6 +50,8 @@ Your task is to implement the functionality required to pass the tests listed in
 5. If there are still tests without "x" in the Green column, return to step 1.
 6. Once all tests have "x" in the Green column, proceed to the refactoring loop below.
 
+### Refactor Phase
+
 **Refactoring Loop:**
 1. Select a test which has an "x" in the "Green" column but not in the "Refactor" column. Choose the simplest remaining test.
 2. Review all implementation code written so far. Refactor it to be cleaner and align with best practices in `.cursor/rules/coding-codex.mdc`. Focus on:
@@ -62,7 +63,7 @@ Your task is to implement the functionality required to pass the tests listed in
 4. If any test fails, fix the code until all tests pass again, then return to step 2 to continue refactoring.
 5. Once all tests pass and you're satisfied with the code quality, add an "x" in the "Refactor" column for the test you selected in step 1.
 6. If there are still tests without "x" in the Refactor column, return to step 1.
-7. Once all tests have "x" in both Green and Refactor columns, report back to your parent agent that your job is done.
+7. Once all tests have "x" in both Green and Refactor columns, run the full test suite to make sure that your work hasn't caused any regressions - adrress regressions carefully, if you find any.
 
 ## Backend Testing (STRICT TDD)
 
