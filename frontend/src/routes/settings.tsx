@@ -4,6 +4,7 @@ import { useThemeStore, type ThemeMode } from '@/stores/themeStore'
 import { useWalletStore, NETWORK_LABELS, type NetworkMode } from '@/stores/walletStore'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { CryptoTest } from '@/components/CryptoTest'
 
 export const Route = createFileRoute('/settings')({
   component: SettingsPage,
@@ -81,6 +82,16 @@ function SettingsPage() {
         </CardHeader>
         <CardContent>
           <ThemeSelector />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Crypto Test (Development)</CardTitle>
+          <CardDescription>Test WASM crypto operations via Web Worker.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <CryptoTest />
         </CardContent>
       </Card>
 
