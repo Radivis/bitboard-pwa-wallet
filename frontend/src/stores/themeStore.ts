@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
 import { useEffect } from 'react'
-import { indexedDbStorage } from '@/db/storage-adapter'
+import { sqliteStorage } from '@/db/storage-adapter'
 
 export type ThemeMode = 'light' | 'dark' | 'system'
 export type ResolvedTheme = 'light' | 'dark'
@@ -27,7 +27,7 @@ export const useThemeStore = create<ThemeState>()(
     }),
     {
       name: 'theme-storage',
-      storage: createJSONStorage(() => indexedDbStorage),
+      storage: createJSONStorage(() => sqliteStorage),
     },
   ),
 )

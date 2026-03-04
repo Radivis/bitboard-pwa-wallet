@@ -1,34 +1,41 @@
-import 'fake-indexeddb/auto'
-import { beforeEach, afterAll, describe, expect, it } from 'vitest'
-import { BitboardDatabase } from '../database'
-import type { Wallet } from '../models'
+import { beforeEach, afterEach, describe, expect, it } from 'vitest'
+import type { Kysely } from 'kysely'
+import type { Database } from '../schema'
+import { createTestDatabase } from '../test-helpers'
 
-describe('BitboardDatabase', () => {
-  const db = new BitboardDatabase()
+describe('SQLite Database', () => {
+  let db: Kysely<Database>
 
   beforeEach(async () => {
-    await db.wallets.clear()
-    await db.settings.clear()
+    db = await createTestDatabase()
   })
 
-  afterAll(async () => {
-    await db.delete()
+  afterEach(async () => {
+    await db.destroy()
   })
 
   describe('wallets table', () => {
-    function createWallet(overrides: Partial<Omit<Wallet, 'id'>> = {}): Wallet {
+    function createWalletValues(overrides: Partial<{ name: string; network: string; created_at: string }> = {}) {
       return {
         name: 'My Test Wallet',
-        createdAt: new Date(),
         network: 'signet',
+        created_at: new Date().toISOString(),
         ...overrides,
-      } as Wallet
+      }
     }
 
-    it('adds a wallet and retrieves it by id', async () => {
-      const id = await db.wallets.add(createWallet())
+    it('adds a wallet and retrieves it by wallet_id', async () => {
+      const result = await db
+        .insertInto('wallets')
+        .values(createWalletValues())
+        .executeTakeFirstOrThrow()
+      const id = Number(result.insertId)
 
-      const retrieved = await db.wallets.get(id)
+      const retrieved = await db
+        .selectFrom('wallets')
+        .selectAll()
+        .where('wallet_id', '=', id)
+        .executeTakeFirst()
 
       expect(retrieved).toBeDefined()
       expect(retrieved!.name).toBe('My Test Wallet')
@@ -36,40 +43,52 @@ describe('BitboardDatabase', () => {
     })
 
     it('lists all wallets', async () => {
-      await db.wallets.add(createWallet({ name: 'First Wallet' }))
-      await db.wallets.add(createWallet({ name: 'Second Wallet', network: 'mainnet' }))
+      await db.insertInto('wallets').values(createWalletValues({ name: 'First Wallet' })).execute()
+      await db.insertInto('wallets').values(createWalletValues({ name: 'Second Wallet', network: 'mainnet' })).execute()
 
-      const all = await db.wallets.toArray()
+      const all = await db.selectFrom('wallets').selectAll().execute()
 
       expect(all).toHaveLength(2)
     })
 
     it('filters wallets by network', async () => {
-      await db.wallets.add(createWallet({ name: 'Signet Wallet' }))
-      await db.wallets.add(createWallet({ name: 'Mainnet Wallet', network: 'mainnet' }))
-      await db.wallets.add(createWallet({ name: 'Another Signet' }))
+      await db.insertInto('wallets').values(createWalletValues({ name: 'Signet Wallet' })).execute()
+      await db.insertInto('wallets').values(createWalletValues({ name: 'Mainnet Wallet', network: 'mainnet' })).execute()
+      await db.insertInto('wallets').values(createWalletValues({ name: 'Another Signet' })).execute()
 
-      const signetWallets = await db.wallets.where('network').equals('signet').toArray()
+      const signetWallets = await db
+        .selectFrom('wallets')
+        .selectAll()
+        .where('network', '=', 'signet')
+        .execute()
 
       expect(signetWallets).toHaveLength(2)
       expect(signetWallets.every((w) => w.network === 'signet')).toBe(true)
     })
 
     it('updates a wallet', async () => {
-      const id = await db.wallets.add(createWallet())
+      const result = await db
+        .insertInto('wallets')
+        .values(createWalletValues())
+        .executeTakeFirstOrThrow()
+      const id = Number(result.insertId)
 
-      await db.wallets.update(id, { name: 'Renamed Wallet' })
-      const updated = await db.wallets.get(id)
+      await db.updateTable('wallets').set({ name: 'Renamed Wallet' }).where('wallet_id', '=', id).execute()
+      const updated = await db.selectFrom('wallets').selectAll().where('wallet_id', '=', id).executeTakeFirst()
 
       expect(updated!.name).toBe('Renamed Wallet')
       expect(updated!.network).toBe('signet')
     })
 
     it('deletes a wallet', async () => {
-      const id = await db.wallets.add(createWallet())
+      const result = await db
+        .insertInto('wallets')
+        .values(createWalletValues())
+        .executeTakeFirstOrThrow()
+      const id = Number(result.insertId)
 
-      await db.wallets.delete(id)
-      const deleted = await db.wallets.get(id)
+      await db.deleteFrom('wallets').where('wallet_id', '=', id).execute()
+      const deleted = await db.selectFrom('wallets').selectAll().where('wallet_id', '=', id).executeTakeFirst()
 
       expect(deleted).toBeUndefined()
     })
@@ -77,34 +96,38 @@ describe('BitboardDatabase', () => {
 
   describe('settings table', () => {
     it('stores and retrieves a setting by key', async () => {
-      await db.settings.put({ key: 'theme-storage', value: '{"themeMode":"dark"}' })
+      await db.insertInto('settings').values({ key: 'theme-storage', value: '{"themeMode":"dark"}' }).execute()
 
-      const setting = await db.settings.get('theme-storage')
+      const setting = await db.selectFrom('settings').selectAll().where('key', '=', 'theme-storage').executeTakeFirst()
 
       expect(setting).toBeDefined()
       expect(setting!.value).toBe('{"themeMode":"dark"}')
     })
 
-    it('upserts a setting with put', async () => {
-      await db.settings.put({ key: 'app-version', value: '0.1.0' })
-      await db.settings.put({ key: 'app-version', value: '0.2.0' })
+    it('upserts a setting with onConflict', async () => {
+      await db.insertInto('settings').values({ key: 'app-version', value: '0.1.0' }).execute()
+      await db
+        .insertInto('settings')
+        .values({ key: 'app-version', value: '0.2.0' })
+        .onConflict((oc) => oc.column('key').doUpdateSet({ value: '0.2.0' }))
+        .execute()
 
-      const setting = await db.settings.get('app-version')
+      const setting = await db.selectFrom('settings').selectAll().where('key', '=', 'app-version').executeTakeFirst()
 
       expect(setting!.value).toBe('0.2.0')
     })
 
     it('deletes a setting', async () => {
-      await db.settings.put({ key: 'temp-key', value: 'temp-value' })
+      await db.insertInto('settings').values({ key: 'temp-key', value: 'temp-value' }).execute()
 
-      await db.settings.delete('temp-key')
-      const deleted = await db.settings.get('temp-key')
+      await db.deleteFrom('settings').where('key', '=', 'temp-key').execute()
+      const deleted = await db.selectFrom('settings').selectAll().where('key', '=', 'temp-key').executeTakeFirst()
 
       expect(deleted).toBeUndefined()
     })
 
     it('returns undefined for a non-existent key', async () => {
-      const missing = await db.settings.get('does-not-exist')
+      const missing = await db.selectFrom('settings').selectAll().where('key', '=', 'does-not-exist').executeTakeFirst()
 
       expect(missing).toBeUndefined()
     })

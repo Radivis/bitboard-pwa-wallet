@@ -1,24 +1,31 @@
 import type { StateStorage } from 'zustand/middleware'
-import { db } from './database'
+import { getDatabase, ensureMigrated } from './database'
 
-/**
- * Zustand-compatible storage adapter that persists state to IndexedDB
- * via the Dexie `settings` table instead of localStorage.
- *
- * Each Zustand store is stored as a single row keyed by its store name
- * (e.g. "wallet-storage", "theme-storage").
- */
-export const indexedDbStorage: StateStorage = {
+export const sqliteStorage: StateStorage = {
   async getItem(key: string): Promise<string | null> {
-    const setting = await db.settings.get(key)
-    return setting?.value ?? null
+    await ensureMigrated()
+    const row = await getDatabase()
+      .selectFrom('settings')
+      .select('value')
+      .where('key', '=', key)
+      .executeTakeFirst()
+    return row?.value ?? null
   },
 
   async setItem(key: string, value: string): Promise<void> {
-    await db.settings.put({ key, value })
+    await ensureMigrated()
+    await getDatabase()
+      .insertInto('settings')
+      .values({ key, value })
+      .onConflict((oc) => oc.column('key').doUpdateSet({ value }))
+      .execute()
   },
 
   async removeItem(key: string): Promise<void> {
-    await db.settings.delete(key)
+    await ensureMigrated()
+    await getDatabase()
+      .deleteFrom('settings')
+      .where('key', '=', key)
+      .execute()
   },
 }

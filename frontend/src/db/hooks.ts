@@ -1,28 +1,93 @@
-import { useLiveQuery } from 'dexie-react-hooks'
-import { db } from './database'
-import type { Wallet } from './models'
-import type { NetworkMode } from '@/stores/walletStore'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { getDatabase, ensureMigrated } from './database'
+import { walletKeys } from './query-keys'
+import type { NewWallet, WalletUpdate } from './schema'
 
 export function useWallets() {
-  return useLiveQuery(() => db.wallets.toArray()) ?? []
+  return useQuery({
+    queryKey: walletKeys.all,
+    queryFn: async () => {
+      await ensureMigrated()
+      return getDatabase().selectFrom('wallets').selectAll().execute()
+    },
+  })
 }
 
-export function useWalletsByNetwork(network: NetworkMode) {
-  return useLiveQuery(() => db.wallets.where('network').equals(network).toArray(), [network]) ?? []
+export function useWalletsByNetwork(network: string) {
+  return useQuery({
+    queryKey: walletKeys.byNetwork(network),
+    queryFn: async () => {
+      await ensureMigrated()
+      return getDatabase()
+        .selectFrom('wallets')
+        .selectAll()
+        .where('network', '=', network)
+        .execute()
+    },
+  })
 }
 
 export function useWallet(id: number) {
-  return useLiveQuery(() => db.wallets.get(id), [id])
+  return useQuery({
+    queryKey: walletKeys.byId(id),
+    queryFn: async () => {
+      await ensureMigrated()
+      const wallet = await getDatabase()
+        .selectFrom('wallets')
+        .selectAll()
+        .where('wallet_id', '=', id)
+        .executeTakeFirst()
+      return wallet ?? null
+    },
+  })
 }
 
-export async function addWallet(wallet: Omit<Wallet, 'id'>): Promise<number> {
-  return db.wallets.add(wallet as Wallet)
+export function useAddWallet() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (wallet: NewWallet) => {
+      await ensureMigrated()
+      const result = await getDatabase()
+        .insertInto('wallets')
+        .values(wallet)
+        .executeTakeFirstOrThrow()
+      return Number(result.insertId)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: walletKeys.all })
+    },
+  })
 }
 
-export async function updateWallet(id: number, changes: Partial<Wallet>): Promise<number> {
-  return db.wallets.update(id, changes)
+export function useUpdateWallet() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ id, changes }: { id: number; changes: WalletUpdate }) => {
+      await ensureMigrated()
+      await getDatabase()
+        .updateTable('wallets')
+        .set(changes)
+        .where('wallet_id', '=', id)
+        .execute()
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: walletKeys.all })
+    },
+  })
 }
 
-export async function deleteWallet(id: number): Promise<void> {
-  return db.wallets.delete(id)
+export function useDeleteWallet() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (id: number) => {
+      await ensureMigrated()
+      await getDatabase()
+        .deleteFrom('wallets')
+        .where('wallet_id', '=', id)
+        .execute()
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: walletKeys.all })
+    },
+  })
 }

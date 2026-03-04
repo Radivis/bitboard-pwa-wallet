@@ -18,6 +18,7 @@ bdk_wallet = { version = "2.3", features = ["keys-bip39"] }
 bdk_esplora = { version = "0.22", default-features = false, features = ["async", "tokio"] }
 wasm-bindgen-futures = "0.4"
 bitcoin = { version = "0.32", default-features = false, features = ["secp-lowmemory", "std"] }
+argon2 = { version = "0.5", features = ["std"] }
 
 [dev-dependencies]
 wiremock = "0.6"

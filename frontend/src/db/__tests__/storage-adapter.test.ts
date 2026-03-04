@@ -1,38 +1,46 @@
-import 'fake-indexeddb/auto'
-import { afterAll, beforeEach, describe, expect, it } from 'vitest'
-import { BitboardDatabase } from '../database'
+import { beforeEach, afterEach, describe, expect, it } from 'vitest'
+import type { Kysely } from 'kysely'
 import type { StateStorage } from 'zustand/middleware'
+import type { Database } from '../schema'
+import { createTestDatabase } from '../test-helpers'
 
-/**
- * Creates a storage adapter backed by the given database instance,
- * mirroring the production indexedDbStorage implementation.
- */
-function createStorageAdapter(db: BitboardDatabase): StateStorage {
+function createStorageAdapter(db: Kysely<Database>): StateStorage {
   return {
     async getItem(key: string): Promise<string | null> {
-      const setting = await db.settings.get(key)
-      return setting?.value ?? null
+      const row = await db
+        .selectFrom('settings')
+        .select('value')
+        .where('key', '=', key)
+        .executeTakeFirst()
+      return row?.value ?? null
     },
     async setItem(key: string, value: string): Promise<void> {
-      await db.settings.put({ key, value })
+      await db
+        .insertInto('settings')
+        .values({ key, value })
+        .onConflict((oc) => oc.column('key').doUpdateSet({ value }))
+        .execute()
     },
     async removeItem(key: string): Promise<void> {
-      await db.settings.delete(key)
+      await db
+        .deleteFrom('settings')
+        .where('key', '=', key)
+        .execute()
     },
   }
 }
 
-describe('indexedDbStorage adapter', () => {
-  const db = new BitboardDatabase()
+describe('sqliteStorage adapter', () => {
+  let db: Kysely<Database>
   let storage: StateStorage
 
   beforeEach(async () => {
-    await db.settings.clear()
+    db = await createTestDatabase()
     storage = createStorageAdapter(db)
   })
 
-  afterAll(async () => {
-    await db.delete()
+  afterEach(async () => {
+    await db.destroy()
   })
 
   it('returns null for a missing key', async () => {

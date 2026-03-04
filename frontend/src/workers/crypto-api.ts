@@ -52,4 +52,6 @@ export interface CryptoService {
   ): Promise<string>;
   
   getTransactionList(): Promise<TransactionDetails[]>;
+
+  deriveArgon2Key(password: string, salt: Uint8Array): Promise<Uint8Array>;
 }
