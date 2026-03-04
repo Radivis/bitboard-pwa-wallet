@@ -83,12 +83,15 @@ pub fn get_transaction_list(wallet: &Wallet) -> Vec<TransactionDetails> {
             let (sent, received) = wallet.sent_and_received(tx);
             let fee = wallet.calculate_fee(tx).ok();
 
-            let (is_confirmed, confirmation_block_height) = match &wallet_tx.chain_position {
-                ChainPosition::Confirmed { anchor, .. } => {
-                    (true, Some(anchor.block_id.height))
-                }
-                ChainPosition::Unconfirmed { .. } => (false, None),
-            };
+            let (is_confirmed, confirmation_block_height, confirmation_time) =
+                match &wallet_tx.chain_position {
+                    ChainPosition::Confirmed { anchor, .. } => (
+                        true,
+                        Some(anchor.block_id.height),
+                        Some(anchor.confirmation_time),
+                    ),
+                    ChainPosition::Unconfirmed { .. } => (false, None, None),
+                };
 
             TransactionDetails {
                 txid: txid.to_string(),
@@ -96,6 +99,7 @@ pub fn get_transaction_list(wallet: &Wallet) -> Vec<TransactionDetails> {
                 received_sats: received.to_sat(),
                 fee_sats: fee.map(|f| f.to_sat()),
                 confirmation_block_height,
+                confirmation_time,
                 is_confirmed,
             }
         })

@@ -1,5 +1,10 @@
 import { create } from 'zustand';
-import { getCryptoWorker, terminateCryptoWorker } from '@/workers/crypto-factory';
+import {
+  getCryptoWorker,
+  terminateCryptoWorker,
+  onWorkerHealthChange,
+  type WorkerHealthStatus,
+} from '@/workers/crypto-factory';
 import type { Remote } from 'comlink';
 import type { CryptoService } from '@/workers/crypto-api';
 import type {
@@ -15,6 +20,8 @@ import type {
 interface CryptoState {
   _worker: Remote<CryptoService> | null;
   error: string | null;
+  workerHealth: WorkerHealthStatus;
+  workerError: string | null;
 
   _getWorker: () => Remote<CryptoService>;
 
@@ -66,7 +73,6 @@ interface CryptoState {
 }
 
 export const useCryptoStore = create<CryptoState>((set, get) => {
-  // Helper to wrap worker calls with error handling
   const withErrorHandling = async <T,>(
     workerCall: (worker: Remote<CryptoService>) => Promise<T>
   ): Promise<T> => {
@@ -84,12 +90,18 @@ export const useCryptoStore = create<CryptoState>((set, get) => {
   return {
     _worker: null,
     error: null,
+    workerHealth: 'initializing',
+    workerError: null,
 
     _getWorker: () => {
       let worker = get()._worker;
       if (!worker) {
         worker = getCryptoWorker();
         set({ _worker: worker });
+
+        onWorkerHealthChange((status, error) => {
+          set({ workerHealth: status, workerError: error });
+        });
       }
       return worker;
     },
@@ -148,7 +160,7 @@ export const useCryptoStore = create<CryptoState>((set, get) => {
 
     terminateWorker: () => {
       terminateCryptoWorker();
-      set({ _worker: null, error: null });
+      set({ _worker: null, error: null, workerHealth: 'initializing', workerError: null });
     },
   };
 });

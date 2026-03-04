@@ -14,9 +14,15 @@ pub mod sync;
 pub mod transaction;
 pub mod types;
 pub mod wallet;
+pub mod wasm_sleep;
 
 #[cfg(test)]
 mod tests;
+
+#[wasm_bindgen(start)]
+pub fn init() {
+    console_error_panic_hook::set_once();
+}
 
 thread_local! {
     static ACTIVE_WALLET: RefCell<Option<BdkWallet>> = RefCell::new(None);

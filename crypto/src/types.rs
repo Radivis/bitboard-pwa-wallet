@@ -114,5 +114,7 @@ pub struct TransactionDetails {
     pub received_sats: u64,
     pub fee_sats: Option<u64>,
     pub confirmation_block_height: Option<u32>,
+    /// Unix timestamp (seconds) of the block that confirmed this transaction.
+    pub confirmation_time: Option<u64>,
     pub is_confirmed: bool,
 }

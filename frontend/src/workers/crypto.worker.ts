@@ -2,15 +2,36 @@ import { expose } from 'comlink';
 import type { AddressType, BitcoinNetwork, BalanceInfo, CreateWalletResult, DescriptorPair, SyncResult, TransactionDetails } from './crypto-types';
 
 let wasm: typeof import('@/wasm-pkg/bitboard_crypto') | null = null;
+let wasmInitError: string | null = null;
 
 async function getWasm() {
+  if (wasmInitError) {
+    throw new Error(`WASM init failed: ${wasmInitError}`);
+  }
   if (!wasm) {
     wasm = await import('@/wasm-pkg/bitboard_crypto');
   }
   return wasm;
 }
 
+async function initWasm() {
+  try {
+    wasm = await import('@/wasm-pkg/bitboard_crypto');
+    console.info('[crypto.worker] WASM module loaded successfully');
+  } catch (err) {
+    wasmInitError = err instanceof Error ? err.message : String(err);
+    console.error('[crypto.worker] WASM init failed:', wasmInitError);
+  }
+}
+
+initWasm();
+
 const cryptoService = {
+  async ping(): Promise<boolean> {
+    await getWasm();
+    return true;
+  },
+
   async generateMnemonic(wordCount: 12 | 24): Promise<string> {
     const wasmModule = await getWasm();
     return wasmModule.generate_mnemonic(wordCount);

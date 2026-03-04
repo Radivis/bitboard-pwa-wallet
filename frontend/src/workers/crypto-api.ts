@@ -9,6 +9,9 @@ import type {
 } from './crypto-types';
 
 export interface CryptoService {
+  /** Lightweight health check -- resolves `true` if WASM is loaded. */
+  ping(): Promise<boolean>;
+
   generateMnemonic(wordCount: 12 | 24): Promise<string>;
   validateMnemonic(mnemonic: string): Promise<boolean>;
   deriveDescriptors(

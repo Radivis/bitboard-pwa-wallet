@@ -29,4 +29,5 @@ Crypto primitives: BDK (Bitcoin) + LDK (Lightning) via WASM bindings
 Key generation: Web Crypto API (crypto.getRandomValues)
 Blockchain API: Esplora (light client sync for on-chain)
 Lightning node: ldk-node
+Regtest library: bitcoinerlab/tester
 Regtest / Signet / Testnet mode: Built-in via ldk-node / BDK configs

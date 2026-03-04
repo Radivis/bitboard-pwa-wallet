@@ -5,9 +5,10 @@ use bitcoin::{Transaction, Txid};
 
 use crate::blockchain::BlockchainClient;
 use crate::error::CryptoError;
+use crate::wasm_sleep::WasmSleeper;
 
 pub struct EsploraClient {
-    client: bdk_esplora::esplora_client::AsyncClient,
+    client: bdk_esplora::esplora_client::AsyncClient<WasmSleeper>,
 }
 
 impl EsploraClient {
@@ -18,7 +19,7 @@ impl EsploraClient {
             ));
         }
         let client = bdk_esplora::esplora_client::Builder::new(url)
-            .build_async()
+            .build_async_with_sleeper::<WasmSleeper>()
             .map_err(|e| CryptoError::Blockchain(e.to_string()))?;
         Ok(Self { client })
     }
@@ -27,7 +28,7 @@ impl EsploraClient {
     ///
     /// Used by WASM wrappers that need to separate the request-building
     /// step (which borrows the wallet) from the async network call.
-    pub fn inner(&self) -> &bdk_esplora::esplora_client::AsyncClient {
+    pub fn inner(&self) -> &bdk_esplora::esplora_client::AsyncClient<WasmSleeper> {
         &self.client
     }
 }
