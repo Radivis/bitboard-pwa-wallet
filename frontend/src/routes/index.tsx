@@ -160,7 +160,7 @@ function RecentTransactions() {
   )
 }
 
-function DashboardPage() {
+export function DashboardPage() {
   const navigate = useNavigate()
   const activeWalletId = useWalletStore((s) => s.activeWalletId)
   const walletStatus = useWalletStore((s) => s.walletStatus)

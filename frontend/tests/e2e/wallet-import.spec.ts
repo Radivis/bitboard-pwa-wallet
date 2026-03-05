@@ -1,0 +1,25 @@
+import { test, expect } from '@playwright/test'
+import { TEST_MNEMONIC, TEST_PASSWORD } from './helpers/wallet-setup'
+
+test.describe('Wallet Import Flow', () => {
+  test('wallet import full flow', async ({ page }) => {
+    await page.goto('/setup')
+    await page.getByRole('button', { name: 'Import Wallet' }).click()
+
+    await expect(page.getByRole('heading', { name: 'Import Wallet' })).toBeVisible()
+    await expect(page.getByText('Enter Seed Phrase')).toBeVisible()
+
+    await page.getByLabel('Seed Phrase').fill(TEST_MNEMONIC)
+
+    await expect(page.getByText('Valid mnemonic')).toBeVisible({ timeout: 10000 })
+
+    await page.getByLabel('Password', { exact: true }).fill(TEST_PASSWORD)
+    await page.getByLabel('Confirm Password', { exact: true }).fill(TEST_PASSWORD)
+
+    await expect(page.getByRole('button', { name: 'Restore Wallet' })).toBeEnabled()
+    await page.getByRole('button', { name: 'Restore Wallet' }).click()
+
+    await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible({ timeout: 60000 })
+    await expect(page.getByText('Balance')).toBeVisible()
+  })
+})

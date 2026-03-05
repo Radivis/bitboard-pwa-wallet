@@ -419,7 +419,7 @@ function WalletManagement() {
   )
 }
 
-function SettingsPage() {
+export function SettingsPage() {
   const activeWalletId = useWalletStore((s) => s.activeWalletId)
 
   return (

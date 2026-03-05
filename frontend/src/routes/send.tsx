@@ -33,7 +33,7 @@ const FEE_PRESETS = [
   { label: 'High', rate: 5 },
 ] as const
 
-function SendPage() {
+export function SendPage() {
   const navigate = useNavigate()
   const activeWalletId = useWalletStore((s) => s.activeWalletId)
   const walletStatus = useWalletStore((s) => s.walletStatus)

@@ -22,7 +22,7 @@ export const Route = createFileRoute('/setup/create')({
 
 type Step = 1 | 2 | 3 | 4
 
-function CreateWalletPage() {
+export function CreateWalletPage() {
   const navigate = useNavigate()
   const [step, setStep] = useState<Step>(1)
   const [wordCount, setWordCount] = useState<12 | 24>(12)

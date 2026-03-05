@@ -21,7 +21,7 @@ export const Route = createFileRoute('/setup/import')({
   component: ImportWalletPage,
 })
 
-function ImportWalletPage() {
+export function ImportWalletPage() {
   const navigate = useNavigate()
   const [mnemonicInput, setMnemonicInput] = useState('')
   const [password, setPassword] = useState('')

@@ -8,7 +8,11 @@ import wasm from 'vite-plugin-wasm'
 
 export default defineConfig({
   plugins: [
-    tanstackRouter({ target: 'react', autoCodeSplitting: true }),
+    tanstackRouter({
+      target: 'react',
+      autoCodeSplitting: true,
+      routeFileIgnorePattern: '__tests__',
+    }),
     react(),
     tailwindcss(),
     wasm(),

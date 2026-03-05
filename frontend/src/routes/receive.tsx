@@ -17,7 +17,7 @@ export const Route = createFileRoute('/receive')({
   component: ReceivePage,
 })
 
-function ReceivePage() {
+export function ReceivePage() {
   const navigate = useNavigate()
   const activeWalletId = useWalletStore((s) => s.activeWalletId)
   const walletStatus = useWalletStore((s) => s.walletStatus)
