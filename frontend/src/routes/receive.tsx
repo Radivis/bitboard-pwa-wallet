@@ -28,29 +28,20 @@ function ReceivePage() {
   const getNewAddress = useCryptoStore((s) => s.getNewAddress)
   const exportChangeset = useCryptoStore((s) => s.exportChangeset)
 
-  if (!activeWalletId) {
-    navigate({ to: '/setup' })
-    return null
-  }
-
-  if (walletStatus === 'locked') {
-    return <WalletUnlock />
-  }
-
   useEffect(() => {
     if (!currentAddress && walletStatus === 'unlocked') {
       loadAddress()
     }
-  }, [currentAddress, walletStatus])
 
-  async function loadAddress() {
-    try {
-      const address = await getNewAddress()
-      setCurrentAddress(address)
-    } catch {
-      toast.error('Failed to generate address')
+    async function loadAddress() {
+      try {
+        const address = await getNewAddress()
+        setCurrentAddress(address)
+      } catch {
+        toast.error('Failed to generate address')
+      }
     }
-  }
+  }, [currentAddress, walletStatus, getNewAddress, setCurrentAddress])
 
   const handleNewAddress = useCallback(async () => {
     try {
@@ -77,6 +68,15 @@ function ReceivePage() {
       toast.error('Failed to copy address')
     }
   }, [currentAddress])
+
+  if (!activeWalletId) {
+    navigate({ to: '/setup' })
+    return null
+  }
+
+  if (walletStatus === 'locked') {
+    return <WalletUnlock />
+  }
 
   return (
     <div className="space-y-6">
