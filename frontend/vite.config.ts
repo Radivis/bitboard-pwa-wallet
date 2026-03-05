@@ -84,6 +84,28 @@ export default defineConfig({
   },
   server: {
     port: 3000,
+    proxy: {
+      '/esplora-proxy/signet': {
+        target: 'https://mempool.space',
+        changeOrigin: true,
+        secure: true,
+        rewrite: (path) =>
+          path.replace(/^\/esplora-proxy\/signet/, '/signet/api'),
+      },
+      '/esplora-proxy/testnet': {
+        target: 'https://mempool.space',
+        changeOrigin: true,
+        secure: true,
+        rewrite: (path) =>
+          path.replace(/^\/esplora-proxy\/testnet/, '/testnet/api'),
+      },
+      '/esplora-proxy/mainnet': {
+        target: 'https://mempool.space',
+        changeOrigin: true,
+        secure: true,
+        rewrite: (path) => path.replace(/^\/esplora-proxy\/mainnet/, '/api'),
+      },
+    },
   },
   optimizeDeps: {
     exclude: ['kysely-wasqlite-worker'],

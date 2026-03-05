@@ -3,9 +3,15 @@ import type { BitcoinNetwork, TransactionDetails } from '@/workers/crypto-types'
 
 export const DEFAULT_ESPLORA_URLS: Record<NetworkMode, string> = {
   regtest: 'http://localhost:3002',
-  signet: 'https://mutinynet.ltbl.io/api',
+  signet: 'https://mempool.space/signet/api',
   testnet: 'https://mempool.space/testnet/api',
   mainnet: 'https://mempool.space/api',
+}
+
+const DEV_ESPLORA_PROXY_PATHS: Partial<Record<NetworkMode, string>> = {
+  signet: '/esplora-proxy/signet',
+  testnet: '/esplora-proxy/testnet',
+  mainnet: '/esplora-proxy/mainnet',
 }
 
 const NETWORK_MODE_TO_BITCOIN: Record<NetworkMode, BitcoinNetwork> = {
@@ -47,7 +53,16 @@ export function getEsploraUrl(
   network: NetworkMode,
   customUrl?: string | null,
 ): string {
-  return customUrl || DEFAULT_ESPLORA_URLS[network]
+  if (customUrl) return customUrl
+
+  if (import.meta.env.DEV) {
+    const proxyPath = DEV_ESPLORA_PROXY_PATHS[network]
+    if (proxyPath) {
+      return `${globalThis.location.origin}${proxyPath}`
+    }
+  }
+
+  return DEFAULT_ESPLORA_URLS[network]
 }
 
 export function truncateAddress(
