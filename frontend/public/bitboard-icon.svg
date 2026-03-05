@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 56" fill="none" aria-hidden="true">
+  <defs>
+    <style>
+      .stroke { stroke: #0f172a; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+      .fill-green { fill: #16a34a; }
+      .fill-cyan { fill: #06b6d4; }
+      .fill-orange { fill: #ea580c; }
+      .fill-white { fill: #fff; }
+    </style>
+  </defs>
+  <!-- Baseline -->
+  <line x1="4" y1="52" x2="96" y2="52" class="stroke" stroke-width="1.5" />
+  <!-- Red 0: recognizable zero as elliptical ring (not fat filled ellipse) -->
+  <ellipse cx="24" cy="34" rx="8" ry="16" fill="none" stroke="#dc2626" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" />
+  <!-- Cyan ramp: same thickness as 1 (width 6) or slightly less; strip from 0 to top of 1 -->
+  <path d="M28.5 47.2 L52 12 L54.5 13.67 L31 48.87 Z" class="fill-cyan stroke" />
+  <!-- Green 1: serif at top so it reads as "1" not "l" -->
+  <path d="M53 8 L56 12 L56 52 L50 52 L50 12 Z" class="fill-green stroke" />
+  <!-- Orange Bitcoin circle -->
+  <circle cx="54" cy="12" r="10" class="fill-orange stroke" />
+  <!-- Bitcoin B -->
+  <text x="54" y="17" text-anchor="middle" font-family="system-ui, sans-serif" font-size="14" font-weight="bold" class="fill-white">B</text>
+</svg>

@@ -24,7 +24,7 @@ Language: Rust → WASM (via wasm-bindgen)
 Off-main-thread execution: Web Workers (with Comlink for RPC-like interface)
 Database: Sqlite via OPFS and wa-sqlite + AccessHandlePoolVFS (with encryption for sensitive data)
 Query builder: Kysely
-Encryption: AES-256-GCM + Argon2id (via argon2-browser)
+Encryption: AES-256-GCM + Argon2id (via argon2 Rust crate)
 Crypto primitives: BDK (Bitcoin) + LDK (Lightning) via WASM bindings
 Key generation: Web Crypto API (crypto.getRandomValues)
 Blockchain API: Esplora (light client sync for on-chain)

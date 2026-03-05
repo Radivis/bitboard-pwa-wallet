@@ -11,7 +11,16 @@ function SetupWelcome() {
   return (
     <div className="space-y-6">
       <div className="text-center">
-        <h1 className="text-3xl font-bold tracking-tight">Bitboard Wallet</h1>
+        <h1 className="flex items-center justify-center gap-3 text-3xl font-bold tracking-tight">
+          <img
+            src="/bitboard-icon.svg"
+            alt=""
+            className="h-10 w-10 shrink-0"
+            width={40}
+            height={40}
+          />
+          Bitboard Wallet
+        </h1>
         <p className="mt-2 text-muted-foreground">
           A self-custody Bitcoin wallet in your browser.
         </p>

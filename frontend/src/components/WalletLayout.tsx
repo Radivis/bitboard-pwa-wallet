@@ -88,7 +88,14 @@ export function WalletLayout({ children }: WalletLayoutProps) {
     <div className="min-h-screen bg-background text-foreground">
       <header className="sticky top-0 z-50 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="mx-auto flex h-14 max-w-screen-xl items-center justify-between px-4">
-          <h1 className="text-lg font-semibold tracking-tight">
+          <h1 className="flex items-center gap-2 text-lg font-semibold tracking-tight">
+            <img
+              src="/bitboard-icon.svg"
+              alt=""
+              className="h-7 w-7 shrink-0"
+              width={28}
+              height={28}
+            />
             Bitboard Wallet
           </h1>
           <WalletThemeToggle />
