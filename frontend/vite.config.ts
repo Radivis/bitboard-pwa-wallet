@@ -7,6 +7,11 @@ import { VitePWA } from 'vite-plugin-pwa'
 import wasm from 'vite-plugin-wasm'
 
 export default defineConfig({
+  define: {
+    // Expose CI to app so we can disable dev overlays (e.g. TanStack Router Devtools)
+    // that intercept pointer events and break E2E tests.
+    'import.meta.env.CI': JSON.stringify(!!process.env.CI),
+  },
   plugins: [
     tanstackRouter({
       target: 'react',
