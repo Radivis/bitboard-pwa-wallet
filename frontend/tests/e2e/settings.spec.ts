@@ -1,12 +1,28 @@
 import { test, expect } from '@playwright/test'
+import { createWalletViaUI } from './helpers/wallet-setup'
 
 test.describe('Settings Page', () => {
   test('settings network switch', async ({ page }) => {
-    await page.goto('/settings')
+    test.setTimeout(120_000)
+    await createWalletViaUI(page)
+
+    await page.getByRole('link', { name: /settings/i }).click()
     await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
 
-    await expect(page.getByRole('button', { name: 'Signet' })).toBeVisible()
-    await page.getByRole('button', { name: 'Testnet' }).click()
+    const testnetButton = page.getByRole('button', { name: 'Testnet' })
+    const signetButton = page.getByRole('button', { name: 'Signet' })
+    await expect(testnetButton).toBeVisible()
+    await expect(signetButton).toBeVisible()
+
+    await signetButton.click()
+    await expect(page.getByText(/Signet sub-wallet loaded/)).toBeVisible({
+      timeout: 60000,
+    })
+
+    await testnetButton.click()
+    await expect(page.getByText(/Testnet sub-wallet loaded/)).toBeVisible({
+      timeout: 60000,
+    })
   })
 
   test('settings address type switch', async ({ page }) => {
@@ -22,7 +38,8 @@ test.describe('Settings Page', () => {
 
   test('settings Esplora endpoint', async ({ page }) => {
     await page.goto('/settings')
-    await expect(page.getByText('Esplora Endpoint')).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
+    await expect(page.getByText(/Esplora Endpoint/)).toBeVisible()
 
     const urlInput = page.getByLabel('Endpoint URL')
     await expect(urlInput).toBeVisible()
