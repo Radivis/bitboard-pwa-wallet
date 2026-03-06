@@ -3,7 +3,13 @@ import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { Sun, Moon, Monitor, Lock, Eye, EyeOff, Globe } from 'lucide-react'
 import { toast } from 'sonner'
 import { useThemeStore, type ThemeMode } from '@/stores/themeStore'
-import { useWalletStore, NETWORK_LABELS, type NetworkMode } from '@/stores/walletStore'
+import {
+  useWalletStore,
+  NETWORK_LABELS,
+  getSubWalletLabel,
+  type NetworkMode,
+  type AddressType,
+} from '@/stores/walletStore'
 import { useWallets } from '@/db'
 import { useSessionStore, clearAutoLockTimer } from '@/stores/sessionStore'
 import { useCryptoStore } from '@/stores/cryptoStore'
@@ -28,12 +34,17 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { MnemonicGrid } from '@/components/MnemonicGrid'
 import { ConfirmationDialog } from '@/components/ConfirmationDialog'
-import { DEFAULT_ESPLORA_URLS } from '@/lib/bitcoin-utils'
+import { DEFAULT_ESPLORA_URLS, toBitcoinNetwork } from '@/lib/bitcoin-utils'
 import {
   saveCustomEsploraUrl,
   deleteCustomEsploraUrl,
   loadCustomEsploraUrl,
+  syncActiveWalletAndUpdateState,
 } from '@/lib/wallet-utils'
+import {
+  resolveDescriptorWallet,
+  updateDescriptorWalletChangeset,
+} from '@/lib/descriptor-wallet-manager'
 
 export const Route = createFileRoute('/settings')({
   component: SettingsPage,
@@ -52,9 +63,139 @@ const NETWORK_OPTIONS: NetworkMode[] = [
   'regtest',
 ]
 
+/**
+ * Switch the active descriptor wallet to match the new parameters.
+ * Saves the current WASM wallet state, resolves the new descriptor wallet,
+ * loads it into WASM, and syncs.
+ *
+ * @param currentNetworkMode - The network we're switching FROM (must be captured before setNetworkMode)
+ * @param currentAddressType - The address type we're switching FROM (must be captured before setAddressType)
+ * @param currentAccountId - The account we're switching FROM
+ */
+async function switchDescriptorWallet(
+  targetNetworkMode: NetworkMode,
+  targetAddressType: AddressType,
+  targetAccountId: number,
+  currentNetworkMode: NetworkMode,
+  currentAddressType: AddressType,
+  currentAccountId: number,
+) {
+  const { activeWalletId } = useWalletStore.getState()
+  const sessionPassword = useSessionStore.getState().password
+  if (!activeWalletId || !sessionPassword) return
+
+  const { exportChangeset, loadWallet, getCurrentAddress } =
+    useCryptoStore.getState()
+  const { setWalletStatus, setCurrentAddress } = useWalletStore.getState()
+
+  const previousSubWalletLabel = getSubWalletLabel(
+    currentNetworkMode,
+    currentAddressType,
+  )
+  const targetSubWalletLabel = getSubWalletLabel(
+    targetNetworkMode,
+    targetAddressType,
+  )
+
+  try {
+    toast.info(`Unloading ${previousSubWalletLabel} sub-wallet`)
+    // Save current WASM wallet state before switching (use current params, not target)
+    try {
+      const currentChangeset = await exportChangeset()
+      await updateDescriptorWalletChangeset(
+        sessionPassword,
+        activeWalletId,
+        toBitcoinNetwork(currentNetworkMode),
+        currentAddressType,
+        currentAccountId,
+        currentChangeset,
+      )
+      toast.success(`${previousSubWalletLabel} sub-wallet unloaded`)
+    } catch {
+      // No active WASM wallet yet (e.g., first load) -- safe to skip
+    }
+
+    toast.info(`Loading ${targetSubWalletLabel} sub-wallet`)
+    const targetNetwork = toBitcoinNetwork(targetNetworkMode)
+    const descriptorWallet = await resolveDescriptorWallet(
+      sessionPassword,
+      activeWalletId,
+      targetNetwork,
+      targetAddressType,
+      targetAccountId,
+    )
+
+    await loadWallet(
+      descriptorWallet.externalDescriptor,
+      descriptorWallet.internalDescriptor,
+      targetNetwork,
+      descriptorWallet.changeSet,
+    )
+
+    const address = await getCurrentAddress()
+    setCurrentAddress(address)
+    setWalletStatus('syncing')
+    try {
+      await syncActiveWalletAndUpdateState(targetNetworkMode)
+    } catch {
+      toast.error('Sync failed after switching')
+    }
+    setWalletStatus('unlocked')
+    toast.success(`${targetSubWalletLabel} sub-wallet loaded`)
+  } catch (err) {
+    const message = toUserFriendlySwitchError(err)
+    toast.error(message)
+  }
+}
+
+function toUserFriendlySwitchError(err: unknown): string {
+  const msg = err instanceof Error ? err.message.toLowerCase() : ''
+  if (
+    msg.includes('password') ||
+    msg.includes('decrypt') ||
+    msg.includes('incorrect') ||
+    msg.includes('corrupted')
+  ) {
+    return 'Wrong password or corrupted wallet data'
+  }
+  if (msg.includes('secrets') && msg.includes('not found')) {
+    return 'Wallet data not found'
+  }
+  return 'Failed to switch descriptor wallet'
+}
+
 function NetworkSelector() {
   const networkMode = useWalletStore((s) => s.networkMode)
   const setNetworkMode = useWalletStore((s) => s.setNetworkMode)
+  const walletStatus = useWalletStore((s) => s.walletStatus)
+  const addressType = useWalletStore((s) => s.addressType)
+  const accountId = useWalletStore((s) => s.accountId)
+  const [switching, setSwitching] = useState(false)
+
+  const handleNetworkChange = useCallback(
+    async (network: NetworkMode) => {
+      if (network === networkMode) return
+      const previousNetworkMode = networkMode
+      setNetworkMode(network)
+
+      if (walletStatus === 'unlocked' || walletStatus === 'syncing') {
+        setSwitching(true)
+        try {
+          await switchDescriptorWallet(
+            network,
+            addressType,
+            accountId,
+            previousNetworkMode,
+            addressType,
+            accountId,
+          )
+        } finally {
+          setSwitching(false)
+        }
+      }
+    },
+    [networkMode, setNetworkMode, walletStatus, addressType, accountId],
+  )
 
   return (
     <div className="flex flex-wrap gap-2">
@@ -63,7 +204,8 @@ function NetworkSelector() {
           key={network}
           variant={networkMode === network ? 'default' : 'outline'}
           size="sm"
-          onClick={() => setNetworkMode(network)}
+          onClick={() => handleNetworkChange(network)}
+          disabled={switching}
         >
           {NETWORK_LABELS[network]}
         </Button>
@@ -98,8 +240,12 @@ function AddressTypeSelector() {
   const addressType = useWalletStore((s) => s.addressType)
   const setAddressType = useWalletStore((s) => s.setAddressType)
   const activeWalletId = useWalletStore((s) => s.activeWalletId)
+  const walletStatus = useWalletStore((s) => s.walletStatus)
+  const networkMode = useWalletStore((s) => s.networkMode)
+  const accountId = useWalletStore((s) => s.accountId)
   const [showWarning, setShowWarning] = useState(false)
   const [pendingType, setPendingType] = useState<'taproot' | 'segwit' | null>(null)
+  const [switching, setSwitching] = useState(false)
 
   const handleChange = (type: 'taproot' | 'segwit') => {
     if (type === addressType) return
@@ -111,6 +257,30 @@ function AddressTypeSelector() {
     }
   }
 
+  const applyAddressTypeChange = useCallback(
+    async (type: AddressType) => {
+      const previousAddressType = addressType
+      setAddressType(type)
+
+      if (walletStatus === 'unlocked' || walletStatus === 'syncing') {
+        setSwitching(true)
+        try {
+          await switchDescriptorWallet(
+            networkMode,
+            type,
+            accountId,
+            networkMode,
+            previousAddressType,
+            accountId,
+          )
+        } finally {
+          setSwitching(false)
+        }
+      }
+    },
+    [setAddressType, walletStatus, networkMode, addressType, accountId],
+  )
+
   return (
     <>
       <div className="flex gap-2">
@@ -119,6 +289,7 @@ function AddressTypeSelector() {
           size="sm"
           onClick={() => handleChange('taproot')}
           className="flex-1"
+          disabled={switching}
         >
           Taproot (BIP86)
         </Button>
@@ -127,6 +298,7 @@ function AddressTypeSelector() {
           size="sm"
           onClick={() => handleChange('segwit')}
           className="flex-1"
+          disabled={switching}
         >
           SegWit (BIP84)
         </Button>
@@ -134,10 +306,10 @@ function AddressTypeSelector() {
       <ConfirmationDialog
         open={showWarning}
         title="Change Address Type?"
-        message="Changing address type requires creating a new wallet with the same seed. Your funds will still be accessible. Continue?"
+        message="Changing address type will switch to a different descriptor wallet derived from the same seed. Your funds on the previous address type remain accessible. Continue?"
         confirmText="Change"
         onConfirm={() => {
-          if (pendingType) setAddressType(pendingType)
+          if (pendingType) applyAddressTypeChange(pendingType)
           setShowWarning(false)
           setPendingType(null)
         }}
@@ -174,8 +346,10 @@ function EsploraEndpointConfig() {
       await saveCustomEsploraUrl(networkMode, customUrl)
       setIsCustom(true)
       toast.success('Esplora endpoint saved')
-    } catch {
-      toast.error('Failed to save endpoint')
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : 'Failed to save endpoint',
+      )
     } finally {
       setLoading(false)
     }

@@ -20,13 +20,16 @@ pub const TEST_MNEMONIC_12: &str =
 pub const TEST_MNEMONIC_24: &str = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon art";
 
 pub const DEFAULT_ADDRESS_TYPE: AddressType = AddressType::Taproot;
-pub const DEFAULT_NETWORK: BitcoinNetwork = BitcoinNetwork::Signet;
+pub const DEFAULT_NETWORK: BitcoinNetwork = BitcoinNetwork::Testnet;
 
 const FUNDING_BLOCK_HEIGHT: u32 = 1_000;
 const FUNDING_CONFIRMATION_TIME: u64 = 1_700_000_000;
 
+pub const DEFAULT_ACCOUNT_ID: u32 = 0;
+
 pub fn descriptors_for_test(network: BitcoinNetwork, address_type: AddressType) -> DescriptorPair {
-    descriptors::derive_descriptors(TEST_MNEMONIC_12, network, address_type).unwrap()
+    descriptors::derive_descriptors(TEST_MNEMONIC_12, network, address_type, DEFAULT_ACCOUNT_ID)
+        .unwrap()
 }
 
 pub fn create_test_wallet(network: BitcoinNetwork, address_type: AddressType) -> Wallet {

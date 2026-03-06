@@ -29,7 +29,7 @@ fn build_transaction_rejects_invalid_address() {
         "not-a-bitcoin-address",
         SEND_AMOUNT,
         FEE_RATE,
-        Network::Signet,
+        Network::Testnet,
     );
     assert!(result.is_err(), "Invalid address must be rejected");
 }
@@ -42,7 +42,7 @@ fn build_transaction_rejects_insufficient_funds() {
         VALID_SIGNET_ADDRESS,
         SEND_AMOUNT,
         FEE_RATE,
-        Network::Signet,
+        Network::Testnet,
     );
     assert!(result.is_err(), "Wallet with no UTXOs must reject tx build");
 }
@@ -55,7 +55,7 @@ fn build_transaction_rejects_zero_amount() {
         VALID_SIGNET_ADDRESS,
         0,
         FEE_RATE,
-        Network::Signet,
+        Network::Testnet,
     );
     assert!(result.is_err(), "Zero-amount transaction must be rejected");
 }
@@ -70,7 +70,7 @@ fn build_transaction_creates_valid_psbt() {
         VALID_SIGNET_ADDRESS,
         SEND_AMOUNT,
         FEE_RATE,
-        Network::Signet,
+        Network::Testnet,
     )
     .expect("Building a transaction with sufficient funds should succeed");
 
@@ -98,7 +98,7 @@ fn build_transaction_respects_fee_rate() {
         VALID_SIGNET_ADDRESS,
         SEND_AMOUNT,
         FEE_RATE,
-        Network::Signet,
+        Network::Testnet,
     )
     .expect("Building a transaction should succeed");
 
@@ -136,7 +136,7 @@ fn sign_transaction_produces_finalized_psbt() {
         VALID_SIGNET_ADDRESS,
         SEND_AMOUNT,
         FEE_RATE,
-        Network::Signet,
+        Network::Testnet,
     )
     .expect("Build should succeed");
 
@@ -153,7 +153,7 @@ fn extract_transaction_returns_valid_tx() {
         VALID_SIGNET_ADDRESS,
         SEND_AMOUNT,
         FEE_RATE,
-        Network::Signet,
+        Network::Testnet,
     )
     .expect("Build should succeed");
 

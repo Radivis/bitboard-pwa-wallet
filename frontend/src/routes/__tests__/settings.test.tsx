@@ -15,11 +15,29 @@ vi.mock('@tanstack/react-router', async (importOriginal) => {
 })
 
 const mockTerminateWorker = vi.fn()
+const mockExportChangeset = vi.fn().mockRejectedValue(new Error('no wallet'))
+const mockLoadWallet = vi.fn().mockResolvedValue(true)
+const mockSyncWallet = vi.fn().mockResolvedValue({ balance: {}, changeset_json: '{}' })
+const mockGetBalance = vi.fn().mockResolvedValue({ confirmed: 0, total: 0 })
+const mockGetTransactionList = vi.fn().mockResolvedValue([])
+const mockGetCurrentAddress = vi.fn().mockResolvedValue('tb1qcurrent')
+const cryptoStoreState = {
+  terminateWorker: mockTerminateWorker,
+  exportChangeset: mockExportChangeset,
+  loadWallet: mockLoadWallet,
+  syncWallet: mockSyncWallet,
+  getBalance: mockGetBalance,
+  getTransactionList: mockGetTransactionList,
+  getCurrentAddress: mockGetCurrentAddress,
+}
 vi.mock('@/stores/cryptoStore', () => ({
-  useCryptoStore: (selector: (s: Record<string, unknown>) => unknown) =>
-    selector({
-      terminateWorker: mockTerminateWorker,
-    }),
+  useCryptoStore: Object.assign(
+    (selector: (s: Record<string, unknown>) => unknown) =>
+      selector(cryptoStoreState),
+    {
+      getState: () => cryptoStoreState,
+    },
+  ),
 }))
 
 let walletStoreState: Record<string, unknown> = {}
@@ -27,20 +45,33 @@ const mockSetNetworkMode = vi.fn()
 const mockSetAddressType = vi.fn()
 const mockLockWallet = vi.fn()
 vi.mock('@/stores/walletStore', () => ({
-  useWalletStore: (selector: (s: Record<string, unknown>) => unknown) =>
-    selector(walletStoreState),
+  useWalletStore: Object.assign(
+    (selector: (s: Record<string, unknown>) => unknown) =>
+      selector(walletStoreState),
+    {
+      getState: () => walletStoreState,
+    },
+  ),
   NETWORK_LABELS: {
     regtest: 'Regtest',
     signet: 'Signet',
     testnet: 'Testnet',
     mainnet: 'Mainnet',
   },
+  getSubWalletLabel: (network: string, addressType: string) =>
+    `${network} ${addressType}`,
 }))
 
 const mockClearSession = vi.fn()
+const sessionStoreState = { password: 'testpass', clear: mockClearSession }
 vi.mock('@/stores/sessionStore', () => ({
-  useSessionStore: (selector: (s: Record<string, unknown>) => unknown) =>
-    selector({ password: 'testpass', clear: mockClearSession }),
+  useSessionStore: Object.assign(
+    (selector: (s: Record<string, unknown>) => unknown) =>
+      selector(sessionStoreState),
+    {
+      getState: () => sessionStoreState,
+    },
+  ),
   clearAutoLockTimer: vi.fn(),
 }))
 
@@ -64,12 +95,33 @@ vi.mock('@/lib/bitcoin-utils', () => ({
     testnet: 'https://mempool.space/testnet/api',
     mainnet: 'https://mempool.space/api',
   },
+  toBitcoinNetwork: (mode: string) => mode,
+  getEsploraUrl: () => 'http://localhost:3002',
 }))
 
 vi.mock('@/lib/wallet-utils', () => ({
   saveCustomEsploraUrl: vi.fn().mockResolvedValue(undefined),
   deleteCustomEsploraUrl: vi.fn().mockResolvedValue(undefined),
   loadCustomEsploraUrl: vi.fn().mockResolvedValue(null),
+  syncActiveWalletAndUpdateState: vi.fn().mockResolvedValue(undefined),
+}))
+
+const mockResolveDescriptorWallet = vi.hoisted(() =>
+  vi.fn().mockResolvedValue({
+    network: 'signet',
+    addressType: 'taproot',
+    accountId: 0,
+    externalDescriptor: 'ext',
+    internalDescriptor: 'int',
+    changeSet: '{}',
+  }),
+)
+const mockUpdateDescriptorWalletChangeset = vi.hoisted(() =>
+  vi.fn().mockResolvedValue(undefined),
+)
+vi.mock('@/lib/descriptor-wallet-manager', () => ({
+  resolveDescriptorWallet: mockResolveDescriptorWallet,
+  updateDescriptorWalletChangeset: mockUpdateDescriptorWalletChangeset,
 }))
 
 vi.mock('@/components/MnemonicGrid', () => ({
@@ -109,8 +161,12 @@ describe('SettingsPage', () => {
       walletStatus: 'unlocked',
       networkMode: 'signet',
       addressType: 'taproot',
+      accountId: 0,
       setNetworkMode: mockSetNetworkMode,
       setAddressType: mockSetAddressType,
+      setWalletStatus: vi.fn(),
+      setBalance: vi.fn(),
+      setTransactions: vi.fn(),
       lockWallet: mockLockWallet,
     }
   })
@@ -183,5 +239,34 @@ describe('SettingsPage', () => {
     await waitFor(() => {
       expect(screen.getByText('Confirm Password')).toBeInTheDocument()
     })
+  })
+
+  it('network switch when unlocked calls updateDescriptorWalletChangeset then resolveDescriptorWallet in order', async () => {
+    mockExportChangeset.mockResolvedValueOnce('{"last_reveal":{"0":0}}')
+    const user = userEvent.setup()
+    renderWithProviders(<SettingsPage />)
+
+    await user.click(screen.getByRole('button', { name: 'Testnet' }))
+
+    await waitFor(() => {
+      expect(mockUpdateDescriptorWalletChangeset).toHaveBeenCalledWith(
+        'testpass',
+        1,
+        'signet',
+        'taproot',
+        0,
+        '{"last_reveal":{"0":0}}',
+      )
+    })
+    expect(mockResolveDescriptorWallet).toHaveBeenCalledWith(
+      'testpass',
+      1,
+      'testnet',
+      'taproot',
+      0,
+    )
+    const updateCallOrder = mockUpdateDescriptorWalletChangeset.mock.invocationCallOrder[0]
+    const resolveCallOrder = mockResolveDescriptorWallet.mock.invocationCallOrder[0]
+    expect(updateCallOrder).toBeLessThan(resolveCallOrder)
   })
 })

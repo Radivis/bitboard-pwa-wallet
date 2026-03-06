@@ -1,9 +1,8 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { Wallet } from 'lucide-react'
 import { useWallets } from '@/db'
-import { useWalletStore, NETWORK_LABELS } from '@/stores/walletStore'
+import { useWalletStore } from '@/stores/walletStore'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 
 export const Route = createFileRoute('/wallets')({
@@ -53,9 +52,6 @@ function WalletsPage() {
                 <Wallet className="h-4 w-4" />
                 {wallet.name}
               </CardTitle>
-              <Badge variant="outline">
-                {NETWORK_LABELS[wallet.network as keyof typeof NETWORK_LABELS] ?? wallet.network}
-              </Badge>
             </CardHeader>
             <CardContent>
               <CardDescription>

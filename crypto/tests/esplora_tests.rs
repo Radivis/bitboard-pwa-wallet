@@ -130,7 +130,7 @@ async fn broadcast_returns_txid_on_success() {
         "tb1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx",
         10_000,
         2.0,
-        bitcoin::Network::Signet,
+        bitcoin::Network::Testnet,
     )
     .expect("Build should succeed");
     bitboard_crypto::transaction::sign_transaction(&wallet, &mut psbt)
@@ -157,7 +157,7 @@ async fn broadcast_handles_rejection() {
         "tb1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx",
         10_000,
         2.0,
-        bitcoin::Network::Signet,
+        bitcoin::Network::Testnet,
     )
     .expect("Build should succeed");
     bitboard_crypto::transaction::sign_transaction(&wallet, &mut psbt)

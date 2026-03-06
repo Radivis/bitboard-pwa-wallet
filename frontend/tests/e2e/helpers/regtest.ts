@@ -5,15 +5,17 @@
  * The server on port 8080 follows the bitcoinjs regtest-server API:
  * - POST /1/r/faucet?key=<key>&address=<addr>&value=<sats>
  * - POST /1/r/generate?key=<key>&count=<n>
- * Set REGTEST_FAUCET_KEY in the environment if the server requires auth.
+ *
+ * The bitcoinerlab/tester image uses regtest-server, which requires the key param.
+ * Default key is "satoshi" (regtest-client default). Override with REGTEST_FAUCET_KEY.
  */
-
 const REGTEST_SERVER_URL = 'http://localhost:8080/1'
 const DEFAULT_FAUCET_SATS = 100_000
+const DEFAULT_FAUCET_KEY = 'satoshi'
 
 function getAuthQuery(): string {
-  const key = process.env.REGTEST_FAUCET_KEY
-  return key ? `key=${encodeURIComponent(key)}&` : ''
+  const key = process.env.REGTEST_FAUCET_KEY ?? DEFAULT_FAUCET_KEY
+  return `key=${encodeURIComponent(key)}&`
 }
 
 /**

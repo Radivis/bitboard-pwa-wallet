@@ -79,6 +79,24 @@ fn get_new_address_increments_index() {
     assert_ne!(addr1, addr3, "All three addresses must be unique");
 }
 
+#[test]
+fn get_current_address_returns_last_revealed_without_incrementing() {
+    let mut wallet = create_test_wallet(DEFAULT_NETWORK, DEFAULT_ADDRESS_TYPE);
+    let addr1 = wallet::get_new_address(&mut wallet);
+    let current = wallet::get_current_address(&wallet);
+    assert_eq!(
+        addr1, current,
+        "get_current_address must match last revealed"
+    );
+    let addr2 = wallet::get_new_address(&mut wallet);
+    let current_again = wallet::get_current_address(&wallet);
+    assert_eq!(
+        addr2, current_again,
+        "get_current_address must match new last revealed"
+    );
+    assert_ne!(addr1, addr2);
+}
+
 // --- ChangeSet serialization tests ---
 
 #[test]

@@ -17,13 +17,15 @@ export interface CryptoService {
   deriveDescriptors(
     mnemonic: string,
     network: BitcoinNetwork,
-    addressType: AddressType
+    addressType: AddressType,
+    accountId: number
   ): Promise<DescriptorPair>;
 
   createWallet(
     mnemonic: string,
     network: BitcoinNetwork,
-    addressType: AddressType
+    addressType: AddressType,
+    accountId: number
   ): Promise<CreateWalletResult>;
   
   loadWallet(
@@ -34,6 +36,7 @@ export interface CryptoService {
   ): Promise<boolean>;
 
   getNewAddress(): Promise<string>;
+  getCurrentAddress(): Promise<string>;
   getBalance(): Promise<BalanceInfo>;
   exportChangeset(): Promise<string>;
 

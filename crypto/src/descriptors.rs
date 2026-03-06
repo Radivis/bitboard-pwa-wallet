@@ -1,7 +1,5 @@
-use bdk_wallet::KeychainKind;
 use bdk_wallet::bitcoin::Network;
 use bdk_wallet::bitcoin::bip32::Xpriv;
-use bdk_wallet::descriptor::template::{Bip84, Bip86, DescriptorTemplate};
 use bdk_wallet::keys::bip39::{Language, Mnemonic};
 
 use crate::error::CryptoError;
@@ -9,8 +7,8 @@ use crate::types::{AddressType, BitcoinNetwork, DescriptorPair};
 
 /// Derive a pair of descriptors (external + internal) from a BIP39 mnemonic.
 ///
-/// - For `AddressType::Taproot`: uses BIP86 template `tr(key/86'/{0,1}'/0'/{0,1}/*)`
-/// - For `AddressType::Segwit`: uses BIP84 template `wpkh(key/84'/{0,1}'/0'/{0,1}/*)`
+/// - For `AddressType::Taproot`: BIP86 path `tr(xprv/86'/{coin}'/account'/{0,1}/*)`
+/// - For `AddressType::Segwit`: BIP84 path `wpkh(xprv/84'/{coin}'/account'/{0,1}/*)`
 ///
 /// The returned descriptor strings include private key material (xprv/tprv),
 /// which is required for signing transactions.
@@ -18,6 +16,7 @@ pub fn derive_descriptors(
     mnemonic_str: &str,
     network: BitcoinNetwork,
     address_type: AddressType,
+    account_id: u32,
 ) -> Result<DescriptorPair, CryptoError> {
     let mnemonic = Mnemonic::parse_in(Language::English, mnemonic_str)
         .map_err(|e| CryptoError::Mnemonic(e.to_string()))?;
@@ -27,47 +26,19 @@ pub fn derive_descriptors(
     let xpriv = Xpriv::new_master(bitcoin_network, &seed)
         .map_err(|e| CryptoError::Descriptor(e.to_string()))?;
 
-    let (external_desc, internal_desc) = match address_type {
-        AddressType::Taproot => build_descriptors_bip86(xpriv, bitcoin_network)?,
-        AddressType::Segwit => build_descriptors_bip84(xpriv, bitcoin_network)?,
+    let coin_type = if bitcoin_network == Network::Bitcoin {
+        0
+    } else {
+        1
+    };
+
+    let (purpose, wrapper) = match address_type {
+        AddressType::Taproot => (86, "tr"),
+        AddressType::Segwit => (84, "wpkh"),
     };
 
     Ok(DescriptorPair {
-        external: external_desc,
-        internal: internal_desc,
+        external: format!("{wrapper}({xpriv}/{purpose}'/{coin_type}'/{account_id}'/0/*)"),
+        internal: format!("{wrapper}({xpriv}/{purpose}'/{coin_type}'/{account_id}'/1/*)"),
     })
-}
-
-/// Build BIP86 (Taproot) descriptor pair.
-fn build_descriptors_bip86(
-    xpriv: Xpriv,
-    network: Network,
-) -> Result<(String, String), CryptoError> {
-    let (ext_desc, ext_km, _) = Bip86(xpriv, KeychainKind::External)
-        .build(network)
-        .map_err(|e| CryptoError::Descriptor(e.to_string()))?;
-    let (int_desc, int_km, _) = Bip86(xpriv, KeychainKind::Internal)
-        .build(network)
-        .map_err(|e| CryptoError::Descriptor(e.to_string()))?;
-    Ok((
-        ext_desc.to_string_with_secret(&ext_km),
-        int_desc.to_string_with_secret(&int_km),
-    ))
-}
-
-/// Build BIP84 (SegWit v0) descriptor pair.
-fn build_descriptors_bip84(
-    xpriv: Xpriv,
-    network: Network,
-) -> Result<(String, String), CryptoError> {
-    let (ext_desc, ext_km, _) = Bip84(xpriv, KeychainKind::External)
-        .build(network)
-        .map_err(|e| CryptoError::Descriptor(e.to_string()))?;
-    let (int_desc, int_km, _) = Bip84(xpriv, KeychainKind::Internal)
-        .build(network)
-        .map_err(|e| CryptoError::Descriptor(e.to_string()))?;
-    Ok((
-        ext_desc.to_string_with_secret(&ext_km),
-        int_desc.to_string_with_secret(&int_km),
-    ))
 }

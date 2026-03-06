@@ -92,9 +92,14 @@ function SendFlow() {
       : parseInt(amount) || 0
   }, [amount, amountUnit])
 
+  const normalizedRecipient = useMemo(
+    () => recipient.trim().replace(/^bitcoin:/i, ''),
+    [recipient],
+  )
+
   const addressValid = useMemo(
-    () => recipient.length > 0 && isValidAddress(recipient, networkMode),
-    [recipient, networkMode],
+    () => normalizedRecipient.length > 0 && isValidAddress(normalizedRecipient, networkMode),
+    [normalizedRecipient, networkMode],
   )
 
   const canBuild = addressValid && amountSats > 0 && amountSats <= confirmedBalance
@@ -106,7 +111,7 @@ function SendFlow() {
       setLoading(true)
       const network = toBitcoinNetwork(networkMode)
       const psbtBase64 = await buildTransaction(
-        recipient,
+        normalizedRecipient,
         amountSats,
         effectiveFeeRate,
         network,
@@ -114,13 +119,14 @@ function SendFlow() {
       setPsbt(psbtBase64)
       setStep(2)
     } catch (err) {
-      toast.error(
-        err instanceof Error ? err.message : 'Failed to build transaction',
-      )
+      console.error('Build transaction failed:', err)
+      const msg =
+        err instanceof Error ? err.message : String(err) || 'Failed to build transaction'
+      toast.error(msg)
     } finally {
       setLoading(false)
     }
-  }, [canBuild, recipient, amountSats, effectiveFeeRate, networkMode, buildTransaction])
+  }, [canBuild, normalizedRecipient, amountSats, effectiveFeeRate, networkMode, buildTransaction])
 
   const handleBroadcast = useCallback(async () => {
     if (!psbt) return

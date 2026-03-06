@@ -74,6 +74,11 @@ jobs:
 
       - name: Install the Rust toolchain
         uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          target: wasm32-unknown-unknown
+
+      - name: Install wasm-pack
+        uses: jetli/wasm-pack-action@v0.4.0
 
       - name: Build WASM
         run: cd crypto && wasm-pack build --target bundler --out-dir ../frontend/src/wasm-pkg
@@ -92,6 +97,9 @@ jobs:
       - name: Install Playwright browsers
         working-directory: frontend
         run: npx playwright install --with-deps chromium
+
+      - name: Start regtest environment
+        run: bash scripts/start-regtest.sh
 
       - name: Run Playwright tests
         working-directory: frontend

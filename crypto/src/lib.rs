@@ -108,12 +108,13 @@ pub fn derive_descriptors(
     mnemonic_str: &str,
     network: &str,
     address_type: &str,
+    account_id: u32,
 ) -> Result<JsValue, JsValue> {
     let network = types::BitcoinNetwork::try_from(network).map_err(JsValue::from)?;
     let addr_type = types::AddressType::try_from(address_type).map_err(JsValue::from)?;
 
-    let pair =
-        descriptors::derive_descriptors(mnemonic_str, network, addr_type).map_err(JsValue::from)?;
+    let pair = descriptors::derive_descriptors(mnemonic_str, network, addr_type, account_id)
+        .map_err(JsValue::from)?;
 
     serde_wasm_bindgen::to_value(&pair).map_err(|e| JsValue::from_str(&e.to_string()))
 }
@@ -122,7 +123,7 @@ pub fn derive_descriptors(
 // Wallet wrappers (Phase 4)
 // ---------------------------------------------------------------------------
 
-/// Create a new wallet from a mnemonic, network, and address type.
+/// Create a new wallet from a mnemonic, network, address type, and account index.
 ///
 /// Derives descriptors internally, creates the BDK wallet, stores it in
 /// thread-local state, and returns a `CreateWalletResult` as JsValue.
@@ -131,12 +132,13 @@ pub fn create_wallet(
     mnemonic_str: &str,
     network: &str,
     address_type: &str,
+    account_id: u32,
 ) -> Result<JsValue, JsValue> {
     let net = types::BitcoinNetwork::try_from(network).map_err(JsValue::from)?;
     let addr_type = types::AddressType::try_from(address_type).map_err(JsValue::from)?;
 
-    let pair =
-        descriptors::derive_descriptors(mnemonic_str, net, addr_type).map_err(JsValue::from)?;
+    let pair = descriptors::derive_descriptors(mnemonic_str, net, addr_type, account_id)
+        .map_err(JsValue::from)?;
 
     let mut bdk_wallet =
         wallet::create_wallet(&pair.external, &pair.internal, net).map_err(JsValue::from)?;
@@ -191,11 +193,17 @@ pub fn get_new_address() -> Result<String, JsValue> {
     Ok(address)
 }
 
+/// Return the last revealed external address without incrementing the index.
+#[wasm_bindgen]
+pub fn get_current_address() -> Result<String, JsValue> {
+    with_wallet(wallet::get_current_address)
+}
+
 /// Return the active wallet's balance as a `BalanceInfo` JsValue.
 #[wasm_bindgen]
 pub fn get_balance() -> Result<JsValue, JsValue> {
     let balance = with_wallet(wallet::get_balance)?;
-    serde_wasm_bindgen::to_value(&balance).map_err(|e| JsValue::from_str(&e.to_string()))
+    Ok(serde_wasm_bindgen::to_value(&balance)?)
 }
 
 /// Export the full accumulated changeset as a JSON string.
@@ -354,11 +362,13 @@ pub fn get_transaction_list() -> Result<JsValue, JsValue> {
 
 /// Derive a 256-bit key from a password and salt using Argon2id.
 ///
-/// Parameters: 64 MB memory, 3 iterations, parallelism 4.
-/// Returns the raw 32-byte key as a `Vec<u8>`.
+/// Parameters: 64 MB memory, 2 iterations, parallelism 1.
+/// t=2 meets OWASP minimum; p=1 is the mobile preset (CipherTools/PHC).
+/// Reduces latency on constrained/CI vs t=3 with acceptable security trade-off.
+/// See .cursor/architecture/research/argon2-mobile-performance.md
 #[wasm_bindgen]
 pub fn derive_argon2_key(password: &str, salt: &[u8]) -> Result<Vec<u8>, JsValue> {
-    let params = Params::new(65536, 3, 4, Some(32))
+    let params = Params::new(65536, 2, 1, Some(32))
         .map_err(|e| JsValue::from_str(&format!("Argon2 params error: {e}")))?;
     let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
     let mut key = vec![0u8; 32];

@@ -10,7 +10,7 @@ use bitboard_crypto::{
 
 fn create_test_wallet() -> JsValue {
     let mnemonic = generate_mnemonic(12).expect("generate_mnemonic failed");
-    create_wallet(&mnemonic, "signet", "taproot").expect("create_wallet failed")
+    create_wallet(&mnemonic, "testnet", "taproot", 0).expect("create_wallet failed")
 }
 
 #[wasm_bindgen_test]
@@ -51,7 +51,7 @@ fn validate_mnemonic_rejects_invalid_via_wasm() {
 #[wasm_bindgen_test]
 fn derive_descriptors_returns_valid_jsvalue() {
     let mnemonic = generate_mnemonic(12).expect("generate failed");
-    let result = derive_descriptors(&mnemonic, "signet", "taproot").expect("derive failed");
+    let result = derive_descriptors(&mnemonic, "testnet", "taproot", 0).expect("derive failed");
 
     let pair: serde_wasm_bindgen::Serializer = serde_wasm_bindgen::Serializer::json_compatible();
     let _ = pair;
@@ -97,7 +97,7 @@ fn create_wallet_returns_serialized_result() {
     let addr = first_address.as_string().unwrap();
     assert!(
         addr.starts_with("tb1"),
-        "signet address should start with tb1, got: {addr}"
+        "testnet address should start with tb1, got: {addr}"
     );
 }
 
@@ -108,7 +108,7 @@ fn get_new_address_returns_string_after_wallet_creation() {
     assert!(!address.is_empty(), "address should not be empty");
     assert!(
         address.starts_with("tb1"),
-        "signet address should start with tb1, got: {address}"
+        "testnet address should start with tb1, got: {address}"
     );
 }
 
@@ -144,7 +144,7 @@ fn build_transaction_fails_without_funds() {
         "tb1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx",
         10_000,
         1.0,
-        "signet",
+        "testnet",
     );
     assert!(
         result.is_err(),

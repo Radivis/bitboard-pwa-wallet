@@ -27,12 +27,13 @@ vi.mock('../kdf', () => ({
   },
 }))
 
+import { TEST_MNEMONIC_12 } from '@/test-utils/test-providers'
 import { encryptData, decryptData, type EncryptedBlob } from '../encryption'
 
 describe('Encryption with Argon2id + AES-GCM', () => {
   const password = 'super-secret-password-123'
   const plaintext = JSON.stringify({
-    mnemonic: 'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about',
+    mnemonic: TEST_MNEMONIC_12,
     descriptors: { external: "wpkh([...]/84'/0'/0'/0/*)", internal: "wpkh([...]/84'/0'/0'/1/*)" },
     changeSet: '{"network":"signet","last_reveal":{"0":5}}',
   })

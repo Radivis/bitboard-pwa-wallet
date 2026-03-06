@@ -6,7 +6,6 @@ export async function migrateToLatest(db: Kysely<any>): Promise<void> {
     .ifNotExists()
     .addColumn('wallet_id', 'integer', (col) => col.primaryKey().autoIncrement())
     .addColumn('name', 'text', (col) => col.notNull())
-    .addColumn('network', 'text', (col) => col.notNull())
     .addColumn('created_at', 'text', (col) => col.notNull())
     .execute()
 
