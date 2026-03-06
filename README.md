@@ -3,7 +3,16 @@
 A non-custodial educational Bitcoin wallet based on the principles simplicity first, transparency, depth in detail, full control, and upgradeable security. The wallet is a Progressive Web App using Rust and React as core technologies.
 
 ## Warning
-**This wallet is still in its initial development phase. Do not assume that it is secure! Do not store more than you can afford to lose on it!**
+
+<div style="color: #f00; font-size: 2.5em; padding: 1em; border: 2px solid #ec0000; border-radius: 10px; background: linear-gradient(135deg, #2a0000 0%, #4b0000 20%,#3c0000 40%,#2a0000 60%,#4b0000 80%, #3c0000 100%);">
+
+**This wallet is still in its initial development phase.**
+
+**Do not assume that it is secure!**
+
+**Do not store more than you can afford to lose on it!**
+
+</div>
 
 ## Principles
 
