@@ -56,8 +56,8 @@ fn test_argon2_performance_suitable_for_mobile() {
     let _ = super::derive_argon2_key(password, salt).unwrap();
     let elapsed = start.elapsed();
 
-    // Real Argon2id with 64MB memory should take 100-500ms on modern hardware
-    // On slower machines or under load, it may take up to 3 seconds
+    // Real Argon2id 64MB/3iter/p=1: ~100-500ms on modern hardware, <2s on CI/old phones.
+    // See .cursor/architecture/research/argon2-mobile-performance.md
     // Too fast means params are wrong, too slow means mobile users will suffer
     assert!(
         elapsed.as_millis() > 50,
@@ -73,8 +73,8 @@ fn test_argon2_performance_suitable_for_mobile() {
 
 #[test]
 fn test_argon2_params_match_specification() {
-    // Verify we're using the correct Argon2id parameters
-    let params = Params::new(65536, 3, 4, Some(32)).unwrap();
+    // Verify we're using the correct Argon2id parameters (64MB, 3 iter, p=1)
+    let params = Params::new(65536, 3, 1, Some(32)).unwrap();
     let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
 
     let password = b"test";
@@ -88,7 +88,7 @@ fn test_argon2_params_match_specification() {
     // Verify params:
     // - Memory: 65536 KiB = 64 MB
     // - Time: 3 iterations
-    // - Parallelism: 4 lanes
+    // - Parallelism: 1 lane (recommended for mobile)
     // - Output: 32 bytes (256 bits)
     assert_eq!(output.len(), 32);
 }
