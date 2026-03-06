@@ -275,7 +275,7 @@ pub async fn full_scan_wallet(esplora_url: &str, stop_gap: usize) -> Result<JsVa
 }
 
 fn build_sync_result() -> Result<JsValue, JsValue> {
-    let balance = with_wallet(|w| wallet::get_balance(w))?;
+    let balance = with_wallet(wallet::get_balance)?;
     let changeset_json = export_changeset()?;
     let result = types::SyncResult {
         balance,
