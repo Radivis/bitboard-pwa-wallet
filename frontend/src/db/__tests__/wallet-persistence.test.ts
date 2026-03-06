@@ -24,6 +24,7 @@ vi.mock('../kdf', () => ({
   },
 }))
 
+import { TEST_MNEMONIC_12 } from '@/test-utils/test-providers'
 import { saveWalletSecrets, loadWalletSecrets, deleteWalletSecrets } from '../wallet-persistence'
 
 describe('Wallet Persistence with Encryption', () => {
@@ -32,7 +33,7 @@ describe('Wallet Persistence with Encryption', () => {
   let walletId: number
 
   const sampleSecrets = {
-    mnemonic: 'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about',
+    mnemonic: TEST_MNEMONIC_12,
     descriptorWallets: [
       {
         network: 'signet' as const,

@@ -58,6 +58,8 @@ vi.mock('@/stores/walletStore', () => ({
     testnet: 'Testnet',
     mainnet: 'Mainnet',
   },
+  getSubWalletLabel: (network: string, addressType: string) =>
+    `${network} ${addressType}`,
 }))
 
 const mockClearSession = vi.fn()
@@ -101,10 +103,11 @@ vi.mock('@/lib/wallet-utils', () => ({
   saveCustomEsploraUrl: vi.fn().mockResolvedValue(undefined),
   deleteCustomEsploraUrl: vi.fn().mockResolvedValue(undefined),
   loadCustomEsploraUrl: vi.fn().mockResolvedValue(null),
+  syncActiveWalletAndUpdateState: vi.fn().mockResolvedValue(undefined),
 }))
 
-vi.mock('@/lib/descriptor-wallet-manager', () => ({
-  resolveDescriptorWallet: vi.fn().mockResolvedValue({
+const mockResolveDescriptorWallet = vi.hoisted(() =>
+  vi.fn().mockResolvedValue({
     network: 'signet',
     addressType: 'taproot',
     accountId: 0,
@@ -112,7 +115,13 @@ vi.mock('@/lib/descriptor-wallet-manager', () => ({
     internalDescriptor: 'int',
     changeSet: '{}',
   }),
-  updateDescriptorWalletChangeset: vi.fn().mockResolvedValue(undefined),
+)
+const mockUpdateDescriptorWalletChangeset = vi.hoisted(() =>
+  vi.fn().mockResolvedValue(undefined),
+)
+vi.mock('@/lib/descriptor-wallet-manager', () => ({
+  resolveDescriptorWallet: mockResolveDescriptorWallet,
+  updateDescriptorWalletChangeset: mockUpdateDescriptorWalletChangeset,
 }))
 
 vi.mock('@/components/MnemonicGrid', () => ({
@@ -230,5 +239,34 @@ describe('SettingsPage', () => {
     await waitFor(() => {
       expect(screen.getByText('Confirm Password')).toBeInTheDocument()
     })
+  })
+
+  it('network switch when unlocked calls updateDescriptorWalletChangeset then resolveDescriptorWallet in order', async () => {
+    mockExportChangeset.mockResolvedValueOnce('{"last_reveal":{"0":0}}')
+    const user = userEvent.setup()
+    renderWithProviders(<SettingsPage />)
+
+    await user.click(screen.getByRole('button', { name: 'Testnet' }))
+
+    await waitFor(() => {
+      expect(mockUpdateDescriptorWalletChangeset).toHaveBeenCalledWith(
+        'testpass',
+        1,
+        'signet',
+        'taproot',
+        0,
+        '{"last_reveal":{"0":0}}',
+      )
+    })
+    expect(mockResolveDescriptorWallet).toHaveBeenCalledWith(
+      'testpass',
+      1,
+      'testnet',
+      'taproot',
+      0,
+    )
+    const updateCallOrder = mockUpdateDescriptorWalletChangeset.mock.invocationCallOrder[0]
+    const resolveCallOrder = mockResolveDescriptorWallet.mock.invocationCallOrder[0]
+    expect(updateCallOrder).toBeLessThan(resolveCallOrder)
   })
 })

@@ -14,11 +14,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { useWalletStore } from '@/stores/walletStore'
-import { useSessionStore, startAutoLockTimer } from '@/stores/sessionStore'
-import { useCryptoStore } from '@/stores/cryptoStore'
-import { getEsploraUrl, toBitcoinNetwork } from '@/lib/bitcoin-utils'
-import { loadCustomEsploraUrl } from '@/lib/wallet-utils'
-import { resolveDescriptorWallet } from '@/lib/descriptor-wallet-manager'
+import { useSessionStore } from '@/stores/sessionStore'
+import { loadDescriptorWalletAndSync } from '@/lib/wallet-utils'
 
 interface WalletUnlockProps {
   walletName?: string
@@ -31,55 +28,24 @@ export function WalletUnlock({ walletName }: WalletUnlockProps) {
   const networkMode = useWalletStore((s) => s.networkMode)
   const addressType = useWalletStore((s) => s.addressType)
   const accountId = useWalletStore((s) => s.accountId)
-  const setWalletStatus = useWalletStore((s) => s.setWalletStatus)
-  const setBalance = useWalletStore((s) => s.setBalance)
-  const setTransactions = useWalletStore((s) => s.setTransactions)
   const setSessionPassword = useSessionStore((s) => s.setPassword)
-
-  const loadWallet = useCryptoStore((s) => s.loadWallet)
-  const syncWallet = useCryptoStore((s) => s.syncWallet)
-  const getBalance = useCryptoStore((s) => s.getBalance)
-  const getTransactionList = useCryptoStore((s) => s.getTransactionList)
 
   const unlockMutation = useMutation({
     mutationFn: async (walletPassword: string) => {
       if (!activeWalletId) throw new Error('No active wallet')
 
-      const network = toBitcoinNetwork(networkMode)
-      const descriptorWallet = await resolveDescriptorWallet(
+      setSessionPassword(walletPassword)
+      await loadDescriptorWalletAndSync(
         walletPassword,
         activeWalletId,
-        network,
+        networkMode,
         addressType,
         accountId,
+        {
+          onSyncError: () =>
+            toast.error('Sync failed — wallet unlocked but data may be stale'),
+        },
       )
-
-      await loadWallet(
-        descriptorWallet.externalDescriptor,
-        descriptorWallet.internalDescriptor,
-        network,
-        descriptorWallet.changeSet,
-      )
-
-      setSessionPassword(walletPassword)
-      setWalletStatus('unlocked')
-
-      startAutoLockTimer(() => {
-        useWalletStore.getState().lockWallet()
-      })
-
-      try {
-        const customUrl = await loadCustomEsploraUrl(networkMode)
-        const esploraUrl = getEsploraUrl(networkMode, customUrl)
-        await syncWallet(esploraUrl)
-
-        const balance = await getBalance()
-        const txs = await getTransactionList()
-        setBalance(balance)
-        setTransactions(txs)
-      } catch {
-        toast.error('Sync failed — wallet unlocked but data may be stale')
-      }
     },
     onError: () => {
       toast.error('Wrong password or corrupted wallet data')

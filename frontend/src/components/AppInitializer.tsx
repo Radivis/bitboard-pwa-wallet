@@ -1,12 +1,9 @@
 import { type ReactNode, useEffect, useRef } from 'react'
 import { useNavigate, useLocation } from '@tanstack/react-router'
 import { useWalletStore } from '@/stores/walletStore'
-import { useSessionStore, startAutoLockTimer } from '@/stores/sessionStore'
-import { useCryptoStore } from '@/stores/cryptoStore'
+import { useSessionStore } from '@/stores/sessionStore'
 import { useWallets } from '@/db'
-import { getEsploraUrl, toBitcoinNetwork } from '@/lib/bitcoin-utils'
-import { loadCustomEsploraUrl } from '@/lib/wallet-utils'
-import { resolveDescriptorWallet } from '@/lib/descriptor-wallet-manager'
+import { loadDescriptorWalletAndSync } from '@/lib/wallet-utils'
 
 interface AppInitializerProps {
   children: ReactNode
@@ -19,20 +16,11 @@ export function AppInitializer({ children }: AppInitializerProps) {
   const activeWalletId = useWalletStore((s) => s.activeWalletId)
   const setActiveWallet = useWalletStore((s) => s.setActiveWallet)
   const setWalletStatus = useWalletStore((s) => s.setWalletStatus)
-  const setBalance = useWalletStore((s) => s.setBalance)
-  const setTransactions = useWalletStore((s) => s.setTransactions)
-  const setCurrentAddress = useWalletStore((s) => s.setCurrentAddress)
-  const setLastSyncTime = useWalletStore((s) => s.setLastSyncTime)
   const networkMode = useWalletStore((s) => s.networkMode)
   const addressType = useWalletStore((s) => s.addressType)
   const accountId = useWalletStore((s) => s.accountId)
   const sessionPassword = useSessionStore((s) => s.password)
   const lastUnlockedWalletId = useRef<number | null>(null)
-
-  const loadWallet = useCryptoStore((s) => s.loadWallet)
-  const syncWallet = useCryptoStore((s) => s.syncWallet)
-  const getBalance = useCryptoStore((s) => s.getBalance)
-  const getTransactionList = useCryptoStore((s) => s.getTransactionList)
 
   useEffect(() => {
     if (isLoading) return
@@ -69,46 +57,14 @@ export function AppInitializer({ children }: AppInitializerProps) {
   }, [activeWalletId, sessionPassword])
 
   async function autoUnlockWallet(walletId: number, password: string) {
-    setCurrentAddress(null)
-    setBalance(null)
-    setTransactions([])
-    setLastSyncTime(null)
-
     try {
-      const network = toBitcoinNetwork(networkMode)
-      const descriptorWallet = await resolveDescriptorWallet(
+      await loadDescriptorWalletAndSync(
         password,
         walletId,
-        network,
+        networkMode,
         addressType,
         accountId,
       )
-
-      await loadWallet(
-        descriptorWallet.externalDescriptor,
-        descriptorWallet.internalDescriptor,
-        network,
-        descriptorWallet.changeSet,
-      )
-
-      setWalletStatus('unlocked')
-
-      startAutoLockTimer(() => {
-        useWalletStore.getState().lockWallet()
-      })
-
-      try {
-        const customUrl = await loadCustomEsploraUrl(networkMode)
-        const esploraUrl = getEsploraUrl(networkMode, customUrl)
-        await syncWallet(esploraUrl)
-
-        const balance = await getBalance()
-        const txs = await getTransactionList()
-        setBalance(balance)
-        setTransactions(txs)
-      } catch {
-        // Sync failure is non-fatal during auto-unlock
-      }
     } catch {
       setWalletStatus('locked')
       lastUnlockedWalletId.current = null

@@ -25,11 +25,14 @@ export function findDescriptorWallet(
  * Resolve (find or lazily create) a descriptor wallet for the given parameters.
  *
  * 1. Decrypts wallet secrets
- * 2. If a WASM wallet is currently active, exports its changeset and saves it
- * 3. Looks up the target descriptor wallet in the array
- * 4. If not found, creates one via WASM and appends it
- * 5. Re-encrypts and persists updated secrets
- * 6. Returns the resolved descriptor wallet data
+ * 2. Looks up the target descriptor wallet in the array
+ * 3. If not found, creates one via WASM and appends it
+ * 4. Re-encrypts and persists updated secrets
+ * 5. Returns the resolved descriptor wallet data
+ *
+ * When switching from one descriptor wallet to another, callers must call
+ * `updateDescriptorWalletChangeset` with the current (network, addressType, accountId)
+ * before calling this function to persist the active WASM wallet state.
  */
 export async function resolveDescriptorWallet(
   password: string,
@@ -41,8 +44,6 @@ export async function resolveDescriptorWallet(
   await ensureMigrated()
   const db = getDatabase()
   const secrets = await loadWalletSecrets(db, password, walletId)
-
-  await persistActiveWalletChangeset(secrets, password, walletId)
 
   const existing = findDescriptorWallet(
     secrets,
@@ -62,38 +63,6 @@ export async function resolveDescriptorWallet(
     targetAddressType,
     targetAccountId,
   )
-}
-
-/**
- * Export the changeset from the currently active WASM wallet and save it
- * back to the matching descriptor wallet entry in secrets.
- *
- * This is a no-op if no descriptor wallets exist yet (fresh wallet).
- */
-async function persistActiveWalletChangeset(
-  secrets: WalletSecrets,
-  password: string,
-  walletId: number,
-): Promise<void> {
-  if (secrets.descriptorWallets.length === 0) return
-
-  const { exportChangeset } = useCryptoStore.getState()
-  try {
-    const changesetJson = await exportChangeset()
-    // We don't know which descriptor wallet is currently active in WASM,
-    // so we update the changeset for the most recently used one.
-    // The caller is responsible for calling this before switching.
-    // For simplicity, we save it and let the caller handle the mapping.
-    // The actual matching is done by the caller via the wallet store state.
-    await ensureMigrated()
-    const db = getDatabase()
-    await saveWalletSecrets(db, password, walletId, secrets)
-    // Note: the changeset is updated by the caller who knows which DW is active
-    void changesetJson
-  } catch {
-    // If no wallet is active in WASM (e.g., first unlock), export will fail.
-    // This is expected and safe to ignore.
-  }
 }
 
 /**

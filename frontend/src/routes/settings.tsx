@@ -34,11 +34,12 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { MnemonicGrid } from '@/components/MnemonicGrid'
 import { ConfirmationDialog } from '@/components/ConfirmationDialog'
-import { DEFAULT_ESPLORA_URLS, toBitcoinNetwork, getEsploraUrl } from '@/lib/bitcoin-utils'
+import { DEFAULT_ESPLORA_URLS, toBitcoinNetwork } from '@/lib/bitcoin-utils'
 import {
   saveCustomEsploraUrl,
   deleteCustomEsploraUrl,
   loadCustomEsploraUrl,
+  syncActiveWalletAndUpdateState,
 } from '@/lib/wallet-utils'
 import {
   resolveDescriptorWallet,
@@ -83,16 +84,9 @@ async function switchDescriptorWallet(
   const sessionPassword = useSessionStore.getState().password
   if (!activeWalletId || !sessionPassword) return
 
-  const {
-    exportChangeset,
-    loadWallet,
-    syncWallet,
-    getBalance,
-    getTransactionList,
-    getCurrentAddress,
-  } = useCryptoStore.getState()
-  const { setBalance, setTransactions, setWalletStatus, setCurrentAddress } =
-    useWalletStore.getState()
+  const { exportChangeset, loadWallet, getCurrentAddress } =
+    useCryptoStore.getState()
+  const { setWalletStatus, setCurrentAddress } = useWalletStore.getState()
 
   const previousSubWalletLabel = getSubWalletLabel(
     currentNetworkMode,
@@ -142,13 +136,7 @@ async function switchDescriptorWallet(
     setCurrentAddress(address)
     setWalletStatus('syncing')
     try {
-      const customUrl = await loadCustomEsploraUrl(targetNetworkMode)
-      const esploraUrl = getEsploraUrl(targetNetworkMode, customUrl)
-      await syncWallet(esploraUrl)
-      const balance = await getBalance()
-      const txs = await getTransactionList()
-      setBalance(balance)
-      setTransactions(txs)
+      await syncActiveWalletAndUpdateState(targetNetworkMode)
     } catch {
       toast.error('Sync failed after switching')
     }

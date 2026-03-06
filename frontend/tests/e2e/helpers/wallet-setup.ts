@@ -1,7 +1,7 @@
 import { type Page, expect } from '@playwright/test'
+import { TEST_MNEMONIC_12 } from '@/test-utils/test-providers'
 
-export const TEST_MNEMONIC =
-  'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about'
+export const TEST_MNEMONIC = TEST_MNEMONIC_12
 
 export const TEST_PASSWORD = 'TestP@ssword123'
 
