@@ -3,6 +3,7 @@ import { TEST_MNEMONIC, TEST_PASSWORD } from './helpers/wallet-setup'
 
 test.describe('Wallet Import Flow', () => {
   test('wallet import full flow', async ({ page }) => {
+    test.setTimeout(90_000) // Argon2 key derivation + wallet load can take 20–30s on CI
     await page.goto('/setup')
     await page.getByRole('button', { name: 'Import Wallet' }).click()
 

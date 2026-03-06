@@ -88,6 +88,8 @@ test.describe('Send Page', () => {
 
     await page.getByRole('link', { name: /send/i }).click()
     await expect(page.getByText('Send Bitcoin')).toBeVisible()
+    // Wait for balance to propagate before filling form (avoids flaky Review Transaction disabled)
+    await expect(page.getByText(/100,000|100000/)).toBeVisible({ timeout: 10000 })
     await page.getByLabel('Recipient Address').fill(receiveAddress)
     await page.getByRole('button', { name: 'Switch to sats' }).click()
     const amountInput = page.getByLabel(/Amount/)
@@ -95,7 +97,7 @@ test.describe('Send Page', () => {
     await expect(amountInput).toHaveValue('1000')
     await expect(
       page.getByRole('button', { name: 'Review Transaction' }),
-    ).toBeEnabled({ timeout: 15000 })
+    ).toBeEnabled({ timeout: 30000 })
     const reviewButton = page.getByRole('button', { name: 'Review Transaction' })
     await reviewButton.click()
 

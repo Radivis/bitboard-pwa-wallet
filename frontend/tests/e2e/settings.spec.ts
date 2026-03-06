@@ -26,7 +26,10 @@ test.describe('Settings Page', () => {
   })
 
   test('settings address type switch', async ({ page }) => {
-    await page.goto('/settings')
+    await createWalletViaUI(page)
+
+    await page.getByRole('link', { name: /settings/i }).click()
+    await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
 
     await expect(
       page.getByRole('button', { name: 'Taproot (BIP86)' }),
@@ -43,6 +46,12 @@ test.describe('Settings Page', () => {
     await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
     await expect(page.getByText(/Esplora Endpoint/)).toBeVisible()
 
+    // Switch to Regtest first: HTTP URLs are only valid for regtest (HTTPS required for others)
+    await page.getByRole('button', { name: 'Regtest' }).click()
+    await expect(page.getByText(/Regtest Taproot sub-wallet loaded/)).toBeVisible({
+      timeout: 60000,
+    })
+
     const urlInput = page.getByLabel('Endpoint URL')
     await expect(urlInput).toBeVisible()
 
@@ -58,7 +67,7 @@ test.describe('Settings Page', () => {
 
     await page.getByRole('button', { name: 'Save Endpoint' }).click()
 
-    await expect(page.getByText('Esplora endpoint saved')).toBeVisible({
+    await expect(page.getByText(/Esplora endpoint saved/)).toBeVisible({
       timeout: 10000,
     })
   })
