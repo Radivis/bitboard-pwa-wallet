@@ -60,14 +60,20 @@ const NETWORK_OPTIONS: NetworkMode[] = [
  * Switch the active descriptor wallet to match the new parameters.
  * Saves the current WASM wallet state, resolves the new descriptor wallet,
  * loads it into WASM, and syncs.
+ *
+ * @param currentNetworkMode - The network we're switching FROM (must be captured before setNetworkMode)
+ * @param currentAddressType - The address type we're switching FROM (must be captured before setAddressType)
+ * @param currentAccountId - The account we're switching FROM
  */
 async function switchDescriptorWallet(
   targetNetworkMode: NetworkMode,
   targetAddressType: AddressType,
   targetAccountId: number,
+  currentNetworkMode: NetworkMode,
+  currentAddressType: AddressType,
+  currentAccountId: number,
 ) {
-  const { activeWalletId, networkMode, addressType, accountId } =
-    useWalletStore.getState()
+  const { activeWalletId } = useWalletStore.getState()
   const sessionPassword = useSessionStore.getState().password
   if (!activeWalletId || !sessionPassword) return
 
@@ -77,15 +83,15 @@ async function switchDescriptorWallet(
     useWalletStore.getState()
 
   try {
-    // Save current WASM wallet state before switching
+    // Save current WASM wallet state before switching (use current params, not target)
     try {
       const currentChangeset = await exportChangeset()
       await updateDescriptorWalletChangeset(
         sessionPassword,
         activeWalletId,
-        toBitcoinNetwork(networkMode),
-        addressType,
-        accountId,
+        toBitcoinNetwork(currentNetworkMode),
+        currentAddressType,
+        currentAccountId,
         currentChangeset,
       )
     } catch {
@@ -139,12 +145,20 @@ function NetworkSelector() {
   const handleNetworkChange = useCallback(
     async (network: NetworkMode) => {
       if (network === networkMode) return
+      const previousNetworkMode = networkMode
       setNetworkMode(network)
 
       if (walletStatus === 'unlocked' || walletStatus === 'syncing') {
         setSwitching(true)
         try {
-          await switchDescriptorWallet(network, addressType, accountId)
+          await switchDescriptorWallet(
+            network,
+            addressType,
+            accountId,
+            previousNetworkMode,
+            addressType,
+            accountId,
+          )
         } finally {
           setSwitching(false)
         }
@@ -215,18 +229,26 @@ function AddressTypeSelector() {
 
   const applyAddressTypeChange = useCallback(
     async (type: AddressType) => {
+      const previousAddressType = addressType
       setAddressType(type)
 
       if (walletStatus === 'unlocked' || walletStatus === 'syncing') {
         setSwitching(true)
         try {
-          await switchDescriptorWallet(networkMode, type, accountId)
+          await switchDescriptorWallet(
+            networkMode,
+            type,
+            accountId,
+            networkMode,
+            previousAddressType,
+            accountId,
+          )
         } finally {
           setSwitching(false)
         }
       }
     },
-    [setAddressType, walletStatus, networkMode, accountId],
+    [setAddressType, walletStatus, networkMode, addressType, accountId],
   )
 
   return (
