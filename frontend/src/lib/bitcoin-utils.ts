@@ -49,6 +49,32 @@ export function isValidAddress(address: string, network: NetworkMode): boolean {
   return prefixes.some((prefix) => address.startsWith(prefix))
 }
 
+/**
+ * Validates an Esplora endpoint URL.
+ * - Must be a valid URL
+ * - Non-regtest networks require HTTPS
+ *
+ * @throws {Error} If the URL is invalid
+ */
+export function validateEsploraUrl(url: string, networkMode: NetworkMode): void {
+  try {
+    const parsed = new URL(url)
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      throw new Error('URL must use http or https')
+    }
+    if (networkMode !== 'regtest' && parsed.protocol !== 'https:') {
+      throw new Error(
+        `${networkMode} requires HTTPS. Use https:// for your Esplora endpoint.`,
+      )
+    }
+  } catch (err) {
+    if (err instanceof TypeError) {
+      throw new Error('Invalid URL')
+    }
+    throw err
+  }
+}
+
 export function getEsploraUrl(
   network: NetworkMode,
   customUrl?: string | null,

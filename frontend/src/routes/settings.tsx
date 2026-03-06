@@ -143,10 +143,25 @@ async function switchDescriptorWallet(
     setWalletStatus('unlocked')
     toast.success(`${targetSubWalletLabel} sub-wallet loaded`)
   } catch (err) {
-    toast.error(
-      err instanceof Error ? err.message : 'Failed to switch descriptor wallet',
-    )
+    const message = toUserFriendlySwitchError(err)
+    toast.error(message)
   }
+}
+
+function toUserFriendlySwitchError(err: unknown): string {
+  const msg = err instanceof Error ? err.message.toLowerCase() : ''
+  if (
+    msg.includes('password') ||
+    msg.includes('decrypt') ||
+    msg.includes('incorrect') ||
+    msg.includes('corrupted')
+  ) {
+    return 'Wrong password or corrupted wallet data'
+  }
+  if (msg.includes('secrets') && msg.includes('not found')) {
+    return 'Wallet data not found'
+  }
+  return 'Failed to switch descriptor wallet'
 }
 
 function NetworkSelector() {
@@ -331,8 +346,10 @@ function EsploraEndpointConfig() {
       await saveCustomEsploraUrl(networkMode, customUrl)
       setIsCustom(true)
       toast.success('Esplora endpoint saved')
-    } catch {
-      toast.error('Failed to save endpoint')
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : 'Failed to save endpoint',
+      )
     } finally {
       setLoading(false)
     }

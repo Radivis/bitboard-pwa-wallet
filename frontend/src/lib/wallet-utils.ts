@@ -2,7 +2,11 @@ import { getDatabase, ensureMigrated } from '@/db/database'
 import type { NetworkMode } from '@/stores/walletStore'
 import { useWalletStore } from '@/stores/walletStore'
 import { useCryptoStore } from '@/stores/cryptoStore'
-import { getEsploraUrl, toBitcoinNetwork } from '@/lib/bitcoin-utils'
+import {
+  getEsploraUrl,
+  toBitcoinNetwork,
+  validateEsploraUrl,
+} from '@/lib/bitcoin-utils'
 import {
   updateDescriptorWalletChangeset,
   resolveDescriptorWallet,
@@ -42,6 +46,7 @@ export async function saveCustomEsploraUrl(
   network: NetworkMode,
   url: string,
 ): Promise<void> {
+  validateEsploraUrl(url, network)
   await ensureMigrated()
   const db = getDatabase()
   const key = `custom_esplora_url_${network}`
