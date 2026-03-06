@@ -90,7 +90,7 @@ export function WalletLayout({ children }: WalletLayoutProps) {
         <div className="mx-auto flex h-14 max-w-screen-xl items-center justify-between px-4">
           <h1 className="flex items-center gap-2 text-lg font-semibold tracking-tight">
             <img
-              src="/bitboard-icon.svg"
+              src="/bitboard-icon.png"
               alt=""
               className="h-7 w-7 shrink-0"
               width={28}

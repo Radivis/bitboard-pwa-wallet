@@ -103,7 +103,7 @@ export function ReceivePage() {
                   size={256}
                   level="M"
                   imageSettings={{
-                    src: '/bitboard-icon.svg',
+                    src: '/bitboard-icon.png',
                     height: 48,
                     width: 48,
                     excavate: true,
