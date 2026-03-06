@@ -36,6 +36,7 @@ export interface CryptoService {
   ): Promise<boolean>;
 
   getNewAddress(): Promise<string>;
+  getCurrentAddress(): Promise<string>;
   getBalance(): Promise<BalanceInfo>;
   exportChangeset(): Promise<string>;
 

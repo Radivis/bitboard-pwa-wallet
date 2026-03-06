@@ -20,6 +20,7 @@ const mockLoadWallet = vi.fn().mockResolvedValue(true)
 const mockSyncWallet = vi.fn().mockResolvedValue({ balance: {}, changeset_json: '{}' })
 const mockGetBalance = vi.fn().mockResolvedValue({ confirmed: 0, total: 0 })
 const mockGetTransactionList = vi.fn().mockResolvedValue([])
+const mockGetCurrentAddress = vi.fn().mockResolvedValue('tb1qcurrent')
 const cryptoStoreState = {
   terminateWorker: mockTerminateWorker,
   exportChangeset: mockExportChangeset,
@@ -27,6 +28,7 @@ const cryptoStoreState = {
   syncWallet: mockSyncWallet,
   getBalance: mockGetBalance,
   getTransactionList: mockGetTransactionList,
+  getCurrentAddress: mockGetCurrentAddress,
 }
 vi.mock('@/stores/cryptoStore', () => ({
   useCryptoStore: Object.assign(

@@ -51,6 +51,16 @@ pub fn get_new_address(wallet: &mut Wallet) -> String {
         .to_string()
 }
 
+/// Return the last revealed external address without incrementing the index.
+/// Use this when switching descriptor wallets to avoid burning address indices.
+pub fn get_current_address(wallet: &Wallet) -> String {
+    let index = wallet.derivation_index(KeychainKind::External).unwrap_or(0);
+    wallet
+        .peek_address(KeychainKind::External, index)
+        .address
+        .to_string()
+}
+
 /// Return the current wallet balance broken down by confirmation status.
 pub fn get_balance(wallet: &Wallet) -> BalanceInfo {
     let balance = wallet.balance();

@@ -193,6 +193,12 @@ pub fn get_new_address() -> Result<String, JsValue> {
     Ok(address)
 }
 
+/// Return the last revealed external address without incrementing the index.
+#[wasm_bindgen]
+pub fn get_current_address() -> Result<String, JsValue> {
+    with_wallet(wallet::get_current_address).map_err(JsValue::from)
+}
+
 /// Return the active wallet's balance as a `BalanceInfo` JsValue.
 #[wasm_bindgen]
 pub fn get_balance() -> Result<JsValue, JsValue> {

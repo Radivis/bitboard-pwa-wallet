@@ -77,9 +77,15 @@ async function switchDescriptorWallet(
   const sessionPassword = useSessionStore.getState().password
   if (!activeWalletId || !sessionPassword) return
 
-  const { exportChangeset, loadWallet, syncWallet, getBalance, getTransactionList } =
-    useCryptoStore.getState()
-  const { setBalance, setTransactions, setWalletStatus } =
+  const {
+    exportChangeset,
+    loadWallet,
+    syncWallet,
+    getBalance,
+    getTransactionList,
+    getCurrentAddress,
+  } = useCryptoStore.getState()
+  const { setBalance, setTransactions, setWalletStatus, setCurrentAddress } =
     useWalletStore.getState()
 
   try {
@@ -114,6 +120,8 @@ async function switchDescriptorWallet(
       descriptorWallet.changeSet,
     )
 
+    const address = await getCurrentAddress()
+    setCurrentAddress(address)
     setWalletStatus('syncing')
     try {
       const customUrl = await loadCustomEsploraUrl(targetNetworkMode)

@@ -82,6 +82,11 @@ const cryptoService = {
     return wasmModule.get_new_address();
   },
 
+  async getCurrentAddress(): Promise<string> {
+    const wasmModule = await getWasm();
+    return wasmModule.get_current_address();
+  },
+
   async getBalance(): Promise<BalanceInfo> {
     const wasmModule = await getWasm();
     return wasmModule.get_balance();
