@@ -48,6 +48,11 @@ test.describe('Send Page', () => {
   test('sends bitcoin on regtest @regtest', async ({ page }) => {
     test.setTimeout(120_000)
 
+    // Workaround: Use SegWit (BIP84) instead of default Taproot (BIP86) for this test.
+    // Taproot descriptor wallets fail with "base58 error" when building transactions
+    // (likely a bug in BDK or a dependency). See .cursor/architecture/research/
+    // taproot-base58-investigation.md for details.
+
     await importWalletViaUI(page, TEST_MNEMONIC, TEST_PASSWORD)
 
     await page.getByRole('link', { name: /settings/i }).click()

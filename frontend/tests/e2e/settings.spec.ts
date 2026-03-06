@@ -37,7 +37,9 @@ test.describe('Settings Page', () => {
   })
 
   test('settings Esplora endpoint', async ({ page }) => {
-    await page.goto('/settings')
+    await createWalletViaUI(page)
+
+    await page.getByRole('link', { name: /settings/i }).click()
     await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
     await expect(page.getByText(/Esplora Endpoint/)).toBeVisible()
 
