@@ -87,7 +87,10 @@ fn invalid_mnemonic_nonsense_fails_validation() {
 fn two_generated_mnemonics_are_different() {
     let m1 = mnemonic::generate_mnemonic(12).unwrap();
     let m2 = mnemonic::generate_mnemonic(12).unwrap();
-    assert_ne!(m1, m2, "Two independently generated mnemonics should differ");
+    assert_ne!(
+        m1, m2,
+        "Two independently generated mnemonics should differ"
+    );
 }
 
 #[test]

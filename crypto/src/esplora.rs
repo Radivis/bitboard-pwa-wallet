@@ -14,9 +14,7 @@ pub struct EsploraClient {
 impl EsploraClient {
     pub fn new(url: &str) -> Result<Self, CryptoError> {
         if url.is_empty() {
-            return Err(CryptoError::Blockchain(
-                "URL must not be empty".to_string(),
-            ));
+            return Err(CryptoError::Blockchain("URL must not be empty".to_string()));
         }
         let client = bdk_esplora::esplora_client::Builder::new(url)
             .build_async_with_sleeper::<WasmSleeper>()
@@ -50,11 +48,7 @@ impl BlockchainClient for EsploraClient {
         Ok(response.into())
     }
 
-    async fn sync(
-        &self,
-        wallet: &Wallet,
-        parallel_requests: usize,
-    ) -> Result<Update, CryptoError> {
+    async fn sync(&self, wallet: &Wallet, parallel_requests: usize) -> Result<Update, CryptoError> {
         let request = wallet.start_sync_with_revealed_spks();
         let response = self.client.sync(request, parallel_requests).await?;
         Ok(response.into())

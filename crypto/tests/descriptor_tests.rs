@@ -16,12 +16,9 @@ fn derive_descriptors_produces_correct_type(
     #[case] address_type: AddressType,
     #[case] expected_prefix: &str,
 ) {
-    let pair = descriptors::derive_descriptors(
-        TEST_MNEMONIC_12,
-        BitcoinNetwork::Signet,
-        address_type,
-    )
-    .unwrap();
+    let pair =
+        descriptors::derive_descriptors(TEST_MNEMONIC_12, BitcoinNetwork::Signet, address_type)
+            .unwrap();
     assert!(
         pair.external.starts_with(expected_prefix),
         "External descriptor '{}' should start with '{}'",
@@ -44,12 +41,8 @@ fn derive_descriptors_produces_correct_type(
 #[case(BitcoinNetwork::Signet)]
 #[case(BitcoinNetwork::Regtest)]
 fn derive_descriptors_works_for_all_networks(#[case] network: BitcoinNetwork) {
-    let pair = descriptors::derive_descriptors(
-        TEST_MNEMONIC_12,
-        network,
-        AddressType::Taproot,
-    )
-    .unwrap();
+    let pair =
+        descriptors::derive_descriptors(TEST_MNEMONIC_12, network, AddressType::Taproot).unwrap();
     assert!(!pair.external.is_empty());
     assert!(!pair.internal.is_empty());
 }
@@ -164,12 +157,9 @@ fn descriptors_contain_wildcard_derivation() {
 #[case(AddressType::Taproot)]
 #[case(AddressType::Segwit)]
 fn derive_descriptors_works_with_24_word_mnemonic(#[case] address_type: AddressType) {
-    let pair = descriptors::derive_descriptors(
-        TEST_MNEMONIC_24,
-        BitcoinNetwork::Signet,
-        address_type,
-    )
-    .unwrap();
+    let pair =
+        descriptors::derive_descriptors(TEST_MNEMONIC_24, BitcoinNetwork::Signet, address_type)
+            .unwrap();
     assert!(!pair.external.is_empty());
     assert!(!pair.internal.is_empty());
 }
@@ -188,11 +178,7 @@ fn derive_descriptors_rejects_invalid_mnemonic() {
 
 #[test]
 fn derive_descriptors_rejects_empty_mnemonic() {
-    let result = descriptors::derive_descriptors(
-        "",
-        BitcoinNetwork::Signet,
-        AddressType::Taproot,
-    );
+    let result = descriptors::derive_descriptors("", BitcoinNetwork::Signet, AddressType::Taproot);
     assert!(result.is_err());
 }
 
@@ -208,8 +194,7 @@ fn descriptors_contain_private_key_material() {
     .unwrap();
     // BDK descriptor templates with Xpriv include the private key
     // in the descriptor string (tprv... for testnet/signet, xprv... for mainnet)
-    let has_private_key = pair.external.contains("prv")
-        || pair.external.contains("tprv");
+    let has_private_key = pair.external.contains("prv") || pair.external.contains("tprv");
     assert!(
         has_private_key,
         "External descriptor should contain private key material for signing capability"

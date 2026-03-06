@@ -6,7 +6,7 @@ use bdk_wallet::KeychainKind;
 use bitboard_crypto::types::{AddressType, BitcoinNetwork};
 use bitboard_crypto::wallet;
 use common::wallet_fixtures::{
-    create_test_wallet, descriptors_for_test, DEFAULT_ADDRESS_TYPE, DEFAULT_NETWORK,
+    DEFAULT_ADDRESS_TYPE, DEFAULT_NETWORK, create_test_wallet, descriptors_for_test,
 };
 use rstest::rstest;
 
@@ -86,7 +86,10 @@ fn create_wallet_returns_serializable_changeset() {
     let mut wallet = create_test_wallet(DEFAULT_NETWORK, DEFAULT_ADDRESS_TYPE);
 
     let changeset = wallet.take_staged();
-    assert!(changeset.is_some(), "New wallet must have a staged changeset");
+    assert!(
+        changeset.is_some(),
+        "New wallet must have a staged changeset"
+    );
 
     let changeset = changeset.unwrap();
     let json = wallet::serialize_changeset(&changeset).expect("Changeset should serialize to JSON");
@@ -94,8 +97,8 @@ fn create_wallet_returns_serializable_changeset() {
 
     let round_tripped =
         wallet::deserialize_changeset(&json).expect("JSON should deserialize back to ChangeSet");
-    let json2 =
-        wallet::serialize_changeset(&round_tripped).expect("Round-tripped changeset should serialize");
+    let json2 = wallet::serialize_changeset(&round_tripped)
+        .expect("Round-tripped changeset should serialize");
     assert_eq!(json, json2, "ChangeSet JSON round-trip must be lossless");
 }
 
@@ -107,7 +110,10 @@ fn load_wallet_from_changeset_restores_state() {
     let mut wallet = wallet::create_wallet(&pair.external, &pair.internal, DEFAULT_NETWORK)
         .expect("Wallet creation should succeed");
 
-    let first_address = wallet.peek_address(KeychainKind::External, 0).address.to_string();
+    let first_address = wallet
+        .peek_address(KeychainKind::External, 0)
+        .address
+        .to_string();
     let changeset = wallet.take_staged().expect("Must have initial changeset");
 
     let loaded_wallet =
@@ -135,13 +141,20 @@ fn changeset_round_trip_preserves_address_index() {
     wallet::get_new_address(&mut wallet);
     let third_address = wallet::get_new_address(&mut wallet);
 
-    let changeset = wallet.take_staged().expect("Must have staged changeset after revealing addresses");
+    let changeset = wallet
+        .take_staged()
+        .expect("Must have staged changeset after revealing addresses");
     let json = wallet::serialize_changeset(&changeset).expect("Serialization should succeed");
-    let deserialized = wallet::deserialize_changeset(&json).expect("Deserialization should succeed");
+    let deserialized =
+        wallet::deserialize_changeset(&json).expect("Deserialization should succeed");
 
-    let mut loaded =
-        wallet::load_wallet(&pair.external, &pair.internal, DEFAULT_NETWORK, deserialized)
-            .expect("Loading should succeed");
+    let mut loaded = wallet::load_wallet(
+        &pair.external,
+        &pair.internal,
+        DEFAULT_NETWORK,
+        deserialized,
+    )
+    .expect("Loading should succeed");
 
     let next_address = wallet::get_new_address(&mut loaded);
     assert_ne!(
@@ -160,8 +173,14 @@ fn same_descriptors_produce_same_wallet() {
     let wallet2 = wallet::create_wallet(&pair.external, &pair.internal, DEFAULT_NETWORK)
         .expect("Second wallet creation should succeed");
 
-    let addr1 = wallet1.peek_address(KeychainKind::External, 0).address.to_string();
-    let addr2 = wallet2.peek_address(KeychainKind::External, 0).address.to_string();
+    let addr1 = wallet1
+        .peek_address(KeychainKind::External, 0)
+        .address
+        .to_string();
+    let addr2 = wallet2
+        .peek_address(KeychainKind::External, 0)
+        .address
+        .to_string();
     assert_eq!(
         addr1, addr2,
         "Same descriptors must produce the same first address"
@@ -183,5 +202,8 @@ fn invalid_descriptor_returns_error() {
         "also-not-a-descriptor",
         DEFAULT_NETWORK,
     );
-    assert!(result.is_err(), "Invalid descriptor strings must return an error");
+    assert!(
+        result.is_err(),
+        "Invalid descriptor strings must return an error"
+    );
 }

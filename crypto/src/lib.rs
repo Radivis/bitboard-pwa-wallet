@@ -33,7 +33,7 @@ pub fn init() {
 }
 
 thread_local! {
-    static ACTIVE_WALLET: RefCell<Option<BdkWallet>> = RefCell::new(None);
+    static ACTIVE_WALLET: RefCell<Option<BdkWallet>> = const { RefCell::new(None) };
     static ACCUMULATED_CHANGESET: RefCell<ChangeSet> = RefCell::new(ChangeSet::default());
 }
 
@@ -45,9 +45,9 @@ where
         let borrow = w.try_borrow().map_err(|_| {
             JsValue::from_str("Wallet is already borrowed — likely a previous operation panicked")
         })?;
-        let wallet_ref = borrow
-            .as_ref()
-            .ok_or_else(|| JsValue::from_str("No active wallet. Call create_wallet or load_wallet first."))?;
+        let wallet_ref = borrow.as_ref().ok_or_else(|| {
+            JsValue::from_str("No active wallet. Call create_wallet or load_wallet first.")
+        })?;
         Ok(op(wallet_ref))
     })
 }
@@ -60,9 +60,9 @@ where
         let mut borrow = w.try_borrow_mut().map_err(|_| {
             JsValue::from_str("Wallet is already borrowed — likely a previous operation panicked")
         })?;
-        let wallet_ref = borrow
-            .as_mut()
-            .ok_or_else(|| JsValue::from_str("No active wallet. Call create_wallet or load_wallet first."))?;
+        let wallet_ref = borrow.as_mut().ok_or_else(|| {
+            JsValue::from_str("No active wallet. Call create_wallet or load_wallet first.")
+        })?;
         Ok(op(wallet_ref))
     })
 }
@@ -71,12 +71,12 @@ where
 fn accumulate_staged_changes() {
     ACTIVE_WALLET.with(|w| {
         let mut borrow = w.borrow_mut();
-        if let Some(wallet_ref) = borrow.as_mut() {
-            if let Some(staged) = wallet_ref.take_staged() {
-                ACCUMULATED_CHANGESET.with(|cs| {
-                    cs.borrow_mut().merge(staged);
-                });
-            }
+        if let Some(wallet_ref) = borrow.as_mut()
+            && let Some(staged) = wallet_ref.take_staged()
+        {
+            ACCUMULATED_CHANGESET.with(|cs| {
+                cs.borrow_mut().merge(staged);
+            });
         }
     });
 }
@@ -112,11 +112,10 @@ pub fn derive_descriptors(
     let network = types::BitcoinNetwork::try_from(network).map_err(JsValue::from)?;
     let addr_type = types::AddressType::try_from(address_type).map_err(JsValue::from)?;
 
-    let pair = descriptors::derive_descriptors(mnemonic_str, network, addr_type)
-        .map_err(JsValue::from)?;
+    let pair =
+        descriptors::derive_descriptors(mnemonic_str, network, addr_type).map_err(JsValue::from)?;
 
-    serde_wasm_bindgen::to_value(&pair)
-        .map_err(|e| JsValue::from_str(&e.to_string()))
+    serde_wasm_bindgen::to_value(&pair).map_err(|e| JsValue::from_str(&e.to_string()))
 }
 
 // ---------------------------------------------------------------------------
@@ -136,20 +135,17 @@ pub fn create_wallet(
     let net = types::BitcoinNetwork::try_from(network).map_err(JsValue::from)?;
     let addr_type = types::AddressType::try_from(address_type).map_err(JsValue::from)?;
 
-    let pair = descriptors::derive_descriptors(mnemonic_str, net, addr_type)
-        .map_err(JsValue::from)?;
+    let pair =
+        descriptors::derive_descriptors(mnemonic_str, net, addr_type).map_err(JsValue::from)?;
 
-    let mut bdk_wallet = wallet::create_wallet(&pair.external, &pair.internal, net)
-        .map_err(JsValue::from)?;
+    let mut bdk_wallet =
+        wallet::create_wallet(&pair.external, &pair.internal, net).map_err(JsValue::from)?;
 
     let first_address = wallet::get_new_address(&mut bdk_wallet);
 
-    let initial_changeset = bdk_wallet
-        .take_staged()
-        .unwrap_or_default();
+    let initial_changeset = bdk_wallet.take_staged().unwrap_or_default();
 
-    let changeset_json = wallet::serialize_changeset(&initial_changeset)
-        .map_err(JsValue::from)?;
+    let changeset_json = wallet::serialize_changeset(&initial_changeset).map_err(JsValue::from)?;
 
     ACTIVE_WALLET.with(|w| w.replace(Some(bdk_wallet)));
     ACCUMULATED_CHANGESET.with(|cs| *cs.borrow_mut() = initial_changeset);
@@ -161,8 +157,7 @@ pub fn create_wallet(
         changeset_json,
     };
 
-    serde_wasm_bindgen::to_value(&result)
-        .map_err(|e| JsValue::from_str(&e.to_string()))
+    serde_wasm_bindgen::to_value(&result).map_err(|e| JsValue::from_str(&e.to_string()))
 }
 
 /// Load a previously persisted wallet from descriptors and a changeset JSON.
@@ -179,7 +174,8 @@ pub fn load_wallet(
     let bdk_wallet = wallet::load_wallet(external_descriptor, internal_descriptor, net, changeset)
         .map_err(JsValue::from)?;
 
-    let restored_changeset = wallet::deserialize_changeset(changeset_json).map_err(JsValue::from)?;
+    let restored_changeset =
+        wallet::deserialize_changeset(changeset_json).map_err(JsValue::from)?;
 
     ACTIVE_WALLET.with(|w| w.replace(Some(bdk_wallet)));
     ACCUMULATED_CHANGESET.with(|cs| *cs.borrow_mut() = restored_changeset);
@@ -190,7 +186,7 @@ pub fn load_wallet(
 /// Reveal the next external address from the active wallet.
 #[wasm_bindgen]
 pub fn get_new_address() -> Result<String, JsValue> {
-    let address = with_wallet_mut(|w| wallet::get_new_address(w))?;
+    let address = with_wallet_mut(wallet::get_new_address)?;
     accumulate_staged_changes();
     Ok(address)
 }
@@ -198,9 +194,8 @@ pub fn get_new_address() -> Result<String, JsValue> {
 /// Return the active wallet's balance as a `BalanceInfo` JsValue.
 #[wasm_bindgen]
 pub fn get_balance() -> Result<JsValue, JsValue> {
-    let balance = with_wallet(|w| wallet::get_balance(w))?;
-    serde_wasm_bindgen::to_value(&balance)
-        .map_err(|e| JsValue::from_str(&e.to_string()))
+    let balance = with_wallet(wallet::get_balance)?;
+    serde_wasm_bindgen::to_value(&balance).map_err(|e| JsValue::from_str(&e.to_string()))
 }
 
 /// Export the full accumulated changeset as a JSON string.
@@ -210,9 +205,8 @@ pub fn get_balance() -> Result<JsValue, JsValue> {
 #[wasm_bindgen]
 pub fn export_changeset() -> Result<String, JsValue> {
     accumulate_staged_changes();
-    ACCUMULATED_CHANGESET.with(|cs| {
-        wallet::serialize_changeset(&cs.borrow()).map_err(JsValue::from)
-    })
+    ACCUMULATED_CHANGESET
+        .with(|cs| wallet::serialize_changeset(&cs.borrow()).map_err(JsValue::from))
 }
 
 // ---------------------------------------------------------------------------
@@ -302,7 +296,13 @@ pub fn build_transaction(
 ) -> Result<String, JsValue> {
     let net = types::BitcoinNetwork::try_from(network).map_err(JsValue::from)?;
     let psbt = with_wallet_mut(|w| {
-        transaction::build_transaction(w, recipient_address, amount_sats, fee_rate_sat_per_vb, net.into())
+        transaction::build_transaction(
+            w,
+            recipient_address,
+            amount_sats,
+            fee_rate_sat_per_vb,
+            net.into(),
+        )
     })?
     .map_err(JsValue::from)?;
 
@@ -319,8 +319,7 @@ pub fn sign_and_extract_transaction(psbt_base64: &str) -> Result<String, JsValue
         .parse()
         .map_err(|e: bitcoin::psbt::PsbtParseError| JsValue::from_str(&e.to_string()))?;
 
-    with_wallet(|w| transaction::sign_transaction(w, &mut psbt))?
-        .map_err(JsValue::from)?;
+    with_wallet(|w| transaction::sign_transaction(w, &mut psbt))?.map_err(JsValue::from)?;
 
     let tx = transaction::extract_transaction(psbt).map_err(JsValue::from)?;
     Ok(bitcoin::consensus::encode::serialize_hex(&tx))
@@ -330,20 +329,14 @@ pub fn sign_and_extract_transaction(psbt_base64: &str) -> Result<String, JsValue
 ///
 /// Takes the raw transaction hex and Esplora URL, returns the txid string.
 #[wasm_bindgen]
-pub async fn broadcast_transaction(
-    raw_tx_hex: &str,
-    esplora_url: &str,
-) -> Result<String, JsValue> {
+pub async fn broadcast_transaction(raw_tx_hex: &str, esplora_url: &str) -> Result<String, JsValue> {
     let tx_bytes = bitcoin::consensus::encode::deserialize_hex::<bitcoin::Transaction>(raw_tx_hex)
         .map_err(|e| JsValue::from_str(&e.to_string()))?;
 
     let client = esplora::EsploraClient::new(esplora_url).map_err(JsValue::from)?;
 
     use crate::blockchain::BlockchainClient;
-    let txid = client
-        .broadcast(&tx_bytes)
-        .await
-        .map_err(JsValue::from)?;
+    let txid = client.broadcast(&tx_bytes).await.map_err(JsValue::from)?;
 
     Ok(txid.to_string())
 }
@@ -351,7 +344,7 @@ pub async fn broadcast_transaction(
 /// Return all wallet transactions as a JSON array of `TransactionDetails`.
 #[wasm_bindgen]
 pub fn get_transaction_list() -> Result<JsValue, JsValue> {
-    let tx_list = with_wallet(|w| wallet::get_transaction_list(w))?;
+    let tx_list = with_wallet(wallet::get_transaction_list)?;
     to_js(&tx_list)
 }
 

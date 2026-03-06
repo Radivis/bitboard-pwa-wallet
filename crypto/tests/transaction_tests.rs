@@ -2,10 +2,10 @@
 
 mod common;
 
-use bitcoin::Network;
 use bitboard_crypto::transaction;
+use bitcoin::Network;
 use common::wallet_fixtures::{
-    create_test_wallet, fund_test_wallet, DEFAULT_ADDRESS_TYPE, DEFAULT_NETWORK,
+    DEFAULT_ADDRESS_TYPE, DEFAULT_NETWORK, create_test_wallet, fund_test_wallet,
 };
 
 const VALID_SIGNET_ADDRESS: &str = "tb1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx";
@@ -79,10 +79,15 @@ fn build_transaction_creates_valid_psbt() {
         "PSBT must contain at least one output"
     );
 
-    let has_recipient_output = psbt.unsigned_tx.output.iter().any(|o| {
-        o.value.to_sat() == SEND_AMOUNT
-    });
-    assert!(has_recipient_output, "PSBT must contain the recipient output");
+    let has_recipient_output = psbt
+        .unsigned_tx
+        .output
+        .iter()
+        .any(|o| o.value.to_sat() == SEND_AMOUNT);
+    assert!(
+        has_recipient_output,
+        "PSBT must contain the recipient output"
+    );
 }
 
 #[test]
@@ -110,7 +115,12 @@ fn build_transaction_respects_fee_rate() {
                 .unwrap_or(0)
         })
         .sum();
-    let total_output: u64 = psbt.unsigned_tx.output.iter().map(|o| o.value.to_sat()).sum();
+    let total_output: u64 = psbt
+        .unsigned_tx
+        .output
+        .iter()
+        .map(|o| o.value.to_sat())
+        .sum();
     let fee = total_input.saturating_sub(total_output);
 
     assert!(fee > 0, "Transaction must have a non-zero fee");

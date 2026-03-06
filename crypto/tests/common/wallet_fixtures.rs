@@ -5,9 +5,7 @@ use bdk_wallet::chain::local_chain::CheckPoint;
 use bdk_wallet::chain::{BlockId, ConfirmationBlockTime, TxUpdate};
 use bdk_wallet::{KeychainKind, Update, Wallet};
 use bitcoin::hashes::Hash;
-use bitcoin::{
-    transaction, Amount, BlockHash, OutPoint, Transaction, TxIn, TxOut,
-};
+use bitcoin::{Amount, BlockHash, OutPoint, Transaction, TxIn, TxOut, transaction};
 
 use bitboard_crypto::descriptors;
 use bitboard_crypto::types::{AddressType, BitcoinNetwork, DescriptorPair};
@@ -43,18 +41,13 @@ pub fn create_test_wallet(network: BitcoinNetwork, address_type: AddressType) ->
 /// the resulting `Update` to the wallet. Uses a non-null input outpoint
 /// so the transaction is not treated as coinbase (avoiding maturity rules).
 pub fn fund_test_wallet(wallet: &mut Wallet, amount_sats: u64) {
-    let receive_address = wallet
-        .peek_address(KeychainKind::External, 0)
-        .address;
+    let receive_address = wallet.peek_address(KeychainKind::External, 0).address;
 
     let funding_tx = Transaction {
         version: transaction::Version(2),
         lock_time: bitcoin::absolute::LockTime::ZERO,
         input: vec![TxIn {
-            previous_output: OutPoint::new(
-                bitcoin::Txid::from_byte_array([1u8; 32]),
-                0,
-            ),
+            previous_output: OutPoint::new(bitcoin::Txid::from_byte_array([1u8; 32]), 0),
             ..Default::default()
         }],
         output: vec![TxOut {

@@ -1,8 +1,8 @@
-use bdk_wallet::bitcoin::bip32::Xpriv;
+use bdk_wallet::KeychainKind;
 use bdk_wallet::bitcoin::Network;
+use bdk_wallet::bitcoin::bip32::Xpriv;
 use bdk_wallet::descriptor::template::{Bip84, Bip86, DescriptorTemplate};
 use bdk_wallet::keys::bip39::{Language, Mnemonic};
-use bdk_wallet::KeychainKind;
 
 use crate::error::CryptoError;
 use crate::types::{AddressType, BitcoinNetwork, DescriptorPair};
@@ -19,7 +19,7 @@ pub fn derive_descriptors(
     network: BitcoinNetwork,
     address_type: AddressType,
 ) -> Result<DescriptorPair, CryptoError> {
-     let mnemonic = Mnemonic::parse_in(Language::English, mnemonic_str)
+    let mnemonic = Mnemonic::parse_in(Language::English, mnemonic_str)
         .map_err(|e| CryptoError::Mnemonic(e.to_string()))?;
 
     let seed = mnemonic.to_seed("");
@@ -37,8 +37,6 @@ pub fn derive_descriptors(
         internal: internal_desc,
     })
 }
-
-
 
 /// Build BIP86 (Taproot) descriptor pair.
 fn build_descriptors_bip86(

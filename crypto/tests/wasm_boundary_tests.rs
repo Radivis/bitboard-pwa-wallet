@@ -66,8 +66,14 @@ fn derive_descriptors_returns_valid_jsvalue() {
 
     let ext_str = external.as_string().unwrap();
     let int_str = internal.as_string().unwrap();
-    assert!(!ext_str.is_empty(), "external descriptor should not be empty");
-    assert!(!int_str.is_empty(), "internal descriptor should not be empty");
+    assert!(
+        !ext_str.is_empty(),
+        "external descriptor should not be empty"
+    );
+    assert!(
+        !int_str.is_empty(),
+        "internal descriptor should not be empty"
+    );
 }
 
 #[wasm_bindgen_test]
@@ -111,10 +117,9 @@ fn get_balance_returns_jsvalue_after_wallet_creation() {
     create_test_wallet();
     let balance = get_balance().expect("get_balance failed");
 
-    let confirmed = js_sys::Reflect::get(&balance, &JsValue::from_str("confirmed"))
-        .expect("missing confirmed");
-    let total =
-        js_sys::Reflect::get(&balance, &JsValue::from_str("total")).expect("missing total");
+    let confirmed =
+        js_sys::Reflect::get(&balance, &JsValue::from_str("confirmed")).expect("missing confirmed");
+    let total = js_sys::Reflect::get(&balance, &JsValue::from_str("total")).expect("missing total");
 
     assert!(confirmed.as_f64().is_some(), "confirmed should be a number");
     assert!(total.as_f64().is_some(), "total should be a number");

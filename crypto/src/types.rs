@@ -66,7 +66,10 @@ impl TryFrom<&str> for BitcoinNetwork {
             "testnet" => Ok(BitcoinNetwork::Testnet),
             "signet" => Ok(BitcoinNetwork::Signet),
             "regtest" => Ok(BitcoinNetwork::Regtest),
-            _ => Err(CryptoError::Descriptor(format!("Unknown network: {}", value))),
+            _ => Err(CryptoError::Descriptor(format!(
+                "Unknown network: {}",
+                value
+            ))),
         }
     }
 }

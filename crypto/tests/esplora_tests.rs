@@ -8,13 +8,13 @@ use bitcoin::{Transaction, Txid};
 use mockall::mock;
 
 use bitboard_crypto::blockchain::BlockchainClient;
-use bitboard_crypto::esplora::EsploraClient;
 use bitboard_crypto::error::CryptoError;
+use bitboard_crypto::esplora::EsploraClient;
 use bitboard_crypto::sync;
 use bitboard_crypto::wallet;
 use common::esplora_mocks::{mock_broadcast_rejection, mock_broadcast_success, start_mock_esplora};
 use common::wallet_fixtures::{
-    create_test_wallet, fund_test_wallet, DEFAULT_ADDRESS_TYPE, DEFAULT_NETWORK,
+    DEFAULT_ADDRESS_TYPE, DEFAULT_NETWORK, create_test_wallet, fund_test_wallet,
 };
 
 mock! {
@@ -78,7 +78,10 @@ async fn full_scan_wallet_applies_update() {
         .returning(|_wallet, _stop_gap, _parallel| Ok(Update::default()));
 
     let result = sync::full_scan_wallet(&mut wallet, &mock_client, 20, 1).await;
-    assert!(result.is_ok(), "Full scan with default update should succeed");
+    assert!(
+        result.is_ok(),
+        "Full scan with default update should succeed"
+    );
 }
 
 #[tokio::test]
@@ -86,11 +89,9 @@ async fn sync_wallet_propagates_client_error() {
     let mut wallet = create_test_wallet(DEFAULT_NETWORK, DEFAULT_ADDRESS_TYPE);
 
     let mut mock_client = MockBC::new();
-    mock_client
-        .expect_sync()
-        .returning(|_wallet, _parallel| {
-            Err(CryptoError::Blockchain("connection refused".to_string()))
-        });
+    mock_client.expect_sync().returning(|_wallet, _parallel| {
+        Err(CryptoError::Blockchain("connection refused".to_string()))
+    });
 
     let result = sync::sync_wallet(&mut wallet, &mock_client, 1).await;
     assert!(result.is_err(), "Sync must propagate client errors");
@@ -134,8 +135,8 @@ async fn broadcast_returns_txid_on_success() {
     .expect("Build should succeed");
     bitboard_crypto::transaction::sign_transaction(&wallet, &mut psbt)
         .expect("Sign should succeed");
-    let tx = bitboard_crypto::transaction::extract_transaction(psbt)
-        .expect("Extract should succeed");
+    let tx =
+        bitboard_crypto::transaction::extract_transaction(psbt).expect("Extract should succeed");
 
     let result = client.broadcast(&tx).await;
     assert!(result.is_ok(), "Broadcast to mock server should succeed");
@@ -161,8 +162,8 @@ async fn broadcast_handles_rejection() {
     .expect("Build should succeed");
     bitboard_crypto::transaction::sign_transaction(&wallet, &mut psbt)
         .expect("Sign should succeed");
-    let tx = bitboard_crypto::transaction::extract_transaction(psbt)
-        .expect("Extract should succeed");
+    let tx =
+        bitboard_crypto::transaction::extract_transaction(psbt).expect("Extract should succeed");
 
     let result = client.broadcast(&tx).await;
     assert!(result.is_err(), "Rejected broadcast must return an error");
@@ -183,7 +184,11 @@ fn get_transaction_list_includes_funded_transaction() {
     fund_test_wallet(&mut wallet, 50_000);
 
     let txs = wallet::get_transaction_list(&wallet);
-    assert_eq!(txs.len(), 1, "Funded wallet must have exactly one transaction");
+    assert_eq!(
+        txs.len(),
+        1,
+        "Funded wallet must have exactly one transaction"
+    );
     assert_eq!(txs[0].received_sats, 50_000);
     assert!(txs[0].is_confirmed);
 }
