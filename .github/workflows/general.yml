@@ -93,6 +93,9 @@ jobs:
         working-directory: frontend
         run: npx playwright install --with-deps chromium
 
+      - name: Start regtest environment
+        run: bash scripts/start-regtest.sh
+
       - name: Run Playwright tests
         working-directory: frontend
         run: npx playwright test
