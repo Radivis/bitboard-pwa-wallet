@@ -88,7 +88,11 @@ async function switchDescriptorWallet(
   const { setBalance, setTransactions, setWalletStatus, setCurrentAddress } =
     useWalletStore.getState()
 
+  const previousNetworkLabel = NETWORK_LABELS[currentNetworkMode]
+  const targetNetworkLabel = NETWORK_LABELS[targetNetworkMode]
+
   try {
+    toast.info(`Unloading ${previousNetworkLabel} sub-wallet`)
     // Save current WASM wallet state before switching (use current params, not target)
     try {
       const currentChangeset = await exportChangeset()
@@ -100,10 +104,12 @@ async function switchDescriptorWallet(
         currentAccountId,
         currentChangeset,
       )
+      toast.success(`${previousNetworkLabel} sub-wallet unloaded`)
     } catch {
       // No active WASM wallet yet (e.g., first load) -- safe to skip
     }
 
+    toast.info(`Loading ${targetNetworkLabel} sub-wallet`)
     const targetNetwork = toBitcoinNetwork(targetNetworkMode)
     const descriptorWallet = await resolveDescriptorWallet(
       sessionPassword,
@@ -135,6 +141,7 @@ async function switchDescriptorWallet(
       toast.error('Sync failed after switching')
     }
     setWalletStatus('unlocked')
+    toast.success(`${targetNetworkLabel} sub-wallet loaded`)
   } catch (err) {
     toast.error(
       err instanceof Error ? err.message : 'Failed to switch descriptor wallet',
