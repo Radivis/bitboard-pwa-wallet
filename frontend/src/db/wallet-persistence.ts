@@ -1,13 +1,22 @@
 import type { Kysely } from 'kysely'
 import type { Database } from './schema'
 import { encryptData, decryptData } from './encryption'
+import type { AddressType, BitcoinNetwork } from '@/workers/crypto-types'
+
+/** Data for a single descriptor wallet (one network + address type + account combo). */
+export interface DescriptorWalletData {
+  network: BitcoinNetwork
+  addressType: AddressType
+  accountId: number
+  externalDescriptor: string
+  internalDescriptor: string
+  changeSet: string
+}
 
 /** Sensitive wallet data that must be stored encrypted. */
 export interface WalletSecrets {
   mnemonic: string
-  externalDescriptor: string
-  internalDescriptor: string
-  changeSet: string
+  descriptorWallets: DescriptorWalletData[]
 }
 
 /**

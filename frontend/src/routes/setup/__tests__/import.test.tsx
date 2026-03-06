@@ -40,16 +40,22 @@ const mockSetCurrentAddress = vi.fn()
 const mockSetBalance = vi.fn()
 const mockSetTransactions = vi.fn()
 vi.mock('@/stores/walletStore', () => ({
-  useWalletStore: (selector: (s: Record<string, unknown>) => unknown) =>
-    selector({
-      networkMode: 'signet',
-      addressType: 'taproot',
-      setActiveWallet: mockSetActiveWallet,
-      setWalletStatus: mockSetWalletStatus,
-      setCurrentAddress: mockSetCurrentAddress,
-      setBalance: mockSetBalance,
-      setTransactions: mockSetTransactions,
-    }),
+  useWalletStore: Object.assign(
+    (selector: (s: Record<string, unknown>) => unknown) =>
+      selector({
+        networkMode: 'signet',
+        addressType: 'taproot',
+        accountId: 0,
+        setActiveWallet: mockSetActiveWallet,
+        setWalletStatus: mockSetWalletStatus,
+        setCurrentAddress: mockSetCurrentAddress,
+        setBalance: mockSetBalance,
+        setTransactions: mockSetTransactions,
+      }),
+    {
+      getState: () => ({ lockWallet: vi.fn() }),
+    },
+  ),
 }))
 
 vi.mock('@/stores/sessionStore', () => ({

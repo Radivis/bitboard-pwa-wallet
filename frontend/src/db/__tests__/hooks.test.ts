@@ -15,7 +15,6 @@ vi.mock('../database', () => ({
 
 import {
   useWallets,
-  useWalletsByNetwork,
   useWallet,
   useAddWallet,
   useUpdateWallet,
@@ -37,10 +36,9 @@ function createQueryClientWrapper() {
   }
 }
 
-function createWalletValues(overrides: Partial<{ name: string; network: string; created_at: string }> = {}) {
+function createWalletValues(overrides: Partial<{ name: string; created_at: string }> = {}) {
   return {
     name: 'Test Wallet',
-    network: 'signet',
     created_at: new Date().toISOString(),
     ...overrides,
   }
@@ -73,21 +71,6 @@ describe('TanStack Query hooks', () => {
 
       await waitFor(() => expect(result.current.isSuccess).toBe(true))
       expect(result.current.data).toHaveLength(2)
-    })
-  })
-
-  describe('useWalletsByNetwork', () => {
-    it('returns only wallets for the specified network', async () => {
-      await testDb.insertInto('wallets').values(createWalletValues({ name: 'Signet 1' })).execute()
-      await testDb.insertInto('wallets').values(createWalletValues({ name: 'Mainnet 1', network: 'mainnet' })).execute()
-      await testDb.insertInto('wallets').values(createWalletValues({ name: 'Signet 2' })).execute()
-
-      const { wrapper } = createQueryClientWrapper()
-      const { result } = renderHook(() => useWalletsByNetwork('signet'), { wrapper })
-
-      await waitFor(() => expect(result.current.isSuccess).toBe(true))
-      expect(result.current.data).toHaveLength(2)
-      expect(result.current.data!.every((w) => w.network === 'signet')).toBe(true)
     })
   })
 

@@ -33,16 +33,23 @@ describe('Wallet Persistence with Encryption', () => {
 
   const sampleSecrets = {
     mnemonic: 'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about',
-    externalDescriptor: "wpkh([fingerprint/84'/0'/0'/0]xpub.../0/*)",
-    internalDescriptor: "wpkh([fingerprint/84'/0'/0'/0]xpub.../1/*)",
-    changeSet: '{"network":"signet","last_reveal":{"0":5}}',
+    descriptorWallets: [
+      {
+        network: 'signet' as const,
+        addressType: 'taproot' as const,
+        accountId: 0,
+        externalDescriptor: "tr([fingerprint/86'/1'/0']xpub.../0/*)",
+        internalDescriptor: "tr([fingerprint/86'/1'/0']xpub.../1/*)",
+        changeSet: '{"last_reveal":{"0":5}}',
+      },
+    ],
   }
 
   beforeEach(async () => {
     db = await createTestDatabase()
     const result = await db
       .insertInto('wallets')
-      .values({ name: 'Test Wallet', network: 'signet', created_at: new Date().toISOString() })
+      .values({ name: 'Test Wallet', created_at: new Date().toISOString() })
       .executeTakeFirstOrThrow()
     walletId = Number(result.insertId)
   })
@@ -137,6 +144,7 @@ describe('Wallet Persistence with Encryption', () => {
       const loaded = await loadWalletSecrets(db, password, walletId)
 
       expect(loaded.mnemonic).toBe(unicodeSecrets.mnemonic)
+      expect(loaded.descriptorWallets).toEqual(unicodeSecrets.descriptorWallets)
     })
   })
 
@@ -163,7 +171,7 @@ describe('Wallet Persistence with Encryption', () => {
     it('keeps secrets separate for different wallets', async () => {
       const result2 = await db
         .insertInto('wallets')
-        .values({ name: 'Second Wallet', network: 'testnet', created_at: new Date().toISOString() })
+        .values({ name: 'Second Wallet', created_at: new Date().toISOString() })
         .executeTakeFirstOrThrow()
       const walletId2 = Number(result2.insertId)
 

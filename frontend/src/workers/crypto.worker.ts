@@ -45,19 +45,21 @@ const cryptoService = {
   async deriveDescriptors(
     mnemonic: string,
     network: BitcoinNetwork,
-    addressType: AddressType
+    addressType: AddressType,
+    accountId: number
   ): Promise<DescriptorPair> {
     const wasmModule = await getWasm();
-    return wasmModule.derive_descriptors(mnemonic, network, addressType);
+    return wasmModule.derive_descriptors(mnemonic, network, addressType, accountId);
   },
 
   async createWallet(
     mnemonic: string,
     network: BitcoinNetwork,
-    addressType: AddressType
+    addressType: AddressType,
+    accountId: number
   ): Promise<CreateWalletResult> {
     const wasmModule = await getWasm();
-    return wasmModule.create_wallet(mnemonic, network, addressType);
+    return wasmModule.create_wallet(mnemonic, network, addressType, accountId);
   },
 
   async loadWallet(

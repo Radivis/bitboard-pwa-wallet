@@ -108,12 +108,13 @@ pub fn derive_descriptors(
     mnemonic_str: &str,
     network: &str,
     address_type: &str,
+    account_id: u32,
 ) -> Result<JsValue, JsValue> {
     let network = types::BitcoinNetwork::try_from(network).map_err(JsValue::from)?;
     let addr_type = types::AddressType::try_from(address_type).map_err(JsValue::from)?;
 
-    let pair =
-        descriptors::derive_descriptors(mnemonic_str, network, addr_type).map_err(JsValue::from)?;
+    let pair = descriptors::derive_descriptors(mnemonic_str, network, addr_type, account_id)
+        .map_err(JsValue::from)?;
 
     serde_wasm_bindgen::to_value(&pair).map_err(|e| JsValue::from_str(&e.to_string()))
 }
@@ -122,7 +123,7 @@ pub fn derive_descriptors(
 // Wallet wrappers (Phase 4)
 // ---------------------------------------------------------------------------
 
-/// Create a new wallet from a mnemonic, network, and address type.
+/// Create a new wallet from a mnemonic, network, address type, and account index.
 ///
 /// Derives descriptors internally, creates the BDK wallet, stores it in
 /// thread-local state, and returns a `CreateWalletResult` as JsValue.
@@ -131,12 +132,13 @@ pub fn create_wallet(
     mnemonic_str: &str,
     network: &str,
     address_type: &str,
+    account_id: u32,
 ) -> Result<JsValue, JsValue> {
     let net = types::BitcoinNetwork::try_from(network).map_err(JsValue::from)?;
     let addr_type = types::AddressType::try_from(address_type).map_err(JsValue::from)?;
 
-    let pair =
-        descriptors::derive_descriptors(mnemonic_str, net, addr_type).map_err(JsValue::from)?;
+    let pair = descriptors::derive_descriptors(mnemonic_str, net, addr_type, account_id)
+        .map_err(JsValue::from)?;
 
     let mut bdk_wallet =
         wallet::create_wallet(&pair.external, &pair.internal, net).map_err(JsValue::from)?;

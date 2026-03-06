@@ -30,13 +30,15 @@ interface CryptoState {
   deriveDescriptors: (
     mnemonic: string,
     network: BitcoinNetwork,
-    addressType: AddressType
+    addressType: AddressType,
+    accountId: number
   ) => Promise<DescriptorPair>;
 
   createWallet: (
     mnemonic: string,
     network: BitcoinNetwork,
-    addressType: AddressType
+    addressType: AddressType,
+    accountId: number
   ) => Promise<CreateWalletResult>;
   
   loadWallet: (
@@ -112,11 +114,11 @@ export const useCryptoStore = create<CryptoState>((set, get) => {
     validateMnemonic: (mnemonic) => 
       withErrorHandling((worker) => worker.validateMnemonic(mnemonic)),
 
-    deriveDescriptors: (mnemonic, network, addressType) => 
-      withErrorHandling((worker) => worker.deriveDescriptors(mnemonic, network, addressType)),
+    deriveDescriptors: (mnemonic, network, addressType, accountId) => 
+      withErrorHandling((worker) => worker.deriveDescriptors(mnemonic, network, addressType, accountId)),
 
-    createWallet: (mnemonic, network, addressType) => 
-      withErrorHandling((worker) => worker.createWallet(mnemonic, network, addressType)),
+    createWallet: (mnemonic, network, addressType, accountId) => 
+      withErrorHandling((worker) => worker.createWallet(mnemonic, network, addressType, accountId)),
 
     loadWallet: (externalDescriptor, internalDescriptor, network, changesetJson) => 
       withErrorHandling((worker) => worker.loadWallet(

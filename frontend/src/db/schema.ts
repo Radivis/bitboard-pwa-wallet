@@ -9,7 +9,6 @@ export interface Database {
 interface WalletsTable {
   wallet_id: Generated<number>
   name: string
-  network: string
   created_at: string
 }
 

@@ -19,6 +19,7 @@ export const NETWORK_LABELS: Record<NetworkMode, string> = {
 interface PersistedWalletState {
   networkMode: NetworkMode
   addressType: AddressType
+  accountId: number
   activeWalletId: number | null
 }
 
@@ -33,6 +34,7 @@ interface TransientWalletState {
 interface WalletActions {
   setNetworkMode: (mode: NetworkMode) => void
   setAddressType: (type: AddressType) => void
+  setAccountId: (id: number) => void
   setActiveWallet: (id: number | null) => void
   setWalletStatus: (status: WalletStatus) => void
   setBalance: (balance: BalanceInfo | null) => void
@@ -56,14 +58,16 @@ const TRANSIENT_DEFAULTS: TransientWalletState = {
 export const useWalletStore = create<WalletState>()(
   persist(
     (set) => ({
-      networkMode: 'signet',
+      networkMode: 'testnet',
       addressType: 'taproot',
+      accountId: 0,
       activeWalletId: null,
 
       ...TRANSIENT_DEFAULTS,
 
       setNetworkMode: (mode) => set({ networkMode: mode }),
       setAddressType: (type) => set({ addressType: type }),
+      setAccountId: (id) => set({ accountId: id }),
       setActiveWallet: (id) => set({ activeWalletId: id }),
       setWalletStatus: (status) => set({ walletStatus: status }),
       setBalance: (balance) => set({ balance }),
@@ -85,6 +89,7 @@ export const useWalletStore = create<WalletState>()(
       partialize: (state) => ({
         networkMode: state.networkMode,
         addressType: state.addressType,
+        accountId: state.accountId,
         activeWalletId: state.activeWalletId,
       }),
     },

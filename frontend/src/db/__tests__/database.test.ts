@@ -15,10 +15,9 @@ describe('SQLite Database', () => {
   })
 
   describe('wallets table', () => {
-    function createWalletValues(overrides: Partial<{ name: string; network: string; created_at: string }> = {}) {
+    function createWalletValues(overrides: Partial<{ name: string; created_at: string }> = {}) {
       return {
         name: 'My Test Wallet',
-        network: 'signet',
         created_at: new Date().toISOString(),
         ...overrides,
       }
@@ -39,31 +38,15 @@ describe('SQLite Database', () => {
 
       expect(retrieved).toBeDefined()
       expect(retrieved!.name).toBe('My Test Wallet')
-      expect(retrieved!.network).toBe('signet')
     })
 
     it('lists all wallets', async () => {
       await db.insertInto('wallets').values(createWalletValues({ name: 'First Wallet' })).execute()
-      await db.insertInto('wallets').values(createWalletValues({ name: 'Second Wallet', network: 'mainnet' })).execute()
+      await db.insertInto('wallets').values(createWalletValues({ name: 'Second Wallet' })).execute()
 
       const all = await db.selectFrom('wallets').selectAll().execute()
 
       expect(all).toHaveLength(2)
-    })
-
-    it('filters wallets by network', async () => {
-      await db.insertInto('wallets').values(createWalletValues({ name: 'Signet Wallet' })).execute()
-      await db.insertInto('wallets').values(createWalletValues({ name: 'Mainnet Wallet', network: 'mainnet' })).execute()
-      await db.insertInto('wallets').values(createWalletValues({ name: 'Another Signet' })).execute()
-
-      const signetWallets = await db
-        .selectFrom('wallets')
-        .selectAll()
-        .where('network', '=', 'signet')
-        .execute()
-
-      expect(signetWallets).toHaveLength(2)
-      expect(signetWallets.every((w) => w.network === 'signet')).toBe(true)
     })
 
     it('updates a wallet', async () => {
@@ -77,7 +60,6 @@ describe('SQLite Database', () => {
       const updated = await db.selectFrom('wallets').selectAll().where('wallet_id', '=', id).executeTakeFirst()
 
       expect(updated!.name).toBe('Renamed Wallet')
-      expect(updated!.network).toBe('signet')
     })
 
     it('deletes a wallet', async () => {

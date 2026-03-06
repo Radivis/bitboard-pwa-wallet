@@ -16,9 +16,9 @@ import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { useWalletStore } from '@/stores/walletStore'
 import { useSessionStore, startAutoLockTimer } from '@/stores/sessionStore'
 import { useCryptoStore } from '@/stores/cryptoStore'
-import { getDatabase, ensureMigrated, loadWalletSecrets } from '@/db'
 import { getEsploraUrl, toBitcoinNetwork } from '@/lib/bitcoin-utils'
 import { loadCustomEsploraUrl } from '@/lib/wallet-utils'
+import { resolveDescriptorWallet } from '@/lib/descriptor-wallet-manager'
 
 interface WalletUnlockProps {
   walletName?: string
@@ -29,6 +29,8 @@ export function WalletUnlock({ walletName }: WalletUnlockProps) {
 
   const activeWalletId = useWalletStore((s) => s.activeWalletId)
   const networkMode = useWalletStore((s) => s.networkMode)
+  const addressType = useWalletStore((s) => s.addressType)
+  const accountId = useWalletStore((s) => s.accountId)
   const setWalletStatus = useWalletStore((s) => s.setWalletStatus)
   const setBalance = useWalletStore((s) => s.setBalance)
   const setTransactions = useWalletStore((s) => s.setTransactions)
@@ -43,15 +45,20 @@ export function WalletUnlock({ walletName }: WalletUnlockProps) {
     mutationFn: async (walletPassword: string) => {
       if (!activeWalletId) throw new Error('No active wallet')
 
-      await ensureMigrated()
-      const db = getDatabase()
-      const secrets = await loadWalletSecrets(db, walletPassword, activeWalletId)
+      const network = toBitcoinNetwork(networkMode)
+      const descriptorWallet = await resolveDescriptorWallet(
+        walletPassword,
+        activeWalletId,
+        network,
+        addressType,
+        accountId,
+      )
 
       await loadWallet(
-        secrets.externalDescriptor,
-        secrets.internalDescriptor,
-        toBitcoinNetwork(networkMode),
-        secrets.changeSet,
+        descriptorWallet.externalDescriptor,
+        descriptorWallet.internalDescriptor,
+        network,
+        descriptorWallet.changeSet,
       )
 
       setSessionPassword(walletPassword)

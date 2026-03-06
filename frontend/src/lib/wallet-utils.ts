@@ -1,19 +1,28 @@
 import { getDatabase, ensureMigrated } from '@/db/database'
-import { saveWalletSecrets, loadWalletSecrets } from '@/db/wallet-persistence'
 import type { NetworkMode } from '@/stores/walletStore'
+import { useWalletStore } from '@/stores/walletStore'
+import { toBitcoinNetwork } from '@/lib/bitcoin-utils'
+import { updateDescriptorWalletChangeset } from '@/lib/descriptor-wallet-manager'
 
+/**
+ * Update the changeset of the currently active descriptor wallet.
+ * Reads (networkMode, addressType, accountId) from the wallet store.
+ */
 export async function updateWalletChangeset(
   password: string,
   walletId: number,
   changesetJson: string,
 ): Promise<void> {
-  await ensureMigrated()
-  const db = getDatabase()
-
-  const secrets = await loadWalletSecrets(db, password, walletId)
-  secrets.changeSet = changesetJson
-
-  await saveWalletSecrets(db, password, walletId, secrets)
+  const { networkMode, addressType, accountId } = useWalletStore.getState()
+  const network = toBitcoinNetwork(networkMode)
+  await updateDescriptorWalletChangeset(
+    password,
+    walletId,
+    network,
+    addressType,
+    accountId,
+    changesetJson,
+  )
 }
 
 export function getWalletInitials(name: string): string {

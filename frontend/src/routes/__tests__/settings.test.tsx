@@ -15,11 +15,27 @@ vi.mock('@tanstack/react-router', async (importOriginal) => {
 })
 
 const mockTerminateWorker = vi.fn()
+const mockExportChangeset = vi.fn().mockRejectedValue(new Error('no wallet'))
+const mockLoadWallet = vi.fn().mockResolvedValue(true)
+const mockSyncWallet = vi.fn().mockResolvedValue({ balance: {}, changeset_json: '{}' })
+const mockGetBalance = vi.fn().mockResolvedValue({ confirmed: 0, total: 0 })
+const mockGetTransactionList = vi.fn().mockResolvedValue([])
+const cryptoStoreState = {
+  terminateWorker: mockTerminateWorker,
+  exportChangeset: mockExportChangeset,
+  loadWallet: mockLoadWallet,
+  syncWallet: mockSyncWallet,
+  getBalance: mockGetBalance,
+  getTransactionList: mockGetTransactionList,
+}
 vi.mock('@/stores/cryptoStore', () => ({
-  useCryptoStore: (selector: (s: Record<string, unknown>) => unknown) =>
-    selector({
-      terminateWorker: mockTerminateWorker,
-    }),
+  useCryptoStore: Object.assign(
+    (selector: (s: Record<string, unknown>) => unknown) =>
+      selector(cryptoStoreState),
+    {
+      getState: () => cryptoStoreState,
+    },
+  ),
 }))
 
 let walletStoreState: Record<string, unknown> = {}
@@ -27,8 +43,13 @@ const mockSetNetworkMode = vi.fn()
 const mockSetAddressType = vi.fn()
 const mockLockWallet = vi.fn()
 vi.mock('@/stores/walletStore', () => ({
-  useWalletStore: (selector: (s: Record<string, unknown>) => unknown) =>
-    selector(walletStoreState),
+  useWalletStore: Object.assign(
+    (selector: (s: Record<string, unknown>) => unknown) =>
+      selector(walletStoreState),
+    {
+      getState: () => walletStoreState,
+    },
+  ),
   NETWORK_LABELS: {
     regtest: 'Regtest',
     signet: 'Signet',
@@ -38,9 +59,15 @@ vi.mock('@/stores/walletStore', () => ({
 }))
 
 const mockClearSession = vi.fn()
+const sessionStoreState = { password: 'testpass', clear: mockClearSession }
 vi.mock('@/stores/sessionStore', () => ({
-  useSessionStore: (selector: (s: Record<string, unknown>) => unknown) =>
-    selector({ password: 'testpass', clear: mockClearSession }),
+  useSessionStore: Object.assign(
+    (selector: (s: Record<string, unknown>) => unknown) =>
+      selector(sessionStoreState),
+    {
+      getState: () => sessionStoreState,
+    },
+  ),
   clearAutoLockTimer: vi.fn(),
 }))
 
@@ -64,12 +91,26 @@ vi.mock('@/lib/bitcoin-utils', () => ({
     testnet: 'https://mempool.space/testnet/api',
     mainnet: 'https://mempool.space/api',
   },
+  toBitcoinNetwork: (mode: string) => mode,
+  getEsploraUrl: () => 'http://localhost:3002',
 }))
 
 vi.mock('@/lib/wallet-utils', () => ({
   saveCustomEsploraUrl: vi.fn().mockResolvedValue(undefined),
   deleteCustomEsploraUrl: vi.fn().mockResolvedValue(undefined),
   loadCustomEsploraUrl: vi.fn().mockResolvedValue(null),
+}))
+
+vi.mock('@/lib/descriptor-wallet-manager', () => ({
+  resolveDescriptorWallet: vi.fn().mockResolvedValue({
+    network: 'signet',
+    addressType: 'taproot',
+    accountId: 0,
+    externalDescriptor: 'ext',
+    internalDescriptor: 'int',
+    changeSet: '{}',
+  }),
+  updateDescriptorWalletChangeset: vi.fn().mockResolvedValue(undefined),
 }))
 
 vi.mock('@/components/MnemonicGrid', () => ({
@@ -109,8 +150,12 @@ describe('SettingsPage', () => {
       walletStatus: 'unlocked',
       networkMode: 'signet',
       addressType: 'taproot',
+      accountId: 0,
       setNetworkMode: mockSetNetworkMode,
       setAddressType: mockSetAddressType,
+      setWalletStatus: vi.fn(),
+      setBalance: vi.fn(),
+      setTransactions: vi.fn(),
       lockWallet: mockLockWallet,
     }
   })

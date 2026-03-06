@@ -13,20 +13,6 @@ export function useWallets() {
   })
 }
 
-export function useWalletsByNetwork(network: string) {
-  return useQuery({
-    queryKey: walletKeys.byNetwork(network),
-    queryFn: async () => {
-      await ensureMigrated()
-      return getDatabase()
-        .selectFrom('wallets')
-        .selectAll()
-        .where('network', '=', network)
-        .execute()
-    },
-  })
-}
-
 export function useWallet(id: number) {
   return useQuery({
     queryKey: walletKeys.byId(id),

@@ -34,6 +34,7 @@ export function ImportWalletPage() {
   const fullScanWallet = useCryptoStore((s) => s.fullScanWallet)
   const networkMode = useWalletStore((s) => s.networkMode)
   const addressType = useWalletStore((s) => s.addressType)
+  const accountId = useWalletStore((s) => s.accountId)
   const setActiveWallet = useWalletStore((s) => s.setActiveWallet)
   const setWalletStatus = useWalletStore((s) => s.setWalletStatus)
   const setCurrentAddress = useWalletStore((s) => s.setCurrentAddress)
@@ -88,22 +89,28 @@ export function ImportWalletPage() {
       if (!canRestore) throw new Error('Invalid input')
 
       const network = toBitcoinNetwork(networkMode)
-      const walletResult = await createWallet(mnemonic, network, addressType)
+      const walletResult = await createWallet(mnemonic, network, addressType, accountId)
 
       await ensureMigrated()
       const db = getDatabase()
 
       const walletId = await addWallet.mutateAsync({
         name: `Imported Wallet ${Date.now()}`,
-        network: networkMode,
         created_at: new Date().toISOString(),
       })
 
       await saveWalletSecrets(db, password, walletId, {
         mnemonic,
-        externalDescriptor: walletResult.external_descriptor,
-        internalDescriptor: walletResult.internal_descriptor,
-        changeSet: walletResult.changeset_json,
+        descriptorWallets: [
+          {
+            network,
+            addressType,
+            accountId,
+            externalDescriptor: walletResult.external_descriptor,
+            internalDescriptor: walletResult.internal_descriptor,
+            changeSet: walletResult.changeset_json,
+          },
+        ],
       })
 
       setSessionPassword(password)

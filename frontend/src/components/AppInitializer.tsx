@@ -3,9 +3,10 @@ import { useNavigate, useLocation } from '@tanstack/react-router'
 import { useWalletStore } from '@/stores/walletStore'
 import { useSessionStore, startAutoLockTimer } from '@/stores/sessionStore'
 import { useCryptoStore } from '@/stores/cryptoStore'
-import { useWallets, getDatabase, ensureMigrated, loadWalletSecrets } from '@/db'
+import { useWallets } from '@/db'
 import { getEsploraUrl, toBitcoinNetwork } from '@/lib/bitcoin-utils'
 import { loadCustomEsploraUrl } from '@/lib/wallet-utils'
+import { resolveDescriptorWallet } from '@/lib/descriptor-wallet-manager'
 
 interface AppInitializerProps {
   children: ReactNode
@@ -23,6 +24,8 @@ export function AppInitializer({ children }: AppInitializerProps) {
   const setCurrentAddress = useWalletStore((s) => s.setCurrentAddress)
   const setLastSyncTime = useWalletStore((s) => s.setLastSyncTime)
   const networkMode = useWalletStore((s) => s.networkMode)
+  const addressType = useWalletStore((s) => s.addressType)
+  const accountId = useWalletStore((s) => s.accountId)
   const sessionPassword = useSessionStore((s) => s.password)
   const lastUnlockedWalletId = useRef<number | null>(null)
 
@@ -72,15 +75,20 @@ export function AppInitializer({ children }: AppInitializerProps) {
     setLastSyncTime(null)
 
     try {
-      await ensureMigrated()
-      const db = getDatabase()
-      const secrets = await loadWalletSecrets(db, password, walletId)
+      const network = toBitcoinNetwork(networkMode)
+      const descriptorWallet = await resolveDescriptorWallet(
+        password,
+        walletId,
+        network,
+        addressType,
+        accountId,
+      )
 
       await loadWallet(
-        secrets.externalDescriptor,
-        secrets.internalDescriptor,
-        toBitcoinNetwork(networkMode),
-        secrets.changeSet,
+        descriptorWallet.externalDescriptor,
+        descriptorWallet.internalDescriptor,
+        network,
+        descriptorWallet.changeSet,
       )
 
       setWalletStatus('unlocked')
