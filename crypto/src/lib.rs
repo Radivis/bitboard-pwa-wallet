@@ -362,13 +362,13 @@ pub fn get_transaction_list() -> Result<JsValue, JsValue> {
 
 /// Derive a 256-bit key from a password and salt using Argon2id.
 ///
-/// Parameters: 64 MB memory, 3 iterations, parallelism 1.
-/// p=1 is the recommended mobile preset (CipherTools/PHC); preserves full
-/// memory and iteration security while reducing latency on constrained/CI.
+/// Parameters: 64 MB memory, 2 iterations, parallelism 1.
+/// t=2 meets OWASP minimum; p=1 is the mobile preset (CipherTools/PHC).
+/// Reduces latency on constrained/CI vs t=3 with acceptable security trade-off.
 /// See .cursor/architecture/research/argon2-mobile-performance.md
 #[wasm_bindgen]
 pub fn derive_argon2_key(password: &str, salt: &[u8]) -> Result<Vec<u8>, JsValue> {
-    let params = Params::new(65536, 3, 1, Some(32))
+    let params = Params::new(65536, 2, 1, Some(32))
         .map_err(|e| JsValue::from_str(&format!("Argon2 params error: {e}")))?;
     let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
     let mut key = vec![0u8; 32];

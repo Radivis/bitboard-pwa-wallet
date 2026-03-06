@@ -4,7 +4,7 @@ mod common;
 
 use bitboard_crypto::descriptors;
 use bitboard_crypto::types::{AddressType, BitcoinNetwork};
-use common::wallet_fixtures::{TEST_MNEMONIC_12, TEST_MNEMONIC_24};
+use common::wallet_fixtures::{DEFAULT_ACCOUNT_ID, TEST_MNEMONIC_12, TEST_MNEMONIC_24};
 use rstest::rstest;
 
 // --- Descriptor type tests ---
@@ -16,9 +16,13 @@ fn derive_descriptors_produces_correct_type(
     #[case] address_type: AddressType,
     #[case] expected_prefix: &str,
 ) {
-    let pair =
-        descriptors::derive_descriptors(TEST_MNEMONIC_12, BitcoinNetwork::Signet, address_type, 0)
-            .unwrap();
+    let pair = descriptors::derive_descriptors(
+        TEST_MNEMONIC_12,
+        BitcoinNetwork::Signet,
+        address_type,
+        DEFAULT_ACCOUNT_ID,
+    )
+    .unwrap();
     assert!(
         pair.external.starts_with(expected_prefix),
         "External descriptor '{}' should start with '{}'",
@@ -41,8 +45,13 @@ fn derive_descriptors_produces_correct_type(
 #[case(BitcoinNetwork::Signet)]
 #[case(BitcoinNetwork::Regtest)]
 fn derive_descriptors_works_for_all_networks(#[case] network: BitcoinNetwork) {
-    let pair = descriptors::derive_descriptors(TEST_MNEMONIC_12, network, AddressType::Taproot, 0)
-        .unwrap();
+    let pair = descriptors::derive_descriptors(
+        TEST_MNEMONIC_12,
+        network,
+        AddressType::Taproot,
+        DEFAULT_ACCOUNT_ID,
+    )
+    .unwrap();
     assert!(!pair.external.is_empty());
     assert!(!pair.internal.is_empty());
 }
@@ -55,14 +64,14 @@ fn same_mnemonic_produces_same_descriptors() {
         TEST_MNEMONIC_12,
         BitcoinNetwork::Signet,
         AddressType::Taproot,
-        0,
+        DEFAULT_ACCOUNT_ID,
     )
     .unwrap();
     let pair2 = descriptors::derive_descriptors(
         TEST_MNEMONIC_12,
         BitcoinNetwork::Signet,
         AddressType::Taproot,
-        0,
+        DEFAULT_ACCOUNT_ID,
     )
     .unwrap();
     assert_eq!(pair1, pair2);
@@ -74,14 +83,14 @@ fn different_mnemonics_produce_different_descriptors() {
         TEST_MNEMONIC_12,
         BitcoinNetwork::Signet,
         AddressType::Taproot,
-        0,
+        DEFAULT_ACCOUNT_ID,
     )
     .unwrap();
     let pair2 = descriptors::derive_descriptors(
         TEST_MNEMONIC_24,
         BitcoinNetwork::Signet,
         AddressType::Taproot,
-        0,
+        DEFAULT_ACCOUNT_ID,
     )
     .unwrap();
     assert_ne!(pair1, pair2);
@@ -93,14 +102,14 @@ fn different_address_types_produce_different_descriptors() {
         TEST_MNEMONIC_12,
         BitcoinNetwork::Signet,
         AddressType::Taproot,
-        0,
+        DEFAULT_ACCOUNT_ID,
     )
     .unwrap();
     let segwit = descriptors::derive_descriptors(
         TEST_MNEMONIC_12,
         BitcoinNetwork::Signet,
         AddressType::Segwit,
-        0,
+        DEFAULT_ACCOUNT_ID,
     )
     .unwrap();
     assert_ne!(taproot, segwit);
@@ -112,14 +121,14 @@ fn different_networks_produce_different_descriptors() {
         TEST_MNEMONIC_12,
         BitcoinNetwork::Bitcoin,
         AddressType::Taproot,
-        0,
+        DEFAULT_ACCOUNT_ID,
     )
     .unwrap();
     let signet = descriptors::derive_descriptors(
         TEST_MNEMONIC_12,
         BitcoinNetwork::Signet,
         AddressType::Taproot,
-        0,
+        DEFAULT_ACCOUNT_ID,
     )
     .unwrap();
     assert_ne!(mainnet, signet);
@@ -133,7 +142,7 @@ fn external_and_internal_descriptors_are_different() {
         TEST_MNEMONIC_12,
         BitcoinNetwork::Signet,
         AddressType::Taproot,
-        0,
+        DEFAULT_ACCOUNT_ID,
     )
     .unwrap();
     assert_ne!(
@@ -148,7 +157,7 @@ fn descriptors_contain_wildcard_derivation() {
         TEST_MNEMONIC_12,
         BitcoinNetwork::Signet,
         AddressType::Taproot,
-        0,
+        DEFAULT_ACCOUNT_ID,
     )
     .unwrap();
     assert!(
@@ -167,9 +176,13 @@ fn descriptors_contain_wildcard_derivation() {
 #[case(AddressType::Taproot)]
 #[case(AddressType::Segwit)]
 fn derive_descriptors_works_with_24_word_mnemonic(#[case] address_type: AddressType) {
-    let pair =
-        descriptors::derive_descriptors(TEST_MNEMONIC_24, BitcoinNetwork::Signet, address_type, 0)
-            .unwrap();
+    let pair = descriptors::derive_descriptors(
+        TEST_MNEMONIC_24,
+        BitcoinNetwork::Signet,
+        address_type,
+        DEFAULT_ACCOUNT_ID,
+    )
+    .unwrap();
     assert!(!pair.external.is_empty());
     assert!(!pair.internal.is_empty());
 }
@@ -182,15 +195,19 @@ fn derive_descriptors_rejects_invalid_mnemonic() {
         "invalid mnemonic words here that are definitely not valid bip39",
         BitcoinNetwork::Signet,
         AddressType::Taproot,
-        0,
+        DEFAULT_ACCOUNT_ID,
     );
     assert!(result.is_err());
 }
 
 #[test]
 fn derive_descriptors_rejects_empty_mnemonic() {
-    let result =
-        descriptors::derive_descriptors("", BitcoinNetwork::Signet, AddressType::Taproot, 0);
+    let result = descriptors::derive_descriptors(
+        "",
+        BitcoinNetwork::Signet,
+        AddressType::Taproot,
+        DEFAULT_ACCOUNT_ID,
+    );
     assert!(result.is_err());
 }
 
@@ -202,7 +219,7 @@ fn different_account_ids_produce_different_descriptors() {
         TEST_MNEMONIC_12,
         BitcoinNetwork::Signet,
         AddressType::Taproot,
-        0,
+        DEFAULT_ACCOUNT_ID,
     )
     .unwrap();
     let account_1 = descriptors::derive_descriptors(
@@ -242,7 +259,7 @@ fn account_id_zero_matches_default_derivation_path() {
         TEST_MNEMONIC_12,
         BitcoinNetwork::Signet,
         AddressType::Taproot,
-        0,
+        DEFAULT_ACCOUNT_ID,
     )
     .unwrap();
     assert!(
@@ -283,7 +300,7 @@ fn descriptors_contain_private_key_material() {
         TEST_MNEMONIC_12,
         BitcoinNetwork::Signet,
         AddressType::Taproot,
-        0,
+        DEFAULT_ACCOUNT_ID,
     )
     .unwrap();
     // BDK descriptor templates with Xpriv include the private key

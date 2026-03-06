@@ -29,7 +29,7 @@ async function deriveKey(password: string, salt: Uint8Array): Promise<CryptoKey>
  * @returns Encrypted blob with ciphertext, IV, and salt
  *
  * @remarks
- * - Key derivation uses Argon2id (64 MB, 3 iterations, parallelism 1) via WASM worker
+ * - Key derivation uses Argon2id (64 MB, 2 iterations, parallelism 1) via WASM worker
  * - Generates random 96-bit IV and 128-bit salt per call
  * - AES-GCM provides authenticated encryption (tamper detection)
  */

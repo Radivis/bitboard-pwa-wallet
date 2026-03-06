@@ -38,15 +38,16 @@ Threshold: 50ms < elapsed < 3000ms. CI exceeded the upper bound.
 
 The 3000ms cap does not match real-world mobile behavior. 3–5 seconds is typical for 64MB Argon2id on older phones. CI at 3.8s is consistent with that.
 
-## Recommendation (Applied)
+## Recommendations (Applied)
 
-**Change parallelism p: 4 → 1** — least compromise on security:
+**1. Change parallelism p: 4 → 1** — least compromise on security:
 
-- **Memory (64 MB)** and **iterations (3)** unchanged — main GPU/ASIC defenses preserved.
 - **p=1** is the CipherTools/PHC interactive mobile preset.
-- Crypto SE: "Parallelism should not make a large difference with regard to security. Adding threads only changes the latency of a single password hash, while the CPU time taken (over all threads) remains approximately the same."
 - On constrained/CI (2 vCPU), p=4 adds thread overhead; p=1 is typically faster.
 
-**Expected speedup**: ~2–4x on CI and single-core mobile (3.8s → ~1–2s).
+**2. Change iterations t: 3 → 2** — acceptable security, improved UX:
 
-**Breaking change**: Different p produces different keys. Existing encrypted wallets cannot be decrypted with new params. Users must re-enter password and re-create/import wallet, or a migration path (try legacy params, re-encrypt) must be implemented.
+- **Memory (64 MB)** unchanged — main GPU/ASIC defense preserved.
+- **t=2** meets OWASP minimum; ~33% faster on constrained hardware.
+
+**Breaking change**: Different p or t produces different keys. Existing encrypted wallets cannot be decrypted with new params. Users must re-enter password and re-create/import wallet, or a migration path (try legacy params, re-encrypt) must be implemented.

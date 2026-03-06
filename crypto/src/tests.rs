@@ -73,8 +73,8 @@ fn test_argon2_performance_suitable_for_mobile() {
 
 #[test]
 fn test_argon2_params_match_specification() {
-    // Verify we're using the correct Argon2id parameters (64MB, 3 iter, p=1)
-    let params = Params::new(65536, 3, 1, Some(32)).unwrap();
+    // Verify we're using the correct Argon2id parameters (64MB, 2 iter, p=1)
+    let params = Params::new(65536, 2, 1, Some(32)).unwrap();
     let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
 
     let password = b"test";
@@ -87,7 +87,7 @@ fn test_argon2_params_match_specification() {
 
     // Verify params:
     // - Memory: 65536 KiB = 64 MB
-    // - Time: 3 iterations
+    // - Time: 2 iterations
     // - Parallelism: 1 lane (recommended for mobile)
     // - Output: 32 bytes (256 bits)
     assert_eq!(output.len(), 32);
