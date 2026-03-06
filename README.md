@@ -2,8 +2,41 @@
 
 A non-custodial educational Bitcoin wallet based on the principles simplicity first, transparency, depth in detail, full control, and upgradeable security. The wallet is a Progressive Web App using Rust and React as core technologies.
 
+## Warning
+**This wallet is still in its initial development phase. Do not assume that it is secure! Do not store more than you can afford to lose on it!**
+
+## Principles
+
+**Please note that the features mentioned in this section are planned, but not fully implemented yet. They are mentioned to communicate the spirit and direction of this app.**
+
+### Simplicity First
+Start with the absolute basics and unlock additional features deliberately, as you understand the technology better.
+
+### Transparency
+No hidden magic. You can inspect what is going on - if you want to.
+
+### Depth in Detail
+Learn about the intricacies of Bitcoin and Lightning as you go. Use advanced features like multiple accounts per wallet, coin control, and UTXO labeling.
+
+### Full Control
+You decide how this wallet works. Don't like the default behavior? Then change the settings accordingly.
+
+### Upgradeable Security
+A hot wallet is faced with certain risks inherently. Use a hardware wallet for better security and manage your funds with Bitboard. Or couple Bitboard with an external always-on Lightning wallet to never miss a payment.
+
+## Technology
+Bitboard is a PWA using React for the frontend. All crypto operations are performed in a separate web worker using WASM. The WASM code is generated using Rust as the source language. A second web worker deals with persisting the data in an in-browser SQLite database using the OPFS storage. Keys and other sensitive data are encrypted by the crypto web worker using AES-256-GCM and Argon2id before they are stored.
+
+This approach enables adequate performance and security for a web / PWA wallet. For even better security, please choose one of the supported upgrade paths when available.
+
+For the full tech stack, see the [architecture documentation](doc/ARCHITECTURE.md)
+
+**Please note that native mobile versions of Bitboard are planned for the future!**
+
 ## Development
 ### Requirements
+- Node.js
+- npm
 - Rust
 - Optional, but suggested: Go and lefthook for the Git hooks
 
