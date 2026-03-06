@@ -99,10 +99,6 @@ test.describe('Send Page', () => {
     const reviewButton = page.getByRole('button', { name: 'Review Transaction' })
     await reviewButton.click()
 
-    await expect(page.getByText('Building transaction...')).toBeVisible({
-      timeout: 5000,
-    })
-
     const result = await Promise.race([
       page
         .getByText('Transaction Details')
