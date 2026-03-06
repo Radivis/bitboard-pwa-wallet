@@ -171,7 +171,7 @@ export function DashboardPage() {
     return null
   }
 
-  if (walletStatus === 'locked') {
+  if (walletStatus !== 'unlocked' && walletStatus !== 'syncing') {
     return <WalletUnlock />
   }
 

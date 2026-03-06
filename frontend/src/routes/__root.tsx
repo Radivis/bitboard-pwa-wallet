@@ -1,10 +1,13 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createRootRoute, Outlet } from '@tanstack/react-router'
-import { lazy, Suspense } from 'react'
+import { lazy, Suspense, useEffect } from 'react'
+import { toast } from 'sonner'
 import { Toaster } from '@/components/ui/sonner'
 import { ThemeSynchronizer } from '@/stores/themeStore'
 import { WalletLayout } from '@/components/WalletLayout'
 import { AppInitializer } from '@/components/AppInitializer'
+import { DatabaseReadyGate } from '@/components/DatabaseReadyGate'
+import { checkDatabaseHealth } from '@/db'
 
 const TanStackRouterDevtools = import.meta.env.DEV
   ? lazy(() =>
@@ -28,14 +31,27 @@ export const Route = createRootRoute({
 })
 
 function RootComponent() {
+  useEffect(() => {
+    checkDatabaseHealth().then((result) => {
+      if (!result.ok) {
+        toast.warning(
+          'Database unavailable — wallet data may not persist. Try reloading or use a supported browser.',
+          { description: result.error.message },
+        )
+      }
+    })
+  }, [])
+
   return (
     <QueryClientProvider client={queryClient}>
-      <ThemeSynchronizer />
-      <AppInitializer>
-        <WalletLayout>
-          <Outlet />
-        </WalletLayout>
-      </AppInitializer>
+      <DatabaseReadyGate>
+        <ThemeSynchronizer />
+        <AppInitializer>
+          <WalletLayout>
+            <Outlet />
+          </WalletLayout>
+        </AppInitializer>
+      </DatabaseReadyGate>
       <Toaster position="top-center" richColors />
       <Suspense>
         <TanStackRouterDevtools position="bottom-right" />

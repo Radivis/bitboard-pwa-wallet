@@ -20,9 +20,11 @@ export function AppInitializer({ children }: AppInitializerProps) {
   const setWalletStatus = useWalletStore((s) => s.setWalletStatus)
   const setBalance = useWalletStore((s) => s.setBalance)
   const setTransactions = useWalletStore((s) => s.setTransactions)
+  const setCurrentAddress = useWalletStore((s) => s.setCurrentAddress)
+  const setLastSyncTime = useWalletStore((s) => s.setLastSyncTime)
   const networkMode = useWalletStore((s) => s.networkMode)
   const sessionPassword = useSessionStore((s) => s.password)
-  const autoUnlockAttempted = useRef(false)
+  const lastUnlockedWalletId = useRef<number | null>(null)
 
   const loadWallet = useCryptoStore((s) => s.loadWallet)
   const syncWallet = useCryptoStore((s) => s.syncWallet)
@@ -33,6 +35,7 @@ export function AppInitializer({ children }: AppInitializerProps) {
     if (isLoading) return
 
     const isSetupRoute = location.pathname.startsWith('/setup')
+    const isWalletsRoute = location.pathname === '/wallets'
 
     if (!wallets || wallets.length === 0) {
       if (!isSetupRoute) {
@@ -41,19 +44,33 @@ export function AppInitializer({ children }: AppInitializerProps) {
       return
     }
 
-    if (!activeWalletId) {
+    if (wallets.length === 1 && !activeWalletId) {
       setActiveWallet(wallets[0].wallet_id)
+      if (isWalletsRoute) {
+        navigate({ to: '/' })
+      }
+      return
+    }
+
+    if (wallets.length > 1 && !activeWalletId && !isWalletsRoute) {
+      navigate({ to: '/wallets' })
     }
   }, [wallets, isLoading, activeWalletId, setActiveWallet, navigate, location.pathname])
 
   useEffect(() => {
-    if (!activeWalletId || !sessionPassword || autoUnlockAttempted.current) return
+    if (!activeWalletId || !sessionPassword) return
+    if (lastUnlockedWalletId.current === activeWalletId) return
 
-    autoUnlockAttempted.current = true
+    lastUnlockedWalletId.current = activeWalletId
     autoUnlockWallet(activeWalletId, sessionPassword)
   }, [activeWalletId, sessionPassword])
 
   async function autoUnlockWallet(walletId: number, password: string) {
+    setCurrentAddress(null)
+    setBalance(null)
+    setTransactions([])
+    setLastSyncTime(null)
+
     try {
       await ensureMigrated()
       const db = getDatabase()
@@ -86,6 +103,7 @@ export function AppInitializer({ children }: AppInitializerProps) {
       }
     } catch {
       setWalletStatus('locked')
+      lastUnlockedWalletId.current = null
     }
   }
 

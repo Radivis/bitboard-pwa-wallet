@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as WalletsRouteImport } from './routes/wallets'
 import { Route as SetupRouteImport } from './routes/setup'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SendRouteImport } from './routes/send'
@@ -18,6 +19,11 @@ import { Route as SetupIndexRouteImport } from './routes/setup/index'
 import { Route as SetupImportRouteImport } from './routes/setup/import'
 import { Route as SetupCreateRouteImport } from './routes/setup/create'
 
+const WalletsRoute = WalletsRouteImport.update({
+  id: '/wallets',
+  path: '/wallets',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SetupRoute = SetupRouteImport.update({
   id: '/setup',
   path: '/setup',
@@ -65,6 +71,7 @@ export interface FileRoutesByFullPath {
   '/send': typeof SendRoute
   '/settings': typeof SettingsRoute
   '/setup': typeof SetupRouteWithChildren
+  '/wallets': typeof WalletsRoute
   '/setup/create': typeof SetupCreateRoute
   '/setup/import': typeof SetupImportRoute
   '/setup/': typeof SetupIndexRoute
@@ -74,6 +81,7 @@ export interface FileRoutesByTo {
   '/receive': typeof ReceiveRoute
   '/send': typeof SendRoute
   '/settings': typeof SettingsRoute
+  '/wallets': typeof WalletsRoute
   '/setup/create': typeof SetupCreateRoute
   '/setup/import': typeof SetupImportRoute
   '/setup': typeof SetupIndexRoute
@@ -85,6 +93,7 @@ export interface FileRoutesById {
   '/send': typeof SendRoute
   '/settings': typeof SettingsRoute
   '/setup': typeof SetupRouteWithChildren
+  '/wallets': typeof WalletsRoute
   '/setup/create': typeof SetupCreateRoute
   '/setup/import': typeof SetupImportRoute
   '/setup/': typeof SetupIndexRoute
@@ -97,6 +106,7 @@ export interface FileRouteTypes {
     | '/send'
     | '/settings'
     | '/setup'
+    | '/wallets'
     | '/setup/create'
     | '/setup/import'
     | '/setup/'
@@ -106,6 +116,7 @@ export interface FileRouteTypes {
     | '/receive'
     | '/send'
     | '/settings'
+    | '/wallets'
     | '/setup/create'
     | '/setup/import'
     | '/setup'
@@ -116,6 +127,7 @@ export interface FileRouteTypes {
     | '/send'
     | '/settings'
     | '/setup'
+    | '/wallets'
     | '/setup/create'
     | '/setup/import'
     | '/setup/'
@@ -127,10 +139,18 @@ export interface RootRouteChildren {
   SendRoute: typeof SendRoute
   SettingsRoute: typeof SettingsRoute
   SetupRoute: typeof SetupRouteWithChildren
+  WalletsRoute: typeof WalletsRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/wallets': {
+      id: '/wallets'
+      path: '/wallets'
+      fullPath: '/wallets'
+      preLoaderRoute: typeof WalletsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/setup': {
       id: '/setup'
       path: '/setup'
@@ -210,6 +230,7 @@ const rootRouteChildren: RootRouteChildren = {
   SendRoute: SendRoute,
   SettingsRoute: SettingsRoute,
   SetupRoute: SetupRouteWithChildren,
+  WalletsRoute: WalletsRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

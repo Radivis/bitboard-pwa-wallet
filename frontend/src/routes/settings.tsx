@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback } from 'react'
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { Sun, Moon, Monitor, Lock, Eye, EyeOff, Globe } from 'lucide-react'
 import { toast } from 'sonner'
 import { useThemeStore, type ThemeMode } from '@/stores/themeStore'
 import { useWalletStore, NETWORK_LABELS, type NetworkMode } from '@/stores/walletStore'
+import { useWallets } from '@/db'
 import { useSessionStore, clearAutoLockTimer } from '@/stores/sessionStore'
 import { useCryptoStore } from '@/stores/cryptoStore'
 import { getDatabase, ensureMigrated, loadWalletSecrets } from '@/db'
@@ -384,11 +385,14 @@ function SeedPhraseBackup() {
 }
 
 function WalletManagement() {
+  const navigate = useNavigate()
   const activeWalletId = useWalletStore((s) => s.activeWalletId)
   const walletStatus = useWalletStore((s) => s.walletStatus)
   const lockWallet = useWalletStore((s) => s.lockWallet)
   const terminateWorker = useCryptoStore((s) => s.terminateWorker)
   const clearSession = useSessionStore((s) => s.clear)
+  const { data: wallets } = useWallets()
+  const hasMultipleWallets = (wallets?.length ?? 0) > 1
 
   if (!activeWalletId) return null
 
@@ -407,13 +411,30 @@ function WalletManagement() {
           <Lock className="h-5 w-5" />
           Wallet Management
         </CardTitle>
+        <CardDescription>
+          Lock your wallet to require a password for the next access, or switch
+          between multiple wallets.
+        </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-3">
-        {walletStatus === 'unlocked' && (
-          <Button variant="outline" onClick={handleLockWallet}>
-            Lock Wallet
+      <CardContent>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={() => navigate({ to: '/setup' })}>
+            Add Wallet
           </Button>
-        )}
+          {hasMultipleWallets && (
+            <Button
+              variant="outline"
+              onClick={() => navigate({ to: '/wallets' })}
+            >
+              Switch Wallet
+            </Button>
+          )}
+          {walletStatus === 'unlocked' && (
+            <Button variant="outline" onClick={handleLockWallet}>
+              Lock Wallet
+            </Button>
+          )}
+        </div>
       </CardContent>
     </Card>
   )
@@ -425,6 +446,8 @@ export function SettingsPage() {
   return (
     <div className="space-y-6">
       <h2 className="text-2xl font-bold tracking-tight">Settings</h2>
+
+      {activeWalletId && <WalletManagement />}
 
       <Card>
         <CardHeader>
@@ -462,7 +485,6 @@ export function SettingsPage() {
 
       <EsploraEndpointConfig />
 
-      {activeWalletId && <WalletManagement />}
       {activeWalletId && <SeedPhraseBackup />}
 
       <Card>

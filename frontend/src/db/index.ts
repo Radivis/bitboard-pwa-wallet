@@ -1,4 +1,10 @@
-export { getDatabase, ensureMigrated, destroyDatabase } from './database'
+export {
+  getDatabase,
+  ensureMigrated,
+  destroyDatabase,
+  checkDatabaseHealth,
+} from './database'
+export type { DatabaseHealthResult } from './database'
 export { sqliteStorage } from './storage-adapter'
 export {
   useWallets,

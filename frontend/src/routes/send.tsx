@@ -43,7 +43,7 @@ export function SendPage() {
     return null
   }
 
-  if (walletStatus === 'locked') {
+  if (walletStatus !== 'unlocked' && walletStatus !== 'syncing') {
     return <WalletUnlock />
   }
 

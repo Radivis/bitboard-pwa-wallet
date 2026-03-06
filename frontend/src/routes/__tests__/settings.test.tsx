@@ -54,6 +54,7 @@ vi.mock('@/db', () => ({
   getDatabase: vi.fn(),
   ensureMigrated: vi.fn().mockResolvedValue(undefined),
   loadWalletSecrets: vi.fn().mockRejectedValue(new Error('Wrong password')),
+  useWallets: () => ({ data: [] }),
 }))
 
 vi.mock('@/lib/bitcoin-utils', () => ({

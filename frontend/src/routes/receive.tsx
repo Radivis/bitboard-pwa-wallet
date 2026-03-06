@@ -29,7 +29,7 @@ export function ReceivePage() {
   const exportChangeset = useCryptoStore((s) => s.exportChangeset)
 
   useEffect(() => {
-    if (!currentAddress && walletStatus === 'unlocked') {
+    if (!currentAddress && (walletStatus === 'unlocked' || walletStatus === 'syncing')) {
       loadAddress()
     }
 
@@ -74,7 +74,7 @@ export function ReceivePage() {
     return null
   }
 
-  if (walletStatus === 'locked') {
+  if (walletStatus !== 'unlocked' && walletStatus !== 'syncing') {
     return <WalletUnlock />
   }
 
