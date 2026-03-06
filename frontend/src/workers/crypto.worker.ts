@@ -116,7 +116,7 @@ const cryptoService = {
     const wasmModule = await getWasm();
     return wasmModule.build_transaction(
       recipientAddress,
-      amountSats,
+      BigInt(amountSats),
       feeRateSatPerVb,
       network
     );

@@ -16,6 +16,18 @@ export const NETWORK_LABELS: Record<NetworkMode, string> = {
   mainnet: 'Mainnet',
 }
 
+export const ADDRESS_TYPE_LABELS: Record<AddressType, string> = {
+  taproot: 'Taproot',
+  segwit: 'SegWit',
+}
+
+export function getSubWalletLabel(
+  networkMode: NetworkMode,
+  addressType: AddressType,
+): string {
+  return `${NETWORK_LABELS[networkMode]} ${ADDRESS_TYPE_LABELS[addressType]}`
+}
+
 interface PersistedWalletState {
   networkMode: NetworkMode
   addressType: AddressType

@@ -15,12 +15,12 @@ test.describe('Settings Page', () => {
     await expect(signetButton).toBeVisible()
 
     await signetButton.click()
-    await expect(page.getByText(/Signet sub-wallet loaded/)).toBeVisible({
+    await expect(page.getByText(/Signet Taproot sub-wallet loaded/)).toBeVisible({
       timeout: 60000,
     })
 
     await testnetButton.click()
-    await expect(page.getByText(/Testnet sub-wallet loaded/)).toBeVisible({
+    await expect(page.getByText(/Testnet Taproot sub-wallet loaded/)).toBeVisible({
       timeout: 60000,
     })
   })
