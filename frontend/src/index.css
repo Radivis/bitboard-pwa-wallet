@@ -5,8 +5,10 @@
 @custom-variant dark (&:is(.dark *));
 
 /* Network hues: Mainnet 30, Testnet 120, Signet 210, Regtest 255 */
+/* Saturation: Taproot 100%, Segwit 67% (33% reduction) */
 :root {
   --hue: 120;
+  --saturation-scale: 1;
   font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;
   font-weight: 400;
@@ -18,10 +20,10 @@
   --radius: 0.625rem;
 
   /* Light theme lightness values */
-  --background-l: 98%;
-  --foreground-l: 9%;
-  --card-l: 100%;
-  --card-foreground-l: 9%;
+  --background-l: 90%;
+  --foreground-l: 10%;
+  --card-l: 95%;
+  --card-foreground-l: 15%;
   --popover-l: 100%;
   --popover-foreground-l: 9%;
   --primary-l: 35%;
@@ -41,7 +43,7 @@
   --chart-4-l: 70%;
   --chart-5-l: 65%;
   --sidebar-l: 98%;
-  --sidebar-foreground-l: 9%;
+  --sidebar-foreground-l: 15%;
   --sidebar-primary-l: 35%;
   --sidebar-primary-foreground-l: 98%;
   --sidebar-accent-l: 96%;
@@ -49,38 +51,38 @@
   --sidebar-border-l: 92%;
   --sidebar-ring-l: 55%;
 
-  /* HSL colors - network modulates hue, theme modulates lightness */
-  --background: hsl(var(--hue) 3% var(--background-l));
-  --foreground: hsl(var(--hue) 3% var(--foreground-l));
-  --card: hsl(var(--hue) 3% var(--card-l));
-  --card-foreground: hsl(var(--hue) 3% var(--card-foreground-l));
-  --popover: hsl(var(--hue) 3% var(--popover-l));
-  --popover-foreground: hsl(var(--hue) 3% var(--popover-foreground-l));
-  --primary: hsl(var(--hue) 60% var(--primary-l));
-  --primary-foreground: hsl(var(--hue) 60% var(--primary-foreground-l));
-  --secondary: hsl(var(--hue) 5% var(--secondary-l));
-  --secondary-foreground: hsl(var(--hue) 5% var(--secondary-foreground-l));
-  --muted: hsl(var(--hue) 5% var(--muted-l));
-  --muted-foreground: hsl(var(--hue) 5% var(--muted-foreground-l));
-  --accent: hsl(var(--hue) 5% var(--accent-l));
-  --accent-foreground: hsl(var(--hue) 5% var(--accent-foreground-l));
-  --destructive: hsl(0 65% 50%);
-  --border: hsl(var(--hue) 5% var(--border-l));
-  --input: hsl(var(--hue) 5% var(--input-l));
-  --ring: hsl(var(--hue) 50% var(--ring-l));
-  --chart-1: hsl(var(--hue) 60% var(--chart-1-l));
-  --chart-2: hsl(calc(var(--hue) + 60) 50% var(--chart-2-l));
-  --chart-3: hsl(calc(var(--hue) + 120) 45% var(--chart-3-l));
-  --chart-4: hsl(calc(var(--hue) + 180) 55% var(--chart-4-l));
-  --chart-5: hsl(calc(var(--hue) + 240) 50% var(--chart-5-l));
-  --sidebar: hsl(var(--hue) 3% var(--sidebar-l));
-  --sidebar-foreground: hsl(var(--hue) 3% var(--sidebar-foreground-l));
-  --sidebar-primary: hsl(var(--hue) 60% var(--sidebar-primary-l));
-  --sidebar-primary-foreground: hsl(var(--hue) 60% var(--sidebar-primary-foreground-l));
-  --sidebar-accent: hsl(var(--hue) 5% var(--sidebar-accent-l));
-  --sidebar-accent-foreground: hsl(var(--hue) 5% var(--sidebar-accent-foreground-l));
-  --sidebar-border: hsl(var(--hue) 5% var(--sidebar-border-l));
-  --sidebar-ring: hsl(var(--hue) 50% var(--sidebar-ring-l));
+  /* HSL colors - network modulates hue, addressType modulates saturation, theme modulates lightness */
+  --background: hsl(var(--hue) calc(15% * var(--saturation-scale)) var(--background-l));
+  --foreground: hsl(var(--hue) calc(5% * var(--saturation-scale)) var(--foreground-l));
+  --card: hsl(var(--hue) calc(15% * var(--saturation-scale)) var(--card-l));
+  --card-foreground: hsl(var(--hue) calc(5% * var(--saturation-scale)) var(--card-foreground-l));
+  --popover: hsl(var(--hue) calc(15% * var(--saturation-scale)) var(--popover-l));
+  --popover-foreground: hsl(var(--hue) calc(5% * var(--saturation-scale)) var(--popover-foreground-l));
+  --primary: hsl(var(--hue) calc(60% * var(--saturation-scale)) var(--primary-l));
+  --primary-foreground: hsl(var(--hue) calc(60% * var(--saturation-scale)) var(--primary-foreground-l));
+  --secondary: hsl(var(--hue) calc(25% * var(--saturation-scale)) var(--secondary-l));
+  --secondary-foreground: hsl(var(--hue) calc(25% * var(--saturation-scale)) var(--secondary-foreground-l));
+  --muted: hsl(var(--hue) calc(25% * var(--saturation-scale)) var(--muted-l));
+  --muted-foreground: hsl(var(--hue) calc(25% * var(--saturation-scale)) var(--muted-foreground-l));
+  --accent: hsl(var(--hue) calc(25% * var(--saturation-scale)) var(--accent-l));
+  --accent-foreground: hsl(var(--hue) calc(25% * var(--saturation-scale)) var(--accent-foreground-l));
+  --destructive: hsl(0 calc(65% * var(--saturation-scale)) 50%);
+  --border: hsl(var(--hue) calc(25% * var(--saturation-scale)) var(--border-l));
+  --input: hsl(var(--hue) calc(25% * var(--saturation-scale)) var(--input-l));
+  --ring: hsl(var(--hue) calc(50% * var(--saturation-scale)) var(--ring-l));
+  --chart-1: hsl(var(--hue) calc(60% * var(--saturation-scale)) var(--chart-1-l));
+  --chart-2: hsl(calc(var(--hue) + 60) calc(50% * var(--saturation-scale)) var(--chart-2-l));
+  --chart-3: hsl(calc(var(--hue) + 120) calc(45% * var(--saturation-scale)) var(--chart-3-l));
+  --chart-4: hsl(calc(var(--hue) + 180) calc(55% * var(--saturation-scale)) var(--chart-4-l));
+  --chart-5: hsl(calc(var(--hue) + 240) calc(50% * var(--saturation-scale)) var(--chart-5-l));
+  --sidebar: hsl(var(--hue) calc(3% * var(--saturation-scale)) var(--sidebar-l));
+  --sidebar-foreground: hsl(var(--hue) calc(3% * var(--saturation-scale)) var(--sidebar-foreground-l));
+  --sidebar-primary: hsl(var(--hue) calc(60% * var(--saturation-scale)) var(--sidebar-primary-l));
+  --sidebar-primary-foreground: hsl(var(--hue) calc(60% * var(--saturation-scale)) var(--sidebar-primary-foreground-l));
+  --sidebar-accent: hsl(var(--hue) calc(5% * var(--saturation-scale)) var(--sidebar-accent-l));
+  --sidebar-accent-foreground: hsl(var(--hue) calc(5% * var(--saturation-scale)) var(--sidebar-accent-foreground-l));
+  --sidebar-border: hsl(var(--hue) calc(5% * var(--saturation-scale)) var(--sidebar-border-l));
+  --sidebar-ring: hsl(var(--hue) calc(50% * var(--saturation-scale)) var(--sidebar-ring-l));
 }
 
 [data-network="mainnet"] {
@@ -97,6 +99,10 @@
 
 [data-network="regtest"] {
   --hue: 255;
+}
+
+[data-address-type="segwit"] {
+  --saturation-scale: 0.5;
 }
 
 body {
@@ -185,7 +191,7 @@ body {
   --sidebar-accent-foreground-l: 98%;
   --sidebar-border-l: 20%;
   --sidebar-ring-l: 55%;
-  --destructive: hsl(0 65% 60%);
+  --destructive: hsl(0 calc(65% * var(--saturation-scale)) 60%);
 }
 
 @layer base {

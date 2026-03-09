@@ -127,7 +127,6 @@ export function ReceivePage() {
               {currentAddress || 'Generating...'}
             </div>
             <Button
-              variant="outline"
               size="icon"
               onClick={handleCopy}
               disabled={!currentAddress}
@@ -137,7 +136,6 @@ export function ReceivePage() {
             </Button>
           </div>
           <Button
-            variant="outline"
             className="w-full"
             onClick={handleNewAddress}
           >

@@ -50,17 +50,19 @@ export function useResolvedTheme(): ResolvedTheme {
 
 /**
  * Renders nothing. Keeps `document.documentElement` class list and
- * data-network attribute in sync with the resolved theme and network mode.
+ * data attributes in sync with the resolved theme, network mode, and address type.
  */
 export function ThemeSynchronizer() {
   const themeMode = useThemeStore((state) => state.themeMode)
   const networkMode = useWalletStore((state) => state.networkMode)
+  const addressType = useWalletStore((state) => state.addressType)
 
   useEffect(() => {
     function apply() {
       const resolved = resolveTheme(themeMode)
       document.documentElement.classList.toggle('dark', resolved === 'dark')
       document.documentElement.dataset.network = networkMode
+      document.documentElement.dataset.addressType = addressType
     }
 
     apply()
@@ -72,7 +74,7 @@ export function ThemeSynchronizer() {
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
     mediaQuery.addEventListener('change', apply)
     return () => mediaQuery.removeEventListener('change', apply)
-  }, [themeMode, networkMode])
+  }, [themeMode, networkMode, addressType])
 
   return null
 }
