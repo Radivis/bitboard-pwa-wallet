@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
+import { useNavigate } from '@tanstack/react-router'
 import { Lock } from 'lucide-react'
 import { toast } from 'sonner'
 import {
@@ -15,6 +16,7 @@ import { Label } from '@/components/ui/label'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { useWalletStore } from '@/stores/walletStore'
 import { useSessionStore } from '@/stores/sessionStore'
+import { useWallets } from '@/db'
 import { loadDescriptorWalletAndSync } from '@/lib/wallet-utils'
 
 interface WalletUnlockProps {
@@ -23,12 +25,22 @@ interface WalletUnlockProps {
 
 export function WalletUnlock({ walletName }: WalletUnlockProps) {
   const [password, setPassword] = useState('')
+  const navigate = useNavigate()
+  const { data: wallets } = useWallets()
 
   const activeWalletId = useWalletStore((s) => s.activeWalletId)
   const networkMode = useWalletStore((s) => s.networkMode)
   const addressType = useWalletStore((s) => s.addressType)
   const accountId = useWalletStore((s) => s.accountId)
   const setSessionPassword = useSessionStore((s) => s.setPassword)
+
+  const handleClose = () => {
+    if (wallets && wallets.length > 1) {
+      navigate({ to: '/wallets' })
+    } else {
+      navigate({ to: '/setup' })
+    }
+  }
 
   const unlockMutation = useMutation({
     mutationFn: async (walletPassword: string) => {
@@ -53,7 +65,7 @@ export function WalletUnlock({ walletName }: WalletUnlockProps) {
   })
 
   return (
-    <Dialog open modal>
+    <Dialog open modal onOpenChange={(open) => !open && handleClose()}>
       <DialogContent
         className="sm:max-w-md"
         onInteractOutside={(e) => e.preventDefault()}
