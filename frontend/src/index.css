@@ -21,6 +21,7 @@
 
   /* Light theme lightness values */
   --background-l: 90%;
+  --header-l: 86%;
   --foreground-l: 10%;
   --card-l: 95%;
   --card-foreground-l: 15%;
@@ -51,38 +52,45 @@
   --sidebar-border-l: 92%;
   --sidebar-ring-l: 55%;
 
+  /* hue levels */
+  --minimal-h: 5%;
+  --low-h: 15%;
+  --muted-h: 25%;
+  --high-h: 60%;
+  --strong-h: 65%;
   /* HSL colors - network modulates hue, addressType modulates saturation, theme modulates lightness */
-  --background: hsl(var(--hue) calc(15% * var(--saturation-scale)) var(--background-l));
-  --foreground: hsl(var(--hue) calc(5% * var(--saturation-scale)) var(--foreground-l));
-  --card: hsl(var(--hue) calc(15% * var(--saturation-scale)) var(--card-l));
-  --card-foreground: hsl(var(--hue) calc(5% * var(--saturation-scale)) var(--card-foreground-l));
-  --popover: hsl(var(--hue) calc(15% * var(--saturation-scale)) var(--popover-l));
-  --popover-foreground: hsl(var(--hue) calc(5% * var(--saturation-scale)) var(--popover-foreground-l));
-  --primary: hsl(var(--hue) calc(60% * var(--saturation-scale)) var(--primary-l));
-  --primary-foreground: hsl(var(--hue) calc(60% * var(--saturation-scale)) var(--primary-foreground-l));
-  --secondary: hsl(var(--hue) calc(25% * var(--saturation-scale)) var(--secondary-l));
-  --secondary-foreground: hsl(var(--hue) calc(25% * var(--saturation-scale)) var(--secondary-foreground-l));
-  --muted: hsl(var(--hue) calc(25% * var(--saturation-scale)) var(--muted-l));
-  --muted-foreground: hsl(var(--hue) calc(25% * var(--saturation-scale)) var(--muted-foreground-l));
-  --accent: hsl(var(--hue) calc(25% * var(--saturation-scale)) var(--accent-l));
-  --accent-foreground: hsl(var(--hue) calc(25% * var(--saturation-scale)) var(--accent-foreground-l));
+  --background: hsl(var(--hue) calc(var(--low-h) * var(--saturation-scale)) var(--background-l));
+  --header: hsl(var(--hue) calc(var(--low-h) * var(--saturation-scale)) var(--header-l));
+  --foreground: hsl(var(--hue) calc(var(--minimal-h) * var(--saturation-scale)) var(--foreground-l));
+  --card: hsl(var(--hue) calc(var(--low-h) * var(--saturation-scale)) var(--card-l));
+  --card-foreground: hsl(var(--hue) calc(var(--minimal-h) * var(--saturation-scale)) var(--card-foreground-l));
+  --popover: hsl(var(--hue) calc(var(--low-h) * var(--saturation-scale)) var(--popover-l));
+  --popover-foreground: hsl(var(--hue) calc(var(--minimal-h) * var(--saturation-scale)) var(--popover-foreground-l));
+  --primary: hsl(var(--hue) calc(var(--high-h) * var(--saturation-scale)) var(--primary-l));
+  --primary-foreground: hsl(var(--hue) calc(var(--high-h) * var(--saturation-scale)) var(--primary-foreground-l));
+  --secondary: hsl(var(--hue) calc(var(--muted-h) * var(--saturation-scale)) var(--secondary-l));
+  --secondary-foreground: hsl(var(--hue) calc(var(--muted-h) * var(--saturation-scale)) var(--secondary-foreground-l));
+  --muted: hsl(var(--hue) calc(var(--muted-h) * var(--saturation-scale)) var(--muted-l));
+  --muted-foreground: hsl(var(--hue) calc(var(--muted-h) * var(--saturation-scale)) var(--muted-foreground-l));
+  --accent: hsl(var(--hue) calc(var(--muted-h) * var(--saturation-scale)) var(--accent-l));
+  --accent-foreground: hsl(var(--hue) calc(var(--muted-h) * var(--saturation-scale)) var(--accent-foreground-l));
   --destructive: hsl(0 calc(65% * var(--saturation-scale)) 50%);
-  --border: hsl(var(--hue) calc(25% * var(--saturation-scale)) var(--border-l));
-  --input: hsl(var(--hue) calc(25% * var(--saturation-scale)) var(--input-l));
-  --ring: hsl(var(--hue) calc(50% * var(--saturation-scale)) var(--ring-l));
-  --chart-1: hsl(var(--hue) calc(60% * var(--saturation-scale)) var(--chart-1-l));
-  --chart-2: hsl(calc(var(--hue) + 60) calc(50% * var(--saturation-scale)) var(--chart-2-l));
-  --chart-3: hsl(calc(var(--hue) + 120) calc(45% * var(--saturation-scale)) var(--chart-3-l));
-  --chart-4: hsl(calc(var(--hue) + 180) calc(55% * var(--saturation-scale)) var(--chart-4-l));
-  --chart-5: hsl(calc(var(--hue) + 240) calc(50% * var(--saturation-scale)) var(--chart-5-l));
-  --sidebar: hsl(var(--hue) calc(3% * var(--saturation-scale)) var(--sidebar-l));
-  --sidebar-foreground: hsl(var(--hue) calc(3% * var(--saturation-scale)) var(--sidebar-foreground-l));
-  --sidebar-primary: hsl(var(--hue) calc(60% * var(--saturation-scale)) var(--sidebar-primary-l));
-  --sidebar-primary-foreground: hsl(var(--hue) calc(60% * var(--saturation-scale)) var(--sidebar-primary-foreground-l));
-  --sidebar-accent: hsl(var(--hue) calc(5% * var(--saturation-scale)) var(--sidebar-accent-l));
-  --sidebar-accent-foreground: hsl(var(--hue) calc(5% * var(--saturation-scale)) var(--sidebar-accent-foreground-l));
-  --sidebar-border: hsl(var(--hue) calc(5% * var(--saturation-scale)) var(--sidebar-border-l));
-  --sidebar-ring: hsl(var(--hue) calc(50% * var(--saturation-scale)) var(--sidebar-ring-l));
+  --border: hsl(var(--hue) calc(var(--muted-h) * var(--saturation-scale)) var(--border-l));
+  --input: hsl(var(--hue) calc(var(--muted-h) * var(--saturation-scale)) var(--input-l));
+  --ring: hsl(var(--hue) calc(var(--high-h) * var(--saturation-scale)) var(--ring-l));
+  --chart-1: hsl(var(--hue) calc(var(--high-h) * var(--saturation-scale)) var(--chart-1-l));
+  --chart-2: hsl(calc(var(--hue) + 60) calc(var(--high-h) * var(--saturation-scale)) var(--chart-2-l));
+  --chart-3: hsl(calc(var(--hue) + 120) calc(var(--high-h) * var(--saturation-scale)) var(--chart-3-l));
+  --chart-4: hsl(calc(var(--hue) + 180) calc(var(--high-h) * var(--saturation-scale)) var(--chart-4-l));
+  --chart-5: hsl(calc(var(--hue) + 240) calc(var(--high-h) * var(--saturation-scale)) var(--chart-5-l));
+  --sidebar: hsl(var(--hue) calc(var(--muted-h) * var(--saturation-scale)) var(--sidebar-l));
+  --sidebar-foreground: hsl(var(--hue) calc(var(--minimal-h) * var(--saturation-scale)) var(--sidebar-foreground-l));
+  --sidebar-primary: hsl(var(--hue) calc(var(--high-h) * var(--saturation-scale)) var(--sidebar-primary-l));
+  --sidebar-primary-foreground: hsl(var(--hue) calc(var(--high-h) * var(--saturation-scale)) var(--sidebar-primary-foreground-l));
+  --sidebar-accent: hsl(var(--hue) calc(var(--minimal-h) * var(--saturation-scale)) var(--sidebar-accent-l));
+  --sidebar-accent-foreground: hsl(var(--hue) calc(var(--minimal-h) * var(--saturation-scale)) var(--sidebar-accent-foreground-l));
+  --sidebar-border: hsl(var(--hue) calc(var(--minimal-h) * var(--saturation-scale)) var(--sidebar-border-l));
+  --sidebar-ring: hsl(var(--hue) calc(var(--high-h) * var(--saturation-scale)) var(--sidebar-ring-l));
 }
 
 [data-network="mainnet"] {
@@ -127,6 +135,7 @@ body {
   --radius-3xl: calc(var(--radius) + 12px);
   --radius-4xl: calc(var(--radius) + 16px);
   --color-background: var(--background);
+  --color-header: var(--header);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
   --color-card-foreground: var(--card-foreground);
@@ -162,6 +171,7 @@ body {
 .dark {
   /* Dark theme: inverted lightness */
   --background-l: 9%;
+  --header-l: 12%;
   --foreground-l: 98%;
   --card-l: 14%;
   --card-foreground-l: 98%;

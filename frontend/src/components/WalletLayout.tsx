@@ -25,7 +25,7 @@ function BottomNavigation() {
   const matchRoute = useMatchRoute()
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+    <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-header/95 backdrop-blur supports-[backdrop-filter]:bg-header/80">
       <div className="mx-auto flex h-16 max-w-screen-xl items-center justify-around px-2">
         {NAV_ITEMS.map(({ to, label, icon: Icon }) => {
           const isActive = !!matchRoute({ to, fuzzy: false })
@@ -58,7 +58,7 @@ export function WalletLayout({ children }: WalletLayoutProps) {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <header className="sticky top-0 z-50 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <header className="sticky top-0 z-50 border-b border-border bg-header/95 backdrop-blur supports-[backdrop-filter]:bg-header/80">
         <div className="mx-auto flex h-14 max-w-screen-xl items-center justify-between px-4">
           <h1 className="flex items-center gap-2 text-lg font-semibold tracking-tight">
             <img
