@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
 import { useEffect } from 'react'
 import { sqliteStorage } from '@/db/storage-adapter'
+import { useWalletStore } from '@/stores/walletStore'
 
 export type ThemeMode = 'light' | 'dark' | 'system'
 export type ResolvedTheme = 'light' | 'dark'
@@ -48,16 +49,18 @@ export function useResolvedTheme(): ResolvedTheme {
 }
 
 /**
- * Renders nothing. Keeps `document.documentElement` class list
- * in sync with the resolved theme from Zustand.
+ * Renders nothing. Keeps `document.documentElement` class list and
+ * data-network attribute in sync with the resolved theme and network mode.
  */
 export function ThemeSynchronizer() {
   const themeMode = useThemeStore((state) => state.themeMode)
+  const networkMode = useWalletStore((state) => state.networkMode)
 
   useEffect(() => {
     function apply() {
       const resolved = resolveTheme(themeMode)
       document.documentElement.classList.toggle('dark', resolved === 'dark')
+      document.documentElement.dataset.network = networkMode
     }
 
     apply()
@@ -69,7 +72,7 @@ export function ThemeSynchronizer() {
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
     mediaQuery.addEventListener('change', apply)
     return () => mediaQuery.removeEventListener('change', apply)
-  }, [themeMode])
+  }, [themeMode, networkMode])
 
   return null
 }
