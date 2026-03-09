@@ -61,8 +61,8 @@ export function ThemeSynchronizer() {
     function apply() {
       const resolved = resolveTheme(themeMode)
       document.documentElement.classList.toggle('dark', resolved === 'dark')
-      document.documentElement.dataset.network = networkMode
-      document.documentElement.dataset.addressType = addressType
+      document.documentElement.dataset.network = networkMode ?? 'testnet'
+      document.documentElement.dataset.addressType = addressType ?? 'taproot'
     }
 
     apply()
