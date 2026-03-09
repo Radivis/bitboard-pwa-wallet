@@ -1,21 +1,12 @@
 import { type ReactNode } from 'react'
 import { Link, useMatchRoute, useLocation } from '@tanstack/react-router'
-import { Home, ArrowDownLeft, ArrowUpRight, Settings, Sun, Moon, Monitor, type LucideIcon } from 'lucide-react'
-import { useThemeStore, useResolvedTheme } from '@/stores/themeStore'
-import { Button } from '@/components/ui/button'
+import { Home, ArrowDownLeft, ArrowUpRight, Settings, type LucideIcon } from 'lucide-react'
+import { ThemeToggle } from '@/components/ThemeToggle'
 import { cn } from '@/lib/utils'
 
 interface WalletLayoutProps {
   children: ReactNode
 }
-
-const NEXT_THEME_ICON = {
-  light: Moon,
-  dark: Monitor,
-  system: Sun,
-} as const
-
-const THEME_CYCLE_LABELS = { light: 'dark', dark: 'system', system: 'light' } as const
 
 interface NavItem {
   to: string
@@ -29,25 +20,6 @@ const NAV_ITEMS: NavItem[] = [
   { to: '/send', label: 'Send', icon: ArrowUpRight },
   { to: '/settings', label: 'Settings', icon: Settings },
 ]
-
-function WalletThemeToggle() {
-  const themeMode = useThemeStore((state) => state.themeMode)
-  const toggleTheme = useThemeStore((state) => state.toggleTheme)
-  const resolvedTheme = useResolvedTheme()
-
-  const Icon = NEXT_THEME_ICON[themeMode]
-
-  return (
-    <Button
-      variant="ghost"
-      size="icon"
-      onClick={toggleTheme}
-      aria-label={`Switch to ${THEME_CYCLE_LABELS[themeMode]} mode (currently ${themeMode}${themeMode === 'system' ? `, resolved: ${resolvedTheme}` : ''})`}
-    >
-      <Icon className="h-5 w-5" />
-    </Button>
-  )
-}
 
 function BottomNavigation() {
   const matchRoute = useMatchRoute()
@@ -98,7 +70,7 @@ export function WalletLayout({ children }: WalletLayoutProps) {
             />
             Bitboard Wallet
           </h1>
-          <WalletThemeToggle />
+          <ThemeToggle />
         </div>
       </header>
 
