@@ -1,5 +1,10 @@
 import { expose } from 'comlink'
-import type { RegtestAddress, RegtestBlock, RegtestState } from './regtest-api'
+import type {
+  RegtestAddress,
+  RegtestBlock,
+  RegtestState,
+  RegtestTxDetails,
+} from './regtest-api'
 
 let wasm: typeof import('@/wasm-pkg/bitboard_crypto') | null = null
 
@@ -14,6 +19,8 @@ let state: RegtestState = {
   blocks: [],
   utxos: [],
   addresses: [],
+  transactions: [],
+  txDetails: [],
 }
 
 function getTip(): RegtestBlock | null {
@@ -21,26 +28,83 @@ function getTip(): RegtestBlock | null {
   return state.blocks[state.blocks.length - 1]
 }
 
-function parseBlockEffects(
-  raw: unknown,
-): { spent: { txid: string; vout: number }[]; new_utxos: { txid: string; vout: number; address: string; amount_sats: number; script_pubkey_hex: string }[] } {
+interface BlockEffectsTx {
+  txid: string
+  inputs: { prev_txid: string; prev_vout: number }[]
+  outputs?: { address: string; amount_sats: number }[]
+}
+
+interface BlockEffectsParsed {
+  spent: { txid: string; vout: number }[]
+  new_utxos: { txid: string; vout: number; address: string; amount_sats: number; script_pubkey_hex: string }[]
+  transactions: BlockEffectsTx[]
+  block_time?: number
+}
+
+function parseBlockEffects(raw: unknown): BlockEffectsParsed {
   if (typeof raw === 'string') {
     try {
-      return JSON.parse(raw) as { spent: { txid: string; vout: number }[]; new_utxos: { txid: string; vout: number; address: string; amount_sats: number; script_pubkey_hex: string }[] }
+      const parsed = JSON.parse(raw) as BlockEffectsParsed
+      return {
+        spent: Array.isArray(parsed?.spent) ? parsed.spent : [],
+        new_utxos: Array.isArray(parsed?.new_utxos) ? parsed.new_utxos : [],
+        transactions: Array.isArray(parsed?.transactions) ? parsed.transactions : [],
+        block_time: typeof parsed?.block_time === 'number' ? parsed.block_time : 0,
+      }
     } catch {
-      return { spent: [], new_utxos: [] }
+      return { spent: [], new_utxos: [], transactions: [], block_time: 0 }
     }
   }
   const effects = raw as Record<string, unknown>
   const spent = Array.isArray(effects?.spent) ? effects.spent : []
   const new_utxos = Array.isArray(effects?.new_utxos) ? effects.new_utxos : []
-  return { spent, new_utxos }
+  const transactions = Array.isArray(effects?.transactions) ? effects.transactions : []
+  const block_time = typeof effects?.block_time === 'number' ? effects.block_time : 0
+  return { spent, new_utxos, transactions, block_time }
 }
 
 function applyBlockEffects(blockHex: string, height: number, newAddress?: RegtestAddress): void {
   const wasmModule = wasm!
   const rawEffects = wasmModule.regtest_block_effects(blockHex)
-  const { spent, new_utxos: newUtxos } = parseBlockEffects(rawEffects)
+  const { spent, new_utxos: newUtxos, transactions, block_time } = parseBlockEffects(rawEffects)
+
+  const utxoMap = new Map(state.utxos.map((u) => [`${u.txid}:${u.vout}`, u]))
+  const blockTime = block_time ?? 0
+
+  for (const tx of transactions) {
+    const inputs: { address: string; amountSats: number }[] = []
+    let largest: { address: string; amountSats: number } | null = null
+    for (const inp of tx.inputs) {
+      const key = `${inp.prev_txid}:${inp.prev_vout}`
+      const utxo = utxoMap.get(key)
+      if (utxo) {
+        inputs.push({ address: utxo.address, amountSats: utxo.amountSats })
+        if (!largest || utxo.amountSats > largest.amountSats) {
+          largest = { address: utxo.address, amountSats: utxo.amountSats }
+        }
+      }
+    }
+    const outputs = (tx.outputs ?? []).map((o) => ({
+      address: o.address,
+      amountSats: o.amount_sats,
+    }))
+    if (largest) {
+      state.transactions.push({
+        txid: tx.txid,
+        largestInputAddress: largest.address,
+        largestInputAmountSats: largest.amountSats,
+      })
+    }
+    if (inputs.length > 0 || outputs.length > 0) {
+      state.txDetails.push({
+        txid: tx.txid,
+        blockHeight: height,
+        blockTime,
+        inputs,
+        outputs,
+      })
+    }
+  }
 
   for (const s of spent) {
     state.utxos = state.utxos.filter((u) => !(u.txid === s.txid && u.vout === s.vout))
@@ -68,7 +132,18 @@ function applyBlockEffects(blockHex: string, height: number, newAddress?: Regtes
 
 const regtestService = {
   async loadState(newState: RegtestState): Promise<void> {
-    state = JSON.parse(JSON.stringify(newState))
+    const cloned = JSON.parse(JSON.stringify(newState)) as RegtestState
+    state = {
+      blocks: cloned.blocks ?? [],
+      utxos: cloned.utxos ?? [],
+      addresses: cloned.addresses ?? [],
+      transactions: cloned.transactions ?? [],
+      txDetails: cloned.txDetails ?? [],
+    }
+  },
+
+  async getTransaction(txid: string): Promise<RegtestTxDetails | null> {
+    return state.txDetails.find((t) => t.txid === txid) ?? null
   },
 
   async getBlockCount(): Promise<number> {

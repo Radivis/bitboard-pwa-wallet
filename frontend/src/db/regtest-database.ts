@@ -48,6 +48,25 @@ async function migrateRegtestToLatest(db: Kysely<RegtestDatabase>): Promise<void
     .addColumn('address', 'text', (col) => col.notNull().unique())
     .addColumn('wif', 'text', (col) => col.notNull())
     .execute()
+
+  await db.schema
+    .createTable('regtest_transactions')
+    .ifNotExists()
+    .addColumn('regtest_transaction_id', 'integer', (col) => col.primaryKey().autoIncrement())
+    .addColumn('txid', 'text', (col) => col.notNull())
+    .addColumn('largest_input_address', 'text', (col) => col.notNull())
+    .addColumn('largest_input_amount_sats', 'integer', (col) => col.notNull())
+    .execute()
+
+  await db.schema
+    .createTable('regtest_tx_details')
+    .ifNotExists()
+    .addColumn('txid', 'text', (col) => col.primaryKey())
+    .addColumn('block_height', 'integer', (col) => col.notNull())
+    .addColumn('block_time', 'integer', (col) => col.notNull())
+    .addColumn('inputs_json', 'text', (col) => col.notNull())
+    .addColumn('outputs_json', 'text', (col) => col.notNull())
+    .execute()
 }
 
 export async function ensureRegtestMigrated(): Promise<void> {

@@ -1,9 +1,26 @@
 import type { Generated, Insertable, Selectable, Updateable } from 'kysely'
 
+interface RegtestTransactionsTable {
+  regtest_transaction_id: Generated<number>
+  txid: string
+  largest_input_address: string
+  largest_input_amount_sats: number
+}
+
+interface RegtestTxDetailsTable {
+  txid: string
+  block_height: number
+  block_time: number
+  inputs_json: string
+  outputs_json: string
+}
+
 export interface RegtestDatabase {
   blocks: BlocksTable
   utxos: UtxosTable
   regtest_addresses: RegtestAddressesTable
+  regtest_transactions: RegtestTransactionsTable
+  regtest_tx_details: RegtestTxDetailsTable
 }
 
 interface BlocksTable {

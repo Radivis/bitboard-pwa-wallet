@@ -303,25 +303,56 @@ pub fn regtest_block_hash(block_hex: &str) -> String {
     block.block_hash().to_string()
 }
 
-/// Returns the effects of applying a block: new UTXOs and spent outpoints.
-/// Used by the worker to update in-memory state.
+/// Returns the effects of applying a block: new UTXOs, spent outpoints, and per-tx input refs.
+/// Used by the worker to update in-memory state and build transaction history.
 #[wasm_bindgen]
 pub fn regtest_block_effects(block_hex: &str) -> Result<JsValue, JsValue> {
     let block: Block = deserialize_hex(block_hex).map_err(|e| JsValue::from_str(&e.to_string()))?;
 
     let mut new_utxos = Vec::new();
     let mut spent = Vec::new();
+    let mut transactions = Vec::new();
 
-    for (_tx_idx, tx) in block.txdata.iter().enumerate() {
+    for (tx_idx, tx) in block.txdata.iter().enumerate() {
         let txid = tx.compute_txid().to_string();
 
+        let mut inputs = Vec::new();
         for input in &tx.input {
             if !input.previous_output.is_null() {
+                let prev = &input.previous_output;
                 spent.push(serde_json::json!({
-                    "txid": input.previous_output.txid.to_string(),
-                    "vout": input.previous_output.vout,
+                    "txid": prev.txid.to_string(),
+                    "vout": prev.vout,
+                }));
+                inputs.push(serde_json::json!({
+                    "prev_txid": prev.txid.to_string(),
+                    "prev_vout": prev.vout,
                 }));
             }
+        }
+
+        let mut tx_outputs = Vec::new();
+        for output in &tx.output {
+            let script = &output.script_pubkey;
+            if !script.is_p2wpkh() {
+                continue;
+            }
+            let addr = match Address::from_script(script, Network::Regtest) {
+                Ok(a) => a.to_string(),
+                Err(_) => continue,
+            };
+            tx_outputs.push(serde_json::json!({
+                "address": addr,
+                "amount_sats": output.value.to_sat(),
+            }));
+        }
+
+        if tx_idx > 0 && !inputs.is_empty() {
+            transactions.push(serde_json::json!({
+                "txid": txid,
+                "inputs": inputs,
+                "outputs": tx_outputs,
+            }));
         }
 
         for (vout, output) in tx.output.iter().enumerate() {
@@ -343,9 +374,12 @@ pub fn regtest_block_effects(block_hex: &str) -> Result<JsValue, JsValue> {
         }
     }
 
+    let block_time = block.header.time;
     let result = serde_json::json!({
         "new_utxos": new_utxos,
         "spent": spent,
+        "transactions": transactions,
+        "block_time": block_time,
     });
     Ok(JsValue::from_str(&result.to_string()))
 }

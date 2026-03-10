@@ -17,10 +17,26 @@ export interface RegtestAddress {
   wif: string
 }
 
+export interface RegtestTxRecord {
+  txid: string
+  largestInputAddress: string
+  largestInputAmountSats: number
+}
+
+export interface RegtestTxDetails {
+  txid: string
+  blockHeight: number
+  blockTime: number
+  inputs: { address: string; amountSats: number }[]
+  outputs: { address: string; amountSats: number }[]
+}
+
 export interface RegtestState {
   blocks: RegtestBlock[]
   utxos: RegtestUtxo[]
   addresses: RegtestAddress[]
+  transactions: RegtestTxRecord[]
+  txDetails: RegtestTxDetails[]
 }
 
 export interface RegtestService {
@@ -35,6 +51,9 @@ export interface RegtestService {
 
   /** Returns full state for persistence. */
   getStateSnapshot(): Promise<RegtestState>
+
+  /** Returns full transaction details by txid, or null if not found. */
+  getTransaction(txid: string): Promise<RegtestTxDetails | null>
 
   /**
    * Mines `count` blocks. If `targetAddress` is empty, generates a new key and uses its address.

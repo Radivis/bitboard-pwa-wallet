@@ -17,8 +17,10 @@ import { Route as ReceiveRouteImport } from './routes/receive'
 import { Route as PersonalRegtestRouteImport } from './routes/personal-regtest'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SetupIndexRouteImport } from './routes/setup/index'
+import { Route as PersonalRegtestIndexRouteImport } from './routes/personal-regtest/index'
 import { Route as SetupImportRouteImport } from './routes/setup/import'
 import { Route as SetupCreateRouteImport } from './routes/setup/create'
+import { Route as PersonalRegtestTxTxidRouteImport } from './routes/personal-regtest/tx.$txid'
 
 const WalletsRoute = WalletsRouteImport.update({
   id: '/wallets',
@@ -60,6 +62,11 @@ const SetupIndexRoute = SetupIndexRouteImport.update({
   path: '/',
   getParentRoute: () => SetupRoute,
 } as any)
+const PersonalRegtestIndexRoute = PersonalRegtestIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => PersonalRegtestRoute,
+} as any)
 const SetupImportRoute = SetupImportRouteImport.update({
   id: '/import',
   path: '/import',
@@ -70,10 +77,15 @@ const SetupCreateRoute = SetupCreateRouteImport.update({
   path: '/create',
   getParentRoute: () => SetupRoute,
 } as any)
+const PersonalRegtestTxTxidRoute = PersonalRegtestTxTxidRouteImport.update({
+  id: '/tx/$txid',
+  path: '/tx/$txid',
+  getParentRoute: () => PersonalRegtestRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/personal-regtest': typeof PersonalRegtestRoute
+  '/personal-regtest': typeof PersonalRegtestRouteWithChildren
   '/receive': typeof ReceiveRoute
   '/send': typeof SendRoute
   '/settings': typeof SettingsRoute
@@ -81,23 +93,26 @@ export interface FileRoutesByFullPath {
   '/wallets': typeof WalletsRoute
   '/setup/create': typeof SetupCreateRoute
   '/setup/import': typeof SetupImportRoute
+  '/personal-regtest/': typeof PersonalRegtestIndexRoute
   '/setup/': typeof SetupIndexRoute
+  '/personal-regtest/tx/$txid': typeof PersonalRegtestTxTxidRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/personal-regtest': typeof PersonalRegtestRoute
   '/receive': typeof ReceiveRoute
   '/send': typeof SendRoute
   '/settings': typeof SettingsRoute
   '/wallets': typeof WalletsRoute
   '/setup/create': typeof SetupCreateRoute
   '/setup/import': typeof SetupImportRoute
+  '/personal-regtest': typeof PersonalRegtestIndexRoute
   '/setup': typeof SetupIndexRoute
+  '/personal-regtest/tx/$txid': typeof PersonalRegtestTxTxidRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/personal-regtest': typeof PersonalRegtestRoute
+  '/personal-regtest': typeof PersonalRegtestRouteWithChildren
   '/receive': typeof ReceiveRoute
   '/send': typeof SendRoute
   '/settings': typeof SettingsRoute
@@ -105,7 +120,9 @@ export interface FileRoutesById {
   '/wallets': typeof WalletsRoute
   '/setup/create': typeof SetupCreateRoute
   '/setup/import': typeof SetupImportRoute
+  '/personal-regtest/': typeof PersonalRegtestIndexRoute
   '/setup/': typeof SetupIndexRoute
+  '/personal-regtest/tx/$txid': typeof PersonalRegtestTxTxidRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -119,18 +136,21 @@ export interface FileRouteTypes {
     | '/wallets'
     | '/setup/create'
     | '/setup/import'
+    | '/personal-regtest/'
     | '/setup/'
+    | '/personal-regtest/tx/$txid'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
-    | '/personal-regtest'
     | '/receive'
     | '/send'
     | '/settings'
     | '/wallets'
     | '/setup/create'
     | '/setup/import'
+    | '/personal-regtest'
     | '/setup'
+    | '/personal-regtest/tx/$txid'
   id:
     | '__root__'
     | '/'
@@ -142,12 +162,14 @@ export interface FileRouteTypes {
     | '/wallets'
     | '/setup/create'
     | '/setup/import'
+    | '/personal-regtest/'
     | '/setup/'
+    | '/personal-regtest/tx/$txid'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  PersonalRegtestRoute: typeof PersonalRegtestRoute
+  PersonalRegtestRoute: typeof PersonalRegtestRouteWithChildren
   ReceiveRoute: typeof ReceiveRoute
   SendRoute: typeof SendRoute
   SettingsRoute: typeof SettingsRoute
@@ -213,6 +235,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SetupIndexRouteImport
       parentRoute: typeof SetupRoute
     }
+    '/personal-regtest/': {
+      id: '/personal-regtest/'
+      path: '/'
+      fullPath: '/personal-regtest/'
+      preLoaderRoute: typeof PersonalRegtestIndexRouteImport
+      parentRoute: typeof PersonalRegtestRoute
+    }
     '/setup/import': {
       id: '/setup/import'
       path: '/import'
@@ -227,8 +256,29 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SetupCreateRouteImport
       parentRoute: typeof SetupRoute
     }
+    '/personal-regtest/tx/$txid': {
+      id: '/personal-regtest/tx/$txid'
+      path: '/tx/$txid'
+      fullPath: '/personal-regtest/tx/$txid'
+      preLoaderRoute: typeof PersonalRegtestTxTxidRouteImport
+      parentRoute: typeof PersonalRegtestRoute
+    }
   }
 }
+
+interface PersonalRegtestRouteChildren {
+  PersonalRegtestIndexRoute: typeof PersonalRegtestIndexRoute
+  PersonalRegtestTxTxidRoute: typeof PersonalRegtestTxTxidRoute
+}
+
+const PersonalRegtestRouteChildren: PersonalRegtestRouteChildren = {
+  PersonalRegtestIndexRoute: PersonalRegtestIndexRoute,
+  PersonalRegtestTxTxidRoute: PersonalRegtestTxTxidRoute,
+}
+
+const PersonalRegtestRouteWithChildren = PersonalRegtestRoute._addFileChildren(
+  PersonalRegtestRouteChildren,
+)
 
 interface SetupRouteChildren {
   SetupCreateRoute: typeof SetupCreateRoute
@@ -246,7 +296,7 @@ const SetupRouteWithChildren = SetupRoute._addFileChildren(SetupRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  PersonalRegtestRoute: PersonalRegtestRoute,
+  PersonalRegtestRoute: PersonalRegtestRouteWithChildren,
   ReceiveRoute: ReceiveRoute,
   SendRoute: SendRoute,
   SettingsRoute: SettingsRoute,
