@@ -14,6 +14,7 @@ import { Route as SetupRouteImport } from './routes/setup'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SendRouteImport } from './routes/send'
 import { Route as ReceiveRouteImport } from './routes/receive'
+import { Route as PersonalRegtestRouteImport } from './routes/personal-regtest'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SetupIndexRouteImport } from './routes/setup/index'
 import { Route as SetupImportRouteImport } from './routes/setup/import'
@@ -44,6 +45,11 @@ const ReceiveRoute = ReceiveRouteImport.update({
   path: '/receive',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PersonalRegtestRoute = PersonalRegtestRouteImport.update({
+  id: '/personal-regtest',
+  path: '/personal-regtest',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -67,6 +73,7 @@ const SetupCreateRoute = SetupCreateRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/personal-regtest': typeof PersonalRegtestRoute
   '/receive': typeof ReceiveRoute
   '/send': typeof SendRoute
   '/settings': typeof SettingsRoute
@@ -78,6 +85,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/personal-regtest': typeof PersonalRegtestRoute
   '/receive': typeof ReceiveRoute
   '/send': typeof SendRoute
   '/settings': typeof SettingsRoute
@@ -89,6 +97,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/personal-regtest': typeof PersonalRegtestRoute
   '/receive': typeof ReceiveRoute
   '/send': typeof SendRoute
   '/settings': typeof SettingsRoute
@@ -102,6 +111,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/personal-regtest'
     | '/receive'
     | '/send'
     | '/settings'
@@ -113,6 +123,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/personal-regtest'
     | '/receive'
     | '/send'
     | '/settings'
@@ -123,6 +134,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/personal-regtest'
     | '/receive'
     | '/send'
     | '/settings'
@@ -135,6 +147,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  PersonalRegtestRoute: typeof PersonalRegtestRoute
   ReceiveRoute: typeof ReceiveRoute
   SendRoute: typeof SendRoute
   SettingsRoute: typeof SettingsRoute
@@ -177,6 +190,13 @@ declare module '@tanstack/react-router' {
       path: '/receive'
       fullPath: '/receive'
       preLoaderRoute: typeof ReceiveRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/personal-regtest': {
+      id: '/personal-regtest'
+      path: '/personal-regtest'
+      fullPath: '/personal-regtest'
+      preLoaderRoute: typeof PersonalRegtestRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -226,6 +246,7 @@ const SetupRouteWithChildren = SetupRoute._addFileChildren(SetupRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  PersonalRegtestRoute: PersonalRegtestRoute,
   ReceiveRoute: ReceiveRoute,
   SendRoute: SendRoute,
   SettingsRoute: SettingsRoute,

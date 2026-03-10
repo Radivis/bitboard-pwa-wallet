@@ -27,9 +27,11 @@ export function AppInitializer({ children }: AppInitializerProps) {
 
     const isSetupRoute = location.pathname.startsWith('/setup')
     const isWalletsRoute = location.pathname === '/wallets'
+    const isSettingsRoute = location.pathname === '/settings'
+    const isPersonalRegtestRoute = location.pathname === '/personal-regtest'
 
     if (!wallets || wallets.length === 0) {
-      if (!isSetupRoute) {
+      if (!isSetupRoute && !isSettingsRoute && !isPersonalRegtestRoute) {
         navigate({ to: '/setup' })
       }
       return
@@ -49,12 +51,13 @@ export function AppInitializer({ children }: AppInitializerProps) {
   }, [wallets, isLoading, activeWalletId, setActiveWallet, navigate, location.pathname])
 
   useEffect(() => {
+    if (networkMode === 'personal-regtest') return
     if (!activeWalletId || !sessionPassword) return
     if (lastUnlockedWalletId.current === activeWalletId) return
 
     lastUnlockedWalletId.current = activeWalletId
     autoUnlockWallet(activeWalletId, sessionPassword)
-  }, [activeWalletId, sessionPassword])
+  }, [activeWalletId, sessionPassword, networkMode])
 
   async function autoUnlockWallet(walletId: number, password: string) {
     try {

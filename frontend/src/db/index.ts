@@ -21,3 +21,9 @@ export {
   deleteWalletSecrets,
 } from './wallet-persistence'
 export type { WalletSecrets, DescriptorWalletData } from './wallet-persistence'
+export {
+  getRegtestDatabase,
+  ensureRegtestMigrated,
+  destroyRegtestDatabase,
+} from './regtest-database'
+export type { Block, Utxo, RegtestAddress } from './regtest-schema'

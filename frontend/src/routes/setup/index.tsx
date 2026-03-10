@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { Plus, Download } from 'lucide-react'
+import { Plus, Download, Settings } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 
@@ -65,6 +65,15 @@ function SetupWelcome() {
           </Link>
         </CardContent>
       </Card>
+
+      <div className="flex justify-center">
+        <Link to="/settings">
+          <Button variant="ghost" size="sm" className="gap-2">
+            <Settings className="h-4 w-4" />
+            Settings
+          </Button>
+        </Link>
+      </div>
     </div>
   )
 }

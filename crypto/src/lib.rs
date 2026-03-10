@@ -18,6 +18,7 @@ pub mod descriptors;
 pub mod error;
 pub mod esplora;
 pub mod mnemonic;
+pub mod regtest;
 pub mod sync;
 pub mod transaction;
 pub mod types;

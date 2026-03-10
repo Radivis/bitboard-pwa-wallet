@@ -45,6 +45,8 @@ import {
   resolveDescriptorWallet,
   updateDescriptorWalletChangeset,
 } from '@/lib/descriptor-wallet-manager'
+import { Link } from '@tanstack/react-router'
+import { initRegtestWorkerWithState, terminateRegtestWorker } from '@/workers/regtest-factory'
 
 export const Route = createFileRoute('/settings')({
   component: SettingsPage,
@@ -61,6 +63,7 @@ const NETWORK_OPTIONS: NetworkMode[] = [
   'testnet',
   'signet',
   'regtest',
+  'personal-regtest',
 ]
 
 /**
@@ -172,10 +175,32 @@ function NetworkSelector() {
   const accountId = useWalletStore((s) => s.accountId)
   const [switching, setSwitching] = useState(false)
 
+  const setAddressType = useWalletStore((s) => s.setAddressType)
+
   const handleNetworkChange = useCallback(
     async (network: NetworkMode) => {
       if (network === networkMode) return
       const previousNetworkMode = networkMode
+
+      if (network === 'personal-regtest') {
+        setNetworkMode(network)
+        setAddressType('segwit')
+        setSwitching(true)
+        try {
+          terminateRegtestWorker()
+          await initRegtestWorkerWithState()
+        } catch (err) {
+          toast.error(err instanceof Error ? err.message : 'Failed to start regtest')
+        } finally {
+          setSwitching(false)
+        }
+        return
+      }
+
+      if (previousNetworkMode === 'personal-regtest') {
+        terminateRegtestWorker()
+      }
+
       setNetworkMode(network)
 
       if (walletStatus === 'unlocked' || walletStatus === 'syncing') {
@@ -194,22 +219,33 @@ function NetworkSelector() {
         }
       }
     },
-    [networkMode, setNetworkMode, walletStatus, addressType, accountId],
+    [networkMode, setNetworkMode, setAddressType, walletStatus, addressType, accountId],
   )
 
   return (
-    <div className="flex flex-wrap gap-2">
-      {NETWORK_OPTIONS.map((network) => (
-        <Button
-          key={network}
-          variant={networkMode === network ? 'default' : 'outline'}
-          size="sm"
-          onClick={() => handleNetworkChange(network)}
-          disabled={switching}
-        >
-          {NETWORK_LABELS[network]}
-        </Button>
-      ))}
+    <div className="space-y-2">
+      <div className="flex flex-wrap gap-2">
+        {NETWORK_OPTIONS.map((network) => (
+          <Button
+            key={network}
+            variant={networkMode === network ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => handleNetworkChange(network)}
+            disabled={switching}
+          >
+            {NETWORK_LABELS[network]}
+          </Button>
+        ))}
+      </div>
+      {networkMode === 'personal-regtest' && (
+        <div>
+          <Link to="/personal-regtest">
+            <Button variant="outline" size="sm">
+              Manage personal regtest network
+            </Button>
+          </Link>
+        </div>
+      )}
     </div>
   )
 }
