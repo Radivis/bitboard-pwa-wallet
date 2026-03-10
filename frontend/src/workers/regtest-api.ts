@@ -28,7 +28,7 @@ export interface RegtestTxDetails {
   blockHeight: number
   blockTime: number
   inputs: { address: string; amountSats: number }[]
-  outputs: { address: string; amountSats: number }[]
+  outputs: { address: string; amountSats: number; isChange?: boolean }[]
 }
 
 export interface RegtestState {

@@ -56,7 +56,11 @@ export async function initRegtestWorkerWithState(): Promise<Remote<RegtestServic
     blockHeight: r.block_height,
     blockTime: r.block_time,
     inputs: JSON.parse(r.inputs_json) as { address: string; amountSats: number }[],
-    outputs: JSON.parse(r.outputs_json) as { address: string; amountSats: number }[],
+    outputs: JSON.parse(r.outputs_json) as {
+      address: string
+      amountSats: number
+      isChange?: boolean
+    }[],
   }))
 
   const state: RegtestState = {

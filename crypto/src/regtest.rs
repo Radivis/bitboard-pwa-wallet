@@ -23,6 +23,7 @@ use wasm_bindgen::prelude::*;
 
 const REGTEST_COINBASE_SUBSIDY: u64 = 50 * 100_000_000; // 50 BTC in sats
 const REGTEST_BITS: u32 = 0x207fffff; // Max target for regtest
+const DUST_THRESHOLD_SATS: u64 = 546; // Min non-dust output for P2WPKH
 
 /// Result of generating a new keypair for "random" mining.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -249,6 +250,78 @@ pub fn regtest_sign_transaction(
     Ok(serialize_hex(&signed_tx))
 }
 
+/// Builds a P2WPKH transaction with payment and change outputs.
+/// Ensures total inputs are fully spent: payment + change + fee, with change to a new address.
+/// Returns (tx_hex, fee_sats) on success.
+#[wasm_bindgen]
+pub fn regtest_build_transaction_with_change(
+    utxos_json: &str,
+    payment_address: &str,
+    payment_sats: u64,
+    fee_rate_sat_per_vb: f64,
+    change_address: &str,
+) -> Result<JsValue, JsValue> {
+    let utxos: Vec<RegtestUtxoInput> =
+        serde_json::from_str(utxos_json).map_err(|e| JsValue::from_str(&e.to_string()))?;
+
+    if utxos.is_empty() {
+        return Err(JsValue::from_str("At least one UTXO required"));
+    }
+    if payment_sats == 0 {
+        return Err(JsValue::from_str("Payment amount must be positive"));
+    }
+
+    let total_in: u64 = utxos.iter().map(|u| u.amount_sats).sum();
+    if payment_sats >= total_in {
+        return Err(JsValue::from_str("Payment exceeds total inputs"));
+    }
+
+    let fee_rate = FeeRate::from_sat_per_vb_unchecked(fee_rate_sat_per_vb.ceil() as u64);
+    // Estimate vsize for P2WPKH: base ~10 + ~68/input + ~34/output vbytes. 1-in-2-out ≈ 146 vbytes.
+    let n_in = utxos.len() as u64;
+    let n_out = 2u64; // payment + change
+    let estimated_vsize = 10 + n_in * 68 + n_out * 34;
+    let required_fee = fee_rate.fee_vb(estimated_vsize).unwrap_or(Amount::ZERO);
+    let required_fee_sats = required_fee.to_sat().saturating_add(1); // small buffer for rounding
+
+    let change_sats = total_in
+        .saturating_sub(payment_sats)
+        .saturating_sub(required_fee_sats);
+    let (outputs, actual_fee_sats) = if change_sats >= DUST_THRESHOLD_SATS {
+        let outputs = vec![
+            RegtestTxOutput {
+                address: payment_address.to_string(),
+                amount_sats: payment_sats,
+            },
+            RegtestTxOutput {
+                address: change_address.to_string(),
+                amount_sats: change_sats,
+            },
+        ];
+        let total_out = payment_sats + change_sats;
+        let fee = total_in - total_out;
+        (outputs, fee)
+    } else {
+        let outputs = vec![RegtestTxOutput {
+            address: payment_address.to_string(),
+            amount_sats: payment_sats,
+        }];
+        let fee = total_in - payment_sats;
+        (outputs, fee)
+    };
+
+    let outputs_json =
+        serde_json::to_string(&outputs).map_err(|e| JsValue::from_str(&e.to_string()))?;
+    let tx_hex = regtest_build_transaction(utxos_json, &outputs_json, fee_rate_sat_per_vb)?;
+
+    let result = serde_json::json!({
+        "tx_hex": tx_hex,
+        "fee_sats": actual_fee_sats,
+        "has_change": change_sats >= DUST_THRESHOLD_SATS,
+    });
+    Ok(JsValue::from_str(&result.to_string()))
+}
+
 /// Generates a new keypair for "random" mining. Returns address (P2WPKH) and WIF.
 #[wasm_bindgen]
 pub fn regtest_generate_keypair() -> Result<JsValue, JsValue> {
@@ -291,6 +364,16 @@ pub fn regtest_validate_address(addr: &str) -> Result<bool, JsValue> {
         Err(_) => return Ok(false),
     };
     Ok(checked.script_pubkey().is_p2wpkh())
+}
+
+/// Returns the txid (hex) for a serialized transaction.
+#[wasm_bindgen]
+pub fn regtest_txid(tx_hex: &str) -> String {
+    let tx: Transaction = match deserialize_hex(tx_hex) {
+        Ok(t) => t,
+        Err(_) => return String::new(),
+    };
+    tx.compute_txid().to_string()
 }
 
 /// Returns the block hash (hex) for a serialized block.

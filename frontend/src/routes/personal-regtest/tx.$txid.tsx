@@ -68,8 +68,9 @@ function RegtestTxViewerPage() {
     )
   }
 
-  const totalAmount = tx.outputs.reduce((sum, o) => sum + o.amountSats, 0)
-  const inputAddresses = new Set(tx.inputs.map((i) => i.address))
+  const totalInputs = tx.inputs.reduce((sum, i) => sum + i.amountSats, 0)
+  const totalOutputs = tx.outputs.reduce((sum, o) => sum + o.amountSats, 0)
+  const feeSats = totalInputs - totalOutputs
   const timestamp = new Date(tx.blockTime * 1000).toLocaleString()
 
   return (
@@ -92,7 +93,7 @@ function RegtestTxViewerPage() {
             </Button>
           </div>
           <CardDescription>
-            {timestamp} · {formatSats(totalAmount)} sats
+            {timestamp} · {formatSats(totalOutputs)} sats total out · {formatSats(feeSats)} sats fee
           </CardDescription>
         </CardHeader>
       </Card>
@@ -133,9 +134,7 @@ function RegtestTxViewerPage() {
             <p className="text-sm text-muted-foreground">No outputs</p>
           ) : (
             <div className="space-y-2">
-              {tx.outputs.map((out, idx) => {
-                const isChange = inputAddresses.has(out.address)
-                return (
+              {tx.outputs.map((out, idx) => (
                   <div
                     key={`${out.address}-${idx}`}
                     className="flex gap-4 items-center py-2 border-b border-border last:border-0"
@@ -144,14 +143,13 @@ function RegtestTxViewerPage() {
                       {truncateAddress(out.address)}
                     </span>
                     <span className="tabular-nums text-right">{formatSats(out.amountSats)} sats</span>
-                    {isChange && (
+                    {out.isChange && (
                       <Badge variant="secondary" className="shrink-0">
                         Change
                       </Badge>
                     )}
                   </div>
-                )
-              })}
+              ))}
             </div>
           )}
         </CardContent>

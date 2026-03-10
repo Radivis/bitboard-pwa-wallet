@@ -23,6 +23,9 @@ let state: RegtestState = {
   txDetails: [],
 }
 
+/** Txid -> change address for txs we create (used to mark change outputs). Not persisted. */
+const txidToChangeAddress = new Map<string, string>()
+
 function getTip(): RegtestBlock | null {
   if (state.blocks.length === 0) return null
   return state.blocks[state.blocks.length - 1]
@@ -84,9 +87,11 @@ function applyBlockEffects(blockHex: string, height: number, newAddress?: Regtes
         }
       }
     }
+    const changeAddressForTx = txidToChangeAddress.get(tx.txid)
     const outputs = (tx.outputs ?? []).map((o) => ({
       address: o.address,
       amountSats: o.amount_sats,
+      isChange: changeAddressForTx !== undefined && o.address === changeAddressForTx,
     }))
     if (largest) {
       state.transactions.push({
@@ -230,20 +235,31 @@ const regtestService = {
         script_pubkey_hex: u.scriptPubkeyHex,
       })),
     )
-    const outputsJson = JSON.stringify([
-      { address: toAddress, amount_sats: amountSats },
-    ])
 
-    const unsignedTxHex = wasmModule.regtest_build_transaction(
+    const changeKeypair = wasmModule.regtest_generate_keypair()
+    const changeAddress: RegtestAddress = { address: changeKeypair.address, wif: changeKeypair.wif }
+
+    const buildResult = wasmModule.regtest_build_transaction_with_change(
       utxosJson,
-      outputsJson,
+      toAddress,
+      BigInt(amountSats),
       feeRateSatPerVb,
+      changeAddress.address,
     )
+    const { tx_hex: unsignedTxHex, fee_sats: _feeSats, has_change } =
+      typeof buildResult === 'string' ? JSON.parse(buildResult) : buildResult
+
     const signedTxHex = wasmModule.regtest_sign_transaction(
       unsignedTxHex,
       controlled.wif,
       utxosJson,
     )
+
+    if (has_change) {
+      state.addresses.push(changeAddress)
+      const createdTxid = wasmModule.regtest_txid(signedTxHex)
+      txidToChangeAddress.set(createdTxid, changeAddress.address)
+    }
 
     const tip = getTip()
     if (!tip) throw new Error('Cannot create transaction: mine at least one block first')
@@ -261,6 +277,9 @@ const regtestService = {
       [signedTxHex],
     )
     applyBlockEffects(blockHex, height, newAddr)
+    if (has_change) {
+      txidToChangeAddress.delete(wasmModule.regtest_txid(signedTxHex))
+    }
 
     return this.getStateSnapshot()
   },
