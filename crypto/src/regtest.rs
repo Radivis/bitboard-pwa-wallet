@@ -347,7 +347,7 @@ pub fn regtest_block_effects(block_hex: &str) -> Result<JsValue, JsValue> {
         "new_utxos": new_utxos,
         "spent": spent,
     });
-    serde_wasm_bindgen::to_value(&result).map_err(|e| JsValue::from_str(&e.to_string()))
+    Ok(JsValue::from_str(&result.to_string()))
 }
 
 /// Extracts script_pubkey hex from a P2WPKH address.

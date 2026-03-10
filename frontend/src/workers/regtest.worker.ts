@@ -21,17 +21,31 @@ function getTip(): RegtestBlock | null {
   return state.blocks[state.blocks.length - 1]
 }
 
+function parseBlockEffects(
+  raw: unknown,
+): { spent: { txid: string; vout: number }[]; new_utxos: { txid: string; vout: number; address: string; amount_sats: number; script_pubkey_hex: string }[] } {
+  if (typeof raw === 'string') {
+    try {
+      return JSON.parse(raw) as { spent: { txid: string; vout: number }[]; new_utxos: { txid: string; vout: number; address: string; amount_sats: number; script_pubkey_hex: string }[] }
+    } catch {
+      return { spent: [], new_utxos: [] }
+    }
+  }
+  const effects = raw as Record<string, unknown>
+  const spent = Array.isArray(effects?.spent) ? effects.spent : []
+  const new_utxos = Array.isArray(effects?.new_utxos) ? effects.new_utxos : []
+  return { spent, new_utxos }
+}
+
 function applyBlockEffects(blockHex: string, height: number, newAddress?: RegtestAddress): void {
   const wasmModule = wasm!
-  const effects = wasmModule.regtest_block_effects(blockHex) as {
-    new_utxos: { txid: string; vout: number; address: string; amount_sats: number; script_pubkey_hex: string }[]
-    spent: { txid: string; vout: number }[]
-  }
+  const rawEffects = wasmModule.regtest_block_effects(blockHex)
+  const { spent, new_utxos: newUtxos } = parseBlockEffects(rawEffects)
 
-  for (const s of effects.spent) {
+  for (const s of spent) {
     state.utxos = state.utxos.filter((u) => !(u.txid === s.txid && u.vout === s.vout))
   }
-  for (const u of effects.new_utxos) {
+  for (const u of newUtxos) {
     state.utxos.push({
       txid: u.txid,
       vout: u.vout,
