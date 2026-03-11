@@ -300,13 +300,7 @@ const regtestService = {
   ): Promise<RegtestState> {
     const wasmModule = await getWasm()
 
-    const mempoolSpent = new Set(
-      (state.mempool ?? []).flatMap((e) => e.inputs.map((i) => `${i.txid}:${i.vout}`)),
-    )
-    const fromUtxos = state.utxos.filter(
-      (u) =>
-        !mempoolSpent.has(`${u.txid}:${u.vout}`) && u.address === fromAddress,
-    )
+    const fromUtxos = state.utxos.filter((u) => u.address === fromAddress)
     const controlled = state.addresses.find((a) => a.address === fromAddress)
     if (!controlled) {
       throw new Error('From address must be a controlled address (mined with random target)')
