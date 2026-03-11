@@ -3,7 +3,10 @@ import { useNavigate, useLocation } from '@tanstack/react-router'
 import { useWalletStore } from '@/stores/walletStore'
 import { useSessionStore } from '@/stores/sessionStore'
 import { useWallets } from '@/db'
-import { loadDescriptorWalletAndSync } from '@/lib/wallet-utils'
+import {
+  loadDescriptorWalletAndSync,
+  loadDescriptorWalletWithoutSync,
+} from '@/lib/wallet-utils'
 
 interface AppInitializerProps {
   children: ReactNode
@@ -51,23 +54,32 @@ export function AppInitializer({ children }: AppInitializerProps) {
   }, [wallets, isLoading, activeWalletId, setActiveWallet, navigate, location.pathname])
 
   useEffect(() => {
-    if (networkMode === 'lab') return
     if (!activeWalletId || !sessionPassword) return
     if (lastUnlockedWalletId.current === activeWalletId) return
 
     lastUnlockedWalletId.current = activeWalletId
     autoUnlockWallet(activeWalletId, sessionPassword)
-  }, [activeWalletId, sessionPassword, networkMode])
+  }, [activeWalletId, sessionPassword, networkMode, addressType, accountId])
 
   async function autoUnlockWallet(walletId: number, password: string) {
     try {
-      await loadDescriptorWalletAndSync(
-        password,
-        walletId,
-        networkMode,
-        addressType,
-        accountId,
-      )
+      if (networkMode === 'lab') {
+        await loadDescriptorWalletWithoutSync(
+          password,
+          walletId,
+          networkMode,
+          addressType,
+          accountId,
+        )
+      } else {
+        await loadDescriptorWalletAndSync(
+          password,
+          walletId,
+          networkMode,
+          addressType,
+          accountId,
+        )
+      }
     } catch {
       setWalletStatus('locked')
       lastUnlockedWalletId.current = null

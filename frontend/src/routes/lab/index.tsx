@@ -27,6 +27,9 @@ import type {
 } from '@/workers/regtest-api'
 import { ConfirmationDialog } from '@/components/ConfirmationDialog'
 import { Copy } from 'lucide-react'
+import { useWalletStore } from '@/stores/walletStore'
+import { useWallet } from '@/db'
+import { displayOwner, WALLET_OWNER_PREFIX } from '@/lib/lab-utils'
 
 export const Route = createFileRoute('/lab/')({
   component: LabIndexPage,
@@ -41,9 +44,15 @@ function LabIndexPage() {
   const [transactions, setTransactions] = useState<RegtestTxRecord[]>([])
   const [txDetails, setTxDetails] = useState<RegtestTxDetails[]>([])
   const [mineCount, setMineCount] = useState('1')
+  const [ownerType, setOwnerType] = useState<'name' | 'wallet'>('name')
   const [targetAddress, setTargetAddress] = useState('')
   const [ownerName, setOwnerName] = useState('')
   const [mining, setMining] = useState(false)
+
+  const activeWalletId = useWalletStore((s) => s.activeWalletId)
+  const walletStatus = useWalletStore((s) => s.walletStatus)
+  const currentAddress = useWalletStore((s) => s.currentAddress)
+  const { data: activeWallet } = useWallet(activeWalletId ?? 0)
   const [showTxForm, setShowTxForm] = useState(false)
   const [fromAddress, setFromAddress] = useState('')
   const [toAddress, setToAddress] = useState('')
@@ -108,14 +117,16 @@ function LabIndexPage() {
       toast.error('Enter a valid block count')
       return
     }
+    const effectiveTarget =
+      ownerType === 'wallet' ? (currentAddress ?? '').trim() : targetAddress.trim()
+    const effectiveOwner =
+      ownerType === 'wallet' && activeWallet?.name
+        ? `${WALLET_OWNER_PREFIX}${activeWallet.name}`
+        : ownerName.trim() || undefined
     setMining(true)
     try {
       const worker = getRegtestWorker()
-      const state = await worker.mineBlocks(
-        count,
-        targetAddress.trim(),
-        ownerName.trim() || undefined,
-      )
+      const state = await worker.mineBlocks(count, effectiveTarget, effectiveOwner)
       await persistRegtestState(state)
       await refreshState()
       toast.success(`Mined ${count} block(s)`)
@@ -124,7 +135,15 @@ function LabIndexPage() {
     } finally {
       setMining(false)
     }
-  }, [mineCount, targetAddress, ownerName, refreshState])
+  }, [
+    mineCount,
+    ownerType,
+    targetAddress,
+    ownerName,
+    currentAddress,
+    activeWallet?.name,
+    refreshState,
+  ])
 
   const handleSend = useCallback(async () => {
     const amount = parseInt(amountSats, 10)
@@ -212,28 +231,84 @@ function LabIndexPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="target-address">Target address (blank = random)</Label>
-              <Input
-                id="target-address"
-                type="text"
-                placeholder="bcrt1q..."
-                value={targetAddress}
-                onChange={(e) => setTargetAddress(e.target.value)}
-                className="min-w-[200px]"
-              />
+              <Label>Owner type</Label>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant={ownerType === 'name' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setOwnerType('name')}
+                >
+                  Name
+                </Button>
+                <Button
+                  type="button"
+                  variant={ownerType === 'wallet' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setOwnerType('wallet')}
+                >
+                  Wallet
+                </Button>
+              </div>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="owner-name">Owner (optional)</Label>
-              <Input
-                id="owner-name"
-                type="text"
-                placeholder="Alice"
-                value={ownerName}
-                onChange={(e) => setOwnerName(e.target.value)}
-                className="min-w-[120px]"
-              />
+              <Label htmlFor="target-address">
+                {ownerType === 'wallet'
+                  ? 'Target address (active wallet)'
+                  : 'Target address (blank = random)'}
+              </Label>
+              {ownerType === 'wallet' ? (
+                walletStatus === 'unlocked' || walletStatus === 'syncing' ? (
+                  <Input
+                    id="target-address"
+                    type="text"
+                    value={currentAddress ?? ''}
+                    readOnly
+                    className="min-w-[200px] font-mono text-sm"
+                  />
+                ) : (
+                  <p className="text-sm text-muted-foreground py-2">
+                    Unlock wallet to mine to it
+                  </p>
+                )
+              ) : (
+                <Input
+                  id="target-address"
+                  type="text"
+                  placeholder="bcrt1q..."
+                  value={targetAddress}
+                  onChange={(e) => setTargetAddress(e.target.value)}
+                  className="min-w-[200px]"
+                />
+              )}
             </div>
-            <Button onClick={handleMine} disabled={mining}>
+            {ownerType === 'name' && (
+              <div className="space-y-2">
+                <Label htmlFor="owner-name">Owner (optional)</Label>
+                <Input
+                  id="owner-name"
+                  type="text"
+                  placeholder="Alice"
+                  value={ownerName}
+                  onChange={(e) => setOwnerName(e.target.value)}
+                  className="min-w-[120px]"
+                />
+              </div>
+            )}
+            {ownerType === 'wallet' && activeWallet && (
+              <p className="text-sm text-muted-foreground">
+                Mining to: {activeWallet.name}
+              </p>
+            )}
+            <Button
+              onClick={handleMine}
+              disabled={
+                mining ||
+                (ownerType === 'wallet' &&
+                  (walletStatus !== 'unlocked' && walletStatus !== 'syncing')) ||
+                (ownerType === 'wallet' && (!currentAddress || !activeWallet))
+              }
+            >
               {mining ? 'Mining...' : 'Mine blocks'}
             </Button>
           </div>
@@ -350,7 +425,9 @@ function LabIndexPage() {
                   <span className="tabular-nums text-right w-24 shrink-0">
                     {formatSats(getBalanceForAddress(a.address))} sats
                   </span>
-                  <span className="w-24 shrink-0">{addressToOwner[a.address] ?? ''}</span>
+                  <span className="w-24 shrink-0">
+                    {displayOwner(addressToOwner[a.address] ?? '')}
+                  </span>
                   <Button
                     size="icon"
                     variant="ghost"
@@ -362,6 +439,69 @@ function LabIndexPage() {
                   </Button>
                 </div>
               ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>UTXOs</CardTitle>
+          <CardDescription>Unspent transaction outputs, grouped by owner</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {utxos.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-4">
+              No UTXOs yet. Mine blocks to create coinbase outputs.
+            </p>
+          ) : (
+            <div className="space-y-4">
+              {(() => {
+                const byOwner = new Map<string, typeof utxos>()
+                for (const u of utxos) {
+                  const owner = addressToOwner[u.address] ?? 'Unknown'
+                  const list = byOwner.get(owner) ?? []
+                  list.push(u)
+                  byOwner.set(owner, list)
+                }
+                const sortedOwners = [...byOwner.keys()].sort((a, b) =>
+                  a === 'Unknown' ? 1 : b === 'Unknown' ? -1 : a.localeCompare(b),
+                )
+                return sortedOwners.map((owner) => (
+                  <div key={owner}>
+                    <h4 className="text-sm font-medium mb-2">{displayOwner(owner)}</h4>
+                    <div className="space-y-2">
+                      <div className="flex gap-4 text-sm font-medium text-muted-foreground">
+                        <span className="flex-1 min-w-0">Address</span>
+                        <span className="w-24 shrink-0 text-right">Sats</span>
+                        <span className="w-10 shrink-0" />
+                      </div>
+                      {(byOwner.get(owner) ?? []).map((u) => (
+                        <div
+                          key={`${u.txid}:${u.vout}`}
+                          className="flex gap-4 items-center py-2 border-b border-border last:border-0"
+                        >
+                          <span className="font-mono text-sm break-all flex-1 min-w-0">
+                            {truncateAddress(u.address)}
+                          </span>
+                          <span className="tabular-nums text-right w-24 shrink-0">
+                            {formatSats(u.amountSats)} sats
+                          </span>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-8 w-8 shrink-0"
+                            onClick={() => handleCopyAddress(u.address)}
+                            aria-label={`Copy ${truncateAddress(u.address)}`}
+                          >
+                            <Copy className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))
+              })()}
             </div>
           )}
         </CardContent>
@@ -388,7 +528,8 @@ function LabIndexPage() {
                       {truncateAddress(tx.txid)}
                     </span>
                     <span className="text-muted-foreground text-sm">
-                      {(tx.sender ?? 'unknown')} → {tx.receiver ?? 'unknown'}
+                      {tx.sender ? displayOwner(tx.sender) : 'unknown'} →{' '}
+                      {tx.receiver ? displayOwner(tx.receiver) : 'unknown'}
                     </span>
                   </Link>
                 ))}
@@ -423,7 +564,8 @@ function LabIndexPage() {
                         {truncateAddress(tx.txid)}
                       </span>
                       <span className="text-muted-foreground text-sm">
-                        {(tx.sender ?? 'unknown')} → {tx.receiver ?? 'unknown'}
+                        {tx.sender ? displayOwner(tx.sender) : 'unknown'} →{' '}
+                        {tx.receiver ? displayOwner(tx.receiver) : 'unknown'}
                         {' '}
                         ({confirmations} confirmations)
                       </span>

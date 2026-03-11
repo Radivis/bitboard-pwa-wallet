@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback, useEffect } from 'react'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { ArrowUpRight, ArrowLeft } from 'lucide-react'
 import { toast } from 'sonner'
@@ -20,6 +20,13 @@ import {
   toBitcoinNetwork,
 } from '@/lib/bitcoin-utils'
 import { updateWalletChangeset, loadCustomEsploraUrl } from '@/lib/wallet-utils'
+import {
+  initRegtestWorkerWithState,
+  getRegtestWorker,
+  persistRegtestState,
+} from '@/workers/regtest-factory'
+import { useWallet } from '@/db'
+import { WALLET_OWNER_PREFIX } from '@/lib/lab-utils'
 
 export const Route = createFileRoute('/send')({
   component: SendPage,
@@ -71,6 +78,10 @@ function SendFlow() {
   const setLastSyncTime = useWalletStore((s) => s.setLastSyncTime)
   const password = useSessionStore((s) => s.password)
 
+  const currentAddress = useWalletStore((s) => s.currentAddress)
+  const { data: activeWallet } = useWallet(activeWalletId ?? 0)
+  const [labBalanceSats, setLabBalanceSats] = useState<number | null>(null)
+
   const buildTransaction = useCryptoStore((s) => s.buildTransaction)
   const signAndExtractTransaction = useCryptoStore((s) => s.signAndExtractTransaction)
   const broadcastTransaction = useCryptoStore((s) => s.broadcastTransaction)
@@ -78,8 +89,32 @@ function SendFlow() {
   const getBalance = useCryptoStore((s) => s.getBalance)
   const getTransactionList = useCryptoStore((s) => s.getTransactionList)
   const exportChangeset = useCryptoStore((s) => s.exportChangeset)
+  const getCurrentAddressWifForLab = useCryptoStore((s) => s.getCurrentAddressWifForLab)
 
-  const confirmedBalance = balance?.confirmed ?? 0
+  useEffect(() => {
+    if (networkMode !== 'lab' || !activeWallet?.name) {
+      setLabBalanceSats(null)
+      return
+    }
+    let mounted = true
+    initRegtestWorkerWithState()
+      .then((worker) => worker.getStateSnapshot())
+      .then((state) => {
+        if (!mounted) return
+        const ownerKey = `${WALLET_OWNER_PREFIX}${activeWallet.name}`
+        const total = (state.utxos ?? [])
+          .filter((u) => (state.addressToOwner ?? {})[u.address] === ownerKey)
+          .reduce((sum, u) => sum + u.amountSats, 0)
+        setLabBalanceSats(total)
+      })
+      .catch(() => setLabBalanceSats(null))
+    return () => { mounted = false }
+  }, [networkMode, activeWallet?.name])
+
+  const confirmedBalance =
+    networkMode === 'lab' && labBalanceSats !== null
+      ? labBalanceSats
+      : balance?.confirmed ?? 0
 
   const effectiveFeeRate = useCustomFee
     ? parseInt(customFeeRate) || 1
@@ -102,10 +137,20 @@ function SendFlow() {
     [normalizedRecipient, networkMode],
   )
 
-  const canBuild = addressValid && amountSats > 0 && amountSats <= confirmedBalance
+  const canBuild =
+    addressValid &&
+    amountSats > 0 &&
+    amountSats <= confirmedBalance &&
+    !(networkMode === 'lab' && (labBalanceSats === 0 || labBalanceSats === null))
+  const labNoBalance = networkMode === 'lab' && labBalanceSats === 0
 
   const handleBuildTransaction = useCallback(async () => {
     if (!canBuild) return
+
+    if (networkMode === 'lab') {
+      setStep(2)
+      return
+    }
 
     try {
       setLoading(true)
@@ -128,7 +173,46 @@ function SendFlow() {
     }
   }, [canBuild, normalizedRecipient, amountSats, effectiveFeeRate, networkMode, buildTransaction])
 
+  const handleLabSend = useCallback(async () => {
+    if (!currentAddress) return
+
+    try {
+      setLoading(true)
+      const wif = await getCurrentAddressWifForLab()
+      const worker = getRegtestWorker()
+      const state = await worker.createTransactionFromExternalSigner(
+        currentAddress,
+        wif,
+        normalizedRecipient,
+        amountSats,
+        effectiveFeeRate,
+      )
+      await persistRegtestState(state)
+      toast.success('Transaction added to mempool')
+      navigate({ to: '/' })
+    } catch (err) {
+      toast.error(
+        err instanceof Error
+          ? `Lab send failed: ${err.message}`
+          : 'Lab send failed',
+      )
+    } finally {
+      setLoading(false)
+    }
+  }, [
+    currentAddress,
+    normalizedRecipient,
+    amountSats,
+    effectiveFeeRate,
+    getCurrentAddressWifForLab,
+    navigate,
+  ])
+
   const handleBroadcast = useCallback(async () => {
+    if (networkMode === 'lab') {
+      await handleLabSend()
+      return
+    }
     if (!psbt) return
 
     try {
@@ -170,6 +254,9 @@ function SendFlow() {
       setLoading(false)
     }
   }, [
+    networkMode,
+    handleLabSend,
+    psbt,
     psbt,
     networkMode,
     activeWalletId,
@@ -187,7 +274,7 @@ function SendFlow() {
     navigate,
   ])
 
-  if (step === 2 && psbt) {
+  if (step === 2 && (psbt || networkMode === 'lab')) {
     return (
       <div className="space-y-6">
         <h2 className="text-2xl font-bold tracking-tight">Review Transaction</h2>
@@ -229,7 +316,9 @@ function SendFlow() {
 
               {loading ? (
                 <div className="flex-1">
-                  <LoadingSpinner text="Broadcasting..." />
+                  <LoadingSpinner
+                    text={networkMode === 'lab' ? 'Adding to mempool...' : 'Broadcasting...'}
+                  />
                 </div>
               ) : (
                 <Button
@@ -312,6 +401,11 @@ function SendFlow() {
                 Available: {formatBTC(confirmedBalance)} BTC (
                 {formatSats(confirmedBalance)} sats)
               </p>
+              {labNoBalance && (
+                <p className="text-xs text-amber-600 dark:text-amber-400">
+                  No balance. Mine blocks to your address in the Lab.
+                </p>
+              )}
             </div>
 
             <div className="space-y-2">

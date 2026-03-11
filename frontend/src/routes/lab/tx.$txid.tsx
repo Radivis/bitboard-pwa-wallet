@@ -14,6 +14,7 @@ import { truncateAddress, formatSats } from '@/lib/bitcoin-utils'
 import type { RegtestTxDetails } from '@/workers/regtest-api'
 import { Copy, ArrowLeft } from 'lucide-react'
 import { toast } from 'sonner'
+import { displayOwner } from '@/lib/lab-utils'
 
 export const Route = createFileRoute('/lab/tx/$txid')({
   component: RegtestTxViewerPage,
@@ -125,7 +126,7 @@ function RegtestTxViewerPage() {
                     {truncateAddress(inp.address)}
                   </span>
                   <Badge variant="secondary" className="shrink-0">
-                    {inp.owner ?? 'unknown'}
+                    {inp.owner ? displayOwner(inp.owner) : 'unknown'}
                   </Badge>
                   <span className="tabular-nums text-right">{formatSats(inp.amountSats)} sats</span>
                 </div>
@@ -154,7 +155,7 @@ function RegtestTxViewerPage() {
                     {truncateAddress(out.address)}
                   </span>
                   <Badge variant="secondary" className="shrink-0">
-                    {out.owner ?? 'unknown'}
+                    {out.owner ? displayOwner(out.owner) : 'unknown'}
                   </Badge>
                   <span className="tabular-nums text-right">{formatSats(out.amountSats)} sats</span>
                   {out.isChange && (

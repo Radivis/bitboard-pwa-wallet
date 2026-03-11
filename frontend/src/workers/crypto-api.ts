@@ -37,6 +37,8 @@ export interface CryptoService {
 
   getNewAddress(): Promise<string>;
   getCurrentAddress(): Promise<string>;
+  /** Returns WIF for current address. Only valid when wallet uses regtest (lab mode). */
+  getCurrentAddressWifForLab(): Promise<string>;
   getBalance(): Promise<BalanceInfo>;
   exportChangeset(): Promise<string>;
 

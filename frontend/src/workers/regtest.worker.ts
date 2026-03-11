@@ -385,6 +385,100 @@ const regtestService = {
 
     return this.getStateSnapshot()
   },
+
+  async createTransactionFromExternalSigner(
+    fromAddress: string,
+    wif: string,
+    toAddress: string,
+    amountSats: number,
+    feeRateSatPerVb: number,
+  ): Promise<RegtestState> {
+    const wasmModule = await getWasm()
+
+    const fromUtxos = state.utxos.filter((u) => u.address === fromAddress)
+    if (fromUtxos.length === 0) {
+      throw new Error('No UTXOs available for the from address')
+    }
+
+    const utxosJson = JSON.stringify(
+      fromUtxos.map((u) => ({
+        txid: u.txid,
+        vout: u.vout,
+        amount_sats: u.amountSats,
+        script_pubkey_hex: u.scriptPubkeyHex,
+      })),
+    )
+
+    const changeKeypair = wasmModule.regtest_generate_keypair()
+    const changeAddress: RegtestAddress = { address: changeKeypair.address, wif: changeKeypair.wif }
+
+    const buildResult = wasmModule.regtest_build_transaction_with_change(
+      utxosJson,
+      toAddress,
+      BigInt(amountSats),
+      feeRateSatPerVb,
+      changeAddress.address,
+    )
+    const { tx_hex: unsignedTxHex, fee_sats: feeSats, has_change } =
+      typeof buildResult === 'string' ? JSON.parse(buildResult) : buildResult
+
+    const signedTxHex = wasmModule.regtest_sign_transaction(
+      unsignedTxHex,
+      wif,
+      utxosJson,
+    )
+
+    if (has_change) {
+      state.addresses.push(changeAddress)
+      const createdTxid = wasmModule.regtest_txid(signedTxHex)
+      txidToChangeAddress.set(createdTxid, changeAddress.address)
+    }
+
+    const addressToOwner = state.addressToOwner ?? {}
+    const sender = addressToOwner[fromAddress] ?? null
+    const receiver = addressToOwner[toAddress] ?? null
+
+    const inputsDetail = fromUtxos.map((u) => ({
+      address: u.address,
+      amountSats: u.amountSats,
+      owner: addressToOwner[u.address] ?? null,
+    }))
+
+    const totalInput = fromUtxos.reduce((s, u) => s + u.amountSats, 0)
+    const outputsDetail: {
+      address: string
+      amountSats: number
+      isChange?: boolean
+      owner?: string | null
+    }[] = has_change
+      ? [
+          { address: toAddress, amountSats, owner: receiver },
+          {
+            address: changeAddress.address,
+            amountSats: totalInput - amountSats - feeSats,
+            isChange: true,
+            owner: sender,
+          },
+        ]
+      : [{ address: toAddress, amountSats: totalInput - feeSats, owner: receiver }]
+
+    const txid = wasmModule.regtest_txid(signedTxHex)
+    const inputs = fromUtxos.map((u) => ({ txid: u.txid, vout: u.vout }))
+
+    state.mempool = state.mempool ?? []
+    state.mempool.push({
+      signedTxHex,
+      txid,
+      sender,
+      receiver,
+      feeSats,
+      inputs,
+      inputsDetail,
+      outputsDetail,
+    })
+
+    return this.getStateSnapshot()
+  },
 }
 
 expose(regtestService)

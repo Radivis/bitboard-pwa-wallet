@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { Wallet, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
@@ -13,6 +13,9 @@ import { TransactionItem } from '@/components/TransactionItem'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { formatBTC, formatSats, getEsploraUrl } from '@/lib/bitcoin-utils'
 import { updateWalletChangeset, loadCustomEsploraUrl } from '@/lib/wallet-utils'
+import { initRegtestWorkerWithState } from '@/workers/regtest-factory'
+import { useWallet } from '@/db'
+import { WALLET_OWNER_PREFIX } from '@/lib/lab-utils'
 
 export const Route = createFileRoute('/')({
   component: DashboardPage,
@@ -21,10 +24,36 @@ export const Route = createFileRoute('/')({
 function BalanceCard() {
   const networkMode = useWalletStore((s) => s.networkMode)
   const balance = useWalletStore((s) => s.balance)
+  const activeWalletId = useWalletStore((s) => s.activeWalletId)
+  const { data: activeWallet } = useWallet(activeWalletId ?? 0)
+  const [labBalanceSats, setLabBalanceSats] = useState<number | null>(null)
 
-  const confirmedSats = balance?.confirmed ?? 0
+  useEffect(() => {
+    if (networkMode !== 'lab' || !activeWallet?.name) {
+      setLabBalanceSats(null)
+      return
+    }
+    let mounted = true
+    initRegtestWorkerWithState()
+      .then((worker) => worker.getStateSnapshot())
+      .then((state) => {
+      if (!mounted) return
+      const ownerKey = `${WALLET_OWNER_PREFIX}${activeWallet.name}`
+      const total = (state.utxos ?? [])
+        .filter((u) => (state.addressToOwner ?? {})[u.address] === ownerKey)
+        .reduce((sum, u) => sum + u.amountSats, 0)
+      setLabBalanceSats(total)
+      })
+      .catch(() => setLabBalanceSats(null))
+    return () => { mounted = false }
+  }, [networkMode, activeWallet?.name])
+
+  const confirmedSats =
+    networkMode === 'lab' && labBalanceSats !== null
+      ? labBalanceSats
+      : balance?.confirmed ?? 0
   const pendingSats =
-    (balance?.trusted_pending ?? 0) + (balance?.untrusted_pending ?? 0)
+    networkMode === 'lab' ? 0 : (balance?.trusted_pending ?? 0) + (balance?.untrusted_pending ?? 0)
 
   return (
     <Card>
@@ -128,7 +157,23 @@ function SyncButton() {
 }
 
 function RecentTransactions() {
+  const networkMode = useWalletStore((s) => s.networkMode)
   const transactions = useWalletStore((s) => s.transactions)
+
+  if (networkMode === 'lab') {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Recent Transactions</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground py-4">
+            Lab transactions are not displayed here.
+          </p>
+        </CardContent>
+      </Card>
+    )
+  }
 
   return (
     <Card>

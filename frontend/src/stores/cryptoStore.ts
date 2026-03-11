@@ -50,6 +50,7 @@ interface CryptoState {
 
   getNewAddress: () => Promise<string>;
   getCurrentAddress: () => Promise<string>;
+  getCurrentAddressWifForLab: () => Promise<string>;
   getBalance: () => Promise<BalanceInfo>;
   exportChangeset: () => Promise<string>;
 
@@ -132,10 +133,13 @@ export const useCryptoStore = create<CryptoState>((set, get) => {
     getNewAddress: () => 
       withErrorHandling((worker) => worker.getNewAddress()),
 
-    getCurrentAddress: () => 
+    getCurrentAddress: () =>
       withErrorHandling((worker) => worker.getCurrentAddress()),
 
-    getBalance: () => 
+    getCurrentAddressWifForLab: () =>
+      withErrorHandling((worker) => worker.getCurrentAddressWifForLab()),
+
+    getBalance: () =>
       withErrorHandling((worker) => worker.getBalance()),
 
     exportChangeset: () => 

@@ -36,6 +36,7 @@ pub fn init() {
 thread_local! {
     static ACTIVE_WALLET: RefCell<Option<BdkWallet>> = const { RefCell::new(None) };
     static ACCUMULATED_CHANGESET: RefCell<ChangeSet> = RefCell::new(ChangeSet::default());
+    static EXTERNAL_DESCRIPTOR_FOR_LAB: RefCell<String> = const { RefCell::new(String::new()) };
 }
 
 fn with_wallet<F, R>(op: F) -> Result<R, JsValue>
@@ -152,6 +153,7 @@ pub fn create_wallet(
 
     ACTIVE_WALLET.with(|w| w.replace(Some(bdk_wallet)));
     ACCUMULATED_CHANGESET.with(|cs| *cs.borrow_mut() = initial_changeset);
+    EXTERNAL_DESCRIPTOR_FOR_LAB.with(|d| *d.borrow_mut() = pair.external.clone());
 
     let result = types::CreateWalletResult {
         external_descriptor: pair.external,
@@ -182,6 +184,7 @@ pub fn load_wallet(
 
     ACTIVE_WALLET.with(|w| w.replace(Some(bdk_wallet)));
     ACCUMULATED_CHANGESET.with(|cs| *cs.borrow_mut() = restored_changeset);
+    EXTERNAL_DESCRIPTOR_FOR_LAB.with(|d| *d.borrow_mut() = external_descriptor.to_string());
 
     Ok(JsValue::TRUE)
 }
@@ -360,6 +363,18 @@ pub fn get_transaction_list() -> Result<JsValue, JsValue> {
 // ---------------------------------------------------------------------------
 // Key derivation (Phase 7b)
 // ---------------------------------------------------------------------------
+
+/// Return the WIF for the current external address. Only valid when the wallet
+/// is loaded with regtest network (lab mode). Used for signing lab transactions.
+#[wasm_bindgen]
+pub fn get_current_address_wif_for_lab() -> Result<String, JsValue> {
+    let descriptor = EXTERNAL_DESCRIPTOR_FOR_LAB.with(|d| d.borrow().clone());
+    if descriptor.is_empty() {
+        return Err(JsValue::from_str("No wallet loaded. Load wallet first."));
+    }
+    with_wallet(|w| wallet::get_current_address_wif(w, &descriptor))
+        .and_then(|r| r.map_err(JsValue::from))
+}
 
 /// Derive a 256-bit key from a password and salt using Argon2id.
 ///

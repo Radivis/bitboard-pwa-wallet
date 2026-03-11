@@ -87,6 +87,11 @@ const cryptoService = {
     return wasmModule.get_current_address();
   },
 
+  async getCurrentAddressWifForLab(): Promise<string> {
+    const wasmModule = await getWasm();
+    return wasmModule.get_current_address_wif_for_lab();
+  },
+
   async getBalance(): Promise<BalanceInfo> {
     const wasmModule = await getWasm();
     return wasmModule.get_balance();

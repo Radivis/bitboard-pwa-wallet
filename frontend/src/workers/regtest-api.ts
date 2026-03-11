@@ -91,4 +91,17 @@ export interface RegtestService {
     amountSats: number,
     feeRateSatPerVb: number,
   ): Promise<RegtestState>
+
+  /**
+   * Creates a transaction from an address controlled by an external signer (e.g. wallet).
+   * Uses the provided WIF instead of looking up in controlled addresses.
+   * Returns the new state.
+   */
+  createTransactionFromExternalSigner(
+    fromAddress: string,
+    wif: string,
+    toAddress: string,
+    amountSats: number,
+    feeRateSatPerVb: number,
+  ): Promise<RegtestState>
 }
