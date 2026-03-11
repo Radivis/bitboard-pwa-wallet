@@ -1,8 +1,34 @@
-import { Kysely } from 'kysely'
+import { Kysely, sql } from 'kysely'
 import { WaSqliteWorkerDialect } from 'kysely-wasqlite-worker'
 import type { RegtestDatabase } from './regtest-schema'
 
 const REGTEST_DATABASE_FILE_NAME = 'bitboard-regtest'
+
+/** Migrates regtest_transactions from old schema (largest_input_*) to new (sender, receiver) if needed. */
+async function migrateRegtestTransactionsIfNeeded(
+  db: Kysely<RegtestDatabase>,
+): Promise<void> {
+  const tableInfo = await sql<{ name: string }>`
+    SELECT name FROM pragma_table_info('regtest_transactions')
+  `.execute(db)
+  const columns = tableInfo.rows.map((r) => r.name)
+  if (columns.includes('sender')) return
+
+  await sql`
+    CREATE TABLE regtest_transactions_new (
+      regtest_transaction_id INTEGER PRIMARY KEY AUTOINCREMENT,
+      txid TEXT NOT NULL,
+      sender TEXT,
+      receiver TEXT
+    )
+  `.execute(db)
+  await sql`
+    INSERT INTO regtest_transactions_new (regtest_transaction_id, txid, sender, receiver)
+    SELECT regtest_transaction_id, txid, NULL, NULL FROM regtest_transactions
+  `.execute(db)
+  await sql`DROP TABLE regtest_transactions`.execute(db)
+  await sql`ALTER TABLE regtest_transactions_new RENAME TO regtest_transactions`.execute(db)
+}
 
 let regtestInstance: Kysely<RegtestDatabase> | null = null
 let regtestMigrated = false
@@ -54,9 +80,18 @@ async function migrateRegtestToLatest(db: Kysely<RegtestDatabase>): Promise<void
     .ifNotExists()
     .addColumn('regtest_transaction_id', 'integer', (col) => col.primaryKey().autoIncrement())
     .addColumn('txid', 'text', (col) => col.notNull())
-    .addColumn('largest_input_address', 'text', (col) => col.notNull())
-    .addColumn('largest_input_amount_sats', 'integer', (col) => col.notNull())
+    .addColumn('sender', 'text', (col) => col)
+    .addColumn('receiver', 'text', (col) => col)
     .execute()
+
+  await db.schema
+    .createTable('regtest_address_owners')
+    .ifNotExists()
+    .addColumn('address', 'text', (col) => col.primaryKey())
+    .addColumn('owner', 'text', (col) => col.notNull())
+    .execute()
+
+  await migrateRegtestTransactionsIfNeeded(db)
 
   await db.schema
     .createTable('regtest_tx_details')

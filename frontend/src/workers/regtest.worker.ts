@@ -19,6 +19,7 @@ let state: RegtestState = {
   blocks: [],
   utxos: [],
   addresses: [],
+  addressToOwner: {},
   transactions: [],
   txDetails: [],
 }
@@ -72,34 +73,44 @@ function applyBlockEffects(blockHex: string, height: number, newAddress?: Regtes
   const { spent, new_utxos: newUtxos, transactions, block_time } = parseBlockEffects(rawEffects)
 
   const utxoMap = new Map(state.utxos.map((u) => [`${u.txid}:${u.vout}`, u]))
+  const addressToOwner = state.addressToOwner ?? {}
   const blockTime = block_time ?? 0
 
   for (const tx of transactions) {
-    const inputs: { address: string; amountSats: number }[] = []
-    let largest: { address: string; amountSats: number } | null = null
+    const inputs: { address: string; amountSats: number; owner?: string | null }[] = []
+    let firstInputAddress: string | null = null
     for (const inp of tx.inputs) {
       const key = `${inp.prev_txid}:${inp.prev_vout}`
       const utxo = utxoMap.get(key)
       if (utxo) {
-        inputs.push({ address: utxo.address, amountSats: utxo.amountSats })
-        if (!largest || utxo.amountSats > largest.amountSats) {
-          largest = { address: utxo.address, amountSats: utxo.amountSats }
-        }
+        const owner = addressToOwner[utxo.address] ?? null
+        inputs.push({ address: utxo.address, amountSats: utxo.amountSats, owner })
+        if (firstInputAddress === null) firstInputAddress = utxo.address
       }
     }
+    const sender = firstInputAddress ? (addressToOwner[firstInputAddress] ?? null) : null
     const changeAddressForTx = txidToChangeAddress.get(tx.txid)
-    const outputs = (tx.outputs ?? []).map((o) => ({
-      address: o.address,
-      amountSats: o.amount_sats,
-      isChange: changeAddressForTx !== undefined && o.address === changeAddressForTx,
-    }))
-    if (largest) {
-      state.transactions.push({
-        txid: tx.txid,
-        largestInputAddress: largest.address,
-        largestInputAmountSats: largest.amountSats,
-      })
-    }
+    const outputs = (tx.outputs ?? []).map((o) => {
+      const isChange = changeAddressForTx !== undefined && o.address === changeAddressForTx
+      const owner = isChange && sender
+        ? sender
+        : (addressToOwner[o.address] ?? null)
+      if (isChange && sender) {
+        state.addressToOwner = state.addressToOwner ?? {}
+        state.addressToOwner[o.address] = sender
+      }
+      return {
+        address: o.address,
+        amountSats: o.amount_sats,
+        isChange,
+        owner,
+      }
+    })
+    const firstNonChangeOutput = outputs.find((o) => !o.isChange)
+    const receiver = firstNonChangeOutput
+      ? (addressToOwner[firstNonChangeOutput.address] ?? null)
+      : null
+    state.transactions.push({ txid: tx.txid, sender, receiver })
     if (inputs.length > 0 || outputs.length > 0) {
       state.txDetails.push({
         txid: tx.txid,
@@ -142,6 +153,7 @@ const regtestService = {
       blocks: cloned.blocks ?? [],
       utxos: cloned.utxos ?? [],
       addresses: cloned.addresses ?? [],
+      addressToOwner: cloned.addressToOwner ?? {},
       transactions: cloned.transactions ?? [],
       txDetails: cloned.txDetails ?? [],
     }
@@ -172,7 +184,11 @@ const regtestService = {
     return JSON.parse(JSON.stringify(state))
   },
 
-  async mineBlocks(count: number, targetAddress: string): Promise<RegtestState> {
+  async mineBlocks(
+    count: number,
+    targetAddress: string,
+    ownerName?: string,
+  ): Promise<RegtestState> {
     const wasmModule = await getWasm()
     const tip = getTip()
 
@@ -185,15 +201,21 @@ const regtestService = {
 
     let coinbaseScriptPubkeyHex: string
     let newAddress: RegtestAddress | null = null
+    let coinbaseAddress: string
 
     if (targetAddress.trim()) {
-      coinbaseScriptPubkeyHex = wasmModule.regtest_address_to_script_pubkey_hex(
-        targetAddress.trim(),
-      )
+      coinbaseAddress = targetAddress.trim()
+      coinbaseScriptPubkeyHex = wasmModule.regtest_address_to_script_pubkey_hex(coinbaseAddress)
     } else {
       const keypair = wasmModule.regtest_generate_keypair()
       newAddress = { address: keypair.address, wif: keypair.wif }
+      coinbaseAddress = keypair.address
       coinbaseScriptPubkeyHex = wasmModule.regtest_address_to_script_pubkey_hex(keypair.address)
+    }
+
+    if (ownerName?.trim()) {
+      state.addressToOwner = state.addressToOwner ?? {}
+      state.addressToOwner[coinbaseAddress] = ownerName.trim()
     }
 
     for (let i = 0; i < count; i++) {

@@ -116,6 +116,9 @@ function RegtestTxViewerPage() {
                   <span className="font-mono text-sm break-all flex-1 min-w-0">
                     {truncateAddress(inp.address)}
                   </span>
+                  <Badge variant="secondary" className="shrink-0">
+                    {inp.owner ?? 'unknown'}
+                  </Badge>
                   <span className="tabular-nums text-right">{formatSats(inp.amountSats)} sats</span>
                 </div>
               ))}
@@ -135,20 +138,23 @@ function RegtestTxViewerPage() {
           ) : (
             <div className="space-y-2">
               {tx.outputs.map((out, idx) => (
-                  <div
-                    key={`${out.address}-${idx}`}
-                    className="flex gap-4 items-center py-2 border-b border-border last:border-0"
-                  >
-                    <span className="font-mono text-sm break-all flex-1 min-w-0">
-                      {truncateAddress(out.address)}
-                    </span>
-                    <span className="tabular-nums text-right">{formatSats(out.amountSats)} sats</span>
-                    {out.isChange && (
-                      <Badge variant="secondary" className="shrink-0">
-                        Change
-                      </Badge>
-                    )}
-                  </div>
+                <div
+                  key={`${out.address}-${idx}`}
+                  className="flex gap-4 items-center py-2 border-b border-border last:border-0"
+                >
+                  <span className="font-mono text-sm break-all flex-1 min-w-0">
+                    {truncateAddress(out.address)}
+                  </span>
+                  <Badge variant="secondary" className="shrink-0">
+                    {out.owner ?? 'unknown'}
+                  </Badge>
+                  <span className="tabular-nums text-right">{formatSats(out.amountSats)} sats</span>
+                  {out.isChange && (
+                    <Badge variant="secondary" className="shrink-0">
+                      Change
+                    </Badge>
+                  )}
+                </div>
               ))}
             </div>
           )}

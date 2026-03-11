@@ -27,10 +27,12 @@ export const Route = createFileRoute('/lab/')({
 function LabIndexPage() {
   const [blockCount, setBlockCount] = useState(0)
   const [addresses, setAddresses] = useState<RegtestAddress[]>([])
+  const [addressToOwner, setAddressToOwner] = useState<Record<string, string>>({})
   const [utxos, setUtxos] = useState<RegtestUtxo[]>([])
   const [transactions, setTransactions] = useState<RegtestTxRecord[]>([])
   const [mineCount, setMineCount] = useState('1')
   const [targetAddress, setTargetAddress] = useState('')
+  const [ownerName, setOwnerName] = useState('')
   const [mining, setMining] = useState(false)
   const [showTxForm, setShowTxForm] = useState(false)
   const [fromAddress, setFromAddress] = useState('')
@@ -49,6 +51,7 @@ function LabIndexPage() {
       ])
       setBlockCount(count)
       setAddresses(addrs)
+      setAddressToOwner(state.addressToOwner ?? {})
       setUtxos(state.utxos)
       setTransactions(state.transactions ?? [])
     } catch (err) {
@@ -94,7 +97,11 @@ function LabIndexPage() {
     setMining(true)
     try {
       const worker = getRegtestWorker()
-      const state = await worker.mineBlocks(count, targetAddress.trim())
+      const state = await worker.mineBlocks(
+        count,
+        targetAddress.trim(),
+        ownerName.trim() || undefined,
+      )
       await persistRegtestState(state)
       await refreshState()
       toast.success(`Mined ${count} block(s)`)
@@ -103,7 +110,7 @@ function LabIndexPage() {
     } finally {
       setMining(false)
     }
-  }, [mineCount, targetAddress, refreshState])
+  }, [mineCount, targetAddress, ownerName, refreshState])
 
   const handleSend = useCallback(async () => {
     const amount = parseInt(amountSats, 10)
@@ -176,6 +183,17 @@ function LabIndexPage() {
                 value={targetAddress}
                 onChange={(e) => setTargetAddress(e.target.value)}
                 className="min-w-[200px]"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="owner-name">Owner (optional)</Label>
+              <Input
+                id="owner-name"
+                type="text"
+                placeholder="Alice"
+                value={ownerName}
+                onChange={(e) => setOwnerName(e.target.value)}
+                className="min-w-[120px]"
               />
             </div>
             <Button onClick={handleMine} disabled={mining}>
@@ -287,7 +305,7 @@ function LabIndexPage() {
               <div className="flex gap-4 text-sm font-medium text-muted-foreground">
                 <span className="flex-1 min-w-0">Address</span>
                 <span className="w-24 shrink-0 text-right">Balance</span>
-                <span className="w-16 shrink-0">Controlled</span>
+                <span className="w-24 shrink-0">Owner</span>
                 <span className="w-10 shrink-0" />
               </div>
               {addresses.map((a) => (
@@ -301,7 +319,7 @@ function LabIndexPage() {
                   <span className="tabular-nums text-right w-24 shrink-0">
                     {formatSats(getBalanceForAddress(a.address))} sats
                   </span>
-                  <span className="w-16 shrink-0">{a.wif ? 'Yes' : 'No'}</span>
+                  <span className="w-24 shrink-0">{addressToOwner[a.address] ?? ''}</span>
                   <Button
                     size="icon"
                     variant="ghost"
@@ -321,7 +339,7 @@ function LabIndexPage() {
       <Card>
         <CardHeader>
           <CardTitle>Recent transactions</CardTitle>
-          <CardDescription>Last 10 transactions (largest TxIn per tx)</CardDescription>
+          <CardDescription>Last 10 transactions (sender and receiver per tx)</CardDescription>
         </CardHeader>
         <CardContent>
           {transactions.length === 0 ? (
@@ -344,7 +362,7 @@ function LabIndexPage() {
                       {truncateAddress(tx.txid)}
                     </span>
                     <span className="text-muted-foreground text-sm">
-                      TxIn: {truncateAddress(tx.largestInputAddress)} — {formatSats(tx.largestInputAmountSats)} sats
+                      {(tx.sender ?? 'unknown')} → {tx.receiver ?? 'unknown'}
                     </span>
                   </Link>
                 ))}

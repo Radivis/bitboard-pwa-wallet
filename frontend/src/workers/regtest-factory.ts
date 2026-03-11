@@ -40,9 +40,19 @@ export async function initRegtestWorkerWithState(): Promise<Remote<RegtestServic
     .select(['address', 'wif'])
     .execute()
 
+  const addressOwnersRows = await db
+    .selectFrom('regtest_address_owners')
+    .select(['address', 'owner'])
+    .execute()
+
+  const addressToOwner: Record<string, string> = {}
+  for (const row of addressOwnersRows) {
+    addressToOwner[row.address] = row.owner
+  }
+
   const transactions = await db
     .selectFrom('regtest_transactions')
-    .select(['txid', 'largest_input_address', 'largest_input_amount_sats'])
+    .select(['txid', 'sender', 'receiver'])
     .orderBy('regtest_transaction_id', 'asc')
     .execute()
 
@@ -55,11 +65,16 @@ export async function initRegtestWorkerWithState(): Promise<Remote<RegtestServic
     txid: r.txid,
     blockHeight: r.block_height,
     blockTime: r.block_time,
-    inputs: JSON.parse(r.inputs_json) as { address: string; amountSats: number }[],
+    inputs: JSON.parse(r.inputs_json) as {
+      address: string
+      amountSats: number
+      owner?: string | null
+    }[],
     outputs: JSON.parse(r.outputs_json) as {
       address: string
       amountSats: number
       isChange?: boolean
+      owner?: string | null
     }[],
   }))
 
@@ -80,10 +95,11 @@ export async function initRegtestWorkerWithState(): Promise<Remote<RegtestServic
       address: a.address,
       wif: a.wif,
     })),
+    addressToOwner,
     transactions: transactions.map((t) => ({
       txid: t.txid,
-      largestInputAddress: t.largest_input_address,
-      largestInputAmountSats: t.largest_input_amount_sats,
+      sender: t.sender,
+      receiver: t.receiver,
     })),
     txDetails,
   }
@@ -99,6 +115,7 @@ export async function persistRegtestState(state: RegtestState): Promise<void> {
   await db.deleteFrom('blocks').execute()
   await db.deleteFrom('utxos').execute()
   await db.deleteFrom('regtest_addresses').execute()
+  await db.deleteFrom('regtest_address_owners').execute()
   await db.deleteFrom('regtest_transactions').execute()
   await db.deleteFrom('regtest_tx_details').execute()
 
@@ -140,9 +157,15 @@ export async function persistRegtestState(state: RegtestState): Promise<void> {
       .insertInto('regtest_transactions')
       .values({
         txid: t.txid,
-        largest_input_address: t.largestInputAddress,
-        largest_input_amount_sats: t.largestInputAmountSats,
+        sender: t.sender,
+        receiver: t.receiver,
       })
+      .execute()
+  }
+  for (const [address, owner] of Object.entries(state.addressToOwner ?? {})) {
+    await db
+      .insertInto('regtest_address_owners')
+      .values({ address, owner })
       .execute()
   }
   for (const d of state.txDetails ?? []) {

@@ -19,22 +19,23 @@ export interface RegtestAddress {
 
 export interface RegtestTxRecord {
   txid: string
-  largestInputAddress: string
-  largestInputAmountSats: number
+  sender: string | null
+  receiver: string | null
 }
 
 export interface RegtestTxDetails {
   txid: string
   blockHeight: number
   blockTime: number
-  inputs: { address: string; amountSats: number }[]
-  outputs: { address: string; amountSats: number; isChange?: boolean }[]
+  inputs: { address: string; amountSats: number; owner?: string | null }[]
+  outputs: { address: string; amountSats: number; isChange?: boolean; owner?: string | null }[]
 }
 
 export interface RegtestState {
   blocks: RegtestBlock[]
   utxos: RegtestUtxo[]
   addresses: RegtestAddress[]
+  addressToOwner?: Record<string, string>
   transactions: RegtestTxRecord[]
   txDetails: RegtestTxDetails[]
 }
@@ -57,9 +58,10 @@ export interface RegtestService {
 
   /**
    * Mines `count` blocks. If `targetAddress` is empty, generates a new key and uses its address.
+   * If `ownerName` is provided, associates it with the coinbase address.
    * Returns the new state after mining.
    */
-  mineBlocks(count: number, targetAddress: string): Promise<RegtestState>
+  mineBlocks(count: number, targetAddress: string, ownerName?: string): Promise<RegtestState>
 
   /**
    * Creates a transaction and mines 1 block to confirm it.
