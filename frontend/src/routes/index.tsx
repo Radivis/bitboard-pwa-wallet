@@ -13,7 +13,7 @@ import { TransactionItem } from '@/components/TransactionItem'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { formatBTC, formatSats, getEsploraUrl } from '@/lib/bitcoin-utils'
 import { updateWalletChangeset, loadCustomEsploraUrl } from '@/lib/wallet-utils'
-import { initRegtestWorkerWithState } from '@/workers/regtest-factory'
+import { initLabWorkerWithState } from '@/workers/lab-factory'
 import { useWallet } from '@/db'
 import { WALLET_OWNER_PREFIX } from '@/lib/lab-utils'
 
@@ -34,7 +34,7 @@ function BalanceCard() {
       return
     }
     let mounted = true
-    initRegtestWorkerWithState()
+    initLabWorkerWithState()
       .then((worker) => worker.getStateSnapshot())
       .then((state) => {
       if (!mounted) return

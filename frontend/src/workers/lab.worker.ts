@@ -1,11 +1,11 @@
 import { expose } from 'comlink'
 import type {
+  LabAddress,
+  LabBlock,
+  LabState,
+  LabTxDetails,
   MempoolEntry,
-  RegtestAddress,
-  RegtestBlock,
-  RegtestState,
-  RegtestTxDetails,
-} from './regtest-api'
+} from './lab-api'
 
 let wasm: typeof import('@/wasm-pkg/bitboard_crypto') | null = null
 
@@ -16,7 +16,7 @@ async function getWasm() {
   return wasm
 }
 
-let state: RegtestState = {
+let state: LabState = {
   blocks: [],
   utxos: [],
   addresses: [],
@@ -46,7 +46,7 @@ function selectMempoolTxsForBlock(mempool: MempoolEntry[]): MempoolEntry[] {
   return selected
 }
 
-function getTip(): RegtestBlock | null {
+function getTip(): LabBlock | null {
   if (state.blocks.length === 0) return null
   return state.blocks[state.blocks.length - 1]
 }
@@ -86,7 +86,7 @@ function parseBlockEffects(raw: unknown): BlockEffectsParsed {
   return { spent, new_utxos, transactions, block_time }
 }
 
-function applyBlockEffects(blockHex: string, height: number, newAddress?: RegtestAddress): void {
+function applyBlockEffects(blockHex: string, height: number, newAddress?: LabAddress): void {
   const wasmModule = wasm!
   const rawEffects = wasmModule.regtest_block_effects(blockHex)
   const { spent, new_utxos: newUtxos, transactions, block_time } = parseBlockEffects(rawEffects)
@@ -167,9 +167,9 @@ function applyBlockEffects(blockHex: string, height: number, newAddress?: Regtes
   })
 }
 
-const regtestService = {
-  async loadState(newState: RegtestState): Promise<void> {
-    const cloned = JSON.parse(JSON.stringify(newState)) as RegtestState
+const labService = {
+  async loadState(newState: LabState): Promise<void> {
+    const cloned = JSON.parse(JSON.stringify(newState)) as LabState
     state = {
       blocks: cloned.blocks ?? [],
       utxos: cloned.utxos ?? [],
@@ -181,7 +181,7 @@ const regtestService = {
     }
   },
 
-  async getTransaction(txid: string): Promise<RegtestTxDetails | null> {
+  async getTransaction(txid: string): Promise<LabTxDetails | null> {
     const mempoolEntry = state.mempool.find((e) => e.txid === txid)
     if (mempoolEntry) {
       return {
@@ -207,10 +207,10 @@ const regtestService = {
     return tip ? tip.height + 1 : 0
   },
 
-  async getAddresses(): Promise<RegtestAddress[]> {
+  async getAddresses(): Promise<LabAddress[]> {
     const controlled = new Map(state.addresses.map((a) => [a.address, a]))
     const fromUtxos = new Set(state.utxos.map((u) => u.address))
-    const result: RegtestAddress[] = [...state.addresses]
+    const result: LabAddress[] = [...state.addresses]
     for (const addr of fromUtxos) {
       if (!controlled.has(addr)) {
         result.push({ address: addr, wif: '' })
@@ -219,7 +219,7 @@ const regtestService = {
     return result
   },
 
-  async getStateSnapshot(): Promise<RegtestState> {
+  async getStateSnapshot(): Promise<LabState> {
     return JSON.parse(JSON.stringify(state))
   },
 
@@ -227,7 +227,7 @@ const regtestService = {
     count: number,
     targetAddress: string,
     ownerName?: string,
-  ): Promise<RegtestState> {
+  ): Promise<LabState> {
     const wasmModule = await getWasm()
     const tip = getTip()
 
@@ -239,7 +239,7 @@ const regtestService = {
     }
 
     let coinbaseScriptPubkeyHex: string
-    let newAddress: RegtestAddress | null = null
+    let newAddress: LabAddress | null = null
     let coinbaseAddress: string
 
     if (targetAddress.trim()) {
@@ -297,7 +297,7 @@ const regtestService = {
     toAddress: string,
     amountSats: number,
     feeRateSatPerVb: number,
-  ): Promise<RegtestState> {
+  ): Promise<LabState> {
     const wasmModule = await getWasm()
 
     const fromUtxos = state.utxos.filter((u) => u.address === fromAddress)
@@ -316,7 +316,7 @@ const regtestService = {
     )
 
     const changeKeypair = wasmModule.regtest_generate_keypair()
-    const changeAddress: RegtestAddress = { address: changeKeypair.address, wif: changeKeypair.wif }
+    const changeAddress: LabAddress = { address: changeKeypair.address, wif: changeKeypair.wif }
 
     const buildResult = wasmModule.regtest_build_transaction_with_change(
       utxosJson,
@@ -393,7 +393,7 @@ const regtestService = {
     amountSats: number,
     feeRateSatPerVb: number,
     walletChangeAddress?: string,
-  ): Promise<RegtestState> {
+  ): Promise<LabState> {
     const wasmModule = await getWasm()
     const addressToOwner = state.addressToOwner ?? {}
 
@@ -440,7 +440,7 @@ const regtestService = {
       walletChangeAddress &&
       addressToWif[walletChangeAddress] !== undefined
 
-    let changeAddress: RegtestAddress
+    let changeAddress: LabAddress
     if (useWalletChange) {
       changeAddress = {
         address: walletChangeAddress,
@@ -522,4 +522,4 @@ const regtestService = {
   },
 }
 
-expose(regtestService)
+expose(labService)

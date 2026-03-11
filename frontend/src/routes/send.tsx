@@ -21,10 +21,10 @@ import {
 } from '@/lib/bitcoin-utils'
 import { updateWalletChangeset, loadCustomEsploraUrl } from '@/lib/wallet-utils'
 import {
-  initRegtestWorkerWithState,
-  getRegtestWorker,
-  persistRegtestState,
-} from '@/workers/regtest-factory'
+  initLabWorkerWithState,
+  getLabWorker,
+  persistLabState,
+} from '@/workers/lab-factory'
 import { useWallet } from '@/db'
 import { WALLET_OWNER_PREFIX } from '@/lib/lab-utils'
 
@@ -102,7 +102,7 @@ function SendFlow() {
       return
     }
     let mounted = true
-    initRegtestWorkerWithState()
+    initLabWorkerWithState()
       .then((worker) => worker.getStateSnapshot())
       .then((state) => {
         if (!mounted) return
@@ -183,7 +183,7 @@ function SendFlow() {
 
     try {
       setLoading(true)
-      const worker = getRegtestWorker()
+      const worker = getLabWorker()
       const walletOwner = `${WALLET_OWNER_PREFIX}${activeWallet.name}`
 
       let state: Awaited<ReturnType<typeof worker.createTransactionFromExternalSigner>>
@@ -213,7 +213,7 @@ function SendFlow() {
         )
       }
 
-      await persistRegtestState(state)
+      await persistLabState(state)
       toast.success('Transaction added to mempool')
       navigate({ to: '/' })
     } catch (err) {

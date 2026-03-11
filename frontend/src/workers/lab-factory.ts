@@ -1,26 +1,26 @@
 import { wrap, type Remote } from 'comlink'
-import type { RegtestService } from './regtest-api'
+import type { LabService } from './lab-api'
 import {
   ensureRegtestMigrated,
   getRegtestDatabase,
 } from '@/db'
-import type { RegtestState } from './regtest-api'
+import type { LabState } from './lab-api'
 
 let worker: Worker | null = null
-let proxy: Remote<RegtestService> | null = null
+let proxy: Remote<LabService> | null = null
 
-export function getRegtestWorker(): Remote<RegtestService> {
+export function getLabWorker(): Remote<LabService> {
   if (!worker || !proxy) {
-    worker = new Worker(new URL('./regtest.worker.ts', import.meta.url), {
+    worker = new Worker(new URL('./lab.worker.ts', import.meta.url), {
       type: 'module',
     })
-    proxy = wrap<RegtestService>(worker)
+    proxy = wrap<LabService>(worker)
   }
   return proxy
 }
 
-export async function initRegtestWorkerWithState(): Promise<Remote<RegtestService>> {
-  const regtestProxy = getRegtestWorker()
+export async function initLabWorkerWithState(): Promise<Remote<LabService>> {
+  const labProxy = getLabWorker()
   await ensureRegtestMigrated()
   const db = getRegtestDatabase()
 
@@ -113,7 +113,7 @@ export async function initRegtestWorkerWithState(): Promise<Remote<RegtestServic
     }[],
   }))
 
-  const state: RegtestState = {
+  const state: LabState = {
     blocks: blocks.map((b) => ({
       blockHash: b.block_hash,
       height: b.height,
@@ -140,11 +140,11 @@ export async function initRegtestWorkerWithState(): Promise<Remote<RegtestServic
     txDetails,
   }
 
-  await regtestProxy.loadState(state)
-  return regtestProxy
+  await labProxy.loadState(state)
+  return labProxy
 }
 
-export async function persistRegtestState(state: RegtestState): Promise<void> {
+export async function persistLabState(state: LabState): Promise<void> {
   await ensureRegtestMigrated()
   const db = getRegtestDatabase()
 
@@ -234,8 +234,8 @@ export async function persistRegtestState(state: RegtestState): Promise<void> {
   }
 }
 
-export async function resetRegtestLab(): Promise<Remote<RegtestService>> {
-  const emptyState: RegtestState = {
+export async function resetLab(): Promise<Remote<LabService>> {
+  const emptyState: LabState = {
     blocks: [],
     utxos: [],
     addresses: [],
@@ -244,11 +244,11 @@ export async function resetRegtestLab(): Promise<Remote<RegtestService>> {
     transactions: [],
     txDetails: [],
   }
-  await persistRegtestState(emptyState)
-  return initRegtestWorkerWithState()
+  await persistLabState(emptyState)
+  return initLabWorkerWithState()
 }
 
-export function terminateRegtestWorker(): void {
+export function terminateLabWorker(): void {
   if (worker) {
     worker.terminate()
     worker = null

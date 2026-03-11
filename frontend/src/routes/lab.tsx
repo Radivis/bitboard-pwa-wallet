@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { createFileRoute, Outlet, useNavigate } from '@tanstack/react-router'
 import { useWalletStore } from '@/stores/walletStore'
-import { initRegtestWorkerWithState } from '@/workers/regtest-factory'
+import { initLabWorkerWithState } from '@/workers/lab-factory'
 import { toast } from 'sonner'
 
 export const Route = createFileRoute('/lab')({
@@ -19,7 +19,7 @@ function LabLayout() {
       return
     }
 
-    initRegtestWorkerWithState()
+    initLabWorkerWithState()
       .then(() => setWorkerReady(true))
       .catch((err) => {
         console.error('Lab init failed:', err)

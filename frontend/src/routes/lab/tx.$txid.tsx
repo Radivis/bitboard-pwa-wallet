@@ -9,24 +9,24 @@ import {
 } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { getRegtestWorker } from '@/workers/regtest-factory'
+import { getLabWorker } from '@/workers/lab-factory'
 import { truncateAddress, formatSats } from '@/lib/bitcoin-utils'
-import type { RegtestTxDetails } from '@/workers/regtest-api'
+import type { LabTxDetails } from '@/workers/lab-api'
 import { Copy, ArrowLeft } from 'lucide-react'
 import { toast } from 'sonner'
 import { displayOwner } from '@/lib/lab-utils'
 
 export const Route = createFileRoute('/lab/tx/$txid')({
-  component: RegtestTxViewerPage,
+  component: LabTxViewerPage,
 })
 
-function RegtestTxViewerPage() {
+function LabTxViewerPage() {
   const { txid } = Route.useParams()
-  const [tx, setTx] = useState<RegtestTxDetails | null | undefined>(undefined)
+  const [tx, setTx] = useState<LabTxDetails | null | undefined>(undefined)
 
   const loadTx = useCallback(async () => {
     try {
-      const worker = getRegtestWorker()
+      const worker = getLabWorker()
       const details = await worker.getTransaction(txid)
       setTx(details ?? null)
     } catch {

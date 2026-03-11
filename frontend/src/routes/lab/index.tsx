@@ -12,19 +12,19 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { toast } from 'sonner'
 import {
-  initRegtestWorkerWithState,
-  persistRegtestState,
-  getRegtestWorker,
-  resetRegtestLab,
-} from '@/workers/regtest-factory'
+  initLabWorkerWithState,
+  persistLabState,
+  getLabWorker,
+  resetLab,
+} from '@/workers/lab-factory'
 import { truncateAddress, formatSats } from '@/lib/bitcoin-utils'
 import type {
   MempoolEntry,
-  RegtestAddress,
-  RegtestUtxo,
-  RegtestTxRecord,
-  RegtestTxDetails,
-} from '@/workers/regtest-api'
+  LabAddress,
+  LabUtxo,
+  LabTxRecord,
+  LabTxDetails,
+} from '@/workers/lab-api'
 import { ConfirmationDialog } from '@/components/ConfirmationDialog'
 import { Copy } from 'lucide-react'
 import { useWalletStore } from '@/stores/walletStore'
@@ -37,12 +37,12 @@ export const Route = createFileRoute('/lab/')({
 
 function LabIndexPage() {
   const [blockCount, setBlockCount] = useState(0)
-  const [addresses, setAddresses] = useState<RegtestAddress[]>([])
+  const [addresses, setAddresses] = useState<LabAddress[]>([])
   const [addressToOwner, setAddressToOwner] = useState<Record<string, string>>({})
-  const [utxos, setUtxos] = useState<RegtestUtxo[]>([])
+  const [utxos, setUtxos] = useState<LabUtxo[]>([])
   const [mempool, setMempool] = useState<MempoolEntry[]>([])
-  const [transactions, setTransactions] = useState<RegtestTxRecord[]>([])
-  const [txDetails, setTxDetails] = useState<RegtestTxDetails[]>([])
+  const [transactions, setTransactions] = useState<LabTxRecord[]>([])
+  const [txDetails, setTxDetails] = useState<LabTxDetails[]>([])
   const [mineCount, setMineCount] = useState('1')
   const [ownerType, setOwnerType] = useState<'name' | 'wallet'>('name')
   const [targetAddress, setTargetAddress] = useState('')
@@ -64,7 +64,7 @@ function LabIndexPage() {
 
   const refreshState = useCallback(async () => {
     try {
-      const worker = getRegtestWorker()
+      const worker = getLabWorker()
       const [count, addrs, state] = await Promise.all([
         worker.getBlockCount(),
         worker.getAddresses(),
@@ -101,7 +101,7 @@ function LabIndexPage() {
 
   useEffect(() => {
     let mounted = true
-    initRegtestWorkerWithState()
+    initLabWorkerWithState()
       .then(() => {
         if (mounted) refreshState()
       })
@@ -125,9 +125,9 @@ function LabIndexPage() {
         : ownerName.trim() || undefined
     setMining(true)
     try {
-      const worker = getRegtestWorker()
+      const worker = getLabWorker()
       const state = await worker.mineBlocks(count, effectiveTarget, effectiveOwner)
-      await persistRegtestState(state)
+      await persistLabState(state)
       await refreshState()
       toast.success(`Mined ${count} block(s)`)
     } catch (err) {
@@ -162,14 +162,14 @@ function LabIndexPage() {
     }
     setSending(true)
     try {
-      const worker = getRegtestWorker()
+      const worker = getLabWorker()
       const state = await worker.createTransaction(
         fromAddress,
         toAddress.trim(),
         amount,
         fee,
       )
-      await persistRegtestState(state)
+      await persistLabState(state)
       await refreshState()
       setShowTxForm(false)
       setFromAddress('')
@@ -187,7 +187,7 @@ function LabIndexPage() {
     setShowResetConfirm(false)
     setResetting(true)
     try {
-      await resetRegtestLab()
+      await resetLab()
       await refreshState()
       toast.success('Lab reset')
     } catch (err) {

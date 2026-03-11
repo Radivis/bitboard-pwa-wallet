@@ -1,10 +1,10 @@
-export interface RegtestBlock {
+export interface LabBlock {
   blockHash: string
   height: number
   blockData: string
 }
 
-export interface RegtestUtxo {
+export interface LabUtxo {
   txid: string
   vout: number
   address: string
@@ -12,12 +12,12 @@ export interface RegtestUtxo {
   scriptPubkeyHex: string
 }
 
-export interface RegtestAddress {
+export interface LabAddress {
   address: string
   wif: string
 }
 
-export interface RegtestTxRecord {
+export interface LabTxRecord {
   txid: string
   sender: string | null
   receiver: string | null
@@ -39,7 +39,7 @@ export interface MempoolEntry {
   }[]
 }
 
-export interface RegtestTxDetails {
+export interface LabTxDetails {
   txid: string
   blockHeight: number
   blockTime: number
@@ -48,38 +48,38 @@ export interface RegtestTxDetails {
   outputs: { address: string; amountSats: number; isChange?: boolean; owner?: string | null }[]
 }
 
-export interface RegtestState {
-  blocks: RegtestBlock[]
-  utxos: RegtestUtxo[]
-  addresses: RegtestAddress[]
+export interface LabState {
+  blocks: LabBlock[]
+  utxos: LabUtxo[]
+  addresses: LabAddress[]
   addressToOwner?: Record<string, string>
   mempool: MempoolEntry[]
-  transactions: RegtestTxRecord[]
-  txDetails: RegtestTxDetails[]
+  transactions: LabTxRecord[]
+  txDetails: LabTxDetails[]
 }
 
-export interface RegtestService {
+export interface LabService {
   /** Load state from main thread (called after worker spawn). */
-  loadState(state: RegtestState): Promise<void>
+  loadState(state: LabState): Promise<void>
 
   /** Returns current block count (height of tip + 1, or 0 if empty). */
   getBlockCount(): Promise<number>
 
   /** Returns addresses that have interacted with the network. */
-  getAddresses(): Promise<RegtestAddress[]>
+  getAddresses(): Promise<LabAddress[]>
 
   /** Returns full state for persistence. */
-  getStateSnapshot(): Promise<RegtestState>
+  getStateSnapshot(): Promise<LabState>
 
   /** Returns full transaction details by txid, or null if not found. */
-  getTransaction(txid: string): Promise<RegtestTxDetails | null>
+  getTransaction(txid: string): Promise<LabTxDetails | null>
 
   /**
    * Mines `count` blocks. If `targetAddress` is empty, generates a new key and uses its address.
    * If `ownerName` is provided, associates it with the coinbase address.
    * Returns the new state after mining.
    */
-  mineBlocks(count: number, targetAddress: string, ownerName?: string): Promise<RegtestState>
+  mineBlocks(count: number, targetAddress: string, ownerName?: string): Promise<LabState>
 
   /**
    * Creates a transaction and adds it to the mempool. No mining.
@@ -90,7 +90,7 @@ export interface RegtestService {
     toAddress: string,
     amountSats: number,
     feeRateSatPerVb: number,
-  ): Promise<RegtestState>
+  ): Promise<LabState>
 
   /**
    * Creates a transaction from addresses controlled by an external signer (e.g. wallet).
@@ -108,5 +108,5 @@ export interface RegtestService {
     amountSats: number,
     feeRateSatPerVb: number,
     walletChangeAddress?: string,
-  ): Promise<RegtestState>
+  ): Promise<LabState>
 }

@@ -46,7 +46,7 @@ import {
   updateDescriptorWalletChangeset,
 } from '@/lib/descriptor-wallet-manager'
 import { Link } from '@tanstack/react-router'
-import { initRegtestWorkerWithState, terminateRegtestWorker } from '@/workers/regtest-factory'
+import { initLabWorkerWithState, terminateLabWorker } from '@/workers/lab-factory'
 
 export const Route = createFileRoute('/settings')({
   component: SettingsPage,
@@ -187,10 +187,10 @@ function NetworkSelector() {
         setAddressType('segwit')
         setSwitching(true)
         try {
-          terminateRegtestWorker()
-          await initRegtestWorkerWithState()
+          terminateLabWorker()
+          await initLabWorkerWithState()
         } catch (err) {
-          toast.error(err instanceof Error ? err.message : 'Failed to start regtest')
+          toast.error(err instanceof Error ? err.message : 'Failed to start lab')
         } finally {
           setSwitching(false)
         }
@@ -198,7 +198,7 @@ function NetworkSelector() {
       }
 
       if (previousNetworkMode === 'lab') {
-        terminateRegtestWorker()
+        terminateLabWorker()
       }
 
       setNetworkMode(network)
