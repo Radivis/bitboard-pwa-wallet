@@ -20,11 +20,11 @@ import { truncateAddress, formatSats } from '@/lib/bitcoin-utils'
 import type { RegtestAddress, RegtestUtxo, RegtestTxRecord } from '@/workers/regtest-api'
 import { Copy } from 'lucide-react'
 
-export const Route = createFileRoute('/personal-regtest/')({
-  component: PersonalRegtestIndexPage,
+export const Route = createFileRoute('/lab/')({
+  component: LabIndexPage,
 })
 
-function PersonalRegtestIndexPage() {
+function LabIndexPage() {
   const [blockCount, setBlockCount] = useState(0)
   const [addresses, setAddresses] = useState<RegtestAddress[]>([])
   const [utxos, setUtxos] = useState<RegtestUtxo[]>([])
@@ -147,7 +147,7 @@ function PersonalRegtestIndexPage() {
 
   return (
     <>
-      <h2 className="text-2xl font-bold tracking-tight">Personal Regtest</h2>
+      <h2 className="text-2xl font-bold tracking-tight">Lab</h2>
 
       <Card>
         <CardHeader>
@@ -336,7 +336,7 @@ function PersonalRegtestIndexPage() {
                 .map((tx) => (
                   <Link
                     key={tx.txid}
-                    to="/personal-regtest/tx/$txid"
+                    to="/lab/tx/$txid"
                     params={{ txid: tx.txid }}
                     className="flex gap-4 items-center py-2 border-b border-border last:border-0 hover:bg-muted/50 rounded px-2 -mx-2 transition-colors"
                   >

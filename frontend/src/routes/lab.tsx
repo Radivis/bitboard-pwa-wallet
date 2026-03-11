@@ -4,17 +4,17 @@ import { useWalletStore } from '@/stores/walletStore'
 import { initRegtestWorkerWithState } from '@/workers/regtest-factory'
 import { toast } from 'sonner'
 
-export const Route = createFileRoute('/personal-regtest')({
-  component: PersonalRegtestLayout,
+export const Route = createFileRoute('/lab')({
+  component: LabLayout,
 })
 
-function PersonalRegtestLayout() {
+function LabLayout() {
   const navigate = useNavigate()
   const networkMode = useWalletStore((s) => s.networkMode)
   const [workerReady, setWorkerReady] = useState(false)
 
   useEffect(() => {
-    if (networkMode !== 'personal-regtest') {
+    if (networkMode !== 'lab') {
       navigate({ to: '/settings' })
       return
     }
@@ -22,18 +22,18 @@ function PersonalRegtestLayout() {
     initRegtestWorkerWithState()
       .then(() => setWorkerReady(true))
       .catch((err) => {
-        toast.error(err instanceof Error ? err.message : 'Failed to init regtest')
+        toast.error(err instanceof Error ? err.message : 'Failed to init lab')
       })
   }, [networkMode, navigate])
 
-  if (networkMode !== 'personal-regtest') {
+  if (networkMode !== 'lab') {
     return null
   }
 
   if (!workerReady) {
     return (
       <div className="space-y-6 px-4 py-6">
-        <p className="text-muted-foreground">Loading regtest network...</p>
+        <p className="text-muted-foreground">Loading lab...</p>
       </div>
     )
   }

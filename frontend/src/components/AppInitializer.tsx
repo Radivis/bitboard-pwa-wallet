@@ -28,10 +28,10 @@ export function AppInitializer({ children }: AppInitializerProps) {
     const isSetupRoute = location.pathname.startsWith('/setup')
     const isWalletsRoute = location.pathname === '/wallets'
     const isSettingsRoute = location.pathname === '/settings'
-    const isPersonalRegtestRoute = location.pathname === '/personal-regtest'
+    const isLabRoute = location.pathname.startsWith('/lab')
 
     if (!wallets || wallets.length === 0) {
-      if (!isSetupRoute && !isSettingsRoute && !isPersonalRegtestRoute) {
+      if (!isSetupRoute && !isSettingsRoute && !isLabRoute) {
         navigate({ to: '/setup' })
       }
       return
@@ -51,7 +51,7 @@ export function AppInitializer({ children }: AppInitializerProps) {
   }, [wallets, isLoading, activeWalletId, setActiveWallet, navigate, location.pathname])
 
   useEffect(() => {
-    if (networkMode === 'personal-regtest') return
+    if (networkMode === 'lab') return
     if (!activeWalletId || !sessionPassword) return
     if (lastUnlockedWalletId.current === activeWalletId) return
 

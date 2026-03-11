@@ -15,7 +15,7 @@ import type { RegtestTxDetails } from '@/workers/regtest-api'
 import { Copy, ArrowLeft } from 'lucide-react'
 import { toast } from 'sonner'
 
-export const Route = createFileRoute('/personal-regtest/tx/$txid')({
+export const Route = createFileRoute('/lab/tx/$txid')({
   component: RegtestTxViewerPage,
 })
 
@@ -58,10 +58,10 @@ function RegtestTxViewerPage() {
     return (
       <div className="space-y-6">
         <p className="text-muted-foreground">Transaction not found.</p>
-        <Link to="/personal-regtest">
+        <Link to="/lab">
           <Button variant="outline">
             <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to regtest
+            Back to lab
           </Button>
         </Link>
       </div>
@@ -76,8 +76,8 @@ function RegtestTxViewerPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-2">
-        <Link to="/personal-regtest">
-          <Button variant="ghost" size="icon" aria-label="Back to regtest">
+        <Link to="/lab">
+          <Button variant="ghost" size="icon" aria-label="Back to lab">
             <ArrowLeft className="h-4 w-4" />
           </Button>
         </Link>

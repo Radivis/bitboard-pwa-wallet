@@ -4,7 +4,7 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* Network hues: Mainnet 30, Testnet 120, Signet 210, Regtest 255 */
+/* Network hues: Mainnet 30, Testnet 120, Signet 210, Regtest 255, Lab 315 */
 /* Saturation: Taproot 100%, Segwit 50% (half) */
 :root {
   --hue: 120;
@@ -107,6 +107,10 @@
 
 [data-network="regtest"] {
   --hue: 255;
+}
+
+[data-network="lab"] {
+  --hue: 315;
 }
 
 [data-address-type="segwit"] {

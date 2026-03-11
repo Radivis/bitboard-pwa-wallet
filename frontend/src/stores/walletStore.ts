@@ -3,14 +3,14 @@ import { createJSONStorage, persist } from 'zustand/middleware'
 import { sqliteStorage } from '@/db/storage-adapter'
 import type { BalanceInfo, TransactionDetails } from '@/workers/crypto-types'
 
-export type NetworkMode = 'personal-regtest' | 'regtest' | 'signet' | 'testnet' | 'mainnet'
+export type NetworkMode = 'lab' | 'regtest' | 'signet' | 'testnet' | 'mainnet'
 
 export type WalletStatus = 'none' | 'locked' | 'unlocked' | 'syncing'
 
 export type AddressType = 'taproot' | 'segwit'
 
 export const NETWORK_LABELS: Record<NetworkMode, string> = {
-  'personal-regtest': 'Personal Regtest',
+  lab: 'Lab',
   regtest: 'Regtest',
   signet: 'Signet',
   testnet: 'Testnet',

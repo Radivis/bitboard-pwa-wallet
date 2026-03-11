@@ -2,7 +2,7 @@ import type { NetworkMode } from '@/stores/walletStore'
 import type { BitcoinNetwork, TransactionDetails } from '@/workers/crypto-types'
 
 export const DEFAULT_ESPLORA_URLS: Record<NetworkMode, string> = {
-  'personal-regtest': '', // In-app chain; no Esplora
+  lab: '', // In-app chain; no Esplora
   regtest: 'http://localhost:3002',
   signet: 'https://mempool.space/signet/api',
   testnet: 'https://mempool.space/testnet/api',
@@ -16,7 +16,7 @@ const DEV_ESPLORA_PROXY_PATHS: Partial<Record<NetworkMode, string>> = {
 }
 
 const NETWORK_MODE_TO_BITCOIN: Record<NetworkMode, BitcoinNetwork> = {
-  'personal-regtest': 'regtest',
+  lab: 'regtest',
   mainnet: 'bitcoin',
   testnet: 'testnet',
   signet: 'signet',
@@ -44,7 +44,7 @@ const ADDRESS_PREFIXES: Record<NetworkMode, string[]> = {
   testnet: ['tb1p', 'tb1q', 'm', 'n', '2'],
   signet: ['tb1p', 'tb1q'],
   regtest: ['bcrt1p', 'bcrt1q'],
-  'personal-regtest': ['bcrt1q'], // P2WPKH only
+  lab: ['bcrt1q'], // P2WPKH only
 }
 
 export function isValidAddress(address: string, network: NetworkMode): boolean {
@@ -65,7 +65,7 @@ export function validateEsploraUrl(url: string, networkMode: NetworkMode): void 
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
       throw new Error('URL must use http or https')
     }
-    if (networkMode !== 'regtest' && networkMode !== 'personal-regtest' && parsed.protocol !== 'https:') {
+    if (networkMode !== 'regtest' && networkMode !== 'lab' && parsed.protocol !== 'https:') {
       throw new Error(
         `${networkMode} requires HTTPS. Use https:// for your Esplora endpoint.`,
       )
@@ -82,7 +82,7 @@ export function getEsploraUrl(
   network: NetworkMode,
   customUrl?: string | null,
 ): string {
-  if (network === 'personal-regtest') {
+  if (network === 'lab') {
     return '' // In-app chain; no Esplora
   }
   if (customUrl) return customUrl

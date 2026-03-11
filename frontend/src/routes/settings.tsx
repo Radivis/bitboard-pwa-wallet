@@ -63,7 +63,7 @@ const NETWORK_OPTIONS: NetworkMode[] = [
   'testnet',
   'signet',
   'regtest',
-  'personal-regtest',
+  'lab',
 ]
 
 /**
@@ -182,7 +182,7 @@ function NetworkSelector() {
       if (network === networkMode) return
       const previousNetworkMode = networkMode
 
-      if (network === 'personal-regtest') {
+      if (network === 'lab') {
         setNetworkMode(network)
         setAddressType('segwit')
         setSwitching(true)
@@ -197,7 +197,7 @@ function NetworkSelector() {
         return
       }
 
-      if (previousNetworkMode === 'personal-regtest') {
+      if (previousNetworkMode === 'lab') {
         terminateRegtestWorker()
       }
 
@@ -237,11 +237,11 @@ function NetworkSelector() {
           </Button>
         ))}
       </div>
-      {networkMode === 'personal-regtest' && (
+      {networkMode === 'lab' && (
         <div>
-          <Link to="/personal-regtest">
+          <Link to="/lab">
             <Button variant="outline" size="sm">
-              Manage personal regtest network
+              Manage lab
             </Button>
           </Link>
         </div>
