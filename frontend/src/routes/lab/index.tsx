@@ -15,6 +15,7 @@ import {
   initRegtestWorkerWithState,
   persistRegtestState,
   getRegtestWorker,
+  resetRegtestLab,
 } from '@/workers/regtest-factory'
 import { truncateAddress, formatSats } from '@/lib/bitcoin-utils'
 import type {
@@ -24,6 +25,7 @@ import type {
   RegtestTxRecord,
   RegtestTxDetails,
 } from '@/workers/regtest-api'
+import { ConfirmationDialog } from '@/components/ConfirmationDialog'
 import { Copy } from 'lucide-react'
 
 export const Route = createFileRoute('/lab/')({
@@ -48,6 +50,8 @@ function LabIndexPage() {
   const [amountSats, setAmountSats] = useState('')
   const [feeRate, setFeeRate] = useState('1')
   const [sending, setSending] = useState(false)
+  const [showResetConfirm, setShowResetConfirm] = useState(false)
+  const [resetting, setResetting] = useState(false)
 
   const refreshState = useCallback(async () => {
     try {
@@ -159,6 +163,20 @@ function LabIndexPage() {
       setSending(false)
     }
   }, [fromAddress, toAddress, amountSats, feeRate, refreshState])
+
+  const handleResetLab = useCallback(async () => {
+    setShowResetConfirm(false)
+    setResetting(true)
+    try {
+      await resetRegtestLab()
+      await refreshState()
+      toast.success('Lab reset')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Reset failed')
+    } finally {
+      setResetting(false)
+    }
+  }, [refreshState])
 
   const controlledAddresses = addresses.filter((a) => a.wif)
   const txDetailsByTxid = new Map(txDetails.map((d) => [d.txid, d]))
@@ -461,6 +479,33 @@ function LabIndexPage() {
           </ul>
         </CardContent>
       </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Drastic Measures</CardTitle>
+          <CardDescription>Irreversible actions</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button
+            variant="destructive"
+            onClick={() => setShowResetConfirm(true)}
+            disabled={resetting}
+          >
+            {resetting ? 'Resetting...' : 'Reset lab'}
+          </Button>
+        </CardContent>
+      </Card>
+
+      <ConfirmationDialog
+        open={showResetConfirm}
+        title="Reset lab?"
+        message="All blocks, transactions, addresses, and mempool entries in the lab will be deleted. This cannot be undone."
+        confirmText="Reset lab"
+        cancelText="Cancel"
+        variant="destructive"
+        onConfirm={handleResetLab}
+        onCancel={() => setShowResetConfirm(false)}
+      />
     </>
   )
 }

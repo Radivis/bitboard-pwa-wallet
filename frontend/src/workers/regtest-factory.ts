@@ -234,6 +234,20 @@ export async function persistRegtestState(state: RegtestState): Promise<void> {
   }
 }
 
+export async function resetRegtestLab(): Promise<Remote<RegtestService>> {
+  const emptyState: RegtestState = {
+    blocks: [],
+    utxos: [],
+    addresses: [],
+    addressToOwner: {},
+    mempool: [],
+    transactions: [],
+    txDetails: [],
+  }
+  await persistRegtestState(emptyState)
+  return initRegtestWorkerWithState()
+}
+
 export function terminateRegtestWorker(): void {
   if (worker) {
     worker.terminate()
