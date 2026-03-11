@@ -23,10 +23,27 @@ export interface RegtestTxRecord {
   receiver: string | null
 }
 
+export interface MempoolEntry {
+  signedTxHex: string
+  txid: string
+  sender: string | null
+  receiver: string | null
+  feeSats: number
+  inputs: { txid: string; vout: number }[]
+  inputsDetail: { address: string; amountSats: number; owner?: string | null }[]
+  outputsDetail: {
+    address: string
+    amountSats: number
+    isChange?: boolean
+    owner?: string | null
+  }[]
+}
+
 export interface RegtestTxDetails {
   txid: string
   blockHeight: number
   blockTime: number
+  confirmations: number
   inputs: { address: string; amountSats: number; owner?: string | null }[]
   outputs: { address: string; amountSats: number; isChange?: boolean; owner?: string | null }[]
 }
@@ -36,6 +53,7 @@ export interface RegtestState {
   utxos: RegtestUtxo[]
   addresses: RegtestAddress[]
   addressToOwner?: Record<string, string>
+  mempool: MempoolEntry[]
   transactions: RegtestTxRecord[]
   txDetails: RegtestTxDetails[]
 }
@@ -64,7 +82,7 @@ export interface RegtestService {
   mineBlocks(count: number, targetAddress: string, ownerName?: string): Promise<RegtestState>
 
   /**
-   * Creates a transaction and mines 1 block to confirm it.
+   * Creates a transaction and adds it to the mempool. No mining.
    * Returns the new state.
    */
   createTransaction(

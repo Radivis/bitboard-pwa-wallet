@@ -17,7 +17,13 @@ import {
   getRegtestWorker,
 } from '@/workers/regtest-factory'
 import { truncateAddress, formatSats } from '@/lib/bitcoin-utils'
-import type { RegtestAddress, RegtestUtxo, RegtestTxRecord } from '@/workers/regtest-api'
+import type {
+  MempoolEntry,
+  RegtestAddress,
+  RegtestUtxo,
+  RegtestTxRecord,
+  RegtestTxDetails,
+} from '@/workers/regtest-api'
 import { Copy } from 'lucide-react'
 
 export const Route = createFileRoute('/lab/')({
@@ -29,7 +35,9 @@ function LabIndexPage() {
   const [addresses, setAddresses] = useState<RegtestAddress[]>([])
   const [addressToOwner, setAddressToOwner] = useState<Record<string, string>>({})
   const [utxos, setUtxos] = useState<RegtestUtxo[]>([])
+  const [mempool, setMempool] = useState<MempoolEntry[]>([])
   const [transactions, setTransactions] = useState<RegtestTxRecord[]>([])
+  const [txDetails, setTxDetails] = useState<RegtestTxDetails[]>([])
   const [mineCount, setMineCount] = useState('1')
   const [targetAddress, setTargetAddress] = useState('')
   const [ownerName, setOwnerName] = useState('')
@@ -53,7 +61,9 @@ function LabIndexPage() {
       setAddresses(addrs)
       setAddressToOwner(state.addressToOwner ?? {})
       setUtxos(state.utxos)
+      setMempool(state.mempool ?? [])
       setTransactions(state.transactions ?? [])
+      setTxDetails(state.txDetails ?? [])
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to refresh')
     }
@@ -142,7 +152,7 @@ function LabIndexPage() {
       setFromAddress('')
       setToAddress('')
       setAmountSats('')
-      toast.success('Transaction sent and confirmed')
+      toast.success('Transaction added to mempool')
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Transaction failed')
     } finally {
@@ -151,6 +161,15 @@ function LabIndexPage() {
   }, [fromAddress, toAddress, amountSats, feeRate, refreshState])
 
   const controlledAddresses = addresses.filter((a) => a.wif)
+  const txDetailsByTxid = new Map(txDetails.map((d) => [d.txid, d]))
+  const sortedTransactions = [...transactions]
+    .sort((a, b) => {
+      const amountA =
+        txDetailsByTxid.get(a.txid)?.outputs.reduce((s, o) => s + o.amountSats, 0) ?? 0
+      const amountB =
+        txDetailsByTxid.get(b.txid)?.outputs.reduce((s, o) => s + o.amountSats, 0) ?? 0
+      return amountB - amountA
+    })
 
   return (
     <>
@@ -221,19 +240,13 @@ function LabIndexPage() {
             <div className="space-y-4 border rounded-lg p-4">
               <div className="space-y-2">
                 <Label htmlFor="from-address">From address</Label>
-                <select
+                <Input
                   id="from-address"
+                  type="text"
+                  placeholder="bcrt1q..."
                   value={fromAddress}
                   onChange={(e) => setFromAddress(e.target.value)}
-                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm"
-                >
-                  <option value="">Select...</option>
-                  {controlledAddresses.map((a) => (
-                    <option key={a.address} value={a.address}>
-                      {truncateAddress(a.address)}
-                    </option>
-                  ))}
-                </select>
+                />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="to-address">To address</Label>
@@ -338,20 +351,15 @@ function LabIndexPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Recent transactions</CardTitle>
-          <CardDescription>Last 10 transactions (sender and receiver per tx)</CardDescription>
+          <CardTitle>Transactions</CardTitle>
+          <CardDescription>Mempool and confirmed transactions</CardDescription>
         </CardHeader>
-        <CardContent>
-          {transactions.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-4">
-              No transactions yet. Create a transaction to see it here.
-            </p>
-          ) : (
-            <div className="space-y-2">
-              {transactions
-                .slice(-10)
-                .reverse()
-                .map((tx) => (
+        <CardContent className="space-y-6">
+          {mempool.length > 0 && (
+            <div>
+              <h4 className="text-sm font-medium mb-2">Mempool</h4>
+              <div className="space-y-2">
+                {mempool.map((tx) => (
                   <Link
                     key={tx.txid}
                     to="/lab/tx/$txid"
@@ -366,8 +374,47 @@ function LabIndexPage() {
                     </span>
                   </Link>
                 ))}
+              </div>
             </div>
           )}
+          <div>
+            <h4 className="text-sm font-medium mb-2">Confirmed</h4>
+            {sortedTransactions.length === 0 && mempool.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-4">
+                No transactions yet. Create a transaction to see it here.
+              </p>
+            ) : sortedTransactions.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-4">
+                No confirmed transactions yet. Mine blocks to confirm mempool transactions.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {sortedTransactions.slice(0, 10).map((tx) => {
+                  const details = txDetailsByTxid.get(tx.txid)
+                  const confirmations = details
+                    ? blockCount - details.blockHeight
+                    : 0
+                  return (
+                    <Link
+                      key={tx.txid}
+                      to="/lab/tx/$txid"
+                      params={{ txid: tx.txid }}
+                      className="flex gap-4 items-center py-2 border-b border-border last:border-0 hover:bg-muted/50 rounded px-2 -mx-2 transition-colors"
+                    >
+                      <span className="font-mono text-sm truncate flex-1 min-w-0" title={tx.txid}>
+                        {truncateAddress(tx.txid)}
+                      </span>
+                      <span className="text-muted-foreground text-sm">
+                        {(tx.sender ?? 'unknown')} → {tx.receiver ?? 'unknown'}
+                        {' '}
+                        ({confirmations} confirmations)
+                      </span>
+                    </Link>
+                  )
+                })}
+              </div>
+            )}
+          </div>
         </CardContent>
       </Card>
     </>

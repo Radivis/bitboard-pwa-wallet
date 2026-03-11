@@ -91,6 +91,20 @@ async function migrateRegtestToLatest(db: Kysely<RegtestDatabase>): Promise<void
     .addColumn('owner', 'text', (col) => col.notNull())
     .execute()
 
+  await db.schema
+    .createTable('regtest_mempool')
+    .ifNotExists()
+    .addColumn('mempool_id', 'integer', (col) => col.primaryKey().autoIncrement())
+    .addColumn('signed_tx_hex', 'text', (col) => col.notNull())
+    .addColumn('txid', 'text', (col) => col.notNull())
+    .addColumn('sender', 'text', (col) => col)
+    .addColumn('receiver', 'text', (col) => col)
+    .addColumn('fee_sats', 'integer', (col) => col.notNull())
+    .addColumn('inputs_json', 'text', (col) => col.notNull())
+    .addColumn('inputs_detail_json', 'text', (col) => col.notNull())
+    .addColumn('outputs_detail_json', 'text', (col) => col.notNull())
+    .execute()
+
   await migrateRegtestTransactionsIfNeeded(db)
 
   await db.schema

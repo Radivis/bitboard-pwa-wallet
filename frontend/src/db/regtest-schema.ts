@@ -5,6 +5,18 @@ interface RegtestAddressOwnersTable {
   owner: string
 }
 
+interface RegtestMempoolTable {
+  mempool_id: Generated<number>
+  signed_tx_hex: string
+  txid: string
+  sender: string | null
+  receiver: string | null
+  fee_sats: number
+  inputs_json: string
+  inputs_detail_json: string
+  outputs_detail_json: string
+}
+
 interface RegtestTransactionsTable {
   regtest_transaction_id: Generated<number>
   txid: string
@@ -25,6 +37,7 @@ export interface RegtestDatabase {
   utxos: UtxosTable
   regtest_addresses: RegtestAddressesTable
   regtest_address_owners: RegtestAddressOwnersTable
+  regtest_mempool: RegtestMempoolTable
   regtest_transactions: RegtestTransactionsTable
   regtest_tx_details: RegtestTxDetailsTable
 }

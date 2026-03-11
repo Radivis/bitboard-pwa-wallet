@@ -61,12 +61,14 @@ pub fn regtest_create_genesis() -> String {
 /// - `height`: Block height (0 for genesis)
 /// - `coinbase_script_pubkey_hex`: ScriptPubKey for coinbase output (hex)
 /// - `txs_hex`: Optional transactions to include (array of hex strings)
+/// - `total_fees_sats`: Sum of fees from included transactions (added to coinbase output)
 #[wasm_bindgen]
 pub fn regtest_mine_block(
     prev_block_hash_hex: &str,
     height: u32,
     coinbase_script_pubkey_hex: &str,
     txs_hex: JsValue,
+    total_fees_sats: u64,
 ) -> Result<String, JsValue> {
     let script_pubkey_bytes =
         hex::decode(coinbase_script_pubkey_hex).map_err(|e| JsValue::from_str(&e.to_string()))?;
@@ -78,7 +80,7 @@ pub fn regtest_mine_block(
         BlockHash::from_str(prev_block_hash_hex).map_err(|e| JsValue::from_str(&e.to_string()))?
     };
 
-    let coinbase = create_coinbase_tx(height, script_pubkey);
+    let coinbase = create_coinbase_tx(height, script_pubkey, total_fees_sats);
     let mut txdata = vec![coinbase];
 
     if !txs_hex.is_undefined() && !txs_hex.is_null() {
@@ -480,7 +482,7 @@ pub fn regtest_address_to_script_pubkey_hex(addr: &str) -> Result<String, JsValu
     Ok(hex::encode(address.script_pubkey().as_bytes()))
 }
 
-fn create_coinbase_tx(height: u32, script_pubkey: ScriptBuf) -> Transaction {
+fn create_coinbase_tx(height: u32, script_pubkey: ScriptBuf, fees_sats: u64) -> Transaction {
     let script_sig = bitcoin::blockdata::script::Builder::new()
         .push_int(height as i64)
         .push_slice(&[0u8; 32]) // Extra nonce for uniqueness
@@ -493,8 +495,9 @@ fn create_coinbase_tx(height: u32, script_pubkey: ScriptBuf) -> Transaction {
         witness: Witness::default(),
     };
 
+    let total_value = REGTEST_COINBASE_SUBSIDY + fees_sats;
     let output = TxOut {
-        value: Amount::from_sat(REGTEST_COINBASE_SUBSIDY),
+        value: Amount::from_sat(total_value),
         script_pubkey,
     };
 

@@ -50,6 +50,40 @@ export async function initRegtestWorkerWithState(): Promise<Remote<RegtestServic
     addressToOwner[row.address] = row.owner
   }
 
+  const mempoolRows = await db
+    .selectFrom('regtest_mempool')
+    .select([
+      'signed_tx_hex',
+      'txid',
+      'sender',
+      'receiver',
+      'fee_sats',
+      'inputs_json',
+      'inputs_detail_json',
+      'outputs_detail_json',
+    ])
+    .execute()
+
+  const mempool = mempoolRows.map((r) => ({
+    signedTxHex: r.signed_tx_hex,
+    txid: r.txid,
+    sender: r.sender,
+    receiver: r.receiver,
+    feeSats: r.fee_sats,
+    inputs: JSON.parse(r.inputs_json) as { txid: string; vout: number }[],
+    inputsDetail: JSON.parse(r.inputs_detail_json) as {
+      address: string
+      amountSats: number
+      owner?: string | null
+    }[],
+    outputsDetail: JSON.parse(r.outputs_detail_json) as {
+      address: string
+      amountSats: number
+      isChange?: boolean
+      owner?: string | null
+    }[],
+  }))
+
   const transactions = await db
     .selectFrom('regtest_transactions')
     .select(['txid', 'sender', 'receiver'])
@@ -65,6 +99,7 @@ export async function initRegtestWorkerWithState(): Promise<Remote<RegtestServic
     txid: r.txid,
     blockHeight: r.block_height,
     blockTime: r.block_time,
+    confirmations: 0,
     inputs: JSON.parse(r.inputs_json) as {
       address: string
       amountSats: number
@@ -96,6 +131,7 @@ export async function initRegtestWorkerWithState(): Promise<Remote<RegtestServic
       wif: a.wif,
     })),
     addressToOwner,
+    mempool,
     transactions: transactions.map((t) => ({
       txid: t.txid,
       sender: t.sender,
@@ -116,6 +152,7 @@ export async function persistRegtestState(state: RegtestState): Promise<void> {
   await db.deleteFrom('utxos').execute()
   await db.deleteFrom('regtest_addresses').execute()
   await db.deleteFrom('regtest_address_owners').execute()
+  await db.deleteFrom('regtest_mempool').execute()
   await db.deleteFrom('regtest_transactions').execute()
   await db.deleteFrom('regtest_tx_details').execute()
 
@@ -166,6 +203,21 @@ export async function persistRegtestState(state: RegtestState): Promise<void> {
     await db
       .insertInto('regtest_address_owners')
       .values({ address, owner })
+      .execute()
+  }
+  for (const m of state.mempool ?? []) {
+    await db
+      .insertInto('regtest_mempool')
+      .values({
+        signed_tx_hex: m.signedTxHex,
+        txid: m.txid,
+        sender: m.sender,
+        receiver: m.receiver,
+        fee_sats: m.feeSats,
+        inputs_json: JSON.stringify(m.inputs),
+        inputs_detail_json: JSON.stringify(m.inputsDetail),
+        outputs_detail_json: JSON.stringify(m.outputsDetail),
+      })
       .execute()
   }
   for (const d of state.txDetails ?? []) {

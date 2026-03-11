@@ -71,7 +71,12 @@ function RegtestTxViewerPage() {
   const totalInputs = tx.inputs.reduce((sum, i) => sum + i.amountSats, 0)
   const totalOutputs = tx.outputs.reduce((sum, o) => sum + o.amountSats, 0)
   const feeSats = totalInputs - totalOutputs
-  const timestamp = new Date(tx.blockTime * 1000).toLocaleString()
+  const timestamp =
+    tx.blockTime > 0 ? new Date(tx.blockTime * 1000).toLocaleString() : null
+  const confirmationsText =
+    tx.confirmations === 0
+      ? 'Unconfirmed (0 confirmations)'
+      : `${tx.confirmations} confirmations`
 
   return (
     <div className="space-y-6">
@@ -93,7 +98,10 @@ function RegtestTxViewerPage() {
             </Button>
           </div>
           <CardDescription>
-            {timestamp} · {formatSats(totalOutputs)} sats total out · {formatSats(feeSats)} sats fee
+            {timestamp ? `${timestamp} · ` : ''}
+            {confirmationsText}
+            {' · '}
+            {formatSats(totalOutputs)} sats total out · {formatSats(feeSats)} sats fee
           </CardDescription>
         </CardHeader>
       </Card>

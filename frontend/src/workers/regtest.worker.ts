@@ -1,5 +1,6 @@
 import { expose } from 'comlink'
 import type {
+  MempoolEntry,
   RegtestAddress,
   RegtestBlock,
   RegtestState,
@@ -20,12 +21,30 @@ let state: RegtestState = {
   utxos: [],
   addresses: [],
   addressToOwner: {},
+  mempool: [],
   transactions: [],
   txDetails: [],
 }
 
 /** Txid -> change address for txs we create (used to mark change outputs). Not persisted. */
 const txidToChangeAddress = new Map<string, string>()
+
+function selectMempoolTxsForBlock(mempool: MempoolEntry[]): MempoolEntry[] {
+  const sorted = [...mempool].sort((a, b) => {
+    if (b.feeSats !== a.feeSats) return b.feeSats - a.feeSats
+    return Math.random() - 0.5
+  })
+  const spentBySelected = new Set<string>()
+  const selected: MempoolEntry[] = []
+  for (const entry of sorted) {
+    const overlaps = entry.inputs.some((i) => spentBySelected.has(`${i.txid}:${i.vout}`))
+    if (!overlaps) {
+      selected.push(entry)
+      for (const i of entry.inputs) spentBySelected.add(`${i.txid}:${i.vout}`)
+    }
+  }
+  return selected
+}
 
 function getTip(): RegtestBlock | null {
   if (state.blocks.length === 0) return null
@@ -116,10 +135,12 @@ function applyBlockEffects(blockHex: string, height: number, newAddress?: Regtes
         txid: tx.txid,
         blockHeight: height,
         blockTime,
+        confirmations: 0,
         inputs,
         outputs,
       })
     }
+    txidToChangeAddress.delete(tx.txid)
   }
 
   for (const s of spent) {
@@ -154,13 +175,31 @@ const regtestService = {
       utxos: cloned.utxos ?? [],
       addresses: cloned.addresses ?? [],
       addressToOwner: cloned.addressToOwner ?? {},
+      mempool: cloned.mempool ?? [],
       transactions: cloned.transactions ?? [],
       txDetails: cloned.txDetails ?? [],
     }
   },
 
   async getTransaction(txid: string): Promise<RegtestTxDetails | null> {
-    return state.txDetails.find((t) => t.txid === txid) ?? null
+    const mempoolEntry = state.mempool.find((e) => e.txid === txid)
+    if (mempoolEntry) {
+      return {
+        txid: mempoolEntry.txid,
+        blockHeight: -1,
+        blockTime: 0,
+        confirmations: 0,
+        inputs: mempoolEntry.inputsDetail,
+        outputs: mempoolEntry.outputsDetail,
+      }
+    }
+    const details = state.txDetails.find((t) => t.txid === txid)
+    if (!details) return null
+    const blockCount = getTip() ? getTip()!.height + 1 : 0
+    return {
+      ...details,
+      confirmations: blockCount - details.blockHeight,
+    }
   },
 
   async getBlockCount(): Promise<number> {
@@ -218,14 +257,32 @@ const regtestService = {
       state.addressToOwner[coinbaseAddress] = ownerName.trim()
     }
 
+    const mempoolCopy = [...(state.mempool ?? [])]
+    const selectedEntries = selectMempoolTxsForBlock(mempoolCopy)
+    const mempoolTxHexes = selectedEntries.map((e) => e.signedTxHex)
+    const totalFeesSats = selectedEntries.reduce((s, e) => s + e.feeSats, 0)
+    const spentByIncluded = new Set(
+      selectedEntries.flatMap((e) => e.inputs.map((i) => `${i.txid}:${i.vout}`)),
+    )
+
     for (let i = 0; i < count; i++) {
+      const txsForBlock = i === 0 ? mempoolTxHexes : []
+      const feesForBlock = BigInt(i === 0 ? totalFeesSats : 0)
       const blockHex = wasmModule.regtest_mine_block(
         prevHash,
         height,
         coinbaseScriptPubkeyHex,
-        [],
+        txsForBlock,
+        feesForBlock,
       )
       applyBlockEffects(blockHex, height, i === 0 ? newAddress ?? undefined : undefined)
+      if (i === 0) {
+        state.mempool = (state.mempool ?? []).filter(
+          (e) =>
+            !selectedEntries.some((s) => s.txid === e.txid) &&
+            !e.inputs.some((inp) => spentByIncluded.has(`${inp.txid}:${inp.vout}`)),
+        )
+      }
       if (i > 0) newAddress = null
       const newTip = getTip()!
       prevHash = newTip.blockHash
@@ -243,7 +300,13 @@ const regtestService = {
   ): Promise<RegtestState> {
     const wasmModule = await getWasm()
 
-    const fromUtxos = state.utxos.filter((u) => u.address === fromAddress)
+    const mempoolSpent = new Set(
+      (state.mempool ?? []).flatMap((e) => e.inputs.map((i) => `${i.txid}:${i.vout}`)),
+    )
+    const fromUtxos = state.utxos.filter(
+      (u) =>
+        !mempoolSpent.has(`${u.txid}:${u.vout}`) && u.address === fromAddress,
+    )
     const controlled = state.addresses.find((a) => a.address === fromAddress)
     if (!controlled) {
       throw new Error('From address must be a controlled address (mined with random target)')
@@ -268,7 +331,7 @@ const regtestService = {
       feeRateSatPerVb,
       changeAddress.address,
     )
-    const { tx_hex: unsignedTxHex, fee_sats: _feeSats, has_change } =
+    const { tx_hex: unsignedTxHex, fee_sats: feeSats, has_change } =
       typeof buildResult === 'string' ? JSON.parse(buildResult) : buildResult
 
     const signedTxHex = wasmModule.regtest_sign_transaction(
@@ -283,25 +346,48 @@ const regtestService = {
       txidToChangeAddress.set(createdTxid, changeAddress.address)
     }
 
-    const tip = getTip()
-    if (!tip) throw new Error('Cannot create transaction: mine at least one block first')
-    const prevHash = tip.blockHash
-    const height = tip.height + 1
+    const addressToOwner = state.addressToOwner ?? {}
+    const sender = addressToOwner[fromAddress] ?? null
+    const receiver = addressToOwner[toAddress] ?? null
 
-    const keypair = wasmModule.regtest_generate_keypair()
-    const newAddr: RegtestAddress = { address: keypair.address, wif: keypair.wif }
-    const coinbaseScriptHex = wasmModule.regtest_address_to_script_pubkey_hex(keypair.address)
+    const inputsDetail = fromUtxos.map((u) => ({
+      address: u.address,
+      amountSats: u.amountSats,
+      owner: addressToOwner[u.address] ?? null,
+    }))
 
-    const blockHex = wasmModule.regtest_mine_block(
-      prevHash,
-      height,
-      coinbaseScriptHex,
-      [signedTxHex],
-    )
-    applyBlockEffects(blockHex, height, newAddr)
-    if (has_change) {
-      txidToChangeAddress.delete(wasmModule.regtest_txid(signedTxHex))
-    }
+    const totalInput = fromUtxos.reduce((s, u) => s + u.amountSats, 0)
+    const outputsDetail: {
+      address: string
+      amountSats: number
+      isChange?: boolean
+      owner?: string | null
+    }[] = has_change
+      ? [
+          { address: toAddress, amountSats, owner: receiver },
+          {
+            address: changeAddress.address,
+            amountSats: totalInput - amountSats - feeSats,
+            isChange: true,
+            owner: sender,
+          },
+        ]
+      : [{ address: toAddress, amountSats: totalInput - feeSats, owner: receiver }]
+
+    const txid = wasmModule.regtest_txid(signedTxHex)
+    const inputs = fromUtxos.map((u) => ({ txid: u.txid, vout: u.vout }))
+
+    state.mempool = state.mempool ?? []
+    state.mempool.push({
+      signedTxHex,
+      txid,
+      sender,
+      receiver,
+      feeSats,
+      inputs,
+      inputsDetail,
+      outputsDetail,
+    })
 
     return this.getStateSnapshot()
   },
