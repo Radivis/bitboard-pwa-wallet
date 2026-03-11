@@ -78,7 +78,6 @@ function SendFlow() {
   const setLastSyncTime = useWalletStore((s) => s.setLastSyncTime)
   const password = useSessionStore((s) => s.password)
 
-  const currentAddress = useWalletStore((s) => s.currentAddress)
   const { data: activeWallet } = useWallet(activeWalletId ?? 0)
   const [labBalanceSats, setLabBalanceSats] = useState<number | null>(null)
 
@@ -89,7 +88,13 @@ function SendFlow() {
   const getBalance = useCryptoStore((s) => s.getBalance)
   const getTransactionList = useCryptoStore((s) => s.getTransactionList)
   const exportChangeset = useCryptoStore((s) => s.exportChangeset)
-  const getCurrentAddressWifForLab = useCryptoStore((s) => s.getCurrentAddressWifForLab)
+  const getWalletAddressesWithWifsForLab = useCryptoStore(
+    (s) => s.getWalletAddressesWithWifsForLab,
+  )
+  const getCurrentAddress = useCryptoStore((s) => s.getCurrentAddress)
+  const getCurrentAddressWifForLab = useCryptoStore(
+    (s) => s.getCurrentAddressWifForLab,
+  )
 
   useEffect(() => {
     if (networkMode !== 'lab' || !activeWallet?.name) {
@@ -174,23 +179,45 @@ function SendFlow() {
   }, [canBuild, normalizedRecipient, amountSats, effectiveFeeRate, networkMode, buildTransaction])
 
   const handleLabSend = useCallback(async () => {
-    if (!currentAddress) return
+    if (!activeWallet?.name) return
 
     try {
       setLoading(true)
-      const wif = await getCurrentAddressWifForLab()
       const worker = getRegtestWorker()
-      const state = await worker.createTransactionFromExternalSigner(
-        currentAddress,
-        wif,
-        normalizedRecipient,
-        amountSats,
-        effectiveFeeRate,
-      )
+      const walletOwner = `${WALLET_OWNER_PREFIX}${activeWallet.name}`
+
+      let state: Awaited<ReturnType<typeof worker.createTransactionFromExternalSigner>>
+      try {
+        const addressWifPairs = await getWalletAddressesWithWifsForLab(20, 20)
+        const addressToWif = Object.fromEntries(
+          addressWifPairs.map((p) => [p.address, p.wif]),
+        )
+        const walletChangeAddress = addressWifPairs[20]?.address
+        state = await worker.createTransactionFromExternalSigner(
+          walletOwner,
+          addressToWif,
+          normalizedRecipient,
+          amountSats,
+          effectiveFeeRate,
+          walletChangeAddress,
+        )
+      } catch (multiErr) {
+        const currentAddress = await getCurrentAddress()
+        const wif = await getCurrentAddressWifForLab()
+        state = await worker.createTransactionFromExternalSigner(
+          currentAddress,
+          wif,
+          normalizedRecipient,
+          amountSats,
+          effectiveFeeRate,
+        )
+      }
+
       await persistRegtestState(state)
       toast.success('Transaction added to mempool')
       navigate({ to: '/' })
     } catch (err) {
+      console.error('Lab send failed:', err)
       toast.error(
         err instanceof Error
           ? `Lab send failed: ${err.message}`
@@ -200,10 +227,12 @@ function SendFlow() {
       setLoading(false)
     }
   }, [
-    currentAddress,
+    activeWallet?.name,
     normalizedRecipient,
     amountSats,
     effectiveFeeRate,
+    getWalletAddressesWithWifsForLab,
+    getCurrentAddress,
     getCurrentAddressWifForLab,
     navigate,
   ])

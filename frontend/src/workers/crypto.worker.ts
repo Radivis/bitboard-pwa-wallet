@@ -92,6 +92,15 @@ const cryptoService = {
     return wasmModule.get_current_address_wif_for_lab();
   },
 
+  async getWalletAddressesWithWifsForLab(
+    maxExternal: number,
+    maxInternal: number
+  ): Promise<Array<{ address: string; wif: string }>> {
+    const wasmModule = await getWasm();
+    const arr = await wasmModule.get_wallet_addresses_with_wifs_for_lab(maxExternal, maxInternal);
+    return arr as Array<{ address: string; wif: string }>;
+  },
+
   async getBalance(): Promise<BalanceInfo> {
     const wasmModule = await getWasm();
     return wasmModule.get_balance();

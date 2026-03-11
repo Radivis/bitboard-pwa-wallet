@@ -387,17 +387,42 @@ const regtestService = {
   },
 
   async createTransactionFromExternalSigner(
-    fromAddress: string,
-    wif: string,
+    walletOwnerOrFromAddress: string,
+    wifOrAddressToWif: string | Record<string, string>,
     toAddress: string,
     amountSats: number,
     feeRateSatPerVb: number,
+    walletChangeAddress?: string,
   ): Promise<RegtestState> {
     const wasmModule = await getWasm()
+    const addressToOwner = state.addressToOwner ?? {}
 
-    const fromUtxos = state.utxos.filter((u) => u.address === fromAddress)
+    const isMultiAddress = typeof wifOrAddressToWif === 'object' && wifOrAddressToWif !== null
+    let fromUtxos: typeof state.utxos
+    let addressToWif: Record<string, string>
+
+    if (isMultiAddress) {
+      const addressToWifMap = wifOrAddressToWif as Record<string, string>
+      fromUtxos = state.utxos.filter(
+        (u) =>
+          addressToOwner[u.address] === walletOwnerOrFromAddress &&
+          addressToWifMap[u.address] !== undefined,
+      )
+      addressToWif = addressToWifMap
+    } else {
+      const fromAddress = walletOwnerOrFromAddress
+      const wif = wifOrAddressToWif as string
+      fromUtxos = state.utxos.filter((u) => u.address === fromAddress)
+      if (fromUtxos.length === 0) {
+        throw new Error('No UTXOs available for the from address')
+      }
+      addressToWif = { [fromAddress]: wif }
+    }
+
     if (fromUtxos.length === 0) {
-      throw new Error('No UTXOs available for the from address')
+      throw new Error(
+        'No UTXOs available for the wallet. Ensure addresses have WIFs and UTXOs are owned by the wallet.',
+      )
     }
 
     const utxosJson = JSON.stringify(
@@ -406,11 +431,25 @@ const regtestService = {
         vout: u.vout,
         amount_sats: u.amountSats,
         script_pubkey_hex: u.scriptPubkeyHex,
+        address: u.address,
       })),
     )
 
-    const changeKeypair = wasmModule.regtest_generate_keypair()
-    const changeAddress: RegtestAddress = { address: changeKeypair.address, wif: changeKeypair.wif }
+    const useWalletChange =
+      isMultiAddress &&
+      walletChangeAddress &&
+      addressToWif[walletChangeAddress] !== undefined
+
+    let changeAddress: RegtestAddress
+    if (useWalletChange) {
+      changeAddress = {
+        address: walletChangeAddress,
+        wif: addressToWif[walletChangeAddress]!,
+      }
+    } else {
+      const changeKeypair = wasmModule.regtest_generate_keypair()
+      changeAddress = { address: changeKeypair.address, wif: changeKeypair.wif }
+    }
 
     const buildResult = wasmModule.regtest_build_transaction_with_change(
       utxosJson,
@@ -422,20 +461,22 @@ const regtestService = {
     const { tx_hex: unsignedTxHex, fee_sats: feeSats, has_change } =
       typeof buildResult === 'string' ? JSON.parse(buildResult) : buildResult
 
-    const signedTxHex = wasmModule.regtest_sign_transaction(
+    const addressToWifJson = JSON.stringify(addressToWif)
+    const signedTxHex = wasmModule.regtest_sign_transaction_multi(
       unsignedTxHex,
-      wif,
       utxosJson,
+      addressToWifJson,
     )
 
     if (has_change) {
-      state.addresses.push(changeAddress)
+      if (!useWalletChange) {
+        state.addresses.push(changeAddress)
+      }
       const createdTxid = wasmModule.regtest_txid(signedTxHex)
       txidToChangeAddress.set(createdTxid, changeAddress.address)
     }
 
-    const addressToOwner = state.addressToOwner ?? {}
-    const sender = addressToOwner[fromAddress] ?? null
+    const sender = isMultiAddress ? walletOwnerOrFromAddress : (addressToOwner[fromUtxos[0]!.address] ?? null)
     const receiver = addressToOwner[toAddress] ?? null
 
     const inputsDetail = fromUtxos.map((u) => ({

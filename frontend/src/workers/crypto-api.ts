@@ -39,6 +39,8 @@ export interface CryptoService {
   getCurrentAddress(): Promise<string>;
   /** Returns WIF for current address. Only valid when wallet uses regtest (lab mode). */
   getCurrentAddressWifForLab(): Promise<string>;
+  /** Returns address->WIF map for lab mode multi-UTXO spending. */
+  getWalletAddressesWithWifsForLab(maxExternal: number, maxInternal: number): Promise<Array<{ address: string; wif: string }>>;
   getBalance(): Promise<BalanceInfo>;
   exportChangeset(): Promise<string>;
 

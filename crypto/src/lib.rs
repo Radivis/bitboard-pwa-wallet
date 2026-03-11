@@ -37,6 +37,7 @@ thread_local! {
     static ACTIVE_WALLET: RefCell<Option<BdkWallet>> = const { RefCell::new(None) };
     static ACCUMULATED_CHANGESET: RefCell<ChangeSet> = RefCell::new(ChangeSet::default());
     static EXTERNAL_DESCRIPTOR_FOR_LAB: RefCell<String> = const { RefCell::new(String::new()) };
+    static INTERNAL_DESCRIPTOR_FOR_LAB: RefCell<String> = const { RefCell::new(String::new()) };
 }
 
 fn with_wallet<F, R>(op: F) -> Result<R, JsValue>
@@ -154,6 +155,7 @@ pub fn create_wallet(
     ACTIVE_WALLET.with(|w| w.replace(Some(bdk_wallet)));
     ACCUMULATED_CHANGESET.with(|cs| *cs.borrow_mut() = initial_changeset);
     EXTERNAL_DESCRIPTOR_FOR_LAB.with(|d| *d.borrow_mut() = pair.external.clone());
+    INTERNAL_DESCRIPTOR_FOR_LAB.with(|d| *d.borrow_mut() = pair.internal.clone());
 
     let result = types::CreateWalletResult {
         external_descriptor: pair.external,
@@ -185,6 +187,7 @@ pub fn load_wallet(
     ACTIVE_WALLET.with(|w| w.replace(Some(bdk_wallet)));
     ACCUMULATED_CHANGESET.with(|cs| *cs.borrow_mut() = restored_changeset);
     EXTERNAL_DESCRIPTOR_FOR_LAB.with(|d| *d.borrow_mut() = external_descriptor.to_string());
+    INTERNAL_DESCRIPTOR_FOR_LAB.with(|d| *d.borrow_mut() = internal_descriptor.to_string());
 
     Ok(JsValue::TRUE)
 }
@@ -374,6 +377,35 @@ pub fn get_current_address_wif_for_lab() -> Result<String, JsValue> {
     }
     with_wallet(|w| wallet::get_current_address_wif(w, &descriptor))
         .and_then(|r| r.map_err(JsValue::from))
+}
+
+/// Return (address, wif) pairs for external and internal addresses up to the given indices.
+/// Used for lab mode when spending from multiple UTXOs across receive and change addresses.
+#[wasm_bindgen]
+pub fn get_wallet_addresses_with_wifs_for_lab(
+    max_external: u32,
+    max_internal: u32,
+) -> Result<JsValue, JsValue> {
+    let external = EXTERNAL_DESCRIPTOR_FOR_LAB.with(|d| d.borrow().clone());
+    let internal = INTERNAL_DESCRIPTOR_FOR_LAB.with(|d| d.borrow().clone());
+    if external.is_empty() || internal.is_empty() {
+        return Err(JsValue::from_str("No wallet loaded. Load wallet first."));
+    }
+    let pairs = with_wallet(|w| {
+        wallet::get_wallet_addresses_with_wifs_for_lab(
+            w,
+            &external,
+            &internal,
+            max_external,
+            max_internal,
+        )
+    })?
+    .map_err(JsValue::from)?;
+    let arr: Vec<serde_json::Value> = pairs
+        .into_iter()
+        .map(|(addr, wif)| serde_json::json!({ "address": addr, "wif": wif }))
+        .collect();
+    serde_wasm_bindgen::to_value(&arr).map_err(|e| JsValue::from_str(&e.to_string()))
 }
 
 /// Derive a 256-bit key from a password and salt using Argon2id.

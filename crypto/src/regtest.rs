@@ -39,6 +39,9 @@ pub struct RegtestUtxoInput {
     pub vout: u32,
     pub amount_sats: u64,
     pub script_pubkey_hex: String,
+    /// Address for multi-key signing. Optional; when absent, single-key signing is used.
+    #[serde(default)]
+    pub address: Option<String>,
 }
 
 /// Output for building a transaction.
@@ -226,6 +229,77 @@ pub fn regtest_sign_transaction(
         if i >= input_len {
             break;
         }
+        let script_bytes =
+            hex::decode(&utxo.script_pubkey_hex).map_err(|e| JsValue::from_str(&e.to_string()))?;
+        let script_pubkey = ScriptBuf::from_bytes(script_bytes);
+
+        let sighash = sighasher
+            .p2wpkh_signature_hash(
+                i,
+                &script_pubkey,
+                Amount::from_sat(utxo.amount_sats),
+                sighash_type,
+            )
+            .map_err(|e| JsValue::from_str(&e.to_string()))?;
+
+        let msg = bitcoin::secp256k1::Message::from(sighash);
+        let signature = secp.sign_ecdsa(&msg, &sk);
+        let sig = bitcoin::ecdsa::Signature {
+            signature,
+            sighash_type,
+        };
+        *sighasher.witness_mut(i).unwrap() = Witness::p2wpkh(&sig, &pk.inner);
+    }
+
+    let signed_tx = sighasher.into_transaction();
+    Ok(serialize_hex(&signed_tx))
+}
+
+/// Signs a P2WPKH transaction where each input may be controlled by a different key.
+/// Uses `address_to_wif_json` (e.g. `{"addr1":"wif1","addr2":"wif2"}`) to look up the WIF
+/// for each input based on the UTXO's `address` field.
+#[wasm_bindgen]
+pub fn regtest_sign_transaction_multi(
+    tx_hex: &str,
+    utxos_json: &str,
+    address_to_wif_json: &str,
+) -> Result<String, JsValue> {
+    let mut tx: Transaction =
+        deserialize_hex(tx_hex).map_err(|e| JsValue::from_str(&e.to_string()))?;
+
+    let utxos: Vec<RegtestUtxoInput> =
+        serde_json::from_str(utxos_json).map_err(|e| JsValue::from_str(&e.to_string()))?;
+
+    let address_to_wif: std::collections::HashMap<String, String> =
+        serde_json::from_str(address_to_wif_json).map_err(|e| JsValue::from_str(&e.to_string()))?;
+
+    let secp = Secp256k1::new();
+    let sighash_type = EcdsaSighashType::All;
+    let input_len = tx.input.len();
+    let mut sighasher = SighashCache::new(&mut tx);
+
+    for (i, utxo) in utxos.iter().enumerate() {
+        if i >= input_len {
+            break;
+        }
+        let wif = utxo
+            .address
+            .as_ref()
+            .and_then(|addr| address_to_wif.get(addr).cloned())
+            .ok_or_else(|| {
+                JsValue::from_str(&format!(
+                    "No WIF for input {} (address: {:?})",
+                    i, utxo.address
+                ))
+            })?;
+
+        let privkey = PrivateKey::from_wif(&wif).map_err(|e| JsValue::from_str(&e.to_string()))?;
+        let sk = privkey.inner;
+        let pk = bitcoin::PublicKey::new(sk.public_key(&secp));
+        if pk.wpubkey_hash().is_err() {
+            return Err(JsValue::from_str("Key must be compressed for P2WPKH"));
+        }
+
         let script_bytes =
             hex::decode(&utxo.script_pubkey_hex).map_err(|e| JsValue::from_str(&e.to_string()))?;
         let script_pubkey = ScriptBuf::from_bytes(script_bytes);

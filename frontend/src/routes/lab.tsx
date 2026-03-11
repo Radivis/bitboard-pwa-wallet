@@ -22,7 +22,9 @@ function LabLayout() {
     initRegtestWorkerWithState()
       .then(() => setWorkerReady(true))
       .catch((err) => {
-        toast.error(err instanceof Error ? err.message : 'Failed to init lab')
+        console.error('Lab init failed:', err)
+        const msg = err instanceof Error ? err.message : String(err) || 'Unknown error'
+        toast.error(`Failed to init lab: ${msg}`)
       })
   }, [networkMode, navigate])
 

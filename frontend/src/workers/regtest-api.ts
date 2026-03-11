@@ -93,15 +93,20 @@ export interface RegtestService {
   ): Promise<RegtestState>
 
   /**
-   * Creates a transaction from an address controlled by an external signer (e.g. wallet).
-   * Uses the provided WIF instead of looking up in controlled addresses.
-   * Returns the new state.
+   * Creates a transaction from addresses controlled by an external signer (e.g. wallet).
+   * Supports two call patterns:
+   * - (fromAddress, wif, toAddress, amountSats, feeRateSatPerVb) for single-address
+   * - (walletOwner, addressToWif, toAddress, amountSats, feeRateSatPerVb, walletChangeAddress?) for multi-address
+   * When second arg is string, treats as WIF (single-address). When object, treats as addressToWif (multi-address).
+   * For multi-address: pass walletChangeAddress (wallet's internal address) so change outputs go to an address
+   * the wallet controls; otherwise change goes to a random address the wallet cannot spend from.
    */
   createTransactionFromExternalSigner(
-    fromAddress: string,
-    wif: string,
+    walletOwnerOrFromAddress: string,
+    wifOrAddressToWif: string | Record<string, string>,
     toAddress: string,
     amountSats: number,
     feeRateSatPerVb: number,
+    walletChangeAddress?: string,
   ): Promise<RegtestState>
 }
