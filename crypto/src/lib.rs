@@ -369,6 +369,7 @@ pub fn get_transaction_list() -> Result<JsValue, JsValue> {
 
 /// Sign a lab transaction using the loaded wallet. Matches UTXO script_pubkeys
 /// to wallet addresses and derives keys internally. Keys never leave the crypto module.
+/// Only derives keys for the script_pubkeys actually needed (transaction inputs).
 #[wasm_bindgen]
 pub fn sign_lab_transaction(unsigned_tx_hex: &str, utxos_json: &str) -> Result<String, JsValue> {
     let external = EXTERNAL_DESCRIPTOR_FOR_LAB.with(|d| d.borrow().clone());
@@ -379,24 +380,40 @@ pub fn sign_lab_transaction(unsigned_tx_hex: &str, utxos_json: &str) -> Result<S
         ));
     }
 
-    const MAX_EXTERNAL: u32 = 1000;
-    const MAX_INTERNAL: u32 = 1000;
+    let utxos: Vec<lab::LabUtxoInput> =
+        serde_json::from_str(utxos_json).map_err(|e| JsValue::from_str(&e.to_string()))?;
+    let needed_spks: std::collections::HashSet<String> =
+        utxos.iter().map(|u| u.script_pubkey_hex.clone()).collect();
+
+    const MAX_DERIVE: u32 = 100;
 
     let script_pubkey_to_wif: std::collections::HashMap<String, String> = with_wallet(|w| {
         let mut map = std::collections::HashMap::<String, String>::new();
-        for i in 0..MAX_EXTERNAL {
+        for i in 0..MAX_DERIVE {
             let addr = w.peek_address(KeychainKind::External, i).address;
             let spk_hex = hex::encode(addr.script_pubkey().as_bytes());
-            let wif = wallet::derive_wif_for_descriptor_at_index(&external, i)
-                .map_err(|e| JsValue::from_str(&e.to_string()))?;
-            map.insert(spk_hex, wif);
+            if needed_spks.contains(&spk_hex) {
+                let wif = wallet::derive_wif_for_descriptor_at_index(&external, i)
+                    .map_err(|e| JsValue::from_str(&e.to_string()))?;
+                map.insert(spk_hex, wif);
+                if map.len() >= needed_spks.len() {
+                    break;
+                }
+            }
         }
-        for i in 0..MAX_INTERNAL {
-            let addr = w.peek_address(KeychainKind::Internal, i).address;
-            let spk_hex = hex::encode(addr.script_pubkey().as_bytes());
-            let wif = wallet::derive_wif_for_descriptor_at_index(&internal, i)
-                .map_err(|e| JsValue::from_str(&e.to_string()))?;
-            map.insert(spk_hex, wif);
+        if map.len() < needed_spks.len() {
+            for i in 0..MAX_DERIVE {
+                let addr = w.peek_address(KeychainKind::Internal, i).address;
+                let spk_hex = hex::encode(addr.script_pubkey().as_bytes());
+                if needed_spks.contains(&spk_hex) && !map.contains_key(&spk_hex) {
+                    let wif = wallet::derive_wif_for_descriptor_at_index(&internal, i)
+                        .map_err(|e| JsValue::from_str(&e.to_string()))?;
+                    map.insert(spk_hex, wif);
+                    if map.len() >= needed_spks.len() {
+                        break;
+                    }
+                }
+            }
         }
         Ok::<_, JsValue>(map)
     })??;
