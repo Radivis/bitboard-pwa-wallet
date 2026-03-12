@@ -44,7 +44,7 @@ const ADDRESS_PREFIXES: Record<NetworkMode, string[]> = {
   testnet: ['tb1p', 'tb1q', 'm', 'n', '2'],
   signet: ['tb1p', 'tb1q'],
   regtest: ['bcrt1p', 'bcrt1q'],
-  lab: ['bcrt1q'], // P2WPKH only
+  lab: ['bcrt1q', 'bcrt1p'],
 }
 
 export function isValidAddress(address: string, network: NetworkMode): boolean {

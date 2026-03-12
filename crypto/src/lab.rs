@@ -1,6 +1,6 @@
 //! Minimal in-app lab implementation for Personal Lab network.
 //!
-//! P2WPKH only. Uses the bitcoin crate for block/transaction construction.
+//! Supports P2WPKH and P2TR (Taproot) addresses. Uses the bitcoin crate for block/transaction construction.
 
 use std::str::FromStr;
 
@@ -10,10 +10,10 @@ use bitcoin::blockdata::transaction::{OutPoint, Sequence};
 use bitcoin::blockdata::witness::Witness;
 use bitcoin::consensus::encode::{deserialize_hex, serialize_hex};
 use bitcoin::hashes::Hash;
-use bitcoin::key::PrivateKey;
+use bitcoin::key::{Keypair, PrivateKey, TapTweak, TweakedKeypair};
 use bitcoin::locktime::absolute;
-use bitcoin::secp256k1::{Secp256k1, SecretKey};
-use bitcoin::sighash::{EcdsaSighashType, SighashCache};
+use bitcoin::secp256k1::{Message, Secp256k1, SecretKey};
+use bitcoin::sighash::{EcdsaSighashType, Prevouts, SighashCache, TapSighashType};
 use bitcoin::{
     Address, Amount, Block, BlockHash, CompactTarget, CompressedPublicKey, FeeRate, Network,
     Transaction, TxIn, TxMerkleNode, TxOut, Txid, transaction,
@@ -251,7 +251,7 @@ pub fn lab_sign_transaction(tx_hex: &str, wif: &str, utxos_json: &str) -> Result
     Ok(serialize_hex(&signed_tx))
 }
 
-/// Signs a P2WPKH transaction where each input may be controlled by a different key.
+/// Signs a transaction where each input may be P2WPKH or P2TR, controlled by different keys.
 /// Uses `address_to_wif_json` (e.g. `{"addr1":"wif1","addr2":"wif2"}`) to look up the WIF
 /// for each input based on the UTXO's `address` field.
 #[wasm_bindgen]
@@ -270,8 +270,23 @@ pub fn lab_sign_transaction_multi(
         serde_json::from_str(address_to_wif_json).map_err(|e| JsValue::from_str(&e.to_string()))?;
 
     let secp = Secp256k1::new();
-    let sighash_type = EcdsaSighashType::All;
+    let ecdsa_sighash_type = EcdsaSighashType::All;
+    let tap_sighash_type = TapSighashType::Default;
     let input_len = tx.input.len();
+
+    let prevouts: Vec<TxOut> = utxos
+        .iter()
+        .map(|u| {
+            let script_bytes =
+                hex::decode(&u.script_pubkey_hex).map_err(|e| JsValue::from_str(&e.to_string()))?;
+            Ok(TxOut {
+                value: Amount::from_sat(u.amount_sats),
+                script_pubkey: ScriptBuf::from_bytes(script_bytes),
+            })
+        })
+        .collect::<Result<Vec<_>, JsValue>>()?;
+    let prevouts = Prevouts::All(&prevouts);
+
     let mut sighasher = SighashCache::new(&mut tx);
 
     for (i, utxo) in utxos.iter().enumerate() {
@@ -289,33 +304,53 @@ pub fn lab_sign_transaction_multi(
                 ))
             })?;
 
-        let privkey = PrivateKey::from_wif(&wif).map_err(|e| JsValue::from_str(&e.to_string()))?;
-        let sk = privkey.inner;
-        let pk = bitcoin::PublicKey::new(sk.public_key(&secp));
-        if pk.wpubkey_hash().is_err() {
-            return Err(JsValue::from_str("Key must be compressed for P2WPKH"));
-        }
-
         let script_bytes =
             hex::decode(&utxo.script_pubkey_hex).map_err(|e| JsValue::from_str(&e.to_string()))?;
         let script_pubkey = ScriptBuf::from_bytes(script_bytes);
 
-        let sighash = sighasher
-            .p2wpkh_signature_hash(
-                i,
-                &script_pubkey,
-                Amount::from_sat(utxo.amount_sats),
-                sighash_type,
-            )
-            .map_err(|e| JsValue::from_str(&e.to_string()))?;
+        if script_pubkey.is_p2tr() {
+            let privkey =
+                PrivateKey::from_wif(&wif).map_err(|e| JsValue::from_str(&e.to_string()))?;
+            let keypair = Keypair::from_secret_key(&secp, &privkey.inner);
+            let tweaked: TweakedKeypair = keypair.tap_tweak(&secp, None);
 
-        let msg = bitcoin::secp256k1::Message::from(sighash);
-        let signature = secp.sign_ecdsa(&msg, &sk);
-        let sig = bitcoin::ecdsa::Signature {
-            signature,
-            sighash_type,
-        };
-        *sighasher.witness_mut(i).unwrap() = Witness::p2wpkh(&sig, &pk.inner);
+            let sighash = sighasher
+                .taproot_key_spend_signature_hash(i, &prevouts, tap_sighash_type)
+                .map_err(|e| JsValue::from_str(&e.to_string()))?;
+
+            let msg = Message::from(sighash);
+            let signature = secp.sign_schnorr(&msg, tweaked.as_keypair());
+            let sig = bitcoin::taproot::Signature {
+                signature,
+                sighash_type: tap_sighash_type,
+            };
+            *sighasher.witness_mut(i).unwrap() = Witness::p2tr_key_spend(&sig);
+        } else {
+            let privkey =
+                PrivateKey::from_wif(&wif).map_err(|e| JsValue::from_str(&e.to_string()))?;
+            let sk = privkey.inner;
+            let pk = bitcoin::PublicKey::new(sk.public_key(&secp));
+            if pk.wpubkey_hash().is_err() {
+                return Err(JsValue::from_str("Key must be compressed for P2WPKH"));
+            }
+
+            let sighash = sighasher
+                .p2wpkh_signature_hash(
+                    i,
+                    &script_pubkey,
+                    Amount::from_sat(utxo.amount_sats),
+                    ecdsa_sighash_type,
+                )
+                .map_err(|e| JsValue::from_str(&e.to_string()))?;
+
+            let msg = Message::from(sighash);
+            let signature = secp.sign_ecdsa(&msg, &sk);
+            let sig = bitcoin::ecdsa::Signature {
+                signature,
+                sighash_type: ecdsa_sighash_type,
+            };
+            *sighasher.witness_mut(i).unwrap() = Witness::p2wpkh(&sig, &pk.inner);
+        }
     }
 
     let signed_tx = sighasher.into_transaction();
@@ -417,7 +452,7 @@ pub fn lab_generate_keypair() -> Result<JsValue, JsValue> {
     serde_wasm_bindgen::to_value(&result).map_err(|e| JsValue::from_str(&e.to_string()))
 }
 
-/// Validates that an address is a valid P2WPKH regtest address.
+/// Validates that an address is a valid P2WPKH or P2TR regtest address.
 #[wasm_bindgen]
 pub fn lab_validate_address(addr: &str) -> Result<bool, JsValue> {
     let address = match Address::from_str(addr) {
@@ -428,7 +463,8 @@ pub fn lab_validate_address(addr: &str) -> Result<bool, JsValue> {
         Ok(a) => a,
         Err(_) => return Ok(false),
     };
-    Ok(checked.script_pubkey().is_p2wpkh())
+    let spk = checked.script_pubkey();
+    Ok(spk.is_p2wpkh() || spk.is_p2tr())
 }
 
 /// Returns the txid (hex) for a serialized transaction.
@@ -482,7 +518,7 @@ pub fn lab_block_effects(block_hex: &str) -> Result<JsValue, JsValue> {
         let mut tx_outputs = Vec::new();
         for output in &tx.output {
             let script = &output.script_pubkey;
-            if !script.is_p2wpkh() {
+            if !script.is_p2wpkh() && !script.is_p2tr() {
                 continue;
             }
             let addr = match Address::from_script(script, Network::Regtest) {
@@ -505,7 +541,7 @@ pub fn lab_block_effects(block_hex: &str) -> Result<JsValue, JsValue> {
 
         for (vout, output) in tx.output.iter().enumerate() {
             let script = &output.script_pubkey;
-            if !script.is_p2wpkh() {
+            if !script.is_p2wpkh() && !script.is_p2tr() {
                 continue;
             }
             let addr = match Address::from_script(script, Network::Regtest) {
@@ -532,17 +568,20 @@ pub fn lab_block_effects(block_hex: &str) -> Result<JsValue, JsValue> {
     Ok(JsValue::from_str(&result.to_string()))
 }
 
-/// Extracts script_pubkey hex from a P2WPKH address.
+/// Extracts script_pubkey hex from a P2WPKH or P2TR address.
 #[wasm_bindgen]
 pub fn lab_address_to_script_pubkey_hex(addr: &str) -> Result<String, JsValue> {
     let address = Address::from_str(addr)
         .map_err(|e| JsValue::from_str(&e.to_string()))?
         .require_network(Network::Regtest)
         .map_err(|e| JsValue::from_str(&e.to_string()))?;
-    if !address.script_pubkey().is_p2wpkh() {
-        return Err(JsValue::from_str("Address must be P2WPKH (bcrt1q...)"));
+    let spk = address.script_pubkey();
+    if !spk.is_p2wpkh() && !spk.is_p2tr() {
+        return Err(JsValue::from_str(
+            "Address must be P2WPKH (bcrt1q...) or P2TR (bcrt1p...)",
+        ));
     }
-    Ok(hex::encode(address.script_pubkey().as_bytes()))
+    Ok(hex::encode(spk.as_bytes()))
 }
 
 fn create_coinbase_tx(height: u32, script_pubkey: ScriptBuf, fees_sats: u64) -> Transaction {

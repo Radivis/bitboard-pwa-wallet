@@ -131,7 +131,14 @@ function LabIndexPage() {
       await refreshState()
       toast.success(`Mined ${count} block(s)`)
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Mining failed')
+      console.error('Mining failed:', err)
+      const msg =
+        err instanceof Error
+          ? err.message
+          : typeof err === 'object' && err !== null && 'message' in err
+            ? String((err as { message: unknown }).message)
+            : String(err) || 'Unknown error'
+      toast.error(`Mining failed: ${msg}`)
     } finally {
       setMining(false)
     }
@@ -275,7 +282,7 @@ function LabIndexPage() {
                 <Input
                   id="target-address"
                   type="text"
-                  placeholder="bcrt1q..."
+                  placeholder="bcrt1q... or bcrt1p..."
                   value={targetAddress}
                   onChange={(e) => setTargetAddress(e.target.value)}
                   className="min-w-[200px]"
@@ -336,7 +343,7 @@ function LabIndexPage() {
                 <Input
                   id="from-address"
                   type="text"
-                  placeholder="bcrt1q..."
+                  placeholder="bcrt1q... or bcrt1p..."
                   value={fromAddress}
                   onChange={(e) => setFromAddress(e.target.value)}
                 />
@@ -346,7 +353,7 @@ function LabIndexPage() {
                 <Input
                   id="to-address"
                   type="text"
-                  placeholder="bcrt1q..."
+                  placeholder="bcrt1q... or bcrt1p..."
                   value={toAddress}
                   onChange={(e) => setToAddress(e.target.value)}
                 />

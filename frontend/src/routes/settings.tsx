@@ -40,6 +40,7 @@ import {
   deleteCustomEsploraUrl,
   loadCustomEsploraUrl,
   syncActiveWalletAndUpdateState,
+  loadDescriptorWalletWithoutSync,
 } from '@/lib/wallet-utils'
 import {
   resolveDescriptorWallet,
@@ -184,10 +185,36 @@ function NetworkSelector() {
 
       if (network === 'lab') {
         setNetworkMode(network)
-        setAddressType('segwit')
         setSwitching(true)
         try {
           terminateLabWorker()
+          if (walletStatus === 'unlocked' || walletStatus === 'syncing') {
+            const sessionPassword = useSessionStore.getState().password
+            const activeWalletId = useWalletStore.getState().activeWalletId
+            if (sessionPassword && activeWalletId) {
+              const { exportChangeset } = useCryptoStore.getState()
+              try {
+                const currentChangeset = await exportChangeset()
+                await updateDescriptorWalletChangeset(
+                  sessionPassword,
+                  activeWalletId,
+                  toBitcoinNetwork(previousNetworkMode),
+                  addressType,
+                  accountId,
+                  currentChangeset,
+                )
+              } catch {
+                // No active WASM wallet yet (e.g., first load) -- safe to skip
+              }
+              await loadDescriptorWalletWithoutSync(
+                sessionPassword,
+                activeWalletId,
+                'lab',
+                addressType,
+                accountId,
+              )
+            }
+          }
           await initLabWorkerWithState()
         } catch (err) {
           toast.error(err instanceof Error ? err.message : 'Failed to start lab')

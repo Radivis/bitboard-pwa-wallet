@@ -67,7 +67,7 @@ pub fn get_current_address(wallet: &Wallet) -> String {
 }
 
 /// Derive the WIF for a descriptor at a given derivation index.
-/// Only valid for P2WPKH (wpkh) descriptors. Returns error for taproot (tr).
+/// Supports P2WPKH (wpkh) and P2TR (tr) descriptors.
 fn derive_wif_for_descriptor_at_index(descriptor: &str, index: u32) -> Result<String, CryptoError> {
     let (xpriv_str, path_from_key) = parse_descriptor_key_and_path(descriptor)?;
     let xpriv = Xpriv::from_str(xpriv_str)
@@ -87,8 +87,7 @@ fn derive_wif_for_descriptor_at_index(descriptor: &str, index: u32) -> Result<St
 }
 
 /// Derive the WIF for the current external address from the descriptor.
-/// Only valid for P2WPKH (wpkh) descriptors. Returns error for taproot (tr).
-/// Used for lab mode where we need to sign with the regtest worker.
+/// Supports P2WPKH (wpkh) and P2TR (tr) descriptors. Used for lab mode signing.
 pub fn get_current_address_wif(
     wallet: &Wallet,
     external_descriptor: &str,
