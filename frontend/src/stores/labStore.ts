@@ -3,7 +3,22 @@ import {
   initLabWorkerWithState,
   resetLab as resetLabFactory,
 } from '@/workers/lab-factory'
-import type { LabState } from '@/workers/lab-api'
+import type { LabState, LabAddress } from '@/workers/lab-api'
+
+function mergeAddressesWithUtxos(
+  addresses: LabAddress[],
+  utxos: LabState['utxos'],
+): LabAddress[] {
+  const controlled = new Map(addresses.map((a) => [a.address, a]))
+  const fromUtxos = new Set(utxos.map((u) => u.address))
+  const result: LabAddress[] = [...addresses]
+  for (const addr of fromUtxos) {
+    if (!controlled.has(addr)) {
+      result.push({ address: addr, wif: '' })
+    }
+  }
+  return result
+}
 
 const EMPTY_LAB_STATE: LabState = {
   blocks: [],
@@ -35,7 +50,7 @@ export const useLabStore = create<LabStore>((set) => ({
     set({
       blocks: state.blocks,
       utxos: state.utxos,
-      addresses: state.addresses,
+      addresses: mergeAddressesWithUtxos(state.addresses, state.utxos),
       addressToOwner: state.addressToOwner ?? {},
       mempool: state.mempool ?? [],
       transactions: state.transactions,
@@ -47,7 +62,7 @@ export const useLabStore = create<LabStore>((set) => ({
     set({
       blocks: state.blocks,
       utxos: state.utxos,
-      addresses: state.addresses,
+      addresses: mergeAddressesWithUtxos(state.addresses, state.utxos),
       addressToOwner: state.addressToOwner ?? {},
       mempool: state.mempool ?? [],
       transactions: state.transactions,

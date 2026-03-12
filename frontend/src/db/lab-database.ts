@@ -58,9 +58,9 @@ async function migrateLabToLatest(db: Kysely<LabDatabase>): Promise<void> {
     .addColumn('receiver', 'text', (col) => col)
     .execute()
 
-  await db.schema.dropTable('lab_address_owners').ifExists().execute()
   await db.schema
     .createTable('lab_address_owners')
+    .ifNotExists()
     .addColumn('address', 'text', (col) => col.primaryKey())
     .addColumn('owner_type', 'text', (col) => col.notNull())
     .addColumn('wallet_id', 'integer', (col) => col)
