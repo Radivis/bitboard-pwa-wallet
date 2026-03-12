@@ -14,8 +14,6 @@ import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { formatBTC, formatSats, getEsploraUrl } from '@/lib/bitcoin-utils'
 import { updateWalletChangeset, loadCustomEsploraUrl } from '@/lib/wallet-utils'
 import { initLabWorkerWithState } from '@/workers/lab-factory'
-import { useWallet } from '@/db'
-import { WALLET_OWNER_PREFIX } from '@/lib/lab-utils'
 
 export const Route = createFileRoute('/')({
   component: DashboardPage,
@@ -25,11 +23,10 @@ function BalanceCard() {
   const networkMode = useWalletStore((s) => s.networkMode)
   const balance = useWalletStore((s) => s.balance)
   const activeWalletId = useWalletStore((s) => s.activeWalletId)
-  const { data: activeWallet } = useWallet(activeWalletId ?? 0)
   const [labBalanceSats, setLabBalanceSats] = useState<number | null>(null)
 
   useEffect(() => {
-    if (networkMode !== 'lab' || !activeWallet?.name) {
+    if (networkMode !== 'lab' || activeWalletId == null) {
       setLabBalanceSats(null)
       return
     }
@@ -37,16 +34,16 @@ function BalanceCard() {
     initLabWorkerWithState()
       .then((worker) => worker.getStateSnapshot())
       .then((state) => {
-      if (!mounted) return
-      const ownerKey = `${WALLET_OWNER_PREFIX}${activeWallet.name}`
-      const total = (state.utxos ?? [])
-        .filter((u) => (state.addressToOwner ?? {})[u.address] === ownerKey)
-        .reduce((sum, u) => sum + u.amountSats, 0)
-      setLabBalanceSats(total)
+        if (!mounted) return
+        const ownerKey = `wallet:${activeWalletId}`
+        const total = (state.utxos ?? [])
+          .filter((u) => (state.addressToOwner ?? {})[u.address] === ownerKey)
+          .reduce((sum, u) => sum + u.amountSats, 0)
+        setLabBalanceSats(total)
       })
       .catch(() => setLabBalanceSats(null))
     return () => { mounted = false }
-  }, [networkMode, activeWallet?.name])
+  }, [networkMode, activeWalletId])
 
   const confirmedSats =
     networkMode === 'lab' && labBalanceSats !== null

@@ -2,7 +2,9 @@ import type { Generated, Insertable, Selectable, Updateable } from 'kysely'
 
 interface LabAddressOwnersTable {
   address: string
-  owner: string
+  owner_type: 'wallet' | 'name'
+  wallet_id: number | null
+  owner_name: string | null
 }
 
 interface LabMempoolTable {

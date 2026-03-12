@@ -26,10 +26,10 @@ import type {
   LabTxDetails,
 } from '@/workers/lab-api'
 import { ConfirmationDialog } from '@/components/ConfirmationDialog'
-import { Copy } from 'lucide-react'
 import { useWalletStore } from '@/stores/walletStore'
-import { useWallet } from '@/db'
-import { displayOwner, WALLET_OWNER_PREFIX } from '@/lib/lab-utils'
+import { useWallet, useWallets } from '@/db'
+import { getOwnerDisplayName, getOwnerIcon } from '@/lib/lab-utils'
+import { Wallet, FlaskConical, Copy } from 'lucide-react'
 
 export const Route = createFileRoute('/lab/')({
   component: LabIndexPage,
@@ -53,6 +53,7 @@ function LabIndexPage() {
   const walletStatus = useWalletStore((s) => s.walletStatus)
   const currentAddress = useWalletStore((s) => s.currentAddress)
   const { data: activeWallet } = useWallet(activeWalletId ?? 0)
+  const { data: wallets = [] } = useWallets()
   const [showTxForm, setShowTxForm] = useState(false)
   const [fromAddress, setFromAddress] = useState('')
   const [toAddress, setToAddress] = useState('')
@@ -119,14 +120,16 @@ function LabIndexPage() {
     }
     const effectiveTarget =
       ownerType === 'wallet' ? (currentAddress ?? '').trim() : targetAddress.trim()
-    const effectiveOwner =
-      ownerType === 'wallet' && activeWallet?.name
-        ? `${WALLET_OWNER_PREFIX}${activeWallet.name}`
-        : ownerName.trim() || undefined
+    const mineOptions =
+      ownerType === 'wallet' && activeWalletId != null
+        ? { ownerWalletId: activeWalletId }
+        : ownerName.trim()
+          ? { ownerName: ownerName.trim() }
+          : undefined
     setMining(true)
     try {
       const worker = getLabWorker()
-      const state = await worker.mineBlocks(count, effectiveTarget, effectiveOwner)
+      const state = await worker.mineBlocks(count, effectiveTarget, mineOptions)
       await persistLabState(state)
       await refreshState()
       toast.success(`Mined ${count} block(s)`)
@@ -148,7 +151,7 @@ function LabIndexPage() {
     targetAddress,
     ownerName,
     currentAddress,
-    activeWallet?.name,
+    activeWalletId,
     refreshState,
   ])
 
@@ -421,8 +424,10 @@ function LabIndexPage() {
                 <span className="w-24 shrink-0">Owner</span>
                 <span className="w-10 shrink-0" />
               </div>
-              {addresses.map((a) => (
-                <div
+              {addresses.map((a) => {
+                const owner = addressToOwner[a.address] ?? 'Unknown';
+                return (
+                  <div
                   key={a.address}
                   className="flex gap-4 items-center py-2 border-b border-border last:border-0"
                 >
@@ -432,8 +437,13 @@ function LabIndexPage() {
                   <span className="tabular-nums text-right w-24 shrink-0">
                     {formatSats(getBalanceForAddress(a.address))} sats
                   </span>
-                  <span className="w-24 shrink-0">
-                    {displayOwner(addressToOwner[a.address] ?? '')}
+                  <span className="w-24 shrink-0 flex items-center gap-1">
+                    {getOwnerIcon(owner) === 'wallet' ? (
+                        <Wallet className="h-4 w-4" />
+                      ) : (
+                        <FlaskConical className="h-4 w-4" />
+                      )}
+                      {getOwnerDisplayName(owner, wallets)}
                   </span>
                   <Button
                     size="icon"
@@ -445,7 +455,7 @@ function LabIndexPage() {
                     <Copy className="h-4 w-4" />
                   </Button>
                 </div>
-              ))}
+              )})}
             </div>
           )}
         </CardContent>
@@ -476,7 +486,14 @@ function LabIndexPage() {
                 )
                 return sortedOwners.map((owner) => (
                   <div key={owner}>
-                    <h4 className="text-sm font-medium mb-2">{displayOwner(owner)}</h4>
+                    <h4 className="text-sm font-medium mb-2 flex items-center gap-1">
+                      {getOwnerIcon(owner) === 'wallet' ? (
+                        <Wallet className="h-4 w-4" />
+                      ) : (
+                        <FlaskConical className="h-4 w-4" />
+                      )}
+                      {getOwnerDisplayName(owner, wallets)}
+                    </h4>
                     <div className="space-y-2">
                       <div className="flex gap-4 text-sm font-medium text-muted-foreground">
                         <span className="flex-1 min-w-0">Address</span>
@@ -535,8 +552,8 @@ function LabIndexPage() {
                       {truncateAddress(tx.txid)}
                     </span>
                     <span className="text-muted-foreground text-sm">
-                      {tx.sender ? displayOwner(tx.sender) : 'unknown'} →{' '}
-                      {tx.receiver ? displayOwner(tx.receiver) : 'unknown'}
+                      {tx.sender ? getOwnerDisplayName(tx.sender, wallets) : 'unknown'} →{' '}
+                      {tx.receiver ? getOwnerDisplayName(tx.receiver, wallets) : 'unknown'}
                     </span>
                   </Link>
                 ))}
@@ -571,8 +588,8 @@ function LabIndexPage() {
                         {truncateAddress(tx.txid)}
                       </span>
                       <span className="text-muted-foreground text-sm">
-                        {tx.sender ? displayOwner(tx.sender) : 'unknown'} →{' '}
-                        {tx.receiver ? displayOwner(tx.receiver) : 'unknown'}
+                        {tx.sender ? getOwnerDisplayName(tx.sender, wallets) : 'unknown'} →{' '}
+                        {tx.receiver ? getOwnerDisplayName(tx.receiver, wallets) : 'unknown'}
                         {' '}
                         ({confirmations} confirmations)
                       </span>

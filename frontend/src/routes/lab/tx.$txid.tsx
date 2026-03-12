@@ -12,9 +12,10 @@ import { Badge } from '@/components/ui/badge'
 import { getLabWorker } from '@/workers/lab-factory'
 import { truncateAddress, formatSats } from '@/lib/bitcoin-utils'
 import type { LabTxDetails } from '@/workers/lab-api'
-import { Copy, ArrowLeft } from 'lucide-react'
+import { Copy, ArrowLeft, Wallet, FlaskConical } from 'lucide-react'
 import { toast } from 'sonner'
-import { displayOwner } from '@/lib/lab-utils'
+import { getOwnerDisplayName, getOwnerIcon } from '@/lib/lab-utils'
+import { useWallets } from '@/db'
 
 export const Route = createFileRoute('/lab/tx/$txid')({
   component: LabTxViewerPage,
@@ -23,6 +24,7 @@ export const Route = createFileRoute('/lab/tx/$txid')({
 function LabTxViewerPage() {
   const { txid } = Route.useParams()
   const [tx, setTx] = useState<LabTxDetails | null | undefined>(undefined)
+  const { data: wallets = [] } = useWallets()
 
   const loadTx = useCallback(async () => {
     try {
@@ -125,9 +127,18 @@ function LabTxViewerPage() {
                   <span className="font-mono text-sm break-all flex-1 min-w-0">
                     {truncateAddress(inp.address)}
                   </span>
-                  <Badge variant="secondary" className="shrink-0">
-                    {inp.owner ? displayOwner(inp.owner) : 'unknown'}
-                  </Badge>
+                  <span className="flex items-center gap-1 shrink-0">
+                    {inp.owner ? (
+                      getOwnerIcon(inp.owner) === 'wallet' ? (
+                        <Wallet className="h-4 w-4" />
+                      ) : (
+                        <FlaskConical className="h-4 w-4" />
+                      )
+                    ) : null}
+                    <Badge variant="secondary">
+                      {inp.owner ? getOwnerDisplayName(inp.owner, wallets) : 'unknown'}
+                    </Badge>
+                  </span>
                   <span className="tabular-nums text-right">{formatSats(inp.amountSats)} sats</span>
                 </div>
               ))}
@@ -154,9 +165,18 @@ function LabTxViewerPage() {
                   <span className="font-mono text-sm break-all flex-1 min-w-0">
                     {truncateAddress(out.address)}
                   </span>
-                  <Badge variant="secondary" className="shrink-0">
-                    {out.owner ? displayOwner(out.owner) : 'unknown'}
-                  </Badge>
+                  <span className="flex items-center gap-1 shrink-0">
+                    {out.owner ? (
+                      getOwnerIcon(out.owner) === 'wallet' ? (
+                        <Wallet className="h-4 w-4" />
+                      ) : (
+                        <FlaskConical className="h-4 w-4" />
+                      )
+                    ) : null}
+                    <Badge variant="secondary">
+                      {out.owner ? getOwnerDisplayName(out.owner, wallets) : 'unknown'}
+                    </Badge>
+                  </span>
                   <span className="tabular-nums text-right">{formatSats(out.amountSats)} sats</span>
                   {out.isChange && (
                     <Badge variant="secondary" className="shrink-0">

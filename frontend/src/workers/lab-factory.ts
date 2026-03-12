@@ -19,7 +19,10 @@ export function getLabWorker(): Remote<LabService> {
   return proxy
 }
 
-export async function initLabWorkerWithState(): Promise<Remote<LabService>> {
+export async function initLabWorkerWithState(): Promise<{
+  proxy: Remote<LabService>
+  state: LabState
+}> {
   const labProxy = getLabWorker()
   await ensureLabMigrated()
   const db = getLabDatabase()
@@ -42,12 +45,16 @@ export async function initLabWorkerWithState(): Promise<Remote<LabService>> {
 
   const addressOwnersRows = await db
     .selectFrom('lab_address_owners')
-    .select(['address', 'owner'])
+    .select(['address', 'owner_type', 'wallet_id', 'owner_name'])
     .execute()
 
   const addressToOwner: Record<string, string> = {}
   for (const row of addressOwnersRows) {
-    addressToOwner[row.address] = row.owner
+    if (row.owner_type === 'wallet' && row.wallet_id != null) {
+      addressToOwner[row.address] = `wallet:${row.wallet_id}`
+    } else if (row.owner_type === 'name' && row.owner_name != null) {
+      addressToOwner[row.address] = row.owner_name
+    }
   }
 
   const mempoolRows = await db
@@ -141,7 +148,7 @@ export async function initLabWorkerWithState(): Promise<Remote<LabService>> {
   }
 
   await labProxy.loadState(state)
-  return labProxy
+  return { proxy: labProxy, state }
 }
 
 export async function persistLabState(state: LabState): Promise<void> {
@@ -199,10 +206,22 @@ export async function persistLabState(state: LabState): Promise<void> {
       })
       .execute()
   }
-  for (const [address, owner] of Object.entries(state.addressToOwner ?? {})) {
+  for (const [address, ownerKey] of Object.entries(state.addressToOwner ?? {})) {
+    const ownerType = ownerKey.startsWith('wallet:')
+      ? ('wallet' as const)
+      : ('name' as const)
+    const walletId = ownerType === 'wallet'
+      ? parseInt(ownerKey.slice(7), 10)
+      : null
+    const ownerName = ownerType === 'name' ? ownerKey : null
     await db
       .insertInto('lab_address_owners')
-      .values({ address, owner })
+      .values({
+        address,
+        owner_type: ownerType,
+        wallet_id: walletId,
+        owner_name: ownerName,
+      })
       .execute()
   }
   for (const m of state.mempool ?? []) {
@@ -245,7 +264,8 @@ export async function resetLab(): Promise<Remote<LabService>> {
     txDetails: [],
   }
   await persistLabState(emptyState)
-  return initLabWorkerWithState()
+  const { proxy } = await initLabWorkerWithState()
+  return proxy
 }
 
 export function terminateLabWorker(): void {

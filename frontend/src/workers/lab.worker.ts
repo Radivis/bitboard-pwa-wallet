@@ -226,7 +226,7 @@ const labService = {
   async mineBlocks(
     count: number,
     targetAddress: string,
-    ownerName?: string,
+    options?: { ownerName?: string; ownerWalletId?: number },
   ): Promise<LabState> {
     const wasmModule = await getWasm()
     const tip = getTip()
@@ -252,9 +252,12 @@ const labService = {
       coinbaseScriptPubkeyHex = wasmModule.lab_address_to_script_pubkey_hex(keypair.address)
     }
 
-    if (ownerName?.trim()) {
+    if (options?.ownerWalletId != null) {
       state.addressToOwner = state.addressToOwner ?? {}
-      state.addressToOwner[coinbaseAddress] = ownerName.trim()
+      state.addressToOwner[coinbaseAddress] = `wallet:${options.ownerWalletId}`
+    } else if (options?.ownerName?.trim()) {
+      state.addressToOwner = state.addressToOwner ?? {}
+      state.addressToOwner[coinbaseAddress] = options.ownerName.trim()
     }
 
     const mempoolCopy = [...(state.mempool ?? [])]

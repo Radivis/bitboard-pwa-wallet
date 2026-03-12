@@ -76,10 +76,15 @@ export interface LabService {
 
   /**
    * Mines `count` blocks. If `targetAddress` is empty, generates a new key and uses its address.
-   * If `ownerName` is provided, associates it with the coinbase address.
+   * If `ownerName` is provided, associates the coinbase address with that name.
+   * If `ownerWalletId` is provided, associates the coinbase address with that wallet.
    * Returns the new state after mining.
    */
-  mineBlocks(count: number, targetAddress: string, ownerName?: string): Promise<LabState>
+  mineBlocks(
+    count: number,
+    targetAddress: string,
+    options?: { ownerName?: string; ownerWalletId?: number },
+  ): Promise<LabState>
 
   /**
    * Creates a transaction and adds it to the mempool. No mining.

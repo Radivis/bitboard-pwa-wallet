@@ -25,8 +25,6 @@ import {
   getLabWorker,
   persistLabState,
 } from '@/workers/lab-factory'
-import { useWallet } from '@/db'
-import { WALLET_OWNER_PREFIX } from '@/lib/lab-utils'
 
 export const Route = createFileRoute('/send')({
   component: SendPage,
@@ -78,7 +76,6 @@ function SendFlow() {
   const setLastSyncTime = useWalletStore((s) => s.setLastSyncTime)
   const password = useSessionStore((s) => s.password)
 
-  const { data: activeWallet } = useWallet(activeWalletId ?? 0)
   const [labBalanceSats, setLabBalanceSats] = useState<number | null>(null)
 
   const buildTransaction = useCryptoStore((s) => s.buildTransaction)
@@ -94,7 +91,7 @@ function SendFlow() {
   const getLabChangeAddress = useCryptoStore((s) => s.getLabChangeAddress)
 
   useEffect(() => {
-    if (networkMode !== 'lab' || !activeWallet?.name) {
+    if (networkMode !== 'lab' || activeWalletId == null) {
       setLabBalanceSats(null)
       return
     }
@@ -103,7 +100,7 @@ function SendFlow() {
       .then((worker) => worker.getStateSnapshot())
       .then((state) => {
         if (!mounted) return
-        const ownerKey = `${WALLET_OWNER_PREFIX}${activeWallet.name}`
+        const ownerKey = `wallet:${activeWalletId}`
         const total = (state.utxos ?? [])
           .filter((u) => (state.addressToOwner ?? {})[u.address] === ownerKey)
           .reduce((sum, u) => sum + u.amountSats, 0)
@@ -111,7 +108,7 @@ function SendFlow() {
       })
       .catch(() => setLabBalanceSats(null))
     return () => { mounted = false }
-  }, [networkMode, activeWallet?.name])
+  }, [networkMode, activeWalletId])
 
   const confirmedBalance =
     networkMode === 'lab' && labBalanceSats !== null
@@ -176,13 +173,13 @@ function SendFlow() {
   }, [canBuild, normalizedRecipient, amountSats, effectiveFeeRate, networkMode, buildTransaction])
 
   const handleLabSend = useCallback(async () => {
-    if (!activeWallet?.name) return
+    if (activeWalletId == null) return
 
     try {
       setLoading(true)
       await initLabWorkerWithState()
       const worker = getLabWorker()
-      const walletOwner = `${WALLET_OWNER_PREFIX}${activeWallet.name}`
+      const walletOwner = `wallet:${activeWalletId}`
 
       const walletChangeAddress = await getLabChangeAddress()
       const { utxosJson, mempoolMetadata, totalInput } =
@@ -246,7 +243,7 @@ function SendFlow() {
       setLoading(false)
     }
   }, [
-    activeWallet?.name,
+    activeWalletId,
     normalizedRecipient,
     amountSats,
     effectiveFeeRate,
