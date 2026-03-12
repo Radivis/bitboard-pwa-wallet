@@ -1,8 +1,8 @@
 import { wrap, type Remote } from 'comlink'
 import type { LabService } from './lab-api'
 import {
-  ensureRegtestMigrated,
-  getRegtestDatabase,
+  ensureLabMigrated,
+  getLabDatabase,
 } from '@/db'
 import type { LabState } from './lab-api'
 
@@ -21,8 +21,8 @@ export function getLabWorker(): Remote<LabService> {
 
 export async function initLabWorkerWithState(): Promise<Remote<LabService>> {
   const labProxy = getLabWorker()
-  await ensureRegtestMigrated()
-  const db = getRegtestDatabase()
+  await ensureLabMigrated()
+  const db = getLabDatabase()
 
   const blocks = await db
     .selectFrom('blocks')
@@ -36,12 +36,12 @@ export async function initLabWorkerWithState(): Promise<Remote<LabService>> {
     .execute()
 
   const addresses = await db
-    .selectFrom('regtest_addresses')
+    .selectFrom('lab_addresses')
     .select(['address', 'wif'])
     .execute()
 
   const addressOwnersRows = await db
-    .selectFrom('regtest_address_owners')
+    .selectFrom('lab_address_owners')
     .select(['address', 'owner'])
     .execute()
 
@@ -51,7 +51,7 @@ export async function initLabWorkerWithState(): Promise<Remote<LabService>> {
   }
 
   const mempoolRows = await db
-    .selectFrom('regtest_mempool')
+    .selectFrom('lab_mempool')
     .select([
       'signed_tx_hex',
       'txid',
@@ -85,13 +85,13 @@ export async function initLabWorkerWithState(): Promise<Remote<LabService>> {
   }))
 
   const transactions = await db
-    .selectFrom('regtest_transactions')
+    .selectFrom('lab_transactions')
     .select(['txid', 'sender', 'receiver'])
-    .orderBy('regtest_transaction_id', 'asc')
+    .orderBy('lab_transaction_id', 'asc')
     .execute()
 
   const txDetailsRows = await db
-    .selectFrom('regtest_tx_details')
+    .selectFrom('lab_tx_details')
     .select(['txid', 'block_height', 'block_time', 'inputs_json', 'outputs_json'])
     .execute()
 
@@ -145,16 +145,16 @@ export async function initLabWorkerWithState(): Promise<Remote<LabService>> {
 }
 
 export async function persistLabState(state: LabState): Promise<void> {
-  await ensureRegtestMigrated()
-  const db = getRegtestDatabase()
+  await ensureLabMigrated()
+  const db = getLabDatabase()
 
   await db.deleteFrom('blocks').execute()
   await db.deleteFrom('utxos').execute()
-  await db.deleteFrom('regtest_addresses').execute()
-  await db.deleteFrom('regtest_address_owners').execute()
-  await db.deleteFrom('regtest_mempool').execute()
-  await db.deleteFrom('regtest_transactions').execute()
-  await db.deleteFrom('regtest_tx_details').execute()
+  await db.deleteFrom('lab_addresses').execute()
+  await db.deleteFrom('lab_address_owners').execute()
+  await db.deleteFrom('lab_mempool').execute()
+  await db.deleteFrom('lab_transactions').execute()
+  await db.deleteFrom('lab_tx_details').execute()
 
   const now = new Date().toISOString()
   for (const b of state.blocks) {
@@ -182,7 +182,7 @@ export async function persistLabState(state: LabState): Promise<void> {
   }
   for (const a of state.addresses) {
     await db
-      .insertInto('regtest_addresses')
+      .insertInto('lab_addresses')
       .values({
         address: a.address,
         wif: a.wif,
@@ -191,7 +191,7 @@ export async function persistLabState(state: LabState): Promise<void> {
   }
   for (const t of state.transactions) {
     await db
-      .insertInto('regtest_transactions')
+      .insertInto('lab_transactions')
       .values({
         txid: t.txid,
         sender: t.sender,
@@ -201,13 +201,13 @@ export async function persistLabState(state: LabState): Promise<void> {
   }
   for (const [address, owner] of Object.entries(state.addressToOwner ?? {})) {
     await db
-      .insertInto('regtest_address_owners')
+      .insertInto('lab_address_owners')
       .values({ address, owner })
       .execute()
   }
   for (const m of state.mempool ?? []) {
     await db
-      .insertInto('regtest_mempool')
+      .insertInto('lab_mempool')
       .values({
         signed_tx_hex: m.signedTxHex,
         txid: m.txid,
@@ -222,7 +222,7 @@ export async function persistLabState(state: LabState): Promise<void> {
   }
   for (const d of state.txDetails ?? []) {
     await db
-      .insertInto('regtest_tx_details')
+      .insertInto('lab_tx_details')
       .values({
         txid: d.txid,
         block_height: d.blockHeight,

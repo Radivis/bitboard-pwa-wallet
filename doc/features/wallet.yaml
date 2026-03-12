@@ -11,7 +11,7 @@ feature:
     - As a user, I want to send Bitcoin to an address
     - As a user, I want to see my wallet balance and sync status
     - As a user, I want to view my transaction history
-    - As a user, I want to switch between networks (regtest, signet, testnet, mainnet)
+    - As a user, I want to switch between networks (lab, regtest, signet, testnet, mainnet)
     - As a user, I want to configure a custom Esplora endpoint
     - As a user, I want to back up my mnemonic from Settings
   requirements:
@@ -145,7 +145,7 @@ feature:
       - file: frontend/src/routes/settings.tsx
       - visible_elements:
         - Network section:
-          - network selector dropdown (regtest, signet, testnet, mainnet)
+          - network selector buttons (lab, regtest, signet, testnet, mainnet)
             - click_event:
               - change active network, re-sync wallet
           - Esplora endpoint input field with current URL displayed

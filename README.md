@@ -55,10 +55,64 @@ For the full tech stack, see the [architecture documentation](doc/ARCHITECTURE.m
 
 ## Development
 ### Requirements
-- Node.js
+- Node.js (>=24.0.0)
 - npm
 - Rust
 - Optional, but suggested: Go and lefthook for the Git hooks
+
+### Build and Run
+
+The project consists of a Rust crypto library compiled to WASM and a React frontend. The WASM build must complete before the frontend can run.
+
+#### 1. Install Rust and the WASM target
+
+```bash
+rustup target add wasm32-unknown-unknown
+```
+
+#### 2. Install wasm-pack
+
+The crypto crate is built to WASM using [wasm-pack](https://rustwasm.github.io/wasm-pack/installer/):
+
+```bash
+cargo install wasm-pack
+```
+
+#### 3. Build the WASM module
+
+From the project root:
+
+```bash
+cd crypto && wasm-pack build --target bundler --out-dir ../frontend/src/wasm-pkg
+```
+
+Or from the frontend directory:
+
+```bash
+cd frontend && npm run build:wasm
+```
+
+The output goes to `frontend/src/wasm-pkg/` (gitignored). You need to run this at least once before starting the dev server, and again whenever you change the Rust code in `crypto/`.
+
+#### 4. Install frontend dependencies and run
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+The dev server will be available at the URL shown (typically `http://localhost:5173`).
+
+#### Full production build
+
+From the project root:
+
+```bash
+cd frontend && npm run build
+```
+
+This runs the WASM build, TypeScript compilation, and Vite build in sequence.
 
 ### Initialization
 

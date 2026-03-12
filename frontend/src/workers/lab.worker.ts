@@ -88,7 +88,7 @@ function parseBlockEffects(raw: unknown): BlockEffectsParsed {
 
 function applyBlockEffects(blockHex: string, height: number, newAddress?: LabAddress): void {
   const wasmModule = wasm!
-  const rawEffects = wasmModule.regtest_block_effects(blockHex)
+  const rawEffects = wasmModule.lab_block_effects(blockHex)
   const { spent, new_utxos: newUtxos, transactions, block_time } = parseBlockEffects(rawEffects)
 
   const utxoMap = new Map(state.utxos.map((u) => [`${u.txid}:${u.vout}`, u]))
@@ -159,7 +159,7 @@ function applyBlockEffects(blockHex: string, height: number, newAddress?: LabAdd
     state.addresses.push(newAddress)
   }
 
-  const blockHash = wasmModule.regtest_block_hash(blockHex)
+  const blockHash = wasmModule.lab_block_hash(blockHex)
   state.blocks.push({
     blockHash,
     height,
@@ -244,12 +244,12 @@ const labService = {
 
     if (targetAddress.trim()) {
       coinbaseAddress = targetAddress.trim()
-      coinbaseScriptPubkeyHex = wasmModule.regtest_address_to_script_pubkey_hex(coinbaseAddress)
+      coinbaseScriptPubkeyHex = wasmModule.lab_address_to_script_pubkey_hex(coinbaseAddress)
     } else {
-      const keypair = wasmModule.regtest_generate_keypair()
+      const keypair = wasmModule.lab_generate_keypair()
       newAddress = { address: keypair.address, wif: keypair.wif }
       coinbaseAddress = keypair.address
-      coinbaseScriptPubkeyHex = wasmModule.regtest_address_to_script_pubkey_hex(keypair.address)
+      coinbaseScriptPubkeyHex = wasmModule.lab_address_to_script_pubkey_hex(keypair.address)
     }
 
     if (ownerName?.trim()) {
@@ -268,7 +268,7 @@ const labService = {
     for (let i = 0; i < count; i++) {
       const txsForBlock = i === 0 ? mempoolTxHexes : []
       const feesForBlock = BigInt(i === 0 ? totalFeesSats : 0)
-      const blockHex = wasmModule.regtest_mine_block(
+      const blockHex = wasmModule.lab_mine_block(
         prevHash,
         height,
         coinbaseScriptPubkeyHex,
@@ -315,10 +315,10 @@ const labService = {
       })),
     )
 
-    const changeKeypair = wasmModule.regtest_generate_keypair()
+    const changeKeypair = wasmModule.lab_generate_keypair()
     const changeAddress: LabAddress = { address: changeKeypair.address, wif: changeKeypair.wif }
 
-    const buildResult = wasmModule.regtest_build_transaction_with_change(
+    const buildResult = wasmModule.lab_build_transaction_with_change(
       utxosJson,
       toAddress,
       BigInt(amountSats),
@@ -328,7 +328,7 @@ const labService = {
     const { tx_hex: unsignedTxHex, fee_sats: feeSats, has_change } =
       typeof buildResult === 'string' ? JSON.parse(buildResult) : buildResult
 
-    const signedTxHex = wasmModule.regtest_sign_transaction(
+    const signedTxHex = wasmModule.lab_sign_transaction(
       unsignedTxHex,
       controlled.wif,
       utxosJson,
@@ -336,7 +336,7 @@ const labService = {
 
     if (has_change) {
       state.addresses.push(changeAddress)
-      const createdTxid = wasmModule.regtest_txid(signedTxHex)
+      const createdTxid = wasmModule.lab_txid(signedTxHex)
       txidToChangeAddress.set(createdTxid, changeAddress.address)
     }
 
@@ -368,7 +368,7 @@ const labService = {
         ]
       : [{ address: toAddress, amountSats: totalInput - feeSats, owner: receiver }]
 
-    const txid = wasmModule.regtest_txid(signedTxHex)
+    const txid = wasmModule.lab_txid(signedTxHex)
     const inputs = fromUtxos.map((u) => ({ txid: u.txid, vout: u.vout }))
 
     state.mempool = state.mempool ?? []
@@ -447,11 +447,11 @@ const labService = {
         wif: addressToWif[walletChangeAddress]!,
       }
     } else {
-      const changeKeypair = wasmModule.regtest_generate_keypair()
+      const changeKeypair = wasmModule.lab_generate_keypair()
       changeAddress = { address: changeKeypair.address, wif: changeKeypair.wif }
     }
 
-    const buildResult = wasmModule.regtest_build_transaction_with_change(
+    const buildResult = wasmModule.lab_build_transaction_with_change(
       utxosJson,
       toAddress,
       BigInt(amountSats),
@@ -462,7 +462,7 @@ const labService = {
       typeof buildResult === 'string' ? JSON.parse(buildResult) : buildResult
 
     const addressToWifJson = JSON.stringify(addressToWif)
-    const signedTxHex = wasmModule.regtest_sign_transaction_multi(
+    const signedTxHex = wasmModule.lab_sign_transaction_multi(
       unsignedTxHex,
       utxosJson,
       addressToWifJson,
@@ -472,7 +472,7 @@ const labService = {
       if (!useWalletChange) {
         state.addresses.push(changeAddress)
       }
-      const createdTxid = wasmModule.regtest_txid(signedTxHex)
+      const createdTxid = wasmModule.lab_txid(signedTxHex)
       txidToChangeAddress.set(createdTxid, changeAddress.address)
     }
 
@@ -503,7 +503,7 @@ const labService = {
         ]
       : [{ address: toAddress, amountSats: totalInput - feeSats, owner: receiver }]
 
-    const txid = wasmModule.regtest_txid(signedTxHex)
+    const txid = wasmModule.lab_txid(signedTxHex)
     const inputs = fromUtxos.map((u) => ({ txid: u.txid, vout: u.vout }))
 
     state.mempool = state.mempool ?? []

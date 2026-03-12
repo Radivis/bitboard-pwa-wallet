@@ -1,11 +1,11 @@
 import type { Generated, Insertable, Selectable, Updateable } from 'kysely'
 
-interface RegtestAddressOwnersTable {
+interface LabAddressOwnersTable {
   address: string
   owner: string
 }
 
-interface RegtestMempoolTable {
+interface LabMempoolTable {
   mempool_id: Generated<number>
   signed_tx_hex: string
   txid: string
@@ -17,14 +17,14 @@ interface RegtestMempoolTable {
   outputs_detail_json: string
 }
 
-interface RegtestTransactionsTable {
-  regtest_transaction_id: Generated<number>
+interface LabTransactionsTable {
+  lab_transaction_id: Generated<number>
   txid: string
   sender: string | null
   receiver: string | null
 }
 
-interface RegtestTxDetailsTable {
+interface LabTxDetailsTable {
   txid: string
   block_height: number
   block_time: number
@@ -32,14 +32,14 @@ interface RegtestTxDetailsTable {
   outputs_json: string
 }
 
-export interface RegtestDatabase {
+export interface LabDatabase {
   blocks: BlocksTable
   utxos: UtxosTable
-  regtest_addresses: RegtestAddressesTable
-  regtest_address_owners: RegtestAddressOwnersTable
-  regtest_mempool: RegtestMempoolTable
-  regtest_transactions: RegtestTransactionsTable
-  regtest_tx_details: RegtestTxDetailsTable
+  lab_addresses: LabAddressesTable
+  lab_address_owners: LabAddressOwnersTable
+  lab_mempool: LabMempoolTable
+  lab_transactions: LabTransactionsTable
+  lab_tx_details: LabTxDetailsTable
 }
 
 interface BlocksTable {
@@ -66,12 +66,12 @@ export type Utxo = Selectable<UtxosTable>
 export type NewUtxo = Insertable<UtxosTable>
 export type UtxoUpdate = Updateable<UtxosTable>
 
-interface RegtestAddressesTable {
-  regtest_address_id: Generated<number>
+interface LabAddressesTable {
+  lab_address_id: Generated<number>
   address: string
   wif: string
 }
 
-export type RegtestAddress = Selectable<RegtestAddressesTable>
-export type NewRegtestAddress = Insertable<RegtestAddressesTable>
-export type RegtestAddressUpdate = Updateable<RegtestAddressesTable>
+export type LabAddress = Selectable<LabAddressesTable>
+export type NewLabAddress = Insertable<LabAddressesTable>
+export type LabAddressUpdate = Updateable<LabAddressesTable>

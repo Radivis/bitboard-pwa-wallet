@@ -33,6 +33,7 @@ vi.mock('@/stores/walletStore', () => ({
   useWalletStore: (selector: (s: Record<string, unknown>) => unknown) =>
     selector(walletStoreState),
   NETWORK_LABELS: {
+    lab: 'Lab',
     regtest: 'Regtest',
     signet: 'Signet',
     testnet: 'Testnet',

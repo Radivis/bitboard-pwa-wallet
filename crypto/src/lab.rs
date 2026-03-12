@@ -1,4 +1,4 @@
-//! Minimal in-app regtest implementation for Personal Regtest network.
+//! Minimal in-app lab implementation for Personal Lab network.
 //!
 //! P2WPKH only. Uses the bitcoin crate for block/transaction construction.
 
@@ -21,20 +21,20 @@ use bitcoin::{
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 
-const REGTEST_COINBASE_SUBSIDY: u64 = 50 * 100_000_000; // 50 BTC in sats
-const REGTEST_BITS: u32 = 0x207fffff; // Max target for regtest
+const LAB_COINBASE_SUBSIDY: u64 = 50 * 100_000_000; // 50 BTC in sats
+const LAB_BITS: u32 = 0x207fffff; // Max target for lab
 const DUST_THRESHOLD_SATS: u64 = 546; // Min non-dust output for P2WPKH
 
 /// Result of generating a new keypair for "random" mining.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RegtestKeypairResult {
+pub struct LabKeypairResult {
     pub address: String,
     pub wif: String,
 }
 
 /// Input UTXO for building a transaction.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RegtestUtxoInput {
+pub struct LabUtxoInput {
     pub txid: String,
     pub vout: u32,
     pub amount_sats: u64,
@@ -46,7 +46,7 @@ pub struct RegtestUtxoInput {
 
 /// Output for building a transaction.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RegtestTxOutput {
+pub struct LabTxOutput {
     pub address: String,
     pub amount_sats: u64,
 }
@@ -66,7 +66,7 @@ pub fn regtest_create_genesis() -> String {
 /// - `txs_hex`: Optional transactions to include (array of hex strings)
 /// - `total_fees_sats`: Sum of fees from included transactions (added to coinbase output)
 #[wasm_bindgen]
-pub fn regtest_mine_block(
+pub fn lab_mine_block(
     prev_block_hash_hex: &str,
     height: u32,
     coinbase_script_pubkey_hex: &str,
@@ -97,14 +97,14 @@ pub fn regtest_mine_block(
     }
 
     let merkle_root = compute_merkle_root(&txdata);
-    let time = unix_time_regtest();
+    let time = unix_time_lab();
 
     let header = bitcoin::blockdata::block::Header {
         version: BlockVersion::TWO,
         prev_blockhash: prev_hash,
         merkle_root,
         time,
-        bits: CompactTarget::from_consensus(REGTEST_BITS),
+        bits: CompactTarget::from_consensus(LAB_BITS),
         nonce: 0,
     };
 
@@ -114,14 +114,14 @@ pub fn regtest_mine_block(
 
 /// Builds an unsigned P2WPKH transaction from UTXOs and outputs.
 #[wasm_bindgen]
-pub fn regtest_build_transaction(
+pub fn lab_build_transaction(
     utxos_json: &str,
     outputs_json: &str,
     fee_rate_sat_per_vb: f64,
 ) -> Result<String, JsValue> {
-    let utxos: Vec<RegtestUtxoInput> =
+    let utxos: Vec<LabUtxoInput> =
         serde_json::from_str(utxos_json).map_err(|e| JsValue::from_str(&e.to_string()))?;
-    let outputs: Vec<RegtestTxOutput> =
+    let outputs: Vec<LabTxOutput> =
         serde_json::from_str(outputs_json).map_err(|e| JsValue::from_str(&e.to_string()))?;
 
     if utxos.is_empty() {
@@ -200,17 +200,13 @@ pub fn regtest_build_transaction(
 ///
 /// - `tx_hex`: Unsigned transaction hex
 /// - `wif`: WIF of the key that controls the inputs (must match script_pubkey)
-/// - `utxos_json`: Same format as regtest_build_transaction
+/// - `utxos_json`: Same format as lab_build_transaction
 #[wasm_bindgen]
-pub fn regtest_sign_transaction(
-    tx_hex: &str,
-    wif: &str,
-    utxos_json: &str,
-) -> Result<String, JsValue> {
+pub fn lab_sign_transaction(tx_hex: &str, wif: &str, utxos_json: &str) -> Result<String, JsValue> {
     let mut tx: Transaction =
         deserialize_hex(tx_hex).map_err(|e| JsValue::from_str(&e.to_string()))?;
 
-    let utxos: Vec<RegtestUtxoInput> =
+    let utxos: Vec<LabUtxoInput> =
         serde_json::from_str(utxos_json).map_err(|e| JsValue::from_str(&e.to_string()))?;
 
     let privkey = PrivateKey::from_wif(wif).map_err(|e| JsValue::from_str(&e.to_string()))?;
@@ -259,7 +255,7 @@ pub fn regtest_sign_transaction(
 /// Uses `address_to_wif_json` (e.g. `{"addr1":"wif1","addr2":"wif2"}`) to look up the WIF
 /// for each input based on the UTXO's `address` field.
 #[wasm_bindgen]
-pub fn regtest_sign_transaction_multi(
+pub fn lab_sign_transaction_multi(
     tx_hex: &str,
     utxos_json: &str,
     address_to_wif_json: &str,
@@ -267,7 +263,7 @@ pub fn regtest_sign_transaction_multi(
     let mut tx: Transaction =
         deserialize_hex(tx_hex).map_err(|e| JsValue::from_str(&e.to_string()))?;
 
-    let utxos: Vec<RegtestUtxoInput> =
+    let utxos: Vec<LabUtxoInput> =
         serde_json::from_str(utxos_json).map_err(|e| JsValue::from_str(&e.to_string()))?;
 
     let address_to_wif: std::collections::HashMap<String, String> =
@@ -330,14 +326,14 @@ pub fn regtest_sign_transaction_multi(
 /// Ensures total inputs are fully spent: payment + change + fee, with change to a new address.
 /// Returns (tx_hex, fee_sats) on success.
 #[wasm_bindgen]
-pub fn regtest_build_transaction_with_change(
+pub fn lab_build_transaction_with_change(
     utxos_json: &str,
     payment_address: &str,
     payment_sats: u64,
     fee_rate_sat_per_vb: f64,
     change_address: &str,
 ) -> Result<JsValue, JsValue> {
-    let utxos: Vec<RegtestUtxoInput> =
+    let utxos: Vec<LabUtxoInput> =
         serde_json::from_str(utxos_json).map_err(|e| JsValue::from_str(&e.to_string()))?;
 
     if utxos.is_empty() {
@@ -365,11 +361,11 @@ pub fn regtest_build_transaction_with_change(
         .saturating_sub(required_fee_sats);
     let (outputs, actual_fee_sats) = if change_sats >= DUST_THRESHOLD_SATS {
         let outputs = vec![
-            RegtestTxOutput {
+            LabTxOutput {
                 address: payment_address.to_string(),
                 amount_sats: payment_sats,
             },
-            RegtestTxOutput {
+            LabTxOutput {
                 address: change_address.to_string(),
                 amount_sats: change_sats,
             },
@@ -378,7 +374,7 @@ pub fn regtest_build_transaction_with_change(
         let fee = total_in - total_out;
         (outputs, fee)
     } else {
-        let outputs = vec![RegtestTxOutput {
+        let outputs = vec![LabTxOutput {
             address: payment_address.to_string(),
             amount_sats: payment_sats,
         }];
@@ -388,7 +384,7 @@ pub fn regtest_build_transaction_with_change(
 
     let outputs_json =
         serde_json::to_string(&outputs).map_err(|e| JsValue::from_str(&e.to_string()))?;
-    let tx_hex = regtest_build_transaction(utxos_json, &outputs_json, fee_rate_sat_per_vb)?;
+    let tx_hex = lab_build_transaction(utxos_json, &outputs_json, fee_rate_sat_per_vb)?;
 
     let result = serde_json::json!({
         "tx_hex": tx_hex,
@@ -400,15 +396,8 @@ pub fn regtest_build_transaction_with_change(
 
 /// Generates a new keypair for "random" mining. Returns address (P2WPKH) and WIF.
 #[wasm_bindgen]
-pub fn regtest_generate_keypair() -> Result<JsValue, JsValue> {
+pub fn lab_generate_keypair() -> Result<JsValue, JsValue> {
     let secp = Secp256k1::new();
-    #[cfg(target_arch = "wasm32")]
-    let sk = {
-        let mut bytes = [0u8; 32];
-        getrandom::getrandom(&mut bytes).map_err(|e| JsValue::from_str(&e.to_string()))?;
-        SecretKey::from_slice(&bytes).map_err(|e| JsValue::from_str(&e.to_string()))?
-    };
-    #[cfg(not(target_arch = "wasm32"))]
     let sk = {
         let mut bytes = [0u8; 32];
         getrandom::getrandom(&mut bytes).map_err(|e| JsValue::from_str(&e.to_string()))?;
@@ -421,7 +410,7 @@ pub fn regtest_generate_keypair() -> Result<JsValue, JsValue> {
     let addr = Address::p2wpkh(&compressed_pk, Network::Regtest);
     let privkey = PrivateKey::new(sk, Network::Regtest);
 
-    let result = RegtestKeypairResult {
+    let result = LabKeypairResult {
         address: addr.to_string(),
         wif: privkey.to_wif(),
     };
@@ -430,7 +419,7 @@ pub fn regtest_generate_keypair() -> Result<JsValue, JsValue> {
 
 /// Validates that an address is a valid P2WPKH regtest address.
 #[wasm_bindgen]
-pub fn regtest_validate_address(addr: &str) -> Result<bool, JsValue> {
+pub fn lab_validate_address(addr: &str) -> Result<bool, JsValue> {
     let address = match Address::from_str(addr) {
         Ok(a) => a,
         Err(_) => return Ok(false),
@@ -444,7 +433,7 @@ pub fn regtest_validate_address(addr: &str) -> Result<bool, JsValue> {
 
 /// Returns the txid (hex) for a serialized transaction.
 #[wasm_bindgen]
-pub fn regtest_txid(tx_hex: &str) -> String {
+pub fn lab_txid(tx_hex: &str) -> String {
     let tx: Transaction = match deserialize_hex(tx_hex) {
         Ok(t) => t,
         Err(_) => return String::new(),
@@ -454,7 +443,7 @@ pub fn regtest_txid(tx_hex: &str) -> String {
 
 /// Returns the block hash (hex) for a serialized block.
 #[wasm_bindgen]
-pub fn regtest_block_hash(block_hex: &str) -> String {
+pub fn lab_block_hash(block_hex: &str) -> String {
     let block: Block = match deserialize_hex(block_hex) {
         Ok(b) => b,
         Err(_) => return String::new(),
@@ -465,7 +454,7 @@ pub fn regtest_block_hash(block_hex: &str) -> String {
 /// Returns the effects of applying a block: new UTXOs, spent outpoints, and per-tx input refs.
 /// Used by the worker to update in-memory state and build transaction history.
 #[wasm_bindgen]
-pub fn regtest_block_effects(block_hex: &str) -> Result<JsValue, JsValue> {
+pub fn lab_block_effects(block_hex: &str) -> Result<JsValue, JsValue> {
     let block: Block = deserialize_hex(block_hex).map_err(|e| JsValue::from_str(&e.to_string()))?;
 
     let mut new_utxos = Vec::new();
@@ -545,7 +534,7 @@ pub fn regtest_block_effects(block_hex: &str) -> Result<JsValue, JsValue> {
 
 /// Extracts script_pubkey hex from a P2WPKH address.
 #[wasm_bindgen]
-pub fn regtest_address_to_script_pubkey_hex(addr: &str) -> Result<String, JsValue> {
+pub fn lab_address_to_script_pubkey_hex(addr: &str) -> Result<String, JsValue> {
     let address = Address::from_str(addr)
         .map_err(|e| JsValue::from_str(&e.to_string()))?
         .require_network(Network::Regtest)
@@ -569,7 +558,7 @@ fn create_coinbase_tx(height: u32, script_pubkey: ScriptBuf, fees_sats: u64) -> 
         witness: Witness::default(),
     };
 
-    let total_value = REGTEST_COINBASE_SUBSIDY + fees_sats;
+    let total_value = LAB_COINBASE_SUBSIDY + fees_sats;
     let output = TxOut {
         value: Amount::from_sat(total_value),
         script_pubkey,
@@ -590,7 +579,7 @@ fn compute_merkle_root(txdata: &[Transaction]) -> TxMerkleNode {
         .into()
 }
 
-fn unix_time_regtest() -> u32 {
+fn unix_time_lab() -> u32 {
     #[cfg(target_arch = "wasm32")]
     {
         (js_sys::Date::now() / 1000.0) as u32

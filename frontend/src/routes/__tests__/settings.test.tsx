@@ -53,6 +53,7 @@ vi.mock('@/stores/walletStore', () => ({
     },
   ),
   NETWORK_LABELS: {
+    lab: 'Lab',
     regtest: 'Regtest',
     signet: 'Signet',
     testnet: 'Testnet',

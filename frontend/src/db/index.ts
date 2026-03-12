@@ -22,8 +22,8 @@ export {
 } from './wallet-persistence'
 export type { WalletSecrets, DescriptorWalletData } from './wallet-persistence'
 export {
-  getRegtestDatabase,
-  ensureRegtestMigrated,
-  destroyRegtestDatabase,
-} from './regtest-database'
-export type { Block, Utxo, RegtestAddress } from './regtest-schema'
+  getLabDatabase,
+  ensureLabMigrated,
+  destroyLabDatabase,
+} from './lab-database'
+export type { Block, Utxo, LabAddress } from './lab-schema'
