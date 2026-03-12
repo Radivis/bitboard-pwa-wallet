@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from '@tanstack/react-router'
 import { useWalletStore } from '@/stores/walletStore'
 import { useSessionStore } from '@/stores/sessionStore'
 import { useWallets } from '@/db'
+import { useLabStore } from '@/stores/labStore'
 import {
   loadDescriptorWalletAndSync,
   loadDescriptorWalletWithoutSync,
@@ -24,6 +25,13 @@ export function AppInitializer({ children }: AppInitializerProps) {
   const accountId = useWalletStore((s) => s.accountId)
   const sessionPassword = useSessionStore((s) => s.password)
   const lastUnlockedWalletId = useRef<number | null>(null)
+  const hydrateLab = useLabStore((s) => s.hydrate)
+
+  useEffect(() => {
+    if (networkMode === 'lab') {
+      hydrateLab().catch(() => {})
+    }
+  }, [networkMode, hydrateLab])
 
   useEffect(() => {
     if (isLoading) return

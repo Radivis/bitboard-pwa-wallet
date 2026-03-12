@@ -18,6 +18,7 @@ pub mod descriptors;
 pub mod error;
 pub mod esplora;
 pub mod lab;
+pub mod lab_psbt;
 pub mod mnemonic;
 pub mod sync;
 pub mod transaction;
@@ -364,14 +365,19 @@ pub fn get_transaction_list() -> Result<JsValue, JsValue> {
 }
 
 // ---------------------------------------------------------------------------
-// Lab signing (wallet-based, no WIF export)
+// Lab build and sign (wallet-based, PSBT path)
 // ---------------------------------------------------------------------------
 
-/// Sign a lab transaction using the loaded wallet. Matches UTXO script_pubkeys
-/// to wallet addresses and derives keys internally. Keys never leave the crypto module.
-/// Only derives keys for the script_pubkeys actually needed (transaction inputs).
+/// Build and sign a lab transaction using BDK's add_foreign_utxo.
+/// Returns JSON: { signed_tx_hex, fee_sats, has_change }.
 #[wasm_bindgen]
-pub fn sign_lab_transaction(unsigned_tx_hex: &str, utxos_json: &str) -> Result<String, JsValue> {
+pub fn build_and_sign_lab_transaction(
+    utxos_json: &str,
+    to_address: &str,
+    amount_sats: u64,
+    fee_rate_sat_per_vb: f64,
+    change_address: &str,
+) -> Result<JsValue, JsValue> {
     let external = EXTERNAL_DESCRIPTOR_FOR_LAB.with(|d| d.borrow().clone());
     let internal = INTERNAL_DESCRIPTOR_FOR_LAB.with(|d| d.borrow().clone());
     if external.is_empty() || internal.is_empty() {
@@ -380,52 +386,25 @@ pub fn sign_lab_transaction(unsigned_tx_hex: &str, utxos_json: &str) -> Result<S
         ));
     }
 
-    let utxos: Vec<lab::LabUtxoInput> =
-        serde_json::from_str(utxos_json).map_err(|e| JsValue::from_str(&e.to_string()))?;
-    let needed_spks: std::collections::HashSet<String> =
-        utxos.iter().map(|u| u.script_pubkey_hex.clone()).collect();
+    let result = with_wallet_mut(|w| {
+        lab_psbt::build_and_sign_lab_transaction(
+            w,
+            utxos_json,
+            to_address,
+            amount_sats,
+            fee_rate_sat_per_vb,
+            change_address,
+        )
+    })?;
+    let (tx_bytes, fee_sats, has_change) = result.map_err(|e| JsValue::from_str(&e.to_string()))?;
 
-    const MAX_DERIVE: u32 = 100;
-
-    let script_pubkey_to_wif: std::collections::HashMap<String, String> = with_wallet(|w| {
-        let mut map = std::collections::HashMap::<String, String>::new();
-        for i in 0..MAX_DERIVE {
-            let addr = w.peek_address(KeychainKind::External, i).address;
-            let spk_hex = hex::encode(addr.script_pubkey().as_bytes());
-            if needed_spks.contains(&spk_hex) {
-                let wif = wallet::derive_wif_for_descriptor_at_index(&external, i)
-                    .map_err(|e| JsValue::from_str(&e.to_string()))?;
-                map.insert(spk_hex, wif);
-                if map.len() >= needed_spks.len() {
-                    break;
-                }
-            }
-        }
-        if map.len() < needed_spks.len() {
-            for i in 0..MAX_DERIVE {
-                let addr = w.peek_address(KeychainKind::Internal, i).address;
-                let spk_hex = hex::encode(addr.script_pubkey().as_bytes());
-                if needed_spks.contains(&spk_hex) && !map.contains_key(&spk_hex) {
-                    let wif = wallet::derive_wif_for_descriptor_at_index(&internal, i)
-                        .map_err(|e| JsValue::from_str(&e.to_string()))?;
-                    map.insert(spk_hex, wif);
-                    if map.len() >= needed_spks.len() {
-                        break;
-                    }
-                }
-            }
-        }
-        Ok::<_, JsValue>(map)
-    })??;
-
-    let script_pubkey_to_wif_json = serde_json::to_string(&script_pubkey_to_wif)
-        .map_err(|e| JsValue::from_str(&e.to_string()))?;
-
-    lab::lab_sign_transaction_multi_by_script_pubkey(
-        unsigned_tx_hex,
-        utxos_json,
-        &script_pubkey_to_wif_json,
-    )
+    let signed_tx_hex = hex::encode(&tx_bytes);
+    let result = serde_json::json!({
+        "signed_tx_hex": signed_tx_hex,
+        "fee_sats": fee_sats,
+        "has_change": has_change,
+    });
+    Ok(JsValue::from_str(&result.to_string()))
 }
 
 /// Return the first internal address for lab change outputs.

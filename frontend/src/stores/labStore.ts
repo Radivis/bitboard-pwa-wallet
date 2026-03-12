@@ -3,15 +3,7 @@ import {
   initLabWorkerWithState,
   resetLab as resetLabFactory,
 } from '@/workers/lab-factory'
-import type {
-  LabState,
-  LabBlock,
-  LabUtxo,
-  LabAddress,
-  MempoolEntry,
-  LabTxRecord,
-  LabTxDetails,
-} from '@/workers/lab-api'
+import type { LabState } from '@/workers/lab-api'
 
 const EMPTY_LAB_STATE: LabState = {
   blocks: [],
@@ -35,7 +27,7 @@ interface LabStoreActions {
 
 type LabStore = LabStoreState & LabStoreActions
 
-export const useLabStore = create<LabStore>((set, get) => ({
+export const useLabStore = create<LabStore>((set) => ({
   ...EMPTY_LAB_STATE,
   isHydrated: false,
 
@@ -51,7 +43,7 @@ export const useLabStore = create<LabStore>((set, get) => ({
     }),
 
   hydrate: async () => {
-    const { proxy, state } = await initLabWorkerWithState()
+    const { state } = await initLabWorkerWithState()
     set({
       blocks: state.blocks,
       utxos: state.utxos,

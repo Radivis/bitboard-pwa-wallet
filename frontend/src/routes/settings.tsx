@@ -47,7 +47,8 @@ import {
   updateDescriptorWalletChangeset,
 } from '@/lib/descriptor-wallet-manager'
 import { Link } from '@tanstack/react-router'
-import { initLabWorkerWithState, terminateLabWorker } from '@/workers/lab-factory'
+import { terminateLabWorker } from '@/workers/lab-factory'
+import { useLabStore } from '@/stores/labStore'
 
 export const Route = createFileRoute('/settings')({
   component: SettingsPage,
@@ -215,7 +216,7 @@ function NetworkSelector() {
               )
             }
           }
-          await initLabWorkerWithState()
+          await useLabStore.getState().hydrate()
         } catch (err) {
           toast.error(err instanceof Error ? err.message : 'Failed to start lab')
         } finally {

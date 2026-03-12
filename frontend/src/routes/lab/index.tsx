@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback } from 'react'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import {
   Card,
@@ -11,20 +11,9 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { toast } from 'sonner'
-import {
-  initLabWorkerWithState,
-  persistLabState,
-  getLabWorker,
-  resetLab,
-} from '@/workers/lab-factory'
+import { persistLabState, getLabWorker } from '@/workers/lab-factory'
+import { useLabStore } from '@/stores/labStore'
 import { truncateAddress, formatSats } from '@/lib/bitcoin-utils'
-import type {
-  MempoolEntry,
-  LabAddress,
-  LabUtxo,
-  LabTxRecord,
-  LabTxDetails,
-} from '@/workers/lab-api'
 import { ConfirmationDialog } from '@/components/ConfirmationDialog'
 import { useWalletStore } from '@/stores/walletStore'
 import { useWallet, useWallets } from '@/db'
@@ -36,13 +25,16 @@ export const Route = createFileRoute('/lab/')({
 })
 
 function LabIndexPage() {
-  const [blockCount, setBlockCount] = useState(0)
-  const [addresses, setAddresses] = useState<LabAddress[]>([])
-  const [addressToOwner, setAddressToOwner] = useState<Record<string, string>>({})
-  const [utxos, setUtxos] = useState<LabUtxo[]>([])
-  const [mempool, setMempool] = useState<MempoolEntry[]>([])
-  const [transactions, setTransactions] = useState<LabTxRecord[]>([])
-  const [txDetails, setTxDetails] = useState<LabTxDetails[]>([])
+  const blocks = useLabStore((s) => s.blocks)
+  const addresses = useLabStore((s) => s.addresses)
+  const addressToOwner = useLabStore((s) => s.addressToOwner)
+  const utxos = useLabStore((s) => s.utxos)
+  const mempool = useLabStore((s) => s.mempool)
+  const transactions = useLabStore((s) => s.transactions)
+  const txDetails = useLabStore((s) => s.txDetails)
+  const setLabState = useLabStore((s) => s.setState)
+  const resetLabStore = useLabStore((s) => s.reset)
+  const blockCount = blocks.length === 0 ? 0 : blocks[blocks.length - 1].height + 1
   const [mineCount, setMineCount] = useState('1')
   const [ownerType, setOwnerType] = useState<'name' | 'wallet'>('name')
   const [targetAddress, setTargetAddress] = useState('')
@@ -63,26 +55,6 @@ function LabIndexPage() {
   const [showResetConfirm, setShowResetConfirm] = useState(false)
   const [resetting, setResetting] = useState(false)
 
-  const refreshState = useCallback(async () => {
-    try {
-      const worker = getLabWorker()
-      const [count, addrs, state] = await Promise.all([
-        worker.getBlockCount(),
-        worker.getAddresses(),
-        worker.getStateSnapshot(),
-      ])
-      setBlockCount(count)
-      setAddresses(addrs)
-      setAddressToOwner(state.addressToOwner ?? {})
-      setUtxos(state.utxos)
-      setMempool(state.mempool ?? [])
-      setTransactions(state.transactions ?? [])
-      setTxDetails(state.txDetails ?? [])
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to refresh')
-    }
-  }, [])
-
   const getBalanceForAddress = useCallback(
     (address: string) =>
       utxos
@@ -99,18 +71,6 @@ function LabIndexPage() {
       toast.error('Failed to copy address')
     }
   }, [])
-
-  useEffect(() => {
-    let mounted = true
-    initLabWorkerWithState()
-      .then(() => {
-        if (mounted) refreshState()
-      })
-      .catch(() => {})
-    return () => {
-      mounted = false
-    }
-  }, [refreshState])
 
   const handleMine = useCallback(async () => {
     const count = parseInt(mineCount, 10)
@@ -131,7 +91,7 @@ function LabIndexPage() {
       const worker = getLabWorker()
       const state = await worker.mineBlocks(count, effectiveTarget, mineOptions)
       await persistLabState(state)
-      await refreshState()
+      setLabState(state)
       toast.success(`Mined ${count} block(s)`)
     } catch (err) {
       console.error('Mining failed:', err)
@@ -152,7 +112,7 @@ function LabIndexPage() {
     ownerName,
     currentAddress,
     activeWalletId,
-    refreshState,
+    setLabState,
   ])
 
   const handleSend = useCallback(async () => {
@@ -180,7 +140,7 @@ function LabIndexPage() {
         fee,
       )
       await persistLabState(state)
-      await refreshState()
+      setLabState(state)
       setShowTxForm(false)
       setFromAddress('')
       setToAddress('')
@@ -191,21 +151,20 @@ function LabIndexPage() {
     } finally {
       setSending(false)
     }
-  }, [fromAddress, toAddress, amountSats, feeRate, refreshState])
+  }, [fromAddress, toAddress, amountSats, feeRate, setLabState])
 
   const handleResetLab = useCallback(async () => {
     setShowResetConfirm(false)
     setResetting(true)
     try {
-      await resetLab()
-      await refreshState()
+      await resetLabStore()
       toast.success('Lab reset')
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Reset failed')
     } finally {
       setResetting(false)
     }
-  }, [refreshState])
+  }, [resetLabStore])
 
   const controlledAddresses = addresses.filter((a) => a.wif)
   const txDetailsByTxid = new Map(txDetails.map((d) => [d.txid, d]))
@@ -425,7 +384,7 @@ function LabIndexPage() {
                 <span className="w-10 shrink-0" />
               </div>
               {addresses.map((a) => {
-                const owner = addressToOwner[a.address] ?? 'Unknown';
+                const owner = (addressToOwner ?? {})[a.address] ?? 'Unknown'
                 return (
                   <div
                   key={a.address}
@@ -476,7 +435,7 @@ function LabIndexPage() {
               {(() => {
                 const byOwner = new Map<string, typeof utxos>()
                 for (const u of utxos) {
-                  const owner = addressToOwner[u.address] ?? 'Unknown'
+                  const owner = (addressToOwner ?? {})[u.address] ?? 'Unknown'
                   const list = byOwner.get(owner) ?? []
                   list.push(u)
                   byOwner.set(owner, list)

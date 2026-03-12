@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { ArrowUpRight, ArrowLeft } from 'lucide-react'
 import { toast } from 'sonner'
@@ -20,11 +20,8 @@ import {
   toBitcoinNetwork,
 } from '@/lib/bitcoin-utils'
 import { updateWalletChangeset, loadCustomEsploraUrl } from '@/lib/wallet-utils'
-import {
-  initLabWorkerWithState,
-  getLabWorker,
-  persistLabState,
-} from '@/workers/lab-factory'
+import { getLabWorker, persistLabState } from '@/workers/lab-factory'
+import { useLabStore } from '@/stores/labStore'
 
 export const Route = createFileRoute('/send')({
   component: SendPage,
@@ -76,7 +73,17 @@ function SendFlow() {
   const setLastSyncTime = useWalletStore((s) => s.setLastSyncTime)
   const password = useSessionStore((s) => s.password)
 
-  const [labBalanceSats, setLabBalanceSats] = useState<number | null>(null)
+  const utxos = useLabStore((s) => s.utxos)
+  const addressToOwner = useLabStore((s) => s.addressToOwner)
+  const isHydrated = useLabStore((s) => s.isHydrated)
+  const setLabState = useLabStore((s) => s.setState)
+
+  const labBalanceSats =
+    networkMode === 'lab' && activeWalletId != null && isHydrated
+      ? utxos
+          .filter((u) => (addressToOwner ?? {})[u.address] === `wallet:${activeWalletId}`)
+          .reduce((sum, u) => sum + u.amountSats, 0)
+      : null
 
   const buildTransaction = useCryptoStore((s) => s.buildTransaction)
   const signAndExtractTransaction = useCryptoStore((s) => s.signAndExtractTransaction)
@@ -89,26 +96,6 @@ function SendFlow() {
     (s) => s.buildAndSignLabTransaction,
   )
   const getLabChangeAddress = useCryptoStore((s) => s.getLabChangeAddress)
-
-  useEffect(() => {
-    if (networkMode !== 'lab' || activeWalletId == null) {
-      setLabBalanceSats(null)
-      return
-    }
-    let mounted = true
-    initLabWorkerWithState()
-      .then((worker) => worker.getStateSnapshot())
-      .then((state) => {
-        if (!mounted) return
-        const ownerKey = `wallet:${activeWalletId}`
-        const total = (state.utxos ?? [])
-          .filter((u) => (state.addressToOwner ?? {})[u.address] === ownerKey)
-          .reduce((sum, u) => sum + u.amountSats, 0)
-        setLabBalanceSats(total)
-      })
-      .catch(() => setLabBalanceSats(null))
-    return () => { mounted = false }
-  }, [networkMode, activeWalletId])
 
   const confirmedBalance =
     networkMode === 'lab' && labBalanceSats !== null
@@ -177,7 +164,7 @@ function SendFlow() {
 
     try {
       setLoading(true)
-      await initLabWorkerWithState()
+      await useLabStore.getState().hydrate()
       const worker = getLabWorker()
       const walletOwner = `wallet:${activeWalletId}`
 
@@ -230,6 +217,7 @@ function SendFlow() {
       )
 
       await persistLabState(state)
+      setLabState(state)
       toast.success('Transaction added to mempool')
       navigate({ to: '/' })
     } catch (err) {
@@ -249,7 +237,7 @@ function SendFlow() {
     effectiveFeeRate,
     getLabChangeAddress,
     buildAndSignLabTransaction,
-    initLabWorkerWithState,
+    setLabState,
     navigate,
   ])
 

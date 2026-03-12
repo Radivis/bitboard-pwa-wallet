@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback } from 'react'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { Wallet, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
@@ -13,7 +13,7 @@ import { TransactionItem } from '@/components/TransactionItem'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { formatBTC, formatSats, getEsploraUrl } from '@/lib/bitcoin-utils'
 import { updateWalletChangeset, loadCustomEsploraUrl } from '@/lib/wallet-utils'
-import { initLabWorkerWithState } from '@/workers/lab-factory'
+import { useLabStore } from '@/stores/labStore'
 
 export const Route = createFileRoute('/')({
   component: DashboardPage,
@@ -23,27 +23,16 @@ function BalanceCard() {
   const networkMode = useWalletStore((s) => s.networkMode)
   const balance = useWalletStore((s) => s.balance)
   const activeWalletId = useWalletStore((s) => s.activeWalletId)
-  const [labBalanceSats, setLabBalanceSats] = useState<number | null>(null)
+  const utxos = useLabStore((s) => s.utxos)
+  const addressToOwner = useLabStore((s) => s.addressToOwner)
+  const isHydrated = useLabStore((s) => s.isHydrated)
 
-  useEffect(() => {
-    if (networkMode !== 'lab' || activeWalletId == null) {
-      setLabBalanceSats(null)
-      return
-    }
-    let mounted = true
-    initLabWorkerWithState()
-      .then((worker) => worker.getStateSnapshot())
-      .then((state) => {
-        if (!mounted) return
-        const ownerKey = `wallet:${activeWalletId}`
-        const total = (state.utxos ?? [])
-          .filter((u) => (state.addressToOwner ?? {})[u.address] === ownerKey)
+  const labBalanceSats =
+    networkMode === 'lab' && activeWalletId != null && isHydrated
+      ? utxos
+          .filter((u) => (addressToOwner ?? {})[u.address] === `wallet:${activeWalletId}`)
           .reduce((sum, u) => sum + u.amountSats, 0)
-        setLabBalanceSats(total)
-      })
-      .catch(() => setLabBalanceSats(null))
-    return () => { mounted = false }
-  }, [networkMode, activeWalletId])
+      : null
 
   const confirmedSats =
     networkMode === 'lab' && labBalanceSats !== null

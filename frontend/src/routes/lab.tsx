@@ -1,10 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useEffect } from 'react'
 import { createFileRoute, Outlet, useNavigate } from '@tanstack/react-router'
 import { useWalletStore } from '@/stores/walletStore'
-import {
-  initLabWorkerWithState,
-  getLabWorker,
-} from '@/workers/lab-factory'
+import { useLabStore } from '@/stores/labStore'
 import { toast } from 'sonner'
 
 export const Route = createFileRoute('/lab')({
@@ -14,7 +11,8 @@ export const Route = createFileRoute('/lab')({
 function LabLayout() {
   const navigate = useNavigate()
   const networkMode = useWalletStore((s) => s.networkMode)
-  const [workerReady, setWorkerReady] = useState(false)
+  const isHydrated = useLabStore((s) => s.isHydrated)
+  const hydrate = useLabStore((s) => s.hydrate)
 
   useEffect(() => {
     if (networkMode !== 'lab') {
@@ -22,33 +20,40 @@ function LabLayout() {
       return
     }
 
-    initLabWorkerWithState()
-      .then(() => setWorkerReady(true))
+    hydrate()
       .catch((err) => {
         console.error('Lab init failed:', err)
         const msg = err instanceof Error ? err.message : String(err) || 'Unknown error'
         toast.error(`Failed to init lab: ${msg}`)
       })
-  }, [networkMode, navigate])
+  }, [networkMode, navigate, hydrate])
 
   useEffect(() => {
-    if (!workerReady || networkMode !== 'lab') return
+    if (!isHydrated || networkMode !== 'lab') return
     if (import.meta.env.DEV) {
       window.__labGetState = async () => {
-        const worker = getLabWorker()
-        return await worker.getStateSnapshot()
+        const state = useLabStore.getState()
+        return {
+          blocks: state.blocks,
+          utxos: state.utxos,
+          addresses: state.addresses,
+          addressToOwner: state.addressToOwner,
+          mempool: state.mempool,
+          transactions: state.transactions,
+          txDetails: state.txDetails,
+        }
       }
     }
     return () => {
       delete window.__labGetState
     }
-  }, [workerReady, networkMode])
+  }, [isHydrated, networkMode])
 
   if (networkMode !== 'lab') {
     return null
   }
 
-  if (!workerReady) {
+  if (!isHydrated) {
     return (
       <div className="space-y-6 px-4 py-6">
         <p className="text-muted-foreground">Loading lab...</p>
