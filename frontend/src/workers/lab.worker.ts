@@ -386,18 +386,17 @@ const labService = {
     return this.getStateSnapshot()
   },
 
-  async buildUnsignedLabTransaction(
+  async prepareLabWalletTransaction(
     walletOwner: string,
     toAddress: string,
     amountSats: number,
-    feeRateSatPerVb: number,
+    _feeRateSatPerVb: number,
     walletChangeAddress: string,
   ): Promise<{
-    unsignedTxHex: string
     utxosJson: string
     mempoolMetadata: import('./lab-api').LabMempoolMetadata
+    totalInput: number
   }> {
-    const wasmModule = await getWasm()
     const addressToOwner = state.addressToOwner ?? {}
 
     const fromUtxos = state.utxos.filter(
@@ -420,16 +419,6 @@ const labService = {
       })),
     )
 
-    const buildResult = wasmModule.lab_build_transaction_with_change(
-      utxosJson,
-      toAddress,
-      BigInt(amountSats),
-      feeRateSatPerVb,
-      walletChangeAddress,
-    )
-    const { tx_hex: unsignedTxHex, fee_sats: feeSats, has_change } =
-      typeof buildResult === 'string' ? JSON.parse(buildResult) : buildResult
-
     const sender = walletOwner
     const receiver = addressToOwner[toAddress] ?? null
 
@@ -440,38 +429,21 @@ const labService = {
     }))
 
     const totalInput = fromUtxos.reduce((s, u) => s + u.amountSats, 0)
-    const outputsDetail: {
-      address: string
-      amountSats: number
-      isChange?: boolean
-      owner?: string | null
-    }[] = has_change
-      ? [
-          { address: toAddress, amountSats, owner: receiver },
-          {
-            address: walletChangeAddress,
-            amountSats: totalInput - amountSats - feeSats,
-            isChange: true,
-            owner: sender,
-          },
-        ]
-      : [{ address: toAddress, amountSats: totalInput - feeSats, owner: receiver }]
-
     const inputs = fromUtxos.map((u) => ({ txid: u.txid, vout: u.vout }))
 
     return {
-      unsignedTxHex,
       utxosJson,
       mempoolMetadata: {
         sender,
         receiver,
-        feeSats,
+        feeSats: 0,
         inputs,
         inputsDetail,
-        outputsDetail,
-        hasChange: has_change,
+        outputsDetail: [{ address: toAddress, amountSats, owner: receiver }],
+        hasChange: false,
         walletChangeAddress,
       },
+      totalInput,
     }
   },
 

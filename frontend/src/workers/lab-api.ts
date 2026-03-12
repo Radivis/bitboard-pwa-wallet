@@ -93,24 +93,24 @@ export interface LabService {
   ): Promise<LabState>
 
   /**
-   * Builds an unsigned transaction from UTXOs owned by walletOwner.
-   * Returns unsignedTxHex, utxosJson, and metadata for adding to mempool after signing.
-   * Main thread signs via crypto worker, then calls addSignedTransactionToMempool.
+   * Prepares lab UTXOs for a wallet transaction. Returns utxosJson and partial metadata.
+   * Main thread calls crypto.buildAndSignLabTransaction, then merges feeSats/hasChange
+   * and calls addSignedTransactionToMempool.
    */
-  buildUnsignedLabTransaction(
+  prepareLabWalletTransaction(
     walletOwner: string,
     toAddress: string,
     amountSats: number,
     feeRateSatPerVb: number,
     walletChangeAddress: string,
   ): Promise<{
-    unsignedTxHex: string
     utxosJson: string
     mempoolMetadata: LabMempoolMetadata
+    totalInput: number
   }>
 
   /**
-   * Adds a signed transaction to the mempool. Call after signing via signLabTransaction.
+   * Adds a signed transaction to the mempool. Call after buildAndSignLabTransaction.
    */
   addSignedTransactionToMempool(
     signedTxHex: string,

@@ -22,7 +22,7 @@ const mockSyncWallet = vi.fn()
 const mockGetBalance = vi.fn()
 const mockGetTransactionList = vi.fn()
 const mockExportChangeset = vi.fn()
-const mockSignLabTransaction = vi.fn()
+const mockBuildAndSignLabTransaction = vi.fn()
 const mockGetLabChangeAddress = vi.fn()
 vi.mock('@/stores/cryptoStore', () => ({
   useCryptoStore: (selector: (s: Record<string, unknown>) => unknown) =>
@@ -34,7 +34,7 @@ vi.mock('@/stores/cryptoStore', () => ({
       getBalance: mockGetBalance,
       getTransactionList: mockGetTransactionList,
       exportChangeset: mockExportChangeset,
-      signLabTransaction: mockSignLabTransaction,
+      buildAndSignLabTransaction: mockBuildAndSignLabTransaction,
       getLabChangeAddress: mockGetLabChangeAddress,
     }),
 }))

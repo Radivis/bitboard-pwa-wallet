@@ -1,7 +1,10 @@
 import { useState, useEffect } from 'react'
 import { createFileRoute, Outlet, useNavigate } from '@tanstack/react-router'
 import { useWalletStore } from '@/stores/walletStore'
-import { initLabWorkerWithState } from '@/workers/lab-factory'
+import {
+  initLabWorkerWithState,
+  getLabWorker,
+} from '@/workers/lab-factory'
 import { toast } from 'sonner'
 
 export const Route = createFileRoute('/lab')({
@@ -27,6 +30,19 @@ function LabLayout() {
         toast.error(`Failed to init lab: ${msg}`)
       })
   }, [networkMode, navigate])
+
+  useEffect(() => {
+    if (!workerReady || networkMode !== 'lab') return
+    if (import.meta.env.DEV) {
+      window.__labGetState = async () => {
+        const worker = getLabWorker()
+        return await worker.getStateSnapshot()
+      }
+    }
+    return () => {
+      delete window.__labGetState
+    }
+  }, [workerReady, networkMode])
 
   if (networkMode !== 'lab') {
     return null

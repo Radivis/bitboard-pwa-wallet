@@ -88,7 +88,9 @@ function SendFlow() {
   const getBalance = useCryptoStore((s) => s.getBalance)
   const getTransactionList = useCryptoStore((s) => s.getTransactionList)
   const exportChangeset = useCryptoStore((s) => s.exportChangeset)
-  const signLabTransaction = useCryptoStore((s) => s.signLabTransaction)
+  const buildAndSignLabTransaction = useCryptoStore(
+    (s) => s.buildAndSignLabTransaction,
+  )
   const getLabChangeAddress = useCryptoStore((s) => s.getLabChangeAddress)
 
   useEffect(() => {
@@ -183,8 +185,8 @@ function SendFlow() {
       const walletOwner = `${WALLET_OWNER_PREFIX}${activeWallet.name}`
 
       const walletChangeAddress = await getLabChangeAddress()
-      const { unsignedTxHex, utxosJson, mempoolMetadata } =
-        await worker.buildUnsignedLabTransaction(
+      const { utxosJson, mempoolMetadata, totalInput } =
+        await worker.prepareLabWalletTransaction(
           walletOwner,
           normalizedRecipient,
           amountSats,
@@ -192,10 +194,42 @@ function SendFlow() {
           walletChangeAddress,
         )
 
-      const signedTxHex = await signLabTransaction(unsignedTxHex, utxosJson)
+      const { signedTxHex, feeSats, hasChange } =
+        await buildAndSignLabTransaction(
+          utxosJson,
+          normalizedRecipient,
+          amountSats,
+          effectiveFeeRate,
+          walletChangeAddress,
+        )
+
+      const outputsDetail = hasChange
+        ? [
+            ...mempoolMetadata.outputsDetail,
+            {
+              address: walletChangeAddress,
+              amountSats: totalInput - amountSats - feeSats,
+              isChange: true as const,
+              owner: mempoolMetadata.sender,
+            },
+          ]
+        : [
+            {
+              ...mempoolMetadata.outputsDetail[0],
+              amountSats: totalInput - feeSats,
+            },
+          ]
+
+      const fullMetadata = {
+        ...mempoolMetadata,
+        feeSats,
+        hasChange,
+        outputsDetail,
+      }
+
       const state = await worker.addSignedTransactionToMempool(
         signedTxHex,
-        mempoolMetadata,
+        fullMetadata,
       )
 
       await persistLabState(state)
@@ -217,7 +251,7 @@ function SendFlow() {
     amountSats,
     effectiveFeeRate,
     getLabChangeAddress,
-    signLabTransaction,
+    buildAndSignLabTransaction,
     initLabWorkerWithState,
     navigate,
   ])
