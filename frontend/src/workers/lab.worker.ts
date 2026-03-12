@@ -386,42 +386,27 @@ const labService = {
     return this.getStateSnapshot()
   },
 
-  async createTransactionFromExternalSigner(
-    walletOwnerOrFromAddress: string,
-    wifOrAddressToWif: string | Record<string, string>,
+  async buildUnsignedLabTransaction(
+    walletOwner: string,
     toAddress: string,
     amountSats: number,
     feeRateSatPerVb: number,
-    walletChangeAddress?: string,
-  ): Promise<LabState> {
+    walletChangeAddress: string,
+  ): Promise<{
+    unsignedTxHex: string
+    utxosJson: string
+    mempoolMetadata: import('./lab-api').LabMempoolMetadata
+  }> {
     const wasmModule = await getWasm()
     const addressToOwner = state.addressToOwner ?? {}
 
-    const isMultiAddress = typeof wifOrAddressToWif === 'object' && wifOrAddressToWif !== null
-    let fromUtxos: typeof state.utxos
-    let addressToWif: Record<string, string>
-
-    if (isMultiAddress) {
-      const addressToWifMap = wifOrAddressToWif as Record<string, string>
-      fromUtxos = state.utxos.filter(
-        (u) =>
-          addressToOwner[u.address] === walletOwnerOrFromAddress &&
-          addressToWifMap[u.address] !== undefined,
-      )
-      addressToWif = addressToWifMap
-    } else {
-      const fromAddress = walletOwnerOrFromAddress
-      const wif = wifOrAddressToWif as string
-      fromUtxos = state.utxos.filter((u) => u.address === fromAddress)
-      if (fromUtxos.length === 0) {
-        throw new Error('No UTXOs available for the from address')
-      }
-      addressToWif = { [fromAddress]: wif }
-    }
-
+    const fromUtxos = state.utxos.filter(
+      (u) => addressToOwner[u.address] === walletOwner,
+    )
     if (fromUtxos.length === 0) {
       throw new Error(
-        'No UTXOs available for the wallet. Ensure addresses have WIFs and UTXOs are owned by the wallet.',
+        `No UTXOs available for the wallet. Owner="${walletOwner}". ` +
+          `Ensure the wallet is loaded for lab (regtest) and you have mined to it.`,
       )
     }
 
@@ -435,48 +420,17 @@ const labService = {
       })),
     )
 
-    const useWalletChange =
-      isMultiAddress &&
-      walletChangeAddress &&
-      addressToWif[walletChangeAddress] !== undefined
-
-    let changeAddress: LabAddress
-    if (useWalletChange) {
-      changeAddress = {
-        address: walletChangeAddress,
-        wif: addressToWif[walletChangeAddress]!,
-      }
-    } else {
-      const changeKeypair = wasmModule.lab_generate_keypair()
-      changeAddress = { address: changeKeypair.address, wif: changeKeypair.wif }
-    }
-
     const buildResult = wasmModule.lab_build_transaction_with_change(
       utxosJson,
       toAddress,
       BigInt(amountSats),
       feeRateSatPerVb,
-      changeAddress.address,
+      walletChangeAddress,
     )
     const { tx_hex: unsignedTxHex, fee_sats: feeSats, has_change } =
       typeof buildResult === 'string' ? JSON.parse(buildResult) : buildResult
 
-    const addressToWifJson = JSON.stringify(addressToWif)
-    const signedTxHex = wasmModule.lab_sign_transaction_multi(
-      unsignedTxHex,
-      utxosJson,
-      addressToWifJson,
-    )
-
-    if (has_change) {
-      if (!useWalletChange) {
-        state.addresses.push(changeAddress)
-      }
-      const createdTxid = wasmModule.lab_txid(signedTxHex)
-      txidToChangeAddress.set(createdTxid, changeAddress.address)
-    }
-
-    const sender = isMultiAddress ? walletOwnerOrFromAddress : (addressToOwner[fromUtxos[0]!.address] ?? null)
+    const sender = walletOwner
     const receiver = addressToOwner[toAddress] ?? null
 
     const inputsDetail = fromUtxos.map((u) => ({
@@ -495,7 +449,7 @@ const labService = {
       ? [
           { address: toAddress, amountSats, owner: receiver },
           {
-            address: changeAddress.address,
+            address: walletChangeAddress,
             amountSats: totalInput - amountSats - feeSats,
             isChange: true,
             owner: sender,
@@ -503,19 +457,47 @@ const labService = {
         ]
       : [{ address: toAddress, amountSats: totalInput - feeSats, owner: receiver }]
 
-    const txid = wasmModule.lab_txid(signedTxHex)
     const inputs = fromUtxos.map((u) => ({ txid: u.txid, vout: u.vout }))
+
+    return {
+      unsignedTxHex,
+      utxosJson,
+      mempoolMetadata: {
+        sender,
+        receiver,
+        feeSats,
+        inputs,
+        inputsDetail,
+        outputsDetail,
+        hasChange: has_change,
+        walletChangeAddress,
+      },
+    }
+  },
+
+  async addSignedTransactionToMempool(
+    signedTxHex: string,
+    mempoolMetadata: import('./lab-api').LabMempoolMetadata,
+  ): Promise<LabState> {
+    const wasmModule = await getWasm()
+
+    if (mempoolMetadata.hasChange) {
+      const createdTxid = wasmModule.lab_txid(signedTxHex)
+      txidToChangeAddress.set(createdTxid, mempoolMetadata.walletChangeAddress)
+    }
+
+    const txid = wasmModule.lab_txid(signedTxHex)
 
     state.mempool = state.mempool ?? []
     state.mempool.push({
       signedTxHex,
       txid,
-      sender,
-      receiver,
-      feeSats,
-      inputs,
-      inputsDetail,
-      outputsDetail,
+      sender: mempoolMetadata.sender,
+      receiver: mempoolMetadata.receiver,
+      feeSats: mempoolMetadata.feeSats,
+      inputs: mempoolMetadata.inputs,
+      inputsDetail: mempoolMetadata.inputsDetail,
+      outputsDetail: mempoolMetadata.outputsDetail,
     })
 
     return this.getStateSnapshot()

@@ -37,10 +37,10 @@ export interface CryptoService {
 
   getNewAddress(): Promise<string>;
   getCurrentAddress(): Promise<string>;
-  /** Returns WIF for current address. Only valid when wallet uses lab mode. */
-  getCurrentAddressWifForLab(): Promise<string>;
-  /** Returns address->WIF map for lab mode multi-UTXO spending. */
-  getWalletAddressesWithWifsForLab(maxExternal: number, maxInternal: number): Promise<Array<{ address: string; wif: string }>>;
+  /** Sign a lab transaction using the loaded wallet. Keys stay in crypto worker. */
+  signLabTransaction(unsignedTxHex: string, utxosJson: string): Promise<string>;
+  /** First internal address for lab change outputs. */
+  getLabChangeAddress(): Promise<string>;
   getBalance(): Promise<BalanceInfo>;
   exportChangeset(): Promise<string>;
 

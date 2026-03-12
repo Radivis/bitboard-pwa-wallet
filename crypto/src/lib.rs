@@ -2,7 +2,7 @@ use std::cell::RefCell;
 
 use argon2::{Algorithm, Argon2, Params, Version};
 use bdk_wallet::chain::Merge;
-use bdk_wallet::{ChangeSet, Wallet as BdkWallet};
+use bdk_wallet::{ChangeSet, KeychainKind, Wallet as BdkWallet};
 use wasm_bindgen::prelude::*;
 
 /// Current Unix time in seconds, sourced from JavaScript's `Date.now()`.
@@ -364,48 +364,67 @@ pub fn get_transaction_list() -> Result<JsValue, JsValue> {
 }
 
 // ---------------------------------------------------------------------------
-// Key derivation (Phase 7b)
+// Lab signing (wallet-based, no WIF export)
 // ---------------------------------------------------------------------------
 
-/// Return the WIF for the current external address. Only valid when the wallet
-/// is loaded with regtest network (lab mode). Used for signing lab transactions.
+/// Sign a lab transaction using the loaded wallet. Matches UTXO script_pubkeys
+/// to wallet addresses and derives keys internally. Keys never leave the crypto module.
 #[wasm_bindgen]
-pub fn get_current_address_wif_for_lab() -> Result<String, JsValue> {
-    let descriptor = EXTERNAL_DESCRIPTOR_FOR_LAB.with(|d| d.borrow().clone());
-    if descriptor.is_empty() {
-        return Err(JsValue::from_str("No wallet loaded. Load wallet first."));
-    }
-    with_wallet(|w| wallet::get_current_address_wif(w, &descriptor))
-        .and_then(|r| r.map_err(JsValue::from))
-}
-
-/// Return (address, wif) pairs for external and internal addresses up to the given indices.
-/// Used for lab mode when spending from multiple UTXOs across receive and change addresses.
-#[wasm_bindgen]
-pub fn get_wallet_addresses_with_wifs_for_lab(
-    max_external: u32,
-    max_internal: u32,
-) -> Result<JsValue, JsValue> {
+pub fn sign_lab_transaction(unsigned_tx_hex: &str, utxos_json: &str) -> Result<String, JsValue> {
     let external = EXTERNAL_DESCRIPTOR_FOR_LAB.with(|d| d.borrow().clone());
     let internal = INTERNAL_DESCRIPTOR_FOR_LAB.with(|d| d.borrow().clone());
     if external.is_empty() || internal.is_empty() {
-        return Err(JsValue::from_str("No wallet loaded. Load wallet first."));
+        return Err(JsValue::from_str(
+            "No wallet loaded for lab. Load wallet first.",
+        ));
     }
-    let pairs = with_wallet(|w| {
-        wallet::get_wallet_addresses_with_wifs_for_lab(
-            w,
-            &external,
-            &internal,
-            max_external,
-            max_internal,
-        )
-    })?
-    .map_err(JsValue::from)?;
-    let arr: Vec<serde_json::Value> = pairs
-        .into_iter()
-        .map(|(addr, wif)| serde_json::json!({ "address": addr, "wif": wif }))
-        .collect();
-    serde_wasm_bindgen::to_value(&arr).map_err(|e| JsValue::from_str(&e.to_string()))
+
+    const MAX_EXTERNAL: u32 = 1000;
+    const MAX_INTERNAL: u32 = 1000;
+
+    let script_pubkey_to_wif: std::collections::HashMap<String, String> = with_wallet(|w| {
+        let mut map = std::collections::HashMap::<String, String>::new();
+        for i in 0..MAX_EXTERNAL {
+            let addr = w.peek_address(KeychainKind::External, i).address;
+            let spk_hex = hex::encode(addr.script_pubkey().as_bytes());
+            let wif = wallet::derive_wif_for_descriptor_at_index(&external, i)
+                .map_err(|e| JsValue::from_str(&e.to_string()))?;
+            map.insert(spk_hex, wif);
+        }
+        for i in 0..MAX_INTERNAL {
+            let addr = w.peek_address(KeychainKind::Internal, i).address;
+            let spk_hex = hex::encode(addr.script_pubkey().as_bytes());
+            let wif = wallet::derive_wif_for_descriptor_at_index(&internal, i)
+                .map_err(|e| JsValue::from_str(&e.to_string()))?;
+            map.insert(spk_hex, wif);
+        }
+        Ok::<_, JsValue>(map)
+    })??;
+
+    let script_pubkey_to_wif_json = serde_json::to_string(&script_pubkey_to_wif)
+        .map_err(|e| JsValue::from_str(&e.to_string()))?;
+
+    lab::lab_sign_transaction_multi_by_script_pubkey(
+        unsigned_tx_hex,
+        utxos_json,
+        &script_pubkey_to_wif_json,
+    )
+}
+
+/// Return the first internal address for lab change outputs.
+#[wasm_bindgen]
+pub fn get_lab_change_address() -> Result<String, JsValue> {
+    let internal = INTERNAL_DESCRIPTOR_FOR_LAB.with(|d| d.borrow().clone());
+    if internal.is_empty() {
+        return Err(JsValue::from_str(
+            "No wallet loaded for lab. Load wallet first.",
+        ));
+    }
+    with_wallet(|w| {
+        w.peek_address(KeychainKind::Internal, 0)
+            .address
+            .to_string()
+    })
 }
 
 /// Derive a 256-bit key from a password and salt using Argon2id.

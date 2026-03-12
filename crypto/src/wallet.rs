@@ -68,7 +68,10 @@ pub fn get_current_address(wallet: &Wallet) -> String {
 
 /// Derive the WIF for a descriptor at a given derivation index.
 /// Supports P2WPKH (wpkh) and P2TR (tr) descriptors.
-fn derive_wif_for_descriptor_at_index(descriptor: &str, index: u32) -> Result<String, CryptoError> {
+pub(crate) fn derive_wif_for_descriptor_at_index(
+    descriptor: &str,
+    index: u32,
+) -> Result<String, CryptoError> {
     let (xpriv_str, path_from_key) = parse_descriptor_key_and_path(descriptor)?;
     let xpriv = Xpriv::from_str(xpriv_str)
         .map_err(|e| CryptoError::Descriptor(format!("Invalid extended key: {}", e)))?;
@@ -84,45 +87,6 @@ fn derive_wif_for_descriptor_at_index(descriptor: &str, index: u32) -> Result<St
 
     let privkey = PrivateKey::new(derived.private_key, bitcoin::Network::Regtest);
     Ok(privkey.to_wif())
-}
-
-/// Derive the WIF for the current external address from the descriptor.
-/// Supports P2WPKH (wpkh) and P2TR (tr) descriptors. Used for lab mode signing.
-pub fn get_current_address_wif(
-    wallet: &Wallet,
-    external_descriptor: &str,
-) -> Result<String, CryptoError> {
-    let index = wallet.derivation_index(KeychainKind::External).unwrap_or(0);
-    derive_wif_for_descriptor_at_index(external_descriptor, index)
-}
-
-/// Return (address, wif) pairs for external and internal addresses up to the given indices.
-/// Used for lab mode when spending from multiple UTXOs across receive and change addresses.
-pub fn get_wallet_addresses_with_wifs_for_lab(
-    wallet: &Wallet,
-    external_descriptor: &str,
-    internal_descriptor: &str,
-    max_external: u32,
-    max_internal: u32,
-) -> Result<Vec<(String, String)>, CryptoError> {
-    let mut result = Vec::new();
-    for i in 0..max_external {
-        let address = wallet
-            .peek_address(KeychainKind::External, i)
-            .address
-            .to_string();
-        let wif = derive_wif_for_descriptor_at_index(external_descriptor, i)?;
-        result.push((address, wif));
-    }
-    for i in 0..max_internal {
-        let address = wallet
-            .peek_address(KeychainKind::Internal, i)
-            .address
-            .to_string();
-        let wif = derive_wif_for_descriptor_at_index(internal_descriptor, i)?;
-        result.push((address, wif));
-    }
-    Ok(result)
 }
 
 /// Parse descriptor to extract extended key and path. Supports wpkh(xprv/path/*) and tr(xprv/path/*).

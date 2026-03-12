@@ -50,8 +50,8 @@ interface CryptoState {
 
   getNewAddress: () => Promise<string>;
   getCurrentAddress: () => Promise<string>;
-  getCurrentAddressWifForLab: () => Promise<string>;
-  getWalletAddressesWithWifsForLab: (maxExternal: number, maxInternal: number) => Promise<Array<{ address: string; wif: string }>>;
+  signLabTransaction: (unsignedTxHex: string, utxosJson: string) => Promise<string>;
+  getLabChangeAddress: () => Promise<string>;
   getBalance: () => Promise<BalanceInfo>;
   exportChangeset: () => Promise<string>;
 
@@ -137,11 +137,11 @@ export const useCryptoStore = create<CryptoState>((set, get) => {
     getCurrentAddress: () =>
       withErrorHandling((worker) => worker.getCurrentAddress()),
 
-    getCurrentAddressWifForLab: () =>
-      withErrorHandling((worker) => worker.getCurrentAddressWifForLab()),
+    signLabTransaction: (unsignedTxHex, utxosJson) =>
+      withErrorHandling((worker) => worker.signLabTransaction(unsignedTxHex, utxosJson)),
 
-    getWalletAddressesWithWifsForLab: (maxExternal, maxInternal) =>
-      withErrorHandling((worker) => worker.getWalletAddressesWithWifsForLab(maxExternal, maxInternal)),
+    getLabChangeAddress: () =>
+      withErrorHandling((worker) => worker.getLabChangeAddress()),
 
     getBalance: () =>
       withErrorHandling((worker) => worker.getBalance()),

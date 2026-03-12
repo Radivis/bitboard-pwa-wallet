@@ -93,20 +93,43 @@ export interface LabService {
   ): Promise<LabState>
 
   /**
-   * Creates a transaction from addresses controlled by an external signer (e.g. wallet).
-   * Supports two call patterns:
-   * - (fromAddress, wif, toAddress, amountSats, feeRateSatPerVb) for single-address
-   * - (walletOwner, addressToWif, toAddress, amountSats, feeRateSatPerVb, walletChangeAddress?) for multi-address
-   * When second arg is string, treats as WIF (single-address). When object, treats as addressToWif (multi-address).
-   * For multi-address: pass walletChangeAddress (wallet's internal address) so change outputs go to an address
-   * the wallet controls; otherwise change goes to a random address the wallet cannot spend from.
+   * Builds an unsigned transaction from UTXOs owned by walletOwner.
+   * Returns unsignedTxHex, utxosJson, and metadata for adding to mempool after signing.
+   * Main thread signs via crypto worker, then calls addSignedTransactionToMempool.
    */
-  createTransactionFromExternalSigner(
-    walletOwnerOrFromAddress: string,
-    wifOrAddressToWif: string | Record<string, string>,
+  buildUnsignedLabTransaction(
+    walletOwner: string,
     toAddress: string,
     amountSats: number,
     feeRateSatPerVb: number,
-    walletChangeAddress?: string,
+    walletChangeAddress: string,
+  ): Promise<{
+    unsignedTxHex: string
+    utxosJson: string
+    mempoolMetadata: LabMempoolMetadata
+  }>
+
+  /**
+   * Adds a signed transaction to the mempool. Call after signing via signLabTransaction.
+   */
+  addSignedTransactionToMempool(
+    signedTxHex: string,
+    mempoolMetadata: LabMempoolMetadata,
   ): Promise<LabState>
+}
+
+export interface LabMempoolMetadata {
+  sender: string | null
+  receiver: string | null
+  feeSats: number
+  inputs: { txid: string; vout: number }[]
+  inputsDetail: { address: string; amountSats: number; owner?: string | null }[]
+  outputsDetail: {
+    address: string
+    amountSats: number
+    isChange?: boolean
+    owner?: string | null
+  }[]
+  hasChange: boolean
+  walletChangeAddress: string
 }

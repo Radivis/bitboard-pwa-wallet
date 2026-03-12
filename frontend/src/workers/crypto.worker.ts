@@ -87,18 +87,14 @@ const cryptoService = {
     return wasmModule.get_current_address();
   },
 
-  async getCurrentAddressWifForLab(): Promise<string> {
+  async signLabTransaction(unsignedTxHex: string, utxosJson: string): Promise<string> {
     const wasmModule = await getWasm();
-    return wasmModule.get_current_address_wif_for_lab();
+    return wasmModule.sign_lab_transaction(unsignedTxHex, utxosJson);
   },
 
-  async getWalletAddressesWithWifsForLab(
-    maxExternal: number,
-    maxInternal: number
-  ): Promise<Array<{ address: string; wif: string }>> {
+  async getLabChangeAddress(): Promise<string> {
     const wasmModule = await getWasm();
-    const arr = await wasmModule.get_wallet_addresses_with_wifs_for_lab(maxExternal, maxInternal);
-    return arr as Array<{ address: string; wif: string }>;
+    return wasmModule.get_lab_change_address();
   },
 
   async getBalance(): Promise<BalanceInfo> {

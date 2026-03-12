@@ -88,13 +88,8 @@ function SendFlow() {
   const getBalance = useCryptoStore((s) => s.getBalance)
   const getTransactionList = useCryptoStore((s) => s.getTransactionList)
   const exportChangeset = useCryptoStore((s) => s.exportChangeset)
-  const getWalletAddressesWithWifsForLab = useCryptoStore(
-    (s) => s.getWalletAddressesWithWifsForLab,
-  )
-  const getCurrentAddress = useCryptoStore((s) => s.getCurrentAddress)
-  const getCurrentAddressWifForLab = useCryptoStore(
-    (s) => s.getCurrentAddressWifForLab,
-  )
+  const signLabTransaction = useCryptoStore((s) => s.signLabTransaction)
+  const getLabChangeAddress = useCryptoStore((s) => s.getLabChangeAddress)
 
   useEffect(() => {
     if (networkMode !== 'lab' || !activeWallet?.name) {
@@ -183,35 +178,25 @@ function SendFlow() {
 
     try {
       setLoading(true)
+      await initLabWorkerWithState()
       const worker = getLabWorker()
       const walletOwner = `${WALLET_OWNER_PREFIX}${activeWallet.name}`
 
-      let state: Awaited<ReturnType<typeof worker.createTransactionFromExternalSigner>>
-      try {
-        const addressWifPairs = await getWalletAddressesWithWifsForLab(20, 20)
-        const addressToWif = Object.fromEntries(
-          addressWifPairs.map((p) => [p.address, p.wif]),
-        )
-        const walletChangeAddress = addressWifPairs[20]?.address
-        state = await worker.createTransactionFromExternalSigner(
+      const walletChangeAddress = await getLabChangeAddress()
+      const { unsignedTxHex, utxosJson, mempoolMetadata } =
+        await worker.buildUnsignedLabTransaction(
           walletOwner,
-          addressToWif,
           normalizedRecipient,
           amountSats,
           effectiveFeeRate,
           walletChangeAddress,
         )
-      } catch (multiErr) {
-        const currentAddress = await getCurrentAddress()
-        const wif = await getCurrentAddressWifForLab()
-        state = await worker.createTransactionFromExternalSigner(
-          currentAddress,
-          wif,
-          normalizedRecipient,
-          amountSats,
-          effectiveFeeRate,
-        )
-      }
+
+      const signedTxHex = await signLabTransaction(unsignedTxHex, utxosJson)
+      const state = await worker.addSignedTransactionToMempool(
+        signedTxHex,
+        mempoolMetadata,
+      )
 
       await persistLabState(state)
       toast.success('Transaction added to mempool')
@@ -231,9 +216,9 @@ function SendFlow() {
     normalizedRecipient,
     amountSats,
     effectiveFeeRate,
-    getWalletAddressesWithWifsForLab,
-    getCurrentAddress,
-    getCurrentAddressWifForLab,
+    getLabChangeAddress,
+    signLabTransaction,
+    initLabWorkerWithState,
     navigate,
   ])
 
