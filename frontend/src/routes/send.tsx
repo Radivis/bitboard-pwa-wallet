@@ -20,6 +20,9 @@ import {
   toBitcoinNetwork,
 } from '@/lib/bitcoin-utils'
 import { updateWalletChangeset, loadCustomEsploraUrl } from '@/lib/wallet-utils'
+import { walletOwnerKey } from '@/lib/lab-utils'
+import { getLabWorker } from '@/workers/lab-factory'
+import { useLabStore } from '@/stores/labStore'
 
 export const Route = createFileRoute('/send')({
   component: SendPage,
@@ -71,6 +74,17 @@ function SendFlow() {
   const setLastSyncTime = useWalletStore((s) => s.setLastSyncTime)
   const password = useSessionStore((s) => s.password)
 
+  const utxos = useLabStore((s) => s.utxos)
+  const addressToOwner = useLabStore((s) => s.addressToOwner)
+  const isHydrated = useLabStore((s) => s.isHydrated)
+
+  const labBalanceSats =
+    networkMode === 'lab' && activeWalletId != null && isHydrated
+      ? utxos
+          .filter((u) => (addressToOwner ?? {})[u.address] === walletOwnerKey(activeWalletId))
+          .reduce((sum, u) => sum + u.amountSats, 0)
+      : null
+
   const buildTransaction = useCryptoStore((s) => s.buildTransaction)
   const signAndExtractTransaction = useCryptoStore((s) => s.signAndExtractTransaction)
   const broadcastTransaction = useCryptoStore((s) => s.broadcastTransaction)
@@ -78,8 +92,15 @@ function SendFlow() {
   const getBalance = useCryptoStore((s) => s.getBalance)
   const getTransactionList = useCryptoStore((s) => s.getTransactionList)
   const exportChangeset = useCryptoStore((s) => s.exportChangeset)
+  const buildAndSignLabTransaction = useCryptoStore(
+    (s) => s.buildAndSignLabTransaction,
+  )
+  const getLabChangeAddress = useCryptoStore((s) => s.getLabChangeAddress)
 
-  const confirmedBalance = balance?.confirmed ?? 0
+  const confirmedBalance =
+    networkMode === 'lab' && labBalanceSats !== null
+      ? labBalanceSats
+      : balance?.confirmed ?? 0
 
   const effectiveFeeRate = useCustomFee
     ? parseInt(customFeeRate) || 1
@@ -102,10 +123,20 @@ function SendFlow() {
     [normalizedRecipient, networkMode],
   )
 
-  const canBuild = addressValid && amountSats > 0 && amountSats <= confirmedBalance
+  const canBuild =
+    addressValid &&
+    amountSats > 0 &&
+    amountSats <= confirmedBalance &&
+    !(networkMode === 'lab' && (labBalanceSats === 0 || labBalanceSats === null))
+  const labNoBalance = networkMode === 'lab' && labBalanceSats === 0
 
   const handleBuildTransaction = useCallback(async () => {
     if (!canBuild) return
+
+    if (networkMode === 'lab') {
+      setStep(2)
+      return
+    }
 
     try {
       setLoading(true)
@@ -128,7 +159,86 @@ function SendFlow() {
     }
   }, [canBuild, normalizedRecipient, amountSats, effectiveFeeRate, networkMode, buildTransaction])
 
+  const handleLabSend = useCallback(async () => {
+    if (activeWalletId == null) return
+
+    try {
+      setLoading(true)
+      await useLabStore.getState().hydrate()
+      const worker = getLabWorker()
+      const walletOwner = walletOwnerKey(activeWalletId)
+
+      const walletChangeAddress = await getLabChangeAddress()
+      const { utxosJson, mempoolMetadata, totalInput } =
+        await worker.prepareLabWalletTransaction(
+          walletOwner,
+          normalizedRecipient,
+          amountSats,
+          effectiveFeeRate,
+          walletChangeAddress,
+        )
+
+      const { signedTxHex, feeSats, hasChange } =
+        await buildAndSignLabTransaction(
+          utxosJson,
+          normalizedRecipient,
+          amountSats,
+          effectiveFeeRate,
+          walletChangeAddress,
+        )
+
+      const outputsDetail = hasChange
+        ? [
+            ...mempoolMetadata.outputsDetail,
+            {
+              address: walletChangeAddress,
+              amountSats: totalInput - amountSats - feeSats,
+              isChange: true as const,
+              owner: mempoolMetadata.sender,
+            },
+          ]
+        : [
+            {
+              ...mempoolMetadata.outputsDetail[0],
+              amountSats: totalInput - feeSats,
+            },
+          ]
+
+      const fullMetadata = {
+        ...mempoolMetadata,
+        feeSats,
+        hasChange,
+        outputsDetail,
+      }
+
+      await useLabStore.getState().addSignedTransaction(signedTxHex, fullMetadata)
+      toast.success('Transaction added to mempool')
+      navigate({ to: '/' })
+    } catch (err) {
+      console.error('Lab send failed:', err)
+      toast.error(
+        err instanceof Error
+          ? `Lab send failed: ${err.message}`
+          : 'Lab send failed',
+      )
+    } finally {
+      setLoading(false)
+    }
+  }, [
+    activeWalletId,
+    normalizedRecipient,
+    amountSats,
+    effectiveFeeRate,
+    getLabChangeAddress,
+    buildAndSignLabTransaction,
+    navigate,
+  ])
+
   const handleBroadcast = useCallback(async () => {
+    if (networkMode === 'lab') {
+      await handleLabSend()
+      return
+    }
     if (!psbt) return
 
     try {
@@ -170,8 +280,9 @@ function SendFlow() {
       setLoading(false)
     }
   }, [
-    psbt,
     networkMode,
+    handleLabSend,
+    psbt,
     activeWalletId,
     password,
     signAndExtractTransaction,
@@ -187,7 +298,7 @@ function SendFlow() {
     navigate,
   ])
 
-  if (step === 2 && psbt) {
+  if (step === 2 && (psbt || networkMode === 'lab')) {
     return (
       <div className="space-y-6">
         <h2 className="text-2xl font-bold tracking-tight">Review Transaction</h2>
@@ -229,7 +340,9 @@ function SendFlow() {
 
               {loading ? (
                 <div className="flex-1">
-                  <LoadingSpinner text="Broadcasting..." />
+                  <LoadingSpinner
+                    text={networkMode === 'lab' ? 'Adding to mempool...' : 'Broadcasting...'}
+                  />
                 </div>
               ) : (
                 <Button
@@ -312,6 +425,11 @@ function SendFlow() {
                 Available: {formatBTC(confirmedBalance)} BTC (
                 {formatSats(confirmedBalance)} sats)
               </p>
+              {labNoBalance && (
+                <p className="text-xs text-amber-600 dark:text-amber-400">
+                  No balance. Mine blocks to your address in the Lab.
+                </p>
+              )}
             </div>
 
             <div className="space-y-2">

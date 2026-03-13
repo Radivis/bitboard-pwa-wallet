@@ -2,7 +2,7 @@ use std::cell::RefCell;
 
 use argon2::{Algorithm, Argon2, Params, Version};
 use bdk_wallet::chain::Merge;
-use bdk_wallet::{ChangeSet, Wallet as BdkWallet};
+use bdk_wallet::{ChangeSet, KeychainKind, Wallet as BdkWallet};
 use wasm_bindgen::prelude::*;
 
 /// Current Unix time in seconds, sourced from JavaScript's `Date.now()`.
@@ -17,6 +17,8 @@ pub mod blockchain;
 pub mod descriptors;
 pub mod error;
 pub mod esplora;
+pub mod lab;
+pub mod lab_psbt;
 pub mod mnemonic;
 pub mod sync;
 pub mod transaction;
@@ -35,6 +37,8 @@ pub fn init() {
 thread_local! {
     static ACTIVE_WALLET: RefCell<Option<BdkWallet>> = const { RefCell::new(None) };
     static ACCUMULATED_CHANGESET: RefCell<ChangeSet> = RefCell::new(ChangeSet::default());
+    static EXTERNAL_DESCRIPTOR_FOR_LAB: RefCell<String> = const { RefCell::new(String::new()) };
+    static INTERNAL_DESCRIPTOR_FOR_LAB: RefCell<String> = const { RefCell::new(String::new()) };
 }
 
 fn with_wallet<F, R>(op: F) -> Result<R, JsValue>
@@ -151,6 +155,8 @@ pub fn create_wallet(
 
     ACTIVE_WALLET.with(|w| w.replace(Some(bdk_wallet)));
     ACCUMULATED_CHANGESET.with(|cs| *cs.borrow_mut() = initial_changeset);
+    EXTERNAL_DESCRIPTOR_FOR_LAB.with(|d| *d.borrow_mut() = pair.external.clone());
+    INTERNAL_DESCRIPTOR_FOR_LAB.with(|d| *d.borrow_mut() = pair.internal.clone());
 
     let result = types::CreateWalletResult {
         external_descriptor: pair.external,
@@ -181,6 +187,8 @@ pub fn load_wallet(
 
     ACTIVE_WALLET.with(|w| w.replace(Some(bdk_wallet)));
     ACCUMULATED_CHANGESET.with(|cs| *cs.borrow_mut() = restored_changeset);
+    EXTERNAL_DESCRIPTOR_FOR_LAB.with(|d| *d.borrow_mut() = external_descriptor.to_string());
+    INTERNAL_DESCRIPTOR_FOR_LAB.with(|d| *d.borrow_mut() = internal_descriptor.to_string());
 
     Ok(JsValue::TRUE)
 }
@@ -357,8 +365,63 @@ pub fn get_transaction_list() -> Result<JsValue, JsValue> {
 }
 
 // ---------------------------------------------------------------------------
-// Key derivation (Phase 7b)
+// Lab build and sign (wallet-based, PSBT path)
 // ---------------------------------------------------------------------------
+
+/// Build and sign a lab transaction using BDK's add_foreign_utxo.
+/// Returns JSON: { signed_tx_hex, fee_sats, has_change }.
+#[wasm_bindgen]
+pub fn build_and_sign_lab_transaction(
+    utxos_json: &str,
+    to_address: &str,
+    amount_sats: u64,
+    fee_rate_sat_per_vb: f64,
+    change_address: &str,
+) -> Result<JsValue, JsValue> {
+    let external = EXTERNAL_DESCRIPTOR_FOR_LAB.with(|d| d.borrow().clone());
+    let internal = INTERNAL_DESCRIPTOR_FOR_LAB.with(|d| d.borrow().clone());
+    if external.is_empty() || internal.is_empty() {
+        return Err(JsValue::from_str(
+            "No wallet loaded for lab. Load wallet first.",
+        ));
+    }
+
+    let result = with_wallet_mut(|w| {
+        lab_psbt::build_and_sign_lab_transaction(
+            w,
+            utxos_json,
+            to_address,
+            amount_sats,
+            fee_rate_sat_per_vb,
+            change_address,
+        )
+    })?;
+    let (tx_bytes, fee_sats, has_change) = result.map_err(|e| JsValue::from_str(&e.to_string()))?;
+
+    let signed_tx_hex = hex::encode(&tx_bytes);
+    let result = serde_json::json!({
+        "signed_tx_hex": signed_tx_hex,
+        "fee_sats": fee_sats,
+        "has_change": has_change,
+    });
+    Ok(JsValue::from_str(&result.to_string()))
+}
+
+/// Return the first internal address for lab change outputs.
+#[wasm_bindgen]
+pub fn get_lab_change_address() -> Result<String, JsValue> {
+    let internal = INTERNAL_DESCRIPTOR_FOR_LAB.with(|d| d.borrow().clone());
+    if internal.is_empty() {
+        return Err(JsValue::from_str(
+            "No wallet loaded for lab. Load wallet first.",
+        ));
+    }
+    with_wallet(|w| {
+        w.peek_address(KeychainKind::Internal, 0)
+            .address
+            .to_string()
+    })
+}
 
 /// Derive a 256-bit key from a password and salt using Argon2id.
 ///

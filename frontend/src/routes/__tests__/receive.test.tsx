@@ -8,6 +8,7 @@ vi.mock('@tanstack/react-router', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@tanstack/react-router')>()
   return {
     ...actual,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- route path not used in mock
     createFileRoute: (_path: string) => (options: Record<string, unknown>) => ({
       options,
     }),

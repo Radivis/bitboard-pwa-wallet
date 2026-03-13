@@ -9,3 +9,8 @@ interface ImportMetaEnv {
 interface ImportMeta {
   readonly env: ImportMetaEnv
 }
+
+/** Test hook for E2E: returns lab state. Only set when import.meta.env.DEV. */
+interface Window {
+  __labGetState?: () => Promise<import('@/workers/lab-api').LabState>
+}

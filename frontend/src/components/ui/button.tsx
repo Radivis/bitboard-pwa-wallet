@@ -61,4 +61,5 @@ function Button({
   )
 }
 
+// eslint-disable-next-line react-refresh/only-export-components -- variant types used by consumers
 export { Button, buttonVariants }

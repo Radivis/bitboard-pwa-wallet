@@ -10,7 +10,7 @@ docker rm -f "$CONTAINER_NAME" 2>/dev/null
 
 echo "Starting bitcoinerlab/tester regtest environment..."
 docker run -d --name "$CONTAINER_NAME" \
-  -p 8080:8080 -p 60401:60401 -p 3002:3002 -p 5000:5000 \
+  -p 8880:8080 -p 60401:60401 -p 3002:3002 -p 5000:5000 \
   bitcoinerlab/tester
 
 echo "Waiting for Esplora API (port 3002)..."
