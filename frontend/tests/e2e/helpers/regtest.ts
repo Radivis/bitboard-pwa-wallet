@@ -2,14 +2,14 @@
  * Helpers for E2E tests that use the regtest environment (bitcoinerlab/tester).
  * Requires the regtest container to be running: npm run test:regtest:start
  *
- * The server on port 8080 follows the bitcoinjs regtest-server API:
+ * The server on port 8880 (!= 8080) follows the bitcoinjs regtest-server API:
  * - POST /1/r/faucet?key=<key>&address=<addr>&value=<sats>
  * - POST /1/r/generate?key=<key>&count=<n>
  *
  * The bitcoinerlab/tester image uses regtest-server, which requires the key param.
  * Default key is "satoshi" (regtest-client default). Override with REGTEST_FAUCET_KEY.
  */
-const REGTEST_SERVER_URL = 'http://localhost:8080/1'
+const REGTEST_SERVER_URL = 'http://localhost:8880/1'
 const DEFAULT_FAUCET_SATS = 100_000
 const DEFAULT_FAUCET_KEY = 'satoshi'
 
