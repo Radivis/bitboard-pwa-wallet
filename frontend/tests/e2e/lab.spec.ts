@@ -87,9 +87,25 @@ test.describe('Lab', { tag: '@lab' }, () => {
     expect(bobAddress).toBeDefined()
 
     await createTransactionInLab(page, aliceAddress!, bobAddress!, 1000, 1)
+
+    // Wait for first tx to be in mempool before creating the conflicting second tx
+    let state = await getLabState(page)
+    expect(state.mempool).toHaveLength(1)
+
     await createTransactionInLab(page, aliceAddress!, bobAddress!, 1000, 10)
 
-    let state = await getLabState(page)
+    // Poll for both conflicting txs to appear (state propagation can be async)
+    await expect
+      .poll(
+        async () => {
+          const s = await getLabState(page)
+          return s.mempool.length
+        },
+        { timeout: 10000 },
+      )
+      .toBe(2)
+
+    state = await getLabState(page)
     expect(state.mempool).toHaveLength(2)
 
     await mineBlocksInLab(page, 1, 'name', { ownerName: 'Alice' })
