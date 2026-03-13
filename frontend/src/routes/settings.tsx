@@ -139,11 +139,14 @@ async function switchDescriptorWallet(
 
     const address = await getCurrentAddress()
     setCurrentAddress(address)
-    setWalletStatus('syncing')
-    try {
-      await syncActiveWalletAndUpdateState(targetNetworkMode)
-    } catch {
-      toast.error('Sync failed after switching')
+    
+    if (targetNetworkMode !== 'lab') {
+      setWalletStatus('syncing')
+      try {
+        await syncActiveWalletAndUpdateState(targetNetworkMode)
+      } catch {
+        toast.error('Sync failed after switching')
+      }
     }
     setWalletStatus('unlocked')
     toast.success(`${targetSubWalletLabel} sub-wallet loaded`)
