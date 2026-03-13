@@ -132,7 +132,8 @@ export async function sendFromWallet(
   page: Page,
   toAddress: string,
   amountSats: number,
-  feeRate: number = 1,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- reserved for future fee rate control
+  _feeRate: number = 1,
 ): Promise<void> {
   await page.getByRole('link', { name: /send/i }).click()
   await expect(page.getByText('Send Bitcoin')).toBeVisible()

@@ -180,8 +180,6 @@ function NetworkSelector() {
   const accountId = useWalletStore((s) => s.accountId)
   const [switching, setSwitching] = useState(false)
 
-  const setAddressType = useWalletStore((s) => s.setAddressType)
-
   const handleNetworkChange = useCallback(
     async (network: NetworkMode) => {
       if (network === networkMode) return
@@ -250,7 +248,7 @@ function NetworkSelector() {
         }
       }
     },
-    [networkMode, setNetworkMode, setAddressType, walletStatus, addressType, accountId],
+    [networkMode, setNetworkMode, walletStatus, addressType, accountId],
   )
 
   return (

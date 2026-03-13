@@ -58,6 +58,17 @@ export interface LabState {
   txDetails: LabTxDetails[]
 }
 
+/** Single source of truth for empty lab state. Use in store, worker, and lab-factory. */
+export const EMPTY_LAB_STATE: LabState = {
+  blocks: [],
+  utxos: [],
+  addresses: [],
+  addressToOwner: {},
+  mempool: [],
+  transactions: [],
+  txDetails: [],
+}
+
 export interface LabService {
   /** Load state from main thread (called after worker spawn). */
   loadState(state: LabState): Promise<void>

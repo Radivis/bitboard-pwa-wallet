@@ -2,10 +2,33 @@ import type {
   LabTxRecord,
   LabTxDetails,
   MempoolEntry,
+  LabAddress,
+  LabState,
 } from '@/workers/lab-api'
 import type { TransactionDetails } from '@/workers/crypto-types'
 
 export const WALLET_OWNER_PREFIX = 'wallet:'
+
+/** Returns the wallet owner key used in lab state (e.g. addressToOwner, sender, receiver). */
+export function walletOwnerKey(walletId: number): string {
+  return `${WALLET_OWNER_PREFIX}${walletId}`
+}
+
+/** Merge controlled addresses with any addresses that appear in UTXOs but are not yet in the list. */
+export function mergeAddressesWithUtxos(
+  addresses: LabAddress[],
+  utxos: LabState['utxos'],
+): LabAddress[] {
+  const controlled = new Map(addresses.map((a) => [a.address, a]))
+  const fromUtxos = new Set(utxos.map((u) => u.address))
+  const result: LabAddress[] = [...addresses]
+  for (const addr of fromUtxos) {
+    if (!controlled.has(addr)) {
+      result.push({ address: addr, wif: '' })
+    }
+  }
+  return result
+}
 
 export function labTransactionsForWallet(
   labState: {
@@ -15,7 +38,7 @@ export function labTransactionsForWallet(
   },
   activeWalletId: number,
 ): TransactionDetails[] {
-  const walletOwner = `${WALLET_OWNER_PREFIX}${activeWalletId}`
+  const walletOwner = walletOwnerKey(activeWalletId)
   const txDetailsByTxid = new Map(
     labState.txDetails.map((d) => [d.txid, d]),
   )

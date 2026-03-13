@@ -13,7 +13,7 @@ import { TransactionItem } from '@/components/TransactionItem'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { formatBTC, formatSats, getEsploraUrl } from '@/lib/bitcoin-utils'
 import { updateWalletChangeset, loadCustomEsploraUrl } from '@/lib/wallet-utils'
-import { labTransactionsForWallet } from '@/lib/lab-utils'
+import { labTransactionsForWallet, walletOwnerKey } from '@/lib/lab-utils'
 import { useLabStore } from '@/stores/labStore'
 
 export const Route = createFileRoute('/')({
@@ -31,7 +31,7 @@ function BalanceCard() {
   const labBalanceSats =
     networkMode === 'lab' && activeWalletId != null && isHydrated
       ? utxos
-          .filter((u) => (addressToOwner ?? {})[u.address] === `wallet:${activeWalletId}`)
+          .filter((u) => (addressToOwner ?? {})[u.address] === walletOwnerKey(activeWalletId))
           .reduce((sum, u) => sum + u.amountSats, 0)
       : null
 

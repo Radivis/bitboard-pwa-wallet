@@ -1,5 +1,6 @@
 import type { Kysely } from 'kysely'
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- migrations run over multiple DB shapes
 export async function migrateToLatest(db: Kysely<any>): Promise<void> {
   await db.schema
     .createTable('wallets')

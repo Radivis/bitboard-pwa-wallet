@@ -5,26 +5,9 @@ import {
   getLabWorker,
   persistLabState,
 } from '@/workers/lab-factory'
-import type {
-  LabState,
-  LabAddress,
-  LabMempoolMetadata,
-} from '@/workers/lab-api'
-
-function mergeAddressesWithUtxos(
-  addresses: LabAddress[],
-  utxos: LabState['utxos'],
-): LabAddress[] {
-  const controlled = new Map(addresses.map((a) => [a.address, a]))
-  const fromUtxos = new Set(utxos.map((u) => u.address))
-  const result: LabAddress[] = [...addresses]
-  for (const addr of fromUtxos) {
-    if (!controlled.has(addr)) {
-      result.push({ address: addr, wif: '' })
-    }
-  }
-  return result
-}
+import type { LabState, LabMempoolMetadata } from '@/workers/lab-api'
+import { EMPTY_LAB_STATE } from '@/workers/lab-api'
+import { mergeAddressesWithUtxos } from '@/lib/lab-utils'
 
 function applyState(set: (partial: Partial<LabStoreState>) => void) {
   return (state: LabState) =>
@@ -37,16 +20,6 @@ function applyState(set: (partial: Partial<LabStoreState>) => void) {
       transactions: state.transactions,
       txDetails: state.txDetails ?? [],
     })
-}
-
-const EMPTY_LAB_STATE: LabState = {
-  blocks: [],
-  utxos: [],
-  addresses: [],
-  addressToOwner: {},
-  mempool: [],
-  transactions: [],
-  txDetails: [],
 }
 
 interface LabStoreState extends LabState {

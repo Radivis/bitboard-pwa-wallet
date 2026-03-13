@@ -100,7 +100,7 @@ describe('TanStack Query hooks', () => {
 
   describe('useAddWallet', () => {
     it('inserts a wallet and invalidates the wallet queries', async () => {
-      const { wrapper, queryClient } = createQueryClientWrapper()
+      const { wrapper } = createQueryClientWrapper()
       const { result: walletsResult } = renderHook(() => useWallets(), { wrapper })
       const { result: addResult } = renderHook(() => useAddWallet(), { wrapper })
 

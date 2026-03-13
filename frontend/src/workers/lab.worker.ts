@@ -6,25 +6,19 @@ import type {
   LabTxDetails,
   MempoolEntry,
 } from './lab-api'
+import { EMPTY_LAB_STATE } from './lab-api'
+import { mergeAddressesWithUtxos, walletOwnerKey } from '@/lib/lab-utils'
 
-let wasm: typeof import('@/wasm-pkg/bitboard_crypto') | null = null
+let labWasmModule: typeof import('@/wasm-pkg/bitboard_crypto') | null = null
 
 async function getWasm() {
-  if (!wasm) {
-    wasm = await import('@/wasm-pkg/bitboard_crypto')
+  if (!labWasmModule) {
+    labWasmModule = await import('@/wasm-pkg/bitboard_crypto')
   }
-  return wasm
+  return labWasmModule
 }
 
-let state: LabState = {
-  blocks: [],
-  utxos: [],
-  addresses: [],
-  addressToOwner: {},
-  mempool: [],
-  transactions: [],
-  txDetails: [],
-}
+let state: LabState = { ...EMPTY_LAB_STATE }
 
 /** Txid -> change address for txs we create (used to mark change outputs). Not persisted. */
 const txidToChangeAddress = new Map<string, string>()
@@ -86,14 +80,39 @@ function parseBlockEffects(raw: unknown): BlockEffectsParsed {
   return { spent, new_utxos, transactions, block_time }
 }
 
-function applyBlockEffects(blockHex: string, height: number, newAddress?: LabAddress): void {
-  const wasmModule = wasm!
-  const rawEffects = wasmModule.lab_block_effects(blockHex)
-  const { spent, new_utxos: newUtxos, transactions, block_time } = parseBlockEffects(rawEffects)
+function removeSpentUtxos(spent: { txid: string; vout: number }[]): void {
+  for (const s of spent) {
+    state.utxos = state.utxos.filter((u) => !(u.txid === s.txid && u.vout === s.vout))
+  }
+}
 
+function addNewUtxos(
+  newUtxos: {
+    txid: string
+    vout: number
+    address: string
+    amount_sats: number
+    script_pubkey_hex: string
+  }[],
+): void {
+  for (const u of newUtxos) {
+    state.utxos.push({
+      txid: u.txid,
+      vout: u.vout,
+      address: u.address,
+      amountSats: u.amount_sats,
+      scriptPubkeyHex: u.script_pubkey_hex,
+    })
+  }
+}
+
+function applyTransactionsAndDetailsFromBlock(
+  transactions: BlockEffectsTx[],
+  height: number,
+  blockTime: number,
+): void {
   const utxoMap = new Map(state.utxos.map((u) => [`${u.txid}:${u.vout}`, u]))
   const addressToOwner = state.addressToOwner ?? {}
-  const blockTime = block_time ?? 0
 
   for (const tx of transactions) {
     const inputs: { address: string; amountSats: number; owner?: string | null }[] = []
@@ -142,19 +161,17 @@ function applyBlockEffects(blockHex: string, height: number, newAddress?: LabAdd
     }
     txidToChangeAddress.delete(tx.txid)
   }
+}
 
-  for (const s of spent) {
-    state.utxos = state.utxos.filter((u) => !(u.txid === s.txid && u.vout === s.vout))
-  }
-  for (const u of newUtxos) {
-    state.utxos.push({
-      txid: u.txid,
-      vout: u.vout,
-      address: u.address,
-      amountSats: u.amount_sats,
-      scriptPubkeyHex: u.script_pubkey_hex,
-    })
-  }
+function applyBlockEffects(blockHex: string, height: number, newAddress?: LabAddress): void {
+  const wasmModule = labWasmModule!
+  const rawEffects = wasmModule.lab_block_effects(blockHex)
+  const { spent, new_utxos: newUtxos, transactions, block_time } = parseBlockEffects(rawEffects)
+  const blockTime = block_time ?? 0
+
+  applyTransactionsAndDetailsFromBlock(transactions, height, blockTime)
+  removeSpentUtxos(spent)
+  addNewUtxos(newUtxos)
   if (newAddress) {
     state.addresses.push(newAddress)
   }
@@ -208,15 +225,7 @@ const labService = {
   },
 
   async getAddresses(): Promise<LabAddress[]> {
-    const controlled = new Map(state.addresses.map((a) => [a.address, a]))
-    const fromUtxos = new Set(state.utxos.map((u) => u.address))
-    const result: LabAddress[] = [...state.addresses]
-    for (const addr of fromUtxos) {
-      if (!controlled.has(addr)) {
-        result.push({ address: addr, wif: '' })
-      }
-    }
-    return result
+    return mergeAddressesWithUtxos(state.addresses, state.utxos)
   },
 
   async getStateSnapshot(): Promise<LabState> {
@@ -254,7 +263,7 @@ const labService = {
 
     if (options?.ownerWalletId != null) {
       state.addressToOwner = state.addressToOwner ?? {}
-      state.addressToOwner[coinbaseAddress] = `wallet:${options.ownerWalletId}`
+      state.addressToOwner[coinbaseAddress] = walletOwnerKey(options.ownerWalletId)
     } else if (options?.ownerName?.trim()) {
       state.addressToOwner = state.addressToOwner ?? {}
       state.addressToOwner[coinbaseAddress] = options.ownerName.trim()

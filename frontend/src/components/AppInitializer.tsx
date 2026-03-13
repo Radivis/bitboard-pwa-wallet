@@ -67,6 +67,8 @@ export function AppInitializer({ children }: AppInitializerProps) {
 
     lastUnlockedWalletId.current = activeWalletId
     autoUnlockWallet(activeWalletId, sessionPassword)
+    // autoUnlockWallet omitted from deps: it is defined below and captures latest state
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeWalletId, sessionPassword, networkMode, addressType, accountId])
 
   async function autoUnlockWallet(walletId: number, password: string) {

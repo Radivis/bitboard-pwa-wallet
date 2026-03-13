@@ -10,7 +10,7 @@ test.describe('Crypto Worker Integration', () => {
 
   test('wallet creation flow via worker', async ({ page }) => {
     const result = await page.evaluate(async () => {
-      const store = (window as any).__zustand_cryptoStore
+      const store = (window as Window & { __zustand_cryptoStore?: unknown }).__zustand_cryptoStore
       if (!store) {
         const { useCryptoStore } = await import('/src/stores/cryptoStore')
         const state = useCryptoStore.getState()
@@ -116,7 +116,7 @@ test.describe('Crypto Worker Integration', () => {
         const { useCryptoStore } = await import('/src/stores/cryptoStore')
         const state = useCryptoStore.getState()
         const mnemonic = await state.generateMnemonic(12)
-        const wallet = await state.createWallet(mnemonic, 'signet', 'taproot')
+        await state.createWallet(mnemonic, 'signet', 'taproot')
         const changeset = await state.exportChangeset()
         const parsed = JSON.parse(changeset)
         return {

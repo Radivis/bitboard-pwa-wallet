@@ -1,29 +1,28 @@
 import { wrap, type Remote } from 'comlink'
 import type { LabService } from './lab-api'
+import type { LabState } from './lab-api'
+import { EMPTY_LAB_STATE } from './lab-api'
 import {
   ensureLabMigrated,
   getLabDatabase,
 } from '@/db'
-import type { LabState } from './lab-api'
+import { WALLET_OWNER_PREFIX, walletOwnerKey } from '@/lib/lab-utils'
 
 let worker: Worker | null = null
-let proxy: Remote<LabService> | null = null
+let labWorkerProxy: Remote<LabService> | null = null
 
 export function getLabWorker(): Remote<LabService> {
-  if (!worker || !proxy) {
+  if (!worker || !labWorkerProxy) {
     worker = new Worker(new URL('./lab.worker.ts', import.meta.url), {
       type: 'module',
     })
-    proxy = wrap<LabService>(worker)
+    labWorkerProxy = wrap<LabService>(worker)
   }
-  return proxy
+  return labWorkerProxy
 }
 
-export async function initLabWorkerWithState(): Promise<{
-  proxy: Remote<LabService>
-  state: LabState
-}> {
-  const labProxy = getLabWorker()
+/** Loads full lab state from the lab database. Call after ensureLabMigrated. */
+export async function loadLabStateFromDatabase(): Promise<LabState> {
   await ensureLabMigrated()
   const db = getLabDatabase()
 
@@ -51,7 +50,7 @@ export async function initLabWorkerWithState(): Promise<{
   const addressToOwner: Record<string, string> = {}
   for (const row of addressOwnersRows) {
     if (row.owner_type === 'wallet' && row.wallet_id != null) {
-      addressToOwner[row.address] = `wallet:${row.wallet_id}`
+      addressToOwner[row.address] = walletOwnerKey(row.wallet_id)
     } else if (row.owner_type === 'name' && row.owner_name != null) {
       addressToOwner[row.address] = row.owner_name
     }
@@ -120,7 +119,7 @@ export async function initLabWorkerWithState(): Promise<{
     }[],
   }))
 
-  const state: LabState = {
+  return {
     blocks: blocks.map((b) => ({
       blockHash: b.block_hash,
       height: b.height,
@@ -146,9 +145,16 @@ export async function initLabWorkerWithState(): Promise<{
     })),
     txDetails,
   }
+}
 
-  await labProxy.loadState(state)
-  return { proxy: labProxy, state }
+export async function initLabWorkerWithState(): Promise<{
+  proxy: Remote<LabService>
+  state: LabState
+}> {
+  const labWorkerProxyInstance = getLabWorker()
+  const state = await loadLabStateFromDatabase()
+  await labWorkerProxyInstance.loadState(state)
+  return { proxy: labWorkerProxyInstance, state }
 }
 
 export async function persistLabState(state: LabState): Promise<void> {
@@ -207,11 +213,11 @@ export async function persistLabState(state: LabState): Promise<void> {
       .execute()
   }
   for (const [address, ownerKey] of Object.entries(state.addressToOwner ?? {})) {
-    const ownerType = ownerKey.startsWith('wallet:')
+    const ownerType = ownerKey.startsWith(WALLET_OWNER_PREFIX)
       ? ('wallet' as const)
       : ('name' as const)
     const walletId = ownerType === 'wallet'
-      ? parseInt(ownerKey.slice(7), 10)
+      ? parseInt(ownerKey.slice(WALLET_OWNER_PREFIX.length), 10)
       : null
     const ownerName = ownerType === 'name' ? ownerKey : null
     await db
@@ -254,16 +260,7 @@ export async function persistLabState(state: LabState): Promise<void> {
 }
 
 export async function resetLab(): Promise<Remote<LabService>> {
-  const emptyState: LabState = {
-    blocks: [],
-    utxos: [],
-    addresses: [],
-    addressToOwner: {},
-    mempool: [],
-    transactions: [],
-    txDetails: [],
-  }
-  await persistLabState(emptyState)
+  await persistLabState(EMPTY_LAB_STATE)
   const { proxy } = await initLabWorkerWithState()
   return proxy
 }
@@ -272,6 +269,6 @@ export function terminateLabWorker(): void {
   if (worker) {
     worker.terminate()
     worker = null
-    proxy = null
+    labWorkerProxy = null
   }
 }

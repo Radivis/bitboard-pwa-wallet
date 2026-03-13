@@ -20,6 +20,7 @@ import {
   toBitcoinNetwork,
 } from '@/lib/bitcoin-utils'
 import { updateWalletChangeset, loadCustomEsploraUrl } from '@/lib/wallet-utils'
+import { walletOwnerKey } from '@/lib/lab-utils'
 import { getLabWorker } from '@/workers/lab-factory'
 import { useLabStore } from '@/stores/labStore'
 
@@ -80,7 +81,7 @@ function SendFlow() {
   const labBalanceSats =
     networkMode === 'lab' && activeWalletId != null && isHydrated
       ? utxos
-          .filter((u) => (addressToOwner ?? {})[u.address] === `wallet:${activeWalletId}`)
+          .filter((u) => (addressToOwner ?? {})[u.address] === walletOwnerKey(activeWalletId))
           .reduce((sum, u) => sum + u.amountSats, 0)
       : null
 
@@ -165,7 +166,7 @@ function SendFlow() {
       setLoading(true)
       await useLabStore.getState().hydrate()
       const worker = getLabWorker()
-      const walletOwner = `wallet:${activeWalletId}`
+      const walletOwner = walletOwnerKey(activeWalletId)
 
       const walletChangeAddress = await getLabChangeAddress()
       const { utxosJson, mempoolMetadata, totalInput } =
@@ -282,8 +283,6 @@ function SendFlow() {
     networkMode,
     handleLabSend,
     psbt,
-    psbt,
-    networkMode,
     activeWalletId,
     password,
     signAndExtractTransaction,
