@@ -2,8 +2,14 @@ import { create } from 'zustand'
 import {
   initLabWorkerWithState,
   resetLab as resetLabFactory,
+  getLabWorker,
+  persistLabState,
 } from '@/workers/lab-factory'
-import type { LabState, LabAddress } from '@/workers/lab-api'
+import type {
+  LabState,
+  LabAddress,
+  LabMempoolMetadata,
+} from '@/workers/lab-api'
 
 function mergeAddressesWithUtxos(
   addresses: LabAddress[],
@@ -18,6 +24,19 @@ function mergeAddressesWithUtxos(
     }
   }
   return result
+}
+
+function applyState(set: (partial: Partial<LabStoreState>) => void) {
+  return (state: LabState) =>
+    set({
+      blocks: state.blocks,
+      utxos: state.utxos,
+      addresses: mergeAddressesWithUtxos(state.addresses, state.utxos),
+      addressToOwner: state.addressToOwner ?? {},
+      mempool: state.mempool ?? [],
+      transactions: state.transactions,
+      txDetails: state.txDetails ?? [],
+    })
 }
 
 const EMPTY_LAB_STATE: LabState = {
@@ -35,47 +54,91 @@ interface LabStoreState extends LabState {
 }
 
 interface LabStoreActions {
-  setState: (state: LabState) => void
+  mineBlocks: (
+    count: number,
+    targetAddress: string,
+    options?: { ownerName?: string; ownerWalletId?: number },
+  ) => Promise<LabState>
+  createLabTransaction: (
+    fromAddress: string,
+    toAddress: string,
+    amountSats: number,
+    feeRateSatPerVb: number,
+  ) => Promise<LabState>
+  addSignedTransaction: (
+    signedTxHex: string,
+    mempoolMetadata: LabMempoolMetadata,
+  ) => Promise<LabState>
   hydrate: () => Promise<void>
   reset: () => Promise<void>
 }
 
 type LabStore = LabStoreState & LabStoreActions
 
-export const useLabStore = create<LabStore>((set) => ({
-  ...EMPTY_LAB_STATE,
-  isHydrated: false,
+export const useLabStore = create<LabStore>((set) => {
+  const apply = applyState(set)
 
-  setState: (state: LabState) =>
-    set({
-      blocks: state.blocks,
-      utxos: state.utxos,
-      addresses: mergeAddressesWithUtxos(state.addresses, state.utxos),
-      addressToOwner: state.addressToOwner ?? {},
-      mempool: state.mempool ?? [],
-      transactions: state.transactions,
-      txDetails: state.txDetails ?? [],
-    }),
+  return {
+    ...EMPTY_LAB_STATE,
+    isHydrated: false,
 
-  hydrate: async () => {
-    const { state } = await initLabWorkerWithState()
-    set({
-      blocks: state.blocks,
-      utxos: state.utxos,
-      addresses: mergeAddressesWithUtxos(state.addresses, state.utxos),
-      addressToOwner: state.addressToOwner ?? {},
-      mempool: state.mempool ?? [],
-      transactions: state.transactions,
-      txDetails: state.txDetails ?? [],
-      isHydrated: true,
-    })
-  },
+    mineBlocks: async (count, targetAddress, options) => {
+      const worker = getLabWorker()
+      const state = await worker.mineBlocks(count, targetAddress, options)
+      await persistLabState(state)
+      apply(state)
+      return state
+    },
 
-  reset: async () => {
-    await resetLabFactory()
-    set({
-      ...EMPTY_LAB_STATE,
-      isHydrated: true,
-    })
-  },
-}))
+    createLabTransaction: async (
+      fromAddress,
+      toAddress,
+      amountSats,
+      feeRateSatPerVb,
+    ) => {
+      const worker = getLabWorker()
+      const state = await worker.createTransaction(
+        fromAddress,
+        toAddress,
+        amountSats,
+        feeRateSatPerVb,
+      )
+      await persistLabState(state)
+      apply(state)
+      return state
+    },
+
+    addSignedTransaction: async (signedTxHex, mempoolMetadata) => {
+      const worker = getLabWorker()
+      const state = await worker.addSignedTransactionToMempool(
+        signedTxHex,
+        mempoolMetadata,
+      )
+      await persistLabState(state)
+      apply(state)
+      return state
+    },
+
+    hydrate: async () => {
+      const { state } = await initLabWorkerWithState()
+      set({
+        blocks: state.blocks,
+        utxos: state.utxos,
+        addresses: mergeAddressesWithUtxos(state.addresses, state.utxos),
+        addressToOwner: state.addressToOwner ?? {},
+        mempool: state.mempool ?? [],
+        transactions: state.transactions,
+        txDetails: state.txDetails ?? [],
+        isHydrated: true,
+      })
+    },
+
+    reset: async () => {
+      await resetLabFactory()
+      set({
+        ...EMPTY_LAB_STATE,
+        isHydrated: true,
+      })
+    },
+  }
+})

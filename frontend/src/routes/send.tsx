@@ -20,7 +20,7 @@ import {
   toBitcoinNetwork,
 } from '@/lib/bitcoin-utils'
 import { updateWalletChangeset, loadCustomEsploraUrl } from '@/lib/wallet-utils'
-import { getLabWorker, persistLabState } from '@/workers/lab-factory'
+import { getLabWorker } from '@/workers/lab-factory'
 import { useLabStore } from '@/stores/labStore'
 
 export const Route = createFileRoute('/send')({
@@ -76,7 +76,6 @@ function SendFlow() {
   const utxos = useLabStore((s) => s.utxos)
   const addressToOwner = useLabStore((s) => s.addressToOwner)
   const isHydrated = useLabStore((s) => s.isHydrated)
-  const setLabState = useLabStore((s) => s.setState)
 
   const labBalanceSats =
     networkMode === 'lab' && activeWalletId != null && isHydrated
@@ -211,13 +210,7 @@ function SendFlow() {
         outputsDetail,
       }
 
-      const state = await worker.addSignedTransactionToMempool(
-        signedTxHex,
-        fullMetadata,
-      )
-
-      await persistLabState(state)
-      setLabState(state)
+      await useLabStore.getState().addSignedTransaction(signedTxHex, fullMetadata)
       toast.success('Transaction added to mempool')
       navigate({ to: '/' })
     } catch (err) {
@@ -237,7 +230,6 @@ function SendFlow() {
     effectiveFeeRate,
     getLabChangeAddress,
     buildAndSignLabTransaction,
-    setLabState,
     navigate,
   ])
 

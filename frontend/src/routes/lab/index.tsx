@@ -11,7 +11,6 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { toast } from 'sonner'
-import { persistLabState, getLabWorker } from '@/workers/lab-factory'
 import { useLabStore } from '@/stores/labStore'
 import { truncateAddress, formatSats } from '@/lib/bitcoin-utils'
 import { ConfirmationDialog } from '@/components/ConfirmationDialog'
@@ -32,7 +31,6 @@ function LabIndexPage() {
   const mempool = useLabStore((s) => s.mempool)
   const transactions = useLabStore((s) => s.transactions)
   const txDetails = useLabStore((s) => s.txDetails)
-  const setLabState = useLabStore((s) => s.setState)
   const resetLabStore = useLabStore((s) => s.reset)
   const blockCount = blocks.length === 0 ? 0 : blocks[blocks.length - 1].height + 1
   const [mineCount, setMineCount] = useState('1')
@@ -88,10 +86,7 @@ function LabIndexPage() {
           : undefined
     setMining(true)
     try {
-      const worker = getLabWorker()
-      const state = await worker.mineBlocks(count, effectiveTarget, mineOptions)
-      await persistLabState(state)
-      setLabState(state)
+      await useLabStore.getState().mineBlocks(count, effectiveTarget, mineOptions)
       toast.success(`Mined ${count} block(s)`)
     } catch (err) {
       console.error('Mining failed:', err)
@@ -112,7 +107,6 @@ function LabIndexPage() {
     ownerName,
     currentAddress,
     activeWalletId,
-    setLabState,
   ])
 
   const handleSend = useCallback(async () => {
@@ -132,15 +126,12 @@ function LabIndexPage() {
     }
     setSending(true)
     try {
-      const worker = getLabWorker()
-      const state = await worker.createTransaction(
+      await useLabStore.getState().createLabTransaction(
         fromAddress,
         toAddress.trim(),
         amount,
         fee,
       )
-      await persistLabState(state)
-      setLabState(state)
       setShowTxForm(false)
       setFromAddress('')
       setToAddress('')
@@ -151,7 +142,7 @@ function LabIndexPage() {
     } finally {
       setSending(false)
     }
-  }, [fromAddress, toAddress, amountSats, feeRate, setLabState])
+  }, [fromAddress, toAddress, amountSats, feeRate])
 
   const handleResetLab = useCallback(async () => {
     setShowResetConfirm(false)
