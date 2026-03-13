@@ -1,10 +1,5 @@
-use std::str::FromStr;
-
 use bdk_wallet::chain::ChainPosition;
 use bdk_wallet::{ChangeSet, KeychainKind, Wallet};
-use bitcoin::bip32::{DerivationPath, Xpriv};
-use bitcoin::key::PrivateKey;
-use bitcoin::secp256k1::Secp256k1;
 
 use crate::error::CryptoError;
 use crate::types::{BalanceInfo, BitcoinNetwork, TransactionDetails};
@@ -64,63 +59,6 @@ pub fn get_current_address(wallet: &Wallet) -> String {
         .peek_address(KeychainKind::External, index)
         .address
         .to_string()
-}
-
-/// Derive the WIF for a descriptor at a given derivation index.
-/// Supports P2WPKH (wpkh) and P2TR (tr) descriptors.
-pub(crate) fn derive_wif_for_descriptor_at_index(
-    descriptor: &str,
-    index: u32,
-) -> Result<String, CryptoError> {
-    let (xpriv_str, path_from_key) = parse_descriptor_key_and_path(descriptor)?;
-    let xpriv = Xpriv::from_str(xpriv_str)
-        .map_err(|e| CryptoError::Descriptor(format!("Invalid extended key: {}", e)))?;
-
-    let path_str = format!("{}/{}", path_from_key, index);
-    let deriv_path = DerivationPath::from_str(&path_str)
-        .map_err(|e| CryptoError::Descriptor(format!("Invalid derivation path: {}", e)))?;
-
-    let secp = Secp256k1::new();
-    let derived = xpriv
-        .derive_priv(&secp, &deriv_path)
-        .map_err(|e| CryptoError::Descriptor(format!("Derivation failed: {}", e)))?;
-
-    let privkey = PrivateKey::new(derived.private_key, bitcoin::Network::Regtest);
-    Ok(privkey.to_wif())
-}
-
-/// Parse descriptor to extract extended key and path. Supports wpkh(xprv/path/*) and tr(xprv/path/*).
-fn parse_descriptor_key_and_path(descriptor: &str) -> Result<(&str, &str), CryptoError> {
-    let inner = descriptor
-        .strip_prefix("wpkh(")
-        .or_else(|| descriptor.strip_prefix("tr("))
-        .and_then(|s| s.strip_suffix("/*)"))
-        .ok_or_else(|| {
-            CryptoError::Descriptor("Descriptor must be wpkh or tr with wildcard".into())
-        })?;
-
-    let slash_pos = inner
-        .find('/')
-        .ok_or_else(|| CryptoError::Descriptor("Descriptor key path must contain /".into()))?;
-
-    let (key_part, path_part) = inner.split_at(slash_pos);
-    let path = path_part.strip_prefix('/').unwrap_or(path_part);
-
-    let key = if let Some(bracket_end) = key_part.find(']') {
-        key_part
-            .get(bracket_end + 1..)
-            .ok_or_else(|| CryptoError::Descriptor("Invalid origin in descriptor".into()))?
-    } else {
-        key_part
-    };
-
-    if !key.starts_with("xprv") && !key.starts_with("tprv") {
-        return Err(CryptoError::Descriptor(
-            "Descriptor must contain xprv or tprv for lab WIF export".into(),
-        ));
-    }
-
-    Ok((key, path))
 }
 
 /// Return the current wallet balance broken down by confirmation status.

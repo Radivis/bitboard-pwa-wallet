@@ -440,7 +440,7 @@ pub fn lab_generate_keypair() -> Result<JsValue, JsValue> {
     };
 
     let pk = bitcoin::PublicKey::new(sk.public_key(&secp));
-    let compressed_pk = CompressedPublicKey::try_from(pk.clone())
+    let compressed_pk = CompressedPublicKey::try_from(pk)
         .map_err(|_| JsValue::from_str("Key must be compressed"))?;
     let addr = Address::p2wpkh(&compressed_pk, Network::Regtest);
     let privkey = PrivateKey::new(sk, Network::Regtest);
@@ -587,7 +587,7 @@ pub fn lab_address_to_script_pubkey_hex(addr: &str) -> Result<String, JsValue> {
 fn create_coinbase_tx(height: u32, script_pubkey: ScriptBuf, fees_sats: u64) -> Transaction {
     let script_sig = bitcoin::blockdata::script::Builder::new()
         .push_int(height as i64)
-        .push_slice(&[0u8; 32]) // Extra nonce for uniqueness
+        .push_slice([0u8; 32]) // Extra nonce for uniqueness
         .into_script();
 
     let input = TxIn {
