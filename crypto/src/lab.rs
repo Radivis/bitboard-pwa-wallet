@@ -25,6 +25,12 @@ const LAB_COINBASE_SUBSIDY: u64 = 50 * 100_000_000; // 50 BTC in sats
 const LAB_BITS: u32 = 0x207fffff; // Max target for lab
 const DUST_THRESHOLD_SATS: u64 = 546; // Min non-dust output for P2WPKH
 
+// P2WPKH vsize estimates for fee calculation in lab_build_transaction_with_change
+const LAB_ESTIMATE_TX_VSIZE_BASE: u64 = 10;
+const LAB_ESTIMATE_P2WPKH_INPUT_VSIZE: u64 = 68;
+const LAB_ESTIMATE_P2WPKH_OUTPUT_VSIZE: u64 = 34;
+const LAB_ESTIMATE_P2WPKH_OUTPUT_COUNT: u64 = 2; // payment + change
+
 /// Result of generating a new keypair for "random" mining.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LabKeypairResult {
@@ -36,7 +42,7 @@ pub struct LabKeypairResult {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LabUtxoInput {
     pub txid: String,
-    pub vout: u32,
+    pub vout: u32, // INDEX of the output vector in the transaction - confusing legacy naming, but we stick to it for consistency
     pub amount_sats: u64,
     pub script_pubkey_hex: String,
     /// Address for multi-key signing. Optional; when absent, single-key signing is used.
@@ -384,10 +390,10 @@ pub fn lab_build_transaction_with_change(
     }
 
     let fee_rate = FeeRate::from_sat_per_vb_unchecked(fee_rate_sat_per_vb.ceil() as u64);
-    // Estimate vsize for P2WPKH: base ~10 + ~68/input + ~34/output vbytes. 1-in-2-out ≈ 146 vbytes.
     let n_in = utxos.len() as u64;
-    let n_out = 2u64; // payment + change
-    let estimated_vsize = 10 + n_in * 68 + n_out * 34;
+    let estimated_vsize = LAB_ESTIMATE_TX_VSIZE_BASE
+        + n_in * LAB_ESTIMATE_P2WPKH_INPUT_VSIZE
+        + LAB_ESTIMATE_P2WPKH_OUTPUT_COUNT * LAB_ESTIMATE_P2WPKH_OUTPUT_VSIZE;
     let required_fee = fee_rate.fee_vb(estimated_vsize).unwrap_or(Amount::ZERO);
     let required_fee_sats = required_fee.to_sat().saturating_add(1); // small buffer for rounding
 

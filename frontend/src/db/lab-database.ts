@@ -35,7 +35,7 @@ async function migrateLabToLatest(db: Kysely<LabDatabase>): Promise<void> {
     .ifNotExists()
     .addColumn('utxo_id', 'integer', (col) => col.primaryKey().autoIncrement())
     .addColumn('txid', 'text', (col) => col.notNull())
-    .addColumn('vout', 'integer', (col) => col.notNull())
+    .addColumn('vout', 'integer', (col) => col.notNull()) // INDEX of the output vector in the transaction
     .addColumn('address', 'text', (col) => col.notNull())
     .addColumn('amount_sats', 'integer', (col) => col.notNull())
     .addColumn('script_pubkey_hex', 'text', (col) => col.notNull())

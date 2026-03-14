@@ -58,7 +58,7 @@ export type BlockUpdate = Updateable<BlocksTable>
 interface UtxosTable {
   utxo_id: Generated<number>
   txid: string
-  vout: number
+  vout: number // INDEX of the output vector in the transaction - confusing legacy naming, but we stick to it for consistency
   address: string
   amount_sats: number
   script_pubkey_hex: string
