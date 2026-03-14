@@ -396,13 +396,13 @@ pub fn build_and_sign_lab_transaction(
             change_address,
         )
     })?;
-    let (tx_bytes, fee_sats, has_change) = result.map_err(|e| JsValue::from_str(&e.to_string()))?;
+    let signed = result.map_err(|e| JsValue::from_str(&e.to_string()))?;
 
-    let signed_tx_hex = hex::encode(&tx_bytes);
+    let signed_tx_hex = hex::encode(&signed.signed_tx_bytes);
     let result = serde_json::json!({
         "signed_tx_hex": signed_tx_hex,
-        "fee_sats": fee_sats,
-        "has_change": has_change,
+        "fee_sats": signed.fee_sats,
+        "has_change": signed.has_change,
     });
     Ok(JsValue::from_str(&result.to_string()))
 }

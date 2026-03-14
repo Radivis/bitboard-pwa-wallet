@@ -260,6 +260,8 @@ pub fn lab_sign_transaction(tx_hex: &str, wif: &str, utxos_json: &str) -> Result
 /// Signs a transaction where each input may be P2WPKH or P2TR, controlled by different keys.
 /// Uses `address_to_wif_json` (e.g. `{"addr1":"wif1","addr2":"wif2"}`) to look up the WIF
 /// for each input based on the UTXO's `address` field.
+/// Note: This function is not used in the current implementation.
+/// It will be used once we support lab transactions with multiple input addresses.
 #[wasm_bindgen]
 pub fn lab_sign_transaction_multi(
     tx_hex: &str,
