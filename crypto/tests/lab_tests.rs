@@ -33,21 +33,21 @@ fn build_and_sign_lab_transaction_returns_signed_tx() {
 
     load_wallet(&external, &internal, "regtest", &changeset).expect("load wallet");
 
-    let spk_hex = lab::lab_address_to_script_pubkey_hex(&first_address).unwrap();
+    let script_pubkey_hex = lab::lab_address_to_script_pubkey_hex(&first_address).unwrap();
     let utxos_json = format!(
         r#"[{{"txid":"{}","vout":0,"amount_sats":50000,"script_pubkey_hex":"{}","address":"{}"}}]"#,
         "a".repeat(64),
-        spk_hex,
+        script_pubkey_hex,
         first_address
     );
 
-    let change_addr = get_lab_change_address().expect("get change address");
+    let change_address = get_lab_change_address().expect("get change address");
     let result = build_and_sign_lab_transaction(
         &utxos_json,
         "bcrt1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh",
         40000,
         1.0,
-        &change_addr,
+        &change_address,
     )
     .expect("build and sign");
 
