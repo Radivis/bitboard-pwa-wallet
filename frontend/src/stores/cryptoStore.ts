@@ -50,6 +50,14 @@ interface CryptoState {
 
   getNewAddress: () => Promise<string>;
   getCurrentAddress: () => Promise<string>;
+  buildAndSignLabTransaction: (
+    utxosJson: string,
+    toAddress: string,
+    amountSats: number,
+    feeRateSatPerVb: number,
+    changeAddress: string,
+  ) => Promise<{ signedTxHex: string; feeSats: number; hasChange: boolean }>;
+  getLabChangeAddress: () => Promise<string>;
   getBalance: () => Promise<BalanceInfo>;
   exportChangeset: () => Promise<string>;
 
@@ -132,10 +140,30 @@ export const useCryptoStore = create<CryptoState>((set, get) => {
     getNewAddress: () => 
       withErrorHandling((worker) => worker.getNewAddress()),
 
-    getCurrentAddress: () => 
+    getCurrentAddress: () =>
       withErrorHandling((worker) => worker.getCurrentAddress()),
 
-    getBalance: () => 
+    buildAndSignLabTransaction: (
+      utxosJson,
+      toAddress,
+      amountSats,
+      feeRateSatPerVb,
+      changeAddress,
+    ) =>
+      withErrorHandling((worker) =>
+        worker.buildAndSignLabTransaction(
+          utxosJson,
+          toAddress,
+          amountSats,
+          feeRateSatPerVb,
+          changeAddress,
+        ),
+      ),
+
+    getLabChangeAddress: () =>
+      withErrorHandling((worker) => worker.getLabChangeAddress()),
+
+    getBalance: () =>
       withErrorHandling((worker) => worker.getBalance()),
 
     exportChangeset: () => 

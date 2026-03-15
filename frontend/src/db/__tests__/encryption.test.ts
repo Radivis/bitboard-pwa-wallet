@@ -28,7 +28,7 @@ vi.mock('../kdf', () => ({
 }))
 
 import { TEST_MNEMONIC_12 } from '@/test-utils/test-providers'
-import { encryptData, decryptData, type EncryptedBlob } from '../encryption'
+import { encryptData, decryptData } from '../encryption'
 
 describe('Encryption with Argon2id + AES-GCM', () => {
   const password = 'super-secret-password-123'

@@ -116,6 +116,55 @@ export async function syncActiveWalletAndUpdateState(
 
 /**
  * Resolve descriptor wallet, load into WASM, set current address, start
+ * auto-lock timer. Does NOT sync. Used for lab mode where there is no Esplora.
+ */
+export async function loadDescriptorWalletWithoutSync(
+  password: string,
+  walletId: number,
+  networkMode: NetworkMode,
+  addressType: 'taproot' | 'segwit',
+  accountId: number,
+): Promise<void> {
+  const network = toBitcoinNetwork(networkMode)
+  const descriptorWallet = await resolveDescriptorWallet(
+    password,
+    walletId,
+    network,
+    addressType,
+    accountId,
+  )
+
+  const { loadWallet, getCurrentAddress } = useCryptoStore.getState()
+  const {
+    setWalletStatus,
+    setBalance,
+    setTransactions,
+    setCurrentAddress,
+  } = useWalletStore.getState()
+
+  setCurrentAddress(null)
+  setBalance(null)
+  setTransactions([])
+
+  await loadWallet(
+    descriptorWallet.externalDescriptor,
+    descriptorWallet.internalDescriptor,
+    network,
+    descriptorWallet.changeSet,
+  )
+
+  const address = await getCurrentAddress()
+  setCurrentAddress(address)
+  setWalletStatus('unlocked')
+
+  const { startAutoLockTimer } = await import('@/stores/sessionStore')
+  startAutoLockTimer(() => {
+    useWalletStore.getState().lockWallet()
+  })
+}
+
+/**
+ * Resolve descriptor wallet, load into WASM, set current address, start
  * auto-lock timer, and sync. Used by WalletUnlock and AppInitializer.
  */
 export async function loadDescriptorWalletAndSync(

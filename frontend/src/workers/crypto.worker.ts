@@ -87,6 +87,35 @@ const cryptoService = {
     return wasmModule.get_current_address();
   },
 
+  async buildAndSignLabTransaction(
+    utxosJson: string,
+    toAddress: string,
+    amountSats: number,
+    feeRateSatPerVb: number,
+    changeAddress: string,
+  ): Promise<{ signedTxHex: string; feeSats: number; hasChange: boolean }> {
+    const wasmModule = await getWasm();
+    const result = wasmModule.build_and_sign_lab_transaction(
+      utxosJson,
+      toAddress,
+      BigInt(amountSats),
+      feeRateSatPerVb,
+      changeAddress,
+    );
+    const parsed =
+      typeof result === 'string' ? JSON.parse(result) : result;
+    return {
+      signedTxHex: parsed.signed_tx_hex,
+      feeSats: parsed.fee_sats,
+      hasChange: parsed.has_change,
+    };
+  },
+
+  async getLabChangeAddress(): Promise<string> {
+    const wasmModule = await getWasm();
+    return wasmModule.get_lab_change_address();
+  },
+
   async getBalance(): Promise<BalanceInfo> {
     const wasmModule = await getWasm();
     return wasmModule.get_balance();

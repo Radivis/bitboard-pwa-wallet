@@ -3,7 +3,11 @@ import { useNavigate, useLocation } from '@tanstack/react-router'
 import { useWalletStore } from '@/stores/walletStore'
 import { useSessionStore } from '@/stores/sessionStore'
 import { useWallets } from '@/db'
-import { loadDescriptorWalletAndSync } from '@/lib/wallet-utils'
+import { useLabStore } from '@/stores/labStore'
+import {
+  loadDescriptorWalletAndSync,
+  loadDescriptorWalletWithoutSync,
+} from '@/lib/wallet-utils'
 
 interface AppInitializerProps {
   children: ReactNode
@@ -21,15 +25,24 @@ export function AppInitializer({ children }: AppInitializerProps) {
   const accountId = useWalletStore((s) => s.accountId)
   const sessionPassword = useSessionStore((s) => s.password)
   const lastUnlockedWalletId = useRef<number | null>(null)
+  const hydrateLab = useLabStore((s) => s.hydrate)
+
+  useEffect(() => {
+    if (networkMode === 'lab') {
+      hydrateLab().catch(() => {})
+    }
+  }, [networkMode, hydrateLab])
 
   useEffect(() => {
     if (isLoading) return
 
     const isSetupRoute = location.pathname.startsWith('/setup')
     const isWalletsRoute = location.pathname === '/wallets'
+    const isSettingsRoute = location.pathname === '/settings'
+    const isLabRoute = location.pathname.startsWith('/lab')
 
     if (!wallets || wallets.length === 0) {
-      if (!isSetupRoute) {
+      if (!isSetupRoute && !isSettingsRoute && !isLabRoute) {
         navigate({ to: '/setup' })
       }
       return
@@ -54,17 +67,29 @@ export function AppInitializer({ children }: AppInitializerProps) {
 
     lastUnlockedWalletId.current = activeWalletId
     autoUnlockWallet(activeWalletId, sessionPassword)
-  }, [activeWalletId, sessionPassword])
+    // autoUnlockWallet omitted from deps: it is defined below and captures latest state
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeWalletId, sessionPassword, networkMode, addressType, accountId])
 
   async function autoUnlockWallet(walletId: number, password: string) {
     try {
-      await loadDescriptorWalletAndSync(
-        password,
-        walletId,
-        networkMode,
-        addressType,
-        accountId,
-      )
+      if (networkMode === 'lab') {
+        await loadDescriptorWalletWithoutSync(
+          password,
+          walletId,
+          networkMode,
+          addressType,
+          accountId,
+        )
+      } else {
+        await loadDescriptorWalletAndSync(
+          password,
+          walletId,
+          networkMode,
+          addressType,
+          accountId,
+        )
+      }
     } catch {
       setWalletStatus('locked')
       lastUnlockedWalletId.current = null

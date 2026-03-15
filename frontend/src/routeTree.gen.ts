@@ -14,10 +14,13 @@ import { Route as SetupRouteImport } from './routes/setup'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SendRouteImport } from './routes/send'
 import { Route as ReceiveRouteImport } from './routes/receive'
+import { Route as LabRouteImport } from './routes/lab'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SetupIndexRouteImport } from './routes/setup/index'
+import { Route as LabIndexRouteImport } from './routes/lab/index'
 import { Route as SetupImportRouteImport } from './routes/setup/import'
 import { Route as SetupCreateRouteImport } from './routes/setup/create'
+import { Route as LabTxTxidRouteImport } from './routes/lab/tx.$txid'
 
 const WalletsRoute = WalletsRouteImport.update({
   id: '/wallets',
@@ -44,6 +47,11 @@ const ReceiveRoute = ReceiveRouteImport.update({
   path: '/receive',
   getParentRoute: () => rootRouteImport,
 } as any)
+const LabRoute = LabRouteImport.update({
+  id: '/lab',
+  path: '/lab',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -53,6 +61,11 @@ const SetupIndexRoute = SetupIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => SetupRoute,
+} as any)
+const LabIndexRoute = LabIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => LabRoute,
 } as any)
 const SetupImportRoute = SetupImportRouteImport.update({
   id: '/import',
@@ -64,9 +77,15 @@ const SetupCreateRoute = SetupCreateRouteImport.update({
   path: '/create',
   getParentRoute: () => SetupRoute,
 } as any)
+const LabTxTxidRoute = LabTxTxidRouteImport.update({
+  id: '/tx/$txid',
+  path: '/tx/$txid',
+  getParentRoute: () => LabRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/lab': typeof LabRouteWithChildren
   '/receive': typeof ReceiveRoute
   '/send': typeof SendRoute
   '/settings': typeof SettingsRoute
@@ -74,7 +93,9 @@ export interface FileRoutesByFullPath {
   '/wallets': typeof WalletsRoute
   '/setup/create': typeof SetupCreateRoute
   '/setup/import': typeof SetupImportRoute
+  '/lab/': typeof LabIndexRoute
   '/setup/': typeof SetupIndexRoute
+  '/lab/tx/$txid': typeof LabTxTxidRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -84,11 +105,14 @@ export interface FileRoutesByTo {
   '/wallets': typeof WalletsRoute
   '/setup/create': typeof SetupCreateRoute
   '/setup/import': typeof SetupImportRoute
+  '/lab': typeof LabIndexRoute
   '/setup': typeof SetupIndexRoute
+  '/lab/tx/$txid': typeof LabTxTxidRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/lab': typeof LabRouteWithChildren
   '/receive': typeof ReceiveRoute
   '/send': typeof SendRoute
   '/settings': typeof SettingsRoute
@@ -96,12 +120,15 @@ export interface FileRoutesById {
   '/wallets': typeof WalletsRoute
   '/setup/create': typeof SetupCreateRoute
   '/setup/import': typeof SetupImportRoute
+  '/lab/': typeof LabIndexRoute
   '/setup/': typeof SetupIndexRoute
+  '/lab/tx/$txid': typeof LabTxTxidRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/lab'
     | '/receive'
     | '/send'
     | '/settings'
@@ -109,7 +136,9 @@ export interface FileRouteTypes {
     | '/wallets'
     | '/setup/create'
     | '/setup/import'
+    | '/lab/'
     | '/setup/'
+    | '/lab/tx/$txid'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -119,10 +148,13 @@ export interface FileRouteTypes {
     | '/wallets'
     | '/setup/create'
     | '/setup/import'
+    | '/lab'
     | '/setup'
+    | '/lab/tx/$txid'
   id:
     | '__root__'
     | '/'
+    | '/lab'
     | '/receive'
     | '/send'
     | '/settings'
@@ -130,11 +162,14 @@ export interface FileRouteTypes {
     | '/wallets'
     | '/setup/create'
     | '/setup/import'
+    | '/lab/'
     | '/setup/'
+    | '/lab/tx/$txid'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  LabRoute: typeof LabRouteWithChildren
   ReceiveRoute: typeof ReceiveRoute
   SendRoute: typeof SendRoute
   SettingsRoute: typeof SettingsRoute
@@ -179,6 +214,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ReceiveRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/lab': {
+      id: '/lab'
+      path: '/lab'
+      fullPath: '/lab'
+      preLoaderRoute: typeof LabRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -192,6 +234,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/setup/'
       preLoaderRoute: typeof SetupIndexRouteImport
       parentRoute: typeof SetupRoute
+    }
+    '/lab/': {
+      id: '/lab/'
+      path: '/'
+      fullPath: '/lab/'
+      preLoaderRoute: typeof LabIndexRouteImport
+      parentRoute: typeof LabRoute
     }
     '/setup/import': {
       id: '/setup/import'
@@ -207,8 +256,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SetupCreateRouteImport
       parentRoute: typeof SetupRoute
     }
+    '/lab/tx/$txid': {
+      id: '/lab/tx/$txid'
+      path: '/tx/$txid'
+      fullPath: '/lab/tx/$txid'
+      preLoaderRoute: typeof LabTxTxidRouteImport
+      parentRoute: typeof LabRoute
+    }
   }
 }
+
+interface LabRouteChildren {
+  LabIndexRoute: typeof LabIndexRoute
+  LabTxTxidRoute: typeof LabTxTxidRoute
+}
+
+const LabRouteChildren: LabRouteChildren = {
+  LabIndexRoute: LabIndexRoute,
+  LabTxTxidRoute: LabTxTxidRoute,
+}
+
+const LabRouteWithChildren = LabRoute._addFileChildren(LabRouteChildren)
 
 interface SetupRouteChildren {
   SetupCreateRoute: typeof SetupCreateRoute
@@ -226,6 +294,7 @@ const SetupRouteWithChildren = SetupRoute._addFileChildren(SetupRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  LabRoute: LabRouteWithChildren,
   ReceiveRoute: ReceiveRoute,
   SendRoute: SendRoute,
   SettingsRoute: SettingsRoute,

@@ -23,7 +23,8 @@
     "test:e2e:debug": "playwright test --debug",
     "test:regtest:start": "../scripts/start-regtest.sh",
     "test:regtest:stop": "docker rm -f bitboard-regtest",
-    "test:e2e:regtest": "npm run test:regtest:start && playwright test --grep @regtest"
+    "test:e2e:regtest": "npm run test:regtest:start && playwright test --grep @regtest",
+    "test:e2e:lab": "playwright test --grep @lab"
   },
   "dependencies": {
     "@subframe7536/sqlite-wasm": "^0.5.8",

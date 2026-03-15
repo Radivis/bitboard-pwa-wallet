@@ -37,6 +37,16 @@ export interface CryptoService {
 
   getNewAddress(): Promise<string>;
   getCurrentAddress(): Promise<string>;
+  /** Build and sign a lab transaction using BDK add_foreign_utxo. */
+  buildAndSignLabTransaction(
+    utxosJson: string,
+    toAddress: string,
+    amountSats: number,
+    feeRateSatPerVb: number,
+    changeAddress: string,
+  ): Promise<{ signedTxHex: string; feeSats: number; hasChange: boolean }>;
+  /** First internal address for lab change outputs. */
+  getLabChangeAddress(): Promise<string>;
   getBalance(): Promise<BalanceInfo>;
   exportChangeset(): Promise<string>;
 

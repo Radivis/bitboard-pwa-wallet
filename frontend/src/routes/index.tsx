@@ -13,6 +13,8 @@ import { TransactionItem } from '@/components/TransactionItem'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { formatBTC, formatSats, getEsploraUrl } from '@/lib/bitcoin-utils'
 import { updateWalletChangeset, loadCustomEsploraUrl } from '@/lib/wallet-utils'
+import { labTransactionsForWallet, walletOwnerKey } from '@/lib/lab-utils'
+import { useLabStore } from '@/stores/labStore'
 
 export const Route = createFileRoute('/')({
   component: DashboardPage,
@@ -21,10 +23,24 @@ export const Route = createFileRoute('/')({
 function BalanceCard() {
   const networkMode = useWalletStore((s) => s.networkMode)
   const balance = useWalletStore((s) => s.balance)
+  const activeWalletId = useWalletStore((s) => s.activeWalletId)
+  const utxos = useLabStore((s) => s.utxos)
+  const addressToOwner = useLabStore((s) => s.addressToOwner)
+  const isHydrated = useLabStore((s) => s.isHydrated)
 
-  const confirmedSats = balance?.confirmed ?? 0
+  const labBalanceSats =
+    networkMode === 'lab' && activeWalletId != null && isHydrated
+      ? utxos
+          .filter((u) => (addressToOwner ?? {})[u.address] === walletOwnerKey(activeWalletId))
+          .reduce((sum, u) => sum + u.amountSats, 0)
+      : null
+
+  const confirmedSats =
+    networkMode === 'lab' && labBalanceSats !== null
+      ? labBalanceSats
+      : balance?.confirmed ?? 0
   const pendingSats =
-    (balance?.trusted_pending ?? 0) + (balance?.untrusted_pending ?? 0)
+    networkMode === 'lab' ? 0 : (balance?.trusted_pending ?? 0) + (balance?.untrusted_pending ?? 0)
 
   return (
     <Card>
@@ -128,29 +144,63 @@ function SyncButton() {
 }
 
 function RecentTransactions() {
+  const networkMode = useWalletStore((s) => s.networkMode)
   const transactions = useWalletStore((s) => s.transactions)
+  const activeWalletId = useWalletStore((s) => s.activeWalletId)
+  const labTransactions = useLabStore((s) => s.transactions)
+  const labTxDetails = useLabStore((s) => s.txDetails)
+  const labMempool = useLabStore((s) => s.mempool)
+  const isLabHydrated = useLabStore((s) => s.isHydrated)
+
+  const labTransactionsForActiveWallet =
+    networkMode === 'lab' && activeWalletId != null && isLabHydrated
+      ? labTransactionsForWallet(
+          { transactions: labTransactions, txDetails: labTxDetails, mempool: labMempool },
+          activeWalletId,
+        )
+      : []
+
+  const displayTransactions =
+    networkMode === 'lab' ? labTransactionsForActiveWallet : transactions
+
+  if (networkMode === 'lab' && !isLabHydrated) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Recent Transactions</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground py-4">
+            Loading lab...
+          </p>
+        </CardContent>
+      </Card>
+    )
+  }
 
   return (
     <Card>
       <CardHeader>
         <div className="flex items-center justify-between">
           <CardTitle>Recent Transactions</CardTitle>
-          <SyncButton />
+          {networkMode !== 'lab' && <SyncButton />}
         </div>
       </CardHeader>
       <CardContent>
-        {transactions.length === 0 ? (
+        {displayTransactions.length === 0 ? (
           <div className="flex flex-col items-center gap-3 py-8 text-center">
             <div className="rounded-full bg-muted p-3">
               <Wallet className="h-6 w-6 text-muted-foreground" />
             </div>
             <p className="text-sm text-muted-foreground">
-              No transactions yet. Sync your wallet to see activity.
+              {networkMode === 'lab'
+                ? 'No transactions yet. Mine blocks or send to see activity.'
+                : 'No transactions yet. Sync your wallet to see activity.'}
             </p>
           </div>
         ) : (
           <div className="space-y-2">
-            {transactions.slice(0, 10).map((tx) => (
+            {displayTransactions.slice(0, 10).map((tx) => (
               <TransactionItem key={tx.txid} transaction={tx} />
             ))}
           </div>

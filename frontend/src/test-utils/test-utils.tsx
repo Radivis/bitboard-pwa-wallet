@@ -78,6 +78,7 @@ export function renderWithRouter(
   return render(<RouterProvider router={router} />, options)
 }
 
+// eslint-disable-next-line react-refresh/only-export-components -- re-export of test utilities
 export * from '@testing-library/react'
 
 export { renderWithRouter as render }

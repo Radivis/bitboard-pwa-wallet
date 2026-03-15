@@ -21,3 +21,9 @@ export {
   deleteWalletSecrets,
 } from './wallet-persistence'
 export type { WalletSecrets, DescriptorWalletData } from './wallet-persistence'
+export {
+  getLabDatabase,
+  ensureLabMigrated,
+  destroyLabDatabase,
+} from './lab-database'
+export type { Block, Utxo, LabAddress } from './lab-schema'

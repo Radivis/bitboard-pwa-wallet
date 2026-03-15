@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback } from 'react'
+import { useMutation } from '@tanstack/react-query'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { ArrowUpRight, ArrowLeft } from 'lucide-react'
 import { toast } from 'sonner'
@@ -20,6 +21,9 @@ import {
   toBitcoinNetwork,
 } from '@/lib/bitcoin-utils'
 import { updateWalletChangeset, loadCustomEsploraUrl } from '@/lib/wallet-utils'
+import { walletOwnerKey } from '@/lib/lab-utils'
+import { getLabWorker } from '@/workers/lab-factory'
+import { useLabStore } from '@/stores/labStore'
 
 export const Route = createFileRoute('/send')({
   component: SendPage,
@@ -71,6 +75,17 @@ function SendFlow() {
   const setLastSyncTime = useWalletStore((s) => s.setLastSyncTime)
   const password = useSessionStore((s) => s.password)
 
+  const utxos = useLabStore((s) => s.utxos)
+  const addressToOwner = useLabStore((s) => s.addressToOwner)
+  const isHydrated = useLabStore((s) => s.isHydrated)
+
+  const labBalanceSats =
+    networkMode === 'lab' && activeWalletId != null && isHydrated
+      ? utxos
+          .filter((u) => (addressToOwner ?? {})[u.address] === walletOwnerKey(activeWalletId))
+          .reduce((sum, u) => sum + u.amountSats, 0)
+      : null
+
   const buildTransaction = useCryptoStore((s) => s.buildTransaction)
   const signAndExtractTransaction = useCryptoStore((s) => s.signAndExtractTransaction)
   const broadcastTransaction = useCryptoStore((s) => s.broadcastTransaction)
@@ -78,8 +93,15 @@ function SendFlow() {
   const getBalance = useCryptoStore((s) => s.getBalance)
   const getTransactionList = useCryptoStore((s) => s.getTransactionList)
   const exportChangeset = useCryptoStore((s) => s.exportChangeset)
+  const buildAndSignLabTransaction = useCryptoStore(
+    (s) => s.buildAndSignLabTransaction,
+  )
+  const getLabChangeAddress = useCryptoStore((s) => s.getLabChangeAddress)
 
-  const confirmedBalance = balance?.confirmed ?? 0
+  const confirmedBalance =
+    networkMode === 'lab' && labBalanceSats !== null
+      ? labBalanceSats
+      : balance?.confirmed ?? 0
 
   const effectiveFeeRate = useCustomFee
     ? parseInt(customFeeRate) || 1
@@ -102,10 +124,20 @@ function SendFlow() {
     [normalizedRecipient, networkMode],
   )
 
-  const canBuild = addressValid && amountSats > 0 && amountSats <= confirmedBalance
+  const isLabWithNoBalance = networkMode === 'lab' && (labBalanceSats === 0 || labBalanceSats === null)
+  const canBuild =
+    addressValid &&
+    amountSats > 0 &&
+    amountSats <= confirmedBalance &&
+    !isLabWithNoBalance
 
   const handleBuildTransaction = useCallback(async () => {
     if (!canBuild) return
+
+    if (networkMode === 'lab') {
+      setStep(2)
+      return
+    }
 
     try {
       setLoading(true)
@@ -128,11 +160,85 @@ function SendFlow() {
     }
   }, [canBuild, normalizedRecipient, amountSats, effectiveFeeRate, networkMode, buildTransaction])
 
-  const handleBroadcast = useCallback(async () => {
-    if (!psbt) return
+  const handleLabSend = useCallback(async () => {
+    if (activeWalletId == null) return
 
     try {
-      setLoading(true)
+      await useLabStore.getState().hydrate()
+      const labWorker = getLabWorker()
+      const walletOwner = walletOwnerKey(activeWalletId)
+
+      const walletChangeAddress = await getLabChangeAddress()
+      const { utxosJson, mempoolMetadata, totalInput } =
+        await labWorker.prepareLabWalletTransaction(
+          walletOwner,
+          normalizedRecipient,
+          amountSats,
+          effectiveFeeRate,
+          walletChangeAddress,
+        )
+
+      const { signedTxHex, feeSats, hasChange } =
+        await buildAndSignLabTransaction(
+          utxosJson,
+          normalizedRecipient,
+          amountSats,
+          effectiveFeeRate,
+          walletChangeAddress,
+        )
+
+      const outputsDetail = hasChange
+        ? [
+            ...mempoolMetadata.outputsDetail,
+            {
+              address: walletChangeAddress,
+              amountSats: totalInput - amountSats - feeSats,
+              isChange: true as const,
+              owner: mempoolMetadata.sender,
+            },
+          ]
+        : [
+            {
+              ...mempoolMetadata.outputsDetail[0],
+              amountSats: totalInput - feeSats,
+            },
+          ]
+
+      const fullMetadata = {
+        ...mempoolMetadata,
+        feeSats,
+        hasChange,
+        outputsDetail,
+      }
+
+      await useLabStore.getState().addSignedTransaction(signedTxHex, fullMetadata)
+      toast.success('Transaction added to mempool')
+      navigate({ to: '/' })
+    } catch (err) {
+      console.error('Lab send failed:', err)
+      toast.error(
+        err instanceof Error
+          ? `Lab send failed: ${err.message}`
+          : 'Lab send failed',
+      )
+    }
+  }, [
+    activeWalletId,
+    normalizedRecipient,
+    amountSats,
+    effectiveFeeRate,
+    getLabChangeAddress,
+    buildAndSignLabTransaction,
+    navigate,
+  ])
+
+  const broadcastMutation = useMutation({
+    mutationFn: async () => {
+      if (networkMode === 'lab') {
+        await handleLabSend()
+        return
+      }
+      if (!psbt) throw new Error('No PSBT to broadcast')
 
       const rawTxHex = await signAndExtractTransaction(psbt)
 
@@ -160,34 +266,17 @@ function SendFlow() {
 
       toast.success(`Transaction broadcast! TXID: ${txid.slice(0, 16)}...`)
       navigate({ to: '/' })
-    } catch (err) {
+    },
+    onError: (err) => {
       toast.error(
         err instanceof Error
           ? `Broadcast failed: ${err.message}`
           : 'Broadcast failed',
       )
-    } finally {
-      setLoading(false)
-    }
-  }, [
-    psbt,
-    networkMode,
-    activeWalletId,
-    password,
-    signAndExtractTransaction,
-    broadcastTransaction,
-    syncWallet,
-    getBalance,
-    getTransactionList,
-    exportChangeset,
-    setWalletStatus,
-    setBalance,
-    setTransactions,
-    setLastSyncTime,
-    navigate,
-  ])
+    },
+  })
 
-  if (step === 2 && psbt) {
+  if (step === 2 && (psbt || networkMode === 'lab')) {
     return (
       <div className="space-y-6">
         <h2 className="text-2xl font-bold tracking-tight">Review Transaction</h2>
@@ -221,20 +310,22 @@ function SendFlow() {
                 variant="outline"
                 className="flex-1"
                 onClick={() => setStep(1)}
-                disabled={loading}
+                disabled={broadcastMutation.isPending}
               >
                 <ArrowLeft className="mr-2 h-4 w-4" />
                 Back
               </Button>
 
-              {loading ? (
+              {broadcastMutation.isPending ? (
                 <div className="flex-1">
-                  <LoadingSpinner text="Broadcasting..." />
+                  <LoadingSpinner
+                    text={networkMode === 'lab' ? 'Adding to mempool...' : 'Broadcasting...'}
+                  />
                 </div>
               ) : (
                 <Button
                   className="flex-1"
-                  onClick={handleBroadcast}
+                  onClick={() => broadcastMutation.mutate()}
                 >
                   Confirm and Send
                 </Button>
@@ -312,6 +403,11 @@ function SendFlow() {
                 Available: {formatBTC(confirmedBalance)} BTC (
                 {formatSats(confirmedBalance)} sats)
               </p>
+              {isLabWithNoBalance && (
+                <p className="text-xs text-amber-600 dark:text-amber-400">
+                  No balance. Mine blocks or make a transaction to your wallet in the lab.
+                </p>
+              )}
             </div>
 
             <div className="space-y-2">

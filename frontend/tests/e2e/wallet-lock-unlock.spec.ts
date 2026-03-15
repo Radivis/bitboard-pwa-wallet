@@ -1,9 +1,5 @@
 import { test, expect } from '@playwright/test'
-import {
-  createWalletViaUI,
-  unlockWalletViaUI,
-  TEST_PASSWORD,
-} from './helpers/wallet-setup'
+import { createWalletViaUI, TEST_PASSWORD } from './helpers/wallet-setup'
 
 test.describe('Wallet Lock/Unlock', () => {
   test('wallet lock and unlock', async ({ page }) => {

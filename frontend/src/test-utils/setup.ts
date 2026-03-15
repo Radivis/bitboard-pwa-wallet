@@ -10,7 +10,7 @@ globalThis.IntersectionObserver = class IntersectionObserver {
     return []
   }
   unobserve() {}
-} as any
+} as unknown as typeof IntersectionObserver
 
 // Mock scrollTo
 window.scrollTo = vi.fn()
