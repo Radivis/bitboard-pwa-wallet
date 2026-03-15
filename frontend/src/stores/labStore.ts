@@ -56,8 +56,8 @@ export const useLabStore = create<LabStore>((set) => {
     isHydrated: false,
 
     mineBlocks: async (count, targetAddress, options) => {
-      const worker = getLabWorker()
-      const state = await worker.mineBlocks(count, targetAddress, options)
+      const labWorker = getLabWorker()
+      const state = await labWorker.mineBlocks(count, targetAddress, options)
       await persistLabState(state)
       apply(state)
       return state
@@ -69,8 +69,8 @@ export const useLabStore = create<LabStore>((set) => {
       amountSats,
       feeRateSatPerVb,
     ) => {
-      const worker = getLabWorker()
-      const state = await worker.createTransaction(
+      const labWorker = getLabWorker()
+      const state = await labWorker.createTransaction(
         fromAddress,
         toAddress,
         amountSats,
@@ -82,8 +82,8 @@ export const useLabStore = create<LabStore>((set) => {
     },
 
     addSignedTransaction: async (signedTxHex, mempoolMetadata) => {
-      const worker = getLabWorker()
-      const state = await worker.addSignedTransactionToMempool(
+      const labWorker = getLabWorker()
+      const state = await labWorker.addSignedTransactionToMempool(
         signedTxHex,
         mempoolMetadata,
       )

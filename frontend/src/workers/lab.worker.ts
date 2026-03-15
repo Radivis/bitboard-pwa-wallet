@@ -24,20 +24,21 @@ let state: LabState = { ...EMPTY_LAB_STATE }
 const txidToChangeAddress = new Map<string, string>()
 
 function selectMempoolTxsForBlock(mempool: MempoolEntry[]): MempoolEntry[] {
-  const sorted = [...mempool].sort((a, b) => {
+  const sortedEntries = [...mempool].sort((a, b) => {
     if (b.feeSats !== a.feeSats) return b.feeSats - a.feeSats
     return Math.random() - 0.5
   })
   const spentBySelected = new Set<string>()
-  const selected: MempoolEntry[] = []
-  for (const entry of sorted) {
-    const overlaps = entry.inputs.some((i) => spentBySelected.has(`${i.txid}:${i.vout}`))
+  const selectedEntries: MempoolEntry[] = []
+  // Check for double spends
+  for (const entry of sortedEntries) {
+    const overlaps = entry.inputs.some((input) => spentBySelected.has(`${input.txid}:${input.vout}`))
     if (!overlaps) {
-      selected.push(entry)
-      for (const i of entry.inputs) spentBySelected.add(`${i.txid}:${i.vout}`)
+      selectedEntries.push(entry)
+      for (const input of entry.inputs) spentBySelected.add(`${input.txid}:${input.vout}`)
     }
   }
-  return selected
+  return selectedEntries
 }
 
 function getTip(): LabBlock | null {
@@ -81,8 +82,8 @@ function parseBlockEffects(raw: unknown): BlockEffectsParsed {
 }
 
 function removeSpentUtxos(spent: { txid: string; vout: number }[]): void {
-  for (const s of spent) {
-    state.utxos = state.utxos.filter((u) => !(u.txid === s.txid && u.vout === s.vout))
+  for (const stxo of spent) {
+    state.utxos = state.utxos.filter((utxo) => !(utxo.txid === stxo.txid && utxo.vout === stxo.vout))
   }
 }
 
@@ -95,13 +96,13 @@ function addNewUtxos(
     script_pubkey_hex: string
   }[],
 ): void {
-  for (const u of newUtxos) {
+  for (const utxo of newUtxos) {
     state.utxos.push({
-      txid: u.txid,
-      vout: u.vout,
-      address: u.address,
-      amountSats: u.amount_sats,
-      scriptPubkeyHex: u.script_pubkey_hex,
+      txid: utxo.txid,
+      vout: utxo.vout,
+      address: utxo.address,
+      amountSats: utxo.amount_sats,
+      scriptPubkeyHex: utxo.script_pubkey_hex,
     })
   }
 }
@@ -111,14 +112,14 @@ function applyTransactionsAndDetailsFromBlock(
   height: number,
   blockTime: number,
 ): void {
-  const utxoMap = new Map(state.utxos.map((u) => [`${u.txid}:${u.vout}`, u]))
+  const utxoMap = new Map(state.utxos.map((utxo) => [`${utxo.txid}:${utxo.vout}`, utxo]))
   const addressToOwner = state.addressToOwner ?? {}
 
   for (const tx of transactions) {
     const inputs: { address: string; amountSats: number; owner?: string | null }[] = []
     let firstInputAddress: string | null = null
-    for (const inp of tx.inputs) {
-      const key = `${inp.prev_txid}:${inp.prev_vout}`
+    for (const input of tx.inputs) {
+      const key = `${input.prev_txid}:${input.prev_vout}`
       const utxo = utxoMap.get(key)
       if (utxo) {
         const owner = addressToOwner[utxo.address] ?? null
@@ -128,23 +129,23 @@ function applyTransactionsAndDetailsFromBlock(
     }
     const sender = firstInputAddress ? (addressToOwner[firstInputAddress] ?? null) : null
     const changeAddressForTx = txidToChangeAddress.get(tx.txid)
-    const outputs = (tx.outputs ?? []).map((o) => {
-      const isChange = changeAddressForTx !== undefined && o.address === changeAddressForTx
+    const outputs = (tx.outputs ?? []).map((output) => {
+      const isChange = changeAddressForTx !== undefined && output.address === changeAddressForTx
       const owner = isChange && sender
         ? sender
-        : (addressToOwner[o.address] ?? null)
+        : (addressToOwner[output.address] ?? null)
       if (isChange && sender) {
         state.addressToOwner = state.addressToOwner ?? {}
-        state.addressToOwner[o.address] = sender
+        state.addressToOwner[output.address] = sender
       }
       return {
-        address: o.address,
-        amountSats: o.amount_sats,
+        address: output.address,
+        amountSats: output.amount_sats,
         isChange,
         owner,
       }
     })
-    const firstNonChangeOutput = outputs.find((o) => !o.isChange)
+    const firstNonChangeOutput = outputs.find((output) => !output.isChange)
     const receiver = firstNonChangeOutput
       ? (addressToOwner[firstNonChangeOutput.address] ?? null)
       : null
@@ -199,7 +200,7 @@ const labService = {
   },
 
   async getTransaction(txid: string): Promise<LabTxDetails | null> {
-    const mempoolEntry = state.mempool.find((e) => e.txid === txid)
+    const mempoolEntry = state.mempool.find((entry) => entry.txid === txid)
     if (mempoolEntry) {
       return {
         txid: mempoolEntry.txid,
@@ -210,7 +211,7 @@ const labService = {
         outputs: mempoolEntry.outputsDetail,
       }
     }
-    const details = state.txDetails.find((t) => t.txid === txid)
+    const details = state.txDetails.find((tx) => tx.txid === txid)
     if (!details) return null
     const blockCount = getTip() ? getTip()!.height + 1 : 0
     return {
@@ -233,7 +234,7 @@ const labService = {
   },
 
   async mineBlocks(
-    count: number,
+    blockCountToMine: number,
     targetAddress: string,
     options?: { ownerName?: string; ownerWalletId?: number },
   ): Promise<LabState> {
@@ -271,13 +272,13 @@ const labService = {
 
     const mempoolCopy = [...(state.mempool ?? [])]
     const selectedEntries = selectMempoolTxsForBlock(mempoolCopy)
-    const mempoolTxHexes = selectedEntries.map((e) => e.signedTxHex)
-    const totalFeesSats = selectedEntries.reduce((s, e) => s + e.feeSats, 0)
+    const mempoolTxHexes = selectedEntries.map((entry) => entry.signedTxHex)
+    const totalFeesSats = selectedEntries.reduce((sum, entry) => sum + entry.feeSats, 0)
     const spentByIncluded = new Set(
-      selectedEntries.flatMap((e) => e.inputs.map((i) => `${i.txid}:${i.vout}`)),
+      selectedEntries.flatMap((entry) => entry.inputs.map((input) => `${input.txid}:${input.vout}`)),
     )
 
-    for (let i = 0; i < count; i++) {
+    for (let i = 0; i < blockCountToMine; i++) {
       const txsForBlock = i === 0 ? mempoolTxHexes : []
       const feesForBlock = BigInt(i === 0 ? totalFeesSats : 0)
       const blockHex = wasmModule.lab_mine_block(
@@ -290,9 +291,9 @@ const labService = {
       applyBlockEffects(blockHex, height, i === 0 ? newAddress ?? undefined : undefined)
       if (i === 0) {
         state.mempool = (state.mempool ?? []).filter(
-          (e) =>
-            !selectedEntries.some((s) => s.txid === e.txid) &&
-            !e.inputs.some((inp) => spentByIncluded.has(`${inp.txid}:${inp.vout}`)),
+          (entry) =>
+            !selectedEntries.some((selectedEntry) => selectedEntry.txid === entry.txid) &&
+            !entry.inputs.some((input) => spentByIncluded.has(`${input.txid}:${input.vout}`)),
         )
       }
       if (i > 0) newAddress = null
@@ -319,11 +320,11 @@ const labService = {
     }
 
     const utxosJson = JSON.stringify(
-      fromUtxos.map((u) => ({
-        txid: u.txid,
-        vout: u.vout,
-        amount_sats: u.amountSats,
-        script_pubkey_hex: u.scriptPubkeyHex,
+      fromUtxos.map((utxo) => ({
+        txid: utxo.txid,
+        vout: utxo.vout,
+        amount_sats: utxo.amountSats,
+        script_pubkey_hex: utxo.scriptPubkeyHex,
       })),
     )
 
@@ -356,13 +357,13 @@ const labService = {
     const sender = addressToOwner[fromAddress] ?? null
     const receiver = addressToOwner[toAddress] ?? null
 
-    const inputsDetail = fromUtxos.map((u) => ({
-      address: u.address,
-      amountSats: u.amountSats,
-      owner: addressToOwner[u.address] ?? null,
+    const inputsDetail = fromUtxos.map((utxo) => ({
+      address: utxo.address,
+      amountSats: utxo.amountSats,
+      owner: addressToOwner[utxo.address] ?? null,
     }))
 
-    const totalInput = fromUtxos.reduce((s, u) => s + u.amountSats, 0)
+    const totalInput = fromUtxos.reduce((sum, utxo) => sum + utxo.amountSats, 0)
     const outputsDetail: {
       address: string
       amountSats: number
@@ -381,7 +382,7 @@ const labService = {
       : [{ address: toAddress, amountSats: totalInput - feeSats, owner: receiver }]
 
     const txid = wasmModule.lab_txid(signedTxHex)
-    const inputs = fromUtxos.map((u) => ({ txid: u.txid, vout: u.vout }))
+    const inputs = fromUtxos.map((utxo) => ({ txid: utxo.txid, vout: utxo.vout }))
 
     state.mempool = state.mempool ?? []
     state.mempool.push({
@@ -412,7 +413,7 @@ const labService = {
     const addressToOwner = state.addressToOwner ?? {}
 
     const fromUtxos = state.utxos.filter(
-      (u) => addressToOwner[u.address] === walletOwner,
+      (utxo) => addressToOwner[utxo.address] === walletOwner,
     )
     if (fromUtxos.length === 0) {
       throw new Error(
@@ -422,26 +423,26 @@ const labService = {
     }
 
     const utxosJson = JSON.stringify(
-      fromUtxos.map((u) => ({
-        txid: u.txid,
-        vout: u.vout,
-        amount_sats: u.amountSats,
-        script_pubkey_hex: u.scriptPubkeyHex,
-        address: u.address,
+      fromUtxos.map((utxo) => ({
+        txid: utxo.txid,
+        vout: utxo.vout,
+        amount_sats: utxo.amountSats,
+        script_pubkey_hex: utxo.scriptPubkeyHex,
+        address: utxo.address,
       })),
     )
 
     const sender = walletOwner
     const receiver = addressToOwner[toAddress] ?? null
 
-    const inputsDetail = fromUtxos.map((u) => ({
-      address: u.address,
-      amountSats: u.amountSats,
-      owner: addressToOwner[u.address] ?? null,
+    const inputsDetail = fromUtxos.map((utxo) => ({
+      address: utxo.address,
+      amountSats: utxo.amountSats,
+      owner: addressToOwner[utxo.address] ?? null,
     }))
 
-    const totalInput = fromUtxos.reduce((s, u) => s + u.amountSats, 0)
-    const inputs = fromUtxos.map((u) => ({ txid: u.txid, vout: u.vout }))
+    const totalInput = fromUtxos.reduce((sum, utxo) => sum + utxo.amountSats, 0)
+    const inputs = fromUtxos.map((utxo) => ({ txid: utxo.txid, vout: utxo.vout }))
 
     return {
       utxosJson,
