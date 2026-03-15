@@ -32,6 +32,9 @@ const LAB_ESTIMATE_P2WPKH_OUTPUT_VSIZE: u64 = 34;
 const LAB_ESTIMATE_P2WPKH_OUTPUT_COUNT: u64 = 2; // payment + change
 
 /// Result of generating a new keypair for "random" mining.
+/// The WIF would be confidential information for real users,
+/// but since the lab is just a simulation,
+/// we don't need to bother with security at this point
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LabKeypairResult {
     pub address: String,
