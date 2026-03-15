@@ -190,7 +190,7 @@ function LabBlocksCard({
   )
 }
 
-function LabTransactionCard({
+function LabMakeTransactionCard({
   showTxForm,
   setShowTxForm,
   fromAddress,
@@ -391,6 +391,239 @@ function LabResetCard({
   )
 }
 
+function LabAddressesCard({
+  addresses,
+  addressToOwner,
+  getBalanceForAddress,
+  onCopyAddress,
+  wallets,
+}: {
+  addresses: Array<{ address: string; wif?: string }>
+  addressToOwner: Record<string, string> | null | undefined
+  getBalanceForAddress: (address: string) => number
+  onCopyAddress: (address: string) => void
+  wallets: Array<{ wallet_id: number; name: string }>
+}) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Addresses</CardTitle>
+        <CardDescription>Addresses that have interacted with the network</CardDescription>
+      </CardHeader>
+      <CardContent>
+        {addresses.length === 0 ? (
+          <p className="text-sm text-muted-foreground py-4">
+            No addresses yet. Mine blocks to create addresses.
+          </p>
+        ) : (
+          <div className="space-y-2">
+            <div className="flex gap-4 text-sm font-medium text-muted-foreground">
+              <span className="flex-1 min-w-0">Address</span>
+              <span className="w-24 shrink-0 text-right">Balance</span>
+              <span className="w-24 shrink-0">Owner</span>
+              <span className="w-10 shrink-0" />
+            </div>
+            {addresses.map((a) => {
+              const owner = (addressToOwner ?? {})[a.address] ?? 'Unknown'
+              return (
+                <div
+                  key={a.address}
+                  className="flex gap-4 items-center py-2 border-b border-border last:border-0"
+                >
+                  <span className="font-mono text-sm break-all flex-1 min-w-0">
+                    {truncateAddress(a.address)}
+                  </span>
+                  <span className="tabular-nums text-right w-24 shrink-0">
+                    {formatSats(getBalanceForAddress(a.address))} sats
+                  </span>
+                  <span className="w-24 shrink-0 flex items-center gap-1">
+                    {getOwnerIcon(owner) === 'wallet' ? (
+                      <Wallet className="h-4 w-4" />
+                    ) : (
+                      <FlaskConical className="h-4 w-4" />
+                    )}
+                    {getOwnerDisplayName(owner, wallets)}
+                  </span>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-8 w-8 shrink-0"
+                    onClick={() => onCopyAddress(a.address)}
+                    aria-label={`Copy ${truncateAddress(a.address)}`}
+                  >
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+function LabUtxosCard({
+  utxos,
+  utxosByOwner,
+  sortedOwnerKeys,
+  onCopyAddress,
+  wallets,
+}: {
+  utxos: Array<{ txid: string; vout: number; address: string; amountSats: number }>
+  utxosByOwner: Map<string, Array<{ txid: string; vout: number; address: string; amountSats: number }>>
+  sortedOwnerKeys: string[]
+  onCopyAddress: (address: string) => void
+  wallets: Array<{ wallet_id: number; name: string }>
+}) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>UTXOs</CardTitle>
+        <CardDescription>Unspent transaction outputs, grouped by owner</CardDescription>
+      </CardHeader>
+      <CardContent>
+        {utxos.length === 0 ? (
+          <p className="text-sm text-muted-foreground py-4">
+            No UTXOs yet. Mine blocks to create coinbase outputs.
+          </p>
+        ) : (
+          <div className="space-y-4">
+            {sortedOwnerKeys.map((owner) => (
+              <div key={owner}>
+                <h4 className="text-sm font-medium mb-2 flex items-center gap-1">
+                  {getOwnerIcon(owner) === 'wallet' ? (
+                    <Wallet className="h-4 w-4" />
+                  ) : (
+                    <FlaskConical className="h-4 w-4" />
+                  )}
+                  {getOwnerDisplayName(owner, wallets)}
+                </h4>
+                <div className="space-y-2">
+                  <div className="flex gap-4 text-sm font-medium text-muted-foreground">
+                    <span className="flex-1 min-w-0">Address</span>
+                    <span className="w-24 shrink-0 text-right">Sats</span>
+                    <span className="w-10 shrink-0" />
+                  </div>
+                  {(utxosByOwner.get(owner) ?? []).map((u) => (
+                    <div
+                      key={`${u.txid}:${u.vout}`}
+                      className="flex gap-4 items-center py-2 border-b border-border last:border-0"
+                    >
+                      <span className="font-mono text-sm break-all flex-1 min-w-0">
+                        {truncateAddress(u.address)}
+                      </span>
+                      <span className="tabular-nums text-right w-24 shrink-0">
+                        {formatSats(u.amountSats)} sats
+                      </span>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-8 w-8 shrink-0"
+                        onClick={() => onCopyAddress(u.address)}
+                        aria-label={`Copy ${truncateAddress(u.address)}`}
+                      >
+                        <Copy className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+function LabTransactionsCard({
+  mempool,
+  sortedTransactions,
+  txDetailsByTxid,
+  blockCount,
+  wallets,
+}: {
+  mempool: Array<{ txid: string; sender: string | null; receiver: string | null }>
+  sortedTransactions: Array<{ txid: string; sender: string | null; receiver: string | null }>
+  txDetailsByTxid: Map<string, { blockHeight: number; outputs: Array<{ amountSats: number }> }>
+  blockCount: number
+  wallets: Array<{ wallet_id: number; name: string }>
+}) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Transactions</CardTitle>
+        <CardDescription>Mempool and confirmed transactions</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        {mempool.length > 0 && (
+          <div>
+            <h4 className="text-sm font-medium mb-2">Mempool</h4>
+            <div className="space-y-2">
+              {mempool.map((tx) => (
+                <Link
+                  key={tx.txid}
+                  to="/lab/tx/$txid"
+                  params={{ txid: tx.txid }}
+                  className="flex gap-4 items-center py-2 border-b border-border last:border-0 hover:bg-muted/50 rounded px-2 -mx-2 transition-colors"
+                >
+                  <span className="font-mono text-sm truncate flex-1 min-w-0" title={tx.txid}>
+                    {truncateAddress(tx.txid)}
+                  </span>
+                  <span className="text-muted-foreground text-sm">
+                    {tx.sender ? getOwnerDisplayName(tx.sender, wallets) : 'unknown'} →{' '}
+                    {tx.receiver ? getOwnerDisplayName(tx.receiver, wallets) : 'unknown'}
+                  </span>
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
+        <div>
+          <h4 className="text-sm font-medium mb-2">Confirmed</h4>
+          {sortedTransactions.length === 0 && mempool.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-4">
+              No transactions yet. Create a transaction to see it here.
+            </p>
+          ) : sortedTransactions.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-4">
+              No confirmed transactions yet. Mine blocks to confirm mempool transactions.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {sortedTransactions.slice(0, MAX_DISPLAYED_LAB_TRANSACTIONS).map((tx) => {
+                const details = txDetailsByTxid.get(tx.txid)
+                const confirmations = details
+                  ? blockCount - details.blockHeight
+                  : 0
+                return (
+                  <Link
+                    key={tx.txid}
+                    to="/lab/tx/$txid"
+                    params={{ txid: tx.txid }}
+                    className="flex gap-4 items-center py-2 border-b border-border last:border-0 hover:bg-muted/50 rounded px-2 -mx-2 transition-colors"
+                  >
+                    <span className="font-mono text-sm truncate flex-1 min-w-0" title={tx.txid}>
+                      {truncateAddress(tx.txid)}
+                    </span>
+                    <span className="text-muted-foreground text-sm">
+                      {tx.sender ? getOwnerDisplayName(tx.sender, wallets) : 'unknown'} →{' '}
+                      {tx.receiver ? getOwnerDisplayName(tx.receiver, wallets) : 'unknown'}
+                      {' '}
+                      ({confirmations} confirmations)
+                    </span>
+                  </Link>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
 function LabIndexPage() {
   const blocks = useLabStore((s) => s.blocks)
   const addresses = useLabStore((s) => s.addresses)
@@ -544,16 +777,16 @@ function LabIndexPage() {
 
   const { utxosByOwner, sortedOwnerKeys } = useMemo(() => {
     const byOwner = new Map<string, typeof utxos>()
-    for (const u of utxos) {
-      const owner = (addressToOwner ?? {})[u.address] ?? 'Unknown'
-      const list = byOwner.get(owner) ?? []
-      list.push(u)
-      byOwner.set(owner, list)
+    for (const utxo of utxos) {
+      const owner = (addressToOwner ?? {})[utxo.address] ?? 'Unknown'
+      const ownerList = byOwner.get(owner) ?? []
+      ownerList.push(utxo)
+      byOwner.set(owner, ownerList)
     }
-    const sorted = [...byOwner.keys()].sort((a, b) =>
+    const sortedOwners = [...byOwner.keys()].sort((a, b) =>
       a === 'Unknown' ? 1 : b === 'Unknown' ? -1 : a.localeCompare(b),
     )
-    return { utxosByOwner: byOwner, sortedOwnerKeys: sorted }
+    return { utxosByOwner: byOwner, sortedOwnerKeys: sortedOwners }
   }, [utxos, addressToOwner])
 
   return (
@@ -577,7 +810,7 @@ function LabIndexPage() {
         activeWallet={activeWallet ?? undefined}
       />
 
-      <LabTransactionCard
+      <LabMakeTransactionCard
         showTxForm={showTxForm}
         setShowTxForm={setShowTxForm}
         fromAddress={fromAddress}
@@ -593,189 +826,29 @@ function LabIndexPage() {
         controlledAddressesCount={controlledAddresses.length}
       />
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Addresses</CardTitle>
-          <CardDescription>Addresses that have interacted with the network</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {addresses.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-4">
-              No addresses yet. Mine blocks to create addresses.
-            </p>
-          ) : (
-            <div className="space-y-2">
-              <div className="flex gap-4 text-sm font-medium text-muted-foreground">
-                <span className="flex-1 min-w-0">Address</span>
-                <span className="w-24 shrink-0 text-right">Balance</span>
-                <span className="w-24 shrink-0">Owner</span>
-                <span className="w-10 shrink-0" />
-              </div>
-              {addresses.map((a) => {
-                const owner = (addressToOwner ?? {})[a.address] ?? 'Unknown'
-                return (
-                  <div
-                  key={a.address}
-                  className="flex gap-4 items-center py-2 border-b border-border last:border-0"
-                >
-                  <span className="font-mono text-sm break-all flex-1 min-w-0">
-                    {truncateAddress(a.address)}
-                  </span>
-                  <span className="tabular-nums text-right w-24 shrink-0">
-                    {formatSats(getBalanceForAddress(a.address))} sats
-                  </span>
-                  <span className="w-24 shrink-0 flex items-center gap-1">
-                    {getOwnerIcon(owner) === 'wallet' ? (
-                        <Wallet className="h-4 w-4" />
-                      ) : (
-                        <FlaskConical className="h-4 w-4" />
-                      )}
-                      {getOwnerDisplayName(owner, wallets)}
-                  </span>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-8 w-8 shrink-0"
-                    onClick={() => handleCopyAddress(a.address)}
-                    aria-label={`Copy ${truncateAddress(a.address)}`}
-                  >
-                    <Copy className="h-4 w-4" />
-                  </Button>
-                </div>
-              )})}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      <LabAddressesCard
+        addresses={addresses}
+        addressToOwner={addressToOwner}
+        getBalanceForAddress={getBalanceForAddress}
+        onCopyAddress={handleCopyAddress}
+        wallets={wallets}
+      />
 
-      <Card>
-        <CardHeader>
-          <CardTitle>UTXOs</CardTitle>
-          <CardDescription>Unspent transaction outputs, grouped by owner</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {utxos.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-4">
-              No UTXOs yet. Mine blocks to create coinbase outputs.
-            </p>
-          ) : (
-            <div className="space-y-4">
-              {sortedOwnerKeys.map((owner) => (
-                <div key={owner}>
-                  <h4 className="text-sm font-medium mb-2 flex items-center gap-1">
-                    {getOwnerIcon(owner) === 'wallet' ? (
-                      <Wallet className="h-4 w-4" />
-                    ) : (
-                      <FlaskConical className="h-4 w-4" />
-                    )}
-                    {getOwnerDisplayName(owner, wallets)}
-                  </h4>
-                  <div className="space-y-2">
-                    <div className="flex gap-4 text-sm font-medium text-muted-foreground">
-                      <span className="flex-1 min-w-0">Address</span>
-                      <span className="w-24 shrink-0 text-right">Sats</span>
-                      <span className="w-10 shrink-0" />
-                    </div>
-                    {(utxosByOwner.get(owner) ?? []).map((u) => (
-                      <div
-                        key={`${u.txid}:${u.vout}`}
-                        className="flex gap-4 items-center py-2 border-b border-border last:border-0"
-                      >
-                        <span className="font-mono text-sm break-all flex-1 min-w-0">
-                          {truncateAddress(u.address)}
-                        </span>
-                        <span className="tabular-nums text-right w-24 shrink-0">
-                          {formatSats(u.amountSats)} sats
-                        </span>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className="h-8 w-8 shrink-0"
-                          onClick={() => handleCopyAddress(u.address)}
-                          aria-label={`Copy ${truncateAddress(u.address)}`}
-                        >
-                          <Copy className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      <LabUtxosCard
+        utxos={utxos}
+        utxosByOwner={utxosByOwner}
+        sortedOwnerKeys={sortedOwnerKeys}
+        onCopyAddress={handleCopyAddress}
+        wallets={wallets}
+      />
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Transactions</CardTitle>
-          <CardDescription>Mempool and confirmed transactions</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          {mempool.length > 0 && (
-            <div>
-              <h4 className="text-sm font-medium mb-2">Mempool</h4>
-              <div className="space-y-2">
-                {mempool.map((tx) => (
-                  <Link
-                    key={tx.txid}
-                    to="/lab/tx/$txid"
-                    params={{ txid: tx.txid }}
-                    className="flex gap-4 items-center py-2 border-b border-border last:border-0 hover:bg-muted/50 rounded px-2 -mx-2 transition-colors"
-                  >
-                    <span className="font-mono text-sm truncate flex-1 min-w-0" title={tx.txid}>
-                      {truncateAddress(tx.txid)}
-                    </span>
-                    <span className="text-muted-foreground text-sm">
-                      {tx.sender ? getOwnerDisplayName(tx.sender, wallets) : 'unknown'} →{' '}
-                      {tx.receiver ? getOwnerDisplayName(tx.receiver, wallets) : 'unknown'}
-                    </span>
-                  </Link>
-                ))}
-              </div>
-            </div>
-          )}
-          <div>
-            <h4 className="text-sm font-medium mb-2">Confirmed</h4>
-            {sortedTransactions.length === 0 && mempool.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-4">
-                No transactions yet. Create a transaction to see it here.
-              </p>
-            ) : sortedTransactions.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-4">
-                No confirmed transactions yet. Mine blocks to confirm mempool transactions.
-              </p>
-            ) : (
-              <div className="space-y-2">
-                {sortedTransactions.slice(0, MAX_DISPLAYED_LAB_TRANSACTIONS).map((tx) => {
-                  const details = txDetailsByTxid.get(tx.txid)
-                  const confirmations = details
-                    ? blockCount - details.blockHeight
-                    : 0
-                  return (
-                    <Link
-                      key={tx.txid}
-                      to="/lab/tx/$txid"
-                      params={{ txid: tx.txid }}
-                      className="flex gap-4 items-center py-2 border-b border-border last:border-0 hover:bg-muted/50 rounded px-2 -mx-2 transition-colors"
-                    >
-                      <span className="font-mono text-sm truncate flex-1 min-w-0" title={tx.txid}>
-                        {truncateAddress(tx.txid)}
-                      </span>
-                      <span className="text-muted-foreground text-sm">
-                        {tx.sender ? getOwnerDisplayName(tx.sender, wallets) : 'unknown'} →{' '}
-                        {tx.receiver ? getOwnerDisplayName(tx.receiver, wallets) : 'unknown'}
-                        {' '}
-                        ({confirmations} confirmations)
-                      </span>
-                    </Link>
-                  )
-                })}
-              </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+      <LabTransactionsCard
+        mempool={mempool}
+        sortedTransactions={sortedTransactions}
+        txDetailsByTxid={txDetailsByTxid}
+        blockCount={blockCount}
+        wallets={wallets}
+      />
 
       <LabRulesCard />
 
