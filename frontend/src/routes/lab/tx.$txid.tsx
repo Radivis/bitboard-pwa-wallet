@@ -28,8 +28,8 @@ function LabTxViewerPage() {
 
   const loadTx = useCallback(async () => {
     try {
-      const worker = getLabWorker()
-      const details = await worker.getTransaction(txid)
+      const labWorker = getLabWorker()
+      const details = await labWorker.getTransaction(txid)
       setTx(details ?? null)
     } catch {
       setTx(null)
@@ -119,27 +119,27 @@ function LabTxViewerPage() {
             <p className="text-sm text-muted-foreground">No inputs (coinbase)</p>
           ) : (
             <div className="space-y-2">
-              {tx.inputs.map((inp, idx) => (
+              {tx.inputs.map((input, index) => (
                 <div
-                  key={`${inp.address}-${idx}`}
+                  key={`${input.address}-${index}`}
                   className="flex gap-4 items-center py-2 border-b border-border last:border-0"
                 >
                   <span className="font-mono text-sm break-all flex-1 min-w-0">
-                    {truncateAddress(inp.address)}
+                    {truncateAddress(input.address)}
                   </span>
                   <span className="flex items-center gap-1 shrink-0">
-                    {inp.owner ? (
-                      getOwnerIcon(inp.owner) === 'wallet' ? (
+                    {input.owner ? (
+                      getOwnerIcon(input.owner) === 'wallet' ? (
                         <Wallet className="h-4 w-4" />
                       ) : (
                         <FlaskConical className="h-4 w-4" />
                       )
                     ) : null}
                     <Badge variant="secondary">
-                      {inp.owner ? getOwnerDisplayName(inp.owner, wallets) : 'unknown'}
+                      {input.owner ? getOwnerDisplayName(input.owner, wallets) : 'unknown'}
                     </Badge>
                   </span>
-                  <span className="tabular-nums text-right">{formatSats(inp.amountSats)} sats</span>
+                  <span className="tabular-nums text-right">{formatSats(input.amountSats)} sats</span>
                 </div>
               ))}
             </div>
@@ -157,28 +157,28 @@ function LabTxViewerPage() {
             <p className="text-sm text-muted-foreground">No outputs</p>
           ) : (
             <div className="space-y-2">
-              {tx.outputs.map((out, idx) => (
+              {tx.outputs.map((output, index) => (
                 <div
-                  key={`${out.address}-${idx}`}
+                  key={`${output.address}-${index}`}
                   className="flex gap-4 items-center py-2 border-b border-border last:border-0"
                 >
                   <span className="font-mono text-sm break-all flex-1 min-w-0">
-                    {truncateAddress(out.address)}
+                    {truncateAddress(output.address)}
                   </span>
                   <span className="flex items-center gap-1 shrink-0">
-                    {out.owner ? (
-                      getOwnerIcon(out.owner) === 'wallet' ? (
+                    {output.owner ? (
+                      getOwnerIcon(output.owner) === 'wallet' ? (
                         <Wallet className="h-4 w-4" />
                       ) : (
                         <FlaskConical className="h-4 w-4" />
                       )
                     ) : null}
                     <Badge variant="secondary">
-                      {out.owner ? getOwnerDisplayName(out.owner, wallets) : 'unknown'}
+                      {output.owner ? getOwnerDisplayName(output.owner, wallets) : 'unknown'}
                     </Badge>
                   </span>
-                  <span className="tabular-nums text-right">{formatSats(out.amountSats)} sats</span>
-                  {out.isChange && (
+                  <span className="tabular-nums text-right">{formatSats(output.amountSats)} sats</span>
+                  {output.isChange && (
                     <Badge variant="secondary" className="shrink-0">
                       Change
                     </Badge>

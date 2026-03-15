@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback } from 'react'
+import { useMutation } from '@tanstack/react-query'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { ArrowUpRight, ArrowLeft } from 'lucide-react'
 import { toast } from 'sonner'
@@ -123,12 +124,12 @@ function SendFlow() {
     [normalizedRecipient, networkMode],
   )
 
+  const isLabWithNoBalance = networkMode === 'lab' && (labBalanceSats === 0 || labBalanceSats === null)
   const canBuild =
     addressValid &&
     amountSats > 0 &&
     amountSats <= confirmedBalance &&
-    !(networkMode === 'lab' && (labBalanceSats === 0 || labBalanceSats === null))
-  const labNoBalance = networkMode === 'lab' && labBalanceSats === 0
+    !isLabWithNoBalance
 
   const handleBuildTransaction = useCallback(async () => {
     if (!canBuild) return
@@ -163,14 +164,13 @@ function SendFlow() {
     if (activeWalletId == null) return
 
     try {
-      setLoading(true)
       await useLabStore.getState().hydrate()
-      const worker = getLabWorker()
+      const labWorker = getLabWorker()
       const walletOwner = walletOwnerKey(activeWalletId)
 
       const walletChangeAddress = await getLabChangeAddress()
       const { utxosJson, mempoolMetadata, totalInput } =
-        await worker.prepareLabWalletTransaction(
+        await labWorker.prepareLabWalletTransaction(
           walletOwner,
           normalizedRecipient,
           amountSats,
@@ -221,8 +221,6 @@ function SendFlow() {
           ? `Lab send failed: ${err.message}`
           : 'Lab send failed',
       )
-    } finally {
-      setLoading(false)
     }
   }, [
     activeWalletId,
@@ -234,15 +232,13 @@ function SendFlow() {
     navigate,
   ])
 
-  const handleBroadcast = useCallback(async () => {
-    if (networkMode === 'lab') {
-      await handleLabSend()
-      return
-    }
-    if (!psbt) return
-
-    try {
-      setLoading(true)
+  const broadcastMutation = useMutation({
+    mutationFn: async () => {
+      if (networkMode === 'lab') {
+        await handleLabSend()
+        return
+      }
+      if (!psbt) throw new Error('No PSBT to broadcast')
 
       const rawTxHex = await signAndExtractTransaction(psbt)
 
@@ -270,33 +266,15 @@ function SendFlow() {
 
       toast.success(`Transaction broadcast! TXID: ${txid.slice(0, 16)}...`)
       navigate({ to: '/' })
-    } catch (err) {
+    },
+    onError: (err) => {
       toast.error(
         err instanceof Error
           ? `Broadcast failed: ${err.message}`
           : 'Broadcast failed',
       )
-    } finally {
-      setLoading(false)
-    }
-  }, [
-    networkMode,
-    handleLabSend,
-    psbt,
-    activeWalletId,
-    password,
-    signAndExtractTransaction,
-    broadcastTransaction,
-    syncWallet,
-    getBalance,
-    getTransactionList,
-    exportChangeset,
-    setWalletStatus,
-    setBalance,
-    setTransactions,
-    setLastSyncTime,
-    navigate,
-  ])
+    },
+  })
 
   if (step === 2 && (psbt || networkMode === 'lab')) {
     return (
@@ -332,13 +310,13 @@ function SendFlow() {
                 variant="outline"
                 className="flex-1"
                 onClick={() => setStep(1)}
-                disabled={loading}
+                disabled={broadcastMutation.isPending}
               >
                 <ArrowLeft className="mr-2 h-4 w-4" />
                 Back
               </Button>
 
-              {loading ? (
+              {broadcastMutation.isPending ? (
                 <div className="flex-1">
                   <LoadingSpinner
                     text={networkMode === 'lab' ? 'Adding to mempool...' : 'Broadcasting...'}
@@ -347,7 +325,7 @@ function SendFlow() {
               ) : (
                 <Button
                   className="flex-1"
-                  onClick={handleBroadcast}
+                  onClick={() => broadcastMutation.mutate()}
                 >
                   Confirm and Send
                 </Button>
@@ -425,9 +403,9 @@ function SendFlow() {
                 Available: {formatBTC(confirmedBalance)} BTC (
                 {formatSats(confirmedBalance)} sats)
               </p>
-              {labNoBalance && (
+              {isLabWithNoBalance && (
                 <p className="text-xs text-amber-600 dark:text-amber-400">
-                  No balance. Mine blocks to your address in the Lab.
+                  No balance. Mine blocks or make a transaction to your wallet in the lab.
                 </p>
               )}
             </div>
