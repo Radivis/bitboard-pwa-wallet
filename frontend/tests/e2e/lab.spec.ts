@@ -92,7 +92,7 @@ test.describe('Lab', { tag: '@lab' }, () => {
     let state = await getLabState(page)
     expect(state.mempool).toHaveLength(1)
 
-    await createTransactionInLab(page, aliceAddress!, bobAddress!, 1000, 10)
+    await createTransactionInLab(page, aliceAddress!, bobAddress!, 800, 10)
 
     // Poll for both conflicting txs to appear (state propagation can be async)
     await expect
@@ -115,7 +115,7 @@ test.describe('Lab', { tag: '@lab' }, () => {
     expect(state.transactions).toHaveLength(1)
     const aliceSum = getUtxoSumByOwner(state, 'Alice')
     const bobSum = getUtxoSumByOwner(state, 'Bob')
-    expect(bobSum).toBe(COINBASE_SATS + 1000)
+    expect(bobSum).toBe(COINBASE_SATS + 800)
     expect(aliceSum).toBeGreaterThan(0)
   })
 
@@ -205,7 +205,7 @@ test.describe('Lab', { tag: '@lab' }, () => {
       o.startsWith(WALLET_OWNER_PREFIX),
     )
     const walletSum = getUtxoSumByOwner(state, walletOwner!)
-    expect(walletSum).toBeGreaterThanOrEqual(2 * COINBASE_SATS - 25_000 - 500)
-    expect(walletSum).toBeLessThanOrEqual(2 * COINBASE_SATS - 25_000)
+    expect(walletSum).toBeGreaterThanOrEqual(2 * COINBASE_SATS - 500)
+    expect(walletSum).toBeLessThanOrEqual(2 * COINBASE_SATS)
   })
 })

@@ -7,7 +7,11 @@ import type {
   MempoolEntry,
 } from './lab-api'
 import { EMPTY_LAB_STATE } from './lab-api'
-import { mergeAddressesWithUtxos, walletOwnerKey } from '@/lib/lab-utils'
+import {
+  mergeAddressesWithUtxos,
+  walletOwnerKey,
+  WALLET_OWNER_PREFIX,
+} from '@/lib/lab-utils'
 
 let labWasmModule: typeof import('@/wasm-pkg/bitboard_crypto') | null = null
 
@@ -146,9 +150,19 @@ function applyTransactionsAndDetailsFromBlock(
       }
     })
     const firstNonChangeOutput = outputs.find((output) => !output.isChange)
-    const receiver = firstNonChangeOutput
+    let receiver = firstNonChangeOutput
       ? (addressToOwner[firstNonChangeOutput.address] ?? null)
       : null
+    if (
+      firstNonChangeOutput &&
+      receiver === null &&
+      sender !== null &&
+      sender.startsWith(WALLET_OWNER_PREFIX)
+    ) {
+      state.addressToOwner = state.addressToOwner ?? {}
+      state.addressToOwner[firstNonChangeOutput.address] = sender
+      receiver = sender
+    }
     state.transactions.push({ txid: tx.txid, sender, receiver })
     if (inputs.length > 0 || outputs.length > 0) {
       state.txDetails.push({
