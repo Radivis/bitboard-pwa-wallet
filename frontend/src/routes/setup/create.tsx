@@ -83,14 +83,14 @@ export function CreateWalletPage() {
       const walletResult = await createWallet(mnemonic, network, addressType, accountId)
 
       await ensureMigrated()
-      const db = getDatabase()
+      const walletDb = getDatabase()
 
       const walletId = await addWallet.mutateAsync({
         name: `Wallet ${Date.now()}`,
         created_at: new Date().toISOString(),
       })
 
-      await saveWalletSecrets(db, password, walletId, {
+      await saveWalletSecrets(walletDb, password, walletId, {
         mnemonic,
         descriptorWallets: [
           {

@@ -24,25 +24,25 @@ export function getLabWorker(): Remote<LabService> {
 /** Loads full lab state from the lab database. Call after ensureLabMigrated. */
 export async function loadLabStateFromDatabase(): Promise<LabState> {
   await ensureLabMigrated()
-  const db = getLabDatabase()
+  const labDb = getLabDatabase()
 
-  const blocks = await db
+  const blocks = await labDb
     .selectFrom('blocks')
     .select(['block_hash', 'height', 'block_data', 'created_at'])
     .orderBy('height', 'asc')
     .execute()
 
-  const utxos = await db
+  const utxos = await labDb
     .selectFrom('utxos')
     .select(['txid', 'vout', 'address', 'amount_sats', 'script_pubkey_hex'])
     .execute()
 
-  const addresses = await db
+  const addresses = await labDb
     .selectFrom('lab_addresses')
     .select(['address', 'wif'])
     .execute()
 
-  const addressOwnersRows = await db
+  const addressOwnersRows = await labDb
     .selectFrom('lab_address_owners')
     .select(['address', 'owner_type', 'wallet_id', 'owner_name'])
     .execute()
@@ -56,7 +56,7 @@ export async function loadLabStateFromDatabase(): Promise<LabState> {
     }
   }
 
-  const mempoolRows = await db
+  const mempoolRows = await labDb
     .selectFrom('lab_mempool')
     .select([
       'signed_tx_hex',
@@ -90,13 +90,13 @@ export async function loadLabStateFromDatabase(): Promise<LabState> {
     }[],
   }))
 
-  const transactions = await db
+  const transactions = await labDb
     .selectFrom('lab_transactions')
     .select(['txid', 'sender', 'receiver'])
     .orderBy('lab_transaction_id', 'asc')
     .execute()
 
-  const txDetailsRows = await db
+  const txDetailsRows = await labDb
     .selectFrom('lab_tx_details')
     .select(['txid', 'block_height', 'block_time', 'inputs_json', 'outputs_json'])
     .execute()
@@ -159,19 +159,19 @@ export async function initLabWorkerWithState(): Promise<{
 
 export async function persistLabState(state: LabState): Promise<void> {
   await ensureLabMigrated()
-  const db = getLabDatabase()
+  const labDb = getLabDatabase()
 
-  await db.deleteFrom('blocks').execute()
-  await db.deleteFrom('utxos').execute()
-  await db.deleteFrom('lab_addresses').execute()
-  await db.deleteFrom('lab_address_owners').execute()
-  await db.deleteFrom('lab_mempool').execute()
-  await db.deleteFrom('lab_transactions').execute()
-  await db.deleteFrom('lab_tx_details').execute()
+  await labDb.deleteFrom('blocks').execute()
+  await labDb.deleteFrom('utxos').execute()
+  await labDb.deleteFrom('lab_addresses').execute()
+  await labDb.deleteFrom('lab_address_owners').execute()
+  await labDb.deleteFrom('lab_mempool').execute()
+  await labDb.deleteFrom('lab_transactions').execute()
+  await labDb.deleteFrom('lab_tx_details').execute()
 
   const now = new Date().toISOString()
   for (const b of state.blocks) {
-    await db
+    await labDb
       .insertInto('blocks')
       .values({
         block_hash: b.blockHash,
@@ -182,7 +182,7 @@ export async function persistLabState(state: LabState): Promise<void> {
       .execute()
   }
   for (const u of state.utxos) {
-    await db
+    await labDb
       .insertInto('utxos')
       .values({
         txid: u.txid,
@@ -194,7 +194,7 @@ export async function persistLabState(state: LabState): Promise<void> {
       .execute()
   }
   for (const a of state.addresses) {
-    await db
+    await labDb
       .insertInto('lab_addresses')
       .values({
         address: a.address,
@@ -203,7 +203,7 @@ export async function persistLabState(state: LabState): Promise<void> {
       .execute()
   }
   for (const t of state.transactions) {
-    await db
+    await labDb
       .insertInto('lab_transactions')
       .values({
         txid: t.txid,
@@ -220,7 +220,7 @@ export async function persistLabState(state: LabState): Promise<void> {
       ? parseInt(ownerKey.slice(WALLET_OWNER_PREFIX.length), 10)
       : null
     const ownerName = ownerType === 'name' ? ownerKey : null
-    await db
+    await labDb
       .insertInto('lab_address_owners')
       .values({
         address,
@@ -231,7 +231,7 @@ export async function persistLabState(state: LabState): Promise<void> {
       .execute()
   }
   for (const m of state.mempool ?? []) {
-    await db
+    await labDb
       .insertInto('lab_mempool')
       .values({
         signed_tx_hex: m.signedTxHex,
@@ -246,7 +246,7 @@ export async function persistLabState(state: LabState): Promise<void> {
       .execute()
   }
   for (const d of state.txDetails ?? []) {
-    await db
+    await labDb
       .insertInto('lab_tx_details')
       .values({
         txid: d.txid,

@@ -132,7 +132,6 @@ export async function sendFromWallet(
   page: Page,
   toAddress: string,
   amountSats: number,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- reserved for future fee rate control
   _feeRate: number = 1,
 ): Promise<void> {
   await page.getByRole('link', { name: /send/i }).click()

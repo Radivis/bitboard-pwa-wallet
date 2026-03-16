@@ -42,8 +42,8 @@ export async function resolveDescriptorWallet(
   targetAccountId: number,
 ): Promise<DescriptorWalletData> {
   await ensureMigrated()
-  const db = getDatabase()
-  const secrets = await loadWalletSecrets(db, password, walletId)
+  const walletDb = getDatabase()
+  const secrets = await loadWalletSecrets(walletDb, password, walletId)
 
   const existing = findDescriptorWallet(
     secrets,
@@ -97,8 +97,8 @@ async function createAndPersistDescriptorWallet(
   secrets.descriptorWallets.push(descriptorWallet)
 
   await ensureMigrated()
-  const db = getDatabase()
-  await saveWalletSecrets(db, password, walletId, secrets)
+  const walletDb = getDatabase()
+  await saveWalletSecrets(walletDb, password, walletId, secrets)
 
   return descriptorWallet
 }
@@ -116,8 +116,8 @@ export async function updateDescriptorWalletChangeset(
   changesetJson: string,
 ): Promise<void> {
   await ensureMigrated()
-  const db = getDatabase()
-  const secrets = await loadWalletSecrets(db, password, walletId)
+  const walletDb = getDatabase()
+  const secrets = await loadWalletSecrets(walletDb, password, walletId)
 
   const descriptorWallet = findDescriptorWallet(
     secrets,
@@ -132,5 +132,5 @@ export async function updateDescriptorWalletChangeset(
   }
 
   descriptorWallet.changeSet = changesetJson
-  await saveWalletSecrets(db, password, walletId, secrets)
+  await saveWalletSecrets(walletDb, password, walletId, secrets)
 }

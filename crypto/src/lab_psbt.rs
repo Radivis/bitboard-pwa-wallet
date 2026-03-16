@@ -109,6 +109,7 @@ pub fn build_and_sign_lab_transaction(
         .finish()
         .map_err(|e| CryptoError::Transaction(e.to_string()))?;
 
+    // BDK wallet.sign(SignOptions) is deprecated; required until BDK provides replacement.
     #[allow(deprecated)]
     let signed = wallet
         .sign(

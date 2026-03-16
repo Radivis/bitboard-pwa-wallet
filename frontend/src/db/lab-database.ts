@@ -20,8 +20,8 @@ export function getLabDatabase(): Kysely<LabDatabase> {
   return labInstance
 }
 
-async function migrateLabToLatest(db: Kysely<LabDatabase>): Promise<void> {
-  await db.schema
+async function migrateLabToLatest(labDb: Kysely<LabDatabase>): Promise<void> {
+  await labDb.schema
     .createTable('blocks')
     .ifNotExists()
     .addColumn('block_hash', 'text', (col) => col.primaryKey())
@@ -30,7 +30,7 @@ async function migrateLabToLatest(db: Kysely<LabDatabase>): Promise<void> {
     .addColumn('created_at', 'text', (col) => col.notNull())
     .execute()
 
-  await db.schema
+  await labDb.schema
     .createTable('utxos')
     .ifNotExists()
     .addColumn('utxo_id', 'integer', (col) => col.primaryKey().autoIncrement())
@@ -41,7 +41,7 @@ async function migrateLabToLatest(db: Kysely<LabDatabase>): Promise<void> {
     .addColumn('script_pubkey_hex', 'text', (col) => col.notNull())
     .execute()
 
-  await db.schema
+  await labDb.schema
     .createTable('lab_addresses')
     .ifNotExists()
     .addColumn('lab_address_id', 'integer', (col) => col.primaryKey().autoIncrement())
@@ -49,7 +49,7 @@ async function migrateLabToLatest(db: Kysely<LabDatabase>): Promise<void> {
     .addColumn('wif', 'text', (col) => col.notNull())
     .execute()
 
-  await db.schema
+  await labDb.schema
     .createTable('lab_transactions')
     .ifNotExists()
     .addColumn('lab_transaction_id', 'integer', (col) => col.primaryKey().autoIncrement())
@@ -58,7 +58,7 @@ async function migrateLabToLatest(db: Kysely<LabDatabase>): Promise<void> {
     .addColumn('receiver', 'text', (col) => col)
     .execute()
 
-  await db.schema
+  await labDb.schema
     .createTable('lab_address_owners')
     .ifNotExists()
     .addColumn('address', 'text', (col) => col.primaryKey())
@@ -67,7 +67,7 @@ async function migrateLabToLatest(db: Kysely<LabDatabase>): Promise<void> {
     .addColumn('owner_name', 'text', (col) => col)
     .execute()
 
-  await db.schema
+  await labDb.schema
     .createTable('lab_mempool')
     .ifNotExists()
     .addColumn('mempool_id', 'integer', (col) => col.primaryKey().autoIncrement())
@@ -81,7 +81,7 @@ async function migrateLabToLatest(db: Kysely<LabDatabase>): Promise<void> {
     .addColumn('outputs_detail_json', 'text', (col) => col.notNull())
     .execute()
 
-  await db.schema
+  await labDb.schema
     .createTable('lab_tx_details')
     .ifNotExists()
     .addColumn('txid', 'text', (col) => col.primaryKey())

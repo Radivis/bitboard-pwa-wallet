@@ -34,6 +34,7 @@ pub fn build_transaction(
     Ok(psbt)
 }
 
+// BDK wallet.sign(SignOptions) is deprecated; required until BDK provides replacement API.
 #[allow(deprecated)]
 pub fn sign_transaction(wallet: &Wallet, psbt: &mut Psbt) -> Result<bool, CryptoError> {
     use bdk_wallet::SignOptions;

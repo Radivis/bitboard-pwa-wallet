@@ -1,0 +1,192 @@
+import { useMutation } from '@tanstack/react-query'
+import { useNavigate } from '@tanstack/react-router'
+import { toast } from 'sonner'
+import { useWalletStore } from '@/stores/walletStore'
+import { useSessionStore } from '@/stores/sessionStore'
+import { useCryptoStore } from '@/stores/cryptoStore'
+import { useSendStore } from '@/stores/sendStore'
+import { getEsploraUrl, toBitcoinNetwork } from '@/lib/bitcoin-utils'
+import { updateWalletChangeset, loadCustomEsploraUrl } from '@/lib/wallet-utils'
+import { walletOwnerKey } from '@/lib/lab-utils'
+import { getLabWorker } from '@/workers/lab-factory'
+import { useLabStore } from '@/stores/labStore'
+import { errorMessage } from '@/lib/utils'
+
+/**
+ * Mutation to build a PSBT (mainnet/testnet/signet/regtest).
+ * Uses crypto worker; result is stored in sendStore.psbt and sendStore.step set to 2.
+ */
+export function useBuildTransactionMutation() {
+  const networkMode = useWalletStore((s) => s.networkMode)
+  const buildTransaction = useCryptoStore((s) => s.buildTransaction)
+
+  return useMutation({
+    mutationFn: async (params: {
+      normalizedRecipient: string
+      amountSats: number
+      effectiveFeeRate: number
+    }) => {
+      const network = toBitcoinNetwork(networkMode)
+      const psbtBase64 = await buildTransaction(
+        params.normalizedRecipient,
+        params.amountSats,
+        params.effectiveFeeRate,
+        network,
+      )
+      return psbtBase64
+    },
+    onSuccess: (psbtBase64) => {
+      const { setPsbt, setStep } = useSendStore.getState()
+      setPsbt(psbtBase64)
+      setStep(2)
+    },
+    onError: (err) => {
+      console.error('Build transaction failed:', err)
+      toast.error(errorMessage(err) || 'Failed to build transaction')
+    },
+  })
+}
+
+/**
+ * Mutation to broadcast a transaction (mainnet/testnet/signet/regtest).
+ * Signs and extracts from PSBT, broadcasts via Esplora, optionally syncs and updates changeset.
+ */
+export function useBroadcastTransactionMutation() {
+  const navigate = useNavigate()
+  const networkMode = useWalletStore((s) => s.networkMode)
+  const psbt = useSendStore((s) => s.psbt)
+  const reset = useSendStore((s) => s.reset)
+
+  return useMutation({
+    mutationFn: async () => {
+      if (!psbt) throw new Error('No PSBT to broadcast')
+
+      const {
+        signAndExtractTransaction,
+        broadcastTransaction,
+        exportChangeset,
+        syncWallet,
+        getBalance,
+        getTransactionList,
+      } = useCryptoStore.getState()
+      const { setWalletStatus, setBalance, setTransactions, setLastSyncTime } =
+        useWalletStore.getState()
+      const password = useSessionStore.getState().password
+      const activeWalletId = useWalletStore.getState().activeWalletId
+
+      const rawTxHex = await signAndExtractTransaction(psbt)
+
+      const customUrl = await loadCustomEsploraUrl(networkMode)
+      const esploraUrl = getEsploraUrl(networkMode, customUrl)
+      const txid = await broadcastTransaction(rawTxHex, esploraUrl)
+
+      if (password && activeWalletId) {
+        const changeset = await exportChangeset()
+        await updateWalletChangeset(password, activeWalletId, changeset)
+      }
+
+      setWalletStatus('syncing')
+      try {
+        await syncWallet(esploraUrl)
+        const newBalance = await getBalance()
+        const newTxs = await getTransactionList()
+        setBalance(newBalance)
+        setTransactions(newTxs)
+        setLastSyncTime(new Date())
+      } catch {
+        // keep unlocked on sync failure
+      }
+      setWalletStatus('unlocked')
+
+      return { txid }
+    },
+    onSuccess: ({ txid }) => {
+      toast.success(`Transaction broadcast! TXID: ${txid.slice(0, 16)}...`)
+      reset()
+      navigate({ to: '/' })
+    },
+    onError: (err) => {
+      toast.error(`Broadcast failed: ${errorMessage(err)}`)
+    },
+  })
+}
+
+/**
+ * Mutation to build, sign, and add a lab transaction to the mempool.
+ * Uses lab worker and crypto worker.
+ */
+export function useLabSendMutation() {
+  const navigate = useNavigate()
+  const activeWalletId = useWalletStore((s) => s.activeWalletId)
+  const getLabChangeAddress = useCryptoStore((s) => s.getLabChangeAddress)
+  const buildAndSignLabTransaction = useCryptoStore((s) => s.buildAndSignLabTransaction)
+  const reset = useSendStore((s) => s.reset)
+
+  return useMutation({
+    mutationFn: async (params: {
+      normalizedRecipient: string
+      amountSats: number
+      effectiveFeeRate: number
+    }) => {
+      if (activeWalletId == null) throw new Error('No active wallet')
+
+      await useLabStore.getState().hydrate()
+      const labWorker = getLabWorker()
+      const walletOwner = walletOwnerKey(activeWalletId)
+      const walletChangeAddress = await getLabChangeAddress()
+
+      const { utxosJson, mempoolMetadata, totalInput } =
+        await labWorker.prepareLabWalletTransaction(
+          walletOwner,
+          params.normalizedRecipient,
+          params.amountSats,
+          params.effectiveFeeRate,
+          walletChangeAddress,
+        )
+
+      const { signedTxHex, feeSats, hasChange } = await buildAndSignLabTransaction(
+        utxosJson,
+        params.normalizedRecipient,
+        params.amountSats,
+        params.effectiveFeeRate,
+        walletChangeAddress,
+      )
+
+      const outputsDetail = hasChange
+        ? [
+            ...mempoolMetadata.outputsDetail,
+            {
+              address: walletChangeAddress,
+              amountSats: totalInput - params.amountSats - feeSats,
+              isChange: true as const,
+              owner: mempoolMetadata.sender,
+            },
+          ]
+        : [
+            {
+              ...mempoolMetadata.outputsDetail[0],
+              amountSats: totalInput - feeSats,
+            },
+          ]
+
+      const fullMetadata = {
+        ...mempoolMetadata,
+        feeSats,
+        hasChange,
+        outputsDetail,
+      }
+
+      await useLabStore.getState().addSignedTransaction(signedTxHex, fullMetadata)
+      return undefined
+    },
+    onSuccess: () => {
+      toast.success('Transaction added to mempool')
+      reset()
+      navigate({ to: '/' })
+    },
+    onError: (err) => {
+      console.error('Lab send failed:', err)
+      toast.error(`Lab send failed: ${errorMessage(err)}`)
+    },
+  })
+}

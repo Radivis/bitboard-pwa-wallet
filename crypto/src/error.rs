@@ -59,6 +59,7 @@ impl From<bdk_wallet::error::CreateTxError> for CryptoError {
     }
 }
 
+// BDK SignerError is deprecated pending replacement; we still need it for sign().
 #[allow(deprecated)]
 impl From<bdk_wallet::signer::SignerError> for CryptoError {
     fn from(e: bdk_wallet::signer::SignerError) -> Self {

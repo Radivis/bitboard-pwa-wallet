@@ -18,7 +18,7 @@ pub fn create_wallet(
     Wallet::create(external, internal)
         .network(network.into())
         .create_wallet_no_persist()
-        .map_err(|e| CryptoError::Wallet(format!("{:?}", e)))
+        .map_err(|e| CryptoError::Wallet(e.to_string()))
 }
 
 /// Reload a previously persisted wallet from its descriptors and a `ChangeSet`.
@@ -39,7 +39,7 @@ pub fn load_wallet(
         .extract_keys()
         .check_network(network.into())
         .load_wallet_no_persist(changeset)
-        .map_err(|e| CryptoError::Wallet(format!("{:?}", e)))?
+        .map_err(|e| CryptoError::Wallet(e.to_string()))?
         .ok_or_else(|| CryptoError::Wallet("Wallet could not be loaded from changeset".to_string()))
 }
 

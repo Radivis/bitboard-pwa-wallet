@@ -4,10 +4,10 @@ import type { StateStorage } from 'zustand/middleware'
 import type { Database } from '../schema'
 import { createTestDatabase } from '../test-helpers'
 
-function createStorageAdapter(db: Kysely<Database>): StateStorage {
+function createStorageAdapter(walletDb: Kysely<Database>): StateStorage {
   return {
     async getItem(key: string): Promise<string | null> {
-      const row = await db
+      const row = await walletDb
         .selectFrom('settings')
         .select('value')
         .where('key', '=', key)
@@ -15,14 +15,14 @@ function createStorageAdapter(db: Kysely<Database>): StateStorage {
       return row?.value ?? null
     },
     async setItem(key: string, value: string): Promise<void> {
-      await db
+      await walletDb
         .insertInto('settings')
         .values({ key, value })
         .onConflict((oc) => oc.column('key').doUpdateSet({ value }))
         .execute()
     },
     async removeItem(key: string): Promise<void> {
-      await db
+      await walletDb
         .deleteFrom('settings')
         .where('key', '=', key)
         .execute()
@@ -31,16 +31,16 @@ function createStorageAdapter(db: Kysely<Database>): StateStorage {
 }
 
 describe('sqliteStorage adapter', () => {
-  let db: Kysely<Database>
+  let walletDb: Kysely<Database>
   let storage: StateStorage
 
   beforeEach(async () => {
-    db = await createTestDatabase()
-    storage = createStorageAdapter(db)
+    walletDb = await createTestDatabase()
+    storage = createStorageAdapter(walletDb)
   })
 
   afterEach(async () => {
-    await db.destroy()
+    await walletDb.destroy()
   })
 
   it('returns null for a missing key', async () => {

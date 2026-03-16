@@ -24,7 +24,7 @@ export interface WalletSecrets {
  *
  * If secrets already exist for the given wallet, they are re-encrypted and updated.
  *
- * @param db - Kysely database instance
+ * @param walletDb - Kysely wallet database instance
  * @param password - User password for encryption
  * @param walletId - ID of the wallet in the `wallets` table
  * @param secrets - Sensitive wallet data to encrypt and store
@@ -32,25 +32,25 @@ export interface WalletSecrets {
  * @throws {Error} If the wallet ID does not exist in the `wallets` table
  */
 export async function saveWalletSecrets(
-  db: Kysely<Database>,
+  walletDb: Kysely<Database>,
   password: string,
   walletId: number,
   secrets: WalletSecrets
 ): Promise<void> {
-  await assertWalletExists(db, walletId)
+  await assertWalletExists(walletDb, walletId)
 
   const plaintext = JSON.stringify(secrets)
   const encrypted = await encryptData(password, plaintext)
 
   const now = new Date().toISOString()
-  const existing = await db
+  const existing = await walletDb
     .selectFrom('wallet_secrets')
     .select('wallet_secrets_id')
     .where('wallet_id', '=', walletId)
     .executeTakeFirst()
 
   if (existing) {
-    await db
+    await walletDb
       .updateTable('wallet_secrets')
       .set({
         encrypted_data: encrypted.ciphertext,
@@ -61,7 +61,7 @@ export async function saveWalletSecrets(
       .where('wallet_secrets_id', '=', existing.wallet_secrets_id)
       .execute()
   } else {
-    await db
+    await walletDb
       .insertInto('wallet_secrets')
       .values({
         wallet_id: walletId,
@@ -78,7 +78,7 @@ export async function saveWalletSecrets(
 /**
  * Loads and decrypts wallet secrets from the `wallet_secrets` table.
  *
- * @param db - Kysely database instance
+ * @param walletDb - Kysely wallet database instance
  * @param password - User password for decryption (must match encryption password)
  * @param walletId - ID of the wallet whose secrets to load
  * @returns Decrypted wallet secrets
@@ -87,11 +87,11 @@ export async function saveWalletSecrets(
  * @throws {Error} If the password is incorrect or data is corrupted
  */
 export async function loadWalletSecrets(
-  db: Kysely<Database>,
+  walletDb: Kysely<Database>,
   password: string,
   walletId: number
 ): Promise<WalletSecrets> {
-  const record = await db
+  const record = await walletDb
     .selectFrom('wallet_secrets')
     .selectAll()
     .where('wallet_id', '=', walletId)
@@ -116,17 +116,17 @@ export async function loadWalletSecrets(
  * No-op if no secrets exist for the given wallet.
  */
 export async function deleteWalletSecrets(
-  db: Kysely<Database>,
+  walletDb: Kysely<Database>,
   walletId: number
 ): Promise<void> {
-  await db
+  await walletDb
     .deleteFrom('wallet_secrets')
     .where('wallet_id', '=', walletId)
     .execute()
 }
 
-async function assertWalletExists(db: Kysely<Database>, walletId: number): Promise<void> {
-  const wallet = await db
+async function assertWalletExists(walletDb: Kysely<Database>, walletId: number): Promise<void> {
+  const wallet = await walletDb
     .selectFrom('wallets')
     .select('wallet_id')
     .where('wallet_id', '=', walletId)

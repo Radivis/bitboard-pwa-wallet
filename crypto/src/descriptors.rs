@@ -5,6 +5,10 @@ use bdk_wallet::keys::bip39::{Language, Mnemonic};
 use crate::error::CryptoError;
 use crate::types::{AddressType, BitcoinNetwork, DescriptorPair};
 
+/// BIP32 coin type: 0 for mainnet, 1 for testnet/signet/regtest.
+const COIN_TYPE_MAINNET: u32 = 0;
+const COIN_TYPE_TESTNET: u32 = 1;
+
 /// Derive a pair of descriptors (external + internal) from a BIP39 mnemonic.
 ///
 /// - For `AddressType::Taproot`: BIP86 path `tr(xprv/86'/{coin}'/account'/{0,1}/*)`
@@ -27,9 +31,9 @@ pub fn derive_descriptors(
         .map_err(|e| CryptoError::Descriptor(e.to_string()))?;
 
     let coin_type = if bitcoin_network == Network::Bitcoin {
-        0
+        COIN_TYPE_MAINNET
     } else {
-        1
+        COIN_TYPE_TESTNET
     };
 
     let (purpose, wrapper) = match address_type {

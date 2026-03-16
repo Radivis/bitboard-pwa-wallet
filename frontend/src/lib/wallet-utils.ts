@@ -12,6 +12,8 @@ import {
   resolveDescriptorWallet,
 } from '@/lib/descriptor-wallet-manager'
 
+const CUSTOM_ESPLORA_URL_KEY_PREFIX = 'custom_esplora_url_'
+
 /**
  * Update the changeset of the currently active descriptor wallet.
  * Reads (networkMode, addressType, accountId) from the wallet store.
@@ -48,23 +50,23 @@ export async function saveCustomEsploraUrl(
 ): Promise<void> {
   validateEsploraUrl(url, network)
   await ensureMigrated()
-  const db = getDatabase()
-  const key = `custom_esplora_url_${network}`
+  const walletDb = getDatabase()
+  const key = `${CUSTOM_ESPLORA_URL_KEY_PREFIX}${network}`
 
-  const existing = await db
+  const existing = await walletDb
     .selectFrom('settings')
     .select('key')
     .where('key', '=', key)
     .executeTakeFirst()
 
   if (existing) {
-    await db
+    await walletDb
       .updateTable('settings')
       .set({ value: url })
       .where('key', '=', key)
       .execute()
   } else {
-    await db.insertInto('settings').values({ key, value: url }).execute()
+    await walletDb.insertInto('settings').values({ key, value: url }).execute()
   }
 }
 
@@ -72,10 +74,10 @@ export async function deleteCustomEsploraUrl(
   network: NetworkMode,
 ): Promise<void> {
   await ensureMigrated()
-  const db = getDatabase()
-  await db
+  const walletDb = getDatabase()
+  await walletDb
     .deleteFrom('settings')
-    .where('key', '=', `custom_esplora_url_${network}`)
+    .where('key', '=', `${CUSTOM_ESPLORA_URL_KEY_PREFIX}${network}`)
     .execute()
 }
 
@@ -83,11 +85,11 @@ export async function loadCustomEsploraUrl(
   network: NetworkMode,
 ): Promise<string | null> {
   await ensureMigrated()
-  const db = getDatabase()
-  const result = await db
+  const walletDb = getDatabase()
+  const result = await walletDb
     .selectFrom('settings')
     .select('value')
-    .where('key', '=', `custom_esplora_url_${network}`)
+    .where('key', '=', `${CUSTOM_ESPLORA_URL_KEY_PREFIX}${network}`)
     .executeTakeFirst()
 
   return result?.value ?? null
