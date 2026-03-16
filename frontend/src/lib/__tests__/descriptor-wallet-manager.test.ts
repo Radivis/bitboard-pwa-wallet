@@ -1,5 +1,4 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { pbkdf2Sync } from 'node:crypto'
 import type { Kysely } from 'kysely'
 import type { Database as DbSchema } from '@/db/schema'
 import { createTestDatabase } from '@/db/test-helpers'
@@ -16,16 +15,16 @@ import {
 } from '../descriptor-wallet-manager'
 
 /**
- * Descriptor wallet manager tests using PBKDF2 mock for fast execution.
+ * Descriptor wallet manager tests using mock encryption worker for fast execution.
  *
- * IMPORTANT: These tests use PBKDF2 as a stand-in for Argon2id KDF.
- * The actual Argon2id algorithm is tested in crypto/src/tests.rs.
+ * IMPORTANT: The mock uses PBKDF2 + AES-GCM. Production uses the encryption worker with Argon2id WASM.
  */
-vi.mock('@/db/kdf', () => ({
-  deriveKeyBytes: async (password: string, salt: Uint8Array): Promise<Uint8Array> => {
-    return new Uint8Array(pbkdf2Sync(password, salt, 1000, 32, 'sha256'))
-  },
-}))
+vi.mock('@/workers/encryption-factory', async () => {
+  const { getMockEncryptionWorker } = await import('@/db/__tests__/mock-encryption-worker')
+  return {
+    getEncryptionWorker: () => getMockEncryptionWorker(),
+  }
+})
 
 let testDb: Kysely<DbSchema>
 

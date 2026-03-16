@@ -42,7 +42,7 @@ UI (React routes) → Zustand stores (`cryptoStore`, `walletStore`) → `getCryp
 
 ### Persistence flow
 
-UI / stores → `@/db` (hooks, `wallet-persistence`, `database`, `lab-database`) → SQLite (OPFS) via Kysely. Encryption uses `encryption.ts` and `kdf.ts`; KDF calls `getEncryptionWorker().deriveKeyBytes()`, so the **db layer depends only on the encryption worker** for key derivation (not the crypto worker).
+UI / stores → `@/db` (hooks, `wallet-persistence`, `database`, `lab-database`) → SQLite (OPFS) via Kysely. Encryption (KDF + encrypt/decrypt) runs **entirely in the encryption worker**; `encryption.ts` delegates `encryptData` and `decryptData` to `getEncryptionWorker()`, so key material and plaintext never touch the main thread. The db layer depends only on the encryption worker for encryption (not the crypto worker).
 
 ### Lab flow
 
@@ -83,7 +83,7 @@ flowchart TB
   LabWorker --> WasmPkg
   EncryptionWorker --> EncryptionWasm
   Db --> SQLite
-  Db -->|"KDF only"| EncryptionWorker
+  Db -->|"encrypt/decrypt"| EncryptionWorker
   Stores --> Db
   LabWorker -->|"state load/save via main"| Db
   WasmPkg -->|"sync broadcast"| Esplora
@@ -108,12 +108,12 @@ Wallet state lives in **thread-local** `ACTIVE_WALLET` and related `RefCell`s in
 - **crypto-api** (`frontend/src/workers/crypto-api.ts`): Type-only; defines the `CryptoService` interface. Implementation is in `crypto.worker.ts`, which loads the WASM once and forwards every method to the WASM module. State lives **inside WASM** (thread-locals).
 - **lab.worker** (`frontend/src/workers/lab.worker.ts`): Own in-memory `LabState` (blocks, utxos, addresses, mempool, etc.). Loads the **same** WASM (`@/wasm-pkg/bitboard_crypto`) for `lab_*` functions (mine block, build/sign tx, block effects, keypair). It does **not** call the crypto worker; the **main thread** calls both workers when doing “wallet send in lab” (see `useSendMutations.ts` and lab-api’s `prepareLabWalletTransaction` / `addSignedTransactionToMempool`).
 
-So: **two workers each load the same wallet WASM** (crypto and lab; two instances). The **encryption worker** loads only the WASM in `wasm-pkg/bitboard_encryption/` (Argon2id KDF); it has no wallet or Bitcoin code. Wallet-backed lab sends rely on the **crypto** worker’s loaded wallet (descriptors stored in WASM when the wallet is loaded). Comlink passes only serializable data; lab state is sent in/out via `loadState` / `getStateSnapshot`; persistence is done on the main thread via `lab-factory.ts` and `getLabDatabase()`.
+So: **two workers each load the same wallet WASM** (crypto and lab; two instances). The **encryption worker** loads only the WASM in `wasm-pkg/bitboard_encryption/` (Argon2id KDF) and performs AES-GCM encrypt/decrypt using Web Crypto in the worker; derived keys and plaintext exist only in that worker, and it has no wallet or Bitcoin code. Wallet-backed lab sends rely on the **crypto** worker’s loaded wallet (descriptors stored in WASM when the wallet is loaded). Comlink passes only serializable data; lab state is sent in/out via `loadState` / `getStateSnapshot`; persistence is done on the main thread via `lab-factory.ts` and `getLabDatabase()`.
 
 ### Persistence
 
 - **DB:** `frontend/src/db`: `database.ts` / `lab-database.ts`, migrations, schema, Kysely, storage adapter (OPFS). Wallet metadata in the `wallets` table; sensitive payload in `wallet_secrets` (encrypted).
-- **Encryption:** `encryption.ts` (AES-256-GCM), `kdf.ts` (Argon2 via `getEncryptionWorker().deriveKeyBytes()`). **Persistence depends only on the encryption worker** for key derivation (WASM in `wasm-pkg/bitboard_encryption/`).
+- **Encryption:** `encryption.ts` delegates to `getEncryptionWorker()` for `encryptData` and `decryptData`; the worker performs Argon2id KDF (WASM in `wasm-pkg/bitboard_encryption/`) and AES-GCM via Web Crypto. **Persistence depends only on the encryption worker**; key derivation and symmetric encrypt/decrypt are isolated there (no key material on the main thread).
 - **Sensitive data:** Mnemonics and descriptor wallets live in `WalletSecrets`; encrypted at rest in `wallet_secrets`; decrypted only in memory when needed (e.g. to load the wallet into the crypto worker). Lab DB stores WIFs in `lab_addresses` (lab-only, not production keys). Sensitive data exists in memory only in the worker or main thread during unlock and during operations; it is not logged.
 
 ---
@@ -124,20 +124,20 @@ So: **two workers each load the same wallet WASM** (crypto and lab; two instance
 
 - **UI / routes** → stores, db (hooks, persistence), workers (via stores).
 - **Stores** → worker factories (`getCryptoWorker`, `getLabWorker`), db (e.g. `sqliteStorage`, `walletStore`).
-- **db** → `getEncryptionWorker()` in `kdf.ts` only (for KDF); `lab-factory` (main thread) → `getLabDatabase`, `ensureLabMigrated`.
+- **db** → `getEncryptionWorker()` from `encryption.ts` (encrypt/decrypt) and `kdf.ts` (deriveKeyBytes); `lab-factory` (main thread) → `getLabDatabase`, `ensureLabMigrated`.
 - **Workers** → WASM only; no worker imports from `@/db` or from the other worker.
 
 ### Circular dependencies
 
-There is **no** strict cycle: db → encryption worker (for KDF only); workers do not import db or each other. Lab state is loaded/saved from the **main thread** in lab-factory, not from inside the lab worker.
+There is **no** strict cycle: db → encryption worker (for encrypt/decrypt and KDF); workers do not import db or each other. Lab state is loaded/saved from the **main thread** in lab-factory, not from inside the lab worker.
 
 ### Notable coupling
 
-- **Persistence → encryption worker:** The only db–worker coupling is `db/kdf.ts` → `getEncryptionWorker()`. Key derivation is delegated to the encryption worker (WASM in `wasm-pkg/bitboard_encryption/`), which has no wallet or Bitcoin code.
+- **Persistence → encryption worker:** The db layer uses `getEncryptionWorker()` from `encryption.ts` (encryptData/decryptData) and `kdf.ts` (deriveKeyBytes). Key derivation and AES-GCM encrypt/decrypt run in the encryption worker (WASM Argon2 in `wasm-pkg/bitboard_encryption/` plus Web Crypto in the worker); it has no wallet or Bitcoin code.
 - **Duplicate WASM load:** Two workers (crypto and lab) each instantiate `@/wasm-pkg/bitboard_crypto`. This is acceptable (separate processes, no shared mutable state) but should be kept in mind—there is no single shared WASM instance.
 - **Lab vs wallet types:** `lab-api` and `crypto-types` are separate; `TransactionDetails` (crypto) and lab’s tx details are different types. No circular type dependency; wallet and lab have separate type surfaces.
 
 ### Who may import whom
 
-- **db** may import the encryption worker factory for KDF only (`kdf.ts`).
+- **db** may import the encryption worker factory for encryption (`encryption.ts`: encryptData/decryptData; `kdf.ts`: deriveKeyBytes).
 - **Workers** must not import db or app stores.

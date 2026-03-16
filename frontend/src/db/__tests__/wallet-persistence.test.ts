@@ -1,28 +1,25 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { pbkdf2Sync } from 'node:crypto'
 import type { Kysely } from 'kysely'
 import type { Database } from '../schema'
 import { createTestDatabase } from '../test-helpers'
 
 /**
- * Wallet persistence tests using PBKDF2 mock for fast execution.
- * 
- * IMPORTANT: These tests use PBKDF2 as a stand-in for Argon2id KDF.
- * The actual Argon2id algorithm is tested in crypto/src/tests.rs.
- * 
+ * Wallet persistence tests using mock encryption worker for fast execution.
+ *
+ * IMPORTANT: The mock uses PBKDF2 + AES-GCM. Production uses the encryption worker with Argon2id WASM.
+ *
  * These tests validate:
  * - Database CRUD operations for wallet_secrets table
  * - Correct integration of encryption with persistence
  * - Error handling for missing wallets and decryption failures
  * - Round-trip save/load of encrypted wallet secrets
  */
-vi.mock('../kdf', () => ({
-  // Fast PBKDF2 stand-in for Argon2id (only for unit tests)
-  // Production uses real Argon2id via WASM worker
-  deriveKeyBytes: async (password: string, salt: Uint8Array): Promise<Uint8Array> => {
-    return new Uint8Array(pbkdf2Sync(password, salt, 1000, 32, 'sha256'))
-  },
-}))
+vi.mock('@/workers/encryption-factory', async () => {
+  const { getMockEncryptionWorker } = await import('./mock-encryption-worker')
+  return {
+    getEncryptionWorker: () => getMockEncryptionWorker(),
+  }
+})
 
 import { TEST_MNEMONIC_12 } from '@/test-utils/test-providers'
 import { saveWalletSecrets, loadWalletSecrets, deleteWalletSecrets } from '../wallet-persistence'

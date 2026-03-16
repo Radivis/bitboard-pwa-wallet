@@ -1,59 +1,22 @@
-import { deriveKeyBytes } from './kdf'
+import { getEncryptionWorker } from '@/workers/encryption-factory'
+import type { EncryptedBlob } from '@/workers/encryption-api'
 
-export interface EncryptedBlob {
-  ciphertext: Uint8Array
-  iv: Uint8Array
-  salt: Uint8Array
-}
-
-const SALT_LENGTH_BYTES = 16
-const IV_LENGTH_BYTES = 12
-
-async function deriveKey(password: string, salt: Uint8Array): Promise<CryptoKey> {
-  const rawKey = await deriveKeyBytes(password, salt)
-
-  return crypto.subtle.importKey(
-    'raw',
-    rawKey as BufferSource,
-    'AES-GCM',
-    false,
-    ['encrypt', 'decrypt']
-  )
-}
+/** Re-export so wallet-persistence and tests keep the same import shape. */
+export type { EncryptedBlob } from '@/workers/encryption-api'
 
 /**
  * Encrypts plaintext using Argon2id KDF + AES-256-GCM.
+ * Key derivation and encryption run in the encryption worker; key material never touches the main thread.
  *
  * @param password - User password for key derivation
  * @param plaintext - Data to encrypt (will be UTF-8 encoded)
  * @returns Encrypted blob with ciphertext, IV, and salt
- *
- * @remarks
- * - Key derivation uses Argon2id (64 MB, 2 iterations, parallelism 1) via WASM worker
- * - Generates random 96-bit IV and 128-bit salt per call
- * - AES-GCM provides authenticated encryption (tamper detection)
  */
 export async function encryptData(
   password: string,
   plaintext: string
 ): Promise<EncryptedBlob> {
-  const salt = crypto.getRandomValues(new Uint8Array(SALT_LENGTH_BYTES))
-  const iv = crypto.getRandomValues(new Uint8Array(IV_LENGTH_BYTES))
-
-  const key = await deriveKey(password, salt)
-  const plaintextBytes = new TextEncoder().encode(plaintext)
-
-  const ciphertextBuffer = await crypto.subtle.encrypt(
-    { name: 'AES-GCM', iv },
-    key,
-    plaintextBytes
-  )
-
-  return {
-    ciphertext: new Uint8Array(ciphertextBuffer),
-    iv,
-    salt,
-  }
+  return getEncryptionWorker().encryptData(password, plaintext)
 }
 
 /**
@@ -69,17 +32,5 @@ export async function decryptData(
   password: string,
   encrypted: EncryptedBlob
 ): Promise<string> {
-  const key = await deriveKey(password, encrypted.salt)
-
-  try {
-    const plaintextBytes = await crypto.subtle.decrypt(
-      { name: 'AES-GCM', iv: encrypted.iv as BufferSource },
-      key,
-      encrypted.ciphertext as BufferSource
-    )
-
-    return new TextDecoder().decode(plaintextBytes)
-  } catch {
-    throw new Error('Decryption failed: incorrect password or corrupted data')
-  }
+  return getEncryptionWorker().decryptData(password, encrypted)
 }
