@@ -10,7 +10,7 @@
   "scripts": {
     "dev": "vite",
     "build": "npm run build:wasm && tsc && vite build",
-    "build:wasm": "cd ../crypto && wasm-pack build --target bundler --out-dir ../frontend/src/wasm-pkg",
+    "build:wasm": "cd ../crypto && wasm-pack build --target bundler --out-dir ../frontend/src/wasm-pkg && cd ../bitboard-encryption && wasm-pack build --target bundler --out-dir ../frontend/src/wasm-pkg/bitboard_encryption",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
     "test": "vitest",

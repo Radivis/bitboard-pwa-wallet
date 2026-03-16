@@ -14,7 +14,7 @@ async function deriveKey(password: string, salt: Uint8Array): Promise<CryptoKey>
 
   return crypto.subtle.importKey(
     'raw',
-    rawKey,
+    rawKey as BufferSource,
     'AES-GCM',
     false,
     ['encrypt', 'decrypt']
@@ -73,9 +73,9 @@ export async function decryptData(
 
   try {
     const plaintextBytes = await crypto.subtle.decrypt(
-      { name: 'AES-GCM', iv: encrypted.iv },
+      { name: 'AES-GCM', iv: encrypted.iv as BufferSource },
       key,
-      encrypted.ciphertext
+      encrypted.ciphertext as BufferSource
     )
 
     return new TextDecoder().decode(plaintextBytes)

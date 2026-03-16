@@ -81,7 +81,9 @@ jobs:
         uses: jetli/wasm-pack-action@v0.4.0
 
       - name: Build WASM
-        run: cd crypto && wasm-pack build --target bundler --out-dir ../frontend/src/wasm-pkg
+        run: |
+          cd crypto && wasm-pack build --target bundler --out-dir ../frontend/src/wasm-pkg
+          cd ../bitboard-encryption && wasm-pack build --target bundler --out-dir ../frontend/src/wasm-pkg/bitboard_encryption
 
       - name: Setup Node.js
         uses: actions/setup-node@v4

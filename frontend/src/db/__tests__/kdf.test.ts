@@ -1,9 +1,9 @@
 import { describe, it, expect, vi } from 'vitest'
 import { deriveKeyBytes } from '../kdf'
 
-vi.mock('@/workers/crypto-factory', () => ({
-  getCryptoWorker: () => ({
-    deriveArgon2Key: async (_password: string, _salt: Uint8Array) =>
+vi.mock('@/workers/encryption-factory', () => ({
+  getEncryptionWorker: () => ({
+    deriveKeyBytes: async (_password: string, _salt: Uint8Array) =>
       new Uint8Array(32).fill(0xab),
   }),
 }))

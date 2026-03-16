@@ -151,15 +151,16 @@ test.describe('Crypto Worker Integration', () => {
     }
   })
 
-  test('argon2 key derivation', async ({ page }) => {
+  test('encryption worker key derivation', async ({ page }) => {
     const result = await page.evaluate(async () => {
       try {
-        const { useCryptoStore } = await import('/src/stores/cryptoStore')
-        const state = useCryptoStore.getState()
-        const worker = state._getWorker()
+        const { getEncryptionWorker } = await import(
+          '/src/workers/encryption-factory'
+        )
+        const worker = getEncryptionWorker()
         const salt = new Uint8Array(16).fill(42)
-        const key = await worker.deriveArgon2Key('testpassword', salt)
-        const key2 = await worker.deriveArgon2Key('testpassword', salt)
+        const key = await worker.deriveKeyBytes('testpassword', salt)
+        const key2 = await worker.deriveKeyBytes('testpassword', salt)
         return {
           keyLength: key.length,
           deterministic: JSON.stringify(key) === JSON.stringify(key2),

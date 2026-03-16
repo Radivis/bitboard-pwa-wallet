@@ -168,11 +168,6 @@ const cryptoService = {
     const wasmModule = await getWasm();
     return wasmModule.get_transaction_list();
   },
-
-  async deriveArgon2Key(password: string, salt: Uint8Array): Promise<Uint8Array> {
-    const wasmModule = await getWasm();
-    return new Uint8Array(wasmModule.derive_argon2_key(password, salt));
-  },
 };
 
 expose(cryptoService);

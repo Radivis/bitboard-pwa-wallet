@@ -1,6 +1,5 @@
 use std::cell::RefCell;
 
-use argon2::{Algorithm, Argon2, Params, Version};
 use bdk_wallet::chain::Merge;
 use bdk_wallet::{ChangeSet, KeychainKind, Wallet as BdkWallet};
 use wasm_bindgen::prelude::*;
@@ -421,22 +420,4 @@ pub fn get_lab_change_address() -> Result<String, JsValue> {
             .address
             .to_string()
     })
-}
-
-/// Derive a 256-bit key from a password and salt using Argon2id.
-///
-/// Parameters: 64 MB memory, 2 iterations, parallelism 1.
-/// t=2 meets OWASP minimum; p=1 is the mobile preset (CipherTools/PHC).
-/// Reduces latency on constrained/CI vs t=3 with acceptable security trade-off.
-/// See .cursor/architecture/research/argon2-mobile-performance.md
-#[wasm_bindgen]
-pub fn derive_argon2_key(password: &str, salt: &[u8]) -> Result<Vec<u8>, JsValue> {
-    let params = Params::new(65536, 2, 1, Some(32))
-        .map_err(|e| JsValue::from_str(&format!("Argon2 params error: {e}")))?;
-    let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
-    let mut key = vec![0u8; 32];
-    argon2
-        .hash_password_into(password.as_bytes(), salt, &mut key)
-        .map_err(|e| JsValue::from_str(&format!("Argon2 hash error: {e}")))?;
-    Ok(key)
 }

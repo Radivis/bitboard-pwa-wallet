@@ -185,7 +185,6 @@ dependencies = [
 name = "bitboard-crypto"
 version = "0.1.0"
 dependencies = [
- "argon2",
  "assert_matches",
  "async-trait",
  "bdk_esplora",
@@ -206,6 +205,15 @@ dependencies = [
  "wasm-bindgen-futures",
  "wasm-bindgen-test",
  "wiremock",
+]
+
+[[package]]
+name = "bitboard-encryption"
+version = "0.1.0"
+dependencies = [
+ "argon2",
+ "getrandom",
+ "wasm-bindgen",
 ]
 
 [[package]]
