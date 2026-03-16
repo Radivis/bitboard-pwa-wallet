@@ -38,3 +38,7 @@ post-commit:
       run: ./scripts/e2e-reminder.sh
       # Reminds developers to run E2E tests manually
       priority: 1
+    refresh-coverage:
+      run: ./scripts/refresh-coverage.sh
+      # Keep lcov.info and coverage reports up to date in dev
+      priority: 2

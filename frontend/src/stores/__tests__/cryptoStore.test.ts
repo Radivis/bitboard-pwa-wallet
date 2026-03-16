@@ -1,18 +1,47 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { useCryptoStore } from '../cryptoStore';
 
 /**
- * Note: These tests require a browser environment with Worker support.
- * The jsdom environment doesn't support Web Workers by default.
- * 
- * To run these tests:
- * 1. Use @vitest/browser or playwright-test for actual worker testing
- * 2. Or mock the worker factory for unit testing the store logic
- * 
- * For now, these tests serve as documentation of expected behavior.
- * The actual integration is tested manually via the CryptoTest component.
+ * cryptoStore unit tests with a mocked worker factory.
+ * Worker creation and Comlink are not used; the store's logic (error handling,
+ * delegation to worker) is tested against a fake CryptoService.
+ * Real worker integration is covered by E2E (crypto-integration.spec.ts).
  */
-describe.skip('cryptoStore (requires browser environment)', () => {
+vi.mock('@/workers/crypto-factory', () => {
+  let lastGeneratedMnemonic = '';
+  const mockWorker = {
+    ping: async () => true,
+    generateMnemonic: async (wordCount: 12 | 24) => {
+      const words = Array.from(
+        { length: wordCount },
+        (_, i) => `word${i + 1}`,
+      );
+      lastGeneratedMnemonic = words.join(' ');
+      return lastGeneratedMnemonic;
+    },
+    validateMnemonic: async (mnemonic: string) => {
+      if (mnemonic === '') {
+        throw new Error('Mnemonic cannot be empty');
+      }
+      if (mnemonic === 'invalid word list here test foo bar') {
+        return false;
+      }
+      return mnemonic === lastGeneratedMnemonic;
+    },
+  };
+  return {
+    getCryptoWorker: () => mockWorker,
+    terminateCryptoWorker: vi.fn(),
+    onWorkerHealthChange: (
+      listener: (status: string, error: string | null) => void,
+    ) => {
+      listener('healthy', null);
+      return () => {};
+    },
+  };
+});
+
+describe('cryptoStore', () => {
   beforeEach(() => {
     const { terminateWorker } = useCryptoStore.getState();
     terminateWorker();
@@ -39,28 +68,30 @@ describe.skip('cryptoStore (requires browser environment)', () => {
 
   it('rejects invalid mnemonic', async () => {
     const { validateMnemonic } = useCryptoStore.getState();
-    const isValid = await validateMnemonic('invalid word list here test foo bar');
+    const isValid = await validateMnemonic(
+      'invalid word list here test foo bar',
+    );
     expect(isValid).toBe(false);
   });
 
   it('sets error state on failure', async () => {
     const { validateMnemonic } = useCryptoStore.getState();
-    
+
     try {
       await validateMnemonic('');
-    } catch (err) {
+    } catch {
       // Expected to throw
     }
-    
+
     const { error } = useCryptoStore.getState();
     expect(error).toBeTruthy();
   });
 
   it('clears error state on success', async () => {
     const { generateMnemonic } = useCryptoStore.getState();
-    
+
     await generateMnemonic(12);
-    
+
     const { error } = useCryptoStore.getState();
     expect(error).toBeNull();
   });
