@@ -37,4 +37,19 @@ test.describe('Wallet Lock/Unlock', () => {
     await expect(page.getByRole('heading', { name: /receive/i })).toBeVisible({ timeout: 10000 })
     await expect(page.getByText('Receiving Address')).toBeVisible()
   })
+
+  test('reload when locked shows Unlock screen (no sensitive state leak)', async ({
+    page,
+  }) => {
+    await createWalletViaUI(page)
+    await page.getByRole('link', { name: /settings/i }).click()
+    await page.getByRole('button', { name: 'Lock Wallet' }).click()
+    await page.getByRole('link', { name: /dashboard/i }).click()
+    await expect(page.getByText('Unlock Wallet')).toBeVisible({ timeout: 10000 })
+
+    await page.reload()
+    await expect(page.getByText('Unlock Wallet')).toBeVisible({ timeout: 10000 })
+    await expect(page.getByLabel('Password')).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Dashboard' })).not.toBeVisible()
+  })
 })

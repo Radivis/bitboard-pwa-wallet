@@ -1,3 +1,8 @@
+//! WASM-only sleep and sleeper for async Esplora client.
+//!
+//! This module uses `setTimeout` and is only compiled for `wasm32`. Native coverage
+//! (`cargo llvm-cov` on the host) will show 0% for this file; that is expected.
+
 use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll};
