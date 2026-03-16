@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Refresh coverage reports (Rust + frontend) for local development.
-# Run from repository root. Used as last step in post-commit hook.
+# Run from repository root. Invoked manually or via reminder in post-commit hook.
 
 set -e
 cd "$(dirname "$0")/.."
