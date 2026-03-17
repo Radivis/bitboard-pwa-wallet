@@ -21,6 +21,7 @@ export {
   deleteWalletSecrets,
   getWalletSecretsEncrypted,
   putWalletSecretsEncrypted,
+  persistNewWalletWithSecrets,
 } from './wallet-persistence'
 export type {
   WalletSecrets,

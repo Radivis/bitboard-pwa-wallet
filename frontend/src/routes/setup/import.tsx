@@ -17,7 +17,7 @@ import {
   useAddWallet,
   getDatabase,
   ensureMigrated,
-  putWalletSecretsEncrypted,
+  persistNewWalletWithSecrets,
   walletKeys,
 } from '@/db'
 import { ensureSecretsChannel } from '@/workers/secrets-channel'
@@ -111,14 +111,18 @@ export function ImportWalletPage() {
       await ensureMigrated()
       const walletDb = getDatabase()
 
-      const walletId = await addWallet.mutateAsync({
-        name: `Imported Wallet ${Date.now()}`,
-        created_at: new Date().toISOString(),
-      })
+      let walletId: number
       try {
-        await putWalletSecretsEncrypted(walletDb, walletId, encryptedBlob)
+        walletId = await persistNewWalletWithSecrets(
+          walletDb,
+          () =>
+            addWallet.mutateAsync({
+              name: `Imported Wallet ${Date.now()}`,
+              created_at: new Date().toISOString(),
+            }),
+          encryptedBlob,
+        )
       } catch (secretsErr) {
-        await walletDb.deleteFrom('wallets').where('wallet_id', '=', walletId).execute()
         queryClient.invalidateQueries({ queryKey: walletKeys.all })
         throw secretsErr
       }

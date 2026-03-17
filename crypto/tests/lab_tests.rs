@@ -99,7 +99,7 @@ fn build_and_sign_lab_transaction_returns_signed_tx() {
     );
 
     // Fee must be at least fee_rate * vsize (vsize = ceil(weight/4))
-    let vsize = (tx.weight().to_wu() + 3) / 4;
+    let vsize = tx.weight().to_wu().div_ceil(4);
     let min_fee = vsize as u64 * (FEE_RATE_SAT_PER_VB as u64);
     assert!(
         fee_sats >= min_fee,

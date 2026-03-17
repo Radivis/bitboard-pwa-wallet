@@ -92,6 +92,39 @@ export async function putWalletSecretsEncrypted(
   }
 }
 
+export type PutWalletSecretsEncryptedFn = (
+  db: Kysely<Database>,
+  walletId: number,
+  encrypted: EncryptedWalletSecretsBlob
+) => Promise<void>
+
+/**
+ * Inserts a wallet row via the given callback, then persists encrypted secrets.
+ * If the secrets write fails, the wallet row is removed and the error is rethrown,
+ * so the wallet list never contains an entry without secrets.
+ *
+ * @param walletDb - Kysely wallet database instance
+ * @param insertWalletRow - Callback that inserts the wallet row and returns the new wallet_id
+ * @param encryptedBlob - Encrypted blob to store (from crypto worker)
+ * @param putSecrets - Secrets writer (default: putWalletSecretsEncrypted). Inject for tests.
+ * @returns The new wallet_id on success
+ */
+export async function persistNewWalletWithSecrets(
+  walletDb: Kysely<Database>,
+  insertWalletRow: () => Promise<number>,
+  encryptedBlob: EncryptedWalletSecretsBlob,
+  putSecrets: PutWalletSecretsEncryptedFn = putWalletSecretsEncrypted
+): Promise<number> {
+  const walletId = await insertWalletRow()
+  try {
+    await putSecrets(walletDb, walletId, encryptedBlob)
+    return walletId
+  } catch (err) {
+    await walletDb.deleteFrom('wallets').where('wallet_id', '=', walletId).execute()
+    throw err
+  }
+}
+
 /**
  * Encrypts and persists wallet secrets to the `wallet_secrets` table.
  *
