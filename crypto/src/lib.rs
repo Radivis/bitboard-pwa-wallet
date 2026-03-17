@@ -15,6 +15,7 @@ fn unix_seconds_now() -> u64 {
 pub mod blockchain;
 pub mod descriptors;
 pub mod error;
+use crate::error::MapErrToJs;
 pub mod esplora;
 pub mod lab;
 pub mod lab_psbt;
@@ -90,11 +91,6 @@ fn accumulate_staged_changes() {
 // ---------------------------------------------------------------------------
 
 #[wasm_bindgen]
-pub fn greet(name: &str) -> String {
-    format!("Hello from bitboard-crypto, {}!", name)
-}
-
-#[wasm_bindgen]
 pub fn generate_mnemonic(word_count: u32) -> Result<String, JsValue> {
     mnemonic::generate_mnemonic(word_count).map_err(Into::into)
 }
@@ -120,7 +116,7 @@ pub fn derive_descriptors(
     let pair = descriptors::derive_descriptors(mnemonic_str, network, addr_type, account_id)
         .map_err(JsValue::from)?;
 
-    serde_wasm_bindgen::to_value(&pair).map_err(|e| JsValue::from_str(&e.to_string()))
+    serde_wasm_bindgen::to_value(&pair).map_err_to_js()
 }
 
 // ---------------------------------------------------------------------------
@@ -165,7 +161,7 @@ pub fn create_wallet(
         changeset_json,
     };
 
-    serde_wasm_bindgen::to_value(&result).map_err(|e| JsValue::from_str(&e.to_string()))
+    serde_wasm_bindgen::to_value(&result).map_err_to_js()
 }
 
 /// Load a previously persisted wallet from descriptors and a changeset JSON.
@@ -179,14 +175,16 @@ pub fn load_wallet(
     let net = types::BitcoinNetwork::try_from(network).map_err(JsValue::from)?;
     let changeset = wallet::deserialize_changeset(changeset_json).map_err(JsValue::from)?;
 
-    let bdk_wallet = wallet::load_wallet(external_descriptor, internal_descriptor, net, changeset)
-        .map_err(JsValue::from)?;
-
-    let restored_changeset =
-        wallet::deserialize_changeset(changeset_json).map_err(JsValue::from)?;
+    let bdk_wallet = wallet::load_wallet(
+        external_descriptor,
+        internal_descriptor,
+        net,
+        changeset.clone(),
+    )
+    .map_err(JsValue::from)?;
 
     ACTIVE_WALLET.with(|w| w.replace(Some(bdk_wallet)));
-    ACCUMULATED_CHANGESET.with(|cs| *cs.borrow_mut() = restored_changeset);
+    ACCUMULATED_CHANGESET.with(|cs| *cs.borrow_mut() = changeset);
     EXTERNAL_DESCRIPTOR_FOR_LAB.with(|d| *d.borrow_mut() = external_descriptor.to_string());
     INTERNAL_DESCRIPTOR_FOR_LAB.with(|d| *d.borrow_mut() = internal_descriptor.to_string());
 
@@ -232,11 +230,13 @@ pub fn export_changeset() -> Result<String, JsValue> {
 // Sync behavior: we rely on BDK for reorg/duplicate handling; empty update is
 // safe (apply_update is all-or-nothing per call). Use full_scan after
 // create/import; use sync_wallet for incremental updates.
+// The sync module (sync::sync_wallet / full_scan_wallet) is used by tests with
+// a mock BlockchainClient; the WASM entrypoints here use EsploraClient directly.
 
 const PARALLEL_REQUESTS: usize = 5;
 
 fn to_js<T: serde::Serialize>(value: &T) -> Result<JsValue, JsValue> {
-    serde_wasm_bindgen::to_value(value).map_err(|e| JsValue::from_str(&e.to_string()))
+    serde_wasm_bindgen::to_value(value).map_err_to_js()
 }
 
 /// Sync the active wallet against an Esplora server (incremental).
@@ -253,7 +253,7 @@ pub async fn sync_wallet(esplora_url: &str) -> Result<JsValue, JsValue> {
         .inner()
         .sync(sync_request, PARALLEL_REQUESTS)
         .await
-        .map_err(|e| JsValue::from_str(&e.to_string()))?
+        .map_err_to_js()?
         .into();
 
     with_wallet_mut(|w| {
@@ -281,7 +281,7 @@ pub async fn full_scan_wallet(esplora_url: &str, stop_gap: usize) -> Result<JsVa
         .inner()
         .full_scan(scan_request, stop_gap, PARALLEL_REQUESTS)
         .await
-        .map_err(|e| JsValue::from_str(&e.to_string()))?
+        .map_err_to_js()?
         .into();
 
     with_wallet_mut(|w| {
@@ -351,7 +351,7 @@ pub fn sign_and_extract_transaction(psbt_base64: &str) -> Result<String, JsValue
 #[wasm_bindgen]
 pub async fn broadcast_transaction(raw_tx_hex: &str, esplora_url: &str) -> Result<String, JsValue> {
     let tx_bytes = bitcoin::consensus::encode::deserialize_hex::<bitcoin::Transaction>(raw_tx_hex)
-        .map_err(|e| JsValue::from_str(&e.to_string()))?;
+        .map_err_to_js()?;
 
     let client = esplora::EsploraClient::new(esplora_url).map_err(JsValue::from)?;
 
@@ -400,7 +400,7 @@ pub fn build_and_sign_lab_transaction(
             change_address,
         )
     })?;
-    let signed = result.map_err(|e| JsValue::from_str(&e.to_string()))?;
+    let signed = result.map_err_to_js()?;
 
     let signed_tx_hex = hex::encode(&signed.signed_tx_bytes);
     let result = serde_json::json!({
@@ -408,7 +408,7 @@ pub fn build_and_sign_lab_transaction(
         "fee_sats": signed.fee_sats,
         "has_change": signed.has_change,
     });
-    Ok(JsValue::from_str(&result.to_string()))
+    serde_wasm_bindgen::to_value(&result).map_err_to_js()
 }
 
 /// Return the first internal address for lab change outputs.

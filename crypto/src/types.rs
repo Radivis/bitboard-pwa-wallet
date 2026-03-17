@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::CryptoError;
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum AddressType {
     Taproot,
@@ -25,7 +25,7 @@ impl TryFrom<&str> for AddressType {
     }
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum BitcoinNetwork {
     Bitcoin,
@@ -52,6 +52,7 @@ impl From<Network> for BitcoinNetwork {
             Network::Testnet => BitcoinNetwork::Testnet,
             Network::Signet => BitcoinNetwork::Signet,
             Network::Regtest => BitcoinNetwork::Regtest,
+            // Default to Signet for any future or non-standard Network variant from the bitcoin crate.
             _ => BitcoinNetwork::Signet,
         }
     }
@@ -76,7 +77,7 @@ impl TryFrom<&str> for BitcoinNetwork {
 
 /// A pair of descriptor strings (external for receiving, internal for change).
 /// These are serialized to/from the WASM boundary as JSON.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct DescriptorPair {
     pub external: String,
     pub internal: String,
@@ -84,7 +85,7 @@ pub struct DescriptorPair {
 
 /// Wallet balance broken down by confirmation status.
 /// All amounts are in satoshis.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct BalanceInfo {
     pub confirmed: u64,
     pub trusted_pending: u64,
@@ -94,7 +95,7 @@ pub struct BalanceInfo {
 }
 
 /// Result returned to JS after creating a new wallet.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct CreateWalletResult {
     pub external_descriptor: String,
     pub internal_descriptor: String,
@@ -103,14 +104,14 @@ pub struct CreateWalletResult {
 }
 
 /// Result returned to JS after syncing/scanning the wallet.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct SyncResult {
     pub balance: BalanceInfo,
     pub changeset_json: String,
 }
 
 /// Summary of a single wallet transaction, returned as part of transaction history.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct TransactionDetails {
     pub txid: String,
     pub sent_sats: u64,

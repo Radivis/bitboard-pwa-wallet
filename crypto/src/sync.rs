@@ -1,3 +1,10 @@
+//! Wallet sync abstraction over a [`BlockchainClient`].
+//!
+//! This module is used by **integration tests** (e.g. `tests/esplora_tests.rs`) so they can
+//! pass a mock `BlockchainClient`. The WASM entrypoints in `lib.rs` (`sync_wallet` and
+//! `full_scan_wallet`) do not use this module; they call `EsploraClient` directly to avoid
+//! passing a trait object across the WASM boundary.
+
 use bdk_wallet::Wallet;
 
 use crate::blockchain::BlockchainClient;
