@@ -1,4 +1,4 @@
-import { expose } from 'comlink';
+import { expose, wrap, type Remote } from 'comlink';
 import type {
   AddressType,
   BitcoinNetwork,
@@ -10,21 +10,11 @@ import type {
   TransactionDetails,
   WalletSecrets,
 } from './crypto-types';
-import type {
-  EncryptedBlobMessage,
-  SecretsChannelResponse,
-} from './secrets-channel-types';
+import type { EncryptedBlobMessage, SecretsChannelService } from './secrets-channel-types';
 
 let wasm: typeof import('@/wasm-pkg/bitboard_crypto') | null = null;
 let wasmInitError: string | null = null;
-let secretsPort: MessagePort | null = null;
-const secretsPending = new Map<
-  string,
-  {
-    resolve: (value: string | EncryptedBlobMessage) => void;
-    reject: (err: Error) => void;
-  }
->();
+let secretsProxy: Remote<SecretsChannelService> | null = null;
 
 async function getWasm() {
   if (wasmInitError) {
@@ -48,55 +38,14 @@ async function initWasm() {
 
 initWasm();
 
-function handleSecretsPortMessage(event: MessageEvent<SecretsChannelResponse>) {
-  const msg = event.data;
-  if (!msg || !('requestId' in msg)) return;
-  const pending = secretsPending.get(msg.requestId);
-  if (!pending) return;
-  secretsPending.delete(msg.requestId);
-  if (msg.type === 'DECRYPT_RESULT') {
-    pending.resolve(msg.plaintext);
-  } else if (msg.type === 'DECRYPT_ERROR') {
-    pending.reject(new Error(msg.error));
-  } else if (msg.type === 'ENCRYPT_RESULT') {
-    pending.resolve(msg.encryptedBlob);
-  } else if (msg.type === 'ENCRYPT_ERROR') {
-    pending.reject(new Error(msg.error));
-  }
-}
-
 function requestDecrypt(password: string, encryptedBlob: EncryptedBlobMessage): Promise<string> {
-  if (!secretsPort) return Promise.reject(new Error('Secrets port not set'));
-  const requestId = `decrypt-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  return new Promise<string>((resolve, reject) => {
-    secretsPending.set(requestId, {
-      resolve: resolve as (v: string | EncryptedBlobMessage) => void,
-      reject,
-    });
-    secretsPort!.postMessage({
-      type: 'DECRYPT',
-      requestId,
-      password,
-      encryptedBlob,
-    });
-  });
+  if (!secretsProxy) return Promise.reject(new Error('Secrets port not set'));
+  return secretsProxy.decrypt(password, encryptedBlob);
 }
 
 function requestEncrypt(password: string, plaintext: string): Promise<EncryptedBlobMessage> {
-  if (!secretsPort) return Promise.reject(new Error('Secrets port not set'));
-  const requestId = `encrypt-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  return new Promise<EncryptedBlobMessage>((resolve, reject) => {
-    secretsPending.set(requestId, {
-      resolve: resolve as (v: string | EncryptedBlobMessage) => void,
-      reject,
-    });
-    secretsPort!.postMessage({
-      type: 'ENCRYPT',
-      requestId,
-      password,
-      plaintext,
-    });
-  });
+  if (!secretsProxy) return Promise.reject(new Error('Secrets port not set'));
+  return secretsProxy.encrypt(password, plaintext);
 }
 
 function findDescriptorWallet(
@@ -115,11 +64,7 @@ function findDescriptorWallet(
 
 const cryptoService = {
   async setSecretsPort(port: MessagePort): Promise<void> {
-    if (secretsPort) {
-      secretsPort.onmessage = null;
-    }
-    secretsPort = port;
-    secretsPort.onmessage = handleSecretsPortMessage as (ev: MessageEvent) => void;
+    secretsProxy = wrap<SecretsChannelService>(port);
   },
 
   async ping(): Promise<boolean> {

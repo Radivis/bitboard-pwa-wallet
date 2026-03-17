@@ -1,16 +1,11 @@
 import { expose } from 'comlink';
 import type { EncryptionService, EncryptedBlob } from './encryption-api';
-import type {
-  SecretsChannelDecryptRequest,
-  SecretsChannelEncryptRequest,
-  SecretsChannelResponse,
-} from './secrets-channel-types';
+import type { EncryptedBlobMessage } from './secrets-channel-types';
 
 const SALT_LENGTH_BYTES = 16
 const IV_LENGTH_BYTES = 12
 
 let wasm: typeof import('@/wasm-pkg/bitboard_encryption/bitboard_encryption') | null = null;
-let secretsPort: MessagePort | null = null;
 
 async function getWasm() {
   if (!wasm) {
@@ -70,53 +65,24 @@ async function doDecrypt(password: string, encrypted: EncryptedBlob): Promise<st
   }
 }
 
-function handleSecretsPortMessage(event: MessageEvent<SecretsChannelDecryptRequest | SecretsChannelEncryptRequest>) {
-  const msg = event.data;
-  if (!msg || !secretsPort) return;
-
-  if (msg.type === 'DECRYPT') {
-    const { requestId, password, encryptedBlob } = msg;
-    doDecrypt(password, {
+/** API exposed on the secrets port for the crypto worker (Comlink RPC). */
+const secretsChannelService = {
+  async decrypt(password: string, encryptedBlob: EncryptedBlobMessage): Promise<string> {
+    return doDecrypt(password, {
       ciphertext: encryptedBlob.ciphertext as Uint8Array,
       iv: encryptedBlob.iv as Uint8Array,
       salt: encryptedBlob.salt as Uint8Array,
-    })
-      .then((plaintext) => {
-        secretsPort!.postMessage({ type: 'DECRYPT_RESULT', requestId, plaintext } satisfies SecretsChannelResponse);
-      })
-      .catch((err) => {
-        secretsPort!.postMessage({ type: 'DECRYPT_ERROR', requestId, error: String(err) } satisfies SecretsChannelResponse);
-      });
-    return;
-  }
-
-  if (msg.type === 'ENCRYPT') {
-    const { requestId, password, plaintext } = msg;
-    doEncrypt(password, plaintext)
-      .then((encryptedBlob) => {
-        secretsPort!.postMessage({
-          type: 'ENCRYPT_RESULT',
-          requestId,
-          encryptedBlob: {
-            ciphertext: encryptedBlob.ciphertext,
-            iv: encryptedBlob.iv,
-            salt: encryptedBlob.salt,
-          },
-        } satisfies SecretsChannelResponse);
-      })
-      .catch((err) => {
-        secretsPort!.postMessage({ type: 'ENCRYPT_ERROR', requestId, error: String(err) } satisfies SecretsChannelResponse);
-      });
-  }
-}
+    });
+  },
+  async encrypt(password: string, plaintext: string): Promise<EncryptedBlobMessage> {
+    const blob = await doEncrypt(password, plaintext);
+    return { ciphertext: blob.ciphertext, iv: blob.iv, salt: blob.salt };
+  },
+};
 
 const encryptionService: EncryptionService = {
   async setSecretsPort(port: MessagePort): Promise<void> {
-    if (secretsPort) {
-      secretsPort.onmessage = null;
-    }
-    secretsPort = port;
-    secretsPort.onmessage = handleSecretsPortMessage;
+    expose(secretsChannelService, port);
   },
 
   async deriveKeyBytes(password: string, salt: Uint8Array): Promise<Uint8Array> {

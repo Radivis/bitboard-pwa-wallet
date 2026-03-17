@@ -1,6 +1,6 @@
 /**
- * Message types for the worker-to-worker secrets channel (encryption worker ↔ crypto worker).
- * Main thread never reads this channel; it only passes the ports to the workers.
+ * Types for the worker-to-worker secrets channel (encryption worker ↔ crypto worker).
+ * Communication uses Comlink RPC over a MessagePort; main thread never reads this channel.
  */
 
 export interface EncryptedBlobMessage {
@@ -9,50 +9,8 @@ export interface EncryptedBlobMessage {
   salt: Uint8Array;
 }
 
-export type SecretsChannelDecryptRequest = {
-  type: 'DECRYPT';
-  requestId: string;
-  password: string;
-  encryptedBlob: EncryptedBlobMessage;
-};
-
-export type SecretsChannelDecryptResult = {
-  type: 'DECRYPT_RESULT';
-  requestId: string;
-  plaintext: string;
-};
-
-export type SecretsChannelDecryptError = {
-  type: 'DECRYPT_ERROR';
-  requestId: string;
-  error: string;
-};
-
-export type SecretsChannelEncryptRequest = {
-  type: 'ENCRYPT';
-  requestId: string;
-  password: string;
-  plaintext: string;
-};
-
-export type SecretsChannelEncryptResult = {
-  type: 'ENCRYPT_RESULT';
-  requestId: string;
-  encryptedBlob: EncryptedBlobMessage;
-};
-
-export type SecretsChannelEncryptError = {
-  type: 'ENCRYPT_ERROR';
-  requestId: string;
-  error: string;
-};
-
-export type SecretsChannelRequest =
-  | SecretsChannelDecryptRequest
-  | SecretsChannelEncryptRequest;
-
-export type SecretsChannelResponse =
-  | SecretsChannelDecryptResult
-  | SecretsChannelDecryptError
-  | SecretsChannelEncryptResult
-  | SecretsChannelEncryptError;
+/** API exposed by the encryption worker on the secrets port for the crypto worker. */
+export interface SecretsChannelService {
+  decrypt(password: string, encryptedBlob: EncryptedBlobMessage): Promise<string>;
+  encrypt(password: string, plaintext: string): Promise<EncryptedBlobMessage>;
+}
