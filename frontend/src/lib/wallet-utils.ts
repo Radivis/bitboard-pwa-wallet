@@ -24,6 +24,7 @@ export async function updateWalletChangeset(
   password: string,
   walletId: number,
   changesetJson: string,
+  options?: { markFullScanDone?: boolean },
 ): Promise<void> {
   const { networkMode, addressType, accountId } = useWalletStore.getState()
   const network = toBitcoinNetwork(networkMode)
@@ -34,6 +35,7 @@ export async function updateWalletChangeset(
     addressType,
     accountId,
     changesetJson,
+    options,
   )
 }
 
@@ -247,7 +249,9 @@ export async function loadDescriptorWalletAndSync(
   try {
     await syncActiveWalletAndUpdateState(networkMode, { useFullScan: true })
     const changeset = await exportChangeset()
-    await updateWalletChangeset(password, walletId, changeset)
+    await updateWalletChangeset(password, walletId, changeset, {
+      markFullScanDone: true,
+    })
   } catch (err) {
     options?.onSyncError?.(err)
   }

@@ -9,6 +9,8 @@ export interface DescriptorWalletData {
   externalDescriptor: string;
   internalDescriptor: string;
   changeSet: string;
+  /** True after a full scan has been run for this sub-wallet at least once. Omitted/undefined = false for backward compat. */
+  fullScanDone?: boolean;
 }
 
 /** Sensitive wallet data stored encrypted. Shared with db layer and workers. */

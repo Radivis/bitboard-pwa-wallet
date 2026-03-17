@@ -58,6 +58,7 @@ export async function resolveDescriptorWallet(
 /**
  * Update the changeset for a specific descriptor wallet in the secrets array.
  * Used after sync/scan/address generation to persist WASM state changes.
+ * When markFullScanDone is true, sets that sub-wallet's fullScanDone flag.
  * Decrypt and encrypt run in workers; mnemonic never touches the main thread.
  */
 export async function updateDescriptorWalletChangeset(
@@ -67,6 +68,7 @@ export async function updateDescriptorWalletChangeset(
   addressType: AddressType,
   accountId: number,
   changesetJson: string,
+  options?: { markFullScanDone?: boolean },
 ): Promise<void> {
   await ensureMigrated()
   await ensureSecretsChannel()
@@ -80,6 +82,7 @@ export async function updateDescriptorWalletChangeset(
     addressType,
     accountId,
     changesetJson,
+    options,
   )
   await putWalletSecretsEncrypted(walletDb, walletId, newEncrypted)
 }

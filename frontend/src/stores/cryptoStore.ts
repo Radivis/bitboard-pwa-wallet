@@ -99,7 +99,8 @@ interface CryptoState {
     network: BitcoinNetwork,
     addressType: AddressType,
     accountId: number,
-    changesetJson: string
+    changesetJson: string,
+    options?: { markFullScanDone?: boolean }
   ) => Promise<EncryptedBlobForDb>;
 
   createWalletAndEncryptSecrets: (
@@ -251,7 +252,15 @@ export const useCryptoStore = create<CryptoState>((set, get) => {
         )
       ),
 
-    updateDescriptorWalletChangeset: (password, encryptedBlob, network, addressType, accountId, changesetJson) =>
+    updateDescriptorWalletChangeset: (
+      password,
+      encryptedBlob,
+      network,
+      addressType,
+      accountId,
+      changesetJson,
+      options
+    ) =>
       withErrorHandling((worker) =>
         worker.updateDescriptorWalletChangeset(
           password,
@@ -259,7 +268,8 @@ export const useCryptoStore = create<CryptoState>((set, get) => {
           network,
           addressType,
           accountId,
-          changesetJson
+          changesetJson,
+          options
         )
       ),
 

@@ -104,6 +104,7 @@ export interface CryptoService {
   /**
    * Update the changeset for one descriptor wallet in encrypted secrets.
    * Returns the new encrypted blob to store.
+   * When markFullScanDone is true, sets that sub-wallet's fullScanDone flag.
    */
   updateDescriptorWalletChangeset(
     password: string,
@@ -111,7 +112,8 @@ export interface CryptoService {
     network: BitcoinNetwork,
     addressType: AddressType,
     accountId: number,
-    changesetJson: string
+    changesetJson: string,
+    options?: { markFullScanDone?: boolean }
   ): Promise<EncryptedBlobForDb>;
 
   /**

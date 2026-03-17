@@ -248,6 +248,7 @@ const cryptoService = {
       externalDescriptor: walletResult.external_descriptor,
       internalDescriptor: walletResult.internal_descriptor,
       changeSet: walletResult.changeset_json,
+      fullScanDone: false,
     };
     secrets.descriptorWallets.push(descriptorWallet);
     const newPlaintext = JSON.stringify(secrets);
@@ -269,7 +270,8 @@ const cryptoService = {
     network: BitcoinNetwork,
     addressType: AddressType,
     accountId: number,
-    changesetJson: string
+    changesetJson: string,
+    options?: { markFullScanDone?: boolean }
   ) {
     const plaintext = await requestDecrypt(password, encryptedBlob);
     const secrets: WalletSecrets = JSON.parse(plaintext);
@@ -285,6 +287,9 @@ const cryptoService = {
       );
     }
     descriptorWallet.changeSet = changesetJson;
+    if (options?.markFullScanDone) {
+      descriptorWallet.fullScanDone = true;
+    }
     const newPlaintext = JSON.stringify(secrets);
     const newBlob = await requestEncrypt(password, newPlaintext);
     return {
@@ -320,6 +325,7 @@ const cryptoService = {
           externalDescriptor: walletResult.external_descriptor,
           internalDescriptor: walletResult.internal_descriptor,
           changeSet: walletResult.changeset_json,
+          fullScanDone: false,
         },
       ],
     };
@@ -361,6 +367,7 @@ const cryptoService = {
           externalDescriptor: walletResult.external_descriptor,
           internalDescriptor: walletResult.internal_descriptor,
           changeSet: walletResult.changeset_json,
+          fullScanDone: false,
         },
       ],
     };
