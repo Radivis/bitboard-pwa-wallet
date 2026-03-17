@@ -1,12 +1,20 @@
 //! Lab build and sign tests. Run with: wasm-pack test --target web --headless
 //! (requires wasm32 target; skipped on native)
 
+use std::io::Cursor;
+
+use bitcoin::consensus::Decodable;
 use wasm_bindgen::JsValue;
 use wasm_bindgen_test::*;
 
 wasm_bindgen_test_configure!(run_in_browser);
 
 use bitboard_crypto::{build_and_sign_lab_transaction, get_lab_change_address, lab, load_wallet};
+
+const TOTAL_UTXO_SATS: u64 = 50000;
+const PAYMENT_SATS: u64 = 40000;
+const FEE_RATE_SAT_PER_VB: f64 = 1.0;
+const PAYMENT_ADDRESS: &str = "bcrt1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh";
 
 #[wasm_bindgen_test]
 fn build_and_sign_lab_transaction_returns_signed_tx() {
@@ -35,8 +43,9 @@ fn build_and_sign_lab_transaction_returns_signed_tx() {
 
     let script_pubkey_hex = lab::lab_address_to_script_pubkey_hex(&first_address).unwrap();
     let utxos_json = format!(
-        r#"[{{"txid":"{}","vout":0,"amount_sats":50000,"script_pubkey_hex":"{}","address":"{}"}}]"#,
+        r#"[{{"txid":"{}","vout":0,"amount_sats":{},"script_pubkey_hex":"{}","address":"{}"}}]"#,
         "a".repeat(64),
+        TOTAL_UTXO_SATS,
         script_pubkey_hex,
         first_address
     );
@@ -44,9 +53,9 @@ fn build_and_sign_lab_transaction_returns_signed_tx() {
     let change_address = get_lab_change_address().expect("get change address");
     let result = build_and_sign_lab_transaction(
         &utxos_json,
-        "bcrt1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh",
-        40000,
-        1.0,
+        PAYMENT_ADDRESS,
+        PAYMENT_SATS,
+        FEE_RATE_SAT_PER_VB,
         &change_address,
     )
     .expect("build and sign");
@@ -55,7 +64,80 @@ fn build_and_sign_lab_transaction_returns_signed_tx() {
     let parsed: serde_json::Value = serde_json::from_str(&result_str).unwrap();
     let signed_tx_hex = parsed["signed_tx_hex"].as_str().expect("signed_tx_hex");
     let fee_sats = parsed["fee_sats"].as_u64().expect("fee_sats");
+    let has_change = parsed["has_change"].as_bool().expect("has_change");
 
     assert!(!signed_tx_hex.is_empty());
-    assert!(fee_sats > 0);
+    assert!(fee_sats > 0, "fee must be positive");
+
+    // Fee and change: total_in = payment + fee + change
+    let expected_change = TOTAL_UTXO_SATS
+        .saturating_sub(PAYMENT_SATS)
+        .saturating_sub(fee_sats);
+    assert!(
+        has_change,
+        "transaction should have a change output when inputs exceed payment + fee"
+    );
+    assert!(
+        expected_change > 0,
+        "change amount should be positive (fee_sats={}, total_in={}, payment={})",
+        fee_sats,
+        TOTAL_UTXO_SATS,
+        PAYMENT_SATS
+    );
+
+    // Decode signed tx and assert structure
+    let tx_bytes = hex::decode(signed_tx_hex).expect("signed_tx_hex must be valid hex");
+    let tx: bitcoin::Transaction =
+        bitcoin::Transaction::consensus_decode(&mut Cursor::new(&tx_bytes))
+            .expect("signed tx must decode");
+
+    let total_out: u64 = tx.output.iter().map(|o| o.value.to_sat()).sum();
+    assert_eq!(
+        total_out + fee_sats,
+        TOTAL_UTXO_SATS,
+        "inputs (total_in) must equal outputs + fee"
+    );
+
+    // Fee must be at least fee_rate * vsize (vsize = ceil(weight/4))
+    let vsize = (tx.weight().to_wu() + 3) / 4;
+    let min_fee = vsize as u64 * (FEE_RATE_SAT_PER_VB as u64);
+    assert!(
+        fee_sats >= min_fee,
+        "fee {} sats must be >= fee_rate * vsize ({} * {} = {})",
+        fee_sats,
+        FEE_RATE_SAT_PER_VB,
+        vsize,
+        min_fee
+    );
+
+    // Exactly two outputs: payment and change
+    assert_eq!(tx.output.len(), 2, "expected payment + change outputs");
+
+    let change_script_hex = lab::lab_address_to_script_pubkey_hex(&change_address).unwrap();
+    let change_script_bytes = hex::decode(&change_script_hex).expect("change script hex");
+    let change_script = bitcoin::ScriptBuf::from_bytes(change_script_bytes);
+
+    let (payment_out, change_out) =
+        tx.output
+            .iter()
+            .enumerate()
+            .fold((None, None), |(pay, chg), (i, o)| {
+                if o.script_pubkey == change_script {
+                    (pay, Some((i, o.value.to_sat())))
+                } else {
+                    (Some((i, o.value.to_sat())), chg)
+                }
+            });
+
+    let (_, payment_value) = payment_out.expect("one output must be payment");
+    let (_, change_value) = change_out.expect("one output must be change to change_address");
+
+    assert_eq!(
+        payment_value, PAYMENT_SATS,
+        "payment output must equal requested amount"
+    );
+    assert_eq!(
+        change_value, expected_change,
+        "change output must equal total_in - payment - fee"
+    );
 }

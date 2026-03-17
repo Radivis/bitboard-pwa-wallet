@@ -27,6 +27,8 @@ hex = "0.4"
 
 [dev-dependencies]
 wasm-bindgen-test = "0.3"
+bitcoin = { version = "0.32", default-features = false, features = ["std"] }
+hex = "0.4"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 wiremock = "0.6"
