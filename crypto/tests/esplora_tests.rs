@@ -26,12 +26,14 @@ mock! {
             &self,
             wallet: &Wallet,
             stop_gap: usize,
+            now: u64,
             parallel_requests: usize,
         ) -> Result<Update, CryptoError>;
 
         async fn sync(
             &self,
             wallet: &Wallet,
+            now: u64,
             parallel_requests: usize,
         ) -> Result<Update, CryptoError>;
 
@@ -62,7 +64,7 @@ async fn sync_wallet_applies_update() {
     let mut mock_client = MockBC::new();
     mock_client
         .expect_sync()
-        .returning(|_wallet, _parallel| Ok(Update::default()));
+        .returning(|_wallet, _now, _parallel| Ok(Update::default()));
 
     let result = sync::sync_wallet(&mut wallet, &mock_client, 1).await;
     assert!(result.is_ok(), "Sync with default update should succeed");
@@ -75,7 +77,7 @@ async fn full_scan_wallet_applies_update() {
     let mut mock_client = MockBC::new();
     mock_client
         .expect_full_scan()
-        .returning(|_wallet, _stop_gap, _parallel| Ok(Update::default()));
+        .returning(|_wallet, _stop_gap, _now, _parallel| Ok(Update::default()));
 
     let result = sync::full_scan_wallet(&mut wallet, &mock_client, 20, 1).await;
     assert!(
@@ -89,9 +91,11 @@ async fn sync_wallet_propagates_client_error() {
     let mut wallet = create_test_wallet(DEFAULT_NETWORK, DEFAULT_ADDRESS_TYPE);
 
     let mut mock_client = MockBC::new();
-    mock_client.expect_sync().returning(|_wallet, _parallel| {
-        Err(CryptoError::Blockchain("connection refused".to_string()))
-    });
+    mock_client
+        .expect_sync()
+        .returning(|_wallet, _now, _parallel| {
+            Err(CryptoError::Blockchain("connection refused".to_string()))
+        });
 
     let result = sync::sync_wallet(&mut wallet, &mock_client, 1).await;
     assert!(result.is_err(), "Sync must propagate client errors");
@@ -104,7 +108,7 @@ async fn full_scan_wallet_propagates_client_error() {
     let mut mock_client = MockBC::new();
     mock_client
         .expect_full_scan()
-        .returning(|_wallet, _stop_gap, _parallel| {
+        .returning(|_wallet, _stop_gap, _now, _parallel| {
             Err(CryptoError::Blockchain("timeout".to_string()))
         });
 

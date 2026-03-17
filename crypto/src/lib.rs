@@ -4,12 +4,19 @@ use bdk_wallet::chain::Merge;
 use bdk_wallet::{ChangeSet, KeychainKind, Wallet as BdkWallet};
 use wasm_bindgen::prelude::*;
 
-/// Current Unix time in seconds, sourced from JavaScript's `Date.now()`.
-///
-/// `std::time::SystemTime::now()` panics on `wasm32-unknown-unknown`, so we
-/// must obtain the wall-clock time from the JS host instead.
-fn unix_seconds_now() -> u64 {
-    (js_sys::Date::now() / 1000.0) as u64
+/// Current Unix time in seconds. Used for sync/full_scan request building so production and tests use the same `_at(now)` API.
+pub(crate) fn current_unix_time() -> u64 {
+    #[cfg(target_arch = "wasm32")]
+    {
+        (js_sys::Date::now() / 1000.0) as u64
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("system time before UNIX_EPOCH")
+            .as_secs()
+    }
 }
 
 pub mod blockchain;
@@ -246,7 +253,7 @@ fn to_js<T: serde::Serialize>(value: &T) -> Result<JsValue, JsValue> {
 pub async fn sync_wallet(esplora_url: &str) -> Result<JsValue, JsValue> {
     let client = esplora::EsploraClient::new(esplora_url).map_err(JsValue::from)?;
 
-    let sync_request = with_wallet(|w| w.start_sync_with_revealed_spks_at(unix_seconds_now()))?;
+    let sync_request = with_wallet(|w| w.start_sync_with_revealed_spks_at(current_unix_time()))?;
 
     use bdk_esplora::EsploraAsyncExt;
     let update: bdk_wallet::Update = client
@@ -256,11 +263,7 @@ pub async fn sync_wallet(esplora_url: &str) -> Result<JsValue, JsValue> {
         .map_err_to_js()?
         .into();
 
-    with_wallet_mut(|w| {
-        w.apply_update(update)
-            .map_err(|e| error::CryptoError::Blockchain(e.to_string()))
-    })?
-    .map_err(JsValue::from)?;
+    with_wallet_mut(|w| sync::apply_update(w, update).map_err(JsValue::from))??;
 
     accumulate_staged_changes();
     build_sync_result()
@@ -274,7 +277,7 @@ pub async fn sync_wallet(esplora_url: &str) -> Result<JsValue, JsValue> {
 pub async fn full_scan_wallet(esplora_url: &str, stop_gap: usize) -> Result<JsValue, JsValue> {
     let client = esplora::EsploraClient::new(esplora_url).map_err(JsValue::from)?;
 
-    let scan_request = with_wallet(|w| w.start_full_scan_at(unix_seconds_now()))?;
+    let scan_request = with_wallet(|w| w.start_full_scan_at(current_unix_time()))?;
 
     use bdk_esplora::EsploraAsyncExt;
     let update: bdk_wallet::Update = client
@@ -284,11 +287,7 @@ pub async fn full_scan_wallet(esplora_url: &str, stop_gap: usize) -> Result<JsVa
         .map_err_to_js()?
         .into();
 
-    with_wallet_mut(|w| {
-        w.apply_update(update)
-            .map_err(|e| error::CryptoError::Blockchain(e.to_string()))
-    })?
-    .map_err(JsValue::from)?;
+    with_wallet_mut(|w| sync::apply_update(w, update).map_err(JsValue::from))??;
 
     accumulate_staged_changes();
     build_sync_result()

@@ -1,3 +1,5 @@
+import { toast } from 'sonner'
+
 import { getDatabase, ensureMigrated } from '@/db/database'
 import type { NetworkMode } from '@/stores/walletStore'
 import { useWalletStore } from '@/stores/walletStore'
@@ -95,21 +97,42 @@ export async function loadCustomEsploraUrl(
   return result?.value ?? null
 }
 
+/** Stop-gap for full scan (consecutive unused addresses before stopping). Match import flow. */
+const FULL_SCAN_STOP_GAP = 20
+
 /**
  * Sync the active WASM wallet against Esplora and update wallet store with
  * balance and transactions.
+ *
+ * @param networkMode - Current network (e.g. testnet, mainnet)
+ * @param options.useFullScan - If true, run a full scan instead of incremental sync.
+ *   Use after loading a wallet so we discover all txs (e.g. faucet); use false or
+ *   omit for the manual Sync button (incremental sync).
  */
 export async function syncActiveWalletAndUpdateState(
   networkMode: NetworkMode,
+  options?: { useFullScan?: boolean },
 ): Promise<void> {
   const customUrl = await loadCustomEsploraUrl(networkMode)
   const esploraUrl = getEsploraUrl(networkMode, customUrl)
 
-  const { syncWallet, getBalance, getTransactionList } =
+  const { syncWallet, fullScanWallet, getBalance, getTransactionList } =
     useCryptoStore.getState()
   const { setBalance, setTransactions } = useWalletStore.getState()
 
-  await syncWallet(esploraUrl)
+  if (options?.useFullScan) {
+    const toastId = toast.loading('Scanning blockchain…')
+    try {
+      await fullScanWallet(esploraUrl, FULL_SCAN_STOP_GAP)
+      toast.success('Wallet synced', { id: toastId })
+    } catch (err) {
+      toast.dismiss(toastId)
+      throw err
+    }
+  } else {
+    await syncWallet(esploraUrl)
+  }
+
   const balance = await getBalance()
   const txs = await getTransactionList()
   setBalance(balance)
@@ -186,7 +209,8 @@ export async function loadDescriptorWalletAndSync(
     accountId,
   )
 
-  const { loadWallet, getCurrentAddress } = useCryptoStore.getState()
+  const { loadWallet, getCurrentAddress, exportChangeset } =
+    useCryptoStore.getState()
   const {
     setWalletStatus,
     setBalance,
@@ -217,7 +241,9 @@ export async function loadDescriptorWalletAndSync(
   })
 
   try {
-    await syncActiveWalletAndUpdateState(networkMode)
+    await syncActiveWalletAndUpdateState(networkMode, { useFullScan: true })
+    const changeset = await exportChangeset()
+    await updateWalletChangeset(password, walletId, changeset)
   } catch (err) {
     options?.onSyncError?.(err)
   }
