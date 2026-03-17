@@ -1,6 +1,6 @@
 # Security
 
-This document describes how Bitboard Wallet keeps user credentials and wallet secrets safe, and states inherent limitations of the web / PWA environment. It complements [ARCHITECTURE.md](ARCHITECTURE.md) and the Phase 4 security review.
+This document describes how Bitboard Wallet keeps user credentials and wallet secrets safe, and states inherent limitations of the web / PWA environment.
 
 ---
 
@@ -43,7 +43,7 @@ Findings and mitigations below are interpreted in this context.
 
 ### 2.2 Storage and persistence
 
-- **Backend:** SQLite via WaSqlite with OPFS; single DB file. Schema: `wallets`, `settings`, `wallet_secrets` (see [ARCHITECTURE.md](ARCHITECTURE.md)).
+- **Backend:** SQLite via WaSqlite with OPFS; **two separate database files**: `bitboard-wallet` (wallet persistence: `wallets`, `settings`, `wallet_secrets`) and `bitboard-lab` (lab state: blocks, utxos, lab_addresses, etc.). See [ARCHITECTURE.md](ARCHITECTURE.md).
 - **Encryption algorithm:** Argon2id (parameters above) + AES-256-GCM; 16-byte random salt, 12-byte random IV per encryption. Implemented in the encryption worker and `bitboard_encryption` WASM.
 
 ### 2.3 External communication
@@ -59,7 +59,7 @@ Findings and mitigations below are interpreted in this context.
 ### 2.5 Dependencies and audits
 
 - **Rust:** `cargo deny check advisories` runs in CI (see `.github/workflows/audit.yml`).
-- **Frontend:** Same workflow runs Socket CLI for npm when the API key is set; Socket is optional. Lefthook audit steps may be commented out; consider `npm audit` for local pre-push checks.
+- **Frontend:** Same workflow runs Socket CLI for npm when the API key is set; Socket is optional, but strongly recommended for CI. Lefthook audit steps may be commented out; consider `npm audit` for local pre-push checks.
 
 ### 2.6 Logging
 
@@ -95,18 +95,7 @@ The following cannot be fully eliminated in a browser-based wallet:
 
 - Physical access, keyloggers, or OS-level compromise are out of scope for this document; the threat model focuses on in-browser and storage security.
 
----
 
-## 4. Recommended follow-ups
-
-- **Audit docs:** Document that Socket is optional when the secret is not set; consider enabling or replacing with `npm audit` in lefthook for local checks.
-- **CryptoTest / build:** Ensure dev/test components that display a mnemonic are excluded from production or behind a dev route.
-- **Ongoing:** Keep dependencies and advisories (cargo deny, npm/Socket or npm audit) up to date and documented.
-
----
-
-## 5. References
+## References
 
 - [ARCHITECTURE.md](ARCHITECTURE.md) — Tech stack, data flow, workers, persistence.
-- Phase 4 security review (`.cursor/pr-reviews/SECURITY-REVIEW-PHASE4.md`) — Detailed findings and follow-ups.
-- Phase 4 security review plan (`.cursor/plans/phase_4_security_review_53efa358.plan.md`) — Threat model, sensitive data handling, mnemonic isolation design.
