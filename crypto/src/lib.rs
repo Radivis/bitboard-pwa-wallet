@@ -123,7 +123,7 @@ pub fn derive_descriptors(
 }
 
 // ---------------------------------------------------------------------------
-// Wallet wrappers (Phase 4)
+// Wallet wrappers
 // ---------------------------------------------------------------------------
 
 /// Create a new wallet from a mnemonic, network, address type, and account index.
