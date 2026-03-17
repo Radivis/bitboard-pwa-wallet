@@ -31,6 +31,8 @@ async function deriveKey(password: string, salt: Uint8Array): Promise<CryptoKey>
     );
   } finally {
     (rawKey as Uint8Array).fill(0);
+    // Note: Web Crypto may keep internal copies of the key; zeroing rawKey only
+    // clears our buffer, not necessarily all in-process copies.
   }
 }
 

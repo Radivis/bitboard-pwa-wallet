@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { validateEsploraUrl } from '../bitcoin-utils'
+import { parseBTC, validateEsploraUrl } from '../bitcoin-utils'
 
 describe('validateEsploraUrl', () => {
   it('accepts valid https URL for mainnet', () => {
@@ -52,5 +52,42 @@ describe('validateEsploraUrl', () => {
 
   it('rejects empty string', () => {
     expect(() => validateEsploraUrl('', 'mainnet')).toThrow('Invalid URL')
+  })
+})
+
+describe('parseBTC', () => {
+  it('parses valid BTC string to sats', () => {
+    expect(parseBTC('0')).toBe(0)
+    expect(parseBTC('1')).toBe(100_000_000)
+    expect(parseBTC('0.5')).toBe(50_000_000)
+    expect(parseBTC('0.00000001')).toBe(1)
+    expect(parseBTC('  0.1  ')).toBe(10_000_000)
+  })
+
+  it('returns 0 for NaN', () => {
+    expect(parseBTC('abc')).toBe(0)
+    expect(parseBTC('nope')).toBe(0)
+  })
+
+  it('returns 0 for negative values', () => {
+    expect(parseBTC('-1')).toBe(0)
+    expect(parseBTC('-0.00000001')).toBe(0)
+  })
+
+  it('returns 0 for non-finite values', () => {
+    expect(parseBTC('Infinity')).toBe(0)
+    expect(parseBTC('-Infinity')).toBe(0)
+  })
+
+  it('returns 0 for empty or whitespace-only string', () => {
+    expect(parseBTC('')).toBe(0)
+    expect(parseBTC('   ')).toBe(0)
+  })
+
+  it('clamps very large values to MAX_SAFE_INTEGER', () => {
+    const huge = '100000000'
+    const sats = parseBTC(huge)
+    expect(sats).toBe(Number.MAX_SAFE_INTEGER)
+    expect(sats).toBeLessThanOrEqual(Number.MAX_SAFE_INTEGER)
   })
 })

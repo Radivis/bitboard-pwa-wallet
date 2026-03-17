@@ -35,8 +35,24 @@ export function formatSats(sats: number): string {
   return sats.toLocaleString()
 }
 
+const SATS_PER_BTC = 100_000_000;
+const MAX_SAFE_SATS = Number.MAX_SAFE_INTEGER;
+
+/**
+ * Parses a BTC amount string to satoshis. Returns 0 for invalid or negative
+ * input; clamps to MAX_SAFE_INTEGER to avoid overflow.
+ */
 export function parseBTC(btcString: string): number {
-  return Math.floor(parseFloat(btcString) * 100_000_000)
+  if (typeof btcString !== 'string' || btcString.trim() === '') {
+    return 0;
+  }
+  const parsed = parseFloat(btcString);
+  if (Number.isNaN(parsed) || !Number.isFinite(parsed) || parsed < 0) {
+    return 0;
+  }
+  const sats = parsed * SATS_PER_BTC;
+  const floored = Math.floor(sats);
+  return Math.min(floored, MAX_SAFE_SATS);
 }
 
 const ADDRESS_PREFIXES: Record<NetworkMode, string[]> = {
