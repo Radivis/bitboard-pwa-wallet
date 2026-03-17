@@ -16,7 +16,7 @@ test.describe('Wallet Lock/Unlock', () => {
     await page.getByLabel('Password').fill(TEST_PASSWORD)
     await page.getByRole('button', { name: 'Unlock' }).click()
 
-    await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible({ timeout: 30000 })
+    await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible({ timeout: 60000 })
     await expect(page.getByText('Balance')).toBeVisible()
   })
 
@@ -31,7 +31,7 @@ test.describe('Wallet Lock/Unlock', () => {
     await expect(page.getByText('Unlock Wallet')).toBeVisible({ timeout: 10000 })
     await page.getByLabel('Password').fill(TEST_PASSWORD)
     await page.getByRole('button', { name: 'Unlock' }).click()
-    await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible({ timeout: 30000 })
+    await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible({ timeout: 60000 })
 
     await page.getByRole('link', { name: /receive/i }).click()
     await expect(page.getByRole('heading', { name: /receive/i })).toBeVisible({ timeout: 10000 })

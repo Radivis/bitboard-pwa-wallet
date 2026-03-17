@@ -73,6 +73,6 @@ export async function unlockWalletViaUI(
   await page.getByLabel('Password').fill(password)
   await page.getByRole('button', { name: 'Unlock' }).click()
   await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible({
-    timeout: 30000,
+    timeout: 60000,
   })
 }

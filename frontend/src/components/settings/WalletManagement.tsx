@@ -6,6 +6,7 @@ import { useCryptoStore } from '@/stores/cryptoStore'
 import { useSessionStore } from '@/stores/sessionStore'
 import { useWallets } from '@/db'
 import { clearAutoLockTimer } from '@/stores/sessionStore'
+import { resetSecretsChannel } from '@/workers/secrets-channel'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 
@@ -24,6 +25,7 @@ export function WalletManagement() {
   const handleLockWallet = () => {
     lockWallet()
     terminateWorker()
+    resetSecretsChannel()
     clearSession()
     clearAutoLockTimer()
     toast.success('Wallet locked')

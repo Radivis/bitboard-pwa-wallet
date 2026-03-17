@@ -9,6 +9,16 @@ import { transfer } from 'comlink';
 let channelReady = false;
 let channelPromise: Promise<void> | null = null;
 
+/**
+ * Reset channel state so the next ensureSecretsChannel() will re-establish
+ * the worker-to-worker connection. Call this when terminating the crypto worker
+ * (e.g. on manual lock) so that after unlock a new worker gets a valid secrets port.
+ */
+export function resetSecretsChannel(): void {
+  channelReady = false;
+  channelPromise = null;
+}
+
 export async function ensureSecretsChannel(): Promise<void> {
   if (channelReady) return;
   if (channelPromise) {
