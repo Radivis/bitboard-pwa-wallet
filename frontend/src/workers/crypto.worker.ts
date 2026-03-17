@@ -256,6 +256,7 @@ const cryptoService = {
         ciphertext: newBlob.ciphertext,
         iv: newBlob.iv,
         salt: newBlob.salt,
+        kdfVersion: newBlob.kdfVersion,
       },
     };
   },
@@ -288,6 +289,7 @@ const cryptoService = {
       ciphertext: newBlob.ciphertext,
       iv: newBlob.iv,
       salt: newBlob.salt,
+      kdfVersion: newBlob.kdfVersion,
     };
   },
 
@@ -326,6 +328,7 @@ const cryptoService = {
         ciphertext: encryptedBlob.ciphertext,
         iv: encryptedBlob.iv,
         salt: encryptedBlob.salt,
+        kdfVersion: encryptedBlob.kdfVersion,
       },
       walletResult,
       mnemonicForBackup: mnemonic,
@@ -366,6 +369,7 @@ const cryptoService = {
         ciphertext: encryptedBlob.ciphertext,
         iv: encryptedBlob.iv,
         salt: encryptedBlob.salt,
+        kdfVersion: encryptedBlob.kdfVersion,
       },
       walletResult,
     };

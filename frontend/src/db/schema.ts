@@ -23,12 +23,16 @@ interface SettingsTable {
 
 export type Setting = Selectable<SettingsTable>
 
+/** KDF version: 1 = CI (2 iter, 1 par), 2 = production (3 iter, 4 par). */
+export type KdfVersion = 1 | 2
+
 interface WalletSecretsTable {
   wallet_secrets_id: Generated<number>
   wallet_id: number
   encrypted_data: Uint8Array
   iv: Uint8Array
   salt: Uint8Array
+  kdf_version: KdfVersion
   created_at: string
   updated_at: string
 }

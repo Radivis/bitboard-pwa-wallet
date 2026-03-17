@@ -20,6 +20,8 @@ export interface EncryptedBlobForDb {
   ciphertext: Uint8Array;
   iv: Uint8Array;
   salt: Uint8Array;
+  /** 1 = CI, 2 = production. Omitted treated as 1. */
+  kdfVersion?: 1 | 2;
 }
 
 export interface CryptoService {

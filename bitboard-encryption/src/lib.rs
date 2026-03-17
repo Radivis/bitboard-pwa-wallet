@@ -1,17 +1,31 @@
 //! Minimal WASM crate for key derivation (Argon2id). Used by the encryption worker only.
 //!
-//! Parameters must match the original crypto crate for backward compatibility with
-//! existing encrypted wallet data: 64 MB memory, 2 iterations, parallelism 1, 32-byte output.
+//! Two parameter sets:
+//! - **Production:** 64 MB memory, 3 iterations, parallelism 4 (stronger, for real devices).
+//! - **CI:** 64 MB memory, 2 iterations, parallelism 1 (faster, for CI).
 
 use argon2::{Algorithm, Argon2, Params, Version};
 use wasm_bindgen::prelude::*;
 
-/// Derive a 256-bit key from a password and salt using Argon2id.
-///
-/// Parameters: 64 MB memory, 2 iterations, parallelism 1.
-/// Must match the former crypto crate for compatibility with existing encrypted data.
+/// Derive a 256-bit key using Argon2id with **production** parameters.
+/// 64 MB memory, 3 iterations, parallelism 4, 32-byte output.
 #[wasm_bindgen]
 pub fn derive_argon2_key(password: &str, salt: &[u8]) -> Result<Vec<u8>, JsValue> {
+    let params = Params::new(65536, 3, 4, Some(32))
+        .map_err(|e| JsValue::from_str(&format!("Argon2 params error: {e}")))?;
+    let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
+    let mut key = vec![0u8; 32];
+    argon2
+        .hash_password_into(password.as_bytes(), salt, &mut key)
+        .map_err(|e| JsValue::from_str(&format!("Argon2 hash error: {e}")))?;
+    Ok(key)
+}
+
+/// Derive a 256-bit key using Argon2id with **legacy/CI** parameters.
+/// 64 MB memory, 2 iterations, parallelism 1, 32-byte output.
+/// Used for decryption of existing data and for encryption when running in CI.
+#[wasm_bindgen]
+pub fn derive_argon2_key_legacy(password: &str, salt: &[u8]) -> Result<Vec<u8>, JsValue> {
     let params = Params::new(65536, 2, 1, Some(32))
         .map_err(|e| JsValue::from_str(&format!("Argon2 params error: {e}")))?;
     let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);

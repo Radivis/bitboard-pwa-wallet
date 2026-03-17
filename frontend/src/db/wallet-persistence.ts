@@ -1,5 +1,6 @@
 import type { Kysely } from 'kysely'
 import type { Database } from './schema'
+import type { KdfVersion } from './schema'
 import { encryptData, decryptData } from './encryption'
 import type { DescriptorWalletData, WalletSecrets } from '@/workers/crypto-types'
 
@@ -10,6 +11,8 @@ export interface EncryptedWalletSecretsBlob {
   ciphertext: Uint8Array
   iv: Uint8Array
   salt: Uint8Array
+  /** 1 = CI, 2 = production. Omitted/undefined treated as 1 for backward compat. */
+  kdfVersion?: KdfVersion
 }
 
 /**
@@ -24,7 +27,7 @@ export async function getWalletSecretsEncrypted(
 ): Promise<EncryptedWalletSecretsBlob> {
   const record = await walletDb
     .selectFrom('wallet_secrets')
-    .select(['encrypted_data', 'iv', 'salt'])
+    .select(['encrypted_data', 'iv', 'salt', 'kdf_version'])
     .where('wallet_id', '=', walletId)
     .executeTakeFirst()
 
@@ -36,6 +39,7 @@ export async function getWalletSecretsEncrypted(
     ciphertext: record.encrypted_data,
     iv: record.iv,
     salt: record.salt,
+    kdfVersion: (record.kdf_version as KdfVersion) ?? 1,
   }
 }
 
@@ -53,6 +57,7 @@ export async function putWalletSecretsEncrypted(
   await assertWalletExists(walletDb, walletId)
 
   const now = new Date().toISOString()
+  const kdfVersion = encrypted.kdfVersion ?? 1
   const existing = await walletDb
     .selectFrom('wallet_secrets')
     .select('wallet_secrets_id')
@@ -66,6 +71,7 @@ export async function putWalletSecretsEncrypted(
         encrypted_data: encrypted.ciphertext,
         iv: encrypted.iv,
         salt: encrypted.salt,
+        kdf_version: kdfVersion,
         updated_at: now,
       })
       .where('wallet_secrets_id', '=', existing.wallet_secrets_id)
@@ -78,6 +84,7 @@ export async function putWalletSecretsEncrypted(
         encrypted_data: encrypted.ciphertext,
         iv: encrypted.iv,
         salt: encrypted.salt,
+        kdf_version: kdfVersion,
         created_at: now,
         updated_at: now,
       })
@@ -109,6 +116,7 @@ export async function saveWalletSecrets(
   const encrypted = await encryptData(password, plaintext)
 
   const now = new Date().toISOString()
+  const kdfVersion = encrypted.kdfVersion ?? 1
   const existing = await walletDb
     .selectFrom('wallet_secrets')
     .select('wallet_secrets_id')
@@ -122,6 +130,7 @@ export async function saveWalletSecrets(
         encrypted_data: encrypted.ciphertext,
         iv: encrypted.iv,
         salt: encrypted.salt,
+        kdf_version: kdfVersion,
         updated_at: now,
       })
       .where('wallet_secrets_id', '=', existing.wallet_secrets_id)
@@ -134,6 +143,7 @@ export async function saveWalletSecrets(
         encrypted_data: encrypted.ciphertext,
         iv: encrypted.iv,
         salt: encrypted.salt,
+        kdf_version: kdfVersion,
         created_at: now,
         updated_at: now,
       })
@@ -171,6 +181,7 @@ export async function loadWalletSecrets(
     ciphertext: record.encrypted_data,
     iv: record.iv,
     salt: record.salt,
+    kdfVersion: (record.kdf_version as KdfVersion) ?? 1,
   })
 
   return JSON.parse(plaintext)
