@@ -14,6 +14,7 @@ import { useCryptoStore } from '@/stores/cryptoStore'
 import { useWalletStore } from '@/stores/walletStore'
 import { useSessionStore, startAutoLockTimer } from '@/stores/sessionStore'
 import {
+  useAddWallet,
   getDatabase,
   ensureMigrated,
   putWalletSecretsEncrypted,
@@ -52,6 +53,7 @@ export function CreateWalletPage() {
   const setWalletStatus = useWalletStore((s) => s.setWalletStatus)
   const setCurrentAddress = useWalletStore((s) => s.setCurrentAddress)
   const setSessionPassword = useSessionStore((s) => s.setPassword)
+  const addWallet = useAddWallet()
 
   const words = useMemo(() => (mnemonicForBackup ? mnemonicForBackup.split(' ') : []), [mnemonicForBackup])
 
@@ -113,25 +115,17 @@ export function CreateWalletPage() {
       setMnemonicForBackup('')
       await ensureMigrated()
       const walletDb = getDatabase()
-      let walletId: number
+      const walletId = await addWallet.mutateAsync({
+        name: `Wallet ${Date.now()}`,
+        created_at: new Date().toISOString(),
+      })
       try {
-        walletId = await walletDb.transaction().execute(async (trx) => {
-          const result = await trx
-            .insertInto('wallets')
-            .values({
-              name: `Wallet ${Date.now()}`,
-              created_at: new Date().toISOString(),
-            })
-            .executeTakeFirstOrThrow()
-          const id = Number(result.insertId)
-          await putWalletSecretsEncrypted(trx, id, pendingCreate!.encryptedBlob)
-          return id
-        })
-      } catch (err) {
+        await putWalletSecretsEncrypted(walletDb, walletId, pendingCreate!.encryptedBlob)
+      } catch (secretsErr) {
+        await walletDb.deleteFrom('wallets').where('wallet_id', '=', walletId).execute()
         queryClient.invalidateQueries({ queryKey: walletKeys.all })
-        throw err
+        throw secretsErr
       }
-      queryClient.invalidateQueries({ queryKey: walletKeys.all })
       setPendingCreate(null)
       setSessionPassword(password)
       setActiveWallet(walletId)
@@ -381,4 +375,3 @@ function StepVerify({
     </Card>
   )
 }
-
