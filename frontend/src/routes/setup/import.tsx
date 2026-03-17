@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react'
 import { createFileRoute, useNavigate, Link } from '@tanstack/react-router'
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, CheckCircle2, XCircle, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -13,7 +13,12 @@ import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { useCryptoStore } from '@/stores/cryptoStore'
 import { useWalletStore } from '@/stores/walletStore'
 import { useSessionStore, startAutoLockTimer } from '@/stores/sessionStore'
-import { useAddWallet, getDatabase, ensureMigrated, putWalletSecretsEncrypted } from '@/db'
+import {
+  getDatabase,
+  ensureMigrated,
+  putWalletSecretsEncrypted,
+  walletKeys,
+} from '@/db'
 import { ensureSecretsChannel } from '@/workers/secrets-channel'
 import { toBitcoinNetwork, getEsploraUrl } from '@/lib/bitcoin-utils'
 import { loadCustomEsploraUrl } from '@/lib/wallet-utils'
@@ -44,7 +49,7 @@ export function ImportWalletPage() {
   const setSessionPassword = useSessionStore((s) => s.setPassword)
   const getBalanceFromWorker = useCryptoStore((s) => s.getBalance)
   const getTransactionList = useCryptoStore((s) => s.getTransactionList)
-  const addWallet = useAddWallet()
+  const queryClient = useQueryClient()
 
   const mnemonic = useMemo(
     () =>
@@ -104,12 +109,25 @@ export function ImportWalletPage() {
       await ensureMigrated()
       const walletDb = getDatabase()
 
-      const walletId = await addWallet.mutateAsync({
-        name: `Imported Wallet ${Date.now()}`,
-        created_at: new Date().toISOString(),
-      })
-
-      await putWalletSecretsEncrypted(walletDb, walletId, encryptedBlob)
+      let walletId: number
+      try {
+        walletId = await walletDb.transaction().execute(async (trx) => {
+          const result = await trx
+            .insertInto('wallets')
+            .values({
+              name: `Imported Wallet ${Date.now()}`,
+              created_at: new Date().toISOString(),
+            })
+            .executeTakeFirstOrThrow()
+          const id = Number(result.insertId)
+          await putWalletSecretsEncrypted(trx, id, encryptedBlob)
+          return id
+        })
+      } catch (err) {
+        queryClient.invalidateQueries({ queryKey: walletKeys.all })
+        throw err
+      }
+      queryClient.invalidateQueries({ queryKey: walletKeys.all })
 
       setSessionPassword(password)
       setActiveWallet(walletId)

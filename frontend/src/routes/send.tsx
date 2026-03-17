@@ -33,6 +33,18 @@ const FEE_PRESETS = [
   { label: 'High', rate: 5 },
 ] as const
 
+/** Max satoshis we pass to the worker (JS safe integer range). */
+const MAX_SAFE_SATS = Number.MAX_SAFE_INTEGER
+
+function isValidAmountSats(n: number): boolean {
+  return (
+    Number.isFinite(n) &&
+    Number.isInteger(n) &&
+    n >= 1 &&
+    n <= MAX_SAFE_SATS
+  )
+}
+
 export function SendPage() {
   const navigate = useNavigate()
   const activeWalletId = useWalletStore((s) => s.activeWalletId)
@@ -121,7 +133,7 @@ function SendFlow() {
     networkMode === 'lab' && (labBalanceSats === 0 || labBalanceSats === null)
   const canBuild =
     addressValid &&
-    amountSats > 0 &&
+    isValidAmountSats(amountSats) &&
     amountSats <= confirmedBalance &&
     !isLabWithNoBalance
 

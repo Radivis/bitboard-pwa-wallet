@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { createFileRoute, useNavigate, Link } from '@tanstack/react-router'
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -13,7 +13,12 @@ import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { useCryptoStore } from '@/stores/cryptoStore'
 import { useWalletStore } from '@/stores/walletStore'
 import { useSessionStore, startAutoLockTimer } from '@/stores/sessionStore'
-import { useAddWallet, getDatabase, ensureMigrated, putWalletSecretsEncrypted } from '@/db'
+import {
+  getDatabase,
+  ensureMigrated,
+  putWalletSecretsEncrypted,
+  walletKeys,
+} from '@/db'
 import { ensureSecretsChannel } from '@/workers/secrets-channel'
 import { toBitcoinNetwork } from '@/lib/bitcoin-utils'
 
@@ -47,7 +52,6 @@ export function CreateWalletPage() {
   const setWalletStatus = useWalletStore((s) => s.setWalletStatus)
   const setCurrentAddress = useWalletStore((s) => s.setCurrentAddress)
   const setSessionPassword = useSessionStore((s) => s.setPassword)
-  const addWallet = useAddWallet()
 
   const words = useMemo(() => (mnemonicForBackup ? mnemonicForBackup.split(' ') : []), [mnemonicForBackup])
 
@@ -101,6 +105,7 @@ export function CreateWalletPage() {
     },
   })
 
+  const queryClient = useQueryClient()
   const finishCreateMutation = useMutation({
     mutationFn: async () => {
       if (!pendingCreate) throw new Error('No pending create')
@@ -108,11 +113,25 @@ export function CreateWalletPage() {
       setMnemonicForBackup('')
       await ensureMigrated()
       const walletDb = getDatabase()
-      const walletId = await addWallet.mutateAsync({
-        name: `Wallet ${Date.now()}`,
-        created_at: new Date().toISOString(),
-      })
-      await putWalletSecretsEncrypted(walletDb, walletId, pendingCreate.encryptedBlob)
+      let walletId: number
+      try {
+        walletId = await walletDb.transaction().execute(async (trx) => {
+          const result = await trx
+            .insertInto('wallets')
+            .values({
+              name: `Wallet ${Date.now()}`,
+              created_at: new Date().toISOString(),
+            })
+            .executeTakeFirstOrThrow()
+          const id = Number(result.insertId)
+          await putWalletSecretsEncrypted(trx, id, pendingCreate!.encryptedBlob)
+          return id
+        })
+      } catch (err) {
+        queryClient.invalidateQueries({ queryKey: walletKeys.all })
+        throw err
+      }
+      queryClient.invalidateQueries({ queryKey: walletKeys.all })
       setPendingCreate(null)
       setSessionPassword(password)
       setActiveWallet(walletId)

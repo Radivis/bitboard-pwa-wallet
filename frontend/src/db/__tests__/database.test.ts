@@ -74,6 +74,35 @@ describe('SQLite Database', () => {
 
       expect(deleted).toBeUndefined()
     })
+
+    it('transaction rolls back both inserts when callback throws', async () => {
+      const now = new Date().toISOString()
+      try {
+        await walletDb.transaction().execute(async (trx) => {
+          const result = await trx
+            .insertInto('wallets')
+            .values({ name: 'Rollback Wallet', created_at: now })
+            .executeTakeFirstOrThrow()
+          const walletId = Number(result.insertId)
+          await trx.insertInto('wallet_secrets').values({
+            wallet_id: walletId,
+            encrypted_data: new Uint8Array(0),
+            iv: new Uint8Array(12),
+            salt: new Uint8Array(16),
+            kdf_version: 1,
+            created_at: now,
+            updated_at: now,
+          }).execute()
+          throw new Error('rollback')
+        })
+      } catch (e) {
+        expect((e as Error).message).toBe('rollback')
+      }
+      const wallets = await walletDb.selectFrom('wallets').selectAll().execute()
+      const secrets = await walletDb.selectFrom('wallet_secrets').selectAll().execute()
+      expect(wallets).toHaveLength(0)
+      expect(secrets).toHaveLength(0)
+    })
   })
 
   describe('settings table', () => {

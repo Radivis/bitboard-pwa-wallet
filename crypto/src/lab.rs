@@ -21,6 +21,8 @@ use bitcoin::{
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 
+use crate::validation;
+
 const LAB_COINBASE_SUBSIDY: u64 = 50 * 100_000_000; // 50 BTC in sats
 const LAB_BITS: u32 = 0x207fffff; // Max target for lab
 const DUST_THRESHOLD_SATS: u64 = 546; // Min non-dust output for P2WPKH
@@ -147,7 +149,9 @@ pub fn lab_build_transaction(
     }
 
     let fee = total_in - total_out;
-    let fee_rate = FeeRate::from_sat_per_vb_unchecked(fee_rate_sat_per_vb.ceil() as u64);
+    let fee_rate_sats = validation::validate_fee_rate_sat_per_vb(fee_rate_sat_per_vb)
+        .map_err(|e| JsValue::from_str(&e.to_string()))?;
+    let fee_rate = FeeRate::from_sat_per_vb_unchecked(fee_rate_sats);
 
     let mut input_vec = Vec::with_capacity(utxos.len());
     let mut prev_outputs: Vec<(TxOut, u32)> = Vec::with_capacity(utxos.len());
@@ -394,7 +398,9 @@ pub fn lab_build_transaction_with_change(
         return Err(JsValue::from_str("Payment exceeds total inputs"));
     }
 
-    let fee_rate = FeeRate::from_sat_per_vb_unchecked(fee_rate_sat_per_vb.ceil() as u64);
+    let fee_rate_sats = validation::validate_fee_rate_sat_per_vb(fee_rate_sat_per_vb)
+        .map_err(|e| JsValue::from_str(&e.to_string()))?;
+    let fee_rate = FeeRate::from_sat_per_vb_unchecked(fee_rate_sats);
     let utxos_len = utxos.len() as u64;
     let estimated_vsize = LAB_ESTIMATE_TX_VSIZE_BASE
         + utxos_len * LAB_ESTIMATE_P2WPKH_INPUT_VSIZE
@@ -431,7 +437,7 @@ pub fn lab_build_transaction_with_change(
 
     let outputs_json =
         serde_json::to_string(&outputs).map_err(|e| JsValue::from_str(&e.to_string()))?;
-    let tx_hex = lab_build_transaction(utxos_json, &outputs_json, fee_rate_sat_per_vb)?;
+    let tx_hex = lab_build_transaction(utxos_json, &outputs_json, fee_rate_sats as f64)?;
 
     let result = serde_json::json!({
         "tx_hex": tx_hex,

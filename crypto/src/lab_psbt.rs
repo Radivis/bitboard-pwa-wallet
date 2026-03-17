@@ -13,6 +13,7 @@ use bitcoin::{Address, Amount, FeeRate, Network, OutPoint, ScriptBuf, TxOut, Txi
 use crate::error::CryptoError;
 use crate::lab::LabUtxoInput;
 use crate::transaction;
+use crate::validation;
 
 /// Result of building and signing a lab transaction via the wallet (PSBT path).
 #[derive(Debug, Clone)]
@@ -71,7 +72,8 @@ pub fn build_and_sign_lab_transaction(
         .max_weight_to_satisfy()
         .map_err(|e| CryptoError::Transaction(e.to_string()))?;
 
-    let fee_rate = FeeRate::from_sat_per_vb_unchecked(fee_rate_sat_per_vb.ceil() as u64);
+    let fee_rate_sats = validation::validate_fee_rate_sat_per_vb(fee_rate_sat_per_vb)?;
+    let fee_rate = FeeRate::from_sat_per_vb_unchecked(fee_rate_sats);
 
     let mut tx_builder = wallet.build_tx();
     tx_builder

@@ -22,6 +22,7 @@ pub mod mnemonic;
 pub mod sync;
 pub mod transaction;
 pub mod types;
+pub mod validation;
 pub mod wallet;
 pub mod wasm_sleep;
 
@@ -225,8 +226,12 @@ pub fn export_changeset() -> Result<String, JsValue> {
 }
 
 // ---------------------------------------------------------------------------
-// Sync & transaction wrappers (Phase 5)
+// Sync & transaction wrappers
 // ---------------------------------------------------------------------------
+//
+// Sync behavior: we rely on BDK for reorg/duplicate handling; empty update is
+// safe (apply_update is all-or-nothing per call). Use full_scan after
+// create/import; use sync_wallet for incremental updates.
 
 const PARALLEL_REQUESTS: usize = 5;
 

@@ -1,6 +1,11 @@
 import type { Kysely } from 'kysely'
 import { sql } from 'kysely'
 
+/**
+ * Migration strategy: additive only; no destructive changes. No version table.
+ * kdf_version backfill is best-effort (catch duplicate column for existing DBs).
+ */
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- migrations run over multiple DB shapes
 export async function migrateToLatest(db: Kysely<any>): Promise<void> {
   await db.schema
