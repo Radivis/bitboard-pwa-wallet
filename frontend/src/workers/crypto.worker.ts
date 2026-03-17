@@ -106,14 +106,16 @@ const cryptoService = {
     externalDescriptor: string,
     internalDescriptor: string,
     network: BitcoinNetwork,
-    changesetJson: string
+    changesetJson: string,
+    useEmptyChain: boolean
   ): Promise<boolean> {
     const wasmModule = await getWasm();
     return wasmModule.load_wallet(
       externalDescriptor,
       internalDescriptor,
       network,
-      changesetJson
+      changesetJson,
+      useEmptyChain
     );
   },
 

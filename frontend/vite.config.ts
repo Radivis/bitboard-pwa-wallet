@@ -106,7 +106,7 @@ export default defineConfig({
         changeOrigin: true,
         secure: true,
         rewrite: (path) =>
-          path.replace(/^\/esplora-proxy\/testnet/, '/testnet/api'),
+          path.replace(/^\/esplora-proxy\/testnet/, '/testnet4/api'),
       },
       '/esplora-proxy/mainnet': {
         target: 'https://mempool.space',

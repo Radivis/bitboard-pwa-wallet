@@ -1,5 +1,6 @@
 import { type ReactNode, useEffect, useRef } from 'react'
 import { useNavigate, useLocation } from '@tanstack/react-router'
+import { toast } from 'sonner'
 import { useWalletStore } from '@/stores/walletStore'
 import { useSessionStore } from '@/stores/sessionStore'
 import { useWallets } from '@/db'
@@ -88,6 +89,13 @@ export function AppInitializer({ children }: AppInitializerProps) {
           networkMode,
           addressType,
           accountId,
+          {
+            onSyncError: (err) => {
+              const msg =
+                err instanceof Error ? err.message : String(err)
+              toast.error(msg || 'Sync failed — wallet unlocked but data may be stale')
+            },
+          },
         )
       }
     } catch {

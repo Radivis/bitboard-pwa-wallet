@@ -5,7 +5,7 @@ export const DEFAULT_ESPLORA_URLS: Record<NetworkMode, string> = {
   lab: '', // In-app chain; no Esplora
   regtest: 'http://localhost:3002',
   signet: 'https://mempool.space/signet/api',
-  testnet: 'https://mempool.space/testnet/api',
+  testnet: 'https://mempool.space/testnet4/api',
   mainnet: 'https://mempool.space/api',
 }
 

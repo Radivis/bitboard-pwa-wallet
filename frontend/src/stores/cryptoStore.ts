@@ -49,7 +49,8 @@ interface CryptoState {
     externalDescriptor: string,
     internalDescriptor: string,
     network: BitcoinNetwork,
-    changesetJson: string
+    changesetJson: string,
+    useEmptyChain: boolean
   ) => Promise<boolean>;
 
   getNewAddress: () => Promise<string>;
@@ -173,13 +174,16 @@ export const useCryptoStore = create<CryptoState>((set, get) => {
     createWallet: (mnemonic, network, addressType, accountId) => 
       withErrorHandling((worker) => worker.createWallet(mnemonic, network, addressType, accountId)),
 
-    loadWallet: (externalDescriptor, internalDescriptor, network, changesetJson) => 
-      withErrorHandling((worker) => worker.loadWallet(
-        externalDescriptor,
-        internalDescriptor,
-        network,
-        changesetJson
-      )),
+    loadWallet: (externalDescriptor, internalDescriptor, network, changesetJson, useEmptyChain) =>
+      withErrorHandling((worker) =>
+        worker.loadWallet(
+          externalDescriptor,
+          internalDescriptor,
+          network,
+          changesetJson,
+          useEmptyChain
+        )
+      ),
 
     getNewAddress: () => 
       withErrorHandling((worker) => worker.getNewAddress()),

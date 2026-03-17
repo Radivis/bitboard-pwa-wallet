@@ -17,6 +17,7 @@ import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { useWalletStore } from '@/stores/walletStore'
 import { useSessionStore } from '@/stores/sessionStore'
 import { useWallets } from '@/db'
+import { errorMessage } from '@/lib/utils'
 import {
   loadDescriptorWalletAndSync,
   loadDescriptorWalletWithoutSync,
@@ -66,8 +67,10 @@ export function WalletUnlock({ walletName }: WalletUnlockProps) {
           addressType,
           accountId,
           {
-            onSyncError: () =>
-              toast.error('Sync failed — wallet unlocked but data may be stale'),
+            onSyncError: (err) =>
+              toast.error(
+                errorMessage(err) || 'Sync failed — wallet unlocked but data may be stale',
+              ),
           },
         )
       }

@@ -171,11 +171,13 @@ export async function loadDescriptorWalletWithoutSync(
   setBalance(null)
   setTransactions([])
 
+  const useEmptyChain = network === 'testnet'
   await loadWallet(
     descriptorWallet.externalDescriptor,
     descriptorWallet.internalDescriptor,
     network,
     descriptorWallet.changeSet,
+    useEmptyChain,
   )
 
   const address = await getCurrentAddress()
@@ -224,11 +226,13 @@ export async function loadDescriptorWalletAndSync(
   setTransactions([])
   setLastSyncTime(null)
 
+  const useEmptyChain = network === 'testnet'
   await loadWallet(
     descriptorWallet.externalDescriptor,
     descriptorWallet.internalDescriptor,
     network,
     descriptorWallet.changeSet,
+    useEmptyChain,
   )
 
   const address = await getCurrentAddress()

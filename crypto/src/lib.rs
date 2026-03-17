@@ -172,25 +172,50 @@ pub fn create_wallet(
 }
 
 /// Load a previously persisted wallet from descriptors and a changeset JSON.
+///
+/// When `use_empty_chain` is true (e.g. for testnet), the wallet is created fresh with
+/// the same descriptors so the next sync uses the correct chain genesis. For testnet we
+/// use BDK's Testnet4 so the genesis matches testnet4 Esplora (avoids HeaderHashNotFound
+/// from Testnet3 genesis). BDK's load returns None for an empty changeset, so we use
+/// create + take_staged instead of load.
 #[wasm_bindgen]
 pub fn load_wallet(
     external_descriptor: &str,
     internal_descriptor: &str,
     network: &str,
     changeset_json: &str,
+    use_empty_chain: bool,
 ) -> Result<JsValue, JsValue> {
     let net = types::BitcoinNetwork::try_from(network).map_err(JsValue::from)?;
-    let changeset = wallet::deserialize_changeset(changeset_json).map_err(JsValue::from)?;
 
-    let bdk_wallet = wallet::load_wallet(
-        external_descriptor,
-        internal_descriptor,
-        net,
-        changeset.clone(),
-    )
-    .map_err(JsValue::from)?;
+    let (bdk_wallet, changeset) = if use_empty_chain {
+        let bdk_network = match net {
+            types::BitcoinNetwork::Testnet => bitcoin::Network::Testnet4,
+            _ => net.into(),
+        };
+        let mut w = wallet::create_wallet_with_bdk_network(
+            external_descriptor,
+            internal_descriptor,
+            bdk_network,
+        )
+        .map_err(JsValue::from)?;
+        let initial = w
+            .take_staged()
+            .ok_or_else(|| JsValue::from("new wallet has no staged changeset"))?;
+        (w, initial)
+    } else {
+        let changeset = wallet::deserialize_changeset(changeset_json).map_err(JsValue::from)?;
+        let w = wallet::load_wallet(
+            external_descriptor,
+            internal_descriptor,
+            net,
+            changeset.clone(),
+        )
+        .map_err(JsValue::from)?;
+        (w, changeset)
+    };
 
-    ACTIVE_WALLET.with(|w| w.replace(Some(bdk_wallet)));
+    ACTIVE_WALLET.with(|cell| cell.replace(Some(bdk_wallet)));
     ACCUMULATED_CHANGESET.with(|cs| *cs.borrow_mut() = changeset);
     EXTERNAL_DESCRIPTOR_FOR_LAB.with(|d| *d.borrow_mut() = external_descriptor.to_string());
     INTERNAL_DESCRIPTOR_FOR_LAB.with(|d| *d.borrow_mut() = internal_descriptor.to_string());

@@ -39,7 +39,7 @@ fn build_and_sign_lab_transaction_returns_signed_tx() {
         .as_string()
         .expect("internal string");
 
-    load_wallet(&external, &internal, "regtest", &changeset).expect("load wallet");
+    load_wallet(&external, &internal, "regtest", &changeset, false).expect("load wallet");
 
     let script_pubkey_hex = lab::lab_address_to_script_pubkey_hex(&first_address).unwrap();
     let utxos_json = format!(

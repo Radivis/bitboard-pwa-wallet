@@ -51,7 +51,8 @@ export interface CryptoService {
     externalDescriptor: string,
     internalDescriptor: string,
     network: BitcoinNetwork,
-    changesetJson: string
+    changesetJson: string,
+    useEmptyChain: boolean
   ): Promise<boolean>;
 
   getNewAddress(): Promise<string>;

@@ -8,6 +8,7 @@ import { useWalletStore } from '@/stores/walletStore'
 import { useSessionStore } from '@/stores/sessionStore'
 import { useCryptoStore } from '@/stores/cryptoStore'
 import { toBitcoinNetwork } from '@/lib/bitcoin-utils'
+import { errorMessage } from '@/lib/utils'
 import {
   updateDescriptorWalletChangeset,
   resolveDescriptorWallet,
@@ -71,11 +72,13 @@ export async function switchDescriptorWallet(
       targetAccountId,
     )
 
+    const useEmptyChain = targetNetwork === 'testnet'
     await loadWallet(
       descriptorWallet.externalDescriptor,
       descriptorWallet.internalDescriptor,
       targetNetwork,
       descriptorWallet.changeSet,
+      useEmptyChain,
     )
 
     const address = await getCurrentAddress()
@@ -85,15 +88,17 @@ export async function switchDescriptorWallet(
       setWalletStatus('syncing')
       try {
         await syncActiveWalletAndUpdateState(targetNetworkMode)
-      } catch {
-        toast.error('Sync failed after switching')
+      } catch (syncErr) {
+        const detail = errorMessage(syncErr)
+        toast.error(`Sync failed after switching: ${detail}`)
       }
     }
     setWalletStatus('unlocked')
     toast.success(`${targetSubWalletLabel} sub-wallet loaded`)
   } catch (err) {
     const message = toUserFriendlySwitchError(err)
-    toast.error(message)
+    const detail = errorMessage(err)
+    toast.error(message === 'Failed to switch descriptor wallet' ? `${message}: ${detail}` : message)
   }
 }
 
