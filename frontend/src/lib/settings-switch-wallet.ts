@@ -87,7 +87,10 @@ export async function switchDescriptorWallet(
     if (targetNetworkMode !== 'lab') {
       setWalletStatus('syncing')
       try {
-        await syncActiveWalletAndUpdateState(targetNetworkMode)
+        const useFullScan = targetNetworkMode === 'testnet'
+        await syncActiveWalletAndUpdateState(targetNetworkMode, {
+          useFullScan,
+        })
       } catch (syncErr) {
         const detail = errorMessage(syncErr)
         toast.error(`Sync failed after switching: ${detail}`)
