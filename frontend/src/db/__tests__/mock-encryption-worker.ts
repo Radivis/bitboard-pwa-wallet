@@ -14,7 +14,7 @@ async function deriveKey(password: string, salt: Uint8Array): Promise<CryptoKey>
   )
   return crypto.subtle.importKey(
     'raw',
-    rawKey,
+    rawKey as BufferSource,
     'AES-GCM',
     false,
     ['encrypt', 'decrypt']
@@ -23,6 +23,8 @@ async function deriveKey(password: string, salt: Uint8Array): Promise<CryptoKey>
 
 export function getMockEncryptionWorker() {
   return {
+    setSecretsPort: async (_port: MessagePort): Promise<void> => {},
+
     deriveKeyBytes: async (password: string, salt: Uint8Array): Promise<Uint8Array> =>
       new Uint8Array(pbkdf2Sync(password, salt, 1000, 32, 'sha256')),
 
@@ -47,9 +49,9 @@ export function getMockEncryptionWorker() {
       const key = await deriveKey(password, encrypted.salt)
       try {
         const plaintextBytes = await crypto.subtle.decrypt(
-          { name: 'AES-GCM', iv: encrypted.iv },
+          { name: 'AES-GCM', iv: encrypted.iv as unknown as BufferSource },
           key,
-          encrypted.ciphertext
+          encrypted.ciphertext as unknown as BufferSource
         )
         return new TextDecoder().decode(plaintextBytes)
       } catch {

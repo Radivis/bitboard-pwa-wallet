@@ -1,6 +1,7 @@
-import { getDatabase, ensureMigrated, loadWalletSecrets, saveWalletSecrets } from '@/db'
+import { getDatabase, ensureMigrated, getWalletSecretsEncrypted, putWalletSecretsEncrypted } from '@/db'
 import type { DescriptorWalletData, WalletSecrets } from '@/db/wallet-persistence'
 import type { AddressType, BitcoinNetwork } from '@/workers/crypto-types'
+import { ensureSecretsChannel } from '@/workers/secrets-channel'
 import { useCryptoStore } from '@/stores/cryptoStore'
 
 /**
@@ -23,12 +24,7 @@ export function findDescriptorWallet(
 
 /**
  * Resolve (find or lazily create) a descriptor wallet for the given parameters.
- *
- * 1. Decrypts wallet secrets
- * 2. Looks up the target descriptor wallet in the array
- * 3. If not found, creates one via WASM and appends it
- * 4. Re-encrypts and persists updated secrets
- * 5. Returns the resolved descriptor wallet data
+ * Decrypt and encrypt run in workers via the secrets channel; mnemonic never touches the main thread.
  *
  * When switching from one descriptor wallet to another, callers must call
  * `updateDescriptorWalletChangeset` with the current (network, addressType, accountId)
@@ -42,70 +38,27 @@ export async function resolveDescriptorWallet(
   targetAccountId: number,
 ): Promise<DescriptorWalletData> {
   await ensureMigrated()
+  await ensureSecretsChannel()
   const walletDb = getDatabase()
-  const secrets = await loadWalletSecrets(walletDb, password, walletId)
-
-  const existing = findDescriptorWallet(
-    secrets,
-    targetNetwork,
-    targetAddressType,
-    targetAccountId,
-  )
-  if (existing) {
-    return existing
-  }
-
-  return await createAndPersistDescriptorWallet(
-    secrets,
+  const encryptedBlob = await getWalletSecretsEncrypted(walletDb, walletId)
+  const { resolveDescriptorWallet: workerResolve } = useCryptoStore.getState()
+  const result = await workerResolve(
     password,
-    walletId,
+    encryptedBlob,
     targetNetwork,
     targetAddressType,
     targetAccountId,
   )
-}
-
-/**
- * Create a new descriptor wallet via WASM, append it to the secrets array,
- * persist the updated secrets, and return the new entry.
- */
-async function createAndPersistDescriptorWallet(
-  secrets: WalletSecrets,
-  password: string,
-  walletId: number,
-  network: BitcoinNetwork,
-  addressType: AddressType,
-  accountId: number,
-): Promise<DescriptorWalletData> {
-  const { createWallet } = useCryptoStore.getState()
-  const walletResult = await createWallet(
-    secrets.mnemonic,
-    network,
-    addressType,
-    accountId,
-  )
-
-  const descriptorWallet: DescriptorWalletData = {
-    network,
-    addressType,
-    accountId,
-    externalDescriptor: walletResult.external_descriptor,
-    internalDescriptor: walletResult.internal_descriptor,
-    changeSet: walletResult.changeset_json,
+  if (result.encryptedBlobToStore) {
+    await putWalletSecretsEncrypted(walletDb, walletId, result.encryptedBlobToStore)
   }
-
-  secrets.descriptorWallets.push(descriptorWallet)
-
-  await ensureMigrated()
-  const walletDb = getDatabase()
-  await saveWalletSecrets(walletDb, password, walletId, secrets)
-
-  return descriptorWallet
+  return result.descriptorWalletData
 }
 
 /**
  * Update the changeset for a specific descriptor wallet in the secrets array.
  * Used after sync/scan/address generation to persist WASM state changes.
+ * Decrypt and encrypt run in workers; mnemonic never touches the main thread.
  */
 export async function updateDescriptorWalletChangeset(
   password: string,
@@ -116,21 +69,17 @@ export async function updateDescriptorWalletChangeset(
   changesetJson: string,
 ): Promise<void> {
   await ensureMigrated()
+  await ensureSecretsChannel()
   const walletDb = getDatabase()
-  const secrets = await loadWalletSecrets(walletDb, password, walletId)
-
-  const descriptorWallet = findDescriptorWallet(
-    secrets,
+  const encryptedBlob = await getWalletSecretsEncrypted(walletDb, walletId)
+  const { updateDescriptorWalletChangeset: workerUpdate } = useCryptoStore.getState()
+  const newEncrypted = await workerUpdate(
+    password,
+    encryptedBlob,
     network,
     addressType,
     accountId,
+    changesetJson,
   )
-  if (!descriptorWallet) {
-    throw new Error(
-      `No descriptor wallet found for ${network}/${addressType}/${accountId}`,
-    )
-  }
-
-  descriptorWallet.changeSet = changesetJson
-  await saveWalletSecrets(walletDb, password, walletId, secrets)
+  await putWalletSecretsEncrypted(walletDb, walletId, newEncrypted)
 }

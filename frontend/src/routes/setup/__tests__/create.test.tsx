@@ -18,13 +18,11 @@ vi.mock('@tanstack/react-router', async (importOriginal) => {
   }
 })
 
-const mockGenerateMnemonic = vi.fn()
-const mockCreateWallet = vi.fn()
+const mockCreateWalletAndEncryptSecrets = vi.fn()
 vi.mock('@/stores/cryptoStore', () => ({
   useCryptoStore: (selector: (s: Record<string, unknown>) => unknown) =>
     selector({
-      generateMnemonic: mockGenerateMnemonic,
-      createWallet: mockCreateWallet,
+      createWalletAndEncryptSecrets: mockCreateWalletAndEncryptSecrets,
     }),
 }))
 
@@ -62,7 +60,11 @@ vi.mock('@/db', () => ({
   useAddWallet: () => ({ mutateAsync: mockMutateAsync }),
   getDatabase: vi.fn(),
   ensureMigrated: vi.fn().mockResolvedValue(undefined),
-  saveWalletSecrets: vi.fn().mockResolvedValue(undefined),
+  putWalletSecretsEncrypted: vi.fn().mockResolvedValue(undefined),
+}))
+
+vi.mock('@/workers/secrets-channel', () => ({
+  ensureSecretsChannel: vi.fn().mockResolvedValue(undefined),
 }))
 
 vi.mock('@/lib/bitcoin-utils', () => ({
@@ -90,42 +92,71 @@ describe('CreateWalletPage', () => {
 
   it('renders step 1 with 12 words selected by default', () => {
     renderWithProviders(<CreateWalletPage />)
-    expect(screen.getByText('Step 1 of 4')).toBeInTheDocument()
-    expect(screen.getByText('Generate Seed Phrase')).toBeInTheDocument()
+    expect(screen.getByText('Step 1 of 3')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Create Wallet' })).toBeInTheDocument()
     expect(screen.getByText('12 Words')).toBeInTheDocument()
     expect(screen.getByText('24 Words')).toBeInTheDocument()
+    expect(screen.getByLabelText('Password')).toBeInTheDocument()
   })
 
-  it('clicking 24 Words switches word count selection', async () => {
+  it('clicking 24 Words then Generate & Continue calls createWalletAndEncryptSecrets with 24', async () => {
     const user = userEvent.setup()
+    mockCreateWalletAndEncryptSecrets.mockResolvedValueOnce({
+      encryptedBlob: { ciphertext: new Uint8Array(0), iv: new Uint8Array(12), salt: new Uint8Array(16) },
+      walletResult: { first_address: 'addr' },
+      mnemonicForBackup: 'a '.repeat(24).trim(),
+    })
     renderWithProviders(<CreateWalletPage />)
 
-    const btn24 = screen.getByText('24 Words')
-    await user.click(btn24)
-
-    mockGenerateMnemonic.mockResolvedValueOnce('a '.repeat(24).trim())
-    await user.click(screen.getByText('Generate Mnemonic'))
-    expect(mockGenerateMnemonic).toHaveBeenCalledWith(24)
+    await user.click(screen.getByText('24 Words'))
+    await user.type(screen.getByLabelText('Password'), 'password123')
+    await user.type(screen.getByLabelText('Confirm Password'), 'password123')
+    await user.click(screen.getByText('Generate & Continue'))
+    expect(mockCreateWalletAndEncryptSecrets).toHaveBeenCalledWith(
+      'password123',
+      'signet',
+      'taproot',
+      0,
+      24,
+    )
   })
 
-  it('clicking Generate Mnemonic calls generateMnemonic', async () => {
+  it('clicking Generate & Continue with valid password calls createWalletAndEncryptSecrets', async () => {
     const user = userEvent.setup()
-    mockGenerateMnemonic.mockResolvedValueOnce(TEST_MNEMONIC_12)
+    mockCreateWalletAndEncryptSecrets.mockResolvedValueOnce({
+      encryptedBlob: { ciphertext: new Uint8Array(0), iv: new Uint8Array(12), salt: new Uint8Array(16) },
+      walletResult: { first_address: 'addr' },
+      mnemonicForBackup: TEST_MNEMONIC_12,
+    })
     renderWithProviders(<CreateWalletPage />)
 
-    await user.click(screen.getByText('Generate Mnemonic'))
-    expect(mockGenerateMnemonic).toHaveBeenCalledWith(12)
+    await user.type(screen.getByLabelText('Password'), 'validpassword123')
+    await user.type(screen.getByLabelText('Confirm Password'), 'validpassword123')
+    await user.click(screen.getByText('Generate & Continue'))
+    expect(mockCreateWalletAndEncryptSecrets).toHaveBeenCalledWith(
+      'validpassword123',
+      'signet',
+      'taproot',
+      0,
+      12,
+    )
   })
 
-  it('advances to step 2 on successful generation', async () => {
+  it('advances to step 2 on successful create', async () => {
     const user = userEvent.setup()
-    mockGenerateMnemonic.mockResolvedValueOnce(TEST_MNEMONIC_12)
+    mockCreateWalletAndEncryptSecrets.mockResolvedValueOnce({
+      encryptedBlob: { ciphertext: new Uint8Array(0), iv: new Uint8Array(12), salt: new Uint8Array(16) },
+      walletResult: { first_address: 'addr' },
+      mnemonicForBackup: TEST_MNEMONIC_12,
+    })
     renderWithProviders(<CreateWalletPage />)
 
-    await user.click(screen.getByText('Generate Mnemonic'))
+    await user.type(screen.getByLabelText('Password'), 'validpassword123')
+    await user.type(screen.getByLabelText('Confirm Password'), 'validpassword123')
+    await user.click(screen.getByText('Generate & Continue'))
 
     await waitFor(() => {
-      expect(screen.getByText('Step 2 of 4')).toBeInTheDocument()
+      expect(screen.getByText('Step 2 of 3')).toBeInTheDocument()
     })
     expect(screen.getByText('Backup Seed Phrase')).toBeInTheDocument()
     expect(screen.getByTestId('mnemonic-grid')).toBeInTheDocument()
@@ -133,10 +164,16 @@ describe('CreateWalletPage', () => {
 
   it('step 2 displays mnemonic words in grid', async () => {
     const user = userEvent.setup()
-    mockGenerateMnemonic.mockResolvedValueOnce(TEST_MNEMONIC_12)
+    mockCreateWalletAndEncryptSecrets.mockResolvedValueOnce({
+      encryptedBlob: { ciphertext: new Uint8Array(0), iv: new Uint8Array(12), salt: new Uint8Array(16) },
+      walletResult: { first_address: 'addr' },
+      mnemonicForBackup: TEST_MNEMONIC_12,
+    })
     renderWithProviders(<CreateWalletPage />)
 
-    await user.click(screen.getByText('Generate Mnemonic'))
+    await user.type(screen.getByLabelText('Password'), 'validpassword123')
+    await user.type(screen.getByLabelText('Confirm Password'), 'validpassword123')
+    await user.click(screen.getByText('Generate & Continue'))
     await waitFor(() => {
       expect(screen.getByTestId('mnemonic-grid')).toHaveTextContent(TEST_MNEMONIC_12)
     })
@@ -144,10 +181,16 @@ describe('CreateWalletPage', () => {
 
   it('step 2 shows warning text', async () => {
     const user = userEvent.setup()
-    mockGenerateMnemonic.mockResolvedValueOnce(TEST_MNEMONIC_12)
+    mockCreateWalletAndEncryptSecrets.mockResolvedValueOnce({
+      encryptedBlob: { ciphertext: new Uint8Array(0), iv: new Uint8Array(12), salt: new Uint8Array(16) },
+      walletResult: { first_address: 'addr' },
+      mnemonicForBackup: TEST_MNEMONIC_12,
+    })
     renderWithProviders(<CreateWalletPage />)
 
-    await user.click(screen.getByText('Generate Mnemonic'))
+    await user.type(screen.getByLabelText('Password'), 'validpassword123')
+    await user.type(screen.getByLabelText('Confirm Password'), 'validpassword123')
+    await user.click(screen.getByText('Generate & Continue'))
     await waitFor(() => {
       const warnings = screen.getAllByText(/Write down these words in order/)
       expect(warnings.length).toBeGreaterThanOrEqual(1)
@@ -156,24 +199,36 @@ describe('CreateWalletPage', () => {
 
   it("step 2 I've Written It Down advances to step 3", async () => {
     const user = userEvent.setup()
-    mockGenerateMnemonic.mockResolvedValueOnce(TEST_MNEMONIC_12)
+    mockCreateWalletAndEncryptSecrets.mockResolvedValueOnce({
+      encryptedBlob: { ciphertext: new Uint8Array(0), iv: new Uint8Array(12), salt: new Uint8Array(16) },
+      walletResult: { first_address: 'addr' },
+      mnemonicForBackup: TEST_MNEMONIC_12,
+    })
     renderWithProviders(<CreateWalletPage />)
 
-    await user.click(screen.getByText('Generate Mnemonic'))
+    await user.type(screen.getByLabelText('Password'), 'validpassword123')
+    await user.type(screen.getByLabelText('Confirm Password'), 'validpassword123')
+    await user.click(screen.getByText('Generate & Continue'))
     await waitFor(() => {
       expect(screen.getByText("I've Written It Down")).toBeInTheDocument()
     })
     await user.click(screen.getByText("I've Written It Down"))
-    expect(screen.getByText('Step 3 of 4')).toBeInTheDocument()
+    expect(screen.getByText('Step 3 of 3')).toBeInTheDocument()
     expect(screen.getByText('Verify Seed Phrase')).toBeInTheDocument()
   })
 
   it('step 3 shows 3 verification input fields', async () => {
     const user = userEvent.setup()
-    mockGenerateMnemonic.mockResolvedValueOnce(TEST_MNEMONIC_12)
+    mockCreateWalletAndEncryptSecrets.mockResolvedValueOnce({
+      encryptedBlob: { ciphertext: new Uint8Array(0), iv: new Uint8Array(12), salt: new Uint8Array(16) },
+      walletResult: { first_address: 'addr' },
+      mnemonicForBackup: TEST_MNEMONIC_12,
+    })
     renderWithProviders(<CreateWalletPage />)
 
-    await user.click(screen.getByText('Generate Mnemonic'))
+    await user.type(screen.getByLabelText('Password'), 'validpassword123')
+    await user.type(screen.getByLabelText('Confirm Password'), 'validpassword123')
+    await user.click(screen.getByText('Generate & Continue'))
     await waitFor(() => screen.getByText("I've Written It Down"))
     await user.click(screen.getByText("I've Written It Down"))
 
@@ -181,31 +236,42 @@ describe('CreateWalletPage', () => {
     expect(inputs).toHaveLength(3)
   })
 
-  it('step 3 Confirm disabled until correct words entered', async () => {
+  it('step 3 Confirm & Finish disabled until correct words entered', async () => {
     const user = userEvent.setup()
-    mockGenerateMnemonic.mockResolvedValueOnce(TEST_MNEMONIC_12)
+    mockCreateWalletAndEncryptSecrets.mockResolvedValueOnce({
+      encryptedBlob: { ciphertext: new Uint8Array(0), iv: new Uint8Array(12), salt: new Uint8Array(16) },
+      walletResult: { first_address: 'addr' },
+      mnemonicForBackup: TEST_MNEMONIC_12,
+    })
     renderWithProviders(<CreateWalletPage />)
 
-    await user.click(screen.getByText('Generate Mnemonic'))
+    await user.type(screen.getByLabelText('Password'), 'validpassword123')
+    await user.type(screen.getByLabelText('Confirm Password'), 'validpassword123')
+    await user.click(screen.getByText('Generate & Continue'))
     await waitFor(() => screen.getByText("I've Written It Down"))
     await user.click(screen.getByText("I've Written It Down"))
 
-    const confirmBtn = screen.getByRole('button', { name: 'Confirm' })
+    const confirmBtn = screen.getByRole('button', { name: 'Confirm & Finish' })
     expect(confirmBtn).toBeDisabled()
   })
 
-  it('step 3 Confirm enabled when correct words entered', async () => {
+  it('step 3 Confirm & Finish enabled when correct words entered', async () => {
     const user = userEvent.setup()
-    mockGenerateMnemonic.mockResolvedValueOnce(TEST_MNEMONIC_12)
+    mockCreateWalletAndEncryptSecrets.mockResolvedValueOnce({
+      encryptedBlob: { ciphertext: new Uint8Array(0), iv: new Uint8Array(12), salt: new Uint8Array(16) },
+      walletResult: { first_address: 'addr' },
+      mnemonicForBackup: TEST_MNEMONIC_12,
+    })
     renderWithProviders(<CreateWalletPage />)
 
-    await user.click(screen.getByText('Generate Mnemonic'))
+    await user.type(screen.getByLabelText('Password'), 'validpassword123')
+    await user.type(screen.getByLabelText('Confirm Password'), 'validpassword123')
+    await user.click(screen.getByText('Generate & Continue'))
     await waitFor(() => screen.getByText("I've Written It Down"))
     await user.click(screen.getByText("I've Written It Down"))
 
     const words = TEST_MNEMONIC_12.split(' ')
     const inputs = screen.getAllByPlaceholderText(/Enter word #/)
-
     for (const input of inputs) {
       const placeholder = input.getAttribute('placeholder')!
       const wordNum = parseInt(placeholder.replace('Enter word #', ''))
@@ -213,54 +279,13 @@ describe('CreateWalletPage', () => {
     }
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Confirm' })).toBeEnabled()
+      expect(screen.getByRole('button', { name: 'Confirm & Finish' })).toBeEnabled()
     })
   })
 
-  it('step 4 shows password and confirm inputs', async () => {
+  it('step 1 shows Passwords do not match error', async () => {
     const user = userEvent.setup()
-    mockGenerateMnemonic.mockResolvedValueOnce(TEST_MNEMONIC_12)
     renderWithProviders(<CreateWalletPage />)
-
-    await user.click(screen.getByText('Generate Mnemonic'))
-    await waitFor(() => screen.getByText("I've Written It Down"))
-    await user.click(screen.getByText("I've Written It Down"))
-
-    const words = TEST_MNEMONIC_12.split(' ')
-    const inputs = screen.getAllByPlaceholderText(/Enter word #/)
-    for (const input of inputs) {
-      const wordNum = parseInt(input.getAttribute('placeholder')!.replace('Enter word #', ''))
-      await user.type(input, words[wordNum - 1])
-    }
-    await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Confirm' })).toBeEnabled(),
-    )
-    await user.click(screen.getByRole('button', { name: 'Confirm' }))
-
-    expect(screen.getByText('Step 4 of 4')).toBeInTheDocument()
-    expect(screen.getByLabelText('Password')).toBeInTheDocument()
-    expect(screen.getByLabelText('Confirm Password')).toBeInTheDocument()
-  })
-
-  it('step 4 shows Passwords do not match error', async () => {
-    const user = userEvent.setup()
-    mockGenerateMnemonic.mockResolvedValueOnce(TEST_MNEMONIC_12)
-    renderWithProviders(<CreateWalletPage />)
-
-    await user.click(screen.getByText('Generate Mnemonic'))
-    await waitFor(() => screen.getByText("I've Written It Down"))
-    await user.click(screen.getByText("I've Written It Down"))
-
-    const words = TEST_MNEMONIC_12.split(' ')
-    const inputs = screen.getAllByPlaceholderText(/Enter word #/)
-    for (const input of inputs) {
-      const wordNum = parseInt(input.getAttribute('placeholder')!.replace('Enter word #', ''))
-      await user.type(input, words[wordNum - 1])
-    }
-    await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Confirm' })).toBeEnabled(),
-    )
-    await user.click(screen.getByRole('button', { name: 'Confirm' }))
 
     await user.type(screen.getByLabelText('Password'), 'password123')
     await user.type(screen.getByLabelText('Confirm Password'), 'different')
@@ -268,60 +293,28 @@ describe('CreateWalletPage', () => {
     expect(screen.getByText('Passwords do not match')).toBeInTheDocument()
   })
 
-  it('step 4 Create Wallet disabled when password too short', async () => {
+  it('step 1 Generate & Continue disabled when password too short', async () => {
     const user = userEvent.setup()
-    mockGenerateMnemonic.mockResolvedValueOnce(TEST_MNEMONIC_12)
     renderWithProviders(<CreateWalletPage />)
-
-    await user.click(screen.getByText('Generate Mnemonic'))
-    await waitFor(() => screen.getByText("I've Written It Down"))
-    await user.click(screen.getByText("I've Written It Down"))
-
-    const words = TEST_MNEMONIC_12.split(' ')
-    const inputs = screen.getAllByPlaceholderText(/Enter word #/)
-    for (const input of inputs) {
-      const wordNum = parseInt(input.getAttribute('placeholder')!.replace('Enter word #', ''))
-      await user.type(input, words[wordNum - 1])
-    }
-    await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Confirm' })).toBeEnabled(),
-    )
-    await user.click(screen.getByRole('button', { name: 'Confirm' }))
 
     await user.type(screen.getByLabelText('Password'), 'short')
     await user.type(screen.getByLabelText('Confirm Password'), 'short')
 
-    expect(screen.getByRole('button', { name: 'Create Wallet' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Generate & Continue' })).toBeDisabled()
   })
 
-  it('step 4 Create Wallet enabled when valid', async () => {
+  it('step 1 Generate & Continue enabled when valid', async () => {
     const user = userEvent.setup()
-    mockGenerateMnemonic.mockResolvedValueOnce(TEST_MNEMONIC_12)
     renderWithProviders(<CreateWalletPage />)
-
-    await user.click(screen.getByText('Generate Mnemonic'))
-    await waitFor(() => screen.getByText("I've Written It Down"))
-    await user.click(screen.getByText("I've Written It Down"))
-
-    const words = TEST_MNEMONIC_12.split(' ')
-    const inputs = screen.getAllByPlaceholderText(/Enter word #/)
-    for (const input of inputs) {
-      const wordNum = parseInt(input.getAttribute('placeholder')!.replace('Enter word #', ''))
-      await user.type(input, words[wordNum - 1])
-    }
-    await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Confirm' })).toBeEnabled(),
-    )
-    await user.click(screen.getByRole('button', { name: 'Confirm' }))
 
     await user.type(screen.getByLabelText('Password'), 'validpassword123')
     await user.type(screen.getByLabelText('Confirm Password'), 'validpassword123')
 
-    expect(screen.getByRole('button', { name: 'Create Wallet' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Generate & Continue' })).toBeEnabled()
   })
 
   it('step indicator shows correct step number', () => {
     renderWithProviders(<CreateWalletPage />)
-    expect(screen.getByText('Step 1 of 4')).toBeInTheDocument()
+    expect(screen.getByText('Step 1 of 3')).toBeInTheDocument()
   })
 })

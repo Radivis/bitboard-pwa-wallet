@@ -1,22 +1,88 @@
 import type { Kysely } from 'kysely'
 import type { Database } from './schema'
 import { encryptData, decryptData } from './encryption'
-import type { AddressType, BitcoinNetwork } from '@/workers/crypto-types'
+import type { DescriptorWalletData, WalletSecrets } from '@/workers/crypto-types'
 
-/** Data for a single descriptor wallet (one network + address type + account combo). */
-export interface DescriptorWalletData {
-  network: BitcoinNetwork
-  addressType: AddressType
-  accountId: number
-  externalDescriptor: string
-  internalDescriptor: string
-  changeSet: string
+export type { DescriptorWalletData, WalletSecrets }
+
+/** Encrypted blob shape for reading/writing without decryption (used by descriptor-wallet-manager with crypto worker). */
+export interface EncryptedWalletSecretsBlob {
+  ciphertext: Uint8Array
+  iv: Uint8Array
+  salt: Uint8Array
 }
 
-/** Sensitive wallet data that must be stored encrypted. */
-export interface WalletSecrets {
-  mnemonic: string
-  descriptorWallets: DescriptorWalletData[]
+/**
+ * Reads the encrypted wallet secrets row for a wallet (no decryption).
+ * Used when delegating decrypt/resolve to the crypto worker.
+ *
+ * @throws {Error} If no secrets exist for the wallet ID
+ */
+export async function getWalletSecretsEncrypted(
+  walletDb: Kysely<Database>,
+  walletId: number
+): Promise<EncryptedWalletSecretsBlob> {
+  const record = await walletDb
+    .selectFrom('wallet_secrets')
+    .select(['encrypted_data', 'iv', 'salt'])
+    .where('wallet_id', '=', walletId)
+    .executeTakeFirst()
+
+  if (!record) {
+    throw new Error(`Wallet secrets for wallet ${walletId} not found`)
+  }
+
+  return {
+    ciphertext: record.encrypted_data,
+    iv: record.iv,
+    salt: record.salt,
+  }
+}
+
+/**
+ * Writes encrypted wallet secrets for a wallet (no encryption on main thread).
+ * Used after crypto worker returns encryptedBlobToStore from resolveDescriptorWallet or updateDescriptorWalletChangeset.
+ *
+ * @throws {Error} If the wallet ID does not exist in the `wallets` table
+ */
+export async function putWalletSecretsEncrypted(
+  walletDb: Kysely<Database>,
+  walletId: number,
+  encrypted: EncryptedWalletSecretsBlob
+): Promise<void> {
+  await assertWalletExists(walletDb, walletId)
+
+  const now = new Date().toISOString()
+  const existing = await walletDb
+    .selectFrom('wallet_secrets')
+    .select('wallet_secrets_id')
+    .where('wallet_id', '=', walletId)
+    .executeTakeFirst()
+
+  if (existing) {
+    await walletDb
+      .updateTable('wallet_secrets')
+      .set({
+        encrypted_data: encrypted.ciphertext,
+        iv: encrypted.iv,
+        salt: encrypted.salt,
+        updated_at: now,
+      })
+      .where('wallet_secrets_id', '=', existing.wallet_secrets_id)
+      .execute()
+  } else {
+    await walletDb
+      .insertInto('wallet_secrets')
+      .values({
+        wallet_id: walletId,
+        encrypted_data: encrypted.ciphertext,
+        iv: encrypted.iv,
+        salt: encrypted.salt,
+        created_at: now,
+        updated_at: now,
+      })
+      .execute()
+  }
 }
 
 /**

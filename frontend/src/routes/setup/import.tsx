@@ -13,7 +13,8 @@ import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { useCryptoStore } from '@/stores/cryptoStore'
 import { useWalletStore } from '@/stores/walletStore'
 import { useSessionStore, startAutoLockTimer } from '@/stores/sessionStore'
-import { useAddWallet, getDatabase, ensureMigrated, saveWalletSecrets } from '@/db'
+import { useAddWallet, getDatabase, ensureMigrated, putWalletSecretsEncrypted } from '@/db'
+import { ensureSecretsChannel } from '@/workers/secrets-channel'
 import { toBitcoinNetwork, getEsploraUrl } from '@/lib/bitcoin-utils'
 import { loadCustomEsploraUrl } from '@/lib/wallet-utils'
 
@@ -30,7 +31,7 @@ export function ImportWalletPage() {
   const [isValid, setIsValid] = useState<boolean | null>(null)
 
   const validateMnemonic = useCryptoStore((s) => s.validateMnemonic)
-  const createWallet = useCryptoStore((s) => s.createWallet)
+  const importWalletAndEncryptSecrets = useCryptoStore((s) => s.importWalletAndEncryptSecrets)
   const fullScanWallet = useCryptoStore((s) => s.fullScanWallet)
   const networkMode = useWalletStore((s) => s.networkMode)
   const addressType = useWalletStore((s) => s.addressType)
@@ -88,8 +89,17 @@ export function ImportWalletPage() {
     mutationFn: async () => {
       if (!canRestore) throw new Error('Invalid input')
 
+      await ensureSecretsChannel()
       const network = toBitcoinNetwork(networkMode)
-      const walletResult = await createWallet(mnemonic, network, addressType, accountId)
+      const { encryptedBlob, walletResult } = await importWalletAndEncryptSecrets(
+        mnemonic,
+        password,
+        network,
+        addressType,
+        accountId,
+      )
+
+      setMnemonicInput('')
 
       await ensureMigrated()
       const walletDb = getDatabase()
@@ -99,19 +109,7 @@ export function ImportWalletPage() {
         created_at: new Date().toISOString(),
       })
 
-      await saveWalletSecrets(walletDb, password, walletId, {
-        mnemonic,
-        descriptorWallets: [
-          {
-            network,
-            addressType,
-            accountId,
-            externalDescriptor: walletResult.external_descriptor,
-            internalDescriptor: walletResult.internal_descriptor,
-            changeSet: walletResult.changeset_json,
-          },
-        ],
-      })
+      await putWalletSecretsEncrypted(walletDb, walletId, encryptedBlob)
 
       setSessionPassword(password)
       setActiveWallet(walletId)
@@ -136,6 +134,7 @@ export function ImportWalletPage() {
       }
     },
     onSuccess: () => {
+      setMnemonicInput('')
       toast.success('Wallet imported successfully!')
       navigate({ to: '/' })
     },

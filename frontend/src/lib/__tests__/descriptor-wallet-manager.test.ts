@@ -13,6 +13,7 @@ import {
   resolveDescriptorWallet,
   updateDescriptorWalletChangeset,
 } from '../descriptor-wallet-manager'
+import type { AddressType, BitcoinNetwork } from '@/workers/crypto-types'
 
 /**
  * Descriptor wallet manager tests using mock encryption worker for fast execution.
@@ -25,6 +26,10 @@ vi.mock('@/workers/encryption-factory', async () => {
     getEncryptionWorker: () => getMockEncryptionWorker(),
   }
 })
+
+vi.mock('@/workers/secrets-channel', () => ({
+  ensureSecretsChannel: vi.fn().mockResolvedValue(undefined),
+}))
 
 let testDb: Kysely<DbSchema>
 
@@ -41,9 +46,70 @@ vi.mock('@/db', async (importOriginal) => {
 })
 
 const mockCreateWallet = vi.fn()
+
+async function mockResolveDescriptorWallet(
+  password: string,
+  encryptedBlob: { ciphertext: Uint8Array; iv: Uint8Array; salt: Uint8Array },
+  targetNetwork: BitcoinNetwork,
+  targetAddressType: AddressType,
+  targetAccountId: number,
+) {
+  const { getEncryptionWorker } = await import('@/workers/encryption-factory')
+  const plaintext = await getEncryptionWorker().decryptData(password, encryptedBlob)
+  const secrets: WalletSecrets = JSON.parse(plaintext)
+  const existing = findDescriptorWallet(secrets, targetNetwork, targetAddressType, targetAccountId)
+  if (existing) {
+    return { descriptorWalletData: existing, encryptedBlobToStore: null }
+  }
+  const walletResult = await mockCreateWallet(
+    secrets.mnemonic,
+    targetNetwork,
+    targetAddressType,
+    targetAccountId,
+  )
+  const newDw = {
+    network: targetNetwork,
+    addressType: targetAddressType,
+    accountId: targetAccountId,
+    externalDescriptor: walletResult.external_descriptor,
+    internalDescriptor: walletResult.internal_descriptor,
+    changeSet: walletResult.changeset_json,
+  }
+  secrets.descriptorWallets.push(newDw)
+  const newBlob = await getEncryptionWorker().encryptData(password, JSON.stringify(secrets))
+  return {
+    descriptorWalletData: newDw,
+    encryptedBlobToStore: newBlob,
+  }
+}
+
+async function mockUpdateDescriptorWalletChangeset(
+  password: string,
+  encryptedBlob: { ciphertext: Uint8Array; iv: Uint8Array; salt: Uint8Array },
+  network: BitcoinNetwork,
+  addressType: AddressType,
+  accountId: number,
+  changesetJson: string,
+) {
+  const { getEncryptionWorker } = await import('@/workers/encryption-factory')
+  const plaintext = await getEncryptionWorker().decryptData(password, encryptedBlob)
+  const secrets: WalletSecrets = JSON.parse(plaintext)
+  const dw = findDescriptorWallet(secrets, network, addressType, accountId)
+  if (!dw) {
+    throw new Error(`No descriptor wallet found for ${network}/${addressType}/${accountId}`)
+  }
+  dw.changeSet = changesetJson
+  const newBlob = await getEncryptionWorker().encryptData(password, JSON.stringify(secrets))
+  return newBlob
+}
+
 vi.mock('@/stores/cryptoStore', () => ({
   useCryptoStore: {
-    getState: () => ({ createWallet: mockCreateWallet }),
+    getState: () => ({
+      createWallet: mockCreateWallet,
+      resolveDescriptorWallet: mockResolveDescriptorWallet,
+      updateDescriptorWalletChangeset: mockUpdateDescriptorWalletChangeset,
+    }),
   },
 }))
 

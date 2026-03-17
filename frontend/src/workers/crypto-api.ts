@@ -4,11 +4,28 @@ import type {
   BalanceInfo,
   CreateWalletResult,
   DescriptorPair,
+  DescriptorWalletData,
   SyncResult,
   TransactionDetails,
 } from './crypto-types';
 
+/** Result of resolveDescriptorWallet: descriptor data and optional new encrypted blob to store. */
+export interface ResolveDescriptorWalletResult {
+  descriptorWalletData: DescriptorWalletData;
+  encryptedBlobToStore: EncryptedBlobForDb | null;
+}
+
+/** Encrypted blob as stored in DB (transferable from worker to main). */
+export interface EncryptedBlobForDb {
+  ciphertext: Uint8Array;
+  iv: Uint8Array;
+  salt: Uint8Array;
+}
+
 export interface CryptoService {
+  /** Sets the port for worker-to-worker secrets channel. Call once from main thread before using resolveDescriptorWallet/updateDescriptorWalletChangeset. */
+  setSecretsPort(port: MessagePort): Promise<void>;
+
   /** Lightweight health check -- resolves `true` if WASM is loaded. */
   ping(): Promise<boolean>;
 
@@ -68,4 +85,60 @@ export interface CryptoService {
   ): Promise<string>;
   
   getTransactionList(): Promise<TransactionDetails[]>;
+
+  /**
+   * Resolve (find or create) a descriptor wallet using encrypted secrets.
+   * Decrypt and encrypt happen via the secrets port; mnemonic never leaves the worker.
+   */
+  resolveDescriptorWallet(
+    password: string,
+    encryptedBlob: EncryptedBlobForDb,
+    targetNetwork: BitcoinNetwork,
+    targetAddressType: AddressType,
+    targetAccountId: number
+  ): Promise<ResolveDescriptorWalletResult>;
+
+  /**
+   * Update the changeset for one descriptor wallet in encrypted secrets.
+   * Returns the new encrypted blob to store.
+   */
+  updateDescriptorWalletChangeset(
+    password: string,
+    encryptedBlob: EncryptedBlobForDb,
+    network: BitcoinNetwork,
+    addressType: AddressType,
+    accountId: number,
+    changesetJson: string
+  ): Promise<EncryptedBlobForDb>;
+
+  /**
+   * Create wallet (generate mnemonic, create in WASM, encrypt secrets).
+   * Returns encrypted blob, wallet result, and mnemonic for one-time backup display.
+   */
+  createWalletAndEncryptSecrets(
+    password: string,
+    network: BitcoinNetwork,
+    addressType: AddressType,
+    accountId: number,
+    wordCount: 12 | 24
+  ): Promise<{
+    encryptedBlob: EncryptedBlobForDb;
+    walletResult: CreateWalletResult;
+    mnemonicForBackup: string;
+  }>;
+
+  /**
+   * Import wallet (create in WASM from mnemonic, encrypt secrets).
+   * Mnemonic is passed in and not retained; returns encrypted blob and wallet result.
+   */
+  importWalletAndEncryptSecrets(
+    mnemonic: string,
+    password: string,
+    network: BitcoinNetwork,
+    addressType: AddressType,
+    accountId: number
+  ): Promise<{
+    encryptedBlob: EncryptedBlobForDb;
+    walletResult: CreateWalletResult;
+  }>;
 }

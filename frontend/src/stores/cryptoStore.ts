@@ -16,6 +16,10 @@ import type {
   SyncResult,
   TransactionDetails,
 } from '@/workers/crypto-types';
+import type {
+  EncryptedBlobForDb,
+  ResolveDescriptorWalletResult,
+} from '@/workers/crypto-api';
 
 interface CryptoState {
   _worker: Remote<CryptoService> | null;
@@ -79,6 +83,46 @@ interface CryptoState {
   ) => Promise<string>;
   
   getTransactionList: () => Promise<TransactionDetails[]>;
+
+  resolveDescriptorWallet: (
+    password: string,
+    encryptedBlob: EncryptedBlobForDb,
+    targetNetwork: BitcoinNetwork,
+    targetAddressType: AddressType,
+    targetAccountId: number
+  ) => Promise<ResolveDescriptorWalletResult>;
+
+  updateDescriptorWalletChangeset: (
+    password: string,
+    encryptedBlob: EncryptedBlobForDb,
+    network: BitcoinNetwork,
+    addressType: AddressType,
+    accountId: number,
+    changesetJson: string
+  ) => Promise<EncryptedBlobForDb>;
+
+  createWalletAndEncryptSecrets: (
+    password: string,
+    network: BitcoinNetwork,
+    addressType: AddressType,
+    accountId: number,
+    wordCount: 12 | 24
+  ) => Promise<{
+    encryptedBlob: EncryptedBlobForDb;
+    walletResult: CreateWalletResult;
+    mnemonicForBackup: string;
+  }>;
+
+  importWalletAndEncryptSecrets: (
+    mnemonic: string,
+    password: string,
+    network: BitcoinNetwork,
+    addressType: AddressType,
+    accountId: number
+  ) => Promise<{
+    encryptedBlob: EncryptedBlobForDb;
+    walletResult: CreateWalletResult;
+  }>;
 
   terminateWorker: () => void;
 }
@@ -191,6 +235,39 @@ export const useCryptoStore = create<CryptoState>((set, get) => {
 
     getTransactionList: () => 
       withErrorHandling((worker) => worker.getTransactionList()),
+
+    resolveDescriptorWallet: (password, encryptedBlob, targetNetwork, targetAddressType, targetAccountId) =>
+      withErrorHandling((worker) =>
+        worker.resolveDescriptorWallet(
+          password,
+          encryptedBlob,
+          targetNetwork,
+          targetAddressType,
+          targetAccountId
+        )
+      ),
+
+    updateDescriptorWalletChangeset: (password, encryptedBlob, network, addressType, accountId, changesetJson) =>
+      withErrorHandling((worker) =>
+        worker.updateDescriptorWalletChangeset(
+          password,
+          encryptedBlob,
+          network,
+          addressType,
+          accountId,
+          changesetJson
+        )
+      ),
+
+    createWalletAndEncryptSecrets: (password, network, addressType, accountId, wordCount) =>
+      withErrorHandling((worker) =>
+        worker.createWalletAndEncryptSecrets(password, network, addressType, accountId, wordCount)
+      ),
+
+    importWalletAndEncryptSecrets: (mnemonic, password, network, addressType, accountId) =>
+      withErrorHandling((worker) =>
+        worker.importWalletAndEncryptSecrets(mnemonic, password, network, addressType, accountId)
+      ),
 
     terminateWorker: () => {
       terminateCryptoWorker();

@@ -1,6 +1,22 @@
 export type AddressType = 'taproot' | 'segwit';
 export type BitcoinNetwork = 'bitcoin' | 'testnet' | 'signet' | 'regtest';
 
+/** Data for a single descriptor wallet (one network + address type + account combo). Shared with db layer. */
+export interface DescriptorWalletData {
+  network: BitcoinNetwork;
+  addressType: AddressType;
+  accountId: number;
+  externalDescriptor: string;
+  internalDescriptor: string;
+  changeSet: string;
+}
+
+/** Sensitive wallet data stored encrypted. Shared with db layer and workers. */
+export interface WalletSecrets {
+  mnemonic: string;
+  descriptorWallets: DescriptorWalletData[];
+}
+
 export interface DescriptorPair {
   external: string;
   internal: string;

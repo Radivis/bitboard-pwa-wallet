@@ -1,8 +1,30 @@
 import { expose } from 'comlink';
-import type { AddressType, BitcoinNetwork, BalanceInfo, CreateWalletResult, DescriptorPair, SyncResult, TransactionDetails } from './crypto-types';
+import type {
+  AddressType,
+  BitcoinNetwork,
+  BalanceInfo,
+  CreateWalletResult,
+  DescriptorPair,
+  DescriptorWalletData,
+  SyncResult,
+  TransactionDetails,
+  WalletSecrets,
+} from './crypto-types';
+import type {
+  EncryptedBlobMessage,
+  SecretsChannelResponse,
+} from './secrets-channel-types';
 
 let wasm: typeof import('@/wasm-pkg/bitboard_crypto') | null = null;
 let wasmInitError: string | null = null;
+let secretsPort: MessagePort | null = null;
+const secretsPending = new Map<
+  string,
+  {
+    resolve: (value: string | EncryptedBlobMessage) => void;
+    reject: (err: Error) => void;
+  }
+>();
 
 async function getWasm() {
   if (wasmInitError) {
@@ -26,7 +48,80 @@ async function initWasm() {
 
 initWasm();
 
+function handleSecretsPortMessage(event: MessageEvent<SecretsChannelResponse>) {
+  const msg = event.data;
+  if (!msg || !('requestId' in msg)) return;
+  const pending = secretsPending.get(msg.requestId);
+  if (!pending) return;
+  secretsPending.delete(msg.requestId);
+  if (msg.type === 'DECRYPT_RESULT') {
+    pending.resolve(msg.plaintext);
+  } else if (msg.type === 'DECRYPT_ERROR') {
+    pending.reject(new Error(msg.error));
+  } else if (msg.type === 'ENCRYPT_RESULT') {
+    pending.resolve(msg.encryptedBlob);
+  } else if (msg.type === 'ENCRYPT_ERROR') {
+    pending.reject(new Error(msg.error));
+  }
+}
+
+function requestDecrypt(password: string, encryptedBlob: EncryptedBlobMessage): Promise<string> {
+  if (!secretsPort) return Promise.reject(new Error('Secrets port not set'));
+  const requestId = `decrypt-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  return new Promise<string>((resolve, reject) => {
+    secretsPending.set(requestId, {
+      resolve: resolve as (v: string | EncryptedBlobMessage) => void,
+      reject,
+    });
+    secretsPort!.postMessage({
+      type: 'DECRYPT',
+      requestId,
+      password,
+      encryptedBlob,
+    });
+  });
+}
+
+function requestEncrypt(password: string, plaintext: string): Promise<EncryptedBlobMessage> {
+  if (!secretsPort) return Promise.reject(new Error('Secrets port not set'));
+  const requestId = `encrypt-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  return new Promise<EncryptedBlobMessage>((resolve, reject) => {
+    secretsPending.set(requestId, {
+      resolve: resolve as (v: string | EncryptedBlobMessage) => void,
+      reject,
+    });
+    secretsPort!.postMessage({
+      type: 'ENCRYPT',
+      requestId,
+      password,
+      plaintext,
+    });
+  });
+}
+
+function findDescriptorWallet(
+  secrets: WalletSecrets,
+  network: BitcoinNetwork,
+  addressType: AddressType,
+  accountId: number
+): DescriptorWalletData | undefined {
+  return secrets.descriptorWallets.find(
+    (dw) =>
+      dw.network === network &&
+      dw.addressType === addressType &&
+      dw.accountId === accountId
+  );
+}
+
 const cryptoService = {
+  async setSecretsPort(port: MessagePort): Promise<void> {
+    if (secretsPort) {
+      secretsPort.onmessage = null;
+    }
+    secretsPort = port;
+    secretsPort.onmessage = handleSecretsPortMessage as (ev: MessageEvent) => void;
+  },
+
   async ping(): Promise<boolean> {
     await getWasm();
     return true;
@@ -167,6 +262,168 @@ const cryptoService = {
   async getTransactionList(): Promise<TransactionDetails[]> {
     const wasmModule = await getWasm();
     return wasmModule.get_transaction_list();
+  },
+
+  async resolveDescriptorWallet(
+    password: string,
+    encryptedBlob: EncryptedBlobMessage,
+    targetNetwork: BitcoinNetwork,
+    targetAddressType: AddressType,
+    targetAccountId: number
+  ) {
+    const wasmModule = await getWasm();
+    const plaintext = await requestDecrypt(password, encryptedBlob);
+    const secrets: WalletSecrets = JSON.parse(plaintext);
+
+    const existing = findDescriptorWallet(
+      secrets,
+      targetNetwork,
+      targetAddressType,
+      targetAccountId
+    );
+    if (existing) {
+      return {
+        descriptorWalletData: existing,
+        encryptedBlobToStore: null,
+      };
+    }
+
+    const walletResult = wasmModule.create_wallet(
+      secrets.mnemonic,
+      targetNetwork,
+      targetAddressType,
+      targetAccountId
+    );
+    const descriptorWallet: DescriptorWalletData = {
+      network: targetNetwork,
+      addressType: targetAddressType,
+      accountId: targetAccountId,
+      externalDescriptor: walletResult.external_descriptor,
+      internalDescriptor: walletResult.internal_descriptor,
+      changeSet: walletResult.changeset_json,
+    };
+    secrets.descriptorWallets.push(descriptorWallet);
+    const newPlaintext = JSON.stringify(secrets);
+    const newBlob = await requestEncrypt(password, newPlaintext);
+    return {
+      descriptorWalletData: descriptorWallet,
+      encryptedBlobToStore: {
+        ciphertext: newBlob.ciphertext,
+        iv: newBlob.iv,
+        salt: newBlob.salt,
+      },
+    };
+  },
+
+  async updateDescriptorWalletChangeset(
+    password: string,
+    encryptedBlob: EncryptedBlobMessage,
+    network: BitcoinNetwork,
+    addressType: AddressType,
+    accountId: number,
+    changesetJson: string
+  ) {
+    const plaintext = await requestDecrypt(password, encryptedBlob);
+    const secrets: WalletSecrets = JSON.parse(plaintext);
+    const descriptorWallet = findDescriptorWallet(
+      secrets,
+      network,
+      addressType,
+      accountId
+    );
+    if (!descriptorWallet) {
+      throw new Error(
+        `No descriptor wallet found for ${network}/${addressType}/${accountId}`
+      );
+    }
+    descriptorWallet.changeSet = changesetJson;
+    const newPlaintext = JSON.stringify(secrets);
+    const newBlob = await requestEncrypt(password, newPlaintext);
+    return {
+      ciphertext: newBlob.ciphertext,
+      iv: newBlob.iv,
+      salt: newBlob.salt,
+    };
+  },
+
+  async createWalletAndEncryptSecrets(
+    password: string,
+    network: BitcoinNetwork,
+    addressType: AddressType,
+    accountId: number,
+    wordCount: 12 | 24
+  ) {
+    const wasmModule = await getWasm();
+    const mnemonic = wasmModule.generate_mnemonic(wordCount);
+    const walletResult = wasmModule.create_wallet(
+      mnemonic,
+      network,
+      addressType,
+      accountId
+    );
+    const secrets: WalletSecrets = {
+      mnemonic,
+      descriptorWallets: [
+        {
+          network,
+          addressType,
+          accountId,
+          externalDescriptor: walletResult.external_descriptor,
+          internalDescriptor: walletResult.internal_descriptor,
+          changeSet: walletResult.changeset_json,
+        },
+      ],
+    };
+    const plaintext = JSON.stringify(secrets);
+    const encryptedBlob = await requestEncrypt(password, plaintext);
+    return {
+      encryptedBlob: {
+        ciphertext: encryptedBlob.ciphertext,
+        iv: encryptedBlob.iv,
+        salt: encryptedBlob.salt,
+      },
+      walletResult,
+      mnemonicForBackup: mnemonic,
+    };
+  },
+
+  async importWalletAndEncryptSecrets(
+    mnemonic: string,
+    password: string,
+    network: BitcoinNetwork,
+    addressType: AddressType,
+    accountId: number
+  ) {
+    const wasmModule = await getWasm();
+    const walletResult = wasmModule.create_wallet(
+      mnemonic,
+      network,
+      addressType,
+      accountId
+    );
+    const secrets: WalletSecrets = {
+      mnemonic,
+      descriptorWallets: [
+        {
+          network,
+          addressType,
+          accountId,
+          externalDescriptor: walletResult.external_descriptor,
+          internalDescriptor: walletResult.internal_descriptor,
+          changeSet: walletResult.changeset_json,
+        },
+      ],
+    };
+    const plaintext = JSON.stringify(secrets);
+    const encryptedBlob = await requestEncrypt(password, plaintext);
+    return {
+      encryptedBlob: {
+        ciphertext: encryptedBlob.ciphertext,
+        iv: encryptedBlob.iv,
+        salt: encryptedBlob.salt,
+      },
+      walletResult,
+    };
   },
 };
 
