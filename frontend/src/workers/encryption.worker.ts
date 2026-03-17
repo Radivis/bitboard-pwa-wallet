@@ -83,6 +83,7 @@ const secretsChannelService = {
 const encryptionService: EncryptionService = {
   async setSecretsPort(port: MessagePort): Promise<void> {
     expose(secretsChannelService, port);
+    port.start();
   },
 
   async deriveKeyBytes(password: string, salt: Uint8Array): Promise<Uint8Array> {

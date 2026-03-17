@@ -4,6 +4,8 @@
  * so that the encryption and crypto workers can communicate without the main thread seeing secrets.
  */
 
+import { transfer } from 'comlink';
+
 let channelReady = false;
 let channelPromise: Promise<void> | null = null;
 
@@ -18,8 +20,8 @@ export async function ensureSecretsChannel(): Promise<void> {
     const { getEncryptionWorker } = await import('./encryption-factory');
     const { getCryptoWorker } = await import('./crypto-factory');
     await Promise.all([
-      getEncryptionWorker().setSecretsPort(port1),
-      getCryptoWorker().setSecretsPort(port2),
+      getEncryptionWorker().setSecretsPort(transfer(port1, [port1])),
+      getCryptoWorker().setSecretsPort(transfer(port2, [port2])),
     ]);
     channelReady = true;
   })();
