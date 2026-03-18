@@ -1,5 +1,6 @@
 import { type Page, expect } from '@playwright/test'
 import type { LabState } from '@/workers/lab-api'
+import { WALLET_OWNER_PREFIX } from '@/lib/lab-utils'
 
 /** Switch to Lab network and SegWit (BIP84) address type. */
 export async function switchToLabAndSegwit(page: Page): Promise<void> {
@@ -92,7 +93,8 @@ export async function mineBlocksInLab(
   if (ownerType === 'name' && options?.ownerName !== undefined) {
     const ownerInput = page.locator('#owner-name')
     await expect(ownerInput).toBeVisible()
-    await ownerInput.fill(options.ownerName)
+    await ownerInput.clear()
+    await ownerInput.pressSequentially(options.ownerName, { delay: 40 })
     await expect(ownerInput).toHaveValue(options.ownerName)
   }
 
@@ -100,6 +102,34 @@ export async function mineBlocksInLab(
   await expect(page.getByRole('button', { name: 'Mine blocks' })).toBeEnabled({
     timeout: 30000,
   })
+
+  if (ownerType === 'name' && options?.ownerName?.trim()) {
+    const owner = options.ownerName.trim()
+    await expect
+      .poll(
+        async () => {
+          const st = await getLabState(page)
+          return getUtxoSumByOwner(st, owner)
+        },
+        { timeout: 20000, message: `Expected lab UTXOs for owner "${owner}" after mining` },
+      )
+      .toBeGreaterThan(0)
+  }
+  if (ownerType === 'wallet') {
+    await expect
+      .poll(
+        async () => {
+          const st = await getLabState(page)
+          const map = st.addressToOwner ?? {}
+          return (st.utxos ?? []).some((u) => {
+            const o = map[u.address]
+            return typeof o === 'string' && o.startsWith(WALLET_OWNER_PREFIX)
+          })
+        },
+        { timeout: 20000, message: 'Expected wallet-owned lab UTXOs after mining' },
+      )
+      .toBe(true)
+  }
 }
 
 /** Create a transaction in the lab UI (name-owned addresses only). */
@@ -176,4 +206,12 @@ export function getUtxoSumByOwner(state: LabState, owner: string): number {
   return (state.utxos ?? [])
     .filter((u) => addressToOwner[u.address] === owner)
     .reduce((sum, u) => sum + u.amountSats, 0)
+}
+
+/** Resolve an address for a display owner (checks UTXOs first — always present after mining). */
+export function findAddressForOwner(state: LabState, owner: string): string | undefined {
+  const map = state.addressToOwner ?? {}
+  const fromUtxo = state.utxos?.find((u) => map[u.address] === owner)?.address
+  if (fromUtxo) return fromUtxo
+  return state.addresses?.find((a) => map[a.address] === owner)?.address
 }

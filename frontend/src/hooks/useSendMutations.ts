@@ -130,7 +130,20 @@ export function useLabSendMutation() {
     }) => {
       if (activeWalletId == null) throw new Error('No active wallet')
 
-      await useLabStore.getState().hydrate()
+      const labStore = useLabStore.getState()
+      if (!labStore.isHydrated) {
+        await labStore.hydrate()
+      }
+      const zs = useLabStore.getState()
+      await getLabWorker().loadState({
+        blocks: zs.blocks,
+        utxos: zs.utxos,
+        addresses: zs.addresses,
+        addressToOwner: zs.addressToOwner ?? {},
+        mempool: zs.mempool ?? [],
+        transactions: zs.transactions ?? [],
+        txDetails: zs.txDetails ?? [],
+      })
       const labWorker = getLabWorker()
       const walletOwner = walletOwnerKey(activeWalletId)
       const walletChangeAddress = await getLabChangeAddress()

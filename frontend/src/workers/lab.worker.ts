@@ -12,7 +12,6 @@ import {
   walletOwnerKey,
   WALLET_OWNER_PREFIX,
 } from '@/lib/lab-utils'
-import { wasmSerdeValueToPlainJson } from '@/lib/wasm-serde-maps'
 
 let labWasmModule: typeof import('@/wasm-pkg/bitboard_crypto') | null = null
 
@@ -78,7 +77,7 @@ function parseBlockEffects(raw: unknown): BlockEffectsParsed {
       return { spent: [], new_utxos: [], transactions: [], block_time: 0 }
     }
   }
-  const effects = wasmSerdeValueToPlainJson(raw) as Record<string, unknown>
+  const effects = raw as Record<string, unknown>
   const spent = Array.isArray(effects?.spent) ? effects.spent : []
   const new_utxos = Array.isArray(effects?.new_utxos) ? effects.new_utxos : []
   const transactions = Array.isArray(effects?.transactions) ? effects.transactions : []
@@ -365,12 +364,16 @@ const labService = {
       feeRateSatPerVb,
       changeAddress.address,
     )
-    const build_plain = wasmSerdeValueToPlainJson(
-      typeof buildResult === 'string' ? JSON.parse(buildResult) : buildResult,
-    ) as Record<string, unknown>
-    const unsignedTxHex = String(build_plain.tx_hex ?? '')
-    const feeSats = Number(build_plain.fee_sats ?? 0)
-    const has_change = Boolean(build_plain.has_change)
+    const buildParsed = (typeof buildResult === 'string'
+      ? JSON.parse(buildResult)
+      : buildResult) as {
+      tx_hex?: string
+      fee_sats?: number
+      has_change?: boolean
+    }
+    const unsignedTxHex = String(buildParsed.tx_hex ?? '')
+    const feeSats = Number(buildParsed.fee_sats ?? 0)
+    const has_change = Boolean(buildParsed.has_change)
 
     const signedTxHex = wasmModule.lab_sign_transaction(
       unsignedTxHex,

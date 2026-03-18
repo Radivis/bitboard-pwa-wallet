@@ -63,6 +63,58 @@ pub struct LabTxOutput {
     pub amount_sats: u64,
 }
 
+/// WASM→JS: `serde_wasm_bindgen::to_value(serde_json::Value)` turns nested objects into JS `Map`.
+/// Use `Serialize` structs so the worker gets plain objects (`new_utxos`, `spent`, etc.).
+#[derive(Debug, Serialize)]
+struct LabBuildTransactionWithChangeResult {
+    tx_hex: String,
+    fee_sats: u64,
+    has_change: bool,
+}
+
+/// Spent outpoint in `lab_block_effects`.
+#[derive(Debug, Serialize)]
+struct LabBlockSpentOut {
+    txid: String,
+    vout: u32,
+}
+
+#[derive(Debug, Serialize)]
+struct LabBlockTxInputRef {
+    prev_txid: String,
+    prev_vout: u32,
+}
+
+#[derive(Debug, Serialize)]
+struct LabBlockTxOutputSummary {
+    address: String,
+    amount_sats: u64,
+}
+
+#[derive(Debug, Serialize)]
+struct LabBlockEffectsTransaction {
+    txid: String,
+    inputs: Vec<LabBlockTxInputRef>,
+    outputs: Vec<LabBlockTxOutputSummary>,
+}
+
+#[derive(Debug, Serialize)]
+struct LabBlockNewUtxo {
+    txid: String,
+    vout: u32,
+    address: String,
+    amount_sats: u64,
+    script_pubkey_hex: String,
+}
+
+#[derive(Debug, Serialize)]
+struct LabBlockEffectsResult {
+    new_utxos: Vec<LabBlockNewUtxo>,
+    spent: Vec<LabBlockSpentOut>,
+    transactions: Vec<LabBlockEffectsTransaction>,
+    block_time: u32,
+}
+
 /// Returns the regtest genesis block as hex.
 #[wasm_bindgen]
 pub fn regtest_create_genesis() -> String {
@@ -432,11 +484,11 @@ pub fn lab_build_transaction_with_change(
     let outputs_json = serde_json::to_string(&outputs).map_err_to_js()?;
     let tx_hex = lab_build_transaction(utxos_json, &outputs_json, fee_rate_sats as f64)?;
 
-    let result = serde_json::json!({
-        "tx_hex": tx_hex,
-        "fee_sats": actual_fee_sats,
-        "has_change": has_change,
-    });
+    let result = LabBuildTransactionWithChangeResult {
+        tx_hex,
+        fee_sats: actual_fee_sats,
+        has_change,
+    };
     serde_wasm_bindgen::to_value(&result).map_err_to_js()
 }
 
@@ -509,14 +561,14 @@ pub fn lab_block_effects(block_hex: &str) -> Result<JsValue, JsValue> {
         for input in &tx.input {
             if !input.previous_output.is_null() {
                 let prev = &input.previous_output;
-                spent.push(serde_json::json!({
-                    "txid": prev.txid.to_string(),
-                    "vout": prev.vout,
-                }));
-                inputs.push(serde_json::json!({
-                    "prev_txid": prev.txid.to_string(),
-                    "prev_vout": prev.vout,
-                }));
+                spent.push(LabBlockSpentOut {
+                    txid: prev.txid.to_string(),
+                    vout: prev.vout,
+                });
+                inputs.push(LabBlockTxInputRef {
+                    prev_txid: prev.txid.to_string(),
+                    prev_vout: prev.vout,
+                });
             }
         }
 
@@ -530,18 +582,18 @@ pub fn lab_block_effects(block_hex: &str) -> Result<JsValue, JsValue> {
                 Ok(a) => a.to_string(),
                 Err(_) => continue,
             };
-            tx_outputs.push(serde_json::json!({
-                "address": address,
-                "amount_sats": output.value.to_sat(),
-            }));
+            tx_outputs.push(LabBlockTxOutputSummary {
+                address,
+                amount_sats: output.value.to_sat(),
+            });
         }
 
         if tx_idx > 0 && !inputs.is_empty() {
-            transactions.push(serde_json::json!({
-                "txid": txid,
-                "inputs": inputs,
-                "outputs": tx_outputs,
-            }));
+            transactions.push(LabBlockEffectsTransaction {
+                txid: txid.clone(),
+                inputs,
+                outputs: tx_outputs,
+            });
         }
 
         for (vout, output) in tx.output.iter().enumerate() {
@@ -553,23 +605,23 @@ pub fn lab_block_effects(block_hex: &str) -> Result<JsValue, JsValue> {
                 Ok(a) => a.to_string(),
                 Err(_) => continue,
             };
-            new_utxos.push(serde_json::json!({
-                "txid": txid,
-                "vout": vout as u32,
-                "address": address,
-                "amount_sats": output.value.to_sat(),
-                "script_pubkey_hex": hex::encode(script.as_bytes()),
-            }));
+            new_utxos.push(LabBlockNewUtxo {
+                txid: txid.clone(),
+                vout: vout as u32,
+                address,
+                amount_sats: output.value.to_sat(),
+                script_pubkey_hex: hex::encode(script.as_bytes()),
+            });
         }
     }
 
     let block_time = block.header.time;
-    let result = serde_json::json!({
-        "new_utxos": new_utxos,
-        "spent": spent,
-        "transactions": transactions,
-        "block_time": block_time,
-    });
+    let result = LabBlockEffectsResult {
+        new_utxos,
+        spent,
+        transactions,
+        block_time,
+    };
     serde_wasm_bindgen::to_value(&result).map_err_to_js()
 }
 

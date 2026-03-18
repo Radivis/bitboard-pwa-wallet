@@ -427,11 +427,17 @@ pub fn build_and_sign_lab_transaction(
     let signed = result.map_err_to_js()?;
 
     let signed_tx_hex = hex::encode(&signed.signed_tx_bytes);
-    let result = serde_json::json!({
-        "signed_tx_hex": signed_tx_hex,
-        "fee_sats": signed.fee_sats,
-        "has_change": signed.has_change,
-    });
+    #[derive(serde::Serialize)]
+    struct BuildAndSignLabTxResult {
+        signed_tx_hex: String,
+        fee_sats: u64,
+        has_change: bool,
+    }
+    let result = BuildAndSignLabTxResult {
+        signed_tx_hex,
+        fee_sats: signed.fee_sats,
+        has_change: signed.has_change,
+    };
     serde_wasm_bindgen::to_value(&result).map_err_to_js()
 }
 

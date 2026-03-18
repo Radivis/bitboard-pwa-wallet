@@ -84,7 +84,9 @@ test.describe('Send Page', () => {
     await page.getByRole('link', { name: /dashboard/i }).click()
     await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible()
     await page.getByRole('button', { name: /Sync/ }).click()
-    await expect(page.getByText('Wallet synced')).toBeVisible({ timeout: 30000 })
+    await expect(page.getByText('Wallet synced').first()).toBeVisible({
+      timeout: 30000,
+    })
 
     // Wait for balance to propagate so the send page can enable the Review button
     await expect(page.getByText(/100[,.]?000\s*sats/).first()).toBeVisible({ timeout: 10000 })
