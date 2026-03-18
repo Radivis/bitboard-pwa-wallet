@@ -2,7 +2,6 @@ import { useEffect } from 'react'
 import { createFileRoute, Outlet, useNavigate } from '@tanstack/react-router'
 import { useWalletStore } from '@/stores/walletStore'
 import { useLabStore } from '@/stores/labStore'
-import { toast } from 'sonner'
 
 export const Route = createFileRoute('/lab')({
   component: LabLayout,
@@ -12,21 +11,12 @@ function LabLayout() {
   const navigate = useNavigate()
   const networkMode = useWalletStore((s) => s.networkMode)
   const isHydrated = useLabStore((s) => s.isHydrated)
-  const hydrate = useLabStore((s) => s.hydrate)
 
   useEffect(() => {
     if (networkMode !== 'lab') {
       navigate({ to: '/settings' })
-      return
     }
-
-    hydrate()
-      .catch((err) => {
-        console.error('Lab init failed:', err)
-        const msg = err instanceof Error ? err.message : String(err) || 'Unknown error'
-        toast.error(`Failed to init lab: ${msg}`)
-      })
-  }, [networkMode, navigate, hydrate])
+  }, [networkMode, navigate])
 
   useEffect(() => {
     if (!isHydrated || networkMode !== 'lab') return

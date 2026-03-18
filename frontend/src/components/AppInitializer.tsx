@@ -29,9 +29,13 @@ export function AppInitializer({ children }: AppInitializerProps) {
   const hydrateLab = useLabStore((s) => s.hydrate)
 
   useEffect(() => {
-    if (networkMode === 'lab') {
-      hydrateLab().catch(() => {})
-    }
+    if (networkMode !== 'lab') return
+    hydrateLab().catch((err) => {
+      console.error('Lab hydrate failed:', err)
+      const msg =
+        err instanceof Error ? err.message : String(err) || 'Unknown error'
+      toast.error(`Failed to init lab: ${msg}`)
+    })
   }, [networkMode, hydrateLab])
 
   useEffect(() => {
