@@ -12,6 +12,7 @@ import {
   walletOwnerKey,
   WALLET_OWNER_PREFIX,
 } from '@/lib/lab-utils'
+import { wasmSerdeValueToPlainJson } from '@/lib/wasm-serde-maps'
 
 let labWasmModule: typeof import('@/wasm-pkg/bitboard_crypto') | null = null
 
@@ -77,7 +78,7 @@ function parseBlockEffects(raw: unknown): BlockEffectsParsed {
       return { spent: [], new_utxos: [], transactions: [], block_time: 0 }
     }
   }
-  const effects = raw as Record<string, unknown>
+  const effects = wasmSerdeValueToPlainJson(raw) as Record<string, unknown>
   const spent = Array.isArray(effects?.spent) ? effects.spent : []
   const new_utxos = Array.isArray(effects?.new_utxos) ? effects.new_utxos : []
   const transactions = Array.isArray(effects?.transactions) ? effects.transactions : []
@@ -91,22 +92,34 @@ function removeSpentUtxos(spent: { txid: string; vout: number }[]): void {
   }
 }
 
+function readSatsFromUtxoRow(row: Record<string, unknown>): number {
+  const v = row.amount_sats ?? row.amountSats
+  if (typeof v === 'bigint') return Number(v)
+  if (typeof v === 'number' && Number.isFinite(v)) return Math.trunc(v)
+  return 0
+}
+
 function addNewUtxos(
   newUtxos: {
     txid: string
     vout: number
     address: string
-    amount_sats: number
-    script_pubkey_hex: string
+    amount_sats?: number
+    script_pubkey_hex?: string
+    amountSats?: number
+    scriptPubkeyHex?: string
   }[],
 ): void {
   for (const utxo of newUtxos) {
+    const row = utxo as unknown as Record<string, unknown>
     state.utxos.push({
-      txid: utxo.txid,
-      vout: utxo.vout,
-      address: utxo.address,
-      amountSats: utxo.amount_sats,
-      scriptPubkeyHex: utxo.script_pubkey_hex,
+      txid: String(utxo.txid),
+      vout: Number(utxo.vout),
+      address: String(utxo.address),
+      amountSats: readSatsFromUtxoRow(row),
+      scriptPubkeyHex: String(
+        utxo.script_pubkey_hex ?? utxo.scriptPubkeyHex ?? '',
+      ),
     })
   }
 }
@@ -352,8 +365,12 @@ const labService = {
       feeRateSatPerVb,
       changeAddress.address,
     )
-    const { tx_hex: unsignedTxHex, fee_sats: feeSats, has_change } =
-      typeof buildResult === 'string' ? JSON.parse(buildResult) : buildResult
+    const build_plain = wasmSerdeValueToPlainJson(
+      typeof buildResult === 'string' ? JSON.parse(buildResult) : buildResult,
+    ) as Record<string, unknown>
+    const unsignedTxHex = String(build_plain.tx_hex ?? '')
+    const feeSats = Number(build_plain.fee_sats ?? 0)
+    const has_change = Boolean(build_plain.has_change)
 
     const signedTxHex = wasmModule.lab_sign_transaction(
       unsignedTxHex,
