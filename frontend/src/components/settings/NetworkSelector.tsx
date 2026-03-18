@@ -11,7 +11,8 @@ import { loadDescriptorWalletWithoutSync } from '@/lib/wallet-utils'
 import { toBitcoinNetwork } from '@/lib/bitcoin-utils'
 import { switchDescriptorWallet } from '@/lib/settings-switch-wallet'
 import { terminateLabWorker } from '@/workers/lab-factory'
-import { useLabStore } from '@/stores/labStore'
+import { appQueryClient } from '@/lib/app-query-client'
+import { prefetchLabChainState } from '@/hooks/useLabChainStateQuery'
 import { useSessionStore } from '@/stores/sessionStore'
 import { useCryptoStore } from '@/stores/cryptoStore'
 import { Button } from '@/components/ui/button'
@@ -70,7 +71,7 @@ export function NetworkSelector() {
               )
             }
           }
-          await useLabStore.getState().hydrate()
+          await prefetchLabChainState(appQueryClient)
         } catch (err) {
           toast.error(errorMessage(err) || 'Failed to start lab')
         } finally {

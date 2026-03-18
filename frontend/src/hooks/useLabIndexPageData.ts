@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react'
 import { toast } from 'sonner'
-import { useLabStore } from '@/stores/labStore'
+import { useLabChainStateQuery } from '@/hooks/useLabChainStateQuery'
 import { useWalletStore } from '@/stores/walletStore'
 import { useWallet, useWallets } from '@/db'
 import {
@@ -16,13 +16,14 @@ const MIN_LAB_BLOCK_COUNT = 1
  * Form state, derived lab lists, and TanStack Query mutations for the lab index page.
  */
 export function useLabIndexPageData() {
-  const blocks = useLabStore((s) => s.blocks)
-  const addresses = useLabStore((s) => s.addresses)
-  const addressToOwner = useLabStore((s) => s.addressToOwner)
-  const utxos = useLabStore((s) => s.utxos)
-  const mempool = useLabStore((s) => s.mempool)
-  const transactions = useLabStore((s) => s.transactions)
-  const txDetails = useLabStore((s) => s.txDetails)
+  const { data: labState } = useLabChainStateQuery()
+  const blocks = labState?.blocks ?? []
+  const addresses = labState?.addresses ?? []
+  const addressToOwner = labState?.addressToOwner ?? {}
+  const utxos = labState?.utxos ?? []
+  const mempool = labState?.mempool ?? []
+  const transactions = labState?.transactions ?? []
+  const txDetails = labState?.txDetails ?? []
 
   const blockCount = blocks.length === 0 ? 0 : blocks[blocks.length - 1].height + 1
 

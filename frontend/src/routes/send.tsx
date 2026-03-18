@@ -9,7 +9,7 @@ import { WalletUnlock } from '@/components/WalletUnlock'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { useWalletStore } from '@/stores/walletStore'
 import { useSendStore } from '@/stores/sendStore'
-import { useLabStore } from '@/stores/labStore'
+import { useLabChainStateQuery } from '@/hooks/useLabChainStateQuery'
 import {
   isValidAddress,
   formatBTC,
@@ -85,20 +85,21 @@ function SendFlow() {
     setUseCustomFee,
   } = useSendStore()
 
-  const utxos = useLabStore((s) => s.utxos)
-  const addressToOwner = useLabStore((s) => s.addressToOwner)
-  const isHydrated = useLabStore((s) => s.isHydrated)
+  const { data: labState, isPending: labChainPending } = useLabChainStateQuery()
+  const utxos = labState?.utxos ?? []
+  const addressToOwner = labState?.addressToOwner ?? {}
+  const labChainReady =
+    networkMode === 'lab' && labState != null && !labChainPending
 
   const buildMutation = useBuildTransactionMutation()
   const broadcastMutation = useBroadcastTransactionMutation()
   const labSendMutation = useLabSendMutation()
 
   const labBalanceSats =
-    networkMode === 'lab' && activeWalletId != null && isHydrated
+    networkMode === 'lab' && activeWalletId != null && labChainReady
       ? utxos
           .filter(
-            (u) =>
-              (addressToOwner ?? {})[u.address] === walletOwnerKey(activeWalletId),
+            (u) => addressToOwner[u.address] === walletOwnerKey(activeWalletId),
           )
           .reduce((sum, u) => sum + u.amountSats, 0)
       : null

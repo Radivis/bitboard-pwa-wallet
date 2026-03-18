@@ -14,7 +14,7 @@ import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { formatBTC, formatSats, getEsploraUrl } from '@/lib/bitcoin-utils'
 import { updateWalletChangeset, loadCustomEsploraUrl } from '@/lib/wallet-utils'
 import { labTransactionsForWallet, walletOwnerKey } from '@/lib/lab-utils'
-import { useLabStore } from '@/stores/labStore'
+import { useLabChainStateQuery } from '@/hooks/useLabChainStateQuery'
 
 export const Route = createFileRoute('/')({
   component: DashboardPage,
@@ -24,14 +24,15 @@ function BalanceCard() {
   const networkMode = useWalletStore((s) => s.networkMode)
   const balance = useWalletStore((s) => s.balance)
   const activeWalletId = useWalletStore((s) => s.activeWalletId)
-  const utxos = useLabStore((s) => s.utxos)
-  const addressToOwner = useLabStore((s) => s.addressToOwner)
-  const isHydrated = useLabStore((s) => s.isHydrated)
+  const { data: labState, isPending: labChainPending } = useLabChainStateQuery()
+  const utxos = labState?.utxos ?? []
+  const addressToOwner = labState?.addressToOwner ?? {}
+  const labChainReady = networkMode === 'lab' && labState != null && !labChainPending
 
   const labBalanceSats =
-    networkMode === 'lab' && activeWalletId != null && isHydrated
+    networkMode === 'lab' && activeWalletId != null && labChainReady
       ? utxos
-          .filter((u) => (addressToOwner ?? {})[u.address] === walletOwnerKey(activeWalletId))
+          .filter((u) => addressToOwner[u.address] === walletOwnerKey(activeWalletId))
           .reduce((sum, u) => sum + u.amountSats, 0)
       : null
 
@@ -147,13 +148,14 @@ function RecentTransactions() {
   const networkMode = useWalletStore((s) => s.networkMode)
   const transactions = useWalletStore((s) => s.transactions)
   const activeWalletId = useWalletStore((s) => s.activeWalletId)
-  const labTransactions = useLabStore((s) => s.transactions)
-  const labTxDetails = useLabStore((s) => s.txDetails)
-  const labMempool = useLabStore((s) => s.mempool)
-  const isLabHydrated = useLabStore((s) => s.isHydrated)
+  const { data: labState, isPending: labChainPending } = useLabChainStateQuery()
+  const labTransactions = labState?.transactions ?? []
+  const labTxDetails = labState?.txDetails ?? []
+  const labMempool = labState?.mempool ?? []
+  const labChainReady = networkMode === 'lab' && labState != null && !labChainPending
 
   const labTransactionsForActiveWallet =
-    networkMode === 'lab' && activeWalletId != null && isLabHydrated
+    networkMode === 'lab' && activeWalletId != null && labChainReady
       ? labTransactionsForWallet(
           { transactions: labTransactions, txDetails: labTxDetails, mempool: labMempool },
           activeWalletId,
@@ -163,7 +165,7 @@ function RecentTransactions() {
   const displayTransactions =
     networkMode === 'lab' ? labTransactionsForActiveWallet : transactions
 
-  if (networkMode === 'lab' && !isLabHydrated) {
+  if (networkMode === 'lab' && !labChainReady) {
     return (
       <Card>
         <CardHeader>

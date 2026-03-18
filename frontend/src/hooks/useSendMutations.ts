@@ -1,4 +1,4 @@
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import { toast } from 'sonner'
 import { useWalletStore } from '@/stores/walletStore'
@@ -8,8 +8,9 @@ import { useSendStore } from '@/stores/sendStore'
 import { getEsploraUrl, toBitcoinNetwork } from '@/lib/bitcoin-utils'
 import { updateWalletChangeset, loadCustomEsploraUrl } from '@/lib/wallet-utils'
 import { walletOwnerKey } from '@/lib/lab-utils'
-import { getLabWorker } from '@/workers/lab-factory'
-import { useLabStore } from '@/stores/labStore'
+import { getLabWorker, initLabWorkerWithState, persistLabState } from '@/workers/lab-factory'
+import { runLabOp } from '@/lib/lab-coordinator'
+import { setLabChainStateCache } from '@/hooks/useLabChainStateQuery'
 import { errorMessage } from '@/lib/utils'
 
 /**
@@ -117,6 +118,7 @@ export function useBroadcastTransactionMutation() {
  */
 export function useLabSendMutation() {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const activeWalletId = useWalletStore((s) => s.activeWalletId)
   const getLabChangeAddress = useCryptoStore((s) => s.getLabChangeAddress)
   const buildAndSignLabTransaction = useCryptoStore((s) => s.buildAndSignLabTransaction)
@@ -130,69 +132,63 @@ export function useLabSendMutation() {
     }) => {
       if (activeWalletId == null) throw new Error('No active wallet')
 
-      const labStore = useLabStore.getState()
-      if (!labStore.isHydrated) {
-        await labStore.hydrate()
-      }
-      const zs = useLabStore.getState()
-      await getLabWorker().loadState({
-        blocks: zs.blocks,
-        utxos: zs.utxos,
-        addresses: zs.addresses,
-        addressToOwner: zs.addressToOwner ?? {},
-        mempool: zs.mempool ?? [],
-        transactions: zs.transactions ?? [],
-        txDetails: zs.txDetails ?? [],
-      })
-      const labWorker = getLabWorker()
-      const walletOwner = walletOwnerKey(activeWalletId)
-      const walletChangeAddress = await getLabChangeAddress()
+      return runLabOp(async () => {
+        await initLabWorkerWithState()
+        const labWorker = getLabWorker()
+        const walletOwner = walletOwnerKey(activeWalletId)
+        const walletChangeAddress = await getLabChangeAddress()
 
-      const { utxosJson, mempoolMetadata, totalInput } =
-        await labWorker.prepareLabWalletTransaction(
-          walletOwner,
+        const { utxosJson, mempoolMetadata, totalInput } =
+          await labWorker.prepareLabWalletTransaction(
+            walletOwner,
+            params.normalizedRecipient,
+            params.amountSats,
+            params.effectiveFeeRate,
+            walletChangeAddress,
+          )
+
+        const { signedTxHex, feeSats, hasChange } = await buildAndSignLabTransaction(
+          utxosJson,
           params.normalizedRecipient,
           params.amountSats,
           params.effectiveFeeRate,
           walletChangeAddress,
         )
 
-      const { signedTxHex, feeSats, hasChange } = await buildAndSignLabTransaction(
-        utxosJson,
-        params.normalizedRecipient,
-        params.amountSats,
-        params.effectiveFeeRate,
-        walletChangeAddress,
-      )
+        const outputsDetail = hasChange
+          ? [
+              ...mempoolMetadata.outputsDetail,
+              {
+                address: walletChangeAddress,
+                amountSats: totalInput - params.amountSats - feeSats,
+                isChange: true as const,
+                owner: mempoolMetadata.sender,
+              },
+            ]
+          : [
+              {
+                ...mempoolMetadata.outputsDetail[0],
+                amountSats: totalInput - feeSats,
+              },
+            ]
 
-      const outputsDetail = hasChange
-        ? [
-            ...mempoolMetadata.outputsDetail,
-            {
-              address: walletChangeAddress,
-              amountSats: totalInput - params.amountSats - feeSats,
-              isChange: true as const,
-              owner: mempoolMetadata.sender,
-            },
-          ]
-        : [
-            {
-              ...mempoolMetadata.outputsDetail[0],
-              amountSats: totalInput - feeSats,
-            },
-          ]
+        const fullMetadata = {
+          ...mempoolMetadata,
+          feeSats,
+          hasChange,
+          outputsDetail,
+        }
 
-      const fullMetadata = {
-        ...mempoolMetadata,
-        feeSats,
-        hasChange,
-        outputsDetail,
-      }
-
-      await useLabStore.getState().addSignedTransaction(signedTxHex, fullMetadata)
-      return undefined
+        const state = await labWorker.addSignedTransactionToMempool(
+          signedTxHex,
+          fullMetadata,
+        )
+        await persistLabState(state)
+        return state
+      })
     },
-    onSuccess: () => {
+    onSuccess: (state) => {
+      setLabChainStateCache(queryClient, state)
       toast.success('Transaction added to mempool')
       reset()
       navigate({ to: '/' })

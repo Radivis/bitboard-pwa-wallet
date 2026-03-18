@@ -6,18 +6,18 @@
  *   - Console: localStorage.setItem('bitboard_lab_debug', '1'); location.reload()
  *
  * Then reproduce (mine in lab). In DevTools Console, filter by `[lab-pipeline]`.
- * You should see strict ordering: hydrate/mine/reset never overlapping wrongly, and
- * utxoCount / totalSatsAfter after each step.
+ * Lab work is serialized by **runLabOp** (lab-coordinator): DB reload, mine, create tx,
+ * add-signed, reset, and TanStack Query cache updates stay ordered. You should see
+ * utxoCount / totalSats after each step without overlapping mutations.
  *
  * Playwright (see tests/e2e/helpers/lab-debug.ts):
  *   await enableLabPipelineDebug(page)
  *
  * Interpretation (read logs in time order):
  *   - mineBlocks:workerReturned totalSats ≈ 5_000_000_000 × blocks mined → WASM + worker OK.
- *   - workerReturned good but mineBlocks:afterApply totalSats 0 → apply/Zustand bug.
+ *   - workerReturned good but UI shows 0 → Query cache not updated; check setLabChainStateCache.
  *   - workerReturned totalSats 0 → WASM/coinbase path; run WASM check below in DevTools.
- *   - hydrate:end after mineBlocks:afterApply with empty utxos → something called hydrate with stale DB
- *     or overwrote store after mine (grep for other set() on lab store).
+ *   - loadFromDb after mine with empty utxos → DB/worker desync; check coordinator + persist ordering.
  *
  * Manual WASM check (DevTools, app on any page after wasm loaded):
  *   const M = await import('@/wasm-pkg/bitboard_crypto.js'); await M.default?.();
@@ -55,13 +55,13 @@ export function labPipelineDebugLog(
   console.info(line, { ms: Math.round(performance.now()), ...detail })
 }
 
-/** Call from labStore after reading state (getState()). */
+/** Call after a lab worker op; pass raw LabState or similar. */
 export function labPipelineSnapshot(
   label: string,
   state: {
     blocks: unknown[]
     utxos: { amountSats: number }[]
-    isHydrated: boolean
+    isHydrated?: boolean
   },
 ): void {
   if (!isLabPipelineDebugEnabled()) return
@@ -69,6 +69,6 @@ export function labPipelineSnapshot(
     blockCount: state.blocks.length,
     utxoCount: state.utxos.length,
     totalSats: totalSats(state.utxos),
-    isHydrated: state.isHydrated,
+    isHydrated: state.isHydrated ?? true,
   })
 }

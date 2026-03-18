@@ -1,4 +1,5 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { QueryClientProvider } from '@tanstack/react-query'
+import { appQueryClient } from '@/lib/app-query-client'
 import { createRootRoute, Outlet } from '@tanstack/react-router'
 import { lazy, Suspense, useEffect } from 'react'
 import { toast } from 'sonner'
@@ -19,15 +20,6 @@ const TanStackRouterDevtools =
       )
     : () => null
 
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      refetchOnWindowFocus: false,
-      retry: 1,
-    },
-  },
-})
-
 export const Route = createRootRoute({
   component: RootComponent,
 })
@@ -45,7 +37,7 @@ function RootComponent() {
   }, [])
 
   return (
-    <QueryClientProvider client={queryClient}>
+    <QueryClientProvider client={appQueryClient}>
       <DatabaseReadyGate>
         <ThemeSynchronizer />
         <AppInitializer>

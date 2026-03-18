@@ -4,7 +4,8 @@ import { toast } from 'sonner'
 import { useWalletStore } from '@/stores/walletStore'
 import { useSessionStore } from '@/stores/sessionStore'
 import { useWallets } from '@/db'
-import { useLabStore } from '@/stores/labStore'
+import { appQueryClient } from '@/lib/app-query-client'
+import { prefetchLabChainState } from '@/hooks/useLabChainStateQuery'
 import {
   loadDescriptorWalletAndSync,
   loadDescriptorWalletWithoutSync,
@@ -26,17 +27,16 @@ export function AppInitializer({ children }: AppInitializerProps) {
   const accountId = useWalletStore((s) => s.accountId)
   const sessionPassword = useSessionStore((s) => s.password)
   const lastUnlockedWalletId = useRef<number | null>(null)
-  const hydrateLab = useLabStore((s) => s.hydrate)
 
   useEffect(() => {
     if (networkMode !== 'lab') return
-    hydrateLab().catch((err) => {
-      console.error('Lab hydrate failed:', err)
+    prefetchLabChainState(appQueryClient).catch((err) => {
+      console.error('Lab chain prefetch failed:', err)
       const msg =
         err instanceof Error ? err.message : String(err) || 'Unknown error'
       toast.error(`Failed to init lab: ${msg}`)
     })
-  }, [networkMode, hydrateLab])
+  }, [networkMode])
 
   useEffect(() => {
     if (isLoading) return

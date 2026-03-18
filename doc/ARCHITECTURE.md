@@ -46,7 +46,7 @@ UI / stores → `@/db` (hooks, `wallet-persistence`, `database`, `lab-database`)
 
 ### Lab flow
 
-UI / `labStore` → `getLabWorker()` → `lab.worker.ts` (in-memory `LabState` plus the same WASM for mining/signing). For “send from wallet in lab”: the main thread orchestrates `labWorker.prepareLabWalletTransaction` → `cryptoWorker.buildAndSignLabTransaction` → `labWorker.addSignedTransactionToMempool`. Lab state is persisted via `lab-factory` and `getLabDatabase()` on the main thread.
+UI reads lab chain state from TanStack Query (`['lab','chainState']`); mutations and hydrate go through **`runLabOp`** → `getLabWorker()` → `lab.worker.ts` (in-memory `LabState` plus WASM). Worker state is loaded from SQLite only (never from a stale UI snapshot). For “send from wallet in lab”: `runLabOp` wraps `initLabWorkerWithState` → `prepareLabWalletTransaction` → `buildAndSignLabTransaction` → `addSignedTransactionToMempool` → `persistLabState` → `setQueryData`. Persistence uses `lab-factory` and `getLabDatabase()` on the main thread.
 
 ### Esplora
 
