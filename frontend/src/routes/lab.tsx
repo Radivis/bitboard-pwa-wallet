@@ -24,22 +24,20 @@ function LabLayout() {
   useEffect(() => {
     if (networkMode !== 'lab' || !import.meta.env.DEV) return
     window.__labGetState = async () => {
-      let cached = appQueryClient.getQueryData<ReturnType<typeof toUiLabState>>(
-        labChainStateQueryKey,
-      )
-      if (!cached) {
-        const raw = await labOpLoadChainFromDatabase()
-        cached = toUiLabState(raw)
-        appQueryClient.setQueryData(labChainStateQueryKey, cached)
-      }
+      // Always read from SQLite (worker reload), not Query cache alone. The cache can lag
+      // behind persist: mutationFn awaits persistLabState before isPending clears, but
+      // setQueryData runs in onSuccess — Playwright may read __labGetState in between.
+      const raw = await labOpLoadChainFromDatabase()
+      const ui = toUiLabState(raw)
+      appQueryClient.setQueryData(labChainStateQueryKey, ui)
       return {
-        blocks: cached.blocks,
-        utxos: cached.utxos,
-        addresses: cached.addresses,
-        addressToOwner: cached.addressToOwner,
-        mempool: cached.mempool,
-        transactions: cached.transactions,
-        txDetails: cached.txDetails,
+        blocks: ui.blocks,
+        utxos: ui.utxos,
+        addresses: ui.addresses,
+        addressToOwner: ui.addressToOwner,
+        mempool: ui.mempool,
+        transactions: ui.transactions,
+        txDetails: ui.txDetails,
       }
     }
     return () => {
