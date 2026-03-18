@@ -11,7 +11,7 @@ PWA building: vite-plugin-pwa
 Framework: React
 API handling & data fetching: TanStack Query
 Routing: TanStack Route
-Global state management: Zustand
+Global state: TanStack Query for async / worker / DB–backed data; Zustand for UI-only state (see [Client state: TanStack Query and Zustand](#client-state-tanstack-query-and-zustand))
 Styling: Tailwind CSS + shadcn/ui
 Animation: Motion
 Crypto integration: Web workers for WASM
@@ -88,6 +88,18 @@ flowchart TB
   LabWorker -->|"state load/save via main"| Db
   WasmPkg -->|"sync broadcast"| Esplora
 ```
+
+---
+
+## Client state: TanStack Query and Zustand
+
+**Principle:** **TanStack Query is the primary tool for state that is produced or consumed through asynchronous pipelines**—especially anything that touches **Web Workers**, **WASM**, or **SQLite**. It models loading/error/success, serializes work through mutations and queries, and gives a single cache (`queryClient`) that stays aligned with persisted data when updates run **after** `await persist…` in the mutation function.
+
+**Zustand is for UI and session concerns that do not duplicate worker- or DB-backed domain data.** Examples: theme, modal open/closed, current wizard step, form drafts that are not yet committed, or ephemeral UI flags. If a value can diverge from “what the worker or DB says” because it was updated from another source, it does not belong in Zustand alone—put the source of truth in TanStack Query (or derive from it) and keep Zustand out of that path.
+
+**Why:** Mixing Zustand (or ad hoc React state) with TanStack Query for the **same** logical data creates sync bugs: the UI may read a stale cache or store while a mutation has already persisted to SQLite, or two writers may race. Lab chain state is the reference pattern: **`runLabOp`** + worker + **`persistLabState`**, then **`setQueryData`**; never push a React/Zustand snapshot into the worker as authority.
+
+**Component `useState`:** Fine for strictly local UI (e.g. which accordion is open). Avoid mirroring server/worker/DB entities in component state when those entities are also in Query or Zustand—pick one source of truth per entity.
 
 ---
 
