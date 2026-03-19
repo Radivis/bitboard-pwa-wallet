@@ -3,7 +3,7 @@
  * Production uses the real encryption worker with Argon2id WASM.
  */
 import { pbkdf2Sync } from 'node:crypto'
-import type { EncryptedBlob } from '@/workers/encryption-api'
+import type { EncryptedBlob } from '@/lib/encrypted-blob-types'
 
 const SALT_LENGTH_BYTES = 16
 const IV_LENGTH_BYTES = 12

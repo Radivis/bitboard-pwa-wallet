@@ -1,3 +1,4 @@
+import type { EncryptedBlob } from '@/lib/encrypted-blob-types';
 import type {
   AddressType,
   BitcoinNetwork,
@@ -16,13 +17,7 @@ export interface ResolveDescriptorWalletResult {
 }
 
 /** Encrypted blob as stored in DB (transferable from worker to main). */
-export interface EncryptedBlobForDb {
-  ciphertext: Uint8Array;
-  iv: Uint8Array;
-  salt: Uint8Array;
-  /** 1 = CI, 2 = production. Omitted treated as 1. */
-  kdfVersion?: 1 | 2;
-}
+export type EncryptedBlobForDb = EncryptedBlob;
 
 export interface CryptoService {
   /** Sets the port for worker-to-worker secrets channel. Call once from main thread before using resolveDescriptorWallet/updateDescriptorWalletChangeset. */

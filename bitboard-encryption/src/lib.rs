@@ -2,38 +2,67 @@
 //!
 //! Two parameter sets:
 //! - **Production:** 64 MB memory, 3 iterations, parallelism 4 (stronger, for real devices).
-//! - **CI:** 64 MB memory, 2 iterations, parallelism 1 (faster, for CI).
+//! - **CI** 64 MB memory, 2 iterations, parallelism 1 (faster, for CI; decrypts older blobs).
 
 use argon2::{Algorithm, Argon2, Params, Version};
 use wasm_bindgen::prelude::*;
 
-/// Derive a 256-bit key using Argon2id with **production** parameters.
-/// 64 MB memory, 3 iterations, parallelism 4, 32-byte output.
-#[wasm_bindgen]
-pub fn derive_argon2_key(password: &str, salt: &[u8]) -> Result<Vec<u8>, JsValue> {
-    let params = Params::new(65536, 3, 4, Some(32))
-        .map_err(|e| JsValue::from_str(&format!("Argon2 params error: {e}")))?;
+/// Memory cost (KiB) for both profiles — 64 MiB.
+const ARGON2_MEMORY_KIB: u32 = 65536;
+/// Production: Argon2 time cost (iterations).
+const ARGON2_PRODUCTION_ITERATIONS: u32 = 3;
+/// Production: parallelism lanes.
+const ARGON2_PRODUCTION_PARALLELISM: u32 = 4;
+/// CI: Argon2 time cost (iterations).
+const ARGON2_CI_ITERATIONS: u32 = 2;
+/// CI: parallelism lanes.
+const ARGON2_CI_PARALLELISM: u32 = 1;
+/// Output length for AES-256 key material (bytes).
+const DERIVED_KEY_LEN: usize = 32;
+
+#[derive(Clone, Copy)]
+enum Argon2Profile {
+    Production,
+    Ci,
+}
+
+fn derive_argon2_key_with_profile(
+    password: &str,
+    salt: &[u8],
+    profile: Argon2Profile,
+) -> Result<Vec<u8>, JsValue> {
+    let (iterations, parallelism) = match profile {
+        Argon2Profile::Production => (ARGON2_PRODUCTION_ITERATIONS, ARGON2_PRODUCTION_PARALLELISM),
+        Argon2Profile::Ci => (ARGON2_CI_ITERATIONS, ARGON2_CI_PARALLELISM),
+    };
+    let params = Params::new(
+        ARGON2_MEMORY_KIB,
+        iterations,
+        parallelism,
+        Some(DERIVED_KEY_LEN),
+    )
+    .map_err(|e| JsValue::from_str(&format!("Argon2 params error: {e}")))?;
     let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
-    let mut key = vec![0u8; 32];
+    let mut key = vec![0u8; DERIVED_KEY_LEN];
     argon2
         .hash_password_into(password.as_bytes(), salt, &mut key)
         .map_err(|e| JsValue::from_str(&format!("Argon2 hash error: {e}")))?;
     Ok(key)
 }
 
-/// Derive a 256-bit key using Argon2id with **legacy/CI** parameters.
+/// Derive a 256-bit key using Argon2id with **production** parameters.
+/// 64 MB memory, 3 iterations, parallelism 4, 32-byte output.
+#[wasm_bindgen]
+pub fn derive_argon2_key(password: &str, salt: &[u8]) -> Result<Vec<u8>, JsValue> {
+    derive_argon2_key_with_profile(password, salt, Argon2Profile::Production)
+}
+
+/// Derive a 256-bit key using Argon2id with **CI** parameters.
 /// 64 MB memory, 2 iterations, parallelism 1, 32-byte output.
 /// Used for decryption of existing data and for encryption when running in CI.
 #[wasm_bindgen]
-pub fn derive_argon2_key_legacy(password: &str, salt: &[u8]) -> Result<Vec<u8>, JsValue> {
-    let params = Params::new(65536, 2, 1, Some(32))
-        .map_err(|e| JsValue::from_str(&format!("Argon2 params error: {e}")))?;
-    let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
-    let mut key = vec![0u8; 32];
-    argon2
-        .hash_password_into(password.as_bytes(), salt, &mut key)
-        .map_err(|e| JsValue::from_str(&format!("Argon2 hash error: {e}")))?;
-    Ok(key)
+pub fn derive_argon2_key_ci(password: &str, salt: &[u8]) -> Result<Vec<u8>, JsValue> {
+    derive_argon2_key_with_profile(password, salt, Argon2Profile::Ci)
 }
 
 #[cfg(test)]

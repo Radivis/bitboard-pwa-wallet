@@ -6,6 +6,7 @@ import {
   labOpReset,
 } from '@/lib/lab-worker-operations'
 import { setLabChainStateCache } from '@/hooks/useLabChainStateQuery'
+import { errorMessage } from '@/lib/utils'
 
 export type LabMineBlocksVariables = {
   count: number
@@ -14,14 +15,6 @@ export type LabMineBlocksVariables = {
     | { ownerWalletId: number }
     | { ownerName: string }
     | undefined
-}
-
-function formatLabError(err: unknown): string {
-  if (err instanceof Error) return err.message
-  if (typeof err === 'object' && err !== null && 'message' in err) {
-    return String((err as { message: unknown }).message)
-  }
-  return String(err) || 'Unknown error'
 }
 
 export function useLabMineBlocksMutation() {
@@ -42,7 +35,7 @@ export function useLabMineBlocksMutation() {
     },
     onError: (err) => {
       console.error('Mining failed:', err)
-      toast.error(`Mining failed: ${formatLabError(err)}`)
+      toast.error(`Mining failed: ${errorMessage(err)}`)
     },
   })
 }
@@ -88,7 +81,7 @@ export function useLabResetMutation() {
       toast.success('Lab reset')
     },
     onError: (err) => {
-      toast.error(err instanceof Error ? err.message : 'Reset failed')
+      toast.error(errorMessage(err) || 'Reset failed')
     },
   })
 }

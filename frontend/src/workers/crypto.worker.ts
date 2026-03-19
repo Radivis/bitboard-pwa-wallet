@@ -48,6 +48,57 @@ function requestEncrypt(password: string, plaintext: string): Promise<EncryptedB
   return secretsProxy.encrypt(password, plaintext);
 }
 
+/** Shape stored in DB / returned to main (transferable fields only). */
+type EncryptedBlobStoreFields = {
+  ciphertext: Uint8Array;
+  iv: Uint8Array;
+  salt: Uint8Array;
+  kdfVersion?: EncryptedBlobMessage['kdfVersion'];
+};
+
+function buildSingleDescriptorWalletSecrets(
+  mnemonic: string,
+  network: BitcoinNetwork,
+  addressType: AddressType,
+  accountId: number,
+  walletResult: CreateWalletResult
+): WalletSecrets {
+  return {
+    mnemonic,
+    descriptorWallets: [
+      {
+        network,
+        addressType,
+        accountId,
+        externalDescriptor: walletResult.external_descriptor,
+        internalDescriptor: walletResult.internal_descriptor,
+        changeSet: walletResult.changeset_json,
+        fullScanDone: false,
+      },
+    ],
+  };
+}
+
+function encryptedBlobMessageToStoreFields(
+  blob: EncryptedBlobMessage
+): EncryptedBlobStoreFields {
+  return {
+    ciphertext: blob.ciphertext,
+    iv: blob.iv,
+    salt: blob.salt,
+    kdfVersion: blob.kdfVersion,
+  };
+}
+
+async function encryptWalletSecretsToStoreFields(
+  password: string,
+  secrets: WalletSecrets
+): Promise<EncryptedBlobStoreFields> {
+  const plaintext = JSON.stringify(secrets);
+  const encryptedBlob = await requestEncrypt(password, plaintext);
+  return encryptedBlobMessageToStoreFields(encryptedBlob);
+}
+
 function findDescriptorWallet(
   secrets: WalletSecrets,
   network: BitcoinNetwork,
@@ -255,12 +306,7 @@ const cryptoService = {
     const newBlob = await requestEncrypt(password, newPlaintext);
     return {
       descriptorWalletData: descriptorWallet,
-      encryptedBlobToStore: {
-        ciphertext: newBlob.ciphertext,
-        iv: newBlob.iv,
-        salt: newBlob.salt,
-        kdfVersion: newBlob.kdfVersion,
-      },
+      encryptedBlobToStore: encryptedBlobMessageToStoreFields(newBlob),
     };
   },
 
@@ -292,12 +338,7 @@ const cryptoService = {
     }
     const newPlaintext = JSON.stringify(secrets);
     const newBlob = await requestEncrypt(password, newPlaintext);
-    return {
-      ciphertext: newBlob.ciphertext,
-      iv: newBlob.iv,
-      salt: newBlob.salt,
-      kdfVersion: newBlob.kdfVersion,
-    };
+    return encryptedBlobMessageToStoreFields(newBlob);
   },
 
   async createWalletAndEncryptSecrets(
@@ -315,29 +356,16 @@ const cryptoService = {
       addressType,
       accountId
     );
-    const secrets: WalletSecrets = {
+    const secrets = buildSingleDescriptorWalletSecrets(
       mnemonic,
-      descriptorWallets: [
-        {
-          network,
-          addressType,
-          accountId,
-          externalDescriptor: walletResult.external_descriptor,
-          internalDescriptor: walletResult.internal_descriptor,
-          changeSet: walletResult.changeset_json,
-          fullScanDone: false,
-        },
-      ],
-    };
-    const plaintext = JSON.stringify(secrets);
-    const encryptedBlob = await requestEncrypt(password, plaintext);
+      network,
+      addressType,
+      accountId,
+      walletResult
+    );
+    const encryptedBlob = await encryptWalletSecretsToStoreFields(password, secrets);
     return {
-      encryptedBlob: {
-        ciphertext: encryptedBlob.ciphertext,
-        iv: encryptedBlob.iv,
-        salt: encryptedBlob.salt,
-        kdfVersion: encryptedBlob.kdfVersion,
-      },
+      encryptedBlob,
       walletResult,
       mnemonicForBackup: mnemonic,
     };
@@ -357,29 +385,16 @@ const cryptoService = {
       addressType,
       accountId
     );
-    const secrets: WalletSecrets = {
+    const secrets = buildSingleDescriptorWalletSecrets(
       mnemonic,
-      descriptorWallets: [
-        {
-          network,
-          addressType,
-          accountId,
-          externalDescriptor: walletResult.external_descriptor,
-          internalDescriptor: walletResult.internal_descriptor,
-          changeSet: walletResult.changeset_json,
-          fullScanDone: false,
-        },
-      ],
-    };
-    const plaintext = JSON.stringify(secrets);
-    const encryptedBlob = await requestEncrypt(password, plaintext);
+      network,
+      addressType,
+      accountId,
+      walletResult
+    );
+    const encryptedBlob = await encryptWalletSecretsToStoreFields(password, secrets);
     return {
-      encryptedBlob: {
-        ciphertext: encryptedBlob.ciphertext,
-        iv: encryptedBlob.iv,
-        salt: encryptedBlob.salt,
-        kdfVersion: encryptedBlob.kdfVersion,
-      },
+      encryptedBlob,
       walletResult,
     };
   },

@@ -8,8 +8,9 @@ import { useSendStore } from '@/stores/sendStore'
 import { getEsploraUrl, toBitcoinNetwork } from '@/lib/bitcoin-utils'
 import { updateWalletChangeset, loadCustomEsploraUrl } from '@/lib/wallet-utils'
 import { walletOwnerKey } from '@/lib/lab-utils'
-import { getLabWorker, initLabWorkerWithState, persistLabState } from '@/workers/lab-factory'
+import { getLabWorker, initLabWorkerWithState } from '@/workers/lab-factory'
 import { runLabOp } from '@/lib/lab-coordinator'
+import { labOpAddSignedTransaction } from '@/lib/lab-worker-operations'
 import { setLabChainStateCache } from '@/hooks/useLabChainStateQuery'
 import { errorMessage } from '@/lib/utils'
 
@@ -132,7 +133,7 @@ export function useLabSendMutation() {
     }) => {
       if (activeWalletId == null) throw new Error('No active wallet')
 
-      return runLabOp(async () => {
+      const { signedTxHex, fullMetadata } = await runLabOp(async () => {
         await initLabWorkerWithState()
         const labWorker = getLabWorker()
         const walletOwner = walletOwnerKey(activeWalletId)
@@ -179,13 +180,10 @@ export function useLabSendMutation() {
           outputsDetail,
         }
 
-        const state = await labWorker.addSignedTransactionToMempool(
-          signedTxHex,
-          fullMetadata,
-        )
-        await persistLabState(state)
-        return state
+        return { signedTxHex, fullMetadata }
       })
+
+      return labOpAddSignedTransaction(signedTxHex, fullMetadata)
     },
     onSuccess: (state) => {
       setLabChainStateCache(queryClient, state)

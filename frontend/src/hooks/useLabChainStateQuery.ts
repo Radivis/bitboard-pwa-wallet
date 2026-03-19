@@ -1,10 +1,10 @@
 import { useQuery, type QueryClient } from '@tanstack/react-query'
 import { useWalletStore } from '@/stores/walletStore'
 import {
+  fetchLabChainStateForQuery,
   labChainStateQueryKey,
   toUiLabState,
 } from '@/lib/lab-chain-query'
-import { labOpLoadChainFromDatabase } from '@/lib/lab-worker-operations'
 import type { LabState } from '@/workers/lab-api'
 
 export function useLabChainStateQuery() {
@@ -12,10 +12,7 @@ export function useLabChainStateQuery() {
 
   return useQuery({
     queryKey: labChainStateQueryKey,
-    queryFn: async () => {
-      const raw = await labOpLoadChainFromDatabase()
-      return toUiLabState(raw)
-    },
+    queryFn: fetchLabChainStateForQuery,
     enabled: networkMode === 'lab',
     staleTime: Infinity,
   })
@@ -24,10 +21,7 @@ export function useLabChainStateQuery() {
 export function prefetchLabChainState(queryClient: QueryClient): Promise<void> {
   return queryClient.prefetchQuery({
     queryKey: labChainStateQueryKey,
-    queryFn: async () => {
-      const raw = await labOpLoadChainFromDatabase()
-      return toUiLabState(raw)
-    },
+    queryFn: fetchLabChainStateForQuery,
     staleTime: Infinity,
   })
 }

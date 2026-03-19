@@ -1,4 +1,7 @@
 import type { Generated, Insertable, Selectable, Updateable } from 'kysely'
+import type { KdfVersion } from '@/lib/encrypted-blob-types'
+
+export type { KdfVersion }
 
 export interface Database {
   wallets: WalletsTable
@@ -22,9 +25,6 @@ interface SettingsTable {
 }
 
 export type Setting = Selectable<SettingsTable>
-
-/** KDF version: 1 = CI (2 iter, 1 par), 2 = production (3 iter, 4 par). */
-export type KdfVersion = 1 | 2
 
 interface WalletSecretsTable {
   wallet_secrets_id: Generated<number>

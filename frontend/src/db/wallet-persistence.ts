@@ -2,7 +2,7 @@ import type { Kysely } from 'kysely'
 import type { Database } from './schema'
 import type { KdfVersion } from './schema'
 import { encryptData, decryptData } from './encryption'
-import type { DescriptorWalletData, WalletSecrets } from '@/workers/crypto-types'
+import type { DescriptorWalletData, WalletSecrets } from '@/lib/wallet-domain-types'
 
 export type { DescriptorWalletData, WalletSecrets }
 
