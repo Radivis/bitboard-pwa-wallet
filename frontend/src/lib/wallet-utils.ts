@@ -9,6 +9,8 @@ import {
   toBitcoinNetwork,
   validateEsploraUrl,
 } from '@/lib/bitcoin-utils'
+import { errorMessage } from '@/lib/utils'
+import type { AddressType, BitcoinNetwork } from '@/workers/crypto-types'
 import {
   updateDescriptorWalletChangeset,
   resolveDescriptorWallet,
@@ -139,6 +141,72 @@ export async function syncActiveWalletAndUpdateState(
   const txs = await getTransactionList()
   setBalance(balance)
   setTransactions(txs)
+}
+
+export type SubWalletEsploraSyncResult = 'completed' | 'sync_failed'
+
+/**
+ * After WASM is already loaded for a target sub-wallet, run Esplora sync
+ * (incremental or full scan) and persist full-scan completion when needed.
+ * Does not set `walletStatus` — the caller owns UI state around this call.
+ */
+export async function syncLoadedSubWalletWithEsplora(options: {
+  networkMode: NetworkMode
+  activeWalletId: number
+  sessionPassword: string
+  targetNetwork: BitcoinNetwork
+  targetAddressType: AddressType
+  targetAccountId: number
+  fullScanNeeded: boolean
+}): Promise<SubWalletEsploraSyncResult> {
+  try {
+    await syncActiveWalletAndUpdateState(options.networkMode, {
+      useFullScan: options.fullScanNeeded,
+    })
+    if (options.fullScanNeeded) {
+      const { exportChangeset } = useCryptoStore.getState()
+      const changeset = await exportChangeset()
+      await updateDescriptorWalletChangeset(
+        options.sessionPassword,
+        options.activeWalletId,
+        options.targetNetwork,
+        options.targetAddressType,
+        options.targetAccountId,
+        changeset,
+        { markFullScanDone: true },
+      )
+    }
+    return 'completed'
+  } catch (syncErr) {
+    const detail = errorMessage(syncErr)
+    toast.error(`Sync failed after switching: ${detail}`)
+    return 'sync_failed'
+  }
+}
+
+/**
+ * Incremental Esplora sync for the dashboard "Sync" button: updates balance and
+ * transactions in the store, last sync time, and persisted changeset.
+ */
+export async function runIncrementalDashboardWalletSync(options: {
+  networkMode: NetworkMode
+  password: string | null
+  activeWalletId: number | null
+}): Promise<void> {
+  await syncActiveWalletAndUpdateState(options.networkMode, {
+    useFullScan: false,
+  })
+  const { setLastSyncTime } = useWalletStore.getState()
+  setLastSyncTime(new Date())
+  if (options.password && options.activeWalletId != null) {
+    const { exportChangeset } = useCryptoStore.getState()
+    const changeset = await exportChangeset()
+    await updateWalletChangeset(
+      options.password,
+      options.activeWalletId,
+      changeset,
+    )
+  }
 }
 
 /**

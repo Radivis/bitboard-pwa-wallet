@@ -13,12 +13,16 @@ import {
   updateDescriptorWalletChangeset,
   resolveDescriptorWallet,
 } from '@/lib/descriptor-wallet-manager'
-import { syncActiveWalletAndUpdateState } from '@/lib/wallet-utils'
+import { syncLoadedSubWalletWithEsplora } from '@/lib/wallet-utils'
 
 /**
  * Switch the active descriptor wallet to match the new parameters.
  * Saves the current WASM wallet state, resolves the new descriptor wallet,
- * loads it into WASM, and syncs.
+ * loads it into WASM, and syncs (non-lab targets only).
+ *
+ * Contract:
+ * - Load phase (resolve + loadWallet + address): on failure, rejects after toast — callers must not commit new network/address in the store.
+ * - Sync phase (Esplora): on failure after a successful load, still resolves — callers should commit store so UI matches WASM; wallet stays `syncing` until the user retries or fixes network.
  */
 export async function switchDescriptorWallet(
   targetNetworkMode: NetworkMode,
@@ -30,7 +34,11 @@ export async function switchDescriptorWallet(
 ): Promise<void> {
   const { activeWalletId } = useWalletStore.getState()
   const sessionPassword = useSessionStore.getState().password
-  if (!activeWalletId || !sessionPassword) return
+  if (!activeWalletId || !sessionPassword) {
+    throw new Error(
+      'Cannot switch descriptor wallet: no active wallet or session',
+    )
+  }
 
   const { exportChangeset, loadWallet, getCurrentAddress } =
     useCryptoStore.getState()
@@ -87,33 +95,33 @@ export async function switchDescriptorWallet(
     if (targetNetworkMode !== 'lab') {
       setWalletStatus('syncing')
       const fullScanNeeded = descriptorWallet.fullScanDone !== true
-      try {
-        await syncActiveWalletAndUpdateState(targetNetworkMode, {
-          useFullScan: fullScanNeeded,
-        })
-        if (fullScanNeeded) {
-          const changeset = await exportChangeset()
-          await updateDescriptorWalletChangeset(
-            sessionPassword,
-            activeWalletId,
-            targetNetwork,
-            targetAddressType,
-            targetAccountId,
-            changeset,
-            { markFullScanDone: true },
-          )
-        }
-      } catch (syncErr) {
-        const detail = errorMessage(syncErr)
-        toast.error(`Sync failed after switching: ${detail}`)
+      const syncResult = await syncLoadedSubWalletWithEsplora({
+        networkMode: targetNetworkMode,
+        activeWalletId,
+        sessionPassword,
+        targetNetwork,
+        targetAddressType,
+        targetAccountId,
+        fullScanNeeded,
+      })
+      if (syncResult === 'completed') {
+        setWalletStatus('unlocked')
+        toast.success(`${targetSubWalletLabel} sub-wallet loaded`)
       }
+      // On `sync_failed`, keep `syncing` — load succeeded but chain data may be stale.
+    } else {
+      setWalletStatus('unlocked')
+      toast.success(`${targetSubWalletLabel} sub-wallet loaded`)
     }
-    setWalletStatus('unlocked')
-    toast.success(`${targetSubWalletLabel} sub-wallet loaded`)
   } catch (err) {
     const message = toUserFriendlySwitchError(err)
     const detail = errorMessage(err)
-    toast.error(message === 'Failed to switch descriptor wallet' ? `${message}: ${detail}` : message)
+    toast.error(
+      message === 'Failed to switch descriptor wallet'
+        ? `${message}: ${detail}`
+        : message,
+    )
+    throw err
   }
 }
 

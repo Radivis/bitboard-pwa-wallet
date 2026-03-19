@@ -33,7 +33,6 @@ export function AddressTypeSelector() {
   const applyAddressTypeChange = useCallback(
     async (type: AddressType) => {
       const previousAddressType = addressType
-      setAddressType(type)
 
       if (walletStatus === 'unlocked' || walletStatus === 'syncing') {
         setSwitching(true)
@@ -46,9 +45,14 @@ export function AddressTypeSelector() {
             previousAddressType,
             accountId,
           )
+          setAddressType(type)
+        } catch {
+          // switchDescriptorWallet already showed a toast
         } finally {
           setSwitching(false)
         }
+      } else {
+        setAddressType(type)
       }
     },
     [setAddressType, walletStatus, networkMode, addressType, accountId],

@@ -40,7 +40,6 @@ export function NetworkSelector() {
       const previousNetworkMode = networkMode
 
       if (network === 'lab') {
-        setNetworkMode(network)
         setSwitching(true)
         try {
           terminateLabWorker()
@@ -72,6 +71,7 @@ export function NetworkSelector() {
             }
           }
           await prefetchLabChainState(appQueryClient)
+          setNetworkMode('lab')
         } catch (err) {
           toast.error(errorMessage(err) || 'Failed to start lab')
         } finally {
@@ -81,10 +81,30 @@ export function NetworkSelector() {
       }
 
       if (previousNetworkMode === 'lab') {
-        terminateLabWorker()
+        if (walletStatus === 'unlocked' || walletStatus === 'syncing') {
+          setSwitching(true)
+          try {
+            await switchDescriptorWallet(
+              network,
+              addressType,
+              accountId,
+              previousNetworkMode,
+              addressType,
+              accountId,
+            )
+            terminateLabWorker()
+            setNetworkMode(network)
+          } catch {
+            // switchDescriptorWallet already showed a toast
+          } finally {
+            setSwitching(false)
+          }
+        } else {
+          terminateLabWorker()
+          setNetworkMode(network)
+        }
+        return
       }
-
-      setNetworkMode(network)
 
       if (walletStatus === 'unlocked' || walletStatus === 'syncing') {
         setSwitching(true)
@@ -97,9 +117,14 @@ export function NetworkSelector() {
             addressType,
             accountId,
           )
+          setNetworkMode(network)
+        } catch {
+          // switchDescriptorWallet already showed a toast
         } finally {
           setSwitching(false)
         }
+      } else {
+        setNetworkMode(network)
       }
     },
     [networkMode, setNetworkMode, walletStatus, addressType, accountId],

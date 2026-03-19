@@ -25,15 +25,24 @@ export async function ensureSecretsChannel(): Promise<void> {
     await channelPromise;
     return;
   }
-  channelPromise = (async () => {
-    const { port1, port2 } = new MessageChannel();
-    const { getEncryptionWorker } = await import('./encryption-factory');
-    const { getCryptoWorker } = await import('./crypto-factory');
-    await Promise.all([
-      getEncryptionWorker().setSecretsPort(transfer(port1, [port1])),
-      getCryptoWorker().setSecretsPort(transfer(port2, [port2])),
-    ]);
-    channelReady = true;
+  const setupPromise = (async () => {
+    try {
+      const { port1, port2 } = new MessageChannel();
+      const { getEncryptionWorker } = await import('./encryption-factory');
+      const { getCryptoWorker } = await import('./crypto-factory');
+      await Promise.all([
+        getEncryptionWorker().setSecretsPort(transfer(port1, [port1])),
+        getCryptoWorker().setSecretsPort(transfer(port2, [port2])),
+      ]);
+      channelReady = true;
+    } catch (error) {
+      channelReady = false;
+      const detail = error instanceof Error ? error.message : String(error);
+      throw new Error(`Failed to establish secrets channel: ${detail}`);
+    }
   })();
+  channelPromise = setupPromise.finally(() => {
+    channelPromise = null;
+  });
   await channelPromise;
 }

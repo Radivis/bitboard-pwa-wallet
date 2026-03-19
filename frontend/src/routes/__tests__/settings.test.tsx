@@ -43,6 +43,7 @@ vi.mock('@/stores/cryptoStore', () => ({
 let walletStoreState: Record<string, unknown> = {}
 const mockSetNetworkMode = vi.fn()
 const mockSetAddressType = vi.fn()
+const mockSetCurrentAddress = vi.fn()
 const mockLockWallet = vi.fn()
 vi.mock('@/stores/walletStore', () => ({
   useWalletStore: Object.assign(
@@ -105,6 +106,8 @@ vi.mock('@/lib/wallet-utils', () => ({
   deleteCustomEsploraUrl: vi.fn().mockResolvedValue(undefined),
   loadCustomEsploraUrl: vi.fn().mockResolvedValue(null),
   syncActiveWalletAndUpdateState: vi.fn().mockResolvedValue(undefined),
+  syncLoadedSubWalletWithEsplora: vi.fn().mockResolvedValue('completed'),
+  runIncrementalDashboardWalletSync: vi.fn().mockResolvedValue(undefined),
 }))
 
 const mockResolveDescriptorWallet = vi.hoisted(() =>
@@ -166,6 +169,7 @@ describe('SettingsPage', () => {
       setNetworkMode: mockSetNetworkMode,
       setAddressType: mockSetAddressType,
       setWalletStatus: vi.fn(),
+      setCurrentAddress: mockSetCurrentAddress,
       setBalance: vi.fn(),
       setTransactions: vi.fn(),
       lockWallet: mockLockWallet,
@@ -180,12 +184,14 @@ describe('SettingsPage', () => {
     expect(screen.getByText('About')).toBeInTheDocument()
   })
 
-  it('network selector calls setNetworkMode', async () => {
+  it('network selector calls setNetworkMode after switch completes', async () => {
     const user = userEvent.setup()
     renderWithProviders(<SettingsPage />)
 
     await user.click(screen.getByRole('button', { name: 'Testnet' }))
-    expect(mockSetNetworkMode).toHaveBeenCalledWith('testnet')
+    await waitFor(() => {
+      expect(mockSetNetworkMode).toHaveBeenCalledWith('testnet')
+    })
   })
 
   it('address type selector shows confirmation when wallet exists', async () => {

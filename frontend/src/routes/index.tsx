@@ -4,15 +4,14 @@ import { Wallet, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import { useWalletStore, NETWORK_LABELS } from '@/stores/walletStore'
 import { useSessionStore } from '@/stores/sessionStore'
-import { useCryptoStore } from '@/stores/cryptoStore'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { WalletUnlock } from '@/components/WalletUnlock'
 import { TransactionItem } from '@/components/TransactionItem'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
-import { formatBTC, formatSats, getEsploraUrl } from '@/lib/bitcoin-utils'
-import { updateWalletChangeset, loadCustomEsploraUrl } from '@/lib/wallet-utils'
+import { formatBTC, formatSats } from '@/lib/bitcoin-utils'
+import { runIncrementalDashboardWalletSync } from '@/lib/wallet-utils'
 import { labTransactionsForWallet, walletOwnerKey } from '@/lib/lab-utils'
 import { useLabChainStateQuery } from '@/hooks/useLabChainStateQuery'
 
@@ -77,39 +76,19 @@ function SyncButton() {
   const networkMode = useWalletStore((s) => s.networkMode)
   const activeWalletId = useWalletStore((s) => s.activeWalletId)
   const setWalletStatus = useWalletStore((s) => s.setWalletStatus)
-  const setBalance = useWalletStore((s) => s.setBalance)
-  const setTransactions = useWalletStore((s) => s.setTransactions)
-  const setLastSyncTime = useWalletStore((s) => s.setLastSyncTime)
   const password = useSessionStore((s) => s.password)
-
-  const syncWallet = useCryptoStore((s) => s.syncWallet)
-  const getBalance = useCryptoStore((s) => s.getBalance)
-  const getTransactionList = useCryptoStore((s) => s.getTransactionList)
-  const exportChangeset = useCryptoStore((s) => s.exportChangeset)
 
   const isSyncing = walletStatus === 'syncing'
 
   const handleSync = useCallback(async () => {
     try {
       setWalletStatus('syncing')
-      const customUrl = await loadCustomEsploraUrl(networkMode)
-      const esploraUrl = getEsploraUrl(networkMode, customUrl)
-
-      await syncWallet(esploraUrl)
-
-      const newBalance = await getBalance()
-      const newTxs = await getTransactionList()
-
-      setBalance(newBalance)
-      setTransactions(newTxs)
-      setLastSyncTime(new Date())
+      await runIncrementalDashboardWalletSync({
+        networkMode,
+        password,
+        activeWalletId,
+      })
       setWalletStatus('unlocked')
-
-      if (password && activeWalletId) {
-        const changeset = await exportChangeset()
-        await updateWalletChangeset(password, activeWalletId, changeset)
-      }
-
       toast.success('Wallet synced')
     } catch (err) {
       setWalletStatus('unlocked')
@@ -117,19 +96,7 @@ function SyncButton() {
         err instanceof Error ? err.message : 'Sync failed',
       )
     }
-  }, [
-    networkMode,
-    activeWalletId,
-    password,
-    syncWallet,
-    getBalance,
-    getTransactionList,
-    exportChangeset,
-    setWalletStatus,
-    setBalance,
-    setTransactions,
-    setLastSyncTime,
-  ])
+  }, [networkMode, activeWalletId, password, setWalletStatus])
 
   return (
     <Button

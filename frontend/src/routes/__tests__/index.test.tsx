@@ -59,12 +59,10 @@ vi.mock('@/components/TransactionItem', () => ({
 vi.mock('@/lib/bitcoin-utils', () => ({
   formatBTC: (sats: number) => (sats / 100_000_000).toFixed(8),
   formatSats: (sats: number) => sats.toLocaleString(),
-  getEsploraUrl: () => 'http://localhost:3002',
 }))
 
 vi.mock('@/lib/wallet-utils', () => ({
-  updateWalletChangeset: vi.fn().mockResolvedValue(undefined),
-  loadCustomEsploraUrl: vi.fn().mockResolvedValue(null),
+  runIncrementalDashboardWalletSync: vi.fn().mockResolvedValue(undefined),
 }))
 
 import { DashboardPage } from '../index'
