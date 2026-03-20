@@ -8,9 +8,10 @@ import type {
   DescriptorWalletData,
   SyncResult,
   TransactionDetails,
-  WalletSecrets,
 } from './crypto-types';
 import type { EncryptedBlobMessage, SecretsChannelService } from './secrets-channel-types';
+import { parseWalletSecretsJson } from '@/lib/wallet-domain-types';
+import type { WalletSecrets } from '@/lib/wallet-domain-types';
 
 let wasm: typeof import('@/wasm-pkg/bitboard_crypto') | null = null;
 let wasmInitError: string | null = null;
@@ -271,7 +272,7 @@ const cryptoService = {
   ) {
     const wasmModule = await getWasm();
     const plaintext = await requestDecrypt(password, encryptedBlob);
-    const secrets: WalletSecrets = JSON.parse(plaintext);
+    const secrets = parseWalletSecretsJson(plaintext);
 
     const existing = findDescriptorWallet(
       secrets,
@@ -320,7 +321,7 @@ const cryptoService = {
     options?: { markFullScanDone?: boolean }
   ) {
     const plaintext = await requestDecrypt(password, encryptedBlob);
-    const secrets: WalletSecrets = JSON.parse(plaintext);
+    const secrets = parseWalletSecretsJson(plaintext);
     const descriptorWallet = findDescriptorWallet(
       secrets,
       network,

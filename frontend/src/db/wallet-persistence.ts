@@ -2,7 +2,11 @@ import type { Kysely } from 'kysely'
 import type { Database } from './schema'
 import type { KdfVersion } from './schema'
 import { encryptData, decryptData } from './encryption'
-import type { DescriptorWalletData, WalletSecrets } from '@/lib/wallet-domain-types'
+import {
+  parseWalletSecretsJson,
+  type DescriptorWalletData,
+  type WalletSecrets,
+} from '@/lib/wallet-domain-types'
 
 export type { DescriptorWalletData, WalletSecrets }
 
@@ -217,7 +221,7 @@ export async function loadWalletSecrets(
     kdfVersion: (record.kdf_version as KdfVersion) ?? 1,
   })
 
-  return JSON.parse(plaintext)
+  return parseWalletSecretsJson(plaintext)
 }
 
 /**
