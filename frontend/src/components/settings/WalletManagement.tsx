@@ -3,10 +3,7 @@ import { Lock } from 'lucide-react'
 import { toast } from 'sonner'
 import { useWalletStore } from '@/stores/walletStore'
 import { useCryptoStore } from '@/stores/cryptoStore'
-import { useSessionStore } from '@/stores/sessionStore'
 import { useWallets } from '@/db'
-import { clearAutoLockTimer } from '@/stores/sessionStore'
-import { resetSecretsChannel } from '@/workers/secrets-channel'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 
@@ -14,20 +11,16 @@ export function WalletManagement() {
   const navigate = useNavigate()
   const activeWalletId = useWalletStore((s) => s.activeWalletId)
   const walletStatus = useWalletStore((s) => s.walletStatus)
-  const lockWallet = useWalletStore((s) => s.lockWallet)
-  const terminateWorker = useCryptoStore((s) => s.terminateWorker)
-  const clearSession = useSessionStore((s) => s.clear)
+  const lockAndPurgeSensitiveRuntimeState = useCryptoStore(
+    (s) => s.lockAndPurgeSensitiveRuntimeState,
+  )
   const { data: wallets } = useWallets()
   const hasMultipleWallets = (wallets?.length ?? 0) > 1
 
   if (!activeWalletId) return null
 
   const handleLockWallet = () => {
-    lockWallet()
-    terminateWorker()
-    resetSecretsChannel()
-    clearSession()
-    clearAutoLockTimer()
+    lockAndPurgeSensitiveRuntimeState()
     toast.success('Wallet locked')
   }
 

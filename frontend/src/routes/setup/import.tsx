@@ -133,7 +133,7 @@ export function ImportWalletPage() {
       setWalletStatus('unlocked')
 
       startAutoLockTimer(() => {
-        useWalletStore.getState().lockWallet()
+        useCryptoStore.getState().lockAndPurgeSensitiveRuntimeState()
       })
 
       try {

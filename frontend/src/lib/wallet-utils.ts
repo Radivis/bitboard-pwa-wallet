@@ -256,7 +256,7 @@ export async function loadDescriptorWalletWithoutSync(
 
   const { startAutoLockTimer } = await import('@/stores/sessionStore')
   startAutoLockTimer(() => {
-    useWalletStore.getState().lockWallet()
+    useCryptoStore.getState().lockAndPurgeSensitiveRuntimeState()
   })
 }
 
@@ -311,7 +311,7 @@ export async function loadDescriptorWalletAndSync(
 
   const { startAutoLockTimer } = await import('@/stores/sessionStore')
   startAutoLockTimer(() => {
-    useWalletStore.getState().lockWallet()
+    useCryptoStore.getState().lockAndPurgeSensitiveRuntimeState()
   })
 
   try {

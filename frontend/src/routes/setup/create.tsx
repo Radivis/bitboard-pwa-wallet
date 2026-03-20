@@ -136,7 +136,7 @@ export function CreateWalletPage() {
       setCurrentAddress(firstAddress)
       setWalletStatus('unlocked')
       startAutoLockTimer(() => {
-        useWalletStore.getState().lockWallet()
+        useCryptoStore.getState().lockAndPurgeSensitiveRuntimeState()
       })
     },
     onSuccess: () => {

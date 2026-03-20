@@ -5,6 +5,9 @@ import {
   onWorkerHealthChange,
   type WorkerHealthStatus,
 } from '@/workers/crypto-factory';
+import { useWalletStore } from '@/stores/walletStore';
+import { useSessionStore, clearAutoLockTimer } from '@/stores/sessionStore';
+import { resetSecretsChannel } from '@/workers/secrets-channel';
 import type { Remote } from 'comlink';
 import type { CryptoService } from '@/workers/crypto-api';
 import type {
@@ -126,6 +129,7 @@ interface CryptoState {
     walletResult: CreateWalletResult;
   }>;
 
+  lockAndPurgeSensitiveRuntimeState: () => void;
   terminateWorker: () => void;
 }
 
@@ -282,6 +286,15 @@ export const useCryptoStore = create<CryptoState>((set, get) => {
       withErrorHandling((worker) =>
         worker.importWalletAndEncryptSecrets(mnemonic, password, network, addressType, accountId)
       ),
+
+    lockAndPurgeSensitiveRuntimeState: () => {
+      useWalletStore.getState().lockWallet();
+      terminateCryptoWorker();
+      resetSecretsChannel();
+      useSessionStore.getState().clear();
+      clearAutoLockTimer();
+      set({ _worker: null, error: null, workerHealth: 'initializing', workerError: null });
+    },
 
     terminateWorker: () => {
       terminateCryptoWorker();
