@@ -102,7 +102,7 @@ export async function switchDescriptorWallet(params: {
 
     if (targetNetworkMode !== 'lab') {
       setWalletStatus('syncing')
-      const fullScanNeeded = descriptorWallet.fullScanDone !== true
+      const fullScanNeeded = !descriptorWallet.fullScanDone
       const syncResult = await syncLoadedSubWalletWithEsplora({
         networkMode: targetNetworkMode,
         activeWalletId,

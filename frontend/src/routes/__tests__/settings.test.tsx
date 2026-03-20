@@ -123,6 +123,7 @@ const mockResolveDescriptorWallet = vi.hoisted(() =>
     externalDescriptor: 'ext',
     internalDescriptor: 'int',
     changeSet: '{}',
+    fullScanDone: false,
   }),
 )
 const mockUpdateDescriptorWalletChangeset = vi.hoisted(() =>

@@ -39,6 +39,7 @@ describe('Wallet Persistence with Encryption', () => {
         externalDescriptor: "tr([fingerprint/86'/1'/0']xpub.../0/*)",
         internalDescriptor: "tr([fingerprint/86'/1'/0']xpub.../1/*)",
         changeSet: '{"last_reveal":{"0":5}}',
+        fullScanDone: false,
       },
     ],
   }

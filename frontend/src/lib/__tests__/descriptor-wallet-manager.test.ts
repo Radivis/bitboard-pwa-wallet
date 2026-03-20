@@ -86,6 +86,7 @@ async function mockResolveDescriptorWallet(params: {
     externalDescriptor: walletResult.external_descriptor,
     internalDescriptor: walletResult.internal_descriptor,
     changeSet: walletResult.changeset_json,
+    fullScanDone: false,
   }
   secrets.descriptorWallets.push(newDw)
   const newBlob = await getEncryptionWorker().encryptData(password, JSON.stringify(secrets))
@@ -136,6 +137,7 @@ describe('findDescriptorWallet', () => {
     externalDescriptor: 'tr(...)',
     internalDescriptor: 'tr(...)',
     changeSet: '{}',
+    fullScanDone: false,
   }
 
   const testnetSegwit: WalletSecrets['descriptorWallets'][0] = {
@@ -145,6 +147,7 @@ describe('findDescriptorWallet', () => {
     externalDescriptor: 'wpkh(...)',
     internalDescriptor: 'wpkh(...)',
     changeSet: '{}',
+    fullScanDone: false,
   }
 
   const signetTaprootAccount1: WalletSecrets['descriptorWallets'][0] = {
@@ -240,6 +243,7 @@ describe('resolveDescriptorWallet', () => {
     externalDescriptor: 'tr(existing...)',
     internalDescriptor: 'tr(existing...)',
     changeSet: '{"last_reveal":{"0":3}}',
+    fullScanDone: false,
   }
 
   const mockSecrets: WalletSecrets = {
@@ -311,6 +315,7 @@ describe('resolveDescriptorWallet', () => {
       externalDescriptor: newWalletResult.external_descriptor,
       internalDescriptor: newWalletResult.internal_descriptor,
       changeSet: newWalletResult.changeset_json,
+      fullScanDone: false,
     })
     expect(mockCreateWallet).toHaveBeenCalledWith(
       mockSecrets.mnemonic,
@@ -339,6 +344,7 @@ describe('updateDescriptorWalletChangeset', () => {
         externalDescriptor: "tr([fingerprint/86'/1'/0']xpub.../0/*)",
         internalDescriptor: "tr([fingerprint/86'/1'/0']xpub.../1/*)",
         changeSet: '{"last_reveal":{"0":5}}',
+        fullScanDone: false,
       },
     ],
   }

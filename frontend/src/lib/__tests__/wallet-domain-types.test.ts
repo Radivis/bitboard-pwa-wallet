@@ -13,6 +13,26 @@ describe('parseWalletSecretsJson', () => {
     )
   })
 
+  it('rejects descriptor wallet missing fullScanDone', () => {
+    const secretsJson = JSON.stringify({
+      mnemonic: 'abandon ability able about above absent absorb abstract absurd abuse access accident',
+      descriptorWallets: [
+        {
+          network: 'testnet',
+          addressType: 'taproot',
+          accountId: 0,
+          externalDescriptor: 'tr(xpub.../0/*)',
+          internalDescriptor: 'tr(xpub.../1/*)',
+          changeSet: '{}',
+        },
+      ],
+    })
+
+    expect(() => parseWalletSecretsJson(secretsJson)).toThrow(
+      'Invalid wallet secrets: schema validation failed',
+    )
+  })
+
   it('accepts valid wallet secrets payload', () => {
     const validSecretsJson = JSON.stringify({
       mnemonic: 'abandon ability able about above absent absorb abstract absurd abuse access accident',

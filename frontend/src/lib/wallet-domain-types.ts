@@ -9,8 +9,8 @@ export interface DescriptorWalletData {
   externalDescriptor: string
   internalDescriptor: string
   changeSet: string
-  /** True after a full scan has been run for this sub-wallet at least once. Omitted/undefined = false for backward compat. */
-  fullScanDone?: boolean
+  /** True after a full scan has been run for this sub-wallet at least once. */
+  fullScanDone: boolean
 }
 
 /** Sensitive wallet data stored encrypted. Shared with db layer and workers. */
@@ -38,7 +38,6 @@ function isNonEmptyString(value: unknown): value is string {
 
 function isDescriptorWalletData(value: unknown): value is DescriptorWalletData {
   if (!isRecord(value)) return false
-  const fullScanDone = value.fullScanDone
   return (
     SUPPORTED_BITCOIN_NETWORKS.includes(value.network as BitcoinNetwork) &&
     SUPPORTED_ADDRESS_TYPES.includes(value.addressType as AddressType) &&
@@ -47,7 +46,7 @@ function isDescriptorWalletData(value: unknown): value is DescriptorWalletData {
     isNonEmptyString(value.externalDescriptor) &&
     isNonEmptyString(value.internalDescriptor) &&
     isNonEmptyString(value.changeSet) &&
-    (fullScanDone === undefined || typeof fullScanDone === 'boolean')
+    typeof value.fullScanDone === 'boolean'
   )
 }
 
