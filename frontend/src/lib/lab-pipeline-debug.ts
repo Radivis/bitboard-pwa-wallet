@@ -1,25 +1,26 @@
 /**
- * Systematic lab debugging (no guessing).
+ * Lab pipeline debugging (dev-only). Optional console logging for tracing lab operations
+ * (mining, persistence, TanStack Query) without changing app behaviour.
  *
- * Enable ONE of:
- *   - URL: append ?labDebug=1 (first navigation)
- *   - Console: localStorage.setItem('bitboard_lab_debug', '1'); location.reload()
+ * Work is serialized by `runLabOp` in lab-coordinator; these helpers only emit
+ * `[lab-pipeline]` lines when enabled.
  *
- * Then reproduce (mine in lab). In DevTools Console, filter by `[lab-pipeline]`.
- * Lab work is serialized by **runLabOp** (lab-coordinator): DB reload, mine, create tx,
- * add-signed, reset, and TanStack Query cache updates stay ordered. You should see
- * utxoCount / totalSats after each step without overlapping mutations.
+ * Enable one of:
+ *   - URL: `?labDebug=1` on first navigation
+ *   - Console: `localStorage.setItem('bitboard_lab_debug', '1'); location.reload()`
  *
- * Playwright (see tests/e2e/helpers/lab-debug.ts):
- *   await enableLabPipelineDebug(page)
+ * Reproduce the issue (e.g. mine in lab), then filter DevTools by `[lab-pipeline]`.
+ * Expect utxoCount / totalSats after each step without overlapping mutations.
  *
- * Interpretation (read logs in time order):
- *   - mineBlocks:workerReturned totalSats ≈ 5_000_000_000 × blocks mined → WASM + worker OK.
- *   - workerReturned good but UI shows 0 → Query cache not updated; check setLabChainStateCache.
- *   - workerReturned totalSats 0 → WASM/coinbase path; run WASM check below in DevTools.
- *   - loadFromDb after mine with empty utxos → DB/worker desync; check coordinator + persist ordering.
+ * Playwright: `await enableLabPipelineDebug(page)` — `tests/e2e/helpers/lab-debug.ts`.
  *
- * Manual WASM check (DevTools, app on any page after wasm loaded):
+ * Reading logs (time order):
+ *   - mineBlocks:workerReturned totalSats ≈ 5_000_000_000 × blocks mined → WASM + worker OK
+ *   - Worker OK but UI shows 0 → query cache; check setLabChainStateCache
+ *   - workerReturned totalSats 0 → WASM/coinbase; run manual check below
+ *   - loadFromDb after mine with empty utxos → DB/worker desync; coordinator + persist order
+ *
+ * Manual WASM check (DevTools, after WASM loaded):
  *   const M = await import('@/wasm-pkg/bitboard_crypto.js'); await M.default?.();
  *   const a = M.lab_generate_keypair(); const addr = a.address;
  *   const spk = M.lab_address_to_script_pubkey_hex(addr);
@@ -55,7 +56,7 @@ export function labPipelineDebugLog(
   console.info(line, { ms: Math.round(performance.now()), ...detail })
 }
 
-/** Call after a lab worker op; pass raw LabState or similar. */
+/** Logs block/UTXO counts for debugging after a lab worker step (LabState-shaped input). */
 export function labPipelineSnapshot(
   label: string,
   state: {

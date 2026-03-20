@@ -4,11 +4,20 @@
  */
 let labOperationChain: Promise<unknown> = Promise.resolve()
 
-export function runLabOp<T>(operation: () => Promise<T>): Promise<T> {
-  const next = labOperationChain.then(operation, operation)
-  labOperationChain = next.then(
+async function runAfterPreviousTail<T>(
+  previousTail: Promise<unknown>,
+  operation: () => Promise<T>,
+): Promise<T> {
+  await previousTail.catch(() => undefined)
+  return operation()
+}
+
+export async function runLabOp<T>(operation: () => Promise<T>): Promise<T> {
+  const previousTail = labOperationChain
+  const workPromise = runAfterPreviousTail(previousTail, operation)
+  labOperationChain = workPromise.then(
     () => undefined,
     () => undefined,
   )
-  return next
+  return workPromise
 }
