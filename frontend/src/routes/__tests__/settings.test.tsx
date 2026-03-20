@@ -21,6 +21,8 @@ const mockSyncWallet = vi.fn().mockResolvedValue({ balance: {}, changeset_json: 
 const mockGetBalance = vi.fn().mockResolvedValue({ confirmed: 0, total: 0 })
 const mockGetTransactionList = vi.fn().mockResolvedValue([])
 const mockGetCurrentAddress = vi.fn().mockResolvedValue('tb1qcurrent')
+const mockLockWallet = vi.fn()
+const mockClearSession = vi.fn()
 const cryptoStoreState = {
   terminateWorker: mockTerminateWorker,
   exportChangeset: mockExportChangeset,
@@ -29,6 +31,11 @@ const cryptoStoreState = {
   getBalance: mockGetBalance,
   getTransactionList: mockGetTransactionList,
   getCurrentAddress: mockGetCurrentAddress,
+  lockAndPurgeSensitiveRuntimeState: () => {
+    mockLockWallet()
+    mockTerminateWorker()
+    mockClearSession()
+  },
 }
 vi.mock('@/stores/cryptoStore', () => ({
   useCryptoStore: Object.assign(
@@ -44,7 +51,6 @@ let walletStoreState: Record<string, unknown> = {}
 const mockSetNetworkMode = vi.fn()
 const mockSetAddressType = vi.fn()
 const mockSetCurrentAddress = vi.fn()
-const mockLockWallet = vi.fn()
 vi.mock('@/stores/walletStore', () => ({
   useWalletStore: Object.assign(
     (selector: (s: Record<string, unknown>) => unknown) =>
@@ -64,7 +70,6 @@ vi.mock('@/stores/walletStore', () => ({
     `${network} ${addressType}`,
 }))
 
-const mockClearSession = vi.fn()
 const sessionStoreState = { password: 'testpass', clear: mockClearSession }
 vi.mock('@/stores/sessionStore', () => ({
   useSessionStore: Object.assign(

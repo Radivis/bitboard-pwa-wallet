@@ -7,5 +7,5 @@ export interface EncryptedBlob {
   iv: Uint8Array
   salt: Uint8Array
   /** Omitted or 1 = CI; 2 = production. */
-  kdfVersion?: KdfVersion
+  kdfVersion: KdfVersion
 }

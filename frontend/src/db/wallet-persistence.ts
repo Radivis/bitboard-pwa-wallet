@@ -15,8 +15,8 @@ export interface EncryptedWalletSecretsBlob {
   ciphertext: Uint8Array
   iv: Uint8Array
   salt: Uint8Array
-  /** 1 = CI, 2 = production. Omitted/undefined treated as 1 for backward compat. */
-  kdfVersion?: KdfVersion
+  /** 1 = CI, 2 = production. */
+  kdfVersion: KdfVersion
 }
 
 /**
@@ -43,7 +43,7 @@ export async function getWalletSecretsEncrypted(
     ciphertext: record.encrypted_data,
     iv: record.iv,
     salt: record.salt,
-    kdfVersion: (record.kdf_version as KdfVersion) ?? 1,
+    kdfVersion: record.kdf_version as KdfVersion,
   }
 }
 
@@ -61,7 +61,7 @@ export async function putWalletSecretsEncrypted(
   await assertWalletExists(walletDb, walletId)
 
   const now = new Date().toISOString()
-  const kdfVersion = encrypted.kdfVersion ?? 1
+  const kdfVersion = encrypted.kdfVersion
   const existing = await walletDb
     .selectFrom('wallet_secrets')
     .select('wallet_secrets_id')
@@ -153,7 +153,7 @@ export async function saveWalletSecrets(
   const encrypted = await encryptData(password, plaintext)
 
   const now = new Date().toISOString()
-  const kdfVersion = encrypted.kdfVersion ?? 1
+  const kdfVersion = encrypted.kdfVersion
   const existing = await walletDb
     .selectFrom('wallet_secrets')
     .select('wallet_secrets_id')
@@ -218,7 +218,7 @@ export async function loadWalletSecrets(
     ciphertext: record.encrypted_data,
     iv: record.iv,
     salt: record.salt,
-    kdfVersion: (record.kdf_version as KdfVersion) ?? 1,
+    kdfVersion: record.kdf_version as KdfVersion,
   })
 
   return parseWalletSecretsJson(plaintext)
