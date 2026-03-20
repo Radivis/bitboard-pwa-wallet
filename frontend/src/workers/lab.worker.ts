@@ -6,7 +6,11 @@ import type {
   LabTxDetails,
   MempoolEntry,
 } from './lab-api'
-import { EMPTY_LAB_STATE } from './lab-api'
+import {
+  EMPTY_LAB_STATE,
+  LAB_MAX_BLOCKS_PER_MINE,
+  LAB_MIN_BLOCKS_PER_MINE,
+} from './lab-api'
 import {
   mergeAddressesWithUtxos,
   walletOwnerKey,
@@ -264,6 +268,16 @@ const labService = {
     targetAddress: string,
     options?: { ownerName?: string; ownerWalletId?: number },
   ): Promise<LabState> {
+    if (
+      !Number.isInteger(blockCountToMine) ||
+      blockCountToMine < LAB_MIN_BLOCKS_PER_MINE ||
+      blockCountToMine > LAB_MAX_BLOCKS_PER_MINE
+    ) {
+      throw new Error(
+        `Block count must be an integer from ${LAB_MIN_BLOCKS_PER_MINE} to ${LAB_MAX_BLOCKS_PER_MINE} (inclusive)`,
+      )
+    }
+
     const wasmModule = await getWasm()
     const tip = getTip()
 

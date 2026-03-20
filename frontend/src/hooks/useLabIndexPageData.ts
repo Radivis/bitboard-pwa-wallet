@@ -8,9 +8,12 @@ import {
   useLabCreateTransactionMutation,
   useLabResetMutation,
 } from '@/hooks/useLabMutations'
+import {
+  LAB_MAX_BLOCKS_PER_MINE,
+  LAB_MIN_BLOCKS_PER_MINE,
+} from '@/workers/lab-api'
 
 const DEFAULT_LAB_FEE_RATE_SAT_PER_VB = 1
-const MIN_LAB_BLOCK_COUNT = 1
 
 /**
  * Form state, derived lab lists, and TanStack Query mutations for the lab index page.
@@ -27,7 +30,7 @@ export function useLabIndexPageData() {
 
   const blockCount = blocks.length === 0 ? 0 : blocks[blocks.length - 1].height + 1
 
-  const [mineCount, setMineCount] = useState(String(MIN_LAB_BLOCK_COUNT))
+  const [mineCount, setMineCount] = useState(String(LAB_MIN_BLOCKS_PER_MINE))
   const [ownerType, setOwnerType] = useState<'name' | 'wallet'>('name')
   const [targetAddress, setTargetAddress] = useState('')
   const [ownerName, setOwnerName] = useState('')
@@ -69,8 +72,14 @@ export function useLabIndexPageData() {
 
   const handleMine = useCallback(() => {
     const count = parseInt(mineCount, 10)
-    if (isNaN(count) || count < 1) {
+    if (isNaN(count) || count < LAB_MIN_BLOCKS_PER_MINE) {
       toast.error('Enter a valid block count')
+      return
+    }
+    if (count > LAB_MAX_BLOCKS_PER_MINE) {
+      toast.error(
+        `Mine at most ${LAB_MAX_BLOCKS_PER_MINE} blocks at once so the app stays responsive`,
+      )
       return
     }
     const effectiveTarget =
