@@ -185,8 +185,12 @@ export async function syncLoadedSubWalletWithEsplora(options: {
 }
 
 /**
- * Incremental Esplora sync for the dashboard "Sync" button: updates balance and
+ * Esplora sync for the dashboard "Sync" button: updates balance and
  * transactions in the store, last sync time, and persisted changeset.
+ *
+ * Uses full scan for regtest (BDK's incremental sync via WASM does not
+ * reliably anchor confirmed transactions to their blocks on regtest).
+ * Uses incremental sync for all other networks for performance.
  */
 export async function runIncrementalDashboardWalletSync(options: {
   networkMode: NetworkMode
@@ -194,7 +198,7 @@ export async function runIncrementalDashboardWalletSync(options: {
   activeWalletId: number | null
 }): Promise<void> {
   await syncActiveWalletAndUpdateState(options.networkMode, {
-    useFullScan: false,
+    useFullScan: options.networkMode === 'regtest',
   })
   const { setLastSyncTime } = useWalletStore.getState()
   setLastSyncTime(new Date())

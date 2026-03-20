@@ -92,9 +92,8 @@ function SyncButton() {
       toast.success('Wallet synced')
     } catch (err) {
       setWalletStatus('unlocked')
-      toast.error(
-        err instanceof Error ? err.message : 'Sync failed',
-      )
+      const detail = err instanceof Error ? err.message : String(err)
+      toast.error(detail || 'Sync failed')
     }
   }, [networkMode, activeWalletId, password, setWalletStatus])
 

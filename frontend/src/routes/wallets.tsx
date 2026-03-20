@@ -13,8 +13,10 @@ function WalletsPage() {
   const navigate = useNavigate()
   const { data: wallets, isLoading } = useWallets()
   const setActiveWallet = useWalletStore((s) => s.setActiveWallet)
+  const lockWallet = useWalletStore((s) => s.lockWallet)
 
   const handleSelectWallet = (walletId: number) => {
+    lockWallet()
     setActiveWallet(walletId)
     navigate({ to: '/' })
   }

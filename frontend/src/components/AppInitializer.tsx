@@ -71,6 +71,12 @@ export function AppInitializer({ children }: AppInitializerProps) {
     if (lastUnlockedWalletId.current === activeWalletId) return
 
     lastUnlockedWalletId.current = activeWalletId
+
+    const { walletStatus } = useWalletStore.getState()
+    if (walletStatus === 'unlocked' || walletStatus === 'syncing') {
+      return
+    }
+
     autoUnlockWallet(activeWalletId, sessionPassword)
     // autoUnlockWallet omitted from deps: it is defined below and captures latest state
   // eslint-disable-next-line react-hooks/exhaustive-deps
