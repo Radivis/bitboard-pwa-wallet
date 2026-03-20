@@ -8,7 +8,6 @@ vi.mock('@tanstack/react-router', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@tanstack/react-router')>()
   return {
     ...actual,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- route path not used in mock
     createFileRoute: (_path: string) => (options: Record<string, unknown>) => ({
       options,
     }),
@@ -20,7 +19,7 @@ vi.mock('@tanstack/react-router', async (importOriginal) => {
 })
 
 const mockValidateMnemonic = vi.fn()
-const mockCreateWallet = vi.fn()
+const mockImportWalletAndEncryptSecrets = vi.fn()
 const mockFullScanWallet = vi.fn()
 const mockGetBalance = vi.fn()
 const mockGetTransactionList = vi.fn()
@@ -28,7 +27,7 @@ vi.mock('@/stores/cryptoStore', () => ({
   useCryptoStore: (selector: (s: Record<string, unknown>) => unknown) =>
     selector({
       validateMnemonic: mockValidateMnemonic,
-      createWallet: mockCreateWallet,
+      importWalletAndEncryptSecrets: mockImportWalletAndEncryptSecrets,
       fullScanWallet: mockFullScanWallet,
       getBalance: mockGetBalance,
       getTransactionList: mockGetTransactionList,
@@ -70,7 +69,11 @@ vi.mock('@/db', () => ({
   useAddWallet: () => ({ mutateAsync: mockMutateAsync }),
   getDatabase: vi.fn(),
   ensureMigrated: vi.fn().mockResolvedValue(undefined),
-  saveWalletSecrets: vi.fn().mockResolvedValue(undefined),
+  putWalletSecretsEncrypted: vi.fn().mockResolvedValue(undefined),
+}))
+
+vi.mock('@/workers/secrets-channel', () => ({
+  ensureSecretsChannel: vi.fn().mockResolvedValue(undefined),
 }))
 
 vi.mock('@/lib/bitcoin-utils', () => ({
@@ -185,15 +188,18 @@ describe('ImportWalletPage', () => {
     expect(screen.getByRole('button', { name: 'Restore Wallet' })).toBeEnabled()
   })
 
-  it('calls createWallet on submit', async () => {
+  it('calls importWalletAndEncryptSecrets on submit', async () => {
     vi.useRealTimers()
     const user = userEvent.setup()
     mockValidateMnemonic.mockResolvedValue(true)
-    mockCreateWallet.mockResolvedValue({
-      external_descriptor: 'ext',
-      internal_descriptor: 'int',
-      first_address: 'tb1test',
-      changeset_json: '{}',
+    mockImportWalletAndEncryptSecrets.mockResolvedValue({
+      encryptedBlob: { ciphertext: new Uint8Array(0), iv: new Uint8Array(12), salt: new Uint8Array(16) },
+      walletResult: {
+        external_descriptor: 'ext',
+        internal_descriptor: 'int',
+        first_address: 'tb1test',
+        changeset_json: '{}',
+      },
     })
     mockFullScanWallet.mockResolvedValue({
       balance: { confirmed: 0, trusted_pending: 0, untrusted_pending: 0, immature: 0, total: 0 },
@@ -221,7 +227,13 @@ describe('ImportWalletPage', () => {
     await user.click(screen.getByRole('button', { name: 'Restore Wallet' }))
 
     await waitFor(() => {
-      expect(mockCreateWallet).toHaveBeenCalled()
+      expect(mockImportWalletAndEncryptSecrets).toHaveBeenCalledWith({
+        mnemonic: TEST_MNEMONIC_12,
+        password: 'validpassword123',
+        network: 'signet',
+        addressType: 'taproot',
+        accountId: 0,
+      })
     })
   })
 
@@ -229,10 +241,10 @@ describe('ImportWalletPage', () => {
     vi.useRealTimers()
     const user = userEvent.setup()
     mockValidateMnemonic.mockResolvedValue(true)
-    let resolveCreate: (value: unknown) => void
-    mockCreateWallet.mockReturnValue(
+    let resolveImport: (value: unknown) => void
+    mockImportWalletAndEncryptSecrets.mockReturnValue(
       new Promise((resolve) => {
-        resolveCreate = resolve
+        resolveImport = resolve
       }),
     )
     renderWithProviders(<ImportWalletPage />)
@@ -252,11 +264,14 @@ describe('ImportWalletPage', () => {
       expect(screen.getByText('Restoring wallet...')).toBeInTheDocument()
     })
 
-    resolveCreate!({
-      external_descriptor: 'ext',
-      internal_descriptor: 'int',
-      first_address: 'tb1test',
-      changeset_json: '{}',
+    resolveImport!({
+      encryptedBlob: { ciphertext: new Uint8Array(0), iv: new Uint8Array(12), salt: new Uint8Array(16) },
+      walletResult: {
+        external_descriptor: 'ext',
+        internal_descriptor: 'int',
+        first_address: 'tb1test',
+        changeset_json: '{}',
+      },
     })
   })
 })

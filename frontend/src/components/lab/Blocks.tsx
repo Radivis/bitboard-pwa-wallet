@@ -8,8 +8,10 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-
-const MIN_LAB_BLOCK_COUNT = 1
+import {
+  LAB_MAX_BLOCKS_PER_MINE,
+  LAB_MIN_BLOCKS_PER_MINE,
+} from '@/workers/lab-api'
 
 function TargetAddressField({
   ownerType,
@@ -98,7 +100,8 @@ export function LabBlocksCard({
             <Input
               id="mine-count"
               type="number"
-              min={MIN_LAB_BLOCK_COUNT}
+              min={LAB_MIN_BLOCKS_PER_MINE}
+              max={LAB_MAX_BLOCKS_PER_MINE}
               value={mineCount}
               onChange={(e) => setMineCount(e.target.value)}
               className="w-24"

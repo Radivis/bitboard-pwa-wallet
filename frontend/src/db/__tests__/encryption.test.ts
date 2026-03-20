@@ -1,31 +1,24 @@
 import { describe, it, expect, vi } from 'vitest'
-import { pbkdf2Sync } from 'node:crypto'
 
 /**
- * Frontend encryption tests using PBKDF2 mock for fast execution.
- * 
- * IMPORTANT: These tests use PBKDF2 as a stand-in for Argon2id KDF.
- * The actual Argon2id algorithm (security properties, performance,
- * parameter validation) is tested in the Rust crypto crate at
- * crypto/src/tests.rs.
- * 
- * These frontend tests validate:
+ * Frontend encryption tests using a mock encryption worker (PBKDF2 + AES-GCM) for fast execution.
+ *
+ * IMPORTANT: The mock uses PBKDF2 as a stand-in for Argon2id KDF.
+ * The actual Argon2id algorithm is tested in the Rust bitboard-encryption crate.
+ *
+ * These tests validate:
  * - AES-256-GCM encryption/decryption correctness
  * - Proper IV and salt generation and handling
  * - Error handling for corrupted data and wrong passwords
- * - Integration between kdf.ts, encryption.ts, and wallet-persistence.ts
+ * - Integration between encryption.ts and the encryption worker API
  * - Round-trip encryption with various data types
- * 
- * For actual Argon2id security validation and performance benchmarks,
- * run: cd crypto && cargo test
  */
-vi.mock('../kdf', () => ({
-  // Fast PBKDF2 stand-in for Argon2id (only for unit tests)
-  // Production uses real Argon2id via WASM worker
-  deriveKeyBytes: async (password: string, salt: Uint8Array): Promise<Uint8Array> => {
-    return new Uint8Array(pbkdf2Sync(password, salt, 1000, 32, 'sha256'))
-  },
-}))
+vi.mock('@/workers/encryption-factory', async () => {
+  const { getMockEncryptionWorker } = await import('./mock-encryption-worker')
+  return {
+    getEncryptionWorker: () => getMockEncryptionWorker(),
+  }
+})
 
 import { TEST_MNEMONIC_12 } from '@/test-utils/test-providers'
 import { encryptData, decryptData } from '../encryption'

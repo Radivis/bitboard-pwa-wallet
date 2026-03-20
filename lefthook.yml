@@ -38,3 +38,7 @@ post-commit:
       run: ./scripts/e2e-reminder.sh
       # Reminds developers to run E2E tests manually
       priority: 1
+    coverage-reminder:
+      run: ./scripts/coverage-reminder.sh
+      # Reminds developers to run coverage refresh manually (./scripts/refresh-coverage.sh)
+      priority: 2

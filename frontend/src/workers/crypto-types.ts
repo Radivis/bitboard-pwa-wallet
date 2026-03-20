@@ -1,5 +1,9 @@
-export type AddressType = 'taproot' | 'segwit';
-export type BitcoinNetwork = 'bitcoin' | 'testnet' | 'signet' | 'regtest';
+export type {
+  AddressType,
+  BitcoinNetwork,
+  DescriptorWalletData,
+  WalletSecrets,
+} from '@/lib/wallet-domain-types'
 
 export interface DescriptorPair {
   external: string;

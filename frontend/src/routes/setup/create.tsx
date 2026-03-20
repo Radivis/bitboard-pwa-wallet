@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { createFileRoute, useNavigate, Link } from '@tanstack/react-router'
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -13,7 +13,15 @@ import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { useCryptoStore } from '@/stores/cryptoStore'
 import { useWalletStore } from '@/stores/walletStore'
 import { useSessionStore, startAutoLockTimer } from '@/stores/sessionStore'
-import { useAddWallet, getDatabase, ensureMigrated, saveWalletSecrets } from '@/db'
+import {
+  useAddWallet,
+  getDatabase,
+  ensureMigrated,
+  persistNewWalletWithSecrets,
+  walletKeys,
+  type EncryptedWalletSecretsBlob,
+} from '@/db'
+import { ensureSecretsChannel } from '@/workers/secrets-channel'
 import { toBitcoinNetwork } from '@/lib/bitcoin-utils'
 
 export const Route = createFileRoute('/setup/create')({
@@ -22,17 +30,23 @@ export const Route = createFileRoute('/setup/create')({
 
 type Step = 1 | 2 | 3 | 4
 
+/** Stored after createWalletAndEncryptSecrets so we can persist in step 4 without keeping mnemonic. */
+interface CreateWalletPending {
+  encryptedBlob: EncryptedWalletSecretsBlob
+  walletResult: { first_address: string }
+}
+
 export function CreateWalletPage() {
   const navigate = useNavigate()
   const [step, setStep] = useState<Step>(1)
   const [wordCount, setWordCount] = useState<12 | 24>(12)
-  const [mnemonic, setMnemonic] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const [mnemonicForBackup, setMnemonicForBackup] = useState('')
+  const [pendingCreate, setPendingCreate] = useState<CreateWalletPending | null>(null)
   const [verificationWords, setVerificationWords] = useState<Record<number, string>>({})
 
-  const generateMnemonic = useCryptoStore((s) => s.generateMnemonic)
-  const createWallet = useCryptoStore((s) => s.createWallet)
+  const createWalletAndEncryptSecrets = useCryptoStore((s) => s.createWalletAndEncryptSecrets)
   const networkMode = useWalletStore((s) => s.networkMode)
   const addressType = useWalletStore((s) => s.addressType)
   const accountId = useWalletStore((s) => s.accountId)
@@ -42,7 +56,7 @@ export function CreateWalletPage() {
   const setSessionPassword = useSessionStore((s) => s.setPassword)
   const addWallet = useAddWallet()
 
-  const words = useMemo(() => (mnemonic ? mnemonic.split(' ') : []), [mnemonic])
+  const words = useMemo(() => (mnemonicForBackup ? mnemonicForBackup.split(' ') : []), [mnemonicForBackup])
 
   const verificationIndices = useMemo(() => {
     if (words.length === 0) return []
@@ -66,51 +80,64 @@ export function CreateWalletPage() {
     return password.length >= 8 && password === confirmPassword
   }, [password, confirmPassword])
 
-  const generateMnemonicMutation = useMutation({
-    mutationFn: (wc: 12 | 24) => generateMnemonic(wc),
+  const createWalletMutation = useMutation({
+    mutationFn: async () => {
+      await ensureSecretsChannel()
+      const network = toBitcoinNetwork(networkMode)
+      const result = await createWalletAndEncryptSecrets({
+        password,
+        network,
+        addressType,
+        accountId,
+        wordCount,
+      })
+      return result
+    },
     onSuccess: (result) => {
-      setMnemonic(result)
+      setMnemonicForBackup(result.mnemonicForBackup)
+      setPendingCreate({
+        encryptedBlob: result.encryptedBlob,
+        walletResult: { first_address: result.walletResult.first_address },
+      })
       setStep(2)
     },
-    onError: () => {
-      toast.error('Failed to generate mnemonic')
+    onError: (err) => {
+      toast.error(
+        err instanceof Error ? err.message : 'Failed to create wallet',
+      )
     },
   })
 
-  const createWalletMutation = useMutation({
+  const queryClient = useQueryClient()
+  const finishCreateMutation = useMutation({
     mutationFn: async () => {
-      const network = toBitcoinNetwork(networkMode)
-      const walletResult = await createWallet(mnemonic, network, addressType, accountId)
-
+      if (!pendingCreate) throw new Error('No pending create')
+      const firstAddress = pendingCreate.walletResult.first_address
+      setMnemonicForBackup('')
       await ensureMigrated()
-      const db = getDatabase()
-
-      const walletId = await addWallet.mutateAsync({
-        name: `Wallet ${Date.now()}`,
-        created_at: new Date().toISOString(),
-      })
-
-      await saveWalletSecrets(db, password, walletId, {
-        mnemonic,
-        descriptorWallets: [
-          {
-            network,
-            addressType,
-            accountId,
-            externalDescriptor: walletResult.external_descriptor,
-            internalDescriptor: walletResult.internal_descriptor,
-            changeSet: walletResult.changeset_json,
-          },
-        ],
-      })
-
+      const walletDb = getDatabase()
+      let walletId: number
+      try {
+        walletId = await persistNewWalletWithSecrets({
+          walletDb,
+          insertWalletRow: () =>
+            addWallet.mutateAsync({
+              name: `Wallet ${Date.now()}`,
+              created_at: new Date().toISOString(),
+            }),
+          encryptedBlob: pendingCreate!.encryptedBlob,
+        })
+      } catch (secretsErr) {
+        queryClient.invalidateQueries({ queryKey: walletKeys.all })
+        throw secretsErr
+      }
+      setPendingCreate(null)
       setSessionPassword(password)
       setActiveWallet(walletId)
-      setCurrentAddress(walletResult.first_address)
+      setCurrentAddress(firstAddress)
       setWalletStatus('unlocked')
-
       startAutoLockTimer(() => {
-        useWalletStore.getState().lockWallet()
+        useCryptoStore.getState().lockAndPurgeSensitiveRuntimeState()
       })
     },
     onSuccess: () => {
@@ -119,7 +146,7 @@ export function CreateWalletPage() {
     },
     onError: (err) => {
       toast.error(
-        err instanceof Error ? err.message : 'Failed to create wallet',
+        err instanceof Error ? err.message : 'Failed to save wallet',
       )
     },
   })
@@ -134,16 +161,21 @@ export function CreateWalletPage() {
         </Link>
         <h2 className="text-xl font-bold">Create Wallet</h2>
         <div className="ml-auto text-sm text-muted-foreground">
-          Step {step} of 4
+          Step {step} of 3
         </div>
       </div>
 
       {step === 1 && (
-        <StepGenerate
+        <StepWordCountAndPassword
           wordCount={wordCount}
           setWordCount={setWordCount}
-          onGenerate={() => generateMnemonicMutation.mutate(wordCount)}
-          loading={generateMnemonicMutation.isPending}
+          password={password}
+          setPassword={setPassword}
+          confirmPassword={confirmPassword}
+          setConfirmPassword={setConfirmPassword}
+          isValid={passwordsValid}
+          loading={createWalletMutation.isPending}
+          onSubmit={() => createWalletMutation.mutate()}
         />
       )}
 
@@ -157,42 +189,41 @@ export function CreateWalletPage() {
           verificationWords={verificationWords}
           setVerificationWords={setVerificationWords}
           isCorrect={verificationCorrect}
-          onContinue={() => setStep(4)}
-        />
-      )}
-
-      {step === 4 && (
-        <StepPassword
-          password={password}
-          setPassword={setPassword}
-          confirmPassword={confirmPassword}
-          setConfirmPassword={setConfirmPassword}
-          isValid={passwordsValid}
-          loading={createWalletMutation.isPending}
-          onSubmit={() => createWalletMutation.mutate()}
+          loading={finishCreateMutation.isPending}
+          onConfirm={() => finishCreateMutation.mutate()}
         />
       )}
     </div>
   )
 }
 
-function StepGenerate({
+function StepWordCountAndPassword({
   wordCount,
   setWordCount,
-  onGenerate,
+  password,
+  setPassword,
+  confirmPassword,
+  setConfirmPassword,
+  isValid,
   loading,
+  onSubmit,
 }: {
   wordCount: 12 | 24
   setWordCount: (wc: 12 | 24) => void
-  onGenerate: () => void
+  password: string
+  setPassword: (pw: string) => void
+  confirmPassword: string
+  setConfirmPassword: (pw: string) => void
+  isValid: boolean
   loading: boolean
+  onSubmit: () => void
 }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Generate Seed Phrase</CardTitle>
+        <CardTitle>Create Wallet</CardTitle>
         <CardDescription>
-          Choose the length of your seed phrase and generate it.
+          Choose seed phrase length and set a password. The seed phrase will be generated and shown on the next step.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -216,12 +247,45 @@ function StepGenerate({
           </div>
         </div>
 
+        <div className="space-y-2">
+          <Label htmlFor="create-password">Password</Label>
+          <Input
+            id="create-password"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Enter a strong password"
+            disabled={loading}
+          />
+          <PasswordStrengthIndicator password={password} />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="confirm-password">Confirm Password</Label>
+          <Input
+            id="confirm-password"
+            type="password"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            placeholder="Confirm your password"
+            disabled={loading}
+          />
+          {confirmPassword && password !== confirmPassword && (
+            <p className="text-xs text-destructive">Passwords do not match</p>
+          )}
+        </div>
+
         {loading ? (
-          <LoadingSpinner text="Generating seed phrase..." />
+          <LoadingSpinner text="Generating wallet..." />
         ) : (
-          <Button onClick={onGenerate} className="w-full" size="lg">
+          <Button
+            onClick={onSubmit}
+            className="w-full"
+            size="lg"
+            disabled={!isValid}
+          >
             <RefreshCw className="mr-2 h-4 w-4" />
-            Generate Mnemonic
+            Generate & Continue
           </Button>
         )}
       </CardContent>
@@ -264,13 +328,15 @@ function StepVerify({
   verificationWords,
   setVerificationWords,
   isCorrect,
-  onContinue,
+  loading,
+  onConfirm,
 }: {
   verificationIndices: number[]
   verificationWords: Record<number, string>
   setVerificationWords: (words: Record<number, string>) => void
   isCorrect: boolean
-  onContinue: () => void
+  loading: boolean
+  onConfirm: () => void
 }) {
   return (
     <Card>
@@ -294,97 +360,22 @@ function StepVerify({
               }
               placeholder={`Enter word #${idx + 1}`}
               autoComplete="off"
+              disabled={loading}
             />
           </div>
         ))}
-        <Button
-          onClick={onContinue}
-          className="w-full"
-          size="lg"
-          disabled={!isCorrect}
-        >
-          Confirm
-        </Button>
-      </CardContent>
-    </Card>
-  )
-}
-
-function StepPassword({
-  password,
-  setPassword,
-  confirmPassword,
-  setConfirmPassword,
-  isValid,
-  loading,
-  onSubmit,
-}: {
-  password: string
-  setPassword: (pw: string) => void
-  confirmPassword: string
-  setConfirmPassword: (pw: string) => void
-  isValid: boolean
-  loading: boolean
-  onSubmit: () => void
-}) {
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Set Password</CardTitle>
-        <CardDescription>
-          Choose a strong password to encrypt your wallet. You will need this
-          password every time you open the app.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <form
-          className="space-y-4"
-          onSubmit={(e) => {
-            e.preventDefault()
-            onSubmit()
-          }}
-        >
-          <div className="space-y-2">
-            <Label htmlFor="create-password">Password</Label>
-            <Input
-              id="create-password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Enter a strong password"
-              disabled={loading}
-            />
-            <PasswordStrengthIndicator password={password} />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="confirm-password">Confirm Password</Label>
-            <Input
-              id="confirm-password"
-              type="password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              placeholder="Confirm your password"
-              disabled={loading}
-            />
-            {confirmPassword && password !== confirmPassword && (
-              <p className="text-xs text-destructive">Passwords do not match</p>
-            )}
-          </div>
-
-          {loading ? (
-            <LoadingSpinner text="Creating wallet..." />
-          ) : (
-            <Button
-              type="submit"
-              className="w-full"
-              size="lg"
-              disabled={!isValid}
-            >
-              Create Wallet
-            </Button>
-          )}
-        </form>
+        {loading ? (
+          <LoadingSpinner text="Saving wallet..." />
+        ) : (
+          <Button
+            onClick={onConfirm}
+            className="w-full"
+            size="lg"
+            disabled={!isCorrect}
+          >
+            Confirm & Finish
+          </Button>
+        )}
       </CardContent>
     </Card>
   )

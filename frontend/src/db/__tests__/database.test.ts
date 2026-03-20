@@ -4,14 +4,14 @@ import type { Database } from '../schema'
 import { createTestDatabase } from '../test-helpers'
 
 describe('SQLite Database', () => {
-  let db: Kysely<Database>
+  let walletDb: Kysely<Database>
 
   beforeEach(async () => {
-    db = await createTestDatabase()
+    walletDb = await createTestDatabase()
   })
 
   afterEach(async () => {
-    await db.destroy()
+    await walletDb.destroy()
   })
 
   describe('wallets table', () => {
@@ -24,13 +24,13 @@ describe('SQLite Database', () => {
     }
 
     it('adds a wallet and retrieves it by wallet_id', async () => {
-      const result = await db
+      const result = await walletDb
         .insertInto('wallets')
         .values(createWalletValues())
         .executeTakeFirstOrThrow()
       const id = Number(result.insertId)
 
-      const retrieved = await db
+      const retrieved = await walletDb
         .selectFrom('wallets')
         .selectAll()
         .where('wallet_id', '=', id)
@@ -41,75 +41,104 @@ describe('SQLite Database', () => {
     })
 
     it('lists all wallets', async () => {
-      await db.insertInto('wallets').values(createWalletValues({ name: 'First Wallet' })).execute()
-      await db.insertInto('wallets').values(createWalletValues({ name: 'Second Wallet' })).execute()
+      await walletDb.insertInto('wallets').values(createWalletValues({ name: 'First Wallet' })).execute()
+      await walletDb.insertInto('wallets').values(createWalletValues({ name: 'Second Wallet' })).execute()
 
-      const all = await db.selectFrom('wallets').selectAll().execute()
+      const all = await walletDb.selectFrom('wallets').selectAll().execute()
 
       expect(all).toHaveLength(2)
     })
 
     it('updates a wallet', async () => {
-      const result = await db
+      const result = await walletDb
         .insertInto('wallets')
         .values(createWalletValues())
         .executeTakeFirstOrThrow()
       const id = Number(result.insertId)
 
-      await db.updateTable('wallets').set({ name: 'Renamed Wallet' }).where('wallet_id', '=', id).execute()
-      const updated = await db.selectFrom('wallets').selectAll().where('wallet_id', '=', id).executeTakeFirst()
+      await walletDb.updateTable('wallets').set({ name: 'Renamed Wallet' }).where('wallet_id', '=', id).execute()
+      const updated = await walletDb.selectFrom('wallets').selectAll().where('wallet_id', '=', id).executeTakeFirst()
 
       expect(updated!.name).toBe('Renamed Wallet')
     })
 
     it('deletes a wallet', async () => {
-      const result = await db
+      const result = await walletDb
         .insertInto('wallets')
         .values(createWalletValues())
         .executeTakeFirstOrThrow()
       const id = Number(result.insertId)
 
-      await db.deleteFrom('wallets').where('wallet_id', '=', id).execute()
-      const deleted = await db.selectFrom('wallets').selectAll().where('wallet_id', '=', id).executeTakeFirst()
+      await walletDb.deleteFrom('wallets').where('wallet_id', '=', id).execute()
+      const deleted = await walletDb.selectFrom('wallets').selectAll().where('wallet_id', '=', id).executeTakeFirst()
 
       expect(deleted).toBeUndefined()
+    })
+
+    it('transaction rolls back both inserts when callback throws', async () => {
+      const now = new Date().toISOString()
+      try {
+        await walletDb.transaction().execute(async (trx) => {
+          const result = await trx
+            .insertInto('wallets')
+            .values({ name: 'Rollback Wallet', created_at: now })
+            .executeTakeFirstOrThrow()
+          const walletId = Number(result.insertId)
+          await trx.insertInto('wallet_secrets').values({
+            wallet_id: walletId,
+            encrypted_data: new Uint8Array(0),
+            iv: new Uint8Array(12),
+            salt: new Uint8Array(16),
+            kdf_version: 1,
+            created_at: now,
+            updated_at: now,
+          }).execute()
+          throw new Error('rollback')
+        })
+      } catch (e) {
+        expect((e as Error).message).toBe('rollback')
+      }
+      const wallets = await walletDb.selectFrom('wallets').selectAll().execute()
+      const secrets = await walletDb.selectFrom('wallet_secrets').selectAll().execute()
+      expect(wallets).toHaveLength(0)
+      expect(secrets).toHaveLength(0)
     })
   })
 
   describe('settings table', () => {
     it('stores and retrieves a setting by key', async () => {
-      await db.insertInto('settings').values({ key: 'theme-storage', value: '{"themeMode":"dark"}' }).execute()
+      await walletDb.insertInto('settings').values({ key: 'theme-storage', value: '{"themeMode":"dark"}' }).execute()
 
-      const setting = await db.selectFrom('settings').selectAll().where('key', '=', 'theme-storage').executeTakeFirst()
+      const setting = await walletDb.selectFrom('settings').selectAll().where('key', '=', 'theme-storage').executeTakeFirst()
 
       expect(setting).toBeDefined()
       expect(setting!.value).toBe('{"themeMode":"dark"}')
     })
 
     it('upserts a setting with onConflict', async () => {
-      await db.insertInto('settings').values({ key: 'app-version', value: '0.1.0' }).execute()
-      await db
+      await walletDb.insertInto('settings').values({ key: 'app-version', value: '0.1.0' }).execute()
+      await walletDb
         .insertInto('settings')
         .values({ key: 'app-version', value: '0.2.0' })
         .onConflict((oc) => oc.column('key').doUpdateSet({ value: '0.2.0' }))
         .execute()
 
-      const setting = await db.selectFrom('settings').selectAll().where('key', '=', 'app-version').executeTakeFirst()
+      const setting = await walletDb.selectFrom('settings').selectAll().where('key', '=', 'app-version').executeTakeFirst()
 
       expect(setting!.value).toBe('0.2.0')
     })
 
     it('deletes a setting', async () => {
-      await db.insertInto('settings').values({ key: 'temp-key', value: 'temp-value' }).execute()
+      await walletDb.insertInto('settings').values({ key: 'temp-key', value: 'temp-value' }).execute()
 
-      await db.deleteFrom('settings').where('key', '=', 'temp-key').execute()
-      const deleted = await db.selectFrom('settings').selectAll().where('key', '=', 'temp-key').executeTakeFirst()
+      await walletDb.deleteFrom('settings').where('key', '=', 'temp-key').execute()
+      const deleted = await walletDb.selectFrom('settings').selectAll().where('key', '=', 'temp-key').executeTakeFirst()
 
       expect(deleted).toBeUndefined()
     })
 
     it('returns undefined for a non-existent key', async () => {
-      const missing = await db.selectFrom('settings').selectAll().where('key', '=', 'does-not-exist').executeTakeFirst()
+      const missing = await walletDb.selectFrom('settings').selectAll().where('key', '=', 'does-not-exist').executeTakeFirst()
 
       expect(missing).toBeUndefined()
     })

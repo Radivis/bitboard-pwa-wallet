@@ -3,6 +3,9 @@ name = "bitboard-crypto"
 version = "0.1.0"
 edition = "2024"
 
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(coverage)"] }
+
 [lib]
 crate-type = ["cdylib", "rlib"]
 
@@ -19,7 +22,6 @@ bdk_esplora = { version = "0.22", default-features = false, features = ["async"]
 wasm-bindgen-futures = "0.4"
 js-sys = "0.3"
 bitcoin = { version = "0.32", default-features = false, features = ["secp-lowmemory", "std", "rand"] }
-argon2 = { version = "0.5", features = ["std"] }
 console_error_panic_hook = "0.1"
 hex = "0.4"
 

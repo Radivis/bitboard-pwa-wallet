@@ -4,6 +4,7 @@ use bdk_wallet::Wallet;
 use bitcoin::{Address, Amount, FeeRate, Network, Psbt, Transaction};
 
 use crate::error::CryptoError;
+use crate::validation;
 
 pub fn build_transaction(
     wallet: &mut Wallet,
@@ -23,7 +24,8 @@ pub fn build_transaction(
         .map_err(|e| CryptoError::Transaction(e.to_string()))?;
 
     let script_pubkey = address.script_pubkey();
-    let fee_rate = FeeRate::from_sat_per_vb_unchecked(fee_rate_sat_per_vb.ceil() as u64);
+    let fee_rate_sats = validation::validate_fee_rate_sat_per_vb(fee_rate_sat_per_vb)?;
+    let fee_rate = FeeRate::from_sat_per_vb_unchecked(fee_rate_sats);
 
     let mut tx_builder = wallet.build_tx();
     tx_builder
@@ -34,6 +36,7 @@ pub fn build_transaction(
     Ok(psbt)
 }
 
+// BDK wallet.sign(SignOptions) is deprecated; required until BDK provides replacement API.
 #[allow(deprecated)]
 pub fn sign_transaction(wallet: &Wallet, psbt: &mut Psbt) -> Result<bool, CryptoError> {
     use bdk_wallet::SignOptions;

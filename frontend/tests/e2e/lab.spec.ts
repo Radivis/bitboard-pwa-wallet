@@ -8,6 +8,7 @@ import {
   sendFromWallet,
   getLabState,
   getUtxoSumByOwner,
+  findAddressForOwner,
 } from './helpers/lab'
 import { WALLET_OWNER_PREFIX } from '@/lib/lab-utils'
 
@@ -48,13 +49,8 @@ test.describe('Lab', { tag: '@lab' }, () => {
     await mineBlocksInLab(page, 1, 'name', { ownerName: 'Bob' })
 
     const stateBefore = await getLabState(page)
-    const addressToOwner = stateBefore.addressToOwner ?? {}
-    const aliceAddress =
-      stateBefore.addresses.find((a) => addressToOwner[a.address] === 'Alice')?.address ??
-      stateBefore.utxos.find((u) => addressToOwner[u.address] === 'Alice')?.address
-    const bobAddress =
-      stateBefore.addresses.find((a) => addressToOwner[a.address] === 'Bob')?.address ??
-      stateBefore.utxos.find((u) => addressToOwner[u.address] === 'Bob')?.address
+    const aliceAddress = findAddressForOwner(stateBefore, 'Alice')
+    const bobAddress = findAddressForOwner(stateBefore, 'Bob')
     expect(aliceAddress).toBeDefined()
     expect(bobAddress).toBeDefined()
 
@@ -78,11 +74,8 @@ test.describe('Lab', { tag: '@lab' }, () => {
     await mineBlocksInLab(page, 1, 'name', { ownerName: 'Bob' })
 
     const stateBefore = await getLabState(page)
-    const addressToOwner = stateBefore.addressToOwner ?? {}
-    const aliceAddress = stateBefore.addresses.find((a) => addressToOwner[a.address] === 'Alice')
-      ?.address
-    const bobAddress = stateBefore.addresses.find((a) => addressToOwner[a.address] === 'Bob')
-      ?.address
+    const aliceAddress = findAddressForOwner(stateBefore, 'Alice')
+    const bobAddress = findAddressForOwner(stateBefore, 'Bob')
     expect(aliceAddress).toBeDefined()
     expect(bobAddress).toBeDefined()
 
@@ -123,9 +116,7 @@ test.describe('Lab', { tag: '@lab' }, () => {
     await mineBlocksInLab(page, 1, 'name', { ownerName: 'Alice' })
 
     const stateAfterMine = await getLabState(page)
-    const aliceAddress = stateAfterMine.addresses.find(
-      (a) => (stateAfterMine.addressToOwner ?? {})[a.address] === 'Alice',
-    )?.address
+    const aliceAddress = findAddressForOwner(stateAfterMine, 'Alice')
     expect(aliceAddress).toBeDefined()
 
     await page.getByRole('link', { name: /receive/i }).click()
@@ -158,9 +149,7 @@ test.describe('Lab', { tag: '@lab' }, () => {
     await mineBlocksInLab(page, 1, 'name', { ownerName: 'Alice' })
 
     const stateBefore = await getLabState(page)
-    const aliceAddress = stateBefore.addresses.find(
-      (a) => (stateBefore.addressToOwner ?? {})[a.address] === 'Alice',
-    )?.address
+    const aliceAddress = findAddressForOwner(stateBefore, 'Alice')
     expect(aliceAddress).toBeDefined()
 
     await sendFromWallet(page, aliceAddress!, 15_000, 1)

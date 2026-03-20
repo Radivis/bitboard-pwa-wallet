@@ -5,7 +5,7 @@ import {
   TEST_MNEMONIC,
   TEST_PASSWORD,
 } from './helpers/wallet-setup'
-import { fundRegtestAddress, mineRegtestBlocks } from './helpers/regtest'
+import { fundRegtestAddress, mineRegtestBlocks, waitForConfirmedBalance } from './helpers/regtest'
 
 test.describe('Send Page', () => {
   test.beforeEach(async ({ page }) => {
@@ -46,12 +46,7 @@ test.describe('Send Page', () => {
   })
 
   test('sends bitcoin on regtest @regtest', async ({ page }) => {
-    test.setTimeout(120_000)
-
-    // Workaround: Use SegWit (BIP84) instead of default Taproot (BIP86) for this test.
-    // Taproot descriptor wallets fail with "base58 error" when building transactions
-    // (likely a bug in BDK or a dependency). See .cursor/architecture/research/
-    // taproot-base58-investigation.md for details.
+    test.setTimeout(60_000)
 
     await importWalletViaUI(page, TEST_MNEMONIC, TEST_PASSWORD)
 
@@ -80,14 +75,26 @@ test.describe('Send Page', () => {
 
     await fundRegtestAddress(receiveAddress, 100_000)
     await mineRegtestBlocks(1)
+    await waitForConfirmedBalance(receiveAddress, 100_000)
 
     await page.getByRole('link', { name: /dashboard/i }).click()
     await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible()
-    await page.getByRole('button', { name: /Sync/ }).click()
-    await expect(page.getByText('Wallet synced')).toBeVisible({ timeout: 30000 })
 
-    // Wait for balance to propagate so the send page can enable the Review button
-    await expect(page.getByText(/100[,.]?000\s*sats/).first()).toBeVisible({ timeout: 10000 })
+    // Wait for the Sync button to be ready (not "Syncing..." from a
+    // settings-switch sync that may still be running).
+    const syncButton = page.getByRole('button', { name: 'Sync' })
+    await expect(syncButton).toBeVisible({ timeout: 30000 })
+
+    await syncButton.click()
+
+    // Wait for the sync to START (button changes to "Syncing...") and then
+    // FINISH (button changes back to "Sync"). This is the only reliable way
+    // to know the current sync completed — toast-based checks are unreliable
+    // due to stale "Wallet synced" toasts from the settings switch.
+    await expect(page.getByRole('button', { name: 'Syncing...' })).toBeVisible({
+      timeout: 5000,
+    })
+    await expect(syncButton).toBeVisible({ timeout: 60000 })
 
     await page.getByRole('link', { name: /send/i }).click()
     await expect(page.getByText('Send Bitcoin')).toBeVisible()

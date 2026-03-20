@@ -1,21 +1,28 @@
 use std::cell::RefCell;
 
-use argon2::{Algorithm, Argon2, Params, Version};
 use bdk_wallet::chain::Merge;
 use bdk_wallet::{ChangeSet, KeychainKind, Wallet as BdkWallet};
 use wasm_bindgen::prelude::*;
 
-/// Current Unix time in seconds, sourced from JavaScript's `Date.now()`.
-///
-/// `std::time::SystemTime::now()` panics on `wasm32-unknown-unknown`, so we
-/// must obtain the wall-clock time from the JS host instead.
-fn unix_seconds_now() -> u64 {
-    (js_sys::Date::now() / 1000.0) as u64
+/// Current Unix time in seconds. Used for sync/full_scan request building so production and tests use the same `_at(now)` API.
+pub(crate) fn current_unix_time() -> u64 {
+    #[cfg(target_arch = "wasm32")]
+    {
+        (js_sys::Date::now() / 1000.0) as u64
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("system time before UNIX_EPOCH")
+            .as_secs()
+    }
 }
 
 pub mod blockchain;
 pub mod descriptors;
 pub mod error;
+use crate::error::MapErrToJs;
 pub mod esplora;
 pub mod lab;
 pub mod lab_psbt;
@@ -23,6 +30,7 @@ pub mod mnemonic;
 pub mod sync;
 pub mod transaction;
 pub mod types;
+pub mod validation;
 pub mod wallet;
 pub mod wasm_sleep;
 
@@ -90,11 +98,6 @@ fn accumulate_staged_changes() {
 // ---------------------------------------------------------------------------
 
 #[wasm_bindgen]
-pub fn greet(name: &str) -> String {
-    format!("Hello from bitboard-crypto, {}!", name)
-}
-
-#[wasm_bindgen]
 pub fn generate_mnemonic(word_count: u32) -> Result<String, JsValue> {
     mnemonic::generate_mnemonic(word_count).map_err(Into::into)
 }
@@ -120,11 +123,11 @@ pub fn derive_descriptors(
     let pair = descriptors::derive_descriptors(mnemonic_str, network, addr_type, account_id)
         .map_err(JsValue::from)?;
 
-    serde_wasm_bindgen::to_value(&pair).map_err(|e| JsValue::from_str(&e.to_string()))
+    serde_wasm_bindgen::to_value(&pair).map_err_to_js()
 }
 
 // ---------------------------------------------------------------------------
-// Wallet wrappers (Phase 4)
+// Wallet wrappers
 // ---------------------------------------------------------------------------
 
 /// Create a new wallet from a mnemonic, network, address type, and account index.
@@ -165,28 +168,55 @@ pub fn create_wallet(
         changeset_json,
     };
 
-    serde_wasm_bindgen::to_value(&result).map_err(|e| JsValue::from_str(&e.to_string()))
+    serde_wasm_bindgen::to_value(&result).map_err_to_js()
 }
 
 /// Load a previously persisted wallet from descriptors and a changeset JSON.
+///
+/// When `use_empty_chain` is true (e.g. for testnet), the wallet is created fresh with
+/// the same descriptors so the next sync uses the correct chain genesis. For testnet we
+/// use BDK's Testnet4 so the genesis matches testnet4 Esplora (avoids HeaderHashNotFound
+/// from Testnet3 genesis). BDK's load returns None for an empty changeset, so we use
+/// create + take_staged instead of load.
 #[wasm_bindgen]
 pub fn load_wallet(
     external_descriptor: &str,
     internal_descriptor: &str,
     network: &str,
     changeset_json: &str,
+    use_empty_chain: bool,
 ) -> Result<JsValue, JsValue> {
     let net = types::BitcoinNetwork::try_from(network).map_err(JsValue::from)?;
-    let changeset = wallet::deserialize_changeset(changeset_json).map_err(JsValue::from)?;
 
-    let bdk_wallet = wallet::load_wallet(external_descriptor, internal_descriptor, net, changeset)
+    let (bdk_wallet, changeset) = if use_empty_chain {
+        let bdk_network = match net {
+            types::BitcoinNetwork::Testnet => bitcoin::Network::Testnet4,
+            _ => net.into(),
+        };
+        let mut w = wallet::create_wallet_with_bdk_network(
+            external_descriptor,
+            internal_descriptor,
+            bdk_network,
+        )
         .map_err(JsValue::from)?;
+        let initial = w
+            .take_staged()
+            .ok_or_else(|| JsValue::from("new wallet has no staged changeset"))?;
+        (w, initial)
+    } else {
+        let changeset = wallet::deserialize_changeset(changeset_json).map_err(JsValue::from)?;
+        let w = wallet::load_wallet(
+            external_descriptor,
+            internal_descriptor,
+            net,
+            changeset.clone(),
+        )
+        .map_err(JsValue::from)?;
+        (w, changeset)
+    };
 
-    let restored_changeset =
-        wallet::deserialize_changeset(changeset_json).map_err(JsValue::from)?;
-
-    ACTIVE_WALLET.with(|w| w.replace(Some(bdk_wallet)));
-    ACCUMULATED_CHANGESET.with(|cs| *cs.borrow_mut() = restored_changeset);
+    ACTIVE_WALLET.with(|cell| cell.replace(Some(bdk_wallet)));
+    ACCUMULATED_CHANGESET.with(|cs| *cs.borrow_mut() = changeset);
     EXTERNAL_DESCRIPTOR_FOR_LAB.with(|d| *d.borrow_mut() = external_descriptor.to_string());
     INTERNAL_DESCRIPTOR_FOR_LAB.with(|d| *d.borrow_mut() = internal_descriptor.to_string());
 
@@ -226,13 +256,19 @@ pub fn export_changeset() -> Result<String, JsValue> {
 }
 
 // ---------------------------------------------------------------------------
-// Sync & transaction wrappers (Phase 5)
+// Sync & transaction wrappers
 // ---------------------------------------------------------------------------
+//
+// Sync behavior: we rely on BDK for reorg/duplicate handling; empty update is
+// safe (apply_update is all-or-nothing per call). Use full_scan after
+// create/import; use sync_wallet for incremental updates.
+// The sync module (sync::sync_wallet / full_scan_wallet) is used by tests with
+// a mock BlockchainClient; the WASM entrypoints here use EsploraClient directly.
 
 const PARALLEL_REQUESTS: usize = 5;
 
 fn to_js<T: serde::Serialize>(value: &T) -> Result<JsValue, JsValue> {
-    serde_wasm_bindgen::to_value(value).map_err(|e| JsValue::from_str(&e.to_string()))
+    serde_wasm_bindgen::to_value(value).map_err_to_js()
 }
 
 /// Sync the active wallet against an Esplora server (incremental).
@@ -242,21 +278,17 @@ fn to_js<T: serde::Serialize>(value: &T) -> Result<JsValue, JsValue> {
 pub async fn sync_wallet(esplora_url: &str) -> Result<JsValue, JsValue> {
     let client = esplora::EsploraClient::new(esplora_url).map_err(JsValue::from)?;
 
-    let sync_request = with_wallet(|w| w.start_sync_with_revealed_spks_at(unix_seconds_now()))?;
+    let sync_request = with_wallet(|w| w.start_sync_with_revealed_spks_at(current_unix_time()))?;
 
     use bdk_esplora::EsploraAsyncExt;
     let update: bdk_wallet::Update = client
         .inner()
         .sync(sync_request, PARALLEL_REQUESTS)
         .await
-        .map_err(|e| JsValue::from_str(&e.to_string()))?
+        .map_err_to_js()?
         .into();
 
-    with_wallet_mut(|w| {
-        w.apply_update(update)
-            .map_err(|e| error::CryptoError::Blockchain(e.to_string()))
-    })?
-    .map_err(JsValue::from)?;
+    with_wallet_mut(|w| sync::apply_update(w, update).map_err(JsValue::from))??;
 
     accumulate_staged_changes();
     build_sync_result()
@@ -270,21 +302,17 @@ pub async fn sync_wallet(esplora_url: &str) -> Result<JsValue, JsValue> {
 pub async fn full_scan_wallet(esplora_url: &str, stop_gap: usize) -> Result<JsValue, JsValue> {
     let client = esplora::EsploraClient::new(esplora_url).map_err(JsValue::from)?;
 
-    let scan_request = with_wallet(|w| w.start_full_scan_at(unix_seconds_now()))?;
+    let scan_request = with_wallet(|w| w.start_full_scan_at(current_unix_time()))?;
 
     use bdk_esplora::EsploraAsyncExt;
     let update: bdk_wallet::Update = client
         .inner()
         .full_scan(scan_request, stop_gap, PARALLEL_REQUESTS)
         .await
-        .map_err(|e| JsValue::from_str(&e.to_string()))?
+        .map_err_to_js()?
         .into();
 
-    with_wallet_mut(|w| {
-        w.apply_update(update)
-            .map_err(|e| error::CryptoError::Blockchain(e.to_string()))
-    })?
-    .map_err(JsValue::from)?;
+    with_wallet_mut(|w| sync::apply_update(w, update).map_err(JsValue::from))??;
 
     accumulate_staged_changes();
     build_sync_result()
@@ -347,7 +375,7 @@ pub fn sign_and_extract_transaction(psbt_base64: &str) -> Result<String, JsValue
 #[wasm_bindgen]
 pub async fn broadcast_transaction(raw_tx_hex: &str, esplora_url: &str) -> Result<String, JsValue> {
     let tx_bytes = bitcoin::consensus::encode::deserialize_hex::<bitcoin::Transaction>(raw_tx_hex)
-        .map_err(|e| JsValue::from_str(&e.to_string()))?;
+        .map_err_to_js()?;
 
     let client = esplora::EsploraClient::new(esplora_url).map_err(JsValue::from)?;
 
@@ -396,15 +424,21 @@ pub fn build_and_sign_lab_transaction(
             change_address,
         )
     })?;
-    let signed = result.map_err(|e| JsValue::from_str(&e.to_string()))?;
+    let signed = result.map_err_to_js()?;
 
     let signed_tx_hex = hex::encode(&signed.signed_tx_bytes);
-    let result = serde_json::json!({
-        "signed_tx_hex": signed_tx_hex,
-        "fee_sats": signed.fee_sats,
-        "has_change": signed.has_change,
-    });
-    Ok(JsValue::from_str(&result.to_string()))
+    #[derive(serde::Serialize)]
+    struct BuildAndSignLabTxResult {
+        signed_tx_hex: String,
+        fee_sats: u64,
+        has_change: bool,
+    }
+    let result = BuildAndSignLabTxResult {
+        signed_tx_hex,
+        fee_sats: signed.fee_sats,
+        has_change: signed.has_change,
+    };
+    serde_wasm_bindgen::to_value(&result).map_err_to_js()
 }
 
 /// Return the first internal address for lab change outputs.
@@ -421,22 +455,4 @@ pub fn get_lab_change_address() -> Result<String, JsValue> {
             .address
             .to_string()
     })
-}
-
-/// Derive a 256-bit key from a password and salt using Argon2id.
-///
-/// Parameters: 64 MB memory, 2 iterations, parallelism 1.
-/// t=2 meets OWASP minimum; p=1 is the mobile preset (CipherTools/PHC).
-/// Reduces latency on constrained/CI vs t=3 with acceptable security trade-off.
-/// See .cursor/architecture/research/argon2-mobile-performance.md
-#[wasm_bindgen]
-pub fn derive_argon2_key(password: &str, salt: &[u8]) -> Result<Vec<u8>, JsValue> {
-    let params = Params::new(65536, 2, 1, Some(32))
-        .map_err(|e| JsValue::from_str(&format!("Argon2 params error: {e}")))?;
-    let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
-    let mut key = vec![0u8; 32];
-    argon2
-        .hash_password_into(password.as_bytes(), salt, &mut key)
-        .map_err(|e| JsValue::from_str(&format!("Argon2 hash error: {e}")))?;
-    Ok(key)
 }

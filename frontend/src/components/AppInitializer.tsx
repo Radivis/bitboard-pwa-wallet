@@ -1,9 +1,11 @@
 import { type ReactNode, useEffect, useRef } from 'react'
 import { useNavigate, useLocation } from '@tanstack/react-router'
+import { toast } from 'sonner'
 import { useWalletStore } from '@/stores/walletStore'
 import { useSessionStore } from '@/stores/sessionStore'
 import { useWallets } from '@/db'
-import { useLabStore } from '@/stores/labStore'
+import { appQueryClient } from '@/lib/app-query-client'
+import { prefetchLabChainState } from '@/hooks/useLabChainStateQuery'
 import {
   loadDescriptorWalletAndSync,
   loadDescriptorWalletWithoutSync,
@@ -25,13 +27,16 @@ export function AppInitializer({ children }: AppInitializerProps) {
   const accountId = useWalletStore((s) => s.accountId)
   const sessionPassword = useSessionStore((s) => s.password)
   const lastUnlockedWalletId = useRef<number | null>(null)
-  const hydrateLab = useLabStore((s) => s.hydrate)
 
   useEffect(() => {
-    if (networkMode === 'lab') {
-      hydrateLab().catch(() => {})
-    }
-  }, [networkMode, hydrateLab])
+    if (networkMode !== 'lab') return
+    prefetchLabChainState(appQueryClient).catch((err) => {
+      console.error('Lab chain prefetch failed:', err)
+      const msg =
+        err instanceof Error ? err.message : String(err) || 'Unknown error'
+      toast.error(`Failed to init lab: ${msg}`)
+    })
+  }, [networkMode])
 
   useEffect(() => {
     if (isLoading) return
@@ -66,6 +71,12 @@ export function AppInitializer({ children }: AppInitializerProps) {
     if (lastUnlockedWalletId.current === activeWalletId) return
 
     lastUnlockedWalletId.current = activeWalletId
+
+    const { walletStatus } = useWalletStore.getState()
+    if (walletStatus === 'unlocked' || walletStatus === 'syncing') {
+      return
+    }
+
     autoUnlockWallet(activeWalletId, sessionPassword)
     // autoUnlockWallet omitted from deps: it is defined below and captures latest state
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -74,21 +85,26 @@ export function AppInitializer({ children }: AppInitializerProps) {
   async function autoUnlockWallet(walletId: number, password: string) {
     try {
       if (networkMode === 'lab') {
-        await loadDescriptorWalletWithoutSync(
+        await loadDescriptorWalletWithoutSync({
           password,
           walletId,
           networkMode,
           addressType,
           accountId,
-        )
+        })
       } else {
-        await loadDescriptorWalletAndSync(
+        await loadDescriptorWalletAndSync({
           password,
           walletId,
           networkMode,
           addressType,
           accountId,
-        )
+          onSyncError: (err) => {
+            const msg =
+              err instanceof Error ? err.message : String(err)
+            toast.error(msg || 'Sync failed — wallet unlocked but data may be stale')
+          },
+        })
       }
     } catch {
       setWalletStatus('locked')

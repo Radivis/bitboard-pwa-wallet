@@ -60,6 +60,39 @@ fn build_transaction_rejects_zero_amount() {
     assert!(result.is_err(), "Zero-amount transaction must be rejected");
 }
 
+#[test]
+fn build_transaction_rejects_invalid_fee_rate() {
+    let mut wallet = funded_wallet();
+    for bad_rate in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY, -1.0, 0.0] {
+        let result = transaction::build_transaction(
+            &mut wallet,
+            VALID_SIGNET_ADDRESS,
+            SEND_AMOUNT,
+            bad_rate,
+            Network::Testnet,
+        );
+        assert!(result.is_err(), "Fee rate {:?} must be rejected", bad_rate);
+    }
+}
+
+#[test]
+fn build_transaction_rejects_address_wrong_network() {
+    let mut wallet = funded_wallet();
+    // Mainnet address used with Testnet: require_network fails.
+    let mainnet_addr = "bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx";
+    let result = transaction::build_transaction(
+        &mut wallet,
+        mainnet_addr,
+        SEND_AMOUNT,
+        FEE_RATE,
+        Network::Testnet,
+    );
+    assert!(
+        result.is_err(),
+        "Address for a different network must be rejected"
+    );
+}
+
 // --- Happy-path tests ---
 
 #[test]

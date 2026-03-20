@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react'
 import { createFileRoute, useNavigate, Link } from '@tanstack/react-router'
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, CheckCircle2, XCircle, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -13,7 +13,14 @@ import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { useCryptoStore } from '@/stores/cryptoStore'
 import { useWalletStore } from '@/stores/walletStore'
 import { useSessionStore, startAutoLockTimer } from '@/stores/sessionStore'
-import { useAddWallet, getDatabase, ensureMigrated, saveWalletSecrets } from '@/db'
+import {
+  useAddWallet,
+  getDatabase,
+  ensureMigrated,
+  persistNewWalletWithSecrets,
+  walletKeys,
+} from '@/db'
+import { ensureSecretsChannel } from '@/workers/secrets-channel'
 import { toBitcoinNetwork, getEsploraUrl } from '@/lib/bitcoin-utils'
 import { loadCustomEsploraUrl } from '@/lib/wallet-utils'
 
@@ -30,7 +37,7 @@ export function ImportWalletPage() {
   const [isValid, setIsValid] = useState<boolean | null>(null)
 
   const validateMnemonic = useCryptoStore((s) => s.validateMnemonic)
-  const createWallet = useCryptoStore((s) => s.createWallet)
+  const importWalletAndEncryptSecrets = useCryptoStore((s) => s.importWalletAndEncryptSecrets)
   const fullScanWallet = useCryptoStore((s) => s.fullScanWallet)
   const networkMode = useWalletStore((s) => s.networkMode)
   const addressType = useWalletStore((s) => s.addressType)
@@ -44,6 +51,7 @@ export function ImportWalletPage() {
   const getBalanceFromWorker = useCryptoStore((s) => s.getBalance)
   const getTransactionList = useCryptoStore((s) => s.getTransactionList)
   const addWallet = useAddWallet()
+  const queryClient = useQueryClient()
 
   const mnemonic = useMemo(
     () =>
@@ -88,30 +96,36 @@ export function ImportWalletPage() {
     mutationFn: async () => {
       if (!canRestore) throw new Error('Invalid input')
 
+      await ensureSecretsChannel()
       const network = toBitcoinNetwork(networkMode)
-      const walletResult = await createWallet(mnemonic, network, addressType, accountId)
+      const { encryptedBlob, walletResult } = await importWalletAndEncryptSecrets({
+        mnemonic,
+        password,
+        network,
+        addressType,
+        accountId,
+      })
+
+      setMnemonicInput('')
 
       await ensureMigrated()
-      const db = getDatabase()
+      const walletDb = getDatabase()
 
-      const walletId = await addWallet.mutateAsync({
-        name: `Imported Wallet ${Date.now()}`,
-        created_at: new Date().toISOString(),
-      })
-
-      await saveWalletSecrets(db, password, walletId, {
-        mnemonic,
-        descriptorWallets: [
-          {
-            network,
-            addressType,
-            accountId,
-            externalDescriptor: walletResult.external_descriptor,
-            internalDescriptor: walletResult.internal_descriptor,
-            changeSet: walletResult.changeset_json,
-          },
-        ],
-      })
+      let walletId: number
+      try {
+        walletId = await persistNewWalletWithSecrets({
+          walletDb,
+          insertWalletRow: () =>
+            addWallet.mutateAsync({
+              name: `Imported Wallet ${Date.now()}`,
+              created_at: new Date().toISOString(),
+            }),
+          encryptedBlob,
+        })
+      } catch (secretsErr) {
+        queryClient.invalidateQueries({ queryKey: walletKeys.all })
+        throw secretsErr
+      }
 
       setSessionPassword(password)
       setActiveWallet(walletId)
@@ -119,7 +133,7 @@ export function ImportWalletPage() {
       setWalletStatus('unlocked')
 
       startAutoLockTimer(() => {
-        useWalletStore.getState().lockWallet()
+        useCryptoStore.getState().lockAndPurgeSensitiveRuntimeState()
       })
 
       try {
@@ -136,6 +150,7 @@ export function ImportWalletPage() {
       }
     },
     onSuccess: () => {
+      setMnemonicInput('')
       toast.success('Wallet imported successfully!')
       navigate({ to: '/' })
     },

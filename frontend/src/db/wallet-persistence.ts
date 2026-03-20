@@ -1,22 +1,138 @@
 import type { Kysely } from 'kysely'
 import type { Database } from './schema'
+import type { KdfVersion } from './schema'
 import { encryptData, decryptData } from './encryption'
-import type { AddressType, BitcoinNetwork } from '@/workers/crypto-types'
+import {
+  parseWalletSecretsJson,
+  type DescriptorWalletData,
+  type WalletSecrets,
+} from '@/lib/wallet-domain-types'
 
-/** Data for a single descriptor wallet (one network + address type + account combo). */
-export interface DescriptorWalletData {
-  network: BitcoinNetwork
-  addressType: AddressType
-  accountId: number
-  externalDescriptor: string
-  internalDescriptor: string
-  changeSet: string
+export type { DescriptorWalletData, WalletSecrets }
+
+/** Encrypted blob shape for reading/writing without decryption (used by descriptor-wallet-manager with crypto worker). */
+export interface EncryptedWalletSecretsBlob {
+  ciphertext: Uint8Array
+  iv: Uint8Array
+  salt: Uint8Array
+  /** 1 = CI, 2 = production. */
+  kdfVersion: KdfVersion
 }
 
-/** Sensitive wallet data that must be stored encrypted. */
-export interface WalletSecrets {
-  mnemonic: string
-  descriptorWallets: DescriptorWalletData[]
+/**
+ * Reads the encrypted wallet secrets row for a wallet (no decryption).
+ * Used when delegating decrypt/resolve to the crypto worker.
+ *
+ * @throws {Error} If no secrets exist for the wallet ID
+ */
+export async function getWalletSecretsEncrypted(
+  walletDb: Kysely<Database>,
+  walletId: number
+): Promise<EncryptedWalletSecretsBlob> {
+  const record = await walletDb
+    .selectFrom('wallet_secrets')
+    .select(['encrypted_data', 'iv', 'salt', 'kdf_version'])
+    .where('wallet_id', '=', walletId)
+    .executeTakeFirst()
+
+  if (!record) {
+    throw new Error(`Wallet secrets for wallet ${walletId} not found`)
+  }
+
+  return {
+    ciphertext: record.encrypted_data,
+    iv: record.iv,
+    salt: record.salt,
+    kdfVersion: record.kdf_version as KdfVersion,
+  }
+}
+
+/**
+ * Writes encrypted wallet secrets for a wallet (no encryption on main thread).
+ * Used after crypto worker returns encryptedBlobToStore from resolveDescriptorWallet or updateDescriptorWalletChangeset.
+ *
+ * @throws {Error} If the wallet ID does not exist in the `wallets` table
+ */
+export async function putWalletSecretsEncrypted(
+  walletDb: Kysely<Database>,
+  walletId: number,
+  encrypted: EncryptedWalletSecretsBlob
+): Promise<void> {
+  await assertWalletExists(walletDb, walletId)
+
+  const now = new Date().toISOString()
+  const kdfVersion = encrypted.kdfVersion
+  const existing = await walletDb
+    .selectFrom('wallet_secrets')
+    .select('wallet_secrets_id')
+    .where('wallet_id', '=', walletId)
+    .executeTakeFirst()
+
+  if (existing) {
+    await walletDb
+      .updateTable('wallet_secrets')
+      .set({
+        encrypted_data: encrypted.ciphertext,
+        iv: encrypted.iv,
+        salt: encrypted.salt,
+        kdf_version: kdfVersion,
+        updated_at: now,
+      })
+      .where('wallet_secrets_id', '=', existing.wallet_secrets_id)
+      .execute()
+  } else {
+    await walletDb
+      .insertInto('wallet_secrets')
+      .values({
+        wallet_id: walletId,
+        encrypted_data: encrypted.ciphertext,
+        iv: encrypted.iv,
+        salt: encrypted.salt,
+        kdf_version: kdfVersion,
+        created_at: now,
+        updated_at: now,
+      })
+      .execute()
+  }
+}
+
+export type PutWalletSecretsEncryptedFn = (
+  db: Kysely<Database>,
+  walletId: number,
+  encrypted: EncryptedWalletSecretsBlob
+) => Promise<void>
+
+/**
+ * Inserts a wallet row via the given callback, then persists encrypted secrets.
+ * If the secrets write fails, the wallet row is removed and the error is rethrown,
+ * so the wallet list never contains an entry without secrets.
+ *
+ * @param walletDb - Kysely wallet database instance
+ * @param insertWalletRow - Callback that inserts the wallet row and returns the new wallet_id
+ * @param encryptedBlob - Encrypted blob to store (from crypto worker)
+ * @param putSecrets - Secrets writer (default: putWalletSecretsEncrypted). Inject for tests.
+ * @returns The new wallet_id on success
+ */
+export async function persistNewWalletWithSecrets(params: {
+  walletDb: Kysely<Database>
+  insertWalletRow: () => Promise<number>
+  encryptedBlob: EncryptedWalletSecretsBlob
+  putSecrets?: PutWalletSecretsEncryptedFn
+}): Promise<number> {
+  const {
+    walletDb,
+    insertWalletRow,
+    encryptedBlob,
+    putSecrets = putWalletSecretsEncrypted,
+  } = params
+  const walletId = await insertWalletRow()
+  try {
+    await putSecrets(walletDb, walletId, encryptedBlob)
+    return walletId
+  } catch (err) {
+    await walletDb.deleteFrom('wallets').where('wallet_id', '=', walletId).execute()
+    throw err
+  }
 }
 
 /**
@@ -24,50 +140,54 @@ export interface WalletSecrets {
  *
  * If secrets already exist for the given wallet, they are re-encrypted and updated.
  *
- * @param db - Kysely database instance
+ * @param walletDb - Kysely wallet database instance
  * @param password - User password for encryption
  * @param walletId - ID of the wallet in the `wallets` table
  * @param secrets - Sensitive wallet data to encrypt and store
  *
  * @throws {Error} If the wallet ID does not exist in the `wallets` table
  */
-export async function saveWalletSecrets(
-  db: Kysely<Database>,
-  password: string,
-  walletId: number,
+export async function saveWalletSecrets(params: {
+  walletDb: Kysely<Database>
+  password: string
+  walletId: number
   secrets: WalletSecrets
-): Promise<void> {
-  await assertWalletExists(db, walletId)
+}): Promise<void> {
+  const { walletDb, password, walletId, secrets } = params
+  await assertWalletExists(walletDb, walletId)
 
   const plaintext = JSON.stringify(secrets)
   const encrypted = await encryptData(password, plaintext)
 
   const now = new Date().toISOString()
-  const existing = await db
+  const kdfVersion = encrypted.kdfVersion
+  const existing = await walletDb
     .selectFrom('wallet_secrets')
     .select('wallet_secrets_id')
     .where('wallet_id', '=', walletId)
     .executeTakeFirst()
 
   if (existing) {
-    await db
+    await walletDb
       .updateTable('wallet_secrets')
       .set({
         encrypted_data: encrypted.ciphertext,
         iv: encrypted.iv,
         salt: encrypted.salt,
+        kdf_version: kdfVersion,
         updated_at: now,
       })
       .where('wallet_secrets_id', '=', existing.wallet_secrets_id)
       .execute()
   } else {
-    await db
+    await walletDb
       .insertInto('wallet_secrets')
       .values({
         wallet_id: walletId,
         encrypted_data: encrypted.ciphertext,
         iv: encrypted.iv,
         salt: encrypted.salt,
+        kdf_version: kdfVersion,
         created_at: now,
         updated_at: now,
       })
@@ -78,7 +198,7 @@ export async function saveWalletSecrets(
 /**
  * Loads and decrypts wallet secrets from the `wallet_secrets` table.
  *
- * @param db - Kysely database instance
+ * @param walletDb - Kysely wallet database instance
  * @param password - User password for decryption (must match encryption password)
  * @param walletId - ID of the wallet whose secrets to load
  * @returns Decrypted wallet secrets
@@ -87,11 +207,11 @@ export async function saveWalletSecrets(
  * @throws {Error} If the password is incorrect or data is corrupted
  */
 export async function loadWalletSecrets(
-  db: Kysely<Database>,
+  walletDb: Kysely<Database>,
   password: string,
   walletId: number
 ): Promise<WalletSecrets> {
-  const record = await db
+  const record = await walletDb
     .selectFrom('wallet_secrets')
     .selectAll()
     .where('wallet_id', '=', walletId)
@@ -105,9 +225,10 @@ export async function loadWalletSecrets(
     ciphertext: record.encrypted_data,
     iv: record.iv,
     salt: record.salt,
+    kdfVersion: record.kdf_version as KdfVersion,
   })
 
-  return JSON.parse(plaintext)
+  return parseWalletSecretsJson(plaintext)
 }
 
 /**
@@ -116,17 +237,17 @@ export async function loadWalletSecrets(
  * No-op if no secrets exist for the given wallet.
  */
 export async function deleteWalletSecrets(
-  db: Kysely<Database>,
+  walletDb: Kysely<Database>,
   walletId: number
 ): Promise<void> {
-  await db
+  await walletDb
     .deleteFrom('wallet_secrets')
     .where('wallet_id', '=', walletId)
     .execute()
 }
 
-async function assertWalletExists(db: Kysely<Database>, walletId: number): Promise<void> {
-  const wallet = await db
+async function assertWalletExists(walletDb: Kysely<Database>, walletId: number): Promise<void> {
+  const wallet = await walletDb
     .selectFrom('wallets')
     .select('wallet_id')
     .where('wallet_id', '=', walletId)

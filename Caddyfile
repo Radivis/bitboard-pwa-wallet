@@ -1,9 +1,0 @@
-{$DOMAIN:localhost} {
-    # Grafana expects the /grafana prefix (GF_SERVER_SERVE_FROM_SUB_PATH=true)
-    handle /grafana* {
-        reverse_proxy grafana:3000
-    }
-
-    # Everything else goes to the backend (API + React SPA)
-    reverse_proxy zero2prod:8000
-}

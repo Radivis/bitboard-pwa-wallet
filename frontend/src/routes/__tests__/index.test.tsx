@@ -7,7 +7,6 @@ vi.mock('@tanstack/react-router', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@tanstack/react-router')>()
   return {
     ...actual,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- route path not used in mock
     createFileRoute: (_path: string) => (options: Record<string, unknown>) => ({
       options,
     }),
@@ -60,12 +59,10 @@ vi.mock('@/components/TransactionItem', () => ({
 vi.mock('@/lib/bitcoin-utils', () => ({
   formatBTC: (sats: number) => (sats / 100_000_000).toFixed(8),
   formatSats: (sats: number) => sats.toLocaleString(),
-  getEsploraUrl: () => 'http://localhost:3002',
 }))
 
 vi.mock('@/lib/wallet-utils', () => ({
-  updateWalletChangeset: vi.fn().mockResolvedValue(undefined),
-  loadCustomEsploraUrl: vi.fn().mockResolvedValue(null),
+  runIncrementalDashboardWalletSync: vi.fn().mockResolvedValue(undefined),
 }))
 
 import { DashboardPage } from '../index'

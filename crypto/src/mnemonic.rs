@@ -20,8 +20,13 @@ pub fn generate_mnemonic(word_count: u32) -> Result<String, CryptoError> {
         }
     };
 
-    let generated = <Mnemonic as GeneratableKey<Tap>>::generate((wc, Language::English))
-        .map_err(|e| CryptoError::Mnemonic(format!("{:?}", e)))?;
+    let generated =
+        <Mnemonic as GeneratableKey<Tap>>::generate((wc, Language::English)).map_err(|e| {
+            CryptoError::Mnemonic(
+                e.map(|err| err.to_string())
+                    .unwrap_or_else(|| "Mnemonic generation failed".to_string()),
+            )
+        })?;
 
     Ok(generated.to_string())
 }

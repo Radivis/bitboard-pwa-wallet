@@ -1,5 +1,6 @@
 use bdk_wallet::chain::ChainPosition;
 use bdk_wallet::{ChangeSet, KeychainKind, Wallet};
+use bitcoin::Network as BdkNetwork;
 
 use crate::error::CryptoError;
 use crate::types::{BalanceInfo, BitcoinNetwork, TransactionDetails};
@@ -13,18 +14,31 @@ pub fn create_wallet(
     internal_descriptor: &str,
     network: BitcoinNetwork,
 ) -> Result<Wallet, CryptoError> {
+    create_wallet_with_bdk_network(external_descriptor, internal_descriptor, network.into())
+}
+
+/// Create a wallet using an explicit BDK network. Use this when the sync target
+/// is a different chain variant (e.g. Testnet4) than the default for our network
+/// (e.g. Testnet = Testnet3).
+pub fn create_wallet_with_bdk_network(
+    external_descriptor: &str,
+    internal_descriptor: &str,
+    bdk_network: BdkNetwork,
+) -> Result<Wallet, CryptoError> {
     let external = external_descriptor.to_string();
     let internal = internal_descriptor.to_string();
     Wallet::create(external, internal)
-        .network(network.into())
+        .network(bdk_network)
         .create_wallet_no_persist()
-        .map_err(|e| CryptoError::Wallet(format!("{:?}", e)))
+        .map_err(|e| CryptoError::Wallet(e.to_string()))
 }
 
 /// Reload a previously persisted wallet from its descriptors and a `ChangeSet`.
 ///
 /// The descriptors must include private key material (xprv/tprv) for signing.
-/// The `ChangeSet` is deserialized from JSON via `deserialize_changeset`.
+/// The `ChangeSet` must be non-empty (BDK returns `None` for an empty changeset).
+/// For testnet when syncing to testnet4, the caller should use `create_wallet_with_bdk_network`
+/// with `Network::Testnet4` instead of loading a persisted Testnet3 changeset.
 pub fn load_wallet(
     external_descriptor: &str,
     internal_descriptor: &str,
@@ -39,7 +53,7 @@ pub fn load_wallet(
         .extract_keys()
         .check_network(network.into())
         .load_wallet_no_persist(changeset)
-        .map_err(|e| CryptoError::Wallet(format!("{:?}", e)))?
+        .map_err(|e| CryptoError::Wallet(e.to_string()))?
         .ok_or_else(|| CryptoError::Wallet("Wallet could not be loaded from changeset".to_string()))
 }
 

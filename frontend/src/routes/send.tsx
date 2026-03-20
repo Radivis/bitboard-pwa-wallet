@@ -1,8 +1,6 @@
-import { useState, useMemo, useCallback } from 'react'
-import { useMutation } from '@tanstack/react-query'
+import { useMemo, useCallback } from 'react'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { ArrowUpRight, ArrowLeft } from 'lucide-react'
-import { toast } from 'sonner'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -10,32 +8,42 @@ import { Label } from '@/components/ui/label'
 import { WalletUnlock } from '@/components/WalletUnlock'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { useWalletStore } from '@/stores/walletStore'
-import { useSessionStore } from '@/stores/sessionStore'
-import { useCryptoStore } from '@/stores/cryptoStore'
+import { useSendStore } from '@/stores/sendStore'
+import { useLabChainStateQuery } from '@/hooks/useLabChainStateQuery'
 import {
   isValidAddress,
   formatBTC,
   formatSats,
-  getEsploraUrl,
   truncateAddress,
-  toBitcoinNetwork,
 } from '@/lib/bitcoin-utils'
-import { updateWalletChangeset, loadCustomEsploraUrl } from '@/lib/wallet-utils'
 import { walletOwnerKey } from '@/lib/lab-utils'
-import { getLabWorker } from '@/workers/lab-factory'
-import { useLabStore } from '@/stores/labStore'
+import {
+  useBuildTransactionMutation,
+  useBroadcastTransactionMutation,
+  useLabSendMutation,
+} from '@/hooks/useSendMutations'
 
 export const Route = createFileRoute('/send')({
   component: SendPage,
 })
-
-type AmountUnit = 'btc' | 'sats'
 
 const FEE_PRESETS = [
   { label: 'Low', rate: 1 },
   { label: 'Medium', rate: 3 },
   { label: 'High', rate: 5 },
 ] as const
+
+/** Max satoshis we pass to the worker (JS safe integer range). */
+const MAX_SAFE_SATS = Number.MAX_SAFE_INTEGER
+
+function isValidAmountSats(n: number): boolean {
+  return (
+    Number.isFinite(n) &&
+    Number.isInteger(n) &&
+    n >= 1 &&
+    n <= MAX_SAFE_SATS
+  )
+}
 
 export function SendPage() {
   const navigate = useNavigate()
@@ -55,57 +63,53 @@ export function SendPage() {
 }
 
 function SendFlow() {
-  const navigate = useNavigate()
-  const [step, setStep] = useState<1 | 2>(1)
-  const [recipient, setRecipient] = useState('')
-  const [amount, setAmount] = useState('')
-  const [amountUnit, setAmountUnit] = useState<AmountUnit>('btc')
-  const [feeRate, setFeeRate] = useState(1)
-  const [customFeeRate, setCustomFeeRate] = useState('')
-  const [useCustomFee, setUseCustomFee] = useState(false)
-  const [psbt, setPsbt] = useState<string | null>(null)
-  const [loading, setLoading] = useState(false)
-
   const networkMode = useWalletStore((s) => s.networkMode)
   const balance = useWalletStore((s) => s.balance)
   const activeWalletId = useWalletStore((s) => s.activeWalletId)
-  const setWalletStatus = useWalletStore((s) => s.setWalletStatus)
-  const setBalance = useWalletStore((s) => s.setBalance)
-  const setTransactions = useWalletStore((s) => s.setTransactions)
-  const setLastSyncTime = useWalletStore((s) => s.setLastSyncTime)
-  const password = useSessionStore((s) => s.password)
 
-  const utxos = useLabStore((s) => s.utxos)
-  const addressToOwner = useLabStore((s) => s.addressToOwner)
-  const isHydrated = useLabStore((s) => s.isHydrated)
+  const {
+    step,
+    recipient,
+    amount,
+    amountUnit,
+    feeRate,
+    customFeeRate,
+    useCustomFee,
+    psbt,
+    setStep,
+    setRecipient,
+    setAmount,
+    setAmountUnit,
+    setFeeRate,
+    setCustomFeeRate,
+    setUseCustomFee,
+  } = useSendStore()
+
+  const { data: labState, isPending: labChainPending } = useLabChainStateQuery()
+  const utxos = labState?.utxos ?? []
+  const addressToOwner = labState?.addressToOwner ?? {}
+  const labChainReady =
+    networkMode === 'lab' && labState != null && !labChainPending
+
+  const buildMutation = useBuildTransactionMutation()
+  const broadcastMutation = useBroadcastTransactionMutation()
+  const labSendMutation = useLabSendMutation()
 
   const labBalanceSats =
-    networkMode === 'lab' && activeWalletId != null && isHydrated
+    networkMode === 'lab' && activeWalletId != null && labChainReady
       ? utxos
-          .filter((u) => (addressToOwner ?? {})[u.address] === walletOwnerKey(activeWalletId))
+          .filter(
+            (u) => addressToOwner[u.address] === walletOwnerKey(activeWalletId),
+          )
           .reduce((sum, u) => sum + u.amountSats, 0)
       : null
-
-  const buildTransaction = useCryptoStore((s) => s.buildTransaction)
-  const signAndExtractTransaction = useCryptoStore((s) => s.signAndExtractTransaction)
-  const broadcastTransaction = useCryptoStore((s) => s.broadcastTransaction)
-  const syncWallet = useCryptoStore((s) => s.syncWallet)
-  const getBalance = useCryptoStore((s) => s.getBalance)
-  const getTransactionList = useCryptoStore((s) => s.getTransactionList)
-  const exportChangeset = useCryptoStore((s) => s.exportChangeset)
-  const buildAndSignLabTransaction = useCryptoStore(
-    (s) => s.buildAndSignLabTransaction,
-  )
-  const getLabChangeAddress = useCryptoStore((s) => s.getLabChangeAddress)
 
   const confirmedBalance =
     networkMode === 'lab' && labBalanceSats !== null
       ? labBalanceSats
       : balance?.confirmed ?? 0
 
-  const effectiveFeeRate = useCustomFee
-    ? parseInt(customFeeRate) || 1
-    : feeRate
+  const effectiveFeeRate = useCustomFee ? parseInt(customFeeRate) || 1 : feeRate
 
   const amountSats = useMemo(() => {
     if (!amount) return 0
@@ -120,18 +124,21 @@ function SendFlow() {
   )
 
   const addressValid = useMemo(
-    () => normalizedRecipient.length > 0 && isValidAddress(normalizedRecipient, networkMode),
+    () =>
+      normalizedRecipient.length > 0 &&
+      isValidAddress(normalizedRecipient, networkMode),
     [normalizedRecipient, networkMode],
   )
 
-  const isLabWithNoBalance = networkMode === 'lab' && (labBalanceSats === 0 || labBalanceSats === null)
+  const isLabWithNoBalance =
+    networkMode === 'lab' && (labBalanceSats === 0 || labBalanceSats === null)
   const canBuild =
     addressValid &&
-    amountSats > 0 &&
+    isValidAmountSats(amountSats) &&
     amountSats <= confirmedBalance &&
     !isLabWithNoBalance
 
-  const handleBuildTransaction = useCallback(async () => {
+  const handleSubmitBuild = useCallback(() => {
     if (!canBuild) return
 
     if (networkMode === 'lab') {
@@ -139,142 +146,44 @@ function SendFlow() {
       return
     }
 
-    try {
-      setLoading(true)
-      const network = toBitcoinNetwork(networkMode)
-      const psbtBase64 = await buildTransaction(
-        normalizedRecipient,
-        amountSats,
-        effectiveFeeRate,
-        network,
-      )
-      setPsbt(psbtBase64)
-      setStep(2)
-    } catch (err) {
-      console.error('Build transaction failed:', err)
-      const msg =
-        err instanceof Error ? err.message : String(err) || 'Failed to build transaction'
-      toast.error(msg)
-    } finally {
-      setLoading(false)
-    }
-  }, [canBuild, normalizedRecipient, amountSats, effectiveFeeRate, networkMode, buildTransaction])
-
-  const handleLabSend = useCallback(async () => {
-    if (activeWalletId == null) return
-
-    try {
-      await useLabStore.getState().hydrate()
-      const labWorker = getLabWorker()
-      const walletOwner = walletOwnerKey(activeWalletId)
-
-      const walletChangeAddress = await getLabChangeAddress()
-      const { utxosJson, mempoolMetadata, totalInput } =
-        await labWorker.prepareLabWalletTransaction(
-          walletOwner,
-          normalizedRecipient,
-          amountSats,
-          effectiveFeeRate,
-          walletChangeAddress,
-        )
-
-      const { signedTxHex, feeSats, hasChange } =
-        await buildAndSignLabTransaction(
-          utxosJson,
-          normalizedRecipient,
-          amountSats,
-          effectiveFeeRate,
-          walletChangeAddress,
-        )
-
-      const outputsDetail = hasChange
-        ? [
-            ...mempoolMetadata.outputsDetail,
-            {
-              address: walletChangeAddress,
-              amountSats: totalInput - amountSats - feeSats,
-              isChange: true as const,
-              owner: mempoolMetadata.sender,
-            },
-          ]
-        : [
-            {
-              ...mempoolMetadata.outputsDetail[0],
-              amountSats: totalInput - feeSats,
-            },
-          ]
-
-      const fullMetadata = {
-        ...mempoolMetadata,
-        feeSats,
-        hasChange,
-        outputsDetail,
-      }
-
-      await useLabStore.getState().addSignedTransaction(signedTxHex, fullMetadata)
-      toast.success('Transaction added to mempool')
-      navigate({ to: '/' })
-    } catch (err) {
-      console.error('Lab send failed:', err)
-      toast.error(
-        err instanceof Error
-          ? `Lab send failed: ${err.message}`
-          : 'Lab send failed',
-      )
-    }
+    buildMutation.mutate({
+      normalizedRecipient,
+      amountSats,
+      effectiveFeeRate,
+    })
   }, [
-    activeWalletId,
+    canBuild,
+    networkMode,
+    setStep,
+    buildMutation,
     normalizedRecipient,
     amountSats,
     effectiveFeeRate,
-    getLabChangeAddress,
-    buildAndSignLabTransaction,
-    navigate,
   ])
 
-  const broadcastMutation = useMutation({
-    mutationFn: async () => {
-      if (networkMode === 'lab') {
-        await handleLabSend()
-        return
-      }
-      if (!psbt) throw new Error('No PSBT to broadcast')
+  const handleConfirmSend = useCallback(() => {
+    if (networkMode === 'lab') {
+      labSendMutation.mutate({
+        normalizedRecipient,
+        amountSats,
+        effectiveFeeRate,
+      })
+    } else {
+      broadcastMutation.mutate()
+    }
+  }, [
+    networkMode,
+    normalizedRecipient,
+    amountSats,
+    effectiveFeeRate,
+    labSendMutation,
+    broadcastMutation,
+  ])
 
-      const rawTxHex = await signAndExtractTransaction(psbt)
-
-      const customUrl = await loadCustomEsploraUrl(networkMode)
-      const esploraUrl = getEsploraUrl(networkMode, customUrl)
-      const txid = await broadcastTransaction(rawTxHex, esploraUrl)
-
-      if (password && activeWalletId) {
-        const changeset = await exportChangeset()
-        await updateWalletChangeset(password, activeWalletId, changeset)
-      }
-
-      try {
-        setWalletStatus('syncing')
-        await syncWallet(esploraUrl)
-        const newBalance = await getBalance()
-        const newTxs = await getTransactionList()
-        setBalance(newBalance)
-        setTransactions(newTxs)
-        setLastSyncTime(new Date())
-        setWalletStatus('unlocked')
-      } catch {
-        setWalletStatus('unlocked')
-      }
-
-      toast.success(`Transaction broadcast! TXID: ${txid.slice(0, 16)}...`)
-      navigate({ to: '/' })
-    },
-    onError: (err) => {
-      toast.error(
-        err instanceof Error
-          ? `Broadcast failed: ${err.message}`
-          : 'Broadcast failed',
-      )
-    },
-  })
+  const isPending =
+    buildMutation.isPending ||
+    broadcastMutation.isPending ||
+    labSendMutation.isPending
 
   if (step === 2 && (psbt || networkMode === 'lab')) {
     return (
@@ -289,9 +198,7 @@ function SendFlow() {
             <div className="space-y-2 text-sm">
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Recipient</span>
-                <span className="font-mono">
-                  {truncateAddress(recipient)}
-                </span>
+                <span className="font-mono">{truncateAddress(recipient)}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Amount</span>
@@ -310,22 +217,26 @@ function SendFlow() {
                 variant="outline"
                 className="flex-1"
                 onClick={() => setStep(1)}
-                disabled={broadcastMutation.isPending}
+                disabled={isPending}
               >
                 <ArrowLeft className="mr-2 h-4 w-4" />
                 Back
               </Button>
 
-              {broadcastMutation.isPending ? (
+              {isPending ? (
                 <div className="flex-1">
                   <LoadingSpinner
-                    text={networkMode === 'lab' ? 'Adding to mempool...' : 'Broadcasting...'}
+                    text={
+                      networkMode === 'lab'
+                        ? 'Adding to mempool...'
+                        : 'Broadcasting...'
+                    }
                   />
                 </div>
               ) : (
                 <Button
                   className="flex-1"
-                  onClick={() => broadcastMutation.mutate()}
+                  onClick={handleConfirmSend}
                 >
                   Confirm and Send
                 </Button>
@@ -353,7 +264,7 @@ function SendFlow() {
             className="space-y-4"
             onSubmit={(e) => {
               e.preventDefault()
-              handleBuildTransaction()
+              handleSubmitBuild()
             }}
           >
             <div className="space-y-2">
@@ -363,7 +274,7 @@ function SendFlow() {
                 value={recipient}
                 onChange={(e) => setRecipient(e.target.value)}
                 placeholder="bc1q..."
-                disabled={loading}
+                disabled={isPending}
               />
               {recipient && !addressValid && (
                 <p className="text-xs text-destructive">
@@ -382,7 +293,7 @@ function SendFlow() {
                   variant="ghost"
                   size="sm"
                   onClick={() =>
-                    setAmountUnit((u) => (u === 'btc' ? 'sats' : 'btc'))
+                    setAmountUnit(amountUnit === 'btc' ? 'sats' : 'btc')
                   }
                   className="h-auto py-0 text-xs"
                 >
@@ -397,7 +308,7 @@ function SendFlow() {
                 placeholder={amountUnit === 'btc' ? '0.00000000' : '0'}
                 step={amountUnit === 'btc' ? '0.00000001' : '1'}
                 min="0"
-                disabled={loading}
+                disabled={isPending}
               />
               <p className="text-xs text-muted-foreground">
                 Available: {formatBTC(confirmedBalance)} BTC (
@@ -405,17 +316,17 @@ function SendFlow() {
               </p>
               {isLabWithNoBalance && (
                 <p className="text-xs text-amber-600 dark:text-amber-400">
-                  No balance. Mine blocks or make a transaction to your wallet in the lab.
+                  No balance. Mine blocks or make a transaction to your wallet in
+                  the lab.
                 </p>
               )}
             </div>
 
             <div className="space-y-2">
-              <Label>
-                Fee Rate (sat/vB)
-              </Label>
+              <Label>Fee Rate (sat/vB)</Label>
               <p className="text-xs text-muted-foreground">
-                Static presets for now. Dynamic fee estimation will be added later.
+                Static presets for now. Dynamic fee estimation will be added
+                later.
               </p>
               <div className="flex gap-2">
                 {FEE_PRESETS.map((preset) => (
@@ -454,12 +365,12 @@ function SendFlow() {
                   onChange={(e) => setCustomFeeRate(e.target.value)}
                   placeholder="Custom fee rate"
                   min="1"
-                  disabled={loading}
+                  disabled={isPending}
                 />
               )}
             </div>
 
-            {loading ? (
+            {buildMutation.isPending ? (
               <LoadingSpinner text="Building transaction..." />
             ) : (
               <Button

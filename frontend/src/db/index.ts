@@ -19,8 +19,15 @@ export {
   saveWalletSecrets,
   loadWalletSecrets,
   deleteWalletSecrets,
+  getWalletSecretsEncrypted,
+  putWalletSecretsEncrypted,
+  persistNewWalletWithSecrets,
 } from './wallet-persistence'
-export type { WalletSecrets, DescriptorWalletData } from './wallet-persistence'
+export type {
+  WalletSecrets,
+  DescriptorWalletData,
+  EncryptedWalletSecretsBlob,
+} from './wallet-persistence'
 export {
   getLabDatabase,
   ensureLabMigrated,

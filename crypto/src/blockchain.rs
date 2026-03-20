@@ -20,10 +20,16 @@ pub trait BlockchainClient: Send + Sync {
         &self,
         wallet: &Wallet,
         stop_gap: usize,
+        now: u64,
         parallel_requests: usize,
     ) -> Result<Update, CryptoError>;
 
-    async fn sync(&self, wallet: &Wallet, parallel_requests: usize) -> Result<Update, CryptoError>;
+    async fn sync(
+        &self,
+        wallet: &Wallet,
+        now: u64,
+        parallel_requests: usize,
+    ) -> Result<Update, CryptoError>;
 
     async fn broadcast(&self, tx: &Transaction) -> Result<Txid, CryptoError>;
 }
@@ -35,10 +41,16 @@ pub trait BlockchainClient {
         &self,
         wallet: &Wallet,
         stop_gap: usize,
+        now: u64,
         parallel_requests: usize,
     ) -> Result<Update, CryptoError>;
 
-    async fn sync(&self, wallet: &Wallet, parallel_requests: usize) -> Result<Update, CryptoError>;
+    async fn sync(
+        &self,
+        wallet: &Wallet,
+        now: u64,
+        parallel_requests: usize,
+    ) -> Result<Update, CryptoError>;
 
     async fn broadcast(&self, tx: &Transaction) -> Result<Txid, CryptoError>;
 }

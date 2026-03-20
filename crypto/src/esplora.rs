@@ -38,9 +38,10 @@ impl BlockchainClient for EsploraClient {
         &self,
         wallet: &Wallet,
         stop_gap: usize,
+        now: u64,
         parallel_requests: usize,
     ) -> Result<Update, CryptoError> {
-        let request = wallet.start_full_scan();
+        let request = wallet.start_full_scan_at(now);
         let response = self
             .client
             .full_scan(request, stop_gap, parallel_requests)
@@ -48,8 +49,13 @@ impl BlockchainClient for EsploraClient {
         Ok(response.into())
     }
 
-    async fn sync(&self, wallet: &Wallet, parallel_requests: usize) -> Result<Update, CryptoError> {
-        let request = wallet.start_sync_with_revealed_spks();
+    async fn sync(
+        &self,
+        wallet: &Wallet,
+        now: u64,
+        parallel_requests: usize,
+    ) -> Result<Update, CryptoError> {
+        let request = wallet.start_sync_with_revealed_spks_at(now);
         let response = self.client.sync(request, parallel_requests).await?;
         Ok(response.into())
     }

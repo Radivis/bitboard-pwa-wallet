@@ -78,21 +78,22 @@ The crypto crate is built to WASM using [wasm-pack](https://rustwasm.github.io/w
 cargo install wasm-pack
 ```
 
-#### 3. Build the WASM module
+#### 3. Build the WASM modules
 
 From the project root:
 
 ```bash
 cd crypto && wasm-pack build --target bundler --out-dir ../frontend/src/wasm-pkg
+cd bitboard-encryption && wasm-pack build --target bundler --out-dir ../frontend/src/wasm-pkg/bitboard_encryption
 ```
 
-Or from the frontend directory:
+Or from the frontend directory (builds both crates):
 
 ```bash
 cd frontend && npm run build:wasm
 ```
 
-The output goes to `frontend/src/wasm-pkg/` (gitignored). You need to run this at least once before starting the dev server, and again whenever you change the Rust code in `crypto/`.
+The output goes to `frontend/src/wasm-pkg/` (crypto) and `frontend/src/wasm-pkg/bitboard_encryption/` (encryption; gitignored with the parent). You need to run this at least once before starting the dev server, and again whenever you change the Rust code in `crypto/` or `bitboard-encryption/`.
 
 #### 4. Install frontend dependencies and run
 

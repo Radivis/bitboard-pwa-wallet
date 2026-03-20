@@ -4,17 +4,16 @@ import { Wallet, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import { useWalletStore, NETWORK_LABELS } from '@/stores/walletStore'
 import { useSessionStore } from '@/stores/sessionStore'
-import { useCryptoStore } from '@/stores/cryptoStore'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { WalletUnlock } from '@/components/WalletUnlock'
 import { TransactionItem } from '@/components/TransactionItem'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
-import { formatBTC, formatSats, getEsploraUrl } from '@/lib/bitcoin-utils'
-import { updateWalletChangeset, loadCustomEsploraUrl } from '@/lib/wallet-utils'
+import { formatBTC, formatSats } from '@/lib/bitcoin-utils'
+import { runIncrementalDashboardWalletSync } from '@/lib/wallet-utils'
 import { labTransactionsForWallet, walletOwnerKey } from '@/lib/lab-utils'
-import { useLabStore } from '@/stores/labStore'
+import { useLabChainStateQuery } from '@/hooks/useLabChainStateQuery'
 
 export const Route = createFileRoute('/')({
   component: DashboardPage,
@@ -24,14 +23,15 @@ function BalanceCard() {
   const networkMode = useWalletStore((s) => s.networkMode)
   const balance = useWalletStore((s) => s.balance)
   const activeWalletId = useWalletStore((s) => s.activeWalletId)
-  const utxos = useLabStore((s) => s.utxos)
-  const addressToOwner = useLabStore((s) => s.addressToOwner)
-  const isHydrated = useLabStore((s) => s.isHydrated)
+  const { data: labState, isPending: labChainPending } = useLabChainStateQuery()
+  const utxos = labState?.utxos ?? []
+  const addressToOwner = labState?.addressToOwner ?? {}
+  const labChainReady = networkMode === 'lab' && labState != null && !labChainPending
 
   const labBalanceSats =
-    networkMode === 'lab' && activeWalletId != null && isHydrated
+    networkMode === 'lab' && activeWalletId != null && labChainReady
       ? utxos
-          .filter((u) => (addressToOwner ?? {})[u.address] === walletOwnerKey(activeWalletId))
+          .filter((u) => addressToOwner[u.address] === walletOwnerKey(activeWalletId))
           .reduce((sum, u) => sum + u.amountSats, 0)
       : null
 
@@ -76,59 +76,26 @@ function SyncButton() {
   const networkMode = useWalletStore((s) => s.networkMode)
   const activeWalletId = useWalletStore((s) => s.activeWalletId)
   const setWalletStatus = useWalletStore((s) => s.setWalletStatus)
-  const setBalance = useWalletStore((s) => s.setBalance)
-  const setTransactions = useWalletStore((s) => s.setTransactions)
-  const setLastSyncTime = useWalletStore((s) => s.setLastSyncTime)
   const password = useSessionStore((s) => s.password)
-
-  const syncWallet = useCryptoStore((s) => s.syncWallet)
-  const getBalance = useCryptoStore((s) => s.getBalance)
-  const getTransactionList = useCryptoStore((s) => s.getTransactionList)
-  const exportChangeset = useCryptoStore((s) => s.exportChangeset)
 
   const isSyncing = walletStatus === 'syncing'
 
   const handleSync = useCallback(async () => {
     try {
       setWalletStatus('syncing')
-      const customUrl = await loadCustomEsploraUrl(networkMode)
-      const esploraUrl = getEsploraUrl(networkMode, customUrl)
-
-      await syncWallet(esploraUrl)
-
-      const newBalance = await getBalance()
-      const newTxs = await getTransactionList()
-
-      setBalance(newBalance)
-      setTransactions(newTxs)
-      setLastSyncTime(new Date())
+      await runIncrementalDashboardWalletSync({
+        networkMode,
+        password,
+        activeWalletId,
+      })
       setWalletStatus('unlocked')
-
-      if (password && activeWalletId) {
-        const changeset = await exportChangeset()
-        await updateWalletChangeset(password, activeWalletId, changeset)
-      }
-
       toast.success('Wallet synced')
     } catch (err) {
       setWalletStatus('unlocked')
-      toast.error(
-        err instanceof Error ? err.message : 'Sync failed',
-      )
+      const detail = err instanceof Error ? err.message : String(err)
+      toast.error(detail || 'Sync failed')
     }
-  }, [
-    networkMode,
-    activeWalletId,
-    password,
-    syncWallet,
-    getBalance,
-    getTransactionList,
-    exportChangeset,
-    setWalletStatus,
-    setBalance,
-    setTransactions,
-    setLastSyncTime,
-  ])
+  }, [networkMode, activeWalletId, password, setWalletStatus])
 
   return (
     <Button
@@ -147,13 +114,14 @@ function RecentTransactions() {
   const networkMode = useWalletStore((s) => s.networkMode)
   const transactions = useWalletStore((s) => s.transactions)
   const activeWalletId = useWalletStore((s) => s.activeWalletId)
-  const labTransactions = useLabStore((s) => s.transactions)
-  const labTxDetails = useLabStore((s) => s.txDetails)
-  const labMempool = useLabStore((s) => s.mempool)
-  const isLabHydrated = useLabStore((s) => s.isHydrated)
+  const { data: labState, isPending: labChainPending } = useLabChainStateQuery()
+  const labTransactions = labState?.transactions ?? []
+  const labTxDetails = labState?.txDetails ?? []
+  const labMempool = labState?.mempool ?? []
+  const labChainReady = networkMode === 'lab' && labState != null && !labChainPending
 
   const labTransactionsForActiveWallet =
-    networkMode === 'lab' && activeWalletId != null && isLabHydrated
+    networkMode === 'lab' && activeWalletId != null && labChainReady
       ? labTransactionsForWallet(
           { transactions: labTransactions, txDetails: labTxDetails, mempool: labMempool },
           activeWalletId,
@@ -163,7 +131,7 @@ function RecentTransactions() {
   const displayTransactions =
     networkMode === 'lab' ? labTransactionsForActiveWallet : transactions
 
-  if (networkMode === 'lab' && !isLabHydrated) {
+  if (networkMode === 'lab' && !labChainReady) {
     return (
       <Card>
         <CardHeader>

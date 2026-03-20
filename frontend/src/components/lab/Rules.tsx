@@ -5,6 +5,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
+import { LAB_MAX_BLOCKS_PER_MINE } from '@/workers/lab-api'
 
 export function LabRulesCard() {
   return (
@@ -20,7 +21,9 @@ export function LabRulesCard() {
           <li>
             <strong>No Proof of Work.</strong> In the lab, new blocks are created by clicking
             &quot;Mine blocks&quot;. On mainnet, miners must solve a cryptographic puzzle
-            (Proof of Work) to produce a valid block.
+            (Proof of Work) to produce a valid block. You can mine at most{' '}
+            {LAB_MAX_BLOCKS_PER_MINE} blocks per click so the app stays responsive; run mining
+            again if you need more height.
           </li>
           <li>
             <strong>Immediate coinbase spendability.</strong> Newly mined coins can be spent

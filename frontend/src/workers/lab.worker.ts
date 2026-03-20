@@ -6,7 +6,11 @@ import type {
   LabTxDetails,
   MempoolEntry,
 } from './lab-api'
-import { EMPTY_LAB_STATE } from './lab-api'
+import {
+  EMPTY_LAB_STATE,
+  LAB_MAX_BLOCKS_PER_MINE,
+  LAB_MIN_BLOCKS_PER_MINE,
+} from './lab-api'
 import {
   mergeAddressesWithUtxos,
   walletOwnerKey,
@@ -91,22 +95,34 @@ function removeSpentUtxos(spent: { txid: string; vout: number }[]): void {
   }
 }
 
+function readSatsFromUtxoRow(row: Record<string, unknown>): number {
+  const v = row.amount_sats ?? row.amountSats
+  if (typeof v === 'bigint') return Number(v)
+  if (typeof v === 'number' && Number.isFinite(v)) return Math.trunc(v)
+  return 0
+}
+
 function addNewUtxos(
   newUtxos: {
     txid: string
     vout: number
     address: string
-    amount_sats: number
-    script_pubkey_hex: string
+    amount_sats?: number
+    script_pubkey_hex?: string
+    amountSats?: number
+    scriptPubkeyHex?: string
   }[],
 ): void {
   for (const utxo of newUtxos) {
+    const row = utxo as unknown as Record<string, unknown>
     state.utxos.push({
-      txid: utxo.txid,
-      vout: utxo.vout,
-      address: utxo.address,
-      amountSats: utxo.amount_sats,
-      scriptPubkeyHex: utxo.script_pubkey_hex,
+      txid: String(utxo.txid),
+      vout: Number(utxo.vout),
+      address: String(utxo.address),
+      amountSats: readSatsFromUtxoRow(row),
+      scriptPubkeyHex: String(
+        utxo.script_pubkey_hex ?? utxo.scriptPubkeyHex ?? '',
+      ),
     })
   }
 }
@@ -252,6 +268,16 @@ const labService = {
     targetAddress: string,
     options?: { ownerName?: string; ownerWalletId?: number },
   ): Promise<LabState> {
+    if (
+      !Number.isInteger(blockCountToMine) ||
+      blockCountToMine < LAB_MIN_BLOCKS_PER_MINE ||
+      blockCountToMine > LAB_MAX_BLOCKS_PER_MINE
+    ) {
+      throw new Error(
+        `Block count must be an integer from ${LAB_MIN_BLOCKS_PER_MINE} to ${LAB_MAX_BLOCKS_PER_MINE} (inclusive)`,
+      )
+    }
+
     const wasmModule = await getWasm()
     const tip = getTip()
 
@@ -319,12 +345,13 @@ const labService = {
     return this.getStateSnapshot()
   },
 
-  async createTransaction(
-    fromAddress: string,
-    toAddress: string,
-    amountSats: number,
-    feeRateSatPerVb: number,
-  ): Promise<LabState> {
+  async createTransaction(params: {
+    fromAddress: string
+    toAddress: string
+    amountSats: number
+    feeRateSatPerVb: number
+  }): Promise<LabState> {
+    const { fromAddress, toAddress, amountSats, feeRateSatPerVb } = params
     const wasmModule = await getWasm()
 
     const fromUtxos = state.utxos.filter((u) => u.address === fromAddress)
@@ -352,8 +379,16 @@ const labService = {
       feeRateSatPerVb,
       changeAddress.address,
     )
-    const { tx_hex: unsignedTxHex, fee_sats: feeSats, has_change } =
-      typeof buildResult === 'string' ? JSON.parse(buildResult) : buildResult
+    const buildParsed = (typeof buildResult === 'string'
+      ? JSON.parse(buildResult)
+      : buildResult) as {
+      tx_hex?: string
+      fee_sats?: number
+      has_change?: boolean
+    }
+    const unsignedTxHex = String(buildParsed.tx_hex ?? '')
+    const feeSats = Number(buildParsed.fee_sats ?? 0)
+    const has_change = Boolean(buildParsed.has_change)
 
     const signedTxHex = wasmModule.lab_sign_transaction(
       unsignedTxHex,
@@ -413,17 +448,18 @@ const labService = {
     return this.getStateSnapshot()
   },
 
-  async prepareLabWalletTransaction(
-    walletOwner: string,
-    toAddress: string,
-    amountSats: number,
-    _feeRateSatPerVb: number,
-    walletChangeAddress: string,
-  ): Promise<{
+  async prepareLabWalletTransaction(params: {
+    walletOwner: string
+    toAddress: string
+    amountSats: number
+    feeRateSatPerVb: number
+    walletChangeAddress: string
+  }): Promise<{
     utxosJson: string
     mempoolMetadata: import('./lab-api').LabMempoolMetadata
     totalInput: number
   }> {
+    const { walletOwner, toAddress, amountSats, walletChangeAddress } = params
     const addressToOwner = state.addressToOwner ?? {}
 
     const fromUtxos = state.utxos.filter(

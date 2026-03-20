@@ -7,7 +7,6 @@ vi.mock('@tanstack/react-router', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@tanstack/react-router')>()
   return {
     ...actual,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- route path not used in mock
     createFileRoute: (_path: string) => (options: Record<string, unknown>) => ({
       options,
     }),
@@ -22,6 +21,8 @@ const mockSyncWallet = vi.fn().mockResolvedValue({ balance: {}, changeset_json: 
 const mockGetBalance = vi.fn().mockResolvedValue({ confirmed: 0, total: 0 })
 const mockGetTransactionList = vi.fn().mockResolvedValue([])
 const mockGetCurrentAddress = vi.fn().mockResolvedValue('tb1qcurrent')
+const mockLockWallet = vi.fn()
+const mockClearSession = vi.fn()
 const cryptoStoreState = {
   terminateWorker: mockTerminateWorker,
   exportChangeset: mockExportChangeset,
@@ -30,6 +31,11 @@ const cryptoStoreState = {
   getBalance: mockGetBalance,
   getTransactionList: mockGetTransactionList,
   getCurrentAddress: mockGetCurrentAddress,
+  lockAndPurgeSensitiveRuntimeState: () => {
+    mockLockWallet()
+    mockTerminateWorker()
+    mockClearSession()
+  },
 }
 vi.mock('@/stores/cryptoStore', () => ({
   useCryptoStore: Object.assign(
@@ -44,7 +50,7 @@ vi.mock('@/stores/cryptoStore', () => ({
 let walletStoreState: Record<string, unknown> = {}
 const mockSetNetworkMode = vi.fn()
 const mockSetAddressType = vi.fn()
-const mockLockWallet = vi.fn()
+const mockSetCurrentAddress = vi.fn()
 vi.mock('@/stores/walletStore', () => ({
   useWalletStore: Object.assign(
     (selector: (s: Record<string, unknown>) => unknown) =>
@@ -64,7 +70,6 @@ vi.mock('@/stores/walletStore', () => ({
     `${network} ${addressType}`,
 }))
 
-const mockClearSession = vi.fn()
 const sessionStoreState = { password: 'testpass', clear: mockClearSession }
 vi.mock('@/stores/sessionStore', () => ({
   useSessionStore: Object.assign(
@@ -106,6 +111,8 @@ vi.mock('@/lib/wallet-utils', () => ({
   deleteCustomEsploraUrl: vi.fn().mockResolvedValue(undefined),
   loadCustomEsploraUrl: vi.fn().mockResolvedValue(null),
   syncActiveWalletAndUpdateState: vi.fn().mockResolvedValue(undefined),
+  syncLoadedSubWalletWithEsplora: vi.fn().mockResolvedValue('completed'),
+  runIncrementalDashboardWalletSync: vi.fn().mockResolvedValue(undefined),
 }))
 
 const mockResolveDescriptorWallet = vi.hoisted(() =>
@@ -116,6 +123,7 @@ const mockResolveDescriptorWallet = vi.hoisted(() =>
     externalDescriptor: 'ext',
     internalDescriptor: 'int',
     changeSet: '{}',
+    fullScanDone: false,
   }),
 )
 const mockUpdateDescriptorWalletChangeset = vi.hoisted(() =>
@@ -167,6 +175,7 @@ describe('SettingsPage', () => {
       setNetworkMode: mockSetNetworkMode,
       setAddressType: mockSetAddressType,
       setWalletStatus: vi.fn(),
+      setCurrentAddress: mockSetCurrentAddress,
       setBalance: vi.fn(),
       setTransactions: vi.fn(),
       lockWallet: mockLockWallet,
@@ -181,12 +190,14 @@ describe('SettingsPage', () => {
     expect(screen.getByText('About')).toBeInTheDocument()
   })
 
-  it('network selector calls setNetworkMode', async () => {
+  it('network selector calls setNetworkMode after switch completes', async () => {
     const user = userEvent.setup()
     renderWithProviders(<SettingsPage />)
 
     await user.click(screen.getByRole('button', { name: 'Testnet' }))
-    expect(mockSetNetworkMode).toHaveBeenCalledWith('testnet')
+    await waitFor(() => {
+      expect(mockSetNetworkMode).toHaveBeenCalledWith('testnet')
+    })
   })
 
   it('address type selector shows confirmation when wallet exists', async () => {
@@ -251,22 +262,22 @@ describe('SettingsPage', () => {
     await user.click(screen.getByRole('button', { name: 'Testnet' }))
 
     await waitFor(() => {
-      expect(mockUpdateDescriptorWalletChangeset).toHaveBeenCalledWith(
-        'testpass',
-        1,
-        'signet',
-        'taproot',
-        0,
-        '{"last_reveal":{"0":0}}',
-      )
+      expect(mockUpdateDescriptorWalletChangeset).toHaveBeenCalledWith({
+        password: 'testpass',
+        walletId: 1,
+        network: 'signet',
+        addressType: 'taproot',
+        accountId: 0,
+        changesetJson: '{"last_reveal":{"0":0}}',
+      })
     })
-    expect(mockResolveDescriptorWallet).toHaveBeenCalledWith(
-      'testpass',
-      1,
-      'testnet',
-      'taproot',
-      0,
-    )
+    expect(mockResolveDescriptorWallet).toHaveBeenCalledWith({
+      password: 'testpass',
+      walletId: 1,
+      targetNetwork: 'testnet',
+      targetAddressType: 'taproot',
+      targetAccountId: 0,
+    })
     const updateCallOrder = mockUpdateDescriptorWalletChangeset.mock.invocationCallOrder[0]
     const resolveCallOrder = mockResolveDescriptorWallet.mock.invocationCallOrder[0]
     expect(updateCallOrder).toBeLessThan(resolveCallOrder)

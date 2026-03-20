@@ -17,6 +17,7 @@ import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { useWalletStore } from '@/stores/walletStore'
 import { useSessionStore } from '@/stores/sessionStore'
 import { useWallets } from '@/db'
+import { errorMessage } from '@/lib/utils'
 import {
   loadDescriptorWalletAndSync,
   loadDescriptorWalletWithoutSync,
@@ -51,25 +52,25 @@ export function WalletUnlock({ walletName }: WalletUnlockProps) {
 
       setSessionPassword(walletPassword)
       if (networkMode === 'lab') {
-        await loadDescriptorWalletWithoutSync(
-          walletPassword,
-          activeWalletId,
+        await loadDescriptorWalletWithoutSync({
+          password: walletPassword,
+          walletId: activeWalletId,
           networkMode,
           addressType,
           accountId,
-        )
+        })
       } else {
-        await loadDescriptorWalletAndSync(
-          walletPassword,
-          activeWalletId,
+        await loadDescriptorWalletAndSync({
+          password: walletPassword,
+          walletId: activeWalletId,
           networkMode,
           addressType,
           accountId,
-          {
-            onSyncError: () =>
-              toast.error('Sync failed — wallet unlocked but data may be stale'),
-          },
-        )
+          onSyncError: (err) =>
+            toast.error(
+              errorMessage(err) || 'Sync failed — wallet unlocked but data may be stale',
+            ),
+        })
       }
     },
     onError: () => {

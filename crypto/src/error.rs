@@ -1,5 +1,18 @@
+use std::fmt::Display;
 use thiserror::Error;
 use wasm_bindgen::JsValue;
+
+/// Extension trait for `Result` to map any error implementing `Display` into `JsValue`.
+/// Use at the WASM boundary to avoid repeating `.map_err(|e| JsValue::from_str(&e.to_string()))`.
+pub trait MapErrToJs<T, E> {
+    fn map_err_to_js(self) -> Result<T, JsValue>;
+}
+
+impl<T, E: Display> MapErrToJs<T, E> for Result<T, E> {
+    fn map_err_to_js(self) -> Result<T, JsValue> {
+        self.map_err(|e| JsValue::from_str(&e.to_string()))
+    }
+}
 
 #[derive(Debug, Error)]
 pub enum CryptoError {
@@ -59,6 +72,7 @@ impl From<bdk_wallet::error::CreateTxError> for CryptoError {
     }
 }
 
+// BDK SignerError is deprecated pending replacement; we still need it for sign().
 #[allow(deprecated)]
 impl From<bdk_wallet::signer::SignerError> for CryptoError {
     fn from(e: bdk_wallet::signer::SignerError) -> Self {

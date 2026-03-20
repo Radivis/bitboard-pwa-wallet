@@ -1,4 +1,7 @@
 import type { Generated, Insertable, Selectable, Updateable } from 'kysely'
+import type { KdfVersion } from '@/lib/encrypted-blob-types'
+
+export type { KdfVersion }
 
 export interface Database {
   wallets: WalletsTable
@@ -29,6 +32,7 @@ interface WalletSecretsTable {
   encrypted_data: Uint8Array
   iv: Uint8Array
   salt: Uint8Array
+  kdf_version: KdfVersion
   created_at: string
   updated_at: string
 }

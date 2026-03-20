@@ -4,8 +4,8 @@ use wasm_bindgen_test::*;
 wasm_bindgen_test_configure!(run_in_browser);
 
 use bitboard_crypto::{
-    create_wallet, derive_argon2_key, derive_descriptors, export_changeset, generate_mnemonic,
-    get_balance, get_new_address, validate_mnemonic,
+    create_wallet, derive_descriptors, export_changeset, generate_mnemonic, get_balance,
+    get_new_address, validate_mnemonic,
 };
 
 fn create_test_wallet() -> JsValue {
@@ -150,13 +150,6 @@ fn build_transaction_fails_without_funds() {
         result.is_err(),
         "build_transaction should fail without funds"
     );
-}
-
-#[wasm_bindgen_test]
-fn derive_argon2_key_returns_32_bytes() {
-    let salt = b"test_salt_16byte";
-    let key = derive_argon2_key("test_password", salt).expect("derive_argon2_key failed");
-    assert_eq!(key.len(), 32, "key should be 32 bytes");
 }
 
 #[wasm_bindgen_test]

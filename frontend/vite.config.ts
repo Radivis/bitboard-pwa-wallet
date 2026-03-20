@@ -106,7 +106,7 @@ export default defineConfig({
         changeOrigin: true,
         secure: true,
         rewrite: (path) =>
-          path.replace(/^\/esplora-proxy\/testnet/, '/testnet/api'),
+          path.replace(/^\/esplora-proxy\/testnet/, '/testnet4/api'),
       },
       '/esplora-proxy/mainnet': {
         target: 'https://mempool.space',
@@ -131,5 +131,17 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: ['./src/test-utils/setup.ts'],
     include: ['src/**/*.{test,spec}.{ts,tsx}'],
+    coverage: {
+      provider: 'v8',
+      // Only 'lcov' for HTML (writes coverage/lcov-report/). Avoid 'html' to prevent duplicate coverage/ and coverage/lcov-report/.
+      reporter: ['text', 'lcov'],
+      include: ['src/**/*.ts', 'src/**/*.tsx'],
+      exclude: [
+        '**/*.d.ts',
+        '**/__tests__/**',
+        '**/test-utils/**',
+        '**/routeTree.gen.ts',
+      ],
+    },
   },
 })

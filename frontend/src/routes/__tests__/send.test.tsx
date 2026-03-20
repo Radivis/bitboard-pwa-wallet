@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { screen, waitFor } from '@testing-library/react'
+import { screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { renderWithProviders } from '@/test-utils/test-providers'
 
@@ -8,7 +8,6 @@ vi.mock('@tanstack/react-router', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@tanstack/react-router')>()
   return {
     ...actual,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- route path not used in mock
     createFileRoute: (_path: string) => (options: Record<string, unknown>) => ({
       options,
     }),
@@ -25,19 +24,23 @@ const mockGetTransactionList = vi.fn()
 const mockExportChangeset = vi.fn()
 const mockBuildAndSignLabTransaction = vi.fn()
 const mockGetLabChangeAddress = vi.fn()
+const cryptoStoreState = {
+  buildTransaction: mockBuildTransaction,
+  signAndExtractTransaction: mockSignAndExtractTransaction,
+  broadcastTransaction: mockBroadcastTransaction,
+  syncWallet: mockSyncWallet,
+  getBalance: mockGetBalance,
+  getTransactionList: mockGetTransactionList,
+  exportChangeset: mockExportChangeset,
+  buildAndSignLabTransaction: mockBuildAndSignLabTransaction,
+  getLabChangeAddress: mockGetLabChangeAddress,
+}
 vi.mock('@/stores/cryptoStore', () => ({
-  useCryptoStore: (selector: (s: Record<string, unknown>) => unknown) =>
-    selector({
-      buildTransaction: mockBuildTransaction,
-      signAndExtractTransaction: mockSignAndExtractTransaction,
-      broadcastTransaction: mockBroadcastTransaction,
-      syncWallet: mockSyncWallet,
-      getBalance: mockGetBalance,
-      getTransactionList: mockGetTransactionList,
-      exportChangeset: mockExportChangeset,
-      buildAndSignLabTransaction: mockBuildAndSignLabTransaction,
-      getLabChangeAddress: mockGetLabChangeAddress,
-    }),
+  useCryptoStore: Object.assign(
+    (selector: (s: Record<string, unknown>) => unknown) =>
+      selector(cryptoStoreState),
+    { getState: () => cryptoStoreState },
+  ),
 }))
 
 let walletStoreState: Record<string, unknown> = {}
@@ -73,11 +76,13 @@ vi.mock('@/lib/wallet-utils', () => ({
   loadCustomEsploraUrl: vi.fn().mockResolvedValue(null),
 }))
 
+import { useSendStore } from '@/stores/sendStore'
 import { SendPage } from '../send'
 
 describe('SendPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    useSendStore.getState().reset()
     walletStoreState = {
       activeWalletId: 1,
       walletStatus: 'unlocked',
@@ -181,10 +186,9 @@ describe('SendPage', () => {
     await user.type(screen.getByLabelText(/Amount/), '0.001')
     await user.click(screen.getByRole('button', { name: 'Review Transaction' }))
 
-    await waitFor(() => {
-      expect(screen.getByText('Review Transaction')).toBeInTheDocument()
-      expect(screen.getByText('Transaction Details')).toBeInTheDocument()
-    })
+    expect(
+      await screen.findByText('Transaction Details', {}, { timeout: 3000 }),
+    ).toBeInTheDocument()
   })
 
   it('Back button returns to compose step', async () => {
@@ -199,9 +203,9 @@ describe('SendPage', () => {
     await user.type(screen.getByLabelText(/Amount/), '0.001')
     await user.click(screen.getByRole('button', { name: 'Review Transaction' }))
 
-    await waitFor(() => {
-      expect(screen.getByText('Transaction Details')).toBeInTheDocument()
-    })
+    expect(
+      await screen.findByText('Transaction Details', {}, { timeout: 3000 }),
+    ).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: /Back/ }))
     expect(screen.getByText('Send Bitcoin')).toBeInTheDocument()

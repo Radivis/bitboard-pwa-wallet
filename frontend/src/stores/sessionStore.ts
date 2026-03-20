@@ -11,6 +11,11 @@ interface SessionState {
 export const useSessionStore = create<SessionState>((set) => ({
   password: null,
   setPassword: (password) => set({ password }),
+  /**
+   * Clears the session password. Only the reference is set to null; the previous
+   * string may remain in memory until GC (JavaScript strings are immutable, so
+   * we cannot overwrite the backing memory). Call after lock to reduce exposure.
+   */
   clear: () => set({ password: null }),
 }))
 
