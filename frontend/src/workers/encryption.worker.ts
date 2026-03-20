@@ -5,8 +5,20 @@ import type { EncryptedBlobMessage } from './secrets-channel-types';
 const SALT_LENGTH_BYTES = 16
 const IV_LENGTH_BYTES = 12
 
-/** Use CI Argon2 params (faster) when set, e.g. in CI. Set via VITE_ARGON2_CI=1 at build time. */
-const USE_CI_PARAMS = typeof import.meta.env !== 'undefined' && import.meta.env.VITE_ARGON2_CI === '1'
+function resolveCiArgon2Flag(): boolean {
+  if (typeof import.meta.env === 'undefined') return false
+  const ciFlagEnabled = import.meta.env.VITE_ARGON2_CI === '1'
+  const isProductionBuild = import.meta.env.PROD === true
+  if (ciFlagEnabled && isProductionBuild) {
+    throw new Error(
+      'Security guardrail: VITE_ARGON2_CI=1 is not allowed in production builds.'
+    )
+  }
+  return ciFlagEnabled
+}
+
+/** CI params are allowed only outside production builds. */
+const USE_CI_PARAMS = resolveCiArgon2Flag()
 
 let wasm: typeof import('@/wasm-pkg/bitboard_encryption/bitboard_encryption') | null = null;
 
