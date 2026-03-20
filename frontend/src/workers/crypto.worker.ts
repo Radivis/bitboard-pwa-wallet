@@ -57,13 +57,14 @@ type EncryptedBlobStoreFields = {
   kdfVersion?: EncryptedBlobMessage['kdfVersion'];
 };
 
-function buildSingleDescriptorWalletSecrets(
-  mnemonic: string,
-  network: BitcoinNetwork,
-  addressType: AddressType,
-  accountId: number,
-  walletResult: CreateWalletResult
-): WalletSecrets {
+function buildSingleDescriptorWalletSecrets(params: {
+  mnemonic: string;
+  network: BitcoinNetwork;
+  addressType: AddressType;
+  accountId: number;
+  walletResult: CreateWalletResult;
+}): WalletSecrets {
+  const { mnemonic, network, addressType, accountId, walletResult } = params;
   return {
     mnemonic,
     descriptorWallets: [
@@ -100,12 +101,13 @@ async function encryptWalletSecretsToStoreFields(
   return encryptedBlobMessageToStoreFields(encryptedBlob);
 }
 
-function findDescriptorWallet(
-  secrets: WalletSecrets,
-  network: BitcoinNetwork,
-  addressType: AddressType,
-  accountId: number
-): DescriptorWalletData | undefined {
+function findDescriptorWallet(params: {
+  secrets: WalletSecrets;
+  network: BitcoinNetwork;
+  addressType: AddressType;
+  accountId: number;
+}): DescriptorWalletData | undefined {
+  const { secrets, network, addressType, accountId } = params;
   return secrets.descriptorWallets.find(
     (dw) =>
       dw.network === network &&
@@ -134,33 +136,37 @@ const cryptoService = {
     return wasmModule.validate_mnemonic(mnemonic);
   },
 
-  async deriveDescriptors(
-    mnemonic: string,
-    network: BitcoinNetwork,
-    addressType: AddressType,
-    accountId: number
-  ): Promise<DescriptorPair> {
+  async deriveDescriptors(params: {
+    mnemonic: string;
+    network: BitcoinNetwork;
+    addressType: AddressType;
+    accountId: number;
+  }): Promise<DescriptorPair> {
+    const { mnemonic, network, addressType, accountId } = params;
     const wasmModule = await getWasm();
     return wasmModule.derive_descriptors(mnemonic, network, addressType, accountId);
   },
 
-  async createWallet(
-    mnemonic: string,
-    network: BitcoinNetwork,
-    addressType: AddressType,
-    accountId: number
-  ): Promise<CreateWalletResult> {
+  async createWallet(params: {
+    mnemonic: string;
+    network: BitcoinNetwork;
+    addressType: AddressType;
+    accountId: number;
+  }): Promise<CreateWalletResult> {
+    const { mnemonic, network, addressType, accountId } = params;
     const wasmModule = await getWasm();
     return wasmModule.create_wallet(mnemonic, network, addressType, accountId);
   },
 
-  async loadWallet(
-    externalDescriptor: string,
-    internalDescriptor: string,
-    network: BitcoinNetwork,
-    changesetJson: string,
-    useEmptyChain: boolean
-  ): Promise<boolean> {
+  async loadWallet(params: {
+    externalDescriptor: string;
+    internalDescriptor: string;
+    network: BitcoinNetwork;
+    changesetJson: string;
+    useEmptyChain: boolean;
+  }): Promise<boolean> {
+    const { externalDescriptor, internalDescriptor, network, changesetJson, useEmptyChain } =
+      params;
     const wasmModule = await getWasm();
     return wasmModule.load_wallet(
       externalDescriptor,
@@ -181,13 +187,14 @@ const cryptoService = {
     return wasmModule.get_current_address();
   },
 
-  async buildAndSignLabTransaction(
-    utxosJson: string,
-    toAddress: string,
-    amountSats: number,
-    feeRateSatPerVb: number,
-    changeAddress: string,
-  ): Promise<{ signedTxHex: string; feeSats: number; hasChange: boolean }> {
+  async buildAndSignLabTransaction(params: {
+    utxosJson: string;
+    toAddress: string;
+    amountSats: number;
+    feeRateSatPerVb: number;
+    changeAddress: string;
+  }): Promise<{ signedTxHex: string; feeSats: number; hasChange: boolean }> {
+    const { utxosJson, toAddress, amountSats, feeRateSatPerVb, changeAddress } = params;
     const wasmModule = await getWasm();
     const result = wasmModule.build_and_sign_lab_transaction(
       utxosJson,
@@ -230,12 +237,13 @@ const cryptoService = {
     return wasmModule.full_scan_wallet(esploraUrl, stopGap);
   },
 
-  async buildTransaction(
-    recipientAddress: string,
-    amountSats: number,
-    feeRateSatPerVb: number,
-    network: BitcoinNetwork
-  ): Promise<string> {
+  async buildTransaction(params: {
+    recipientAddress: string;
+    amountSats: number;
+    feeRateSatPerVb: number;
+    network: BitcoinNetwork;
+  }): Promise<string> {
+    const { recipientAddress, amountSats, feeRateSatPerVb, network } = params;
     const wasmModule = await getWasm();
     return wasmModule.build_transaction(
       recipientAddress,
@@ -263,23 +271,25 @@ const cryptoService = {
     return wasmModule.get_transaction_list();
   },
 
-  async resolveDescriptorWallet(
-    password: string,
-    encryptedBlob: EncryptedBlobMessage,
-    targetNetwork: BitcoinNetwork,
-    targetAddressType: AddressType,
-    targetAccountId: number
-  ) {
+  async resolveDescriptorWallet(params: {
+    password: string;
+    encryptedBlob: EncryptedBlobMessage;
+    targetNetwork: BitcoinNetwork;
+    targetAddressType: AddressType;
+    targetAccountId: number;
+  }) {
+    const { password, encryptedBlob, targetNetwork, targetAddressType, targetAccountId } =
+      params;
     const wasmModule = await getWasm();
     const plaintext = await requestDecrypt(password, encryptedBlob);
     const secrets = parseWalletSecretsJson(plaintext);
 
-    const existing = findDescriptorWallet(
+    const existing = findDescriptorWallet({
       secrets,
-      targetNetwork,
-      targetAddressType,
-      targetAccountId
-    );
+      network: targetNetwork,
+      addressType: targetAddressType,
+      accountId: targetAccountId,
+    });
     if (existing) {
       return {
         descriptorWalletData: existing,
@@ -311,30 +321,39 @@ const cryptoService = {
     };
   },
 
-  async updateDescriptorWalletChangeset(
-    password: string,
-    encryptedBlob: EncryptedBlobMessage,
-    network: BitcoinNetwork,
-    addressType: AddressType,
-    accountId: number,
-    changesetJson: string,
-    options?: { markFullScanDone?: boolean }
-  ) {
+  async updateDescriptorWalletChangeset(params: {
+    password: string;
+    encryptedBlob: EncryptedBlobMessage;
+    network: BitcoinNetwork;
+    addressType: AddressType;
+    accountId: number;
+    changesetJson: string;
+    markFullScanDone?: boolean;
+  }) {
+    const {
+      password,
+      encryptedBlob,
+      network,
+      addressType,
+      accountId,
+      changesetJson,
+      markFullScanDone,
+    } = params;
     const plaintext = await requestDecrypt(password, encryptedBlob);
     const secrets = parseWalletSecretsJson(plaintext);
-    const descriptorWallet = findDescriptorWallet(
+    const descriptorWallet = findDescriptorWallet({
       secrets,
       network,
       addressType,
-      accountId
-    );
+      accountId,
+    });
     if (!descriptorWallet) {
       throw new Error(
         `No descriptor wallet found for ${network}/${addressType}/${accountId}`
       );
     }
     descriptorWallet.changeSet = changesetJson;
-    if (options?.markFullScanDone) {
+    if (markFullScanDone) {
       descriptorWallet.fullScanDone = true;
     }
     const newPlaintext = JSON.stringify(secrets);
@@ -342,13 +361,14 @@ const cryptoService = {
     return encryptedBlobMessageToStoreFields(newBlob);
   },
 
-  async createWalletAndEncryptSecrets(
-    password: string,
-    network: BitcoinNetwork,
-    addressType: AddressType,
-    accountId: number,
-    wordCount: 12 | 24
-  ) {
+  async createWalletAndEncryptSecrets(params: {
+    password: string;
+    network: BitcoinNetwork;
+    addressType: AddressType;
+    accountId: number;
+    wordCount: 12 | 24;
+  }) {
+    const { password, network, addressType, accountId, wordCount } = params;
     const wasmModule = await getWasm();
     const mnemonic = wasmModule.generate_mnemonic(wordCount);
     const walletResult = wasmModule.create_wallet(
@@ -357,13 +377,13 @@ const cryptoService = {
       addressType,
       accountId
     );
-    const secrets = buildSingleDescriptorWalletSecrets(
+    const secrets = buildSingleDescriptorWalletSecrets({
       mnemonic,
       network,
       addressType,
       accountId,
-      walletResult
-    );
+      walletResult,
+    });
     const encryptedBlob = await encryptWalletSecretsToStoreFields(password, secrets);
     return {
       encryptedBlob,
@@ -372,13 +392,14 @@ const cryptoService = {
     };
   },
 
-  async importWalletAndEncryptSecrets(
-    mnemonic: string,
-    password: string,
-    network: BitcoinNetwork,
-    addressType: AddressType,
-    accountId: number
-  ) {
+  async importWalletAndEncryptSecrets(params: {
+    mnemonic: string;
+    password: string;
+    network: BitcoinNetwork;
+    addressType: AddressType;
+    accountId: number;
+  }) {
+    const { mnemonic, password, network, addressType, accountId } = params;
     const wasmModule = await getWasm();
     const walletResult = wasmModule.create_wallet(
       mnemonic,
@@ -386,13 +407,13 @@ const cryptoService = {
       addressType,
       accountId
     );
-    const secrets = buildSingleDescriptorWalletSecrets(
+    const secrets = buildSingleDescriptorWalletSecrets({
       mnemonic,
       network,
       addressType,
       accountId,
-      walletResult
-    );
+      walletResult,
+    });
     const encryptedBlob = await encryptWalletSecretsToStoreFields(password, secrets);
     return {
       encryptedBlob,

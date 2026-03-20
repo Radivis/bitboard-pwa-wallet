@@ -50,7 +50,11 @@ export function ReceivePage() {
 
       if (password && activeWalletId) {
         const changeset = await exportChangeset()
-        await updateWalletChangeset(password, activeWalletId, changeset)
+        await updateWalletChangeset({
+          password,
+          walletId: activeWalletId,
+          changesetJson: changeset,
+        })
       }
 
       toast.success('New address generated')

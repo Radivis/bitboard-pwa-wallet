@@ -58,7 +58,12 @@ describe('Wallet Persistence with Encryption', () => {
 
   describe('saveWalletSecrets', () => {
     it('saves encrypted wallet secrets to SQLite', async () => {
-      await saveWalletSecrets(walletDb, password, walletId, sampleSecrets)
+      await saveWalletSecrets({
+        walletDb,
+        password,
+        walletId,
+        secrets: sampleSecrets,
+      })
 
       const record = await walletDb
         .selectFrom('wallet_secrets')
@@ -76,7 +81,12 @@ describe('Wallet Persistence with Encryption', () => {
     })
 
     it('updates existing wallet secrets on re-save', async () => {
-      await saveWalletSecrets(walletDb, password, walletId, sampleSecrets)
+      await saveWalletSecrets({
+        walletDb,
+        password,
+        walletId,
+        secrets: sampleSecrets,
+      })
 
       const firstRecord = await walletDb
         .selectFrom('wallet_secrets')
@@ -88,7 +98,12 @@ describe('Wallet Persistence with Encryption', () => {
       await new Promise(resolve => setTimeout(resolve, 10))
 
       const updatedSecrets = { ...sampleSecrets, mnemonic: 'different mnemonic words here' }
-      await saveWalletSecrets(walletDb, password, walletId, updatedSecrets)
+      await saveWalletSecrets({
+        walletDb,
+        password,
+        walletId,
+        secrets: updatedSecrets,
+      })
 
       const count = await walletDb
         .selectFrom('wallet_secrets')
@@ -106,14 +121,25 @@ describe('Wallet Persistence with Encryption', () => {
     })
 
     it('throws error if walletId does not exist', async () => {
-      await expect(saveWalletSecrets(walletDb, password, 999, sampleSecrets))
-        .rejects.toThrow(/wallet.*not found/i)
+      await expect(
+        saveWalletSecrets({
+          walletDb,
+          password,
+          walletId: 999,
+          secrets: sampleSecrets,
+        }),
+      ).rejects.toThrow(/wallet.*not found/i)
     })
   })
 
   describe('loadWalletSecrets', () => {
     it('loads and decrypts wallet secrets with correct password', async () => {
-      await saveWalletSecrets(walletDb, password, walletId, sampleSecrets)
+      await saveWalletSecrets({
+        walletDb,
+        password,
+        walletId,
+        secrets: sampleSecrets,
+      })
 
       const loaded = await loadWalletSecrets(walletDb, password, walletId)
 
@@ -121,7 +147,12 @@ describe('Wallet Persistence with Encryption', () => {
     })
 
     it('throws error when loading with wrong password', async () => {
-      await saveWalletSecrets(walletDb, password, walletId, sampleSecrets)
+      await saveWalletSecrets({
+        walletDb,
+        password,
+        walletId,
+        secrets: sampleSecrets,
+      })
 
       await expect(loadWalletSecrets(walletDb, 'wrong-password', walletId))
         .rejects.toThrow()
@@ -138,7 +169,12 @@ describe('Wallet Persistence with Encryption', () => {
         mnemonic: 'test mnemonic with émojis 🔐 and 中文',
       }
 
-      await saveWalletSecrets(walletDb, password, walletId, unicodeSecrets)
+      await saveWalletSecrets({
+        walletDb,
+        password,
+        walletId,
+        secrets: unicodeSecrets,
+      })
       const loaded = await loadWalletSecrets(walletDb, password, walletId)
 
       expect(loaded.mnemonic).toBe(unicodeSecrets.mnemonic)
@@ -148,7 +184,12 @@ describe('Wallet Persistence with Encryption', () => {
 
   describe('deleteWalletSecrets', () => {
     it('deletes wallet secrets from SQLite', async () => {
-      await saveWalletSecrets(walletDb, password, walletId, sampleSecrets)
+      await saveWalletSecrets({
+        walletDb,
+        password,
+        walletId,
+        secrets: sampleSecrets,
+      })
 
       await deleteWalletSecrets(walletDb, walletId)
 
@@ -176,8 +217,18 @@ describe('Wallet Persistence with Encryption', () => {
       const secrets1 = { ...sampleSecrets, mnemonic: 'first wallet mnemonic' }
       const secrets2 = { ...sampleSecrets, mnemonic: 'second wallet mnemonic' }
 
-      await saveWalletSecrets(walletDb, 'password1', walletId, secrets1)
-      await saveWalletSecrets(walletDb, 'password2', walletId2, secrets2)
+      await saveWalletSecrets({
+        walletDb,
+        password: 'password1',
+        walletId,
+        secrets: secrets1,
+      })
+      await saveWalletSecrets({
+        walletDb,
+        password: 'password2',
+        walletId: walletId2,
+        secrets: secrets2,
+      })
 
       const loaded1 = await loadWalletSecrets(walletDb, 'password1', walletId)
       const loaded2 = await loadWalletSecrets(walletDb, 'password2', walletId2)

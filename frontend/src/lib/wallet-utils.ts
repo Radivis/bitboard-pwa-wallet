@@ -22,23 +22,24 @@ const CUSTOM_ESPLORA_URL_KEY_PREFIX = 'custom_esplora_url_'
  * Update the changeset of the currently active descriptor wallet.
  * Reads (networkMode, addressType, accountId) from the wallet store.
  */
-export async function updateWalletChangeset(
-  password: string,
-  walletId: number,
-  changesetJson: string,
-  options?: { markFullScanDone?: boolean },
-): Promise<void> {
+export async function updateWalletChangeset(params: {
+  password: string
+  walletId: number
+  changesetJson: string
+  markFullScanDone?: boolean
+}): Promise<void> {
+  const { password, walletId, changesetJson, markFullScanDone } = params
   const { networkMode, addressType, accountId } = useWalletStore.getState()
   const network = toBitcoinNetwork(networkMode)
-  await updateDescriptorWalletChangeset(
+  await updateDescriptorWalletChangeset({
     password,
     walletId,
     network,
     addressType,
     accountId,
     changesetJson,
-    options,
-  )
+    markFullScanDone,
+  })
 }
 
 export function getWalletInitials(name: string): string {
@@ -166,15 +167,15 @@ export async function syncLoadedSubWalletWithEsplora(options: {
     if (options.fullScanNeeded) {
       const { exportChangeset } = useCryptoStore.getState()
       const changeset = await exportChangeset()
-      await updateDescriptorWalletChangeset(
-        options.sessionPassword,
-        options.activeWalletId,
-        options.targetNetwork,
-        options.targetAddressType,
-        options.targetAccountId,
-        changeset,
-        { markFullScanDone: true },
-      )
+      await updateDescriptorWalletChangeset({
+        password: options.sessionPassword,
+        walletId: options.activeWalletId,
+        network: options.targetNetwork,
+        addressType: options.targetAddressType,
+        accountId: options.targetAccountId,
+        changesetJson: changeset,
+        markFullScanDone: true,
+      })
     }
     return 'completed'
   } catch (syncErr) {
@@ -205,11 +206,11 @@ export async function runIncrementalDashboardWalletSync(options: {
   if (options.password && options.activeWalletId != null) {
     const { exportChangeset } = useCryptoStore.getState()
     const changeset = await exportChangeset()
-    await updateWalletChangeset(
-      options.password,
-      options.activeWalletId,
-      changeset,
-    )
+    await updateWalletChangeset({
+      password: options.password,
+      walletId: options.activeWalletId,
+      changesetJson: changeset,
+    })
   }
 }
 
@@ -217,21 +218,22 @@ export async function runIncrementalDashboardWalletSync(options: {
  * Resolve descriptor wallet, load into WASM, set current address, start
  * auto-lock timer. Does NOT sync. Used for lab mode where there is no Esplora.
  */
-export async function loadDescriptorWalletWithoutSync(
-  password: string,
-  walletId: number,
-  networkMode: NetworkMode,
-  addressType: 'taproot' | 'segwit',
-  accountId: number,
-): Promise<void> {
+export async function loadDescriptorWalletWithoutSync(params: {
+  password: string
+  walletId: number
+  networkMode: NetworkMode
+  addressType: 'taproot' | 'segwit'
+  accountId: number
+}): Promise<void> {
+  const { password, walletId, networkMode, addressType, accountId } = params
   const network = toBitcoinNetwork(networkMode)
-  const descriptorWallet = await resolveDescriptorWallet(
+  const descriptorWallet = await resolveDescriptorWallet({
     password,
     walletId,
-    network,
-    addressType,
-    accountId,
-  )
+    targetNetwork: network,
+    targetAddressType: addressType,
+    targetAccountId: accountId,
+  })
 
   const { loadWallet, getCurrentAddress } = useCryptoStore.getState()
   const {
@@ -246,13 +248,13 @@ export async function loadDescriptorWalletWithoutSync(
   setTransactions([])
 
   const useEmptyChain = network === 'testnet'
-  await loadWallet(
-    descriptorWallet.externalDescriptor,
-    descriptorWallet.internalDescriptor,
+  await loadWallet({
+    externalDescriptor: descriptorWallet.externalDescriptor,
+    internalDescriptor: descriptorWallet.internalDescriptor,
     network,
-    descriptorWallet.changeSet,
+    changesetJson: descriptorWallet.changeSet,
     useEmptyChain,
-  )
+  })
 
   const address = await getCurrentAddress()
   setCurrentAddress(address)
@@ -268,22 +270,24 @@ export async function loadDescriptorWalletWithoutSync(
  * Resolve descriptor wallet, load into WASM, set current address, start
  * auto-lock timer, and sync. Used by WalletUnlock and AppInitializer.
  */
-export async function loadDescriptorWalletAndSync(
-  password: string,
-  walletId: number,
-  networkMode: NetworkMode,
-  addressType: 'taproot' | 'segwit',
-  accountId: number,
-  options?: { onSyncError?: (err: unknown) => void },
-): Promise<void> {
+export async function loadDescriptorWalletAndSync(params: {
+  password: string
+  walletId: number
+  networkMode: NetworkMode
+  addressType: 'taproot' | 'segwit'
+  accountId: number
+  onSyncError?: (err: unknown) => void
+}): Promise<void> {
+  const { password, walletId, networkMode, addressType, accountId, onSyncError } =
+    params
   const network = toBitcoinNetwork(networkMode)
-  const descriptorWallet = await resolveDescriptorWallet(
+  const descriptorWallet = await resolveDescriptorWallet({
     password,
     walletId,
-    network,
-    addressType,
-    accountId,
-  )
+    targetNetwork: network,
+    targetAddressType: addressType,
+    targetAccountId: accountId,
+  })
 
   const { loadWallet, getCurrentAddress, exportChangeset } =
     useCryptoStore.getState()
@@ -301,13 +305,13 @@ export async function loadDescriptorWalletAndSync(
   setLastSyncTime(null)
 
   const useEmptyChain = network === 'testnet'
-  await loadWallet(
-    descriptorWallet.externalDescriptor,
-    descriptorWallet.internalDescriptor,
+  await loadWallet({
+    externalDescriptor: descriptorWallet.externalDescriptor,
+    internalDescriptor: descriptorWallet.internalDescriptor,
     network,
-    descriptorWallet.changeSet,
+    changesetJson: descriptorWallet.changeSet,
     useEmptyChain,
-  )
+  })
 
   const address = await getCurrentAddress()
   setCurrentAddress(address)
@@ -321,10 +325,13 @@ export async function loadDescriptorWalletAndSync(
   try {
     await syncActiveWalletAndUpdateState(networkMode, { useFullScan: true })
     const changeset = await exportChangeset()
-    await updateWalletChangeset(password, walletId, changeset, {
+    await updateWalletChangeset({
+      password,
+      walletId,
+      changesetJson: changeset,
       markFullScanDone: true,
     })
   } catch (err) {
-    options?.onSyncError?.(err)
+    onSyncError?.(err)
   }
 }

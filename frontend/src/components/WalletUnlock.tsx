@@ -52,27 +52,25 @@ export function WalletUnlock({ walletName }: WalletUnlockProps) {
 
       setSessionPassword(walletPassword)
       if (networkMode === 'lab') {
-        await loadDescriptorWalletWithoutSync(
-          walletPassword,
-          activeWalletId,
+        await loadDescriptorWalletWithoutSync({
+          password: walletPassword,
+          walletId: activeWalletId,
           networkMode,
           addressType,
           accountId,
-        )
+        })
       } else {
-        await loadDescriptorWalletAndSync(
-          walletPassword,
-          activeWalletId,
+        await loadDescriptorWalletAndSync({
+          password: walletPassword,
+          walletId: activeWalletId,
           networkMode,
           addressType,
           accountId,
-          {
-            onSyncError: (err) =>
-              toast.error(
-                errorMessage(err) || 'Sync failed — wallet unlocked but data may be stale',
-              ),
-          },
-        )
+          onSyncError: (err) =>
+            toast.error(
+              errorMessage(err) || 'Sync failed — wallet unlocked but data may be stale',
+            ),
+        })
       }
     },
     onError: () => {

@@ -29,12 +29,12 @@ export function useBuildTransactionMutation() {
       effectiveFeeRate: number
     }) => {
       const network = toBitcoinNetwork(networkMode)
-      const psbtBase64 = await buildTransaction(
-        params.normalizedRecipient,
-        params.amountSats,
-        params.effectiveFeeRate,
+      const psbtBase64 = await buildTransaction({
+        recipientAddress: params.normalizedRecipient,
+        amountSats: params.amountSats,
+        feeRateSatPerVb: params.effectiveFeeRate,
         network,
-      )
+      })
       return psbtBase64
     },
     onSuccess: (psbtBase64) => {
@@ -84,7 +84,11 @@ export function useBroadcastTransactionMutation() {
 
       if (password && activeWalletId) {
         const changeset = await exportChangeset()
-        await updateWalletChangeset(password, activeWalletId, changeset)
+        await updateWalletChangeset({
+          password,
+          walletId: activeWalletId,
+          changesetJson: changeset,
+        })
       }
 
       setWalletStatus('syncing')
@@ -140,21 +144,21 @@ export function useLabSendMutation() {
         const walletChangeAddress = await getLabChangeAddress()
 
         const { utxosJson, mempoolMetadata, totalInput } =
-          await labWorker.prepareLabWalletTransaction(
+          await labWorker.prepareLabWalletTransaction({
             walletOwner,
-            params.normalizedRecipient,
-            params.amountSats,
-            params.effectiveFeeRate,
+            toAddress: params.normalizedRecipient,
+            amountSats: params.amountSats,
+            feeRateSatPerVb: params.effectiveFeeRate,
             walletChangeAddress,
-          )
+          })
 
-        const { signedTxHex, feeSats, hasChange } = await buildAndSignLabTransaction(
+        const { signedTxHex, feeSats, hasChange } = await buildAndSignLabTransaction({
           utxosJson,
-          params.normalizedRecipient,
-          params.amountSats,
-          params.effectiveFeeRate,
-          walletChangeAddress,
-        )
+          toAddress: params.normalizedRecipient,
+          amountSats: params.amountSats,
+          feeRateSatPerVb: params.effectiveFeeRate,
+          changeAddress: walletChangeAddress,
+        })
 
         const outputsDetail = hasChange
           ? [

@@ -23,9 +23,9 @@ describe('Create/import rollback on secrets write failure', () => {
     const putSecretsFails = vi.fn().mockRejectedValue(new Error('secrets write failed'))
 
     await expect(
-      persistNewWalletWithSecrets(
+      persistNewWalletWithSecrets({
         walletDb,
-        async () => {
+        insertWalletRow: async () => {
           const result = await walletDb
             .insertInto('wallets')
             .values({
@@ -35,13 +35,14 @@ describe('Create/import rollback on secrets write failure', () => {
             .executeTakeFirstOrThrow()
           return Number(result.insertId)
         },
-        {
+        encryptedBlob: {
           ciphertext: new Uint8Array(0),
           iv: new Uint8Array(12),
           salt: new Uint8Array(16),
+          kdfVersion: 1,
         },
-        putSecretsFails,
-      ),
+        putSecrets: putSecretsFails,
+      }),
     ).rejects.toThrow('secrets write failed')
 
     const wallets = await walletDb.selectFrom('wallets').selectAll().execute()

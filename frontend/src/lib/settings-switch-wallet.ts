@@ -24,14 +24,22 @@ import { syncLoadedSubWalletWithEsplora } from '@/lib/wallet-utils'
  * - Load phase (resolve + loadWallet + address): on failure, rejects after toast — callers must not commit new network/address in the store.
  * - Sync phase (Esplora): on failure after a successful load, still resolves — callers should commit store so UI matches WASM; wallet stays `syncing` until the user retries or fixes network.
  */
-export async function switchDescriptorWallet(
-  targetNetworkMode: NetworkMode,
-  targetAddressType: AddressType,
-  targetAccountId: number,
-  currentNetworkMode: NetworkMode,
-  currentAddressType: AddressType,
-  currentAccountId: number,
-): Promise<void> {
+export async function switchDescriptorWallet(params: {
+  targetNetworkMode: NetworkMode
+  targetAddressType: AddressType
+  targetAccountId: number
+  currentNetworkMode: NetworkMode
+  currentAddressType: AddressType
+  currentAccountId: number
+}): Promise<void> {
+  const {
+    targetNetworkMode,
+    targetAddressType,
+    targetAccountId,
+    currentNetworkMode,
+    currentAddressType,
+    currentAccountId,
+  } = params
   const { activeWalletId } = useWalletStore.getState()
   const sessionPassword = useSessionStore.getState().password
   if (!activeWalletId || !sessionPassword) {
@@ -57,14 +65,14 @@ export async function switchDescriptorWallet(
     toast.info(`Unloading ${previousSubWalletLabel} sub-wallet`)
     try {
       const currentChangeset = await exportChangeset()
-      await updateDescriptorWalletChangeset(
-        sessionPassword,
-        activeWalletId,
-        toBitcoinNetwork(currentNetworkMode),
-        currentAddressType,
-        currentAccountId,
-        currentChangeset,
-      )
+      await updateDescriptorWalletChangeset({
+        password: sessionPassword,
+        walletId: activeWalletId,
+        network: toBitcoinNetwork(currentNetworkMode),
+        addressType: currentAddressType,
+        accountId: currentAccountId,
+        changesetJson: currentChangeset,
+      })
       toast.success(`${previousSubWalletLabel} sub-wallet unloaded`)
     } catch {
       // No active WASM wallet yet (e.g., first load) -- safe to skip
@@ -72,22 +80,22 @@ export async function switchDescriptorWallet(
 
     toast.info(`Loading ${targetSubWalletLabel} sub-wallet`)
     const targetNetwork = toBitcoinNetwork(targetNetworkMode)
-    const descriptorWallet = await resolveDescriptorWallet(
-      sessionPassword,
-      activeWalletId,
+    const descriptorWallet = await resolveDescriptorWallet({
+      password: sessionPassword,
+      walletId: activeWalletId,
       targetNetwork,
       targetAddressType,
       targetAccountId,
-    )
+    })
 
     const useEmptyChain = targetNetwork === 'testnet'
-    await loadWallet(
-      descriptorWallet.externalDescriptor,
-      descriptorWallet.internalDescriptor,
-      targetNetwork,
-      descriptorWallet.changeSet,
+    await loadWallet({
+      externalDescriptor: descriptorWallet.externalDescriptor,
+      internalDescriptor: descriptorWallet.internalDescriptor,
+      network: targetNetwork,
+      changesetJson: descriptorWallet.changeSet,
       useEmptyChain,
-    )
+    })
 
     const address = await getCurrentAddress()
     setCurrentAddress(address)

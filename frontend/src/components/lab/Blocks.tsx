@@ -106,9 +106,6 @@ export function LabBlocksCard({
               onChange={(e) => setMineCount(e.target.value)}
               className="w-24"
             />
-            <p className="text-xs text-muted-foreground max-w-[14rem]">
-              Up to {LAB_MAX_BLOCKS_PER_MINE} per run (larger batches can freeze the UI)
-            </p>
           </div>
           <div className="space-y-2">
             <Label>Owner type</Label>

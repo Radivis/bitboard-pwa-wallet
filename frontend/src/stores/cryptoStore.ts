@@ -9,20 +9,27 @@ import { useWalletStore } from '@/stores/walletStore';
 import { useSessionStore, clearAutoLockTimer } from '@/stores/sessionStore';
 import { resetSecretsChannel } from '@/workers/secrets-channel';
 import type { Remote } from 'comlink';
-import type { CryptoService } from '@/workers/crypto-api';
 import type {
-  AddressType,
-  BitcoinNetwork,
+  CryptoService,
+  BuildAndSignLabTransactionParams,
+  BuildTransactionParams,
+  CreateWalletAndEncryptSecretsParams,
+  CreateWalletParams,
+  DeriveDescriptorsParams,
+  EncryptedBlobForDb,
+  ImportWalletAndEncryptSecretsParams,
+  LoadWalletParams,
+  ResolveDescriptorWalletParams,
+  ResolveDescriptorWalletResult,
+  UpdateDescriptorWalletChangesetParams,
+} from '@/workers/crypto-api';
+import type {
   BalanceInfo,
   CreateWalletResult,
   DescriptorPair,
   SyncResult,
   TransactionDetails,
 } from '@/workers/crypto-types';
-import type {
-  EncryptedBlobForDb,
-  ResolveDescriptorWalletResult,
-} from '@/workers/crypto-api';
 
 interface CryptoState {
   _worker: Remote<CryptoService> | null;
@@ -34,36 +41,16 @@ interface CryptoState {
 
   generateMnemonic: (wordCount: 12 | 24) => Promise<string>;
   validateMnemonic: (mnemonic: string) => Promise<boolean>;
-  deriveDescriptors: (
-    mnemonic: string,
-    network: BitcoinNetwork,
-    addressType: AddressType,
-    accountId: number
-  ) => Promise<DescriptorPair>;
+  deriveDescriptors: (params: DeriveDescriptorsParams) => Promise<DescriptorPair>;
 
-  createWallet: (
-    mnemonic: string,
-    network: BitcoinNetwork,
-    addressType: AddressType,
-    accountId: number
-  ) => Promise<CreateWalletResult>;
-  
-  loadWallet: (
-    externalDescriptor: string,
-    internalDescriptor: string,
-    network: BitcoinNetwork,
-    changesetJson: string,
-    useEmptyChain: boolean
-  ) => Promise<boolean>;
+  createWallet: (params: CreateWalletParams) => Promise<CreateWalletResult>;
+
+  loadWallet: (params: LoadWalletParams) => Promise<boolean>;
 
   getNewAddress: () => Promise<string>;
   getCurrentAddress: () => Promise<string>;
   buildAndSignLabTransaction: (
-    utxosJson: string,
-    toAddress: string,
-    amountSats: number,
-    feeRateSatPerVb: number,
-    changeAddress: string,
+    params: BuildAndSignLabTransactionParams,
   ) => Promise<{ signedTxHex: string; feeSats: number; hasChange: boolean }>;
   getLabChangeAddress: () => Promise<string>;
   getBalance: () => Promise<BalanceInfo>;
@@ -72,46 +59,27 @@ interface CryptoState {
   syncWallet: (esploraUrl: string) => Promise<SyncResult>;
   fullScanWallet: (esploraUrl: string, stopGap: number) => Promise<SyncResult>;
 
-  buildTransaction: (
-    recipientAddress: string,
-    amountSats: number,
-    feeRateSatPerVb: number,
-    network: BitcoinNetwork
-  ) => Promise<string>;
-  
+  buildTransaction: (params: BuildTransactionParams) => Promise<string>;
+
   signAndExtractTransaction: (psbtBase64: string) => Promise<string>;
-  
+
   broadcastTransaction: (
     rawTxHex: string,
     esploraUrl: string
   ) => Promise<string>;
-  
+
   getTransactionList: () => Promise<TransactionDetails[]>;
 
   resolveDescriptorWallet: (
-    password: string,
-    encryptedBlob: EncryptedBlobForDb,
-    targetNetwork: BitcoinNetwork,
-    targetAddressType: AddressType,
-    targetAccountId: number
+    params: ResolveDescriptorWalletParams,
   ) => Promise<ResolveDescriptorWalletResult>;
 
   updateDescriptorWalletChangeset: (
-    password: string,
-    encryptedBlob: EncryptedBlobForDb,
-    network: BitcoinNetwork,
-    addressType: AddressType,
-    accountId: number,
-    changesetJson: string,
-    options?: { markFullScanDone?: boolean }
+    params: UpdateDescriptorWalletChangesetParams,
   ) => Promise<EncryptedBlobForDb>;
 
   createWalletAndEncryptSecrets: (
-    password: string,
-    network: BitcoinNetwork,
-    addressType: AddressType,
-    accountId: number,
-    wordCount: 12 | 24
+    params: CreateWalletAndEncryptSecretsParams,
   ) => Promise<{
     encryptedBlob: EncryptedBlobForDb;
     walletResult: CreateWalletResult;
@@ -119,11 +87,7 @@ interface CryptoState {
   }>;
 
   importWalletAndEncryptSecrets: (
-    mnemonic: string,
-    password: string,
-    network: BitcoinNetwork,
-    addressType: AddressType,
-    accountId: number
+    params: ImportWalletAndEncryptSecretsParams,
   ) => Promise<{
     encryptedBlob: EncryptedBlobForDb;
     walletResult: CreateWalletResult;
@@ -167,51 +131,29 @@ export const useCryptoStore = create<CryptoState>((set, get) => {
       return worker;
     },
 
-    generateMnemonic: (wordCount) => 
+    generateMnemonic: (wordCount) =>
       withErrorHandling((worker) => worker.generateMnemonic(wordCount)),
 
-    validateMnemonic: (mnemonic) => 
+    validateMnemonic: (mnemonic) =>
       withErrorHandling((worker) => worker.validateMnemonic(mnemonic)),
 
-    deriveDescriptors: (mnemonic, network, addressType, accountId) => 
-      withErrorHandling((worker) => worker.deriveDescriptors(mnemonic, network, addressType, accountId)),
+    deriveDescriptors: (params) =>
+      withErrorHandling((worker) => worker.deriveDescriptors(params)),
 
-    createWallet: (mnemonic, network, addressType, accountId) => 
-      withErrorHandling((worker) => worker.createWallet(mnemonic, network, addressType, accountId)),
+    createWallet: (params) =>
+      withErrorHandling((worker) => worker.createWallet(params)),
 
-    loadWallet: (externalDescriptor, internalDescriptor, network, changesetJson, useEmptyChain) =>
-      withErrorHandling((worker) =>
-        worker.loadWallet(
-          externalDescriptor,
-          internalDescriptor,
-          network,
-          changesetJson,
-          useEmptyChain
-        )
-      ),
+    loadWallet: (params) =>
+      withErrorHandling((worker) => worker.loadWallet(params)),
 
-    getNewAddress: () => 
+    getNewAddress: () =>
       withErrorHandling((worker) => worker.getNewAddress()),
 
     getCurrentAddress: () =>
       withErrorHandling((worker) => worker.getCurrentAddress()),
 
-    buildAndSignLabTransaction: (
-      utxosJson,
-      toAddress,
-      amountSats,
-      feeRateSatPerVb,
-      changeAddress,
-    ) =>
-      withErrorHandling((worker) =>
-        worker.buildAndSignLabTransaction(
-          utxosJson,
-          toAddress,
-          amountSats,
-          feeRateSatPerVb,
-          changeAddress,
-        ),
-      ),
+    buildAndSignLabTransaction: (params) =>
+      withErrorHandling((worker) => worker.buildAndSignLabTransaction(params)),
 
     getLabChangeAddress: () =>
       withErrorHandling((worker) => worker.getLabChangeAddress()),
@@ -219,73 +161,38 @@ export const useCryptoStore = create<CryptoState>((set, get) => {
     getBalance: () =>
       withErrorHandling((worker) => worker.getBalance()),
 
-    exportChangeset: () => 
+    exportChangeset: () =>
       withErrorHandling((worker) => worker.exportChangeset()),
 
-    syncWallet: (esploraUrl) => 
+    syncWallet: (esploraUrl) =>
       withErrorHandling((worker) => worker.syncWallet(esploraUrl)),
 
-    fullScanWallet: (esploraUrl, stopGap) => 
+    fullScanWallet: (esploraUrl, stopGap) =>
       withErrorHandling((worker) => worker.fullScanWallet(esploraUrl, stopGap)),
 
-    buildTransaction: (recipientAddress, amountSats, feeRateSatPerVb, network) => 
-      withErrorHandling((worker) => worker.buildTransaction(
-        recipientAddress,
-        amountSats,
-        feeRateSatPerVb,
-        network
-      )),
+    buildTransaction: (params) =>
+      withErrorHandling((worker) => worker.buildTransaction(params)),
 
-    signAndExtractTransaction: (psbtBase64) => 
+    signAndExtractTransaction: (psbtBase64) =>
       withErrorHandling((worker) => worker.signAndExtractTransaction(psbtBase64)),
 
-    broadcastTransaction: (rawTxHex, esploraUrl) => 
+    broadcastTransaction: (rawTxHex, esploraUrl) =>
       withErrorHandling((worker) => worker.broadcastTransaction(rawTxHex, esploraUrl)),
 
-    getTransactionList: () => 
+    getTransactionList: () =>
       withErrorHandling((worker) => worker.getTransactionList()),
 
-    resolveDescriptorWallet: (password, encryptedBlob, targetNetwork, targetAddressType, targetAccountId) =>
-      withErrorHandling((worker) =>
-        worker.resolveDescriptorWallet(
-          password,
-          encryptedBlob,
-          targetNetwork,
-          targetAddressType,
-          targetAccountId
-        )
-      ),
+    resolveDescriptorWallet: (params) =>
+      withErrorHandling((worker) => worker.resolveDescriptorWallet(params)),
 
-    updateDescriptorWalletChangeset: (
-      password,
-      encryptedBlob,
-      network,
-      addressType,
-      accountId,
-      changesetJson,
-      options
-    ) =>
-      withErrorHandling((worker) =>
-        worker.updateDescriptorWalletChangeset(
-          password,
-          encryptedBlob,
-          network,
-          addressType,
-          accountId,
-          changesetJson,
-          options
-        )
-      ),
+    updateDescriptorWalletChangeset: (params) =>
+      withErrorHandling((worker) => worker.updateDescriptorWalletChangeset(params)),
 
-    createWalletAndEncryptSecrets: (password, network, addressType, accountId, wordCount) =>
-      withErrorHandling((worker) =>
-        worker.createWalletAndEncryptSecrets(password, network, addressType, accountId, wordCount)
-      ),
+    createWalletAndEncryptSecrets: (params) =>
+      withErrorHandling((worker) => worker.createWalletAndEncryptSecrets(params)),
 
-    importWalletAndEncryptSecrets: (mnemonic, password, network, addressType, accountId) =>
-      withErrorHandling((worker) =>
-        worker.importWalletAndEncryptSecrets(mnemonic, password, network, addressType, accountId)
-      ),
+    importWalletAndEncryptSecrets: (params) =>
+      withErrorHandling((worker) => worker.importWalletAndEncryptSecrets(params)),
 
     lockAndPurgeSensitiveRuntimeState: () => {
       useWalletStore.getState().lockWallet();

@@ -345,12 +345,13 @@ const labService = {
     return this.getStateSnapshot()
   },
 
-  async createTransaction(
-    fromAddress: string,
-    toAddress: string,
-    amountSats: number,
-    feeRateSatPerVb: number,
-  ): Promise<LabState> {
+  async createTransaction(params: {
+    fromAddress: string
+    toAddress: string
+    amountSats: number
+    feeRateSatPerVb: number
+  }): Promise<LabState> {
+    const { fromAddress, toAddress, amountSats, feeRateSatPerVb } = params
     const wasmModule = await getWasm()
 
     const fromUtxos = state.utxos.filter((u) => u.address === fromAddress)
@@ -447,17 +448,18 @@ const labService = {
     return this.getStateSnapshot()
   },
 
-  async prepareLabWalletTransaction(
-    walletOwner: string,
-    toAddress: string,
-    amountSats: number,
-    _feeRateSatPerVb: number,
-    walletChangeAddress: string,
-  ): Promise<{
+  async prepareLabWalletTransaction(params: {
+    walletOwner: string
+    toAddress: string
+    amountSats: number
+    feeRateSatPerVb: number
+    walletChangeAddress: string
+  }): Promise<{
     utxosJson: string
     mempoolMetadata: import('./lab-api').LabMempoolMetadata
     totalInput: number
   }> {
+    const { walletOwner, toAddress, amountSats, walletChangeAddress } = params
     const addressToOwner = state.addressToOwner ?? {}
 
     const fromUtxos = state.utxos.filter(

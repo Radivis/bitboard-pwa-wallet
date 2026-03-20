@@ -101,14 +101,14 @@ describe('switchDescriptorWallet', () => {
     } as ReturnType<typeof useWalletStore.getState>)
 
     await expect(
-      switchDescriptorWallet(
-        'testnet',
-        'taproot',
-        0,
-        'signet',
-        'taproot',
-        0,
-      ),
+      switchDescriptorWallet({
+        targetNetworkMode: 'testnet',
+        targetAddressType: 'taproot',
+        targetAccountId: 0,
+        currentNetworkMode: 'signet',
+        currentAddressType: 'taproot',
+        currentAccountId: 0,
+      }),
     ).rejects.toThrow('Cannot switch descriptor wallet: no active wallet or session')
   })
 
@@ -118,28 +118,28 @@ describe('switchDescriptorWallet', () => {
     )
 
     await expect(
-      switchDescriptorWallet(
-        'testnet',
-        'taproot',
-        0,
-        'signet',
-        'taproot',
-        0,
-      ),
+      switchDescriptorWallet({
+        targetNetworkMode: 'testnet',
+        targetAddressType: 'taproot',
+        targetAccountId: 0,
+        currentNetworkMode: 'signet',
+        currentAddressType: 'taproot',
+        currentAccountId: 0,
+      }),
     ).rejects.toThrow('resolve failed')
 
     expect(toast.error).toHaveBeenCalled()
   })
 
   it('resolves when load and sync succeed (non-lab)', async () => {
-    await switchDescriptorWallet(
-      'testnet',
-      'taproot',
-      0,
-      'signet',
-      'taproot',
-      0,
-    )
+    await switchDescriptorWallet({
+      targetNetworkMode: 'testnet',
+      targetAddressType: 'taproot',
+      targetAccountId: 0,
+      currentNetworkMode: 'signet',
+      currentAddressType: 'taproot',
+      currentAccountId: 0,
+    })
 
     expect(mockSyncLoadedSubWalletWithEsplora).toHaveBeenCalledWith({
       networkMode: 'testnet',
@@ -159,14 +159,14 @@ describe('switchDescriptorWallet', () => {
     mockSyncLoadedSubWalletWithEsplora.mockResolvedValueOnce('sync_failed')
 
     await expect(
-      switchDescriptorWallet(
-        'testnet',
-        'taproot',
-        0,
-        'signet',
-        'taproot',
-        0,
-      ),
+      switchDescriptorWallet({
+        targetNetworkMode: 'testnet',
+        targetAddressType: 'taproot',
+        targetAccountId: 0,
+        currentNetworkMode: 'signet',
+        currentAddressType: 'taproot',
+        currentAccountId: 0,
+      }),
     ).resolves.toBeUndefined()
 
     expect(mockSyncLoadedSubWalletWithEsplora).toHaveBeenCalled()
@@ -179,14 +179,14 @@ describe('switchDescriptorWallet', () => {
   })
 
   it('does not run Esplora sync for lab target', async () => {
-    await switchDescriptorWallet(
-      'lab',
-      'taproot',
-      0,
-      'testnet',
-      'taproot',
-      0,
-    )
+    await switchDescriptorWallet({
+      targetNetworkMode: 'lab',
+      targetAddressType: 'taproot',
+      targetAccountId: 0,
+      currentNetworkMode: 'testnet',
+      currentAddressType: 'taproot',
+      currentAccountId: 0,
+    })
 
     expect(mockSyncLoadedSubWalletWithEsplora).not.toHaveBeenCalled()
     expect(mockSetWalletStatus).toHaveBeenCalledWith('unlocked')

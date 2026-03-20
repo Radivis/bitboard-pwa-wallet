@@ -112,13 +112,13 @@ describe('CreateWalletPage', () => {
     await user.type(screen.getByLabelText('Password'), 'password123')
     await user.type(screen.getByLabelText('Confirm Password'), 'password123')
     await user.click(screen.getByText('Generate & Continue'))
-    expect(mockCreateWalletAndEncryptSecrets).toHaveBeenCalledWith(
-      'password123',
-      'signet',
-      'taproot',
-      0,
-      24,
-    )
+    expect(mockCreateWalletAndEncryptSecrets).toHaveBeenCalledWith({
+      password: 'password123',
+      network: 'signet',
+      addressType: 'taproot',
+      accountId: 0,
+      wordCount: 24,
+    })
   })
 
   it('clicking Generate & Continue with valid password calls createWalletAndEncryptSecrets', async () => {
@@ -133,13 +133,13 @@ describe('CreateWalletPage', () => {
     await user.type(screen.getByLabelText('Password'), 'validpassword123')
     await user.type(screen.getByLabelText('Confirm Password'), 'validpassword123')
     await user.click(screen.getByText('Generate & Continue'))
-    expect(mockCreateWalletAndEncryptSecrets).toHaveBeenCalledWith(
-      'validpassword123',
-      'signet',
-      'taproot',
-      0,
-      12,
-    )
+    expect(mockCreateWalletAndEncryptSecrets).toHaveBeenCalledWith({
+      password: 'validpassword123',
+      network: 'signet',
+      addressType: 'taproot',
+      accountId: 0,
+      wordCount: 12,
+    })
   })
 
   it('advances to step 2 on successful create', async () => {

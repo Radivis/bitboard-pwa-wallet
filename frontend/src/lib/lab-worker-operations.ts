@@ -6,7 +6,11 @@ import {
   persistLabState,
   resetLab as resetLabFactory,
 } from '@/workers/lab-factory'
-import type { LabState, LabMempoolMetadata } from '@/workers/lab-api'
+import type {
+  LabCreateTransactionParams,
+  LabMempoolMetadata,
+  LabState,
+} from '@/workers/lab-api'
 import {
   labPipelineDebugLog,
   labPipelineSnapshot,
@@ -56,21 +60,13 @@ export async function labOpMineBlocks(
 }
 
 export async function labOpCreateTransaction(
-  fromAddress: string,
-  toAddress: string,
-  amountSats: number,
-  feeRateSatPerVb: number,
+  params: LabCreateTransactionParams,
 ): Promise<LabState> {
   return runLabOp(async () => {
     labPipelineDebugLog('createLabTransaction:start', {})
     await initLabWorkerWithState()
     const labWorker = getLabWorker()
-    const state = await labWorker.createTransaction(
-      fromAddress,
-      toAddress,
-      amountSats,
-      feeRateSatPerVb,
-    )
+    const state = await labWorker.createTransaction(params)
     await persistLabState(state)
     labPipelineSnapshot('createLabTransaction:end', state)
     return state

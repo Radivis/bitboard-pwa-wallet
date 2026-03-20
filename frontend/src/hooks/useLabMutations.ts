@@ -53,12 +53,12 @@ export function useLabCreateTransactionMutation() {
   return useMutation({
     mutationKey: ['lab', 'createTransaction'] as const,
     mutationFn: async (variables: LabCreateTransactionVariables) => {
-      return labOpCreateTransaction(
-        variables.fromAddress,
-        variables.toAddress,
-        variables.amountSats,
-        variables.feeRateSatPerVb,
-      )
+      return labOpCreateTransaction({
+        fromAddress: variables.fromAddress,
+        toAddress: variables.toAddress,
+        amountSats: variables.amountSats,
+        feeRateSatPerVb: variables.feeRateSatPerVb,
+      })
     },
     onSuccess: (state) => {
       setLabChainStateCache(queryClient, state)

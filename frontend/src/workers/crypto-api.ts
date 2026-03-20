@@ -19,6 +19,77 @@ export interface ResolveDescriptorWalletResult {
 /** Encrypted blob as stored in DB (transferable from worker to main). */
 export type EncryptedBlobForDb = EncryptedBlob;
 
+export interface DeriveDescriptorsParams {
+  mnemonic: string;
+  network: BitcoinNetwork;
+  addressType: AddressType;
+  accountId: number;
+}
+
+export interface CreateWalletParams {
+  mnemonic: string;
+  network: BitcoinNetwork;
+  addressType: AddressType;
+  accountId: number;
+}
+
+export interface LoadWalletParams {
+  externalDescriptor: string;
+  internalDescriptor: string;
+  network: BitcoinNetwork;
+  changesetJson: string;
+  useEmptyChain: boolean;
+}
+
+export interface BuildAndSignLabTransactionParams {
+  utxosJson: string;
+  toAddress: string;
+  amountSats: number;
+  feeRateSatPerVb: number;
+  changeAddress: string;
+}
+
+export interface BuildTransactionParams {
+  recipientAddress: string;
+  amountSats: number;
+  feeRateSatPerVb: number;
+  network: BitcoinNetwork;
+}
+
+export interface ResolveDescriptorWalletParams {
+  password: string;
+  encryptedBlob: EncryptedBlobForDb;
+  targetNetwork: BitcoinNetwork;
+  targetAddressType: AddressType;
+  targetAccountId: number;
+}
+
+export interface UpdateDescriptorWalletChangesetParams {
+  password: string;
+  encryptedBlob: EncryptedBlobForDb;
+  network: BitcoinNetwork;
+  addressType: AddressType;
+  accountId: number;
+  changesetJson: string;
+  markFullScanDone?: boolean;
+}
+
+export interface CreateWalletAndEncryptSecretsParams {
+  password: string;
+  network: BitcoinNetwork;
+  addressType: AddressType;
+  accountId: number;
+  wordCount: 12 | 24;
+}
+
+export interface ImportWalletAndEncryptSecretsParams {
+  mnemonic: string;
+  password: string;
+  network: BitcoinNetwork;
+  addressType: AddressType;
+  accountId: number;
+}
+
 export interface CryptoService {
   /** Sets the port for worker-to-worker secrets channel. Call once from main thread before using resolveDescriptorWallet/updateDescriptorWalletChangeset. */
   setSecretsPort(port: MessagePort): Promise<void>;
@@ -28,37 +99,17 @@ export interface CryptoService {
 
   generateMnemonic(wordCount: 12 | 24): Promise<string>;
   validateMnemonic(mnemonic: string): Promise<boolean>;
-  deriveDescriptors(
-    mnemonic: string,
-    network: BitcoinNetwork,
-    addressType: AddressType,
-    accountId: number
-  ): Promise<DescriptorPair>;
+  deriveDescriptors(params: DeriveDescriptorsParams): Promise<DescriptorPair>;
 
-  createWallet(
-    mnemonic: string,
-    network: BitcoinNetwork,
-    addressType: AddressType,
-    accountId: number
-  ): Promise<CreateWalletResult>;
-  
-  loadWallet(
-    externalDescriptor: string,
-    internalDescriptor: string,
-    network: BitcoinNetwork,
-    changesetJson: string,
-    useEmptyChain: boolean
-  ): Promise<boolean>;
+  createWallet(params: CreateWalletParams): Promise<CreateWalletResult>;
+
+  loadWallet(params: LoadWalletParams): Promise<boolean>;
 
   getNewAddress(): Promise<string>;
   getCurrentAddress(): Promise<string>;
   /** Build and sign a lab transaction using BDK add_foreign_utxo. */
   buildAndSignLabTransaction(
-    utxosJson: string,
-    toAddress: string,
-    amountSats: number,
-    feeRateSatPerVb: number,
-    changeAddress: string,
+    params: BuildAndSignLabTransactionParams,
   ): Promise<{ signedTxHex: string; feeSats: number; hasChange: boolean }>;
   /** First internal address for lab change outputs. */
   getLabChangeAddress(): Promise<string>;
@@ -68,20 +119,15 @@ export interface CryptoService {
   syncWallet(esploraUrl: string): Promise<SyncResult>;
   fullScanWallet(esploraUrl: string, stopGap: number): Promise<SyncResult>;
 
-  buildTransaction(
-    recipientAddress: string,
-    amountSats: number,
-    feeRateSatPerVb: number,
-    network: BitcoinNetwork
-  ): Promise<string>;
-  
+  buildTransaction(params: BuildTransactionParams): Promise<string>;
+
   signAndExtractTransaction(psbtBase64: string): Promise<string>;
-  
+
   broadcastTransaction(
     rawTxHex: string,
     esploraUrl: string
   ): Promise<string>;
-  
+
   getTransactionList(): Promise<TransactionDetails[]>;
 
   /**
@@ -89,11 +135,7 @@ export interface CryptoService {
    * Decrypt and encrypt happen via the secrets port; mnemonic never leaves the worker.
    */
   resolveDescriptorWallet(
-    password: string,
-    encryptedBlob: EncryptedBlobForDb,
-    targetNetwork: BitcoinNetwork,
-    targetAddressType: AddressType,
-    targetAccountId: number
+    params: ResolveDescriptorWalletParams,
   ): Promise<ResolveDescriptorWalletResult>;
 
   /**
@@ -102,13 +144,7 @@ export interface CryptoService {
    * When markFullScanDone is true, sets that sub-wallet's fullScanDone flag.
    */
   updateDescriptorWalletChangeset(
-    password: string,
-    encryptedBlob: EncryptedBlobForDb,
-    network: BitcoinNetwork,
-    addressType: AddressType,
-    accountId: number,
-    changesetJson: string,
-    options?: { markFullScanDone?: boolean }
+    params: UpdateDescriptorWalletChangesetParams,
   ): Promise<EncryptedBlobForDb>;
 
   /**
@@ -116,11 +152,7 @@ export interface CryptoService {
    * Returns encrypted blob, wallet result, and mnemonic for one-time backup display.
    */
   createWalletAndEncryptSecrets(
-    password: string,
-    network: BitcoinNetwork,
-    addressType: AddressType,
-    accountId: number,
-    wordCount: 12 | 24
+    params: CreateWalletAndEncryptSecretsParams,
   ): Promise<{
     encryptedBlob: EncryptedBlobForDb;
     walletResult: CreateWalletResult;
@@ -132,11 +164,7 @@ export interface CryptoService {
    * Mnemonic is passed in and not retained; returns encrypted blob and wallet result.
    */
   importWalletAndEncryptSecrets(
-    mnemonic: string,
-    password: string,
-    network: BitcoinNetwork,
-    addressType: AddressType,
-    accountId: number
+    params: ImportWalletAndEncryptSecretsParams,
   ): Promise<{
     encryptedBlob: EncryptedBlobForDb;
     walletResult: CreateWalletResult;

@@ -85,28 +85,26 @@ export function AppInitializer({ children }: AppInitializerProps) {
   async function autoUnlockWallet(walletId: number, password: string) {
     try {
       if (networkMode === 'lab') {
-        await loadDescriptorWalletWithoutSync(
+        await loadDescriptorWalletWithoutSync({
           password,
           walletId,
           networkMode,
           addressType,
           accountId,
-        )
+        })
       } else {
-        await loadDescriptorWalletAndSync(
+        await loadDescriptorWalletAndSync({
           password,
           walletId,
           networkMode,
           addressType,
           accountId,
-          {
-            onSyncError: (err) => {
-              const msg =
-                err instanceof Error ? err.message : String(err)
-              toast.error(msg || 'Sync failed — wallet unlocked but data may be stale')
-            },
+          onSyncError: (err) => {
+            const msg =
+              err instanceof Error ? err.message : String(err)
+            toast.error(msg || 'Sync failed — wallet unlocked but data may be stale')
           },
-        )
+        })
       }
     } catch {
       setWalletStatus('locked')

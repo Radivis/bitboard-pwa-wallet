@@ -261,22 +261,22 @@ describe('SettingsPage', () => {
     await user.click(screen.getByRole('button', { name: 'Testnet' }))
 
     await waitFor(() => {
-      expect(mockUpdateDescriptorWalletChangeset).toHaveBeenCalledWith(
-        'testpass',
-        1,
-        'signet',
-        'taproot',
-        0,
-        '{"last_reveal":{"0":0}}',
-      )
+      expect(mockUpdateDescriptorWalletChangeset).toHaveBeenCalledWith({
+        password: 'testpass',
+        walletId: 1,
+        network: 'signet',
+        addressType: 'taproot',
+        accountId: 0,
+        changesetJson: '{"last_reveal":{"0":0}}',
+      })
     })
-    expect(mockResolveDescriptorWallet).toHaveBeenCalledWith(
-      'testpass',
-      1,
-      'testnet',
-      'taproot',
-      0,
-    )
+    expect(mockResolveDescriptorWallet).toHaveBeenCalledWith({
+      password: 'testpass',
+      walletId: 1,
+      targetNetwork: 'testnet',
+      targetAddressType: 'taproot',
+      targetAccountId: 0,
+    })
     const updateCallOrder = mockUpdateDescriptorWalletChangeset.mock.invocationCallOrder[0]
     const resolveCallOrder = mockResolveDescriptorWallet.mock.invocationCallOrder[0]
     expect(updateCallOrder).toBeLessThan(resolveCallOrder)

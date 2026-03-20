@@ -19,6 +19,7 @@ import {
   ensureMigrated,
   persistNewWalletWithSecrets,
   walletKeys,
+  type EncryptedWalletSecretsBlob,
 } from '@/db'
 import { ensureSecretsChannel } from '@/workers/secrets-channel'
 import { toBitcoinNetwork } from '@/lib/bitcoin-utils'
@@ -31,7 +32,7 @@ type Step = 1 | 2 | 3 | 4
 
 /** Stored after createWalletAndEncryptSecrets so we can persist in step 4 without keeping mnemonic. */
 interface CreateWalletPending {
-  encryptedBlob: { ciphertext: Uint8Array; iv: Uint8Array; salt: Uint8Array }
+  encryptedBlob: EncryptedWalletSecretsBlob
   walletResult: { first_address: string }
 }
 
@@ -83,13 +84,13 @@ export function CreateWalletPage() {
     mutationFn: async () => {
       await ensureSecretsChannel()
       const network = toBitcoinNetwork(networkMode)
-      const result = await createWalletAndEncryptSecrets(
+      const result = await createWalletAndEncryptSecrets({
         password,
         network,
         addressType,
         accountId,
         wordCount,
-      )
+      })
       return result
     },
     onSuccess: (result) => {
@@ -117,15 +118,15 @@ export function CreateWalletPage() {
       const walletDb = getDatabase()
       let walletId: number
       try {
-        walletId = await persistNewWalletWithSecrets(
+        walletId = await persistNewWalletWithSecrets({
           walletDb,
-          () =>
+          insertWalletRow: () =>
             addWallet.mutateAsync({
               name: `Wallet ${Date.now()}`,
               created_at: new Date().toISOString(),
             }),
-          pendingCreate!.encryptedBlob,
-        )
+          encryptedBlob: pendingCreate!.encryptedBlob,
+        })
       } catch (secretsErr) {
         queryClient.invalidateQueries({ queryKey: walletKeys.all })
         throw secretsErr

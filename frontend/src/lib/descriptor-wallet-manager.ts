@@ -8,12 +8,13 @@ import { useCryptoStore } from '@/stores/cryptoStore'
  * Find a descriptor wallet matching the given (network, addressType, accountId)
  * within the wallet secrets array.
  */
-export function findDescriptorWallet(
-  secrets: WalletSecrets,
-  network: BitcoinNetwork,
-  addressType: AddressType,
-  accountId: number,
-): DescriptorWalletData | undefined {
+export function findDescriptorWallet(params: {
+  secrets: WalletSecrets
+  network: BitcoinNetwork
+  addressType: AddressType
+  accountId: number
+}): DescriptorWalletData | undefined {
+  const { secrets, network, addressType, accountId } = params
   return secrets.descriptorWallets.find(
     (dw) =>
       dw.network === network &&
@@ -30,25 +31,27 @@ export function findDescriptorWallet(
  * `updateDescriptorWalletChangeset` with the current (network, addressType, accountId)
  * before calling this function to persist the active WASM wallet state.
  */
-export async function resolveDescriptorWallet(
-  password: string,
-  walletId: number,
-  targetNetwork: BitcoinNetwork,
-  targetAddressType: AddressType,
-  targetAccountId: number,
-): Promise<DescriptorWalletData> {
+export async function resolveDescriptorWallet(params: {
+  password: string
+  walletId: number
+  targetNetwork: BitcoinNetwork
+  targetAddressType: AddressType
+  targetAccountId: number
+}): Promise<DescriptorWalletData> {
+  const { password, walletId, targetNetwork, targetAddressType, targetAccountId } =
+    params
   await ensureMigrated()
   await ensureSecretsChannel()
   const walletDb = getDatabase()
   const encryptedBlob = await getWalletSecretsEncrypted(walletDb, walletId)
   const { resolveDescriptorWallet: workerResolve } = useCryptoStore.getState()
-  const result = await workerResolve(
+  const result = await workerResolve({
     password,
     encryptedBlob,
     targetNetwork,
     targetAddressType,
     targetAccountId,
-  )
+  })
   if (result.encryptedBlobToStore) {
     await putWalletSecretsEncrypted(walletDb, walletId, result.encryptedBlobToStore)
   }
@@ -61,28 +64,37 @@ export async function resolveDescriptorWallet(
  * When markFullScanDone is true, sets that sub-wallet's fullScanDone flag.
  * Decrypt and encrypt run in workers; mnemonic never touches the main thread.
  */
-export async function updateDescriptorWalletChangeset(
-  password: string,
-  walletId: number,
-  network: BitcoinNetwork,
-  addressType: AddressType,
-  accountId: number,
-  changesetJson: string,
-  options?: { markFullScanDone?: boolean },
-): Promise<void> {
+export async function updateDescriptorWalletChangeset(params: {
+  password: string
+  walletId: number
+  network: BitcoinNetwork
+  addressType: AddressType
+  accountId: number
+  changesetJson: string
+  markFullScanDone?: boolean
+}): Promise<void> {
+  const {
+    password,
+    walletId,
+    network,
+    addressType,
+    accountId,
+    changesetJson,
+    markFullScanDone,
+  } = params
   await ensureMigrated()
   await ensureSecretsChannel()
   const walletDb = getDatabase()
   const encryptedBlob = await getWalletSecretsEncrypted(walletDb, walletId)
   const { updateDescriptorWalletChangeset: workerUpdate } = useCryptoStore.getState()
-  const newEncrypted = await workerUpdate(
+  const newEncrypted = await workerUpdate({
     password,
     encryptedBlob,
     network,
     addressType,
     accountId,
     changesetJson,
-    options,
-  )
+    markFullScanDone,
+  })
   await putWalletSecretsEncrypted(walletDb, walletId, newEncrypted)
 }

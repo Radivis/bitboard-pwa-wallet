@@ -16,7 +16,12 @@ test.describe('Crypto Worker Integration', () => {
         const state = useCryptoStore.getState()
         const mnemonic = await state.generateMnemonic(12)
         const isValid = await state.validateMnemonic(mnemonic)
-        const wallet = await state.createWallet(mnemonic, 'signet', 'taproot')
+        const wallet = await state.createWallet({
+          mnemonic,
+          network: 'signet',
+          addressType: 'taproot',
+          accountId: 0,
+        })
         return {
           wordCount: mnemonic.split(' ').length,
           isValid,
@@ -61,16 +66,18 @@ test.describe('Crypto Worker Integration', () => {
         const { useCryptoStore } = await import('/src/stores/cryptoStore')
         const state = useCryptoStore.getState()
         const mnemonic = await state.generateMnemonic(12)
-        const taproot = await state.deriveDescriptors(
+        const taproot = await state.deriveDescriptors({
           mnemonic,
-          'signet',
-          'taproot',
-        )
-        const segwit = await state.deriveDescriptors(
+          network: 'signet',
+          addressType: 'taproot',
+          accountId: 0,
+        })
+        const segwit = await state.deriveDescriptors({
           mnemonic,
-          'signet',
-          'segwit',
-        )
+          network: 'signet',
+          addressType: 'segwit',
+          accountId: 0,
+        })
         return {
           taprootExternal: taproot.external,
           segwitExternal: segwit.external,
@@ -94,7 +101,12 @@ test.describe('Crypto Worker Integration', () => {
         const { useCryptoStore } = await import('/src/stores/cryptoStore')
         const state = useCryptoStore.getState()
         const mnemonic = await state.generateMnemonic(12)
-        await state.createWallet(mnemonic, 'signet', 'taproot')
+        await state.createWallet({
+          mnemonic,
+          network: 'signet',
+          addressType: 'taproot',
+          accountId: 0,
+        })
         const addr1 = await state.getNewAddress()
         const addr2 = await state.getNewAddress()
         return { addr1, addr2, different: addr1 !== addr2 }
@@ -116,7 +128,12 @@ test.describe('Crypto Worker Integration', () => {
         const { useCryptoStore } = await import('/src/stores/cryptoStore')
         const state = useCryptoStore.getState()
         const mnemonic = await state.generateMnemonic(12)
-        await state.createWallet(mnemonic, 'signet', 'taproot')
+        await state.createWallet({
+          mnemonic,
+          network: 'signet',
+          addressType: 'taproot',
+          accountId: 0,
+        })
         const changeset = await state.exportChangeset()
         const parsed = JSON.parse(changeset)
         return {
@@ -139,7 +156,12 @@ test.describe('Crypto Worker Integration', () => {
       try {
         const { useCryptoStore } = await import('/src/stores/cryptoStore')
         const state = useCryptoStore.getState()
-        await state.createWallet('invalid mnemonic words', 'signet', 'taproot')
+        await state.createWallet({
+          mnemonic: 'invalid mnemonic words',
+          network: 'signet',
+          addressType: 'taproot',
+          accountId: 0,
+        })
         return { threw: false }
       } catch {
         return { threw: true }

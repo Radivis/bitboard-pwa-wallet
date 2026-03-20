@@ -42,6 +42,7 @@ export function getMockEncryptionWorker() {
         ciphertext: new Uint8Array(ciphertextBuffer),
         iv,
         salt,
+        kdfVersion: 1 as const,
       }
     },
 

@@ -227,13 +227,13 @@ describe('ImportWalletPage', () => {
     await user.click(screen.getByRole('button', { name: 'Restore Wallet' }))
 
     await waitFor(() => {
-      expect(mockImportWalletAndEncryptSecrets).toHaveBeenCalledWith(
-        TEST_MNEMONIC_12,
-        'validpassword123',
-        'signet',
-        'taproot',
-        0,
-      )
+      expect(mockImportWalletAndEncryptSecrets).toHaveBeenCalledWith({
+        mnemonic: TEST_MNEMONIC_12,
+        password: 'validpassword123',
+        network: 'signet',
+        addressType: 'taproot',
+        accountId: 0,
+      })
     })
   })
 

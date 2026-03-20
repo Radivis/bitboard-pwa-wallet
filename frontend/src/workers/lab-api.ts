@@ -58,7 +58,6 @@ export interface LabState {
   txDetails: LabTxDetails[]
 }
 
-/** Single source of truth for empty lab state. Use in store, worker, and lab-factory. */
 /** Minimum blocks per single "Mine blocks" operation in the lab UI and worker. */
 export const LAB_MIN_BLOCKS_PER_MINE = 1
 
@@ -67,6 +66,21 @@ export const LAB_MIN_BLOCKS_PER_MINE = 1
  * (WASM mining loop) and make the app feel stuck.
  */
 export const LAB_MAX_BLOCKS_PER_MINE = 100
+
+export interface LabCreateTransactionParams {
+  fromAddress: string
+  toAddress: string
+  amountSats: number
+  feeRateSatPerVb: number
+}
+
+export interface PrepareLabWalletTransactionParams {
+  walletOwner: string
+  toAddress: string
+  amountSats: number
+  feeRateSatPerVb: number
+  walletChangeAddress: string
+}
 
 /** Single source of truth for empty lab state. Use in store, worker, and lab-factory. */
 export const EMPTY_LAB_STATE: LabState = {
@@ -112,12 +126,7 @@ export interface LabService {
    * Creates a transaction and adds it to the mempool. No mining.
    * Returns the new state.
    */
-  createTransaction(
-    fromAddress: string,
-    toAddress: string,
-    amountSats: number,
-    feeRateSatPerVb: number,
-  ): Promise<LabState>
+  createTransaction(params: LabCreateTransactionParams): Promise<LabState>
 
   /**
    * Prepares lab UTXOs for a wallet transaction. Returns utxosJson and partial metadata.
@@ -125,11 +134,7 @@ export interface LabService {
    * and calls addSignedTransactionToMempool.
    */
   prepareLabWalletTransaction(
-    walletOwner: string,
-    toAddress: string,
-    amountSats: number,
-    feeRateSatPerVb: number,
-    walletChangeAddress: string,
+    params: PrepareLabWalletTransactionParams,
   ): Promise<{
     utxosJson: string
     mempoolMetadata: LabMempoolMetadata

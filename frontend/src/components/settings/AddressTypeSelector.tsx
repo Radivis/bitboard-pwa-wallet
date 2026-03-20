@@ -37,14 +37,14 @@ export function AddressTypeSelector() {
       if (walletStatus === 'unlocked' || walletStatus === 'syncing') {
         setSwitching(true)
         try {
-          await switchDescriptorWallet(
-            networkMode,
-            type,
-            accountId,
-            networkMode,
-            previousAddressType,
-            accountId,
-          )
+          await switchDescriptorWallet({
+            targetNetworkMode: networkMode,
+            targetAddressType: type,
+            targetAccountId: accountId,
+            currentNetworkMode: networkMode,
+            currentAddressType: previousAddressType,
+            currentAccountId: accountId,
+          })
           setAddressType(type)
         } catch {
           // switchDescriptorWallet already showed a toast

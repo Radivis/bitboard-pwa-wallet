@@ -113,12 +113,18 @@ export type PutWalletSecretsEncryptedFn = (
  * @param putSecrets - Secrets writer (default: putWalletSecretsEncrypted). Inject for tests.
  * @returns The new wallet_id on success
  */
-export async function persistNewWalletWithSecrets(
-  walletDb: Kysely<Database>,
-  insertWalletRow: () => Promise<number>,
-  encryptedBlob: EncryptedWalletSecretsBlob,
-  putSecrets: PutWalletSecretsEncryptedFn = putWalletSecretsEncrypted
-): Promise<number> {
+export async function persistNewWalletWithSecrets(params: {
+  walletDb: Kysely<Database>
+  insertWalletRow: () => Promise<number>
+  encryptedBlob: EncryptedWalletSecretsBlob
+  putSecrets?: PutWalletSecretsEncryptedFn
+}): Promise<number> {
+  const {
+    walletDb,
+    insertWalletRow,
+    encryptedBlob,
+    putSecrets = putWalletSecretsEncrypted,
+  } = params
   const walletId = await insertWalletRow()
   try {
     await putSecrets(walletDb, walletId, encryptedBlob)
@@ -141,12 +147,13 @@ export async function persistNewWalletWithSecrets(
  *
  * @throws {Error} If the wallet ID does not exist in the `wallets` table
  */
-export async function saveWalletSecrets(
-  walletDb: Kysely<Database>,
-  password: string,
-  walletId: number,
+export async function saveWalletSecrets(params: {
+  walletDb: Kysely<Database>
+  password: string
+  walletId: number
   secrets: WalletSecrets
-): Promise<void> {
+}): Promise<void> {
+  const { walletDb, password, walletId, secrets } = params
   await assertWalletExists(walletDb, walletId)
 
   const plaintext = JSON.stringify(secrets)
