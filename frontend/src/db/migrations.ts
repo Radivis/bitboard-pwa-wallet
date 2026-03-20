@@ -1,5 +1,4 @@
 import type { Kysely } from 'kysely'
-import { sql } from 'kysely'
 
 /**
  * Migration strategy: additive only; no destructive changes. No version table.
@@ -35,12 +34,4 @@ export async function migrateToLatest(db: Kysely<any>): Promise<void> {
     .addColumn('created_at', 'text', (col) => col.notNull())
     .addColumn('updated_at', 'text', (col) => col.notNull())
     .execute()
-
-  // Add kdf_version for existing DBs created before this column existed. Ignore if column exists.
-  try {
-    await sql`ALTER TABLE wallet_secrets ADD COLUMN kdf_version INTEGER NOT NULL DEFAULT 1`.execute(db)
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e)
-    if (!msg.includes('duplicate column') && !msg.includes('already exists')) throw e
-  }
 }
