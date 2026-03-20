@@ -21,7 +21,7 @@ async function deriveKeyBytes(password: string, salt: Uint8Array, kdfVersion?: K
   const w = await getWasm();
   const useCIParams = kdfVersion === 1;
   const key = useCIParams
-    ? w.derive_argon2_key_legacy(password, salt)
+    ? w.derive_argon2_key_ci(password, salt)
     : w.derive_argon2_key(password, salt);
   return new Uint8Array(key);
 }
