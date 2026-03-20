@@ -9,9 +9,7 @@ This document describes how Bitboard Wallet keeps user credentials and wallet se
 **Scope:** Local PWA, no backend. All assets and API calls go to Esplora (or a dev proxy). There are no server-side secrets.
 
 - **In scope:** Browser storage (SQLite/OPFS, settings), worker and main-thread handling of passwords/mnemonics/keys, Esplora URLs and validation, input validation (addresses, amounts, descriptors, URLs), dependency advisories.
-- **Out of scope:** Physical access, OS-level attacks, and full penetration testing (per project review policy).
-
-Findings and mitigations below are interpreted in this context.
+- **Out of scope:** Physical access, OS-level attacks, and full penetration testing.
 
 ---
 
