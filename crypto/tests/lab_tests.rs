@@ -117,20 +117,21 @@ fn build_and_sign_lab_transaction_returns_signed_tx() {
     let change_script_bytes = hex::decode(&change_script_hex).expect("change script hex");
     let change_script = bitcoin::ScriptBuf::from_bytes(change_script_bytes);
 
-    let (payment_out, change_out) =
-        tx.output
-            .iter()
-            .enumerate()
-            .fold((None, None), |(pay, chg), (i, o)| {
-                if o.script_pubkey == change_script {
-                    (pay, Some((i, o.value.to_sat())))
-                } else {
-                    (Some((i, o.value.to_sat())), chg)
-                }
-            });
+    // Classify the two outputs: one pays to the external payment address, one to our change address.
+    let mut payment_output_index_and_sats: Option<(usize, u64)> = None;
+    let mut change_output_index_and_sats: Option<(usize, u64)> = None;
+    for (output_index, output) in tx.output.iter().enumerate() {
+        let value_sats = output.value.to_sat();
+        if output.script_pubkey == change_script {
+            change_output_index_and_sats = Some((output_index, value_sats));
+        } else {
+            payment_output_index_and_sats = Some((output_index, value_sats));
+        }
+    }
 
-    let (_, payment_value) = payment_out.expect("one output must be payment");
-    let (_, change_value) = change_out.expect("one output must be change to change_address");
+    let (_, payment_value) = payment_output_index_and_sats.expect("one output must be payment");
+    let (_, change_value) =
+        change_output_index_and_sats.expect("one output must be change to change_address");
 
     assert_eq!(
         payment_value, PAYMENT_SATS,

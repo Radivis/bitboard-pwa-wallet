@@ -2,7 +2,7 @@
 //!
 //! Two parameter sets:
 //! - **Production:** 64 MB memory, 3 iterations, parallelism 4 (stronger, for real devices).
-//! - **CI** 64 MB memory, 2 iterations, parallelism 1 (faster, for CI; decrypts older blobs).
+//! - **CI** 64 MB memory, 2 iterations, parallelism 1 (faster, for CI).
 
 use argon2::{Algorithm, Argon2, Params, Version};
 use wasm_bindgen::prelude::*;
