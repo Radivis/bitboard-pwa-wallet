@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { Plus, Download, Settings } from 'lucide-react'
+import { AppDescription } from '@/components/AppDescription'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -22,9 +23,7 @@ function SetupWelcome() {
           />
           Bitboard Wallet
         </h1>
-        <p className="mt-2 text-muted-foreground">
-          A self-custody Bitcoin wallet in your browser.
-        </p>
+        <AppDescription className="mt-2" />
       </div>
 
       <InfomodeWrapper

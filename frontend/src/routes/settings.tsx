@@ -1,5 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useWalletStore } from '@/stores/walletStore'
+import { AppDescription } from '@/components/AppDescription'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { ThemeSelector } from '@/components/settings/ThemeSelector'
 import { NetworkSelector } from '@/components/settings/NetworkSelector'
@@ -65,6 +66,7 @@ export function SettingsPage() {
         </CardHeader>
         <CardContent className="space-y-2 text-sm text-muted-foreground">
           <p>Bitboard Wallet &mdash; A Progressive Web App Bitcoin wallet.</p>
+          <AppDescription />
           <p>Version 0.1.0</p>
         </CardContent>
       </Card>
