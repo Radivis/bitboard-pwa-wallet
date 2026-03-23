@@ -1,6 +1,9 @@
 import { Lightbulb, LightbulbOff } from 'lucide-react'
+import { toast } from 'sonner'
 import { useInfomodeStore } from '@/stores/infomodeStore'
 import { cn } from '@/lib/utils'
+
+const INFO_MODE_TOGGLE_TOAST_DURATION_MS = 6_000
 
 export function InfomodeToggle() {
   const isActive = useInfomodeStore((state) => state.isActive)
@@ -9,7 +12,22 @@ export function InfomodeToggle() {
   return (
     <button
       type="button"
-      onClick={() => toggleInfomode()}
+      onClick={() => {
+        const willBeActive = !isActive
+        toggleInfomode()
+        if (willBeActive) {
+          toast.message('Infomode on', {
+            description:
+              'Anything with a cyan border is an explainer zone—tap it to read what that part of the app does. (Taps there open help instead of the control underneath.)',
+            duration: INFO_MODE_TOGGLE_TOAST_DURATION_MS,
+          })
+        } else {
+          toast.message('Infomode off', {
+            description: 'Normal behavior is back: buttons, links, and fields respond the usual way when you tap them.',
+            duration: INFO_MODE_TOGGLE_TOAST_DURATION_MS,
+          })
+        }
+      }}
       aria-pressed={isActive}
       aria-label={isActive ? 'Turn off infomode' : 'Turn on infomode'}
       className={cn(
