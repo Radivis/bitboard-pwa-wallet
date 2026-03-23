@@ -8,6 +8,7 @@ import {
   deleteCustomEsploraUrl,
   loadCustomEsploraUrl,
 } from '@/lib/wallet-utils'
+import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -61,45 +62,52 @@ export function EsploraUrlSettings() {
   }, [networkMode])
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center gap-2">
-          <CardTitle className="flex items-center gap-2">
-            <Globe className="h-5 w-5" />
-            Esplora Endpoint for {NETWORK_LABELS[networkMode]}
-          </CardTitle>
-          {isCustom && <Badge variant="secondary">Custom</Badge>}
-        </div>
-        <CardDescription>
-          Network-specific: changing network will use the endpoint configured for
-          that network.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        <div className="space-y-2">
-          <Label htmlFor="esplora-url">Endpoint URL</Label>
-          <Input
-            id="esplora-url"
-            value={customUrl}
-            onChange={(e) => setCustomUrl(e.target.value)}
-            placeholder={DEFAULT_ESPLORA_URLS[networkMode]}
-            disabled={loading}
-          />
-        </div>
-        <div className="flex gap-2">
-          <Button onClick={handleSave} disabled={loading} size="sm">
-            Save Endpoint
-          </Button>
-          <Button
-            variant="outline"
-            onClick={handleReset}
-            disabled={loading || !isCustom}
-            size="sm"
-          >
-            Reset to Default
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
+    <InfomodeWrapper
+      infoId="settings-esplora-endpoint-card"
+      infoTitle="Esplora endpoint"
+      infoText="Bitboard uses an Esplora-style HTTP API to read blockchain data (balances, history) and to broadcast transactions. Each network can point at its own server URL. Most people keep the default; advanced users may enter their own node or a mirror they trust."
+      className="rounded-xl"
+    >
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <CardTitle className="flex items-center gap-2">
+              <Globe className="h-5 w-5" />
+              Esplora Endpoint for {NETWORK_LABELS[networkMode]}
+            </CardTitle>
+            {isCustom && <Badge variant="secondary">Custom</Badge>}
+          </div>
+          <CardDescription>
+            Network-specific: changing network will use the endpoint configured for
+            that network.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="space-y-2">
+            <Label htmlFor="esplora-url">Endpoint URL</Label>
+            <Input
+              id="esplora-url"
+              value={customUrl}
+              onChange={(e) => setCustomUrl(e.target.value)}
+              placeholder={DEFAULT_ESPLORA_URLS[networkMode]}
+              disabled={loading}
+            />
+          </div>
+          <div className="flex gap-2">
+            <Button onClick={handleSave} disabled={loading} size="sm">
+              Save Endpoint
+            </Button>
+            <Button
+              variant="outline"
+              onClick={handleReset}
+              disabled={loading || !isCustom}
+              size="sm"
+            >
+              Reset to Default
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    </InfomodeWrapper>
   )
 }

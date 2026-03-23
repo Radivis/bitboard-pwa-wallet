@@ -1,6 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useWalletStore } from '@/stores/walletStore'
 import { AppDescription } from '@/components/AppDescription'
+import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { ThemeSelector } from '@/components/settings/ThemeSelector'
 import { NetworkSelector } from '@/components/settings/NetworkSelector'
@@ -22,29 +23,43 @@ export function SettingsPage() {
 
       {activeWalletId && <WalletManagement />}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Network</CardTitle>
-          <CardDescription>
-            Select the Bitcoin network to connect to.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <NetworkSelector />
-        </CardContent>
-      </Card>
+      <InfomodeWrapper
+        infoId="settings-network-card"
+        infoTitle="Bitcoin networks"
+        infoText="Bitcoin exists on more than one network. Mainnet is the real-money chain; the others are mainly for practice, learning, and software testing, using coins that are not worth real dollars. Choose the network that matches what you are doing so balances and transactions line up with the right environment."
+        className="rounded-xl"
+      >
+        <Card>
+          <CardHeader>
+            <CardTitle>Network</CardTitle>
+            <CardDescription>
+              Select the Bitcoin network to connect to.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <NetworkSelector />
+          </CardContent>
+        </Card>
+      </InfomodeWrapper>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Address Type</CardTitle>
-          <CardDescription>
-            Choose the address format for new wallets.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <AddressTypeSelector />
-        </CardContent>
-      </Card>
+      <InfomodeWrapper
+        infoId="settings-address-type-card"
+        infoTitle="Address type"
+        infoText="This setting controls how Bitboard derives new receiving addresses from your seed—Taproot (BIP86) versus SegWit (BIP84). Both are standard and secure; they produce different address shapes. Changing it does not delete money you already received on the other style, but day-to-day you usually stick to one type for simplicity."
+        className="rounded-xl"
+      >
+        <Card>
+          <CardHeader>
+            <CardTitle>Address Type</CardTitle>
+            <CardDescription>
+              Choose the address format for new wallets.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <AddressTypeSelector />
+          </CardContent>
+        </Card>
+      </InfomodeWrapper>
 
       <Card>
         <CardHeader>

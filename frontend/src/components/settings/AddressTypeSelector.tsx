@@ -4,6 +4,7 @@ import {
   type AddressType,
 } from '@/stores/walletStore'
 import { switchDescriptorWallet } from '@/lib/settings-switch-wallet'
+import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { Button } from '@/components/ui/button'
 import { ConfirmationDialog } from '@/components/ConfirmationDialog'
 
@@ -61,24 +62,38 @@ export function AddressTypeSelector() {
   return (
     <>
       <div className="flex gap-2">
-        <Button
-          variant={addressType === 'taproot' ? 'default' : 'outline'}
-          size="sm"
-          onClick={() => handleChange('taproot')}
-          className="flex-1"
-          disabled={switching}
+        <InfomodeWrapper
+          infoId="settings-address-type-taproot"
+          infoTitle="Taproot (BIP86)"
+          infoText="Taproot-style addresses (often shown as bc1p…) are the newer standard many wallets use by default. They can enable nicer privacy and efficiency features on-chain and remain fully compatible with normal sends and receives."
+          className="min-w-0 flex-1"
         >
-          Taproot (BIP86)
-        </Button>
-        <Button
-          variant={addressType === 'segwit' ? 'default' : 'outline'}
-          size="sm"
-          onClick={() => handleChange('segwit')}
-          className="flex-1"
-          disabled={switching}
+          <Button
+            variant={addressType === 'taproot' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => handleChange('taproot')}
+            className="w-full"
+            disabled={switching}
+          >
+            Taproot (BIP86)
+          </Button>
+        </InfomodeWrapper>
+        <InfomodeWrapper
+          infoId="settings-address-type-segwit"
+          infoTitle="SegWit (BIP84)"
+          infoText="Native SegWit addresses (often bc1q…) have been widely supported for years. They are cheaper to spend than old legacy addresses and work with virtually every exchange and wallet today."
+          className="min-w-0 flex-1"
         >
-          SegWit (BIP84)
-        </Button>
+          <Button
+            variant={addressType === 'segwit' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => handleChange('segwit')}
+            className="w-full"
+            disabled={switching}
+          >
+            SegWit (BIP84)
+          </Button>
+        </InfomodeWrapper>
       </div>
       <ConfirmationDialog
         open={showWarning}

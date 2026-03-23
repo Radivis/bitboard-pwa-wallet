@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react'
 import { Eye, EyeOff } from 'lucide-react'
 import { useWalletStore } from '@/stores/walletStore'
 import { getDatabase, ensureMigrated, loadWalletSecrets } from '@/db'
+import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -47,26 +48,33 @@ export function SeedPhraseBackup() {
 
   return (
     <>
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Eye className="h-5 w-5" />
-            Seed Phrase Backup
-          </CardTitle>
-          <CardDescription>
-            View your seed phrase to back up your wallet. You will need to
-            confirm your password.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Button
-            variant="outline"
-            onClick={() => setShowPasswordPrompt(true)}
-          >
-            Show Seed Phrase
-          </Button>
-        </CardContent>
-      </Card>
+      <InfomodeWrapper
+        infoId="settings-seed-phrase-backup-card"
+        infoTitle="Seed phrase backup"
+        infoText="This section lets you reveal your recovery words again after typing your wallet password. Use it only in a private place—anyone who sees the words can control your funds. It is for checking a paper backup or writing the phrase down if you have not already."
+        className="rounded-xl"
+      >
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Eye className="h-5 w-5" />
+              Seed Phrase Backup
+            </CardTitle>
+            <CardDescription>
+              View your seed phrase to back up your wallet. You will need to
+              confirm your password.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button
+              variant="outline"
+              onClick={() => setShowPasswordPrompt(true)}
+            >
+              Show Seed Phrase
+            </Button>
+          </CardContent>
+        </Card>
+      </InfomodeWrapper>
 
       <Dialog
         open={showPasswordPrompt}
