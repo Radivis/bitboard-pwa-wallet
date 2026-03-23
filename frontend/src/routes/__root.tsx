@@ -8,6 +8,7 @@ import { ThemeSynchronizer } from '@/stores/themeStore'
 import { WalletLayout } from '@/components/WalletLayout'
 import { AppInitializer } from '@/components/AppInitializer'
 import { DatabaseReadyGate } from '@/components/DatabaseReadyGate'
+import { InfomodeHintToast } from '@/components/InfomodeHintToast'
 import { InfomodeProvider } from '@/components/infomode/InfomodeProvider'
 import { checkDatabaseHealth } from '@/db'
 
@@ -41,6 +42,7 @@ function RootComponent() {
     <QueryClientProvider client={appQueryClient}>
       <InfomodeProvider>
         <DatabaseReadyGate>
+          <InfomodeHintToast />
           <ThemeSynchronizer />
           <AppInitializer>
             <WalletLayout>

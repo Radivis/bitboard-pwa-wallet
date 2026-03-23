@@ -1,6 +1,7 @@
 import { beforeEach, afterEach, describe, expect, it } from 'vitest'
 import type { Kysely } from 'kysely'
 import type { Database } from '../schema'
+import { APP_SETTINGS_LAST_OPENED_AT_KEY } from '@/lib/app-session-metadata'
 import { createTestDatabase } from '../test-helpers'
 
 describe('SQLite Database', () => {
@@ -141,6 +142,36 @@ describe('SQLite Database', () => {
       const missing = await walletDb.selectFrom('settings').selectAll().where('key', '=', 'does-not-exist').executeTakeFirst()
 
       expect(missing).toBeUndefined()
+    })
+
+    it('stores and upserts app_last_opened_at like production metadata', async () => {
+      const first = '2024-01-01T00:00:00.000Z'
+      const second = '2025-06-01T12:30:00.000Z'
+
+      await walletDb
+        .insertInto('settings')
+        .values({ key: APP_SETTINGS_LAST_OPENED_AT_KEY, value: first })
+        .execute()
+
+      let row = await walletDb
+        .selectFrom('settings')
+        .select('value')
+        .where('key', '=', APP_SETTINGS_LAST_OPENED_AT_KEY)
+        .executeTakeFirst()
+      expect(row?.value).toBe(first)
+
+      await walletDb
+        .insertInto('settings')
+        .values({ key: APP_SETTINGS_LAST_OPENED_AT_KEY, value: second })
+        .onConflict((oc) => oc.column('key').doUpdateSet({ value: second }))
+        .execute()
+
+      row = await walletDb
+        .selectFrom('settings')
+        .select('value')
+        .where('key', '=', APP_SETTINGS_LAST_OPENED_AT_KEY)
+        .executeTakeFirst()
+      expect(row?.value).toBe(second)
     })
   })
 })
