@@ -1,6 +1,7 @@
 import { useMemo, useCallback } from 'react'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { ArrowUpRight, ArrowLeft } from 'lucide-react'
+import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -32,6 +33,27 @@ const FEE_PRESETS = [
   { label: 'Medium', rate: 3 },
   { label: 'High', rate: 5 },
 ] as const
+
+const FEE_PRESET_INFOMODE: Record<
+  (typeof FEE_PRESETS)[number]['label'],
+  { infoTitle: string; infoText: string }
+> = {
+  Low: {
+    infoTitle: 'Low fee',
+    infoText:
+      'Best when the mempool is calm or you do not care if confirmation takes longer. You pay less total fee, but in a busy period your transaction might sit unconfirmed longer than with Medium or High.',
+  },
+  Medium: {
+    infoTitle: 'Medium fee',
+    infoText:
+      'A reasonable default when you want a normal confirmation time without overpaying. Pick this for typical transfers if you are unsure—then switch to High if blocks are full and you are in a hurry, or Low if you are happy to wait.',
+  },
+  High: {
+    infoTitle: 'High fee',
+    infoText:
+      'Use when you want priority during congestion—paying more per vB makes it more attractive for miners to include your transaction in the next blocks. Good for time-sensitive payments; you spend more in fees than with Low or Medium.',
+  },
+}
 
 /** Max satoshis we pass to the worker (JS safe integer range). */
 const MAX_SAFE_SATS = Number.MAX_SAFE_INTEGER
@@ -323,40 +345,66 @@ function SendFlow() {
             </div>
 
             <div className="space-y-2">
-              <Label>Fee Rate (sat/vB)</Label>
+              <Label>
+                <InfomodeWrapper
+                  as="span"
+                  infoId="send-fee-rate-label"
+                  infoTitle="Fee rate (sat/vB)"
+                  infoText="Miners prioritize transactions that pay more per byte of block space. The number is satoshis per virtual byte (sat/vB). Bitboard currently offers simple fixed presets (not live mempool data—smarter estimation may come later). In general: use Low when you are not in a rush, Medium for everyday sends, High when the network is busy or you need faster confirmation, and Custom only when you already have a target rate from an explorer or another trusted source."
+                >
+                  Fee Rate (sat/vB)
+                </InfomodeWrapper>
+              </Label>
               <p className="text-xs text-muted-foreground">
                 Static presets for now. Dynamic fee estimation will be added
                 later.
               </p>
               <div className="flex gap-2">
-                {FEE_PRESETS.map((preset) => (
-                  <Button
-                    key={preset.label}
-                    type="button"
-                    variant={
-                      !useCustomFee && feeRate === preset.rate
-                        ? 'default'
-                        : 'outline'
-                    }
-                    size="sm"
-                    className="flex-1"
-                    onClick={() => {
-                      setFeeRate(preset.rate)
-                      setUseCustomFee(false)
-                    }}
-                  >
-                    {preset.label} ({preset.rate})
-                  </Button>
-                ))}
-                <Button
-                  type="button"
-                  variant={useCustomFee ? 'default' : 'outline'}
-                  size="sm"
-                  className="flex-1"
-                  onClick={() => setUseCustomFee(true)}
+                {FEE_PRESETS.map((preset) => {
+                  const { infoTitle, infoText } = FEE_PRESET_INFOMODE[preset.label]
+                  return (
+                    <InfomodeWrapper
+                      key={preset.label}
+                      infoId={`send-fee-preset-${preset.label.toLowerCase()}`}
+                      infoTitle={infoTitle}
+                      infoText={infoText}
+                      className="min-w-0 flex-1"
+                    >
+                      <Button
+                        type="button"
+                        variant={
+                          !useCustomFee && feeRate === preset.rate
+                            ? 'default'
+                            : 'outline'
+                        }
+                        size="sm"
+                        className="w-full"
+                        onClick={() => {
+                          setFeeRate(preset.rate)
+                          setUseCustomFee(false)
+                        }}
+                      >
+                        {preset.label} ({preset.rate})
+                      </Button>
+                    </InfomodeWrapper>
+                  )
+                })}
+                <InfomodeWrapper
+                  infoId="send-fee-custom-button"
+                  infoTitle="Custom fee"
+                  infoText="Switch here when you already know the exact sat/vB you want—for example from a mempool dashboard, a node, or advice that matches current network conditions. After selecting Custom, type that number in the field below; use it if presets feel too coarse or you are following a specific recommendation."
+                  className="min-w-0 flex-1"
                 >
-                  Custom
-                </Button>
+                  <Button
+                    type="button"
+                    variant={useCustomFee ? 'default' : 'outline'}
+                    size="sm"
+                    className="w-full"
+                    onClick={() => setUseCustomFee(true)}
+                  >
+                    Custom
+                  </Button>
+                </InfomodeWrapper>
               </div>
               {useCustomFee && (
                 <Input
