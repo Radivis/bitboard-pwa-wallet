@@ -1,0 +1,27 @@
+feature:
+  name: Infomode
+  description: "Educational overlay mode: highlights explorable UI regions and shows contextual explanations on click"
+  user_stories:
+    - As a learner, I want to turn on an educational mode so I can discover what parts of the wallet mean
+    - As a learner, I want highlighted regions to show which elements have explanations
+    - As a learner, I want to tap an highlighted region to read what it does without triggering its normal action
+    - As a learner, I want nested highlighted regions to show only the innermost explanation when I tap inside them
+    - As a learner, I want to dismiss an explanation by tapping outside it
+  requirements:
+    - Infomode is toggled from the header via a lightbulb control to the left of the theme (light/dark/system) selector; lit when on, dim/off when off
+    - When infomode is active, elements that opt in receive a subtle cyan inner highlight at their border (visual cue only)
+    - While infomode is active, a single global click listener handles clicks; per-element onClick handlers must not be required for performance on dense pages
+    - Clicking a supported element opens an info popup positioned near that element; the handler resolves the innermost opt-in ancestor of the click target
+    - Clicking outside an open popup closes it; clicking another opt-in element replaces the popup content and position
+    - Info content has two variants:
+      - Inline: a title and body text supplied at the call site
+      - Component: a dedicated React component colocated under an `info/` directory next to the component that wraps the UI
+    - Opt-in is implemented with `InfomodeWrapper` which registers metadata in app-level context and renders a `data-infomode-id` wrapper for CSS and hit testing
+    - Infomode on/off state is session-only (not persisted across reloads)
+  implementation:
+    - store: frontend/src/stores/infomodeStore.ts
+    - components: frontend/src/components/infomode/
+    - global_highlight: frontend/src/index.css selector `[data-infomode-active] [data-infomode-id]`
+    - html_flag: document.documentElement receives `data-infomode-active` when mode is on (for global CSS)
+    - layout: frontend/src/components/WalletLayout.tsx — infomode toggle adjacent to ThemeToggle
+    - root: frontend/src/routes/__root.tsx — InfomodeProvider wraps app content that uses InfomodeWrapper

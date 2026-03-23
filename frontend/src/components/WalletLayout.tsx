@@ -1,6 +1,7 @@
 import { type ReactNode } from 'react'
 import { Link, useMatchRoute, useLocation } from '@tanstack/react-router'
 import { Home, ArrowDownLeft, ArrowUpRight, Settings, type LucideIcon } from 'lucide-react'
+import { InfomodeToggle } from '@/components/infomode/InfomodeToggle'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { cn } from '@/lib/utils'
 
@@ -70,7 +71,10 @@ export function WalletLayout({ children }: WalletLayoutProps) {
             />
             Bitboard Wallet
           </h1>
-          <ThemeToggle />
+          <div className="flex items-center gap-3">
+            <InfomodeToggle />
+            <ThemeToggle />
+          </div>
         </div>
       </header>
 
