@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { XIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -20,17 +20,17 @@ function computePopupPosition(
 ): { top: number; left: number } {
   const anchorRect = anchorElement.getBoundingClientRect()
   const popupRect = popupElement.getBoundingClientRect()
-  const vpW = window.innerWidth
-  const vpH = window.innerHeight
+  const viewportWidth = window.innerWidth
+  const viewportHeight = window.innerHeight
 
   let top = anchorRect.bottom + GAP_PX
   let left = anchorRect.left
 
-  if (top + popupRect.height > vpH - VIEWPORT_MARGIN_PX) {
+  if (top + popupRect.height > viewportHeight - VIEWPORT_MARGIN_PX) {
     top = anchorRect.top - popupRect.height - GAP_PX
   }
-  if (left + popupRect.width > vpW - VIEWPORT_MARGIN_PX) {
-    left = vpW - popupRect.width - VIEWPORT_MARGIN_PX
+  if (left + popupRect.width > viewportWidth - VIEWPORT_MARGIN_PX) {
+    left = viewportWidth - popupRect.width - VIEWPORT_MARGIN_PX
   }
   if (left < VIEWPORT_MARGIN_PX) {
     left = VIEWPORT_MARGIN_PX
@@ -49,6 +49,7 @@ export function InfomodePopup({
   onRequestClose,
 }: InfomodePopupProps) {
   const popupRef = useRef<HTMLDivElement>(null)
+  const closeButtonRef = useRef<HTMLButtonElement>(null)
   const [position, setPosition] = useState({ top: 0, left: 0 })
 
   useLayoutEffect(() => {
@@ -71,6 +72,34 @@ export function InfomodePopup({
       window.removeEventListener('resize', updatePosition)
     }
   }, [open, anchorElement, entry])
+
+  useLayoutEffect(() => {
+    if (!open || !anchorElement || !entry) {
+      return
+    }
+    const elementToRestore =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null
+    closeButtonRef.current?.focus({ preventScroll: true })
+    return () => {
+      elementToRestore?.focus({ preventScroll: true })
+    }
+  }, [open, anchorElement, entry])
+
+  useEffect(() => {
+    if (!open) {
+      return
+    }
+    function handleDocumentKeyDown(event: KeyboardEvent) {
+      if (event.key !== 'Escape') {
+        return
+      }
+      event.preventDefault()
+      event.stopPropagation()
+      onRequestClose()
+    }
+    document.addEventListener('keydown', handleDocumentKeyDown, true)
+    return () => document.removeEventListener('keydown', handleDocumentKeyDown, true)
+  }, [open, onRequestClose])
 
   if (!open || !anchorElement || !entry) {
     return null
@@ -103,6 +132,7 @@ export function InfomodePopup({
       style={{ top: position.top, left: position.left }}
     >
       <button
+        ref={closeButtonRef}
         type="button"
         onClick={onRequestClose}
         aria-label="Close explanation"

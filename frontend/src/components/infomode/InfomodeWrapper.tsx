@@ -35,9 +35,10 @@ export function InfomodeWrapper({
   ...rest
 }: InfomodeWrapperProps) {
   const { register } = useInfomodeRegistry()
+  const configurationIsValid = hasExactlyOneInfomodeVariant(infoTitle, infoText, InfoComponent)
 
   useEffect(() => {
-    if (!hasExactlyOneInfomodeVariant(infoTitle, infoText, InfoComponent)) {
+    if (!configurationIsValid) {
       console.error(
         'InfomodeWrapper: provide exactly one of (infoTitle + infoText) or infoComponent for',
         infoId,
@@ -58,12 +59,12 @@ export function InfomodeWrapper({
     }
 
     return register(infoId, entry)
-  }, [InfoComponent, infoId, infoText, infoTitle, register])
+  }, [InfoComponent, configurationIsValid, infoId, infoText, infoTitle, register])
 
   return createElement(
     as,
     {
-      'data-infomode-id': infoId,
+      ...(configurationIsValid ? { 'data-infomode-id': infoId } : {}),
       className: cn(className),
       ...rest,
     },
