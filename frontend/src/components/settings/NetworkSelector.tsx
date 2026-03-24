@@ -17,6 +17,7 @@ import { appQueryClient } from '@/lib/app-query-client'
 import { prefetchLabChainState } from '@/hooks/useLabChainStateQuery'
 import { useSessionStore } from '@/stores/sessionStore'
 import { useCryptoStore } from '@/stores/cryptoStore'
+import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { Button } from '@/components/ui/button'
 import { errorMessage } from '@/lib/utils'
 
@@ -27,6 +28,29 @@ const NETWORK_OPTIONS: NetworkMode[] = [
   'regtest',
   'lab',
 ]
+
+const NETWORK_INFOMODE: Record<NetworkMode, { title: string; text: string }> = {
+  mainnet: {
+    title: 'Mainnet',
+    text: 'The live Bitcoin network where real BTC moves. Use mainnet when you are sending or receiving money that has real economic value.',
+  },
+  testnet: {
+    title: 'Testnet',
+    text: 'A public testing network that behaves like Bitcoin but uses free test coins from faucets. Ideal for trying the app without risking real funds.',
+  },
+  signet: {
+    title: 'Signet',
+    text: 'A coordinated signet network for testing—often used by wallets and services that want a stable test environment. Coins are not real money.',
+  },
+  regtest: {
+    title: 'Regtest',
+    text: '“Regression test” mode: usually a private or local chain developers run for automated tests and experiments. Not the same as the public internet Bitcoin networks most users pick.',
+  },
+  lab: {
+    title: 'Lab',
+    text: 'Bitboard’s in-app simulator: a fake blockchain that runs inside your browser for safe practice—mine blocks, try transactions, and learn without touching mainnet or public testnets.',
+  },
+}
 
 function walletIsUnlockedOrSyncing(walletStatus: WalletStatus): boolean {
   return walletStatus === 'unlocked' || walletStatus === 'syncing'
@@ -285,25 +309,40 @@ export function NetworkSelector() {
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap gap-2">
-        {NETWORK_OPTIONS.map((network) => (
-          <Button
-            key={network}
-            variant={networkMode === network ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => handleNetworkChange(network)}
-            disabled={switching}
-          >
-            {NETWORK_LABELS[network]}
-          </Button>
-        ))}
+        {NETWORK_OPTIONS.map((network) => {
+          const { title, text } = NETWORK_INFOMODE[network]
+          return (
+            <InfomodeWrapper
+              key={network}
+              infoId={`settings-network-mode-${network}`}
+              infoTitle={title}
+              infoText={text}
+            >
+              <Button
+                variant={networkMode === network ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => handleNetworkChange(network)}
+                disabled={switching}
+              >
+                {NETWORK_LABELS[network]}
+              </Button>
+            </InfomodeWrapper>
+          )
+        })}
       </div>
       {networkMode === 'lab' && (
         <div>
-          <Link to="/lab">
-            <Button variant="outline" size="sm">
-              Manage lab
-            </Button>
-          </Link>
+          <InfomodeWrapper
+            infoId="settings-network-manage-lab"
+            infoTitle="Manage lab"
+            infoText="Opens Bitboard’s lab screen where you can mine pretend blocks, inspect addresses and UTXOs, and build practice transactions inside the simulator—still disconnected from real Bitcoin networks."
+          >
+            <Link to="/lab">
+              <Button variant="outline" size="sm">
+                Manage lab
+              </Button>
+            </Link>
+          </InfomodeWrapper>
         </div>
       )}
     </div>

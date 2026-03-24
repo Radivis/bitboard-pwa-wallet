@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { MnemonicGrid } from '@/components/MnemonicGrid'
 import { PasswordStrengthIndicator } from '@/components/PasswordStrengthIndicator'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
@@ -218,37 +219,91 @@ function StepWordCountAndPassword({
   loading: boolean
   onSubmit: () => void
 }) {
+  const seedPhraseInfoTitle = 'Seed phrase'
+  const seedPhraseInfoText =
+    'A seed phrase is an ordered list of everyday words that encodes your wallet’s master secret. It’s the usual way to make a simple, memorable backup you can write on paper. Bitboard follows the same industry-standard format (BIP39) that most Bitcoin wallets use, so the same words can typically restore your wallet in another trusted app—not just here.'
+
   return (
     <Card>
       <CardHeader>
         <CardTitle>Create Wallet</CardTitle>
         <CardDescription>
-          Choose seed phrase length and set a password. The seed phrase will be generated and shown on the next step.
+          Choose{' '}
+          <InfomodeWrapper
+            as="span"
+            infoId="create-wallet-step1-seed-phrase-in-description-a"
+            infoTitle={seedPhraseInfoTitle}
+            infoText={seedPhraseInfoText}
+          >
+            seed phrase
+          </InfomodeWrapper>{' '}
+          length and set a password. The{' '}
+          <InfomodeWrapper
+            as="span"
+            infoId="create-wallet-step1-seed-phrase-in-description-b"
+            infoTitle={seedPhraseInfoTitle}
+            infoText={seedPhraseInfoText}
+          >
+            seed phrase
+          </InfomodeWrapper>{' '}
+          will be generated and shown on the next step.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="space-y-2">
-          <Label>Word Count</Label>
+          <Label>
+            <InfomodeWrapper
+              as="span"
+              infoId="create-wallet-step1-word-count-label"
+              infoTitle="Word count"
+              infoText="Whether you pick 12 or 24 words barely changes how strong your wallet is—the generator uses enough randomness either way. This choice is mostly about how long you want your written backup to be and what you find easier to handle, not about turning security up or down."
+            >
+              Word Count
+            </InfomodeWrapper>
+          </Label>
           <div className="flex gap-2">
-            <Button
-              variant={wordCount === 12 ? 'default' : 'outline'}
-              onClick={() => setWordCount(12)}
-              className="flex-1"
+            <InfomodeWrapper
+              infoId="create-wallet-step1-twelve-words"
+              infoTitle="12-word backup"
+              infoText="Twelve words are quicker to write down and type if you restore later. They still represent an enormous amount of randomness, so they are considered very secure when created by the wallet. The tradeoff is simply length: shorter backup, slightly fewer combinations than 24 words (both are far beyond guessable)."
+              className="min-w-0 flex-1"
             >
-              12 Words
-            </Button>
-            <Button
-              variant={wordCount === 24 ? 'default' : 'outline'}
-              onClick={() => setWordCount(24)}
-              className="flex-1"
+              <Button
+                variant={wordCount === 12 ? 'default' : 'outline'}
+                onClick={() => setWordCount(12)}
+                className="w-full"
+              >
+                12 Words
+              </Button>
+            </InfomodeWrapper>
+            <InfomodeWrapper
+              infoId="create-wallet-step1-twenty-four-words"
+              infoTitle="24-word backup"
+              infoText="Twenty-four words take more time to copy but give a larger mathematical space. Some people prefer that extra peace of mind. It is not automatically “twice as safe” as 12 words—both are secure; this is mainly about how much you are comfortable writing and storing."
+              className="min-w-0 flex-1"
             >
-              24 Words
-            </Button>
+              <Button
+                variant={wordCount === 24 ? 'default' : 'outline'}
+                onClick={() => setWordCount(24)}
+                className="w-full"
+              >
+                24 Words
+              </Button>
+            </InfomodeWrapper>
           </div>
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="create-password">Password</Label>
+          <Label htmlFor="create-password">
+            <InfomodeWrapper
+              as="span"
+              infoId="create-wallet-step1-password-label"
+              infoTitle="This password"
+              infoText="This password is only for Bitboard in this browser. It encrypts your wallet data on this device so other people who use the machine can’t open it. If you import the same seed phrase into another wallet app later, that app will ask for its own password (or none)—your recovery words are what move between wallets, not this Bitboard password."
+            >
+              Password
+            </InfomodeWrapper>
+          </Label>
           <Input
             id="create-password"
             type="password"

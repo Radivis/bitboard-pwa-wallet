@@ -216,3 +216,23 @@ body {
     @apply bg-background text-foreground;
   }
 }
+
+/*
+ * Infomode highlight: inset box-shadow on the wrapper alone sits *under* opaque
+ * children (e.g. Card bg-card), so it never shows. A ::after layer paints the
+ * same inner glow on top with pointer-events: none so clicks still reach targets.
+ */
+[data-infomode-active] [data-infomode-id] {
+  position: relative;
+  cursor: help;
+}
+
+[data-infomode-active] [data-infomode-id]::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 0 4px 2px rgba(34, 211, 238, 0.5);
+  pointer-events: none;
+  z-index: 1;
+}

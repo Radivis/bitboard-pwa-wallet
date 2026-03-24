@@ -5,6 +5,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
+import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { Button } from '@/components/ui/button'
 import { truncateAddress, formatSats } from '@/lib/bitcoin-utils'
 import { getOwnerDisplayName, getOwnerIcon } from '@/lib/lab-utils'
@@ -24,12 +25,18 @@ export function LabUtxosCard({
   wallets: Array<{ wallet_id: number; name: string }>
 }) {
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>UTXOs</CardTitle>
-        <CardDescription>Unspent transaction outputs, grouped by owner</CardDescription>
-      </CardHeader>
-      <CardContent>
+    <InfomodeWrapper
+      infoId="lab-utxos-card"
+      infoTitle="UTXOs (lab)"
+      infoText="UTXO stands for unspent transaction output—each row is a discrete chunk of coins sitting on an address until you spend it. Bitcoin wallets track these pieces rather than a single “account balance.” Here they are grouped by owner so you can see which lab identity or wallet holds spendable outputs before you build a transaction."
+      className="rounded-xl"
+    >
+      <Card>
+        <CardHeader>
+          <CardTitle>UTXOs</CardTitle>
+          <CardDescription>Unspent transaction outputs, grouped by owner</CardDescription>
+        </CardHeader>
+        <CardContent>
         {utxos.length === 0 ? (
           <p className="text-sm text-muted-foreground py-4">
             No UTXOs yet. Mine blocks to create coinbase outputs.
@@ -81,5 +88,6 @@ export function LabUtxosCard({
         )}
       </CardContent>
     </Card>
+    </InfomodeWrapper>
   )
 }

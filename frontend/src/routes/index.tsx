@@ -4,6 +4,7 @@ import { Wallet, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import { useWalletStore, NETWORK_LABELS } from '@/stores/walletStore'
 import { useSessionStore } from '@/stores/sessionStore'
+import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -43,31 +44,38 @@ function BalanceCard() {
     networkMode === 'lab' ? 0 : (balance?.trusted_pending ?? 0) + (balance?.untrusted_pending ?? 0)
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle className="flex items-center gap-2">
-            <Wallet className="h-5 w-5" />
-            Balance
-          </CardTitle>
-          <Badge variant="outline">{NETWORK_LABELS[networkMode]}</Badge>
-        </div>
-      </CardHeader>
-      <CardContent>
-        <p className="text-3xl font-semibold tabular-nums">
-          {formatBTC(confirmedSats)}
-        </p>
-        <p className="mt-1 text-sm text-muted-foreground">BTC</p>
-        <p className="mt-2 text-lg tabular-nums text-muted-foreground">
-          {formatSats(confirmedSats)} sats
-        </p>
-        {pendingSats > 0 && (
-          <p className="mt-1 text-sm text-yellow-600 dark:text-yellow-400">
-            +{formatSats(pendingSats)} sats pending
+    <InfomodeWrapper
+      infoId="dashboard-balance-card"
+      infoTitle="Balance"
+      infoText="This is how much Bitcoin this wallet can spend on the network shown in the badge. The main figure is confirmed balance (deeply settled on-chain in normal use). If you see “pending,” some value is still clearing—often change or a recent payment not yet fully confirmed. On Lab mode, this total comes from the simulator’s coins tied to your wallet instead of the live Esplora-backed ledger."
+      className="rounded-xl"
+    >
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2">
+              <Wallet className="h-5 w-5" />
+              Balance
+            </CardTitle>
+            <Badge variant="outline">{NETWORK_LABELS[networkMode]}</Badge>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <p className="text-3xl font-semibold tabular-nums">
+            {formatBTC(confirmedSats)}
           </p>
-        )}
-      </CardContent>
-    </Card>
+          <p className="mt-1 text-sm text-muted-foreground">BTC</p>
+          <p className="mt-2 text-lg tabular-nums text-muted-foreground">
+            {formatSats(confirmedSats)} sats
+          </p>
+          {pendingSats > 0 && (
+            <p className="mt-1 text-sm text-yellow-600 dark:text-yellow-400">
+              +{formatSats(pendingSats)} sats pending
+            </p>
+          )}
+        </CardContent>
+      </Card>
+    </InfomodeWrapper>
   )
 }
 
@@ -98,15 +106,21 @@ function SyncButton() {
   }, [networkMode, activeWalletId, password, setWalletStatus])
 
   return (
-    <Button
-      variant="outline"
-      size="sm"
-      onClick={handleSync}
-      disabled={isSyncing}
+    <InfomodeWrapper
+      infoId="dashboard-sync-button"
+      infoTitle="Sync"
+      infoText="Fetches the latest data for your wallet from the configured Esplora server: new transactions, updated balances, and anything your addresses have done on-chain since the last refresh. Tap when you are expecting a payment or your activity looks out of date. On Lab network this button is hidden—the playground chain updates inside the lab instead of via this network sync."
     >
-      <RefreshCw className={`mr-2 h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
-      {isSyncing ? 'Syncing...' : 'Sync'}
-    </Button>
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={handleSync}
+        disabled={isSyncing}
+      >
+        <RefreshCw className={`mr-2 h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
+        {isSyncing ? 'Syncing...' : 'Sync'}
+      </Button>
+    </InfomodeWrapper>
   )
 }
 

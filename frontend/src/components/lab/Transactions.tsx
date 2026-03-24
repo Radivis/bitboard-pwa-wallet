@@ -6,6 +6,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
+import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { truncateAddress } from '@/lib/bitcoin-utils'
 import { getOwnerDisplayName } from '@/lib/lab-utils'
 
@@ -25,12 +26,18 @@ export function LabTransactionsCard({
   wallets: Array<{ wallet_id: number; name: string }>
 }) {
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Transactions</CardTitle>
-        <CardDescription>Mempool and confirmed transactions</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-6">
+    <InfomodeWrapper
+      infoId="lab-transactions-card"
+      infoTitle="Transactions (lab)"
+      infoText="The mempool lists transactions that have been created in the lab but not yet included in a block. After you mine blocks, those txs move into “Confirmed” with a confirmation count (how many blocks have been mined on top). Tap any row to inspect inputs, outputs, and amounts in detail—mirroring how explorers present real chain history."
+      className="rounded-xl"
+    >
+      <Card>
+        <CardHeader>
+          <CardTitle>Transactions</CardTitle>
+          <CardDescription>Mempool and confirmed transactions</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
         {mempool.length > 0 && (
           <div>
             <h4 className="text-sm font-medium mb-2">Mempool</h4>
@@ -95,5 +102,6 @@ export function LabTransactionsCard({
         </div>
       </CardContent>
     </Card>
+    </InfomodeWrapper>
   )
 }

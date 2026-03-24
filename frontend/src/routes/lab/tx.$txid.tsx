@@ -7,6 +7,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
+import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { getLabWorker } from '@/workers/lab-factory'
@@ -92,103 +93,124 @@ function LabTxViewerPage() {
         <h2 className="text-2xl font-bold tracking-tight">Transaction</h2>
       </div>
 
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between gap-2">
-            <CardTitle className="font-mono text-base break-all">{txid}</CardTitle>
-            <Button size="icon" variant="ghost" onClick={handleCopyTxid} aria-label="Copy txid">
-              <Copy className="h-4 w-4" />
-            </Button>
-          </div>
-          <CardDescription>
-            {timestamp ? `${timestamp} · ` : ''}
-            {confirmationsText}
-            {' · '}
-            {formatSats(totalOutputs)} sats total out · {formatSats(feeSats)} sats fee
-          </CardDescription>
-        </CardHeader>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>TxIns</CardTitle>
-          <CardDescription>Inputs to this transaction</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {tx.inputs.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No inputs (coinbase)</p>
-          ) : (
-            <div className="space-y-2">
-              {tx.inputs.map((input, index) => (
-                <div
-                  key={`${input.address}-${index}`}
-                  className="flex gap-4 items-center py-2 border-b border-border last:border-0"
-                >
-                  <span className="font-mono text-sm break-all flex-1 min-w-0">
-                    {truncateAddress(input.address)}
-                  </span>
-                  <span className="flex items-center gap-1 shrink-0">
-                    {input.owner ? (
-                      getOwnerIcon(input.owner) === 'wallet' ? (
-                        <Wallet className="h-4 w-4" />
-                      ) : (
-                        <FlaskConical className="h-4 w-4" />
-                      )
-                    ) : null}
-                    <Badge variant="secondary">
-                      {input.owner ? getOwnerDisplayName(input.owner, wallets) : 'unknown'}
-                    </Badge>
-                  </span>
-                  <span className="tabular-nums text-right">{formatSats(input.amountSats)} sats</span>
-                </div>
-              ))}
+      <InfomodeWrapper
+        infoId="lab-tx-detail-summary-card"
+        infoTitle="Transaction summary"
+        infoText="The transaction id (txid) is the fingerprint of this payment on the lab chain—share it to refer to exactly this transfer. Confirmations count blocks mined on top: zero means it is still waiting in the mempool like a real network. “Total out” adds up every output amount; the fee is what is left from inputs minus outputs—the incentive that would go to a miner on mainnet (here it helps you read economic cost in the simulator)."
+        className="rounded-xl"
+      >
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between gap-2">
+              <CardTitle className="font-mono text-base break-all">{txid}</CardTitle>
+              <Button size="icon" variant="ghost" onClick={handleCopyTxid} aria-label="Copy txid">
+                <Copy className="h-4 w-4" />
+              </Button>
             </div>
-          )}
-        </CardContent>
-      </Card>
+            <CardDescription>
+              {timestamp ? `${timestamp} · ` : ''}
+              {confirmationsText}
+              {' · '}
+              {formatSats(totalOutputs)} sats total out · {formatSats(feeSats)} sats fee
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      </InfomodeWrapper>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>TxOuts</CardTitle>
-          <CardDescription>Outputs from this transaction</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {tx.outputs.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No outputs</p>
-          ) : (
-            <div className="space-y-2">
-              {tx.outputs.map((output, index) => (
-                <div
-                  key={`${output.address}-${index}`}
-                  className="flex gap-4 items-center py-2 border-b border-border last:border-0"
-                >
-                  <span className="font-mono text-sm break-all flex-1 min-w-0">
-                    {truncateAddress(output.address)}
-                  </span>
-                  <span className="flex items-center gap-1 shrink-0">
-                    {output.owner ? (
-                      getOwnerIcon(output.owner) === 'wallet' ? (
-                        <Wallet className="h-4 w-4" />
-                      ) : (
-                        <FlaskConical className="h-4 w-4" />
-                      )
-                    ) : null}
-                    <Badge variant="secondary">
-                      {output.owner ? getOwnerDisplayName(output.owner, wallets) : 'unknown'}
-                    </Badge>
-                  </span>
-                  <span className="tabular-nums text-right">{formatSats(output.amountSats)} sats</span>
-                  {output.isChange && (
-                    <Badge variant="secondary" className="shrink-0">
-                      Change
-                    </Badge>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      <InfomodeWrapper
+        infoId="lab-tx-detail-inputs-card"
+        infoTitle="Inputs (TxIns)"
+        infoText="Each input spends a previous unspent output—coins consumed to fund this payment. The owner badge shows whether that coin belonged to a named lab participant or your loaded wallet. Block-reward “coinbase” transactions have no normal inputs; the UI may show that case explicitly."
+        className="rounded-xl"
+      >
+        <Card>
+          <CardHeader>
+            <CardTitle>TxIns</CardTitle>
+            <CardDescription>Inputs to this transaction</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {tx.inputs.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No inputs (coinbase)</p>
+            ) : (
+              <div className="space-y-2">
+                {tx.inputs.map((input, index) => (
+                  <div
+                    key={`${input.address}-${index}`}
+                    className="flex gap-4 items-center py-2 border-b border-border last:border-0"
+                  >
+                    <span className="font-mono text-sm break-all flex-1 min-w-0">
+                      {truncateAddress(input.address)}
+                    </span>
+                    <span className="flex items-center gap-1 shrink-0">
+                      {input.owner ? (
+                        getOwnerIcon(input.owner) === 'wallet' ? (
+                          <Wallet className="h-4 w-4" />
+                        ) : (
+                          <FlaskConical className="h-4 w-4" />
+                        )
+                      ) : null}
+                      <Badge variant="secondary">
+                        {input.owner ? getOwnerDisplayName(input.owner, wallets) : 'unknown'}
+                      </Badge>
+                    </span>
+                    <span className="tabular-nums text-right">{formatSats(input.amountSats)} sats</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </InfomodeWrapper>
+
+      <InfomodeWrapper
+        infoId="lab-tx-detail-outputs-card"
+        infoTitle="Outputs (TxOuts)"
+        infoText="Outputs are the destinations of the payment: amounts locked to specific addresses. A row marked “Change” is not a second recipient—it is your wallet sending leftover value back to yourself after spending a larger coin than the payment amount, exactly like real Bitcoin wallets do to avoid losing the remainder."
+        className="rounded-xl"
+      >
+        <Card>
+          <CardHeader>
+            <CardTitle>TxOuts</CardTitle>
+            <CardDescription>Outputs from this transaction</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {tx.outputs.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No outputs</p>
+            ) : (
+              <div className="space-y-2">
+                {tx.outputs.map((output, index) => (
+                  <div
+                    key={`${output.address}-${index}`}
+                    className="flex gap-4 items-center py-2 border-b border-border last:border-0"
+                  >
+                    <span className="font-mono text-sm break-all flex-1 min-w-0">
+                      {truncateAddress(output.address)}
+                    </span>
+                    <span className="flex items-center gap-1 shrink-0">
+                      {output.owner ? (
+                        getOwnerIcon(output.owner) === 'wallet' ? (
+                          <Wallet className="h-4 w-4" />
+                        ) : (
+                          <FlaskConical className="h-4 w-4" />
+                        )
+                      ) : null}
+                      <Badge variant="secondary">
+                        {output.owner ? getOwnerDisplayName(output.owner, wallets) : 'unknown'}
+                      </Badge>
+                    </span>
+                    <span className="tabular-nums text-right">{formatSats(output.amountSats)} sats</span>
+                    {output.isChange && (
+                      <Badge variant="secondary" className="shrink-0">
+                        Change
+                      </Badge>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </InfomodeWrapper>
     </div>
   )
 }

@@ -5,6 +5,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
+import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { Button } from '@/components/ui/button'
 import { truncateAddress, formatSats } from '@/lib/bitcoin-utils'
 import { getOwnerDisplayName, getOwnerIcon } from '@/lib/lab-utils'
@@ -24,12 +25,18 @@ export function LabAddressesCard({
   wallets: Array<{ wallet_id: number; name: string }>
 }) {
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Addresses</CardTitle>
-        <CardDescription>Addresses that have interacted with the network</CardDescription>
-      </CardHeader>
-      <CardContent>
+    <InfomodeWrapper
+      infoId="lab-addresses-card"
+      infoTitle="Addresses (lab)"
+      infoText="Every address that has appeared on the simulated chain—usually from mining rewards or transfers—with its current balance and which owner it belongs to (a named lab identity or your loaded wallet). Use this table to copy addresses into the transaction form or to see who holds what."
+      className="rounded-xl"
+    >
+      <Card>
+        <CardHeader>
+          <CardTitle>Addresses</CardTitle>
+          <CardDescription>Addresses that have interacted with the network</CardDescription>
+        </CardHeader>
+        <CardContent>
         {addresses.length === 0 ? (
           <p className="text-sm text-muted-foreground py-4">
             No addresses yet. Mine blocks to create addresses.
@@ -79,5 +86,6 @@ export function LabAddressesCard({
         )}
       </CardContent>
     </Card>
+    </InfomodeWrapper>
   )
 }
