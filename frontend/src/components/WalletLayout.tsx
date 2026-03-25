@@ -70,16 +70,19 @@ function isWalletSectionPath(pathname: string): boolean {
   )
 }
 
-function navItemClassNames(isActive: boolean) {
+const NAV_LINK_CLASS =
+  'group flex min-h-0 flex-1 items-center justify-center py-1.5 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background'
+
+function navItemInnerClassNames(isActive: boolean) {
   return cn(
-    'flex flex-1 flex-col items-center justify-center gap-1 rounded-lg px-1 py-2 text-xs transition-[color,box-shadow]',
+    'inline-flex flex-col items-center gap-1 rounded-md px-2 py-1 text-xs transition-[color,box-shadow,ring]',
     isActive
       ? cn(
           'font-medium text-primary',
           'ring-1 ring-primary/45',
-          'shadow-[0_0_20px_-4px_color-mix(in_hsl,var(--primary)_55%,transparent)]',
+          'shadow-[0_0_16px_-3px_color-mix(in_hsl,var(--primary)_50%,transparent)]',
         )
-      : 'text-muted-foreground hover:text-foreground',
+      : 'text-muted-foreground group-hover:text-foreground',
   )
 }
 
@@ -106,11 +109,13 @@ function PrimarySectionNav() {
             <Link
               key={to}
               to={to}
-              className={navItemClassNames(isActive)}
+              className={NAV_LINK_CLASS}
               aria-current={isActive ? 'page' : undefined}
             >
-              <Icon className="h-5 w-5 shrink-0" aria-hidden />
-              <span>{label}</span>
+              <span className={navItemInnerClassNames(isActive)}>
+                <Icon className="h-5 w-5 shrink-0" aria-hidden />
+                <span>{label}</span>
+              </span>
             </Link>
           )
         })}
@@ -138,11 +143,13 @@ function WalletSubNav() {
             <Link
               key={to}
               to={to}
-              className={navItemClassNames(isActive)}
+              className={NAV_LINK_CLASS}
               aria-current={isActive ? 'page' : undefined}
             >
-              <Icon className="h-5 w-5 shrink-0" aria-hidden />
-              <span>{label}</span>
+              <span className={navItemInnerClassNames(isActive)}>
+                <Icon className="h-5 w-5 shrink-0" aria-hidden />
+                <span>{label}</span>
+              </span>
             </Link>
           )
         })}
