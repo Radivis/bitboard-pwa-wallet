@@ -7,6 +7,7 @@ import {
   type NetworkMode,
   type WalletStatus,
 } from '@/stores/walletStore'
+import { walletIsUnlockedOrSyncing } from '@/lib/wallet-unlocked-status'
 import { switchDescriptorWallet } from '@/lib/settings-switch-wallet'
 import { terminateLabWorker } from '@/workers/lab-factory'
 import { switchToLabNetwork } from '@/lib/switch-to-lab-network'
@@ -42,10 +43,6 @@ const NETWORK_INFOMODE: Record<NetworkMode, { title: string; text: string }> = {
     title: 'Lab',
     text: 'Bitboard’s in-app simulator: a fake blockchain that runs inside your browser for safe practice—mine blocks, try transactions, and learn without touching mainnet or public testnets.',
   },
-}
-
-function walletIsUnlockedOrSyncing(walletStatus: WalletStatus): boolean {
-  return walletStatus === 'unlocked' || walletStatus === 'syncing'
 }
 
 /**

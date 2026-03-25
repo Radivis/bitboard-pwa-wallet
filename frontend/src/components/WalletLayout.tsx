@@ -63,6 +63,24 @@ const WALLET_SUB_NAV_ITEMS: WalletSubNavItem[] = [
 const NAV_SURFACE_CLASS =
   'border-border bg-header/95 backdrop-blur supports-[backdrop-filter]:bg-header/80'
 
+/**
+ * Primary section bar (Tailwind `h-16`). Wallet sub-nav uses literal `bottom-16` in JSX
+ * (same 4rem offset) so Tailwind’s scanner keeps the class; do not change one without the other.
+ */
+const PRIMARY_BOTTOM_NAV_HEIGHT_CLASS = 'h-16'
+
+/** Wallet subsection bar height (`h-14`). */
+const WALLET_SUB_NAV_HEIGHT_CLASS = 'h-14'
+
+/**
+ * Main content bottom padding when both fixed bars show: must match
+ * WALLET_SUB_NAV_HEIGHT_CLASS + PRIMARY_BOTTOM_NAV_HEIGHT_CLASS (3.5rem + 4rem).
+ */
+const MAIN_BOTTOM_PADDING_WALLET_SECTION_CLASS = 'pb-[7.5rem]'
+
+/** Main padding when only the primary bar is fixed (`h-16` + comfortable scroll inset). */
+const MAIN_BOTTOM_PADDING_PRIMARY_ONLY_CLASS = 'pb-20'
+
 function isWalletSectionPath(pathname: string): boolean {
   return pathname === '/' || pathname.startsWith('/wallet')
 }
@@ -83,6 +101,36 @@ function navItemInnerClassNames(isActive: boolean) {
   )
 }
 
+type BottomNavLinkProps = {
+  to: string
+  label: string
+  icon: LucideIcon
+  isActive: boolean
+  preload?: false
+}
+
+function BottomNavLink({
+  to,
+  label,
+  icon: Icon,
+  isActive,
+  preload,
+}: BottomNavLinkProps) {
+  return (
+    <Link
+      to={to}
+      preload={preload}
+      className={NAV_LINK_CLASS}
+      aria-current={isActive ? 'page' : undefined}
+    >
+      <span className={navItemInnerClassNames(isActive)}>
+        <Icon className="h-5 w-5 shrink-0" aria-hidden />
+        <span>{label}</span>
+      </span>
+    </Link>
+  )
+}
+
 function PrimarySectionNav() {
   const matchRoute = useMatchRoute()
   const location = useLocation()
@@ -96,28 +144,30 @@ function PrimarySectionNav() {
         NAV_SURFACE_CLASS,
       )}
     >
-      <div className="mx-auto flex h-16 max-w-screen-xl items-stretch justify-around px-2">
+      <div
+        className={cn(
+          'mx-auto flex max-w-screen-xl items-stretch justify-around px-2',
+          PRIMARY_BOTTOM_NAV_HEIGHT_CLASS,
+        )}
+      >
         {PRIMARY_NAV_ITEMS.map(
-          ({ to, label, icon: Icon, isActive: customActive, linkPreload }) => {
-          const isActive = customActive
-            ? customActive(pathname)
-            : !!matchRoute({ to, fuzzy: false })
+          ({ to, label, icon, isActive: customActive, linkPreload }) => {
+            const isActive = customActive
+              ? customActive(pathname)
+              : !!matchRoute({ to, fuzzy: false })
 
-          return (
-            <Link
-              key={to}
-              to={to}
-              preload={linkPreload}
-              className={NAV_LINK_CLASS}
-              aria-current={isActive ? 'page' : undefined}
-            >
-              <span className={navItemInnerClassNames(isActive)}>
-                <Icon className="h-5 w-5 shrink-0" aria-hidden />
-                <span>{label}</span>
-              </span>
-            </Link>
-          )
-        })}
+            return (
+              <BottomNavLink
+                key={to}
+                to={to}
+                label={label}
+                icon={icon}
+                isActive={isActive}
+                preload={linkPreload}
+              />
+            )
+          },
+        )}
       </div>
     </nav>
   )
@@ -134,22 +184,23 @@ function WalletSubNav() {
         NAV_SURFACE_CLASS,
       )}
     >
-      <div className="mx-auto flex h-14 max-w-screen-xl items-stretch justify-around px-2">
-        {WALLET_SUB_NAV_ITEMS.map(({ to, label, icon: Icon }) => {
+      <div
+        className={cn(
+          'mx-auto flex max-w-screen-xl items-stretch justify-around px-2',
+          WALLET_SUB_NAV_HEIGHT_CLASS,
+        )}
+      >
+        {WALLET_SUB_NAV_ITEMS.map(({ to, label, icon }) => {
           const isActive = !!matchRoute({ to, fuzzy: false })
 
           return (
-            <Link
+            <BottomNavLink
               key={to}
               to={to}
-              className={NAV_LINK_CLASS}
-              aria-current={isActive ? 'page' : undefined}
-            >
-              <span className={navItemInnerClassNames(isActive)}>
-                <Icon className="h-5 w-5 shrink-0" aria-hidden />
-                <span>{label}</span>
-              </span>
-            </Link>
+              label={label}
+              icon={icon}
+              isActive={isActive}
+            />
           )
         })}
       </div>
@@ -198,7 +249,10 @@ export function WalletLayout({ children }: WalletLayoutProps) {
       <main
         className={cn(
           'mx-auto max-w-screen-xl px-4 py-6',
-          !isSetupRoute && (showWalletSubNav ? 'pb-[7.5rem]' : 'pb-20'),
+          !isSetupRoute &&
+            (showWalletSubNav
+              ? MAIN_BOTTOM_PADDING_WALLET_SECTION_CLASS
+              : MAIN_BOTTOM_PADDING_PRIMARY_ONLY_CLASS),
         )}
       >
         {children}

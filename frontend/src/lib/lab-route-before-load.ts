@@ -21,6 +21,7 @@ export async function runLabRouteBeforeLoad(): Promise<LabRouteContext> {
 
   const previousNetworkMode = snapshot.networkMode
 
+  // Yield once so the navigation transition can paint before we block on WASM / toasts.
   await new Promise<void>((resolve) => {
     window.setTimeout(resolve, 0)
   })
@@ -33,6 +34,7 @@ export async function runLabRouteBeforeLoad(): Promise<LabRouteContext> {
   const { setNetworkMode, walletStatus, addressType, accountId } =
     useWalletStore.getState()
   const ok = await switchToLabNetwork({
+    // No Settings UI here: loading toast covers the switch; ignore switching flag.
     setSwitching: () => {},
     setNetworkMode,
     previousNetworkMode,

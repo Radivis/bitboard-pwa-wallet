@@ -5,6 +5,7 @@ import {
   type NetworkMode,
   type WalletStatus,
 } from '@/stores/walletStore'
+import { walletIsUnlockedOrSyncing } from '@/lib/wallet-unlocked-status'
 import { useSessionStore } from '@/stores/sessionStore'
 import { useCryptoStore } from '@/stores/cryptoStore'
 import { updateDescriptorWalletChangeset } from '@/lib/descriptor-wallet-manager'
@@ -14,10 +15,6 @@ import { terminateLabWorker } from '@/workers/lab-factory'
 import { appQueryClient } from '@/lib/app-query-client'
 import { prefetchLabChainState } from '@/hooks/useLabChainStateQuery'
 import { errorMessage } from '@/lib/utils'
-
-function walletIsUnlockedOrSyncing(walletStatus: WalletStatus): boolean {
-  return walletStatus === 'unlocked' || walletStatus === 'syncing'
-}
 
 /**
  * When switching *to* lab with an active WASM wallet: persist the current
