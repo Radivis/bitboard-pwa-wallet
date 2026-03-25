@@ -1,0 +1,25 @@
+import { createFileRoute } from '@tanstack/react-router'
+import { useWalletStore } from '@/stores/walletStore'
+import { WalletManagement } from '@/components/settings/WalletManagement'
+
+export const Route = createFileRoute('/management')({
+  component: ManagementPage,
+})
+
+export function ManagementPage() {
+  const activeWalletId = useWalletStore((s) => s.activeWalletId)
+
+  return (
+    <div className="space-y-6">
+      <h2 className="text-2xl font-bold tracking-tight">Management</h2>
+
+      {activeWalletId ? (
+        <WalletManagement />
+      ) : (
+        <p className="text-muted-foreground">
+          Create or import a wallet to manage lock, backup, and multiple wallets.
+        </p>
+      )}
+    </div>
+  )
+}

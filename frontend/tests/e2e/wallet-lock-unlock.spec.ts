@@ -5,8 +5,8 @@ test.describe('Wallet Lock/Unlock', () => {
   test('wallet lock and unlock', async ({ page }) => {
     await createWalletViaUI(page)
 
-    await page.getByRole('link', { name: /settings/i }).click()
-    await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
+    await page.getByRole('link', { name: /^Management$/i }).click()
+    await expect(page.getByRole('heading', { name: 'Management' })).toBeVisible()
 
     await page.getByRole('button', { name: 'Lock Wallet' }).click()
 
@@ -24,7 +24,7 @@ test.describe('Wallet Lock/Unlock', () => {
     test.setTimeout(120_000)
     await createWalletViaUI(page)
 
-    await page.getByRole('link', { name: /settings/i }).click()
+    await page.getByRole('link', { name: /^Management$/i }).click()
     await page.getByRole('button', { name: 'Lock Wallet' }).click()
 
     await page.getByRole('link', { name: /dashboard/i }).click()
@@ -42,7 +42,7 @@ test.describe('Wallet Lock/Unlock', () => {
     page,
   }) => {
     await createWalletViaUI(page)
-    await page.getByRole('link', { name: /settings/i }).click()
+    await page.getByRole('link', { name: /^Management$/i }).click()
     await page.getByRole('button', { name: 'Lock Wallet' }).click()
     await page.getByRole('link', { name: /dashboard/i }).click()
     await expect(page.getByText('Unlock Wallet')).toBeVisible({ timeout: 10000 })

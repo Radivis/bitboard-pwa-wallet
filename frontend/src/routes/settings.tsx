@@ -8,7 +8,6 @@ import { NetworkSelector } from '@/components/settings/NetworkSelector'
 import { AddressTypeSelector } from '@/components/settings/AddressTypeSelector'
 import { EsploraUrlSettings } from '@/components/settings/EsploraUrlSettings'
 import { SeedPhraseBackup } from '@/components/settings/SeedPhraseBackup'
-import { WalletManagement } from '@/components/settings/WalletManagement'
 
 export const Route = createFileRoute('/settings')({
   component: SettingsPage,
@@ -20,8 +19,6 @@ export function SettingsPage() {
   return (
     <div className="space-y-6">
       <h2 className="text-2xl font-bold tracking-tight">Settings</h2>
-
-      {activeWalletId && <WalletManagement />}
 
       <InfomodeWrapper
         infoId="settings-network-card"

@@ -44,10 +44,11 @@ export function AppInitializer({ children }: AppInitializerProps) {
     const isSetupRoute = location.pathname.startsWith('/setup')
     const isWalletsRoute = location.pathname === '/wallets'
     const isSettingsRoute = location.pathname === '/settings'
+    const isLibraryRoute = location.pathname === '/library'
     const isLabRoute = location.pathname.startsWith('/lab')
 
     if (!wallets || wallets.length === 0) {
-      if (!isSetupRoute && !isSettingsRoute && !isLabRoute) {
+      if (!isSetupRoute && !isSettingsRoute && !isLibraryRoute && !isLabRoute) {
         navigate({ to: '/setup' })
       }
       return
