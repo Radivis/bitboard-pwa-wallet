@@ -44,7 +44,7 @@ export function AppInitializer({ children }: AppInitializerProps) {
     const isSetupRoute = location.pathname.startsWith('/setup')
     const isWalletsRoute = location.pathname === '/wallet/wallets'
     const isSettingsRoute = location.pathname === '/settings'
-    const isLibraryRoute = location.pathname === '/library'
+    const isLibraryRoute = location.pathname.startsWith('/library')
     const isLabRoute = location.pathname.startsWith('/lab')
 
     if (!wallets || wallets.length === 0) {

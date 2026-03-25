@@ -14,7 +14,20 @@ export {
   useDeleteWallet,
 } from './hooks'
 export { walletKeys } from './query-keys'
-export type { Wallet, NewWallet, WalletUpdate, Setting } from './schema'
+export type {
+  Wallet,
+  NewWallet,
+  WalletUpdate,
+  Setting,
+  LibraryHistoryRow,
+  NewLibraryHistoryRow,
+} from './schema'
+export {
+  recordLibraryHistoryAccess,
+  listLibraryHistory,
+  pruneLibraryHistory,
+  LIBRARY_HISTORY_MAX_ROWS,
+} from './library-history'
 export {
   saveWalletSecrets,
   loadWalletSecrets,

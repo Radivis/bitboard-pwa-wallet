@@ -17,6 +17,7 @@ import { Route as LabRouteImport } from './routes/lab'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as WalletIndexRouteImport } from './routes/wallet/index'
 import { Route as SetupIndexRouteImport } from './routes/setup/index'
+import { Route as LibraryIndexRouteImport } from './routes/library/index'
 import { Route as LabIndexRouteImport } from './routes/lab/index'
 import { Route as WalletWalletsRouteImport } from './routes/wallet/wallets'
 import { Route as WalletSendRouteImport } from './routes/wallet/send'
@@ -24,6 +25,8 @@ import { Route as WalletReceiveRouteImport } from './routes/wallet/receive'
 import { Route as WalletManagementRouteImport } from './routes/wallet/management'
 import { Route as SetupImportRouteImport } from './routes/setup/import'
 import { Route as SetupCreateRouteImport } from './routes/setup/create'
+import { Route as LibraryHistoryRouteImport } from './routes/library/history'
+import { Route as LibraryArticlesSlugRouteImport } from './routes/library/articles.$slug'
 import { Route as LabTxTxidRouteImport } from './routes/lab/tx.$txid'
 
 const WalletRoute = WalletRouteImport.update({
@@ -66,6 +69,11 @@ const SetupIndexRoute = SetupIndexRouteImport.update({
   path: '/',
   getParentRoute: () => SetupRoute,
 } as any)
+const LibraryIndexRoute = LibraryIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => LibraryRoute,
+} as any)
 const LabIndexRoute = LabIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -101,6 +109,16 @@ const SetupCreateRoute = SetupCreateRouteImport.update({
   path: '/create',
   getParentRoute: () => SetupRoute,
 } as any)
+const LibraryHistoryRoute = LibraryHistoryRouteImport.update({
+  id: '/history',
+  path: '/history',
+  getParentRoute: () => LibraryRoute,
+} as any)
+const LibraryArticlesSlugRoute = LibraryArticlesSlugRouteImport.update({
+  id: '/articles/$slug',
+  path: '/articles/$slug',
+  getParentRoute: () => LibraryRoute,
+} as any)
 const LabTxTxidRoute = LabTxTxidRouteImport.update({
   id: '/tx/$txid',
   path: '/tx/$txid',
@@ -110,10 +128,11 @@ const LabTxTxidRoute = LabTxTxidRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/lab': typeof LabRouteWithChildren
-  '/library': typeof LibraryRoute
+  '/library': typeof LibraryRouteWithChildren
   '/settings': typeof SettingsRoute
   '/setup': typeof SetupRouteWithChildren
   '/wallet': typeof WalletRouteWithChildren
+  '/library/history': typeof LibraryHistoryRoute
   '/setup/create': typeof SetupCreateRoute
   '/setup/import': typeof SetupImportRoute
   '/wallet/management': typeof WalletManagementRoute
@@ -121,14 +140,16 @@ export interface FileRoutesByFullPath {
   '/wallet/send': typeof WalletSendRoute
   '/wallet/wallets': typeof WalletWalletsRoute
   '/lab/': typeof LabIndexRoute
+  '/library/': typeof LibraryIndexRoute
   '/setup/': typeof SetupIndexRoute
   '/wallet/': typeof WalletIndexRoute
   '/lab/tx/$txid': typeof LabTxTxidRoute
+  '/library/articles/$slug': typeof LibraryArticlesSlugRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/library': typeof LibraryRoute
   '/settings': typeof SettingsRoute
+  '/library/history': typeof LibraryHistoryRoute
   '/setup/create': typeof SetupCreateRoute
   '/setup/import': typeof SetupImportRoute
   '/wallet/management': typeof WalletManagementRoute
@@ -136,18 +157,21 @@ export interface FileRoutesByTo {
   '/wallet/send': typeof WalletSendRoute
   '/wallet/wallets': typeof WalletWalletsRoute
   '/lab': typeof LabIndexRoute
+  '/library': typeof LibraryIndexRoute
   '/setup': typeof SetupIndexRoute
   '/wallet': typeof WalletIndexRoute
   '/lab/tx/$txid': typeof LabTxTxidRoute
+  '/library/articles/$slug': typeof LibraryArticlesSlugRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/lab': typeof LabRouteWithChildren
-  '/library': typeof LibraryRoute
+  '/library': typeof LibraryRouteWithChildren
   '/settings': typeof SettingsRoute
   '/setup': typeof SetupRouteWithChildren
   '/wallet': typeof WalletRouteWithChildren
+  '/library/history': typeof LibraryHistoryRoute
   '/setup/create': typeof SetupCreateRoute
   '/setup/import': typeof SetupImportRoute
   '/wallet/management': typeof WalletManagementRoute
@@ -155,9 +179,11 @@ export interface FileRoutesById {
   '/wallet/send': typeof WalletSendRoute
   '/wallet/wallets': typeof WalletWalletsRoute
   '/lab/': typeof LabIndexRoute
+  '/library/': typeof LibraryIndexRoute
   '/setup/': typeof SetupIndexRoute
   '/wallet/': typeof WalletIndexRoute
   '/lab/tx/$txid': typeof LabTxTxidRoute
+  '/library/articles/$slug': typeof LibraryArticlesSlugRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -168,6 +194,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/setup'
     | '/wallet'
+    | '/library/history'
     | '/setup/create'
     | '/setup/import'
     | '/wallet/management'
@@ -175,14 +202,16 @@ export interface FileRouteTypes {
     | '/wallet/send'
     | '/wallet/wallets'
     | '/lab/'
+    | '/library/'
     | '/setup/'
     | '/wallet/'
     | '/lab/tx/$txid'
+    | '/library/articles/$slug'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
-    | '/library'
     | '/settings'
+    | '/library/history'
     | '/setup/create'
     | '/setup/import'
     | '/wallet/management'
@@ -190,9 +219,11 @@ export interface FileRouteTypes {
     | '/wallet/send'
     | '/wallet/wallets'
     | '/lab'
+    | '/library'
     | '/setup'
     | '/wallet'
     | '/lab/tx/$txid'
+    | '/library/articles/$slug'
   id:
     | '__root__'
     | '/'
@@ -201,6 +232,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/setup'
     | '/wallet'
+    | '/library/history'
     | '/setup/create'
     | '/setup/import'
     | '/wallet/management'
@@ -208,15 +240,17 @@ export interface FileRouteTypes {
     | '/wallet/send'
     | '/wallet/wallets'
     | '/lab/'
+    | '/library/'
     | '/setup/'
     | '/wallet/'
     | '/lab/tx/$txid'
+    | '/library/articles/$slug'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   LabRoute: typeof LabRouteWithChildren
-  LibraryRoute: typeof LibraryRoute
+  LibraryRoute: typeof LibraryRouteWithChildren
   SettingsRoute: typeof SettingsRoute
   SetupRoute: typeof SetupRouteWithChildren
   WalletRoute: typeof WalletRouteWithChildren
@@ -280,6 +314,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SetupIndexRouteImport
       parentRoute: typeof SetupRoute
     }
+    '/library/': {
+      id: '/library/'
+      path: '/'
+      fullPath: '/library/'
+      preLoaderRoute: typeof LibraryIndexRouteImport
+      parentRoute: typeof LibraryRoute
+    }
     '/lab/': {
       id: '/lab/'
       path: '/'
@@ -329,6 +370,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SetupCreateRouteImport
       parentRoute: typeof SetupRoute
     }
+    '/library/history': {
+      id: '/library/history'
+      path: '/history'
+      fullPath: '/library/history'
+      preLoaderRoute: typeof LibraryHistoryRouteImport
+      parentRoute: typeof LibraryRoute
+    }
+    '/library/articles/$slug': {
+      id: '/library/articles/$slug'
+      path: '/articles/$slug'
+      fullPath: '/library/articles/$slug'
+      preLoaderRoute: typeof LibraryArticlesSlugRouteImport
+      parentRoute: typeof LibraryRoute
+    }
     '/lab/tx/$txid': {
       id: '/lab/tx/$txid'
       path: '/tx/$txid'
@@ -350,6 +405,21 @@ const LabRouteChildren: LabRouteChildren = {
 }
 
 const LabRouteWithChildren = LabRoute._addFileChildren(LabRouteChildren)
+
+interface LibraryRouteChildren {
+  LibraryHistoryRoute: typeof LibraryHistoryRoute
+  LibraryIndexRoute: typeof LibraryIndexRoute
+  LibraryArticlesSlugRoute: typeof LibraryArticlesSlugRoute
+}
+
+const LibraryRouteChildren: LibraryRouteChildren = {
+  LibraryHistoryRoute: LibraryHistoryRoute,
+  LibraryIndexRoute: LibraryIndexRoute,
+  LibraryArticlesSlugRoute: LibraryArticlesSlugRoute,
+}
+
+const LibraryRouteWithChildren =
+  LibraryRoute._addFileChildren(LibraryRouteChildren)
 
 interface SetupRouteChildren {
   SetupCreateRoute: typeof SetupCreateRoute
@@ -387,7 +457,7 @@ const WalletRouteWithChildren =
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   LabRoute: LabRouteWithChildren,
-  LibraryRoute: LibraryRoute,
+  LibraryRoute: LibraryRouteWithChildren,
   SettingsRoute: SettingsRoute,
   SetupRoute: SetupRouteWithChildren,
   WalletRoute: WalletRouteWithChildren,

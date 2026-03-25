@@ -49,7 +49,12 @@ const PRIMARY_NAV_ITEMS: PrimaryNavItem[] = [
     isActive: (pathname) => pathname.startsWith('/lab'),
     linkPreload: false,
   },
-  { to: '/library', label: 'Library', icon: BookOpen },
+  {
+    to: '/library',
+    label: 'Library',
+    icon: BookOpen,
+    isActive: (pathname) => pathname.startsWith('/library'),
+  },
   { to: '/settings', label: 'Settings', icon: Settings },
 ]
 

@@ -1,30 +1,21 @@
-import { createFileRoute } from '@tanstack/react-router'
-import { BookOpen } from 'lucide-react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { useEffect } from 'react'
+import { createFileRoute, Outlet, useLocation } from '@tanstack/react-router'
+import { getDatabase, recordLibraryHistoryAccess } from '@/db'
 
 export const Route = createFileRoute('/library')({
-  component: LibraryPage,
+  component: LibraryLayout,
 })
 
-export function LibraryPage() {
-  return (
-    <div className="space-y-6">
-      <h2 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
-        <BookOpen className="h-8 w-8" aria-hidden />
-        Library
-      </h2>
+function LibraryLayout() {
+  const location = useLocation()
 
-      <Card>
-        <CardHeader>
-          <CardTitle>In-app knowledge base</CardTitle>
-          <CardDescription>Coming soon</CardDescription>
-        </CardHeader>
-        <CardContent className="text-sm text-muted-foreground">
-          <p>
-            This section will host guides and reference material inside Bitboard Wallet.
-          </p>
-        </CardContent>
-      </Card>
-    </div>
-  )
+  useEffect(() => {
+    const pathname = location.pathname
+    if (!pathname.startsWith('/library')) return
+    void recordLibraryHistoryAccess(getDatabase(), pathname).catch((err) => {
+      console.error('Failed to record library history:', err)
+    })
+  }, [location.pathname])
+
+  return <Outlet />
 }
