@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test'
 import { createWalletViaUI } from './helpers/wallet-setup'
+import { goToWalletTab } from './helpers/wallet-nav'
 
 test.describe('Receive Page', () => {
   test.beforeEach(async ({ page }) => {
@@ -7,7 +8,7 @@ test.describe('Receive Page', () => {
   })
 
   test('receive page shows address and QR', async ({ page }) => {
-    await page.getByRole('link', { name: /receive/i }).click()
+    await goToWalletTab(page, 'Receive')
     await expect(page.getByText('Receive Bitcoin')).toBeVisible()
 
     const qrCode = page.getByRole('main').getByRole('img')

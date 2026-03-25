@@ -1,6 +1,7 @@
 import { type Page, expect } from '@playwright/test'
 import type { LabState } from '@/workers/lab-api'
 import { WALLET_OWNER_PREFIX } from '@/lib/lab-utils'
+import { goToWalletTab } from './wallet-nav'
 
 /** Switch to Lab network and SegWit (BIP84) address type. */
 export async function switchToLabAndSegwit(page: Page): Promise<void> {
@@ -21,7 +22,7 @@ export async function switchToLabAndSegwit(page: Page): Promise<void> {
     timeout: 15000,
   })
 
-  await page.getByRole('link', { name: /receive/i }).click()
+  await goToWalletTab(page, 'Receive')
   await expect(page.getByRole('heading', { name: 'Receive Bitcoin' })).toBeVisible({
     timeout: 15000,
   })
@@ -66,7 +67,7 @@ export async function mineBlocksInLab(
   options?: MineOptions,
 ): Promise<void> {
   if (ownerType === 'wallet') {
-    await page.getByRole('link', { name: /receive/i }).click()
+    await goToWalletTab(page, 'Receive')
     await expect(page.getByRole('heading', { name: 'Receive Bitcoin' })).toBeVisible({
       timeout: 10000,
     })
@@ -164,7 +165,7 @@ export async function sendFromWallet(
   amountSats: number,
   _feeRate: number = 1,
 ): Promise<void> {
-  await page.getByRole('link', { name: /send/i }).click()
+  await goToWalletTab(page, 'Send')
   await expect(page.getByText('Send Bitcoin')).toBeVisible()
 
   await page.getByLabel('Recipient Address').fill(toAddress)

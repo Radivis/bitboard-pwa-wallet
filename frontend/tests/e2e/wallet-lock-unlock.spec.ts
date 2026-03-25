@@ -1,16 +1,17 @@
 import { test, expect } from '@playwright/test'
 import { createWalletViaUI, TEST_PASSWORD } from './helpers/wallet-setup'
+import { goToWalletTab } from './helpers/wallet-nav'
 
 test.describe('Wallet Lock/Unlock', () => {
   test('wallet lock and unlock', async ({ page }) => {
     await createWalletViaUI(page)
 
-    await page.getByRole('link', { name: /^Management$/i }).click()
+    await goToWalletTab(page, 'Management')
     await expect(page.getByRole('heading', { name: 'Management' })).toBeVisible()
 
     await page.getByRole('button', { name: 'Lock Wallet' }).click()
 
-    await page.getByRole('link', { name: /dashboard/i }).click()
+    await goToWalletTab(page, 'Dashboard')
     await expect(page.getByText('Unlock Wallet')).toBeVisible({ timeout: 10000 })
 
     await page.getByLabel('Password').fill(TEST_PASSWORD)
@@ -24,16 +25,16 @@ test.describe('Wallet Lock/Unlock', () => {
     test.setTimeout(120_000)
     await createWalletViaUI(page)
 
-    await page.getByRole('link', { name: /^Management$/i }).click()
+    await goToWalletTab(page, 'Management')
     await page.getByRole('button', { name: 'Lock Wallet' }).click()
 
-    await page.getByRole('link', { name: /dashboard/i }).click()
+    await goToWalletTab(page, 'Dashboard')
     await expect(page.getByText('Unlock Wallet')).toBeVisible({ timeout: 10000 })
     await page.getByLabel('Password').fill(TEST_PASSWORD)
     await page.getByRole('button', { name: 'Unlock' }).click()
     await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible({ timeout: 60000 })
 
-    await page.getByRole('link', { name: /receive/i }).click()
+    await goToWalletTab(page, 'Receive')
     await expect(page.getByRole('heading', { name: /receive/i })).toBeVisible({ timeout: 10000 })
     await expect(page.getByText('Receiving Address')).toBeVisible()
   })
@@ -42,9 +43,9 @@ test.describe('Wallet Lock/Unlock', () => {
     page,
   }) => {
     await createWalletViaUI(page)
-    await page.getByRole('link', { name: /^Management$/i }).click()
+    await goToWalletTab(page, 'Management')
     await page.getByRole('button', { name: 'Lock Wallet' }).click()
-    await page.getByRole('link', { name: /dashboard/i }).click()
+    await goToWalletTab(page, 'Dashboard')
     await expect(page.getByText('Unlock Wallet')).toBeVisible({ timeout: 10000 })
 
     await page.reload()

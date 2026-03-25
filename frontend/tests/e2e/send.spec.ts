@@ -6,6 +6,7 @@ import {
   TEST_PASSWORD,
 } from './helpers/wallet-setup'
 import { fundRegtestAddress, mineRegtestBlocks, waitForConfirmedBalance } from './helpers/regtest'
+import { goToWalletTab } from './helpers/wallet-nav'
 
 test.describe('Send Page', () => {
   test.beforeEach(async ({ page }) => {
@@ -13,7 +14,7 @@ test.describe('Send Page', () => {
   })
 
   test('send page validates inputs', async ({ page }) => {
-    await page.getByRole('link', { name: /send/i }).click()
+    await goToWalletTab(page, 'Send')
     await expect(page.getByText('Send Bitcoin')).toBeVisible()
 
     await expect(
@@ -63,7 +64,7 @@ test.describe('Send Page', () => {
       timeout: 15000,
     })
 
-    await page.getByRole('link', { name: /receive/i }).click()
+    await goToWalletTab(page, 'Receive')
     await expect(page.getByText('Receive Bitcoin')).toBeVisible()
     const addressEl = page.getByRole('main').locator('.font-mono').first()
     await expect(addressEl).toBeVisible({ timeout: 10000 })
@@ -77,7 +78,7 @@ test.describe('Send Page', () => {
     await mineRegtestBlocks(1)
     await waitForConfirmedBalance(receiveAddress, 100_000)
 
-    await page.getByRole('link', { name: /dashboard/i }).click()
+    await goToWalletTab(page, 'Dashboard')
     await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible()
 
     // Wait for the Sync button to be ready (not "Syncing..." from a
@@ -96,7 +97,7 @@ test.describe('Send Page', () => {
     })
     await expect(syncButton).toBeVisible({ timeout: 60000 })
 
-    await page.getByRole('link', { name: /send/i }).click()
+    await goToWalletTab(page, 'Send')
     await expect(page.getByText('Send Bitcoin')).toBeVisible()
     await page.getByLabel('Recipient Address').fill(receiveAddress)
     await page.getByRole('button', { name: 'Switch to sats' }).click()
