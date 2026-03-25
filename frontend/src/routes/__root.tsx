@@ -10,6 +10,7 @@ import { AppInitializer } from '@/components/AppInitializer'
 import { DatabaseReadyGate } from '@/components/DatabaseReadyGate'
 import { InfomodeHintToast } from '@/components/InfomodeHintToast'
 import { InfomodeProvider } from '@/components/infomode/InfomodeProvider'
+import { LabRouteNavigationProvider } from '@/components/LabRouteNavigationController'
 import { checkDatabaseHealth } from '@/db'
 
 // Disable in CI: devtools overlay intercepts pointer events and breaks E2E tests.
@@ -42,13 +43,15 @@ function RootComponent() {
     <QueryClientProvider client={appQueryClient}>
       <InfomodeProvider>
         <DatabaseReadyGate>
-          <InfomodeHintToast />
-          <ThemeSynchronizer />
-          <AppInitializer>
-            <WalletLayout>
-              <Outlet />
-            </WalletLayout>
-          </AppInitializer>
+          <LabRouteNavigationProvider>
+            <InfomodeHintToast />
+            <ThemeSynchronizer />
+            <AppInitializer>
+              <WalletLayout>
+                <Outlet />
+              </WalletLayout>
+            </AppInitializer>
+          </LabRouteNavigationProvider>
         </DatabaseReadyGate>
       </InfomodeProvider>
       <Toaster position="top-center" richColors />
