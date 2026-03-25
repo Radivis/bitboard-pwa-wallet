@@ -5,15 +5,31 @@ import { appQueryClient } from '@/lib/app-query-client'
 import { labChainStateQueryKey, toUiLabState } from '@/lib/lab-chain-query'
 import { labOpLoadChainFromDatabase } from '@/lib/lab-worker-operations'
 import { useLabChainStateQuery } from '@/hooks/useLabChainStateQuery'
-import { useLabRouteSwitchPhase } from '@/components/LabRouteNavigationController'
+import { runLabRouteBeforeLoad } from '@/lib/lab-route-before-load'
 
 export const Route = createFileRoute('/lab')({
+  /** Avoid intent preloads (hover/focus) switching the wallet to Lab early. */
+  preload: false,
+  pendingComponent: LabRoutePending,
+  beforeLoad: () => runLabRouteBeforeLoad(),
   component: LabLayout,
 })
 
+function LabRoutePending() {
+  return (
+    <div
+      className="min-h-[40vh] space-y-6 px-4 py-6"
+      aria-busy="true"
+      aria-live="polite"
+    >
+      <p className="sr-only">Opening Lab…</p>
+    </div>
+  )
+}
+
 function LabLayout() {
   const networkMode = useWalletStore((s) => s.networkMode)
-  const labSwitchPhase = useLabRouteSwitchPhase()
+  const { labAutoSwitchFailed } = Route.useRouteContext()
   const { isPending, isError, error, refetch } = useLabChainStateQuery()
 
   useEffect(() => {
@@ -40,24 +56,13 @@ function LabLayout() {
     }
   }, [networkMode])
 
-  if (networkMode !== 'lab') {
-    if (labSwitchPhase === 'failed') {
-      return (
-        <div className="space-y-6 px-4 py-6">
-          <p className="text-destructive">
-            Could not switch to Lab automatically. Open Settings, choose Lab under
-            Network, then try again.
-          </p>
-        </div>
-      )
-    }
+  if (networkMode !== 'lab' || labAutoSwitchFailed) {
     return (
-      <div
-        className="min-h-[40vh] px-4 py-6"
-        aria-busy="true"
-        aria-live="polite"
-      >
-        <p className="sr-only">Switching to Lab network…</p>
+      <div className="space-y-6 px-4 py-6">
+        <p className="text-destructive">
+          Could not switch to Lab automatically. Open Settings, choose Lab under Network,
+          then try again.
+        </p>
       </div>
     )
   }

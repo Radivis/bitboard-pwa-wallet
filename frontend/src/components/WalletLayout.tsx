@@ -25,6 +25,8 @@ interface PrimaryNavItem {
   icon: LucideIcon
   /** When set, active when this returns true instead of strict route match */
   isActive?: (pathname: string) => boolean
+  /** e.g. false for Lab so intent preload does not run `beforeLoad` on hover */
+  linkPreload?: false
 }
 
 interface WalletSubNavItem {
@@ -45,6 +47,7 @@ const PRIMARY_NAV_ITEMS: PrimaryNavItem[] = [
     label: 'Lab',
     icon: FlaskConical,
     isActive: (pathname) => pathname.startsWith('/lab'),
+    linkPreload: false,
   },
   { to: '/library', label: 'Library', icon: BookOpen },
   { to: '/settings', label: 'Settings', icon: Settings },
@@ -94,7 +97,8 @@ function PrimarySectionNav() {
       )}
     >
       <div className="mx-auto flex h-16 max-w-screen-xl items-stretch justify-around px-2">
-        {PRIMARY_NAV_ITEMS.map(({ to, label, icon: Icon, isActive: customActive }) => {
+        {PRIMARY_NAV_ITEMS.map(
+          ({ to, label, icon: Icon, isActive: customActive, linkPreload }) => {
           const isActive = customActive
             ? customActive(pathname)
             : !!matchRoute({ to, fuzzy: false })
@@ -103,6 +107,7 @@ function PrimarySectionNav() {
             <Link
               key={to}
               to={to}
+              preload={linkPreload}
               className={NAV_LINK_CLASS}
               aria-current={isActive ? 'page' : undefined}
             >

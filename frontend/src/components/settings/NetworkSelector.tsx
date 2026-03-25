@@ -248,7 +248,7 @@ export function NetworkSelector() {
             infoTitle="Manage lab"
             infoText="Opens Bitboard’s lab screen where you can mine pretend blocks, inspect addresses and UTXOs, and build practice transactions inside the simulator—still disconnected from real Bitcoin networks."
           >
-            <Link to="/lab">
+            <Link to="/lab" preload={false}>
               <Button variant="outline" size="sm">
                 Manage lab
               </Button>
