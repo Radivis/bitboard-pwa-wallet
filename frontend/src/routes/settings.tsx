@@ -1,5 +1,4 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { useWalletStore } from '@/stores/walletStore'
 import { AppDescription } from '@/components/AppDescription'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -7,15 +6,12 @@ import { ThemeSelector } from '@/components/settings/ThemeSelector'
 import { NetworkSelector } from '@/components/settings/NetworkSelector'
 import { AddressTypeSelector } from '@/components/settings/AddressTypeSelector'
 import { EsploraUrlSettings } from '@/components/settings/EsploraUrlSettings'
-import { SeedPhraseBackup } from '@/components/settings/SeedPhraseBackup'
 
 export const Route = createFileRoute('/settings')({
   component: SettingsPage,
 })
 
 export function SettingsPage() {
-  const activeWalletId = useWalletStore((s) => s.activeWalletId)
-
   return (
     <div className="space-y-6">
       <h2 className="text-2xl font-bold tracking-tight">Settings</h2>
@@ -69,8 +65,6 @@ export function SettingsPage() {
       </Card>
 
       <EsploraUrlSettings />
-
-      {activeWalletId && <SeedPhraseBackup />}
 
       <Card>
         <CardHeader>

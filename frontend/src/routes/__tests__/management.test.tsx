@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { screen } from '@testing-library/react'
+import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { renderWithProviders } from '@/test-utils/test-providers'
 
@@ -85,6 +85,22 @@ describe('ManagementPage', () => {
       screen.getByText(/Create or import a wallet to manage lock/i),
     ).toBeInTheDocument()
     expect(screen.queryByText('Wallet Management')).not.toBeInTheDocument()
+    expect(screen.queryByText('Seed Phrase Backup')).not.toBeInTheDocument()
+  })
+
+  it('shows seed phrase backup when a wallet is active', () => {
+    renderWithProviders(<ManagementPage />)
+    expect(screen.getByText('Seed Phrase Backup')).toBeInTheDocument()
+  })
+
+  it('show seed phrase opens password dialog', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(<ManagementPage />)
+
+    await user.click(screen.getByRole('button', { name: 'Show Seed Phrase' }))
+    await waitFor(() => {
+      expect(screen.getByText('Confirm Password')).toBeInTheDocument()
+    })
   })
 
   it('lock wallet clears sensitive state', async () => {
