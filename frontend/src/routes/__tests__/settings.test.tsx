@@ -219,41 +219,6 @@ describe('SettingsPage', () => {
     expect(mockSetThemeMode).toHaveBeenCalledWith('dark')
   })
 
-  it('wallet management visible only with wallet', () => {
-    renderWithProviders(<SettingsPage />)
-    expect(screen.getByText('Wallet Management')).toBeInTheDocument()
-
-    walletStoreState.activeWalletId = null
-    const { unmount } = renderWithProviders(<SettingsPage />)
-    expect(screen.queryAllByText('Wallet Management')).toHaveLength(1)
-    unmount()
-  })
-
-  it('lock wallet calls lockWallet and terminateWorker', async () => {
-    const user = userEvent.setup()
-    renderWithProviders(<SettingsPage />)
-
-    await user.click(screen.getByRole('button', { name: 'Lock Wallet' }))
-    expect(mockLockWallet).toHaveBeenCalled()
-    expect(mockTerminateWorker).toHaveBeenCalled()
-    expect(mockClearSession).toHaveBeenCalled()
-  })
-
-  it('seed phrase backup visible only with wallet', () => {
-    renderWithProviders(<SettingsPage />)
-    expect(screen.getByText('Seed Phrase Backup')).toBeInTheDocument()
-  })
-
-  it('show seed phrase opens password dialog', async () => {
-    const user = userEvent.setup()
-    renderWithProviders(<SettingsPage />)
-
-    await user.click(screen.getByRole('button', { name: 'Show Seed Phrase' }))
-    await waitFor(() => {
-      expect(screen.getByText('Confirm Password')).toBeInTheDocument()
-    })
-  })
-
   it('network switch when unlocked calls updateDescriptorWalletChangeset then resolveDescriptorWallet in order', async () => {
     mockExportChangeset.mockResolvedValueOnce('{"last_reveal":{"0":0}}')
     const user = userEvent.setup()

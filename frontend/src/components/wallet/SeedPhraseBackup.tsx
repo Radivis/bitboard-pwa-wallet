@@ -49,7 +49,7 @@ export function SeedPhraseBackup() {
   return (
     <>
       <InfomodeWrapper
-        infoId="settings-seed-phrase-backup-card"
+        infoId="management-seed-phrase-backup-card"
         infoTitle="Seed phrase backup"
         infoText="This section lets you reveal your recovery words again after typing your wallet password. Use it only in a private place—anyone who sees the words can control your funds. It is for checking a paper backup or writing the phrase down if you have not already."
         className="rounded-xl"

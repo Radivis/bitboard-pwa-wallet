@@ -24,7 +24,7 @@ import {
   useLabSendMutation,
 } from '@/hooks/useSendMutations'
 
-export const Route = createFileRoute('/send')({
+export const Route = createFileRoute('/wallet/send')({
   component: SendPage,
 })
 

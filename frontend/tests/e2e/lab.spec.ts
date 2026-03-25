@@ -10,6 +10,7 @@ import {
   getUtxoSumByOwner,
   findAddressForOwner,
 } from './helpers/lab'
+import { goToWalletTab } from './helpers/wallet-nav'
 import { WALLET_OWNER_PREFIX } from '@/lib/lab-utils'
 
 const COINBASE_SATS = 5_000_000_000 // 50 BTC (LAB_COINBASE_SUBSIDY in crypto)
@@ -119,7 +120,7 @@ test.describe('Lab', { tag: '@lab' }, () => {
     const aliceAddress = findAddressForOwner(stateAfterMine, 'Alice')
     expect(aliceAddress).toBeDefined()
 
-    await page.getByRole('link', { name: /receive/i }).click()
+    await goToWalletTab(page, 'Receive')
     await expect(page.getByRole('heading', { name: 'Receive Bitcoin' })).toBeVisible({
       timeout: 15000,
     })
@@ -168,7 +169,7 @@ test.describe('Lab', { tag: '@lab' }, () => {
   test('transfer wallet to wallet', async ({ page }) => {
     await mineBlocksInLab(page, 2, 'wallet')
 
-    await page.getByRole('link', { name: /receive/i }).click()
+    await goToWalletTab(page, 'Receive')
     await expect(page.getByRole('heading', { name: 'Receive Bitcoin' })).toBeVisible({
       timeout: 15000,
     })

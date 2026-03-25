@@ -69,8 +69,10 @@ feature:
             - navigate to Dashboard
     - Dashboard:
       - description: "Main wallet view showing balance, sync status, and recent transactions"
-      - path: /
-      - file: frontend/src/routes/index.tsx
+      - path: /wallet
+      - redirect_from: /
+      - file: frontend/src/routes/wallet/index.tsx
+      - redirect_file: frontend/src/routes/index.tsx
       - visible_elements:
         - wallet balance in BTC and sats
         - sync status indicator (last synced timestamp, syncing spinner when active)
@@ -93,8 +95,8 @@ feature:
         - If wallet is locked, show unlock prompt (password input)
     - Receive:
       - description: "Display a Bitcoin address and QR code for receiving payments"
-      - path: /receive
-      - file: frontend/src/routes/receive.tsx
+      - path: /wallet/receive
+      - file: frontend/src/routes/wallet/receive.tsx
       - visible_elements:
         - current receive address displayed as text
         - QR code encoding the current receive address (bitcoin: URI)
@@ -109,8 +111,8 @@ feature:
         - Wallet must be unlocked
     - Send:
       - description: "Send Bitcoin to a recipient address"
-      - path: /send
-      - file: frontend/src/routes/send.tsx
+      - path: /wallet/send
+      - file: frontend/src/routes/wallet/send.tsx
       - visible_elements:
         - Step 1 - Compose:
           - recipient address input field with validation

@@ -109,7 +109,7 @@ export function useBroadcastTransactionMutation() {
     onSuccess: ({ txid }) => {
       toast.success(`Transaction broadcast! TXID: ${txid.slice(0, 16)}...`)
       reset()
-      navigate({ to: '/' })
+      navigate({ to: '/wallet' })
     },
     onError: (err) => {
       toast.error(`Broadcast failed: ${errorMessage(err)}`)
@@ -193,7 +193,7 @@ export function useLabSendMutation() {
       setLabChainStateCache(queryClient, state)
       toast.success('Transaction added to mempool')
       reset()
-      navigate({ to: '/' })
+      navigate({ to: '/wallet' })
     },
     onError: (err) => {
       console.error('Lab send failed:', err)

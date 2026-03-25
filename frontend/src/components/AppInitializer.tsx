@@ -42,12 +42,13 @@ export function AppInitializer({ children }: AppInitializerProps) {
     if (isLoading) return
 
     const isSetupRoute = location.pathname.startsWith('/setup')
-    const isWalletsRoute = location.pathname === '/wallets'
+    const isWalletsRoute = location.pathname === '/wallet/wallets'
     const isSettingsRoute = location.pathname === '/settings'
+    const isLibraryRoute = location.pathname === '/library'
     const isLabRoute = location.pathname.startsWith('/lab')
 
     if (!wallets || wallets.length === 0) {
-      if (!isSetupRoute && !isSettingsRoute && !isLabRoute) {
+      if (!isSetupRoute && !isSettingsRoute && !isLibraryRoute && !isLabRoute) {
         navigate({ to: '/setup' })
       }
       return
@@ -56,13 +57,13 @@ export function AppInitializer({ children }: AppInitializerProps) {
     if (wallets.length === 1 && !activeWalletId) {
       setActiveWallet(wallets[0].wallet_id)
       if (isWalletsRoute) {
-        navigate({ to: '/' })
+        navigate({ to: '/wallet' })
       }
       return
     }
 
     if (wallets.length > 1 && !activeWalletId && !isWalletsRoute) {
-      navigate({ to: '/wallets' })
+      navigate({ to: '/wallet/wallets' })
     }
   }, [wallets, isLoading, activeWalletId, setActiveWallet, navigate, location.pathname])
 

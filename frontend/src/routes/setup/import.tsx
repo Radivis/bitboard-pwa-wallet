@@ -152,7 +152,7 @@ export function ImportWalletPage() {
     onSuccess: () => {
       setMnemonicInput('')
       toast.success('Wallet imported successfully!')
-      navigate({ to: '/' })
+      navigate({ to: '/wallet' })
     },
     onError: (err) => {
       toast.error(

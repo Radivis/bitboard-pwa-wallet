@@ -51,7 +51,7 @@ vi.mock('qrcode.react', () => ({
   ),
 }))
 
-import { ReceivePage } from '../receive'
+import { ReceivePage } from '../wallet/receive'
 
 describe('ReceivePage', () => {
   beforeEach(() => {

@@ -1,25 +1,36 @@
 import { useEffect } from 'react'
-import { createFileRoute, Outlet, useNavigate } from '@tanstack/react-router'
+import { createFileRoute, Outlet } from '@tanstack/react-router'
 import { useWalletStore } from '@/stores/walletStore'
 import { appQueryClient } from '@/lib/app-query-client'
 import { labChainStateQueryKey, toUiLabState } from '@/lib/lab-chain-query'
 import { labOpLoadChainFromDatabase } from '@/lib/lab-worker-operations'
 import { useLabChainStateQuery } from '@/hooks/useLabChainStateQuery'
+import { runLabRouteBeforeLoad } from '@/lib/lab-route-before-load'
 
 export const Route = createFileRoute('/lab')({
+  /** Avoid intent preloads (hover/focus) switching the wallet to Lab early. */
+  preload: false,
+  pendingComponent: LabRoutePending,
+  beforeLoad: () => runLabRouteBeforeLoad(),
   component: LabLayout,
 })
 
-function LabLayout() {
-  const navigate = useNavigate()
-  const networkMode = useWalletStore((s) => s.networkMode)
-  const { isPending, isError, error, refetch } = useLabChainStateQuery()
+function LabRoutePending() {
+  return (
+    <div
+      className="min-h-[40vh] space-y-6 px-4 py-6"
+      aria-busy="true"
+      aria-live="polite"
+    >
+      <p className="sr-only">Opening Lab…</p>
+    </div>
+  )
+}
 
-  useEffect(() => {
-    if (networkMode !== 'lab') {
-      navigate({ to: '/settings' })
-    }
-  }, [networkMode, navigate])
+function LabLayout() {
+  const networkMode = useWalletStore((s) => s.networkMode)
+  const { labAutoSwitchFailed } = Route.useRouteContext()
+  const { isPending, isError, error, refetch } = useLabChainStateQuery()
 
   useEffect(() => {
     if (networkMode !== 'lab' || !import.meta.env.DEV) return
@@ -45,8 +56,15 @@ function LabLayout() {
     }
   }, [networkMode])
 
-  if (networkMode !== 'lab') {
-    return null
+  if (networkMode !== 'lab' || labAutoSwitchFailed) {
+    return (
+      <div className="space-y-6 px-4 py-6">
+        <p className="text-destructive">
+          Could not switch to Lab automatically. Open Settings, choose Lab under Network,
+          then try again.
+        </p>
+      </div>
+    )
   }
 
   if (isPending) {

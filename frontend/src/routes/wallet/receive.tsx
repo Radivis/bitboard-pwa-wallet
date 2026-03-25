@@ -14,7 +14,7 @@ import { useSessionStore } from '@/stores/sessionStore'
 import { useCryptoStore } from '@/stores/cryptoStore'
 import { updateWalletChangeset } from '@/lib/wallet-utils'
 
-export const Route = createFileRoute('/receive')({
+export const Route = createFileRoute('/wallet/receive')({
   component: ReceivePage,
 })
 

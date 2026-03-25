@@ -1,6 +1,5 @@
 import { useState, useCallback } from 'react'
 import { Link } from '@tanstack/react-router'
-import { toast } from 'sonner'
 import {
   useWalletStore,
   NETWORK_LABELS,
@@ -8,18 +7,12 @@ import {
   type NetworkMode,
   type WalletStatus,
 } from '@/stores/walletStore'
-import { updateDescriptorWalletChangeset } from '@/lib/descriptor-wallet-manager'
-import { loadDescriptorWalletWithoutSync } from '@/lib/wallet-utils'
-import { toBitcoinNetwork } from '@/lib/bitcoin-utils'
+import { walletIsUnlockedOrSyncing } from '@/lib/wallet-unlocked-status'
 import { switchDescriptorWallet } from '@/lib/settings-switch-wallet'
 import { terminateLabWorker } from '@/workers/lab-factory'
-import { appQueryClient } from '@/lib/app-query-client'
-import { prefetchLabChainState } from '@/hooks/useLabChainStateQuery'
-import { useSessionStore } from '@/stores/sessionStore'
-import { useCryptoStore } from '@/stores/cryptoStore'
+import { switchToLabNetwork } from '@/lib/switch-to-lab-network'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { Button } from '@/components/ui/button'
-import { errorMessage } from '@/lib/utils'
 
 const NETWORK_OPTIONS: NetworkMode[] = [
   'mainnet',
@@ -50,91 +43,6 @@ const NETWORK_INFOMODE: Record<NetworkMode, { title: string; text: string }> = {
     title: 'Lab',
     text: 'Bitboard’s in-app simulator: a fake blockchain that runs inside your browser for safe practice—mine blocks, try transactions, and learn without touching mainnet or public testnets.',
   },
-}
-
-function walletIsUnlockedOrSyncing(walletStatus: WalletStatus): boolean {
-  return walletStatus === 'unlocked' || walletStatus === 'syncing'
-}
-
-/**
- * When switching *to* lab with an active WASM wallet: persist the current
- * network’s descriptor wallet state to storage, then load the lab wallet in
- * memory without starting sync. Skipped when there is no session password /
- * active wallet, or when export/update fails (e.g. wallet not initialized yet).
- */
-async function persistAndLoadLabWalletIfUnlockedOrSyncing(params: {
-  walletStatus: WalletStatus
-  previousNetworkMode: NetworkMode
-  addressType: AddressType
-  accountId: number
-}): Promise<void> {
-  const { walletStatus, previousNetworkMode, addressType, accountId } = params
-  if (!walletIsUnlockedOrSyncing(walletStatus)) return
-
-  const sessionPassword = useSessionStore.getState().password
-  const activeWalletId = useWalletStore.getState().activeWalletId
-  if (!sessionPassword || !activeWalletId) return
-
-  const { exportChangeset } = useCryptoStore.getState()
-  try {
-    const currentChangeset = await exportChangeset()
-    await updateDescriptorWalletChangeset({
-      password: sessionPassword,
-      walletId: activeWalletId,
-      network: toBitcoinNetwork(previousNetworkMode),
-      addressType,
-      accountId,
-      changesetJson: currentChangeset,
-    })
-  } catch {
-    // No active WASM wallet yet (e.g., first load) -- safe to skip
-  }
-
-  await loadDescriptorWalletWithoutSync({
-    password: sessionPassword,
-    walletId: activeWalletId,
-    networkMode: 'lab',
-    addressType,
-    accountId,
-  })
-}
-
-/**
- * User selected lab: tear down any lab worker, optionally sync wallet state
- * into lab mode, warm chain state for queries, then set network to lab.
- */
-async function switchToLabNetwork(params: {
-  setSwitching: (value: boolean) => void
-  setNetworkMode: (mode: NetworkMode) => void
-  previousNetworkMode: NetworkMode
-  walletStatus: WalletStatus
-  addressType: AddressType
-  accountId: number
-}): Promise<void> {
-  const {
-    setSwitching,
-    setNetworkMode,
-    previousNetworkMode,
-    walletStatus,
-    addressType,
-    accountId,
-  } = params
-  setSwitching(true)
-  try {
-    terminateLabWorker()
-    await persistAndLoadLabWalletIfUnlockedOrSyncing({
-      walletStatus,
-      previousNetworkMode,
-      addressType,
-      accountId,
-    })
-    await prefetchLabChainState(appQueryClient)
-    setNetworkMode('lab')
-  } catch (err) {
-    toast.error(errorMessage(err) || 'Failed to start lab')
-  } finally {
-    setSwitching(false)
-  }
 }
 
 /**
@@ -337,7 +245,7 @@ export function NetworkSelector() {
             infoTitle="Manage lab"
             infoText="Opens Bitboard’s lab screen where you can mine pretend blocks, inspect addresses and UTXOs, and build practice transactions inside the simulator—still disconnected from real Bitcoin networks."
           >
-            <Link to="/lab">
+            <Link to="/lab" preload={false}>
               <Button variant="outline" size="sm">
                 Manage lab
               </Button>

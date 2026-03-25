@@ -40,7 +40,7 @@ export function WalletUnlock({ walletName }: WalletUnlockProps) {
 
   const handleClose = () => {
     if (wallets && wallets.length > 1) {
-      navigate({ to: '/wallets' })
+      navigate({ to: '/wallet/wallets' })
     } else {
       navigate({ to: '/setup' })
     }

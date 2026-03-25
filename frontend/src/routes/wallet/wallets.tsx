@@ -5,7 +5,7 @@ import { useWalletStore } from '@/stores/walletStore'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 
-export const Route = createFileRoute('/wallets')({
+export const Route = createFileRoute('/wallet/wallets')({
   component: WalletsPage,
 })
 
@@ -18,7 +18,7 @@ function WalletsPage() {
   const handleSelectWallet = (walletId: number) => {
     lockWallet()
     setActiveWallet(walletId)
-    navigate({ to: '/' })
+    navigate({ to: '/wallet' })
   }
 
   if (isLoading) {
