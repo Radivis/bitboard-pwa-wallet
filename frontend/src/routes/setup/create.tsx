@@ -143,7 +143,7 @@ export function CreateWalletPage() {
     },
     onSuccess: () => {
       toast.success('Wallet created successfully!')
-      navigate({ to: '/' })
+      navigate({ to: '/wallet' })
     },
     onError: (err) => {
       toast.error(

@@ -77,7 +77,7 @@ vi.mock('@/lib/wallet-utils', () => ({
 }))
 
 import { useSendStore } from '@/stores/sendStore'
-import { SendPage } from '../send'
+import { SendPage } from '../wallet/send'
 
 describe('SendPage', () => {
   beforeEach(() => {

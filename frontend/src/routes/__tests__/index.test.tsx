@@ -65,7 +65,7 @@ vi.mock('@/lib/wallet-utils', () => ({
   runIncrementalDashboardWalletSync: vi.fn().mockResolvedValue(undefined),
 }))
 
-import { DashboardPage } from '../index'
+import { DashboardPage } from '../wallet/index'
 
 describe('DashboardPage', () => {
   beforeEach(() => {

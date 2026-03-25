@@ -9,24 +9,26 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as WalletsRouteImport } from './routes/wallets'
+import { Route as WalletRouteImport } from './routes/wallet'
 import { Route as SetupRouteImport } from './routes/setup'
 import { Route as SettingsRouteImport } from './routes/settings'
-import { Route as SendRouteImport } from './routes/send'
-import { Route as ReceiveRouteImport } from './routes/receive'
-import { Route as ManagementRouteImport } from './routes/management'
 import { Route as LibraryRouteImport } from './routes/library'
 import { Route as LabRouteImport } from './routes/lab'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as WalletIndexRouteImport } from './routes/wallet/index'
 import { Route as SetupIndexRouteImport } from './routes/setup/index'
 import { Route as LabIndexRouteImport } from './routes/lab/index'
+import { Route as WalletWalletsRouteImport } from './routes/wallet/wallets'
+import { Route as WalletSendRouteImport } from './routes/wallet/send'
+import { Route as WalletReceiveRouteImport } from './routes/wallet/receive'
+import { Route as WalletManagementRouteImport } from './routes/wallet/management'
 import { Route as SetupImportRouteImport } from './routes/setup/import'
 import { Route as SetupCreateRouteImport } from './routes/setup/create'
 import { Route as LabTxTxidRouteImport } from './routes/lab/tx.$txid'
 
-const WalletsRoute = WalletsRouteImport.update({
-  id: '/wallets',
-  path: '/wallets',
+const WalletRoute = WalletRouteImport.update({
+  id: '/wallet',
+  path: '/wallet',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SetupRoute = SetupRouteImport.update({
@@ -37,21 +39,6 @@ const SetupRoute = SetupRouteImport.update({
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SendRoute = SendRouteImport.update({
-  id: '/send',
-  path: '/send',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ReceiveRoute = ReceiveRouteImport.update({
-  id: '/receive',
-  path: '/receive',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ManagementRoute = ManagementRouteImport.update({
-  id: '/management',
-  path: '/management',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LibraryRoute = LibraryRouteImport.update({
@@ -69,6 +56,11 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const WalletIndexRoute = WalletIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => WalletRoute,
+} as any)
 const SetupIndexRoute = SetupIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -78,6 +70,26 @@ const LabIndexRoute = LabIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => LabRoute,
+} as any)
+const WalletWalletsRoute = WalletWalletsRouteImport.update({
+  id: '/wallets',
+  path: '/wallets',
+  getParentRoute: () => WalletRoute,
+} as any)
+const WalletSendRoute = WalletSendRouteImport.update({
+  id: '/send',
+  path: '/send',
+  getParentRoute: () => WalletRoute,
+} as any)
+const WalletReceiveRoute = WalletReceiveRouteImport.update({
+  id: '/receive',
+  path: '/receive',
+  getParentRoute: () => WalletRoute,
+} as any)
+const WalletManagementRoute = WalletManagementRouteImport.update({
+  id: '/management',
+  path: '/management',
+  getParentRoute: () => WalletRoute,
 } as any)
 const SetupImportRoute = SetupImportRouteImport.update({
   id: '/import',
@@ -99,30 +111,33 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/lab': typeof LabRouteWithChildren
   '/library': typeof LibraryRoute
-  '/management': typeof ManagementRoute
-  '/receive': typeof ReceiveRoute
-  '/send': typeof SendRoute
   '/settings': typeof SettingsRoute
   '/setup': typeof SetupRouteWithChildren
-  '/wallets': typeof WalletsRoute
+  '/wallet': typeof WalletRouteWithChildren
   '/setup/create': typeof SetupCreateRoute
   '/setup/import': typeof SetupImportRoute
+  '/wallet/management': typeof WalletManagementRoute
+  '/wallet/receive': typeof WalletReceiveRoute
+  '/wallet/send': typeof WalletSendRoute
+  '/wallet/wallets': typeof WalletWalletsRoute
   '/lab/': typeof LabIndexRoute
   '/setup/': typeof SetupIndexRoute
+  '/wallet/': typeof WalletIndexRoute
   '/lab/tx/$txid': typeof LabTxTxidRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/library': typeof LibraryRoute
-  '/management': typeof ManagementRoute
-  '/receive': typeof ReceiveRoute
-  '/send': typeof SendRoute
   '/settings': typeof SettingsRoute
-  '/wallets': typeof WalletsRoute
   '/setup/create': typeof SetupCreateRoute
   '/setup/import': typeof SetupImportRoute
+  '/wallet/management': typeof WalletManagementRoute
+  '/wallet/receive': typeof WalletReceiveRoute
+  '/wallet/send': typeof WalletSendRoute
+  '/wallet/wallets': typeof WalletWalletsRoute
   '/lab': typeof LabIndexRoute
   '/setup': typeof SetupIndexRoute
+  '/wallet': typeof WalletIndexRoute
   '/lab/tx/$txid': typeof LabTxTxidRoute
 }
 export interface FileRoutesById {
@@ -130,16 +145,18 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/lab': typeof LabRouteWithChildren
   '/library': typeof LibraryRoute
-  '/management': typeof ManagementRoute
-  '/receive': typeof ReceiveRoute
-  '/send': typeof SendRoute
   '/settings': typeof SettingsRoute
   '/setup': typeof SetupRouteWithChildren
-  '/wallets': typeof WalletsRoute
+  '/wallet': typeof WalletRouteWithChildren
   '/setup/create': typeof SetupCreateRoute
   '/setup/import': typeof SetupImportRoute
+  '/wallet/management': typeof WalletManagementRoute
+  '/wallet/receive': typeof WalletReceiveRoute
+  '/wallet/send': typeof WalletSendRoute
+  '/wallet/wallets': typeof WalletWalletsRoute
   '/lab/': typeof LabIndexRoute
   '/setup/': typeof SetupIndexRoute
+  '/wallet/': typeof WalletIndexRoute
   '/lab/tx/$txid': typeof LabTxTxidRoute
 }
 export interface FileRouteTypes {
@@ -148,46 +165,51 @@ export interface FileRouteTypes {
     | '/'
     | '/lab'
     | '/library'
-    | '/management'
-    | '/receive'
-    | '/send'
     | '/settings'
     | '/setup'
-    | '/wallets'
+    | '/wallet'
     | '/setup/create'
     | '/setup/import'
+    | '/wallet/management'
+    | '/wallet/receive'
+    | '/wallet/send'
+    | '/wallet/wallets'
     | '/lab/'
     | '/setup/'
+    | '/wallet/'
     | '/lab/tx/$txid'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/library'
-    | '/management'
-    | '/receive'
-    | '/send'
     | '/settings'
-    | '/wallets'
     | '/setup/create'
     | '/setup/import'
+    | '/wallet/management'
+    | '/wallet/receive'
+    | '/wallet/send'
+    | '/wallet/wallets'
     | '/lab'
     | '/setup'
+    | '/wallet'
     | '/lab/tx/$txid'
   id:
     | '__root__'
     | '/'
     | '/lab'
     | '/library'
-    | '/management'
-    | '/receive'
-    | '/send'
     | '/settings'
     | '/setup'
-    | '/wallets'
+    | '/wallet'
     | '/setup/create'
     | '/setup/import'
+    | '/wallet/management'
+    | '/wallet/receive'
+    | '/wallet/send'
+    | '/wallet/wallets'
     | '/lab/'
     | '/setup/'
+    | '/wallet/'
     | '/lab/tx/$txid'
   fileRoutesById: FileRoutesById
 }
@@ -195,21 +217,18 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   LabRoute: typeof LabRouteWithChildren
   LibraryRoute: typeof LibraryRoute
-  ManagementRoute: typeof ManagementRoute
-  ReceiveRoute: typeof ReceiveRoute
-  SendRoute: typeof SendRoute
   SettingsRoute: typeof SettingsRoute
   SetupRoute: typeof SetupRouteWithChildren
-  WalletsRoute: typeof WalletsRoute
+  WalletRoute: typeof WalletRouteWithChildren
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/wallets': {
-      id: '/wallets'
-      path: '/wallets'
-      fullPath: '/wallets'
-      preLoaderRoute: typeof WalletsRouteImport
+    '/wallet': {
+      id: '/wallet'
+      path: '/wallet'
+      fullPath: '/wallet'
+      preLoaderRoute: typeof WalletRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/setup': {
@@ -224,27 +243,6 @@ declare module '@tanstack/react-router' {
       path: '/settings'
       fullPath: '/settings'
       preLoaderRoute: typeof SettingsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/send': {
-      id: '/send'
-      path: '/send'
-      fullPath: '/send'
-      preLoaderRoute: typeof SendRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/receive': {
-      id: '/receive'
-      path: '/receive'
-      fullPath: '/receive'
-      preLoaderRoute: typeof ReceiveRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/management': {
-      id: '/management'
-      path: '/management'
-      fullPath: '/management'
-      preLoaderRoute: typeof ManagementRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/library': {
@@ -268,6 +266,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/wallet/': {
+      id: '/wallet/'
+      path: '/'
+      fullPath: '/wallet/'
+      preLoaderRoute: typeof WalletIndexRouteImport
+      parentRoute: typeof WalletRoute
+    }
     '/setup/': {
       id: '/setup/'
       path: '/'
@@ -281,6 +286,34 @@ declare module '@tanstack/react-router' {
       fullPath: '/lab/'
       preLoaderRoute: typeof LabIndexRouteImport
       parentRoute: typeof LabRoute
+    }
+    '/wallet/wallets': {
+      id: '/wallet/wallets'
+      path: '/wallets'
+      fullPath: '/wallet/wallets'
+      preLoaderRoute: typeof WalletWalletsRouteImport
+      parentRoute: typeof WalletRoute
+    }
+    '/wallet/send': {
+      id: '/wallet/send'
+      path: '/send'
+      fullPath: '/wallet/send'
+      preLoaderRoute: typeof WalletSendRouteImport
+      parentRoute: typeof WalletRoute
+    }
+    '/wallet/receive': {
+      id: '/wallet/receive'
+      path: '/receive'
+      fullPath: '/wallet/receive'
+      preLoaderRoute: typeof WalletReceiveRouteImport
+      parentRoute: typeof WalletRoute
+    }
+    '/wallet/management': {
+      id: '/wallet/management'
+      path: '/management'
+      fullPath: '/wallet/management'
+      preLoaderRoute: typeof WalletManagementRouteImport
+      parentRoute: typeof WalletRoute
     }
     '/setup/import': {
       id: '/setup/import'
@@ -332,16 +365,32 @@ const SetupRouteChildren: SetupRouteChildren = {
 
 const SetupRouteWithChildren = SetupRoute._addFileChildren(SetupRouteChildren)
 
+interface WalletRouteChildren {
+  WalletManagementRoute: typeof WalletManagementRoute
+  WalletReceiveRoute: typeof WalletReceiveRoute
+  WalletSendRoute: typeof WalletSendRoute
+  WalletWalletsRoute: typeof WalletWalletsRoute
+  WalletIndexRoute: typeof WalletIndexRoute
+}
+
+const WalletRouteChildren: WalletRouteChildren = {
+  WalletManagementRoute: WalletManagementRoute,
+  WalletReceiveRoute: WalletReceiveRoute,
+  WalletSendRoute: WalletSendRoute,
+  WalletWalletsRoute: WalletWalletsRoute,
+  WalletIndexRoute: WalletIndexRoute,
+}
+
+const WalletRouteWithChildren =
+  WalletRoute._addFileChildren(WalletRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   LabRoute: LabRouteWithChildren,
   LibraryRoute: LibraryRoute,
-  ManagementRoute: ManagementRoute,
-  ReceiveRoute: ReceiveRoute,
-  SendRoute: SendRoute,
   SettingsRoute: SettingsRoute,
   SetupRoute: SetupRouteWithChildren,
-  WalletsRoute: WalletsRoute,
+  WalletRoute: WalletRouteWithChildren,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

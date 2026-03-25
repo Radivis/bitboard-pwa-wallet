@@ -35,7 +35,7 @@ interface WalletSubNavItem {
 
 const PRIMARY_NAV_ITEMS: PrimaryNavItem[] = [
   {
-    to: '/',
+    to: '/wallet',
     label: 'Wallet',
     icon: Wallet,
     isActive: (pathname) => isWalletSectionPath(pathname),
@@ -51,23 +51,17 @@ const PRIMARY_NAV_ITEMS: PrimaryNavItem[] = [
 ]
 
 const WALLET_SUB_NAV_ITEMS: WalletSubNavItem[] = [
-  { to: '/', label: 'Dashboard', icon: Home },
-  { to: '/send', label: 'Send', icon: ArrowUpRight },
-  { to: '/receive', label: 'Receive', icon: ArrowDownLeft },
-  { to: '/management', label: 'Management', icon: SlidersHorizontal },
+  { to: '/wallet', label: 'Dashboard', icon: Home },
+  { to: '/wallet/send', label: 'Send', icon: ArrowUpRight },
+  { to: '/wallet/receive', label: 'Receive', icon: ArrowDownLeft },
+  { to: '/wallet/management', label: 'Management', icon: SlidersHorizontal },
 ]
 
 const NAV_SURFACE_CLASS =
   'border-border bg-header/95 backdrop-blur supports-[backdrop-filter]:bg-header/80'
 
 function isWalletSectionPath(pathname: string): boolean {
-  return (
-    pathname === '/' ||
-    pathname === '/send' ||
-    pathname === '/receive' ||
-    pathname === '/management' ||
-    pathname === '/wallets'
-  )
+  return pathname === '/' || pathname.startsWith('/wallet')
 }
 
 const NAV_LINK_CLASS =

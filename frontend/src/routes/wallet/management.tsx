@@ -2,7 +2,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { useWalletStore } from '@/stores/walletStore'
 import { WalletManagement } from '@/components/settings/WalletManagement'
 
-export const Route = createFileRoute('/management')({
+export const Route = createFileRoute('/wallet/management')({
   component: ManagementPage,
 })
 

@@ -51,7 +51,7 @@ export function WalletManagement() {
           {hasMultipleWallets && (
             <Button
               variant="outline"
-              onClick={() => navigate({ to: '/wallets' })}
+              onClick={() => navigate({ to: '/wallet/wallets' })}
             >
               Switch Wallet
             </Button>

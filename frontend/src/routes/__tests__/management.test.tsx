@@ -61,7 +61,7 @@ vi.mock('@/db', () => ({
   useWallets: () => ({ data: [{ wallet_id: 1 }] }),
 }))
 
-import { ManagementPage } from '../management'
+import { ManagementPage } from '../wallet/management'
 
 describe('ManagementPage', () => {
   beforeEach(() => {
