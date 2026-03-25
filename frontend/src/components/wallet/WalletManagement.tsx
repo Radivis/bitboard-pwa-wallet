@@ -40,7 +40,7 @@ export function WalletManagement() {
       <CardContent>
         <div className="flex flex-wrap gap-2">
           <InfomodeWrapper
-            infoId="settings-add-wallet"
+            infoId="wallet-add-wallet"
             infoTitle="Add wallet"
             infoText="Opens the setup flow so you can create a brand-new wallet or import another recovery phrase. Bitboard can store several wallets; each keeps its own records, and you can switch between them from the wallet list when you have more than one."
           >
@@ -58,7 +58,7 @@ export function WalletManagement() {
           )}
           {walletStatus === 'unlocked' && (
             <InfomodeWrapper
-              infoId="settings-lock-wallet"
+              infoId="wallet-lock-wallet"
               infoTitle="Lock wallet"
               infoText="Immediately clears sensitive keys from this app’s memory and returns you to a locked state. The next time you use the wallet you will enter your Bitboard password again—handy on a shared computer or when you walk away from the device."
             >

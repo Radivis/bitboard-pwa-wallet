@@ -1,7 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useWalletStore } from '@/stores/walletStore'
-import { WalletManagement } from '@/components/settings/WalletManagement'
-import { SeedPhraseBackup } from '@/components/settings/SeedPhraseBackup'
+import { WalletManagement } from '@/components/wallet/WalletManagement'
+import { SeedPhraseBackup } from '@/components/wallet/SeedPhraseBackup'
 
 export const Route = createFileRoute('/wallet/management')({
   component: ManagementPage,
