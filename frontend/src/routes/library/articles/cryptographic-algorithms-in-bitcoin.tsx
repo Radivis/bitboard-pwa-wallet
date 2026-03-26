@@ -20,8 +20,9 @@ export const article: LibraryArticle = {
       </p>
       <p>
         <strong>ECDSA</strong> (Elliptic Curve Digital Signature Algorithm) and <strong>Schnorr</strong>{' '}
-        signatures let you prove you know a private key without revealing it. Both work on the
-        secp256k1 curve used in Bitcoin. <strong>Taproot</strong> builds on Schnorr for more compact
+        <ArticleLink slug="cryptographic-signatures">signatures</ArticleLink> let you prove you know a
+        private key without revealing it. Both work on the secp256k1 curve used in Bitcoin.{' '}
+        <strong>Taproot</strong> builds on Schnorr for more compact
         multisignature-style authorizations and script features; see{' '}
         <ArticleLink slug="taproot">Taproot</ArticleLink>.
       </p>

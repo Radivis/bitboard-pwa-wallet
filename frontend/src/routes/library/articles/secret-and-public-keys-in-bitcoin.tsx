@@ -13,7 +13,8 @@ export const article: LibraryArticle = {
         math on the secp256k1 curve—you can think of the public key as a derived &quot;lock&quot; that
         pairs with your secret &quot;key.&quot; You share <strong>addresses</strong> (often encoded
         forms of scripts or public keys); you never share the private key, which is required to
-        authorize spends with a digital signature.
+        authorize spends with a{' '}
+        <ArticleLink slug="cryptographic-signatures">digital signature</ArticleLink>.
       </p>
       <p>
         <ArticleLink slug="what-are-hd-wallets-and-how-do-they-work">HD wallets</ArticleLink> (hierarchical

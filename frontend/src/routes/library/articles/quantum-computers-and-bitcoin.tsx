@@ -34,6 +34,10 @@ export const article: LibraryArticle = {
         <ArticleLink slug="cryptographic-algorithms-in-bitcoin">
           Cryptographic algorithms used in Bitcoin
         </ArticleLink>
+        . For why upgrading the whole system is not a simple parameter change, see{' '}
+        <ArticleLink slug="why-making-bitcoin-fully-quantum-resistant-is-hard">
+          Why making Bitcoin fully quantum resistant is hard
+        </ArticleLink>
         .
       </p>
     </div>

@@ -27,7 +27,12 @@ export const article: LibraryArticle = {
       <p>
         <strong>Hierarchical</strong> means keys are grouped (for example separate accounts or
         coin types). <strong>Deterministic</strong> means given the same seed and path, every
-        compliant wallet derives the same keys—important for recovery across devices and apps.
+        compliant wallet derives the same keys—important for recovery across devices and apps. For how
+        many addresses that implies in practice, see{' '}
+        <ArticleLink slug="how-many-addresses-can-a-bitcoin-wallet-have">
+          How many addresses can a Bitcoin wallet have?
+        </ArticleLink>
+        .
       </p>
       <p>
         HD schemes also define <strong>extended keys</strong>: data that includes a public or private
