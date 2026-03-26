@@ -13,7 +13,6 @@ export const LIBRARY_TAGS = {
   'elliptic-curves': { label: 'Elliptic curves' },
   'quantum-computing': { label: 'Quantum computing' },
   security: { label: 'Security' },
-  opsec: { label: 'OPSEC' },
   'test-networks': { label: 'Test networks' },
   history: { label: 'History' },
   'soft-forks': { label: 'Soft forks' },
