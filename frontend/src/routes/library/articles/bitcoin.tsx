@@ -10,7 +10,12 @@ export const article: LibraryArticle = {
       <p>
         <strong>Bitcoin</strong> (the network and the asset) is a decentralized digital currency:
         participants agree on who owns which amounts without relying on a central bank or company to
-        maintain the ledger. Instead, thousands of <strong>full nodes</strong> run open-source
+        maintain the ledger. Why agreement on a shared history is difficult without a central referee is
+        covered in{' '}
+        <ArticleLink slug="why-consensus-in-decentralized-networks-is-a-hard-problem">
+          Why consensus in decentralized networks is a hard problem
+        </ArticleLink>
+        . Instead, thousands of <strong>full nodes</strong> run open-source
         software that validates every transaction against the same rules: signatures must verify,
         coins cannot be spent twice, and new coins are created only according to the subsidy
         schedule.

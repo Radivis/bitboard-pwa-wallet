@@ -15,7 +15,9 @@ export const article: LibraryArticle = {
       </p>
       <p>
         Hash-based <ArticleLink slug="proof-of-work-and-mining-basics">proof-of-work</ArticleLink> is
-        less directly at risk than elliptic-curve discrete logarithms: algorithms such as Shor&apos;s
+        less directly at risk than{' '}
+        <ArticleLink slug="the-discrete-logarithm-problem">elliptic-curve discrete logarithms</ArticleLink>
+        : algorithms such as Shor&apos;s
         could hypothetically break <strong>ECDSA</strong> and Schnorr signatures on secp256k1 if a
         sufficiently large fault-tolerant quantum computer existed.
       </p>

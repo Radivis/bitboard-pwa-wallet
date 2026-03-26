@@ -15,7 +15,10 @@ export const article: LibraryArticle = {
         <strong>public point</strong> (your public key). Multiplying forward is fast; recovering the
         secret from the public point alone is believed to be infeasible for classical computers at
         the sizes Bitcoin uses (this is the{' '}
-        <strong>elliptic-curve discrete logarithm problem</strong>).
+        <ArticleLink slug="the-discrete-logarithm-problem">
+          elliptic-curve discrete logarithm problem
+        </ArticleLink>
+        ).
       </p>
       <p>
         Bitcoin uses the secp256k1 curve for ECDSA and Schnorr signatures. Parameters are chosen for

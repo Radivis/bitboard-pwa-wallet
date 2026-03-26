@@ -19,6 +19,14 @@ export const article: LibraryArticle = {
         and leave.
       </p>
       <p>
+        Agreeing on a single global order of events without a central authority is still
+        non-trivial; see{' '}
+        <ArticleLink slug="why-consensus-in-decentralized-networks-is-a-hard-problem">
+          Why consensus in decentralized networks is a hard problem
+        </ArticleLink>
+        .
+      </p>
+      <p>
         Bitcoin&apos;s node layer is P2P; see <ArticleLink slug="bitcoin">Bitcoin</ArticleLink> for how
         that supports a decentralized currency.
       </p>

@@ -17,8 +17,11 @@ export const article: LibraryArticle = {
       <p>
         Wallets can be <strong>custodial</strong>: a service holds the keys for you (similar to a bank
         holding an account). They can also be <strong>non-custodial</strong>: only you control the
-        keys; if you lose the backup, no one can reset your password. This app is built around
-        non-custodial use—protect your backup accordingly.
+        keys; if you lose the backup, no one can reset your password. See{' '}
+        <ArticleLink slug="not-your-keys-not-your-coins-explained">
+          &quot;Not your keys, not your coins&quot; explained
+        </ArticleLink>
+        . This app is built around non-custodial use—protect your backup accordingly.
       </p>
       <p>
         Modern wallets often derive many keys from a single secret called a <strong>seed</strong> (often
