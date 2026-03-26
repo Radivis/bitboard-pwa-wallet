@@ -30,7 +30,9 @@ export const article: LibraryArticle = {
       </p>
       <p>
         Bitcoin was the first widely deployed example. For how it combines these pieces in practice,
-        see <ArticleLink slug="bitcoin">Bitcoin</ArticleLink>.
+        see <ArticleLink slug="bitcoin">Bitcoin</ArticleLink>. For why the machinery behind that goal
+        is intricate, see{' '}
+        <ArticleLink slug="why-is-bitcoin-so-complicated">Why is Bitcoin so complicated?</ArticleLink>.
       </p>
     </div>
   ),

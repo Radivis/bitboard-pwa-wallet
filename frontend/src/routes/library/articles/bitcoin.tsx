@@ -51,6 +51,12 @@ export const article: LibraryArticle = {
         base layer are usually done as{' '}
         <ArticleLink slug="soft-forks-hard-forks-and-backward-compatibility">soft forks</ArticleLink>.
       </p>
+      <p>
+        If the stack of ideas feels heavy, that reflects real constraints: preventing double spending
+        without a central authority pulls in consensus, proof-of-work, cryptography, and careful
+        upgrades. See{' '}
+        <ArticleLink slug="why-is-bitcoin-so-complicated">Why is Bitcoin so complicated?</ArticleLink>.
+      </p>
     </div>
   ),
 }
