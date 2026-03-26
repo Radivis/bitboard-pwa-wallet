@@ -17,7 +17,12 @@ export const article: LibraryArticle = {
         The Lightning Network is a prominent L2 for Bitcoin: <strong>payment channels</strong> lock
         funds on chain with a shared balance; participants then exchange signed updates that reallocate
         the balance instantly and cheaply. A network of <strong>routing</strong> nodes can forward
-        payments across channels so payer and payee do not need a direct channel.
+        payments across channels so payer and payee do not need a direct channel. Lightning uses the
+        same asset as on-chain Bitcoin—see{' '}
+        <ArticleLink slug="are-bitcoin-and-lightning-different-cryptocurrencies">
+          Are Bitcoin and Lightning different cryptocurrencies?
+        </ArticleLink>
+        .
       </p>
       <p>
         Read <ArticleLink slug="the-lightning-network">The Lightning network</ArticleLink> for an

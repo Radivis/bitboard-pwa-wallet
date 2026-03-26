@@ -20,7 +20,8 @@ export const article: LibraryArticle = {
         and algorithms requires consensus among implementers and users.
       </p>
       <p>
-        Bitcoin also has a long history of on-chain outputs: old <strong>UTXO</strong>s use today&apos;s
+        Bitcoin also has a long history of on-chain outputs: old{' '}
+        <ArticleLink slug="what-is-a-utxo">UTXO</ArticleLink>s use today&apos;s
         elliptic-curve signatures. Migrating or &quot;burning&quot; legacy coins without keys, or
         forcing everyone to move funds in a deadline, raises social and economic questions. A gradual
         transition via new output types and voluntary movement is more plausible, but it is slow and

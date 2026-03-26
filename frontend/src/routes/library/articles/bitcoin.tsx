@@ -40,6 +40,11 @@ export const article: LibraryArticle = {
         for the underlying math.
       </p>
       <p>
+        The shared ledger tracks value as <ArticleLink slug="what-is-a-utxo">UTXOs</ArticleLink>{' '}
+        (unspent transaction outputs)—not as simple bank-style account rows. Wallets scan outputs you
+        can spend and build new transactions that consume them.
+      </p>
+      <p>
         <strong>Segregated Witness (SegWit)</strong>, activated in 2017, changed how transaction data is
         structured and helped scale on-chain capacity; read <ArticleLink slug="segwit">SegWit</ArticleLink>{' '}
         for a short overview and why it matters for fees and security. Rule changes on Bitcoin&apos;s

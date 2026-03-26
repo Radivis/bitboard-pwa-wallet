@@ -9,7 +9,8 @@ export const article: LibraryArticle = {
     <div className={ARTICLE_BODY_CLASS}>
       <p>
         Miners collect two sources of value: the <strong>block subsidy</strong> (new coins issued per
-        block, halving over time according to Bitcoin&apos;s rules) and{' '}
+        block, <ArticleLink slug="what-is-a-halving-exactly">halving</ArticleLink> over time according
+        to Bitcoin&apos;s rules) and{' '}
         <strong>transaction fees</strong> paid by users whose transactions are included in the block.
         For how mining works, see{' '}
         <ArticleLink slug="proof-of-work-and-mining-basics">Proof-of-work and mining (basics)</ArticleLink>

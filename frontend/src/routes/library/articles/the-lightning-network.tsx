@@ -21,7 +21,12 @@ export const article: LibraryArticle = {
       </p>
       <p>
         For how L2 fits next to the base chain, see{' '}
-        <ArticleLink slug="layer-2-networks">Layer 2 networks</ArticleLink>.
+        <ArticleLink slug="layer-2-networks">Layer 2 networks</ArticleLink>. For whether Lightning is a
+        separate coin, see{' '}
+        <ArticleLink slug="are-bitcoin-and-lightning-different-cryptocurrencies">
+          Are Bitcoin and Lightning different cryptocurrencies?
+        </ArticleLink>
+        .
       </p>
     </div>
   ),
