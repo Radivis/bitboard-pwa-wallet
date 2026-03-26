@@ -6,7 +6,7 @@ export { ARTICLE_SLUGS, type ArticleSlug, type LibraryArticle }
 export { LIBRARY_ARTICLE_TITLE_CLASS } from './article-shared'
 
 export function isArticleSlug(value: string): value is ArticleSlug {
-  return (ARTICLE_SLUGS as readonly string[]).includes(value)
+  return Object.prototype.hasOwnProperty.call(ARTICLES, value)
 }
 
 export function getArticle(slug: string): LibraryArticle | undefined {
