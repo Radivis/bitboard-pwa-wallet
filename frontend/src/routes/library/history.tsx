@@ -51,7 +51,8 @@ function LibraryHistoryPage() {
       </div>
 
       <p className="text-sm text-muted-foreground">
-        Recent pages you opened in this section (stored on this device only).
+        Articles you opened recently (stored on this device only). Index, tags, and other library
+        screens are not listed here.
       </p>
 
       {loadError ? (
@@ -62,7 +63,7 @@ function LibraryHistoryPage() {
         <Card>
           <CardHeader>
             <CardTitle>No entries yet</CardTitle>
-            <CardDescription>Open an article or this index from the Library to build history.</CardDescription>
+            <CardDescription>Open an article from the Library to build history.</CardDescription>
           </CardHeader>
         </Card>
       ) : (

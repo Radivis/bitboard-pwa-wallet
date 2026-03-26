@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { createFileRoute, Outlet, useLocation } from '@tanstack/react-router'
 import { getDatabase, recordLibraryHistoryAccess } from '@/db'
+import { articleSlugFromAccessPath, isArticleSlug } from '@/lib/library/articles'
 
 export const Route = createFileRoute('/library')({
   component: LibraryLayout,
@@ -11,7 +12,8 @@ function LibraryLayout() {
 
   useEffect(() => {
     const pathname = location.pathname
-    if (!pathname.startsWith('/library')) return
+    const slug = articleSlugFromAccessPath(pathname)
+    if (!slug || !isArticleSlug(slug)) return
     void recordLibraryHistoryAccess(getDatabase(), pathname).catch((err) => {
       console.error('Failed to record library history:', err)
     })
