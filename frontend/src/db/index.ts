@@ -12,8 +12,10 @@ export {
   useAddWallet,
   useUpdateWallet,
   useDeleteWallet,
+  useLibraryFavorites,
+  useSetArticleFavorite,
 } from './hooks'
-export { walletKeys } from './query-keys'
+export { walletKeys, libraryKeys } from './query-keys'
 export type {
   Wallet,
   NewWallet,
@@ -21,7 +23,15 @@ export type {
   Setting,
   LibraryHistoryRow,
   NewLibraryHistoryRow,
+  LibraryArticleRow,
+  NewLibraryArticleRow,
+  LibraryArticleUpdate,
 } from './schema'
+export {
+  getFavoriteBySlug,
+  getAllFavoriteSlugs,
+  setArticleFavorite,
+} from './library-articles'
 export {
   recordLibraryHistoryAccess,
   listLibraryHistory,

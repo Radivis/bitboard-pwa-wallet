@@ -1,9 +1,12 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, Star } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { getArticle } from '@/lib/library/articles'
+import { useLibraryFavorites, useSetArticleFavorite } from '@/db'
+import { getArticle, isArticleSlug } from '@/lib/library/articles'
 import { getTagLabel } from '@/lib/library/tags'
+import { cn } from '@/lib/utils'
 
 export const Route = createFileRoute('/library/articles/$slug')({
   component: LibraryArticlePage,
@@ -12,6 +15,11 @@ export const Route = createFileRoute('/library/articles/$slug')({
 function LibraryArticlePage() {
   const { slug } = Route.useParams()
   const article = getArticle(slug)
+  const { data: favoriteSlugs } = useLibraryFavorites()
+  const setFavorite = useSetArticleFavorite()
+
+  const isFavorite =
+    isArticleSlug(slug) && favoriteSlugs ? favoriteSlugs.has(slug) : false
 
   if (!article) {
     return (
@@ -46,7 +54,32 @@ function LibraryArticlePage() {
       </Link>
 
       <header className="space-y-3">
-        <h2 className="text-2xl font-bold tracking-tight">{article.title}</h2>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <h2 className="text-2xl font-bold tracking-tight">{article.title}</h2>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="shrink-0"
+            aria-pressed={isFavorite}
+            aria-label={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+            disabled={setFavorite.isPending}
+            onClick={() =>
+              void setFavorite.mutateAsync({
+                articleSlug: article.slug,
+                isFavorite: !isFavorite,
+              })
+            }
+          >
+            <Star
+              className={cn(
+                'size-6',
+                isFavorite && 'fill-primary text-primary',
+              )}
+              aria-hidden
+            />
+          </Button>
+        </div>
         <div className="flex flex-wrap gap-1.5">
           {article.tagIds.map((tagId) => (
             <Badge key={tagId} variant="secondary">

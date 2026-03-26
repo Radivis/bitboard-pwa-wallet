@@ -42,4 +42,11 @@ export async function migrateToLatest(db: Kysely<any>): Promise<void> {
     .addColumn('accessed_at', 'text', (col) => col.notNull())
     .addColumn('access_path', 'text', (col) => col.notNull())
     .execute()
+
+  await db.schema
+    .createTable('library_articles')
+    .ifNotExists()
+    .addColumn('article_slug', 'text', (col) => col.primaryKey())
+    .addColumn('is_favorite', 'integer', (col) => col.notNull().defaultTo(0))
+    .execute()
 }

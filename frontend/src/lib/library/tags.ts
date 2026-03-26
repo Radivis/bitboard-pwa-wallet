@@ -31,3 +31,10 @@ export type LibraryTagId = keyof typeof LIBRARY_TAGS
 export function getTagLabel(tagId: LibraryTagId): string {
   return LIBRARY_TAGS[tagId].label
 }
+
+/** All tag ids, sorted alphabetically by display label (for Tags page sections). */
+export function listLibraryTagIdsSortedByLabel(): LibraryTagId[] {
+  return (Object.keys(LIBRARY_TAGS) as LibraryTagId[]).sort((a, b) =>
+    getTagLabel(a).localeCompare(getTagLabel(b)),
+  )
+}

@@ -9,6 +9,10 @@ import {
   FlaskConical,
   BookOpen,
   SlidersHorizontal,
+  List,
+  Tags,
+  Star,
+  History,
   type LucideIcon,
 } from 'lucide-react'
 import { InfomodeToggle } from '@/components/infomode/InfomodeToggle'
@@ -65,6 +69,40 @@ const WALLET_SUB_NAV_ITEMS: WalletSubNavItem[] = [
   { to: '/wallet/management', label: 'Management', icon: SlidersHorizontal },
 ]
 
+interface LibrarySubNavItem {
+  to: string
+  label: string
+  icon: LucideIcon
+  isActive: (pathname: string) => boolean
+}
+
+const LIBRARY_SUB_NAV_ITEMS: LibrarySubNavItem[] = [
+  {
+    to: '/library',
+    label: 'Index',
+    icon: List,
+    isActive: (pathname) => pathname === '/library' || pathname === '/library/',
+  },
+  {
+    to: '/library/tags',
+    label: 'Tags',
+    icon: Tags,
+    isActive: (pathname) => pathname === '/library/tags',
+  },
+  {
+    to: '/library/favorites',
+    label: 'Favorites',
+    icon: Star,
+    isActive: (pathname) => pathname === '/library/favorites',
+  },
+  {
+    to: '/library/history',
+    label: 'History',
+    icon: History,
+    isActive: (pathname) => pathname === '/library/history',
+  },
+]
+
 const NAV_SURFACE_CLASS =
   'border-border bg-header/95 backdrop-blur supports-[backdrop-filter]:bg-header/80'
 
@@ -88,6 +126,10 @@ const MAIN_BOTTOM_PADDING_PRIMARY_ONLY_CLASS = 'pb-20'
 
 function isWalletSectionPath(pathname: string): boolean {
   return pathname === '/' || pathname.startsWith('/wallet')
+}
+
+function isLibrarySectionPath(pathname: string): boolean {
+  return pathname.startsWith('/library')
 }
 
 const NAV_LINK_CLASS =
@@ -213,12 +255,46 @@ function WalletSubNav() {
   )
 }
 
+function LibrarySubNav() {
+  const location = useLocation()
+  const pathname = location.pathname
+
+  return (
+    <nav
+      aria-label="Library"
+      className={cn(
+        'fixed bottom-16 left-0 right-0 z-40 border-t',
+        NAV_SURFACE_CLASS,
+      )}
+    >
+      <div
+        className={cn(
+          'mx-auto flex max-w-screen-xl items-stretch justify-around px-2',
+          WALLET_SUB_NAV_HEIGHT_CLASS,
+        )}
+      >
+        {LIBRARY_SUB_NAV_ITEMS.map(({ to, label, icon, isActive }) => (
+          <BottomNavLink
+            key={to}
+            to={to}
+            label={label}
+            icon={icon}
+            isActive={isActive(pathname)}
+          />
+        ))}
+      </div>
+    </nav>
+  )
+}
+
 function BottomNavigationChrome() {
   const location = useLocation()
+  const showLibrarySubNav = isLibrarySectionPath(location.pathname)
   const showWalletSubNav = isWalletSectionPath(location.pathname)
 
   return (
     <>
+      {showLibrarySubNav && <LibrarySubNav />}
       {showWalletSubNav && <WalletSubNav />}
       <PrimarySectionNav />
     </>
@@ -228,6 +304,7 @@ function BottomNavigationChrome() {
 export function WalletLayout({ children }: WalletLayoutProps) {
   const location = useLocation()
   const isSetupRoute = location.pathname.startsWith('/setup')
+  const showLibrarySubNav = !isSetupRoute && isLibrarySectionPath(location.pathname)
   const showWalletSubNav = !isSetupRoute && isWalletSectionPath(location.pathname)
 
   return (
@@ -255,7 +332,7 @@ export function WalletLayout({ children }: WalletLayoutProps) {
         className={cn(
           'mx-auto max-w-screen-xl px-4 py-6',
           !isSetupRoute &&
-            (showWalletSubNav
+            (showWalletSubNav || showLibrarySubNav
               ? MAIN_BOTTOM_PADDING_WALLET_SECTION_CLASS
               : MAIN_BOTTOM_PADDING_PRIMARY_ONLY_CLASS),
         )}

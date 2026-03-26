@@ -1,7 +1,8 @@
-import { createFileRoute, Link } from '@tanstack/react-router'
-import { BookOpen, History } from 'lucide-react'
-import { Badge } from '@/components/ui/badge'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { useMemo, useState } from 'react'
+import { createFileRoute } from '@tanstack/react-router'
+import { BookOpen } from 'lucide-react'
+import { LibraryArticleList } from '@/components/library/LibraryArticleList'
+import { Input } from '@/components/ui/input'
 import { listArticles } from '@/lib/library/articles'
 import { getTagLabel } from '@/lib/library/tags'
 
@@ -9,8 +10,21 @@ export const Route = createFileRoute('/library/')({
   component: LibraryIndexPage,
 })
 
+function normalizeSearch(value: string): string {
+  return value.trim().toLowerCase()
+}
+
 function LibraryIndexPage() {
-  const articles = listArticles()
+  const [query, setQuery] = useState('')
+  const articles = useMemo(() => {
+    const sorted = [...listArticles()].sort((a, b) => a.title.localeCompare(b.title))
+    const q = normalizeSearch(query)
+    if (!q) return sorted
+    return sorted.filter((article) => {
+      if (article.title.toLowerCase().includes(q)) return true
+      return article.tagIds.some((tagId) => getTagLabel(tagId).toLowerCase().includes(q))
+    })
+  }, [query])
 
   return (
     <div className="space-y-6">
@@ -20,55 +34,28 @@ function LibraryIndexPage() {
       </h2>
 
       <p className="text-sm text-muted-foreground">
-        In-app guides and reference material. Articles are fixed for accuracy; use the history view
-        to retrace what you opened recently.
+        In-app guides and reference material. Articles are fixed for accuracy. Use the bottom bar to
+        browse by tag, favorites, or history.
       </p>
 
-      <div>
-        <Link
-          to="/library/history"
-          className="inline-flex items-center gap-2 text-sm font-medium text-primary underline-offset-4 hover:underline"
-        >
-          <History className="h-4 w-4 shrink-0" aria-hidden />
-          Library history
-        </Link>
+      <div className="space-y-2">
+        <label htmlFor="library-search" className="text-sm font-medium text-foreground">
+          Search
+        </label>
+        <Input
+          id="library-search"
+          type="search"
+          placeholder="Filter by title or tag…"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          autoComplete="off"
+        />
       </div>
 
-      <ul className="space-y-4">
-        {articles.map((article) => (
-          <li key={article.slug}>
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-lg">
-                  <Link
-                    to="/library/articles/$slug"
-                    params={{ slug: article.slug }}
-                    className="text-foreground underline-offset-4 hover:underline"
-                  >
-                    {article.title}
-                  </Link>
-                </CardTitle>
-                <CardDescription className="flex flex-wrap gap-1.5 pt-1">
-                  {article.tagIds.map((tagId) => (
-                    <Badge key={tagId} variant="secondary">
-                      {getTagLabel(tagId)}
-                    </Badge>
-                  ))}
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="text-sm text-muted-foreground">
-                <Link
-                  to="/library/articles/$slug"
-                  params={{ slug: article.slug }}
-                  className="text-primary underline-offset-4 hover:underline"
-                >
-                  Read article
-                </Link>
-              </CardContent>
-            </Card>
-          </li>
-        ))}
-      </ul>
+      <LibraryArticleList
+        articles={articles}
+        emptyMessage="No articles match your search. Try a different term."
+      />
     </div>
   )
 }
