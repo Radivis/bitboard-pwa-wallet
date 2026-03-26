@@ -28,6 +28,10 @@ export const LIBRARY_TAGS = {
 
 export type LibraryTagId = keyof typeof LIBRARY_TAGS
 
+export function isLibraryTagId(value: string): value is LibraryTagId {
+  return value in LIBRARY_TAGS
+}
+
 export function getTagLabel(tagId: LibraryTagId): string {
   return LIBRARY_TAGS[tagId].label
 }

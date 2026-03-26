@@ -1,21 +1,48 @@
 import type { ReactNode } from 'react'
+import { useEffect, useRef } from 'react'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { Tags as TagsIcon } from 'lucide-react'
 import { LibraryArticleList } from '@/components/library/LibraryArticleList'
 import { listArticles } from '@/lib/library/articles'
-import { getTagLabel, listLibraryTagIdsSortedByLabel, type LibraryTagId } from '@/lib/library/tags'
+import {
+  getTagLabel,
+  isLibraryTagId,
+  listLibraryTagIdsSortedByLabel,
+  type LibraryTagId,
+} from '@/lib/library/tags'
 
 export const Route = createFileRoute('/library/tags')({
+  validateSearch: (search: Record<string, unknown>): { tag?: LibraryTagId } => {
+    const raw = search.tag
+    if (typeof raw !== 'string' || !isLibraryTagId(raw)) return {}
+    return { tag: raw }
+  },
   component: LibraryTagsPage,
 })
 
 function TagSection({ tagId }: { tagId: LibraryTagId }) {
+  const detailsRef = useRef<HTMLDetailsElement>(null)
+  const { tag: focusedTag } = Route.useSearch()
+  const isFocused = focusedTag === tagId
+
   const articles = listArticles()
     .filter((a) => a.tagIds.includes(tagId))
     .sort((a, b) => a.title.localeCompare(b.title))
 
+  useEffect(() => {
+    if (!isFocused || !detailsRef.current) return
+    detailsRef.current.open = true
+    requestAnimationFrame(() => {
+      detailsRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    })
+  }, [isFocused, tagId])
+
   return (
-    <details className="group rounded-lg border border-border">
+    <details
+      ref={detailsRef}
+      id={`library-tag-${tagId}`}
+      className="group rounded-lg border border-border"
+    >
       <summary className="cursor-pointer list-none px-4 py-3 font-medium text-foreground marker:content-none [&::-webkit-details-marker]:hidden">
         <span className="inline-flex w-full items-center justify-between gap-2">
           <span>{getTagLabel(tagId)}</span>
@@ -28,6 +55,7 @@ function TagSection({ tagId }: { tagId: LibraryTagId }) {
         <LibraryArticleList
           articles={articles}
           emptyMessage="No articles use this tag yet."
+          showTags={false}
         />
       </CardContentPadding>
     </details>
