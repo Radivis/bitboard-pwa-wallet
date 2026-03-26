@@ -15,14 +15,18 @@ export const article: LibraryArticle = {
         different times.
       </p>
       <p>
-        Computer science results (such as the FLP impossibility in asynchronous systems, and limits on
-        Byzantine agreement) show that perfect agreement under arbitrary faults and timing is not
-        trivial. Practical systems relax assumptions: they use cryptography, economic incentives, and
-        rules about who may propose the next update.
+        Computer science results (such as{' '}
+        <ArticleLink slug="the-flp-impossibility-in-asynchronous-systems">
+          the FLP impossibility in asynchronous systems
+        </ArticleLink>
+        , and limits on Byzantine agreement) show that perfect agreement under arbitrary faults and
+        timing is not trivial. Practical systems relax assumptions: they use cryptography, economic
+        incentives, and rules about who may propose the next update.
       </p>
       <p>
-        Open networks face a <strong>Sybil</strong> problem: one actor can pretend to be many
-        identities at low cost unless joining or voting is expensive. Bitcoin addresses that by making
+        Open networks face a <ArticleLink slug="sybil-attacks-and-countermeasures">Sybil</ArticleLink>{' '}
+        problem: one actor can pretend to be many identities at low cost unless joining or voting is
+        expensive. Bitcoin addresses that by making
         block production costly through{' '}
         <ArticleLink slug="proof-of-work-and-mining-basics">proof-of-work</ArticleLink>, so rewriting
         history requires redoing large amounts of work. Participants converge on a single chain tip

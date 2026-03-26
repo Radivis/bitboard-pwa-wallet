@@ -29,8 +29,11 @@ export const article: LibraryArticle = {
       <p>
         <strong>Sybil resistance and who may update the ledger.</strong> In an open{' '}
         <ArticleLink slug="what-is-a-peer-to-peer-network">peer-to-peer</ArticleLink> network, anyone
-        can spin up fake identities cheaply unless joining the game is costly.{' '}
-        <ArticleLink slug="proof-of-work-and-mining-basics">Proof-of-work</ArticleLink> makes extending
+        can spin up fake identities cheaply unless joining the game is costly—see{' '}
+        <ArticleLink slug="sybil-attacks-and-countermeasures">
+          Sybil attacks and countermeasures
+        </ArticleLink>
+        . <ArticleLink slug="proof-of-work-and-mining-basics">Proof-of-work</ArticleLink> makes extending
         the chain expensive in real-world energy and hardware, so rewriting history does not scale
         with sock puppets alone.
       </p>

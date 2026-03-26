@@ -14,7 +14,9 @@ export const article: LibraryArticle = {
         <strong>nonce</strong>) such that when the block header is hashed (using SHA-256), the result
         is numerically below a network-wide <strong>difficulty</strong> target. Finding such a hash
         takes many tries; displaying a valid hash proves that a lot of computation was done—hence
-        &quot;proof of work.&quot;
+        &quot;proof of work.&quot; That cost also limits{' '}
+        <ArticleLink slug="sybil-attacks-and-countermeasures">Sybil-style</ArticleLink> influence over
+        which chain tip counts as canonical: identities are cheap, but valid blocks are not.
       </p>
       <p>
         The first miner to find a valid block broadcasts it; other nodes check the rules and accept it
