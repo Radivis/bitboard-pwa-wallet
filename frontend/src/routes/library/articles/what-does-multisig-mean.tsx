@@ -18,8 +18,8 @@ export const article: LibraryArticle = {
         <strong>P2SH</strong> (pay-to-script-hash) or <strong>P2WSH</strong> (SegWit script hash)
         encodings; <strong>Taproot</strong> can embed similar policies in a more private and efficient
         way. Wallets show these as addresses or as{' '}
-        <ArticleLink slug="what-is-a-wallet">descriptors</ArticleLink>—structured text that describes
-        how to receive and spend.
+        <ArticleLink slug="what-are-descriptors-and-descriptor-wallets">descriptors</ArticleLink>
+        —structured text that describes how to receive and spend.
       </p>
       <p>
         For key basics, see{' '}

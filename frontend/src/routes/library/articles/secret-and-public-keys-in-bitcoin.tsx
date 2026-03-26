@@ -17,7 +17,8 @@ export const article: LibraryArticle = {
       </p>
       <p>
         <strong>HD wallets</strong> (hierarchical deterministic) derive many keys from one master seed
-        so one backup phrase can restore a whole wallet tree. <strong>Descriptors</strong> are a
+        so one backup phrase can restore a whole wallet tree.{' '}
+        <ArticleLink slug="what-are-descriptors-and-descriptor-wallets">Descriptors</ArticleLink> are a
         text format that describes how keys and scripts fit together—helpful for recovery and advanced
         setups.
       </p>
