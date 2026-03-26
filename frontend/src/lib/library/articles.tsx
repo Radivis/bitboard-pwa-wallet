@@ -20,6 +20,13 @@ export interface LibraryArticle {
 
 const linkClass = 'text-primary underline-offset-4 hover:underline'
 
+/** Max contrast body copy; links stay `text-primary` for clear distinction. */
+const ARTICLE_BODY_CLASS = 'space-y-4 text-sm leading-relaxed text-black dark:text-white'
+
+/** Matches article heading contrast on the article route. */
+export const LIBRARY_ARTICLE_TITLE_CLASS =
+  'text-2xl font-bold tracking-tight text-black dark:text-white'
+
 function ArticleLink({ slug, children }: { slug: ArticleSlug; children: ReactNode }) {
   return (
     <Link to="/library/articles/$slug" params={{ slug }} className={linkClass}>
@@ -34,7 +41,7 @@ const ARTICLES: Record<ArticleSlug, LibraryArticle> = {
     title: 'Bitcoin',
     tagIds: ['bitcoin', 'cryptocurrencies'],
     body: (
-      <div className="space-y-4 text-sm leading-relaxed text-muted-foreground">
+      <div className={ARTICLE_BODY_CLASS}>
         <p>
           Bitcoin is a decentralized digital currency: participants agree on who owns which coins
           without relying on a central bank. Consensus is reached on a shared public ledger (the
@@ -59,7 +66,7 @@ const ARTICLES: Record<ArticleSlug, LibraryArticle> = {
     title: 'What is a wallet',
     tagIds: ['wallets'],
     body: (
-      <div className="space-y-4 text-sm leading-relaxed text-muted-foreground">
+      <div className={ARTICLE_BODY_CLASS}>
         <p>
           In Bitcoin, a wallet is software (and sometimes hardware) that manages cryptographic keys
           and helps you receive and spend bitcoin. The blockchain records balances; your wallet
@@ -83,7 +90,7 @@ const ARTICLES: Record<ArticleSlug, LibraryArticle> = {
     title: 'SegWit',
     tagIds: ['bitcoin', 'soft-forks', 'history'],
     body: (
-      <div className="space-y-4 text-sm leading-relaxed text-muted-foreground">
+      <div className={ARTICLE_BODY_CLASS}>
         <p>
           Segregated Witness (SegWit) was a consensus change deployed as a soft fork: it redefined
           how parts of a transaction are hashed for signing (witness data is separated) and how

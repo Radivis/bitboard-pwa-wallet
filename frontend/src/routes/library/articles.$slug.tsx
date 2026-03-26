@@ -4,7 +4,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useLibraryFavorites, useSetArticleFavorite } from '@/db'
-import { getArticle, isArticleSlug } from '@/lib/library/articles'
+import { getArticle, isArticleSlug, LIBRARY_ARTICLE_TITLE_CLASS } from '@/lib/library/articles'
 import { getTagLabel } from '@/lib/library/tags'
 import { cn } from '@/lib/utils'
 
@@ -55,7 +55,7 @@ function LibraryArticlePage() {
 
       <header className="space-y-3">
         <div className="flex flex-wrap items-start justify-between gap-3">
-          <h2 className="text-2xl font-bold tracking-tight">{article.title}</h2>
+          <h2 className={LIBRARY_ARTICLE_TITLE_CLASS}>{article.title}</h2>
           <Button
             type="button"
             variant="ghost"
