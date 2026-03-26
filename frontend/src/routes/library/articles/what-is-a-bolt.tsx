@@ -8,12 +8,13 @@ export const article: LibraryArticle = {
   body: (
     <div className={ARTICLE_BODY_CLASS}>
       <p>
-        BOLT stands for Basis of Lightning Technology. BOLTs specify how Lightning nodes interoperate:
-        channel establishment, gossip, routing, failures, and security considerations.
+        BOLT stands for Basis of Lightning Technology. BOLTs are written specifications—similar in
+        spirit to an RFC in networking—describing how Lightning nodes interoperate: channel
+        establishment, gossip, routing, failures, and security considerations.
       </p>
       <p>
-        They are separate from BIPs but serve a similar role for the Lightning layer. Implementors
-        follow BOLTs to build compatible Lightning software on top of Bitcoin.
+        They are separate from BIPs but serve a similar coordination role for the Lightning layer.
+        Implementers follow BOLTs to build compatible Lightning software on top of Bitcoin.
       </p>
       <p>
         For the user-facing network, see{' '}

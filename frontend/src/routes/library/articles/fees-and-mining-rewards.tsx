@@ -8,13 +8,18 @@ export const article: LibraryArticle = {
   body: (
     <div className={ARTICLE_BODY_CLASS}>
       <p>
-        Miners collect two sources of value: the block subsidy (new coins issued per block, halving
-        over time) and transaction fees paid by users whose transactions are included in the block.
+        Miners collect two sources of value: the <strong>block subsidy</strong> (new coins issued per
+        block, halving over time according to Bitcoin&apos;s rules) and{' '}
+        <strong>transaction fees</strong> paid by users whose transactions are included in the block.
+        For how mining works, see{' '}
+        <ArticleLink slug="proof-of-work-and-mining-basics">Proof-of-work and mining (basics)</ArticleLink>
+        .
       </p>
       <p>
-        Fees incentivize miners to prioritize scarce block space efficiently. Users compete with fee
-        rates; wallets estimate appropriate rates based on mempool conditions and desired
-        confirmation time.
+        Fees incentivize miners to prioritize scarce block space efficiently. Users compete with{' '}
+        <strong>fee rates</strong> (fee per unit of block weight). Wallets estimate appropriate rates
+        based on <strong>mempool</strong> conditions—the set of valid transactions waiting to be
+        confirmed—and how quickly you want inclusion.
       </p>
       <p>
         Long term, as the subsidy shrinks, fees are expected to carry more of miners&apos; revenue.

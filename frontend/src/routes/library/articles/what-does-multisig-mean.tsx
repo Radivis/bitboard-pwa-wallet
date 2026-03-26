@@ -8,13 +8,18 @@ export const article: LibraryArticle = {
   body: (
     <div className={ARTICLE_BODY_CLASS}>
       <p>
-        Multisignature (multisig) means spending requires approval from more than one key—often
-        implemented as <em>m-of-n</em> (any <em>m</em> keys out of <em>n</em> must sign). It spreads
-        risk across people or devices and supports custody policies like two-person control.
+        <strong>Multisignature (multisig)</strong> means spending requires approval from more than one
+        key—often implemented as <em>m-of-n</em> (any <em>m</em> keys out of <em>n</em> must sign). It
+        spreads risk across people or devices and supports custody policies like two-person control.
       </p>
       <p>
-        On Bitcoin, multisig appears in the scripting layer (e.g. bare multisig, P2SH, P2WSH, P2TR
-        script paths). Wallets present these as addresses or descriptors you can receive to.
+        On Bitcoin, multisig is expressed in the <strong>scripting system</strong>: the chain stores
+        small programs that say which signatures must be provided. Historically you might see{' '}
+        <strong>P2SH</strong> (pay-to-script-hash) or <strong>P2WSH</strong> (SegWit script hash)
+        encodings; <strong>Taproot</strong> can embed similar policies in a more private and efficient
+        way. Wallets show these as addresses or as{' '}
+        <ArticleLink slug="what-is-a-wallet">descriptors</ArticleLink>—structured text that describes
+        how to receive and spend.
       </p>
       <p>
         For key basics, see{' '}

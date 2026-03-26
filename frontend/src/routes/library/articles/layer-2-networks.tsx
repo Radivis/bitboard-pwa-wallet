@@ -8,13 +8,16 @@ export const article: LibraryArticle = {
   body: (
     <div className={ARTICLE_BODY_CLASS}>
       <p>
-        Layer 2 (L2) systems build on top of a base blockchain (layer 1) to offer faster or cheaper
-        transfers, often by moving activity off-chain while still anchoring security to Bitcoin&apos;s
-        consensus.
+        <strong>Layer 2 (L2)</strong> systems build on top of a base blockchain (<strong>layer 1</strong>
+        ) to offer faster or cheaper transfers. Instead of recording every small payment on the main
+        chain, participants move activity <strong>off-chain</strong>—still anchored by rules that let
+        them fall back to on-chain settlement if something goes wrong.
       </p>
       <p>
-        The Lightning Network is a prominent L2 for Bitcoin: payment channels and a network of routed
-        payments enable many small or rapid payments without recording every one on chain.
+        The Lightning Network is a prominent L2 for Bitcoin: <strong>payment channels</strong> lock
+        funds on chain with a shared balance; participants then exchange signed updates that reallocate
+        the balance instantly and cheaply. A network of <strong>routing</strong> nodes can forward
+        payments across channels so payer and payee do not need a direct channel.
       </p>
       <p>
         Read <ArticleLink slug="the-lightning-network">The Lightning network</ArticleLink> for an

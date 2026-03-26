@@ -8,10 +8,11 @@ export const article: LibraryArticle = {
   body: (
     <div className={ARTICLE_BODY_CLASS}>
       <p>
-        BlockDAG refers to protocols where blocks form a directed acyclic graph: new blocks can
-        confirm multiple predecessors instead of a single chain tip only. Researchers and some
-        networks explore DAG structures to improve throughput or latency compared with classic
-        longest-chain Nakamoto consensus.
+        <strong>BlockDAG</strong> refers to protocols where blocks form a <strong>directed acyclic graph</strong>
+        : new blocks can confirm multiple predecessors instead of extending a single chain tip only.
+        Researchers and some networks explore DAG structures to improve throughput or latency compared
+        with classic longest-chain <ArticleLink slug="proof-of-work-and-mining-basics">Nakamoto-style proof-of-work</ArticleLink>{' '}
+        consensus on a single parent chain.
       </p>
       <p>
         These designs differ from Bitcoin&apos;s primary chain model and usually come with different

@@ -8,10 +8,14 @@ export const article: LibraryArticle = {
   body: (
     <div className={ARTICLE_BODY_CLASS}>
       <p>
-        Bitcoin combined existing ideas—public-key cryptography, Merkle trees, proof-of-work—into a
+        Bitcoin combined existing ideas—public-key cryptography, Merkle trees (see{' '}
+        <ArticleLink slug="hashes-and-merkle-trees-in-bitcoin">
+          Hashes and Merkle trees in Bitcoin
+        </ArticleLink>
+        ), and <ArticleLink slug="proof-of-work-and-mining-basics">proof-of-work</ArticleLink>—into a
         system for peer-to-peer electronic cash without trusted intermediaries. For the first time at
         global scale, scarcity and ownership could be enforced by open-source rules and economic
-        incentives.
+        incentives rather than by physical possession alone.
       </p>
       <p>
         It launched a new field of decentralized networks and inspired later cryptocurrencies and

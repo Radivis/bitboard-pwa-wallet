@@ -8,13 +8,15 @@ export const article: LibraryArticle = {
   body: (
     <div className={ARTICLE_BODY_CLASS}>
       <p>
-        In a peer-to-peer (P2P) network, nodes connect as equals: they relay data (such as
-        transactions and blocks) without requiring a central hub that must stay online for the system
-        to work.
+        In a <strong>peer-to-peer (P2P)</strong> network, computers (called <strong>nodes</strong> or{' '}
+        <strong>peers</strong>) connect as equals: they relay data—such as transactions and blocks—to
+        neighbors without requiring one central server that must stay online for the whole system to
+        function.
       </p>
       <p>
         Resilience comes from redundancy: many independent participants validate and propagate
-        information according to shared rules.
+        information according to shared rules. That design fits open networks where anyone can join
+        and leave.
       </p>
       <p>
         Bitcoin&apos;s node layer is P2P; see <ArticleLink slug="bitcoin">Bitcoin</ArticleLink> for how

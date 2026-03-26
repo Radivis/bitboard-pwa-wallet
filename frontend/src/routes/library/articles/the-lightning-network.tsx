@@ -8,12 +8,14 @@ export const article: LibraryArticle = {
   body: (
     <div className={ARTICLE_BODY_CLASS}>
       <p>
-        Lightning is a peer-to-peer network of payment channels on top of Bitcoin. Users open
-        channels with on-chain transactions, then exchange off-chain updates that move balances
-        instantly and cheaply.
+        Lightning is a peer-to-peer network of <strong>payment channels</strong> on top of Bitcoin.
+        Two parties open a channel with an on-chain transaction that locks funds under rules they both
+        agree to; they then exchange <strong>off-chain</strong> updates (signed messages) that move
+        the balance between them without publishing every move to the blockchain.
       </p>
       <p>
-        Routing lets payments hop across channels without a direct link between payer and payee. The
+        <strong>Routing</strong> lets payments hop across multiple channels: intermediate nodes
+        forward liquidity for a small fee, similar to how internet packets hop between routers. The
         protocol family is specified in BOLTs (Basis of Lightning Technology); see{' '}
         <ArticleLink slug="what-is-a-bolt">What is a BOLT?</ArticleLink>.
       </p>

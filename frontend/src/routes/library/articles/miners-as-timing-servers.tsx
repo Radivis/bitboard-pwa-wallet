@@ -8,14 +8,16 @@ export const article: LibraryArticle = {
   body: (
     <div className={ARTICLE_BODY_CLASS}>
       <p>
-        Proof-of-work does not just secure the chain: it provides a distributed, unpredictable pace
-        for new blocks. Roughly every ten minutes (in Bitcoin), a valid block appears, ordering
-        recent transactions into the global history without a central clock.
+        <ArticleLink slug="proof-of-work-and-mining-basics">Proof-of-work</ArticleLink> does not only
+        secure the chain: it provides a distributed, unpredictable pace for new blocks. Roughly every
+        ten minutes (in Bitcoin), a valid block appears, ordering recent transactions into the global
+        history without a central clock.
       </p>
       <p>
-        Miners compete to find a nonce that makes a block hash meet the difficulty target; the
-        winner propagates the block and the process repeats. That random selection of who finds the
-        next block, combined with difficulty adjustment, acts like a lottery-driven timing
+        Miners compete to find a <strong>nonce</strong> that makes a block hash meet the difficulty
+        target (see <ArticleLink slug="hashes-and-merkle-trees-in-bitcoin">Hashes and Merkle trees in Bitcoin</ArticleLink>
+        ); the winner propagates the block and the process repeats. That random selection of who finds
+        the next block, combined with difficulty adjustment, acts like a lottery-driven timing
         mechanism for the network.
       </p>
       <p>

@@ -8,13 +8,22 @@ export const article: LibraryArticle = {
   body: (
     <div className={ARTICLE_BODY_CLASS}>
       <p>
-        A private key is a large random number; the corresponding public key is derived on the
-        secp256k1 curve. You share addresses derived from the public key (or scripts); you never
-        share the private key, which is required to sign spends.
+        A <strong>private key</strong> (also called a <strong>secret key</strong>) is a large random
+        number. From it, wallet software derives a <strong>public key</strong> using elliptic-curve
+        math on the secp256k1 curve—you can think of the public key as a derived &quot;lock&quot; that
+        pairs with your secret &quot;key.&quot; You share <strong>addresses</strong> (often encoded
+        forms of scripts or public keys); you never share the private key, which is required to
+        authorize spends with a digital signature.
       </p>
       <p>
-        Losing the private key (or seed) means losing access to funds; leaking it means anyone can
-        steal them. Modern wallets abstract this with HD seeds and descriptors.
+        <strong>HD wallets</strong> (hierarchical deterministic) derive many keys from one master seed
+        so one backup phrase can restore a whole wallet tree. <strong>Descriptors</strong> are a
+        text format that describes how keys and scripts fit together—helpful for recovery and advanced
+        setups.
+      </p>
+      <p>
+        Losing the private key or seed means losing access to funds; leaking it means anyone who has it
+        can steal them. Treat backups like secrets with physical consequences.
       </p>
       <p>
         For curve background, see{' '}

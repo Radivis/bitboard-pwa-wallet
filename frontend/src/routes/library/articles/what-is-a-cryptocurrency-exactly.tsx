@@ -8,17 +8,29 @@ export const article: LibraryArticle = {
   body: (
     <div className={ARTICLE_BODY_CLASS}>
       <p>
-        A cryptocurrency is a digital asset whose ownership and transfers are enforced by
-        cryptography and network rules rather than physical possession or a single administrator.
-        Participants run software that agrees on balances and transaction order.
+        If you are new to the topic, think of a cryptocurrency as <strong>internet-native money</strong>
+        : rules written in software define who owns what and who can transfer value. There are no
+        physical coins; ownership is recorded digitally. Math-based locks (cryptography) and
+        network rules replace the role of a bank clerk or cashier checking your identity at a counter.
       </p>
       <p>
-        Most cryptocurrencies use a shared ledger (often a blockchain), peer-to-peer networking, and
-        economic incentives (such as mining or staking) to secure the system.
+        A <strong>cryptocurrency</strong> is a digital asset whose ownership and transfers are enforced
+        by cryptography and shared rules rather than by physical possession or a single company. Many
+        participants run compatible software; together they agree on balances and the order of
+        transactions so that everyone sees the same history.
       </p>
       <p>
-        Bitcoin was the first widely deployed example; see <ArticleLink slug="bitcoin">Bitcoin</ArticleLink>{' '}
-        for how it combines these pieces in practice.
+        Most cryptocurrencies rely on a <strong>shared ledger</strong> (often implemented as a{' '}
+        <strong>blockchain</strong>: a chain of blocks, each bundling recent transactions and linking
+        to the previous block). They also use <strong>peer-to-peer networking</strong> so nodes can
+        relay data without one central server, and <strong>economic incentives</strong>—for example
+        rewards for people who help secure the network through{' '}
+        <ArticleLink slug="proof-of-work-and-mining-basics">proof-of-work mining</ArticleLink> or,
+        in other systems, staking—to keep the system honest at scale.
+      </p>
+      <p>
+        Bitcoin was the first widely deployed example. For how it combines these pieces in practice,
+        see <ArticleLink slug="bitcoin">Bitcoin</ArticleLink>.
       </p>
     </div>
   ),

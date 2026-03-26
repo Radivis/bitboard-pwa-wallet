@@ -8,14 +8,24 @@ export const article: LibraryArticle = {
   body: (
     <div className={ARTICLE_BODY_CLASS}>
       <p>
-        In Bitcoin, a wallet is software (and sometimes hardware) that manages cryptographic keys and
-        helps you receive and spend bitcoin. The blockchain records balances; your wallet proves you
-        can move funds associated with your addresses.
+        In everyday language, a physical wallet holds cash. In Bitcoin, a <strong>wallet</strong> is
+        software (and sometimes hardware) that manages <strong>cryptographic keys</strong> and helps
+        you receive and spend bitcoin. The blockchain records which amounts are associated with which
+        addresses; your wallet proves you are allowed to move funds by producing valid cryptographic
+        signatures with keys you control.
       </p>
       <p>
-        Wallets can be custodial (a service holds keys for you) or non-custodial (only you control the
-        keys). This app is built around non-custodial use: backup and protect your seed or descriptor
-        material accordingly.
+        Wallets can be <strong>custodial</strong>: a service holds the keys for you (similar to a bank
+        holding an account). They can also be <strong>non-custodial</strong>: only you control the
+        keys; if you lose the backup, no one can reset your password. This app is built around
+        non-custodial use—protect your backup accordingly.
+      </p>
+      <p>
+        Modern wallets often derive many keys from a single secret called a <strong>seed</strong> (often
+        shown as a 12- or 24-word phrase). They may also use <strong>descriptors</strong>: structured
+        text that tells the wallet how keys and addresses relate to scripts—useful for recovery and
+        advanced setups. See <ArticleLink slug="what-is-a-bip">What is BIP?</ArticleLink> for how seed
+        and backup standards are documented.
       </p>
       <p>
         To understand what those balances represent on the network, see the{' '}

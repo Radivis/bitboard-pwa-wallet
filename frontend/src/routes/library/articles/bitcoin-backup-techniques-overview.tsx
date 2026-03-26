@@ -9,8 +9,11 @@ export const article: LibraryArticle = {
     <div className={ARTICLE_BODY_CLASS}>
       <p>
         Backups let you recover access if a device is lost or damaged. Common approaches include
-        writing down a BIP-39 seed phrase on paper or metal, exporting descriptor or xpub material
-        for watch-only recovery, and using multisig so loss of one key does not mean loss of funds.
+        writing down a <strong>BIP-39</strong> seed phrase (a list of words encoding random data) on
+        paper or metal, exporting <strong>descriptor</strong> or <strong>xpub</strong> (extended public
+        key) material for watch-only recovery, and using multisig so loss of one key does not mean loss
+        of funds. <strong>Xpub</strong> lets a wallet derive many receiving addresses without holding
+        private keys—useful for monitoring on a less trusted device.
       </p>
       <p>
         Each approach balances convenience, durability, and attack surface. Metal plates resist fire

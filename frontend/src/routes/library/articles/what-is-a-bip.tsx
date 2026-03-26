@@ -8,9 +8,10 @@ export const article: LibraryArticle = {
   body: (
     <div className={ARTICLE_BODY_CLASS}>
       <p>
-        BIP stands for Bitcoin Improvement Proposal. BIPs document proposed changes or conventions:
-        consensus changes, peer-to-peer behavior, wallet interoperability (including mnemonic seeds
-        and derivation paths), and informational guides.
+        <strong>BIP</strong> stands for Bitcoin Improvement Proposal. BIPs document proposed changes
+        or conventions: <ArticleLink slug="soft-forks-hard-forks-and-backward-compatibility">consensus changes</ArticleLink>
+        , peer-to-peer behavior, wallet interoperability (including mnemonic seeds and derivation
+        paths), and informational guides.
       </p>
       <p>
         Not every BIP becomes part of Bitcoin Core or the wider ecosystem; some are experimental or

@@ -8,15 +8,23 @@ export const article: LibraryArticle = {
   body: (
     <div className={ARTICLE_BODY_CLASS}>
       <p>
-        Large-scale quantum computers could threaten some cryptographic assumptions. Hash-based
-        proof-of-work is less directly at risk than elliptic-curve discrete log problems: Shor-type
-        algorithms could hypothetically break ECDSA/Schnorr on secp256k1 if sufficiently large
-        machines existed.
+        <strong>Quantum computers</strong> use quantum-mechanical effects to solve certain math
+        problems faster than known classical algorithms. For Bitcoin, the concern is not that quantum
+        machines would &quot;guess&quot; your password—they would attack specific cryptographic
+        assumptions.
       </p>
       <p>
-        Bitcoin could migrate to post-quantum signature schemes over time if needed; coins whose
-        public keys have never been revealed (e.g. P2PKH outputs until spend) retain more privacy
-        against such attacks than reused patterns.
+        Hash-based <ArticleLink slug="proof-of-work-and-mining-basics">proof-of-work</ArticleLink> is
+        less directly at risk than elliptic-curve discrete logarithms: algorithms such as Shor&apos;s
+        could hypothetically break <strong>ECDSA</strong> and Schnorr signatures on secp256k1 if a
+        sufficiently large fault-tolerant quantum computer existed.
+      </p>
+      <p>
+        Bitcoin could migrate to post-quantum signature schemes over time if needed. Coins whose
+        public keys have never been revealed on chain (for example classic{' '}
+        <strong>P2PKH</strong>—pay-to-public-key-hash—outputs where only the hash of the key was
+        published until spend) retain different exposure profiles than patterns that reveal public keys
+        earlier.
       </p>
       <p>
         This remains a long-horizon research and engineering topic. For current key cryptography,

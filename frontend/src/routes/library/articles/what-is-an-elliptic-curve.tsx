@@ -8,10 +8,14 @@ export const article: LibraryArticle = {
   body: (
     <div className={ARTICLE_BODY_CLASS}>
       <p>
-        An elliptic curve is a mathematical object used in modern cryptography: points on the curve
-        can be added in a well-defined way, and scalar multiplication lets you derive a public point
-        from a secret integer efficiently, while recovering the secret from the public point is
-        believed to be hard for classical computers.
+        You do not need to visualize the whole math to use Bitcoin. In short, an{' '}
+        <strong>elliptic curve</strong> is a mathematical structure where points can be combined in a
+        predictable way. In cryptography, one picks a <strong>secret integer</strong> (your private
+        key) and performs <strong>scalar multiplication</strong> on the curve to obtain a{' '}
+        <strong>public point</strong> (your public key). Multiplying forward is fast; recovering the
+        secret from the public point alone is believed to be infeasible for classical computers at
+        the sizes Bitcoin uses (this is the{' '}
+        <strong>elliptic-curve discrete logarithm problem</strong>).
       </p>
       <p>
         Bitcoin uses the secp256k1 curve for ECDSA and Schnorr signatures. Parameters are chosen for

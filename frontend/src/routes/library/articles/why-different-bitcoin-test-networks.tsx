@@ -8,14 +8,18 @@ export const article: LibraryArticle = {
   body: (
     <div className={ARTICLE_BODY_CLASS}>
       <p>
-        Test networks use valueless coins so developers and users can experiment without risking real
-        funds. Different testnets exist because requirements evolved: stability, faucet availability,
-        reset history, and compatibility with new features (like Taproot) differ over time.
+        <strong>Test networks (testnets)</strong> use coins with no real-world value so developers and
+        users can experiment without risking <strong>mainnet</strong> funds (the live Bitcoin
+        network). Different testnets exist because requirements evolved: stability,{' '}
+        <strong>faucet</strong> availability (services that give away free test coins), reset history,
+        and compatibility with new features differ over time.
       </p>
       <p>
-        Signet offers a more predictable block production model operated by signers; earlier testnets
-        relied more on traditional mining with lower security assumptions. Tooling and community
-        focus gradually shift as ecosystems adopt newer networks.
+        <strong>Signet</strong> offers a more predictable block production model operated by signers;
+        earlier testnets relied more on traditional mining with lower security assumptions. Tooling
+        and community focus gradually shift as ecosystems adopt newer networks. When testing newer
+        consensus features (for example <ArticleLink slug="taproot">Taproot</ArticleLink>), you need a
+        network whose rules support them.
       </p>
       <p>
         Always use addresses and explorers that match the network your wallet is configured for. See{' '}
