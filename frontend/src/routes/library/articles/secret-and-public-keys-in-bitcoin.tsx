@@ -16,8 +16,9 @@ export const article: LibraryArticle = {
         authorize spends with a digital signature.
       </p>
       <p>
-        <strong>HD wallets</strong> (hierarchical deterministic) derive many keys from one master seed
-        so one backup phrase can restore a whole wallet tree.{' '}
+        <ArticleLink slug="what-are-hd-wallets-and-how-do-they-work">HD wallets</ArticleLink> (hierarchical
+        deterministic) derive many keys from one master seed so one backup phrase can restore a whole
+        wallet tree.{' '}
         <ArticleLink slug="what-are-descriptors-and-descriptor-wallets">Descriptors</ArticleLink> are a
         text format that describes how keys and scripts fit together—helpful for recovery and advanced
         setups.

@@ -22,7 +22,11 @@ export const article: LibraryArticle = {
       </p>
       <p>
         Modern wallets often derive many keys from a single secret called a <strong>seed</strong> (often
-        shown as a 12- or 24-word phrase). They may also use{' '}
+        shown as a 12- or 24-word phrase)—the usual pattern is a{' '}
+        <ArticleLink slug="what-are-hd-wallets-and-how-do-they-work">
+          hierarchical deterministic (HD) wallet
+        </ArticleLink>
+        . They may also use{' '}
         <ArticleLink slug="what-are-descriptors-and-descriptor-wallets">descriptors</ArticleLink>
         —structured text that tells the wallet how keys and addresses relate to scripts—useful for
         recovery and advanced setups. See <ArticleLink slug="what-is-a-bip">What is BIP?</ArticleLink>{' '}

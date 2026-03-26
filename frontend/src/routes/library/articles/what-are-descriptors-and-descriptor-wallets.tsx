@@ -33,9 +33,13 @@ export const article: LibraryArticle = {
       <p>
         Descriptors do not replace your responsibility to protect seeds and private key material; they
         describe <em>how</em> keys are used. For general wallet concepts, see{' '}
-        <ArticleLink slug="what-is-a-wallet">What is a wallet</ArticleLink>; for keys and HD wallets, see{' '}
+        <ArticleLink slug="what-is-a-wallet">What is a wallet</ArticleLink>; for keys, see{' '}
         <ArticleLink slug="secret-and-public-keys-in-bitcoin">
           Secret and public keys in Bitcoin
+        </ArticleLink>
+        ; for HD derivation from a seed, see{' '}
+        <ArticleLink slug="what-are-hd-wallets-and-how-do-they-work">
+          What are HD wallets and how do they work?
         </ArticleLink>
         . For backup tradeoffs, see{' '}
         <ArticleLink slug="bitcoin-backup-techniques-overview">
