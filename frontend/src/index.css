@@ -117,6 +117,12 @@
   --saturation-scale: 0.5;
 }
 
+/* No active wallet, locked, or not yet unlocked: cyan accent at Taproot saturation */
+[data-palette="neutral"] {
+  --hue: 180;
+  --saturation-scale: 1;
+}
+
 body {
   margin: 0;
   display: flex;
