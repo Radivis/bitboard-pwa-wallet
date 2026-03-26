@@ -16,7 +16,9 @@ export default defineConfig({
     tanstackRouter({
       target: 'react',
       autoCodeSplitting: true,
-      routeFileIgnorePattern: '__tests__',
+      // Per-filename match (not full path): TSX in `routes/library/articles/` are content modules, not routes.
+      routeFileIgnorePattern:
+        '__tests__|^(?:basics-for-keeping-keys-safe|bitcoin|bitcoin-backup-techniques-overview|bitcoin-cash|block-network-vs-blockchain|blockdag|cryptographic-algorithms-in-bitcoin|fees-and-mining-rewards|layer-2-networks|miners-as-timing-servers|quantum-computers-and-bitcoin|secret-and-public-keys-in-bitcoin|segwit|taproot|the-lightning-network|what-does-multisig-mean|what-is-a-bip|what-is-a-bolt|what-is-a-cryptocurrency-exactly|what-is-a-hardware-wallet|what-is-a-peer-to-peer-network|what-is-a-wallet|what-is-an-elliptic-curve|why-bitcoin-was-a-revolution|why-different-bitcoin-test-networks)\\.tsx$',
     }),
     react(),
     tailwindcss(),
