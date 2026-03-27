@@ -71,7 +71,7 @@ function TagSection({
         <LibraryArticleList
           articles={articles}
           emptyMessage="No articles use this tag yet."
-          showTags={false}
+          excludeTagId={tagId}
         />
       </CardContentPadding>
     </details>
