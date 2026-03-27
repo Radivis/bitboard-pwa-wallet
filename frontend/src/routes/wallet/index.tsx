@@ -1,6 +1,6 @@
 import { useCallback } from 'react'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import { Wallet, RefreshCw } from 'lucide-react'
+import { Wallet, RefreshCw, Home } from 'lucide-react'
 import { toast } from 'sonner'
 import { useWalletStore, NETWORK_LABELS } from '@/stores/walletStore'
 import { useSessionStore } from '@/stores/sessionStore'
@@ -210,7 +210,7 @@ export function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Dashboard">
+      <PageHeader title="Dashboard" icon={Home}>
         {lastSyncTime ? (
           <p className="text-xs text-muted-foreground">
             Last synced: {lastSyncTime.toLocaleTimeString()}

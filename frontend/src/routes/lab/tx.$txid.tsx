@@ -91,7 +91,7 @@ function LabTxViewerPage() {
             <ArrowLeft className="h-4 w-4" />
           </Button>
         </Link>
-        <PageHeader title="Transaction" />
+        <PageHeader title="Transaction" icon={FlaskConical} />
       </div>
 
       <InfomodeWrapper

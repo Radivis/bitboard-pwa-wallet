@@ -211,7 +211,7 @@ function SendFlow() {
   if (step === 2 && (psbt || networkMode === 'lab')) {
     return (
       <div className="space-y-6">
-        <PageHeader title="Review Transaction" />
+        <PageHeader title="Review Transaction" icon={ArrowUpRight} />
 
         <Card>
           <CardHeader>
@@ -273,7 +273,7 @@ function SendFlow() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Send Bitcoin" />
+      <PageHeader title="Send Bitcoin" icon={ArrowUpRight} />
 
       <Card>
         <CardHeader>

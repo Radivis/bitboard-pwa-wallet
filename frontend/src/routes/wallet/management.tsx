@@ -1,4 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router'
+import { SlidersHorizontal } from 'lucide-react'
 import { PageHeader } from '@/components/PageHeader'
 import { useWalletStore } from '@/stores/walletStore'
 import { WalletManagement } from '@/components/wallet/WalletManagement'
@@ -13,7 +14,7 @@ export function ManagementPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Management" />
+      <PageHeader title="Management" icon={SlidersHorizontal} />
 
       {activeWalletId ? (
         <>

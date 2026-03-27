@@ -1,6 +1,6 @@
 import { useCallback, useEffect } from 'react'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import { QrCode, Copy, RefreshCw } from 'lucide-react'
+import { QrCode, Copy, RefreshCw, ArrowDownLeft } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
 import { toast } from 'sonner'
 import { PageHeader } from '@/components/PageHeader'
@@ -86,7 +86,7 @@ export function ReceivePage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Receive Bitcoin" />
+      <PageHeader title="Receive Bitcoin" icon={ArrowDownLeft} />
 
       <InfomodeWrapper
         infoId="receive-qr-code-card"
