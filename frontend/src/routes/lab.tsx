@@ -18,7 +18,7 @@ export const Route = createFileRoute('/lab')({
 function LabRoutePending() {
   return (
     <div
-      className="min-h-[40vh] space-y-6 px-4 py-6"
+      className="min-h-[40vh] space-y-6"
       aria-busy="true"
       aria-live="polite"
     >
@@ -58,7 +58,7 @@ function LabLayout() {
 
   if (networkMode !== 'lab' || labAutoSwitchFailed) {
     return (
-      <div className="space-y-6 px-4 py-6">
+      <div className="space-y-6">
         <p className="text-destructive">
           Could not switch to Lab automatically. Open Settings, choose Lab under Network,
           then try again.
@@ -69,7 +69,7 @@ function LabLayout() {
 
   if (isPending) {
     return (
-      <div className="space-y-6 px-4 py-6">
+      <div className="space-y-6">
         <p className="text-muted-foreground">Loading lab...</p>
       </div>
     )
@@ -77,7 +77,7 @@ function LabLayout() {
 
   if (isError) {
     return (
-      <div className="space-y-6 px-4 py-6">
+      <div className="space-y-6">
         <p className="text-destructive">
           Failed to load lab: {error instanceof Error ? error.message : String(error)}
         </p>
@@ -93,7 +93,7 @@ function LabLayout() {
   }
 
   return (
-    <div className="space-y-6 px-4 py-6">
+    <div className="space-y-6">
       <Outlet />
     </div>
   )

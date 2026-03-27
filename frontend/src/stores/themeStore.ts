@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
 import { useEffect } from 'react'
 import { sqliteStorage } from '@/db/storage-adapter'
-import { useWalletStore } from '@/stores/walletStore'
+import { useWalletStore, type WalletStatus } from '@/stores/walletStore'
 
 export type ThemeMode = 'light' | 'dark' | 'system'
 export type ResolvedTheme = 'light' | 'dark'
@@ -49,6 +49,20 @@ export function useResolvedTheme(): ResolvedTheme {
 }
 
 /**
+ * When true, network × address accent colors apply. Otherwise a neutral cyan palette is used
+ * (no active wallet, locked, or not yet unlocked).
+ */
+export function isWalletThemePaletteActive(
+  activeWalletId: number | null,
+  walletStatus: WalletStatus,
+): boolean {
+  if (activeWalletId == null) {
+    return false
+  }
+  return walletStatus === 'unlocked' || walletStatus === 'syncing'
+}
+
+/**
  * Renders nothing. Keeps `document.documentElement` class list and
  * data attributes in sync with the resolved theme, network mode, and address type.
  */
@@ -56,6 +70,8 @@ export function ThemeSynchronizer() {
   const themeMode = useThemeStore((state) => state.themeMode)
   const networkMode = useWalletStore((state) => state.networkMode)
   const addressType = useWalletStore((state) => state.addressType)
+  const activeWalletId = useWalletStore((state) => state.activeWalletId)
+  const walletStatus = useWalletStore((state) => state.walletStatus)
 
   useEffect(() => {
     function apply() {
@@ -63,6 +79,12 @@ export function ThemeSynchronizer() {
       document.documentElement.classList.toggle('dark', resolved === 'dark')
       document.documentElement.dataset.network = networkMode ?? 'testnet'
       document.documentElement.dataset.addressType = addressType ?? 'taproot'
+      document.documentElement.dataset.palette = isWalletThemePaletteActive(
+        activeWalletId,
+        walletStatus,
+      )
+        ? 'wallet'
+        : 'neutral'
     }
 
     apply()
@@ -74,7 +96,7 @@ export function ThemeSynchronizer() {
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
     mediaQuery.addEventListener('change', apply)
     return () => mediaQuery.removeEventListener('change', apply)
-  }, [themeMode, networkMode, addressType])
+  }, [themeMode, networkMode, addressType, activeWalletId, walletStatus])
 
   return null
 }

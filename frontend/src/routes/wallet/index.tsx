@@ -1,9 +1,10 @@
 import { useCallback } from 'react'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import { Wallet, RefreshCw } from 'lucide-react'
+import { Wallet, RefreshCw, Home } from 'lucide-react'
 import { toast } from 'sonner'
 import { useWalletStore, NETWORK_LABELS } from '@/stores/walletStore'
 import { useSessionStore } from '@/stores/sessionStore'
+import { PageHeader } from '@/components/PageHeader'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -209,14 +210,13 @@ export function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold tracking-tight">Dashboard</h2>
-        {lastSyncTime && (
+      <PageHeader title="Dashboard" icon={Home}>
+        {lastSyncTime ? (
           <p className="text-xs text-muted-foreground">
             Last synced: {lastSyncTime.toLocaleTimeString()}
           </p>
-        )}
-      </div>
+        ) : null}
+      </PageHeader>
 
       {walletStatus === 'syncing' && (
         <LoadingSpinner text="Syncing wallet..." />

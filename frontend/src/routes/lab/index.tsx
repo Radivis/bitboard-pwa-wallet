@@ -1,4 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
+import { FlaskConical } from 'lucide-react'
+import { PageHeader } from '@/components/PageHeader'
 import { LabBlocksCard } from '@/components/lab/Blocks'
 import { LabMakeTransactionCard } from '@/components/lab/MakeTransaction'
 import { LabRulesCard } from '@/components/lab/Rules'
@@ -17,7 +19,7 @@ function LabIndexPage() {
 
   return (
     <>
-      <h2 className="text-2xl font-bold tracking-tight">Lab</h2>
+      <PageHeader title="Lab" icon={FlaskConical} />
 
       <LabBlocksCard
         blockCount={lab.blockCount}

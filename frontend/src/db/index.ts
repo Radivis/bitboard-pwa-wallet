@@ -12,9 +12,33 @@ export {
   useAddWallet,
   useUpdateWallet,
   useDeleteWallet,
+  useLibraryFavorites,
+  useSetArticleFavorite,
+  useLibraryHistory,
 } from './hooks'
-export { walletKeys } from './query-keys'
-export type { Wallet, NewWallet, WalletUpdate, Setting } from './schema'
+export { walletKeys, libraryKeys } from './query-keys'
+export type {
+  Wallet,
+  NewWallet,
+  WalletUpdate,
+  Setting,
+  LibraryHistoryRow,
+  NewLibraryHistoryRow,
+  LibraryArticleRow,
+  NewLibraryArticleRow,
+  LibraryArticleUpdate,
+} from './schema'
+export {
+  getFavoriteBySlug,
+  getAllFavoriteSlugs,
+  setArticleFavorite,
+} from './library-articles'
+export {
+  recordLibraryHistoryAccess,
+  listLibraryHistory,
+  pruneLibraryHistory,
+  LIBRARY_HISTORY_MAX_ROWS,
+} from './library-history'
 export {
   saveWalletSecrets,
   loadWalletSecrets,

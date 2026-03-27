@@ -1,10 +1,38 @@
+import fs from 'node:fs'
 import path from 'path'
+import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vite'
 import { tanstackRouter } from '@tanstack/router-plugin/vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
 import wasm from 'vite-plugin-wasm'
+
+const projectRoot = path.dirname(fileURLToPath(import.meta.url))
+
+/** Escape a string for use inside a RegExp (filename slug segments). */
+function escapeRegExpSegment(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+/**
+ * TanStack Router matches `routeFileIgnorePattern` against each filename under `routes/`.
+ * TSX modules in `src/routes/library/articles/` are article content, not routes — discover them from disk so new files do not require manual regex updates.
+ */
+function libraryArticleRouteIgnorePattern(): string {
+  const articlesDir = path.join(projectRoot, 'src/routes/library/articles')
+  let tsxFiles: string[] = []
+  try {
+    tsxFiles = fs.readdirSync(articlesDir).filter((f) => f.endsWith('.tsx'))
+  } catch {
+    return '__tests__'
+  }
+  if (tsxFiles.length === 0) {
+    return '__tests__'
+  }
+  const escapedBasenames = tsxFiles.map((f) => escapeRegExpSegment(f.replace(/\.tsx$/i, '')))
+  return `__tests__|^(?:${escapedBasenames.join('|')})\\.tsx$`
+}
 
 export default defineConfig({
   define: {
@@ -16,7 +44,7 @@ export default defineConfig({
     tanstackRouter({
       target: 'react',
       autoCodeSplitting: true,
-      routeFileIgnorePattern: '__tests__',
+      routeFileIgnorePattern: libraryArticleRouteIgnorePattern(),
     }),
     react(),
     tailwindcss(),
@@ -88,7 +116,7 @@ export default defineConfig({
   ],
   resolve: {
     alias: {
-      '@': path.resolve(__dirname, './src'),
+      '@': path.resolve(projectRoot, './src'),
     },
   },
   server: {

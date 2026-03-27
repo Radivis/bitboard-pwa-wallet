@@ -7,6 +7,8 @@ export interface Database {
   wallets: WalletsTable
   settings: SettingsTable
   wallet_secrets: WalletSecretsTable
+  library_history: LibraryHistoryTable
+  library_articles: LibraryArticlesTable
 }
 
 interface WalletsTable {
@@ -40,3 +42,21 @@ interface WalletSecretsTable {
 export type WalletSecret = Selectable<WalletSecretsTable>
 export type NewWalletSecret = Insertable<WalletSecretsTable>
 export type WalletSecretUpdate = Updateable<WalletSecretsTable>
+
+interface LibraryHistoryTable {
+  library_history_id: Generated<number>
+  accessed_at: string
+  access_path: string
+}
+
+export type LibraryHistoryRow = Selectable<LibraryHistoryTable>
+export type NewLibraryHistoryRow = Insertable<LibraryHistoryTable>
+
+interface LibraryArticlesTable {
+  article_slug: string
+  is_favorite: number
+}
+
+export type LibraryArticleRow = Selectable<LibraryArticlesTable>
+export type NewLibraryArticleRow = Insertable<LibraryArticlesTable>
+export type LibraryArticleUpdate = Updateable<LibraryArticlesTable>
