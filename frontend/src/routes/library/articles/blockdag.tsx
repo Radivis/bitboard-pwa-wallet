@@ -20,7 +20,9 @@ export const article: LibraryArticle = {
         &quot;block-based&quot; distributed ledgers beyond a simple linked list of blocks.
       </p>
       <p>
-        For the classic linear structure used by Bitcoin, see{' '}
+        That differs from Bitcoin&apos;s usual <strong>single-parent</strong> blocks, where the
+        interesting distinction is instead between <em>all</em> mined blocks and the one canonical
+        chain—see{' '}
         <ArticleLink slug="block-network-vs-blockchain">
           The difference between a block network and a blockchain
         </ArticleLink>{' '}

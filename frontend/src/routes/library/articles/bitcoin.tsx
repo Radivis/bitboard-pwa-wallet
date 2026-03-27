@@ -26,8 +26,15 @@ export const article: LibraryArticle = {
         compete to append new <strong>blocks</strong> to a public chain. Each block references the
         previous one via{' '}
         <ArticleLink slug="hashes-and-merkle-trees-in-bitcoin">cryptographic hashes</ArticleLink>,
-        forming the <strong>blockchain</strong>—an append-only history anyone can audit. For how
-        peer connections work, see{' '}
+        forming the <strong>blockchain</strong>—an append-only history anyone can audit. Many blocks are
+        mined that never become part of that canonical path; see{' '}
+        <ArticleLink slug="block-network-vs-blockchain">
+          The difference between a block network and a blockchain
+        </ArticleLink>
+        , and <ArticleLink slug="what-is-a-blockchain-reorganization">
+          What is a blockchain reorganization?
+        </ArticleLink>
+        . For how peer connections work, see{' '}
         <ArticleLink slug="what-is-a-peer-to-peer-network">What is a peer to peer network?</ArticleLink>
         .
       </p>
