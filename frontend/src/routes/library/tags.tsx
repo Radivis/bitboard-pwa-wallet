@@ -2,10 +2,6 @@ import type { ReactNode } from 'react'
 import { useEffect, useMemo, useRef } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
 import { Tags as TagsIcon } from 'lucide-react'
-import {
-  BackToLibraryLink,
-  LIBRARY_SUBPAGE_TOP_ROW_CLASS,
-} from '@/components/library/BackToLibraryLink'
 import { LibraryArticleList } from '@/components/library/LibraryArticleList'
 import { LibraryPageHeader } from '@/components/library/LibraryPageHeader'
 import { listArticlesSortedByTitle, type LibraryArticle } from '@/lib/library/articles'
@@ -92,10 +88,7 @@ function LibraryTagsPage() {
 
   return (
     <div className="space-y-6">
-      <div className={LIBRARY_SUBPAGE_TOP_ROW_CLASS}>
-        <LibraryPageHeader title="Tags" icon={TagsIcon} />
-        <BackToLibraryLink />
-      </div>
+      <LibraryPageHeader title="Tags" icon={TagsIcon} />
 
       <p className="text-sm text-muted-foreground">
         Expand a tag to see articles that reference it. The same article can appear under several

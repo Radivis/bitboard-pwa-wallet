@@ -1,9 +1,5 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { History } from 'lucide-react'
-import {
-  BackToLibraryLink,
-  LIBRARY_SUBPAGE_TOP_ROW_CLASS,
-} from '@/components/library/BackToLibraryLink'
 import { LibraryPageHeader } from '@/components/library/LibraryPageHeader'
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { useLibraryHistory } from '@/db'
@@ -23,10 +19,7 @@ function LibraryHistoryPage() {
 
   return (
     <div className="space-y-6">
-      <div className={LIBRARY_SUBPAGE_TOP_ROW_CLASS}>
-        <LibraryPageHeader title="Library history" icon={History} />
-        <BackToLibraryLink />
-      </div>
+      <LibraryPageHeader title="Library history" icon={History} />
 
       <p className="text-sm text-muted-foreground">
         Articles you opened recently (stored on this device only). Index, tags, and other library

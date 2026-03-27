@@ -1,10 +1,6 @@
 import { useMemo } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
 import { Star } from 'lucide-react'
-import {
-  BackToLibraryLink,
-  LIBRARY_SUBPAGE_TOP_ROW_CLASS,
-} from '@/components/library/BackToLibraryLink'
 import { LibraryArticleList } from '@/components/library/LibraryArticleList'
 import { LibraryPageHeader } from '@/components/library/LibraryPageHeader'
 import { useLibraryFavorites } from '@/db'
@@ -24,10 +20,7 @@ function LibraryFavoritesPage() {
 
   return (
     <div className="space-y-6">
-      <div className={LIBRARY_SUBPAGE_TOP_ROW_CLASS}>
-        <LibraryPageHeader title="Favorites" icon={Star} />
-        <BackToLibraryLink />
-      </div>
+      <LibraryPageHeader title="Favorites" icon={Star} />
 
       <p className="text-sm text-muted-foreground">
         Articles you marked with the star. Favorites are stored on this device only.
