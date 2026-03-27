@@ -1,4 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router'
+import { PageHeader } from '@/components/PageHeader'
 import { AppDescription } from '@/components/AppDescription'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -14,7 +15,7 @@ export const Route = createFileRoute('/settings')({
 export function SettingsPage() {
   return (
     <div className="space-y-6">
-      <h2 className="text-2xl font-bold tracking-tight">Settings</h2>
+      <PageHeader title="Settings" />
 
       <InfomodeWrapper
         infoId="settings-network-card"

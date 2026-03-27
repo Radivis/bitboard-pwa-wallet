@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
 import { BookOpen } from 'lucide-react'
 import { LibraryArticleList } from '@/components/library/LibraryArticleList'
-import { LibraryPageHeader } from '@/components/library/LibraryPageHeader'
+import { PageHeader } from '@/components/PageHeader'
 import { Input } from '@/components/ui/input'
 import { listArticlesSortedByTitle } from '@/lib/library/articles'
 import { getTagLabel } from '@/lib/library/tags'
@@ -29,7 +29,7 @@ function LibraryIndexPage() {
 
   return (
     <div className="space-y-6">
-      <LibraryPageHeader title="Library" icon={BookOpen} />
+      <PageHeader title="Library" icon={BookOpen} />
 
       <p className="text-sm text-muted-foreground">
         In-app guides and reference material. Articles are fixed for accuracy. Use the bottom bar to

@@ -7,6 +7,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
+import { PageHeader } from '@/components/PageHeader'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -90,7 +91,7 @@ function LabTxViewerPage() {
             <ArrowLeft className="h-4 w-4" />
           </Button>
         </Link>
-        <h2 className="text-2xl font-bold tracking-tight">Transaction</h2>
+        <PageHeader title="Transaction" />
       </div>
 
       <InfomodeWrapper

@@ -1,6 +1,7 @@
 import { useMemo, useCallback } from 'react'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { ArrowUpRight, ArrowLeft } from 'lucide-react'
+import { PageHeader } from '@/components/PageHeader'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -210,7 +211,7 @@ function SendFlow() {
   if (step === 2 && (psbt || networkMode === 'lab')) {
     return (
       <div className="space-y-6">
-        <h2 className="text-2xl font-bold tracking-tight">Review Transaction</h2>
+        <PageHeader title="Review Transaction" />
 
         <Card>
           <CardHeader>
@@ -272,7 +273,7 @@ function SendFlow() {
 
   return (
     <div className="space-y-6">
-      <h2 className="text-2xl font-bold tracking-tight">Send Bitcoin</h2>
+      <PageHeader title="Send Bitcoin" />
 
       <Card>
         <CardHeader>

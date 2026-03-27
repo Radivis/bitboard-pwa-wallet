@@ -1,4 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router'
+import { PageHeader } from '@/components/PageHeader'
 import { useWalletStore } from '@/stores/walletStore'
 import { WalletManagement } from '@/components/wallet/WalletManagement'
 import { SeedPhraseBackup } from '@/components/wallet/SeedPhraseBackup'
@@ -12,7 +13,7 @@ export function ManagementPage() {
 
   return (
     <div className="space-y-6">
-      <h2 className="text-2xl font-bold tracking-tight">Management</h2>
+      <PageHeader title="Management" />
 
       {activeWalletId ? (
         <>

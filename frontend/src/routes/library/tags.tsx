@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
 import { Tags as TagsIcon } from 'lucide-react'
 import { LibraryArticleList } from '@/components/library/LibraryArticleList'
-import { LibraryPageHeader } from '@/components/library/LibraryPageHeader'
+import { PageHeader } from '@/components/PageHeader'
 import { listArticlesSortedByTitle, type LibraryArticle } from '@/lib/library/articles'
 import {
   getTagLabel,
@@ -88,7 +88,7 @@ function LibraryTagsPage() {
 
   return (
     <div className="space-y-6">
-      <LibraryPageHeader title="Tags" icon={TagsIcon} />
+      <PageHeader title="Tags" icon={TagsIcon} />
 
       <p className="text-sm text-muted-foreground">
         Expand a tag to see articles that reference it. The same article can appear under several

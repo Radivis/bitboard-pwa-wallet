@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { History } from 'lucide-react'
-import { LibraryPageHeader } from '@/components/library/LibraryPageHeader'
+import { PageHeader } from '@/components/PageHeader'
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { useLibraryHistory } from '@/db'
 import { articleSlugFromAccessPath, resolveHistoryPathLabel } from '@/lib/library/articles'
@@ -19,7 +19,7 @@ function LibraryHistoryPage() {
 
   return (
     <div className="space-y-6">
-      <LibraryPageHeader title="Library history" icon={History} />
+      <PageHeader title="Library history" icon={History} />
 
       <p className="text-sm text-muted-foreground">
         Articles you opened recently (stored on this device only). Index, tags, and other library
