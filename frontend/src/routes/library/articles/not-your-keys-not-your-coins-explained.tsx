@@ -24,7 +24,12 @@ export const article: LibraryArticle = {
       <p>
         Custody is not always &quot;bad&quot;—some people choose it for convenience, regulation, or
         operational reasons—but it is a different risk model than self-custody. The slogan urges you
-        to notice which model you are in before treating an app balance like cash in your pocket.
+        to notice which model you are in before treating an app balance like cash in your pocket. For
+        the same custody split spelled out for cash and banks, see{' '}
+        <ArticleLink slug="security-models-for-cryptocurrencies-and-conventional-currencies">
+          Security models for cryptocurrencies and conventional currencies
+        </ArticleLink>
+        .
       </p>
       <p>
         For protecting seeds and devices, see{' '}

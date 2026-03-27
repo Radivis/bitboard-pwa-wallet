@@ -14,7 +14,12 @@ export const article: LibraryArticle = {
         pairs with your secret &quot;key.&quot; You share <strong>addresses</strong> (often encoded
         forms of scripts or public keys); you never share the private key, which is required to
         authorize spends with a{' '}
-        <ArticleLink slug="cryptographic-signatures">digital signature</ArticleLink>.
+        <ArticleLink slug="cryptographic-signatures">digital signature</ArticleLink>. How hashed
+        addresses hide the full public key on chain until a spend is explained in{' '}
+        <ArticleLink slug="transaction-outputs-as-hidden-safes">
+          Transaction outputs as hidden safes
+        </ArticleLink>
+        .
       </p>
       <p>
         <ArticleLink slug="what-are-hd-wallets-and-how-do-they-work">HD wallets</ArticleLink> (hierarchical

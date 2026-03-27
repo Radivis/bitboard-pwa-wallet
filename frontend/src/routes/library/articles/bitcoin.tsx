@@ -42,7 +42,12 @@ export const article: LibraryArticle = {
       <p>
         The shared ledger tracks value as <ArticleLink slug="what-is-a-utxo">UTXOs</ArticleLink>{' '}
         (unspent transaction outputs)—not as simple bank-style account rows. Wallets scan outputs you
-        can spend and build new transactions that consume them.
+        can spend and build new transactions that consume them. For a concrete image of outputs,
+        addresses, and keys together, see{' '}
+        <ArticleLink slug="transaction-outputs-as-hidden-safes">
+          Transaction outputs as hidden safes
+        </ArticleLink>
+        .
       </p>
       <p>
         <strong>Segregated Witness (SegWit)</strong>, activated in 2017, changed how transaction data is

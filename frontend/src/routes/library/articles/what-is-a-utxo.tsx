@@ -19,7 +19,12 @@ export const article: LibraryArticle = {
         your keys—outputs that have not yet been spent. When you pay someone, you reference specific
         UTXOs as inputs, prove you may spend them with{' '}
         <ArticleLink slug="cryptographic-signatures">signatures</ArticleLink>, and define new outputs
-        that become the next generation of UTXOs.
+        that become the next generation of UTXOs. For an intuition that mixes addresses, hashes, and
+        keys, see{' '}
+        <ArticleLink slug="transaction-outputs-as-hidden-safes">
+          Transaction outputs as hidden safes
+        </ArticleLink>
+        .
       </p>
       <p>
         This model makes validation clear: nodes check that inputs exist, signatures verify, and no

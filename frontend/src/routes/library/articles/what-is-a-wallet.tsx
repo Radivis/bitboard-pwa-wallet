@@ -21,6 +21,10 @@ export const article: LibraryArticle = {
         <ArticleLink slug="not-your-keys-not-your-coins-explained">
           &quot;Not your keys, not your coins&quot; explained
         </ArticleLink>
+        . For how this lines up with cash versus banks, see{' '}
+        <ArticleLink slug="security-models-for-cryptocurrencies-and-conventional-currencies">
+          Security models for cryptocurrencies and conventional currencies
+        </ArticleLink>
         . This app is built around non-custodial use—protect your backup accordingly.
       </p>
       <p>
