@@ -5,4 +5,7 @@ export const walletKeys = {
 
 export const libraryKeys = {
   favorites: ['library', 'favorites'] as const,
+  /** Prefix for `useLibraryHistory(limit)`; invalidate this root after new history rows. */
+  historyRoot: ['library', 'history'] as const,
+  history: (limit: number) => [...libraryKeys.historyRoot, limit] as const,
 }

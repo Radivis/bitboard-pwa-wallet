@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getDatabase, ensureMigrated } from './database'
 import { getAllFavoriteSlugs, setArticleFavorite } from './library-articles'
+import { listLibraryHistory } from './library-history'
 import { libraryKeys, walletKeys } from './query-keys'
 import type { NewWallet, WalletUpdate } from './schema'
 
@@ -99,6 +100,16 @@ export function useSetArticleFavorite() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: libraryKeys.favorites })
+    },
+  })
+}
+
+export function useLibraryHistory(limit: number) {
+  return useQuery({
+    queryKey: libraryKeys.history(limit),
+    queryFn: async () => {
+      await ensureMigrated()
+      return listLibraryHistory(getDatabase(), limit)
     },
   })
 }

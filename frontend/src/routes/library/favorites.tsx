@@ -1,9 +1,14 @@
 import { useMemo } from 'react'
-import { createFileRoute, Link } from '@tanstack/react-router'
+import { createFileRoute } from '@tanstack/react-router'
 import { Star } from 'lucide-react'
+import {
+  BackToLibraryLink,
+  LIBRARY_SUBPAGE_TOP_ROW_CLASS,
+} from '@/components/library/BackToLibraryLink'
 import { LibraryArticleList } from '@/components/library/LibraryArticleList'
+import { LibraryPageHeader } from '@/components/library/LibraryPageHeader'
 import { useLibraryFavorites } from '@/db'
-import { listArticles } from '@/lib/library/articles'
+import { listArticlesSortedByTitle } from '@/lib/library/articles'
 
 export const Route = createFileRoute('/library/favorites')({
   component: LibraryFavoritesPage,
@@ -14,31 +19,19 @@ function LibraryFavoritesPage() {
 
   const articles = useMemo(() => {
     if (!favoriteSlugs) return []
-    const all = listArticles()
-    return all
-      .filter((a) => favoriteSlugs.has(a.slug))
-      .sort((a, b) => a.title.localeCompare(b.title))
+    return listArticlesSortedByTitle().filter((a) => favoriteSlugs.has(a.slug))
   }, [favoriteSlugs])
 
   return (
     <div className="space-y-6">
-      <h2 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
-        <Star className="h-8 w-8" aria-hidden />
-        Favorites
-      </h2>
+      <div className={LIBRARY_SUBPAGE_TOP_ROW_CLASS}>
+        <LibraryPageHeader title="Favorites" icon={Star} />
+        <BackToLibraryLink />
+      </div>
 
       <p className="text-sm text-muted-foreground">
         Articles you marked with the star. Favorites are stored on this device only.
       </p>
-
-      <div>
-        <Link
-          to="/library"
-          className="text-sm text-primary underline-offset-4 hover:underline"
-        >
-          Back to Library index
-        </Link>
-      </div>
 
       {isLoading ? (
         <p className="text-sm text-muted-foreground">Loading…</p>

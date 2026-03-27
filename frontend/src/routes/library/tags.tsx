@@ -1,9 +1,14 @@
 import type { ReactNode } from 'react'
-import { useEffect, useRef } from 'react'
-import { createFileRoute, Link } from '@tanstack/react-router'
+import { useEffect, useMemo, useRef } from 'react'
+import { createFileRoute } from '@tanstack/react-router'
 import { Tags as TagsIcon } from 'lucide-react'
+import {
+  BackToLibraryLink,
+  LIBRARY_SUBPAGE_TOP_ROW_CLASS,
+} from '@/components/library/BackToLibraryLink'
 import { LibraryArticleList } from '@/components/library/LibraryArticleList'
-import { listArticles } from '@/lib/library/articles'
+import { LibraryPageHeader } from '@/components/library/LibraryPageHeader'
+import { listArticlesSortedByTitle, type LibraryArticle } from '@/lib/library/articles'
 import {
   getTagLabel,
   isLibraryTagId,
@@ -20,14 +25,29 @@ export const Route = createFileRoute('/library/tags')({
   component: LibraryTagsPage,
 })
 
-function TagSection({ tagId }: { tagId: LibraryTagId }) {
+function buildArticlesByTagId(): Map<LibraryTagId, LibraryArticle[]> {
+  const map = new Map<LibraryTagId, LibraryArticle[]>()
+  for (const article of listArticlesSortedByTitle()) {
+    for (const tagId of article.tagIds) {
+      if (!isLibraryTagId(tagId)) continue
+      const existing = map.get(tagId)
+      if (existing) existing.push(article)
+      else map.set(tagId, [article])
+    }
+  }
+  return map
+}
+
+function TagSection({
+  tagId,
+  articles,
+}: {
+  tagId: LibraryTagId
+  articles: LibraryArticle[]
+}) {
   const detailsRef = useRef<HTMLDetailsElement>(null)
   const { tag: focusedTag } = Route.useSearch()
   const isFocused = focusedTag === tagId
-
-  const articles = listArticles()
-    .filter((a) => a.tagIds.includes(tagId))
-    .sort((a, b) => a.title.localeCompare(b.title))
 
   useEffect(() => {
     if (!isFocused || !detailsRef.current) return
@@ -68,31 +88,27 @@ function CardContentPadding({ children }: { children: ReactNode }) {
 
 function LibraryTagsPage() {
   const tagIds = listLibraryTagIdsSortedByLabel()
+  const articlesByTagId = useMemo(() => buildArticlesByTagId(), [])
 
   return (
     <div className="space-y-6">
-      <h2 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
-        <TagsIcon className="h-8 w-8" aria-hidden />
-        Tags
-      </h2>
+      <div className={LIBRARY_SUBPAGE_TOP_ROW_CLASS}>
+        <LibraryPageHeader title="Tags" icon={TagsIcon} />
+        <BackToLibraryLink />
+      </div>
 
       <p className="text-sm text-muted-foreground">
         Expand a tag to see articles that reference it. The same article can appear under several
         tags.
       </p>
 
-      <div>
-        <Link
-          to="/library"
-          className="text-sm text-primary underline-offset-4 hover:underline"
-        >
-          Back to Library index
-        </Link>
-      </div>
-
       <div className="space-y-3">
         {tagIds.map((tagId) => (
-          <TagSection key={tagId} tagId={tagId} />
+          <TagSection
+            key={tagId}
+            tagId={tagId}
+            articles={articlesByTagId.get(tagId) ?? []}
+          />
         ))}
       </div>
     </div>

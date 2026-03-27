@@ -33,12 +33,6 @@ interface PrimaryNavItem {
   linkPreload?: false
 }
 
-interface WalletSubNavItem {
-  to: string
-  label: string
-  icon: LucideIcon
-}
-
 const PRIMARY_NAV_ITEMS: PrimaryNavItem[] = [
   {
     to: '/wallet',
@@ -62,40 +56,52 @@ const PRIMARY_NAV_ITEMS: PrimaryNavItem[] = [
   { to: '/settings', label: 'Settings', icon: Settings },
 ]
 
-const WALLET_SUB_NAV_ITEMS: WalletSubNavItem[] = [
-  { to: '/wallet', label: 'Dashboard', icon: Home },
-  { to: '/wallet/send', label: 'Send', icon: ArrowUpRight },
-  { to: '/wallet/receive', label: 'Receive', icon: ArrowDownLeft },
-  { to: '/wallet/management', label: 'Management', icon: SlidersHorizontal },
+type SectionSubNavItem =
+  | {
+      kind: 'match'
+      to: string
+      label: string
+      icon: LucideIcon
+    }
+  | {
+      kind: 'pathname'
+      to: string
+      label: string
+      icon: LucideIcon
+      isActive: (pathname: string) => boolean
+    }
+
+const WALLET_SUB_NAV_ITEMS: SectionSubNavItem[] = [
+  { kind: 'match', to: '/wallet', label: 'Dashboard', icon: Home },
+  { kind: 'match', to: '/wallet/send', label: 'Send', icon: ArrowUpRight },
+  { kind: 'match', to: '/wallet/receive', label: 'Receive', icon: ArrowDownLeft },
+  { kind: 'match', to: '/wallet/management', label: 'Management', icon: SlidersHorizontal },
 ]
 
-interface LibrarySubNavItem {
-  to: string
-  label: string
-  icon: LucideIcon
-  isActive: (pathname: string) => boolean
-}
-
-const LIBRARY_SUB_NAV_ITEMS: LibrarySubNavItem[] = [
+const LIBRARY_SUB_NAV_ITEMS: SectionSubNavItem[] = [
   {
+    kind: 'pathname',
     to: '/library',
     label: 'Index',
     icon: List,
     isActive: (pathname) => pathname === '/library' || pathname === '/library/',
   },
   {
+    kind: 'pathname',
     to: '/library/tags',
     label: 'Tags',
     icon: Tags,
     isActive: (pathname) => pathname === '/library/tags',
   },
   {
+    kind: 'pathname',
     to: '/library/favorites',
     label: 'Favorites',
     icon: Star,
     isActive: (pathname) => pathname === '/library/favorites',
   },
   {
+    kind: 'pathname',
     to: '/library/history',
     label: 'History',
     icon: History,
@@ -220,48 +226,20 @@ function PrimarySectionNav() {
   )
 }
 
-function WalletSubNav() {
+function SectionSubNav({
+  ariaLabel,
+  items,
+}: {
+  ariaLabel: string
+  items: SectionSubNavItem[]
+}) {
   const matchRoute = useMatchRoute()
-
-  return (
-    <nav
-      aria-label="Wallet"
-      className={cn(
-        'fixed bottom-16 left-0 right-0 z-40 border-t',
-        NAV_SURFACE_CLASS,
-      )}
-    >
-      <div
-        className={cn(
-          'mx-auto flex max-w-screen-xl items-stretch justify-around px-2',
-          WALLET_SUB_NAV_HEIGHT_CLASS,
-        )}
-      >
-        {WALLET_SUB_NAV_ITEMS.map(({ to, label, icon }) => {
-          const isActive = !!matchRoute({ to, fuzzy: false })
-
-          return (
-            <BottomNavLink
-              key={to}
-              to={to}
-              label={label}
-              icon={icon}
-              isActive={isActive}
-            />
-          )
-        })}
-      </div>
-    </nav>
-  )
-}
-
-function LibrarySubNav() {
   const location = useLocation()
   const pathname = location.pathname
 
   return (
     <nav
-      aria-label="Library"
+      aria-label={ariaLabel}
       className={cn(
         'fixed bottom-16 left-0 right-0 z-40 border-t',
         NAV_SURFACE_CLASS,
@@ -273,15 +251,21 @@ function LibrarySubNav() {
           WALLET_SUB_NAV_HEIGHT_CLASS,
         )}
       >
-        {LIBRARY_SUB_NAV_ITEMS.map(({ to, label, icon, isActive }) => (
-          <BottomNavLink
-            key={to}
-            to={to}
-            label={label}
-            icon={icon}
-            isActive={isActive(pathname)}
-          />
-        ))}
+        {items.map((item) => {
+          const isActive =
+            item.kind === 'match'
+              ? !!matchRoute({ to: item.to, fuzzy: false })
+              : item.isActive(pathname)
+          return (
+            <BottomNavLink
+              key={item.to}
+              to={item.to}
+              label={item.label}
+              icon={item.icon}
+              isActive={isActive}
+            />
+          )
+        })}
       </div>
     </nav>
   )
@@ -294,8 +278,12 @@ function BottomNavigationChrome() {
 
   return (
     <>
-      {showLibrarySubNav && <LibrarySubNav />}
-      {showWalletSubNav && <WalletSubNav />}
+      {showLibrarySubNav && (
+        <SectionSubNav ariaLabel="Library" items={LIBRARY_SUB_NAV_ITEMS} />
+      )}
+      {showWalletSubNav && (
+        <SectionSubNav ariaLabel="Wallet" items={WALLET_SUB_NAV_ITEMS} />
+      )}
       <PrimarySectionNav />
     </>
   )

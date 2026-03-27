@@ -18,6 +18,11 @@ export function listArticles(): LibraryArticle[] {
   return ARTICLE_SLUGS.map((slug) => ARTICLES[slug])
 }
 
+/** All articles sorted by display title (stable locale compare). */
+export function listArticlesSortedByTitle(): LibraryArticle[] {
+  return [...listArticles()].sort((a, b) => a.title.localeCompare(b.title))
+}
+
 /** If `accessPath` is `/library/articles/<slug>`, returns article title for display. */
 export function resolveHistoryPathLabel(accessPath: string): string | null {
   const slug = articleSlugFromAccessPath(accessPath)

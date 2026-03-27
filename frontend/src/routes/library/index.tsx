@@ -2,8 +2,9 @@ import { useMemo, useState } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
 import { BookOpen } from 'lucide-react'
 import { LibraryArticleList } from '@/components/library/LibraryArticleList'
+import { LibraryPageHeader } from '@/components/library/LibraryPageHeader'
 import { Input } from '@/components/ui/input'
-import { listArticles } from '@/lib/library/articles'
+import { listArticlesSortedByTitle } from '@/lib/library/articles'
 import { getTagLabel } from '@/lib/library/tags'
 
 export const Route = createFileRoute('/library/')({
@@ -17,7 +18,7 @@ function normalizeSearch(value: string): string {
 function LibraryIndexPage() {
   const [query, setQuery] = useState('')
   const articles = useMemo(() => {
-    const sorted = [...listArticles()].sort((a, b) => a.title.localeCompare(b.title))
+    const sorted = listArticlesSortedByTitle()
     const q = normalizeSearch(query)
     if (!q) return sorted
     return sorted.filter((article) => {
@@ -28,10 +29,7 @@ function LibraryIndexPage() {
 
   return (
     <div className="space-y-6">
-      <h2 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
-        <BookOpen className="h-8 w-8" aria-hidden />
-        Library
-      </h2>
+      <LibraryPageHeader title="Library" icon={BookOpen} />
 
       <p className="text-sm text-muted-foreground">
         In-app guides and reference material. Articles are fixed for accuracy. Use the bottom bar to

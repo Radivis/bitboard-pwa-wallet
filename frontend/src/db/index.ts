@@ -14,6 +14,7 @@ export {
   useDeleteWallet,
   useLibraryFavorites,
   useSetArticleFavorite,
+  useLibraryHistory,
 } from './hooks'
 export { walletKeys, libraryKeys } from './query-keys'
 export type {

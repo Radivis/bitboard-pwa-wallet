@@ -1,7 +1,11 @@
 import type { Kysely } from 'kysely'
 import type { Database } from './schema'
 
-/** Max rows kept after each insert; older visits are removed. */
+/**
+ * Max rows kept after each insert; older visits are removed.
+ * The history UI (`/library/history`) typically lists fewer rows (see `HISTORY_LIST_LIMIT` there);
+ * pruning may retain up to this many for future use or consistency.
+ */
 export const LIBRARY_HISTORY_MAX_ROWS = 200
 
 export async function recordLibraryHistoryAccess(

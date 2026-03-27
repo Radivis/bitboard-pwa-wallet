@@ -1,10 +1,15 @@
-import { useEffect, useState } from 'react'
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { ArrowLeft, History } from 'lucide-react'
+import { History } from 'lucide-react'
+import {
+  BackToLibraryLink,
+  LIBRARY_SUBPAGE_TOP_ROW_CLASS,
+} from '@/components/library/BackToLibraryLink'
+import { LibraryPageHeader } from '@/components/library/LibraryPageHeader'
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { getDatabase, listLibraryHistory } from '@/db'
+import { useLibraryHistory } from '@/db'
 import { articleSlugFromAccessPath, resolveHistoryPathLabel } from '@/lib/library/articles'
 
+/** UI cap for the history list. DB pruning keeps at most `LIBRARY_HISTORY_MAX_ROWS` (see `library-history.ts`). */
 const HISTORY_LIST_LIMIT = 100
 
 export const Route = createFileRoute('/library/history')({
@@ -12,42 +17,15 @@ export const Route = createFileRoute('/library/history')({
 })
 
 function LibraryHistoryPage() {
-  const [rows, setRows] = useState<
-    Array<{ library_history_id: number; accessed_at: string; access_path: string }>
-  >([])
-  const [loadError, setLoadError] = useState<string | null>(null)
-
-  useEffect(() => {
-    let cancelled = false
-    void (async () => {
-      try {
-        const list = await listLibraryHistory(getDatabase(), HISTORY_LIST_LIMIT)
-        if (!cancelled) setRows(list)
-      } catch (e) {
-        if (!cancelled) {
-          setLoadError(e instanceof Error ? e.message : String(e))
-        }
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [])
+  const { data: rows = [], error, isPending } = useLibraryHistory(HISTORY_LIST_LIMIT)
+  const loadError =
+    error instanceof Error ? error.message : error ? String(error) : null
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h2 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
-          <History className="h-8 w-8" aria-hidden />
-          Library history
-        </h2>
-        <Link
-          to="/library"
-          className="inline-flex items-center gap-2 text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
-        >
-          <ArrowLeft className="h-4 w-4 shrink-0" aria-hidden />
-          Back to Library
-        </Link>
+      <div className={LIBRARY_SUBPAGE_TOP_ROW_CLASS}>
+        <LibraryPageHeader title="Library history" icon={History} />
+        <BackToLibraryLink />
       </div>
 
       <p className="text-sm text-muted-foreground">
@@ -59,6 +37,8 @@ function LibraryHistoryPage() {
         <p className="text-sm text-destructive" role="alert">
           Could not load history: {loadError}
         </p>
+      ) : isPending ? (
+        <p className="text-sm text-muted-foreground">Loading…</p>
       ) : rows.length === 0 ? (
         <Card>
           <CardHeader>

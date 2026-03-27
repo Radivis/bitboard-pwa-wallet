@@ -1,8 +1,11 @@
 import type { Kysely } from 'kysely'
 import type { Database } from './schema'
 
+/** SQLite `is_favorite` flag for “favorite” rows (absent or `0` means not favorite). */
+export const FAVORITE_SQLITE_TRUE = 1
+
 function isFavoriteValue(value: number): boolean {
-  return value === 1
+  return value === FAVORITE_SQLITE_TRUE
 }
 
 export async function getFavoriteBySlug(
@@ -22,7 +25,7 @@ export async function getAllFavoriteSlugs(walletDb: Kysely<Database>): Promise<s
   const rows = await walletDb
     .selectFrom('library_articles')
     .select('article_slug')
-    .where('is_favorite', '=', 1)
+    .where('is_favorite', '=', FAVORITE_SQLITE_TRUE)
     .execute()
   return rows.map((r) => r.article_slug)
 }
@@ -52,7 +55,7 @@ export async function setArticleFavorite(
   if (existing) {
     await walletDb
       .updateTable('library_articles')
-      .set({ is_favorite: 1 })
+      .set({ is_favorite: FAVORITE_SQLITE_TRUE })
       .where('article_slug', '=', articleSlug)
       .execute()
     return
@@ -60,6 +63,6 @@ export async function setArticleFavorite(
 
   await walletDb
     .insertInto('library_articles')
-    .values({ article_slug: articleSlug, is_favorite: 1 })
+    .values({ article_slug: articleSlug, is_favorite: FAVORITE_SQLITE_TRUE })
     .execute()
 }
