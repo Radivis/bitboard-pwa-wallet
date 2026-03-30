@@ -2,8 +2,11 @@ import { createFileRoute } from '@tanstack/react-router'
 import { SlidersHorizontal } from 'lucide-react'
 import { PageHeader } from '@/components/PageHeader'
 import { useWalletStore } from '@/stores/walletStore'
+import { useFeatureStore } from '@/stores/featureStore'
+import { isLightningSupported } from '@/lib/lightning-utils'
 import { WalletManagement } from '@/components/wallet/WalletManagement'
 import { SeedPhraseBackup } from '@/components/wallet/SeedPhraseBackup'
+import { LightningChannels } from '@/components/wallet/LightningChannels'
 
 export const Route = createFileRoute('/wallet/management')({
   component: ManagementPage,
@@ -11,6 +14,9 @@ export const Route = createFileRoute('/wallet/management')({
 
 export function ManagementPage() {
   const activeWalletId = useWalletStore((s) => s.activeWalletId)
+  const networkMode = useWalletStore((s) => s.networkMode)
+  const lightningEnabled = useFeatureStore((s) => s.lightningEnabled)
+  const showLightningChannels = lightningEnabled && isLightningSupported(networkMode)
 
   return (
     <div className="space-y-6">
@@ -20,6 +26,7 @@ export function ManagementPage() {
         <>
           <WalletManagement />
           <SeedPhraseBackup />
+          {showLightningChannels && <LightningChannels />}
         </>
       ) : (
         <p className="text-muted-foreground">

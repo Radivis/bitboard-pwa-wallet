@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { QrCode, Copy, RefreshCw, ArrowDownLeft } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
@@ -13,7 +13,11 @@ import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { useWalletStore } from '@/stores/walletStore'
 import { useSessionStore } from '@/stores/sessionStore'
 import { useCryptoStore } from '@/stores/cryptoStore'
+import { useFeatureStore } from '@/stores/featureStore'
 import { updateWalletChangeset } from '@/lib/wallet-utils'
+import { isLightningSupported } from '@/lib/lightning-utils'
+import { ReceiveModeToggle, type ReceiveMode } from '@/components/receive/ReceiveModeToggle'
+import { LightningReceive } from '@/components/receive/LightningReceive'
 
 export const Route = createFileRoute('/wallet/receive')({
   component: ReceivePage,
@@ -25,10 +29,15 @@ export function ReceivePage() {
   const walletStatus = useWalletStore((s) => s.walletStatus)
   const currentAddress = useWalletStore((s) => s.currentAddress)
   const addressType = useWalletStore((s) => s.addressType)
+  const networkMode = useWalletStore((s) => s.networkMode)
   const setCurrentAddress = useWalletStore((s) => s.setCurrentAddress)
   const password = useSessionStore((s) => s.password)
   const getNewAddress = useCryptoStore((s) => s.getNewAddress)
   const exportChangeset = useCryptoStore((s) => s.exportChangeset)
+  const lightningEnabled = useFeatureStore((s) => s.lightningEnabled)
+
+  const showLightningToggle = lightningEnabled && isLightningSupported(networkMode)
+  const [receiveMode, setReceiveMode] = useState<ReceiveMode>('bitcoin')
 
   useEffect(() => {
     if (!currentAddress && (walletStatus === 'unlocked' || walletStatus === 'syncing')) {
@@ -84,9 +93,23 @@ export function ReceivePage() {
     return <WalletUnlock />
   }
 
+  if (showLightningToggle && receiveMode === 'lightning') {
+    return (
+      <div className="space-y-6">
+        <PageHeader title="Receive Lightning" icon={ArrowDownLeft} />
+        <ReceiveModeToggle mode={receiveMode} onModeChange={setReceiveMode} />
+        <LightningReceive />
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6">
       <PageHeader title="Receive Bitcoin" icon={ArrowDownLeft} />
+
+      {showLightningToggle && (
+        <ReceiveModeToggle mode={receiveMode} onModeChange={setReceiveMode} />
+      )}
 
       <InfomodeWrapper
         infoId="receive-qr-code-card"

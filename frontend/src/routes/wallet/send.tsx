@@ -1,6 +1,7 @@
 import { useMemo, useCallback } from 'react'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { ArrowUpRight, ArrowLeft } from 'lucide-react'
+import { toast } from 'sonner'
 import { PageHeader } from '@/components/PageHeader'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -11,6 +12,7 @@ import { WalletUnlock } from '@/components/WalletUnlock'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { useWalletStore } from '@/stores/walletStore'
 import { useSendStore } from '@/stores/sendStore'
+import { useFeatureStore } from '@/stores/featureStore'
 import { useLabChainStateQuery } from '@/hooks/useLabChainStateQuery'
 import {
   isValidAddress,
@@ -18,6 +20,11 @@ import {
   formatSats,
   truncateAddress,
 } from '@/lib/bitcoin-utils'
+import {
+  isLightningSupported,
+  isValidLightningDestination,
+  normalizeLightningDestination,
+} from '@/lib/lightning-utils'
 import { walletOwnerKey } from '@/lib/lab-utils'
 import {
   useBuildTransactionMutation,
@@ -89,6 +96,8 @@ function SendFlow() {
   const networkMode = useWalletStore((s) => s.networkMode)
   const balance = useWalletStore((s) => s.balance)
   const activeWalletId = useWalletStore((s) => s.activeWalletId)
+  const lightningEnabled = useFeatureStore((s) => s.lightningEnabled)
+  const lightningAvailable = lightningEnabled && isLightningSupported(networkMode)
 
   const {
     step,
@@ -142,15 +151,20 @@ function SendFlow() {
   }, [amount, amountUnit])
 
   const normalizedRecipient = useMemo(
-    () => recipient.trim().replace(/^bitcoin:/i, ''),
+    () => normalizeLightningDestination(recipient.trim().replace(/^bitcoin:/i, '')),
     [recipient],
+  )
+
+  const isLightningDestination = useMemo(
+    () => lightningAvailable && isValidLightningDestination(normalizedRecipient),
+    [lightningAvailable, normalizedRecipient],
   )
 
   const addressValid = useMemo(
     () =>
       normalizedRecipient.length > 0 &&
-      isValidAddress(normalizedRecipient, networkMode),
-    [normalizedRecipient, networkMode],
+      (isValidAddress(normalizedRecipient, networkMode) || isLightningDestination),
+    [normalizedRecipient, networkMode, isLightningDestination],
   )
 
   const isLabWithNoBalance =
@@ -164,6 +178,11 @@ function SendFlow() {
   const handleSubmitBuild = useCallback(() => {
     if (!canBuild) return
 
+    if (isLightningDestination) {
+      toast.info('Lightning payments coming soon — LDK integration is in progress.')
+      return
+    }
+
     if (networkMode === 'lab') {
       setStep(2)
       return
@@ -176,6 +195,7 @@ function SendFlow() {
     })
   }, [
     canBuild,
+    isLightningDestination,
     networkMode,
     setStep,
     buildMutation,
@@ -296,12 +316,12 @@ function SendFlow() {
                 id="recipient-address"
                 value={recipient}
                 onChange={(e) => setRecipient(e.target.value)}
-                placeholder="bc1q..."
+                placeholder={lightningAvailable ? 'bc1q... or Lightning address' : 'bc1q...'}
                 disabled={isPending}
               />
               {recipient && !addressValid && (
                 <p className="text-xs text-destructive">
-                  Invalid address for {networkMode}
+                  Invalid {lightningAvailable ? 'address or Lightning destination' : 'address'} for {networkMode}
                 </p>
               )}
             </div>
