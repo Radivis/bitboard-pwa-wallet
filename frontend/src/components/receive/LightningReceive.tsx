@@ -1,13 +1,16 @@
-import { useState, useCallback } from 'react'
-import { Zap, Copy } from 'lucide-react'
+import { useState, useCallback, useMemo } from 'react'
+import { Zap, Copy, Plus } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
 import { toast } from 'sonner'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Badge } from '@/components/ui/badge'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { useLightningStore } from '@/stores/lightningStore'
+import { useReceiveStore, isInvoiceExpired } from '@/stores/receiveStore'
+import type { LightningInvoice } from '@/stores/lightningStore'
 import { useWalletStore } from '@/stores/walletStore'
 import {
   INVOICE_EXPIRY_OPTIONS,
@@ -15,19 +18,123 @@ import {
   formatSatsCompact,
 } from '@/lib/lightning-utils'
 
-export function LightningReceive() {
+function InvoiceQrDisplay({ invoice }: { invoice: LightningInvoice }) {
+  const expiryLabel =
+    INVOICE_EXPIRY_OPTIONS.find((o) => o.seconds === invoice.expirySeconds)?.label ?? 'Custom'
+
+  const handleCopy = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(invoice.bolt11)
+      toast.success('Invoice copied to clipboard')
+    } catch {
+      toast.error('Failed to copy invoice')
+    }
+  }, [invoice.bolt11])
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Zap className="h-5 w-5" />
+          Lightning Invoice
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="flex flex-col items-center gap-4">
+          <div className="rounded-lg bg-white p-4">
+            <QRCodeSVG
+              value={invoice.bolt11}
+              size={256}
+              level="M"
+              imageSettings={{
+                src: '/bitboard-icon.png',
+                height: 48,
+                width: 48,
+                excavate: true,
+              }}
+            />
+          </div>
+          <p className="text-center text-sm text-muted-foreground">
+            {formatSatsCompact(invoice.amountSats)} &middot; {expiryLabel} expiry
+            {invoice.description && (
+              <span className="block text-xs">{invoice.description}</span>
+            )}
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <div className="flex-1 truncate rounded-md border border-input bg-muted/50 px-3 py-2 font-mono text-xs">
+            {invoice.bolt11}
+          </div>
+          <Button size="icon" onClick={handleCopy} aria-label="Copy invoice">
+            <Copy className="h-4 w-4" />
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+function InvoiceListItem({
+  invoice,
+  isActive,
+  onSelect,
+}: {
+  invoice: LightningInvoice
+  isActive: boolean
+  onSelect: () => void
+}) {
+  const expired = isInvoiceExpired(invoice)
+
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      disabled={expired}
+      className={`w-full rounded-md border p-3 text-left transition-colors ${
+        expired
+          ? 'cursor-not-allowed opacity-50'
+          : isActive
+            ? 'border-primary bg-primary/5'
+            : 'hover:bg-muted/50'
+      }`}
+    >
+      <div className="flex items-center justify-between">
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-medium">
+            {formatSatsCompact(invoice.amountSats)}
+          </p>
+          {invoice.description && (
+            <p className="truncate text-xs text-muted-foreground">
+              {invoice.description}
+            </p>
+          )}
+        </div>
+        <div className="ml-2 flex items-center gap-2">
+          {expired ? (
+            <Badge variant="outline">expired</Badge>
+          ) : (
+            <Badge variant="secondary">pending</Badge>
+          )}
+        </div>
+      </div>
+    </button>
+  )
+}
+
+function InvoiceCreateForm({ onCreated }: { onCreated: () => void }) {
   const networkMode = useWalletStore((s) => s.networkMode)
   const createInvoice = useLightningStore((s) => s.createInvoice)
+  const addSessionInvoice = useReceiveStore((s) => s.addSessionInvoice)
 
   const [amountSats, setAmountSats] = useState('')
   const [description, setDescription] = useState('')
   const [expirySeconds, setExpirySeconds] = useState(DEFAULT_INVOICE_EXPIRY_SECONDS)
-  const [createdInvoiceBolt11, setCreatedInvoiceBolt11] = useState<string | null>(null)
 
   const parsedAmount = parseInt(amountSats) || 0
   const canCreate = parsedAmount >= 1
 
-  const handleCreateInvoice = useCallback(() => {
+  const handleCreate = useCallback(() => {
     if (!canCreate) return
     const invoice = createInvoice({
       amountSats: parsedAmount,
@@ -35,77 +142,22 @@ export function LightningReceive() {
       expirySeconds,
       networkMode,
     })
-    setCreatedInvoiceBolt11(invoice.bolt11)
+    addSessionInvoice(invoice)
     toast.success(`Invoice created for ${formatSatsCompact(parsedAmount)}`)
-  }, [canCreate, parsedAmount, description, expirySeconds, networkMode, createInvoice])
-
-  const handleCopyInvoice = useCallback(async () => {
-    if (!createdInvoiceBolt11) return
-    try {
-      await navigator.clipboard.writeText(createdInvoiceBolt11)
-      toast.success('Invoice copied to clipboard')
-    } catch {
-      toast.error('Failed to copy invoice')
-    }
-  }, [createdInvoiceBolt11])
-
-  const handleReset = useCallback(() => {
-    setCreatedInvoiceBolt11(null)
     setAmountSats('')
     setDescription('')
     setExpirySeconds(DEFAULT_INVOICE_EXPIRY_SECONDS)
-  }, [])
-
-  if (createdInvoiceBolt11) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Zap className="h-5 w-5" />
-            Lightning Invoice
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex flex-col items-center gap-4">
-            <div className="rounded-lg bg-white p-4">
-              <QRCodeSVG
-                value={createdInvoiceBolt11}
-                size={256}
-                level="M"
-                imageSettings={{
-                  src: '/bitboard-icon.png',
-                  height: 48,
-                  width: 48,
-                  excavate: true,
-                }}
-              />
-            </div>
-            <p className="text-center text-sm text-muted-foreground">
-              {formatSatsCompact(parsedAmount)} &middot;{' '}
-              {INVOICE_EXPIRY_OPTIONS.find((o) => o.seconds === expirySeconds)?.label ?? 'Custom'} expiry
-            </p>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <div className="flex-1 truncate rounded-md border border-input bg-muted/50 px-3 py-2 font-mono text-xs">
-              {createdInvoiceBolt11}
-            </div>
-            <Button
-              size="icon"
-              onClick={handleCopyInvoice}
-              aria-label="Copy invoice"
-            >
-              <Copy className="h-4 w-4" />
-            </Button>
-          </div>
-
-          <Button variant="outline" className="w-full" onClick={handleReset}>
-            Create New Invoice
-          </Button>
-        </CardContent>
-      </Card>
-    )
-  }
+    onCreated()
+  }, [
+    canCreate,
+    parsedAmount,
+    description,
+    expirySeconds,
+    networkMode,
+    createInvoice,
+    addSessionInvoice,
+    onCreated,
+  ])
 
   return (
     <InfomodeWrapper
@@ -126,7 +178,7 @@ export function LightningReceive() {
             className="space-y-4"
             onSubmit={(e) => {
               e.preventDefault()
-              handleCreateInvoice()
+              handleCreate()
             }}
           >
             <div className="space-y-2">
@@ -178,5 +230,74 @@ export function LightningReceive() {
         </CardContent>
       </Card>
     </InfomodeWrapper>
+  )
+}
+
+export function LightningReceive() {
+  const activeInvoice = useReceiveStore((s) => s.activeInvoice)
+  const sessionInvoices = useReceiveStore((s) => s.sessionInvoices)
+  const setActiveInvoice = useReceiveStore((s) => s.setActiveInvoice)
+
+  const [showCreateForm, setShowCreateForm] = useState(false)
+
+  const visibleInvoices = useMemo(
+    () => sessionInvoices.filter((inv) => !isInvoiceExpired(inv)),
+    [sessionInvoices],
+  )
+
+  const pastInvoices = useMemo(
+    () => visibleInvoices.filter((inv) => inv.bolt11 !== activeInvoice?.bolt11),
+    [visibleInvoices, activeInvoice],
+  )
+
+  const showForm = showCreateForm || activeInvoice == null
+
+  if (showForm && activeInvoice == null && sessionInvoices.length === 0) {
+    return (
+      <InvoiceCreateForm onCreated={() => setShowCreateForm(false)} />
+    )
+  }
+
+  return (
+    <div className="space-y-4">
+      {showForm ? (
+        <InvoiceCreateForm onCreated={() => setShowCreateForm(false)} />
+      ) : (
+        <>
+          {activeInvoice && <InvoiceQrDisplay invoice={activeInvoice} />}
+          <Button
+            variant="outline"
+            className="w-full"
+            onClick={() => setShowCreateForm(true)}
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            Create New Invoice
+          </Button>
+        </>
+      )}
+
+      {pastInvoices.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm">Previous Invoices</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {pastInvoices.map((invoice) => (
+                <InvoiceListItem
+                  key={invoice.bolt11}
+                  invoice={invoice}
+                  isActive={activeInvoice?.bolt11 === invoice.bolt11}
+                  onSelect={() => {
+                    setActiveInvoice(invoice)
+                    setShowCreateForm(false)
+                  }}
+                />
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </div>
   )
 }
