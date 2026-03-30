@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useMemo } from 'react'
 import { Zap, Trash2, Eye, EyeOff, CheckCircle, XCircle, Loader2, Wifi } from 'lucide-react'
 import { toast } from 'sonner'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -249,12 +249,18 @@ function ConnectWalletForm({ onConnected }: { onConnected: () => void }) {
 
 export function LightningWallets() {
   const activeWalletId = useWalletStore((s) => s.activeWalletId)
-  const connections = useLightningStore((s) =>
-    activeWalletId != null ? s.getConnectionsForWallet(activeWalletId) : [],
+  const connectedWallets = useLightningStore((s) => s.connectedWallets)
+  const activeConnectionIds = useLightningStore((s) => s.activeConnectionIds)
+
+  const connections = useMemo(
+    () =>
+      activeWalletId != null
+        ? connectedWallets.filter((w) => w.walletId === activeWalletId)
+        : [],
+    [connectedWallets, activeWalletId],
   )
-  const activeConnectionId = useLightningStore((s) =>
-    activeWalletId != null ? s.activeConnectionIds[activeWalletId] : undefined,
-  )
+  const activeConnectionId =
+    activeWalletId != null ? activeConnectionIds[activeWalletId] : undefined
   const setActiveConnection = useLightningStore((s) => s.setActiveConnection)
   const removeConnection = useLightningStore((s) => s.removeConnection)
 
