@@ -23,8 +23,12 @@ import {
 import {
   isLightningSupported,
   isValidLightningDestination,
+  isValidBolt11Invoice,
+  isLightningAddress,
   normalizeLightningDestination,
 } from '@/lib/lightning-utils'
+import { useLightningStore } from '@/stores/lightningStore'
+import { useLightningPayMutation } from '@/hooks/useLightningMutations'
 import { walletOwnerKey } from '@/lib/lab-utils'
 import {
   useBuildTransactionMutation,
@@ -98,6 +102,10 @@ function SendFlow() {
   const activeWalletId = useWalletStore((s) => s.activeWalletId)
   const lightningEnabled = useFeatureStore((s) => s.lightningEnabled)
   const lightningAvailable = lightningEnabled && isLightningSupported(networkMode)
+  const activeConnection = useLightningStore((s) =>
+    activeWalletId != null ? s.getActiveConnection(activeWalletId) : null,
+  )
+  const lightningPayMutation = useLightningPayMutation()
 
   const {
     step,
@@ -179,7 +187,24 @@ function SendFlow() {
     if (!canBuild) return
 
     if (isLightningDestination) {
-      toast.info('Lightning payments coming soon — LDK integration is in progress.')
+      if (isLightningAddress(normalizedRecipient)) {
+        toast.info(
+          'Lightning Address payments are not yet supported — paste a BOLT11 invoice instead.',
+        )
+        return
+      }
+
+      if (!activeConnection) {
+        toast.error('Connect a Lightning wallet first (Settings → Management).')
+        return
+      }
+
+      if (!isValidBolt11Invoice(normalizedRecipient)) return
+
+      lightningPayMutation.mutate({
+        bolt11: normalizedRecipient,
+        config: activeConnection.config,
+      })
       return
     }
 
@@ -196,10 +221,12 @@ function SendFlow() {
   }, [
     canBuild,
     isLightningDestination,
+    normalizedRecipient,
+    activeConnection,
     networkMode,
     setStep,
+    lightningPayMutation,
     buildMutation,
-    normalizedRecipient,
     amountSats,
     effectiveFeeRate,
   ])
@@ -226,7 +253,8 @@ function SendFlow() {
   const isPending =
     buildMutation.isPending ||
     broadcastMutation.isPending ||
-    labSendMutation.isPending
+    labSendMutation.isPending ||
+    lightningPayMutation.isPending
 
   if (step === 2 && (psbt || networkMode === 'lab')) {
     return (
@@ -322,6 +350,15 @@ function SendFlow() {
               {recipient && !addressValid && (
                 <p className="text-xs text-destructive">
                   Invalid {lightningAvailable ? 'address or Lightning destination' : 'address'} for {networkMode}
+                </p>
+              )}
+              {isLightningDestination && !activeConnection && (
+                <p className="text-xs text-amber-600 dark:text-amber-400">
+                  No Lightning wallet connected.{' '}
+                  <a href="/wallet/management" className="underline">
+                    Connect one
+                  </a>{' '}
+                  to send Lightning payments.
                 </p>
               )}
             </div>

@@ -1,11 +1,5 @@
 import type { NetworkMode } from '@/stores/walletStore'
 
-export interface ChannelTarget {
-  nodeId: string
-  alias: string
-  host: string
-}
-
 const LIGHTNING_SUPPORTED_NETWORKS: ReadonlySet<NetworkMode> = new Set([
   'mainnet',
   'testnet',
@@ -75,62 +69,6 @@ export function isValidLightningDestination(input: string): boolean {
 export function normalizeLightningDestination(input: string): string {
   return input.trim().replace(/^lightning:/i, '')
 }
-
-const MAINNET_CHANNEL_TARGETS: ChannelTarget[] = [
-  {
-    nodeId: '03864ef025fde8fb587d989186ce6a4a186895ee44a926bfc370e2c366597a3f8f',
-    alias: 'ACINQ',
-    host: 'node.acinq.co:9735',
-  },
-  {
-    nodeId: '02f1a8c87607f415c8f22c00571c53a346a6a4b60b08a89c55f35e7e0d5a4b5168',
-    alias: 'WalletOfSatoshi',
-    host: 'walletofsatoshi.com:9735',
-  },
-  {
-    nodeId: '035e4ff418fc8b5554c5d9eea66396c227bd429a3251c8cbc711002ba215bfc226',
-    alias: 'Kraken',
-    host: 'kraken.com:9735',
-  },
-]
-
-const TESTNET_CHANNEL_TARGETS: ChannelTarget[] = [
-  {
-    nodeId: '0270685ca81a8e4d4d01beec5781f4cc924684072ae52c507f8ebe9daf0caaab7b',
-    alias: 'LND Testnet',
-    host: 'testnet-lnd.example.com:9735',
-  },
-  {
-    nodeId: '038863cf8ab91046230f561cd5b386cbff8309fa02e3f0c3ed161a3aeb64a643b9',
-    alias: 'Eclair Testnet',
-    host: 'testnet-eclair.example.com:9735',
-  },
-]
-
-const SIGNET_CHANNEL_TARGETS: ChannelTarget[] = [
-  {
-    nodeId: '0395033b252c6f40e3756984162d68174e2bd127587d1a8b5a53170ee3e252c301',
-    alias: 'Mutinynet Signet',
-    host: 'signet.example.com:9735',
-  },
-  {
-    nodeId: '024bfaf0cabe7f874fd33ebf7c6f4e5385971fc504ef3f492432e9e3ec77e1b5cf',
-    alias: 'CLN Signet',
-    host: 'signet-cln.example.com:9735',
-  },
-]
-
-const CHANNEL_TARGETS_BY_NETWORK: Partial<Record<NetworkMode, ChannelTarget[]>> = {
-  mainnet: MAINNET_CHANNEL_TARGETS,
-  testnet: TESTNET_CHANNEL_TARGETS,
-  signet: SIGNET_CHANNEL_TARGETS,
-}
-
-export function getChannelTargets(networkMode: NetworkMode): ChannelTarget[] {
-  return CHANNEL_TARGETS_BY_NETWORK[networkMode] ?? []
-}
-
-export const DEFAULT_FUNDING_AMOUNT_SATS = 10_000
 
 export type InvoiceExpiryOption = {
   label: string

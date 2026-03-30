@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo } from 'react'
-import { Zap, Copy, Plus } from 'lucide-react'
+import { Zap, Copy, Plus, Loader2 } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
 import { toast } from 'sonner'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -12,6 +12,8 @@ import { useLightningStore } from '@/stores/lightningStore'
 import { useReceiveStore, isInvoiceExpired } from '@/stores/receiveStore'
 import type { LightningInvoice } from '@/stores/lightningStore'
 import { useWalletStore } from '@/stores/walletStore'
+import { Link } from '@tanstack/react-router'
+import { useCreateInvoiceMutation } from '@/hooks/useLightningMutations'
 import {
   INVOICE_EXPIRY_OPTIONS,
   DEFAULT_INVOICE_EXPIRY_SECONDS,
@@ -123,41 +125,28 @@ function InvoiceListItem({
 }
 
 function InvoiceCreateForm({ onCreated }: { onCreated: () => void }) {
-  const networkMode = useWalletStore((s) => s.networkMode)
-  const createInvoice = useLightningStore((s) => s.createInvoice)
-  const addSessionInvoice = useReceiveStore((s) => s.addSessionInvoice)
-
   const [amountSats, setAmountSats] = useState('')
   const [description, setDescription] = useState('')
   const [expirySeconds, setExpirySeconds] = useState(DEFAULT_INVOICE_EXPIRY_SECONDS)
 
-  const parsedAmount = parseInt(amountSats) || 0
-  const canCreate = parsedAmount >= 1
-
-  const handleCreate = useCallback(() => {
-    if (!canCreate) return
-    const invoice = createInvoice({
-      amountSats: parsedAmount,
-      description: description.trim(),
-      expirySeconds,
-      networkMode,
-    })
-    addSessionInvoice(invoice)
-    toast.success(`Invoice created for ${formatSatsCompact(parsedAmount)}`)
+  const createMutation = useCreateInvoiceMutation(() => {
     setAmountSats('')
     setDescription('')
     setExpirySeconds(DEFAULT_INVOICE_EXPIRY_SECONDS)
     onCreated()
-  }, [
-    canCreate,
-    parsedAmount,
-    description,
-    expirySeconds,
-    networkMode,
-    createInvoice,
-    addSessionInvoice,
-    onCreated,
-  ])
+  })
+
+  const parsedAmount = parseInt(amountSats) || 0
+  const canCreate = parsedAmount >= 1 && !createMutation.isPending
+
+  const handleCreate = useCallback(() => {
+    if (!canCreate) return
+    createMutation.mutate({
+      amountSats: parsedAmount,
+      description: description.trim(),
+      expirySeconds,
+    })
+  }, [canCreate, parsedAmount, description, expirySeconds, createMutation])
 
   return (
     <InfomodeWrapper
@@ -223,8 +212,17 @@ function InvoiceCreateForm({ onCreated }: { onCreated: () => void }) {
             </div>
 
             <Button type="submit" className="w-full" disabled={!canCreate}>
-              <Zap className="mr-2 h-4 w-4" />
-              Create Invoice
+              {createMutation.isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Creating Invoice...
+                </>
+              ) : (
+                <>
+                  <Zap className="mr-2 h-4 w-4" />
+                  Create Invoice
+                </>
+              )}
             </Button>
           </form>
         </CardContent>
@@ -233,12 +231,37 @@ function InvoiceCreateForm({ onCreated }: { onCreated: () => void }) {
   )
 }
 
+function NoConnectionPrompt() {
+  return (
+    <Card>
+      <CardContent className="py-6">
+        <div className="space-y-3 text-center">
+          <Zap className="mx-auto h-8 w-8 text-muted-foreground" />
+          <p className="text-sm text-muted-foreground">
+            No Lightning wallet connected. Connect one to create real invoices.
+          </p>
+          <Button asChild variant="outline">
+            <Link to="/wallet/management">
+              Connect Lightning Wallet
+            </Link>
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
 export function LightningReceive() {
+  const activeWalletId = useWalletStore((s) => s.activeWalletId)
+  const activeConnection = useLightningStore((s) =>
+    activeWalletId != null ? s.getActiveConnection(activeWalletId) : null,
+  )
   const activeInvoice = useReceiveStore((s) => s.activeInvoice)
   const sessionInvoices = useReceiveStore((s) => s.sessionInvoices)
   const setActiveInvoice = useReceiveStore((s) => s.setActiveInvoice)
 
   const [showCreateForm, setShowCreateForm] = useState(false)
+  const hasConnection = activeConnection != null
 
   const visibleInvoices = useMemo(
     () => sessionInvoices.filter((inv) => !isInvoiceExpired(inv)),
@@ -254,12 +277,16 @@ export function LightningReceive() {
 
   if (showForm && activeInvoice == null && sessionInvoices.length === 0) {
     return (
-      <InvoiceCreateForm onCreated={() => setShowCreateForm(false)} />
+      <div className="space-y-4">
+        {!hasConnection && <NoConnectionPrompt />}
+        <InvoiceCreateForm onCreated={() => setShowCreateForm(false)} />
+      </div>
     )
   }
 
   return (
     <div className="space-y-4">
+      {!hasConnection && <NoConnectionPrompt />}
       {showForm ? (
         <InvoiceCreateForm onCreated={() => setShowCreateForm(false)} />
       ) : (

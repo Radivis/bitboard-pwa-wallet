@@ -6,7 +6,7 @@ import { useFeatureStore } from '@/stores/featureStore'
 import { isLightningSupported } from '@/lib/lightning-utils'
 import { WalletManagement } from '@/components/wallet/WalletManagement'
 import { SeedPhraseBackup } from '@/components/wallet/SeedPhraseBackup'
-import { LightningChannels } from '@/components/wallet/LightningChannels'
+import { LightningWallets } from '@/components/wallet/LightningWallets'
 
 export const Route = createFileRoute('/wallet/management')({
   component: ManagementPage,
@@ -16,7 +16,7 @@ export function ManagementPage() {
   const activeWalletId = useWalletStore((s) => s.activeWalletId)
   const networkMode = useWalletStore((s) => s.networkMode)
   const lightningEnabled = useFeatureStore((s) => s.lightningEnabled)
-  const showLightningChannels = lightningEnabled && isLightningSupported(networkMode)
+  const showLightningWallets = lightningEnabled && isLightningSupported(networkMode)
 
   return (
     <div className="space-y-6">
@@ -26,7 +26,7 @@ export function ManagementPage() {
         <>
           <WalletManagement />
           <SeedPhraseBackup />
-          {showLightningChannels && <LightningChannels />}
+          {showLightningWallets && <LightningWallets />}
         </>
       ) : (
         <p className="text-muted-foreground">
