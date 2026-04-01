@@ -1,4 +1,4 @@
-import { LnbitsClient } from '@/lib/lnbits-client'
+import { NWCClient } from '@getalby/sdk'
 
 export interface LightningPayment {
   paymentHash: string
@@ -25,15 +25,14 @@ export interface LightningBackendService {
   }>
 }
 
-export type LightningWalletType = 'lnbits'
+export type LightningWalletType = 'nwc'
 
-export interface LnbitsConnectionConfig {
-  type: 'lnbits'
-  url: string
-  adminApiKey: string
+export interface NwcConnectionConfig {
+  type: 'nwc'
+  connectionString: string
 }
 
-export type LightningConnectionConfig = LnbitsConnectionConfig
+export type LightningConnectionConfig = NwcConnectionConfig
 
 export interface ConnectedLightningWallet {
   id: string
@@ -43,50 +42,66 @@ export interface ConnectedLightningWallet {
   createdAt: string
 }
 
-function createLnbitsBackendService(
-  config: LnbitsConnectionConfig,
+const NWC_CONNECTION_STRING_PREFIX = 'nostr+walletconnect://'
+
+export function isValidNwcConnectionString(value: string): boolean {
+  return value.startsWith(NWC_CONNECTION_STRING_PREFIX)
+}
+
+function msatsToSats(msats: number): number {
+  return Math.floor(msats / 1000)
+}
+
+function satsToMsats(sats: number): number {
+  return sats * 1000
+}
+
+function createNwcBackendService(
+  config: NwcConnectionConfig,
 ): LightningBackendService {
-  const client = new LnbitsClient(config.url, config.adminApiKey)
+  const client = new NWCClient({
+    nostrWalletConnectUrl: config.connectionString,
+  })
 
   return {
     async getBalance() {
-      const info = await client.getWalletInfo()
-      return { balanceSats: Math.floor(info.balance / 1000) }
+      const result = await client.getBalance()
+      return { balanceSats: msatsToSats(result.balance) }
     },
 
     async createInvoice(params) {
-      const result = await client.createInvoice({
-        amountSats: params.amountSats,
-        memo: params.memo,
+      const result = await client.makeInvoice({
+        amount: satsToMsats(params.amountSats),
+        description: params.memo,
         expiry: params.expiry,
       })
       return {
-        bolt11: result.payment_request,
+        bolt11: result.invoice,
         paymentHash: result.payment_hash,
       }
     },
 
     async payInvoice(bolt11) {
-      const result = await client.payInvoice(bolt11)
-      return { paymentHash: result.payment_hash }
+      const result = await client.payInvoice({ invoice: bolt11 })
+      return { paymentHash: result.preimage }
     },
 
     async listPayments() {
-      const payments = await client.listPayments()
-      return payments.map((p) => ({
-        paymentHash: p.payment_hash,
-        pending: p.pending,
-        amountSats: Math.floor(Math.abs(p.amount) / 1000),
-        memo: p.memo,
-        timestamp: p.time,
-        bolt11: p.bolt11,
+      const result = await client.listTransactions({})
+      return result.transactions.map((tx) => ({
+        paymentHash: tx.payment_hash,
+        pending: tx.state === 'pending',
+        amountSats: msatsToSats(tx.amount),
+        memo: tx.description,
+        timestamp: tx.created_at,
+        bolt11: tx.invoice,
       }))
     },
 
     async testConnection() {
       try {
-        const info = await client.getWalletInfo()
-        return { ok: true, walletName: info.name }
+        const info = await client.getInfo()
+        return { ok: true, walletName: info.alias || 'NWC Wallet' }
       } catch (error) {
         const message =
           error instanceof Error ? error.message : 'Unknown error'
@@ -100,9 +115,11 @@ export function createBackendService(
   config: LightningConnectionConfig,
 ): LightningBackendService {
   switch (config.type) {
-    case 'lnbits':
-      return createLnbitsBackendService(config)
+    case 'nwc':
+      return createNwcBackendService(config)
     default:
-      throw new Error(`Unsupported Lightning wallet type: ${(config as { type: string }).type}`)
+      throw new Error(
+        `Unsupported Lightning wallet type: ${(config as { type: string }).type}`,
+      )
   }
 }

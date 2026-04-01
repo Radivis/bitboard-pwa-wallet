@@ -7,7 +7,7 @@ import { useReceiveStore } from '@/stores/receiveStore'
 import { useSendStore } from '@/stores/sendStore'
 import {
   createBackendService,
-  type LnbitsConnectionConfig,
+  type NwcConnectionConfig,
   type LightningConnectionConfig,
 } from '@/lib/lightning-backend-service'
 import {
@@ -29,7 +29,7 @@ export function useLnWalletBalanceQuery(config: LightningConnectionConfig) {
 
 export function useTestConnectionMutation() {
   return useMutation({
-    mutationFn: async (config: LnbitsConnectionConfig) => {
+    mutationFn: async (config: NwcConnectionConfig) => {
       const service = createBackendService(config)
       return service.testConnection()
     },

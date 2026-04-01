@@ -27,6 +27,7 @@
     "test:e2e:lab": "playwright test --grep @lab"
   },
   "dependencies": {
+    "@getalby/sdk": "^7.0.0",
     "@subframe7536/sqlite-wasm": "^0.5.8",
     "@tailwindcss/vite": "^4.2.1",
     "@tanstack/react-query": "5.90.21",

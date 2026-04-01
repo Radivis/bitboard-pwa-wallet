@@ -14,7 +14,7 @@ import { useWalletStore } from '@/stores/walletStore'
 import type { NetworkMode } from '@/stores/walletStore'
 
 export type { ConnectedLightningWallet, LightningConnectionConfig }
-export type { LnbitsConnectionConfig, LightningWalletType } from '@/lib/lightning-backend-service'
+export type { NwcConnectionConfig, LightningWalletType } from '@/lib/lightning-backend-service'
 
 export interface LightningInvoice {
   bolt11: string
