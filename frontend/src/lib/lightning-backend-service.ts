@@ -1,4 +1,5 @@
 import { NWCClient } from '@getalby/sdk'
+import type { LightningNetworkMode } from '@/lib/lightning-utils'
 
 export interface LightningPayment {
   paymentHash: string
@@ -38,6 +39,8 @@ export interface ConnectedLightningWallet {
   id: string
   walletId: number
   label: string
+  /** Lightning network this NWC connection is for (must match app network mode for LN send/receive). */
+  networkMode: LightningNetworkMode
   config: LightningConnectionConfig
   createdAt: string
 }

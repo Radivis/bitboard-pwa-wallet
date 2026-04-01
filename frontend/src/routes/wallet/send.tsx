@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { WalletUnlock } from '@/components/WalletUnlock'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
-import { useWalletStore } from '@/stores/walletStore'
+import { NETWORK_LABELS, useWalletStore } from '@/stores/walletStore'
 import { useSendStore } from '@/stores/sendStore'
 import { useFeatureStore } from '@/stores/featureStore'
 import { useLabChainStateQuery } from '@/hooks/useLabChainStateQuery'
@@ -102,8 +102,15 @@ function SendFlow() {
   const activeWalletId = useWalletStore((s) => s.activeWalletId)
   const lightningEnabled = useFeatureStore((s) => s.lightningEnabled)
   const lightningAvailable = lightningEnabled && isLightningSupported(networkMode)
-  const activeConnection = useLightningStore((s) =>
-    activeWalletId != null ? s.getActiveConnection(activeWalletId) : null,
+  const matchingLnConnection = useLightningStore((s) =>
+    activeWalletId != null
+      ? s.getActiveConnection(activeWalletId, networkMode)
+      : null,
+  )
+  const hasAnyLightningConnection = useLightningStore((s) =>
+    activeWalletId != null
+      ? s.getConnectionsForWallet(activeWalletId).length > 0
+      : false,
   )
   const lightningPayMutation = useLightningPayMutation()
 
@@ -168,11 +175,22 @@ function SendFlow() {
     [lightningAvailable, normalizedRecipient],
   )
 
+  const lightningDestinationPayable = useMemo(
+    () => !isLightningDestination || matchingLnConnection != null,
+    [isLightningDestination, matchingLnConnection],
+  )
+
   const addressValid = useMemo(
     () =>
       normalizedRecipient.length > 0 &&
-      (isValidAddress(normalizedRecipient, networkMode) || isLightningDestination),
-    [normalizedRecipient, networkMode, isLightningDestination],
+      (isValidAddress(normalizedRecipient, networkMode) || isLightningDestination) &&
+      lightningDestinationPayable,
+    [
+      normalizedRecipient,
+      networkMode,
+      isLightningDestination,
+      lightningDestinationPayable,
+    ],
   )
 
   const isLabWithNoBalance =
@@ -194,8 +212,12 @@ function SendFlow() {
         return
       }
 
-      if (!activeConnection) {
-        toast.error('Connect a Lightning wallet first (Settings → Management).')
+      if (!matchingLnConnection) {
+        toast.error(
+          hasAnyLightningConnection
+            ? `No Lightning wallet for ${NETWORK_LABELS[networkMode]}. Connect or label one for this network in Management.`
+            : 'Connect a Lightning wallet first (Settings → Management).',
+        )
         return
       }
 
@@ -203,7 +225,7 @@ function SendFlow() {
 
       lightningPayMutation.mutate({
         bolt11: normalizedRecipient,
-        config: activeConnection.config,
+        config: matchingLnConnection.config,
       })
       return
     }
@@ -222,7 +244,8 @@ function SendFlow() {
     canBuild,
     isLightningDestination,
     normalizedRecipient,
-    activeConnection,
+    matchingLnConnection,
+    hasAnyLightningConnection,
     networkMode,
     setStep,
     lightningPayMutation,
@@ -352,13 +375,26 @@ function SendFlow() {
                   Invalid {lightningAvailable ? 'address or Lightning destination' : 'address'} for {networkMode}
                 </p>
               )}
-              {isLightningDestination && !activeConnection && (
+              {isLightningDestination && !matchingLnConnection && (
                 <p className="text-xs text-amber-600 dark:text-amber-400">
-                  No Lightning wallet connected.{' '}
-                  <a href="/wallet/management" className="underline">
-                    Connect one
-                  </a>{' '}
-                  to send Lightning payments.
+                  {hasAnyLightningConnection ? (
+                    <>
+                      No Lightning wallet for {NETWORK_LABELS[networkMode]}. Connect
+                      or label one for this network in{' '}
+                      <a href="/wallet/management" className="underline">
+                        Management
+                      </a>{' '}
+                      to send Lightning payments.
+                    </>
+                  ) : (
+                    <>
+                      No Lightning wallet connected. Connect one in{' '}
+                      <a href="/wallet/management" className="underline">
+                        Management
+                      </a>{' '}
+                      to send Lightning payments.
+                    </>
+                  )}
                 </p>
               )}
             </div>

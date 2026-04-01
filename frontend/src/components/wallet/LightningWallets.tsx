@@ -8,10 +8,15 @@ import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { useLightningStore } from '@/stores/lightningStore'
-import { useWalletStore } from '@/stores/walletStore'
+import { NETWORK_LABELS, useWalletStore } from '@/stores/walletStore'
 import { useLnWalletBalanceQuery, useTestConnectionMutation } from '@/hooks/useLightningMutations'
 import { isValidNwcConnectionString } from '@/lib/lightning-backend-service'
 import type { ConnectedLightningWallet } from '@/lib/lightning-backend-service'
+import {
+  LIGHTNING_NETWORK_MODES,
+  defaultLightningNetworkForAppMode,
+  type LightningNetworkMode,
+} from '@/lib/lightning-utils'
 
 const WALLET_TYPE_LABELS: Record<string, string> = {
   nwc: 'NWC',
@@ -45,8 +50,11 @@ function WalletRow({
         className="flex min-w-0 flex-1 flex-col gap-1 text-left"
         onClick={onSetActive}
       >
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <p className="text-sm font-medium">{wallet.label}</p>
+          <Badge variant="outline" className="text-xs">
+            {NETWORK_LABELS[wallet.networkMode]}
+          </Badge>
           <Badge variant="outline" className="text-xs">
             {walletTypeBadgeLabel(wallet.config.type)}
           </Badge>
@@ -86,10 +94,14 @@ function WalletRow({
 
 function ConnectWalletForm({ onConnected }: { onConnected: () => void }) {
   const activeWalletId = useWalletStore((s) => s.activeWalletId)
+  const appNetworkMode = useWalletStore((s) => s.networkMode)
   const addConnection = useLightningStore((s) => s.addConnection)
 
   const [label, setLabel] = useState('')
   const [connectionString, setConnectionString] = useState('')
+  const [lnNetwork, setLnNetwork] = useState<LightningNetworkMode>(() =>
+    defaultLightningNetworkForAppMode(appNetworkMode),
+  )
 
   const testMutation = useTestConnectionMutation()
 
@@ -104,7 +116,7 @@ function ConnectWalletForm({ onConnected }: { onConnected: () => void }) {
       type: 'nwc',
       connectionString: connectionString.trim(),
     })
-    if (result.ok && label.trim() === '') {
+    if (result.ok && label.trim() === '' && result.walletName) {
       setLabel(result.walletName)
     }
   }, [canTest, connectionString, testMutation, label])
@@ -114,6 +126,7 @@ function ConnectWalletForm({ onConnected }: { onConnected: () => void }) {
     addConnection({
       walletId: activeWalletId,
       label: label.trim(),
+      networkMode: lnNetwork,
       config: {
         type: 'nwc',
         connectionString: connectionString.trim(),
@@ -122,9 +135,20 @@ function ConnectWalletForm({ onConnected }: { onConnected: () => void }) {
     toast.success(`Lightning wallet "${label.trim()}" connected`)
     setLabel('')
     setConnectionString('')
+    setLnNetwork(defaultLightningNetworkForAppMode(appNetworkMode))
     testMutation.reset()
     onConnected()
-  }, [canSave, activeWalletId, label, connectionString, addConnection, testMutation, onConnected])
+  }, [
+    canSave,
+    activeWalletId,
+    label,
+    connectionString,
+    lnNetwork,
+    appNetworkMode,
+    addConnection,
+    testMutation,
+    onConnected,
+  ])
 
   const resetTest = useCallback(() => {
     if (testMutation.isSuccess || testMutation.isError) {
@@ -147,6 +171,31 @@ function ConnectWalletForm({ onConnected }: { onConnected: () => void }) {
               App-internal node (coming soon)
             </Button>
           </div>
+        </div>
+
+        <div className="space-y-1">
+          <Label htmlFor="ln-network">
+            Lightning network <span className="text-destructive">*</span>
+          </Label>
+          <select
+            id="ln-network"
+            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            value={lnNetwork}
+            onChange={(e) => {
+              setLnNetwork(e.target.value as LightningNetworkMode)
+              resetTest()
+            }}
+          >
+            {LIGHTNING_NETWORK_MODES.map((mode) => (
+              <option key={mode} value={mode}>
+                {NETWORK_LABELS[mode]}
+              </option>
+            ))}
+          </select>
+          <p className="text-xs text-muted-foreground">
+            Must match this wallet&apos;s Lightning network and your app network mode
+            when sending or receiving.
+          </p>
         </div>
 
         <div className="space-y-1">
@@ -249,8 +298,6 @@ export function LightningWallets() {
         : [],
     [connectedWallets, activeWalletId],
   )
-  const activeConnectionId =
-    activeWalletId != null ? activeConnectionIds[activeWalletId] : undefined
   const setActiveConnection = useLightningStore((s) => s.setActiveConnection)
   const removeConnection = useLightningStore((s) => s.removeConnection)
 
@@ -284,9 +331,16 @@ export function LightningWallets() {
                 <WalletRow
                   key={wallet.id}
                   wallet={wallet}
-                  isActive={wallet.id === activeConnectionId}
+                  isActive={
+                    wallet.id ===
+                    activeConnectionIds[activeWalletId]?.[wallet.networkMode]
+                  }
                   onSetActive={() =>
-                    setActiveConnection(activeWalletId, wallet.id)
+                    setActiveConnection(
+                      activeWalletId,
+                      wallet.networkMode,
+                      wallet.id,
+                    )
                   }
                   onRemove={() => removeConnection(wallet.id)}
                 />

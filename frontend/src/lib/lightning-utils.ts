@@ -1,13 +1,24 @@
 import type { NetworkMode } from '@/stores/walletStore'
 
-const LIGHTNING_SUPPORTED_NETWORKS: ReadonlySet<NetworkMode> = new Set([
-  'mainnet',
-  'testnet',
-  'signet',
-])
+export const LIGHTNING_NETWORK_MODES = ['mainnet', 'testnet', 'signet'] as const
+
+export type LightningNetworkMode = (typeof LIGHTNING_NETWORK_MODES)[number]
+
+const LIGHTNING_SUPPORTED_NETWORKS: ReadonlySet<NetworkMode> = new Set(
+  LIGHTNING_NETWORK_MODES,
+)
 
 export function isLightningSupported(networkMode: NetworkMode): boolean {
   return LIGHTNING_SUPPORTED_NETWORKS.has(networkMode)
+}
+
+/** Default Lightning connection network when opening the connect form for the current app mode. */
+export function defaultLightningNetworkForAppMode(
+  networkMode: NetworkMode,
+): LightningNetworkMode {
+  return isLightningSupported(networkMode)
+    ? (networkMode as LightningNetworkMode)
+    : 'mainnet'
 }
 
 const BOLT11_PREFIX_BY_NETWORK: Record<string, string> = {

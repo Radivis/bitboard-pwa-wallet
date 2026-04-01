@@ -11,7 +11,7 @@ import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { useLightningStore } from '@/stores/lightningStore'
 import { useReceiveStore, isInvoiceExpired } from '@/stores/receiveStore'
 import type { LightningInvoice } from '@/stores/lightningStore'
-import { useWalletStore } from '@/stores/walletStore'
+import { NETWORK_LABELS, useWalletStore } from '@/stores/walletStore'
 import { Link } from '@tanstack/react-router'
 import { useCreateInvoiceMutation } from '@/hooks/useLightningMutations'
 import {
@@ -231,14 +231,22 @@ function InvoiceCreateForm({ onCreated }: { onCreated: () => void }) {
   )
 }
 
-function NoConnectionPrompt() {
+function NoConnectionPrompt({
+  networkLabel,
+  hasOtherNetworkConnections,
+}: {
+  networkLabel: string
+  hasOtherNetworkConnections: boolean
+}) {
   return (
     <Card>
       <CardContent className="py-6">
         <div className="space-y-3 text-center">
           <Zap className="mx-auto h-8 w-8 text-muted-foreground" />
           <p className="text-sm text-muted-foreground">
-            No Lightning wallet connected. Connect one to create real invoices.
+            {hasOtherNetworkConnections
+              ? `No Lightning wallet for ${networkLabel}. Connect or label one for this network in Management to create real invoices.`
+              : 'No Lightning wallet connected. Connect one to create real invoices.'}
           </p>
           <Button asChild variant="outline">
             <Link to="/wallet/management">
@@ -253,15 +261,24 @@ function NoConnectionPrompt() {
 
 export function LightningReceive() {
   const activeWalletId = useWalletStore((s) => s.activeWalletId)
-  const activeConnection = useLightningStore((s) =>
-    activeWalletId != null ? s.getActiveConnection(activeWalletId) : null,
+  const networkMode = useWalletStore((s) => s.networkMode)
+  const matchingConnection = useLightningStore((s) =>
+    activeWalletId != null
+      ? s.getActiveConnection(activeWalletId, networkMode)
+      : null,
+  )
+  const hasAnyLightningConnection = useLightningStore((s) =>
+    activeWalletId != null
+      ? s.getConnectionsForWallet(activeWalletId).length > 0
+      : false,
   )
   const activeInvoice = useReceiveStore((s) => s.activeInvoice)
   const sessionInvoices = useReceiveStore((s) => s.sessionInvoices)
   const setActiveInvoice = useReceiveStore((s) => s.setActiveInvoice)
 
   const [showCreateForm, setShowCreateForm] = useState(false)
-  const hasConnection = activeConnection != null
+  const hasMatchingConnection = matchingConnection != null
+  const networkLabel = NETWORK_LABELS[networkMode]
 
   const visibleInvoices = useMemo(
     () => sessionInvoices.filter((inv) => !isInvoiceExpired(inv)),
@@ -278,7 +295,14 @@ export function LightningReceive() {
   if (showForm && activeInvoice == null && sessionInvoices.length === 0) {
     return (
       <div className="space-y-4">
-        {!hasConnection && <NoConnectionPrompt />}
+        {!hasMatchingConnection && (
+          <NoConnectionPrompt
+            networkLabel={networkLabel}
+            hasOtherNetworkConnections={
+              hasAnyLightningConnection && !hasMatchingConnection
+            }
+          />
+        )}
         <InvoiceCreateForm onCreated={() => setShowCreateForm(false)} />
       </div>
     )
@@ -286,7 +310,14 @@ export function LightningReceive() {
 
   return (
     <div className="space-y-4">
-      {!hasConnection && <NoConnectionPrompt />}
+      {!hasMatchingConnection && (
+        <NoConnectionPrompt
+          networkLabel={networkLabel}
+          hasOtherNetworkConnections={
+            hasAnyLightningConnection && !hasMatchingConnection
+          }
+        />
+      )}
       {showForm ? (
         <InvoiceCreateForm onCreated={() => setShowCreateForm(false)} />
       ) : (
