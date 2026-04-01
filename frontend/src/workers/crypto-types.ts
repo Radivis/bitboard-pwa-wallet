@@ -40,3 +40,8 @@ export interface TransactionDetails {
   confirmation_time: number | null;
   is_confirmed: boolean;
 }
+
+export interface NodeInfo {
+  /** Hex-encoded compressed public key (33 bytes / 66 hex chars). */
+  nodeId: string;
+}

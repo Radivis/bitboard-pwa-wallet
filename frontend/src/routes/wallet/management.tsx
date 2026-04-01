@@ -7,6 +7,7 @@ import { isLightningSupported } from '@/lib/lightning-utils'
 import { WalletManagement } from '@/components/wallet/WalletManagement'
 import { SeedPhraseBackup } from '@/components/wallet/SeedPhraseBackup'
 import { LightningWallets } from '@/components/wallet/LightningWallets'
+import { LightningNodeId } from '@/components/wallet/LightningNodeId'
 
 export const Route = createFileRoute('/wallet/management')({
   component: ManagementPage,
@@ -27,6 +28,7 @@ export function ManagementPage() {
           <WalletManagement />
           <SeedPhraseBackup />
           {showLightningWallets && <LightningWallets />}
+          <LightningNodeId />
         </>
       ) : (
         <p className="text-muted-foreground">

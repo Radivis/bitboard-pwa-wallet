@@ -1,0 +1,22 @@
+[package]
+name = "bitboard-lightning"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wasm-bindgen = "0.2"
+getrandom = { version = "0.2", features = ["js"] }
+lightning = { version = "0.2", default-features = false, features = ["std"] }
+bitcoin = { version = "0.32", default-features = false, features = ["secp-lowmemory", "std"] }
+js-sys = "0.3"
+console_error_panic_hook = "0.1"
+hex = "0.4"
+
+[dev-dependencies]
+wasm-bindgen-test = "0.3"
+
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = ["-Oz", "--enable-bulk-memory", "--enable-nontrapping-float-to-int"]

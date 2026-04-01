@@ -27,6 +27,7 @@ import type {
   BalanceInfo,
   CreateWalletResult,
   DescriptorPair,
+  NodeInfo,
   SyncResult,
   TransactionDetails,
 } from '@/workers/crypto-types';
@@ -92,6 +93,8 @@ interface CryptoState {
     encryptedBlob: EncryptedBlobForDb;
     walletResult: CreateWalletResult;
   }>;
+
+  generateNodeId: (seed: Uint8Array) => Promise<NodeInfo>;
 
   lockAndPurgeSensitiveRuntimeState: () => void;
   terminateWorker: () => void;
@@ -193,6 +196,9 @@ export const useCryptoStore = create<CryptoState>((set, get) => {
 
     importWalletAndEncryptSecrets: (params) =>
       withErrorHandling((worker) => worker.importWalletAndEncryptSecrets(params)),
+
+    generateNodeId: (seed) =>
+      withErrorHandling((worker) => worker.generateNodeId(seed)),
 
     lockAndPurgeSensitiveRuntimeState: () => {
       useWalletStore.getState().lockWallet();
