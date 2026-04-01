@@ -9,7 +9,12 @@ import { Badge } from '@/components/ui/badge'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { useLightningStore } from '@/stores/lightningStore'
 import { NETWORK_LABELS, useWalletStore } from '@/stores/walletStore'
-import { useLnWalletBalanceQuery, useTestConnectionMutation } from '@/hooks/useLightningMutations'
+import {
+  useLnWalletBalanceQuery,
+  useLnWalletNetworkPlausibilityQuery,
+  useTestConnectionMutation,
+} from '@/hooks/useLightningMutations'
+import { Link } from '@tanstack/react-router'
 import { isValidNwcConnectionString } from '@/lib/lightning-backend-service'
 import type { ConnectedLightningWallet } from '@/lib/lightning-backend-service'
 import {
@@ -17,6 +22,7 @@ import {
   defaultLightningNetworkForAppMode,
   type LightningNetworkMode,
 } from '@/lib/lightning-utils'
+import { NWC_ESPLORA_BLOCK_HEIGHT_TOLERANCE } from '@/lib/bitcoin-utils'
 
 const WALLET_TYPE_LABELS: Record<string, string> = {
   nwc: 'NWC',
@@ -38,45 +44,68 @@ function WalletRow({
   onRemove: () => void
 }) {
   const balanceQuery = useLnWalletBalanceQuery(wallet.config)
+  const plausibilityQuery = useLnWalletNetworkPlausibilityQuery(wallet)
+  const showNetworkMismatch =
+    plausibilityQuery.isSuccess &&
+    plausibilityQuery.data.probableMismatch
 
   return (
     <div
-      className={`flex items-center justify-between rounded-md border p-3 transition-colors ${
+      className={`flex items-start justify-between gap-2 rounded-md border p-3 transition-colors ${
         isActive ? 'border-primary bg-primary/5' : ''
       }`}
     >
-      <button
-        type="button"
-        className="flex min-w-0 flex-1 flex-col gap-1 text-left"
-        onClick={onSetActive}
-      >
-        <div className="flex flex-wrap items-center gap-2">
-          <p className="text-sm font-medium">{wallet.label}</p>
-          <Badge variant="outline" className="text-xs">
-            {NETWORK_LABELS[wallet.networkMode]}
-          </Badge>
-          <Badge variant="outline" className="text-xs">
-            {walletTypeBadgeLabel(wallet.config.type)}
-          </Badge>
-          {isActive && (
-            <Badge variant="default" className="text-xs">
-              Active
+      <div className="flex min-w-0 flex-1 flex-col gap-2">
+        <button
+          type="button"
+          className="flex w-full flex-col gap-1 text-left"
+          onClick={onSetActive}
+        >
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-sm font-medium">{wallet.label}</p>
+            <Badge variant="outline" className="text-xs">
+              {NETWORK_LABELS[wallet.networkMode]}
             </Badge>
-          )}
-        </div>
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          {balanceQuery.isPending ? (
-            <span className="flex items-center gap-1">
-              <Loader2 className="h-3 w-3 animate-spin" />
-              Loading balance...
-            </span>
-          ) : balanceQuery.isError ? (
-            <span className="text-destructive">Connection error</span>
-          ) : (
-            <span>{balanceQuery.data.balanceSats.toLocaleString()} sats</span>
-          )}
-        </div>
-      </button>
+            <Badge variant="outline" className="text-xs">
+              {walletTypeBadgeLabel(wallet.config.type)}
+            </Badge>
+            {isActive && (
+              <Badge variant="default" className="text-xs">
+                Active
+              </Badge>
+            )}
+            {showNetworkMismatch && (
+              <Badge variant="destructive" className="text-xs">
+                Probable network mismatch
+              </Badge>
+            )}
+          </div>
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            {balanceQuery.isPending ? (
+              <span className="flex items-center gap-1">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                Loading balance...
+              </span>
+            ) : balanceQuery.isError ? (
+              <span className="text-destructive">Connection error</span>
+            ) : (
+              <span>{balanceQuery.data.balanceSats.toLocaleString()} sats</span>
+            )}
+          </div>
+        </button>
+        {showNetworkMismatch && (
+          <p className="text-xs text-amber-700 dark:text-amber-400">
+            The Lightning wallet&apos;s block height differs from your Esplora
+            tip by more than {NWC_ESPLORA_BLOCK_HEIGHT_TOLERANCE} blocks. Confirm
+            this NWC wallet runs on the same chain as the Esplora endpoint for{' '}
+            {NETWORK_LABELS[wallet.networkMode]} in{' '}
+            <Link to="/settings" className="font-medium underline">
+              Settings
+            </Link>
+            .
+          </p>
+        )}
+      </div>
       <Button
         variant="ghost"
         size="icon"

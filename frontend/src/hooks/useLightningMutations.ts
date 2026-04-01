@@ -5,11 +5,20 @@ import { useWalletStore } from '@/stores/walletStore'
 import { useLightningStore } from '@/stores/lightningStore'
 import { useReceiveStore } from '@/stores/receiveStore'
 import { useSendStore } from '@/stores/sendStore'
+import type { NetworkMode } from '@/stores/walletStore'
 import {
   createBackendService,
+  fetchNwcChainTipBlockHeight,
+  type ConnectedLightningWallet,
   type NwcConnectionConfig,
   type LightningConnectionConfig,
 } from '@/lib/lightning-backend-service'
+import {
+  fetchEsploraTipBlockHeight,
+  getEsploraUrl,
+  NWC_ESPLORA_BLOCK_HEIGHT_TOLERANCE,
+} from '@/lib/bitcoin-utils'
+import { loadCustomEsploraUrl } from '@/lib/wallet-utils'
 import {
   DEFAULT_INVOICE_EXPIRY_SECONDS,
   formatSatsCompact,
@@ -23,6 +32,48 @@ export function useLnWalletBalanceQuery(config: LightningConnectionConfig) {
       return service.getBalance()
     },
     staleTime: 30_000,
+    retry: 1,
+  })
+}
+
+/**
+ * Compares NWC `get_info` chain tip to the configured Esplora tip for the
+ * connection's Lightning network. Large drift suggests a network mismatch.
+ */
+export function useLnWalletNetworkPlausibilityQuery(
+  wallet: ConnectedLightningWallet | null,
+) {
+  return useQuery({
+    queryKey: [
+      'ln-nwc-network-plausibility',
+      wallet?.id,
+      wallet?.networkMode,
+      wallet?.config,
+    ],
+    queryFn: async () => {
+      if (!wallet) {
+        throw new Error('No Lightning wallet')
+      }
+      const networkMode = wallet.networkMode as NetworkMode
+      const customUrl = await loadCustomEsploraUrl(networkMode)
+      const esploraUrl = getEsploraUrl(networkMode, customUrl)
+      if (!esploraUrl) {
+        throw new Error('No Esplora URL for this network')
+      }
+      const [esploraHeight, nwcHeight] = await Promise.all([
+        fetchEsploraTipBlockHeight(esploraUrl),
+        fetchNwcChainTipBlockHeight(wallet.config),
+      ])
+      const delta = Math.abs(esploraHeight - nwcHeight)
+      return {
+        esploraHeight,
+        nwcHeight,
+        delta,
+        probableMismatch: delta > NWC_ESPLORA_BLOCK_HEIGHT_TOLERANCE,
+      }
+    },
+    enabled: wallet != null,
+    staleTime: 60_000,
     retry: 1,
   })
 }

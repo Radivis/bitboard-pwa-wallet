@@ -18,7 +18,11 @@ vi.mock('@getalby/sdk', () => {
   }
 })
 
-import { createBackendService, isValidNwcConnectionString } from '../lightning-backend-service'
+import {
+  createBackendService,
+  fetchNwcChainTipBlockHeight,
+  isValidNwcConnectionString,
+} from '../lightning-backend-service'
 import type { NwcConnectionConfig } from '../lightning-backend-service'
 
 const TEST_CONFIG: NwcConnectionConfig = {
@@ -180,7 +184,11 @@ describe('NWC backend service', () => {
       const service = createBackendService(TEST_CONFIG)
       const result = await service.testConnection()
 
-      expect(result).toEqual({ ok: true, walletName: 'My Alby Hub' })
+      expect(result).toEqual({
+        ok: true,
+        walletName: 'My Alby Hub',
+        nwcBlockHeight: 800000,
+      })
     })
 
     it('falls back to default name when alias is empty', async () => {
@@ -197,7 +205,11 @@ describe('NWC backend service', () => {
       const service = createBackendService(TEST_CONFIG)
       const result = await service.testConnection()
 
-      expect(result).toEqual({ ok: true, walletName: 'NWC Wallet' })
+      expect(result).toEqual({
+        ok: true,
+        walletName: 'NWC Wallet',
+        nwcBlockHeight: 800000,
+      })
     })
 
     it('returns error on connection failure', async () => {
@@ -207,6 +219,19 @@ describe('NWC backend service', () => {
       const result = await service.testConnection()
 
       expect(result).toEqual({ ok: false, error: 'Relay unreachable' })
+    })
+  })
+
+  describe('fetchNwcChainTipBlockHeight', () => {
+    it('returns block_height from getInfo', async () => {
+      mockGetInfo.mockResolvedValue({
+        alias: 'x',
+        block_height: 12345,
+        methods: [],
+      })
+
+      const height = await fetchNwcChainTipBlockHeight(TEST_CONFIG)
+      expect(height).toBe(12345)
     })
   })
 })

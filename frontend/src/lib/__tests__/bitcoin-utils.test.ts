@@ -1,5 +1,9 @@
-import { describe, it, expect } from 'vitest'
-import { parseBTC, validateEsploraUrl } from '../bitcoin-utils'
+import { describe, it, expect, afterEach, vi } from 'vitest'
+import {
+  fetchEsploraTipBlockHeight,
+  parseBTC,
+  validateEsploraUrl,
+} from '../bitcoin-utils'
 
 describe('validateEsploraUrl', () => {
   it('accepts valid https URL for mainnet', () => {
@@ -17,6 +21,12 @@ describe('validateEsploraUrl', () => {
   it('accepts valid https URL for signet', () => {
     expect(() =>
       validateEsploraUrl('https://mempool.space/signet/api', 'signet'),
+    ).not.toThrow()
+  })
+
+  it('accepts Mutinynet default Esplora URL for signet', () => {
+    expect(() =>
+      validateEsploraUrl('https://mutinynet.com/api', 'signet'),
     ).not.toThrow()
   })
 
@@ -52,6 +62,28 @@ describe('validateEsploraUrl', () => {
 
   it('rejects empty string', () => {
     expect(() => validateEsploraUrl('', 'mainnet')).toThrow('Invalid URL')
+  })
+})
+
+describe('fetchEsploraTipBlockHeight', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('fetches and parses plain-text tip height', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        text: async () => ' 987654 \n',
+      }),
+    )
+
+    const height = await fetchEsploraTipBlockHeight('https://example.com/api')
+    expect(height).toBe(987654)
+    expect(vi.mocked(fetch)).toHaveBeenCalledWith(
+      'https://example.com/api/blocks/tip/height',
+    )
   })
 })
 

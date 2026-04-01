@@ -123,11 +123,11 @@ export default defineConfig({
     port: 3000,
     proxy: {
       '/esplora-proxy/signet': {
-        target: 'https://mempool.space',
+        target: 'https://mutinynet.com',
         changeOrigin: true,
         secure: true,
         rewrite: (path) =>
-          path.replace(/^\/esplora-proxy\/signet/, '/signet/api'),
+          path.replace(/^\/esplora-proxy\/signet/, '/api'),
       },
       '/esplora-proxy/testnet': {
         target: 'https://mempool.space',

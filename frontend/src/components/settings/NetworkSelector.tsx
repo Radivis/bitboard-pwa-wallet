@@ -33,7 +33,7 @@ const NETWORK_INFOMODE: Record<NetworkMode, { title: string; text: string }> = {
   },
   signet: {
     title: 'Signet',
-    text: 'A coordinated signet network for testing—often used by wallets and services that want a stable test environment. Coins are not real money.',
+    text: 'Default Esplora uses Mutinynet (a fast custom signet widely used for Lightning testing). Coins are not real money. Point Esplora at another Signet if your on-chain wallet should follow a different signet.',
   },
   regtest: {
     title: 'Regtest',

@@ -1,6 +1,20 @@
 import { NWCClient } from '@getalby/sdk'
 import type { LightningNetworkMode } from '@/lib/lightning-utils'
 
+/** NWC `get_info` chain tip — used to compare against Esplora for the same network. */
+export async function fetchNwcChainTipBlockHeight(
+  config: LightningConnectionConfig,
+): Promise<number> {
+  if (config.type !== 'nwc') {
+    throw new Error('Unsupported Lightning wallet type')
+  }
+  const client = new NWCClient({
+    nostrWalletConnectUrl: config.connectionString,
+  })
+  const info = await client.getInfo()
+  return info.block_height
+}
+
 export interface LightningPayment {
   paymentHash: string
   pending: boolean
@@ -22,6 +36,8 @@ export interface LightningBackendService {
   testConnection(): Promise<{
     ok: boolean
     walletName?: string
+    /** Present when `ok` and the backend exposes a chain tip (NWC `get_info`). */
+    nwcBlockHeight?: number
     error?: string
   }>
 }
@@ -104,7 +120,11 @@ function createNwcBackendService(
     async testConnection() {
       try {
         const info = await client.getInfo()
-        return { ok: true, walletName: info.alias || 'NWC Wallet' }
+        return {
+          ok: true,
+          walletName: info.alias || 'NWC Wallet',
+          nwcBlockHeight: info.block_height,
+        }
       } catch (error) {
         const message =
           error instanceof Error ? error.message : 'Unknown error'
