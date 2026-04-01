@@ -24,41 +24,6 @@ export type ActiveLightningConnectionsByNetwork = Partial<
   Record<LightningNetworkMode, string>
 >
 
-/** Migrates persisted state from pre-network-label storage. Exported for tests. */
-export function migrateConnectedWalletsForRehydrate(
-  wallets: unknown,
-): ConnectedLightningWallet[] {
-  if (!Array.isArray(wallets)) return []
-  return wallets.map((w) => {
-    const row = w as ConnectedLightningWallet
-    return {
-      ...row,
-      networkMode: row.networkMode ?? 'mainnet',
-    }
-  })
-}
-
-/** Migrates activeConnectionIds from Record<walletId, connectionId> to per-network map. */
-export function migrateActiveConnectionIdsForRehydrate(
-  input: unknown,
-): Record<number, ActiveLightningConnectionsByNetwork> {
-  if (!input || typeof input !== 'object') return {}
-  const entries = Object.entries(input as Record<string, unknown>)
-  if (entries.length === 0) return {}
-
-  const firstVal = entries[0][1]
-  if (typeof firstVal === 'string') {
-    const legacy = input as Record<number, string>
-    const out: Record<number, ActiveLightningConnectionsByNetwork> = {}
-    for (const [k, v] of Object.entries(legacy)) {
-      out[Number(k)] = { mainnet: v }
-    }
-    return out
-  }
-
-  return input as Record<number, ActiveLightningConnectionsByNetwork>
-}
-
 export interface LightningInvoice {
   bolt11: string
   paymentHash: string
@@ -267,17 +232,6 @@ export const useLightningStore = create<LightningState>()(
         activeConnectionIds: state.activeConnectionIds,
         invoices: state.invoices,
       }),
-      onRehydrateStorage: () => (state, error) => {
-        if (error || !state) return
-        useLightningStore.setState({
-          connectedWallets: migrateConnectedWalletsForRehydrate(
-            state.connectedWallets,
-          ),
-          activeConnectionIds: migrateActiveConnectionIdsForRehydrate(
-            state.activeConnectionIds,
-          ),
-        })
-      },
     },
   ),
 )
