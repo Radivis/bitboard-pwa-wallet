@@ -98,13 +98,16 @@ function ConnectWalletForm({ onConnected }: { onConnected: () => void }) {
   const testSucceeded = testMutation.isSuccess && testMutation.data.ok
   const canSave = canTest && label.trim().length > 0 && testSucceeded
 
-  const handleTestConnection = useCallback(() => {
+  const handleTestConnection = useCallback(async () => {
     if (!canTest) return
-    testMutation.mutate({
+    const result = await testMutation.mutateAsync({
       type: 'nwc',
       connectionString: connectionString.trim(),
     })
-  }, [canTest, connectionString, testMutation])
+    if (result.ok && label.trim() === '') {
+      setLabel(result.walletName)
+    }
+  }, [canTest, connectionString, testMutation, label])
 
   const handleSave = useCallback(() => {
     if (!canSave || activeWalletId == null) return
@@ -147,16 +150,6 @@ function ConnectWalletForm({ onConnected }: { onConnected: () => void }) {
         </div>
 
         <div className="space-y-1">
-          <Label htmlFor="ln-wallet-label">Label</Label>
-          <Input
-            id="ln-wallet-label"
-            value={label}
-            onChange={(e) => setLabel(e.target.value)}
-            placeholder="My Lightning Wallet"
-          />
-        </div>
-
-        <div className="space-y-1">
           <Label htmlFor="nwc-connection-string">NWC Connection String</Label>
           <Input
             id="nwc-connection-string"
@@ -180,6 +173,23 @@ function ConnectWalletForm({ onConnected }: { onConnected: () => void }) {
             Connected to &ldquo;{testMutation.data.walletName}&rdquo;
           </div>
         )}
+
+        <div className="space-y-1">
+          <Label htmlFor="ln-wallet-label">
+            Label <span className="text-destructive">*</span>
+          </Label>
+          <Input
+            id="ln-wallet-label"
+            value={label}
+            onChange={(e) => setLabel(e.target.value)}
+            placeholder="My Lightning Wallet"
+          />
+          {testSucceeded && label.trim().length === 0 && (
+            <p className="text-xs text-muted-foreground">
+              Enter a label to save this connection
+            </p>
+          )}
+        </div>
         {testMutation.isSuccess && !testMutation.data.ok && (
           <div className="flex items-center gap-2 text-sm text-destructive">
             <XCircle className="h-4 w-4" />
