@@ -18,7 +18,8 @@ export const article: LibraryArticle = {
         less directly at risk than{' '}
         <ArticleLink slug="the-discrete-logarithm-problem">elliptic-curve discrete logarithms</ArticleLink>
         : algorithms such as Shor&apos;s
-        could hypothetically break <strong>ECDSA</strong> and Schnorr signatures on secp256k1 if a
+        could hypothetically break <strong>ECDSA</strong> and Schnorr signatures on{' '}
+        <ArticleLink slug="what-is-secp256k1">secp256k1</ArticleLink> if a
         sufficiently large fault-tolerant quantum computer existed.
       </p>
       <p>

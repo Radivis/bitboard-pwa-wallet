@@ -23,6 +23,7 @@ export const LIBRARY_TAGS = {
   mining: { label: 'Mining' },
   hardware: { label: 'Hardware (signers, …)' },
   backups: { label: 'Backups' },
+  nostr: { label: 'Nostr' },
 } as const
 
 export type LibraryTagId = keyof typeof LIBRARY_TAGS

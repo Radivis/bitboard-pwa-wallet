@@ -55,6 +55,12 @@ export function NwcWalletOptionsInfomodeContent() {
         Bitboard uses Nostr Wallet Connect (NIP-47). Pick a wallet that fits how you use
         Bitcoin and Lightning, then paste its NWC connection string below.
       </p>
+      <p className="text-xs leading-relaxed text-muted-foreground">
+        Background:{' '}
+        <ArticleLink slug="what-is-nostr">What is Nostr?</ArticleLink>
+        {' · '}
+        <ArticleLink slug="nostr-wallet-connect">Nostr Wallet Connect (NWC)</ArticleLink>
+      </p>
 
       <div className="space-y-1.5">
         <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">

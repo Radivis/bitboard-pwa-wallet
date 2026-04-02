@@ -21,8 +21,8 @@ export const article: LibraryArticle = {
         ).
       </p>
       <p>
-        Bitcoin uses the secp256k1 curve for ECDSA and Schnorr signatures. Parameters are chosen for
-        security and performance on typical hardware.
+        Bitcoin uses the <ArticleLink slug="what-is-secp256k1">secp256k1</ArticleLink> curve for ECDSA
+        and Schnorr signatures. Parameters are chosen for security and performance on typical hardware.
       </p>
       <p>
         For how keys are used in Bitcoin, see{' '}

@@ -22,7 +22,8 @@ export const article: LibraryArticle = {
       </p>
       <p>
         Bitcoin does not use classical modular discrete log directly for keys; it uses the{' '}
-        <strong>elliptic-curve discrete logarithm problem (ECDLP)</strong> on secp256k1: given a public
+        <strong>elliptic-curve discrete logarithm problem (ECDLP)</strong> on{' '}
+        <ArticleLink slug="what-is-secp256k1">secp256k1</ArticleLink>: given a public
         point on the curve, finding the integer multiple of a base point that yields it is believed to
         be infeasible at 256-bit security levels. See{' '}
         <ArticleLink slug="what-is-an-elliptic-curve">What is an elliptic curve?</ArticleLink> and{' '}
