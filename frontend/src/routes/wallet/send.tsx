@@ -1,7 +1,9 @@
-import { useMemo, useCallback } from 'react'
-import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import { ArrowUpRight, ArrowLeft } from 'lucide-react'
+import { useMemo, useCallback, useState, useEffect } from 'react'
+import { createFileRoute, useNavigate, Link } from '@tanstack/react-router'
+import { useQueries } from '@tanstack/react-query'
+import { ArrowUpRight, ArrowLeft, Loader2, Zap } from 'lucide-react'
 import { toast } from 'sonner'
+import { LightningAddress } from '@getalby/lightning-tools'
 import { PageHeader } from '@/components/PageHeader'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -26,7 +28,12 @@ import {
   isValidBolt11Invoice,
   isLightningAddress,
   normalizeLightningDestination,
+  bolt11NetworkModeFromPrefix,
+  tryDecodeBolt11Invoice,
+  type LightningNetworkMode,
 } from '@/lib/lightning-utils'
+import { createBackendService } from '@/lib/lightning-backend-service'
+import type { ConnectedLightningWallet } from '@/lib/lightning-backend-service'
 import { useLightningStore } from '@/stores/lightningStore'
 import { useLightningPayMutation } from '@/hooks/useLightningMutations'
 import { walletOwnerKey } from '@/lib/lab-utils'
@@ -35,6 +42,7 @@ import {
   useBroadcastTransactionMutation,
   useLabSendMutation,
 } from '@/hooks/useSendMutations'
+import { cn } from '@/lib/utils'
 
 export const Route = createFileRoute('/wallet/send')({
   component: SendPage,
@@ -58,7 +66,7 @@ const FEE_PRESET_INFOMODE: Record<
   Medium: {
     infoTitle: 'Medium fee',
     infoText:
-      'A reasonable default when you want a normal confirmation time without overpaying. Pick this for typical transfers if you are unsure—then switch to High if blocks are full and you are in a hurry, or Low if you are happy to wait.',
+      'A reasonable default when you want a normal confirmation time without overpaying. Pick this for typical transfers if you are unsure—then switch to High if blocks are full or you are in a hurry, or Low if you are happy to wait.',
   },
   High: {
     infoTitle: 'High fee',
@@ -96,22 +104,39 @@ export function SendPage() {
   return <SendFlow />
 }
 
-function SendFlow() {
+export function SendFlow() {
   const networkMode = useWalletStore((s) => s.networkMode)
   const balance = useWalletStore((s) => s.balance)
   const activeWalletId = useWalletStore((s) => s.activeWalletId)
   const lightningEnabled = useFeatureStore((s) => s.lightningEnabled)
   const lightningAvailable = lightningEnabled && isLightningSupported(networkMode)
-  const matchingLnConnection = useLightningStore((s) =>
-    activeWalletId != null
-      ? s.getActiveConnection(activeWalletId, networkMode)
-      : null,
-  )
+  const connectedLightningWallets = useLightningStore((s) => s.connectedWallets)
+
+  const matchingLightningConnections = useMemo((): ConnectedLightningWallet[] => {
+    if (
+      !lightningEnabled ||
+      !isLightningSupported(networkMode) ||
+      activeWalletId == null
+    ) {
+      return []
+    }
+    const lnMode = networkMode as LightningNetworkMode
+    return connectedLightningWallets.filter(
+      (w) => w.walletId === activeWalletId && w.networkMode === lnMode,
+    )
+  }, [lightningEnabled, networkMode, activeWalletId, connectedLightningWallets])
+
   const hasAnyLightningConnection = useLightningStore((s) =>
     activeWalletId != null
       ? s.getConnectionsForWallet(activeWalletId).length > 0
       : false,
   )
+
+  const [selectedLightningConnectionId, setSelectedLightningConnectionId] =
+    useState<string | null>(null)
+  const [isResolvingLightningAddress, setIsResolvingLightningAddress] =
+    useState(false)
+
   const lightningPayMutation = useLightningPayMutation()
 
   const {
@@ -166,7 +191,10 @@ function SendFlow() {
   }, [amount, amountUnit])
 
   const normalizedRecipient = useMemo(
-    () => normalizeLightningDestination(recipient.trim().replace(/^bitcoin:/i, '')),
+    () =>
+      normalizeLightningDestination(
+        recipient.trim().replace(/^bitcoin:/i, ''),
+      ),
     [recipient],
   )
 
@@ -175,49 +203,180 @@ function SendFlow() {
     [lightningAvailable, normalizedRecipient],
   )
 
-  const lightningDestinationPayable = useMemo(
-    () => !isLightningDestination || matchingLnConnection != null,
-    [isLightningDestination, matchingLnConnection],
-  )
+  const isLightningSendMode = isLightningDestination
 
-  const addressValid = useMemo(
+  const decodedBolt11 = useMemo(() => {
+    if (!isValidBolt11Invoice(normalizedRecipient)) return null
+    return tryDecodeBolt11Invoice(normalizedRecipient)
+  }, [normalizedRecipient])
+
+  const bolt11NetworkMismatch = useMemo(() => {
+    if (!isValidBolt11Invoice(normalizedRecipient)) return false
+    const invNetwork = bolt11NetworkModeFromPrefix(normalizedRecipient)
+    if (invNetwork == null) return false
+    return invNetwork !== networkMode
+  }, [normalizedRecipient, networkMode])
+
+  const needsUserLightningAmount = useMemo(() => {
+    if (!isLightningSendMode) return false
+    if (isLightningAddress(normalizedRecipient)) return true
+    if (!isValidBolt11Invoice(normalizedRecipient)) return false
+    return decodedBolt11 == null || decodedBolt11.satoshi === 0
+  }, [isLightningSendMode, normalizedRecipient, decodedBolt11])
+
+  const lightningPayAmountSats = useMemo(() => {
+    if (!isLightningSendMode) return 0
+    if (isValidBolt11Invoice(normalizedRecipient)) {
+      if (decodedBolt11 != null && decodedBolt11.satoshi > 0) {
+        return decodedBolt11.satoshi
+      }
+      return amountSats
+    }
+    return amountSats
+  }, [isLightningSendMode, normalizedRecipient, decodedBolt11, amountSats])
+
+  const bolt11DecodeOk = useMemo(() => {
+    if (!isValidBolt11Invoice(normalizedRecipient)) return true
+    return decodedBolt11 != null
+  }, [normalizedRecipient, decodedBolt11])
+
+  const recipientFormatValid = useMemo(
     () =>
       normalizedRecipient.length > 0 &&
-      (isValidAddress(normalizedRecipient, networkMode) || isLightningDestination) &&
-      lightningDestinationPayable,
-    [
-      normalizedRecipient,
-      networkMode,
-      isLightningDestination,
-      lightningDestinationPayable,
-    ],
+      (isValidAddress(normalizedRecipient, networkMode) ||
+        (lightningAvailable &&
+          isValidLightningDestination(normalizedRecipient))),
+    [normalizedRecipient, networkMode, lightningAvailable],
   )
+
+  const lightningRecipientOk =
+    !isLightningSendMode || matchingLightningConnections.length > 0
+
+  useEffect(() => {
+    if (!isLightningSendMode) {
+      setSelectedLightningConnectionId(null)
+      return
+    }
+    const ids = matchingLightningConnections.map((c) => c.id)
+    if (matchingLightningConnections.length === 1) {
+      setSelectedLightningConnectionId(matchingLightningConnections[0].id)
+    } else if (matchingLightningConnections.length > 1) {
+      setSelectedLightningConnectionId((prev) =>
+        prev != null && ids.includes(prev) ? prev : null,
+      )
+    } else {
+      setSelectedLightningConnectionId(null)
+    }
+  }, [isLightningSendMode, matchingLightningConnections])
+
+  const lnBalanceQueries = useQueries({
+    queries: matchingLightningConnections.map((conn) => ({
+      queryKey: ['send-page-ln-balance', conn.id],
+      queryFn: () => createBackendService(conn.config).getBalance(),
+      enabled: isLightningSendMode && matchingLightningConnections.length > 0,
+      staleTime: 30_000,
+    })),
+  })
+
+  const selectedLightningWallet = useMemo(
+    () =>
+      matchingLightningConnections.find(
+        (c) => c.id === selectedLightningConnectionId,
+      ) ?? null,
+    [matchingLightningConnections, selectedLightningConnectionId],
+  )
+
+  const selectedLnBalanceIndex = matchingLightningConnections.findIndex(
+    (c) => c.id === selectedLightningConnectionId,
+  )
+  const selectedLnBalanceQuery =
+    selectedLnBalanceIndex >= 0 ? lnBalanceQueries[selectedLnBalanceIndex] : null
+  const selectedLnBalanceSats = selectedLnBalanceQuery?.data?.balanceSats
+
+  const hasLightningWalletSelected =
+    selectedLightningConnectionId != null && selectedLightningWallet != null
+
+  const lightningAmountInputOk =
+    !needsUserLightningAmount || isValidAmountSats(amountSats)
+
+  const lightningBalanceOk =
+    hasLightningWalletSelected &&
+    selectedLnBalanceQuery?.isSuccess === true &&
+    selectedLnBalanceSats !== undefined &&
+    lightningPayAmountSats <= selectedLnBalanceSats
+
+  const canBuildLightning =
+    recipientFormatValid &&
+    lightningRecipientOk &&
+    matchingLightningConnections.length > 0 &&
+    hasLightningWalletSelected &&
+    !bolt11NetworkMismatch &&
+    bolt11DecodeOk &&
+    lightningAmountInputOk &&
+    lightningPayAmountSats >= 1 &&
+    lightningBalanceOk &&
+    (isLightningAddress(normalizedRecipient)
+      ? isValidAmountSats(amountSats)
+      : true)
 
   const isLabWithNoBalance =
     networkMode === 'lab' && (labBalanceSats === 0 || labBalanceSats === null)
-  const canBuild =
-    addressValid &&
+
+  const canBuildOnChain =
+    !isLightningSendMode &&
+    normalizedRecipient.length > 0 &&
+    isValidAddress(normalizedRecipient, networkMode) &&
     isValidAmountSats(amountSats) &&
     amountSats <= confirmedBalance &&
     !isLabWithNoBalance
 
-  const handleSubmitBuild = useCallback(() => {
-    if (!canBuild) return
+  const canBuild = isLightningSendMode ? canBuildLightning : canBuildOnChain
 
-    if (isLightningDestination) {
-      if (isLightningAddress(normalizedRecipient)) {
-        toast.info(
-          'Lightning Address payments are not yet supported — paste a BOLT11 invoice instead.',
+  const handleLightningAddressPay = useCallback(async () => {
+    if (!selectedLightningWallet || !isValidAmountSats(amountSats)) return
+    setIsResolvingLightningAddress(true)
+    try {
+      const la = new LightningAddress(normalizedRecipient)
+      await la.fetch()
+      const inv = await la.requestInvoice({ satoshi: amountSats })
+      const pr = inv.paymentRequest
+      const invNet = bolt11NetworkModeFromPrefix(pr)
+      if (invNet !== networkMode) {
+        toast.error(
+          'This invoice is for a different network. Switch network in Settings.',
         )
         return
       }
+      lightningPayMutation.mutate({
+        bolt11: pr,
+        config: selectedLightningWallet.config,
+      })
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : 'Could not fetch Lightning invoice',
+      )
+    } finally {
+      setIsResolvingLightningAddress(false)
+    }
+  }, [
+    selectedLightningWallet,
+    amountSats,
+    normalizedRecipient,
+    networkMode,
+    lightningPayMutation,
+  ])
 
-      if (!matchingLnConnection) {
-        toast.error(
-          hasAnyLightningConnection
-            ? `No Lightning wallet for ${NETWORK_LABELS[networkMode]}. Connect or label one for this network in Management.`
-            : 'Connect a Lightning wallet first (Settings → Management).',
-        )
+  const handleSubmitBuild = useCallback(() => {
+    if (!canBuild) return
+
+    if (isLightningSendMode) {
+      if (isLightningAddress(normalizedRecipient)) {
+        void handleLightningAddressPay()
+        return
+      }
+
+      if (!selectedLightningWallet) {
+        toast.error('Select a Lightning wallet to pay from.')
         return
       }
 
@@ -225,7 +384,7 @@ function SendFlow() {
 
       lightningPayMutation.mutate({
         bolt11: normalizedRecipient,
-        config: matchingLnConnection.config,
+        config: selectedLightningWallet.config,
       })
       return
     }
@@ -242,16 +401,16 @@ function SendFlow() {
     })
   }, [
     canBuild,
-    isLightningDestination,
+    isLightningSendMode,
     normalizedRecipient,
-    matchingLnConnection,
-    hasAnyLightningConnection,
+    selectedLightningWallet,
     networkMode,
     setStep,
     lightningPayMutation,
     buildMutation,
     amountSats,
     effectiveFeeRate,
+    handleLightningAddressPay,
   ])
 
   const handleConfirmSend = useCallback(() => {
@@ -277,7 +436,8 @@ function SendFlow() {
     buildMutation.isPending ||
     broadcastMutation.isPending ||
     labSendMutation.isPending ||
-    lightningPayMutation.isPending
+    lightningPayMutation.isPending ||
+    isResolvingLightningAddress
 
   if (step === 2 && (psbt || networkMode === 'lab')) {
     return (
@@ -328,10 +488,7 @@ function SendFlow() {
                   />
                 </div>
               ) : (
-                <Button
-                  className="flex-1"
-                  onClick={handleConfirmSend}
-                >
+                <Button className="flex-1" onClick={handleConfirmSend}>
                   Confirm and Send
                 </Button>
               )}
@@ -342,15 +499,23 @@ function SendFlow() {
     )
   }
 
+  const pageTitle = isLightningSendMode ? 'Send Lightning' : 'Send Bitcoin'
+  const cardTitle = isLightningSendMode ? 'Pay with Lightning' : 'Send Transaction'
+  const submitLabel = isLightningSendMode
+    ? 'Pay with Lightning'
+    : networkMode === 'lab'
+      ? 'Review Transaction'
+      : 'Review Transaction'
+
   return (
     <div className="space-y-6">
-      <PageHeader title="Send Bitcoin" icon={ArrowUpRight} />
+      <PageHeader title={pageTitle} icon={ArrowUpRight} />
 
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <ArrowUpRight className="h-5 w-5" />
-            Send Transaction
+            {cardTitle}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -362,75 +527,194 @@ function SendFlow() {
             }}
           >
             <div className="space-y-2">
-              <Label htmlFor="recipient-address">Recipient Address</Label>
+              <Label htmlFor="recipient-address">
+                {isLightningSendMode ? 'Invoice or Lightning address' : 'Recipient Address'}
+              </Label>
               <Input
                 id="recipient-address"
                 value={recipient}
                 onChange={(e) => setRecipient(e.target.value)}
-                placeholder={lightningAvailable ? 'bc1q... or Lightning address' : 'bc1q...'}
+                placeholder={
+                  lightningAvailable
+                    ? 'bc1q… or BOLT11 invoice or Lightning address'
+                    : 'bc1q…'
+                }
                 disabled={isPending}
               />
-              {recipient && !addressValid && (
+              {recipient && !recipientFormatValid && (
                 <p className="text-xs text-destructive">
-                  Invalid {lightningAvailable ? 'address or Lightning destination' : 'address'} for {networkMode}
+                  {isLightningSendMode
+                    ? 'Invalid Lightning invoice or Lightning address.'
+                    : `Invalid address for ${networkMode}`}
                 </p>
               )}
-              {isLightningDestination && !matchingLnConnection && (
+              {recipient && isLightningSendMode && !lightningRecipientOk && (
                 <p className="text-xs text-amber-600 dark:text-amber-400">
                   {hasAnyLightningConnection ? (
                     <>
                       No Lightning wallet for {NETWORK_LABELS[networkMode]}. Connect
-                      or label one for this network in{' '}
-                      <a href="/wallet/management" className="underline">
+                      one for this network in{' '}
+                      <Link to="/wallet/management" className="underline">
                         Management
-                      </a>{' '}
-                      to send Lightning payments.
+                      </Link>
+                      .
                     </>
                   ) : (
                     <>
                       No Lightning wallet connected. Connect one in{' '}
-                      <a href="/wallet/management" className="underline">
+                      <Link to="/wallet/management" className="underline">
                         Management
-                      </a>{' '}
-                      to send Lightning payments.
+                      </Link>
+                      .
                     </>
                   )}
                 </p>
               )}
+              {isLightningSendMode &&
+                isValidBolt11Invoice(normalizedRecipient) &&
+                bolt11NetworkMismatch && (
+                  <p className="text-xs text-amber-700 dark:text-amber-400">
+                    This invoice is for a different Bitcoin network than your
+                    current mode. Switch network in{' '}
+                    <Link to="/settings" className="font-medium underline">
+                      Settings
+                    </Link>
+                    .
+                  </p>
+                )}
+              {isLightningSendMode &&
+                isValidBolt11Invoice(normalizedRecipient) &&
+                !bolt11DecodeOk && (
+                  <p className="text-xs text-destructive">
+                    Could not read this BOLT11 invoice. Check the payment request
+                    and try again.
+                  </p>
+                )}
             </div>
+
+            {isLightningSendMode &&
+              matchingLightningConnections.length > 0 && (
+                <div className="space-y-2">
+                  <Label>Pay from Lightning wallet</Label>
+                  <p className="text-xs text-muted-foreground">
+                    {matchingLightningConnections.length > 1
+                      ? 'Select which connected wallet should pay this invoice.'
+                      : 'Using your connected Lightning wallet for this network.'}
+                  </p>
+                  <ul className="space-y-2">
+                    {matchingLightningConnections.map((conn, index) => {
+                      const q = lnBalanceQueries[index]
+                      const isSelected = conn.id === selectedLightningConnectionId
+                      return (
+                        <li key={conn.id}>
+                          <button
+                            type="button"
+                            disabled={isPending}
+                            onClick={() =>
+                              setSelectedLightningConnectionId(conn.id)
+                            }
+                            className={cn(
+                              'flex w-full items-center justify-between gap-2 rounded-md border p-3 text-left text-sm transition-colors',
+                              isSelected
+                                ? 'border-primary bg-primary/5'
+                                : 'border-border hover:bg-muted/50',
+                            )}
+                          >
+                            <span className="min-w-0 flex-1 font-medium">
+                              {conn.label}
+                            </span>
+                            <span className="flex shrink-0 items-center gap-1 tabular-nums text-muted-foreground">
+                              {q?.isPending ? (
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                              ) : q?.isError ? (
+                                <span className="text-destructive">—</span>
+                              ) : (
+                                <>
+                                  <Zap className="h-3 w-3" />
+                                  {formatSats(q?.data?.balanceSats ?? 0)} sats
+                                </>
+                              )}
+                            </span>
+                          </button>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                </div>
+              )}
+
+            {isLightningSendMode &&
+              decodedBolt11?.description != null &&
+              decodedBolt11.description.length > 0 && (
+                <p className="text-sm text-muted-foreground">
+                  <span className="font-medium text-foreground">Memo: </span>
+                  {decodedBolt11.description}
+                </p>
+              )}
 
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label htmlFor="send-amount">
-                  Amount ({amountUnit === 'btc' ? 'BTC' : 'sats'})
+                  {needsUserLightningAmount
+                    ? `Amount (${amountUnit === 'btc' ? 'BTC' : 'sats'})`
+                    : isLightningSendMode && !needsUserLightningAmount
+                      ? 'Amount (from invoice)'
+                      : `Amount (${amountUnit === 'btc' ? 'BTC' : 'sats'})`}
                 </Label>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() =>
-                    setAmountUnit(amountUnit === 'btc' ? 'sats' : 'btc')
-                  }
-                  className="h-auto py-0 text-xs"
-                >
-                  Switch to {amountUnit === 'btc' ? 'sats' : 'BTC'}
-                </Button>
+                {(needsUserLightningAmount || !isLightningSendMode) && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() =>
+                      setAmountUnit(amountUnit === 'btc' ? 'sats' : 'btc')
+                    }
+                    className="h-auto py-0 text-xs"
+                  >
+                    Switch to {amountUnit === 'btc' ? 'sats' : 'BTC'}
+                  </Button>
+                )}
               </div>
-              <Input
-                id="send-amount"
-                type="number"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                placeholder={amountUnit === 'btc' ? '0.00000000' : '0'}
-                step={amountUnit === 'btc' ? '0.00000001' : '1'}
-                min="0"
-                disabled={isPending}
-              />
+              {isLightningSendMode && !needsUserLightningAmount ? (
+                <p className="rounded-md border border-border bg-muted/30 px-3 py-2 text-sm tabular-nums">
+                  {formatBTC(lightningPayAmountSats)} BTC (
+                  {formatSats(lightningPayAmountSats)} sats)
+                </p>
+              ) : (
+                <Input
+                  id="send-amount"
+                  type="number"
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  placeholder={amountUnit === 'btc' ? '0.00000000' : '0'}
+                  step={amountUnit === 'btc' ? '0.00000001' : '1'}
+                  min="0"
+                  disabled={isPending}
+                />
+              )}
               <p className="text-xs text-muted-foreground">
-                Available: {formatBTC(confirmedBalance)} BTC (
-                {formatSats(confirmedBalance)} sats)
+                {isLightningSendMode ? (
+                  <>
+                    Lightning wallet:{' '}
+                    {selectedLnBalanceQuery?.isPending ? (
+                      'Loading balance…'
+                    ) : selectedLnBalanceQuery?.isSuccess ? (
+                      <>
+                        {formatBTC(selectedLnBalanceSats ?? 0)} BTC (
+                        {formatSats(selectedLnBalanceSats ?? 0)} sats)
+                      </>
+                    ) : (
+                      '—'
+                    )}
+                  </>
+                ) : (
+                  <>
+                    Available: {formatBTC(confirmedBalance)} BTC (
+                    {formatSats(confirmedBalance)} sats)
+                  </>
+                )}
               </p>
-              {isLabWithNoBalance && (
+              {isLabWithNoBalance && !isLightningSendMode && (
                 <p className="text-xs text-amber-600 dark:text-amber-400">
                   No balance. Mine blocks or make a transaction to your wallet in
                   the lab.
@@ -438,89 +722,88 @@ function SendFlow() {
               )}
             </div>
 
-            <div className="space-y-2">
-              <Label>
-                <InfomodeWrapper
-                  as="span"
-                  infoId="send-fee-rate-label"
-                  infoTitle="Fee rate (sat/vB)"
-                  infoText="Miners prioritize transactions that pay more per byte of block space. The number is satoshis per virtual byte (sat/vB). Bitboard currently offers simple fixed presets (not live mempool data—smarter estimation may come later). In general: use Low when you are not in a rush, Medium for everyday sends, High when the network is busy or you need faster confirmation, and Custom only when you already have a target rate from an explorer or another trusted source."
-                >
-                  Fee Rate (sat/vB)
-                </InfomodeWrapper>
-              </Label>
-              <p className="text-xs text-muted-foreground">
-                Static presets for now. Dynamic fee estimation will be added
-                later.
-              </p>
-              <div className="flex gap-2">
-                {FEE_PRESETS.map((preset) => {
-                  const { infoTitle, infoText } = FEE_PRESET_INFOMODE[preset.label]
-                  return (
-                    <InfomodeWrapper
-                      key={preset.label}
-                      infoId={`send-fee-preset-${preset.label.toLowerCase()}`}
-                      infoTitle={infoTitle}
-                      infoText={infoText}
-                      className="min-w-0 flex-1"
-                    >
-                      <Button
-                        type="button"
-                        variant={
-                          !useCustomFee && feeRate === preset.rate
-                            ? 'default'
-                            : 'outline'
-                        }
-                        size="sm"
-                        className="w-full"
-                        onClick={() => {
-                          setFeeRate(preset.rate)
-                          setUseCustomFee(false)
-                        }}
-                      >
-                        {preset.label} ({preset.rate})
-                      </Button>
-                    </InfomodeWrapper>
-                  )
-                })}
-                <InfomodeWrapper
-                  infoId="send-fee-custom-button"
-                  infoTitle="Custom fee"
-                  infoText="Switch here when you already know the exact sat/vB you want—for example from a mempool dashboard, a node, or advice that matches current network conditions. After selecting Custom, type that number in the field below; use it if presets feel too coarse or you are following a specific recommendation."
-                  className="min-w-0 flex-1"
-                >
-                  <Button
-                    type="button"
-                    variant={useCustomFee ? 'default' : 'outline'}
-                    size="sm"
-                    className="w-full"
-                    onClick={() => setUseCustomFee(true)}
+            {!isLightningSendMode && (
+              <div className="space-y-2">
+                <Label>
+                  <InfomodeWrapper
+                    as="span"
+                    infoId="send-fee-rate-label"
+                    infoTitle="Fee rate (sat/vB)"
+                    infoText="Miners prioritize transactions that pay more per byte of block space. The number is satoshis per virtual byte (sat/vB). Bitboard currently offers simple fixed presets (not live mempool data—smarter estimation may come later). In general: use Low when you are not in a rush, Medium for everyday sends, High when the network is busy or you need faster confirmation, and Custom only when you already have a target rate from an explorer or another trusted source."
                   >
-                    Custom
-                  </Button>
-                </InfomodeWrapper>
+                    Fee Rate (sat/vB)
+                  </InfomodeWrapper>
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  Static presets for now. Dynamic fee estimation will be added
+                  later.
+                </p>
+                <div className="flex gap-2">
+                  {FEE_PRESETS.map((preset) => {
+                    const { infoTitle, infoText } =
+                      FEE_PRESET_INFOMODE[preset.label]
+                    return (
+                      <InfomodeWrapper
+                        key={preset.label}
+                        infoId={`send-fee-preset-${preset.label.toLowerCase()}`}
+                        infoTitle={infoTitle}
+                        infoText={infoText}
+                        className="min-w-0 flex-1"
+                      >
+                        <Button
+                          type="button"
+                          variant={
+                            !useCustomFee && feeRate === preset.rate
+                              ? 'default'
+                              : 'outline'
+                          }
+                          size="sm"
+                          className="w-full"
+                          onClick={() => {
+                            setFeeRate(preset.rate)
+                            setUseCustomFee(false)
+                          }}
+                        >
+                          {preset.label} ({preset.rate})
+                        </Button>
+                      </InfomodeWrapper>
+                    )
+                  })}
+                  <InfomodeWrapper
+                    infoId="send-fee-custom-button"
+                    infoTitle="Custom fee"
+                    infoText="Switch here when you already know the exact sat/vB you want—for example from a mempool dashboard, a node, or advice that matches current network conditions. After selecting Custom, type that number in the field below; use it if presets feel too coarse or you are following a specific recommendation."
+                    className="min-w-0 flex-1"
+                  >
+                    <Button
+                      type="button"
+                      variant={useCustomFee ? 'default' : 'outline'}
+                      size="sm"
+                      className="w-full"
+                      onClick={() => setUseCustomFee(true)}
+                    >
+                      Custom
+                    </Button>
+                  </InfomodeWrapper>
+                </div>
+                {useCustomFee && (
+                  <Input
+                    type="number"
+                    value={customFeeRate}
+                    onChange={(e) => setCustomFeeRate(e.target.value)}
+                    placeholder="Custom fee rate"
+                    min="1"
+                    disabled={isPending}
+                  />
+                )}
               </div>
-              {useCustomFee && (
-                <Input
-                  type="number"
-                  value={customFeeRate}
-                  onChange={(e) => setCustomFeeRate(e.target.value)}
-                  placeholder="Custom fee rate"
-                  min="1"
-                  disabled={isPending}
-                />
-              )}
-            </div>
+            )}
 
             {buildMutation.isPending ? (
               <LoadingSpinner text="Building transaction..." />
             ) : (
-              <Button
-                type="submit"
-                className="w-full"
-                disabled={!canBuild}
-              >
-                Review Transaction
+              <Button type="submit" className="w-full" disabled={!canBuild}>
+                {submitLabel}
               </Button>
             )}
           </form>

@@ -1,3 +1,4 @@
+import { decodeInvoice } from '@getalby/lightning-tools/bolt11'
 import type { NetworkMode } from '@/stores/walletStore'
 
 export const LIGHTNING_NETWORK_MODES = ['mainnet', 'testnet', 'signet'] as const
@@ -62,6 +63,30 @@ export function isValidBolt11Invoice(input: string): boolean {
   const lower = input.toLowerCase()
   return ALL_BOLT11_PREFIXES.some((prefix) => lower.startsWith(prefix))
 }
+
+/**
+ * Infer Lightning chain from BOLT11 human-readable prefix (before bech32 payload).
+ * Returns null if the string does not start with a known mainnet/testnet/signet prefix.
+ */
+export function bolt11NetworkModeFromPrefix(
+  paymentRequest: string,
+): LightningNetworkMode | null {
+  const lower = paymentRequest.toLowerCase()
+  if (lower.startsWith('lnbc')) return 'mainnet'
+  /** `lntbs` must be checked before `lntb` (prefix overlap). */
+  if (lower.startsWith('lntbs')) return 'signet'
+  if (lower.startsWith('lntb')) return 'testnet'
+  return null
+}
+
+/** Decode a BOLT11 payment request; returns null if invalid or undecodable. */
+export function tryDecodeBolt11Invoice(paymentRequest: string) {
+  return decodeInvoice(paymentRequest)
+}
+
+export type DecodedBolt11Invoice = NonNullable<
+  ReturnType<typeof tryDecodeBolt11Invoice>
+>
 
 const LIGHTNING_ADDRESS_PATTERN = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/
 
