@@ -37,7 +37,14 @@ export interface LightningBackendService {
     memo?: string
     expiry?: number
   }): Promise<{ bolt11: string; paymentHash: string }>
-  payInvoice(bolt11: string): Promise<{ paymentHash: string }>
+  /**
+   * Pay a BOLT11 invoice. For **amountless** invoices (0 sats in the PR), NIP-47 requires
+   * `amount` in millisatoshis so the NWC wallet knows how much to send.
+   */
+  payInvoice(
+    bolt11: string,
+    options?: { amountMsats?: number },
+  ): Promise<{ paymentHash: string }>
   listPayments(): Promise<LightningPayment[]>
   testConnection(): Promise<{
     ok: boolean
@@ -106,8 +113,13 @@ function createNwcBackendService(
       }
     },
 
-    async payInvoice(bolt11) {
-      const result = await client.payInvoice({ invoice: bolt11 })
+    async payInvoice(bolt11, options) {
+      const result = await client.payInvoice({
+        invoice: bolt11,
+        ...(options?.amountMsats != null
+          ? { amount: options.amountMsats }
+          : {}),
+      })
       return { paymentHash: result.preimage }
     },
 

@@ -382,9 +382,19 @@ export function SendFlow() {
 
       if (!isValidBolt11Invoice(normalizedRecipient)) return
 
+      const amountMsatsForAmountless =
+        decodedBolt11 != null &&
+        decodedBolt11.satoshi === 0 &&
+        isValidAmountSats(amountSats)
+          ? amountSats * 1000
+          : undefined
+
       lightningPayMutation.mutate({
         bolt11: normalizedRecipient,
         config: selectedLightningWallet.config,
+        ...(amountMsatsForAmountless != null
+          ? { amountMsats: amountMsatsForAmountless }
+          : {}),
       })
       return
     }
@@ -411,6 +421,7 @@ export function SendFlow() {
     amountSats,
     effectiveFeeRate,
     handleLightningAddressPay,
+    decodedBolt11,
   ])
 
   const handleConfirmSend = useCallback(() => {

@@ -108,6 +108,24 @@ describe('NWC backend service', () => {
       })
       expect(result).toEqual({ paymentHash: 'preimage_abc' })
     })
+
+    it('passes amount in millisatoshis for amountless invoices (NIP-47)', async () => {
+      mockPayInvoice.mockResolvedValue({
+        preimage: 'preimage_xyz',
+        fees_paid: 0,
+      })
+
+      const service = createBackendService(TEST_CONFIG)
+      const result = await service.payInvoice('lntb1amountless...', {
+        amountMsats: 5_000_000,
+      })
+
+      expect(mockPayInvoice).toHaveBeenCalledWith({
+        invoice: 'lntb1amountless...',
+        amount: 5_000_000,
+      })
+      expect(result).toEqual({ paymentHash: 'preimage_xyz' })
+    })
   })
 
   describe('listPayments', () => {

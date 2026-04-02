@@ -247,9 +247,13 @@ export function useLightningPayMutation() {
     mutationFn: async (params: {
       bolt11: string
       config: LightningConnectionConfig
+      /** Required for amountless BOLT11 (NIP-47 `pay_invoice.amount` in msats). */
+      amountMsats?: number
     }) => {
       const service = createBackendService(params.config)
-      return service.payInvoice(params.bolt11)
+      return service.payInvoice(params.bolt11, {
+        amountMsats: params.amountMsats,
+      })
     },
     onSuccess: () => {
       invalidateLightningDashboardQueries()
