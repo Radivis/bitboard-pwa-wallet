@@ -7,6 +7,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
+import { NwcWalletOptionsInfomodeContent } from '@/components/wallet/NwcWalletOptionsInfomodeContent'
+import { useInfomodeStore } from '@/stores/infomodeStore'
 import { useLightningStore } from '@/stores/lightningStore'
 import { NETWORK_LABELS, useWalletStore } from '@/stores/walletStore'
 import {
@@ -125,6 +127,7 @@ function ConnectWalletForm({ onConnected }: { onConnected: () => void }) {
   const activeWalletId = useWalletStore((s) => s.activeWalletId)
   const appNetworkMode = useWalletStore((s) => s.networkMode)
   const addConnection = useLightningStore((s) => s.addConnection)
+  const isInfomodeActive = useInfomodeStore((s) => s.isActive)
 
   const [label, setLabel] = useState('')
   const [connectionString, setConnectionString] = useState('')
@@ -193,9 +196,31 @@ function ConnectWalletForm({ onConnected }: { onConnected: () => void }) {
         <div className="space-y-1">
           <Label className="text-xs text-muted-foreground">Type</Label>
           <div className="flex gap-2">
-            <Button variant="default" size="sm" className="flex-1" disabled>
-              NWC
-            </Button>
+            <InfomodeWrapper
+              infoId="connect-lightning-nwc-type"
+              infoComponent={NwcWalletOptionsInfomodeContent}
+              className="min-w-0 flex-1"
+            >
+              <Button
+                variant="default"
+                size="sm"
+                className="w-full"
+                type="button"
+                disabled={!isInfomodeActive}
+                aria-label={
+                  isInfomodeActive
+                    ? 'NWC — open wallet guide'
+                    : 'NWC (turn on Infomode in the header to open the wallet guide)'
+                }
+                title={
+                  isInfomodeActive
+                    ? 'Open NWC-compatible wallet guide'
+                    : 'Turn on Infomode (header) to tap here for the wallet guide'
+                }
+              >
+                NWC
+              </Button>
+            </InfomodeWrapper>
             <Button variant="outline" size="sm" className="flex-1" disabled>
               App-internal node (coming soon)
             </Button>
@@ -340,7 +365,7 @@ export function LightningWallets() {
     <InfomodeWrapper
       infoId="management-lightning-wallets-card"
       infoTitle="Connected Lightning wallets"
-      infoText="A connected Lightning wallet lets you send and receive Lightning payments. It uses Nostr Wallet Connect (NWC) to link your Bitboard wallet to any compatible Lightning wallet — such as Alby Hub, Mutiny, or Primal. Your Lightning wallet manages channels and routing for you, so you can focus on sending and receiving. You can connect multiple Lightning wallets and switch between them."
+      infoText="A connected Lightning wallet lets you send and receive Lightning payments. It uses Nostr Wallet Connect (NWC) to link your Bitboard wallet to any compatible Lightning wallet. Your Lightning wallet manages channels and routing for you, so you can focus on sending and receiving. You can connect multiple Lightning wallets and switch between them. With Infomode on, tap the NWC type control in Connect Lightning Wallet to open a short guide with links to Library articles on popular NWC wallets."
       className="rounded-xl"
     >
       <Card>
