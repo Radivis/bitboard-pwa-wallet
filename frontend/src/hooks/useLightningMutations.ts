@@ -1,8 +1,10 @@
+import { useMemo, useSyncExternalStore } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import { toast } from 'sonner'
 import { useWalletStore } from '@/stores/walletStore'
 import { useLightningStore } from '@/stores/lightningStore'
+import { useFeatureStore } from '@/stores/featureStore'
 import { useReceiveStore } from '@/stores/receiveStore'
 import { useSendStore } from '@/stores/sendStore'
 import type { NetworkMode } from '@/stores/walletStore'
@@ -22,7 +24,119 @@ import { loadCustomEsploraUrl } from '@/lib/wallet-utils'
 import {
   DEFAULT_INVOICE_EXPIRY_SECONDS,
   formatSatsCompact,
+  isLightningSupported,
+  type LightningNetworkMode,
 } from '@/lib/lightning-utils'
+import {
+  fetchLightningBalancesForDashboard,
+  fetchLightningPaymentsForActiveWallet,
+  invalidateLightningDashboardQueries,
+  lightningConnectionsFingerprint,
+  lightningDashboardBalancesQueryKey,
+  lightningDashboardHistoryQueryKey,
+} from '@/lib/lightning-dashboard-sync'
+
+const LIGHTNING_DASHBOARD_REFETCH_MS = 60_000
+const LIGHTNING_DASHBOARD_STALE_MS = 30_000
+
+function subscribeOnlineStatus(onStoreChange: () => void) {
+  window.addEventListener('online', onStoreChange)
+  window.addEventListener('offline', onStoreChange)
+  return () => {
+    window.removeEventListener('online', onStoreChange)
+    window.removeEventListener('offline', onStoreChange)
+  }
+}
+
+function getNavigatorOnlineSnapshot(): boolean {
+  return typeof navigator !== 'undefined' && navigator.onLine
+}
+
+/** Reactive `navigator.onLine` for query `enabled` and refetch behavior. */
+export function useNavigatorOnline(): boolean {
+  return useSyncExternalStore(
+    subscribeOnlineStatus,
+    getNavigatorOnlineSnapshot,
+    () => true,
+  )
+}
+
+function useLightningDashboardQueryBase() {
+  const lightningEnabled = useFeatureStore((s) => s.lightningEnabled)
+  const networkMode = useWalletStore((s) => s.networkMode)
+  const activeWalletId = useWalletStore((s) => s.activeWalletId)
+  const walletStatus = useWalletStore((s) => s.walletStatus)
+  const connectedWallets = useLightningStore((s) => s.connectedWallets)
+  const isOnline = useNavigatorOnline()
+
+  const matchingConnections = useMemo(() => {
+    if (
+      !lightningEnabled ||
+      !isLightningSupported(networkMode) ||
+      activeWalletId == null
+    ) {
+      return []
+    }
+    const lnMode = networkMode as LightningNetworkMode
+    return connectedWallets.filter(
+      (w) => w.walletId === activeWalletId && w.networkMode === lnMode,
+    )
+  }, [lightningEnabled, networkMode, activeWalletId, connectedWallets])
+
+  const fingerprint = lightningConnectionsFingerprint(matchingConnections)
+
+  const enabled =
+    lightningEnabled &&
+    isLightningSupported(networkMode) &&
+    activeWalletId != null &&
+    (walletStatus === 'unlocked' || walletStatus === 'syncing') &&
+    matchingConnections.length > 0 &&
+    isOnline
+
+  return { enabled, fingerprint }
+}
+
+/**
+ * NWC `list_transactions` merged for all matching connections (React Query cache).
+ */
+export function useLightningHistoryQuery() {
+  const { enabled, fingerprint } = useLightningDashboardQueryBase()
+
+  return useQuery({
+    queryKey: lightningDashboardHistoryQueryKey(fingerprint),
+    queryFn: fetchLightningPaymentsForActiveWallet,
+    enabled,
+    staleTime: LIGHTNING_DASHBOARD_STALE_MS,
+    refetchInterval: () =>
+      typeof document !== 'undefined' &&
+      document.visibilityState === 'visible'
+        ? LIGHTNING_DASHBOARD_REFETCH_MS
+        : false,
+    refetchOnWindowFocus: true,
+    retry: 1,
+  })
+}
+
+/**
+ * Per-connection and total Lightning balance for the dashboard Balance card.
+ */
+export function useLightningBalancesForDashboardQuery() {
+  const { enabled, fingerprint } = useLightningDashboardQueryBase()
+
+  return useQuery({
+    queryKey: lightningDashboardBalancesQueryKey(fingerprint),
+    queryFn: fetchLightningBalancesForDashboard,
+    enabled,
+    staleTime: LIGHTNING_DASHBOARD_STALE_MS,
+    refetchInterval: () =>
+      typeof document !== 'undefined' &&
+      document.visibilityState === 'visible'
+        ? LIGHTNING_DASHBOARD_REFETCH_MS
+        : false,
+    refetchOnWindowFocus: true,
+    retry: 1,
+  })
+}
 
 export function useLnWalletBalanceQuery(config: LightningConnectionConfig) {
   return useQuery({
@@ -138,6 +252,7 @@ export function useLightningPayMutation() {
       return service.payInvoice(params.bolt11)
     },
     onSuccess: () => {
+      invalidateLightningDashboardQueries()
       toast.success('Lightning payment sent!')
       const { setRecipient, setAmount } = useSendStore.getState()
       setRecipient('')

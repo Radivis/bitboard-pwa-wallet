@@ -15,13 +15,19 @@ export async function fetchNwcChainTipBlockHeight(
   return info.block_height
 }
 
+export type LightningPaymentDirection = 'incoming' | 'outgoing'
+
 export interface LightningPayment {
   paymentHash: string
   pending: boolean
+  /** Absolute amount in satoshis (incoming or outgoing). */
   amountSats: number
   memo: string
   timestamp: number
   bolt11: string
+  direction: LightningPaymentDirection
+  /** Fee component in sats when reported by NWC (millisatoshis floored). */
+  feesPaidSats: number
 }
 
 export interface LightningBackendService {
@@ -114,6 +120,8 @@ function createNwcBackendService(
         memo: tx.description,
         timestamp: tx.created_at,
         bolt11: tx.invoice,
+        direction: tx.type,
+        feesPaidSats: msatsToSats(tx.fees_paid),
       }))
     },
 

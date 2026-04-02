@@ -65,6 +65,19 @@ vi.mock('@/lib/wallet-utils', () => ({
   runIncrementalDashboardWalletSync: vi.fn().mockResolvedValue(undefined),
 }))
 
+vi.mock('@/hooks/useLightningMutations', () => ({
+  useLightningHistoryQuery: () => ({
+    data: [] as unknown[],
+    isPending: false,
+  }),
+  useLightningBalancesForDashboardQuery: () => ({
+    data: undefined,
+    isPending: false,
+    isSuccess: false,
+  }),
+  useNavigatorOnline: () => true,
+}))
+
 import { DashboardPage } from '../wallet/index'
 
 describe('DashboardPage', () => {
@@ -141,10 +154,10 @@ describe('DashboardPage', () => {
     expect(screen.getByText('Syncing wallet...')).toBeInTheDocument()
   })
 
-  it('shows empty transaction message', () => {
+  it('shows empty activity message when there is no history', () => {
     renderWithProviders(<DashboardPage />)
     expect(
-      screen.getByText(/No transactions yet/),
+      screen.getByText(/No activity yet/),
     ).toBeInTheDocument()
   })
 

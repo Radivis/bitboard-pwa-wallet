@@ -157,6 +157,8 @@ describe('NWC backend service', () => {
         memo: 'Coffee',
         timestamp: 1700000000,
         bolt11: 'lntb...',
+        direction: 'incoming',
+        feesPaidSats: 0,
       })
       expect(payments[1]).toEqual({
         paymentHash: 'hash2',
@@ -165,6 +167,8 @@ describe('NWC backend service', () => {
         memo: 'Pizza',
         timestamp: 1700000050,
         bolt11: 'lntb2...',
+        direction: 'outgoing',
+        feesPaidSats: 1,
       })
     })
   })

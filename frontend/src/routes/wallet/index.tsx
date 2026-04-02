@@ -1,8 +1,9 @@
-import { useCallback } from 'react'
+import { useCallback, useMemo } from 'react'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import { Wallet, RefreshCw, Home } from 'lucide-react'
+import { Wallet, RefreshCw, Home, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useWalletStore, NETWORK_LABELS } from '@/stores/walletStore'
+import { useLightningStore } from '@/stores/lightningStore'
 import { useSessionStore } from '@/stores/sessionStore'
 import { PageHeader } from '@/components/PageHeader'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
@@ -16,6 +17,14 @@ import { formatBTC, formatSats } from '@/lib/bitcoin-utils'
 import { runIncrementalDashboardWalletSync } from '@/lib/wallet-utils'
 import { labTransactionsForWallet, walletOwnerKey } from '@/lib/lab-utils'
 import { useLabChainStateQuery } from '@/hooks/useLabChainStateQuery'
+import {
+  useLightningBalancesForDashboardQuery,
+  useLightningHistoryQuery,
+} from '@/hooks/useLightningMutations'
+import { useFeatureStore } from '@/stores/featureStore'
+import { isLightningSupported } from '@/lib/lightning-utils'
+import { mergeAndSortDashboardActivity } from '@/lib/lightning-dashboard-sync'
+import { LightningPaymentItem } from '@/components/LightningPaymentItem'
 
 export const Route = createFileRoute('/wallet/')({
   component: DashboardPage,
@@ -25,6 +34,9 @@ function BalanceCard() {
   const networkMode = useWalletStore((s) => s.networkMode)
   const balance = useWalletStore((s) => s.balance)
   const activeWalletId = useWalletStore((s) => s.activeWalletId)
+  const lightningEnabled = useFeatureStore((s) => s.lightningEnabled)
+  const connectedLightningWallets = useLightningStore((s) => s.connectedWallets)
+  const lnBalancesQuery = useLightningBalancesForDashboardQuery()
   const { data: labState, isPending: labChainPending } = useLabChainStateQuery()
   const utxos = labState?.utxos ?? []
   const addressToOwner = labState?.addressToOwner ?? {}
@@ -44,6 +56,33 @@ function BalanceCard() {
   const pendingSats =
     networkMode === 'lab' ? 0 : (balance?.trusted_pending ?? 0) + (balance?.untrusted_pending ?? 0)
 
+  const matchingLightningConnectionCount = useMemo(() => {
+    if (
+      !lightningEnabled ||
+      !isLightningSupported(networkMode) ||
+      activeWalletId == null
+    ) {
+      return 0
+    }
+    return connectedLightningWallets.filter(
+      (w) => w.walletId === activeWalletId && w.networkMode === networkMode,
+    ).length
+  }, [
+    lightningEnabled,
+    networkMode,
+    activeWalletId,
+    connectedLightningWallets,
+  ])
+
+  const showLightningBalances =
+    lightningEnabled &&
+    networkMode !== 'lab' &&
+    isLightningSupported(networkMode) &&
+    matchingLightningConnectionCount > 0
+
+  const lnTotalSats = lnBalancesQuery.data?.totalSats ?? 0
+  const lnPerWallet = lnBalancesQuery.data?.perWallet ?? []
+
   return (
     <InfomodeWrapper
       infoId="dashboard-balance-card"
@@ -61,19 +100,76 @@ function BalanceCard() {
             <Badge variant="outline">{NETWORK_LABELS[networkMode]}</Badge>
           </div>
         </CardHeader>
-        <CardContent>
-          <p className="text-3xl font-semibold tabular-nums">
-            {formatBTC(confirmedSats)}
-          </p>
-          <p className="mt-1 text-sm text-muted-foreground">BTC</p>
-          <p className="mt-2 text-lg tabular-nums text-muted-foreground">
-            {formatSats(confirmedSats)} sats
-          </p>
-          {pendingSats > 0 && (
-            <p className="mt-1 text-sm text-yellow-600 dark:text-yellow-400">
-              +{formatSats(pendingSats)} sats pending
+        <CardContent className="space-y-6">
+          <div>
+            <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              On-chain
             </p>
+            <p className="text-3xl font-semibold tabular-nums">
+              {formatBTC(confirmedSats)}
+            </p>
+            <p className="mt-1 text-sm text-muted-foreground">BTC</p>
+            <p className="mt-2 text-lg tabular-nums text-muted-foreground">
+              {formatSats(confirmedSats)} sats
+            </p>
+            {pendingSats > 0 && (
+              <p className="mt-1 text-sm text-yellow-600 dark:text-yellow-400">
+                +{formatSats(pendingSats)} sats pending
+              </p>
+            )}
+          </div>
+
+          {showLightningBalances && lnBalancesQuery.isPending && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Loading Lightning balances…
+            </div>
           )}
+
+          {showLightningBalances &&
+            lnBalancesQuery.isSuccess &&
+            lnPerWallet.length > 0 && (
+              <div>
+                <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Lightning (NWC)
+                </p>
+                <p className="text-2xl font-semibold tabular-nums">
+                  {formatBTC(lnTotalSats)}
+                </p>
+                <p className="mt-1 text-sm text-muted-foreground">BTC total</p>
+                <p className="mt-1 text-base tabular-nums text-muted-foreground">
+                  {formatSats(lnTotalSats)} sats
+                </p>
+                {lnPerWallet.length > 1 && (
+                  <ul className="mt-3 space-y-1.5 border-t border-border pt-3 text-sm">
+                    {lnPerWallet.map((row) => (
+                      <li
+                        key={row.connectionId}
+                        className="flex justify-between gap-2 text-muted-foreground"
+                      >
+                        <span className="min-w-0 truncate">{row.label}</span>
+                        <span className="shrink-0 tabular-nums">
+                          {row.error != null ? (
+                            <span className="text-amber-600 dark:text-amber-400">
+                              —
+                            </span>
+                          ) : (
+                            formatSats(row.balanceSats)
+                          )}{' '}
+                          sats
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {lnPerWallet.some((r) => r.error != null) && (
+                  <p className="mt-2 text-xs text-amber-700 dark:text-amber-400">
+                    Some Lightning wallets could not be reached; totals include
+                    only successful responses.
+                  </p>
+                )}
+              </div>
+            )}
         </CardContent>
       </Card>
     </InfomodeWrapper>
@@ -129,6 +225,8 @@ function RecentTransactions() {
   const networkMode = useWalletStore((s) => s.networkMode)
   const transactions = useWalletStore((s) => s.transactions)
   const activeWalletId = useWalletStore((s) => s.activeWalletId)
+  const lightningEnabled = useFeatureStore((s) => s.lightningEnabled)
+  const lnHistoryQuery = useLightningHistoryQuery()
   const { data: labState, isPending: labChainPending } = useLabChainStateQuery()
   const labTransactions = labState?.transactions ?? []
   const labTxDetails = labState?.txDetails ?? []
@@ -145,6 +243,29 @@ function RecentTransactions() {
 
   const displayTransactions =
     networkMode === 'lab' ? labTransactionsForActiveWallet : transactions
+
+  const mergedActivity = useMemo(() => {
+    if (networkMode === 'lab') {
+      return []
+    }
+    if (
+      !lightningEnabled ||
+      !isLightningSupported(networkMode) ||
+      activeWalletId == null
+    ) {
+      return mergeAndSortDashboardActivity(transactions, [])
+    }
+    return mergeAndSortDashboardActivity(
+      transactions,
+      lnHistoryQuery.data ?? [],
+    )
+  }, [
+    networkMode,
+    lightningEnabled,
+    activeWalletId,
+    transactions,
+    lnHistoryQuery.data,
+  ])
 
   if (networkMode === 'lab' && !labChainReady) {
     return (
@@ -170,22 +291,49 @@ function RecentTransactions() {
         </div>
       </CardHeader>
       <CardContent>
-        {displayTransactions.length === 0 ? (
+        {networkMode !== 'lab' && lnHistoryQuery.isPending && (
+          <p className="mb-3 flex items-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Loading Lightning activity…
+          </p>
+        )}
+        {networkMode !== 'lab' && mergedActivity.length === 0 ? (
           <div className="flex flex-col items-center gap-3 py-8 text-center">
             <div className="rounded-full bg-muted p-3">
               <Wallet className="h-6 w-6 text-muted-foreground" />
             </div>
             <p className="text-sm text-muted-foreground">
-              {networkMode === 'lab'
-                ? 'No transactions yet. Mine blocks or send to see activity.'
-                : 'No transactions yet. Sync your wallet to see activity.'}
+              No activity yet. On-chain transactions appear after you sync;
+              Lightning payments appear when your NWC wallet reports them.
             </p>
           </div>
-        ) : (
+        ) : networkMode === 'lab' && displayTransactions.length === 0 ? (
+          <div className="flex flex-col items-center gap-3 py-8 text-center">
+            <div className="rounded-full bg-muted p-3">
+              <Wallet className="h-6 w-6 text-muted-foreground" />
+            </div>
+            <p className="text-sm text-muted-foreground">
+              No transactions yet. Mine blocks or send to see activity.
+            </p>
+          </div>
+        ) : networkMode === 'lab' ? (
           <div className="space-y-2">
             {displayTransactions.slice(0, 10).map((tx) => (
               <TransactionItem key={tx.txid} transaction={tx} />
             ))}
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {mergedActivity.slice(0, 10).map((item) =>
+              item.kind === 'chain' ? (
+                <TransactionItem key={item.tx.txid} transaction={item.tx} />
+              ) : (
+                <LightningPaymentItem
+                  key={item.payment.paymentHash}
+                  payment={item.payment}
+                />
+              ),
+            )}
           </div>
         )}
       </CardContent>
