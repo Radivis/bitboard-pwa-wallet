@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'vitest'
-import { mergeAndSortDashboardActivity } from '@/lib/lightning-dashboard-sync'
+import {
+  mergeAndSortDashboardActivity,
+  type LightningPaymentWithWallet,
+} from '@/lib/lightning-dashboard-sync'
 import type { TransactionDetails } from '@/workers/crypto-types'
-import type { LightningPayment } from '@/lib/lightning-backend-service'
 
 const chainOlder: TransactionDetails = {
   txid: 'aa',
@@ -23,7 +25,7 @@ const chainNewer: TransactionDetails = {
   is_confirmed: true,
 }
 
-const lnMiddle: LightningPayment = {
+const lnMiddle: LightningPaymentWithWallet = {
   paymentHash: 'ln1',
   pending: false,
   amountSats: 50,
@@ -32,6 +34,8 @@ const lnMiddle: LightningPayment = {
   bolt11: 'lntb',
   direction: 'incoming',
   feesPaidSats: 0,
+  connectionId: 'conn-1',
+  walletLabel: 'Test LN Wallet',
 }
 
 describe('mergeAndSortDashboardActivity', () => {

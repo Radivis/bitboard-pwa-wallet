@@ -133,6 +133,15 @@ function BalanceCard() {
                 <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
                   Lightning (NWC)
                 </p>
+                {lnPerWallet.length === 1 ? (
+                  <p className="mb-3 text-sm font-semibold text-foreground">
+                    {lnPerWallet[0].label}
+                  </p>
+                ) : (
+                  <p className="mb-3 text-xs text-muted-foreground">
+                    Total across {lnPerWallet.length} connected wallets
+                  </p>
+                )}
                 <p className="text-2xl font-semibold tabular-nums">
                   {formatBTC(lnTotalSats)}
                 </p>
@@ -140,28 +149,28 @@ function BalanceCard() {
                 <p className="mt-1 text-base tabular-nums text-muted-foreground">
                   {formatSats(lnTotalSats)} sats
                 </p>
-                {lnPerWallet.length > 1 && (
-                  <ul className="mt-3 space-y-1.5 border-t border-border pt-3 text-sm">
-                    {lnPerWallet.map((row) => (
-                      <li
-                        key={row.connectionId}
-                        className="flex justify-between gap-2 text-muted-foreground"
-                      >
-                        <span className="min-w-0 truncate">{row.label}</span>
-                        <span className="shrink-0 tabular-nums">
-                          {row.error != null ? (
-                            <span className="text-amber-600 dark:text-amber-400">
-                              —
-                            </span>
-                          ) : (
-                            formatSats(row.balanceSats)
-                          )}{' '}
-                          sats
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
+                <ul className="mt-3 space-y-1.5 border-t border-border pt-3 text-sm">
+                  {lnPerWallet.map((row) => (
+                    <li
+                      key={row.connectionId}
+                      className="flex justify-between gap-2"
+                    >
+                      <span className="min-w-0 truncate font-medium text-foreground">
+                        {row.label}
+                      </span>
+                      <span className="shrink-0 tabular-nums text-muted-foreground">
+                        {row.error != null ? (
+                          <span className="text-amber-600 dark:text-amber-400">
+                            —
+                          </span>
+                        ) : (
+                          formatSats(row.balanceSats)
+                        )}{' '}
+                        sats
+                      </span>
+                    </li>
+                  ))}
+                </ul>
                 {lnPerWallet.some((r) => r.error != null) && (
                   <p className="mt-2 text-xs text-amber-700 dark:text-amber-400">
                     Some Lightning wallets could not be reached; totals include
@@ -329,7 +338,7 @@ function RecentTransactions() {
                 <TransactionItem key={item.tx.txid} transaction={item.tx} />
               ) : (
                 <LightningPaymentItem
-                  key={item.payment.paymentHash}
+                  key={`${item.payment.connectionId}-${item.payment.paymentHash}`}
                   payment={item.payment}
                 />
               ),

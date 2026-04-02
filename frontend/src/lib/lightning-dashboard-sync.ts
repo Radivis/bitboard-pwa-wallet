@@ -66,13 +66,19 @@ export interface LightningBalancesResult {
   totalSats: number
 }
 
+/** NWC payment row plus the Bitboard connection label that reported it. */
+export type LightningPaymentWithWallet = LightningPayment & {
+  connectionId: string
+  walletLabel: string
+}
+
 /**
  * Fetches merged NWC payment history for all Lightning connections matching the
- * active wallet and current network. Dedupes by `payment_hash`. Partial failures
- * omit that connection’s rows but do not throw.
+ * active wallet and current network. Dedupes by `payment_hash` (first connection
+ * wins). Partial failures omit that connection’s rows but do not throw.
  */
 export async function fetchLightningPaymentsForActiveWallet(): Promise<
-  LightningPayment[]
+  LightningPaymentWithWallet[]
 > {
   if (typeof navigator !== 'undefined' && !navigator.onLine) {
     return []
@@ -83,7 +89,7 @@ export async function fetchLightningPaymentsForActiveWallet(): Promise<
     return []
   }
 
-  const byHash = new Map<string, LightningPayment>()
+  const byHash = new Map<string, LightningPaymentWithWallet>()
 
   for (const conn of matches) {
     try {
@@ -91,7 +97,11 @@ export async function fetchLightningPaymentsForActiveWallet(): Promise<
       const payments = await service.listPayments()
       for (const p of payments) {
         if (!byHash.has(p.paymentHash)) {
-          byHash.set(p.paymentHash, p)
+          byHash.set(p.paymentHash, {
+            ...p,
+            connectionId: conn.id,
+            walletLabel: conn.label,
+          })
         }
       }
     } catch {
@@ -157,7 +167,7 @@ export async function fetchLightningBalancesForDashboard(): Promise<LightningBal
 
 export type DashboardActivityItem =
   | { kind: 'chain'; tx: TransactionDetails }
-  | { kind: 'lightning'; payment: LightningPayment }
+  | { kind: 'lightning'; payment: LightningPaymentWithWallet }
 
 function chainSortTime(tx: TransactionDetails): number {
   if (tx.confirmation_time != null) {
@@ -166,7 +176,7 @@ function chainSortTime(tx: TransactionDetails): number {
   return 0
 }
 
-function lightningSortTime(p: LightningPayment): number {
+function lightningSortTime(p: LightningPaymentWithWallet): number {
   return p.timestamp
 }
 
@@ -175,7 +185,7 @@ function lightningSortTime(p: LightningPayment): number {
  */
 export function mergeAndSortDashboardActivity(
   onChain: TransactionDetails[],
-  lightning: LightningPayment[],
+  lightning: LightningPaymentWithWallet[],
 ): DashboardActivityItem[] {
   const items: DashboardActivityItem[] = [
     ...onChain.map((tx) => ({ kind: 'chain' as const, tx })),

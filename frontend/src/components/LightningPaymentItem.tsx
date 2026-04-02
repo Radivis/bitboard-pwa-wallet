@@ -1,12 +1,12 @@
 import { useState } from 'react'
 import { ArrowDownLeft, ArrowUpRight, BadgeCheck, Clock, Zap } from 'lucide-react'
 import { formatDistanceToNow, format } from 'date-fns'
-import type { LightningPayment } from '@/lib/lightning-backend-service'
+import type { LightningPaymentWithWallet } from '@/lib/lightning-dashboard-sync'
 import { formatBTC, formatSats } from '@/lib/bitcoin-utils'
 import { cn } from '@/lib/utils'
 
 interface LightningPaymentItemProps {
-  payment: LightningPayment
+  payment: LightningPaymentWithWallet
 }
 
 export function LightningPaymentItem({ payment }: LightningPaymentItemProps) {
@@ -19,7 +19,7 @@ export function LightningPaymentItem({ payment }: LightningPaymentItemProps) {
 
   return (
     <div
-      data-testid={`ln-payment-${payment.paymentHash}`}
+      data-testid={`ln-payment-${payment.connectionId}-${payment.paymentHash}`}
       className="cursor-pointer rounded-lg border border-border p-3 transition-colors hover:bg-muted/50"
       onClick={() => setExpanded(!expanded)}
     >
@@ -48,6 +48,9 @@ export function LightningPaymentItem({ payment }: LightningPaymentItemProps) {
               LN
             </span>
           </div>
+          <p className="truncate text-xs font-medium text-muted-foreground">
+            {payment.walletLabel}
+          </p>
           <button
             type="button"
             className="text-xs text-muted-foreground hover:underline"
@@ -88,6 +91,12 @@ export function LightningPaymentItem({ payment }: LightningPaymentItemProps) {
 
       {expanded && (
         <div className="mt-3 space-y-1 border-t pt-3 text-xs text-muted-foreground">
+          <div className="flex justify-between">
+            <span>Lightning wallet</span>
+            <span className="max-w-[180px] truncate text-right font-medium text-foreground">
+              {payment.walletLabel}
+            </span>
+          </div>
           <div className="flex justify-between">
             <span>Payment hash</span>
             <span className="max-w-[180px] truncate font-mono text-[10px]">
