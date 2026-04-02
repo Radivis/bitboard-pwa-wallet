@@ -221,9 +221,32 @@ function ConnectWalletForm({ onConnected }: { onConnected: () => void }) {
                 NWC
               </Button>
             </InfomodeWrapper>
-            <Button variant="outline" size="sm" className="flex-1" disabled>
-              App-internal node (coming soon)
-            </Button>
+            <InfomodeWrapper
+              infoId="connect-lightning-app-internal-type"
+              infoTitle="App-internal Lightning (planned)"
+              infoText="This mode will implement a fully Bitboard-internal Lightning wallet: channels and keys live in the app instead of an external wallet over NWC. That can be a simple way to get started with everything in one place, but the caveats are serious. Lightning requires you to react to certain on-chain events in time; without connecting to a watchtower service that monitors the chain on your behalf, you would need to log into Bitboard on your own about once a day to review and act on time-critical transactions—until watchtower support exists or you use another connection mode."
+              className="min-w-0 flex-1"
+            >
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full"
+                type="button"
+                disabled={!isInfomodeActive}
+                aria-label={
+                  isInfomodeActive
+                    ? 'App-internal node (coming soon) — open explanation'
+                    : 'App-internal node (turn on Infomode in the header for details)'
+                }
+                title={
+                  isInfomodeActive
+                    ? 'Planned: in-app Lightning wallet — tap for risks and expectations'
+                    : 'Turn on Infomode (header) to read about the planned app-internal mode'
+                }
+              >
+                App-internal node (coming soon)
+              </Button>
+            </InfomodeWrapper>
           </div>
         </div>
 
@@ -365,7 +388,7 @@ export function LightningWallets() {
     <InfomodeWrapper
       infoId="management-lightning-wallets-card"
       infoTitle="Connected Lightning wallets"
-      infoText="A connected Lightning wallet lets you send and receive Lightning payments. It uses Nostr Wallet Connect (NWC) to link your Bitboard wallet to any compatible Lightning wallet. Your Lightning wallet manages channels and routing for you, so you can focus on sending and receiving. You can connect multiple Lightning wallets and switch between them. With Infomode on, tap the NWC type control in Connect Lightning Wallet to open a short guide with links to Library articles on popular NWC wallets."
+      infoText="A connected Lightning wallet lets you send and receive Lightning payments. It uses Nostr Wallet Connect (NWC) to link your Bitboard wallet to any compatible Lightning wallet. Your Lightning wallet manages channels and routing for you, so you can focus on sending and receiving. You can connect multiple Lightning wallets and switch between them. With Infomode on, tap the NWC type control in Connect Lightning Wallet to open a short guide with links to Library articles on popular NWC wallets, or tap App-internal node (coming soon) to read about the planned in-app Lightning mode and its risks."
       className="rounded-xl"
     >
       <Card>
