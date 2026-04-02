@@ -5,8 +5,12 @@ import {
   useEffect,
   useRef,
   useState,
+  type Dispatch,
   type ReactNode,
+  type SetStateAction,
 } from 'react'
+import type { AnyRouter } from '@tanstack/router-core'
+import { useRouter, useRouterState } from '@tanstack/react-router'
 import { useInfomodeStore } from '@/stores/infomodeStore'
 import { InfomodePopup } from '@/components/infomode/InfomodePopup'
 import type { InfomodeRegistryEntry } from '@/components/infomode/infomode-types'
@@ -32,13 +36,76 @@ interface InfomodeProviderProps {
   children: ReactNode
 }
 
+type PopupState = {
+  anchorElement: HTMLElement
+  infoId: string
+} | null
+
+/**
+ * When TanStack Router is available, close the Infomode popup whenever the
+ * location changes (e.g. user followed a link inside the popup). If the popup
+ * was open, also turn Infomode off so the user is not left in "explain" mode
+ * after navigating away (e.g. to the Library).
+ */
+function InfomodeCloseOnNavigateIfRouter({
+  setPopupState,
+  popupOpen,
+}: {
+  setPopupState: Dispatch<SetStateAction<PopupState>>
+  popupOpen: boolean
+}) {
+  const router = useRouter({ warn: false })
+  if (!router) {
+    return null
+  }
+  return (
+    <InfomodeCloseOnNavigate
+      router={router}
+      setPopupState={setPopupState}
+      popupOpen={popupOpen}
+    />
+  )
+}
+
+function InfomodeCloseOnNavigate({
+  router,
+  setPopupState,
+  popupOpen,
+}: {
+  router: AnyRouter
+  setPopupState: Dispatch<SetStateAction<PopupState>>
+  popupOpen: boolean
+}) {
+  const setInfomodeActive = useInfomodeStore((s) => s.setInfomodeActive)
+  const locationKey = useRouterState({
+    router,
+    select: (s) =>
+      `${s.location.pathname}${s.location.search}${s.location.hash}`,
+  })
+
+  const previousLocationKeyRef = useRef<string | null>(null)
+
+  useEffect(() => {
+    if (previousLocationKeyRef.current === null) {
+      previousLocationKeyRef.current = locationKey
+      return
+    }
+    if (previousLocationKeyRef.current !== locationKey) {
+      previousLocationKeyRef.current = locationKey
+      if (popupOpen) {
+        setInfomodeActive(false)
+      }
+      setPopupState(null)
+    }
+  }, [locationKey, popupOpen, setInfomodeActive, setPopupState])
+
+  return null
+}
+
 export function InfomodeProvider({ children }: InfomodeProviderProps) {
   const isActive = useInfomodeStore((state) => state.isActive)
   const registryRef = useRef(new Map<string, InfomodeRegistryEntry>())
-  const [popupState, setPopupState] = useState<{
-    anchorElement: HTMLElement
-    infoId: string
-  } | null>(null)
+  const [popupState, setPopupState] = useState<PopupState>(null)
 
   const register = useCallback((infoId: string, entry: InfomodeRegistryEntry) => {
     registryRef.current.set(infoId, entry)
@@ -106,6 +173,10 @@ export function InfomodeProvider({ children }: InfomodeProviderProps) {
 
   return (
     <InfomodeRegistryContext.Provider value={{ register }}>
+      <InfomodeCloseOnNavigateIfRouter
+        setPopupState={setPopupState}
+        popupOpen={popupState !== null}
+      />
       {children}
       <InfomodePopup
         open={popupState !== null && activeEntry !== null}
