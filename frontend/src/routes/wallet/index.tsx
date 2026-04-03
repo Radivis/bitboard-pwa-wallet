@@ -17,6 +17,7 @@ import { WalletUnlock } from '@/components/WalletUnlock'
 import { TransactionItem } from '@/components/TransactionItem'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { formatBTC, formatSats } from '@/lib/bitcoin-utils'
+import { balanceInfoToOnChainDisplay } from '@/lib/onchain-balance-display'
 import { runIncrementalDashboardWalletSync } from '@/lib/wallet-utils'
 import { labTransactionsForWallet, walletOwnerKey } from '@/lib/lab-utils'
 import { useLabChainStateQuery } from '@/hooks/useLabChainStateQuery'
@@ -52,12 +53,19 @@ function BalanceCard() {
           .reduce((sum, u) => sum + u.amountSats, 0)
       : null
 
-  const confirmedSats =
+  const onChainDisplay =
     networkMode === 'lab' && labBalanceSats !== null
-      ? labBalanceSats
-      : balance?.confirmed ?? 0
-  const pendingSats =
-    networkMode === 'lab' ? 0 : (balance?.trusted_pending ?? 0) + (balance?.untrusted_pending ?? 0)
+      ? {
+          showBreakdown: false,
+          totalSats: labBalanceSats,
+          confirmedSats: labBalanceSats,
+          trustedPendingSats: 0,
+          untrustedPendingSats: 0,
+          immatureSats: 0,
+        }
+      : balanceInfoToOnChainDisplay(balance)
+
+  const primarySats = onChainDisplay.totalSats
 
   const hasMatchingLightningConnection = useMemo(
     () =>
@@ -85,7 +93,7 @@ function BalanceCard() {
     <InfomodeWrapper
       infoId="dashboard-balance-card"
       infoTitle="Balance"
-      infoText="This is how much Bitcoin this wallet can spend on the network shown in the badge. The main figure is confirmed balance (deeply settled on-chain in normal use). If you see “pending,” some value is still clearing—often change or a recent payment not yet fully confirmed. On Lab mode, this total comes from the simulator’s coins tied to your wallet instead of the live Esplora-backed ledger."
+      infoText="This is your on-chain Bitcoin on the network shown in the badge. The headline is your total balance (everything the wallet counts toward that total). When something is still unconfirmed, you may see a breakdown: spendable (settled in a block), pending change (value returning from a send you made), and pending incoming (someone else’s payment to you not yet confirmed). Immature appears rarely (e.g. mining rewards before they mature). On Lab mode, the total comes from the simulator’s coins tied to your wallet instead of the live Esplora-backed ledger."
       className="rounded-xl"
     >
       <Card>
@@ -104,16 +112,41 @@ function BalanceCard() {
               On-chain
             </p>
             <p className="text-3xl font-semibold tabular-nums">
-              {formatBTC(confirmedSats)}
+              {formatBTC(primarySats)}
             </p>
             <p className="mt-1 text-sm text-muted-foreground">BTC</p>
             <p className="mt-2 text-lg tabular-nums text-muted-foreground">
-              {formatSats(confirmedSats)} sats
+              {formatSats(primarySats)} sats
             </p>
-            {pendingSats > 0 && (
-              <p className="mt-1 text-sm text-yellow-600 dark:text-yellow-400">
-                +{formatSats(pendingSats)} sats pending
-              </p>
+            {onChainDisplay.showBreakdown && (
+              <ul className="mt-3 space-y-1.5 text-sm">
+                {onChainDisplay.confirmedSats > 0 && (
+                  <li className="flex justify-between gap-2 tabular-nums text-muted-foreground">
+                    <span>Spendable (settled)</span>
+                    <span>{formatSats(onChainDisplay.confirmedSats)} sats</span>
+                  </li>
+                )}
+                {onChainDisplay.trustedPendingSats > 0 && (
+                  <li className="flex justify-between gap-2 tabular-nums text-yellow-600 dark:text-yellow-400">
+                    <span>Pending change</span>
+                    <span>{formatSats(onChainDisplay.trustedPendingSats)} sats</span>
+                  </li>
+                )}
+                {onChainDisplay.untrustedPendingSats > 0 && (
+                  <li className="flex justify-between gap-2 tabular-nums text-yellow-600 dark:text-yellow-400">
+                    <span>Pending incoming</span>
+                    <span>
+                      {formatSats(onChainDisplay.untrustedPendingSats)} sats
+                    </span>
+                  </li>
+                )}
+                {onChainDisplay.immatureSats > 0 && (
+                  <li className="flex justify-between gap-2 tabular-nums text-muted-foreground">
+                    <span>Immature</span>
+                    <span>{formatSats(onChainDisplay.immatureSats)} sats</span>
+                  </li>
+                )}
+              </ul>
             )}
           </div>
 

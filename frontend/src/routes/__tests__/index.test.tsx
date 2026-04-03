@@ -122,7 +122,7 @@ describe('DashboardPage', () => {
     expect(screen.getByText('100,000 sats')).toBeInTheDocument()
   })
 
-  it('shows pending sats when pending > 0', () => {
+  it('shows on-chain breakdown when pending components are non-zero', () => {
     walletStoreState.balance = {
       confirmed: 100_000,
       trusted_pending: 5_000,
@@ -131,7 +131,11 @@ describe('DashboardPage', () => {
       total: 108_000,
     }
     renderWithProviders(<DashboardPage />)
-    expect(screen.getByText(/8,000 sats pending/)).toBeInTheDocument()
+    expect(screen.getByText('0.00108000')).toBeInTheDocument()
+    expect(screen.getByText('108,000 sats')).toBeInTheDocument()
+    expect(screen.getByText('Spendable (settled)')).toBeInTheDocument()
+    expect(screen.getByText('Pending change')).toBeInTheDocument()
+    expect(screen.getByText('Pending incoming')).toBeInTheDocument()
   })
 
   it('shows network badge', () => {
