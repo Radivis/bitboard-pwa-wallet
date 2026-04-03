@@ -1,16 +1,16 @@
 import type { TransactionDetails } from '@/workers/crypto-types'
 import { useWalletStore } from '@/stores/walletStore'
-import { useLightningStore } from '@/stores/lightningStore'
+import {
+  hasNetworkConnectedWallet,
+  useLightningStore,
+} from '@/stores/lightningStore'
 import { useFeatureStore } from '@/stores/featureStore'
 import {
   createBackendService,
   type ConnectedLightningWallet,
   type LightningPayment,
 } from '@/lib/lightning-backend-service'
-import {
-  isLightningSupported,
-  type LightningNetworkMode,
-} from '@/lib/lightning-utils'
+import type { LightningNetworkMode } from '@/lib/lightning-utils'
 import { appQueryClient } from '@/lib/app-query-client'
 
 /** React Query key prefix for dashboard Lightning data (invalidate all with `['lightning-dashboard']`). */
@@ -42,8 +42,8 @@ export function getMatchingLightningConnectionsForDashboard(): ConnectedLightnin
 
   if (
     !lightningEnabled ||
-    !isLightningSupported(networkMode) ||
-    activeWalletId == null
+    activeWalletId == null ||
+    !hasNetworkConnectedWallet(connectedWallets, activeWalletId, networkMode)
   ) {
     return []
   }

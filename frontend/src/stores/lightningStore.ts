@@ -16,6 +16,24 @@ import {
 import { useWalletStore } from '@/stores/walletStore'
 import type { NetworkMode } from '@/stores/walletStore'
 
+/**
+ * Whether the given Bitcoin wallet has at least one Lightning connection for the
+ * app’s current chain mode (e.g. Signet). Lab and unsupported modes yield false.
+ */
+export function hasNetworkConnectedWallet(
+  connectedWallets: ConnectedLightningWallet[],
+  walletId: number | null | undefined,
+  networkMode: NetworkMode,
+): boolean {
+  if (walletId == null || !isLightningSupported(networkMode)) {
+    return false
+  }
+  const lnMode = networkMode as LightningNetworkMode
+  return connectedWallets.some(
+    (w) => w.walletId === walletId && w.networkMode === lnMode,
+  )
+}
+
 export type { ConnectedLightningWallet, LightningConnectionConfig }
 export type { NwcConnectionConfig, LightningWalletType } from '@/lib/lightning-backend-service'
 export type { LightningNetworkMode } from '@/lib/lightning-utils'
@@ -57,6 +75,12 @@ interface LightningState {
     walletId: number,
     networkMode: NetworkMode,
   ) => ConnectedLightningWallet | null
+
+  /** @see {@link hasNetworkConnectedWallet} */
+  hasNetworkConnectedWallet: (
+    walletId: number,
+    networkMode: NetworkMode,
+  ) => boolean
 
   createInvoice: (params: {
     amountSats: number
@@ -166,6 +190,9 @@ export const useLightningStore = create<LightningState>()(
         if (!conn || conn.networkMode !== lnMode) return null
         return conn
       },
+
+      hasNetworkConnectedWallet: (walletId, networkMode) =>
+        hasNetworkConnectedWallet(get().connectedWallets, walletId, networkMode),
 
       createInvoice: async ({
         amountSats,

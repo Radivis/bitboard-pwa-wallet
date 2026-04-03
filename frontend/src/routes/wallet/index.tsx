@@ -3,7 +3,10 @@ import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { Wallet, RefreshCw, Home, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useWalletStore, NETWORK_LABELS } from '@/stores/walletStore'
-import { useLightningStore } from '@/stores/lightningStore'
+import {
+  hasNetworkConnectedWallet,
+  useLightningStore,
+} from '@/stores/lightningStore'
 import { useSessionStore } from '@/stores/sessionStore'
 import { PageHeader } from '@/components/PageHeader'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
@@ -56,29 +59,24 @@ function BalanceCard() {
   const pendingSats =
     networkMode === 'lab' ? 0 : (balance?.trusted_pending ?? 0) + (balance?.untrusted_pending ?? 0)
 
-  const matchingLightningConnectionCount = useMemo(() => {
-    if (
-      !lightningEnabled ||
-      !isLightningSupported(networkMode) ||
-      activeWalletId == null
-    ) {
-      return 0
-    }
-    return connectedLightningWallets.filter(
-      (w) => w.walletId === activeWalletId && w.networkMode === networkMode,
-    ).length
-  }, [
-    lightningEnabled,
-    networkMode,
-    activeWalletId,
-    connectedLightningWallets,
-  ])
+  const hasMatchingLightningConnection = useMemo(
+    () =>
+      lightningEnabled &&
+      networkMode !== 'lab' &&
+      hasNetworkConnectedWallet(
+        connectedLightningWallets,
+        activeWalletId,
+        networkMode,
+      ),
+    [
+      lightningEnabled,
+      networkMode,
+      activeWalletId,
+      connectedLightningWallets,
+    ],
+  )
 
-  const showLightningBalances =
-    lightningEnabled &&
-    networkMode !== 'lab' &&
-    isLightningSupported(networkMode) &&
-    matchingLightningConnectionCount > 0
+  const showLightningBalances = hasMatchingLightningConnection
 
   const lnTotalSats = lnBalancesQuery.data?.totalSats ?? 0
   const lnPerWallet = lnBalancesQuery.data?.perWallet ?? []
@@ -235,6 +233,16 @@ function RecentTransactions() {
   const transactions = useWalletStore((s) => s.transactions)
   const activeWalletId = useWalletStore((s) => s.activeWalletId)
   const lightningEnabled = useFeatureStore((s) => s.lightningEnabled)
+  const connectedLightningWallets = useLightningStore((s) => s.connectedWallets)
+  const hasLnWalletForNetwork = useMemo(
+    () =>
+      hasNetworkConnectedWallet(
+        connectedLightningWallets,
+        activeWalletId,
+        networkMode,
+      ),
+    [connectedLightningWallets, activeWalletId, networkMode],
+  )
   const lnHistoryQuery = useLightningHistoryQuery()
   const { data: labState, isPending: labChainPending } = useLabChainStateQuery()
   const labTransactions = labState?.transactions ?? []
@@ -260,7 +268,8 @@ function RecentTransactions() {
     if (
       !lightningEnabled ||
       !isLightningSupported(networkMode) ||
-      activeWalletId == null
+      activeWalletId == null ||
+      !hasLnWalletForNetwork
     ) {
       return mergeAndSortDashboardActivity(transactions, [])
     }
@@ -272,6 +281,7 @@ function RecentTransactions() {
     networkMode,
     lightningEnabled,
     activeWalletId,
+    hasLnWalletForNetwork,
     transactions,
     lnHistoryQuery.data,
   ])
@@ -300,7 +310,10 @@ function RecentTransactions() {
         </div>
       </CardHeader>
       <CardContent>
-        {networkMode !== 'lab' && lnHistoryQuery.isPending && (
+        {networkMode !== 'lab' &&
+          lightningEnabled &&
+          hasLnWalletForNetwork &&
+          lnHistoryQuery.isLoading && (
           <p className="mb-3 flex items-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" />
             Loading Lightning activity…
