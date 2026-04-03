@@ -19,6 +19,7 @@ import {
   DEFAULT_INVOICE_EXPIRY_SECONDS,
   formatSatsCompact,
 } from '@/lib/lightning-utils'
+import { MAX_LIGHTNING_INVOICE_DESCRIPTION_LENGTH } from '@/lib/lightning-input-limits'
 
 function InvoiceQrDisplay({ invoice }: { invoice: LightningInvoice }) {
   const expiryLabel =
@@ -188,6 +189,7 @@ function InvoiceCreateForm({ onCreated }: { onCreated: () => void }) {
               <Input
                 id="invoice-description"
                 value={description}
+                maxLength={MAX_LIGHTNING_INVOICE_DESCRIPTION_LENGTH}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="What is this payment for?"
               />

@@ -1,4 +1,5 @@
 import { NWCClient } from '@getalby/sdk'
+import { MAX_NWC_CONNECTION_STRING_LENGTH } from '@/lib/lightning-input-limits'
 import type { LightningNetworkMode } from '@/lib/lightning-utils'
 
 /** NWC `get_info` chain tip — used to compare against Esplora for the same network. */
@@ -80,7 +81,11 @@ export interface ConnectedLightningWallet {
 const NWC_CONNECTION_STRING_PREFIX = 'nostr+walletconnect://'
 
 export function isValidNwcConnectionString(value: string): boolean {
-  return value.startsWith(NWC_CONNECTION_STRING_PREFIX)
+  const v = value.trim()
+  return (
+    v.startsWith(NWC_CONNECTION_STRING_PREFIX) &&
+    v.length <= MAX_NWC_CONNECTION_STRING_LENGTH
+  )
 }
 
 function msatsToSats(msats: number): number {

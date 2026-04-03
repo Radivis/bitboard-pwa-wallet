@@ -18,6 +18,7 @@ vi.mock('@getalby/sdk', () => {
   }
 })
 
+import { MAX_NWC_CONNECTION_STRING_LENGTH } from '../lightning-input-limits'
 import {
   createBackendService,
   fetchNwcChainTipBlockHeight,
@@ -271,5 +272,11 @@ describe('isValidNwcConnectionString', () => {
     expect(isValidNwcConnectionString('https://demo.lnbits.com')).toBe(false)
     expect(isValidNwcConnectionString('nostr://something')).toBe(false)
     expect(isValidNwcConnectionString('')).toBe(false)
+  })
+
+  it('rejects strings over max length', () => {
+    const base = 'nostr+walletconnect://x'
+    const padding = 'a'.repeat(MAX_NWC_CONNECTION_STRING_LENGTH - base.length + 1)
+    expect(isValidNwcConnectionString(base + padding)).toBe(false)
   })
 })

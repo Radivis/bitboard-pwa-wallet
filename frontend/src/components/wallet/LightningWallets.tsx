@@ -18,6 +18,10 @@ import {
 } from '@/hooks/useLightningMutations'
 import { Link } from '@tanstack/react-router'
 import { isValidNwcConnectionString } from '@/lib/lightning-backend-service'
+import {
+  MAX_LIGHTNING_WALLET_LABEL_LENGTH,
+  MAX_NWC_CONNECTION_STRING_LENGTH,
+} from '@/lib/lightning-input-limits'
 import type { ConnectedLightningWallet } from '@/lib/lightning-backend-service'
 import {
   LIGHTNING_NETWORK_MODES,
@@ -153,23 +157,27 @@ function ConnectWalletForm({ onConnected }: { onConnected: () => void }) {
     }
   }, [canTest, connectionString, testMutation, label])
 
-  const handleSave = useCallback(() => {
+  const handleSave = useCallback(async () => {
     if (!canSave || activeWalletId == null) return
-    addConnection({
-      walletId: activeWalletId,
-      label: label.trim(),
-      networkMode: lnNetwork,
-      config: {
-        type: 'nwc',
-        connectionString: connectionString.trim(),
-      },
-    })
-    toast.success(`Lightning wallet "${label.trim()}" connected`)
-    setLabel('')
-    setConnectionString('')
-    setLnNetwork(defaultLightningNetworkForAppMode(appNetworkMode))
-    testMutation.reset()
-    onConnected()
+    try {
+      await addConnection({
+        walletId: activeWalletId,
+        label: label.trim(),
+        networkMode: lnNetwork,
+        config: {
+          type: 'nwc',
+          connectionString: connectionString.trim(),
+        },
+      })
+      toast.success(`Lightning wallet "${label.trim()}" connected`)
+      setLabel('')
+      setConnectionString('')
+      setLnNetwork(defaultLightningNetworkForAppMode(appNetworkMode))
+      testMutation.reset()
+      onConnected()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to save Lightning connection')
+    }
   }, [
     canSave,
     activeWalletId,
@@ -280,6 +288,7 @@ function ConnectWalletForm({ onConnected }: { onConnected: () => void }) {
           <Input
             id="nwc-connection-string"
             value={connectionString}
+            maxLength={MAX_NWC_CONNECTION_STRING_LENGTH}
             onChange={(e) => {
               setConnectionString(e.target.value)
               resetTest()
@@ -307,6 +316,7 @@ function ConnectWalletForm({ onConnected }: { onConnected: () => void }) {
           <Input
             id="ln-wallet-label"
             value={label}
+            maxLength={MAX_LIGHTNING_WALLET_LABEL_LENGTH}
             onChange={(e) => setLabel(e.target.value)}
             placeholder="My Lightning Wallet"
           />
@@ -419,7 +429,15 @@ export function LightningWallets() {
                       wallet.id,
                     )
                   }
-                  onRemove={() => removeConnection(wallet.id)}
+                  onRemove={() => {
+                    void removeConnection(wallet.id).catch((err) => {
+                      toast.error(
+                        err instanceof Error
+                          ? err.message
+                          : 'Failed to remove Lightning connection',
+                      )
+                    })
+                  }}
                 />
               ))}
             </div>

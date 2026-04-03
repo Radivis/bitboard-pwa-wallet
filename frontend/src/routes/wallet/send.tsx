@@ -35,6 +35,7 @@ import {
 import { useLightningStore } from '@/stores/lightningStore'
 import { useLightningPayMutation } from '@/hooks/useLightningMutations'
 import { useSendLightningBalances } from '@/hooks/useSendLightningBalances'
+import { MAX_BOLT11_PAYMENT_REQUEST_LENGTH } from '@/lib/lightning-input-limits'
 import { walletOwnerKey } from '@/lib/lab-utils'
 import {
   useBuildTransactionMutation,
@@ -212,6 +213,10 @@ export function SendFlow() {
   const lightningRecipientOk =
     !isLightningSendMode || matchingLightningConnections.length > 0
 
+  const lightningPayloadLengthOk =
+    !isLightningSendMode ||
+    normalizedRecipient.length <= MAX_BOLT11_PAYMENT_REQUEST_LENGTH
+
   const lightningAmountInputOk =
     !needsUserLightningAmount || isValidSendAmountSats(amountSats)
 
@@ -224,6 +229,7 @@ export function SendFlow() {
   const canBuildLightning =
     recipientFormatValid &&
     lightningRecipientOk &&
+    lightningPayloadLengthOk &&
     matchingLightningConnections.length > 0 &&
     hasLightningWalletSelected &&
     !bolt11NetworkMismatch &&
@@ -517,6 +523,12 @@ export function SendFlow() {
                     and try again.
                   </p>
                 )}
+              {isLightningSendMode && !lightningPayloadLengthOk && (
+                <p className="text-xs text-destructive">
+                  Payment request is too long (
+                  {MAX_BOLT11_PAYMENT_REQUEST_LENGTH} characters max).
+                </p>
+              )}
             </div>
 
             {isLightningSendMode && (

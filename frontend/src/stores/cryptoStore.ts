@@ -6,6 +6,7 @@ import {
   type WorkerHealthStatus,
 } from '@/workers/crypto-factory';
 import { useWalletStore } from '@/stores/walletStore';
+import { useLightningStore } from '@/stores/lightningStore';
 import { useSessionStore, clearAutoLockTimer } from '@/stores/sessionStore';
 import { resetSecretsChannel } from '@/workers/secrets-channel';
 import type { Remote } from 'comlink';
@@ -202,6 +203,7 @@ export const useCryptoStore = create<CryptoState>((set, get) => {
 
     lockAndPurgeSensitiveRuntimeState: () => {
       useWalletStore.getState().lockWallet();
+      useLightningStore.getState().purgeLightningConnectionsFromMemory();
       terminateCryptoWorker();
       resetSecretsChannel();
       useSessionStore.getState().clear();

@@ -27,6 +27,16 @@ vi.mock('@/workers/secrets-channel', () => ({
   resetSecretsChannel: resetSecretsChannelMock,
 }))
 
+const purgeLightningConnectionsFromMemoryMock = vi.fn()
+
+vi.mock('@/stores/lightningStore', () => ({
+  useLightningStore: {
+    getState: () => ({
+      purgeLightningConnectionsFromMemory: purgeLightningConnectionsFromMemoryMock,
+    }),
+  },
+}))
+
 vi.mock('@/stores/walletStore', () => {
   type WalletStatus = 'none' | 'locked' | 'unlocked' | 'syncing'
   const walletState = {
@@ -79,5 +89,6 @@ describe('auto-lock security purge', () => {
     expect(resetSecretsChannelMock).toHaveBeenCalledTimes(1)
     expect(terminateCryptoWorkerMock).toHaveBeenCalled()
     expect(useCryptoStore.getState()._worker).toBeNull()
+    expect(purgeLightningConnectionsFromMemoryMock).toHaveBeenCalledTimes(1)
   })
 })
