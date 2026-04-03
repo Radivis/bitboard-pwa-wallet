@@ -1,16 +1,13 @@
 import type { TransactionDetails } from '@/workers/crypto-types'
 import { useWalletStore } from '@/stores/walletStore'
-import {
-  hasNetworkConnectedWallet,
-  useLightningStore,
-} from '@/stores/lightningStore'
+import { useLightningStore } from '@/stores/lightningStore'
 import { useFeatureStore } from '@/stores/featureStore'
 import {
   createBackendService,
   type ConnectedLightningWallet,
   type LightningPayment,
 } from '@/lib/lightning-backend-service'
-import type { LightningNetworkMode } from '@/lib/lightning-utils'
+import { getLightningConnectionsForActiveWallet } from '@/lib/lightning-connection-utils'
 import { appQueryClient } from '@/lib/app-query-client'
 
 /** React Query key prefix for dashboard Lightning data (invalidate all with `['lightning-dashboard']`). */
@@ -40,17 +37,11 @@ export function getMatchingLightningConnectionsForDashboard(): ConnectedLightnin
   const { lightningEnabled } = useFeatureStore.getState()
   const { connectedWallets } = useLightningStore.getState()
 
-  if (
-    !lightningEnabled ||
-    activeWalletId == null ||
-    !hasNetworkConnectedWallet(connectedWallets, activeWalletId, networkMode)
-  ) {
-    return []
-  }
-
-  const lnMode = networkMode as LightningNetworkMode
-  return connectedWallets.filter(
-    (w) => w.walletId === activeWalletId && w.networkMode === lnMode,
+  return getLightningConnectionsForActiveWallet(
+    connectedWallets,
+    activeWalletId,
+    networkMode,
+    lightningEnabled,
   )
 }
 
@@ -90,6 +81,7 @@ export async function fetchLightningPaymentsForActiveWallet(): Promise<
   }
 
   const byHash = new Map<string, LightningPaymentWithWallet>()
+  let listPaymentsFailureCount = 0
 
   for (const conn of matches) {
     try {
@@ -104,9 +96,22 @@ export async function fetchLightningPaymentsForActiveWallet(): Promise<
           })
         }
       }
-    } catch {
-      // Other connections may still succeed
+    } catch (err) {
+      listPaymentsFailureCount += 1
+      if (import.meta.env.DEV) {
+        console.debug(
+          '[lightning-dashboard] listPayments failed for connection',
+          { id: conn.id, label: conn.label },
+          err,
+        )
+      }
     }
+  }
+
+  if (listPaymentsFailureCount === matches.length && matches.length > 0) {
+    console.warn(
+      '[lightning-dashboard] All Lightning connections failed to list payments',
+    )
   }
 
   return [...byHash.values()]

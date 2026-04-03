@@ -1,11 +1,12 @@
-import { useMemo, useCallback, useState, useEffect } from 'react'
+import { useMemo, useCallback, useState } from 'react'
 import { createFileRoute, useNavigate, Link } from '@tanstack/react-router'
-import { useQueries } from '@tanstack/react-query'
-import { ArrowUpRight, ArrowLeft, Loader2, Zap } from 'lucide-react'
+import { ArrowUpRight, ArrowLeft } from 'lucide-react'
 import { toast } from 'sonner'
 import { LightningAddress } from '@getalby/lightning-tools'
 import { PageHeader } from '@/components/PageHeader'
-import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
+import { SendLightningWalletPicker } from '@/components/wallet/send/SendLightningWalletPicker'
+import { SendOnChainFeeSection } from '@/components/wallet/send/SendOnChainFeeSection'
+import { isValidSendAmountSats } from '@/components/wallet/send/send-amount'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -30,62 +31,20 @@ import {
   normalizeLightningDestination,
   bolt11NetworkModeFromPrefix,
   tryDecodeBolt11Invoice,
-  type LightningNetworkMode,
 } from '@/lib/lightning-utils'
-import { createBackendService } from '@/lib/lightning-backend-service'
-import type { ConnectedLightningWallet } from '@/lib/lightning-backend-service'
 import { useLightningStore } from '@/stores/lightningStore'
 import { useLightningPayMutation } from '@/hooks/useLightningMutations'
+import { useSendLightningBalances } from '@/hooks/useSendLightningBalances'
 import { walletOwnerKey } from '@/lib/lab-utils'
 import {
   useBuildTransactionMutation,
   useBroadcastTransactionMutation,
   useLabSendMutation,
 } from '@/hooks/useSendMutations'
-import { cn } from '@/lib/utils'
 
 export const Route = createFileRoute('/wallet/send')({
   component: SendPage,
 })
-
-const FEE_PRESETS = [
-  { label: 'Low', rate: 1 },
-  { label: 'Medium', rate: 3 },
-  { label: 'High', rate: 5 },
-] as const
-
-const FEE_PRESET_INFOMODE: Record<
-  (typeof FEE_PRESETS)[number]['label'],
-  { infoTitle: string; infoText: string }
-> = {
-  Low: {
-    infoTitle: 'Low fee',
-    infoText:
-      'Best when the mempool is calm or you do not care if confirmation takes longer. You pay less total fee, but in a busy period your transaction might sit unconfirmed longer than with Medium or High.',
-  },
-  Medium: {
-    infoTitle: 'Medium fee',
-    infoText:
-      'A reasonable default when you want a normal confirmation time without overpaying. Pick this for typical transfers if you are unsure—then switch to High if blocks are full or you are in a hurry, or Low if you are happy to wait.',
-  },
-  High: {
-    infoTitle: 'High fee',
-    infoText:
-      'Use when you want priority during congestion—paying more per vB makes it more attractive for miners to include your transaction in the next blocks. Good for time-sensitive payments; you spend more in fees than with Low or Medium.',
-  },
-}
-
-/** Max satoshis we pass to the worker (JS safe integer range). */
-const MAX_SAFE_SATS = Number.MAX_SAFE_INTEGER
-
-function isValidAmountSats(n: number): boolean {
-  return (
-    Number.isFinite(n) &&
-    Number.isInteger(n) &&
-    n >= 1 &&
-    n <= MAX_SAFE_SATS
-  )
-}
 
 export function SendPage() {
   const navigate = useNavigate()
@@ -112,28 +71,12 @@ export function SendFlow() {
   const lightningAvailable = lightningEnabled && isLightningSupported(networkMode)
   const connectedLightningWallets = useLightningStore((s) => s.connectedWallets)
 
-  const matchingLightningConnections = useMemo((): ConnectedLightningWallet[] => {
-    if (
-      !lightningEnabled ||
-      !isLightningSupported(networkMode) ||
-      activeWalletId == null
-    ) {
-      return []
-    }
-    const lnMode = networkMode as LightningNetworkMode
-    return connectedLightningWallets.filter(
-      (w) => w.walletId === activeWalletId && w.networkMode === lnMode,
-    )
-  }, [lightningEnabled, networkMode, activeWalletId, connectedLightningWallets])
-
   const hasAnyLightningConnection = useLightningStore((s) =>
     activeWalletId != null
       ? s.getConnectionsForWallet(activeWalletId).length > 0
       : false,
   )
 
-  const [selectedLightningConnectionId, setSelectedLightningConnectionId] =
-    useState<string | null>(null)
   const [isResolvingLightningAddress, setIsResolvingLightningAddress] =
     useState(false)
 
@@ -205,6 +148,23 @@ export function SendFlow() {
 
   const isLightningSendMode = isLightningDestination
 
+  const {
+    matchingLightningConnections,
+    selectedLightningConnectionId,
+    setSelectedLightningConnectionId,
+    lnBalanceQueries,
+    selectedLightningWallet,
+    selectedLnBalanceQuery,
+    selectedLnBalanceSats,
+    hasLightningWalletSelected,
+  } = useSendLightningBalances({
+    lightningEnabled,
+    networkMode,
+    activeWalletId,
+    connectedLightningWallets,
+    isLightningSendMode,
+  })
+
   const decodedBolt11 = useMemo(() => {
     if (!isValidBolt11Invoice(normalizedRecipient)) return null
     return tryDecodeBolt11Invoice(normalizedRecipient)
@@ -252,52 +212,8 @@ export function SendFlow() {
   const lightningRecipientOk =
     !isLightningSendMode || matchingLightningConnections.length > 0
 
-  useEffect(() => {
-    if (!isLightningSendMode) {
-      setSelectedLightningConnectionId(null)
-      return
-    }
-    const ids = matchingLightningConnections.map((c) => c.id)
-    if (matchingLightningConnections.length === 1) {
-      setSelectedLightningConnectionId(matchingLightningConnections[0].id)
-    } else if (matchingLightningConnections.length > 1) {
-      setSelectedLightningConnectionId((prev) =>
-        prev != null && ids.includes(prev) ? prev : null,
-      )
-    } else {
-      setSelectedLightningConnectionId(null)
-    }
-  }, [isLightningSendMode, matchingLightningConnections])
-
-  const lnBalanceQueries = useQueries({
-    queries: matchingLightningConnections.map((conn) => ({
-      queryKey: ['send-page-ln-balance', conn.id],
-      queryFn: () => createBackendService(conn.config).getBalance(),
-      enabled: isLightningSendMode && matchingLightningConnections.length > 0,
-      staleTime: 30_000,
-    })),
-  })
-
-  const selectedLightningWallet = useMemo(
-    () =>
-      matchingLightningConnections.find(
-        (c) => c.id === selectedLightningConnectionId,
-      ) ?? null,
-    [matchingLightningConnections, selectedLightningConnectionId],
-  )
-
-  const selectedLnBalanceIndex = matchingLightningConnections.findIndex(
-    (c) => c.id === selectedLightningConnectionId,
-  )
-  const selectedLnBalanceQuery =
-    selectedLnBalanceIndex >= 0 ? lnBalanceQueries[selectedLnBalanceIndex] : null
-  const selectedLnBalanceSats = selectedLnBalanceQuery?.data?.balanceSats
-
-  const hasLightningWalletSelected =
-    selectedLightningConnectionId != null && selectedLightningWallet != null
-
   const lightningAmountInputOk =
-    !needsUserLightningAmount || isValidAmountSats(amountSats)
+    !needsUserLightningAmount || isValidSendAmountSats(amountSats)
 
   const lightningBalanceOk =
     hasLightningWalletSelected &&
@@ -316,7 +232,7 @@ export function SendFlow() {
     lightningPayAmountSats >= 1 &&
     lightningBalanceOk &&
     (isLightningAddress(normalizedRecipient)
-      ? isValidAmountSats(amountSats)
+      ? isValidSendAmountSats(amountSats)
       : true)
 
   const isLabWithNoBalance =
@@ -326,14 +242,14 @@ export function SendFlow() {
     !isLightningSendMode &&
     normalizedRecipient.length > 0 &&
     isValidAddress(normalizedRecipient, networkMode) &&
-    isValidAmountSats(amountSats) &&
+    isValidSendAmountSats(amountSats) &&
     amountSats <= confirmedBalance &&
     !isLabWithNoBalance
 
   const canBuild = isLightningSendMode ? canBuildLightning : canBuildOnChain
 
   const handleLightningAddressPay = useCallback(async () => {
-    if (!selectedLightningWallet || !isValidAmountSats(amountSats)) return
+    if (!selectedLightningWallet || !isValidSendAmountSats(amountSats)) return
     setIsResolvingLightningAddress(true)
     try {
       const la = new LightningAddress(normalizedRecipient)
@@ -385,7 +301,7 @@ export function SendFlow() {
       const amountMsatsForAmountless =
         decodedBolt11 != null &&
         decodedBolt11.satoshi === 0 &&
-        isValidAmountSats(amountSats)
+        isValidSendAmountSats(amountSats)
           ? amountSats * 1000
           : undefined
 
@@ -603,56 +519,15 @@ export function SendFlow() {
                 )}
             </div>
 
-            {isLightningSendMode &&
-              matchingLightningConnections.length > 0 && (
-                <div className="space-y-2">
-                  <Label>Pay from Lightning wallet</Label>
-                  <p className="text-xs text-muted-foreground">
-                    {matchingLightningConnections.length > 1
-                      ? 'Select which connected wallet should pay this invoice.'
-                      : 'Using your connected Lightning wallet for this network.'}
-                  </p>
-                  <ul className="space-y-2">
-                    {matchingLightningConnections.map((conn, index) => {
-                      const q = lnBalanceQueries[index]
-                      const isSelected = conn.id === selectedLightningConnectionId
-                      return (
-                        <li key={conn.id}>
-                          <button
-                            type="button"
-                            disabled={isPending}
-                            onClick={() =>
-                              setSelectedLightningConnectionId(conn.id)
-                            }
-                            className={cn(
-                              'flex w-full items-center justify-between gap-2 rounded-md border p-3 text-left text-sm transition-colors',
-                              isSelected
-                                ? 'border-primary bg-primary/5'
-                                : 'border-border hover:bg-muted/50',
-                            )}
-                          >
-                            <span className="min-w-0 flex-1 font-medium">
-                              {conn.label}
-                            </span>
-                            <span className="flex shrink-0 items-center gap-1 tabular-nums text-muted-foreground">
-                              {q?.isPending ? (
-                                <Loader2 className="h-3 w-3 animate-spin" />
-                              ) : q?.isError ? (
-                                <span className="text-destructive">—</span>
-                              ) : (
-                                <>
-                                  <Zap className="h-3 w-3" />
-                                  {formatSats(q?.data?.balanceSats ?? 0)} sats
-                                </>
-                              )}
-                            </span>
-                          </button>
-                        </li>
-                      )
-                    })}
-                  </ul>
-                </div>
-              )}
+            {isLightningSendMode && (
+              <SendLightningWalletPicker
+                connections={matchingLightningConnections}
+                lnBalanceQueries={lnBalanceQueries}
+                selectedConnectionId={selectedLightningConnectionId}
+                onSelectConnection={setSelectedLightningConnectionId}
+                disabled={isPending}
+              />
+            )}
 
             {isLightningSendMode &&
               decodedBolt11?.description != null &&
@@ -734,80 +609,15 @@ export function SendFlow() {
             </div>
 
             {!isLightningSendMode && (
-              <div className="space-y-2">
-                <Label>
-                  <InfomodeWrapper
-                    as="span"
-                    infoId="send-fee-rate-label"
-                    infoTitle="Fee rate (sat/vB)"
-                    infoText="Miners prioritize transactions that pay more per byte of block space. The number is satoshis per virtual byte (sat/vB). Bitboard currently offers simple fixed presets (not live mempool data—smarter estimation may come later). In general: use Low when you are not in a rush, Medium for everyday sends, High when the network is busy or you need faster confirmation, and Custom only when you already have a target rate from an explorer or another trusted source."
-                  >
-                    Fee Rate (sat/vB)
-                  </InfomodeWrapper>
-                </Label>
-                <p className="text-xs text-muted-foreground">
-                  Static presets for now. Dynamic fee estimation will be added
-                  later.
-                </p>
-                <div className="flex gap-2">
-                  {FEE_PRESETS.map((preset) => {
-                    const { infoTitle, infoText } =
-                      FEE_PRESET_INFOMODE[preset.label]
-                    return (
-                      <InfomodeWrapper
-                        key={preset.label}
-                        infoId={`send-fee-preset-${preset.label.toLowerCase()}`}
-                        infoTitle={infoTitle}
-                        infoText={infoText}
-                        className="min-w-0 flex-1"
-                      >
-                        <Button
-                          type="button"
-                          variant={
-                            !useCustomFee && feeRate === preset.rate
-                              ? 'default'
-                              : 'outline'
-                          }
-                          size="sm"
-                          className="w-full"
-                          onClick={() => {
-                            setFeeRate(preset.rate)
-                            setUseCustomFee(false)
-                          }}
-                        >
-                          {preset.label} ({preset.rate})
-                        </Button>
-                      </InfomodeWrapper>
-                    )
-                  })}
-                  <InfomodeWrapper
-                    infoId="send-fee-custom-button"
-                    infoTitle="Custom fee"
-                    infoText="Switch here when you already know the exact sat/vB you want—for example from a mempool dashboard, a node, or advice that matches current network conditions. After selecting Custom, type that number in the field below; use it if presets feel too coarse or you are following a specific recommendation."
-                    className="min-w-0 flex-1"
-                  >
-                    <Button
-                      type="button"
-                      variant={useCustomFee ? 'default' : 'outline'}
-                      size="sm"
-                      className="w-full"
-                      onClick={() => setUseCustomFee(true)}
-                    >
-                      Custom
-                    </Button>
-                  </InfomodeWrapper>
-                </div>
-                {useCustomFee && (
-                  <Input
-                    type="number"
-                    value={customFeeRate}
-                    onChange={(e) => setCustomFeeRate(e.target.value)}
-                    placeholder="Custom fee rate"
-                    min="1"
-                    disabled={isPending}
-                  />
-                )}
-              </div>
+              <SendOnChainFeeSection
+                feeRate={feeRate}
+                customFeeRate={customFeeRate}
+                useCustomFee={useCustomFee}
+                isPending={isPending}
+                setFeeRate={setFeeRate}
+                setCustomFeeRate={setCustomFeeRate}
+                setUseCustomFee={setUseCustomFee}
+              />
             )}
 
             {buildMutation.isPending ? (

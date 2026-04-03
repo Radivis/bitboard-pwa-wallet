@@ -152,6 +152,7 @@ vi.mock('@/hooks/useLabChainStateQuery', () => ({
 }))
 
 vi.mock('@/lib/bitcoin-utils', () => ({
+  MAX_SAFE_SATS: Number.MAX_SAFE_INTEGER,
   isValidAddress: (addr: string) => addr.startsWith('bc1'),
   formatBTC: (sats: number) => (sats / 100_000_000).toFixed(8),
   formatSats: (sats: number) => sats.toLocaleString(),

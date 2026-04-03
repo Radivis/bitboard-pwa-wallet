@@ -60,8 +60,10 @@ export function formatSats(sats: number): string {
   return sats.toLocaleString()
 }
 
-const SATS_PER_BTC = 100_000_000;
-const MAX_SAFE_SATS = Number.MAX_SAFE_INTEGER;
+const SATS_PER_BTC = 100_000_000
+
+/** Upper bound for sat amounts passed through JS (safe integer range). */
+export const MAX_SAFE_SATS = Number.MAX_SAFE_INTEGER
 
 /**
  * Parses a BTC amount string to satoshis. Returns 0 for invalid or negative

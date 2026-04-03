@@ -25,8 +25,8 @@ import {
   DEFAULT_INVOICE_EXPIRY_SECONDS,
   formatSatsCompact,
   isLightningSupported,
-  type LightningNetworkMode,
 } from '@/lib/lightning-utils'
+import { getLightningConnectionsForActiveWallet } from '@/lib/lightning-connection-utils'
 import {
   fetchLightningBalancesForDashboard,
   fetchLightningPaymentsForActiveWallet,
@@ -35,9 +35,12 @@ import {
   lightningDashboardBalancesQueryKey,
   lightningDashboardHistoryQueryKey,
 } from '@/lib/lightning-dashboard-sync'
-
-const LIGHTNING_DASHBOARD_REFETCH_MS = 60_000
-const LIGHTNING_DASHBOARD_STALE_MS = 30_000
+import {
+  LIGHTNING_DASHBOARD_REFETCH_MS,
+  LIGHTNING_DASHBOARD_STALE_MS,
+  LN_WALLET_BALANCE_STALE_MS,
+  LN_WALLET_NETWORK_PLAUSIBILITY_STALE_MS,
+} from '@/lib/lightning-query-timings'
 
 function subscribeOnlineStatus(onStoreChange: () => void) {
   window.addEventListener('online', onStoreChange)
@@ -69,19 +72,16 @@ function useLightningDashboardQueryBase() {
   const connectedWallets = useLightningStore((s) => s.connectedWallets)
   const isOnline = useNavigatorOnline()
 
-  const matchingConnections = useMemo(() => {
-    if (
-      !lightningEnabled ||
-      !isLightningSupported(networkMode) ||
-      activeWalletId == null
-    ) {
-      return []
-    }
-    const lnMode = networkMode as LightningNetworkMode
-    return connectedWallets.filter(
-      (w) => w.walletId === activeWalletId && w.networkMode === lnMode,
-    )
-  }, [lightningEnabled, networkMode, activeWalletId, connectedWallets])
+  const matchingConnections = useMemo(
+    () =>
+      getLightningConnectionsForActiveWallet(
+        connectedWallets,
+        activeWalletId,
+        networkMode,
+        lightningEnabled,
+      ),
+    [lightningEnabled, networkMode, activeWalletId, connectedWallets],
+  )
 
   const fingerprint = lightningConnectionsFingerprint(matchingConnections)
 
@@ -145,7 +145,7 @@ export function useLnWalletBalanceQuery(config: LightningConnectionConfig) {
       const service = createBackendService(config)
       return service.getBalance()
     },
-    staleTime: 30_000,
+    staleTime: LN_WALLET_BALANCE_STALE_MS,
     retry: 1,
   })
 }
@@ -187,7 +187,7 @@ export function useLnWalletNetworkPlausibilityQuery(
       }
     },
     enabled: wallet != null,
-    staleTime: 60_000,
+    staleTime: LN_WALLET_NETWORK_PLAUSIBILITY_STALE_MS,
     retry: 1,
   })
 }
