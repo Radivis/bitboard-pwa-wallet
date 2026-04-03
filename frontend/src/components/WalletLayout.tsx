@@ -1,4 +1,4 @@
-import { type ReactNode } from 'react'
+import { type ReactNode, useEffect } from 'react'
 import { Link, useMatchRoute, useLocation } from '@tanstack/react-router'
 import {
   Home,
@@ -17,7 +17,11 @@ import {
 } from 'lucide-react'
 import { InfomodeToggle } from '@/components/infomode/InfomodeToggle'
 import { ThemeToggle } from '@/components/ThemeToggle'
+import { useWallet } from '@/db'
+import { useWalletStore } from '@/stores/walletStore'
 import { cn } from '@/lib/utils'
+
+const APP_TITLE = 'Bitboard Wallet'
 
 interface WalletLayoutProps {
   children: ReactNode
@@ -295,11 +299,26 @@ export function WalletLayout({ children }: WalletLayoutProps) {
   const showLibrarySubNav = !isSetupRoute && isLibrarySectionPath(location.pathname)
   const showWalletSubNav = !isSetupRoute && isWalletSectionPath(location.pathname)
 
+  const activeWalletId = useWalletStore((s) => s.activeWalletId)
+  const walletStatus = useWalletStore((s) => s.walletStatus)
+  const { data: activeWalletRow, isSuccess: activeWalletLoaded } = useWallet(activeWalletId)
+  const walletDisplayName =
+    activeWalletId && activeWalletLoaded && activeWalletRow?.name
+      ? activeWalletRow.name
+      : null
+  const showWalletSuffix = Boolean(walletDisplayName)
+  const walletSuffixMuted = walletStatus === 'locked'
+
+  useEffect(() => {
+    document.title =
+      walletDisplayName !== null ? `${APP_TITLE}: ${walletDisplayName}` : APP_TITLE
+  }, [walletDisplayName])
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <header className="sticky top-0 z-50 border-b border-border bg-header/95 backdrop-blur supports-[backdrop-filter]:bg-header/80">
         <div className="mx-auto flex h-14 max-w-screen-xl items-center justify-between px-4">
-          <h1 className="flex items-center gap-2 text-lg font-semibold tracking-tight">
+          <h1 className="flex min-w-0 max-w-full items-center gap-2 text-lg font-semibold tracking-tight">
             <img
               src="/bitboard-icon.png"
               alt=""
@@ -307,7 +326,17 @@ export function WalletLayout({ children }: WalletLayoutProps) {
               width={28}
               height={28}
             />
-            Bitboard Wallet
+            <span className="min-w-0 truncate">
+              {APP_TITLE}
+              {showWalletSuffix && walletDisplayName !== null && (
+                <span
+                  className={cn(walletSuffixMuted && 'opacity-40')}
+                  title={walletDisplayName}
+                >
+                  :&nbsp;{walletDisplayName}
+                </span>
+              )}
+            </span>
           </h1>
           <div className="flex items-center gap-3">
             <InfomodeToggle />

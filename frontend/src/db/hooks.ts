@@ -15,18 +15,19 @@ export function useWallets() {
   })
 }
 
-export function useWallet(id: number) {
+export function useWallet(id: number | null) {
   return useQuery({
-    queryKey: walletKeys.byId(id),
+    queryKey: id === null ? (['wallets', 'detail', 'none'] as const) : walletKeys.byId(id),
     queryFn: async () => {
       await ensureMigrated()
       const wallet = await getDatabase()
         .selectFrom('wallets')
         .selectAll()
-        .where('wallet_id', '=', id)
+        .where('wallet_id', '=', id!)
         .executeTakeFirst()
       return wallet ?? null
     },
+    enabled: id !== null,
   })
 }
 
