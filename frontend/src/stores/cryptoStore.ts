@@ -5,6 +5,7 @@ import {
   onWorkerHealthChange,
   type WorkerHealthStatus,
 } from '@/workers/crypto-factory';
+import { removeLightningConnectionsHydrationQueries } from '@/lib/lightning-connections-hydration';
 import { useWalletStore } from '@/stores/walletStore';
 import { useLightningStore } from '@/stores/lightningStore';
 import { useSessionStore, clearAutoLockTimer } from '@/stores/sessionStore';
@@ -204,6 +205,7 @@ export const useCryptoStore = create<CryptoState>((set, get) => {
     lockAndPurgeSensitiveRuntimeState: () => {
       useWalletStore.getState().lockWallet();
       useLightningStore.getState().purgeLightningConnectionsFromMemory();
+      removeLightningConnectionsHydrationQueries();
       terminateCryptoWorker();
       resetSecretsChannel();
       useSessionStore.getState().clear();

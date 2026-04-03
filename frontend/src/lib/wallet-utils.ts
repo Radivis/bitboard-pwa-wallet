@@ -16,9 +16,6 @@ import {
   resolveDescriptorWallet,
 } from '@/lib/descriptor-wallet-manager'
 import { invalidateLightningDashboardQueries } from '@/lib/lightning-dashboard-sync'
-import {
-  hydrateLightningStoreAfterUnlock,
-} from '@/lib/hydrate-lightning-store'
 
 const CUSTOM_ESPLORA_URL_KEY_PREFIX = 'custom_esplora_url_'
 
@@ -266,11 +263,6 @@ export async function loadDescriptorWalletWithoutSync(params: {
   setCurrentAddress(address)
   setWalletStatus('unlocked')
 
-  await hydrateLightningStoreAfterUnlock({
-    password,
-    walletId,
-  })
-
   const { startAutoLockTimer } = await import('@/stores/sessionStore')
   startAutoLockTimer(() => {
     useCryptoStore.getState().lockAndPurgeSensitiveRuntimeState()
@@ -327,11 +319,6 @@ export async function loadDescriptorWalletAndSync(params: {
   const address = await getCurrentAddress()
   setCurrentAddress(address)
   setWalletStatus('unlocked')
-
-  await hydrateLightningStoreAfterUnlock({
-    password,
-    walletId,
-  })
 
   const { startAutoLockTimer } = await import('@/stores/sessionStore')
   startAutoLockTimer(() => {

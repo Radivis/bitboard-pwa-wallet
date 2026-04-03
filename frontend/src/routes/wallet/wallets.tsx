@@ -2,6 +2,7 @@ import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { Wallet } from 'lucide-react'
 import { useWallets } from '@/db'
 import { useWalletStore } from '@/stores/walletStore'
+import { removeLightningConnectionsHydrationQueries } from '@/lib/lightning-connections-hydration'
 import { useLightningStore } from '@/stores/lightningStore'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
@@ -18,6 +19,7 @@ function WalletsPage() {
 
   const handleSelectWallet = (walletId: number) => {
     useLightningStore.getState().purgeLightningConnectionsFromMemory()
+    removeLightningConnectionsHydrationQueries()
     lockWallet()
     setActiveWallet(walletId)
     navigate({ to: '/wallet' })
