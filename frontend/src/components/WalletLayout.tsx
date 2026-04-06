@@ -17,6 +17,7 @@ import {
 } from 'lucide-react'
 import { InfomodeToggle } from '@/components/infomode/InfomodeToggle'
 import { ThemeToggle } from '@/components/ThemeToggle'
+import { NearZeroSecurityBanner } from '@/components/NearZeroSecurityBanner'
 import { useWallet } from '@/db'
 import { useWalletStore } from '@/stores/walletStore'
 import { cn } from '@/lib/utils'
@@ -344,6 +345,8 @@ export function WalletLayout({ children }: WalletLayoutProps) {
           </div>
         </div>
       </header>
+
+      <NearZeroSecurityBanner />
 
       <main
         className={cn(

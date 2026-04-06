@@ -31,6 +31,8 @@ feature:
         - password and confirm password fields with strength indicator
         - Continue button (disabled until passwords match and meet minimum length)
         - Back to setup link
+        - optional Near-zero security mode (secondary): weak quick-start path; random session secret wrapped with a fixed passphrase stored in source and in settings; encrypts wallets like a normal app password but is not meaningfully secret
+        - Use near-zero security mode: persist wrapped secret, enable near-zero mode, session holds random secret
       - click_event:
         - Continue: store password in session and dismiss modal so create/import can proceed
     - CreateWallet:
@@ -177,13 +179,15 @@ feature:
             - click_event:
               - clear decrypted wallet data from memory, return to locked state
         - Security section (above About):
-          - Change app password button (disabled when no wallets exist)
+          - When near-zero security mode is active: Set a real password button (file: frontend/src/components/UpgradeFromNearZeroPasswordModal.tsx); new password plus confirm only; re-encrypt all `wallet_secrets` if any, update session, clear near-zero settings
+          - Otherwise: Change app password button (disabled when no wallets exist)
             - click_event:
               - open Change app password modal (file: frontend/src/components/ChangeAppPasswordModal.tsx)
               - same prominent red warning as Set Bitboard app password (no recovery; fund loss risk without mnemonic backup)
               - user enters current password, new password, and confirmation
               - on submit: decrypt all `wallet_secrets` with current password, re-encrypt with new password, persist all rows in a single database transaction, then update session password
               - UI: spinner with “Encrypting secrets with new password…” while running; success screen with checkmark and Done
+        - Near-zero banner (below app header, not on /setup): red alert when near-zero mode is active; Set up password now opens upgrade modal; small “Set up a password later” dismisses until the browser tab session ends (sessionStorage)
       - requirements:
         - Wallet must exist for backup and lock sections to appear
         - Network and address type settings are available even without a wallet

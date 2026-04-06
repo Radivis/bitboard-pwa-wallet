@@ -87,6 +87,12 @@ vi.mock('@/stores/sessionStore', () => ({
   clearAutoLockTimer: vi.fn(),
 }))
 
+const nearZeroSecurityState = { active: false }
+vi.mock('@/stores/nearZeroSecurityStore', () => ({
+  useNearZeroSecurityStore: (selector: (s: typeof nearZeroSecurityState) => unknown) =>
+    selector(nearZeroSecurityState),
+}))
+
 const mockSetThemeMode = vi.fn()
 vi.mock('@/stores/themeStore', () => ({
   useThemeStore: (selector: (s: Record<string, unknown>) => unknown) =>
@@ -174,6 +180,7 @@ import { SettingsPage } from '../settings'
 describe('SettingsPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    nearZeroSecurityState.active = false
     mockWalletsState.data = []
     walletStoreState = {
       activeWalletId: 1,
@@ -212,6 +219,14 @@ describe('SettingsPage', () => {
     ]
     renderWithProviders(<SettingsPage />)
     expect(screen.getByRole('button', { name: 'Change app password' })).toBeEnabled()
+  })
+
+  it('shows Set a real password when near-zero security mode is active', () => {
+    nearZeroSecurityState.active = true
+    mockWalletsState.data = []
+    renderWithProviders(<SettingsPage />)
+    expect(screen.getByRole('button', { name: 'Set a real password' })).toBeEnabled()
+    expect(screen.queryByRole('button', { name: 'Change app password' })).not.toBeInTheDocument()
   })
 
   it('network selector calls setNetworkMode after switch completes', async () => {

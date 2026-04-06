@@ -1,5 +1,5 @@
 import { type ReactNode, useEffect, useState } from 'react'
-import { checkDatabaseHealth } from '@/db'
+import { checkDatabaseHealth, getDatabase, tryLoadNearZeroSessionIntoMemory } from '@/db'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 
 interface DatabaseReadyGateProps {
@@ -16,9 +16,11 @@ export function DatabaseReadyGate({ children }: DatabaseReadyGateProps) {
   const [isReady, setIsReady] = useState(false)
 
   useEffect(() => {
-    checkDatabaseHealth().then(() => {
-      setIsReady(true)
-    })
+    checkDatabaseHealth()
+      .then(() => tryLoadNearZeroSessionIntoMemory(getDatabase()))
+      .then(() => {
+        setIsReady(true)
+      })
   }, [])
 
   if (!isReady) {

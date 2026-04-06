@@ -16,6 +16,7 @@ import {
   isNewAppPasswordValid,
 } from '@/components/AppPasswordFields'
 import { AppPasswordFundsLossWarning } from '@/components/AppPasswordFundsLossWarning'
+import { NearZeroSecurityOptIn } from '@/components/NearZeroSecurityOptIn'
 
 const SET_APP_PASSWORD_FIELDS_CONFIG = {
   ids: {
@@ -124,6 +125,8 @@ export function SetAppPasswordModal({ open }: SetAppPasswordModalProps) {
             <Link to="/setup">Back to setup</Link>
           </Button>
         </form>
+
+          <NearZeroSecurityOptIn />
         </div>
       </DialogContent>
     </Dialog>

@@ -49,6 +49,18 @@ export {
   listWalletIdsWithSecrets,
   reencryptAllWalletSecretsWithNewPassword,
 } from './wallet-persistence'
+export {
+  NEAR_ZERO_WRAPPER_PASSWORD,
+  NEAR_ZERO_SETTINGS_KEY_ACTIVE,
+  NEAR_ZERO_SETTINGS_KEY_WRAPPED,
+  serializeEncryptedBlobForSettings,
+  deserializeEncryptedBlobFromSettings,
+  generateAndPersistNearZeroSession,
+  tryLoadNearZeroSessionIntoMemory,
+  clearNearZeroSecuritySettings,
+  isNearZeroSecurityConfiguredInDb,
+  upgradeNearZeroToUserPassword,
+} from './near-zero-security'
 export type {
   WalletSecrets,
   DescriptorWalletData,

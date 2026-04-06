@@ -12,7 +12,9 @@ import { AddressTypeSelector } from '@/components/settings/AddressTypeSelector'
 import { EsploraUrlSettings } from '@/components/settings/EsploraUrlSettings'
 import { FeatureToggles } from '@/components/settings/FeatureToggles'
 import { ChangeAppPasswordModal } from '@/components/ChangeAppPasswordModal'
+import { UpgradeFromNearZeroPasswordModal } from '@/components/UpgradeFromNearZeroPasswordModal'
 import { useWallets } from '@/db'
+import { useNearZeroSecurityStore } from '@/stores/nearZeroSecurityStore'
 
 export const Route = createFileRoute('/settings')({
   component: SettingsPage,
@@ -21,7 +23,9 @@ export const Route = createFileRoute('/settings')({
 export function SettingsPage() {
   const { data: wallets } = useWallets()
   const hasWallets = (wallets?.length ?? 0) > 0
+  const nearZeroActive = useNearZeroSecurityStore((s) => s.active)
   const [changePasswordOpen, setChangePasswordOpen] = useState(false)
+  const [upgradeFromNearZeroOpen, setUpgradeFromNearZeroOpen] = useState(false)
 
   return (
     <div className="space-y-6">
@@ -99,7 +103,7 @@ export function SettingsPage() {
       <InfomodeWrapper
         infoId="settings-security-card"
         infoTitle="Security"
-        infoText="Change the Bitboard app password that encrypts all wallets on this device. You will need your current password. All stored secrets are re-encrypted in one atomic step so your data never sits half-updated."
+        infoText="Change the Bitboard app password that encrypts all wallets on this device. With a normal password you will need your current password; if you still use near-zero security mode, use Set a real password instead. All stored secrets are re-encrypted in one atomic step so your data never sits half-updated."
         className="rounded-xl"
       >
         <Card>
@@ -113,18 +117,36 @@ export function SettingsPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            <Button
-              type="button"
-              variant="secondary"
-              disabled={!hasWallets}
-              onClick={() => setChangePasswordOpen(true)}
-            >
-              Change app password
-            </Button>
-            {!hasWallets && (
-              <p className="text-sm text-muted-foreground">
-                Add a wallet first—there is nothing encrypted to re-encrypt yet.
-              </p>
+            {nearZeroActive ? (
+              <>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => setUpgradeFromNearZeroOpen(true)}
+                >
+                  Set a real password
+                </Button>
+                <p className="text-sm text-muted-foreground">
+                  You are in near-zero security mode. Setting a real password replaces the weak
+                  storage and encrypts your wallets with a password only you know.
+                </p>
+              </>
+            ) : (
+              <>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  disabled={!hasWallets}
+                  onClick={() => setChangePasswordOpen(true)}
+                >
+                  Change app password
+                </Button>
+                {!hasWallets && (
+                  <p className="text-sm text-muted-foreground">
+                    Add a wallet first—there is nothing encrypted to re-encrypt yet.
+                  </p>
+                )}
+              </>
             )}
           </CardContent>
         </Card>
@@ -133,6 +155,11 @@ export function SettingsPage() {
       <ChangeAppPasswordModal
         open={changePasswordOpen}
         onOpenChange={setChangePasswordOpen}
+      />
+
+      <UpgradeFromNearZeroPasswordModal
+        open={upgradeFromNearZeroOpen}
+        onOpenChange={setUpgradeFromNearZeroOpen}
       />
 
       <Card>

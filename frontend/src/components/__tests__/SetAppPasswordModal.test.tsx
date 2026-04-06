@@ -37,6 +37,12 @@ describe('SetAppPasswordModal', () => {
     mockNavigate.mockClear()
   })
 
+  it('offers near-zero security mode opt-in', () => {
+    renderWithProviders(<SetAppPasswordModal open />)
+    expect(screen.getByRole('region', { name: 'Near-zero security mode' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Use near-zero security mode' })).toBeInTheDocument()
+  })
+
   it('shows funds loss warning about password recovery and mnemonic backup', () => {
     renderWithProviders(<SetAppPasswordModal open />)
 

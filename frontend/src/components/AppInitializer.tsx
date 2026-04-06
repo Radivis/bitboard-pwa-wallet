@@ -3,7 +3,11 @@ import { useNavigate, useLocation } from '@tanstack/react-router'
 import { toast } from 'sonner'
 import { useWalletStore } from '@/stores/walletStore'
 import { useSessionStore } from '@/stores/sessionStore'
-import { useWallets } from '@/db'
+import {
+  useWallets,
+  getDatabase,
+  tryLoadNearZeroSessionIntoMemory,
+} from '@/db'
 import { appQueryClient } from '@/lib/app-query-client'
 import { prefetchLabChainState } from '@/hooks/useLabChainStateQuery'
 import { useHydrateLightningConnections } from '@/hooks/useHydrateLightningConnections'
@@ -28,6 +32,7 @@ export function AppInitializer({ children }: AppInitializerProps) {
   const addressType = useWalletStore((s) => s.addressType)
   const accountId = useWalletStore((s) => s.accountId)
   const sessionPassword = useSessionStore((s) => s.password)
+  const walletStatus = useWalletStore((s) => s.walletStatus)
   const lastUnlockedWalletId = useRef<number | null>(null)
 
   useEffect(() => {
@@ -69,21 +74,39 @@ export function AppInitializer({ children }: AppInitializerProps) {
     }
   }, [wallets, isLoading, activeWalletId, setActiveWallet, navigate, location.pathname])
 
+  /** After lock, session is cleared; restore near-zero wrapped secret so auto-unlock can run again. */
+  useEffect(() => {
+    if (sessionPassword !== null) return
+    void tryLoadNearZeroSessionIntoMemory(getDatabase())
+  }, [sessionPassword])
+
   useEffect(() => {
     if (!activeWalletId || !sessionPassword) return
-    if (lastUnlockedWalletId.current === activeWalletId) return
+    if (
+      lastUnlockedWalletId.current === activeWalletId &&
+      walletStatus !== 'locked'
+    ) {
+      return
+    }
 
     lastUnlockedWalletId.current = activeWalletId
 
-    const { walletStatus } = useWalletStore.getState()
-    if (walletStatus === 'unlocked' || walletStatus === 'syncing') {
+    const { walletStatus: status } = useWalletStore.getState()
+    if (status === 'unlocked' || status === 'syncing') {
       return
     }
 
     autoUnlockWallet(activeWalletId, sessionPassword)
     // autoUnlockWallet omitted from deps: it is defined below and captures latest state
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeWalletId, sessionPassword, networkMode, addressType, accountId])
+  }, [
+    activeWalletId,
+    sessionPassword,
+    networkMode,
+    addressType,
+    accountId,
+    walletStatus,
+  ])
 
   async function autoUnlockWallet(walletId: number, password: string) {
     try {
