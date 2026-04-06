@@ -1,3 +1,10 @@
+import {
+  MAX_LIGHTNING_WALLET_LABEL_LENGTH,
+  MAX_NWC_CONNECTION_STRING_LENGTH,
+} from '@/lib/lightning-input-limits'
+import type { LightningNetworkMode } from '@/lib/lightning-utils'
+import { LIGHTNING_NETWORK_MODES } from '@/lib/lightning-utils'
+
 export type AddressType = 'taproot' | 'segwit'
 export type BitcoinNetwork = 'bitcoin' | 'testnet' | 'signet' | 'regtest'
 
@@ -13,10 +20,25 @@ export interface DescriptorWalletData {
   fullScanDone: boolean
 }
 
+/**
+ * NWC connection persisted inside the encrypted wallet secrets blob (not in plain settings).
+ * Same fields as UI `ConnectedLightningWallet` minus redundant `walletId`.
+ */
+export interface StoredNwcLightningConnection {
+  id: string
+  label: string
+  networkMode: LightningNetworkMode
+  /** Full `nostr+walletconnect://…` URI including secret. */
+  connectionString: string
+  createdAt: string
+}
+
 /** Sensitive wallet data stored encrypted. Shared with db layer and workers. */
 export interface WalletSecrets {
   mnemonic: string
   descriptorWallets: DescriptorWalletData[]
+  /** NWC URIs and metadata (empty array when the user has no Lightning connections). */
+  lightningNwcConnections: StoredNwcLightningConnection[]
 }
 
 const SUPPORTED_BITCOIN_NETWORKS: readonly BitcoinNetwork[] = [
@@ -34,6 +56,29 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0
+}
+
+function isLightningNetworkMode(value: unknown): value is LightningNetworkMode {
+  return (
+    typeof value === 'string' &&
+    (LIGHTNING_NETWORK_MODES as readonly string[]).includes(value)
+  )
+}
+
+function isStoredNwcLightningConnection(
+  value: unknown,
+): value is StoredNwcLightningConnection {
+  if (!isRecord(value)) return false
+  return (
+    isNonEmptyString(value.id) &&
+    typeof value.label === 'string' &&
+    value.label.length <= MAX_LIGHTNING_WALLET_LABEL_LENGTH &&
+    isLightningNetworkMode(value.networkMode) &&
+    typeof value.connectionString === 'string' &&
+    value.connectionString.length > 0 &&
+    value.connectionString.length <= MAX_NWC_CONNECTION_STRING_LENGTH &&
+    typeof value.createdAt === 'string'
+  )
 }
 
 function isDescriptorWalletData(value: unknown): value is DescriptorWalletData {
@@ -54,9 +99,30 @@ export function isWalletSecrets(value: unknown): value is WalletSecrets {
   if (!isRecord(value)) return false
   if (!isNonEmptyString(value.mnemonic)) return false
   if (!Array.isArray(value.descriptorWallets)) return false
-  return value.descriptorWallets.every((descriptorWallet) =>
-    isDescriptorWalletData(descriptorWallet),
-  )
+  if (
+    !value.descriptorWallets.every((descriptorWallet) =>
+      isDescriptorWalletData(descriptorWallet),
+    )
+  ) {
+    return false
+  }
+  if (!Array.isArray(value.lightningNwcConnections)) return false
+  if (
+    !value.lightningNwcConnections.every((row) =>
+      isStoredNwcLightningConnection(row),
+    )
+  ) {
+    return false
+  }
+  return true
+}
+
+function normalizeWalletSecretsPayload(raw: unknown): unknown {
+  if (!isRecord(raw)) return raw
+  if (raw.lightningNwcConnections === undefined) {
+    return { ...raw, lightningNwcConnections: [] }
+  }
+  return raw
 }
 
 export function parseWalletSecretsJson(walletSecretsJson: string): WalletSecrets {
@@ -66,6 +132,7 @@ export function parseWalletSecretsJson(walletSecretsJson: string): WalletSecrets
   } catch {
     throw new Error('Invalid wallet secrets: not valid JSON')
   }
+  parsed = normalizeWalletSecretsPayload(parsed)
   if (!isWalletSecrets(parsed)) {
     throw new Error('Invalid wallet secrets: schema validation failed')
   }

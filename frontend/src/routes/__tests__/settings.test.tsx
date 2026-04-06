@@ -98,7 +98,7 @@ vi.mock('@/db', () => ({
 vi.mock('@/lib/bitcoin-utils', () => ({
   DEFAULT_ESPLORA_URLS: {
     regtest: 'http://localhost:3002',
-    signet: 'https://mempool.space/signet/api',
+    signet: 'https://mutinynet.com/api',
     testnet: 'https://mempool.space/testnet/api',
     mainnet: 'https://mempool.space/api',
   },

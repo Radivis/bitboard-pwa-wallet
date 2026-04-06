@@ -58,7 +58,15 @@ vi.mock('@/stores/sessionStore', () => ({
 }))
 
 vi.mock('@/db', () => ({
-  useWallets: () => ({ data: [{ wallet_id: 1 }] }),
+  useWallets: () => ({ data: [{ wallet_id: 1, name: 'Test Wallet', created_at: '' }] }),
+  useWallet: () => ({
+    data: { wallet_id: 1, name: 'Test Wallet', created_at: '' },
+    isSuccess: true,
+  }),
+  useUpdateWallet: () => ({
+    mutateAsync: vi.fn().mockResolvedValue(undefined),
+    isPending: false,
+  }),
 }))
 
 import { ManagementPage } from '../wallet/management'

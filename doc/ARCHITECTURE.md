@@ -28,9 +28,9 @@ Encryption: AES-256-GCM + Argon2id (via argon2 Rust crate)
 Crypto primitives: BDK (Bitcoin) + LDK (Lightning) via WASM bindings
 Key generation: Web Crypto API (crypto.getRandomValues)
 Blockchain API: Esplora (light client sync for on-chain)
-Lightning node: ldk-node
+Lightning node: raw `lightning` crate (rust-lightning) compiled to WASM via `bitboard-lightning` crate
 Regtest library: bitcoinerlab/tester
-Regtest / Signet / Testnet mode: Built-in via ldk-node / BDK configs
+Regtest / Signet / Testnet mode: Built-in via BDK configs
 
 ---
 
@@ -68,6 +68,7 @@ flowchart TB
   subgraph rust [Rust WASM]
     WasmPkg[bitboard_crypto]
     EncryptionWasm[bitboard_encryption]
+    LightningWasm[bitboard_lightning]
   end
   subgraph persistence [Persistence]
     Db[frontend/src/db]
@@ -80,6 +81,7 @@ flowchart TB
   Stores --> CryptoWorker
   Stores --> LabWorker
   CryptoWorker --> WasmPkg
+  CryptoWorker --> LightningWasm
   LabWorker --> WasmPkg
   EncryptionWorker --> EncryptionWasm
   Db --> SQLite

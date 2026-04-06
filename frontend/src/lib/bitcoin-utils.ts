@@ -4,9 +4,34 @@ import type { BitcoinNetwork, TransactionDetails } from '@/workers/crypto-types'
 export const DEFAULT_ESPLORA_URLS: Record<NetworkMode, string> = {
   lab: '', // In-app chain; no Esplora
   regtest: 'http://localhost:3002',
-  signet: 'https://mempool.space/signet/api',
+  /** Mutinynet — preferred for Lightning testing (fast blocks, shared infra). */
+  signet: 'https://mutinynet.com/api',
   testnet: 'https://mempool.space/testnet4/api',
   mainnet: 'https://mempool.space/api',
+}
+
+/** Max allowed difference between NWC `get_info` block height and Esplora tip before flagging. */
+export const NWC_ESPLORA_BLOCK_HEIGHT_TOLERANCE = 100
+
+/**
+ * Fetches the current chain tip height from an Esplora-style HTTP API.
+ * @see https://github.com/Blockstream/esplora/blob/master/API.md
+ */
+export async function fetchEsploraTipBlockHeight(
+  esploraBaseUrl: string,
+): Promise<number> {
+  const base = esploraBaseUrl.replace(/\/$/, '')
+  const url = `${base}/blocks/tip/height`
+  const res = await fetch(url)
+  if (!res.ok) {
+    throw new Error(`Esplora tip height failed: HTTP ${res.status}`)
+  }
+  const text = (await res.text()).trim()
+  const height = parseInt(text, 10)
+  if (!Number.isFinite(height) || height < 0) {
+    throw new Error('Esplora returned an invalid tip height')
+  }
+  return height
 }
 
 const DEV_ESPLORA_PROXY_PATHS: Partial<Record<NetworkMode, string>> = {
@@ -35,8 +60,10 @@ export function formatSats(sats: number): string {
   return sats.toLocaleString()
 }
 
-const SATS_PER_BTC = 100_000_000;
-const MAX_SAFE_SATS = Number.MAX_SAFE_INTEGER;
+const SATS_PER_BTC = 100_000_000
+
+/** Upper bound for sat amounts passed through JS (safe integer range). */
+export const MAX_SAFE_SATS = Number.MAX_SAFE_INTEGER
 
 /**
  * Parses a BTC amount string to satoshis. Returns 0 for invalid or negative

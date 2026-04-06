@@ -6,6 +6,7 @@ import type {
   CreateWalletResult,
   DescriptorPair,
   DescriptorWalletData,
+  NodeInfo,
   SyncResult,
   TransactionDetails,
 } from './crypto-types';
@@ -16,6 +17,15 @@ import type { WalletSecrets } from '@/lib/wallet-domain-types';
 let wasm: typeof import('@/wasm-pkg/bitboard_crypto') | null = null;
 let wasmInitError: string | null = null;
 let secretsProxy: Remote<SecretsChannelService> | null = null;
+
+let lightningWasm: typeof import('@/wasm-pkg/bitboard_lightning') | null = null;
+
+async function getLightningWasm() {
+  if (!lightningWasm) {
+    lightningWasm = await import('@/wasm-pkg/bitboard_lightning');
+  }
+  return lightningWasm;
+}
 
 async function getWasm() {
   if (wasmInitError) {
@@ -78,6 +88,7 @@ function buildSingleDescriptorWalletSecrets(params: {
         fullScanDone: false,
       },
     ],
+    lightningNwcConnections: [],
   };
 }
 
@@ -419,6 +430,14 @@ const cryptoService = {
       encryptedBlob,
       walletResult,
     };
+  },
+
+  async generateNodeId(seed: Uint8Array): Promise<NodeInfo> {
+    const ldk = await getLightningWasm();
+    const currentTimeSecs = BigInt(Math.floor(Date.now() / 1000));
+    const currentTimeNanos = 0;
+    const nodeId = ldk.generate_node_id(seed, currentTimeSecs, currentTimeNanos);
+    return { nodeId };
   },
 };
 

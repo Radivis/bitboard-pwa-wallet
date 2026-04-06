@@ -25,7 +25,7 @@ export const article: LibraryArticle = {
         The subtler part is the <strong>address</strong>. In common output types (for example{' '}
         <strong>pay-to-public-key-hash</strong> and SegWit <strong>pay-to-witness-public-key-hash</strong>
         ), what appears on chain is not your full{' '}
-        <ArticleLink slug="what-is-an-elliptic-curve">secp256k1</ArticleLink> public key but a{' '}
+        <ArticleLink slug="what-is-secp256k1">secp256k1</ArticleLink> public key but a{' '}
         <strong>hash</strong> of it (or of a script)—see{' '}
         <ArticleLink slug="hashes-and-merkle-trees-in-bitcoin">Hashes and Merkle trees in Bitcoin</ArticleLink>
         . Until you spend, observers see a short commitment that identifies the locking condition, not

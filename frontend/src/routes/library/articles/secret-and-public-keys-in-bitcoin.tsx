@@ -10,7 +10,8 @@ export const article: LibraryArticle = {
       <p>
         A <strong>private key</strong> (also called a <strong>secret key</strong>) is a large random
         number. From it, wallet software derives a <strong>public key</strong> using elliptic-curve
-        math on the secp256k1 curve—you can think of the public key as a derived &quot;lock&quot; that
+        math on the <ArticleLink slug="what-is-secp256k1">secp256k1</ArticleLink> curve—you can think of
+        the public key as a derived &quot;lock&quot; that
         pairs with your secret &quot;key.&quot; You share <strong>addresses</strong> (often encoded
         forms of scripts or public keys); you never share the private key, which is required to
         authorize spends with a{' '}
@@ -35,8 +36,9 @@ export const article: LibraryArticle = {
       </p>
       <p>
         For curve background, see{' '}
-        <ArticleLink slug="what-is-an-elliptic-curve">What is an elliptic curve?</ArticleLink>. For
-        wallet concepts, see <ArticleLink slug="what-is-a-wallet">What is a wallet</ArticleLink>.
+        <ArticleLink slug="what-is-an-elliptic-curve">What is an elliptic curve?</ArticleLink> and{' '}
+        <ArticleLink slug="what-is-secp256k1">What is secp256k1?</ArticleLink>. For wallet concepts,
+        see <ArticleLink slug="what-is-a-wallet">What is a wallet</ArticleLink>.
       </p>
     </div>
   ),

@@ -38,7 +38,7 @@ export function useLabIndexPageData() {
   const activeWalletId = useWalletStore((s) => s.activeWalletId)
   const walletStatus = useWalletStore((s) => s.walletStatus)
   const currentAddress = useWalletStore((s) => s.currentAddress)
-  const { data: activeWallet } = useWallet(activeWalletId ?? 0)
+  const { data: activeWallet } = useWallet(activeWalletId)
   const { data: wallets = [] } = useWallets()
 
   const [showTxForm, setShowTxForm] = useState(false)

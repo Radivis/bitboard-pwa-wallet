@@ -96,6 +96,14 @@ describe('TanStack Query hooks', () => {
       await waitFor(() => expect(result.current.isSuccess).toBe(true))
       expect(result.current.data).toBeNull()
     })
+
+    it('does not fetch when id is null', async () => {
+      const { wrapper } = createQueryClientWrapper()
+      const { result } = renderHook(() => useWallet(null), { wrapper })
+
+      expect(result.current.fetchStatus).toBe('idle')
+      expect(result.current.data).toBeUndefined()
+    })
   })
 
   describe('useAddWallet', () => {

@@ -5,7 +5,9 @@ import {
   onWorkerHealthChange,
   type WorkerHealthStatus,
 } from '@/workers/crypto-factory';
+import { removeLightningConnectionsHydrationQueries } from '@/lib/lightning-connections-hydration';
 import { useWalletStore } from '@/stores/walletStore';
+import { useLightningStore } from '@/stores/lightningStore';
 import { useSessionStore, clearAutoLockTimer } from '@/stores/sessionStore';
 import { resetSecretsChannel } from '@/workers/secrets-channel';
 import type { Remote } from 'comlink';
@@ -27,6 +29,7 @@ import type {
   BalanceInfo,
   CreateWalletResult,
   DescriptorPair,
+  NodeInfo,
   SyncResult,
   TransactionDetails,
 } from '@/workers/crypto-types';
@@ -92,6 +95,8 @@ interface CryptoState {
     encryptedBlob: EncryptedBlobForDb;
     walletResult: CreateWalletResult;
   }>;
+
+  generateNodeId: (seed: Uint8Array) => Promise<NodeInfo>;
 
   lockAndPurgeSensitiveRuntimeState: () => void;
   terminateWorker: () => void;
@@ -194,8 +199,13 @@ export const useCryptoStore = create<CryptoState>((set, get) => {
     importWalletAndEncryptSecrets: (params) =>
       withErrorHandling((worker) => worker.importWalletAndEncryptSecrets(params)),
 
+    generateNodeId: (seed) =>
+      withErrorHandling((worker) => worker.generateNodeId(seed)),
+
     lockAndPurgeSensitiveRuntimeState: () => {
       useWalletStore.getState().lockWallet();
+      useLightningStore.getState().purgeLightningConnectionsFromMemory();
+      removeLightningConnectionsHydrationQueries();
       terminateCryptoWorker();
       resetSecretsChannel();
       useSessionStore.getState().clear();

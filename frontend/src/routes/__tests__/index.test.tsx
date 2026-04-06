@@ -65,6 +65,19 @@ vi.mock('@/lib/wallet-utils', () => ({
   runIncrementalDashboardWalletSync: vi.fn().mockResolvedValue(undefined),
 }))
 
+vi.mock('@/hooks/useLightningMutations', () => ({
+  useLightningHistoryQuery: () => ({
+    data: [] as unknown[],
+    isPending: false,
+  }),
+  useLightningBalancesForDashboardQuery: () => ({
+    data: undefined,
+    isPending: false,
+    isSuccess: false,
+  }),
+  useNavigatorOnline: () => true,
+}))
+
 import { DashboardPage } from '../wallet/index'
 
 describe('DashboardPage', () => {
@@ -109,7 +122,7 @@ describe('DashboardPage', () => {
     expect(screen.getByText('100,000 sats')).toBeInTheDocument()
   })
 
-  it('shows pending sats when pending > 0', () => {
+  it('shows on-chain breakdown when pending components are non-zero', () => {
     walletStoreState.balance = {
       confirmed: 100_000,
       trusted_pending: 5_000,
@@ -118,7 +131,11 @@ describe('DashboardPage', () => {
       total: 108_000,
     }
     renderWithProviders(<DashboardPage />)
-    expect(screen.getByText(/8,000 sats pending/)).toBeInTheDocument()
+    expect(screen.getByText('0.00108000')).toBeInTheDocument()
+    expect(screen.getByText('108,000 sats')).toBeInTheDocument()
+    expect(screen.getByText('Spendable (settled)')).toBeInTheDocument()
+    expect(screen.getByText('Pending change')).toBeInTheDocument()
+    expect(screen.getByText('Pending incoming')).toBeInTheDocument()
   })
 
   it('shows network badge', () => {
@@ -141,10 +158,10 @@ describe('DashboardPage', () => {
     expect(screen.getByText('Syncing wallet...')).toBeInTheDocument()
   })
 
-  it('shows empty transaction message', () => {
+  it('shows empty activity message when there is no history', () => {
     renderWithProviders(<DashboardPage />)
     expect(
-      screen.getByText(/No transactions yet/),
+      screen.getByText(/No activity yet/),
     ).toBeInTheDocument()
   })
 

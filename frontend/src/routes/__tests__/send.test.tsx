@@ -59,6 +59,7 @@ vi.mock('@/components/WalletUnlock', () => ({
 }))
 
 vi.mock('@/lib/bitcoin-utils', () => ({
+  MAX_SAFE_SATS: Number.MAX_SAFE_INTEGER,
   isValidAddress: (address: string, network: string) => {
     if (network === 'signet') return address.startsWith('tb1')
     return false

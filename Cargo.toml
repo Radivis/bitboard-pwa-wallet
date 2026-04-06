@@ -1,5 +1,5 @@
 [workspace]
-members = ["crypto", "bitboard-encryption"]
+members = ["crypto", "bitboard-encryption", "bitboard-lightning"]
 resolver = "2"
 
 [profile.release]

@@ -15,6 +15,7 @@ import {
   updateDescriptorWalletChangeset,
   resolveDescriptorWallet,
 } from '@/lib/descriptor-wallet-manager'
+import { invalidateLightningDashboardQueries } from '@/lib/lightning-dashboard-sync'
 
 const CUSTOM_ESPLORA_URL_KEY_PREFIX = 'custom_esplora_url_'
 
@@ -164,6 +165,7 @@ export async function syncLoadedSubWalletWithEsplora(options: {
     await syncActiveWalletAndUpdateState(options.networkMode, {
       useFullScan: options.fullScanNeeded,
     })
+    invalidateLightningDashboardQueries()
     if (options.fullScanNeeded) {
       const { exportChangeset } = useCryptoStore.getState()
       const changeset = await exportChangeset()
@@ -201,6 +203,7 @@ export async function runIncrementalDashboardWalletSync(options: {
   await syncActiveWalletAndUpdateState(options.networkMode, {
     useFullScan: options.networkMode === 'regtest',
   })
+  invalidateLightningDashboardQueries()
   const { setLastSyncTime } = useWalletStore.getState()
   setLastSyncTime(new Date())
   if (options.password && options.activeWalletId != null) {
@@ -324,6 +327,7 @@ export async function loadDescriptorWalletAndSync(params: {
 
   try {
     await syncActiveWalletAndUpdateState(networkMode, { useFullScan: true })
+    invalidateLightningDashboardQueries()
     const changeset = await exportChangeset()
     await updateWalletChangeset({
       password,

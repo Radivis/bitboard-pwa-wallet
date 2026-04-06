@@ -16,8 +16,9 @@ export const article: LibraryArticle = {
       </p>
       <p>
         Good signature schemes make forgery computationally infeasible without the secret key. Bitcoin
-        uses <strong>ECDSA</strong> and (with Taproot) <strong>Schnorr</strong>-style signatures on the
-        secp256k1 curve; security rests on the hardness of the{' '}
+        uses <strong>ECDSA</strong> and (with Taproot) <strong>Schnorr</strong>-style signatures on the{' '}
+        <ArticleLink slug="what-is-secp256k1">secp256k1</ArticleLink> curve; security rests on the
+        hardness of the{' '}
         <ArticleLink slug="the-discrete-logarithm-problem">elliptic-curve discrete logarithm problem</ArticleLink>
         .
       </p>
@@ -31,7 +32,8 @@ export const article: LibraryArticle = {
         <ArticleLink slug="cryptographic-algorithms-in-bitcoin">
           Cryptographic algorithms used in Bitcoin
         </ArticleLink>
-        ; for keys, see{' '}
+        ; for the curve parameters, see{' '}
+        <ArticleLink slug="what-is-secp256k1">What is secp256k1?</ArticleLink>; for keys, see{' '}
         <ArticleLink slug="secret-and-public-keys-in-bitcoin">
           Secret and public keys in Bitcoin
         </ArticleLink>

@@ -8,6 +8,7 @@ import { ThemeSelector } from '@/components/settings/ThemeSelector'
 import { NetworkSelector } from '@/components/settings/NetworkSelector'
 import { AddressTypeSelector } from '@/components/settings/AddressTypeSelector'
 import { EsploraUrlSettings } from '@/components/settings/EsploraUrlSettings'
+import { FeatureToggles } from '@/components/settings/FeatureToggles'
 
 export const Route = createFileRoute('/settings')({
   component: SettingsPage,
@@ -65,6 +66,25 @@ export function SettingsPage() {
           <ThemeSelector />
         </CardContent>
       </Card>
+
+      <InfomodeWrapper
+        infoId="settings-features-card"
+        infoTitle="Features"
+        infoText="Enable or disable optional wallet features. These are advanced capabilities that go beyond basic Bitcoin on-chain operations. Each feature can be turned on independently when you are ready to explore it."
+        className="rounded-xl"
+      >
+        <Card>
+          <CardHeader>
+            <CardTitle>Features</CardTitle>
+            <CardDescription>
+              Enable optional wallet capabilities.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <FeatureToggles />
+          </CardContent>
+        </Card>
+      </InfomodeWrapper>
 
       <EsploraUrlSettings />
 

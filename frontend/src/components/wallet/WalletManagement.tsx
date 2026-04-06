@@ -1,12 +1,17 @@
+import { useEffect, useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { Lock } from 'lucide-react'
 import { toast } from 'sonner'
 import { useWalletStore } from '@/stores/walletStore'
 import { useCryptoStore } from '@/stores/cryptoStore'
-import { useWallets } from '@/db'
+import { useUpdateWallet, useWallet, useWallets } from '@/db'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+
+const MAX_WALLET_NAME_LENGTH = 128
 
 export function WalletManagement() {
   const navigate = useNavigate()
@@ -16,13 +21,44 @@ export function WalletManagement() {
     (s) => s.lockAndPurgeSensitiveRuntimeState,
   )
   const { data: wallets } = useWallets()
+  const { data: walletRow, isSuccess: walletRowLoaded } = useWallet(activeWalletId)
+  const updateWallet = useUpdateWallet()
+  const [draftName, setDraftName] = useState('')
   const hasMultipleWallets = (wallets?.length ?? 0) > 1
+
+  useEffect(() => {
+    if (walletRowLoaded && walletRow?.name !== undefined) {
+      setDraftName(walletRow.name)
+    }
+  }, [activeWalletId, walletRowLoaded, walletRow?.name])
 
   if (!activeWalletId) return null
 
   const handleLockWallet = () => {
     lockAndPurgeSensitiveRuntimeState()
     toast.success('Wallet locked')
+  }
+
+  const trimmedDraft = draftName.trim()
+  const storedName = (walletRow?.name ?? '').trim()
+  const nameValid =
+    trimmedDraft.length > 0 && trimmedDraft.length <= MAX_WALLET_NAME_LENGTH
+  const nameChanged = trimmedDraft !== storedName
+
+  const handleSaveWalletName = async () => {
+    if (!nameValid) {
+      if (trimmedDraft.length === 0) {
+        toast.error('Enter a wallet name')
+      } else {
+        toast.error(`Name must be at most ${MAX_WALLET_NAME_LENGTH} characters`)
+      }
+      return
+    }
+    await updateWallet.mutateAsync({
+      id: activeWalletId,
+      changes: { name: trimmedDraft },
+    })
+    toast.success('Wallet name updated')
   }
 
   return (
@@ -37,7 +73,33 @@ export function WalletManagement() {
           between multiple wallets.
         </CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="space-y-6">
+        <InfomodeWrapper
+          infoId="wallet-rename"
+          infoTitle="Wallet name"
+          infoText="This label is only used inside Bitboard (for example in the header and wallet list). It is not sent to the Bitcoin network and does not affect your recovery phrase or addresses."
+          className="space-y-2"
+        >
+          <Label htmlFor="wallet-display-name">Wallet name</Label>
+          <div className="flex max-w-md flex-col gap-2 sm:flex-row sm:items-end">
+            <Input
+              id="wallet-display-name"
+              value={draftName}
+              onChange={(e) => setDraftName(e.target.value)}
+              maxLength={MAX_WALLET_NAME_LENGTH}
+              autoComplete="off"
+              className="sm:flex-1"
+            />
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={!nameChanged || !nameValid || updateWallet.isPending}
+              onClick={() => void handleSaveWalletName()}
+            >
+              Save name
+            </Button>
+          </div>
+        </InfomodeWrapper>
         <div className="flex flex-wrap gap-2">
           <InfomodeWrapper
             infoId="wallet-add-wallet"

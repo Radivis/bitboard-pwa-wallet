@@ -6,6 +6,7 @@ import { useSessionStore } from '@/stores/sessionStore'
 import { useWallets } from '@/db'
 import { appQueryClient } from '@/lib/app-query-client'
 import { prefetchLabChainState } from '@/hooks/useLabChainStateQuery'
+import { useHydrateLightningConnections } from '@/hooks/useHydrateLightningConnections'
 import {
   loadDescriptorWalletAndSync,
   loadDescriptorWalletWithoutSync,
@@ -16,6 +17,7 @@ interface AppInitializerProps {
 }
 
 export function AppInitializer({ children }: AppInitializerProps) {
+  useHydrateLightningConnections()
   const navigate = useNavigate()
   const location = useLocation()
   const { data: wallets, isLoading } = useWallets()

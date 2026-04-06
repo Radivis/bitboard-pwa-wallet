@@ -6,6 +6,7 @@ import type {
   CreateWalletResult,
   DescriptorPair,
   DescriptorWalletData,
+  NodeInfo,
   SyncResult,
   TransactionDetails,
 } from './crypto-types';
@@ -169,4 +170,7 @@ export interface CryptoService {
     encryptedBlob: EncryptedBlobForDb;
     walletResult: CreateWalletResult;
   }>;
+
+  /** Generate a Lightning node ID from a 32-byte seed using LDK KeysManager. */
+  generateNodeId(seed: Uint8Array): Promise<NodeInfo>;
 }

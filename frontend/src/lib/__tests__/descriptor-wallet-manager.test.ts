@@ -158,6 +158,7 @@ describe('findDescriptorWallet', () => {
   const secrets: WalletSecrets = {
     mnemonic: TEST_MNEMONIC_12,
     descriptorWallets: [signetTaproot, testnetSegwit, signetTaprootAccount1],
+    lightningNwcConnections: [],
   }
 
   it('returns matching descriptor wallet for signet/taproot/0', () => {
@@ -249,6 +250,7 @@ describe('resolveDescriptorWallet', () => {
   const mockSecrets: WalletSecrets = {
     mnemonic: TEST_MNEMONIC_12,
     descriptorWallets: [existingDescriptorWallet],
+    lightningNwcConnections: [],
   }
 
   beforeEach(async () => {
@@ -347,6 +349,7 @@ describe('updateDescriptorWalletChangeset', () => {
         fullScanDone: false,
       },
     ],
+    lightningNwcConnections: [],
   }
 
   beforeEach(async () => {
