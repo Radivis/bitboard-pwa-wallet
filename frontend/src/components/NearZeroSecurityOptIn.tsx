@@ -6,7 +6,7 @@ import { ensureMigrated, getDatabase, generateAndPersistNearZeroSession } from '
 import { errorMessage } from '@/lib/utils'
 
 /**
- * First-run optional path: "quick start" with cryptographically weak storage (see plan).
+ * First-run optional path: "quick start" with cryptographically weak storage.
  */
 export function NearZeroSecurityOptIn() {
   const mutation = useMutation({
