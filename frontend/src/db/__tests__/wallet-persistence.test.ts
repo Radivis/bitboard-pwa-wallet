@@ -25,6 +25,7 @@ import { TEST_MNEMONIC_12 } from '@/test-utils/test-providers'
 import {
   saveWalletSecrets,
   loadWalletSecrets,
+  loadWalletSecretsPayload,
   deleteWalletSecrets,
   reencryptAllWalletSecretsWithNewPassword,
   listWalletIdsWithSecrets,
@@ -84,6 +85,9 @@ describe('Wallet Persistence with Encryption', () => {
       expect(record!.encrypted_data.byteLength).toBeGreaterThan(0)
       expect(record!.iv.byteLength).toBe(12)
       expect(record!.salt.byteLength).toBe(16)
+      expect(record!.mnemonic_encrypted_data!.byteLength).toBeGreaterThan(0)
+      expect(record!.mnemonic_iv!.byteLength).toBe(12)
+      expect(record!.mnemonic_salt!.byteLength).toBe(16)
       expect(record!.created_at).toBeDefined()
       expect(record!.updated_at).toBeDefined()
     })
@@ -169,6 +173,20 @@ describe('Wallet Persistence with Encryption', () => {
     it('throws error when wallet secrets do not exist', async () => {
       await expect(loadWalletSecrets(walletDb, password, 999))
         .rejects.toThrow(/secrets.*not found/i)
+    })
+
+    it('loads payload-only without touching mnemonic ciphertext path semantics', async () => {
+      await saveWalletSecrets({
+        walletDb,
+        password,
+        walletId,
+        secrets: sampleSecrets,
+      })
+      const payloadOnly = await loadWalletSecretsPayload(walletDb, password, walletId)
+      expect(payloadOnly.descriptorWallets).toEqual(sampleSecrets.descriptorWallets)
+      expect(payloadOnly.lightningNwcConnections).toEqual(
+        sampleSecrets.lightningNwcConnections,
+      )
     })
 
     it('correctly handles unicode in secrets', async () => {

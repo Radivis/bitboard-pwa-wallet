@@ -98,13 +98,14 @@ export function ImportWalletPage() {
 
       await ensureSecretsChannel()
       const network = toBitcoinNetwork(networkMode)
-      const { encryptedBlob, walletResult } = await importWalletAndEncryptSecrets({
-        mnemonic,
-        password,
-        network,
-        addressType,
-        accountId,
-      })
+      const { encryptedPayload, encryptedMnemonic, walletResult } =
+        await importWalletAndEncryptSecrets({
+          mnemonic,
+          password,
+          network,
+          addressType,
+          accountId,
+        })
 
       setMnemonicInput('')
 
@@ -120,7 +121,10 @@ export function ImportWalletPage() {
               name: `Imported Wallet ${Date.now()}`,
               created_at: new Date().toISOString(),
             }),
-          encryptedBlob,
+          encryptedBlobs: {
+            payload: encryptedPayload,
+            mnemonic: encryptedMnemonic,
+          },
         })
       } catch (secretsErr) {
         queryClient.invalidateQueries({ queryKey: walletKeys.all })

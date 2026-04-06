@@ -91,6 +91,10 @@ describe('SQLite Database', () => {
             iv: new Uint8Array(12),
             salt: new Uint8Array(16),
             kdf_version: 1,
+            mnemonic_encrypted_data: null,
+            mnemonic_iv: null,
+            mnemonic_salt: null,
+            mnemonic_kdf_version: null,
             created_at: now,
             updated_at: now,
           }).execute()

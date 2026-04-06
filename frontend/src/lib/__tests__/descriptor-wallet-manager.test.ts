@@ -49,32 +49,59 @@ const mockCreateWallet = vi.fn()
 
 async function mockResolveDescriptorWallet(params: {
   password: string
-  encryptedBlob: { ciphertext: Uint8Array; iv: Uint8Array; salt: Uint8Array }
+  encryptedPayload: {
+    ciphertext: Uint8Array
+    iv: Uint8Array
+    salt: Uint8Array
+    kdfVersion?: number
+  }
+  encryptedMnemonic: {
+    ciphertext: Uint8Array
+    iv: Uint8Array
+    salt: Uint8Array
+    kdfVersion?: number
+  }
   targetNetwork: BitcoinNetwork
   targetAddressType: AddressType
   targetAccountId: number
 }) {
   const {
     password,
-    encryptedBlob,
+    encryptedPayload,
+    encryptedMnemonic,
     targetNetwork,
     targetAddressType,
     targetAccountId,
   } = params
   const { getEncryptionWorker } = await import('@/workers/encryption-factory')
-  const plaintext = await getEncryptionWorker().decryptData(password, encryptedBlob)
-  const secrets: WalletSecrets = JSON.parse(plaintext)
+  const enc = getEncryptionWorker()
+
+  const payloadPlain = await enc.decryptData(password, encryptedPayload)
+  const pl = JSON.parse(payloadPlain) as {
+    descriptorWallets: WalletSecrets['descriptorWallets']
+    lightningNwcConnections: WalletSecrets['lightningNwcConnections']
+  }
+  const secretsLike: WalletSecrets = {
+    mnemonic: '',
+    descriptorWallets: pl.descriptorWallets,
+    lightningNwcConnections: pl.lightningNwcConnections,
+  }
   const existing = findDescriptorWallet({
-    secrets,
+    secrets: secretsLike,
     network: targetNetwork,
     addressType: targetAddressType,
     accountId: targetAccountId,
   })
   if (existing) {
-    return { descriptorWalletData: existing, encryptedBlobToStore: null }
+    return {
+      descriptorWalletData: existing,
+      encryptedPayloadToStore: null,
+      encryptedMnemonicToStore: null,
+    }
   }
+  const mnemonicPlain = await enc.decryptData(password, encryptedMnemonic)
   const walletResult = await mockCreateWallet(
-    secrets.mnemonic,
+    mnemonicPlain,
     targetNetwork,
     targetAddressType,
     targetAccountId,
@@ -88,34 +115,48 @@ async function mockResolveDescriptorWallet(params: {
     changeSet: walletResult.changeset_json,
     fullScanDone: false,
   }
-  secrets.descriptorWallets.push(newDw)
-  const newBlob = await getEncryptionWorker().encryptData(password, JSON.stringify(secrets))
+  pl.descriptorWallets.push(newDw)
+  const payloadEnc = await enc.encryptData(password, JSON.stringify(pl))
   return {
     descriptorWalletData: newDw,
-    encryptedBlobToStore: newBlob,
+    encryptedPayloadToStore: payloadEnc,
+    encryptedMnemonicToStore: null,
   }
 }
 
 async function mockUpdateDescriptorWalletChangeset(params: {
   password: string
-  encryptedBlob: { ciphertext: Uint8Array; iv: Uint8Array; salt: Uint8Array }
+  encryptedPayload: {
+    ciphertext: Uint8Array
+    iv: Uint8Array
+    salt: Uint8Array
+    kdfVersion?: number
+  }
   network: BitcoinNetwork
   addressType: AddressType
   accountId: number
   changesetJson: string
   markFullScanDone?: boolean
 }) {
-  const { password, encryptedBlob, network, addressType, accountId, changesetJson } =
+  const { password, encryptedPayload, network, addressType, accountId, changesetJson } =
     params
   const { getEncryptionWorker } = await import('@/workers/encryption-factory')
-  const plaintext = await getEncryptionWorker().decryptData(password, encryptedBlob)
-  const secrets: WalletSecrets = JSON.parse(plaintext)
-  const dw = findDescriptorWallet({ secrets, network, addressType, accountId })
+  const plaintext = await getEncryptionWorker().decryptData(password, encryptedPayload)
+  const pl = JSON.parse(plaintext) as {
+    descriptorWallets: WalletSecrets['descriptorWallets']
+    lightningNwcConnections: WalletSecrets['lightningNwcConnections']
+  }
+  const secretsLike: WalletSecrets = {
+    mnemonic: '',
+    descriptorWallets: pl.descriptorWallets,
+    lightningNwcConnections: pl.lightningNwcConnections ?? [],
+  }
+  const dw = findDescriptorWallet({ secrets: secretsLike, network, addressType, accountId })
   if (!dw) {
     throw new Error(`No descriptor wallet found for ${network}/${addressType}/${accountId}`)
   }
   dw.changeSet = changesetJson
-  const newBlob = await getEncryptionWorker().encryptData(password, JSON.stringify(secrets))
+  const newBlob = await getEncryptionWorker().encryptData(password, JSON.stringify(pl))
   return newBlob
 }
 

@@ -1,10 +1,13 @@
 import { getDatabase } from '@/db/database'
+import { encryptData } from '@/db/encryption'
 import {
-  loadWalletSecrets,
-  saveWalletSecrets,
-  type WalletSecrets,
+  loadWalletSecretsPayload,
+  putSplitWalletSecretsEncrypted,
 } from '@/db/wallet-persistence'
-import type { StoredNwcLightningConnection } from '@/lib/wallet-domain-types'
+import type {
+  StoredNwcLightningConnection,
+  WalletSecretsPayload,
+} from '@/lib/wallet-domain-types'
 import type { ConnectedLightningWallet } from '@/lib/lightning-backend-service'
 
 function storedToConnected(
@@ -41,8 +44,8 @@ export async function loadLightningConnectionsForWallet(params: {
   walletId: number
 }): Promise<ConnectedLightningWallet[]> {
   const { password, walletId } = params
-  const secrets = await loadWalletSecrets(getDatabase(), password, walletId)
-  return secrets.lightningNwcConnections.map((s) =>
+  const payload = await loadWalletSecretsPayload(getDatabase(), password, walletId)
+  return payload.lightningNwcConnections.map((s) =>
     storedToConnected(walletId, s),
   )
 }
@@ -53,16 +56,19 @@ export async function saveLightningConnectionsForWallet(params: {
   connections: ConnectedLightningWallet[]
 }): Promise<void> {
   const { password, walletId, connections } = params
-  const secrets = await loadWalletSecrets(getDatabase(), password, walletId)
+  const payload = await loadWalletSecretsPayload(getDatabase(), password, walletId)
   const nwcOnly = connections.filter((c) => c.walletId === walletId)
-  const merged: WalletSecrets = {
-    ...secrets,
+  const merged: WalletSecretsPayload = {
+    ...payload,
     lightningNwcConnections: nwcOnly.map(connectedWalletToStored),
   }
-  await saveWalletSecrets({
-    walletDb: getDatabase(),
-    password,
-    walletId,
-    secrets: merged,
+  const payloadEnc = await encryptData(password, JSON.stringify(merged))
+  await putSplitWalletSecretsEncrypted(getDatabase(), walletId, {
+    payload: {
+      ciphertext: payloadEnc.ciphertext,
+      iv: payloadEnc.iv,
+      salt: payloadEnc.salt,
+      kdfVersion: payloadEnc.kdfVersion,
+    },
   })
 }

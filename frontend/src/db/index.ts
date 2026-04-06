@@ -42,9 +42,11 @@ export {
 export {
   saveWalletSecrets,
   loadWalletSecrets,
+  loadWalletSecretsPayload,
   deleteWalletSecrets,
   getWalletSecretsEncrypted,
   putWalletSecretsEncrypted,
+  putSplitWalletSecretsEncrypted,
   persistNewWalletWithSecrets,
   listWalletIdsWithSecrets,
   reencryptAllWalletSecretsWithNewPassword,
@@ -63,8 +65,10 @@ export {
 } from './near-zero-security'
 export type {
   WalletSecrets,
+  WalletSecretsPayload,
   DescriptorWalletData,
   EncryptedWalletSecretsBlob,
+  SplitWalletSecretsEncryptedBlobs,
 } from './wallet-persistence'
 export {
   getLabDatabase,

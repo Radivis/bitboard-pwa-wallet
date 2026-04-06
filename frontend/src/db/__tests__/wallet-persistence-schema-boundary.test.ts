@@ -33,6 +33,10 @@ describe('wallet secrets schema boundary', () => {
         iv: new Uint8Array(12),
         salt: new Uint8Array(16),
         kdf_version: 1,
+        mnemonic_encrypted_data: new Uint8Array([1]),
+        mnemonic_iv: new Uint8Array(12),
+        mnemonic_salt: new Uint8Array(16),
+        mnemonic_kdf_version: 1,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       })
@@ -43,16 +47,16 @@ describe('wallet secrets schema boundary', () => {
     await walletDb.destroy()
   })
 
-  it('rejects decrypted secrets that fail schema validation', async () => {
+  it('rejects decrypted payload that fails schema validation', async () => {
     decryptDataMock.mockResolvedValueOnce(
       JSON.stringify({
-        mnemonic: 'not enough fields',
         descriptorWallets: [{ network: 'testnet' }],
+        lightningNwcConnections: [],
       }),
     )
 
     await expect(loadWalletSecrets(walletDb, 'pw', walletId)).rejects.toThrow(
-      'Invalid wallet secrets: schema validation failed',
+      'Invalid wallet secrets payload: schema validation failed',
     )
   })
 })

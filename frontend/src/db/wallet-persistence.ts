@@ -3,12 +3,15 @@ import type { Database } from './schema'
 import type { KdfVersion } from './schema'
 import { encryptData, decryptData } from './encryption'
 import {
-  parseWalletSecretsJson,
+  assembleWalletSecrets,
+  parseWalletPayloadJson,
   type DescriptorWalletData,
   type WalletSecrets,
+  type WalletSecretsPayload,
 } from '@/lib/wallet-domain-types'
 
 export type { DescriptorWalletData, WalletSecrets }
+export type { WalletSecretsPayload } from '@/lib/wallet-domain-types'
 
 /** Encrypted blob shape for reading/writing without decryption (used by descriptor-wallet-manager with crypto worker). */
 export interface EncryptedWalletSecretsBlob {
@@ -19,26 +22,18 @@ export interface EncryptedWalletSecretsBlob {
   kdfVersion: KdfVersion
 }
 
-/**
- * Reads the encrypted wallet secrets row for a wallet (no decryption).
- * Used when delegating decrypt/resolve to the crypto worker.
- *
- * @throws {Error} If no secrets exist for the wallet ID
- */
-export async function getWalletSecretsEncrypted(
-  walletDb: Kysely<Database>,
-  walletId: number
-): Promise<EncryptedWalletSecretsBlob> {
-  const record = await walletDb
-    .selectFrom('wallet_secrets')
-    .select(['encrypted_data', 'iv', 'salt', 'kdf_version'])
-    .where('wallet_id', '=', walletId)
-    .executeTakeFirst()
+/** Encrypted wallet row: payload ciphertext (WalletSecretsPayload JSON) and separate mnemonic ciphertext. */
+export interface SplitWalletSecretsEncryptedBlobs {
+  payload: EncryptedWalletSecretsBlob
+  mnemonic: EncryptedWalletSecretsBlob
+}
 
-  if (!record) {
-    throw new Error(`Wallet secrets for wallet ${walletId} not found`)
-  }
-
+function rowToPayloadBlob(record: {
+  encrypted_data: Uint8Array
+  iv: Uint8Array
+  salt: Uint8Array
+  kdf_version: number
+}): EncryptedWalletSecretsBlob {
   return {
     ciphertext: record.encrypted_data,
     iv: record.iv,
@@ -47,48 +42,134 @@ export async function getWalletSecretsEncrypted(
   }
 }
 
+function rowToMnemonicBlobOrThrow(record: {
+  wallet_id: number
+  mnemonic_encrypted_data: Uint8Array | null
+  mnemonic_iv: Uint8Array | null
+  mnemonic_salt: Uint8Array | null
+  mnemonic_kdf_version: number | null
+}): EncryptedWalletSecretsBlob {
+  if (
+    record.mnemonic_encrypted_data == null ||
+    record.mnemonic_iv == null ||
+    record.mnemonic_salt == null ||
+    record.mnemonic_kdf_version == null
+  ) {
+    throw new Error(
+      `Wallet ${record.wallet_id} uses an old secrets layout. Clear site data or reset the app database, then create or import wallets again.`,
+    )
+  }
+  return {
+    ciphertext: record.mnemonic_encrypted_data,
+    iv: record.mnemonic_iv,
+    salt: record.mnemonic_salt,
+    kdfVersion: record.mnemonic_kdf_version as KdfVersion,
+  }
+}
+
+/** Reads encrypted wallet secrets for a wallet (no decryption). Requires split payload + mnemonic columns. */
+export async function getWalletSecretsEncrypted(
+  walletDb: Kysely<Database>,
+  walletId: number
+): Promise<SplitWalletSecretsEncryptedBlobs> {
+  const record = await walletDb
+    .selectFrom('wallet_secrets')
+    .select([
+      'wallet_id',
+      'encrypted_data',
+      'iv',
+      'salt',
+      'kdf_version',
+      'mnemonic_encrypted_data',
+      'mnemonic_iv',
+      'mnemonic_salt',
+      'mnemonic_kdf_version',
+    ])
+    .where('wallet_id', '=', walletId)
+    .executeTakeFirst()
+
+  if (!record) {
+    throw new Error(`Wallet secrets for wallet ${walletId} not found`)
+  }
+
+  return {
+    payload: rowToPayloadBlob(record),
+    mnemonic: rowToMnemonicBlobOrThrow(record),
+  }
+}
+
+export type PutSplitWalletSecretsEncryptedInput = {
+  payload: EncryptedWalletSecretsBlob
+  /** When set (including null), updates mnemonic columns; omit to leave them unchanged. */
+  mnemonic?: EncryptedWalletSecretsBlob | null
+}
+
 /**
- * Writes encrypted wallet secrets for a wallet (no encryption on main thread).
- * Used after crypto worker returns encryptedBlobToStore from resolveDescriptorWallet or updateDescriptorWalletChangeset.
- *
- * @throws {Error} If the wallet ID does not exist in the `wallets` table
+ * Writes encrypted split blobs. When `mnemonic` is omitted, mnemonic columns are not updated.
  */
-export async function putWalletSecretsEncrypted(
+export async function putSplitWalletSecretsEncrypted(
   walletDb: Kysely<Database>,
   walletId: number,
-  encrypted: EncryptedWalletSecretsBlob
+  blobs: PutSplitWalletSecretsEncryptedInput,
 ): Promise<void> {
   await assertWalletExists(walletDb, walletId)
 
   const now = new Date().toISOString()
-  const kdfVersion = encrypted.kdfVersion
+  const kdfVersion = blobs.payload.kdfVersion
   const existing = await walletDb
     .selectFrom('wallet_secrets')
     .select('wallet_secrets_id')
     .where('wallet_id', '=', walletId)
     .executeTakeFirst()
 
+  const baseSet = {
+    encrypted_data: blobs.payload.ciphertext,
+    iv: blobs.payload.iv,
+    salt: blobs.payload.salt,
+    kdf_version: kdfVersion,
+    updated_at: now,
+  }
+
+  const mnemonicSet =
+    blobs.mnemonic !== undefined
+      ? blobs.mnemonic === null
+        ? {
+            mnemonic_encrypted_data: null,
+            mnemonic_iv: null,
+            mnemonic_salt: null,
+            mnemonic_kdf_version: null,
+          }
+        : {
+            mnemonic_encrypted_data: blobs.mnemonic.ciphertext,
+            mnemonic_iv: blobs.mnemonic.iv,
+            mnemonic_salt: blobs.mnemonic.salt,
+            mnemonic_kdf_version: blobs.mnemonic.kdfVersion,
+          }
+      : {}
+
   if (existing) {
     await walletDb
       .updateTable('wallet_secrets')
-      .set({
-        encrypted_data: encrypted.ciphertext,
-        iv: encrypted.iv,
-        salt: encrypted.salt,
-        kdf_version: kdfVersion,
-        updated_at: now,
-      })
+      .set({ ...baseSet, ...mnemonicSet })
       .where('wallet_secrets_id', '=', existing.wallet_secrets_id)
       .execute()
   } else {
+    if (blobs.mnemonic === undefined || blobs.mnemonic === null) {
+      throw new Error('New wallet secrets row requires both payload and mnemonic ciphertexts')
+    }
+    const m = blobs.mnemonic
     await walletDb
       .insertInto('wallet_secrets')
       .values({
         wallet_id: walletId,
-        encrypted_data: encrypted.ciphertext,
-        iv: encrypted.iv,
-        salt: encrypted.salt,
+        encrypted_data: blobs.payload.ciphertext,
+        iv: blobs.payload.iv,
+        salt: blobs.payload.salt,
         kdf_version: kdfVersion,
+        mnemonic_encrypted_data: m.ciphertext,
+        mnemonic_iv: m.iv,
+        mnemonic_salt: m.salt,
+        mnemonic_kdf_version: m.kdfVersion,
         created_at: now,
         updated_at: now,
       })
@@ -96,38 +177,46 @@ export async function putWalletSecretsEncrypted(
   }
 }
 
+/** @deprecated Use {@link putSplitWalletSecretsEncrypted} with payload-only update. */
+export async function putWalletSecretsEncrypted(
+  walletDb: Kysely<Database>,
+  walletId: number,
+  encrypted: EncryptedWalletSecretsBlob,
+): Promise<void> {
+  await putSplitWalletSecretsEncrypted(walletDb, walletId, { payload: encrypted })
+}
+
 export type PutWalletSecretsEncryptedFn = (
   db: Kysely<Database>,
   walletId: number,
-  encrypted: EncryptedWalletSecretsBlob
+  encrypted: EncryptedWalletSecretsBlob,
 ) => Promise<void>
 
 /**
- * Inserts a wallet row via the given callback, then persists encrypted secrets.
- * If the secrets write fails, the wallet row is removed and the error is rethrown,
- * so the wallet list never contains an entry without secrets.
- *
- * @param walletDb - Kysely wallet database instance
- * @param insertWalletRow - Callback that inserts the wallet row and returns the new wallet_id
- * @param encryptedBlob - Encrypted blob to store (from crypto worker)
- * @param putSecrets - Secrets writer (default: putWalletSecretsEncrypted). Inject for tests.
- * @returns The new wallet_id on success
+ * Inserts a wallet row via the given callback, then persists encrypted secrets (split format).
  */
 export async function persistNewWalletWithSecrets(params: {
   walletDb: Kysely<Database>
   insertWalletRow: () => Promise<number>
-  encryptedBlob: EncryptedWalletSecretsBlob
-  putSecrets?: PutWalletSecretsEncryptedFn
+  encryptedBlobs: SplitWalletSecretsEncryptedBlobs
+  putSecrets?: (
+    db: Kysely<Database>,
+    walletId: number,
+    blobs: PutSplitWalletSecretsEncryptedInput,
+  ) => Promise<void>
 }): Promise<number> {
   const {
     walletDb,
     insertWalletRow,
-    encryptedBlob,
-    putSecrets = putWalletSecretsEncrypted,
+    encryptedBlobs,
+    putSecrets = putSplitWalletSecretsEncrypted,
   } = params
   const walletId = await insertWalletRow()
   try {
-    await putSecrets(walletDb, walletId, encryptedBlob)
+    await putSecrets(walletDb, walletId, {
+      payload: encryptedBlobs.payload,
+      mnemonic: encryptedBlobs.mnemonic,
+    })
     return walletId
   } catch (err) {
     await walletDb.deleteFrom('wallets').where('wallet_id', '=', walletId).execute()
@@ -136,16 +225,7 @@ export async function persistNewWalletWithSecrets(params: {
 }
 
 /**
- * Encrypts and persists wallet secrets to the `wallet_secrets` table.
- *
- * If secrets already exist for the given wallet, they are re-encrypted and updated.
- *
- * @param walletDb - Kysely wallet database instance
- * @param password - User password for encryption
- * @param walletId - ID of the wallet in the `wallets` table
- * @param secrets - Sensitive wallet data to encrypt and store
- *
- * @throws {Error} If the wallet ID does not exist in the `wallets` table
+ * Encrypts and persists wallet secrets in split format.
  */
 export async function saveWalletSecrets(params: {
   walletDb: Kysely<Database>
@@ -156,70 +236,57 @@ export async function saveWalletSecrets(params: {
   const { walletDb, password, walletId, secrets } = params
   await assertWalletExists(walletDb, walletId)
 
-  const plaintext = JSON.stringify(secrets)
-  const encrypted = await encryptData(password, plaintext)
-
-  const now = new Date().toISOString()
-  const kdfVersion = encrypted.kdfVersion
-  const existing = await walletDb
-    .selectFrom('wallet_secrets')
-    .select('wallet_secrets_id')
-    .where('wallet_id', '=', walletId)
-    .executeTakeFirst()
-
-  if (existing) {
-    await walletDb
-      .updateTable('wallet_secrets')
-      .set({
-        encrypted_data: encrypted.ciphertext,
-        iv: encrypted.iv,
-        salt: encrypted.salt,
-        kdf_version: kdfVersion,
-        updated_at: now,
-      })
-      .where('wallet_secrets_id', '=', existing.wallet_secrets_id)
-      .execute()
-  } else {
-    await walletDb
-      .insertInto('wallet_secrets')
-      .values({
-        wallet_id: walletId,
-        encrypted_data: encrypted.ciphertext,
-        iv: encrypted.iv,
-        salt: encrypted.salt,
-        kdf_version: kdfVersion,
-        created_at: now,
-        updated_at: now,
-      })
-      .execute()
+  const payload: WalletSecretsPayload = {
+    descriptorWallets: secrets.descriptorWallets,
+    lightningNwcConnections: secrets.lightningNwcConnections,
   }
+  const payloadEnc = await encryptData(password, JSON.stringify(payload))
+  const mnemonicEnc = await encryptData(password, secrets.mnemonic)
+
+  await putSplitWalletSecretsEncrypted(walletDb, walletId, {
+    payload: {
+      ciphertext: payloadEnc.ciphertext,
+      iv: payloadEnc.iv,
+      salt: payloadEnc.salt,
+      kdfVersion: payloadEnc.kdfVersion,
+    },
+    mnemonic: {
+      ciphertext: mnemonicEnc.ciphertext,
+      iv: mnemonicEnc.iv,
+      salt: mnemonicEnc.salt,
+      kdfVersion: mnemonicEnc.kdfVersion,
+    },
+  })
 }
 
 /**
- * Loads and decrypts wallet secrets from the `wallet_secrets` table.
- *
- * @param walletDb - Kysely wallet database instance
- * @param password - User password for decryption (must match encryption password)
- * @param walletId - ID of the wallet whose secrets to load
- * @returns Decrypted wallet secrets
- *
- * @throws {Error} If no secrets exist for the wallet ID
- * @throws {Error} If the password is incorrect or data is corrupted
+ * Loads and decrypts wallet payload only (no mnemonic). Requires split-format row.
  */
-export async function loadWalletSecrets(
+export async function loadWalletSecretsPayload(
   walletDb: Kysely<Database>,
   password: string,
-  walletId: number
-): Promise<WalletSecrets> {
+  walletId: number,
+): Promise<WalletSecretsPayload> {
   const record = await walletDb
     .selectFrom('wallet_secrets')
-    .selectAll()
+    .select([
+      'wallet_id',
+      'encrypted_data',
+      'iv',
+      'salt',
+      'kdf_version',
+      'mnemonic_encrypted_data',
+      'mnemonic_iv',
+      'mnemonic_salt',
+      'mnemonic_kdf_version',
+    ])
     .where('wallet_id', '=', walletId)
     .executeTakeFirst()
 
   if (!record) {
     throw new Error(`Wallet secrets for wallet ${walletId} not found`)
   }
+  rowToMnemonicBlobOrThrow(record)
 
   const plaintext = await decryptData(password, {
     ciphertext: record.encrypted_data,
@@ -227,28 +294,69 @@ export async function loadWalletSecrets(
     salt: record.salt,
     kdfVersion: record.kdf_version as KdfVersion,
   })
+  return parseWalletPayloadJson(plaintext)
+}
 
-  return parseWalletSecretsJson(plaintext)
+/**
+ * Loads and decrypts wallet secrets from the `wallet_secrets` table.
+ */
+export async function loadWalletSecrets(
+  walletDb: Kysely<Database>,
+  password: string,
+  walletId: number,
+): Promise<WalletSecrets> {
+  const record = await walletDb
+    .selectFrom('wallet_secrets')
+    .select([
+      'encrypted_data',
+      'iv',
+      'salt',
+      'kdf_version',
+      'mnemonic_encrypted_data',
+      'mnemonic_iv',
+      'mnemonic_salt',
+      'mnemonic_kdf_version',
+    ])
+    .where('wallet_id', '=', walletId)
+    .executeTakeFirst()
+
+  if (!record) {
+    throw new Error(`Wallet secrets for wallet ${walletId} not found`)
+  }
+  const mnemonicBlob = rowToMnemonicBlobOrThrow({
+    wallet_id: walletId,
+    mnemonic_encrypted_data: record.mnemonic_encrypted_data,
+    mnemonic_iv: record.mnemonic_iv,
+    mnemonic_salt: record.mnemonic_salt,
+    mnemonic_kdf_version: record.mnemonic_kdf_version,
+  })
+
+  const payloadPlaintext = await decryptData(password, {
+    ciphertext: record.encrypted_data,
+    iv: record.iv,
+    salt: record.salt,
+    kdfVersion: record.kdf_version as KdfVersion,
+  })
+  const mnemonicPlaintext = await decryptData(password, {
+    ciphertext: mnemonicBlob.ciphertext,
+    iv: mnemonicBlob.iv,
+    salt: mnemonicBlob.salt,
+    kdfVersion: mnemonicBlob.kdfVersion,
+  })
+  const payload = parseWalletPayloadJson(payloadPlaintext)
+  return assembleWalletSecrets(mnemonicPlaintext, payload)
 }
 
 /**
  * Deletes encrypted wallet secrets from the `wallet_secrets` table.
- *
- * No-op if no secrets exist for the given wallet.
  */
 export async function deleteWalletSecrets(
   walletDb: Kysely<Database>,
-  walletId: number
+  walletId: number,
 ): Promise<void> {
-  await walletDb
-    .deleteFrom('wallet_secrets')
-    .where('wallet_id', '=', walletId)
-    .execute()
+  await walletDb.deleteFrom('wallet_secrets').where('wallet_id', '=', walletId).execute()
 }
 
-/**
- * Returns wallet IDs that have a `wallet_secrets` row, ascending order.
- */
 export async function listWalletIdsWithSecrets(
   walletDb: Kysely<Database>,
 ): Promise<number[]> {
@@ -260,12 +368,6 @@ export async function listWalletIdsWithSecrets(
   return rows.map((r) => r.wallet_id)
 }
 
-/**
- * Decrypts every wallet secrets blob with `oldPassword`, re-encrypts with `newPassword`,
- * and persists all rows in a single database transaction (all-or-nothing).
- *
- * @throws {Error} If there are no rows in `wallet_secrets`, or decryption fails (wrong password).
- */
 export async function reencryptAllWalletSecretsWithNewPassword(params: {
   walletDb: Kysely<Database>
   oldPassword: string
@@ -284,24 +386,38 @@ export async function reencryptAllWalletSecretsWithNewPassword(params: {
     decrypted.push({ walletId, secrets })
   }
 
-  const blobs: { walletId: number; encrypted: EncryptedWalletSecretsBlob }[] = []
+  const blobs: {
+    walletId: number
+    payload: EncryptedWalletSecretsBlob
+    mnemonic: EncryptedWalletSecretsBlob
+  }[] = []
   for (const { walletId, secrets } of decrypted) {
-    const plaintext = JSON.stringify(secrets)
-    const encrypted = await encryptData(newPassword, plaintext)
+    const payload: WalletSecretsPayload = {
+      descriptorWallets: secrets.descriptorWallets,
+      lightningNwcConnections: secrets.lightningNwcConnections,
+    }
+    const payloadEnc = await encryptData(newPassword, JSON.stringify(payload))
+    const mnemonicEnc = await encryptData(newPassword, secrets.mnemonic)
     blobs.push({
       walletId,
-      encrypted: {
-        ciphertext: encrypted.ciphertext,
-        iv: encrypted.iv,
-        salt: encrypted.salt,
-        kdfVersion: encrypted.kdfVersion,
+      payload: {
+        ciphertext: payloadEnc.ciphertext,
+        iv: payloadEnc.iv,
+        salt: payloadEnc.salt,
+        kdfVersion: payloadEnc.kdfVersion,
+      },
+      mnemonic: {
+        ciphertext: mnemonicEnc.ciphertext,
+        iv: mnemonicEnc.iv,
+        salt: mnemonicEnc.salt,
+        kdfVersion: mnemonicEnc.kdfVersion,
       },
     })
   }
 
   await walletDb.transaction().execute(async (trx) => {
-    for (const { walletId, encrypted } of blobs) {
-      await putWalletSecretsEncrypted(trx, walletId, encrypted)
+    for (const { walletId, payload, mnemonic } of blobs) {
+      await putSplitWalletSecretsEncrypted(trx, walletId, { payload, mnemonic })
     }
   })
 }

@@ -31,10 +31,16 @@ export type Setting = Selectable<SettingsTable>
 interface WalletSecretsTable {
   wallet_secrets_id: Generated<number>
   wallet_id: number
+  /** Payload ciphertext: after split migration, JSON of WalletSecretsPayload only. Legacy: full WalletSecrets JSON. */
   encrypted_data: Uint8Array
   iv: Uint8Array
   salt: Uint8Array
   kdf_version: KdfVersion
+  /** Separate mnemonic ciphertext (split storage layout). */
+  mnemonic_encrypted_data: Uint8Array | null
+  mnemonic_iv: Uint8Array | null
+  mnemonic_salt: Uint8Array | null
+  mnemonic_kdf_version: KdfVersion | null
   created_at: string
   updated_at: string
 }

@@ -22,7 +22,7 @@ import {
   persistNewWalletWithSecrets,
   walletKeys,
   useWallets,
-  type EncryptedWalletSecretsBlob,
+  type SplitWalletSecretsEncryptedBlobs,
 } from '@/db'
 import { ensureSecretsChannel } from '@/workers/secrets-channel'
 import { toBitcoinNetwork } from '@/lib/bitcoin-utils'
@@ -35,7 +35,7 @@ type Step = 1 | 2 | 3
 
 /** Stored after createWalletAndEncryptSecrets so we can persist in step 3 without keeping mnemonic. */
 interface CreateWalletPending {
-  encryptedBlob: EncryptedWalletSecretsBlob
+  encryptedBlobs: SplitWalletSecretsEncryptedBlobs
   walletResult: { first_address: string }
 }
 
@@ -97,7 +97,10 @@ export function CreateWalletPage() {
     onSuccess: (result) => {
       setMnemonicForBackup(result.mnemonicForBackup)
       setPendingCreate({
-        encryptedBlob: result.encryptedBlob,
+        encryptedBlobs: {
+          payload: result.encryptedPayload,
+          mnemonic: result.encryptedMnemonic,
+        },
         walletResult: { first_address: result.walletResult.first_address },
       })
       setStep(2)
@@ -126,7 +129,7 @@ export function CreateWalletPage() {
               name: `Wallet ${Date.now()}`,
               created_at: new Date().toISOString(),
             }),
-          encryptedBlob: pendingCreate!.encryptedBlob,
+          encryptedBlobs: pendingCreate!.encryptedBlobs,
         })
       } catch (secretsErr) {
         queryClient.invalidateQueries({ queryKey: walletKeys.all })

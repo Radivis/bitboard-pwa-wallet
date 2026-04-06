@@ -11,10 +11,11 @@ import type {
   TransactionDetails,
 } from './crypto-types';
 
-/** Result of resolveDescriptorWallet: descriptor data and optional new encrypted blob to store. */
+/** Result of resolveDescriptorWallet: descriptor data and optional new ciphertext(s) to store. */
 export interface ResolveDescriptorWalletResult {
   descriptorWalletData: DescriptorWalletData;
-  encryptedBlobToStore: EncryptedBlobForDb | null;
+  encryptedPayloadToStore: EncryptedBlobForDb | null;
+  encryptedMnemonicToStore: EncryptedBlobForDb | null;
 }
 
 /** Encrypted blob as stored in DB (transferable from worker to main). */
@@ -59,7 +60,9 @@ export interface BuildTransactionParams {
 
 export interface ResolveDescriptorWalletParams {
   password: string;
-  encryptedBlob: EncryptedBlobForDb;
+  /** Payload ciphertext (WalletSecretsPayload JSON). */
+  encryptedPayload: EncryptedBlobForDb;
+  encryptedMnemonic: EncryptedBlobForDb;
   targetNetwork: BitcoinNetwork;
   targetAddressType: AddressType;
   targetAccountId: number;
@@ -67,7 +70,8 @@ export interface ResolveDescriptorWalletParams {
 
 export interface UpdateDescriptorWalletChangesetParams {
   password: string;
-  encryptedBlob: EncryptedBlobForDb;
+  /** WalletSecretsPayload ciphertext only (after split migration). */
+  encryptedPayload: EncryptedBlobForDb;
   network: BitcoinNetwork;
   addressType: AddressType;
   accountId: number;
@@ -155,19 +159,21 @@ export interface CryptoService {
   createWalletAndEncryptSecrets(
     params: CreateWalletAndEncryptSecretsParams,
   ): Promise<{
-    encryptedBlob: EncryptedBlobForDb;
+    encryptedPayload: EncryptedBlobForDb;
+    encryptedMnemonic: EncryptedBlobForDb;
     walletResult: CreateWalletResult;
     mnemonicForBackup: string;
   }>;
 
   /**
    * Import wallet (create in WASM from mnemonic, encrypt secrets).
-   * Mnemonic is passed in and not retained; returns encrypted blob and wallet result.
+   * Mnemonic is passed in and not retained; returns split ciphertexts and wallet result.
    */
   importWalletAndEncryptSecrets(
     params: ImportWalletAndEncryptSecretsParams,
   ): Promise<{
-    encryptedBlob: EncryptedBlobForDb;
+    encryptedPayload: EncryptedBlobForDb;
+    encryptedMnemonic: EncryptedBlobForDb;
     walletResult: CreateWalletResult;
   }>;
 
