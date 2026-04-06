@@ -47,6 +47,7 @@ export function ImportWalletPage() {
   const setActiveWallet = useWalletStore((s) => s.setActiveWallet)
   const setWalletStatus = useWalletStore((s) => s.setWalletStatus)
   const setCurrentAddress = useWalletStore((s) => s.setCurrentAddress)
+  const commitLoadedSubWallet = useWalletStore((s) => s.commitLoadedSubWallet)
   const setBalance = useWalletStore((s) => s.setBalance)
   const setTransactions = useWalletStore((s) => s.setTransactions)
   const getBalanceFromWorker = useCryptoStore((s) => s.getBalance)
@@ -133,6 +134,11 @@ export function ImportWalletPage() {
 
       setActiveWallet(walletId)
       setCurrentAddress(walletResult.first_address)
+      commitLoadedSubWallet({
+        networkMode,
+        addressType,
+        accountId,
+      })
       setWalletStatus('unlocked')
 
       startAutoLockTimer(() => {

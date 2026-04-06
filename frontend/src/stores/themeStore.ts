@@ -69,16 +69,20 @@ export function isWalletThemePaletteActive(
 export function ThemeSynchronizer() {
   const themeMode = useThemeStore((state) => state.themeMode)
   const networkMode = useWalletStore((state) => state.networkMode)
+  const loadedSubWallet = useWalletStore((state) => state.loadedSubWallet)
   const addressType = useWalletStore((state) => state.addressType)
   const activeWalletId = useWalletStore((state) => state.activeWalletId)
   const walletStatus = useWalletStore((state) => state.walletStatus)
+
+  const accentNetworkMode = loadedSubWallet?.networkMode ?? networkMode
+  const accentAddressType = loadedSubWallet?.addressType ?? addressType
 
   useEffect(() => {
     function apply() {
       const resolved = resolveTheme(themeMode)
       document.documentElement.classList.toggle('dark', resolved === 'dark')
-      document.documentElement.dataset.network = networkMode ?? 'testnet'
-      document.documentElement.dataset.addressType = addressType ?? 'taproot'
+      document.documentElement.dataset.network = accentNetworkMode ?? 'testnet'
+      document.documentElement.dataset.addressType = accentAddressType ?? 'taproot'
       document.documentElement.dataset.palette = isWalletThemePaletteActive(
         activeWalletId,
         walletStatus,
@@ -96,7 +100,7 @@ export function ThemeSynchronizer() {
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
     mediaQuery.addEventListener('change', apply)
     return () => mediaQuery.removeEventListener('change', apply)
-  }, [themeMode, networkMode, addressType, activeWalletId, walletStatus])
+  }, [themeMode, accentNetworkMode, accentAddressType, activeWalletId, walletStatus])
 
   return null
 }

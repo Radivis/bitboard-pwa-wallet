@@ -1,4 +1,5 @@
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useMemo } from 'react'
+import { useMutation, useIsFetching } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import {
   useWalletStore,
@@ -15,6 +16,8 @@ import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { Button } from '@/components/ui/button'
 import { WalletUnlock } from '@/components/WalletUnlock'
 import { useSessionStore } from '@/stores/sessionStore'
+import { LoadingSpinner } from '@/components/LoadingSpinner'
+import { ACTIVE_WALLET_LOAD_QUERY_ROOT } from '@/lib/wallet-load-query-keys'
 
 const NETWORK_OPTIONS: NetworkMode[] = [
   'mainnet',
@@ -47,14 +50,7 @@ const NETWORK_INFOMODE: Record<NetworkMode, { title: string; text: string }> = {
   },
 }
 
-/**
- * Move the descriptor wallet from `previousNetwork` to `targetNetwork` with a
- * loading overlay; runs optional work after the WASM switch succeeds (e.g.
- * stopping the lab worker when leaving lab).
- */
 async function switchDescriptorWalletWhileUnlockedOrSyncing(params: {
-  setSwitching: (value: boolean) => void
-  setNetworkMode: (mode: NetworkMode) => void
   targetNetwork: NetworkMode
   previousNetwork: NetworkMode
   addressType: AddressType
@@ -62,40 +58,24 @@ async function switchDescriptorWalletWhileUnlockedOrSyncing(params: {
   afterDescriptorSwitch?: () => void | Promise<void>
 }): Promise<void> {
   const {
-    setSwitching,
-    setNetworkMode,
     targetNetwork,
     previousNetwork,
     addressType,
     accountId,
     afterDescriptorSwitch,
   } = params
-  setSwitching(true)
-  try {
-    await switchDescriptorWallet({
-      targetNetworkMode: targetNetwork,
-      targetAddressType: addressType,
-      targetAccountId: accountId,
-      currentNetworkMode: previousNetwork,
-      currentAddressType: addressType,
-      currentAccountId: accountId,
-    })
-    await afterDescriptorSwitch?.()
-    setNetworkMode(targetNetwork)
-  } catch {
-    // switchDescriptorWallet already showed a toast
-  } finally {
-    setSwitching(false)
-  }
+  await switchDescriptorWallet({
+    targetNetworkMode: targetNetwork,
+    targetAddressType: addressType,
+    targetAccountId: accountId,
+    currentNetworkMode: previousNetwork,
+    currentAddressType: addressType,
+    currentAccountId: accountId,
+  })
+  await afterDescriptorSwitch?.()
 }
 
-/**
- * Leaving lab: if the wallet is active, switch the descriptor wallet back to a
- * live chain (with spinner); always stop the lab worker before/after as
- * appropriate. If the wallet is not active, just tear down lab and update mode.
- */
 async function switchFromLabNetwork(params: {
-  setSwitching: (value: boolean) => void
   setNetworkMode: (mode: NetworkMode) => void
   targetNetwork: NetworkMode
   walletStatus: WalletStatus
@@ -103,7 +83,6 @@ async function switchFromLabNetwork(params: {
   accountId: number
 }): Promise<void> {
   const {
-    setSwitching,
     setNetworkMode,
     targetNetwork,
     walletStatus,
@@ -112,8 +91,6 @@ async function switchFromLabNetwork(params: {
   } = params
   if (walletIsUnlockedOrSyncing(walletStatus)) {
     await switchDescriptorWalletWhileUnlockedOrSyncing({
-      setSwitching,
-      setNetworkMode,
       targetNetwork,
       previousNetwork: 'lab',
       addressType,
@@ -129,12 +106,7 @@ async function switchFromLabNetwork(params: {
   setNetworkMode(targetNetwork)
 }
 
-/**
- * Switch between non-lab networks: descriptor switch when the wallet is active,
- * otherwise only update persisted network mode.
- */
 async function switchBetweenLiveNetworks(params: {
-  setSwitching: (value: boolean) => void
   setNetworkMode: (mode: NetworkMode) => void
   targetNetwork: NetworkMode
   previousNetwork: NetworkMode
@@ -143,7 +115,6 @@ async function switchBetweenLiveNetworks(params: {
   accountId: number
 }): Promise<void> {
   const {
-    setSwitching,
     setNetworkMode,
     targetNetwork,
     previousNetwork,
@@ -157,8 +128,6 @@ async function switchBetweenLiveNetworks(params: {
   }
 
   await switchDescriptorWalletWhileUnlockedOrSyncing({
-    setSwitching,
-    setNetworkMode,
     targetNetwork,
     previousNetwork,
     addressType,
@@ -166,79 +135,93 @@ async function switchBetweenLiveNetworks(params: {
   })
 }
 
+function committedNetworkMode(): NetworkMode {
+  const { loadedSubWallet, networkMode } = useWalletStore.getState()
+  return loadedSubWallet?.networkMode ?? networkMode
+}
+
 export function NetworkSelector() {
   const networkMode = useWalletStore((s) => s.networkMode)
+  const loadedSubWallet = useWalletStore((s) => s.loadedSubWallet)
   const setNetworkMode = useWalletStore((s) => s.setNetworkMode)
   const activeWalletId = useWalletStore((s) => s.activeWalletId)
   const sessionPassword = useSessionStore((s) => s.password)
-  const [switching, setSwitching] = useState(false)
   const [showUnlockForNetworkChange, setShowUnlockForNetworkChange] =
     useState(false)
   const pendingNetworkAfterUnlockRef = useRef<NetworkMode | null>(null)
 
-  const runNetworkChange = useCallback(
-    async (network: NetworkMode) => {
-      const currentMode = useWalletStore.getState().networkMode
-      const walletStatus = useWalletStore.getState().walletStatus
-      const addressType = useWalletStore.getState().addressType
-      const accountId = useWalletStore.getState().accountId
+  const displayNetworkMode = loadedSubWallet?.networkMode ?? networkMode
 
-      if (network === currentMode) return
-      const previousNetworkMode = currentMode
+  const bootstrapFetching =
+    useIsFetching({ queryKey: [ACTIVE_WALLET_LOAD_QUERY_ROOT] }) > 0
 
-      if (network === 'lab') {
-        await switchToLabNetwork({
-          setSwitching,
-          setNetworkMode,
-          previousNetworkMode,
-          walletStatus,
-          addressType,
-          accountId,
-        })
-        return
-      }
+  const runNetworkChange = useCallback(async (network: NetworkMode) => {
+    const currentMode = committedNetworkMode()
+    const walletStatus = useWalletStore.getState().walletStatus
+    const addressType = useWalletStore.getState().addressType
+    const accountId = useWalletStore.getState().accountId
 
-      if (previousNetworkMode === 'lab') {
-        await switchFromLabNetwork({
-          setSwitching,
-          setNetworkMode,
-          targetNetwork: network,
-          walletStatus,
-          addressType,
-          accountId,
-        })
-        return
-      }
+    if (network === currentMode) return
+    const previousNetworkMode = currentMode
 
-      await switchBetweenLiveNetworks({
-        setSwitching,
-        setNetworkMode,
-        targetNetwork: network,
-        previousNetwork: previousNetworkMode,
+    if (network === 'lab') {
+      await switchToLabNetwork({
+        previousNetworkMode,
         walletStatus,
         addressType,
         accountId,
       })
-    },
-    [setNetworkMode],
-  )
+      return
+    }
+
+    if (previousNetworkMode === 'lab') {
+      await switchFromLabNetwork({
+        setNetworkMode,
+        targetNetwork: network,
+        walletStatus,
+        addressType,
+        accountId,
+      })
+      return
+    }
+
+    await switchBetweenLiveNetworks({
+      setNetworkMode,
+      targetNetwork: network,
+      previousNetwork: previousNetworkMode,
+      walletStatus,
+      addressType,
+      accountId,
+    })
+  }, [setNetworkMode])
+
+  const switchMutation = useMutation({
+    mutationFn: runNetworkChange,
+  })
 
   const handleNetworkChange = useCallback(
-    async (network: NetworkMode) => {
-      if (network === networkMode) return
+    (network: NetworkMode) => {
+      if (network === displayNetworkMode) return
 
-      // No persisted session: walletStatus may be `locked` after autolock or `none` after
-      // reload — both mean we cannot run switchDescriptorWallet until the user unlocks.
       if (activeWalletId !== null && sessionPassword === null) {
         pendingNetworkAfterUnlockRef.current = network
         setShowUnlockForNetworkChange(true)
         return
       }
 
-      await runNetworkChange(network)
+      switchMutation.mutate(network)
     },
-    [networkMode, activeWalletId, sessionPassword, runNetworkChange],
+    [displayNetworkMode, activeWalletId, sessionPassword, switchMutation],
   )
+
+  const pendingSwitch = switchMutation.isPending
+  const loading = bootstrapFetching || pendingSwitch
+
+  const statusLine = useMemo(() => {
+    if (bootstrapFetching) return 'Loading wallet…'
+    if (pendingSwitch) return 'Switching network…'
+    return null
+  }, [bootstrapFetching, pendingSwitch])
 
   return (
     <div className="space-y-2">
@@ -253,10 +236,10 @@ export function NetworkSelector() {
               infoText={text}
             >
               <Button
-                variant={networkMode === network ? 'default' : 'outline'}
+                variant={displayNetworkMode === network ? 'default' : 'outline'}
                 size="sm"
                 onClick={() => handleNetworkChange(network)}
-                disabled={switching}
+                disabled={loading}
               >
                 {NETWORK_LABELS[network]}
               </Button>
@@ -264,7 +247,13 @@ export function NetworkSelector() {
           )
         })}
       </div>
-      {networkMode === 'lab' && (
+      {loading && statusLine && (
+        <LoadingSpinner
+          text={statusLine}
+          className="flex-row items-center justify-start gap-2 py-1 [&_.animate-spin]:h-4 [&_.animate-spin]:w-4"
+        />
+      )}
+      {displayNetworkMode === 'lab' && (
         <div>
           <InfomodeWrapper
             infoId="settings-network-manage-lab"
@@ -272,7 +261,7 @@ export function NetworkSelector() {
             infoText="Opens Bitboard’s lab screen where you can mine pretend blocks, inspect addresses and UTXOs, and build practice transactions inside the simulator—still disconnected from real Bitcoin networks."
           >
             <Link to="/lab" preload={false}>
-              <Button variant="outline" size="sm">
+              <Button variant="outline" size="sm" disabled={loading}>
                 Manage lab
               </Button>
             </Link>
@@ -290,7 +279,7 @@ export function NetworkSelector() {
             const target = pendingNetworkAfterUnlockRef.current
             pendingNetworkAfterUnlockRef.current = null
             setShowUnlockForNetworkChange(false)
-            if (target) void runNetworkChange(target)
+            if (target) switchMutation.mutate(target)
           }}
         />
       )}

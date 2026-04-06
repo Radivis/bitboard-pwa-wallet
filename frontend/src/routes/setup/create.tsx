@@ -57,6 +57,7 @@ export function CreateWalletPage() {
   const setActiveWallet = useWalletStore((s) => s.setActiveWallet)
   const setWalletStatus = useWalletStore((s) => s.setWalletStatus)
   const setCurrentAddress = useWalletStore((s) => s.setCurrentAddress)
+  const commitLoadedSubWallet = useWalletStore((s) => s.commitLoadedSubWallet)
   const addWallet = useAddWallet()
 
   const words = useMemo(() => (mnemonicForBackup ? mnemonicForBackup.split(' ') : []), [mnemonicForBackup])
@@ -138,6 +139,11 @@ export function CreateWalletPage() {
       setPendingCreate(null)
       setActiveWallet(walletId)
       setCurrentAddress(firstAddress)
+      commitLoadedSubWallet({
+        networkMode,
+        addressType,
+        accountId,
+      })
       setWalletStatus('unlocked')
       startAutoLockTimer(() => {
         useCryptoStore.getState().lockAndPurgeSensitiveRuntimeState()

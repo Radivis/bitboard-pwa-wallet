@@ -60,8 +60,6 @@ async function persistAndLoadLabWalletIfUnlockedOrSyncing(params: {
 }
 
 export type SwitchToLabNetworkParams = {
-  setSwitching: (value: boolean) => void
-  setNetworkMode: (mode: NetworkMode) => void
   previousNetworkMode: NetworkMode
   walletStatus: WalletStatus
   addressType: AddressType
@@ -76,15 +74,7 @@ export type SwitchToLabNetworkParams = {
 export async function switchToLabNetwork(
   params: SwitchToLabNetworkParams,
 ): Promise<boolean> {
-  const {
-    setSwitching,
-    setNetworkMode,
-    previousNetworkMode,
-    walletStatus,
-    addressType,
-    accountId,
-  } = params
-  setSwitching(true)
+  const { previousNetworkMode, walletStatus, addressType, accountId } = params
   try {
     terminateLabWorker()
     await persistAndLoadLabWalletIfUnlockedOrSyncing({
@@ -94,12 +84,12 @@ export async function switchToLabNetwork(
       accountId,
     })
     await prefetchLabChainState(appQueryClient)
-    setNetworkMode('lab')
+    if (!walletIsUnlockedOrSyncing(walletStatus)) {
+      useWalletStore.getState().setNetworkMode('lab')
+    }
     return true
   } catch (err) {
     toast.error(errorMessage(err) || 'Failed to start lab')
     return false
-  } finally {
-    setSwitching(false)
   }
 }

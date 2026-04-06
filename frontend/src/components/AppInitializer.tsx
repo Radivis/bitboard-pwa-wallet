@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useRef } from 'react'
+import { type ReactNode, useEffect } from 'react'
 import { useNavigate, useLocation } from '@tanstack/react-router'
 import { toast } from 'sonner'
 import { useWalletStore } from '@/stores/walletStore'
@@ -11,10 +11,7 @@ import {
 import { appQueryClient } from '@/lib/app-query-client'
 import { prefetchLabChainState } from '@/hooks/useLabChainStateQuery'
 import { useHydrateLightningConnections } from '@/hooks/useHydrateLightningConnections'
-import {
-  loadDescriptorWalletAndSync,
-  loadDescriptorWalletWithoutSync,
-} from '@/lib/wallet-utils'
+import { ActiveWalletBootstrap } from '@/components/ActiveWalletBootstrap'
 
 interface AppInitializerProps {
   children: ReactNode
@@ -27,13 +24,8 @@ export function AppInitializer({ children }: AppInitializerProps) {
   const { data: wallets, isLoading } = useWallets()
   const activeWalletId = useWalletStore((s) => s.activeWalletId)
   const setActiveWallet = useWalletStore((s) => s.setActiveWallet)
-  const setWalletStatus = useWalletStore((s) => s.setWalletStatus)
   const networkMode = useWalletStore((s) => s.networkMode)
-  const addressType = useWalletStore((s) => s.addressType)
-  const accountId = useWalletStore((s) => s.accountId)
   const sessionPassword = useSessionStore((s) => s.password)
-  const walletStatus = useWalletStore((s) => s.walletStatus)
-  const lastUnlockedWalletId = useRef<number | null>(null)
 
   useEffect(() => {
     if (networkMode !== 'lab') return
@@ -80,63 +72,10 @@ export function AppInitializer({ children }: AppInitializerProps) {
     void tryLoadNearZeroSessionIntoMemory(getDatabase())
   }, [sessionPassword])
 
-  useEffect(() => {
-    if (!activeWalletId || !sessionPassword) return
-    if (
-      lastUnlockedWalletId.current === activeWalletId &&
-      walletStatus !== 'locked'
-    ) {
-      return
-    }
-
-    lastUnlockedWalletId.current = activeWalletId
-
-    const { walletStatus: status } = useWalletStore.getState()
-    if (status === 'unlocked' || status === 'syncing') {
-      return
-    }
-
-    autoUnlockWallet(activeWalletId, sessionPassword)
-    // autoUnlockWallet omitted from deps: it is defined below and captures latest state
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    activeWalletId,
-    sessionPassword,
-    networkMode,
-    addressType,
-    accountId,
-    walletStatus,
-  ])
-
-  async function autoUnlockWallet(walletId: number, password: string) {
-    try {
-      if (networkMode === 'lab') {
-        await loadDescriptorWalletWithoutSync({
-          password,
-          walletId,
-          networkMode,
-          addressType,
-          accountId,
-        })
-      } else {
-        await loadDescriptorWalletAndSync({
-          password,
-          walletId,
-          networkMode,
-          addressType,
-          accountId,
-          onSyncError: (err) => {
-            const msg =
-              err instanceof Error ? err.message : String(err)
-            toast.error(msg || 'Sync failed — wallet unlocked but data may be stale')
-          },
-        })
-      }
-    } catch {
-      setWalletStatus('locked')
-      lastUnlockedWalletId.current = null
-    }
-  }
-
-  return <>{children}</>
+  return (
+    <>
+      <ActiveWalletBootstrap />
+      {children}
+    </>
+  )
 }

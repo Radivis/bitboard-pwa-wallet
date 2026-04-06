@@ -55,6 +55,7 @@ vi.mock('@/lib/wallet-utils', async (importOriginal) => {
 
 const mockSetWalletStatus = vi.fn()
 const mockSetCurrentAddress = vi.fn()
+const mockCommitLoadedSubWallet = vi.fn()
 const mockExportChangeset = vi.fn()
 const mockLoadWallet = vi.fn()
 const mockGetCurrentAddress = vi.fn()
@@ -80,6 +81,7 @@ describe('switchDescriptorWallet', () => {
       activeWalletId: 1,
       setWalletStatus: mockSetWalletStatus,
       setCurrentAddress: mockSetCurrentAddress,
+      commitLoadedSubWallet: mockCommitLoadedSubWallet,
     } as ReturnType<typeof useWalletStore.getState>)
 
     vi.mocked(useSessionStore.getState).mockReturnValue({
@@ -102,6 +104,7 @@ describe('switchDescriptorWallet', () => {
       activeWalletId: null,
       setWalletStatus: mockSetWalletStatus,
       setCurrentAddress: mockSetCurrentAddress,
+      commitLoadedSubWallet: mockCommitLoadedSubWallet,
     } as ReturnType<typeof useWalletStore.getState>)
 
     await expect(
@@ -154,9 +157,14 @@ describe('switchDescriptorWallet', () => {
       targetAccountId: 0,
       fullScanNeeded: false,
     })
+    expect(mockCommitLoadedSubWallet).toHaveBeenCalledWith({
+      networkMode: 'testnet',
+      addressType: 'taproot',
+      accountId: 0,
+    })
     expect(mockSetWalletStatus).toHaveBeenCalledWith('syncing')
     expect(mockSetWalletStatus).toHaveBeenCalledWith('unlocked')
-    expect(toast.success).toHaveBeenCalledWith('Label sub-wallet loaded')
+    expect(toast.success).not.toHaveBeenCalled()
   })
 
   it('resolves without success toast when sync fails after load; stays syncing', async () => {
@@ -174,6 +182,11 @@ describe('switchDescriptorWallet', () => {
     ).resolves.toBeUndefined()
 
     expect(mockSyncLoadedSubWalletWithEsplora).toHaveBeenCalled()
+    expect(mockCommitLoadedSubWallet).toHaveBeenCalledWith({
+      networkMode: 'testnet',
+      addressType: 'taproot',
+      accountId: 0,
+    })
     const successCalls = vi.mocked(toast.success).mock.calls.map((c) => c[0])
     expect(successCalls.some((m) => String(m).includes('sub-wallet loaded'))).toBe(
       false,
@@ -228,7 +241,12 @@ describe('switchDescriptorWallet', () => {
     })
 
     expect(mockSyncLoadedSubWalletWithEsplora).not.toHaveBeenCalled()
+    expect(mockCommitLoadedSubWallet).toHaveBeenCalledWith({
+      networkMode: 'lab',
+      addressType: 'taproot',
+      accountId: 0,
+    })
     expect(mockSetWalletStatus).toHaveBeenCalledWith('unlocked')
-    expect(toast.success).toHaveBeenCalledWith('Label sub-wallet loaded')
+    expect(toast.success).not.toHaveBeenCalled()
   })
 })

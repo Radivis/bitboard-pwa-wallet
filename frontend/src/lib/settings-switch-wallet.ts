@@ -1,9 +1,5 @@
 import { toast } from 'sonner'
-import {
-  getSubWalletLabel,
-  type NetworkMode,
-  type AddressType,
-} from '@/stores/walletStore'
+import type { NetworkMode, AddressType } from '@/stores/walletStore'
 import { useWalletStore } from '@/stores/walletStore'
 import { useSessionStore } from '@/stores/sessionStore'
 import { useCryptoStore } from '@/stores/cryptoStore'
@@ -53,19 +49,10 @@ export async function switchDescriptorWallet(params: {
 
   const { exportChangeset, loadWallet, getCurrentAddress } =
     useCryptoStore.getState()
-  const { setWalletStatus, setCurrentAddress } = useWalletStore.getState()
-
-  const previousSubWalletLabel = getSubWalletLabel(
-    currentNetworkMode,
-    currentAddressType,
-  )
-  const targetSubWalletLabel = getSubWalletLabel(
-    targetNetworkMode,
-    targetAddressType,
-  )
+  const { setWalletStatus, setCurrentAddress, commitLoadedSubWallet } =
+    useWalletStore.getState()
 
   try {
-    toast.info(`Unloading ${previousSubWalletLabel} sub-wallet`)
     try {
       const currentChangeset = await exportChangeset()
       await updateDescriptorWalletChangeset({
@@ -76,12 +63,10 @@ export async function switchDescriptorWallet(params: {
         accountId: currentAccountId,
         changesetJson: currentChangeset,
       })
-      toast.success(`${previousSubWalletLabel} sub-wallet unloaded`)
     } catch {
       // No active WASM wallet yet (e.g., first load) -- safe to skip
     }
 
-    toast.info(`Loading ${targetSubWalletLabel} sub-wallet`)
     const targetNetwork = toBitcoinNetwork(targetNetworkMode)
     const descriptorWallet = await resolveDescriptorWallet({
       password: sessionPassword,
@@ -102,6 +87,11 @@ export async function switchDescriptorWallet(params: {
 
     const address = await getCurrentAddress()
     setCurrentAddress(address)
+    commitLoadedSubWallet({
+      networkMode: targetNetworkMode,
+      addressType: targetAddressType,
+      accountId: targetAccountId,
+    })
 
     if (targetNetworkMode !== 'lab') {
       setWalletStatus('syncing')
@@ -117,12 +107,10 @@ export async function switchDescriptorWallet(params: {
       })
       if (syncResult === 'completed') {
         setWalletStatus('unlocked')
-        toast.success(`${targetSubWalletLabel} sub-wallet loaded`)
       }
       // On `sync_failed`, keep `syncing` — load succeeded but chain data may be stale.
     } else {
       setWalletStatus('unlocked')
-      toast.success(`${targetSubWalletLabel} sub-wallet loaded`)
     }
   } catch (err) {
     const message = toUserFriendlySwitchError(err)

@@ -51,6 +51,7 @@ let walletStoreState: Record<string, unknown> = {}
 const mockSetNetworkMode = vi.fn()
 const mockSetAddressType = vi.fn()
 const mockSetCurrentAddress = vi.fn()
+const mockCommitLoadedSubWallet = vi.fn()
 vi.mock('@/stores/walletStore', () => ({
   useWalletStore: Object.assign(
     (selector: (s: Record<string, unknown>) => unknown) =>
@@ -135,6 +136,14 @@ vi.mock('@/lib/wallet-utils', () => ({
   runIncrementalDashboardWalletSync: vi.fn().mockResolvedValue(undefined),
   loadDescriptorWalletAndSync: mockLoadDescriptorWalletAndSync,
   loadDescriptorWalletWithoutSync: mockLoadDescriptorWalletWithoutSync,
+  loadWalletHandlingPersistedChainMismatch: vi.fn(
+    async (
+      loadWallet: (params: Record<string, unknown>) => Promise<boolean>,
+      params: Record<string, unknown>,
+    ) => {
+      await loadWallet(params)
+    },
+  ),
 }))
 
 const mockResolveDescriptorWallet = vi.hoisted(() =>
@@ -197,8 +206,10 @@ describe('SettingsPage', () => {
       networkMode: 'signet',
       addressType: 'taproot',
       accountId: 0,
+      loadedSubWallet: null,
       setNetworkMode: mockSetNetworkMode,
       setAddressType: mockSetAddressType,
+      commitLoadedSubWallet: mockCommitLoadedSubWallet,
       setWalletStatus: vi.fn(),
       setCurrentAddress: mockSetCurrentAddress,
       setBalance: vi.fn(),
@@ -238,13 +249,17 @@ describe('SettingsPage', () => {
     expect(screen.queryByRole('button', { name: 'Change app password' })).not.toBeInTheDocument()
   })
 
-  it('network selector calls setNetworkMode after switch completes', async () => {
+  it('network selector commits loaded sub-wallet after switch completes', async () => {
     const user = userEvent.setup()
     renderWithProviders(<SettingsPage />)
 
     await user.click(screen.getByRole('button', { name: 'Testnet' }))
     await waitFor(() => {
-      expect(mockSetNetworkMode).toHaveBeenCalledWith('testnet')
+      expect(mockCommitLoadedSubWallet).toHaveBeenCalledWith({
+        networkMode: 'testnet',
+        addressType: 'taproot',
+        accountId: 0,
+      })
     })
   })
 

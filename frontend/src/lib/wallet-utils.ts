@@ -22,7 +22,7 @@ const CUSTOM_ESPLORA_URL_KEY_PREFIX = 'custom_esplora_url_'
 
 /**
  * Update the changeset of the currently active descriptor wallet.
- * Reads (networkMode, addressType, accountId) from the wallet store.
+ * Keys by `loadedSubWallet` when set (matches WASM); otherwise persisted triple.
  */
 export async function updateWalletChangeset(params: {
   password: string
@@ -31,14 +31,20 @@ export async function updateWalletChangeset(params: {
   markFullScanDone?: boolean
 }): Promise<void> {
   const { password, walletId, changesetJson, markFullScanDone } = params
-  const { networkMode, addressType, accountId } = useWalletStore.getState()
-  const network = toBitcoinNetwork(networkMode)
+  const { loadedSubWallet, networkMode, addressType, accountId } =
+    useWalletStore.getState()
+  const key = loadedSubWallet ?? {
+    networkMode,
+    addressType,
+    accountId,
+  }
+  const network = toBitcoinNetwork(key.networkMode)
   await updateDescriptorWalletChangeset({
     password,
     walletId,
     network,
-    addressType,
-    accountId,
+    addressType: key.addressType,
+    accountId: key.accountId,
     changesetJson,
     markFullScanDone,
   })
@@ -273,6 +279,7 @@ export async function loadDescriptorWalletWithoutSync(params: {
     setBalance,
     setTransactions,
     setCurrentAddress,
+    commitLoadedSubWallet,
   } = useWalletStore.getState()
 
   setCurrentAddress(null)
@@ -290,6 +297,11 @@ export async function loadDescriptorWalletWithoutSync(params: {
 
   const address = await getCurrentAddress()
   setCurrentAddress(address)
+  commitLoadedSubWallet({
+    networkMode,
+    addressType,
+    accountId,
+  })
   setWalletStatus('unlocked')
 
   const { startAutoLockTimer } = await import('@/stores/sessionStore')
@@ -329,6 +341,7 @@ export async function loadDescriptorWalletAndSync(params: {
     setTransactions,
     setCurrentAddress,
     setLastSyncTime,
+    commitLoadedSubWallet,
   } = useWalletStore.getState()
 
   setCurrentAddress(null)
@@ -347,6 +360,11 @@ export async function loadDescriptorWalletAndSync(params: {
 
   const address = await getCurrentAddress()
   setCurrentAddress(address)
+  commitLoadedSubWallet({
+    networkMode,
+    addressType,
+    accountId,
+  })
   setWalletStatus('unlocked')
 
   const { startAutoLockTimer } = await import('@/stores/sessionStore')
