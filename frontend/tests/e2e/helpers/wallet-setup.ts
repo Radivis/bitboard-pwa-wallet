@@ -18,6 +18,21 @@ export async function dismissSetAppPasswordModalIfPresent(page: Page, password: 
   await page.getByRole('button', { name: 'Continue' }).click()
 }
 
+/**
+ * After a full navigation (e.g. `page.goto`), session memory is cleared but wallets remain in IndexedDB.
+ * Setup create/import routes then show "Unlock to continue" instead of the form.
+ */
+export async function dismissSetupUnlockIfPresent(page: Page, password: string) {
+  const heading = page.getByRole('heading', { name: 'Unlock to continue' })
+  try {
+    await heading.waitFor({ state: 'visible', timeout: 8000 })
+  } catch {
+    return
+  }
+  await page.getByLabel('Bitboard app password').fill(password)
+  await page.getByRole('button', { name: 'Unlock' }).click()
+}
+
 export async function createWalletViaUI(page: Page) {
   await page.goto('/setup')
   await page.getByRole('button', { name: 'Create New Wallet' }).click()
@@ -67,6 +82,7 @@ export async function importWalletViaUI(
   await page.getByRole('button', { name: 'Import Wallet' }).click()
 
   await dismissSetAppPasswordModalIfPresent(page, password)
+  await dismissSetupUnlockIfPresent(page, password)
 
   await page.getByLabel('Seed Phrase').fill(mnemonic)
   await expect(page.getByText('Valid mnemonic')).toBeVisible({ timeout: 10000 })
