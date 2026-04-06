@@ -1,7 +1,8 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Globe } from 'lucide-react'
 import { toast } from 'sonner'
-import { useWalletStore, NETWORK_LABELS } from '@/stores/walletStore'
+import { useWalletStore, NETWORK_LABELS, type NetworkMode } from '@/stores/walletStore'
 import { DEFAULT_ESPLORA_URLS } from '@/lib/bitcoin-utils'
 import {
   saveCustomEsploraUrl,
@@ -16,50 +17,54 @@ import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { errorMessage } from '@/lib/utils'
 
+export const customEsploraUrlQueryKey = (networkMode: NetworkMode) =>
+  ['customEsploraUrl', networkMode] as const
+
 export function EsploraUrlSettings() {
   const networkMode = useWalletStore((s) => s.networkMode)
-  const [customUrl, setCustomUrl] = useState('')
-  const [isCustom, setIsCustom] = useState(false)
-  const [loading, setLoading] = useState(false)
+  const queryClient = useQueryClient()
+  const defaultUrl = DEFAULT_ESPLORA_URLS[networkMode]
+
+  const { data: storedCustomUrl } = useQuery({
+    queryKey: customEsploraUrlQueryKey(networkMode),
+    queryFn: () => loadCustomEsploraUrl(networkMode),
+  })
+
+  const [editUrl, setEditUrl] = useState(defaultUrl)
 
   useEffect(() => {
-    loadCustomEsploraUrl(networkMode).then((url) => {
-      if (url) {
-        setCustomUrl(url)
-        setIsCustom(true)
-      } else {
-        setCustomUrl(DEFAULT_ESPLORA_URLS[networkMode])
-        setIsCustom(false)
-      }
-    })
-  }, [networkMode])
+    setEditUrl(storedCustomUrl ?? defaultUrl)
+  }, [storedCustomUrl, defaultUrl])
 
-  const handleSave = useCallback(async () => {
-    try {
-      setLoading(true)
-      await saveCustomEsploraUrl(networkMode, customUrl)
-      setIsCustom(true)
+  const isCustom = storedCustomUrl != null
+
+  const saveMutation = useMutation({
+    mutationFn: () => saveCustomEsploraUrl(networkMode, editUrl),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: customEsploraUrlQueryKey(networkMode),
+      })
       toast.success('Esplora endpoint saved')
-    } catch (err) {
+    },
+    onError: (err: unknown) => {
       toast.error(errorMessage(err) || 'Failed to save endpoint')
-    } finally {
-      setLoading(false)
-    }
-  }, [networkMode, customUrl])
+    },
+  })
 
-  const handleReset = useCallback(async () => {
-    try {
-      setLoading(true)
-      await deleteCustomEsploraUrl(networkMode)
-      setCustomUrl(DEFAULT_ESPLORA_URLS[networkMode])
-      setIsCustom(false)
+  const resetMutation = useMutation({
+    mutationFn: () => deleteCustomEsploraUrl(networkMode),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: customEsploraUrlQueryKey(networkMode),
+      })
       toast.success('Reset to default endpoint')
-    } catch {
+    },
+    onError: () => {
       toast.error('Failed to reset endpoint')
-    } finally {
-      setLoading(false)
-    }
-  }, [networkMode])
+    },
+  })
+
+  const loading = saveMutation.isPending || resetMutation.isPending
 
   return (
     <InfomodeWrapper
@@ -87,19 +92,25 @@ export function EsploraUrlSettings() {
             <Label htmlFor="esplora-url">Endpoint URL</Label>
             <Input
               id="esplora-url"
-              value={customUrl}
-              onChange={(e) => setCustomUrl(e.target.value)}
-              placeholder={DEFAULT_ESPLORA_URLS[networkMode]}
+              value={editUrl}
+              onChange={(e) => setEditUrl(e.target.value)}
+              placeholder={defaultUrl}
               disabled={loading}
             />
           </div>
           <div className="flex gap-2">
-            <Button onClick={handleSave} disabled={loading} size="sm">
+            <Button
+              type="button"
+              onClick={() => saveMutation.mutate()}
+              disabled={loading}
+              size="sm"
+            >
               Save Endpoint
             </Button>
             <Button
+              type="button"
               variant="outline"
-              onClick={handleReset}
+              onClick={() => resetMutation.mutate()}
               disabled={loading || !isCustom}
               size="sm"
             >

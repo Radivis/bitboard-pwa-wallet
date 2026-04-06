@@ -14,8 +14,10 @@ test.describe('Receive Page', () => {
     const qrCode = page.getByRole('main').getByRole('img')
     await expect(qrCode).toBeVisible({ timeout: 10000 })
 
-    const addressDisplay = page.getByRole('main').locator('.font-mono')
-    await expect(addressDisplay.first()).toBeVisible({ timeout: 10000 })
+    const addressDisplay = page
+      .locator('[data-infomode-id="receive-receiving-address-card"]')
+      .locator('.font-mono')
+    await expect(addressDisplay).toBeVisible({ timeout: 10000 })
     const addressText = await addressDisplay.textContent()
     expect(addressText).toBeTruthy()
     expect(addressText!.length).toBeGreaterThan(10)
@@ -30,14 +32,10 @@ test.describe('Receive Page', () => {
       name: 'Generate New Address',
     })
     await expect(newAddressButton).toBeVisible()
-    const oldAddress = addressText
+    const oldTrimmed = addressText!.trim()
     await newAddressButton.click()
-
-    await page.waitForTimeout(2000)
-    const newAddressText = await addressDisplay.textContent()
-    expect(newAddressText).toBeTruthy()
-    if (oldAddress && newAddressText) {
-      expect(newAddressText).not.toBe(oldAddress)
-    }
+    // getNewAddress is async; poll until the UI shows a different address (fixed
+    // sleeps are flaky under load).
+    await expect(addressDisplay).not.toHaveText(oldTrimmed, { timeout: 20000 })
   })
 })

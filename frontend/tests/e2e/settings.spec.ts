@@ -62,8 +62,10 @@ test.describe('Settings Page', () => {
 
     await page.getByRole('button', { name: 'Save Endpoint' }).click()
 
-    await expect(page.getByText(/Esplora endpoint saved/)).toBeVisible({
-      timeout: 10000,
+    // Persisted custom URL (TanStack Query refetch) enables reset; more reliable than toast or badge timing.
+    await expect(page.getByRole('button', { name: 'Reset to Default' })).toBeEnabled({
+      timeout: 20000,
     })
+    await expect(urlInput).toHaveValue('http://custom-esplora:3002', { timeout: 5000 })
   })
 })

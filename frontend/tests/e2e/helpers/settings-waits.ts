@@ -24,3 +24,16 @@ export async function waitForSettingsAddressTypeSwitchComplete(
     timeout,
   })
 }
+
+/** Network button uses `data-variant="default"` when that mode is active. */
+export async function waitForSettingsNetworkModeButtonSelected(
+  page: Page,
+  networkButtonName: string,
+  timeout = 120_000,
+): Promise<void> {
+  await expect(page.getByRole('button', { name: networkButtonName })).toHaveAttribute(
+    'data-variant',
+    'default',
+    { timeout },
+  )
+}

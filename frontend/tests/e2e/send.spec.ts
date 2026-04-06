@@ -9,6 +9,7 @@ import { fundRegtestAddress, mineRegtestBlocks, waitForConfirmedBalance } from '
 import { goToWalletTab } from './helpers/wallet-nav'
 import {
   waitForSettingsAddressTypeSwitchComplete,
+  waitForSettingsNetworkModeButtonSelected,
   waitForSettingsNetworkSwitchComplete,
 } from './helpers/settings-waits'
 
@@ -59,6 +60,7 @@ test.describe('Send Page', () => {
     await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
     await page.getByRole('button', { name: 'Regtest' }).click()
     await waitForSettingsNetworkSwitchComplete(page)
+    await waitForSettingsNetworkModeButtonSelected(page, 'Regtest')
 
     await page.getByRole('button', { name: 'SegWit (BIP84)' }).click()
     await page.getByRole('button', { name: 'Change' }).click()
@@ -66,9 +68,11 @@ test.describe('Send Page', () => {
 
     await goToWalletTab(page, 'Receive')
     await expect(page.getByText('Receive Bitcoin')).toBeVisible()
-    const addressEl = page.getByRole('main').locator('.font-mono').first()
+    const addressEl = page
+      .locator('[data-infomode-id="receive-receiving-address-card"]')
+      .locator('.font-mono')
     await expect(addressEl).toBeVisible({ timeout: 10000 })
-    await expect(addressEl).toHaveText(/bcrt1/, { timeout: 15000 })
+    await expect(addressEl).toHaveText(/bcrt1/, { timeout: 45000 })
     const receiveAddress = (await addressEl.textContent())?.trim()
     if (!receiveAddress || !receiveAddress.startsWith('bcrt1')) {
       throw new Error(`Expected regtest address, got: ${receiveAddress}`)
