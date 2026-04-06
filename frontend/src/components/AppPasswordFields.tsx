@@ -2,9 +2,9 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { PasswordStrengthIndicator } from '@/components/PasswordStrengthIndicator'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
+import { APP_PASSWORD_MIN_LENGTH } from '@/lib/app-password-policy'
 
-/** Minimum length for Bitboard app passwords (new/set/change). */
-export const APP_PASSWORD_MIN_LENGTH = 8
+export { APP_PASSWORD_MIN_LENGTH }
 
 export interface AppPasswordFieldsConfig {
   ids: {

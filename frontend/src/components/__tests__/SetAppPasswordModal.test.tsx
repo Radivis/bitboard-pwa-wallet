@@ -71,6 +71,16 @@ describe('SetAppPasswordModal', () => {
     expect(screen.getByRole('button', { name: 'Continue' })).toBeDisabled()
   })
 
+  it('Continue disabled when matching passwords are below minimum length', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(<SetAppPasswordModal open />)
+
+    await user.type(screen.getByLabelText('Password'), 'password123')
+    await user.type(screen.getByLabelText('Confirm password'), 'password123')
+
+    expect(screen.getByRole('button', { name: 'Continue' })).toBeDisabled()
+  })
+
   it('close button navigates back to setup', async () => {
     const user = userEvent.setup()
     renderWithProviders(<SetAppPasswordModal open />)
@@ -80,7 +90,7 @@ describe('SetAppPasswordModal', () => {
     expect(mockNavigate).toHaveBeenCalledWith({ to: '/setup' })
   })
 
-  it('submits matching passwords of at least 8 chars and sets session password', async () => {
+  it('submits matching passwords of at least 12 chars and sets session password', async () => {
     const user = userEvent.setup()
     renderWithProviders(<SetAppPasswordModal open />)
 
