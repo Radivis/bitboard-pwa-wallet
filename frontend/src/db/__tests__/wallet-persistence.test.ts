@@ -187,6 +187,7 @@ describe('Wallet Persistence with Encryption', () => {
       expect(payloadOnly.lightningNwcConnections).toEqual(
         sampleSecrets.lightningNwcConnections,
       )
+      expect(payloadOnly).not.toHaveProperty('mnemonic')
     })
 
     it('correctly handles unicode in secrets', async () => {
