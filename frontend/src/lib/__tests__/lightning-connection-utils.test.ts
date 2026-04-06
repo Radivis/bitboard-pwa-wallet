@@ -30,25 +30,45 @@ describe('getLightningConnectionsForActiveWallet', () => {
 
   it('returns empty when Lightning is disabled', () => {
     expect(
-      getLightningConnectionsForActiveWallet(wallets, 1, 'signet', false),
+      getLightningConnectionsForActiveWallet({
+        connectedLightningWallets: wallets,
+        activeWalletId: 1,
+        networkMode: 'signet',
+        isLightningEnabled: false,
+      }),
     ).toEqual([])
   })
 
   it('returns empty when there is no active wallet', () => {
     expect(
-      getLightningConnectionsForActiveWallet(wallets, null, 'signet', true),
+      getLightningConnectionsForActiveWallet({
+        connectedLightningWallets: wallets,
+        activeWalletId: null,
+        networkMode: 'signet',
+        isLightningEnabled: true,
+      }),
     ).toEqual([])
   })
 
   it('returns empty for networks without Lightning support', () => {
     expect(
-      getLightningConnectionsForActiveWallet(wallets, 1, 'lab', true),
+      getLightningConnectionsForActiveWallet({
+        connectedLightningWallets: wallets,
+        activeWalletId: 1,
+        networkMode: 'lab',
+        isLightningEnabled: true,
+      }),
     ).toEqual([])
   })
 
   it('returns only connections for the active wallet and network mode', () => {
     expect(
-      getLightningConnectionsForActiveWallet(wallets, 1, 'signet', true),
+      getLightningConnectionsForActiveWallet({
+        connectedLightningWallets: wallets,
+        activeWalletId: 1,
+        networkMode: 'signet',
+        isLightningEnabled: true,
+      }),
     ).toEqual([wallets[0]])
   })
 })

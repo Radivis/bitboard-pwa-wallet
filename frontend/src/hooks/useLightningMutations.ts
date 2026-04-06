@@ -74,12 +74,12 @@ function useLightningDashboardQueryBase() {
 
   const matchingConnections = useMemo(
     () =>
-      getLightningConnectionsForActiveWallet(
-        connectedWallets,
+      getLightningConnectionsForActiveWallet({
+        connectedLightningWallets: connectedWallets,
         activeWalletId,
         networkMode,
-        lightningEnabled,
-      ),
+        isLightningEnabled: lightningEnabled,
+      }),
     [lightningEnabled, networkMode, activeWalletId, connectedWallets],
   )
 

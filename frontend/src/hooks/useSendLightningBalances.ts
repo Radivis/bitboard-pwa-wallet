@@ -27,12 +27,12 @@ export function useSendLightningBalances(params: {
 
   const matchingLightningConnections = useMemo(
     (): ConnectedLightningWallet[] =>
-      getLightningConnectionsForActiveWallet(
+      getLightningConnectionsForActiveWallet({
         connectedLightningWallets,
         activeWalletId,
         networkMode,
-        lightningEnabled,
-      ),
+        isLightningEnabled: lightningEnabled,
+      }),
     [
       lightningEnabled,
       networkMode,

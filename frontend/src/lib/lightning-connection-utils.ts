@@ -5,6 +5,13 @@ import {
   type LightningNetworkMode,
 } from '@/lib/lightning-utils'
 
+export type GetLightningConnectionsForActiveWalletParams = {
+  connectedLightningWallets: ConnectedLightningWallet[]
+  activeWalletId: number | null
+  networkMode: NetworkMode
+  isLightningEnabled: boolean
+}
+
 /**
  * Lightning connections for the active Bitcoin wallet that match the app’s
  * network mode (e.g. Signet NWC when the app is on Signet). Returns an empty
@@ -12,20 +19,19 @@ import {
  * does not support Lightning.
  */
 export function getLightningConnectionsForActiveWallet(
-  connectedWallets: ConnectedLightningWallet[],
-  activeWalletId: number | null,
-  networkMode: NetworkMode,
-  lightningEnabled: boolean,
+  params: GetLightningConnectionsForActiveWalletParams,
 ): ConnectedLightningWallet[] {
+  const { connectedLightningWallets, activeWalletId, networkMode, isLightningEnabled } =
+    params
   if (
-    !lightningEnabled ||
+    !isLightningEnabled ||
     activeWalletId == null ||
     !isLightningSupported(networkMode)
   ) {
     return []
   }
   const lnMode = networkMode as LightningNetworkMode
-  return connectedWallets.filter(
+  return connectedLightningWallets.filter(
     (w) => w.walletId === activeWalletId && w.networkMode === lnMode,
   )
 }

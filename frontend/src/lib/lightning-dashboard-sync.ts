@@ -37,12 +37,12 @@ export function getMatchingLightningConnectionsForDashboard(): ConnectedLightnin
   const { lightningEnabled } = useFeatureStore.getState()
   const { connectedWallets } = useLightningStore.getState()
 
-  return getLightningConnectionsForActiveWallet(
-    connectedWallets,
+  return getLightningConnectionsForActiveWallet({
+    connectedLightningWallets: connectedWallets,
     activeWalletId,
     networkMode,
-    lightningEnabled,
-  )
+    isLightningEnabled: lightningEnabled,
+  })
 }
 
 export interface LightningBalanceRow {

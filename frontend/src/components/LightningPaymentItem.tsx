@@ -41,11 +41,11 @@ export function LightningPaymentItem({ payment }: LightningPaymentItemProps) {
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <p className="text-sm font-medium capitalize">
-              {isSent ? 'Sent' : 'Received'} (Lightning)
+              {isSent ? 'Sent' : 'Received'}
             </p>
             <span className="inline-flex items-center gap-0.5 rounded border border-border px-1.5 py-0.5 text-[10px] font-medium uppercase text-muted-foreground">
               <Zap className="h-3 w-3" />
-              LN
+              Lightning
             </span>
           </div>
           <p className="truncate text-xs font-medium text-muted-foreground">
