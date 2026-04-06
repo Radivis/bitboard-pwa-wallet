@@ -153,7 +153,7 @@ export function SendFlow() {
     matchingLightningConnections,
     selectedLightningConnectionId,
     setSelectedLightningConnectionId,
-    lnBalanceQueries,
+    balanceQueries,
     selectedLightningWallet,
     selectedLnBalanceQuery,
     selectedLnBalanceSats,
@@ -258,19 +258,21 @@ export function SendFlow() {
     if (!selectedLightningWallet || !isValidSendAmountSats(amountSats)) return
     setIsResolvingLightningAddress(true)
     try {
-      const la = new LightningAddress(normalizedRecipient)
-      await la.fetch()
-      const inv = await la.requestInvoice({ satoshi: amountSats })
-      const pr = inv.paymentRequest
-      const invNet = bolt11NetworkModeFromPrefix(pr)
-      if (invNet !== networkMode) {
+      const recipientLightningAddress = new LightningAddress(normalizedRecipient)
+      await recipientLightningAddress.fetch()
+      const lud16Invoice = await recipientLightningAddress.requestInvoice({
+        satoshi: amountSats,
+      })
+      const bolt11PaymentRequest = lud16Invoice.paymentRequest
+      const invoiceNetworkMode = bolt11NetworkModeFromPrefix(bolt11PaymentRequest)
+      if (invoiceNetworkMode !== networkMode) {
         toast.error(
           'This invoice is for a different network. Switch network in Settings.',
         )
         return
       }
       lightningPayMutation.mutate({
-        bolt11: pr,
+        bolt11: bolt11PaymentRequest,
         config: selectedLightningWallet.config,
       })
     } catch (err) {
@@ -533,8 +535,8 @@ export function SendFlow() {
 
             {isLightningSendMode && (
               <SendLightningWalletPicker
-                connections={matchingLightningConnections}
-                lnBalanceQueries={lnBalanceQueries}
+                connectedLightningWallets={matchingLightningConnections}
+                balanceQueries={balanceQueries}
                 selectedConnectionId={selectedLightningConnectionId}
                 onSelectConnection={setSelectedLightningConnectionId}
                 disabled={isPending}

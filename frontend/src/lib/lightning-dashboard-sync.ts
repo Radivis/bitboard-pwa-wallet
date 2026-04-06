@@ -53,7 +53,7 @@ export interface LightningBalanceRow {
 }
 
 export interface LightningBalancesResult {
-  perWallet: LightningBalanceRow[]
+  lightningBalanceRows: LightningBalanceRow[]
   totalSats: number
 }
 
@@ -129,7 +129,7 @@ export function invalidateLightningDashboardQueries(): void {
 export async function fetchLightningBalancesForDashboard(): Promise<LightningBalancesResult> {
   const matches = getMatchingLightningConnectionsForDashboard()
   if (matches.length === 0) {
-    return { perWallet: [], totalSats: 0 }
+    return { lightningBalanceRows: [], totalSats: 0 }
   }
 
   const settled = await Promise.allSettled(
@@ -144,21 +144,21 @@ export async function fetchLightningBalancesForDashboard(): Promise<LightningBal
     }),
   )
 
-  const perWallet: LightningBalanceRow[] = []
+  const lightningBalanceRows: LightningBalanceRow[] = []
   let totalSats = 0
 
   settled.forEach((result, index) => {
     const conn = matches[index]
     if (result.status === 'fulfilled') {
       const row = result.value
-      perWallet.push(row)
+      lightningBalanceRows.push(row)
       totalSats += row.balanceSats
     } else {
       const message =
         result.reason instanceof Error
           ? result.reason.message
           : 'Balance unavailable'
-      perWallet.push({
+      lightningBalanceRows.push({
         connectionId: conn.id,
         label: conn.label,
         balanceSats: 0,
@@ -167,7 +167,7 @@ export async function fetchLightningBalancesForDashboard(): Promise<LightningBal
     }
   })
 
-  return { perWallet, totalSats }
+  return { lightningBalanceRows, totalSats }
 }
 
 export type DashboardActivityItem =

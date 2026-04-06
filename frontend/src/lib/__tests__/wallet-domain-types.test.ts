@@ -52,9 +52,10 @@ describe('parseWalletSecretsJson', () => {
     const parsed = parseWalletSecretsJson(validSecretsJson)
     expect(parsed.descriptorWallets).toHaveLength(1)
     expect(parsed.descriptorWallets[0].network).toBe('testnet')
+    expect(parsed.lightningNwcConnections).toEqual([])
   })
 
-  it('accepts optional lightningNwcConnections in wallet secrets', () => {
+  it('accepts wallet secrets with NWC connection rows', () => {
     const validSecretsJson = JSON.stringify({
       mnemonic: 'abandon ability able about above absent absorb abstract absurd abuse access accident',
       descriptorWallets: [
@@ -81,6 +82,28 @@ describe('parseWalletSecretsJson', () => {
 
     const parsed = parseWalletSecretsJson(validSecretsJson)
     expect(parsed.lightningNwcConnections).toHaveLength(1)
-    expect(parsed.lightningNwcConnections?.[0].label).toBe('Test')
+    expect(parsed.lightningNwcConnections[0].label).toBe('Test')
+  })
+
+  it('rejects lightningNwcConnections when not an array', () => {
+    const secretsJson = JSON.stringify({
+      mnemonic: 'abandon ability able about above absent absorb abstract absurd abuse access accident',
+      descriptorWallets: [
+        {
+          network: 'testnet',
+          addressType: 'taproot',
+          accountId: 0,
+          externalDescriptor: 'tr(xpub.../0/*)',
+          internalDescriptor: 'tr(xpub.../1/*)',
+          changeSet: '{}',
+          fullScanDone: false,
+        },
+      ],
+      lightningNwcConnections: null,
+    })
+
+    expect(() => parseWalletSecretsJson(secretsJson)).toThrow(
+      'Invalid wallet secrets: schema validation failed',
+    )
   })
 })

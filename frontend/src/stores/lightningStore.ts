@@ -2,7 +2,6 @@ import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
 import { sqliteStorage } from '@/db/storage-adapter'
 import {
-  generateMockBolt11Invoice,
   DEFAULT_INVOICE_EXPIRY_SECONDS,
   LIGHTNING_NETWORK_MODES,
   isLightningSupported,
@@ -308,23 +307,9 @@ export const useLightningStore = create<LightningState>()(
           }
         }
 
-        const bolt11 = generateMockBolt11Invoice({
-          networkMode,
-          amountSats,
-          description,
-          expirySeconds: effectiveExpiry,
-        })
-        const invoice: LightningInvoice = {
-          bolt11,
-          paymentHash: '',
-          amountSats,
-          description,
-          expirySeconds: effectiveExpiry,
-          createdAt: new Date().toISOString(),
-          status: 'pending',
-        }
-        set({ invoices: [...get().invoices, invoice] })
-        return invoice
+        throw new Error(
+          'Connect a Lightning wallet for this network to create invoices.',
+        )
       },
 
       clearInvoices: () => set({ invoices: [] }),

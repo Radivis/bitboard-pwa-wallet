@@ -1,9 +1,6 @@
 import { appQueryClient } from '@/lib/app-query-client'
 import { useLightningStore } from '@/stores/lightningStore'
-import {
-  loadLightningConnectionsForWallet,
-  migrateLegacyLightningStorageIfNeeded,
-} from '@/lib/lightning-wallet-secrets'
+import { loadLightningConnectionsForWallet } from '@/lib/lightning-wallet-secrets'
 
 /** TanStack Query key prefix; pair with `activeWalletId` in hooks. */
 export const LIGHTNING_CONNECTIONS_HYDRATION_QUERY_KEY = [
@@ -11,14 +8,13 @@ export const LIGHTNING_CONNECTIONS_HYDRATION_QUERY_KEY = [
 ] as const
 
 /**
- * Loads NWC connections from encrypted wallet secrets (and migrates legacy plain
- * settings once), then replaces the in-memory slice for this wallet.
+ * Loads NWC connections from encrypted wallet secrets, then replaces the
+ * in-memory slice for this wallet.
  */
 export async function hydrateLightningConnectionsForWallet(params: {
   password: string
   walletId: number
 }): Promise<void> {
-  await migrateLegacyLightningStorageIfNeeded(params.password)
   const connections = await loadLightningConnectionsForWallet(params)
   useLightningStore.getState().replaceConnectionsForWallet(params.walletId, connections)
 }

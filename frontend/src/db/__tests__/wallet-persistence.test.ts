@@ -42,6 +42,7 @@ describe('Wallet Persistence with Encryption', () => {
         fullScanDone: false,
       },
     ],
+    lightningNwcConnections: [],
   }
 
   beforeEach(async () => {

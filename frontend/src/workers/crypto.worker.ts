@@ -88,6 +88,7 @@ function buildSingleDescriptorWalletSecrets(params: {
         fullScanDone: false,
       },
     ],
+    lightningNwcConnections: [],
   };
 }
 

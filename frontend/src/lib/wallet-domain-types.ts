@@ -37,8 +37,8 @@ export interface StoredNwcLightningConnection {
 export interface WalletSecrets {
   mnemonic: string
   descriptorWallets: DescriptorWalletData[]
-  /** Optional: NWC URIs and metadata; omitted in older wallets until first Lightning connect. */
-  lightningNwcConnections?: StoredNwcLightningConnection[]
+  /** NWC URIs and metadata (empty array when the user has no Lightning connections). */
+  lightningNwcConnections: StoredNwcLightningConnection[]
 }
 
 const SUPPORTED_BITCOIN_NETWORKS: readonly BitcoinNetwork[] = [
@@ -106,17 +106,23 @@ export function isWalletSecrets(value: unknown): value is WalletSecrets {
   ) {
     return false
   }
-  if (value.lightningNwcConnections !== undefined) {
-    if (!Array.isArray(value.lightningNwcConnections)) return false
-    if (
-      !value.lightningNwcConnections.every((row) =>
-        isStoredNwcLightningConnection(row),
-      )
-    ) {
-      return false
-    }
+  if (!Array.isArray(value.lightningNwcConnections)) return false
+  if (
+    !value.lightningNwcConnections.every((row) =>
+      isStoredNwcLightningConnection(row),
+    )
+  ) {
+    return false
   }
   return true
+}
+
+function normalizeWalletSecretsPayload(raw: unknown): unknown {
+  if (!isRecord(raw)) return raw
+  if (raw.lightningNwcConnections === undefined) {
+    return { ...raw, lightningNwcConnections: [] }
+  }
+  return raw
 }
 
 export function parseWalletSecretsJson(walletSecretsJson: string): WalletSecrets {
@@ -126,6 +132,7 @@ export function parseWalletSecretsJson(walletSecretsJson: string): WalletSecrets
   } catch {
     throw new Error('Invalid wallet secrets: not valid JSON')
   }
+  parsed = normalizeWalletSecretsPayload(parsed)
   if (!isWalletSecrets(parsed)) {
     throw new Error('Invalid wallet secrets: schema validation failed')
   }

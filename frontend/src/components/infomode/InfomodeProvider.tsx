@@ -49,10 +49,10 @@ type PopupState = {
  */
 function InfomodeCloseOnNavigateIfRouter({
   setPopupState,
-  popupOpen,
+  isPopupOpen,
 }: {
   setPopupState: Dispatch<SetStateAction<PopupState>>
-  popupOpen: boolean
+  isPopupOpen: boolean
 }) {
   const router = useRouter({ warn: false })
   if (!router) {
@@ -62,7 +62,7 @@ function InfomodeCloseOnNavigateIfRouter({
     <InfomodeCloseOnNavigate
       router={router}
       setPopupState={setPopupState}
-      popupOpen={popupOpen}
+      isPopupOpen={isPopupOpen}
     />
   )
 }
@@ -70,11 +70,11 @@ function InfomodeCloseOnNavigateIfRouter({
 function InfomodeCloseOnNavigate({
   router,
   setPopupState,
-  popupOpen,
+  isPopupOpen,
 }: {
   router: AnyRouter
   setPopupState: Dispatch<SetStateAction<PopupState>>
-  popupOpen: boolean
+  isPopupOpen: boolean
 }) {
   const setInfomodeActive = useInfomodeStore((s) => s.setInfomodeActive)
   const locationKey = useRouterState({
@@ -92,12 +92,12 @@ function InfomodeCloseOnNavigate({
     }
     if (previousLocationKeyRef.current !== locationKey) {
       previousLocationKeyRef.current = locationKey
-      if (popupOpen) {
+      if (isPopupOpen) {
         setInfomodeActive(false)
       }
       setPopupState(null)
     }
-  }, [locationKey, popupOpen, setInfomodeActive, setPopupState])
+  }, [locationKey, isPopupOpen, setInfomodeActive, setPopupState])
 
   return null
 }
@@ -175,7 +175,7 @@ export function InfomodeProvider({ children }: InfomodeProviderProps) {
     <InfomodeRegistryContext.Provider value={{ register }}>
       <InfomodeCloseOnNavigateIfRouter
         setPopupState={setPopupState}
-        popupOpen={popupState !== null}
+        isPopupOpen={popupState !== null}
       />
       {children}
       <InfomodePopup

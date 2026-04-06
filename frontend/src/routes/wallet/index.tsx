@@ -87,7 +87,7 @@ function BalanceCard() {
   const showLightningBalances = hasMatchingLightningConnection
 
   const lnTotalSats = lnBalancesQuery.data?.totalSats ?? 0
-  const lnPerWallet = lnBalancesQuery.data?.perWallet ?? []
+  const lightningBalanceRows = lnBalancesQuery.data?.lightningBalanceRows ?? []
 
   return (
     <InfomodeWrapper
@@ -159,18 +159,18 @@ function BalanceCard() {
 
           {showLightningBalances &&
             lnBalancesQuery.isSuccess &&
-            lnPerWallet.length > 0 && (
+            lightningBalanceRows.length > 0 && (
               <div>
                 <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
                   Lightning (NWC)
                 </p>
-                {lnPerWallet.length === 1 ? (
+                {lightningBalanceRows.length === 1 ? (
                   <p className="mb-3 text-sm font-semibold text-foreground">
-                    {lnPerWallet[0].label}
+                    {lightningBalanceRows[0].label}
                   </p>
                 ) : (
                   <p className="mb-3 text-xs text-muted-foreground">
-                    Total across {lnPerWallet.length} connected wallets
+                    Total across {lightningBalanceRows.length} connected wallets
                   </p>
                 )}
                 <p className="text-2xl font-semibold tabular-nums">
@@ -181,7 +181,7 @@ function BalanceCard() {
                   {formatSats(lnTotalSats)} sats
                 </p>
                 <ul className="mt-3 space-y-1.5 border-t border-border pt-3 text-sm">
-                  {lnPerWallet.map((row) => (
+                  {lightningBalanceRows.map((row) => (
                     <li
                       key={row.connectionId}
                       className="flex justify-between gap-2"
@@ -202,7 +202,7 @@ function BalanceCard() {
                     </li>
                   ))}
                 </ul>
-                {lnPerWallet.some((r) => r.error != null) && (
+                {lightningBalanceRows.some((r) => r.error != null) && (
                   <p className="mt-2 text-xs text-amber-700 dark:text-amber-400">
                     Some Lightning wallets could not be reached; totals include
                     only successful responses.

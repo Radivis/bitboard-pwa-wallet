@@ -11,33 +11,33 @@ type BalanceQuery = {
 }
 
 export function SendLightningWalletPicker(props: {
-  connections: ConnectedLightningWallet[]
-  lnBalanceQueries: BalanceQuery[]
+  connectedLightningWallets: ConnectedLightningWallet[]
+  balanceQueries: BalanceQuery[]
   selectedConnectionId: string | null
   onSelectConnection: (id: string) => void
   disabled: boolean
 }) {
   const {
-    connections,
-    lnBalanceQueries,
+    connectedLightningWallets,
+    balanceQueries,
     selectedConnectionId,
     onSelectConnection,
     disabled,
   } = props
 
-  if (connections.length === 0) return null
+  if (connectedLightningWallets.length === 0) return null
 
   return (
     <div className="space-y-2">
       <Label>Pay from Lightning wallet</Label>
       <p className="text-xs text-muted-foreground">
-        {connections.length > 1
+        {connectedLightningWallets.length > 1
           ? 'Select which connected wallet should pay this invoice.'
           : 'Using your connected Lightning wallet for this network.'}
       </p>
       <ul className="space-y-2">
-        {connections.map((conn, index) => {
-          const q = lnBalanceQueries[index]
+        {connectedLightningWallets.map((conn, index) => {
+          const q = balanceQueries[index]
           const isSelected = conn.id === selectedConnectionId
           return (
             <li key={conn.id}>
