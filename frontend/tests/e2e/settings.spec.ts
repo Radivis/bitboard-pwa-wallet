@@ -1,6 +1,9 @@
 import { test, expect } from '@playwright/test'
 import { createWalletViaUI } from './helpers/wallet-setup'
-import { waitForSettingsNetworkSwitchComplete } from './helpers/settings-waits'
+import {
+  waitForSettingsNetworkSwitchComplete,
+  waitForSettingsNetworkModeButtonSelected,
+} from './helpers/settings-waits'
 
 test.describe('Settings Page', () => {
   test('settings network switch', async ({ page }) => {
@@ -46,6 +49,7 @@ test.describe('Settings Page', () => {
     // Switch to Regtest first: HTTP URLs are only valid for regtest (HTTPS required for others)
     await page.getByRole('button', { name: 'Regtest' }).click()
     await waitForSettingsNetworkSwitchComplete(page)
+    await waitForSettingsNetworkModeButtonSelected(page, 'Regtest')
 
     const urlInput = page.getByLabel('Endpoint URL')
     await expect(urlInput).toBeVisible()

@@ -2,7 +2,13 @@ import { useState, useEffect } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Globe } from 'lucide-react'
 import { toast } from 'sonner'
-import { useWalletStore, NETWORK_LABELS, type NetworkMode } from '@/stores/walletStore'
+import {
+  useWalletStore,
+  NETWORK_LABELS,
+  selectCommittedNetworkMode,
+  getCommittedNetworkMode,
+  type NetworkMode,
+} from '@/stores/walletStore'
 import { DEFAULT_ESPLORA_URLS } from '@/lib/bitcoin-utils'
 import {
   saveCustomEsploraUrl,
@@ -21,7 +27,8 @@ export const customEsploraUrlQueryKey = (networkMode: NetworkMode) =>
   ['customEsploraUrl', networkMode] as const
 
 export function EsploraUrlSettings() {
-  const networkMode = useWalletStore((s) => s.networkMode)
+  /** Match NetworkSelector / Esplora persistence: same “committed” network as the active mode button. */
+  const networkMode = useWalletStore(selectCommittedNetworkMode)
   const queryClient = useQueryClient()
   const defaultUrl = DEFAULT_ESPLORA_URLS[networkMode]
 
@@ -39,10 +46,16 @@ export function EsploraUrlSettings() {
   const isCustom = storedCustomUrl != null
 
   const saveMutation = useMutation({
-    mutationFn: () => saveCustomEsploraUrl(networkMode, editUrl),
-    onSuccess: async () => {
+    mutationFn: async () => {
+      const mode = getCommittedNetworkMode()
+      await saveCustomEsploraUrl(mode, editUrl)
+      return { mode, savedUrl: editUrl }
+    },
+    onSuccess: async ({ mode, savedUrl }) => {
+      queryClient.setQueryData(customEsploraUrlQueryKey(mode), savedUrl)
       await queryClient.invalidateQueries({
-        queryKey: customEsploraUrlQueryKey(networkMode),
+        queryKey: customEsploraUrlQueryKey(mode),
+        refetchType: 'none',
       })
       toast.success('Esplora endpoint saved')
     },
@@ -52,10 +65,16 @@ export function EsploraUrlSettings() {
   })
 
   const resetMutation = useMutation({
-    mutationFn: () => deleteCustomEsploraUrl(networkMode),
-    onSuccess: async () => {
+    mutationFn: async () => {
+      const mode = getCommittedNetworkMode()
+      await deleteCustomEsploraUrl(mode)
+      return mode
+    },
+    onSuccess: async (mode) => {
+      queryClient.setQueryData(customEsploraUrlQueryKey(mode), null)
       await queryClient.invalidateQueries({
-        queryKey: customEsploraUrlQueryKey(networkMode),
+        queryKey: customEsploraUrlQueryKey(mode),
+        refetchType: 'none',
       })
       toast.success('Reset to default endpoint')
     },
