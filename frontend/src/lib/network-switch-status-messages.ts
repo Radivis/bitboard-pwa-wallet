@@ -5,6 +5,16 @@ import {
   type NetworkMode,
 } from '@/stores/walletStore'
 
+/** While active-wallet bootstrap query is fetching — network switch UI only. */
+export const LOADING_WALLET_FOR_SWITCH_STATUS_LINE = 'Loading wallet…'
+
+/** Fallback when phase callback has not run yet — network switch. */
+export const DEFAULT_SWITCHING_NETWORK_STATUS_LINE = 'Switching network…'
+
+/** Fallback when phase callback has not run yet — address type switch. */
+export const DEFAULT_SWITCHING_ADDRESS_TYPE_STATUS_LINE =
+  'Switching address type…'
+
 /** Shown while persisting the current WASM wallet state for the previous network. */
 export function savingPreviousNetworkMessage(network: NetworkMode): string {
   return `Switching network: Saving ${NETWORK_LABELS[network]} data`

@@ -3,7 +3,7 @@ import {
   useWalletStore,
   type AddressType,
 } from '@/stores/walletStore'
-import { useAddressTypeSwitchMutation } from '@/hooks/useAddressTypeSwitchMutation'
+import { useSubWalletSwitchMutation } from '@/hooks/useSubWalletSwitchMutation'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { Button } from '@/components/ui/button'
 import { ConfirmationDialog } from '@/components/ConfirmationDialog'
@@ -22,7 +22,8 @@ export function AddressTypeSelector() {
     null,
   )
 
-  const { mutate, loading, statusLine } = useAddressTypeSwitchMutation()
+  const { mutate, loading, statusLine } =
+    useSubWalletSwitchMutation('addressType')
 
   const handleChange = (type: 'taproot' | 'segwit') => {
     if (type === addressType) return

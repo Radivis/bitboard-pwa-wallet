@@ -6,7 +6,7 @@ import {
   selectCommittedNetworkMode,
   type NetworkMode,
 } from '@/stores/walletStore'
-import { useNetworkSwitchMutation } from '@/hooks/useNetworkSwitchMutation'
+import { useSubWalletSwitchMutation } from '@/hooks/useSubWalletSwitchMutation'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { Button } from '@/components/ui/button'
 import { WalletUnlock } from '@/components/WalletUnlock'
@@ -52,7 +52,8 @@ export function NetworkSelector() {
     useState(false)
   const pendingNetworkAfterUnlockRef = useRef<NetworkMode | null>(null)
 
-  const { mutate: switchMutate, loading, statusLine } = useNetworkSwitchMutation()
+  const { mutate: switchMutate, loading, statusLine } =
+    useSubWalletSwitchMutation('network')
 
   const handleNetworkChange = useCallback(
     (network: NetworkMode) => {

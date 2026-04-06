@@ -15,7 +15,12 @@ vi.mock('@tanstack/react-router', async (importOriginal) => {
 })
 
 const mockTerminateWorker = vi.fn()
-const mockExportChangeset = vi.fn().mockRejectedValue(new Error('no wallet'))
+/** Matches WASM when nothing is loaded — persisted path in switch is skipped. */
+const mockExportChangeset = vi.fn().mockRejectedValue(
+  new Error(
+    'No active wallet. Call create_wallet or load_wallet first.',
+  ),
+)
 const mockLoadWallet = vi.fn().mockResolvedValue(true)
 const mockSyncWallet = vi.fn().mockResolvedValue({ balance: {}, changeset_json: '{}' })
 const mockGetBalance = vi.fn().mockResolvedValue({ confirmed: 0, total: 0 })
