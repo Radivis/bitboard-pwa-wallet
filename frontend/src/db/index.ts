@@ -42,15 +42,32 @@ export {
 export {
   saveWalletSecrets,
   loadWalletSecrets,
+  loadWalletSecretsPayload,
   deleteWalletSecrets,
   getWalletSecretsEncrypted,
-  putWalletSecretsEncrypted,
+  putSplitWalletSecretsEncrypted,
   persistNewWalletWithSecrets,
+  listWalletIdsWithSecrets,
+  reencryptAllWalletSecretsWithNewPassword,
 } from './wallet-persistence'
+export {
+  NEAR_ZERO_WRAPPER_PASSWORD,
+  NEAR_ZERO_SETTINGS_KEY_ACTIVE,
+  NEAR_ZERO_SETTINGS_KEY_WRAPPED,
+  serializeEncryptedBlobForSettings,
+  deserializeEncryptedBlobFromSettings,
+  generateAndPersistNearZeroSession,
+  tryLoadNearZeroSessionIntoMemory,
+  clearNearZeroSecuritySettings,
+  isNearZeroSecurityConfiguredInDb,
+  upgradeNearZeroToUserPassword,
+} from './near-zero-security'
 export type {
   WalletSecrets,
+  WalletSecretsPayload,
   DescriptorWalletData,
   EncryptedWalletSecretsBlob,
+  SplitWalletSecretsEncryptedBlobs,
 } from './wallet-persistence'
 export {
   getLabDatabase,

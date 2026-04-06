@@ -51,7 +51,7 @@ export function SeedPhraseBackup() {
       <InfomodeWrapper
         infoId="management-seed-phrase-backup-card"
         infoTitle="Seed phrase backup"
-        infoText="This section lets you reveal your recovery words again after typing your wallet password. Use it only in a private place—anyone who sees the words can control your funds. It is for checking a paper backup or writing the phrase down if you have not already."
+        infoText="This section lets you reveal your recovery words again after typing your Bitboard app password. Use it only in a private place—anyone who sees the words can control your funds. It is for checking a paper backup or writing the phrase down if you have not already."
         className="rounded-xl"
       >
         <Card>
@@ -62,7 +62,7 @@ export function SeedPhraseBackup() {
             </CardTitle>
             <CardDescription>
               View your seed phrase to back up your wallet. You will need to
-              confirm your password.
+              confirm your Bitboard app password.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -88,9 +88,9 @@ export function SeedPhraseBackup() {
       >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Confirm Password</DialogTitle>
+            <DialogTitle>Confirm Bitboard app password</DialogTitle>
             <DialogDescription>
-              Enter your wallet password to view your seed phrase.
+              Enter your Bitboard app password to view your seed phrase.
             </DialogDescription>
           </DialogHeader>
           <form
@@ -101,13 +101,13 @@ export function SeedPhraseBackup() {
             }}
           >
             <div className="space-y-2">
-              <Label htmlFor="backup-password">Password</Label>
+              <Label htmlFor="backup-password">Bitboard app password</Label>
               <Input
                 id="backup-password"
                 type="password"
                 value={promptPassword}
                 onChange={(e) => setPromptPassword(e.target.value)}
-                placeholder="Enter your password"
+                placeholder="Enter your Bitboard app password"
                 disabled={loading}
                 autoFocus
               />

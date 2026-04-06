@@ -5,7 +5,12 @@ import { cn } from '@/lib/utils'
 
 const INFO_MODE_TOGGLE_TOAST_DURATION_MS = 6_000
 
-export function InfomodeToggle() {
+interface InfomodeToggleProps {
+  /** Extra classes for the toggle button (e.g. larger hit target in modals). */
+  className?: string
+}
+
+export function InfomodeToggle({ className }: InfomodeToggleProps) {
   const isActive = useInfomodeStore((state) => state.isActive)
   const toggleInfomode = useInfomodeStore((state) => state.toggleInfomode)
 
@@ -35,6 +40,7 @@ export function InfomodeToggle() {
         'hover:bg-accent hover:text-accent-foreground',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
         isActive ? 'text-cyan-500' : 'text-muted-foreground',
+        className,
       )}
     >
       {isActive ? <Lightbulb className="h-5 w-5" /> : <LightbulbOff className="h-5 w-5" />}

@@ -2,7 +2,7 @@ import type { Kysely } from 'kysely'
 
 /**
  * Migration strategy: additive only; no destructive changes. No version table.
- * kdf_version backfill is best-effort (catch duplicate column for existing DBs).
+ * Fresh installs get the full schema from createTable; no separate ALTER steps.
  */
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- migrations run over multiple DB shapes
@@ -33,6 +33,10 @@ export async function migrateToLatest(db: Kysely<any>): Promise<void> {
     .addColumn('kdf_version', 'integer', (col) => col.notNull().defaultTo(1))
     .addColumn('created_at', 'text', (col) => col.notNull())
     .addColumn('updated_at', 'text', (col) => col.notNull())
+    .addColumn('mnemonic_encrypted_data', 'blob', (col) => col.notNull())
+    .addColumn('mnemonic_iv', 'blob', (col) => col.notNull())
+    .addColumn('mnemonic_salt', 'blob', (col) => col.notNull())
+    .addColumn('mnemonic_kdf_version', 'integer', (col) => col.notNull())
     .execute()
 
   await db.schema

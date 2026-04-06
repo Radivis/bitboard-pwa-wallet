@@ -15,6 +15,11 @@ import { terminateLabWorker } from '@/workers/lab-factory'
 import { appQueryClient } from '@/lib/app-query-client'
 import { prefetchLabChainState } from '@/hooks/useLabChainStateQuery'
 import { errorMessage } from '@/lib/utils'
+import {
+  loadingTargetNetworkMessage,
+  savingPreviousNetworkMessage,
+  type NetworkSwitchPhaseReporter,
+} from '@/lib/network-switch-status-messages'
 
 /**
  * When switching *to* lab with an active WASM wallet: persist the current
@@ -27,8 +32,10 @@ async function persistAndLoadLabWalletIfUnlockedOrSyncing(params: {
   previousNetworkMode: NetworkMode
   addressType: AddressType
   accountId: number
+  onPhase?: NetworkSwitchPhaseReporter
 }): Promise<void> {
-  const { walletStatus, previousNetworkMode, addressType, accountId } = params
+  const { walletStatus, previousNetworkMode, addressType, accountId, onPhase } =
+    params
   if (!walletIsUnlockedOrSyncing(walletStatus)) return
 
   const sessionPassword = useSessionStore.getState().password
@@ -38,6 +45,7 @@ async function persistAndLoadLabWalletIfUnlockedOrSyncing(params: {
   const { exportChangeset } = useCryptoStore.getState()
   try {
     const currentChangeset = await exportChangeset()
+    onPhase?.(savingPreviousNetworkMessage(previousNetworkMode))
     await updateDescriptorWalletChangeset({
       password: sessionPassword,
       walletId: activeWalletId,
@@ -50,6 +58,8 @@ async function persistAndLoadLabWalletIfUnlockedOrSyncing(params: {
     // No active WASM wallet yet (e.g., first load) -- safe to skip
   }
 
+  onPhase?.(loadingTargetNetworkMessage('lab'))
+
   await loadDescriptorWalletWithoutSync({
     password: sessionPassword,
     walletId: activeWalletId,
@@ -60,12 +70,11 @@ async function persistAndLoadLabWalletIfUnlockedOrSyncing(params: {
 }
 
 export type SwitchToLabNetworkParams = {
-  setSwitching: (value: boolean) => void
-  setNetworkMode: (mode: NetworkMode) => void
   previousNetworkMode: NetworkMode
   walletStatus: WalletStatus
   addressType: AddressType
   accountId: number
+  onPhase?: NetworkSwitchPhaseReporter
 }
 
 /**
@@ -76,15 +85,8 @@ export type SwitchToLabNetworkParams = {
 export async function switchToLabNetwork(
   params: SwitchToLabNetworkParams,
 ): Promise<boolean> {
-  const {
-    setSwitching,
-    setNetworkMode,
-    previousNetworkMode,
-    walletStatus,
-    addressType,
-    accountId,
-  } = params
-  setSwitching(true)
+  const { previousNetworkMode, walletStatus, addressType, accountId, onPhase } =
+    params
   try {
     terminateLabWorker()
     await persistAndLoadLabWalletIfUnlockedOrSyncing({
@@ -92,14 +94,15 @@ export async function switchToLabNetwork(
       previousNetworkMode,
       addressType,
       accountId,
+      onPhase,
     })
     await prefetchLabChainState(appQueryClient)
-    setNetworkMode('lab')
+    if (!walletIsUnlockedOrSyncing(walletStatus)) {
+      useWalletStore.getState().setNetworkMode('lab')
+    }
     return true
   } catch (err) {
     toast.error(errorMessage(err) || 'Failed to start lab')
     return false
-  } finally {
-    setSwitching(false)
   }
 }

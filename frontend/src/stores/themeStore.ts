@@ -2,7 +2,12 @@ import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
 import { useEffect } from 'react'
 import { sqliteStorage } from '@/db/storage-adapter'
-import { useWalletStore, type WalletStatus } from '@/stores/walletStore'
+import {
+  useWalletStore,
+  selectCommittedAddressType,
+  selectCommittedNetworkMode,
+  type WalletStatus,
+} from '@/stores/walletStore'
 
 export type ThemeMode = 'light' | 'dark' | 'system'
 export type ResolvedTheme = 'light' | 'dark'
@@ -68,8 +73,8 @@ export function isWalletThemePaletteActive(
  */
 export function ThemeSynchronizer() {
   const themeMode = useThemeStore((state) => state.themeMode)
-  const networkMode = useWalletStore((state) => state.networkMode)
-  const addressType = useWalletStore((state) => state.addressType)
+  const accentNetworkMode = useWalletStore(selectCommittedNetworkMode)
+  const accentAddressType = useWalletStore(selectCommittedAddressType)
   const activeWalletId = useWalletStore((state) => state.activeWalletId)
   const walletStatus = useWalletStore((state) => state.walletStatus)
 
@@ -77,8 +82,8 @@ export function ThemeSynchronizer() {
     function apply() {
       const resolved = resolveTheme(themeMode)
       document.documentElement.classList.toggle('dark', resolved === 'dark')
-      document.documentElement.dataset.network = networkMode ?? 'testnet'
-      document.documentElement.dataset.addressType = addressType ?? 'taproot'
+      document.documentElement.dataset.network = accentNetworkMode ?? 'testnet'
+      document.documentElement.dataset.addressType = accentAddressType ?? 'taproot'
       document.documentElement.dataset.palette = isWalletThemePaletteActive(
         activeWalletId,
         walletStatus,
@@ -96,7 +101,7 @@ export function ThemeSynchronizer() {
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
     mediaQuery.addEventListener('change', apply)
     return () => mediaQuery.removeEventListener('change', apply)
-  }, [themeMode, networkMode, addressType, activeWalletId, walletStatus])
+  }, [themeMode, accentNetworkMode, accentAddressType, activeWalletId, walletStatus])
 
   return null
 }

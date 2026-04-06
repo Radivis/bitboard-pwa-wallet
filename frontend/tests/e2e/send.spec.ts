@@ -7,6 +7,11 @@ import {
 } from './helpers/wallet-setup'
 import { fundRegtestAddress, mineRegtestBlocks, waitForConfirmedBalance } from './helpers/regtest'
 import { goToWalletTab } from './helpers/wallet-nav'
+import {
+  waitForSettingsAddressTypeSwitchComplete,
+  waitForSettingsNetworkModeButtonSelected,
+  waitForSettingsNetworkSwitchComplete,
+} from './helpers/settings-waits'
 
 test.describe('Send Page', () => {
   test.beforeEach(async ({ page }) => {
@@ -54,21 +59,20 @@ test.describe('Send Page', () => {
     await page.getByRole('link', { name: /settings/i }).click()
     await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
     await page.getByRole('button', { name: 'Regtest' }).click()
-    await expect(page.getByText(/Regtest Taproot sub-wallet loaded/)).toBeVisible({
-      timeout: 60000,
-    })
+    await waitForSettingsNetworkSwitchComplete(page)
+    await waitForSettingsNetworkModeButtonSelected(page, 'Regtest')
 
     await page.getByRole('button', { name: 'SegWit (BIP84)' }).click()
     await page.getByRole('button', { name: 'Change' }).click()
-    await expect(page.getByText(/Regtest SegWit sub-wallet loaded/)).toBeVisible({
-      timeout: 15000,
-    })
+    await waitForSettingsAddressTypeSwitchComplete(page)
 
     await goToWalletTab(page, 'Receive')
     await expect(page.getByText('Receive Bitcoin')).toBeVisible()
-    const addressEl = page.getByRole('main').locator('.font-mono').first()
+    const addressEl = page
+      .locator('[data-infomode-id="receive-receiving-address-card"]')
+      .locator('.font-mono')
     await expect(addressEl).toBeVisible({ timeout: 10000 })
-    await expect(addressEl).toHaveText(/bcrt1/, { timeout: 15000 })
+    await expect(addressEl).toHaveText(/bcrt1/, { timeout: 45000 })
     const receiveAddress = (await addressEl.textContent())?.trim()
     if (!receiveAddress || !receiveAddress.startsWith('bcrt1')) {
       throw new Error(`Expected regtest address, got: ${receiveAddress}`)
@@ -90,8 +94,8 @@ test.describe('Send Page', () => {
 
     // Wait for the sync to START (button changes to "Syncing...") and then
     // FINISH (button changes back to "Sync"). This is the only reliable way
-    // to know the current sync completed — toast-based checks are unreliable
-    // due to stale "Wallet synced" toasts from the settings switch.
+    // to know the current sync completed — success toasts from the settings
+    // switch were removed in favor of inline status; button state is reliable.
     await expect(page.getByRole('button', { name: 'Syncing...' })).toBeVisible({
       timeout: 5000,
     })

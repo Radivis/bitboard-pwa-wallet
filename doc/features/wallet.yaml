@@ -5,8 +5,9 @@ feature:
     - As a user, I want to create a new wallet with a BIP39 mnemonic so I can start using Bitcoin
     - As a user, I want to import an existing wallet from a mnemonic so I can restore my funds
     - As a user, I want to choose between Taproot (BIP86) and SegWit (BIP84) address types
-    - As a user, I want to lock my wallet with a password so my funds are protected
-    - As a user, I want to unlock my wallet to access my funds
+    - As a user, I want a single Bitboard app password that encrypts all stored wallet secrets on this device
+    - As a user, I want to lock the app so decrypted keys are cleared until I enter my app password again
+    - As a user, I want to unlock the app with my Bitboard app password to access my funds
     - As a user, I want to receive Bitcoin by displaying an address and QR code
     - As a user, I want to send Bitcoin to an address
     - As a user, I want to see my wallet balance and sync status
@@ -16,20 +17,37 @@ feature:
     - As a user, I want to back up my mnemonic from Settings
   requirements:
     - Mnemonic must be 12 or 24 words (BIP39 English wordlist)
-    - All sensitive data encrypted at rest with user password (AES-256-GCM via Argon2id KDF)
+    - All sensitive data encrypted at rest with the Bitboard app password (AES-256-GCM via Argon2id KDF); the same password encrypts every wallet on this device
+    - The mnemonic is stored as a separate ciphertext from the rest of wallet secrets (descriptor sub-wallets, Lightning NWC metadata); decrypt the mnemonic only when an operation requires the master seed (e.g. new sub-wallet derivation, seed backup, app password change).
+    - Security posture does not target isolating blast radius to a single descriptor sub-wallet; the shared payload can still reveal all materialized sub-wallet state when decrypted; see doc/SECURITY.md
     - Crypto operations run off-main-thread in a Web Worker
     - Default address type is Taproot (BIP86)
     - Default network is Signet
   pages:
+    - SetAppPasswordModal:
+      - description: "Blocking first-run dialog before create/import when no wallets exist and no session password"
+      - file: frontend/src/components/SetAppPasswordModal.tsx
+      - visible_elements:
+        - title Set Bitboard app password
+        - prominent red warning: no password recovery; losing the app password may cause permanent loss of funds if the mnemonic is not backed up
+        - password and confirm password fields with strength indicator
+        - Continue button (disabled until passwords match and meet minimum length)
+        - Back to setup link
+        - optional Near-zero security mode (secondary): weak quick-start path; random session secret wrapped with a fixed passphrase stored in source and in settings; encrypts wallets like a normal app password but is not meaningfully secret
+        - Use near-zero security mode: persist wrapped secret, enable near-zero mode, session holds random secret
+      - click_event:
+        - Continue: store password in session and dismiss modal so create/import can proceed
     - CreateWallet:
       - description: "Multi-step flow to create a new wallet"
       - path: /setup/create
       - file: frontend/src/routes/setup/create.tsx
       - visible_elements:
-        - step indicator showing current step out of total steps
+        - If at least one wallet exists and session is locked: Unlock to continue dialog (WalletUnlock variant setup) before the form
+        - If no wallets and no session password: SetAppPasswordModal only until Continue
+        - step indicator showing current step out of total steps (three steps)
         - Step 1 - Generate:
           - word count selector (12 or 24 words)
-          - generate button
+          - generate button (uses session app password for encryption; no inline password fields)
             - click_event:
               - generate BIP39 mnemonic and advance to step 2
         - Step 2 - Backup:
@@ -43,29 +61,19 @@ feature:
           - input fields for the requested words
           - confirm button (disabled until correct words entered)
             - click_event:
-              - validate words match and advance to step 4
-        - Step 4 - Password:
-          - password input field
-          - password confirmation input field
-          - password strength indicator
-          - create wallet button (disabled until passwords match and meet minimum strength)
-            - click_event:
-              - encrypt mnemonic with password, create wallet, persist to IndexedDB
-              - navigate to Dashboard
+              - validate words match, persist encrypted secrets with session app password, navigate to Dashboard
     - ImportWallet:
       - description: "Import an existing wallet by entering a BIP39 mnemonic"
       - path: /setup/import
       - file: frontend/src/routes/setup/import.tsx
       - visible_elements:
+        - If at least one wallet exists and session is locked: Unlock to continue dialog before the form
+        - If no wallets and no session password: SetAppPasswordModal only until Continue
         - mnemonic input (textarea or individual word inputs)
-        - word count selector (12 or 24 words)
         - validation indicator showing whether mnemonic is valid
-        - password input field
-        - password confirmation input field
-        - password strength indicator
-        - restore wallet button (disabled until mnemonic is valid and passwords match)
+        - restore wallet button (disabled until mnemonic is valid; encryption uses session app password)
           - click_event:
-            - validate mnemonic, encrypt with password, restore wallet, persist to IndexedDB
+            - validate mnemonic, encrypt with session app password, restore wallet, persist to IndexedDB
             - navigate to Dashboard
     - Dashboard:
       - description: "Main wallet view showing balance, sync status, and recent transactions"
@@ -92,7 +100,7 @@ feature:
       - requirements:
         - Wallet must be unlocked to view
         - If no wallet exists, redirect to CreateWallet or ImportWallet choice
-        - If wallet is locked, show unlock prompt (password input)
+        - If wallet is locked, show unlock prompt (Bitboard app password)
     - Receive:
       - description: "Display a Bitcoin address and QR code for receiving payments"
       - path: /wallet/receive
@@ -164,13 +172,24 @@ feature:
         - Backup section:
           - show seed phrase button
             - click_event:
-              - prompt for password confirmation
+              - prompt for Bitboard app password confirmation
               - on success: display mnemonic words in a secure modal
           - warning text about seed phrase security
         - Wallet management section:
+          - add wallet button (navigates to setup; if session locked, user unlocks first)
           - lock wallet button
             - click_event:
               - clear decrypted wallet data from memory, return to locked state
+        - Security section (above About):
+          - When near-zero security mode is active: Set a real password button (file: frontend/src/components/UpgradeFromNearZeroPasswordModal.tsx); new password plus confirm only; re-encrypt all `wallet_secrets` if any, update session, clear near-zero settings
+          - Otherwise: Change app password button (disabled when no wallets exist)
+            - click_event:
+              - open Change app password modal (file: frontend/src/components/ChangeAppPasswordModal.tsx)
+              - same prominent red warning as Set Bitboard app password (no recovery; fund loss risk without mnemonic backup)
+              - user enters current password, new password, and confirmation
+              - on submit: decrypt all `wallet_secrets` with current password, re-encrypt with new password, persist all rows in a single database transaction, then update session password
+              - UI: spinner with “Encrypting secrets with new password…” while running; success screen with checkmark and Done
+        - Near-zero banner (below app header, not on /setup): red alert when near-zero mode is active; Set up password now opens upgrade modal; small “Set up a password later” dismisses until the browser tab session ends (sessionStorage)
       - requirements:
         - Wallet must exist for backup and lock sections to appear
         - Network and address type settings are available even without a wallet

@@ -4,12 +4,12 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, CheckCircle2, XCircle, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { PasswordStrengthIndicator } from '@/components/PasswordStrengthIndicator'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
+import { SetAppPasswordModal } from '@/components/SetAppPasswordModal'
+import { WalletUnlock } from '@/components/WalletUnlock'
 import { useCryptoStore } from '@/stores/cryptoStore'
 import { useWalletStore } from '@/stores/walletStore'
 import { useSessionStore, startAutoLockTimer } from '@/stores/sessionStore'
@@ -19,6 +19,7 @@ import {
   ensureMigrated,
   persistNewWalletWithSecrets,
   walletKeys,
+  useWallets,
 } from '@/db'
 import { ensureSecretsChannel } from '@/workers/secrets-channel'
 import { toBitcoinNetwork, getEsploraUrl } from '@/lib/bitcoin-utils'
@@ -31,10 +32,11 @@ export const Route = createFileRoute('/setup/import')({
 export function ImportWalletPage() {
   const navigate = useNavigate()
   const [mnemonicInput, setMnemonicInput] = useState('')
-  const [password, setPassword] = useState('')
-  const [confirmPassword, setConfirmPassword] = useState('')
   const [validating, setValidating] = useState(false)
   const [isValid, setIsValid] = useState<boolean | null>(null)
+
+  const { data: wallets, isLoading: walletsLoading } = useWallets()
+  const sessionPassword = useSessionStore((s) => s.password)
 
   const validateMnemonic = useCryptoStore((s) => s.validateMnemonic)
   const importWalletAndEncryptSecrets = useCryptoStore((s) => s.importWalletAndEncryptSecrets)
@@ -45,9 +47,9 @@ export function ImportWalletPage() {
   const setActiveWallet = useWalletStore((s) => s.setActiveWallet)
   const setWalletStatus = useWalletStore((s) => s.setWalletStatus)
   const setCurrentAddress = useWalletStore((s) => s.setCurrentAddress)
+  const commitLoadedSubWallet = useWalletStore((s) => s.commitLoadedSubWallet)
   const setBalance = useWalletStore((s) => s.setBalance)
   const setTransactions = useWalletStore((s) => s.setTransactions)
-  const setSessionPassword = useSessionStore((s) => s.setPassword)
   const getBalanceFromWorker = useCryptoStore((s) => s.getBalance)
   const getTransactionList = useCryptoStore((s) => s.getTransactionList)
   const addWallet = useAddWallet()
@@ -86,25 +88,25 @@ export function ImportWalletPage() {
     return () => clearTimeout(timer)
   }, [mnemonic, wordCount, validateMnemonic])
 
-  const passwordsValid = useMemo(() => {
-    return password.length >= 8 && password === confirmPassword
-  }, [password, confirmPassword])
-
-  const canRestore = isValid === true && passwordsValid
+  const canRestore = isValid === true
 
   const restoreMutation = useMutation({
     mutationFn: async () => {
       if (!canRestore) throw new Error('Invalid input')
 
+      const password = useSessionStore.getState().password
+      if (!password) throw new Error('App password required')
+
       await ensureSecretsChannel()
       const network = toBitcoinNetwork(networkMode)
-      const { encryptedBlob, walletResult } = await importWalletAndEncryptSecrets({
-        mnemonic,
-        password,
-        network,
-        addressType,
-        accountId,
-      })
+      const { encryptedPayload, encryptedMnemonic, walletResult } =
+        await importWalletAndEncryptSecrets({
+          mnemonic,
+          password,
+          network,
+          addressType,
+          accountId,
+        })
 
       setMnemonicInput('')
 
@@ -120,16 +122,23 @@ export function ImportWalletPage() {
               name: `Imported Wallet ${Date.now()}`,
               created_at: new Date().toISOString(),
             }),
-          encryptedBlob,
+          encryptedBlobs: {
+            payload: encryptedPayload,
+            mnemonic: encryptedMnemonic,
+          },
         })
       } catch (secretsErr) {
         queryClient.invalidateQueries({ queryKey: walletKeys.all })
         throw secretsErr
       }
 
-      setSessionPassword(password)
       setActiveWallet(walletId)
       setCurrentAddress(walletResult.first_address)
+      commitLoadedSubWallet({
+        networkMode,
+        addressType,
+        accountId,
+      })
       setWalletStatus('unlocked')
 
       startAutoLockTimer(() => {
@@ -160,6 +169,24 @@ export function ImportWalletPage() {
       )
     },
   })
+
+  if (walletsLoading) {
+    return (
+      <div className="flex justify-center py-12">
+        <LoadingSpinner text="Loading…" />
+      </div>
+    )
+  }
+
+  const hasWallets = (wallets?.length ?? 0) > 0
+
+  if (hasWallets && !sessionPassword) {
+    return <WalletUnlock variant="setup" />
+  }
+
+  if (!hasWallets && !sessionPassword) {
+    return <SetAppPasswordModal open />
+  }
 
   return (
     <div className="space-y-4">
@@ -221,36 +248,6 @@ export function ImportWalletPage() {
                   </span>
                 )}
               </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="import-password">Password</Label>
-              <Input
-                id="import-password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Enter a strong password"
-                disabled={restoreMutation.isPending}
-              />
-              <PasswordStrengthIndicator password={password} />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="import-confirm-password">Confirm Password</Label>
-              <Input
-                id="import-confirm-password"
-                type="password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                placeholder="Confirm your password"
-                disabled={restoreMutation.isPending}
-              />
-              {confirmPassword && password !== confirmPassword && (
-                <p className="text-xs text-destructive">
-                  Passwords do not match
-                </p>
-              )}
             </div>
 
             {restoreMutation.isPending ? (

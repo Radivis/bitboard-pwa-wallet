@@ -3,23 +3,27 @@ import {
   useWalletStore,
   type AddressType,
 } from '@/stores/walletStore'
-import { switchDescriptorWallet } from '@/lib/settings-switch-wallet'
+import { useSubWalletSwitchMutation } from '@/hooks/useSubWalletSwitchMutation'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { Button } from '@/components/ui/button'
 import { ConfirmationDialog } from '@/components/ConfirmationDialog'
+import { LoadingSpinner } from '@/components/LoadingSpinner'
+
+const ADDRESS_SWITCH_SPINNER_CLASS =
+  'flex-row items-start justify-start gap-2 py-1 [&_.animate-spin]:mt-0.5 [&_.animate-spin]:h-4 [&_.animate-spin]:w-4 [&_p]:max-w-[min(100%,28rem)] [&_p]:text-left [&_p]:leading-snug'
 
 export function AddressTypeSelector() {
   const addressType = useWalletStore((s) => s.addressType)
   const setAddressType = useWalletStore((s) => s.setAddressType)
   const activeWalletId = useWalletStore((s) => s.activeWalletId)
   const walletStatus = useWalletStore((s) => s.walletStatus)
-  const networkMode = useWalletStore((s) => s.networkMode)
-  const accountId = useWalletStore((s) => s.accountId)
   const [showWarning, setShowWarning] = useState(false)
   const [pendingType, setPendingType] = useState<'taproot' | 'segwit' | null>(
     null,
   )
-  const [switching, setSwitching] = useState(false)
+
+  const { mutate, loading, statusLine } =
+    useSubWalletSwitchMutation('addressType')
 
   const handleChange = (type: 'taproot' | 'segwit') => {
     if (type === addressType) return
@@ -32,31 +36,18 @@ export function AddressTypeSelector() {
   }
 
   const applyAddressTypeChange = useCallback(
-    async (type: AddressType) => {
-      const previousAddressType = addressType
-
+    (type: AddressType) => {
       if (walletStatus === 'unlocked' || walletStatus === 'syncing') {
-        setSwitching(true)
-        try {
-          await switchDescriptorWallet({
-            targetNetworkMode: networkMode,
-            targetAddressType: type,
-            targetAccountId: accountId,
-            currentNetworkMode: networkMode,
-            currentAddressType: previousAddressType,
-            currentAccountId: accountId,
-          })
-          setAddressType(type)
-        } catch {
-          // switchDescriptorWallet already showed a toast
-        } finally {
-          setSwitching(false)
-        }
+        mutate(type, {
+          onSuccess: () => {
+            setAddressType(type)
+          },
+        })
       } else {
         setAddressType(type)
       }
     },
-    [setAddressType, walletStatus, networkMode, addressType, accountId],
+    [walletStatus, mutate, setAddressType],
   )
 
   return (
@@ -73,7 +64,7 @@ export function AddressTypeSelector() {
             size="sm"
             onClick={() => handleChange('taproot')}
             className="w-full"
-            disabled={switching}
+            disabled={loading}
           >
             Taproot (BIP86)
           </Button>
@@ -89,12 +80,15 @@ export function AddressTypeSelector() {
             size="sm"
             onClick={() => handleChange('segwit')}
             className="w-full"
-            disabled={switching}
+            disabled={loading}
           >
             SegWit (BIP84)
           </Button>
         </InfomodeWrapper>
       </div>
+      {loading && statusLine && (
+        <LoadingSpinner text={statusLine} className={ADDRESS_SWITCH_SPINNER_CLASS} />
+      )}
       <ConfirmationDialog
         open={showWarning}
         title="Change Address Type?"

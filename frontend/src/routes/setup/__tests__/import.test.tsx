@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { renderWithProviders, TEST_MNEMONIC_12 } from '@/test-utils/test-providers'
@@ -58,18 +58,36 @@ vi.mock('@/stores/walletStore', () => ({
   ),
 }))
 
+const mockSessionPassword = { value: 'validpassword123' as string | null }
 vi.mock('@/stores/sessionStore', () => ({
-  useSessionStore: (selector: (s: Record<string, unknown>) => unknown) =>
-    selector({ setPassword: vi.fn() }),
+  useSessionStore: Object.assign(
+    (selector: (s: { password: string | null }) => unknown) =>
+      selector({
+        password: mockSessionPassword.value,
+        setPassword: (p: string | null) => {
+          mockSessionPassword.value = p
+        },
+      }),
+    {
+      getState: () => ({
+        password: mockSessionPassword.value,
+        setPassword: (p: string | null) => {
+          mockSessionPassword.value = p
+        },
+      }),
+    },
+  ),
   startAutoLockTimer: vi.fn(),
 }))
 
 const mockMutateAsync = vi.fn().mockResolvedValue(1)
 vi.mock('@/db', () => ({
   useAddWallet: () => ({ mutateAsync: mockMutateAsync }),
+  useWallets: () => ({ data: [], isLoading: false }),
   getDatabase: vi.fn(),
   ensureMigrated: vi.fn().mockResolvedValue(undefined),
-  putWalletSecretsEncrypted: vi.fn().mockResolvedValue(undefined),
+  persistNewWalletWithSecrets: vi.fn().mockResolvedValue(1),
+  walletKeys: { all: ['wallets'] as const },
 }))
 
 vi.mock('@/workers/secrets-channel', () => ({
@@ -85,10 +103,6 @@ vi.mock('@/lib/wallet-utils', () => ({
   loadCustomEsploraUrl: vi.fn().mockResolvedValue(null),
 }))
 
-vi.mock('@/components/PasswordStrengthIndicator', () => ({
-  PasswordStrengthIndicator: () => <div data-testid="password-strength" />,
-}))
-
 import { ImportWalletPage } from '../import'
 
 describe('ImportWalletPage', () => {
@@ -96,17 +110,18 @@ describe('ImportWalletPage', () => {
     vi.clearAllMocks()
     vi.useFakeTimers({ shouldAdvanceTime: true })
     mockValidateMnemonic.mockResolvedValue(true)
+    mockSessionPassword.value = 'validpassword123'
   })
 
   afterEach(() => {
     vi.useRealTimers()
   })
 
-  it('renders mnemonic textarea and password fields', () => {
+  it('renders mnemonic textarea without inline password fields', () => {
     renderWithProviders(<ImportWalletPage />)
     expect(screen.getByLabelText('Seed Phrase')).toBeInTheDocument()
-    expect(screen.getByLabelText('Password')).toBeInTheDocument()
-    expect(screen.getByLabelText('Confirm Password')).toBeInTheDocument()
+    expect(screen.queryByLabelText('Password')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Confirm Password')).not.toBeInTheDocument()
   })
 
   it('word count display updates as words are typed', async () => {
@@ -151,23 +166,12 @@ describe('ImportWalletPage', () => {
     )
   })
 
-  it('password mismatch shows error message', async () => {
-    vi.useRealTimers()
-    const user = userEvent.setup()
-    renderWithProviders(<ImportWalletPage />)
-
-    await user.type(screen.getByLabelText('Password'), 'password123')
-    await user.type(screen.getByLabelText('Confirm Password'), 'different')
-
-    expect(screen.getByText('Passwords do not match')).toBeInTheDocument()
-  })
-
-  it('Restore Wallet disabled until mnemonic valid and passwords valid', () => {
+  it('Restore Wallet disabled until mnemonic valid', () => {
     renderWithProviders(<ImportWalletPage />)
     expect(screen.getByRole('button', { name: 'Restore Wallet' })).toBeDisabled()
   })
 
-  it('Restore Wallet enabled when both conditions met', async () => {
+  it('Restore Wallet enabled when mnemonic valid', async () => {
     vi.useRealTimers()
     const user = userEvent.setup()
     mockValidateMnemonic.mockResolvedValue(true)
@@ -182,13 +186,10 @@ describe('ImportWalletPage', () => {
       { timeout: 2000 },
     )
 
-    await user.type(screen.getByLabelText('Password'), 'validpassword123')
-    await user.type(screen.getByLabelText('Confirm Password'), 'validpassword123')
-
     expect(screen.getByRole('button', { name: 'Restore Wallet' })).toBeEnabled()
   })
 
-  it('calls importWalletAndEncryptSecrets on submit', async () => {
+  it('calls importWalletAndEncryptSecrets with session app password', async () => {
     vi.useRealTimers()
     const user = userEvent.setup()
     mockValidateMnemonic.mockResolvedValue(true)
@@ -221,9 +222,6 @@ describe('ImportWalletPage', () => {
       { timeout: 2000 },
     )
 
-    await user.type(screen.getByLabelText('Password'), 'validpassword123')
-    await user.type(screen.getByLabelText('Confirm Password'), 'validpassword123')
-
     await user.click(screen.getByRole('button', { name: 'Restore Wallet' }))
 
     await waitFor(() => {
@@ -254,9 +252,6 @@ describe('ImportWalletPage', () => {
       () => expect(screen.getByText('Valid mnemonic')).toBeInTheDocument(),
       { timeout: 2000 },
     )
-
-    await user.type(screen.getByLabelText('Password'), 'validpassword123')
-    await user.type(screen.getByLabelText('Confirm Password'), 'validpassword123')
 
     await user.click(screen.getByRole('button', { name: 'Restore Wallet' }))
 

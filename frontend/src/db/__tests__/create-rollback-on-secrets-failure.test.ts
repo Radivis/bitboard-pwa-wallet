@@ -19,8 +19,14 @@ describe('Create/import rollback on secrets write failure', () => {
     await walletDb.destroy()
   })
 
-  it('removes wallet row when putWalletSecretsEncrypted fails so wallet list has no entry without secrets', async () => {
+  it('removes wallet row when putSplitWalletSecretsEncrypted fails so wallet list has no entry without secrets', async () => {
     const putSecretsFails = vi.fn().mockRejectedValue(new Error('secrets write failed'))
+    const dummyBlob = {
+      ciphertext: new Uint8Array(0),
+      iv: new Uint8Array(12),
+      salt: new Uint8Array(16),
+      kdfVersion: 1 as const,
+    }
 
     await expect(
       persistNewWalletWithSecrets({
@@ -35,11 +41,9 @@ describe('Create/import rollback on secrets write failure', () => {
             .executeTakeFirstOrThrow()
           return Number(result.insertId)
         },
-        encryptedBlob: {
-          ciphertext: new Uint8Array(0),
-          iv: new Uint8Array(12),
-          salt: new Uint8Array(16),
-          kdfVersion: 1,
+        encryptedBlobs: {
+          payload: dummyBlob,
+          mnemonic: dummyBlob,
         },
         putSecrets: putSecretsFails,
       }),

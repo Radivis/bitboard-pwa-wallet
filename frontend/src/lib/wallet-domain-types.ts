@@ -33,12 +33,19 @@ export interface StoredNwcLightningConnection {
   createdAt: string
 }
 
-/** Sensitive wallet data stored encrypted. Shared with db layer and workers. */
-export interface WalletSecrets {
-  mnemonic: string
+/**
+ * Encrypted wallet payload without the mnemonic (descriptor state + Lightning).
+ * Stored in the main `encrypted_data` column after split migration.
+ */
+export interface WalletSecretsPayload {
   descriptorWallets: DescriptorWalletData[]
   /** NWC URIs and metadata (empty array when the user has no Lightning connections). */
   lightningNwcConnections: StoredNwcLightningConnection[]
+}
+
+/** Sensitive wallet data stored encrypted. Shared with db layer and workers. */
+export interface WalletSecrets extends WalletSecretsPayload {
+  mnemonic: string
 }
 
 const SUPPORTED_BITCOIN_NETWORKS: readonly BitcoinNetwork[] = [
@@ -95,6 +102,30 @@ function isDescriptorWalletData(value: unknown): value is DescriptorWalletData {
   )
 }
 
+export function isWalletSecretsPayload(value: unknown): value is WalletSecretsPayload {
+  if (!isRecord(value)) return false
+  if ('mnemonic' in value && (value as { mnemonic?: unknown }).mnemonic !== undefined) {
+    return false
+  }
+  if (!Array.isArray(value.descriptorWallets)) return false
+  if (
+    !value.descriptorWallets.every((descriptorWallet) =>
+      isDescriptorWalletData(descriptorWallet),
+    )
+  ) {
+    return false
+  }
+  if (!Array.isArray(value.lightningNwcConnections)) return false
+  if (
+    !value.lightningNwcConnections.every((row) =>
+      isStoredNwcLightningConnection(row),
+    )
+  ) {
+    return false
+  }
+  return true
+}
+
 export function isWalletSecrets(value: unknown): value is WalletSecrets {
   if (!isRecord(value)) return false
   if (!isNonEmptyString(value.mnemonic)) return false
@@ -117,12 +148,37 @@ export function isWalletSecrets(value: unknown): value is WalletSecrets {
   return true
 }
 
+export function assembleWalletSecrets(
+  mnemonic: string,
+  payload: WalletSecretsPayload,
+): WalletSecrets {
+  return {
+    mnemonic,
+    descriptorWallets: payload.descriptorWallets,
+    lightningNwcConnections: payload.lightningNwcConnections,
+  }
+}
+
 function normalizeWalletSecretsPayload(raw: unknown): unknown {
   if (!isRecord(raw)) return raw
   if (raw.lightningNwcConnections === undefined) {
     return { ...raw, lightningNwcConnections: [] }
   }
   return raw
+}
+
+export function parseWalletPayloadJson(walletSecretsJson: string): WalletSecretsPayload {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(walletSecretsJson)
+  } catch {
+    throw new Error('Invalid wallet secrets payload: not valid JSON')
+  }
+  parsed = normalizeWalletSecretsPayload(parsed)
+  if (!isWalletSecretsPayload(parsed)) {
+    throw new Error('Invalid wallet secrets payload: schema validation failed')
+  }
+  return parsed
 }
 
 export function parseWalletSecretsJson(walletSecretsJson: string): WalletSecrets {

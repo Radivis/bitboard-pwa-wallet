@@ -1,5 +1,11 @@
-import { getDatabase, ensureMigrated, getWalletSecretsEncrypted, putWalletSecretsEncrypted } from '@/db'
-import type { DescriptorWalletData, WalletSecrets } from '@/db/wallet-persistence'
+import {
+  getDatabase,
+  ensureMigrated,
+  getWalletSecretsEncrypted,
+  putSplitWalletSecretsEncrypted,
+} from '@/db'
+import type { DescriptorWalletData, EncryptedWalletSecretsBlob, WalletSecrets } from '@/db/wallet-persistence'
+import type { EncryptedBlobForDb } from '@/workers/crypto-api'
 import type { AddressType, BitcoinNetwork } from '@/workers/crypto-types'
 import { ensureSecretsChannel } from '@/workers/secrets-channel'
 import { useCryptoStore } from '@/stores/cryptoStore'
@@ -23,6 +29,15 @@ export function findDescriptorWallet(params: {
   )
 }
 
+function workerBlobToPersistence(blob: EncryptedBlobForDb): EncryptedWalletSecretsBlob {
+  return {
+    ciphertext: blob.ciphertext,
+    iv: blob.iv,
+    salt: blob.salt,
+    kdfVersion: blob.kdfVersion as EncryptedWalletSecretsBlob['kdfVersion'],
+  }
+}
+
 /**
  * Resolve (find or lazily create) a descriptor wallet for the given parameters.
  * Decrypt and encrypt run in workers via the secrets channel; mnemonic never touches the main thread.
@@ -43,17 +58,31 @@ export async function resolveDescriptorWallet(params: {
   await ensureMigrated()
   await ensureSecretsChannel()
   const walletDb = getDatabase()
-  const encryptedBlob = await getWalletSecretsEncrypted(walletDb, walletId)
+  const encryptedBlobs = await getWalletSecretsEncrypted(walletDb, walletId)
   const { resolveDescriptorWallet: workerResolve } = useCryptoStore.getState()
   const result = await workerResolve({
     password,
-    encryptedBlob,
+    encryptedPayload: encryptedBlobs.payload,
+    encryptedMnemonic: encryptedBlobs.mnemonic,
     targetNetwork,
     targetAddressType,
     targetAccountId,
   })
-  if (result.encryptedBlobToStore) {
-    await putWalletSecretsEncrypted(walletDb, walletId, result.encryptedBlobToStore)
+  if (
+    result.encryptedPayloadToStore !== null ||
+    result.encryptedMnemonicToStore !== null
+  ) {
+    const current = await getWalletSecretsEncrypted(walletDb, walletId)
+    await putSplitWalletSecretsEncrypted(walletDb, walletId, {
+      payload:
+        result.encryptedPayloadToStore !== null
+          ? workerBlobToPersistence(result.encryptedPayloadToStore)
+          : current.payload,
+      mnemonic:
+        result.encryptedMnemonicToStore !== null
+          ? workerBlobToPersistence(result.encryptedMnemonicToStore)
+          : undefined,
+    })
   }
   return result.descriptorWalletData
 }
@@ -85,16 +114,18 @@ export async function updateDescriptorWalletChangeset(params: {
   await ensureMigrated()
   await ensureSecretsChannel()
   const walletDb = getDatabase()
-  const encryptedBlob = await getWalletSecretsEncrypted(walletDb, walletId)
+  const { payload } = await getWalletSecretsEncrypted(walletDb, walletId)
   const { updateDescriptorWalletChangeset: workerUpdate } = useCryptoStore.getState()
   const newEncrypted = await workerUpdate({
     password,
-    encryptedBlob,
+    encryptedPayload: payload,
     network,
     addressType,
     accountId,
     changesetJson,
     markFullScanDone,
   })
-  await putWalletSecretsEncrypted(walletDb, walletId, newEncrypted)
+  await putSplitWalletSecretsEncrypted(walletDb, walletId, {
+    payload: workerBlobToPersistence(newEncrypted),
+  })
 }

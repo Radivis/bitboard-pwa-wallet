@@ -1,9 +1,5 @@
 import { toast } from 'sonner'
-import {
-  getSubWalletLabel,
-  type NetworkMode,
-  type AddressType,
-} from '@/stores/walletStore'
+import type { NetworkMode, AddressType } from '@/stores/walletStore'
 import { useWalletStore } from '@/stores/walletStore'
 import { useSessionStore } from '@/stores/sessionStore'
 import { useCryptoStore } from '@/stores/cryptoStore'
@@ -13,7 +9,28 @@ import {
   updateDescriptorWalletChangeset,
   resolveDescriptorWallet,
 } from '@/lib/descriptor-wallet-manager'
-import { syncLoadedSubWalletWithEsplora } from '@/lib/wallet-utils'
+import {
+  loadWalletHandlingPersistedChainMismatch,
+  syncLoadedSubWalletWithEsplora,
+} from '@/lib/wallet-utils'
+import {
+  loadingTargetAddressTypeMessage,
+  loadingTargetNetworkMessage,
+  savingPreviousAddressTypeMessage,
+  savingPreviousNetworkMessage,
+  syncingTargetNetworkMessage,
+  type NetworkSwitchPhaseReporter,
+} from '@/lib/network-switch-status-messages'
+
+/** WASM when no wallet is loaded in the worker — persisting previous state is not applicable. */
+const NO_ACTIVE_WALLET_IN_WASM =
+  'No active wallet. Call create_wallet or load_wallet first.'
+
+function isBenignNoWalletLoadedForPersistError(err: unknown): boolean {
+  return errorMessage(err).includes(NO_ACTIVE_WALLET_IN_WASM)
+}
+
+export type SwitchDescriptorPhaseContext = 'network' | 'addressType'
 
 /**
  * Switch the active descriptor wallet to match the new parameters.
@@ -31,6 +48,10 @@ export async function switchDescriptorWallet(params: {
   currentNetworkMode: NetworkMode
   currentAddressType: AddressType
   currentAccountId: number
+  /** Settings UI: reflects save → load → sync so long switches are understandable. */
+  onPhase?: NetworkSwitchPhaseReporter
+  /** Network card vs address-type card copy for phase lines. */
+  phaseContext?: SwitchDescriptorPhaseContext
 }): Promise<void> {
   const {
     targetNetworkMode,
@@ -39,6 +60,8 @@ export async function switchDescriptorWallet(params: {
     currentNetworkMode,
     currentAddressType,
     currentAccountId,
+    onPhase,
+    phaseContext = 'network',
   } = params
   const { activeWalletId } = useWalletStore.getState()
   const sessionPassword = useSessionStore.getState().password
@@ -50,21 +73,17 @@ export async function switchDescriptorWallet(params: {
 
   const { exportChangeset, loadWallet, getCurrentAddress } =
     useCryptoStore.getState()
-  const { setWalletStatus, setCurrentAddress } = useWalletStore.getState()
-
-  const previousSubWalletLabel = getSubWalletLabel(
-    currentNetworkMode,
-    currentAddressType,
-  )
-  const targetSubWalletLabel = getSubWalletLabel(
-    targetNetworkMode,
-    targetAddressType,
-  )
+  const { setWalletStatus, setCurrentAddress, commitLoadedSubWallet } =
+    useWalletStore.getState()
 
   try {
-    toast.info(`Unloading ${previousSubWalletLabel} sub-wallet`)
     try {
       const currentChangeset = await exportChangeset()
+      onPhase?.(
+        phaseContext === 'addressType'
+          ? savingPreviousAddressTypeMessage(currentAddressType)
+          : savingPreviousNetworkMessage(currentNetworkMode),
+      )
       await updateDescriptorWalletChangeset({
         password: sessionPassword,
         walletId: activeWalletId,
@@ -73,12 +92,18 @@ export async function switchDescriptorWallet(params: {
         accountId: currentAccountId,
         changesetJson: currentChangeset,
       })
-      toast.success(`${previousSubWalletLabel} sub-wallet unloaded`)
-    } catch {
-      // No active WASM wallet yet (e.g., first load) -- safe to skip
+    } catch (err) {
+      if (!isBenignNoWalletLoadedForPersistError(err)) {
+        throw err
+      }
     }
 
-    toast.info(`Loading ${targetSubWalletLabel} sub-wallet`)
+    onPhase?.(
+      phaseContext === 'addressType'
+        ? loadingTargetAddressTypeMessage(targetAddressType)
+        : loadingTargetNetworkMessage(targetNetworkMode),
+    )
+
     const targetNetwork = toBitcoinNetwork(targetNetworkMode)
     const descriptorWallet = await resolveDescriptorWallet({
       password: sessionPassword,
@@ -89,7 +114,7 @@ export async function switchDescriptorWallet(params: {
     })
 
     const useEmptyChain = targetNetwork === 'testnet'
-    await loadWallet({
+    await loadWalletHandlingPersistedChainMismatch(loadWallet, {
       externalDescriptor: descriptorWallet.externalDescriptor,
       internalDescriptor: descriptorWallet.internalDescriptor,
       network: targetNetwork,
@@ -99,8 +124,14 @@ export async function switchDescriptorWallet(params: {
 
     const address = await getCurrentAddress()
     setCurrentAddress(address)
+    commitLoadedSubWallet({
+      networkMode: targetNetworkMode,
+      addressType: targetAddressType,
+      accountId: targetAccountId,
+    })
 
     if (targetNetworkMode !== 'lab') {
+      onPhase?.(syncingTargetNetworkMessage(targetNetworkMode))
       setWalletStatus('syncing')
       const fullScanNeeded = !descriptorWallet.fullScanDone
       const syncResult = await syncLoadedSubWalletWithEsplora({
@@ -114,12 +145,10 @@ export async function switchDescriptorWallet(params: {
       })
       if (syncResult === 'completed') {
         setWalletStatus('unlocked')
-        toast.success(`${targetSubWalletLabel} sub-wallet loaded`)
       }
       // On `sync_failed`, keep `syncing` — load succeeded but chain data may be stale.
     } else {
       setWalletStatus('unlocked')
-      toast.success(`${targetSubWalletLabel} sub-wallet loaded`)
     }
   } catch (err) {
     const message = toUserFriendlySwitchError(err)

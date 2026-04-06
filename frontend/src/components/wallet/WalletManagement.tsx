@@ -69,8 +69,8 @@ export function WalletManagement() {
           Wallet Management
         </CardTitle>
         <CardDescription>
-          Lock your wallet to require a password for the next access, or switch
-          between multiple wallets.
+          Lock your wallet to require your Bitboard app password for the next
+          access, or switch between multiple wallets.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -104,7 +104,7 @@ export function WalletManagement() {
           <InfomodeWrapper
             infoId="wallet-add-wallet"
             infoTitle="Add wallet"
-            infoText="Opens the setup flow so you can create a brand-new wallet or import another recovery phrase. Bitboard can store several wallets; each keeps its own records, and you can switch between them from the wallet list when you have more than one."
+            infoText="Opens the setup flow so you can create a brand-new wallet or import another recovery phrase. Use the same Bitboard app password you already set—it encrypts every wallet on this device. If your session is locked, you will unlock first. You can switch between wallets from the wallet list when you have more than one."
           >
             <Button variant="outline" onClick={() => navigate({ to: '/setup' })}>
               Add Wallet
@@ -122,7 +122,7 @@ export function WalletManagement() {
             <InfomodeWrapper
               infoId="wallet-lock-wallet"
               infoTitle="Lock wallet"
-              infoText="Immediately clears sensitive keys from this app’s memory and returns you to a locked state. The next time you use the wallet you will enter your Bitboard password again—handy on a shared computer or when you walk away from the device."
+              infoText="Immediately clears sensitive keys from this app’s memory and returns you to a locked state. The next time you use Bitboard you will enter your app password again—handy on a shared computer or when you walk away from the device."
             >
               <Button variant="outline" onClick={handleLockWallet}>
                 Lock Wallet

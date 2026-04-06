@@ -11,8 +11,8 @@ import type {
   TransactionDetails,
 } from './crypto-types';
 import type { EncryptedBlobMessage, SecretsChannelService } from './secrets-channel-types';
-import { parseWalletSecretsJson } from '@/lib/wallet-domain-types';
-import type { WalletSecrets } from '@/lib/wallet-domain-types';
+import { parseWalletPayloadJson } from '@/lib/wallet-domain-types';
+import type { WalletSecretsPayload } from '@/lib/wallet-domain-types';
 
 let wasm: typeof import('@/wasm-pkg/bitboard_crypto') | null = null;
 let wasmInitError: string | null = null;
@@ -67,16 +67,33 @@ type EncryptedBlobStoreFields = {
   kdfVersion?: EncryptedBlobMessage['kdfVersion'];
 };
 
-function buildSingleDescriptorWalletSecrets(params: {
-  mnemonic: string;
+function encryptedBlobMessageToStoreFields(
+  blob: EncryptedBlobMessage
+): EncryptedBlobStoreFields {
+  return {
+    ciphertext: blob.ciphertext,
+    iv: blob.iv,
+    salt: blob.salt,
+    kdfVersion: blob.kdfVersion,
+  };
+}
+
+async function encryptPlaintextToStoreFields(
+  password: string,
+  plaintext: string
+): Promise<EncryptedBlobStoreFields> {
+  const encryptedBlob = await requestEncrypt(password, plaintext);
+  return encryptedBlobMessageToStoreFields(encryptedBlob);
+}
+
+function buildInitialWalletSecretsPayload(params: {
   network: BitcoinNetwork;
   addressType: AddressType;
   accountId: number;
   walletResult: CreateWalletResult;
-}): WalletSecrets {
-  const { mnemonic, network, addressType, accountId, walletResult } = params;
+}): WalletSecretsPayload {
+  const { network, addressType, accountId, walletResult } = params;
   return {
-    mnemonic,
     descriptorWallets: [
       {
         network,
@@ -92,34 +109,34 @@ function buildSingleDescriptorWalletSecrets(params: {
   };
 }
 
-function encryptedBlobMessageToStoreFields(
-  blob: EncryptedBlobMessage
-): EncryptedBlobStoreFields {
-  return {
-    ciphertext: blob.ciphertext,
-    iv: blob.iv,
-    salt: blob.salt,
-    kdfVersion: blob.kdfVersion,
-  };
+async function encryptWalletSecretsPayloadAndMnemonic(params: {
+  password: string;
+  payload: WalletSecretsPayload;
+  mnemonicPlaintext: string;
+}): Promise<{
+  encryptedPayload: EncryptedBlobStoreFields;
+  encryptedMnemonic: EncryptedBlobStoreFields;
+}> {
+  const { password, payload, mnemonicPlaintext } = params;
+  const encryptedPayload = await encryptPlaintextToStoreFields(
+    password,
+    JSON.stringify(payload)
+  );
+  const encryptedMnemonic = await encryptPlaintextToStoreFields(
+    password,
+    mnemonicPlaintext
+  );
+  return { encryptedPayload, encryptedMnemonic };
 }
 
-async function encryptWalletSecretsToStoreFields(
-  password: string,
-  secrets: WalletSecrets
-): Promise<EncryptedBlobStoreFields> {
-  const plaintext = JSON.stringify(secrets);
-  const encryptedBlob = await requestEncrypt(password, plaintext);
-  return encryptedBlobMessageToStoreFields(encryptedBlob);
-}
-
-function findDescriptorWallet(params: {
-  secrets: WalletSecrets;
+function findDescriptorWalletInPayload(params: {
+  payload: WalletSecretsPayload;
   network: BitcoinNetwork;
   addressType: AddressType;
   accountId: number;
 }): DescriptorWalletData | undefined {
-  const { secrets, network, addressType, accountId } = params;
-  return secrets.descriptorWallets.find(
+  const { payload, network, addressType, accountId } = params;
+  return payload.descriptorWallets.find(
     (dw) =>
       dw.network === network &&
       dw.addressType === addressType &&
@@ -284,19 +301,26 @@ const cryptoService = {
 
   async resolveDescriptorWallet(params: {
     password: string;
-    encryptedBlob: EncryptedBlobMessage;
+    encryptedPayload: EncryptedBlobMessage;
+    encryptedMnemonic: EncryptedBlobMessage;
     targetNetwork: BitcoinNetwork;
     targetAddressType: AddressType;
     targetAccountId: number;
   }) {
-    const { password, encryptedBlob, targetNetwork, targetAddressType, targetAccountId } =
-      params;
+    const {
+      password,
+      encryptedPayload,
+      encryptedMnemonic,
+      targetNetwork,
+      targetAddressType,
+      targetAccountId,
+    } = params;
     const wasmModule = await getWasm();
-    const plaintext = await requestDecrypt(password, encryptedBlob);
-    const secrets = parseWalletSecretsJson(plaintext);
 
-    const existing = findDescriptorWallet({
-      secrets,
+    const payloadPlain = await requestDecrypt(password, encryptedPayload);
+    const payload = parseWalletPayloadJson(payloadPlain);
+    const existing = findDescriptorWalletInPayload({
+      payload,
       network: targetNetwork,
       addressType: targetAddressType,
       accountId: targetAccountId,
@@ -304,37 +328,46 @@ const cryptoService = {
     if (existing) {
       return {
         descriptorWalletData: existing,
-        encryptedBlobToStore: null,
+        encryptedPayloadToStore: null,
+        encryptedMnemonicToStore: null,
       };
     }
 
-    const walletResult = wasmModule.create_wallet(
-      secrets.mnemonic,
-      targetNetwork,
-      targetAddressType,
-      targetAccountId
-    );
-    const descriptorWallet: DescriptorWalletData = {
-      network: targetNetwork,
-      addressType: targetAddressType,
-      accountId: targetAccountId,
-      externalDescriptor: walletResult.external_descriptor,
-      internalDescriptor: walletResult.internal_descriptor,
-      changeSet: walletResult.changeset_json,
-      fullScanDone: false,
-    };
-    secrets.descriptorWallets.push(descriptorWallet);
-    const newPlaintext = JSON.stringify(secrets);
-    const newBlob = await requestEncrypt(password, newPlaintext);
-    return {
-      descriptorWalletData: descriptorWallet,
-      encryptedBlobToStore: encryptedBlobMessageToStoreFields(newBlob),
-    };
+    let mnemonicPlain = await requestDecrypt(password, encryptedMnemonic);
+    try {
+      const walletResult = wasmModule.create_wallet(
+        mnemonicPlain,
+        targetNetwork,
+        targetAddressType,
+        targetAccountId
+      );
+      const descriptorWallet: DescriptorWalletData = {
+        network: targetNetwork,
+        addressType: targetAddressType,
+        accountId: targetAccountId,
+        externalDescriptor: walletResult.external_descriptor,
+        internalDescriptor: walletResult.internal_descriptor,
+        changeSet: walletResult.changeset_json,
+        fullScanDone: false,
+      };
+      payload.descriptorWallets.push(descriptorWallet);
+      const payloadEnc = await encryptPlaintextToStoreFields(
+        password,
+        JSON.stringify(payload)
+      );
+      return {
+        descriptorWalletData: descriptorWallet,
+        encryptedPayloadToStore: payloadEnc,
+        encryptedMnemonicToStore: null,
+      };
+    } finally {
+      mnemonicPlain = '';
+    }
   },
 
   async updateDescriptorWalletChangeset(params: {
     password: string;
-    encryptedBlob: EncryptedBlobMessage;
+    encryptedPayload: EncryptedBlobMessage;
     network: BitcoinNetwork;
     addressType: AddressType;
     accountId: number;
@@ -343,17 +376,17 @@ const cryptoService = {
   }) {
     const {
       password,
-      encryptedBlob,
+      encryptedPayload,
       network,
       addressType,
       accountId,
       changesetJson,
       markFullScanDone,
     } = params;
-    const plaintext = await requestDecrypt(password, encryptedBlob);
-    const secrets = parseWalletSecretsJson(plaintext);
-    const descriptorWallet = findDescriptorWallet({
-      secrets,
+    const plaintext = await requestDecrypt(password, encryptedPayload);
+    const payload = parseWalletPayloadJson(plaintext);
+    const descriptorWallet = findDescriptorWalletInPayload({
+      payload,
       network,
       addressType,
       accountId,
@@ -367,7 +400,7 @@ const cryptoService = {
     if (markFullScanDone) {
       descriptorWallet.fullScanDone = true;
     }
-    const newPlaintext = JSON.stringify(secrets);
+    const newPlaintext = JSON.stringify(payload);
     const newBlob = await requestEncrypt(password, newPlaintext);
     return encryptedBlobMessageToStoreFields(newBlob);
   },
@@ -388,16 +421,21 @@ const cryptoService = {
       addressType,
       accountId
     );
-    const secrets = buildSingleDescriptorWalletSecrets({
-      mnemonic,
+    const payload = buildInitialWalletSecretsPayload({
       network,
       addressType,
       accountId,
       walletResult,
     });
-    const encryptedBlob = await encryptWalletSecretsToStoreFields(password, secrets);
+    const { encryptedPayload, encryptedMnemonic } =
+      await encryptWalletSecretsPayloadAndMnemonic({
+        password,
+        payload,
+        mnemonicPlaintext: mnemonic,
+      });
     return {
-      encryptedBlob,
+      encryptedPayload,
+      encryptedMnemonic,
       walletResult,
       mnemonicForBackup: mnemonic,
     };
@@ -418,16 +456,21 @@ const cryptoService = {
       addressType,
       accountId
     );
-    const secrets = buildSingleDescriptorWalletSecrets({
-      mnemonic,
+    const payload = buildInitialWalletSecretsPayload({
       network,
       addressType,
       accountId,
       walletResult,
     });
-    const encryptedBlob = await encryptWalletSecretsToStoreFields(password, secrets);
+    const { encryptedPayload, encryptedMnemonic } =
+      await encryptWalletSecretsPayloadAndMnemonic({
+        password,
+        payload,
+        mnemonicPlaintext: mnemonic,
+      });
     return {
-      encryptedBlob,
+      encryptedPayload,
+      encryptedMnemonic,
       walletResult,
     };
   },

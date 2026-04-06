@@ -31,12 +31,8 @@ export async function runLabRouteBeforeLoad(): Promise<LabRouteContext> {
     duration: Infinity,
   })
 
-  const { setNetworkMode, walletStatus, addressType, accountId } =
-    useWalletStore.getState()
+  const { walletStatus, addressType, accountId } = useWalletStore.getState()
   const ok = await switchToLabNetwork({
-    // No Settings UI here: loading toast covers the switch; ignore switching flag.
-    setSwitching: () => {},
-    setNetworkMode,
     previousNetworkMode,
     walletStatus,
     addressType,

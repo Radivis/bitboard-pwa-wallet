@@ -17,8 +17,10 @@ import {
 } from 'lucide-react'
 import { InfomodeToggle } from '@/components/infomode/InfomodeToggle'
 import { ThemeToggle } from '@/components/ThemeToggle'
+import { NearZeroSecurityBanner } from '@/components/NearZeroSecurityBanner'
 import { useWallet } from '@/db'
 import { useWalletStore } from '@/stores/walletStore'
+import { useSessionStore } from '@/stores/sessionStore'
 import { cn } from '@/lib/utils'
 
 const APP_TITLE = 'Bitboard Wallet'
@@ -300,14 +302,16 @@ export function WalletLayout({ children }: WalletLayoutProps) {
   const showWalletSubNav = !isSetupRoute && isWalletSectionPath(location.pathname)
 
   const activeWalletId = useWalletStore((s) => s.activeWalletId)
-  const walletStatus = useWalletStore((s) => s.walletStatus)
+  const sessionPassword = useSessionStore((s) => s.password)
   const { data: activeWalletRow, isSuccess: activeWalletLoaded } = useWallet(activeWalletId)
   const walletDisplayName =
     activeWalletId && activeWalletLoaded && activeWalletRow?.name
       ? activeWalletRow.name
       : null
   const showWalletSuffix = Boolean(walletDisplayName)
-  const walletSuffixMuted = walletStatus === 'locked'
+  /** Same signal as network unlock: `walletStatus` is not persisted, so use session. */
+  const walletSuffixMuted =
+    activeWalletId !== null && sessionPassword === null
 
   useEffect(() => {
     document.title =
@@ -344,6 +348,8 @@ export function WalletLayout({ children }: WalletLayoutProps) {
           </div>
         </div>
       </header>
+
+      <NearZeroSecurityBanner />
 
       <main
         className={cn(

@@ -25,16 +25,22 @@ This document describes how Bitboard Wallet keeps user credentials and wallet se
 
 **Worker-to-worker secrets channel**
 
-- The main thread never sees decrypted wallet secrets (mnemonic, `WalletSecrets` JSON). A **MessageChannel** connects the encryption worker and the crypto worker; the main thread creates the channel and passes one port to each worker (using Comlink `transfer()` so ports are transferred, not cloned). It never reads from that channel.
+- The main thread never sees decrypted wallet secrets (mnemonic, or the wallet **payload** JSON that holds descriptor sub-wallets and Lightning metadata). A **MessageChannel** connects the encryption worker and the crypto worker; the main thread creates the channel and passes one port to each worker (using Comlink `transfer()` so ports are transferred, not cloned). It never reads from that channel.
 - Decrypt/encrypt for “resolve descriptor wallet” and “update changeset” run via this channel: crypto worker requests decrypt/encrypt from the encryption worker over the port; plaintext secrets stay in the workers. The main thread never sees decrypted wallet secrets: it only passes encrypted blobs between the crypto worker and the app’s DB layer. DB operations are initiated from the main thread via Kysely; the actual SQLite/OPFS access is performed by the WaSqlite worker (Kysely’s `WaSqliteWorkerDialect`), not the main thread.
 - The channel is established by `ensureSecretsChannel()` before any operation that needs it. When the user manually locks the wallet, the crypto worker is terminated and `resetSecretsChannel()` is called so that the next unlock re-establishes the channel for a new worker.
 
 **Storage**
 
-- **Encrypted at rest:** The `wallet_secrets` table holds `encrypted_data`, `iv`, `salt`, and `kdf_version` per wallet (and per save). Encryption uses **Argon2id** + **AES-256-GCM**; salt and IV are unique per encryption. Two Argon2id parameter sets are used:
+- **Encrypted at rest:** The `wallet_secrets` table stores two ciphertexts per wallet row: a **payload** blob (`encrypted_data`, `iv`, `salt`, `kdf_version`) for the non-mnemonic secrets JSON (descriptor sub-wallets, Lightning NWC metadata), and a **separate mnemonic** blob (`mnemonic_encrypted_data`, `mnemonic_iv`, `mnemonic_salt`, `mnemonic_kdf_version`). Both are encrypted with the Bitboard app password using **Argon2id** + **AES-256-GCM**; salt and IV are unique per encryption. Two Argon2id parameter sets are used:
   - **Production (default):** 64 MB memory, 3 iterations, parallelism 4, 32-byte key. Used for new encryption when the app is not built with the CI flag.
   - **CI:** 64 MB memory, 2 iterations, parallelism 1, 32-byte key. Used when `VITE_ARGON2_CI=1` at build time (e.g. in CI for faster tests and E2E), and for decrypting data that was encrypted with these params. The `kdf_version` column (1 = CI, 2 = production) records which set was used so decryption uses the correct params.
 - **Unencrypted:** The `wallets` table (ids, names) and `settings` (e.g. custom Esplora URLs). No passwords or mnemonics are stored in settings.
+
+**Mnemonic vs. payload (moderate hardening, not sub-wallet isolation)**
+
+- The **BIP39 mnemonic is the master secret** from which descriptors are derived. Storing it in a **separate ciphertext** from the rest of the wallet secrets allows many routine operations to **decrypt only the payload** (e.g. updating a sub-wallet changeset, resolving an existing sub-wallet, listing or saving NWC connections) **without** decrypting the mnemonic. The mnemonic is decrypted only when an operation **requires** the seed (e.g. first-time derivation of a new sub-wallet, displaying the backup phrase, re-encrypting all secrets with a new app password). This is **incremental** hardening: it reduces unnecessary exposure of the master seed during normal use; it is **not** a substitute for hardware signing or a compromised-host guarantee.
+
+- **Blast radius:** Bitboard **does not** aim to limit exposure to a **single** descriptor (sub-)wallet. The payload JSON still contains **every materialized** sub-wallet’s descriptors and changesets (plus Lightning connection rows) in one structure; when that payload is decrypted for persistence, **all of that** can exist in memory for that operation. At runtime, **one** BDK wallet is loaded in WASM at a time, which limits **active** signing and chain state—not the contents of the decrypted payload when it is read or written. Further isolation (e.g. separate ciphertext per sub-wallet) would be a larger architectural trade-off and is **not** currently planned.
 
 **Clearing and lock**
 

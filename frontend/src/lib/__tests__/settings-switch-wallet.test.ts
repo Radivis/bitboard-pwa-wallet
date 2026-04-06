@@ -25,6 +25,17 @@ vi.mock('@/stores/walletStore', () => ({
   useWalletStore: {
     getState: vi.fn(),
   },
+  NETWORK_LABELS: {
+    lab: 'Lab',
+    regtest: 'Regtest',
+    signet: 'Signet',
+    testnet: 'Testnet',
+    mainnet: 'Mainnet',
+  },
+  ADDRESS_TYPE_LABELS: {
+    taproot: 'Taproot',
+    segwit: 'SegWit',
+  },
   getSubWalletLabel: () => 'Label',
 }))
 
@@ -45,12 +56,17 @@ vi.mock('@/lib/descriptor-wallet-manager', () => ({
   updateDescriptorWalletChangeset: vi.fn(),
 }))
 
-vi.mock('@/lib/wallet-utils', () => ({
-  syncLoadedSubWalletWithEsplora: mockSyncLoadedSubWalletWithEsplora,
-}))
+vi.mock('@/lib/wallet-utils', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/wallet-utils')>()
+  return {
+    ...actual,
+    syncLoadedSubWalletWithEsplora: mockSyncLoadedSubWalletWithEsplora,
+  }
+})
 
 const mockSetWalletStatus = vi.fn()
 const mockSetCurrentAddress = vi.fn()
+const mockCommitLoadedSubWallet = vi.fn()
 const mockExportChangeset = vi.fn()
 const mockLoadWallet = vi.fn()
 const mockGetCurrentAddress = vi.fn()
@@ -76,6 +92,7 @@ describe('switchDescriptorWallet', () => {
       activeWalletId: 1,
       setWalletStatus: mockSetWalletStatus,
       setCurrentAddress: mockSetCurrentAddress,
+      commitLoadedSubWallet: mockCommitLoadedSubWallet,
     } as ReturnType<typeof useWalletStore.getState>)
 
     vi.mocked(useSessionStore.getState).mockReturnValue({
@@ -98,6 +115,7 @@ describe('switchDescriptorWallet', () => {
       activeWalletId: null,
       setWalletStatus: mockSetWalletStatus,
       setCurrentAddress: mockSetCurrentAddress,
+      commitLoadedSubWallet: mockCommitLoadedSubWallet,
     } as ReturnType<typeof useWalletStore.getState>)
 
     await expect(
@@ -150,9 +168,14 @@ describe('switchDescriptorWallet', () => {
       targetAccountId: 0,
       fullScanNeeded: false,
     })
+    expect(mockCommitLoadedSubWallet).toHaveBeenCalledWith({
+      networkMode: 'testnet',
+      addressType: 'taproot',
+      accountId: 0,
+    })
     expect(mockSetWalletStatus).toHaveBeenCalledWith('syncing')
     expect(mockSetWalletStatus).toHaveBeenCalledWith('unlocked')
-    expect(toast.success).toHaveBeenCalledWith('Label sub-wallet loaded')
+    expect(toast.success).not.toHaveBeenCalled()
   })
 
   it('resolves without success toast when sync fails after load; stays syncing', async () => {
@@ -170,12 +193,52 @@ describe('switchDescriptorWallet', () => {
     ).resolves.toBeUndefined()
 
     expect(mockSyncLoadedSubWalletWithEsplora).toHaveBeenCalled()
+    expect(mockCommitLoadedSubWallet).toHaveBeenCalledWith({
+      networkMode: 'testnet',
+      addressType: 'taproot',
+      accountId: 0,
+    })
     const successCalls = vi.mocked(toast.success).mock.calls.map((c) => c[0])
     expect(successCalls.some((m) => String(m).includes('sub-wallet loaded'))).toBe(
       false,
     )
     expect(mockSetWalletStatus).toHaveBeenCalledWith('syncing')
     expect(mockSetWalletStatus).not.toHaveBeenCalledWith('unlocked')
+  })
+
+  it('retries load with fresh chain when persisted changeset network mismatches target', async () => {
+    mockLoadWallet
+      .mockRejectedValueOnce(
+        new Error(
+          'Wallet error: Network mismatch: loaded testnet4, expected signet',
+        ),
+      )
+      .mockResolvedValueOnce(undefined)
+
+    await switchDescriptorWallet({
+      targetNetworkMode: 'signet',
+      targetAddressType: 'taproot',
+      targetAccountId: 0,
+      currentNetworkMode: 'testnet',
+      currentAddressType: 'taproot',
+      currentAccountId: 0,
+    })
+
+    expect(mockLoadWallet).toHaveBeenCalledTimes(2)
+    expect(mockLoadWallet).toHaveBeenNthCalledWith(1, {
+      externalDescriptor: 'ext',
+      internalDescriptor: 'int',
+      network: 'signet',
+      changesetJson: '{}',
+      useEmptyChain: false,
+    })
+    expect(mockLoadWallet).toHaveBeenNthCalledWith(2, {
+      externalDescriptor: 'ext',
+      internalDescriptor: 'int',
+      network: 'signet',
+      changesetJson: '{}',
+      useEmptyChain: true,
+    })
   })
 
   it('does not run Esplora sync for lab target', async () => {
@@ -189,7 +252,31 @@ describe('switchDescriptorWallet', () => {
     })
 
     expect(mockSyncLoadedSubWalletWithEsplora).not.toHaveBeenCalled()
+    expect(mockCommitLoadedSubWallet).toHaveBeenCalledWith({
+      networkMode: 'lab',
+      addressType: 'taproot',
+      accountId: 0,
+    })
     expect(mockSetWalletStatus).toHaveBeenCalledWith('unlocked')
-    expect(toast.success).toHaveBeenCalledWith('Label sub-wallet loaded')
+    expect(toast.success).not.toHaveBeenCalled()
+  })
+
+  it('emits address-type phase labels when phaseContext is addressType', async () => {
+    const onPhase = vi.fn()
+    await switchDescriptorWallet({
+      targetNetworkMode: 'testnet',
+      targetAddressType: 'segwit',
+      targetAccountId: 0,
+      currentNetworkMode: 'testnet',
+      currentAddressType: 'taproot',
+      currentAccountId: 0,
+      phaseContext: 'addressType',
+      onPhase,
+    })
+
+    const messages = onPhase.mock.calls.map((c) => String(c[0]))
+    expect(messages.some((m) => m.includes('Switching address type'))).toBe(true)
+    expect(messages.some((m) => m.includes('Taproot'))).toBe(true)
+    expect(messages.some((m) => m.includes('SegWit'))).toBe(true)
   })
 })

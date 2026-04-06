@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
 import { Settings } from 'lucide-react'
 import { PageHeader } from '@/components/PageHeader'
@@ -9,12 +10,23 @@ import { NetworkSelector } from '@/components/settings/NetworkSelector'
 import { AddressTypeSelector } from '@/components/settings/AddressTypeSelector'
 import { EsploraUrlSettings } from '@/components/settings/EsploraUrlSettings'
 import { FeatureToggles } from '@/components/settings/FeatureToggles'
+import { SettingsSecurityCard } from '@/components/settings/SettingsSecurityCard'
+import { ChangeAppPasswordModal } from '@/components/ChangeAppPasswordModal'
+import { UpgradeFromNearZeroPasswordModal } from '@/components/UpgradeFromNearZeroPasswordModal'
+import { useWallets } from '@/db'
+import { useNearZeroSecurityStore } from '@/stores/nearZeroSecurityStore'
 
 export const Route = createFileRoute('/settings')({
   component: SettingsPage,
 })
 
 export function SettingsPage() {
+  const { data: wallets } = useWallets()
+  const hasWallets = (wallets?.length ?? 0) > 0
+  const nearZeroActive = useNearZeroSecurityStore((s) => s.active)
+  const [changePasswordOpen, setChangePasswordOpen] = useState(false)
+  const [upgradeFromNearZeroOpen, setUpgradeFromNearZeroOpen] = useState(false)
+
   return (
     <div className="space-y-6">
       <PageHeader title="Settings" icon={Settings} />
@@ -87,6 +99,23 @@ export function SettingsPage() {
       </InfomodeWrapper>
 
       <EsploraUrlSettings />
+
+      <SettingsSecurityCard
+        hasWallets={hasWallets}
+        nearZeroActive={nearZeroActive}
+        onOpenChangePassword={() => setChangePasswordOpen(true)}
+        onOpenUpgradeFromNearZero={() => setUpgradeFromNearZeroOpen(true)}
+      />
+
+      <ChangeAppPasswordModal
+        open={changePasswordOpen}
+        onOpenChange={setChangePasswordOpen}
+      />
+
+      <UpgradeFromNearZeroPasswordModal
+        open={upgradeFromNearZeroOpen}
+        onOpenChange={setUpgradeFromNearZeroOpen}
+      />
 
       <Card>
         <CardHeader>

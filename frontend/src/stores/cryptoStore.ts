@@ -84,7 +84,8 @@ interface CryptoState {
   createWalletAndEncryptSecrets: (
     params: CreateWalletAndEncryptSecretsParams,
   ) => Promise<{
-    encryptedBlob: EncryptedBlobForDb;
+    encryptedPayload: EncryptedBlobForDb;
+    encryptedMnemonic: EncryptedBlobForDb;
     walletResult: CreateWalletResult;
     mnemonicForBackup: string;
   }>;
@@ -92,7 +93,8 @@ interface CryptoState {
   importWalletAndEncryptSecrets: (
     params: ImportWalletAndEncryptSecretsParams,
   ) => Promise<{
-    encryptedBlob: EncryptedBlobForDb;
+    encryptedPayload: EncryptedBlobForDb;
+    encryptedMnemonic: EncryptedBlobForDb;
     walletResult: CreateWalletResult;
   }>;
 

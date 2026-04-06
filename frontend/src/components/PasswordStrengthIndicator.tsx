@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import zxcvbn from 'zxcvbn'
+import { APP_PASSWORD_MIN_LENGTH } from '@/lib/app-password-policy'
 
 interface PasswordStrengthIndicatorProps {
   password: string
@@ -41,8 +42,10 @@ export function PasswordStrengthIndicator({
       </div>
       <p className="text-xs text-muted-foreground">
         Strength: {STRENGTH_LABELS[score]}
-        {password.length < 12 && (
-          <span className="ml-1">(12+ characters recommended)</span>
+        {password.length < APP_PASSWORD_MIN_LENGTH && (
+          <span className="ml-1">
+            (at least {APP_PASSWORD_MIN_LENGTH} characters required)
+          </span>
         )}
       </p>
     </div>

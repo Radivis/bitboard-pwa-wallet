@@ -9,8 +9,9 @@ import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { MnemonicGrid } from '@/components/MnemonicGrid'
-import { PasswordStrengthIndicator } from '@/components/PasswordStrengthIndicator'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
+import { SetAppPasswordModal } from '@/components/SetAppPasswordModal'
+import { WalletUnlock } from '@/components/WalletUnlock'
 import { useCryptoStore } from '@/stores/cryptoStore'
 import { useWalletStore } from '@/stores/walletStore'
 import { useSessionStore, startAutoLockTimer } from '@/stores/sessionStore'
@@ -20,7 +21,8 @@ import {
   ensureMigrated,
   persistNewWalletWithSecrets,
   walletKeys,
-  type EncryptedWalletSecretsBlob,
+  useWallets,
+  type SplitWalletSecretsEncryptedBlobs,
 } from '@/db'
 import { ensureSecretsChannel } from '@/workers/secrets-channel'
 import { toBitcoinNetwork } from '@/lib/bitcoin-utils'
@@ -29,11 +31,11 @@ export const Route = createFileRoute('/setup/create')({
   component: CreateWalletPage,
 })
 
-type Step = 1 | 2 | 3 | 4
+type Step = 1 | 2 | 3
 
-/** Stored after createWalletAndEncryptSecrets so we can persist in step 4 without keeping mnemonic. */
+/** Stored after createWalletAndEncryptSecrets so we can persist in step 3 without keeping mnemonic. */
 interface CreateWalletPending {
-  encryptedBlob: EncryptedWalletSecretsBlob
+  encryptedBlobs: SplitWalletSecretsEncryptedBlobs
   walletResult: { first_address: string }
 }
 
@@ -41,11 +43,12 @@ export function CreateWalletPage() {
   const navigate = useNavigate()
   const [step, setStep] = useState<Step>(1)
   const [wordCount, setWordCount] = useState<12 | 24>(12)
-  const [password, setPassword] = useState('')
-  const [confirmPassword, setConfirmPassword] = useState('')
   const [mnemonicForBackup, setMnemonicForBackup] = useState('')
   const [pendingCreate, setPendingCreate] = useState<CreateWalletPending | null>(null)
   const [verificationWords, setVerificationWords] = useState<Record<number, string>>({})
+
+  const { data: wallets, isLoading: walletsLoading } = useWallets()
+  const sessionPassword = useSessionStore((s) => s.password)
 
   const createWalletAndEncryptSecrets = useCryptoStore((s) => s.createWalletAndEncryptSecrets)
   const networkMode = useWalletStore((s) => s.networkMode)
@@ -54,7 +57,7 @@ export function CreateWalletPage() {
   const setActiveWallet = useWalletStore((s) => s.setActiveWallet)
   const setWalletStatus = useWalletStore((s) => s.setWalletStatus)
   const setCurrentAddress = useWalletStore((s) => s.setCurrentAddress)
-  const setSessionPassword = useSessionStore((s) => s.setPassword)
+  const commitLoadedSubWallet = useWalletStore((s) => s.commitLoadedSubWallet)
   const addWallet = useAddWallet()
 
   const words = useMemo(() => (mnemonicForBackup ? mnemonicForBackup.split(' ') : []), [mnemonicForBackup])
@@ -77,12 +80,10 @@ export function CreateWalletPage() {
     )
   }, [verificationIndices, verificationWords, words])
 
-  const passwordsValid = useMemo(() => {
-    return password.length >= 8 && password === confirmPassword
-  }, [password, confirmPassword])
-
   const createWalletMutation = useMutation({
     mutationFn: async () => {
+      const password = useSessionStore.getState().password
+      if (!password) throw new Error('App password required')
       await ensureSecretsChannel()
       const network = toBitcoinNetwork(networkMode)
       const result = await createWalletAndEncryptSecrets({
@@ -97,7 +98,10 @@ export function CreateWalletPage() {
     onSuccess: (result) => {
       setMnemonicForBackup(result.mnemonicForBackup)
       setPendingCreate({
-        encryptedBlob: result.encryptedBlob,
+        encryptedBlobs: {
+          payload: result.encryptedPayload,
+          mnemonic: result.encryptedMnemonic,
+        },
         walletResult: { first_address: result.walletResult.first_address },
       })
       setStep(2)
@@ -126,16 +130,20 @@ export function CreateWalletPage() {
               name: `Wallet ${Date.now()}`,
               created_at: new Date().toISOString(),
             }),
-          encryptedBlob: pendingCreate!.encryptedBlob,
+          encryptedBlobs: pendingCreate!.encryptedBlobs,
         })
       } catch (secretsErr) {
         queryClient.invalidateQueries({ queryKey: walletKeys.all })
         throw secretsErr
       }
       setPendingCreate(null)
-      setSessionPassword(password)
       setActiveWallet(walletId)
       setCurrentAddress(firstAddress)
+      commitLoadedSubWallet({
+        networkMode,
+        addressType,
+        accountId,
+      })
       setWalletStatus('unlocked')
       startAutoLockTimer(() => {
         useCryptoStore.getState().lockAndPurgeSensitiveRuntimeState()
@@ -152,6 +160,24 @@ export function CreateWalletPage() {
     },
   })
 
+  if (walletsLoading) {
+    return (
+      <div className="flex justify-center py-12">
+        <LoadingSpinner text="Loading…" />
+      </div>
+    )
+  }
+
+  const hasWallets = (wallets?.length ?? 0) > 0
+
+  if (hasWallets && !sessionPassword) {
+    return <WalletUnlock variant="setup" />
+  }
+
+  if (!hasWallets && !sessionPassword) {
+    return <SetAppPasswordModal open />
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2">
@@ -167,14 +193,9 @@ export function CreateWalletPage() {
       </div>
 
       {step === 1 && (
-        <StepWordCountAndPassword
+        <StepWordCountGenerate
           wordCount={wordCount}
           setWordCount={setWordCount}
-          password={password}
-          setPassword={setPassword}
-          confirmPassword={confirmPassword}
-          setConfirmPassword={setConfirmPassword}
-          isValid={passwordsValid}
           loading={createWalletMutation.isPending}
           onSubmit={() => createWalletMutation.mutate()}
         />
@@ -198,24 +219,14 @@ export function CreateWalletPage() {
   )
 }
 
-function StepWordCountAndPassword({
+function StepWordCountGenerate({
   wordCount,
   setWordCount,
-  password,
-  setPassword,
-  confirmPassword,
-  setConfirmPassword,
-  isValid,
   loading,
   onSubmit,
 }: {
   wordCount: 12 | 24
   setWordCount: (wc: 12 | 24) => void
-  password: string
-  setPassword: (pw: string) => void
-  confirmPassword: string
-  setConfirmPassword: (pw: string) => void
-  isValid: boolean
   loading: boolean
   onSubmit: () => void
 }) {
@@ -237,7 +248,7 @@ function StepWordCountAndPassword({
           >
             seed phrase
           </InfomodeWrapper>{' '}
-          length and set a password. The{' '}
+          length. The{' '}
           <InfomodeWrapper
             as="span"
             infoId="create-wallet-step1-seed-phrase-in-description-b"
@@ -293,43 +304,6 @@ function StepWordCountAndPassword({
           </div>
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="create-password">
-            <InfomodeWrapper
-              as="span"
-              infoId="create-wallet-step1-password-label"
-              infoTitle="This password"
-              infoText="This password is only for Bitboard in this browser. It encrypts your wallet data on this device so other people who use the machine can’t open it. If you import the same seed phrase into another wallet app later, that app will ask for its own password (or none)—your recovery words are what move between wallets, not this Bitboard password."
-            >
-              Password
-            </InfomodeWrapper>
-          </Label>
-          <Input
-            id="create-password"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="Enter a strong password"
-            disabled={loading}
-          />
-          <PasswordStrengthIndicator password={password} />
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="confirm-password">Confirm Password</Label>
-          <Input
-            id="confirm-password"
-            type="password"
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-            placeholder="Confirm your password"
-            disabled={loading}
-          />
-          {confirmPassword && password !== confirmPassword && (
-            <p className="text-xs text-destructive">Passwords do not match</p>
-          )}
-        </div>
-
         {loading ? (
           <LoadingSpinner text="Generating wallet..." />
         ) : (
@@ -337,7 +311,6 @@ function StepWordCountAndPassword({
             onClick={onSubmit}
             className="w-full"
             size="lg"
-            disabled={!isValid}
           >
             <RefreshCw className="mr-2 h-4 w-4" />
             Generate & Continue

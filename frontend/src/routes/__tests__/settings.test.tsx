@@ -15,7 +15,12 @@ vi.mock('@tanstack/react-router', async (importOriginal) => {
 })
 
 const mockTerminateWorker = vi.fn()
-const mockExportChangeset = vi.fn().mockRejectedValue(new Error('no wallet'))
+/** Matches WASM when nothing is loaded — persisted path in switch is skipped. */
+const mockExportChangeset = vi.fn().mockRejectedValue(
+  new Error(
+    'No active wallet. Call create_wallet or load_wallet first.',
+  ),
+)
 const mockLoadWallet = vi.fn().mockResolvedValue(true)
 const mockSyncWallet = vi.fn().mockResolvedValue({ balance: {}, changeset_json: '{}' })
 const mockGetBalance = vi.fn().mockResolvedValue({ confirmed: 0, total: 0 })
@@ -51,6 +56,7 @@ let walletStoreState: Record<string, unknown> = {}
 const mockSetNetworkMode = vi.fn()
 const mockSetAddressType = vi.fn()
 const mockSetCurrentAddress = vi.fn()
+const mockCommitLoadedSubWallet = vi.fn()
 vi.mock('@/stores/walletStore', () => ({
   useWalletStore: Object.assign(
     (selector: (s: Record<string, unknown>) => unknown) =>
@@ -68,9 +74,29 @@ vi.mock('@/stores/walletStore', () => ({
   },
   getSubWalletLabel: (network: string, addressType: string) =>
     `${network} ${addressType}`,
+  selectCommittedNetworkMode: (s: {
+    loadedSubWallet: { networkMode: string } | null
+    networkMode: string
+  }) => s.loadedSubWallet?.networkMode ?? s.networkMode,
+  selectCommittedAddressType: (s: {
+    loadedSubWallet: { addressType: string } | null
+    addressType: string
+  }) => s.loadedSubWallet?.addressType ?? s.addressType,
+  getCommittedNetworkMode: () => {
+    const s = walletStoreState as {
+      loadedSubWallet: { networkMode: string } | null
+      networkMode: string
+    }
+    return s.loadedSubWallet?.networkMode ?? s.networkMode
+  },
 }))
 
-const sessionStoreState = { password: 'testpass', clear: mockClearSession }
+const mockSetSessionPassword = vi.fn()
+const sessionStoreState = {
+  password: 'testpass',
+  clear: mockClearSession,
+  setPassword: mockSetSessionPassword,
+}
 vi.mock('@/stores/sessionStore', () => ({
   useSessionStore: Object.assign(
     (selector: (s: Record<string, unknown>) => unknown) =>
@@ -82,17 +108,26 @@ vi.mock('@/stores/sessionStore', () => ({
   clearAutoLockTimer: vi.fn(),
 }))
 
+const nearZeroSecurityState = { active: false }
+vi.mock('@/stores/nearZeroSecurityStore', () => ({
+  useNearZeroSecurityStore: (selector: (s: typeof nearZeroSecurityState) => unknown) =>
+    selector(nearZeroSecurityState),
+}))
+
 const mockSetThemeMode = vi.fn()
 vi.mock('@/stores/themeStore', () => ({
   useThemeStore: (selector: (s: Record<string, unknown>) => unknown) =>
     selector({ themeMode: 'system', setThemeMode: mockSetThemeMode }),
 }))
 
+const mockWalletsState: { data: { wallet_id: number; name: string; created_at: string }[] } = {
+  data: [],
+}
 vi.mock('@/db', () => ({
   getDatabase: vi.fn(),
   ensureMigrated: vi.fn().mockResolvedValue(undefined),
   loadWalletSecrets: vi.fn().mockRejectedValue(new Error('Wrong password')),
-  useWallets: () => ({ data: [] }),
+  useWallets: () => ({ data: mockWalletsState.data }),
 }))
 
 vi.mock('@/lib/bitcoin-utils', () => ({
@@ -106,6 +141,12 @@ vi.mock('@/lib/bitcoin-utils', () => ({
   getEsploraUrl: () => 'http://localhost:3002',
 }))
 
+const mockLoadDescriptorWalletAndSync = vi.hoisted(() =>
+  vi.fn().mockResolvedValue(undefined),
+)
+const mockLoadDescriptorWalletWithoutSync = vi.hoisted(() =>
+  vi.fn().mockResolvedValue(undefined),
+)
 vi.mock('@/lib/wallet-utils', () => ({
   saveCustomEsploraUrl: vi.fn().mockResolvedValue(undefined),
   deleteCustomEsploraUrl: vi.fn().mockResolvedValue(undefined),
@@ -113,6 +154,16 @@ vi.mock('@/lib/wallet-utils', () => ({
   syncActiveWalletAndUpdateState: vi.fn().mockResolvedValue(undefined),
   syncLoadedSubWalletWithEsplora: vi.fn().mockResolvedValue('completed'),
   runIncrementalDashboardWalletSync: vi.fn().mockResolvedValue(undefined),
+  loadDescriptorWalletAndSync: mockLoadDescriptorWalletAndSync,
+  loadDescriptorWalletWithoutSync: mockLoadDescriptorWalletWithoutSync,
+  loadWalletHandlingPersistedChainMismatch: vi.fn(
+    async (
+      loadWallet: (params: Record<string, unknown>) => Promise<boolean>,
+      params: Record<string, unknown>,
+    ) => {
+      await loadWallet(params)
+    },
+  ),
 }))
 
 const mockResolveDescriptorWallet = vi.hoisted(() =>
@@ -166,14 +217,19 @@ import { SettingsPage } from '../settings'
 describe('SettingsPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    nearZeroSecurityState.active = false
+    mockWalletsState.data = []
+    sessionStoreState.password = 'testpass'
     walletStoreState = {
       activeWalletId: 1,
       walletStatus: 'unlocked',
       networkMode: 'signet',
       addressType: 'taproot',
       accountId: 0,
+      loadedSubWallet: null,
       setNetworkMode: mockSetNetworkMode,
       setAddressType: mockSetAddressType,
+      commitLoadedSubWallet: mockCommitLoadedSubWallet,
       setWalletStatus: vi.fn(),
       setCurrentAddress: mockSetCurrentAddress,
       setBalance: vi.fn(),
@@ -187,17 +243,69 @@ describe('SettingsPage', () => {
     expect(screen.getByText('Network')).toBeInTheDocument()
     expect(screen.getByText('Address Type')).toBeInTheDocument()
     expect(screen.getByText('Appearance')).toBeInTheDocument()
+    expect(screen.getByText('Security')).toBeInTheDocument()
     expect(screen.getByText('About')).toBeInTheDocument()
   })
 
-  it('network selector calls setNetworkMode after switch completes', async () => {
+  it('disables Change app password when there are no wallets', () => {
+    mockWalletsState.data = []
+    renderWithProviders(<SettingsPage />)
+    expect(screen.getByRole('button', { name: 'Change app password' })).toBeDisabled()
+  })
+
+  it('enables Change app password when at least one wallet exists', () => {
+    mockWalletsState.data = [
+      { wallet_id: 1, name: 'Test', created_at: new Date().toISOString() },
+    ]
+    renderWithProviders(<SettingsPage />)
+    expect(screen.getByRole('button', { name: 'Change app password' })).toBeEnabled()
+  })
+
+  it('shows Set a real password when near-zero security mode is active', () => {
+    nearZeroSecurityState.active = true
+    mockWalletsState.data = []
+    renderWithProviders(<SettingsPage />)
+    expect(screen.getByRole('button', { name: 'Set a real password' })).toBeEnabled()
+    expect(screen.queryByRole('button', { name: 'Change app password' })).not.toBeInTheDocument()
+  })
+
+  it('network selector commits loaded sub-wallet after switch completes', async () => {
     const user = userEvent.setup()
     renderWithProviders(<SettingsPage />)
 
     await user.click(screen.getByRole('button', { name: 'Testnet' }))
     await waitFor(() => {
-      expect(mockSetNetworkMode).toHaveBeenCalledWith('testnet')
+      expect(mockCommitLoadedSubWallet).toHaveBeenCalledWith({
+        networkMode: 'testnet',
+        addressType: 'taproot',
+        accountId: 0,
+      })
     })
+  })
+
+  it('network selector prompts to unlock when there is no session password and does not change network yet', async () => {
+    walletStoreState.walletStatus = 'locked'
+    sessionStoreState.password = null
+    const user = userEvent.setup()
+    renderWithProviders(<SettingsPage />)
+
+    await user.click(screen.getByRole('button', { name: 'Testnet' }))
+
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Unlock Wallet' })).toBeInTheDocument()
+    expect(mockSetNetworkMode).not.toHaveBeenCalled()
+  })
+
+  it('network selector prompts to unlock when walletStatus is none after reload but session is missing', async () => {
+    walletStoreState.walletStatus = 'none'
+    sessionStoreState.password = null
+    const user = userEvent.setup()
+    renderWithProviders(<SettingsPage />)
+
+    await user.click(screen.getByRole('button', { name: 'Testnet' }))
+
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+    expect(mockSetNetworkMode).not.toHaveBeenCalled()
   })
 
   it('address type selector shows confirmation when wallet exists', async () => {

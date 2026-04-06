@@ -1,5 +1,37 @@
 import { describe, expect, it } from 'vitest'
-import { parseWalletSecretsJson } from '../wallet-domain-types'
+import { parseWalletPayloadJson, parseWalletSecretsJson } from '../wallet-domain-types'
+
+describe('parseWalletPayloadJson', () => {
+  it('rejects JSON that includes a mnemonic field', () => {
+    const json = JSON.stringify({
+      mnemonic: 'abandon ability able about above absent absorb abstract absurd abuse access accident',
+      descriptorWallets: [],
+      lightningNwcConnections: [],
+    })
+    expect(() => parseWalletPayloadJson(json)).toThrow(
+      'Invalid wallet secrets payload: schema validation failed',
+    )
+  })
+
+  it('accepts payload without mnemonic', () => {
+    const json = JSON.stringify({
+      descriptorWallets: [
+        {
+          network: 'testnet',
+          addressType: 'taproot',
+          accountId: 0,
+          externalDescriptor: 'tr(xpub.../0/*)',
+          internalDescriptor: 'tr(xpub.../1/*)',
+          changeSet: '{}',
+          fullScanDone: false,
+        },
+      ],
+      lightningNwcConnections: [],
+    })
+    const p = parseWalletPayloadJson(json)
+    expect(p.descriptorWallets).toHaveLength(1)
+  })
+})
 
 describe('parseWalletSecretsJson', () => {
   it('rejects malformed secrets payload before use', () => {
