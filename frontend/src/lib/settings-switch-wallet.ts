@@ -13,7 +13,10 @@ import {
   updateDescriptorWalletChangeset,
   resolveDescriptorWallet,
 } from '@/lib/descriptor-wallet-manager'
-import { syncLoadedSubWalletWithEsplora } from '@/lib/wallet-utils'
+import {
+  loadWalletHandlingPersistedChainMismatch,
+  syncLoadedSubWalletWithEsplora,
+} from '@/lib/wallet-utils'
 
 /**
  * Switch the active descriptor wallet to match the new parameters.
@@ -89,7 +92,7 @@ export async function switchDescriptorWallet(params: {
     })
 
     const useEmptyChain = targetNetwork === 'testnet'
-    await loadWallet({
+    await loadWalletHandlingPersistedChainMismatch(loadWallet, {
       externalDescriptor: descriptorWallet.externalDescriptor,
       internalDescriptor: descriptorWallet.internalDescriptor,
       network: targetNetwork,

@@ -45,9 +45,13 @@ vi.mock('@/lib/descriptor-wallet-manager', () => ({
   updateDescriptorWalletChangeset: vi.fn(),
 }))
 
-vi.mock('@/lib/wallet-utils', () => ({
-  syncLoadedSubWalletWithEsplora: mockSyncLoadedSubWalletWithEsplora,
-}))
+vi.mock('@/lib/wallet-utils', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/wallet-utils')>()
+  return {
+    ...actual,
+    syncLoadedSubWalletWithEsplora: mockSyncLoadedSubWalletWithEsplora,
+  }
+})
 
 const mockSetWalletStatus = vi.fn()
 const mockSetCurrentAddress = vi.fn()
@@ -176,6 +180,41 @@ describe('switchDescriptorWallet', () => {
     )
     expect(mockSetWalletStatus).toHaveBeenCalledWith('syncing')
     expect(mockSetWalletStatus).not.toHaveBeenCalledWith('unlocked')
+  })
+
+  it('retries load with fresh chain when persisted changeset network mismatches target', async () => {
+    mockLoadWallet
+      .mockRejectedValueOnce(
+        new Error(
+          'Wallet error: Network mismatch: loaded testnet4, expected signet',
+        ),
+      )
+      .mockResolvedValueOnce(undefined)
+
+    await switchDescriptorWallet({
+      targetNetworkMode: 'signet',
+      targetAddressType: 'taproot',
+      targetAccountId: 0,
+      currentNetworkMode: 'testnet',
+      currentAddressType: 'taproot',
+      currentAccountId: 0,
+    })
+
+    expect(mockLoadWallet).toHaveBeenCalledTimes(2)
+    expect(mockLoadWallet).toHaveBeenNthCalledWith(1, {
+      externalDescriptor: 'ext',
+      internalDescriptor: 'int',
+      network: 'signet',
+      changesetJson: '{}',
+      useEmptyChain: false,
+    })
+    expect(mockLoadWallet).toHaveBeenNthCalledWith(2, {
+      externalDescriptor: 'ext',
+      internalDescriptor: 'int',
+      network: 'signet',
+      changesetJson: '{}',
+      useEmptyChain: true,
+    })
   })
 
   it('does not run Esplora sync for lab target', async () => {

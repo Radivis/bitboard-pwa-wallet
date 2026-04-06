@@ -10,6 +10,7 @@ import {
   validateEsploraUrl,
 } from '@/lib/bitcoin-utils'
 import { errorMessage } from '@/lib/utils'
+import type { LoadWalletParams } from '@/workers/crypto-api'
 import type { AddressType, BitcoinNetwork } from '@/workers/crypto-types'
 import {
   updateDescriptorWalletChangeset,
@@ -218,6 +219,34 @@ export async function runIncrementalDashboardWalletSync(options: {
 }
 
 /**
+ * Loads from persisted changeset when possible. If BDK reports a persisted chain
+ * that does not match the target network (e.g. testnet4 state stored under another
+ * sub-wallet slot), retries with a fresh chain for that network so the UI can recover.
+ */
+export async function loadWalletHandlingPersistedChainMismatch(
+  loadWallet: (params: LoadWalletParams) => Promise<boolean>,
+  params: LoadWalletParams,
+): Promise<void> {
+  try {
+    await loadWallet(params)
+  } catch (err) {
+    if (params.useEmptyChain) throw err
+    const detail = errorMessage(err) ?? String(err)
+    if (
+      detail.includes('Network mismatch') ||
+      detail.includes('Genesis hash mismatch')
+    ) {
+      await loadWallet({
+        ...params,
+        useEmptyChain: true,
+      })
+      return
+    }
+    throw err
+  }
+}
+
+/**
  * Resolve descriptor wallet, load into WASM, set current address, start
  * auto-lock timer. Does NOT sync. Used for lab mode where there is no Esplora.
  */
@@ -251,7 +280,7 @@ export async function loadDescriptorWalletWithoutSync(params: {
   setTransactions([])
 
   const useEmptyChain = network === 'testnet'
-  await loadWallet({
+  await loadWalletHandlingPersistedChainMismatch(loadWallet, {
     externalDescriptor: descriptorWallet.externalDescriptor,
     internalDescriptor: descriptorWallet.internalDescriptor,
     network,
@@ -308,7 +337,7 @@ export async function loadDescriptorWalletAndSync(params: {
   setLastSyncTime(null)
 
   const useEmptyChain = network === 'testnet'
-  await loadWallet({
+  await loadWalletHandlingPersistedChainMismatch(loadWallet, {
     externalDescriptor: descriptorWallet.externalDescriptor,
     internalDescriptor: descriptorWallet.internalDescriptor,
     network,
