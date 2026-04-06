@@ -18,6 +18,8 @@ feature:
   requirements:
     - Mnemonic must be 12 or 24 words (BIP39 English wordlist)
     - All sensitive data encrypted at rest with the Bitboard app password (AES-256-GCM via Argon2id KDF); the same password encrypts every wallet on this device
+    - The mnemonic is stored as a separate ciphertext from the rest of wallet secrets (descriptor sub-wallets, Lightning NWC metadata); decrypt the mnemonic only when an operation requires the master seed (e.g. new sub-wallet derivation, seed backup, app password change).
+    - Security posture does not target isolating blast radius to a single descriptor sub-wallet; the shared payload can still reveal all materialized sub-wallet state when decrypted; see doc/SECURITY.md
     - Crypto operations run off-main-thread in a Web Worker
     - Default address type is Taproot (BIP86)
     - Default network is Signet
