@@ -5,13 +5,26 @@ export const TEST_MNEMONIC = TEST_MNEMONIC_12
 
 export const TEST_PASSWORD = 'TestP@ssword123'
 
+/** First-run blocking dialog on /setup/create and /setup/import when no wallets exist and no session password. */
+export async function dismissSetAppPasswordModalIfPresent(page: Page, password: string) {
+  const heading = page.getByRole('heading', { name: 'Set Bitboard app password' })
+  try {
+    await heading.waitFor({ state: 'visible', timeout: 8000 })
+  } catch {
+    return
+  }
+  await page.locator('#app-password').fill(password)
+  await page.locator('#app-confirm-password').fill(password)
+  await page.getByRole('button', { name: 'Continue' }).click()
+}
+
 export async function createWalletViaUI(page: Page) {
   await page.goto('/setup')
   await page.getByRole('button', { name: 'Create New Wallet' }).click()
 
+  await dismissSetAppPasswordModalIfPresent(page, TEST_PASSWORD)
+
   await expect(page.getByText('Step 1 of 3')).toBeVisible()
-  await page.getByLabel('Password', { exact: true }).fill(TEST_PASSWORD)
-  await page.getByLabel('Confirm Password', { exact: true }).fill(TEST_PASSWORD)
   const generateButton = page.getByRole('button', { name: 'Generate & Continue' })
   await expect(generateButton).toBeEnabled()
   await generateButton.click()
@@ -53,11 +66,11 @@ export async function importWalletViaUI(
   await page.goto('/setup')
   await page.getByRole('button', { name: 'Import Wallet' }).click()
 
+  await dismissSetAppPasswordModalIfPresent(page, password)
+
   await page.getByLabel('Seed Phrase').fill(mnemonic)
   await expect(page.getByText('Valid mnemonic')).toBeVisible({ timeout: 10000 })
 
-  await page.getByLabel('Password', { exact: true }).fill(password)
-  await page.getByLabel('Confirm Password', { exact: true }).fill(password)
   await page.getByRole('button', { name: 'Restore Wallet' }).click()
 
   await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible({
@@ -70,7 +83,7 @@ export async function unlockWalletViaUI(
   password: string = TEST_PASSWORD,
 ) {
   await expect(page.getByText('Unlock Wallet')).toBeVisible({ timeout: 10000 })
-  await page.getByLabel('Password').fill(password)
+  await page.getByLabel('Bitboard app password').fill(password)
   await page.getByRole('button', { name: 'Unlock' }).click()
   await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible({
     timeout: 60000,

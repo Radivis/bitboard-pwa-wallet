@@ -25,9 +25,14 @@ import {
 
 interface WalletUnlockProps {
   walletName?: string
+  /** When adding a wallet from setup while the session is locked, use setup-specific copy and navigation. */
+  variant?: 'default' | 'setup'
 }
 
-export function WalletUnlock({ walletName }: WalletUnlockProps) {
+export function WalletUnlock({
+  walletName,
+  variant = 'default',
+}: WalletUnlockProps) {
   const [password, setPassword] = useState('')
   const navigate = useNavigate()
   const { data: wallets } = useWallets()
@@ -39,6 +44,10 @@ export function WalletUnlock({ walletName }: WalletUnlockProps) {
   const setSessionPassword = useSessionStore((s) => s.setPassword)
 
   const handleClose = () => {
+    if (variant === 'setup') {
+      navigate({ to: '/setup' })
+      return
+    }
     if (wallets && wallets.length > 1) {
       navigate({ to: '/wallet/wallets' })
     } else {
@@ -87,12 +96,14 @@ export function WalletUnlock({ walletName }: WalletUnlockProps) {
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Lock className="h-5 w-5" />
-            Unlock Wallet
+            {variant === 'setup' ? 'Unlock to continue' : 'Unlock Wallet'}
           </DialogTitle>
           <DialogDescription>
-            {walletName
-              ? `Enter your password to unlock "${walletName}".`
-              : 'Enter your password to unlock your wallet.'}
+            {variant === 'setup'
+              ? 'Enter your Bitboard app password to unlock an existing wallet before you add or import another.'
+              : walletName
+                ? `Enter your Bitboard app password to unlock "${walletName}".`
+                : 'Enter your Bitboard app password to unlock your wallet.'}
           </DialogDescription>
         </DialogHeader>
 
@@ -104,13 +115,13 @@ export function WalletUnlock({ walletName }: WalletUnlockProps) {
           className="space-y-4"
         >
           <div className="space-y-2">
-            <Label htmlFor="unlock-password">Password</Label>
+            <Label htmlFor="unlock-password">Bitboard app password</Label>
             <Input
               id="unlock-password"
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="Enter your wallet password"
+              placeholder="Enter your Bitboard app password"
               disabled={unlockMutation.isPending}
               autoFocus
             />

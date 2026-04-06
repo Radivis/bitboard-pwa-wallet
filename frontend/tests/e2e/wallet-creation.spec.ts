@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { TEST_PASSWORD } from './helpers/wallet-setup'
+import { TEST_PASSWORD, dismissSetAppPasswordModalIfPresent } from './helpers/wallet-setup'
 
 test.describe('Wallet Creation Flow', () => {
   test('wallet creation full flow', async ({ page }) => {
@@ -10,13 +10,13 @@ test.describe('Wallet Creation Flow', () => {
 
     await page.getByRole('button', { name: 'Create New Wallet' }).click()
 
+    await dismissSetAppPasswordModalIfPresent(page, TEST_PASSWORD)
+
     await expect(page.getByText('Step 1 of 3')).toBeVisible()
     await expect(page.getByRole('heading', { name: 'Create Wallet' })).toBeVisible()
     await expect(page.getByRole('button', { name: '12 Words' })).toBeVisible()
     await expect(page.getByRole('button', { name: '24 Words' })).toBeVisible()
 
-    await page.getByLabel('Password', { exact: true }).fill(TEST_PASSWORD)
-    await page.getByLabel('Confirm Password', { exact: true }).fill(TEST_PASSWORD)
     await page.getByRole('button', { name: 'Generate & Continue' }).click()
 
     await expect(page.getByText('Step 2 of 3')).toBeVisible({ timeout: 15000 })

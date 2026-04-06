@@ -46,21 +46,37 @@ vi.mock('@/stores/walletStore', () => ({
   ),
 }))
 
-const mockSetSessionPassword = vi.fn()
+const mockSessionPassword = { value: 'validpassword123' as string | null }
 vi.mock('@/stores/sessionStore', () => ({
-  useSessionStore: (selector: (s: Record<string, unknown>) => unknown) =>
-    selector({
-      setPassword: mockSetSessionPassword,
-    }),
+  useSessionStore: Object.assign(
+    (selector: (s: { password: string | null; setPassword: (p: string | null) => void }) => unknown) =>
+      selector({
+        password: mockSessionPassword.value,
+        setPassword: (p: string | null) => {
+          mockSessionPassword.value = p
+        },
+      }),
+    {
+      getState: () => ({
+        password: mockSessionPassword.value,
+        setPassword: (p: string | null) => {
+          mockSessionPassword.value = p
+        },
+      }),
+    },
+  ),
   startAutoLockTimer: vi.fn(),
 }))
 
 const mockMutateAsync = vi.fn().mockResolvedValue(1)
 vi.mock('@/db', () => ({
   useAddWallet: () => ({ mutateAsync: mockMutateAsync }),
+  useWallets: () => ({ data: [], isLoading: false }),
   getDatabase: vi.fn(),
   ensureMigrated: vi.fn().mockResolvedValue(undefined),
   putWalletSecretsEncrypted: vi.fn().mockResolvedValue(undefined),
+  persistNewWalletWithSecrets: vi.fn().mockResolvedValue(1),
+  walletKeys: { all: ['wallets'] as const },
 }))
 
 vi.mock('@/workers/secrets-channel', () => ({
@@ -69,12 +85,6 @@ vi.mock('@/workers/secrets-channel', () => ({
 
 vi.mock('@/lib/bitcoin-utils', () => ({
   toBitcoinNetwork: (mode: string) => mode,
-}))
-
-vi.mock('@/components/PasswordStrengthIndicator', () => ({
-  PasswordStrengthIndicator: ({ password }: { password: string }) => (
-    <div data-testid="password-strength">{password ? 'strength-shown' : ''}</div>
-  ),
 }))
 
 vi.mock('@/components/MnemonicGrid', () => ({
@@ -88,6 +98,7 @@ import { CreateWalletPage } from '../create'
 describe('CreateWalletPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockSessionPassword.value = 'validpassword123'
   })
 
   it('renders step 1 with 12 words selected by default', () => {
@@ -96,7 +107,7 @@ describe('CreateWalletPage', () => {
     expect(screen.getByRole('heading', { name: 'Create Wallet' })).toBeInTheDocument()
     expect(screen.getByText('12 Words')).toBeInTheDocument()
     expect(screen.getByText('24 Words')).toBeInTheDocument()
-    expect(screen.getByLabelText('Password')).toBeInTheDocument()
+    expect(screen.queryByLabelText('Password')).not.toBeInTheDocument()
   })
 
   it('clicking 24 Words then Generate & Continue calls createWalletAndEncryptSecrets with 24', async () => {
@@ -109,11 +120,9 @@ describe('CreateWalletPage', () => {
     renderWithProviders(<CreateWalletPage />)
 
     await user.click(screen.getByText('24 Words'))
-    await user.type(screen.getByLabelText('Password'), 'password123')
-    await user.type(screen.getByLabelText('Confirm Password'), 'password123')
     await user.click(screen.getByText('Generate & Continue'))
     expect(mockCreateWalletAndEncryptSecrets).toHaveBeenCalledWith({
-      password: 'password123',
+      password: 'validpassword123',
       network: 'signet',
       addressType: 'taproot',
       accountId: 0,
@@ -121,7 +130,7 @@ describe('CreateWalletPage', () => {
     })
   })
 
-  it('clicking Generate & Continue with valid password calls createWalletAndEncryptSecrets', async () => {
+  it('clicking Generate & Continue calls createWalletAndEncryptSecrets with session password', async () => {
     const user = userEvent.setup()
     mockCreateWalletAndEncryptSecrets.mockResolvedValueOnce({
       encryptedBlob: { ciphertext: new Uint8Array(0), iv: new Uint8Array(12), salt: new Uint8Array(16) },
@@ -130,8 +139,6 @@ describe('CreateWalletPage', () => {
     })
     renderWithProviders(<CreateWalletPage />)
 
-    await user.type(screen.getByLabelText('Password'), 'validpassword123')
-    await user.type(screen.getByLabelText('Confirm Password'), 'validpassword123')
     await user.click(screen.getByText('Generate & Continue'))
     expect(mockCreateWalletAndEncryptSecrets).toHaveBeenCalledWith({
       password: 'validpassword123',
@@ -151,8 +158,6 @@ describe('CreateWalletPage', () => {
     })
     renderWithProviders(<CreateWalletPage />)
 
-    await user.type(screen.getByLabelText('Password'), 'validpassword123')
-    await user.type(screen.getByLabelText('Confirm Password'), 'validpassword123')
     await user.click(screen.getByText('Generate & Continue'))
 
     await waitFor(() => {
@@ -171,8 +176,6 @@ describe('CreateWalletPage', () => {
     })
     renderWithProviders(<CreateWalletPage />)
 
-    await user.type(screen.getByLabelText('Password'), 'validpassword123')
-    await user.type(screen.getByLabelText('Confirm Password'), 'validpassword123')
     await user.click(screen.getByText('Generate & Continue'))
     await waitFor(() => {
       expect(screen.getByTestId('mnemonic-grid')).toHaveTextContent(TEST_MNEMONIC_12)
@@ -188,8 +191,6 @@ describe('CreateWalletPage', () => {
     })
     renderWithProviders(<CreateWalletPage />)
 
-    await user.type(screen.getByLabelText('Password'), 'validpassword123')
-    await user.type(screen.getByLabelText('Confirm Password'), 'validpassword123')
     await user.click(screen.getByText('Generate & Continue'))
     await waitFor(() => {
       const warnings = screen.getAllByText(/Write down these words in order/)
@@ -206,8 +207,6 @@ describe('CreateWalletPage', () => {
     })
     renderWithProviders(<CreateWalletPage />)
 
-    await user.type(screen.getByLabelText('Password'), 'validpassword123')
-    await user.type(screen.getByLabelText('Confirm Password'), 'validpassword123')
     await user.click(screen.getByText('Generate & Continue'))
     await waitFor(() => {
       expect(screen.getByText("I've Written It Down")).toBeInTheDocument()
@@ -226,8 +225,6 @@ describe('CreateWalletPage', () => {
     })
     renderWithProviders(<CreateWalletPage />)
 
-    await user.type(screen.getByLabelText('Password'), 'validpassword123')
-    await user.type(screen.getByLabelText('Confirm Password'), 'validpassword123')
     await user.click(screen.getByText('Generate & Continue'))
     await waitFor(() => screen.getByText("I've Written It Down"))
     await user.click(screen.getByText("I've Written It Down"))
@@ -245,8 +242,6 @@ describe('CreateWalletPage', () => {
     })
     renderWithProviders(<CreateWalletPage />)
 
-    await user.type(screen.getByLabelText('Password'), 'validpassword123')
-    await user.type(screen.getByLabelText('Confirm Password'), 'validpassword123')
     await user.click(screen.getByText('Generate & Continue'))
     await waitFor(() => screen.getByText("I've Written It Down"))
     await user.click(screen.getByText("I've Written It Down"))
@@ -264,8 +259,6 @@ describe('CreateWalletPage', () => {
     })
     renderWithProviders(<CreateWalletPage />)
 
-    await user.type(screen.getByLabelText('Password'), 'validpassword123')
-    await user.type(screen.getByLabelText('Confirm Password'), 'validpassword123')
     await user.click(screen.getByText('Generate & Continue'))
     await waitFor(() => screen.getByText("I've Written It Down"))
     await user.click(screen.getByText("I've Written It Down"))
@@ -283,33 +276,8 @@ describe('CreateWalletPage', () => {
     })
   })
 
-  it('step 1 shows Passwords do not match error', async () => {
-    const user = userEvent.setup()
+  it('step 1 Generate & Continue is enabled without typing a password', () => {
     renderWithProviders(<CreateWalletPage />)
-
-    await user.type(screen.getByLabelText('Password'), 'password123')
-    await user.type(screen.getByLabelText('Confirm Password'), 'different')
-
-    expect(screen.getByText('Passwords do not match')).toBeInTheDocument()
-  })
-
-  it('step 1 Generate & Continue disabled when password too short', async () => {
-    const user = userEvent.setup()
-    renderWithProviders(<CreateWalletPage />)
-
-    await user.type(screen.getByLabelText('Password'), 'short')
-    await user.type(screen.getByLabelText('Confirm Password'), 'short')
-
-    expect(screen.getByRole('button', { name: 'Generate & Continue' })).toBeDisabled()
-  })
-
-  it('step 1 Generate & Continue enabled when valid', async () => {
-    const user = userEvent.setup()
-    renderWithProviders(<CreateWalletPage />)
-
-    await user.type(screen.getByLabelText('Password'), 'validpassword123')
-    await user.type(screen.getByLabelText('Confirm Password'), 'validpassword123')
-
     expect(screen.getByRole('button', { name: 'Generate & Continue' })).toBeEnabled()
   })
 

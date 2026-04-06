@@ -14,7 +14,7 @@ test.describe('Wallet Lock/Unlock', () => {
     await goToWalletTab(page, 'Dashboard')
     await expect(page.getByText('Unlock Wallet')).toBeVisible({ timeout: 10000 })
 
-    await page.getByLabel('Password').fill(TEST_PASSWORD)
+    await page.getByLabel('Bitboard app password').fill(TEST_PASSWORD)
     await page.getByRole('button', { name: 'Unlock' }).click()
 
     await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible({ timeout: 60000 })
@@ -30,7 +30,7 @@ test.describe('Wallet Lock/Unlock', () => {
 
     await goToWalletTab(page, 'Dashboard')
     await expect(page.getByText('Unlock Wallet')).toBeVisible({ timeout: 10000 })
-    await page.getByLabel('Password').fill(TEST_PASSWORD)
+    await page.getByLabel('Bitboard app password').fill(TEST_PASSWORD)
     await page.getByRole('button', { name: 'Unlock' }).click()
     await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible({ timeout: 60000 })
 
@@ -50,7 +50,7 @@ test.describe('Wallet Lock/Unlock', () => {
 
     await page.reload()
     await expect(page.getByText('Unlock Wallet')).toBeVisible({ timeout: 10000 })
-    await expect(page.getByLabel('Password')).toBeVisible()
+    await expect(page.getByLabel('Bitboard app password')).toBeVisible()
     await expect(page.getByRole('heading', { name: 'Dashboard' })).not.toBeVisible()
   })
 })
