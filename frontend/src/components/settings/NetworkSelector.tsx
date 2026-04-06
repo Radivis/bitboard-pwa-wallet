@@ -1,5 +1,4 @@
-import { useState, useCallback, useRef, useMemo } from 'react'
-import { useMutation, useIsFetching } from '@tanstack/react-query'
+import { useState, useCallback, useRef } from 'react'
 import { Link } from '@tanstack/react-router'
 import {
   useWalletStore,
@@ -7,13 +6,12 @@ import {
   selectCommittedNetworkMode,
   type NetworkMode,
 } from '@/stores/walletStore'
-import { executeSettingsNetworkSwitch } from '@/lib/network-mode-switch'
+import { useNetworkSwitchMutation } from '@/hooks/useNetworkSwitchMutation'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { Button } from '@/components/ui/button'
 import { WalletUnlock } from '@/components/WalletUnlock'
 import { useSessionStore } from '@/stores/sessionStore'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
-import { ACTIVE_WALLET_LOAD_QUERY_ROOT } from '@/lib/wallet-load-query-keys'
 
 const NETWORK_OPTIONS: NetworkMode[] = [
   'mainnet',
@@ -53,27 +51,8 @@ export function NetworkSelector() {
   const [showUnlockForNetworkChange, setShowUnlockForNetworkChange] =
     useState(false)
   const pendingNetworkAfterUnlockRef = useRef<NetworkMode | null>(null)
-  const [switchPhaseMessage, setSwitchPhaseMessage] = useState<string | null>(
-    null,
-  )
 
-  const bootstrapFetching =
-    useIsFetching({ queryKey: [ACTIVE_WALLET_LOAD_QUERY_ROOT] }) > 0
-
-  const runNetworkChange = useCallback(async (network: NetworkMode) => {
-    const onPhase = (message: string) => {
-      setSwitchPhaseMessage(message)
-    }
-    try {
-      await executeSettingsNetworkSwitch({ targetNetwork: network, onPhase })
-    } finally {
-      setSwitchPhaseMessage(null)
-    }
-  }, [])
-
-  const switchMutation = useMutation({
-    mutationFn: runNetworkChange,
-  })
+  const { mutate: switchMutate, loading, statusLine } = useNetworkSwitchMutation()
 
   const handleNetworkChange = useCallback(
     (network: NetworkMode) => {
@@ -85,21 +64,10 @@ export function NetworkSelector() {
         return
       }
 
-      switchMutation.mutate(network)
+      switchMutate(network)
     },
-    [displayNetworkMode, activeWalletId, sessionPassword, switchMutation],
+    [displayNetworkMode, activeWalletId, sessionPassword, switchMutate],
   )
-
-  const pendingSwitch = switchMutation.isPending
-  const loading = bootstrapFetching || pendingSwitch
-
-  const statusLine = useMemo(() => {
-    if (bootstrapFetching) return 'Loading wallet…'
-    if (pendingSwitch) {
-      return switchPhaseMessage ?? 'Switching network…'
-    }
-    return null
-  }, [bootstrapFetching, pendingSwitch, switchPhaseMessage])
 
   return (
     <div className="space-y-2">
@@ -157,7 +125,7 @@ export function NetworkSelector() {
             const target = pendingNetworkAfterUnlockRef.current
             pendingNetworkAfterUnlockRef.current = null
             setShowUnlockForNetworkChange(false)
-            if (target) switchMutation.mutate(target)
+            if (target) switchMutate(target)
           }}
         />
       )}

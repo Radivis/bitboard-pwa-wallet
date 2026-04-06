@@ -14,11 +14,15 @@ import {
   syncLoadedSubWalletWithEsplora,
 } from '@/lib/wallet-utils'
 import {
+  loadingTargetAddressTypeMessage,
   loadingTargetNetworkMessage,
+  savingPreviousAddressTypeMessage,
   savingPreviousNetworkMessage,
   syncingTargetNetworkMessage,
   type NetworkSwitchPhaseReporter,
 } from '@/lib/network-switch-status-messages'
+
+export type SwitchDescriptorPhaseContext = 'network' | 'addressType'
 
 /**
  * Switch the active descriptor wallet to match the new parameters.
@@ -38,6 +42,8 @@ export async function switchDescriptorWallet(params: {
   currentAccountId: number
   /** Settings UI: reflects save → load → sync so long switches are understandable. */
   onPhase?: NetworkSwitchPhaseReporter
+  /** Network card vs address-type card copy for phase lines. */
+  phaseContext?: SwitchDescriptorPhaseContext
 }): Promise<void> {
   const {
     targetNetworkMode,
@@ -47,6 +53,7 @@ export async function switchDescriptorWallet(params: {
     currentAddressType,
     currentAccountId,
     onPhase,
+    phaseContext = 'network',
   } = params
   const { activeWalletId } = useWalletStore.getState()
   const sessionPassword = useSessionStore.getState().password
@@ -64,7 +71,11 @@ export async function switchDescriptorWallet(params: {
   try {
     try {
       const currentChangeset = await exportChangeset()
-      onPhase?.(savingPreviousNetworkMessage(currentNetworkMode))
+      onPhase?.(
+        phaseContext === 'addressType'
+          ? savingPreviousAddressTypeMessage(currentAddressType)
+          : savingPreviousNetworkMessage(currentNetworkMode),
+      )
       await updateDescriptorWalletChangeset({
         password: sessionPassword,
         walletId: activeWalletId,
@@ -77,7 +88,11 @@ export async function switchDescriptorWallet(params: {
       // No active WASM wallet yet (e.g., first load) -- safe to skip
     }
 
-    onPhase?.(loadingTargetNetworkMessage(targetNetworkMode))
+    onPhase?.(
+      phaseContext === 'addressType'
+        ? loadingTargetAddressTypeMessage(targetAddressType)
+        : loadingTargetNetworkMessage(targetNetworkMode),
+    )
 
     const targetNetwork = toBitcoinNetwork(targetNetworkMode)
     const descriptorWallet = await resolveDescriptorWallet({

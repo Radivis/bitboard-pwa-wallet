@@ -25,6 +25,17 @@ vi.mock('@/stores/walletStore', () => ({
   useWalletStore: {
     getState: vi.fn(),
   },
+  NETWORK_LABELS: {
+    lab: 'Lab',
+    regtest: 'Regtest',
+    signet: 'Signet',
+    testnet: 'Testnet',
+    mainnet: 'Mainnet',
+  },
+  ADDRESS_TYPE_LABELS: {
+    taproot: 'Taproot',
+    segwit: 'SegWit',
+  },
   getSubWalletLabel: () => 'Label',
 }))
 
@@ -248,5 +259,24 @@ describe('switchDescriptorWallet', () => {
     })
     expect(mockSetWalletStatus).toHaveBeenCalledWith('unlocked')
     expect(toast.success).not.toHaveBeenCalled()
+  })
+
+  it('emits address-type phase labels when phaseContext is addressType', async () => {
+    const onPhase = vi.fn()
+    await switchDescriptorWallet({
+      targetNetworkMode: 'testnet',
+      targetAddressType: 'segwit',
+      targetAccountId: 0,
+      currentNetworkMode: 'testnet',
+      currentAddressType: 'taproot',
+      currentAccountId: 0,
+      phaseContext: 'addressType',
+      onPhase,
+    })
+
+    const messages = onPhase.mock.calls.map((c) => String(c[0]))
+    expect(messages.some((m) => m.includes('Switching address type'))).toBe(true)
+    expect(messages.some((m) => m.includes('Taproot'))).toBe(true)
+    expect(messages.some((m) => m.includes('SegWit'))).toBe(true)
   })
 })
