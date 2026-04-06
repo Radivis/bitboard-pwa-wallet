@@ -2,7 +2,12 @@ import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
 import { useEffect } from 'react'
 import { sqliteStorage } from '@/db/storage-adapter'
-import { useWalletStore, type WalletStatus } from '@/stores/walletStore'
+import {
+  useWalletStore,
+  selectCommittedAddressType,
+  selectCommittedNetworkMode,
+  type WalletStatus,
+} from '@/stores/walletStore'
 
 export type ThemeMode = 'light' | 'dark' | 'system'
 export type ResolvedTheme = 'light' | 'dark'
@@ -68,14 +73,10 @@ export function isWalletThemePaletteActive(
  */
 export function ThemeSynchronizer() {
   const themeMode = useThemeStore((state) => state.themeMode)
-  const networkMode = useWalletStore((state) => state.networkMode)
-  const loadedSubWallet = useWalletStore((state) => state.loadedSubWallet)
-  const addressType = useWalletStore((state) => state.addressType)
+  const accentNetworkMode = useWalletStore(selectCommittedNetworkMode)
+  const accentAddressType = useWalletStore(selectCommittedAddressType)
   const activeWalletId = useWalletStore((state) => state.activeWalletId)
   const walletStatus = useWalletStore((state) => state.walletStatus)
-
-  const accentNetworkMode = loadedSubWallet?.networkMode ?? networkMode
-  const accentAddressType = loadedSubWallet?.addressType ?? addressType
 
   useEffect(() => {
     function apply() {

@@ -69,6 +69,21 @@ vi.mock('@/stores/walletStore', () => ({
   },
   getSubWalletLabel: (network: string, addressType: string) =>
     `${network} ${addressType}`,
+  selectCommittedNetworkMode: (s: {
+    loadedSubWallet: { networkMode: string } | null
+    networkMode: string
+  }) => s.loadedSubWallet?.networkMode ?? s.networkMode,
+  selectCommittedAddressType: (s: {
+    loadedSubWallet: { addressType: string } | null
+    addressType: string
+  }) => s.loadedSubWallet?.addressType ?? s.addressType,
+  getCommittedNetworkMode: () => {
+    const s = walletStoreState as {
+      loadedSubWallet: { networkMode: string } | null
+      networkMode: string
+    }
+    return s.loadedSubWallet?.networkMode ?? s.networkMode
+  },
 }))
 
 const mockSetSessionPassword = vi.fn()

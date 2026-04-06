@@ -4,21 +4,16 @@ import { Link } from '@tanstack/react-router'
 import {
   useWalletStore,
   NETWORK_LABELS,
-  type AddressType,
+  selectCommittedNetworkMode,
   type NetworkMode,
-  type WalletStatus,
 } from '@/stores/walletStore'
-import { walletIsUnlockedOrSyncing } from '@/lib/wallet-unlocked-status'
-import { switchDescriptorWallet } from '@/lib/settings-switch-wallet'
-import { terminateLabWorker } from '@/workers/lab-factory'
-import { switchToLabNetwork } from '@/lib/switch-to-lab-network'
+import { executeSettingsNetworkSwitch } from '@/lib/network-mode-switch'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { Button } from '@/components/ui/button'
 import { WalletUnlock } from '@/components/WalletUnlock'
 import { useSessionStore } from '@/stores/sessionStore'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { ACTIVE_WALLET_LOAD_QUERY_ROOT } from '@/lib/wallet-load-query-keys'
-import type { NetworkSwitchPhaseReporter } from '@/lib/network-switch-status-messages'
 
 const NETWORK_OPTIONS: NetworkMode[] = [
   'mainnet',
@@ -51,109 +46,8 @@ const NETWORK_INFOMODE: Record<NetworkMode, { title: string; text: string }> = {
   },
 }
 
-async function switchDescriptorWalletWhileUnlockedOrSyncing(params: {
-  targetNetwork: NetworkMode
-  previousNetwork: NetworkMode
-  addressType: AddressType
-  accountId: number
-  afterDescriptorSwitch?: () => void | Promise<void>
-  onPhase?: NetworkSwitchPhaseReporter
-}): Promise<void> {
-  const {
-    targetNetwork,
-    previousNetwork,
-    addressType,
-    accountId,
-    afterDescriptorSwitch,
-    onPhase,
-  } = params
-  await switchDescriptorWallet({
-    targetNetworkMode: targetNetwork,
-    targetAddressType: addressType,
-    targetAccountId: accountId,
-    currentNetworkMode: previousNetwork,
-    currentAddressType: addressType,
-    currentAccountId: accountId,
-    onPhase,
-  })
-  await afterDescriptorSwitch?.()
-}
-
-async function switchFromLabNetwork(params: {
-  setNetworkMode: (mode: NetworkMode) => void
-  targetNetwork: NetworkMode
-  walletStatus: WalletStatus
-  addressType: AddressType
-  accountId: number
-  onPhase?: NetworkSwitchPhaseReporter
-}): Promise<void> {
-  const {
-    setNetworkMode,
-    targetNetwork,
-    walletStatus,
-    addressType,
-    accountId,
-    onPhase,
-  } = params
-  if (walletIsUnlockedOrSyncing(walletStatus)) {
-    await switchDescriptorWalletWhileUnlockedOrSyncing({
-      targetNetwork,
-      previousNetwork: 'lab',
-      addressType,
-      accountId,
-      onPhase,
-      afterDescriptorSwitch: () => {
-        terminateLabWorker()
-      },
-    })
-    return
-  }
-
-  terminateLabWorker()
-  setNetworkMode(targetNetwork)
-}
-
-async function switchBetweenLiveNetworks(params: {
-  setNetworkMode: (mode: NetworkMode) => void
-  targetNetwork: NetworkMode
-  previousNetwork: NetworkMode
-  walletStatus: WalletStatus
-  addressType: AddressType
-  accountId: number
-  onPhase?: NetworkSwitchPhaseReporter
-}): Promise<void> {
-  const {
-    setNetworkMode,
-    targetNetwork,
-    previousNetwork,
-    walletStatus,
-    addressType,
-    accountId,
-    onPhase,
-  } = params
-  if (!walletIsUnlockedOrSyncing(walletStatus)) {
-    setNetworkMode(targetNetwork)
-    return
-  }
-
-  await switchDescriptorWalletWhileUnlockedOrSyncing({
-    targetNetwork,
-    previousNetwork,
-    addressType,
-    accountId,
-    onPhase,
-  })
-}
-
-function committedNetworkMode(): NetworkMode {
-  const { loadedSubWallet, networkMode } = useWalletStore.getState()
-  return loadedSubWallet?.networkMode ?? networkMode
-}
-
 export function NetworkSelector() {
-  const networkMode = useWalletStore((s) => s.networkMode)
-  const loadedSubWallet = useWalletStore((s) => s.loadedSubWallet)
-  const setNetworkMode = useWalletStore((s) => s.setNetworkMode)
+  const displayNetworkMode = useWalletStore(selectCommittedNetworkMode)
   const activeWalletId = useWalletStore((s) => s.activeWalletId)
   const sessionPassword = useSessionStore((s) => s.password)
   const [showUnlockForNetworkChange, setShowUnlockForNetworkChange] =
@@ -163,61 +57,19 @@ export function NetworkSelector() {
     null,
   )
 
-  const displayNetworkMode = loadedSubWallet?.networkMode ?? networkMode
-
   const bootstrapFetching =
     useIsFetching({ queryKey: [ACTIVE_WALLET_LOAD_QUERY_ROOT] }) > 0
 
   const runNetworkChange = useCallback(async (network: NetworkMode) => {
-    const currentMode = committedNetworkMode()
-    const walletStatus = useWalletStore.getState().walletStatus
-    const addressType = useWalletStore.getState().addressType
-    const accountId = useWalletStore.getState().accountId
-
-    if (network === currentMode) return
-    const previousNetworkMode = currentMode
-
     const onPhase = (message: string) => {
       setSwitchPhaseMessage(message)
     }
-
     try {
-      if (network === 'lab') {
-        await switchToLabNetwork({
-          previousNetworkMode,
-          walletStatus,
-          addressType,
-          accountId,
-          onPhase,
-        })
-        return
-      }
-
-      if (previousNetworkMode === 'lab') {
-        await switchFromLabNetwork({
-          setNetworkMode,
-          targetNetwork: network,
-          walletStatus,
-          addressType,
-          accountId,
-          onPhase,
-        })
-        return
-      }
-
-      await switchBetweenLiveNetworks({
-        setNetworkMode,
-        targetNetwork: network,
-        previousNetwork: previousNetworkMode,
-        walletStatus,
-        addressType,
-        accountId,
-        onPhase,
-      })
+      await executeSettingsNetworkSwitch({ targetNetwork: network, onPhase })
     } finally {
       setSwitchPhaseMessage(null)
     }
-  }, [setNetworkMode])
+  }, [])
 
   const switchMutation = useMutation({
     mutationFn: runNetworkChange,

@@ -43,6 +43,21 @@ export type LoadedSubWallet = {
   accountId: number
 }
 
+/** Last-loaded sub-wallet, else persisted preference — use for UI selection and theme accents. */
+export function selectCommittedNetworkMode(s: {
+  loadedSubWallet: LoadedSubWallet | null
+  networkMode: NetworkMode
+}): NetworkMode {
+  return s.loadedSubWallet?.networkMode ?? s.networkMode
+}
+
+export function selectCommittedAddressType(s: {
+  loadedSubWallet: LoadedSubWallet | null
+  addressType: AddressType
+}): AddressType {
+  return s.loadedSubWallet?.addressType ?? s.addressType
+}
+
 interface TransientWalletState {
   walletStatus: WalletStatus
   balance: BalanceInfo | null
@@ -127,3 +142,8 @@ export const useWalletStore = create<WalletState>()(
     },
   ),
 )
+
+/** Imperative: same as `selectCommittedNetworkMode` on current store state. */
+export function getCommittedNetworkMode(): NetworkMode {
+  return selectCommittedNetworkMode(useWalletStore.getState())
+}
