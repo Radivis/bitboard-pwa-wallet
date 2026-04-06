@@ -46,6 +46,8 @@ export {
   getWalletSecretsEncrypted,
   putWalletSecretsEncrypted,
   persistNewWalletWithSecrets,
+  listWalletIdsWithSecrets,
+  reencryptAllWalletSecretsWithNewPassword,
 } from './wallet-persistence'
 export type {
   WalletSecrets,

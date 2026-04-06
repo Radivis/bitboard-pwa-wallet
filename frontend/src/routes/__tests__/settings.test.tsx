@@ -70,7 +70,12 @@ vi.mock('@/stores/walletStore', () => ({
     `${network} ${addressType}`,
 }))
 
-const sessionStoreState = { password: 'testpass', clear: mockClearSession }
+const mockSetSessionPassword = vi.fn()
+const sessionStoreState = {
+  password: 'testpass',
+  clear: mockClearSession,
+  setPassword: mockSetSessionPassword,
+}
 vi.mock('@/stores/sessionStore', () => ({
   useSessionStore: Object.assign(
     (selector: (s: Record<string, unknown>) => unknown) =>
@@ -88,11 +93,14 @@ vi.mock('@/stores/themeStore', () => ({
     selector({ themeMode: 'system', setThemeMode: mockSetThemeMode }),
 }))
 
+const mockWalletsState: { data: { wallet_id: number; name: string; created_at: string }[] } = {
+  data: [],
+}
 vi.mock('@/db', () => ({
   getDatabase: vi.fn(),
   ensureMigrated: vi.fn().mockResolvedValue(undefined),
   loadWalletSecrets: vi.fn().mockRejectedValue(new Error('Wrong password')),
-  useWallets: () => ({ data: [] }),
+  useWallets: () => ({ data: mockWalletsState.data }),
 }))
 
 vi.mock('@/lib/bitcoin-utils', () => ({
@@ -166,6 +174,7 @@ import { SettingsPage } from '../settings'
 describe('SettingsPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockWalletsState.data = []
     walletStoreState = {
       activeWalletId: 1,
       walletStatus: 'unlocked',
@@ -187,7 +196,22 @@ describe('SettingsPage', () => {
     expect(screen.getByText('Network')).toBeInTheDocument()
     expect(screen.getByText('Address Type')).toBeInTheDocument()
     expect(screen.getByText('Appearance')).toBeInTheDocument()
+    expect(screen.getByText('Security')).toBeInTheDocument()
     expect(screen.getByText('About')).toBeInTheDocument()
+  })
+
+  it('disables Change app password when there are no wallets', () => {
+    mockWalletsState.data = []
+    renderWithProviders(<SettingsPage />)
+    expect(screen.getByRole('button', { name: 'Change app password' })).toBeDisabled()
+  })
+
+  it('enables Change app password when at least one wallet exists', () => {
+    mockWalletsState.data = [
+      { wallet_id: 1, name: 'Test', created_at: new Date().toISOString() },
+    ]
+    renderWithProviders(<SettingsPage />)
+    expect(screen.getByRole('button', { name: 'Change app password' })).toBeEnabled()
   })
 
   it('network selector calls setNetworkMode after switch completes', async () => {

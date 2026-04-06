@@ -246,6 +246,66 @@ export async function deleteWalletSecrets(
     .execute()
 }
 
+/**
+ * Returns wallet IDs that have a `wallet_secrets` row, ascending order.
+ */
+export async function listWalletIdsWithSecrets(
+  walletDb: Kysely<Database>,
+): Promise<number[]> {
+  const rows = await walletDb
+    .selectFrom('wallet_secrets')
+    .select('wallet_id')
+    .orderBy('wallet_id', 'asc')
+    .execute()
+  return rows.map((r) => r.wallet_id)
+}
+
+/**
+ * Decrypts every wallet secrets blob with `oldPassword`, re-encrypts with `newPassword`,
+ * and persists all rows in a single database transaction (all-or-nothing).
+ *
+ * @throws {Error} If there are no rows in `wallet_secrets`, or decryption fails (wrong password).
+ */
+export async function reencryptAllWalletSecretsWithNewPassword(params: {
+  walletDb: Kysely<Database>
+  oldPassword: string
+  newPassword: string
+}): Promise<void> {
+  const { walletDb, oldPassword, newPassword } = params
+
+  const walletIds = await listWalletIdsWithSecrets(walletDb)
+  if (walletIds.length === 0) {
+    throw new Error('No wallet secrets to re-encrypt')
+  }
+
+  const decrypted: { walletId: number; secrets: WalletSecrets }[] = []
+  for (const walletId of walletIds) {
+    const secrets = await loadWalletSecrets(walletDb, oldPassword, walletId)
+    decrypted.push({ walletId, secrets })
+  }
+
+  const blobs: { walletId: number; encrypted: EncryptedWalletSecretsBlob }[] = []
+  for (const { walletId, secrets } of decrypted) {
+    const plaintext = JSON.stringify(secrets)
+    const encrypted = await encryptData(newPassword, plaintext)
+    blobs.push({
+      walletId,
+      encrypted: {
+        ciphertext: encrypted.ciphertext,
+        iv: encrypted.iv,
+        salt: encrypted.salt,
+        kdfVersion: encrypted.kdfVersion,
+      },
+    })
+  }
+
+  await walletDb.transaction().execute(async (trx) => {
+    for (const { walletId, encrypted } of blobs) {
+      await putWalletSecretsEncrypted(trx, walletId, encrypted)
+    }
+  })
+}
+
 async function assertWalletExists(walletDb: Kysely<Database>, walletId: number): Promise<void> {
   const wallet = await walletDb
     .selectFrom('wallets')

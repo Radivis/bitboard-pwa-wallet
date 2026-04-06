@@ -1,20 +1,28 @@
+import { useState } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
-import { Settings } from 'lucide-react'
+import { Settings, Shield } from 'lucide-react'
 import { PageHeader } from '@/components/PageHeader'
 import { AppDescription } from '@/components/AppDescription'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
 import { ThemeSelector } from '@/components/settings/ThemeSelector'
 import { NetworkSelector } from '@/components/settings/NetworkSelector'
 import { AddressTypeSelector } from '@/components/settings/AddressTypeSelector'
 import { EsploraUrlSettings } from '@/components/settings/EsploraUrlSettings'
 import { FeatureToggles } from '@/components/settings/FeatureToggles'
+import { ChangeAppPasswordModal } from '@/components/ChangeAppPasswordModal'
+import { useWallets } from '@/db'
 
 export const Route = createFileRoute('/settings')({
   component: SettingsPage,
 })
 
 export function SettingsPage() {
+  const { data: wallets } = useWallets()
+  const hasWallets = (wallets?.length ?? 0) > 0
+  const [changePasswordOpen, setChangePasswordOpen] = useState(false)
+
   return (
     <div className="space-y-6">
       <PageHeader title="Settings" icon={Settings} />
@@ -87,6 +95,45 @@ export function SettingsPage() {
       </InfomodeWrapper>
 
       <EsploraUrlSettings />
+
+      <InfomodeWrapper
+        infoId="settings-security-card"
+        infoTitle="Security"
+        infoText="Change the Bitboard app password that encrypts all wallets on this device. You will need your current password. All stored secrets are re-encrypted in one atomic step so your data never sits half-updated."
+        className="rounded-xl"
+      >
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Shield className="h-5 w-5" />
+              Security
+            </CardTitle>
+            <CardDescription>
+              Update the password used to encrypt wallet data in this browser.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={!hasWallets}
+              onClick={() => setChangePasswordOpen(true)}
+            >
+              Change app password
+            </Button>
+            {!hasWallets && (
+              <p className="text-sm text-muted-foreground">
+                Add a wallet first—there is nothing encrypted to re-encrypt yet.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      </InfomodeWrapper>
+
+      <ChangeAppPasswordModal
+        open={changePasswordOpen}
+        onOpenChange={setChangePasswordOpen}
+      />
 
       <Card>
         <CardHeader>

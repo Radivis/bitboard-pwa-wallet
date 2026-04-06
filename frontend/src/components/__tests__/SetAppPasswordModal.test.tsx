@@ -37,6 +37,14 @@ describe('SetAppPasswordModal', () => {
     mockNavigate.mockClear()
   })
 
+  it('shows funds loss warning about password recovery and mnemonic backup', () => {
+    renderWithProviders(<SetAppPasswordModal open />)
+
+    expect(screen.getByRole('alert')).toBeInTheDocument()
+    expect(screen.getByText(/Bitboard cannot recover your app password/i)).toBeInTheDocument()
+    expect(screen.getByText(/permanently lose access to your funds/i)).toBeInTheDocument()
+  })
+
   it('shows mismatch when confirm differs', async () => {
     const user = userEvent.setup()
     renderWithProviders(<SetAppPasswordModal open />)

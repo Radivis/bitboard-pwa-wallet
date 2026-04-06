@@ -9,12 +9,24 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { PasswordStrengthIndicator } from '@/components/PasswordStrengthIndicator'
-import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
-import { InfomodeToggle } from '@/components/infomode/InfomodeToggle'
 import { useSessionStore } from '@/stores/sessionStore'
+import { InfomodeToggle } from '@/components/infomode/InfomodeToggle'
+import {
+  AppPasswordFields,
+  isNewAppPasswordValid,
+} from '@/components/AppPasswordFields'
+import { AppPasswordFundsLossWarning } from '@/components/AppPasswordFundsLossWarning'
+
+const SET_APP_PASSWORD_FIELDS_CONFIG = {
+  ids: {
+    newPassword: 'app-password',
+    confirmPassword: 'app-confirm-password',
+  },
+  infoIds: {
+    passwordLabel: 'set-app-password-label',
+    strength: 'set-app-password-strength',
+  },
+} as const
 
 interface SetAppPasswordModalProps {
   open: boolean
@@ -37,7 +49,7 @@ export function SetAppPasswordModal({ open }: SetAppPasswordModalProps) {
     }
   }, [open])
 
-  const passwordsValid = password.length >= 8 && password === confirmPassword
+  const passwordsValid = isNewAppPasswordValid(password, confirmPassword)
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -83,66 +95,26 @@ export function SetAppPasswordModal({ open }: SetAppPasswordModalProps) {
             <span className="min-w-0 leading-tight">Set Bitboard app password</span>
           </DialogTitle>
         </DialogHeader>
-        <DialogDescription className="w-full max-w-none text-left text-sm text-muted-foreground">
-          Choose a password for this browser. It encrypts all wallets you store in Bitboard on this
-          device.{' '}
-          <span className="font-medium text-foreground/90">
-            Use Infomode (lightbulb button above) to get more information about parts of this form by tapping them.
-          </span>
-        </DialogDescription>
+        <div className="space-y-4">
+          <DialogDescription className="w-full max-w-none text-left text-sm text-muted-foreground">
+            Choose a password for this browser. It encrypts all wallets you store in Bitboard on this
+            device.{' '}
+            <span className="font-medium text-foreground/90">
+              Use Infomode (lightbulb button above) to get more information about parts of this form
+              by tapping them.
+            </span>
+          </DialogDescription>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="app-password">
-              <InfomodeWrapper
-                as="span"
-                infoId="set-app-password-label"
-                infoTitle="Bitboard app password"
-                infoText="This password is only for Bitboard in this browser. It encrypts your wallet data on this device. The same password protects every wallet you add here. Your recovery words are what move between apps—not this password."
-              >
-                Password
-              </InfomodeWrapper>
-            </Label>
-            <Input
-              id="app-password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Enter a strong password"
-              autoFocus
-              autoComplete="new-password"
-            />
-            <InfomodeWrapper
-              as="div"
-              className="w-full"
-              infoId="set-app-password-strength"
-              infoTitle="Why a strong password matters"
-              infoText="Bitboard derives encryption keys from this password to protect your wallet secrets on this device. A stronger password makes guessing and cracking much harder for anyone who gets access to stored data or your unlocked session. It does not replace your recovery phrase—the phrase backs up your funds elsewhere; this password protects the encrypted copy in this browser."
-            >
-              {password ? (
-                <PasswordStrengthIndicator password={password} />
-              ) : (
-                <p className="text-xs text-muted-foreground">
-                  Strength feedback appears as you type.
-                </p>
-              )}
-            </InfomodeWrapper>
-          </div>
+          <AppPasswordFundsLossWarning />
 
-          <div className="space-y-2">
-            <Label htmlFor="app-confirm-password">Confirm password</Label>
-            <Input
-              id="app-confirm-password"
-              type="password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              placeholder="Confirm your password"
-              autoComplete="new-password"
-            />
-            {confirmPassword && password !== confirmPassword && (
-              <p className="text-xs text-destructive">Passwords do not match</p>
-            )}
-          </div>
+          <form onSubmit={handleSubmit} className="space-y-4">
+          <AppPasswordFields
+            config={SET_APP_PASSWORD_FIELDS_CONFIG}
+            newPassword={password}
+            confirmPassword={confirmPassword}
+            onNewPasswordChange={setPassword}
+            onConfirmPasswordChange={setConfirmPassword}
+          />
 
           <Button type="submit" className="w-full" disabled={!passwordsValid}>
             Continue
@@ -152,6 +124,7 @@ export function SetAppPasswordModal({ open }: SetAppPasswordModalProps) {
             <Link to="/setup">Back to setup</Link>
           </Button>
         </form>
+        </div>
       </DialogContent>
     </Dialog>
   )

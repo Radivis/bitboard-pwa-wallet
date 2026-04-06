@@ -22,7 +22,13 @@ vi.mock('@/workers/encryption-factory', async () => {
 })
 
 import { TEST_MNEMONIC_12 } from '@/test-utils/test-providers'
-import { saveWalletSecrets, loadWalletSecrets, deleteWalletSecrets } from '../wallet-persistence'
+import {
+  saveWalletSecrets,
+  loadWalletSecrets,
+  deleteWalletSecrets,
+  reencryptAllWalletSecretsWithNewPassword,
+  listWalletIdsWithSecrets,
+} from '../wallet-persistence'
 
 describe('Wallet Persistence with Encryption', () => {
   let walletDb: Kysely<Database>
@@ -237,6 +243,82 @@ describe('Wallet Persistence with Encryption', () => {
 
       expect(loaded1.mnemonic).toBe('first wallet mnemonic')
       expect(loaded2.mnemonic).toBe('second wallet mnemonic')
+    })
+  })
+
+  describe('reencryptAllWalletSecretsWithNewPassword', () => {
+    const oldPass = 'old-app-password-12'
+    const newPass = 'new-app-password-12'
+
+    it('re-encrypts all wallet secrets and old password no longer works', async () => {
+      const result2 = await walletDb
+        .insertInto('wallets')
+        .values({ name: 'Second Wallet', created_at: new Date().toISOString() })
+        .executeTakeFirstOrThrow()
+      const walletId2 = Number(result2.insertId)
+
+      const secretsA = { ...sampleSecrets, mnemonic: 'aaa first mnemonic unique' }
+      const secretsB = { ...sampleSecrets, mnemonic: 'bbb second mnemonic unique' }
+
+      await saveWalletSecrets({
+        walletDb,
+        password: oldPass,
+        walletId,
+        secrets: secretsA,
+      })
+      await saveWalletSecrets({
+        walletDb,
+        password: oldPass,
+        walletId: walletId2,
+        secrets: secretsB,
+      })
+
+      const ids = await listWalletIdsWithSecrets(walletDb)
+      expect(ids).toEqual([walletId, walletId2])
+
+      await reencryptAllWalletSecretsWithNewPassword({
+        walletDb,
+        oldPassword: oldPass,
+        newPassword: newPass,
+      })
+
+      const loaded1 = await loadWalletSecrets(walletDb, newPass, walletId)
+      const loaded2 = await loadWalletSecrets(walletDb, newPass, walletId2)
+      expect(loaded1.mnemonic).toBe('aaa first mnemonic unique')
+      expect(loaded2.mnemonic).toBe('bbb second mnemonic unique')
+
+      await expect(loadWalletSecrets(walletDb, oldPass, walletId)).rejects.toThrow()
+      await expect(loadWalletSecrets(walletDb, oldPass, walletId2)).rejects.toThrow()
+    })
+
+    it('throws when current password is wrong (no partial writes)', async () => {
+      await saveWalletSecrets({
+        walletDb,
+        password: oldPass,
+        walletId,
+        secrets: sampleSecrets,
+      })
+
+      await expect(
+        reencryptAllWalletSecretsWithNewPassword({
+          walletDb,
+          oldPassword: 'wrong-password',
+          newPassword: newPass,
+        }),
+      ).rejects.toThrow()
+
+      const loaded = await loadWalletSecrets(walletDb, oldPass, walletId)
+      expect(loaded).toEqual(sampleSecrets)
+    })
+
+    it('throws when there are no wallet_secrets rows', async () => {
+      await expect(
+        reencryptAllWalletSecretsWithNewPassword({
+          walletDb,
+          oldPassword: oldPass,
+          newPassword: newPass,
+        }),
+      ).rejects.toThrow(/no wallet secrets/i)
     })
   })
 })

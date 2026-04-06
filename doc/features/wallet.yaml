@@ -27,6 +27,7 @@ feature:
       - file: frontend/src/components/SetAppPasswordModal.tsx
       - visible_elements:
         - title Set Bitboard app password
+        - prominent red warning: no password recovery; losing the app password may cause permanent loss of funds if the mnemonic is not backed up
         - password and confirm password fields with strength indicator
         - Continue button (disabled until passwords match and meet minimum length)
         - Back to setup link
@@ -175,6 +176,14 @@ feature:
           - lock wallet button
             - click_event:
               - clear decrypted wallet data from memory, return to locked state
+        - Security section (above About):
+          - Change app password button (disabled when no wallets exist)
+            - click_event:
+              - open Change app password modal (file: frontend/src/components/ChangeAppPasswordModal.tsx)
+              - same prominent red warning as Set Bitboard app password (no recovery; fund loss risk without mnemonic backup)
+              - user enters current password, new password, and confirmation
+              - on submit: decrypt all `wallet_secrets` with current password, re-encrypt with new password, persist all rows in a single database transaction, then update session password
+              - UI: spinner with “Encrypting secrets with new password…” while running; success screen with checkmark and Done
       - requirements:
         - Wallet must exist for backup and lock sections to appear
         - Network and address type settings are available even without a wallet
