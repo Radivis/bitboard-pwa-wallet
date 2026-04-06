@@ -18,6 +18,7 @@ import { WalletUnlock } from '@/components/WalletUnlock'
 import { useSessionStore } from '@/stores/sessionStore'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { ACTIVE_WALLET_LOAD_QUERY_ROOT } from '@/lib/wallet-load-query-keys'
+import type { NetworkSwitchPhaseReporter } from '@/lib/network-switch-status-messages'
 
 const NETWORK_OPTIONS: NetworkMode[] = [
   'mainnet',
@@ -56,6 +57,7 @@ async function switchDescriptorWalletWhileUnlockedOrSyncing(params: {
   addressType: AddressType
   accountId: number
   afterDescriptorSwitch?: () => void | Promise<void>
+  onPhase?: NetworkSwitchPhaseReporter
 }): Promise<void> {
   const {
     targetNetwork,
@@ -63,6 +65,7 @@ async function switchDescriptorWalletWhileUnlockedOrSyncing(params: {
     addressType,
     accountId,
     afterDescriptorSwitch,
+    onPhase,
   } = params
   await switchDescriptorWallet({
     targetNetworkMode: targetNetwork,
@@ -71,6 +74,7 @@ async function switchDescriptorWalletWhileUnlockedOrSyncing(params: {
     currentNetworkMode: previousNetwork,
     currentAddressType: addressType,
     currentAccountId: accountId,
+    onPhase,
   })
   await afterDescriptorSwitch?.()
 }
@@ -81,6 +85,7 @@ async function switchFromLabNetwork(params: {
   walletStatus: WalletStatus
   addressType: AddressType
   accountId: number
+  onPhase?: NetworkSwitchPhaseReporter
 }): Promise<void> {
   const {
     setNetworkMode,
@@ -88,6 +93,7 @@ async function switchFromLabNetwork(params: {
     walletStatus,
     addressType,
     accountId,
+    onPhase,
   } = params
   if (walletIsUnlockedOrSyncing(walletStatus)) {
     await switchDescriptorWalletWhileUnlockedOrSyncing({
@@ -95,6 +101,7 @@ async function switchFromLabNetwork(params: {
       previousNetwork: 'lab',
       addressType,
       accountId,
+      onPhase,
       afterDescriptorSwitch: () => {
         terminateLabWorker()
       },
@@ -113,6 +120,7 @@ async function switchBetweenLiveNetworks(params: {
   walletStatus: WalletStatus
   addressType: AddressType
   accountId: number
+  onPhase?: NetworkSwitchPhaseReporter
 }): Promise<void> {
   const {
     setNetworkMode,
@@ -121,6 +129,7 @@ async function switchBetweenLiveNetworks(params: {
     walletStatus,
     addressType,
     accountId,
+    onPhase,
   } = params
   if (!walletIsUnlockedOrSyncing(walletStatus)) {
     setNetworkMode(targetNetwork)
@@ -132,6 +141,7 @@ async function switchBetweenLiveNetworks(params: {
     previousNetwork,
     addressType,
     accountId,
+    onPhase,
   })
 }
 
@@ -149,6 +159,9 @@ export function NetworkSelector() {
   const [showUnlockForNetworkChange, setShowUnlockForNetworkChange] =
     useState(false)
   const pendingNetworkAfterUnlockRef = useRef<NetworkMode | null>(null)
+  const [switchPhaseMessage, setSwitchPhaseMessage] = useState<string | null>(
+    null,
+  )
 
   const displayNetworkMode = loadedSubWallet?.networkMode ?? networkMode
 
@@ -164,35 +177,46 @@ export function NetworkSelector() {
     if (network === currentMode) return
     const previousNetworkMode = currentMode
 
-    if (network === 'lab') {
-      await switchToLabNetwork({
-        previousNetworkMode,
-        walletStatus,
-        addressType,
-        accountId,
-      })
-      return
+    const onPhase = (message: string) => {
+      setSwitchPhaseMessage(message)
     }
 
-    if (previousNetworkMode === 'lab') {
-      await switchFromLabNetwork({
+    try {
+      if (network === 'lab') {
+        await switchToLabNetwork({
+          previousNetworkMode,
+          walletStatus,
+          addressType,
+          accountId,
+          onPhase,
+        })
+        return
+      }
+
+      if (previousNetworkMode === 'lab') {
+        await switchFromLabNetwork({
+          setNetworkMode,
+          targetNetwork: network,
+          walletStatus,
+          addressType,
+          accountId,
+          onPhase,
+        })
+        return
+      }
+
+      await switchBetweenLiveNetworks({
         setNetworkMode,
         targetNetwork: network,
+        previousNetwork: previousNetworkMode,
         walletStatus,
         addressType,
         accountId,
+        onPhase,
       })
-      return
+    } finally {
+      setSwitchPhaseMessage(null)
     }
-
-    await switchBetweenLiveNetworks({
-      setNetworkMode,
-      targetNetwork: network,
-      previousNetwork: previousNetworkMode,
-      walletStatus,
-      addressType,
-      accountId,
-    })
   }, [setNetworkMode])
 
   const switchMutation = useMutation({
@@ -219,9 +243,11 @@ export function NetworkSelector() {
 
   const statusLine = useMemo(() => {
     if (bootstrapFetching) return 'Loading wallet…'
-    if (pendingSwitch) return 'Switching network…'
+    if (pendingSwitch) {
+      return switchPhaseMessage ?? 'Switching network…'
+    }
     return null
-  }, [bootstrapFetching, pendingSwitch])
+  }, [bootstrapFetching, pendingSwitch, switchPhaseMessage])
 
   return (
     <div className="space-y-2">
@@ -250,7 +276,7 @@ export function NetworkSelector() {
       {loading && statusLine && (
         <LoadingSpinner
           text={statusLine}
-          className="flex-row items-center justify-start gap-2 py-1 [&_.animate-spin]:h-4 [&_.animate-spin]:w-4"
+          className="flex-row items-start justify-start gap-2 py-1 [&_.animate-spin]:mt-0.5 [&_.animate-spin]:h-4 [&_.animate-spin]:w-4 [&_p]:max-w-[min(100%,28rem)] [&_p]:text-left [&_p]:leading-snug"
         />
       )}
       {displayNetworkMode === 'lab' && (

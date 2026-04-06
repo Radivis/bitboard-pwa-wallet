@@ -13,6 +13,12 @@ import {
   loadWalletHandlingPersistedChainMismatch,
   syncLoadedSubWalletWithEsplora,
 } from '@/lib/wallet-utils'
+import {
+  loadingTargetNetworkMessage,
+  savingPreviousNetworkMessage,
+  syncingTargetNetworkMessage,
+  type NetworkSwitchPhaseReporter,
+} from '@/lib/network-switch-status-messages'
 
 /**
  * Switch the active descriptor wallet to match the new parameters.
@@ -30,6 +36,8 @@ export async function switchDescriptorWallet(params: {
   currentNetworkMode: NetworkMode
   currentAddressType: AddressType
   currentAccountId: number
+  /** Settings UI: reflects save → load → sync so long switches are understandable. */
+  onPhase?: NetworkSwitchPhaseReporter
 }): Promise<void> {
   const {
     targetNetworkMode,
@@ -38,6 +46,7 @@ export async function switchDescriptorWallet(params: {
     currentNetworkMode,
     currentAddressType,
     currentAccountId,
+    onPhase,
   } = params
   const { activeWalletId } = useWalletStore.getState()
   const sessionPassword = useSessionStore.getState().password
@@ -55,6 +64,7 @@ export async function switchDescriptorWallet(params: {
   try {
     try {
       const currentChangeset = await exportChangeset()
+      onPhase?.(savingPreviousNetworkMessage(currentNetworkMode))
       await updateDescriptorWalletChangeset({
         password: sessionPassword,
         walletId: activeWalletId,
@@ -66,6 +76,8 @@ export async function switchDescriptorWallet(params: {
     } catch {
       // No active WASM wallet yet (e.g., first load) -- safe to skip
     }
+
+    onPhase?.(loadingTargetNetworkMessage(targetNetworkMode))
 
     const targetNetwork = toBitcoinNetwork(targetNetworkMode)
     const descriptorWallet = await resolveDescriptorWallet({
@@ -94,6 +106,7 @@ export async function switchDescriptorWallet(params: {
     })
 
     if (targetNetworkMode !== 'lab') {
+      onPhase?.(syncingTargetNetworkMessage(targetNetworkMode))
       setWalletStatus('syncing')
       const fullScanNeeded = !descriptorWallet.fullScanDone
       const syncResult = await syncLoadedSubWalletWithEsplora({
