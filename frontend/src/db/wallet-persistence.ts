@@ -42,23 +42,13 @@ function rowToPayloadBlob(record: {
   }
 }
 
-function rowToMnemonicBlobOrThrow(record: {
+function rowToMnemonicBlob(record: {
   wallet_id: number
-  mnemonic_encrypted_data: Uint8Array | null
-  mnemonic_iv: Uint8Array | null
-  mnemonic_salt: Uint8Array | null
-  mnemonic_kdf_version: number | null
+  mnemonic_encrypted_data: Uint8Array
+  mnemonic_iv: Uint8Array
+  mnemonic_salt: Uint8Array
+  mnemonic_kdf_version: number
 }): EncryptedWalletSecretsBlob {
-  if (
-    record.mnemonic_encrypted_data == null ||
-    record.mnemonic_iv == null ||
-    record.mnemonic_salt == null ||
-    record.mnemonic_kdf_version == null
-  ) {
-    throw new Error(
-      `Wallet ${record.wallet_id} uses an old secrets layout. Clear site data or reset the app database, then create or import wallets again.`,
-    )
-  }
   return {
     ciphertext: record.mnemonic_encrypted_data,
     iv: record.mnemonic_iv,
@@ -94,14 +84,14 @@ export async function getWalletSecretsEncrypted(
 
   return {
     payload: rowToPayloadBlob(record),
-    mnemonic: rowToMnemonicBlobOrThrow(record),
+    mnemonic: rowToMnemonicBlob(record),
   }
 }
 
 export type PutSplitWalletSecretsEncryptedInput = {
   payload: EncryptedWalletSecretsBlob
-  /** When set (including null), updates mnemonic columns; omit to leave them unchanged. */
-  mnemonic?: EncryptedWalletSecretsBlob | null
+  /** When set, updates mnemonic columns; omit to leave them unchanged (payload-only update). */
+  mnemonic?: EncryptedWalletSecretsBlob
 }
 
 /**
@@ -132,19 +122,12 @@ export async function putSplitWalletSecretsEncrypted(
 
   const mnemonicSet =
     blobs.mnemonic !== undefined
-      ? blobs.mnemonic === null
-        ? {
-            mnemonic_encrypted_data: null,
-            mnemonic_iv: null,
-            mnemonic_salt: null,
-            mnemonic_kdf_version: null,
-          }
-        : {
-            mnemonic_encrypted_data: blobs.mnemonic.ciphertext,
-            mnemonic_iv: blobs.mnemonic.iv,
-            mnemonic_salt: blobs.mnemonic.salt,
-            mnemonic_kdf_version: blobs.mnemonic.kdfVersion,
-          }
+      ? {
+          mnemonic_encrypted_data: blobs.mnemonic.ciphertext,
+          mnemonic_iv: blobs.mnemonic.iv,
+          mnemonic_salt: blobs.mnemonic.salt,
+          mnemonic_kdf_version: blobs.mnemonic.kdfVersion,
+        }
       : {}
 
   if (existing) {
@@ -154,7 +137,7 @@ export async function putSplitWalletSecretsEncrypted(
       .where('wallet_secrets_id', '=', existing.wallet_secrets_id)
       .execute()
   } else {
-    if (blobs.mnemonic === undefined || blobs.mnemonic === null) {
+    if (blobs.mnemonic === undefined) {
       throw new Error('New wallet secrets row requires both payload and mnemonic ciphertexts')
     }
     const m = blobs.mnemonic
@@ -176,21 +159,6 @@ export async function putSplitWalletSecretsEncrypted(
       .execute()
   }
 }
-
-/** @deprecated Use {@link putSplitWalletSecretsEncrypted} with payload-only update. */
-export async function putWalletSecretsEncrypted(
-  walletDb: Kysely<Database>,
-  walletId: number,
-  encrypted: EncryptedWalletSecretsBlob,
-): Promise<void> {
-  await putSplitWalletSecretsEncrypted(walletDb, walletId, { payload: encrypted })
-}
-
-export type PutWalletSecretsEncryptedFn = (
-  db: Kysely<Database>,
-  walletId: number,
-  encrypted: EncryptedWalletSecretsBlob,
-) => Promise<void>
 
 /**
  * Inserts a wallet row via the given callback, then persists encrypted secrets (split format).
@@ -286,7 +254,7 @@ export async function loadWalletSecretsPayload(
   if (!record) {
     throw new Error(`Wallet secrets for wallet ${walletId} not found`)
   }
-  rowToMnemonicBlobOrThrow(record)
+  rowToMnemonicBlob(record)
 
   const plaintext = await decryptData(password, {
     ciphertext: record.encrypted_data,
@@ -323,7 +291,7 @@ export async function loadWalletSecrets(
   if (!record) {
     throw new Error(`Wallet secrets for wallet ${walletId} not found`)
   }
-  const mnemonicBlob = rowToMnemonicBlobOrThrow({
+  const mnemonicBlob = rowToMnemonicBlob({
     wallet_id: walletId,
     mnemonic_encrypted_data: record.mnemonic_encrypted_data,
     mnemonic_iv: record.mnemonic_iv,

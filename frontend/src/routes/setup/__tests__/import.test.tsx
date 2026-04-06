@@ -86,7 +86,6 @@ vi.mock('@/db', () => ({
   useWallets: () => ({ data: [], isLoading: false }),
   getDatabase: vi.fn(),
   ensureMigrated: vi.fn().mockResolvedValue(undefined),
-  putWalletSecretsEncrypted: vi.fn().mockResolvedValue(undefined),
   persistNewWalletWithSecrets: vi.fn().mockResolvedValue(1),
   walletKeys: { all: ['wallets'] as const },
 }))
