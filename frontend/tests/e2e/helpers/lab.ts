@@ -2,6 +2,7 @@ import { type Page, expect } from '@playwright/test'
 import type { LabState } from '@/workers/lab-api'
 import { WALLET_OWNER_PREFIX } from '@/lib/lab-utils'
 import { goToWalletTab } from './wallet-nav'
+import { waitForSettingsAddressTypeSwitchComplete } from './settings-waits'
 
 /** Switch to Lab network and SegWit (BIP84) address type. */
 export async function switchToLabAndSegwit(page: Page): Promise<void> {
@@ -18,9 +19,7 @@ export async function switchToLabAndSegwit(page: Page): Promise<void> {
   if (await changeButton.isVisible()) {
     await changeButton.click()
   }
-  await expect(page.getByText(/Lab SegWit sub-wallet loaded/)).toBeVisible({
-    timeout: 15000,
-  })
+  await waitForSettingsAddressTypeSwitchComplete(page)
 
   await goToWalletTab(page, 'Receive')
   await expect(page.getByRole('heading', { name: 'Receive Bitcoin' })).toBeVisible({

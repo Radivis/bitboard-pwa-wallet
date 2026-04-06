@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test'
 import { createWalletViaUI } from './helpers/wallet-setup'
+import { waitForSettingsNetworkSwitchComplete } from './helpers/settings-waits'
 
 test.describe('Settings Page', () => {
   test('settings network switch', async ({ page }) => {
@@ -15,14 +16,10 @@ test.describe('Settings Page', () => {
     await expect(signetButton).toBeVisible()
 
     await signetButton.click()
-    await expect(page.getByText(/Signet Taproot sub-wallet loaded/)).toBeVisible({
-      timeout: 60000,
-    })
+    await waitForSettingsNetworkSwitchComplete(page)
 
     await testnetButton.click()
-    await expect(page.getByText(/Testnet Taproot sub-wallet loaded/)).toBeVisible({
-      timeout: 60000,
-    })
+    await waitForSettingsNetworkSwitchComplete(page)
   })
 
   test('settings address type switch', async ({ page }) => {
@@ -48,9 +45,7 @@ test.describe('Settings Page', () => {
 
     // Switch to Regtest first: HTTP URLs are only valid for regtest (HTTPS required for others)
     await page.getByRole('button', { name: 'Regtest' }).click()
-    await expect(page.getByText(/Regtest Taproot sub-wallet loaded/)).toBeVisible({
-      timeout: 60000,
-    })
+    await waitForSettingsNetworkSwitchComplete(page)
 
     const urlInput = page.getByLabel('Endpoint URL')
     await expect(urlInput).toBeVisible()
