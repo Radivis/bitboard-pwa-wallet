@@ -120,6 +120,12 @@ vi.mock('@/lib/bitcoin-utils', () => ({
   getEsploraUrl: () => 'http://localhost:3002',
 }))
 
+const mockLoadDescriptorWalletAndSync = vi.hoisted(() =>
+  vi.fn().mockResolvedValue(undefined),
+)
+const mockLoadDescriptorWalletWithoutSync = vi.hoisted(() =>
+  vi.fn().mockResolvedValue(undefined),
+)
 vi.mock('@/lib/wallet-utils', () => ({
   saveCustomEsploraUrl: vi.fn().mockResolvedValue(undefined),
   deleteCustomEsploraUrl: vi.fn().mockResolvedValue(undefined),
@@ -127,6 +133,8 @@ vi.mock('@/lib/wallet-utils', () => ({
   syncActiveWalletAndUpdateState: vi.fn().mockResolvedValue(undefined),
   syncLoadedSubWalletWithEsplora: vi.fn().mockResolvedValue('completed'),
   runIncrementalDashboardWalletSync: vi.fn().mockResolvedValue(undefined),
+  loadDescriptorWalletAndSync: mockLoadDescriptorWalletAndSync,
+  loadDescriptorWalletWithoutSync: mockLoadDescriptorWalletWithoutSync,
 }))
 
 const mockResolveDescriptorWallet = vi.hoisted(() =>
@@ -182,6 +190,7 @@ describe('SettingsPage', () => {
     vi.clearAllMocks()
     nearZeroSecurityState.active = false
     mockWalletsState.data = []
+    sessionStoreState.password = 'testpass'
     walletStoreState = {
       activeWalletId: 1,
       walletStatus: 'unlocked',
@@ -237,6 +246,31 @@ describe('SettingsPage', () => {
     await waitFor(() => {
       expect(mockSetNetworkMode).toHaveBeenCalledWith('testnet')
     })
+  })
+
+  it('network selector prompts to unlock when there is no session password and does not change network yet', async () => {
+    walletStoreState.walletStatus = 'locked'
+    sessionStoreState.password = null
+    const user = userEvent.setup()
+    renderWithProviders(<SettingsPage />)
+
+    await user.click(screen.getByRole('button', { name: 'Testnet' }))
+
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Unlock Wallet' })).toBeInTheDocument()
+    expect(mockSetNetworkMode).not.toHaveBeenCalled()
+  })
+
+  it('network selector prompts to unlock when walletStatus is none after reload but session is missing', async () => {
+    walletStoreState.walletStatus = 'none'
+    sessionStoreState.password = null
+    const user = userEvent.setup()
+    renderWithProviders(<SettingsPage />)
+
+    await user.click(screen.getByRole('button', { name: 'Testnet' }))
+
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+    expect(mockSetNetworkMode).not.toHaveBeenCalled()
   })
 
   it('address type selector shows confirmation when wallet exists', async () => {

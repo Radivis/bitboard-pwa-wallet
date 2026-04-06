@@ -27,11 +27,19 @@ interface WalletUnlockProps {
   walletName?: string
   /** When adding a wallet from setup while the session is locked, use setup-specific copy and navigation. */
   variant?: 'default' | 'setup'
+  /**
+   * When set, closing the dialog invokes this instead of navigating away (e.g. inline unlock on Settings).
+   */
+  onDismiss?: () => void
+  /** Called after password unlock and wallet load succeed. */
+  onUnlockSuccess?: () => void
 }
 
 export function WalletUnlock({
   walletName,
   variant = 'default',
+  onDismiss,
+  onUnlockSuccess,
 }: WalletUnlockProps) {
   const [password, setPassword] = useState('')
   const navigate = useNavigate()
@@ -44,6 +52,10 @@ export function WalletUnlock({
   const setSessionPassword = useSessionStore((s) => s.setPassword)
 
   const handleClose = () => {
+    if (onDismiss) {
+      onDismiss()
+      return
+    }
     if (variant === 'setup') {
       navigate({ to: '/setup' })
       return
@@ -81,6 +93,9 @@ export function WalletUnlock({
             ),
         })
       }
+    },
+    onSuccess: () => {
+      onUnlockSuccess?.()
     },
     onError: () => {
       toast.error('Wrong password or corrupted wallet data')

@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import { Link } from '@tanstack/react-router'
 import {
   useWalletStore,
@@ -13,6 +13,8 @@ import { terminateLabWorker } from '@/workers/lab-factory'
 import { switchToLabNetwork } from '@/lib/switch-to-lab-network'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { Button } from '@/components/ui/button'
+import { WalletUnlock } from '@/components/WalletUnlock'
+import { useSessionStore } from '@/stores/sessionStore'
 
 const NETWORK_OPTIONS: NetworkMode[] = [
   'mainnet',
@@ -167,15 +169,22 @@ async function switchBetweenLiveNetworks(params: {
 export function NetworkSelector() {
   const networkMode = useWalletStore((s) => s.networkMode)
   const setNetworkMode = useWalletStore((s) => s.setNetworkMode)
-  const walletStatus = useWalletStore((s) => s.walletStatus)
-  const addressType = useWalletStore((s) => s.addressType)
-  const accountId = useWalletStore((s) => s.accountId)
+  const activeWalletId = useWalletStore((s) => s.activeWalletId)
+  const sessionPassword = useSessionStore((s) => s.password)
   const [switching, setSwitching] = useState(false)
+  const [showUnlockForNetworkChange, setShowUnlockForNetworkChange] =
+    useState(false)
+  const pendingNetworkAfterUnlockRef = useRef<NetworkMode | null>(null)
 
-  const handleNetworkChange = useCallback(
+  const runNetworkChange = useCallback(
     async (network: NetworkMode) => {
-      if (network === networkMode) return
-      const previousNetworkMode = networkMode
+      const currentMode = useWalletStore.getState().networkMode
+      const walletStatus = useWalletStore.getState().walletStatus
+      const addressType = useWalletStore.getState().addressType
+      const accountId = useWalletStore.getState().accountId
+
+      if (network === currentMode) return
+      const previousNetworkMode = currentMode
 
       if (network === 'lab') {
         await switchToLabNetwork({
@@ -211,7 +220,24 @@ export function NetworkSelector() {
         accountId,
       })
     },
-    [networkMode, setNetworkMode, walletStatus, addressType, accountId],
+    [setNetworkMode],
+  )
+
+  const handleNetworkChange = useCallback(
+    async (network: NetworkMode) => {
+      if (network === networkMode) return
+
+      // No persisted session: walletStatus may be `locked` after autolock or `none` after
+      // reload — both mean we cannot run switchDescriptorWallet until the user unlocks.
+      if (activeWalletId !== null && sessionPassword === null) {
+        pendingNetworkAfterUnlockRef.current = network
+        setShowUnlockForNetworkChange(true)
+        return
+      }
+
+      await runNetworkChange(network)
+    },
+    [networkMode, activeWalletId, sessionPassword, runNetworkChange],
   )
 
   return (
@@ -252,6 +278,21 @@ export function NetworkSelector() {
             </Link>
           </InfomodeWrapper>
         </div>
+      )}
+
+      {showUnlockForNetworkChange && (
+        <WalletUnlock
+          onDismiss={() => {
+            pendingNetworkAfterUnlockRef.current = null
+            setShowUnlockForNetworkChange(false)
+          }}
+          onUnlockSuccess={() => {
+            const target = pendingNetworkAfterUnlockRef.current
+            pendingNetworkAfterUnlockRef.current = null
+            setShowUnlockForNetworkChange(false)
+            if (target) void runNetworkChange(target)
+          }}
+        />
       )}
     </div>
   )
