@@ -84,6 +84,7 @@ jobs:
         run: |
           cd crypto && wasm-pack build --target bundler --out-dir ../frontend/src/wasm-pkg
           cd ../bitboard-encryption && wasm-pack build --target bundler --out-dir ../frontend/src/wasm-pkg/bitboard_encryption
+          cd ../bitboard-lightning && wasm-pack build --target bundler --out-dir ../frontend/src/wasm-pkg/bitboard_lightning
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
