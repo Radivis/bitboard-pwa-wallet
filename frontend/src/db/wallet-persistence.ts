@@ -2,6 +2,7 @@ import { sql, type Kysely } from 'kysely'
 import type { Database } from './schema'
 import type { KdfVersion } from './schema'
 import { encryptData, decryptData } from './encryption'
+import { trackWalletSecretsWrite } from '@/db/wallet-secrets-write-tracker'
 import {
   assembleWalletSecrets,
   parseWalletPayloadJson,
@@ -241,7 +242,7 @@ function walletSecretsConflictError(maxRetries: number): Error {
   )
 }
 
-export async function updateWalletSecretsPayloadWithRetry(params: {
+async function updateWalletSecretsPayloadWithRetryImpl(params: {
   walletDb: Kysely<Database>
   walletId: number
   password: string
@@ -283,7 +284,19 @@ export async function updateWalletSecretsPayloadWithRetry(params: {
   throw walletSecretsConflictError(maxRetries)
 }
 
-export async function updateWalletSecretsEncryptedPayloadWithRetry(params: {
+export function updateWalletSecretsPayloadWithRetry(params: {
+  walletDb: Kysely<Database>
+  walletId: number
+  password: string
+  transform: (
+    payload: WalletSecretsPayload,
+  ) => WalletSecretsPayload | Promise<WalletSecretsPayload>
+  maxRetries?: number
+}): Promise<void> {
+  return trackWalletSecretsWrite(updateWalletSecretsPayloadWithRetryImpl(params))
+}
+
+async function updateWalletSecretsEncryptedPayloadWithRetryImpl(params: {
   walletDb: Kysely<Database>
   walletId: number
   transform: (
@@ -311,6 +324,19 @@ export async function updateWalletSecretsEncryptedPayloadWithRetry(params: {
     logWalletSecretsConflictRetry(attempt, maxRetries)
   }
   throw walletSecretsConflictError(maxRetries)
+}
+
+export function updateWalletSecretsEncryptedPayloadWithRetry(params: {
+  walletDb: Kysely<Database>
+  walletId: number
+  transform: (
+    payload: EncryptedWalletSecretsBlob,
+  ) => EncryptedWalletSecretsBlob | Promise<EncryptedWalletSecretsBlob>
+  maxRetries?: number
+}): Promise<void> {
+  return trackWalletSecretsWrite(
+    updateWalletSecretsEncryptedPayloadWithRetryImpl(params),
+  )
 }
 
 /**

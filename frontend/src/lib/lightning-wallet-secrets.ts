@@ -1,5 +1,6 @@
 import { getDatabase } from '@/db/database'
 import {
+  loadWalletSecretsPayload,
   updateWalletSecretsPayloadWithRetry,
 } from '@/db/wallet-persistence'
 import type {

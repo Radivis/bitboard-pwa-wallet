@@ -10,6 +10,7 @@ import { useWalletStore } from '@/stores/walletStore';
 import { useLightningStore } from '@/stores/lightningStore';
 import { useSessionStore, clearAutoLockTimer } from '@/stores/sessionStore';
 import { resetSecretsChannel } from '@/workers/secrets-channel';
+import { awaitInFlightWalletSecretsWrites } from '@/db/wallet-secrets-write-tracker';
 import type { Remote } from 'comlink';
 import type {
   CryptoService,
@@ -100,7 +101,7 @@ interface CryptoState {
 
   generateNodeId: (seed: Uint8Array) => Promise<NodeInfo>;
 
-  lockAndPurgeSensitiveRuntimeState: () => void;
+  lockAndPurgeSensitiveRuntimeState: () => Promise<void>;
   terminateWorker: () => void;
 }
 
@@ -204,14 +205,15 @@ export const useCryptoStore = create<CryptoState>((set, get) => {
     generateNodeId: (seed) =>
       withErrorHandling((worker) => worker.generateNodeId(seed)),
 
-    lockAndPurgeSensitiveRuntimeState: () => {
+    lockAndPurgeSensitiveRuntimeState: async () => {
+      clearAutoLockTimer();
+      await awaitInFlightWalletSecretsWrites();
       useWalletStore.getState().lockWallet();
       useLightningStore.getState().purgeLightningConnectionsFromMemory();
       removeLightningConnectionsHydrationQueries();
       terminateCryptoWorker();
       resetSecretsChannel();
       useSessionStore.getState().clear();
-      clearAutoLockTimer();
       set({ _worker: null, error: null, workerHealth: 'initializing', workerError: null });
     },
 

@@ -21,17 +21,24 @@ export const useSessionStore = create<SessionState>((set) => ({
 
 let autoLockTimer: ReturnType<typeof setTimeout> | null = null
 
-export function startAutoLockTimer(onLock: () => void) {
+export function startAutoLockTimer(onLock: () => void | Promise<void>) {
   resetAutoLockTimer(onLock)
 }
 
-export function resetAutoLockTimer(onLock: () => void) {
+export function resetAutoLockTimer(onLock: () => void | Promise<void>) {
   if (autoLockTimer) {
     clearTimeout(autoLockTimer)
   }
   autoLockTimer = setTimeout(() => {
-    useSessionStore.getState().clear()
-    onLock()
+    void (async () => {
+      try {
+        await Promise.resolve(onLock())
+      } catch (err) {
+        console.error('[session] auto-lock handler failed', err)
+      } finally {
+        useSessionStore.getState().clear()
+      }
+    })()
   }, AUTO_LOCK_TIMEOUT_MS)
 }
 

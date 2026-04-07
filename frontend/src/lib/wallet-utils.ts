@@ -305,9 +305,9 @@ export async function loadDescriptorWalletWithoutSync(params: {
   setWalletStatus('unlocked')
 
   const { startAutoLockTimer } = await import('@/stores/sessionStore')
-  startAutoLockTimer(() => {
-    useCryptoStore.getState().lockAndPurgeSensitiveRuntimeState()
-  })
+  startAutoLockTimer(() =>
+    useCryptoStore.getState().lockAndPurgeSensitiveRuntimeState(),
+  )
 }
 
 /**
@@ -368,9 +368,9 @@ export async function loadDescriptorWalletAndSync(params: {
   setWalletStatus('unlocked')
 
   const { startAutoLockTimer } = await import('@/stores/sessionStore')
-  startAutoLockTimer(() => {
-    useCryptoStore.getState().lockAndPurgeSensitiveRuntimeState()
-  })
+  startAutoLockTimer(() =>
+    useCryptoStore.getState().lockAndPurgeSensitiveRuntimeState(),
+  )
 
   try {
     await syncActiveWalletAndUpdateState(networkMode, { useFullScan: true })
