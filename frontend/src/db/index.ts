@@ -16,6 +16,7 @@ export {
   useLibraryFavorites,
   useSetArticleFavorite,
   useLibraryHistory,
+  useWalletNoMnemonicBackupFlag,
 } from './hooks'
 export { walletKeys, libraryKeys } from './query-keys'
 export type {
@@ -56,6 +57,12 @@ export {
   listWalletIdsWithSecrets,
   reencryptAllWalletSecretsWithNewPassword,
 } from './wallet-persistence'
+export {
+  setWalletNoMnemonicBackupFlag,
+  clearWalletNoMnemonicBackupFlag,
+  walletHasNoMnemonicBackupFlag,
+  noMnemonicBackupSettingsKey,
+} from './no-mnemonic-backup-settings'
 export {
   NEAR_ZERO_WRAPPER_PASSWORD,
   NEAR_ZERO_SETTINGS_KEY_ACTIVE,

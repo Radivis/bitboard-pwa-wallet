@@ -18,6 +18,7 @@ import {
 import { InfomodeToggle } from '@/components/infomode/InfomodeToggle'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { NearZeroSecurityBanner } from '@/components/NearZeroSecurityBanner'
+import { NoMnemonicBackupBanner } from '@/components/NoMnemonicBackupBanner'
 import { useWallet } from '@/db'
 import { useWalletStore } from '@/stores/walletStore'
 import { useSessionStore } from '@/stores/sessionStore'
@@ -350,6 +351,7 @@ export function WalletLayout({ children }: WalletLayoutProps) {
       </header>
 
       <NearZeroSecurityBanner />
+      <NoMnemonicBackupBanner />
 
       <main
         className={cn(

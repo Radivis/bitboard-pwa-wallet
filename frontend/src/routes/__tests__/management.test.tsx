@@ -57,6 +57,10 @@ vi.mock('@/stores/sessionStore', () => ({
   clearAutoLockTimer: vi.fn(),
 }))
 
+const managementDbMocks = vi.hoisted(() => ({
+  noMnemonicBackupFlag: false,
+}))
+
 vi.mock('@/db', () => ({
   useWallets: () => ({ data: [{ wallet_id: 1, name: 'Test Wallet', created_at: '' }] }),
   useWallet: () => ({
@@ -67,6 +71,9 @@ vi.mock('@/db', () => ({
     mutateAsync: vi.fn().mockResolvedValue(undefined),
     isPending: false,
   }),
+  useWalletNoMnemonicBackupFlag: () => ({
+    data: managementDbMocks.noMnemonicBackupFlag,
+  }),
 }))
 
 import { ManagementPage } from '../wallet/management'
@@ -74,6 +81,7 @@ import { ManagementPage } from '../wallet/management'
 describe('ManagementPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    managementDbMocks.noMnemonicBackupFlag = false
     walletStoreState = {
       activeWalletId: 1,
       walletStatus: 'unlocked',
@@ -99,6 +107,14 @@ describe('ManagementPage', () => {
   it('shows seed phrase backup when a wallet is active', () => {
     renderWithProviders(<ManagementPage />)
     expect(screen.getByText('Seed Phrase Backup')).toBeInTheDocument()
+  })
+
+  it('shows stressed backup warning when no mnemonic backup flag is set', () => {
+    managementDbMocks.noMnemonicBackupFlag = true
+    renderWithProviders(<ManagementPage />)
+    expect(
+      screen.getByText(/No backup of the seed phrase has been recorded for this wallet/i),
+    ).toBeInTheDocument()
   })
 
   it('show seed phrase opens password dialog', async () => {
