@@ -1,8 +1,7 @@
 import { getDatabase } from '@/db/database'
-import { encryptData } from '@/db/encryption'
 import {
   loadWalletSecretsPayload,
-  putSplitWalletSecretsEncrypted,
+  updateWalletSecretsPayloadWithRetry,
 } from '@/db/wallet-persistence'
 import type { LightningPayment } from '@/lib/lightning-backend-service'
 import { capLightningPaymentsForSnapshot } from '@/lib/lightning-snapshot-payload'
@@ -52,16 +51,6 @@ export function lightningNwcConnectionIdsFingerprint(
   return [...connections.map((c) => c.id)].sort().join('\0')
 }
 
-function sameLightningConnectionSet(
-  left: { id: string }[],
-  right: { id: string }[],
-): boolean {
-  return (
-    lightningNwcConnectionIdsFingerprint(left) ===
-    lightningNwcConnectionIdsFingerprint(right)
-  )
-}
-
 /**
  * Merges snapshot patches into a payload copy (does not read from DB).
  */
@@ -92,31 +81,8 @@ export function applyNwcSnapshotPatchesToPayload(
   }
 }
 
-const BATCH_APPLY_NWC_SNAPSHOT_MAX_RETRIES = 8
-let nwcSnapshotWriteQueue: Promise<void> = Promise.resolve()
-
-async function runInNwcSnapshotWriteQueue<T>(
-  work: () => Promise<T>,
-): Promise<T> {
-  const previous = nwcSnapshotWriteQueue
-  let release: () => void = () => {}
-  nwcSnapshotWriteQueue = new Promise<void>((resolve) => {
-    release = resolve
-  })
-  await previous
-  try {
-    return await work()
-  } finally {
-    release()
-  }
-}
-
 /**
  * Applies snapshot patches in one decrypt + encrypt cycle.
- *
- * Uses a two-phase guard to avoid clobbering concurrent connection-row updates:
- * - A cheap pre-check skips encryption when the payload is already stale.
- * - A pre-write check catches races that occur during encryption.
  */
 export async function batchApplyNwcSnapshotPatches(params: {
   password: string
@@ -126,68 +92,12 @@ export async function batchApplyNwcSnapshotPatches(params: {
   const { password, walletId, patches } = params
   if (patches.length === 0) return
 
-  await runInNwcSnapshotWriteQueue(async () => {
-    const walletDb = getDatabase()
-
-    for (let attempt = 0; attempt < BATCH_APPLY_NWC_SNAPSHOT_MAX_RETRIES; attempt += 1) {
-      const payload = await loadWalletSecretsPayload(walletDb, password, walletId)
-      const latestBeforeEncrypt = await loadWalletSecretsPayload(
-        walletDb,
-        password,
-        walletId,
-      )
-      if (
-        !sameLightningConnectionSet(
-          latestBeforeEncrypt.lightningNwcConnections,
-          payload.lightningNwcConnections,
-        )
-      ) {
-        continue
-      }
-
-      const mergedPayload = applyNwcSnapshotPatchesToPayload(payload, patches)
-      const payloadEnc = await encryptData(
-        password,
-        JSON.stringify(mergedPayload),
-      )
-      const latestBeforeWrite = await loadWalletSecretsPayload(
-        walletDb,
-        password,
-        walletId,
-      )
-      if (
-        !sameLightningConnectionSet(
-          latestBeforeWrite.lightningNwcConnections,
-          payload.lightningNwcConnections,
-        )
-      ) {
-        continue
-      }
-      await putSplitWalletSecretsEncrypted(walletDb, walletId, {
-        payload: {
-          ciphertext: payloadEnc.ciphertext,
-          iv: payloadEnc.iv,
-          salt: payloadEnc.salt,
-          kdfVersion: payloadEnc.kdfVersion,
-        },
-      })
-      return
-    }
-
-    const payload = await loadWalletSecretsPayload(walletDb, password, walletId)
-    const mergedPayload = applyNwcSnapshotPatchesToPayload(payload, patches)
-    const payloadEnc = await encryptData(
-      password,
-      JSON.stringify(mergedPayload),
-    )
-    await putSplitWalletSecretsEncrypted(walletDb, walletId, {
-      payload: {
-        ciphertext: payloadEnc.ciphertext,
-        iv: payloadEnc.iv,
-        salt: payloadEnc.salt,
-        kdfVersion: payloadEnc.kdfVersion,
-      },
-    })
+  await updateWalletSecretsPayloadWithRetry({
+    walletDb: getDatabase(),
+    walletId,
+    password,
+    transform: async (payload) =>
+      applyNwcSnapshotPatchesToPayload(payload, patches),
   })
 }
 

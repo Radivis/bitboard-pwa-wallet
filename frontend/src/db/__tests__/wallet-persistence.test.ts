@@ -29,6 +29,12 @@ import {
   deleteWalletSecrets,
   reencryptAllWalletSecretsWithNewPassword,
   listWalletIdsWithSecrets,
+  getWalletSecretsEncrypted,
+  getWalletSecretsEncryptedWithRevision,
+  putSplitWalletSecretsEncrypted,
+  putSplitWalletSecretsEncryptedIfRevisionMatches,
+  updateWalletSecretsPayloadWithRetry,
+  updateWalletSecretsEncryptedPayloadWithRetry,
 } from '../wallet-persistence'
 
 describe('Wallet Persistence with Encryption', () => {
@@ -338,6 +344,121 @@ describe('Wallet Persistence with Encryption', () => {
           newPassword: newPass,
         }),
       ).rejects.toThrow(/no wallet secrets/i)
+    })
+  })
+
+  describe('CAS revision guardrails', () => {
+    it('starts at revision 0 and increments on each write', async () => {
+      await saveWalletSecrets({
+        walletDb,
+        password,
+        walletId,
+        secrets: sampleSecrets,
+      })
+
+      let row = await getWalletSecretsEncryptedWithRevision(walletDb, walletId)
+      expect(row.revision).toBe(0)
+
+      await saveWalletSecrets({
+        walletDb,
+        password,
+        walletId,
+        secrets: { ...sampleSecrets, mnemonic: 'different mnemonic words here' },
+      })
+      row = await getWalletSecretsEncryptedWithRevision(walletDb, walletId)
+      expect(row.revision).toBe(1)
+    })
+
+    it('rejects stale expected revision in CAS write', async () => {
+      await saveWalletSecrets({
+        walletDb,
+        password,
+        walletId,
+        secrets: sampleSecrets,
+      })
+      const current = await getWalletSecretsEncryptedWithRevision(walletDb, walletId)
+      await putSplitWalletSecretsEncrypted(walletDb, walletId, {
+        payload: current.payload,
+      })
+
+      const staleWriteResult = await putSplitWalletSecretsEncryptedIfRevisionMatches(
+        walletDb,
+        walletId,
+        { payload: current.payload },
+        current.revision,
+      )
+      expect(staleWriteResult).toBe(false)
+    })
+
+    it('retries payload update when revision changes during transform', async () => {
+      await saveWalletSecrets({
+        walletDb,
+        password,
+        walletId,
+        secrets: sampleSecrets,
+      })
+
+      let injectedConflict = false
+      await updateWalletSecretsPayloadWithRetry({
+        walletDb,
+        walletId,
+        password,
+        transform: async (payload) => {
+          if (!injectedConflict) {
+            injectedConflict = true
+            const current = await getWalletSecretsEncrypted(walletDb, walletId)
+            await putSplitWalletSecretsEncrypted(walletDb, walletId, {
+              payload: current.payload,
+            })
+          }
+          return {
+            ...payload,
+            lightningNwcConnections: [
+              {
+                id: 'c1',
+                label: 'Conn 1',
+                networkMode: 'signet',
+                connectionString:
+                  'nostr+walletconnect://abc?relay=wss%3A%2F%2Frelay.example.com',
+                createdAt: '2020-01-01T00:00:00.000Z',
+              },
+            ],
+          }
+        },
+      })
+
+      const loaded = await loadWalletSecretsPayload(walletDb, password, walletId)
+      expect(loaded.lightningNwcConnections).toHaveLength(1)
+      expect(loaded.lightningNwcConnections[0].id).toBe('c1')
+      const withRevision = await getWalletSecretsEncryptedWithRevision(walletDb, walletId)
+      expect(withRevision.revision).toBeGreaterThanOrEqual(2)
+    })
+
+    it('retries encrypted-payload update when revision changes before CAS write', async () => {
+      await saveWalletSecrets({
+        walletDb,
+        password,
+        walletId,
+        secrets: sampleSecrets,
+      })
+
+      let injectedConflict = false
+      await updateWalletSecretsEncryptedPayloadWithRetry({
+        walletDb,
+        walletId,
+        transform: async (payloadBlob) => {
+          if (!injectedConflict) {
+            injectedConflict = true
+            await putSplitWalletSecretsEncrypted(walletDb, walletId, {
+              payload: payloadBlob,
+            })
+          }
+          return payloadBlob
+        },
+      })
+
+      const withRevision = await getWalletSecretsEncryptedWithRevision(walletDb, walletId)
+      expect(withRevision.revision).toBeGreaterThanOrEqual(2)
     })
   })
 })

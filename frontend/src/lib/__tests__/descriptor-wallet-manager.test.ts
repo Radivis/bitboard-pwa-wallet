@@ -396,7 +396,22 @@ describe('updateDescriptorWalletChangeset', () => {
         fullScanDone: false,
       },
     ],
-    lightningNwcConnections: [],
+    lightningNwcConnections: [
+      {
+        id: 'conn-1',
+        label: 'LN',
+        networkMode: 'signet',
+        connectionString:
+          'nostr+walletconnect://abc?relay=wss%3A%2F%2Frelay.example.com',
+        createdAt: '2020-01-01T00:00:00.000Z',
+        nwcSnapshot: {
+          balanceSats: 50,
+          balanceUpdatedAt: '2020-01-01T00:00:00.000Z',
+          payments: [],
+          paymentsUpdatedAt: '2020-01-01T00:00:00.000Z',
+        },
+      },
+    ],
   }
 
   beforeEach(async () => {
@@ -432,6 +447,8 @@ describe('updateDescriptorWalletChangeset', () => {
 
     const loaded = await loadWalletSecrets(testDb, password, walletId)
     expect(loaded.descriptorWallets[0].changeSet).toBe(newChangeset)
+    expect(loaded.lightningNwcConnections).toHaveLength(1)
+    expect(loaded.lightningNwcConnections[0].id).toBe('conn-1')
   })
 
   it('throws when descriptor wallet not found', async () => {

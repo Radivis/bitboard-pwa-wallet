@@ -45,7 +45,12 @@ export {
   loadWalletSecretsPayload,
   deleteWalletSecrets,
   getWalletSecretsEncrypted,
+  getWalletSecretsEncryptedWithRevision,
   putSplitWalletSecretsEncrypted,
+  putSplitWalletSecretsEncryptedIfRevisionMatches,
+  updateWalletSecretsPayloadWithRetry,
+  updateWalletSecretsEncryptedPayloadWithRetry,
+  WALLET_SECRETS_CAS_MAX_RETRIES,
   persistNewWalletWithSecrets,
   listWalletIdsWithSecrets,
   reencryptAllWalletSecretsWithNewPassword,
@@ -68,6 +73,7 @@ export type {
   DescriptorWalletData,
   EncryptedWalletSecretsBlob,
   SplitWalletSecretsEncryptedBlobs,
+  SplitWalletSecretsEncryptedWithRevision,
 } from './wallet-persistence'
 export {
   getLabDatabase,
