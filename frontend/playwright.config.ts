@@ -1,4 +1,9 @@
-import { defineConfig, devices } from '@playwright/test';
+import { defineConfig, devices } from '@playwright/test'
+
+const devServerCommand =
+  process.env.VITE_E2E_NWC_MOCK === 'true'
+    ? 'VITE_E2E_NWC_MOCK=true npm run dev'
+    : 'npm run dev'
 
 export default defineConfig({
   testDir: './tests/e2e',
@@ -20,8 +25,9 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'npm run dev',
+    command: devServerCommand,
     url: 'http://localhost:3000',
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer:
+      !process.env.CI && process.env.VITE_E2E_NWC_MOCK !== 'true',
   },
-});
+})

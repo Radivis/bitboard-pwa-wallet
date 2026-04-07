@@ -34,8 +34,8 @@ export function WalletManagement() {
 
   if (!activeWalletId) return null
 
-  const handleLockWallet = () => {
-    lockAndPurgeSensitiveRuntimeState()
+  const handleLockWallet = async () => {
+    await lockAndPurgeSensitiveRuntimeState()
     toast.success('Wallet locked')
   }
 

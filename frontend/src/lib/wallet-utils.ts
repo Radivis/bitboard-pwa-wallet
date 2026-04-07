@@ -305,14 +305,14 @@ export async function loadDescriptorWalletWithoutSync(params: {
   setWalletStatus('unlocked')
 
   const { startAutoLockTimer } = await import('@/stores/sessionStore')
-  startAutoLockTimer(() => {
-    useCryptoStore.getState().lockAndPurgeSensitiveRuntimeState()
-  })
+  startAutoLockTimer(() =>
+    useCryptoStore.getState().lockAndPurgeSensitiveRuntimeState(),
+  )
 }
 
 /**
  * Resolve descriptor wallet, load into WASM, set current address, start
- * auto-lock timer, and sync. Used by WalletUnlock and AppInitializer.
+ * auto-lock timer, then run Esplora sync (by default in the background after unlock).
  */
 export async function loadDescriptorWalletAndSync(params: {
   password: string
@@ -321,9 +321,22 @@ export async function loadDescriptorWalletAndSync(params: {
   addressType: 'taproot' | 'segwit'
   accountId: number
   onSyncError?: (err: unknown) => void
+  /**
+   * When true, this function resolves only after Esplora sync and changeset persistence finish.
+   * When false (default), unlock completes as soon as WASM is ready; sync cannot block or
+   * fail the returned promise (errors go to `onSyncError` only).
+   */
+  awaitSync?: boolean
 }): Promise<void> {
-  const { password, walletId, networkMode, addressType, accountId, onSyncError } =
-    params
+  const {
+    password,
+    walletId,
+    networkMode,
+    addressType,
+    accountId,
+    onSyncError,
+    awaitSync = false,
+  } = params
   const network = toBitcoinNetwork(networkMode)
   const descriptorWallet = await resolveDescriptorWallet({
     password,
@@ -368,21 +381,29 @@ export async function loadDescriptorWalletAndSync(params: {
   setWalletStatus('unlocked')
 
   const { startAutoLockTimer } = await import('@/stores/sessionStore')
-  startAutoLockTimer(() => {
-    useCryptoStore.getState().lockAndPurgeSensitiveRuntimeState()
-  })
+  startAutoLockTimer(() =>
+    useCryptoStore.getState().lockAndPurgeSensitiveRuntimeState(),
+  )
 
-  try {
-    await syncActiveWalletAndUpdateState(networkMode, { useFullScan: true })
-    invalidateLightningDashboardQueries()
-    const changeset = await exportChangeset()
-    await updateWalletChangeset({
-      password,
-      walletId,
-      changesetJson: changeset,
-      markFullScanDone: true,
-    })
-  } catch (err) {
-    onSyncError?.(err)
+  const runEsploraSyncAndPersistChangeset = async () => {
+    try {
+      await syncActiveWalletAndUpdateState(networkMode, { useFullScan: true })
+      invalidateLightningDashboardQueries()
+      const changeset = await exportChangeset()
+      await updateWalletChangeset({
+        password,
+        walletId,
+        changesetJson: changeset,
+        markFullScanDone: true,
+      })
+    } catch (err) {
+      onSyncError?.(err)
+    }
+  }
+
+  if (awaitSync) {
+    await runEsploraSyncAndPersistChangeset()
+  } else {
+    void runEsploraSyncAndPersistChangeset()
   }
 }

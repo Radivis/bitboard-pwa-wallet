@@ -145,9 +145,9 @@ export function CreateWalletPage() {
         accountId,
       })
       setWalletStatus('unlocked')
-      startAutoLockTimer(() => {
-        useCryptoStore.getState().lockAndPurgeSensitiveRuntimeState()
-      })
+      startAutoLockTimer(() =>
+        useCryptoStore.getState().lockAndPurgeSensitiveRuntimeState(),
+      )
     },
     onSuccess: () => {
       toast.success('Wallet created successfully!')

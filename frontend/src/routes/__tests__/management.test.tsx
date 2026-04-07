@@ -19,7 +19,7 @@ const mockClearSession = vi.fn()
 const mockLockWallet = vi.fn()
 const cryptoStoreState = {
   terminateWorker: mockTerminateWorker,
-  lockAndPurgeSensitiveRuntimeState: () => {
+  lockAndPurgeSensitiveRuntimeState: async () => {
     mockLockWallet()
     mockTerminateWorker()
     mockClearSession()

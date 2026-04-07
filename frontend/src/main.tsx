@@ -1,6 +1,7 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { RouterProvider, createRouter } from '@tanstack/react-router'
+import { registerAppRouter } from '@/lib/app-router'
 import { routeTree } from './routeTree.gen'
 import './index.css'
 
@@ -9,6 +10,7 @@ const router = createRouter({
   defaultPreload: 'intent',
   scrollRestoration: true,
 })
+registerAppRouter(router)
 
 declare module '@tanstack/react-router' {
   interface Register {

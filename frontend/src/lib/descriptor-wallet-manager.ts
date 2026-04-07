@@ -2,7 +2,7 @@ import {
   getDatabase,
   ensureMigrated,
   getWalletSecretsEncrypted,
-  putSplitWalletSecretsEncrypted,
+  updateWalletSecretsEncryptedPayloadWithRetry,
 } from '@/db'
 import type { DescriptorWalletData, EncryptedWalletSecretsBlob, WalletSecrets } from '@/db/wallet-persistence'
 import type { EncryptedBlobForDb } from '@/workers/crypto-api'
@@ -58,8 +58,8 @@ export async function resolveDescriptorWallet(params: {
   await ensureMigrated()
   await ensureSecretsChannel()
   const walletDb = getDatabase()
-  const encryptedBlobs = await getWalletSecretsEncrypted(walletDb, walletId)
   const { resolveDescriptorWallet: workerResolve } = useCryptoStore.getState()
+  const encryptedBlobs = await getWalletSecretsEncrypted(walletDb, walletId)
   const result = await workerResolve({
     password,
     encryptedPayload: encryptedBlobs.payload,
@@ -68,20 +68,19 @@ export async function resolveDescriptorWallet(params: {
     targetAddressType,
     targetAccountId,
   })
-  if (
-    result.encryptedPayloadToStore !== null ||
-    result.encryptedMnemonicToStore !== null
-  ) {
-    const current = await getWalletSecretsEncrypted(walletDb, walletId)
-    await putSplitWalletSecretsEncrypted(walletDb, walletId, {
-      payload:
-        result.encryptedPayloadToStore !== null
-          ? workerBlobToPersistence(result.encryptedPayloadToStore)
-          : current.payload,
-      mnemonic:
-        result.encryptedMnemonicToStore !== null
-          ? workerBlobToPersistence(result.encryptedMnemonicToStore)
-          : undefined,
+  if (result.encryptedMnemonicToStore !== null) {
+    throw new Error(
+      'resolveDescriptorWallet returned mnemonic update, which is unsupported in payload-only CAS writes',
+    )
+  }
+  if (result.encryptedPayloadToStore !== null) {
+    const encryptedPayloadToStore = workerBlobToPersistence(
+      result.encryptedPayloadToStore,
+    )
+    await updateWalletSecretsEncryptedPayloadWithRetry({
+      walletDb,
+      walletId,
+      transform: async () => encryptedPayloadToStore,
     })
   }
   return result.descriptorWalletData
@@ -114,18 +113,21 @@ export async function updateDescriptorWalletChangeset(params: {
   await ensureMigrated()
   await ensureSecretsChannel()
   const walletDb = getDatabase()
-  const { payload } = await getWalletSecretsEncrypted(walletDb, walletId)
   const { updateDescriptorWalletChangeset: workerUpdate } = useCryptoStore.getState()
-  const newEncrypted = await workerUpdate({
-    password,
-    encryptedPayload: payload,
-    network,
-    addressType,
-    accountId,
-    changesetJson,
-    markFullScanDone,
-  })
-  await putSplitWalletSecretsEncrypted(walletDb, walletId, {
-    payload: workerBlobToPersistence(newEncrypted),
+  await updateWalletSecretsEncryptedPayloadWithRetry({
+    walletDb,
+    walletId,
+    transform: async (payload) => {
+      const newEncrypted = await workerUpdate({
+        password,
+        encryptedPayload: payload,
+        network,
+        addressType,
+        accountId,
+        changesetJson,
+        markFullScanDone,
+      })
+      return workerBlobToPersistence(newEncrypted)
+    },
   })
 }

@@ -77,12 +77,12 @@ describe('auto-lock security purge', () => {
     terminateWorker()
   })
 
-  it('auto-lock callback purges worker, secrets channel, and session password', () => {
-    startAutoLockTimer(() => {
-      useCryptoStore.getState().lockAndPurgeSensitiveRuntimeState()
-    })
+  it('auto-lock callback purges worker, secrets channel, and session password', async () => {
+    startAutoLockTimer(() =>
+      useCryptoStore.getState().lockAndPurgeSensitiveRuntimeState(),
+    )
 
-    vi.advanceTimersByTime(15 * 60 * 1000)
+    await vi.advanceTimersByTimeAsync(15 * 60 * 1000)
 
     expect(useSessionStore.getState().password).toBeNull()
     expect(useWalletStore.getState().walletStatus).toBe('locked')

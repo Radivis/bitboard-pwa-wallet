@@ -27,6 +27,7 @@ export async function migrateToLatest(db: Kysely<any>): Promise<void> {
     .ifNotExists()
     .addColumn('wallet_secrets_id', 'integer', (col) => col.primaryKey().autoIncrement())
     .addColumn('wallet_id', 'integer', (col) => col.notNull().unique())
+    .addColumn('revision', 'integer', (col) => col.notNull().defaultTo(0))
     .addColumn('encrypted_data', 'blob', (col) => col.notNull())
     .addColumn('iv', 'blob', (col) => col.notNull())
     .addColumn('salt', 'blob', (col) => col.notNull())
@@ -38,6 +39,19 @@ export async function migrateToLatest(db: Kysely<any>): Promise<void> {
     .addColumn('mnemonic_salt', 'blob', (col) => col.notNull())
     .addColumn('mnemonic_kdf_version', 'integer', (col) => col.notNull())
     .execute()
+
+  // Additive migration for already-existing databases created before `revision`.
+  try {
+    await db.schema
+      .alterTable('wallet_secrets')
+      .addColumn('revision', 'integer', (col) => col.notNull().defaultTo(0))
+      .execute()
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    if (!message.toLowerCase().includes('duplicate column')) {
+      throw error
+    }
+  }
 
   await db.schema
     .createTable('library_history')

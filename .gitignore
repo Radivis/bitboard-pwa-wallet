@@ -17,6 +17,7 @@ lcov.info
 /coverage/
 /target/
 /tests/logs/
+/test-results/
 /frontend/coverage/
 /frontend/test-results/
 /frontend/playwright-report/

@@ -141,9 +141,9 @@ export function ImportWalletPage() {
       })
       setWalletStatus('unlocked')
 
-      startAutoLockTimer(() => {
-        useCryptoStore.getState().lockAndPurgeSensitiveRuntimeState()
-      })
+      startAutoLockTimer(() =>
+        useCryptoStore.getState().lockAndPurgeSensitiveRuntimeState(),
+      )
 
       try {
         const customUrl = await loadCustomEsploraUrl(networkMode)

@@ -2,6 +2,8 @@ import {
   MAX_LIGHTNING_WALLET_LABEL_LENGTH,
   MAX_NWC_CONNECTION_STRING_LENGTH,
 } from '@/lib/lightning-input-limits'
+import type { LightningPayment } from '@/lib/lightning-backend-service'
+import { isLightningPaymentPayload } from '@/lib/lightning-snapshot-payload'
 import type { LightningNetworkMode } from '@/lib/lightning-utils'
 import { LIGHTNING_NETWORK_MODES } from '@/lib/lightning-utils'
 
@@ -21,6 +23,17 @@ export interface DescriptorWalletData {
 }
 
 /**
+ * Cached NWC balance and payment list (encrypted inside wallet secrets).
+ * Fields are grouped: balance pair and/or payments pair may be present.
+ */
+export interface NwcConnectionSnapshot {
+  balanceSats: number
+  balanceUpdatedAt: string
+  payments: LightningPayment[]
+  paymentsUpdatedAt: string
+}
+
+/**
  * NWC connection persisted inside the encrypted wallet secrets blob (not in plain settings).
  * Same fields as UI `ConnectedLightningWallet` minus redundant `walletId`.
  */
@@ -31,6 +44,8 @@ export interface StoredNwcLightningConnection {
   /** Full `nostr+walletconnect://…` URI including secret. */
   connectionString: string
   createdAt: string
+  /** Last successful NWC balance / payment list sync stored in this app (encrypted). */
+  nwcSnapshot?: NwcConnectionSnapshot
 }
 
 /**
@@ -72,11 +87,25 @@ function isLightningNetworkMode(value: unknown): value is LightningNetworkMode {
   )
 }
 
+function isNwcConnectionSnapshot(value: unknown): value is NwcConnectionSnapshot {
+  if (!isRecord(value)) return false
+  return (
+    typeof value.balanceSats === 'number' &&
+    Number.isFinite(value.balanceSats) &&
+    typeof value.balanceUpdatedAt === 'string' &&
+    value.balanceUpdatedAt.length > 0 &&
+    Array.isArray(value.payments) &&
+    value.payments.every((p) => isLightningPaymentPayload(p)) &&
+    typeof value.paymentsUpdatedAt === 'string' &&
+    value.paymentsUpdatedAt.length > 0
+  )
+}
+
 function isStoredNwcLightningConnection(
   value: unknown,
 ): value is StoredNwcLightningConnection {
   if (!isRecord(value)) return false
-  return (
+  const base =
     isNonEmptyString(value.id) &&
     typeof value.label === 'string' &&
     value.label.length <= MAX_LIGHTNING_WALLET_LABEL_LENGTH &&
@@ -85,7 +114,9 @@ function isStoredNwcLightningConnection(
     value.connectionString.length > 0 &&
     value.connectionString.length <= MAX_NWC_CONNECTION_STRING_LENGTH &&
     typeof value.createdAt === 'string'
-  )
+  if (!base) return false
+  if (value.nwcSnapshot === undefined) return true
+  return isNwcConnectionSnapshot(value.nwcSnapshot)
 }
 
 function isDescriptorWalletData(value: unknown): value is DescriptorWalletData {

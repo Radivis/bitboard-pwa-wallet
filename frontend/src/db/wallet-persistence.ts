@@ -1,7 +1,8 @@
-import type { Kysely } from 'kysely'
+import { sql, type Kysely } from 'kysely'
 import type { Database } from './schema'
 import type { KdfVersion } from './schema'
 import { encryptData, decryptData } from './encryption'
+import { trackWalletSecretsWrite } from '@/db/wallet-secrets-write-tracker'
 import {
   assembleWalletSecrets,
   parseWalletPayloadJson,
@@ -27,6 +28,13 @@ export interface SplitWalletSecretsEncryptedBlobs {
   payload: EncryptedWalletSecretsBlob
   mnemonic: EncryptedWalletSecretsBlob
 }
+
+export interface SplitWalletSecretsEncryptedWithRevision
+  extends SplitWalletSecretsEncryptedBlobs {
+  revision: number
+}
+
+export const WALLET_SECRETS_CAS_MAX_RETRIES = 8
 
 function rowToPayloadBlob(record: {
   encrypted_data: Uint8Array
@@ -62,10 +70,23 @@ export async function getWalletSecretsEncrypted(
   walletDb: Kysely<Database>,
   walletId: number
 ): Promise<SplitWalletSecretsEncryptedBlobs> {
+  const withRevision = await getWalletSecretsEncryptedWithRevision(walletDb, walletId)
+  return {
+    payload: withRevision.payload,
+    mnemonic: withRevision.mnemonic,
+  }
+}
+
+/** Reads encrypted wallet secrets plus optimistic-concurrency revision (no decryption). */
+export async function getWalletSecretsEncryptedWithRevision(
+  walletDb: Kysely<Database>,
+  walletId: number
+): Promise<SplitWalletSecretsEncryptedWithRevision> {
   const record = await walletDb
     .selectFrom('wallet_secrets')
     .select([
       'wallet_id',
+      'revision',
       'encrypted_data',
       'iv',
       'salt',
@@ -85,6 +106,7 @@ export async function getWalletSecretsEncrypted(
   return {
     payload: rowToPayloadBlob(record),
     mnemonic: rowToMnemonicBlob(record),
+    revision: record.revision,
   }
 }
 
@@ -108,7 +130,7 @@ export async function putSplitWalletSecretsEncrypted(
   const kdfVersion = blobs.payload.kdfVersion
   const existing = await walletDb
     .selectFrom('wallet_secrets')
-    .select('wallet_secrets_id')
+    .select(['wallet_secrets_id', 'revision'])
     .where('wallet_id', '=', walletId)
     .executeTakeFirst()
 
@@ -133,7 +155,11 @@ export async function putSplitWalletSecretsEncrypted(
   if (existing) {
     await walletDb
       .updateTable('wallet_secrets')
-      .set({ ...baseSet, ...mnemonicSet })
+      .set({
+        ...baseSet,
+        ...mnemonicSet,
+        revision: sql<number>`revision + 1`,
+      })
       .where('wallet_secrets_id', '=', existing.wallet_secrets_id)
       .execute()
   } else {
@@ -145,6 +171,7 @@ export async function putSplitWalletSecretsEncrypted(
       .insertInto('wallet_secrets')
       .values({
         wallet_id: walletId,
+        revision: 0,
         encrypted_data: blobs.payload.ciphertext,
         iv: blobs.payload.iv,
         salt: blobs.payload.salt,
@@ -158,6 +185,158 @@ export async function putSplitWalletSecretsEncrypted(
       })
       .execute()
   }
+}
+
+/**
+ * CAS update for encrypted split blobs.
+ * Returns true when updated, false when revision mismatch (concurrent writer won).
+ */
+export async function putSplitWalletSecretsEncryptedIfRevisionMatches(
+  walletDb: Kysely<Database>,
+  walletId: number,
+  blobs: PutSplitWalletSecretsEncryptedInput,
+  expectedRevision: number,
+): Promise<boolean> {
+  await assertWalletExists(walletDb, walletId)
+  const now = new Date().toISOString()
+  const kdfVersion = blobs.payload.kdfVersion
+  const baseSet = {
+    encrypted_data: blobs.payload.ciphertext,
+    iv: blobs.payload.iv,
+    salt: blobs.payload.salt,
+    kdf_version: kdfVersion,
+    updated_at: now,
+    revision: sql<number>`revision + 1`,
+  }
+  const mnemonicSet =
+    blobs.mnemonic !== undefined
+      ? {
+          mnemonic_encrypted_data: blobs.mnemonic.ciphertext,
+          mnemonic_iv: blobs.mnemonic.iv,
+          mnemonic_salt: blobs.mnemonic.salt,
+          mnemonic_kdf_version: blobs.mnemonic.kdfVersion,
+        }
+      : {}
+
+  const result = await walletDb
+    .updateTable('wallet_secrets')
+    .set({ ...baseSet, ...mnemonicSet })
+    .where('wallet_id', '=', walletId)
+    .where('revision', '=', expectedRevision)
+    .executeTakeFirst()
+  return Number(result.numUpdatedRows) === 1
+}
+
+function logWalletSecretsConflictRetry(attempt: number, maxRetries: number): void {
+  if (import.meta.env.DEV) {
+    console.debug('[wallet-persistence] CAS conflict; retrying', {
+      attempt,
+      maxRetries,
+    })
+  }
+}
+
+function walletSecretsConflictError(maxRetries: number): Error {
+  return new Error(
+    `Failed to update encrypted wallet secrets after ${maxRetries} CAS retries`,
+  )
+}
+
+async function updateWalletSecretsPayloadWithRetryImpl(params: {
+  walletDb: Kysely<Database>
+  walletId: number
+  password: string
+  transform: (
+    payload: WalletSecretsPayload,
+  ) => WalletSecretsPayload | Promise<WalletSecretsPayload>
+  maxRetries?: number
+}): Promise<void> {
+  const {
+    walletDb,
+    walletId,
+    password,
+    transform,
+    maxRetries = WALLET_SECRETS_CAS_MAX_RETRIES,
+  } = params
+
+  for (let attempt = 1; attempt <= maxRetries; attempt += 1) {
+    const current = await getWalletSecretsEncryptedWithRevision(walletDb, walletId)
+    const payloadPlaintext = await decryptData(password, current.payload)
+    const payload = parseWalletPayloadJson(payloadPlaintext)
+    const nextPayload = await transform(payload)
+    const encryptedPayload = await encryptData(password, JSON.stringify(nextPayload))
+    const updated = await putSplitWalletSecretsEncryptedIfRevisionMatches(
+      walletDb,
+      walletId,
+      {
+        payload: {
+          ciphertext: encryptedPayload.ciphertext,
+          iv: encryptedPayload.iv,
+          salt: encryptedPayload.salt,
+          kdfVersion: encryptedPayload.kdfVersion,
+        },
+      },
+      current.revision,
+    )
+    if (updated) return
+    logWalletSecretsConflictRetry(attempt, maxRetries)
+  }
+  throw walletSecretsConflictError(maxRetries)
+}
+
+export function updateWalletSecretsPayloadWithRetry(params: {
+  walletDb: Kysely<Database>
+  walletId: number
+  password: string
+  transform: (
+    payload: WalletSecretsPayload,
+  ) => WalletSecretsPayload | Promise<WalletSecretsPayload>
+  maxRetries?: number
+}): Promise<void> {
+  return trackWalletSecretsWrite(updateWalletSecretsPayloadWithRetryImpl(params))
+}
+
+async function updateWalletSecretsEncryptedPayloadWithRetryImpl(params: {
+  walletDb: Kysely<Database>
+  walletId: number
+  transform: (
+    payload: EncryptedWalletSecretsBlob,
+  ) => EncryptedWalletSecretsBlob | Promise<EncryptedWalletSecretsBlob>
+  maxRetries?: number
+}): Promise<void> {
+  const {
+    walletDb,
+    walletId,
+    transform,
+    maxRetries = WALLET_SECRETS_CAS_MAX_RETRIES,
+  } = params
+
+  for (let attempt = 1; attempt <= maxRetries; attempt += 1) {
+    const current = await getWalletSecretsEncryptedWithRevision(walletDb, walletId)
+    const nextPayload = await transform(current.payload)
+    const updated = await putSplitWalletSecretsEncryptedIfRevisionMatches(
+      walletDb,
+      walletId,
+      { payload: nextPayload },
+      current.revision,
+    )
+    if (updated) return
+    logWalletSecretsConflictRetry(attempt, maxRetries)
+  }
+  throw walletSecretsConflictError(maxRetries)
+}
+
+export function updateWalletSecretsEncryptedPayloadWithRetry(params: {
+  walletDb: Kysely<Database>
+  walletId: number
+  transform: (
+    payload: EncryptedWalletSecretsBlob,
+  ) => EncryptedWalletSecretsBlob | Promise<EncryptedWalletSecretsBlob>
+  maxRetries?: number
+}): Promise<void> {
+  return trackWalletSecretsWrite(
+    updateWalletSecretsEncryptedPayloadWithRetryImpl(params),
+  )
 }
 
 /**

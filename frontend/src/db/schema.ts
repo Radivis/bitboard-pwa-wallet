@@ -31,6 +31,8 @@ export type Setting = Selectable<SettingsTable>
 interface WalletSecretsTable {
   wallet_secrets_id: Generated<number>
   wallet_id: number
+  /** Monotonic row version for optimistic-concurrency writes. */
+  revision: number
   /** Payload ciphertext: JSON of WalletSecretsPayload only. */
   encrypted_data: Uint8Array
   iv: Uint8Array

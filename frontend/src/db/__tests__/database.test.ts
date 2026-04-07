@@ -87,6 +87,7 @@ describe('SQLite Database', () => {
           const walletId = Number(result.insertId)
           await trx.insertInto('wallet_secrets').values({
             wallet_id: walletId,
+            revision: 0,
             encrypted_data: new Uint8Array(0),
             iv: new Uint8Array(12),
             salt: new Uint8Array(16),

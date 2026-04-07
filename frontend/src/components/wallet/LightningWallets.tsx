@@ -49,7 +49,12 @@ function WalletRow({
   onSetActive: () => void
   onRemove: () => void
 }) {
-  const balanceQuery = useLnWalletBalanceQuery(wallet.config)
+  const balanceQuery = useLnWalletBalanceQuery({
+    connectionId: wallet.id,
+    walletId: wallet.walletId,
+    networkMode: wallet.networkMode,
+    config: wallet.config,
+  })
   const plausibilityQuery = useLnWalletNetworkPlausibilityQuery(wallet)
   const showNetworkMismatch =
     plausibilityQuery.isSuccess &&
@@ -86,7 +91,7 @@ function WalletRow({
               </Badge>
             )}
           </div>
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <div className="flex flex-col gap-0.5 text-xs text-muted-foreground">
             {balanceQuery.isPending ? (
               <span className="flex items-center gap-1">
                 <Loader2 className="h-3 w-3 animate-spin" />
@@ -95,7 +100,25 @@ function WalletRow({
             ) : balanceQuery.isError ? (
               <span className="text-destructive">Connection error</span>
             ) : (
-              <span>{balanceQuery.data.balanceSats.toLocaleString()} sats</span>
+              <>
+                <span>
+                  {balanceQuery.data.balanceSats.toLocaleString()} sats
+                  {balanceQuery.data.isStaleBalance ? (
+                    <span className="ml-1.5 text-amber-700 dark:text-amber-400">
+                      (cached)
+                    </span>
+                  ) : null}
+                </span>
+                {balanceQuery.data.isStaleBalance &&
+                  balanceQuery.data.balanceSnapshotAt != null && (
+                    <span className="text-[11px] text-amber-700/90 dark:text-amber-400/90">
+                      Last saved in this app:{' '}
+                      {new Date(
+                        balanceQuery.data.balanceSnapshotAt,
+                      ).toLocaleString()}
+                    </span>
+                  )}
+              </>
             )}
           </div>
         </button>

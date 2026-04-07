@@ -109,6 +109,7 @@ jobs:
         run: npx playwright test
         env:
           CI: true
+          VITE_E2E_NWC_MOCK: "true"
 
       - name: Upload Playwright report (on failure)
         if: failure()

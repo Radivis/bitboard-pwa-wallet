@@ -87,6 +87,7 @@ export function WalletUnlock({
           networkMode,
           addressType,
           accountId,
+          awaitSync: false,
           onSyncError: (err) =>
             toast.error(
               errorMessage(err) || 'Sync failed — wallet unlocked but data may be stale',

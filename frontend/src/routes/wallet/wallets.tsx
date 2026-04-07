@@ -3,6 +3,7 @@ import { Wallet } from 'lucide-react'
 import { useWallets } from '@/db'
 import { useWalletStore } from '@/stores/walletStore'
 import { removeLightningConnectionsHydrationQueries } from '@/lib/lightning-connections-hydration'
+import { awaitInFlightWalletSecretsWrites } from '@/db/wallet-secrets-write-tracker'
 import { useLightningStore } from '@/stores/lightningStore'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
@@ -17,7 +18,8 @@ function WalletsPage() {
   const setActiveWallet = useWalletStore((s) => s.setActiveWallet)
   const lockWallet = useWalletStore((s) => s.lockWallet)
 
-  const handleSelectWallet = (walletId: number) => {
+  const handleSelectWallet = async (walletId: number) => {
+    await awaitInFlightWalletSecretsWrites()
     useLightningStore.getState().purgeLightningConnectionsFromMemory()
     removeLightningConnectionsHydrationQueries()
     lockWallet()

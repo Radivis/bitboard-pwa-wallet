@@ -11,7 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { WalletUnlock } from '@/components/WalletUnlock'
+import { WalletUnlockOrNearZeroLoading } from '@/components/WalletUnlockOrNearZeroLoading'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { NETWORK_LABELS, useWalletStore } from '@/stores/walletStore'
 import { useSendStore } from '@/stores/sendStore'
@@ -58,7 +58,7 @@ export function SendPage() {
   }
 
   if (walletStatus !== 'unlocked' && walletStatus !== 'syncing') {
-    return <WalletUnlock />
+    return <WalletUnlockOrNearZeroLoading />
   }
 
   return <SendFlow />

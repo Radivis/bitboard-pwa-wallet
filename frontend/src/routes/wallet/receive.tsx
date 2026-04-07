@@ -8,7 +8,7 @@ import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { WalletUnlock } from '@/components/WalletUnlock'
+import { WalletUnlockOrNearZeroLoading } from '@/components/WalletUnlockOrNearZeroLoading'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { useWalletStore } from '@/stores/walletStore'
 import { useSessionStore } from '@/stores/sessionStore'
@@ -90,7 +90,7 @@ export function ReceivePage() {
   }
 
   if (walletStatus !== 'unlocked' && walletStatus !== 'syncing') {
-    return <WalletUnlock />
+    return <WalletUnlockOrNearZeroLoading />
   }
 
   if (showLightningToggle && receiveMode === 'lightning') {

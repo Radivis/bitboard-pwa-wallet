@@ -60,6 +60,8 @@ export function selectCommittedAddressType(s: {
 
 interface TransientWalletState {
   walletStatus: WalletStatus
+  /** True while TanStack active-wallet bootstrap `queryFn` runs; keeps the query enabled after status flips to unlocked mid-load. */
+  activeWalletBootstrapInFlight: boolean
   balance: BalanceInfo | null
   currentAddress: string | null
   lastSyncTime: Date | null
@@ -79,6 +81,7 @@ interface WalletActions {
   setCurrentAddress: (address: string | null) => void
   setLastSyncTime: (time: Date | null) => void
   setTransactions: (txs: TransactionDetails[]) => void
+  setActiveWalletBootstrapInFlight: (inFlight: boolean) => void
   lockWallet: () => void
   resetWallet: () => void
 }
@@ -87,6 +90,7 @@ type WalletState = PersistedWalletState & TransientWalletState & WalletActions
 
 const TRANSIENT_DEFAULTS: TransientWalletState = {
   walletStatus: 'none',
+  activeWalletBootstrapInFlight: false,
   balance: null,
   currentAddress: null,
   lastSyncTime: null,
@@ -120,6 +124,8 @@ export const useWalletStore = create<WalletState>()(
       setCurrentAddress: (address) => set({ currentAddress: address }),
       setLastSyncTime: (time) => set({ lastSyncTime: time }),
       setTransactions: (txs) => set({ transactions: txs }),
+      setActiveWalletBootstrapInFlight: (inFlight) =>
+        set({ activeWalletBootstrapInFlight: inFlight }),
 
       lockWallet: () =>
         set({ ...TRANSIENT_DEFAULTS, walletStatus: 'locked', loadedSubWallet: null }),

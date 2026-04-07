@@ -36,7 +36,7 @@ const cryptoStoreState = {
   getBalance: mockGetBalance,
   getTransactionList: mockGetTransactionList,
   getCurrentAddress: mockGetCurrentAddress,
-  lockAndPurgeSensitiveRuntimeState: () => {
+  lockAndPurgeSensitiveRuntimeState: async () => {
     mockLockWallet()
     mockTerminateWorker()
     mockClearSession()
