@@ -1,3 +1,5 @@
+import { usePostLockPrivacyRedirectStore } from '@/stores/postLockPrivacyRedirectStore'
+
 /** Registered from `main.tsx` so imperative code (e.g. lock) can navigate without hooks. */
 type AppRouter = {
   readonly state: { location: { pathname: string } }
@@ -17,6 +19,9 @@ export function navigateToLibraryIfOnWalletRoute(): void {
   if (!appRouter) return
   const pathname = appRouter.state.location.pathname
   if (pathname.startsWith('/wallet')) {
+    usePostLockPrivacyRedirectStore
+      .getState()
+      .setPrivacyRedirectFromLock(pathname)
     void appRouter.navigate({ to: '/library/', replace: true })
   }
 }
