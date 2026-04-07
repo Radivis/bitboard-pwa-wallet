@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useLayoutEffect } from 'react'
 import { useLocation } from '@tanstack/react-router'
 import { AlertTriangle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -6,11 +6,12 @@ import { UpgradeFromNearZeroPasswordModal } from '@/components/UpgradeFromNearZe
 import { useSessionStore } from '@/stores/sessionStore'
 import { useNearZeroSecurityStore } from '@/stores/nearZeroSecurityStore'
 
-const SESSION_DISMISS_KEY = 'bitboard_near_zero_banner_dismissed'
+/** Exported for tests; session dismiss is cleared on each visit to `/wallet/receive`. */
+export const NEAR_ZERO_BANNER_SESSION_DISMISS_KEY = 'bitboard_near_zero_banner_dismissed'
 
 function readDismissedFromSessionStorage(): boolean {
   if (typeof sessionStorage === 'undefined') return false
-  return sessionStorage.getItem(SESSION_DISMISS_KEY) === '1'
+  return sessionStorage.getItem(NEAR_ZERO_BANNER_SESSION_DISMISS_KEY) === '1'
 }
 
 /**
@@ -22,6 +23,13 @@ export function NearZeroSecurityBanner() {
   const sessionPassword = useSessionStore((s) => s.password)
   const [dismissed, setDismissed] = useState(readDismissedFromSessionStorage)
   const [upgradeOpen, setUpgradeOpen] = useState(false)
+
+  useLayoutEffect(() => {
+    if (location.pathname !== '/wallet/receive') return
+    if (typeof sessionStorage === 'undefined') return
+    sessionStorage.removeItem(NEAR_ZERO_BANNER_SESSION_DISMISS_KEY)
+    setDismissed(false)
+  }, [location.pathname])
 
   if (location.pathname.startsWith('/setup')) {
     return null
@@ -36,7 +44,7 @@ export function NearZeroSecurityBanner() {
   }
 
   const handleDismissLater = () => {
-    sessionStorage.setItem(SESSION_DISMISS_KEY, '1')
+    sessionStorage.setItem(NEAR_ZERO_BANNER_SESSION_DISMISS_KEY, '1')
     setDismissed(true)
   }
 

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useLayoutEffect } from 'react'
 import { Link, useLocation } from '@tanstack/react-router'
 import { AlertTriangle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -6,8 +6,12 @@ import { useWalletNoMnemonicBackupFlag } from '@/db'
 import { useSessionStore } from '@/stores/sessionStore'
 import { useWalletStore } from '@/stores/walletStore'
 
-function sessionDismissKey(walletId: number): string {
+export function noMnemonicBackupBannerSessionDismissKey(walletId: number): string {
   return `bitboard_no_mnemonic_backup_banner_dismissed:${walletId}`
+}
+
+function sessionDismissKey(walletId: number): string {
+  return noMnemonicBackupBannerSessionDismissKey(walletId)
 }
 
 function readDismissedForWallet(walletId: number | null): boolean {
@@ -30,6 +34,13 @@ export function NoMnemonicBackupBanner() {
   useEffect(() => {
     setDismissed(readDismissedForWallet(activeWalletId))
   }, [activeWalletId])
+
+  useLayoutEffect(() => {
+    if (location.pathname !== '/wallet/receive') return
+    if (activeWalletId === null || typeof sessionStorage === 'undefined') return
+    sessionStorage.removeItem(sessionDismissKey(activeWalletId))
+    setDismissed(false)
+  }, [location.pathname, activeWalletId])
 
   if (location.pathname.startsWith('/setup')) {
     return null
