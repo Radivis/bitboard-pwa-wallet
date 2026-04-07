@@ -25,6 +25,9 @@ function isBenignNoWalletLoadedForPersistError(err: unknown): boolean {
  * **Side effect:** After restoring the active sub-wallet, updates `useWalletStore` with the
  * current balance and transaction list from WASM so the UI does not show stale data from the
  * probe loop. Treat this as “probe + refresh active wallet view,” not a pure read.
+ *
+ * If loading mainnet wallets throws, still attempts to reload the committed sub-wallet and
+ * refresh store balance/transactions so the WASM slot is not left on an arbitrary network.
  */
 export async function sumMainnetOnChainSatsForWallet(params: {
   password: string
@@ -44,47 +47,63 @@ export async function sumMainnetOnChainSatsForWallet(params: {
   const { loadWallet, getBalance, exportChangeset, getTransactionList } =
     useCryptoStore.getState()
 
-  try {
-    const currentChangeset = await exportChangeset()
-    await updateDescriptorWalletChangeset({
+  const restoreActiveSubWalletView = async (): Promise<void> => {
+    await loadDescriptorWalletWithoutSync({
       password,
       walletId,
-      network: toBitcoinNetwork(committed.networkMode),
+      networkMode: committed.networkMode,
       addressType: committed.addressType,
       accountId: committed.accountId,
-      changesetJson: currentChangeset,
     })
-  } catch (err) {
-    if (!isBenignNoWalletLoadedForPersistError(err)) {
-      throw err
-    }
+    const restoredBalance = await getBalance()
+    const txs = await getTransactionList()
+    useWalletStore.getState().setBalance(restoredBalance)
+    useWalletStore.getState().setTransactions(txs)
   }
 
   let sum = 0
-  for (const dw of mainnetDescriptors) {
-    await loadWalletHandlingPersistedChainMismatch(loadWallet, {
-      externalDescriptor: dw.externalDescriptor,
-      internalDescriptor: dw.internalDescriptor,
-      network: 'bitcoin',
-      changesetJson: dw.changeSet,
-      useEmptyChain: false,
-    })
-    const balance = await getBalance()
-    sum += balance.total
+  try {
+    try {
+      const currentChangeset = await exportChangeset()
+      await updateDescriptorWalletChangeset({
+        password,
+        walletId,
+        network: toBitcoinNetwork(committed.networkMode),
+        addressType: committed.addressType,
+        accountId: committed.accountId,
+        changesetJson: currentChangeset,
+      })
+    } catch (err) {
+      if (!isBenignNoWalletLoadedForPersistError(err)) {
+        throw err
+      }
+    }
+
+    for (const dw of mainnetDescriptors) {
+      await loadWalletHandlingPersistedChainMismatch(loadWallet, {
+        externalDescriptor: dw.externalDescriptor,
+        internalDescriptor: dw.internalDescriptor,
+        network: 'bitcoin',
+        changesetJson: dw.changeSet,
+        useEmptyChain: false,
+      })
+      const balance = await getBalance()
+      sum += balance.total
+    }
+  } catch (probeErr) {
+    try {
+      await restoreActiveSubWalletView()
+    } catch (restoreErr) {
+      if (import.meta.env.DEV) {
+        console.error(
+          '[mainnet-onchain-balance-probe] Failed to restore wallet view after probe error',
+          restoreErr,
+        )
+      }
+    }
+    throw probeErr
   }
 
-  await loadDescriptorWalletWithoutSync({
-    password,
-    walletId,
-    networkMode: committed.networkMode,
-    addressType: committed.addressType,
-    accountId: committed.accountId,
-  })
-
-  const restoredBalance = await getBalance()
-  const txs = await getTransactionList()
-  useWalletStore.getState().setBalance(restoredBalance)
-  useWalletStore.getState().setTransactions(txs)
-
+  await restoreActiveSubWalletView()
   return sum
 }

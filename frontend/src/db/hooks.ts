@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useWalletStore } from '@/stores/walletStore'
 import { getDatabase, ensureMigrated } from './database'
 import { getAllFavoriteSlugs, setArticleFavorite } from './library-articles'
 import { listLibraryHistory } from './library-history'
@@ -71,6 +72,10 @@ export function useDeleteWallet() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async (id: number) => {
+      const activeWalletId = useWalletStore.getState().activeWalletId
+      if (id !== activeWalletId) {
+        throw new Error('Only the active wallet can be deleted')
+      }
       await ensureMigrated()
       await deleteWalletCompletely(getDatabase(), id)
     },
