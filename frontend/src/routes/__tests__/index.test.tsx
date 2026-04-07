@@ -67,7 +67,7 @@ vi.mock('@/lib/wallet-utils', () => ({
 
 vi.mock('@/hooks/useLightningMutations', () => ({
   useLightningHistoryQuery: () => ({
-    data: [] as unknown[],
+    data: { payments: [] as unknown[], stalePaymentsAsOf: undefined },
     isPending: false,
   }),
   useLightningBalancesForDashboardQuery: () => ({

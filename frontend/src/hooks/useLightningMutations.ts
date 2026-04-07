@@ -15,6 +15,12 @@ import {
   type NwcConnectionConfig,
   type LightningConnectionConfig,
 } from '@/lib/lightning-backend-service'
+import { ensureMigrated } from '@/db/database'
+import { useSessionStore } from '@/stores/sessionStore'
+import {
+  batchApplyNwcSnapshotPatches,
+  loadNwcSnapshotForConnection,
+} from '@/lib/lightning-wallet-snapshot-persistence'
 import {
   fetchEsploraTipBlockHeight,
   getEsploraUrl,
@@ -25,6 +31,7 @@ import {
   DEFAULT_INVOICE_EXPIRY_SECONDS,
   formatSatsCompact,
   isLightningSupported,
+  type LightningNetworkMode,
 } from '@/lib/lightning-utils'
 import { getLightningConnectionsForActiveWallet } from '@/lib/lightning-connection-utils'
 import {
@@ -138,12 +145,58 @@ export function useLightningBalancesForDashboardQuery() {
   })
 }
 
-export function useLnWalletBalanceQuery(config: LightningConnectionConfig) {
+export interface LnWalletBalanceQueryResult {
+  balanceSats: number
+  isStaleBalance?: boolean
+  balanceSnapshotAt?: string
+}
+
+export function useLnWalletBalanceQuery(params: {
+  connectionId: string
+  walletId: number
+  networkMode: LightningNetworkMode
+  config: LightningConnectionConfig
+}) {
+  const { connectionId, walletId, networkMode, config } = params
   return useQuery({
-    queryKey: ['ln-wallet-balance', config],
-    queryFn: async () => {
-      const service = createBackendService(config)
-      return service.getBalance()
+    queryKey: ['ln-wallet-balance', connectionId, walletId, networkMode, config],
+    queryFn: async (): Promise<LnWalletBalanceQueryResult> => {
+      await ensureMigrated()
+      const password = useSessionStore.getState().password
+      try {
+        const service = createBackendService(config)
+        const { balanceSats } = await service.getBalance()
+        const balanceUpdatedAt = new Date().toISOString()
+        if (password != null) {
+          await batchApplyNwcSnapshotPatches({
+            password,
+            walletId,
+            patches: [
+              {
+                connectionId,
+                balance: { balanceSats, balanceUpdatedAt },
+              },
+            ],
+          })
+        }
+        return { balanceSats }
+      } catch (err) {
+        if (password != null) {
+          const snap = await loadNwcSnapshotForConnection({
+            password,
+            walletId,
+            connectionId,
+          })
+          if (snap != null && snap.balanceUpdatedAt.length > 0) {
+            return {
+              balanceSats: snap.balanceSats,
+              isStaleBalance: true,
+              balanceSnapshotAt: snap.balanceUpdatedAt,
+            }
+          }
+        }
+        throw err instanceof Error ? err : new Error('Balance unavailable')
+      }
     },
     staleTime: LN_WALLET_BALANCE_STALE_MS,
     retry: 1,

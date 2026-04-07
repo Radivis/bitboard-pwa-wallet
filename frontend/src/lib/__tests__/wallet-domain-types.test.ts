@@ -31,6 +31,53 @@ describe('parseWalletPayloadJson', () => {
     const p = parseWalletPayloadJson(json)
     expect(p.descriptorWallets).toHaveLength(1)
   })
+
+  it('accepts lightning connection with nwcSnapshot', () => {
+    const t = '2025-01-01T12:00:00.000Z'
+    const json = JSON.stringify({
+      descriptorWallets: [
+        {
+          network: 'testnet',
+          addressType: 'taproot',
+          accountId: 0,
+          externalDescriptor: 'tr(xpub.../0/*)',
+          internalDescriptor: 'tr(xpub.../1/*)',
+          changeSet: '{}',
+          fullScanDone: false,
+        },
+      ],
+      lightningNwcConnections: [
+        {
+          id: 'conn-1',
+          label: 'LN',
+          networkMode: 'signet',
+          connectionString:
+            'nostr+walletconnect://0000000000000000000000000000000000000000000000000000000000000000?relay=wss%3A%2F%2Frelay.example.com',
+          createdAt: t,
+          nwcSnapshot: {
+            balanceSats: 1000,
+            balanceUpdatedAt: t,
+            payments: [
+              {
+                paymentHash: 'ph',
+                pending: false,
+                amountSats: 50,
+                memo: '',
+                timestamp: 1,
+                bolt11: 'lnbc1fake',
+                direction: 'incoming',
+                feesPaidSats: 0,
+              },
+            ],
+            paymentsUpdatedAt: t,
+          },
+        },
+      ],
+    })
+    const p = parseWalletPayloadJson(json)
+    expect(p.lightningNwcConnections[0].nwcSnapshot?.balanceSats).toBe(1000)
+    expect(p.lightningNwcConnections[0].nwcSnapshot?.payments).toHaveLength(1)
+  })
 })
 
 describe('parseWalletSecretsJson', () => {

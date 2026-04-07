@@ -88,6 +88,14 @@ function BalanceCard() {
 
   const lnTotalSats = lnBalancesQuery.data?.totalSats ?? 0
   const lightningBalanceRows = lnBalancesQuery.data?.lightningBalanceRows ?? []
+  const hasStaleLnBalance = lightningBalanceRows.some((r) => r.isStaleBalance)
+  const newestStaleBalanceIso = useMemo(() => {
+    const times = lightningBalanceRows
+      .filter((r) => r.isStaleBalance && r.balanceSnapshotAt != null)
+      .map((r) => r.balanceSnapshotAt as string)
+    if (times.length === 0) return null
+    return times.reduce((a, b) => (a > b ? a : b))
+  }, [lightningBalanceRows])
 
   return (
     <InfomodeWrapper
@@ -190,22 +198,43 @@ function BalanceCard() {
                         {row.label}
                       </span>
                       <span className="shrink-0 tabular-nums text-muted-foreground">
-                        {row.error != null ? (
+                        {row.error != null && !row.isStaleBalance ? (
                           <span className="text-amber-600 dark:text-amber-400">
                             —
                           </span>
                         ) : (
-                          formatSats(row.balanceSats)
+                          <>
+                            {formatSats(row.balanceSats)}
+                            {row.isStaleBalance ? (
+                              <span className="ml-1 text-xs font-normal text-amber-700 dark:text-amber-400">
+                                cached
+                              </span>
+                            ) : null}
+                          </>
                         )}{' '}
                         sats
                       </span>
                     </li>
                   ))}
                 </ul>
+                {hasStaleLnBalance && (
+                  <p className="mt-2 text-xs text-amber-700 dark:text-amber-400">
+                    Showing last known Lightning balance saved in this app (not a
+                    live check). NWC could not be reached.
+                    {newestStaleBalanceIso != null && (
+                      <>
+                        {' '}
+                        Updated:{' '}
+                        {new Date(newestStaleBalanceIso).toLocaleString()}.
+                      </>
+                    )}
+                  </p>
+                )}
                 {lightningBalanceRows.some((r) => r.error != null) && (
                   <p className="mt-2 text-xs text-amber-700 dark:text-amber-400">
-                    Some Lightning wallets could not be reached; totals include
-                    only successful responses.
+                    Some Lightning wallets could not be reached and have no saved
+                    balance yet; those show “—” and are not included in the
+                    total.
                   </p>
                 )}
               </div>
@@ -294,6 +323,9 @@ function RecentTransactions() {
   const displayTransactions =
     networkMode === 'lab' ? labTransactionsForActiveWallet : transactions
 
+  const lnPayments = lnHistoryQuery.data?.payments ?? []
+  const stalePaymentsAsOf = lnHistoryQuery.data?.stalePaymentsAsOf
+
   const mergedActivity = useMemo(() => {
     if (networkMode === 'lab') {
       return []
@@ -306,17 +338,14 @@ function RecentTransactions() {
     ) {
       return mergeAndSortDashboardActivity(transactions, [])
     }
-    return mergeAndSortDashboardActivity(
-      transactions,
-      lnHistoryQuery.data ?? [],
-    )
+    return mergeAndSortDashboardActivity(transactions, lnPayments)
   }, [
     networkMode,
     lightningEnabled,
     activeWalletId,
     hasLnWalletForNetwork,
     transactions,
-    lnHistoryQuery.data,
+    lnPayments,
   ])
 
   if (networkMode === 'lab' && !labChainReady) {
@@ -352,6 +381,17 @@ function RecentTransactions() {
             Loading Lightning activity…
           </p>
         )}
+        {networkMode !== 'lab' &&
+          lightningEnabled &&
+          hasLnWalletForNetwork &&
+          stalePaymentsAsOf != null &&
+          lnPayments.length > 0 && (
+            <p className="mb-3 text-xs text-amber-700 dark:text-amber-400">
+              Some Lightning activity below may be from the last successful sync
+              in this app (NWC unreachable). List saved:{' '}
+              {new Date(stalePaymentsAsOf).toLocaleString()}.
+            </p>
+          )}
         {networkMode !== 'lab' && mergedActivity.length === 0 ? (
           <div className="flex flex-col items-center gap-3 py-8 text-center">
             <div className="rounded-full bg-muted p-3">

@@ -58,9 +58,19 @@ export async function saveLightningConnectionsForWallet(params: {
   const { password, walletId, connections } = params
   const payload = await loadWalletSecretsPayload(getDatabase(), password, walletId)
   const nwcOnly = connections.filter((c) => c.walletId === walletId)
+  const previousById = new Map(
+    payload.lightningNwcConnections.map((c) => [c.id, c] as const),
+  )
   const merged: WalletSecretsPayload = {
     ...payload,
-    lightningNwcConnections: nwcOnly.map(connectedWalletToStored),
+    lightningNwcConnections: nwcOnly.map((c) => {
+      const base = connectedWalletToStored(c)
+      const prev = previousById.get(c.id)
+      if (prev?.nwcSnapshot != null) {
+        return { ...base, nwcSnapshot: prev.nwcSnapshot }
+      }
+      return base
+    }),
   }
   const payloadEnc = await encryptData(password, JSON.stringify(merged))
   await putSplitWalletSecretsEncrypted(getDatabase(), walletId, {
