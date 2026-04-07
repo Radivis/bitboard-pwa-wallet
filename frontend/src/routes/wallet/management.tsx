@@ -1,4 +1,4 @@
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, useNavigate, useSearch } from '@tanstack/react-router'
 import { SlidersHorizontal } from 'lucide-react'
 import { PageHeader } from '@/components/PageHeader'
 import { useWalletStore } from '@/stores/walletStore'
@@ -7,12 +7,22 @@ import { isLightningSupported } from '@/lib/lightning-utils'
 import { WalletManagement } from '@/components/wallet/WalletManagement'
 import { SeedPhraseBackup } from '@/components/wallet/SeedPhraseBackup'
 import { LightningWallets } from '@/components/wallet/LightningWallets'
-
 export const Route = createFileRoute('/wallet/management')({
+  validateSearch: (
+    search: Record<string, unknown>,
+  ): { openDelete?: boolean } => {
+    const raw = search.openDelete
+    if (raw === true || raw === 'true' || raw === 1 || raw === '1') {
+      return { openDelete: true }
+    }
+    return {}
+  },
   component: ManagementPage,
 })
 
 export function ManagementPage() {
+  const navigate = useNavigate({ from: '/wallet/management' })
+  const { openDelete } = useSearch({ from: '/wallet/management' })
   const activeWalletId = useWalletStore((s) => s.activeWalletId)
   const networkMode = useWalletStore((s) => s.networkMode)
   const lightningEnabled = useFeatureStore((s) => s.lightningEnabled)
@@ -24,7 +34,15 @@ export function ManagementPage() {
 
       {activeWalletId ? (
         <>
-          <WalletManagement />
+          <WalletManagement
+            deleteWalletAutoOpen={openDelete === true}
+            onDeleteWalletAutoOpenConsumed={() =>
+              navigate({
+                search: (prev) => ({ ...prev, openDelete: undefined }),
+                replace: true,
+              })
+            }
+          />
           <SeedPhraseBackup />
           {showLightningWallets && <LightningWallets />}
         </>

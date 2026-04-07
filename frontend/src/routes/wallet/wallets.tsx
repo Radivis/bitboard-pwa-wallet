@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import { Wallet } from 'lucide-react'
+import { Trash2, Wallet } from 'lucide-react'
 import { useWallets } from '@/db'
 import { useWalletStore } from '@/stores/walletStore'
 import { removeLightningConnectionsHydrationQueries } from '@/lib/lightning-connections-hydration'
@@ -7,6 +7,7 @@ import { awaitInFlightWalletSecretsWrites } from '@/db/wallet-secrets-write-trac
 import { useLightningStore } from '@/stores/lightningStore'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
+import { Button } from '@/components/ui/button'
 
 export const Route = createFileRoute('/wallet/wallets')({
   component: WalletsPage,
@@ -25,6 +26,21 @@ function WalletsPage() {
     lockWallet()
     setActiveWallet(walletId)
     navigate({ to: '/wallet' })
+  }
+
+  /**
+   * Delete requires this wallet to be active and (for the mainnet check) eventually unlocked.
+   * Reuse the same lock/switch pattern as selecting a wallet, then open Management with
+   * `openDelete` so the delete flow runs there.
+   */
+  const handleDeleteWalletIntent = async (event: React.MouseEvent, walletId: number) => {
+    event.stopPropagation()
+    await awaitInFlightWalletSecretsWrites()
+    useLightningStore.getState().purgeLightningConnectionsFromMemory()
+    removeLightningConnectionsHydrationQueries()
+    lockWallet()
+    setActiveWallet(walletId)
+    navigate({ to: '/wallet/management', search: { openDelete: true } })
   }
 
   if (isLoading) {
@@ -60,6 +76,16 @@ function WalletsPage() {
                 <Wallet className="h-4 w-4" />
                 {wallet.name}
               </CardTitle>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="shrink-0 text-muted-foreground hover:text-destructive"
+                aria-label={`Delete wallet ${wallet.name}`}
+                onClick={(e) => void handleDeleteWalletIntent(e, wallet.wallet_id)}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
             </CardHeader>
             <CardContent>
               <CardDescription>

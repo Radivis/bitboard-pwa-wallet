@@ -46,6 +46,7 @@ export {
   loadWalletSecrets,
   loadWalletSecretsPayload,
   deleteWalletSecrets,
+  deleteWalletCompletely,
   getWalletSecretsEncrypted,
   getWalletSecretsEncryptedWithRevision,
   putSplitWalletSecretsEncrypted,

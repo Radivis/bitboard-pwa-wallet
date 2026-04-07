@@ -10,6 +10,7 @@ import {
   type WalletSecrets,
   type WalletSecretsPayload,
 } from '@/lib/wallet-domain-types'
+import { noMnemonicBackupSettingsKey } from './no-mnemonic-backup-settings'
 
 export type { DescriptorWalletData, WalletSecrets }
 export type { WalletSecretsPayload } from '@/lib/wallet-domain-types'
@@ -502,6 +503,21 @@ export async function deleteWalletSecrets(
   walletId: number,
 ): Promise<void> {
   await walletDb.deleteFrom('wallet_secrets').where('wallet_id', '=', walletId).execute()
+}
+
+/**
+ * Removes encrypted secrets, mnemonic backup flag row, and the wallet row.
+ */
+export async function deleteWalletCompletely(
+  walletDb: Kysely<Database>,
+  walletId: number,
+): Promise<void> {
+  await deleteWalletSecrets(walletDb, walletId)
+  await walletDb
+    .deleteFrom('settings')
+    .where('key', '=', noMnemonicBackupSettingsKey(walletId))
+    .execute()
+  await walletDb.deleteFrom('wallets').where('wallet_id', '=', walletId).execute()
 }
 
 export async function listWalletIdsWithSecrets(

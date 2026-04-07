@@ -74,6 +74,9 @@ interface LightningState {
   /** Clear decrypted NWC material from memory (call on wallet lock). */
   purgeLightningConnectionsFromMemory: () => void
 
+  /** Drop in-memory NWC state for one Bitcoin wallet (e.g. after it was deleted from the DB). */
+  removeLightningStateForWallet: (walletId: number) => void
+
   addConnection: (params: {
     walletId: number
     label: string
@@ -128,6 +131,16 @@ export const useLightningStore = create<LightningState>()(
 
       purgeLightningConnectionsFromMemory: () =>
         set({ connectedWallets: [], activeConnectionIds: {} }),
+
+      removeLightningStateForWallet: (walletId) =>
+        set((s) => {
+          const nextActiveIds = { ...s.activeConnectionIds }
+          delete nextActiveIds[walletId]
+          return {
+            connectedWallets: s.connectedWallets.filter((w) => w.walletId !== walletId),
+            activeConnectionIds: nextActiveIds,
+          }
+        }),
 
       addConnection: async ({ walletId, label, networkMode, config }) => {
         const password = useSessionStore.getState().password

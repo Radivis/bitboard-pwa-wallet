@@ -10,10 +10,19 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { DeleteWalletSection } from '@/components/wallet/DeleteWalletSection'
 
 const MAX_WALLET_NAME_LENGTH = 128
 
-export function WalletManagement() {
+export type WalletManagementProps = {
+  deleteWalletAutoOpen?: boolean
+  onDeleteWalletAutoOpenConsumed?: () => void
+}
+
+export function WalletManagement({
+  deleteWalletAutoOpen = false,
+  onDeleteWalletAutoOpenConsumed,
+}: WalletManagementProps = {}) {
   const navigate = useNavigate()
   const activeWalletId = useWalletStore((s) => s.activeWalletId)
   const walletStatus = useWalletStore((s) => s.walletStatus)
@@ -130,6 +139,10 @@ export function WalletManagement() {
             </InfomodeWrapper>
           )}
         </div>
+        <DeleteWalletSection
+          autoOpenFirstDialog={deleteWalletAutoOpen}
+          onAutoOpenConsumed={onDeleteWalletAutoOpenConsumed}
+        />
       </CardContent>
     </Card>
   )
