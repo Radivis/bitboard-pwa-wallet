@@ -3,17 +3,12 @@ import { useMutation } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import { Lock } from 'lucide-react'
 import { toast } from 'sonner'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
+import { DialogDescription } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
+import { AppModal } from '@/components/AppModal'
 import { useWalletStore } from '@/stores/walletStore'
 import { useSessionStore } from '@/stores/sessionStore'
 import { useWallets } from '@/db'
@@ -104,24 +99,30 @@ export function WalletUnlock({
   })
 
   return (
-    <Dialog open modal onOpenChange={(open) => !open && handleClose()}>
-      <DialogContent
-        className="sm:max-w-md"
-        onInteractOutside={(e) => e.preventDefault()}
-      >
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Lock className="h-5 w-5" />
+    <AppModal
+      open
+      modal
+      onOpenChange={() => {}}
+      onCancel={handleClose}
+      title={
+        <>
+          <Lock className="mt-0.5 h-5 w-5 shrink-0" />
+          <span className="min-w-0">
             {variant === 'setup' ? 'Unlock to continue' : 'Unlock Wallet'}
-          </DialogTitle>
-          <DialogDescription>
-            {variant === 'setup'
-              ? 'Enter your Bitboard app password to unlock an existing wallet before you add or import another.'
-              : walletName
-                ? `Enter your Bitboard app password to unlock "${walletName}".`
-                : 'Enter your Bitboard app password to unlock your wallet.'}
-          </DialogDescription>
-        </DialogHeader>
+          </span>
+        </>
+      }
+      contentClassName="sm:max-w-md"
+      onInteractOutside={(e) => e.preventDefault()}
+    >
+      <>
+        <DialogDescription>
+          {variant === 'setup'
+            ? 'Enter your Bitboard app password to unlock an existing wallet before you add or import another.'
+            : walletName
+              ? `Enter your Bitboard app password to unlock "${walletName}".`
+              : 'Enter your Bitboard app password to unlock your wallet.'}
+        </DialogDescription>
 
         <form
           onSubmit={(e) => {
@@ -157,7 +158,7 @@ export function WalletUnlock({
             </Button>
           )}
         </form>
-      </DialogContent>
-    </Dialog>
+      </>
+    </AppModal>
   )
 }

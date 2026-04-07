@@ -7,14 +7,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
+import { DialogDescription } from '@/components/ui/dialog'
+import { AppModal } from '@/components/AppModal'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { MnemonicGrid } from '@/components/MnemonicGrid'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
@@ -297,42 +291,15 @@ export function CreateWalletPage() {
             onSubmit={() => createWalletMutation.mutate()}
             onOpenSkipBackupWarning={() => setSkipBackupWarningOpen(true)}
           />
-          <Dialog
+          <AppModal
             open={skipBackupWarningOpen}
             onOpenChange={setSkipBackupWarningOpen}
-          >
-            <DialogContent className="sm:max-w-lg">
-              <DialogHeader>
-                <DialogTitle>Quick start without viewing backup</DialogTitle>
-                <DialogDescription asChild>
-                  <div className="space-y-3 text-left text-sm text-foreground">
-                    <p>
-                      This quick start option still creates a seed phrase and
-                      stores it encrypted on this device, but it will not be
-                      shown here. You can view it and back it up later from{' '}
-                      <strong>Wallet → Management</strong> — doing so is
-                      strongly recommended.
-                    </p>
-                    <p>
-                      It is <strong>much safer</strong> to make a backup of the
-                      seed phrase immediately using &quot;Generate &amp;
-                      Continue&quot; instead.
-                    </p>
-                    <p className="font-semibold text-destructive">
-                      If you skip writing down your seed phrase, permanent loss
-                      of funds is highly likely if you lose this device, damage
-                      your data, or forget your Bitboard app password — treat
-                      total loss as the expected outcome.
-                    </p>
-                  </div>
-                </DialogDescription>
-              </DialogHeader>
-              <DialogFooter className="w-full gap-2 sm:!justify-between">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setSkipBackupWarningOpen(false)}
-                >
+            onCancel={() => {}}
+            title="Quick start without viewing backup"
+            contentClassName="sm:max-w-lg"
+            footer={(requestClose) => (
+              <>
+                <Button type="button" variant="outline" onClick={requestClose}>
                   Abort
                 </Button>
                 <Button
@@ -343,9 +310,28 @@ export function CreateWalletPage() {
                 >
                   Understood! Proceed!
                 </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+              </>
+            )}
+          >
+            <DialogDescription asChild>
+              <div className="space-y-3 text-left text-sm text-foreground">
+                <p>
+                  This quick start option still creates a seed phrase and stores it encrypted on this
+                  device, but it will not be shown here. You can view it and back it up later from{' '}
+                  <strong>Wallet → Management</strong> — doing so is strongly recommended.
+                </p>
+                <p>
+                  It is <strong>much safer</strong> to make a backup of the seed phrase immediately
+                  using &quot;Generate &amp; Continue&quot; instead.
+                </p>
+                <p className="font-semibold text-destructive">
+                  If you skip writing down your seed phrase, permanent loss of funds is highly likely
+                  if you lose this device, damage your data, or forget your Bitboard app password —
+                  treat total loss as the expected outcome.
+                </p>
+              </div>
+            </DialogDescription>
+          </AppModal>
         </>
       )}
 

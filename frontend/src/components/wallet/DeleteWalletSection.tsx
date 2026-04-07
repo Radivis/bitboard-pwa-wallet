@@ -9,15 +9,9 @@ import { errorMessage } from '@/lib/utils'
 import { useSessionStore } from '@/stores/sessionStore'
 import { useWalletStore } from '@/stores/walletStore'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
+import { AppModal } from '@/components/AppModal'
 import { Button } from '@/components/ui/button'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
+import { DialogDescription } from '@/components/ui/dialog'
 
 export type DeleteWalletSectionProps = {
   /**
@@ -170,22 +164,19 @@ export function DeleteWalletSection({
         </InfomodeWrapper>
       </div>
 
-      <Dialog open={firstDialogOpen} onOpenChange={setFirstDialogOpen}>
-        <DialogContent showCloseButton={!probingMainnet}>
-          <DialogHeader>
-            <DialogTitle>Delete {walletName}?</DialogTitle>
-            <DialogDescription>
-              This removes the wallet from Bitboard on this device. You cannot undo this. If
-              you might need this wallet again, confirm you have your recovery phrase saved
-              somewhere safe before continuing.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="gap-2 sm:gap-0">
+      <AppModal
+        open={firstDialogOpen}
+        onOpenChange={setFirstDialogOpen}
+        onCancel={() => {}}
+        title={`Delete ${walletName}?`}
+        hideCloseButton={probingMainnet}
+        footer={(requestClose) => (
+          <>
             <Button
               type="button"
               variant="outline"
               disabled={probingMainnet}
-              onClick={() => setFirstDialogOpen(false)}
+              onClick={requestClose}
             >
               Cancel
             </Button>
@@ -197,33 +188,24 @@ export function DeleteWalletSection({
             >
               {probingMainnet ? 'Checking…' : 'Continue'}
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </>
+        )}
+      >
+        <DialogDescription>
+          This removes the wallet from Bitboard on this device. You cannot undo this. If you might
+          need this wallet again, confirm you have your recovery phrase saved somewhere safe before
+          continuing.
+        </DialogDescription>
+      </AppModal>
 
-      <Dialog open={mainnetWarnOpen} onOpenChange={setMainnetWarnOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Mainnet bitcoin may be at risk</DialogTitle>
-            <DialogDescription asChild>
-              <div className="space-y-3 text-sm text-muted-foreground">
-                <p>
-                  This wallet has a non-zero <strong className="text-foreground">mainnet</strong>{' '}
-                  on-chain balance (Lightning / NWC balances are not counted here). Your recovery
-                  phrase is the only way to move those coins again if you remove this wallet from
-                  Bitboard.
-                </p>
-                <p>
-                  If you delete this wallet without a complete, correct backup of your seed
-                  phrase, you can <strong className="text-destructive">permanently lose access</strong>{' '}
-                  to your bitcoin. There is no way for Bitboard or anyone else to recover it for
-                  you.
-                </p>
-              </div>
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="gap-2 sm:gap-0">
-            <Button type="button" variant="outline" onClick={() => setMainnetWarnOpen(false)}>
+      <AppModal
+        open={mainnetWarnOpen}
+        onOpenChange={setMainnetWarnOpen}
+        onCancel={() => {}}
+        title="Mainnet bitcoin may be at risk"
+        footer={(requestClose) => (
+          <>
+            <Button type="button" variant="outline" onClick={requestClose}>
               Cancel
             </Button>
             <Button
@@ -234,45 +216,60 @@ export function DeleteWalletSection({
             >
               I have a backup — delete wallet
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </>
+        )}
+      >
+        <DialogDescription asChild>
+          <div className="space-y-3 text-sm text-muted-foreground">
+            <p>
+              This wallet has a non-zero <strong className="text-foreground">mainnet</strong>{' '}
+              on-chain balance (Lightning / NWC balances are not counted here). Your recovery phrase
+              is the only way to move those coins again if you remove this wallet from Bitboard.
+            </p>
+            <p>
+              If you delete this wallet without a complete, correct backup of your seed phrase, you
+              can <strong className="text-destructive">permanently lose access</strong> to your
+              bitcoin. There is no way for Bitboard or anyone else to recover it for you.
+            </p>
+          </div>
+        </DialogDescription>
+      </AppModal>
 
-      <Dialog open={mainnetBlockedOpen} onOpenChange={setMainnetBlockedOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Cannot delete this wallet</DialogTitle>
-            <DialogDescription asChild>
-              <div className="space-y-3 text-sm text-muted-foreground">
-                <p>
-                  This wallet has a non-zero <strong className="text-foreground">mainnet</strong>{' '}
-                  on-chain balance. Deleting it now would be extremely dangerous because Bitboard
-                  has no record that you have backed up your recovery phrase.
-                </p>
-                <p>
-                  Without that phrase,{' '}
-                  <strong className="text-destructive">
-                    deleting the wallet will permanently destroy your ability to spend or recover
-                    those coins
-                  </strong>
-                  .
-                </p>
-                <p className="font-bold text-foreground">
-                  Deletion cannot proceed while the &quot;no mnemonic backup&quot; flag is set for
-                  this wallet and mainnet funds are present. Use Seed Phrase Backup in Management
-                  to record your recovery phrase first; then you can delete the wallet if you still
-                  want to.
-                </p>
-              </div>
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button type="button" variant="default" onClick={() => setMainnetBlockedOpen(false)}>
-              Understood
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <AppModal
+        open={mainnetBlockedOpen}
+        onOpenChange={setMainnetBlockedOpen}
+        onCancel={() => {}}
+        title="Cannot delete this wallet"
+        footerClassName="justify-end"
+        footer={(requestClose) => (
+          <Button type="button" variant="default" onClick={requestClose}>
+            Understood
+          </Button>
+        )}
+      >
+        <DialogDescription asChild>
+          <div className="space-y-3 text-sm text-muted-foreground">
+            <p>
+              This wallet has a non-zero <strong className="text-foreground">mainnet</strong>{' '}
+              on-chain balance. Deleting it now would be extremely dangerous because Bitboard has no
+              record that you have backed up your recovery phrase.
+            </p>
+            <p>
+              Without that phrase,{' '}
+              <strong className="text-destructive">
+                deleting the wallet will permanently destroy your ability to spend or recover those
+                coins
+              </strong>
+              .
+            </p>
+            <p className="font-bold text-foreground">
+              Deletion cannot proceed while the &quot;no mnemonic backup&quot; flag is set for this
+              wallet and mainnet funds are present. Use Seed Phrase Backup in Management to record
+              your recovery phrase first; then you can delete the wallet if you still want to.
+            </p>
+          </div>
+        </DialogDescription>
+      </AppModal>
     </>
   )
 }

@@ -11,18 +11,13 @@ import {
   useWalletNoMnemonicBackupFlag,
 } from '@/db'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
+import { AppModal } from '@/components/AppModal'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
+import { DialogDescription } from '@/components/ui/dialog'
 import { MnemonicGrid } from '@/components/MnemonicGrid'
 
 export function SeedPhraseBackup() {
@@ -58,10 +53,11 @@ export function SeedPhraseBackup() {
     [activeWalletId, queryClient],
   )
 
-  /** Radix often does not call `onOpenChange` when `open` is set to false from React state (e.g. our Close button). Always run cleanup through this handler for button closes; keep `onOpenChange` for overlay / X / Escape. */
-  const handleCloseMnemonicClick = useCallback(() => {
-    void closeMnemonicDialog(backupConfirmed)
-  }, [backupConfirmed, closeMnemonicDialog])
+  const dismissPasswordPrompt = useCallback(() => {
+    setShowPasswordPrompt(false)
+    setPromptPassword('')
+    setError(null)
+  }, [])
 
   const handleShowSeedPhrase = useCallback(async () => {
     if (!activeWalletId) return
@@ -127,23 +123,17 @@ export function SeedPhraseBackup() {
         </Card>
       </InfomodeWrapper>
 
-      <Dialog
+      <AppModal
         open={showPasswordPrompt}
-        onOpenChange={(open) => {
-          if (!open) {
-            setShowPasswordPrompt(false)
-            setPromptPassword('')
-            setError(null)
-          }
-        }}
+        onOpenChange={() => {}}
+        onCancel={dismissPasswordPrompt}
+        title="Confirm Bitboard app password"
+        contentClassName="sm:max-w-md"
       >
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Confirm Bitboard app password</DialogTitle>
-            <DialogDescription>
-              Enter your Bitboard app password to view your seed phrase.
-            </DialogDescription>
-          </DialogHeader>
+        <>
+          <DialogDescription>
+            Enter your Bitboard app password to view your seed phrase.
+          </DialogDescription>
           <form
             className="space-y-4"
             onSubmit={(e) => {
@@ -174,27 +164,33 @@ export function SeedPhraseBackup() {
               {loading ? 'Decrypting...' : 'Confirm'}
             </Button>
           </form>
-        </DialogContent>
-      </Dialog>
+        </>
+      </AppModal>
 
-      <Dialog
+      <AppModal
         open={showMnemonic}
-        onOpenChange={(open) => {
-          if (!open) {
-            void closeMnemonicDialog(backupConfirmedRef.current)
-          }
+        onOpenChange={() => {}}
+        onCancel={() => {
+          void closeMnemonicDialog(backupConfirmedRef.current)
         }}
+        title={
+          <>
+            <EyeOff className="mt-0.5 h-5 w-5 shrink-0" />
+            <span className="min-w-0">Your Seed Phrase</span>
+          </>
+        }
+        contentClassName="sm:max-w-lg"
+        footerClassName="justify-end"
+        footer={(requestClose) => (
+          <Button variant="outline" onClick={requestClose}>
+            Close
+          </Button>
+        )}
       >
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <EyeOff className="h-5 w-5" />
-              Your Seed Phrase
-            </DialogTitle>
-            <DialogDescription>
-              Never share these words. Anyone with them can access your funds.
-            </DialogDescription>
-          </DialogHeader>
+        <>
+          <DialogDescription>
+            Never share these words. Anyone with them can access your funds.
+          </DialogDescription>
           <MnemonicGrid
             words={mnemonicWords}
             columns={mnemonicWords.length > 12 ? 4 : 3}
@@ -218,11 +214,8 @@ export function SeedPhraseBackup() {
               I have actually made a backup of this seed phrase
             </Label>
           </div>
-          <Button variant="outline" onClick={handleCloseMnemonicClick}>
-            Close
-          </Button>
-        </DialogContent>
-      </Dialog>
+        </>
+      </AppModal>
     </>
   )
 }
