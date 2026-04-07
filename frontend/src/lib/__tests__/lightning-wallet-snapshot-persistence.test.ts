@@ -146,8 +146,8 @@ describe('batchApplyNwcSnapshotPatches concurrent payload', () => {
     vi.clearAllMocks()
   })
 
-  it('retries when lightning connections change after first read (no clobber)', async () => {
-    const emptyLn: WalletSecretsPayload = {
+  function buildBasePayload(): WalletSecretsPayload {
+    return {
       descriptorWallets: [
         {
           network: 'testnet',
@@ -161,6 +161,10 @@ describe('batchApplyNwcSnapshotPatches concurrent payload', () => {
       ],
       lightningNwcConnections: [],
     }
+  }
+
+  it('retries when lightning connections change after first read (no clobber)', async () => {
+    const emptyLn = buildBasePayload()
     const withConn: WalletSecretsPayload = {
       ...emptyLn,
       lightningNwcConnections: [
@@ -196,6 +200,55 @@ describe('batchApplyNwcSnapshotPatches concurrent payload', () => {
     expect(putSplitWalletSecretsEncrypted).toHaveBeenCalledTimes(1)
     const putArg = vi.mocked(putSplitWalletSecretsEncrypted).mock.calls[0]
     expect(putArg[1]).toBe(1)
+    const enc = new TextDecoder().decode(putArg[2].payload.ciphertext)
+    const written = JSON.parse(enc) as WalletSecretsPayload
+    expect(written.lightningNwcConnections).toHaveLength(1)
+    expect(written.lightningNwcConnections[0].id).toBe('new-nwc')
+    expect(written.lightningNwcConnections[0].nwcSnapshot?.balanceSats).toBe(100)
+  })
+
+  it('retries when connections change during encryption window', async () => {
+    const emptyLn = buildBasePayload()
+    const withConn: WalletSecretsPayload = {
+      ...emptyLn,
+      lightningNwcConnections: [
+        {
+          id: 'new-nwc',
+          label: 'Hub',
+          networkMode: 'signet',
+          connectionString:
+            'nostr+walletconnect://1111111111111111111111111111111111111111111111111111111111111111?relay=wss%3A%2F%2Frelay.example.com',
+          createdAt: '2020-01-01T00:00:00.000Z',
+        },
+      ],
+    }
+
+    const responses: WalletSecretsPayload[] = [
+      emptyLn, // attempt 1: payload
+      emptyLn, // attempt 1: latest before encrypt
+      withConn, // attempt 1: latest before write (race detected, retry)
+      withConn, // attempt 2: payload
+      withConn, // attempt 2: latest before encrypt
+      withConn, // attempt 2: latest before write
+    ]
+    vi.mocked(loadWalletSecretsPayload).mockImplementation(async () => {
+      const next = responses.shift()
+      return next ?? withConn
+    })
+
+    await batchApplyNwcSnapshotPatches({
+      password: 'pw',
+      walletId: 1,
+      patches: [
+        {
+          connectionId: 'new-nwc',
+          balance: { balanceSats: 100, balanceUpdatedAt: '2020-01-03T00:00:00.000Z' },
+        },
+      ],
+    })
+
+    expect(putSplitWalletSecretsEncrypted).toHaveBeenCalledTimes(1)
+    const putArg = vi.mocked(putSplitWalletSecretsEncrypted).mock.calls[0]
     const enc = new TextDecoder().decode(putArg[2].payload.ciphertext)
     const written = JSON.parse(enc) as WalletSecretsPayload
     expect(written.lightningNwcConnections).toHaveLength(1)

@@ -105,23 +105,25 @@ type E2eNwcMockState = {
   payments: LightningPayment[]
 }
 
+function createInitialE2eMockPayment(): LightningPayment {
+  return {
+    paymentHash: 'e2e-mock-payment-1',
+    pending: false,
+    amountSats: 21,
+    memo: 'Initial mock payment',
+    timestamp: Math.floor(Date.now() / 1000),
+    bolt11: 'lnbc1e2emockpayment1',
+    direction: 'incoming',
+    feesPaidSats: 0,
+  }
+}
+
 const e2eNwcMockState: E2eNwcMockState = {
   shouldFail: false,
   alias: 'E2E NWC Mock',
   blockHeight: 100,
   balanceSats: 1234,
-  payments: [
-    {
-      paymentHash: 'e2e-mock-payment-1',
-      pending: false,
-      amountSats: 21,
-      memo: 'Initial mock payment',
-      timestamp: Math.floor(Date.now() / 1000),
-      bolt11: 'lnbc1e2emockpayment1',
-      direction: 'incoming',
-      feesPaidSats: 0,
-    },
-  ],
+  payments: [createInitialE2eMockPayment()],
 }
 
 type E2eNwcMockControl = {
@@ -153,18 +155,7 @@ function ensureE2eNwcMockControl(): void {
       e2eNwcMockState.alias = 'E2E NWC Mock'
       e2eNwcMockState.blockHeight = 100
       e2eNwcMockState.balanceSats = 1234
-      e2eNwcMockState.payments = [
-        {
-          paymentHash: 'e2e-mock-payment-1',
-          pending: false,
-          amountSats: 21,
-          memo: 'Initial mock payment',
-          timestamp: Math.floor(Date.now() / 1000),
-          bolt11: 'lnbc1e2emockpayment1',
-          direction: 'incoming',
-          feesPaidSats: 0,
-        },
-      ]
+      e2eNwcMockState.payments = [createInitialE2eMockPayment()]
     },
   }
   window.__E2E_NWC__ = control

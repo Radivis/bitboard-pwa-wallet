@@ -52,6 +52,16 @@ export function lightningNwcConnectionIdsFingerprint(
   return [...connections.map((c) => c.id)].sort().join('\0')
 }
 
+function sameLightningConnectionSet(
+  left: { id: string }[],
+  right: { id: string }[],
+): boolean {
+  return (
+    lightningNwcConnectionIdsFingerprint(left) ===
+    lightningNwcConnectionIdsFingerprint(right)
+  )
+}
+
 /**
  * Merges snapshot patches into a payload copy (does not read from DB).
  */
@@ -104,9 +114,9 @@ async function runInNwcSnapshotWriteQueue<T>(
 /**
  * Applies snapshot patches in one decrypt + encrypt cycle.
  *
- * Re-reads the payload after encrypt if another writer changed `lightningNwcConnections`
- * (e.g. user saved a new NWC while dashboard snapshot code was in flight) so we never
- * overwrite fresh connection rows with a stale empty list.
+ * Uses a two-phase guard to avoid clobbering concurrent connection-row updates:
+ * - A cheap pre-check skips encryption when the payload is already stale.
+ * - A pre-write check catches races that occur during encryption.
  */
 export async function batchApplyNwcSnapshotPatches(params: {
   password: string
@@ -121,26 +131,47 @@ export async function batchApplyNwcSnapshotPatches(params: {
 
     for (let attempt = 0; attempt < BATCH_APPLY_NWC_SNAPSHOT_MAX_RETRIES; attempt += 1) {
       const payload = await loadWalletSecretsPayload(walletDb, password, walletId)
+      const latestBeforeEncrypt = await loadWalletSecretsPayload(
+        walletDb,
+        password,
+        walletId,
+      )
+      if (
+        !sameLightningConnectionSet(
+          latestBeforeEncrypt.lightningNwcConnections,
+          payload.lightningNwcConnections,
+        )
+      ) {
+        continue
+      }
+
       const mergedPayload = applyNwcSnapshotPatchesToPayload(payload, patches)
       const payloadEnc = await encryptData(
         password,
         JSON.stringify(mergedPayload),
       )
-      const latest = await loadWalletSecretsPayload(walletDb, password, walletId)
+      const latestBeforeWrite = await loadWalletSecretsPayload(
+        walletDb,
+        password,
+        walletId,
+      )
       if (
-        lightningNwcConnectionIdsFingerprint(latest.lightningNwcConnections) ===
-        lightningNwcConnectionIdsFingerprint(payload.lightningNwcConnections)
+        !sameLightningConnectionSet(
+          latestBeforeWrite.lightningNwcConnections,
+          payload.lightningNwcConnections,
+        )
       ) {
-        await putSplitWalletSecretsEncrypted(walletDb, walletId, {
-          payload: {
-            ciphertext: payloadEnc.ciphertext,
-            iv: payloadEnc.iv,
-            salt: payloadEnc.salt,
-            kdfVersion: payloadEnc.kdfVersion,
-          },
-        })
-        return
+        continue
       }
+      await putSplitWalletSecretsEncrypted(walletDb, walletId, {
+        payload: {
+          ciphertext: payloadEnc.ciphertext,
+          iv: payloadEnc.iv,
+          salt: payloadEnc.salt,
+          kdfVersion: payloadEnc.kdfVersion,
+        },
+      })
+      return
     }
 
     const payload = await loadWalletSecretsPayload(walletDb, password, walletId)
