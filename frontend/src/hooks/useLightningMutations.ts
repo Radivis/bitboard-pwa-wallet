@@ -166,10 +166,11 @@ export function useLnWalletBalanceQuery(params: {
         const service = createBackendService(config)
         const { balanceSats } = await service.getBalance()
         const balanceUpdatedAt = new Date().toISOString()
-        const passwordAfterFetch = useSessionStore.getState().password
-        if (passwordAfterFetch != null) {
+        // Re-check session after NWC: user may have locked the wallet while getBalance was in flight.
+        const sessionPasswordIfStillActive = useSessionStore.getState().password
+        if (sessionPasswordIfStillActive != null) {
           await batchApplyNwcSnapshotPatches({
-            password: passwordAfterFetch,
+            password: sessionPasswordIfStillActive,
             walletId,
             patches: [
               {
@@ -181,10 +182,10 @@ export function useLnWalletBalanceQuery(params: {
         }
         return { balanceSats }
       } catch (err) {
-        const passwordForSnapshot = useSessionStore.getState().password
-        if (passwordForSnapshot != null) {
+        const sessionPasswordForStaleSnapshot = useSessionStore.getState().password
+        if (sessionPasswordForStaleSnapshot != null) {
           const snap = await loadNwcSnapshotForConnection({
-            password: passwordForSnapshot,
+            password: sessionPasswordForStaleSnapshot,
             walletId,
             connectionId,
           })

@@ -10,15 +10,15 @@ describe('wallet-secrets-write-tracker', () => {
   })
 
   it('waits for tracked promise before returning', async () => {
-    let done = false
-    const p = trackWalletSecretsWrite(
+    let writeCompleted = false
+    const trackedWritePromise = trackWalletSecretsWrite(
       (async () => {
-        await new Promise((r) => setTimeout(r, 5))
-        done = true
+        await new Promise((resolveDelay) => setTimeout(resolveDelay, 5))
+        writeCompleted = true
       })(),
     )
     await awaitInFlightWalletSecretsWrites()
-    await p
-    expect(done).toBe(true)
+    await trackedWritePromise
+    expect(writeCompleted).toBe(true)
   })
 })

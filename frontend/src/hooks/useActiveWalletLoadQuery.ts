@@ -53,31 +53,32 @@ export function useActiveWalletLoadQuery() {
       const { setActiveWalletBootstrapInFlight } = useWalletStore.getState()
       setActiveWalletBootstrapInFlight(true)
       try {
-        const wallet = useWalletStore.getState()
-        const password = useSessionStore.getState().password
-        const wId = wallet.activeWalletId
-        const nM = wallet.networkMode
-        const aT = wallet.addressType
-        const aId = wallet.accountId
-        if (wId == null || password == null) {
+        const {
+          activeWalletId: bootstrapWalletId,
+          networkMode: bootstrapNetworkMode,
+          addressType: bootstrapAddressType,
+          accountId: bootstrapAccountId,
+        } = useWalletStore.getState()
+        const sessionPassword = useSessionStore.getState().password
+        if (bootstrapWalletId == null || sessionPassword == null) {
           throw new Error('Bootstrap query ran without wallet or session')
         }
         await waitForCryptoWorkerHealthy()
-        if (nM === 'lab') {
+        if (bootstrapNetworkMode === 'lab') {
           await loadDescriptorWalletWithoutSync({
-            password,
-            walletId: wId,
-            networkMode: nM,
-            addressType: aT,
-            accountId: aId,
+            password: sessionPassword,
+            walletId: bootstrapWalletId,
+            networkMode: bootstrapNetworkMode,
+            addressType: bootstrapAddressType,
+            accountId: bootstrapAccountId,
           })
         } else {
           await loadDescriptorWalletAndSync({
-            password,
-            walletId: wId,
-            networkMode: nM,
-            addressType: aT,
-            accountId: aId,
+            password: sessionPassword,
+            walletId: bootstrapWalletId,
+            networkMode: bootstrapNetworkMode,
+            addressType: bootstrapAddressType,
+            accountId: bootstrapAccountId,
             awaitSync: false,
             onSyncError: (err) => {
               const msg = err instanceof Error ? err.message : String(err)

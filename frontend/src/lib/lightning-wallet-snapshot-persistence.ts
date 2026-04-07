@@ -44,13 +44,6 @@ export type NwcSnapshotPatch = {
   payments?: { payments: LightningPayment[]; paymentsUpdatedAt: string }
 }
 
-/** Stable fingerprint for comparing which NWC rows exist (detect concurrent payload updates). */
-export function lightningNwcConnectionIdsFingerprint(
-  connections: { id: string }[],
-): string {
-  return [...connections.map((c) => c.id)].sort().join('\0')
-}
-
 /**
  * Merges snapshot patches into a payload copy (does not read from DB).
  */
@@ -62,14 +55,14 @@ export function applyNwcSnapshotPatchesToPayload(
     payload.lightningNwcConnections.map((c) => [c.id, { ...c }] as const),
   )
 
-  for (const p of patches) {
-    const row = byId.get(p.connectionId)
+  for (const patch of patches) {
+    const row = byId.get(patch.connectionId)
     if (row == null) continue
     const nextSnapshot = mergeNwcConnectionSnapshot(row.nwcSnapshot, {
-      balance: p.balance,
-      payments: p.payments,
+      balance: patch.balance,
+      payments: patch.payments,
     })
-    byId.set(p.connectionId, { ...row, nwcSnapshot: nextSnapshot })
+    byId.set(patch.connectionId, { ...row, nwcSnapshot: nextSnapshot })
   }
 
   const nextList = payload.lightningNwcConnections.map(
