@@ -11,6 +11,7 @@ import { useLightningStore } from '@/stores/lightningStore';
 import { useSessionStore, clearAutoLockTimer } from '@/stores/sessionStore';
 import { resetSecretsChannel } from '@/workers/secrets-channel';
 import { awaitInFlightWalletSecretsWrites } from '@/db/wallet-secrets-write-tracker';
+import { navigateToLibraryIfOnWalletRoute } from '@/lib/app-router';
 import type { Remote } from 'comlink';
 import type {
   CryptoService,
@@ -208,6 +209,7 @@ export const useCryptoStore = create<CryptoState>((set, get) => {
     lockAndPurgeSensitiveRuntimeState: async () => {
       clearAutoLockTimer();
       await awaitInFlightWalletSecretsWrites();
+      navigateToLibraryIfOnWalletRoute();
       useWalletStore.getState().lockWallet();
       useLightningStore.getState().purgeLightningConnectionsFromMemory();
       removeLightningConnectionsHydrationQueries();
