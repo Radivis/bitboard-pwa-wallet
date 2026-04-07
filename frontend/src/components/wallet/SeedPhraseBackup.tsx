@@ -58,6 +58,11 @@ export function SeedPhraseBackup() {
     [activeWalletId, queryClient],
   )
 
+  /** Radix often does not call `onOpenChange` when `open` is set to false from React state (e.g. our Close button). Always run cleanup through this handler for button closes; keep `onOpenChange` for overlay / X / Escape. */
+  const handleCloseMnemonicClick = useCallback(() => {
+    void closeMnemonicDialog(backupConfirmed)
+  }, [backupConfirmed, closeMnemonicDialog])
+
   const handleShowSeedPhrase = useCallback(async () => {
     if (!activeWalletId) return
     try {
@@ -213,7 +218,7 @@ export function SeedPhraseBackup() {
               I have actually made a backup of this seed phrase
             </Label>
           </div>
-          <Button variant="outline" onClick={() => setShowMnemonic(false)}>
+          <Button variant="outline" onClick={handleCloseMnemonicClick}>
             Close
           </Button>
         </DialogContent>
