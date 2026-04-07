@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import { Link } from '@tanstack/react-router'
 import {
   useWalletStore,
@@ -11,6 +11,7 @@ import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { Button } from '@/components/ui/button'
 import { WalletUnlock } from '@/components/WalletUnlock'
 import { useSessionStore } from '@/stores/sessionStore'
+import { useNearZeroSecurityStore } from '@/stores/nearZeroSecurityStore'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 
 const NETWORK_OPTIONS: NetworkMode[] = [
@@ -48,18 +49,40 @@ export function NetworkSelector() {
   const displayNetworkMode = useWalletStore(selectCommittedNetworkMode)
   const activeWalletId = useWalletStore((s) => s.activeWalletId)
   const sessionPassword = useSessionStore((s) => s.password)
+  const nearZeroActive = useNearZeroSecurityStore((s) => s.active)
   const [showUnlockForNetworkChange, setShowUnlockForNetworkChange] =
     useState(false)
   const pendingNetworkAfterUnlockRef = useRef<NetworkMode | null>(null)
+  const pendingNearZeroNetworkRef = useRef<NetworkMode | null>(null)
 
   const { mutate: switchMutate, loading, statusLine } =
     useSubWalletSwitchMutation('network')
+
+  useEffect(() => {
+    const pending = pendingNearZeroNetworkRef.current
+    if (pending === null || sessionPassword === null) return
+    pendingNearZeroNetworkRef.current = null
+    switchMutate(pending)
+  }, [sessionPassword, switchMutate])
+
+  useEffect(() => {
+    if (nearZeroActive || sessionPassword !== null) return
+    const pending = pendingNearZeroNetworkRef.current
+    if (pending === null) return
+    pendingNearZeroNetworkRef.current = null
+    pendingNetworkAfterUnlockRef.current = pending
+    setShowUnlockForNetworkChange(true)
+  }, [nearZeroActive, sessionPassword])
 
   const handleNetworkChange = useCallback(
     (network: NetworkMode) => {
       if (network === displayNetworkMode) return
 
       if (activeWalletId !== null && sessionPassword === null) {
+        if (nearZeroActive) {
+          pendingNearZeroNetworkRef.current = network
+          return
+        }
         pendingNetworkAfterUnlockRef.current = network
         setShowUnlockForNetworkChange(true)
         return
@@ -67,7 +90,13 @@ export function NetworkSelector() {
 
       switchMutate(network)
     },
-    [displayNetworkMode, activeWalletId, sessionPassword, switchMutate],
+    [
+      displayNetworkMode,
+      activeWalletId,
+      sessionPassword,
+      switchMutate,
+      nearZeroActive,
+    ],
   )
 
   return (

@@ -13,6 +13,10 @@ interface WorkerState {
 
 const HEALTH_POLL_INTERVAL_MS = 5_000;
 
+/** Poll interval while waiting for the initial post-construction health check. */
+const WORKER_STARTUP_POLL_MS = 25;
+const WORKER_STARTUP_TIMEOUT_MS = 30_000;
+
 let state: WorkerState | null = null;
 const statusListeners = new Set<(status: WorkerHealthStatus, error: string | null) => void>();
 
@@ -64,6 +68,27 @@ async function verifyWorkerHealth(proxy: Remote<CryptoService>): Promise<void> {
     console.error('[crypto-factory] Worker health check failed:', message);
     setStatus('error', message);
     throw new Error(`Crypto worker failed to initialize: ${message}`);
+  }
+}
+
+/**
+ * Ensures a worker instance exists and {@link verifyWorkerHealth}'s ping has finished.
+ * After {@link terminateCryptoWorker}, the next crypto call must wait here or similar;
+ * otherwise Comlink operations can run before the worker is ready and fail spuriously.
+ */
+export async function waitForCryptoWorkerHealthy(): Promise<void> {
+  getCryptoWorker();
+  const deadline = Date.now() + WORKER_STARTUP_TIMEOUT_MS;
+  for (;;) {
+    const { status, lastError } = getWorkerHealthStatus();
+    if (status === 'healthy') return;
+    if (status === 'error' || status === 'crashed') {
+      throw new Error(lastError ?? 'Crypto worker unavailable');
+    }
+    if (Date.now() >= deadline) {
+      throw new Error('Crypto worker did not become ready in time');
+    }
+    await new Promise((r) => setTimeout(r, WORKER_STARTUP_POLL_MS));
   }
 }
 

@@ -13,7 +13,7 @@ import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { WalletUnlock } from '@/components/WalletUnlock'
+import { WalletUnlockOrNearZeroLoading } from '@/components/WalletUnlockOrNearZeroLoading'
 import { TransactionItem } from '@/components/TransactionItem'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { formatBTC, formatSats } from '@/lib/bitcoin-utils'
@@ -457,7 +457,7 @@ export function DashboardPage() {
   }
 
   if (walletStatus !== 'unlocked' && walletStatus !== 'syncing') {
-    return <WalletUnlock />
+    return <WalletUnlockOrNearZeroLoading />
   }
 
   return (
