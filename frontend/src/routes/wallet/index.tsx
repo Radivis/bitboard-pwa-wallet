@@ -206,7 +206,10 @@ function BalanceCard() {
                           <>
                             {formatSats(row.balanceSats)}
                             {row.isStaleBalance ? (
-                              <span className="ml-1 text-xs font-normal text-amber-700 dark:text-amber-400">
+                              <span
+                                className="ml-1 text-xs font-normal text-amber-700 dark:text-amber-400"
+                                data-testid="lightning-balance-cached-tag"
+                              >
                                 cached
                               </span>
                             ) : null}
@@ -218,7 +221,10 @@ function BalanceCard() {
                   ))}
                 </ul>
                 {hasStaleLnBalance && (
-                  <p className="mt-2 text-xs text-amber-700 dark:text-amber-400">
+                  <p
+                    className="mt-2 text-xs text-amber-700 dark:text-amber-400"
+                    data-testid="lightning-balance-stale-banner"
+                  >
                     Showing last known Lightning balance saved in this app (not a
                     live check). NWC could not be reached.
                     {newestStaleBalanceIso != null && (
@@ -386,7 +392,10 @@ function RecentTransactions() {
           hasLnWalletForNetwork &&
           stalePaymentsAsOf != null &&
           lnPayments.length > 0 && (
-            <p className="mb-3 text-xs text-amber-700 dark:text-amber-400">
+            <p
+              className="mb-3 text-xs text-amber-700 dark:text-amber-400"
+              data-testid="lightning-history-stale-banner"
+            >
               Some Lightning activity below may be from the last successful sync
               in this app (NWC unreachable). List saved:{' '}
               {new Date(stalePaymentsAsOf).toLocaleString()}.

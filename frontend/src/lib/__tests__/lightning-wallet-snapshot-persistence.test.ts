@@ -1,6 +1,35 @@
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { LightningPayment } from '@/lib/lightning-backend-service'
-import { mergeNwcConnectionSnapshot } from '@/lib/lightning-wallet-snapshot-persistence'
+import type { WalletSecretsPayload } from '@/lib/wallet-domain-types'
+import {
+  loadWalletSecretsPayload,
+  putSplitWalletSecretsEncrypted,
+} from '@/db/wallet-persistence'
+
+vi.mock('@/db/database', () => ({
+  getDatabase: vi.fn(() => ({})),
+}))
+
+vi.mock('@/db/wallet-persistence', () => ({
+  loadWalletSecretsPayload: vi.fn(),
+  putSplitWalletSecretsEncrypted: vi.fn(),
+}))
+
+vi.mock('@/db/encryption', () => ({
+  encryptData: vi.fn(async (_password: string, plaintext: string) => ({
+    ciphertext: new TextEncoder().encode(plaintext),
+    iv: new Uint8Array(12),
+    salt: new Uint8Array(16),
+    kdfVersion: 2 as const,
+  })),
+}))
+
+import {
+  applyNwcSnapshotPatchesToPayload,
+  batchApplyNwcSnapshotPatches,
+  lightningNwcConnectionIdsFingerprint,
+  mergeNwcConnectionSnapshot,
+} from '@/lib/lightning-wallet-snapshot-persistence'
 
 function pay(overrides: Partial<LightningPayment> = {}): LightningPayment {
   return {
@@ -53,5 +82,124 @@ describe('mergeNwcConnectionSnapshot', () => {
     expect(next.balanceSats).toBe(7)
     expect(next.payments).toHaveLength(1)
     expect(next.paymentsUpdatedAt).toBe(t0)
+  })
+})
+
+describe('lightningNwcConnectionIdsFingerprint', () => {
+  it('is order-insensitive', () => {
+    expect(
+      lightningNwcConnectionIdsFingerprint([{ id: 'b' }, { id: 'a' }]),
+    ).toBe(lightningNwcConnectionIdsFingerprint([{ id: 'a' }, { id: 'b' }]))
+  })
+})
+
+describe('applyNwcSnapshotPatchesToPayload', () => {
+  const basePayload = (): WalletSecretsPayload => ({
+    descriptorWallets: [
+      {
+        network: 'testnet',
+        addressType: 'taproot',
+        accountId: 0,
+        externalDescriptor: 'tr(xpub.../0/*)',
+        internalDescriptor: 'tr(xpub.../1/*)',
+        changeSet: '{}',
+        fullScanDone: false,
+      },
+    ],
+    lightningNwcConnections: [
+      {
+        id: 'c1',
+        label: 'LN',
+        networkMode: 'signet',
+        connectionString:
+          'nostr+walletconnect://0000000000000000000000000000000000000000000000000000000000000000?relay=wss%3A%2F%2Frelay.example.com',
+        createdAt: '2020-01-01T00:00:00.000Z',
+      },
+    ],
+  })
+
+  it('applies balance patch to matching connection', () => {
+    const t = '2020-01-02T00:00:00.000Z'
+    const next = applyNwcSnapshotPatchesToPayload(basePayload(), [
+      {
+        connectionId: 'c1',
+        balance: { balanceSats: 42, balanceUpdatedAt: t },
+      },
+    ])
+    expect(next.lightningNwcConnections).toHaveLength(1)
+    expect(next.lightningNwcConnections[0].nwcSnapshot?.balanceSats).toBe(42)
+  })
+
+  it('ignores patches for unknown connection ids', () => {
+    const next = applyNwcSnapshotPatchesToPayload(basePayload(), [
+      {
+        connectionId: 'missing',
+        balance: { balanceSats: 1, balanceUpdatedAt: '2020-01-01T00:00:00.000Z' },
+      },
+    ])
+    expect(next.lightningNwcConnections[0].nwcSnapshot).toBeUndefined()
+  })
+})
+
+describe('batchApplyNwcSnapshotPatches concurrent payload', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('retries when lightning connections change after first read (no clobber)', async () => {
+    const emptyLn: WalletSecretsPayload = {
+      descriptorWallets: [
+        {
+          network: 'testnet',
+          addressType: 'taproot',
+          accountId: 0,
+          externalDescriptor: 'tr(xpub.../0/*)',
+          internalDescriptor: 'tr(xpub.../1/*)',
+          changeSet: '{}',
+          fullScanDone: false,
+        },
+      ],
+      lightningNwcConnections: [],
+    }
+    const withConn: WalletSecretsPayload = {
+      ...emptyLn,
+      lightningNwcConnections: [
+        {
+          id: 'new-nwc',
+          label: 'Hub',
+          networkMode: 'signet',
+          connectionString:
+            'nostr+walletconnect://1111111111111111111111111111111111111111111111111111111111111111?relay=wss%3A%2F%2Frelay.example.com',
+          createdAt: '2020-01-01T00:00:00.000Z',
+        },
+      ],
+    }
+
+    let loadCount = 0
+    vi.mocked(loadWalletSecretsPayload).mockImplementation(async () => {
+      loadCount += 1
+      if (loadCount === 1) return emptyLn
+      return withConn
+    })
+
+    await batchApplyNwcSnapshotPatches({
+      password: 'pw',
+      walletId: 1,
+      patches: [
+        {
+          connectionId: 'new-nwc',
+          balance: { balanceSats: 100, balanceUpdatedAt: '2020-01-03T00:00:00.000Z' },
+        },
+      ],
+    })
+
+    expect(putSplitWalletSecretsEncrypted).toHaveBeenCalledTimes(1)
+    const putArg = vi.mocked(putSplitWalletSecretsEncrypted).mock.calls[0]
+    expect(putArg[1]).toBe(1)
+    const enc = new TextDecoder().decode(putArg[2].payload.ciphertext)
+    const written = JSON.parse(enc) as WalletSecretsPayload
+    expect(written.lightningNwcConnections).toHaveLength(1)
+    expect(written.lightningNwcConnections[0].id).toBe('new-nwc')
+    expect(written.lightningNwcConnections[0].nwcSnapshot?.balanceSats).toBe(100)
   })
 })

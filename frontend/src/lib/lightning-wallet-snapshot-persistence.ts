@@ -45,18 +45,20 @@ export type NwcSnapshotPatch = {
   payments?: { payments: LightningPayment[]; paymentsUpdatedAt: string }
 }
 
-/**
- * Applies snapshot patches in one decrypt + encrypt cycle.
- */
-export async function batchApplyNwcSnapshotPatches(params: {
-  password: string
-  walletId: number
-  patches: NwcSnapshotPatch[]
-}): Promise<void> {
-  const { password, walletId, patches } = params
-  if (patches.length === 0) return
+/** Stable fingerprint for comparing which NWC rows exist (detect concurrent payload updates). */
+export function lightningNwcConnectionIdsFingerprint(
+  connections: { id: string }[],
+): string {
+  return [...connections.map((c) => c.id)].sort().join('\0')
+}
 
-  const payload = await loadWalletSecretsPayload(getDatabase(), password, walletId)
+/**
+ * Merges snapshot patches into a payload copy (does not read from DB).
+ */
+export function applyNwcSnapshotPatchesToPayload(
+  payload: WalletSecretsPayload,
+  patches: NwcSnapshotPatch[],
+): WalletSecretsPayload {
   const byId = new Map(
     payload.lightningNwcConnections.map((c) => [c.id, { ...c }] as const),
   )
@@ -74,15 +76,62 @@ export async function batchApplyNwcSnapshotPatches(params: {
   const nextList = payload.lightningNwcConnections.map(
     (c) => byId.get(c.id) ?? c,
   )
-  const mergedPayload: WalletSecretsPayload = {
+  return {
     ...payload,
     lightningNwcConnections: nextList,
   }
+}
+
+const BATCH_APPLY_NWC_SNAPSHOT_MAX_RETRIES = 8
+
+/**
+ * Applies snapshot patches in one decrypt + encrypt cycle.
+ *
+ * Re-reads the payload after encrypt if another writer changed `lightningNwcConnections`
+ * (e.g. user saved a new NWC while dashboard snapshot code was in flight) so we never
+ * overwrite fresh connection rows with a stale empty list.
+ */
+export async function batchApplyNwcSnapshotPatches(params: {
+  password: string
+  walletId: number
+  patches: NwcSnapshotPatch[]
+}): Promise<void> {
+  const { password, walletId, patches } = params
+  if (patches.length === 0) return
+
+  const walletDb = getDatabase()
+
+  for (let attempt = 0; attempt < BATCH_APPLY_NWC_SNAPSHOT_MAX_RETRIES; attempt += 1) {
+    const payload = await loadWalletSecretsPayload(walletDb, password, walletId)
+    const mergedPayload = applyNwcSnapshotPatchesToPayload(payload, patches)
+    const payloadEnc = await encryptData(
+      password,
+      JSON.stringify(mergedPayload),
+    )
+    const latest = await loadWalletSecretsPayload(walletDb, password, walletId)
+    if (
+      lightningNwcConnectionIdsFingerprint(latest.lightningNwcConnections) ===
+      lightningNwcConnectionIdsFingerprint(payload.lightningNwcConnections)
+    ) {
+      await putSplitWalletSecretsEncrypted(walletDb, walletId, {
+        payload: {
+          ciphertext: payloadEnc.ciphertext,
+          iv: payloadEnc.iv,
+          salt: payloadEnc.salt,
+          kdfVersion: payloadEnc.kdfVersion,
+        },
+      })
+      return
+    }
+  }
+
+  const payload = await loadWalletSecretsPayload(walletDb, password, walletId)
+  const mergedPayload = applyNwcSnapshotPatchesToPayload(payload, patches)
   const payloadEnc = await encryptData(
     password,
     JSON.stringify(mergedPayload),
   )
-  await putSplitWalletSecretsEncrypted(getDatabase(), walletId, {
+  await putSplitWalletSecretsEncrypted(walletDb, walletId, {
     payload: {
       ciphertext: payloadEnc.ciphertext,
       iv: payloadEnc.iv,

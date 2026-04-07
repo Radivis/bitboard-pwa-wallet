@@ -79,6 +79,7 @@ export interface ConnectedLightningWallet {
 }
 
 const NWC_CONNECTION_STRING_PREFIX = 'nostr+walletconnect://'
+const E2E_NWC_MOCK_CONNECTION_STRING = 'nostr+walletconnect://e2e-mock'
 
 export function isValidNwcConnectionString(value: string): boolean {
   const v = value.trim()
@@ -94,6 +95,122 @@ function msatsToSats(msats: number): number {
 
 function satsToMsats(sats: number): number {
   return sats * 1000
+}
+
+type E2eNwcMockState = {
+  shouldFail: boolean
+  alias: string
+  blockHeight: number
+  balanceSats: number
+  payments: LightningPayment[]
+}
+
+const e2eNwcMockState: E2eNwcMockState = {
+  shouldFail: false,
+  alias: 'E2E NWC Mock',
+  blockHeight: 100,
+  balanceSats: 1234,
+  payments: [
+    {
+      paymentHash: 'e2e-mock-payment-1',
+      pending: false,
+      amountSats: 21,
+      memo: 'Initial mock payment',
+      timestamp: Math.floor(Date.now() / 1000),
+      bolt11: 'lnbc1e2emockpayment1',
+      direction: 'incoming',
+      feesPaidSats: 0,
+    },
+  ],
+}
+
+type E2eNwcMockControl = {
+  setFailing: (value: boolean) => void
+  setBalanceSats: (value: number) => void
+  addPayment: (payment: LightningPayment) => void
+  reset: () => void
+}
+
+function isE2eNwcMockEnabled(): boolean {
+  return import.meta.env.VITE_E2E_NWC_MOCK === 'true' && import.meta.env.DEV
+}
+
+function ensureE2eNwcMockControl(): void {
+  if (!isE2eNwcMockEnabled() || typeof window === 'undefined') return
+  if (window.__E2E_NWC__ != null) return
+  const control: E2eNwcMockControl = {
+    setFailing: (value) => {
+      e2eNwcMockState.shouldFail = value
+    },
+    setBalanceSats: (value) => {
+      e2eNwcMockState.balanceSats = Math.max(0, Math.floor(value))
+    },
+    addPayment: (payment) => {
+      e2eNwcMockState.payments = [payment, ...e2eNwcMockState.payments]
+    },
+    reset: () => {
+      e2eNwcMockState.shouldFail = false
+      e2eNwcMockState.alias = 'E2E NWC Mock'
+      e2eNwcMockState.blockHeight = 100
+      e2eNwcMockState.balanceSats = 1234
+      e2eNwcMockState.payments = [
+        {
+          paymentHash: 'e2e-mock-payment-1',
+          pending: false,
+          amountSats: 21,
+          memo: 'Initial mock payment',
+          timestamp: Math.floor(Date.now() / 1000),
+          bolt11: 'lnbc1e2emockpayment1',
+          direction: 'incoming',
+          feesPaidSats: 0,
+        },
+      ]
+    },
+  }
+  window.__E2E_NWC__ = control
+}
+
+function throwIfE2eNwcMockFailing(): void {
+  if (e2eNwcMockState.shouldFail) {
+    throw new Error('E2E NWC mock: simulated connection error')
+  }
+}
+
+function createE2eNwcMockBackendService(): LightningBackendService {
+  ensureE2eNwcMockControl()
+  return {
+    async getBalance() {
+      throwIfE2eNwcMockFailing()
+      return { balanceSats: e2eNwcMockState.balanceSats }
+    },
+    async createInvoice(params) {
+      throwIfE2eNwcMockFailing()
+      const sats = Math.max(0, Math.floor(params.amountSats))
+      const paymentHash = `e2e-invoice-${Date.now()}`
+      return {
+        bolt11: `lnbc1e2einvoice${sats}`,
+        paymentHash,
+      }
+    },
+    async payInvoice() {
+      throwIfE2eNwcMockFailing()
+      return { preimage: `e2e-preimage-${Date.now()}` }
+    },
+    async listPayments() {
+      throwIfE2eNwcMockFailing()
+      return [...e2eNwcMockState.payments]
+    },
+    async testConnection() {
+      if (e2eNwcMockState.shouldFail) {
+        return { ok: false, error: 'E2E NWC mock: simulated connection error' }
+      }
+      return {
+        ok: true,
+        walletName: e2eNwcMockState.alias,
+        nwcBlockHeight: e2eNwcMockState.blockHeight,
+      }
+    },
+  }
 }
 
 function createNwcBackendService(
@@ -165,6 +282,13 @@ function createNwcBackendService(
 export function createBackendService(
   config: LightningConnectionConfig,
 ): LightningBackendService {
+  if (
+    isE2eNwcMockEnabled() &&
+    config.type === 'nwc' &&
+    config.connectionString.trim() === E2E_NWC_MOCK_CONNECTION_STRING
+  ) {
+    return createE2eNwcMockBackendService()
+  }
   switch (config.type) {
     case 'nwc':
       return createNwcBackendService(config)

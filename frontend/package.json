@@ -21,6 +21,7 @@
     "test:e2e:sequential": "E2E_SEQUENTIAL=true playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:debug": "playwright test --debug",
+    "test:e2e:nwc": "VITE_E2E_NWC_MOCK=true playwright test --grep @nwc",
     "test:regtest:start": "../scripts/start-regtest.sh",
     "test:regtest:stop": "docker rm -f bitboard-regtest",
     "test:e2e:regtest": "npm run test:regtest:start && playwright test --grep @regtest",

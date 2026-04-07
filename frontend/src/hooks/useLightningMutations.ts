@@ -162,14 +162,14 @@ export function useLnWalletBalanceQuery(params: {
     queryKey: ['ln-wallet-balance', connectionId, walletId, networkMode, config],
     queryFn: async (): Promise<LnWalletBalanceQueryResult> => {
       await ensureMigrated()
-      const password = useSessionStore.getState().password
       try {
         const service = createBackendService(config)
         const { balanceSats } = await service.getBalance()
         const balanceUpdatedAt = new Date().toISOString()
-        if (password != null) {
+        const passwordAfterFetch = useSessionStore.getState().password
+        if (passwordAfterFetch != null) {
           await batchApplyNwcSnapshotPatches({
-            password,
+            password: passwordAfterFetch,
             walletId,
             patches: [
               {
@@ -181,9 +181,10 @@ export function useLnWalletBalanceQuery(params: {
         }
         return { balanceSats }
       } catch (err) {
-        if (password != null) {
+        const passwordForSnapshot = useSessionStore.getState().password
+        if (passwordForSnapshot != null) {
           const snap = await loadNwcSnapshotForConnection({
-            password,
+            password: passwordForSnapshot,
             walletId,
             connectionId,
           })
