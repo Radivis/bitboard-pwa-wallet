@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect } from 'react'
+import { type ReactNode, useEffect, useLayoutEffect } from 'react'
 import { useNavigate, useLocation } from '@tanstack/react-router'
 import { toast } from 'sonner'
 import { useWalletStore } from '@/stores/walletStore'
@@ -12,6 +12,8 @@ import { appQueryClient } from '@/lib/app-query-client'
 import { prefetchLabChainState } from '@/hooks/useLabChainStateQuery'
 import { useHydrateLightningConnections } from '@/hooks/useHydrateLightningConnections'
 import { ActiveWalletBootstrap } from '@/components/ActiveWalletBootstrap'
+import { pathnameRequiresWalletCryptoSession } from '@/lib/pathname-requires-wallet-crypto-session'
+import { useWalletCryptoSessionPathGateStore } from '@/stores/walletCryptoSessionPathGateStore'
 
 interface AppInitializerProps {
   children: ReactNode
@@ -26,6 +28,10 @@ export function AppInitializer({ children }: AppInitializerProps) {
   const setActiveWallet = useWalletStore((s) => s.setActiveWallet)
   const networkMode = useWalletStore((s) => s.networkMode)
   const sessionPassword = useSessionStore((s) => s.password)
+
+  useLayoutEffect(() => {
+    useWalletCryptoSessionPathGateStore.getState().setPathname(location.pathname)
+  }, [location.pathname])
 
   useEffect(() => {
     if (networkMode !== 'lab') return
@@ -66,11 +72,15 @@ export function AppInitializer({ children }: AppInitializerProps) {
     }
   }, [wallets, isLoading, activeWalletId, setActiveWallet, navigate, location.pathname])
 
-  /** After lock, session is cleared; restore near-zero wrapped secret so auto-unlock can run again. */
+  /**
+   * After lock, session is cleared. Restore near-zero session only on routes that need
+   * wallet crypto — not on Library, so “lock → Library” stays locked until the user opens Wallet.
+   */
   useEffect(() => {
     if (sessionPassword !== null) return
+    if (!pathnameRequiresWalletCryptoSession(location.pathname)) return
     void tryLoadNearZeroSessionIntoMemory(getDatabase())
-  }, [sessionPassword])
+  }, [sessionPassword, location.pathname])
 
   return (
     <>

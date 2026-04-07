@@ -24,11 +24,13 @@ export function useHydrateLightningConnections() {
 
   return useQuery({
     queryKey: [...LIGHTNING_CONNECTIONS_HYDRATION_QUERY_KEY, activeWalletId] as const,
-    queryFn: () =>
-      hydrateLightningConnectionsForWallet({
+    queryFn: async () => {
+      await hydrateLightningConnectionsForWallet({
         password: sessionPassword!,
         walletId: activeWalletId!,
-      }),
+      })
+      return true as const
+    },
     enabled,
     staleTime: Number.POSITIVE_INFINITY,
   })

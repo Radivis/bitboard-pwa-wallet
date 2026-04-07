@@ -5,6 +5,8 @@ import { useSessionStore } from '@/stores/sessionStore'
 import { loadDescriptorWalletAndSync, loadDescriptorWalletWithoutSync } from '@/lib/wallet-utils'
 import { activeWalletLoadQueryKey } from '@/lib/wallet-load-query-keys'
 import { waitForCryptoWorkerHealthy } from '@/workers/crypto-factory'
+import { pathnameRequiresWalletCryptoSession } from '@/lib/pathname-requires-wallet-crypto-session'
+import { useWalletCryptoSessionPathGateStore } from '@/stores/walletCryptoSessionPathGateStore'
 
 /**
  * TanStack Query observer for loading the active sub-wallet when a session exists
@@ -21,14 +23,18 @@ export function useActiveWalletLoadQuery() {
   const activeWalletBootstrapInFlight = useWalletStore(
     (s) => s.activeWalletBootstrapInFlight,
   )
+  const pathname = useWalletCryptoSessionPathGateStore((s) => s.pathname)
+  const onWalletCryptoRoute = pathnameRequiresWalletCryptoSession(pathname)
 
   /**
    * `loadDescriptorWalletAndSync` marks the wallet unlocked before Esplora sync; bootstrap
    * uses background sync (`awaitSync: false`) so the query finishes right after WASM load.
    * `activeWalletBootstrapInFlight` keeps the query enabled until `queryFn` returns so
    * TanStack Query does not cancel mid-flight when status flips to unlocked.
+   * Bootstrap is off on Library (etc.) so locking → Library does not immediately reload keys.
    */
   const needsBootstrap =
+    onWalletCryptoRoute &&
     sessionPassword != null &&
     activeWalletId != null &&
     (walletStatus === 'locked' ||
