@@ -162,10 +162,7 @@ export async function fetchLightningPaymentsForActiveWallet(): Promise<
         )
       }
       const snap = snapshotById.get(conn.id)
-      if (
-        snap?.paymentsUpdatedAt != null &&
-        snap.payments.length > 0
-      ) {
+      if (snap?.paymentsUpdatedAt != null) {
         stalePaymentsAsOf = maxIsoTimestamp(
           stalePaymentsAsOf,
           snap.paymentsUpdatedAt,
