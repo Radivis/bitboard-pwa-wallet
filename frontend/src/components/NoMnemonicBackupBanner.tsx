@@ -10,13 +10,11 @@ export function noMnemonicBackupBannerSessionDismissKey(walletId: number): strin
   return `bitboard_no_mnemonic_backup_banner_dismissed:${walletId}`
 }
 
-function sessionDismissKey(walletId: number): string {
-  return noMnemonicBackupBannerSessionDismissKey(walletId)
-}
-
 function readDismissedForWallet(walletId: number | null): boolean {
   if (walletId === null || typeof sessionStorage === 'undefined') return false
-  return sessionStorage.getItem(sessionDismissKey(walletId)) === '1'
+  return (
+    sessionStorage.getItem(noMnemonicBackupBannerSessionDismissKey(walletId)) === '1'
+  )
 }
 
 /**
@@ -38,7 +36,7 @@ export function NoMnemonicBackupBanner() {
   useLayoutEffect(() => {
     if (location.pathname !== '/wallet/receive') return
     if (activeWalletId === null || typeof sessionStorage === 'undefined') return
-    sessionStorage.removeItem(sessionDismissKey(activeWalletId))
+    sessionStorage.removeItem(noMnemonicBackupBannerSessionDismissKey(activeWalletId))
     setDismissed(false)
   }, [location.pathname, activeWalletId])
 
@@ -55,7 +53,10 @@ export function NoMnemonicBackupBanner() {
   }
 
   const handleDismissLater = () => {
-    sessionStorage.setItem(sessionDismissKey(activeWalletId), '1')
+    sessionStorage.setItem(
+      noMnemonicBackupBannerSessionDismissKey(activeWalletId),
+      '1',
+    )
     setDismissed(true)
   }
 

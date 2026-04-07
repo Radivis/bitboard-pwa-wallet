@@ -21,6 +21,10 @@ function isBenignNoWalletLoadedForPersistError(err: unknown): boolean {
  * Sums BDK-reported on-chain balance for every mainnet (`bitcoin`) descriptor sub-wallet.
  * Temporarily loads each into the single WASM slot, then restores the previously active sub-wallet.
  * Ignores Lightning / NWC entirely.
+ *
+ * **Side effect:** After restoring the active sub-wallet, updates `useWalletStore` with the
+ * current balance and transaction list from WASM so the UI does not show stale data from the
+ * probe loop. Treat this as “probe + refresh active wallet view,” not a pure read.
  */
 export async function sumMainnetOnChainSatsForWallet(params: {
   password: string

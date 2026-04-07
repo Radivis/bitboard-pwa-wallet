@@ -300,10 +300,10 @@ describe('CreateWalletPage', () => {
     expect(screen.getByText('Step 1 of 3')).toBeInTheDocument()
   })
 
-  it('shows Generate but skip Backup button on step 1', () => {
+  it('shows Generate but skip backup button on step 1', () => {
     renderWithProviders(<CreateWalletPage />)
     expect(
-      screen.getByRole('button', { name: 'Generate but skip Backup' }),
+      screen.getByRole('button', { name: 'Generate but skip backup' }),
     ).toBeInTheDocument()
   })
 
@@ -311,7 +311,7 @@ describe('CreateWalletPage', () => {
     const user = userEvent.setup()
     renderWithProviders(<CreateWalletPage />)
 
-    await user.click(screen.getByRole('button', { name: 'Generate but skip Backup' }))
+    await user.click(screen.getByRole('button', { name: 'Generate but skip backup' }))
     expect(screen.getByRole('heading', { name: 'Quick start without viewing backup' })).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Abort' }))
     await waitFor(() => {
@@ -327,7 +327,7 @@ describe('CreateWalletPage', () => {
     mockCreateWalletAndEncryptSecrets.mockResolvedValueOnce(createWalletCryptoResult())
     renderWithProviders(<CreateWalletPage />)
 
-    await user.click(screen.getByRole('button', { name: 'Generate but skip Backup' }))
+    await user.click(screen.getByRole('button', { name: 'Generate but skip backup' }))
     await user.click(screen.getByRole('button', { name: 'Understood! Proceed!' }))
 
     await waitFor(() => {

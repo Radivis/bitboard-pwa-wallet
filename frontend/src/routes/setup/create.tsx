@@ -37,6 +37,9 @@ export const Route = createFileRoute('/setup/create')({
 
 type Step = 1 | 2 | 3
 
+/** Number of random word positions asked during seed verification (step 3). */
+const SEED_VERIFICATION_WORD_COUNT = 3
+
 /** Stored after createWalletAndEncryptSecrets so we can persist in step 3 without keeping mnemonic. */
 interface CreateWalletPending {
   encryptedBlobs: SplitWalletSecretsEncryptedBlobs
@@ -73,7 +76,7 @@ export function CreateWalletPage() {
     if (words.length === 0) return []
     const indices: number[] = []
     const range = words.length
-    while (indices.length < 3) {
+    while (indices.length < SEED_VERIFICATION_WORD_COUNT) {
       const idx = Math.floor(Math.random() * range)
       if (!indices.includes(idx)) indices.push(idx)
     }
@@ -156,21 +159,28 @@ export function CreateWalletPage() {
     ],
   )
 
+  const runCreateWalletAndEncryptSecrets = useCallback(async () => {
+    const password = useSessionStore.getState().password
+    if (!password) throw new Error('App password required')
+    await ensureSecretsChannel()
+    const network = toBitcoinNetwork(networkMode)
+    return createWalletAndEncryptSecrets({
+      password,
+      network,
+      addressType,
+      accountId,
+      wordCount,
+    })
+  }, [
+    accountId,
+    addressType,
+    createWalletAndEncryptSecrets,
+    networkMode,
+    wordCount,
+  ])
+
   const createWalletMutation = useMutation({
-    mutationFn: async () => {
-      const password = useSessionStore.getState().password
-      if (!password) throw new Error('App password required')
-      await ensureSecretsChannel()
-      const network = toBitcoinNetwork(networkMode)
-      const result = await createWalletAndEncryptSecrets({
-        password,
-        network,
-        addressType,
-        accountId,
-        wordCount,
-      })
-      return result
-    },
+    mutationFn: runCreateWalletAndEncryptSecrets,
     onSuccess: (result) => {
       setMnemonicForBackup(result.mnemonicForBackup)
       setPendingCreate({
@@ -193,17 +203,7 @@ export function CreateWalletPage() {
 
   const quickCreateWalletMutation = useMutation({
     mutationFn: async () => {
-      const password = useSessionStore.getState().password
-      if (!password) throw new Error('App password required')
-      await ensureSecretsChannel()
-      const network = toBitcoinNetwork(networkMode)
-      const result = await createWalletAndEncryptSecrets({
-        password,
-        network,
-        addressType,
-        accountId,
-        wordCount,
-      })
+      const result = await runCreateWalletAndEncryptSecrets()
       await persistAndActivateNewWallet({
         encryptedBlobs: {
           payload: result.encryptedPayload,
@@ -459,7 +459,7 @@ function StepWordCountGenerate({
               size="lg"
               onClick={onOpenSkipBackupWarning}
             >
-              Generate but skip Backup
+              Generate but skip backup
             </Button>
           </>
         )}

@@ -54,6 +54,10 @@ export interface AppModalProps {
 /**
  * Standard app dialog: header row (title + Infomode + close), full-width body, optional footer.
  * Close paths call onCancel once, then onOpenChange(false), except when blockDismiss is true.
+ *
+ * **Controlled usage:** Some parents pass `onOpenChange={() => {}}` and rely on `onCancel` to
+ * update local `open` state (e.g. clear form + `setOpen(false)`). That matches this component’s
+ * close order; if you only no-op `onCancel`, the dialog can stay open incorrectly.
  */
 export function AppModal({
   open,

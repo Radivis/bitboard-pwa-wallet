@@ -72,7 +72,8 @@ export function DeleteWalletSection({
     if (activeWalletId == null || sessionPassword == null) return
 
     const deletedWalletId = activeWalletId
-    const wasActiveWallet = true
+    /** This UI only deletes the wallet that is currently active. */
+    const activeWalletIsBeingDeleted = true
     const nextActiveWalletId =
       wallets.find((w) => w.wallet_id !== deletedWalletId)?.wallet_id ?? null
 
@@ -80,12 +81,12 @@ export function DeleteWalletSection({
       await deleteWalletMutation.mutateAsync(deletedWalletId)
       await finalizeWalletDeletion({
         deletedWalletId,
-        wasActiveWallet,
+        wasActiveWallet: activeWalletIsBeingDeleted,
         nextActiveWalletId,
       })
       toast.success('Wallet deleted')
       closeAll()
-      if (wasActiveWallet) {
+      if (activeWalletIsBeingDeleted) {
         if (nextActiveWalletId === null) {
           navigate({ to: '/setup' })
         } else {
@@ -129,7 +130,14 @@ export function DeleteWalletSection({
     } finally {
       setProbingMainnet(false)
     }
-  }, [activeWalletId, sessionPassword, noMnemonicBackupFlag, performDelete])
+  }, [
+    activeWalletId,
+    sessionPassword,
+    noMnemonicBackupFlag,
+    performDelete,
+    setFirstDialogOpen,
+    setProbingMainnet,
+  ])
 
   if (activeWalletId == null) return null
 
