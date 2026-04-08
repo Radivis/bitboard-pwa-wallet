@@ -36,13 +36,14 @@ export async function sumMainnetOnChainSatsForWallet(params: {
   const { password, walletId } = params
   const walletDb = getDatabase()
   const payload = await loadWalletSecretsPayload(walletDb, password, walletId)
-  const mainnetDescriptors = payload.descriptorWallets.filter((dw) => dw.network === 'bitcoin')
+  const mainnetDescriptors = payload.descriptorWallets
+    .filter((descriptorWallet) => descriptorWallet.network === 'bitcoin')
   if (mainnetDescriptors.length === 0) {
     return 0
   }
 
   const { loadedSubWallet, networkMode, addressType, accountId } = useWalletStore.getState()
-  const committed = loadedSubWallet ?? { networkMode, addressType, accountId }
+  const committedSubWallet = loadedSubWallet ?? { networkMode, addressType, accountId }
 
   const { loadWallet, getBalance, exportChangeset, getTransactionList } =
     useCryptoStore.getState()
@@ -51,26 +52,26 @@ export async function sumMainnetOnChainSatsForWallet(params: {
     await loadDescriptorWalletWithoutSync({
       password,
       walletId,
-      networkMode: committed.networkMode,
-      addressType: committed.addressType,
-      accountId: committed.accountId,
+      networkMode: committedSubWallet.networkMode,
+      addressType: committedSubWallet.addressType,
+      accountId: committedSubWallet.accountId,
     })
     const restoredBalance = await getBalance()
-    const txs = await getTransactionList()
+    const restoredTxs = await getTransactionList()
     useWalletStore.getState().setBalance(restoredBalance)
-    useWalletStore.getState().setTransactions(txs)
+    useWalletStore.getState().setTransactions(restoredTxs)
   }
 
-  let sum = 0
+  let balanceSum = 0
   try {
     try {
       const currentChangeset = await exportChangeset()
       await updateDescriptorWalletChangeset({
         password,
         walletId,
-        network: toBitcoinNetwork(committed.networkMode),
-        addressType: committed.addressType,
-        accountId: committed.accountId,
+        network: toBitcoinNetwork(committedSubWallet.networkMode),
+        addressType: committedSubWallet.addressType,
+        accountId: committedSubWallet.accountId,
         changesetJson: currentChangeset,
       })
     } catch (err) {
@@ -79,16 +80,16 @@ export async function sumMainnetOnChainSatsForWallet(params: {
       }
     }
 
-    for (const dw of mainnetDescriptors) {
+    for (const descriptorWalletData of mainnetDescriptors) {
       await loadWalletHandlingPersistedChainMismatch(loadWallet, {
-        externalDescriptor: dw.externalDescriptor,
-        internalDescriptor: dw.internalDescriptor,
+        externalDescriptor: descriptorWalletData.externalDescriptor,
+        internalDescriptor: descriptorWalletData.internalDescriptor,
         network: 'bitcoin',
-        changesetJson: dw.changeSet,
+        changesetJson: descriptorWalletData.changeSet,
         useEmptyChain: false,
       })
       const balance = await getBalance()
-      sum += balance.total
+      balanceSum += balance.total
     }
   } catch (probeErr) {
     try {
@@ -105,5 +106,5 @@ export async function sumMainnetOnChainSatsForWallet(params: {
   }
 
   await restoreActiveSubWalletView()
-  return sum
+  return balanceSum
 }
