@@ -16,6 +16,12 @@ import {
   LAB_MIN_BLOCKS_PER_MINE,
 } from './lab-api'
 import {
+  isCoinbaseFromBlockEffectsTx,
+  LAB_COINBASE_PREV_TXID_HEX,
+  LAB_COINBASE_PREV_VOUT,
+  LAB_COINBASE_SEQUENCE,
+} from '@/lib/lab-operations'
+import {
   mergeAddressesWithUtxos,
   walletOwnerKey,
   WALLET_OWNER_PREFIX,
@@ -51,8 +57,20 @@ function labAddressesEqual(a: string, b: string): boolean {
   return false
 }
 
+/** Resolves owner when WASM-reported addresses differ in bech32 casing from stored map keys. */
+function lookupOwnerForLabAddress(
+  address: string,
+  addressToOwner: Record<string, string>,
+): string | undefined {
+  const direct = addressToOwner[address]
+  if (direct !== undefined) return direct
+  for (const [storedAddr, owner] of Object.entries(addressToOwner)) {
+    if (labAddressesEqual(storedAddr, address)) return owner
+  }
+  return undefined
+}
+
 function rebuildTxidToChangeAddressFromMempool(mempool: MempoolEntry[]): void {
-  txidToChangeAddress.clear()
   for (const entry of mempool) {
     const changeOut = entry.outputsDetail.find((o) => o.isChange)
     if (changeOut) {
@@ -61,11 +79,22 @@ function rebuildTxidToChangeAddressFromMempool(mempool: MempoolEntry[]): void {
   }
 }
 
+function rebuildTxidToChangeAddressFromState(): void {
+  txidToChangeAddress.clear()
+  for (const op of state.txOperations ?? []) {
+    if (op.changeAddress) {
+      txidToChangeAddress.set(op.txid, op.changeAddress)
+    }
+  }
+  rebuildTxidToChangeAddressFromMempool(state.mempool ?? [])
+}
+
 /**
  * Fills missing output owners for legacy rows where change was not linked (e.g. mined after
  * reload when txid→change map was empty). Requires one unowned output and at least one owned.
  */
 function inferMissingLabOutputOwners(tx: LabTxDetails): LabTxDetails {
+  if (tx.isCoinbase) return tx
   const firstOwner = tx.inputs.find((i) => i.owner != null)?.owner ?? null
   if (firstOwner == null) return tx
   if (tx.inputs.some((i) => i.owner != null && i.owner !== firstOwner)) return tx
@@ -282,25 +311,50 @@ function applyTransactionsAndDetailsFromBlock(
   const addressToOwner = state.addressToOwner ?? {}
 
   for (const tx of transactions) {
-    const inputs: { address: string; amountSats: number; owner?: string | null }[] = []
+    const isCb = isCoinbaseFromBlockEffectsTx(tx)
+    const changeFromOp = state.txOperations?.find((o) => o.txid === tx.txid)?.changeAddress
+    const changeAddressForTx =
+      txidToChangeAddress.get(tx.txid) ?? changeFromOp ?? undefined
+
+    let inputs: LabTxDetails['inputs']
     let firstInputAddress: string | null = null
-    for (const input of tx.inputs) {
-      const key = `${input.prev_txid}:${input.prev_vout}`
-      const utxo = utxoMap.get(key)
-      if (utxo) {
-        const owner = addressToOwner[utxo.address] ?? null
-        inputs.push({ address: utxo.address, amountSats: utxo.amountSats, owner })
-        if (firstInputAddress === null) firstInputAddress = utxo.address
+
+    if (isCb) {
+      inputs = [
+        {
+          address: '',
+          amountSats: 0,
+          owner: null,
+          prevTxid: LAB_COINBASE_PREV_TXID_HEX,
+          prevVout: LAB_COINBASE_PREV_VOUT,
+          sequence: LAB_COINBASE_SEQUENCE,
+        },
+      ]
+    } else {
+      inputs = []
+      for (const input of tx.inputs) {
+        const key = `${input.prev_txid}:${input.prev_vout}`
+        const utxo = utxoMap.get(key)
+        if (utxo) {
+          const owner = lookupOwnerForLabAddress(utxo.address, addressToOwner) ?? null
+          inputs.push({ address: utxo.address, amountSats: utxo.amountSats, owner })
+          if (firstInputAddress === null) firstInputAddress = utxo.address
+        }
       }
     }
-    const sender = firstInputAddress ? (addressToOwner[firstInputAddress] ?? null) : null
-    const changeAddressForTx = txidToChangeAddress.get(tx.txid)
+
+    const sender = isCb
+      ? null
+      : firstInputAddress
+        ? lookupOwnerForLabAddress(firstInputAddress, addressToOwner) ?? null
+        : null
+
     const outputs = (tx.outputs ?? []).map((output) => {
       const isChange =
         changeAddressForTx !== undefined && labAddressesEqual(output.address, changeAddressForTx)
       const owner = isChange && sender
         ? sender
-        : (addressToOwner[output.address] ?? null)
+        : (lookupOwnerForLabAddress(output.address, addressToOwner) ?? null)
       if (isChange && sender) {
         state.addressToOwner = state.addressToOwner ?? {}
         state.addressToOwner[output.address] = sender
@@ -314,7 +368,7 @@ function applyTransactionsAndDetailsFromBlock(
     })
     const firstNonChangeOutput = outputs.find((output) => !output.isChange)
     let receiver = firstNonChangeOutput
-      ? (addressToOwner[firstNonChangeOutput.address] ?? null)
+      ? (lookupOwnerForLabAddress(firstNonChangeOutput.address, addressToOwner) ?? null)
       : null
     if (
       firstNonChangeOutput &&
@@ -326,13 +380,19 @@ function applyTransactionsAndDetailsFromBlock(
       state.addressToOwner[firstNonChangeOutput.address] = sender
       receiver = sender
     }
-    state.transactions.push({ txid: tx.txid, sender, receiver })
+    state.transactions.push({
+      txid: tx.txid,
+      sender,
+      receiver,
+      isCoinbase: isCb,
+    })
     if (inputs.length > 0 || outputs.length > 0) {
       state.txDetails.push({
         txid: tx.txid,
         blockHeight: height,
         blockTime,
         confirmations: 0,
+        isCoinbase: isCb,
         inputs,
         outputs,
       })
@@ -341,11 +401,43 @@ function applyTransactionsAndDetailsFromBlock(
   }
 }
 
+function synthesizeCoinbaseTxFromNewUtxos(
+  newUtxos: BlockEffectsParsed['new_utxos'],
+): BlockEffectsTx[] {
+  if (!Array.isArray(newUtxos) || newUtxos.length === 0) return []
+  const byTxid = new Map<string, BlockEffectsParsed['new_utxos']>()
+  for (const u of newUtxos) {
+    const txid = String(u.txid)
+    const list = byTxid.get(txid) ?? []
+    list.push(u)
+    byTxid.set(txid, list)
+  }
+  const firstTxid = String(newUtxos[0].txid)
+  const rows = byTxid.get(firstTxid) ?? []
+  return [
+    {
+      txid: firstTxid,
+      inputs: [],
+      outputs: rows.map((u) => {
+        const row = u as unknown as Record<string, unknown>
+        return {
+          address: String(u.address),
+          amount_sats: readSatsFromUtxoRow(row),
+        }
+      }),
+    },
+  ]
+}
+
 function applyBlockEffects(blockHex: string, height: number, newAddress?: LabAddress): void {
   const wasmModule = labWasmModule!
   const rawEffects = wasmModule.lab_block_effects(blockHex)
-  const { spent, new_utxos: newUtxos, transactions, block_time } = parseBlockEffects(rawEffects)
+  let { spent, new_utxos: newUtxos, transactions, block_time } = parseBlockEffects(rawEffects)
   const blockTime = block_time ?? 0
+
+  if (transactions.length === 0 && newUtxos.length > 0) {
+    transactions = synthesizeCoinbaseTxFromNewUtxos(newUtxos)
+  }
 
   applyTransactionsAndDetailsFromBlock(transactions, height, blockTime)
   removeSpentUtxos(spent)
@@ -363,15 +455,31 @@ function applyBlockEffects(blockHex: string, height: number, newAddress?: LabAdd
 }
 
 function feeFromTxDetails(tx: LabTxDetails): number {
+  if (tx.isCoinbase) return 0
   const totalInputs = tx.inputs.reduce((sum, input) => sum + input.amountSats, 0)
   const totalOutputs = tx.outputs.reduce((sum, output) => sum + output.amountSats, 0)
   return Math.max(totalInputs - totalOutputs, 0)
 }
 
-function minedByFromBlockTxs(blockTxs: LabTxDetails[]): string | null {
-  const coinbase = blockTxs.find((tx) => tx.inputs.length === 0)
-  const firstCoinbaseOutputOwner = coinbase?.outputs[0]?.owner
-  return firstCoinbaseOutputOwner ?? null
+function minedByFromBlockTxs(
+  blockTxs: LabTxDetails[],
+  addressToOwner: Record<string, string>,
+): string | null {
+  const coinbase = blockTxs.find((tx) => tx.isCoinbase || tx.inputs.length === 0)
+  const out0 = coinbase?.outputs[0]
+  if (!out0) return null
+  const fromStoredDetail = out0.owner ?? null
+  if (fromStoredDetail) return fromStoredDetail
+  return lookupOwnerForLabAddress(out0.address, addressToOwner) ?? null
+}
+
+function minedByForBlockHeight(height: number): string | null {
+  const op = state.mineOperations?.find((m) => m.height === height)
+  if (op != null && op.minedByKey != null && op.minedByKey !== '') {
+    return op.minedByKey
+  }
+  const blockTxs = state.txDetails.filter((tx) => tx.blockHeight === height)
+  return minedByFromBlockTxs(blockTxs, state.addressToOwner ?? {})
 }
 
 function blockTransactionsForHeight(height: number): LabBlockTransactionSummary[] {
@@ -385,6 +493,7 @@ function blockTransactionsForHeight(height: number): LabBlockTransactionSummary[
         sender: txRecord?.sender ?? null,
         receiver: txRecord?.receiver ?? null,
         feeSats: feeFromTxDetails(tx),
+        isCoinbase: tx.isCoinbase,
       }
     })
 }
@@ -471,7 +580,7 @@ async function buildMinedBlockDetails(block: LabBlock): Promise<LabBlockDetails>
     metadata: {
       height: block.height,
       minedOn: blockTxDetails[0]?.blockTime ?? header.timestamp,
-      minedBy: minedByFromBlockTxs(blockTxDetails),
+      minedBy: minedByForBlockHeight(block.height),
       numberOfTransactions: transactions.length,
       totalFeesSats,
     },
@@ -508,12 +617,13 @@ async function buildCurrentBlockTemplate(
 
   const transactions: LabBlockTransactionSummary[] = previewEffects.transactions.map((tx) => {
     const matchedEntry = entryByTxid.get(tx.txid)
-    const isCoinbase = tx.inputs.length === 0
+    const isCoinbase = isCoinbaseFromBlockEffectsTx(tx)
     return {
       txid: tx.txid,
       sender: matchedEntry?.sender ?? null,
       receiver: isCoinbase ? minedBy : (matchedEntry?.receiver ?? null),
       feeSats: matchedEntry?.feeSats ?? 0,
+      isCoinbase,
     }
   })
 
@@ -543,8 +653,10 @@ const labService = {
       mempool: cloned.mempool ?? [],
       transactions: cloned.transactions ?? [],
       txDetails: cloned.txDetails ?? [],
+      mineOperations: cloned.mineOperations ?? [],
+      txOperations: cloned.txOperations ?? [],
     }
-    rebuildTxidToChangeAddressFromMempool(state.mempool)
+    rebuildTxidToChangeAddressFromState()
   },
 
   async getTransaction(txid: string): Promise<LabTxDetails | null> {
@@ -555,6 +667,7 @@ const labService = {
         blockHeight: -1,
         blockTime: 0,
         confirmations: 0,
+        isCoinbase: false,
         inputs: mempoolEntry.inputsDetail,
         outputs: mempoolEntry.outputsDetail,
       })
@@ -719,6 +832,11 @@ const labService = {
       state.addressToOwner[coinbaseAddress] = ownerForCoinbase
     }
 
+    const minedByKey: string | null =
+      options?.ownerWalletId != null
+        ? walletOwnerKey(options.ownerWalletId)
+        : ownerForCoinbase ?? null
+
     const mempoolCopy = [...(state.mempool ?? [])]
     const selectedEntries = selectMempoolTxsForBlock(mempoolCopy)
     const mempoolTxHexes = selectedEntries.map((entry) => entry.signedTxHex)
@@ -738,6 +856,20 @@ const labService = {
         feesForBlock,
       )
       applyBlockEffects(blockHex, height, i === 0 ? newAddress ?? undefined : undefined)
+      const minedAtHeight = height
+      const tipAfter = getTip()!
+      const coinbaseDetail = state.txDetails.find(
+        (d) => d.blockHeight === minedAtHeight && d.isCoinbase,
+      )
+      state.mineOperations = state.mineOperations ?? []
+      state.mineOperations.push({
+        height: minedAtHeight,
+        blockHash: tipAfter.blockHash,
+        minedByKey,
+        coinbaseTxid: coinbaseDetail?.txid ?? null,
+        coinbaseVout: 0,
+        createdAt: new Date().toISOString(),
+      })
       if (i === 0) {
         state.mempool = (state.mempool ?? []).filter(
           (entry) =>
@@ -850,12 +982,19 @@ const labService = {
     entity.updatedAt = new Date().toISOString()
 
     const txid = wasmModule.lab_txid(signedTxHex)
-    if (mempoolMetadata.hasChange) {
-      const changeOut = mempoolMetadata.outputsDetail.find((o) => o.isChange)
-      if (changeOut) {
-        txidToChangeAddress.set(txid, changeOut.address)
-      }
-    }
+    const changeOut = mempoolMetadata.hasChange
+      ? mempoolMetadata.outputsDetail.find((o) => o.isChange)
+      : undefined
+
+    state.txOperations = state.txOperations ?? []
+    state.txOperations.push({
+      txid,
+      senderKey: entityName,
+      changeAddress: changeOut?.address ?? null,
+      changeVout: null,
+      payloadJson: '{}',
+    })
+    rebuildTxidToChangeAddressFromState()
 
     state.mempool = state.mempool ?? []
     state.mempool.push({
@@ -940,12 +1079,18 @@ const labService = {
   ): Promise<LabState> {
     const wasmModule = await getWasm()
 
-    if (mempoolMetadata.hasChange) {
-      const createdTxid = wasmModule.lab_txid(signedTxHex)
-      txidToChangeAddress.set(createdTxid, mempoolMetadata.walletChangeAddress)
-    }
-
     const txid = wasmModule.lab_txid(signedTxHex)
+
+    const senderKey = mempoolMetadata.sender ?? ''
+    state.txOperations = state.txOperations ?? []
+    state.txOperations.push({
+      txid,
+      senderKey,
+      changeAddress: mempoolMetadata.hasChange ? mempoolMetadata.walletChangeAddress : null,
+      changeVout: null,
+      payloadJson: '{}',
+    })
+    rebuildTxidToChangeAddressFromState()
 
     state.mempool = state.mempool ?? []
     state.mempool.push({

@@ -116,6 +116,45 @@ async function migrateLabToLatest(labDb: Kysely<LabDatabase>): Promise<void> {
   } catch {
     /* column already present */
   }
+
+  try {
+    await sql`ALTER TABLE lab_transactions ADD COLUMN is_coinbase integer NOT NULL DEFAULT 0`.execute(
+      labDb,
+    )
+  } catch {
+    /* column already present */
+  }
+
+  try {
+    await sql`ALTER TABLE lab_tx_details ADD COLUMN is_coinbase integer NOT NULL DEFAULT 0`.execute(
+      labDb,
+    )
+  } catch {
+    /* column already present */
+  }
+
+  await labDb.schema
+    .createTable('lab_mine_operations')
+    .ifNotExists()
+    .addColumn('mine_operation_id', 'integer', (col) => col.primaryKey().autoIncrement())
+    .addColumn('height', 'integer', (col) => col.notNull())
+    .addColumn('block_hash', 'text', (col) => col.notNull())
+    .addColumn('mined_by_key', 'text', (col) => col)
+    .addColumn('coinbase_txid', 'text', (col) => col)
+    .addColumn('coinbase_vout', 'integer', (col) => col)
+    .addColumn('created_at', 'text', (col) => col.notNull())
+    .execute()
+
+  await labDb.schema
+    .createTable('lab_tx_operations')
+    .ifNotExists()
+    .addColumn('tx_operation_id', 'integer', (col) => col.primaryKey().autoIncrement())
+    .addColumn('txid', 'text', (col) => col.notNull().unique())
+    .addColumn('sender_key', 'text', (col) => col.notNull())
+    .addColumn('change_address', 'text', (col) => col)
+    .addColumn('change_vout', 'integer', (col) => col)
+    .addColumn('payload_json', 'text', (col) => col.notNull())
+    .execute()
 }
 
 export async function ensureLabMigrated(): Promise<void> {

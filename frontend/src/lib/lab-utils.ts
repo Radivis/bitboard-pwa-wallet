@@ -80,6 +80,22 @@ export function labTransactionsForWallet(
     const details = txDetailsByTxid.get(record.txid)
     if (!details) continue
 
+    if (details.isCoinbase) {
+      const receivedSatsCoinbase = (details.outputs ?? [])
+        .filter((o) => o.owner === walletOwner)
+        .reduce((s, o) => s + o.amountSats, 0)
+      result.push({
+        txid: record.txid,
+        sent_sats: 0,
+        received_sats: receivedSatsCoinbase,
+        fee_sats: 0,
+        confirmation_block_height: details.blockHeight,
+        confirmation_time: details.blockTime,
+        is_confirmed: true,
+      })
+      continue
+    }
+
     const sentSats = isSender
       ? (details.outputs ?? []).filter((o) => !o.isChange).reduce((s, o) => s + o.amountSats, 0)
       : 0

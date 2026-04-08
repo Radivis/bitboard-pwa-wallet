@@ -139,7 +139,7 @@ test.describe('Lab', { tag: '@lab' }, () => {
 
     state = await getLabState(page)
     expect(state.mempool).toHaveLength(0)
-    expect(state.transactions).toHaveLength(1)
+    expect(state.transactions.filter((t) => !t.isCoinbase)).toHaveLength(1)
     const aliceSum = getUtxoSumByOwner(state, 'Alice')
     const bobSum = getUtxoSumByOwner(state, 'Bob')
     expect(bobSum).toBe(COINBASE_SATS + 800)
@@ -259,5 +259,7 @@ test.describe('Lab', { tag: '@lab' }, () => {
     await expect(page.getByRole('main').getByText('Block Header', { exact: true })).toBeVisible()
     await expect(page.getByRole('main').getByText('Metadata', { exact: true })).toBeVisible()
     await expect(page.getByRole('main').getByText('Transactions', { exact: true })).toBeVisible()
+    await expect(page.getByRole('main').getByText(/Mined by:.*Alice/)).toBeVisible()
+    await expect(page.getByRole('main').getByText('Coinbase', { exact: true })).toBeVisible()
   })
 })

@@ -17,10 +17,22 @@ export interface LabAddress {
   wif: string
 }
 
+export interface LabTxInputDetail {
+  address: string
+  amountSats: number
+  owner?: string | null
+  /** Populated for coinbase inputs (Bitcoin prevout conventions). */
+  prevTxid?: string
+  prevVout?: number
+  sequence?: number
+}
+
 export interface LabTxRecord {
   txid: string
   sender: string | null
   receiver: string | null
+  /** Denormalized; coinbase txs have no spend sender in the usual sense. */
+  isCoinbase?: boolean
 }
 
 export interface MempoolEntry {
@@ -44,7 +56,8 @@ export interface LabTxDetails {
   blockHeight: number
   blockTime: number
   confirmations: number
-  inputs: { address: string; amountSats: number; owner?: string | null }[]
+  isCoinbase?: boolean
+  inputs: LabTxInputDetail[]
   outputs: { address: string; amountSats: number; isChange?: boolean; owner?: string | null }[]
 }
 
@@ -64,6 +77,7 @@ export interface LabBlockTransactionSummary {
   sender: string | null
   receiver: string | null
   feeSats: number
+  isCoinbase?: boolean
 }
 
 export interface LabBlockMetadataDetails {
@@ -106,6 +120,27 @@ export interface LabEntityRecord {
   updatedAt: string
 }
 
+/** Persisted: one row per mined block / coinbase (see lab_mine_operations). */
+export interface LabMineOperationRecord {
+  mineOperationId?: number
+  height: number
+  blockHash: string
+  minedByKey: string | null
+  coinbaseTxid: string | null
+  coinbaseVout: number | null
+  createdAt: string
+}
+
+/** Persisted: metadata for entity/wallet spends (see lab_tx_operations). */
+export interface LabTxOperationRecord {
+  txOperationId?: number
+  txid: string
+  senderKey: string
+  changeAddress: string | null
+  changeVout: number | null
+  payloadJson: string
+}
+
 export interface LabState {
   blocks: LabBlock[]
   utxos: LabUtxo[]
@@ -116,6 +151,8 @@ export interface LabState {
   mempool: MempoolEntry[]
   transactions: LabTxRecord[]
   txDetails: LabTxDetails[]
+  mineOperations: LabMineOperationRecord[]
+  txOperations: LabTxOperationRecord[]
 }
 
 /** Minimum blocks per single "Mine blocks" operation in the lab UI and worker. */
@@ -166,6 +203,8 @@ export const EMPTY_LAB_STATE: LabState = {
   mempool: [],
   transactions: [],
   txDetails: [],
+  mineOperations: [],
+  txOperations: [],
 }
 
 export interface LabService {

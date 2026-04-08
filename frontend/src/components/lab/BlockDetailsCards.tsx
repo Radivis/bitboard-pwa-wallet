@@ -7,6 +7,7 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
+import { Badge } from '@/components/ui/badge'
 import { formatSats, truncateAddress } from '@/lib/bitcoin-utils'
 import { getOwnerDisplayName } from '@/lib/lab-utils'
 import type { LabBlockDetails } from '@/workers/lab-api'
@@ -126,15 +127,24 @@ export function LabBlockTransactionsCard({
                   key={tx.txid}
                   to="/lab/tx/$txid"
                   params={{ txid: tx.txid }}
-                  className="flex items-center gap-3 rounded px-2 py-2 transition-colors hover:bg-muted/50"
+                  className="flex flex-wrap items-center gap-2 rounded px-2 py-2 transition-colors hover:bg-muted/50"
                 >
+                  {tx.isCoinbase ? (
+                    <Badge variant="outline" className="shrink-0">
+                      Coinbase
+                    </Badge>
+                  ) : null}
                   <span className="min-w-0 flex-1 font-mono text-sm" title={tx.txid}>
                     {truncateAddress(tx.txid)}
                   </span>
                   <span className="text-sm text-muted-foreground">
-                    {tx.sender ? getOwnerDisplayName(tx.sender, wallets) : 'unknown'}
-                    {' -> '}
-                    {tx.receiver ? getOwnerDisplayName(tx.receiver, wallets) : 'unknown'}
+                    {tx.isCoinbase
+                      ? (tx.receiver
+                        ? getOwnerDisplayName(tx.receiver, wallets)
+                        : 'unknown reward')
+                      : `${tx.sender ? getOwnerDisplayName(tx.sender, wallets) : 'unknown'} -> ${
+                          tx.receiver ? getOwnerDisplayName(tx.receiver, wallets) : 'unknown'
+                        }`}
                   </span>
                   <span className="text-sm tabular-nums">{formatSats(tx.feeSats)} sats fee</span>
                 </Link>

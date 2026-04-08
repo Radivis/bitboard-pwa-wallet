@@ -1,5 +1,12 @@
 import { wrap, type Remote } from 'comlink'
-import type { LabEntityRecord, LabService, LabState } from './lab-api'
+import type {
+  LabEntityRecord,
+  LabMineOperationRecord,
+  LabService,
+  LabState,
+  LabTxDetails,
+  LabTxOperationRecord,
+} from './lab-api'
 import { EMPTY_LAB_STATE } from './lab-api'
 import {
   ensureLabMigrated,
@@ -107,25 +114,44 @@ export async function loadLabStateFromDatabase(): Promise<LabState> {
 
   const transactions = await labDb
     .selectFrom('lab_transactions')
-    .select(['txid', 'sender', 'receiver'])
+    .select(['txid', 'sender', 'receiver', 'is_coinbase'])
     .orderBy('lab_transaction_id', 'asc')
     .execute()
 
   const txDetailsRows = await labDb
     .selectFrom('lab_tx_details')
-    .select(['txid', 'block_height', 'block_time', 'inputs_json', 'outputs_json'])
+    .select(['txid', 'block_height', 'block_time', 'inputs_json', 'outputs_json', 'is_coinbase'])
     .execute()
+
+  const mineOpRows = await labDb.selectFrom('lab_mine_operations').selectAll().orderBy('height', 'asc').execute()
+  const txOpRows = await labDb.selectFrom('lab_tx_operations').selectAll().execute()
+
+  const mineOperations: LabMineOperationRecord[] = mineOpRows.map((r) => ({
+    mineOperationId: r.mine_operation_id,
+    height: r.height,
+    blockHash: r.block_hash,
+    minedByKey: r.mined_by_key,
+    coinbaseTxid: r.coinbase_txid,
+    coinbaseVout: r.coinbase_vout,
+    createdAt: r.created_at,
+  }))
+
+  const txOperations: LabTxOperationRecord[] = txOpRows.map((r) => ({
+    txOperationId: r.tx_operation_id,
+    txid: r.txid,
+    senderKey: r.sender_key,
+    changeAddress: r.change_address,
+    changeVout: r.change_vout,
+    payloadJson: r.payload_json,
+  }))
 
   const txDetails = txDetailsRows.map((r) => ({
     txid: r.txid,
     blockHeight: r.block_height,
     blockTime: r.block_time,
     confirmations: 0,
-    inputs: JSON.parse(r.inputs_json) as {
-      address: string
-      amountSats: number
-      owner?: string | null
-    }[],
+    isCoinbase: r.is_coinbase === 1,
+    inputs: JSON.parse(r.inputs_json) as LabTxDetails['inputs'],
     outputs: JSON.parse(r.outputs_json) as {
       address: string
       amountSats: number
@@ -158,8 +184,11 @@ export async function loadLabStateFromDatabase(): Promise<LabState> {
       txid: t.txid,
       sender: t.sender,
       receiver: t.receiver,
+      isCoinbase: t.is_coinbase === 1,
     })),
     txDetails,
+    mineOperations,
+    txOperations,
   }
 }
 
@@ -185,6 +214,8 @@ export async function persistLabState(state: LabState): Promise<void> {
   await labDb.deleteFrom('lab_mempool').execute()
   await labDb.deleteFrom('lab_transactions').execute()
   await labDb.deleteFrom('lab_tx_details').execute()
+  await labDb.deleteFrom('lab_mine_operations').execute()
+  await labDb.deleteFrom('lab_tx_operations').execute()
 
   const now = new Date().toISOString()
   for (const b of state.blocks) {
@@ -226,6 +257,7 @@ export async function persistLabState(state: LabState): Promise<void> {
         txid: t.txid,
         sender: t.sender,
         receiver: t.receiver,
+        is_coinbase: t.isCoinbase ? 1 : 0,
       })
       .execute()
   }
@@ -296,6 +328,33 @@ export async function persistLabState(state: LabState): Promise<void> {
         block_time: d.blockTime,
         inputs_json: JSON.stringify(d.inputs),
         outputs_json: JSON.stringify(d.outputs),
+        is_coinbase: d.isCoinbase ? 1 : 0,
+      })
+      .execute()
+  }
+  const nowMine = new Date().toISOString()
+  for (const m of state.mineOperations ?? []) {
+    await labDb
+      .insertInto('lab_mine_operations')
+      .values({
+        height: m.height,
+        block_hash: m.blockHash,
+        mined_by_key: m.minedByKey,
+        coinbase_txid: m.coinbaseTxid,
+        coinbase_vout: m.coinbaseVout,
+        created_at: m.createdAt || nowMine,
+      })
+      .execute()
+  }
+  for (const o of state.txOperations ?? []) {
+    await labDb
+      .insertInto('lab_tx_operations')
+      .values({
+        txid: o.txid,
+        sender_key: o.senderKey,
+        change_address: o.changeAddress,
+        change_vout: o.changeVout,
+        payload_json: o.payloadJson || '{}',
       })
       .execute()
   }

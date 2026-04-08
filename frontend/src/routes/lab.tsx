@@ -50,6 +50,8 @@ function LabLayout() {
         mempool: ui.mempool,
         transactions: ui.transactions,
         txDetails: ui.txDetails,
+        mineOperations: ui.mineOperations,
+        txOperations: ui.txOperations,
       }
     }
     return () => {

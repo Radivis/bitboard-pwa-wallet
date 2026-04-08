@@ -38,6 +38,7 @@ interface LabTransactionsTable {
   txid: string
   sender: string | null
   receiver: string | null
+  is_coinbase: number
 }
 
 interface LabTxDetailsTable {
@@ -46,6 +47,26 @@ interface LabTxDetailsTable {
   block_time: number
   inputs_json: string
   outputs_json: string
+  is_coinbase: number
+}
+
+interface LabMineOperationsTable {
+  mine_operation_id: Generated<number>
+  height: number
+  block_hash: string
+  mined_by_key: string | null
+  coinbase_txid: string | null
+  coinbase_vout: number | null
+  created_at: string
+}
+
+interface LabTxOperationsTable {
+  tx_operation_id: Generated<number>
+  txid: string
+  sender_key: string
+  change_address: string | null
+  change_vout: number | null
+  payload_json: string
 }
 
 export interface LabDatabase {
@@ -57,6 +78,8 @@ export interface LabDatabase {
   lab_mempool: LabMempoolTable
   lab_transactions: LabTransactionsTable
   lab_tx_details: LabTxDetailsTable
+  lab_mine_operations: LabMineOperationsTable
+  lab_tx_operations: LabTxOperationsTable
 }
 
 export type LabEntityRow = Selectable<LabEntitiesTable>

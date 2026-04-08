@@ -21,5 +21,7 @@ export function toUiLabState(state: LabState): LabState {
     mempool: state.mempool ?? [],
     transactions: state.transactions ?? [],
     txDetails: state.txDetails ?? [],
+    mineOperations: state.mineOperations ?? [],
+    txOperations: state.txOperations ?? [],
   }
 }
