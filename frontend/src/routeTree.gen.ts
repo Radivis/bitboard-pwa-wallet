@@ -28,6 +28,10 @@ import { Route as SetupCreateRouteImport } from './routes/setup/create'
 import { Route as LibraryTagsRouteImport } from './routes/library/tags'
 import { Route as LibraryHistoryRouteImport } from './routes/library/history'
 import { Route as LibraryFavoritesRouteImport } from './routes/library/favorites'
+import { Route as LabTransactionsRouteImport } from './routes/lab/transactions'
+import { Route as LabLayer2RouteImport } from './routes/lab/layer-2'
+import { Route as LabControlRouteImport } from './routes/lab/control'
+import { Route as LabBlocksRouteImport } from './routes/lab/blocks'
 import { Route as LibraryArticlesSlugRouteImport } from './routes/library/articles.$slug'
 import { Route as LabTxTxidRouteImport } from './routes/lab/tx.$txid'
 
@@ -126,6 +130,26 @@ const LibraryFavoritesRoute = LibraryFavoritesRouteImport.update({
   path: '/favorites',
   getParentRoute: () => LibraryRoute,
 } as any)
+const LabTransactionsRoute = LabTransactionsRouteImport.update({
+  id: '/transactions',
+  path: '/transactions',
+  getParentRoute: () => LabRoute,
+} as any)
+const LabLayer2Route = LabLayer2RouteImport.update({
+  id: '/layer-2',
+  path: '/layer-2',
+  getParentRoute: () => LabRoute,
+} as any)
+const LabControlRoute = LabControlRouteImport.update({
+  id: '/control',
+  path: '/control',
+  getParentRoute: () => LabRoute,
+} as any)
+const LabBlocksRoute = LabBlocksRouteImport.update({
+  id: '/blocks',
+  path: '/blocks',
+  getParentRoute: () => LabRoute,
+} as any)
 const LibraryArticlesSlugRoute = LibraryArticlesSlugRouteImport.update({
   id: '/articles/$slug',
   path: '/articles/$slug',
@@ -144,6 +168,10 @@ export interface FileRoutesByFullPath {
   '/settings': typeof SettingsRoute
   '/setup': typeof SetupRouteWithChildren
   '/wallet': typeof WalletRouteWithChildren
+  '/lab/blocks': typeof LabBlocksRoute
+  '/lab/control': typeof LabControlRoute
+  '/lab/layer-2': typeof LabLayer2Route
+  '/lab/transactions': typeof LabTransactionsRoute
   '/library/favorites': typeof LibraryFavoritesRoute
   '/library/history': typeof LibraryHistoryRoute
   '/library/tags': typeof LibraryTagsRoute
@@ -163,6 +191,10 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/settings': typeof SettingsRoute
+  '/lab/blocks': typeof LabBlocksRoute
+  '/lab/control': typeof LabControlRoute
+  '/lab/layer-2': typeof LabLayer2Route
+  '/lab/transactions': typeof LabTransactionsRoute
   '/library/favorites': typeof LibraryFavoritesRoute
   '/library/history': typeof LibraryHistoryRoute
   '/library/tags': typeof LibraryTagsRoute
@@ -187,6 +219,10 @@ export interface FileRoutesById {
   '/settings': typeof SettingsRoute
   '/setup': typeof SetupRouteWithChildren
   '/wallet': typeof WalletRouteWithChildren
+  '/lab/blocks': typeof LabBlocksRoute
+  '/lab/control': typeof LabControlRoute
+  '/lab/layer-2': typeof LabLayer2Route
+  '/lab/transactions': typeof LabTransactionsRoute
   '/library/favorites': typeof LibraryFavoritesRoute
   '/library/history': typeof LibraryHistoryRoute
   '/library/tags': typeof LibraryTagsRoute
@@ -212,6 +248,10 @@ export interface FileRouteTypes {
     | '/settings'
     | '/setup'
     | '/wallet'
+    | '/lab/blocks'
+    | '/lab/control'
+    | '/lab/layer-2'
+    | '/lab/transactions'
     | '/library/favorites'
     | '/library/history'
     | '/library/tags'
@@ -231,6 +271,10 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/settings'
+    | '/lab/blocks'
+    | '/lab/control'
+    | '/lab/layer-2'
+    | '/lab/transactions'
     | '/library/favorites'
     | '/library/history'
     | '/library/tags'
@@ -254,6 +298,10 @@ export interface FileRouteTypes {
     | '/settings'
     | '/setup'
     | '/wallet'
+    | '/lab/blocks'
+    | '/lab/control'
+    | '/lab/layer-2'
+    | '/lab/transactions'
     | '/library/favorites'
     | '/library/history'
     | '/library/tags'
@@ -415,6 +463,34 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LibraryFavoritesRouteImport
       parentRoute: typeof LibraryRoute
     }
+    '/lab/transactions': {
+      id: '/lab/transactions'
+      path: '/transactions'
+      fullPath: '/lab/transactions'
+      preLoaderRoute: typeof LabTransactionsRouteImport
+      parentRoute: typeof LabRoute
+    }
+    '/lab/layer-2': {
+      id: '/lab/layer-2'
+      path: '/layer-2'
+      fullPath: '/lab/layer-2'
+      preLoaderRoute: typeof LabLayer2RouteImport
+      parentRoute: typeof LabRoute
+    }
+    '/lab/control': {
+      id: '/lab/control'
+      path: '/control'
+      fullPath: '/lab/control'
+      preLoaderRoute: typeof LabControlRouteImport
+      parentRoute: typeof LabRoute
+    }
+    '/lab/blocks': {
+      id: '/lab/blocks'
+      path: '/blocks'
+      fullPath: '/lab/blocks'
+      preLoaderRoute: typeof LabBlocksRouteImport
+      parentRoute: typeof LabRoute
+    }
     '/library/articles/$slug': {
       id: '/library/articles/$slug'
       path: '/articles/$slug'
@@ -433,11 +509,19 @@ declare module '@tanstack/react-router' {
 }
 
 interface LabRouteChildren {
+  LabBlocksRoute: typeof LabBlocksRoute
+  LabControlRoute: typeof LabControlRoute
+  LabLayer2Route: typeof LabLayer2Route
+  LabTransactionsRoute: typeof LabTransactionsRoute
   LabIndexRoute: typeof LabIndexRoute
   LabTxTxidRoute: typeof LabTxTxidRoute
 }
 
 const LabRouteChildren: LabRouteChildren = {
+  LabBlocksRoute: LabBlocksRoute,
+  LabControlRoute: LabControlRoute,
+  LabLayer2Route: LabLayer2Route,
+  LabTransactionsRoute: LabTransactionsRoute,
   LabIndexRoute: LabIndexRoute,
   LabTxTxidRoute: LabTxTxidRoute,
 }

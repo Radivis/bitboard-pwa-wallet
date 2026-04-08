@@ -32,7 +32,12 @@ export async function resetLab(page: Page): Promise<void> {
   await page.getByRole('link', { name: /settings/i }).click()
   await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
   await page.getByRole('link', { name: 'Manage lab' }).click()
-  await expect(page.getByRole('heading', { name: 'Lab' })).toBeVisible({
+  await expect(page.getByRole('heading', { name: 'Blocks' })).toBeVisible({
+    timeout: 15000,
+  })
+
+  await page.getByRole('navigation', { name: 'Lab' }).getByRole('link', { name: 'Control' }).click()
+  await expect(page.getByRole('heading', { name: 'Control' })).toBeVisible({
     timeout: 15000,
   })
 
@@ -40,7 +45,12 @@ export async function resetLab(page: Page): Promise<void> {
   await expect(page.getByRole('dialog')).toBeVisible()
   await page.getByRole('dialog').getByRole('button', { name: 'Reset lab' }).click()
   await expect(page.getByRole('dialog')).not.toBeVisible()
-  await expect(page.getByText('Blocks mined: 0')).toBeVisible({ timeout: 10000 })
+
+  await page.getByRole('navigation', { name: 'Lab' }).getByRole('link', { name: 'Blocks' }).click()
+  await expect(page.getByRole('heading', { name: 'Blocks' })).toBeVisible({ timeout: 15000 })
+  await expect(page.getByText(/Chain height \(blocks mined\): 0/)).toBeVisible({
+    timeout: 10000,
+  })
 }
 
 export type MineOwnerType = 'name' | 'wallet'
@@ -51,8 +61,8 @@ export interface MineOptions {
 }
 
 async function navigateToLab(page: Page): Promise<void> {
-  const labHeading = page.getByRole('heading', { name: 'Lab' })
-  if (await labHeading.isVisible()) return
+  const blocksHeading = page.getByRole('heading', { name: 'Blocks' })
+  if (await blocksHeading.isVisible()) return
   await page.getByRole('link', { name: /settings/i }).click()
   await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
   await page.getByRole('link', { name: 'Manage lab' }).click()
@@ -76,7 +86,7 @@ export async function mineBlocksInLab(
   }
 
   await navigateToLab(page)
-  await expect(page.getByRole('heading', { name: 'Lab' })).toBeVisible({
+  await expect(page.getByRole('heading', { name: 'Blocks' })).toBeVisible({
     timeout: 15000,
   })
 
@@ -141,7 +151,12 @@ export async function createTransactionInLab(
   feeRate: number,
 ): Promise<void> {
   await navigateToLab(page)
-  await expect(page.getByRole('heading', { name: 'Lab' })).toBeVisible({
+  await expect(page.getByRole('heading', { name: 'Blocks' })).toBeVisible({
+    timeout: 15000,
+  })
+
+  await page.getByRole('navigation', { name: 'Lab' }).getByRole('link', { name: 'Transactions' }).click()
+  await expect(page.getByRole('heading', { name: 'Transactions' })).toBeVisible({
     timeout: 15000,
   })
 
@@ -191,7 +206,7 @@ export async function sendFromWallet(
 /** Get lab state via test hook. Navigates to lab first if needed. */
 export async function getLabState(page: Page): Promise<LabState> {
   await navigateToLab(page)
-  await expect(page.getByRole('heading', { name: 'Lab' })).toBeVisible({ timeout: 5000 })
+  await expect(page.getByRole('heading', { name: 'Blocks' })).toBeVisible({ timeout: 5000 })
   const state = await page.evaluate(async () => {
     const fn = (window as unknown as { __labGetState?: () => Promise<LabState> }).__labGetState
     if (!fn) throw new Error('__labGetState not available')

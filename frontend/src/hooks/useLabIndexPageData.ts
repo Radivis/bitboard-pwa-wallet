@@ -16,7 +16,7 @@ import {
 const DEFAULT_LAB_FEE_RATE_SAT_PER_VB = 1
 
 /**
- * Form state, derived lab lists, and TanStack Query mutations for the lab index page.
+ * Form state, derived lab lists, and TanStack Query mutations for lab section routes.
  */
 export function useLabIndexPageData() {
   const { data: labState } = useLabChainStateQuery()
@@ -171,6 +171,7 @@ export function useLabIndexPageData() {
   }, [utxos, addressToOwner])
 
   return {
+    blocks,
     blockCount,
     mineCount,
     setMineCount,

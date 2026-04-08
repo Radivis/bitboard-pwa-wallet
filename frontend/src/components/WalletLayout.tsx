@@ -4,6 +4,7 @@ import {
   Home,
   ArrowDownLeft,
   ArrowUpRight,
+  ArrowLeftRight,
   Settings,
   Wallet,
   FlaskConical,
@@ -13,6 +14,8 @@ import {
   Tags,
   Star,
   History,
+  Blocks,
+  Zap,
   type LucideIcon,
 } from 'lucide-react'
 import { InfomodeToggle } from '@/components/infomode/InfomodeToggle'
@@ -69,6 +72,7 @@ type SectionSubNavItem =
       to: string
       label: string
       icon: LucideIcon
+      linkPreload?: false
     }
   | {
       kind: 'pathname'
@@ -76,6 +80,7 @@ type SectionSubNavItem =
       label: string
       icon: LucideIcon
       isActive: (pathname: string) => boolean
+      linkPreload?: false
     }
 
 const WALLET_SUB_NAV_ITEMS: SectionSubNavItem[] = [
@@ -116,6 +121,44 @@ const LIBRARY_SUB_NAV_ITEMS: SectionSubNavItem[] = [
   },
 ]
 
+const LAB_SUB_NAV_ITEMS: SectionSubNavItem[] = [
+  {
+    kind: 'pathname',
+    to: '/lab/blocks',
+    label: 'Blocks',
+    icon: Blocks,
+    linkPreload: false,
+    isActive: (pathname) =>
+      pathname === '/lab/blocks' ||
+      pathname === '/lab' ||
+      pathname === '/lab/',
+  },
+  {
+    kind: 'pathname',
+    to: '/lab/transactions',
+    label: 'Transactions',
+    icon: ArrowLeftRight,
+    linkPreload: false,
+    isActive: (pathname) => pathname === '/lab/transactions',
+  },
+  {
+    kind: 'pathname',
+    to: '/lab/layer-2',
+    label: 'Layer 2',
+    icon: Zap,
+    linkPreload: false,
+    isActive: (pathname) => pathname === '/lab/layer-2',
+  },
+  {
+    kind: 'pathname',
+    to: '/lab/control',
+    label: 'Control',
+    icon: SlidersHorizontal,
+    linkPreload: false,
+    isActive: (pathname) => pathname === '/lab/control',
+  },
+]
+
 const NAV_SURFACE_CLASS =
   'border-border bg-header/95 backdrop-blur supports-[backdrop-filter]:bg-header/80'
 
@@ -143,6 +186,10 @@ function isWalletSectionPath(pathname: string): boolean {
 
 function isLibrarySectionPath(pathname: string): boolean {
   return pathname.startsWith('/library')
+}
+
+function isLabSectionPath(pathname: string): boolean {
+  return pathname.startsWith('/lab')
 }
 
 const NAV_LINK_CLASS =
@@ -270,6 +317,7 @@ function SectionSubNav({
               label={item.label}
               icon={item.icon}
               isActive={isActive}
+              preload={item.linkPreload}
             />
           )
         })}
@@ -282,6 +330,7 @@ function BottomNavigationChrome() {
   const location = useLocation()
   const showLibrarySubNav = isLibrarySectionPath(location.pathname)
   const showWalletSubNav = isWalletSectionPath(location.pathname)
+  const showLabSubNav = isLabSectionPath(location.pathname)
 
   return (
     <>
@@ -290,6 +339,9 @@ function BottomNavigationChrome() {
       )}
       {showWalletSubNav && (
         <SectionSubNav ariaLabel="Wallet" items={WALLET_SUB_NAV_ITEMS} />
+      )}
+      {showLabSubNav && (
+        <SectionSubNav ariaLabel="Lab" items={LAB_SUB_NAV_ITEMS} />
       )}
       <PrimarySectionNav />
     </>
@@ -301,6 +353,7 @@ export function WalletLayout({ children }: WalletLayoutProps) {
   const isSetupRoute = location.pathname.startsWith('/setup')
   const showLibrarySubNav = !isSetupRoute && isLibrarySectionPath(location.pathname)
   const showWalletSubNav = !isSetupRoute && isWalletSectionPath(location.pathname)
+  const showLabSubNav = !isSetupRoute && isLabSectionPath(location.pathname)
 
   const activeWalletId = useWalletStore((s) => s.activeWalletId)
   const sessionPassword = useSessionStore((s) => s.password)
@@ -357,7 +410,7 @@ export function WalletLayout({ children }: WalletLayoutProps) {
         className={cn(
           'mx-auto max-w-screen-xl px-4 py-6',
           !isSetupRoute &&
-            (showWalletSubNav || showLibrarySubNav
+            (showWalletSubNav || showLibrarySubNav || showLabSubNav
               ? MAIN_BOTTOM_PADDING_WALLET_SECTION_CLASS
               : MAIN_BOTTOM_PADDING_PRIMARY_ONLY_CLASS),
         )}
