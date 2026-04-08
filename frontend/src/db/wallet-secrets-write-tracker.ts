@@ -8,10 +8,11 @@ const WALLET_SECRETS_FLUSH_TIMEOUT_MS = 60_000
 
 export function trackWalletSecretsWrite<T>(promise: Promise<T>): Promise<T> {
   pendingWalletSecretsWrites.add(promise)
-  void promise.finally(() => {
+  // Return the `finally` promise so its rejection is never discarded (voiding `.finally()`
+  // leaves a sibling promise that rejects with the same reason and triggers unhandledrejection).
+  return promise.finally(() => {
     pendingWalletSecretsWrites.delete(promise)
   })
-  return promise
 }
 
 /**

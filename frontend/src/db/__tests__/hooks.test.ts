@@ -13,6 +13,7 @@ vi.mock('../database', () => ({
   ensureMigrated: async () => {},
 }))
 
+import { useWalletStore } from '@/stores/walletStore'
 import {
   useWallets,
   useWallet,
@@ -162,10 +163,83 @@ describe('TanStack Query hooks', () => {
       await waitFor(() => expect(walletsResult.current.data).toHaveLength(1))
 
       await act(async () => {
+        useWalletStore.getState().setActiveWallet(walletId)
         await deleteResult.current.mutateAsync(walletId)
       })
 
       await waitFor(() => expect(walletsResult.current.data).toHaveLength(0))
+    })
+
+    it('removes the wallet_secrets row for that wallet', async () => {
+      const now = new Date().toISOString()
+      const insertResult = await testDb
+        .insertInto('wallets')
+        .values(createWalletValues())
+        .executeTakeFirstOrThrow()
+      const walletId = Number(insertResult.insertId)
+      await testDb
+        .insertInto('wallet_secrets')
+        .values({
+          wallet_id: walletId,
+          revision: 0,
+          encrypted_data: new Uint8Array([1]),
+          iv: new Uint8Array(12),
+          salt: new Uint8Array(16),
+          kdf_version: 1,
+          mnemonic_encrypted_data: new Uint8Array([1]),
+          mnemonic_iv: new Uint8Array(12),
+          mnemonic_salt: new Uint8Array(16),
+          mnemonic_kdf_version: 1,
+          created_at: now,
+          updated_at: now,
+        })
+        .execute()
+
+      const { wrapper } = createQueryClientWrapper()
+      const { result: deleteResult } = renderHook(() => useDeleteWallet(), { wrapper })
+
+      await act(async () => {
+        useWalletStore.getState().setActiveWallet(walletId)
+        await deleteResult.current.mutateAsync(walletId)
+      })
+
+      const secretRow = await testDb
+        .selectFrom('wallet_secrets')
+        .selectAll()
+        .where('wallet_id', '=', walletId)
+        .executeTakeFirst()
+      expect(secretRow).toBeUndefined()
+    })
+
+    it('rejects when the wallet id is not the active wallet', async () => {
+      const insertA = await testDb
+        .insertInto('wallets')
+        .values(createWalletValues({ name: 'Wallet A' }))
+        .executeTakeFirstOrThrow()
+      const idA = Number(insertA.insertId)
+      const insertB = await testDb
+        .insertInto('wallets')
+        .values(createWalletValues({ name: 'Wallet B' }))
+        .executeTakeFirstOrThrow()
+      const idB = Number(insertB.insertId)
+
+      const { wrapper } = createQueryClientWrapper()
+      const { result: deleteResult } = renderHook(() => useDeleteWallet(), { wrapper })
+
+      await act(async () => {
+        useWalletStore.getState().setActiveWallet(idA)
+      })
+
+      await expect(deleteResult.current.mutateAsync(idB)).rejects.toThrow(
+        'Only the active wallet can be deleted',
+      )
+
+      const rowB = await testDb
+        .selectFrom('wallets')
+        .select('wallet_id')
+        .where('wallet_id', '=', idB)
+        .executeTakeFirst()
+      expect(rowB).toBeDefined()
     })
   })
 })

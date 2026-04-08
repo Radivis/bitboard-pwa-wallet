@@ -1,7 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useWalletStore } from '@/stores/walletStore'
 import { getDatabase, ensureMigrated } from './database'
 import { getAllFavoriteSlugs, setArticleFavorite } from './library-articles'
 import { listLibraryHistory } from './library-history'
+import { walletHasNoMnemonicBackupFlag } from './no-mnemonic-backup-settings'
+import { deleteWalletCompletely } from './wallet-persistence'
 import { libraryKeys, walletKeys } from './query-keys'
 import type { NewWallet, WalletUpdate } from './schema'
 
@@ -69,15 +72,32 @@ export function useDeleteWallet() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async (id: number) => {
+      const activeWalletId = useWalletStore.getState().activeWalletId
+      if (id !== activeWalletId) {
+        throw new Error('Only the active wallet can be deleted')
+      }
       await ensureMigrated()
-      await getDatabase()
-        .deleteFrom('wallets')
-        .where('wallet_id', '=', id)
-        .execute()
+      await deleteWalletCompletely(getDatabase(), id)
     },
-    onSuccess: () => {
+    onSuccess: (_data, id) => {
       queryClient.invalidateQueries({ queryKey: walletKeys.all })
+      queryClient.invalidateQueries({ queryKey: walletKeys.noMnemonicBackup(id) })
     },
+  })
+}
+
+export function useWalletNoMnemonicBackupFlag(walletId: number | null) {
+  return useQuery({
+    queryKey:
+      walletId === null
+        ? (['settings', 'no_mnemonic_backup', 'none'] as const)
+        : walletKeys.noMnemonicBackup(walletId),
+    queryFn: async () => {
+      await ensureMigrated()
+      if (walletId === null) return false
+      return walletHasNoMnemonicBackupFlag(getDatabase(), walletId)
+    },
+    enabled: walletId !== null,
   })
 }
 

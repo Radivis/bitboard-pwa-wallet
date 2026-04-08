@@ -1,16 +1,10 @@
 import { useState, useEffect } from 'react'
 import { Link, useNavigate } from '@tanstack/react-router'
-import { KeyRound, X } from 'lucide-react'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
+import { KeyRound } from 'lucide-react'
+import { DialogDescription } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { useSessionStore } from '@/stores/sessionStore'
-import { InfomodeToggle } from '@/components/infomode/InfomodeToggle'
+import { AppModal } from '@/components/AppModal'
 import {
   AppPasswordFields,
   isNewAppPasswordValid,
@@ -63,52 +57,34 @@ export function SetAppPasswordModal({ open }: SetAppPasswordModalProps) {
   }
 
   return (
-    <Dialog open={open} modal onOpenChange={() => {}}>
-      <DialogContent
-        showCloseButton={false}
-        className="sm:max-w-md"
-        onInteractOutside={(e) => e.preventDefault()}
-        onEscapeKeyDown={(e) => e.preventDefault()}
-      >
-        <div className="absolute top-4 right-4 z-10 flex items-center gap-2">
-          <div
-            className="flex items-center gap-2 rounded-lg border border-cyan-500/40 bg-cyan-500/[0.08] px-2.5 py-1.5 shadow-sm dark:bg-cyan-950/40"
-            title="Turn on Infomode to tap underlined labels for explanations"
-          >
-            <InfomodeToggle className="h-10 w-10 shadow-sm" />
-          </div>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="size-9 shrink-0 opacity-70 ring-offset-background hover:opacity-100"
-            aria-label="Back to setup"
-            onClick={handleBackToSetup}
-          >
-            <X className="size-4" />
-            <span className="sr-only">Back to setup</span>
-          </Button>
-        </div>
+    <AppModal
+      isOpen={open}
+      onOpenChange={() => {}}
+      onCancel={handleBackToSetup}
+      title={
+        <>
+          <KeyRound className="mt-0.5 h-5 w-5 shrink-0" />
+          <span className="min-w-0 leading-tight">Set Bitboard app password</span>
+        </>
+      }
+      closeAriaLabel="Back to setup"
+      contentClassName="sm:max-w-md"
+      onInteractOutside={(e) => e.preventDefault()}
+      onEscapeKeyDown={(e) => e.preventDefault()}
+    >
+      <div className="space-y-4">
+        <DialogDescription className="w-full max-w-none text-left text-sm text-muted-foreground">
+          Choose a password for this browser. It encrypts all wallets you store in Bitboard on this
+          device.{' '}
+          <span className="font-medium text-foreground/90">
+            Use Infomode (lightbulb button above) to get more information about parts of this form
+            by tapping them.
+          </span>
+        </DialogDescription>
 
-        <DialogHeader className="space-y-3 text-left">
-          <DialogTitle className="flex items-start gap-2 pr-[10.5rem] sm:pr-[13.5rem]">
-            <KeyRound className="mt-0.5 h-5 w-5 shrink-0" />
-            <span className="min-w-0 leading-tight">Set Bitboard app password</span>
-          </DialogTitle>
-        </DialogHeader>
-        <div className="space-y-4">
-          <DialogDescription className="w-full max-w-none text-left text-sm text-muted-foreground">
-            Choose a password for this browser. It encrypts all wallets you store in Bitboard on this
-            device.{' '}
-            <span className="font-medium text-foreground/90">
-              Use Infomode (lightbulb button above) to get more information about parts of this form
-              by tapping them.
-            </span>
-          </DialogDescription>
+        <AppPasswordFundsLossWarning />
 
-          <AppPasswordFundsLossWarning />
-
-          <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4">
           <AppPasswordFields
             config={SET_APP_PASSWORD_FIELDS_CONFIG}
             newPassword={password}
@@ -126,9 +102,8 @@ export function SetAppPasswordModal({ open }: SetAppPasswordModalProps) {
           </Button>
         </form>
 
-          <NearZeroSecurityOptIn />
-        </div>
-      </DialogContent>
-    </Dialog>
+        <NearZeroSecurityOptIn />
+      </div>
+    </AppModal>
   )
 }

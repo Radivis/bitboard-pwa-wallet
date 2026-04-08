@@ -11,6 +11,7 @@ vi.mock('@tanstack/react-router', async (importOriginal) => {
       options,
     }),
     useNavigate: () => vi.fn(),
+    useSearch: () => ({ openDelete: false }),
   }
 })
 
@@ -57,6 +58,26 @@ vi.mock('@/stores/sessionStore', () => ({
   clearAutoLockTimer: vi.fn(),
 }))
 
+const managementDbMocks = vi.hoisted(() => ({
+  noMnemonicBackupFlag: false,
+}))
+
+const mockDeleteWalletMutate = vi.hoisted(() =>
+  vi.fn().mockResolvedValue(undefined),
+)
+
+const sumMainnetOnChainSatsMock = vi.hoisted(() =>
+  vi.fn().mockResolvedValue(0),
+)
+
+vi.mock('@/lib/mainnet-onchain-balance-probe', () => ({
+  sumMainnetOnChainSatsForWallet: sumMainnetOnChainSatsMock,
+}))
+
+vi.mock('@/lib/wallet-delete-finalize', () => ({
+  finalizeWalletDeletion: vi.fn().mockResolvedValue(undefined),
+}))
+
 vi.mock('@/db', () => ({
   useWallets: () => ({ data: [{ wallet_id: 1, name: 'Test Wallet', created_at: '' }] }),
   useWallet: () => ({
@@ -67,6 +88,13 @@ vi.mock('@/db', () => ({
     mutateAsync: vi.fn().mockResolvedValue(undefined),
     isPending: false,
   }),
+  useDeleteWallet: () => ({
+    mutateAsync: mockDeleteWalletMutate,
+    isPending: false,
+  }),
+  useWalletNoMnemonicBackupFlag: () => ({
+    data: managementDbMocks.noMnemonicBackupFlag,
+  }),
 }))
 
 import { ManagementPage } from '../wallet/management'
@@ -74,6 +102,9 @@ import { ManagementPage } from '../wallet/management'
 describe('ManagementPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    managementDbMocks.noMnemonicBackupFlag = false
+    mockDeleteWalletMutate.mockResolvedValue(undefined)
+    sumMainnetOnChainSatsMock.mockResolvedValue(0)
     walletStoreState = {
       activeWalletId: 1,
       walletStatus: 'unlocked',
@@ -101,6 +132,14 @@ describe('ManagementPage', () => {
     expect(screen.getByText('Seed Phrase Backup')).toBeInTheDocument()
   })
 
+  it('shows stressed backup warning when no mnemonic backup flag is set', () => {
+    managementDbMocks.noMnemonicBackupFlag = true
+    renderWithProviders(<ManagementPage />)
+    expect(
+      screen.getByText(/No backup of the seed phrase has been recorded for this wallet/i),
+    ).toBeInTheDocument()
+  })
+
   it('show seed phrase opens password dialog', async () => {
     const user = userEvent.setup()
     renderWithProviders(<ManagementPage />)
@@ -119,5 +158,60 @@ describe('ManagementPage', () => {
     expect(mockLockWallet).toHaveBeenCalled()
     expect(mockTerminateWorker).toHaveBeenCalled()
     expect(mockClearSession).toHaveBeenCalled()
+  })
+
+  it('delete wallet with no mainnet balance deletes after first confirmation', async () => {
+    const user = userEvent.setup()
+    sumMainnetOnChainSatsMock.mockResolvedValue(0)
+    renderWithProviders(<ManagementPage />)
+
+    await user.click(screen.getByRole('button', { name: 'Delete wallet' }))
+    await user.click(screen.getByRole('button', { name: 'Continue' }))
+
+    await waitFor(() => {
+      expect(mockDeleteWalletMutate).toHaveBeenCalledWith(1)
+    })
+  })
+
+  it('delete wallet with mainnet balance and backup flag cleared shows scary second step', async () => {
+    const user = userEvent.setup()
+    sumMainnetOnChainSatsMock.mockResolvedValue(5000)
+    managementDbMocks.noMnemonicBackupFlag = false
+    renderWithProviders(<ManagementPage />)
+
+    await user.click(screen.getByRole('button', { name: 'Delete wallet' }))
+    await user.click(screen.getByRole('button', { name: 'Continue' }))
+
+    await waitFor(() => {
+      expect(screen.getByText(/Mainnet bitcoin may be at risk/i)).toBeInTheDocument()
+    })
+
+    await user.click(screen.getByRole('button', { name: /I have a backup/i }))
+
+    await waitFor(() => {
+      expect(mockDeleteWalletMutate).toHaveBeenCalledWith(1)
+    })
+  })
+
+  it('delete wallet with mainnet balance and no mnemonic backup blocks deletion', async () => {
+    const user = userEvent.setup()
+    sumMainnetOnChainSatsMock.mockResolvedValue(1000)
+    managementDbMocks.noMnemonicBackupFlag = true
+    renderWithProviders(<ManagementPage />)
+
+    await user.click(screen.getByRole('button', { name: 'Delete wallet' }))
+    await user.click(screen.getByRole('button', { name: 'Continue' }))
+
+    await waitFor(() => {
+      expect(screen.getByText(/Cannot delete this wallet/i)).toBeInTheDocument()
+    })
+
+    expect(
+      screen.getByText(/Deletion cannot proceed while the "no mnemonic backup" flag is set/i),
+    ).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Understood' }))
+
+    expect(mockDeleteWalletMutate).not.toHaveBeenCalled()
   })
 })
