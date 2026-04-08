@@ -539,6 +539,8 @@ const labService = {
     let coinbaseScriptPubkeyHex: string
     let newAddress: LabAddress | null = null
     let coinbaseAddress: string
+    /** Lab entity name to record for coinbase ownership (not used for wallet or bare target). */
+    let ownerForCoinbase: string | undefined
 
     if (entityNameOpt != null && entityNameOpt !== '' && options?.ownerWalletId == null) {
       let entity = state.entities.find((e) => e.entityName === entityNameOpt)
@@ -580,23 +582,50 @@ const labService = {
       }
       coinbaseScriptPubkeyHex = wasmModule.lab_address_to_script_pubkey_hex(coinbaseAddress)
       newAddress = null
+      ownerForCoinbase = entityNameOpt
     } else if (targetAddress.trim()) {
       coinbaseAddress = targetAddress.trim()
       coinbaseScriptPubkeyHex = wasmModule.lab_address_to_script_pubkey_hex(coinbaseAddress)
       newAddress = null
     } else {
-      const keypair = wasmModule.lab_generate_keypair()
-      newAddress = { address: keypair.address, wif: keypair.wif }
-      coinbaseAddress = keypair.address
-      coinbaseScriptPubkeyHex = wasmModule.lab_address_to_script_pubkey_hex(keypair.address)
+      const anonymousName = `Anonymous-${crypto.randomUUID()}`
+      const now = new Date().toISOString()
+      const mnemonic = wasmModule.generate_mnemonic(12)
+      const createdRaw = wasmModule.create_lab_entity_wallet(
+        mnemonic,
+        labNetwork,
+        labAddressType,
+        0,
+      )
+      const cr = parseWasmObject(createdRaw)
+      const entity = {
+        entityName: anonymousName,
+        mnemonic,
+        changesetJson: String(cr.changeset_json ?? ''),
+        externalDescriptor: String(cr.external_descriptor ?? ''),
+        internalDescriptor: String(cr.internal_descriptor ?? ''),
+        network: labNetwork,
+        addressType: labAddressType,
+        accountId: 0,
+        createdAt: now,
+        updatedAt: now,
+      }
+      state.entities.push(entity)
+      coinbaseAddress = String(cr.first_address ?? '')
+      if (!coinbaseAddress) {
+        throw new Error('Anonymous lab entity wallet creation failed (no first address)')
+      }
+      coinbaseScriptPubkeyHex = wasmModule.lab_address_to_script_pubkey_hex(coinbaseAddress)
+      newAddress = null
+      ownerForCoinbase = anonymousName
     }
 
     if (options?.ownerWalletId != null) {
       state.addressToOwner = state.addressToOwner ?? {}
       state.addressToOwner[coinbaseAddress] = walletOwnerKey(options.ownerWalletId)
-    } else if (entityNameOpt != null && entityNameOpt !== '' && options?.ownerWalletId == null) {
+    } else if (ownerForCoinbase != null) {
       state.addressToOwner = state.addressToOwner ?? {}
-      state.addressToOwner[coinbaseAddress] = entityNameOpt
+      state.addressToOwner[coinbaseAddress] = ownerForCoinbase
     }
 
     const mempoolCopy = [...(state.mempool ?? [])]

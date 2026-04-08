@@ -58,6 +58,8 @@ export type MineOwnerType = 'name' | 'wallet'
 export interface MineOptions {
   targetAddress?: string
   ownerName?: string
+  /** Lab-entity mode with empty name and target: creates `Anonymous-{uuid}` wallet. */
+  randomAnonymous?: boolean
 }
 
 async function navigateToLab(page: Page): Promise<void> {
@@ -114,6 +116,11 @@ export async function mineBlocksInLab(
       await expect(ownerInput).toHaveValue('')
     }
   }
+  if (ownerType === 'name' && options?.randomAnonymous) {
+    const targetInput = page.locator('#target-address')
+    await targetInput.clear()
+    await expect(targetInput).toHaveValue('')
+  }
 
   await page.getByRole('button', { name: 'Mine blocks' }).click()
   await expect(page.getByRole('button', { name: 'Mine blocks' })).toBeEnabled({
@@ -129,6 +136,19 @@ export async function mineBlocksInLab(
           return getUtxoSumByOwner(st, owner)
         },
         { timeout: 20000, message: `Expected lab UTXOs for owner "${owner}" after mining` },
+      )
+      .toBeGreaterThan(0)
+  }
+  if (ownerType === 'name' && options?.randomAnonymous) {
+    await expect
+      .poll(
+        async () => {
+          const st = await getLabState(page)
+          const anon = st.entities?.find((e) => e.entityName.startsWith('Anonymous-'))
+          if (!anon) return 0
+          return getUtxoSumByOwner(st, anon.entityName)
+        },
+        { timeout: 20000, message: 'Expected anonymous lab entity UTXOs after random mine' },
       )
       .toBeGreaterThan(0)
   }

@@ -47,6 +47,17 @@ test.describe('Lab', { tag: '@lab' }, () => {
     expect(walletSum).toBe(COINBASE_SATS)
   })
 
+  test('random mine creates anonymous lab entity', async ({ page }) => {
+    await mineBlocksInLab(page, 1, 'name', { randomAnonymous: true })
+
+    const state = await getLabState(page)
+    expect(state.blocks).toHaveLength(1)
+    expect(state.entities).toHaveLength(1)
+    const name = state.entities![0].entityName
+    expect(name).toMatch(/^Anonymous-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)
+    expect(getUtxoSumByOwner(state, name)).toBe(COINBASE_SATS)
+  })
+
   test('creating lab transaction does not increase merged address count while unconfirmed', async ({
     page,
   }) => {

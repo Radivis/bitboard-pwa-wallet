@@ -162,7 +162,7 @@ export function LabBlocksCard({
               <Label htmlFor="target-address">
                 {ownerType === 'wallet'
                   ? 'Target address (active wallet)'
-                  : 'Target address (blank = random; ignored when lab entity name is set)'}
+                  : 'Target address (blank = new anonymous lab entity; ignored when lab entity name is set)'}
               </Label>
               <TargetAddressField
                 ownerType={ownerType}
