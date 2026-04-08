@@ -51,6 +51,19 @@ export interface BuildAndSignLabTransactionParams {
   changeAddress: string;
 }
 
+/** Ephemeral lab-entity wallet signing (does not use the active user wallet). */
+export interface LabEntityBuildAndSignLabTransactionParams {
+  mnemonic: string;
+  changesetJson: string;
+  network: string;
+  addressType: string;
+  accountId: number;
+  utxosJson: string;
+  toAddress: string;
+  amountSats: number;
+  feeRateSatPerVb: number;
+}
+
 export interface BuildTransactionParams {
   recipientAddress: string;
   amountSats: number;
@@ -118,6 +131,11 @@ export interface CryptoService {
   ): Promise<{ signedTxHex: string; feeSats: number; hasChange: boolean }>;
   /** First internal address for lab change outputs. */
   getLabChangeAddress(): Promise<string>;
+
+  /** Build and sign a lab mempool tx for a simulated lab entity (BDK + foreign UTXOs). */
+  labEntityBuildAndSignLabTransaction(
+    params: LabEntityBuildAndSignLabTransactionParams,
+  ): Promise<unknown>;
   getBalance(): Promise<BalanceInfo>;
   exportChangeset(): Promise<string>;
 

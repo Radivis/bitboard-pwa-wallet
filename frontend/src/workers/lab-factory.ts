@@ -1,6 +1,5 @@
 import { wrap, type Remote } from 'comlink'
-import type { LabService } from './lab-api'
-import type { LabState } from './lab-api'
+import type { LabEntityRecord, LabService, LabState } from './lab-api'
 import { EMPTY_LAB_STATE } from './lab-api'
 import {
   ensureLabMigrated,
@@ -44,17 +43,33 @@ export async function loadLabStateFromDatabase(): Promise<LabState> {
 
   const addressOwnersRows = await labDb
     .selectFrom('lab_address_owners')
-    .select(['address', 'owner_type', 'wallet_id', 'owner_name'])
+    .select(['address', 'owner_type', 'wallet_id', 'owner_name', 'entity_name'])
     .execute()
 
   const addressToOwner: Record<string, string> = {}
   for (const row of addressOwnersRows) {
     if (row.owner_type === 'wallet' && row.wallet_id != null) {
       addressToOwner[row.address] = walletOwnerKey(row.wallet_id)
+    } else if (row.owner_type === 'lab_entity' && row.entity_name != null) {
+      addressToOwner[row.address] = row.entity_name
     } else if (row.owner_type === 'name' && row.owner_name != null) {
       addressToOwner[row.address] = row.owner_name
     }
   }
+
+  const entityRows = await labDb.selectFrom('lab_entities').selectAll().execute()
+  const entities: LabEntityRecord[] = entityRows.map((r) => ({
+    entityName: r.entity_name,
+    mnemonic: r.mnemonic,
+    changesetJson: r.changeset_json,
+    externalDescriptor: r.external_descriptor,
+    internalDescriptor: r.internal_descriptor,
+    network: r.network,
+    addressType: r.address_type,
+    accountId: r.account_id,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  }))
 
   const mempoolRows = await labDb
     .selectFrom('lab_mempool')
@@ -136,6 +151,7 @@ export async function loadLabStateFromDatabase(): Promise<LabState> {
       address: a.address,
       wif: a.wif,
     })),
+    entities,
     addressToOwner,
     mempool,
     transactions: transactions.map((t) => ({
@@ -164,6 +180,7 @@ export async function persistLabState(state: LabState): Promise<void> {
   await labDb.deleteFrom('blocks').execute()
   await labDb.deleteFrom('utxos').execute()
   await labDb.deleteFrom('lab_addresses').execute()
+  await labDb.deleteFrom('lab_entities').execute()
   await labDb.deleteFrom('lab_address_owners').execute()
   await labDb.deleteFrom('lab_mempool').execute()
   await labDb.deleteFrom('lab_transactions').execute()
@@ -212,23 +229,48 @@ export async function persistLabState(state: LabState): Promise<void> {
       })
       .execute()
   }
-  for (const [address, ownerKey] of Object.entries(state.addressToOwner ?? {})) {
-    const ownerType = ownerKey.startsWith(WALLET_OWNER_PREFIX)
-      ? ('wallet' as const)
-      : ('name' as const)
-    const walletId = ownerType === 'wallet'
-      ? parseInt(ownerKey.slice(WALLET_OWNER_PREFIX.length), 10)
-      : null
-    const ownerName = ownerType === 'name' ? ownerKey : null
+  for (const e of state.entities ?? []) {
     await labDb
-      .insertInto('lab_address_owners')
+      .insertInto('lab_entities')
       .values({
-        address,
-        owner_type: ownerType,
-        wallet_id: walletId,
-        owner_name: ownerName,
+        entity_name: e.entityName,
+        mnemonic: e.mnemonic,
+        changeset_json: e.changesetJson,
+        external_descriptor: e.externalDescriptor,
+        internal_descriptor: e.internalDescriptor,
+        network: e.network,
+        address_type: e.addressType,
+        account_id: e.accountId,
+        created_at: e.createdAt,
+        updated_at: e.updatedAt,
       })
       .execute()
+  }
+  for (const [address, ownerKey] of Object.entries(state.addressToOwner ?? {})) {
+    if (ownerKey.startsWith(WALLET_OWNER_PREFIX)) {
+      const walletId = parseInt(ownerKey.slice(WALLET_OWNER_PREFIX.length), 10)
+      await labDb
+        .insertInto('lab_address_owners')
+        .values({
+          address,
+          owner_type: 'wallet',
+          wallet_id: walletId,
+          owner_name: null,
+          entity_name: null,
+        })
+        .execute()
+    } else {
+      await labDb
+        .insertInto('lab_address_owners')
+        .values({
+          address,
+          owner_type: 'lab_entity',
+          wallet_id: null,
+          owner_name: null,
+          entity_name: ownerKey,
+        })
+        .execute()
+    }
   }
   for (const m of state.mempool ?? []) {
     await labDb

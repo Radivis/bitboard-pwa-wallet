@@ -8,11 +8,11 @@ import {
 } from '@/workers/lab-factory'
 import type {
   LabBlockDetails,
-  LabCreateTransactionParams,
   LabCurrentBlockTemplateParams,
   LabMempoolMetadata,
   LabState,
 } from '@/workers/lab-api'
+import { getCryptoWorker } from '@/workers/crypto-factory'
 import {
   labPipelineDebugLog,
   labPipelineSnapshot,
@@ -37,7 +37,12 @@ export async function labOpLoadChainFromDatabase(): Promise<LabState> {
 export async function labOpMineBlocks(
   count: number,
   targetAddress: string,
-  options?: { ownerName?: string; ownerWalletId?: number },
+  options?: {
+    ownerName?: string
+    ownerWalletId?: number
+    labAddressType?: string
+    labNetwork?: string
+  },
 ): Promise<LabState> {
   return runLabOp(async () => {
     labPipelineDebugLog('mineBlocks:start', {
@@ -61,16 +66,99 @@ export async function labOpMineBlocks(
   })
 }
 
-export async function labOpCreateTransaction(
-  params: LabCreateTransactionParams,
-): Promise<LabState> {
-  return runLabOp(async () => {
-    labPipelineDebugLog('createLabTransaction:start', {})
+function parseLabEntitySignResult(raw: unknown): {
+  signedTxHex: string
+  feeSats: number
+  hasChange: boolean
+  changesetJson: string
+  changeAddress: string
+} {
+  const o: Record<string, unknown> =
+    raw != null && typeof raw === 'object' && !Array.isArray(raw)
+      ? (raw as Record<string, unknown>)
+      : typeof raw === 'string'
+        ? (JSON.parse(raw) as Record<string, unknown>)
+        : {}
+  return {
+    signedTxHex: String(o.signed_tx_hex ?? ''),
+    feeSats: Number(o.fee_sats ?? 0),
+    hasChange: Boolean(o.has_change),
+    changesetJson: String(o.changeset_json ?? ''),
+    changeAddress: String(o.change_address ?? ''),
+  }
+}
+
+/**
+ * Build/sign a lab-entity mempool tx (lab worker + crypto worker), then persist.
+ */
+export async function labOpCreateLabEntityTransaction(params: {
+  entityName: string
+  fromAddress: string
+  toAddress: string
+  amountSats: number
+  feeRateSatPerVb: number
+}): Promise<LabState> {
+  const prep = await runLabOp(async () => {
+    labPipelineDebugLog('createLabEntityTransaction:prepare', {})
     await initLabWorkerWithState()
     const labWorker = getLabWorker()
-    const state = await labWorker.createTransaction(params)
+    return labWorker.prepareLabEntityTransaction(params)
+  })
+
+  const cryptoWorker = getCryptoWorker()
+  const c = prep.crypto
+  const signRaw = await cryptoWorker.labEntityBuildAndSignLabTransaction({
+    mnemonic: c.mnemonic,
+    changesetJson: c.changesetJson,
+    network: c.network,
+    addressType: c.addressType,
+    accountId: c.accountId,
+    utxosJson: c.utxosJson,
+    toAddress: c.toAddress,
+    amountSats: c.amountSats,
+    feeRateSatPerVb: c.feeRateSatPerVb,
+  })
+  const { signedTxHex, feeSats, hasChange, changesetJson, changeAddress } =
+    parseLabEntitySignResult(signRaw)
+
+  const totalInput = prep.totalInput
+  const outputsDetail = hasChange
+    ? [
+        ...prep.mempoolMetadata.outputsDetail,
+        {
+          address: changeAddress,
+          amountSats: totalInput - params.amountSats - feeSats,
+          isChange: true as const,
+          owner: prep.mempoolMetadata.sender,
+        },
+      ]
+    : [
+        {
+          ...prep.mempoolMetadata.outputsDetail[0],
+          amountSats: totalInput - feeSats,
+        },
+      ]
+
+  const fullMetadata = {
+    ...prep.mempoolMetadata,
+    feeSats,
+    hasChange,
+    outputsDetail,
+    walletChangeAddress: hasChange ? changeAddress : '',
+  }
+
+  return runLabOp(async () => {
+    labPipelineDebugLog('createLabEntityTransaction:finalize', {})
+    await initLabWorkerWithState()
+    const labWorker = getLabWorker()
+    const state = await labWorker.finalizeLabEntityMempoolTransaction({
+      signedTxHex,
+      mempoolMetadata: fullMetadata,
+      entityName: params.entityName,
+      newChangesetJson: changesetJson,
+    })
     await persistLabState(state)
-    labPipelineSnapshot('createLabTransaction:end', state)
+    labPipelineSnapshot('createLabEntityTransaction:end', state)
     return state
   })
 }

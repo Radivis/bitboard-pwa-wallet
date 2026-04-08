@@ -1,4 +1,4 @@
-import { Kysely } from 'kysely'
+import { Kysely, sql } from 'kysely'
 import { WaSqliteWorkerDialect } from 'kysely-wasqlite-worker'
 import type { LabDatabase } from './lab-schema'
 
@@ -90,6 +90,32 @@ async function migrateLabToLatest(labDb: Kysely<LabDatabase>): Promise<void> {
     .addColumn('inputs_json', 'text', (col) => col.notNull())
     .addColumn('outputs_json', 'text', (col) => col.notNull())
     .execute()
+
+  await labDb.schema
+    .createTable('lab_entities')
+    .ifNotExists()
+    .addColumn('entity_name', 'text', (col) => col.primaryKey())
+    .addColumn('mnemonic', 'text', (col) => col.notNull())
+    .addColumn('changeset_json', 'text', (col) => col.notNull())
+    .addColumn('external_descriptor', 'text', (col) => col.notNull())
+    .addColumn('internal_descriptor', 'text', (col) => col.notNull())
+    .addColumn('network', 'text', (col) => col.notNull().defaultTo('regtest'))
+    .addColumn('address_type', 'text', (col) => col.notNull().defaultTo('segwit'))
+    .addColumn('account_id', 'integer', (col) => col.notNull().defaultTo(0))
+    .addColumn('created_at', 'text', (col) => col.notNull())
+    .addColumn('updated_at', 'text', (col) => col.notNull())
+    .execute()
+
+  try {
+    await sql`ALTER TABLE lab_address_owners ADD COLUMN entity_name text`.execute(labDb)
+    await sql`
+      UPDATE lab_address_owners
+      SET entity_name = owner_name, owner_type = 'lab_entity'
+      WHERE owner_type = 'name'
+    `.execute(labDb)
+  } catch {
+    /* column already present */
+  }
 }
 
 export async function ensureLabMigrated(): Promise<void> {

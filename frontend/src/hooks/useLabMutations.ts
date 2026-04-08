@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import {
-  labOpCreateTransaction,
+  labOpCreateLabEntityTransaction,
   labOpMineBlocks,
   labOpReset,
 } from '@/lib/lab-worker-operations'
@@ -15,6 +15,8 @@ export type LabMineBlocksVariables = {
     | { ownerWalletId: number }
     | { ownerName: string }
     | undefined
+  labAddressType: 'segwit' | 'taproot'
+  labNetwork?: string
 }
 
 export function useLabMineBlocksMutation() {
@@ -23,11 +25,11 @@ export function useLabMineBlocksMutation() {
   return useMutation({
     mutationKey: ['lab', 'mineBlocks'] as const,
     mutationFn: async (variables: LabMineBlocksVariables) => {
-      return labOpMineBlocks(
-        variables.count,
-        variables.effectiveTarget,
-        variables.mineOptions,
-      )
+      return labOpMineBlocks(variables.count, variables.effectiveTarget, {
+        ...variables.mineOptions,
+        labAddressType: variables.labAddressType,
+        labNetwork: variables.labNetwork ?? 'regtest',
+      })
     },
     onSuccess: (state, variables) => {
       setLabChainStateCache(queryClient, state)
@@ -41,6 +43,7 @@ export function useLabMineBlocksMutation() {
 }
 
 export type LabCreateTransactionVariables = {
+  entityName: string
   fromAddress: string
   toAddress: string
   amountSats: number
@@ -51,9 +54,10 @@ export function useLabCreateTransactionMutation() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationKey: ['lab', 'createTransaction'] as const,
+    mutationKey: ['lab', 'createLabEntityTransaction'] as const,
     mutationFn: async (variables: LabCreateTransactionVariables) => {
-      return labOpCreateTransaction({
+      return labOpCreateLabEntityTransaction({
+        entityName: variables.entityName,
         fromAddress: variables.fromAddress,
         toAddress: variables.toAddress,
         amountSats: variables.amountSats,

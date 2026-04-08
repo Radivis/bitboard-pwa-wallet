@@ -91,7 +91,7 @@ export async function mineBlocksInLab(
   })
 
   await page.getByLabel('Number of blocks').fill(String(count))
-  await page.getByRole('button', { name: ownerType === 'name' ? 'Name' : 'Wallet' }).click()
+  await page.getByRole('button', { name: ownerType === 'name' ? 'Lab entity' : 'Wallet' }).click()
 
   await expect(page.getByRole('button', { name: 'Mine blocks' })).toBeEnabled({
     timeout: 20000,

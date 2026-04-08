@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { useLabChainStateQuery } from '@/hooks/useLabChainStateQuery'
-import { useWalletStore } from '@/stores/walletStore'
+import { selectCommittedAddressType, useWalletStore } from '@/stores/walletStore'
 import { useLabMiningStore } from '@/stores/labMiningStore'
 import { useWallet, useWallets } from '@/db'
 import {
@@ -10,6 +10,7 @@ import {
   useLabResetMutation,
 } from '@/hooks/useLabMutations'
 import { LAB_MAX_BLOCKS_PER_MINE, LAB_MIN_BLOCKS_PER_MINE } from '@/workers/lab-api'
+import { WALLET_OWNER_PREFIX } from '@/lib/lab-utils'
 
 const DEFAULT_LAB_FEE_RATE_SAT_PER_VB = 1
 
@@ -40,6 +41,7 @@ export function useLabIndexPageData() {
   const activeWalletId = useWalletStore((s) => s.activeWalletId)
   const walletStatus = useWalletStore((s) => s.walletStatus)
   const currentAddress = useWalletStore((s) => s.currentAddress)
+  const labAddressType = useWalletStore(selectCommittedAddressType)
   const { data: activeWallet } = useWallet(activeWalletId)
   const { data: wallets = [] } = useWallets()
 
@@ -92,7 +94,12 @@ export function useLabIndexPageData() {
         : ownerName.trim()
           ? { ownerName: ownerName.trim() }
           : undefined
-    mineMutation.mutate({ count, effectiveTarget, mineOptions })
+    mineMutation.mutate({
+      count,
+      effectiveTarget,
+      mineOptions,
+      labAddressType,
+    })
   }, [
     mineCount,
     ownerType,
@@ -101,6 +108,7 @@ export function useLabIndexPageData() {
     currentAddress,
     activeWalletId,
     mineMutation,
+    labAddressType,
   ])
 
   const handleSend = useCallback(() => {
@@ -110,7 +118,8 @@ export function useLabIndexPageData() {
       toast.error('Enter a valid amount')
       return
     }
-    if (!fromAddress) {
+    const trimmedFrom = fromAddress.trim()
+    if (!trimmedFrom) {
       toast.error('Select a from address')
       return
     }
@@ -118,9 +127,19 @@ export function useLabIndexPageData() {
       toast.error('Enter a to address')
       return
     }
+    const entityOwner = addressToOwner[trimmedFrom]
+    if (
+      entityOwner == null ||
+      entityOwner === '' ||
+      entityOwner.startsWith(WALLET_OWNER_PREFIX)
+    ) {
+      toast.error('Spend from a lab entity address (use Send for your wallet)')
+      return
+    }
     void createTxMutation
       .mutateAsync({
-        fromAddress,
+        entityName: entityOwner,
+        fromAddress: trimmedFrom,
         toAddress: toAddress.trim(),
         amountSats: amount,
         feeRateSatPerVb: fee,
@@ -134,14 +153,21 @@ export function useLabIndexPageData() {
       .catch(() => {
         /* error toast from mutation onError */
       })
-  }, [fromAddress, toAddress, amountSats, feeRate, createTxMutation])
+  }, [fromAddress, toAddress, amountSats, feeRate, createTxMutation, addressToOwner])
 
   const handleResetLab = useCallback(() => {
     setShowResetConfirm(false)
     resetMutation.mutate()
   }, [resetMutation])
 
-  const controlledAddresses = addresses.filter((a) => a.wif)
+  const controlledAddresses = useMemo(() => {
+    return addresses.filter((a) => {
+      if (a.wif) return true
+      const owner = addressToOwner[a.address]
+      if (owner == null || owner.startsWith(WALLET_OWNER_PREFIX)) return false
+      return getBalanceForAddress(a.address) > 0
+    })
+  }, [addresses, addressToOwner, getBalanceForAddress])
   const txDetailsByTxid = useMemo(
     () => new Map(txDetails.map((d) => [d.txid, d])),
     [txDetails],

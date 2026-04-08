@@ -122,7 +122,7 @@ export function LabBlocksCard({
                   as="span"
                   infoId="lab-owner-type-label"
                   infoTitle="Owner type"
-                  infoText="Decides who receives the freshly mined lab coins. “Name” credits a lab-only identity you control with keys shown in the lab UI. “Wallet” sends the reward to your currently unlocked Bitboard wallet’s receive address so the same seed you use in the app gets the funds inside the simulator."
+                  infoText="Decides who receives the freshly mined lab coins. “Lab entity” credits a simulated participant with a local descriptor wallet (plaintext in the lab DB). “Wallet” sends the reward to your unlocked Bitboard wallet’s receive address (your real seed, encrypted)."
                 >
                   Owner type
                 </InfomodeWrapper>
@@ -130,8 +130,8 @@ export function LabBlocksCard({
               <div className="flex gap-2">
                 <InfomodeWrapper
                   infoId="lab-owner-type-name-button"
-                  infoTitle="Name"
-                  infoText="Named lab owners are fictional participants with their own addresses and WIF keys inside the simulator—handy for moving coins between “Alice”, “Bob”, etc., without involving your real wallet."
+                  infoTitle="Lab entity"
+                  infoText="Lab entities are simulated participants with a BIP39-backed descriptor wallet stored in plaintext in the lab database—use them for “Alice”, “Bob”, etc., without touching your real wallet."
                 >
                   <Button
                     type="button"
@@ -139,7 +139,7 @@ export function LabBlocksCard({
                     size="sm"
                     onClick={() => setOwnerType('name')}
                   >
-                    Name
+                    Lab entity
                   </Button>
                 </InfomodeWrapper>
                 <InfomodeWrapper
@@ -162,7 +162,7 @@ export function LabBlocksCard({
               <Label htmlFor="target-address">
                 {ownerType === 'wallet'
                   ? 'Target address (active wallet)'
-                  : 'Target address (blank = random)'}
+                  : 'Target address (blank = random; ignored when lab entity name is set)'}
               </Label>
               <TargetAddressField
                 ownerType={ownerType}
@@ -174,7 +174,7 @@ export function LabBlocksCard({
             </div>
             {ownerType === 'name' && (
               <div className="space-y-2">
-                <Label htmlFor="owner-name">Owner (optional)</Label>
+                <Label htmlFor="owner-name">Lab entity name (optional)</Label>
                 <Input
                   id="owner-name"
                   type="text"

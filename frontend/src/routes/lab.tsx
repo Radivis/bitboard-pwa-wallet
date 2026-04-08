@@ -45,6 +45,7 @@ function LabLayout() {
         blocks: ui.blocks,
         utxos: ui.utxos,
         addresses: ui.addresses,
+        entities: ui.entities,
         addressToOwner: ui.addressToOwner,
         mempool: ui.mempool,
         transactions: ui.transactions,

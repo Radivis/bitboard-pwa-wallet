@@ -35,6 +35,20 @@ let state: LabState = { ...EMPTY_LAB_STATE }
 /** Txid -> change address for txs we create (used to mark change outputs). Not persisted. */
 const txidToChangeAddress = new Map<string, string>()
 
+function parseWasmObject(val: unknown): Record<string, unknown> {
+  if (val != null && typeof val === 'object' && !Array.isArray(val)) {
+    return val as Record<string, unknown>
+  }
+  if (typeof val === 'string') {
+    try {
+      return JSON.parse(val) as Record<string, unknown>
+    } catch {
+      return {}
+    }
+  }
+  return {}
+}
+
 function selectMempoolTxsForBlock(mempool: MempoolEntry[]): MempoolEntry[] {
   const sortedEntries = [...mempool].sort((a, b) => {
     if (b.feeSats !== a.feeSats) return b.feeSats - a.feeSats
@@ -194,10 +208,11 @@ function addNewUtxos(
 ): void {
   for (const utxo of newUtxos) {
     const row = utxo as unknown as Record<string, unknown>
+    const addressStr = String(utxo.address)
     state.utxos.push({
       txid: String(utxo.txid),
       vout: Number(utxo.vout),
-      address: String(utxo.address),
+      address: addressStr,
       amountSats: readSatsFromUtxoRow(row),
       scriptPubkeyHex: String(
         utxo.script_pubkey_hex ?? utxo.scriptPubkeyHex ?? '',
@@ -357,7 +372,31 @@ async function buildCurrentBlockTemplate(
     ? (params.walletCurrentAddress ?? '').trim()
     : params.targetAddress.trim()
 
-  const targetAddress = effectiveTargetAddress || wasmModule.lab_generate_keypair().address
+  const entityNameOpt = params.ownerName?.trim()
+
+  let targetAddress: string
+  if (
+    params.ownerType === 'name' &&
+    entityNameOpt != null &&
+    entityNameOpt !== '' &&
+    params.ownerWalletId == null
+  ) {
+    const entity = state.entities.find((e) => e.entityName === entityNameOpt)
+    if (entity) {
+      targetAddress = wasmModule.lab_entity_get_current_external_address(
+        entity.mnemonic,
+        entity.changesetJson,
+        entity.network,
+        entity.addressType,
+        entity.accountId,
+      )
+    } else {
+      targetAddress = effectiveTargetAddress || wasmModule.lab_generate_keypair().address
+    }
+  } else {
+    targetAddress = effectiveTargetAddress || wasmModule.lab_generate_keypair().address
+  }
+
   const coinbaseScriptPubkeyHex = wasmModule.lab_address_to_script_pubkey_hex(targetAddress)
   const blockHex = wasmModule.lab_mine_block(
     previousHash,
@@ -409,6 +448,7 @@ const labService = {
       blocks: cloned.blocks ?? [],
       utxos: cloned.utxos ?? [],
       addresses: cloned.addresses ?? [],
+      entities: cloned.entities ?? [],
       addressToOwner: cloned.addressToOwner ?? {},
       mempool: cloned.mempool ?? [],
       transactions: cloned.transactions ?? [],
@@ -465,7 +505,12 @@ const labService = {
   async mineBlocks(
     blockCountToMine: number,
     targetAddress: string,
-    options?: { ownerName?: string; ownerWalletId?: number },
+    options?: {
+      ownerName?: string
+      ownerWalletId?: number
+      labAddressType?: string
+      labNetwork?: string
+    },
   ): Promise<LabState> {
     if (
       !Number.isInteger(blockCountToMine) ||
@@ -487,13 +532,58 @@ const labService = {
       height = tip.height + 1
     }
 
+    const labNetwork = options?.labNetwork ?? 'regtest'
+    const labAddressType = options?.labAddressType ?? 'segwit'
+    const entityNameOpt = options?.ownerName?.trim()
+
     let coinbaseScriptPubkeyHex: string
     let newAddress: LabAddress | null = null
     let coinbaseAddress: string
 
-    if (targetAddress.trim()) {
+    if (entityNameOpt != null && entityNameOpt !== '' && options?.ownerWalletId == null) {
+      let entity = state.entities.find((e) => e.entityName === entityNameOpt)
+      const now = new Date().toISOString()
+      if (!entity) {
+        const mnemonic = wasmModule.generate_mnemonic(12)
+        const createdRaw = wasmModule.create_lab_entity_wallet(
+          mnemonic,
+          labNetwork,
+          labAddressType,
+          0,
+        )
+        const cr = parseWasmObject(createdRaw)
+        entity = {
+          entityName: entityNameOpt,
+          mnemonic,
+          changesetJson: String(cr.changeset_json ?? ''),
+          externalDescriptor: String(cr.external_descriptor ?? ''),
+          internalDescriptor: String(cr.internal_descriptor ?? ''),
+          network: labNetwork,
+          addressType: labAddressType,
+          accountId: 0,
+          createdAt: now,
+          updatedAt: now,
+        }
+        state.entities.push(entity)
+        coinbaseAddress = String(cr.first_address ?? '')
+        if (!coinbaseAddress) {
+          throw new Error('Lab entity wallet creation failed (no first address)')
+        }
+      } else {
+        coinbaseAddress = wasmModule.lab_entity_get_current_external_address(
+          entity.mnemonic,
+          entity.changesetJson,
+          entity.network,
+          entity.addressType,
+          entity.accountId,
+        )
+      }
+      coinbaseScriptPubkeyHex = wasmModule.lab_address_to_script_pubkey_hex(coinbaseAddress)
+      newAddress = null
+    } else if (targetAddress.trim()) {
       coinbaseAddress = targetAddress.trim()
       coinbaseScriptPubkeyHex = wasmModule.lab_address_to_script_pubkey_hex(coinbaseAddress)
+      newAddress = null
     } else {
       const keypair = wasmModule.lab_generate_keypair()
       newAddress = { address: keypair.address, wif: keypair.wif }
@@ -504,9 +594,9 @@ const labService = {
     if (options?.ownerWalletId != null) {
       state.addressToOwner = state.addressToOwner ?? {}
       state.addressToOwner[coinbaseAddress] = walletOwnerKey(options.ownerWalletId)
-    } else if (options?.ownerName?.trim()) {
+    } else if (entityNameOpt != null && entityNameOpt !== '' && options?.ownerWalletId == null) {
       state.addressToOwner = state.addressToOwner ?? {}
-      state.addressToOwner[coinbaseAddress] = options.ownerName.trim()
+      state.addressToOwner[coinbaseAddress] = entityNameOpt
     }
 
     const mempoolCopy = [...(state.mempool ?? [])]
@@ -544,19 +634,35 @@ const labService = {
     return this.getStateSnapshot()
   },
 
-  async createTransaction(params: {
+  async prepareLabEntityTransaction(params: {
+    entityName: string
     fromAddress: string
     toAddress: string
     amountSats: number
     feeRateSatPerVb: number
-  }): Promise<LabState> {
-    const { fromAddress, toAddress, amountSats, feeRateSatPerVb } = params
-    const wasmModule = await getWasm()
+  }): Promise<{
+    crypto: import('./lab-api').LabEntityTransactionCryptoParams
+    mempoolMetadata: import('./lab-api').LabMempoolMetadata
+    totalInput: number
+  }> {
+    const { entityName, fromAddress, toAddress, amountSats, feeRateSatPerVb } = params
+    const addressToOwner = state.addressToOwner ?? {}
+    const ownerAtFrom = addressToOwner[fromAddress] ?? null
+    if (ownerAtFrom !== entityName) {
+      throw new Error('From address does not belong to this lab entity')
+    }
+    if (ownerAtFrom != null && ownerAtFrom.startsWith(WALLET_OWNER_PREFIX)) {
+      throw new Error('Use the wallet Send flow for user-wallet lab spends')
+    }
+
+    const entity = state.entities.find((e) => e.entityName === entityName)
+    if (!entity) {
+      throw new Error(`Unknown lab entity "${entityName}"`)
+    }
 
     const fromUtxos = state.utxos.filter((u) => u.address === fromAddress)
-    const controlled = state.addresses.find((a) => a.address === fromAddress)
-    if (!controlled) {
-      throw new Error('From address must be a controlled address (mined with random target)')
+    if (fromUtxos.length === 0) {
+      throw new Error('No UTXOs for the selected from address')
     }
 
     const utxosJson = JSON.stringify(
@@ -565,44 +671,11 @@ const labService = {
         vout: utxo.vout,
         amount_sats: utxo.amountSats,
         script_pubkey_hex: utxo.scriptPubkeyHex,
+        address: utxo.address,
       })),
     )
 
-    const changeKeypair = wasmModule.lab_generate_keypair()
-    const changeAddress: LabAddress = { address: changeKeypair.address, wif: changeKeypair.wif }
-
-    const buildResult = wasmModule.lab_build_transaction_with_change(
-      utxosJson,
-      toAddress,
-      BigInt(amountSats),
-      feeRateSatPerVb,
-      changeAddress.address,
-    )
-    const buildParsed = (typeof buildResult === 'string'
-      ? JSON.parse(buildResult)
-      : buildResult) as {
-      tx_hex?: string
-      fee_sats?: number
-      has_change?: boolean
-    }
-    const unsignedTxHex = String(buildParsed.tx_hex ?? '')
-    const feeSats = Number(buildParsed.fee_sats ?? 0)
-    const has_change = Boolean(buildParsed.has_change)
-
-    const signedTxHex = wasmModule.lab_sign_transaction(
-      unsignedTxHex,
-      controlled.wif,
-      utxosJson,
-    )
-
-    if (has_change) {
-      state.addresses.push(changeAddress)
-      const createdTxid = wasmModule.lab_txid(signedTxHex)
-      txidToChangeAddress.set(createdTxid, changeAddress.address)
-    }
-
-    const addressToOwner = state.addressToOwner ?? {}
-    const sender = addressToOwner[fromAddress] ?? null
+    const sender = entityName
     const receiver = addressToOwner[toAddress] ?? null
 
     const inputsDetail = fromUtxos.map((utxo) => ({
@@ -612,36 +685,68 @@ const labService = {
     }))
 
     const totalInput = fromUtxos.reduce((sum, utxo) => sum + utxo.amountSats, 0)
-    const outputsDetail: {
-      address: string
-      amountSats: number
-      isChange?: boolean
-      owner?: string | null
-    }[] = has_change
-      ? [
-          { address: toAddress, amountSats, owner: receiver },
-          {
-            address: changeAddress.address,
-            amountSats: totalInput - amountSats - feeSats,
-            isChange: true,
-            owner: sender,
-          },
-        ]
-      : [{ address: toAddress, amountSats: totalInput - feeSats, owner: receiver }]
+    const inputs = fromUtxos.map((utxo) => ({ txid: utxo.txid, vout: utxo.vout }))
+
+    return {
+      crypto: {
+        mnemonic: entity.mnemonic,
+        changesetJson: entity.changesetJson,
+        network: entity.network,
+        addressType: entity.addressType,
+        accountId: entity.accountId,
+        utxosJson,
+        toAddress,
+        amountSats,
+        feeRateSatPerVb,
+      },
+      mempoolMetadata: {
+        sender,
+        receiver,
+        feeSats: 0,
+        inputs,
+        inputsDetail,
+        outputsDetail: [{ address: toAddress, amountSats, owner: receiver }],
+        hasChange: false,
+        walletChangeAddress: '',
+      },
+      totalInput,
+    }
+  },
+
+  async finalizeLabEntityMempoolTransaction(params: {
+    signedTxHex: string
+    mempoolMetadata: import('./lab-api').LabMempoolMetadata
+    entityName: string
+    newChangesetJson: string
+  }): Promise<LabState> {
+    const wasmModule = await getWasm()
+    const { signedTxHex, mempoolMetadata, entityName, newChangesetJson } = params
+
+    const entity = state.entities.find((e) => e.entityName === entityName)
+    if (!entity) {
+      throw new Error(`Unknown lab entity "${entityName}"`)
+    }
+    entity.changesetJson = newChangesetJson
+    entity.updatedAt = new Date().toISOString()
 
     const txid = wasmModule.lab_txid(signedTxHex)
-    const inputs = fromUtxos.map((utxo) => ({ txid: utxo.txid, vout: utxo.vout }))
+    if (mempoolMetadata.hasChange) {
+      const changeOut = mempoolMetadata.outputsDetail.find((o) => o.isChange)
+      if (changeOut) {
+        txidToChangeAddress.set(txid, changeOut.address)
+      }
+    }
 
     state.mempool = state.mempool ?? []
     state.mempool.push({
       signedTxHex,
       txid,
-      sender,
-      receiver,
-      feeSats,
-      inputs,
-      inputsDetail,
-      outputsDetail,
+      sender: mempoolMetadata.sender,
+      receiver: mempoolMetadata.receiver,
+      feeSats: mempoolMetadata.feeSats,
+      inputs: mempoolMetadata.inputs,
+      inputsDetail: mempoolMetadata.inputsDetail,
+      outputsDetail: mempoolMetadata.outputsDetail,
     })
 
     return this.getStateSnapshot()

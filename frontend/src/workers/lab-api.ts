@@ -89,10 +89,26 @@ export interface LabCurrentBlockTemplateParams {
   walletCurrentAddress?: string | null
 }
 
+/** Simulated BDK-backed lab participant (plaintext in lab DB). */
+export interface LabEntityRecord {
+  entityName: string
+  mnemonic: string
+  changesetJson: string
+  externalDescriptor: string
+  internalDescriptor: string
+  network: string
+  addressType: string
+  accountId: number
+  createdAt: string
+  updatedAt: string
+}
+
 export interface LabState {
   blocks: LabBlock[]
   utxos: LabUtxo[]
   addresses: LabAddress[]
+  /** Lab Entities with simulated descriptor wallets (not user wallets). */
+  entities: LabEntityRecord[]
   addressToOwner?: Record<string, string>
   mempool: MempoolEntry[]
   transactions: LabTxRecord[]
@@ -108,8 +124,22 @@ export const LAB_MIN_BLOCKS_PER_MINE = 1
  */
 export const LAB_MAX_BLOCKS_PER_MINE = 100
 
-export interface LabCreateTransactionParams {
+export interface PrepareLabEntityTransactionParams {
+  entityName: string
   fromAddress: string
+  toAddress: string
+  amountSats: number
+  feeRateSatPerVb: number
+}
+
+/** Payload for crypto worker after prepareLabEntityTransaction. */
+export interface LabEntityTransactionCryptoParams {
+  mnemonic: string
+  changesetJson: string
+  network: string
+  addressType: string
+  accountId: number
+  utxosJson: string
   toAddress: string
   amountSats: number
   feeRateSatPerVb: number
@@ -128,6 +158,7 @@ export const EMPTY_LAB_STATE: LabState = {
   blocks: [],
   utxos: [],
   addresses: [],
+  entities: [],
   addressToOwner: {},
   mempool: [],
   transactions: [],
@@ -166,14 +197,34 @@ export interface LabService {
   mineBlocks(
     count: number,
     targetAddress: string,
-    options?: { ownerName?: string; ownerWalletId?: number },
+    options?: {
+      ownerName?: string
+      ownerWalletId?: number
+      labAddressType?: string
+      labNetwork?: string
+    },
   ): Promise<LabState>
 
   /**
-   * Creates a transaction and adds it to the mempool. No mining.
-   * Returns the new state.
+   * Build lab-entity tx inputs/metadata for signing on the crypto worker.
    */
-  createTransaction(params: LabCreateTransactionParams): Promise<LabState>
+  prepareLabEntityTransaction(
+    params: PrepareLabEntityTransactionParams,
+  ): Promise<{
+    crypto: LabEntityTransactionCryptoParams
+    mempoolMetadata: LabMempoolMetadata
+    totalInput: number
+  }>
+
+  /**
+   * Push signed lab-entity tx to mempool and persist updated entity changeset.
+   */
+  finalizeLabEntityMempoolTransaction(params: {
+    signedTxHex: string
+    mempoolMetadata: LabMempoolMetadata
+    entityName: string
+    newChangesetJson: string
+  }): Promise<LabState>
 
   /**
    * Prepares lab UTXOs for a wallet transaction. Returns utxosJson and partial metadata.

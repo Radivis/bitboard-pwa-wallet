@@ -245,6 +245,23 @@ const cryptoService = {
     return wasmModule.get_lab_change_address();
   },
 
+  async labEntityBuildAndSignLabTransaction(
+    params: import('./crypto-api').LabEntityBuildAndSignLabTransactionParams,
+  ): Promise<unknown> {
+    const wasmModule = await getWasm();
+    return wasmModule.lab_entity_build_and_sign_lab_transaction(
+      params.mnemonic,
+      params.changesetJson,
+      params.network,
+      params.addressType,
+      params.accountId,
+      params.utxosJson,
+      params.toAddress,
+      BigInt(params.amountSats),
+      params.feeRateSatPerVb,
+    );
+  },
+
   async getBalance(): Promise<BalanceInfo> {
     const wasmModule = await getWasm();
     return wasmModule.get_balance();

@@ -25,6 +25,7 @@ pub mod error;
 use crate::error::MapErrToJs;
 pub mod esplora;
 pub mod lab;
+pub mod lab_entity_wallet;
 pub mod lab_psbt;
 pub mod mnemonic;
 pub mod sync;
@@ -455,4 +456,106 @@ pub fn get_lab_change_address() -> Result<String, JsValue> {
             .address
             .to_string()
     })
+}
+
+// ---------------------------------------------------------------------------
+// Lab entity wallet (ephemeral BDK, no ACTIVE_WALLET)
+// ---------------------------------------------------------------------------
+
+/// Create a simulated lab-entity wallet from mnemonic. Does not touch the active user wallet.
+#[wasm_bindgen]
+pub fn create_lab_entity_wallet(
+    mnemonic_str: &str,
+    network: &str,
+    address_type: &str,
+    account_id: u32,
+) -> Result<JsValue, JsValue> {
+    let net = types::BitcoinNetwork::try_from(network).map_err(JsValue::from)?;
+    let addr_type = types::AddressType::try_from(address_type).map_err(JsValue::from)?;
+    let result =
+        lab_entity_wallet::create_lab_entity_wallet(mnemonic_str, net, addr_type, account_id)
+            .map_err(JsValue::from)?;
+    serde_wasm_bindgen::to_value(&result).map_err_to_js()
+}
+
+/// Last revealed external address for mining coinbase to a lab entity.
+#[wasm_bindgen]
+pub fn lab_entity_get_current_external_address(
+    mnemonic_str: &str,
+    changeset_json: &str,
+    network: &str,
+    address_type: &str,
+    account_id: u32,
+) -> Result<String, JsValue> {
+    let net = types::BitcoinNetwork::try_from(network).map_err(JsValue::from)?;
+    let addr_type = types::AddressType::try_from(address_type).map_err(JsValue::from)?;
+    lab_entity_wallet::lab_entity_get_current_external_address(
+        mnemonic_str,
+        changeset_json,
+        net,
+        addr_type,
+        account_id,
+    )
+    .map_err(JsValue::from)
+}
+
+/// Reveal next external address; returns JSON `{ address, changeset_json }`.
+#[wasm_bindgen]
+pub fn lab_entity_reveal_next_external_address(
+    mnemonic_str: &str,
+    changeset_json: &str,
+    network: &str,
+    address_type: &str,
+    account_id: u32,
+) -> Result<JsValue, JsValue> {
+    let net = types::BitcoinNetwork::try_from(network).map_err(JsValue::from)?;
+    let addr_type = types::AddressType::try_from(address_type).map_err(JsValue::from)?;
+    let (address, changeset_json) = lab_entity_wallet::lab_entity_reveal_next_external_address(
+        mnemonic_str,
+        changeset_json,
+        net,
+        addr_type,
+        account_id,
+    )
+    .map_err(JsValue::from)?;
+    #[derive(serde::Serialize)]
+    struct RevealResult {
+        address: String,
+        changeset_json: String,
+    }
+    serde_wasm_bindgen::to_value(&RevealResult {
+        address,
+        changeset_json,
+    })
+    .map_err_to_js()
+}
+
+/// Build and sign a lab mempool tx for a lab entity. Returns JSON including updated `changeset_json`.
+#[wasm_bindgen]
+pub fn lab_entity_build_and_sign_lab_transaction(
+    mnemonic_str: &str,
+    changeset_json: &str,
+    network: &str,
+    address_type: &str,
+    account_id: u32,
+    utxos_json: &str,
+    to_address: &str,
+    amount_sats: u64,
+    fee_rate_sat_per_vb: f64,
+) -> Result<JsValue, JsValue> {
+    let net = types::BitcoinNetwork::try_from(network).map_err(JsValue::from)?;
+    let addr_type = types::AddressType::try_from(address_type).map_err(JsValue::from)?;
+    let result = lab_entity_wallet::lab_entity_build_and_sign_lab_transaction(
+        mnemonic_str,
+        changeset_json,
+        net,
+        addr_type,
+        account_id,
+        utxos_json,
+        to_address,
+        amount_sats,
+        fee_rate_sat_per_vb,
+    )
+    .map_err(JsValue::from)?;
+    serde_wasm_bindgen::to_value(&result).map_err_to_js()
 }

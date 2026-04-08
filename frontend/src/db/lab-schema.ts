@@ -2,9 +2,23 @@ import type { Generated, Insertable, Selectable, Updateable } from 'kysely'
 
 interface LabAddressOwnersTable {
   address: string
-  owner_type: 'wallet' | 'name'
+  owner_type: 'wallet' | 'name' | 'lab_entity'
   wallet_id: number | null
   owner_name: string | null
+  entity_name: string | null
+}
+
+interface LabEntitiesTable {
+  entity_name: string
+  mnemonic: string
+  changeset_json: string
+  external_descriptor: string
+  internal_descriptor: string
+  network: string
+  address_type: string
+  account_id: number
+  created_at: string
+  updated_at: string
 }
 
 interface LabMempoolTable {
@@ -38,11 +52,15 @@ export interface LabDatabase {
   blocks: BlocksTable
   utxos: UtxosTable
   lab_addresses: LabAddressesTable
+  lab_entities: LabEntitiesTable
   lab_address_owners: LabAddressOwnersTable
   lab_mempool: LabMempoolTable
   lab_transactions: LabTransactionsTable
   lab_tx_details: LabTxDetailsTable
 }
+
+export type LabEntityRow = Selectable<LabEntitiesTable>
+export type NewLabEntityRow = Insertable<LabEntitiesTable>
 
 interface BlocksTable {
   block_hash: string

@@ -30,6 +30,8 @@ test.describe('Lab', { tag: '@lab' }, () => {
     expect(state.blocks).toHaveLength(1)
     const aliceSum = getUtxoSumByOwner(state, 'Alice')
     expect(aliceSum).toBe(COINBASE_SATS)
+    expect(state.entities).toHaveLength(1)
+    expect(state.entities![0].entityName).toBe('Alice')
   })
 
   test('mine to wallet', async ({ page }) => {
@@ -43,6 +45,26 @@ test.describe('Lab', { tag: '@lab' }, () => {
     expect(walletOwner).toBeDefined()
     const walletSum = getUtxoSumByOwner(state, walletOwner!)
     expect(walletSum).toBe(COINBASE_SATS)
+  })
+
+  test('creating lab transaction does not increase merged address count while unconfirmed', async ({
+    page,
+  }) => {
+    await mineBlocksInLab(page, 1, 'name', { ownerName: 'Alice' })
+    await mineBlocksInLab(page, 1, 'name', { ownerName: 'Bob' })
+
+    const stateBefore = await getLabState(page)
+    const aliceAddress = findAddressForOwner(stateBefore, 'Alice')
+    const bobAddress = findAddressForOwner(stateBefore, 'Bob')
+    expect(aliceAddress).toBeDefined()
+    expect(bobAddress).toBeDefined()
+    const addressCountBefore = stateBefore.addresses.length
+
+    await createTransactionInLab(page, aliceAddress!, bobAddress!, 10_000, 1)
+
+    const stateAfterMempool = await getLabState(page)
+    expect(stateAfterMempool.mempool).toHaveLength(1)
+    expect(stateAfterMempool.addresses.length).toBe(addressCountBefore)
   })
 
   test('transfer name to name in lab', async ({ page }) => {
