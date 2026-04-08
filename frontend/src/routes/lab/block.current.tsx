@@ -10,7 +10,7 @@ import {
 } from '@/components/lab/BlockDetailsCards'
 import { useWallets } from '@/db'
 import { useLabIndexPageData } from '@/hooks/useLabIndexPageData'
-import { useWalletStore } from '@/stores/walletStore'
+import { selectCommittedAddressType, useWalletStore } from '@/stores/walletStore'
 import { labOpGetCurrentBlockTemplate } from '@/lib/lab-worker-operations'
 import type { LabBlockDetails } from '@/workers/lab-api'
 
@@ -23,6 +23,7 @@ function LabCurrentBlockPage() {
   const { data: wallets = [] } = useWallets()
   const activeWalletId = useWalletStore((s) => s.activeWalletId)
   const currentAddress = useWalletStore((s) => s.currentAddress)
+  const labAddressType = useWalletStore(selectCommittedAddressType)
   const lab = useLabIndexPageData()
 
   const loadCurrentBlockTemplate = useCallback(async () => {
@@ -33,6 +34,7 @@ function LabCurrentBlockPage() {
         ownerName: lab.ownerName,
         ownerWalletId: activeWalletId ?? undefined,
         walletCurrentAddress: currentAddress,
+        labAddressType,
       })
       setBlock(details)
     } catch {
@@ -44,6 +46,7 @@ function LabCurrentBlockPage() {
     lab.ownerName,
     activeWalletId,
     currentAddress,
+    labAddressType,
   ])
 
   useEffect(() => {

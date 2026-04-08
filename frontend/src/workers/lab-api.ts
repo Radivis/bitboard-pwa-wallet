@@ -87,6 +87,9 @@ export interface LabCurrentBlockTemplateParams {
   ownerName?: string
   ownerWalletId?: number
   walletCurrentAddress?: string | null
+  /** Matches lab mining defaults; omit to use worker default (segwit). */
+  labAddressType?: string
+  labNetwork?: string
 }
 
 /** Simulated BDK-backed lab participant (plaintext in lab DB). */

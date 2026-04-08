@@ -336,6 +336,76 @@ function blockTransactionsForHeight(height: number): LabBlockTransactionSummary[
     })
 }
 
+/**
+ * Resolves coinbase recipient and template "mined by" label without mutating lab state.
+ * Mirrors {@link mineBlocks} branching (entity → explicit target → anonymous lab entity).
+ */
+async function resolveTemplateCoinbase(
+  params: LabCurrentBlockTemplateParams,
+  wasmModule: Awaited<ReturnType<typeof getWasm>>,
+): Promise<{ address: string; minedBy: string | null }> {
+  const labNetwork = params.labNetwork ?? 'regtest'
+  const labAddressType = params.labAddressType ?? 'segwit'
+
+  const targetArg =
+    params.ownerType === 'wallet'
+      ? (params.walletCurrentAddress ?? '').trim()
+      : params.targetAddress.trim()
+
+  const entityNameOpt =
+    params.ownerType === 'name' ? (params.ownerName?.trim() ?? '') : ''
+
+  const firstAddressFromNewEntityWallet = (): string => {
+    const mnemonic = wasmModule.generate_mnemonic(12)
+    const createdRaw = wasmModule.create_lab_entity_wallet(
+      mnemonic,
+      labNetwork,
+      labAddressType,
+      0,
+    )
+    const cr = parseWasmObject(createdRaw)
+    const first = String(cr.first_address ?? '')
+    if (!first) {
+      throw new Error('Lab entity wallet creation failed (no first address)')
+    }
+    return first
+  }
+
+  if (entityNameOpt !== '') {
+    const entity = state.entities.find((e) => e.entityName === entityNameOpt)
+    if (entity) {
+      return {
+        address: wasmModule.lab_entity_get_current_external_address(
+          entity.mnemonic,
+          entity.changesetJson,
+          entity.network,
+          entity.addressType,
+          entity.accountId,
+        ),
+        minedBy: entityNameOpt,
+      }
+    }
+    return {
+      address: firstAddressFromNewEntityWallet(),
+      minedBy: entityNameOpt,
+    }
+  }
+
+  if (targetArg !== '') {
+    const minedBy =
+      params.ownerType === 'wallet' && params.ownerWalletId != null
+        ? walletOwnerKey(params.ownerWalletId)
+        : null
+    return { address: targetArg, minedBy }
+  }
+
+  const anonymousName = `Anonymous-${crypto.randomUUID()}`
+  return {
+    address: firstAddressFromNewEntityWallet(),
+    minedBy: anonymousName,
+  }
+}
+
 async function buildMinedBlockDetails(block: LabBlock): Promise<LabBlockDetails> {
   const header = await parseBlockHeader(block.blockData)
   const blockTxDetails = state.txDetails.filter((tx) => tx.blockHeight === block.height)
@@ -368,34 +438,7 @@ async function buildCurrentBlockTemplate(
   const mempoolTxHexes = selectedEntries.map((entry) => entry.signedTxHex)
   const totalFeesSats = selectedEntries.reduce((sum, entry) => sum + entry.feeSats, 0)
 
-  const effectiveTargetAddress = params.ownerType === 'wallet'
-    ? (params.walletCurrentAddress ?? '').trim()
-    : params.targetAddress.trim()
-
-  const entityNameOpt = params.ownerName?.trim()
-
-  let targetAddress: string
-  if (
-    params.ownerType === 'name' &&
-    entityNameOpt != null &&
-    entityNameOpt !== '' &&
-    params.ownerWalletId == null
-  ) {
-    const entity = state.entities.find((e) => e.entityName === entityNameOpt)
-    if (entity) {
-      targetAddress = wasmModule.lab_entity_get_current_external_address(
-        entity.mnemonic,
-        entity.changesetJson,
-        entity.network,
-        entity.addressType,
-        entity.accountId,
-      )
-    } else {
-      targetAddress = effectiveTargetAddress || wasmModule.lab_generate_keypair().address
-    }
-  } else {
-    targetAddress = effectiveTargetAddress || wasmModule.lab_generate_keypair().address
-  }
+  const { address: targetAddress, minedBy } = await resolveTemplateCoinbase(params, wasmModule)
 
   const coinbaseScriptPubkeyHex = wasmModule.lab_address_to_script_pubkey_hex(targetAddress)
   const blockHex = wasmModule.lab_mine_block(
@@ -409,12 +452,6 @@ async function buildCurrentBlockTemplate(
   const rawEffects = wasmModule.lab_block_effects(blockHex)
   const previewEffects = parseBlockEffects(rawEffects)
   const entryByTxid = new Map(selectedEntries.map((entry) => [entry.txid, entry]))
-
-  const minedBy = params.ownerType === 'wallet' && params.ownerWalletId != null
-    ? walletOwnerKey(params.ownerWalletId)
-    : params.ownerName?.trim()
-      ? params.ownerName.trim()
-      : null
 
   const transactions: LabBlockTransactionSummary[] = previewEffects.transactions.map((tx) => {
     const matchedEntry = entryByTxid.get(tx.txid)
