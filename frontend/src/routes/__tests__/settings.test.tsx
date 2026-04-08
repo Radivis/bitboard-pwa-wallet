@@ -267,6 +267,14 @@ describe('SettingsPage', () => {
     renderWithProviders(<SettingsPage />)
     expect(screen.getByRole('button', { name: 'Set a real password' })).toBeEnabled()
     expect(screen.queryByRole('button', { name: 'Change app password' })).not.toBeInTheDocument()
+    expect(screen.getByTestId('settings-security-card')).toHaveClass('border-destructive')
+  })
+
+  it('does not highlight security card when near-zero security mode is inactive', () => {
+    nearZeroSecurityState.active = false
+    mockWalletsState.data = []
+    renderWithProviders(<SettingsPage />)
+    expect(screen.getByTestId('settings-security-card')).not.toHaveClass('border-destructive')
   })
 
   it('network selector commits loaded sub-wallet after switch completes', async () => {

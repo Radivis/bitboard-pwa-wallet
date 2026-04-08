@@ -58,7 +58,7 @@ export function SetAppPasswordModal({ open }: SetAppPasswordModalProps) {
 
   return (
     <AppModal
-      open={open}
+      isOpen={open}
       onOpenChange={() => {}}
       onCancel={handleBackToSetup}
       title={

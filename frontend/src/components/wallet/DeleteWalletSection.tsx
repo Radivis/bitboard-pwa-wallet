@@ -173,11 +173,11 @@ export function DeleteWalletSection({
       </div>
 
       <AppModal
-        open={firstDialogOpen}
+        isOpen={firstDialogOpen}
         onOpenChange={setFirstDialogOpen}
         onCancel={() => {}}
         title={`Delete ${walletName}?`}
-        hideCloseButton={probingMainnet}
+        isCloseButtonHidden={probingMainnet}
         footer={(requestClose) => (
           <>
             <Button
@@ -207,7 +207,7 @@ export function DeleteWalletSection({
       </AppModal>
 
       <AppModal
-        open={mainnetWarnOpen}
+        isOpen={mainnetWarnOpen}
         onOpenChange={setMainnetWarnOpen}
         onCancel={() => {}}
         title="Mainnet bitcoin may be at risk"
@@ -244,7 +244,7 @@ export function DeleteWalletSection({
       </AppModal>
 
       <AppModal
-        open={mainnetBlockedOpen}
+        isOpen={mainnetBlockedOpen}
         onOpenChange={setMainnetBlockedOpen}
         onCancel={() => {}}
         title="Cannot delete this wallet"

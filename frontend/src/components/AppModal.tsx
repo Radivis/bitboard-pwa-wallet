@@ -28,8 +28,8 @@ export function AppModalFooter({
 export type AppModalRequestClose = () => void
 
 export interface AppModalProps {
-  open: boolean
-  onOpenChange: (open: boolean) => void
+  isOpen: boolean
+  onOpenChange: (isOpen: boolean) => void
   /** Visible dialog title (not the HTML `title` attribute — avoids clashing with `DialogContent`). */
   title: React.ReactNode
   /** Invoked when the dialog closes via X, overlay, Escape, or explicit requestClose from footer/children. */
@@ -40,13 +40,13 @@ export interface AppModalProps {
   footer?:
     | React.ReactNode
     | ((requestClose: AppModalRequestClose) => React.ReactNode)
-  blockDismiss?: boolean
+  isBlockDismissed?: boolean
   /** When true, the header close (X) control is not rendered (overlay/Escape still follow blockDismiss). */
-  hideCloseButton?: boolean
+  isCloseButtonHidden?: boolean
   closeAriaLabel?: string
   contentClassName?: string
-  /** Passed to Radix Dialog root (default true). */
-  modal?: boolean
+  /** Passed to Radix Dialog root as argument "modal"(default true). */
+  isModal?: boolean
   /** Merged into the wrapper around `footer` (e.g. `justify-end` for a single action). */
   footerClassName?: string
 }
@@ -60,17 +60,17 @@ export interface AppModalProps {
  * close order; if you only no-op `onCancel`, the dialog can stay open incorrectly.
  */
 export function AppModal({
-  open,
+  isOpen,
   onOpenChange,
   title,
   onCancel,
   children,
   footer,
-  blockDismiss = false,
-  hideCloseButton = false,
+  isBlockDismissed = false,
+  isCloseButtonHidden = false,
   closeAriaLabel = 'Close',
   contentClassName,
-  modal = true,
+  isModal = true,
   footerClassName,
   ...dialogContentProps
 }: AppModalProps &
@@ -85,7 +85,7 @@ export function AppModal({
   } = dialogContentProps
 
   const handleOpenChange = (next: boolean) => {
-    if (!next && blockDismiss) {
+    if (!next && isBlockDismissed) {
       return
     }
     if (!next) {
@@ -104,16 +104,16 @@ export function AppModal({
     typeof footer === 'function' ? footer(requestClose) : footer
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange} modal={modal}>
+    <Dialog open={isOpen} onOpenChange={handleOpenChange} modal={isModal}>
       <DialogContent
         showCloseButton={false}
         className={cn('gap-0 p-6 sm:max-w-lg', contentClassName)}
         onInteractOutside={(e) => {
-          if (blockDismiss) e.preventDefault()
+          if (isBlockDismissed) e.preventDefault()
           onInteractOutsideFromProps?.(e)
         }}
         onEscapeKeyDown={(e) => {
-          if (blockDismiss) e.preventDefault()
+          if (isBlockDismissed) e.preventDefault()
           onEscapeKeyDownFromProps?.(e)
         }}
         {...restDialogContentProps}
@@ -129,14 +129,14 @@ export function AppModal({
             </DialogHeader>
             <div className="flex shrink-0 items-center gap-2">
               <InfomodeModalToggleCapsule />
-              {!hideCloseButton && (
+              {!isCloseButtonHidden && (
                 <Button
                   type="button"
                   variant="ghost"
                   size="icon"
                   className="size-9 shrink-0 opacity-70 ring-offset-background hover:opacity-100"
                   aria-label={closeAriaLabel}
-                  disabled={blockDismiss}
+                  disabled={isBlockDismissed}
                   onClick={requestClose}
                 >
                   <X className="size-4" />

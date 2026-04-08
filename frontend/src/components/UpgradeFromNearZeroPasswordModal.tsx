@@ -97,7 +97,7 @@ export function UpgradeFromNearZeroPasswordModal({
 
   return (
     <AppModal
-      open={open}
+      isOpen={open}
       onOpenChange={onOpenChange}
       onCancel={() => {}}
       title={
@@ -106,7 +106,7 @@ export function UpgradeFromNearZeroPasswordModal({
           <span className="min-w-0">Set a real app password</span>
         </>
       }
-      blockDismiss={blockDismiss}
+      isBlockDismissed={blockDismiss}
       contentClassName="sm:max-w-md"
     >
       {(requestClose) => (

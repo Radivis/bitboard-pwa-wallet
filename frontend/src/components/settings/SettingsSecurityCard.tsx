@@ -8,6 +8,7 @@ import {
   CardDescription,
 } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 
 export interface SettingsSecurityCardProps {
   hasWallets: boolean
@@ -29,7 +30,12 @@ export function SettingsSecurityCard({
       infoText="Change the Bitboard app password that encrypts all wallets on this device. With a normal password you will need your current password; if you still use near-zero security mode, use Set a real password instead. All stored secrets are re-encrypted in one atomic step so your data never sits half-updated."
       className="rounded-xl"
     >
-      <Card>
+      <Card
+        data-testid="settings-security-card"
+        className={cn(
+          nearZeroActive && 'border-2 border-destructive shadow-sm ring-1 ring-destructive/20',
+        )}
+      >
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Shield className="h-5 w-5" />

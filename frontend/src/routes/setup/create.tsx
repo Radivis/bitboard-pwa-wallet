@@ -292,7 +292,7 @@ export function CreateWalletPage() {
             onOpenSkipBackupWarning={() => setSkipBackupWarningOpen(true)}
           />
           <AppModal
-            open={skipBackupWarningOpen}
+            isOpen={skipBackupWarningOpen}
             onOpenChange={setSkipBackupWarningOpen}
             onCancel={() => {}}
             title="Quick start without viewing backup"

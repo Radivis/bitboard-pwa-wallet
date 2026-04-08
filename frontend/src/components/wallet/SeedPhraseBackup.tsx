@@ -124,7 +124,7 @@ export function SeedPhraseBackup() {
       </InfomodeWrapper>
 
       <AppModal
-        open={showPasswordPrompt}
+        isOpen={showPasswordPrompt}
         onOpenChange={() => {}}
         onCancel={dismissPasswordPrompt}
         title="Confirm Bitboard app password"
@@ -168,7 +168,7 @@ export function SeedPhraseBackup() {
       </AppModal>
 
       <AppModal
-        open={showMnemonic}
+        isOpen={showMnemonic}
         onOpenChange={() => {}}
         onCancel={() => {
           void closeMnemonicDialog(backupConfirmedRef.current)

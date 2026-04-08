@@ -100,8 +100,8 @@ export function WalletUnlock({
 
   return (
     <AppModal
-      open
-      modal
+      isOpen
+      isModal
       onOpenChange={() => {}}
       onCancel={handleClose}
       title={

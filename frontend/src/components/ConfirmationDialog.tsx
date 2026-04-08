@@ -25,7 +25,7 @@ export function ConfirmationDialog({
 }: ConfirmationDialogProps) {
   return (
     <AppModal
-      open={open}
+      isOpen={open}
       onOpenChange={() => {}}
       title={title}
       onCancel={onCancel}
