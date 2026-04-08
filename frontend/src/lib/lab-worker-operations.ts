@@ -7,7 +7,9 @@ import {
   resetLab as resetLabFactory,
 } from '@/workers/lab-factory'
 import type {
+  LabBlockDetails,
   LabCreateTransactionParams,
+  LabCurrentBlockTemplateParams,
   LabMempoolMetadata,
   LabState,
 } from '@/workers/lab-api'
@@ -98,5 +100,23 @@ export async function labOpReset(): Promise<LabState> {
     const state = await loadLabStateFromDatabase()
     labPipelineSnapshot('reset:end', state)
     return state
+  })
+}
+
+export async function labOpGetBlockByHeight(height: number): Promise<LabBlockDetails | null> {
+  return runLabOp(async () => {
+    await initLabWorkerWithState()
+    const labWorker = getLabWorker()
+    return labWorker.getBlockByHeight(height)
+  })
+}
+
+export async function labOpGetCurrentBlockTemplate(
+  params: LabCurrentBlockTemplateParams,
+): Promise<LabBlockDetails> {
+  return runLabOp(async () => {
+    await initLabWorkerWithState()
+    const labWorker = getLabWorker()
+    return labWorker.getCurrentBlockTemplate(params)
   })
 }

@@ -48,6 +48,47 @@ export interface LabTxDetails {
   outputs: { address: string; amountSats: number; isChange?: boolean; owner?: string | null }[]
 }
 
+export interface LabBlockHeaderDetails {
+  version: number
+  previousBlockHash: string
+  merkleRoot: string
+  timestamp: number
+  targetBits: string
+  targetExpanded: string
+  nonce: number
+  blockHeaderHash: string
+}
+
+export interface LabBlockTransactionSummary {
+  txid: string
+  sender: string | null
+  receiver: string | null
+  feeSats: number
+}
+
+export interface LabBlockMetadataDetails {
+  height: number
+  minedOn: number
+  minedBy: string | null
+  numberOfTransactions: number
+  totalFeesSats: number
+}
+
+export interface LabBlockDetails {
+  isTemplate: boolean
+  header: LabBlockHeaderDetails
+  metadata: LabBlockMetadataDetails
+  transactions: LabBlockTransactionSummary[]
+}
+
+export interface LabCurrentBlockTemplateParams {
+  ownerType: 'name' | 'wallet'
+  targetAddress: string
+  ownerName?: string
+  ownerWalletId?: number
+  walletCurrentAddress?: string | null
+}
+
 export interface LabState {
   blocks: LabBlock[]
   utxos: LabUtxo[]
@@ -108,6 +149,12 @@ export interface LabService {
 
   /** Returns full transaction details by txid, or null if not found. */
   getTransaction(txid: string): Promise<LabTxDetails | null>
+
+  /** Returns mined block details by exact height, or null if missing. */
+  getBlockByHeight(height: number): Promise<LabBlockDetails | null>
+
+  /** Returns an unmined current block template preview for current mining controls. */
+  getCurrentBlockTemplate(params: LabCurrentBlockTemplateParams): Promise<LabBlockDetails>
 
   /**
    * Mines `count` blocks. If `targetAddress` is empty, generates a new key and uses its address.

@@ -1,4 +1,5 @@
 import type { LabBlock } from '@/workers/lab-api'
+import { Link } from '@tanstack/react-router'
 import {
   Card,
   CardContent,
@@ -21,20 +22,32 @@ export function LabPreviousBlocksCard({ blocks }: { blocks: LabBlock[] }) {
       <Card>
         <CardHeader>
           <CardTitle>Previous blocks</CardTitle>
-          <CardDescription>Block heights on the lab chain</CardDescription>
+          <CardDescription>Open mined blocks and the current template</CardDescription>
         </CardHeader>
         <CardContent>
+          <div className="mb-3">
+            <Link
+              to="/lab/block/current"
+              preload={false}
+              className="inline-flex rounded-md border border-border bg-muted/40 px-2 py-1 text-sm font-medium transition-colors hover:bg-muted"
+            >
+              current
+            </Link>
+          </div>
           {byHeightDesc.length === 0 ? (
             <p className="text-sm text-muted-foreground py-2">No blocks mined yet.</p>
           ) : (
             <ul className="flex flex-wrap gap-2">
               {byHeightDesc.map((b) => (
-                <li
+                <Link
                   key={b.blockHash}
+                  to="/lab/block/$height"
+                  params={{ height: String(b.height) }}
+                  preload={false}
                   className="rounded-md border border-border bg-muted/40 px-2 py-1 font-mono text-sm"
                 >
                   {b.height}
-                </li>
+                </Link>
               ))}
             </ul>
           )}

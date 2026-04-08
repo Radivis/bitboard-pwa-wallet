@@ -34,6 +34,8 @@ import { Route as LabControlRouteImport } from './routes/lab/control'
 import { Route as LabBlocksRouteImport } from './routes/lab/blocks'
 import { Route as LibraryArticlesSlugRouteImport } from './routes/library/articles.$slug'
 import { Route as LabTxTxidRouteImport } from './routes/lab/tx.$txid'
+import { Route as LabBlockCurrentRouteImport } from './routes/lab/block.current'
+import { Route as LabBlockHeightRouteImport } from './routes/lab/block.$height'
 
 const WalletRoute = WalletRouteImport.update({
   id: '/wallet',
@@ -160,6 +162,16 @@ const LabTxTxidRoute = LabTxTxidRouteImport.update({
   path: '/tx/$txid',
   getParentRoute: () => LabRoute,
 } as any)
+const LabBlockCurrentRoute = LabBlockCurrentRouteImport.update({
+  id: '/block/current',
+  path: '/block/current',
+  getParentRoute: () => LabRoute,
+} as any)
+const LabBlockHeightRoute = LabBlockHeightRouteImport.update({
+  id: '/block/$height',
+  path: '/block/$height',
+  getParentRoute: () => LabRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -185,6 +197,8 @@ export interface FileRoutesByFullPath {
   '/library/': typeof LibraryIndexRoute
   '/setup/': typeof SetupIndexRoute
   '/wallet/': typeof WalletIndexRoute
+  '/lab/block/$height': typeof LabBlockHeightRoute
+  '/lab/block/current': typeof LabBlockCurrentRoute
   '/lab/tx/$txid': typeof LabTxTxidRoute
   '/library/articles/$slug': typeof LibraryArticlesSlugRoute
 }
@@ -208,6 +222,8 @@ export interface FileRoutesByTo {
   '/library': typeof LibraryIndexRoute
   '/setup': typeof SetupIndexRoute
   '/wallet': typeof WalletIndexRoute
+  '/lab/block/$height': typeof LabBlockHeightRoute
+  '/lab/block/current': typeof LabBlockCurrentRoute
   '/lab/tx/$txid': typeof LabTxTxidRoute
   '/library/articles/$slug': typeof LibraryArticlesSlugRoute
 }
@@ -236,6 +252,8 @@ export interface FileRoutesById {
   '/library/': typeof LibraryIndexRoute
   '/setup/': typeof SetupIndexRoute
   '/wallet/': typeof WalletIndexRoute
+  '/lab/block/$height': typeof LabBlockHeightRoute
+  '/lab/block/current': typeof LabBlockCurrentRoute
   '/lab/tx/$txid': typeof LabTxTxidRoute
   '/library/articles/$slug': typeof LibraryArticlesSlugRoute
 }
@@ -265,6 +283,8 @@ export interface FileRouteTypes {
     | '/library/'
     | '/setup/'
     | '/wallet/'
+    | '/lab/block/$height'
+    | '/lab/block/current'
     | '/lab/tx/$txid'
     | '/library/articles/$slug'
   fileRoutesByTo: FileRoutesByTo
@@ -288,6 +308,8 @@ export interface FileRouteTypes {
     | '/library'
     | '/setup'
     | '/wallet'
+    | '/lab/block/$height'
+    | '/lab/block/current'
     | '/lab/tx/$txid'
     | '/library/articles/$slug'
   id:
@@ -315,6 +337,8 @@ export interface FileRouteTypes {
     | '/library/'
     | '/setup/'
     | '/wallet/'
+    | '/lab/block/$height'
+    | '/lab/block/current'
     | '/lab/tx/$txid'
     | '/library/articles/$slug'
   fileRoutesById: FileRoutesById
@@ -505,6 +529,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LabTxTxidRouteImport
       parentRoute: typeof LabRoute
     }
+    '/lab/block/current': {
+      id: '/lab/block/current'
+      path: '/block/current'
+      fullPath: '/lab/block/current'
+      preLoaderRoute: typeof LabBlockCurrentRouteImport
+      parentRoute: typeof LabRoute
+    }
+    '/lab/block/$height': {
+      id: '/lab/block/$height'
+      path: '/block/$height'
+      fullPath: '/lab/block/$height'
+      preLoaderRoute: typeof LabBlockHeightRouteImport
+      parentRoute: typeof LabRoute
+    }
   }
 }
 
@@ -514,6 +552,8 @@ interface LabRouteChildren {
   LabLayer2Route: typeof LabLayer2Route
   LabTransactionsRoute: typeof LabTransactionsRoute
   LabIndexRoute: typeof LabIndexRoute
+  LabBlockHeightRoute: typeof LabBlockHeightRoute
+  LabBlockCurrentRoute: typeof LabBlockCurrentRoute
   LabTxTxidRoute: typeof LabTxTxidRoute
 }
 
@@ -523,6 +563,8 @@ const LabRouteChildren: LabRouteChildren = {
   LabLayer2Route: LabLayer2Route,
   LabTransactionsRoute: LabTransactionsRoute,
   LabIndexRoute: LabIndexRoute,
+  LabBlockHeightRoute: LabBlockHeightRoute,
+  LabBlockCurrentRoute: LabBlockCurrentRoute,
   LabTxTxidRoute: LabTxTxidRoute,
 }
 

@@ -2,16 +2,14 @@ import { useCallback, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { useLabChainStateQuery } from '@/hooks/useLabChainStateQuery'
 import { useWalletStore } from '@/stores/walletStore'
+import { useLabMiningStore } from '@/stores/labMiningStore'
 import { useWallet, useWallets } from '@/db'
 import {
   useLabMineBlocksMutation,
   useLabCreateTransactionMutation,
   useLabResetMutation,
 } from '@/hooks/useLabMutations'
-import {
-  LAB_MAX_BLOCKS_PER_MINE,
-  LAB_MIN_BLOCKS_PER_MINE,
-} from '@/workers/lab-api'
+import { LAB_MAX_BLOCKS_PER_MINE, LAB_MIN_BLOCKS_PER_MINE } from '@/workers/lab-api'
 
 const DEFAULT_LAB_FEE_RATE_SAT_PER_VB = 1
 
@@ -30,10 +28,14 @@ export function useLabIndexPageData() {
 
   const blockCount = blocks.length === 0 ? 0 : blocks[blocks.length - 1].height + 1
 
-  const [mineCount, setMineCount] = useState(String(LAB_MIN_BLOCKS_PER_MINE))
-  const [ownerType, setOwnerType] = useState<'name' | 'wallet'>('name')
-  const [targetAddress, setTargetAddress] = useState('')
-  const [ownerName, setOwnerName] = useState('')
+  const mineCount = useLabMiningStore((s) => s.mineCount)
+  const setMineCount = useLabMiningStore((s) => s.setMineCount)
+  const ownerType = useLabMiningStore((s) => s.ownerType)
+  const setOwnerType = useLabMiningStore((s) => s.setOwnerType)
+  const targetAddress = useLabMiningStore((s) => s.targetAddress)
+  const setTargetAddress = useLabMiningStore((s) => s.setTargetAddress)
+  const ownerName = useLabMiningStore((s) => s.ownerName)
+  const setOwnerName = useLabMiningStore((s) => s.setOwnerName)
 
   const activeWalletId = useWalletStore((s) => s.activeWalletId)
   const walletStatus = useWalletStore((s) => s.walletStatus)

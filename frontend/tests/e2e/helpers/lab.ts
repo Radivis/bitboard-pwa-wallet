@@ -107,6 +107,13 @@ export async function mineBlocksInLab(
     await ownerInput.pressSequentially(options.ownerName, { delay: 40 })
     await expect(ownerInput).toHaveValue(options.ownerName)
   }
+  if (ownerType === 'name' && options?.ownerName === undefined) {
+    const ownerInput = page.locator('#owner-name')
+    if (await ownerInput.isVisible()) {
+      await ownerInput.clear()
+      await expect(ownerInput).toHaveValue('')
+    }
+  }
 
   await page.getByRole('button', { name: 'Mine blocks' }).click()
   await expect(page.getByRole('button', { name: 'Mine blocks' })).toBeEnabled({

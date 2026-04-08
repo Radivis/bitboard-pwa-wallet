@@ -36,9 +36,6 @@ function LabBlocksPage() {
 
       <LabMempoolCard
         mempool={lab.mempool}
-        sortedTransactions={lab.sortedTransactions}
-        txDetailsByTxid={lab.txDetailsByTxid}
-        blockCount={lab.blockCount}
         wallets={lab.wallets}
       />
 

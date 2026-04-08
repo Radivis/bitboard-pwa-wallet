@@ -198,4 +198,33 @@ test.describe('Lab', { tag: '@lab' }, () => {
     expect(walletSum).toBeGreaterThanOrEqual(2 * COINBASE_SATS - 500)
     expect(walletSum).toBeLessThanOrEqual(2 * COINBASE_SATS)
   })
+
+  test('block details routes and mempool card behavior', async ({ page }) => {
+    await page.getByRole('link', { name: /settings/i }).click()
+    await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
+    await page.getByRole('link', { name: 'Manage lab' }).click()
+    await expect(page.getByRole('heading', { name: 'Blocks' })).toBeVisible({
+      timeout: 15000,
+    })
+
+    await expect(page.getByText('Mempool', { exact: true })).toBeVisible()
+    await expect(page.getByText('No confirmed transactions yet.')).toHaveCount(0)
+
+    await page.getByRole('link', { name: 'current' }).click()
+    await expect(page.getByRole('heading', { name: 'Current block template' })).toBeVisible()
+    await expect(page.getByRole('main').getByText('Block Header', { exact: true })).toBeVisible()
+    await expect(page.getByRole('main').getByText('Metadata', { exact: true })).toBeVisible()
+    await expect(page.getByRole('main').getByText('Transactions', { exact: true })).toBeVisible()
+
+    await page.getByRole('navigation', { name: 'Lab' }).getByRole('link', { name: 'Blocks' }).click()
+    await expect(page.getByRole('heading', { name: 'Blocks' })).toBeVisible()
+
+    await mineBlocksInLab(page, 1, 'name', { ownerName: 'Alice' })
+
+    await page.getByRole('link', { name: '0' }).click()
+    await expect(page.getByRole('heading', { name: 'Block 0' })).toBeVisible()
+    await expect(page.getByRole('main').getByText('Block Header', { exact: true })).toBeVisible()
+    await expect(page.getByRole('main').getByText('Metadata', { exact: true })).toBeVisible()
+    await expect(page.getByRole('main').getByText('Transactions', { exact: true })).toBeVisible()
+  })
 })

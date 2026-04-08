@@ -1,6 +1,10 @@
 import { expose } from 'comlink'
 import type {
   LabAddress,
+  LabBlockDetails,
+  LabBlockHeaderDetails,
+  LabBlockTransactionSummary,
+  LabCurrentBlockTemplateParams,
   LabBlock,
   LabState,
   LabTxDetails,
@@ -52,6 +56,81 @@ function selectMempoolTxsForBlock(mempool: MempoolEntry[]): MempoolEntry[] {
 function getTip(): LabBlock | null {
   if (state.blocks.length === 0) return null
   return state.blocks[state.blocks.length - 1]
+}
+
+function hexToBytes(hex: string): Uint8Array {
+  const normalizedHex = hex.length % 2 === 0 ? hex : `0${hex}`
+  const out = new Uint8Array(normalizedHex.length / 2)
+  for (let i = 0; i < out.length; i += 1) {
+    out[i] = parseInt(normalizedHex.slice(i * 2, i * 2 + 2), 16)
+  }
+  return out
+}
+
+function bytesToHex(bytes: Uint8Array): string {
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')
+}
+
+function reverseHexByteOrder(hex: string): string {
+  return bytesToHex(hexToBytes(hex).reverse())
+}
+
+function readUint32Le(bytes: Uint8Array, offset: number): number {
+  return (
+    bytes[offset] |
+    (bytes[offset + 1] << 8) |
+    (bytes[offset + 2] << 16) |
+    (bytes[offset + 3] << 24)
+  ) >>> 0
+}
+
+async function sha256(data: Uint8Array): Promise<Uint8Array> {
+  const digest = await crypto.subtle.digest('SHA-256', data)
+  return new Uint8Array(digest)
+}
+
+async function doubleSha256(data: Uint8Array): Promise<Uint8Array> {
+  const first = await sha256(data)
+  return sha256(first)
+}
+
+function expandTargetFromBits(bits: number): string {
+  const exponent = bits >>> 24
+  const mantissa = bits & 0x007fffff
+  if (mantissa === 0) return '0'.repeat(64)
+  const shiftBytes = exponent - 3
+  const value = shiftBytes >= 0
+    ? BigInt(mantissa) << BigInt(8 * shiftBytes)
+    : BigInt(mantissa) >> BigInt(8 * -shiftBytes)
+  return value.toString(16).padStart(64, '0')
+}
+
+async function parseBlockHeader(blockHex: string): Promise<LabBlockHeaderDetails> {
+  const headerHex = blockHex.slice(0, 160)
+  const headerBytes = hexToBytes(headerHex)
+  if (headerBytes.length < 80) {
+    throw new Error('Block header must be 80 bytes')
+  }
+  const version = readUint32Le(headerBytes, 0)
+  const previousBlockHash = reverseHexByteOrder(headerHex.slice(8, 72))
+  const merkleRoot = reverseHexByteOrder(headerHex.slice(72, 136))
+  const timestamp = readUint32Le(headerBytes, 68)
+  const bits = readUint32Le(headerBytes, 72)
+  const nonce = readUint32Le(headerBytes, 76)
+  const targetBits = bits.toString(16).padStart(8, '0')
+  const targetExpanded = expandTargetFromBits(bits)
+  const blockHeaderHash = bytesToHex((await doubleSha256(headerBytes)).reverse())
+
+  return {
+    version,
+    previousBlockHash,
+    merkleRoot,
+    timestamp,
+    targetBits,
+    targetExpanded,
+    nonce,
+    blockHeaderHash,
+  }
 }
 
 interface BlockEffectsTx {
@@ -215,6 +294,114 @@ function applyBlockEffects(blockHex: string, height: number, newAddress?: LabAdd
   })
 }
 
+function feeFromTxDetails(tx: LabTxDetails): number {
+  const totalInputs = tx.inputs.reduce((sum, input) => sum + input.amountSats, 0)
+  const totalOutputs = tx.outputs.reduce((sum, output) => sum + output.amountSats, 0)
+  return Math.max(totalInputs - totalOutputs, 0)
+}
+
+function minedByFromBlockTxs(blockTxs: LabTxDetails[]): string | null {
+  const coinbase = blockTxs.find((tx) => tx.inputs.length === 0)
+  const firstCoinbaseOutputOwner = coinbase?.outputs[0]?.owner
+  return firstCoinbaseOutputOwner ?? null
+}
+
+function blockTransactionsForHeight(height: number): LabBlockTransactionSummary[] {
+  const txRecordByTxid = new Map(state.transactions.map((tx) => [tx.txid, tx]))
+  return state.txDetails
+    .filter((tx) => tx.blockHeight === height)
+    .map((tx) => {
+      const txRecord = txRecordByTxid.get(tx.txid)
+      return {
+        txid: tx.txid,
+        sender: txRecord?.sender ?? null,
+        receiver: txRecord?.receiver ?? null,
+        feeSats: feeFromTxDetails(tx),
+      }
+    })
+}
+
+async function buildMinedBlockDetails(block: LabBlock): Promise<LabBlockDetails> {
+  const header = await parseBlockHeader(block.blockData)
+  const blockTxDetails = state.txDetails.filter((tx) => tx.blockHeight === block.height)
+  const transactions = blockTransactionsForHeight(block.height)
+  const totalFeesSats = transactions.reduce((sum, tx) => sum + tx.feeSats, 0)
+
+  return {
+    isTemplate: false,
+    header,
+    metadata: {
+      height: block.height,
+      minedOn: blockTxDetails[0]?.blockTime ?? header.timestamp,
+      minedBy: minedByFromBlockTxs(blockTxDetails),
+      numberOfTransactions: transactions.length,
+      totalFeesSats,
+    },
+    transactions,
+  }
+}
+
+async function buildCurrentBlockTemplate(
+  params: LabCurrentBlockTemplateParams,
+): Promise<LabBlockDetails> {
+  const wasmModule = await getWasm()
+  const tip = getTip()
+  const previewHeight = tip ? tip.height + 1 : 0
+  const previousHash = tip?.blockHash ?? ''
+
+  const selectedEntries = selectMempoolTxsForBlock([...(state.mempool ?? [])])
+  const mempoolTxHexes = selectedEntries.map((entry) => entry.signedTxHex)
+  const totalFeesSats = selectedEntries.reduce((sum, entry) => sum + entry.feeSats, 0)
+
+  const effectiveTargetAddress = params.ownerType === 'wallet'
+    ? (params.walletCurrentAddress ?? '').trim()
+    : params.targetAddress.trim()
+
+  const targetAddress = effectiveTargetAddress || wasmModule.lab_generate_keypair().address
+  const coinbaseScriptPubkeyHex = wasmModule.lab_address_to_script_pubkey_hex(targetAddress)
+  const blockHex = wasmModule.lab_mine_block(
+    previousHash,
+    previewHeight,
+    coinbaseScriptPubkeyHex,
+    mempoolTxHexes,
+    BigInt(totalFeesSats),
+  )
+  const header = await parseBlockHeader(blockHex)
+  const rawEffects = wasmModule.lab_block_effects(blockHex)
+  const previewEffects = parseBlockEffects(rawEffects)
+  const entryByTxid = new Map(selectedEntries.map((entry) => [entry.txid, entry]))
+
+  const minedBy = params.ownerType === 'wallet' && params.ownerWalletId != null
+    ? walletOwnerKey(params.ownerWalletId)
+    : params.ownerName?.trim()
+      ? params.ownerName.trim()
+      : null
+
+  const transactions: LabBlockTransactionSummary[] = previewEffects.transactions.map((tx) => {
+    const matchedEntry = entryByTxid.get(tx.txid)
+    const isCoinbase = tx.inputs.length === 0
+    return {
+      txid: tx.txid,
+      sender: matchedEntry?.sender ?? null,
+      receiver: isCoinbase ? minedBy : (matchedEntry?.receiver ?? null),
+      feeSats: matchedEntry?.feeSats ?? 0,
+    }
+  })
+
+  return {
+    isTemplate: true,
+    header,
+    metadata: {
+      height: previewHeight,
+      minedOn: header.timestamp,
+      minedBy,
+      numberOfTransactions: transactions.length,
+      totalFeesSats,
+    },
+    transactions,
+  }
+}
+
 const labService = {
   async loadState(newState: LabState): Promise<void> {
     const cloned = JSON.parse(JSON.stringify(newState)) as LabState
@@ -248,6 +435,18 @@ const labService = {
       ...details,
       confirmations: blockCount - details.blockHeight,
     }
+  },
+
+  async getBlockByHeight(height: number): Promise<LabBlockDetails | null> {
+    const block = state.blocks.find((candidate) => candidate.height === height)
+    if (!block) return null
+    return buildMinedBlockDetails(block)
+  },
+
+  async getCurrentBlockTemplate(
+    params: LabCurrentBlockTemplateParams,
+  ): Promise<LabBlockDetails> {
+    return buildCurrentBlockTemplate(params)
   },
 
   async getBlockCount(): Promise<number> {
