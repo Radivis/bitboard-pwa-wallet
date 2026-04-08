@@ -32,8 +32,60 @@ async function getWasm() {
 
 let state: LabState = { ...EMPTY_LAB_STATE }
 
-/** Txid -> change address for txs we create (used to mark change outputs). Not persisted. */
+/**
+ * Txid -> change output address for txs we create. Used when applying block effects so change
+ * is attributed to the same owner as inputs. Rebuilt from persisted mempool on {@link loadState}
+ * (the map itself is not part of {@link LabState} JSON).
+ */
 const txidToChangeAddress = new Map<string, string>()
+
+/** Bech32 (bc1/tb1/bcrt1) addresses can differ by case; BIP173 compares case-insensitively. */
+function labAddressesEqual(a: string, b: string): boolean {
+  if (a === b) return true
+  const x = a.trim()
+  const y = b.trim()
+  if (x === y) return true
+  if (/^(bc|tb|bcrt)1/i.test(x) && /^(bc|tb|bcrt)1/i.test(y)) {
+    return x.toLowerCase() === y.toLowerCase()
+  }
+  return false
+}
+
+function rebuildTxidToChangeAddressFromMempool(mempool: MempoolEntry[]): void {
+  txidToChangeAddress.clear()
+  for (const entry of mempool) {
+    const changeOut = entry.outputsDetail.find((o) => o.isChange)
+    if (changeOut) {
+      txidToChangeAddress.set(entry.txid, changeOut.address)
+    }
+  }
+}
+
+/**
+ * Fills missing output owners for legacy rows where change was not linked (e.g. mined after
+ * reload when txid→change map was empty). Requires one unowned output and at least one owned.
+ */
+function inferMissingLabOutputOwners(tx: LabTxDetails): LabTxDetails {
+  const firstOwner = tx.inputs.find((i) => i.owner != null)?.owner ?? null
+  if (firstOwner == null) return tx
+  if (tx.inputs.some((i) => i.owner != null && i.owner !== firstOwner)) return tx
+
+  const outMissingOwner = tx.outputs.filter((o) => !o.owner)
+  const outWithOwner = tx.outputs.filter((o) => o.owner)
+  if (outMissingOwner.length !== 1 || outWithOwner.length < 1) return tx
+
+  const patchAddr = outMissingOwner[0].address
+  return {
+    ...tx,
+    outputs: tx.outputs.map((o) => {
+      if (o.owner != null) return o
+      if (labAddressesEqual(o.address, patchAddr)) {
+        return { ...o, owner: firstOwner, isChange: true }
+      }
+      return o
+    }),
+  }
+}
 
 function parseWasmObject(val: unknown): Record<string, unknown> {
   if (val != null && typeof val === 'object' && !Array.isArray(val)) {
@@ -244,7 +296,8 @@ function applyTransactionsAndDetailsFromBlock(
     const sender = firstInputAddress ? (addressToOwner[firstInputAddress] ?? null) : null
     const changeAddressForTx = txidToChangeAddress.get(tx.txid)
     const outputs = (tx.outputs ?? []).map((output) => {
-      const isChange = changeAddressForTx !== undefined && output.address === changeAddressForTx
+      const isChange =
+        changeAddressForTx !== undefined && labAddressesEqual(output.address, changeAddressForTx)
       const owner = isChange && sender
         ? sender
         : (addressToOwner[output.address] ?? null)
@@ -491,27 +544,28 @@ const labService = {
       transactions: cloned.transactions ?? [],
       txDetails: cloned.txDetails ?? [],
     }
+    rebuildTxidToChangeAddressFromMempool(state.mempool)
   },
 
   async getTransaction(txid: string): Promise<LabTxDetails | null> {
     const mempoolEntry = state.mempool.find((entry) => entry.txid === txid)
     if (mempoolEntry) {
-      return {
+      return inferMissingLabOutputOwners({
         txid: mempoolEntry.txid,
         blockHeight: -1,
         blockTime: 0,
         confirmations: 0,
         inputs: mempoolEntry.inputsDetail,
         outputs: mempoolEntry.outputsDetail,
-      }
+      })
     }
     const details = state.txDetails.find((tx) => tx.txid === txid)
     if (!details) return null
     const blockCount = getTip() ? getTip()!.height + 1 : 0
-    return {
+    return inferMissingLabOutputOwners({
       ...details,
       confirmations: blockCount - details.blockHeight,
-    }
+    })
   },
 
   async getBlockByHeight(height: number): Promise<LabBlockDetails | null> {
