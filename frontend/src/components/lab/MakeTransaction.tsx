@@ -11,6 +11,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 
 const MIN_AMOUNT_SATS = 1
+const MIN_RANDOM_TRANSACTION_COUNT = 1
+const MAX_RANDOM_TRANSACTION_COUNT = 1000
 
 export function LabMakeTransactionCard({
   showTxForm,
@@ -26,6 +28,11 @@ export function LabMakeTransactionCard({
   onSend,
   sending,
   controlledAddressesCount,
+  randomTransactionCount,
+  setRandomTransactionCount,
+  onCreateRandomTransactions,
+  creatingRandomTransactions,
+  labEntitiesCount,
 }: {
   showTxForm: boolean
   setShowTxForm: (v: boolean) => void
@@ -40,6 +47,11 @@ export function LabMakeTransactionCard({
   onSend: () => void
   sending: boolean
   controlledAddressesCount: number
+  randomTransactionCount: string
+  setRandomTransactionCount: (v: string) => void
+  onCreateRandomTransactions: () => void
+  creatingRandomTransactions: boolean
+  labEntitiesCount: number
 }) {
   return (
     <InfomodeWrapper
@@ -55,13 +67,40 @@ export function LabMakeTransactionCard({
         </CardHeader>
         <CardContent className="space-y-4">
           {!showTxForm ? (
-            <Button
-              variant="outline"
-              onClick={() => setShowTxForm(true)}
-              disabled={controlledAddressesCount === 0}
-            >
-              Make transaction
-            </Button>
+            <div className="space-y-4">
+              <Button
+                variant="outline"
+                onClick={() => setShowTxForm(true)}
+                disabled={controlledAddressesCount === 0}
+              >
+                Make transaction
+              </Button>
+              <div className="space-y-2 border rounded-lg p-4">
+                <Label htmlFor="random-transaction-count">Number of random transactions</Label>
+                <Input
+                  id="random-transaction-count"
+                  type="number"
+                  min={MIN_RANDOM_TRANSACTION_COUNT}
+                  max={MAX_RANDOM_TRANSACTION_COUNT}
+                  value={randomTransactionCount}
+                  onChange={(e) => setRandomTransactionCount(e.target.value)}
+                />
+                {labEntitiesCount === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    Mining a block to a name enables random transactions.
+                  </p>
+                ) : null}
+                <Button
+                  variant="secondary"
+                  onClick={onCreateRandomTransactions}
+                  disabled={creatingRandomTransactions || labEntitiesCount === 0}
+                >
+                  {creatingRandomTransactions
+                    ? 'Creating random transactions...'
+                    : 'Make random transaction'}
+                </Button>
+              </div>
+            </div>
           ) : (
             <div className="space-y-4 border rounded-lg p-4">
               <div className="space-y-2">

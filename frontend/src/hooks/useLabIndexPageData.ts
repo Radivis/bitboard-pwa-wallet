@@ -6,6 +6,7 @@ import { useLabMiningStore } from '@/stores/labMiningStore'
 import { useWallet, useWallets } from '@/db'
 import {
   useLabMineBlocksMutation,
+  useLabCreateRandomTransactionsMutation,
   useLabCreateTransactionMutation,
   useLabResetMutation,
 } from '@/hooks/useLabMutations'
@@ -13,6 +14,8 @@ import { LAB_MAX_BLOCKS_PER_MINE, LAB_MIN_BLOCKS_PER_MINE } from '@/workers/lab-
 import { WALLET_OWNER_PREFIX } from '@/lib/lab-utils'
 
 const DEFAULT_LAB_FEE_RATE_SAT_PER_VB = 1
+const DEFAULT_RANDOM_TRANSACTION_COUNT = 1
+const MAX_RANDOM_TRANSACTION_COUNT = 1000
 
 /**
  * Form state, derived lab lists, and TanStack Query mutations for lab section routes.
@@ -50,11 +53,15 @@ export function useLabIndexPageData() {
   const [toAddress, setToAddress] = useState('')
   const [amountSats, setAmountSats] = useState('')
   const [feeRate, setFeeRate] = useState(String(DEFAULT_LAB_FEE_RATE_SAT_PER_VB))
+  const [randomTransactionCount, setRandomTransactionCount] = useState(
+    String(DEFAULT_RANDOM_TRANSACTION_COUNT),
+  )
 
   const [showResetConfirm, setShowResetConfirm] = useState(false)
 
   const mineMutation = useLabMineBlocksMutation()
   const createTxMutation = useLabCreateTransactionMutation()
+  const createRandomTxMutation = useLabCreateRandomTransactionsMutation()
   const resetMutation = useLabResetMutation()
 
   const getBalanceForAddress = useCallback(
@@ -160,6 +167,21 @@ export function useLabIndexPageData() {
     resetMutation.mutate()
   }, [resetMutation])
 
+  const handleCreateRandomTransactions = useCallback(() => {
+    const parsedCount = Number.parseInt(randomTransactionCount, 10)
+    if (Number.isNaN(parsedCount) || parsedCount < 1) {
+      toast.error('Enter a valid transaction count')
+      return
+    }
+    if (parsedCount > MAX_RANDOM_TRANSACTION_COUNT) {
+      toast.error(`You can generate at most ${MAX_RANDOM_TRANSACTION_COUNT} transactions`)
+      return
+    }
+    void createRandomTxMutation.mutateAsync({ count: parsedCount }).catch(() => {
+      /* error toast from mutation onError */
+    })
+  }, [createRandomTxMutation, randomTransactionCount])
+
   const controlledAddresses = useMemo(() => {
     return addresses.filter((a) => {
       if (a.wif) return true
@@ -227,6 +249,11 @@ export function useLabIndexPageData() {
     onSend: handleSend,
     sending: createTxMutation.isPending,
     controlledAddressesCount: controlledAddresses.length,
+    randomTransactionCount,
+    setRandomTransactionCount,
+    onCreateRandomTransactions: handleCreateRandomTransactions,
+    creatingRandomTransactions: createRandomTxMutation.isPending,
+    labEntitiesCount: labState?.entities?.length ?? 0,
     addresses,
     addressToOwner,
     getBalanceForAddress,

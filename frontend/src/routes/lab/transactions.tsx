@@ -31,6 +31,11 @@ function LabTransactionsPage() {
         onSend={lab.onSend}
         sending={lab.sending}
         controlledAddressesCount={lab.controlledAddressesCount}
+        randomTransactionCount={lab.randomTransactionCount}
+        setRandomTransactionCount={lab.setRandomTransactionCount}
+        onCreateRandomTransactions={lab.onCreateRandomTransactions}
+        creatingRandomTransactions={lab.creatingRandomTransactions}
+        labEntitiesCount={lab.labEntitiesCount}
       />
 
       <LabAddressesCard

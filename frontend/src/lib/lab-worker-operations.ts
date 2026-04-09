@@ -11,6 +11,7 @@ import type {
   LabCurrentBlockTemplateParams,
   LabMempoolMetadata,
   LabState,
+  PrepareRandomLabEntityTransactionResult,
 } from '@/workers/lab-api'
 import { getCryptoWorker } from '@/workers/crypto-factory'
 import {
@@ -161,6 +162,77 @@ export async function labOpCreateLabEntityTransaction(params: {
     labPipelineSnapshot('createLabEntityTransaction:end', state)
     return state
   })
+}
+
+/**
+ * Create up to `count` random lab-entity transactions and persist final state.
+ */
+export async function labOpCreateRandomLabEntityTransactions(count: number): Promise<{
+  state: LabState
+  createdCount: number
+}> {
+  let createdCount = 0
+  let latestState: LabState | null = null
+  const requestedCount = Math.max(1, Math.trunc(count))
+
+  for (let index = 0; index < requestedCount; index += 1) {
+    const prepared: PrepareRandomLabEntityTransactionResult | null = await runLabOp(async () => {
+      await initLabWorkerWithState()
+      const labWorker = getLabWorker()
+      return labWorker.prepareRandomLabEntityTransaction()
+    })
+    if (!prepared) break
+
+    const cryptoWorker = getCryptoWorker()
+    const signRaw = await cryptoWorker.labEntityBuildAndSignLabTransaction(prepared.crypto)
+    const { signedTxHex, feeSats, hasChange, changesetJson, changeAddress } =
+      parseLabEntitySignResult(signRaw)
+
+    const outputsDetail = hasChange
+      ? [
+          ...prepared.mempoolMetadata.outputsDetail,
+          {
+            address: changeAddress,
+            amountSats: prepared.totalInput - prepared.prepareParams.amountSats - feeSats,
+            isChange: true as const,
+            owner: prepared.mempoolMetadata.sender,
+          },
+        ]
+      : [
+          {
+            ...prepared.mempoolMetadata.outputsDetail[0],
+            amountSats: prepared.totalInput - feeSats,
+          },
+        ]
+
+    latestState = await runLabOp(async () => {
+      await initLabWorkerWithState()
+      const labWorker = getLabWorker()
+      const state = await labWorker.finalizeLabEntityMempoolTransaction({
+        signedTxHex,
+        mempoolMetadata: {
+          ...prepared.mempoolMetadata,
+          feeSats,
+          hasChange,
+          outputsDetail,
+          walletChangeAddress: hasChange ? changeAddress : '',
+        },
+        entityName: prepared.entityName,
+        newChangesetJson: changesetJson,
+      })
+      await persistLabState(state)
+      return state
+    })
+    createdCount += 1
+  }
+
+  if (latestState == null) {
+    latestState = await runLabOp(async () => {
+      const { state } = await initLabWorkerWithState()
+      return state
+    })
+  }
+  return { state: latestState, createdCount }
 }
 
 export async function labOpAddSignedTransaction(

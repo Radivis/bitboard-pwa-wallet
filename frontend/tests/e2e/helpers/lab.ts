@@ -199,6 +199,29 @@ export async function createTransactionInLab(
   })
 }
 
+/** Create random lab-entity transactions from Transactions tab. */
+export async function createRandomTransactionsInLab(
+  page: Page,
+  count: number,
+): Promise<void> {
+  await navigateToLab(page)
+  await expect(page.getByRole('heading', { name: 'Blocks' })).toBeVisible({
+    timeout: 15000,
+  })
+
+  await page.getByRole('navigation', { name: 'Lab' }).getByRole('link', { name: 'Transactions' }).click()
+  await expect(page.getByRole('heading', { name: 'Transactions' })).toBeVisible({
+    timeout: 15000,
+  })
+
+  await page.getByLabel('Number of random transactions').fill(String(count))
+  await page.getByRole('button', { name: 'Make random transaction' }).click()
+
+  await expect(page.getByText(`Created ${count} random transaction(s)`)).toBeVisible({
+    timeout: 30000,
+  })
+}
+
 /** Send from wallet via Send page (wallet-owned UTXOs). */
 export async function sendFromWallet(
   page: Page,

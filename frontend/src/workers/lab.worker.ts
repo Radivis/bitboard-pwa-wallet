@@ -26,6 +26,16 @@ import {
   walletOwnerKey,
   WALLET_OWNER_PREFIX,
 } from '@/lib/lab-utils'
+import {
+  amountSatsFromPpm,
+  estimateRequiredFeeSats,
+  feeRateSatPerVbFromRandomRoll,
+  isRandomAmountViable,
+  LAB_RANDOM_FEE_RATE_TENTHS_MAX,
+  LAB_RANDOM_FEE_RATE_TENTHS_MIN,
+  LAB_RANDOM_PPM_MAX,
+  LAB_RANDOM_PPM_MIN,
+} from './lab-random-transactions'
 
 let labWasmModule: typeof import('@/wasm-pkg/bitboard_crypto') | null = null
 
@@ -44,6 +54,7 @@ let state: LabState = { ...EMPTY_LAB_STATE }
  * (the map itself is not part of {@link LabState} JSON).
  */
 const txidToChangeAddress = new Map<string, string>()
+const DEFAULT_RANDOM_TX_MAX_ATTEMPTS = 500
 
 /** Bech32 (bc1/tb1/bcrt1) addresses can differ by case; BIP173 compares case-insensitively. */
 function labAddressesEqual(a: string, b: string): boolean {
@@ -130,6 +141,10 @@ function parseWasmObject(val: unknown): Record<string, unknown> {
   return {}
 }
 
+function randomIntInclusive(min: number, max: number): number {
+  return Math.floor(Math.random() * (max - min + 1)) + min
+}
+
 function selectMempoolTxsForBlock(mempool: MempoolEntry[]): MempoolEntry[] {
   const sortedEntries = [...mempool].sort((a, b) => {
     if (b.feeSats !== a.feeSats) return b.feeSats - a.feeSats
@@ -180,7 +195,7 @@ function readUint32Le(bytes: Uint8Array, offset: number): number {
 }
 
 async function sha256(data: Uint8Array): Promise<Uint8Array> {
-  const digest = await crypto.subtle.digest('SHA-256', data)
+  const digest = await crypto.subtle.digest('SHA-256', new Uint8Array(data).buffer)
   return new Uint8Array(digest)
 }
 
@@ -432,7 +447,9 @@ function synthesizeCoinbaseTxFromNewUtxos(
 function applyBlockEffects(blockHex: string, height: number, newAddress?: LabAddress): void {
   const wasmModule = labWasmModule!
   const rawEffects = wasmModule.lab_block_effects(blockHex)
-  let { spent, new_utxos: newUtxos, transactions, block_time } = parseBlockEffects(rawEffects)
+  const effects = parseBlockEffects(rawEffects)
+  const { spent, new_utxos: newUtxos, block_time } = effects
+  let { transactions } = effects
   const blockTime = block_time ?? 0
 
   if (transactions.length === 0 && newUtxos.length > 0) {
@@ -963,6 +980,86 @@ const labService = {
       },
       totalInput,
     }
+  },
+
+  async prepareRandomLabEntityTransaction(
+    params?: import('./lab-api').PrepareRandomLabEntityTransactionParams,
+  ): Promise<import('./lab-api').PrepareRandomLabEntityTransactionResult | null> {
+    const wasmModule = await getWasm()
+    const maxAttempts = Math.max(1, params?.maxAttempts ?? DEFAULT_RANDOM_TX_MAX_ATTEMPTS)
+    const addressToOwner = state.addressToOwner ?? {}
+    const sourceEntities = state.entities.filter((entity) => {
+      return state.utxos.some((utxo) => addressToOwner[utxo.address] === entity.entityName)
+    })
+    if (sourceEntities.length === 0) return null
+
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      const sourceEntity = sourceEntities[randomIntInclusive(0, sourceEntities.length - 1)]
+      const targetEntity = state.entities[randomIntInclusive(0, state.entities.length - 1)]
+      const sourceAddressCandidates = state.utxos
+        .filter((utxo) => addressToOwner[utxo.address] === sourceEntity.entityName)
+        .map((utxo) => utxo.address)
+      const sourceAddresses = [...new Set(sourceAddressCandidates)]
+      if (sourceAddresses.length === 0) continue
+
+      const fromAddress = sourceAddresses[randomIntInclusive(0, sourceAddresses.length - 1)]
+      const fromUtxos = state.utxos.filter((utxo) => utxo.address === fromAddress)
+      if (fromUtxos.length === 0) continue
+
+      const totalInput = fromUtxos.reduce((sum, utxo) => sum + utxo.amountSats, 0)
+      const feeRateSatPerVb = feeRateSatPerVbFromRandomRoll(
+        randomIntInclusive(LAB_RANDOM_FEE_RATE_TENTHS_MIN, LAB_RANDOM_FEE_RATE_TENTHS_MAX),
+      )
+      const transferPpm = randomIntInclusive(LAB_RANDOM_PPM_MIN, LAB_RANDOM_PPM_MAX)
+      const amountSats = amountSatsFromPpm(totalInput, transferPpm)
+      const requiredFeeSats = estimateRequiredFeeSats(fromUtxos.length, feeRateSatPerVb)
+      if (!isRandomAmountViable(amountSats, totalInput, requiredFeeSats)) continue
+
+      let toAddress = ''
+      if (sourceEntity.entityName === targetEntity.entityName) {
+        const revealedRaw = wasmModule.lab_entity_reveal_next_external_address(
+          sourceEntity.mnemonic,
+          sourceEntity.changesetJson,
+          sourceEntity.network,
+          sourceEntity.addressType,
+          sourceEntity.accountId,
+        )
+        const revealedObj = parseWasmObject(revealedRaw)
+        toAddress = String(revealedObj.address ?? '')
+        const nextChangesetJson = String(revealedObj.changeset_json ?? '')
+        if (!toAddress || !nextChangesetJson) continue
+        sourceEntity.changesetJson = nextChangesetJson
+        sourceEntity.updatedAt = new Date().toISOString()
+        state.addressToOwner = state.addressToOwner ?? {}
+        state.addressToOwner[toAddress] = sourceEntity.entityName
+      } else {
+        toAddress = wasmModule.lab_entity_get_current_external_address(
+          targetEntity.mnemonic,
+          targetEntity.changesetJson,
+          targetEntity.network,
+          targetEntity.addressType,
+          targetEntity.accountId,
+        )
+      }
+      if (!toAddress) continue
+
+      const prepareParams = {
+        entityName: sourceEntity.entityName,
+        fromAddress,
+        toAddress,
+        amountSats,
+        feeRateSatPerVb,
+      }
+      const prepared = await this.prepareLabEntityTransaction(prepareParams)
+      return {
+        prepareParams,
+        entityName: sourceEntity.entityName,
+        crypto: prepared.crypto,
+        mempoolMetadata: prepared.mempoolMetadata,
+        totalInput: prepared.totalInput,
+      }
+    }
+    return null
   },
 
   async finalizeLabEntityMempoolTransaction(params: {

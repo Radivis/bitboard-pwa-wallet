@@ -193,6 +193,18 @@ export interface PrepareLabWalletTransactionParams {
   walletChangeAddress: string
 }
 
+export interface PrepareRandomLabEntityTransactionParams {
+  maxAttempts?: number
+}
+
+export interface PrepareRandomLabEntityTransactionResult {
+  prepareParams: PrepareLabEntityTransactionParams
+  entityName: string
+  crypto: LabEntityTransactionCryptoParams
+  mempoolMetadata: LabMempoolMetadata
+  totalInput: number
+}
+
 /** Single source of truth for empty lab state. Use in store, worker, and lab-factory. */
 export const EMPTY_LAB_STATE: LabState = {
   blocks: [],
@@ -257,6 +269,13 @@ export interface LabService {
     mempoolMetadata: LabMempoolMetadata
     totalInput: number
   }>
+
+  /**
+   * Selects randomized lab-entity transaction parameters and prepares signing payload.
+   */
+  prepareRandomLabEntityTransaction(
+    params?: PrepareRandomLabEntityTransactionParams,
+  ): Promise<PrepareRandomLabEntityTransactionResult | null>
 
   /**
    * Push signed lab-entity tx to mempool and persist updated entity changeset.

@@ -5,6 +5,7 @@ import {
   resetLab,
   mineBlocksInLab,
   createTransactionInLab,
+  createRandomTransactionsInLab,
   sendFromWallet,
   getLabState,
   getUtxoSumByOwner,
@@ -76,6 +77,30 @@ test.describe('Lab', { tag: '@lab' }, () => {
     const stateAfterMempool = await getLabState(page)
     expect(stateAfterMempool.mempool).toHaveLength(1)
     expect(stateAfterMempool.addresses.length).toBe(addressCountBefore)
+  })
+
+  test('transactions page explains random generation requires entities', async ({ page }) => {
+    await page.getByRole('link', { name: /settings/i }).click()
+    await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
+    await page.getByRole('link', { name: 'Manage lab' }).click()
+    await expect(page.getByRole('heading', { name: 'Blocks' })).toBeVisible({
+      timeout: 15000,
+    })
+    await page.getByRole('navigation', { name: 'Lab' }).getByRole('link', { name: 'Transactions' }).click()
+    await expect(page.getByText('Mining a block to a name enables random transactions.')).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Make random transaction' })).toBeDisabled()
+  })
+
+  test('creates random transactions between lab entities', async ({ page }) => {
+    await mineBlocksInLab(page, 1, 'name', { ownerName: 'Alice' })
+    await mineBlocksInLab(page, 1, 'name', { ownerName: 'Bob' })
+
+    await createRandomTransactionsInLab(page, 5)
+
+    const state = await getLabState(page)
+    expect(state.mempool).toHaveLength(5)
+    const senders = new Set(state.mempool.map((entry) => entry.sender))
+    expect(senders).toEqual(new Set(['Alice', 'Bob']))
   })
 
   test('transfer name to name in lab', async ({ page }) => {

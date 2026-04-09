@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import {
   labOpCreateLabEntityTransaction,
+  labOpCreateRandomLabEntityTransactions,
   labOpMineBlocks,
   labOpReset,
 } from '@/lib/lab-worker-operations'
@@ -70,6 +71,34 @@ export function useLabCreateTransactionMutation() {
     },
     onError: (err) => {
       toast.error(err instanceof Error ? err.message : 'Transaction failed')
+    },
+  })
+}
+
+export type LabCreateRandomTransactionsVariables = {
+  count: number
+}
+
+export function useLabCreateRandomTransactionsMutation() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationKey: ['lab', 'createRandomLabEntityTransactions'] as const,
+    mutationFn: async (variables: LabCreateRandomTransactionsVariables) => {
+      return labOpCreateRandomLabEntityTransactions(variables.count)
+    },
+    onSuccess: (result, variables) => {
+      setLabChainStateCache(queryClient, result.state)
+      if (result.createdCount === variables.count) {
+        toast.success(`Created ${result.createdCount} random transaction(s)`)
+        return
+      }
+      toast.success(
+        `Created ${result.createdCount} of ${variables.count} random transaction(s)`,
+      )
+    },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : 'Random transactions failed')
     },
   })
 }
