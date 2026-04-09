@@ -442,8 +442,14 @@ function applyTransactionsAndDetailsFromBlock(
     const outputs = (tx.outputs ?? []).map((output, outputIndex) => {
       const isAddressMatch =
         changeAddress != null && labAddressesEqual(output.address, changeAddress)
+      // Prefer matching by change address: BDK may order outputs differently than our
+      // mempool metadata (add_recipient vs drain_to), so changeVout can be wrong.
       const isChange =
-        changeVout != null ? outputIndex === changeVout : isAddressMatch && outputIndex === lastChangeAddressMatchIndex
+        changeAddress != null
+          ? isAddressMatch
+          : changeVout != null
+            ? outputIndex === changeVout
+            : isAddressMatch && outputIndex === lastChangeAddressMatchIndex
       const owner = isChange && sender
         ? sender
         : (lookupOwnerForLabAddress(output.address, addressToOwner) ?? null)
@@ -1294,7 +1300,7 @@ const labService = {
     const addressToOwner = state.addressToOwner ?? {}
 
     const fromUtxos = state.utxos.filter(
-      (utxo) => addressToOwner[utxo.address] === walletOwner,
+      (utxo) => lookupOwnerForLabAddress(utxo.address, addressToOwner) === walletOwner,
     )
     if (fromUtxos.length === 0) {
       throw new Error(
@@ -1335,7 +1341,7 @@ const labService = {
     const inputsDetail = fromUtxos.map((utxo) => ({
       address: utxo.address,
       amountSats: utxo.amountSats,
-      owner: addressToOwner[utxo.address] ?? null,
+      owner: lookupOwnerForLabAddress(utxo.address, addressToOwner) ?? null,
     }))
 
     const totalInput = fromUtxos.reduce((sum, utxo) => sum + utxo.amountSats, 0)

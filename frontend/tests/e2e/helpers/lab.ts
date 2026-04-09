@@ -1,6 +1,6 @@
 import { type Page, expect } from '@playwright/test'
 import type { LabState } from '@/workers/lab-api'
-import { WALLET_OWNER_PREFIX } from '@/lib/lab-utils'
+import { lookupLabAddressOwner, WALLET_OWNER_PREFIX } from '@/lib/lab-utils'
 import { goToWalletTab } from './wallet-nav'
 import { waitForSettingsAddressTypeSwitchComplete } from './settings-waits'
 
@@ -159,7 +159,7 @@ export async function mineBlocksInLab(
           const st = await getLabState(page)
           const map = st.addressToOwner ?? {}
           return (st.utxos ?? []).some((u) => {
-            const o = map[u.address]
+            const o = lookupLabAddressOwner(u.address, map)
             return typeof o === 'string' && o.startsWith(WALLET_OWNER_PREFIX)
           })
         },
@@ -269,14 +269,20 @@ export async function getLabState(page: Page): Promise<LabState> {
 export function getUtxoSumByOwner(state: LabState, owner: string): number {
   const addressToOwner = state.addressToOwner ?? {}
   return (state.utxos ?? [])
-    .filter((u) => addressToOwner[u.address] === owner)
+    .filter(
+      (u) => lookupLabAddressOwner(u.address, addressToOwner) === owner,
+    )
     .reduce((sum, u) => sum + u.amountSats, 0)
 }
 
 /** Resolve an address for a display owner (checks UTXOs first — always present after mining). */
 export function findAddressForOwner(state: LabState, owner: string): string | undefined {
   const map = state.addressToOwner ?? {}
-  const fromUtxo = state.utxos?.find((u) => map[u.address] === owner)?.address
+  const fromUtxo = state.utxos?.find(
+    (u) => lookupLabAddressOwner(u.address, map) === owner,
+  )?.address
   if (fromUtxo) return fromUtxo
-  return state.addresses?.find((a) => map[a.address] === owner)?.address
+  return state.addresses?.find(
+    (a) => lookupLabAddressOwner(a.address, map) === owner,
+  )?.address
 }
