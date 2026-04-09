@@ -25,20 +25,112 @@ export function labBitcoinAddressesEqual(a: string, b: string): boolean {
   return false
 }
 
+/**
+ * Resolves `addressToOwner` the same way as the lab worker: direct key, then
+ * case-insensitive match for bc1/tb1/bcrt1 (BIP173).
+ */
+export function lookupLabAddressOwner(
+  address: string,
+  addressToOwner: Record<string, string>,
+): string | undefined {
+  const direct = addressToOwner[address]
+  if (direct !== undefined) return direct
+  for (const [storedAddr, owner] of Object.entries(addressToOwner)) {
+    if (labBitcoinAddressesEqual(storedAddr, address)) return owner
+  }
+  return undefined
+}
+
+function inferLabOwnerFromTxRecordForOutput(
+  detail: LabTxDetails,
+  output: { address: string; isChange?: boolean },
+  record: LabTxRecord | undefined,
+): string | undefined {
+  if (record == null) return undefined
+  if (detail.isCoinbase) {
+    return record.receiver ?? undefined
+  }
+  if (output.isChange) {
+    return record.sender ?? undefined
+  }
+  return record.receiver ?? undefined
+}
+
+/**
+ * Owner for UI: map first, then confirmed outputs with `owner`, then infer from
+ * {@link LabTxRecord} sender/receiver when per-output owner was not denormalized.
+ */
+export function resolveLabAddressOwnerDisplay(
+  address: string,
+  addressToOwner: Record<string, string>,
+  txDetails: LabTxDetails[],
+  transactions?: LabTxRecord[],
+): string | undefined {
+  const fromMap = lookupLabAddressOwner(address, addressToOwner)
+  if (fromMap !== undefined) return fromMap
+
+  const recordByTxid =
+    transactions != null ? new Map(transactions.map((t) => [t.txid, t])) : null
+
+  for (const d of txDetails) {
+    for (const o of d.outputs ?? []) {
+      if (!labBitcoinAddressesEqual(o.address, address)) continue
+      if (o.owner != null && o.owner !== '') return o.owner
+      const inferred = inferLabOwnerFromTxRecordForOutput(
+        d,
+        o,
+        recordByTxid?.get(d.txid),
+      )
+      if (inferred != null && inferred !== '') return inferred
+    }
+  }
+  return undefined
+}
+
+/** Stable sort for lab owner keys (no special Unknown bucket—callers assert first). */
+export function sortLabOwnerKeys(ownerKeys: string[]): string[] {
+  return [...ownerKeys].sort((a, b) => a.localeCompare(b))
+}
+
+/**
+ * Lab invariant: every address shown or grouped must have a resolved owner key.
+ * Throws immediately if missing (data bug or stale state).
+ */
+export function assertLabAddressOwnerResolved(
+  address: string,
+  ownerKey: string | undefined | null,
+  context?: string,
+): asserts ownerKey is string {
+  if (ownerKey == null || ownerKey === '') {
+    throw new Error(
+      `Lab address has no resolved owner${context ? ` (${context})` : ''}: ${address}`,
+    )
+  }
+}
+
+/** Bech32 addresses are compared case-insensitively for deduplication (BIP173). */
+function canonicalLabAddressKey(address: string): string {
+  const t = address.trim()
+  return /^(bc|tb|bcrt)1/i.test(t) ? t.toLowerCase() : t
+}
+
 /** Merge controlled addresses with any addresses that appear in UTXOs but are not yet in the list. */
 export function mergeAddressesWithUtxos(
   addresses: LabAddress[],
   utxos: LabState['utxos'],
 ): LabAddress[] {
-  const controlled = new Map(addresses.map((a) => [a.address, a]))
-  const fromUtxos = new Set(utxos.map((u) => u.address))
-  const result: LabAddress[] = [...addresses]
-  for (const addr of fromUtxos) {
-    if (!controlled.has(addr)) {
-      result.push({ address: addr, wif: '' })
+  const byKey = new Map<string, LabAddress>()
+  for (const a of addresses) {
+    const k = canonicalLabAddressKey(a.address)
+    if (!byKey.has(k)) byKey.set(k, a)
+  }
+  for (const u of utxos) {
+    const k = canonicalLabAddressKey(u.address)
+    if (!byKey.has(k)) {
+      byKey.set(k, { address: u.address, wif: '' })
     }
   }
-  return result
+  return [...byKey.values()]
 }
 
 export function labTransactionsForWallet(

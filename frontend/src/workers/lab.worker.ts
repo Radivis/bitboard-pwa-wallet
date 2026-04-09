@@ -9,6 +9,7 @@ import type {
   LabMineBlocksResult,
   LabState,
   LabTxDetails,
+  LabUtxo,
   MempoolEntry,
 } from './lab-api'
 import {
@@ -480,6 +481,12 @@ function applyTransactionsAndDetailsFromBlock(
         if (resolved != null) output.owner = resolved
       }
     }
+    for (const output of outputs) {
+      if (output.owner != null && output.owner !== '') {
+        state.addressToOwner = state.addressToOwner ?? {}
+        state.addressToOwner[output.address] = output.owner
+      }
+    }
     if (isCb) {
       assertLabReceiverNonNull(
         receiver,
@@ -507,6 +514,19 @@ function applyTransactionsAndDetailsFromBlock(
         inputs,
         outputs,
       })
+    }
+    // Later txs in this block may spend outputs created earlier in the block; `state.utxos`
+    // is only updated after the full block, so extend the working map per tx.
+    for (let vout = 0; vout < outputs.length; vout += 1) {
+      const o = outputs[vout]
+      const synthetic: LabUtxo = {
+        txid: tx.txid,
+        vout,
+        address: o.address,
+        amountSats: o.amountSats,
+        scriptPubkeyHex: '',
+      }
+      utxoMap.set(`${tx.txid}:${vout}`, synthetic)
     }
     txidToChangeOutput.delete(tx.txid)
   }
@@ -1056,7 +1076,7 @@ const labService = {
 
     const sender = entityName
     const knownRecipient = params.knownRecipientOwner?.trim() || null
-    let receiver =
+    const receiver =
       lookupOwnerForLabAddress(toAddress, addressToOwner) ??
       (labAddressesEqual(fromAddress, toAddress) ? entityName : null) ??
       knownRecipient

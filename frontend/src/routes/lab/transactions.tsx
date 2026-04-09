@@ -39,8 +39,8 @@ function LabTransactionsPage() {
       />
 
       <LabAddressesCard
-        addresses={lab.addresses}
-        addressToOwner={lab.addressToOwner}
+        addressesByOwner={lab.addressesByOwner}
+        sortedAddressOwnerKeys={lab.sortedAddressOwnerKeys}
         getBalanceForAddress={lab.getBalanceForAddress}
         onCopyAddress={lab.onCopyAddress}
         wallets={lab.wallets}

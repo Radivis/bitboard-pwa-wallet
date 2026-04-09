@@ -13,9 +13,13 @@ import {
 import { LAB_MAX_BLOCKS_PER_MINE, LAB_MIN_BLOCKS_PER_MINE } from '@/workers/lab-api'
 import {
   WALLET_OWNER_PREFIX,
+  assertLabAddressOwnerResolved,
   labBitcoinAddressesEqual,
+  resolveLabAddressOwnerDisplay,
+  sortLabOwnerKeys,
   walletOwnerKey,
 } from '@/lib/lab-utils'
+import type { LabAddress } from '@/workers/lab-api'
 
 const DEFAULT_LAB_FEE_RATE_SAT_PER_VB = 1
 const DEFAULT_RANDOM_TRANSACTION_COUNT = 1
@@ -71,7 +75,7 @@ export function useLabIndexPageData() {
   const getBalanceForAddress = useCallback(
     (address: string) =>
       utxos
-        .filter((u) => u.address === address)
+        .filter((u) => labBitcoinAddressesEqual(u.address, address))
         .reduce((sum, u) => sum + u.amountSats, 0),
     [utxos],
   )
@@ -138,12 +142,14 @@ export function useLabIndexPageData() {
       toast.error('Enter a to address')
       return
     }
-    const entityOwner = addressToOwner[trimmedFrom]
-    if (
-      entityOwner == null ||
-      entityOwner === '' ||
-      entityOwner.startsWith(WALLET_OWNER_PREFIX)
-    ) {
+    const entityOwner = resolveLabAddressOwnerDisplay(
+      trimmedFrom,
+      addressToOwner,
+      txDetails,
+      transactions,
+    )
+    assertLabAddressOwnerResolved(trimmedFrom, entityOwner, 'send from')
+    if (entityOwner.startsWith(WALLET_OWNER_PREFIX)) {
       toast.error('Spend from a lab entity address (use Send for your wallet)')
       return
     }
@@ -180,6 +186,8 @@ export function useLabIndexPageData() {
     feeRate,
     createTxMutation,
     addressToOwner,
+    txDetails,
+    transactions,
     activeWalletId,
     currentAddress,
   ])
@@ -207,11 +215,17 @@ export function useLabIndexPageData() {
   const controlledAddresses = useMemo(() => {
     return addresses.filter((a) => {
       if (a.wif) return true
-      const owner = addressToOwner[a.address]
-      if (owner == null || owner.startsWith(WALLET_OWNER_PREFIX)) return false
+      const owner = resolveLabAddressOwnerDisplay(
+        a.address,
+        addressToOwner,
+        txDetails,
+        transactions,
+      )
+      if (owner == null || owner === '') return false
+      if (owner.startsWith(WALLET_OWNER_PREFIX)) return false
       return getBalanceForAddress(a.address) > 0
     })
-  }, [addresses, addressToOwner, getBalanceForAddress])
+  }, [addresses, addressToOwner, txDetails, transactions, getBalanceForAddress])
   const txDetailsByTxid = useMemo(
     () => new Map(txDetails.map((d) => [d.txid, d])),
     [txDetails],
@@ -228,19 +242,45 @@ export function useLabIndexPageData() {
     [transactions, txDetailsByTxid],
   )
 
+  const { addressesByOwner, sortedAddressOwnerKeys } = useMemo(() => {
+    const byOwner = new Map<string, LabAddress[]>()
+    for (const a of addresses) {
+      const owner = resolveLabAddressOwnerDisplay(
+        a.address,
+        addressToOwner,
+        txDetails,
+        transactions,
+      )
+      assertLabAddressOwnerResolved(a.address, owner, 'addresses card')
+      const ownerList = byOwner.get(owner) ?? []
+      ownerList.push(a)
+      byOwner.set(owner, ownerList)
+    }
+    return {
+      addressesByOwner: byOwner,
+      sortedAddressOwnerKeys: sortLabOwnerKeys([...byOwner.keys()]),
+    }
+  }, [addresses, addressToOwner, txDetails, transactions])
+
   const { utxosByOwner, sortedOwnerKeys } = useMemo(() => {
     const byOwner = new Map<string, typeof utxos>()
     for (const utxo of utxos) {
-      const owner = (addressToOwner ?? {})[utxo.address] ?? 'Unknown'
+      const owner = resolveLabAddressOwnerDisplay(
+        utxo.address,
+        addressToOwner,
+        txDetails,
+        transactions,
+      )
+      assertLabAddressOwnerResolved(utxo.address, owner, 'utxos card')
       const ownerList = byOwner.get(owner) ?? []
       ownerList.push(utxo)
       byOwner.set(owner, ownerList)
     }
-    const sortedOwners = [...byOwner.keys()].sort((a, b) =>
-      a === 'Unknown' ? 1 : b === 'Unknown' ? -1 : a.localeCompare(b),
-    )
-    return { utxosByOwner: byOwner, sortedOwnerKeys: sortedOwners }
-  }, [utxos, addressToOwner])
+    return {
+      utxosByOwner: byOwner,
+      sortedOwnerKeys: sortLabOwnerKeys([...byOwner.keys()]),
+    }
+  }, [utxos, addressToOwner, txDetails, transactions])
 
   return {
     blocks,
@@ -277,6 +317,9 @@ export function useLabIndexPageData() {
     creatingRandomTransactions: createRandomTxMutation.isPending,
     labEntitiesCount: labState?.entities?.length ?? 0,
     addresses,
+    addressesByOwner,
+    sortedAddressOwnerKeys,
+    txDetails,
     addressToOwner,
     getBalanceForAddress,
     onCopyAddress: handleCopyAddress,
