@@ -11,7 +11,11 @@ import {
   useLabResetMutation,
 } from '@/hooks/useLabMutations'
 import { LAB_MAX_BLOCKS_PER_MINE, LAB_MIN_BLOCKS_PER_MINE } from '@/workers/lab-api'
-import { WALLET_OWNER_PREFIX } from '@/lib/lab-utils'
+import {
+  WALLET_OWNER_PREFIX,
+  labBitcoinAddressesEqual,
+  walletOwnerKey,
+} from '@/lib/lab-utils'
 
 const DEFAULT_LAB_FEE_RATE_SAT_PER_VB = 1
 const DEFAULT_RANDOM_TRANSACTION_COUNT = 1
@@ -143,13 +147,22 @@ export function useLabIndexPageData() {
       toast.error('Spend from a lab entity address (use Send for your wallet)')
       return
     }
+    const trimmedTo = toAddress.trim()
+    const knownRecipientOwner =
+      activeWalletId != null &&
+      currentAddress != null &&
+      labBitcoinAddressesEqual(trimmedTo, currentAddress)
+        ? walletOwnerKey(activeWalletId)
+        : undefined
+
     void createTxMutation
       .mutateAsync({
         entityName: entityOwner,
         fromAddress: trimmedFrom,
-        toAddress: toAddress.trim(),
+        toAddress: trimmedTo,
         amountSats: amount,
         feeRateSatPerVb: fee,
+        knownRecipientOwner,
       })
       .then(() => {
         setShowTxForm(false)
@@ -160,7 +173,16 @@ export function useLabIndexPageData() {
       .catch(() => {
         /* error toast from mutation onError */
       })
-  }, [fromAddress, toAddress, amountSats, feeRate, createTxMutation, addressToOwner])
+  }, [
+    fromAddress,
+    toAddress,
+    amountSats,
+    feeRate,
+    createTxMutation,
+    addressToOwner,
+    activeWalletId,
+    currentAddress,
+  ])
 
   const handleResetLab = useCallback(() => {
     setShowResetConfirm(false)

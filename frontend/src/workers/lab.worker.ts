@@ -81,6 +81,16 @@ function lookupOwnerForLabAddress(
   return undefined
 }
 
+/** Every lab transaction summary row must have a non-empty receiver (list UI + invariants). */
+function assertLabReceiverNonNull(
+  receiver: string | null | undefined,
+  context: string,
+): asserts receiver is string {
+  if (receiver == null || receiver === '') {
+    throw new Error(`${context}: receiver must not be null or empty`)
+  }
+}
+
 function rebuildTxidToChangeAddressFromMempool(mempool: MempoolEntry[]): void {
   for (const entry of mempool) {
     const changeVout = entry.outputsDetail.findIndex((o) => o.isChange)
@@ -175,7 +185,7 @@ function randomIntInclusive(min: number, max: number): number {
 function selectMempoolTxsForBlock(mempool: MempoolEntry[]): MempoolEntry[] {
   const sortedEntries = [...mempool].sort((a, b) => {
     if (b.feeSats !== a.feeSats) return b.feeSats - a.feeSats
-    return Math.random() - 0.5
+    return a.txid.localeCompare(b.txid)
   })
   const spentBySelected = new Set<string>()
   const selectedEntries: MempoolEntry[] = []
@@ -424,19 +434,27 @@ function applyTransactionsAndDetailsFromBlock(
         owner,
       }
     })
-    const firstNonChangeOutput = outputs.find((output) => !output.isChange)
+    const nonChangeOutputs = outputs.filter((output) => !output.isChange)
+    const firstNonChangeOutput = nonChangeOutputs[0]
     let receiver = firstNonChangeOutput
       ? (lookupOwnerForLabAddress(firstNonChangeOutput.address, addressToOwner) ?? null)
       : null
-    if (
-      firstNonChangeOutput &&
-      receiver === null &&
-      sender !== null &&
-      sender.startsWith(WALLET_OWNER_PREFIX)
-    ) {
-      state.addressToOwner = state.addressToOwner ?? {}
-      state.addressToOwner[firstNonChangeOutput.address] = sender
-      receiver = sender
+    const primaryFromOp = txOperationPayload.primaryToAddress?.trim() ?? ''
+    if (receiver === null && txOperationPayload.receiver && changeFromOp?.txid === tx.txid) {
+      // Prefer the vout whose address matches mempool `primaryToAddress` — WASM `isChange` can
+      // disagree with our mempool flags, and "only one !isChange" may then be the change output.
+      let payOutput: (typeof outputs)[0] | undefined
+      if (primaryFromOp !== '') {
+        payOutput = outputs.find((o) => labAddressesEqual(o.address, primaryFromOp))
+      }
+      if (payOutput == null && nonChangeOutputs.length === 1) {
+        payOutput = nonChangeOutputs[0]
+      }
+      if (payOutput != null) {
+        state.addressToOwner = state.addressToOwner ?? {}
+        state.addressToOwner[payOutput.address] = txOperationPayload.receiver
+        receiver = txOperationPayload.receiver
+      }
     }
     if (
       firstNonChangeOutput &&
@@ -451,10 +469,25 @@ function applyTransactionsAndDetailsFromBlock(
       state.addressToOwner[firstNonChangeOutput.address] = sender
       receiver = sender
     }
-    if (firstNonChangeOutput && receiver === null && txOperationPayload.receiver) {
-      state.addressToOwner = state.addressToOwner ?? {}
-      state.addressToOwner[firstNonChangeOutput.address] = txOperationPayload.receiver
-      receiver = txOperationPayload.receiver
+    for (const output of outputs) {
+      if (!output.isChange && output.owner == null) {
+        const resolved = lookupOwnerForLabAddress(
+          output.address,
+          state.addressToOwner ?? {},
+        )
+        if (resolved != null) output.owner = resolved
+      }
+    }
+    if (isCb) {
+      assertLabReceiverNonNull(
+        receiver,
+        `applyTransactionsFromBlock coinbase txid=${tx.txid} height=${height}`,
+      )
+    } else {
+      assertLabReceiverNonNull(
+        receiver,
+        `applyTransactionsFromBlock txid=${tx.txid} height=${height}`,
+      )
     }
     state.transactions.push({
       txid: tx.txid,
@@ -970,6 +1003,8 @@ const labService = {
     toAddress: string
     amountSats: number
     feeRateSatPerVb: number
+    /** When the UI knows the recipient (e.g. pay to active wallet receive addr before it is in lab DB). */
+    knownRecipientOwner?: string | null
   }): Promise<{
     crypto: import('./lab-api').LabEntityTransactionCryptoParams
     mempoolMetadata: import('./lab-api').LabMempoolMetadata
@@ -1006,7 +1041,23 @@ const labService = {
     )
 
     const sender = entityName
-    const receiver = addressToOwner[toAddress] ?? null
+    const knownRecipient = params.knownRecipientOwner?.trim() || null
+    let receiver =
+      lookupOwnerForLabAddress(toAddress, addressToOwner) ??
+      (labAddressesEqual(fromAddress, toAddress) ? entityName : null) ??
+      knownRecipient
+    if (
+      receiver != null &&
+      receiver !== '' &&
+      lookupOwnerForLabAddress(toAddress, addressToOwner) === undefined
+    ) {
+      state.addressToOwner = state.addressToOwner ?? {}
+      state.addressToOwner[toAddress] = receiver
+    }
+    assertLabReceiverNonNull(
+      receiver,
+      `prepareLabEntityTransaction entity="${entityName}" toAddress="${toAddress}"`,
+    )
 
     const inputsDetail = fromUtxos.map((utxo) => ({
       address: utxo.address,
@@ -1101,6 +1152,8 @@ const labService = {
           targetEntity.addressType,
           targetEntity.accountId,
         )
+        state.addressToOwner = state.addressToOwner ?? {}
+        state.addressToOwner[toAddress] = targetEntity.entityName
       }
       if (!toAddress) continue
 
@@ -1112,11 +1165,15 @@ const labService = {
         feeRateSatPerVb,
       }
       const prepared = await this.prepareLabEntityTransaction(prepareParams)
+      const mempoolMetadata =
+        sourceEntity.entityName === targetEntity.entityName
+          ? { ...prepared.mempoolMetadata, receiver: sourceEntity.entityName }
+          : prepared.mempoolMetadata
       return {
         prepareParams,
         entityName: sourceEntity.entityName,
         crypto: prepared.crypto,
-        mempoolMetadata: prepared.mempoolMetadata,
+        mempoolMetadata,
         totalInput: prepared.totalInput,
       }
     }
@@ -1140,6 +1197,10 @@ const labService = {
     entity.updatedAt = new Date().toISOString()
 
     const txid = wasmModule.lab_txid(signedTxHex)
+    assertLabReceiverNonNull(
+      mempoolMetadata.receiver,
+      `finalizeLabEntityMempoolTransaction txid=${txid}`,
+    )
     const changeOut = mempoolMetadata.hasChange
       ? mempoolMetadata.outputsDetail.find((o) => o.isChange)
       : undefined
@@ -1180,6 +1241,7 @@ const labService = {
     amountSats: number
     feeRateSatPerVb: number
     walletChangeAddress: string
+    knownRecipientOwner?: string | null
   }): Promise<{
     utxosJson: string
     mempoolMetadata: import('./lab-api').LabMempoolMetadata
@@ -1209,7 +1271,23 @@ const labService = {
     )
 
     const sender = walletOwner
-    const receiver = addressToOwner[toAddress] ?? null
+    const knownRecipient = params.knownRecipientOwner?.trim() || null
+    let receiver = lookupOwnerForLabAddress(toAddress, addressToOwner) ?? null
+    if (receiver === null && knownRecipient != null) {
+      state.addressToOwner = state.addressToOwner ?? {}
+      state.addressToOwner[toAddress] = knownRecipient
+      receiver = knownRecipient
+    }
+    if (receiver === null) {
+      throw new Error(
+        `prepareLabWalletTransaction: cannot resolve payee owner for toAddress="${toAddress}". ` +
+          `Send to a lab-mapped address, or pay your active receive address (shown on Receive) so the app can set knownRecipientOwner.`,
+      )
+    }
+    assertLabReceiverNonNull(
+      receiver,
+      `prepareLabWalletTransaction walletOwner="${walletOwner}" toAddress="${toAddress}"`,
+    )
 
     const inputsDetail = fromUtxos.map((utxo) => ({
       address: utxo.address,
@@ -1243,6 +1321,10 @@ const labService = {
     const wasmModule = await getWasm()
 
     const txid = wasmModule.lab_txid(signedTxHex)
+    assertLabReceiverNonNull(
+      mempoolMetadata.receiver,
+      `addSignedTransactionToMempool txid=${txid}`,
+    )
 
     const senderKey = mempoolMetadata.sender ?? ''
     const changeVout = mempoolMetadata.outputsDetail.findIndex((o) => o.isChange)

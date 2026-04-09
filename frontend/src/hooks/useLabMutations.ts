@@ -49,6 +49,7 @@ export type LabCreateTransactionVariables = {
   toAddress: string
   amountSats: number
   feeRateSatPerVb: number
+  knownRecipientOwner?: string | null
 }
 
 export function useLabCreateTransactionMutation() {
@@ -63,6 +64,7 @@ export function useLabCreateTransactionMutation() {
         toAddress: variables.toAddress,
         amountSats: variables.amountSats,
         feeRateSatPerVb: variables.feeRateSatPerVb,
+        knownRecipientOwner: variables.knownRecipientOwner,
       })
     },
     onSuccess: (state) => {

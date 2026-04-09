@@ -14,6 +14,17 @@ export function walletOwnerKey(walletId: number): string {
   return `${WALLET_OWNER_PREFIX}${walletId}`
 }
 
+/** Case-insensitive equality for bc1/tb1/bcrt1 addresses (matches lab worker / BIP173). */
+export function labBitcoinAddressesEqual(a: string, b: string): boolean {
+  const x = a.trim()
+  const y = b.trim()
+  if (x === y) return true
+  if (/^(bc|tb|bcrt)1/i.test(x) && /^(bc|tb|bcrt)1/i.test(y)) {
+    return x.toLowerCase() === y.toLowerCase()
+  }
+  return false
+}
+
 /** Merge controlled addresses with any addresses that appear in UTXOs but are not yet in the list. */
 export function mergeAddressesWithUtxos(
   addresses: LabAddress[],

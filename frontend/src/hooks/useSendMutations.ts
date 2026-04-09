@@ -7,7 +7,7 @@ import { useCryptoStore } from '@/stores/cryptoStore'
 import { useSendStore } from '@/stores/sendStore'
 import { getEsploraUrl, toBitcoinNetwork } from '@/lib/bitcoin-utils'
 import { updateWalletChangeset, loadCustomEsploraUrl } from '@/lib/wallet-utils'
-import { walletOwnerKey } from '@/lib/lab-utils'
+import { labBitcoinAddressesEqual, walletOwnerKey } from '@/lib/lab-utils'
 import { getLabWorker, initLabWorkerWithState } from '@/workers/lab-factory'
 import { runLabOp } from '@/lib/lab-coordinator'
 import { labOpAddSignedTransaction } from '@/lib/lab-worker-operations'
@@ -125,6 +125,7 @@ export function useLabSendMutation() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const activeWalletId = useWalletStore((s) => s.activeWalletId)
+  const currentAddress = useWalletStore((s) => s.currentAddress)
   const getLabChangeAddress = useCryptoStore((s) => s.getLabChangeAddress)
   const buildAndSignLabTransaction = useCryptoStore((s) => s.buildAndSignLabTransaction)
   const reset = useSendStore((s) => s.reset)
@@ -143,6 +144,12 @@ export function useLabSendMutation() {
         const walletOwner = walletOwnerKey(activeWalletId)
         const walletChangeAddress = await getLabChangeAddress()
 
+        const knownRecipientOwner =
+          currentAddress != null &&
+          labBitcoinAddressesEqual(params.normalizedRecipient, currentAddress)
+            ? walletOwner
+            : undefined
+
         const { utxosJson, mempoolMetadata, totalInput } =
           await labWorker.prepareLabWalletTransaction({
             walletOwner,
@@ -150,6 +157,7 @@ export function useLabSendMutation() {
             amountSats: params.amountSats,
             feeRateSatPerVb: params.effectiveFeeRate,
             walletChangeAddress,
+            knownRecipientOwner,
           })
 
         const { signedTxHex, feeSats, hasChange } = await buildAndSignLabTransaction({

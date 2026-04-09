@@ -98,6 +98,7 @@ export async function labOpCreateLabEntityTransaction(params: {
   toAddress: string
   amountSats: number
   feeRateSatPerVb: number
+  knownRecipientOwner?: string | null
 }): Promise<LabState> {
   const prep = await runLabOp(async () => {
     labPipelineDebugLog('createLabEntityTransaction:prepare', {})
@@ -146,6 +147,10 @@ export async function labOpCreateLabEntityTransaction(params: {
     hasChange,
     outputsDetail,
     walletChangeAddress: hasChange ? changeAddress : '',
+  }
+
+  if (fullMetadata.receiver == null || fullMetadata.receiver === '') {
+    throw new Error('labOpCreateLabEntityTransaction: receiver is required before finalize')
   }
 
   return runLabOp(async () => {
@@ -205,18 +210,23 @@ export async function labOpCreateRandomLabEntityTransactions(count: number): Pro
           },
         ]
 
+    const randomFullMetadata = {
+      ...prepared.mempoolMetadata,
+      feeSats,
+      hasChange,
+      outputsDetail,
+      walletChangeAddress: hasChange ? changeAddress : '',
+    }
+    if (randomFullMetadata.receiver == null || randomFullMetadata.receiver === '') {
+      throw new Error('labOpCreateRandomLabEntityTransactions: receiver is required before finalize')
+    }
+
     latestState = await runLabOp(async () => {
       await initLabWorkerWithState()
       const labWorker = getLabWorker()
       const state = await labWorker.finalizeLabEntityMempoolTransaction({
         signedTxHex,
-        mempoolMetadata: {
-          ...prepared.mempoolMetadata,
-          feeSats,
-          hasChange,
-          outputsDetail,
-          walletChangeAddress: hasChange ? changeAddress : '',
-        },
+        mempoolMetadata: randomFullMetadata,
         entityName: prepared.entityName,
         newChangesetJson: changesetJson,
       })
@@ -239,6 +249,9 @@ export async function labOpAddSignedTransaction(
   signedTxHex: string,
   mempoolMetadata: LabMempoolMetadata,
 ): Promise<LabState> {
+  if (mempoolMetadata.receiver == null || mempoolMetadata.receiver === '') {
+    throw new Error('labOpAddSignedTransaction: receiver is required')
+  }
   return runLabOp(async () => {
     labPipelineDebugLog('addSignedTransaction:start', {})
     await initLabWorkerWithState()

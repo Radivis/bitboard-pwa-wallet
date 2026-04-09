@@ -170,6 +170,8 @@ export interface PrepareLabEntityTransactionParams {
   toAddress: string
   amountSats: number
   feeRateSatPerVb: number
+  /** UI may supply when payee is not yet in lab `addressToOwner` (e.g. wallet receive address). */
+  knownRecipientOwner?: string | null
 }
 
 /** Payload for crypto worker after prepareLabEntityTransaction. */
@@ -191,6 +193,8 @@ export interface PrepareLabWalletTransactionParams {
   amountSats: number
   feeRateSatPerVb: number
   walletChangeAddress: string
+  /** When the payee is not in `addressToOwner` yet (e.g. newly generated receive address). */
+  knownRecipientOwner?: string | null
 }
 
 export interface PrepareRandomLabEntityTransactionParams {

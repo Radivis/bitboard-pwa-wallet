@@ -95,10 +95,11 @@ test.describe('Lab', { tag: '@lab' }, () => {
     await mineBlocksInLab(page, 1, 'name', { ownerName: 'Alice' })
     await mineBlocksInLab(page, 1, 'name', { ownerName: 'Bob' })
 
-    await createRandomTransactionsInLab(page, 5)
+    const randomTxCount = 16
+    await createRandomTransactionsInLab(page, randomTxCount)
 
     const state = await getLabState(page)
-    expect(state.mempool).toHaveLength(5)
+    expect(state.mempool).toHaveLength(randomTxCount)
     const senders = new Set(state.mempool.map((entry) => entry.sender))
     expect(senders).toEqual(new Set(['Alice', 'Bob']))
   })
@@ -139,6 +140,10 @@ test.describe('Lab', { tag: '@lab' }, () => {
     const stateWithMempoolTx = await getLabState(page)
     const selfTransferTxid = stateWithMempoolTx.mempool[0]?.txid
     expect(selfTransferTxid).toBeDefined()
+    const selfTransferMempoolEntry = stateWithMempoolTx.mempool.find(
+      (entry) => entry.txid === selfTransferTxid,
+    )
+    expect(selfTransferMempoolEntry?.receiver).toBe('Alice')
     await mineBlocksInLab(page, 1, 'name', { ownerName: 'Alice' })
 
     const stateAfter = await getLabState(page)
