@@ -53,7 +53,7 @@ let state: LabState = { ...EMPTY_LAB_STATE }
  * is attributed to the same owner as inputs. Rebuilt from persisted mempool on {@link loadState}
  * (the map itself is not part of {@link LabState} JSON).
  */
-const txidToChangeAddress = new Map<string, string>()
+const txidToChangeOutput = new Map<string, { address: string; vout: number | null }>()
 const DEFAULT_RANDOM_TX_MAX_ATTEMPTS = 500
 
 /** Bech32 (bc1/tb1/bcrt1) addresses can differ by case; BIP173 compares case-insensitively. */
@@ -83,18 +83,22 @@ function lookupOwnerForLabAddress(
 
 function rebuildTxidToChangeAddressFromMempool(mempool: MempoolEntry[]): void {
   for (const entry of mempool) {
-    const changeOut = entry.outputsDetail.find((o) => o.isChange)
-    if (changeOut) {
-      txidToChangeAddress.set(entry.txid, changeOut.address)
+    const changeVout = entry.outputsDetail.findIndex((o) => o.isChange)
+    if (changeVout >= 0) {
+      const changeOut = entry.outputsDetail[changeVout]
+      txidToChangeOutput.set(entry.txid, { address: changeOut.address, vout: changeVout })
     }
   }
 }
 
 function rebuildTxidToChangeAddressFromState(): void {
-  txidToChangeAddress.clear()
+  txidToChangeOutput.clear()
   for (const op of state.txOperations ?? []) {
     if (op.changeAddress) {
-      txidToChangeAddress.set(op.txid, op.changeAddress)
+      txidToChangeOutput.set(op.txid, {
+        address: op.changeAddress,
+        vout: op.changeVout ?? null,
+      })
     }
   }
   rebuildTxidToChangeAddressFromMempool(state.mempool ?? [])
@@ -112,6 +116,7 @@ function inferMissingLabOutputOwners(tx: LabTxDetails): LabTxDetails {
 
   const outMissingOwner = tx.outputs.filter((o) => !o.owner)
   const outWithOwner = tx.outputs.filter((o) => o.owner)
+  const existingChangeCount = tx.outputs.filter((o) => o.isChange).length
   if (outMissingOwner.length !== 1 || outWithOwner.length < 1) return tx
 
   const patchAddr = outMissingOwner[0].address
@@ -120,6 +125,11 @@ function inferMissingLabOutputOwners(tx: LabTxDetails): LabTxDetails {
     outputs: tx.outputs.map((o) => {
       if (o.owner != null) return o
       if (labAddressesEqual(o.address, patchAddr)) {
+        // Legacy repair: only backfill missing owner. Do not mark additional outputs as change
+        // when a change output is already present, otherwise self-sends can show two "Change" badges.
+        if (existingChangeCount > 0) {
+          return { ...o, owner: firstOwner }
+        }
         return { ...o, owner: firstOwner, isChange: true }
       }
       return o
@@ -139,6 +149,23 @@ function parseWasmObject(val: unknown): Record<string, unknown> {
     }
   }
   return {}
+}
+
+function parseTxOperationPayload(payloadJson: string | null | undefined): {
+  receiver?: string | null
+  primaryToAddress?: string | null
+} {
+  if (!payloadJson) return {}
+  try {
+    const parsed = JSON.parse(payloadJson) as Record<string, unknown>
+    return {
+      receiver: typeof parsed.receiver === 'string' ? parsed.receiver : null,
+      primaryToAddress:
+        typeof parsed.primaryToAddress === 'string' ? parsed.primaryToAddress : null,
+    }
+  } catch {
+    return {}
+  }
 }
 
 function randomIntInclusive(min: number, max: number): number {
@@ -327,9 +354,13 @@ function applyTransactionsAndDetailsFromBlock(
 
   for (const tx of transactions) {
     const isCb = isCoinbaseFromBlockEffectsTx(tx)
-    const changeFromOp = state.txOperations?.find((o) => o.txid === tx.txid)?.changeAddress
-    const changeAddressForTx =
-      txidToChangeAddress.get(tx.txid) ?? changeFromOp ?? undefined
+    const changeFromOp = state.txOperations?.find((o) => o.txid === tx.txid)
+    const txOperationPayload = parseTxOperationPayload(changeFromOp?.payloadJson)
+    const changeOutputForTx =
+      txidToChangeOutput.get(tx.txid) ??
+      (changeFromOp?.changeAddress
+        ? { address: changeFromOp.changeAddress, vout: changeFromOp.changeVout ?? null }
+        : undefined)
 
     let inputs: LabTxDetails['inputs']
     let firstInputAddress: string | null = null
@@ -364,9 +395,21 @@ function applyTransactionsAndDetailsFromBlock(
         ? lookupOwnerForLabAddress(firstInputAddress, addressToOwner) ?? null
         : null
 
-    const outputs = (tx.outputs ?? []).map((output) => {
+    const changeAddress = changeOutputForTx?.address
+    const changeVout = changeOutputForTx?.vout ?? null
+    const lastChangeAddressMatchIndex =
+      changeAddress == null
+        ? -1
+        : (tx.outputs ?? []).reduce(
+            (lastMatchIndex, output, index) =>
+              labAddressesEqual(output.address, changeAddress) ? index : lastMatchIndex,
+            -1,
+          )
+    const outputs = (tx.outputs ?? []).map((output, outputIndex) => {
+      const isAddressMatch =
+        changeAddress != null && labAddressesEqual(output.address, changeAddress)
       const isChange =
-        changeAddressForTx !== undefined && labAddressesEqual(output.address, changeAddressForTx)
+        changeVout != null ? outputIndex === changeVout : isAddressMatch && outputIndex === lastChangeAddressMatchIndex
       const owner = isChange && sender
         ? sender
         : (lookupOwnerForLabAddress(output.address, addressToOwner) ?? null)
@@ -395,6 +438,24 @@ function applyTransactionsAndDetailsFromBlock(
       state.addressToOwner[firstNonChangeOutput.address] = sender
       receiver = sender
     }
+    if (
+      firstNonChangeOutput &&
+      receiver === null &&
+      sender !== null &&
+      outputs.some(
+        (output) =>
+          output.isChange === true && labAddressesEqual(output.address, firstNonChangeOutput.address),
+      )
+    ) {
+      state.addressToOwner = state.addressToOwner ?? {}
+      state.addressToOwner[firstNonChangeOutput.address] = sender
+      receiver = sender
+    }
+    if (firstNonChangeOutput && receiver === null && txOperationPayload.receiver) {
+      state.addressToOwner = state.addressToOwner ?? {}
+      state.addressToOwner[firstNonChangeOutput.address] = txOperationPayload.receiver
+      receiver = txOperationPayload.receiver
+    }
     state.transactions.push({
       txid: tx.txid,
       sender,
@@ -412,7 +473,7 @@ function applyTransactionsAndDetailsFromBlock(
         outputs,
       })
     }
-    txidToChangeAddress.delete(tx.txid)
+    txidToChangeOutput.delete(tx.txid)
   }
 }
 
@@ -1084,12 +1145,17 @@ const labService = {
       : undefined
 
     state.txOperations = state.txOperations ?? []
+    const changeVout = mempoolMetadata.outputsDetail.findIndex((o) => o.isChange)
+    const primaryToAddress = mempoolMetadata.outputsDetail.find((o) => !o.isChange)?.address ?? null
     state.txOperations.push({
       txid,
       senderKey: entityName,
       changeAddress: changeOut?.address ?? null,
-      changeVout: null,
-      payloadJson: '{}',
+      changeVout: changeVout >= 0 ? changeVout : null,
+      payloadJson: JSON.stringify({
+        receiver: mempoolMetadata.receiver,
+        primaryToAddress,
+      }),
     })
     rebuildTxidToChangeAddressFromState()
 
@@ -1179,13 +1245,18 @@ const labService = {
     const txid = wasmModule.lab_txid(signedTxHex)
 
     const senderKey = mempoolMetadata.sender ?? ''
+    const changeVout = mempoolMetadata.outputsDetail.findIndex((o) => o.isChange)
+    const primaryToAddress = mempoolMetadata.outputsDetail.find((o) => !o.isChange)?.address ?? null
     state.txOperations = state.txOperations ?? []
     state.txOperations.push({
       txid,
       senderKey,
       changeAddress: mempoolMetadata.hasChange ? mempoolMetadata.walletChangeAddress : null,
-      changeVout: null,
-      payloadJson: '{}',
+      changeVout: changeVout >= 0 ? changeVout : null,
+      payloadJson: JSON.stringify({
+        receiver: mempoolMetadata.receiver,
+        primaryToAddress,
+      }),
     })
     rebuildTxidToChangeAddressFromState()
 

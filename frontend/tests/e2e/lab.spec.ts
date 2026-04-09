@@ -128,6 +128,34 @@ test.describe('Lab', { tag: '@lab' }, () => {
     expect(aliceSum).toBeGreaterThan(0)
   })
 
+  test('self transfer marks only one change output', async ({ page }) => {
+    await mineBlocksInLab(page, 1, 'name', { ownerName: 'Alice' })
+
+    const stateBefore = await getLabState(page)
+    const aliceAddress = findAddressForOwner(stateBefore, 'Alice')
+    expect(aliceAddress).toBeDefined()
+
+    await createTransactionInLab(page, aliceAddress!, aliceAddress!, 10_000, 1)
+    const stateWithMempoolTx = await getLabState(page)
+    const selfTransferTxid = stateWithMempoolTx.mempool[0]?.txid
+    expect(selfTransferTxid).toBeDefined()
+    await mineBlocksInLab(page, 1, 'name', { ownerName: 'Alice' })
+
+    const stateAfter = await getLabState(page)
+    const minedSpendRecord = stateAfter.transactions.find(
+      (tx) => tx.txid === selfTransferTxid,
+    )
+    expect(minedSpendRecord).toBeDefined()
+    const minedSpendDetails = stateAfter.txDetails.find(
+      (detail) => detail.txid === minedSpendRecord!.txid,
+    )
+    expect(minedSpendDetails).toBeDefined()
+    const changeOutputCount = minedSpendDetails!.outputs.filter((output) => output.isChange).length
+    expect(changeOutputCount).toBe(1)
+    expect(minedSpendDetails!.outputs.some((output) => !output.isChange)).toBe(true)
+    expect(minedSpendRecord?.receiver).toBe('Alice')
+  })
+
   test('conflicting transactions - higher fee wins', async ({ page }) => {
     await mineBlocksInLab(page, 1, 'name', { ownerName: 'Alice' })
     await mineBlocksInLab(page, 1, 'name', { ownerName: 'Bob' })
