@@ -261,5 +261,15 @@ test.describe('Lab', { tag: '@lab' }, () => {
     await expect(page.getByRole('main').getByText('Transactions', { exact: true })).toBeVisible()
     await expect(page.getByRole('main').getByText(/Mined by:.*Alice/)).toBeVisible()
     await expect(page.getByRole('main').getByText('Coinbase', { exact: true })).toBeVisible()
+    const nonceValue = page
+      .getByRole('main')
+      .locator('p', { hasText: /^Nonce$/ })
+      .locator('xpath=following-sibling::p[1]')
+    await expect(nonceValue).not.toHaveText('0')
+    const headerHashValue = page
+      .getByRole('main')
+      .locator('p', { hasText: /^Block header hash$/ })
+      .locator('xpath=following-sibling::p[1]')
+    await expect(headerHashValue).toContainText(/^00[0-9a-f]{62}$/i)
   })
 })

@@ -26,6 +26,7 @@ use crate::validation;
 
 const LAB_COINBASE_SUBSIDY: u64 = 50 * 100_000_000; // 50 BTC in sats
 const LAB_BITS: u32 = 0x207fffff; // Max target for lab
+const LAB_MICRO_POW_HASH_PREFIX: &str = "00"; // Require first 2 hex chars to be zero
 const DUST_THRESHOLD_SATS: u64 = 546; // Min non-dust output for P2WPKH
 
 // P2WPKH vsize estimates for fee calculation in lab_build_transaction_with_change
@@ -162,7 +163,7 @@ pub fn lab_mine_block(
     })?;
     let time = unix_time_lab();
 
-    let header = bitcoin::blockdata::block::Header {
+    let mut header = bitcoin::blockdata::block::Header {
         version: BlockVersion::TWO,
         prev_blockhash: prev_hash,
         merkle_root,
@@ -170,9 +171,26 @@ pub fn lab_mine_block(
         bits: CompactTarget::from_consensus(LAB_BITS),
         nonce: 0,
     };
+    header.nonce = find_micro_pow_nonce(&mut header).ok_or_else(|| {
+        JsValue::from_str("micro-pow search exhausted nonce range without finding a valid hash")
+    })?;
 
     let block = Block { header, txdata };
     Ok(serialize_hex(&block))
+}
+
+fn find_micro_pow_nonce(header: &mut bitcoin::blockdata::block::Header) -> Option<u32> {
+    for nonce in 0..=u32::MAX {
+        header.nonce = nonce;
+        if header
+            .block_hash()
+            .to_string()
+            .starts_with(LAB_MICRO_POW_HASH_PREFIX)
+        {
+            return Some(nonce);
+        }
+    }
+    None
 }
 
 /// Builds an unsigned P2WPKH transaction from UTXOs and outputs.

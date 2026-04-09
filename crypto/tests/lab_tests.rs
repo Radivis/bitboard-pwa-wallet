@@ -4,6 +4,7 @@
 use std::io::Cursor;
 
 use bitcoin::consensus::Decodable;
+use bitcoin::consensus::encode::deserialize_hex;
 use wasm_bindgen::JsValue;
 use wasm_bindgen_test::*;
 
@@ -15,6 +16,17 @@ const TOTAL_UTXO_SATS: u64 = 50000;
 const PAYMENT_SATS: u64 = 40000;
 const FEE_RATE_SAT_PER_VB: f64 = 1.0;
 const PAYMENT_ADDRESS: &str = "bcrt1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh";
+
+fn fresh_regtest_script_pubkey_hex() -> String {
+    let mnemonic = bitboard_crypto::generate_mnemonic(12).expect("generate mnemonic");
+    let created =
+        bitboard_crypto::create_wallet(&mnemonic, "regtest", "segwit", 0).expect("create wallet");
+    let first_address = js_sys::Reflect::get(&created, &JsValue::from_str("first_address"))
+        .expect("first_address")
+        .as_string()
+        .expect("first_address string");
+    lab::lab_address_to_script_pubkey_hex(&first_address).expect("first address script pubkey")
+}
 
 #[wasm_bindgen_test]
 fn build_and_sign_lab_transaction_returns_signed_tx() {
@@ -140,5 +152,47 @@ fn build_and_sign_lab_transaction_returns_signed_tx() {
     assert_eq!(
         change_value, expected_change,
         "change output must equal total_in - payment - fee"
+    );
+}
+
+#[wasm_bindgen_test]
+fn lab_mine_block_micro_pow_hash_starts_with_00() {
+    let script_pubkey_hex = fresh_regtest_script_pubkey_hex();
+    let block_hex = lab::lab_mine_block("", 0, &script_pubkey_hex, JsValue::NULL, 0)
+        .expect("mine block with micro-pow");
+    let block: bitcoin::Block = deserialize_hex(&block_hex).expect("deserialize mined block");
+    let block_hash_hex = block.block_hash().to_string();
+
+    assert!(
+        block_hash_hex.starts_with("00"),
+        "micro-pow requires block hash starting with 00, got {}",
+        block_hash_hex
+    );
+}
+
+#[wasm_bindgen_test]
+fn lab_mine_block_micro_pow_nonce_varies_across_calls() {
+    let script_pubkey_hex = fresh_regtest_script_pubkey_hex();
+
+    let mut previous_hash = String::new();
+    let mut nonces = Vec::new();
+    for height in 0..16u32 {
+        let block_hex =
+            lab::lab_mine_block(&previous_hash, height, &script_pubkey_hex, JsValue::NULL, 0)
+                .expect("mine block with micro-pow");
+        let block: bitcoin::Block = deserialize_hex(&block_hex).expect("deserialize mined block");
+        previous_hash = block.block_hash().to_string();
+        nonces.push(block.header.nonce);
+    }
+
+    assert!(
+        nonces.iter().any(|nonce| *nonce > 0),
+        "expected at least one nonce to be > 0, got {:?}",
+        nonces
+    );
+    assert!(
+        nonces.windows(2).any(|pair| pair[0] != pair[1]),
+        "expected nonce variation across consecutive blocks, got {:?}",
+        nonces
     );
 }
