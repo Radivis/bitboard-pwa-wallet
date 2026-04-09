@@ -50,17 +50,15 @@ export async function loadLabStateFromDatabase(): Promise<LabState> {
 
   const addressOwnersRows = await labDb
     .selectFrom('lab_address_owners')
-    .select(['address', 'owner_type', 'wallet_id', 'owner_name', 'entity_name'])
+    .select(['address', 'owner_type', 'wallet_id', 'entity_name'])
     .execute()
 
   const addressToOwner: Record<string, string> = {}
   for (const row of addressOwnersRows) {
     if (row.owner_type === 'wallet' && row.wallet_id != null) {
       addressToOwner[row.address] = walletOwnerKey(row.wallet_id)
-    } else if (row.owner_type === 'lab_entity' && row.entity_name != null) {
+    } else if (row.entity_name != null && row.entity_name !== '') {
       addressToOwner[row.address] = row.entity_name
-    } else if (row.owner_type === 'name' && row.owner_name != null) {
-      addressToOwner[row.address] = row.owner_name
     }
   }
 
@@ -287,7 +285,6 @@ export async function persistLabState(state: LabState): Promise<void> {
           address,
           owner_type: 'wallet',
           wallet_id: walletId,
-          owner_name: null,
           entity_name: null,
         })
         .execute()
@@ -298,7 +295,6 @@ export async function persistLabState(state: LabState): Promise<void> {
           address,
           owner_type: 'lab_entity',
           wallet_id: null,
-          owner_name: null,
           entity_name: ownerKey,
         })
         .execute()

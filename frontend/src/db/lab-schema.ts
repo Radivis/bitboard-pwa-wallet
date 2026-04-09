@@ -9,12 +9,15 @@
  */
 import type { Generated, Insertable, Selectable, Updateable } from 'kysely'
 
-/** Maps a lab address string to who owns it: main wallet, a named entity, or a lab-only entity. Used for UTXO labels, tx summaries, and merge logic. */
+/**
+ * Maps a lab address to its owner: main app wallet (`wallet` + `wallet_id`) or a lab entity
+ * (`lab_entity` + `entity_name`: human-chosen name, anonymous id, etc.). Used for UTXO labels,
+ * tx summaries, and merge logic.
+ */
 interface LabAddressOwnersTable {
   address: string
-  owner_type: 'wallet' | 'name' | 'lab_entity'
+  owner_type: 'wallet' | 'lab_entity'
   wallet_id: number | null
-  owner_name: string | null
   entity_name: string | null
 }
 

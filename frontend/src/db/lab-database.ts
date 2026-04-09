@@ -1,4 +1,4 @@
-import { Kysely, sql } from 'kysely'
+import { Kysely } from 'kysely'
 import { WaSqliteWorkerDialect } from 'kysely-wasqlite-worker'
 import type { LabDatabase } from './lab-schema'
 
@@ -20,6 +20,11 @@ export function getLabDatabase(): Kysely<LabDatabase> {
   return labInstance
 }
 
+/**
+ * Ensures all lab tables exist with the current column set. Lab uses a separate SQLite file
+ * (`bitboard-lab`); there is no version table. Pre-production: if an older file is missing
+ * columns, use “Reset lab” in the UI or clear site data rather than keeping ALTER migrations.
+ */
 async function migrateLabToLatest(labDb: Kysely<LabDatabase>): Promise<void> {
   await labDb.schema
     .createTable('blocks')
@@ -56,6 +61,7 @@ async function migrateLabToLatest(labDb: Kysely<LabDatabase>): Promise<void> {
     .addColumn('txid', 'text', (col) => col.notNull())
     .addColumn('sender', 'text', (col) => col)
     .addColumn('receiver', 'text', (col) => col)
+    .addColumn('is_coinbase', 'integer', (col) => col.notNull().defaultTo(0))
     .execute()
 
   await labDb.schema
@@ -64,7 +70,7 @@ async function migrateLabToLatest(labDb: Kysely<LabDatabase>): Promise<void> {
     .addColumn('address', 'text', (col) => col.primaryKey())
     .addColumn('owner_type', 'text', (col) => col.notNull())
     .addColumn('wallet_id', 'integer', (col) => col)
-    .addColumn('owner_name', 'text', (col) => col)
+    .addColumn('entity_name', 'text', (col) => col)
     .execute()
 
   await labDb.schema
@@ -89,6 +95,7 @@ async function migrateLabToLatest(labDb: Kysely<LabDatabase>): Promise<void> {
     .addColumn('block_time', 'integer', (col) => col.notNull())
     .addColumn('inputs_json', 'text', (col) => col.notNull())
     .addColumn('outputs_json', 'text', (col) => col.notNull())
+    .addColumn('is_coinbase', 'integer', (col) => col.notNull().defaultTo(0))
     .execute()
 
   await labDb.schema
@@ -105,33 +112,6 @@ async function migrateLabToLatest(labDb: Kysely<LabDatabase>): Promise<void> {
     .addColumn('created_at', 'text', (col) => col.notNull())
     .addColumn('updated_at', 'text', (col) => col.notNull())
     .execute()
-
-  try {
-    await sql`ALTER TABLE lab_address_owners ADD COLUMN entity_name text`.execute(labDb)
-    await sql`
-      UPDATE lab_address_owners
-      SET entity_name = owner_name, owner_type = 'lab_entity'
-      WHERE owner_type = 'name'
-    `.execute(labDb)
-  } catch {
-    /* column already present */
-  }
-
-  try {
-    await sql`ALTER TABLE lab_transactions ADD COLUMN is_coinbase integer NOT NULL DEFAULT 0`.execute(
-      labDb,
-    )
-  } catch {
-    /* column already present */
-  }
-
-  try {
-    await sql`ALTER TABLE lab_tx_details ADD COLUMN is_coinbase integer NOT NULL DEFAULT 0`.execute(
-      labDb,
-    )
-  } catch {
-    /* column already present */
-  }
 
   await labDb.schema
     .createTable('lab_mine_operations')
