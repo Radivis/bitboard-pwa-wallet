@@ -107,20 +107,31 @@ pub struct LabEntitySignResult {
     pub change_address: String,
 }
 
+/// Inputs for [`lab_entity_build_and_sign_lab_transaction`].
+#[derive(Debug)]
+pub struct LabEntityBuildSignArgs<'a> {
+    pub mnemonic: &'a str,
+    pub changeset_json: &'a str,
+    pub network: BitcoinNetwork,
+    pub address_type: AddressType,
+    pub account_id: u32,
+    pub utxos_json: &'a str,
+    pub to_address: &'a str,
+    pub amount_sats: u64,
+    pub fee_rate_sat_per_vb: f64,
+}
+
 /// Build and sign a lab tx using a lab-entity wallet (foreign UTXOs + internal change).
 pub fn lab_entity_build_and_sign_lab_transaction(
-    mnemonic: &str,
-    changeset_json: &str,
-    network: BitcoinNetwork,
-    address_type: AddressType,
-    account_id: u32,
-    utxos_json: &str,
-    to_address: &str,
-    amount_sats: u64,
-    fee_rate_sat_per_vb: f64,
+    args: LabEntityBuildSignArgs<'_>,
 ) -> Result<LabEntitySignResult, CryptoError> {
-    let (mut w, mut persisted) =
-        open_lab_entity_wallet(mnemonic, changeset_json, network, address_type, account_id)?;
+    let (mut w, mut persisted) = open_lab_entity_wallet(
+        args.mnemonic,
+        args.changeset_json,
+        args.network,
+        args.address_type,
+        args.account_id,
+    )?;
 
     let change_addr = w
         .reveal_next_address(KeychainKind::Internal)
@@ -130,10 +141,10 @@ pub fn lab_entity_build_and_sign_lab_transaction(
 
     let signed = lab_psbt::build_and_sign_lab_transaction(
         &mut w,
-        utxos_json,
-        to_address,
-        amount_sats,
-        fee_rate_sat_per_vb,
+        args.utxos_json,
+        args.to_address,
+        args.amount_sats,
+        args.fee_rate_sat_per_vb,
         &change_addr,
     )?;
     merge_staged(&mut w, &mut persisted)?;

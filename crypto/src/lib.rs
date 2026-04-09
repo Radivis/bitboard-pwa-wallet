@@ -532,6 +532,7 @@ pub fn lab_entity_reveal_next_external_address(
 
 /// Build and sign a lab mempool tx for a lab entity. Returns JSON including updated `changeset_json`.
 #[wasm_bindgen]
+#[allow(clippy::too_many_arguments)] // wasm_bindgen exposes a flat JS API; arity stays fixed for WASM ABI.
 pub fn lab_entity_build_and_sign_lab_transaction(
     mnemonic_str: &str,
     changeset_json: &str,
@@ -546,15 +547,17 @@ pub fn lab_entity_build_and_sign_lab_transaction(
     let net = types::BitcoinNetwork::try_from(network).map_err(JsValue::from)?;
     let addr_type = types::AddressType::try_from(address_type).map_err(JsValue::from)?;
     let result = lab_entity_wallet::lab_entity_build_and_sign_lab_transaction(
-        mnemonic_str,
-        changeset_json,
-        net,
-        addr_type,
-        account_id,
-        utxos_json,
-        to_address,
-        amount_sats,
-        fee_rate_sat_per_vb,
+        lab_entity_wallet::LabEntityBuildSignArgs {
+            mnemonic: mnemonic_str,
+            changeset_json,
+            network: net,
+            address_type: addr_type,
+            account_id,
+            utxos_json,
+            to_address,
+            amount_sats,
+            fee_rate_sat_per_vb,
+        },
     )
     .map_err(JsValue::from)?;
     serde_wasm_bindgen::to_value(&result).map_err_to_js()

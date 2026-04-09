@@ -41,15 +41,17 @@ fn lab_entity_create_and_sign_foreign_utxo() {
     .expect("second external for payment destination");
 
     let out = lab_entity_wallet::lab_entity_build_and_sign_lab_transaction(
-        mnemonic,
-        &created.changeset_json,
-        BitcoinNetwork::Regtest,
-        AddressType::Segwit,
-        0,
-        &utxos_json,
-        &pay_to,
-        40_000,
-        1.0,
+        lab_entity_wallet::LabEntityBuildSignArgs {
+            mnemonic,
+            changeset_json: &created.changeset_json,
+            network: BitcoinNetwork::Regtest,
+            address_type: AddressType::Segwit,
+            account_id: 0,
+            utxos_json: &utxos_json,
+            to_address: &pay_to,
+            amount_sats: 40_000,
+            fee_rate_sat_per_vb: 1.0,
+        },
     )
     .expect("build and sign");
 
