@@ -1,5 +1,15 @@
+/**
+ * Kysely row types for the Lab chain simulator SQLite database.
+ *
+ * Split roughly into: (1) chain state (`blocks`, `utxos`), (2) keys and identity
+ * (`lab_addresses`, `lab_entities`, `lab_address_owners`), (3) transaction views
+ * (`lab_mempool`, `lab_transactions`, `lab_tx_details`), and (4) explicit
+ * operation metadata layered on WASM effects (`lab_mine_operations`,
+ * `lab_tx_operations`) so UI attribution does not depend only on string inference.
+ */
 import type { Generated, Insertable, Selectable, Updateable } from 'kysely'
 
+/** Maps a lab address string to who owns it: main wallet, a named entity, or a lab-only entity. Used for UTXO labels, tx summaries, and merge logic. */
 interface LabAddressOwnersTable {
   address: string
   owner_type: 'wallet' | 'name' | 'lab_entity'
@@ -8,6 +18,7 @@ interface LabAddressOwnersTable {
   entity_name: string | null
 }
 
+/** A simulated “person” in the lab: mnemonic, descriptors, and BDK changeset. One row per named or anonymous lab entity. */
 interface LabEntitiesTable {
   entity_name: string
   mnemonic: string
@@ -21,6 +32,7 @@ interface LabEntitiesTable {
   updated_at: string
 }
 
+/** Unconfirmed transactions: raw hex, ids, fee, and JSON snapshots of inputs/outputs for mempool UI and worker reconciliation. */
 interface LabMempoolTable {
   mempool_id: Generated<number>
   signed_tx_hex: string
@@ -33,6 +45,10 @@ interface LabMempoolTable {
   outputs_detail_json: string
 }
 
+/**
+ * Flat list of confirmed transactions for chain-wide summaries and tests.
+ * `is_coinbase` (SQLite 0/1) marks block rewards; coinbase rows use the same table as spends.
+ */
 interface LabTransactionsTable {
   lab_transaction_id: Generated<number>
   txid: string
@@ -41,6 +57,7 @@ interface LabTransactionsTable {
   is_coinbase: number
 }
 
+/** Per-tx detail row: block placement, full inputs/outputs as JSON, and `is_coinbase` for tx detail / block list UIs. */
 interface LabTxDetailsTable {
   txid: string
   block_height: number
@@ -50,6 +67,10 @@ interface LabTxDetailsTable {
   is_coinbase: number
 }
 
+/**
+ * One row per mined block: who mined it (`mined_by_key`: entity name, anonymous id, or wallet key) and optional
+ * coinbase outpoint. Drives “Mined by” on block details without scanning inferred tx metadata.
+ */
 interface LabMineOperationsTable {
   mine_operation_id: Generated<number>
   height: number
@@ -60,6 +81,10 @@ interface LabMineOperationsTable {
   created_at: string
 }
 
+/**
+ * One row per non-coinbase spend the app records at finalize/sign time: sender identity and change output hints.
+ * Replaces ad-hoc maps for change attribution after reload; `payload_json` holds extensible discriminator data.
+ */
 interface LabTxOperationsTable {
   tx_operation_id: Generated<number>
   txid: string
@@ -69,6 +94,7 @@ interface LabTxOperationsTable {
   payload_json: string
 }
 
+/** Table name → row shape for Kysely queries against the lab SQLite database. */
 export interface LabDatabase {
   blocks: BlocksTable
   utxos: UtxosTable
@@ -85,6 +111,7 @@ export interface LabDatabase {
 export type LabEntityRow = Selectable<LabEntitiesTable>
 export type NewLabEntityRow = Insertable<LabEntitiesTable>
 
+/** Confirmed blocks in lab chain order: hash, height, and opaque `block_data` from the WASM simulator. */
 interface BlocksTable {
   block_hash: string
   height: number
@@ -96,6 +123,7 @@ export type Block = Selectable<BlocksTable>
 export type NewBlock = Insertable<BlocksTable>
 export type BlockUpdate = Updateable<BlocksTable>
 
+/** Current UTXO set for the lab chain (one row per outpoint). Synced from block effects; backs balances and spend selection. */
 interface UtxosTable {
   utxo_id: Generated<number>
   txid: string
@@ -109,6 +137,7 @@ export type Utxo = Selectable<UtxosTable>
 export type NewUtxo = Insertable<UtxosTable>
 export type UtxoUpdate = Updateable<UtxosTable>
 
+/** Lab-generated receive addresses with WIF for signing in the simulator (distinct from main app wallet rows if applicable). */
 interface LabAddressesTable {
   lab_address_id: Generated<number>
   address: string

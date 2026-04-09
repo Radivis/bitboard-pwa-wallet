@@ -544,7 +544,8 @@ pub fn lab_block_hash(block_hex: &str) -> Result<String, JsValue> {
     Ok(block.block_hash().to_string())
 }
 
-/// Returns the effects of applying a block: new UTXOs, spent outpoints, and per-tx input refs.
+/// Returns the effects of applying a block: new UTXOs, spent outpoints, and per-tx summaries
+/// (including the coinbase as the first entry, with empty `inputs` in this encoding).
 /// Used by the worker to update in-memory state and build transaction history.
 #[wasm_bindgen]
 pub fn lab_block_effects(block_hex: &str) -> Result<JsValue, JsValue> {
@@ -588,7 +589,11 @@ pub fn lab_block_effects(block_hex: &str) -> Result<JsValue, JsValue> {
             });
         }
 
-        if tx_idx > 0 && !inputs.is_empty() {
+        // Include the coinbase (tx 0): it has no non-null prevouts, so `inputs` stays empty here.
+        // The frontend treats empty inputs as coinbase (see isCoinbaseFromBlockEffectsTx). Previously
+        // we skipped tx 0 entirely, which broke block tx lists when the mempool was empty and hid
+        // coinbase in multi-tx blocks because JS only synthesized when `transactions` was fully empty.
+        if tx_idx == 0 || !inputs.is_empty() {
             transactions.push(LabBlockEffectsTransaction {
                 txid: txid.clone(),
                 inputs,
