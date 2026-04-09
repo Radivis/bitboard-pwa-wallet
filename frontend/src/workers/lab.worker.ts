@@ -2,32 +2,12 @@ import { expose } from 'comlink'
 import type {
   LabAddress,
   LabBlockDetails,
-  LabBlockHeaderDetails,
-  LabBlockTransactionSummary,
   LabCurrentBlockTemplateParams,
-  LabBlock,
   LabMineBlocksResult,
   LabState,
   LabTxDetails,
-  LabUtxo,
-  MempoolEntry,
 } from './lab-api'
-import {
-  EMPTY_LAB_STATE,
-  LAB_MAX_BLOCKS_PER_MINE,
-  LAB_MIN_BLOCKS_PER_MINE,
-} from './lab-api'
-import {
-  isCoinbaseFromBlockEffectsTx,
-  LAB_COINBASE_PREV_TXID_HEX,
-  LAB_COINBASE_PREV_VOUT,
-  LAB_COINBASE_SEQUENCE,
-} from '@/lib/lab-operations'
-import {
-  mergeAddressesWithUtxos,
-  walletOwnerKey,
-  WALLET_OWNER_PREFIX,
-} from '@/lib/lab-utils'
+import { mergeAddressesWithUtxos, WALLET_OWNER_PREFIX } from '@/lib/lab-utils'
 import {
   amountSatsFromPpm,
   estimateRequiredFeeSats,
@@ -37,762 +17,33 @@ import {
   LAB_RANDOM_FEE_RATE_TENTHS_MIN,
   LAB_RANDOM_PPM_MAX,
   LAB_RANDOM_PPM_MIN,
+  LAB_RANDOM_TX_MAX_ATTEMPTS_DEFAULT,
 } from './lab-random-transactions'
-import { discardedMempoolConflictTxCount } from '@/lib/lab-mempool-mine-stats'
-
-let labWasmModule: typeof import('@/wasm-pkg/bitboard_crypto') | null = null
-
-async function getWasm() {
-  if (!labWasmModule) {
-    labWasmModule = await import('@/wasm-pkg/bitboard_crypto')
-  }
-  return labWasmModule
-}
-
-let state: LabState = { ...EMPTY_LAB_STATE }
-
-/**
- * Txid -> change output address for txs we create. Used when applying block effects so change
- * is attributed to the same owner as inputs. Rebuilt from persisted mempool on {@link loadState}
- * (the map itself is not part of {@link LabState} JSON).
- */
-const txidToChangeOutput = new Map<string, { address: string; vout: number | null }>()
-const DEFAULT_RANDOM_TX_MAX_ATTEMPTS = 500
-
-/** Bech32 (bc1/tb1/bcrt1) addresses can differ by case; BIP173 compares case-insensitively. */
-function labAddressesEqual(a: string, b: string): boolean {
-  if (a === b) return true
-  const x = a.trim()
-  const y = b.trim()
-  if (x === y) return true
-  if (/^(bc|tb|bcrt)1/i.test(x) && /^(bc|tb|bcrt)1/i.test(y)) {
-    return x.toLowerCase() === y.toLowerCase()
-  }
-  return false
-}
-
-/** Resolves owner when WASM-reported addresses differ in bech32 casing from stored map keys. */
-function lookupOwnerForLabAddress(
-  address: string,
-  addressToOwner: Record<string, string>,
-): string | undefined {
-  const direct = addressToOwner[address]
-  if (direct !== undefined) return direct
-  for (const [storedAddr, owner] of Object.entries(addressToOwner)) {
-    if (labAddressesEqual(storedAddr, address)) return owner
-  }
-  return undefined
-}
-
-/** Every lab transaction summary row must have a non-empty receiver (list UI + invariants). */
-function assertLabReceiverNonNull(
-  receiver: string | null | undefined,
-  context: string,
-): asserts receiver is string {
-  if (receiver == null || receiver === '') {
-    throw new Error(`${context}: receiver must not be null or empty`)
-  }
-}
-
-function rebuildTxidToChangeAddressFromMempool(mempool: MempoolEntry[]): void {
-  for (const entry of mempool) {
-    const changeVout = entry.outputsDetail.findIndex((o) => o.isChange)
-    if (changeVout >= 0) {
-      const changeOut = entry.outputsDetail[changeVout]
-      txidToChangeOutput.set(entry.txid, { address: changeOut.address, vout: changeVout })
-    }
-  }
-}
-
-function rebuildTxidToChangeAddressFromState(): void {
-  txidToChangeOutput.clear()
-  for (const op of state.txOperations ?? []) {
-    if (op.changeAddress) {
-      txidToChangeOutput.set(op.txid, {
-        address: op.changeAddress,
-        vout: op.changeVout ?? null,
-      })
-    }
-  }
-  rebuildTxidToChangeAddressFromMempool(state.mempool ?? [])
-}
-
-/**
- * Fills missing output owners for legacy rows where change was not linked (e.g. mined after
- * reload when txid→change map was empty). Requires one unowned output and at least one owned.
- */
-function inferMissingLabOutputOwners(tx: LabTxDetails): LabTxDetails {
-  if (tx.isCoinbase) return tx
-  const firstOwner = tx.inputs.find((i) => i.owner != null)?.owner ?? null
-  if (firstOwner == null) return tx
-  if (tx.inputs.some((i) => i.owner != null && i.owner !== firstOwner)) return tx
-
-  const outMissingOwner = tx.outputs.filter((o) => !o.owner)
-  const outWithOwner = tx.outputs.filter((o) => o.owner)
-  const existingChangeCount = tx.outputs.filter((o) => o.isChange).length
-  if (outMissingOwner.length !== 1 || outWithOwner.length < 1) return tx
-
-  const patchAddr = outMissingOwner[0].address
-  return {
-    ...tx,
-    outputs: tx.outputs.map((o) => {
-      if (o.owner != null) return o
-      if (labAddressesEqual(o.address, patchAddr)) {
-        // Legacy repair: only backfill missing owner. Do not mark additional outputs as change
-        // when a change output is already present, otherwise self-sends can show two "Change" badges.
-        if (existingChangeCount > 0) {
-          return { ...o, owner: firstOwner }
-        }
-        return { ...o, owner: firstOwner, isChange: true }
-      }
-      return o
-    }),
-  }
-}
-
-function parseWasmObject(val: unknown): Record<string, unknown> {
-  if (val != null && typeof val === 'object' && !Array.isArray(val)) {
-    return val as Record<string, unknown>
-  }
-  if (typeof val === 'string') {
-    try {
-      return JSON.parse(val) as Record<string, unknown>
-    } catch {
-      return {}
-    }
-  }
-  return {}
-}
-
-function parseTxOperationPayload(payloadJson: string | null | undefined): {
-  receiver?: string | null
-  primaryToAddress?: string | null
-} {
-  if (!payloadJson) return {}
-  try {
-    const parsed = JSON.parse(payloadJson) as Record<string, unknown>
-    return {
-      receiver: typeof parsed.receiver === 'string' ? parsed.receiver : null,
-      primaryToAddress:
-        typeof parsed.primaryToAddress === 'string' ? parsed.primaryToAddress : null,
-    }
-  } catch {
-    return {}
-  }
-}
-
-function randomIntInclusive(min: number, max: number): number {
-  return Math.floor(Math.random() * (max - min + 1)) + min
-}
-
-function selectMempoolTxsForBlock(mempool: MempoolEntry[]): MempoolEntry[] {
-  const sortedEntries = [...mempool].sort((a, b) => {
-    if (b.feeSats !== a.feeSats) return b.feeSats - a.feeSats
-    return a.txid.localeCompare(b.txid)
-  })
-  const spentBySelected = new Set<string>()
-  const selectedEntries: MempoolEntry[] = []
-  // Check for double spends
-  for (const entry of sortedEntries) {
-    const overlaps = entry.inputs.some((input) => spentBySelected.has(`${input.txid}:${input.vout}`))
-    if (!overlaps) {
-      selectedEntries.push(entry)
-      for (const input of entry.inputs) spentBySelected.add(`${input.txid}:${input.vout}`)
-    }
-  }
-  return selectedEntries
-}
-
-function getTip(): LabBlock | null {
-  if (state.blocks.length === 0) return null
-  return state.blocks[state.blocks.length - 1]
-}
-
-function hexToBytes(hex: string): Uint8Array {
-  const normalizedHex = hex.length % 2 === 0 ? hex : `0${hex}`
-  const out = new Uint8Array(normalizedHex.length / 2)
-  for (let i = 0; i < out.length; i += 1) {
-    out[i] = parseInt(normalizedHex.slice(i * 2, i * 2 + 2), 16)
-  }
-  return out
-}
-
-function bytesToHex(bytes: Uint8Array): string {
-  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')
-}
-
-function reverseHexByteOrder(hex: string): string {
-  return bytesToHex(hexToBytes(hex).reverse())
-}
-
-function readUint32Le(bytes: Uint8Array, offset: number): number {
-  return (
-    bytes[offset] |
-    (bytes[offset + 1] << 8) |
-    (bytes[offset + 2] << 16) |
-    (bytes[offset + 3] << 24)
-  ) >>> 0
-}
-
-async function sha256(data: Uint8Array): Promise<Uint8Array> {
-  const digest = await crypto.subtle.digest('SHA-256', new Uint8Array(data).buffer)
-  return new Uint8Array(digest)
-}
-
-async function doubleSha256(data: Uint8Array): Promise<Uint8Array> {
-  const first = await sha256(data)
-  return sha256(first)
-}
-
-function expandTargetFromBits(bits: number): string {
-  const exponent = bits >>> 24
-  const mantissa = bits & 0x007fffff
-  if (mantissa === 0) return '0'.repeat(64)
-  const shiftBytes = exponent - 3
-  const value = shiftBytes >= 0
-    ? BigInt(mantissa) << BigInt(8 * shiftBytes)
-    : BigInt(mantissa) >> BigInt(8 * -shiftBytes)
-  return value.toString(16).padStart(64, '0')
-}
-
-async function parseBlockHeader(blockHex: string): Promise<LabBlockHeaderDetails> {
-  const headerHex = blockHex.slice(0, 160)
-  const headerBytes = hexToBytes(headerHex)
-  if (headerBytes.length < 80) {
-    throw new Error('Block header must be 80 bytes')
-  }
-  const version = readUint32Le(headerBytes, 0)
-  const previousBlockHash = reverseHexByteOrder(headerHex.slice(8, 72))
-  const merkleRoot = reverseHexByteOrder(headerHex.slice(72, 136))
-  const timestamp = readUint32Le(headerBytes, 68)
-  const bits = readUint32Le(headerBytes, 72)
-  const nonce = readUint32Le(headerBytes, 76)
-  const targetBits = bits.toString(16).padStart(8, '0')
-  const targetExpanded = expandTargetFromBits(bits)
-  const blockHeaderHash = bytesToHex((await doubleSha256(headerBytes)).reverse())
-
-  return {
-    version,
-    previousBlockHash,
-    merkleRoot,
-    timestamp,
-    targetBits,
-    targetExpanded,
-    nonce,
-    blockHeaderHash,
-  }
-}
-
-interface BlockEffectsTx {
-  txid: string
-  inputs: { prev_txid: string; prev_vout: number }[]
-  outputs?: { address: string; amount_sats: number }[]
-}
-
-interface BlockEffectsParsed {
-  spent: { txid: string; vout: number }[]
-  new_utxos: { txid: string; vout: number; address: string; amount_sats: number; script_pubkey_hex: string }[]
-  transactions: BlockEffectsTx[]
-  block_time?: number
-}
-
-function parseBlockEffects(raw: unknown): BlockEffectsParsed {
-  if (typeof raw === 'string') {
-    try {
-      const parsed = JSON.parse(raw) as BlockEffectsParsed
-      return {
-        spent: Array.isArray(parsed?.spent) ? parsed.spent : [],
-        new_utxos: Array.isArray(parsed?.new_utxos) ? parsed.new_utxos : [],
-        transactions: Array.isArray(parsed?.transactions) ? parsed.transactions : [],
-        block_time: typeof parsed?.block_time === 'number' ? parsed.block_time : 0,
-      }
-    } catch {
-      return { spent: [], new_utxos: [], transactions: [], block_time: 0 }
-    }
-  }
-  const effects = raw as Record<string, unknown>
-  const spent = Array.isArray(effects?.spent) ? effects.spent : []
-  const new_utxos = Array.isArray(effects?.new_utxos) ? effects.new_utxos : []
-  const transactions = Array.isArray(effects?.transactions) ? effects.transactions : []
-  const block_time = typeof effects?.block_time === 'number' ? effects.block_time : 0
-  return { spent, new_utxos, transactions, block_time }
-}
-
-function removeSpentUtxos(spent: { txid: string; vout: number }[]): void {
-  for (const stxo of spent) {
-    state.utxos = state.utxos.filter((utxo) => !(utxo.txid === stxo.txid && utxo.vout === stxo.vout))
-  }
-}
-
-function readSatsFromUtxoRow(row: Record<string, unknown>): number {
-  const v = row.amount_sats ?? row.amountSats
-  if (typeof v === 'bigint') return Number(v)
-  if (typeof v === 'number' && Number.isFinite(v)) return Math.trunc(v)
-  return 0
-}
-
-function addNewUtxos(
-  newUtxos: {
-    txid: string
-    vout: number
-    address: string
-    amount_sats?: number
-    script_pubkey_hex?: string
-    amountSats?: number
-    scriptPubkeyHex?: string
-  }[],
-): void {
-  for (const utxo of newUtxos) {
-    const row = utxo as unknown as Record<string, unknown>
-    const addressStr = String(utxo.address)
-    state.utxos.push({
-      txid: String(utxo.txid),
-      vout: Number(utxo.vout),
-      address: addressStr,
-      amountSats: readSatsFromUtxoRow(row),
-      scriptPubkeyHex: String(
-        utxo.script_pubkey_hex ?? utxo.scriptPubkeyHex ?? '',
-      ),
-    })
-  }
-}
-
-/**
- * `state.utxos` is updated only after the full block; register this tx’s outputs so
- * later txs in the same block can resolve inputs against earlier block outputs.
- */
-function registerBlockTxOutputsInWorkingUtxoMap(
-  utxoMap: Map<string, LabUtxo>,
-  txid: string,
-  outputs: ReadonlyArray<{ address: string; amountSats: number }>,
-): void {
-  for (let vout = 0; vout < outputs.length; vout += 1) {
-    const o = outputs[vout]
-    utxoMap.set(`${txid}:${vout}`, {
-      txid,
-      vout,
-      address: o.address,
-      amountSats: o.amountSats,
-      scriptPubkeyHex: '',
-    })
-  }
-}
-
-function applyTransactionsAndDetailsFromBlock(
-  transactions: BlockEffectsTx[],
-  height: number,
-  blockTime: number,
-): void {
-  const utxoMap = new Map(state.utxos.map((utxo) => [`${utxo.txid}:${utxo.vout}`, utxo]))
-  const addressToOwner = state.addressToOwner ?? {}
-
-  for (const tx of transactions) {
-    const isCb = isCoinbaseFromBlockEffectsTx(tx)
-    const changeFromOp = state.txOperations?.find((o) => o.txid === tx.txid)
-    const txOperationPayload = parseTxOperationPayload(changeFromOp?.payloadJson)
-    const changeOutputForTx =
-      txidToChangeOutput.get(tx.txid) ??
-      (changeFromOp?.changeAddress
-        ? { address: changeFromOp.changeAddress, vout: changeFromOp.changeVout ?? null }
-        : undefined)
-
-    let inputs: LabTxDetails['inputs']
-    let firstInputAddress: string | null = null
-
-    if (isCb) {
-      inputs = [
-        {
-          address: '',
-          amountSats: 0,
-          owner: null,
-          prevTxid: LAB_COINBASE_PREV_TXID_HEX,
-          prevVout: LAB_COINBASE_PREV_VOUT,
-          sequence: LAB_COINBASE_SEQUENCE,
-        },
-      ]
-    } else {
-      inputs = []
-      for (const input of tx.inputs) {
-        const key = `${input.prev_txid}:${input.prev_vout}`
-        const utxo = utxoMap.get(key)
-        if (utxo) {
-          const owner = lookupOwnerForLabAddress(utxo.address, addressToOwner) ?? null
-          inputs.push({ address: utxo.address, amountSats: utxo.amountSats, owner })
-          if (firstInputAddress === null) firstInputAddress = utxo.address
-        }
-      }
-    }
-
-    const sender = isCb
-      ? null
-      : firstInputAddress
-        ? lookupOwnerForLabAddress(firstInputAddress, addressToOwner) ?? null
-        : null
-
-    const changeAddress = changeOutputForTx?.address
-    const changeVout = changeOutputForTx?.vout ?? null
-    const lastChangeAddressMatchIndex =
-      changeAddress == null
-        ? -1
-        : (tx.outputs ?? []).reduce(
-            (lastMatchIndex, output, index) =>
-              labAddressesEqual(output.address, changeAddress) ? index : lastMatchIndex,
-            -1,
-          )
-    const outputs = (tx.outputs ?? []).map((output, outputIndex) => {
-      const isAddressMatch =
-        changeAddress != null && labAddressesEqual(output.address, changeAddress)
-      // Prefer matching by change address: BDK may order outputs differently than our
-      // mempool metadata (add_recipient vs drain_to), so changeVout can be wrong.
-      const isChange =
-        changeAddress != null
-          ? isAddressMatch
-          : changeVout != null
-            ? outputIndex === changeVout
-            : isAddressMatch && outputIndex === lastChangeAddressMatchIndex
-      const owner = isChange && sender
-        ? sender
-        : (lookupOwnerForLabAddress(output.address, addressToOwner) ?? null)
-      if (isChange && sender) {
-        state.addressToOwner = state.addressToOwner ?? {}
-        state.addressToOwner[output.address] = sender
-      }
-      return {
-        address: output.address,
-        amountSats: output.amount_sats,
-        isChange,
-        owner,
-      }
-    })
-    const nonChangeOutputs = outputs.filter((output) => !output.isChange)
-    const firstNonChangeOutput = nonChangeOutputs[0]
-    let receiver = firstNonChangeOutput
-      ? (lookupOwnerForLabAddress(firstNonChangeOutput.address, addressToOwner) ?? null)
-      : null
-    const primaryFromOp = txOperationPayload.primaryToAddress?.trim() ?? ''
-    if (receiver === null && txOperationPayload.receiver && changeFromOp?.txid === tx.txid) {
-      // Prefer the vout whose address matches mempool `primaryToAddress` — WASM `isChange` can
-      // disagree with our mempool flags, and "only one !isChange" may then be the change output.
-      let payOutput: (typeof outputs)[0] | undefined
-      if (primaryFromOp !== '') {
-        payOutput = outputs.find((o) => labAddressesEqual(o.address, primaryFromOp))
-      }
-      if (payOutput == null && nonChangeOutputs.length === 1) {
-        payOutput = nonChangeOutputs[0]
-      }
-      if (payOutput != null) {
-        state.addressToOwner = state.addressToOwner ?? {}
-        state.addressToOwner[payOutput.address] = txOperationPayload.receiver
-        receiver = txOperationPayload.receiver
-      }
-    }
-    if (
-      firstNonChangeOutput &&
-      receiver === null &&
-      sender !== null &&
-      outputs.some(
-        (output) =>
-          output.isChange === true && labAddressesEqual(output.address, firstNonChangeOutput.address),
-      )
-    ) {
-      state.addressToOwner = state.addressToOwner ?? {}
-      state.addressToOwner[firstNonChangeOutput.address] = sender
-      receiver = sender
-    }
-    for (const output of outputs) {
-      if (!output.isChange && output.owner == null) {
-        const resolved = lookupOwnerForLabAddress(
-          output.address,
-          state.addressToOwner ?? {},
-        )
-        if (resolved != null) output.owner = resolved
-      }
-    }
-    for (const output of outputs) {
-      if (output.owner != null && output.owner !== '') {
-        state.addressToOwner = state.addressToOwner ?? {}
-        state.addressToOwner[output.address] = output.owner
-      }
-    }
-    if (isCb) {
-      assertLabReceiverNonNull(
-        receiver,
-        `applyTransactionsFromBlock coinbase txid=${tx.txid} height=${height}`,
-      )
-    } else {
-      assertLabReceiverNonNull(
-        receiver,
-        `applyTransactionsFromBlock txid=${tx.txid} height=${height}`,
-      )
-    }
-    state.transactions.push({
-      txid: tx.txid,
-      sender,
-      receiver,
-      isCoinbase: isCb,
-    })
-    if (inputs.length > 0 || outputs.length > 0) {
-      state.txDetails.push({
-        txid: tx.txid,
-        blockHeight: height,
-        blockTime,
-        confirmations: 0,
-        isCoinbase: isCb,
-        inputs,
-        outputs,
-      })
-    }
-    registerBlockTxOutputsInWorkingUtxoMap(utxoMap, tx.txid, outputs)
-    txidToChangeOutput.delete(tx.txid)
-  }
-}
-
-function synthesizeCoinbaseTxFromNewUtxos(
-  newUtxos: BlockEffectsParsed['new_utxos'],
-): BlockEffectsTx[] {
-  if (!Array.isArray(newUtxos) || newUtxos.length === 0) return []
-  const byTxid = new Map<string, BlockEffectsParsed['new_utxos']>()
-  for (const u of newUtxos) {
-    const txid = String(u.txid)
-    const list = byTxid.get(txid) ?? []
-    list.push(u)
-    byTxid.set(txid, list)
-  }
-  const firstTxid = String(newUtxos[0].txid)
-  const rows = byTxid.get(firstTxid) ?? []
-  return [
-    {
-      txid: firstTxid,
-      inputs: [],
-      outputs: rows.map((u) => {
-        const row = u as unknown as Record<string, unknown>
-        return {
-          address: String(u.address),
-          amount_sats: readSatsFromUtxoRow(row),
-        }
-      }),
-    },
-  ]
-}
-
-function applyBlockEffects(blockHex: string, height: number, newAddress?: LabAddress): void {
-  const wasmModule = labWasmModule!
-  const rawEffects = wasmModule.lab_block_effects(blockHex)
-  const effects = parseBlockEffects(rawEffects)
-  const { spent, new_utxos: newUtxos, block_time } = effects
-  let { transactions } = effects
-  const blockTime = block_time ?? 0
-
-  if (transactions.length === 0 && newUtxos.length > 0) {
-    transactions = synthesizeCoinbaseTxFromNewUtxos(newUtxos)
-  }
-
-  applyTransactionsAndDetailsFromBlock(transactions, height, blockTime)
-  removeSpentUtxos(spent)
-  addNewUtxos(newUtxos)
-  if (newAddress) {
-    state.addresses.push(newAddress)
-  }
-
-  const blockHash = wasmModule.lab_block_hash(blockHex)
-  state.blocks.push({
-    blockHash,
-    height,
-    blockData: blockHex,
-  })
-}
-
-function feeFromTxDetails(tx: LabTxDetails): number {
-  if (tx.isCoinbase) return 0
-  const totalInputs = tx.inputs.reduce((sum, input) => sum + input.amountSats, 0)
-  const totalOutputs = tx.outputs.reduce((sum, output) => sum + output.amountSats, 0)
-  return Math.max(totalInputs - totalOutputs, 0)
-}
-
-function minedByFromBlockTxs(
-  blockTxs: LabTxDetails[],
-  addressToOwner: Record<string, string>,
-): string | null {
-  const coinbase = blockTxs.find((tx) => tx.isCoinbase || tx.inputs.length === 0)
-  const out0 = coinbase?.outputs[0]
-  if (!out0) return null
-  const fromStoredDetail = out0.owner ?? null
-  if (fromStoredDetail) return fromStoredDetail
-  return lookupOwnerForLabAddress(out0.address, addressToOwner) ?? null
-}
-
-function minedByForBlockHeight(height: number): string | null {
-  const op = state.mineOperations?.find((m) => m.height === height)
-  if (op != null && op.minedByKey != null && op.minedByKey !== '') {
-    return op.minedByKey
-  }
-  const blockTxs = state.txDetails.filter((tx) => tx.blockHeight === height)
-  return minedByFromBlockTxs(blockTxs, state.addressToOwner ?? {})
-}
-
-function blockTransactionsForHeight(height: number): LabBlockTransactionSummary[] {
-  const txRecordByTxid = new Map(state.transactions.map((tx) => [tx.txid, tx]))
-  return state.txDetails
-    .filter((tx) => tx.blockHeight === height)
-    .map((tx) => {
-      const txRecord = txRecordByTxid.get(tx.txid)
-      return {
-        txid: tx.txid,
-        sender: txRecord?.sender ?? null,
-        receiver: txRecord?.receiver ?? null,
-        feeSats: feeFromTxDetails(tx),
-        isCoinbase: tx.isCoinbase,
-      }
-    })
-}
-
-/**
- * Resolves coinbase recipient and template "mined by" label without mutating lab state.
- * Mirrors {@link mineBlocks} branching (entity → explicit target → anonymous lab entity).
- */
-async function resolveTemplateCoinbase(
-  params: LabCurrentBlockTemplateParams,
-  wasmModule: Awaited<ReturnType<typeof getWasm>>,
-): Promise<{ address: string; minedBy: string | null }> {
-  const labNetwork = params.labNetwork ?? 'regtest'
-  const labAddressType = params.labAddressType ?? 'segwit'
-
-  const targetArg =
-    params.ownerType === 'wallet'
-      ? (params.walletCurrentAddress ?? '').trim()
-      : params.targetAddress.trim()
-
-  const entityNameOpt =
-    params.ownerType === 'name' ? (params.ownerName?.trim() ?? '') : ''
-
-  const firstAddressFromNewEntityWallet = (): string => {
-    const mnemonic = wasmModule.generate_mnemonic(12)
-    const createdRaw = wasmModule.create_lab_entity_wallet(
-      mnemonic,
-      labNetwork,
-      labAddressType,
-      0,
-    )
-    const cr = parseWasmObject(createdRaw)
-    const first = String(cr.first_address ?? '')
-    if (!first) {
-      throw new Error('Lab entity wallet creation failed (no first address)')
-    }
-    return first
-  }
-
-  if (entityNameOpt !== '') {
-    const entity = state.entities.find((e) => e.entityName === entityNameOpt)
-    if (entity) {
-      return {
-        address: wasmModule.lab_entity_get_current_external_address(
-          entity.mnemonic,
-          entity.changesetJson,
-          entity.network,
-          entity.addressType,
-          entity.accountId,
-        ),
-        minedBy: entityNameOpt,
-      }
-    }
-    return {
-      address: firstAddressFromNewEntityWallet(),
-      minedBy: entityNameOpt,
-    }
-  }
-
-  if (targetArg !== '') {
-    const minedBy =
-      params.ownerType === 'wallet' && params.ownerWalletId != null
-        ? walletOwnerKey(params.ownerWalletId)
-        : null
-    return { address: targetArg, minedBy }
-  }
-
-  const anonymousName = `Anonymous-${crypto.randomUUID()}`
-  return {
-    address: firstAddressFromNewEntityWallet(),
-    minedBy: anonymousName,
-  }
-}
-
-async function buildMinedBlockDetails(block: LabBlock): Promise<LabBlockDetails> {
-  const header = await parseBlockHeader(block.blockData)
-  const blockTxDetails = state.txDetails.filter((tx) => tx.blockHeight === block.height)
-  const transactions = blockTransactionsForHeight(block.height)
-  const totalFeesSats = transactions.reduce((sum, tx) => sum + tx.feeSats, 0)
-
-  return {
-    isTemplate: false,
-    header,
-    metadata: {
-      height: block.height,
-      minedOn: blockTxDetails[0]?.blockTime ?? header.timestamp,
-      minedBy: minedByForBlockHeight(block.height),
-      numberOfTransactions: transactions.length,
-      totalFeesSats,
-    },
-    transactions,
-  }
-}
-
-async function buildCurrentBlockTemplate(
-  params: LabCurrentBlockTemplateParams,
-): Promise<LabBlockDetails> {
-  const wasmModule = await getWasm()
-  const tip = getTip()
-  const previewHeight = tip ? tip.height + 1 : 0
-  const previousHash = tip?.blockHash ?? ''
-
-  const selectedEntries = selectMempoolTxsForBlock([...(state.mempool ?? [])])
-  const mempoolTxHexes = selectedEntries.map((entry) => entry.signedTxHex)
-  const totalFeesSats = selectedEntries.reduce((sum, entry) => sum + entry.feeSats, 0)
-
-  const { address: targetAddress, minedBy } = await resolveTemplateCoinbase(params, wasmModule)
-
-  const coinbaseScriptPubkeyHex = wasmModule.lab_address_to_script_pubkey_hex(targetAddress)
-  const blockHex = wasmModule.lab_mine_block(
-    previousHash,
-    previewHeight,
-    coinbaseScriptPubkeyHex,
-    mempoolTxHexes,
-    BigInt(totalFeesSats),
-  )
-  const header = await parseBlockHeader(blockHex)
-  const rawEffects = wasmModule.lab_block_effects(blockHex)
-  const previewEffects = parseBlockEffects(rawEffects)
-  const entryByTxid = new Map(selectedEntries.map((entry) => [entry.txid, entry]))
-
-  const transactions: LabBlockTransactionSummary[] = previewEffects.transactions.map((tx) => {
-    const matchedEntry = entryByTxid.get(tx.txid)
-    const isCoinbase = isCoinbaseFromBlockEffectsTx(tx)
-    return {
-      txid: tx.txid,
-      sender: matchedEntry?.sender ?? null,
-      receiver: isCoinbase ? minedBy : (matchedEntry?.receiver ?? null),
-      feeSats: matchedEntry?.feeSats ?? 0,
-      isCoinbase,
-    }
-  })
-
-  return {
-    isTemplate: true,
-    header,
-    metadata: {
-      height: previewHeight,
-      minedOn: header.timestamp,
-      minedBy,
-      numberOfTransactions: transactions.length,
-      totalFeesSats,
-    },
-    transactions,
-  }
-}
+import { appendLabTxOperationAndMempoolEntry } from './lab-append-mempool'
+import {
+  buildCurrentBlockTemplate,
+  buildMinedBlockDetails,
+  getTip,
+  randomIntInclusive,
+} from './lab-mining-template'
+import { executeMineBlocks } from './lab-mine-blocks'
+import { getWasm } from './lab-wasm-loader'
+import { utxosToJsonForLabWasm } from './lab-wasm-utxos'
+import {
+  assertLabReceiverNonNull,
+  inferMissingLabOutputOwners,
+  labAddressesEqual,
+  lookupOwnerForLabAddress,
+  parseWasmObject,
+  rebuildTxidToChangeAddressFromState,
+  replaceLabWorkerState,
+  state,
+} from './lab-worker-state'
 
 const labService = {
   async loadState(newState: LabState): Promise<void> {
     const cloned = JSON.parse(JSON.stringify(newState)) as LabState
-    state = {
+    replaceLabWorkerState({
       blocks: cloned.blocks ?? [],
       utxos: cloned.utxos ?? [],
       addresses: cloned.addresses ?? [],
@@ -803,7 +54,7 @@ const labService = {
       txDetails: cloned.txDetails ?? [],
       mineOperations: cloned.mineOperations ?? [],
       txOperations: cloned.txOperations ?? [],
-    }
+    })
     rebuildTxidToChangeAddressFromState()
   },
 
@@ -864,186 +115,9 @@ const labService = {
       labNetwork?: string
     },
   ): Promise<LabMineBlocksResult> {
-    if (
-      !Number.isInteger(blockCountToMine) ||
-      blockCountToMine < LAB_MIN_BLOCKS_PER_MINE ||
-      blockCountToMine > LAB_MAX_BLOCKS_PER_MINE
-    ) {
-      throw new Error(
-        `Block count must be an integer from ${LAB_MIN_BLOCKS_PER_MINE} to ${LAB_MAX_BLOCKS_PER_MINE} (inclusive)`,
-      )
-    }
-
-    const wasmModule = await getWasm()
-    const tip = getTip()
-
-    let prevHash = ''
-    let height = 0
-    if (tip) {
-      prevHash = tip.blockHash
-      height = tip.height + 1
-    }
-
-    const labNetwork = options?.labNetwork ?? 'regtest'
-    const labAddressType = options?.labAddressType ?? 'segwit'
-    const entityNameOpt = options?.ownerName?.trim()
-
-    let coinbaseScriptPubkeyHex: string
-    let newAddress: LabAddress | null = null
-    let coinbaseAddress: string
-    /** Lab entity name to record for coinbase ownership (not used for wallet or bare target). */
-    let ownerForCoinbase: string | undefined
-
-    if (entityNameOpt != null && entityNameOpt !== '' && options?.ownerWalletId == null) {
-      let entity = state.entities.find((e) => e.entityName === entityNameOpt)
-      const now = new Date().toISOString()
-      if (!entity) {
-        const mnemonic = wasmModule.generate_mnemonic(12)
-        const createdRaw = wasmModule.create_lab_entity_wallet(
-          mnemonic,
-          labNetwork,
-          labAddressType,
-          0,
-        )
-        const cr = parseWasmObject(createdRaw)
-        entity = {
-          entityName: entityNameOpt,
-          mnemonic,
-          changesetJson: String(cr.changeset_json ?? ''),
-          externalDescriptor: String(cr.external_descriptor ?? ''),
-          internalDescriptor: String(cr.internal_descriptor ?? ''),
-          network: labNetwork,
-          addressType: labAddressType,
-          accountId: 0,
-          createdAt: now,
-          updatedAt: now,
-        }
-        state.entities.push(entity)
-        coinbaseAddress = String(cr.first_address ?? '')
-        if (!coinbaseAddress) {
-          throw new Error('Lab entity wallet creation failed (no first address)')
-        }
-      } else {
-        coinbaseAddress = wasmModule.lab_entity_get_current_external_address(
-          entity.mnemonic,
-          entity.changesetJson,
-          entity.network,
-          entity.addressType,
-          entity.accountId,
-        )
-      }
-      coinbaseScriptPubkeyHex = wasmModule.lab_address_to_script_pubkey_hex(coinbaseAddress)
-      newAddress = null
-      ownerForCoinbase = entityNameOpt
-    } else if (targetAddress.trim()) {
-      coinbaseAddress = targetAddress.trim()
-      coinbaseScriptPubkeyHex = wasmModule.lab_address_to_script_pubkey_hex(coinbaseAddress)
-      newAddress = null
-    } else {
-      const anonymousName = `Anonymous-${crypto.randomUUID()}`
-      const now = new Date().toISOString()
-      const mnemonic = wasmModule.generate_mnemonic(12)
-      const createdRaw = wasmModule.create_lab_entity_wallet(
-        mnemonic,
-        labNetwork,
-        labAddressType,
-        0,
-      )
-      const cr = parseWasmObject(createdRaw)
-      const entity = {
-        entityName: anonymousName,
-        mnemonic,
-        changesetJson: String(cr.changeset_json ?? ''),
-        externalDescriptor: String(cr.external_descriptor ?? ''),
-        internalDescriptor: String(cr.internal_descriptor ?? ''),
-        network: labNetwork,
-        addressType: labAddressType,
-        accountId: 0,
-        createdAt: now,
-        updatedAt: now,
-      }
-      state.entities.push(entity)
-      coinbaseAddress = String(cr.first_address ?? '')
-      if (!coinbaseAddress) {
-        throw new Error('Anonymous lab entity wallet creation failed (no first address)')
-      }
-      coinbaseScriptPubkeyHex = wasmModule.lab_address_to_script_pubkey_hex(coinbaseAddress)
-      newAddress = null
-      ownerForCoinbase = anonymousName
-    }
-
-    if (options?.ownerWalletId != null) {
-      state.addressToOwner = state.addressToOwner ?? {}
-      state.addressToOwner[coinbaseAddress] = walletOwnerKey(options.ownerWalletId)
-    } else if (ownerForCoinbase != null) {
-      state.addressToOwner = state.addressToOwner ?? {}
-      state.addressToOwner[coinbaseAddress] = ownerForCoinbase
-    }
-
-    const minedByKey: string | null =
-      options?.ownerWalletId != null
-        ? walletOwnerKey(options.ownerWalletId)
-        : ownerForCoinbase ?? null
-
-    const mempoolCopy = [...(state.mempool ?? [])]
-    const selectedEntries = selectMempoolTxsForBlock(mempoolCopy)
-    const mempoolTxHexes = selectedEntries.map((entry) => entry.signedTxHex)
-    const totalFeesSats = selectedEntries.reduce((sum, entry) => sum + entry.feeSats, 0)
-    const spentByIncluded = new Set(
-      selectedEntries.flatMap((entry) => entry.inputs.map((input) => `${input.txid}:${input.vout}`)),
+    return executeMineBlocks(blockCountToMine, targetAddress, options, () =>
+      labService.getStateSnapshot(),
     )
-
-    for (let i = 0; i < blockCountToMine; i++) {
-      const txsForBlock = i === 0 ? mempoolTxHexes : []
-      const feesForBlock = BigInt(i === 0 ? totalFeesSats : 0)
-      const blockHex = wasmModule.lab_mine_block(
-        prevHash,
-        height,
-        coinbaseScriptPubkeyHex,
-        txsForBlock,
-        feesForBlock,
-      )
-      applyBlockEffects(blockHex, height, i === 0 ? newAddress ?? undefined : undefined)
-      const minedAtHeight = height
-      const tipAfter = getTip()!
-      const coinbaseDetail = state.txDetails.find(
-        (d) => d.blockHeight === minedAtHeight && d.isCoinbase,
-      )
-      state.mineOperations = state.mineOperations ?? []
-      state.mineOperations.push({
-        height: minedAtHeight,
-        blockHash: tipAfter.blockHash,
-        minedByKey,
-        coinbaseTxid: coinbaseDetail?.txid ?? null,
-        coinbaseVout: 0,
-        createdAt: new Date().toISOString(),
-      })
-      if (i === 0) {
-        state.mempool = (state.mempool ?? []).filter(
-          (entry) =>
-            !selectedEntries.some((selectedEntry) => selectedEntry.txid === entry.txid) &&
-            !entry.inputs.some((input) => spentByIncluded.has(`${input.txid}:${input.vout}`)),
-        )
-      }
-      if (i > 0) newAddress = null
-      const newTip = getTip()!
-      prevHash = newTip.blockHash
-      height = newTip.height + 1
-    }
-
-    const includedMempoolTxCount = selectedEntries.length
-    const mempoolSizeAfterFirstBlock = (state.mempool ?? []).length
-    const discardedConflictTxCount = discardedMempoolConflictTxCount({
-      mempoolSizeBefore: mempoolCopy.length,
-      mempoolSizeAfterFirstBlock,
-      includedMempoolTxCount,
-    })
-
-    return {
-      state: await this.getStateSnapshot(),
-      includedMempoolTxCount,
-      discardedConflictTxCount,
-    }
   },
 
   async prepareLabEntityTransaction(params: {
@@ -1052,7 +126,6 @@ const labService = {
     toAddress: string
     amountSats: number
     feeRateSatPerVb: number
-    /** When the UI knows the recipient (e.g. pay to active wallet receive addr before it is in lab DB). */
     knownRecipientOwner?: string | null
   }): Promise<{
     crypto: import('./lab-api').LabEntityTransactionCryptoParams
@@ -1079,15 +152,7 @@ const labService = {
       throw new Error('No UTXOs for the selected from address')
     }
 
-    const utxosJson = JSON.stringify(
-      fromUtxos.map((utxo) => ({
-        txid: utxo.txid,
-        vout: utxo.vout,
-        amount_sats: utxo.amountSats,
-        script_pubkey_hex: utxo.scriptPubkeyHex,
-        address: utxo.address,
-      })),
-    )
+    const utxosJson = utxosToJsonForLabWasm(fromUtxos)
 
     const sender = entityName
     const knownRecipient = params.knownRecipientOwner?.trim() || null
@@ -1147,7 +212,7 @@ const labService = {
     params?: import('./lab-api').PrepareRandomLabEntityTransactionParams,
   ): Promise<import('./lab-api').PrepareRandomLabEntityTransactionResult | null> {
     const wasmModule = await getWasm()
-    const maxAttempts = Math.max(1, params?.maxAttempts ?? DEFAULT_RANDOM_TX_MAX_ATTEMPTS)
+    const maxAttempts = Math.max(1, params?.maxAttempts ?? LAB_RANDOM_TX_MAX_ATTEMPTS_DEFAULT)
     const addressToOwner = state.addressToOwner ?? {}
     const sourceEntities = state.entities.filter((entity) => {
       return state.utxos.some((utxo) => addressToOwner[utxo.address] === entity.entityName)
@@ -1253,32 +318,15 @@ const labService = {
     const changeOut = mempoolMetadata.hasChange
       ? mempoolMetadata.outputsDetail.find((o) => o.isChange)
       : undefined
-
-    state.txOperations = state.txOperations ?? []
     const changeVout = mempoolMetadata.outputsDetail.findIndex((o) => o.isChange)
-    const primaryToAddress = mempoolMetadata.outputsDetail.find((o) => !o.isChange)?.address ?? null
-    state.txOperations.push({
+
+    appendLabTxOperationAndMempoolEntry({
+      signedTxHex,
       txid,
+      mempoolMetadata,
       senderKey: entityName,
       changeAddress: changeOut?.address ?? null,
       changeVout: changeVout >= 0 ? changeVout : null,
-      payloadJson: JSON.stringify({
-        receiver: mempoolMetadata.receiver,
-        primaryToAddress,
-      }),
-    })
-    rebuildTxidToChangeAddressFromState()
-
-    state.mempool = state.mempool ?? []
-    state.mempool.push({
-      signedTxHex,
-      txid,
-      sender: mempoolMetadata.sender,
-      receiver: mempoolMetadata.receiver,
-      feeSats: mempoolMetadata.feeSats,
-      inputs: mempoolMetadata.inputs,
-      inputsDetail: mempoolMetadata.inputsDetail,
-      outputsDetail: mempoolMetadata.outputsDetail,
     })
 
     return this.getStateSnapshot()
@@ -1309,15 +357,7 @@ const labService = {
       )
     }
 
-    const utxosJson = JSON.stringify(
-      fromUtxos.map((utxo) => ({
-        txid: utxo.txid,
-        vout: utxo.vout,
-        amount_sats: utxo.amountSats,
-        script_pubkey_hex: utxo.scriptPubkeyHex,
-        address: utxo.address,
-      })),
-    )
+    const utxosJson = utxosToJsonForLabWasm(fromUtxos)
 
     const sender = walletOwner
     const knownRecipient = params.knownRecipientOwner?.trim() || null
@@ -1375,32 +415,14 @@ const labService = {
       `addSignedTransactionToMempool txid=${txid}`,
     )
 
-    const senderKey = mempoolMetadata.sender ?? ''
     const changeVout = mempoolMetadata.outputsDetail.findIndex((o) => o.isChange)
-    const primaryToAddress = mempoolMetadata.outputsDetail.find((o) => !o.isChange)?.address ?? null
-    state.txOperations = state.txOperations ?? []
-    state.txOperations.push({
-      txid,
-      senderKey,
-      changeAddress: mempoolMetadata.hasChange ? mempoolMetadata.walletChangeAddress : null,
-      changeVout: changeVout >= 0 ? changeVout : null,
-      payloadJson: JSON.stringify({
-        receiver: mempoolMetadata.receiver,
-        primaryToAddress,
-      }),
-    })
-    rebuildTxidToChangeAddressFromState()
-
-    state.mempool = state.mempool ?? []
-    state.mempool.push({
+    appendLabTxOperationAndMempoolEntry({
       signedTxHex,
       txid,
-      sender: mempoolMetadata.sender,
-      receiver: mempoolMetadata.receiver,
-      feeSats: mempoolMetadata.feeSats,
-      inputs: mempoolMetadata.inputs,
-      inputsDetail: mempoolMetadata.inputsDetail,
-      outputsDetail: mempoolMetadata.outputsDetail,
+      mempoolMetadata,
+      senderKey: mempoolMetadata.sender ?? '',
+      changeAddress: mempoolMetadata.hasChange ? mempoolMetadata.walletChangeAddress : null,
+      changeVout: changeVout >= 0 ? changeVout : null,
     })
 
     return this.getStateSnapshot()

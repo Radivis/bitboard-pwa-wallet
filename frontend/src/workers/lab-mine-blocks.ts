@@ -1,0 +1,175 @@
+import { discardedMempoolConflictTxCount } from '@/lib/lab-mempool-mine-stats'
+import { walletOwnerKey } from '@/lib/lab-utils'
+import type { LabAddress, LabMineBlocksResult, LabState } from './lab-api'
+import {
+  LAB_MAX_BLOCKS_PER_MINE,
+  LAB_MIN_BLOCKS_PER_MINE,
+} from './lab-api'
+import { applyBlockEffects } from './lab-block-effects'
+import { createAndRegisterLabEntityFromWasm } from './lab-entity-creation'
+import { getTip, selectMempoolTxsForBlock } from './lab-mining-template'
+import { getWasm } from './lab-wasm-loader'
+import { state } from './lab-worker-state'
+
+export async function executeMineBlocks(
+  blockCountToMine: number,
+  targetAddress: string,
+  options:
+    | {
+        ownerName?: string
+        ownerWalletId?: number
+        labAddressType?: string
+        labNetwork?: string
+      }
+    | undefined,
+  getStateSnapshot: () => Promise<LabState>,
+): Promise<LabMineBlocksResult> {
+  if (
+    !Number.isInteger(blockCountToMine) ||
+    blockCountToMine < LAB_MIN_BLOCKS_PER_MINE ||
+    blockCountToMine > LAB_MAX_BLOCKS_PER_MINE
+  ) {
+    throw new Error(
+      `Block count must be an integer from ${LAB_MIN_BLOCKS_PER_MINE} to ${LAB_MAX_BLOCKS_PER_MINE} (inclusive)`,
+    )
+  }
+
+  const wasmModule = await getWasm()
+  const tip = getTip()
+
+  let prevHash = ''
+  let height = 0
+  if (tip) {
+    prevHash = tip.blockHash
+    height = tip.height + 1
+  }
+
+  const labNetwork = options?.labNetwork ?? 'regtest'
+  const labAddressType = options?.labAddressType ?? 'segwit'
+  const entityNameOpt = options?.ownerName?.trim()
+
+  let coinbaseScriptPubkeyHex: string
+  let newAddress: LabAddress | null = null
+  let coinbaseAddress: string
+  /** Lab entity name to record for coinbase ownership (not used for wallet or bare target). */
+  let ownerForCoinbase: string | undefined
+
+  if (entityNameOpt != null && entityNameOpt !== '' && options?.ownerWalletId == null) {
+    let entity = state.entities.find((e) => e.entityName === entityNameOpt)
+    const now = new Date().toISOString()
+    if (!entity) {
+      coinbaseAddress = createAndRegisterLabEntityFromWasm(wasmModule, {
+        entityName: entityNameOpt,
+        labNetwork,
+        labAddressType,
+        nowIso: now,
+        noAddressErrorMessage: 'Lab entity wallet creation failed (no first address)',
+      })
+      entity = state.entities.find((e) => e.entityName === entityNameOpt)
+      if (!entity) {
+        throw new Error('Lab entity registration failed after wallet creation')
+      }
+    } else {
+      coinbaseAddress = wasmModule.lab_entity_get_current_external_address(
+        entity.mnemonic,
+        entity.changesetJson,
+        entity.network,
+        entity.addressType,
+        entity.accountId,
+      )
+    }
+    coinbaseScriptPubkeyHex = wasmModule.lab_address_to_script_pubkey_hex(coinbaseAddress)
+    newAddress = null
+    ownerForCoinbase = entityNameOpt
+  } else if (targetAddress.trim()) {
+    coinbaseAddress = targetAddress.trim()
+    coinbaseScriptPubkeyHex = wasmModule.lab_address_to_script_pubkey_hex(coinbaseAddress)
+    newAddress = null
+  } else {
+    const anonymousName = `Anonymous-${crypto.randomUUID()}`
+    const now = new Date().toISOString()
+    coinbaseAddress = createAndRegisterLabEntityFromWasm(wasmModule, {
+      entityName: anonymousName,
+      labNetwork,
+      labAddressType,
+      nowIso: now,
+      noAddressErrorMessage: 'Anonymous lab entity wallet creation failed (no first address)',
+    })
+    coinbaseScriptPubkeyHex = wasmModule.lab_address_to_script_pubkey_hex(coinbaseAddress)
+    newAddress = null
+    ownerForCoinbase = anonymousName
+  }
+
+  if (options?.ownerWalletId != null) {
+    state.addressToOwner = state.addressToOwner ?? {}
+    state.addressToOwner[coinbaseAddress] = walletOwnerKey(options.ownerWalletId)
+  } else if (ownerForCoinbase != null) {
+    state.addressToOwner = state.addressToOwner ?? {}
+    state.addressToOwner[coinbaseAddress] = ownerForCoinbase
+  }
+
+  const minedByKey: string | null =
+    options?.ownerWalletId != null
+      ? walletOwnerKey(options.ownerWalletId)
+      : ownerForCoinbase ?? null
+
+  const mempoolCopy = [...(state.mempool ?? [])]
+  const selectedEntries = selectMempoolTxsForBlock(mempoolCopy)
+  const mempoolTxHexes = selectedEntries.map((entry) => entry.signedTxHex)
+  const totalFeesSats = selectedEntries.reduce((sum, entry) => sum + entry.feeSats, 0)
+  const spentByIncluded = new Set(
+    selectedEntries.flatMap((entry) => entry.inputs.map((input) => `${input.txid}:${input.vout}`)),
+  )
+
+  for (let i = 0; i < blockCountToMine; i++) {
+    const txsForBlock = i === 0 ? mempoolTxHexes : []
+    const feesForBlock = BigInt(i === 0 ? totalFeesSats : 0)
+    const blockHex = wasmModule.lab_mine_block(
+      prevHash,
+      height,
+      coinbaseScriptPubkeyHex,
+      txsForBlock,
+      feesForBlock,
+    )
+    applyBlockEffects(wasmModule, blockHex, height, i === 0 ? newAddress ?? undefined : undefined)
+    const minedAtHeight = height
+    const tipAfter = getTip()!
+    const coinbaseDetail = state.txDetails.find(
+      (d) => d.blockHeight === minedAtHeight && d.isCoinbase,
+    )
+    state.mineOperations = state.mineOperations ?? []
+    state.mineOperations.push({
+      height: minedAtHeight,
+      blockHash: tipAfter.blockHash,
+      minedByKey,
+      coinbaseTxid: coinbaseDetail?.txid ?? null,
+      coinbaseVout: 0,
+      createdAt: new Date().toISOString(),
+    })
+    if (i === 0) {
+      state.mempool = (state.mempool ?? []).filter(
+        (entry) =>
+          !selectedEntries.some((selectedEntry) => selectedEntry.txid === entry.txid) &&
+          !entry.inputs.some((input) => spentByIncluded.has(`${input.txid}:${input.vout}`)),
+      )
+    }
+    if (i > 0) newAddress = null
+    const newTip = getTip()!
+    prevHash = newTip.blockHash
+    height = newTip.height + 1
+  }
+
+  const includedMempoolTxCount = selectedEntries.length
+  const mempoolSizeAfterFirstBlock = (state.mempool ?? []).length
+  const discardedConflictTxCount = discardedMempoolConflictTxCount({
+    mempoolSizeBefore: mempoolCopy.length,
+    mempoolSizeAfterFirstBlock,
+    includedMempoolTxCount,
+  })
+
+  return {
+    state: await getStateSnapshot(),
+    includedMempoolTxCount,
+    discardedConflictTxCount,
+  }
+}

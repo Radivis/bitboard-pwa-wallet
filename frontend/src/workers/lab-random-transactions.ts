@@ -8,6 +8,9 @@ export const LAB_RANDOM_FEE_RATE_TENTHS_MAX = 100
 export const LAB_RANDOM_PPM_MIN = 1
 export const LAB_RANDOM_PPM_MAX = 1_000_000
 
+/** Default cap for random lab entity transaction generation attempts (see lab worker). */
+export const LAB_RANDOM_TX_MAX_ATTEMPTS_DEFAULT = 500
+
 export function feeRateSatPerVbFromRandomRoll(roll: number): number {
   return roll / 10
 }
