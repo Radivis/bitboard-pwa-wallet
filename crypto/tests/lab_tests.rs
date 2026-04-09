@@ -162,11 +162,21 @@ fn lab_mine_block_micro_pow_hash_starts_with_00() {
         .expect("mine block with micro-pow");
     let block: bitcoin::Block = deserialize_hex(&block_hex).expect("deserialize mined block");
     let block_hash_hex = block.block_hash().to_string();
+    let compact_target = bitcoin::Target::from_compact(block.header.bits);
 
     assert!(
         block_hash_hex.starts_with("00"),
         "micro-pow requires block hash starting with 00, got {}",
         block_hash_hex
+    );
+    assert!(
+        compact_target.is_met_by(block.block_hash()),
+        "mined block hash must satisfy header bits target"
+    );
+    assert_eq!(
+        block.header.bits.to_consensus(),
+        0x2000ffff,
+        "lab micro-pow bits should remain consistent"
     );
 }
 

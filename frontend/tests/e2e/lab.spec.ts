@@ -265,7 +265,12 @@ test.describe('Lab', { tag: '@lab' }, () => {
       .getByRole('main')
       .locator('p', { hasText: /^Nonce$/ })
       .locator('xpath=following-sibling::p[1]')
-    await expect(nonceValue).not.toHaveText('0')
+    await expect(nonceValue).toContainText(/^\d+$/)
+    const targetValue = page
+      .getByRole('main')
+      .locator('p', { hasText: /^Target$/ })
+      .locator('xpath=following-sibling::p[1]')
+    await expect(targetValue).toContainText(/bits=2000ffff/i)
     const headerHashValue = page
       .getByRole('main')
       .locator('p', { hasText: /^Block header hash$/ })

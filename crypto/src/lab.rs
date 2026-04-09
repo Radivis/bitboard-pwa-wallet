@@ -16,7 +16,7 @@ use bitcoin::secp256k1::{Message, Secp256k1, SecretKey};
 use bitcoin::sighash::{EcdsaSighashType, Prevouts, SighashCache, TapSighashType};
 use bitcoin::{
     Address, Amount, Block, BlockHash, CompactTarget, CompressedPublicKey, FeeRate, Network,
-    Transaction, TxIn, TxMerkleNode, TxOut, Txid, transaction,
+    Target, Transaction, TxIn, TxMerkleNode, TxOut, Txid, transaction,
 };
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
@@ -25,8 +25,7 @@ use crate::error::MapErrToJs;
 use crate::validation;
 
 const LAB_COINBASE_SUBSIDY: u64 = 50 * 100_000_000; // 50 BTC in sats
-const LAB_BITS: u32 = 0x207fffff; // Max target for lab
-const LAB_MICRO_POW_HASH_PREFIX: &str = "00"; // Require first 2 hex chars to be zero
+const LAB_BITS: u32 = 0x2000ffff; // Micro-PoW: compact target around ~1/256 expected attempts
 const DUST_THRESHOLD_SATS: u64 = 546; // Min non-dust output for P2WPKH
 
 // P2WPKH vsize estimates for fee calculation in lab_build_transaction_with_change
@@ -180,13 +179,10 @@ pub fn lab_mine_block(
 }
 
 fn find_micro_pow_nonce(header: &mut bitcoin::blockdata::block::Header) -> Option<u32> {
+    let target = Target::from_compact(header.bits);
     for nonce in 0..=u32::MAX {
         header.nonce = nonce;
-        if header
-            .block_hash()
-            .to_string()
-            .starts_with(LAB_MICRO_POW_HASH_PREFIX)
-        {
+        if target.is_met_by(header.block_hash()) {
             return Some(nonce);
         }
     }
