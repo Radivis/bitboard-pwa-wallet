@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   assertLabAddressOwnerResolved,
+  groupLabRowsByResolvedOwner,
   lookupLabAddressOwner,
   mergeAddressesWithUtxos,
   resolveLabAddressOwnerDisplay,
@@ -142,6 +143,24 @@ describe('assertLabAddressOwnerResolved', () => {
 describe('sortLabOwnerKeys', () => {
   it('sorts keys lexicographically', () => {
     expect(sortLabOwnerKeys(['Zed', 'Alice', 'Bob'])).toEqual(['Alice', 'Bob', 'Zed'])
+  })
+})
+
+describe('groupLabRowsByResolvedOwner', () => {
+  it('groups by owner key and sorts keys', () => {
+    const { byOwner, sortedOwnerKeys } = groupLabRowsByResolvedOwner(
+      [
+        { id: 1, addr: 'a1' },
+        { id: 2, addr: 'a2' },
+        { id: 3, addr: 'a3' },
+      ],
+      (row) => row.addr,
+      (addr) => (addr === 'a1' || addr === 'a2' ? 'Alice' : 'Bob'),
+      'test',
+    )
+    expect(sortedOwnerKeys).toEqual(['Alice', 'Bob'])
+    expect(byOwner.get('Alice')?.map((r) => r.id)).toEqual([1, 2])
+    expect(byOwner.get('Bob')?.map((r) => r.id)).toEqual([3])
   })
 })
 

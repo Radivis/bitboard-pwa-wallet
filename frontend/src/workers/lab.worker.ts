@@ -357,6 +357,27 @@ function addNewUtxos(
   }
 }
 
+/**
+ * `state.utxos` is updated only after the full block; register this tx’s outputs so
+ * later txs in the same block can resolve inputs against earlier block outputs.
+ */
+function registerBlockTxOutputsInWorkingUtxoMap(
+  utxoMap: Map<string, LabUtxo>,
+  txid: string,
+  outputs: ReadonlyArray<{ address: string; amountSats: number }>,
+): void {
+  for (let vout = 0; vout < outputs.length; vout += 1) {
+    const o = outputs[vout]
+    utxoMap.set(`${txid}:${vout}`, {
+      txid,
+      vout,
+      address: o.address,
+      amountSats: o.amountSats,
+      scriptPubkeyHex: '',
+    })
+  }
+}
+
 function applyTransactionsAndDetailsFromBlock(
   transactions: BlockEffectsTx[],
   height: number,
@@ -515,19 +536,7 @@ function applyTransactionsAndDetailsFromBlock(
         outputs,
       })
     }
-    // Later txs in this block may spend outputs created earlier in the block; `state.utxos`
-    // is only updated after the full block, so extend the working map per tx.
-    for (let vout = 0; vout < outputs.length; vout += 1) {
-      const o = outputs[vout]
-      const synthetic: LabUtxo = {
-        txid: tx.txid,
-        vout,
-        address: o.address,
-        amountSats: o.amountSats,
-        scriptPubkeyHex: '',
-      }
-      utxoMap.set(`${tx.txid}:${vout}`, synthetic)
-    }
+    registerBlockTxOutputsInWorkingUtxoMap(utxoMap, tx.txid, outputs)
     txidToChangeOutput.delete(tx.txid)
   }
 }

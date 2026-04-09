@@ -108,6 +108,31 @@ export function assertLabAddressOwnerResolved(
   }
 }
 
+/**
+ * Groups rows by resolved owner (addresses card, UTXOs card). Throws via
+ * {@link assertLabAddressOwnerResolved} if any address has no owner.
+ */
+export function groupLabRowsByResolvedOwner<T>(
+  items: T[],
+  getAddress: (item: T) => string,
+  resolveOwner: (address: string) => string | undefined,
+  assertContext: string,
+): { byOwner: Map<string, T[]>; sortedOwnerKeys: string[] } {
+  const byOwner = new Map<string, T[]>()
+  for (const item of items) {
+    const address = getAddress(item)
+    const owner = resolveOwner(address)
+    assertLabAddressOwnerResolved(address, owner, assertContext)
+    const list = byOwner.get(owner) ?? []
+    list.push(item)
+    byOwner.set(owner, list)
+  }
+  return {
+    byOwner,
+    sortedOwnerKeys: sortLabOwnerKeys([...byOwner.keys()]),
+  }
+}
+
 /** Bech32 addresses are compared case-insensitively for deduplication (BIP173). */
 function canonicalLabAddressKey(address: string): string {
   const t = address.trim()

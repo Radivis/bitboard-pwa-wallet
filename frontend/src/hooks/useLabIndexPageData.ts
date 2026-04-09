@@ -14,12 +14,11 @@ import { LAB_MAX_BLOCKS_PER_MINE, LAB_MIN_BLOCKS_PER_MINE } from '@/workers/lab-
 import {
   WALLET_OWNER_PREFIX,
   assertLabAddressOwnerResolved,
+  groupLabRowsByResolvedOwner,
   labBitcoinAddressesEqual,
   resolveLabAddressOwnerDisplay,
-  sortLabOwnerKeys,
   walletOwnerKey,
 } from '@/lib/lab-utils'
-import type { LabAddress } from '@/workers/lab-api'
 
 const DEFAULT_LAB_FEE_RATE_SAT_PER_VB = 1
 const DEFAULT_RANDOM_TRANSACTION_COUNT = 1
@@ -80,6 +79,12 @@ export function useLabIndexPageData() {
     [utxos],
   )
 
+  const resolveLabAddressOwner = useCallback(
+    (address: string) =>
+      resolveLabAddressOwnerDisplay(address, addressToOwner, txDetails, transactions),
+    [addressToOwner, txDetails, transactions],
+  )
+
   const handleCopyAddress = useCallback(async (address: string) => {
     try {
       await navigator.clipboard.writeText(address)
@@ -88,6 +93,65 @@ export function useLabIndexPageData() {
       toast.error('Failed to copy address')
     }
   }, [])
+
+  const handleSend = useCallback(() => {
+    const amount = parseInt(amountSats, 10)
+    const fee = parseFloat(feeRate)
+    if (isNaN(amount) || amount < 1) {
+      toast.error('Enter a valid amount')
+      return
+    }
+    const trimmedFrom = fromAddress.trim()
+    if (!trimmedFrom) {
+      toast.error('Select a from address')
+      return
+    }
+    if (!toAddress.trim()) {
+      toast.error('Enter a to address')
+      return
+    }
+    const entityOwner = resolveLabAddressOwner(trimmedFrom)
+    assertLabAddressOwnerResolved(trimmedFrom, entityOwner, 'send from')
+    if (entityOwner.startsWith(WALLET_OWNER_PREFIX)) {
+      toast.error('Spend from a lab entity address (use Send for your wallet)')
+      return
+    }
+    const trimmedTo = toAddress.trim()
+    const knownRecipientOwner =
+      activeWalletId != null &&
+      currentAddress != null &&
+      labBitcoinAddressesEqual(trimmedTo, currentAddress)
+        ? walletOwnerKey(activeWalletId)
+        : undefined
+
+    void createTxMutation
+      .mutateAsync({
+        entityName: entityOwner,
+        fromAddress: trimmedFrom,
+        toAddress: trimmedTo,
+        amountSats: amount,
+        feeRateSatPerVb: fee,
+        knownRecipientOwner,
+      })
+      .then(() => {
+        setShowTxForm(false)
+        setFromAddress('')
+        setToAddress('')
+        setAmountSats('')
+      })
+      .catch(() => {
+        /* error toast from mutation onError */
+      })
+  }, [
+    fromAddress,
+    toAddress,
+    amountSats,
+    feeRate,
+    createTxMutation,
+    resolveLabAddressOwner,
+    activeWalletId,
+    currentAddress,
+  ])
 
   const handleMine = useCallback(() => {
     const count = parseInt(mineCount, 10)
@@ -126,72 +190,6 @@ export function useLabIndexPageData() {
     labAddressType,
   ])
 
-  const handleSend = useCallback(() => {
-    const amount = parseInt(amountSats, 10)
-    const fee = parseFloat(feeRate)
-    if (isNaN(amount) || amount < 1) {
-      toast.error('Enter a valid amount')
-      return
-    }
-    const trimmedFrom = fromAddress.trim()
-    if (!trimmedFrom) {
-      toast.error('Select a from address')
-      return
-    }
-    if (!toAddress.trim()) {
-      toast.error('Enter a to address')
-      return
-    }
-    const entityOwner = resolveLabAddressOwnerDisplay(
-      trimmedFrom,
-      addressToOwner,
-      txDetails,
-      transactions,
-    )
-    assertLabAddressOwnerResolved(trimmedFrom, entityOwner, 'send from')
-    if (entityOwner.startsWith(WALLET_OWNER_PREFIX)) {
-      toast.error('Spend from a lab entity address (use Send for your wallet)')
-      return
-    }
-    const trimmedTo = toAddress.trim()
-    const knownRecipientOwner =
-      activeWalletId != null &&
-      currentAddress != null &&
-      labBitcoinAddressesEqual(trimmedTo, currentAddress)
-        ? walletOwnerKey(activeWalletId)
-        : undefined
-
-    void createTxMutation
-      .mutateAsync({
-        entityName: entityOwner,
-        fromAddress: trimmedFrom,
-        toAddress: trimmedTo,
-        amountSats: amount,
-        feeRateSatPerVb: fee,
-        knownRecipientOwner,
-      })
-      .then(() => {
-        setShowTxForm(false)
-        setFromAddress('')
-        setToAddress('')
-        setAmountSats('')
-      })
-      .catch(() => {
-        /* error toast from mutation onError */
-      })
-  }, [
-    fromAddress,
-    toAddress,
-    amountSats,
-    feeRate,
-    createTxMutation,
-    addressToOwner,
-    txDetails,
-    transactions,
-    activeWalletId,
-    currentAddress,
-  ])
-
   const handleResetLab = useCallback(() => {
     setShowResetConfirm(false)
     resetMutation.mutate()
@@ -215,17 +213,12 @@ export function useLabIndexPageData() {
   const controlledAddresses = useMemo(() => {
     return addresses.filter((a) => {
       if (a.wif) return true
-      const owner = resolveLabAddressOwnerDisplay(
-        a.address,
-        addressToOwner,
-        txDetails,
-        transactions,
-      )
+      const owner = resolveLabAddressOwner(a.address)
       if (owner == null || owner === '') return false
       if (owner.startsWith(WALLET_OWNER_PREFIX)) return false
       return getBalanceForAddress(a.address) > 0
     })
-  }, [addresses, addressToOwner, txDetails, transactions, getBalanceForAddress])
+  }, [addresses, resolveLabAddressOwner, getBalanceForAddress])
   const txDetailsByTxid = useMemo(
     () => new Map(txDetails.map((d) => [d.txid, d])),
     [txDetails],
@@ -242,45 +235,27 @@ export function useLabIndexPageData() {
     [transactions, txDetailsByTxid],
   )
 
-  const { addressesByOwner, sortedAddressOwnerKeys } = useMemo(() => {
-    const byOwner = new Map<string, LabAddress[]>()
-    for (const a of addresses) {
-      const owner = resolveLabAddressOwnerDisplay(
-        a.address,
-        addressToOwner,
-        txDetails,
-        transactions,
-      )
-      assertLabAddressOwnerResolved(a.address, owner, 'addresses card')
-      const ownerList = byOwner.get(owner) ?? []
-      ownerList.push(a)
-      byOwner.set(owner, ownerList)
-    }
-    return {
-      addressesByOwner: byOwner,
-      sortedAddressOwnerKeys: sortLabOwnerKeys([...byOwner.keys()]),
-    }
-  }, [addresses, addressToOwner, txDetails, transactions])
+  const { byOwner: addressesByOwner, sortedOwnerKeys: sortedAddressOwnerKeys } = useMemo(
+    () =>
+      groupLabRowsByResolvedOwner(
+        addresses,
+        (a) => a.address,
+        resolveLabAddressOwner,
+        'addresses card',
+      ),
+    [addresses, resolveLabAddressOwner],
+  )
 
-  const { utxosByOwner, sortedOwnerKeys } = useMemo(() => {
-    const byOwner = new Map<string, typeof utxos>()
-    for (const utxo of utxos) {
-      const owner = resolveLabAddressOwnerDisplay(
-        utxo.address,
-        addressToOwner,
-        txDetails,
-        transactions,
-      )
-      assertLabAddressOwnerResolved(utxo.address, owner, 'utxos card')
-      const ownerList = byOwner.get(owner) ?? []
-      ownerList.push(utxo)
-      byOwner.set(owner, ownerList)
-    }
-    return {
-      utxosByOwner: byOwner,
-      sortedOwnerKeys: sortLabOwnerKeys([...byOwner.keys()]),
-    }
-  }, [utxos, addressToOwner, txDetails, transactions])
+  const { byOwner: utxosByOwner, sortedOwnerKeys } = useMemo(
+    () =>
+      groupLabRowsByResolvedOwner(
+        utxos,
+        (u) => u.address,
+        resolveLabAddressOwner,
+        'utxos card',
+      ),
+    [utxos, resolveLabAddressOwner],
+  )
 
   return {
     blocks,
