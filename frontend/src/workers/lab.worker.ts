@@ -6,6 +6,7 @@ import type {
   LabBlockTransactionSummary,
   LabCurrentBlockTemplateParams,
   LabBlock,
+  LabMineBlocksResult,
   LabState,
   LabTxDetails,
   MempoolEntry,
@@ -36,6 +37,7 @@ import {
   LAB_RANDOM_PPM_MAX,
   LAB_RANDOM_PPM_MIN,
 } from './lab-random-transactions'
+import { discardedMempoolConflictTxCount } from '@/lib/lab-mempool-mine-stats'
 
 let labWasmModule: typeof import('@/wasm-pkg/bitboard_crypto') | null = null
 
@@ -826,7 +828,7 @@ const labService = {
       labAddressType?: string
       labNetwork?: string
     },
-  ): Promise<LabState> {
+  ): Promise<LabMineBlocksResult> {
     if (
       !Number.isInteger(blockCountToMine) ||
       blockCountToMine < LAB_MIN_BLOCKS_PER_MINE ||
@@ -994,7 +996,19 @@ const labService = {
       height = newTip.height + 1
     }
 
-    return this.getStateSnapshot()
+    const includedMempoolTxCount = selectedEntries.length
+    const mempoolSizeAfterFirstBlock = (state.mempool ?? []).length
+    const discardedConflictTxCount = discardedMempoolConflictTxCount({
+      mempoolSizeBefore: mempoolCopy.length,
+      mempoolSizeAfterFirstBlock,
+      includedMempoolTxCount,
+    })
+
+    return {
+      state: await this.getStateSnapshot(),
+      includedMempoolTxCount,
+      discardedConflictTxCount,
+    }
   },
 
   async prepareLabEntityTransaction(params: {

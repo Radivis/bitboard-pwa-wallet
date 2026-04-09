@@ -9,6 +9,7 @@ import {
 import type {
   LabBlockDetails,
   LabCurrentBlockTemplateParams,
+  LabMineBlocksResult,
   LabMempoolMetadata,
   LabState,
   PrepareRandomLabEntityTransactionResult,
@@ -44,7 +45,7 @@ export async function labOpMineBlocks(
     labAddressType?: string
     labNetwork?: string
   },
-): Promise<LabState> {
+): Promise<LabMineBlocksResult> {
   return runLabOp(async () => {
     labPipelineDebugLog('mineBlocks:start', {
       count,
@@ -54,16 +55,18 @@ export async function labOpMineBlocks(
     })
     await initLabWorkerWithState()
     const labWorker = getLabWorker()
-    const state = await labWorker.mineBlocks(count, targetAddress, options)
+    const result = await labWorker.mineBlocks(count, targetAddress, options)
     labPipelineDebugLog('mineBlocks:workerReturned', {
-      blockCount: state.blocks.length,
-      utxoCount: state.utxos.length,
-      totalSats: sumUtxoSats(state.utxos),
+      blockCount: result.state.blocks.length,
+      utxoCount: result.state.utxos.length,
+      totalSats: sumUtxoSats(result.state.utxos),
+      includedMempoolTxCount: result.includedMempoolTxCount,
+      discardedConflictTxCount: result.discardedConflictTxCount,
     })
-    await persistLabState(state)
+    await persistLabState(result.state)
     labPipelineDebugLog('mineBlocks:afterPersist', {})
-    labPipelineSnapshot('mineBlocks:end', state)
-    return state
+    labPipelineSnapshot('mineBlocks:end', result.state)
+    return result
   })
 }
 

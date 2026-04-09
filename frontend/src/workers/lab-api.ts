@@ -223,6 +223,15 @@ export const EMPTY_LAB_STATE: LabState = {
   txOperations: [],
 }
 
+/** Result of {@link LabService.mineBlocks}. Mempool counts exclude coinbase (mempool-only). */
+export interface LabMineBlocksResult {
+  state: LabState
+  /** Non-coinbase mempool txs included in the first block of this mining run. */
+  includedMempoolTxCount: number
+  /** Mempool txs removed without inclusion (double-spend losers vs higher-fee selection). */
+  discardedConflictTxCount: number
+}
+
 export interface LabService {
   /** Load state from main thread (called after worker spawn). */
   loadState(state: LabState): Promise<void>
@@ -250,7 +259,7 @@ export interface LabService {
    * If `ownerName` is provided, associates the coinbase address with that name.
    * If `ownerWalletId` is provided, associates the coinbase address with that wallet.
    * `count` must be an integer from LAB_MIN_BLOCKS_PER_MINE to LAB_MAX_BLOCKS_PER_MINE inclusive.
-   * Returns the new state after mining.
+   * Returns the new state and mempool inclusion/discard stats for the first block mined.
    */
   mineBlocks(
     count: number,
@@ -261,7 +270,7 @@ export interface LabService {
       labAddressType?: string
       labNetwork?: string
     },
-  ): Promise<LabState>
+  ): Promise<LabMineBlocksResult>
 
   /**
    * Build lab-entity tx inputs/metadata for signing on the crypto worker.

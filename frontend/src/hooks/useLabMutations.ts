@@ -32,9 +32,23 @@ export function useLabMineBlocksMutation() {
         labNetwork: variables.labNetwork ?? 'regtest',
       })
     },
-    onSuccess: (state, variables) => {
-      setLabChainStateCache(queryClient, state)
-      toast.success(`Mined ${variables.count} block(s)`)
+    onSuccess: (result, variables) => {
+      setLabChainStateCache(queryClient, result.state)
+      const blocksPhrase = `Mined ${variables.count} block(s)`
+      const successMessage =
+        result.includedMempoolTxCount > 0
+          ? `${blocksPhrase}. Included ${result.includedMempoolTxCount} transaction${
+              result.includedMempoolTxCount === 1 ? '' : 's'
+            } from the mempool.`
+          : blocksPhrase
+      toast.success(successMessage)
+      if (result.discardedConflictTxCount > 0) {
+        toast.warning(
+          `${result.discardedConflictTxCount} transaction${
+            result.discardedConflictTxCount === 1 ? '' : 's'
+          } discarded from the mempool due to double-spend conflicts.`,
+        )
+      }
     },
     onError: (err) => {
       console.error('Mining failed:', err)
