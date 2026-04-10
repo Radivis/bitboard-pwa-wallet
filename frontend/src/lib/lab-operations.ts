@@ -42,13 +42,14 @@ function resolvePrevout(input: LabCoinbaseInputLike): { txid: string; vout: numb
 }
 
 /**
- * True when the tx is a lab coinbase: WASM empty inputs (legacy), or exactly one input with
- * Bitcoin coinbase prevout. Accepts block-effects txs (snake_case) and persisted detail inputs
+ * True when the tx is a lab coinbase: exactly one input with Bitcoin coinbase prevout (zero txid,
+ * `0xffffffff` vout). Every transaction must have at least one input; WASM encodes coinbase with a
+ * synthetic prevout ref. Accepts block-effects txs (snake_case) and persisted detail inputs
  * (camelCase optional prevouts).
  */
 export function isCoinbase(tx: { inputs: ReadonlyArray<LabCoinbaseInputLike> }): boolean {
   const { inputs } = tx
-  if (inputs.length === 0) return true
+  if (inputs.length === 0) return false
   if (inputs.length > 1) return false
   const prev = resolvePrevout(inputs[0])
   if (prev == null) return false

@@ -6,8 +6,8 @@ import {
 } from '@/lib/lab-operations'
 
 describe('isCoinbase', () => {
-  it('returns true for empty inputs (legacy WASM block effects)', () => {
-    expect(isCoinbase({ inputs: [] })).toBe(true)
+  it('returns false for empty inputs', () => {
+    expect(isCoinbase({ inputs: [] })).toBe(false)
   })
 
   it('returns true for block-effects single input with coinbase prevout (snake_case)', () => {

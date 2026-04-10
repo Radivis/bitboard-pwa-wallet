@@ -25,6 +25,8 @@ use crate::error::MapErrToJs;
 use crate::validation;
 
 const LAB_COINBASE_SUBSIDY: u64 = 50 * 100_000_000; // 50 BTC in sats
+/// Bitcoin coinbase prevout index (all bits set), matches frontend `LAB_COINBASE_PREV_VOUT`.
+const LAB_COINBASE_PREV_VOUT: u32 = 0xffff_ffff;
 const LAB_BITS: u32 = 0x2000ffff; // Micro-PoW: compact target around 256 expected attempts
 const DUST_THRESHOLD_SATS: u64 = 546; // Min non-dust output for P2WPKH
 
@@ -559,7 +561,7 @@ pub fn lab_block_hash(block_hex: &str) -> Result<String, JsValue> {
 }
 
 /// Returns the effects of applying a block: new UTXOs, spent outpoints, and per-tx summaries
-/// (including the coinbase as the first entry, with empty `inputs` in this encoding).
+/// (including the coinbase as the first entry, with a synthetic null-prevout input ref).
 /// Used by the worker to update in-memory state and build transaction history.
 #[wasm_bindgen]
 pub fn lab_block_effects(block_hex: &str) -> Result<JsValue, JsValue> {
@@ -587,6 +589,14 @@ pub fn lab_block_effects(block_hex: &str) -> Result<JsValue, JsValue> {
             }
         }
 
+        // Coinbase has a single TxIn with a null prevout; encode it like the frontend `isCoinbase` helper.
+        if inputs.is_empty() && tx_idx == 0 {
+            inputs.push(LabBlockTxInputRef {
+                prev_txid: Txid::all_zeros().to_string(),
+                prev_vout: LAB_COINBASE_PREV_VOUT,
+            });
+        }
+
         let mut tx_outputs = Vec::new();
         for output in &tx.output {
             let script = &output.script_pubkey;
@@ -603,10 +613,7 @@ pub fn lab_block_effects(block_hex: &str) -> Result<JsValue, JsValue> {
             });
         }
 
-        // Include the coinbase (tx 0): it has no non-null prevouts, so `inputs` stays empty here.
-        // The frontend treats empty inputs as coinbase (see frontend `isCoinbase`). Previously
-        // we skipped tx 0 entirely, which broke block tx lists when the mempool was empty and hid
-        // coinbase in multi-tx blocks because JS only synthesized when `transactions` was fully empty.
+        // Include the coinbase (tx 0) and every tx with at least one prevout-spend input.
         if tx_idx == 0 || !inputs.is_empty() {
             transactions.push(LabBlockEffectsTransaction {
                 txid: txid.clone(),

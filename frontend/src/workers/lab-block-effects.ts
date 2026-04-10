@@ -1,3 +1,7 @@
+import {
+  LAB_COINBASE_PREV_TXID_HEX,
+  LAB_COINBASE_PREV_VOUT,
+} from '@/lib/lab-operations'
 import type { LabAddress } from './lab-api'
 import type { BlockEffectsParsed, BlockEffectsTx } from './lab-block-effects-types'
 import { applyTransactionsAndDetailsFromBlock } from './lab-apply-block-transactions'
@@ -82,7 +86,12 @@ function synthesizeCoinbaseTxFromNewUtxos(
   return [
     {
       txid: firstTxid,
-      inputs: [],
+      inputs: [
+        {
+          prev_txid: LAB_COINBASE_PREV_TXID_HEX,
+          prev_vout: LAB_COINBASE_PREV_VOUT,
+        },
+      ],
       outputs: rows.map((u) => {
         const row = u as unknown as Record<string, unknown>
         return {

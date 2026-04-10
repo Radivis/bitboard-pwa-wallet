@@ -128,7 +128,7 @@ function LabTxViewerPage() {
       <InfomodeWrapper
         infoId="lab-tx-detail-inputs-card"
         infoTitle="Inputs (TxIns)"
-        infoText="Each input spends a previous unspent output—coins consumed to fund this payment. The owner badge shows whether that coin belonged to a named lab participant or your loaded wallet. Block-reward “coinbase” transactions have no normal inputs; the UI may show that case explicitly."
+        infoText="Each input spends a previous unspent output—coins consumed to fund this payment. The owner badge shows whether that coin belonged to a named lab participant or your loaded wallet. Block-reward coinbase transactions use a synthetic prevout (zero txid, max vout) instead of spending a prior UTXO."
         className="rounded-xl"
       >
         <Card>
@@ -163,7 +163,7 @@ function LabTxViewerPage() {
                 ))}
               </div>
             ) : tx.inputs.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No inputs (legacy coinbase)</p>
+              <p className="text-sm text-muted-foreground">No inputs</p>
             ) : (
               <div className="space-y-2">
                 {tx.inputs.map((input, index) => (
