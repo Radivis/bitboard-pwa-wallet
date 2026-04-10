@@ -5,15 +5,25 @@ const devServerCommand =
     ? 'VITE_E2E_NWC_MOCK=true npm run dev'
     : 'npm run dev'
 
+const isCi = !!process.env.CI
+
 export default defineConfig({
   testDir: './tests/e2e',
   fullyParallel: true,
-  forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 2 : 1,
-  reporter: [
-    ['html', { open: 'on-failure' }],
-    ['list'],
-  ],
+  forbidOnly: isCi,
+  retries: isCi ? 2 : 1,
+  /** GitHub-hosted runners are small; too many Chromium + WASM lab workers can OOM or hit 90s timeouts. */
+  workers: isCi ? 2 : undefined,
+  reporter: isCi
+    ? [
+        ['github'],
+        ['html', { open: 'never' }],
+        ['list'],
+      ]
+    : [
+        ['html', { open: 'on-failure' }],
+        ['list'],
+      ],
   use: {
     baseURL: 'http://localhost:3000',
     trace: 'on-first-retry',
@@ -28,6 +38,8 @@ export default defineConfig({
     command: devServerCommand,
     url: 'http://localhost:3000',
     reuseExistingServer:
-      !process.env.CI && process.env.VITE_E2E_NWC_MOCK !== 'true',
+      !isCi && process.env.VITE_E2E_NWC_MOCK !== 'true',
+    /** Cold Vite + first WASM init on CI can exceed the default 60s. */
+    timeout: isCi ? 180_000 : 60_000,
   },
 })

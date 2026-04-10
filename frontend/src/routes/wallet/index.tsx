@@ -19,7 +19,7 @@ import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { formatBTC, formatSats } from '@/lib/bitcoin-utils'
 import { balanceInfoToOnChainDisplay } from '@/lib/onchain-balance-display'
 import { runIncrementalDashboardWalletSync } from '@/lib/wallet-utils'
-import { labTransactionsForWallet, walletOwnerKey } from '@/lib/lab-utils'
+import { labTransactionsForWallet, lookupLabAddressOwner, walletOwnerKey } from '@/lib/lab-utils'
 import { useLabChainStateQuery } from '@/hooks/useLabChainStateQuery'
 import {
   useLightningBalancesForDashboardQuery,
@@ -49,7 +49,11 @@ function BalanceCard() {
   const labBalanceSats =
     networkMode === 'lab' && activeWalletId != null && labChainReady
       ? utxos
-          .filter((u) => addressToOwner[u.address] === walletOwnerKey(activeWalletId))
+          .filter(
+            (u) =>
+              lookupLabAddressOwner(u.address, addressToOwner) ===
+              walletOwnerKey(activeWalletId),
+          )
           .reduce((sum, u) => sum + u.amountSats, 0)
       : null
 

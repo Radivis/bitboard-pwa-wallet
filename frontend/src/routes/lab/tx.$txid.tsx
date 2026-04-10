@@ -75,7 +75,7 @@ function LabTxViewerPage() {
 
   const totalInputs = tx.inputs.reduce((sum, i) => sum + i.amountSats, 0)
   const totalOutputs = tx.outputs.reduce((sum, o) => sum + o.amountSats, 0)
-  const feeSats = totalInputs - totalOutputs
+  const feeSats = tx.isCoinbase ? 0 : totalInputs - totalOutputs
   const timestamp =
     tx.blockTime > 0 ? new Date(tx.blockTime * 1000).toLocaleString() : null
   const confirmationsText =
@@ -91,7 +91,14 @@ function LabTxViewerPage() {
             <ArrowLeft className="h-4 w-4" />
           </Button>
         </Link>
-        <PageHeader title="Transaction" icon={FlaskConical} />
+        <div className="flex items-center gap-2">
+          <PageHeader title="Transaction" icon={FlaskConical} />
+          {tx.isCoinbase ? (
+            <Badge variant="outline" className="shrink-0">
+              Coinbase
+            </Badge>
+          ) : null}
+        </div>
       </div>
 
       <InfomodeWrapper
@@ -121,7 +128,7 @@ function LabTxViewerPage() {
       <InfomodeWrapper
         infoId="lab-tx-detail-inputs-card"
         infoTitle="Inputs (TxIns)"
-        infoText="Each input spends a previous unspent output—coins consumed to fund this payment. The owner badge shows whether that coin belonged to a named lab participant or your loaded wallet. Block-reward “coinbase” transactions have no normal inputs; the UI may show that case explicitly."
+        infoText="Each input spends a previous unspent output—coins consumed to fund this payment. The owner badge shows whether that coin belonged to a named lab participant or your loaded wallet. Block-reward coinbase transactions use a synthetic prevout (zero txid, max vout) instead of spending a prior UTXO."
         className="rounded-xl"
       >
         <Card>
@@ -130,8 +137,33 @@ function LabTxViewerPage() {
             <CardDescription>Inputs to this transaction</CardDescription>
           </CardHeader>
           <CardContent>
-            {tx.inputs.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No inputs (coinbase)</p>
+            {tx.isCoinbase ? (
+              <div className="space-y-2 text-sm">
+                <p className="text-muted-foreground">
+                  One coinbase input (no previous output spent).
+                </p>
+                {tx.inputs.map((input, index) => (
+                  <div
+                    key={`coinbase-${index}`}
+                    className="rounded-md border border-border p-3 font-mono text-xs space-y-1"
+                  >
+                    <p>
+                      <span className="text-muted-foreground">prev txid:</span>{' '}
+                      {input.prevTxid ?? '(null)'}
+                    </p>
+                    <p>
+                      <span className="text-muted-foreground">prev vout:</span>{' '}
+                      {input.prevVout != null ? `0x${input.prevVout.toString(16)}` : '—'}
+                    </p>
+                    <p>
+                      <span className="text-muted-foreground">sequence:</span>{' '}
+                      {input.sequence != null ? `0x${input.sequence.toString(16)}` : '—'}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            ) : tx.inputs.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No inputs</p>
             ) : (
               <div className="space-y-2">
                 {tx.inputs.map((input, index) => (

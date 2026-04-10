@@ -1,10 +1,4 @@
-import type {
-  LabTxRecord,
-  LabTxDetails,
-  MempoolEntry,
-  LabAddress,
-  LabState,
-} from '@/workers/lab-api'
+import type { LabTxRecord, LabTxDetails, MempoolEntry, LabAddress, LabState } from '@/workers/lab-api'
 import type { TransactionDetails } from '@/workers/crypto-types'
 
 export const WALLET_OWNER_PREFIX = 'wallet:'
@@ -14,20 +8,122 @@ export function walletOwnerKey(walletId: number): string {
   return `${WALLET_OWNER_PREFIX}${walletId}`
 }
 
+/** Case-insensitive equality for bc1/tb1/bcrt1 addresses (matches lab worker / BIP173). */
+export function labBitcoinAddressesEqual(a: string, b: string): boolean {
+  const x = a.trim()
+  const y = b.trim()
+  if (x === y) return true
+  if (/^(bc|tb|bcrt)1/i.test(x) && /^(bc|tb|bcrt)1/i.test(y)) {
+    return x.toLowerCase() === y.toLowerCase()
+  }
+  return false
+}
+
+/**
+ * Resolves `addressToOwner` the same way as the lab worker: direct key, then
+ * case-insensitive match for bc1/tb1/bcrt1 (BIP173).
+ */
+export function lookupLabAddressOwner(
+  address: string,
+  addressToOwner: Record<string, string>,
+): string | undefined {
+  const direct = addressToOwner[address]
+  if (direct !== undefined) return direct
+  for (const [storedAddr, owner] of Object.entries(addressToOwner)) {
+    if (labBitcoinAddressesEqual(storedAddr, address)) return owner
+  }
+  return undefined
+}
+
+/**
+ * Owner for UI: map first, then confirmed outputs with a non-empty `owner` field.
+ */
+export function resolveLabAddressOwnerDisplay(
+  address: string,
+  addressToOwner: Record<string, string>,
+  txDetails: LabTxDetails[],
+): string | undefined {
+  const fromMap = lookupLabAddressOwner(address, addressToOwner)
+  if (fromMap !== undefined) return fromMap
+
+  for (const detail of txDetails) {
+    for (const output of detail.outputs ?? []) {
+      if (!labBitcoinAddressesEqual(output.address, address)) continue
+      if (output.owner != null && output.owner !== '') return output.owner
+    }
+  }
+  return undefined
+}
+
+/** Stable sort for lab owner keys (no special Unknown bucket—callers assert first). */
+export function sortLabOwnerKeys(ownerKeys: string[]): string[] {
+  return [...ownerKeys].sort((a, b) => a.localeCompare(b))
+}
+
+/**
+ * Lab invariant: every address shown or grouped must have a resolved owner key.
+ * Throws immediately if missing (data bug or stale state).
+ */
+export function assertLabAddressOwnerResolved(
+  address: string,
+  ownerKey: string | undefined | null,
+  context?: string,
+): asserts ownerKey is string {
+  if (ownerKey == null || ownerKey === '') {
+    throw new Error(
+      `Lab address has no resolved owner${context ? ` (${context})` : ''}: ${address}`,
+    )
+  }
+}
+
+/**
+ * Groups rows by resolved owner (addresses card, UTXOs card). Throws via
+ * {@link assertLabAddressOwnerResolved} if any address has no owner.
+ */
+export function groupLabRowsByResolvedOwner<T>(
+  items: T[],
+  getAddress: (item: T) => string,
+  resolveOwner: (address: string) => string | undefined,
+  assertContext: string,
+): { byOwner: Map<string, T[]>; sortedOwnerKeys: string[] } {
+  const byOwner = new Map<string, T[]>()
+  for (const item of items) {
+    const address = getAddress(item)
+    const owner = resolveOwner(address)
+    assertLabAddressOwnerResolved(address, owner, assertContext)
+    const list = byOwner.get(owner) ?? []
+    list.push(item)
+    byOwner.set(owner, list)
+  }
+  return {
+    byOwner,
+    sortedOwnerKeys: sortLabOwnerKeys([...byOwner.keys()]),
+  }
+}
+
+/** Bech32 addresses are compared case-insensitively for deduplication (BIP173). */
+function canonicalLabAddressKey(address: string): string {
+  const t = address.trim()
+  return /^(bc|tb|bcrt)1/i.test(t) ? t.toLowerCase() : t
+}
+
 /** Merge controlled addresses with any addresses that appear in UTXOs but are not yet in the list. */
 export function mergeAddressesWithUtxos(
   addresses: LabAddress[],
   utxos: LabState['utxos'],
 ): LabAddress[] {
-  const controlled = new Map(addresses.map((a) => [a.address, a]))
-  const fromUtxos = new Set(utxos.map((u) => u.address))
-  const result: LabAddress[] = [...addresses]
-  for (const addr of fromUtxos) {
-    if (!controlled.has(addr)) {
-      result.push({ address: addr, wif: '' })
+  const byKey = new Map<string, LabAddress>()
+  for (const labAddress of addresses) {
+    const key = canonicalLabAddressKey(labAddress.address)
+    if (!byKey.has(key)) byKey.set(key, labAddress)
+  }
+  for (const utxo of utxos) {
+    const key = canonicalLabAddressKey(utxo.address)
+    if (!byKey.has(key)) {
+      byKey.set(key, { address: utxo.address, wif: '' })
     }
   }
-  return result
+  return [...byKey.values()]
 }
 
 export function labTransactionsForWallet(
@@ -40,7 +136,7 @@ export function labTransactionsForWallet(
 ): TransactionDetails[] {
   const walletOwner = walletOwnerKey(activeWalletId)
   const txDetailsByTxid = new Map(
-    labState.txDetails.map((d) => [d.txid, d]),
+    labState.txDetails.map((detail) => [detail.txid, detail]),
   )
 
   const result: TransactionDetails[] = []
@@ -52,13 +148,13 @@ export function labTransactionsForWallet(
 
     const sentSats = isSender
       ? (entry.outputsDetail ?? [])
-          .filter((o) => !o.isChange)
-          .reduce((s, o) => s + o.amountSats, 0)
+          .filter((output) => !output.isChange)
+          .reduce((sumSats, output) => sumSats + output.amountSats, 0)
       : 0
     const receivedSats = isReceiver
       ? (entry.outputsDetail ?? [])
-          .filter((o) => o.owner === walletOwner)
-          .reduce((s, o) => s + o.amountSats, 0)
+          .filter((output) => output.owner === walletOwner)
+          .reduce((sumSats, output) => sumSats + output.amountSats, 0)
       : 0
 
     result.push({
@@ -80,17 +176,41 @@ export function labTransactionsForWallet(
     const details = txDetailsByTxid.get(record.txid)
     if (!details) continue
 
+    if (details.isCoinbase) {
+      const receivedSatsCoinbase = (details.outputs ?? [])
+        .filter((output) => output.owner === walletOwner)
+        .reduce((sumSats, output) => sumSats + output.amountSats, 0)
+      result.push({
+        txid: record.txid,
+        sent_sats: 0,
+        received_sats: receivedSatsCoinbase,
+        fee_sats: 0,
+        confirmation_block_height: details.blockHeight,
+        confirmation_time: details.blockTime,
+        is_confirmed: true,
+      })
+      continue
+    }
+
     const sentSats = isSender
-      ? (details.outputs ?? []).filter((o) => !o.isChange).reduce((s, o) => s + o.amountSats, 0)
+      ? (details.outputs ?? [])
+          .filter((output) => !output.isChange)
+          .reduce((sumSats, output) => sumSats + output.amountSats, 0)
       : 0
     const receivedSats = isReceiver
       ? (details.outputs ?? [])
-          .filter((o) => o.owner === walletOwner)
-          .reduce((s, o) => s + o.amountSats, 0)
+          .filter((output) => output.owner === walletOwner)
+          .reduce((sumSats, output) => sumSats + output.amountSats, 0)
       : 0
 
-    const totalInput = (details.inputs ?? []).reduce((s, i) => s + i.amountSats, 0)
-    const totalOutput = (details.outputs ?? []).reduce((s, o) => s + o.amountSats, 0)
+    const totalInput = (details.inputs ?? []).reduce(
+      (sumSats, input) => sumSats + input.amountSats,
+      0,
+    )
+    const totalOutput = (details.outputs ?? []).reduce(
+      (sumSats, output) => sumSats + output.amountSats,
+      0,
+    )
     const feeSats = totalInput - totalOutput
 
     result.push({
@@ -104,12 +224,12 @@ export function labTransactionsForWallet(
     })
   }
 
-  result.sort((a, b) => {
-    if (!a.is_confirmed && b.is_confirmed) return -1
-    if (a.is_confirmed && !b.is_confirmed) return 1
-    if (a.is_confirmed && b.is_confirmed) {
-      const timeA = a.confirmation_time ?? 0
-      const timeB = b.confirmation_time ?? 0
+  result.sort((txA, txB) => {
+    if (!txA.is_confirmed && txB.is_confirmed) return -1
+    if (txA.is_confirmed && !txB.is_confirmed) return 1
+    if (txA.is_confirmed && txB.is_confirmed) {
+      const timeA = txA.confirmation_time ?? 0
+      const timeB = txB.confirmation_time ?? 0
       return timeB - timeA
     }
     return 0
@@ -124,7 +244,7 @@ export function getOwnerDisplayName(
 ): string {
   if (ownerKey.startsWith(WALLET_OWNER_PREFIX)) {
     const id = parseInt(ownerKey.slice(WALLET_OWNER_PREFIX.length), 10)
-    return wallets.find((w) => w.wallet_id === id)?.name ?? 'Unknown wallet'
+    return wallets.find((wallet) => wallet.wallet_id === id)?.name ?? 'Unknown wallet'
   }
   return ownerKey
 }

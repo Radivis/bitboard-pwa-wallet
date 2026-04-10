@@ -16,9 +16,12 @@ export function toUiLabState(state: LabState): LabState {
     blocks: state.blocks,
     utxos: state.utxos,
     addresses: mergeAddressesWithUtxos(state.addresses, state.utxos),
+    entities: state.entities ?? [],
     addressToOwner: state.addressToOwner ?? {},
     mempool: state.mempool ?? [],
     transactions: state.transactions ?? [],
     txDetails: state.txDetails ?? [],
+    mineOperations: state.mineOperations ?? [],
+    txOperations: state.txOperations ?? [],
   }
 }

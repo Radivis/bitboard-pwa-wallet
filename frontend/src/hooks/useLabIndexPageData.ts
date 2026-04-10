@@ -1,22 +1,31 @@
 import { useCallback, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { useLabChainStateQuery } from '@/hooks/useLabChainStateQuery'
-import { useWalletStore } from '@/stores/walletStore'
+import { selectCommittedAddressType, useWalletStore } from '@/stores/walletStore'
+import { useLabMiningStore } from '@/stores/labMiningStore'
 import { useWallet, useWallets } from '@/db'
 import {
   useLabMineBlocksMutation,
+  useLabCreateRandomTransactionsMutation,
   useLabCreateTransactionMutation,
   useLabResetMutation,
 } from '@/hooks/useLabMutations'
+import { LAB_MAX_BLOCKS_PER_MINE, LAB_MIN_BLOCKS_PER_MINE } from '@/workers/lab-api'
+import { LAB_MAX_RANDOM_ENTITY_TRANSACTIONS } from '@/lib/lab-random-limits'
 import {
-  LAB_MAX_BLOCKS_PER_MINE,
-  LAB_MIN_BLOCKS_PER_MINE,
-} from '@/workers/lab-api'
+  WALLET_OWNER_PREFIX,
+  assertLabAddressOwnerResolved,
+  groupLabRowsByResolvedOwner,
+  labBitcoinAddressesEqual,
+  resolveLabAddressOwnerDisplay,
+  walletOwnerKey,
+} from '@/lib/lab-utils'
 
 const DEFAULT_LAB_FEE_RATE_SAT_PER_VB = 1
+const DEFAULT_RANDOM_TRANSACTION_COUNT = 1
 
 /**
- * Form state, derived lab lists, and TanStack Query mutations for the lab index page.
+ * Form state, derived lab lists, and TanStack Query mutations for lab section routes.
  */
 export function useLabIndexPageData() {
   const { data: labState } = useLabChainStateQuery()
@@ -30,14 +39,19 @@ export function useLabIndexPageData() {
 
   const blockCount = blocks.length === 0 ? 0 : blocks[blocks.length - 1].height + 1
 
-  const [mineCount, setMineCount] = useState(String(LAB_MIN_BLOCKS_PER_MINE))
-  const [ownerType, setOwnerType] = useState<'name' | 'wallet'>('name')
-  const [targetAddress, setTargetAddress] = useState('')
-  const [ownerName, setOwnerName] = useState('')
+  const mineCount = useLabMiningStore((s) => s.mineCount)
+  const setMineCount = useLabMiningStore((s) => s.setMineCount)
+  const ownerType = useLabMiningStore((s) => s.ownerType)
+  const setOwnerType = useLabMiningStore((s) => s.setOwnerType)
+  const targetAddress = useLabMiningStore((s) => s.targetAddress)
+  const setTargetAddress = useLabMiningStore((s) => s.setTargetAddress)
+  const ownerName = useLabMiningStore((s) => s.ownerName)
+  const setOwnerName = useLabMiningStore((s) => s.setOwnerName)
 
   const activeWalletId = useWalletStore((s) => s.activeWalletId)
   const walletStatus = useWalletStore((s) => s.walletStatus)
   const currentAddress = useWalletStore((s) => s.currentAddress)
+  const labAddressType = useWalletStore(selectCommittedAddressType)
   const { data: activeWallet } = useWallet(activeWalletId)
   const { data: wallets = [] } = useWallets()
 
@@ -46,19 +60,32 @@ export function useLabIndexPageData() {
   const [toAddress, setToAddress] = useState('')
   const [amountSats, setAmountSats] = useState('')
   const [feeRate, setFeeRate] = useState(String(DEFAULT_LAB_FEE_RATE_SAT_PER_VB))
+  const [randomTransactionCount, setRandomTransactionCount] = useState(
+    String(DEFAULT_RANDOM_TRANSACTION_COUNT),
+  )
 
   const [showResetConfirm, setShowResetConfirm] = useState(false)
+  const [randomBatchProgress, setRandomBatchProgress] = useState<{
+    created: number
+    total: number
+  } | null>(null)
 
   const mineMutation = useLabMineBlocksMutation()
   const createTxMutation = useLabCreateTransactionMutation()
+  const createRandomTxMutation = useLabCreateRandomTransactionsMutation()
   const resetMutation = useLabResetMutation()
 
   const getBalanceForAddress = useCallback(
     (address: string) =>
       utxos
-        .filter((u) => u.address === address)
-        .reduce((sum, u) => sum + u.amountSats, 0),
+        .filter((utxo) => labBitcoinAddressesEqual(utxo.address, address))
+        .reduce((sumSats, utxo) => sumSats + utxo.amountSats, 0),
     [utxos],
+  )
+
+  const resolveLabAddressOwner = useCallback(
+    (address: string) => resolveLabAddressOwnerDisplay(address, addressToOwner, txDetails),
+    [addressToOwner, txDetails],
   )
 
   const handleCopyAddress = useCallback(async (address: string) => {
@@ -69,6 +96,65 @@ export function useLabIndexPageData() {
       toast.error('Failed to copy address')
     }
   }, [])
+
+  const handleSend = useCallback(() => {
+    const amount = parseInt(amountSats, 10)
+    const fee = parseFloat(feeRate)
+    if (isNaN(amount) || amount < 1) {
+      toast.error('Enter a valid amount')
+      return
+    }
+    const trimmedFrom = fromAddress.trim()
+    if (!trimmedFrom) {
+      toast.error('Select a from address')
+      return
+    }
+    if (!toAddress.trim()) {
+      toast.error('Enter a to address')
+      return
+    }
+    const entityOwner = resolveLabAddressOwner(trimmedFrom)
+    assertLabAddressOwnerResolved(trimmedFrom, entityOwner, 'send from')
+    if (entityOwner.startsWith(WALLET_OWNER_PREFIX)) {
+      toast.error('Spend from a lab entity address (use Send for your wallet)')
+      return
+    }
+    const trimmedTo = toAddress.trim()
+    const knownRecipientOwner =
+      activeWalletId != null &&
+      currentAddress != null &&
+      labBitcoinAddressesEqual(trimmedTo, currentAddress)
+        ? walletOwnerKey(activeWalletId)
+        : undefined
+
+    void createTxMutation
+      .mutateAsync({
+        entityName: entityOwner,
+        fromAddress: trimmedFrom,
+        toAddress: trimmedTo,
+        amountSats: amount,
+        feeRateSatPerVb: fee,
+        knownRecipientOwner,
+      })
+      .then(() => {
+        setShowTxForm(false)
+        setFromAddress('')
+        setToAddress('')
+        setAmountSats('')
+      })
+      .catch(() => {
+        /* error toast from mutation onError */
+      })
+  }, [
+    fromAddress,
+    toAddress,
+    amountSats,
+    feeRate,
+    createTxMutation,
+    resolveLabAddressOwner,
+    activeWalletId,
+    currentAddress,
+  ])
 
   const handleMine = useCallback(() => {
     const count = parseInt(mineCount, 10)
@@ -90,7 +176,12 @@ export function useLabIndexPageData() {
         : ownerName.trim()
           ? { ownerName: ownerName.trim() }
           : undefined
-    mineMutation.mutate({ count, effectiveTarget, mineOptions })
+    mineMutation.mutate({
+      count,
+      effectiveTarget,
+      mineOptions,
+      labAddressType,
+    })
   }, [
     mineCount,
     ownerType,
@@ -99,47 +190,45 @@ export function useLabIndexPageData() {
     currentAddress,
     activeWalletId,
     mineMutation,
+    labAddressType,
   ])
-
-  const handleSend = useCallback(() => {
-    const amount = parseInt(amountSats, 10)
-    const fee = parseFloat(feeRate)
-    if (isNaN(amount) || amount < 1) {
-      toast.error('Enter a valid amount')
-      return
-    }
-    if (!fromAddress) {
-      toast.error('Select a from address')
-      return
-    }
-    if (!toAddress.trim()) {
-      toast.error('Enter a to address')
-      return
-    }
-    void createTxMutation
-      .mutateAsync({
-        fromAddress,
-        toAddress: toAddress.trim(),
-        amountSats: amount,
-        feeRateSatPerVb: fee,
-      })
-      .then(() => {
-        setShowTxForm(false)
-        setFromAddress('')
-        setToAddress('')
-        setAmountSats('')
-      })
-      .catch(() => {
-        /* error toast from mutation onError */
-      })
-  }, [fromAddress, toAddress, amountSats, feeRate, createTxMutation])
 
   const handleResetLab = useCallback(() => {
     setShowResetConfirm(false)
     resetMutation.mutate()
   }, [resetMutation])
 
-  const controlledAddresses = addresses.filter((a) => a.wif)
+  const handleCreateRandomTransactions = useCallback(() => {
+    const parsedCount = Number.parseInt(randomTransactionCount, 10)
+    if (Number.isNaN(parsedCount) || parsedCount < 1) {
+      toast.error('Enter a valid transaction count')
+      return
+    }
+    if (parsedCount > LAB_MAX_RANDOM_ENTITY_TRANSACTIONS) {
+      toast.error(`You can generate at most ${LAB_MAX_RANDOM_ENTITY_TRANSACTIONS} transactions`)
+      return
+    }
+    setRandomBatchProgress({ created: 0, total: parsedCount })
+    void createRandomTxMutation
+      .mutateAsync({
+        count: parsedCount,
+        onProgress: (created, total) => setRandomBatchProgress({ created, total }),
+      })
+      .catch(() => {
+        /* error toast from mutation onError */
+      })
+      .finally(() => setRandomBatchProgress(null))
+  }, [createRandomTxMutation, randomTransactionCount])
+
+  const controlledAddresses = useMemo(() => {
+    return addresses.filter((a) => {
+      if (a.wif) return true
+      const owner = resolveLabAddressOwner(a.address)
+      if (owner == null || owner === '') return false
+      if (owner.startsWith(WALLET_OWNER_PREFIX)) return false
+      return getBalanceForAddress(a.address) > 0
+    })
+  }, [addresses, resolveLabAddressOwner, getBalanceForAddress])
   const txDetailsByTxid = useMemo(
     () => new Map(txDetails.map((d) => [d.txid, d])),
     [txDetails],
@@ -156,21 +245,30 @@ export function useLabIndexPageData() {
     [transactions, txDetailsByTxid],
   )
 
-  const { utxosByOwner, sortedOwnerKeys } = useMemo(() => {
-    const byOwner = new Map<string, typeof utxos>()
-    for (const utxo of utxos) {
-      const owner = (addressToOwner ?? {})[utxo.address] ?? 'Unknown'
-      const ownerList = byOwner.get(owner) ?? []
-      ownerList.push(utxo)
-      byOwner.set(owner, ownerList)
-    }
-    const sortedOwners = [...byOwner.keys()].sort((a, b) =>
-      a === 'Unknown' ? 1 : b === 'Unknown' ? -1 : a.localeCompare(b),
-    )
-    return { utxosByOwner: byOwner, sortedOwnerKeys: sortedOwners }
-  }, [utxos, addressToOwner])
+  const { byOwner: addressesByOwner, sortedOwnerKeys: sortedAddressOwnerKeys } = useMemo(
+    () =>
+      groupLabRowsByResolvedOwner(
+        addresses,
+        (a) => a.address,
+        resolveLabAddressOwner,
+        'addresses card',
+      ),
+    [addresses, resolveLabAddressOwner],
+  )
+
+  const { byOwner: utxosByOwner, sortedOwnerKeys } = useMemo(
+    () =>
+      groupLabRowsByResolvedOwner(
+        utxos,
+        (u) => u.address,
+        resolveLabAddressOwner,
+        'utxos card',
+      ),
+    [utxos, resolveLabAddressOwner],
+  )
 
   return {
+    blocks,
     blockCount,
     mineCount,
     setMineCount,
@@ -198,7 +296,16 @@ export function useLabIndexPageData() {
     onSend: handleSend,
     sending: createTxMutation.isPending,
     controlledAddressesCount: controlledAddresses.length,
+    randomTransactionCount,
+    setRandomTransactionCount,
+    onCreateRandomTransactions: handleCreateRandomTransactions,
+    creatingRandomTransactions: createRandomTxMutation.isPending,
+    randomBatchProgress,
+    labEntitiesCount: labState?.entities?.length ?? 0,
     addresses,
+    addressesByOwner,
+    sortedAddressOwnerKeys,
+    txDetails,
     addressToOwner,
     getBalanceForAddress,
     onCopyAddress: handleCopyAddress,

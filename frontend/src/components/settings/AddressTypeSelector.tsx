@@ -22,7 +22,7 @@ export function AddressTypeSelector() {
     null,
   )
 
-  const { mutate, loading, statusLine } =
+  const { mutateAsync, loading, statusLine } =
     useSubWalletSwitchMutation('addressType')
 
   const handleChange = (type: 'taproot' | 'segwit') => {
@@ -36,18 +36,15 @@ export function AddressTypeSelector() {
   }
 
   const applyAddressTypeChange = useCallback(
-    (type: AddressType) => {
+    async (type: AddressType) => {
       if (walletStatus === 'unlocked' || walletStatus === 'syncing') {
-        mutate(type, {
-          onSuccess: () => {
-            setAddressType(type)
-          },
-        })
+        await mutateAsync(type)
+        setAddressType(type)
       } else {
         setAddressType(type)
       }
     },
-    [walletStatus, mutate, setAddressType],
+    [walletStatus, mutateAsync, setAddressType],
   )
 
   return (

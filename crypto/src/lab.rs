@@ -16,7 +16,7 @@ use bitcoin::secp256k1::{Message, Secp256k1, SecretKey};
 use bitcoin::sighash::{EcdsaSighashType, Prevouts, SighashCache, TapSighashType};
 use bitcoin::{
     Address, Amount, Block, BlockHash, CompactTarget, CompressedPublicKey, FeeRate, Network,
-    Transaction, TxIn, TxMerkleNode, TxOut, Txid, transaction,
+    Target, Transaction, TxIn, TxMerkleNode, TxOut, Txid, transaction,
 };
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
@@ -25,7 +25,9 @@ use crate::error::MapErrToJs;
 use crate::validation;
 
 const LAB_COINBASE_SUBSIDY: u64 = 50 * 100_000_000; // 50 BTC in sats
-const LAB_BITS: u32 = 0x207fffff; // Max target for lab
+/// Bitcoin coinbase prevout index (all bits set), matches frontend `LAB_COINBASE_PREV_VOUT`.
+const LAB_COINBASE_PREV_VOUT: u32 = 0xffff_ffff;
+const LAB_BITS: u32 = 0x2000ffff; // Micro-PoW: compact target around 256 expected attempts
 const DUST_THRESHOLD_SATS: u64 = 546; // Min non-dust output for P2WPKH
 
 // P2WPKH vsize estimates for fee calculation in lab_build_transaction_with_change
@@ -162,7 +164,7 @@ pub fn lab_mine_block(
     })?;
     let time = unix_time_lab();
 
-    let header = bitcoin::blockdata::block::Header {
+    let mut header = bitcoin::blockdata::block::Header {
         version: BlockVersion::TWO,
         prev_blockhash: prev_hash,
         merkle_root,
@@ -170,9 +172,23 @@ pub fn lab_mine_block(
         bits: CompactTarget::from_consensus(LAB_BITS),
         nonce: 0,
     };
+    header.nonce = find_micro_pow_nonce(&mut header).ok_or_else(|| {
+        JsValue::from_str("micro-pow search exhausted nonce range without finding a valid hash")
+    })?;
 
     let block = Block { header, txdata };
     Ok(serialize_hex(&block))
+}
+
+fn find_micro_pow_nonce(header: &mut bitcoin::blockdata::block::Header) -> Option<u32> {
+    let target = Target::from_compact(header.bits);
+    for nonce in 0..=u32::MAX {
+        header.nonce = nonce;
+        if target.is_met_by(header.block_hash()) {
+            return Some(nonce);
+        }
+    }
+    None
 }
 
 /// Builds an unsigned P2WPKH transaction from UTXOs and outputs.
@@ -544,7 +560,8 @@ pub fn lab_block_hash(block_hex: &str) -> Result<String, JsValue> {
     Ok(block.block_hash().to_string())
 }
 
-/// Returns the effects of applying a block: new UTXOs, spent outpoints, and per-tx input refs.
+/// Returns the effects of applying a block: new UTXOs, spent outpoints, and per-tx summaries
+/// (including the coinbase as the first entry, with a synthetic null-prevout input ref).
 /// Used by the worker to update in-memory state and build transaction history.
 #[wasm_bindgen]
 pub fn lab_block_effects(block_hex: &str) -> Result<JsValue, JsValue> {
@@ -572,6 +589,14 @@ pub fn lab_block_effects(block_hex: &str) -> Result<JsValue, JsValue> {
             }
         }
 
+        // Coinbase has a single TxIn with a null prevout; encode it like the frontend `isCoinbase` helper.
+        if inputs.is_empty() && tx_idx == 0 {
+            inputs.push(LabBlockTxInputRef {
+                prev_txid: Txid::all_zeros().to_string(),
+                prev_vout: LAB_COINBASE_PREV_VOUT,
+            });
+        }
+
         let mut tx_outputs = Vec::new();
         for output in &tx.output {
             let script = &output.script_pubkey;
@@ -588,7 +613,8 @@ pub fn lab_block_effects(block_hex: &str) -> Result<JsValue, JsValue> {
             });
         }
 
-        if tx_idx > 0 && !inputs.is_empty() {
+        // Include the coinbase (tx 0) and every tx with at least one prevout-spend input.
+        if tx_idx == 0 || !inputs.is_empty() {
             transactions.push(LabBlockEffectsTransaction {
                 txid: txid.clone(),
                 inputs,

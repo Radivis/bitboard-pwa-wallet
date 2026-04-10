@@ -18,7 +18,7 @@ describe('AppModal', () => {
   it('renders Infomode toggle in the header', () => {
     renderWithProviders(
       <AppModal
-        open
+        isOpen
         onOpenChange={() => {}}
         onCancel={() => {}}
         title="Test title"
@@ -33,7 +33,7 @@ describe('AppModal', () => {
     const user = userEvent.setup()
     const onCancel = vi.fn()
     renderWithProviders(
-      <AppModal open onOpenChange={() => {}} onCancel={onCancel} title="T">
+      <AppModal isOpen onOpenChange={() => {}} onCancel={onCancel} title="T">
         <DialogDescription>Content</DialogDescription>
       </AppModal>,
     )
@@ -46,7 +46,7 @@ describe('AppModal', () => {
     const onCancel = vi.fn()
     renderWithProviders(
       <AppModal
-        open
+        isOpen
         onOpenChange={() => {}}
         onCancel={onCancel}
         title="T"

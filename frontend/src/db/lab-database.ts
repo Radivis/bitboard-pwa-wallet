@@ -20,6 +20,11 @@ export function getLabDatabase(): Kysely<LabDatabase> {
   return labInstance
 }
 
+/**
+ * Ensures all lab tables exist with the current column set. Lab uses a separate SQLite file
+ * (`bitboard-lab`); there is no version table. Pre-production: if an older file is missing
+ * columns, use “Reset lab” in the UI or clear site data rather than keeping ALTER migrations.
+ */
 async function migrateLabToLatest(labDb: Kysely<LabDatabase>): Promise<void> {
   await labDb.schema
     .createTable('blocks')
@@ -64,7 +69,7 @@ async function migrateLabToLatest(labDb: Kysely<LabDatabase>): Promise<void> {
     .addColumn('address', 'text', (col) => col.primaryKey())
     .addColumn('owner_type', 'text', (col) => col.notNull())
     .addColumn('wallet_id', 'integer', (col) => col)
-    .addColumn('owner_name', 'text', (col) => col)
+    .addColumn('entity_name', 'text', (col) => col)
     .execute()
 
   await labDb.schema
@@ -89,6 +94,52 @@ async function migrateLabToLatest(labDb: Kysely<LabDatabase>): Promise<void> {
     .addColumn('block_time', 'integer', (col) => col.notNull())
     .addColumn('inputs_json', 'text', (col) => col.notNull())
     .addColumn('outputs_json', 'text', (col) => col.notNull())
+    .execute()
+
+  await labDb.schema
+    .createTable('lab_entities')
+    .ifNotExists()
+    .addColumn('lab_entity_id', 'integer', (col) => col.primaryKey().autoIncrement())
+    .addColumn('entity_name', 'text', (col) => col)
+    .addColumn('mnemonic', 'text', (col) => col.notNull())
+    .addColumn('changeset_json', 'text', (col) => col.notNull())
+    .addColumn('external_descriptor', 'text', (col) => col.notNull())
+    .addColumn('internal_descriptor', 'text', (col) => col.notNull())
+    .addColumn('network', 'text', (col) => col.notNull().defaultTo('regtest'))
+    .addColumn('address_type', 'text', (col) => col.notNull().defaultTo('segwit'))
+    .addColumn('account_id', 'integer', (col) => col.notNull().defaultTo(0))
+    .addColumn('created_at', 'text', (col) => col.notNull())
+    .addColumn('updated_at', 'text', (col) => col.notNull())
+    .execute()
+
+  await labDb.schema
+    .createIndex('lab_entities_entity_name_unique')
+    .ifNotExists()
+    .on('lab_entities')
+    .column('entity_name')
+    .unique()
+    .execute()
+
+  await labDb.schema
+    .createTable('lab_mine_operations')
+    .ifNotExists()
+    .addColumn('mine_operation_id', 'integer', (col) => col.primaryKey().autoIncrement())
+    .addColumn('height', 'integer', (col) => col.notNull())
+    .addColumn('block_hash', 'text', (col) => col.notNull())
+    .addColumn('mined_by_key', 'text', (col) => col)
+    .addColumn('coinbase_txid', 'text', (col) => col)
+    .addColumn('created_at', 'text', (col) => col.notNull())
+    .execute()
+
+  await labDb.schema
+    .createTable('lab_tx_operations')
+    .ifNotExists()
+    .addColumn('tx_operation_id', 'integer', (col) => col.primaryKey().autoIncrement())
+    .addColumn('txid', 'text', (col) => col.notNull().unique())
+    .addColumn('sender_key', 'text', (col) => col.notNull())
+    .addColumn('change_address', 'text', (col) => col)
+    .addColumn('change_vout', 'integer', (col) => col)
+    .addColumn('payload_json', 'text', (col) => col.notNull())
     .execute()
 }
 

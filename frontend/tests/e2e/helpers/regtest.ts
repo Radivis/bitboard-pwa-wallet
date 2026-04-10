@@ -23,6 +23,13 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
+const isCi = !!process.env.CI
+
+/** Esplora/electrs can lag more on GitHub Actions than on a warm local Docker setup. */
+const ESPLORA_INDEX_WAIT_MS = isCi ? 45_000 : 15_000
+
+const CONFIRMED_UTXO_WAIT_MS = isCi ? 45_000 : 15_000
+
 /**
  * Send sats from the regtest miner to the given address.
  * Then you typically need to mine a block so the tx confirms.
@@ -65,7 +72,7 @@ export async function mineRegtestBlocks(count: number = 1): Promise<void> {
   }
 
   const expectedHeight = heightBefore + count
-  const deadline = Date.now() + 15_000
+  const deadline = Date.now() + ESPLORA_INDEX_WAIT_MS
   while (Date.now() < deadline) {
     const currentHeight = await getEsploraBlockHeight()
     if (currentHeight >= expectedHeight) return
@@ -73,7 +80,7 @@ export async function mineRegtestBlocks(count: number = 1): Promise<void> {
   }
 
   throw new Error(
-    `Esplora did not index to height ${expectedHeight} within 15s (stuck at ${await getEsploraBlockHeight()})`,
+    `Esplora did not index to height ${expectedHeight} within ${ESPLORA_INDEX_WAIT_MS / 1000}s (stuck at ${await getEsploraBlockHeight()})`,
   )
 }
 
@@ -92,7 +99,7 @@ interface EsploraUtxo {
 export async function waitForConfirmedBalance(
   address: string,
   minConfirmedSats: number,
-  timeoutMs: number = 15_000,
+  timeoutMs: number = CONFIRMED_UTXO_WAIT_MS,
 ): Promise<void> {
   const deadline = Date.now() + timeoutMs
   while (Date.now() < deadline) {

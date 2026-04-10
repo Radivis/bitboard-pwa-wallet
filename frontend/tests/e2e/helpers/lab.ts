@@ -1,6 +1,6 @@
 import { type Page, expect } from '@playwright/test'
 import type { LabState } from '@/workers/lab-api'
-import { WALLET_OWNER_PREFIX } from '@/lib/lab-utils'
+import { lookupLabAddressOwner, WALLET_OWNER_PREFIX } from '@/lib/lab-utils'
 import { goToWalletTab } from './wallet-nav'
 import { waitForSettingsAddressTypeSwitchComplete } from './settings-waits'
 
@@ -32,7 +32,12 @@ export async function resetLab(page: Page): Promise<void> {
   await page.getByRole('link', { name: /settings/i }).click()
   await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
   await page.getByRole('link', { name: 'Manage lab' }).click()
-  await expect(page.getByRole('heading', { name: 'Lab' })).toBeVisible({
+  await expect(page.getByRole('heading', { name: 'Blocks' })).toBeVisible({
+    timeout: 15000,
+  })
+
+  await page.getByRole('navigation', { name: 'Lab' }).getByRole('link', { name: 'Control' }).click()
+  await expect(page.getByRole('heading', { name: 'Control' })).toBeVisible({
     timeout: 15000,
   })
 
@@ -40,7 +45,12 @@ export async function resetLab(page: Page): Promise<void> {
   await expect(page.getByRole('dialog')).toBeVisible()
   await page.getByRole('dialog').getByRole('button', { name: 'Reset lab' }).click()
   await expect(page.getByRole('dialog')).not.toBeVisible()
-  await expect(page.getByText('Blocks mined: 0')).toBeVisible({ timeout: 10000 })
+
+  await page.getByRole('navigation', { name: 'Lab' }).getByRole('link', { name: 'Blocks' }).click()
+  await expect(page.getByRole('heading', { name: 'Blocks' })).toBeVisible({ timeout: 15000 })
+  await expect(page.getByText(/Chain height \(blocks mined\): 0/)).toBeVisible({
+    timeout: 10000,
+  })
 }
 
 export type MineOwnerType = 'name' | 'wallet'
@@ -48,11 +58,13 @@ export type MineOwnerType = 'name' | 'wallet'
 export interface MineOptions {
   targetAddress?: string
   ownerName?: string
+  /** Lab-entity mode with empty name and target: creates `Anonymous-{id}` wallet. */
+  randomAnonymous?: boolean
 }
 
 async function navigateToLab(page: Page): Promise<void> {
-  const labHeading = page.getByRole('heading', { name: 'Lab' })
-  if (await labHeading.isVisible()) return
+  const blocksHeading = page.getByRole('heading', { name: 'Blocks' })
+  if (await blocksHeading.isVisible()) return
   await page.getByRole('link', { name: /settings/i }).click()
   await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
   await page.getByRole('link', { name: 'Manage lab' }).click()
@@ -76,12 +88,12 @@ export async function mineBlocksInLab(
   }
 
   await navigateToLab(page)
-  await expect(page.getByRole('heading', { name: 'Lab' })).toBeVisible({
+  await expect(page.getByRole('heading', { name: 'Blocks' })).toBeVisible({
     timeout: 15000,
   })
 
   await page.getByLabel('Number of blocks').fill(String(count))
-  await page.getByRole('button', { name: ownerType === 'name' ? 'Name' : 'Wallet' }).click()
+  await page.getByRole('button', { name: ownerType === 'name' ? 'Lab entity' : 'Wallet' }).click()
 
   await expect(page.getByRole('button', { name: 'Mine blocks' })).toBeEnabled({
     timeout: 20000,
@@ -96,6 +108,18 @@ export async function mineBlocksInLab(
     await ownerInput.clear()
     await ownerInput.pressSequentially(options.ownerName, { delay: 40 })
     await expect(ownerInput).toHaveValue(options.ownerName)
+  }
+  if (ownerType === 'name' && options?.ownerName === undefined) {
+    const ownerInput = page.locator('#owner-name')
+    if (await ownerInput.isVisible()) {
+      await ownerInput.clear()
+      await expect(ownerInput).toHaveValue('')
+    }
+  }
+  if (ownerType === 'name' && options?.randomAnonymous) {
+    const targetInput = page.locator('#target-address')
+    await targetInput.clear()
+    await expect(targetInput).toHaveValue('')
   }
 
   await page.getByRole('button', { name: 'Mine blocks' }).click()
@@ -115,6 +139,20 @@ export async function mineBlocksInLab(
       )
       .toBeGreaterThan(0)
   }
+  if (ownerType === 'name' && options?.randomAnonymous) {
+    await expect
+      .poll(
+        async () => {
+          const st = await getLabState(page)
+          const anon = st.entities?.find((e) => e.entityName == null)
+          if (!anon) return 0
+          const ownerKey = anon.entityName ?? `Anonymous-${anon.labEntityId}`
+          return getUtxoSumByOwner(st, ownerKey)
+        },
+        { timeout: 20000, message: 'Expected anonymous lab entity UTXOs after random mine' },
+      )
+      .toBeGreaterThan(0)
+  }
   if (ownerType === 'wallet') {
     await expect
       .poll(
@@ -122,7 +160,7 @@ export async function mineBlocksInLab(
           const st = await getLabState(page)
           const map = st.addressToOwner ?? {}
           return (st.utxos ?? []).some((u) => {
-            const o = map[u.address]
+            const o = lookupLabAddressOwner(u.address, map)
             return typeof o === 'string' && o.startsWith(WALLET_OWNER_PREFIX)
           })
         },
@@ -141,7 +179,12 @@ export async function createTransactionInLab(
   feeRate: number,
 ): Promise<void> {
   await navigateToLab(page)
-  await expect(page.getByRole('heading', { name: 'Lab' })).toBeVisible({
+  await expect(page.getByRole('heading', { name: 'Blocks' })).toBeVisible({
+    timeout: 15000,
+  })
+
+  await page.getByRole('navigation', { name: 'Lab' }).getByRole('link', { name: 'Transactions' }).click()
+  await expect(page.getByRole('heading', { name: 'Transactions' })).toBeVisible({
     timeout: 15000,
   })
 
@@ -154,6 +197,29 @@ export async function createTransactionInLab(
 
   await expect(page.getByText('Transaction added to mempool')).toBeVisible({
     timeout: 15000,
+  })
+}
+
+/** Create random lab-entity transactions from Transactions tab. */
+export async function createRandomTransactionsInLab(
+  page: Page,
+  count: number,
+): Promise<void> {
+  await navigateToLab(page)
+  await expect(page.getByRole('heading', { name: 'Blocks' })).toBeVisible({
+    timeout: 15000,
+  })
+
+  await page.getByRole('navigation', { name: 'Lab' }).getByRole('link', { name: 'Transactions' }).click()
+  await expect(page.getByRole('heading', { name: 'Transactions' })).toBeVisible({
+    timeout: 15000,
+  })
+
+  await page.getByLabel('Number of random transactions').fill(String(count))
+  await page.getByRole('button', { name: 'Make random transaction' }).click()
+
+  await expect(page.getByText(`Created ${count} random transaction(s)`)).toBeVisible({
+    timeout: 30000,
   })
 }
 
@@ -191,7 +257,7 @@ export async function sendFromWallet(
 /** Get lab state via test hook. Navigates to lab first if needed. */
 export async function getLabState(page: Page): Promise<LabState> {
   await navigateToLab(page)
-  await expect(page.getByRole('heading', { name: 'Lab' })).toBeVisible({ timeout: 5000 })
+  await expect(page.getByRole('heading', { name: 'Blocks' })).toBeVisible({ timeout: 5000 })
   const state = await page.evaluate(async () => {
     const fn = (window as unknown as { __labGetState?: () => Promise<LabState> }).__labGetState
     if (!fn) throw new Error('__labGetState not available')
@@ -204,14 +270,20 @@ export async function getLabState(page: Page): Promise<LabState> {
 export function getUtxoSumByOwner(state: LabState, owner: string): number {
   const addressToOwner = state.addressToOwner ?? {}
   return (state.utxos ?? [])
-    .filter((u) => addressToOwner[u.address] === owner)
+    .filter(
+      (u) => lookupLabAddressOwner(u.address, addressToOwner) === owner,
+    )
     .reduce((sum, u) => sum + u.amountSats, 0)
 }
 
 /** Resolve an address for a display owner (checks UTXOs first — always present after mining). */
 export function findAddressForOwner(state: LabState, owner: string): string | undefined {
   const map = state.addressToOwner ?? {}
-  const fromUtxo = state.utxos?.find((u) => map[u.address] === owner)?.address
+  const fromUtxo = state.utxos?.find(
+    (u) => lookupLabAddressOwner(u.address, map) === owner,
+  )?.address
   if (fromUtxo) return fromUtxo
-  return state.addresses?.find((a) => map[a.address] === owner)?.address
+  return state.addresses?.find(
+    (a) => lookupLabAddressOwner(a.address, map) === owner,
+  )?.address
 }

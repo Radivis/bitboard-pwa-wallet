@@ -45,10 +45,13 @@ function LabLayout() {
         blocks: ui.blocks,
         utxos: ui.utxos,
         addresses: ui.addresses,
+        entities: ui.entities,
         addressToOwner: ui.addressToOwner,
         mempool: ui.mempool,
         transactions: ui.transactions,
         txDetails: ui.txDetails,
+        mineOperations: ui.mineOperations,
+        txOperations: ui.txOperations,
       }
     }
     return () => {

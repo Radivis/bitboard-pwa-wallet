@@ -15,8 +15,8 @@ import { loadWalletSecretsPayload } from '@/db/wallet-persistence'
 import {
   batchApplyNwcSnapshotPatches,
   snapshotMapFromPayload,
-  type NwcConnectionSnapshot,
 } from '@/lib/lightning-wallet-snapshot-persistence'
+import type { NwcConnectionSnapshot } from '@/lib/wallet-domain-types'
 
 /** React Query key prefix for dashboard Lightning data (invalidate all with `['lightning-dashboard']`). */
 export const LIGHTNING_DASHBOARD_QUERY_KEY = ['lightning-dashboard'] as const

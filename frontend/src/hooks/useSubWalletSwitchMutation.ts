@@ -17,6 +17,7 @@ export function useSubWalletSwitchMutation(
   switchContext: 'network',
 ): {
   mutate: (target: NetworkMode) => void
+  mutateAsync: (target: NetworkMode) => Promise<void>
   isPending: boolean
   loading: boolean
   statusLine: string | null
@@ -25,6 +26,7 @@ export function useSubWalletSwitchMutation(
   switchContext: 'addressType',
 ): {
   mutate: (target: AddressType) => void
+  mutateAsync: (target: AddressType) => Promise<void>
   isPending: boolean
   loading: boolean
   statusLine: string | null
@@ -99,6 +101,7 @@ export function useSubWalletSwitchMutation(switchContext: SubWalletSwitchContext
 
   return {
     mutate: mutation.mutate,
+    mutateAsync: mutation.mutateAsync,
     isPending: mutation.isPending,
     loading,
     statusLine,

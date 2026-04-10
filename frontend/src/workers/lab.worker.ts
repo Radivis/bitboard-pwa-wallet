@@ -1,232 +1,58 @@
 import { expose } from 'comlink'
 import type {
   LabAddress,
-  LabBlock,
+  LabBlockDetails,
+  LabCurrentBlockTemplateParams,
+  LabMineBlocksResult,
   LabState,
   LabTxDetails,
-  MempoolEntry,
 } from './lab-api'
+import { findLabEntityByOwnerKey, labEntityOwnerKey } from '@/lib/lab-entity-keys'
+import { mergeAddressesWithUtxos, WALLET_OWNER_PREFIX } from '@/lib/lab-utils'
 import {
-  EMPTY_LAB_STATE,
-  LAB_MAX_BLOCKS_PER_MINE,
-  LAB_MIN_BLOCKS_PER_MINE,
-} from './lab-api'
+  estimateRequiredFeeSats,
+  feeRateSatPerVbFromRandomRoll,
+  LAB_RANDOM_FEE_RATE_TENTHS_MAX,
+  LAB_RANDOM_FEE_RATE_TENTHS_MIN,
+  LAB_RANDOM_TX_MAX_ATTEMPTS_DEFAULT,
+  sampleRandomLabAmountSats,
+} from './lab-random-transactions'
+import { appendLabTxOperationAndMempoolEntry } from './lab-append-mempool'
 import {
-  mergeAddressesWithUtxos,
-  walletOwnerKey,
-  WALLET_OWNER_PREFIX,
-} from '@/lib/lab-utils'
-
-let labWasmModule: typeof import('@/wasm-pkg/bitboard_crypto') | null = null
-
-async function getWasm() {
-  if (!labWasmModule) {
-    labWasmModule = await import('@/wasm-pkg/bitboard_crypto')
-  }
-  return labWasmModule
-}
-
-let state: LabState = { ...EMPTY_LAB_STATE }
-
-/** Txid -> change address for txs we create (used to mark change outputs). Not persisted. */
-const txidToChangeAddress = new Map<string, string>()
-
-function selectMempoolTxsForBlock(mempool: MempoolEntry[]): MempoolEntry[] {
-  const sortedEntries = [...mempool].sort((a, b) => {
-    if (b.feeSats !== a.feeSats) return b.feeSats - a.feeSats
-    return Math.random() - 0.5
-  })
-  const spentBySelected = new Set<string>()
-  const selectedEntries: MempoolEntry[] = []
-  // Check for double spends
-  for (const entry of sortedEntries) {
-    const overlaps = entry.inputs.some((input) => spentBySelected.has(`${input.txid}:${input.vout}`))
-    if (!overlaps) {
-      selectedEntries.push(entry)
-      for (const input of entry.inputs) spentBySelected.add(`${input.txid}:${input.vout}`)
-    }
-  }
-  return selectedEntries
-}
-
-function getTip(): LabBlock | null {
-  if (state.blocks.length === 0) return null
-  return state.blocks[state.blocks.length - 1]
-}
-
-interface BlockEffectsTx {
-  txid: string
-  inputs: { prev_txid: string; prev_vout: number }[]
-  outputs?: { address: string; amount_sats: number }[]
-}
-
-interface BlockEffectsParsed {
-  spent: { txid: string; vout: number }[]
-  new_utxos: { txid: string; vout: number; address: string; amount_sats: number; script_pubkey_hex: string }[]
-  transactions: BlockEffectsTx[]
-  block_time?: number
-}
-
-function parseBlockEffects(raw: unknown): BlockEffectsParsed {
-  if (typeof raw === 'string') {
-    try {
-      const parsed = JSON.parse(raw) as BlockEffectsParsed
-      return {
-        spent: Array.isArray(parsed?.spent) ? parsed.spent : [],
-        new_utxos: Array.isArray(parsed?.new_utxos) ? parsed.new_utxos : [],
-        transactions: Array.isArray(parsed?.transactions) ? parsed.transactions : [],
-        block_time: typeof parsed?.block_time === 'number' ? parsed.block_time : 0,
-      }
-    } catch {
-      return { spent: [], new_utxos: [], transactions: [], block_time: 0 }
-    }
-  }
-  const effects = raw as Record<string, unknown>
-  const spent = Array.isArray(effects?.spent) ? effects.spent : []
-  const new_utxos = Array.isArray(effects?.new_utxos) ? effects.new_utxos : []
-  const transactions = Array.isArray(effects?.transactions) ? effects.transactions : []
-  const block_time = typeof effects?.block_time === 'number' ? effects.block_time : 0
-  return { spent, new_utxos, transactions, block_time }
-}
-
-function removeSpentUtxos(spent: { txid: string; vout: number }[]): void {
-  for (const stxo of spent) {
-    state.utxos = state.utxos.filter((utxo) => !(utxo.txid === stxo.txid && utxo.vout === stxo.vout))
-  }
-}
-
-function readSatsFromUtxoRow(row: Record<string, unknown>): number {
-  const v = row.amount_sats ?? row.amountSats
-  if (typeof v === 'bigint') return Number(v)
-  if (typeof v === 'number' && Number.isFinite(v)) return Math.trunc(v)
-  return 0
-}
-
-function addNewUtxos(
-  newUtxos: {
-    txid: string
-    vout: number
-    address: string
-    amount_sats?: number
-    script_pubkey_hex?: string
-    amountSats?: number
-    scriptPubkeyHex?: string
-  }[],
-): void {
-  for (const utxo of newUtxos) {
-    const row = utxo as unknown as Record<string, unknown>
-    state.utxos.push({
-      txid: String(utxo.txid),
-      vout: Number(utxo.vout),
-      address: String(utxo.address),
-      amountSats: readSatsFromUtxoRow(row),
-      scriptPubkeyHex: String(
-        utxo.script_pubkey_hex ?? utxo.scriptPubkeyHex ?? '',
-      ),
-    })
-  }
-}
-
-function applyTransactionsAndDetailsFromBlock(
-  transactions: BlockEffectsTx[],
-  height: number,
-  blockTime: number,
-): void {
-  const utxoMap = new Map(state.utxos.map((utxo) => [`${utxo.txid}:${utxo.vout}`, utxo]))
-  const addressToOwner = state.addressToOwner ?? {}
-
-  for (const tx of transactions) {
-    const inputs: { address: string; amountSats: number; owner?: string | null }[] = []
-    let firstInputAddress: string | null = null
-    for (const input of tx.inputs) {
-      const key = `${input.prev_txid}:${input.prev_vout}`
-      const utxo = utxoMap.get(key)
-      if (utxo) {
-        const owner = addressToOwner[utxo.address] ?? null
-        inputs.push({ address: utxo.address, amountSats: utxo.amountSats, owner })
-        if (firstInputAddress === null) firstInputAddress = utxo.address
-      }
-    }
-    const sender = firstInputAddress ? (addressToOwner[firstInputAddress] ?? null) : null
-    const changeAddressForTx = txidToChangeAddress.get(tx.txid)
-    const outputs = (tx.outputs ?? []).map((output) => {
-      const isChange = changeAddressForTx !== undefined && output.address === changeAddressForTx
-      const owner = isChange && sender
-        ? sender
-        : (addressToOwner[output.address] ?? null)
-      if (isChange && sender) {
-        state.addressToOwner = state.addressToOwner ?? {}
-        state.addressToOwner[output.address] = sender
-      }
-      return {
-        address: output.address,
-        amountSats: output.amount_sats,
-        isChange,
-        owner,
-      }
-    })
-    const firstNonChangeOutput = outputs.find((output) => !output.isChange)
-    let receiver = firstNonChangeOutput
-      ? (addressToOwner[firstNonChangeOutput.address] ?? null)
-      : null
-    if (
-      firstNonChangeOutput &&
-      receiver === null &&
-      sender !== null &&
-      sender.startsWith(WALLET_OWNER_PREFIX)
-    ) {
-      state.addressToOwner = state.addressToOwner ?? {}
-      state.addressToOwner[firstNonChangeOutput.address] = sender
-      receiver = sender
-    }
-    state.transactions.push({ txid: tx.txid, sender, receiver })
-    if (inputs.length > 0 || outputs.length > 0) {
-      state.txDetails.push({
-        txid: tx.txid,
-        blockHeight: height,
-        blockTime,
-        confirmations: 0,
-        inputs,
-        outputs,
-      })
-    }
-    txidToChangeAddress.delete(tx.txid)
-  }
-}
-
-function applyBlockEffects(blockHex: string, height: number, newAddress?: LabAddress): void {
-  const wasmModule = labWasmModule!
-  const rawEffects = wasmModule.lab_block_effects(blockHex)
-  const { spent, new_utxos: newUtxos, transactions, block_time } = parseBlockEffects(rawEffects)
-  const blockTime = block_time ?? 0
-
-  applyTransactionsAndDetailsFromBlock(transactions, height, blockTime)
-  removeSpentUtxos(spent)
-  addNewUtxos(newUtxos)
-  if (newAddress) {
-    state.addresses.push(newAddress)
-  }
-
-  const blockHash = wasmModule.lab_block_hash(blockHex)
-  state.blocks.push({
-    blockHash,
-    height,
-    blockData: blockHex,
-  })
-}
+  buildCurrentBlockTemplate,
+  buildMinedBlockDetails,
+  getTip,
+  randomIntInclusive,
+} from './lab-mining-template'
+import { executeMineBlocks } from './lab-mine-blocks'
+import { getWasm } from './lab-wasm-loader'
+import { utxosToJsonForLabWasm } from './lab-wasm-utxos'
+import {
+  assertLabReceiverNonNull,
+  labAddressesEqual,
+  lookupOwnerForLabAddress,
+  parseWasmObject,
+  rebuildTxidToChangeAddressFromState,
+  replaceLabWorkerState,
+  state,
+} from './lab-worker-state'
 
 const labService = {
   async loadState(newState: LabState): Promise<void> {
     const cloned = JSON.parse(JSON.stringify(newState)) as LabState
-    state = {
+    replaceLabWorkerState({
       blocks: cloned.blocks ?? [],
       utxos: cloned.utxos ?? [],
       addresses: cloned.addresses ?? [],
+      entities: cloned.entities ?? [],
       addressToOwner: cloned.addressToOwner ?? {},
       mempool: cloned.mempool ?? [],
       transactions: cloned.transactions ?? [],
       txDetails: cloned.txDetails ?? [],
-    }
+      mineOperations: cloned.mineOperations ?? [],
+      txOperations: cloned.txOperations ?? [],
+    })
+    rebuildTxidToChangeAddressFromState()
   },
 
   async getTransaction(txid: string): Promise<LabTxDetails | null> {
@@ -237,6 +63,7 @@ const labService = {
         blockHeight: -1,
         blockTime: 0,
         confirmations: 0,
+        isCoinbase: false,
         inputs: mempoolEntry.inputsDetail,
         outputs: mempoolEntry.outputsDetail,
       }
@@ -248,6 +75,18 @@ const labService = {
       ...details,
       confirmations: blockCount - details.blockHeight,
     }
+  },
+
+  async getBlockByHeight(height: number): Promise<LabBlockDetails | null> {
+    const block = state.blocks.find((candidate) => candidate.height === height)
+    if (!block) return null
+    return buildMinedBlockDetails(block)
+  },
+
+  async getCurrentBlockTemplate(
+    params: LabCurrentBlockTemplateParams,
+  ): Promise<LabBlockDetails> {
+    return buildCurrentBlockTemplate(params)
   },
 
   async getBlockCount(): Promise<number> {
@@ -266,145 +105,70 @@ const labService = {
   async mineBlocks(
     blockCountToMine: number,
     targetAddress: string,
-    options?: { ownerName?: string; ownerWalletId?: number },
-  ): Promise<LabState> {
-    if (
-      !Number.isInteger(blockCountToMine) ||
-      blockCountToMine < LAB_MIN_BLOCKS_PER_MINE ||
-      blockCountToMine > LAB_MAX_BLOCKS_PER_MINE
-    ) {
-      throw new Error(
-        `Block count must be an integer from ${LAB_MIN_BLOCKS_PER_MINE} to ${LAB_MAX_BLOCKS_PER_MINE} (inclusive)`,
-      )
-    }
-
-    const wasmModule = await getWasm()
-    const tip = getTip()
-
-    let prevHash = ''
-    let height = 0
-    if (tip) {
-      prevHash = tip.blockHash
-      height = tip.height + 1
-    }
-
-    let coinbaseScriptPubkeyHex: string
-    let newAddress: LabAddress | null = null
-    let coinbaseAddress: string
-
-    if (targetAddress.trim()) {
-      coinbaseAddress = targetAddress.trim()
-      coinbaseScriptPubkeyHex = wasmModule.lab_address_to_script_pubkey_hex(coinbaseAddress)
-    } else {
-      const keypair = wasmModule.lab_generate_keypair()
-      newAddress = { address: keypair.address, wif: keypair.wif }
-      coinbaseAddress = keypair.address
-      coinbaseScriptPubkeyHex = wasmModule.lab_address_to_script_pubkey_hex(keypair.address)
-    }
-
-    if (options?.ownerWalletId != null) {
-      state.addressToOwner = state.addressToOwner ?? {}
-      state.addressToOwner[coinbaseAddress] = walletOwnerKey(options.ownerWalletId)
-    } else if (options?.ownerName?.trim()) {
-      state.addressToOwner = state.addressToOwner ?? {}
-      state.addressToOwner[coinbaseAddress] = options.ownerName.trim()
-    }
-
-    const mempoolCopy = [...(state.mempool ?? [])]
-    const selectedEntries = selectMempoolTxsForBlock(mempoolCopy)
-    const mempoolTxHexes = selectedEntries.map((entry) => entry.signedTxHex)
-    const totalFeesSats = selectedEntries.reduce((sum, entry) => sum + entry.feeSats, 0)
-    const spentByIncluded = new Set(
-      selectedEntries.flatMap((entry) => entry.inputs.map((input) => `${input.txid}:${input.vout}`)),
+    options?: {
+      ownerName?: string
+      ownerWalletId?: number
+      labAddressType?: string
+      labNetwork?: string
+    },
+  ): Promise<LabMineBlocksResult> {
+    return executeMineBlocks(blockCountToMine, targetAddress, options, () =>
+      labService.getStateSnapshot(),
     )
-
-    for (let i = 0; i < blockCountToMine; i++) {
-      const txsForBlock = i === 0 ? mempoolTxHexes : []
-      const feesForBlock = BigInt(i === 0 ? totalFeesSats : 0)
-      const blockHex = wasmModule.lab_mine_block(
-        prevHash,
-        height,
-        coinbaseScriptPubkeyHex,
-        txsForBlock,
-        feesForBlock,
-      )
-      applyBlockEffects(blockHex, height, i === 0 ? newAddress ?? undefined : undefined)
-      if (i === 0) {
-        state.mempool = (state.mempool ?? []).filter(
-          (entry) =>
-            !selectedEntries.some((selectedEntry) => selectedEntry.txid === entry.txid) &&
-            !entry.inputs.some((input) => spentByIncluded.has(`${input.txid}:${input.vout}`)),
-        )
-      }
-      if (i > 0) newAddress = null
-      const newTip = getTip()!
-      prevHash = newTip.blockHash
-      height = newTip.height + 1
-    }
-
-    return this.getStateSnapshot()
   },
 
-  async createTransaction(params: {
+  async prepareLabEntityTransaction(params: {
+    entityName: string
     fromAddress: string
     toAddress: string
     amountSats: number
     feeRateSatPerVb: number
-  }): Promise<LabState> {
-    const { fromAddress, toAddress, amountSats, feeRateSatPerVb } = params
-    const wasmModule = await getWasm()
+    knownRecipientOwner?: string | null
+  }): Promise<{
+    crypto: import('./lab-api').LabEntityTransactionCryptoParams
+    mempoolMetadata: import('./lab-api').LabMempoolMetadata
+    totalInput: number
+  }> {
+    const { entityName, fromAddress, toAddress, amountSats, feeRateSatPerVb } = params
+    const addressToOwner = state.addressToOwner ?? {}
+    const ownerAtFrom = addressToOwner[fromAddress] ?? null
+    if (ownerAtFrom !== entityName) {
+      throw new Error('From address does not belong to this lab entity')
+    }
+    if (ownerAtFrom != null && ownerAtFrom.startsWith(WALLET_OWNER_PREFIX)) {
+      throw new Error('Use the wallet Send flow for user-wallet lab spends')
+    }
+
+    const entity = findLabEntityByOwnerKey(state.entities, entityName)
+    if (!entity) {
+      throw new Error(`Unknown lab entity "${entityName}"`)
+    }
 
     const fromUtxos = state.utxos.filter((u) => u.address === fromAddress)
-    const controlled = state.addresses.find((a) => a.address === fromAddress)
-    if (!controlled) {
-      throw new Error('From address must be a controlled address (mined with random target)')
+    if (fromUtxos.length === 0) {
+      throw new Error('No UTXOs for the selected from address')
     }
 
-    const utxosJson = JSON.stringify(
-      fromUtxos.map((utxo) => ({
-        txid: utxo.txid,
-        vout: utxo.vout,
-        amount_sats: utxo.amountSats,
-        script_pubkey_hex: utxo.scriptPubkeyHex,
-      })),
-    )
+    const utxosJson = utxosToJsonForLabWasm(fromUtxos)
 
-    const changeKeypair = wasmModule.lab_generate_keypair()
-    const changeAddress: LabAddress = { address: changeKeypair.address, wif: changeKeypair.wif }
-
-    const buildResult = wasmModule.lab_build_transaction_with_change(
-      utxosJson,
-      toAddress,
-      BigInt(amountSats),
-      feeRateSatPerVb,
-      changeAddress.address,
-    )
-    const buildParsed = (typeof buildResult === 'string'
-      ? JSON.parse(buildResult)
-      : buildResult) as {
-      tx_hex?: string
-      fee_sats?: number
-      has_change?: boolean
+    const sender = entityName
+    const knownRecipient = params.knownRecipientOwner?.trim() || null
+    const receiver =
+      lookupOwnerForLabAddress(toAddress, addressToOwner) ??
+      (labAddressesEqual(fromAddress, toAddress) ? entityName : null) ??
+      knownRecipient
+    if (
+      receiver != null &&
+      receiver !== '' &&
+      lookupOwnerForLabAddress(toAddress, addressToOwner) === undefined
+    ) {
+      state.addressToOwner = state.addressToOwner ?? {}
+      state.addressToOwner[toAddress] = receiver
     }
-    const unsignedTxHex = String(buildParsed.tx_hex ?? '')
-    const feeSats = Number(buildParsed.fee_sats ?? 0)
-    const has_change = Boolean(buildParsed.has_change)
-
-    const signedTxHex = wasmModule.lab_sign_transaction(
-      unsignedTxHex,
-      controlled.wif,
-      utxosJson,
+    assertLabReceiverNonNull(
+      receiver,
+      `prepareLabEntityTransaction entity="${entityName}" toAddress="${toAddress}"`,
     )
-
-    if (has_change) {
-      state.addresses.push(changeAddress)
-      const createdTxid = wasmModule.lab_txid(signedTxHex)
-      txidToChangeAddress.set(createdTxid, changeAddress.address)
-    }
-
-    const addressToOwner = state.addressToOwner ?? {}
-    const sender = addressToOwner[fromAddress] ?? null
-    const receiver = addressToOwner[toAddress] ?? null
 
     const inputsDetail = fromUtxos.map((utxo) => ({
       address: utxo.address,
@@ -413,36 +177,154 @@ const labService = {
     }))
 
     const totalInput = fromUtxos.reduce((sum, utxo) => sum + utxo.amountSats, 0)
-    const outputsDetail: {
-      address: string
-      amountSats: number
-      isChange?: boolean
-      owner?: string | null
-    }[] = has_change
-      ? [
-          { address: toAddress, amountSats, owner: receiver },
-          {
-            address: changeAddress.address,
-            amountSats: totalInput - amountSats - feeSats,
-            isChange: true,
-            owner: sender,
-          },
-        ]
-      : [{ address: toAddress, amountSats: totalInput - feeSats, owner: receiver }]
-
-    const txid = wasmModule.lab_txid(signedTxHex)
     const inputs = fromUtxos.map((utxo) => ({ txid: utxo.txid, vout: utxo.vout }))
 
-    state.mempool = state.mempool ?? []
-    state.mempool.push({
+    return {
+      crypto: {
+        mnemonic: entity.mnemonic,
+        changesetJson: entity.changesetJson,
+        network: entity.network,
+        addressType: entity.addressType,
+        accountId: entity.accountId,
+        utxosJson,
+        toAddress,
+        amountSats,
+        feeRateSatPerVb,
+      },
+      mempoolMetadata: {
+        sender,
+        receiver,
+        feeSats: 0,
+        inputs,
+        inputsDetail,
+        outputsDetail: [{ address: toAddress, amountSats, owner: receiver }],
+        hasChange: false,
+        walletChangeAddress: '',
+      },
+      totalInput,
+    }
+  },
+
+  async prepareRandomLabEntityTransaction(
+    params?: import('./lab-api').PrepareRandomLabEntityTransactionParams,
+  ): Promise<import('./lab-api').PrepareRandomLabEntityTransactionResult | null> {
+    const wasmModule = await getWasm()
+    const maxAttempts = Math.max(1, params?.maxAttempts ?? LAB_RANDOM_TX_MAX_ATTEMPTS_DEFAULT)
+    const addressToOwner = state.addressToOwner ?? {}
+    const sourceEntities = state.entities.filter((entity) => {
+      return state.utxos.some(
+        (utxo) => addressToOwner[utxo.address] === labEntityOwnerKey(entity),
+      )
+    })
+    if (sourceEntities.length === 0) return null
+
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      const sourceEntity = sourceEntities[randomIntInclusive(0, sourceEntities.length - 1)]
+      const targetEntity = state.entities[randomIntInclusive(0, state.entities.length - 1)]
+      const sourceAddressCandidates = state.utxos
+        .filter((utxo) => addressToOwner[utxo.address] === labEntityOwnerKey(sourceEntity))
+        .map((utxo) => utxo.address)
+      const sourceAddresses = [...new Set(sourceAddressCandidates)]
+      if (sourceAddresses.length === 0) continue
+
+      const fromAddress = sourceAddresses[randomIntInclusive(0, sourceAddresses.length - 1)]
+      const fromUtxos = state.utxos.filter((utxo) => utxo.address === fromAddress)
+      if (fromUtxos.length === 0) continue
+
+      const totalInput = fromUtxos.reduce((sum, utxo) => sum + utxo.amountSats, 0)
+      const feeRateSatPerVb = feeRateSatPerVbFromRandomRoll(
+        randomIntInclusive(LAB_RANDOM_FEE_RATE_TENTHS_MIN, LAB_RANDOM_FEE_RATE_TENTHS_MAX),
+      )
+      const requiredFeeSats = estimateRequiredFeeSats(fromUtxos.length, feeRateSatPerVb)
+      const amountSats = sampleRandomLabAmountSats(totalInput, requiredFeeSats)
+      if (amountSats === null) continue
+
+      let toAddress = ''
+      if (sourceEntity.labEntityId === targetEntity.labEntityId) {
+        const revealedRaw = wasmModule.lab_entity_reveal_next_external_address(
+          sourceEntity.mnemonic,
+          sourceEntity.changesetJson,
+          sourceEntity.network,
+          sourceEntity.addressType,
+          sourceEntity.accountId,
+        )
+        const revealedObj = parseWasmObject(revealedRaw)
+        toAddress = String(revealedObj.address ?? '')
+        const nextChangesetJson = String(revealedObj.changeset_json ?? '')
+        if (!toAddress || !nextChangesetJson) continue
+        sourceEntity.changesetJson = nextChangesetJson
+        sourceEntity.updatedAt = new Date().toISOString()
+        state.addressToOwner = state.addressToOwner ?? {}
+        state.addressToOwner[toAddress] = labEntityOwnerKey(sourceEntity)
+      } else {
+        toAddress = wasmModule.lab_entity_get_current_external_address(
+          targetEntity.mnemonic,
+          targetEntity.changesetJson,
+          targetEntity.network,
+          targetEntity.addressType,
+          targetEntity.accountId,
+        )
+        state.addressToOwner = state.addressToOwner ?? {}
+        state.addressToOwner[toAddress] = labEntityOwnerKey(targetEntity)
+      }
+      if (!toAddress) continue
+
+      const prepareParams = {
+        entityName: labEntityOwnerKey(sourceEntity),
+        fromAddress,
+        toAddress,
+        amountSats,
+        feeRateSatPerVb,
+      }
+      const prepared = await this.prepareLabEntityTransaction(prepareParams)
+      const mempoolMetadata =
+        sourceEntity.labEntityId === targetEntity.labEntityId
+          ? { ...prepared.mempoolMetadata, receiver: labEntityOwnerKey(sourceEntity) }
+          : prepared.mempoolMetadata
+      return {
+        prepareParams,
+        entityName: labEntityOwnerKey(sourceEntity),
+        crypto: prepared.crypto,
+        mempoolMetadata,
+        totalInput: prepared.totalInput,
+      }
+    }
+    return null
+  },
+
+  async finalizeLabEntityMempoolTransaction(params: {
+    signedTxHex: string
+    mempoolMetadata: import('./lab-api').LabMempoolMetadata
+    entityName: string
+    newChangesetJson: string
+  }): Promise<LabState> {
+    const wasmModule = await getWasm()
+    const { signedTxHex, mempoolMetadata, entityName, newChangesetJson } = params
+
+    const entity = findLabEntityByOwnerKey(state.entities, entityName)
+    if (!entity) {
+      throw new Error(`Unknown lab entity "${entityName}"`)
+    }
+    entity.changesetJson = newChangesetJson
+    entity.updatedAt = new Date().toISOString()
+
+    const txid = wasmModule.lab_txid(signedTxHex)
+    assertLabReceiverNonNull(
+      mempoolMetadata.receiver,
+      `finalizeLabEntityMempoolTransaction txid=${txid}`,
+    )
+    const changeOut = mempoolMetadata.hasChange
+      ? mempoolMetadata.outputsDetail.find((o) => o.isChange)
+      : undefined
+    const changeVout = mempoolMetadata.outputsDetail.findIndex((o) => o.isChange)
+
+    appendLabTxOperationAndMempoolEntry({
       signedTxHex,
       txid,
-      sender,
-      receiver,
-      feeSats,
-      inputs,
-      inputsDetail,
-      outputsDetail,
+      mempoolMetadata,
+      senderKey: entityName,
+      changeAddress: changeOut?.address ?? null,
+      changeVout: changeVout >= 0 ? changeVout : null,
     })
 
     return this.getStateSnapshot()
@@ -454,6 +336,7 @@ const labService = {
     amountSats: number
     feeRateSatPerVb: number
     walletChangeAddress: string
+    knownRecipientOwner?: string | null
   }): Promise<{
     utxosJson: string
     mempoolMetadata: import('./lab-api').LabMempoolMetadata
@@ -463,7 +346,7 @@ const labService = {
     const addressToOwner = state.addressToOwner ?? {}
 
     const fromUtxos = state.utxos.filter(
-      (utxo) => addressToOwner[utxo.address] === walletOwner,
+      (utxo) => lookupOwnerForLabAddress(utxo.address, addressToOwner) === walletOwner,
     )
     if (fromUtxos.length === 0) {
       throw new Error(
@@ -472,23 +355,31 @@ const labService = {
       )
     }
 
-    const utxosJson = JSON.stringify(
-      fromUtxos.map((utxo) => ({
-        txid: utxo.txid,
-        vout: utxo.vout,
-        amount_sats: utxo.amountSats,
-        script_pubkey_hex: utxo.scriptPubkeyHex,
-        address: utxo.address,
-      })),
-    )
+    const utxosJson = utxosToJsonForLabWasm(fromUtxos)
 
     const sender = walletOwner
-    const receiver = addressToOwner[toAddress] ?? null
+    const knownRecipient = params.knownRecipientOwner?.trim() || null
+    let receiver = lookupOwnerForLabAddress(toAddress, addressToOwner) ?? null
+    if (receiver === null && knownRecipient != null) {
+      state.addressToOwner = state.addressToOwner ?? {}
+      state.addressToOwner[toAddress] = knownRecipient
+      receiver = knownRecipient
+    }
+    if (receiver === null) {
+      throw new Error(
+        `prepareLabWalletTransaction: cannot resolve payee owner for toAddress="${toAddress}". ` +
+          `Send to a lab-mapped address, or pay your active receive address (shown on Receive) so the app can set knownRecipientOwner.`,
+      )
+    }
+    assertLabReceiverNonNull(
+      receiver,
+      `prepareLabWalletTransaction walletOwner="${walletOwner}" toAddress="${toAddress}"`,
+    )
 
     const inputsDetail = fromUtxos.map((utxo) => ({
       address: utxo.address,
       amountSats: utxo.amountSats,
-      owner: addressToOwner[utxo.address] ?? null,
+      owner: lookupOwnerForLabAddress(utxo.address, addressToOwner) ?? null,
     }))
 
     const totalInput = fromUtxos.reduce((sum, utxo) => sum + utxo.amountSats, 0)
@@ -516,23 +407,20 @@ const labService = {
   ): Promise<LabState> {
     const wasmModule = await getWasm()
 
-    if (mempoolMetadata.hasChange) {
-      const createdTxid = wasmModule.lab_txid(signedTxHex)
-      txidToChangeAddress.set(createdTxid, mempoolMetadata.walletChangeAddress)
-    }
-
     const txid = wasmModule.lab_txid(signedTxHex)
+    assertLabReceiverNonNull(
+      mempoolMetadata.receiver,
+      `addSignedTransactionToMempool txid=${txid}`,
+    )
 
-    state.mempool = state.mempool ?? []
-    state.mempool.push({
+    const changeVout = mempoolMetadata.outputsDetail.findIndex((o) => o.isChange)
+    appendLabTxOperationAndMempoolEntry({
       signedTxHex,
       txid,
-      sender: mempoolMetadata.sender,
-      receiver: mempoolMetadata.receiver,
-      feeSats: mempoolMetadata.feeSats,
-      inputs: mempoolMetadata.inputs,
-      inputsDetail: mempoolMetadata.inputsDetail,
-      outputsDetail: mempoolMetadata.outputsDetail,
+      mempoolMetadata,
+      senderKey: mempoolMetadata.sender ?? '',
+      changeAddress: mempoolMetadata.hasChange ? mempoolMetadata.walletChangeAddress : null,
+      changeVout: changeVout >= 0 ? changeVout : null,
     })
 
     return this.getStateSnapshot()

@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useCallback } from 'react'
 import { createFileRoute, useNavigate, Link } from '@tanstack/react-router'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, CheckCircle2, XCircle, Loader2 } from 'lucide-react'
@@ -90,6 +90,32 @@ export function ImportWalletPage() {
 
   const canRestore = isValid === true
 
+  /** First Esplora full scan can take a long time; run it after navigation so the wallet UI is usable immediately. */
+  const runPostImportInitialSync = useCallback(async () => {
+    try {
+      const customUrl = await loadCustomEsploraUrl(networkMode)
+      const esploraUrl = getEsploraUrl(networkMode, customUrl)
+      await fullScanWallet(esploraUrl, 20)
+
+      const balance = await getBalanceFromWorker()
+      const txs = await getTransactionList()
+      setBalance(balance)
+      setTransactions(txs)
+      setWalletStatus('unlocked')
+    } catch {
+      toast.error('Initial sync failed — you can sync later from the dashboard')
+      setWalletStatus('unlocked')
+    }
+  }, [
+    networkMode,
+    fullScanWallet,
+    getBalanceFromWorker,
+    getTransactionList,
+    setBalance,
+    setTransactions,
+    setWalletStatus,
+  ])
+
   const restoreMutation = useMutation({
     mutationFn: async () => {
       if (!canRestore) throw new Error('Invalid input')
@@ -139,29 +165,17 @@ export function ImportWalletPage() {
         addressType,
         accountId,
       })
-      setWalletStatus('unlocked')
+      setWalletStatus('syncing')
 
       startAutoLockTimer(() =>
         useCryptoStore.getState().lockAndPurgeSensitiveRuntimeState(),
       )
-
-      try {
-        const customUrl = await loadCustomEsploraUrl(networkMode)
-        const esploraUrl = getEsploraUrl(networkMode, customUrl)
-        await fullScanWallet(esploraUrl, 20)
-
-        const balance = await getBalanceFromWorker()
-        const txs = await getTransactionList()
-        setBalance(balance)
-        setTransactions(txs)
-      } catch {
-        toast.error('Initial sync failed — you can sync later from the dashboard')
-      }
     },
     onSuccess: () => {
       setMnemonicInput('')
       toast.success('Wallet imported successfully!')
       navigate({ to: '/wallet' })
+      void runPostImportInitialSync()
     },
     onError: (err) => {
       toast.error(
