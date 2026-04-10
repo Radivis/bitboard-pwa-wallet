@@ -128,10 +128,15 @@ export function LabUtxosCard({
               onPageChange={setOwnerPageIndex}
               ariaLabel="UTXO owner groups page"
             >
-              <div className="space-y-4">
+              <div className="space-y-5">
                 {ownerKeys.map((owner) => (
-                  <div key={owner}>
-                    <h4 className="text-sm font-medium mb-2 flex items-center gap-1">
+                  <div
+                    key={owner}
+                    role="group"
+                    aria-label={`${getOwnerDisplayName(owner, wallets)} — UTXOs in this group`}
+                    className="rounded-lg border-[3px] border-border bg-muted/15 p-4 shadow-sm"
+                  >
+                    <h4 className="text-sm font-medium mb-3 flex items-center gap-1">
                       {getOwnerIcon(owner) === 'wallet' ? (
                         <Wallet className="h-4 w-4" />
                       ) : (
