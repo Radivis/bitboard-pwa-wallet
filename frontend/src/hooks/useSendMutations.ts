@@ -12,6 +12,7 @@ import { getLabWorker, initLabWorkerWithState } from '@/workers/lab-factory'
 import { runLabOp } from '@/lib/lab-coordinator'
 import { labOpAddSignedTransaction } from '@/lib/lab-worker-operations'
 import { setLabChainStateCache } from '@/hooks/useLabChainStateQuery'
+import { invalidateLabPaginatedQueries } from '@/lib/lab-paginated-queries'
 import { errorMessage } from '@/lib/utils'
 
 /**
@@ -199,6 +200,7 @@ export function useLabSendMutation() {
     },
     onSuccess: (state) => {
       setLabChainStateCache(queryClient, state)
+      void invalidateLabPaginatedQueries(queryClient)
       toast.success('Transaction added to mempool')
       reset()
       navigate({ to: '/wallet' })

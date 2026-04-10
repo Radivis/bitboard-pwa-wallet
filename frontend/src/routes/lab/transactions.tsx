@@ -39,21 +39,9 @@ function LabTransactionsPage() {
         labEntitiesCount={lab.labEntitiesCount}
       />
 
-      <LabAddressesCard
-        addressesByOwner={lab.addressesByOwner}
-        sortedAddressOwnerKeys={lab.sortedAddressOwnerKeys}
-        getBalanceForAddress={lab.getBalanceForAddress}
-        onCopyAddress={lab.onCopyAddress}
-        wallets={lab.wallets}
-      />
+      <LabAddressesCard onCopyAddress={lab.onCopyAddress} wallets={lab.wallets} />
 
-      <LabUtxosCard
-        utxos={lab.utxos}
-        utxosByOwner={lab.utxosByOwner}
-        sortedOwnerKeys={lab.sortedOwnerKeys}
-        onCopyAddress={lab.onCopyAddress}
-        wallets={lab.wallets}
-      />
+      <LabUtxosCard onCopyAddress={lab.onCopyAddress} wallets={lab.wallets} />
     </>
   )
 }

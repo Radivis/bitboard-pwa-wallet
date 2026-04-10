@@ -1,4 +1,5 @@
 import { nextLabEntityId } from '@/lib/lab-entity-keys'
+import { feeSatsFromTxDetails } from '@/lib/lab-tx-fee'
 import { isCoinbase } from '@/lib/lab-operations'
 import { walletOwnerKey } from '@/lib/lab-utils'
 import type {
@@ -45,13 +46,6 @@ export function getTip(): LabBlock | null {
   return state.blocks[state.blocks.length - 1]
 }
 
-function feeFromTxDetails(tx: LabTxDetails): number {
-  if (tx.isCoinbase) return 0
-  const totalInputs = tx.inputs.reduce((sum, input) => sum + input.amountSats, 0)
-  const totalOutputs = tx.outputs.reduce((sum, output) => sum + output.amountSats, 0)
-  return Math.max(totalInputs - totalOutputs, 0)
-}
-
 function minedByFromBlockTxs(
   blockTxs: LabTxDetails[],
   addressToOwner: Record<string, string>,
@@ -83,7 +77,7 @@ export function blockTransactionsForHeight(height: number): LabBlockTransactionS
         txid: tx.txid,
         sender: txRecord?.sender ?? null,
         receiver: txRecord?.receiver ?? null,
-        feeSats: feeFromTxDetails(tx),
+        feeSats: feeSatsFromTxDetails(tx),
         isCoinbase: tx.isCoinbase,
       }
     })

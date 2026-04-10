@@ -15,7 +15,6 @@ import { LAB_MAX_RANDOM_ENTITY_TRANSACTIONS } from '@/lib/lab-random-limits'
 import {
   WALLET_OWNER_PREFIX,
   assertLabAddressOwnerResolved,
-  groupLabRowsByResolvedOwner,
   labBitcoinAddressesEqual,
   resolveLabAddressOwnerDisplay,
   walletOwnerKey,
@@ -245,28 +244,6 @@ export function useLabIndexPageData() {
     [transactions, txDetailsByTxid],
   )
 
-  const { byOwner: addressesByOwner, sortedOwnerKeys: sortedAddressOwnerKeys } = useMemo(
-    () =>
-      groupLabRowsByResolvedOwner(
-        addresses,
-        (a) => a.address,
-        resolveLabAddressOwner,
-        'addresses card',
-      ),
-    [addresses, resolveLabAddressOwner],
-  )
-
-  const { byOwner: utxosByOwner, sortedOwnerKeys } = useMemo(
-    () =>
-      groupLabRowsByResolvedOwner(
-        utxos,
-        (u) => u.address,
-        resolveLabAddressOwner,
-        'utxos card',
-      ),
-    [utxos, resolveLabAddressOwner],
-  )
-
   return {
     blocks,
     blockCount,
@@ -303,16 +280,12 @@ export function useLabIndexPageData() {
     randomBatchProgress,
     labEntitiesCount: labState?.entities?.length ?? 0,
     addresses,
-    addressesByOwner,
-    sortedAddressOwnerKeys,
     txDetails,
     addressToOwner,
     getBalanceForAddress,
     onCopyAddress: handleCopyAddress,
     wallets,
     utxos,
-    utxosByOwner,
-    sortedOwnerKeys,
     mempool,
     sortedTransactions,
     txDetailsByTxid,

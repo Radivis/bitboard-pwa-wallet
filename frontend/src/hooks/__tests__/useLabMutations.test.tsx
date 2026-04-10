@@ -8,6 +8,7 @@ import {
   useLabMineBlocksMutation,
 } from '@/hooks/useLabMutations'
 import { labChainStateQueryKey } from '@/lib/lab-chain-query'
+import { labPaginatedQueryKeyPrefix } from '@/lib/lab-paginated-queries'
 import { EMPTY_LAB_STATE, type LabMineBlocksResult } from '@/workers/lab-api'
 
 const labOpMineBlocks = vi.hoisted(() => vi.fn())
@@ -190,7 +191,7 @@ describe('useLabCreateRandomTransactionsMutation', () => {
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: labChainStateQueryKey })
   })
 
-  it('does not invalidate lab chain query on success', async () => {
+  it('invalidates lab paginated queries on success but not the chain state query key', async () => {
     labOpCreateRandomLabEntityTransactions.mockResolvedValue({
       state: EMPTY_LAB_STATE,
       createdCount: 2,
@@ -204,6 +205,7 @@ describe('useLabCreateRandomTransactionsMutation', () => {
       await result.current.mutateAsync({ count: 2 })
     })
 
-    expect(invalidateSpy).not.toHaveBeenCalled()
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: [...labPaginatedQueryKeyPrefix] })
+    expect(invalidateSpy).not.toHaveBeenCalledWith({ queryKey: labChainStateQueryKey })
   })
 })

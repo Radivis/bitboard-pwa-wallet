@@ -8,6 +8,7 @@ import {
 } from '@/lib/lab-worker-operations'
 import { setLabChainStateCache } from '@/hooks/useLabChainStateQuery'
 import { labChainStateQueryKey } from '@/lib/lab-chain-query'
+import { invalidateLabPaginatedQueries } from '@/lib/lab-paginated-queries'
 import { errorMessage } from '@/lib/utils'
 
 export type LabMineBlocksVariables = {
@@ -35,6 +36,7 @@ export function useLabMineBlocksMutation() {
     },
     onSuccess: (result, variables) => {
       setLabChainStateCache(queryClient, result.state)
+      void invalidateLabPaginatedQueries(queryClient)
       const blocksPhrase = `Mined ${variables.count} block(s)`
       const successMessage =
         result.includedMempoolTxCount > 0
@@ -84,6 +86,7 @@ export function useLabCreateTransactionMutation() {
     },
     onSuccess: (state) => {
       setLabChainStateCache(queryClient, state)
+      void invalidateLabPaginatedQueries(queryClient)
       toast.success('Transaction added to mempool')
     },
     onError: (err) => {
@@ -109,6 +112,7 @@ export function useLabCreateRandomTransactionsMutation() {
     },
     onSuccess: (result, variables) => {
       setLabChainStateCache(queryClient, result.state)
+      void invalidateLabPaginatedQueries(queryClient)
       if (result.createdCount === variables.count) {
         toast.success(`Created ${result.createdCount} random transaction(s)`)
         return
@@ -136,6 +140,7 @@ export function useLabResetMutation() {
     mutationFn: () => labOpReset(),
     onSuccess: (state) => {
       setLabChainStateCache(queryClient, state)
+      void invalidateLabPaginatedQueries(queryClient)
       toast.success('Lab reset')
     },
     onError: (err) => {

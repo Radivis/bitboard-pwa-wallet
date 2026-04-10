@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { Link } from '@tanstack/react-router'
 import {
   Card,
@@ -15,6 +16,10 @@ import {
   LabBlockHeaderInfomodeContent,
   LabBlockMerkleRootInfomodeContent,
 } from '@/components/lab/LabBlockHeaderInfomodeContent'
+import { CardPagination } from '@/components/CardPagination'
+import { useLabBlockTransactionsPage } from '@/hooks/useLabPaginatedQueries'
+import { LAB_CARD_PAGE_SIZE } from '@/lib/lab-paginated-queries'
+import { useWalletStore } from '@/stores/walletStore'
 
 function HeaderField({ label, value }: { label: string; value: string }) {
   return (
@@ -142,6 +147,43 @@ export function LabBlockMetadataCard({
   )
 }
 
+function labBlockTxList(
+  txs: LabBlockDetails['transactions'],
+  wallets: Array<{ wallet_id: number; name: string }>,
+) {
+  return (
+    <div className="space-y-2">
+      {txs.map((tx) => (
+        <Link
+          key={tx.txid}
+          to="/lab/tx/$txid"
+          params={{ txid: tx.txid }}
+          className="flex flex-wrap items-center gap-2 rounded px-2 py-2 transition-colors hover:bg-muted/50"
+        >
+          {tx.isCoinbase ? (
+            <Badge variant="outline" className="shrink-0">
+              Coinbase
+            </Badge>
+          ) : null}
+          <span className="min-w-0 flex-1 font-mono text-sm" title={tx.txid}>
+            {truncateAddress(tx.txid)}
+          </span>
+          <span className="text-sm text-muted-foreground">
+            {tx.isCoinbase
+              ? tx.receiver
+                ? getOwnerDisplayName(tx.receiver, wallets)
+                : 'unknown reward'
+              : `${tx.sender ? getOwnerDisplayName(tx.sender, wallets) : 'unknown'} -> ${
+                  tx.receiver ? getOwnerDisplayName(tx.receiver, wallets) : 'unknown'
+                }`}
+          </span>
+          <span className="text-sm tabular-nums">{formatSats(tx.feeSats)} sats fee</span>
+        </Link>
+      ))}
+    </div>
+  )
+}
+
 export function LabBlockTransactionsCard({
   block,
   wallets,
@@ -149,6 +191,32 @@ export function LabBlockTransactionsCard({
   block: LabBlockDetails
   wallets: Array<{ wallet_id: number; name: string }>
 }) {
+  const [pageIndex, setPageIndex] = useState(0)
+  const isTemplate = block.isTemplate
+  const blockHeight = block.metadata.height
+  const labNetworkEnabled = useWalletStore((s) => s.networkMode === 'lab')
+
+  const minedQuery = useLabBlockTransactionsPage(blockHeight, pageIndex, {
+    enabled: !isTemplate && labNetworkEnabled,
+  })
+
+  useEffect(() => {
+    setPageIndex(0)
+  }, [isTemplate, blockHeight])
+
+  const totalCount = isTemplate
+    ? block.transactions.length
+    : minedQuery.data?.totalCount ?? block.metadata.numberOfTransactions
+
+  const txsForPage = isTemplate
+    ? block.transactions.slice(
+        pageIndex * LAB_CARD_PAGE_SIZE,
+        (pageIndex + 1) * LAB_CARD_PAGE_SIZE,
+      )
+    : (minedQuery.data?.transactions ?? [])
+
+  const showLoading = !isTemplate && minedQuery.isLoading && txsForPage.length === 0
+
   return (
     <InfomodeWrapper
       infoId="lab-block-detail-transactions-card"
@@ -162,38 +230,22 @@ export function LabBlockTransactionsCard({
           <CardDescription>Transactions included in this block</CardDescription>
         </CardHeader>
         <CardContent>
-          {block.transactions.length === 0 ? (
+          {totalCount === 0 ? (
             <p className="text-sm text-muted-foreground">No transactions in this block.</p>
+          ) : showLoading ? (
+            <p className="text-sm text-muted-foreground">Loading transactions…</p>
+          ) : minedQuery.isError && !isTemplate ? (
+            <p className="text-sm text-destructive">Could not load transactions.</p>
           ) : (
-            <div className="space-y-2">
-              {block.transactions.map((tx) => (
-                <Link
-                  key={tx.txid}
-                  to="/lab/tx/$txid"
-                  params={{ txid: tx.txid }}
-                  className="flex flex-wrap items-center gap-2 rounded px-2 py-2 transition-colors hover:bg-muted/50"
-                >
-                  {tx.isCoinbase ? (
-                    <Badge variant="outline" className="shrink-0">
-                      Coinbase
-                    </Badge>
-                  ) : null}
-                  <span className="min-w-0 flex-1 font-mono text-sm" title={tx.txid}>
-                    {truncateAddress(tx.txid)}
-                  </span>
-                  <span className="text-sm text-muted-foreground">
-                    {tx.isCoinbase
-                      ? (tx.receiver
-                        ? getOwnerDisplayName(tx.receiver, wallets)
-                        : 'unknown reward')
-                      : `${tx.sender ? getOwnerDisplayName(tx.sender, wallets) : 'unknown'} -> ${
-                          tx.receiver ? getOwnerDisplayName(tx.receiver, wallets) : 'unknown'
-                        }`}
-                  </span>
-                  <span className="text-sm tabular-nums">{formatSats(tx.feeSats)} sats fee</span>
-                </Link>
-              ))}
-            </div>
+            <CardPagination
+              pageSize={LAB_CARD_PAGE_SIZE}
+              totalCount={totalCount}
+              pageIndex={pageIndex}
+              onPageChange={setPageIndex}
+              ariaLabel="Transactions page"
+            >
+              {labBlockTxList(txsForPage, wallets)}
+            </CardPagination>
           )}
         </CardContent>
       </Card>
