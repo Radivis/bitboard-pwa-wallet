@@ -7,6 +7,7 @@ import {
   labOpReset,
 } from '@/lib/lab-worker-operations'
 import { setLabChainStateCache } from '@/hooks/useLabChainStateQuery'
+import { labChainStateQueryKey } from '@/lib/lab-chain-query'
 import { errorMessage } from '@/lib/utils'
 
 export type LabMineBlocksVariables = {
@@ -115,6 +116,11 @@ export function useLabCreateRandomTransactionsMutation() {
     },
     onError: (err) => {
       toast.error(err instanceof Error ? err.message : 'Random transactions failed')
+    },
+    onSettled: (_data, error) => {
+      if (error != null) {
+        void queryClient.invalidateQueries({ queryKey: labChainStateQueryKey })
+      }
     },
   })
 }

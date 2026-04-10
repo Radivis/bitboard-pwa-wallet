@@ -179,83 +179,85 @@ export async function labOpCreateLabEntityTransaction(params: {
 }
 
 /**
- * Create up to `count` random lab-entity transactions and persist final state.
+ * Create up to `count` random lab-entity transactions, then persist once (in `finally`,
+ * including partial progress if the loop throws after some finalizes).
  */
 export async function labOpCreateRandomLabEntityTransactions(count: number): Promise<{
   state: LabState
   createdCount: number
 }> {
-  let createdCount = 0
-  let latestState: LabState | null = null
-  const requestedCount = Math.max(1, Math.trunc(count))
-
-  for (let index = 0; index < requestedCount; index += 1) {
-    const prepared: PrepareRandomLabEntityTransactionResult | null = await runLabOp(async () => {
-      await initLabWorkerWithState()
-      const labWorker = getLabWorker()
-      return labWorker.prepareRandomLabEntityTransaction()
-    })
-    if (!prepared) break
-
+  return runLabOp(async () => {
+    labPipelineDebugLog('createRandomLabEntityTransactions:start', { count })
+    await initLabWorkerWithState()
+    const labWorker = getLabWorker()
     const cryptoWorker = getCryptoWorker()
-    const signRaw = await cryptoWorker.labEntityBuildAndSignLabTransaction(prepared.crypto)
-    const { signedTxHex, feeSats, hasChange, changesetJson, changeAddress } =
-      parseLabEntitySignResult(signRaw)
 
-    if (hasChange && (changeAddress == null || changeAddress === '')) {
-      throw new Error('labOpCreateRandomLabEntityTransactions: change_address missing when has_change')
+    let createdCount = 0
+    let persistedState!: LabState
+    const requestedCount = Math.max(1, Math.trunc(count))
+
+    try {
+      for (let index = 0; index < requestedCount; index += 1) {
+        const prepared: PrepareRandomLabEntityTransactionResult | null =
+          await labWorker.prepareRandomLabEntityTransaction()
+        if (!prepared) break
+
+        const signRaw = await cryptoWorker.labEntityBuildAndSignLabTransaction(prepared.crypto)
+        const { signedTxHex, feeSats, hasChange, changesetJson, changeAddress } =
+          parseLabEntitySignResult(signRaw)
+
+        if (hasChange && (changeAddress == null || changeAddress === '')) {
+          throw new Error(
+            'labOpCreateRandomLabEntityTransactions: change_address missing when has_change',
+          )
+        }
+
+        const outputsDetail = hasChange
+          ? [
+              ...prepared.mempoolMetadata.outputsDetail,
+              {
+                address: changeAddress as string,
+                amountSats: prepared.totalInput - prepared.prepareParams.amountSats - feeSats,
+                isChange: true as const,
+                owner: prepared.mempoolMetadata.sender,
+              },
+            ]
+          : [
+              {
+                ...prepared.mempoolMetadata.outputsDetail[0],
+                amountSats: prepared.totalInput - feeSats,
+              },
+            ]
+
+        const randomFullMetadata = {
+          ...prepared.mempoolMetadata,
+          feeSats,
+          hasChange,
+          outputsDetail,
+          walletChangeAddress: hasChange ? (changeAddress as string) : '',
+        }
+        if (randomFullMetadata.receiver == null || randomFullMetadata.receiver === '') {
+          throw new Error('labOpCreateRandomLabEntityTransactions: receiver is required before finalize')
+        }
+
+        await labWorker.finalizeLabEntityMempoolTransaction({
+          signedTxHex,
+          mempoolMetadata: randomFullMetadata,
+          entityName: prepared.entityName,
+          newChangesetJson: changesetJson,
+        })
+        createdCount += 1
+      }
+    } finally {
+      const snapshot = await labWorker.getStateSnapshot()
+      await persistLabState(snapshot)
+      persistedState = snapshot
+      labPipelineSnapshot('createRandomLabEntityTransactions:afterPersist', snapshot)
     }
 
-    const outputsDetail = hasChange
-      ? [
-          ...prepared.mempoolMetadata.outputsDetail,
-          {
-            address: changeAddress as string,
-            amountSats: prepared.totalInput - prepared.prepareParams.amountSats - feeSats,
-            isChange: true as const,
-            owner: prepared.mempoolMetadata.sender,
-          },
-        ]
-      : [
-          {
-            ...prepared.mempoolMetadata.outputsDetail[0],
-            amountSats: prepared.totalInput - feeSats,
-          },
-        ]
-
-    const randomFullMetadata = {
-      ...prepared.mempoolMetadata,
-      feeSats,
-      hasChange,
-      outputsDetail,
-      walletChangeAddress: hasChange ? (changeAddress as string) : '',
-    }
-    if (randomFullMetadata.receiver == null || randomFullMetadata.receiver === '') {
-      throw new Error('labOpCreateRandomLabEntityTransactions: receiver is required before finalize')
-    }
-
-    latestState = await runLabOp(async () => {
-      await initLabWorkerWithState()
-      const labWorker = getLabWorker()
-      const state = await labWorker.finalizeLabEntityMempoolTransaction({
-        signedTxHex,
-        mempoolMetadata: randomFullMetadata,
-        entityName: prepared.entityName,
-        newChangesetJson: changesetJson,
-      })
-      await persistLabState(state)
-      return state
-    })
-    createdCount += 1
-  }
-
-  if (latestState == null) {
-    latestState = await runLabOp(async () => {
-      const { state } = await initLabWorkerWithState()
-      return state
-    })
-  }
-  return { state: latestState, createdCount }
+    labPipelineDebugLog('createRandomLabEntityTransactions:done', { createdCount })
+    return { state: persistedState, createdCount }
+  })
 }
 
 export async function labOpAddSignedTransaction(

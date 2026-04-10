@@ -3,13 +3,19 @@ import { renderHook, act } from '@testing-library/react'
 import React from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { useLabMineBlocksMutation } from '@/hooks/useLabMutations'
+import {
+  useLabCreateRandomTransactionsMutation,
+  useLabMineBlocksMutation,
+} from '@/hooks/useLabMutations'
+import { labChainStateQueryKey } from '@/lib/lab-chain-query'
 import { EMPTY_LAB_STATE, type LabMineBlocksResult } from '@/workers/lab-api'
 
 const labOpMineBlocks = vi.hoisted(() => vi.fn())
+const labOpCreateRandomLabEntityTransactions = vi.hoisted(() => vi.fn())
 
 vi.mock('@/lib/lab-worker-operations', () => ({
   labOpMineBlocks,
+  labOpCreateRandomLabEntityTransactions,
 }))
 
 vi.mock('sonner', () => ({
@@ -158,5 +164,46 @@ describe('useLabMineBlocksMutation', () => {
 
     const warnMsg = vi.mocked(toast.warning).mock.calls[0][0] as string
     expect(warnMsg).toContain('1 transaction discarded')
+  })
+})
+
+describe('useLabCreateRandomTransactionsMutation', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('invalidates lab chain query when random batch fails after partial persist', async () => {
+    labOpCreateRandomLabEntityTransactions.mockRejectedValue(new Error('sign failed'))
+    const { queryClient, wrapper } = createTestWrapper()
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
+
+    const { result } = renderHook(() => useLabCreateRandomTransactionsMutation(), { wrapper })
+
+    await act(async () => {
+      try {
+        await result.current.mutateAsync({ count: 2 })
+      } catch {
+        /* expected */
+      }
+    })
+
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: labChainStateQueryKey })
+  })
+
+  it('does not invalidate lab chain query on success', async () => {
+    labOpCreateRandomLabEntityTransactions.mockResolvedValue({
+      state: EMPTY_LAB_STATE,
+      createdCount: 2,
+    })
+    const { queryClient, wrapper } = createTestWrapper()
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
+
+    const { result } = renderHook(() => useLabCreateRandomTransactionsMutation(), { wrapper })
+
+    await act(async () => {
+      await result.current.mutateAsync({ count: 2 })
+    })
+
+    expect(invalidateSpy).not.toHaveBeenCalled()
   })
 })
