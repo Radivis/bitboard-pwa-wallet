@@ -101,7 +101,8 @@ async function migrateLabToLatest(labDb: Kysely<LabDatabase>): Promise<void> {
   await labDb.schema
     .createTable('lab_entities')
     .ifNotExists()
-    .addColumn('entity_name', 'text', (col) => col.primaryKey())
+    .addColumn('lab_entity_id', 'integer', (col) => col.primaryKey().autoIncrement())
+    .addColumn('entity_name', 'text', (col) => col)
     .addColumn('mnemonic', 'text', (col) => col.notNull())
     .addColumn('changeset_json', 'text', (col) => col.notNull())
     .addColumn('external_descriptor', 'text', (col) => col.notNull())
@@ -111,6 +112,14 @@ async function migrateLabToLatest(labDb: Kysely<LabDatabase>): Promise<void> {
     .addColumn('account_id', 'integer', (col) => col.notNull().defaultTo(0))
     .addColumn('created_at', 'text', (col) => col.notNull())
     .addColumn('updated_at', 'text', (col) => col.notNull())
+    .execute()
+
+  await labDb.schema
+    .createIndex('lab_entities_entity_name_unique')
+    .ifNotExists()
+    .on('lab_entities')
+    .column('entity_name')
+    .unique()
     .execute()
 
   await labDb.schema

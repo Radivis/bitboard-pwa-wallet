@@ -1,3 +1,4 @@
+import { nextLabEntityId } from '@/lib/lab-entity-keys'
 import { isCoinbaseFromBlockEffectsTx } from '@/lib/lab-operations'
 import { walletOwnerKey } from '@/lib/lab-utils'
 import type {
@@ -151,7 +152,7 @@ export async function resolveTemplateCoinbase(
     return { address: targetArg, minedBy }
   }
 
-  const anonymousName = `Anonymous-${crypto.randomUUID()}`
+  const anonymousName = `Anonymous-${nextLabEntityId(state.entities)}`
   return {
     address: firstAddressFromNewEntityWallet(),
     minedBy: anonymousName,

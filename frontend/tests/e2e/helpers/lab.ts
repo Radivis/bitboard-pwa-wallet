@@ -58,7 +58,7 @@ export type MineOwnerType = 'name' | 'wallet'
 export interface MineOptions {
   targetAddress?: string
   ownerName?: string
-  /** Lab-entity mode with empty name and target: creates `Anonymous-{uuid}` wallet. */
+  /** Lab-entity mode with empty name and target: creates `Anonymous-{id}` wallet. */
   randomAnonymous?: boolean
 }
 
@@ -144,9 +144,10 @@ export async function mineBlocksInLab(
       .poll(
         async () => {
           const st = await getLabState(page)
-          const anon = st.entities?.find((e) => e.entityName.startsWith('Anonymous-'))
+          const anon = st.entities?.find((e) => e.entityName == null)
           if (!anon) return 0
-          return getUtxoSumByOwner(st, anon.entityName)
+          const ownerKey = anon.entityName ?? `Anonymous-${anon.labEntityId}`
+          return getUtxoSumByOwner(st, ownerKey)
         },
         { timeout: 20000, message: 'Expected anonymous lab entity UTXOs after random mine' },
       )

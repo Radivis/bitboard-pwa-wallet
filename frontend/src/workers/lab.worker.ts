@@ -7,6 +7,7 @@ import type {
   LabState,
   LabTxDetails,
 } from './lab-api'
+import { findLabEntityByOwnerKey, labEntityOwnerKey } from '@/lib/lab-entity-keys'
 import { mergeAddressesWithUtxos, WALLET_OWNER_PREFIX } from '@/lib/lab-utils'
 import {
   estimateRequiredFeeSats,
@@ -139,7 +140,7 @@ const labService = {
       throw new Error('Use the wallet Send flow for user-wallet lab spends')
     }
 
-    const entity = state.entities.find((e) => e.entityName === entityName)
+    const entity = findLabEntityByOwnerKey(state.entities, entityName)
     if (!entity) {
       throw new Error(`Unknown lab entity "${entityName}"`)
     }
@@ -212,7 +213,9 @@ const labService = {
     const maxAttempts = Math.max(1, params?.maxAttempts ?? LAB_RANDOM_TX_MAX_ATTEMPTS_DEFAULT)
     const addressToOwner = state.addressToOwner ?? {}
     const sourceEntities = state.entities.filter((entity) => {
-      return state.utxos.some((utxo) => addressToOwner[utxo.address] === entity.entityName)
+      return state.utxos.some(
+        (utxo) => addressToOwner[utxo.address] === labEntityOwnerKey(entity),
+      )
     })
     if (sourceEntities.length === 0) return null
 
@@ -220,7 +223,7 @@ const labService = {
       const sourceEntity = sourceEntities[randomIntInclusive(0, sourceEntities.length - 1)]
       const targetEntity = state.entities[randomIntInclusive(0, state.entities.length - 1)]
       const sourceAddressCandidates = state.utxos
-        .filter((utxo) => addressToOwner[utxo.address] === sourceEntity.entityName)
+        .filter((utxo) => addressToOwner[utxo.address] === labEntityOwnerKey(sourceEntity))
         .map((utxo) => utxo.address)
       const sourceAddresses = [...new Set(sourceAddressCandidates)]
       if (sourceAddresses.length === 0) continue
@@ -238,7 +241,7 @@ const labService = {
       if (amountSats === null) continue
 
       let toAddress = ''
-      if (sourceEntity.entityName === targetEntity.entityName) {
+      if (sourceEntity.labEntityId === targetEntity.labEntityId) {
         const revealedRaw = wasmModule.lab_entity_reveal_next_external_address(
           sourceEntity.mnemonic,
           sourceEntity.changesetJson,
@@ -253,7 +256,7 @@ const labService = {
         sourceEntity.changesetJson = nextChangesetJson
         sourceEntity.updatedAt = new Date().toISOString()
         state.addressToOwner = state.addressToOwner ?? {}
-        state.addressToOwner[toAddress] = sourceEntity.entityName
+        state.addressToOwner[toAddress] = labEntityOwnerKey(sourceEntity)
       } else {
         toAddress = wasmModule.lab_entity_get_current_external_address(
           targetEntity.mnemonic,
@@ -263,12 +266,12 @@ const labService = {
           targetEntity.accountId,
         )
         state.addressToOwner = state.addressToOwner ?? {}
-        state.addressToOwner[toAddress] = targetEntity.entityName
+        state.addressToOwner[toAddress] = labEntityOwnerKey(targetEntity)
       }
       if (!toAddress) continue
 
       const prepareParams = {
-        entityName: sourceEntity.entityName,
+        entityName: labEntityOwnerKey(sourceEntity),
         fromAddress,
         toAddress,
         amountSats,
@@ -276,12 +279,12 @@ const labService = {
       }
       const prepared = await this.prepareLabEntityTransaction(prepareParams)
       const mempoolMetadata =
-        sourceEntity.entityName === targetEntity.entityName
-          ? { ...prepared.mempoolMetadata, receiver: sourceEntity.entityName }
+        sourceEntity.labEntityId === targetEntity.labEntityId
+          ? { ...prepared.mempoolMetadata, receiver: labEntityOwnerKey(sourceEntity) }
           : prepared.mempoolMetadata
       return {
         prepareParams,
-        entityName: sourceEntity.entityName,
+        entityName: labEntityOwnerKey(sourceEntity),
         crypto: prepared.crypto,
         mempoolMetadata,
         totalInput: prepared.totalInput,
@@ -299,7 +302,7 @@ const labService = {
     const wasmModule = await getWasm()
     const { signedTxHex, mempoolMetadata, entityName, newChangesetJson } = params
 
-    const entity = state.entities.find((e) => e.entityName === entityName)
+    const entity = findLabEntityByOwnerKey(state.entities, entityName)
     if (!entity) {
       throw new Error(`Unknown lab entity "${entityName}"`)
     }

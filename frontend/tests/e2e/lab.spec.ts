@@ -54,9 +54,10 @@ test.describe('Lab', { tag: '@lab' }, () => {
     const state = await getLabState(page)
     expect(state.blocks).toHaveLength(1)
     expect(state.entities).toHaveLength(1)
-    const name = state.entities![0].entityName
-    expect(name).toMatch(/^Anonymous-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)
-    expect(getUtxoSumByOwner(state, name)).toBe(COINBASE_SATS)
+    const entity = state.entities![0]
+    const displayName = entity.entityName ?? `Anonymous-${entity.labEntityId}`
+    expect(displayName).toMatch(/^Anonymous-\d+$/)
+    expect(getUtxoSumByOwner(state, displayName)).toBe(COINBASE_SATS)
   })
 
   test('creating lab transaction does not increase merged address count while unconfirmed', async ({

@@ -1,3 +1,4 @@
+import { labEntityOwnerKey, nextLabEntityId } from '@/lib/lab-entity-keys'
 import { discardedMempoolConflictTxCount } from '@/lib/lab-mempool-mine-stats'
 import { walletOwnerKey } from '@/lib/lab-utils'
 import type { LabAddress, LabMineBlocksResult, LabState } from './lab-api'
@@ -59,6 +60,7 @@ export async function executeMineBlocks(
     const now = new Date().toISOString()
     if (!entity) {
       coinbaseAddress = createAndRegisterLabEntityFromWasm(wasmModule, {
+        labEntityId: nextLabEntityId(state.entities),
         entityName: entityNameOpt,
         labNetwork,
         labAddressType,
@@ -86,10 +88,11 @@ export async function executeMineBlocks(
     coinbaseScriptPubkeyHex = wasmModule.lab_address_to_script_pubkey_hex(coinbaseAddress)
     newAddress = null
   } else {
-    const anonymousName = `Anonymous-${crypto.randomUUID()}`
+    const labEntityId = nextLabEntityId(state.entities)
     const now = new Date().toISOString()
     coinbaseAddress = createAndRegisterLabEntityFromWasm(wasmModule, {
-      entityName: anonymousName,
+      labEntityId,
+      entityName: null,
       labNetwork,
       labAddressType,
       nowIso: now,
@@ -97,7 +100,10 @@ export async function executeMineBlocks(
     })
     coinbaseScriptPubkeyHex = wasmModule.lab_address_to_script_pubkey_hex(coinbaseAddress)
     newAddress = null
-    ownerForCoinbase = anonymousName
+    ownerForCoinbase = labEntityOwnerKey({
+      labEntityId,
+      entityName: null,
+    })
   }
 
   if (options?.ownerWalletId != null) {

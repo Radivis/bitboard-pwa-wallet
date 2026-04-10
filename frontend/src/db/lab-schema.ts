@@ -23,7 +23,9 @@ interface LabAddressOwnersTable {
 
 /** A simulated “person” in the lab: mnemonic, descriptors, and BDK changeset. One row per named or anonymous lab entity. */
 interface LabEntitiesTable {
-  entity_name: string
+  lab_entity_id: Generated<number>
+  /** User-chosen name, or null when anonymous (display as `Anonymous-{lab_entity_id}`). */
+  entity_name: string | null
   mnemonic: string
   changeset_json: string
   external_descriptor: string

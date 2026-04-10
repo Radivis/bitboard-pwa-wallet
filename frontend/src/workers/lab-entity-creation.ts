@@ -6,14 +6,16 @@ type WasmModule = Awaited<ReturnType<typeof import('./lab-wasm-loader').getWasm>
 export function createAndRegisterLabEntityFromWasm(
   wasmModule: WasmModule,
   params: {
-    entityName: string
+    labEntityId: number
+    entityName: string | null
     labNetwork: string
     labAddressType: string
     nowIso: string
     noAddressErrorMessage: string
   },
 ): string {
-  const { entityName, labNetwork, labAddressType, nowIso, noAddressErrorMessage } = params
+  const { labEntityId, entityName, labNetwork, labAddressType, nowIso, noAddressErrorMessage } =
+    params
   const mnemonic = wasmModule.generate_mnemonic(12)
   const createdRaw = wasmModule.create_lab_entity_wallet(
     mnemonic,
@@ -23,6 +25,7 @@ export function createAndRegisterLabEntityFromWasm(
   )
   const cr = parseWasmObject(createdRaw)
   const entity: LabEntityRecord = {
+    labEntityId,
     entityName,
     mnemonic,
     changesetJson: String(cr.changeset_json ?? ''),

@@ -108,7 +108,9 @@ export interface LabCurrentBlockTemplateParams {
 
 /** Simulated BDK-backed lab participant (plaintext in lab DB). */
 export interface LabEntityRecord {
-  entityName: string
+  labEntityId: number
+  /** User-provided name, or null for anonymous (use `Anonymous-{labEntityId}` as owner/display key). */
+  entityName: string | null
   mnemonic: string
   changesetJson: string
   externalDescriptor: string

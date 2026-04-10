@@ -77,6 +77,7 @@ export async function loadLabStateFromDatabase(): Promise<LabState> {
 
   const entityRows = await labDb.selectFrom('lab_entities').selectAll().execute()
   const entities: LabEntityRecord[] = entityRows.map((r) => ({
+    labEntityId: r.lab_entity_id,
     entityName: r.entity_name,
     mnemonic: r.mnemonic,
     changesetJson: r.changeset_json,
@@ -269,6 +270,7 @@ async function clearAndInsertLabState(
   }
 
   const entityRows = (state.entities ?? []).map((e) => ({
+    lab_entity_id: e.labEntityId,
     entity_name: e.entityName,
     mnemonic: e.mnemonic,
     changeset_json: e.changesetJson,
