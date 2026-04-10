@@ -1,5 +1,5 @@
 import { nextLabEntityId } from '@/lib/lab-entity-keys'
-import { isCoinbaseFromBlockEffectsTx } from '@/lib/lab-operations'
+import { isCoinbase } from '@/lib/lab-operations'
 import { walletOwnerKey } from '@/lib/lab-utils'
 import type {
   LabBlock,
@@ -56,7 +56,7 @@ function minedByFromBlockTxs(
   blockTxs: LabTxDetails[],
   addressToOwner: Record<string, string>,
 ): string | null {
-  const coinbase = blockTxs.find((tx) => tx.isCoinbase || tx.inputs.length === 0)
+  const coinbase = blockTxs.find((tx) => isCoinbase(tx))
   const out0 = coinbase?.outputs[0]
   if (!out0) return null
   const fromStoredDetail = out0.owner ?? null
@@ -208,13 +208,13 @@ export async function buildCurrentBlockTemplate(
 
   const transactions: LabBlockTransactionSummary[] = previewEffects.transactions.map((tx) => {
     const matchedEntry = entryByTxid.get(tx.txid)
-    const isCoinbase = isCoinbaseFromBlockEffectsTx(tx)
+    const isCb = isCoinbase(tx)
     return {
       txid: tx.txid,
       sender: matchedEntry?.sender ?? null,
-      receiver: isCoinbase ? minedBy : (matchedEntry?.receiver ?? null),
+      receiver: isCb ? minedBy : (matchedEntry?.receiver ?? null),
       feeSats: matchedEntry?.feeSats ?? 0,
-      isCoinbase,
+      isCoinbase: isCb,
     }
   })
 

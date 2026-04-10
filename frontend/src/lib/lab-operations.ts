@@ -20,14 +20,37 @@ export function isLabCoinbasePrevout(prevTxid: string, prevVout: number): boolea
   return zero && prevVout === LAB_COINBASE_PREV_VOUT
 }
 
-/** True when WASM reports no inputs (legacy) or standard coinbase prevout. */
-export function isCoinbaseFromBlockEffectsTx(tx: {
-  inputs: { prev_txid: string; prev_vout: number }[]
-}): boolean {
-  if (tx.inputs.length === 0) return true
-  if (tx.inputs.length === 1) {
-    const i = tx.inputs[0]
-    return isLabCoinbasePrevout(i.prev_txid, i.prev_vout)
-  }
-  return false
+/** WASM block-effects input shape (snake_case prevouts). */
+type BlockEffectsTxInput = { prev_txid: string; prev_vout: number }
+
+/** Persisted lab tx input may use camelCase optional prevouts; spends often omit them. */
+type LabCoinbaseInputLike =
+  | BlockEffectsTxInput
+  | {
+      prev_txid?: string
+      prev_vout?: number
+      prevTxid?: string
+      prevVout?: number
+    }
+
+function resolvePrevout(input: LabCoinbaseInputLike): { txid: string; vout: number } | null {
+  const rec = input as Record<string, string | number | undefined>
+  const txid = rec.prev_txid ?? rec.prevTxid
+  const vout = rec.prev_vout ?? rec.prevVout
+  if (txid === undefined || vout === undefined) return null
+  return { txid: String(txid), vout: Number(vout) }
+}
+
+/**
+ * True when the tx is a lab coinbase: WASM empty inputs (legacy), or exactly one input with
+ * Bitcoin coinbase prevout. Accepts block-effects txs (snake_case) and persisted detail inputs
+ * (camelCase optional prevouts).
+ */
+export function isCoinbase(tx: { inputs: ReadonlyArray<LabCoinbaseInputLike> }): boolean {
+  const { inputs } = tx
+  if (inputs.length === 0) return true
+  if (inputs.length > 1) return false
+  const prev = resolvePrevout(inputs[0])
+  if (prev == null) return false
+  return isLabCoinbasePrevout(prev.txid, prev.vout)
 }

@@ -1,7 +1,7 @@
 import type { LabTxDetails, LabTxOperationRecord, LabUtxo } from './lab-api'
 import type { BlockEffectsTx } from './lab-block-effects-types'
 import {
-  isCoinbaseFromBlockEffectsTx,
+  isCoinbase,
   LAB_COINBASE_PREV_TXID_HEX,
   LAB_COINBASE_PREV_VOUT,
   LAB_COINBASE_SEQUENCE,
@@ -195,7 +195,7 @@ export function applyTransactionsAndDetailsFromBlock(
   const addressToOwner = state.addressToOwner ?? {}
 
   for (const tx of transactions) {
-    const isCb = isCoinbaseFromBlockEffectsTx(tx)
+    const isCb = isCoinbase(tx)
     const { changeFromOp, txOperationPayload, changeOutputForTx } =
       resolveChangeMetadataForBlockTx(tx)
 

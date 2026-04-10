@@ -13,6 +13,7 @@ import {
   getLabDatabase,
 } from '@/db'
 import type { LabDatabase } from '@/db/lab-schema'
+import { isCoinbase } from '@/lib/lab-operations'
 import { WALLET_OWNER_PREFIX, walletOwnerKey } from '@/lib/lab-utils'
 import type { Transaction } from 'kysely'
 
@@ -124,15 +125,35 @@ export async function loadLabStateFromDatabase(): Promise<LabState> {
     }[],
   }))
 
-  const transactions = await labDb
-    .selectFrom('lab_transactions')
-    .select(['txid', 'sender', 'receiver', 'is_coinbase'])
-    .orderBy('lab_transaction_id', 'asc')
-    .execute()
-
   const txDetailsRows = await labDb
     .selectFrom('lab_tx_details')
-    .select(['txid', 'block_height', 'block_time', 'inputs_json', 'outputs_json', 'is_coinbase'])
+    .select(['txid', 'block_height', 'block_time', 'inputs_json', 'outputs_json'])
+    .execute()
+
+  const txDetails = txDetailsRows.map((r) => {
+    const inputs = JSON.parse(r.inputs_json) as LabTxDetails['inputs']
+    return {
+      txid: r.txid,
+      blockHeight: r.block_height,
+      blockTime: r.block_time,
+      confirmations: 0,
+      isCoinbase: isCoinbase({ inputs }),
+      inputs,
+      outputs: JSON.parse(r.outputs_json) as {
+        address: string
+        amountSats: number
+        isChange?: boolean
+        owner?: string | null
+      }[],
+    }
+  })
+
+  const coinbaseByTxid = new Map(txDetails.map((d) => [d.txid, d.isCoinbase ?? false]))
+
+  const transactions = await labDb
+    .selectFrom('lab_transactions')
+    .select(['txid', 'sender', 'receiver'])
+    .orderBy('lab_transaction_id', 'asc')
     .execute()
 
   const mineOpRows = await labDb.selectFrom('lab_mine_operations').selectAll().orderBy('height', 'asc').execute()
@@ -154,21 +175,6 @@ export async function loadLabStateFromDatabase(): Promise<LabState> {
     changeAddress: r.change_address,
     changeVout: r.change_vout,
     payloadJson: r.payload_json,
-  }))
-
-  const txDetails = txDetailsRows.map((r) => ({
-    txid: r.txid,
-    blockHeight: r.block_height,
-    blockTime: r.block_time,
-    confirmations: 0,
-    isCoinbase: r.is_coinbase === 1,
-    inputs: JSON.parse(r.inputs_json) as LabTxDetails['inputs'],
-    outputs: JSON.parse(r.outputs_json) as {
-      address: string
-      amountSats: number
-      isChange?: boolean
-      owner?: string | null
-    }[],
   }))
 
   return {
@@ -195,7 +201,7 @@ export async function loadLabStateFromDatabase(): Promise<LabState> {
       txid: t.txid,
       sender: t.sender,
       receiver: t.receiver,
-      isCoinbase: t.is_coinbase === 1,
+      isCoinbase: coinbaseByTxid.get(t.txid) ?? false,
     })),
     txDetails,
     mineOperations,
@@ -262,7 +268,6 @@ async function clearAndInsertLabState(
     txid: t.txid,
     sender: t.sender,
     receiver: t.receiver,
-    is_coinbase: t.isCoinbase ? 1 : 0,
   }))
   for (const chunk of chunkArray(transactionRows, LAB_PERSIST_INSERT_BATCH_SIZE)) {
     await trx.insertInto('lab_transactions').values(chunk).execute()
@@ -333,7 +338,6 @@ async function clearAndInsertLabState(
     block_time: d.blockTime,
     inputs_json: JSON.stringify(d.inputs),
     outputs_json: JSON.stringify(d.outputs),
-    is_coinbase: d.isCoinbase ? 1 : 0,
   }))
   for (const chunk of chunkArray(txDetailRows, LAB_PERSIST_INSERT_BATCH_SIZE)) {
     await trx.insertInto('lab_tx_details').values(chunk).execute()

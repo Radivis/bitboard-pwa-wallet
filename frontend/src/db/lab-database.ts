@@ -61,7 +61,6 @@ async function migrateLabToLatest(labDb: Kysely<LabDatabase>): Promise<void> {
     .addColumn('txid', 'text', (col) => col.notNull())
     .addColumn('sender', 'text', (col) => col)
     .addColumn('receiver', 'text', (col) => col)
-    .addColumn('is_coinbase', 'integer', (col) => col.notNull().defaultTo(0))
     .execute()
 
   await labDb.schema
@@ -95,7 +94,6 @@ async function migrateLabToLatest(labDb: Kysely<LabDatabase>): Promise<void> {
     .addColumn('block_time', 'integer', (col) => col.notNull())
     .addColumn('inputs_json', 'text', (col) => col.notNull())
     .addColumn('outputs_json', 'text', (col) => col.notNull())
-    .addColumn('is_coinbase', 'integer', (col) => col.notNull().defaultTo(0))
     .execute()
 
   await labDb.schema

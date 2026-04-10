@@ -50,26 +50,21 @@ interface LabMempoolTable {
   outputs_detail_json: string
 }
 
-/**
- * Flat list of confirmed transactions for chain-wide summaries and tests.
- * `is_coinbase` (SQLite 0/1) marks block rewards; coinbase rows use the same table as spends.
- */
+/** Flat list of confirmed transactions for chain-wide summaries and tests. */
 interface LabTransactionsTable {
   lab_transaction_id: Generated<number>
   txid: string
   sender: string | null
   receiver: string | null
-  is_coinbase: number
 }
 
-/** Per-tx detail row: block placement, full inputs/outputs as JSON, and `is_coinbase` for tx detail / block list UIs. */
+/** Per-tx detail row: block placement, full inputs/outputs as JSON (coinbase is derived from `inputs_json`). */
 interface LabTxDetailsTable {
   txid: string
   block_height: number
   block_time: number
   inputs_json: string
   outputs_json: string
-  is_coinbase: number
 }
 
 /**

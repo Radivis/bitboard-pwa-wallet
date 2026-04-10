@@ -604,7 +604,7 @@ pub fn lab_block_effects(block_hex: &str) -> Result<JsValue, JsValue> {
         }
 
         // Include the coinbase (tx 0): it has no non-null prevouts, so `inputs` stays empty here.
-        // The frontend treats empty inputs as coinbase (see isCoinbaseFromBlockEffectsTx). Previously
+        // The frontend treats empty inputs as coinbase (see frontend `isCoinbase`). Previously
         // we skipped tx 0 entirely, which broke block tx lists when the mempool was empty and hid
         // coinbase in multi-tx blocks because JS only synthesized when `transactions` was fully empty.
         if tx_idx == 0 || !inputs.is_empty() {
