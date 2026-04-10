@@ -9,15 +9,12 @@ import type {
 } from './lab-api'
 import { mergeAddressesWithUtxos, WALLET_OWNER_PREFIX } from '@/lib/lab-utils'
 import {
-  amountSatsFromPpm,
   estimateRequiredFeeSats,
   feeRateSatPerVbFromRandomRoll,
-  isRandomAmountViable,
   LAB_RANDOM_FEE_RATE_TENTHS_MAX,
   LAB_RANDOM_FEE_RATE_TENTHS_MIN,
-  LAB_RANDOM_PPM_MAX,
-  LAB_RANDOM_PPM_MIN,
   LAB_RANDOM_TX_MAX_ATTEMPTS_DEFAULT,
+  sampleRandomLabAmountSats,
 } from './lab-random-transactions'
 import { appendLabTxOperationAndMempoolEntry } from './lab-append-mempool'
 import {
@@ -236,10 +233,9 @@ const labService = {
       const feeRateSatPerVb = feeRateSatPerVbFromRandomRoll(
         randomIntInclusive(LAB_RANDOM_FEE_RATE_TENTHS_MIN, LAB_RANDOM_FEE_RATE_TENTHS_MAX),
       )
-      const transferPpm = randomIntInclusive(LAB_RANDOM_PPM_MIN, LAB_RANDOM_PPM_MAX)
-      const amountSats = amountSatsFromPpm(totalInput, transferPpm)
       const requiredFeeSats = estimateRequiredFeeSats(fromUtxos.length, feeRateSatPerVb)
-      if (!isRandomAmountViable(amountSats, totalInput, requiredFeeSats)) continue
+      const amountSats = sampleRandomLabAmountSats(totalInput, requiredFeeSats)
+      if (amountSats === null) continue
 
       let toAddress = ''
       if (sourceEntity.entityName === targetEntity.entityName) {
