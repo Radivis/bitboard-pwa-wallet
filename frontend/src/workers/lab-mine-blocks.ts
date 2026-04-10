@@ -149,7 +149,6 @@ export async function executeMineBlocks(
       blockHash: tipAfter.blockHash,
       minedByKey,
       coinbaseTxid: coinbaseDetail?.txid ?? null,
-      coinbaseVout: 0,
       createdAt: new Date().toISOString(),
     })
     if (i === 0) {

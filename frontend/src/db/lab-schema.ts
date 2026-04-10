@@ -74,7 +74,8 @@ interface LabTxDetailsTable {
 
 /**
  * One row per mined block: who mined it (`mined_by_key`: entity name, anonymous id, or wallet key) and optional
- * coinbase outpoint. Drives “Mined by” on block details without scanning inferred tx metadata.
+ * coinbase txid. (Coinbase is always the first tx in the block; reward vout is 0 by protocol.) Drives “Mined by”
+ * on block details without scanning inferred tx metadata.
  */
 interface LabMineOperationsTable {
   mine_operation_id: Generated<number>
@@ -82,7 +83,6 @@ interface LabMineOperationsTable {
   block_hash: string
   mined_by_key: string | null
   coinbase_txid: string | null
-  coinbase_vout: number | null
   created_at: string
 }
 

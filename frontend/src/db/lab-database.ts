@@ -130,7 +130,6 @@ async function migrateLabToLatest(labDb: Kysely<LabDatabase>): Promise<void> {
     .addColumn('block_hash', 'text', (col) => col.notNull())
     .addColumn('mined_by_key', 'text', (col) => col)
     .addColumn('coinbase_txid', 'text', (col) => col)
-    .addColumn('coinbase_vout', 'integer', (col) => col)
     .addColumn('created_at', 'text', (col) => col.notNull())
     .execute()
 

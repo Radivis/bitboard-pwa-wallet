@@ -129,7 +129,6 @@ export interface LabMineOperationRecord {
   blockHash: string
   minedByKey: string | null
   coinbaseTxid: string | null
-  coinbaseVout: number | null
   createdAt: string
 }
 

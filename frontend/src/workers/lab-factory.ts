@@ -144,7 +144,6 @@ export async function loadLabStateFromDatabase(): Promise<LabState> {
     blockHash: r.block_hash,
     minedByKey: r.mined_by_key,
     coinbaseTxid: r.coinbase_txid,
-    coinbaseVout: r.coinbase_vout,
     createdAt: r.created_at,
   }))
 
@@ -346,7 +345,6 @@ async function clearAndInsertLabState(
     block_hash: m.blockHash,
     mined_by_key: m.minedByKey,
     coinbase_txid: m.coinbaseTxid,
-    coinbase_vout: m.coinbaseVout,
     created_at: m.createdAt || nowMine,
   }))
   for (const chunk of chunkArray(mineOpRows, LAB_PERSIST_INSERT_BATCH_SIZE)) {
