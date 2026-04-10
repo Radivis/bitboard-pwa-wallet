@@ -24,21 +24,24 @@ fn open_lab_entity_wallet(
 
     let trimmed = changeset_json.trim();
     if trimmed.is_empty() || trimmed == "{}" {
-        let mut w = create_wallet(&pair.external, &pair.internal, network)?;
-        let staged = w.take_staged().ok_or_else(|| {
+        let mut wallet = create_wallet(&pair.external, &pair.internal, network)?;
+        let staged = wallet.take_staged().ok_or_else(|| {
             CryptoError::Wallet("new lab entity wallet has no staged changeset".to_string())
         })?;
-        return Ok((w, staged));
+        return Ok((wallet, staged));
     }
 
-    let cs = deserialize_changeset(changeset_json)?;
-    let w = load_wallet(&pair.external, &pair.internal, network, cs.clone())?;
-    Ok((w, cs))
+    let changeset = deserialize_changeset(changeset_json)?;
+    let wallet = load_wallet(&pair.external, &pair.internal, network, changeset.clone())?;
+    Ok((wallet, changeset))
 }
 
-fn merge_staged(wallet: &mut Wallet, persisted: &mut ChangeSet) -> Result<(), CryptoError> {
-    if let Some(delta) = wallet.take_staged() {
-        persisted.merge(delta);
+fn merge_staged_changeset(
+    wallet: &mut Wallet,
+    persisted_changeset: &mut ChangeSet,
+) -> Result<(), CryptoError> {
+    if let Some(changeset_delta) = wallet.take_staged() {
+        persisted_changeset.merge(changeset_delta);
     }
     Ok(())
 }
@@ -52,9 +55,9 @@ pub fn create_lab_entity_wallet(
 ) -> Result<CreateWalletResult, CryptoError> {
     let pair = descriptors::derive_descriptors(mnemonic, network, address_type, account_id)?;
 
-    let mut w = create_wallet(&pair.external, &pair.internal, network)?;
-    let first_address = get_new_address(&mut w);
-    let initial_changeset = w.take_staged().ok_or_else(|| {
+    let mut wallet = create_wallet(&pair.external, &pair.internal, network)?;
+    let first_address = get_new_address(&mut wallet);
+    let initial_changeset = wallet.take_staged().ok_or_else(|| {
         CryptoError::Wallet("new lab entity wallet has no staged changeset".to_string())
     })?;
 
@@ -76,9 +79,9 @@ pub fn lab_entity_get_current_external_address(
     address_type: AddressType,
     account_id: u32,
 ) -> Result<String, CryptoError> {
-    let (w, _) =
+    let (wallet, _) =
         open_lab_entity_wallet(mnemonic, changeset_json, network, address_type, account_id)?;
-    Ok(get_current_address(&w))
+    Ok(get_current_address(&wallet))
 }
 
 /// Reveal the next external address and return updated changeset (e.g. explicit new receive).
@@ -89,11 +92,11 @@ pub fn lab_entity_reveal_next_external_address(
     address_type: AddressType,
     account_id: u32,
 ) -> Result<(String, String), CryptoError> {
-    let (mut w, mut persisted) =
+    let (mut wallet, mut persisted_changeset) =
         open_lab_entity_wallet(mnemonic, changeset_json, network, address_type, account_id)?;
-    let address = get_new_address(&mut w);
-    merge_staged(&mut w, &mut persisted)?;
-    let changeset_json = serialize_changeset(&persisted)?;
+    let address = get_new_address(&mut wallet);
+    merge_staged_changeset(&mut wallet, &mut persisted_changeset)?;
+    let changeset_json = serialize_changeset(&persisted_changeset)?;
     Ok((address, changeset_json))
 }
 
@@ -103,8 +106,8 @@ pub struct LabEntitySignResult {
     pub fee_sats: u64,
     pub has_change: bool,
     pub changeset_json: String,
-    /// Internal change address used in the transaction (empty if no change).
-    pub change_address: String,
+    /// Internal change address used in the transaction, only set when the signed tx has change.
+    pub change_address: Option<String>,
 }
 
 /// Inputs for [`lab_entity_build_and_sign_lab_transaction`].
@@ -125,7 +128,7 @@ pub struct LabEntityBuildSignArgs<'a> {
 pub fn lab_entity_build_and_sign_lab_transaction(
     args: LabEntityBuildSignArgs<'_>,
 ) -> Result<LabEntitySignResult, CryptoError> {
-    let (mut w, mut persisted) = open_lab_entity_wallet(
+    let (mut wallet, mut persisted_changeset) = open_lab_entity_wallet(
         args.mnemonic,
         args.changeset_json,
         args.network,
@@ -133,34 +136,40 @@ pub fn lab_entity_build_and_sign_lab_transaction(
         args.account_id,
     )?;
 
-    let change_addr = w
-        .reveal_next_address(KeychainKind::Internal)
+    let next_internal_index = wallet.next_derivation_index(KeychainKind::Internal);
+    let change_address_for_build = wallet
+        .peek_address(KeychainKind::Internal, next_internal_index)
         .address
         .to_string();
-    merge_staged(&mut w, &mut persisted)?;
 
-    let signed = lab_psbt::build_and_sign_lab_transaction(
-        &mut w,
+    let signed_tx = lab_psbt::build_and_sign_lab_transaction(
+        &mut wallet,
         args.utxos_json,
         args.to_address,
         args.amount_sats,
         args.fee_rate_sat_per_vb,
-        &change_addr,
+        &change_address_for_build,
     )?;
-    merge_staged(&mut w, &mut persisted)?;
+    merge_staged_changeset(&mut wallet, &mut persisted_changeset)?;
 
-    let signed_tx_hex = hex::encode(&signed.signed_tx_bytes);
-    let changeset_json = serialize_changeset(&persisted)?;
+    let change_address = if signed_tx.has_change {
+        let revealed = wallet.reveal_next_address(KeychainKind::Internal);
+        merge_staged_changeset(&mut wallet, &mut persisted_changeset)?;
+        let revealed_str = revealed.address.to_string();
+        debug_assert_eq!(revealed_str, change_address_for_build);
+        Some(revealed_str)
+    } else {
+        None
+    };
+
+    let signed_tx_hex = hex::encode(&signed_tx.signed_tx_bytes);
+    let changeset_json = serialize_changeset(&persisted_changeset)?;
 
     Ok(LabEntitySignResult {
         signed_tx_hex,
-        fee_sats: signed.fee_sats,
-        has_change: signed.has_change,
+        fee_sats: signed_tx.fee_sats,
+        has_change: signed_tx.has_change,
         changeset_json,
-        change_address: if signed.has_change {
-            change_addr
-        } else {
-            String::new()
-        },
+        change_address,
     })
 }

@@ -25,7 +25,7 @@ use crate::error::MapErrToJs;
 use crate::validation;
 
 const LAB_COINBASE_SUBSIDY: u64 = 50 * 100_000_000; // 50 BTC in sats
-const LAB_BITS: u32 = 0x2000ffff; // Micro-PoW: compact target around ~1/256 expected attempts
+const LAB_BITS: u32 = 0x2000ffff; // Micro-PoW: compact target around 256 expected attempts
 const DUST_THRESHOLD_SATS: u64 = 546; // Min non-dust output for P2WPKH
 
 // P2WPKH vsize estimates for fee calculation in lab_build_transaction_with_change

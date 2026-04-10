@@ -75,7 +75,7 @@ function parseLabEntitySignResult(raw: unknown): {
   feeSats: number
   hasChange: boolean
   changesetJson: string
-  changeAddress: string
+  changeAddress: string | null
 } {
   const o: Record<string, unknown> =
     raw != null && typeof raw === 'object' && !Array.isArray(raw)
@@ -83,12 +83,14 @@ function parseLabEntitySignResult(raw: unknown): {
       : typeof raw === 'string'
         ? (JSON.parse(raw) as Record<string, unknown>)
         : {}
+  const changeRaw = o.change_address
   return {
     signedTxHex: String(o.signed_tx_hex ?? ''),
     feeSats: Number(o.fee_sats ?? 0),
     hasChange: Boolean(o.has_change),
     changesetJson: String(o.changeset_json ?? ''),
-    changeAddress: String(o.change_address ?? ''),
+    changeAddress:
+      typeof changeRaw === 'string' && changeRaw.length > 0 ? changeRaw : null,
   }
 }
 
@@ -126,12 +128,16 @@ export async function labOpCreateLabEntityTransaction(params: {
   const { signedTxHex, feeSats, hasChange, changesetJson, changeAddress } =
     parseLabEntitySignResult(signRaw)
 
+  if (hasChange && (changeAddress == null || changeAddress === '')) {
+    throw new Error('labOpCreateLabEntityTransaction: change_address missing when has_change')
+  }
+
   const totalInput = prep.totalInput
   const outputsDetail = hasChange
     ? [
         ...prep.mempoolMetadata.outputsDetail,
         {
-          address: changeAddress,
+          address: changeAddress as string,
           amountSats: totalInput - params.amountSats - feeSats,
           isChange: true as const,
           owner: prep.mempoolMetadata.sender,
@@ -149,7 +155,7 @@ export async function labOpCreateLabEntityTransaction(params: {
     feeSats,
     hasChange,
     outputsDetail,
-    walletChangeAddress: hasChange ? changeAddress : '',
+    walletChangeAddress: hasChange ? (changeAddress as string) : '',
   }
 
   if (fullMetadata.receiver == null || fullMetadata.receiver === '') {
@@ -196,11 +202,15 @@ export async function labOpCreateRandomLabEntityTransactions(count: number): Pro
     const { signedTxHex, feeSats, hasChange, changesetJson, changeAddress } =
       parseLabEntitySignResult(signRaw)
 
+    if (hasChange && (changeAddress == null || changeAddress === '')) {
+      throw new Error('labOpCreateRandomLabEntityTransactions: change_address missing when has_change')
+    }
+
     const outputsDetail = hasChange
       ? [
           ...prepared.mempoolMetadata.outputsDetail,
           {
-            address: changeAddress,
+            address: changeAddress as string,
             amountSats: prepared.totalInput - prepared.prepareParams.amountSats - feeSats,
             isChange: true as const,
             owner: prepared.mempoolMetadata.sender,
@@ -218,7 +228,7 @@ export async function labOpCreateRandomLabEntityTransactions(count: number): Pro
       feeSats,
       hasChange,
       outputsDetail,
-      walletChangeAddress: hasChange ? changeAddress : '',
+      walletChangeAddress: hasChange ? (changeAddress as string) : '',
     }
     if (randomFullMetadata.receiver == null || randomFullMetadata.receiver === '') {
       throw new Error('labOpCreateRandomLabEntityTransactions: receiver is required before finalize')

@@ -59,5 +59,9 @@ fn lab_entity_create_and_sign_foreign_utxo() {
     assert!(out.fee_sats > 0);
     assert!(out.has_change);
     assert!(!out.changeset_json.is_empty());
-    assert!(!out.change_address.is_empty());
+    let change_addr = out
+        .change_address
+        .as_deref()
+        .expect("change address when has_change");
+    assert!(!change_addr.is_empty());
 }
