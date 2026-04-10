@@ -23,7 +23,7 @@ export function AppInitializer({ children }: AppInitializerProps) {
   useHydrateLightningConnections()
   const navigate = useNavigate()
   const location = useLocation()
-  const { data: wallets, isLoading } = useWallets()
+  const { data: wallets, isLoading, isFetching } = useWallets()
   const activeWalletId = useWalletStore((s) => s.activeWalletId)
   const setActiveWallet = useWalletStore((s) => s.setActiveWallet)
   const networkMode = useWalletStore((s) => s.networkMode)
@@ -53,6 +53,12 @@ export function AppInitializer({ children }: AppInitializerProps) {
     const isLabRoute = location.pathname.startsWith('/lab')
 
     if (!wallets || wallets.length === 0) {
+      // After create/import, `addWallet` invalidates this query; cached data can stay
+      // `[]` until the refetch finishes. Do not send the user back to /setup while the
+      // list is catching up or the store already has an active wallet id.
+      if (activeWalletId != null || isFetching) {
+        return
+      }
       if (!isSetupRoute && !isSettingsRoute && !isLibraryRoute && !isLabRoute) {
         navigate({ to: '/setup' })
       }
@@ -70,7 +76,15 @@ export function AppInitializer({ children }: AppInitializerProps) {
     if (wallets.length > 1 && !activeWalletId && !isWalletsRoute) {
       navigate({ to: '/wallet/wallets' })
     }
-  }, [wallets, isLoading, activeWalletId, setActiveWallet, navigate, location.pathname])
+  }, [
+    wallets,
+    isLoading,
+    isFetching,
+    activeWalletId,
+    setActiveWallet,
+    navigate,
+    location.pathname,
+  ])
 
   /**
    * After lock, session is cleared. Restore near-zero session only on routes that need
