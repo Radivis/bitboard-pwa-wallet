@@ -15,6 +15,23 @@ import { LAB_MAX_RANDOM_ENTITY_TRANSACTIONS } from '@/lib/lab-random-limits'
 const MIN_AMOUNT_SATS = 1
 const MIN_RANDOM_TRANSACTION_COUNT = 1
 
+function parseAndClampRandomTransactionCount(raw: string): string {
+  if (raw === '') return ''
+  const n = Number.parseInt(raw.trim(), 10)
+  if (Number.isNaN(n)) return raw
+  const clamped = Math.min(
+    Math.max(n, MIN_RANDOM_TRANSACTION_COUNT),
+    LAB_MAX_RANDOM_ENTITY_TRANSACTIONS,
+  )
+  return String(clamped)
+}
+
+function parseRandomTransactionCountValue(raw: string): number | null {
+  if (raw === '') return null
+  const n = Number.parseInt(raw.trim(), 10)
+  return Number.isNaN(n) ? null : n
+}
+
 export function LabMakeTransactionCard({
   showTxForm,
   setShowTxForm,
@@ -56,6 +73,12 @@ export function LabMakeTransactionCard({
   randomBatchProgress: { created: number; total: number } | null
   labEntitiesCount: number
 }) {
+  const selectedRandomCount = parseRandomTransactionCountValue(randomTransactionCount)
+  const showRandomBatchConflictWarning =
+    labEntitiesCount > 0 &&
+    selectedRandomCount != null &&
+    selectedRandomCount > labEntitiesCount
+
   return (
     <InfomodeWrapper
       infoId="lab-make-transaction-card"
@@ -86,7 +109,9 @@ export function LabMakeTransactionCard({
                   min={MIN_RANDOM_TRANSACTION_COUNT}
                   max={LAB_MAX_RANDOM_ENTITY_TRANSACTIONS}
                   value={randomTransactionCount}
-                  onChange={(e) => setRandomTransactionCount(e.target.value)}
+                  onChange={(e) =>
+                    setRandomTransactionCount(parseAndClampRandomTransactionCount(e.target.value))
+                  }
                   disabled={creatingRandomTransactions}
                 />
                 {labEntitiesCount === 0 ? (
@@ -110,6 +135,15 @@ export function LabMakeTransactionCard({
                 >
                   Make random transaction
                 </Button>
+                {showRandomBatchConflictWarning ? (
+                  <p
+                    className="text-sm text-amber-600 dark:text-amber-400"
+                    role="status"
+                  >
+                    You chose more random transactions than there are lab entities. That makes
+                    conflicting spends very likely, so not every transaction may end up in a block.
+                  </p>
+                ) : null}
               </div>
             </div>
           ) : (
