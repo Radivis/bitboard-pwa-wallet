@@ -78,15 +78,14 @@ export function useLabIndexPageData() {
   const getBalanceForAddress = useCallback(
     (address: string) =>
       utxos
-        .filter((u) => labBitcoinAddressesEqual(u.address, address))
-        .reduce((sum, u) => sum + u.amountSats, 0),
+        .filter((utxo) => labBitcoinAddressesEqual(utxo.address, address))
+        .reduce((sumSats, utxo) => sumSats + utxo.amountSats, 0),
     [utxos],
   )
 
   const resolveLabAddressOwner = useCallback(
-    (address: string) =>
-      resolveLabAddressOwnerDisplay(address, addressToOwner, txDetails, transactions),
-    [addressToOwner, txDetails, transactions],
+    (address: string) => resolveLabAddressOwnerDisplay(address, addressToOwner, txDetails),
+    [addressToOwner, txDetails],
   )
 
   const handleCopyAddress = useCallback(async (address: string) => {

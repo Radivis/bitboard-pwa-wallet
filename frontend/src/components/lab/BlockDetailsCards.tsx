@@ -11,6 +11,10 @@ import { Badge } from '@/components/ui/badge'
 import { formatSats, truncateAddress } from '@/lib/bitcoin-utils'
 import { getOwnerDisplayName } from '@/lib/lab-utils'
 import type { LabBlockDetails } from '@/workers/lab-api'
+import {
+  LabBlockHeaderInfomodeContent,
+  LabBlockMerkleRootInfomodeContent,
+} from '@/components/lab/LabBlockHeaderInfomodeContent'
 
 function HeaderField({ label, value }: { label: string; value: string }) {
   return (
@@ -25,8 +29,7 @@ export function LabBlockHeaderCard({ block }: { block: LabBlockDetails }) {
   return (
     <InfomodeWrapper
       infoId="lab-block-detail-header-card"
-      infoTitle="Block header"
-      infoText="The block header is the compact fingerprint of a block: version, link to previous block, merkle root, timestamp, target, nonce, and resulting header hash."
+      infoComponent={LabBlockHeaderInfomodeContent}
       className="rounded-xl"
     >
       <Card>
@@ -35,19 +38,60 @@ export function LabBlockHeaderCard({ block }: { block: LabBlockDetails }) {
           <CardDescription>Core header fields for this block</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4">
-          <HeaderField label="Version" value={String(block.header.version)} />
-          <HeaderField label="Previous block hash" value={block.header.previousBlockHash} />
-          <HeaderField label="Merkle root" value={block.header.merkleRoot} />
-          <HeaderField
-            label="Timestamp"
-            value={`${block.header.timestamp} (${new Date(block.header.timestamp * 1000).toLocaleString()})`}
-          />
-          <HeaderField
-            label="Target"
-            value={`bits=${block.header.targetBits} expanded=${block.header.targetExpanded}`}
-          />
-          <HeaderField label="Nonce" value={String(block.header.nonce)} />
-          <HeaderField label="Block header hash" value={block.header.blockHeaderHash} />
+          <InfomodeWrapper
+            infoId="lab-block-field-version"
+            infoTitle="Version"
+            infoText="Block version number. Consensus upgrades sometimes coordinate using version bits; nodes interpret known versions under the current rules."
+          >
+            <HeaderField label="Version" value={String(block.header.version)} />
+          </InfomodeWrapper>
+          <InfomodeWrapper
+            infoId="lab-block-field-prev-hash"
+            infoTitle="Previous block hash"
+            infoText="Hash of the previous block’s header. This links the block into the chain so every block confirms all history before it."
+          >
+            <HeaderField label="Previous block hash" value={block.header.previousBlockHash} />
+          </InfomodeWrapper>
+          <InfomodeWrapper
+            infoId="lab-block-field-merkle-root"
+            infoComponent={LabBlockMerkleRootInfomodeContent}
+          >
+            <HeaderField label="Merkle root" value={block.header.merkleRoot} />
+          </InfomodeWrapper>
+          <InfomodeWrapper
+            infoId="lab-block-field-timestamp"
+            infoTitle="Timestamp"
+            infoText="Unix time (seconds) in the header. The network uses it for difficulty adjustment and as a loose ordering hint; it is not a perfect clock."
+          >
+            <HeaderField
+              label="Timestamp"
+              value={`${block.header.timestamp} (${new Date(block.header.timestamp * 1000).toLocaleString()})`}
+            />
+          </InfomodeWrapper>
+          <InfomodeWrapper
+            infoId="lab-block-field-target"
+            infoTitle="Target"
+            infoText="Mining difficulty: compact nBits and the expanded 256-bit target. A valid block hash must be numerically below this target (proof-of-work)."
+          >
+            <HeaderField
+              label="Target"
+              value={`bits=${block.header.targetBits} expanded=${block.header.targetExpanded}`}
+            />
+          </InfomodeWrapper>
+          <InfomodeWrapper
+            infoId="lab-block-field-nonce"
+            infoTitle="Nonce"
+            infoText="A 32-bit field miners change (along with extra nonce space in coinbase when needed) to search for a header hash below the target."
+          >
+            <HeaderField label="Nonce" value={String(block.header.nonce)} />
+          </InfomodeWrapper>
+          <InfomodeWrapper
+            infoId="lab-block-field-header-hash"
+            infoTitle="Block header hash"
+            infoText="Double SHA-256 of the 80-byte header, usually shown reversed for display. This is the block identifier peers gossip and explorers show."
+          >
+            <HeaderField label="Block header hash" value={block.header.blockHeaderHash} />
+          </InfomodeWrapper>
         </CardContent>
       </Card>
     </InfomodeWrapper>
@@ -67,14 +111,14 @@ export function LabBlockMetadataCard({
 
   return (
     <InfomodeWrapper
-      infoId="lab-block-detail-metadata-card"
-      infoTitle="Metadata"
-      infoText="Context around this block: where it sits in chain order, who mined it, transaction count, and total fees."
+      infoId="lab-block-detail-contextual-data-card"
+      infoTitle="Contextual data"
+      infoText="Where this block sits in the chain, when it was mined, who received the subsidy, how many transactions it contains, and the fees from non-coinbase transactions."
       className="rounded-xl"
     >
       <Card>
         <CardHeader>
-          <CardTitle>Metadata</CardTitle>
+          <CardTitle>Contextual data</CardTitle>
           <CardDescription>Block summary and mining context</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-3 text-sm">

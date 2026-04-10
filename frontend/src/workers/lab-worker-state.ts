@@ -1,4 +1,4 @@
-import type { LabState, LabTxDetails, MempoolEntry } from './lab-api'
+import type { LabState, MempoolEntry } from './lab-api'
 import { EMPTY_LAB_STATE } from './lab-api'
 
 export let state: LabState = { ...EMPTY_LAB_STATE }
@@ -70,39 +70,6 @@ export function rebuildTxidToChangeAddressFromState(): void {
     }
   }
   rebuildTxidToChangeAddressFromMempool(state.mempool ?? [])
-}
-
-/**
- * Fills missing output owners for legacy rows where change was not linked (e.g. mined after
- * reload when txid→change map was empty). Requires one unowned output and at least one owned.
- */
-export function inferMissingLabOutputOwners(tx: LabTxDetails): LabTxDetails {
-  if (tx.isCoinbase) return tx
-  const firstOwner = tx.inputs.find((i) => i.owner != null)?.owner ?? null
-  if (firstOwner == null) return tx
-  if (tx.inputs.some((i) => i.owner != null && i.owner !== firstOwner)) return tx
-
-  const outMissingOwner = tx.outputs.filter((o) => !o.owner)
-  const outWithOwner = tx.outputs.filter((o) => o.owner)
-  const existingChangeCount = tx.outputs.filter((o) => o.isChange).length
-  if (outMissingOwner.length !== 1 || outWithOwner.length < 1) return tx
-
-  const patchAddr = outMissingOwner[0].address
-  return {
-    ...tx,
-    outputs: tx.outputs.map((o) => {
-      if (o.owner != null) return o
-      if (labAddressesEqual(o.address, patchAddr)) {
-        // Legacy repair: only backfill missing owner. Do not mark additional outputs as change
-        // when a change output is already present, otherwise self-sends can show two "Change" badges.
-        if (existingChangeCount > 0) {
-          return { ...o, owner: firstOwner }
-        }
-        return { ...o, owner: firstOwner, isChange: true }
-      }
-      return o
-    }),
-  }
 }
 
 export function parseWasmObject(val: unknown): Record<string, unknown> {

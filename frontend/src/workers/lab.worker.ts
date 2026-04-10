@@ -29,7 +29,6 @@ import { getWasm } from './lab-wasm-loader'
 import { utxosToJsonForLabWasm } from './lab-wasm-utxos'
 import {
   assertLabReceiverNonNull,
-  inferMissingLabOutputOwners,
   labAddressesEqual,
   lookupOwnerForLabAddress,
   parseWasmObject,
@@ -59,7 +58,7 @@ const labService = {
   async getTransaction(txid: string): Promise<LabTxDetails | null> {
     const mempoolEntry = state.mempool.find((entry) => entry.txid === txid)
     if (mempoolEntry) {
-      return inferMissingLabOutputOwners({
+      return {
         txid: mempoolEntry.txid,
         blockHeight: -1,
         blockTime: 0,
@@ -67,15 +66,15 @@ const labService = {
         isCoinbase: false,
         inputs: mempoolEntry.inputsDetail,
         outputs: mempoolEntry.outputsDetail,
-      })
+      }
     }
     const details = state.txDetails.find((tx) => tx.txid === txid)
     if (!details) return null
     const blockCount = getTip() ? getTip()!.height + 1 : 0
-    return inferMissingLabOutputOwners({
+    return {
       ...details,
       confirmations: blockCount - details.blockHeight,
-    })
+    }
   },
 
   async getBlockByHeight(height: number): Promise<LabBlockDetails | null> {

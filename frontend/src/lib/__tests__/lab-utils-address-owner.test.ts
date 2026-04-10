@@ -7,7 +7,7 @@ import {
   resolveLabAddressOwnerDisplay,
   sortLabOwnerKeys,
 } from '@/lib/lab-utils'
-import type { LabTxDetails, LabTxRecord } from '@/workers/lab-api'
+import type { LabTxDetails } from '@/workers/lab-api'
 
 describe('lookupLabAddressOwner', () => {
   it('finds owner when bech32 casing differs from map key', () => {
@@ -67,58 +67,6 @@ describe('resolveLabAddressOwnerDisplay', () => {
     expect(
       resolveLabAddressOwnerDisplay('bcrt1paaa', { bcrt1paaa: 'Right' }, txDetails),
     ).toBe('Right')
-  })
-
-  it('infers payee from LabTxRecord when output.owner is missing', () => {
-    const txDetails: LabTxDetails[] = [
-      {
-        txid: 'abc',
-        blockHeight: 1,
-        blockTime: 0,
-        confirmations: 1,
-        isCoinbase: false,
-        inputs: [],
-        outputs: [
-          {
-            address: 'bcrt1ppay',
-            amountSats: 100,
-            isChange: false,
-          },
-        ],
-      },
-    ]
-    const transactions: LabTxRecord[] = [
-      { txid: 'abc', sender: 'Alice', receiver: 'Bob' },
-    ]
-    expect(
-      resolveLabAddressOwnerDisplay('bcrt1ppay', {}, txDetails, transactions),
-    ).toBe('Bob')
-  })
-
-  it('infers change owner from sender when output.owner is missing', () => {
-    const txDetails: LabTxDetails[] = [
-      {
-        txid: 'abc',
-        blockHeight: 1,
-        blockTime: 0,
-        confirmations: 1,
-        isCoinbase: false,
-        inputs: [],
-        outputs: [
-          {
-            address: 'bcrt1pch',
-            amountSats: 50,
-            isChange: true,
-          },
-        ],
-      },
-    ]
-    const transactions: LabTxRecord[] = [
-      { txid: 'abc', sender: 'Alice', receiver: 'Bob' },
-    ]
-    expect(
-      resolveLabAddressOwnerDisplay('bcrt1pch', {}, txDetails, transactions),
-    ).toBe('Alice')
   })
 })
 

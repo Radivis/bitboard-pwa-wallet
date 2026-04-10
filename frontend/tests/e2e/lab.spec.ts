@@ -305,7 +305,7 @@ test.describe('Lab', { tag: '@lab' }, () => {
     await page.getByRole('link', { name: 'current' }).click()
     await expect(page.getByRole('heading', { name: 'Current block template' })).toBeVisible()
     await expect(page.getByRole('main').getByText('Block Header', { exact: true })).toBeVisible()
-    await expect(page.getByRole('main').getByText('Metadata', { exact: true })).toBeVisible()
+    await expect(page.getByRole('main').getByText('Contextual data', { exact: true })).toBeVisible()
     await expect(page.getByRole('main').getByText('Transactions', { exact: true })).toBeVisible()
 
     await page.getByRole('navigation', { name: 'Lab' }).getByRole('link', { name: 'Blocks' }).click()
@@ -316,7 +316,7 @@ test.describe('Lab', { tag: '@lab' }, () => {
     await page.getByRole('link', { name: '0' }).click()
     await expect(page.getByRole('heading', { name: 'Block 0' })).toBeVisible()
     await expect(page.getByRole('main').getByText('Block Header', { exact: true })).toBeVisible()
-    await expect(page.getByRole('main').getByText('Metadata', { exact: true })).toBeVisible()
+    await expect(page.getByRole('main').getByText('Contextual data', { exact: true })).toBeVisible()
     await expect(page.getByRole('main').getByText('Transactions', { exact: true })).toBeVisible()
     await expect(page.getByRole('main').getByText(/Mined by:.*Alice/)).toBeVisible()
     await expect(page.getByRole('main').getByText('Coinbase', { exact: true })).toBeVisible()

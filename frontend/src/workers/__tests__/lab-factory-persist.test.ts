@@ -49,7 +49,7 @@ describe('persistLabState', () => {
     expect(transactionCount).toBe(1)
   })
 
-  it('chunks utxo inserts (batch size 200)', async () => {
+  it('batches large utxo persists into multiple INSERT chunks (persist batch size)', async () => {
     const utxos = Array.from({ length: 250 }, (_, i) => ({
       txid: 'aa',
       vout: i,

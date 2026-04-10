@@ -17,9 +17,14 @@ import { isCoinbase } from '@/lib/lab-operations'
 import { WALLET_OWNER_PREFIX, walletOwnerKey } from '@/lib/lab-utils'
 import type { Transaction } from 'kysely'
 
-/** SQLite / Kysely batch size for lab snapshot inserts (avoids huge single statements). */
+/**
+ * Max rows per `INSERT` when persisting a {@link LabState} snapshot. Large states come from
+ * mining and chain growth (many UTXOs and rows across tables), not from the random-transaction UI
+ * limit—batching keeps each statement bounded and avoids oversized single inserts.
+ */
 const LAB_PERSIST_INSERT_BATCH_SIZE = 200
 
+/** Splits row arrays so each DB insert stays within {@link LAB_PERSIST_INSERT_BATCH_SIZE}. */
 function chunkArray<T>(items: readonly T[], size: number): T[][] {
   const chunks: T[][] = []
   for (let i = 0; i < items.length; i += size) {

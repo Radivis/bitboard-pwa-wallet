@@ -1,10 +1,4 @@
-import type {
-  LabTxRecord,
-  LabTxDetails,
-  MempoolEntry,
-  LabAddress,
-  LabState,
-} from '@/workers/lab-api'
+import type { LabTxRecord, LabTxDetails, MempoolEntry, LabAddress, LabState } from '@/workers/lab-api'
 import type { TransactionDetails } from '@/workers/crypto-types'
 
 export const WALLET_OWNER_PREFIX = 'wallet:'
@@ -41,47 +35,21 @@ export function lookupLabAddressOwner(
   return undefined
 }
 
-function inferLabOwnerFromTxRecordForOutput(
-  detail: LabTxDetails,
-  output: { address: string; isChange?: boolean },
-  record: LabTxRecord | undefined,
-): string | undefined {
-  if (record == null) return undefined
-  if (detail.isCoinbase) {
-    return record.receiver ?? undefined
-  }
-  if (output.isChange) {
-    return record.sender ?? undefined
-  }
-  return record.receiver ?? undefined
-}
-
 /**
- * Owner for UI: map first, then confirmed outputs with `owner`, then infer from
- * {@link LabTxRecord} sender/receiver when per-output owner was not denormalized.
+ * Owner for UI: map first, then confirmed outputs with a non-empty `owner` field.
  */
 export function resolveLabAddressOwnerDisplay(
   address: string,
   addressToOwner: Record<string, string>,
   txDetails: LabTxDetails[],
-  transactions?: LabTxRecord[],
 ): string | undefined {
   const fromMap = lookupLabAddressOwner(address, addressToOwner)
   if (fromMap !== undefined) return fromMap
 
-  const recordByTxid =
-    transactions != null ? new Map(transactions.map((t) => [t.txid, t])) : null
-
-  for (const d of txDetails) {
-    for (const o of d.outputs ?? []) {
-      if (!labBitcoinAddressesEqual(o.address, address)) continue
-      if (o.owner != null && o.owner !== '') return o.owner
-      const inferred = inferLabOwnerFromTxRecordForOutput(
-        d,
-        o,
-        recordByTxid?.get(d.txid),
-      )
-      if (inferred != null && inferred !== '') return inferred
+  for (const detail of txDetails) {
+    for (const output of detail.outputs ?? []) {
+      if (!labBitcoinAddressesEqual(output.address, address)) continue
+      if (output.owner != null && output.owner !== '') return output.owner
     }
   }
   return undefined
@@ -145,14 +113,14 @@ export function mergeAddressesWithUtxos(
   utxos: LabState['utxos'],
 ): LabAddress[] {
   const byKey = new Map<string, LabAddress>()
-  for (const a of addresses) {
-    const k = canonicalLabAddressKey(a.address)
-    if (!byKey.has(k)) byKey.set(k, a)
+  for (const labAddress of addresses) {
+    const key = canonicalLabAddressKey(labAddress.address)
+    if (!byKey.has(key)) byKey.set(key, labAddress)
   }
-  for (const u of utxos) {
-    const k = canonicalLabAddressKey(u.address)
-    if (!byKey.has(k)) {
-      byKey.set(k, { address: u.address, wif: '' })
+  for (const utxo of utxos) {
+    const key = canonicalLabAddressKey(utxo.address)
+    if (!byKey.has(key)) {
+      byKey.set(key, { address: utxo.address, wif: '' })
     }
   }
   return [...byKey.values()]
@@ -168,7 +136,7 @@ export function labTransactionsForWallet(
 ): TransactionDetails[] {
   const walletOwner = walletOwnerKey(activeWalletId)
   const txDetailsByTxid = new Map(
-    labState.txDetails.map((d) => [d.txid, d]),
+    labState.txDetails.map((detail) => [detail.txid, detail]),
   )
 
   const result: TransactionDetails[] = []
@@ -180,13 +148,13 @@ export function labTransactionsForWallet(
 
     const sentSats = isSender
       ? (entry.outputsDetail ?? [])
-          .filter((o) => !o.isChange)
-          .reduce((s, o) => s + o.amountSats, 0)
+          .filter((output) => !output.isChange)
+          .reduce((sumSats, output) => sumSats + output.amountSats, 0)
       : 0
     const receivedSats = isReceiver
       ? (entry.outputsDetail ?? [])
-          .filter((o) => o.owner === walletOwner)
-          .reduce((s, o) => s + o.amountSats, 0)
+          .filter((output) => output.owner === walletOwner)
+          .reduce((sumSats, output) => sumSats + output.amountSats, 0)
       : 0
 
     result.push({
@@ -210,8 +178,8 @@ export function labTransactionsForWallet(
 
     if (details.isCoinbase) {
       const receivedSatsCoinbase = (details.outputs ?? [])
-        .filter((o) => o.owner === walletOwner)
-        .reduce((s, o) => s + o.amountSats, 0)
+        .filter((output) => output.owner === walletOwner)
+        .reduce((sumSats, output) => sumSats + output.amountSats, 0)
       result.push({
         txid: record.txid,
         sent_sats: 0,
@@ -225,16 +193,24 @@ export function labTransactionsForWallet(
     }
 
     const sentSats = isSender
-      ? (details.outputs ?? []).filter((o) => !o.isChange).reduce((s, o) => s + o.amountSats, 0)
+      ? (details.outputs ?? [])
+          .filter((output) => !output.isChange)
+          .reduce((sumSats, output) => sumSats + output.amountSats, 0)
       : 0
     const receivedSats = isReceiver
       ? (details.outputs ?? [])
-          .filter((o) => o.owner === walletOwner)
-          .reduce((s, o) => s + o.amountSats, 0)
+          .filter((output) => output.owner === walletOwner)
+          .reduce((sumSats, output) => sumSats + output.amountSats, 0)
       : 0
 
-    const totalInput = (details.inputs ?? []).reduce((s, i) => s + i.amountSats, 0)
-    const totalOutput = (details.outputs ?? []).reduce((s, o) => s + o.amountSats, 0)
+    const totalInput = (details.inputs ?? []).reduce(
+      (sumSats, input) => sumSats + input.amountSats,
+      0,
+    )
+    const totalOutput = (details.outputs ?? []).reduce(
+      (sumSats, output) => sumSats + output.amountSats,
+      0,
+    )
     const feeSats = totalInput - totalOutput
 
     result.push({
@@ -248,12 +224,12 @@ export function labTransactionsForWallet(
     })
   }
 
-  result.sort((a, b) => {
-    if (!a.is_confirmed && b.is_confirmed) return -1
-    if (a.is_confirmed && !b.is_confirmed) return 1
-    if (a.is_confirmed && b.is_confirmed) {
-      const timeA = a.confirmation_time ?? 0
-      const timeB = b.confirmation_time ?? 0
+  result.sort((txA, txB) => {
+    if (!txA.is_confirmed && txB.is_confirmed) return -1
+    if (txA.is_confirmed && !txB.is_confirmed) return 1
+    if (txA.is_confirmed && txB.is_confirmed) {
+      const timeA = txA.confirmation_time ?? 0
+      const timeB = txB.confirmation_time ?? 0
       return timeB - timeA
     }
     return 0
@@ -268,7 +244,7 @@ export function getOwnerDisplayName(
 ): string {
   if (ownerKey.startsWith(WALLET_OWNER_PREFIX)) {
     const id = parseInt(ownerKey.slice(WALLET_OWNER_PREFIX.length), 10)
-    return wallets.find((w) => w.wallet_id === id)?.name ?? 'Unknown wallet'
+    return wallets.find((wallet) => wallet.wallet_id === id)?.name ?? 'Unknown wallet'
   }
   return ownerKey
 }
