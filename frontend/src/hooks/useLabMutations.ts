@@ -94,6 +94,7 @@ export function useLabCreateTransactionMutation() {
 
 export type LabCreateRandomTransactionsVariables = {
   count: number
+  onProgress?: (createdCount: number, requestedCount: number) => void
 }
 
 export function useLabCreateRandomTransactionsMutation() {
@@ -102,7 +103,9 @@ export function useLabCreateRandomTransactionsMutation() {
   return useMutation({
     mutationKey: ['lab', 'createRandomLabEntityTransactions'] as const,
     mutationFn: async (variables: LabCreateRandomTransactionsVariables) => {
-      return labOpCreateRandomLabEntityTransactions(variables.count)
+      return labOpCreateRandomLabEntityTransactions(variables.count, {
+        onProgress: variables.onProgress,
+      })
     },
     onSuccess: (result, variables) => {
       setLabChainStateCache(queryClient, result.state)

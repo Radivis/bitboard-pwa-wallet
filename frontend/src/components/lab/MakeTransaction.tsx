@@ -9,10 +9,11 @@ import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { LoadingSpinner } from '@/components/LoadingSpinner'
+import { LAB_MAX_RANDOM_ENTITY_TRANSACTIONS } from '@/lib/lab-random-limits'
 
 const MIN_AMOUNT_SATS = 1
 const MIN_RANDOM_TRANSACTION_COUNT = 1
-const MAX_RANDOM_TRANSACTION_COUNT = 1000
 
 export function LabMakeTransactionCard({
   showTxForm,
@@ -32,6 +33,7 @@ export function LabMakeTransactionCard({
   setRandomTransactionCount,
   onCreateRandomTransactions,
   creatingRandomTransactions,
+  randomBatchProgress,
   labEntitiesCount,
 }: {
   showTxForm: boolean
@@ -51,6 +53,7 @@ export function LabMakeTransactionCard({
   setRandomTransactionCount: (v: string) => void
   onCreateRandomTransactions: () => void
   creatingRandomTransactions: boolean
+  randomBatchProgress: { created: number; total: number } | null
   labEntitiesCount: number
 }) {
   return (
@@ -81,23 +84,31 @@ export function LabMakeTransactionCard({
                   id="random-transaction-count"
                   type="number"
                   min={MIN_RANDOM_TRANSACTION_COUNT}
-                  max={MAX_RANDOM_TRANSACTION_COUNT}
+                  max={LAB_MAX_RANDOM_ENTITY_TRANSACTIONS}
                   value={randomTransactionCount}
                   onChange={(e) => setRandomTransactionCount(e.target.value)}
+                  disabled={creatingRandomTransactions}
                 />
                 {labEntitiesCount === 0 ? (
                   <p className="text-sm text-muted-foreground">
                     Mining a block to a name enables random transactions.
                   </p>
                 ) : null}
+                {creatingRandomTransactions && randomBatchProgress != null ? (
+                  <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
+                    <LoadingSpinner text="Rolling random transaction data and signing lab transactions" />
+                    <p className="text-center text-sm text-muted-foreground">
+                      Created {randomBatchProgress.created} of {randomBatchProgress.total}{' '}
+                      random transactions
+                    </p>
+                  </div>
+                ) : null}
                 <Button
                   variant="secondary"
                   onClick={onCreateRandomTransactions}
                   disabled={creatingRandomTransactions || labEntitiesCount === 0}
                 >
-                  {creatingRandomTransactions
-                    ? 'Creating random transactions...'
-                    : 'Make random transaction'}
+                  Make random transaction
                 </Button>
               </div>
             </div>

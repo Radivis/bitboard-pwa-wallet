@@ -50,6 +50,7 @@ vi.mock('@/workers/crypto-factory', () => ({
   }),
 }))
 
+import { LAB_MAX_RANDOM_ENTITY_TRANSACTIONS } from '@/lib/lab-random-limits'
 import { labOpCreateRandomLabEntityTransactions } from '@/lib/lab-worker-operations'
 
 let mempoolSize = 0
@@ -151,5 +152,32 @@ describe('labOpCreateRandomLabEntityTransactions', () => {
     expect(persistLabState).toHaveBeenCalledTimes(1)
     expect(finalizeLabEntityMempoolTransaction).not.toHaveBeenCalled()
     expect(result.createdCount).toBe(0)
+  })
+
+  it('calls onProgress after each finalized random tx', async () => {
+    const onProgress = vi.fn()
+    const prepared = buildPrepared()
+    prepareRandomLabEntityTransaction.mockResolvedValue(prepared as never)
+
+    await labOpCreateRandomLabEntityTransactions(4, { onProgress })
+
+    expect(onProgress).toHaveBeenCalledTimes(4)
+    expect(onProgress.mock.calls).toEqual([
+      [1, 4],
+      [2, 4],
+      [3, 4],
+      [4, 4],
+    ])
+  })
+
+  it(`rejects when count exceeds LAB_MAX_RANDOM_ENTITY_TRANSACTIONS (${LAB_MAX_RANDOM_ENTITY_TRANSACTIONS})`, async () => {
+    await expect(
+      labOpCreateRandomLabEntityTransactions(LAB_MAX_RANDOM_ENTITY_TRANSACTIONS + 1),
+    ).rejects.toThrow(
+      new RegExp(`At most ${LAB_MAX_RANDOM_ENTITY_TRANSACTIONS} random lab transactions per batch`),
+    )
+
+    expect(initLabWorkerWithState).not.toHaveBeenCalled()
+    expect(persistLabState).not.toHaveBeenCalled()
   })
 })

@@ -11,6 +11,7 @@ import {
   useLabResetMutation,
 } from '@/hooks/useLabMutations'
 import { LAB_MAX_BLOCKS_PER_MINE, LAB_MIN_BLOCKS_PER_MINE } from '@/workers/lab-api'
+import { LAB_MAX_RANDOM_ENTITY_TRANSACTIONS } from '@/lib/lab-random-limits'
 import {
   WALLET_OWNER_PREFIX,
   assertLabAddressOwnerResolved,
@@ -22,7 +23,6 @@ import {
 
 const DEFAULT_LAB_FEE_RATE_SAT_PER_VB = 1
 const DEFAULT_RANDOM_TRANSACTION_COUNT = 1
-const MAX_RANDOM_TRANSACTION_COUNT = 1000
 
 /**
  * Form state, derived lab lists, and TanStack Query mutations for lab section routes.
@@ -65,6 +65,10 @@ export function useLabIndexPageData() {
   )
 
   const [showResetConfirm, setShowResetConfirm] = useState(false)
+  const [randomBatchProgress, setRandomBatchProgress] = useState<{
+    created: number
+    total: number
+  } | null>(null)
 
   const mineMutation = useLabMineBlocksMutation()
   const createTxMutation = useLabCreateTransactionMutation()
@@ -201,13 +205,20 @@ export function useLabIndexPageData() {
       toast.error('Enter a valid transaction count')
       return
     }
-    if (parsedCount > MAX_RANDOM_TRANSACTION_COUNT) {
-      toast.error(`You can generate at most ${MAX_RANDOM_TRANSACTION_COUNT} transactions`)
+    if (parsedCount > LAB_MAX_RANDOM_ENTITY_TRANSACTIONS) {
+      toast.error(`You can generate at most ${LAB_MAX_RANDOM_ENTITY_TRANSACTIONS} transactions`)
       return
     }
-    void createRandomTxMutation.mutateAsync({ count: parsedCount }).catch(() => {
-      /* error toast from mutation onError */
-    })
+    setRandomBatchProgress({ created: 0, total: parsedCount })
+    void createRandomTxMutation
+      .mutateAsync({
+        count: parsedCount,
+        onProgress: (created, total) => setRandomBatchProgress({ created, total }),
+      })
+      .catch(() => {
+        /* error toast from mutation onError */
+      })
+      .finally(() => setRandomBatchProgress(null))
   }, [createRandomTxMutation, randomTransactionCount])
 
   const controlledAddresses = useMemo(() => {
@@ -290,6 +301,7 @@ export function useLabIndexPageData() {
     setRandomTransactionCount,
     onCreateRandomTransactions: handleCreateRandomTransactions,
     creatingRandomTransactions: createRandomTxMutation.isPending,
+    randomBatchProgress,
     labEntitiesCount: labState?.entities?.length ?? 0,
     addresses,
     addressesByOwner,

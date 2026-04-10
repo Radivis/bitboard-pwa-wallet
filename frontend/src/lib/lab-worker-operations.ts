@@ -19,6 +19,7 @@ import {
   labPipelineDebugLog,
   labPipelineSnapshot,
 } from '@/lib/lab-pipeline-debug'
+import { LAB_MAX_RANDOM_ENTITY_TRANSACTIONS } from '@/lib/lab-random-limits'
 
 function sumUtxoSats(utxos: { amountSats: number }[]): number {
   return utxos.reduce((s, u) => s + (Number(u.amountSats) || 0), 0)
@@ -182,19 +183,32 @@ export async function labOpCreateLabEntityTransaction(params: {
  * Create up to `count` random lab-entity transactions, then persist once (in `finally`,
  * including partial progress if the loop throws after some finalizes).
  */
-export async function labOpCreateRandomLabEntityTransactions(count: number): Promise<{
+export type LabCreateRandomEntityTransactionsOptions = {
+  onProgress?: (createdCount: number, requestedCount: number) => void
+}
+
+export async function labOpCreateRandomLabEntityTransactions(
+  count: number,
+  options?: LabCreateRandomEntityTransactionsOptions,
+): Promise<{
   state: LabState
   createdCount: number
 }> {
   return runLabOp(async () => {
     labPipelineDebugLog('createRandomLabEntityTransactions:start', { count })
+    const requestedCount = Math.max(1, Math.trunc(count))
+    if (requestedCount > LAB_MAX_RANDOM_ENTITY_TRANSACTIONS) {
+      throw new Error(
+        `At most ${LAB_MAX_RANDOM_ENTITY_TRANSACTIONS} random lab transactions per batch (got ${requestedCount})`,
+      )
+    }
+
     await initLabWorkerWithState()
     const labWorker = getLabWorker()
     const cryptoWorker = getCryptoWorker()
 
     let createdCount = 0
     let persistedState!: LabState
-    const requestedCount = Math.max(1, Math.trunc(count))
 
     try {
       for (let index = 0; index < requestedCount; index += 1) {
@@ -247,6 +261,7 @@ export async function labOpCreateRandomLabEntityTransactions(count: number): Pro
           newChangesetJson: changesetJson,
         })
         createdCount += 1
+        options?.onProgress?.(createdCount, requestedCount)
       }
     } finally {
       const snapshot = await labWorker.getStateSnapshot()

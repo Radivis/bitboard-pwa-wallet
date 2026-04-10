@@ -35,6 +35,7 @@ function LabTransactionsPage() {
         setRandomTransactionCount={lab.setRandomTransactionCount}
         onCreateRandomTransactions={lab.onCreateRandomTransactions}
         creatingRandomTransactions={lab.creatingRandomTransactions}
+        randomBatchProgress={lab.randomBatchProgress}
         labEntitiesCount={lab.labEntitiesCount}
       />
 
