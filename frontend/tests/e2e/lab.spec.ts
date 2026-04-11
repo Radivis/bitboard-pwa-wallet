@@ -16,9 +16,13 @@ import { WALLET_OWNER_PREFIX } from '@/lib/lab-utils'
 
 const COINBASE_SATS = 5_000_000_000 // 50 BTC (LAB_COINBASE_SUBSIDY in crypto)
 
+const isCi = !!process.env.CI
+
 test.describe('Lab', { tag: '@lab' }, () => {
   /** Lab runs heavy WASM mining; serial avoids CPU/RAM contention on small CI runners. */
-  test.describe.configure({ mode: 'serial' })
+  if (isCi) {
+    test.describe.configure({ mode: 'serial' })
+  }
 
   test.beforeEach(async ({ page }) => {
     test.setTimeout(90_000)
