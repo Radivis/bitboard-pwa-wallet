@@ -113,9 +113,10 @@ export function LabRulesCard() {
           <li>
             <strong>One spend per UTXO.</strong> Each UTXO can only be spent once in a
             block. If two mempool transactions try to spend the same UTXO (double-spend),
-            the miner prefers the one with the higher fee rate (fee per vByte). Equal fee
-            rates are ordered deterministically by transaction id. The losing transaction is
-            discarded from the mempool entirely.
+            the miner prefers the one with the higher fee rate (fee per virtual byte,
+            vByte). Block space is still limited by weight units (WU) above; fee rate is a
+            separate mempool tie-break. Equal fee rates are ordered deterministically by
+            transaction id. The losing transaction is discarded from the mempool entirely.
           </li>
           <li>
             <strong>Balances reflect confirmed UTXOs only.</strong> Unconfirmed (mempool)

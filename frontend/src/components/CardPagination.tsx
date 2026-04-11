@@ -2,8 +2,8 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { ChevronFirst, ChevronLast, ChevronLeft, ChevronRight } from 'lucide-react'
 
-export const LAB_CARD_PAGE_SIZE_DEFAULT = 20
-export const LAB_ENTITY_INNER_PAGE_SIZE_DEFAULT = 5
+/** Default when `pageSize` is omitted. Lab views should pass sizes from `lab-paginated-queries`. */
+const CARD_PAGINATION_DEFAULT_PAGE_SIZE = 20
 
 export type CardPaginationProps = {
   /** Max items per page; navigator hidden when totalCount <= pageSize. */
@@ -19,7 +19,7 @@ export type CardPaginationProps = {
 }
 
 export function CardPagination({
-  pageSize = LAB_CARD_PAGE_SIZE_DEFAULT,
+  pageSize = CARD_PAGINATION_DEFAULT_PAGE_SIZE,
   totalCount,
   pageIndex,
   onPageChange,
