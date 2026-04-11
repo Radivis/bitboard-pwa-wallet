@@ -281,6 +281,7 @@ export type LabEntitiesPageRow = {
   labEntityId: number
   entityName: string | null
   displayName: string
+  addressType: string
   balanceSats: number
   hasTransactions: boolean
   isDead: boolean
@@ -348,6 +349,7 @@ export async function fetchLabEntitiesPage(
       labEntityId,
       entityName,
       displayName,
+      addressType: r.address_type,
       balanceSats,
       hasTransactions: hasConfirmed != null || hasMempool != null,
       isDead: r.is_dead !== 0,

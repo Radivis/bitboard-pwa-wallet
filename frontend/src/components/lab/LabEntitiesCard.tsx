@@ -11,7 +11,9 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
+import { Switch } from '@/components/ui/switch'
 import { CardPagination } from '@/components/CardPagination'
+import { LabAddressTypeBadge } from '@/components/lab/LabAddressTypeBadge'
 import { ConfirmationDialog } from '@/components/ConfirmationDialog'
 import { formatSats } from '@/lib/bitcoin-utils'
 import { validateLabEntityRenameName } from '@/lib/lab-owner'
@@ -35,6 +37,8 @@ export function LabEntitiesCard() {
   const [renamingId, setRenamingId] = useState<number | null>(null)
   const [renameDraft, setRenameDraft] = useState('')
   const [deleteId, setDeleteId] = useState<number | null>(null)
+  /** When false (default), new entities use SegWit (BIP84); when true, Taproot (BIP86). */
+  const [newEntityUseTaproot, setNewEntityUseTaproot] = useState(false)
 
   const { data: labState } = useLabChainStateQuery()
   const entitiesForValidation =
@@ -67,11 +71,15 @@ export function LabEntitiesCard() {
 
   const onCreate = () => {
     const trimmed = newEntityName.trim()
+    const labAddressType = newEntityUseTaproot ? 'taproot' : 'segwit'
     void createMutation.mutateAsync(
-      trimmed.length > 0 ? { ownerName: trimmed } : undefined,
+      trimmed.length > 0
+        ? { ownerName: trimmed, labAddressType }
+        : { labAddressType },
       {
         onSuccess: () => {
           setNewEntityName('')
+          setNewEntityUseTaproot(false)
           void refetch()
         },
       },
@@ -141,26 +149,49 @@ export function LabEntitiesCard() {
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-6">
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:gap-3">
-              <div className="space-y-2 flex-1 min-w-0">
-                <Label htmlFor="new-lab-entity-name">Name (optional)</Label>
-                <Input
-                  id="new-lab-entity-name"
-                  type="text"
-                  placeholder="Alice"
-                  value={newEntityName}
-                  onChange={(e) => setNewEntityName(e.target.value)}
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:gap-3">
+                <div className="space-y-2 flex-1 min-w-0">
+                  <Label htmlFor="new-lab-entity-name">Name (optional)</Label>
+                  <Input
+                    id="new-lab-entity-name"
+                    type="text"
+                    placeholder="Alice"
+                    value={newEntityName}
+                    onChange={(e) => setNewEntityName(e.target.value)}
+                    disabled={!labNetworkEnabled || busy}
+                    className="max-w-md"
+                  />
+                </div>
+                <Button
+                  type="button"
+                  onClick={onCreate}
                   disabled={!labNetworkEnabled || busy}
-                  className="max-w-md"
-                />
+                >
+                  {createMutation.isPending ? 'Creating…' : 'Create lab entity'}
+                </Button>
               </div>
-              <Button
-                type="button"
-                onClick={onCreate}
-                disabled={!labNetworkEnabled || busy}
-              >
-                {createMutation.isPending ? 'Creating…' : 'Create lab entity'}
-              </Button>
+              <div className="flex flex-col gap-2 max-w-md">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="new-lab-entity-address-type" className="text-base">
+                      Address type
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      {newEntityUseTaproot
+                        ? 'Taproot (BIP86) — experimental'
+                        : 'SegWit (BIP84) — default'}
+                    </p>
+                  </div>
+                  <Switch
+                    id="new-lab-entity-address-type"
+                    checked={newEntityUseTaproot}
+                    onCheckedChange={setNewEntityUseTaproot}
+                    disabled={!labNetworkEnabled || busy}
+                    aria-label="Use Taproot address type (experimental); off for SegWit"
+                  />
+                </div>
+              </div>
             </div>
 
             {!labNetworkEnabled ? (
@@ -218,6 +249,7 @@ export function LabEntitiesCard() {
                         ) : (
                           <div className="flex flex-wrap items-center gap-2">
                             <span className="font-medium break-words">{row.displayName}</span>
+                            <LabAddressTypeBadge addressType={row.addressType} />
                             {row.isDead ? (
                               <Badge variant="secondary" className="gap-1">
                                 <Skull className="h-3 w-3" />

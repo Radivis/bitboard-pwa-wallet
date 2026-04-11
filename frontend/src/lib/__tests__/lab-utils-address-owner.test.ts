@@ -164,7 +164,10 @@ describe('resolveDeadLabEntityRecipient', () => {
     const addr = 'bcrt1qdeadtest'
     const map: Record<string, LabOwner> = { [addr]: labEntityLabOwner(2) }
     const entities = [minimalEntity({ labEntityId: 2, isDead: true, entityName: 'Gone' })]
-    expect(resolveDeadLabEntityRecipient(addr, map, entities)).toEqual({ displayName: 'Gone' })
+    expect(resolveDeadLabEntityRecipient(addr, map, entities)).toEqual({
+      displayName: 'Gone',
+      addressType: 'segwit',
+    })
   })
 
   it('returns null for wallet-owned address', () => {

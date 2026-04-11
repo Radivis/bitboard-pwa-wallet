@@ -15,7 +15,7 @@ import {
   LAB_MIN_BLOCKS_PER_MINE,
 } from '@/workers/lab-api'
 import type { LabEntityRecord } from '@/workers/lab-api'
-import { labEntityOwnerKey } from '@/lib/lab-entity-keys'
+import { formatLabEntityMineOptionLabel } from '@/lib/lab-entity-keys'
 import { cn } from '@/lib/utils'
 
 export function LabBlocksCard({
@@ -171,7 +171,7 @@ export function LabBlocksCard({
                 >
                   {livingEntities.map((e) => (
                     <option key={e.labEntityId} value={e.labEntityId}>
-                      {labEntityOwnerKey(e)}
+                      {formatLabEntityMineOptionLabel(e)}
                     </option>
                   ))}
                 </select>

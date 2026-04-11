@@ -71,6 +71,7 @@ export function useLabIndexPageData() {
   } | null>(null)
   const [pendingDeadLabSend, setPendingDeadLabSend] = useState<{
     displayName: string
+    addressType: string
     variables: LabCreateTransactionVariables
   } | null>(null)
 
@@ -194,6 +195,7 @@ export function useLabIndexPageData() {
     if (deadTo != null) {
       setPendingDeadLabSend({
         displayName: deadTo.displayName,
+        addressType: deadTo.addressType,
         variables: {
           labEntityId: ownerLab.labEntityId,
           fromAddress: trimmedFrom,
@@ -354,6 +356,7 @@ export function useLabIndexPageData() {
     deadFromEntityDisplayName,
     deadRecipientModalOpen: pendingDeadLabSend != null,
     deadRecipientModalDisplayName: pendingDeadLabSend?.displayName ?? '',
+    deadRecipientModalAddressType: pendingDeadLabSend?.addressType,
     onConfirmDeadRecipientSend: confirmDeadRecipientSend,
     onCloseDeadRecipientModal: closeDeadRecipientModal,
     controlledAddressesCount: controlledAddresses.length,

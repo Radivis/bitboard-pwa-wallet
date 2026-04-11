@@ -10,7 +10,7 @@ import {
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { Badge } from '@/components/ui/badge'
 import { formatSats, truncateAddress } from '@/lib/bitcoin-utils'
-import { getOwnerDisplayName } from '@/lib/lab-utils'
+import { LabOwnerDisplayWithAddressType } from '@/components/lab/LabOwnerDisplayWithAddressType'
 import { useLabChainStateQuery } from '@/hooks/useLabChainStateQuery'
 import type { LabBlockDetails } from '@/workers/lab-api'
 import {
@@ -113,9 +113,6 @@ export function LabBlockMetadataCard({
 }) {
   const { data: labState } = useLabChainStateQuery()
   const entities = labState?.entities ?? []
-  const minedBy = block.metadata.minedBy
-    ? getOwnerDisplayName(block.metadata.minedBy, wallets, entities)
-    : 'unknown'
 
   return (
     <InfomodeWrapper
@@ -135,7 +132,18 @@ export function LabBlockMetadataCard({
             <span className="text-muted-foreground">Mined on:</span>{' '}
             {new Date(block.metadata.minedOn * 1000).toLocaleString()}
           </p>
-          <p><span className="text-muted-foreground">Mined by:</span> {minedBy}</p>
+          <p className="flex flex-wrap items-center gap-2">
+            <span className="text-muted-foreground">Mined by:</span>
+            {block.metadata.minedBy ? (
+              <LabOwnerDisplayWithAddressType
+                owner={block.metadata.minedBy}
+                wallets={wallets}
+                entities={entities}
+              />
+            ) : (
+              'unknown'
+            )}
+          </p>
           <p>
             <span className="text-muted-foreground">Number of transactions:</span>{' '}
             {block.metadata.numberOfTransactions}
@@ -153,7 +161,7 @@ export function LabBlockMetadataCard({
 function labBlockTxList(
   txs: LabBlockDetails['transactions'],
   wallets: Array<{ wallet_id: number; name: string }>,
-  entities: readonly { labEntityId: number; entityName: string | null }[],
+  entities: readonly { labEntityId: number; entityName: string | null; addressType: string }[],
 ) {
   return (
     <div className="space-y-2">
@@ -172,14 +180,40 @@ function labBlockTxList(
           <span className="min-w-0 flex-1 font-mono text-sm" title={tx.txid}>
             {truncateAddress(tx.txid)}
           </span>
-          <span className="text-sm text-muted-foreground">
-            {tx.isCoinbase
-              ? tx.receiver
-                ? getOwnerDisplayName(tx.receiver, wallets, entities)
-                : 'unknown reward'
-              : `${tx.sender ? getOwnerDisplayName(tx.sender, wallets, entities) : 'unknown'} -> ${
-                  tx.receiver ? getOwnerDisplayName(tx.receiver, wallets, entities) : 'unknown'
-                }`}
+          <span className="text-sm text-muted-foreground flex flex-wrap items-center gap-x-1 gap-y-1">
+            {tx.isCoinbase ? (
+              tx.receiver ? (
+                <LabOwnerDisplayWithAddressType
+                  owner={tx.receiver}
+                  wallets={wallets}
+                  entities={entities}
+                />
+              ) : (
+                'unknown reward'
+              )
+            ) : (
+              <>
+                {tx.sender ? (
+                  <LabOwnerDisplayWithAddressType
+                    owner={tx.sender}
+                    wallets={wallets}
+                    entities={entities}
+                  />
+                ) : (
+                  'unknown'
+                )}
+                <span aria-hidden="true">→</span>
+                {tx.receiver ? (
+                  <LabOwnerDisplayWithAddressType
+                    owner={tx.receiver}
+                    wallets={wallets}
+                    entities={entities}
+                  />
+                ) : (
+                  'unknown'
+                )}
+              </>
+            )}
           </span>
           <span className="text-sm tabular-nums">{formatSats(tx.feeSats)} sats fee</span>
         </Link>

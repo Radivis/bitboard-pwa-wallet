@@ -25,6 +25,7 @@ function LabTransactionsPage() {
         }}
         onCancel={lab.onCloseDeadRecipientModal}
         entityDisplayName={lab.deadRecipientModalDisplayName}
+        addressType={lab.deadRecipientModalAddressType}
         onConfirm={lab.onConfirmDeadRecipientSend}
         isPending={lab.sending}
       />

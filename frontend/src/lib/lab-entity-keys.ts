@@ -2,6 +2,21 @@
  * Lab entity stable string keys for `addressToOwner`, mempool, and UI.
  * Anonymous entities store `entityName: null` and use `Anonymous-{labEntityId}` as the key.
  */
+
+/** Plain-text option label for mining target select (no React in `<option>`). */
+export function formatLabEntityMineOptionLabel(e: {
+  labEntityId: number
+  entityName: string | null
+  addressType: string
+}): string {
+  const name = labEntityOwnerKey(e)
+  const suffix =
+    e.addressType.toLowerCase() === 'taproot'
+      ? 'Taproot (experimental)'
+      : 'SegWit'
+  return `${name} · ${suffix}`
+}
+
 export function labEntityOwnerKey(e: { labEntityId: number; entityName: string | null }): string {
   return e.entityName ?? `Anonymous-${e.labEntityId}`
 }

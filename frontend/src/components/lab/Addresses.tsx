@@ -9,7 +9,11 @@ import {
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { Button } from '@/components/ui/button'
 import { truncateAddress, formatSats } from '@/lib/bitcoin-utils'
-import { getOwnerDisplayName, getOwnerIcon } from '@/lib/lab-utils'
+import {
+  getOwnerDisplayNameWithAddressTypeAria,
+  getOwnerIcon,
+} from '@/lib/lab-utils'
+import { LabOwnerDisplayWithAddressType } from '@/components/lab/LabOwnerDisplayWithAddressType'
 import { isLabEntityOwnerGroupDead } from '@/lib/lab-owner'
 import { useLabChainStateQuery } from '@/hooks/useLabChainStateQuery'
 import { CardPagination } from '@/components/CardPagination'
@@ -33,7 +37,12 @@ function LabOwnerAddressesInner({
 }: {
   ownerKey: string
   wallets: Array<{ wallet_id: number; name: string }>
-  entities: readonly { labEntityId: number; entityName: string | null; isDead: boolean }[]
+  entities: readonly {
+    labEntityId: number
+    entityName: string | null
+    isDead: boolean
+    addressType: string
+  }[]
   onCopyAddress: (address: string) => void
   addressPageIndex: number
   onAddressPageChange: (pageIndex: number) => void
@@ -55,7 +64,7 @@ function LabOwnerAddressesInner({
       totalCount={totalCount}
       pageIndex={addressPageIndex}
       onPageChange={onAddressPageChange}
-      ariaLabel={`Addresses page for ${getOwnerDisplayName(ownerKey, wallets, entities)}`}
+      ariaLabel={`Addresses page for ${getOwnerDisplayNameWithAddressTypeAria(ownerKey, wallets, entities)}`}
     >
       <div className="space-y-2">
         <div className="flex gap-4 text-sm font-medium text-muted-foreground">
@@ -148,7 +157,7 @@ export function LabAddressesCard({
                   <div
                     key={owner}
                     role="group"
-                    aria-label={`${getOwnerDisplayName(owner, wallets, entities)} — addresses in this group`}
+                    aria-label={`${getOwnerDisplayNameWithAddressTypeAria(owner, wallets, entities)} — addresses in this group`}
                     className="rounded-lg border-[3px] border-border bg-muted/15 p-4 shadow-sm"
                   >
                     <h4 className="text-sm font-medium mb-3 flex flex-wrap items-center gap-2">
@@ -157,7 +166,11 @@ export function LabAddressesCard({
                       ) : (
                         <FlaskConical className="h-4 w-4" />
                       )}
-                      {getOwnerDisplayName(owner, wallets, entities)}
+                      <LabOwnerDisplayWithAddressType
+                        owner={owner}
+                        wallets={wallets}
+                        entities={entities}
+                      />
                       {isLabEntityOwnerGroupDead(owner, entities) ? (
                         <Badge variant="secondary" className="gap-1">
                           <Skull className="h-3 w-3" />

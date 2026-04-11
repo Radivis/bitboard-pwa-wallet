@@ -16,7 +16,8 @@ import { truncateAddress, formatSats } from '@/lib/bitcoin-utils'
 import type { LabTxDetails } from '@/workers/lab-api'
 import { Copy, ArrowLeft, Wallet, FlaskConical } from 'lucide-react'
 import { toast } from 'sonner'
-import { getOwnerDisplayName, getOwnerIcon } from '@/lib/lab-utils'
+import { getOwnerIcon } from '@/lib/lab-utils'
+import { LabOwnerDisplayWithAddressType } from '@/components/lab/LabOwnerDisplayWithAddressType'
 import { useWallets } from '@/db'
 import { useLabChainStateQuery } from '@/hooks/useLabChainStateQuery'
 import { cn } from '@/lib/utils'
@@ -222,9 +223,15 @@ function LabTxViewerPage() {
                             <FlaskConical className="h-4 w-4" />
                           )
                         ) : null}
-                        <Badge variant="secondary">
-                          {input.owner ? getOwnerDisplayName(input.owner, wallets, entities) : 'unknown'}
-                        </Badge>
+                        {input.owner ? (
+                          <LabOwnerDisplayWithAddressType
+                            owner={input.owner}
+                            wallets={wallets}
+                            entities={entities}
+                          />
+                        ) : (
+                          <Badge variant="secondary">unknown</Badge>
+                        )}
                       </span>
                       <span className="tabular-nums text-right sm:shrink-0">
                         {formatSats(input.amountSats)} sats
@@ -276,9 +283,15 @@ function LabTxViewerPage() {
                           <FlaskConical className="h-4 w-4" />
                         )
                       ) : null}
-                      <Badge variant="secondary">
-                        {output.owner ? getOwnerDisplayName(output.owner, wallets, entities) : 'unknown'}
-                      </Badge>
+                      {output.owner ? (
+                        <LabOwnerDisplayWithAddressType
+                          owner={output.owner}
+                          wallets={wallets}
+                          entities={entities}
+                        />
+                      ) : (
+                        <Badge variant="secondary">unknown</Badge>
+                      )}
                     </span>
                     <span className="tabular-nums text-right">{formatSats(output.amountSats)} sats</span>
                     {output.isChange && (

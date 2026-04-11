@@ -59,12 +59,12 @@ export function resolveDeadLabEntityRecipient(
   recipientAddress: string,
   addressToOwner: Record<string, LabOwner>,
   entities: readonly LabEntityRecord[],
-): { displayName: string } | null {
+): { displayName: string; addressType: string } | null {
   const owner = lookupLabAddressOwner(recipientAddress, addressToOwner)
   if (owner?.kind !== 'lab_entity') return null
   const entity = entities.find((e) => e.labEntityId === owner.labEntityId)
   if (entity == null || !entity.isDead) return null
-  return { displayName: labEntityOwnerKey(entity) }
+  return { displayName: labEntityOwnerKey(entity), addressType: entity.addressType }
 }
 
 /**
@@ -279,6 +279,54 @@ export function labTransactionsForWallet(
 }
 
 /**
+ * Resolves a display-time owner reference to {@link LabOwner}, or null if unknown.
+ */
+export function resolveLabOwnerForDisplay(
+  owner: LabOwner | string,
+  _wallets: { wallet_id: number; name: string }[],
+  entities: readonly { labEntityId: number; entityName: string | null }[],
+): LabOwner | null {
+  if (typeof owner === 'object' && owner !== null && 'kind' in owner) {
+    return owner
+  }
+  const fromSort = labOwnerFromSortKey(owner)
+  if (fromSort) return fromSort
+  if (typeof owner === 'string' && owner.startsWith(WALLET_OWNER_PREFIX)) {
+    const id = parseInt(owner.slice(WALLET_OWNER_PREFIX.length), 10)
+    if (!Number.isNaN(id)) return { kind: 'wallet', walletId: id }
+  }
+  return labOwnerFromLegacyKey(owner, entities)
+}
+
+/**
+ * Returns `addressType` for a lab-entity owner, or null for wallets / unknown owners.
+ */
+export function labEntityAddressTypeForOwner(
+  owner: LabOwner | string,
+  entities: readonly { labEntityId: number; entityName: string | null; addressType: string }[],
+): string | null {
+  const resolved = resolveLabOwnerForDisplay(owner, [], entities)
+  if (resolved?.kind !== 'lab_entity') return null
+  const entity = entities.find((e) => e.labEntityId === resolved.labEntityId)
+  return entity?.addressType ?? null
+}
+
+/**
+ * Accessible label including address type for lab entities (matches {@link LabOwnerDisplayWithAddressType}).
+ */
+export function getOwnerDisplayNameWithAddressTypeAria(
+  owner: LabOwner | string,
+  wallets: { wallet_id: number; name: string }[],
+  entities: readonly { labEntityId: number; entityName: string | null; addressType: string }[],
+): string {
+  const base = getOwnerDisplayName(owner, wallets, entities)
+  const addrType = labEntityAddressTypeForOwner(owner, entities)
+  if (addrType == null) return base
+  if (addrType.toLowerCase() === 'taproot') return `${base}, Taproot experimental`
+  return `${base}, SegWit`
+}
+
+/**
  * Display label for a lab owner: {@link LabOwner}, grouped-list sort key (`e:` / `w:`), or legacy string.
  */
 export function getOwnerDisplayName(
@@ -291,7 +339,7 @@ export function getOwnerDisplayName(
   }
   const fromSort = labOwnerFromSortKey(owner)
   if (fromSort) return labOwnerDisplayName(fromSort, wallets, entities)
-  if (owner.startsWith(WALLET_OWNER_PREFIX)) {
+  if (typeof owner === 'string' && owner.startsWith(WALLET_OWNER_PREFIX)) {
     const id = parseInt(owner.slice(WALLET_OWNER_PREFIX.length), 10)
     return wallets.find((w) => w.wallet_id === id)?.name ?? 'Unknown wallet'
   }

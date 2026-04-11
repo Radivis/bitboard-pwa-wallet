@@ -424,6 +424,7 @@ export function SendFlow() {
             }}
             onCancel={() => setDeadLabRecipientModalOpen(false)}
             entityDisplayName={deadLabRecipientInfo.displayName}
+            addressType={deadLabRecipientInfo.addressType}
             onConfirm={handleConfirmDeadLabRecipientSend}
             isPending={labSendMutation.isPending}
           />
