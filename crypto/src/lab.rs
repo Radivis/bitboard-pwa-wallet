@@ -131,7 +131,7 @@ pub fn regtest_create_genesis() -> String {
 /// - `height`: Block height (0 for genesis)
 /// - `coinbase_script_pubkey_hex`: ScriptPubKey for coinbase output (hex)
 /// - `txs_hex`: Optional transactions to include (array of hex strings)
-/// - `subsidy_sats`: New coins for the miner (not including fees)
+/// - `subsidy_sats`: New coins for the miner (not including fees). May be 0 (fees-only coinbase).
 /// - `total_fees_sats`: Sum of fees from included transactions (added to coinbase output)
 #[wasm_bindgen]
 pub fn lab_mine_block(
@@ -142,7 +142,6 @@ pub fn lab_mine_block(
     subsidy_sats: u64,
     total_fees_sats: u64,
 ) -> Result<String, JsValue> {
-    validate_lab_subsidy_sats(subsidy_sats)?;
     let script_pubkey_bytes = hex::decode(coinbase_script_pubkey_hex).map_err_to_js()?;
     let script_pubkey = ScriptBuf::from_bytes(script_pubkey_bytes);
 
@@ -193,13 +192,6 @@ fn find_micro_pow_nonce(header: &mut bitcoin::blockdata::block::Header) -> Optio
         }
     }
     None
-}
-
-fn validate_lab_subsidy_sats(subsidy_sats: u64) -> Result<(), JsValue> {
-    if subsidy_sats == 0 {
-        return Err(JsValue::from_str("subsidy_sats must be at least 1"));
-    }
-    Ok(())
 }
 
 /// Builds an unsigned P2WPKH transaction from UTXOs and outputs.

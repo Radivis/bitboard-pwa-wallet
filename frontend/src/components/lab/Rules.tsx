@@ -47,7 +47,7 @@ export function LabRulesCard() {
     labState?.minerSubsidySats ?? LAB_DEFAULT_MINER_SUBSIDY_SATS
 
   function applyHalfSubsidy() {
-    const next = Math.max(1, Math.floor(currentSubsidySats / 2))
+    const next = Math.max(0, Math.floor(currentSubsidySats / 2))
     setMinerSubsidy.mutate(next)
   }
 
@@ -100,8 +100,10 @@ export function LabRulesCard() {
           </li>
           <li>
             <strong>Miner subsidy.</strong> Each mined block creates new coins paid in the
-            coinbase (plus transaction fees). The subsidy you set below applies only to{' '}
-            <em>future</em> blocks; amounts already mined stay as they are.
+            coinbase (plus transaction fees). You can set the subsidy to zero to simulate a
+            distant future where issuance has ended and blocks are paid from fees only. The
+            subsidy you set below applies only to <em>future</em> blocks; amounts already mined
+            stay as they are.
           </li>
           <li>
             <strong>Transaction fees go to the miner.</strong> When a block is mined, all
@@ -157,7 +159,7 @@ export function LabRulesCard() {
                   className="max-w-[14rem] font-mono tabular-nums"
                   id="lab-miner-subsidy-input"
                   inputMode="numeric"
-                  min={1}
+                  min={0}
                   type="number"
                   value={draftSubsidySats}
                   onChange={(ev) => setDraftSubsidySats(ev.target.value)}

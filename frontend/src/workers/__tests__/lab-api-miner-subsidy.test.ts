@@ -12,10 +12,10 @@ describe('normalizeMinerSubsidySats', () => {
     )
   })
 
-  it('floors and clamps to at least 1', () => {
+  it('floors and clamps negatives to 0', () => {
     expect(normalizeMinerSubsidySats(100.7)).toBe(100)
-    expect(normalizeMinerSubsidySats(0)).toBe(1)
-    expect(normalizeMinerSubsidySats(-5)).toBe(1)
+    expect(normalizeMinerSubsidySats(0)).toBe(0)
+    expect(normalizeMinerSubsidySats(-5)).toBe(0)
   })
 
   it('caps at MAX_SAFE_INTEGER', () => {

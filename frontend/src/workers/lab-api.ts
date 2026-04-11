@@ -186,7 +186,7 @@ export interface LabState {
   txOperations: LabTxOperationRecord[]
   /** Max total weight units (WU) for non-coinbase txs in a mined block (future blocks only). At least 1000 WU. */
   blockWeightLimit: number
-  /** Coinbase subsidy in sats for newly mined blocks (future blocks only; excludes fees). At least 1 sat. */
+  /** Coinbase subsidy in sats for newly mined blocks (future blocks only; excludes fees). 0 = fees only. */
   minerSubsidySats: number
 }
 
@@ -222,13 +222,13 @@ export const LAB_DEFAULT_MINER_SUBSIDY_SATS = 5_000_000_000
 /** Upper bound aligned with WASM `u64` sat amounts and JS safe integers. */
 const LAB_MAX_MINER_SUBSIDY_SATS = Number.MAX_SAFE_INTEGER
 
-/** Clamp subsidy to [1, {@link LAB_MAX_MINER_SUBSIDY_SATS}]. */
+/** Clamp subsidy to [0, {@link LAB_MAX_MINER_SUBSIDY_SATS}]. Negative values become 0. */
 export function normalizeMinerSubsidySats(value: number): number {
   if (!Number.isFinite(value)) {
     return LAB_DEFAULT_MINER_SUBSIDY_SATS
   }
   const floored = Math.floor(value)
-  if (floored < 1) return 1
+  if (floored < 0) return 0
   if (floored > LAB_MAX_MINER_SUBSIDY_SATS) return LAB_MAX_MINER_SUBSIDY_SATS
   return floored
 }
