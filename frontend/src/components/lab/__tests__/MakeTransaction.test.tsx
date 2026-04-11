@@ -111,6 +111,25 @@ describe('LabMakeTransactionCard', () => {
     ).not.toBeInTheDocument()
   })
 
+  it('disables Send when sendDisabledFromDeadEntity is true', () => {
+    const onSend = vi.fn()
+    renderWithProviders(
+      <LabMakeTransactionCard
+        {...buildProps({
+          showTxForm: true,
+          onSend,
+          sendDisabledFromDeadEntity: true,
+          deadFromEntityDisplayName: 'Corpse',
+        })}
+      />,
+    )
+
+    expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled()
+    expect(
+      screen.getByText(/This address belongs to DEAD lab entity Corpse/i),
+    ).toBeInTheDocument()
+  })
+
   it('shows rolling message and progress while creating random transactions', () => {
     renderWithProviders(
       <LabMakeTransactionCard

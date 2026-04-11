@@ -2,6 +2,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { ArrowLeftRight } from 'lucide-react'
 import { PageHeader } from '@/components/PageHeader'
 import { LabMakeTransactionCard } from '@/components/lab/MakeTransaction'
+import { DeadLabEntityRecipientModal } from '@/components/lab/DeadLabEntityRecipientModal'
 import { LabAddressesCard } from '@/components/lab/Addresses'
 import { LabUtxosCard } from '@/components/lab/Utxos'
 import { useLabIndexPageData } from '@/hooks/useLabIndexPageData'
@@ -17,6 +18,17 @@ function LabTransactionsPage() {
     <>
       <PageHeader title="Transactions" icon={ArrowLeftRight} />
 
+      <DeadLabEntityRecipientModal
+        open={lab.deadRecipientModalOpen}
+        onOpenChange={(open) => {
+          if (!open) lab.onCloseDeadRecipientModal()
+        }}
+        onCancel={lab.onCloseDeadRecipientModal}
+        entityDisplayName={lab.deadRecipientModalDisplayName}
+        onConfirm={lab.onConfirmDeadRecipientSend}
+        isPending={lab.sending}
+      />
+
       <LabMakeTransactionCard
         showTxForm={lab.showTxForm}
         setShowTxForm={lab.setShowTxForm}
@@ -30,6 +42,8 @@ function LabTransactionsPage() {
         setFeeRate={lab.setFeeRate}
         onSend={lab.onSend}
         sending={lab.sending}
+        sendDisabledFromDeadEntity={lab.sendDisabledFromDeadEntity}
+        deadFromEntityDisplayName={lab.deadFromEntityDisplayName}
         controlledAddressesCount={lab.controlledAddressesCount}
         randomTransactionCount={lab.randomTransactionCount}
         setRandomTransactionCount={lab.setRandomTransactionCount}

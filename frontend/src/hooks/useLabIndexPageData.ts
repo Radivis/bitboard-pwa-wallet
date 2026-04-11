@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { useLabChainStateQuery } from '@/hooks/useLabChainStateQuery'
 import { selectCommittedAddressType, useWalletStore } from '@/stores/walletStore'
@@ -9,15 +9,17 @@ import {
   useLabCreateRandomTransactionsMutation,
   useLabCreateTransactionMutation,
   useLabResetMutation,
+  type LabCreateTransactionVariables,
 } from '@/hooks/useLabMutations'
 import { LAB_MAX_BLOCKS_PER_MINE, LAB_MIN_BLOCKS_PER_MINE } from '@/workers/lab-api'
 import { LAB_MAX_RANDOM_ENTITY_TRANSACTIONS } from '@/lib/lab-random-limits'
-import { lookupLabAddressOwner } from '@/lib/lab-utils'
-import { walletLabOwner } from '@/lib/lab-owner'
+import { labEntityOwnerKey } from '@/lib/lab-entity-keys'
+import { labEntityRecordForLabOwner, walletLabOwner } from '@/lib/lab-owner'
 import {
   assertLabAddressOwnerResolved,
   labBitcoinAddressesEqual,
-  resolveLabAddressOwnerDisplay,
+  lookupLabAddressOwner,
+  resolveDeadLabEntityRecipient,
 } from '@/lib/lab-utils'
 
 const DEFAULT_LAB_FEE_RATE_SAT_PER_VB = 1
@@ -67,6 +69,10 @@ export function useLabIndexPageData() {
     created: number
     total: number
   } | null>(null)
+  const [pendingDeadLabSend, setPendingDeadLabSend] = useState<{
+    displayName: string
+    variables: LabCreateTransactionVariables
+  } | null>(null)
 
   const mineMutation = useLabMineBlocksMutation()
   const createTxMutation = useLabCreateTransactionMutation()
@@ -92,12 +98,6 @@ export function useLabIndexPageData() {
     [utxos],
   )
 
-  const resolveLabAddressOwner = useCallback(
-    (address: string) =>
-      resolveLabAddressOwnerDisplay(address, addressToOwner, txDetails, entities, wallets),
-    [addressToOwner, txDetails, entities, wallets],
-  )
-
   const handleCopyAddress = useCallback(async (address: string) => {
     try {
       await navigator.clipboard.writeText(address)
@@ -106,6 +106,52 @@ export function useLabIndexPageData() {
       toast.error('Failed to copy address')
     }
   }, [])
+
+  const { fromEntityDead, deadFromEntityDisplayName } = useMemo(() => {
+    const trimmedFrom = fromAddress.trim()
+    if (!trimmedFrom) {
+      return { fromEntityDead: false, deadFromEntityDisplayName: '' }
+    }
+    const ownerLab = lookupLabAddressOwner(trimmedFrom, addressToOwner)
+    if (ownerLab?.kind !== 'lab_entity') {
+      return { fromEntityDead: false, deadFromEntityDisplayName: '' }
+    }
+    const record = labEntityRecordForLabOwner(ownerLab, entities)
+    if (record == null || !record.isDead) {
+      return { fromEntityDead: false, deadFromEntityDisplayName: '' }
+    }
+    return { fromEntityDead: true, deadFromEntityDisplayName: labEntityOwnerKey(record) }
+  }, [fromAddress, addressToOwner, entities])
+
+  const prevFromEntityDeadRef = useRef(false)
+  useEffect(() => {
+    if (fromEntityDead && !prevFromEntityDeadRef.current && deadFromEntityDisplayName) {
+      toast.error(
+        `The address belongs to DEAD lab entity ${deadFromEntityDisplayName}. Dead entities cannot send.`,
+      )
+    }
+    prevFromEntityDeadRef.current = fromEntityDead
+  }, [fromEntityDead, deadFromEntityDisplayName])
+
+  const closeDeadRecipientModal = useCallback(() => {
+    setPendingDeadLabSend(null)
+  }, [])
+
+  const confirmDeadRecipientSend = useCallback(() => {
+    if (pendingDeadLabSend == null) return
+    void createTxMutation
+      .mutateAsync(pendingDeadLabSend.variables)
+      .then(() => {
+        setPendingDeadLabSend(null)
+        setShowTxForm(false)
+        setFromAddress('')
+        setToAddress('')
+        setAmountSats('')
+      })
+      .catch(() => {
+        /* error toast from mutation onError */
+      })
+  }, [pendingDeadLabSend, createTxMutation])
 
   const handleSend = useCallback(() => {
     const amount = parseInt(amountSats, 10)
@@ -129,6 +175,13 @@ export function useLabIndexPageData() {
       toast.error('Spend from a lab entity address (use Send for your wallet)')
       return
     }
+    const fromEntity = labEntityRecordForLabOwner(ownerLab, entities)
+    if (fromEntity?.isDead === true) {
+      toast.error(
+        `The address belongs to DEAD lab entity ${labEntityOwnerKey(fromEntity)}. Dead entities cannot send.`,
+      )
+      return
+    }
     const trimmedTo = toAddress.trim()
     const knownRecipientOwner =
       activeWalletId != null &&
@@ -136,6 +189,22 @@ export function useLabIndexPageData() {
       labBitcoinAddressesEqual(trimmedTo, currentAddress)
         ? walletLabOwner(activeWalletId)
         : undefined
+
+    const deadTo = resolveDeadLabEntityRecipient(trimmedTo, addressToOwner, entities)
+    if (deadTo != null) {
+      setPendingDeadLabSend({
+        displayName: deadTo.displayName,
+        variables: {
+          labEntityId: ownerLab.labEntityId,
+          fromAddress: trimmedFrom,
+          toAddress: trimmedTo,
+          amountSats: amount,
+          feeRateSatPerVb: fee,
+          knownRecipientOwner,
+        },
+      })
+      return
+    }
 
     void createTxMutation
       .mutateAsync({
@@ -161,10 +230,10 @@ export function useLabIndexPageData() {
     amountSats,
     feeRate,
     createTxMutation,
-    resolveLabAddressOwner,
     addressToOwner,
     activeWalletId,
     currentAddress,
+    entities,
   ])
 
   const handleMine = useCallback(() => {
@@ -281,6 +350,12 @@ export function useLabIndexPageData() {
     setFeeRate,
     onSend: handleSend,
     sending: createTxMutation.isPending,
+    sendDisabledFromDeadEntity: fromEntityDead,
+    deadFromEntityDisplayName,
+    deadRecipientModalOpen: pendingDeadLabSend != null,
+    deadRecipientModalDisplayName: pendingDeadLabSend?.displayName ?? '',
+    onConfirmDeadRecipientSend: confirmDeadRecipientSend,
+    onCloseDeadRecipientModal: closeDeadRecipientModal,
     controlledAddressesCount: controlledAddresses.length,
     randomTransactionCount,
     setRandomTransactionCount,

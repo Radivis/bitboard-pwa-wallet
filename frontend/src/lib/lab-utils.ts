@@ -1,3 +1,4 @@
+import { labEntityOwnerKey } from '@/lib/lab-entity-keys'
 import type { LabOwner } from '@/lib/lab-owner'
 import {
   labOwnerDisplayName,
@@ -7,7 +8,14 @@ import {
   labOwnerSortKey,
   walletLabOwner,
 } from '@/lib/lab-owner'
-import type { LabTxRecord, LabTxDetails, MempoolEntry, LabAddress, LabState } from '@/workers/lab-api'
+import type {
+  LabEntityRecord,
+  LabTxRecord,
+  LabTxDetails,
+  MempoolEntry,
+  LabAddress,
+  LabState,
+} from '@/workers/lab-api'
 import type { TransactionDetails } from '@/workers/crypto-types'
 
 export const WALLET_OWNER_PREFIX = 'wallet:'
@@ -42,6 +50,21 @@ export function lookupLabAddressOwner(
     if (labBitcoinAddressesEqual(storedAddr, address)) return owner
   }
   return undefined
+}
+
+/**
+ * If the recipient address maps to a dead lab entity, returns its display key; otherwise null.
+ */
+export function resolveDeadLabEntityRecipient(
+  recipientAddress: string,
+  addressToOwner: Record<string, LabOwner>,
+  entities: readonly LabEntityRecord[],
+): { displayName: string } | null {
+  const owner = lookupLabAddressOwner(recipientAddress, addressToOwner)
+  if (owner?.kind !== 'lab_entity') return null
+  const entity = entities.find((e) => e.labEntityId === owner.labEntityId)
+  if (entity == null || !entity.isDead) return null
+  return { displayName: labEntityOwnerKey(entity) }
 }
 
 /**

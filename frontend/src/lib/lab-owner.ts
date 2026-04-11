@@ -106,6 +106,16 @@ export function labOwnerDisplayKey(
   return e ? labEntityOwnerKey(e) : `Anonymous-${owner.labEntityId}`
 }
 
+/**
+ * Returns the entity row for a lab-entity owner, or undefined if not a lab entity or missing.
+ */
+export function labEntityRecordForLabOwner<
+  T extends { labEntityId: number },
+>(owner: LabOwner, entities: readonly T[]): T | undefined {
+  if (owner.kind !== 'lab_entity') return undefined
+  return entities.find((e) => e.labEntityId === owner.labEntityId)
+}
+
 export function labOwnerDisplayName(
   owner: LabOwner,
   wallets: { wallet_id: number; name: string }[],

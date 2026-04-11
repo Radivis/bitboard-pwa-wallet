@@ -4,12 +4,31 @@ import {
   groupLabRowsByResolvedOwner,
   lookupLabAddressOwner,
   mergeAddressesWithUtxos,
+  resolveDeadLabEntityRecipient,
   resolveLabAddressOwnerDisplay,
   sortLabOwnerKeys,
 } from '@/lib/lab-utils'
 import type { LabOwner } from '@/lib/lab-owner'
 import { labEntityLabOwner } from '@/lib/lab-owner'
-import type { LabTxDetails } from '@/workers/lab-api'
+import type { LabEntityRecord, LabTxDetails } from '@/workers/lab-api'
+
+function minimalEntity(
+  overrides: Partial<LabEntityRecord> & Pick<LabEntityRecord, 'labEntityId' | 'isDead'>,
+): LabEntityRecord {
+  return {
+    entityName: null,
+    mnemonic: '',
+    changesetJson: '',
+    externalDescriptor: '',
+    internalDescriptor: '',
+    network: 'regtest',
+    addressType: 'segwit',
+    accountId: 0,
+    createdAt: '',
+    updatedAt: '',
+    ...overrides,
+  }
+}
 
 const emptyWallets: { wallet_id: number; name: string }[] = []
 
@@ -130,5 +149,30 @@ describe('mergeAddressesWithUtxos', () => {
       [{ txid: 't', vout: 0, address: 'bcrt1paaa', amountSats: 1, scriptPubkeyHex: '' }],
     )
     expect(merged).toHaveLength(1)
+  })
+})
+
+describe('resolveDeadLabEntityRecipient', () => {
+  it('returns null when address is not a dead lab entity', () => {
+    const addr = 'bcrt1qdeadtest'
+    const map: Record<string, LabOwner> = { [addr]: labEntityLabOwner(1) }
+    const entities = [minimalEntity({ labEntityId: 1, isDead: false, entityName: 'Alive' })]
+    expect(resolveDeadLabEntityRecipient(addr, map, entities)).toBeNull()
+  })
+
+  it('returns display name when address maps to a dead lab entity', () => {
+    const addr = 'bcrt1qdeadtest'
+    const map: Record<string, LabOwner> = { [addr]: labEntityLabOwner(2) }
+    const entities = [minimalEntity({ labEntityId: 2, isDead: true, entityName: 'Gone' })]
+    expect(resolveDeadLabEntityRecipient(addr, map, entities)).toEqual({ displayName: 'Gone' })
+  })
+
+  it('returns null for wallet-owned address', () => {
+    const addr = 'bcrt1qwallet'
+    const map: Record<string, LabOwner> = {
+      [addr]: { kind: 'wallet', walletId: 1 },
+    }
+    const entities = [minimalEntity({ labEntityId: 1, isDead: true })]
+    expect(resolveDeadLabEntityRecipient(addr, map, entities)).toBeNull()
   })
 })
