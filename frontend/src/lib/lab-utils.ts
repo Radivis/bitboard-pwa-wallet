@@ -322,7 +322,7 @@ export function getOwnerDisplayNameWithAddressTypeAria(
   const base = getOwnerDisplayName(owner, wallets, entities)
   const addrType = labEntityAddressTypeForOwner(owner, entities)
   if (addrType == null) return base
-  if (addrType.toLowerCase() === 'taproot') return `${base}, Taproot experimental`
+  if (addrType.toLowerCase() === 'taproot') return `${base}, Taproot`
   return `${base}, SegWit`
 }
 

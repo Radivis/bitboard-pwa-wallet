@@ -10,10 +10,9 @@ describe('LabAddressTypeBadge', () => {
     expect(screen.getByText('SegWit')).toBeInTheDocument()
   })
 
-  it('renders Taproot and experimental for taproot', () => {
+  it('renders Taproot for taproot address type', () => {
     render(<LabAddressTypeBadge addressType="taproot" />)
     expect(screen.getByText('Taproot')).toBeInTheDocument()
-    expect(screen.getByText('experimental')).toBeInTheDocument()
   })
 
   it('treats address type case-insensitively', () => {

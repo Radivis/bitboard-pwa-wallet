@@ -10,10 +10,7 @@ export function formatLabEntityMineOptionLabel(e: {
   addressType: string
 }): string {
   const name = labEntityOwnerKey(e)
-  const suffix =
-    e.addressType.toLowerCase() === 'taproot'
-      ? 'Taproot (experimental)'
-      : 'SegWit'
+  const suffix = e.addressType.toLowerCase() === 'taproot' ? 'Taproot' : 'SegWit'
   return `${name} · ${suffix}`
 }
 

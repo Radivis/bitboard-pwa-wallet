@@ -17,10 +17,10 @@ describe('getOwnerDisplayNameWithAddressTypeAria', () => {
     ).toBe('Bob, SegWit')
   })
 
-  it('appends Taproot experimental for taproot anonymous entity', () => {
+  it('appends Taproot for taproot anonymous entity', () => {
     expect(
       getOwnerDisplayNameWithAddressTypeAria(labEntityLabOwner(2), wallets, entitiesTaproot),
-    ).toBe('Anonymous-2, Taproot experimental')
+    ).toBe('Anonymous-2, Taproot')
   })
 
   it('does not append for wallet owner', () => {

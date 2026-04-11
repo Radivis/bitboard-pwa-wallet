@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test'
 import { importWalletViaUI, TEST_MNEMONIC, TEST_PASSWORD } from './helpers/wallet-setup'
 import {
-  switchToLabAndSegwit,
+  switchToLab,
   resetLab,
   mineBlocksInLab,
   createTransactionInLab,
@@ -27,7 +27,7 @@ test.describe('Lab', { tag: '@lab' }, () => {
   test.beforeEach(async ({ page }) => {
     test.setTimeout(90_000)
     await importWalletViaUI(page, TEST_MNEMONIC, TEST_PASSWORD)
-    await switchToLabAndSegwit(page)
+    await switchToLab(page)
     await resetLab(page)
   })
 

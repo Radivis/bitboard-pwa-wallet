@@ -3,10 +3,10 @@ import type { LabState } from '@/workers/lab-api'
 import { labEntityOwnerKey } from '@/lib/lab-entity-keys'
 import { lookupLabAddressOwner, WALLET_OWNER_PREFIX } from '@/lib/lab-utils'
 import { goToWalletTab } from './wallet-nav'
-import { waitForSettingsAddressTypeSwitchComplete } from './settings-waits'
+import { waitForSettingsNetworkSwitchComplete } from './settings-waits'
 
-/** Switch to Lab network and SegWit (BIP84) address type. */
-export async function switchToLabAndSegwit(page: Page): Promise<void> {
+/** Switch to Lab network without changing address type (default is Taproot). */
+export async function switchToLab(page: Page): Promise<void> {
   await page.getByRole('link', { name: /settings/i }).click()
   await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
 
@@ -15,12 +15,7 @@ export async function switchToLabAndSegwit(page: Page): Promise<void> {
     timeout: 60000,
   })
 
-  await page.getByRole('button', { name: 'SegWit (BIP84)' }).click()
-  const changeButton = page.getByRole('button', { name: 'Change' })
-  if (await changeButton.isVisible()) {
-    await changeButton.click()
-  }
-  await waitForSettingsAddressTypeSwitchComplete(page)
+  await waitForSettingsNetworkSwitchComplete(page)
 
   await goToWalletTab(page, 'Receive')
   await expect(page.getByRole('heading', { name: 'Receive Bitcoin' })).toBeVisible({
@@ -52,6 +47,10 @@ export async function resetLab(page: Page): Promise<void> {
   await expect(page.getByText(/Chain height \(blocks mined\): 0/)).toBeVisible({
     timeout: 10000,
   })
+}
+
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
 export type MineOwnerType = 'name' | 'wallet'
@@ -137,7 +136,13 @@ export async function mineBlocksInLab(
     const select = page.locator('#lab-entity-mine-select')
     await expect(select).toBeVisible()
     if (options?.ownerName?.trim()) {
-      await select.selectOption({ label: options.ownerName.trim() })
+      const name = options.ownerName.trim()
+      const optionLabel = await select
+        .locator('option')
+        .filter({ hasText: new RegExp(`^${escapeRegExp(name)} ·`) })
+        .first()
+        .innerText()
+      await select.selectOption({ label: optionLabel.trim() })
     } else if (options?.randomAnonymous) {
       await select.selectOption({ index: 0 })
     }

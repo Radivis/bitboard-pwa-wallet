@@ -179,7 +179,7 @@ export function LabEntitiesCard() {
                     </Label>
                     <p className="text-xs text-muted-foreground">
                       {newEntityUseTaproot
-                        ? 'Taproot (BIP86) — experimental'
+                        ? 'Taproot (BIP86)'
                         : 'SegWit (BIP84) — default'}
                     </p>
                   </div>
@@ -188,7 +188,7 @@ export function LabEntitiesCard() {
                     checked={newEntityUseTaproot}
                     onCheckedChange={setNewEntityUseTaproot}
                     disabled={!labNetworkEnabled || busy}
-                    aria-label="Use Taproot address type (experimental); off for SegWit"
+                    aria-label="Use Taproot address type (BIP86); off for SegWit (BIP84)"
                   />
                 </div>
               </div>
