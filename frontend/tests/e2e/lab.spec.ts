@@ -4,6 +4,7 @@ import {
   switchToLab,
   resetLab,
   mineBlocksInLab,
+  labEntityAddressTypeForCreationIndex,
   createTransactionInLab,
   createRandomTransactionsInLab,
   sendFromWallet,
@@ -102,8 +103,18 @@ test.describe('Lab', { tag: '@lab' }, () => {
   })
 
   test('creates random transactions between lab entities', async ({ page }) => {
-    await mineBlocksInLab(page, 1, 'name', { ownerName: 'Alice' })
-    await mineBlocksInLab(page, 1, 'name', { ownerName: 'Bob' })
+    await mineBlocksInLab(page, 1, 'name', {
+      ownerName: 'Alice',
+      labAddressType: labEntityAddressTypeForCreationIndex(1),
+    })
+    await mineBlocksInLab(page, 1, 'name', {
+      ownerName: 'Bob',
+      labAddressType: labEntityAddressTypeForCreationIndex(2),
+    })
+    await mineBlocksInLab(page, 1, 'name', {
+      ownerName: 'Carol',
+      labAddressType: labEntityAddressTypeForCreationIndex(3),
+    })
 
     const randomTxCount = 16
     await createRandomTransactionsInLab(page, randomTxCount)
@@ -115,7 +126,59 @@ test.describe('Lab', { tag: '@lab' }, () => {
         entry.sender?.kind === 'lab_entity' ? entry.sender.labEntityId : null,
       ),
     )
-    expect(senderEntityIds).toEqual(new Set([1, 2]))
+    expect(senderEntityIds).toEqual(new Set([1, 2, 3]))
+
+    expect(state.entities.find((e) => e.labEntityId === 1)?.addressType).toBe('segwit')
+    expect(state.entities.find((e) => e.labEntityId === 2)?.addressType).toBe('taproot')
+    expect(state.entities.find((e) => e.labEntityId === 3)?.addressType).toBe('segwit')
+  })
+
+  test('lab entity SegWit and Taproot interop transfers', async ({ page }) => {
+    const segwitA = 'SegWit A'
+    const segwitB = 'SegWit B'
+    const taprootA = 'Taproot A'
+    const taprootB = 'Taproot B'
+
+    await mineBlocksInLab(page, 1, 'name', { ownerName: segwitA, labAddressType: 'segwit' })
+    await mineBlocksInLab(page, 1, 'name', { ownerName: segwitB, labAddressType: 'segwit' })
+    await mineBlocksInLab(page, 1, 'name', { ownerName: taprootA, labAddressType: 'taproot' })
+    await mineBlocksInLab(page, 1, 'name', { ownerName: taprootB, labAddressType: 'taproot' })
+
+    let state = await getLabState(page)
+    expect(state.entities).toHaveLength(4)
+    expect(state.entities!.find((e) => e.labEntityId === 1)?.addressType).toBe('segwit')
+    expect(state.entities!.find((e) => e.labEntityId === 2)?.addressType).toBe('segwit')
+    expect(state.entities!.find((e) => e.labEntityId === 3)?.addressType).toBe('taproot')
+    expect(state.entities!.find((e) => e.labEntityId === 4)?.addressType).toBe('taproot')
+
+    const addressForOwner = async (owner: string) => {
+      const s = await getLabState(page)
+      const a = findAddressForOwner(s, owner)
+      expect(a).toBeDefined()
+      return a!
+    }
+
+    await createTransactionInLab(page, await addressForOwner(segwitA), await addressForOwner(segwitB), 11_000, 1)
+    expect((await getLabState(page)).mempool).toHaveLength(1)
+    await mineBlocksInLab(page, 1, 'name', { ownerName: segwitA, labAddressType: 'segwit' })
+    expect((await getLabState(page)).mempool).toHaveLength(0)
+
+    await createTransactionInLab(page, await addressForOwner(segwitA), await addressForOwner(taprootA), 13_000, 1)
+    expect((await getLabState(page)).mempool).toHaveLength(1)
+    await mineBlocksInLab(page, 1, 'name', { ownerName: segwitA, labAddressType: 'segwit' })
+    expect((await getLabState(page)).mempool).toHaveLength(0)
+
+    await createTransactionInLab(page, await addressForOwner(taprootA), await addressForOwner(segwitA), 9_000, 1)
+    expect((await getLabState(page)).mempool).toHaveLength(1)
+    await mineBlocksInLab(page, 1, 'name', { ownerName: taprootA, labAddressType: 'taproot' })
+    expect((await getLabState(page)).mempool).toHaveLength(0)
+
+    await createTransactionInLab(page, await addressForOwner(taprootA), await addressForOwner(taprootB), 14_000, 1)
+    expect((await getLabState(page)).mempool).toHaveLength(1)
+    await mineBlocksInLab(page, 1, 'name', { ownerName: taprootA, labAddressType: 'taproot' })
+    state = await getLabState(page)
+    expect(state.mempool).toHaveLength(0)
+    expect(state.transactions.filter((t) => !t.isCoinbase)).toHaveLength(4)
   })
 
   test('transfer name to name in lab', async ({ page }) => {

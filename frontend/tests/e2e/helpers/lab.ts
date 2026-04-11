@@ -55,21 +55,39 @@ function escapeRegExp(text: string): string {
 
 export type MineOwnerType = 'name' | 'wallet'
 
+export type LabEntityAddressType = 'segwit' | 'taproot'
+
 export interface MineOptions {
   targetAddress?: string
   ownerName?: string
   /** Lab-entity mode with empty name and target: creates `Anonymous-{id}` wallet. */
   randomAnonymous?: boolean
+  /** BIP84 vs BIP86 for the lab entity row created before this mine (defaults to SegWit). */
+  labAddressType?: LabEntityAddressType
+}
+
+/**
+ * Odd index → SegWit, even → Taproot (1-based creation order within a test).
+ */
+export function labEntityAddressTypeForCreationIndex(index1Based: number): LabEntityAddressType {
+  return index1Based % 2 === 1 ? 'segwit' : 'taproot'
 }
 
 /** Create a lab entity from Control (required before mining to a lab entity). */
-export async function createLabEntityViaControl(page: Page, ownerName?: string): Promise<void> {
+export async function createLabEntityViaControl(
+  page: Page,
+  options?: { ownerName?: string; addressType?: LabEntityAddressType },
+): Promise<void> {
   await page.getByRole('navigation', { name: 'Lab' }).getByRole('link', { name: 'Control' }).click()
   await expect(page.getByRole('heading', { name: 'Control' })).toBeVisible({ timeout: 15000 })
+  const addressType = options?.addressType ?? 'segwit'
+  await page
+    .getByRole('switch', { name: /Use Taproot address type/ })
+    .setChecked(addressType === 'taproot')
   const nameInput = page.getByLabel(/Name \(optional\)/)
   await nameInput.clear()
-  if (ownerName) {
-    await nameInput.fill(ownerName)
+  if (options?.ownerName) {
+    await nameInput.fill(options.ownerName)
   }
   await page.getByRole('button', { name: 'Create lab entity' }).click()
   await expect(page.getByText('Lab entity created').first()).toBeVisible({ timeout: 15000 })
@@ -119,9 +137,14 @@ export async function mineBlocksInLab(
 
   if (ownerType === 'name') {
     if (options?.randomAnonymous) {
-      await createLabEntityViaControl(page)
+      await createLabEntityViaControl(page, {
+        addressType: options.labAddressType ?? 'segwit',
+      })
     } else if (options?.ownerName !== undefined) {
-      await createLabEntityViaControl(page, options.ownerName.trim() || undefined)
+      await createLabEntityViaControl(page, {
+        ownerName: options.ownerName.trim() || undefined,
+        addressType: options.labAddressType,
+      })
     }
   }
 
@@ -221,7 +244,7 @@ export async function createTransactionInLab(
   await page.getByLabel('Fee rate (sat/vB)').fill(String(feeRate))
   await page.getByRole('button', { name: 'Send' }).click()
 
-  await expect(page.getByText('Transaction added to mempool')).toBeVisible({
+  await expect(page.getByText('Transaction added to mempool').first()).toBeVisible({
     timeout: 15000,
   })
 }
