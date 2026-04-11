@@ -6,8 +6,10 @@
 import type { QueryClient } from '@tanstack/react-query'
 import { sql } from 'kysely'
 import { ensureLabMigrated, getLabDatabase } from '@/db/lab-database'
-import { feeSatsFromTxDetails } from '@/lib/lab-tx-fee'
+import { labEntityOwnerKey } from '@/lib/lab-entity-keys'
+import { labOwnerFromTxRow } from '@/lib/lab-db-owner'
 import { isCoinbase } from '@/lib/lab-operations'
+import { feeSatsFromTxDetails } from '@/lib/lab-tx-fee'
 import type { LabAddress, LabBlockTransactionSummary, LabTxDetails } from '@/workers/lab-api'
 
 export const LAB_CARD_PAGE_SIZE = 20
@@ -39,8 +41,26 @@ export function labAddressBalancesQueryKey(addressesKey: string) {
   return [...labPaginatedQueryKeyPrefix, 'addressBalances', addressesKey] as const
 }
 
+export function labEntitiesPageQueryKey(pageIndex: number) {
+  return [...labPaginatedQueryKeyPrefix, 'labEntities', pageIndex] as const
+}
+
 function ownerKeyMatches(ownerKey: string) {
-  return sql<boolean>`(o.owner_type = 'wallet' AND ('wallet:' || o.wallet_id) = ${ownerKey}) OR (o.owner_type = 'lab_entity' AND o.entity_name = ${ownerKey})`
+  const w = /^w:(\d+)$/.exec(ownerKey)
+  if (w) {
+    const id = Number(w[1])
+    return sql<boolean>`o.owner_type = 'wallet' AND o.wallet_id = ${id}`
+  }
+  const e = /^e:(\d+)$/.exec(ownerKey)
+  if (e) {
+    const id = Number(e[1])
+    return sql<boolean>`o.owner_type = 'lab_entity' AND o.lab_entity_id = ${id}`
+  }
+  if (ownerKey.startsWith('wallet:')) {
+    const id = parseInt(ownerKey.slice('wallet:'.length), 10)
+    return sql<boolean>`o.owner_type = 'wallet' AND o.wallet_id = ${id}`
+  }
+  return sql<boolean>`o.owner_type = 'lab_entity' AND o.entity_name = ${ownerKey}`
 }
 
 function parseTxDetailsRow(
@@ -52,7 +72,12 @@ function parseTxDetailsRow(
     outputs_json: string
     sender: string | null
     receiver: string | null
+    sender_lab_entity_id: number | null
+    sender_wallet_id: number | null
+    receiver_lab_entity_id: number | null
+    receiver_wallet_id: number | null
   },
+  entities: readonly { labEntityId: number; entityName: string | null }[],
 ): LabBlockTransactionSummary {
   const inputs = JSON.parse(row.inputs_json) as LabTxDetails['inputs']
   const outputs = JSON.parse(row.outputs_json) as LabTxDetails['outputs']
@@ -67,8 +92,18 @@ function parseTxDetailsRow(
   }
   return {
     txid: row.txid,
-    sender: row.sender,
-    receiver: row.receiver,
+    sender: labOwnerFromTxRow(
+      row.sender_lab_entity_id,
+      row.sender_wallet_id,
+      row.sender,
+      entities,
+    ),
+    receiver: labOwnerFromTxRow(
+      row.receiver_lab_entity_id,
+      row.receiver_wallet_id,
+      row.receiver,
+      entities,
+    ),
     feeSats: feeSatsFromTxDetails(tx),
     isCoinbase: tx.isCoinbase ?? false,
   }
@@ -91,6 +126,12 @@ export async function fetchLabBlockTransactionsPage(
 
   const totalCount = Number(countRow?.count ?? 0)
 
+  const entityRows = await labDb.selectFrom('lab_entities').selectAll().execute()
+  const entities = entityRows.map((r) => ({
+    labEntityId: r.lab_entity_id,
+    entityName: r.entity_name,
+  }))
+
   const rows = await labDb
     .selectFrom('lab_tx_details as d')
     .leftJoin('lab_transactions as t', 't.txid', 'd.txid')
@@ -101,6 +142,10 @@ export async function fetchLabBlockTransactionsPage(
       'd.outputs_json',
       't.sender',
       't.receiver',
+      't.sender_lab_entity_id',
+      't.sender_wallet_id',
+      't.receiver_lab_entity_id',
+      't.receiver_wallet_id',
     ])
     .where('d.block_height', '=', blockHeight)
     .orderBy('d.txid', 'asc')
@@ -109,13 +154,7 @@ export async function fetchLabBlockTransactionsPage(
     .execute()
 
   const transactions = rows.map((row) =>
-    parseTxDetailsRow(blockHeight, row.block_time, {
-      txid: row.txid,
-      inputs_json: row.inputs_json,
-      outputs_json: row.outputs_json,
-      sender: row.sender,
-      receiver: row.receiver,
-    }),
+    parseTxDetailsRow(blockHeight, row.block_time, row, entities),
   )
 
   return { transactions, totalCount }
@@ -131,14 +170,22 @@ export async function fetchLabOwnerKeysPage(
 
   const countResult = await sql<{ c: number | bigint }>`
     SELECT COUNT(*) AS c FROM (
-      SELECT DISTINCT CASE WHEN owner_type = 'wallet' THEN 'wallet:' || wallet_id ELSE entity_name END AS owner_key
+      SELECT DISTINCT CASE
+        WHEN owner_type = 'wallet' THEN 'w:' || wallet_id
+        WHEN lab_entity_id IS NOT NULL THEN 'e:' || lab_entity_id
+        ELSE entity_name
+      END AS owner_key
       FROM lab_address_owners
     )
   `.execute(labDb)
   const totalCount = Number(countResult.rows[0]?.c ?? 0)
 
   const pageResult = await sql<{ owner_key: string }>`
-    SELECT DISTINCT CASE WHEN owner_type = 'wallet' THEN 'wallet:' || wallet_id ELSE entity_name END AS owner_key
+    SELECT DISTINCT CASE
+      WHEN owner_type = 'wallet' THEN 'w:' || wallet_id
+      WHEN lab_entity_id IS NOT NULL THEN 'e:' || lab_entity_id
+      ELSE entity_name
+    END AS owner_key
     FROM lab_address_owners
     ORDER BY owner_key
     LIMIT ${pageSize} OFFSET ${offset}
@@ -230,6 +277,86 @@ export async function fetchLabUtxosForOwnerPage(
 /**
  * Sum of UTXO amounts for the given addresses (batch for one inner page).
  */
+export type LabEntitiesPageRow = {
+  labEntityId: number
+  entityName: string | null
+  displayName: string
+  balanceSats: number
+  hasTransactions: boolean
+  isDead: boolean
+}
+
+export async function fetchLabEntitiesPage(
+  pageIndex: number,
+  pageSize: number = LAB_CARD_PAGE_SIZE,
+): Promise<{ rows: LabEntitiesPageRow[]; totalCount: number }> {
+  await ensureLabMigrated()
+  const labDb = getLabDatabase()
+  const offset = pageIndex * pageSize
+
+  const countRow = await labDb
+    .selectFrom('lab_entities')
+    .select((eb) => eb.fn.countAll<number>().as('count'))
+    .executeTakeFirst()
+  const totalCount = Number(countRow?.count ?? 0)
+
+  const entityRows = await labDb
+    .selectFrom('lab_entities')
+    .selectAll()
+    .orderBy('lab_entity_id', 'asc')
+    .limit(pageSize)
+    .offset(offset)
+    .execute()
+
+  const rows: LabEntitiesPageRow[] = []
+  for (const r of entityRows) {
+    const labEntityId = r.lab_entity_id
+    const entityName = r.entity_name
+    const displayName = labEntityOwnerKey({ labEntityId, entityName })
+    const balRow = await labDb
+      .selectFrom('utxos as u')
+      .innerJoin('lab_address_owners as o', 'o.address', 'u.address')
+      .select((eb) => eb.fn.sum<number | bigint | null>('u.amount_sats').as('total'))
+      .where('o.owner_type', '=', 'lab_entity')
+      .where('o.lab_entity_id', '=', labEntityId)
+      .executeTakeFirst()
+    const balanceSats = Number(balRow?.total ?? 0)
+
+    const hasConfirmed = await labDb
+      .selectFrom('lab_transactions')
+      .select('txid')
+      .where((eb) =>
+        eb.or([
+          eb('sender_lab_entity_id', '=', labEntityId),
+          eb('receiver_lab_entity_id', '=', labEntityId),
+        ]),
+      )
+      .executeTakeFirst()
+
+    const hasMempool = await labDb
+      .selectFrom('lab_mempool')
+      .select('txid')
+      .where((eb) =>
+        eb.or([
+          eb('sender_lab_entity_id', '=', labEntityId),
+          eb('receiver_lab_entity_id', '=', labEntityId),
+        ]),
+      )
+      .executeTakeFirst()
+
+    rows.push({
+      labEntityId,
+      entityName,
+      displayName,
+      balanceSats,
+      hasTransactions: hasConfirmed != null || hasMempool != null,
+      isDead: r.is_dead !== 0,
+    })
+  }
+
+  return { rows, totalCount }
+}
+
 export async function fetchLabAddressBalancesSats(
   addresses: readonly string[],
 ): Promise<Map<string, number>> {

@@ -10,6 +10,7 @@ import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { Button } from '@/components/ui/button'
 import { truncateAddress, formatSats } from '@/lib/bitcoin-utils'
 import { getOwnerDisplayName, getOwnerIcon } from '@/lib/lab-utils'
+import { useLabChainStateQuery } from '@/hooks/useLabChainStateQuery'
 import { CardPagination } from '@/components/CardPagination'
 import {
   useLabAddressBalancesForAddresses,
@@ -23,12 +24,14 @@ import { Wallet, FlaskConical, Copy } from 'lucide-react'
 function LabOwnerAddressesInner({
   ownerKey,
   wallets,
+  entities,
   onCopyAddress,
   addressPageIndex,
   onAddressPageChange,
 }: {
   ownerKey: string
   wallets: Array<{ wallet_id: number; name: string }>
+  entities: readonly { labEntityId: number; entityName: string | null }[]
   onCopyAddress: (address: string) => void
   addressPageIndex: number
   onAddressPageChange: (pageIndex: number) => void
@@ -50,7 +53,7 @@ function LabOwnerAddressesInner({
       totalCount={totalCount}
       pageIndex={addressPageIndex}
       onPageChange={onAddressPageChange}
-      ariaLabel={`Addresses page for ${getOwnerDisplayName(ownerKey, wallets)}`}
+      ariaLabel={`Addresses page for ${getOwnerDisplayName(ownerKey, wallets, entities)}`}
     >
       <div className="space-y-2">
         <div className="flex gap-4 text-sm font-medium text-muted-foreground">
@@ -96,6 +99,8 @@ export function LabAddressesCard({
   const [innerAddressPageByOwner, setInnerAddressPageByOwner] = useState<Record<string, number>>({})
 
   const labNetworkEnabled = useWalletStore((s) => s.networkMode === 'lab')
+  const { data: labState } = useLabChainStateQuery()
+  const entities = labState?.entities ?? []
   const { data: ownerPage, isLoading, isError } = useLabOwnerKeysPage(ownerPageIndex, {
     enabled: labNetworkEnabled,
   })
@@ -141,7 +146,7 @@ export function LabAddressesCard({
                   <div
                     key={owner}
                     role="group"
-                    aria-label={`${getOwnerDisplayName(owner, wallets)} — addresses in this group`}
+                    aria-label={`${getOwnerDisplayName(owner, wallets, entities)} — addresses in this group`}
                     className="rounded-lg border-[3px] border-border bg-muted/15 p-4 shadow-sm"
                   >
                     <h4 className="text-sm font-medium mb-3 flex items-center gap-1">
@@ -150,11 +155,12 @@ export function LabAddressesCard({
                       ) : (
                         <FlaskConical className="h-4 w-4" />
                       )}
-                      {getOwnerDisplayName(owner, wallets)}
+                      {getOwnerDisplayName(owner, wallets, entities)}
                     </h4>
                     <LabOwnerAddressesInner
                       ownerKey={owner}
                       wallets={wallets}
+                      entities={entities}
                       onCopyAddress={onCopyAddress}
                       addressPageIndex={innerAddressPageByOwner[owner] ?? 0}
                       onAddressPageChange={(page) =>

@@ -10,6 +10,7 @@ import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { Button } from '@/components/ui/button'
 import { truncateAddress, formatSats } from '@/lib/bitcoin-utils'
 import { getOwnerDisplayName, getOwnerIcon } from '@/lib/lab-utils'
+import { useLabChainStateQuery } from '@/hooks/useLabChainStateQuery'
 import { CardPagination } from '@/components/CardPagination'
 import { useLabOwnerKeysPage, useLabUtxosForOwnerPage } from '@/hooks/useLabPaginatedQueries'
 import { LAB_CARD_PAGE_SIZE, LAB_ENTITY_INNER_PAGE_SIZE } from '@/lib/lab-paginated-queries'
@@ -19,12 +20,14 @@ import { Wallet, FlaskConical, Copy } from 'lucide-react'
 function LabOwnerUtxosInner({
   ownerKey,
   wallets,
+  entities,
   onCopyAddress,
   utxoPageIndex,
   onUtxoPageChange,
 }: {
   ownerKey: string
   wallets: Array<{ wallet_id: number; name: string }>
+  entities: readonly { labEntityId: number; entityName: string | null }[]
   onCopyAddress: (address: string) => void
   utxoPageIndex: number
   onUtxoPageChange: (pageIndex: number) => void
@@ -42,7 +45,7 @@ function LabOwnerUtxosInner({
       totalCount={totalCount}
       pageIndex={utxoPageIndex}
       onPageChange={onUtxoPageChange}
-      ariaLabel={`UTXOs page for ${getOwnerDisplayName(ownerKey, wallets)}`}
+      ariaLabel={`UTXOs page for ${getOwnerDisplayName(ownerKey, wallets, entities)}`}
     >
       <div className="space-y-2">
         <div className="flex gap-4 text-sm font-medium text-muted-foreground">
@@ -88,6 +91,8 @@ export function LabUtxosCard({
   const [innerUtxoPageByOwner, setInnerUtxoPageByOwner] = useState<Record<string, number>>({})
 
   const labNetworkEnabled = useWalletStore((s) => s.networkMode === 'lab')
+  const { data: labState } = useLabChainStateQuery()
+  const entities = labState?.entities ?? []
   const { data: ownerPage, isLoading, isError } = useLabOwnerKeysPage(ownerPageIndex, {
     enabled: labNetworkEnabled,
   })
@@ -133,7 +138,7 @@ export function LabUtxosCard({
                   <div
                     key={owner}
                     role="group"
-                    aria-label={`${getOwnerDisplayName(owner, wallets)} — UTXOs in this group`}
+                    aria-label={`${getOwnerDisplayName(owner, wallets, entities)} — UTXOs in this group`}
                     className="rounded-lg border-[3px] border-border bg-muted/15 p-4 shadow-sm"
                   >
                     <h4 className="text-sm font-medium mb-3 flex items-center gap-1">
@@ -142,11 +147,12 @@ export function LabUtxosCard({
                       ) : (
                         <FlaskConical className="h-4 w-4" />
                       )}
-                      {getOwnerDisplayName(owner, wallets)}
+                      {getOwnerDisplayName(owner, wallets, entities)}
                     </h4>
                     <LabOwnerUtxosInner
                       ownerKey={owner}
                       wallets={wallets}
+                      entities={entities}
                       onCopyAddress={onCopyAddress}
                       utxoPageIndex={innerUtxoPageByOwner[owner] ?? 0}
                       onUtxoPageChange={(page) =>

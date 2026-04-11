@@ -21,3 +21,9 @@ export function findLabEntityByOwnerKey<
 >(entities: readonly T[], ownerKey: string): T | undefined {
   return entities.find((e) => labEntityOwnerKey(e) === ownerKey)
 }
+
+export function findLabEntityById<
+  T extends { labEntityId: number },
+>(entities: readonly T[], labEntityId: number): T | undefined {
+  return entities.find((e) => e.labEntityId === labEntityId)
+}

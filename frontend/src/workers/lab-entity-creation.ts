@@ -36,6 +36,7 @@ export function createAndRegisterLabEntityFromWasm(
     accountId: 0,
     createdAt: nowIso,
     updatedAt: nowIso,
+    isDead: false,
   }
   state.entities.push(entity)
   const coinbaseAddress = String(cr.first_address ?? '')

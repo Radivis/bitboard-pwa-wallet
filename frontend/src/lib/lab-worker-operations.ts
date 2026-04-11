@@ -6,6 +6,7 @@ import {
   persistLabState,
   resetLab as resetLabFactory,
 } from '@/workers/lab-factory'
+import type { LabOwner } from '@/lib/lab-owner'
 import type {
   LabBlockDetails,
   LabCurrentBlockTemplateParams,
@@ -99,12 +100,12 @@ function parseLabEntitySignResult(raw: unknown): {
  * Build/sign a lab-entity mempool tx (lab worker + crypto worker), then persist.
  */
 export async function labOpCreateLabEntityTransaction(params: {
-  entityName: string
+  labEntityId: number
   fromAddress: string
   toAddress: string
   amountSats: number
   feeRateSatPerVb: number
-  knownRecipientOwner?: string | null
+  knownRecipientOwner?: LabOwner | null
 }): Promise<LabState> {
   const prep = await runLabOp(async () => {
     labPipelineDebugLog('createLabEntityTransaction:prepare', {})
@@ -159,7 +160,7 @@ export async function labOpCreateLabEntityTransaction(params: {
     walletChangeAddress: hasChange ? (changeAddress as string) : '',
   }
 
-  if (fullMetadata.receiver == null || fullMetadata.receiver === '') {
+  if (fullMetadata.receiver == null) {
     throw new Error('labOpCreateLabEntityTransaction: receiver is required before finalize')
   }
 
@@ -170,7 +171,7 @@ export async function labOpCreateLabEntityTransaction(params: {
     const state = await labWorker.finalizeLabEntityMempoolTransaction({
       signedTxHex,
       mempoolMetadata: fullMetadata,
-      entityName: params.entityName,
+      labEntityId: params.labEntityId,
       newChangesetJson: changesetJson,
     })
     await persistLabState(state)
@@ -250,14 +251,14 @@ export async function labOpCreateRandomLabEntityTransactions(
           outputsDetail,
           walletChangeAddress: hasChange ? (changeAddress as string) : '',
         }
-        if (randomFullMetadata.receiver == null || randomFullMetadata.receiver === '') {
+        if (randomFullMetadata.receiver == null) {
           throw new Error('labOpCreateRandomLabEntityTransactions: receiver is required before finalize')
         }
 
         await labWorker.finalizeLabEntityMempoolTransaction({
           signedTxHex,
           mempoolMetadata: randomFullMetadata,
-          entityName: prepared.entityName,
+          labEntityId: prepared.labEntityId,
           newChangesetJson: changesetJson,
         })
         createdCount += 1
@@ -279,7 +280,7 @@ export async function labOpAddSignedTransaction(
   signedTxHex: string,
   mempoolMetadata: LabMempoolMetadata,
 ): Promise<LabState> {
-  if (mempoolMetadata.receiver == null || mempoolMetadata.receiver === '') {
+  if (mempoolMetadata.receiver == null) {
     throw new Error('labOpAddSignedTransaction: receiver is required')
   }
   return runLabOp(async () => {
@@ -321,5 +322,49 @@ export async function labOpGetCurrentBlockTemplate(
     await initLabWorkerWithState()
     const labWorker = getLabWorker()
     return labWorker.getCurrentBlockTemplate(params)
+  })
+}
+
+export async function labOpCreateLabEntity(options?: {
+  ownerName?: string
+  labAddressType?: string
+  labNetwork?: string
+}): Promise<LabState> {
+  return runLabOp(async () => {
+    await initLabWorkerWithState()
+    const labWorker = getLabWorker()
+    const state = await labWorker.createLabEntity(options)
+    await persistLabState(state)
+    return state
+  })
+}
+
+export async function labOpRenameLabEntity(labEntityId: number, newName: string): Promise<LabState> {
+  return runLabOp(async () => {
+    await initLabWorkerWithState()
+    const labWorker = getLabWorker()
+    const state = await labWorker.renameLabEntity(labEntityId, newName)
+    await persistLabState(state)
+    return state
+  })
+}
+
+export async function labOpDeleteLabEntity(labEntityId: number): Promise<LabState> {
+  return runLabOp(async () => {
+    await initLabWorkerWithState()
+    const labWorker = getLabWorker()
+    const state = await labWorker.deleteLabEntity(labEntityId)
+    await persistLabState(state)
+    return state
+  })
+}
+
+export async function labOpSetLabEntityDead(labEntityId: number, dead: boolean): Promise<LabState> {
+  return runLabOp(async () => {
+    await initLabWorkerWithState()
+    const labWorker = getLabWorker()
+    const state = await labWorker.setLabEntityDead(labEntityId, dead)
+    await persistLabState(state)
+    return state
   })
 }

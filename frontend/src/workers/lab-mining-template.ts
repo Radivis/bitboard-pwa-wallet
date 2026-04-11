@@ -1,7 +1,7 @@
 import { nextLabEntityId } from '@/lib/lab-entity-keys'
 import { feeSatsFromTxDetails } from '@/lib/lab-tx-fee'
+import { type LabOwner, labEntityLabOwner, walletLabOwner } from '@/lib/lab-owner'
 import { isCoinbase } from '@/lib/lab-operations'
-import { walletOwnerKey } from '@/lib/lab-utils'
 import type {
   LabBlock,
   LabBlockDetails,
@@ -48,8 +48,8 @@ export function getTip(): LabBlock | null {
 
 function minedByFromBlockTxs(
   blockTxs: LabTxDetails[],
-  addressToOwner: Record<string, string>,
-): string | null {
+  addressToOwner: Record<string, LabOwner>,
+): LabOwner | null {
   const coinbase = blockTxs.find((tx) => isCoinbase(tx))
   const out0 = coinbase?.outputs[0]
   if (!out0) return null
@@ -58,10 +58,10 @@ function minedByFromBlockTxs(
   return lookupOwnerForLabAddress(out0.address, addressToOwner) ?? null
 }
 
-export function minedByForBlockHeight(height: number): string | null {
+export function minedByForBlockHeight(height: number): LabOwner | null {
   const op = state.mineOperations?.find((m) => m.height === height)
-  if (op != null && op.minedByKey != null && op.minedByKey !== '') {
-    return op.minedByKey
+  if (op != null && op.minedBy != null) {
+    return op.minedBy
   }
   const blockTxs = state.txDetails.filter((tx) => tx.blockHeight === height)
   return minedByFromBlockTxs(blockTxs, state.addressToOwner ?? {})
@@ -90,7 +90,7 @@ export function blockTransactionsForHeight(height: number): LabBlockTransactionS
 export async function resolveTemplateCoinbase(
   params: LabCurrentBlockTemplateParams,
   wasmModule: Awaited<ReturnType<typeof getWasm>>,
-): Promise<{ address: string; minedBy: string | null }> {
+): Promise<{ address: string; minedBy: LabOwner | null }> {
   const labNetwork = params.labNetwork ?? 'regtest'
   const labAddressType = params.labAddressType ?? 'segwit'
 
@@ -129,27 +129,26 @@ export async function resolveTemplateCoinbase(
           entity.addressType,
           entity.accountId,
         ),
-        minedBy: entityNameOpt,
+        minedBy: labEntityLabOwner(entity.labEntityId),
       }
     }
     return {
       address: firstAddressFromNewEntityWallet(),
-      minedBy: entityNameOpt,
+      minedBy: labEntityLabOwner(nextLabEntityId(state.entities)),
     }
   }
 
   if (targetArg !== '') {
     const minedBy =
       params.ownerType === 'wallet' && params.ownerWalletId != null
-        ? walletOwnerKey(params.ownerWalletId)
+        ? walletLabOwner(params.ownerWalletId)
         : null
     return { address: targetArg, minedBy }
   }
 
-  const anonymousName = `Anonymous-${nextLabEntityId(state.entities)}`
   return {
     address: firstAddressFromNewEntityWallet(),
-    minedBy: anonymousName,
+    minedBy: labEntityLabOwner(nextLabEntityId(state.entities)),
   }
 }
 

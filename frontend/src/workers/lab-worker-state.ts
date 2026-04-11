@@ -1,3 +1,5 @@
+import type { LabOwner } from '@/lib/lab-owner'
+import { normalizeJsonOwnerToLabOwner } from '@/lib/lab-owner'
 import type { LabState, MempoolEntry } from './lab-api'
 import { EMPTY_LAB_STATE } from './lab-api'
 
@@ -29,8 +31,8 @@ export function labAddressesEqual(a: string, b: string): boolean {
 /** Resolves owner when WASM-reported addresses differ in bech32 casing from stored map keys. */
 export function lookupOwnerForLabAddress(
   address: string,
-  addressToOwner: Record<string, string>,
-): string | undefined {
+  addressToOwner: Record<string, LabOwner>,
+): LabOwner | undefined {
   const direct = addressToOwner[address]
   if (direct !== undefined) return direct
   for (const [storedAddr, owner] of Object.entries(addressToOwner)) {
@@ -41,11 +43,11 @@ export function lookupOwnerForLabAddress(
 
 /** Every lab transaction summary row must have a non-empty receiver (list UI + invariants). */
 export function assertLabReceiverNonNull(
-  receiver: string | null | undefined,
+  receiver: LabOwner | null | undefined,
   context: string,
-): asserts receiver is string {
-  if (receiver == null || receiver === '') {
-    throw new Error(`${context}: receiver must not be null or empty`)
+): asserts receiver is LabOwner {
+  if (receiver == null) {
+    throw new Error(`${context}: receiver must not be null`)
   }
 }
 
@@ -86,15 +88,23 @@ export function parseWasmObject(val: unknown): Record<string, unknown> {
   return {}
 }
 
-export function parseTxOperationPayload(payloadJson: string | null | undefined): {
-  receiver?: string | null
+export function parseTxOperationPayload(
+  payloadJson: string | null | undefined,
+  entities: readonly { labEntityId: number; entityName: string | null }[],
+): {
+  receiver?: LabOwner | null
   primaryToAddress?: string | null
 } {
   if (!payloadJson) return {}
   try {
     const parsed = JSON.parse(payloadJson) as Record<string, unknown>
+    const rawRecv = parsed.receiver
+    const receiver =
+      rawRecv === undefined || rawRecv === null
+        ? null
+        : normalizeJsonOwnerToLabOwner(rawRecv, entities)
     return {
-      receiver: typeof parsed.receiver === 'string' ? parsed.receiver : null,
+      receiver,
       primaryToAddress:
         typeof parsed.primaryToAddress === 'string' ? parsed.primaryToAddress : null,
     }

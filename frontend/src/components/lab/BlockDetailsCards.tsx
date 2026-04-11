@@ -11,6 +11,7 @@ import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { Badge } from '@/components/ui/badge'
 import { formatSats, truncateAddress } from '@/lib/bitcoin-utils'
 import { getOwnerDisplayName } from '@/lib/lab-utils'
+import { useLabChainStateQuery } from '@/hooks/useLabChainStateQuery'
 import type { LabBlockDetails } from '@/workers/lab-api'
 import {
   LabBlockHeaderInfomodeContent,
@@ -110,8 +111,10 @@ export function LabBlockMetadataCard({
   block: LabBlockDetails
   wallets: Array<{ wallet_id: number; name: string }>
 }) {
+  const { data: labState } = useLabChainStateQuery()
+  const entities = labState?.entities ?? []
   const minedBy = block.metadata.minedBy
-    ? getOwnerDisplayName(block.metadata.minedBy, wallets)
+    ? getOwnerDisplayName(block.metadata.minedBy, wallets, entities)
     : 'unknown'
 
   return (
@@ -150,6 +153,7 @@ export function LabBlockMetadataCard({
 function labBlockTxList(
   txs: LabBlockDetails['transactions'],
   wallets: Array<{ wallet_id: number; name: string }>,
+  entities: readonly { labEntityId: number; entityName: string | null }[],
 ) {
   return (
     <div className="space-y-2">
@@ -171,10 +175,10 @@ function labBlockTxList(
           <span className="text-sm text-muted-foreground">
             {tx.isCoinbase
               ? tx.receiver
-                ? getOwnerDisplayName(tx.receiver, wallets)
+                ? getOwnerDisplayName(tx.receiver, wallets, entities)
                 : 'unknown reward'
-              : `${tx.sender ? getOwnerDisplayName(tx.sender, wallets) : 'unknown'} -> ${
-                  tx.receiver ? getOwnerDisplayName(tx.receiver, wallets) : 'unknown'
+              : `${tx.sender ? getOwnerDisplayName(tx.sender, wallets, entities) : 'unknown'} -> ${
+                  tx.receiver ? getOwnerDisplayName(tx.receiver, wallets, entities) : 'unknown'
                 }`}
           </span>
           <span className="text-sm tabular-nums">{formatSats(tx.feeSats)} sats fee</span>
@@ -195,6 +199,8 @@ export function LabBlockTransactionsCard({
   const isTemplate = block.isTemplate
   const blockHeight = block.metadata.height
   const labNetworkEnabled = useWalletStore((s) => s.networkMode === 'lab')
+  const { data: labState } = useLabChainStateQuery()
+  const entities = labState?.entities ?? []
 
   const minedQuery = useLabBlockTransactionsPage(blockHeight, pageIndex, {
     enabled: !isTemplate && labNetworkEnabled,
@@ -244,7 +250,7 @@ export function LabBlockTransactionsCard({
               onPageChange={setPageIndex}
               ariaLabel="Transactions page"
             >
-              {labBlockTxList(txsForPage, wallets)}
+              {labBlockTxList(txsForPage, wallets, entities)}
             </CardPagination>
           )}
         </CardContent>

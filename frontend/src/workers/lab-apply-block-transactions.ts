@@ -1,3 +1,4 @@
+import type { LabOwner } from '@/lib/lab-owner'
 import type { LabTxDetails, LabTxOperationRecord, LabUtxo } from './lab-api'
 import type { BlockEffectsTx } from './lab-block-effects-types'
 import {
@@ -38,7 +39,10 @@ function resolveChangeMetadataForBlockTx(tx: BlockEffectsTx): {
   changeOutputForTx: { address: string; vout: number | null } | undefined
 } {
   const changeFromOp = state.txOperations?.find((o) => o.txid === tx.txid)
-  const txOperationPayload = parseTxOperationPayload(changeFromOp?.payloadJson)
+  const txOperationPayload = parseTxOperationPayload(
+    changeFromOp?.payloadJson,
+    state.entities ?? [],
+  )
   const changeOutputForTx =
     txidToChangeOutput.get(tx.txid) ??
     (changeFromOp?.changeAddress
@@ -51,7 +55,7 @@ function buildInputsForBlockEffectTx(
   tx: BlockEffectsTx,
   isCb: boolean,
   utxoMap: Map<string, LabUtxo>,
-  addressToOwner: Record<string, string>,
+  addressToOwner: Record<string, LabOwner>,
 ): { inputs: LabTxDetails['inputs']; firstInputAddress: string | null } {
   if (isCb) {
     return {
@@ -86,8 +90,8 @@ function buildOutputsForBlockEffectTx(
   tx: BlockEffectsTx,
   changeAddress: string | null | undefined,
   changeVout: number | null,
-  sender: string | null,
-  addressToOwner: Record<string, string>,
+  sender: LabOwner | null,
+  addressToOwner: Record<string, LabOwner>,
 ): LabTxDetails['outputs'] {
   const lastChangeAddressMatchIndex =
     changeAddress == null
@@ -129,9 +133,9 @@ function resolveReceiverForBlockEffectTx(
   outputs: LabTxDetails['outputs'],
   txOperationPayload: ReturnType<typeof parseTxOperationPayload>,
   changeFromOp: LabTxOperationRecord | undefined,
-  sender: string | null,
-  addressToOwner: Record<string, string>,
-): string | null {
+  sender: LabOwner | null,
+  addressToOwner: Record<string, LabOwner>,
+): LabOwner | null {
   const nonChangeOutputs = outputs.filter((output) => !output.isChange)
   const firstNonChangeOutput = nonChangeOutputs[0]
   let receiver = firstNonChangeOutput
@@ -178,7 +182,7 @@ function resolveReceiverForBlockEffectTx(
     }
   }
   for (const output of outputs) {
-    if (output.owner != null && output.owner !== '') {
+    if (output.owner != null) {
       state.addressToOwner = state.addressToOwner ?? {}
       state.addressToOwner[output.address] = output.owner
     }

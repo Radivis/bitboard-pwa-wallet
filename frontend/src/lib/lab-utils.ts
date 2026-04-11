@@ -1,3 +1,12 @@
+import type { LabOwner } from '@/lib/lab-owner'
+import {
+  labOwnerDisplayName,
+  labOwnerFromLegacyKey,
+  labOwnerFromSortKey,
+  labOwnersEqual,
+  labOwnerSortKey,
+  walletLabOwner,
+} from '@/lib/lab-owner'
 import type { LabTxRecord, LabTxDetails, MempoolEntry, LabAddress, LabState } from '@/workers/lab-api'
 import type { TransactionDetails } from '@/workers/crypto-types'
 
@@ -25,8 +34,8 @@ export function labBitcoinAddressesEqual(a: string, b: string): boolean {
  */
 export function lookupLabAddressOwner(
   address: string,
-  addressToOwner: Record<string, string>,
-): string | undefined {
+  addressToOwner: Record<string, LabOwner>,
+): LabOwner | undefined {
   const direct = addressToOwner[address]
   if (direct !== undefined) return direct
   for (const [storedAddr, owner] of Object.entries(addressToOwner)) {
@@ -40,22 +49,29 @@ export function lookupLabAddressOwner(
  */
 export function resolveLabAddressOwnerDisplay(
   address: string,
-  addressToOwner: Record<string, string>,
+  addressToOwner: Record<string, LabOwner>,
   txDetails: LabTxDetails[],
+  entities: readonly { labEntityId: number; entityName: string | null }[],
+  wallets: { wallet_id: number; name: string }[],
 ): string | undefined {
   const fromMap = lookupLabAddressOwner(address, addressToOwner)
-  if (fromMap !== undefined) return fromMap
+  if (fromMap !== undefined) return labOwnerDisplayName(fromMap, wallets, entities)
 
   for (const detail of txDetails) {
     for (const output of detail.outputs ?? []) {
       if (!labBitcoinAddressesEqual(output.address, address)) continue
-      if (output.owner != null && output.owner !== '') return output.owner
+      if (output.owner != null) {
+        const o = output.owner
+        if (typeof o === 'object' && o !== null && 'kind' in o) {
+          return labOwnerDisplayName(o as LabOwner, wallets, entities)
+        }
+      }
     }
   }
   return undefined
 }
 
-/** Stable sort for lab owner keys (no special Unknown bucket—callers assert first). */
+/** Stable sort for lab owner group keys (uses {@link labOwnerSortKey}). */
 export function sortLabOwnerKeys(ownerKeys: string[]): string[] {
   return [...ownerKeys].sort((a, b) => a.localeCompare(b))
 }
@@ -66,10 +82,10 @@ export function sortLabOwnerKeys(ownerKeys: string[]): string[] {
  */
 export function assertLabAddressOwnerResolved(
   address: string,
-  ownerKey: string | undefined | null,
+  ownerKey: LabOwner | undefined | null,
   context?: string,
-): asserts ownerKey is string {
-  if (ownerKey == null || ownerKey === '') {
+): asserts ownerKey is LabOwner {
+  if (ownerKey == null) {
     throw new Error(
       `Lab address has no resolved owner${context ? ` (${context})` : ''}: ${address}`,
     )
@@ -83,7 +99,7 @@ export function assertLabAddressOwnerResolved(
 export function groupLabRowsByResolvedOwner<T>(
   items: T[],
   getAddress: (item: T) => string,
-  resolveOwner: (address: string) => string | undefined,
+  resolveOwner: (address: string) => LabOwner | undefined,
   assertContext: string,
 ): { byOwner: Map<string, T[]>; sortedOwnerKeys: string[] } {
   const byOwner = new Map<string, T[]>()
@@ -91,9 +107,10 @@ export function groupLabRowsByResolvedOwner<T>(
     const address = getAddress(item)
     const owner = resolveOwner(address)
     assertLabAddressOwnerResolved(address, owner, assertContext)
-    const list = byOwner.get(owner) ?? []
+    const key = labOwnerSortKey(owner)
+    const list = byOwner.get(key) ?? []
     list.push(item)
-    byOwner.set(owner, list)
+    byOwner.set(key, list)
   }
   return {
     byOwner,
@@ -134,7 +151,7 @@ export function labTransactionsForWallet(
   },
   activeWalletId: number,
 ): TransactionDetails[] {
-  const walletOwner = walletOwnerKey(activeWalletId)
+  const walletOwner = walletLabOwner(activeWalletId)
   const txDetailsByTxid = new Map(
     labState.txDetails.map((detail) => [detail.txid, detail]),
   )
@@ -142,8 +159,8 @@ export function labTransactionsForWallet(
   const result: TransactionDetails[] = []
 
   for (const entry of labState.mempool ?? []) {
-    const isSender = entry.sender === walletOwner
-    const isReceiver = entry.receiver === walletOwner
+    const isSender = labOwnersEqual(entry.sender, walletOwner)
+    const isReceiver = labOwnersEqual(entry.receiver, walletOwner)
     if (!isSender && !isReceiver) continue
 
     const sentSats = isSender
@@ -153,7 +170,7 @@ export function labTransactionsForWallet(
       : 0
     const receivedSats = isReceiver
       ? (entry.outputsDetail ?? [])
-          .filter((output) => output.owner === walletOwner)
+          .filter((output) => labOwnersEqual(output.owner ?? null, walletOwner))
           .reduce((sumSats, output) => sumSats + output.amountSats, 0)
       : 0
 
@@ -169,8 +186,8 @@ export function labTransactionsForWallet(
   }
 
   for (const record of labState.transactions ?? []) {
-    const isSender = record.sender === walletOwner
-    const isReceiver = record.receiver === walletOwner
+    const isSender = labOwnersEqual(record.sender, walletOwner)
+    const isReceiver = labOwnersEqual(record.receiver, walletOwner)
     if (!isSender && !isReceiver) continue
 
     const details = txDetailsByTxid.get(record.txid)
@@ -178,7 +195,7 @@ export function labTransactionsForWallet(
 
     if (details.isCoinbase) {
       const receivedSatsCoinbase = (details.outputs ?? [])
-        .filter((output) => output.owner === walletOwner)
+        .filter((output) => labOwnersEqual(output.owner ?? null, walletOwner))
         .reduce((sumSats, output) => sumSats + output.amountSats, 0)
       result.push({
         txid: record.txid,
@@ -199,7 +216,7 @@ export function labTransactionsForWallet(
       : 0
     const receivedSats = isReceiver
       ? (details.outputs ?? [])
-          .filter((output) => output.owner === walletOwner)
+          .filter((output) => labOwnersEqual(output.owner ?? null, walletOwner))
           .reduce((sumSats, output) => sumSats + output.amountSats, 0)
       : 0
 
@@ -238,17 +255,45 @@ export function labTransactionsForWallet(
   return result
 }
 
+/**
+ * Display label for a lab owner: {@link LabOwner}, grouped-list sort key (`e:` / `w:`), or legacy string.
+ */
 export function getOwnerDisplayName(
-  ownerKey: string,
+  owner: LabOwner | string,
   wallets: { wallet_id: number; name: string }[],
+  entities: readonly { labEntityId: number; entityName: string | null }[],
 ): string {
-  if (ownerKey.startsWith(WALLET_OWNER_PREFIX)) {
-    const id = parseInt(ownerKey.slice(WALLET_OWNER_PREFIX.length), 10)
-    return wallets.find((wallet) => wallet.wallet_id === id)?.name ?? 'Unknown wallet'
+  if (typeof owner === 'object' && owner !== null && 'kind' in owner) {
+    return labOwnerDisplayName(owner, wallets, entities)
   }
-  return ownerKey
+  const fromSort = labOwnerFromSortKey(owner)
+  if (fromSort) return labOwnerDisplayName(fromSort, wallets, entities)
+  if (owner.startsWith(WALLET_OWNER_PREFIX)) {
+    const id = parseInt(owner.slice(WALLET_OWNER_PREFIX.length), 10)
+    return wallets.find((w) => w.wallet_id === id)?.name ?? 'Unknown wallet'
+  }
+  const o = labOwnerFromLegacyKey(owner, entities)
+  if (o) return labOwnerDisplayName(o, wallets, entities)
+  return owner
 }
 
-export function getOwnerIcon(ownerKey: string): 'wallet' | 'flask' {
-  return ownerKey.startsWith(WALLET_OWNER_PREFIX) ? 'wallet' : 'flask'
+export function getLabOwnerDisplayName(
+  owner: LabOwner,
+  wallets: { wallet_id: number; name: string }[],
+  entities: readonly { labEntityId: number; entityName: string | null }[],
+): string {
+  return labOwnerDisplayName(owner, wallets, entities)
+}
+
+export function getOwnerIcon(owner: LabOwner | string): 'wallet' | 'flask' {
+  if (typeof owner === 'object' && owner !== null && 'kind' in owner) {
+    return getLabOwnerIcon(owner)
+  }
+  const fromSort = labOwnerFromSortKey(owner)
+  if (fromSort) return getLabOwnerIcon(fromSort)
+  return owner.startsWith(WALLET_OWNER_PREFIX) ? 'wallet' : 'flask'
+}
+
+export function getLabOwnerIcon(owner: LabOwner): 'wallet' | 'flask' {
+  return owner.kind === 'wallet' ? 'wallet' : 'flask'
 }

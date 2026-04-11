@@ -1,4 +1,5 @@
 import { expose } from 'comlink'
+import type { LabOwner } from '@/lib/lab-owner'
 import type {
   LabAddress,
   LabBlockDetails,
@@ -7,8 +8,14 @@ import type {
   LabState,
   LabTxDetails,
 } from './lab-api'
-import { findLabEntityByOwnerKey, labEntityOwnerKey } from '@/lib/lab-entity-keys'
-import { mergeAddressesWithUtxos, WALLET_OWNER_PREFIX } from '@/lib/lab-utils'
+import { findLabEntityById, nextLabEntityId } from '@/lib/lab-entity-keys'
+import {
+  labEntityLabOwner,
+  labOwnersEqual,
+  validateLabEntityRenameName,
+  walletLabOwner,
+} from '@/lib/lab-owner'
+import { mergeAddressesWithUtxos } from '@/lib/lab-utils'
 import {
   estimateRequiredFeeSats,
   feeRateSatPerVbFromRandomRoll,
@@ -24,6 +31,7 @@ import {
   getTip,
   randomIntInclusive,
 } from './lab-mining-template'
+import { createAndRegisterLabEntityFromWasm } from './lab-entity-creation'
 import { executeMineBlocks } from './lab-mine-blocks'
 import { getWasm } from './lab-wasm-loader'
 import { utxosToJsonForLabWasm } from './lab-wasm-utxos'
@@ -44,7 +52,10 @@ const labService = {
       blocks: cloned.blocks ?? [],
       utxos: cloned.utxos ?? [],
       addresses: cloned.addresses ?? [],
-      entities: cloned.entities ?? [],
+      entities: (cloned.entities ?? []).map((e) => ({
+        ...e,
+        isDead: e.isDead ?? false,
+      })),
       addressToOwner: cloned.addressToOwner ?? {},
       mempool: cloned.mempool ?? [],
       transactions: cloned.transactions ?? [],
@@ -118,30 +129,31 @@ const labService = {
   },
 
   async prepareLabEntityTransaction(params: {
-    entityName: string
+    labEntityId: number
     fromAddress: string
     toAddress: string
     amountSats: number
     feeRateSatPerVb: number
-    knownRecipientOwner?: string | null
+    knownRecipientOwner?: LabOwner | null
   }): Promise<{
     crypto: import('./lab-api').LabEntityTransactionCryptoParams
     mempoolMetadata: import('./lab-api').LabMempoolMetadata
     totalInput: number
   }> {
-    const { entityName, fromAddress, toAddress, amountSats, feeRateSatPerVb } = params
+    const { labEntityId, fromAddress, toAddress, amountSats, feeRateSatPerVb } = params
     const addressToOwner = state.addressToOwner ?? {}
-    const ownerAtFrom = addressToOwner[fromAddress] ?? null
-    if (ownerAtFrom !== entityName) {
+    const ownerAtFrom = lookupOwnerForLabAddress(fromAddress, addressToOwner) ?? null
+    const expectedOwner = labEntityLabOwner(labEntityId)
+    if (!labOwnersEqual(ownerAtFrom, expectedOwner)) {
       throw new Error('From address does not belong to this lab entity')
     }
-    if (ownerAtFrom != null && ownerAtFrom.startsWith(WALLET_OWNER_PREFIX)) {
+    if (ownerAtFrom != null && ownerAtFrom.kind === 'wallet') {
       throw new Error('Use the wallet Send flow for user-wallet lab spends')
     }
 
-    const entity = findLabEntityByOwnerKey(state.entities, entityName)
+    const entity = findLabEntityById(state.entities, labEntityId)
     if (!entity) {
-      throw new Error(`Unknown lab entity "${entityName}"`)
+      throw new Error(`Unknown lab entity id ${labEntityId}`)
     }
 
     const fromUtxos = state.utxos.filter((u) => u.address === fromAddress)
@@ -151,29 +163,25 @@ const labService = {
 
     const utxosJson = utxosToJsonForLabWasm(fromUtxos)
 
-    const sender = entityName
-    const knownRecipient = params.knownRecipientOwner?.trim() || null
+    const sender = expectedOwner
+    const knownRecipient = params.knownRecipientOwner ?? null
     const receiver =
       lookupOwnerForLabAddress(toAddress, addressToOwner) ??
-      (labAddressesEqual(fromAddress, toAddress) ? entityName : null) ??
+      (labAddressesEqual(fromAddress, toAddress) ? expectedOwner : null) ??
       knownRecipient
-    if (
-      receiver != null &&
-      receiver !== '' &&
-      lookupOwnerForLabAddress(toAddress, addressToOwner) === undefined
-    ) {
+    if (receiver != null && lookupOwnerForLabAddress(toAddress, addressToOwner) === undefined) {
       state.addressToOwner = state.addressToOwner ?? {}
       state.addressToOwner[toAddress] = receiver
     }
     assertLabReceiverNonNull(
       receiver,
-      `prepareLabEntityTransaction entity="${entityName}" toAddress="${toAddress}"`,
+      `prepareLabEntityTransaction labEntityId=${labEntityId} toAddress="${toAddress}"`,
     )
 
     const inputsDetail = fromUtxos.map((utxo) => ({
       address: utxo.address,
       amountSats: utxo.amountSats,
-      owner: addressToOwner[utxo.address] ?? null,
+      owner: lookupOwnerForLabAddress(utxo.address, addressToOwner) ?? null,
     }))
 
     const totalInput = fromUtxos.reduce((sum, utxo) => sum + utxo.amountSats, 0)
@@ -212,17 +220,29 @@ const labService = {
     const maxAttempts = Math.max(1, params?.maxAttempts ?? LAB_RANDOM_TX_MAX_ATTEMPTS_DEFAULT)
     const addressToOwner = state.addressToOwner ?? {}
     const sourceEntities = state.entities.filter((entity) => {
-      return state.utxos.some(
-        (utxo) => addressToOwner[utxo.address] === labEntityOwnerKey(entity),
+      if (entity.isDead) return false
+      return state.utxos.some((utxo) =>
+        labOwnersEqual(
+          lookupOwnerForLabAddress(utxo.address, addressToOwner),
+          labEntityLabOwner(entity.labEntityId),
+        ),
       )
     })
     if (sourceEntities.length === 0) return null
 
+    const aliveEntities = state.entities.filter((e) => !e.isDead)
+    if (aliveEntities.length === 0) return null
+
     for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
       const sourceEntity = sourceEntities[randomIntInclusive(0, sourceEntities.length - 1)]
-      const targetEntity = state.entities[randomIntInclusive(0, state.entities.length - 1)]
+      const targetEntity = aliveEntities[randomIntInclusive(0, aliveEntities.length - 1)]
       const sourceAddressCandidates = state.utxos
-        .filter((utxo) => addressToOwner[utxo.address] === labEntityOwnerKey(sourceEntity))
+        .filter((utxo) =>
+          labOwnersEqual(
+            lookupOwnerForLabAddress(utxo.address, addressToOwner),
+            labEntityLabOwner(sourceEntity.labEntityId),
+          ),
+        )
         .map((utxo) => utxo.address)
       const sourceAddresses = [...new Set(sourceAddressCandidates)]
       if (sourceAddresses.length === 0) continue
@@ -255,7 +275,7 @@ const labService = {
         sourceEntity.changesetJson = nextChangesetJson
         sourceEntity.updatedAt = new Date().toISOString()
         state.addressToOwner = state.addressToOwner ?? {}
-        state.addressToOwner[toAddress] = labEntityOwnerKey(sourceEntity)
+        state.addressToOwner[toAddress] = labEntityLabOwner(sourceEntity.labEntityId)
       } else {
         toAddress = wasmModule.lab_entity_get_current_external_address(
           targetEntity.mnemonic,
@@ -265,12 +285,12 @@ const labService = {
           targetEntity.accountId,
         )
         state.addressToOwner = state.addressToOwner ?? {}
-        state.addressToOwner[toAddress] = labEntityOwnerKey(targetEntity)
+        state.addressToOwner[toAddress] = labEntityLabOwner(targetEntity.labEntityId)
       }
       if (!toAddress) continue
 
       const prepareParams = {
-        entityName: labEntityOwnerKey(sourceEntity),
+        labEntityId: sourceEntity.labEntityId,
         fromAddress,
         toAddress,
         amountSats,
@@ -279,11 +299,14 @@ const labService = {
       const prepared = await this.prepareLabEntityTransaction(prepareParams)
       const mempoolMetadata =
         sourceEntity.labEntityId === targetEntity.labEntityId
-          ? { ...prepared.mempoolMetadata, receiver: labEntityOwnerKey(sourceEntity) }
+          ? {
+              ...prepared.mempoolMetadata,
+              receiver: labEntityLabOwner(sourceEntity.labEntityId),
+            }
           : prepared.mempoolMetadata
       return {
         prepareParams,
-        entityName: labEntityOwnerKey(sourceEntity),
+        labEntityId: sourceEntity.labEntityId,
         crypto: prepared.crypto,
         mempoolMetadata,
         totalInput: prepared.totalInput,
@@ -295,15 +318,15 @@ const labService = {
   async finalizeLabEntityMempoolTransaction(params: {
     signedTxHex: string
     mempoolMetadata: import('./lab-api').LabMempoolMetadata
-    entityName: string
+    labEntityId: number
     newChangesetJson: string
   }): Promise<LabState> {
     const wasmModule = await getWasm()
-    const { signedTxHex, mempoolMetadata, entityName, newChangesetJson } = params
+    const { signedTxHex, mempoolMetadata, labEntityId, newChangesetJson } = params
 
-    const entity = findLabEntityByOwnerKey(state.entities, entityName)
+    const entity = findLabEntityById(state.entities, labEntityId)
     if (!entity) {
-      throw new Error(`Unknown lab entity "${entityName}"`)
+      throw new Error(`Unknown lab entity id ${labEntityId}`)
     }
     entity.changesetJson = newChangesetJson
     entity.updatedAt = new Date().toISOString()
@@ -322,7 +345,7 @@ const labService = {
       signedTxHex,
       txid,
       mempoolMetadata,
-      senderKey: entityName,
+      sender: labEntityLabOwner(entity.labEntityId),
       changeAddress: changeOut?.address ?? null,
       changeVout: changeVout >= 0 ? changeVout : null,
     })
@@ -331,26 +354,27 @@ const labService = {
   },
 
   async prepareLabWalletTransaction(params: {
-    walletOwner: string
+    walletId: number
     toAddress: string
     amountSats: number
     feeRateSatPerVb: number
     walletChangeAddress: string
-    knownRecipientOwner?: string | null
+    knownRecipientOwner?: LabOwner | null
   }): Promise<{
     utxosJson: string
     mempoolMetadata: import('./lab-api').LabMempoolMetadata
     totalInput: number
   }> {
-    const { walletOwner, toAddress, amountSats, walletChangeAddress } = params
+    const { walletId, toAddress, amountSats, walletChangeAddress } = params
     const addressToOwner = state.addressToOwner ?? {}
+    const walletOwner = walletLabOwner(walletId)
 
-    const fromUtxos = state.utxos.filter(
-      (utxo) => lookupOwnerForLabAddress(utxo.address, addressToOwner) === walletOwner,
+    const fromUtxos = state.utxos.filter((utxo) =>
+      labOwnersEqual(lookupOwnerForLabAddress(utxo.address, addressToOwner), walletOwner),
     )
     if (fromUtxos.length === 0) {
       throw new Error(
-        `No UTXOs available for the wallet. Owner="${walletOwner}". ` +
+        `No UTXOs available for the wallet. walletId=${walletId}. ` +
           `Ensure the wallet is loaded for lab (regtest) and you have mined to it.`,
       )
     }
@@ -358,7 +382,7 @@ const labService = {
     const utxosJson = utxosToJsonForLabWasm(fromUtxos)
 
     const sender = walletOwner
-    const knownRecipient = params.knownRecipientOwner?.trim() || null
+    const knownRecipient = params.knownRecipientOwner ?? null
     let receiver = lookupOwnerForLabAddress(toAddress, addressToOwner) ?? null
     if (receiver === null && knownRecipient != null) {
       state.addressToOwner = state.addressToOwner ?? {}
@@ -373,7 +397,7 @@ const labService = {
     }
     assertLabReceiverNonNull(
       receiver,
-      `prepareLabWalletTransaction walletOwner="${walletOwner}" toAddress="${toAddress}"`,
+      `prepareLabWalletTransaction walletId=${walletId} toAddress="${toAddress}"`,
     )
 
     const inputsDetail = fromUtxos.map((utxo) => ({
@@ -414,15 +438,118 @@ const labService = {
     )
 
     const changeVout = mempoolMetadata.outputsDetail.findIndex((o) => o.isChange)
+    const sender = mempoolMetadata.sender
+    if (sender == null) {
+      throw new Error(`addSignedTransactionToMempool: missing sender for txid=${txid}`)
+    }
+
     appendLabTxOperationAndMempoolEntry({
       signedTxHex,
       txid,
       mempoolMetadata,
-      senderKey: mempoolMetadata.sender ?? '',
+      sender,
       changeAddress: mempoolMetadata.hasChange ? mempoolMetadata.walletChangeAddress : null,
       changeVout: changeVout >= 0 ? changeVout : null,
     })
 
+    return this.getStateSnapshot()
+  },
+
+  async createLabEntity(options?: {
+    ownerName?: string
+    labAddressType?: string
+    labNetwork?: string
+  }): Promise<LabState> {
+    const wasmModule = await getWasm()
+    const labNetwork = options?.labNetwork ?? 'regtest'
+    const labAddressType = options?.labAddressType ?? 'segwit'
+    const entityNameOpt = options?.ownerName?.trim()
+    const now = new Date().toISOString()
+
+    if (entityNameOpt != null && entityNameOpt !== '') {
+      let entity = state.entities.find((e) => e.entityName === entityNameOpt)
+      if (!entity) {
+        createAndRegisterLabEntityFromWasm(wasmModule, {
+          labEntityId: nextLabEntityId(state.entities),
+          entityName: entityNameOpt,
+          labNetwork,
+          labAddressType,
+          nowIso: now,
+          noAddressErrorMessage: 'Lab entity wallet creation failed (no first address)',
+        })
+        entity = state.entities.find((e) => e.entityName === entityNameOpt)
+        if (!entity) throw new Error('Lab entity registration failed after wallet creation')
+      }
+      const addr = wasmModule.lab_entity_get_current_external_address(
+        entity.mnemonic,
+        entity.changesetJson,
+        entity.network,
+        entity.addressType,
+        entity.accountId,
+      )
+      state.addressToOwner = state.addressToOwner ?? {}
+      state.addressToOwner[addr] = labEntityLabOwner(entity.labEntityId)
+    } else {
+      const labEntityId = nextLabEntityId(state.entities)
+      const addr = createAndRegisterLabEntityFromWasm(wasmModule, {
+        labEntityId,
+        entityName: null,
+        labNetwork,
+        labAddressType,
+        nowIso: now,
+        noAddressErrorMessage: 'Anonymous lab entity wallet creation failed (no first address)',
+      })
+      state.addressToOwner = state.addressToOwner ?? {}
+      state.addressToOwner[addr] = labEntityLabOwner(labEntityId)
+    }
+    return this.getStateSnapshot()
+  },
+
+  async renameLabEntity(labEntityId: number, newName: string): Promise<LabState> {
+    const trimmed = newName.trim()
+    const v = validateLabEntityRenameName(trimmed, state.entities, labEntityId)
+    if (!v.ok) throw new Error(v.error)
+    const entity = findLabEntityById(state.entities, labEntityId)
+    if (!entity) throw new Error(`Unknown lab entity id ${labEntityId}`)
+    entity.entityName = trimmed
+    entity.updatedAt = new Date().toISOString()
+    return this.getStateSnapshot()
+  },
+
+  async deleteLabEntity(labEntityId: number): Promise<LabState> {
+    const entity = findLabEntityById(state.entities, labEntityId)
+    if (!entity) throw new Error(`Unknown lab entity id ${labEntityId}`)
+
+    const owner = labEntityLabOwner(labEntityId)
+    const touchesTx = (s: LabOwner | null, r: LabOwner | null) =>
+      labOwnersEqual(s, owner) || labOwnersEqual(r, owner)
+
+    const hasTx =
+      (state.transactions ?? []).some((t) => touchesTx(t.sender, t.receiver)) ||
+      (state.mempool ?? []).some((m) => touchesTx(m.sender, m.receiver))
+
+    if (hasTx) {
+      throw new Error(
+        'Cannot delete: this entity has transactions. Use kill instead, or remove transactions from the lab chain first.',
+      )
+    }
+
+    state.entities = state.entities.filter((e) => e.labEntityId !== labEntityId)
+    const addrMap = state.addressToOwner ?? {}
+    for (const [addr, o] of Object.entries(addrMap)) {
+      if (labOwnersEqual(o, owner)) {
+        delete addrMap[addr]
+      }
+    }
+    state.addressToOwner = addrMap
+    return this.getStateSnapshot()
+  },
+
+  async setLabEntityDead(labEntityId: number, dead: boolean): Promise<LabState> {
+    const entity = findLabEntityById(state.entities, labEntityId)
+    if (!entity) throw new Error(`Unknown lab entity id ${labEntityId}`)
+    entity.isDead = dead
+    entity.updatedAt = new Date().toISOString()
     return this.getStateSnapshot()
   },
 }

@@ -1,4 +1,4 @@
-import { Kysely } from 'kysely'
+import { Kysely, sql } from 'kysely'
 import { WaSqliteWorkerDialect } from 'kysely-wasqlite-worker'
 import type { LabDatabase } from './lab-schema'
 
@@ -61,6 +61,10 @@ async function migrateLabToLatest(labDb: Kysely<LabDatabase>): Promise<void> {
     .addColumn('txid', 'text', (col) => col.notNull())
     .addColumn('sender', 'text', (col) => col)
     .addColumn('receiver', 'text', (col) => col)
+    .addColumn('sender_lab_entity_id', 'integer', (col) => col)
+    .addColumn('sender_wallet_id', 'integer', (col) => col)
+    .addColumn('receiver_lab_entity_id', 'integer', (col) => col)
+    .addColumn('receiver_wallet_id', 'integer', (col) => col)
     .execute()
 
   await labDb.schema
@@ -70,6 +74,7 @@ async function migrateLabToLatest(labDb: Kysely<LabDatabase>): Promise<void> {
     .addColumn('owner_type', 'text', (col) => col.notNull())
     .addColumn('wallet_id', 'integer', (col) => col)
     .addColumn('entity_name', 'text', (col) => col)
+    .addColumn('lab_entity_id', 'integer', (col) => col)
     .execute()
 
   await labDb.schema
@@ -80,6 +85,10 @@ async function migrateLabToLatest(labDb: Kysely<LabDatabase>): Promise<void> {
     .addColumn('txid', 'text', (col) => col.notNull())
     .addColumn('sender', 'text', (col) => col)
     .addColumn('receiver', 'text', (col) => col)
+    .addColumn('sender_lab_entity_id', 'integer', (col) => col)
+    .addColumn('sender_wallet_id', 'integer', (col) => col)
+    .addColumn('receiver_lab_entity_id', 'integer', (col) => col)
+    .addColumn('receiver_wallet_id', 'integer', (col) => col)
     .addColumn('fee_sats', 'integer', (col) => col.notNull())
     .addColumn('inputs_json', 'text', (col) => col.notNull())
     .addColumn('inputs_detail_json', 'text', (col) => col.notNull())
@@ -110,6 +119,7 @@ async function migrateLabToLatest(labDb: Kysely<LabDatabase>): Promise<void> {
     .addColumn('account_id', 'integer', (col) => col.notNull().defaultTo(0))
     .addColumn('created_at', 'text', (col) => col.notNull())
     .addColumn('updated_at', 'text', (col) => col.notNull())
+    .addColumn('is_dead', 'integer', (col) => col.notNull().defaultTo(0))
     .execute()
 
   await labDb.schema
@@ -127,6 +137,8 @@ async function migrateLabToLatest(labDb: Kysely<LabDatabase>): Promise<void> {
     .addColumn('height', 'integer', (col) => col.notNull())
     .addColumn('block_hash', 'text', (col) => col.notNull())
     .addColumn('mined_by_key', 'text', (col) => col)
+    .addColumn('mined_by_lab_entity_id', 'integer', (col) => col)
+    .addColumn('mined_by_wallet_id', 'integer', (col) => col)
     .addColumn('coinbase_txid', 'text', (col) => col)
     .addColumn('created_at', 'text', (col) => col.notNull())
     .execute()
@@ -137,10 +149,41 @@ async function migrateLabToLatest(labDb: Kysely<LabDatabase>): Promise<void> {
     .addColumn('tx_operation_id', 'integer', (col) => col.primaryKey().autoIncrement())
     .addColumn('txid', 'text', (col) => col.notNull().unique())
     .addColumn('sender_key', 'text', (col) => col.notNull())
+    .addColumn('sender_lab_entity_id', 'integer', (col) => col)
+    .addColumn('sender_wallet_id', 'integer', (col) => col)
     .addColumn('change_address', 'text', (col) => col)
     .addColumn('change_vout', 'integer', (col) => col)
     .addColumn('payload_json', 'text', (col) => col.notNull())
     .execute()
+
+  await patchLabSchemaForExistingFiles(labDb)
+}
+
+/** Idempotent ALTERs for DBs created before new columns existed. */
+async function patchLabSchemaForExistingFiles(labDb: Kysely<LabDatabase>): Promise<void> {
+  const patches: [string, string][] = [
+    ['lab_entities', 'is_dead INTEGER NOT NULL DEFAULT 0'],
+    ['lab_address_owners', 'lab_entity_id INTEGER'],
+    ['lab_transactions', 'sender_lab_entity_id INTEGER'],
+    ['lab_transactions', 'sender_wallet_id INTEGER'],
+    ['lab_transactions', 'receiver_lab_entity_id INTEGER'],
+    ['lab_transactions', 'receiver_wallet_id INTEGER'],
+    ['lab_mempool', 'sender_lab_entity_id INTEGER'],
+    ['lab_mempool', 'sender_wallet_id INTEGER'],
+    ['lab_mempool', 'receiver_lab_entity_id INTEGER'],
+    ['lab_mempool', 'receiver_wallet_id INTEGER'],
+    ['lab_mine_operations', 'mined_by_lab_entity_id INTEGER'],
+    ['lab_mine_operations', 'mined_by_wallet_id INTEGER'],
+    ['lab_tx_operations', 'sender_lab_entity_id INTEGER'],
+    ['lab_tx_operations', 'sender_wallet_id INTEGER'],
+  ]
+  for (const [table, colDef] of patches) {
+    try {
+      await sql.raw(`ALTER TABLE ${table} ADD COLUMN ${colDef}`).execute(labDb)
+    } catch {
+      /* duplicate column name */
+    }
+  }
 }
 
 export async function ensureLabMigrated(): Promise<void> {

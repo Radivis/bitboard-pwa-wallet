@@ -4,11 +4,13 @@ import {
   fetchLabAddressBalancesSats,
   fetchLabAddressesForOwnerPage,
   fetchLabBlockTransactionsPage,
+  fetchLabEntitiesPage,
   fetchLabOwnerKeysPage,
   fetchLabUtxosForOwnerPage,
   labAddressBalancesQueryKey,
   labAddressesByOwnerQueryKey,
   labBlockTxsQueryKey,
+  labEntitiesPageQueryKey,
   labOwnerKeysQueryKey,
   labUtxosByOwnerQueryKey,
   LAB_CARD_PAGE_SIZE,
@@ -36,6 +38,27 @@ export function useLabBlockTransactionsPage(
       queryFn: () => fetchLabBlockTransactionsPage(blockHeight, pageIndex + 1, LAB_CARD_PAGE_SIZE),
     })
   }, [queryClient, blockHeight, pageIndex, enabled])
+
+  return query
+}
+
+export function useLabEntitiesPage(pageIndex: number, options: { enabled?: boolean } = {}) {
+  const { enabled = true } = options
+  const queryClient = useQueryClient()
+
+  const query = useQuery({
+    queryKey: labEntitiesPageQueryKey(pageIndex),
+    queryFn: () => fetchLabEntitiesPage(pageIndex, LAB_CARD_PAGE_SIZE),
+    enabled,
+  })
+
+  useEffect(() => {
+    if (!enabled) return
+    void queryClient.prefetchQuery({
+      queryKey: labEntitiesPageQueryKey(pageIndex + 1),
+      queryFn: () => fetchLabEntitiesPage(pageIndex + 1, LAB_CARD_PAGE_SIZE),
+    })
+  }, [queryClient, pageIndex, enabled])
 
   return query
 }

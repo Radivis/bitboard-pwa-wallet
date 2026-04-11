@@ -19,6 +19,8 @@ interface LabAddressOwnersTable {
   owner_type: 'wallet' | 'lab_entity'
   wallet_id: number | null
   entity_name: string | null
+  /** FK to lab_entities when owner_type is lab_entity (canonical id). */
+  lab_entity_id: number | null
 }
 
 /** A simulated “person” in the lab: mnemonic, descriptors, and BDK changeset. One row per named or anonymous lab entity. */
@@ -35,6 +37,8 @@ interface LabEntitiesTable {
   account_id: number
   created_at: string
   updated_at: string
+  /** 1 = excluded from random lab-entity transactions as sender/receiver. */
+  is_dead: number
 }
 
 /** Unconfirmed transactions: raw hex, ids, fee, and JSON snapshots of inputs/outputs for mempool UI and worker reconciliation. */
@@ -44,6 +48,10 @@ interface LabMempoolTable {
   txid: string
   sender: string | null
   receiver: string | null
+  sender_lab_entity_id: number | null
+  sender_wallet_id: number | null
+  receiver_lab_entity_id: number | null
+  receiver_wallet_id: number | null
   fee_sats: number
   inputs_json: string
   inputs_detail_json: string
@@ -56,6 +64,10 @@ interface LabTransactionsTable {
   txid: string
   sender: string | null
   receiver: string | null
+  sender_lab_entity_id: number | null
+  sender_wallet_id: number | null
+  receiver_lab_entity_id: number | null
+  receiver_wallet_id: number | null
 }
 
 /** Per-tx detail row: block placement, full inputs/outputs as JSON (coinbase is derived from `inputs_json`). */
@@ -77,6 +89,8 @@ interface LabMineOperationsTable {
   height: number
   block_hash: string
   mined_by_key: string | null
+  mined_by_lab_entity_id: number | null
+  mined_by_wallet_id: number | null
   coinbase_txid: string | null
   created_at: string
 }
@@ -89,6 +103,8 @@ interface LabTxOperationsTable {
   tx_operation_id: Generated<number>
   txid: string
   sender_key: string
+  sender_lab_entity_id: number | null
+  sender_wallet_id: number | null
   change_address: string | null
   change_vout: number | null
   payload_json: string

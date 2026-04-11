@@ -1,10 +1,15 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
+import type { LabOwner } from '@/lib/lab-owner'
 import {
+  labOpCreateLabEntity,
   labOpCreateLabEntityTransaction,
   labOpCreateRandomLabEntityTransactions,
+  labOpDeleteLabEntity,
   labOpMineBlocks,
+  labOpRenameLabEntity,
   labOpReset,
+  labOpSetLabEntityDead,
 } from '@/lib/lab-worker-operations'
 import { setLabChainStateCache } from '@/hooks/useLabChainStateQuery'
 import { labChainStateQueryKey } from '@/lib/lab-chain-query'
@@ -61,12 +66,12 @@ export function useLabMineBlocksMutation() {
 }
 
 export type LabCreateTransactionVariables = {
-  entityName: string
+  labEntityId: number
   fromAddress: string
   toAddress: string
   amountSats: number
   feeRateSatPerVb: number
-  knownRecipientOwner?: string | null
+  knownRecipientOwner?: LabOwner | null
 }
 
 export function useLabCreateTransactionMutation() {
@@ -76,7 +81,7 @@ export function useLabCreateTransactionMutation() {
     mutationKey: ['lab', 'createLabEntityTransaction'] as const,
     mutationFn: async (variables: LabCreateTransactionVariables) => {
       return labOpCreateLabEntityTransaction({
-        entityName: variables.entityName,
+        labEntityId: variables.labEntityId,
         fromAddress: variables.fromAddress,
         toAddress: variables.toAddress,
         amountSats: variables.amountSats,
@@ -128,6 +133,73 @@ export function useLabCreateRandomTransactionsMutation() {
       if (error != null) {
         void queryClient.invalidateQueries({ queryKey: labChainStateQueryKey })
       }
+    },
+  })
+}
+
+export function useLabCreateLabEntityMutation() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationKey: ['lab', 'createLabEntity'] as const,
+    mutationFn: (options?: { ownerName?: string; labAddressType?: string; labNetwork?: string }) =>
+      labOpCreateLabEntity(options),
+    onSuccess: (state) => {
+      setLabChainStateCache(queryClient, state)
+      void invalidateLabPaginatedQueries(queryClient)
+      toast.success('Lab entity created')
+    },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : 'Create failed')
+    },
+  })
+}
+
+export function useLabRenameLabEntityMutation() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationKey: ['lab', 'renameLabEntity'] as const,
+    mutationFn: ({ labEntityId, newName }: { labEntityId: number; newName: string }) =>
+      labOpRenameLabEntity(labEntityId, newName),
+    onSuccess: (state) => {
+      setLabChainStateCache(queryClient, state)
+      void invalidateLabPaginatedQueries(queryClient)
+      toast.success('Entity renamed')
+    },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : 'Rename failed')
+    },
+  })
+}
+
+export function useLabDeleteLabEntityMutation() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationKey: ['lab', 'deleteLabEntity'] as const,
+    mutationFn: (labEntityId: number) => labOpDeleteLabEntity(labEntityId),
+    onSuccess: (state) => {
+      setLabChainStateCache(queryClient, state)
+      void invalidateLabPaginatedQueries(queryClient)
+      toast.success('Entity deleted')
+    },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : 'Delete failed')
+    },
+  })
+}
+
+export function useLabSetEntityDeadMutation() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationKey: ['lab', 'setLabEntityDead'] as const,
+    mutationFn: ({ labEntityId, dead }: { labEntityId: number; dead: boolean }) =>
+      labOpSetLabEntityDead(labEntityId, dead),
+    onSuccess: (state) => {
+      setLabChainStateCache(queryClient, state)
+      void invalidateLabPaginatedQueries(queryClient)
+      toast.success('Entity updated')
+    },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : 'Update failed')
     },
   })
 }

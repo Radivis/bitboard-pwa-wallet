@@ -18,6 +18,7 @@ import { Copy, ArrowLeft, Wallet, FlaskConical } from 'lucide-react'
 import { toast } from 'sonner'
 import { getOwnerDisplayName, getOwnerIcon } from '@/lib/lab-utils'
 import { useWallets } from '@/db'
+import { useLabChainStateQuery } from '@/hooks/useLabChainStateQuery'
 
 export const Route = createFileRoute('/lab/tx/$txid')({
   component: LabTxViewerPage,
@@ -27,6 +28,8 @@ function LabTxViewerPage() {
   const { txid } = Route.useParams()
   const [tx, setTx] = useState<LabTxDetails | null | undefined>(undefined)
   const { data: wallets = [] } = useWallets()
+  const { data: labState } = useLabChainStateQuery()
+  const entities = labState?.entities ?? []
 
   const loadTx = useCallback(async () => {
     try {
@@ -183,7 +186,7 @@ function LabTxViewerPage() {
                         )
                       ) : null}
                       <Badge variant="secondary">
-                        {input.owner ? getOwnerDisplayName(input.owner, wallets) : 'unknown'}
+                        {input.owner ? getOwnerDisplayName(input.owner, wallets, entities) : 'unknown'}
                       </Badge>
                     </span>
                     <span className="tabular-nums text-right">{formatSats(input.amountSats)} sats</span>
@@ -228,7 +231,7 @@ function LabTxViewerPage() {
                         )
                       ) : null}
                       <Badge variant="secondary">
-                        {output.owner ? getOwnerDisplayName(output.owner, wallets) : 'unknown'}
+                        {output.owner ? getOwnerDisplayName(output.owner, wallets, entities) : 'unknown'}
                       </Badge>
                     </span>
                     <span className="tabular-nums text-right">{formatSats(output.amountSats)} sats</span>

@@ -12,12 +12,12 @@ import {
 } from '@/hooks/useLabMutations'
 import { LAB_MAX_BLOCKS_PER_MINE, LAB_MIN_BLOCKS_PER_MINE } from '@/workers/lab-api'
 import { LAB_MAX_RANDOM_ENTITY_TRANSACTIONS } from '@/lib/lab-random-limits'
+import { lookupLabAddressOwner } from '@/lib/lab-utils'
+import { walletLabOwner } from '@/lib/lab-owner'
 import {
-  WALLET_OWNER_PREFIX,
   assertLabAddressOwnerResolved,
   labBitcoinAddressesEqual,
   resolveLabAddressOwnerDisplay,
-  walletOwnerKey,
 } from '@/lib/lab-utils'
 
 const DEFAULT_LAB_FEE_RATE_SAT_PER_VB = 1
@@ -35,6 +35,7 @@ export function useLabIndexPageData() {
   const mempool = labState?.mempool ?? []
   const transactions = labState?.transactions ?? []
   const txDetails = labState?.txDetails ?? []
+  const entities = labState?.entities ?? []
 
   const blockCount = blocks.length === 0 ? 0 : blocks[blocks.length - 1].height + 1
 
@@ -83,8 +84,9 @@ export function useLabIndexPageData() {
   )
 
   const resolveLabAddressOwner = useCallback(
-    (address: string) => resolveLabAddressOwnerDisplay(address, addressToOwner, txDetails),
-    [addressToOwner, txDetails],
+    (address: string) =>
+      resolveLabAddressOwnerDisplay(address, addressToOwner, txDetails, entities, wallets),
+    [addressToOwner, txDetails, entities, wallets],
   )
 
   const handleCopyAddress = useCallback(async (address: string) => {
@@ -112,9 +114,9 @@ export function useLabIndexPageData() {
       toast.error('Enter a to address')
       return
     }
-    const entityOwner = resolveLabAddressOwner(trimmedFrom)
-    assertLabAddressOwnerResolved(trimmedFrom, entityOwner, 'send from')
-    if (entityOwner.startsWith(WALLET_OWNER_PREFIX)) {
+    const ownerLab = lookupLabAddressOwner(trimmedFrom, addressToOwner)
+    assertLabAddressOwnerResolved(trimmedFrom, ownerLab, 'send from')
+    if (ownerLab.kind === 'wallet') {
       toast.error('Spend from a lab entity address (use Send for your wallet)')
       return
     }
@@ -123,12 +125,12 @@ export function useLabIndexPageData() {
       activeWalletId != null &&
       currentAddress != null &&
       labBitcoinAddressesEqual(trimmedTo, currentAddress)
-        ? walletOwnerKey(activeWalletId)
+        ? walletLabOwner(activeWalletId)
         : undefined
 
     void createTxMutation
       .mutateAsync({
-        entityName: entityOwner,
+        labEntityId: ownerLab.labEntityId,
         fromAddress: trimmedFrom,
         toAddress: trimmedTo,
         amountSats: amount,
@@ -151,6 +153,7 @@ export function useLabIndexPageData() {
     feeRate,
     createTxMutation,
     resolveLabAddressOwner,
+    addressToOwner,
     activeWalletId,
     currentAddress,
   ])
@@ -222,12 +225,12 @@ export function useLabIndexPageData() {
   const controlledAddresses = useMemo(() => {
     return addresses.filter((a) => {
       if (a.wif) return true
-      const owner = resolveLabAddressOwner(a.address)
-      if (owner == null || owner === '') return false
-      if (owner.startsWith(WALLET_OWNER_PREFIX)) return false
+      const owner = lookupLabAddressOwner(a.address, addressToOwner)
+      if (owner == null) return false
+      if (owner.kind === 'wallet') return false
       return getBalanceForAddress(a.address) > 0
     })
-  }, [addresses, resolveLabAddressOwner, getBalanceForAddress])
+  }, [addresses, addressToOwner, getBalanceForAddress])
   const txDetailsByTxid = useMemo(
     () => new Map(txDetails.map((d) => [d.txid, d])),
     [txDetails],

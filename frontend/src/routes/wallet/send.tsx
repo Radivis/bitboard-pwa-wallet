@@ -36,7 +36,8 @@ import { useLightningStore } from '@/stores/lightningStore'
 import { useLightningPayMutation } from '@/hooks/useLightningMutations'
 import { useSendLightningBalances } from '@/hooks/useSendLightningBalances'
 import { MAX_BOLT11_PAYMENT_REQUEST_LENGTH } from '@/lib/lightning-input-limits'
-import { lookupLabAddressOwner, walletOwnerKey } from '@/lib/lab-utils'
+import { labOwnersEqual, walletLabOwner } from '@/lib/lab-owner'
+import { lookupLabAddressOwner } from '@/lib/lab-utils'
 import {
   useBuildTransactionMutation,
   useBroadcastTransactionMutation,
@@ -114,11 +115,10 @@ export function SendFlow() {
   const labBalanceSats =
     networkMode === 'lab' && activeWalletId != null && labChainReady
       ? utxos
-          .filter(
-            (u) =>
-              lookupLabAddressOwner(u.address, addressToOwner) ===
-              walletOwnerKey(activeWalletId),
-          )
+          .filter((u) => {
+            const o = lookupLabAddressOwner(u.address, addressToOwner)
+            return o != null && labOwnersEqual(o, walletLabOwner(activeWalletId))
+          })
           .reduce((sum, u) => sum + u.amountSats, 0)
       : null
 

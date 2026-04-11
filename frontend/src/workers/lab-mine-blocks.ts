@@ -1,6 +1,7 @@
-import { labEntityOwnerKey, nextLabEntityId } from '@/lib/lab-entity-keys'
+import { nextLabEntityId } from '@/lib/lab-entity-keys'
 import { discardedMempoolConflictTxCount } from '@/lib/lab-mempool-mine-stats'
-import { walletOwnerKey } from '@/lib/lab-utils'
+import { labEntityLabOwner, walletLabOwner } from '@/lib/lab-owner'
+import type { LabOwner } from '@/lib/lab-owner'
 import type { LabAddress, LabMineBlocksResult, LabState } from './lab-api'
 import {
   LAB_MAX_BLOCKS_PER_MINE,
@@ -52,8 +53,8 @@ export async function executeMineBlocks(
   let coinbaseScriptPubkeyHex: string
   let newAddress: LabAddress | null = null
   let coinbaseAddress: string
-  /** Lab entity name to record for coinbase ownership (not used for wallet or bare target). */
-  let ownerForCoinbase: string | undefined
+  /** Lab entity id for coinbase ownership (not used for wallet or bare target). */
+  let ownerForCoinbase: LabOwner | undefined
 
   if (entityNameOpt != null && entityNameOpt !== '' && options?.ownerWalletId == null) {
     let entity = state.entities.find((e) => e.entityName === entityNameOpt)
@@ -82,7 +83,7 @@ export async function executeMineBlocks(
     }
     coinbaseScriptPubkeyHex = wasmModule.lab_address_to_script_pubkey_hex(coinbaseAddress)
     newAddress = null
-    ownerForCoinbase = entityNameOpt
+    ownerForCoinbase = labEntityLabOwner(entity!.labEntityId)
   } else if (targetAddress.trim()) {
     coinbaseAddress = targetAddress.trim()
     coinbaseScriptPubkeyHex = wasmModule.lab_address_to_script_pubkey_hex(coinbaseAddress)
@@ -100,23 +101,20 @@ export async function executeMineBlocks(
     })
     coinbaseScriptPubkeyHex = wasmModule.lab_address_to_script_pubkey_hex(coinbaseAddress)
     newAddress = null
-    ownerForCoinbase = labEntityOwnerKey({
-      labEntityId,
-      entityName: null,
-    })
+    ownerForCoinbase = labEntityLabOwner(labEntityId)
   }
 
   if (options?.ownerWalletId != null) {
     state.addressToOwner = state.addressToOwner ?? {}
-    state.addressToOwner[coinbaseAddress] = walletOwnerKey(options.ownerWalletId)
+    state.addressToOwner[coinbaseAddress] = walletLabOwner(options.ownerWalletId)
   } else if (ownerForCoinbase != null) {
     state.addressToOwner = state.addressToOwner ?? {}
     state.addressToOwner[coinbaseAddress] = ownerForCoinbase
   }
 
-  const minedByKey: string | null =
+  const minedBy: LabOwner | null =
     options?.ownerWalletId != null
-      ? walletOwnerKey(options.ownerWalletId)
+      ? walletLabOwner(options.ownerWalletId)
       : ownerForCoinbase ?? null
 
   const mempoolCopy = [...(state.mempool ?? [])]
@@ -147,7 +145,7 @@ export async function executeMineBlocks(
     state.mineOperations.push({
       height: minedAtHeight,
       blockHash: tipAfter.blockHash,
-      minedByKey,
+      minedBy,
       coinbaseTxid: coinbaseDetail?.txid ?? null,
       createdAt: new Date().toISOString(),
     })

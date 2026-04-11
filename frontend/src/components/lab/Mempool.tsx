@@ -9,14 +9,18 @@ import {
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { truncateAddress } from '@/lib/bitcoin-utils'
 import { getOwnerDisplayName } from '@/lib/lab-utils'
+import type { LabOwner } from '@/lib/lab-owner'
+import { useLabChainStateQuery } from '@/hooks/useLabChainStateQuery'
 
 export function LabMempoolCard({
   mempool,
   wallets,
 }: {
-  mempool: Array<{ txid: string; sender: string | null; receiver: string | null }>
+  mempool: Array<{ txid: string; sender: LabOwner | null; receiver: LabOwner | null }>
   wallets: Array<{ wallet_id: number; name: string }>
 }) {
+  const { data: labState } = useLabChainStateQuery()
+  const entities = labState?.entities ?? []
   return (
     <InfomodeWrapper
       infoId="lab-mempool-card"
@@ -47,8 +51,8 @@ export function LabMempoolCard({
                     {truncateAddress(tx.txid)}
                   </span>
                   <span className="text-muted-foreground text-sm">
-                    {tx.sender ? getOwnerDisplayName(tx.sender, wallets) : 'unknown'} →{' '}
-                    {tx.receiver ? getOwnerDisplayName(tx.receiver, wallets) : 'unknown'}
+                    {tx.sender ? getOwnerDisplayName(tx.sender, wallets, entities) : 'unknown'} →{' '}
+                    {tx.receiver ? getOwnerDisplayName(tx.receiver, wallets, entities) : 'unknown'}
                   </span>
                 </Link>
               ))}
