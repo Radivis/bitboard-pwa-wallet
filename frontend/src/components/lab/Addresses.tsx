@@ -127,13 +127,17 @@ export function LabAddressesCard({
     <InfomodeWrapper
       infoId="lab-addresses-card"
       infoTitle="Addresses (lab)"
-      infoText="Every address that has appeared on the simulated chain—usually from mining rewards or transfers—with its current balance. Rows are grouped by owner (a named lab identity or your loaded wallet) so you can copy addresses into the transaction form or see who holds what."
+      infoText="Every address that has appeared on the simulated chain—usually from mining rewards or transfers—with its current balance. Rows are grouped by owner (a named lab identity or your loaded wallet) so you can copy addresses into the transaction form or see who holds what.
+
+When you send from an address, the wallet spends whole previous outputs (UTXOs) that funded that payment, so the address is fully drained for that spend. Leftover value is not left on the same address: it goes to change on a new address from your wallet. Fresh change addresses reduce address reuse and improve privacy, and they behave like real Bitcoin wallets here. That is why you will see many past addresses with 0 sats—they are no longer holding coins, but they stay listed so you can see where funds once appeared. Compare with the UTXOs card: this view is one total per address; UTXOs lists each spendable coin separately."
       className="rounded-xl"
     >
       <Card>
         <CardHeader>
           <CardTitle>Addresses</CardTitle>
-          <CardDescription>Addresses that have interacted with the network, grouped by owner</CardDescription>
+          <CardDescription>
+            Total balance per address (one row per address). After sends, expect lots of 0 sats—spent addresses stay listed.
+          </CardDescription>
         </CardHeader>
         <CardContent>
           {isLoading && totalOwnerCount === 0 ? (

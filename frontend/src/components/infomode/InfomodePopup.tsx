@@ -111,7 +111,9 @@ export function InfomodePopup({
         <h2 className="text-base font-semibold leading-tight text-popover-foreground">
           {entry.title}
         </h2>
-        <p className="text-sm leading-relaxed text-muted-foreground">{entry.text}</p>
+        <p className="whitespace-pre-line text-sm leading-relaxed text-muted-foreground">
+          {entry.text}
+        </p>
       </div>
     ) : (
       <entry.Content />

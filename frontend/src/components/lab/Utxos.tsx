@@ -119,13 +119,17 @@ export function LabUtxosCard({
     <InfomodeWrapper
       infoId="lab-utxos-card"
       infoTitle="UTXOs (lab)"
-      infoText="UTXO stands for unspent transaction output—each row is a discrete chunk of coins sitting on an address until you spend it. Bitcoin wallets track these pieces rather than a single “account balance.” Here they are grouped by owner so you can see which lab identity or wallet holds spendable outputs before you build a transaction."
+      infoText="UTXO stands for unspent transaction output—each row is a discrete chunk of coins sitting on an address until you spend it. Bitcoin wallets track these pieces rather than a single “account balance.” Here they are grouped by owner so you can see which lab identity or wallet holds spendable outputs before you build a transaction.
+
+This is not the same as the Addresses card above: Addresses shows one combined balance per address. This card lists each unspent output on its own row, so one address can appear multiple times if several separate coins still sit there."
       className="rounded-xl"
     >
       <Card>
         <CardHeader>
           <CardTitle>UTXOs</CardTitle>
-          <CardDescription>Unspent transaction outputs, grouped by owner</CardDescription>
+          <CardDescription>
+            Each unspent coin (output) as its own row—not merged per address like the Addresses card above.
+          </CardDescription>
         </CardHeader>
         <CardContent>
           {isLoading && totalOwnerCount === 0 ? (

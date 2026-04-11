@@ -156,6 +156,12 @@ export function LabEntitiesCard() {
             <CardDescription>
               Simulator participants — optional name, same rules as mining’s lab-entity branch
             </CardDescription>
+            <p className="text-sm text-muted-foreground pt-1 max-w-prose">
+              Lab entities use <span className="font-medium text-foreground/90">simple wallets</span> (one
+              address type per entity). The Bitboard Wallet uses{' '}
+              <span className="font-medium text-foreground/90">advanced wallets</span> that support multiple
+              address types.
+            </p>
           </CardHeader>
           <CardContent className="flex flex-col gap-6">
             <div className="flex flex-col gap-4">
