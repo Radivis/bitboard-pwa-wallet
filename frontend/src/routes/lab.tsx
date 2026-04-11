@@ -53,6 +53,7 @@ function LabLayout() {
         mineOperations: ui.mineOperations,
         txOperations: ui.txOperations,
         blockWeightLimit: ui.blockWeightLimit,
+        minerSubsidySats: ui.minerSubsidySats,
       }
     }
     return () => {

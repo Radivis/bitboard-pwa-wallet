@@ -10,25 +10,58 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useLabChainStateQuery } from '@/hooks/useLabChainStateQuery'
-import { useLabSetBlockWeightLimitMutation } from '@/hooks/useLabMutations'
+import {
+  useLabSetBlockWeightLimitMutation,
+  useLabSetMinerSubsidySatsMutation,
+} from '@/hooks/useLabMutations'
 import {
   LAB_DEFAULT_BLOCK_WEIGHT_UNITS,
+  LAB_DEFAULT_MINER_SUBSIDY_SATS,
   LAB_MAX_BLOCKS_PER_MINE,
   LAB_MIN_BLOCK_WEIGHT_UNITS,
+  normalizeMinerSubsidySats,
 } from '@/workers/lab-api'
 
 export function LabRulesCard() {
   const { data: labState } = useLabChainStateQuery()
   const setLimit = useLabSetBlockWeightLimitMutation()
+  const setMinerSubsidy = useLabSetMinerSubsidySatsMutation()
   const [draftLimitWu, setDraftLimitWu] = useState(
     String(LAB_DEFAULT_BLOCK_WEIGHT_UNITS),
+  )
+  const [subsidyEditMode, setSubsidyEditMode] = useState(false)
+  const [draftSubsidySats, setDraftSubsidySats] = useState(
+    String(LAB_DEFAULT_MINER_SUBSIDY_SATS),
   )
 
   useEffect(() => {
     if (labState != null) {
       setDraftLimitWu(String(labState.blockWeightLimit))
+      if (!subsidyEditMode) {
+        setDraftSubsidySats(String(labState.minerSubsidySats))
+      }
     }
-  }, [labState])
+  }, [labState, subsidyEditMode])
+
+  const currentSubsidySats =
+    labState?.minerSubsidySats ?? LAB_DEFAULT_MINER_SUBSIDY_SATS
+
+  function applyHalfSubsidy() {
+    const next = Math.max(1, Math.floor(currentSubsidySats / 2))
+    setMinerSubsidy.mutate(next)
+  }
+
+  function saveSubsidyFromDraft() {
+    const parsed = Number.parseInt(draftSubsidySats.trim(), 10)
+    if (!Number.isFinite(parsed)) return
+    const normalized = normalizeMinerSubsidySats(parsed)
+    setMinerSubsidy.mutate(normalized, {
+      onSuccess: () => {
+        setSubsidyEditMode(false)
+        setDraftSubsidySats(String(normalized))
+      },
+    })
+  }
 
   return (
     <Card>
@@ -66,6 +99,11 @@ export function LabRulesCard() {
             <em>future</em> blocks; past blocks are unchanged.
           </li>
           <li>
+            <strong>Miner subsidy.</strong> Each mined block creates new coins paid in the
+            coinbase (plus transaction fees). The subsidy you set below applies only to{' '}
+            <em>future</em> blocks; amounts already mined stay as they are.
+          </li>
+          <li>
             <strong>Transaction fees go to the miner.</strong> When a block is mined, all
             fees from the included transactions are added to the coinbase output, just like
             on mainnet.
@@ -84,30 +122,93 @@ export function LabRulesCard() {
           </li>
         </ul>
 
-        <form
-          className="flex flex-wrap items-end gap-3 rounded-lg border border-border/80 bg-muted/30 p-4"
-          onSubmit={(e) => {
-            e.preventDefault()
-            const parsed = Number.parseInt(draftLimitWu.trim(), 10)
-            if (!Number.isFinite(parsed) || parsed < LAB_MIN_BLOCK_WEIGHT_UNITS) return
-            setLimit.mutate(parsed)
-          }}
-        >
-          <div className="flex min-w-[12rem] flex-col gap-2">
-            <Label htmlFor="lab-block-weight-units">Max non-coinbase weight units (WU) per block</Label>
-            <Input
-              id="lab-block-weight-units"
-              inputMode="numeric"
-              min={LAB_MIN_BLOCK_WEIGHT_UNITS}
-              type="number"
-              value={draftLimitWu}
-              onChange={(ev) => setDraftLimitWu(ev.target.value)}
-            />
+        <div className="space-y-6 rounded-lg border border-border/80 bg-muted/30 p-4">
+          <form
+            className="flex flex-wrap items-end gap-3"
+            onSubmit={(e) => {
+              e.preventDefault()
+              const parsed = Number.parseInt(draftLimitWu.trim(), 10)
+              if (!Number.isFinite(parsed) || parsed < LAB_MIN_BLOCK_WEIGHT_UNITS) return
+              setLimit.mutate(parsed)
+            }}
+          >
+            <div className="flex min-w-[12rem] flex-col gap-2">
+              <Label htmlFor="lab-block-weight-units">Max non-coinbase weight units (WU) per block</Label>
+              <Input
+                id="lab-block-weight-units"
+                inputMode="numeric"
+                min={LAB_MIN_BLOCK_WEIGHT_UNITS}
+                type="number"
+                value={draftLimitWu}
+                onChange={(ev) => setDraftLimitWu(ev.target.value)}
+              />
+            </div>
+            <Button disabled={setLimit.isPending} type="submit" variant="secondary">
+              Apply limit
+            </Button>
+          </form>
+
+          <div className="flex flex-col gap-3 border-t border-border/60 pt-6">
+            <Label id="lab-miner-subsidy-label">Miner subsidy (sats)</Label>
+            <div className="flex flex-wrap items-center gap-3">
+              {subsidyEditMode ? (
+                <Input
+                  aria-labelledby="lab-miner-subsidy-label"
+                  className="max-w-[14rem] font-mono tabular-nums"
+                  id="lab-miner-subsidy-input"
+                  inputMode="numeric"
+                  min={1}
+                  type="number"
+                  value={draftSubsidySats}
+                  onChange={(ev) => setDraftSubsidySats(ev.target.value)}
+                />
+              ) : (
+                <span
+                  aria-labelledby="lab-miner-subsidy-label"
+                  className="min-w-[8rem] font-mono text-base tabular-nums"
+                >
+                  {currentSubsidySats.toLocaleString()}
+                </span>
+              )}
+              <Button
+                disabled={
+                  subsidyEditMode || setMinerSubsidy.isPending || labState == null
+                }
+                onClick={() => {
+                  applyHalfSubsidy()
+                }}
+                type="button"
+                variant="secondary"
+              >
+                Half
+              </Button>
+              {subsidyEditMode ? (
+                <Button
+                  disabled={setMinerSubsidy.isPending}
+                  onClick={() => {
+                    saveSubsidyFromDraft()
+                  }}
+                  type="button"
+                  variant="secondary"
+                >
+                  Save new amount
+                </Button>
+              ) : (
+                <Button
+                  disabled={labState == null}
+                  onClick={() => {
+                    setDraftSubsidySats(String(currentSubsidySats))
+                    setSubsidyEditMode(true)
+                  }}
+                  type="button"
+                  variant="secondary"
+                >
+                  Change to fixed amount
+                </Button>
+              )}
+            </div>
           </div>
-          <Button disabled={setLimit.isPending} type="submit" variant="secondary">
-            Apply limit
-          </Button>
-        </form>
+        </div>
       </CardContent>
     </Card>
   )

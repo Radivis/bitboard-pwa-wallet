@@ -382,3 +382,15 @@ export async function labOpSetBlockWeightLimit(blockWeightLimit: number): Promis
     return state
   })
 }
+
+export async function labOpSetMinerSubsidySats(minerSubsidySats: number): Promise<LabState> {
+  return runLabOp(async () => {
+    labPipelineDebugLog('setMinerSubsidySats:start', { minerSubsidySats })
+    await initLabWorkerWithState()
+    const labWorker = getLabWorker()
+    const state = await labWorker.setMinerSubsidySats(minerSubsidySats)
+    await persistLabState(state)
+    labPipelineSnapshot('setMinerSubsidySats:end', state)
+    return state
+  })
+}

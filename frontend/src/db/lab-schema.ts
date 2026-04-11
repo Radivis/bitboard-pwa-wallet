@@ -68,6 +68,8 @@ interface LabParameterPresetsTable {
   id: Generated<number>
   /** Max non-coinbase transaction weight units (WU) per block (`block_size` name is historical). */
   block_size: number
+  /** Coinbase subsidy in sats for future mined blocks (excludes fees). */
+  miner_subsidy_sats: number
 }
 
 /** Flat list of confirmed transactions for chain-wide summaries and tests. */

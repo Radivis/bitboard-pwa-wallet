@@ -1,6 +1,8 @@
 import {
   LAB_DEFAULT_BLOCK_WEIGHT_UNITS,
+  LAB_DEFAULT_MINER_SUBSIDY_SATS,
   normalizeBlockWeightLimit,
+  normalizeMinerSubsidySats,
   type LabState,
 } from '@/workers/lab-api'
 import { mergeAddressesWithUtxos } from '@/lib/lab-utils'
@@ -31,6 +33,9 @@ export function toUiLabState(state: LabState): LabState {
       state.blockWeightLimit ??
         (state as { blockSizeLimitVbytes?: number }).blockSizeLimitVbytes ??
         LAB_DEFAULT_BLOCK_WEIGHT_UNITS,
+    ),
+    minerSubsidySats: normalizeMinerSubsidySats(
+      state.minerSubsidySats ?? LAB_DEFAULT_MINER_SUBSIDY_SATS,
     ),
   }
 }

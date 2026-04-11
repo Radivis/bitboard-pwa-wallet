@@ -4,6 +4,7 @@ import { type LabOwner, labEntityLabOwner, walletLabOwner } from '@/lib/lab-owne
 import { isCoinbase } from '@/lib/lab-operations'
 import {
   LAB_DEFAULT_BLOCK_WEIGHT_UNITS,
+  LAB_DEFAULT_MINER_SUBSIDY_SATS,
   type LabBlock,
   type LabBlockDetails,
   type LabBlockTransactionSummary,
@@ -238,11 +239,13 @@ export async function buildCurrentBlockTemplate(
   const { address: targetAddress, minedBy } = await resolveTemplateCoinbase(params, wasmModule)
 
   const coinbaseScriptPubkeyHex = wasmModule.lab_address_to_script_pubkey_hex(targetAddress)
+  const minerSubsidySats = state.minerSubsidySats ?? LAB_DEFAULT_MINER_SUBSIDY_SATS
   const blockHex = wasmModule.lab_mine_block(
     previousHash,
     previewHeight,
     coinbaseScriptPubkeyHex,
     mempoolTxHexes,
+    BigInt(minerSubsidySats),
     BigInt(totalFeesSats),
   )
   const header = await parseBlockHeader(blockHex)

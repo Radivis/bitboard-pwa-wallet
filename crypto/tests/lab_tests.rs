@@ -158,8 +158,15 @@ fn build_and_sign_lab_transaction_returns_signed_tx() {
 #[wasm_bindgen_test]
 fn lab_mine_block_micro_pow_hash_starts_with_00() {
     let script_pubkey_hex = fresh_regtest_script_pubkey_hex();
-    let block_hex = lab::lab_mine_block("", 0, &script_pubkey_hex, JsValue::NULL, 0)
-        .expect("mine block with micro-pow");
+    let block_hex = lab::lab_mine_block(
+        "",
+        0,
+        &script_pubkey_hex,
+        JsValue::NULL,
+        lab::LAB_DEFAULT_MINER_SUBSIDY_SATS,
+        0,
+    )
+    .expect("mine block with micro-pow");
     let block: bitcoin::Block = deserialize_hex(&block_hex).expect("deserialize mined block");
     let block_hash_hex = block.block_hash().to_string();
     let compact_target = bitcoin::Target::from_compact(block.header.bits);
@@ -187,9 +194,15 @@ fn lab_mine_block_micro_pow_nonce_varies_across_calls() {
     let mut previous_hash = String::new();
     let mut nonces = Vec::new();
     for height in 0..16u32 {
-        let block_hex =
-            lab::lab_mine_block(&previous_hash, height, &script_pubkey_hex, JsValue::NULL, 0)
-                .expect("mine block with micro-pow");
+        let block_hex = lab::lab_mine_block(
+            &previous_hash,
+            height,
+            &script_pubkey_hex,
+            JsValue::NULL,
+            lab::LAB_DEFAULT_MINER_SUBSIDY_SATS,
+            0,
+        )
+        .expect("mine block with micro-pow");
         let block: bitcoin::Block = deserialize_hex(&block_hex).expect("deserialize mined block");
         previous_hash = block.block_hash().to_string();
         nonces.push(block.header.nonce);

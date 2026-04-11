@@ -2,9 +2,11 @@ import { expose } from 'comlink'
 import type { LabOwner } from '@/lib/lab-owner'
 import {
   LAB_DEFAULT_BLOCK_WEIGHT_UNITS,
+  LAB_DEFAULT_MINER_SUBSIDY_SATS,
   LAB_MIN_BLOCK_WEIGHT_UNITS,
   mergeMempoolInputsDetailWithOutpoints,
   normalizeBlockWeightLimit,
+  normalizeMinerSubsidySats,
   type LabAddress,
   type LabBlockDetails,
   type LabCurrentBlockTemplateParams,
@@ -65,6 +67,9 @@ const labService = {
         legacy.blockSizeLimitVbytes ??
         LAB_DEFAULT_BLOCK_WEIGHT_UNITS,
     )
+    const minerSubsidySats = normalizeMinerSubsidySats(
+      cloned.minerSubsidySats ?? LAB_DEFAULT_MINER_SUBSIDY_SATS,
+    )
     const mempool = (cloned.mempool ?? []).map((entry) => {
       let next = { ...entry }
       if (next.vsize <= 0) {
@@ -92,6 +97,7 @@ const labService = {
       mineOperations: cloned.mineOperations ?? [],
       txOperations: cloned.txOperations ?? [],
       blockWeightLimit,
+      minerSubsidySats,
     })
     rebuildTxidToChangeAddressFromState()
   },
@@ -107,6 +113,14 @@ const labService = {
       )
     }
     state.blockWeightLimit = floored
+    return JSON.parse(JSON.stringify(state)) as LabState
+  },
+
+  async setMinerSubsidySats(minerSubsidySats: number): Promise<LabState> {
+    if (!Number.isFinite(minerSubsidySats)) {
+      throw new Error('minerSubsidySats must be a finite number')
+    }
+    state.minerSubsidySats = normalizeMinerSubsidySats(minerSubsidySats)
     return JSON.parse(JSON.stringify(state)) as LabState
   },
 

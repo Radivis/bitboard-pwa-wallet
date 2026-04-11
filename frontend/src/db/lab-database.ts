@@ -1,6 +1,9 @@
 import { Kysely, sql } from 'kysely'
 import { WaSqliteWorkerDialect } from 'kysely-wasqlite-worker'
-import { LAB_DEFAULT_BLOCK_WEIGHT_UNITS } from '@/workers/lab-api'
+import {
+  LAB_DEFAULT_BLOCK_WEIGHT_UNITS,
+  LAB_DEFAULT_MINER_SUBSIDY_SATS,
+} from '@/workers/lab-api'
 import type { LabDatabase } from './lab-schema'
 
 const LAB_DATABASE_FILE_NAME = 'bitboard-lab'
@@ -164,6 +167,7 @@ async function migrateLabToLatest(labDb: Kysely<LabDatabase>): Promise<void> {
     .ifNotExists()
     .addColumn('id', 'integer', (col) => col.primaryKey().autoIncrement())
     .addColumn('block_size', 'integer', (col) => col.notNull())
+    .addColumn('miner_subsidy_sats', 'integer', (col) => col.notNull())
     .execute()
 
   const existingPreset = await labDb
@@ -173,7 +177,10 @@ async function migrateLabToLatest(labDb: Kysely<LabDatabase>): Promise<void> {
   if (!existingPreset) {
     await labDb
       .insertInto('lab_parameter_presets')
-      .values({ block_size: LAB_DEFAULT_BLOCK_WEIGHT_UNITS })
+      .values({
+        block_size: LAB_DEFAULT_BLOCK_WEIGHT_UNITS,
+        miner_subsidy_sats: LAB_DEFAULT_MINER_SUBSIDY_SATS,
+      })
       .execute()
   }
 
@@ -199,6 +206,7 @@ async function patchLabSchemaForExistingFiles(labDb: Kysely<LabDatabase>): Promi
     ['lab_tx_operations', 'sender_wallet_id INTEGER'],
     ['lab_mempool', 'vsize INTEGER'],
     ['lab_mempool', 'weight INTEGER'],
+    ['lab_parameter_presets', 'miner_subsidy_sats INTEGER NOT NULL DEFAULT 5000000000'],
   ]
   for (const [table, colDef] of patches) {
     try {

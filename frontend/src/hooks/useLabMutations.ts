@@ -11,6 +11,7 @@ import {
   labOpReset,
   labOpSetLabEntityDead,
   labOpSetBlockWeightLimit,
+  labOpSetMinerSubsidySats,
 } from '@/lib/lab-worker-operations'
 import { setLabChainStateCache } from '@/hooks/useLabChainStateQuery'
 import { labChainStateQueryKey } from '@/lib/lab-chain-query'
@@ -215,6 +216,22 @@ export function useLabSetBlockWeightLimitMutation() {
       setLabChainStateCache(queryClient, state)
       void invalidateLabPaginatedQueries(queryClient)
       toast.success('Block weight limit updated (applies to future blocks)')
+    },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : 'Update failed')
+    },
+  })
+}
+
+export function useLabSetMinerSubsidySatsMutation() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationKey: ['lab', 'setMinerSubsidySats'] as const,
+    mutationFn: (minerSubsidySats: number) => labOpSetMinerSubsidySats(minerSubsidySats),
+    onSuccess: (state) => {
+      setLabChainStateCache(queryClient, state)
+      void invalidateLabPaginatedQueries(queryClient)
+      toast.success('Miner subsidy updated (applies to future blocks)')
     },
     onError: (err) => {
       toast.error(err instanceof Error ? err.message : 'Update failed')

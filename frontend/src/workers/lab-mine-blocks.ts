@@ -5,6 +5,7 @@ import type { LabOwner } from '@/lib/lab-owner'
 import type { LabAddress, LabMineBlocksResult, LabState } from './lab-api'
 import {
   LAB_DEFAULT_BLOCK_WEIGHT_UNITS,
+  LAB_DEFAULT_MINER_SUBSIDY_SATS,
   LAB_MAX_BLOCKS_PER_MINE,
   LAB_MIN_BLOCKS_PER_MINE,
 } from './lab-api'
@@ -150,6 +151,9 @@ export async function executeMineBlocks(
     selectedEntries.flatMap((entry) => entry.inputs.map((input) => `${input.txid}:${input.vout}`)),
   )
 
+  const minerSubsidySats = state.minerSubsidySats ?? LAB_DEFAULT_MINER_SUBSIDY_SATS
+  const subsidyForBlock = BigInt(minerSubsidySats)
+
   for (let i = 0; i < blockCountToMine; i++) {
     const txsForBlock = i === 0 ? mempoolTxHexes : []
     const feesForBlock = BigInt(i === 0 ? totalFeesSats : 0)
@@ -158,6 +162,7 @@ export async function executeMineBlocks(
       height,
       coinbaseScriptPubkeyHex,
       txsForBlock,
+      subsidyForBlock,
       feesForBlock,
     )
     applyBlockEffects(wasmModule, blockHex, height, i === 0 ? newAddress ?? undefined : undefined)

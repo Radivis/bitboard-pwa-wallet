@@ -12,7 +12,9 @@ import {
 import {
   EMPTY_LAB_STATE,
   LAB_DEFAULT_BLOCK_WEIGHT_UNITS,
+  LAB_DEFAULT_MINER_SUBSIDY_SATS,
   normalizeBlockWeightLimit,
+  normalizeMinerSubsidySats,
 } from './lab-api'
 import {
   ensureLabMigrated,
@@ -77,11 +79,14 @@ export async function loadLabStateFromDatabase(): Promise<LabState> {
 
   const presetRow = await labDb
     .selectFrom('lab_parameter_presets')
-    .select('block_size')
+    .select(['block_size', 'miner_subsidy_sats'])
     .orderBy('id', 'asc')
     .executeTakeFirst()
   const blockWeightLimit = normalizeBlockWeightLimit(
     presetRow?.block_size ?? LAB_DEFAULT_BLOCK_WEIGHT_UNITS,
+  )
+  const minerSubsidySats = normalizeMinerSubsidySats(
+    presetRow?.miner_subsidy_sats ?? LAB_DEFAULT_MINER_SUBSIDY_SATS,
   )
 
   const blocks = await labDb
@@ -246,6 +251,7 @@ export async function loadLabStateFromDatabase(): Promise<LabState> {
 
   return {
     blockWeightLimit,
+    minerSubsidySats,
     blocks: blocks.map((b) => ({
       blockHash: b.block_hash,
       height: b.height,
@@ -438,6 +444,9 @@ async function clearAndInsertLabState(
     .insertInto('lab_parameter_presets')
     .values({
       block_size: state.blockWeightLimit ?? LAB_DEFAULT_BLOCK_WEIGHT_UNITS,
+      miner_subsidy_sats: normalizeMinerSubsidySats(
+        state.minerSubsidySats ?? LAB_DEFAULT_MINER_SUBSIDY_SATS,
+      ),
     })
     .execute()
 

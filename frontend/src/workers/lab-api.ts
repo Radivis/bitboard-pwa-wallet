@@ -186,6 +186,8 @@ export interface LabState {
   txOperations: LabTxOperationRecord[]
   /** Max total weight units (WU) for non-coinbase txs in a mined block (future blocks only). At least 1000 WU. */
   blockWeightLimit: number
+  /** Coinbase subsidy in sats for newly mined blocks (future blocks only; excludes fees). At least 1 sat. */
+  minerSubsidySats: number
 }
 
 /** Minimum blocks per single "Mine blocks" operation in the lab UI and worker. */
@@ -212,6 +214,23 @@ export function normalizeBlockWeightLimit(value: number): number {
     return LAB_DEFAULT_BLOCK_WEIGHT_UNITS
   }
   return Math.max(LAB_MIN_BLOCK_WEIGHT_UNITS, Math.floor(value))
+}
+
+/** Default lab coinbase subsidy (50 BTC in sats); matches Rust `LAB_DEFAULT_MINER_SUBSIDY_SATS`. */
+export const LAB_DEFAULT_MINER_SUBSIDY_SATS = 5_000_000_000
+
+/** Upper bound aligned with WASM `u64` sat amounts and JS safe integers. */
+const LAB_MAX_MINER_SUBSIDY_SATS = Number.MAX_SAFE_INTEGER
+
+/** Clamp subsidy to [1, {@link LAB_MAX_MINER_SUBSIDY_SATS}]. */
+export function normalizeMinerSubsidySats(value: number): number {
+  if (!Number.isFinite(value)) {
+    return LAB_DEFAULT_MINER_SUBSIDY_SATS
+  }
+  const floored = Math.floor(value)
+  if (floored < 1) return 1
+  if (floored > LAB_MAX_MINER_SUBSIDY_SATS) return LAB_MAX_MINER_SUBSIDY_SATS
+  return floored
 }
 
 export interface PrepareLabEntityTransactionParams {
@@ -272,6 +291,7 @@ export const EMPTY_LAB_STATE: LabState = {
   mineOperations: [],
   txOperations: [],
   blockWeightLimit: LAB_DEFAULT_BLOCK_WEIGHT_UNITS,
+  minerSubsidySats: LAB_DEFAULT_MINER_SUBSIDY_SATS,
 }
 
 /** Result of {@link LabService.mineBlocks}. Mempool counts exclude coinbase (mempool-only). */
@@ -387,6 +407,9 @@ export interface LabService {
 
   /** Updates max non-coinbase weight units per block for future mining (does not alter past blocks). */
   setBlockWeightLimit(blockWeightLimit: number): Promise<LabState>
+
+  /** Updates coinbase subsidy for future mined blocks (does not alter past blocks). */
+  setMinerSubsidySats(minerSubsidySats: number): Promise<LabState>
 }
 
 export interface LabMempoolMetadata {

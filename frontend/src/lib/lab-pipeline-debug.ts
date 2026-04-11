@@ -24,7 +24,7 @@
  *   const M = await import('@/wasm-pkg/bitboard_crypto.js'); await M.default?.();
  *   const a = M.lab_generate_keypair(); const addr = a.address;
  *   const spk = M.lab_address_to_script_pubkey_hex(addr);
- *   const hex = M.lab_mine_block('', 0, spk, [], 0n);
+ *   const hex = M.lab_mine_block('', 0, spk, [], 5000000000n, 0n);
  *   const fx = M.lab_block_effects(hex);
  *   console.log(fx.new_utxos?.[0]?.amount_sats);  // expect 5000000000
  */
