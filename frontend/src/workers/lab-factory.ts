@@ -7,7 +7,11 @@ import type {
   LabTxDetails,
   LabTxOperationRecord,
 } from './lab-api'
-import { EMPTY_LAB_STATE, LAB_DEFAULT_BLOCK_WEIGHT_UNITS } from './lab-api'
+import {
+  EMPTY_LAB_STATE,
+  LAB_DEFAULT_BLOCK_WEIGHT_UNITS,
+  normalizeBlockWeightLimit,
+} from './lab-api'
 import {
   ensureLabMigrated,
   getLabDatabase,
@@ -74,7 +78,9 @@ export async function loadLabStateFromDatabase(): Promise<LabState> {
     .select('block_size')
     .orderBy('id', 'asc')
     .executeTakeFirst()
-  const blockWeightLimit = presetRow?.block_size ?? LAB_DEFAULT_BLOCK_WEIGHT_UNITS
+  const blockWeightLimit = normalizeBlockWeightLimit(
+    presetRow?.block_size ?? LAB_DEFAULT_BLOCK_WEIGHT_UNITS,
+  )
 
   const blocks = await labDb
     .selectFrom('blocks')

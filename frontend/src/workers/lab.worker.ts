@@ -8,7 +8,7 @@ import type {
   LabState,
   LabTxDetails,
 } from './lab-api'
-import { LAB_DEFAULT_BLOCK_WEIGHT_UNITS } from './lab-api'
+import { LAB_DEFAULT_BLOCK_WEIGHT_UNITS, LAB_MIN_BLOCK_WEIGHT_UNITS, normalizeBlockWeightLimit } from './lab-api'
 import { findLabEntityById, nextLabEntityId } from '@/lib/lab-entity-keys'
 import {
   labEntityLabOwner,
@@ -57,10 +57,11 @@ const labService = {
     const cloned = JSON.parse(JSON.stringify(newState)) as LabState
     const wasmModule = await getWasm()
     const legacy = cloned as LabState & { blockSizeLimitVbytes?: number }
-    const blockWeightLimit =
+    const blockWeightLimit = normalizeBlockWeightLimit(
       cloned.blockWeightLimit ??
-      legacy.blockSizeLimitVbytes ??
-      LAB_DEFAULT_BLOCK_WEIGHT_UNITS
+        legacy.blockSizeLimitVbytes ??
+        LAB_DEFAULT_BLOCK_WEIGHT_UNITS,
+    )
     const mempool = (cloned.mempool ?? []).map((entry) => {
       let next = { ...entry }
       if (next.vsize <= 0) {
@@ -93,10 +94,16 @@ const labService = {
   },
 
   async setBlockWeightLimit(blockWeightLimit: number): Promise<LabState> {
-    if (!Number.isFinite(blockWeightLimit) || blockWeightLimit < 1) {
-      throw new Error('blockWeightLimit must be a finite number >= 1')
+    if (!Number.isFinite(blockWeightLimit)) {
+      throw new Error('blockWeightLimit must be a finite number')
     }
-    state.blockWeightLimit = Math.floor(blockWeightLimit)
+    const floored = Math.floor(blockWeightLimit)
+    if (floored < LAB_MIN_BLOCK_WEIGHT_UNITS) {
+      throw new Error(
+        `blockWeightLimit must be at least ${LAB_MIN_BLOCK_WEIGHT_UNITS} weight units`,
+      )
+    }
+    state.blockWeightLimit = floored
     return JSON.parse(JSON.stringify(state)) as LabState
   },
 

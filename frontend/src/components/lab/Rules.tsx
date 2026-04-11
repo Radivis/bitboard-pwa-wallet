@@ -14,6 +14,7 @@ import { useLabSetBlockWeightLimitMutation } from '@/hooks/useLabMutations'
 import {
   LAB_DEFAULT_BLOCK_WEIGHT_UNITS,
   LAB_MAX_BLOCKS_PER_MINE,
+  LAB_MIN_BLOCK_WEIGHT_UNITS,
 } from '@/workers/lab-api'
 
 export function LabRulesCard() {
@@ -59,9 +60,10 @@ export function LabRulesCard() {
           <li>
             <strong>Block weight limit.</strong> Each block has a maximum total size for
             non-coinbase transactions, measured in weight units (WU), like Bitcoin&apos;s block
-            weight. The default numeric limit is intentionally tiny compared to mainnet so you
-            can see congestion. Changing the limit below only affects <em>future</em> blocks;
-            past blocks are unchanged.
+            weight. The minimum is {LAB_MIN_BLOCK_WEIGHT_UNITS} WU so a block can fit several
+            typical transactions. The default numeric limit is intentionally tiny compared to
+            mainnet so you can see congestion. Changing the limit below only affects{' '}
+            <em>future</em> blocks; past blocks are unchanged.
           </li>
           <li>
             <strong>Transaction fees go to the miner.</strong> When a block is mined, all
@@ -87,7 +89,7 @@ export function LabRulesCard() {
           onSubmit={(e) => {
             e.preventDefault()
             const parsed = Number.parseInt(draftLimitWu.trim(), 10)
-            if (!Number.isFinite(parsed) || parsed < 1) return
+            if (!Number.isFinite(parsed) || parsed < LAB_MIN_BLOCK_WEIGHT_UNITS) return
             setLimit.mutate(parsed)
           }}
         >
@@ -96,7 +98,7 @@ export function LabRulesCard() {
             <Input
               id="lab-block-weight-units"
               inputMode="numeric"
-              min={1}
+              min={LAB_MIN_BLOCK_WEIGHT_UNITS}
               type="number"
               value={draftLimitWu}
               onChange={(ev) => setDraftLimitWu(ev.target.value)}

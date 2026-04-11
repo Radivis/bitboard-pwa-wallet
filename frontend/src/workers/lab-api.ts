@@ -164,7 +164,7 @@ export interface LabState {
   txDetails: LabTxDetails[]
   mineOperations: LabMineOperationRecord[]
   txOperations: LabTxOperationRecord[]
-  /** Max total weight units (WU) for non-coinbase txs in a mined block (future blocks only). */
+  /** Max total weight units (WU) for non-coinbase txs in a mined block (future blocks only). At least 1000 WU. */
   blockWeightLimit: number
 }
 
@@ -179,6 +179,20 @@ export const LAB_MAX_BLOCKS_PER_MINE = 100
 
 /** Default max non-coinbase transaction weight per block (Lab). Same numeric default as before; now WU not vBytes. */
 export const LAB_DEFAULT_BLOCK_WEIGHT_UNITS = 4000
+
+/**
+ * Minimum block weight limit (WU) for the lab. Lower values fit at most a couple of typical txs
+ * and are confusing; enforced in the worker and Rules UI.
+ */
+export const LAB_MIN_BLOCK_WEIGHT_UNITS = 1000
+
+/** Clamp stored/loaded block weight limits to at least {@link LAB_MIN_BLOCK_WEIGHT_UNITS}. */
+export function normalizeBlockWeightLimit(value: number): number {
+  if (!Number.isFinite(value)) {
+    return LAB_DEFAULT_BLOCK_WEIGHT_UNITS
+  }
+  return Math.max(LAB_MIN_BLOCK_WEIGHT_UNITS, Math.floor(value))
+}
 
 export interface PrepareLabEntityTransactionParams {
   labEntityId: number

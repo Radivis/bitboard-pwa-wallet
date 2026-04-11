@@ -1,4 +1,8 @@
-import { LAB_DEFAULT_BLOCK_WEIGHT_UNITS, type LabState } from '@/workers/lab-api'
+import {
+  LAB_DEFAULT_BLOCK_WEIGHT_UNITS,
+  normalizeBlockWeightLimit,
+  type LabState,
+} from '@/workers/lab-api'
 import { mergeAddressesWithUtxos } from '@/lib/lab-utils'
 import { labOpLoadChainFromDatabase } from '@/lib/lab-worker-operations'
 
@@ -23,9 +27,10 @@ export function toUiLabState(state: LabState): LabState {
     txDetails: state.txDetails ?? [],
     mineOperations: state.mineOperations ?? [],
     txOperations: state.txOperations ?? [],
-    blockWeightLimit:
+    blockWeightLimit: normalizeBlockWeightLimit(
       state.blockWeightLimit ??
-      (state as { blockSizeLimitVbytes?: number }).blockSizeLimitVbytes ??
-      LAB_DEFAULT_BLOCK_WEIGHT_UNITS,
+        (state as { blockSizeLimitVbytes?: number }).blockSizeLimitVbytes ??
+        LAB_DEFAULT_BLOCK_WEIGHT_UNITS,
+    ),
   }
 }
