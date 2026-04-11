@@ -314,6 +314,56 @@ test.describe('Lab', { tag: '@lab' }, () => {
     expect(walletSum).toBeLessThanOrEqual(2 * COINBASE_SATS)
   })
 
+  test('tx viewer links input outpoint to parent tx and highlights vout', async ({ page }) => {
+    await mineBlocksInLab(page, 1, 'name', { ownerName: 'Alice' })
+    await mineBlocksInLab(page, 1, 'name', { ownerName: 'Bob' })
+
+    const beforeSpend = await getLabState(page)
+    const aliceAddress = findAddressForOwner(beforeSpend, 'Alice')
+    const bobAddress = findAddressForOwner(beforeSpend, 'Bob')
+    expect(aliceAddress).toBeDefined()
+    expect(bobAddress).toBeDefined()
+
+    await createTransactionInLab(page, aliceAddress!, bobAddress!, 10_000, 1)
+    await mineBlocksInLab(page, 1, 'name', { ownerName: 'Alice' })
+
+    const state = await getLabState(page)
+    const spendDetail = state.txDetails?.find(
+      (d) =>
+        d.isCoinbase !== true &&
+        d.inputs.some(
+          (i) =>
+            i.prevTxid != null &&
+            i.prevTxid !== '' &&
+            i.prevVout != null &&
+            i.prevVout !== undefined,
+        ),
+    )
+    expect(spendDetail).toBeDefined()
+    const inputWithPrev = spendDetail!.inputs.find(
+      (i) =>
+        i.prevTxid != null &&
+        i.prevTxid !== '' &&
+        i.prevVout != null &&
+        i.prevVout !== undefined,
+    )
+    expect(inputWithPrev).toBeDefined()
+    const parentTxid = inputWithPrev!.prevTxid!
+    const vout = inputWithPrev!.prevVout!
+
+    await page.goto(`/lab/tx/${spendDetail!.txid}`)
+    await expect(page.getByRole('heading', { name: 'Transaction' })).toBeVisible({ timeout: 15000 })
+
+    await page.getByRole('link', { name: new RegExp(`:\\s*${vout}`) }).first().click()
+
+    await expect(page).toHaveURL(new RegExp(`/lab/tx/${parentTxid}`))
+    await expect(page.url()).toMatch(/highlightVout/)
+
+    const highlighted = page.getByTestId(`lab-tx-vout-${vout}`)
+    await expect(highlighted).toBeVisible({ timeout: 10000 })
+    await expect(highlighted).toHaveClass(/ring-2/)
+  })
+
   test('block details routes and mempool card behavior', async ({ page }) => {
     await page.getByRole('link', { name: /settings/i }).click()
     await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()

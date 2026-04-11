@@ -1,14 +1,17 @@
 import { expose } from 'comlink'
 import type { LabOwner } from '@/lib/lab-owner'
-import type {
-  LabAddress,
-  LabBlockDetails,
-  LabCurrentBlockTemplateParams,
-  LabMineBlocksResult,
-  LabState,
-  LabTxDetails,
+import {
+  LAB_DEFAULT_BLOCK_WEIGHT_UNITS,
+  LAB_MIN_BLOCK_WEIGHT_UNITS,
+  mergeMempoolInputsDetailWithOutpoints,
+  normalizeBlockWeightLimit,
+  type LabAddress,
+  type LabBlockDetails,
+  type LabCurrentBlockTemplateParams,
+  type LabMineBlocksResult,
+  type LabState,
+  type LabTxDetails,
 } from './lab-api'
-import { LAB_DEFAULT_BLOCK_WEIGHT_UNITS, LAB_MIN_BLOCK_WEIGHT_UNITS, normalizeBlockWeightLimit } from './lab-api'
 import { findLabEntityById, nextLabEntityId } from '@/lib/lab-entity-keys'
 import {
   labEntityLabOwner,
@@ -116,7 +119,10 @@ const labService = {
         blockTime: 0,
         confirmations: 0,
         isCoinbase: false,
-        inputs: mempoolEntry.inputsDetail,
+        inputs: mergeMempoolInputsDetailWithOutpoints(
+          mempoolEntry.inputs,
+          mempoolEntry.inputsDetail,
+        ),
         outputs: mempoolEntry.outputsDetail,
       }
     }
@@ -224,6 +230,8 @@ const labService = {
       address: utxo.address,
       amountSats: utxo.amountSats,
       owner: lookupOwnerForLabAddress(utxo.address, addressToOwner) ?? null,
+      prevTxid: utxo.txid,
+      prevVout: utxo.vout,
     }))
 
     const totalInput = fromUtxos.reduce((sum, utxo) => sum + utxo.amountSats, 0)
@@ -450,6 +458,8 @@ const labService = {
       address: utxo.address,
       amountSats: utxo.amountSats,
       owner: lookupOwnerForLabAddress(utxo.address, addressToOwner) ?? null,
+      prevTxid: utxo.txid,
+      prevVout: utxo.vout,
     }))
 
     const totalInput = fromUtxos.reduce((sum, utxo) => sum + utxo.amountSats, 0)

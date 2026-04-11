@@ -1,11 +1,13 @@
 import { wrap, type Remote } from 'comlink'
-import type {
-  LabEntityRecord,
-  LabMineOperationRecord,
-  LabService,
-  LabState,
-  LabTxDetails,
-  LabTxOperationRecord,
+import {
+  mergeMempoolInputsDetailWithOutpoints,
+  type LabEntityRecord,
+  type LabMineOperationRecord,
+  type LabService,
+  type LabState,
+  type LabTxDetails,
+  type LabTxInputDetail,
+  type LabTxOperationRecord,
 } from './lab-api'
 import {
   EMPTY_LAB_STATE,
@@ -159,9 +161,12 @@ export async function loadLabStateFromDatabase(): Promise<LabState> {
     weight:
       r.weight != null && Number.isFinite(r.weight) && r.weight > 0 ? r.weight : 0,
     inputs: JSON.parse(r.inputs_json) as { txid: string; vout: number }[],
-    inputsDetail: normalizeMempoolIoOwners(
-      JSON.parse(r.inputs_detail_json) as { address: string; amountSats: number; owner?: unknown }[],
-      entities,
+    inputsDetail: mergeMempoolInputsDetailWithOutpoints(
+      JSON.parse(r.inputs_json) as { txid: string; vout: number }[],
+      normalizeMempoolIoOwners(
+        JSON.parse(r.inputs_detail_json) as LabTxInputDetail[],
+        entities,
+      ),
     ),
     outputsDetail: normalizeMempoolIoOwners(
       JSON.parse(r.outputs_detail_json) as {

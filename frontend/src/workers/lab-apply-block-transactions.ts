@@ -79,7 +79,13 @@ function buildInputsForBlockEffectTx(
     const utxo = utxoMap.get(key)
     if (utxo) {
       const owner = lookupOwnerForLabAddress(utxo.address, addressToOwner) ?? null
-      inputs.push({ address: utxo.address, amountSats: utxo.amountSats, owner })
+      inputs.push({
+        address: utxo.address,
+        amountSats: utxo.amountSats,
+        owner,
+        prevTxid: input.prev_txid,
+        prevVout: input.prev_vout,
+      })
       if (firstInputAddress === null) firstInputAddress = utxo.address
     }
   }

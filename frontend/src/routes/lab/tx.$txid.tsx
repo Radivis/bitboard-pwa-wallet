@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { createFileRoute, Link } from '@tanstack/react-router'
+import { createFileRoute, Link, useSearch } from '@tanstack/react-router'
 import {
   Card,
   CardContent,
@@ -19,13 +19,24 @@ import { toast } from 'sonner'
 import { getOwnerDisplayName, getOwnerIcon } from '@/lib/lab-utils'
 import { useWallets } from '@/db'
 import { useLabChainStateQuery } from '@/hooks/useLabChainStateQuery'
+import { cn } from '@/lib/utils'
 
 export const Route = createFileRoute('/lab/tx/$txid')({
+  validateSearch: (
+    search: Record<string, unknown>,
+  ): { highlightVout?: number } => {
+    const raw = search.highlightVout
+    if (raw === undefined || raw === null || raw === '') return {}
+    const n = typeof raw === 'number' ? raw : Number.parseInt(String(raw), 10)
+    if (!Number.isFinite(n) || n < 0) return {}
+    return { highlightVout: Math.floor(n) }
+  },
   component: LabTxViewerPage,
 })
 
 function LabTxViewerPage() {
   const { txid } = Route.useParams()
+  const { highlightVout } = useSearch({ from: '/lab/tx/$txid' })
   const [tx, setTx] = useState<LabTxDetails | null | undefined>(undefined)
   const { data: wallets = [] } = useWallets()
   const { data: labState } = useLabChainStateQuery()
@@ -44,6 +55,13 @@ function LabTxViewerPage() {
   useEffect(() => {
     loadTx()
   }, [loadTx])
+
+  useEffect(() => {
+    if (highlightVout === undefined || tx == null) return
+    const id = `lab-tx-vout-${highlightVout}`
+    const el = document.getElementById(id)
+    el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }, [highlightVout, txid, tx])
 
   const handleCopyTxid = useCallback(async () => {
     try {
@@ -131,7 +149,7 @@ function LabTxViewerPage() {
       <InfomodeWrapper
         infoId="lab-tx-detail-inputs-card"
         infoTitle="Inputs (TxIns)"
-        infoText="Each input spends a previous unspent output—coins consumed to fund this payment. The owner badge shows whether that coin belonged to a named lab participant or your loaded wallet. Block-reward coinbase transactions use a synthetic prevout (zero txid, max vout) instead of spending a prior UTXO."
+        infoText="Each input spends a specific previous transaction output (an outpoint: txid + vout). Follow the link to open that funding transaction and highlight the output being spent. The address line shows the script/UTXO context; the owner badge shows whether that coin belonged to a named lab participant or your loaded wallet. Block-reward coinbase transactions use a synthetic prevout (zero txid, max vout) instead of spending a prior UTXO."
         className="rounded-xl"
       >
         <Card>
@@ -169,29 +187,51 @@ function LabTxViewerPage() {
               <p className="text-sm text-muted-foreground">No inputs</p>
             ) : (
               <div className="space-y-2">
-                {tx.inputs.map((input, index) => (
-                  <div
-                    key={`${input.address}-${index}`}
-                    className="flex gap-4 items-center py-2 border-b border-border last:border-0"
-                  >
-                    <span className="font-mono text-sm break-all flex-1 min-w-0">
-                      {truncateAddress(input.address)}
-                    </span>
-                    <span className="flex items-center gap-1 shrink-0">
-                      {input.owner ? (
-                        getOwnerIcon(input.owner) === 'wallet' ? (
-                          <Wallet className="h-4 w-4" />
-                        ) : (
-                          <FlaskConical className="h-4 w-4" />
-                        )
-                      ) : null}
-                      <Badge variant="secondary">
-                        {input.owner ? getOwnerDisplayName(input.owner, wallets, entities) : 'unknown'}
-                      </Badge>
-                    </span>
-                    <span className="tabular-nums text-right">{formatSats(input.amountSats)} sats</span>
-                  </div>
-                ))}
+                {tx.inputs.map((input, index) => {
+                  const hasPrevout =
+                    input.prevTxid != null &&
+                    input.prevTxid !== '' &&
+                    input.prevVout != null &&
+                    input.prevVout !== undefined
+                  return (
+                    <div
+                      key={`${input.address}-${index}`}
+                      className="flex flex-col gap-1 py-2 border-b border-border last:border-0 sm:flex-row sm:items-center sm:gap-4"
+                    >
+                      <div className="flex flex-1 flex-col gap-0.5 min-w-0">
+                        {hasPrevout ? (
+                          <Link
+                            to="/lab/tx/$txid"
+                            params={{ txid: input.prevTxid! }}
+                            search={{ highlightVout: input.prevVout! }}
+                            className="font-mono text-sm text-primary hover:underline break-all"
+                            preload={false}
+                          >
+                            {truncateAddress(input.prevTxid!, 10, 10)} : {input.prevVout}
+                          </Link>
+                        ) : null}
+                        <span className="font-mono text-sm break-all text-muted-foreground">
+                          {truncateAddress(input.address)}
+                        </span>
+                      </div>
+                      <span className="flex items-center gap-1 shrink-0">
+                        {input.owner ? (
+                          getOwnerIcon(input.owner) === 'wallet' ? (
+                            <Wallet className="h-4 w-4" />
+                          ) : (
+                            <FlaskConical className="h-4 w-4" />
+                          )
+                        ) : null}
+                        <Badge variant="secondary">
+                          {input.owner ? getOwnerDisplayName(input.owner, wallets, entities) : 'unknown'}
+                        </Badge>
+                      </span>
+                      <span className="tabular-nums text-right sm:shrink-0">
+                        {formatSats(input.amountSats)} sats
+                      </span>
+                    </div>
+                  )
+                })}
               </div>
             )}
           </CardContent>
@@ -216,8 +256,14 @@ function LabTxViewerPage() {
               <div className="space-y-2">
                 {tx.outputs.map((output, index) => (
                   <div
+                    id={`lab-tx-vout-${index}`}
+                    data-testid={`lab-tx-vout-${index}`}
                     key={`${output.address}-${index}`}
-                    className="flex gap-4 items-center py-2 border-b border-border last:border-0"
+                    className={cn(
+                      'flex gap-4 items-center py-2 border-b border-border last:border-0 rounded-md -mx-1 px-1 transition-colors',
+                      highlightVout === index &&
+                        'ring-2 ring-primary/60 ring-offset-2 ring-offset-background bg-muted/40',
+                    )}
                   >
                     <span className="font-mono text-sm break-all flex-1 min-w-0">
                       {truncateAddress(output.address)}

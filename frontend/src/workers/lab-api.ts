@@ -23,10 +23,30 @@ export interface LabTxInputDetail {
   address: string
   amountSats: number
   owner?: LabOwner | null
-  /** Populated for coinbase inputs (Bitcoin prevout conventions). */
+  /**
+   * Previous output reference: real outpoint for non-coinbase spends; synthetic values for coinbase
+   * (Bitcoin prevout conventions — see LAB_COINBASE_*).
+   */
   prevTxid?: string
   prevVout?: number
   sequence?: number
+}
+
+/** Legacy mempool snapshots may omit prevout on `inputsDetail`; fill from parallel `inputs` when needed. */
+export function mergeMempoolInputsDetailWithOutpoints(
+  inputs: { txid: string; vout: number }[],
+  inputsDetail: LabTxInputDetail[],
+): LabTxInputDetail[] {
+  return inputsDetail.map((d, i) => {
+    const out = inputs[i]
+    if (
+      out != null &&
+      (d.prevTxid == null || d.prevVout === undefined || d.prevVout === null)
+    ) {
+      return { ...d, prevTxid: out.txid, prevVout: out.vout }
+    }
+    return d
+  })
 }
 
 export interface LabTxRecord {
@@ -48,7 +68,7 @@ export interface MempoolEntry {
   /** Virtual size in vBytes (ceil(weight/4)); used for fee rate (sat/vB) only. */
   vsize: number
   inputs: { txid: string; vout: number }[]
-  inputsDetail: { address: string; amountSats: number; owner?: LabOwner | null }[]
+  inputsDetail: LabTxInputDetail[]
   outputsDetail: {
     address: string
     amountSats: number
@@ -374,7 +394,7 @@ export interface LabMempoolMetadata {
   receiver: LabOwner | null
   feeSats: number
   inputs: { txid: string; vout: number }[]
-  inputsDetail: { address: string; amountSats: number; owner?: LabOwner | null }[]
+  inputsDetail: LabTxInputDetail[]
   outputsDetail: {
     address: string
     amountSats: number

@@ -86,6 +86,8 @@ function buildPrepared() {
           address: 'bcrt1from',
           amountSats: 10_000,
           owner: 'Alice',
+          prevTxid: 'aa',
+          prevVout: 0,
         },
       ],
       outputsDetail: [{ address: 'bcrt1to', amountSats: 5000, owner: 'Bob' }],
