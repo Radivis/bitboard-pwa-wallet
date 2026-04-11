@@ -17,6 +17,7 @@ import {
 import { findLabEntityById, nextLabEntityId } from '@/lib/lab-entity-keys'
 import {
   labEntityLabOwner,
+  labEntityMustBeAliveToSend,
   labOwnersEqual,
   validateLabEntityRenameName,
   walletLabOwner,
@@ -217,6 +218,7 @@ const labService = {
     if (!entity) {
       throw new Error(`Unknown lab entity id ${labEntityId}`)
     }
+    labEntityMustBeAliveToSend(entity)
 
     const fromUtxos = state.utxos.filter((u) => u.address === fromAddress)
     if (fromUtxos.length === 0) {
@@ -541,6 +543,8 @@ const labService = {
     const now = new Date().toISOString()
 
     if (entityNameOpt != null && entityNameOpt !== '') {
+      const nameCheck = validateLabEntityRenameName(entityNameOpt, state.entities, -1)
+      if (!nameCheck.ok) throw new Error(nameCheck.error)
       let entity = state.entities.find((e) => e.entityName === entityNameOpt)
       if (!entity) {
         createAndRegisterLabEntityFromWasm(wasmModule, {

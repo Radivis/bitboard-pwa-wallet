@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
+  LAB_ENTITY_NAME_MAX_LENGTH,
+  labEntityMustBeAliveToSend,
   labOwnersEqual,
   validateLabEntityRenameName,
   walletLabOwner,
@@ -54,6 +56,29 @@ describe('validateLabEntityRenameName', () => {
   it('accepts valid unique name', () => {
     const r = validateLabEntityRenameName('Carol', entities, 3)
     expect(r.ok).toBe(true)
+  })
+
+  it('rejects name longer than LAB_ENTITY_NAME_MAX_LENGTH', () => {
+    const long = 'x'.repeat(LAB_ENTITY_NAME_MAX_LENGTH + 1)
+    const r = validateLabEntityRenameName(long, entities, 3)
+    expect(r.ok).toBe(false)
+    if (!r.ok) expect(r.error).toMatch(/128/)
+  })
+
+  it('accepts name of exactly LAB_ENTITY_NAME_MAX_LENGTH', () => {
+    const exact = 'y'.repeat(LAB_ENTITY_NAME_MAX_LENGTH)
+    const r = validateLabEntityRenameName(exact, entities, 3)
+    expect(r.ok).toBe(true)
+  })
+})
+
+describe('labEntityMustBeAliveToSend', () => {
+  it('throws when entity is dead', () => {
+    expect(() => labEntityMustBeAliveToSend({ isDead: true })).toThrow(/dead/i)
+  })
+
+  it('does not throw when entity is alive', () => {
+    expect(() => labEntityMustBeAliveToSend({ isDead: false })).not.toThrow()
   })
 })
 

@@ -116,6 +116,18 @@ export function labEntityRecordForLabOwner<
   return entities.find((e) => e.labEntityId === owner.labEntityId)
 }
 
+/** Maximum length for a lab entity display name (create / rename). */
+export const LAB_ENTITY_NAME_MAX_LENGTH = 128
+
+/**
+ * Ensures the lab worker does not build spends from a dead entity (defense in depth vs UI).
+ */
+export function labEntityMustBeAliveToSend(entity: { isDead: boolean }): void {
+  if (entity.isDead) {
+    throw new Error('Dead lab entities cannot send transactions.')
+  }
+}
+
 export function labOwnerDisplayName(
   owner: LabOwner,
   wallets: { wallet_id: number; name: string }[],
@@ -135,6 +147,12 @@ export function validateLabEntityRenameName(
   excludeLabEntityId: number,
 ): { ok: true } | { ok: false; error: string } {
   if (trimmed.length === 0) return { ok: false, error: 'Name must not be empty' }
+  if (trimmed.length > LAB_ENTITY_NAME_MAX_LENGTH) {
+    return {
+      ok: false,
+      error: `Name must be at most ${LAB_ENTITY_NAME_MAX_LENGTH} characters`,
+    }
+  }
   if (trimmed.startsWith('Anonymous-')) {
     return { ok: false, error: 'Name must not start with "Anonymous-"' }
   }

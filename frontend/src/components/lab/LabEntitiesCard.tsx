@@ -16,7 +16,10 @@ import { CardPagination } from '@/components/CardPagination'
 import { LabAddressTypeBadge } from '@/components/lab/LabAddressTypeBadge'
 import { ConfirmationDialog } from '@/components/ConfirmationDialog'
 import { formatSats } from '@/lib/bitcoin-utils'
-import { validateLabEntityRenameName } from '@/lib/lab-owner'
+import {
+  LAB_ENTITY_NAME_MAX_LENGTH,
+  validateLabEntityRenameName,
+} from '@/lib/lab-owner'
 import { LAB_CARD_PAGE_SIZE } from '@/lib/lab-paginated-queries'
 import { selectCommittedAddressType, useWalletStore } from '@/stores/walletStore'
 import { useLabChainStateQuery } from '@/hooks/useLabChainStateQuery'
@@ -79,6 +82,13 @@ export function LabEntitiesCard() {
   const onCreate = () => {
     const trimmed = newEntityName.trim()
     const labAddressType = newEntityUseTaproot ? 'taproot' : 'segwit'
+    if (trimmed.length > 0) {
+      const v = validateLabEntityRenameName(trimmed, entitiesForValidation, -1)
+      if (!v.ok) {
+        toast.error(v.error)
+        return
+      }
+    }
     void createMutation.mutateAsync(
       trimmed.length > 0
         ? { ownerName: trimmed, labAddressType }
@@ -176,6 +186,7 @@ export function LabEntitiesCard() {
                     onChange={(e) => setNewEntityName(e.target.value)}
                     disabled={!labNetworkEnabled || busy}
                     className="max-w-md"
+                    maxLength={LAB_ENTITY_NAME_MAX_LENGTH}
                   />
                 </div>
                 <Button
@@ -244,6 +255,7 @@ export function LabEntitiesCard() {
                               disabled={busy}
                               className="max-w-xs"
                               aria-label="New name"
+                              maxLength={LAB_ENTITY_NAME_MAX_LENGTH}
                             />
                             <div className="flex gap-2">
                               <Button size="sm" type="button" onClick={saveRename} disabled={busy}>
