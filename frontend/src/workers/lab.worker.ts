@@ -8,6 +8,7 @@ import type {
   LabState,
   LabTxDetails,
 } from './lab-api'
+import { LAB_DEFAULT_BLOCK_SIZE_VBYTES } from './lab-api'
 import { findLabEntityById, nextLabEntityId } from '@/lib/lab-entity-keys'
 import {
   labEntityLabOwner,
@@ -45,9 +46,23 @@ import {
   state,
 } from './lab-worker-state'
 
+function wasmU64ToNumber(raw: unknown): number {
+  if (typeof raw === 'bigint') return Number(raw)
+  if (typeof raw === 'number' && Number.isFinite(raw)) return raw
+  return 0
+}
+
 const labService = {
   async loadState(newState: LabState): Promise<void> {
     const cloned = JSON.parse(JSON.stringify(newState)) as LabState
+    const wasmModule = await getWasm()
+    const blockSizeLimitVbytes =
+      cloned.blockSizeLimitVbytes ?? LAB_DEFAULT_BLOCK_SIZE_VBYTES
+    const mempool = (cloned.mempool ?? []).map((entry) => {
+      if (entry.vsize > 0) return entry
+      const v = wasmU64ToNumber(wasmModule.lab_tx_vbytes(entry.signedTxHex))
+      return { ...entry, vsize: v > 0 ? v : 1 }
+    })
     replaceLabWorkerState({
       blocks: cloned.blocks ?? [],
       utxos: cloned.utxos ?? [],
@@ -57,13 +72,22 @@ const labService = {
         isDead: e.isDead ?? false,
       })),
       addressToOwner: cloned.addressToOwner ?? {},
-      mempool: cloned.mempool ?? [],
+      mempool,
       transactions: cloned.transactions ?? [],
       txDetails: cloned.txDetails ?? [],
       mineOperations: cloned.mineOperations ?? [],
       txOperations: cloned.txOperations ?? [],
+      blockSizeLimitVbytes,
     })
     rebuildTxidToChangeAddressFromState()
+  },
+
+  async setBlockSizeLimitVbytes(blockSizeLimitVbytes: number): Promise<LabState> {
+    if (!Number.isFinite(blockSizeLimitVbytes) || blockSizeLimitVbytes < 1) {
+      throw new Error('blockSizeLimitVbytes must be a finite number >= 1')
+    }
+    state.blockSizeLimitVbytes = Math.floor(blockSizeLimitVbytes)
+    return JSON.parse(JSON.stringify(state)) as LabState
   },
 
   async getTransaction(txid: string): Promise<LabTxDetails | null> {
@@ -342,9 +366,11 @@ const labService = {
       : undefined
     const changeVout = mempoolMetadata.outputsDetail.findIndex((o) => o.isChange)
 
+    const vsize = wasmU64ToNumber(wasmModule.lab_tx_vbytes(signedTxHex))
     appendLabTxOperationAndMempoolEntry({
       signedTxHex,
       txid,
+      vsize: vsize > 0 ? vsize : 1,
       mempoolMetadata,
       sender: labEntityLabOwner(entity.labEntityId),
       changeAddress: changeOut?.address ?? null,
@@ -444,9 +470,11 @@ const labService = {
       throw new Error(`addSignedTransactionToMempool: missing sender for txid=${txid}`)
     }
 
+    const vsize = wasmU64ToNumber(wasmModule.lab_tx_vbytes(signedTxHex))
     appendLabTxOperationAndMempoolEntry({
       signedTxHex,
       txid,
+      vsize: vsize > 0 ? vsize : 1,
       mempoolMetadata,
       sender,
       changeAddress: mempoolMetadata.hasChange ? mempoolMetadata.walletChangeAddress : null,

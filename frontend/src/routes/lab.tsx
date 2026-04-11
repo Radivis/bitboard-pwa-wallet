@@ -52,6 +52,7 @@ function LabLayout() {
         txDetails: ui.txDetails,
         mineOperations: ui.mineOperations,
         txOperations: ui.txOperations,
+        blockSizeLimitVbytes: ui.blockSizeLimitVbytes,
       }
     }
     return () => {

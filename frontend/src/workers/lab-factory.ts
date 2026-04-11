@@ -7,7 +7,7 @@ import type {
   LabTxDetails,
   LabTxOperationRecord,
 } from './lab-api'
-import { EMPTY_LAB_STATE } from './lab-api'
+import { EMPTY_LAB_STATE, LAB_DEFAULT_BLOCK_SIZE_VBYTES } from './lab-api'
 import {
   ensureLabMigrated,
   getLabDatabase,
@@ -68,6 +68,13 @@ export function getLabWorker(): Remote<LabService> {
 export async function loadLabStateFromDatabase(): Promise<LabState> {
   await ensureLabMigrated()
   const labDb = getLabDatabase()
+
+  const presetRow = await labDb
+    .selectFrom('lab_parameter_presets')
+    .select('block_size')
+    .orderBy('id', 'asc')
+    .executeTakeFirst()
+  const blockSizeLimitVbytes = presetRow?.block_size ?? LAB_DEFAULT_BLOCK_SIZE_VBYTES
 
   const blocks = await labDb
     .selectFrom('blocks')
@@ -139,6 +146,10 @@ export async function loadLabStateFromDatabase(): Promise<LabState> {
       entities,
     ),
     feeSats: r.fee_sats,
+    vsize:
+      typeof r.vsize === 'number' && Number.isFinite(r.vsize) && r.vsize > 0
+        ? r.vsize
+        : 0,
     inputs: JSON.parse(r.inputs_json) as { txid: string; vout: number }[],
     inputsDetail: normalizeMempoolIoOwners(
       JSON.parse(r.inputs_detail_json) as { address: string; amountSats: number; owner?: unknown }[],
@@ -221,6 +232,7 @@ export async function loadLabStateFromDatabase(): Promise<LabState> {
   })
 
   return {
+    blockSizeLimitVbytes,
     blocks: blocks.map((b) => ({
       blockHash: b.block_hash,
       height: b.height,
@@ -287,6 +299,7 @@ async function clearAndInsertLabState(
   await trx.deleteFrom('lab_tx_details').execute()
   await trx.deleteFrom('lab_mine_operations').execute()
   await trx.deleteFrom('lab_tx_operations').execute()
+  await trx.deleteFrom('lab_parameter_presets').execute()
 
   const now = new Date().toISOString()
   const blockRows = state.blocks.map((b) => ({
@@ -397,6 +410,7 @@ async function clearAndInsertLabState(
       receiver_lab_entity_id: r.labEntityId,
       receiver_wallet_id: r.walletId,
       fee_sats: m.feeSats,
+      vsize: m.vsize,
       inputs_json: JSON.stringify(m.inputs),
       inputs_detail_json: JSON.stringify(m.inputsDetail),
       outputs_detail_json: JSON.stringify(m.outputsDetail),
@@ -405,6 +419,13 @@ async function clearAndInsertLabState(
   for (const chunk of chunkArray(mempoolRows, LAB_PERSIST_INSERT_BATCH_SIZE)) {
     await trx.insertInto('lab_mempool').values(chunk).execute()
   }
+
+  await trx
+    .insertInto('lab_parameter_presets')
+    .values({
+      block_size: state.blockSizeLimitVbytes ?? LAB_DEFAULT_BLOCK_SIZE_VBYTES,
+    })
+    .execute()
 
   const txDetailRows = (state.txDetails ?? []).map((d) => ({
     txid: d.txid,

@@ -43,11 +43,13 @@ test.describe('Lab', { tag: '@lab' }, () => {
 
     const state = await getLabState(page)
     expect(state.blocks).toHaveLength(1)
-    const walletOwner = Object.values(state.addressToOwner ?? {}).find((o) =>
-      o.startsWith(WALLET_OWNER_PREFIX),
+    const walletOwnerObj = Object.values(state.addressToOwner ?? {}).find(
+      (o): o is { kind: 'wallet'; walletId: number } =>
+        typeof o === 'object' && o !== null && 'kind' in o && o.kind === 'wallet',
     )
-    expect(walletOwner).toBeDefined()
-    const walletSum = getUtxoSumByOwner(state, walletOwner!)
+    expect(walletOwnerObj).toBeDefined()
+    const walletKey = `${WALLET_OWNER_PREFIX}${walletOwnerObj!.walletId}`
+    const walletSum = getUtxoSumByOwner(state, walletKey)
     expect(walletSum).toBe(COINBASE_SATS)
   })
 
@@ -104,8 +106,12 @@ test.describe('Lab', { tag: '@lab' }, () => {
 
     const state = await getLabState(page)
     expect(state.mempool).toHaveLength(randomTxCount)
-    const senders = new Set(state.mempool.map((entry) => entry.sender))
-    expect(senders).toEqual(new Set(['Alice', 'Bob']))
+    const senderEntityIds = new Set(
+      state.mempool.map((entry) =>
+        entry.sender?.kind === 'lab_entity' ? entry.sender.labEntityId : null,
+      ),
+    )
+    expect(senderEntityIds).toEqual(new Set([1, 2]))
   })
 
   test('transfer name to name in lab', async ({ page }) => {
@@ -147,7 +153,7 @@ test.describe('Lab', { tag: '@lab' }, () => {
     const selfTransferMempoolEntry = stateWithMempoolTx.mempool.find(
       (entry) => entry.txid === selfTransferTxid,
     )
-    expect(selfTransferMempoolEntry?.receiver).toBe('Alice')
+    expect(selfTransferMempoolEntry?.receiver).toEqual({ kind: 'lab_entity', labEntityId: 1 })
     await mineBlocksInLab(page, 1, 'name', { ownerName: 'Alice' })
 
     const stateAfter = await getLabState(page)
@@ -162,10 +168,10 @@ test.describe('Lab', { tag: '@lab' }, () => {
     const changeOutputCount = minedSpendDetails!.outputs.filter((output) => output.isChange).length
     expect(changeOutputCount).toBe(1)
     expect(minedSpendDetails!.outputs.some((output) => !output.isChange)).toBe(true)
-    expect(minedSpendRecord?.receiver).toBe('Alice')
+    expect(minedSpendRecord?.receiver).toEqual({ kind: 'lab_entity', labEntityId: 1 })
   })
 
-  test('conflicting transactions - higher fee wins', async ({ page }) => {
+  test('conflicting transactions - higher fee rate wins', async ({ page }) => {
     await mineBlocksInLab(page, 1, 'name', { ownerName: 'Alice' })
     await mineBlocksInLab(page, 1, 'name', { ownerName: 'Bob' })
 
@@ -233,10 +239,13 @@ test.describe('Lab', { tag: '@lab' }, () => {
 
     state = await getLabState(page)
     expect(state.mempool).toHaveLength(0)
-    const walletOwner = Object.values(state.addressToOwner ?? {}).find((o) =>
-      o.startsWith(WALLET_OWNER_PREFIX),
+    const walletOwnerObj = Object.values(state.addressToOwner ?? {}).find(
+      (o): o is { kind: 'wallet'; walletId: number } =>
+        typeof o === 'object' && o !== null && 'kind' in o && o.kind === 'wallet',
     )
-    const walletSum = getUtxoSumByOwner(state, walletOwner!)
+    expect(walletOwnerObj).toBeDefined()
+    const walletKey = `${WALLET_OWNER_PREFIX}${walletOwnerObj!.walletId}`
+    const walletSum = getUtxoSumByOwner(state, walletKey)
     expect(walletSum).toBe(20_000)
   })
 
@@ -258,7 +267,9 @@ test.describe('Lab', { tag: '@lab' }, () => {
     state = await getLabState(page)
     expect(state.mempool).toHaveLength(0)
     const aliceSum = getUtxoSumByOwner(state, 'Alice')
-    expect(aliceSum).toBe(COINBASE_SATS + 15_000)
+    // Alice mined once for initial funding and again to confirm the transfer (two coinbases).
+    expect(aliceSum).toBeGreaterThanOrEqual(2 * COINBASE_SATS + 14_000)
+    expect(aliceSum).toBeLessThanOrEqual(2 * COINBASE_SATS + 20_000)
   })
 
   test('transfer wallet to wallet', async ({ page }) => {

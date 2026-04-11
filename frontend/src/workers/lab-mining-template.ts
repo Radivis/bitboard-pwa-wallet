@@ -2,12 +2,13 @@ import { nextLabEntityId } from '@/lib/lab-entity-keys'
 import { feeSatsFromTxDetails } from '@/lib/lab-tx-fee'
 import { type LabOwner, labEntityLabOwner, walletLabOwner } from '@/lib/lab-owner'
 import { isCoinbase } from '@/lib/lab-operations'
-import type {
-  LabBlock,
-  LabBlockDetails,
-  LabBlockTransactionSummary,
-  LabCurrentBlockTemplateParams,
-  LabTxDetails,
+import {
+  LAB_DEFAULT_BLOCK_SIZE_VBYTES,
+  type LabBlock,
+  type LabBlockDetails,
+  type LabBlockTransactionSummary,
+  type LabCurrentBlockTemplateParams,
+  type LabTxDetails,
 } from './lab-api'
 import { parseBlockEffects } from './lab-block-effects'
 import { parseBlockHeader } from './lab-block-header'
@@ -22,21 +23,46 @@ export function randomIntInclusive(min: number, max: number): number {
   return Math.floor(Math.random() * (max - min + 1)) + min
 }
 
+function feeSatPerVbyte(entry: import('./lab-api').MempoolEntry): number {
+  if (entry.vsize <= 0) return 0
+  return entry.feeSats / entry.vsize
+}
+
+/**
+ * Greedy block template: repeatedly take the best fee/vByte among remaining txs that fits
+ * in the remaining vByte budget and does not conflict with already selected inputs.
+ */
 export function selectMempoolTxsForBlock(
   mempool: import('./lab-api').MempoolEntry[],
+  blockSizeLimitVbytes: number,
 ): import('./lab-api').MempoolEntry[] {
+  const limit = Number.isFinite(blockSizeLimitVbytes) ? blockSizeLimitVbytes : LAB_DEFAULT_BLOCK_SIZE_VBYTES
   const sortedEntries = [...mempool].sort((a, b) => {
-    if (b.feeSats !== a.feeSats) return b.feeSats - a.feeSats
+    const fa = feeSatPerVbyte(a)
+    const fb = feeSatPerVbyte(b)
+    if (fb !== fa) return fb - fa
     return a.txid.localeCompare(b.txid)
   })
   const spentBySelected = new Set<string>()
   const selectedEntries: import('./lab-api').MempoolEntry[] = []
-  for (const entry of sortedEntries) {
-    const overlaps = entry.inputs.some((input) => spentBySelected.has(`${input.txid}:${input.vout}`))
-    if (!overlaps) {
+  let remainingVbytes = Math.max(0, limit)
+
+  while (true) {
+    let added = false
+    for (const entry of sortedEntries) {
+      if (selectedEntries.some((s) => s.txid === entry.txid)) continue
+      if (entry.vsize > remainingVbytes) continue
+      const overlaps = entry.inputs.some((input) =>
+        spentBySelected.has(`${input.txid}:${input.vout}`),
+      )
+      if (overlaps) continue
       selectedEntries.push(entry)
       for (const input of entry.inputs) spentBySelected.add(`${input.txid}:${input.vout}`)
+      remainingVbytes -= entry.vsize
+      added = true
+      break
     }
+    if (!added) break
   }
   return selectedEntries
 }
@@ -204,7 +230,8 @@ export async function buildCurrentBlockTemplate(
   const previewHeight = tip ? tip.height + 1 : 0
   const previousHash = tip?.blockHash ?? ''
 
-  const selectedEntries = selectMempoolTxsForBlock([...(state.mempool ?? [])])
+  const blockLimit = state.blockSizeLimitVbytes ?? LAB_DEFAULT_BLOCK_SIZE_VBYTES
+  const selectedEntries = selectMempoolTxsForBlock([...(state.mempool ?? [])], blockLimit)
   const mempoolTxHexes = selectedEntries.map((entry) => entry.signedTxHex)
   const totalFeesSats = selectedEntries.reduce((sum, entry) => sum + entry.feeSats, 0)
 

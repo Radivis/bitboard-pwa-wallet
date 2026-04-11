@@ -6,6 +6,7 @@
  * (`lab_mempool`, `lab_transactions`, `lab_tx_details`), and (4) explicit
  * operation metadata layered on WASM effects (`lab_mine_operations`,
  * `lab_tx_operations`) so UI attribution does not depend only on string inference.
+ * Simulation parameters live in `lab_parameter_presets` (e.g. block vByte limit).
  */
 import type { Generated, Insertable, Selectable, Updateable } from 'kysely'
 
@@ -53,9 +54,18 @@ interface LabMempoolTable {
   receiver_lab_entity_id: number | null
   receiver_wallet_id: number | null
   fee_sats: number
+  /** Virtual size in vBytes; nullable for DBs created before this column existed. */
+  vsize: number | null
   inputs_json: string
   inputs_detail_json: string
   outputs_detail_json: string
+}
+
+/** Lab simulation parameters (extensible; future: named presets). */
+interface LabParameterPresetsTable {
+  id: Generated<number>
+  /** Max non-coinbase transaction vBytes per block. */
+  block_size: number
 }
 
 /** Flat list of confirmed transactions for chain-wide summaries and tests. */
@@ -122,6 +132,7 @@ export interface LabDatabase {
   lab_tx_details: LabTxDetailsTable
   lab_mine_operations: LabMineOperationsTable
   lab_tx_operations: LabTxOperationsTable
+  lab_parameter_presets: LabParameterPresetsTable
 }
 
 export type LabEntityRow = Selectable<LabEntitiesTable>

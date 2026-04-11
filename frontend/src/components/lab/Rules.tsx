@@ -1,3 +1,5 @@
+import { useEffect, useState } from 'react'
+import { Button } from '@/components/ui/button'
 import {
   Card,
   CardContent,
@@ -5,9 +7,28 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
-import { LAB_MAX_BLOCKS_PER_MINE } from '@/workers/lab-api'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { useLabChainStateQuery } from '@/hooks/useLabChainStateQuery'
+import { useLabSetBlockSizeLimitMutation } from '@/hooks/useLabMutations'
+import {
+  LAB_DEFAULT_BLOCK_SIZE_VBYTES,
+  LAB_MAX_BLOCKS_PER_MINE,
+} from '@/workers/lab-api'
 
 export function LabRulesCard() {
+  const { data: labState } = useLabChainStateQuery()
+  const setLimit = useLabSetBlockSizeLimitMutation()
+  const [draftLimitVbytes, setDraftLimitVbytes] = useState(
+    String(LAB_DEFAULT_BLOCK_SIZE_VBYTES),
+  )
+
+  useEffect(() => {
+    if (labState != null) {
+      setDraftLimitVbytes(String(labState.blockSizeLimitVbytes))
+    }
+  }, [labState])
+
   return (
     <Card>
       <CardHeader>
@@ -16,7 +37,7 @@ export function LabRulesCard() {
           How the lab simulation works and how it differs from Bitcoin mainnet
         </CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="space-y-6">
         <ul className="space-y-3 text-sm">
           <li>
             <strong>No Proof of Work.</strong> In the lab, new blocks are created by clicking
@@ -36,6 +57,12 @@ export function LabRulesCard() {
             them.
           </li>
           <li>
+            <strong>Block vByte limit.</strong> Each block has a maximum total size for
+            non-coinbase transactions, measured in vBytes (virtual bytes), similar in spirit to
+            mainnet block weight limits. Changing the limit below only affects{' '}
+            <em>future</em> blocks; past blocks are unchanged.
+          </li>
+          <li>
             <strong>Transaction fees go to the miner.</strong> When a block is mined, all
             fees from the included transactions are added to the coinbase output, just like
             on mainnet.
@@ -43,8 +70,9 @@ export function LabRulesCard() {
           <li>
             <strong>One spend per UTXO.</strong> Each UTXO can only be spent once in a
             block. If two mempool transactions try to spend the same UTXO (double-spend),
-            only the one with the higher fee is included. Ties are decided randomly. The
-            losing transaction is discarded from the mempool entirely.
+            the miner prefers the one with the higher fee rate (fee per vByte). Equal fee
+            rates are ordered deterministically by transaction id. The losing transaction is
+            discarded from the mempool entirely.
           </li>
           <li>
             <strong>Balances reflect confirmed UTXOs only.</strong> Unconfirmed (mempool)
@@ -52,6 +80,31 @@ export function LabRulesCard() {
             conflicting transactions to observe this.
           </li>
         </ul>
+
+        <form
+          className="flex flex-wrap items-end gap-3 rounded-lg border border-border/80 bg-muted/30 p-4"
+          onSubmit={(e) => {
+            e.preventDefault()
+            const parsed = Number.parseInt(draftLimitVbytes.trim(), 10)
+            if (!Number.isFinite(parsed) || parsed < 1) return
+            setLimit.mutate(parsed)
+          }}
+        >
+          <div className="flex min-w-[12rem] flex-col gap-2">
+            <Label htmlFor="lab-block-size-vbytes">Max non-coinbase vBytes per block</Label>
+            <Input
+              id="lab-block-size-vbytes"
+              inputMode="numeric"
+              min={1}
+              type="number"
+              value={draftLimitVbytes}
+              onChange={(ev) => setDraftLimitVbytes(ev.target.value)}
+            />
+          </div>
+          <Button disabled={setLimit.isPending} type="submit" variant="secondary">
+            Apply limit
+          </Button>
+        </form>
       </CardContent>
     </Card>
   )

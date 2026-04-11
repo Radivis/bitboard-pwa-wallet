@@ -1,5 +1,6 @@
 import { Kysely, sql } from 'kysely'
 import { WaSqliteWorkerDialect } from 'kysely-wasqlite-worker'
+import { LAB_DEFAULT_BLOCK_SIZE_VBYTES } from '@/workers/lab-api'
 import type { LabDatabase } from './lab-schema'
 
 const LAB_DATABASE_FILE_NAME = 'bitboard-lab'
@@ -90,6 +91,7 @@ async function migrateLabToLatest(labDb: Kysely<LabDatabase>): Promise<void> {
     .addColumn('receiver_lab_entity_id', 'integer', (col) => col)
     .addColumn('receiver_wallet_id', 'integer', (col) => col)
     .addColumn('fee_sats', 'integer', (col) => col.notNull())
+    .addColumn('vsize', 'integer', (col) => col)
     .addColumn('inputs_json', 'text', (col) => col.notNull())
     .addColumn('inputs_detail_json', 'text', (col) => col.notNull())
     .addColumn('outputs_detail_json', 'text', (col) => col.notNull())
@@ -156,6 +158,24 @@ async function migrateLabToLatest(labDb: Kysely<LabDatabase>): Promise<void> {
     .addColumn('payload_json', 'text', (col) => col.notNull())
     .execute()
 
+  await labDb.schema
+    .createTable('lab_parameter_presets')
+    .ifNotExists()
+    .addColumn('id', 'integer', (col) => col.primaryKey().autoIncrement())
+    .addColumn('block_size', 'integer', (col) => col.notNull())
+    .execute()
+
+  const existingPreset = await labDb
+    .selectFrom('lab_parameter_presets')
+    .select('id')
+    .executeTakeFirst()
+  if (!existingPreset) {
+    await labDb
+      .insertInto('lab_parameter_presets')
+      .values({ block_size: LAB_DEFAULT_BLOCK_SIZE_VBYTES })
+      .execute()
+  }
+
   await patchLabSchemaForExistingFiles(labDb)
 }
 
@@ -176,6 +196,7 @@ async function patchLabSchemaForExistingFiles(labDb: Kysely<LabDatabase>): Promi
     ['lab_mine_operations', 'mined_by_wallet_id INTEGER'],
     ['lab_tx_operations', 'sender_lab_entity_id INTEGER'],
     ['lab_tx_operations', 'sender_wallet_id INTEGER'],
+    ['lab_mempool', 'vsize INTEGER'],
   ]
   for (const [table, colDef] of patches) {
     try {

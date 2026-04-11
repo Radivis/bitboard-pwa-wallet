@@ -105,6 +105,7 @@ function snapshotFromMempool(): LabState {
       sender: 'Alice',
       receiver: 'Bob',
       feeSats: 1,
+      vsize: 100,
       inputs: [],
       inputsDetail: [],
       outputsDetail: [],

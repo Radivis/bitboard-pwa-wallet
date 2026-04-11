@@ -553,6 +553,13 @@ pub fn lab_txid(tx_hex: &str) -> Result<String, JsValue> {
     Ok(tx.compute_txid().to_string())
 }
 
+/// Returns virtual size in vBytes (`ceil(weight / 4)`) for a serialized transaction.
+#[wasm_bindgen]
+pub fn lab_tx_vbytes(tx_hex: &str) -> Result<u64, JsValue> {
+    let tx: Transaction = deserialize_hex(tx_hex).map_err_to_js()?;
+    Ok(tx.weight().to_wu().div_ceil(4))
+}
+
 /// Returns the block hash (hex) for a serialized block.
 #[wasm_bindgen]
 pub fn lab_block_hash(block_hex: &str) -> Result<String, JsValue> {
@@ -712,5 +719,34 @@ fn unix_time_lab() -> u32 {
             .duration_since(std::time::UNIX_EPOCH)
             .expect("system time is before UNIX_EPOCH")
             .as_secs() as u32
+    }
+}
+
+#[cfg(test)]
+mod lab_tx_vbytes_tests {
+    use super::*;
+    use bitcoin::blockdata::witness::Witness;
+    use bitcoin::consensus::encode::serialize_hex;
+    use bitcoin::{Amount, OutPoint, ScriptBuf, Sequence, TxIn, TxOut};
+
+    #[test]
+    fn lab_tx_vbytes_matches_weight_div_ceil_four() {
+        let tx = Transaction {
+            version: transaction::Version::TWO,
+            lock_time: absolute::LockTime::ZERO,
+            input: vec![TxIn {
+                previous_output: OutPoint::null(),
+                script_sig: ScriptBuf::new(),
+                sequence: Sequence::MAX,
+                witness: Witness::default(),
+            }],
+            output: vec![TxOut {
+                value: Amount::from_sat(1000),
+                script_pubkey: ScriptBuf::new(),
+            }],
+        };
+        let hex = serialize_hex(&tx);
+        let expected = tx.weight().to_wu().div_ceil(4);
+        assert_eq!(lab_tx_vbytes(&hex).unwrap(), expected);
     }
 }

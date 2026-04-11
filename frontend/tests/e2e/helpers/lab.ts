@@ -73,7 +73,7 @@ export async function createLabEntityViaControl(page: Page, ownerName?: string):
     await nameInput.fill(ownerName)
   }
   await page.getByRole('button', { name: 'Create lab entity' }).click()
-  await expect(page.getByText('Lab entity created')).toBeVisible({ timeout: 15000 })
+  await expect(page.getByText('Lab entity created').first()).toBeVisible({ timeout: 15000 })
   await page.getByRole('navigation', { name: 'Lab' }).getByRole('link', { name: 'Blocks' }).click()
   await expect(page.getByRole('heading', { name: 'Blocks' })).toBeVisible({ timeout: 15000 })
 }
