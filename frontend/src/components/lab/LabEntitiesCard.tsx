@@ -18,7 +18,7 @@ import { ConfirmationDialog } from '@/components/ConfirmationDialog'
 import { formatSats } from '@/lib/bitcoin-utils'
 import { validateLabEntityRenameName } from '@/lib/lab-owner'
 import { LAB_CARD_PAGE_SIZE } from '@/lib/lab-paginated-queries'
-import { useWalletStore } from '@/stores/walletStore'
+import { selectCommittedAddressType, useWalletStore } from '@/stores/walletStore'
 import { useLabChainStateQuery } from '@/hooks/useLabChainStateQuery'
 import { useLabEntitiesPage } from '@/hooks/useLabPaginatedQueries'
 import {
@@ -32,13 +32,20 @@ import { Skull, FlaskConical } from 'lucide-react'
 
 export function LabEntitiesCard() {
   const labNetworkEnabled = useWalletStore((s) => s.networkMode === 'lab')
+  const committedAddressType = useWalletStore(selectCommittedAddressType)
   const [pageIndex, setPageIndex] = useState(0)
   const [newEntityName, setNewEntityName] = useState('')
   const [renamingId, setRenamingId] = useState<number | null>(null)
   const [renameDraft, setRenameDraft] = useState('')
   const [deleteId, setDeleteId] = useState<number | null>(null)
-  /** When false (default), new entities use SegWit (BIP84); when true, Taproot (BIP86). */
-  const [newEntityUseTaproot, setNewEntityUseTaproot] = useState(false)
+  /** Taproot vs SegWit for the next create — defaults to Settings / committed wallet address type. */
+  const [newEntityUseTaproot, setNewEntityUseTaproot] = useState(
+    () => selectCommittedAddressType(useWalletStore.getState()) === 'taproot',
+  )
+
+  useEffect(() => {
+    setNewEntityUseTaproot(committedAddressType === 'taproot')
+  }, [committedAddressType])
 
   const { data: labState } = useLabChainStateQuery()
   const entitiesForValidation =
@@ -79,7 +86,9 @@ export function LabEntitiesCard() {
       {
         onSuccess: () => {
           setNewEntityName('')
-          setNewEntityUseTaproot(false)
+          setNewEntityUseTaproot(
+            selectCommittedAddressType(useWalletStore.getState()) === 'taproot',
+          )
           void refetch()
         },
       },
@@ -178,9 +187,8 @@ export function LabEntitiesCard() {
                       Address type
                     </Label>
                     <p className="text-xs text-muted-foreground">
-                      {newEntityUseTaproot
-                        ? 'Taproot (BIP86)'
-                        : 'SegWit (BIP84) — default'}
+                      {newEntityUseTaproot ? 'Taproot (BIP86)' : 'SegWit (BIP84)'} — matches Settings until
+                      you change this switch.
                     </p>
                   </div>
                   <Switch
