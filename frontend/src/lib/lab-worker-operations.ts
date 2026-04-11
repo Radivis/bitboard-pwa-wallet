@@ -371,14 +371,14 @@ export async function labOpSetLabEntityDead(labEntityId: number, dead: boolean):
   })
 }
 
-export async function labOpSetBlockSizeLimitVbytes(blockSizeLimitVbytes: number): Promise<LabState> {
+export async function labOpSetBlockWeightLimit(blockWeightLimit: number): Promise<LabState> {
   return runLabOp(async () => {
-    labPipelineDebugLog('setBlockSizeLimitVbytes:start', { blockSizeLimitVbytes })
+    labPipelineDebugLog('setBlockWeightLimit:start', { blockWeightLimit })
     await initLabWorkerWithState()
     const labWorker = getLabWorker()
-    const state = await labWorker.setBlockSizeLimitVbytes(blockSizeLimitVbytes)
+    const state = await labWorker.setBlockWeightLimit(blockWeightLimit)
     await persistLabState(state)
-    labPipelineSnapshot('setBlockSizeLimitVbytes:end', state)
+    labPipelineSnapshot('setBlockWeightLimit:end', state)
     return state
   })
 }

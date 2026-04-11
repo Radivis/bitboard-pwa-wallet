@@ -56,6 +56,8 @@ interface LabMempoolTable {
   fee_sats: number
   /** Virtual size in vBytes; nullable for DBs created before this column existed. */
   vsize: number | null
+  /** BIP141 weight units; nullable for DBs created before this column existed. */
+  weight: number | null
   inputs_json: string
   inputs_detail_json: string
   outputs_detail_json: string
@@ -64,7 +66,7 @@ interface LabMempoolTable {
 /** Lab simulation parameters (extensible; future: named presets). */
 interface LabParameterPresetsTable {
   id: Generated<number>
-  /** Max non-coinbase transaction vBytes per block. */
+  /** Max non-coinbase transaction weight units (WU) per block (`block_size` name is historical). */
   block_size: number
 }
 

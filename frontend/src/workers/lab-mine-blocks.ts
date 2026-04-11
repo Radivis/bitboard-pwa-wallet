@@ -4,7 +4,7 @@ import { labEntityLabOwner, walletLabOwner } from '@/lib/lab-owner'
 import type { LabOwner } from '@/lib/lab-owner'
 import type { LabAddress, LabMineBlocksResult, LabState } from './lab-api'
 import {
-  LAB_DEFAULT_BLOCK_SIZE_VBYTES,
+  LAB_DEFAULT_BLOCK_WEIGHT_UNITS,
   LAB_MAX_BLOCKS_PER_MINE,
   LAB_MIN_BLOCKS_PER_MINE,
 } from './lab-api'
@@ -142,7 +142,7 @@ export async function executeMineBlocks(
       : ownerForCoinbase ?? null
 
   const mempoolCopy = [...(state.mempool ?? [])]
-  const blockLimit = state.blockSizeLimitVbytes ?? LAB_DEFAULT_BLOCK_SIZE_VBYTES
+  const blockLimit = state.blockWeightLimit ?? LAB_DEFAULT_BLOCK_WEIGHT_UNITS
   const selectedEntries = selectMempoolTxsForBlock(mempoolCopy, blockLimit)
   const mempoolTxHexes = selectedEntries.map((entry) => entry.signedTxHex)
   const totalFeesSats = selectedEntries.reduce((sum, entry) => sum + entry.feeSats, 0)

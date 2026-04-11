@@ -10,22 +10,22 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useLabChainStateQuery } from '@/hooks/useLabChainStateQuery'
-import { useLabSetBlockSizeLimitMutation } from '@/hooks/useLabMutations'
+import { useLabSetBlockWeightLimitMutation } from '@/hooks/useLabMutations'
 import {
-  LAB_DEFAULT_BLOCK_SIZE_VBYTES,
+  LAB_DEFAULT_BLOCK_WEIGHT_UNITS,
   LAB_MAX_BLOCKS_PER_MINE,
 } from '@/workers/lab-api'
 
 export function LabRulesCard() {
   const { data: labState } = useLabChainStateQuery()
-  const setLimit = useLabSetBlockSizeLimitMutation()
-  const [draftLimitVbytes, setDraftLimitVbytes] = useState(
-    String(LAB_DEFAULT_BLOCK_SIZE_VBYTES),
+  const setLimit = useLabSetBlockWeightLimitMutation()
+  const [draftLimitWu, setDraftLimitWu] = useState(
+    String(LAB_DEFAULT_BLOCK_WEIGHT_UNITS),
   )
 
   useEffect(() => {
     if (labState != null) {
-      setDraftLimitVbytes(String(labState.blockSizeLimitVbytes))
+      setDraftLimitWu(String(labState.blockWeightLimit))
     }
   }, [labState])
 
@@ -57,10 +57,11 @@ export function LabRulesCard() {
             them.
           </li>
           <li>
-            <strong>Block vByte limit.</strong> Each block has a maximum total size for
-            non-coinbase transactions, measured in vBytes (virtual bytes), similar in spirit to
-            mainnet block weight limits. Changing the limit below only affects{' '}
-            <em>future</em> blocks; past blocks are unchanged.
+            <strong>Block weight limit.</strong> Each block has a maximum total size for
+            non-coinbase transactions, measured in weight units (WU), like Bitcoin&apos;s block
+            weight. The default numeric limit is intentionally tiny compared to mainnet so you
+            can see congestion. Changing the limit below only affects <em>future</em> blocks;
+            past blocks are unchanged.
           </li>
           <li>
             <strong>Transaction fees go to the miner.</strong> When a block is mined, all
@@ -85,20 +86,20 @@ export function LabRulesCard() {
           className="flex flex-wrap items-end gap-3 rounded-lg border border-border/80 bg-muted/30 p-4"
           onSubmit={(e) => {
             e.preventDefault()
-            const parsed = Number.parseInt(draftLimitVbytes.trim(), 10)
+            const parsed = Number.parseInt(draftLimitWu.trim(), 10)
             if (!Number.isFinite(parsed) || parsed < 1) return
             setLimit.mutate(parsed)
           }}
         >
           <div className="flex min-w-[12rem] flex-col gap-2">
-            <Label htmlFor="lab-block-size-vbytes">Max non-coinbase vBytes per block</Label>
+            <Label htmlFor="lab-block-weight-units">Max non-coinbase weight units (WU) per block</Label>
             <Input
-              id="lab-block-size-vbytes"
+              id="lab-block-weight-units"
               inputMode="numeric"
               min={1}
               type="number"
-              value={draftLimitVbytes}
-              onChange={(ev) => setDraftLimitVbytes(ev.target.value)}
+              value={draftLimitWu}
+              onChange={(ev) => setDraftLimitWu(ev.target.value)}
             />
           </div>
           <Button disabled={setLimit.isPending} type="submit" variant="secondary">

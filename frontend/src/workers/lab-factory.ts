@@ -7,7 +7,7 @@ import type {
   LabTxDetails,
   LabTxOperationRecord,
 } from './lab-api'
-import { EMPTY_LAB_STATE, LAB_DEFAULT_BLOCK_SIZE_VBYTES } from './lab-api'
+import { EMPTY_LAB_STATE, LAB_DEFAULT_BLOCK_WEIGHT_UNITS } from './lab-api'
 import {
   ensureLabMigrated,
   getLabDatabase,
@@ -74,7 +74,7 @@ export async function loadLabStateFromDatabase(): Promise<LabState> {
     .select('block_size')
     .orderBy('id', 'asc')
     .executeTakeFirst()
-  const blockSizeLimitVbytes = presetRow?.block_size ?? LAB_DEFAULT_BLOCK_SIZE_VBYTES
+  const blockWeightLimit = presetRow?.block_size ?? LAB_DEFAULT_BLOCK_WEIGHT_UNITS
 
   const blocks = await labDb
     .selectFrom('blocks')
@@ -150,6 +150,8 @@ export async function loadLabStateFromDatabase(): Promise<LabState> {
       typeof r.vsize === 'number' && Number.isFinite(r.vsize) && r.vsize > 0
         ? r.vsize
         : 0,
+    weight:
+      r.weight != null && Number.isFinite(r.weight) && r.weight > 0 ? r.weight : 0,
     inputs: JSON.parse(r.inputs_json) as { txid: string; vout: number }[],
     inputsDetail: normalizeMempoolIoOwners(
       JSON.parse(r.inputs_detail_json) as { address: string; amountSats: number; owner?: unknown }[],
@@ -232,7 +234,7 @@ export async function loadLabStateFromDatabase(): Promise<LabState> {
   })
 
   return {
-    blockSizeLimitVbytes,
+    blockWeightLimit,
     blocks: blocks.map((b) => ({
       blockHash: b.block_hash,
       height: b.height,
@@ -411,6 +413,7 @@ async function clearAndInsertLabState(
       receiver_wallet_id: r.walletId,
       fee_sats: m.feeSats,
       vsize: m.vsize,
+      weight: m.weight,
       inputs_json: JSON.stringify(m.inputs),
       inputs_detail_json: JSON.stringify(m.inputsDetail),
       outputs_detail_json: JSON.stringify(m.outputsDetail),
@@ -423,7 +426,7 @@ async function clearAndInsertLabState(
   await trx
     .insertInto('lab_parameter_presets')
     .values({
-      block_size: state.blockSizeLimitVbytes ?? LAB_DEFAULT_BLOCK_SIZE_VBYTES,
+      block_size: state.blockWeightLimit ?? LAB_DEFAULT_BLOCK_WEIGHT_UNITS,
     })
     .execute()
 

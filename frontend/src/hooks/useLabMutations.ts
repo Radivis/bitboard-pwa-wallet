@@ -10,7 +10,7 @@ import {
   labOpRenameLabEntity,
   labOpReset,
   labOpSetLabEntityDead,
-  labOpSetBlockSizeLimitVbytes,
+  labOpSetBlockWeightLimit,
 } from '@/lib/lab-worker-operations'
 import { setLabChainStateCache } from '@/hooks/useLabChainStateQuery'
 import { labChainStateQueryKey } from '@/lib/lab-chain-query'
@@ -206,15 +206,15 @@ export function useLabSetEntityDeadMutation() {
   })
 }
 
-export function useLabSetBlockSizeLimitMutation() {
+export function useLabSetBlockWeightLimitMutation() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationKey: ['lab', 'setBlockSizeLimitVbytes'] as const,
-    mutationFn: (blockSizeLimitVbytes: number) => labOpSetBlockSizeLimitVbytes(blockSizeLimitVbytes),
+    mutationKey: ['lab', 'setBlockWeightLimit'] as const,
+    mutationFn: (blockWeightLimit: number) => labOpSetBlockWeightLimit(blockWeightLimit),
     onSuccess: (state) => {
       setLabChainStateCache(queryClient, state)
       void invalidateLabPaginatedQueries(queryClient)
-      toast.success('Block size limit updated (applies to future blocks)')
+      toast.success('Block weight limit updated (applies to future blocks)')
     },
     onError: (err) => {
       toast.error(err instanceof Error ? err.message : 'Update failed')

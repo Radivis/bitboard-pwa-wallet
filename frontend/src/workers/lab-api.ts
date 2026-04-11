@@ -43,7 +43,9 @@ export interface MempoolEntry {
   sender: LabOwner | null
   receiver: LabOwner | null
   feeSats: number
-  /** Virtual size in vBytes (ceil(weight/4)); used for block template and fee rate. */
+  /** BIP141 block weight units; used for block template capacity (sum vs block limit). */
+  weight: number
+  /** Virtual size in vBytes (ceil(weight/4)); used for fee rate (sat/vB) only. */
   vsize: number
   inputs: { txid: string; vout: number }[]
   inputsDetail: { address: string; amountSats: number; owner?: LabOwner | null }[]
@@ -162,8 +164,8 @@ export interface LabState {
   txDetails: LabTxDetails[]
   mineOperations: LabMineOperationRecord[]
   txOperations: LabTxOperationRecord[]
-  /** Max total vBytes for non-coinbase txs in a mined block (future blocks only). */
-  blockSizeLimitVbytes: number
+  /** Max total weight units (WU) for non-coinbase txs in a mined block (future blocks only). */
+  blockWeightLimit: number
 }
 
 /** Minimum blocks per single "Mine blocks" operation in the lab UI and worker. */
@@ -175,8 +177,8 @@ export const LAB_MIN_BLOCKS_PER_MINE = 1
  */
 export const LAB_MAX_BLOCKS_PER_MINE = 100
 
-/** Default simulated block size limit for non-coinbase transaction vBytes (Lab). */
-export const LAB_DEFAULT_BLOCK_SIZE_VBYTES = 4000
+/** Default max non-coinbase transaction weight per block (Lab). Same numeric default as before; now WU not vBytes. */
+export const LAB_DEFAULT_BLOCK_WEIGHT_UNITS = 4000
 
 export interface PrepareLabEntityTransactionParams {
   labEntityId: number
@@ -235,7 +237,7 @@ export const EMPTY_LAB_STATE: LabState = {
   txDetails: [],
   mineOperations: [],
   txOperations: [],
-  blockSizeLimitVbytes: LAB_DEFAULT_BLOCK_SIZE_VBYTES,
+  blockWeightLimit: LAB_DEFAULT_BLOCK_WEIGHT_UNITS,
 }
 
 /** Result of {@link LabService.mineBlocks}. Mempool counts exclude coinbase (mempool-only). */
@@ -349,8 +351,8 @@ export interface LabService {
   /** Set or clear the persistent dead flag (excludes from random lab-entity txs). */
   setLabEntityDead(labEntityId: number, dead: boolean): Promise<LabState>
 
-  /** Updates max non-coinbase vBytes per block for future mining (does not alter past blocks). */
-  setBlockSizeLimitVbytes(blockSizeLimitVbytes: number): Promise<LabState>
+  /** Updates max non-coinbase weight units per block for future mining (does not alter past blocks). */
+  setBlockWeightLimit(blockWeightLimit: number): Promise<LabState>
 }
 
 export interface LabMempoolMetadata {

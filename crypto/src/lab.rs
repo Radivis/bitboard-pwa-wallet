@@ -560,6 +560,13 @@ pub fn lab_tx_vbytes(tx_hex: &str) -> Result<u64, JsValue> {
     Ok(tx.weight().to_wu().div_ceil(4))
 }
 
+/// Returns BIP141 block weight units for a serialized transaction.
+#[wasm_bindgen]
+pub fn lab_tx_weight(tx_hex: &str) -> Result<u64, JsValue> {
+    let tx: Transaction = deserialize_hex(tx_hex).map_err_to_js()?;
+    Ok(tx.weight().to_wu())
+}
+
 /// Returns the block hash (hex) for a serialized block.
 #[wasm_bindgen]
 pub fn lab_block_hash(block_hex: &str) -> Result<String, JsValue> {
@@ -748,5 +755,26 @@ mod lab_tx_vbytes_tests {
         let hex = serialize_hex(&tx);
         let expected = tx.weight().to_wu().div_ceil(4);
         assert_eq!(lab_tx_vbytes(&hex).unwrap(), expected);
+    }
+
+    #[test]
+    fn lab_tx_weight_matches_transaction_weight() {
+        let tx = Transaction {
+            version: transaction::Version::TWO,
+            lock_time: absolute::LockTime::ZERO,
+            input: vec![TxIn {
+                previous_output: OutPoint::null(),
+                script_sig: ScriptBuf::new(),
+                sequence: Sequence::MAX,
+                witness: Witness::default(),
+            }],
+            output: vec![TxOut {
+                value: Amount::from_sat(1000),
+                script_pubkey: ScriptBuf::new(),
+            }],
+        };
+        let hex = serialize_hex(&tx);
+        let expected = tx.weight().to_wu();
+        assert_eq!(lab_tx_weight(&hex).unwrap(), expected);
     }
 }

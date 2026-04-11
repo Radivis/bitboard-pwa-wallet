@@ -8,7 +8,7 @@ import type {
   LabState,
   LabTxDetails,
 } from './lab-api'
-import { LAB_DEFAULT_BLOCK_SIZE_VBYTES } from './lab-api'
+import { LAB_DEFAULT_BLOCK_WEIGHT_UNITS } from './lab-api'
 import { findLabEntityById, nextLabEntityId } from '@/lib/lab-entity-keys'
 import {
   labEntityLabOwner,
@@ -56,12 +56,22 @@ const labService = {
   async loadState(newState: LabState): Promise<void> {
     const cloned = JSON.parse(JSON.stringify(newState)) as LabState
     const wasmModule = await getWasm()
-    const blockSizeLimitVbytes =
-      cloned.blockSizeLimitVbytes ?? LAB_DEFAULT_BLOCK_SIZE_VBYTES
+    const legacy = cloned as LabState & { blockSizeLimitVbytes?: number }
+    const blockWeightLimit =
+      cloned.blockWeightLimit ??
+      legacy.blockSizeLimitVbytes ??
+      LAB_DEFAULT_BLOCK_WEIGHT_UNITS
     const mempool = (cloned.mempool ?? []).map((entry) => {
-      if (entry.vsize > 0) return entry
-      const v = wasmU64ToNumber(wasmModule.lab_tx_vbytes(entry.signedTxHex))
-      return { ...entry, vsize: v > 0 ? v : 1 }
+      let next = { ...entry }
+      if (next.vsize <= 0) {
+        const v = wasmU64ToNumber(wasmModule.lab_tx_vbytes(entry.signedTxHex))
+        next = { ...next, vsize: v > 0 ? v : 1 }
+      }
+      if (next.weight <= 0) {
+        const w = wasmU64ToNumber(wasmModule.lab_tx_weight(entry.signedTxHex))
+        next = { ...next, weight: w > 0 ? w : 1 }
+      }
+      return next
     })
     replaceLabWorkerState({
       blocks: cloned.blocks ?? [],
@@ -77,16 +87,16 @@ const labService = {
       txDetails: cloned.txDetails ?? [],
       mineOperations: cloned.mineOperations ?? [],
       txOperations: cloned.txOperations ?? [],
-      blockSizeLimitVbytes,
+      blockWeightLimit,
     })
     rebuildTxidToChangeAddressFromState()
   },
 
-  async setBlockSizeLimitVbytes(blockSizeLimitVbytes: number): Promise<LabState> {
-    if (!Number.isFinite(blockSizeLimitVbytes) || blockSizeLimitVbytes < 1) {
-      throw new Error('blockSizeLimitVbytes must be a finite number >= 1')
+  async setBlockWeightLimit(blockWeightLimit: number): Promise<LabState> {
+    if (!Number.isFinite(blockWeightLimit) || blockWeightLimit < 1) {
+      throw new Error('blockWeightLimit must be a finite number >= 1')
     }
-    state.blockSizeLimitVbytes = Math.floor(blockSizeLimitVbytes)
+    state.blockWeightLimit = Math.floor(blockWeightLimit)
     return JSON.parse(JSON.stringify(state)) as LabState
   },
 
@@ -367,9 +377,11 @@ const labService = {
     const changeVout = mempoolMetadata.outputsDetail.findIndex((o) => o.isChange)
 
     const vsize = wasmU64ToNumber(wasmModule.lab_tx_vbytes(signedTxHex))
+    const weight = wasmU64ToNumber(wasmModule.lab_tx_weight(signedTxHex))
     appendLabTxOperationAndMempoolEntry({
       signedTxHex,
       txid,
+      weight: weight > 0 ? weight : 1,
       vsize: vsize > 0 ? vsize : 1,
       mempoolMetadata,
       sender: labEntityLabOwner(entity.labEntityId),
@@ -471,9 +483,11 @@ const labService = {
     }
 
     const vsize = wasmU64ToNumber(wasmModule.lab_tx_vbytes(signedTxHex))
+    const weight = wasmU64ToNumber(wasmModule.lab_tx_weight(signedTxHex))
     appendLabTxOperationAndMempoolEntry({
       signedTxHex,
       txid,
+      weight: weight > 0 ? weight : 1,
       vsize: vsize > 0 ? vsize : 1,
       mempoolMetadata,
       sender,

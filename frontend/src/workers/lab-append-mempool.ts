@@ -5,13 +5,15 @@ import { rebuildTxidToChangeAddressFromState, state } from './lab-worker-state'
 export function appendLabTxOperationAndMempoolEntry(params: {
   signedTxHex: string
   txid: string
+  weight: number
   vsize: number
   mempoolMetadata: LabMempoolMetadata
   sender: LabOwner
   changeAddress: string | null
   changeVout: number | null
 }): void {
-  const { signedTxHex, txid, vsize, mempoolMetadata, sender, changeAddress, changeVout } = params
+  const { signedTxHex, txid, weight, vsize, mempoolMetadata, sender, changeAddress, changeVout } =
+    params
   const primaryToAddress = mempoolMetadata.outputsDetail.find((o) => !o.isChange)?.address ?? null
 
   state.txOperations = state.txOperations ?? []
@@ -34,6 +36,7 @@ export function appendLabTxOperationAndMempoolEntry(params: {
     sender: mempoolMetadata.sender,
     receiver: mempoolMetadata.receiver,
     feeSats: mempoolMetadata.feeSats,
+    weight,
     vsize,
     inputs: mempoolMetadata.inputs,
     inputsDetail: mempoolMetadata.inputsDetail,
