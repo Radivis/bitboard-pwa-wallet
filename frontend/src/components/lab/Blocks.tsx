@@ -1,3 +1,4 @@
+import { Link } from '@tanstack/react-router'
 import {
   Card,
   CardContent,
@@ -13,49 +14,9 @@ import {
   LAB_MAX_BLOCKS_PER_MINE,
   LAB_MIN_BLOCKS_PER_MINE,
 } from '@/workers/lab-api'
-
-function TargetAddressField({
-  ownerType,
-  walletStatus,
-  currentAddress,
-  targetAddress,
-  onTargetAddressChange,
-}: {
-  ownerType: 'name' | 'wallet'
-  walletStatus: string
-  currentAddress: string | null
-  targetAddress: string
-  onTargetAddressChange: (value: string) => void
-}) {
-  if (ownerType === 'wallet') {
-    if (walletStatus === 'unlocked' || walletStatus === 'syncing') {
-      return (
-        <Input
-          id="target-address"
-          type="text"
-          value={currentAddress ?? ''}
-          readOnly
-          className="min-w-[200px] font-mono text-sm"
-        />
-      )
-    }
-    return (
-      <p className="text-sm text-muted-foreground py-2">
-        Unlock wallet to mine to it
-      </p>
-    )
-  }
-  return (
-    <Input
-      id="target-address"
-      type="text"
-      placeholder="bcrt1q... or bcrt1p..."
-      value={targetAddress}
-      onChange={(e) => onTargetAddressChange(e.target.value)}
-      className="min-w-[200px]"
-    />
-  )
-}
+import type { LabEntityRecord } from '@/workers/lab-api'
+import { labEntityOwnerKey } from '@/lib/lab-entity-keys'
+import { cn } from '@/lib/utils'
 
 export function LabBlocksCard({
   blockCount,
@@ -63,10 +24,9 @@ export function LabBlocksCard({
   setMineCount,
   ownerType,
   setOwnerType,
-  targetAddress,
-  setTargetAddress,
-  ownerName,
-  setOwnerName,
+  entities,
+  selectedLabEntityId,
+  setSelectedLabEntityId,
   mining,
   onMine,
   walletStatus,
@@ -78,16 +38,18 @@ export function LabBlocksCard({
   setMineCount: (v: string) => void
   ownerType: 'name' | 'wallet'
   setOwnerType: (v: 'name' | 'wallet') => void
-  targetAddress: string
-  setTargetAddress: (v: string) => void
-  ownerName: string
-  setOwnerName: (v: string) => void
+  entities: readonly LabEntityRecord[]
+  selectedLabEntityId: number | null
+  setSelectedLabEntityId: (id: number | null) => void
   mining: boolean
   onMine: () => void
   walletStatus: string
   currentAddress: string | null
   activeWallet: { name: string } | undefined
 }) {
+  const livingEntities = entities.filter((e) => !e.isDead)
+  const noLivingEntities = ownerType === 'name' && livingEntities.length === 0
+
   return (
     <InfomodeWrapper
       infoId="lab-currently-mined-block-card"
@@ -158,31 +120,61 @@ export function LabBlocksCard({
                 </InfomodeWrapper>
               </div>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="target-address">
-                {ownerType === 'wallet'
-                  ? 'Target address (active wallet)'
-                  : 'Target address (blank = new anonymous lab entity; ignored when lab entity name is set)'}
-              </Label>
-              <TargetAddressField
-                ownerType={ownerType}
-                walletStatus={walletStatus}
-                currentAddress={currentAddress}
-                targetAddress={targetAddress}
-                onTargetAddressChange={setTargetAddress}
-              />
-            </div>
-            {ownerType === 'name' && (
+            {ownerType === 'wallet' ? (
               <div className="space-y-2">
-                <Label htmlFor="owner-name">Lab entity name (optional)</Label>
-                <Input
-                  id="owner-name"
-                  type="text"
-                  placeholder="Alice"
-                  value={ownerName}
-                  onChange={(e) => setOwnerName(e.target.value)}
-                  className="min-w-[120px]"
-                />
+                <Label htmlFor="target-address">Target address (active wallet)</Label>
+                {walletStatus === 'unlocked' || walletStatus === 'syncing' ? (
+                  <Input
+                    id="target-address"
+                    type="text"
+                    value={currentAddress ?? ''}
+                    readOnly
+                    className="min-w-[200px] font-mono text-sm"
+                  />
+                ) : (
+                  <p className="text-sm text-muted-foreground py-2">
+                    Unlock wallet to mine to it
+                  </p>
+                )}
+              </div>
+            ) : noLivingEntities ? (
+              <p className="text-sm text-muted-foreground">
+                Create at least one living lab entity on the{' '}
+                <Link to="/lab/control" className="underline font-medium text-foreground">
+                  Control
+                </Link>{' '}
+                page before mining here.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                <Label htmlFor="lab-entity-mine-select">
+                  <InfomodeWrapper
+                    as="span"
+                    infoId="lab-entity-mine-select-label"
+                    infoTitle="Lab entity"
+                    infoText="Coinbase rewards are paid to this entity’s current receive address. Dead entities are not listed."
+                  >
+                    Lab entity
+                  </InfomodeWrapper>
+                </Label>
+                <select
+                  id="lab-entity-mine-select"
+                  className={cn(
+                    'flex h-10 w-full max-w-md rounded-md border border-input bg-background px-3 py-2 text-sm',
+                    'ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+                  )}
+                  value={selectedLabEntityId ?? ''}
+                  onChange={(e) => {
+                    const v = e.target.value
+                    setSelectedLabEntityId(v === '' ? null : Number(v))
+                  }}
+                >
+                  {livingEntities.map((e) => (
+                    <option key={e.labEntityId} value={e.labEntityId}>
+                      {labEntityOwnerKey(e)}
+                    </option>
+                  ))}
+                </select>
               </div>
             )}
             {ownerType === 'wallet' && activeWallet && (
@@ -199,6 +191,7 @@ export function LabBlocksCard({
                 onClick={onMine}
                 disabled={
                   mining ||
+                  noLivingEntities ||
                   (ownerType === 'wallet' &&
                     walletStatus !== 'unlocked' &&
                     walletStatus !== 'syncing') ||

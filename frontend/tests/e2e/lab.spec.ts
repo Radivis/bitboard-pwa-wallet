@@ -253,7 +253,7 @@ test.describe('Lab', { tag: '@lab' }, () => {
     let state = await getLabState(page)
     expect(state.mempool).toHaveLength(1)
 
-    await mineBlocksInLab(page, 1, 'name')
+    await mineBlocksInLab(page, 1, 'name', { ownerName: 'Alice' })
 
     state = await getLabState(page)
     expect(state.mempool).toHaveLength(0)
@@ -282,14 +282,19 @@ test.describe('Lab', { tag: '@lab' }, () => {
     let state = await getLabState(page)
     expect(state.mempool).toHaveLength(1)
 
-    await mineBlocksInLab(page, 1, 'name')
+    await mineBlocksInLab(page, 1, 'name', { ownerName: 'Alice' })
 
     state = await getLabState(page)
     expect(state.mempool).toHaveLength(0)
-    const walletOwner = Object.values(state.addressToOwner ?? {}).find((o) =>
-      o.startsWith(WALLET_OWNER_PREFIX),
+    const walletOwnerEntry = Object.values(state.addressToOwner ?? {}).find(
+      (o): o is { kind: 'wallet'; walletId: number } =>
+        typeof o === 'object' && o !== null && 'kind' in o && o.kind === 'wallet',
     )
-    const walletSum = getUtxoSumByOwner(state, walletOwner!)
+    expect(walletOwnerEntry).toBeDefined()
+    const walletSum = getUtxoSumByOwner(
+      state,
+      `${WALLET_OWNER_PREFIX}${walletOwnerEntry!.walletId}`,
+    )
     expect(walletSum).toBeGreaterThanOrEqual(2 * COINBASE_SATS - 500)
     expect(walletSum).toBeLessThanOrEqual(2 * COINBASE_SATS)
   })

@@ -19,6 +19,7 @@ export async function executeMineBlocks(
   options:
     | {
         ownerName?: string
+        ownerLabEntityId?: number
         ownerWalletId?: number
         labAddressType?: string
         labNetwork?: string
@@ -56,7 +57,29 @@ export async function executeMineBlocks(
   /** Lab entity id for coinbase ownership (not used for wallet or bare target). */
   let ownerForCoinbase: LabOwner | undefined
 
-  if (entityNameOpt != null && entityNameOpt !== '' && options?.ownerWalletId == null) {
+  if (
+    options?.ownerLabEntityId != null &&
+    options.ownerWalletId == null &&
+    Number.isInteger(options.ownerLabEntityId)
+  ) {
+    const entity = state.entities.find((e) => e.labEntityId === options.ownerLabEntityId)
+    if (!entity) {
+      throw new Error(`Unknown lab entity id ${options.ownerLabEntityId}`)
+    }
+    if (entity.isDead) {
+      throw new Error('Cannot mine to a dead lab entity')
+    }
+    coinbaseAddress = wasmModule.lab_entity_get_current_external_address(
+      entity.mnemonic,
+      entity.changesetJson,
+      entity.network,
+      entity.addressType,
+      entity.accountId,
+    )
+    coinbaseScriptPubkeyHex = wasmModule.lab_address_to_script_pubkey_hex(coinbaseAddress)
+    newAddress = null
+    ownerForCoinbase = labEntityLabOwner(entity.labEntityId)
+  } else if (entityNameOpt != null && entityNameOpt !== '' && options?.ownerWalletId == null) {
     let entity = state.entities.find((e) => e.entityName === entityNameOpt)
     const now = new Date().toISOString()
     if (!entity) {

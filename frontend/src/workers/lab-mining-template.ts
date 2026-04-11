@@ -102,6 +102,30 @@ export async function resolveTemplateCoinbase(
   const entityNameOpt =
     params.ownerType === 'name' ? (params.ownerName?.trim() ?? '') : ''
 
+  if (
+    params.ownerType === 'name' &&
+    params.ownerLabEntityId != null &&
+    Number.isInteger(params.ownerLabEntityId)
+  ) {
+    const entity = state.entities.find((e) => e.labEntityId === params.ownerLabEntityId)
+    if (!entity) {
+      throw new Error(`Unknown lab entity id ${params.ownerLabEntityId}`)
+    }
+    if (entity.isDead) {
+      throw new Error('Cannot mine to a dead lab entity')
+    }
+    return {
+      address: wasmModule.lab_entity_get_current_external_address(
+        entity.mnemonic,
+        entity.changesetJson,
+        entity.network,
+        entity.addressType,
+        entity.accountId,
+      ),
+      minedBy: labEntityLabOwner(entity.labEntityId),
+    }
+  }
+
   const firstAddressFromNewEntityWallet = (): string => {
     const mnemonic = wasmModule.generate_mnemonic(12)
     const createdRaw = wasmModule.create_lab_entity_wallet(

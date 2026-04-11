@@ -43,6 +43,7 @@ export async function labOpMineBlocks(
   targetAddress: string,
   options?: {
     ownerName?: string
+    ownerLabEntityId?: number
     ownerWalletId?: number
     labAddressType?: string
     labNetwork?: string
@@ -53,6 +54,7 @@ export async function labOpMineBlocks(
       count,
       targetLen: targetAddress.length,
       hasOwnerName: Boolean(options?.ownerName),
+      hasOwnerLabEntityId: options?.ownerLabEntityId != null,
       hasOwnerWalletId: options?.ownerWalletId != null,
     })
     await initLabWorkerWithState()

@@ -247,29 +247,47 @@ export function LabEntitiesCard() {
                             Rename
                           </Button>
                         ) : null}
-                        <Button
-                          size="sm"
-                          type="button"
-                          variant="outline"
-                          onClick={() =>
-                            void setDeadMutation.mutateAsync(
-                              { labEntityId: row.labEntityId, dead: !row.isDead },
-                              { onSuccess: () => void refetch() },
-                            )
-                          }
-                          disabled={busy}
-                        >
-                          {row.isDead ? 'Unkill' : 'Kill'}
-                        </Button>
-                        <Button
-                          size="sm"
-                          type="button"
-                          variant="destructive"
-                          onClick={() => setDeleteId(row.labEntityId)}
-                          disabled={busy || row.hasTransactions}
-                        >
-                          Delete
-                        </Button>
+                        {row.isDead ? (
+                          <Button
+                            size="sm"
+                            type="button"
+                            variant="outline"
+                            onClick={() =>
+                              void setDeadMutation.mutateAsync(
+                                { labEntityId: row.labEntityId, dead: false },
+                                { onSuccess: () => void refetch() },
+                              )
+                            }
+                            disabled={busy}
+                          >
+                            Unkill
+                          </Button>
+                        ) : row.hasTransactions ? (
+                          <Button
+                            size="sm"
+                            type="button"
+                            variant="outline"
+                            onClick={() =>
+                              void setDeadMutation.mutateAsync(
+                                { labEntityId: row.labEntityId, dead: true },
+                                { onSuccess: () => void refetch() },
+                              )
+                            }
+                            disabled={busy}
+                          >
+                            Kill
+                          </Button>
+                        ) : (
+                          <Button
+                            size="sm"
+                            type="button"
+                            variant="destructive"
+                            onClick={() => setDeleteId(row.labEntityId)}
+                            disabled={busy}
+                          >
+                            Delete
+                          </Button>
+                        )}
                       </div>
                     </div>
                   ))}

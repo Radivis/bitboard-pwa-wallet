@@ -23,10 +23,9 @@ function LabBlocksPage() {
         setMineCount={lab.setMineCount}
         ownerType={lab.ownerType}
         setOwnerType={lab.setOwnerType}
-        targetAddress={lab.targetAddress}
-        setTargetAddress={lab.setTargetAddress}
-        ownerName={lab.ownerName}
-        setOwnerName={lab.setOwnerName}
+        entities={lab.entities}
+        selectedLabEntityId={lab.selectedLabEntityId}
+        setSelectedLabEntityId={lab.setSelectedLabEntityId}
         mining={lab.mining}
         onMine={lab.onMine}
         walletStatus={lab.walletStatus}

@@ -30,8 +30,9 @@ function LabCurrentBlockPage() {
     try {
       const details = await labOpGetCurrentBlockTemplate({
         ownerType: lab.ownerType,
-        targetAddress: lab.targetAddress,
-        ownerName: lab.ownerName,
+        targetAddress: '',
+        ownerLabEntityId:
+          lab.ownerType === 'name' ? lab.selectedLabEntityId ?? undefined : undefined,
         ownerWalletId: activeWalletId ?? undefined,
         walletCurrentAddress: currentAddress,
         labAddressType,
@@ -42,8 +43,7 @@ function LabCurrentBlockPage() {
     }
   }, [
     lab.ownerType,
-    lab.targetAddress,
-    lab.ownerName,
+    lab.selectedLabEntityId,
     activeWalletId,
     currentAddress,
     labAddressType,

@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { useLabChainStateQuery } from '@/hooks/useLabChainStateQuery'
 import { selectCommittedAddressType, useWalletStore } from '@/stores/walletStore'
@@ -43,10 +43,8 @@ export function useLabIndexPageData() {
   const setMineCount = useLabMiningStore((s) => s.setMineCount)
   const ownerType = useLabMiningStore((s) => s.ownerType)
   const setOwnerType = useLabMiningStore((s) => s.setOwnerType)
-  const targetAddress = useLabMiningStore((s) => s.targetAddress)
-  const setTargetAddress = useLabMiningStore((s) => s.setTargetAddress)
-  const ownerName = useLabMiningStore((s) => s.ownerName)
-  const setOwnerName = useLabMiningStore((s) => s.setOwnerName)
+  const selectedLabEntityId = useLabMiningStore((s) => s.selectedLabEntityId)
+  const setSelectedLabEntityId = useLabMiningStore((s) => s.setSelectedLabEntityId)
 
   const activeWalletId = useWalletStore((s) => s.activeWalletId)
   const walletStatus = useWalletStore((s) => s.walletStatus)
@@ -72,6 +70,17 @@ export function useLabIndexPageData() {
 
   const mineMutation = useLabMineBlocksMutation()
   const createTxMutation = useLabCreateTransactionMutation()
+
+  useEffect(() => {
+    const living = entities.filter((e) => !e.isDead)
+    if (living.length === 0) {
+      setSelectedLabEntityId(null)
+      return
+    }
+    const prev = useLabMiningStore.getState().selectedLabEntityId
+    if (prev != null && living.some((e) => e.labEntityId === prev)) return
+    setSelectedLabEntityId(living[0].labEntityId)
+  }, [entities, setSelectedLabEntityId])
   const createRandomTxMutation = useLabCreateRandomTransactionsMutation()
   const resetMutation = useLabResetMutation()
 
@@ -171,12 +180,12 @@ export function useLabIndexPageData() {
       return
     }
     const effectiveTarget =
-      ownerType === 'wallet' ? (currentAddress ?? '').trim() : targetAddress.trim()
+      ownerType === 'wallet' ? (currentAddress ?? '').trim() : ''
     const mineOptions =
       ownerType === 'wallet' && activeWalletId != null
         ? { ownerWalletId: activeWalletId }
-        : ownerName.trim()
-          ? { ownerName: ownerName.trim() }
+        : ownerType === 'name' && selectedLabEntityId != null
+          ? { ownerLabEntityId: selectedLabEntityId }
           : undefined
     mineMutation.mutate({
       count,
@@ -187,8 +196,7 @@ export function useLabIndexPageData() {
   }, [
     mineCount,
     ownerType,
-    targetAddress,
-    ownerName,
+    selectedLabEntityId,
     currentAddress,
     activeWalletId,
     mineMutation,
@@ -254,10 +262,8 @@ export function useLabIndexPageData() {
     setMineCount,
     ownerType,
     setOwnerType,
-    targetAddress,
-    setTargetAddress,
-    ownerName,
-    setOwnerName,
+    selectedLabEntityId,
+    setSelectedLabEntityId,
     mining: mineMutation.isPending,
     onMine: handleMine,
     walletStatus,
@@ -292,6 +298,7 @@ export function useLabIndexPageData() {
     mempool,
     sortedTransactions,
     txDetailsByTxid,
+    entities,
     showResetConfirm,
     setShowResetConfirm,
     resetting: resetMutation.isPending,

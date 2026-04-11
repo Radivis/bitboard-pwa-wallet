@@ -21,6 +21,7 @@ export type LabMineBlocksVariables = {
   effectiveTarget: string
   mineOptions:
     | { ownerWalletId: number }
+    | { ownerLabEntityId: number }
     | { ownerName: string }
     | undefined
   labAddressType: 'segwit' | 'taproot'

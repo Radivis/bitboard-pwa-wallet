@@ -118,6 +118,7 @@ const labService = {
     targetAddress: string,
     options?: {
       ownerName?: string
+      ownerLabEntityId?: number
       ownerWalletId?: number
       labAddressType?: string
       labNetwork?: string

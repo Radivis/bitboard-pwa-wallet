@@ -101,6 +101,8 @@ export interface LabCurrentBlockTemplateParams {
   ownerType: 'name' | 'wallet'
   targetAddress: string
   ownerName?: string
+  /** When set, mines to this lab entity (must exist and not be dead). Takes precedence over ownerName. */
+  ownerLabEntityId?: number
   ownerWalletId?: number
   walletCurrentAddress?: string | null
   /** Matches lab mining defaults; omit to use worker default (segwit). */
@@ -271,6 +273,7 @@ export interface LabService {
     targetAddress: string,
     options?: {
       ownerName?: string
+      ownerLabEntityId?: number
       ownerWalletId?: number
       labAddressType?: string
       labNetwork?: string

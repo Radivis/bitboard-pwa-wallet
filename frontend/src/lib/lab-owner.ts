@@ -137,3 +137,16 @@ export function validateLabEntityRenameName(
   if (taken) return { ok: false, error: 'That name is already taken' }
   return { ok: true }
 }
+
+/**
+ * True when an owner group key (sort key, legacy string, etc.) refers to a lab entity with `isDead`.
+ */
+export function isLabEntityOwnerGroupDead(
+  ownerKey: string,
+  entities: readonly { labEntityId: number; entityName: string | null; isDead: boolean }[],
+): boolean {
+  const owner =
+    labOwnerFromSortKey(ownerKey) ?? labOwnerFromLegacyKey(ownerKey, entities)
+  if (owner?.kind !== 'lab_entity') return false
+  return entities.find((e) => e.labEntityId === owner.labEntityId)?.isDead === true
+}

@@ -10,6 +10,7 @@ import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { Button } from '@/components/ui/button'
 import { truncateAddress, formatSats } from '@/lib/bitcoin-utils'
 import { getOwnerDisplayName, getOwnerIcon } from '@/lib/lab-utils'
+import { isLabEntityOwnerGroupDead } from '@/lib/lab-owner'
 import { useLabChainStateQuery } from '@/hooks/useLabChainStateQuery'
 import { CardPagination } from '@/components/CardPagination'
 import {
@@ -19,7 +20,8 @@ import {
 } from '@/hooks/useLabPaginatedQueries'
 import { LAB_CARD_PAGE_SIZE, LAB_ENTITY_INNER_PAGE_SIZE } from '@/lib/lab-paginated-queries'
 import { useWalletStore } from '@/stores/walletStore'
-import { Wallet, FlaskConical, Copy } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
+import { Wallet, FlaskConical, Copy, Skull } from 'lucide-react'
 
 function LabOwnerAddressesInner({
   ownerKey,
@@ -31,7 +33,7 @@ function LabOwnerAddressesInner({
 }: {
   ownerKey: string
   wallets: Array<{ wallet_id: number; name: string }>
-  entities: readonly { labEntityId: number; entityName: string | null }[]
+  entities: readonly { labEntityId: number; entityName: string | null; isDead: boolean }[]
   onCopyAddress: (address: string) => void
   addressPageIndex: number
   onAddressPageChange: (pageIndex: number) => void
@@ -149,13 +151,19 @@ export function LabAddressesCard({
                     aria-label={`${getOwnerDisplayName(owner, wallets, entities)} — addresses in this group`}
                     className="rounded-lg border-[3px] border-border bg-muted/15 p-4 shadow-sm"
                   >
-                    <h4 className="text-sm font-medium mb-3 flex items-center gap-1">
+                    <h4 className="text-sm font-medium mb-3 flex flex-wrap items-center gap-2">
                       {getOwnerIcon(owner) === 'wallet' ? (
                         <Wallet className="h-4 w-4" />
                       ) : (
                         <FlaskConical className="h-4 w-4" />
                       )}
                       {getOwnerDisplayName(owner, wallets, entities)}
+                      {isLabEntityOwnerGroupDead(owner, entities) ? (
+                        <Badge variant="secondary" className="gap-1">
+                          <Skull className="h-3 w-3" />
+                          Dead
+                        </Badge>
+                      ) : null}
                     </h4>
                     <LabOwnerAddressesInner
                       ownerKey={owner}
