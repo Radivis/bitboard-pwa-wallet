@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { QrCode, Copy, RefreshCw, ArrowDownLeft } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
@@ -10,7 +10,12 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { WalletUnlockOrNearZeroLoading } from '@/components/WalletUnlockOrNearZeroLoading'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
-import { AddressType, useWalletStore } from '@/stores/walletStore'
+import {
+  AddressType,
+  selectCommittedNetworkMode,
+  useWalletStore,
+  type NetworkMode,
+} from '@/stores/walletStore'
 import { useSessionStore } from '@/stores/sessionStore'
 import { useCryptoStore } from '@/stores/cryptoStore'
 import { useFeatureStore } from '@/stores/featureStore'
@@ -18,6 +23,7 @@ import { updateWalletChangeset } from '@/lib/wallet-utils'
 import { isLightningSupported } from '@/lib/lightning-utils'
 import { ReceiveModeToggle, type ReceiveMode } from '@/components/receive/ReceiveModeToggle'
 import { LightningReceive } from '@/components/receive/LightningReceive'
+import { ReceiveMainnetDemoWarningModal } from '@/components/receive/ReceiveMainnetDemoWarningModal'
 
 export const Route = createFileRoute('/wallet/receive')({
   component: ReceivePage,
@@ -35,9 +41,23 @@ export function ReceivePage() {
   const getNewAddress = useCryptoStore((s) => s.getNewAddress)
   const exportChangeset = useCryptoStore((s) => s.exportChangeset)
   const lightningEnabled = useFeatureStore((s) => s.lightningEnabled)
+  const committedNetworkMode = useWalletStore(selectCommittedNetworkMode)
+  const [mainnetDemoDismissed, setMainnetDemoDismissed] = useState(false)
+  const previousCommittedNetworkModeRef = useRef<NetworkMode | null>(null)
 
   const showLightningToggle = lightningEnabled && isLightningSupported(networkMode)
   const [receiveMode, setReceiveMode] = useState<ReceiveMode>('bitcoin')
+
+  useEffect(() => {
+    const previous = previousCommittedNetworkModeRef.current
+    previousCommittedNetworkModeRef.current = committedNetworkMode
+    if (
+      committedNetworkMode === 'mainnet' &&
+      previous !== 'mainnet'
+    ) {
+      setMainnetDemoDismissed(false)
+    }
+  }, [committedNetworkMode])
 
   useEffect(() => {
     if (!currentAddress && (walletStatus === 'unlocked' || walletStatus === 'syncing')) {
@@ -93,18 +113,34 @@ export function ReceivePage() {
     return <WalletUnlockOrNearZeroLoading />
   }
 
+  const showMainnetDemoModal =
+    committedNetworkMode === 'mainnet' && !mainnetDemoDismissed
+  const mainnetDemoModal = (
+    <ReceiveMainnetDemoWarningModal
+      open={showMainnetDemoModal}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen) setMainnetDemoDismissed(true)
+      }}
+    />
+  )
+
   if (showLightningToggle && receiveMode === 'lightning') {
     return (
-      <div className="space-y-6">
-        <PageHeader title="Receive Lightning" icon={ArrowDownLeft} />
-        <ReceiveModeToggle mode={receiveMode} onModeChange={setReceiveMode} />
-        <LightningReceive />
-      </div>
+      <>
+        {mainnetDemoModal}
+        <div className="space-y-6">
+          <PageHeader title="Receive Lightning" icon={ArrowDownLeft} />
+          <ReceiveModeToggle mode={receiveMode} onModeChange={setReceiveMode} />
+          <LightningReceive />
+        </div>
+      </>
     )
   }
 
   return (
-    <div className="space-y-6">
+    <>
+      {mainnetDemoModal}
+      <div className="space-y-6">
       <PageHeader title="Receive Bitcoin" icon={ArrowDownLeft} />
 
       {showLightningToggle && (
@@ -193,5 +229,6 @@ export function ReceivePage() {
         </Card>
       </InfomodeWrapper>
     </div>
+    </>
   )
 }

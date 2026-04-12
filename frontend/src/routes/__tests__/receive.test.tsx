@@ -34,8 +34,17 @@ vi.mock('@/stores/walletStore', async () => {
     AddressType,
     useWalletStore: (selector: (s: Record<string, unknown>) => unknown) =>
       selector(walletStoreState),
+    selectCommittedNetworkMode: (s: {
+      loadedSubWallet: { networkMode: string } | null
+      networkMode: string
+    }) => s.loadedSubWallet?.networkMode ?? s.networkMode,
   }
 })
+
+vi.mock('@/stores/featureStore', () => ({
+  useFeatureStore: (selector: (s: Record<string, unknown>) => unknown) =>
+    selector({ lightningEnabled: false }),
+}))
 
 vi.mock('@/stores/sessionStore', () => ({
   useSessionStore: (selector: (s: Record<string, unknown>) => unknown) =>
@@ -66,6 +75,8 @@ describe('ReceivePage', () => {
       walletStatus: 'unlocked',
       currentAddress: 'tb1qtest123address456',
       addressType: AddressType.Taproot,
+      networkMode: 'testnet',
+      loadedSubWallet: null,
       setCurrentAddress: mockSetCurrentAddress,
     }
   })
@@ -90,6 +101,37 @@ describe('ReceivePage', () => {
     await waitFor(() => {
       expect(mockGetNewAddress).toHaveBeenCalled()
     })
+  })
+
+  it('shows Mainnet demo warning modal and dismisses with OK', async () => {
+    const user = userEvent.setup()
+    walletStoreState.networkMode = 'mainnet'
+    renderWithProviders(<ReceivePage />)
+
+    expect(
+      await screen.findByRole('heading', { name: 'Demo mode (Mainnet)' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText(/Bitboard Wallet is still in DEMO MODE/i),
+    ).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'OK' }))
+
+    await waitFor(() => {
+      expect(
+        screen.queryByRole('heading', { name: 'Demo mode (Mainnet)' }),
+      ).not.toBeInTheDocument()
+    })
+    expect(screen.getByRole('heading', { name: 'Receive Bitcoin' })).toBeInTheDocument()
+  })
+
+  it('does not show Mainnet demo warning when not on Mainnet', () => {
+    walletStoreState.networkMode = 'testnet'
+    renderWithProviders(<ReceivePage />)
+
+    expect(
+      screen.queryByRole('heading', { name: 'Demo mode (Mainnet)' }),
+    ).not.toBeInTheDocument()
   })
 
   it('displays address text and QR code', () => {
