@@ -1,4 +1,5 @@
 import { nextLabEntityId } from '@/lib/lab-entity-keys'
+import { isCoinbase } from '@/lib/lab-operations'
 import { discardedMempoolConflictTxCount } from '@/lib/lab-mempool-mine-stats'
 import { labEntityLabOwner, walletLabOwner } from '@/lib/lab-owner'
 import type { LabOwner } from '@/lib/lab-owner'
@@ -170,7 +171,7 @@ export async function executeMineBlocks(
     const minedAtHeight = height
     const tipAfter = getTip()!
     const coinbaseDetail = state.txDetails.find(
-      (d) => d.blockHeight === minedAtHeight && d.isCoinbase,
+      (d) => d.blockHeight === minedAtHeight && isCoinbase(d),
     )
     state.mineOperations = state.mineOperations ?? []
     state.mineOperations.push({

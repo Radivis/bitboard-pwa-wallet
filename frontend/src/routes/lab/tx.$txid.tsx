@@ -16,6 +16,7 @@ import { truncateAddress, formatSats } from '@/lib/bitcoin-utils'
 import type { LabTxDetails } from '@/workers/lab-api'
 import { Copy, ArrowLeft, Wallet, FlaskConical } from 'lucide-react'
 import { toast } from 'sonner'
+import { isCoinbase } from '@/lib/lab-operations'
 import { getOwnerIcon } from '@/lib/lab-utils'
 import { LabOwnerDisplayWithAddressType } from '@/components/lab/LabOwnerDisplayWithAddressType'
 import { useWallets } from '@/db'
@@ -97,7 +98,7 @@ function LabTxViewerPage() {
 
   const totalInputs = tx.inputs.reduce((sum, i) => sum + i.amountSats, 0)
   const totalOutputs = tx.outputs.reduce((sum, o) => sum + o.amountSats, 0)
-  const feeSats = tx.isCoinbase ? 0 : totalInputs - totalOutputs
+  const feeSats = isCoinbase(tx) ? 0 : totalInputs - totalOutputs
   const timestamp =
     tx.blockTime > 0 ? new Date(tx.blockTime * 1000).toLocaleString() : null
   const confirmationsText =
@@ -115,7 +116,7 @@ function LabTxViewerPage() {
         </Link>
         <div className="flex items-center gap-2">
           <PageHeader title="Transaction" icon={FlaskConical} />
-          {tx.isCoinbase ? (
+          {isCoinbase(tx) ? (
             <Badge variant="outline" className="shrink-0">
               Coinbase
             </Badge>
@@ -159,7 +160,7 @@ function LabTxViewerPage() {
             <CardDescription>Inputs to this transaction</CardDescription>
           </CardHeader>
           <CardContent>
-            {tx.isCoinbase ? (
+            {isCoinbase(tx) ? (
               <div className="space-y-2 text-sm">
                 <p className="text-muted-foreground">
                   One coinbase input (no previous output spent).

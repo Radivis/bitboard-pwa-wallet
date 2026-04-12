@@ -1,4 +1,5 @@
 import { labEntityOwnerKey } from '@/lib/lab-entity-keys'
+import { isCoinbase } from '@/lib/lab-operations'
 import type { LabOwner } from '@/lib/lab-owner'
 import {
   labOwnerDisplayName,
@@ -216,7 +217,7 @@ export function labTransactionsForWallet(
     const details = txDetailsByTxid.get(record.txid)
     if (!details) continue
 
-    if (details.isCoinbase) {
+    if (isCoinbase(details)) {
       const receivedSatsCoinbase = (details.outputs ?? [])
         .filter((output) => labOwnersEqual(output.owner ?? null, walletOwner))
         .reduce((sumSats, output) => sumSats + output.amountSats, 0)

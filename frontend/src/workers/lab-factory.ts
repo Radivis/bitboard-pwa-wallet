@@ -31,7 +31,6 @@ import {
   normalizeJsonOwnerToLabOwner,
   walletLabOwner,
 } from '@/lib/lab-owner'
-import { isCoinbase } from '@/lib/lab-operations'
 import type { Transaction } from 'kysely'
 
 /**
@@ -205,13 +204,10 @@ export async function loadLabStateFromDatabase(): Promise<LabState> {
       blockHeight: r.block_height,
       blockTime: r.block_time,
       confirmations: 0,
-      isCoinbase: isCoinbase({ inputs }),
       inputs,
       outputs,
     }
   })
-
-  const coinbaseByTxid = new Map(txDetails.map((d) => [d.txid, d.isCoinbase ?? false]))
 
   const transactions = await labDb.selectFrom('lab_transactions').selectAll().orderBy('lab_transaction_id', 'asc').execute()
 
@@ -293,7 +289,6 @@ export async function loadLabStateFromDatabase(): Promise<LabState> {
         t.receiver,
         entities,
       ),
-      isCoinbase: coinbaseByTxid.get(t.txid) ?? false,
     })),
     txDetails,
     mineOperations,

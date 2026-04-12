@@ -14,7 +14,6 @@ import { ensureLabMigrated, getLabDatabase } from '@/db/lab-database'
 import { labEntityOwnerKey } from '@/lib/lab-entity-keys'
 import { labOwnerFromTxRow } from '@/lib/lab-db-owner'
 import { labOwnerFromSortKey, labOwnerFromWalletOwnerKey } from '@/lib/lab-owner'
-import { isCoinbase } from '@/lib/lab-operations'
 import { feeSatsFromTxDetails } from '@/lib/lab-tx-fee'
 import type { LabAddress, LabBlockTransactionSummary, LabTxDetails } from '@/workers/lab-api'
 
@@ -103,7 +102,6 @@ function parseTxDetailsRow(
     confirmations: 0,
     inputs,
     outputs,
-    isCoinbase: isCoinbase({ inputs }),
   }
   return {
     txid: row.txid,
@@ -120,7 +118,7 @@ function parseTxDetailsRow(
       entities,
     ),
     feeSats: feeSatsFromTxDetails(tx),
-    isCoinbase: tx.isCoinbase ?? false,
+    inputs,
   }
 }
 

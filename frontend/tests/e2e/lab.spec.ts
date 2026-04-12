@@ -13,6 +13,7 @@ import {
   findAddressForOwner,
 } from './helpers/lab'
 import { goToWalletTab } from './helpers/wallet-nav'
+import { isCoinbase } from '@/lib/lab-operations'
 import { WALLET_OWNER_PREFIX } from '@/lib/lab-utils'
 
 const COINBASE_SATS = 5_000_000_000 // 50 BTC (default lab miner subsidy)
@@ -178,7 +179,12 @@ test.describe('Lab', { tag: '@lab' }, () => {
     await mineBlocksInLab(page, 1, 'name', { ownerName: taprootA, labAddressType: 'taproot' })
     state = await getLabState(page)
     expect(state.mempool).toHaveLength(0)
-    expect(state.transactions.filter((t) => !t.isCoinbase)).toHaveLength(4)
+    expect(
+      state.transactions.filter((t) => {
+        const d = state.txDetails.find((x) => x.txid === t.txid)
+        return d != null && !isCoinbase(d)
+      }),
+    ).toHaveLength(4)
   })
 
   test('transfer name to name in lab', async ({ page }) => {
@@ -274,7 +280,12 @@ test.describe('Lab', { tag: '@lab' }, () => {
 
     state = await getLabState(page)
     expect(state.mempool).toHaveLength(0)
-    expect(state.transactions.filter((t) => !t.isCoinbase)).toHaveLength(1)
+    expect(
+      state.transactions.filter((t) => {
+        const d = state.txDetails.find((x) => x.txid === t.txid)
+        return d != null && !isCoinbase(d)
+      }),
+    ).toHaveLength(1)
     const aliceSum = getUtxoSumByOwner(state, 'Alice')
     const bobSum = getUtxoSumByOwner(state, 'Bob')
     expect(bobSum).toBe(COINBASE_SATS + 800)
@@ -393,7 +404,7 @@ test.describe('Lab', { tag: '@lab' }, () => {
     const state = await getLabState(page)
     const spendDetail = state.txDetails?.find(
       (d) =>
-        d.isCoinbase !== true &&
+        !isCoinbase(d) &&
         d.inputs.some(
           (i) =>
             i.prevTxid != null &&

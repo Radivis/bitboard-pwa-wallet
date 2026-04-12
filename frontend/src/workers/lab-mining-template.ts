@@ -10,6 +10,7 @@ import {
   type LabBlockTransactionSummary,
   type LabCurrentBlockTemplateParams,
   type LabTxDetails,
+  type LabTxInputDetail,
 } from './lab-api'
 import { parseBlockEffects } from './lab-block-effects'
 import { parseBlockHeader } from './lab-block-header'
@@ -105,7 +106,7 @@ export function blockTransactionsForHeight(height: number): LabBlockTransactionS
         sender: txRecord?.sender ?? null,
         receiver: txRecord?.receiver ?? null,
         feeSats: feeSatsFromTxDetails(tx),
-        isCoinbase: tx.isCoinbase,
+        inputs: tx.inputs,
       }
     })
 }
@@ -261,7 +262,14 @@ export async function buildCurrentBlockTemplate(
       sender: matchedEntry?.sender ?? null,
       receiver: isCb ? minedBy : (matchedEntry?.receiver ?? null),
       feeSats: matchedEntry?.feeSats ?? 0,
-      isCoinbase: isCb,
+      inputs: tx.inputs.map(
+        (inp): LabTxInputDetail => ({
+          address: '',
+          amountSats: 0,
+          prevTxid: inp.prev_txid,
+          prevVout: inp.prev_vout,
+        }),
+      ),
     }
   })
 

@@ -133,7 +133,6 @@ const labService = {
         blockHeight: -1,
         blockTime: 0,
         confirmations: 0,
-        isCoinbase: false,
         inputs: mergeMempoolInputsDetailWithOutpoints(
           mempoolEntry.inputs,
           mempoolEntry.inputsDetail,

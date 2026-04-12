@@ -9,7 +9,6 @@ function coinbaseTx(overrides: Partial<LabTxDetails> = {}): LabTxDetails {
     blockHeight: 0,
     blockTime: 1,
     confirmations: 1,
-    isCoinbase: true,
     inputs: [
       {
         address: '',

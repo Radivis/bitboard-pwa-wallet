@@ -53,8 +53,6 @@ export interface LabTxRecord {
   txid: string
   sender: LabOwner | null
   receiver: LabOwner | null
-  /** Denormalized; coinbase txs have no spend sender in the usual sense. */
-  isCoinbase?: boolean
 }
 
 export interface MempoolEntry {
@@ -82,7 +80,6 @@ export interface LabTxDetails {
   blockHeight: number
   blockTime: number
   confirmations: number
-  isCoinbase?: boolean
   inputs: LabTxInputDetail[]
   outputs: { address: string; amountSats: number; isChange?: boolean; owner?: LabOwner | null }[]
 }
@@ -103,7 +100,7 @@ export interface LabBlockTransactionSummary {
   sender: LabOwner | null
   receiver: LabOwner | null
   feeSats: number
-  isCoinbase?: boolean
+  inputs: LabTxInputDetail[]
 }
 
 export interface LabBlockMetadataDetails {

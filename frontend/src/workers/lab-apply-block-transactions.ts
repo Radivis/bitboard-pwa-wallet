@@ -257,7 +257,6 @@ export function applyTransactionsAndDetailsFromBlock(
       txid: tx.txid,
       sender,
       receiver,
-      isCoinbase: isCb,
     })
     if (inputs.length > 0 || outputs.length > 0) {
       state.txDetails.push({
@@ -265,7 +264,6 @@ export function applyTransactionsAndDetailsFromBlock(
         blockHeight: height,
         blockTime,
         confirmations: 0,
-        isCoinbase: isCb,
         inputs,
         outputs,
       })

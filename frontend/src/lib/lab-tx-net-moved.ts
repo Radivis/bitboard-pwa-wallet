@@ -6,7 +6,7 @@ import type { LabTxDetails } from '@/workers/lab-api'
  * {@link buildLabTransactionHistoryRows} — non-change outputs only for spends; coinbase sums all outputs.
  */
 export function netMovedSatsForLabTx(tx: LabTxDetails): number {
-  if (tx.isCoinbase || isCoinbase(tx)) {
+  if (isCoinbase(tx)) {
     return tx.outputs.reduce((sum, o) => sum + o.amountSats, 0)
   }
   return tx.outputs

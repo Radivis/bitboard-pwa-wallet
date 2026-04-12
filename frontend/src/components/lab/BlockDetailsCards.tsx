@@ -18,6 +18,7 @@ import {
   LabBlockMerkleRootInfomodeContent,
 } from '@/components/lab/LabBlockHeaderInfomodeContent'
 import { CardPagination } from '@/components/CardPagination'
+import { isCoinbase } from '@/lib/lab-operations'
 import { netMovedSatsForBlock } from '@/lib/lab-tx-net-moved'
 import { useLabBlockTransactionsPage } from '@/hooks/useLabPaginatedQueries'
 import { LAB_CARD_PAGE_SIZE } from '@/lib/lab-paginated-queries'
@@ -194,7 +195,7 @@ function labBlockTxList(
           params={{ txid: tx.txid }}
           className="flex flex-wrap items-center gap-2 rounded px-2 py-2 transition-colors hover:bg-muted/50"
         >
-          {tx.isCoinbase ? (
+          {isCoinbase(tx) ? (
             <Badge variant="outline" className="shrink-0">
               Coinbase
             </Badge>
@@ -203,7 +204,7 @@ function labBlockTxList(
             {truncateAddress(tx.txid)}
           </span>
           <span className="text-sm text-muted-foreground flex flex-wrap items-center gap-x-1 gap-y-1">
-            {tx.isCoinbase ? (
+            {isCoinbase(tx) ? (
               tx.receiver ? (
                 <LabOwnerDisplayWithAddressType
                   owner={tx.receiver}
