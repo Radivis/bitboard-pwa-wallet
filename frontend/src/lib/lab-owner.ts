@@ -3,7 +3,7 @@
  * Use stable IDs — never use entity_name or "Anonymous-*" strings as identity.
  */
 import { labEntityOwnerKey } from '@/lib/lab-entity-keys'
-import { WALLET_OWNER_PREFIX } from '@/lib/lab-utils'
+import { LAB_ENTITY_SORT_KEY_PREFIX, WALLET_OWNER_PREFIX } from '@/lib/lab-utils'
 
 export type LabOwner =
   | { kind: 'wallet'; walletId: number }
@@ -31,19 +31,21 @@ export function labOwnersEqual(
 
 /** Stable string for sorting / query keys (not a display label). */
 export function labOwnerSortKey(owner: LabOwner): string {
-  return owner.kind === 'wallet' ? `w:${owner.walletId}` : `e:${owner.labEntityId}`
+  return owner.kind === 'wallet'
+    ? `${WALLET_OWNER_PREFIX}${owner.walletId}`
+    : `${LAB_ENTITY_SORT_KEY_PREFIX}${owner.labEntityId}`
 }
 
 /** Inverse of {@link labOwnerSortKey} for map keys used in grouped UI lists. */
 export function labOwnerFromSortKey(key: string): LabOwner | null {
-  const w = /^w:(\d+)$/.exec(key)
-  if (w) {
-    const walletId = parseInt(w[1], 10)
+  const walletSortMatch = /^wallet:(\d+)$/.exec(key)
+  if (walletSortMatch) {
+    const walletId = parseInt(walletSortMatch[1], 10)
     if (!Number.isNaN(walletId)) return { kind: 'wallet', walletId }
   }
-  const e = /^e:(\d+)$/.exec(key)
-  if (e) {
-    const labEntityId = parseInt(e[1], 10)
+  const labEntitySortMatch = /^lab-entity:(\d+)$/.exec(key)
+  if (labEntitySortMatch) {
+    const labEntityId = parseInt(labEntitySortMatch[1], 10)
     if (!Number.isNaN(labEntityId)) return { kind: 'lab_entity', labEntityId }
   }
   return null
@@ -57,31 +59,10 @@ export function labOwnerFromWalletOwnerKey(key: string): LabOwner | null {
   return { kind: 'wallet', walletId: id }
 }
 
-/**
- * Resolves a legacy owner string (wallet:…, entity display key, or Anonymous-n) to LabOwner
- * using the current entity list.
- */
-export function labOwnerFromLegacyKey(
-  key: string,
-  entities: readonly { labEntityId: number; entityName: string | null }[],
-): LabOwner | null {
-  const w = labOwnerFromWalletOwnerKey(key)
-  if (w) return w
-  const anon = /^Anonymous-(\d+)$/.exec(key.trim())
-  if (anon) {
-    const labEntityId = parseInt(anon[1], 10)
-    if (!Number.isNaN(labEntityId)) return { kind: 'lab_entity', labEntityId }
-  }
-  for (const e of entities) {
-    if (labEntityOwnerKey(e) === key) return { kind: 'lab_entity', labEntityId: e.labEntityId }
-  }
-  return null
-}
-
-/** Normalize owner stored in JSON (string legacy vs object). */
+/** Normalize owner stored in JSON (string vs object). */
 export function normalizeJsonOwnerToLabOwner(
   raw: unknown,
-  entities: readonly { labEntityId: number; entityName: string | null }[],
+  _entities: readonly { labEntityId: number; entityName: string | null }[],
 ): LabOwner | null {
   if (raw == null || raw === '') return null
   if (typeof raw === 'object' && raw !== null && !Array.isArray(raw)) {
@@ -93,7 +74,9 @@ export function normalizeJsonOwnerToLabOwner(
       return { kind: 'lab_entity', labEntityId: o.labEntityId }
     }
   }
-  if (typeof raw === 'string') return labOwnerFromLegacyKey(raw, entities)
+  if (typeof raw === 'string') {
+    return labOwnerFromSortKey(raw) ?? labOwnerFromWalletOwnerKey(raw)
+  }
   return null
 }
 
@@ -102,8 +85,8 @@ export function labOwnerDisplayKey(
   entities: readonly { labEntityId: number; entityName: string | null }[],
 ): string {
   if (owner.kind === 'wallet') return `${WALLET_OWNER_PREFIX}${owner.walletId}`
-  const e = entities.find((x) => x.labEntityId === owner.labEntityId)
-  return e ? labEntityOwnerKey(e) : `Anonymous-${owner.labEntityId}`
+  const entityRow = entities.find((candidate) => candidate.labEntityId === owner.labEntityId)
+  return entityRow ? labEntityOwnerKey(entityRow) : `Anonymous-${owner.labEntityId}`
 }
 
 /**
@@ -113,7 +96,7 @@ export function labEntityRecordForLabOwner<
   T extends { labEntityId: number },
 >(owner: LabOwner, entities: readonly T[]): T | undefined {
   if (owner.kind !== 'lab_entity') return undefined
-  return entities.find((e) => e.labEntityId === owner.labEntityId)
+  return entities.find((candidate) => candidate.labEntityId === owner.labEntityId)
 }
 
 /** Maximum length for a lab entity display name (create / rename). */
@@ -134,10 +117,12 @@ export function labOwnerDisplayName(
   entities: readonly { labEntityId: number; entityName: string | null }[],
 ): string {
   if (owner.kind === 'wallet') {
-    return wallets.find((w) => w.wallet_id === owner.walletId)?.name ?? 'Unknown wallet'
+    return (
+      wallets.find((walletRow) => walletRow.wallet_id === owner.walletId)?.name ?? 'Unknown wallet'
+    )
   }
-  const e = entities.find((x) => x.labEntityId === owner.labEntityId)
-  return e ? labEntityOwnerKey(e) : `Anonymous-${owner.labEntityId}`
+  const entityRow = entities.find((candidate) => candidate.labEntityId === owner.labEntityId)
+  return entityRow ? labEntityOwnerKey(entityRow) : `Anonymous-${owner.labEntityId}`
 }
 
 /** Validates rename target: non-empty, unique among entity names, not starting with Anonymous-. */
@@ -157,24 +142,23 @@ export function validateLabEntityRenameName(
     return { ok: false, error: 'Name must not start with "Anonymous-"' }
   }
   const taken = entities.some(
-    (e) =>
-      e.labEntityId !== excludeLabEntityId &&
-      e.entityName != null &&
-      e.entityName === trimmed,
+    (entityRow) =>
+      entityRow.labEntityId !== excludeLabEntityId &&
+      entityRow.entityName != null &&
+      entityRow.entityName === trimmed,
   )
   if (taken) return { ok: false, error: 'That name is already taken' }
   return { ok: true }
 }
 
 /**
- * True when an owner group key (sort key, legacy string, etc.) refers to a lab entity with `isDead`.
+ * True when an owner group sort key refers to a lab entity with `isDead`.
  */
 export function isLabEntityOwnerGroupDead(
   ownerKey: string,
   entities: readonly { labEntityId: number; entityName: string | null; isDead: boolean }[],
 ): boolean {
-  const owner =
-    labOwnerFromSortKey(ownerKey) ?? labOwnerFromLegacyKey(ownerKey, entities)
+  const owner = labOwnerFromSortKey(ownerKey)
   if (owner?.kind !== 'lab_entity') return false
-  return entities.find((e) => e.labEntityId === owner.labEntityId)?.isDead === true
+  return entities.find((entityRow) => entityRow.labEntityId === owner.labEntityId)?.isDead === true
 }

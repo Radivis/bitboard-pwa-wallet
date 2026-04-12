@@ -1,5 +1,5 @@
 import type { LabOwner } from '@/lib/lab-owner'
-import { labOwnerFromLegacyKey } from '@/lib/lab-owner'
+import { labOwnerFromSortKey, labOwnerFromWalletOwnerKey } from '@/lib/lab-owner'
 
 export function labOwnerFromDbPair(
   labEntityId: number | null | undefined,
@@ -30,10 +30,12 @@ export function labOwnerFromTxRow(
   labEntityId: number | null | undefined,
   walletId: number | null | undefined,
   legacy: string | null,
-  entities: readonly { labEntityId: number; entityName: string | null }[],
+  _entities: readonly { labEntityId: number; entityName: string | null }[],
 ): LabOwner | null {
   const fromIds = labOwnerFromDbPair(labEntityId, walletId)
   if (fromIds) return fromIds
-  if (legacy != null && legacy !== '') return labOwnerFromLegacyKey(legacy, entities)
+  if (legacy != null && legacy !== '') {
+    return labOwnerFromSortKey(legacy) ?? labOwnerFromWalletOwnerKey(legacy)
+  }
   return null
 }

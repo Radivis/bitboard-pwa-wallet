@@ -4,9 +4,8 @@
  * `addressToOwner` in lab state (see lab-factory persist).
  *
  * **Owner key invariant:** Distinct keys from {@link labAddressOwnerKeySql} match
- * {@link labOwnerSortKey} for wallet and lab-entity rows (`w:…` / `e:…`). Legacy `wallet:…`
- * and bare entity names are handled in {@link ownerKeyMatches} and in
- * {@link labOwnerFromSortKey} / {@link labOwnerFromLegacyKey} on the TS side.
+ * {@link labOwnerSortKey} for wallet and lab-entity rows (`wallet:…` / `lab-entity:…`).
+ * Bare `entity_name` values are matched only in {@link ownerKeyMatches} for edge rows.
  */
 import type { QueryClient } from '@tanstack/react-query'
 import { sql } from 'kysely'
@@ -60,8 +59,8 @@ export function labEntitiesPageQueryKey(pageIndex: number) {
  */
 const labAddressOwnerKeySql = sql`
   CASE
-    WHEN owner_type = 'wallet' THEN 'w:' || wallet_id
-    WHEN lab_entity_id IS NOT NULL THEN 'e:' || lab_entity_id
+    WHEN owner_type = 'wallet' THEN 'wallet:' || wallet_id
+    WHEN lab_entity_id IS NOT NULL THEN 'lab-entity:' || lab_entity_id
     ELSE entity_name
   END
 `

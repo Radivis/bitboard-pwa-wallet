@@ -136,9 +136,9 @@ describe('groupLabRowsByResolvedOwner', () => {
         addr === 'a1' || addr === 'a2' ? labEntityLabOwner(1) : labEntityLabOwner(2),
       'test',
     )
-    expect(sortedOwnerKeys).toEqual(['e:1', 'e:2'])
-    expect(byOwner.get('e:1')?.map((r) => r.id)).toEqual([1, 2])
-    expect(byOwner.get('e:2')?.map((r) => r.id)).toEqual([3])
+    expect(sortedOwnerKeys).toEqual(['lab-entity:1', 'lab-entity:2'])
+    expect(byOwner.get('lab-entity:1')?.map((r) => r.id)).toEqual([1, 2])
+    expect(byOwner.get('lab-entity:2')?.map((r) => r.id)).toEqual([3])
   })
 })
 

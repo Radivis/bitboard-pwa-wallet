@@ -184,26 +184,7 @@ async function migrateLabToLatest(labDb: Kysely<LabDatabase>): Promise<void> {
 
 /** Idempotent ALTERs for DBs created before new columns existed. */
 async function patchLabSchemaForExistingFiles(labDb: Kysely<LabDatabase>): Promise<void> {
-  const patches: [string, string][] = [
-    ['lab_entities', 'is_dead INTEGER NOT NULL DEFAULT 0'],
-    ['lab_address_owners', 'lab_entity_id INTEGER'],
-    ['lab_transactions', 'sender_lab_entity_id INTEGER'],
-    ['lab_transactions', 'sender_wallet_id INTEGER'],
-    ['lab_transactions', 'receiver_lab_entity_id INTEGER'],
-    ['lab_transactions', 'receiver_wallet_id INTEGER'],
-    ['lab_mempool', 'sender_lab_entity_id INTEGER'],
-    ['lab_mempool', 'sender_wallet_id INTEGER'],
-    ['lab_mempool', 'receiver_lab_entity_id INTEGER'],
-    ['lab_mempool', 'receiver_wallet_id INTEGER'],
-    ['lab_mine_operations', 'mined_by_lab_entity_id INTEGER'],
-    ['lab_mine_operations', 'mined_by_wallet_id INTEGER'],
-    ['lab_tx_operations', 'sender_lab_entity_id INTEGER'],
-    ['lab_tx_operations', 'sender_wallet_id INTEGER'],
-    ['lab_mempool', 'weight INTEGER'],
-    ['lab_parameter_presets', 'miner_subsidy_sats INTEGER NOT NULL DEFAULT 5000000000'],
-    ['lab_mine_operations', 'block_weight_limit_wu INTEGER'],
-    ['lab_mine_operations', 'non_coinbase_weight_used_wu INTEGER'],
-  ]
+  const patches: [string, string][] = []
   for (const [table, colDef] of patches) {
     try {
       await sql.raw(`ALTER TABLE ${table} ADD COLUMN ${colDef}`).execute(labDb)

@@ -68,9 +68,9 @@ function LabTxViewerPage() {
   const handleCopyTxid = useCallback(async () => {
     try {
       await navigator.clipboard.writeText(txid)
-      toast.success('Txid copied to clipboard')
+      toast.success('Transaction id copied to clipboard')
     } catch {
-      toast.error('Failed to copy txid')
+      toast.error('Failed to copy transaction id')
     }
   }, [txid])
 
@@ -127,14 +127,14 @@ function LabTxViewerPage() {
       <InfomodeWrapper
         infoId="lab-tx-detail-summary-card"
         infoTitle="Transaction summary"
-        infoText="The transaction id (txid) is the fingerprint of this payment on the lab chain—share it to refer to exactly this transfer. Confirmations count blocks mined on top: zero means it is still waiting in the mempool like a real network. “Total out” adds up every output amount; the fee is what is left from inputs minus outputs—the incentive that would go to a miner on mainnet (here it helps you read economic cost in the simulator)."
+        infoText="The transaction id is the fingerprint of this payment on the lab chain—share it to refer to exactly this transfer. Confirmations count blocks mined on top: zero means it is still waiting in the mempool like a real network. “Total out” adds up every output amount; the fee is what is left from inputs minus outputs—the incentive that would go to a miner on mainnet (here it helps you read economic cost in the simulator)."
         className="rounded-xl"
       >
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between gap-2">
               <CardTitle className="font-mono text-base break-all">{txid}</CardTitle>
-              <Button size="icon" variant="ghost" onClick={handleCopyTxid} aria-label="Copy txid">
+              <Button size="icon" variant="ghost" onClick={handleCopyTxid} aria-label="Copy transaction id">
                 <Copy className="h-4 w-4" />
               </Button>
             </div>
@@ -150,13 +150,13 @@ function LabTxViewerPage() {
 
       <InfomodeWrapper
         infoId="lab-tx-detail-inputs-card"
-        infoTitle="Inputs (TxIns)"
-        infoText="Each input spends a specific previous transaction output (an outpoint: txid + vout). Follow the link to open that funding transaction and highlight the output being spent. The address line shows the script/UTXO context; the owner badge shows whether that coin belonged to a named lab participant or your loaded wallet. Block-reward coinbase transactions use a synthetic prevout (zero txid, max vout) instead of spending a prior UTXO."
+        infoTitle="Inputs"
+        infoText="Each input spends a specific previous output from an earlier transaction. Follow the link to open that funding transaction and highlight which output is being spent. The address line shows where the coins came from; the owner badge shows whether that coin belonged to a named lab participant or your loaded wallet. Block-reward coinbase transactions use a synthetic reference (all-zero transaction id and maximum output index) instead of spending a prior coin."
         className="rounded-xl"
       >
         <Card>
           <CardHeader>
-            <CardTitle>TxIns</CardTitle>
+            <CardTitle>Inputs</CardTitle>
             <CardDescription>Inputs to this transaction</CardDescription>
           </CardHeader>
           <CardContent>
@@ -171,11 +171,11 @@ function LabTxViewerPage() {
                     className="rounded-md border border-border p-3 font-mono text-xs space-y-1"
                   >
                     <p>
-                      <span className="text-muted-foreground">prev txid:</span>{' '}
+                      <span className="text-muted-foreground">Previous transaction:</span>{' '}
                       {input.prevTxid ?? '(null)'}
                     </p>
                     <p>
-                      <span className="text-muted-foreground">prev vout:</span>{' '}
+                      <span className="text-muted-foreground">Output index:</span>{' '}
                       {input.prevVout != null ? `0x${input.prevVout.toString(16)}` : '—'}
                     </p>
                     <p>
@@ -189,7 +189,7 @@ function LabTxViewerPage() {
               <p className="text-sm text-muted-foreground">No inputs</p>
             ) : (
               <div className="space-y-2">
-                {tx.inputs.map((input, index) => {
+                {tx.inputs.map((input, inputIndex) => {
                   const hasPrevout =
                     input.prevTxid != null &&
                     input.prevTxid !== '' &&
@@ -197,7 +197,7 @@ function LabTxViewerPage() {
                     input.prevVout !== undefined
                   return (
                     <div
-                      key={`${input.address}-${index}`}
+                      key={`${input.address}-${inputIndex}`}
                       className="flex flex-col gap-1 py-2 border-b border-border last:border-0 sm:flex-row sm:items-center sm:gap-4"
                     >
                       <div className="flex flex-1 flex-col gap-0.5 min-w-0">
@@ -248,13 +248,13 @@ function LabTxViewerPage() {
 
       <InfomodeWrapper
         infoId="lab-tx-detail-outputs-card"
-        infoTitle="Outputs (TxOuts)"
+        infoTitle="Outputs"
         infoText="Outputs are the destinations of the payment: amounts locked to specific addresses. A row marked “Change” is not a second recipient—it is your wallet sending leftover value back to yourself after spending a larger coin than the payment amount, exactly like real Bitcoin wallets do to avoid losing the remainder."
         className="rounded-xl"
       >
         <Card>
           <CardHeader>
-            <CardTitle>TxOuts</CardTitle>
+            <CardTitle>Outputs</CardTitle>
             <CardDescription>Outputs from this transaction</CardDescription>
           </CardHeader>
           <CardContent>

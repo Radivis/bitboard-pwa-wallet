@@ -3,7 +3,6 @@ import { isCoinbase } from '@/lib/lab-operations'
 import type { LabOwner } from '@/lib/lab-owner'
 import {
   labOwnerDisplayName,
-  labOwnerFromLegacyKey,
   labOwnerFromSortKey,
   labOwnersEqual,
   labOwnerSortKey,
@@ -21,6 +20,9 @@ import type { TransactionDetails } from '@/workers/crypto-types'
 import { AddressType } from '@/lib/wallet-domain-types'
 
 export const WALLET_OWNER_PREFIX = 'wallet:'
+
+/** Sort / query key prefix for lab entities (pairs with {@link WALLET_OWNER_PREFIX} for wallets). */
+export const LAB_ENTITY_SORT_KEY_PREFIX = 'lab-entity:'
 
 /** Returns the wallet owner key used in lab state (e.g. addressToOwner, sender, receiver). */
 export function walletOwnerKey(walletId: number): string {
@@ -286,18 +288,12 @@ export function labTransactionsForWallet(
 export function resolveLabOwnerForDisplay(
   owner: LabOwner | string,
   _wallets: { wallet_id: number; name: string }[],
-  entities: readonly { labEntityId: number; entityName: string | null }[],
+  _entities: readonly { labEntityId: number; entityName: string | null }[],
 ): LabOwner | null {
   if (typeof owner === 'object' && owner !== null && 'kind' in owner) {
     return owner
   }
-  const fromSort = labOwnerFromSortKey(owner)
-  if (fromSort) return fromSort
-  if (typeof owner === 'string' && owner.startsWith(WALLET_OWNER_PREFIX)) {
-    const id = parseInt(owner.slice(WALLET_OWNER_PREFIX.length), 10)
-    if (!Number.isNaN(id)) return { kind: 'wallet', walletId: id }
-  }
-  return labOwnerFromLegacyKey(owner, entities)
+  return labOwnerFromSortKey(owner)
 }
 
 /**
@@ -313,7 +309,7 @@ export function labEntityAddressTypeForOwner(
 ): AddressType | null {
   const resolved = resolveLabOwnerForDisplay(owner, [], entities)
   if (resolved?.kind !== 'lab_entity') return null
-  const entity = entities.find((e) => e.labEntityId === resolved.labEntityId)
+  const entity = entities.find((entityRow) => entityRow.labEntityId === resolved.labEntityId)
   return entity?.addressType ?? null
 }
 
@@ -337,7 +333,7 @@ export function getOwnerDisplayNameWithAddressTypeAria(
 }
 
 /**
- * Display label for a lab owner: {@link LabOwner}, grouped-list sort key (`e:` / `w:`), or legacy string.
+ * Display label for a lab owner: {@link LabOwner} or sort key (`wallet:` / `lab-entity:`).
  */
 export function getOwnerDisplayName(
   owner: LabOwner | string,
@@ -349,12 +345,6 @@ export function getOwnerDisplayName(
   }
   const fromSort = labOwnerFromSortKey(owner)
   if (fromSort) return labOwnerDisplayName(fromSort, wallets, entities)
-  if (typeof owner === 'string' && owner.startsWith(WALLET_OWNER_PREFIX)) {
-    const id = parseInt(owner.slice(WALLET_OWNER_PREFIX.length), 10)
-    return wallets.find((w) => w.wallet_id === id)?.name ?? 'Unknown wallet'
-  }
-  const o = labOwnerFromLegacyKey(owner, entities)
-  if (o) return labOwnerDisplayName(o, wallets, entities)
   return owner
 }
 

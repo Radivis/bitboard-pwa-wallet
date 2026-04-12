@@ -29,7 +29,6 @@ import type { LabOwner } from '@/lib/lab-owner'
 import {
   labEntityLabOwner,
   labOwnerDisplayKey,
-  labOwnerFromLegacyKey,
   normalizeJsonOwnerToLabOwner,
   walletLabOwner,
 } from '@/lib/lab-owner'
@@ -135,9 +134,6 @@ export async function loadLabStateFromDatabase(): Promise<LabState> {
       const lei = (row as { lab_entity_id?: number | null }).lab_entity_id
       if (lei != null && lei > 0) {
         addressToOwner[row.address] = labEntityLabOwner(lei)
-      } else if (row.entity_name != null && row.entity_name !== '') {
-        const o = labOwnerFromLegacyKey(row.entity_name, entities)
-        if (o) addressToOwner[row.address] = o
       }
     }
   }
@@ -229,9 +225,12 @@ export async function loadLabStateFromDatabase(): Promise<LabState> {
   }))
 
   const txOperations: LabTxOperationRecord[] = txOpRows.map((r) => {
-    const sender =
-      labOwnerFromTxRow(r.sender_lab_entity_id, r.sender_wallet_id, r.sender_key, entities) ??
-      labOwnerFromLegacyKey(r.sender_key, entities)
+    const sender = labOwnerFromTxRow(
+      r.sender_lab_entity_id,
+      r.sender_wallet_id,
+      r.sender_key,
+      entities,
+    )
     if (sender == null) {
       throw new Error(`lab_tx_operations: cannot parse sender for txid=${r.txid}`)
     }
