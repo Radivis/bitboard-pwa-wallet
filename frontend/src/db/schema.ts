@@ -1,4 +1,4 @@
-import type { Generated, Insertable, Selectable, Updateable } from 'kysely'
+import type { ColumnType, Generated, Insertable, Selectable, Updateable } from 'kysely'
 import type { KdfVersion } from '@/lib/encrypted-blob-types'
 
 export type { KdfVersion }
@@ -62,7 +62,8 @@ export type NewLibraryHistoryRow = Insertable<LibraryHistoryTable>
 
 interface LibraryArticlesTable {
   article_slug: string
-  is_favorite: number
+  /** SQLite BOOLEAN; JS `boolean` when selected, bind `0`/`1` on insert/update (driver limitation). */
+  is_favorite: ColumnType<boolean, number, number>
 }
 
 export type LibraryArticleRow = Selectable<LibraryArticlesTable>

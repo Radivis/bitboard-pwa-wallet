@@ -28,6 +28,7 @@ export function getLabDatabase(): Kysely<LabDatabase> {
  * Ensures all lab tables exist with the current column set. Lab uses a separate SQLite file
  * (`bitboard-lab`); there is no version table. Pre-production: if an older file is missing
  * columns, use “Reset lab” in the UI or clear site data rather than keeping ALTER migrations.
+ * Legacy lab DBs may still list INTEGER for boolean columns in PRAGMA table_info until recreated; behavior is unchanged.
  */
 async function migrateLabToLatest(labDb: Kysely<LabDatabase>): Promise<void> {
   await labDb.schema
@@ -120,7 +121,7 @@ async function migrateLabToLatest(labDb: Kysely<LabDatabase>): Promise<void> {
     .addColumn('account_id', 'integer', (col) => col.notNull().defaultTo(0))
     .addColumn('created_at', 'text', (col) => col.notNull())
     .addColumn('updated_at', 'text', (col) => col.notNull())
-    .addColumn('is_dead', 'integer', (col) => col.notNull().defaultTo(0))
+    .addColumn('is_dead', 'boolean', (col) => col.notNull().defaultTo(false))
     .execute()
 
   await labDb.schema

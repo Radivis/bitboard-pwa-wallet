@@ -371,7 +371,7 @@ export async function fetchLabEntitiesPage(
       addressType: parseAddressType(r.address_type),
       balanceSats: balanceByEntityId.get(labEntityId) ?? 0,
       hasTransactions: hasTransactionsById.has(labEntityId),
-      isDead: r.is_dead !== 0,
+      isDead: Boolean(r.is_dead),
     }
   })
 

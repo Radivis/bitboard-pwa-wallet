@@ -118,7 +118,7 @@ export async function loadLabStateFromDatabase(): Promise<LabState> {
     accountId: r.account_id,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
-    isDead: Number((r as { is_dead?: number }).is_dead ?? 0) !== 0,
+    isDead: Boolean(r.is_dead),
   }))
 
   const addressOwnersRows = await labDb

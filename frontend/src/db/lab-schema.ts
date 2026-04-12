@@ -8,7 +8,7 @@
  * `lab_tx_operations`) so UI attribution does not depend only on string inference.
  * Simulation parameters live in `lab_parameter_presets` (e.g. block vByte limit).
  */
-import type { Generated, Insertable, Selectable, Updateable } from 'kysely'
+import type { ColumnType, Generated, Insertable, Selectable, Updateable } from 'kysely'
 
 /**
  * Maps a lab address to its owner: main app wallet (`wallet` + `wallet_id`) or a lab entity
@@ -38,8 +38,8 @@ interface LabEntitiesTable {
   account_id: number
   created_at: string
   updated_at: string
-  /** 1 = excluded from random lab-entity transactions as sender/receiver. */
-  is_dead: number
+  /** SQLite BOOLEAN; JS `boolean` when selected, bind `0`/`1` on insert/update (driver limitation). */
+  is_dead: ColumnType<boolean, number, number>
 }
 
 /** Unconfirmed transactions: raw hex, ids, fee, and JSON snapshots of inputs/outputs for mempool UI and worker reconciliation. */
