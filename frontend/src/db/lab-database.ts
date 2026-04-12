@@ -142,6 +142,8 @@ async function migrateLabToLatest(labDb: Kysely<LabDatabase>): Promise<void> {
     .addColumn('mined_by_wallet_id', 'integer', (col) => col)
     .addColumn('coinbase_txid', 'text', (col) => col)
     .addColumn('created_at', 'text', (col) => col.notNull())
+    .addColumn('block_weight_limit_wu', 'integer', (col) => col)
+    .addColumn('non_coinbase_weight_used_wu', 'integer', (col) => col)
     .execute()
 
   await labDb.schema
@@ -184,7 +186,10 @@ async function migrateLabToLatest(labDb: Kysely<LabDatabase>): Promise<void> {
 
 /** Idempotent ALTERs for DBs created before new columns existed. */
 async function patchLabSchemaForExistingFiles(labDb: Kysely<LabDatabase>): Promise<void> {
-  const patches: [string, string][] = []
+  const patches: [string, string][] = [
+    ['lab_mine_operations', 'block_weight_limit_wu INTEGER'],
+    ['lab_mine_operations', 'non_coinbase_weight_used_wu INTEGER'],
+  ]
   for (const [table, colDef] of patches) {
     try {
       await sql.raw(`ALTER TABLE ${table} ADD COLUMN ${colDef}`).execute(labDb)
