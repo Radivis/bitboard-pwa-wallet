@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { labVsizeFromWeight } from '@/lib/lab-tx-weight'
 import { EMPTY_LAB_STATE, type LabState } from '@/workers/lab-api'
 
 const {
@@ -107,8 +108,8 @@ function snapshotFromMempool(): LabState {
       sender: 'Alice',
       receiver: 'Bob',
       feeSats: 1,
-      vsize: 100,
       weight: 400,
+      vsize: labVsizeFromWeight(400),
       inputs: [],
       inputsDetail: [],
       outputsDetail: [],

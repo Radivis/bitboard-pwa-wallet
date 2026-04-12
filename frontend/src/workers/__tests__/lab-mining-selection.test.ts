@@ -1,18 +1,20 @@
 import { describe, expect, it } from 'vitest'
+import { labVsizeFromWeight } from '@/lib/lab-tx-weight'
 import type { MempoolEntry } from '@/workers/lab-api'
 import { selectMempoolTxsForBlock } from '@/workers/lab-mining-template'
 
 function makeEntry(
-  params: Pick<MempoolEntry, 'txid' | 'feeSats' | 'vsize' | 'weight' | 'inputs'>,
+  params: Pick<MempoolEntry, 'txid' | 'feeSats' | 'weight' | 'inputs'>,
 ): MempoolEntry {
+  const weight = params.weight
   return {
     signedTxHex: '00',
     txid: params.txid,
     sender: null,
     receiver: null,
     feeSats: params.feeSats,
-    vsize: params.vsize,
-    weight: params.weight,
+    weight,
+    vsize: labVsizeFromWeight(weight),
     inputs: params.inputs,
     inputsDetail: [],
     outputsDetail: [],
@@ -28,15 +30,13 @@ describe('selectMempoolTxsForBlock', () => {
     const a = makeEntry({
       txid: 'aa',
       feeSats: 100,
-      vsize: 100,
-      weight: 100,
+      weight: 400,
       inputs: [{ txid: 'f1', vout: 0 }],
     })
     const b = makeEntry({
       txid: 'bb',
       feeSats: 50,
-      vsize: 50,
-      weight: 50,
+      weight: 200,
       inputs: [{ txid: 'f2', vout: 0 }],
     })
     const selected = selectMempoolTxsForBlock([a, b], 4000)
@@ -47,14 +47,12 @@ describe('selectMempoolTxsForBlock', () => {
     const a = makeEntry({
       txid: 'aa',
       feeSats: 1000,
-      vsize: 100,
       weight: 100,
       inputs: [{ txid: 'f1', vout: 0 }],
     })
     const b = makeEntry({
       txid: 'bb',
       feeSats: 500,
-      vsize: 100,
       weight: 100,
       inputs: [{ txid: 'f2', vout: 0 }],
     })
@@ -66,14 +64,12 @@ describe('selectMempoolTxsForBlock', () => {
     const big = makeEntry({
       txid: 'big',
       feeSats: 10_000,
-      vsize: 200,
       weight: 200,
       inputs: [{ txid: 'f1', vout: 0 }],
     })
     const small = makeEntry({
       txid: 'small',
       feeSats: 100,
-      vsize: 50,
       weight: 50,
       inputs: [{ txid: 'f2', vout: 0 }],
     })
@@ -85,14 +81,12 @@ describe('selectMempoolTxsForBlock', () => {
     const winner = makeEntry({
       txid: 'win',
       feeSats: 100,
-      vsize: 100,
       weight: 100,
       inputs: [{ txid: 'shared', vout: 0 }],
     })
     const loser = makeEntry({
       txid: 'lose',
       feeSats: 90,
-      vsize: 100,
       weight: 100,
       inputs: [{ txid: 'shared', vout: 0 }],
     })
@@ -104,14 +98,12 @@ describe('selectMempoolTxsForBlock', () => {
     const b = makeEntry({
       txid: 'bb',
       feeSats: 100,
-      vsize: 100,
       weight: 100,
       inputs: [{ txid: 'f1', vout: 0 }],
     })
     const a = makeEntry({
       txid: 'aa',
       feeSats: 100,
-      vsize: 100,
       weight: 100,
       inputs: [{ txid: 'f2', vout: 0 }],
     })

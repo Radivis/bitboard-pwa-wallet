@@ -52,8 +52,6 @@ interface LabMempoolTable {
   receiver_lab_entity_id: number | null
   receiver_wallet_id: number | null
   fee_sats: number
-  /** Virtual size in vBytes; nullable for DBs created before this column existed. */
-  vsize: number | null
   /** BIP141 weight units; nullable for DBs created before this column existed. */
   weight: number | null
   inputs_json: string

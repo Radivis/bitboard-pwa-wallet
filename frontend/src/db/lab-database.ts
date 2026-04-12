@@ -90,7 +90,6 @@ async function migrateLabToLatest(labDb: Kysely<LabDatabase>): Promise<void> {
     .addColumn('receiver_lab_entity_id', 'integer', (col) => col)
     .addColumn('receiver_wallet_id', 'integer', (col) => col)
     .addColumn('fee_sats', 'integer', (col) => col.notNull())
-    .addColumn('vsize', 'integer', (col) => col)
     .addColumn('weight', 'integer', (col) => col)
     .addColumn('inputs_json', 'text', (col) => col.notNull())
     .addColumn('inputs_detail_json', 'text', (col) => col.notNull())
@@ -200,7 +199,6 @@ async function patchLabSchemaForExistingFiles(labDb: Kysely<LabDatabase>): Promi
     ['lab_mine_operations', 'mined_by_wallet_id INTEGER'],
     ['lab_tx_operations', 'sender_lab_entity_id INTEGER'],
     ['lab_tx_operations', 'sender_wallet_id INTEGER'],
-    ['lab_mempool', 'vsize INTEGER'],
     ['lab_mempool', 'weight INTEGER'],
     ['lab_parameter_presets', 'miner_subsidy_sats INTEGER NOT NULL DEFAULT 5000000000'],
     ['lab_mine_operations', 'block_weight_limit_wu INTEGER'],
@@ -226,6 +224,12 @@ async function patchLabSchemaForExistingFiles(labDb: Kysely<LabDatabase>): Promi
     } catch {
       /* column already dropped, or table created without legacy TEXT owner columns (SQLite 3.35+). */
     }
+  }
+
+  try {
+    await sql.raw('ALTER TABLE lab_mempool DROP COLUMN vsize').execute(labDb)
+  } catch {
+    /* column already dropped, or table created without vsize (derived from weight). */
   }
 }
 

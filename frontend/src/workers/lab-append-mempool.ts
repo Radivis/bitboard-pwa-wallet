@@ -1,4 +1,5 @@
 import type { LabOwner } from '@/lib/lab-owner'
+import { labVsizeFromWeight } from '@/lib/lab-tx-weight'
 import type { LabMempoolMetadata } from './lab-api'
 import { rebuildTxidToChangeAddressFromState, state } from './lab-worker-state'
 
@@ -6,14 +7,15 @@ export function appendLabTxOperationAndMempoolEntry(params: {
   signedTxHex: string
   txid: string
   weight: number
-  vsize: number
   mempoolMetadata: LabMempoolMetadata
   sender: LabOwner
   changeAddress: string | null
   changeVout: number | null
 }): void {
-  const { signedTxHex, txid, weight, vsize, mempoolMetadata, sender, changeAddress, changeVout } =
+  const { signedTxHex, txid, weight, mempoolMetadata, sender, changeAddress, changeVout } =
     params
+  const normalizedWeight = weight > 0 ? weight : 1
+  const vsize = labVsizeFromWeight(normalizedWeight)
   const primaryToAddress = mempoolMetadata.outputsDetail.find((o) => !o.isChange)?.address ?? null
 
   state.txOperations = state.txOperations ?? []
@@ -36,7 +38,7 @@ export function appendLabTxOperationAndMempoolEntry(params: {
     sender: mempoolMetadata.sender,
     receiver: mempoolMetadata.receiver,
     feeSats: mempoolMetadata.feeSats,
-    weight,
+    weight: normalizedWeight,
     vsize,
     inputs: mempoolMetadata.inputs,
     inputsDetail: mempoolMetadata.inputsDetail,

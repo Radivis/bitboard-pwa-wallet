@@ -23,6 +23,7 @@ import {
 import type { LabDatabase } from '@/db/lab-schema'
 import { labOwnerFromDbPair, labOwnerFromTxRow, labOwnerToDbPair } from '@/lib/lab-db-owner'
 import { labEntityOwnerKey } from '@/lib/lab-entity-keys'
+import { labVsizeFromWeight } from '@/lib/lab-tx-weight'
 import type { LabOwner } from '@/lib/lab-owner'
 import {
   labEntityLabOwner,
@@ -142,36 +143,36 @@ export async function loadLabStateFromDatabase(): Promise<LabState> {
 
   const mempoolRows = await labDb.selectFrom('lab_mempool').selectAll().execute()
 
-  const mempool = mempoolRows.map((r) => ({
-    signedTxHex: r.signed_tx_hex,
-    txid: r.txid,
-    sender: labOwnerFromDbPair(r.sender_lab_entity_id, r.sender_wallet_id),
-    receiver: labOwnerFromDbPair(r.receiver_lab_entity_id, r.receiver_wallet_id),
-    feeSats: r.fee_sats,
-    vsize:
-      typeof r.vsize === 'number' && Number.isFinite(r.vsize) && r.vsize > 0
-        ? r.vsize
-        : 0,
-    weight:
-      r.weight != null && Number.isFinite(r.weight) && r.weight > 0 ? r.weight : 0,
-    inputs: JSON.parse(r.inputs_json) as { txid: string; vout: number }[],
-    inputsDetail: mergeMempoolInputsDetailWithOutpoints(
-      JSON.parse(r.inputs_json) as { txid: string; vout: number }[],
-      normalizeMempoolIoOwners(
-        JSON.parse(r.inputs_detail_json) as LabTxInputDetail[],
+  const mempool = mempoolRows.map((r) => {
+    const resolvedWeight =
+      r.weight != null && Number.isFinite(r.weight) && r.weight > 0 ? r.weight : 0
+    return {
+      signedTxHex: r.signed_tx_hex,
+      txid: r.txid,
+      sender: labOwnerFromDbPair(r.sender_lab_entity_id, r.sender_wallet_id),
+      receiver: labOwnerFromDbPair(r.receiver_lab_entity_id, r.receiver_wallet_id),
+      feeSats: r.fee_sats,
+      vsize: labVsizeFromWeight(resolvedWeight),
+      weight: resolvedWeight,
+      inputs: JSON.parse(r.inputs_json) as { txid: string; vout: number }[],
+      inputsDetail: mergeMempoolInputsDetailWithOutpoints(
+        JSON.parse(r.inputs_json) as { txid: string; vout: number }[],
+        normalizeMempoolIoOwners(
+          JSON.parse(r.inputs_detail_json) as LabTxInputDetail[],
+          entities,
+        ),
+      ),
+      outputsDetail: normalizeMempoolIoOwners(
+        JSON.parse(r.outputs_detail_json) as {
+          address: string
+          amountSats: number
+          isChange?: boolean
+          owner?: unknown
+        }[],
         entities,
       ),
-    ),
-    outputsDetail: normalizeMempoolIoOwners(
-      JSON.parse(r.outputs_detail_json) as {
-        address: string
-        amountSats: number
-        isChange?: boolean
-        owner?: unknown
-      }[],
-      entities,
-    ),
-  }))
+    }
+  })
 
   const txDetailsRows = await labDb
     .selectFrom('lab_tx_details')
@@ -408,7 +409,6 @@ async function clearAndInsertLabState(
       receiver_lab_entity_id: r.labEntityId,
       receiver_wallet_id: r.walletId,
       fee_sats: m.feeSats,
-      vsize: m.vsize,
       weight: m.weight,
       inputs_json: JSON.stringify(m.inputs),
       inputs_detail_json: JSON.stringify(m.inputsDetail),

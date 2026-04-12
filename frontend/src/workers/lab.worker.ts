@@ -15,6 +15,7 @@ import {
   type LabTxDetails,
 } from './lab-api'
 import { findLabEntityById, nextLabEntityId } from '@/lib/lab-entity-keys'
+import { labVsizeFromWeight } from '@/lib/lab-tx-weight'
 import {
   labEntityLabOwner,
   labEntityMustBeAliveToSend,
@@ -73,14 +74,11 @@ const labService = {
     )
     const mempool = (cloned.mempool ?? []).map((entry) => {
       let next = { ...entry }
-      if (next.vsize <= 0) {
-        const v = wasmU64ToNumber(wasmModule.lab_tx_vbytes(entry.signedTxHex))
-        next = { ...next, vsize: v > 0 ? v : 1 }
-      }
       if (next.weight <= 0) {
         const w = wasmU64ToNumber(wasmModule.lab_tx_weight(entry.signedTxHex))
         next = { ...next, weight: w > 0 ? w : 1 }
       }
+      next = { ...next, vsize: labVsizeFromWeight(next.weight) }
       return next
     })
     replaceLabWorkerState({
@@ -406,13 +404,11 @@ const labService = {
       : undefined
     const changeVout = mempoolMetadata.outputsDetail.findIndex((o) => o.isChange)
 
-    const vsize = wasmU64ToNumber(wasmModule.lab_tx_vbytes(signedTxHex))
     const weight = wasmU64ToNumber(wasmModule.lab_tx_weight(signedTxHex))
     appendLabTxOperationAndMempoolEntry({
       signedTxHex,
       txid,
       weight: weight > 0 ? weight : 1,
-      vsize: vsize > 0 ? vsize : 1,
       mempoolMetadata,
       sender: labEntityLabOwner(entity.labEntityId),
       changeAddress: changeOut?.address ?? null,
@@ -514,13 +510,11 @@ const labService = {
       throw new Error(`addSignedTransactionToMempool: missing sender for txid=${txid}`)
     }
 
-    const vsize = wasmU64ToNumber(wasmModule.lab_tx_vbytes(signedTxHex))
     const weight = wasmU64ToNumber(wasmModule.lab_tx_weight(signedTxHex))
     appendLabTxOperationAndMempoolEntry({
       signedTxHex,
       txid,
       weight: weight > 0 ? weight : 1,
-      vsize: vsize > 0 ? vsize : 1,
       mempoolMetadata,
       sender,
       changeAddress: mempoolMetadata.hasChange ? mempoolMetadata.walletChangeAddress : null,
