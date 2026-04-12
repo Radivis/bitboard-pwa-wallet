@@ -21,7 +21,11 @@ import {
   validateLabEntityRenameName,
 } from '@/lib/lab-owner'
 import { LAB_CARD_PAGE_SIZE } from '@/lib/lab-paginated-queries'
-import { selectCommittedAddressType, useWalletStore } from '@/stores/walletStore'
+import {
+  AddressType,
+  selectCommittedAddressType,
+  useWalletStore,
+} from '@/stores/walletStore'
 import { useLabChainStateQuery } from '@/hooks/useLabChainStateQuery'
 import { useLabEntitiesPage } from '@/hooks/useLabPaginatedQueries'
 import {
@@ -43,11 +47,13 @@ export function LabEntitiesCard() {
   const [deleteId, setDeleteId] = useState<number | null>(null)
   /** Taproot vs SegWit for the next create — defaults to Settings / committed wallet address type. */
   const [newEntityUseTaproot, setNewEntityUseTaproot] = useState(
-    () => selectCommittedAddressType(useWalletStore.getState()) === 'taproot',
+    () =>
+      selectCommittedAddressType(useWalletStore.getState()) ===
+      AddressType.Taproot,
   )
 
   useEffect(() => {
-    setNewEntityUseTaproot(committedAddressType === 'taproot')
+    setNewEntityUseTaproot(committedAddressType === AddressType.Taproot)
   }, [committedAddressType])
 
   const { data: labState } = useLabChainStateQuery()
@@ -81,7 +87,9 @@ export function LabEntitiesCard() {
 
   const onCreate = () => {
     const trimmed = newEntityName.trim()
-    const labAddressType = newEntityUseTaproot ? 'taproot' : 'segwit'
+    const labAddressType = newEntityUseTaproot
+      ? AddressType.Taproot
+      : AddressType.SegWit
     if (trimmed.length > 0) {
       const v = validateLabEntityRenameName(trimmed, entitiesForValidation, -1)
       if (!v.ok) {
@@ -97,7 +105,8 @@ export function LabEntitiesCard() {
         onSuccess: () => {
           setNewEntityName('')
           setNewEntityUseTaproot(
-            selectCommittedAddressType(useWalletStore.getState()) === 'taproot',
+            selectCommittedAddressType(useWalletStore.getState()) ===
+              AddressType.Taproot,
           )
           void refetch()
         },

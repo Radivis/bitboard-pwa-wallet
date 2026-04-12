@@ -1,4 +1,5 @@
 import { type Page, expect } from '@playwright/test'
+import { AddressType } from '@/lib/wallet-domain-types'
 import { LabOwnerType } from '@/lib/lab-owner-type'
 import type { LabState } from '@/workers/lab-api'
 import { labEntityOwnerKey } from '@/lib/lab-entity-keys'
@@ -62,7 +63,7 @@ function labStateHasNamedEntity(state: LabState, trimmedName: string): boolean {
 
 export type MineOwnerType = LabOwnerType
 
-export type LabEntityAddressType = 'segwit' | 'taproot'
+export type LabEntityAddressType = AddressType
 
 export interface MineOptions {
   targetAddress?: string
@@ -77,7 +78,7 @@ export interface MineOptions {
  * Odd index → SegWit, even → Taproot (1-based creation order within a test).
  */
 export function labEntityAddressTypeForCreationIndex(index1Based: number): LabEntityAddressType {
-  return index1Based % 2 === 1 ? 'segwit' : 'taproot'
+  return index1Based % 2 === 1 ? AddressType.SegWit : AddressType.Taproot
 }
 
 /** Create a lab entity from Control (required before mining to a lab entity). */
@@ -87,10 +88,10 @@ export async function createLabEntityViaControl(
 ): Promise<void> {
   await page.getByRole('navigation', { name: 'Lab' }).getByRole('link', { name: 'Control' }).click()
   await expect(page.getByRole('heading', { name: 'Control' })).toBeVisible({ timeout: 15000 })
-  const addressType = options?.addressType ?? 'segwit'
+  const addressType = options?.addressType ?? AddressType.SegWit
   await page
     .getByRole('switch', { name: /Use Taproot address type/ })
-    .setChecked(addressType === 'taproot')
+    .setChecked(addressType === AddressType.Taproot)
   const nameInput = page.getByLabel(/Name \(optional\)/)
   await nameInput.clear()
   if (options?.ownerName) {
@@ -145,7 +146,7 @@ export async function mineBlocksInLab(
   if (ownerType === LabOwnerType.LabEntity) {
     if (options?.randomAnonymous) {
       await createLabEntityViaControl(page, {
-        addressType: options.labAddressType ?? 'segwit',
+        addressType: options.labAddressType ?? AddressType.SegWit,
       })
     } else if (options?.ownerName !== undefined) {
       const trimmedOwner = options.ownerName.trim()

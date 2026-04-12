@@ -1,3 +1,4 @@
+import { AddressType } from '@/lib/wallet-domain-types'
 import { nextLabEntityId } from '@/lib/lab-entity-keys'
 import { LabOwnerType } from '@/lib/lab-owner-type'
 import { feeSatsFromTxDetails } from '@/lib/lab-tx-fee'
@@ -121,7 +122,7 @@ export async function resolveTemplateCoinbase(
   wasmModule: Awaited<ReturnType<typeof getWasm>>,
 ): Promise<{ address: string; minedBy: LabOwner | null }> {
   const labNetwork = params.labNetwork ?? 'regtest'
-  const labAddressType = params.labAddressType ?? 'segwit'
+  const labAddressType = params.labAddressType ?? AddressType.SegWit
 
   const targetArg =
     params.ownerType === LabOwnerType.Wallet

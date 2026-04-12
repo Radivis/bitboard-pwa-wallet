@@ -1,4 +1,5 @@
 import { expose } from 'comlink'
+import { AddressType } from '@/lib/wallet-domain-types'
 import type { LabOwner } from '@/lib/lab-owner'
 import {
   LAB_DEFAULT_BLOCK_WEIGHT_UNITS,
@@ -179,7 +180,7 @@ const labService = {
       ownerName?: string
       ownerLabEntityId?: number
       ownerWalletId?: number
-      labAddressType?: string
+      labAddressType?: AddressType
       labNetwork?: string
     },
   ): Promise<LabMineBlocksResult> {
@@ -526,12 +527,12 @@ const labService = {
 
   async createLabEntity(options?: {
     ownerName?: string
-    labAddressType?: string
+    labAddressType?: AddressType
     labNetwork?: string
   }): Promise<LabState> {
     const wasmModule = await getWasm()
     const labNetwork = options?.labNetwork ?? 'regtest'
-    const labAddressType = options?.labAddressType ?? 'segwit'
+    const labAddressType = options?.labAddressType ?? AddressType.SegWit
     const entityNameOpt = options?.ownerName?.trim()
     const now = new Date().toISOString()
 

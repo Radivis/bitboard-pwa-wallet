@@ -56,7 +56,7 @@ export interface LabEntityBuildAndSignLabTransactionParams {
   mnemonic: string;
   changesetJson: string;
   network: string;
-  addressType: string;
+  addressType: AddressType;
   accountId: number;
   utxosJson: string;
   toAddress: string;

@@ -13,6 +13,7 @@ import { LAB_CARD_PAGE_SIZE } from '@/lib/lab-paginated-queries'
 import { feeSatsFromTxDetails } from '@/lib/lab-tx-fee'
 import { netMovedSatsForBlock } from '@/lib/lab-tx-net-moved'
 import { LabBlockSquare } from '@/components/lab/LabBlockSquare'
+import type { AddressType } from '@/lib/wallet-domain-types'
 import type { LabOwner } from '@/lib/lab-owner'
 
 function totalFeesForBlockHeight(txDetails: readonly LabTxDetails[], blockHeight: number): number {
@@ -34,7 +35,7 @@ export function LabPreviousBlocksCard({
   entities: readonly {
     labEntityId: number
     entityName: string | null
-    addressType: string
+    addressType: AddressType
   }[]
   wallets: Array<{ wallet_id: number; name: string }>
 }) {

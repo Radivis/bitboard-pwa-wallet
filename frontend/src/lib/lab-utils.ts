@@ -18,6 +18,7 @@ import type {
   LabState,
 } from '@/workers/lab-api'
 import type { TransactionDetails } from '@/workers/crypto-types'
+import { AddressType } from '@/lib/wallet-domain-types'
 
 export const WALLET_OWNER_PREFIX = 'wallet:'
 
@@ -60,7 +61,7 @@ export function resolveDeadLabEntityRecipient(
   recipientAddress: string,
   addressToOwner: Record<string, LabOwner>,
   entities: readonly LabEntityRecord[],
-): { displayName: string; addressType: string } | null {
+): { displayName: string; addressType: AddressType } | null {
   const owner = lookupLabAddressOwner(recipientAddress, addressToOwner)
   if (owner?.kind !== 'lab_entity') return null
   const entity = entities.find((e) => e.labEntityId === owner.labEntityId)
@@ -304,8 +305,12 @@ export function resolveLabOwnerForDisplay(
  */
 export function labEntityAddressTypeForOwner(
   owner: LabOwner | string,
-  entities: readonly { labEntityId: number; entityName: string | null; addressType: string }[],
-): string | null {
+  entities: readonly {
+    labEntityId: number
+    entityName: string | null
+    addressType: AddressType
+  }[],
+): AddressType | null {
   const resolved = resolveLabOwnerForDisplay(owner, [], entities)
   if (resolved?.kind !== 'lab_entity') return null
   const entity = entities.find((e) => e.labEntityId === resolved.labEntityId)
@@ -318,12 +323,16 @@ export function labEntityAddressTypeForOwner(
 export function getOwnerDisplayNameWithAddressTypeAria(
   owner: LabOwner | string,
   wallets: { wallet_id: number; name: string }[],
-  entities: readonly { labEntityId: number; entityName: string | null; addressType: string }[],
+  entities: readonly {
+    labEntityId: number
+    entityName: string | null
+    addressType: AddressType
+  }[],
 ): string {
   const base = getOwnerDisplayName(owner, wallets, entities)
   const addrType = labEntityAddressTypeForOwner(owner, entities)
   if (addrType == null) return base
-  if (addrType.toLowerCase() === 'taproot') return `${base}, Taproot`
+  if (addrType === AddressType.Taproot) return `${base}, Taproot`
   return `${base}, SegWit`
 }
 

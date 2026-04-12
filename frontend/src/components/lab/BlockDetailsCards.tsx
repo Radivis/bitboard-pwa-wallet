@@ -22,6 +22,7 @@ import { isCoinbase } from '@/lib/lab-operations'
 import { netMovedSatsForBlock } from '@/lib/lab-tx-net-moved'
 import { useLabBlockTransactionsPage } from '@/hooks/useLabPaginatedQueries'
 import { LAB_CARD_PAGE_SIZE } from '@/lib/lab-paginated-queries'
+import type { AddressType } from '@/lib/wallet-domain-types'
 import { useWalletStore } from '@/stores/walletStore'
 
 function HeaderField({ label, value }: { label: string; value: string }) {
@@ -188,7 +189,11 @@ const labBlockTxRowPlainClassName = 'flex flex-wrap items-center gap-2 rounded p
 function labBlockTxList(
   txs: LabBlockDetails['transactions'],
   wallets: Array<{ wallet_id: number; name: string }>,
-  entities: readonly { labEntityId: number; entityName: string | null; addressType: string }[],
+  entities: readonly {
+    labEntityId: number
+    entityName: string | null
+    addressType: AddressType
+  }[],
   isTemplate: boolean,
 ) {
   return (

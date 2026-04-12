@@ -1,6 +1,7 @@
 import { DialogDescription } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { AppModal } from '@/components/AppModal'
+import type { AddressType } from '@/lib/wallet-domain-types'
 import { LabAddressTypeBadge } from '@/components/lab/LabAddressTypeBadge'
 
 interface DeadLabEntityRecipientModalProps {
@@ -8,7 +9,7 @@ interface DeadLabEntityRecipientModalProps {
   onOpenChange: (open: boolean) => void
   entityDisplayName: string
   /** When set, shows the same address-type badge as elsewhere in Lab. */
-  addressType?: string
+  addressType?: AddressType
   onConfirm: () => void
   onCancel: () => void
   isPending?: boolean
@@ -44,9 +45,7 @@ export function DeadLabEntityRecipientModal({
         <span className="inline-flex flex-wrap items-center gap-2">
           You are trying to send to an address belonging to the DEAD Lab entity{' '}
           <span className="font-medium">{entityDisplayName}</span>
-          {addressType != null && addressType.length > 0 ? (
-            <LabAddressTypeBadge addressType={addressType} />
-          ) : null}
+          {addressType != null ? <LabAddressTypeBadge addressType={addressType} /> : null}
           . That is generally not a good idea. Proceed anyway?
         </span>
       </DialogDescription>

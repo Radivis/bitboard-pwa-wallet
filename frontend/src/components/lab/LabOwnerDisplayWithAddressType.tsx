@@ -1,3 +1,4 @@
+import type { AddressType } from '@/lib/wallet-domain-types'
 import { labEntityRecordForLabOwner, type LabOwner } from '@/lib/lab-owner'
 import {
   getOwnerDisplayName,
@@ -8,7 +9,7 @@ import { LabAddressTypeBadge } from '@/components/lab/LabAddressTypeBadge'
 type EntityWithAddressType = {
   labEntityId: number
   entityName: string | null
-  addressType: string
+  addressType: AddressType
 }
 
 export function LabOwnerDisplayWithAddressType({

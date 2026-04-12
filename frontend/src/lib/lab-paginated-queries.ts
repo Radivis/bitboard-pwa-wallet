@@ -15,6 +15,10 @@ import { labEntityOwnerKey } from '@/lib/lab-entity-keys'
 import { labOwnerFromDbPair } from '@/lib/lab-db-owner'
 import { labOwnerFromSortKey, labOwnerFromWalletOwnerKey } from '@/lib/lab-owner'
 import { feeSatsFromTxDetails } from '@/lib/lab-tx-fee'
+import {
+  type AddressType,
+  parseAddressType,
+} from '@/lib/wallet-domain-types'
 import type { LabAddress, LabBlockTransactionSummary, LabTxDetails } from '@/workers/lab-api'
 
 export const LAB_CARD_PAGE_SIZE = 20
@@ -265,7 +269,7 @@ export type LabEntitiesPageRow = {
   labEntityId: number
   entityName: string | null
   displayName: string
-  addressType: string
+  addressType: AddressType
   balanceSats: number
   hasTransactions: boolean
   isDead: boolean
@@ -365,7 +369,7 @@ export async function fetchLabEntitiesPage(
       labEntityId,
       entityName,
       displayName,
-      addressType: r.address_type,
+      addressType: parseAddressType(r.address_type),
       balanceSats: balanceByEntityId.get(labEntityId) ?? 0,
       hasTransactions: hasTransactionsById.has(labEntityId),
       isDead: r.is_dead !== 0,

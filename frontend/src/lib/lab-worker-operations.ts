@@ -20,6 +20,7 @@ import {
   labPipelineDebugLog,
   labPipelineSnapshot,
 } from '@/lib/lab-pipeline-debug'
+import type { AddressType } from '@/lib/wallet-domain-types'
 import { LAB_MAX_RANDOM_ENTITY_TRANSACTIONS } from '@/lib/lab-random-limits'
 
 function sumUtxoSats(utxos: { amountSats: number }[]): number {
@@ -45,7 +46,7 @@ export async function labOpMineBlocks(
     ownerName?: string
     ownerLabEntityId?: number
     ownerWalletId?: number
-    labAddressType?: string
+    labAddressType?: AddressType
     labNetwork?: string
   },
 ): Promise<LabMineBlocksResult> {
@@ -329,7 +330,7 @@ export async function labOpGetCurrentBlockTemplate(
 
 export async function labOpCreateLabEntity(options?: {
   ownerName?: string
-  labAddressType?: string
+  labAddressType?: AddressType
   labNetwork?: string
 }): Promise<LabState> {
   return runLabOp(async () => {

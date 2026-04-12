@@ -23,6 +23,7 @@ import {
   useLabOwnerKeysPage,
 } from '@/hooks/useLabPaginatedQueries'
 import { LAB_CARD_PAGE_SIZE, LAB_ENTITY_INNER_PAGE_SIZE } from '@/lib/lab-paginated-queries'
+import type { AddressType } from '@/lib/wallet-domain-types'
 import { useWalletStore } from '@/stores/walletStore'
 import { Badge } from '@/components/ui/badge'
 import { Wallet, FlaskConical, Copy, Skull } from 'lucide-react'
@@ -41,7 +42,7 @@ function LabOwnerAddressesInner({
     labEntityId: number
     entityName: string | null
     isDead: boolean
-    addressType: string
+    addressType: AddressType
   }[]
   onCopyAddress: (address: string) => void
   addressPageIndex: number

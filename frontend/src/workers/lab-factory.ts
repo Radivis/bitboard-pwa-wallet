@@ -22,6 +22,7 @@ import {
 } from '@/db'
 import type { LabDatabase } from '@/db/lab-schema'
 import { labOwnerFromDbPair, labOwnerFromTxRow, labOwnerToDbPair } from '@/lib/lab-db-owner'
+import { parseAddressType } from '@/lib/wallet-domain-types'
 import { labEntityOwnerKey } from '@/lib/lab-entity-keys'
 import { labVsizeFromWeight } from '@/lib/lab-tx-weight'
 import type { LabOwner } from '@/lib/lab-owner'
@@ -114,7 +115,7 @@ export async function loadLabStateFromDatabase(): Promise<LabState> {
     externalDescriptor: r.external_descriptor,
     internalDescriptor: r.internal_descriptor,
     network: r.network,
-    addressType: r.address_type,
+    addressType: parseAddressType(r.address_type),
     accountId: r.account_id,
     createdAt: r.created_at,
     updatedAt: r.updated_at,

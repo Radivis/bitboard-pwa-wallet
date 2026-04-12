@@ -1,3 +1,4 @@
+import type { AddressType } from '@/lib/wallet-domain-types'
 import type { LabOwnerType } from '@/lib/lab-owner-type'
 import type { LabOwner } from '@/lib/lab-owner'
 
@@ -128,7 +129,7 @@ export interface LabCurrentBlockTemplateParams {
   ownerWalletId?: number
   walletCurrentAddress?: string | null
   /** Matches lab mining defaults; omit to use worker default (segwit). */
-  labAddressType?: string
+  labAddressType?: AddressType
   labNetwork?: string
 }
 
@@ -142,7 +143,7 @@ export interface LabEntityRecord {
   externalDescriptor: string
   internalDescriptor: string
   network: string
-  addressType: string
+  addressType: AddressType
   accountId: number
   createdAt: string
   updatedAt: string
@@ -250,7 +251,7 @@ export interface LabEntityTransactionCryptoParams {
   mnemonic: string
   changesetJson: string
   network: string
-  addressType: string
+  addressType: AddressType
   accountId: number
   utxosJson: string
   toAddress: string
@@ -341,7 +342,7 @@ export interface LabService {
       ownerName?: string
       ownerLabEntityId?: number
       ownerWalletId?: number
-      labAddressType?: string
+      labAddressType?: AddressType
       labNetwork?: string
     },
   ): Promise<LabMineBlocksResult>
@@ -394,7 +395,7 @@ export interface LabService {
   /** Create a lab entity without mining (optional name; same reuse rules as mining). */
   createLabEntity(options?: {
     ownerName?: string
-    labAddressType?: string
+    labAddressType?: AddressType
     labNetwork?: string
   }): Promise<LabState>
 

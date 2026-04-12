@@ -1,22 +1,18 @@
 import { describe, expect, it } from 'vitest'
 import { render, screen } from '@testing-library/react'
+import { AddressType } from '@/lib/wallet-domain-types'
 import { LabAddressTypeBadge } from '@/components/lab/LabAddressTypeBadge'
 import { LabOwnerDisplayWithAddressType } from '@/components/lab/LabOwnerDisplayWithAddressType'
 import { labEntityLabOwner } from '@/lib/lab-owner'
 
 describe('LabAddressTypeBadge', () => {
   it('renders SegWit for segwit address type', () => {
-    render(<LabAddressTypeBadge addressType="segwit" />)
+    render(<LabAddressTypeBadge addressType={AddressType.SegWit} />)
     expect(screen.getByText('SegWit')).toBeInTheDocument()
   })
 
   it('renders Taproot for taproot address type', () => {
-    render(<LabAddressTypeBadge addressType="taproot" />)
-    expect(screen.getByText('Taproot')).toBeInTheDocument()
-  })
-
-  it('treats address type case-insensitively', () => {
-    render(<LabAddressTypeBadge addressType="TAPROOT" />)
+    render(<LabAddressTypeBadge addressType={AddressType.Taproot} />)
     expect(screen.getByText('Taproot')).toBeInTheDocument()
   })
 })
@@ -27,7 +23,7 @@ describe('LabOwnerDisplayWithAddressType', () => {
     {
       labEntityId: 1,
       entityName: 'Alice' as string | null,
-      addressType: 'segwit',
+      addressType: AddressType.SegWit,
     },
   ]
 

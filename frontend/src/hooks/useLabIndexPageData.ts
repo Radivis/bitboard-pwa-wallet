@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { useLabChainStateQuery } from '@/hooks/useLabChainStateQuery'
+import type { AddressType } from '@/lib/wallet-domain-types'
 import { selectCommittedAddressType, useWalletStore } from '@/stores/walletStore'
 import { useLabMiningStore } from '@/stores/labMiningStore'
 import { useWallet, useWallets } from '@/db'
@@ -73,7 +74,7 @@ export function useLabIndexPageData() {
   } | null>(null)
   const [pendingDeadLabSend, setPendingDeadLabSend] = useState<{
     displayName: string
-    addressType: string
+    addressType: AddressType
     variables: LabCreateTransactionVariables
   } | null>(null)
 

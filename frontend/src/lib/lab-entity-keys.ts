@@ -1,3 +1,5 @@
+import { AddressType } from '@/lib/wallet-domain-types'
+
 /**
  * Lab entity stable string keys for `addressToOwner`, mempool, and UI.
  * Anonymous entities store `entityName: null` and use `Anonymous-{labEntityId}` as the key.
@@ -7,10 +9,10 @@
 export function formatLabEntityMineOptionLabel(e: {
   labEntityId: number
   entityName: string | null
-  addressType: string
+  addressType: AddressType
 }): string {
   const name = labEntityOwnerKey(e)
-  const suffix = e.addressType.toLowerCase() === 'taproot' ? 'Taproot' : 'SegWit'
+  const suffix = e.addressType === AddressType.Taproot ? 'Taproot' : 'SegWit'
   return `${name} · ${suffix}`
 }
 

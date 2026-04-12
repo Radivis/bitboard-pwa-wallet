@@ -1,3 +1,4 @@
+import { AddressType } from '@/lib/wallet-domain-types'
 import { nextLabEntityId } from '@/lib/lab-entity-keys'
 import { isCoinbase } from '@/lib/lab-operations'
 import { discardedMempoolConflictTxCount } from '@/lib/lab-mempool-mine-stats'
@@ -24,7 +25,7 @@ export async function executeMineBlocks(
         ownerName?: string
         ownerLabEntityId?: number
         ownerWalletId?: number
-        labAddressType?: string
+        labAddressType?: AddressType
         labNetwork?: string
       }
     | undefined,
@@ -51,7 +52,7 @@ export async function executeMineBlocks(
   }
 
   const labNetwork = options?.labNetwork ?? 'regtest'
-  const labAddressType = options?.labAddressType ?? 'segwit'
+  const labAddressType = options?.labAddressType ?? AddressType.SegWit
   const entityNameOpt = options?.ownerName?.trim()
 
   let coinbaseScriptPubkeyHex: string

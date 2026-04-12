@@ -16,6 +16,7 @@ import {
 import { setLabChainStateCache } from '@/hooks/useLabChainStateQuery'
 import { labChainStateQueryKey } from '@/lib/lab-chain-query'
 import { invalidateLabPaginatedQueries } from '@/lib/lab-paginated-queries'
+import type { AddressType } from '@/lib/wallet-domain-types'
 import { errorMessage } from '@/lib/utils'
 
 export type LabMineBlocksVariables = {
@@ -26,7 +27,7 @@ export type LabMineBlocksVariables = {
     | { ownerLabEntityId: number }
     | { ownerName: string }
     | undefined
-  labAddressType: 'segwit' | 'taproot'
+  labAddressType: AddressType
   labNetwork?: string
 }
 
@@ -144,8 +145,11 @@ export function useLabCreateLabEntityMutation() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationKey: ['lab', 'createLabEntity'] as const,
-    mutationFn: (options?: { ownerName?: string; labAddressType?: string; labNetwork?: string }) =>
-      labOpCreateLabEntity(options),
+    mutationFn: (options?: {
+      ownerName?: string
+      labAddressType?: AddressType
+      labNetwork?: string
+    }) => labOpCreateLabEntity(options),
     onSuccess: (state) => {
       setLabChainStateCache(queryClient, state)
       void invalidateLabPaginatedQueries(queryClient)

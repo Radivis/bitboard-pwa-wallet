@@ -57,39 +57,43 @@ const mockSetNetworkMode = vi.fn()
 const mockSetAddressType = vi.fn()
 const mockSetCurrentAddress = vi.fn()
 const mockCommitLoadedSubWallet = vi.fn()
-vi.mock('@/stores/walletStore', () => ({
-  useWalletStore: Object.assign(
-    (selector: (s: Record<string, unknown>) => unknown) =>
-      selector(walletStoreState),
-    {
-      getState: () => walletStoreState,
+vi.mock('@/stores/walletStore', async () => {
+  const { AddressType } = await import('@/lib/wallet-domain-types')
+  return {
+    AddressType,
+    useWalletStore: Object.assign(
+      (selector: (s: Record<string, unknown>) => unknown) =>
+        selector(walletStoreState),
+      {
+        getState: () => walletStoreState,
+      },
+    ),
+    NETWORK_LABELS: {
+      lab: 'Lab',
+      regtest: 'Regtest',
+      signet: 'Signet',
+      testnet: 'Testnet',
+      mainnet: 'Mainnet',
     },
-  ),
-  NETWORK_LABELS: {
-    lab: 'Lab',
-    regtest: 'Regtest',
-    signet: 'Signet',
-    testnet: 'Testnet',
-    mainnet: 'Mainnet',
-  },
-  getSubWalletLabel: (network: string, addressType: string) =>
-    `${network} ${addressType}`,
-  selectCommittedNetworkMode: (s: {
-    loadedSubWallet: { networkMode: string } | null
-    networkMode: string
-  }) => s.loadedSubWallet?.networkMode ?? s.networkMode,
-  selectCommittedAddressType: (s: {
-    loadedSubWallet: { addressType: string } | null
-    addressType: string
-  }) => s.loadedSubWallet?.addressType ?? s.addressType,
-  getCommittedNetworkMode: () => {
-    const s = walletStoreState as {
+    getSubWalletLabel: (network: string, addressType: string) =>
+      `${network} ${addressType}`,
+    selectCommittedNetworkMode: (s: {
       loadedSubWallet: { networkMode: string } | null
       networkMode: string
-    }
-    return s.loadedSubWallet?.networkMode ?? s.networkMode
-  },
-}))
+    }) => s.loadedSubWallet?.networkMode ?? s.networkMode,
+    selectCommittedAddressType: (s: {
+      loadedSubWallet: { addressType: string } | null
+      addressType: string
+    }) => s.loadedSubWallet?.addressType ?? s.addressType,
+    getCommittedNetworkMode: () => {
+      const s = walletStoreState as {
+        loadedSubWallet: { networkMode: string } | null
+        networkMode: string
+      }
+      return s.loadedSubWallet?.networkMode ?? s.networkMode
+    },
+  }
+})
 
 const mockSetSessionPassword = vi.fn()
 const sessionStoreState = {
