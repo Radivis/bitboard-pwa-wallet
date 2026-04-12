@@ -2,6 +2,41 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { renderWithProviders } from '@/test-utils/test-providers'
+import { toast } from 'sonner'
+
+const featureStoreState = vi.hoisted(() => {
+  const state = {
+    lightningEnabled: false,
+    mainnetAccessEnabled: false,
+    setLightningEnabled: vi.fn(),
+    setMainnetAccessEnabled: vi.fn(),
+  }
+  state.setLightningEnabled.mockImplementation((enabled: boolean) => {
+    state.lightningEnabled = enabled
+  })
+  state.setMainnetAccessEnabled.mockImplementation((enabled: boolean) => {
+    state.mainnetAccessEnabled = enabled
+  })
+  return state
+})
+
+vi.mock('sonner', () => ({
+  toast: {
+    info: vi.fn(),
+    error: vi.fn(),
+    success: vi.fn(),
+  },
+}))
+
+vi.mock('@/stores/featureStore', () => ({
+  useFeatureStore: Object.assign(
+    (selector: (s: typeof featureStoreState) => unknown) =>
+      selector(featureStoreState),
+    {
+      getState: () => featureStoreState,
+    },
+  ),
+}))
 
 vi.mock('@tanstack/react-router', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@tanstack/react-router')>()
@@ -221,6 +256,14 @@ import { SettingsPage } from '../settings'
 describe('SettingsPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    featureStoreState.lightningEnabled = false
+    featureStoreState.mainnetAccessEnabled = false
+    featureStoreState.setLightningEnabled.mockImplementation((enabled: boolean) => {
+      featureStoreState.lightningEnabled = enabled
+    })
+    featureStoreState.setMainnetAccessEnabled.mockImplementation((enabled: boolean) => {
+      featureStoreState.mainnetAccessEnabled = enabled
+    })
     nearZeroSecurityState.active = false
     mockWalletsState.data = []
     sessionStoreState.password = 'testpass'
@@ -366,5 +409,48 @@ describe('SettingsPage', () => {
     const updateCallOrder = mockUpdateDescriptorWalletChangeset.mock.invocationCallOrder[0]
     const resolveCallOrder = mockResolveDescriptorWallet.mock.invocationCallOrder[0]
     expect(updateCallOrder).toBeLessThan(resolveCallOrder)
+  })
+
+  it('shows a toast when Mainnet is tapped while Mainnet access is off', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(<SettingsPage />)
+
+    await user.click(screen.getByRole('button', { name: 'Mainnet' }))
+
+    expect(vi.mocked(toast.info)).toHaveBeenCalledWith(
+      'Activate Mainnet access in Settings → Features before selecting Mainnet.',
+    )
+  })
+
+  it('opens Mainnet access confirmation modal when enabling the toggle', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(<SettingsPage />)
+
+    await user.click(screen.getByRole('switch', { name: 'Enable Mainnet access' }))
+
+    expect(
+      screen.getByRole('heading', { name: 'Mainnet access', level: 2 }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'Activate access' }),
+    ).toBeDisabled()
+  })
+
+  it('enables Activate access after acknowledging risks', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(<SettingsPage />)
+
+    await user.click(screen.getByRole('switch', { name: 'Enable Mainnet access' }))
+    await user.click(
+      screen.getByRole('checkbox', {
+        name: /I understand the risks and have a seed phrase backup ready/,
+      }),
+    )
+
+    const activate = screen.getByRole('button', { name: 'Activate access' })
+    await expect(activate).toBeEnabled()
+    await user.click(activate)
+
+    expect(featureStoreState.setMainnetAccessEnabled).toHaveBeenCalledWith(true)
   })
 })

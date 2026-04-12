@@ -82,7 +82,7 @@ export function SettingsPage() {
       <InfomodeWrapper
         infoId="settings-features-card"
         infoTitle="Features"
-        infoText="Enable or disable optional wallet features. These are advanced capabilities that go beyond basic Bitcoin on-chain operations. Each feature can be turned on independently when you are ready to explore it."
+        infoText="Enable or disable optional wallet features. These are advanced capabilities that go beyond basic Bitcoin on-chain operations. Mainnet access must be turned on here before you can select Mainnet under Network. Each feature can be turned on independently when you are ready to explore it."
         className="rounded-xl"
       >
         <Card>

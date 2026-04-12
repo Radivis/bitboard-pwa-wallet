@@ -2,13 +2,14 @@ import { type Page, expect } from '@playwright/test'
 
 /**
  * After clicking a network on Settings, waits until the switch mutation finishes:
- * all network mode buttons become enabled again (inline phase text is gone).
+ * network mode buttons become enabled again (inline phase text is gone).
+ * Uses Testnet (not Mainnet) because Mainnet can stay aria-disabled when Mainnet access is off.
  */
 export async function waitForSettingsNetworkSwitchComplete(
   page: Page,
   timeout = 120_000,
 ): Promise<void> {
-  await expect(page.getByRole('button', { name: 'Mainnet' })).toBeEnabled({
+  await expect(page.getByRole('button', { name: 'Testnet' })).toBeEnabled({
     timeout,
   })
 }

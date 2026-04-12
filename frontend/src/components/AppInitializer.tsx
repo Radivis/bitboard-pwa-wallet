@@ -13,6 +13,7 @@ import { prefetchLabChainState } from '@/hooks/useLabChainStateQuery'
 import { useHydrateLightningConnections } from '@/hooks/useHydrateLightningConnections'
 import { ActiveWalletBootstrap } from '@/components/ActiveWalletBootstrap'
 import { pathnameRequiresWalletCryptoSession } from '@/lib/pathname-requires-wallet-crypto-session'
+import { runMainnetStrictMigrationAfterHydration } from '@/lib/mainnet-access-strict-migration'
 import { useWalletCryptoSessionPathGateStore } from '@/stores/walletCryptoSessionPathGateStore'
 
 interface AppInitializerProps {
@@ -32,6 +33,10 @@ export function AppInitializer({ children }: AppInitializerProps) {
   useLayoutEffect(() => {
     useWalletCryptoSessionPathGateStore.getState().setPathname(location.pathname)
   }, [location.pathname])
+
+  useEffect(() => {
+    runMainnetStrictMigrationAfterHydration()
+  }, [])
 
   useEffect(() => {
     if (networkMode !== 'lab') return

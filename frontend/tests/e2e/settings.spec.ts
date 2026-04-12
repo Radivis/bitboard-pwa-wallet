@@ -72,4 +72,21 @@ test.describe('Settings Page', () => {
     })
     await expect(urlInput).toHaveValue('http://custom-esplora:3002', { timeout: 5000 })
   })
+
+  test('shows toast when Mainnet is tapped without Mainnet access enabled', async ({
+    page,
+  }) => {
+    test.setTimeout(120_000)
+    await createWalletViaUI(page)
+
+    await page.getByRole('link', { name: /settings/i }).click()
+    await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
+
+    await waitForSettingsNetworkSwitchComplete(page)
+    // Mainnet uses aria-disabled when access is off; Playwright treats that as non-clickable without force.
+    await page.getByRole('button', { name: 'Mainnet' }).click({ force: true })
+    await expect(
+      page.getByText('Activate Mainnet access in Settings → Features before selecting Mainnet.'),
+    ).toBeVisible({ timeout: 10000 })
+  })
 })

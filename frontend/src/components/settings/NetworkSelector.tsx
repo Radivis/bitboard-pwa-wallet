@@ -1,11 +1,13 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { Link } from '@tanstack/react-router'
+import { toast } from 'sonner'
 import {
   useWalletStore,
   NETWORK_LABELS,
   selectCommittedNetworkMode,
   type NetworkMode,
 } from '@/stores/walletStore'
+import { useFeatureStore } from '@/stores/featureStore'
 import { useSubWalletSwitchMutation } from '@/hooks/useSubWalletSwitchMutation'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { Button } from '@/components/ui/button'
@@ -13,6 +15,7 @@ import { WalletUnlock } from '@/components/WalletUnlock'
 import { useSessionStore } from '@/stores/sessionStore'
 import { useNearZeroSecurityStore } from '@/stores/nearZeroSecurityStore'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
+import { cn } from '@/lib/utils'
 
 const NETWORK_OPTIONS: NetworkMode[] = [
   'mainnet',
@@ -47,9 +50,13 @@ const NETWORK_INFOMODE: Record<NetworkMode, { title: string; text: string }> = {
 
 export function NetworkSelector() {
   const displayNetworkMode = useWalletStore(selectCommittedNetworkMode)
+  const mainnetAccessEnabled = useFeatureStore((s) => s.mainnetAccessEnabled)
   const activeWalletId = useWalletStore((s) => s.activeWalletId)
   const sessionPassword = useSessionStore((s) => s.password)
   const nearZeroActive = useNearZeroSecurityStore((s) => s.active)
+
+  const mainnetSelectionBlocked =
+    !mainnetAccessEnabled && displayNetworkMode !== 'mainnet'
   const [showUnlockForNetworkChange, setShowUnlockForNetworkChange] =
     useState(false)
   const pendingNetworkAfterUnlockRef = useRef<NetworkMode | null>(null)
@@ -104,6 +111,7 @@ export function NetworkSelector() {
       <div className="flex flex-wrap gap-2">
         {NETWORK_OPTIONS.map((network) => {
           const { title, text } = NETWORK_INFOMODE[network]
+          const isMainnetBlocked = network === 'mainnet' && mainnetSelectionBlocked
           return (
             <InfomodeWrapper
               key={network}
@@ -114,8 +122,21 @@ export function NetworkSelector() {
               <Button
                 variant={displayNetworkMode === network ? 'default' : 'outline'}
                 size="sm"
-                onClick={() => handleNetworkChange(network)}
+                onClick={() => {
+                  if (isMainnetBlocked) {
+                    toast.info(
+                      'Activate Mainnet access in Settings → Features before selecting Mainnet.',
+                    )
+                    return
+                  }
+                  handleNetworkChange(network)
+                }}
                 disabled={loading}
+                aria-disabled={isMainnetBlocked || undefined}
+                className={cn(
+                  isMainnetBlocked &&
+                    'cursor-not-allowed opacity-60 hover:bg-transparent',
+                )}
               >
                 {NETWORK_LABELS[network]}
               </Button>
