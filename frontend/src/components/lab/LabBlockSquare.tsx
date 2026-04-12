@@ -3,11 +3,11 @@ import {
   ArrowLeftRight,
   Bitcoin,
   Blocks,
+  CakeSlice,
   Calendar,
   Clock,
   FlaskConical,
   Pickaxe,
-  Receipt,
   Wallet,
 } from 'lucide-react'
 import type { LabOwner } from '@/lib/lab-owner'
@@ -70,6 +70,8 @@ export function LabBlockSquare({
   const dateLabel = Number.isFinite(minedOnUnix) && minedOnUnix > 0 ? minedDate.toLocaleDateString() : '—'
   const timeLabel = Number.isFinite(minedOnUnix) && minedOnUnix > 0 ? minedDate.toLocaleTimeString() : '—'
   const netBtcLabel = formatBTC(netMovedSats)
+  const minedByDisplayName =
+    minedBy != null ? getOwnerDisplayName(minedBy, wallets, entities) : null
   const fillPercentRounded =
     fillFraction != null ? Math.round(fillFraction * 100) : null
   const ariaWeightHint =
@@ -122,40 +124,42 @@ export function LabBlockSquare({
             </span>
           </div>
 
-          <div className="grid min-w-0 grid-cols-2 gap-x-1 gap-y-1">
-            <span className="flex min-w-0 items-start gap-1">
-              <Pickaxe className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
-              <span className="sr-only">Mined by</span>
-              <span className="flex min-w-0 flex-1 items-start gap-1">
-                {minedBy ? (
-                  <>
-                    <span className="line-clamp-2 min-w-0 flex-1 leading-tight break-words">
-                      {getOwnerDisplayName(minedBy, wallets, entities)}
+          <div className="flex min-w-0 items-center gap-1">
+            <Pickaxe className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+            <span className="sr-only">Mined by</span>
+            <span className="flex min-w-0 flex-1 items-center gap-1">
+              {minedBy ? (
+                <>
+                  <span
+                    className="min-w-0 flex-1 truncate text-[0.75rem] leading-tight"
+                    title={minedByDisplayName ?? undefined}
+                  >
+                    {minedByDisplayName}
+                  </span>
+                  <span
+                    className="shrink-0 text-muted-foreground"
+                    title={minedBy.kind === 'wallet' ? 'Wallet' : 'Lab entity'}
+                  >
+                    {getOwnerIcon(minedBy) === 'wallet' ? (
+                      <Wallet className="h-4 w-4" aria-hidden />
+                    ) : (
+                      <FlaskConical className="h-4 w-4" aria-hidden />
+                    )}
+                    <span className="sr-only">
+                      {minedBy.kind === 'wallet' ? 'Wallet' : 'Lab entity'}
                     </span>
-                    <span
-                      className="mt-0.5 shrink-0 text-muted-foreground"
-                      title={minedBy.kind === 'wallet' ? 'Wallet' : 'Lab entity'}
-                    >
-                      {getOwnerIcon(minedBy) === 'wallet' ? (
-                        <Wallet className="h-4 w-4" aria-hidden />
-                      ) : (
-                        <FlaskConical className="h-4 w-4" aria-hidden />
-                      )}
-                      <span className="sr-only">
-                        {minedBy.kind === 'wallet' ? 'Wallet' : 'Lab entity'}
-                      </span>
-                    </span>
-                  </>
-                ) : (
-                  <span className="text-muted-foreground">unknown</span>
-                )}
-              </span>
+                  </span>
+                </>
+              ) : (
+                <span className="text-muted-foreground">unknown</span>
+              )}
             </span>
-            <span className="flex min-w-0 items-center justify-end gap-1 text-right tabular-nums">
-              <Receipt className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
-              <span className="sr-only">Total fees</span>
-              <span className="truncate">{formatSats(totalFeesSats)}</span>
-            </span>
+          </div>
+
+          <div className="flex min-w-0 items-center gap-1 tabular-nums">
+            <CakeSlice className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+            <span className="sr-only">Total fees</span>
+            <span className="min-w-0 truncate">{formatSats(totalFeesSats)} sats</span>
           </div>
 
           <div className="flex min-w-0 items-center gap-1 border-t border-border/60 pt-1">
