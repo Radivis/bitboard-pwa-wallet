@@ -59,10 +59,21 @@ export function LabBlocksCard({
     >
       <Card>
         <CardHeader>
-          <CardTitle>Currently mined block</CardTitle>
-          <CardDescription>
-            Simplified single-miner setup · Chain height (blocks mined): {blockCount}
-          </CardDescription>
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div className="space-y-1.5">
+              <CardTitle>Currently mined block</CardTitle>
+              <CardDescription>
+                Simplified single-miner setup · Chain height (blocks mined): {blockCount}
+              </CardDescription>
+            </div>
+            <Link
+              to="/lab/block/current"
+              preload={false}
+              className="inline-flex shrink-0 rounded-md border border-border bg-muted/40 px-2 py-1 text-sm font-medium transition-colors hover:bg-muted"
+            >
+              Current template
+            </Link>
+          </div>
         </CardHeader>
         <CardContent className="flex flex-col gap-6">
           <div className="flex flex-col gap-4">

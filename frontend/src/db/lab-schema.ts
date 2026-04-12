@@ -107,6 +107,10 @@ interface LabMineOperationsTable {
   mined_by_wallet_id: number | null
   coinbase_txid: string | null
   created_at: string
+  /** Max non-coinbase WU allowed when this block was mined (nullable for rows before this column). */
+  block_weight_limit_wu: number | null
+  /** Sum of included non-coinbase tx weights for this block (nullable for legacy rows). */
+  non_coinbase_weight_used_wu: number | null
 }
 
 /**

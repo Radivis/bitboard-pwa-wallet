@@ -37,6 +37,7 @@ export function useLabIndexPageData() {
   const mempool = labState?.mempool ?? []
   const transactions = labState?.transactions ?? []
   const txDetails = labState?.txDetails ?? []
+  const mineOperations = labState?.mineOperations ?? []
   const entities = labState?.entities ?? []
 
   const blockCount = blocks.length === 0 ? 0 : blocks[blocks.length - 1].height + 1
@@ -328,6 +329,7 @@ export function useLabIndexPageData() {
 
   return {
     blocks,
+    mineOperations,
     blockCount,
     mineCount,
     setMineCount,

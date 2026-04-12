@@ -207,6 +207,8 @@ async function patchLabSchemaForExistingFiles(labDb: Kysely<LabDatabase>): Promi
     ['lab_mempool', 'vsize INTEGER'],
     ['lab_mempool', 'weight INTEGER'],
     ['lab_parameter_presets', 'miner_subsidy_sats INTEGER NOT NULL DEFAULT 5000000000'],
+    ['lab_mine_operations', 'block_weight_limit_wu INTEGER'],
+    ['lab_mine_operations', 'non_coinbase_weight_used_wu INTEGER'],
   ]
   for (const [table, colDef] of patches) {
     try {

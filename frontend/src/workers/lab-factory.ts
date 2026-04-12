@@ -230,6 +230,14 @@ export async function loadLabStateFromDatabase(): Promise<LabState> {
     ),
     coinbaseTxid: r.coinbase_txid,
     createdAt: r.created_at,
+    blockWeightLimitWu:
+      r.block_weight_limit_wu != null && Number.isFinite(r.block_weight_limit_wu)
+        ? r.block_weight_limit_wu
+        : null,
+    nonCoinbaseWeightUsedWu:
+      r.non_coinbase_weight_used_wu != null && Number.isFinite(r.non_coinbase_weight_used_wu)
+        ? r.non_coinbase_weight_used_wu
+        : null,
   }))
 
   const txOperations: LabTxOperationRecord[] = txOpRows.map((r) => {
@@ -472,6 +480,14 @@ async function clearAndInsertLabState(
       mined_by_wallet_id: mb.walletId,
       coinbase_txid: m.coinbaseTxid,
       created_at: m.createdAt || nowMine,
+      block_weight_limit_wu:
+        m.blockWeightLimitWu != null && Number.isFinite(m.blockWeightLimitWu)
+          ? Math.floor(m.blockWeightLimitWu)
+          : null,
+      non_coinbase_weight_used_wu:
+        m.nonCoinbaseWeightUsedWu != null && Number.isFinite(m.nonCoinbaseWeightUsedWu)
+          ? Math.floor(m.nonCoinbaseWeightUsedWu)
+          : null,
     }
   })
   for (const chunk of chunkArray(mineOpRows, LAB_PERSIST_INSERT_BATCH_SIZE)) {

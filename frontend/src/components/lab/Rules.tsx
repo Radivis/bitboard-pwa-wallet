@@ -96,7 +96,11 @@ export function LabRulesCard() {
             weight. The minimum is {LAB_MIN_BLOCK_WEIGHT_UNITS} WU so a block can fit several
             typical transactions. The default numeric limit is intentionally tiny compared to
             mainnet so you can see congestion. Changing the limit below only affects{' '}
-            <em>future</em> blocks; past blocks are unchanged.
+            <em>future</em> blocks; past blocks are unchanged. This cap applies only to
+            non-coinbase transactions taken from the mempool: the{' '}
+            <strong>coinbase transaction</strong> and the <strong>block header</strong> are not
+            counted against this lab setting (the lab does not simulate Bitcoin&apos;s full
+            network block weight for the entire serialized block).
           </li>
           <li>
             <strong>Miner subsidy.</strong> Each mined block creates new coins paid in the

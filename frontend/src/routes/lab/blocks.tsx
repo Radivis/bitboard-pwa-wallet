@@ -38,7 +38,13 @@ function LabBlocksPage() {
         wallets={lab.wallets}
       />
 
-      <LabPreviousBlocksCard blocks={lab.blocks} />
+      <LabPreviousBlocksCard
+        blocks={lab.blocks}
+        mineOperations={lab.mineOperations}
+        txDetails={lab.txDetails}
+        entities={lab.entities}
+        wallets={lab.wallets}
+      />
     </>
   )
 }

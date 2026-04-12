@@ -160,6 +160,10 @@ export interface LabMineOperationRecord {
   minedBy: LabOwner | null
   coinbaseTxid: string | null
   createdAt: string
+  /** Snapshot of max non-coinbase WU per block when mined; null for legacy DB rows. */
+  blockWeightLimitWu?: number | null
+  /** Sum of non-coinbase tx weights included in this block; null for legacy rows. */
+  nonCoinbaseWeightUsedWu?: number | null
 }
 
 /** Persisted: metadata for entity/wallet spends (see lab_tx_operations). */

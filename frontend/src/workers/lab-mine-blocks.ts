@@ -145,6 +145,7 @@ export async function executeMineBlocks(
   const mempoolCopy = [...(state.mempool ?? [])]
   const blockLimit = state.blockWeightLimit ?? LAB_DEFAULT_BLOCK_WEIGHT_UNITS
   const selectedEntries = selectMempoolTxsForBlock(mempoolCopy, blockLimit)
+  const nonCoinbaseWeightFirstBlock = selectedEntries.reduce((sum, entry) => sum + entry.weight, 0)
   const mempoolTxHexes = selectedEntries.map((entry) => entry.signedTxHex)
   const totalFeesSats = selectedEntries.reduce((sum, entry) => sum + entry.feeSats, 0)
   const spentByIncluded = new Set(
@@ -178,6 +179,8 @@ export async function executeMineBlocks(
       minedBy,
       coinbaseTxid: coinbaseDetail?.txid ?? null,
       createdAt: new Date().toISOString(),
+      blockWeightLimitWu: blockLimit,
+      nonCoinbaseWeightUsedWu: i === 0 ? nonCoinbaseWeightFirstBlock : 0,
     })
     if (i === 0) {
       state.mempool = (state.mempool ?? []).filter(

@@ -113,12 +113,18 @@ export function LabBlockMetadataCard({
 }) {
   const { data: labState } = useLabChainStateQuery()
   const entities = labState?.entities ?? []
+  const mineOp = labState?.mineOperations?.find((m) => m.height === block.metadata.height)
+  const weightAtMiningRecorded =
+    mineOp?.blockWeightLimitWu != null &&
+    mineOp?.nonCoinbaseWeightUsedWu != null &&
+    Number.isFinite(mineOp.blockWeightLimitWu) &&
+    Number.isFinite(mineOp.nonCoinbaseWeightUsedWu)
 
   return (
     <InfomodeWrapper
       infoId="lab-block-detail-contextual-data-card"
       infoTitle="Contextual data"
-      infoText="Where this block sits in the chain, when it was mined, who received the subsidy, how many transactions it contains, and the fees from non-coinbase transactions."
+      infoText="Where this block sits in the chain, when it was mined, who received the subsidy, how many transactions it contains, the fees from non-coinbase transactions, and (when recorded) the non-coinbase weight used versus the lab limit at mining time."
       className="rounded-xl"
     >
       <Card>
@@ -152,6 +158,14 @@ export function LabBlockMetadataCard({
             <span className="text-muted-foreground">Total fees:</span>{' '}
             {formatSats(block.metadata.totalFeesSats)} sats
           </p>
+          {weightAtMiningRecorded && mineOp != null ? (
+            <p>
+              <span className="text-muted-foreground">Non-coinbase weight (at mining):</span>{' '}
+              <span className="font-mono tabular-nums">
+                {mineOp.nonCoinbaseWeightUsedWu} / {mineOp.blockWeightLimitWu} WU
+              </span>
+            </p>
+          ) : null}
         </CardContent>
       </Card>
     </InfomodeWrapper>
