@@ -1,3 +1,4 @@
+import type { LabOwnerType } from '@/lib/lab-owner-type'
 import type { LabOwner } from '@/lib/lab-owner'
 
 export interface LabBlock {
@@ -119,7 +120,7 @@ export interface LabBlockDetails {
 }
 
 export interface LabCurrentBlockTemplateParams {
-  ownerType: 'name' | 'wallet'
+  ownerType: LabOwnerType
   targetAddress: string
   ownerName?: string
   /** When set, mines to this lab entity (must exist and not be dead). Takes precedence over ownerName. */

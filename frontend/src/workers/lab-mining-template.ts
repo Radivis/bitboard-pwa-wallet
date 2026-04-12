@@ -1,4 +1,5 @@
 import { nextLabEntityId } from '@/lib/lab-entity-keys'
+import { LabOwnerType } from '@/lib/lab-owner-type'
 import { feeSatsFromTxDetails } from '@/lib/lab-tx-fee'
 import { type LabOwner, labEntityLabOwner, walletLabOwner } from '@/lib/lab-owner'
 import { isCoinbase } from '@/lib/lab-operations'
@@ -123,15 +124,17 @@ export async function resolveTemplateCoinbase(
   const labAddressType = params.labAddressType ?? 'segwit'
 
   const targetArg =
-    params.ownerType === 'wallet'
+    params.ownerType === LabOwnerType.Wallet
       ? (params.walletCurrentAddress ?? '').trim()
       : params.targetAddress.trim()
 
   const entityNameOpt =
-    params.ownerType === 'name' ? (params.ownerName?.trim() ?? '') : ''
+    params.ownerType === LabOwnerType.LabEntity
+      ? (params.ownerName?.trim() ?? '')
+      : ''
 
   if (
-    params.ownerType === 'name' &&
+    params.ownerType === LabOwnerType.LabEntity &&
     params.ownerLabEntityId != null &&
     Number.isInteger(params.ownerLabEntityId)
   ) {
@@ -192,7 +195,7 @@ export async function resolveTemplateCoinbase(
 
   if (targetArg !== '') {
     const minedBy =
-      params.ownerType === 'wallet' && params.ownerWalletId != null
+      params.ownerType === LabOwnerType.Wallet && params.ownerWalletId != null
         ? walletLabOwner(params.ownerWalletId)
         : null
     return { address: targetArg, minedBy }

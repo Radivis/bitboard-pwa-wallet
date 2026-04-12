@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test'
+import { LabOwnerType } from '@/lib/lab-owner-type'
 import { importWalletViaUI, TEST_MNEMONIC, TEST_PASSWORD } from './helpers/wallet-setup'
 import {
   switchToLab,
@@ -34,7 +35,7 @@ test.describe('Lab', { tag: '@lab' }, () => {
   })
 
   test('mine to name', async ({ page }) => {
-    await mineBlocksInLab(page, 1, 'name', { ownerName: 'Alice' })
+    await mineBlocksInLab(page, 1, LabOwnerType.LabEntity, { ownerName: 'Alice' })
 
     const state = await getLabState(page)
     expect(state.blocks).toHaveLength(1)
@@ -45,7 +46,7 @@ test.describe('Lab', { tag: '@lab' }, () => {
   })
 
   test('mine to wallet', async ({ page }) => {
-    await mineBlocksInLab(page, 1, 'wallet')
+    await mineBlocksInLab(page, 1, LabOwnerType.Wallet)
 
     const state = await getLabState(page)
     expect(state.blocks).toHaveLength(1)
@@ -60,7 +61,7 @@ test.describe('Lab', { tag: '@lab' }, () => {
   })
 
   test('random mine creates anonymous lab entity', async ({ page }) => {
-    await mineBlocksInLab(page, 1, 'name', { randomAnonymous: true })
+    await mineBlocksInLab(page, 1, LabOwnerType.LabEntity, { randomAnonymous: true })
 
     const state = await getLabState(page)
     expect(state.blocks).toHaveLength(1)
@@ -74,8 +75,8 @@ test.describe('Lab', { tag: '@lab' }, () => {
   test('creating lab transaction does not increase merged address count while unconfirmed', async ({
     page,
   }) => {
-    await mineBlocksInLab(page, 1, 'name', { ownerName: 'Alice' })
-    await mineBlocksInLab(page, 1, 'name', { ownerName: 'Bob' })
+    await mineBlocksInLab(page, 1, LabOwnerType.LabEntity, { ownerName: 'Alice' })
+    await mineBlocksInLab(page, 1, LabOwnerType.LabEntity, { ownerName: 'Bob' })
 
     const stateBefore = await getLabState(page)
     const aliceAddress = findAddressForOwner(stateBefore, 'Alice')
@@ -104,15 +105,15 @@ test.describe('Lab', { tag: '@lab' }, () => {
   })
 
   test('creates random transactions between lab entities', async ({ page }) => {
-    await mineBlocksInLab(page, 1, 'name', {
+    await mineBlocksInLab(page, 1, LabOwnerType.LabEntity, {
       ownerName: 'Alice',
       labAddressType: labEntityAddressTypeForCreationIndex(1),
     })
-    await mineBlocksInLab(page, 1, 'name', {
+    await mineBlocksInLab(page, 1, LabOwnerType.LabEntity, {
       ownerName: 'Bob',
       labAddressType: labEntityAddressTypeForCreationIndex(2),
     })
-    await mineBlocksInLab(page, 1, 'name', {
+    await mineBlocksInLab(page, 1, LabOwnerType.LabEntity, {
       ownerName: 'Carol',
       labAddressType: labEntityAddressTypeForCreationIndex(3),
     })
@@ -140,10 +141,10 @@ test.describe('Lab', { tag: '@lab' }, () => {
     const taprootA = 'Taproot A'
     const taprootB = 'Taproot B'
 
-    await mineBlocksInLab(page, 1, 'name', { ownerName: segwitA, labAddressType: 'segwit' })
-    await mineBlocksInLab(page, 1, 'name', { ownerName: segwitB, labAddressType: 'segwit' })
-    await mineBlocksInLab(page, 1, 'name', { ownerName: taprootA, labAddressType: 'taproot' })
-    await mineBlocksInLab(page, 1, 'name', { ownerName: taprootB, labAddressType: 'taproot' })
+    await mineBlocksInLab(page, 1, LabOwnerType.LabEntity, { ownerName: segwitA, labAddressType: 'segwit' })
+    await mineBlocksInLab(page, 1, LabOwnerType.LabEntity, { ownerName: segwitB, labAddressType: 'segwit' })
+    await mineBlocksInLab(page, 1, LabOwnerType.LabEntity, { ownerName: taprootA, labAddressType: 'taproot' })
+    await mineBlocksInLab(page, 1, LabOwnerType.LabEntity, { ownerName: taprootB, labAddressType: 'taproot' })
 
     let state = await getLabState(page)
     expect(state.entities).toHaveLength(4)
@@ -161,22 +162,22 @@ test.describe('Lab', { tag: '@lab' }, () => {
 
     await createTransactionInLab(page, await addressForOwner(segwitA), await addressForOwner(segwitB), 11_000, 1)
     expect((await getLabState(page)).mempool).toHaveLength(1)
-    await mineBlocksInLab(page, 1, 'name', { ownerName: segwitA, labAddressType: 'segwit' })
+    await mineBlocksInLab(page, 1, LabOwnerType.LabEntity, { ownerName: segwitA, labAddressType: 'segwit' })
     expect((await getLabState(page)).mempool).toHaveLength(0)
 
     await createTransactionInLab(page, await addressForOwner(segwitA), await addressForOwner(taprootA), 13_000, 1)
     expect((await getLabState(page)).mempool).toHaveLength(1)
-    await mineBlocksInLab(page, 1, 'name', { ownerName: segwitA, labAddressType: 'segwit' })
+    await mineBlocksInLab(page, 1, LabOwnerType.LabEntity, { ownerName: segwitA, labAddressType: 'segwit' })
     expect((await getLabState(page)).mempool).toHaveLength(0)
 
     await createTransactionInLab(page, await addressForOwner(taprootA), await addressForOwner(segwitA), 9_000, 1)
     expect((await getLabState(page)).mempool).toHaveLength(1)
-    await mineBlocksInLab(page, 1, 'name', { ownerName: taprootA, labAddressType: 'taproot' })
+    await mineBlocksInLab(page, 1, LabOwnerType.LabEntity, { ownerName: taprootA, labAddressType: 'taproot' })
     expect((await getLabState(page)).mempool).toHaveLength(0)
 
     await createTransactionInLab(page, await addressForOwner(taprootA), await addressForOwner(taprootB), 14_000, 1)
     expect((await getLabState(page)).mempool).toHaveLength(1)
-    await mineBlocksInLab(page, 1, 'name', { ownerName: taprootA, labAddressType: 'taproot' })
+    await mineBlocksInLab(page, 1, LabOwnerType.LabEntity, { ownerName: taprootA, labAddressType: 'taproot' })
     state = await getLabState(page)
     expect(state.mempool).toHaveLength(0)
     expect(
@@ -188,8 +189,8 @@ test.describe('Lab', { tag: '@lab' }, () => {
   })
 
   test('transfer name to name in lab', async ({ page }) => {
-    await mineBlocksInLab(page, 1, 'name', { ownerName: 'Alice' })
-    await mineBlocksInLab(page, 1, 'name', { ownerName: 'Bob' })
+    await mineBlocksInLab(page, 1, LabOwnerType.LabEntity, { ownerName: 'Alice' })
+    await mineBlocksInLab(page, 1, LabOwnerType.LabEntity, { ownerName: 'Bob' })
 
     const stateBefore = await getLabState(page)
     const aliceAddress = findAddressForOwner(stateBefore, 'Alice')
@@ -202,7 +203,7 @@ test.describe('Lab', { tag: '@lab' }, () => {
     let state = await getLabState(page)
     expect(state.mempool).toHaveLength(1)
 
-    await mineBlocksInLab(page, 1, 'name', { ownerName: 'Alice' })
+    await mineBlocksInLab(page, 1, LabOwnerType.LabEntity, { ownerName: 'Alice' })
 
     state = await getLabState(page)
     expect(state.mempool).toHaveLength(0)
@@ -213,7 +214,7 @@ test.describe('Lab', { tag: '@lab' }, () => {
   })
 
   test('self transfer marks only one change output', async ({ page }) => {
-    await mineBlocksInLab(page, 1, 'name', { ownerName: 'Alice' })
+    await mineBlocksInLab(page, 1, LabOwnerType.LabEntity, { ownerName: 'Alice' })
 
     const stateBefore = await getLabState(page)
     const aliceAddress = findAddressForOwner(stateBefore, 'Alice')
@@ -227,7 +228,7 @@ test.describe('Lab', { tag: '@lab' }, () => {
       (entry) => entry.txid === selfTransferTxid,
     )
     expect(selfTransferMempoolEntry?.receiver).toEqual({ kind: 'lab_entity', labEntityId: 1 })
-    await mineBlocksInLab(page, 1, 'name', { ownerName: 'Alice' })
+    await mineBlocksInLab(page, 1, LabOwnerType.LabEntity, { ownerName: 'Alice' })
 
     const stateAfter = await getLabState(page)
     const minedSpendRecord = stateAfter.transactions.find(
@@ -245,8 +246,8 @@ test.describe('Lab', { tag: '@lab' }, () => {
   })
 
   test('conflicting transactions - higher fee rate wins', async ({ page }) => {
-    await mineBlocksInLab(page, 1, 'name', { ownerName: 'Alice' })
-    await mineBlocksInLab(page, 1, 'name', { ownerName: 'Bob' })
+    await mineBlocksInLab(page, 1, LabOwnerType.LabEntity, { ownerName: 'Alice' })
+    await mineBlocksInLab(page, 1, LabOwnerType.LabEntity, { ownerName: 'Bob' })
 
     const stateBefore = await getLabState(page)
     const aliceAddress = findAddressForOwner(stateBefore, 'Alice')
@@ -276,7 +277,7 @@ test.describe('Lab', { tag: '@lab' }, () => {
     state = await getLabState(page)
     expect(state.mempool).toHaveLength(2)
 
-    await mineBlocksInLab(page, 1, 'name', { ownerName: 'Alice' })
+    await mineBlocksInLab(page, 1, LabOwnerType.LabEntity, { ownerName: 'Alice' })
 
     state = await getLabState(page)
     expect(state.mempool).toHaveLength(0)
@@ -293,7 +294,7 @@ test.describe('Lab', { tag: '@lab' }, () => {
   })
 
   test('transfer name to wallet address in lab', async ({ page }) => {
-    await mineBlocksInLab(page, 1, 'name', { ownerName: 'Alice' })
+    await mineBlocksInLab(page, 1, LabOwnerType.LabEntity, { ownerName: 'Alice' })
 
     const stateAfterMine = await getLabState(page)
     const aliceAddress = findAddressForOwner(stateAfterMine, 'Alice')
@@ -313,7 +314,7 @@ test.describe('Lab', { tag: '@lab' }, () => {
     let state = await getLabState(page)
     expect(state.mempool).toHaveLength(1)
 
-    await mineBlocksInLab(page, 1, 'name', { ownerName: 'Alice' })
+    await mineBlocksInLab(page, 1, LabOwnerType.LabEntity, { ownerName: 'Alice' })
 
     state = await getLabState(page)
     expect(state.mempool).toHaveLength(0)
@@ -328,8 +329,8 @@ test.describe('Lab', { tag: '@lab' }, () => {
   })
 
   test('transfer wallet to name in wallet', async ({ page }) => {
-    await mineBlocksInLab(page, 1, 'wallet')
-    await mineBlocksInLab(page, 1, 'name', { ownerName: 'Alice' })
+    await mineBlocksInLab(page, 1, LabOwnerType.Wallet)
+    await mineBlocksInLab(page, 1, LabOwnerType.LabEntity, { ownerName: 'Alice' })
 
     const stateBefore = await getLabState(page)
     const aliceAddress = findAddressForOwner(stateBefore, 'Alice')
@@ -340,7 +341,7 @@ test.describe('Lab', { tag: '@lab' }, () => {
     let state = await getLabState(page)
     expect(state.mempool).toHaveLength(1)
 
-    await mineBlocksInLab(page, 1, 'name', { ownerName: 'Alice' })
+    await mineBlocksInLab(page, 1, LabOwnerType.LabEntity, { ownerName: 'Alice' })
 
     state = await getLabState(page)
     expect(state.mempool).toHaveLength(0)
@@ -351,7 +352,7 @@ test.describe('Lab', { tag: '@lab' }, () => {
   })
 
   test('transfer wallet to wallet', async ({ page }) => {
-    await mineBlocksInLab(page, 2, 'wallet')
+    await mineBlocksInLab(page, 2, LabOwnerType.Wallet)
 
     await goToWalletTab(page, 'Receive')
     await expect(page.getByRole('heading', { name: 'Receive Bitcoin' })).toBeVisible({
@@ -371,7 +372,7 @@ test.describe('Lab', { tag: '@lab' }, () => {
     let state = await getLabState(page)
     expect(state.mempool).toHaveLength(1)
 
-    await mineBlocksInLab(page, 1, 'name', { ownerName: 'Alice' })
+    await mineBlocksInLab(page, 1, LabOwnerType.LabEntity, { ownerName: 'Alice' })
 
     state = await getLabState(page)
     expect(state.mempool).toHaveLength(0)
@@ -389,8 +390,8 @@ test.describe('Lab', { tag: '@lab' }, () => {
   })
 
   test('tx viewer links input outpoint to parent tx and highlights vout', async ({ page }) => {
-    await mineBlocksInLab(page, 1, 'name', { ownerName: 'Alice' })
-    await mineBlocksInLab(page, 1, 'name', { ownerName: 'Bob' })
+    await mineBlocksInLab(page, 1, LabOwnerType.LabEntity, { ownerName: 'Alice' })
+    await mineBlocksInLab(page, 1, LabOwnerType.LabEntity, { ownerName: 'Bob' })
 
     const beforeSpend = await getLabState(page)
     const aliceAddress = findAddressForOwner(beforeSpend, 'Alice')
@@ -399,7 +400,7 @@ test.describe('Lab', { tag: '@lab' }, () => {
     expect(bobAddress).toBeDefined()
 
     await createTransactionInLab(page, aliceAddress!, bobAddress!, 10_000, 1)
-    await mineBlocksInLab(page, 1, 'name', { ownerName: 'Alice' })
+    await mineBlocksInLab(page, 1, LabOwnerType.LabEntity, { ownerName: 'Alice' })
 
     const state = await getLabState(page)
     const spendDetail = state.txDetails?.find(
@@ -458,7 +459,7 @@ test.describe('Lab', { tag: '@lab' }, () => {
     await page.getByRole('navigation', { name: 'Lab' }).getByRole('link', { name: 'Blocks' }).click()
     await expect(page.getByRole('heading', { name: 'Blocks' })).toBeVisible()
 
-    await mineBlocksInLab(page, 1, 'name', { ownerName: 'Alice' })
+    await mineBlocksInLab(page, 1, LabOwnerType.LabEntity, { ownerName: 'Alice' })
 
     await page.getByRole('link', { name: '0' }).click()
     await expect(page.getByRole('heading', { name: 'Block 0' })).toBeVisible()

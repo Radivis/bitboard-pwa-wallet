@@ -11,6 +11,7 @@ import {
 import { useWallets } from '@/db'
 import { useLabIndexPageData } from '@/hooks/useLabIndexPageData'
 import { selectCommittedAddressType, useWalletStore } from '@/stores/walletStore'
+import { LabOwnerType } from '@/lib/lab-owner-type'
 import { labOpGetCurrentBlockTemplate } from '@/lib/lab-worker-operations'
 import type { LabBlockDetails } from '@/workers/lab-api'
 
@@ -32,7 +33,9 @@ function LabCurrentBlockPage() {
         ownerType: lab.ownerType,
         targetAddress: '',
         ownerLabEntityId:
-          lab.ownerType === 'name' ? lab.selectedLabEntityId ?? undefined : undefined,
+          lab.ownerType === LabOwnerType.LabEntity
+            ? lab.selectedLabEntityId ?? undefined
+            : undefined,
         ownerWalletId: activeWalletId ?? undefined,
         walletCurrentAddress: currentAddress,
         labAddressType,

@@ -12,6 +12,7 @@ import {
   type LabCreateTransactionVariables,
 } from '@/hooks/useLabMutations'
 import { LAB_MAX_BLOCKS_PER_MINE, LAB_MIN_BLOCKS_PER_MINE } from '@/workers/lab-api'
+import { LabOwnerType } from '@/lib/lab-owner-type'
 import { LAB_MAX_RANDOM_ENTITY_TRANSACTIONS } from '@/lib/lab-random-limits'
 import { labEntityOwnerKey } from '@/lib/lab-entity-keys'
 import { labEntityRecordForLabOwner, walletLabOwner } from '@/lib/lab-owner'
@@ -252,11 +253,11 @@ export function useLabIndexPageData() {
       return
     }
     const effectiveTarget =
-      ownerType === 'wallet' ? (currentAddress ?? '').trim() : ''
+      ownerType === LabOwnerType.Wallet ? (currentAddress ?? '').trim() : ''
     const mineOptions =
-      ownerType === 'wallet' && activeWalletId != null
+      ownerType === LabOwnerType.Wallet && activeWalletId != null
         ? { ownerWalletId: activeWalletId }
-        : ownerType === 'name' && selectedLabEntityId != null
+        : ownerType === LabOwnerType.LabEntity && selectedLabEntityId != null
           ? { ownerLabEntityId: selectedLabEntityId }
           : undefined
     mineMutation.mutate({

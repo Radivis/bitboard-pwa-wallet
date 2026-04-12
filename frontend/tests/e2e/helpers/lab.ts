@@ -1,4 +1,5 @@
 import { type Page, expect } from '@playwright/test'
+import { LabOwnerType } from '@/lib/lab-owner-type'
 import type { LabState } from '@/workers/lab-api'
 import { labEntityOwnerKey } from '@/lib/lab-entity-keys'
 import { lookupLabAddressOwner, WALLET_OWNER_PREFIX } from '@/lib/lab-utils'
@@ -59,7 +60,7 @@ function labStateHasNamedEntity(state: LabState, trimmedName: string): boolean {
   return (state.entities ?? []).some((e) => e.entityName === trimmedName)
 }
 
-export type MineOwnerType = 'name' | 'wallet'
+export type MineOwnerType = LabOwnerType
 
 export type LabEntityAddressType = 'segwit' | 'taproot'
 
@@ -126,7 +127,7 @@ export async function mineBlocksInLab(
   ownerType: MineOwnerType,
   options?: MineOptions,
 ): Promise<void> {
-  if (ownerType === 'wallet') {
+  if (ownerType === LabOwnerType.Wallet) {
     await goToWalletTab(page, 'Receive')
     await expect(page.getByRole('heading', { name: 'Receive Bitcoin' })).toBeVisible({
       timeout: 10000,
@@ -141,7 +142,7 @@ export async function mineBlocksInLab(
     timeout: 15000,
   })
 
-  if (ownerType === 'name') {
+  if (ownerType === LabOwnerType.LabEntity) {
     if (options?.randomAnonymous) {
       await createLabEntityViaControl(page, {
         addressType: options.labAddressType ?? 'segwit',
@@ -159,13 +160,15 @@ export async function mineBlocksInLab(
   }
 
   await page.getByLabel('Number of blocks').fill(String(count))
-  await page.getByRole('button', { name: ownerType === 'name' ? 'Lab entity' : 'Wallet' }).click()
+  await page.getByRole('button', {
+    name: ownerType === LabOwnerType.LabEntity ? 'Lab entity' : 'Wallet',
+  }).click()
 
   await expect(page.getByRole('button', { name: 'Mine blocks' })).toBeEnabled({
     timeout: 20000,
   })
 
-  if (ownerType === 'name') {
+  if (ownerType === LabOwnerType.LabEntity) {
     const select = page.locator('#lab-entity-mine-select')
     await expect(select).toBeVisible()
     if (options?.ownerName?.trim()) {
@@ -186,7 +189,7 @@ export async function mineBlocksInLab(
     timeout: 30000,
   })
 
-  if (ownerType === 'name' && options?.ownerName?.trim()) {
+  if (ownerType === LabOwnerType.LabEntity && options?.ownerName?.trim()) {
     const owner = options.ownerName.trim()
     await expect
       .poll(
@@ -198,7 +201,7 @@ export async function mineBlocksInLab(
       )
       .toBeGreaterThan(0)
   }
-  if (ownerType === 'name' && options?.randomAnonymous) {
+  if (ownerType === LabOwnerType.LabEntity && options?.randomAnonymous) {
     await expect
       .poll(
         async () => {
@@ -212,7 +215,7 @@ export async function mineBlocksInLab(
       )
       .toBeGreaterThan(0)
   }
-  if (ownerType === 'wallet') {
+  if (ownerType === LabOwnerType.Wallet) {
     await expect
       .poll(
         async () => {

@@ -16,6 +16,7 @@ import {
 } from '@/workers/lab-api'
 import type { LabEntityRecord } from '@/workers/lab-api'
 import { formatLabEntityMineOptionLabel } from '@/lib/lab-entity-keys'
+import { LabOwnerType } from '@/lib/lab-owner-type'
 import { cn } from '@/lib/utils'
 
 export function LabBlocksCard({
@@ -36,8 +37,8 @@ export function LabBlocksCard({
   blockCount: number
   mineCount: string
   setMineCount: (v: string) => void
-  ownerType: 'name' | 'wallet'
-  setOwnerType: (v: 'name' | 'wallet') => void
+  ownerType: LabOwnerType
+  setOwnerType: (v: LabOwnerType) => void
   entities: readonly LabEntityRecord[]
   selectedLabEntityId: number | null
   setSelectedLabEntityId: (id: number | null) => void
@@ -48,7 +49,8 @@ export function LabBlocksCard({
   activeWallet: { name: string } | undefined
 }) {
   const livingEntities = entities.filter((e) => !e.isDead)
-  const noLivingEntities = ownerType === 'name' && livingEntities.length === 0
+  const noLivingEntities =
+    ownerType === LabOwnerType.LabEntity && livingEntities.length === 0
 
   return (
     <InfomodeWrapper
@@ -108,9 +110,11 @@ export function LabBlocksCard({
                 >
                   <Button
                     type="button"
-                    variant={ownerType === 'name' ? 'default' : 'outline'}
+                    variant={
+                      ownerType === LabOwnerType.LabEntity ? 'default' : 'outline'
+                    }
                     size="sm"
-                    onClick={() => setOwnerType('name')}
+                    onClick={() => setOwnerType(LabOwnerType.LabEntity)}
                   >
                     Lab entity
                   </Button>
@@ -122,16 +126,18 @@ export function LabBlocksCard({
                 >
                   <Button
                     type="button"
-                    variant={ownerType === 'wallet' ? 'default' : 'outline'}
+                    variant={
+                      ownerType === LabOwnerType.Wallet ? 'default' : 'outline'
+                    }
                     size="sm"
-                    onClick={() => setOwnerType('wallet')}
+                    onClick={() => setOwnerType(LabOwnerType.Wallet)}
                   >
                     Wallet
                   </Button>
                 </InfomodeWrapper>
               </div>
             </div>
-            {ownerType === 'wallet' ? (
+            {ownerType === LabOwnerType.Wallet ? (
               <div className="space-y-2">
                 <Label htmlFor="target-address">Target address (active wallet)</Label>
                 {walletStatus === 'unlocked' || walletStatus === 'syncing' ? (
@@ -188,7 +194,7 @@ export function LabBlocksCard({
                 </select>
               </div>
             )}
-            {ownerType === 'wallet' && activeWallet && (
+            {ownerType === LabOwnerType.Wallet && activeWallet && (
               <p className="text-sm text-muted-foreground">Mining to: {activeWallet.name}</p>
             )}
           </div>
@@ -203,10 +209,11 @@ export function LabBlocksCard({
                 disabled={
                   mining ||
                   noLivingEntities ||
-                  (ownerType === 'wallet' &&
+                  (ownerType === LabOwnerType.Wallet &&
                     walletStatus !== 'unlocked' &&
                     walletStatus !== 'syncing') ||
-                  (ownerType === 'wallet' && (!currentAddress || !activeWallet))
+                  (ownerType === LabOwnerType.Wallet &&
+                    (!currentAddress || !activeWallet))
                 }
               >
                 {mining ? 'Mining...' : 'Mine blocks'}
