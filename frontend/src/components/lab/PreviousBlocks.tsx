@@ -76,7 +76,7 @@ export function LabPreviousBlocksCard({
     <InfomodeWrapper
       infoId="lab-previous-blocks-card"
       infoTitle="Previous blocks (lab)"
-      infoText="Mined blocks as compact square cards: icons show height, transaction count, miner, fees, net moved BTC (sum of per-transaction non-change outputs; coinbase counts full outputs), mined date and time, and non-coinbase weight versus the limit recorded when the block was mined (shown only as background fill). Paginate when there are many blocks."
+      infoText="Mined blocks as compact square cards: icons show height, transaction count, miner, fees, net moved BTC (sum of non-change outputs from non-coinbase transactions only; coinbase is excluded), mined date and time, and non-coinbase weight versus the limit recorded when the block was mined (shown only as background fill). Paginate when there are many blocks."
       className="rounded-xl"
     >
       <Card>

@@ -14,12 +14,16 @@ export function netMovedSatsForLabTx(tx: LabTxDetails): number {
     .reduce((sum, o) => sum + o.amountSats, 0)
 }
 
-/** Sum of {@link netMovedSatsForLabTx} for every transaction in the block. */
+/**
+ * Sum of {@link netMovedSatsForLabTx} for non-coinbase transactions in the block.
+ * Coinbase is excluded so the total reflects mempool transfers only (subsidy size does not dominate).
+ */
 export function netMovedSatsForBlock(
   txDetails: readonly LabTxDetails[],
   blockHeight: number,
 ): number {
   return txDetails
     .filter((tx) => tx.blockHeight === blockHeight)
+    .filter((tx) => !isCoinbase(tx))
     .reduce((sum, tx) => sum + netMovedSatsForLabTx(tx), 0)
 }

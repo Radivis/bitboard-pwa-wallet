@@ -22,7 +22,7 @@ export type LabBlockSquareProps = {
   height: number
   txCount: number
   totalFeesSats: number
-  /** Sum of per-tx net moved sats (non-change outputs; coinbase: all outputs). */
+  /** Block net moved: sum of non-change outputs per non-coinbase tx (coinbase excluded). */
   netMovedSats: number
   minedOnUnix: number
   minedBy: LabOwner | null

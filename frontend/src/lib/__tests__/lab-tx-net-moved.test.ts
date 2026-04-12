@@ -67,7 +67,7 @@ describe('netMovedSatsForLabTx', () => {
 })
 
 describe('netMovedSatsForBlock', () => {
-  it('sums per-tx net moved for the given height', () => {
+  it('sums non-coinbase per-tx net moved for the given height (excludes coinbase)', () => {
     const cb = coinbaseTx({ blockHeight: 2, txid: 'cb2' })
     const spend: LabTxDetails = {
       txid: 'sp',
@@ -88,6 +88,6 @@ describe('netMovedSatsForBlock', () => {
       inputs: [{ address: 'a', amountSats: 1, prevTxid: 'p', prevVout: 0 }],
       outputs: [{ address: 'o', amountSats: 1 }],
     }
-    expect(netMovedSatsForBlock([cb, spend, other], 2)).toBe(5_000_000_000 + 400)
+    expect(netMovedSatsForBlock([cb, spend, other], 2)).toBe(400)
   })
 })

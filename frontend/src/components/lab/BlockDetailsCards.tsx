@@ -128,7 +128,7 @@ export function LabBlockMetadataCard({
     <InfomodeWrapper
       infoId="lab-block-detail-contextual-data-card"
       infoTitle="Contextual data"
-      infoText="Where this block sits in the chain, when it was mined, who received the subsidy, how many transactions it contains, the fees from non-coinbase transactions, net moved BTC (sum of per-transaction non-change outputs; coinbase counts full outputs), and (when recorded) the non-coinbase weight used versus the lab limit at mining time."
+      infoText="Where this block sits in the chain, when it was mined, who received the subsidy, how many transactions it contains, the fees from non-coinbase transactions, net moved BTC (sum of non-change outputs from non-coinbase transactions only; coinbase excluded), and (when recorded) the non-coinbase weight used versus the lab limit at mining time."
       className="rounded-xl"
     >
       <Card>
