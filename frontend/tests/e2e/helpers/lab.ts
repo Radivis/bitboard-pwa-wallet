@@ -53,6 +53,12 @@ function escapeRegExp(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
+/** True when a lab entity with this display name already exists (create would reject as duplicate). */
+function labStateHasNamedEntity(state: LabState, trimmedName: string): boolean {
+  if (trimmedName === '') return false
+  return (state.entities ?? []).some((e) => e.entityName === trimmedName)
+}
+
 export type MineOwnerType = 'name' | 'wallet'
 
 export type LabEntityAddressType = 'segwit' | 'taproot'
@@ -141,10 +147,14 @@ export async function mineBlocksInLab(
         addressType: options.labAddressType ?? 'segwit',
       })
     } else if (options?.ownerName !== undefined) {
-      await createLabEntityViaControl(page, {
-        ownerName: options.ownerName.trim() || undefined,
-        addressType: options.labAddressType,
-      })
+      const trimmedOwner = options.ownerName.trim()
+      const stateBeforeCreate = await getLabState(page)
+      if (!labStateHasNamedEntity(stateBeforeCreate, trimmedOwner)) {
+        await createLabEntityViaControl(page, {
+          ownerName: trimmedOwner || undefined,
+          addressType: options.labAddressType,
+        })
+      }
     }
   }
 
