@@ -1,13 +1,15 @@
 import { Link } from '@tanstack/react-router'
 import {
   ArrowLeftRight,
-  BetweenVerticalStart,
+  Bitcoin,
+  Blocks,
+  Calendar,
   Clock,
   Pickaxe,
   Receipt,
 } from 'lucide-react'
 import type { LabOwner } from '@/lib/lab-owner'
-import { formatSats } from '@/lib/bitcoin-utils'
+import { formatBTC, formatSats } from '@/lib/bitcoin-utils'
 import { getOwnerDisplayName } from '@/lib/lab-utils'
 import { cn } from '@/lib/utils'
 
@@ -20,6 +22,8 @@ export type LabBlockSquareProps = {
   height: number
   txCount: number
   totalFeesSats: number
+  /** Sum of per-tx net moved sats (non-change outputs; coinbase: all outputs). */
+  netMovedSats: number
   minedOnUnix: number
   minedBy: LabOwner | null
   blockWeightLimitWu: number | null
@@ -44,6 +48,7 @@ export function LabBlockSquare({
   height,
   txCount,
   totalFeesSats,
+  netMovedSats,
   minedOnUnix,
   minedBy,
   blockWeightLimitWu,
@@ -59,7 +64,10 @@ export function LabBlockSquare({
   const emptyHeightPercent =
     fillHeightPercent != null ? Math.round((100 - fillHeightPercent) * 100) / 100 : null
 
-  const timeLabel = new Date(minedOnUnix * 1000).toLocaleString()
+  const minedDate = new Date(minedOnUnix * 1000)
+  const dateLabel = Number.isFinite(minedOnUnix) && minedOnUnix > 0 ? minedDate.toLocaleDateString() : '—'
+  const timeLabel = Number.isFinite(minedOnUnix) && minedOnUnix > 0 ? minedDate.toLocaleTimeString() : '—'
+  const netBtcLabel = formatBTC(netMovedSats)
   const fillPercentRounded =
     fillFraction != null ? Math.round(fillFraction * 100) : null
   const ariaWeightHint =
@@ -73,7 +81,7 @@ export function LabBlockSquare({
       params={{ height: String(height) }}
       preload={false}
       className={cn('group block min-w-0 outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-lg', className)}
-      aria-label={`Block ${height}, ${txCount} transactions, mined ${timeLabel}${ariaWeightHint}`}
+      aria-label={`Block ${height}, ${txCount} transactions, net moved ${netBtcLabel} BTC, mined ${dateLabel} ${timeLabel}${ariaWeightHint}`}
     >
       <div
         className={cn(
@@ -98,7 +106,7 @@ export function LabBlockSquare({
         <div className="relative z-10 flex h-full min-h-0 flex-col justify-between gap-1 p-2 text-xs leading-tight">
           <div className="grid min-w-0 grid-cols-2 gap-x-1 gap-y-1">
             <span className="flex min-w-0 items-center gap-1 tabular-nums">
-              <BetweenVerticalStart
+              <Blocks
                 className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
                 aria-hidden
               />
@@ -139,9 +147,23 @@ export function LabBlockSquare({
           </div>
 
           <div className="flex min-w-0 items-center gap-1 border-t border-border/60 pt-1">
-            <Clock className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
-            <span className="sr-only">Mined on</span>
-            <span className="truncate text-[0.7rem] text-muted-foreground">{timeLabel}</span>
+            <Bitcoin className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
+            <span className="sr-only">Net moved</span>
+            <span className="truncate font-mono tabular-nums text-[0.7rem]">{netBtcLabel} BTC</span>
+            <span className="sr-only">{formatSats(netMovedSats)} sats</span>
+          </div>
+
+          <div className="grid min-w-0 grid-cols-2 gap-x-1 gap-y-0 border-t border-border/60 pt-1 text-[0.7rem] text-muted-foreground">
+            <span className="flex min-w-0 items-center gap-1">
+              <Calendar className="h-3.5 w-3.5 shrink-0" aria-hidden />
+              <span className="sr-only">Mined on date</span>
+              <span className="truncate">{dateLabel}</span>
+            </span>
+            <span className="flex min-w-0 items-center justify-end gap-1">
+              <Clock className="h-3.5 w-3.5 shrink-0" aria-hidden />
+              <span className="sr-only">Mined on time</span>
+              <span className="truncate tabular-nums">{timeLabel}</span>
+            </span>
           </div>
         </div>
       </div>

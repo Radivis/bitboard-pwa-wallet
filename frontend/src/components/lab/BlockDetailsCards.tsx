@@ -9,7 +9,7 @@ import {
 } from '@/components/ui/card'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { Badge } from '@/components/ui/badge'
-import { formatSats, truncateAddress } from '@/lib/bitcoin-utils'
+import { formatBTC, formatSats, truncateAddress } from '@/lib/bitcoin-utils'
 import { LabOwnerDisplayWithAddressType } from '@/components/lab/LabOwnerDisplayWithAddressType'
 import { useLabChainStateQuery } from '@/hooks/useLabChainStateQuery'
 import type { LabBlockDetails } from '@/workers/lab-api'
@@ -18,6 +18,7 @@ import {
   LabBlockMerkleRootInfomodeContent,
 } from '@/components/lab/LabBlockHeaderInfomodeContent'
 import { CardPagination } from '@/components/CardPagination'
+import { netMovedSatsForBlock } from '@/lib/lab-tx-net-moved'
 import { useLabBlockTransactionsPage } from '@/hooks/useLabPaginatedQueries'
 import { LAB_CARD_PAGE_SIZE } from '@/lib/lab-paginated-queries'
 import { useWalletStore } from '@/stores/walletStore'
@@ -113,6 +114,8 @@ export function LabBlockMetadataCard({
 }) {
   const { data: labState } = useLabChainStateQuery()
   const entities = labState?.entities ?? []
+  const txDetails = labState?.txDetails ?? []
+  const netMovedSats = netMovedSatsForBlock(txDetails, block.metadata.height)
   const mineOp = labState?.mineOperations?.find((m) => m.height === block.metadata.height)
   const weightAtMiningRecorded =
     mineOp?.blockWeightLimitWu != null &&
@@ -124,7 +127,7 @@ export function LabBlockMetadataCard({
     <InfomodeWrapper
       infoId="lab-block-detail-contextual-data-card"
       infoTitle="Contextual data"
-      infoText="Where this block sits in the chain, when it was mined, who received the subsidy, how many transactions it contains, the fees from non-coinbase transactions, and (when recorded) the non-coinbase weight used versus the lab limit at mining time."
+      infoText="Where this block sits in the chain, when it was mined, who received the subsidy, how many transactions it contains, the fees from non-coinbase transactions, net moved BTC (sum of per-transaction non-change outputs; coinbase counts full outputs), and (when recorded) the non-coinbase weight used versus the lab limit at mining time."
       className="rounded-xl"
     >
       <Card>
@@ -157,6 +160,11 @@ export function LabBlockMetadataCard({
           <p>
             <span className="text-muted-foreground">Total fees:</span>{' '}
             {formatSats(block.metadata.totalFeesSats)} sats
+          </p>
+          <p>
+            <span className="text-muted-foreground">Net moved (BTC):</span>{' '}
+            <span className="font-mono tabular-nums">{formatBTC(netMovedSats)}</span> BTC (
+            {formatSats(netMovedSats)} sats)
           </p>
           {weightAtMiningRecorded && mineOp != null ? (
             <p>

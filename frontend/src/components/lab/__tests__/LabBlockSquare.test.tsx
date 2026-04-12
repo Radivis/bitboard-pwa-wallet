@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { screen } from '@testing-library/react'
 import { renderWithProviders } from '@/test-utils/test-providers'
 import { LabBlockSquare } from '@/components/lab/LabBlockSquare'
@@ -26,6 +26,7 @@ const baseProps = {
   height: 3,
   txCount: 2,
   totalFeesSats: 500,
+  netMovedSats: 100_000_000,
   minedOnUnix: 1_700_000_000,
   minedBy: labEntityLabOwner(1),
   wallets: [] as Array<{ wallet_id: number; name: string }>,

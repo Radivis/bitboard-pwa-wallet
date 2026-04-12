@@ -11,6 +11,7 @@ import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { CardPagination } from '@/components/CardPagination'
 import { LAB_CARD_PAGE_SIZE } from '@/lib/lab-paginated-queries'
 import { feeSatsFromTxDetails } from '@/lib/lab-tx-fee'
+import { netMovedSatsForBlock } from '@/lib/lab-tx-net-moved'
 import { LabBlockSquare } from '@/components/lab/LabBlockSquare'
 import type { LabOwner } from '@/lib/lab-owner'
 
@@ -49,6 +50,7 @@ export function LabPreviousBlocksCard({
         block,
         txCount: txsAtHeight.length,
         totalFeesSats: totalFeesForBlockHeight(txDetails, block.height),
+        netMovedSats: netMovedSatsForBlock(txDetails, block.height),
         minedOnUnix: firstTime,
         minedBy,
         blockWeightLimitWu: mineOp?.blockWeightLimitWu ?? null,
@@ -74,7 +76,7 @@ export function LabPreviousBlocksCard({
     <InfomodeWrapper
       infoId="lab-previous-blocks-card"
       infoTitle="Previous blocks (lab)"
-      infoText="Mined blocks as compact square cards: icons show height, transaction count, miner, fees, time, and non-coinbase weight used versus the limit recorded when the block was mined. The bottom of each card fills with stronger color in proportion to that usage (older blocks may lack stored weight data). Paginate when there are many blocks."
+      infoText="Mined blocks as compact square cards: icons show height, transaction count, miner, fees, net moved BTC (sum of per-transaction non-change outputs; coinbase counts full outputs), mined date and time, and non-coinbase weight versus the limit recorded when the block was mined (shown only as background fill). Paginate when there are many blocks."
       className="rounded-xl"
     >
       <Card>
@@ -100,6 +102,7 @@ export function LabPreviousBlocksCard({
                     height={row.block.height}
                     txCount={row.txCount}
                     totalFeesSats={row.totalFeesSats}
+                    netMovedSats={row.netMovedSats}
                     minedOnUnix={row.minedOnUnix}
                     minedBy={row.minedBy}
                     blockWeightLimitWu={row.blockWeightLimitWu}
