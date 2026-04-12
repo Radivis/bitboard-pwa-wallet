@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { WalletUnlockOrNearZeroLoading } from '@/components/WalletUnlockOrNearZeroLoading'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
-import { useWalletStore } from '@/stores/walletStore'
+import { AddressType, useWalletStore } from '@/stores/walletStore'
 import { useSessionStore } from '@/stores/sessionStore'
 import { useCryptoStore } from '@/stores/cryptoStore'
 import { useFeatureStore } from '@/stores/featureStore'
@@ -125,7 +125,9 @@ export function ReceivePage() {
                 QR Code
               </CardTitle>
               <Badge variant="outline">
-                {addressType === 'taproot' ? 'Taproot (BIP86)' : 'SegWit (BIP84)'}
+                {addressType === AddressType.Taproot
+                  ? 'Taproot (BIP86)'
+                  : 'SegWit (BIP84)'}
               </Badge>
             </div>
           </CardHeader>

@@ -7,11 +7,13 @@ import { useCryptoStore } from '@/stores/cryptoStore'
 import { useSendStore } from '@/stores/sendStore'
 import { getEsploraUrl, toBitcoinNetwork } from '@/lib/bitcoin-utils'
 import { updateWalletChangeset, loadCustomEsploraUrl } from '@/lib/wallet-utils'
-import { labBitcoinAddressesEqual, walletOwnerKey } from '@/lib/lab-utils'
+import { walletLabOwner } from '@/lib/lab-owner'
+import { labBitcoinAddressesEqual } from '@/lib/lab-utils'
 import { getLabWorker, initLabWorkerWithState } from '@/workers/lab-factory'
 import { runLabOp } from '@/lib/lab-coordinator'
 import { labOpAddSignedTransaction } from '@/lib/lab-worker-operations'
 import { setLabChainStateCache } from '@/hooks/useLabChainStateQuery'
+import { invalidateLabPaginatedQueries } from '@/lib/lab-paginated-queries'
 import { errorMessage } from '@/lib/utils'
 
 /**
@@ -141,18 +143,17 @@ export function useLabSendMutation() {
       const { signedTxHex, fullMetadata } = await runLabOp(async () => {
         await initLabWorkerWithState()
         const labWorker = getLabWorker()
-        const walletOwner = walletOwnerKey(activeWalletId)
         const walletChangeAddress = await getLabChangeAddress()
 
         const knownRecipientOwner =
           currentAddress != null &&
           labBitcoinAddressesEqual(params.normalizedRecipient, currentAddress)
-            ? walletOwner
+            ? walletLabOwner(activeWalletId)
             : undefined
 
         const { utxosJson, mempoolMetadata, totalInput } =
           await labWorker.prepareLabWalletTransaction({
-            walletOwner,
+            walletId: activeWalletId,
             toAddress: params.normalizedRecipient,
             amountSats: params.amountSats,
             feeRateSatPerVb: params.effectiveFeeRate,
@@ -199,6 +200,7 @@ export function useLabSendMutation() {
     },
     onSuccess: (state) => {
       setLabChainStateCache(queryClient, state)
+      void invalidateLabPaginatedQueries(queryClient)
       toast.success('Transaction added to mempool')
       reset()
       navigate({ to: '/wallet' })

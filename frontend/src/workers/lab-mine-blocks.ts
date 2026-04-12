@@ -1,8 +1,13 @@
-import { labEntityOwnerKey, nextLabEntityId } from '@/lib/lab-entity-keys'
+import { AddressType } from '@/lib/wallet-domain-types'
+import { nextLabEntityId } from '@/lib/lab-entity-keys'
+import { isCoinbase } from '@/lib/lab-operations'
 import { discardedMempoolConflictTxCount } from '@/lib/lab-mempool-mine-stats'
-import { walletOwnerKey } from '@/lib/lab-utils'
+import { labEntityLabOwner, walletLabOwner } from '@/lib/lab-owner'
+import type { LabOwner } from '@/lib/lab-owner'
 import type { LabAddress, LabMineBlocksResult, LabState } from './lab-api'
 import {
+  LAB_DEFAULT_BLOCK_WEIGHT_UNITS,
+  LAB_DEFAULT_MINER_SUBSIDY_SATS,
   LAB_MAX_BLOCKS_PER_MINE,
   LAB_MIN_BLOCKS_PER_MINE,
 } from './lab-api'
@@ -18,8 +23,9 @@ export async function executeMineBlocks(
   options:
     | {
         ownerName?: string
+        ownerLabEntityId?: number
         ownerWalletId?: number
-        labAddressType?: string
+        labAddressType?: AddressType
         labNetwork?: string
       }
     | undefined,
@@ -46,16 +52,38 @@ export async function executeMineBlocks(
   }
 
   const labNetwork = options?.labNetwork ?? 'regtest'
-  const labAddressType = options?.labAddressType ?? 'segwit'
+  const labAddressType = options?.labAddressType ?? AddressType.SegWit
   const entityNameOpt = options?.ownerName?.trim()
 
   let coinbaseScriptPubkeyHex: string
   let newAddress: LabAddress | null = null
   let coinbaseAddress: string
-  /** Lab entity name to record for coinbase ownership (not used for wallet or bare target). */
-  let ownerForCoinbase: string | undefined
+  /** Lab entity id for coinbase ownership (not used for wallet or bare target). */
+  let ownerForCoinbase: LabOwner | undefined
 
-  if (entityNameOpt != null && entityNameOpt !== '' && options?.ownerWalletId == null) {
+  if (
+    options?.ownerLabEntityId != null &&
+    options.ownerWalletId == null &&
+    Number.isInteger(options.ownerLabEntityId)
+  ) {
+    const entity = state.entities.find((e) => e.labEntityId === options.ownerLabEntityId)
+    if (!entity) {
+      throw new Error(`Unknown lab entity id ${options.ownerLabEntityId}`)
+    }
+    if (entity.isDead) {
+      throw new Error('Cannot mine to a dead lab entity')
+    }
+    coinbaseAddress = wasmModule.lab_entity_get_current_external_address(
+      entity.mnemonic,
+      entity.changesetJson,
+      entity.network,
+      entity.addressType,
+      entity.accountId,
+    )
+    coinbaseScriptPubkeyHex = wasmModule.lab_address_to_script_pubkey_hex(coinbaseAddress)
+    newAddress = null
+    ownerForCoinbase = labEntityLabOwner(entity.labEntityId)
+  } else if (entityNameOpt != null && entityNameOpt !== '' && options?.ownerWalletId == null) {
     let entity = state.entities.find((e) => e.entityName === entityNameOpt)
     const now = new Date().toISOString()
     if (!entity) {
@@ -82,7 +110,7 @@ export async function executeMineBlocks(
     }
     coinbaseScriptPubkeyHex = wasmModule.lab_address_to_script_pubkey_hex(coinbaseAddress)
     newAddress = null
-    ownerForCoinbase = entityNameOpt
+    ownerForCoinbase = labEntityLabOwner(entity!.labEntityId)
   } else if (targetAddress.trim()) {
     coinbaseAddress = targetAddress.trim()
     coinbaseScriptPubkeyHex = wasmModule.lab_address_to_script_pubkey_hex(coinbaseAddress)
@@ -100,32 +128,34 @@ export async function executeMineBlocks(
     })
     coinbaseScriptPubkeyHex = wasmModule.lab_address_to_script_pubkey_hex(coinbaseAddress)
     newAddress = null
-    ownerForCoinbase = labEntityOwnerKey({
-      labEntityId,
-      entityName: null,
-    })
+    ownerForCoinbase = labEntityLabOwner(labEntityId)
   }
 
   if (options?.ownerWalletId != null) {
     state.addressToOwner = state.addressToOwner ?? {}
-    state.addressToOwner[coinbaseAddress] = walletOwnerKey(options.ownerWalletId)
+    state.addressToOwner[coinbaseAddress] = walletLabOwner(options.ownerWalletId)
   } else if (ownerForCoinbase != null) {
     state.addressToOwner = state.addressToOwner ?? {}
     state.addressToOwner[coinbaseAddress] = ownerForCoinbase
   }
 
-  const minedByKey: string | null =
+  const minedBy: LabOwner | null =
     options?.ownerWalletId != null
-      ? walletOwnerKey(options.ownerWalletId)
+      ? walletLabOwner(options.ownerWalletId)
       : ownerForCoinbase ?? null
 
   const mempoolCopy = [...(state.mempool ?? [])]
-  const selectedEntries = selectMempoolTxsForBlock(mempoolCopy)
+  const blockLimit = state.blockWeightLimit ?? LAB_DEFAULT_BLOCK_WEIGHT_UNITS
+  const selectedEntries = selectMempoolTxsForBlock(mempoolCopy, blockLimit)
+  const nonCoinbaseWeightFirstBlock = selectedEntries.reduce((sum, entry) => sum + entry.weight, 0)
   const mempoolTxHexes = selectedEntries.map((entry) => entry.signedTxHex)
   const totalFeesSats = selectedEntries.reduce((sum, entry) => sum + entry.feeSats, 0)
   const spentByIncluded = new Set(
     selectedEntries.flatMap((entry) => entry.inputs.map((input) => `${input.txid}:${input.vout}`)),
   )
+
+  const minerSubsidySats = state.minerSubsidySats ?? LAB_DEFAULT_MINER_SUBSIDY_SATS
+  const subsidyForBlock = BigInt(minerSubsidySats)
 
   for (let i = 0; i < blockCountToMine; i++) {
     const txsForBlock = i === 0 ? mempoolTxHexes : []
@@ -135,21 +165,24 @@ export async function executeMineBlocks(
       height,
       coinbaseScriptPubkeyHex,
       txsForBlock,
+      subsidyForBlock,
       feesForBlock,
     )
     applyBlockEffects(wasmModule, blockHex, height, i === 0 ? newAddress ?? undefined : undefined)
     const minedAtHeight = height
     const tipAfter = getTip()!
     const coinbaseDetail = state.txDetails.find(
-      (d) => d.blockHeight === minedAtHeight && d.isCoinbase,
+      (d) => d.blockHeight === minedAtHeight && isCoinbase(d),
     )
     state.mineOperations = state.mineOperations ?? []
     state.mineOperations.push({
       height: minedAtHeight,
       blockHash: tipAfter.blockHash,
-      minedByKey,
+      minedBy,
       coinbaseTxid: coinbaseDetail?.txid ?? null,
       createdAt: new Date().toISOString(),
+      blockWeightLimitWu: blockLimit,
+      nonCoinbaseWeightUsedWu: i === 0 ? nonCoinbaseWeightFirstBlock : 0,
     })
     if (i === 0) {
       state.mempool = (state.mempool ?? []).filter(

@@ -1,13 +1,14 @@
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
 import { sqliteStorage } from '@/db/storage-adapter'
+import { AddressType } from '@/lib/wallet-domain-types'
 import type { BalanceInfo, TransactionDetails } from '@/workers/crypto-types'
 
 export type NetworkMode = 'lab' | 'regtest' | 'signet' | 'testnet' | 'mainnet'
 
 export type WalletStatus = 'none' | 'locked' | 'unlocked' | 'syncing'
 
-export type AddressType = 'taproot' | 'segwit'
+export { AddressType }
 
 export const NETWORK_LABELS: Record<NetworkMode, string> = {
   lab: 'Lab',
@@ -18,8 +19,8 @@ export const NETWORK_LABELS: Record<NetworkMode, string> = {
 }
 
 export const ADDRESS_TYPE_LABELS: Record<AddressType, string> = {
-  taproot: 'Taproot',
-  segwit: 'SegWit',
+  [AddressType.Taproot]: 'Taproot',
+  [AddressType.SegWit]: 'SegWit',
 }
 
 export function getSubWalletLabel(
@@ -102,7 +103,7 @@ export const useWalletStore = create<WalletState>()(
   persist(
     (set) => ({
       networkMode: 'testnet',
-      addressType: 'taproot',
+      addressType: AddressType.Taproot,
       accountId: 0,
       activeWalletId: null,
 

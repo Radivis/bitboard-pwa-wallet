@@ -3,6 +3,7 @@ import { createJSONStorage, persist } from 'zustand/middleware'
 import { useEffect } from 'react'
 import { sqliteStorage } from '@/db/storage-adapter'
 import {
+  AddressType,
   useWalletStore,
   selectCommittedAddressType,
   selectCommittedNetworkMode,
@@ -83,7 +84,8 @@ export function ThemeSynchronizer() {
       const resolved = resolveTheme(themeMode)
       document.documentElement.classList.toggle('dark', resolved === 'dark')
       document.documentElement.dataset.network = accentNetworkMode ?? 'testnet'
-      document.documentElement.dataset.addressType = accentAddressType ?? 'taproot'
+      document.documentElement.dataset.addressType =
+        accentAddressType ?? AddressType.Taproot
       document.documentElement.dataset.palette = isWalletThemePaletteActive(
         activeWalletId,
         walletStatus,

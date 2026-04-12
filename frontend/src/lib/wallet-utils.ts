@@ -260,7 +260,7 @@ export async function loadDescriptorWalletWithoutSync(params: {
   password: string
   walletId: number
   networkMode: NetworkMode
-  addressType: 'taproot' | 'segwit'
+  addressType: AddressType
   accountId: number
 }): Promise<void> {
   const { password, walletId, networkMode, addressType, accountId } = params
@@ -318,7 +318,7 @@ export async function loadDescriptorWalletAndSync(params: {
   password: string
   walletId: number
   networkMode: NetworkMode
-  addressType: 'taproot' | 'segwit'
+  addressType: AddressType
   accountId: number
   onSyncError?: (err: unknown) => void
   /**

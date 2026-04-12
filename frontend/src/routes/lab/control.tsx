@@ -2,6 +2,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { SlidersHorizontal } from 'lucide-react'
 import { PageHeader } from '@/components/PageHeader'
 import { LabRulesCard } from '@/components/lab/Rules'
+import { LabEntitiesCard } from '@/components/lab/LabEntitiesCard'
 import { LabResetCard } from '@/components/lab/Reset'
 import { useLabIndexPageData } from '@/hooks/useLabIndexPageData'
 
@@ -17,6 +18,8 @@ function LabControlPage() {
       <PageHeader title="Control" icon={SlidersHorizontal} />
 
       <LabRulesCard />
+
+      <LabEntitiesCard />
 
       <LabResetCard
         onResetClick={() => lab.setShowResetConfirm(true)}

@@ -6,6 +6,7 @@
  * (`lab_mempool`, `lab_transactions`, `lab_tx_details`), and (4) explicit
  * operation metadata layered on WASM effects (`lab_mine_operations`,
  * `lab_tx_operations`) so UI attribution does not depend only on string inference.
+ * Simulation parameters live in `lab_parameter_presets` (e.g. block vByte limit).
  */
 import type { Generated, Insertable, Selectable, Updateable } from 'kysely'
 
@@ -19,6 +20,8 @@ interface LabAddressOwnersTable {
   owner_type: 'wallet' | 'lab_entity'
   wallet_id: number | null
   entity_name: string | null
+  /** FK to lab_entities when owner_type is lab_entity (canonical id). */
+  lab_entity_id: number | null
 }
 
 /** A simulated “person” in the lab: mnemonic, descriptors, and BDK changeset. One row per named or anonymous lab entity. */
@@ -35,6 +38,8 @@ interface LabEntitiesTable {
   account_id: number
   created_at: string
   updated_at: string
+  /** 1 = excluded from random lab-entity transactions as sender/receiver. */
+  is_dead: number
 }
 
 /** Unconfirmed transactions: raw hex, ids, fee, and JSON snapshots of inputs/outputs for mempool UI and worker reconciliation. */
@@ -42,20 +47,35 @@ interface LabMempoolTable {
   mempool_id: Generated<number>
   signed_tx_hex: string
   txid: string
-  sender: string | null
-  receiver: string | null
+  sender_lab_entity_id: number | null
+  sender_wallet_id: number | null
+  receiver_lab_entity_id: number | null
+  receiver_wallet_id: number | null
   fee_sats: number
+  /** BIP141 weight units; nullable for DBs created before this column existed. */
+  weight: number | null
   inputs_json: string
   inputs_detail_json: string
   outputs_detail_json: string
+}
+
+/** Lab simulation parameters (extensible; future: named presets). */
+interface LabParameterPresetsTable {
+  id: Generated<number>
+  /** Max non-coinbase transaction weight units (WU) per block (`block_size` name is historical). */
+  block_size: number
+  /** Coinbase subsidy in sats for future mined blocks (excludes fees). */
+  miner_subsidy_sats: number
 }
 
 /** Flat list of confirmed transactions for chain-wide summaries and tests. */
 interface LabTransactionsTable {
   lab_transaction_id: Generated<number>
   txid: string
-  sender: string | null
-  receiver: string | null
+  sender_lab_entity_id: number | null
+  sender_wallet_id: number | null
+  receiver_lab_entity_id: number | null
+  receiver_wallet_id: number | null
 }
 
 /** Per-tx detail row: block placement, full inputs/outputs as JSON (coinbase is derived from `inputs_json`). */
@@ -77,8 +97,14 @@ interface LabMineOperationsTable {
   height: number
   block_hash: string
   mined_by_key: string | null
+  mined_by_lab_entity_id: number | null
+  mined_by_wallet_id: number | null
   coinbase_txid: string | null
   created_at: string
+  /** Max non-coinbase WU allowed when this block was mined (nullable for rows before this column). */
+  block_weight_limit_wu: number | null
+  /** Sum of included non-coinbase tx weights for this block (nullable for legacy rows). */
+  non_coinbase_weight_used_wu: number | null
 }
 
 /**
@@ -89,6 +115,8 @@ interface LabTxOperationsTable {
   tx_operation_id: Generated<number>
   txid: string
   sender_key: string
+  sender_lab_entity_id: number | null
+  sender_wallet_id: number | null
   change_address: string | null
   change_vout: number | null
   payload_json: string
@@ -106,6 +134,7 @@ export interface LabDatabase {
   lab_tx_details: LabTxDetailsTable
   lab_mine_operations: LabMineOperationsTable
   lab_tx_operations: LabTxOperationsTable
+  lab_parameter_presets: LabParameterPresetsTable
 }
 
 export type LabEntityRow = Selectable<LabEntitiesTable>

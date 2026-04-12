@@ -1,4 +1,4 @@
-import { useMemo, useCallback, useState } from 'react'
+import { useMemo, useCallback, useState, useEffect } from 'react'
 import { createFileRoute, useNavigate, Link } from '@tanstack/react-router'
 import { ArrowUpRight, ArrowLeft } from 'lucide-react'
 import { toast } from 'sonner'
@@ -36,7 +36,9 @@ import { useLightningStore } from '@/stores/lightningStore'
 import { useLightningPayMutation } from '@/hooks/useLightningMutations'
 import { useSendLightningBalances } from '@/hooks/useSendLightningBalances'
 import { MAX_BOLT11_PAYMENT_REQUEST_LENGTH } from '@/lib/lightning-input-limits'
-import { lookupLabAddressOwner, walletOwnerKey } from '@/lib/lab-utils'
+import { labOwnersEqual, walletLabOwner } from '@/lib/lab-owner'
+import { DeadLabEntityRecipientModal } from '@/components/lab/DeadLabEntityRecipientModal'
+import { lookupLabAddressOwner, resolveDeadLabEntityRecipient } from '@/lib/lab-utils'
 import {
   useBuildTransactionMutation,
   useBroadcastTransactionMutation,
@@ -80,6 +82,7 @@ export function SendFlow() {
 
   const [isResolvingLightningAddress, setIsResolvingLightningAddress] =
     useState(false)
+  const [deadLabRecipientModalOpen, setDeadLabRecipientModalOpen] = useState(false)
 
   const lightningPayMutation = useLightningPayMutation()
 
@@ -104,6 +107,7 @@ export function SendFlow() {
   const { data: labState, isPending: labChainPending } = useLabChainStateQuery()
   const utxos = labState?.utxos ?? []
   const addressToOwner = labState?.addressToOwner ?? {}
+  const labEntities = labState?.entities ?? []
   const labChainReady =
     networkMode === 'lab' && labState != null && !labChainPending
 
@@ -114,11 +118,10 @@ export function SendFlow() {
   const labBalanceSats =
     networkMode === 'lab' && activeWalletId != null && labChainReady
       ? utxos
-          .filter(
-            (u) =>
-              lookupLabAddressOwner(u.address, addressToOwner) ===
-              walletOwnerKey(activeWalletId),
-          )
+          .filter((u) => {
+            const o = lookupLabAddressOwner(u.address, addressToOwner)
+            return o != null && labOwnersEqual(o, walletLabOwner(activeWalletId))
+          })
           .reduce((sum, u) => sum + u.amountSats, 0)
       : null
 
@@ -143,6 +146,23 @@ export function SendFlow() {
       ),
     [recipient],
   )
+
+  const deadLabRecipientInfo = useMemo(() => {
+    if (networkMode !== 'lab' || !labChainReady) return null
+    return resolveDeadLabEntityRecipient(
+      normalizedRecipient,
+      addressToOwner,
+      labEntities,
+    )
+  }, [networkMode, labChainReady, normalizedRecipient, addressToOwner, labEntities])
+
+  useEffect(() => {
+    setDeadLabRecipientModalOpen(false)
+  }, [networkMode, normalizedRecipient])
+
+  useEffect(() => {
+    if (step !== 2) setDeadLabRecipientModalOpen(false)
+  }, [step])
 
   const isLightningDestination = useMemo(
     () => lightningAvailable && isValidLightningDestination(normalizedRecipient),
@@ -352,6 +372,10 @@ export function SendFlow() {
 
   const handleConfirmSend = useCallback(() => {
     if (networkMode === 'lab') {
+      if (deadLabRecipientInfo != null) {
+        setDeadLabRecipientModalOpen(true)
+        return
+      }
       labSendMutation.mutate({
         normalizedRecipient,
         amountSats,
@@ -362,12 +386,22 @@ export function SendFlow() {
     }
   }, [
     networkMode,
+    deadLabRecipientInfo,
     normalizedRecipient,
     amountSats,
     effectiveFeeRate,
     labSendMutation,
     broadcastMutation,
   ])
+
+  const handleConfirmDeadLabRecipientSend = useCallback(() => {
+    setDeadLabRecipientModalOpen(false)
+    labSendMutation.mutate({
+      normalizedRecipient,
+      amountSats,
+      effectiveFeeRate,
+    })
+  }, [labSendMutation, normalizedRecipient, amountSats, effectiveFeeRate])
 
   const isPending =
     buildMutation.isPending ||
@@ -376,9 +410,26 @@ export function SendFlow() {
     lightningPayMutation.isPending ||
     isResolvingLightningAddress
 
+  const labConfirmSendDisabled =
+    isPending || (networkMode === 'lab' && deadLabRecipientModalOpen)
+
   if (step === 2 && (psbt || networkMode === 'lab')) {
     return (
       <div className="space-y-6">
+        {networkMode === 'lab' && deadLabRecipientInfo != null ? (
+          <DeadLabEntityRecipientModal
+            open={deadLabRecipientModalOpen}
+            onOpenChange={(open) => {
+              if (!open) setDeadLabRecipientModalOpen(false)
+            }}
+            onCancel={() => setDeadLabRecipientModalOpen(false)}
+            entityDisplayName={deadLabRecipientInfo.displayName}
+            addressType={deadLabRecipientInfo.addressType}
+            onConfirm={handleConfirmDeadLabRecipientSend}
+            isPending={labSendMutation.isPending}
+          />
+        ) : null}
+
         <PageHeader title="Review Transaction" icon={ArrowUpRight} />
 
         <Card>
@@ -425,7 +476,11 @@ export function SendFlow() {
                   />
                 </div>
               ) : (
-                <Button className="flex-1" onClick={handleConfirmSend}>
+                <Button
+                  className="flex-1"
+                  onClick={handleConfirmSend}
+                  disabled={labConfirmSendDisabled}
+                >
                   Confirm and Send
                 </Button>
               )}

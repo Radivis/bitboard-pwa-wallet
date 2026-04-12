@@ -1,3 +1,7 @@
+import type { AddressType } from '@/lib/wallet-domain-types'
+import type { LabOwnerType } from '@/lib/lab-owner-type'
+import type { LabOwner } from '@/lib/lab-owner'
+
 export interface LabBlock {
   blockHash: string
   height: number
@@ -20,34 +24,56 @@ export interface LabAddress {
 export interface LabTxInputDetail {
   address: string
   amountSats: number
-  owner?: string | null
-  /** Populated for coinbase inputs (Bitcoin prevout conventions). */
+  owner?: LabOwner | null
+  /**
+   * Previous output reference: real outpoint for non-coinbase spends; synthetic values for coinbase
+   * (Bitcoin prevout conventions — see LAB_COINBASE_*).
+   */
   prevTxid?: string
   prevVout?: number
   sequence?: number
 }
 
+/** Legacy mempool snapshots may omit prevout on `inputsDetail`; fill from parallel `inputs` when needed. */
+export function mergeMempoolInputsDetailWithOutpoints(
+  inputs: { txid: string; vout: number }[],
+  inputsDetail: LabTxInputDetail[],
+): LabTxInputDetail[] {
+  return inputsDetail.map((d, i) => {
+    const out = inputs[i]
+    if (
+      out != null &&
+      (d.prevTxid == null || d.prevVout === undefined || d.prevVout === null)
+    ) {
+      return { ...d, prevTxid: out.txid, prevVout: out.vout }
+    }
+    return d
+  })
+}
+
 export interface LabTxRecord {
   txid: string
-  sender: string | null
-  receiver: string | null
-  /** Denormalized; coinbase txs have no spend sender in the usual sense. */
-  isCoinbase?: boolean
+  sender: LabOwner | null
+  receiver: LabOwner | null
 }
 
 export interface MempoolEntry {
   signedTxHex: string
   txid: string
-  sender: string | null
-  receiver: string | null
+  sender: LabOwner | null
+  receiver: LabOwner | null
   feeSats: number
+  /** BIP141 block weight units; used for block template capacity (sum vs block limit). */
+  weight: number
+  /** Virtual size in vBytes (ceil(weight/4)); used for fee rate (sat/vB) only. */
+  vsize: number
   inputs: { txid: string; vout: number }[]
-  inputsDetail: { address: string; amountSats: number; owner?: string | null }[]
+  inputsDetail: LabTxInputDetail[]
   outputsDetail: {
     address: string
     amountSats: number
     isChange?: boolean
-    owner?: string | null
+    owner?: LabOwner | null
   }[]
 }
 
@@ -56,9 +82,8 @@ export interface LabTxDetails {
   blockHeight: number
   blockTime: number
   confirmations: number
-  isCoinbase?: boolean
   inputs: LabTxInputDetail[]
-  outputs: { address: string; amountSats: number; isChange?: boolean; owner?: string | null }[]
+  outputs: { address: string; amountSats: number; isChange?: boolean; owner?: LabOwner | null }[]
 }
 
 export interface LabBlockHeaderDetails {
@@ -74,16 +99,16 @@ export interface LabBlockHeaderDetails {
 
 export interface LabBlockTransactionSummary {
   txid: string
-  sender: string | null
-  receiver: string | null
+  sender: LabOwner | null
+  receiver: LabOwner | null
   feeSats: number
-  isCoinbase?: boolean
+  inputs: LabTxInputDetail[]
 }
 
 export interface LabBlockMetadataDetails {
   height: number
   minedOn: number
-  minedBy: string | null
+  minedBy: LabOwner | null
   numberOfTransactions: number
   totalFeesSats: number
 }
@@ -96,13 +121,15 @@ export interface LabBlockDetails {
 }
 
 export interface LabCurrentBlockTemplateParams {
-  ownerType: 'name' | 'wallet'
+  ownerType: LabOwnerType
   targetAddress: string
   ownerName?: string
+  /** When set, mines to this lab entity (must exist and not be dead). Takes precedence over ownerName. */
+  ownerLabEntityId?: number
   ownerWalletId?: number
   walletCurrentAddress?: string | null
   /** Matches lab mining defaults; omit to use worker default (segwit). */
-  labAddressType?: string
+  labAddressType?: AddressType
   labNetwork?: string
 }
 
@@ -116,10 +143,12 @@ export interface LabEntityRecord {
   externalDescriptor: string
   internalDescriptor: string
   network: string
-  addressType: string
+  addressType: AddressType
   accountId: number
   createdAt: string
   updatedAt: string
+  /** When true, excluded from random lab-entity tx generation as sender or receiver. */
+  isDead: boolean
 }
 
 /** Persisted: one row per mined block / coinbase (see lab_mine_operations). */
@@ -127,16 +156,20 @@ export interface LabMineOperationRecord {
   mineOperationId?: number
   height: number
   blockHash: string
-  minedByKey: string | null
+  minedBy: LabOwner | null
   coinbaseTxid: string | null
   createdAt: string
+  /** Snapshot of max non-coinbase WU per block when mined; null for legacy DB rows. */
+  blockWeightLimitWu?: number | null
+  /** Sum of non-coinbase tx weights included in this block; null for legacy rows. */
+  nonCoinbaseWeightUsedWu?: number | null
 }
 
 /** Persisted: metadata for entity/wallet spends (see lab_tx_operations). */
 export interface LabTxOperationRecord {
   txOperationId?: number
   txid: string
-  senderKey: string
+  sender: LabOwner
   changeAddress: string | null
   changeVout: number | null
   payloadJson: string
@@ -148,12 +181,16 @@ export interface LabState {
   addresses: LabAddress[]
   /** Lab Entities with simulated descriptor wallets (not user wallets). */
   entities: LabEntityRecord[]
-  addressToOwner?: Record<string, string>
+  addressToOwner?: Record<string, LabOwner>
   mempool: MempoolEntry[]
   transactions: LabTxRecord[]
   txDetails: LabTxDetails[]
   mineOperations: LabMineOperationRecord[]
   txOperations: LabTxOperationRecord[]
+  /** Max total weight units (WU) for non-coinbase txs in a mined block (future blocks only). At least 1000 WU. */
+  blockWeightLimit: number
+  /** Coinbase subsidy in sats for newly mined blocks (future blocks only; excludes fees). 0 = fees only. */
+  minerSubsidySats: number
 }
 
 /** Minimum blocks per single "Mine blocks" operation in the lab UI and worker. */
@@ -165,14 +202,48 @@ export const LAB_MIN_BLOCKS_PER_MINE = 1
  */
 export const LAB_MAX_BLOCKS_PER_MINE = 100
 
+/** Default max non-coinbase transaction weight per block (Lab). Same numeric default as before; now WU not vBytes. */
+export const LAB_DEFAULT_BLOCK_WEIGHT_UNITS = 4000
+
+/**
+ * Minimum block weight limit (WU) for the lab. Lower values fit at most a couple of typical txs
+ * and are confusing; enforced in the worker and Rules UI.
+ */
+export const LAB_MIN_BLOCK_WEIGHT_UNITS = 1000
+
+/** Clamp stored/loaded block weight limits to at least {@link LAB_MIN_BLOCK_WEIGHT_UNITS}. */
+export function normalizeBlockWeightLimit(value: number): number {
+  if (!Number.isFinite(value)) {
+    return LAB_DEFAULT_BLOCK_WEIGHT_UNITS
+  }
+  return Math.max(LAB_MIN_BLOCK_WEIGHT_UNITS, Math.floor(value))
+}
+
+/** Default lab coinbase subsidy (50 BTC in sats); matches Rust `LAB_DEFAULT_MINER_SUBSIDY_SATS`. */
+export const LAB_DEFAULT_MINER_SUBSIDY_SATS = 5_000_000_000
+
+/** Upper bound aligned with WASM `u64` sat amounts and JS safe integers. */
+const LAB_MAX_MINER_SUBSIDY_SATS = Number.MAX_SAFE_INTEGER
+
+/** Clamp subsidy to [0, {@link LAB_MAX_MINER_SUBSIDY_SATS}]. Negative values become 0. */
+export function normalizeMinerSubsidySats(value: number): number {
+  if (!Number.isFinite(value)) {
+    return LAB_DEFAULT_MINER_SUBSIDY_SATS
+  }
+  const floored = Math.floor(value)
+  if (floored < 0) return 0
+  if (floored > LAB_MAX_MINER_SUBSIDY_SATS) return LAB_MAX_MINER_SUBSIDY_SATS
+  return floored
+}
+
 export interface PrepareLabEntityTransactionParams {
-  entityName: string
+  labEntityId: number
   fromAddress: string
   toAddress: string
   amountSats: number
   feeRateSatPerVb: number
   /** UI may supply when payee is not yet in lab `addressToOwner` (e.g. wallet receive address). */
-  knownRecipientOwner?: string | null
+  knownRecipientOwner?: LabOwner | null
 }
 
 /** Payload for crypto worker after prepareLabEntityTransaction. */
@@ -180,7 +251,7 @@ export interface LabEntityTransactionCryptoParams {
   mnemonic: string
   changesetJson: string
   network: string
-  addressType: string
+  addressType: AddressType
   accountId: number
   utxosJson: string
   toAddress: string
@@ -189,13 +260,13 @@ export interface LabEntityTransactionCryptoParams {
 }
 
 export interface PrepareLabWalletTransactionParams {
-  walletOwner: string
+  walletId: number
   toAddress: string
   amountSats: number
   feeRateSatPerVb: number
   walletChangeAddress: string
   /** When the payee is not in `addressToOwner` yet (e.g. newly generated receive address). */
-  knownRecipientOwner?: string | null
+  knownRecipientOwner?: LabOwner | null
 }
 
 export interface PrepareRandomLabEntityTransactionParams {
@@ -204,7 +275,7 @@ export interface PrepareRandomLabEntityTransactionParams {
 
 export interface PrepareRandomLabEntityTransactionResult {
   prepareParams: PrepareLabEntityTransactionParams
-  entityName: string
+  labEntityId: number
   crypto: LabEntityTransactionCryptoParams
   mempoolMetadata: LabMempoolMetadata
   totalInput: number
@@ -222,6 +293,8 @@ export const EMPTY_LAB_STATE: LabState = {
   txDetails: [],
   mineOperations: [],
   txOperations: [],
+  blockWeightLimit: LAB_DEFAULT_BLOCK_WEIGHT_UNITS,
+  minerSubsidySats: LAB_DEFAULT_MINER_SUBSIDY_SATS,
 }
 
 /** Result of {@link LabService.mineBlocks}. Mempool counts exclude coinbase (mempool-only). */
@@ -267,8 +340,9 @@ export interface LabService {
     targetAddress: string,
     options?: {
       ownerName?: string
+      ownerLabEntityId?: number
       ownerWalletId?: number
-      labAddressType?: string
+      labAddressType?: AddressType
       labNetwork?: string
     },
   ): Promise<LabMineBlocksResult>
@@ -276,9 +350,7 @@ export interface LabService {
   /**
    * Build lab-entity tx inputs/metadata for signing on the crypto worker.
    */
-  prepareLabEntityTransaction(
-    params: PrepareLabEntityTransactionParams,
-  ): Promise<{
+  prepareLabEntityTransaction(params: PrepareLabEntityTransactionParams): Promise<{
     crypto: LabEntityTransactionCryptoParams
     mempoolMetadata: LabMempoolMetadata
     totalInput: number
@@ -297,7 +369,7 @@ export interface LabService {
   finalizeLabEntityMempoolTransaction(params: {
     signedTxHex: string
     mempoolMetadata: LabMempoolMetadata
-    entityName: string
+    labEntityId: number
     newChangesetJson: string
   }): Promise<LabState>
 
@@ -306,9 +378,7 @@ export interface LabService {
    * Main thread calls crypto.buildAndSignLabTransaction, then merges feeSats/hasChange
    * and calls addSignedTransactionToMempool.
    */
-  prepareLabWalletTransaction(
-    params: PrepareLabWalletTransactionParams,
-  ): Promise<{
+  prepareLabWalletTransaction(params: PrepareLabWalletTransactionParams): Promise<{
     utxosJson: string
     mempoolMetadata: LabMempoolMetadata
     totalInput: number
@@ -321,19 +391,41 @@ export interface LabService {
     signedTxHex: string,
     mempoolMetadata: LabMempoolMetadata,
   ): Promise<LabState>
+
+  /** Create a lab entity without mining (optional name; same reuse rules as mining). */
+  createLabEntity(options?: {
+    ownerName?: string
+    labAddressType?: AddressType
+    labNetwork?: string
+  }): Promise<LabState>
+
+  /** Rename entity: non-empty, unique among entities, must not start with "Anonymous-". */
+  renameLabEntity(labEntityId: number, newName: string): Promise<LabState>
+
+  /** Remove entity only when it has no related transactions (mempool or confirmed). */
+  deleteLabEntity(labEntityId: number): Promise<LabState>
+
+  /** Set or clear the persistent dead flag (excludes from random lab-entity txs). */
+  setLabEntityDead(labEntityId: number, dead: boolean): Promise<LabState>
+
+  /** Updates max non-coinbase weight units per block for future mining (does not alter past blocks). */
+  setBlockWeightLimit(blockWeightLimit: number): Promise<LabState>
+
+  /** Updates coinbase subsidy for future mined blocks (does not alter past blocks). */
+  setMinerSubsidySats(minerSubsidySats: number): Promise<LabState>
 }
 
 export interface LabMempoolMetadata {
-  sender: string | null
-  receiver: string | null
+  sender: LabOwner | null
+  receiver: LabOwner | null
   feeSats: number
   inputs: { txid: string; vout: number }[]
-  inputsDetail: { address: string; amountSats: number; owner?: string | null }[]
+  inputsDetail: LabTxInputDetail[]
   outputsDetail: {
     address: string
     amountSats: number
     isChange?: boolean
-    owner?: string | null
+    owner?: LabOwner | null
   }[]
   hasChange: boolean
   walletChangeAddress: string

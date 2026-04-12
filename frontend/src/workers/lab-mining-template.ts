@@ -1,12 +1,18 @@
+import { AddressType } from '@/lib/wallet-domain-types'
 import { nextLabEntityId } from '@/lib/lab-entity-keys'
+import { LabOwnerType } from '@/lib/lab-owner-type'
+import { feeSatsFromTxDetails } from '@/lib/lab-tx-fee'
+import { type LabOwner, labEntityLabOwner, walletLabOwner } from '@/lib/lab-owner'
 import { isCoinbase } from '@/lib/lab-operations'
-import { walletOwnerKey } from '@/lib/lab-utils'
-import type {
-  LabBlock,
-  LabBlockDetails,
-  LabBlockTransactionSummary,
-  LabCurrentBlockTemplateParams,
-  LabTxDetails,
+import {
+  LAB_DEFAULT_BLOCK_WEIGHT_UNITS,
+  LAB_DEFAULT_MINER_SUBSIDY_SATS,
+  type LabBlock,
+  type LabBlockDetails,
+  type LabBlockTransactionSummary,
+  type LabCurrentBlockTemplateParams,
+  type LabTxDetails,
+  type LabTxInputDetail,
 } from './lab-api'
 import { parseBlockEffects } from './lab-block-effects'
 import { parseBlockHeader } from './lab-block-header'
@@ -21,21 +27,46 @@ export function randomIntInclusive(min: number, max: number): number {
   return Math.floor(Math.random() * (max - min + 1)) + min
 }
 
+function feeSatPerVbyte(entry: import('./lab-api').MempoolEntry): number {
+  if (entry.vsize <= 0) return 0
+  return entry.feeSats / entry.vsize
+}
+
+/**
+ * Greedy block template: repeatedly take the best fee/vByte among remaining txs that fits
+ * in the remaining weight budget and does not conflict with already selected inputs.
+ */
 export function selectMempoolTxsForBlock(
   mempool: import('./lab-api').MempoolEntry[],
+  blockWeightLimit: number,
 ): import('./lab-api').MempoolEntry[] {
+  const limit = Number.isFinite(blockWeightLimit) ? blockWeightLimit : LAB_DEFAULT_BLOCK_WEIGHT_UNITS
   const sortedEntries = [...mempool].sort((a, b) => {
-    if (b.feeSats !== a.feeSats) return b.feeSats - a.feeSats
+    const fa = feeSatPerVbyte(a)
+    const fb = feeSatPerVbyte(b)
+    if (fb !== fa) return fb - fa
     return a.txid.localeCompare(b.txid)
   })
   const spentBySelected = new Set<string>()
   const selectedEntries: import('./lab-api').MempoolEntry[] = []
-  for (const entry of sortedEntries) {
-    const overlaps = entry.inputs.some((input) => spentBySelected.has(`${input.txid}:${input.vout}`))
-    if (!overlaps) {
+  let remainingWeight = Math.max(0, limit)
+
+  while (true) {
+    let added = false
+    for (const entry of sortedEntries) {
+      if (selectedEntries.some((s) => s.txid === entry.txid)) continue
+      if (entry.weight > remainingWeight) continue
+      const overlaps = entry.inputs.some((input) =>
+        spentBySelected.has(`${input.txid}:${input.vout}`),
+      )
+      if (overlaps) continue
       selectedEntries.push(entry)
       for (const input of entry.inputs) spentBySelected.add(`${input.txid}:${input.vout}`)
+      remainingWeight -= entry.weight
+      added = true
+      break
     }
+    if (!added) break
   }
   return selectedEntries
 }
@@ -45,17 +76,10 @@ export function getTip(): LabBlock | null {
   return state.blocks[state.blocks.length - 1]
 }
 
-function feeFromTxDetails(tx: LabTxDetails): number {
-  if (tx.isCoinbase) return 0
-  const totalInputs = tx.inputs.reduce((sum, input) => sum + input.amountSats, 0)
-  const totalOutputs = tx.outputs.reduce((sum, output) => sum + output.amountSats, 0)
-  return Math.max(totalInputs - totalOutputs, 0)
-}
-
 function minedByFromBlockTxs(
   blockTxs: LabTxDetails[],
-  addressToOwner: Record<string, string>,
-): string | null {
+  addressToOwner: Record<string, LabOwner>,
+): LabOwner | null {
   const coinbase = blockTxs.find((tx) => isCoinbase(tx))
   const out0 = coinbase?.outputs[0]
   if (!out0) return null
@@ -64,10 +88,10 @@ function minedByFromBlockTxs(
   return lookupOwnerForLabAddress(out0.address, addressToOwner) ?? null
 }
 
-export function minedByForBlockHeight(height: number): string | null {
+export function minedByForBlockHeight(height: number): LabOwner | null {
   const op = state.mineOperations?.find((m) => m.height === height)
-  if (op != null && op.minedByKey != null && op.minedByKey !== '') {
-    return op.minedByKey
+  if (op != null && op.minedBy != null) {
+    return op.minedBy
   }
   const blockTxs = state.txDetails.filter((tx) => tx.blockHeight === height)
   return minedByFromBlockTxs(blockTxs, state.addressToOwner ?? {})
@@ -83,8 +107,8 @@ export function blockTransactionsForHeight(height: number): LabBlockTransactionS
         txid: tx.txid,
         sender: txRecord?.sender ?? null,
         receiver: txRecord?.receiver ?? null,
-        feeSats: feeFromTxDetails(tx),
-        isCoinbase: tx.isCoinbase,
+        feeSats: feeSatsFromTxDetails(tx),
+        inputs: tx.inputs,
       }
     })
 }
@@ -96,17 +120,43 @@ export function blockTransactionsForHeight(height: number): LabBlockTransactionS
 export async function resolveTemplateCoinbase(
   params: LabCurrentBlockTemplateParams,
   wasmModule: Awaited<ReturnType<typeof getWasm>>,
-): Promise<{ address: string; minedBy: string | null }> {
+): Promise<{ address: string; minedBy: LabOwner | null }> {
   const labNetwork = params.labNetwork ?? 'regtest'
-  const labAddressType = params.labAddressType ?? 'segwit'
+  const labAddressType = params.labAddressType ?? AddressType.SegWit
 
   const targetArg =
-    params.ownerType === 'wallet'
+    params.ownerType === LabOwnerType.Wallet
       ? (params.walletCurrentAddress ?? '').trim()
       : params.targetAddress.trim()
 
   const entityNameOpt =
-    params.ownerType === 'name' ? (params.ownerName?.trim() ?? '') : ''
+    params.ownerType === LabOwnerType.LabEntity
+      ? (params.ownerName?.trim() ?? '')
+      : ''
+
+  if (
+    params.ownerType === LabOwnerType.LabEntity &&
+    params.ownerLabEntityId != null &&
+    Number.isInteger(params.ownerLabEntityId)
+  ) {
+    const entity = state.entities.find((e) => e.labEntityId === params.ownerLabEntityId)
+    if (!entity) {
+      throw new Error(`Unknown lab entity id ${params.ownerLabEntityId}`)
+    }
+    if (entity.isDead) {
+      throw new Error('Cannot mine to a dead lab entity')
+    }
+    return {
+      address: wasmModule.lab_entity_get_current_external_address(
+        entity.mnemonic,
+        entity.changesetJson,
+        entity.network,
+        entity.addressType,
+        entity.accountId,
+      ),
+      minedBy: labEntityLabOwner(entity.labEntityId),
+    }
+  }
 
   const firstAddressFromNewEntityWallet = (): string => {
     const mnemonic = wasmModule.generate_mnemonic(12)
@@ -135,27 +185,26 @@ export async function resolveTemplateCoinbase(
           entity.addressType,
           entity.accountId,
         ),
-        minedBy: entityNameOpt,
+        minedBy: labEntityLabOwner(entity.labEntityId),
       }
     }
     return {
       address: firstAddressFromNewEntityWallet(),
-      minedBy: entityNameOpt,
+      minedBy: labEntityLabOwner(nextLabEntityId(state.entities)),
     }
   }
 
   if (targetArg !== '') {
     const minedBy =
-      params.ownerType === 'wallet' && params.ownerWalletId != null
-        ? walletOwnerKey(params.ownerWalletId)
+      params.ownerType === LabOwnerType.Wallet && params.ownerWalletId != null
+        ? walletLabOwner(params.ownerWalletId)
         : null
     return { address: targetArg, minedBy }
   }
 
-  const anonymousName = `Anonymous-${nextLabEntityId(state.entities)}`
   return {
     address: firstAddressFromNewEntityWallet(),
-    minedBy: anonymousName,
+    minedBy: labEntityLabOwner(nextLabEntityId(state.entities)),
   }
 }
 
@@ -187,18 +236,21 @@ export async function buildCurrentBlockTemplate(
   const previewHeight = tip ? tip.height + 1 : 0
   const previousHash = tip?.blockHash ?? ''
 
-  const selectedEntries = selectMempoolTxsForBlock([...(state.mempool ?? [])])
+  const blockLimit = state.blockWeightLimit ?? LAB_DEFAULT_BLOCK_WEIGHT_UNITS
+  const selectedEntries = selectMempoolTxsForBlock([...(state.mempool ?? [])], blockLimit)
   const mempoolTxHexes = selectedEntries.map((entry) => entry.signedTxHex)
   const totalFeesSats = selectedEntries.reduce((sum, entry) => sum + entry.feeSats, 0)
 
   const { address: targetAddress, minedBy } = await resolveTemplateCoinbase(params, wasmModule)
 
   const coinbaseScriptPubkeyHex = wasmModule.lab_address_to_script_pubkey_hex(targetAddress)
+  const minerSubsidySats = state.minerSubsidySats ?? LAB_DEFAULT_MINER_SUBSIDY_SATS
   const blockHex = wasmModule.lab_mine_block(
     previousHash,
     previewHeight,
     coinbaseScriptPubkeyHex,
     mempoolTxHexes,
+    BigInt(minerSubsidySats),
     BigInt(totalFeesSats),
   )
   const header = await parseBlockHeader(blockHex)
@@ -214,7 +266,14 @@ export async function buildCurrentBlockTemplate(
       sender: matchedEntry?.sender ?? null,
       receiver: isCb ? minedBy : (matchedEntry?.receiver ?? null),
       feeSats: matchedEntry?.feeSats ?? 0,
-      isCoinbase: isCb,
+      inputs: tx.inputs.map(
+        (inp): LabTxInputDetail => ({
+          address: '',
+          amountSats: 0,
+          prevTxid: inp.prev_txid,
+          prevVout: inp.prev_vout,
+        }),
+      ),
     }
   })
 

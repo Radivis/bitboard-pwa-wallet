@@ -1,11 +1,14 @@
 import { type Page, expect } from '@playwright/test'
+import { AddressType } from '@/lib/wallet-domain-types'
+import { LabOwnerType } from '@/lib/lab-owner-type'
 import type { LabState } from '@/workers/lab-api'
+import { labEntityOwnerKey } from '@/lib/lab-entity-keys'
 import { lookupLabAddressOwner, WALLET_OWNER_PREFIX } from '@/lib/lab-utils'
 import { goToWalletTab } from './wallet-nav'
-import { waitForSettingsAddressTypeSwitchComplete } from './settings-waits'
+import { waitForSettingsNetworkSwitchComplete } from './settings-waits'
 
-/** Switch to Lab network and SegWit (BIP84) address type. */
-export async function switchToLabAndSegwit(page: Page): Promise<void> {
+/** Switch to Lab network without changing address type (default is Taproot). */
+export async function switchToLab(page: Page): Promise<void> {
   await page.getByRole('link', { name: /settings/i }).click()
   await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
 
@@ -14,12 +17,7 @@ export async function switchToLabAndSegwit(page: Page): Promise<void> {
     timeout: 60000,
   })
 
-  await page.getByRole('button', { name: 'SegWit (BIP84)' }).click()
-  const changeButton = page.getByRole('button', { name: 'Change' })
-  if (await changeButton.isVisible()) {
-    await changeButton.click()
-  }
-  await waitForSettingsAddressTypeSwitchComplete(page)
+  await waitForSettingsNetworkSwitchComplete(page)
 
   await goToWalletTab(page, 'Receive')
   await expect(page.getByRole('heading', { name: 'Receive Bitcoin' })).toBeVisible({
@@ -53,13 +51,66 @@ export async function resetLab(page: Page): Promise<void> {
   })
 }
 
-export type MineOwnerType = 'name' | 'wallet'
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+/** True when a lab entity with this display name already exists (create would reject as duplicate). */
+function labStateHasNamedEntity(state: LabState, trimmedName: string): boolean {
+  if (trimmedName === '') return false
+  return (state.entities ?? []).some((e) => e.entityName === trimmedName)
+}
+
+export type MineOwnerType = LabOwnerType
+
+export type LabEntityAddressType = AddressType
 
 export interface MineOptions {
   targetAddress?: string
   ownerName?: string
   /** Lab-entity mode with empty name and target: creates `Anonymous-{id}` wallet. */
   randomAnonymous?: boolean
+  /** BIP84 vs BIP86 for the lab entity row created before this mine (defaults to SegWit). */
+  labAddressType?: LabEntityAddressType
+}
+
+/**
+ * Odd index → SegWit, even → Taproot (1-based creation order within a test).
+ */
+export function labEntityAddressTypeForCreationIndex(index1Based: number): LabEntityAddressType {
+  return index1Based % 2 === 1 ? AddressType.SegWit : AddressType.Taproot
+}
+
+/** Create a lab entity from Control (required before mining to a lab entity). */
+export async function createLabEntityViaControl(
+  page: Page,
+  options?: { ownerName?: string; addressType?: LabEntityAddressType },
+): Promise<void> {
+  await page.getByRole('navigation', { name: 'Lab' }).getByRole('link', { name: 'Control' }).click()
+  await expect(page.getByRole('heading', { name: 'Control' })).toBeVisible({ timeout: 15000 })
+  const addressType = options?.addressType ?? AddressType.SegWit
+  await page
+    .getByRole('switch', { name: /Use Taproot address type/ })
+    .setChecked(addressType === AddressType.Taproot)
+  const nameInput = page.getByLabel(/Name \(optional\)/)
+  await nameInput.clear()
+  if (options?.ownerName) {
+    await nameInput.fill(options.ownerName)
+  }
+  await page.getByRole('button', { name: 'Create lab entity' }).click()
+  await expect(page.getByText('Lab entity created').first()).toBeVisible({ timeout: 15000 })
+  await page.getByRole('navigation', { name: 'Lab' }).getByRole('link', { name: 'Blocks' }).click()
+  await expect(page.getByRole('heading', { name: 'Blocks' })).toBeVisible({ timeout: 15000 })
+}
+
+function labOwnerMatchesDisplayKey(state: LabState, o: ReturnType<typeof lookupLabAddressOwner>, key: string): boolean {
+  if (o == null) return false
+  if (o.kind === 'wallet') {
+    return `${WALLET_OWNER_PREFIX}${o.walletId}` === key
+  }
+  const entity = state.entities?.find((e) => e.labEntityId === o.labEntityId)
+  const display = entity ? labEntityOwnerKey(entity) : `Anonymous-${o.labEntityId}`
+  return display === key
 }
 
 async function navigateToLab(page: Page): Promise<void> {
@@ -77,7 +128,7 @@ export async function mineBlocksInLab(
   ownerType: MineOwnerType,
   options?: MineOptions,
 ): Promise<void> {
-  if (ownerType === 'wallet') {
+  if (ownerType === LabOwnerType.Wallet) {
     await goToWalletTab(page, 'Receive')
     await expect(page.getByRole('heading', { name: 'Receive Bitcoin' })).toBeVisible({
       timeout: 10000,
@@ -92,34 +143,46 @@ export async function mineBlocksInLab(
     timeout: 15000,
   })
 
+  if (ownerType === LabOwnerType.LabEntity) {
+    if (options?.randomAnonymous) {
+      await createLabEntityViaControl(page, {
+        addressType: options.labAddressType ?? AddressType.SegWit,
+      })
+    } else if (options?.ownerName !== undefined) {
+      const trimmedOwner = options.ownerName.trim()
+      const stateBeforeCreate = await getLabState(page)
+      if (!labStateHasNamedEntity(stateBeforeCreate, trimmedOwner)) {
+        await createLabEntityViaControl(page, {
+          ownerName: trimmedOwner || undefined,
+          addressType: options.labAddressType,
+        })
+      }
+    }
+  }
+
   await page.getByLabel('Number of blocks').fill(String(count))
-  await page.getByRole('button', { name: ownerType === 'name' ? 'Lab entity' : 'Wallet' }).click()
+  await page.getByRole('button', {
+    name: ownerType === LabOwnerType.LabEntity ? 'Lab entity' : 'Wallet',
+  }).click()
 
   await expect(page.getByRole('button', { name: 'Mine blocks' })).toBeEnabled({
     timeout: 20000,
   })
 
-  if (ownerType === 'name' && options?.targetAddress !== undefined) {
-    await page.getByLabel(/Target address/).fill(options.targetAddress)
-  }
-  if (ownerType === 'name' && options?.ownerName !== undefined) {
-    const ownerInput = page.locator('#owner-name')
-    await expect(ownerInput).toBeVisible()
-    await ownerInput.clear()
-    await ownerInput.pressSequentially(options.ownerName, { delay: 40 })
-    await expect(ownerInput).toHaveValue(options.ownerName)
-  }
-  if (ownerType === 'name' && options?.ownerName === undefined) {
-    const ownerInput = page.locator('#owner-name')
-    if (await ownerInput.isVisible()) {
-      await ownerInput.clear()
-      await expect(ownerInput).toHaveValue('')
+  if (ownerType === LabOwnerType.LabEntity) {
+    const select = page.locator('#lab-entity-mine-select')
+    await expect(select).toBeVisible()
+    if (options?.ownerName?.trim()) {
+      const name = options.ownerName.trim()
+      const optionLabel = await select
+        .locator('option')
+        .filter({ hasText: new RegExp(`^${escapeRegExp(name)} ·`) })
+        .first()
+        .innerText()
+      await select.selectOption({ label: optionLabel.trim() })
+    } else if (options?.randomAnonymous) {
+      await select.selectOption({ index: 0 })
     }
-  }
-  if (ownerType === 'name' && options?.randomAnonymous) {
-    const targetInput = page.locator('#target-address')
-    await targetInput.clear()
-    await expect(targetInput).toHaveValue('')
   }
 
   await page.getByRole('button', { name: 'Mine blocks' }).click()
@@ -127,7 +190,7 @@ export async function mineBlocksInLab(
     timeout: 30000,
   })
 
-  if (ownerType === 'name' && options?.ownerName?.trim()) {
+  if (ownerType === LabOwnerType.LabEntity && options?.ownerName?.trim()) {
     const owner = options.ownerName.trim()
     await expect
       .poll(
@@ -139,7 +202,7 @@ export async function mineBlocksInLab(
       )
       .toBeGreaterThan(0)
   }
-  if (ownerType === 'name' && options?.randomAnonymous) {
+  if (ownerType === LabOwnerType.LabEntity && options?.randomAnonymous) {
     await expect
       .poll(
         async () => {
@@ -153,7 +216,7 @@ export async function mineBlocksInLab(
       )
       .toBeGreaterThan(0)
   }
-  if (ownerType === 'wallet') {
+  if (ownerType === LabOwnerType.Wallet) {
     await expect
       .poll(
         async () => {
@@ -161,7 +224,7 @@ export async function mineBlocksInLab(
           const map = st.addressToOwner ?? {}
           return (st.utxos ?? []).some((u) => {
             const o = lookupLabAddressOwner(u.address, map)
-            return typeof o === 'string' && o.startsWith(WALLET_OWNER_PREFIX)
+            return o != null && o.kind === 'wallet'
           })
         },
         { timeout: 20000, message: 'Expected wallet-owned lab UTXOs after mining' },
@@ -195,7 +258,7 @@ export async function createTransactionInLab(
   await page.getByLabel('Fee rate (sat/vB)').fill(String(feeRate))
   await page.getByRole('button', { name: 'Send' }).click()
 
-  await expect(page.getByText('Transaction added to mempool')).toBeVisible({
+  await expect(page.getByText('Transaction added to mempool').first()).toBeVisible({
     timeout: 15000,
   })
 }
@@ -266,12 +329,12 @@ export async function getLabState(page: Page): Promise<LabState> {
   return state
 }
 
-/** Sum UTXOs for a given owner (name or wallet:name). */
+/** Sum UTXOs for a given owner (entity display key or wallet:id). */
 export function getUtxoSumByOwner(state: LabState, owner: string): number {
   const addressToOwner = state.addressToOwner ?? {}
   return (state.utxos ?? [])
-    .filter(
-      (u) => lookupLabAddressOwner(u.address, addressToOwner) === owner,
+    .filter((u) =>
+      labOwnerMatchesDisplayKey(state, lookupLabAddressOwner(u.address, addressToOwner), owner),
     )
     .reduce((sum, u) => sum + u.amountSats, 0)
 }
@@ -279,11 +342,11 @@ export function getUtxoSumByOwner(state: LabState, owner: string): number {
 /** Resolve an address for a display owner (checks UTXOs first — always present after mining). */
 export function findAddressForOwner(state: LabState, owner: string): string | undefined {
   const map = state.addressToOwner ?? {}
-  const fromUtxo = state.utxos?.find(
-    (u) => lookupLabAddressOwner(u.address, map) === owner,
+  const fromUtxo = state.utxos?.find((u) =>
+    labOwnerMatchesDisplayKey(state, lookupLabAddressOwner(u.address, map), owner),
   )?.address
   if (fromUtxo) return fromUtxo
-  return state.addresses?.find(
-    (a) => lookupLabAddressOwner(a.address, map) === owner,
+  return state.addresses?.find((a) =>
+    labOwnerMatchesDisplayKey(state, lookupLabAddressOwner(a.address, map), owner),
   )?.address
 }

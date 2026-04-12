@@ -1,5 +1,5 @@
+export { AddressType } from '@/lib/wallet-domain-types'
 export type {
-  AddressType,
   BitcoinNetwork,
   DescriptorWalletData,
   WalletSecrets,

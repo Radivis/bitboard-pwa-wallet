@@ -52,6 +52,8 @@ export function LabMakeTransactionCard({
   creatingRandomTransactions,
   randomBatchProgress,
   labEntitiesCount,
+  sendDisabledFromDeadEntity = false,
+  deadFromEntityDisplayName = '',
 }: {
   showTxForm: boolean
   setShowTxForm: (v: boolean) => void
@@ -72,6 +74,8 @@ export function LabMakeTransactionCard({
   creatingRandomTransactions: boolean
   randomBatchProgress: { created: number; total: number } | null
   labEntitiesCount: number
+  sendDisabledFromDeadEntity?: boolean
+  deadFromEntityDisplayName?: string
 }) {
   const selectedRandomCount = parseRandomTransactionCountValue(randomTransactionCount)
   const showRandomBatchConflictWarning =
@@ -157,6 +161,12 @@ export function LabMakeTransactionCard({
                   value={fromAddress}
                   onChange={(e) => setFromAddress(e.target.value)}
                 />
+                {sendDisabledFromDeadEntity && deadFromEntityDisplayName ? (
+                  <p className="text-sm text-muted-foreground" role="status">
+                    This address belongs to DEAD lab entity {deadFromEntityDisplayName} — sending is
+                    disabled.
+                  </p>
+                ) : null}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="to-address">To address</Label>
@@ -201,7 +211,7 @@ export function LabMakeTransactionCard({
                 />
               </div>
               <div className="flex gap-2">
-                <Button onClick={onSend} disabled={sending}>
+                <Button onClick={onSend} disabled={sending || sendDisabledFromDeadEntity}>
                   {sending ? 'Sending...' : 'Send'}
                 </Button>
                 <Button

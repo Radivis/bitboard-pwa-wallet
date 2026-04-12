@@ -1,3 +1,4 @@
+import type { AddressType } from '@/lib/wallet-domain-types'
 import { parseWasmObject, state } from './lab-worker-state'
 import type { LabEntityRecord } from './lab-api'
 
@@ -9,7 +10,7 @@ export function createAndRegisterLabEntityFromWasm(
     labEntityId: number
     entityName: string | null
     labNetwork: string
-    labAddressType: string
+    labAddressType: AddressType
     nowIso: string
     noAddressErrorMessage: string
   },
@@ -36,6 +37,7 @@ export function createAndRegisterLabEntityFromWasm(
     accountId: 0,
     createdAt: nowIso,
     updatedAt: nowIso,
+    isDead: false,
   }
   state.entities.push(entity)
   const coinbaseAddress = String(cr.first_address ?? '')

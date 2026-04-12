@@ -24,7 +24,8 @@ use wasm_bindgen::prelude::*;
 use crate::error::MapErrToJs;
 use crate::validation;
 
-const LAB_COINBASE_SUBSIDY: u64 = 50 * 100_000_000; // 50 BTC in sats
+/// Default lab coinbase subsidy (50 BTC in sats). JS passes per-block subsidy into `lab_mine_block`.
+pub const LAB_DEFAULT_MINER_SUBSIDY_SATS: u64 = 50 * 100_000_000;
 /// Bitcoin coinbase prevout index (all bits set), matches frontend `LAB_COINBASE_PREV_VOUT`.
 const LAB_COINBASE_PREV_VOUT: u32 = 0xffff_ffff;
 const LAB_BITS: u32 = 0x2000ffff; // Micro-PoW: compact target around 256 expected attempts
@@ -130,6 +131,7 @@ pub fn regtest_create_genesis() -> String {
 /// - `height`: Block height (0 for genesis)
 /// - `coinbase_script_pubkey_hex`: ScriptPubKey for coinbase output (hex)
 /// - `txs_hex`: Optional transactions to include (array of hex strings)
+/// - `subsidy_sats`: New coins for the miner (not including fees). May be 0 (fees-only coinbase).
 /// - `total_fees_sats`: Sum of fees from included transactions (added to coinbase output)
 #[wasm_bindgen]
 pub fn lab_mine_block(
@@ -137,6 +139,7 @@ pub fn lab_mine_block(
     height: u32,
     coinbase_script_pubkey_hex: &str,
     txs_hex: JsValue,
+    subsidy_sats: u64,
     total_fees_sats: u64,
 ) -> Result<String, JsValue> {
     let script_pubkey_bytes = hex::decode(coinbase_script_pubkey_hex).map_err_to_js()?;
@@ -148,7 +151,7 @@ pub fn lab_mine_block(
         BlockHash::from_str(prev_block_hash_hex).map_err_to_js()?
     };
 
-    let coinbase = create_coinbase_tx(height, script_pubkey, total_fees_sats);
+    let coinbase = create_coinbase_tx(height, script_pubkey, subsidy_sats, total_fees_sats)?;
     let mut txdata = vec![coinbase];
 
     if !txs_hex.is_undefined() && !txs_hex.is_null() {
@@ -553,6 +556,20 @@ pub fn lab_txid(tx_hex: &str) -> Result<String, JsValue> {
     Ok(tx.compute_txid().to_string())
 }
 
+/// Returns virtual size in vBytes (`ceil(weight / 4)`) for a serialized transaction.
+#[wasm_bindgen]
+pub fn lab_tx_vbytes(tx_hex: &str) -> Result<u64, JsValue> {
+    let tx: Transaction = deserialize_hex(tx_hex).map_err_to_js()?;
+    Ok(tx.weight().to_wu().div_ceil(4))
+}
+
+/// Returns BIP141 block weight units for a serialized transaction.
+#[wasm_bindgen]
+pub fn lab_tx_weight(tx_hex: &str) -> Result<u64, JsValue> {
+    let tx: Transaction = deserialize_hex(tx_hex).map_err_to_js()?;
+    Ok(tx.weight().to_wu())
+}
+
 /// Returns the block hash (hex) for a serialized block.
 #[wasm_bindgen]
 pub fn lab_block_hash(block_hex: &str) -> Result<String, JsValue> {
@@ -667,7 +684,12 @@ pub fn lab_address_to_script_pubkey_hex(address_str: &str) -> Result<String, JsV
     Ok(hex::encode(script_pubkey.as_bytes()))
 }
 
-fn create_coinbase_tx(height: u32, script_pubkey: ScriptBuf, fees_sats: u64) -> Transaction {
+fn create_coinbase_tx(
+    height: u32,
+    script_pubkey: ScriptBuf,
+    subsidy_sats: u64,
+    fees_sats: u64,
+) -> Result<Transaction, JsValue> {
     let script_sig = bitcoin::blockdata::script::Builder::new()
         .push_int(height as i64)
         .push_slice([0u8; 32]) // Extra nonce for uniqueness
@@ -680,18 +702,20 @@ fn create_coinbase_tx(height: u32, script_pubkey: ScriptBuf, fees_sats: u64) -> 
         witness: Witness::default(),
     };
 
-    let total_value = LAB_COINBASE_SUBSIDY + fees_sats;
+    let total_value = subsidy_sats
+        .checked_add(fees_sats)
+        .ok_or_else(|| JsValue::from_str("coinbase subsidy plus fees overflow"))?;
     let output = TxOut {
         value: Amount::from_sat(total_value),
         script_pubkey,
     };
 
-    Transaction {
+    Ok(Transaction {
         version: transaction::Version::TWO,
         lock_time: absolute::LockTime::ZERO,
         input: vec![input],
         output: vec![output],
-    }
+    })
 }
 
 /// Computes the Merkle root of the transaction list. Returns `None` if `txdata` is empty.
@@ -712,5 +736,55 @@ fn unix_time_lab() -> u32 {
             .duration_since(std::time::UNIX_EPOCH)
             .expect("system time is before UNIX_EPOCH")
             .as_secs() as u32
+    }
+}
+
+#[cfg(test)]
+mod lab_tx_vbytes_tests {
+    use super::*;
+    use bitcoin::blockdata::witness::Witness;
+    use bitcoin::consensus::encode::serialize_hex;
+    use bitcoin::{Amount, OutPoint, ScriptBuf, Sequence, TxIn, TxOut};
+
+    #[test]
+    fn lab_tx_vbytes_matches_weight_div_ceil_four() {
+        let tx = Transaction {
+            version: transaction::Version::TWO,
+            lock_time: absolute::LockTime::ZERO,
+            input: vec![TxIn {
+                previous_output: OutPoint::null(),
+                script_sig: ScriptBuf::new(),
+                sequence: Sequence::MAX,
+                witness: Witness::default(),
+            }],
+            output: vec![TxOut {
+                value: Amount::from_sat(1000),
+                script_pubkey: ScriptBuf::new(),
+            }],
+        };
+        let hex = serialize_hex(&tx);
+        let expected = tx.weight().to_wu().div_ceil(4);
+        assert_eq!(lab_tx_vbytes(&hex).unwrap(), expected);
+    }
+
+    #[test]
+    fn lab_tx_weight_matches_transaction_weight() {
+        let tx = Transaction {
+            version: transaction::Version::TWO,
+            lock_time: absolute::LockTime::ZERO,
+            input: vec![TxIn {
+                previous_output: OutPoint::null(),
+                script_sig: ScriptBuf::new(),
+                sequence: Sequence::MAX,
+                witness: Witness::default(),
+            }],
+            output: vec![TxOut {
+                value: Amount::from_sat(1000),
+                script_pubkey: ScriptBuf::new(),
+            }],
+        };
+        let hex = serialize_hex(&tx);
+        let expected = tx.weight().to_wu();
+        assert_eq!(lab_tx_weight(&hex).unwrap(), expected);
     }
 }

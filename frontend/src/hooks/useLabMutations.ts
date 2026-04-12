@@ -1,13 +1,22 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
+import type { LabOwner } from '@/lib/lab-owner'
 import {
+  labOpCreateLabEntity,
   labOpCreateLabEntityTransaction,
   labOpCreateRandomLabEntityTransactions,
+  labOpDeleteLabEntity,
   labOpMineBlocks,
+  labOpRenameLabEntity,
   labOpReset,
+  labOpSetLabEntityDead,
+  labOpSetBlockWeightLimit,
+  labOpSetMinerSubsidySats,
 } from '@/lib/lab-worker-operations'
 import { setLabChainStateCache } from '@/hooks/useLabChainStateQuery'
 import { labChainStateQueryKey } from '@/lib/lab-chain-query'
+import { invalidateLabPaginatedQueries } from '@/lib/lab-paginated-queries'
+import type { AddressType } from '@/lib/wallet-domain-types'
 import { errorMessage } from '@/lib/utils'
 
 export type LabMineBlocksVariables = {
@@ -15,9 +24,10 @@ export type LabMineBlocksVariables = {
   effectiveTarget: string
   mineOptions:
     | { ownerWalletId: number }
+    | { ownerLabEntityId: number }
     | { ownerName: string }
     | undefined
-  labAddressType: 'segwit' | 'taproot'
+  labAddressType: AddressType
   labNetwork?: string
 }
 
@@ -35,6 +45,7 @@ export function useLabMineBlocksMutation() {
     },
     onSuccess: (result, variables) => {
       setLabChainStateCache(queryClient, result.state)
+      void invalidateLabPaginatedQueries(queryClient)
       const blocksPhrase = `Mined ${variables.count} block(s)`
       const successMessage =
         result.includedMempoolTxCount > 0
@@ -59,12 +70,12 @@ export function useLabMineBlocksMutation() {
 }
 
 export type LabCreateTransactionVariables = {
-  entityName: string
+  labEntityId: number
   fromAddress: string
   toAddress: string
   amountSats: number
   feeRateSatPerVb: number
-  knownRecipientOwner?: string | null
+  knownRecipientOwner?: LabOwner | null
 }
 
 export function useLabCreateTransactionMutation() {
@@ -74,7 +85,7 @@ export function useLabCreateTransactionMutation() {
     mutationKey: ['lab', 'createLabEntityTransaction'] as const,
     mutationFn: async (variables: LabCreateTransactionVariables) => {
       return labOpCreateLabEntityTransaction({
-        entityName: variables.entityName,
+        labEntityId: variables.labEntityId,
         fromAddress: variables.fromAddress,
         toAddress: variables.toAddress,
         amountSats: variables.amountSats,
@@ -84,6 +95,7 @@ export function useLabCreateTransactionMutation() {
     },
     onSuccess: (state) => {
       setLabChainStateCache(queryClient, state)
+      void invalidateLabPaginatedQueries(queryClient)
       toast.success('Transaction added to mempool')
     },
     onError: (err) => {
@@ -109,6 +121,7 @@ export function useLabCreateRandomTransactionsMutation() {
     },
     onSuccess: (result, variables) => {
       setLabChainStateCache(queryClient, result.state)
+      void invalidateLabPaginatedQueries(queryClient)
       if (result.createdCount === variables.count) {
         toast.success(`Created ${result.createdCount} random transaction(s)`)
         return
@@ -128,6 +141,108 @@ export function useLabCreateRandomTransactionsMutation() {
   })
 }
 
+export function useLabCreateLabEntityMutation() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationKey: ['lab', 'createLabEntity'] as const,
+    mutationFn: (options?: {
+      ownerName?: string
+      labAddressType?: AddressType
+      labNetwork?: string
+    }) => labOpCreateLabEntity(options),
+    onSuccess: (state) => {
+      setLabChainStateCache(queryClient, state)
+      void invalidateLabPaginatedQueries(queryClient)
+      toast.success('Lab entity created')
+    },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : 'Create failed')
+    },
+  })
+}
+
+export function useLabRenameLabEntityMutation() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationKey: ['lab', 'renameLabEntity'] as const,
+    mutationFn: ({ labEntityId, newName }: { labEntityId: number; newName: string }) =>
+      labOpRenameLabEntity(labEntityId, newName),
+    onSuccess: (state) => {
+      setLabChainStateCache(queryClient, state)
+      void invalidateLabPaginatedQueries(queryClient)
+      toast.success('Entity renamed')
+    },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : 'Rename failed')
+    },
+  })
+}
+
+export function useLabDeleteLabEntityMutation() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationKey: ['lab', 'deleteLabEntity'] as const,
+    mutationFn: (labEntityId: number) => labOpDeleteLabEntity(labEntityId),
+    onSuccess: (state) => {
+      setLabChainStateCache(queryClient, state)
+      void invalidateLabPaginatedQueries(queryClient)
+      toast.success('Entity deleted')
+    },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : 'Delete failed')
+    },
+  })
+}
+
+export function useLabSetEntityDeadMutation() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationKey: ['lab', 'setLabEntityDead'] as const,
+    mutationFn: ({ labEntityId, dead }: { labEntityId: number; dead: boolean }) =>
+      labOpSetLabEntityDead(labEntityId, dead),
+    onSuccess: (state) => {
+      setLabChainStateCache(queryClient, state)
+      void invalidateLabPaginatedQueries(queryClient)
+      toast.success('Entity updated')
+    },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : 'Update failed')
+    },
+  })
+}
+
+export function useLabSetBlockWeightLimitMutation() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationKey: ['lab', 'setBlockWeightLimit'] as const,
+    mutationFn: (blockWeightLimit: number) => labOpSetBlockWeightLimit(blockWeightLimit),
+    onSuccess: (state) => {
+      setLabChainStateCache(queryClient, state)
+      void invalidateLabPaginatedQueries(queryClient)
+      toast.success('Block weight limit updated (applies to future blocks)')
+    },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : 'Update failed')
+    },
+  })
+}
+
+export function useLabSetMinerSubsidySatsMutation() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationKey: ['lab', 'setMinerSubsidySats'] as const,
+    mutationFn: (minerSubsidySats: number) => labOpSetMinerSubsidySats(minerSubsidySats),
+    onSuccess: (state) => {
+      setLabChainStateCache(queryClient, state)
+      void invalidateLabPaginatedQueries(queryClient)
+      toast.success('Miner subsidy updated (applies to future blocks)')
+    },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : 'Update failed')
+    },
+  })
+}
+
 export function useLabResetMutation() {
   const queryClient = useQueryClient()
 
@@ -136,6 +251,7 @@ export function useLabResetMutation() {
     mutationFn: () => labOpReset(),
     onSuccess: (state) => {
       setLabChainStateCache(queryClient, state)
+      void invalidateLabPaginatedQueries(queryClient)
       toast.success('Lab reset')
     },
     onError: (err) => {

@@ -8,15 +8,19 @@ import {
 } from '@/components/ui/card'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { truncateAddress } from '@/lib/bitcoin-utils'
-import { getOwnerDisplayName } from '@/lib/lab-utils'
+import { LabOwnerDisplayWithAddressType } from '@/components/lab/LabOwnerDisplayWithAddressType'
+import type { LabOwner } from '@/lib/lab-owner'
+import { useLabChainStateQuery } from '@/hooks/useLabChainStateQuery'
 
 export function LabMempoolCard({
   mempool,
   wallets,
 }: {
-  mempool: Array<{ txid: string; sender: string | null; receiver: string | null }>
+  mempool: Array<{ txid: string; sender: LabOwner | null; receiver: LabOwner | null }>
   wallets: Array<{ wallet_id: number; name: string }>
 }) {
+  const { data: labState } = useLabChainStateQuery()
+  const entities = labState?.entities ?? []
   return (
     <InfomodeWrapper
       infoId="lab-mempool-card"
@@ -46,9 +50,26 @@ export function LabMempoolCard({
                   <span className="font-mono text-sm truncate flex-1 min-w-0" title={tx.txid}>
                     {truncateAddress(tx.txid)}
                   </span>
-                  <span className="text-muted-foreground text-sm">
-                    {tx.sender ? getOwnerDisplayName(tx.sender, wallets) : 'unknown'} →{' '}
-                    {tx.receiver ? getOwnerDisplayName(tx.receiver, wallets) : 'unknown'}
+                  <span className="text-muted-foreground text-sm flex flex-wrap items-center gap-x-1 gap-y-1">
+                    {tx.sender ? (
+                      <LabOwnerDisplayWithAddressType
+                        owner={tx.sender}
+                        wallets={wallets}
+                        entities={entities}
+                      />
+                    ) : (
+                      'unknown'
+                    )}
+                    <span aria-hidden="true">→</span>
+                    {tx.receiver ? (
+                      <LabOwnerDisplayWithAddressType
+                        owner={tx.receiver}
+                        wallets={wallets}
+                        entities={entities}
+                      />
+                    ) : (
+                      'unknown'
+                    )}
                   </span>
                 </Link>
               ))}

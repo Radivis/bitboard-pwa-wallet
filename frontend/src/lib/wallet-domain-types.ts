@@ -7,8 +7,20 @@ import { isLightningPaymentPayload } from '@/lib/lightning-snapshot-payload'
 import type { LightningNetworkMode } from '@/lib/lightning-utils'
 import { LIGHTNING_NETWORK_MODES } from '@/lib/lightning-utils'
 
-export type AddressType = 'taproot' | 'segwit'
+export enum AddressType {
+  SegWit = 'segwit',
+  Taproot = 'taproot',
+}
+
 export type BitcoinNetwork = 'bitcoin' | 'testnet' | 'signet' | 'regtest'
+
+/** Parse a stored / wire string (e.g. SQLite `address_type`) into {@link AddressType}. */
+export function parseAddressType(raw: string): AddressType {
+  const normalized = raw.trim().toLowerCase()
+  if (normalized === AddressType.SegWit) return AddressType.SegWit
+  if (normalized === AddressType.Taproot) return AddressType.Taproot
+  throw new Error(`Invalid address type: ${raw}`)
+}
 
 /** Data for a single descriptor wallet (one network + address type + account combo). Shared with db layer. */
 export interface DescriptorWalletData {
@@ -70,7 +82,10 @@ const SUPPORTED_BITCOIN_NETWORKS: readonly BitcoinNetwork[] = [
   'regtest',
 ]
 
-const SUPPORTED_ADDRESS_TYPES: readonly AddressType[] = ['taproot', 'segwit']
+const SUPPORTED_ADDRESS_TYPES: readonly AddressType[] = [
+  AddressType.SegWit,
+  AddressType.Taproot,
+]
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null

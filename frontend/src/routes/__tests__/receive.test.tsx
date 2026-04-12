@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { AddressType } from '@/lib/wallet-domain-types'
 import { renderWithProviders } from '@/test-utils/test-providers'
 
 const mockNavigate = vi.fn()
@@ -27,10 +28,14 @@ vi.mock('@/stores/cryptoStore', () => ({
 
 let walletStoreState: Record<string, unknown> = {}
 const mockSetCurrentAddress = vi.fn()
-vi.mock('@/stores/walletStore', () => ({
-  useWalletStore: (selector: (s: Record<string, unknown>) => unknown) =>
-    selector(walletStoreState),
-}))
+vi.mock('@/stores/walletStore', async () => {
+  const { AddressType } = await import('@/lib/wallet-domain-types')
+  return {
+    AddressType,
+    useWalletStore: (selector: (s: Record<string, unknown>) => unknown) =>
+      selector(walletStoreState),
+  }
+})
 
 vi.mock('@/stores/sessionStore', () => ({
   useSessionStore: (selector: (s: Record<string, unknown>) => unknown) =>
@@ -60,7 +65,7 @@ describe('ReceivePage', () => {
       activeWalletId: 1,
       walletStatus: 'unlocked',
       currentAddress: 'tb1qtest123address456',
-      addressType: 'taproot',
+      addressType: AddressType.Taproot,
       setCurrentAddress: mockSetCurrentAddress,
     }
   })

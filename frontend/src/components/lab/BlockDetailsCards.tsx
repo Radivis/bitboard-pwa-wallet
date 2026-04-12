@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { Link } from '@tanstack/react-router'
 import {
   Card,
@@ -8,13 +9,21 @@ import {
 } from '@/components/ui/card'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { Badge } from '@/components/ui/badge'
-import { formatSats, truncateAddress } from '@/lib/bitcoin-utils'
-import { getOwnerDisplayName } from '@/lib/lab-utils'
+import { formatBTC, formatSats, truncateAddress } from '@/lib/bitcoin-utils'
+import { LabOwnerDisplayWithAddressType } from '@/components/lab/LabOwnerDisplayWithAddressType'
+import { useLabChainStateQuery } from '@/hooks/useLabChainStateQuery'
 import type { LabBlockDetails } from '@/workers/lab-api'
 import {
   LabBlockHeaderInfomodeContent,
   LabBlockMerkleRootInfomodeContent,
 } from '@/components/lab/LabBlockHeaderInfomodeContent'
+import { CardPagination } from '@/components/CardPagination'
+import { isCoinbase } from '@/lib/lab-operations'
+import { netMovedSatsForBlock } from '@/lib/lab-tx-net-moved'
+import { useLabBlockTransactionsPage } from '@/hooks/useLabPaginatedQueries'
+import { LAB_CARD_PAGE_SIZE } from '@/lib/lab-paginated-queries'
+import type { AddressType } from '@/lib/wallet-domain-types'
+import { useWalletStore } from '@/stores/walletStore'
 
 function HeaderField({ label, value }: { label: string; value: string }) {
   return (
@@ -105,15 +114,22 @@ export function LabBlockMetadataCard({
   block: LabBlockDetails
   wallets: Array<{ wallet_id: number; name: string }>
 }) {
-  const minedBy = block.metadata.minedBy
-    ? getOwnerDisplayName(block.metadata.minedBy, wallets)
-    : 'unknown'
+  const { data: labState } = useLabChainStateQuery()
+  const entities = labState?.entities ?? []
+  const txDetails = labState?.txDetails ?? []
+  const netMovedSats = netMovedSatsForBlock(txDetails, block.metadata.height)
+  const mineOp = labState?.mineOperations?.find((m) => m.height === block.metadata.height)
+  const weightAtMiningRecorded =
+    mineOp?.blockWeightLimitWu != null &&
+    mineOp?.nonCoinbaseWeightUsedWu != null &&
+    Number.isFinite(mineOp.blockWeightLimitWu) &&
+    Number.isFinite(mineOp.nonCoinbaseWeightUsedWu)
 
   return (
     <InfomodeWrapper
       infoId="lab-block-detail-contextual-data-card"
       infoTitle="Contextual data"
-      infoText="Where this block sits in the chain, when it was mined, who received the subsidy, how many transactions it contains, and the fees from non-coinbase transactions."
+      infoText="Where this block sits in the chain, when it was mined, who received the subsidy, how many transactions it contains, the fees from non-coinbase transactions, net moved BTC (sum of non-change outputs from non-coinbase transactions only; coinbase excluded), and (when recorded) the non-coinbase weight used versus the lab limit at mining time."
       className="rounded-xl"
     >
       <Card>
@@ -127,7 +143,18 @@ export function LabBlockMetadataCard({
             <span className="text-muted-foreground">Mined on:</span>{' '}
             {new Date(block.metadata.minedOn * 1000).toLocaleString()}
           </p>
-          <p><span className="text-muted-foreground">Mined by:</span> {minedBy}</p>
+          <p className="flex flex-wrap items-center gap-2">
+            <span className="text-muted-foreground">Mined by:</span>
+            {block.metadata.minedBy ? (
+              <LabOwnerDisplayWithAddressType
+                owner={block.metadata.minedBy}
+                wallets={wallets}
+                entities={entities}
+              />
+            ) : (
+              'unknown'
+            )}
+          </p>
           <p>
             <span className="text-muted-foreground">Number of transactions:</span>{' '}
             {block.metadata.numberOfTransactions}
@@ -136,9 +163,107 @@ export function LabBlockMetadataCard({
             <span className="text-muted-foreground">Total fees:</span>{' '}
             {formatSats(block.metadata.totalFeesSats)} sats
           </p>
+          <p>
+            <span className="text-muted-foreground">Net moved (BTC):</span>{' '}
+            <span className="font-mono tabular-nums">{formatBTC(netMovedSats)}</span> BTC (
+            {formatSats(netMovedSats)} sats)
+          </p>
+          {weightAtMiningRecorded && mineOp != null ? (
+            <p>
+              <span className="text-muted-foreground">Non-coinbase weight (at mining):</span>{' '}
+              <span className="font-mono tabular-nums">
+                {mineOp.nonCoinbaseWeightUsedWu} / {mineOp.blockWeightLimitWu} WU
+              </span>
+            </p>
+          ) : null}
         </CardContent>
       </Card>
     </InfomodeWrapper>
+  )
+}
+
+const labBlockTxRowLinkClassName =
+  'flex flex-wrap items-center gap-2 rounded px-2 py-2 transition-colors hover:bg-muted/50'
+const labBlockTxRowPlainClassName = 'flex flex-wrap items-center gap-2 rounded px-2 py-2'
+
+function labBlockTxList(
+  txs: LabBlockDetails['transactions'],
+  wallets: Array<{ wallet_id: number; name: string }>,
+  entities: readonly {
+    labEntityId: number
+    entityName: string | null
+    addressType: AddressType
+  }[],
+  isTemplate: boolean,
+) {
+  return (
+    <div className="space-y-2">
+      {txs.map((tx) => {
+        const coinbaseNoTxPageYet = isTemplate && isCoinbase(tx)
+        const row = (
+          <>
+            {isCoinbase(tx) ? (
+              <Badge variant="outline" className="shrink-0">
+                Coinbase
+              </Badge>
+            ) : null}
+            <span className="min-w-0 flex-1 font-mono text-sm" title={tx.txid}>
+              {truncateAddress(tx.txid)}
+            </span>
+            <span className="text-sm text-muted-foreground flex flex-wrap items-center gap-x-1 gap-y-1">
+              {isCoinbase(tx) ? (
+                tx.receiver ? (
+                  <LabOwnerDisplayWithAddressType
+                    owner={tx.receiver}
+                    wallets={wallets}
+                    entities={entities}
+                  />
+                ) : (
+                  'unknown reward'
+                )
+              ) : (
+                <>
+                  {tx.sender ? (
+                    <LabOwnerDisplayWithAddressType
+                      owner={tx.sender}
+                      wallets={wallets}
+                      entities={entities}
+                    />
+                  ) : (
+                    'unknown'
+                  )}
+                  <span aria-hidden="true">→</span>
+                  {tx.receiver ? (
+                    <LabOwnerDisplayWithAddressType
+                      owner={tx.receiver}
+                      wallets={wallets}
+                      entities={entities}
+                    />
+                  ) : (
+                    'unknown'
+                  )}
+                </>
+              )}
+            </span>
+            <span className="text-sm tabular-nums">{formatSats(tx.feeSats)} sats fee</span>
+          </>
+        )
+        return coinbaseNoTxPageYet ? (
+          <div key={tx.txid} className={labBlockTxRowPlainClassName}>
+            {row}
+          </div>
+        ) : (
+          <Link
+            key={tx.txid}
+            to="/lab/tx/$txid"
+            params={{ txid: tx.txid }}
+            className={labBlockTxRowLinkClassName}
+          >
+            {row}
+          </Link>
+        )
+      })}
+    </div>
   )
 }
 
@@ -149,6 +274,34 @@ export function LabBlockTransactionsCard({
   block: LabBlockDetails
   wallets: Array<{ wallet_id: number; name: string }>
 }) {
+  const [pageIndex, setPageIndex] = useState(0)
+  const isTemplate = block.isTemplate
+  const blockHeight = block.metadata.height
+  const labNetworkEnabled = useWalletStore((s) => s.networkMode === 'lab')
+  const { data: labState } = useLabChainStateQuery()
+  const entities = labState?.entities ?? []
+
+  const minedQuery = useLabBlockTransactionsPage(blockHeight, pageIndex, {
+    enabled: !isTemplate && labNetworkEnabled,
+  })
+
+  useEffect(() => {
+    setPageIndex(0)
+  }, [isTemplate, blockHeight])
+
+  const totalCount = isTemplate
+    ? block.transactions.length
+    : minedQuery.data?.totalCount ?? block.metadata.numberOfTransactions
+
+  const txsForPage = isTemplate
+    ? block.transactions.slice(
+        pageIndex * LAB_CARD_PAGE_SIZE,
+        (pageIndex + 1) * LAB_CARD_PAGE_SIZE,
+      )
+    : (minedQuery.data?.transactions ?? [])
+
+  const showLoading = !isTemplate && minedQuery.isLoading && txsForPage.length === 0
+
   return (
     <InfomodeWrapper
       infoId="lab-block-detail-transactions-card"
@@ -162,38 +315,22 @@ export function LabBlockTransactionsCard({
           <CardDescription>Transactions included in this block</CardDescription>
         </CardHeader>
         <CardContent>
-          {block.transactions.length === 0 ? (
+          {totalCount === 0 ? (
             <p className="text-sm text-muted-foreground">No transactions in this block.</p>
+          ) : showLoading ? (
+            <p className="text-sm text-muted-foreground">Loading transactions…</p>
+          ) : minedQuery.isError && !isTemplate ? (
+            <p className="text-sm text-destructive">Could not load transactions.</p>
           ) : (
-            <div className="space-y-2">
-              {block.transactions.map((tx) => (
-                <Link
-                  key={tx.txid}
-                  to="/lab/tx/$txid"
-                  params={{ txid: tx.txid }}
-                  className="flex flex-wrap items-center gap-2 rounded px-2 py-2 transition-colors hover:bg-muted/50"
-                >
-                  {tx.isCoinbase ? (
-                    <Badge variant="outline" className="shrink-0">
-                      Coinbase
-                    </Badge>
-                  ) : null}
-                  <span className="min-w-0 flex-1 font-mono text-sm" title={tx.txid}>
-                    {truncateAddress(tx.txid)}
-                  </span>
-                  <span className="text-sm text-muted-foreground">
-                    {tx.isCoinbase
-                      ? (tx.receiver
-                        ? getOwnerDisplayName(tx.receiver, wallets)
-                        : 'unknown reward')
-                      : `${tx.sender ? getOwnerDisplayName(tx.sender, wallets) : 'unknown'} -> ${
-                          tx.receiver ? getOwnerDisplayName(tx.receiver, wallets) : 'unknown'
-                        }`}
-                  </span>
-                  <span className="text-sm tabular-nums">{formatSats(tx.feeSats)} sats fee</span>
-                </Link>
-              ))}
-            </div>
+            <CardPagination
+              pageSize={LAB_CARD_PAGE_SIZE}
+              totalCount={totalCount}
+              pageIndex={pageIndex}
+              onPageChange={setPageIndex}
+              ariaLabel="Transactions page"
+            >
+              {labBlockTxList(txsForPage, wallets, entities, isTemplate)}
+            </CardPagination>
           )}
         </CardContent>
       </Card>

@@ -1,8 +1,5 @@
 import { useState, useCallback } from 'react'
-import {
-  useWalletStore,
-  type AddressType,
-} from '@/stores/walletStore'
+import { AddressType, useWalletStore } from '@/stores/walletStore'
 import { useSubWalletSwitchMutation } from '@/hooks/useSubWalletSwitchMutation'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { Button } from '@/components/ui/button'
@@ -18,14 +15,12 @@ export function AddressTypeSelector() {
   const activeWalletId = useWalletStore((s) => s.activeWalletId)
   const walletStatus = useWalletStore((s) => s.walletStatus)
   const [showWarning, setShowWarning] = useState(false)
-  const [pendingType, setPendingType] = useState<'taproot' | 'segwit' | null>(
-    null,
-  )
+  const [pendingType, setPendingType] = useState<AddressType | null>(null)
 
   const { mutateAsync, loading, statusLine } =
     useSubWalletSwitchMutation('addressType')
 
-  const handleChange = (type: 'taproot' | 'segwit') => {
+  const handleChange = (type: AddressType) => {
     if (type === addressType) return
     if (activeWalletId) {
       setPendingType(type)
@@ -57,9 +52,9 @@ export function AddressTypeSelector() {
           className="min-w-0 flex-1"
         >
           <Button
-            variant={addressType === 'taproot' ? 'default' : 'outline'}
+            variant={addressType === AddressType.Taproot ? 'default' : 'outline'}
             size="sm"
-            onClick={() => handleChange('taproot')}
+            onClick={() => handleChange(AddressType.Taproot)}
             className="w-full"
             disabled={loading}
           >
@@ -73,9 +68,9 @@ export function AddressTypeSelector() {
           className="min-w-0 flex-1"
         >
           <Button
-            variant={addressType === 'segwit' ? 'default' : 'outline'}
+            variant={addressType === AddressType.SegWit ? 'default' : 'outline'}
             size="sm"
-            onClick={() => handleChange('segwit')}
+            onClick={() => handleChange(AddressType.SegWit)}
             className="w-full"
             disabled={loading}
           >
