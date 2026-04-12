@@ -82,7 +82,7 @@ export function LabPreviousBlocksCard({
       <Card>
         <CardHeader>
           <CardTitle>Previous blocks</CardTitle>
-          <CardDescription>Open a block for full details</CardDescription>
+          <CardDescription>Only the fee part of the miner reward is shown here. Open a block for full details.</CardDescription>
         </CardHeader>
         <CardContent>
           {totalCount === 0 ? (

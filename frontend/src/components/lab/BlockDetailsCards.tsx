@@ -181,66 +181,83 @@ export function LabBlockMetadataCard({
   )
 }
 
+const labBlockTxRowLinkClassName =
+  'flex flex-wrap items-center gap-2 rounded px-2 py-2 transition-colors hover:bg-muted/50'
+const labBlockTxRowPlainClassName = 'flex flex-wrap items-center gap-2 rounded px-2 py-2'
+
 function labBlockTxList(
   txs: LabBlockDetails['transactions'],
   wallets: Array<{ wallet_id: number; name: string }>,
   entities: readonly { labEntityId: number; entityName: string | null; addressType: string }[],
+  isTemplate: boolean,
 ) {
   return (
     <div className="space-y-2">
-      {txs.map((tx) => (
-        <Link
-          key={tx.txid}
-          to="/lab/tx/$txid"
-          params={{ txid: tx.txid }}
-          className="flex flex-wrap items-center gap-2 rounded px-2 py-2 transition-colors hover:bg-muted/50"
-        >
-          {isCoinbase(tx) ? (
-            <Badge variant="outline" className="shrink-0">
-              Coinbase
-            </Badge>
-          ) : null}
-          <span className="min-w-0 flex-1 font-mono text-sm" title={tx.txid}>
-            {truncateAddress(tx.txid)}
-          </span>
-          <span className="text-sm text-muted-foreground flex flex-wrap items-center gap-x-1 gap-y-1">
+      {txs.map((tx) => {
+        const coinbaseNoTxPageYet = isTemplate && isCoinbase(tx)
+        const row = (
+          <>
             {isCoinbase(tx) ? (
-              tx.receiver ? (
-                <LabOwnerDisplayWithAddressType
-                  owner={tx.receiver}
-                  wallets={wallets}
-                  entities={entities}
-                />
-              ) : (
-                'unknown reward'
-              )
-            ) : (
-              <>
-                {tx.sender ? (
-                  <LabOwnerDisplayWithAddressType
-                    owner={tx.sender}
-                    wallets={wallets}
-                    entities={entities}
-                  />
-                ) : (
-                  'unknown'
-                )}
-                <span aria-hidden="true">→</span>
-                {tx.receiver ? (
+              <Badge variant="outline" className="shrink-0">
+                Coinbase
+              </Badge>
+            ) : null}
+            <span className="min-w-0 flex-1 font-mono text-sm" title={tx.txid}>
+              {truncateAddress(tx.txid)}
+            </span>
+            <span className="text-sm text-muted-foreground flex flex-wrap items-center gap-x-1 gap-y-1">
+              {isCoinbase(tx) ? (
+                tx.receiver ? (
                   <LabOwnerDisplayWithAddressType
                     owner={tx.receiver}
                     wallets={wallets}
                     entities={entities}
                   />
                 ) : (
-                  'unknown'
-                )}
-              </>
-            )}
-          </span>
-          <span className="text-sm tabular-nums">{formatSats(tx.feeSats)} sats fee</span>
-        </Link>
-      ))}
+                  'unknown reward'
+                )
+              ) : (
+                <>
+                  {tx.sender ? (
+                    <LabOwnerDisplayWithAddressType
+                      owner={tx.sender}
+                      wallets={wallets}
+                      entities={entities}
+                    />
+                  ) : (
+                    'unknown'
+                  )}
+                  <span aria-hidden="true">→</span>
+                  {tx.receiver ? (
+                    <LabOwnerDisplayWithAddressType
+                      owner={tx.receiver}
+                      wallets={wallets}
+                      entities={entities}
+                    />
+                  ) : (
+                    'unknown'
+                  )}
+                </>
+              )}
+            </span>
+            <span className="text-sm tabular-nums">{formatSats(tx.feeSats)} sats fee</span>
+          </>
+        )
+        return coinbaseNoTxPageYet ? (
+          <div key={tx.txid} className={labBlockTxRowPlainClassName}>
+            {row}
+          </div>
+        ) : (
+          <Link
+            key={tx.txid}
+            to="/lab/tx/$txid"
+            params={{ txid: tx.txid }}
+            className={labBlockTxRowLinkClassName}
+          >
+            {row}
+          </Link>
+        )
+      })}
     </div>
   )
 }
@@ -307,7 +324,7 @@ export function LabBlockTransactionsCard({
               onPageChange={setPageIndex}
               ariaLabel="Transactions page"
             >
-              {labBlockTxList(txsForPage, wallets, entities)}
+              {labBlockTxList(txsForPage, wallets, entities, isTemplate)}
             </CardPagination>
           )}
         </CardContent>
