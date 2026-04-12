@@ -22,7 +22,10 @@ export function labOwnerToDbPair(
   return { labEntityId: null, walletId: owner.walletId }
 }
 
-/** Prefer id columns; fall back to legacy TEXT sender/receiver. */
+/**
+ * Prefer id columns; fall back to a legacy display key string (e.g. `lab_mine_operations.mined_by_key`,
+ * `lab_tx_operations.sender_key`) when ids are absent.
+ */
 export function labOwnerFromTxRow(
   labEntityId: number | null | undefined,
   walletId: number | null | undefined,

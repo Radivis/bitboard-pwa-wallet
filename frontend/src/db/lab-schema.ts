@@ -47,8 +47,6 @@ interface LabMempoolTable {
   mempool_id: Generated<number>
   signed_tx_hex: string
   txid: string
-  sender: string | null
-  receiver: string | null
   sender_lab_entity_id: number | null
   sender_wallet_id: number | null
   receiver_lab_entity_id: number | null
@@ -76,8 +74,6 @@ interface LabParameterPresetsTable {
 interface LabTransactionsTable {
   lab_transaction_id: Generated<number>
   txid: string
-  sender: string | null
-  receiver: string | null
   sender_lab_entity_id: number | null
   sender_wallet_id: number | null
   receiver_lab_entity_id: number | null

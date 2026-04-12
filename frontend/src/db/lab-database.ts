@@ -63,8 +63,6 @@ async function migrateLabToLatest(labDb: Kysely<LabDatabase>): Promise<void> {
     .ifNotExists()
     .addColumn('lab_transaction_id', 'integer', (col) => col.primaryKey().autoIncrement())
     .addColumn('txid', 'text', (col) => col.notNull())
-    .addColumn('sender', 'text', (col) => col)
-    .addColumn('receiver', 'text', (col) => col)
     .addColumn('sender_lab_entity_id', 'integer', (col) => col)
     .addColumn('sender_wallet_id', 'integer', (col) => col)
     .addColumn('receiver_lab_entity_id', 'integer', (col) => col)
@@ -87,8 +85,6 @@ async function migrateLabToLatest(labDb: Kysely<LabDatabase>): Promise<void> {
     .addColumn('mempool_id', 'integer', (col) => col.primaryKey().autoIncrement())
     .addColumn('signed_tx_hex', 'text', (col) => col.notNull())
     .addColumn('txid', 'text', (col) => col.notNull())
-    .addColumn('sender', 'text', (col) => col)
-    .addColumn('receiver', 'text', (col) => col)
     .addColumn('sender_lab_entity_id', 'integer', (col) => col)
     .addColumn('sender_wallet_id', 'integer', (col) => col)
     .addColumn('receiver_lab_entity_id', 'integer', (col) => col)
@@ -215,6 +211,20 @@ async function patchLabSchemaForExistingFiles(labDb: Kysely<LabDatabase>): Promi
       await sql.raw(`ALTER TABLE ${table} ADD COLUMN ${colDef}`).execute(labDb)
     } catch {
       /* duplicate column name */
+    }
+  }
+
+  const dropLegacyLabTxOwnerTextColumns = [
+    'ALTER TABLE lab_transactions DROP COLUMN sender',
+    'ALTER TABLE lab_transactions DROP COLUMN receiver',
+    'ALTER TABLE lab_mempool DROP COLUMN sender',
+    'ALTER TABLE lab_mempool DROP COLUMN receiver',
+  ]
+  for (const stmt of dropLegacyLabTxOwnerTextColumns) {
+    try {
+      await sql.raw(stmt).execute(labDb)
+    } catch {
+      /* column already dropped, or table created without legacy TEXT owner columns (SQLite 3.35+). */
     }
   }
 }

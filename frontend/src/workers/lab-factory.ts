@@ -21,7 +21,7 @@ import {
   getLabDatabase,
 } from '@/db'
 import type { LabDatabase } from '@/db/lab-schema'
-import { labOwnerFromTxRow, labOwnerToDbPair } from '@/lib/lab-db-owner'
+import { labOwnerFromDbPair, labOwnerFromTxRow, labOwnerToDbPair } from '@/lib/lab-db-owner'
 import { labEntityOwnerKey } from '@/lib/lab-entity-keys'
 import type { LabOwner } from '@/lib/lab-owner'
 import {
@@ -145,18 +145,8 @@ export async function loadLabStateFromDatabase(): Promise<LabState> {
   const mempool = mempoolRows.map((r) => ({
     signedTxHex: r.signed_tx_hex,
     txid: r.txid,
-    sender: labOwnerFromTxRow(
-      r.sender_lab_entity_id,
-      r.sender_wallet_id,
-      r.sender,
-      entities,
-    ),
-    receiver: labOwnerFromTxRow(
-      r.receiver_lab_entity_id,
-      r.receiver_wallet_id,
-      r.receiver,
-      entities,
-    ),
+    sender: labOwnerFromDbPair(r.sender_lab_entity_id, r.sender_wallet_id),
+    receiver: labOwnerFromDbPair(r.receiver_lab_entity_id, r.receiver_wallet_id),
     feeSats: r.fee_sats,
     vsize:
       typeof r.vsize === 'number' && Number.isFinite(r.vsize) && r.vsize > 0
@@ -277,18 +267,8 @@ export async function loadLabStateFromDatabase(): Promise<LabState> {
     mempool,
     transactions: transactions.map((t) => ({
       txid: t.txid,
-      sender: labOwnerFromTxRow(
-        t.sender_lab_entity_id,
-        t.sender_wallet_id,
-        t.sender,
-        entities,
-      ),
-      receiver: labOwnerFromTxRow(
-        t.receiver_lab_entity_id,
-        t.receiver_wallet_id,
-        t.receiver,
-        entities,
-      ),
+      sender: labOwnerFromDbPair(t.sender_lab_entity_id, t.sender_wallet_id),
+      receiver: labOwnerFromDbPair(t.receiver_lab_entity_id, t.receiver_wallet_id),
     })),
     txDetails,
     mineOperations,
@@ -358,8 +338,6 @@ async function clearAndInsertLabState(
     const r = labOwnerToDbPair(t.receiver)
     return {
       txid: t.txid,
-      sender: t.sender ? labOwnerDisplayKey(t.sender, ents) : null,
-      receiver: t.receiver ? labOwnerDisplayKey(t.receiver, ents) : null,
       sender_lab_entity_id: s.labEntityId,
       sender_wallet_id: s.walletId,
       receiver_lab_entity_id: r.labEntityId,
@@ -425,8 +403,6 @@ async function clearAndInsertLabState(
     return {
       signed_tx_hex: m.signedTxHex,
       txid: m.txid,
-      sender: m.sender ? labOwnerDisplayKey(m.sender, ents) : null,
-      receiver: m.receiver ? labOwnerDisplayKey(m.receiver, ents) : null,
       sender_lab_entity_id: s.labEntityId,
       sender_wallet_id: s.walletId,
       receiver_lab_entity_id: r.labEntityId,

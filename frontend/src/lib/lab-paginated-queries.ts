@@ -12,7 +12,7 @@ import type { QueryClient } from '@tanstack/react-query'
 import { sql } from 'kysely'
 import { ensureLabMigrated, getLabDatabase } from '@/db/lab-database'
 import { labEntityOwnerKey } from '@/lib/lab-entity-keys'
-import { labOwnerFromTxRow } from '@/lib/lab-db-owner'
+import { labOwnerFromDbPair } from '@/lib/lab-db-owner'
 import { labOwnerFromSortKey, labOwnerFromWalletOwnerKey } from '@/lib/lab-owner'
 import { feeSatsFromTxDetails } from '@/lib/lab-tx-fee'
 import type { LabAddress, LabBlockTransactionSummary, LabTxDetails } from '@/workers/lab-api'
@@ -84,14 +84,11 @@ function parseTxDetailsRow(
     txid: string
     inputs_json: string
     outputs_json: string
-    sender: string | null
-    receiver: string | null
     sender_lab_entity_id: number | null
     sender_wallet_id: number | null
     receiver_lab_entity_id: number | null
     receiver_wallet_id: number | null
   },
-  entities: readonly { labEntityId: number; entityName: string | null }[],
 ): LabBlockTransactionSummary {
   const inputs = JSON.parse(row.inputs_json) as LabTxDetails['inputs']
   const outputs = JSON.parse(row.outputs_json) as LabTxDetails['outputs']
@@ -105,18 +102,8 @@ function parseTxDetailsRow(
   }
   return {
     txid: row.txid,
-    sender: labOwnerFromTxRow(
-      row.sender_lab_entity_id,
-      row.sender_wallet_id,
-      row.sender,
-      entities,
-    ),
-    receiver: labOwnerFromTxRow(
-      row.receiver_lab_entity_id,
-      row.receiver_wallet_id,
-      row.receiver,
-      entities,
-    ),
+    sender: labOwnerFromDbPair(row.sender_lab_entity_id, row.sender_wallet_id),
+    receiver: labOwnerFromDbPair(row.receiver_lab_entity_id, row.receiver_wallet_id),
     feeSats: feeSatsFromTxDetails(tx),
     inputs,
   }
@@ -139,12 +126,6 @@ export async function fetchLabBlockTransactionsPage(
 
   const totalCount = Number(countRow?.count ?? 0)
 
-  const entityRows = await labDb.selectFrom('lab_entities').selectAll().execute()
-  const entities = entityRows.map((r) => ({
-    labEntityId: r.lab_entity_id,
-    entityName: r.entity_name,
-  }))
-
   const rows = await labDb
     .selectFrom('lab_tx_details as d')
     .leftJoin('lab_transactions as t', 't.txid', 'd.txid')
@@ -153,8 +134,6 @@ export async function fetchLabBlockTransactionsPage(
       'd.block_time',
       'd.inputs_json',
       'd.outputs_json',
-      't.sender',
-      't.receiver',
       't.sender_lab_entity_id',
       't.sender_wallet_id',
       't.receiver_lab_entity_id',
@@ -167,7 +146,7 @@ export async function fetchLabBlockTransactionsPage(
     .execute()
 
   const transactions = rows.map((row) =>
-    parseTxDetailsRow(blockHeight, row.block_time, row, entities),
+    parseTxDetailsRow(blockHeight, row.block_time, row),
   )
 
   return { transactions, totalCount }
