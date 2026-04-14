@@ -24,6 +24,7 @@ import { isLightningSupported } from '@/lib/lightning-utils'
 import { ReceiveModeToggle, type ReceiveMode } from '@/components/receive/ReceiveModeToggle'
 import { LightningReceive } from '@/components/receive/LightningReceive'
 import { ReceiveMainnetDemoWarningModal } from '@/components/receive/ReceiveMainnetDemoWarningModal'
+import { FaucetLinker } from '@/components/receive/FaucetLinker'
 
 export const Route = createFileRoute('/wallet/receive')({
   component: ReceivePage,
@@ -231,6 +232,8 @@ export function ReceivePage() {
           </CardContent>
         </Card>
       </InfomodeWrapper>
+
+      <FaucetLinker />
     </div>
     </>
   )

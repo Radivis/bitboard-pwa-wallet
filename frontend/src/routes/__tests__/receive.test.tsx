@@ -62,6 +62,7 @@ vi.mock('@/components/WalletUnlock', () => ({
 
 vi.mock('@/lib/wallet-utils', () => ({
   updateWalletChangeset: vi.fn().mockResolvedValue(undefined),
+  loadCustomEsploraUrl: vi.fn().mockResolvedValue(null),
 }))
 
 vi.mock('qrcode.react', () => ({
@@ -75,6 +76,10 @@ import { ReceivePage } from '../wallet/receive'
 describe('ReceivePage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ ok: true, status: 200 }),
+    )
     receiveFeatureState.segwitAddressesEnabled = true
     walletStoreState = {
       activeWalletId: 1,
