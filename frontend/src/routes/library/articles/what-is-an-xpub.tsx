@@ -4,7 +4,7 @@ import type { LibraryArticle } from '@/lib/library/library-article'
 export const article: LibraryArticle = {
   slug: 'what-is-an-xpub',
   title: 'What is an xpub?',
-  tagIds: ['wallets', 'standards', 'bitcoin', 'cryptography'],
+  tagIds: ['wallets', 'standards', 'bitcoin', 'cryptography', 'privacy'],
   body: (
     <div className={ARTICLE_BODY_CLASS}>
       <p>

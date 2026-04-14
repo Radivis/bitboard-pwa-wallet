@@ -4,7 +4,7 @@ import type { LibraryArticle } from '@/lib/library/library-article'
 export const article: LibraryArticle = {
   slug: 'what-are-descriptors-and-descriptor-wallets',
   title: 'Descriptors and descriptor wallets',
-  tagIds: ['wallets', 'standards', 'bitcoin'],
+  tagIds: ['wallets', 'standards', 'bitcoin', 'privacy'],
   body: (
     <div className={ARTICLE_BODY_CLASS}>
       <p>

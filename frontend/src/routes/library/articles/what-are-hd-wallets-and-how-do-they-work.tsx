@@ -4,7 +4,7 @@ import type { LibraryArticle } from '@/lib/library/library-article'
 export const article: LibraryArticle = {
   slug: 'what-are-hd-wallets-and-how-do-they-work',
   title: 'What are HD wallets and how do they work?',
-  tagIds: ['wallets', 'standards', 'bitcoin'],
+  tagIds: ['wallets', 'standards', 'bitcoin', 'privacy'],
   body: (
     <div className={ARTICLE_BODY_CLASS}>
       <p>

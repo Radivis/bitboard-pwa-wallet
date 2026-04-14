@@ -4,7 +4,7 @@ import type { LibraryArticle } from '@/lib/library/library-article'
 export const article: LibraryArticle = {
   slug: 'transaction-outputs-as-hidden-safes',
   title: 'Transaction outputs as hidden safes',
-  tagIds: ['bitcoin', 'blockchain', 'cryptography'],
+  tagIds: ['bitcoin', 'blockchain', 'cryptography', 'privacy'],
   body: (
     <div className={ARTICLE_BODY_CLASS}>
       <p>

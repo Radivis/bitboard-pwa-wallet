@@ -4,7 +4,7 @@ import type { LibraryArticle } from '@/lib/library/library-article'
 export const article: LibraryArticle = {
   slug: 'what-is-a-hardware-wallet',
   title: 'What is a hardware wallet?',
-  tagIds: ['hardware', 'wallets', 'bitcoin'],
+  tagIds: ['hardware', 'wallets', 'bitcoin', 'privacy'],
   body: (
     <div className={ARTICLE_BODY_CLASS}>
       <p>

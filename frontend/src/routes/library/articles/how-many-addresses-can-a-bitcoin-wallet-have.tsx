@@ -4,7 +4,7 @@ import type { LibraryArticle } from '@/lib/library/library-article'
 export const article: LibraryArticle = {
   slug: 'how-many-addresses-can-a-bitcoin-wallet-have',
   title: 'How many addresses can a Bitcoin wallet have?',
-  tagIds: ['wallets', 'bitcoin'],
+  tagIds: ['wallets', 'bitcoin', 'privacy'],
   body: (
     <div className={ARTICLE_BODY_CLASS}>
       <p>

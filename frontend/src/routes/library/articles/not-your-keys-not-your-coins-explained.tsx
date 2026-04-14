@@ -4,7 +4,7 @@ import type { LibraryArticle } from '@/lib/library/library-article'
 export const article: LibraryArticle = {
   slug: 'not-your-keys-not-your-coins-explained',
   title: '"Not your keys, not your coins" explained',
-  tagIds: ['security', 'wallets', 'bitcoin'],
+  tagIds: ['security', 'wallets', 'bitcoin', 'privacy'],
   body: (
     <div className={ARTICLE_BODY_CLASS}>
       <p>
