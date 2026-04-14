@@ -4,9 +4,17 @@ import { Settings } from 'lucide-react'
 import { PageHeader } from '@/components/PageHeader'
 import { AppDescription } from '@/components/AppDescription'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import {
+  Card,
+  CardContent,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from '@/components/ui/card'
 import { ThemeSelector } from '@/components/settings/ThemeSelector'
 import { NetworkSelector } from '@/components/settings/NetworkSelector'
+import { NetworkCardCommittedDescriptor } from '@/components/settings/NetworkCardCommittedDescriptor'
 import { AddressTypeSelector } from '@/components/settings/AddressTypeSelector'
 import { EsploraUrlSettings } from '@/components/settings/EsploraUrlSettings'
 import { FeatureToggles } from '@/components/settings/FeatureToggles'
@@ -49,6 +57,11 @@ export function SettingsPage() {
           <CardContent>
             <NetworkSelector />
           </CardContent>
+          {hasWallets ? (
+            <CardFooter className="flex-col items-stretch border-t pt-6">
+              <NetworkCardCommittedDescriptor />
+            </CardFooter>
+          ) : null}
         </Card>
       </InfomodeWrapper>
 

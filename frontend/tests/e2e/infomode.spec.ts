@@ -26,6 +26,19 @@ test.describe('Infomode on Settings', () => {
     await expect(infomodeDialog).toBeVisible()
     await expect(infomodeDialog.getByRole('heading', { name: 'Bitcoin networks' })).toBeVisible()
 
+    await page.getByRole('button', { name: 'Close explanation' }).click()
+    await expect(page.locator('[data-infomode-popup]')).toHaveCount(0)
+
+    const committedDescriptorBlock = page.locator(
+      '[data-infomode-id="settings-network-committed-descriptor"]',
+    )
+    await committedDescriptorBlock.getByText('Receiving descriptor').click()
+    await expect(infomodeDialog).toBeVisible()
+    await expect(infomodeDialog.getByRole('heading', { name: 'Output descriptors' })).toBeVisible()
+
+    await page.getByRole('button', { name: 'Close explanation' }).click()
+    await expect(page.locator('[data-infomode-popup]')).toHaveCount(0)
+
     const networkBefore = await getDocumentNetwork(page)
     expect(networkBefore).toBeDefined()
 

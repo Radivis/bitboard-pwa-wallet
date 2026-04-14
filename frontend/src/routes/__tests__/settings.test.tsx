@@ -137,6 +137,10 @@ vi.mock('@/stores/walletStore', async () => {
       }
       return s.loadedSubWallet?.networkMode ?? s.networkMode
     },
+    selectCommittedAccountId: (s: {
+      loadedSubWallet: { accountId: number } | null
+      accountId: number
+    }) => s.loadedSubWallet?.accountId ?? s.accountId,
   }
 })
 
@@ -172,10 +176,27 @@ vi.mock('@/stores/themeStore', () => ({
 const mockWalletsState: { data: { wallet_id: number; name: string; created_at: string }[] } = {
   data: [],
 }
+const mockLoadWalletSecretsPayload = vi.hoisted(() =>
+  vi.fn().mockResolvedValue({
+    descriptorWallets: [
+      {
+        network: 'signet',
+        addressType: 'taproot',
+        accountId: 0,
+        externalDescriptor: 'tr([mock]/0/*)',
+        internalDescriptor: 'tr([mock]/1/*)',
+        changeSet: '{}',
+        fullScanDone: true,
+      },
+    ],
+    lightningNwcConnections: [],
+  }),
+)
 vi.mock('@/db', () => ({
   getDatabase: vi.fn(),
   ensureMigrated: vi.fn().mockResolvedValue(undefined),
   loadWalletSecrets: vi.fn().mockRejectedValue(new Error('Wrong password')),
+  loadWalletSecretsPayload: mockLoadWalletSecretsPayload,
   useWallets: () => ({ data: mockWalletsState.data }),
 }))
 
@@ -229,10 +250,14 @@ const mockResolveDescriptorWallet = vi.hoisted(() =>
 const mockUpdateDescriptorWalletChangeset = vi.hoisted(() =>
   vi.fn().mockResolvedValue(undefined),
 )
-vi.mock('@/lib/descriptor-wallet-manager', () => ({
-  resolveDescriptorWallet: mockResolveDescriptorWallet,
-  updateDescriptorWalletChangeset: mockUpdateDescriptorWalletChangeset,
-}))
+vi.mock('@/lib/descriptor-wallet-manager', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/descriptor-wallet-manager')>()
+  return {
+    ...actual,
+    resolveDescriptorWallet: mockResolveDescriptorWallet,
+    updateDescriptorWalletChangeset: mockUpdateDescriptorWalletChangeset,
+  }
+})
 
 vi.mock('@/components/MnemonicGrid', () => ({
   MnemonicGrid: ({ words }: { words: string[] }) => (
@@ -333,6 +358,30 @@ describe('SettingsPage', () => {
     ]
     renderWithProviders(<SettingsPage />)
     expect(screen.getByRole('button', { name: 'Change app password' })).toBeEnabled()
+  })
+
+  it('shows receiving descriptor when a wallet exists and session is unlocked', async () => {
+    mockWalletsState.data = [
+      { wallet_id: 1, name: 'Test', created_at: new Date().toISOString() },
+    ]
+    sessionStoreState.password = 'testpass'
+    renderWithProviders(<SettingsPage />)
+    expect(screen.getByText('Receiving descriptor')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.getByText('tr([mock]/0/*)')).toBeInTheDocument()
+    })
+    expect(mockLoadWalletSecretsPayload).toHaveBeenCalled()
+  })
+
+  it('shows unlock hint for receiving descriptor when session has no password', () => {
+    mockWalletsState.data = [
+      { wallet_id: 1, name: 'Test', created_at: new Date().toISOString() },
+    ]
+    sessionStoreState.password = null
+    renderWithProviders(<SettingsPage />)
+    expect(
+      screen.getByText('Unlock your wallet to view the receiving descriptor.'),
+    ).toBeInTheDocument()
   })
 
   it('shows Set a real password when near-zero security mode is active', () => {

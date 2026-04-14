@@ -59,6 +59,13 @@ export function selectCommittedAddressType(s: {
   return s.loadedSubWallet?.addressType ?? s.addressType
 }
 
+export function selectCommittedAccountId(s: {
+  loadedSubWallet: LoadedSubWallet | null
+  accountId: number
+}): number {
+  return s.loadedSubWallet?.accountId ?? s.accountId
+}
+
 interface TransientWalletState {
   walletStatus: WalletStatus
   /** True while TanStack active-wallet bootstrap `queryFn` runs; keeps the query enabled after status flips to unlocked mid-load. */
@@ -158,4 +165,9 @@ export function getCommittedNetworkMode(): NetworkMode {
 /** Imperative: same as `selectCommittedAddressType` on current store state. */
 export function getCommittedAddressType(): AddressType {
   return selectCommittedAddressType(useWalletStore.getState())
+}
+
+/** Imperative: same as `selectCommittedAccountId` on current store state. */
+export function getCommittedAccountId(): number {
+  return selectCommittedAccountId(useWalletStore.getState())
 }
