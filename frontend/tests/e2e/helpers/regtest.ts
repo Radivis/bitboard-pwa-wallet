@@ -30,6 +30,9 @@ const ESPLORA_INDEX_WAIT_MS = isCi ? 45_000 : 15_000
 
 const CONFIRMED_UTXO_WAIT_MS = isCi ? 45_000 : 15_000
 
+/** Same window as Esplora UTXO polling — use when UI must reflect post-sync wallet state. */
+export const E2E_CI_AWARE_LONG_WAIT_MS = CONFIRMED_UTXO_WAIT_MS
+
 /**
  * Send sats from the regtest miner to the given address.
  * Then you typically need to mine a block so the tx confirms.
