@@ -61,6 +61,14 @@ struct LabPsbtBuildMeta {
     change_free_max_sats: u64,
 }
 
+/// Addresses, fee rate, and witness weight used when building a lab PSBT (from `resolve_lab_send_inputs`).
+struct LabPsbtRouteParams<'a> {
+    to_address: &'a Address,
+    change_address: &'a Address,
+    satisfaction_weight: bitcoin::Weight,
+    fee_rate: FeeRate,
+}
+
 fn finish_lab_psbt(
     wallet: &mut bdk_wallet::Wallet,
     utxos: &[LabUtxoInput],
@@ -111,10 +119,7 @@ fn prepare_lab_psbt_inner(
     wallet: &mut bdk_wallet::Wallet,
     utxos: &[LabUtxoInput],
     amount_sats: u64,
-    to_address: &Address,
-    change_address: &Address,
-    satisfaction_weight: bitcoin::Weight,
-    fee_rate: FeeRate,
+    route: LabPsbtRouteParams<'_>,
     apply_change_free_bump: bool,
 ) -> Result<(Psbt, LabPsbtBuildMeta), CryptoError> {
     let total_in: u64 = utxos.iter().map(|u| u.amount_sats).sum();
@@ -135,10 +140,10 @@ fn prepare_lab_psbt_inner(
         wallet,
         utxos,
         final_amt,
-        to_address,
-        change_address,
-        satisfaction_weight,
-        fee_rate,
+        route.to_address,
+        route.change_address,
+        route.satisfaction_weight,
+        route.fee_rate,
     )?;
 
     let mut bumped_change_free = false;
@@ -146,12 +151,12 @@ fn prepare_lab_psbt_inner(
     let mut change_free_max_sats = 0u64;
 
     let unsigned = psbt.unsigned_tx.clone();
-    let pay_spk = to_address.script_pubkey();
+    let pay_spk = route.to_address.script_pubkey();
     let single_recipient_only =
         unsigned.output.len() == 1 && unsigned.output[0].script_pubkey == pay_spk;
 
     if single_recipient_only {
-        let min_total_fee = fee_rate.fee_wu(unsigned.weight()).ok_or_else(|| {
+        let min_total_fee = route.fee_rate.fee_wu(unsigned.weight()).ok_or_else(|| {
             CryptoError::Transaction("Fee overflow for transaction weight".to_string())
         })?;
         let max_recipient = total_in.saturating_sub(min_total_fee.to_sat());
@@ -169,10 +174,10 @@ fn prepare_lab_psbt_inner(
                         wallet,
                         utxos,
                         try_amt,
-                        to_address,
-                        change_address,
-                        satisfaction_weight,
-                        fee_rate,
+                        route.to_address,
+                        route.change_address,
+                        route.satisfaction_weight,
+                        route.fee_rate,
                     ) {
                         Ok(psbt2) => {
                             psbt = psbt2;
@@ -285,16 +290,13 @@ pub fn prepare_lab_psbt_draft(
             amount_sats,
             fee_rate_sat_per_vb,
         )?;
-    let (psbt, meta) = prepare_lab_psbt_inner(
-        wallet,
-        &utxos,
-        amount_sats,
-        &to_address,
-        &change_address,
+    let route = LabPsbtRouteParams {
+        to_address: &to_address,
+        change_address: &change_address,
         satisfaction_weight,
         fee_rate,
-        false,
-    )?;
+    };
+    let (psbt, meta) = prepare_lab_psbt_inner(wallet, &utxos, amount_sats, route, false)?;
     Ok(LabDraftPsbtOutcome {
         psbt_base64: psbt.to_string(),
         final_amount_sats: meta.final_amount_sats,
@@ -327,16 +329,14 @@ pub fn prepare_build_and_sign_lab_transaction(
 
     let total_in: u64 = utxos.iter().map(|u| u.amount_sats).sum();
 
-    let (mut psbt, meta) = prepare_lab_psbt_inner(
-        wallet,
-        &utxos,
-        amount_sats,
-        &to_address,
-        &change_address,
+    let route = LabPsbtRouteParams {
+        to_address: &to_address,
+        change_address: &change_address,
         satisfaction_weight,
         fee_rate,
-        apply_change_free_bump,
-    )?;
+    };
+    let (mut psbt, meta) =
+        prepare_lab_psbt_inner(wallet, &utxos, amount_sats, route, apply_change_free_bump)?;
 
     // BDK wallet.sign(SignOptions) is deprecated; required until BDK provides replacement.
     #[allow(deprecated)]
