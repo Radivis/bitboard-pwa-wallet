@@ -14,7 +14,11 @@ import { Label } from '@/components/ui/label'
 import { WalletUnlockOrNearZeroLoading } from '@/components/WalletUnlockOrNearZeroLoading'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { NETWORK_LABELS, useWalletStore } from '@/stores/walletStore'
-import { useSendStore, type SendAmountUnit } from '@/stores/sendStore'
+import {
+  useSendStore,
+  type OnchainDustWarning,
+  type SendAmountUnit,
+} from '@/stores/sendStore'
 import { useFeatureStore } from '@/stores/featureStore'
 import { useLabChainStateQuery } from '@/hooks/useLabChainStateQuery'
 import {
@@ -85,6 +89,37 @@ function amountSatsFromForm(amountStr: string, unit: SendAmountUnit): number {
   return unit === 'btc'
     ? Math.floor(parseFloat(amountStr) * 100_000_000)
     : parseInt(amountStr, 10) || 0
+}
+
+/** Shown on the review step below the amount summary so it stays visible when confirming. */
+function OnchainDustWarningReviewBanner({
+  warning,
+  amountUnit,
+}: {
+  warning: OnchainDustWarning | null
+  amountUnit: SendAmountUnit
+}) {
+  if (warning == null) return null
+  return (
+    <div className="font-bold text-destructive text-sm space-y-1 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2">
+      {warning.raisedToMin546 ? (
+        <p>
+          Amount was below the minimum spendable output ({formatSats(UX_DUST_FLOOR_SATS)}{' '}
+          sats). The amount shown above was set to{' '}
+          {amountUnit === 'btc'
+            ? `${formatBTC(UX_DUST_FLOOR_SATS)} BTC`
+            : `${formatSats(UX_DUST_FLOOR_SATS)} sats`}
+          .
+        </p>
+      ) : null}
+      {warning.bumpedChangeFree ? (
+        <p>
+          The amount was increased so this payment does not leave change below the dust limit
+          (change-free transfer).
+        </p>
+      ) : null}
+    </div>
+  )
 }
 
 export function SendFlow() {
@@ -636,6 +671,12 @@ export function SendFlow() {
                   {formatBTC(amountSats)} BTC ({formatSats(amountSats)} sats)
                 </span>
               </div>
+              {!isLightningSendMode && (
+                <OnchainDustWarningReviewBanner
+                  warning={onchainDustWarning}
+                  amountUnit={amountUnit}
+                />
+              )}
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Fee rate</span>
                 <span>{effectiveFeeRate} sat/vB</span>
@@ -836,27 +877,6 @@ export function SendFlow() {
                   min="0"
                   disabled={isPending}
                 />
-              )}
-              {!isLightningSendMode && onchainDustWarning != null && (
-                <div className="font-bold text-destructive text-sm space-y-1 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2">
-                  {onchainDustWarning.raisedToMin546 ? (
-                    <p>
-                      Amount was below the minimum spendable output (
-                      {formatSats(UX_DUST_FLOOR_SATS)} sats). The field was set
-                      to{' '}
-                      {amountUnit === 'btc'
-                        ? `${formatBTC(UX_DUST_FLOOR_SATS)} BTC`
-                        : `${formatSats(UX_DUST_FLOOR_SATS)} sats`}
-                      .
-                    </p>
-                  ) : null}
-                  {onchainDustWarning.bumpedChangeFree ? (
-                    <p>
-                      The amount was increased so this payment does not leave
-                      change below the dust limit (change-free transfer).
-                    </p>
-                  ) : null}
-                </div>
               )}
               <p className="text-xs text-muted-foreground">
                 {isLightningSendMode ? (
