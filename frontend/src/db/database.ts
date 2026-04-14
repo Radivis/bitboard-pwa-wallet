@@ -66,3 +66,16 @@ export async function checkDatabaseHealth(): Promise<DatabaseHealthResult> {
     }
   }
 }
+
+let initialDatabaseHealthPromise: Promise<DatabaseHealthResult> | null = null
+
+/**
+ * Runs {@link checkDatabaseHealth} once per page load and returns the same promise
+ * to every caller (avoids duplicate migration/OPFS work from the gate and shell).
+ */
+export function getInitialDatabaseHealth(): Promise<DatabaseHealthResult> {
+  if (!initialDatabaseHealthPromise) {
+    initialDatabaseHealthPromise = checkDatabaseHealth()
+  }
+  return initialDatabaseHealthPromise
+}

@@ -17,6 +17,7 @@ import { runMainnetStrictMigrationAfterHydration } from '@/lib/mainnet-access-st
 import { runRegtestStrictMigrationAfterHydration } from '@/lib/regtest-mode-strict-migration'
 import { runSegwitAddressesStrictMigrationAfterHydration } from '@/lib/segwit-addresses-strict-migration'
 import { useWalletCryptoSessionPathGateStore } from '@/stores/walletCryptoSessionPathGateStore'
+import { useSecureStorageAvailabilityStore } from '@/stores/secureStorageAvailabilityStore'
 
 interface AppInitializerProps {
   children: ReactNode
@@ -102,6 +103,7 @@ export function AppInitializer({ children }: AppInitializerProps) {
   useEffect(() => {
     if (sessionPassword !== null) return
     if (!pathnameRequiresWalletCryptoSession(location.pathname)) return
+    if (!useSecureStorageAvailabilityStore.getState().isAvailable) return
     void tryLoadNearZeroSessionIntoMemory(getDatabase())
   }, [sessionPassword, location.pathname])
 
