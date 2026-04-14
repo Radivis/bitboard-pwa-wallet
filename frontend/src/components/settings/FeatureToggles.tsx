@@ -1,6 +1,5 @@
 import { useCallback, useState } from 'react'
 import { AlertTriangle, FlaskConical, Layers, Zap } from 'lucide-react'
-import { toast } from 'sonner'
 import { useFeatureStore } from '@/stores/featureStore'
 import {
   AddressType,
@@ -11,7 +10,7 @@ import {
 import { isLightningSupported } from '@/lib/lightning-utils'
 import { executeSettingsNetworkSwitch } from '@/lib/network-mode-switch'
 import { executeSettingsAddressTypeSwitch } from '@/lib/execute-settings-address-type-switch'
-import { errorMessage } from '@/lib/utils'
+import { runFeatureToggleOffWork } from '@/lib/feature-toggle-async'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { MainnetAccessConfirmModal } from '@/components/settings/MainnetAccessConfirmModal'
 import { Switch } from '@/components/ui/switch'
@@ -36,56 +35,44 @@ export function FeatureToggles() {
   const networkSupportsLightning = isLightningSupported(networkMode)
 
   const handleMainnetAccessOff = useCallback(async () => {
-    setMainnetAccessSwitchBusy(true)
-    try {
-      if (getCommittedNetworkMode() === 'mainnet') {
-        await executeSettingsNetworkSwitch({ targetNetwork: 'testnet' })
-      }
-      setMainnetAccessEnabled(false)
-    } catch (err) {
-      toast.error(
-        errorMessage(err) ??
-          'Could not switch away from Mainnet. Try again or change network in Settings.',
-      )
-    } finally {
-      setMainnetAccessSwitchBusy(false)
-    }
+    await runFeatureToggleOffWork(
+      setMainnetAccessSwitchBusy,
+      async () => {
+        if (getCommittedNetworkMode() === 'mainnet') {
+          await executeSettingsNetworkSwitch({ targetNetwork: 'testnet' })
+        }
+        setMainnetAccessEnabled(false)
+      },
+      'Could not switch away from Mainnet. Try again or change network in Settings.',
+    )
   }, [setMainnetAccessEnabled])
 
   const handleRegtestModeOff = useCallback(async () => {
-    setRegtestModeSwitchBusy(true)
-    try {
-      if (getCommittedNetworkMode() === 'regtest') {
-        await executeSettingsNetworkSwitch({ targetNetwork: 'testnet' })
-      }
-      setRegtestModeEnabled(false)
-    } catch (err) {
-      toast.error(
-        errorMessage(err) ??
-          'Could not switch away from Regtest. Try again or change network in Settings.',
-      )
-    } finally {
-      setRegtestModeSwitchBusy(false)
-    }
+    await runFeatureToggleOffWork(
+      setRegtestModeSwitchBusy,
+      async () => {
+        if (getCommittedNetworkMode() === 'regtest') {
+          await executeSettingsNetworkSwitch({ targetNetwork: 'testnet' })
+        }
+        setRegtestModeEnabled(false)
+      },
+      'Could not switch away from Regtest. Try again or change network in Settings.',
+    )
   }, [setRegtestModeEnabled])
 
   const handleSegwitAddressesOff = useCallback(async () => {
-    setSegwitAddressesSwitchBusy(true)
-    try {
-      if (getCommittedAddressType() === AddressType.SegWit) {
-        await executeSettingsAddressTypeSwitch({
-          targetAddressType: AddressType.Taproot,
-        })
-      }
-      setSegwitAddressesEnabled(false)
-    } catch (err) {
-      toast.error(
-        errorMessage(err) ??
-          'Could not switch to Taproot. Try again.',
-      )
-    } finally {
-      setSegwitAddressesSwitchBusy(false)
-    }
+    await runFeatureToggleOffWork(
+      setSegwitAddressesSwitchBusy,
+      async () => {
+        if (getCommittedAddressType() === AddressType.SegWit) {
+          await executeSettingsAddressTypeSwitch({
+            targetAddressType: AddressType.Taproot,
+          })
+        }
+        setSegwitAddressesEnabled(false)
+      },
+      'Could not switch to Taproot. Try again.',
+    )
   }, [setSegwitAddressesEnabled])
 
   return (

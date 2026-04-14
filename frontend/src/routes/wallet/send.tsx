@@ -1,32 +1,17 @@
 import { useMemo, useCallback, useState, useEffect, useRef } from 'react'
-import { createFileRoute, useNavigate, Link } from '@tanstack/react-router'
-import { ArrowUpRight, ArrowLeft } from 'lucide-react'
+import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { toast } from 'sonner'
 import { LightningAddress } from '@getalby/lightning-tools'
-import { PageHeader } from '@/components/PageHeader'
-import { SendLightningWalletPicker } from '@/components/wallet/send/SendLightningWalletPicker'
-import { SendOnChainFeeSection } from '@/components/wallet/send/SendOnChainFeeSection'
 import { isValidSendAmountSats } from '@/components/wallet/send/send-amount'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { WalletUnlockOrNearZeroLoading } from '@/components/WalletUnlockOrNearZeroLoading'
-import { LoadingSpinner } from '@/components/LoadingSpinner'
-import { NETWORK_LABELS, useWalletStore } from '@/stores/walletStore'
-import {
-  useSendStore,
-  type OnchainDustWarning,
-  type SendAmountUnit,
-} from '@/stores/sendStore'
+import { amountSatsFromForm } from '@/components/wallet/send/amount-sats-from-form'
+import { SendTransactionEntryCard } from '@/components/wallet/send/SendTransactionEntryCard'
+import { SendTransactionReviewStep } from '@/components/wallet/send/SendTransactionReviewStep'
+import { useWalletStore } from '@/stores/walletStore'
+import { useSendStore } from '@/stores/sendStore'
 import { useFeatureStore } from '@/stores/featureStore'
 import { useLabChainStateQuery } from '@/hooks/useLabChainStateQuery'
-import {
-  isValidAddress,
-  formatBTC,
-  formatSats,
-  truncateAddress,
-} from '@/lib/bitcoin-utils'
+import { isValidAddress } from '@/lib/bitcoin-utils'
 import { errorMessage } from '@/lib/utils'
 import {
   formatAmountInputFromSats,
@@ -46,7 +31,6 @@ import { useLightningPayMutation } from '@/hooks/useLightningMutations'
 import { useSendLightningBalances } from '@/hooks/useSendLightningBalances'
 import { MAX_BOLT11_PAYMENT_REQUEST_LENGTH } from '@/lib/lightning-input-limits'
 import { labOwnersEqual, walletLabOwner } from '@/lib/lab-owner'
-import { DeadLabEntityRecipientModal } from '@/components/lab/DeadLabEntityRecipientModal'
 import { DustChangeChoiceModal } from '@/components/wallet/send/DustChangeChoiceModal'
 import {
   labBitcoinAddressesEqual,
@@ -82,44 +66,6 @@ export function SendPage() {
   }
 
   return <SendFlow />
-}
-
-function amountSatsFromForm(amountStr: string, unit: SendAmountUnit): number {
-  if (!amountStr) return 0
-  return unit === 'btc'
-    ? Math.floor(parseFloat(amountStr) * 100_000_000)
-    : parseInt(amountStr, 10) || 0
-}
-
-/** Shown on the review step below the amount summary so it stays visible when confirming. */
-function OnchainDustWarningReviewBanner({
-  warning,
-  amountUnit,
-}: {
-  warning: OnchainDustWarning | null
-  amountUnit: SendAmountUnit
-}) {
-  if (warning == null) return null
-  return (
-    <div className="font-bold text-destructive text-sm space-y-1 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2">
-      {warning.raisedToMin546 ? (
-        <p>
-          Amount was below the minimum spendable output ({formatSats(UX_DUST_FLOOR_SATS)}{' '}
-          sats). The amount shown above was set to{' '}
-          {amountUnit === 'btc'
-            ? `${formatBTC(UX_DUST_FLOOR_SATS)} BTC`
-            : `${formatSats(UX_DUST_FLOOR_SATS)} sats`}
-          .
-        </p>
-      ) : null}
-      {warning.bumpedChangeFree ? (
-        <p>
-          The amount was increased so this payment does not leave change below the dust limit
-          (change-free transfer).
-        </p>
-      ) : null}
-    </div>
-  )
 }
 
 export function SendFlow() {
@@ -638,85 +584,27 @@ export function SendFlow() {
 
   if (step === 2 && (psbt || networkMode === 'lab')) {
     return (
-      <div className="space-y-6">
-        {networkMode === 'lab' && deadLabRecipientInfo != null ? (
-          <DeadLabEntityRecipientModal
-            open={deadLabRecipientModalOpen}
-            onOpenChange={(open) => {
-              if (!open) setDeadLabRecipientModalOpen(false)
-            }}
-            onCancel={() => setDeadLabRecipientModalOpen(false)}
-            entityDisplayName={deadLabRecipientInfo.displayName}
-            addressType={deadLabRecipientInfo.addressType}
-            onConfirm={handleConfirmDeadLabRecipientSend}
-            isPending={labSendMutation.isPending}
-          />
-        ) : null}
-
-        <PageHeader title="Review Transaction" icon={ArrowUpRight} />
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Transaction Details</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Recipient</span>
-                <span className="font-mono">{truncateAddress(recipient)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Amount</span>
-                <span>
-                  {formatBTC(amountSats)} BTC ({formatSats(amountSats)} sats)
-                </span>
-              </div>
-              {!isLightningSendMode && (
-                <OnchainDustWarningReviewBanner
-                  warning={onchainDustWarning}
-                  amountUnit={amountUnit}
-                />
-              )}
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Fee rate</span>
-                <span>{effectiveFeeRate} sat/vB</span>
-              </div>
-            </div>
-
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                className="flex-1"
-                onClick={() => setStep(1)}
-                disabled={isPending}
-              >
-                <ArrowLeft className="mr-2 h-4 w-4" />
-                Back
-              </Button>
-
-              {isPending ? (
-                <div className="flex-1">
-                  <LoadingSpinner
-                    text={
-                      networkMode === 'lab'
-                        ? 'Adding to mempool...'
-                        : 'Broadcasting...'
-                    }
-                  />
-                </div>
-              ) : (
-                <Button
-                  className="flex-1"
-                  onClick={handleConfirmSend}
-                  disabled={labConfirmSendDisabled}
-                >
-                  Confirm and Send
-                </Button>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      <SendTransactionReviewStep
+        networkMode={networkMode}
+        recipient={recipient}
+        amountSats={amountSats}
+        effectiveFeeRate={effectiveFeeRate}
+        onchainDustWarning={onchainDustWarning}
+        amountUnit={amountUnit}
+        isLightningSendMode={isLightningSendMode}
+        isPending={isPending}
+        deadLabRecipientInfo={deadLabRecipientInfo}
+        deadLabRecipientModalOpen={deadLabRecipientModalOpen}
+        onDeadLabRecipientModalOpenChange={(open) => {
+          if (!open) setDeadLabRecipientModalOpen(false)
+        }}
+        onDeadLabRecipientCancel={() => setDeadLabRecipientModalOpen(false)}
+        onConfirmDeadLabRecipientSend={handleConfirmDeadLabRecipientSend}
+        labSendPendingForDeadLabModal={labSendMutation.isPending}
+        onBack={() => setStep(1)}
+        onConfirmSend={handleConfirmSend}
+        labConfirmSendDisabled={labConfirmSendDisabled}
+      />
     )
   }
 
@@ -730,213 +618,51 @@ export function SendFlow() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title={pageTitle} icon={ArrowUpRight} />
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <ArrowUpRight className="h-5 w-5" />
-            {cardTitle}
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <form
-            className="space-y-4"
-            onSubmit={(e) => {
-              e.preventDefault()
-              handleSubmitBuild()
-            }}
-          >
-            <div className="space-y-2">
-              <Label htmlFor="recipient-address">
-                {isLightningSendMode ? 'Invoice or Lightning address' : 'Recipient Address'}
-              </Label>
-              <Input
-                id="recipient-address"
-                value={recipient}
-                onChange={(e) => setRecipient(e.target.value)}
-                placeholder={
-                  lightningAvailable
-                    ? 'bc1q… or BOLT11 invoice or Lightning address'
-                    : 'bc1q…'
-                }
-                disabled={isPending}
-              />
-              {recipient && !recipientFormatValid && (
-                <p className="text-xs text-destructive">
-                  {isLightningSendMode
-                    ? 'Invalid Lightning invoice or Lightning address.'
-                    : `Invalid address for ${networkMode}`}
-                </p>
-              )}
-              {recipient && isLightningSendMode && !lightningRecipientOk && (
-                <p className="text-xs text-amber-600 dark:text-amber-400">
-                  {hasAnyLightningConnection ? (
-                    <>
-                      No Lightning wallet for {NETWORK_LABELS[networkMode]}. Connect
-                      one for this network in{' '}
-                      <Link to="/wallet/management" className="underline">
-                        Management
-                      </Link>
-                      .
-                    </>
-                  ) : (
-                    <>
-                      No Lightning wallet connected. Connect one in{' '}
-                      <Link to="/wallet/management" className="underline">
-                        Management
-                      </Link>
-                      .
-                    </>
-                  )}
-                </p>
-              )}
-              {isLightningSendMode &&
-                isValidBolt11Invoice(normalizedRecipient) &&
-                bolt11NetworkMismatch && (
-                  <p className="text-xs text-amber-700 dark:text-amber-400">
-                    This invoice is for a different Bitcoin network than your
-                    current mode. Switch network in{' '}
-                    <Link to="/settings" className="font-medium underline">
-                      Settings
-                    </Link>
-                    .
-                  </p>
-                )}
-              {isLightningSendMode &&
-                isValidBolt11Invoice(normalizedRecipient) &&
-                !bolt11DecodeOk && (
-                  <p className="text-xs text-destructive">
-                    Could not read this BOLT11 invoice. Check the payment request
-                    and try again.
-                  </p>
-                )}
-              {isLightningSendMode && !lightningPayloadLengthOk && (
-                <p className="text-xs text-destructive">
-                  Payment request is too long (
-                  {MAX_BOLT11_PAYMENT_REQUEST_LENGTH} characters max).
-                </p>
-              )}
-            </div>
-
-            {isLightningSendMode && (
-              <SendLightningWalletPicker
-                connectedLightningWallets={matchingLightningConnections}
-                balanceQueries={balanceQueries}
-                selectedConnectionId={selectedLightningConnectionId}
-                onSelectConnection={setSelectedLightningConnectionId}
-                disabled={isPending}
-              />
-            )}
-
-            {isLightningSendMode &&
-              decodedBolt11?.description != null &&
-              decodedBolt11.description.length > 0 && (
-                <p className="text-sm text-muted-foreground">
-                  <span className="font-medium text-foreground">Memo: </span>
-                  {decodedBolt11.description}
-                </p>
-              )}
-
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="send-amount">
-                  {needsUserLightningAmount
-                    ? `Amount (${amountUnit === 'btc' ? 'BTC' : 'sats'})`
-                    : isLightningSendMode && !needsUserLightningAmount
-                      ? 'Amount (from invoice)'
-                      : `Amount (${amountUnit === 'btc' ? 'BTC' : 'sats'})`}
-                </Label>
-                {(needsUserLightningAmount || !isLightningSendMode) && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() =>
-                      setAmountUnit(amountUnit === 'btc' ? 'sats' : 'btc')
-                    }
-                    className="h-auto py-0 text-xs"
-                  >
-                    Switch to {amountUnit === 'btc' ? 'sats' : 'BTC'}
-                  </Button>
-                )}
-              </div>
-              {isLightningSendMode && !needsUserLightningAmount ? (
-                <p className="rounded-md border border-border bg-muted/30 px-3 py-2 text-sm tabular-nums">
-                  {formatBTC(lightningPayAmountSats)} BTC (
-                  {formatSats(lightningPayAmountSats)} sats)
-                </p>
-              ) : (
-                <Input
-                  id="send-amount"
-                  type="number"
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value, { fromUser: true })}
-                  placeholder={amountUnit === 'btc' ? '0.00000000' : '0'}
-                  step={amountUnit === 'btc' ? '0.00000001' : '1'}
-                  min="0"
-                  disabled={isPending}
-                />
-              )}
-              <p className="text-xs text-muted-foreground">
-                {isLightningSendMode ? (
-                  <>
-                    Lightning wallet:{' '}
-                    {selectedLnBalanceQuery?.isPending ? (
-                      'Loading balance…'
-                    ) : selectedLnBalanceQuery?.isSuccess ? (
-                      <>
-                        {formatBTC(selectedLnBalanceSats ?? 0)} BTC (
-                        {formatSats(selectedLnBalanceSats ?? 0)} sats)
-                      </>
-                    ) : (
-                      '—'
-                    )}
-                  </>
-                ) : (
-                  <>
-                    Available: {formatBTC(confirmedBalance)} BTC (
-                    {formatSats(confirmedBalance)} sats)
-                  </>
-                )}
-              </p>
-              {isLabWithNoBalance && !isLightningSendMode && (
-                <p className="text-xs text-amber-600 dark:text-amber-400">
-                  No balance. Mine blocks or make a transaction to your wallet in
-                  the lab.
-                </p>
-              )}
-            </div>
-
-            {!isLightningSendMode && (
-              <SendOnChainFeeSection
-                feeRate={feeRate}
-                customFeeRate={customFeeRate}
-                useCustomFee={useCustomFee}
-                isPending={isPending}
-                setFeeRate={setFeeRate}
-                setCustomFeeRate={setCustomFeeRate}
-                setUseCustomFee={setUseCustomFee}
-              />
-            )}
-
-            {buildMutation.isPending ||
-            (networkMode === 'lab' && labReviewPending) ? (
-              <LoadingSpinner
-                text={
-                  networkMode === 'lab'
-                    ? 'Preparing transaction...'
-                    : 'Building transaction...'
-                }
-              />
-            ) : (
-              <Button type="submit" className="w-full" disabled={!canBuild}>
-                {submitLabel}
-              </Button>
-            )}
-          </form>
-        </CardContent>
-      </Card>
+      <SendTransactionEntryCard
+        pageTitle={pageTitle}
+        cardTitle={cardTitle}
+        submitLabel={submitLabel}
+        isLightningSendMode={isLightningSendMode}
+        networkMode={networkMode}
+        recipient={recipient}
+        onRecipientChange={setRecipient}
+        recipientFormatValid={recipientFormatValid}
+        lightningAvailable={lightningAvailable}
+        hasAnyLightningConnection={hasAnyLightningConnection}
+        lightningRecipientOk={lightningRecipientOk}
+        normalizedRecipient={normalizedRecipient}
+        bolt11NetworkMismatch={bolt11NetworkMismatch}
+        bolt11DecodeOk={bolt11DecodeOk}
+        matchingLightningConnections={matchingLightningConnections}
+        balanceQueries={balanceQueries}
+        selectedLightningConnectionId={selectedLightningConnectionId}
+        onSelectLightningConnection={setSelectedLightningConnectionId}
+        decodedBolt11={decodedBolt11}
+        needsUserLightningAmount={needsUserLightningAmount}
+        amountUnit={amountUnit}
+        onToggleAmountUnit={() =>
+          setAmountUnit(amountUnit === 'btc' ? 'sats' : 'btc')
+        }
+        amount={amount}
+        onAmountChange={setAmount}
+        lightningPayAmountSats={lightningPayAmountSats}
+        selectedLnBalanceQuery={selectedLnBalanceQuery}
+        selectedLnBalanceSats={selectedLnBalanceSats}
+        confirmedBalance={confirmedBalance}
+        isLabWithNoBalance={isLabWithNoBalance}
+        feeRate={feeRate}
+        customFeeRate={customFeeRate}
+        useCustomFee={useCustomFee}
+        onFeeRateChange={setFeeRate}
+        onCustomFeeRateChange={setCustomFeeRate}
+        onUseCustomFeeChange={setUseCustomFee}
+        isPending={isPending}
+        buildOrLabPreparing={
+          buildMutation.isPending || (networkMode === 'lab' && labReviewPending)
+        }
+        canBuild={canBuild}
+        onSubmitBuild={handleSubmitBuild}
+      />
 
       <DustChangeChoiceModal
         open={dustCase2Modal != null}

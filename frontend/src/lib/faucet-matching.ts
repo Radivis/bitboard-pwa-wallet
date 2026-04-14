@@ -8,6 +8,40 @@ import {
 /** Result of a browser reachability probe (tri-state). */
 export type FaucetReachability = 'online' | 'offline' | 'unknown'
 
+function parseUrlHostPath(
+  urlString: string,
+): { hostname: string; pathname: string } | null {
+  try {
+    const u = new URL(urlString)
+    return { hostname: u.hostname, pathname: u.pathname }
+  } catch {
+    return null
+  }
+}
+
+function isMempoolSpaceTestnet4(urlString: string): boolean {
+  const parsed = parseUrlHostPath(urlString)
+  return (
+    parsed != null &&
+    parsed.hostname === 'mempool.space' &&
+    parsed.pathname.includes('/testnet4/')
+  )
+}
+
+function isMutinynetHost(urlString: string): boolean {
+  const parsed = parseUrlHostPath(urlString)
+  return parsed != null && parsed.hostname === 'mutinynet.com'
+}
+
+function devEsploraProxyPathIncludes(
+  resolvedEsploraUrl: string,
+  segment: '/esplora-proxy/testnet' | '/esplora-proxy/signet',
+): boolean {
+  if (!import.meta.env.DEV) return false
+  const parsed = parseUrlHostPath(resolvedEsploraUrl)
+  return parsed != null && parsed.pathname.includes(segment)
+}
+
 /**
  * Maps the active network + Esplora configuration to a curated faucet stack, or null if we should not show faucets.
  */
@@ -18,83 +52,37 @@ export function resolveFaucetStack(
 ): FaucetStackId | null {
   if (networkMode === 'testnet') {
     if (customEsploraUrl === null) {
-      if (isDevEsploraProxyTestnet(resolvedEsploraUrl)) {
+      if (devEsploraProxyPathIncludes(resolvedEsploraUrl, '/esplora-proxy/testnet')) {
         return 'mempool_testnet4'
       }
-      try {
-        const u = new URL(resolvedEsploraUrl)
-        if (
-          u.hostname === 'mempool.space' &&
-          u.pathname.includes('/testnet4/')
-        ) {
-          return 'mempool_testnet4'
-        }
-      } catch {
-        return null
+      if (isMempoolSpaceTestnet4(resolvedEsploraUrl)) {
+        return 'mempool_testnet4'
       }
       return null
     }
-    try {
-      const u = new URL(customEsploraUrl)
-      if (
-        u.hostname === 'mempool.space' &&
-        u.pathname.includes('/testnet4/')
-      ) {
-        return 'mempool_testnet4'
-      }
-    } catch {
-      return null
+    if (isMempoolSpaceTestnet4(customEsploraUrl)) {
+      return 'mempool_testnet4'
     }
     return null
   }
 
   if (networkMode === 'signet') {
     if (customEsploraUrl === null) {
-      if (isDevEsploraProxySignet(resolvedEsploraUrl)) {
+      if (devEsploraProxyPathIncludes(resolvedEsploraUrl, '/esplora-proxy/signet')) {
         return 'mutinynet_signet'
       }
-      try {
-        const u = new URL(resolvedEsploraUrl)
-        if (u.hostname === 'mutinynet.com') {
-          return 'mutinynet_signet'
-        }
-      } catch {
-        return null
+      if (isMutinynetHost(resolvedEsploraUrl)) {
+        return 'mutinynet_signet'
       }
       return null
     }
-    try {
-      const u = new URL(customEsploraUrl)
-      if (u.hostname === 'mutinynet.com') {
-        return 'mutinynet_signet'
-      }
-    } catch {
-      return null
+    if (isMutinynetHost(customEsploraUrl)) {
+      return 'mutinynet_signet'
     }
     return null
   }
 
   return null
-}
-
-function isDevEsploraProxyTestnet(resolvedEsploraUrl: string): boolean {
-  if (!import.meta.env.DEV) return false
-  try {
-    const u = new URL(resolvedEsploraUrl)
-    return u.pathname.includes('/esplora-proxy/testnet')
-  } catch {
-    return false
-  }
-}
-
-function isDevEsploraProxySignet(resolvedEsploraUrl: string): boolean {
-  if (!import.meta.env.DEV) return false
-  try {
-    const u = new URL(resolvedEsploraUrl)
-    return u.pathname.includes('/esplora-proxy/signet')
-  } catch {
-    return false
-  }
 }
 
 export function faucetsForStack(stackId: FaucetStackId): FaucetEntry[] {

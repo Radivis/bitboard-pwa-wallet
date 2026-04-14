@@ -1,45 +1,22 @@
 import { toast } from 'sonner'
 import { executeSettingsAddressTypeSwitch } from '@/lib/execute-settings-address-type-switch'
 import { errorMessage } from '@/lib/utils'
+import { runStrictMigrationAfterHydration } from '@/lib/strict-migration-run'
 import { useFeatureStore } from '@/stores/featureStore'
 import {
   AddressType,
   getCommittedAddressType,
-  useWalletStore,
 } from '@/stores/walletStore'
 
-/** Prevents duplicate concurrent runs (e.g. React Strict Mode double effect). */
-let segwitAddressesStrictMigrationStarted = false
-
-function waitForStoreHydration(
-  store: typeof useWalletStore | typeof useFeatureStore,
-): Promise<void> {
-  return new Promise((resolve) => {
-    if (store.persist.hasHydrated()) {
-      resolve()
-      return
-    }
-    const unsub = store.persist.onFinishHydration(() => {
-      unsub()
-      resolve()
-    })
-  })
-}
+const segwitAddressesStrictMigrationGuard = { started: false }
 
 /**
  * When SegWit address options are off, any persisted SegWit preference is moved to Taproot once after hydration.
  */
 export function runSegwitAddressesStrictMigrationAfterHydration(): void {
-  if (segwitAddressesStrictMigrationStarted) return
-  segwitAddressesStrictMigrationStarted = true
-
-  void (async () => {
-    try {
-      await Promise.all([
-        waitForStoreHydration(useWalletStore),
-        waitForStoreHydration(useFeatureStore),
-      ])
-
+  runStrictMigrationAfterHydration(
+    segwitAddressesStrictMigrationGuard,
+    async () => {
       const { segwitAddressesEnabled } = useFeatureStore.getState()
       if (segwitAddressesEnabled) return
       if (getCommittedAddressType() !== AddressType.SegWit) return
@@ -52,14 +29,12 @@ export function runSegwitAddressesStrictMigrationAfterHydration(): void {
           'SegWit addresses are off in Settings → Features. Switched receiving to Taproot (BIP86).',
         )
       } catch (err) {
-        segwitAddressesStrictMigrationStarted = false
+        segwitAddressesStrictMigrationGuard.started = false
         toast.error(
           errorMessage(err) ??
             'Could not switch to Taproot. Enable “SegWit addresses” in Settings → Features or try again.',
         )
       }
-    } catch {
-      segwitAddressesStrictMigrationStarted = false
-    }
-  })()
+    },
+  )
 }
