@@ -1,4 +1,4 @@
-import { useMemo, useCallback, useState, useEffect } from 'react'
+import { useMemo, useCallback, useState, useEffect, useRef } from 'react'
 import { createFileRoute, useNavigate, Link } from '@tanstack/react-router'
 import { ArrowUpRight, ArrowLeft } from 'lucide-react'
 import { toast } from 'sonner'
@@ -14,7 +14,7 @@ import { Label } from '@/components/ui/label'
 import { WalletUnlockOrNearZeroLoading } from '@/components/WalletUnlockOrNearZeroLoading'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { NETWORK_LABELS, useWalletStore } from '@/stores/walletStore'
-import { useSendStore } from '@/stores/sendStore'
+import { useSendStore, type SendAmountUnit } from '@/stores/sendStore'
 import { useFeatureStore } from '@/stores/featureStore'
 import { useLabChainStateQuery } from '@/hooks/useLabChainStateQuery'
 import {
@@ -23,6 +23,11 @@ import {
   formatSats,
   truncateAddress,
 } from '@/lib/bitcoin-utils'
+import { errorMessage } from '@/lib/utils'
+import {
+  formatAmountInputFromSats,
+  UX_DUST_FLOOR_SATS,
+} from '@/lib/bitcoin-dust'
 import {
   isLightningSupported,
   isValidLightningDestination,
@@ -38,12 +43,21 @@ import { useSendLightningBalances } from '@/hooks/useSendLightningBalances'
 import { MAX_BOLT11_PAYMENT_REQUEST_LENGTH } from '@/lib/lightning-input-limits'
 import { labOwnersEqual, walletLabOwner } from '@/lib/lab-owner'
 import { DeadLabEntityRecipientModal } from '@/components/lab/DeadLabEntityRecipientModal'
-import { lookupLabAddressOwner, resolveDeadLabEntityRecipient } from '@/lib/lab-utils'
+import { DustChangeChoiceModal } from '@/components/wallet/send/DustChangeChoiceModal'
+import {
+  labBitcoinAddressesEqual,
+  lookupLabAddressOwner,
+  resolveDeadLabEntityRecipient,
+} from '@/lib/lab-utils'
+import { getLabWorker, initLabWorkerWithState } from '@/workers/lab-factory'
+import { runLabOp } from '@/lib/lab-coordinator'
 import {
   useBuildTransactionMutation,
   useBroadcastTransactionMutation,
   useLabSendMutation,
 } from '@/hooks/useSendMutations'
+import type { PrepareOnchainSendResult } from '@/workers/crypto-api'
+import { useCryptoStore } from '@/stores/cryptoStore'
 
 export const Route = createFileRoute('/wallet/send')({
   component: SendPage,
@@ -66,10 +80,18 @@ export function SendPage() {
   return <SendFlow />
 }
 
+function amountSatsFromForm(amountStr: string, unit: SendAmountUnit): number {
+  if (!amountStr) return 0
+  return unit === 'btc'
+    ? Math.floor(parseFloat(amountStr) * 100_000_000)
+    : parseInt(amountStr, 10) || 0
+}
+
 export function SendFlow() {
   const networkMode = useWalletStore((s) => s.networkMode)
   const balance = useWalletStore((s) => s.balance)
   const activeWalletId = useWalletStore((s) => s.activeWalletId)
+  const currentAddress = useWalletStore((s) => s.currentAddress)
   const lightningEnabled = useFeatureStore((s) => s.lightningEnabled)
   const lightningAvailable = lightningEnabled && isLightningSupported(networkMode)
   const connectedLightningWallets = useLightningStore((s) => s.connectedWallets)
@@ -83,6 +105,19 @@ export function SendFlow() {
   const [isResolvingLightningAddress, setIsResolvingLightningAddress] =
     useState(false)
   const [deadLabRecipientModalOpen, setDeadLabRecipientModalOpen] = useState(false)
+  const [dustCase2Modal, setDustCase2Modal] = useState<null | {
+    pendingOutcome: PrepareOnchainSendResult
+    changeFreeMaxSats: number
+  }>(null)
+  const [labDustCase2Modal, setLabDustCase2Modal] = useState<null | {
+    changeFreeMaxSats: number
+    exactAmountSats: number
+    originalAmountSats: number
+  }>(null)
+  const [labApplyChangeFreeBump, setLabApplyChangeFreeBump] = useState(false)
+  const [labReviewPending, setLabReviewPending] = useState(false)
+  /** Pre-bump payment (e.g. 800). Lab crypto builds from this and applies `applyChangeFreeBump` internally; the store amount is the max for display only. */
+  const labChangeFreeBumpBaseAmountSatsRef = useRef<number | null>(null)
 
   const lightningPayMutation = useLightningPayMutation()
 
@@ -95,6 +130,7 @@ export function SendFlow() {
     customFeeRate,
     useCustomFee,
     psbt,
+    onchainDustWarning,
     setStep,
     setRecipient,
     setAmount,
@@ -132,12 +168,45 @@ export function SendFlow() {
 
   const effectiveFeeRate = useCustomFee ? parseInt(customFeeRate) || 1 : feeRate
 
-  const amountSats = useMemo(() => {
-    if (!amount) return 0
-    return amountUnit === 'btc'
-      ? Math.floor(parseFloat(amount) * 100_000_000)
-      : parseInt(amount) || 0
-  }, [amount, amountUnit])
+  const applyOnchainPrepareOutcomeToSendStore = useCallback(
+    (outcome: PrepareOnchainSendResult) => {
+      const { amountUnit: unit } = useSendStore.getState()
+      if (outcome.raisedToMinDust || outcome.bumpedChangeFree) {
+        const lines: string[] = []
+        if (outcome.raisedToMinDust) {
+          lines.push(
+            `Amount was below the minimum output size (${UX_DUST_FLOOR_SATS} sats). It was increased automatically.`,
+          )
+        }
+        if (outcome.bumpedChangeFree) {
+          lines.push(
+            'Change for this transaction would have been below the dust limit; the amount was increased to make the transfer change-free.',
+          )
+        }
+        toast.warning(lines.join(' '))
+        useSendStore.setState({
+          amount: formatAmountInputFromSats(outcome.finalAmountSats, unit),
+          onchainDustWarning: {
+            previousSats: outcome.originalAmountSats,
+            raisedToMin546: outcome.raisedToMinDust,
+            bumpedChangeFree: outcome.bumpedChangeFree,
+          },
+        })
+      }
+      useSendStore.getState().setPsbt(outcome.psbtBase64)
+      useSendStore.getState().setStep(2)
+    },
+    [],
+  )
+
+  useEffect(() => {
+    if (step === 1) setLabApplyChangeFreeBump(false)
+  }, [step])
+
+  const amountSats = useMemo(
+    () => amountSatsFromForm(amount, amountUnit),
+    [amount, amountUnit],
+  )
 
   const normalizedRecipient = useMemo(
     () =>
@@ -312,7 +381,7 @@ export function SendFlow() {
     lightningPayMutation,
   ])
 
-  const handleSubmitBuild = useCallback(() => {
+  const handleSubmitBuild = useCallback(async () => {
     if (!canBuild) return
 
     if (isLightningSendMode) {
@@ -346,28 +415,124 @@ export function SendFlow() {
     }
 
     if (networkMode === 'lab') {
-      setStep(2)
+      labChangeFreeBumpBaseAmountSatsRef.current = null
+      let draftAmountSats = amountSats
+      if (
+        confirmedBalance >= UX_DUST_FLOOR_SATS &&
+        isValidSendAmountSats(amountSats) &&
+        amountSats > 0 &&
+        amountSats < UX_DUST_FLOOR_SATS
+      ) {
+        draftAmountSats = UX_DUST_FLOOR_SATS
+        const prev = amountSats
+        toast.warning(
+          `Amount was below the minimum output size (${UX_DUST_FLOOR_SATS} sats). It was increased automatically.`,
+        )
+        useSendStore.setState({
+          amount: formatAmountInputFromSats(UX_DUST_FLOOR_SATS, amountUnit),
+          onchainDustWarning: {
+            previousSats: prev,
+            raisedToMin546: true,
+            bumpedChangeFree: false,
+          },
+        })
+      }
+
+      if (activeWalletId == null) {
+        toast.error('No active wallet')
+        return
+      }
+
+      setLabReviewPending(true)
+      try {
+        await runLabOp(async () => {
+          await initLabWorkerWithState()
+          const labWorker = getLabWorker()
+          const walletChangeAddress = await useCryptoStore
+            .getState()
+            .getLabChangeAddress()
+
+          const knownRecipientOwner =
+            currentAddress != null &&
+            labBitcoinAddressesEqual(normalizedRecipient, currentAddress)
+              ? walletLabOwner(activeWalletId)
+              : undefined
+
+          const { utxosJson } = await labWorker.prepareLabWalletTransaction({
+            walletId: activeWalletId,
+            toAddress: normalizedRecipient,
+            amountSats: draftAmountSats,
+            feeRateSatPerVb: effectiveFeeRate,
+            walletChangeAddress,
+            knownRecipientOwner,
+          })
+
+          const draft = await useCryptoStore.getState().draftLabPsbtTransaction({
+            utxosJson,
+            toAddress: normalizedRecipient,
+            amountSats: draftAmountSats,
+            feeRateSatPerVb: effectiveFeeRate,
+            changeAddress: walletChangeAddress,
+          })
+
+          if (draft.changeFreeBumpAvailable) {
+            labChangeFreeBumpBaseAmountSatsRef.current = draft.finalAmountSats
+            setLabDustCase2Modal({
+              changeFreeMaxSats: draft.changeFreeMaxSats,
+              exactAmountSats: draft.finalAmountSats,
+              originalAmountSats: draft.originalAmountSats,
+            })
+            return
+          }
+
+          setLabApplyChangeFreeBump(false)
+          labChangeFreeBumpBaseAmountSatsRef.current = null
+          setStep(2)
+        })
+      } catch (err) {
+        toast.error(errorMessage(err) || 'Failed to prepare lab transaction')
+      } finally {
+        setLabReviewPending(false)
+      }
       return
     }
 
-    buildMutation.mutate({
-      normalizedRecipient,
-      amountSats,
-      effectiveFeeRate,
-    })
+    try {
+      const outcome = await buildMutation.mutateAsync({
+        normalizedRecipient,
+        amountSats,
+        effectiveFeeRate,
+        applyChangeFreeBump: false,
+      })
+      if (outcome.changeFreeBumpAvailable) {
+        setDustCase2Modal({
+          pendingOutcome: outcome,
+          changeFreeMaxSats: outcome.changeFreeMaxSats,
+        })
+        return
+      }
+      applyOnchainPrepareOutcomeToSendStore(outcome)
+    } catch {
+      /* mutation toasts */
+    }
   }, [
     canBuild,
     isLightningSendMode,
     normalizedRecipient,
     selectedLightningWallet,
     networkMode,
-    setStep,
     lightningPayMutation,
     buildMutation,
     amountSats,
     effectiveFeeRate,
     handleLightningAddressPay,
     decodedBolt11,
+    confirmedBalance,
+    amountUnit,
+    applyOnchainPrepareOutcomeToSendStore,
+    activeWalletId,
+    currentAddress,
+    setStep,
   ])
 
   const handleConfirmSend = useCallback(() => {
@@ -376,10 +541,18 @@ export function SendFlow() {
         setDeadLabRecipientModalOpen(true)
         return
       }
+      const { amount: amountFromStore, amountUnit: unitFromStore } =
+        useSendStore.getState()
+      const parsedFromStore = amountSatsFromForm(amountFromStore, unitFromStore)
+      const amountForLab =
+        labApplyChangeFreeBump && labChangeFreeBumpBaseAmountSatsRef.current != null
+          ? labChangeFreeBumpBaseAmountSatsRef.current
+          : parsedFromStore
       labSendMutation.mutate({
         normalizedRecipient,
-        amountSats,
+        amountSats: amountForLab,
         effectiveFeeRate,
+        applyChangeFreeBump: labApplyChangeFreeBump,
       })
     } else {
       broadcastMutation.mutate()
@@ -392,19 +565,34 @@ export function SendFlow() {
     effectiveFeeRate,
     labSendMutation,
     broadcastMutation,
+    labApplyChangeFreeBump,
   ])
 
   const handleConfirmDeadLabRecipientSend = useCallback(() => {
     setDeadLabRecipientModalOpen(false)
+    const { amount: amountFromStore, amountUnit: unitFromStore } =
+      useSendStore.getState()
+    const parsedFromStore = amountSatsFromForm(amountFromStore, unitFromStore)
+    const amountForLab =
+      labApplyChangeFreeBump && labChangeFreeBumpBaseAmountSatsRef.current != null
+        ? labChangeFreeBumpBaseAmountSatsRef.current
+        : parsedFromStore
     labSendMutation.mutate({
       normalizedRecipient,
-      amountSats,
+      amountSats: amountForLab,
       effectiveFeeRate,
+      applyChangeFreeBump: labApplyChangeFreeBump,
     })
-  }, [labSendMutation, normalizedRecipient, amountSats, effectiveFeeRate])
+  }, [
+    labSendMutation,
+    normalizedRecipient,
+    effectiveFeeRate,
+    labApplyChangeFreeBump,
+  ])
 
   const isPending =
     buildMutation.isPending ||
+    labReviewPending ||
     broadcastMutation.isPending ||
     labSendMutation.isPending ||
     lightningPayMutation.isPending ||
@@ -642,12 +830,33 @@ export function SendFlow() {
                   id="send-amount"
                   type="number"
                   value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
+                  onChange={(e) => setAmount(e.target.value, { fromUser: true })}
                   placeholder={amountUnit === 'btc' ? '0.00000000' : '0'}
                   step={amountUnit === 'btc' ? '0.00000001' : '1'}
                   min="0"
                   disabled={isPending}
                 />
+              )}
+              {!isLightningSendMode && onchainDustWarning != null && (
+                <div className="font-bold text-destructive text-sm space-y-1 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2">
+                  {onchainDustWarning.raisedToMin546 ? (
+                    <p>
+                      Amount was below the minimum spendable output (
+                      {formatSats(UX_DUST_FLOOR_SATS)} sats). The field was set
+                      to{' '}
+                      {amountUnit === 'btc'
+                        ? `${formatBTC(UX_DUST_FLOOR_SATS)} BTC`
+                        : `${formatSats(UX_DUST_FLOOR_SATS)} sats`}
+                      .
+                    </p>
+                  ) : null}
+                  {onchainDustWarning.bumpedChangeFree ? (
+                    <p>
+                      The amount was increased so this payment does not leave
+                      change below the dust limit (change-free transfer).
+                    </p>
+                  ) : null}
+                </div>
               )}
               <p className="text-xs text-muted-foreground">
                 {isLightningSendMode ? (
@@ -691,8 +900,15 @@ export function SendFlow() {
               />
             )}
 
-            {buildMutation.isPending ? (
-              <LoadingSpinner text="Building transaction..." />
+            {buildMutation.isPending ||
+            (networkMode === 'lab' && labReviewPending) ? (
+              <LoadingSpinner
+                text={
+                  networkMode === 'lab'
+                    ? 'Preparing transaction...'
+                    : 'Building transaction...'
+                }
+              />
             ) : (
               <Button type="submit" className="w-full" disabled={!canBuild}>
                 {submitLabel}
@@ -701,6 +917,72 @@ export function SendFlow() {
           </form>
         </CardContent>
       </Card>
+
+      <DustChangeChoiceModal
+        open={dustCase2Modal != null}
+        onOpenChange={(o) => {
+          if (!o) setDustCase2Modal(null)
+        }}
+        exactAmountSats={dustCase2Modal?.pendingOutcome.finalAmountSats ?? 0}
+        changeFreeMaxSats={dustCase2Modal?.changeFreeMaxSats ?? 0}
+        onKeepExact={() => {
+          if (!dustCase2Modal) return
+          const pending = dustCase2Modal.pendingOutcome
+          setDustCase2Modal(null)
+          applyOnchainPrepareOutcomeToSendStore(pending)
+        }}
+        onIncreaseToChangeFree={async () => {
+          if (!dustCase2Modal) return
+          try {
+            const outcome = await buildMutation.mutateAsync({
+              normalizedRecipient,
+              amountSats,
+              effectiveFeeRate,
+              applyChangeFreeBump: true,
+            })
+            setDustCase2Modal(null)
+            applyOnchainPrepareOutcomeToSendStore(outcome)
+          } catch {
+            /* mutation onError */
+          }
+        }}
+        isPending={buildMutation.isPending}
+      />
+      <DustChangeChoiceModal
+        open={labDustCase2Modal != null}
+        onOpenChange={(o) => {
+          if (!o) {
+            setLabDustCase2Modal(null)
+            labChangeFreeBumpBaseAmountSatsRef.current = null
+          }
+        }}
+        exactAmountSats={labDustCase2Modal?.exactAmountSats ?? 0}
+        changeFreeMaxSats={labDustCase2Modal?.changeFreeMaxSats ?? 0}
+        onKeepExact={() => {
+          setLabDustCase2Modal(null)
+          setLabApplyChangeFreeBump(false)
+          labChangeFreeBumpBaseAmountSatsRef.current = null
+          setStep(2)
+        }}
+        onIncreaseToChangeFree={() => {
+          if (!labDustCase2Modal) return
+          useSendStore.setState({
+            amount: formatAmountInputFromSats(
+              labDustCase2Modal.changeFreeMaxSats,
+              amountUnit,
+            ),
+            onchainDustWarning: {
+              previousSats: labDustCase2Modal.originalAmountSats,
+              raisedToMin546: false,
+              bumpedChangeFree: true,
+            },
+          })
+          setLabApplyChangeFreeBump(true)
+          setLabDustCase2Modal(null)
+          setStep(2)
+        }}
+        isPending={false}
+      />
     </div>
   )
 }

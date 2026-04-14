@@ -15,34 +15,33 @@ import { labOpAddSignedTransaction } from '@/lib/lab-worker-operations'
 import { setLabChainStateCache } from '@/hooks/useLabChainStateQuery'
 import { invalidateLabPaginatedQueries } from '@/lib/lab-paginated-queries'
 import { errorMessage } from '@/lib/utils'
+import { formatAmountInputFromSats, UX_DUST_FLOOR_SATS } from '@/lib/bitcoin-dust'
 
 /**
- * Mutation to build a PSBT (mainnet/testnet/signet/regtest).
- * Uses crypto worker; result is stored in sendStore.psbt and sendStore.step set to 2.
+ * Mutation to prepare a PSBT (mainnet/testnet/signet/regtest).
+ * Caller handles change-free modal then `applyChangeFreeBump: true` when the user opts in.
  */
 export function useBuildTransactionMutation() {
   const networkMode = useWalletStore((s) => s.networkMode)
-  const buildTransaction = useCryptoStore((s) => s.buildTransaction)
+  const prepareOnchainSendTransaction = useCryptoStore(
+    (s) => s.prepareOnchainSendTransaction,
+  )
 
   return useMutation({
     mutationFn: async (params: {
       normalizedRecipient: string
       amountSats: number
       effectiveFeeRate: number
+      applyChangeFreeBump?: boolean
     }) => {
       const network = toBitcoinNetwork(networkMode)
-      const psbtBase64 = await buildTransaction({
+      return prepareOnchainSendTransaction({
         recipientAddress: params.normalizedRecipient,
         amountSats: params.amountSats,
         feeRateSatPerVb: params.effectiveFeeRate,
         network,
+        applyChangeFreeBump: params.applyChangeFreeBump ?? false,
       })
-      return psbtBase64
-    },
-    onSuccess: (psbtBase64) => {
-      const { setPsbt, setStep } = useSendStore.getState()
-      setPsbt(psbtBase64)
-      setStep(2)
     },
     onError: (err) => {
       console.error('Build transaction failed:', err)
@@ -137,6 +136,7 @@ export function useLabSendMutation() {
       normalizedRecipient: string
       amountSats: number
       effectiveFeeRate: number
+      applyChangeFreeBump?: boolean
     }) => {
       if (activeWalletId == null) throw new Error('No active wallet')
 
@@ -161,20 +161,56 @@ export function useLabSendMutation() {
             knownRecipientOwner,
           })
 
-        const { signedTxHex, feeSats, hasChange } = await buildAndSignLabTransaction({
+        const lab = await buildAndSignLabTransaction({
           utxosJson,
           toAddress: params.normalizedRecipient,
           amountSats: params.amountSats,
           feeRateSatPerVb: params.effectiveFeeRate,
           changeAddress: walletChangeAddress,
+          applyChangeFreeBump: params.applyChangeFreeBump ?? false,
         })
+        const {
+          signedTxHex,
+          feeSats,
+          hasChange,
+          finalAmountSats,
+          raisedToMinDust,
+          bumpedChangeFree,
+        } = lab
+
+        const { amountUnit } = useSendStore.getState()
+        if (raisedToMinDust || bumpedChangeFree) {
+          const lines: string[] = []
+          if (raisedToMinDust) {
+            lines.push(
+              `Amount was below the minimum output size (${UX_DUST_FLOOR_SATS} sats). It was increased automatically.`,
+            )
+          }
+          if (bumpedChangeFree) {
+            lines.push(
+              'Change for this transaction would have been below the dust limit; the amount was increased to make the transfer change-free.',
+            )
+          }
+          toast.warning(lines.join(' '))
+          useSendStore.setState({
+            amount: formatAmountInputFromSats(finalAmountSats, amountUnit),
+            onchainDustWarning: {
+              previousSats: lab.originalAmountSats,
+              raisedToMin546: raisedToMinDust,
+              bumpedChangeFree,
+            },
+          })
+        }
 
         const outputsDetail = hasChange
           ? [
-              ...mempoolMetadata.outputsDetail,
+              {
+                ...mempoolMetadata.outputsDetail[0],
+                amountSats: finalAmountSats,
+              },
               {
                 address: walletChangeAddress,
-                amountSats: totalInput - params.amountSats - feeSats,
+                amountSats: totalInput - finalAmountSats - feeSats,
                 isChange: true as const,
                 owner: mempoolMetadata.sender,
               },

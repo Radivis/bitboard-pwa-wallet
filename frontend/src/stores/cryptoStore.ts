@@ -16,13 +16,18 @@ import type { Remote } from 'comlink';
 import type {
   CryptoService,
   BuildAndSignLabTransactionParams,
+  BuildAndSignLabTransactionResult,
   BuildTransactionParams,
   CreateWalletAndEncryptSecretsParams,
   CreateWalletParams,
   DeriveDescriptorsParams,
+  DraftLabPsbtTransactionParams,
+  DraftLabPsbtTransactionResult,
   EncryptedBlobForDb,
   ImportWalletAndEncryptSecretsParams,
   LoadWalletParams,
+  PrepareOnchainSendParams,
+  PrepareOnchainSendResult,
   ResolveDescriptorWalletParams,
   ResolveDescriptorWalletResult,
   UpdateDescriptorWalletChangesetParams,
@@ -56,7 +61,14 @@ interface CryptoState {
   getCurrentAddress: () => Promise<string>;
   buildAndSignLabTransaction: (
     params: BuildAndSignLabTransactionParams,
-  ) => Promise<{ signedTxHex: string; feeSats: number; hasChange: boolean }>;
+  ) => Promise<BuildAndSignLabTransactionResult>;
+  draftLabPsbtTransaction: (
+    params: DraftLabPsbtTransactionParams,
+  ) => Promise<DraftLabPsbtTransactionResult>;
+
+  prepareOnchainSendTransaction: (
+    params: PrepareOnchainSendParams,
+  ) => Promise<PrepareOnchainSendResult>;
   getLabChangeAddress: () => Promise<string>;
   getBalance: () => Promise<BalanceInfo>;
   exportChangeset: () => Promise<string>;
@@ -163,6 +175,12 @@ export const useCryptoStore = create<CryptoState>((set, get) => {
 
     buildAndSignLabTransaction: (params) =>
       withErrorHandling((worker) => worker.buildAndSignLabTransaction(params)),
+
+    draftLabPsbtTransaction: (params) =>
+      withErrorHandling((worker) => worker.draftLabPsbtTransaction(params)),
+
+    prepareOnchainSendTransaction: (params) =>
+      withErrorHandling((worker) => worker.prepareOnchainSendTransaction(params)),
 
     getLabChangeAddress: () =>
       withErrorHandling((worker) => worker.getLabChangeAddress()),

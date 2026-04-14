@@ -2,7 +2,7 @@
 
 mod common;
 
-use bitboard_crypto::transaction;
+use bitboard_crypto::transaction::{self, UX_DUST_FLOOR_SATS};
 use bitcoin::Network;
 use common::wallet_fixtures::{
     DEFAULT_ADDRESS_TYPE, DEFAULT_NETWORK, create_test_wallet, fund_test_wallet,
@@ -91,6 +91,67 @@ fn build_transaction_rejects_address_wrong_network() {
         result.is_err(),
         "Address for a different network must be rejected"
     );
+}
+
+#[test]
+fn prepare_onchain_send_raises_below_dust_floor() {
+    let mut wallet = funded_wallet();
+    let outcome = transaction::prepare_onchain_send(
+        &mut wallet,
+        VALID_SIGNET_ADDRESS,
+        100,
+        FEE_RATE,
+        Network::Testnet,
+        false,
+    )
+    .expect("Prepare below dust should clamp and succeed");
+
+    assert_eq!(outcome.final_amount_sats, UX_DUST_FLOOR_SATS);
+    assert!(outcome.raised_to_min_dust);
+    assert_eq!(outcome.original_amount_sats, 100);
+    assert!(
+        !outcome.psbt_base64.is_empty(),
+        "PSBT base64 must be returned"
+    );
+    assert!(!outcome.change_free_bump_available);
+}
+
+#[test]
+fn prepare_onchain_send_apply_change_free_bump_matches_first_pass_when_no_bump_path() {
+    let mut wallet = funded_wallet();
+    let first = transaction::prepare_onchain_send(
+        &mut wallet,
+        VALID_SIGNET_ADDRESS,
+        SEND_AMOUNT,
+        FEE_RATE,
+        Network::Testnet,
+        false,
+    )
+    .expect("first prepare");
+
+    let second = transaction::prepare_onchain_send(
+        &mut wallet,
+        VALID_SIGNET_ADDRESS,
+        SEND_AMOUNT,
+        FEE_RATE,
+        Network::Testnet,
+        true,
+    )
+    .expect("second prepare");
+
+    if first.change_free_bump_available {
+        assert!(
+            second.bumped_change_free,
+            "second pass with bump must apply when bump path exists"
+        );
+        assert_eq!(second.final_amount_sats, first.change_free_max_sats);
+    } else {
+        assert_eq!(
+            second.final_amount_sats, first.final_amount_sats,
+            "without a bump path, amount must match exact prepare"
+        );
+        assert!(!second.bumped_change_free);
+    }
 }
 
 // --- Happy-path tests ---

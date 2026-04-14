@@ -336,10 +336,152 @@ export async function sendFromWallet(
   })
 }
 
-/** Get lab state via test hook. Navigates to lab first if needed. */
+/** Lab Send: fill recipient + amount in sats (does not click Review). */
+export async function goToLabSendCompose(
+  page: Page,
+  toAddress: string,
+  amountSats: number,
+): Promise<void> {
+  await goToWalletTab(page, 'Send')
+  await expect(page.getByText('Send Bitcoin')).toBeVisible()
+
+  await page.getByLabel('Recipient Address').fill(toAddress)
+  const switchToSatsBtn = page.getByRole('button', { name: 'Switch to sats' })
+  if (await switchToSatsBtn.isVisible().catch(() => false)) {
+    await switchToSatsBtn.click()
+  }
+  const amountInput = page.getByLabel(/Amount/)
+  await amountInput.fill(String(amountSats))
+  await expect(amountInput).toHaveValue(String(amountSats))
+}
+
+/** Clicks Review Transaction (must be enabled). */
+export async function clickLabReviewTransaction(page: Page): Promise<void> {
+  await expect(
+    page.getByRole('button', { name: 'Review Transaction' }),
+  ).toBeEnabled({ timeout: 30000 })
+  await page.getByRole('button', { name: 'Review Transaction' }).click()
+}
+
+/** Case-1 (sub–dust-floor): toast + amount shown as 546 sats (compose or Transaction Details). */
+export async function expectLabCase1MinDustClampUi(page: Page): Promise<void> {
+  await expect(
+    page.getByText(/minimum output size \(546 sats\)/i).first(),
+  ).toBeVisible({ timeout: 30000 })
+  await expect
+    .poll(
+      async () => {
+        if (await page.getByText('Transaction Details').first().isVisible().catch(() => false)) {
+          const mainText = (await page.getByRole('main').textContent()) ?? ''
+          return /\b546\s*sats\b/i.test(mainText)
+        }
+        const input = page.locator('#send-amount')
+        if (await input.isVisible().catch(() => false)) {
+          return (await input.inputValue()) === '546'
+        }
+        return false
+      },
+      { timeout: 60000 },
+    )
+    .toBe(true)
+}
+
+/**
+ * After Review with a sub-dust amount, the UI may continue with Change-and-fees (case 2)
+ * or skip to Transaction Details. Cancel the modal or press Back so the compose step stays usable.
+ */
+export async function dismissLabDustModalOrBackFromReview(page: Page): Promise<void> {
+  const changeFeesHeading = page.getByRole('heading', { name: 'Change and fees' })
+  const transactionDetails = page.getByText('Transaction Details')
+
+  const which = await Promise.race([
+    changeFeesHeading.waitFor({ state: 'visible', timeout: 90000 }).then(() => 'modal' as const),
+    transactionDetails.waitFor({ state: 'visible', timeout: 90000 }).then(() => 'details' as const),
+  ])
+
+  if (which === 'modal') {
+    await page.getByRole('button', { name: 'Cancel' }).click()
+    await expect(changeFeesHeading).not.toBeVisible({ timeout: 15000 })
+    await expect(page.getByText('Send Bitcoin')).toBeVisible({ timeout: 15000 })
+    return
+  }
+
+  await expect(transactionDetails).toBeVisible()
+  await page.getByRole('button', { name: 'Back' }).click()
+  await expect(page.getByText('Send Bitcoin')).toBeVisible({ timeout: 15000 })
+}
+
+export async function expectLabChangeAndFeesModal(page: Page): Promise<void> {
+  await expect(page.getByRole('heading', { name: 'Change and fees' })).toBeVisible({
+    timeout: 90000,
+  })
+}
+
+export type LabDustChoice = 'keepExact' | 'increaseToChangeFreeMax'
+
+export async function clickLabDustChoice(
+  page: Page,
+  choice: LabDustChoice,
+): Promise<void> {
+  await expectLabChangeAndFeesModal(page)
+  if (choice === 'keepExact') {
+    await page.getByRole('button', { name: /Keep exact amount/ }).click()
+  } else {
+    await page.getByRole('button', { name: /Increase to change-free max/ }).click()
+    // Bump must apply changeFreeMaxSats to the store before Confirm;
+    // otherwise the lab send uses the pre-bump amount and the bump build can fail (insufficient funds).
+    await expect(page.getByRole('main')).not.toContainText('(800 sats)', { timeout: 20000 })
+    await expect(page.getByText('Transaction Details').first()).toBeVisible({ timeout: 15000 })
+  }
+}
+
+/**
+ * Lab step-2 review: confirm send and wait until the new tx appears in the lab mempool.
+ * Do not rely on the success toast alone — an earlier “Transaction added to mempool” from
+ * funding (createTransactionInLab) can remain visible and would mask a failed lab send.
+ * Avoid reading lab state before click: getLabState navigates away from Review.
+ *
+ * Wait for “Adding to mempool” before the first getLabState poll: all lab work is serialized
+ * through runLabOp; polling mempool too early can enqueue `labOpLoadChainFromDatabase`
+ * ahead of the send pipeline and block confirmation for the full poll timeout.
+ */
+export async function confirmLabSendAndWaitForMempool(page: Page): Promise<void> {
+  await expect(page.getByText('Transaction Details')).toBeVisible({ timeout: 90000 })
+  await page.getByRole('button', { name: 'Confirm and Send' }).click()
+
+  const loading = page.getByText(/Adding to mempool/i).first()
+  await loading.waitFor({ state: 'visible', timeout: 60000 })
+  await loading.waitFor({ state: 'hidden', timeout: 120000 }).catch(() => undefined)
+
+  const failedAfterSend = page.getByText(/Lab send failed/i).last()
+  if (await failedAfterSend.isVisible().catch(() => false)) {
+    throw new Error((await failedAfterSend.textContent()) ?? 'Lab send failed')
+  }
+
+  await expect
+    .poll(
+      async () => (await getLabState(page)).mempool.length,
+      { timeout: 60000 },
+    )
+    .toBeGreaterThan(0)
+}
+
+/** Wallet owner key (`wallet:id`) for [getUtxoSumByOwner](getUtxoSumByOwner). */
+export function getWalletOwnerKey(state: LabState): string {
+  const walletOwnerObj = Object.values(state.addressToOwner ?? {}).find(
+    (o): o is { kind: 'wallet'; walletId: number } =>
+      typeof o === 'object' && o !== null && 'kind' in o && o.kind === 'wallet',
+  )
+  if (walletOwnerObj == null) {
+    throw new Error('No wallet owner in lab state')
+  }
+  return `${WALLET_OWNER_PREFIX}${walletOwnerObj.walletId}`
+}
+
+/** Get lab state via test hook. Navigates to lab first if needed (no `page.goto`: avoids interrupting in-flight mine UI). */
 export async function getLabState(page: Page): Promise<LabState> {
   await navigateToLab(page)
-  await expect(page.getByRole('heading', { name: 'Blocks' })).toBeVisible({ timeout: 5000 })
+  await expect(page.getByRole('heading', { name: 'Blocks' })).toBeVisible({ timeout: 20000 })
   const state = await page.evaluate(async () => {
     const fn = (window as unknown as { __labGetState?: () => Promise<LabState> }).__labGetState
     if (!fn) throw new Error('__labGetState not available')

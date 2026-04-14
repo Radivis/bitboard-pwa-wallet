@@ -49,6 +49,26 @@ export interface BuildAndSignLabTransactionParams {
   amountSats: number;
   feeRateSatPerVb: number;
   changeAddress: string;
+  /** When true, increase payment to change-free max if that path exists. */
+  applyChangeFreeBump?: boolean;
+}
+
+/** Unsigned lab PSBT for preview (before signing). */
+export interface DraftLabPsbtTransactionParams {
+  utxosJson: string;
+  toAddress: string;
+  amountSats: number;
+  feeRateSatPerVb: number;
+  changeAddress: string;
+}
+
+export interface DraftLabPsbtTransactionResult {
+  psbtBase64: string;
+  finalAmountSats: number;
+  originalAmountSats: number;
+  raisedToMinDust: boolean;
+  changeFreeBumpAvailable: boolean;
+  changeFreeMaxSats: number;
 }
 
 /** Ephemeral lab-entity wallet signing (does not use the active user wallet). */
@@ -69,6 +89,35 @@ export interface BuildTransactionParams {
   amountSats: number;
   feeRateSatPerVb: number;
   network: BitcoinNetwork;
+}
+
+export interface PrepareOnchainSendParams extends BuildTransactionParams {
+  /** First prepare uses false; second call after user chooses change-free bump uses true. */
+  applyChangeFreeBump?: boolean;
+}
+
+/** `prepare_onchain_send_transaction` (mapped from WASM in the worker). */
+export interface PrepareOnchainSendResult {
+  psbtBase64: string;
+  finalAmountSats: number;
+  originalAmountSats: number;
+  raisedToMinDust: boolean;
+  bumpedChangeFree: boolean;
+  changeFreeBumpAvailable: boolean;
+  changeFreeMaxSats: number;
+}
+
+/** Lab build+sign with dust UX (mapped from WASM in the worker). */
+export interface BuildAndSignLabTransactionResult {
+  signedTxHex: string;
+  feeSats: number;
+  hasChange: boolean;
+  finalAmountSats: number;
+  originalAmountSats: number;
+  raisedToMinDust: boolean;
+  bumpedChangeFree: boolean;
+  changeFreeBumpAvailable: boolean;
+  changeFreeMaxSats: number;
 }
 
 export interface ResolveDescriptorWalletParams {
@@ -128,7 +177,11 @@ export interface CryptoService {
   /** Build and sign a lab transaction using BDK add_foreign_utxo. */
   buildAndSignLabTransaction(
     params: BuildAndSignLabTransactionParams,
-  ): Promise<{ signedTxHex: string; feeSats: number; hasChange: boolean }>;
+  ): Promise<BuildAndSignLabTransactionResult>;
+  /** Unsigned lab PSBT draft (dust / change-free metadata) before signing. */
+  draftLabPsbtTransaction(
+    params: DraftLabPsbtTransactionParams,
+  ): Promise<DraftLabPsbtTransactionResult>;
   /** First internal address for lab change outputs. */
   getLabChangeAddress(): Promise<string>;
 
@@ -143,6 +196,10 @@ export interface CryptoService {
   fullScanWallet(esploraUrl: string, stopGap: number): Promise<SyncResult>;
 
   buildTransaction(params: BuildTransactionParams): Promise<string>;
+
+  prepareOnchainSendTransaction(
+    params: PrepareOnchainSendParams,
+  ): Promise<PrepareOnchainSendResult>;
 
   signAndExtractTransaction(psbtBase64: string): Promise<string>;
 

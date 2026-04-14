@@ -15,7 +15,7 @@ vi.mock('@tanstack/react-router', async (importOriginal) => {
   }
 })
 
-const mockBuildTransaction = vi.fn()
+const mockPrepareOnchainSendTransaction = vi.fn()
 const mockSignAndExtractTransaction = vi.fn()
 const mockBroadcastTransaction = vi.fn()
 const mockSyncWallet = vi.fn()
@@ -24,8 +24,10 @@ const mockGetTransactionList = vi.fn()
 const mockExportChangeset = vi.fn()
 const mockBuildAndSignLabTransaction = vi.fn()
 const mockGetLabChangeAddress = vi.fn()
+const mockDraftLabPsbtTransaction = vi.fn()
 const cryptoStoreState = {
-  buildTransaction: mockBuildTransaction,
+  prepareOnchainSendTransaction: mockPrepareOnchainSendTransaction,
+  draftLabPsbtTransaction: mockDraftLabPsbtTransaction,
   signAndExtractTransaction: mockSignAndExtractTransaction,
   broadcastTransaction: mockBroadcastTransaction,
   syncWallet: mockSyncWallet,
@@ -83,6 +85,14 @@ import { SendPage } from '../wallet/send'
 describe('SendPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockDraftLabPsbtTransaction.mockResolvedValue({
+      psbtBase64: 'draft_psbt',
+      finalAmountSats: 10_000,
+      originalAmountSats: 10_000,
+      raisedToMinDust: false,
+      changeFreeBumpAvailable: false,
+      changeFreeMaxSats: 0,
+    })
     useSendStore.getState().reset()
     walletStoreState = {
       activeWalletId: 1,
@@ -177,7 +187,15 @@ describe('SendPage', () => {
 
   it('review step shows transaction details', async () => {
     const user = userEvent.setup()
-    mockBuildTransaction.mockResolvedValue('mock_psbt_base64')
+    mockPrepareOnchainSendTransaction.mockResolvedValue({
+      psbtBase64: 'mock_psbt_base64',
+      finalAmountSats: 100_000,
+      originalAmountSats: 100_000,
+      raisedToMinDust: false,
+      bumpedChangeFree: false,
+      changeFreeBumpAvailable: false,
+      changeFreeMaxSats: 0,
+    })
     renderWithProviders(<SendPage />)
 
     await user.type(
@@ -192,9 +210,97 @@ describe('SendPage', () => {
     ).toBeInTheDocument()
   })
 
+  it('shows change-free choice modal and calls prepare with bump when user chooses max', async () => {
+    const user = userEvent.setup()
+    mockPrepareOnchainSendTransaction
+      .mockResolvedValueOnce({
+        psbtBase64: 'psbt_exact',
+        finalAmountSats: 5000,
+        originalAmountSats: 5000,
+        raisedToMinDust: false,
+        bumpedChangeFree: false,
+        changeFreeBumpAvailable: true,
+        changeFreeMaxSats: 9900,
+      })
+      .mockResolvedValueOnce({
+        psbtBase64: 'psbt_bumped',
+        finalAmountSats: 9900,
+        originalAmountSats: 5000,
+        raisedToMinDust: false,
+        bumpedChangeFree: true,
+        changeFreeBumpAvailable: false,
+        changeFreeMaxSats: 0,
+      })
+    renderWithProviders(<SendPage />)
+
+    await user.type(
+      screen.getByLabelText('Recipient Address'),
+      'tb1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx',
+    )
+    await user.type(screen.getByLabelText(/Amount/), '0.00005')
+    await user.click(screen.getByRole('button', { name: 'Review Transaction' }))
+
+    expect(await screen.findByText('Change and fees')).toBeInTheDocument()
+    expect(mockPrepareOnchainSendTransaction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        applyChangeFreeBump: false,
+      }),
+    )
+
+    await user.click(
+      screen.getByRole('button', { name: /Increase to change-free max/ }),
+    )
+
+    expect(
+      await screen.findByText('Transaction Details', {}, { timeout: 3000 }),
+    ).toBeInTheDocument()
+    expect(mockPrepareOnchainSendTransaction).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        applyChangeFreeBump: true,
+      }),
+    )
+  })
+
+  it('advances with one prepare when user keeps exact change-free choice', async () => {
+    const user = userEvent.setup()
+    mockPrepareOnchainSendTransaction.mockResolvedValueOnce({
+      psbtBase64: 'psbt_exact',
+      finalAmountSats: 5000,
+      originalAmountSats: 5000,
+      raisedToMinDust: false,
+      bumpedChangeFree: false,
+      changeFreeBumpAvailable: true,
+      changeFreeMaxSats: 9900,
+    })
+    renderWithProviders(<SendPage />)
+
+    await user.type(
+      screen.getByLabelText('Recipient Address'),
+      'tb1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx',
+    )
+    await user.type(screen.getByLabelText(/Amount/), '0.00005')
+    await user.click(screen.getByRole('button', { name: 'Review Transaction' }))
+
+    expect(await screen.findByText('Change and fees')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: /Keep exact amount/ }))
+
+    expect(
+      await screen.findByText('Transaction Details', {}, { timeout: 3000 }),
+    ).toBeInTheDocument()
+    expect(mockPrepareOnchainSendTransaction).toHaveBeenCalledTimes(1)
+  })
+
   it('Back button returns to compose step', async () => {
     const user = userEvent.setup()
-    mockBuildTransaction.mockResolvedValue('mock_psbt_base64')
+    mockPrepareOnchainSendTransaction.mockResolvedValue({
+      psbtBase64: 'mock_psbt_base64',
+      finalAmountSats: 100_000,
+      originalAmountSats: 100_000,
+      raisedToMinDust: false,
+      bumpedChangeFree: false,
+      changeFreeBumpAvailable: false,
+      changeFreeMaxSats: 0,
+    })
     renderWithProviders(<SendPage />)
 
     await user.type(

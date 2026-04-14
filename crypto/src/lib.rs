@@ -329,9 +329,39 @@ fn build_sync_result() -> Result<JsValue, JsValue> {
     to_js(&result)
 }
 
+/// Prepare an on-chain send: applies dust UX clamp; change-free bump only when
+/// `apply_change_free_bump` is true (after user confirms in the UI).
+/// Returns JSON including `change_free_bump_available`, `change_free_max_sats`.
+#[wasm_bindgen]
+pub fn prepare_onchain_send_transaction(
+    recipient_address: &str,
+    amount_sats: u64,
+    fee_rate_sat_per_vb: f64,
+    network: &str,
+    apply_change_free_bump: bool,
+) -> Result<JsValue, JsValue> {
+    let net = types::BitcoinNetwork::try_from(network).map_err(JsValue::from)?;
+    let outcome = with_wallet_mut(|w| {
+        transaction::prepare_onchain_send(
+            w,
+            recipient_address,
+            amount_sats,
+            fee_rate_sat_per_vb,
+            net.into(),
+            apply_change_free_bump,
+        )
+    })?
+    .map_err(JsValue::from)?;
+
+    accumulate_staged_changes();
+    serde_wasm_bindgen::to_value(&outcome).map_err_to_js()
+}
+
 /// Build a transaction from the active wallet.
 ///
 /// Returns the PSBT serialized as a base64 string.
+/// Prefer [`prepare_onchain_send_transaction`] for UX adjustments; this uses the same preparation
+/// and returns only the PSBT string.
 #[wasm_bindgen]
 pub fn build_transaction(
     recipient_address: &str,
@@ -340,19 +370,20 @@ pub fn build_transaction(
     network: &str,
 ) -> Result<String, JsValue> {
     let net = types::BitcoinNetwork::try_from(network).map_err(JsValue::from)?;
-    let psbt = with_wallet_mut(|w| {
-        transaction::build_transaction(
+    let outcome = with_wallet_mut(|w| {
+        transaction::prepare_onchain_send(
             w,
             recipient_address,
             amount_sats,
             fee_rate_sat_per_vb,
             net.into(),
+            false,
         )
     })?
     .map_err(JsValue::from)?;
 
     accumulate_staged_changes();
-    Ok(psbt.to_string())
+    Ok(outcome.psbt_base64)
 }
 
 /// Sign a PSBT and extract the finalized transaction.
@@ -398,9 +429,42 @@ pub fn get_transaction_list() -> Result<JsValue, JsValue> {
 // ---------------------------------------------------------------------------
 
 /// Build and sign a lab transaction using BDK's add_foreign_utxo.
-/// Returns JSON: { signed_tx_hex, fee_sats, has_change }.
+/// Returns JSON including dust UX fields (see [`lab_psbt::LabPrepareSendOutcome`]).
 #[wasm_bindgen]
 pub fn build_and_sign_lab_transaction(
+    utxos_json: &str,
+    to_address: &str,
+    amount_sats: u64,
+    fee_rate_sat_per_vb: f64,
+    change_address: &str,
+    apply_change_free_bump: bool,
+) -> Result<JsValue, JsValue> {
+    let external = EXTERNAL_DESCRIPTOR_FOR_LAB.with(|d| d.borrow().clone());
+    let internal = INTERNAL_DESCRIPTOR_FOR_LAB.with(|d| d.borrow().clone());
+    if external.is_empty() || internal.is_empty() {
+        return Err(JsValue::from_str(
+            "No wallet loaded for lab. Load wallet first.",
+        ));
+    }
+
+    let result = with_wallet_mut(|w| {
+        lab_psbt::prepare_build_and_sign_lab_transaction(
+            w,
+            utxos_json,
+            to_address,
+            amount_sats,
+            fee_rate_sat_per_vb,
+            change_address,
+            apply_change_free_bump,
+        )
+    })?;
+    let outcome = result.map_err_to_js()?;
+    serde_wasm_bindgen::to_value(&outcome).map_err_to_js()
+}
+
+/// Unsigned lab PSBT draft for preview before signing (dust / change-free metadata only).
+#[wasm_bindgen]
+pub fn draft_lab_psbt_transaction(
     utxos_json: &str,
     to_address: &str,
     amount_sats: u64,
@@ -416,7 +480,7 @@ pub fn build_and_sign_lab_transaction(
     }
 
     let result = with_wallet_mut(|w| {
-        lab_psbt::build_and_sign_lab_transaction(
+        lab_psbt::prepare_lab_psbt_draft(
             w,
             utxos_json,
             to_address,
@@ -425,21 +489,8 @@ pub fn build_and_sign_lab_transaction(
             change_address,
         )
     })?;
-    let signed = result.map_err_to_js()?;
-
-    let signed_tx_hex = hex::encode(&signed.signed_tx_bytes);
-    #[derive(serde::Serialize)]
-    struct BuildAndSignLabTxResult {
-        signed_tx_hex: String,
-        fee_sats: u64,
-        has_change: bool,
-    }
-    let result = BuildAndSignLabTxResult {
-        signed_tx_hex,
-        fee_sats: signed.fee_sats,
-        has_change: signed.has_change,
-    };
-    serde_wasm_bindgen::to_value(&result).map_err_to_js()
+    let outcome = result.map_err_to_js()?;
+    serde_wasm_bindgen::to_value(&outcome).map_err_to_js()
 }
 
 /// Return the first internal address for lab change outputs.
