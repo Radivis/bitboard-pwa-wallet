@@ -17,9 +17,9 @@ function LabControlPage() {
     <>
       <PageHeader title="Control" icon={SlidersHorizontal} />
 
-      <LabRulesCard />
-
       <LabEntitiesCard />
+
+      <LabRulesCard />
 
       <LabResetCard
         onResetClick={() => lab.setShowResetConfirm(true)}
