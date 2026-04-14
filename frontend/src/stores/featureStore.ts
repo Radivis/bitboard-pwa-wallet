@@ -11,6 +11,12 @@ interface FeatureState {
   /** When false, Regtest cannot be selected until enabled under Settings → Features (developer use). */
   regtestModeEnabled: boolean
   setRegtestModeEnabled: (enabled: boolean) => void
+  /**
+   * When false (default), the wallet stays Taproot-first UX: no SegWit-vs-Taproot pickers or badges.
+   * When true, users can choose SegWit (BIP84) vs Taproot (BIP86) in Settings and see related labels.
+   */
+  segwitAddressesEnabled: boolean
+  setSegwitAddressesEnabled: (enabled: boolean) => void
 }
 
 export const useFeatureStore = create<FeatureState>()(
@@ -22,6 +28,8 @@ export const useFeatureStore = create<FeatureState>()(
       setMainnetAccessEnabled: (enabled) => set({ mainnetAccessEnabled: enabled }),
       regtestModeEnabled: false,
       setRegtestModeEnabled: (enabled) => set({ regtestModeEnabled: enabled }),
+      segwitAddressesEnabled: false,
+      setSegwitAddressesEnabled: (enabled) => set({ segwitAddressesEnabled: enabled }),
     }),
     {
       name: 'feature-storage',

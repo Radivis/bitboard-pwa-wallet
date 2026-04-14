@@ -154,3 +154,8 @@ export const useWalletStore = create<WalletState>()(
 export function getCommittedNetworkMode(): NetworkMode {
   return selectCommittedNetworkMode(useWalletStore.getState())
 }
+
+/** Imperative: same as `selectCommittedAddressType` on current store state. */
+export function getCommittedAddressType(): AddressType {
+  return selectCommittedAddressType(useWalletStore.getState())
+}

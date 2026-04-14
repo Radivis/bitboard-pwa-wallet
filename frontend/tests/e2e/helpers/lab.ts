@@ -6,6 +6,7 @@ import { labEntityOwnerKey } from '@/lib/lab-entity-keys'
 import { lookupLabAddressOwner, WALLET_OWNER_PREFIX } from '@/lib/lab-utils'
 import { goToWalletTab } from './wallet-nav'
 import { waitForSettingsNetworkSwitchComplete } from './settings-waits'
+import { enableSegwitAddressesFeature } from './segwit-addresses-feature'
 
 /** Switch to Lab network without changing address type (default is Taproot). */
 export async function switchToLab(page: Page): Promise<void> {
@@ -86,12 +87,30 @@ export async function createLabEntityViaControl(
   page: Page,
   options?: { ownerName?: string; addressType?: LabEntityAddressType },
 ): Promise<void> {
+  const addressType = options?.addressType ?? AddressType.SegWit
+
+  /** Native SegWit (BIP84) lab entities need the SegWit addresses feature so the Control switch exists. */
+  if (addressType === AddressType.SegWit) {
+    await enableSegwitAddressesFeature(page)
+    await page.getByRole('link', { name: 'Manage lab' }).click()
+    await expect(page.getByRole('heading', { name: 'Blocks' })).toBeVisible({
+      timeout: 15000,
+    })
+  }
+
   await page.getByRole('navigation', { name: 'Lab' }).getByRole('link', { name: 'Control' }).click()
   await expect(page.getByRole('heading', { name: 'Control' })).toBeVisible({ timeout: 15000 })
-  const addressType = options?.addressType ?? AddressType.SegWit
-  await page
-    .getByRole('switch', { name: /Use Taproot address type/ })
-    .setChecked(addressType === AddressType.Taproot)
+
+  const taprootAddressTypeSwitch = page.getByRole('switch', {
+    name: /Use Taproot address type/,
+  })
+  if (addressType === AddressType.SegWit) {
+    await taprootAddressTypeSwitch.setChecked(false)
+  } else {
+    if (await taprootAddressTypeSwitch.isVisible()) {
+      await taprootAddressTypeSwitch.setChecked(true)
+    }
+  }
   const nameInput = page.getByLabel(/Name \(optional\)/)
   await nameInput.clear()
   if (options?.ownerName) {

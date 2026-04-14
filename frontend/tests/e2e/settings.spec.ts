@@ -31,6 +31,11 @@ test.describe('Settings Page', () => {
     await page.getByRole('link', { name: /settings/i }).click()
     await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
 
+    const segwitFeatureSwitch = page.getByRole('switch', {
+      name: 'Enable SegWit address options and labels',
+    })
+    await segwitFeatureSwitch.scrollIntoViewIfNeeded()
+    await segwitFeatureSwitch.click()
     await expect(
       page.getByRole('button', { name: 'Taproot (BIP86)' }),
     ).toBeVisible()

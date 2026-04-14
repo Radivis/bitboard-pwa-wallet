@@ -12,6 +12,7 @@ import {
   waitForSettingsNetworkModeButtonSelected,
   waitForSettingsNetworkSwitchComplete,
 } from './helpers/settings-waits'
+import { ensureSegwitAddressesFeatureOn } from './helpers/segwit-addresses-feature'
 
 test.describe('Send Page', () => {
   test.beforeEach(async ({ page }) => {
@@ -67,6 +68,8 @@ test.describe('Send Page', () => {
     await page.getByRole('button', { name: 'Regtest' }).click()
     await waitForSettingsNetworkSwitchComplete(page)
     await waitForSettingsNetworkModeButtonSelected(page, 'Regtest')
+
+    await ensureSegwitAddressesFeatureOn(page)
 
     await page.getByRole('button', { name: 'SegWit (BIP84)' }).click()
     await page.getByRole('button', { name: 'Change' }).click()

@@ -41,6 +41,7 @@ export function ReceivePage() {
   const getNewAddress = useCryptoStore((s) => s.getNewAddress)
   const exportChangeset = useCryptoStore((s) => s.exportChangeset)
   const lightningEnabled = useFeatureStore((s) => s.lightningEnabled)
+  const segwitAddressesEnabled = useFeatureStore((s) => s.segwitAddressesEnabled)
   const committedNetworkMode = useWalletStore(selectCommittedNetworkMode)
   const [mainnetDemoDismissed, setMainnetDemoDismissed] = useState(false)
   const previousCommittedNetworkModeRef = useRef<NetworkMode | null>(null)
@@ -160,11 +161,13 @@ export function ReceivePage() {
                 <QrCode className="h-5 w-5" />
                 QR Code
               </CardTitle>
-              <Badge variant="outline">
-                {addressType === AddressType.Taproot
-                  ? 'Taproot (BIP86)'
-                  : 'SegWit (BIP84)'}
-              </Badge>
+              {segwitAddressesEnabled ? (
+                <Badge variant="outline">
+                  {addressType === AddressType.Taproot
+                    ? 'Taproot (BIP86)'
+                    : 'SegWit (BIP84)'}
+                </Badge>
+              ) : null}
             </div>
           </CardHeader>
           <CardContent>

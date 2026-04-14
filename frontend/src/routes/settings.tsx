@@ -15,12 +15,14 @@ import { ChangeAppPasswordModal } from '@/components/ChangeAppPasswordModal'
 import { UpgradeFromNearZeroPasswordModal } from '@/components/UpgradeFromNearZeroPasswordModal'
 import { useWallets } from '@/db'
 import { useNearZeroSecurityStore } from '@/stores/nearZeroSecurityStore'
+import { useFeatureStore } from '@/stores/featureStore'
 
 export const Route = createFileRoute('/settings')({
   component: SettingsPage,
 })
 
 export function SettingsPage() {
+  const segwitAddressesEnabled = useFeatureStore((s) => s.segwitAddressesEnabled)
   const { data: wallets } = useWallets()
   const hasWallets = (wallets?.length ?? 0) > 0
   const nearZeroActive = useNearZeroSecurityStore((s) => s.active)
@@ -50,24 +52,26 @@ export function SettingsPage() {
         </Card>
       </InfomodeWrapper>
 
-      <InfomodeWrapper
-        infoId="settings-address-type-card"
-        infoTitle="Address type"
-        infoText="This setting controls how Bitboard derives new receiving addresses from your seed—Taproot (BIP86) versus SegWit (BIP84). Both are standard and secure; they produce different address shapes. Changing it does not delete money you already received on the other style, but day-to-day you usually stick to one type for simplicity."
-        className="rounded-xl"
-      >
-        <Card>
-          <CardHeader>
-            <CardTitle>Address Type</CardTitle>
-            <CardDescription>
-              Choose the address format for new wallets.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <AddressTypeSelector />
-          </CardContent>
-        </Card>
-      </InfomodeWrapper>
+      {segwitAddressesEnabled ? (
+        <InfomodeWrapper
+          infoId="settings-address-type-card"
+          infoTitle="Address type"
+          infoText="This setting controls how Bitboard derives new receiving addresses from your seed—Taproot (BIP86) versus SegWit (BIP84). Both are standard and secure; they produce different address shapes. Changing it does not delete money you already received on the other style, but day-to-day you usually stick to one type for simplicity."
+          className="rounded-xl"
+        >
+          <Card>
+            <CardHeader>
+              <CardTitle>Address Type</CardTitle>
+              <CardDescription>
+                Choose the address format for new wallets.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <AddressTypeSelector />
+            </CardContent>
+          </Card>
+        </InfomodeWrapper>
+      ) : null}
 
       <Card>
         <CardHeader>

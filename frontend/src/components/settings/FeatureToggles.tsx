@@ -1,10 +1,16 @@
 import { useCallback, useState } from 'react'
-import { AlertTriangle, FlaskConical, Zap } from 'lucide-react'
+import { AlertTriangle, FlaskConical, Layers, Zap } from 'lucide-react'
 import { toast } from 'sonner'
 import { useFeatureStore } from '@/stores/featureStore'
-import { useWalletStore, getCommittedNetworkMode } from '@/stores/walletStore'
+import {
+  AddressType,
+  useWalletStore,
+  getCommittedAddressType,
+  getCommittedNetworkMode,
+} from '@/stores/walletStore'
 import { isLightningSupported } from '@/lib/lightning-utils'
 import { executeSettingsNetworkSwitch } from '@/lib/network-mode-switch'
+import { executeSettingsAddressTypeSwitch } from '@/lib/execute-settings-address-type-switch'
 import { errorMessage } from '@/lib/utils'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { MainnetAccessConfirmModal } from '@/components/settings/MainnetAccessConfirmModal'
@@ -18,11 +24,14 @@ export function FeatureToggles() {
   const setMainnetAccessEnabled = useFeatureStore((s) => s.setMainnetAccessEnabled)
   const regtestModeEnabled = useFeatureStore((s) => s.regtestModeEnabled)
   const setRegtestModeEnabled = useFeatureStore((s) => s.setRegtestModeEnabled)
+  const segwitAddressesEnabled = useFeatureStore((s) => s.segwitAddressesEnabled)
+  const setSegwitAddressesEnabled = useFeatureStore((s) => s.setSegwitAddressesEnabled)
   const networkMode = useWalletStore((s) => s.networkMode)
 
   const [mainnetConfirmOpen, setMainnetConfirmOpen] = useState(false)
   const [mainnetAccessSwitchBusy, setMainnetAccessSwitchBusy] = useState(false)
   const [regtestModeSwitchBusy, setRegtestModeSwitchBusy] = useState(false)
+  const [segwitAddressesSwitchBusy, setSegwitAddressesSwitchBusy] = useState(false)
 
   const networkSupportsLightning = isLightningSupported(networkMode)
 
@@ -59,6 +68,25 @@ export function FeatureToggles() {
       setRegtestModeSwitchBusy(false)
     }
   }, [setRegtestModeEnabled])
+
+  const handleSegwitAddressesOff = useCallback(async () => {
+    setSegwitAddressesSwitchBusy(true)
+    try {
+      if (getCommittedAddressType() === AddressType.SegWit) {
+        await executeSettingsAddressTypeSwitch({
+          targetAddressType: AddressType.Taproot,
+        })
+      }
+      setSegwitAddressesEnabled(false)
+    } catch (err) {
+      toast.error(
+        errorMessage(err) ??
+          'Could not switch to Taproot. Try again.',
+      )
+    } finally {
+      setSegwitAddressesSwitchBusy(false)
+    }
+  }, [setSegwitAddressesEnabled])
 
   return (
     <div className="space-y-4">
@@ -114,6 +142,34 @@ export function FeatureToggles() {
             }}
             disabled={regtestModeSwitchBusy}
             aria-label="Enable Regtest mode for developers"
+          />
+        </div>
+      </InfomodeWrapper>
+
+      <InfomodeWrapper
+        infoId="settings-feature-segwit-addresses"
+        infoTitle="SegWit addresses"
+        infoText="Taproot (BIP86) is the default and works well for most users. Turn this on only if you need to choose native SegWit (BIP84) for new receives or to see Taproot vs SegWit labels in the app. When off, Bitboard keeps the experience Taproot-first and hides address-type choices."
+      >
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Layers className="h-4 w-4" />
+            <Label htmlFor="segwit-addresses-toggle" className="cursor-pointer">
+              SegWit addresses
+            </Label>
+          </div>
+          <Switch
+            id="segwit-addresses-toggle"
+            checked={segwitAddressesEnabled}
+            onCheckedChange={(checked) => {
+              if (checked) {
+                setSegwitAddressesEnabled(true)
+              } else {
+                void handleSegwitAddressesOff()
+              }
+            }}
+            disabled={segwitAddressesSwitchBusy}
+            aria-label="Enable SegWit address options and labels"
           />
         </div>
       </InfomodeWrapper>

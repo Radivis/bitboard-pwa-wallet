@@ -9,9 +9,11 @@ const featureStoreState = vi.hoisted(() => {
     lightningEnabled: false,
     mainnetAccessEnabled: false,
     regtestModeEnabled: false,
+    segwitAddressesEnabled: false,
     setLightningEnabled: vi.fn(),
     setMainnetAccessEnabled: vi.fn(),
     setRegtestModeEnabled: vi.fn(),
+    setSegwitAddressesEnabled: vi.fn(),
   }
   state.setLightningEnabled.mockImplementation((enabled: boolean) => {
     state.lightningEnabled = enabled
@@ -21,6 +23,9 @@ const featureStoreState = vi.hoisted(() => {
   })
   state.setRegtestModeEnabled.mockImplementation((enabled: boolean) => {
     state.regtestModeEnabled = enabled
+  })
+  state.setSegwitAddressesEnabled.mockImplementation((enabled: boolean) => {
+    state.segwitAddressesEnabled = enabled
   })
   return state
 })
@@ -264,6 +269,7 @@ describe('SettingsPage', () => {
     featureStoreState.lightningEnabled = false
     featureStoreState.mainnetAccessEnabled = false
     featureStoreState.regtestModeEnabled = false
+    featureStoreState.segwitAddressesEnabled = false
     featureStoreState.setLightningEnabled.mockImplementation((enabled: boolean) => {
       featureStoreState.lightningEnabled = enabled
     })
@@ -272,6 +278,9 @@ describe('SettingsPage', () => {
     })
     featureStoreState.setRegtestModeEnabled.mockImplementation((enabled: boolean) => {
       featureStoreState.regtestModeEnabled = enabled
+    })
+    featureStoreState.setSegwitAddressesEnabled.mockImplementation((enabled: boolean) => {
+      featureStoreState.segwitAddressesEnabled = enabled
     })
     nearZeroSecurityState.active = false
     mockWalletsState.data = []
@@ -294,13 +303,22 @@ describe('SettingsPage', () => {
     }
   })
 
-  it('renders all settings sections', () => {
+  it('renders core settings sections (Address Type hidden when SegWit feature is off)', () => {
     renderWithProviders(<SettingsPage />)
     expect(screen.getByText('Network')).toBeInTheDocument()
-    expect(screen.getByText('Address Type')).toBeInTheDocument()
+    expect(screen.queryByText('Address Type')).not.toBeInTheDocument()
     expect(screen.getByText('Appearance')).toBeInTheDocument()
     expect(screen.getByText('Security')).toBeInTheDocument()
     expect(screen.getByText('About')).toBeInTheDocument()
+  })
+
+  it('shows Address Type card when SegWit addresses feature is enabled', () => {
+    featureStoreState.segwitAddressesEnabled = true
+    renderWithProviders(<SettingsPage />)
+    expect(screen.getByText('Address Type')).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'Taproot (BIP86)' }),
+    ).toBeInTheDocument()
   })
 
   it('disables Change app password when there are no wallets', () => {
@@ -373,6 +391,7 @@ describe('SettingsPage', () => {
   })
 
   it('address type selector shows confirmation when wallet exists', async () => {
+    featureStoreState.segwitAddressesEnabled = true
     const user = userEvent.setup()
     renderWithProviders(<SettingsPage />)
 
