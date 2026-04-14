@@ -52,4 +52,19 @@ describe('SecureStorageUnavailableBanner', () => {
       screen.queryByText(/Origin Private File System/i),
     ).not.toBeInTheDocument()
   })
+
+  it('does not show raw filesystem paths in the error detail', () => {
+    act(() => {
+      useSecureStorageAvailabilityStore.getState().markUnavailable({
+        lastErrorMessage:
+          'open failed /home/radivis/projects/wallet/bitboard.sqlite',
+        opfsLikelyUnsupported: false,
+      })
+    })
+    render(<SecureStorageUnavailableBanner />)
+    const detail = screen.getByTestId('secure-storage-error-detail')
+    expect(detail.textContent).not.toContain('/home/radivis')
+    expect(detail.textContent).not.toContain('bitboard.sqlite')
+    expect(detail.textContent).toContain('[path]')
+  })
 })

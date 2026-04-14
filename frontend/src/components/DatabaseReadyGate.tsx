@@ -29,6 +29,7 @@ export function DatabaseReadyGate({ children }: DatabaseReadyGateProps) {
       if (cancelled) return
 
       if (!health.ok) {
+        console.error('Database initialization failed:', health.error)
         const opfsLikelyUnsupported = await assessOpfsLikelyUnsupported()
         if (cancelled) return
         useSecureStorageAvailabilityStore.getState().markUnavailable({

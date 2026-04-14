@@ -1,5 +1,6 @@
 import { AlertTriangle } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
+import { sanitizeErrorMessageForUi } from '@/lib/sanitize-error-for-ui'
 import { useSecureStorageAvailabilityStore } from '@/stores/secureStorageAvailabilityStore'
 
 /**
@@ -46,7 +47,7 @@ export function SecureStorageUnavailableBanner() {
                 className="font-mono text-xs leading-relaxed text-red-200/90 break-words"
                 data-testid="secure-storage-error-detail"
               >
-                {lastErrorMessage}
+                {sanitizeErrorMessageForUi(lastErrorMessage)}
               </p>
             ) : null}
           </div>
