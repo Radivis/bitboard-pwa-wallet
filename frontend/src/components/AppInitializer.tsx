@@ -14,6 +14,7 @@ import { useHydrateLightningConnections } from '@/hooks/useHydrateLightningConne
 import { ActiveWalletBootstrap } from '@/components/ActiveWalletBootstrap'
 import { pathnameRequiresWalletCryptoSession } from '@/lib/pathname-requires-wallet-crypto-session'
 import { runMainnetStrictMigrationAfterHydration } from '@/lib/mainnet-access-strict-migration'
+import { runRegtestStrictMigrationAfterHydration } from '@/lib/regtest-mode-strict-migration'
 import { useWalletCryptoSessionPathGateStore } from '@/stores/walletCryptoSessionPathGateStore'
 
 interface AppInitializerProps {
@@ -36,6 +37,7 @@ export function AppInitializer({ children }: AppInitializerProps) {
 
   useEffect(() => {
     runMainnetStrictMigrationAfterHydration()
+    runRegtestStrictMigrationAfterHydration()
   }, [])
 
   useEffect(() => {

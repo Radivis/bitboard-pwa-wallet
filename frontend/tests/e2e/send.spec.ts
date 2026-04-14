@@ -58,6 +58,12 @@ test.describe('Send Page', () => {
 
     await page.getByRole('link', { name: /settings/i }).click()
     await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
+    const regtestModeSwitch = page.getByRole('switch', {
+      name: 'Enable Regtest mode for developers',
+    })
+    await regtestModeSwitch.scrollIntoViewIfNeeded()
+    await regtestModeSwitch.click()
+
     await page.getByRole('button', { name: 'Regtest' }).click()
     await waitForSettingsNetworkSwitchComplete(page)
     await waitForSettingsNetworkModeButtonSelected(page, 'Regtest')

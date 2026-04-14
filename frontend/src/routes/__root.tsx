@@ -13,14 +13,20 @@ import { InfomodeProvider } from '@/components/infomode/InfomodeProvider'
 import { checkDatabaseHealth } from '@/db'
 
 // Disable in CI: devtools overlay intercepts pointer events and breaks E2E tests.
-const TanStackRouterDevtools =
-  import.meta.env.DEV && !import.meta.env.CI
-    ? lazy(() =>
-        import('@tanstack/react-router-devtools').then((module) => ({
-          default: module.TanStackRouterDevtools,
-        })),
-      )
-    : () => null
+// Set VITE_HIDE_ROUTER_DEVTOOLS=1 when you want a dev build without the floating panel (e.g. screenshots).
+const showTanStackRouterDevtools =
+  import.meta.env.DEV &&
+  !import.meta.env.CI &&
+  import.meta.env.VITE_HIDE_ROUTER_DEVTOOLS !== '1' &&
+  import.meta.env.VITE_HIDE_ROUTER_DEVTOOLS !== 'true'
+
+const TanStackRouterDevtools = showTanStackRouterDevtools
+  ? lazy(() =>
+      import('@tanstack/react-router-devtools').then((module) => ({
+        default: module.TanStackRouterDevtools,
+      })),
+    )
+  : () => null
 
 export const Route = createRootRoute({
   component: RootComponent,

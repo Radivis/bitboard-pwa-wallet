@@ -8,6 +8,9 @@ interface FeatureState {
   /** When false, Mainnet cannot be selected until enabled under Settings → Features. */
   mainnetAccessEnabled: boolean
   setMainnetAccessEnabled: (enabled: boolean) => void
+  /** When false, Regtest cannot be selected until enabled under Settings → Features (developer use). */
+  regtestModeEnabled: boolean
+  setRegtestModeEnabled: (enabled: boolean) => void
 }
 
 export const useFeatureStore = create<FeatureState>()(
@@ -17,6 +20,8 @@ export const useFeatureStore = create<FeatureState>()(
       setLightningEnabled: (enabled) => set({ lightningEnabled: enabled }),
       mainnetAccessEnabled: false,
       setMainnetAccessEnabled: (enabled) => set({ mainnetAccessEnabled: enabled }),
+      regtestModeEnabled: false,
+      setRegtestModeEnabled: (enabled) => set({ regtestModeEnabled: enabled }),
     }),
     {
       name: 'feature-storage',

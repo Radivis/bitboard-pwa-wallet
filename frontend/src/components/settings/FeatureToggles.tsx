@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import { AlertTriangle, Zap } from 'lucide-react'
+import { AlertTriangle, FlaskConical, Zap } from 'lucide-react'
 import { toast } from 'sonner'
 import { useFeatureStore } from '@/stores/featureStore'
 import { useWalletStore, getCommittedNetworkMode } from '@/stores/walletStore'
@@ -16,10 +16,13 @@ export function FeatureToggles() {
   const setLightningEnabled = useFeatureStore((s) => s.setLightningEnabled)
   const mainnetAccessEnabled = useFeatureStore((s) => s.mainnetAccessEnabled)
   const setMainnetAccessEnabled = useFeatureStore((s) => s.setMainnetAccessEnabled)
+  const regtestModeEnabled = useFeatureStore((s) => s.regtestModeEnabled)
+  const setRegtestModeEnabled = useFeatureStore((s) => s.setRegtestModeEnabled)
   const networkMode = useWalletStore((s) => s.networkMode)
 
   const [mainnetConfirmOpen, setMainnetConfirmOpen] = useState(false)
   const [mainnetAccessSwitchBusy, setMainnetAccessSwitchBusy] = useState(false)
+  const [regtestModeSwitchBusy, setRegtestModeSwitchBusy] = useState(false)
 
   const networkSupportsLightning = isLightningSupported(networkMode)
 
@@ -39,6 +42,23 @@ export function FeatureToggles() {
       setMainnetAccessSwitchBusy(false)
     }
   }, [setMainnetAccessEnabled])
+
+  const handleRegtestModeOff = useCallback(async () => {
+    setRegtestModeSwitchBusy(true)
+    try {
+      if (getCommittedNetworkMode() === 'regtest') {
+        await executeSettingsNetworkSwitch({ targetNetwork: 'testnet' })
+      }
+      setRegtestModeEnabled(false)
+    } catch (err) {
+      toast.error(
+        errorMessage(err) ??
+          'Could not switch away from Regtest. Try again or change network in Settings.',
+      )
+    } finally {
+      setRegtestModeSwitchBusy(false)
+    }
+  }, [setRegtestModeEnabled])
 
   return (
     <div className="space-y-4">
@@ -66,6 +86,34 @@ export function FeatureToggles() {
             }}
             disabled={mainnetAccessSwitchBusy}
             aria-label="Enable Mainnet access"
+          />
+        </div>
+      </InfomodeWrapper>
+
+      <InfomodeWrapper
+        infoId="settings-feature-regtest-mode"
+        infoTitle="Regtest mode"
+        infoText="Regtest is an external offline test blockchain that developers run locally to try Bitcoin application behavior quickly and safely—separate from mainnet and public test networks. Enable this only if you connect to a Regtest node (for example Esplora on localhost)."
+      >
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <FlaskConical className="h-4 w-4" />
+            <Label htmlFor="regtest-mode-toggle" className="cursor-pointer">
+              Regtest mode (only for developers)
+            </Label>
+          </div>
+          <Switch
+            id="regtest-mode-toggle"
+            checked={regtestModeEnabled}
+            onCheckedChange={(checked) => {
+              if (checked) {
+                setRegtestModeEnabled(true)
+              } else {
+                void handleRegtestModeOff()
+              }
+            }}
+            disabled={regtestModeSwitchBusy}
+            aria-label="Enable Regtest mode for developers"
           />
         </div>
       </InfomodeWrapper>

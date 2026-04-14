@@ -47,6 +47,12 @@ test.describe('Settings Page', () => {
     await expect(page.getByText(/Esplora Endpoint/)).toBeVisible()
 
     // Switch to Regtest first: HTTP URLs are only valid for regtest (HTTPS required for others)
+    const regtestModeSwitch = page.getByRole('switch', {
+      name: 'Enable Regtest mode for developers',
+    })
+    await regtestModeSwitch.scrollIntoViewIfNeeded()
+    await regtestModeSwitch.click()
+
     await page.getByRole('button', { name: 'Regtest' }).click()
     await waitForSettingsNetworkSwitchComplete(page)
     await waitForSettingsNetworkModeButtonSelected(page, 'Regtest')

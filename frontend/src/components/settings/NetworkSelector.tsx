@@ -51,12 +51,17 @@ const NETWORK_INFOMODE: Record<NetworkMode, { title: string; text: string }> = {
 export function NetworkSelector() {
   const displayNetworkMode = useWalletStore(selectCommittedNetworkMode)
   const mainnetAccessEnabled = useFeatureStore((s) => s.mainnetAccessEnabled)
+  const regtestModeEnabled = useFeatureStore((s) => s.regtestModeEnabled)
   const activeWalletId = useWalletStore((s) => s.activeWalletId)
   const sessionPassword = useSessionStore((s) => s.password)
   const nearZeroActive = useNearZeroSecurityStore((s) => s.active)
 
   const mainnetSelectionBlocked =
     !mainnetAccessEnabled && displayNetworkMode !== 'mainnet'
+
+  const networkOptionsVisible: NetworkMode[] = regtestModeEnabled
+    ? NETWORK_OPTIONS
+    : NETWORK_OPTIONS.filter((n) => n !== 'regtest')
   const [showUnlockForNetworkChange, setShowUnlockForNetworkChange] =
     useState(false)
   const pendingNetworkAfterUnlockRef = useRef<NetworkMode | null>(null)
@@ -109,7 +114,7 @@ export function NetworkSelector() {
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap gap-2">
-        {NETWORK_OPTIONS.map((network) => {
+        {networkOptionsVisible.map((network) => {
           const { title, text } = NETWORK_INFOMODE[network]
           const isMainnetBlocked = network === 'mainnet' && mainnetSelectionBlocked
           return (

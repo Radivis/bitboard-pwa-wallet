@@ -8,14 +8,19 @@ const featureStoreState = vi.hoisted(() => {
   const state = {
     lightningEnabled: false,
     mainnetAccessEnabled: false,
+    regtestModeEnabled: false,
     setLightningEnabled: vi.fn(),
     setMainnetAccessEnabled: vi.fn(),
+    setRegtestModeEnabled: vi.fn(),
   }
   state.setLightningEnabled.mockImplementation((enabled: boolean) => {
     state.lightningEnabled = enabled
   })
   state.setMainnetAccessEnabled.mockImplementation((enabled: boolean) => {
     state.mainnetAccessEnabled = enabled
+  })
+  state.setRegtestModeEnabled.mockImplementation((enabled: boolean) => {
+    state.regtestModeEnabled = enabled
   })
   return state
 })
@@ -258,11 +263,15 @@ describe('SettingsPage', () => {
     vi.clearAllMocks()
     featureStoreState.lightningEnabled = false
     featureStoreState.mainnetAccessEnabled = false
+    featureStoreState.regtestModeEnabled = false
     featureStoreState.setLightningEnabled.mockImplementation((enabled: boolean) => {
       featureStoreState.lightningEnabled = enabled
     })
     featureStoreState.setMainnetAccessEnabled.mockImplementation((enabled: boolean) => {
       featureStoreState.mainnetAccessEnabled = enabled
+    })
+    featureStoreState.setRegtestModeEnabled.mockImplementation((enabled: boolean) => {
+      featureStoreState.regtestModeEnabled = enabled
     })
     nearZeroSecurityState.active = false
     mockWalletsState.data = []
@@ -409,6 +418,18 @@ describe('SettingsPage', () => {
     const updateCallOrder = mockUpdateDescriptorWalletChangeset.mock.invocationCallOrder[0]
     const resolveCallOrder = mockResolveDescriptorWallet.mock.invocationCallOrder[0]
     expect(updateCallOrder).toBeLessThan(resolveCallOrder)
+  })
+
+  it('hides Regtest network button when Regtest mode is disabled', () => {
+    featureStoreState.regtestModeEnabled = false
+    renderWithProviders(<SettingsPage />)
+    expect(screen.queryByRole('button', { name: 'Regtest' })).not.toBeInTheDocument()
+  })
+
+  it('shows Regtest network button when Regtest mode is enabled', () => {
+    featureStoreState.regtestModeEnabled = true
+    renderWithProviders(<SettingsPage />)
+    expect(screen.getByRole('button', { name: 'Regtest' })).toBeInTheDocument()
   })
 
   it('shows a toast when Mainnet is tapped while Mainnet access is off', async () => {
