@@ -361,6 +361,7 @@ describe('SettingsPage', () => {
   })
 
   it('shows receiving descriptor when a wallet exists and session is unlocked', async () => {
+    const user = userEvent.setup()
     mockWalletsState.data = [
       { wallet_id: 1, name: 'Test', created_at: new Date().toISOString() },
     ]
@@ -368,8 +369,12 @@ describe('SettingsPage', () => {
     renderWithProviders(<SettingsPage />)
     expect(screen.getByText('Receiving descriptor')).toBeInTheDocument()
     await waitFor(() => {
-      expect(screen.getByText('tr([mock]/0/*)')).toBeInTheDocument()
+      expect(
+        screen.getByRole('button', { name: 'Show receiving descriptor' }),
+      ).toBeInTheDocument()
     })
+    await user.click(screen.getByRole('button', { name: 'Show receiving descriptor' }))
+    expect(screen.getByText('tr([mock]/0/*)')).toBeInTheDocument()
     expect(mockLoadWalletSecretsPayload).toHaveBeenCalled()
   })
 

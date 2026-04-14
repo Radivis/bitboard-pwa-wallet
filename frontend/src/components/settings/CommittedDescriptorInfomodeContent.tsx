@@ -1,4 +1,7 @@
+import { ArticleLink } from '@/lib/library/article-shared'
 import { cn } from '@/lib/utils'
+
+const DESCRIPTORS_ARTICLE_SLUG = 'what-are-descriptors-and-descriptor-wallets' as const
 
 /**
  * Rich Infomode body for the receiving descriptor on Settings → Network.
@@ -28,16 +31,19 @@ export function CommittedDescriptorInfomodeContent() {
         descriptor; change outputs use the internal descriptor, which is not shown here.
       </p>
       <p className="text-xs leading-relaxed text-muted-foreground">
+        You may notice the <strong className="font-medium text-popover-foreground">same</strong> text when
+        switching between some networks (for example Testnet, Signet, and Lab): the string mostly
+        describes your keys and paths, not which chain you are connected to. Bitboard still{' '}
+        <strong className="font-medium text-popover-foreground">stores each network’s wallet
+        separately</strong>, because Testnet, Signet, Lab, and the others are different networks with
+        different coins and history—your balances and activity must not get mixed together.
+      </p>
+      <p className="text-xs leading-relaxed text-muted-foreground">
         Treat this string as sensitive metadata: it can reveal xpub fingerprints and derivation
-        structure. Learn more:{' '}
-        <a
-          href="https://bitcoindevkit.org/descriptors/"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          BDK descriptors overview
-        </a>
-        .
+        structure. For a friendly introduction with links to related topics, read{' '}
+        <ArticleLink slug={DESCRIPTORS_ARTICLE_SLUG}>Descriptors and descriptor wallets</ArticleLink>
+        {' '}
+        in the Library.
       </p>
     </div>
   )
