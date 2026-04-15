@@ -15,6 +15,7 @@ import { Switch } from '@/components/ui/switch'
 import { CardPagination } from '@/components/CardPagination'
 import { LabAddressTypeBadge } from '@/components/lab/LabAddressTypeBadge'
 import { ConfirmationDialog } from '@/components/ConfirmationDialog'
+import { CrossedLucideIcon } from '@/components/CrossedLucideIcon'
 import { formatSats } from '@/lib/bitcoin-utils'
 import {
   LAB_ENTITY_NAME_MAX_LENGTH,
@@ -36,7 +37,15 @@ import {
   useLabSetEntityDeadMutation,
 } from '@/hooks/useLabMutations'
 import { toast } from 'sonner'
-import { Skull, FlaskConical } from 'lucide-react'
+import { Skull, FlaskConical, Drama, Trash2 } from 'lucide-react'
+
+/**
+ * `p-0` + near-full-size glyphs. Default: 48×48 / 44px icons (touch-friendly).
+ * `lg:` ~⅓ smaller — 32×32 / 28px — so the row does not feel oversized on wide viewports.
+ */
+const labEntityActionButtonClassName = 'size-12 p-0 lg:size-8'
+/** Matches button inset at each breakpoint (`size-11` / `size-7`). */
+const labEntityActionIconClassName = 'size-11 lg:size-7'
 
 export function LabEntitiesCard() {
   const labNetworkEnabled = useWalletStore((s) => s.networkMode === 'lab')
@@ -297,11 +306,6 @@ export function LabEntitiesCard() {
                             ) : null}
                           </div>
                         )}
-                        {row.hasTransactions ? (
-                          <p className="text-xs text-muted-foreground">
-                            Has transactions — delete is disabled until the chain no longer references this entity.
-                          </p>
-                        ) : null}
                       </div>
                       <span className="tabular-nums text-sm sm:w-28 sm:text-right sm:shrink-0">
                         {formatSats(row.balanceSats)} sats
@@ -309,54 +313,73 @@ export function LabEntitiesCard() {
                       <div className="flex flex-wrap gap-2 justify-end sm:w-52 sm:shrink-0">
                         {renamingId !== row.labEntityId ? (
                           <Button
-                            size="sm"
+                            size="icon-sm"
                             type="button"
                             variant="outline"
+                            className={labEntityActionButtonClassName}
                             onClick={() => beginRename(row.labEntityId, row.entityName)}
                             disabled={busy}
+                            aria-label={`Rename ${row.displayName}`}
                           >
-                            Rename
+                            <Drama className={labEntityActionIconClassName} />
                           </Button>
                         ) : null}
                         {row.isDead ? (
                           <Button
-                            size="sm"
+                            size="icon-sm"
                             type="button"
                             variant="outline"
+                            className={labEntityActionButtonClassName}
                             onClick={() =>
                               void setDeadMutation.mutateAsync(
-                                { labEntityId: row.labEntityId, dead: false },
+                                {
+                                  labEntityId: row.labEntityId,
+                                  dead: false,
+                                  labEntityDisplayName: row.displayName,
+                                },
                                 { onSuccess: () => void refetch() },
                               )
                             }
                             disabled={busy}
+                            aria-label={`Revive ${row.displayName}`}
                           >
-                            Unkill
+                            <CrossedLucideIcon
+                              icon={Skull}
+                              sizeClassName={labEntityActionIconClassName}
+                            />
                           </Button>
                         ) : row.hasTransactions ? (
                           <Button
-                            size="sm"
+                            size="icon-sm"
                             type="button"
                             variant="outline"
+                            className={labEntityActionButtonClassName}
                             onClick={() =>
                               void setDeadMutation.mutateAsync(
-                                { labEntityId: row.labEntityId, dead: true },
+                                {
+                                  labEntityId: row.labEntityId,
+                                  dead: true,
+                                  labEntityDisplayName: row.displayName,
+                                },
                                 { onSuccess: () => void refetch() },
                               )
                             }
                             disabled={busy}
+                            aria-label={`Mark ${row.displayName} as dead`}
                           >
-                            Kill
+                            <Skull className={labEntityActionIconClassName} />
                           </Button>
                         ) : (
                           <Button
-                            size="sm"
+                            size="icon-sm"
                             type="button"
                             variant="destructive"
+                            className={labEntityActionButtonClassName}
                             onClick={() => setDeleteId(row.labEntityId)}
                             disabled={busy}
+                            aria-label={`Delete ${row.displayName}`}
                           >
-                            Delete
+                            <Trash2 className={labEntityActionIconClassName} />
                           </Button>
                         )}
                       </div>
