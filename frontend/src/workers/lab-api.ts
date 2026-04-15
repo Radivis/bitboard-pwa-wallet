@@ -219,8 +219,8 @@ export function normalizeBlockWeightLimit(value: number): number {
   return Math.max(LAB_MIN_BLOCK_WEIGHT_UNITS, Math.floor(value))
 }
 
-/** Default lab coinbase subsidy (50 BTC in sats); matches Rust `LAB_DEFAULT_MINER_SUBSIDY_SATS`. */
-export const LAB_DEFAULT_MINER_SUBSIDY_SATS = 5_000_000_000
+/** Default lab coinbase subsidy (3.125 BTC in sats; current mainnet epoch); matches Rust `LAB_DEFAULT_MINER_SUBSIDY_SATS`. */
+export const LAB_DEFAULT_MINER_SUBSIDY_SATS = 312_500_000
 
 /** Upper bound aligned with WASM `u64` sat amounts and JS safe integers. */
 const LAB_MAX_MINER_SUBSIDY_SATS = Number.MAX_SAFE_INTEGER

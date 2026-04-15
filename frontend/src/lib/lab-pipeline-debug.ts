@@ -15,7 +15,7 @@
  * Playwright: `await enableLabPipelineDebug(page)` — `tests/e2e/helpers/lab-debug.ts`.
  *
  * Reading logs (time order):
- *   - mineBlocks:workerReturned totalSats ≈ 5_000_000_000 × blocks mined → WASM + worker OK
+ *   - mineBlocks:workerReturned totalSats ≈ 312_500_000 × blocks mined → WASM + worker OK
  *   - Worker OK but UI shows 0 → query cache; check setLabChainStateCache
  *   - workerReturned totalSats 0 → WASM/coinbase; run manual check below
  *   - loadFromDb after mine with empty utxos → DB/worker desync; coordinator + persist order
@@ -24,9 +24,9 @@
  *   const M = await import('@/wasm-pkg/bitboard_crypto.js'); await M.default?.();
  *   const a = M.lab_generate_keypair(); const addr = a.address;
  *   const spk = M.lab_address_to_script_pubkey_hex(addr);
- *   const hex = M.lab_mine_block('', 0, spk, [], 5000000000n, 0n);
+ *   const hex = M.lab_mine_block('', 0, spk, [], 312500000n, 0n);
  *   const fx = M.lab_block_effects(hex);
- *   console.log(fx.new_utxos?.[0]?.amount_sats);  // expect 5000000000
+ *   console.log(fx.new_utxos?.[0]?.amount_sats);  // expect 312500000
  */
 
 const STORAGE_KEY = 'bitboard_lab_debug'

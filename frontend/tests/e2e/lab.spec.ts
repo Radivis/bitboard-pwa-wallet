@@ -17,7 +17,7 @@ import { goToWalletTab } from './helpers/wallet-nav'
 import { isCoinbase } from '@/lib/lab-operations'
 import { WALLET_OWNER_PREFIX } from '@/lib/lab-utils'
 
-const COINBASE_SATS = 5_000_000_000 // 50 BTC (default lab miner subsidy)
+const COINBASE_SATS = 312_500_000 // 3.125 BTC (default lab miner subsidy; current epoch)
 
 const isCi = !!process.env.CI
 

@@ -24,8 +24,8 @@ use wasm_bindgen::prelude::*;
 use crate::error::MapErrToJs;
 use crate::validation;
 
-/// Default lab coinbase subsidy (50 BTC in sats). JS passes per-block subsidy into `lab_mine_block`.
-pub const LAB_DEFAULT_MINER_SUBSIDY_SATS: u64 = 50 * 100_000_000;
+/// Default lab coinbase subsidy (3.125 BTC in sats; current mainnet epoch). JS passes per-block subsidy into `lab_mine_block`.
+pub const LAB_DEFAULT_MINER_SUBSIDY_SATS: u64 = 312_500_000;
 /// Bitcoin coinbase prevout index (all bits set), matches frontend `LAB_COINBASE_PREV_VOUT`.
 const LAB_COINBASE_PREV_VOUT: u32 = 0xffff_ffff;
 const LAB_BITS: u32 = 0x2000ffff; // Micro-PoW: compact target around 256 expected attempts
