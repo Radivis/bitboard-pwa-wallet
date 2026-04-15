@@ -21,6 +21,8 @@ import {
 import type { LabAddress, LabBlockTransactionSummary, LabTxDetails } from '@/workers/lab-api'
 
 export const LAB_CARD_PAGE_SIZE = 20
+/** Lab entities list (card grid) — keep small so each page fits a few rows. */
+export const LAB_ENTITIES_PAGE_SIZE = 6
 export const LAB_ENTITY_INNER_PAGE_SIZE = 5
 
 export const labPaginatedQueryKeyPrefix = ['lab', 'paginated'] as const
@@ -50,7 +52,7 @@ export function labAddressBalancesQueryKey(addressesKey: string) {
 }
 
 export function labEntitiesPageQueryKey(pageIndex: number) {
-  return [...labPaginatedQueryKeyPrefix, 'labEntities', pageIndex] as const
+  return [...labPaginatedQueryKeyPrefix, 'labEntities', LAB_ENTITIES_PAGE_SIZE, pageIndex] as const
 }
 
 /**
@@ -276,7 +278,7 @@ export type LabEntitiesPageRow = {
 
 export async function fetchLabEntitiesPage(
   pageIndex: number,
-  pageSize: number = LAB_CARD_PAGE_SIZE,
+  pageSize: number = LAB_ENTITIES_PAGE_SIZE,
 ): Promise<{ rows: LabEntitiesPageRow[]; totalCount: number }> {
   await ensureLabMigrated()
   const labDb = getLabDatabase()

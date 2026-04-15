@@ -3,6 +3,7 @@ import {
   Card,
   CardContent,
   CardDescription,
+  CardFooter,
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
@@ -21,7 +22,7 @@ import {
   LAB_ENTITY_NAME_MAX_LENGTH,
   validateLabEntityRenameName,
 } from '@/lib/lab-owner'
-import { LAB_CARD_PAGE_SIZE } from '@/lib/lab-paginated-queries'
+import { LAB_ENTITIES_PAGE_SIZE } from '@/lib/lab-paginated-queries'
 import { useFeatureStore } from '@/stores/featureStore'
 import {
   AddressType,
@@ -86,7 +87,7 @@ export function LabEntitiesCard() {
   const setDeadMutation = useLabSetEntityDeadMutation()
 
   useEffect(() => {
-    const maxPage = Math.max(0, Math.ceil(totalCount / LAB_CARD_PAGE_SIZE) - 1)
+    const maxPage = Math.max(0, Math.ceil(totalCount / LAB_ENTITIES_PAGE_SIZE) - 1)
     if (pageIndex > maxPage) setPageIndex(maxPage)
   }, [pageIndex, totalCount])
 
@@ -251,35 +252,30 @@ export function LabEntitiesCard() {
               <p className="text-sm text-muted-foreground py-2">No lab entities yet.</p>
             ) : (
               <CardPagination
-                pageSize={LAB_CARD_PAGE_SIZE}
+                pageSize={LAB_ENTITIES_PAGE_SIZE}
                 totalCount={totalCount}
                 pageIndex={pageIndex}
                 onPageChange={setPageIndex}
                 ariaLabel="Lab entities page"
               >
-                <div className="space-y-3">
-                  <div className="flex gap-4 text-sm font-medium text-muted-foreground border-b border-border pb-2">
-                    <span className="flex-1 min-w-0">Name</span>
-                    <span className="w-28 shrink-0 text-right">Balance</span>
-                    <span className="w-52 shrink-0 text-right">Actions</span>
-                  </div>
+                <div className="flex flex-row flex-wrap gap-4">
                   {rows.map((row) => (
-                    <div
+                    <Card
                       key={row.labEntityId}
-                      className="flex flex-col gap-2 sm:flex-row sm:items-start sm:gap-4 py-3 border-b border-border last:border-0"
+                      className="min-w-0 flex-[1_1_100%] gap-0 py-0 shadow-sm md:flex-[1_1_calc((100%-1rem)/2)] xl:flex-[1_1_calc((100%-2rem)/3)]"
                     >
-                      <div className="flex-1 min-w-0 space-y-1">
+                      <CardHeader className="space-y-2 pb-3 pt-4">
                         {renamingId === row.labEntityId ? (
-                          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-3">
                             <Input
                               value={renameDraft}
                               onChange={(e) => setRenameDraft(e.target.value)}
                               disabled={busy}
-                              className="max-w-xs"
+                              className="w-full min-w-0 sm:max-w-md"
                               aria-label="New name"
                               maxLength={LAB_ENTITY_NAME_MAX_LENGTH}
                             />
-                            <div className="flex gap-2">
+                            <div className="flex shrink-0 gap-2">
                               <Button size="sm" type="button" onClick={saveRename} disabled={busy}>
                                 Save
                               </Button>
@@ -296,7 +292,9 @@ export function LabEntitiesCard() {
                           </div>
                         ) : (
                           <div className="flex flex-wrap items-center gap-2">
-                            <span className="font-medium break-words">{row.displayName}</span>
+                            <span className="font-semibold leading-snug break-words text-base">
+                              {row.displayName}
+                            </span>
                             <LabAddressTypeBadge addressType={row.addressType} />
                             {row.isDead ? (
                               <Badge variant="secondary" className="gap-1">
@@ -306,11 +304,14 @@ export function LabEntitiesCard() {
                             ) : null}
                           </div>
                         )}
-                      </div>
-                      <span className="tabular-nums text-sm sm:w-28 sm:text-right sm:shrink-0">
-                        {formatSats(row.balanceSats)} sats
-                      </span>
-                      <div className="flex flex-wrap gap-2 justify-end sm:w-52 sm:shrink-0">
+                      </CardHeader>
+                      <CardContent className="py-3">
+                        <p className="text-xs font-medium text-muted-foreground">Balance</p>
+                        <p className="mt-1 text-lg font-semibold tabular-nums tracking-tight">
+                          {formatSats(row.balanceSats)} sats
+                        </p>
+                      </CardContent>
+                      <CardFooter className="flex flex-wrap justify-center gap-2 pt-3 pb-4">
                         {renamingId !== row.labEntityId ? (
                           <Button
                             size="icon-sm"
@@ -382,8 +383,8 @@ export function LabEntitiesCard() {
                             <Trash2 className={labEntityActionIconClassName} />
                           </Button>
                         )}
-                      </div>
-                    </div>
+                      </CardFooter>
+                    </Card>
                   ))}
                 </div>
               </CardPagination>
