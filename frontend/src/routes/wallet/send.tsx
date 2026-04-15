@@ -169,7 +169,7 @@ export function SendFlow() {
           amount: formatAmountInputFromSats(outcome.finalAmountSats, unit),
           onchainDustWarning: {
             previousSats: outcome.originalAmountSats,
-            raisedToMin: outcome.raisedToMinDust,
+            raisedToDustMin: outcome.raisedToMinDust,
             bumpedChangeFree: outcome.bumpedChangeFree,
           },
         })
@@ -413,7 +413,7 @@ export function SendFlow() {
           amount: formatAmountInputFromSats(UX_DUST_FLOOR_SATS, amountUnit),
           onchainDustWarning: {
             previousSats: prev,
-            raisedToMin: true,
+            raisedToDustMin: true,
             bumpedChangeFree: false,
           },
         })
@@ -719,7 +719,7 @@ export function SendFlow() {
             ),
             onchainDustWarning: {
               previousSats: labDustCase2Modal.originalAmountSats,
-              raisedToMin: false,
+              raisedToDustMin: false,
               bumpedChangeFree: true,
             },
           })

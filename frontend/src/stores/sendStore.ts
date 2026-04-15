@@ -7,7 +7,7 @@ export type SendStep = 1 | 2
 /** At least one flag is true; both can apply when the user entered a sub-dust amount that also needed a change-free bump after clamping. */
 export type OnchainDustWarning = {
   previousSats: number
-  raisedToMin: boolean
+  raisedToDustMin: boolean
   bumpedChangeFree: boolean
 }
 

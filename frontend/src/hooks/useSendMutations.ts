@@ -196,7 +196,7 @@ export function useLabSendMutation() {
             amount: formatAmountInputFromSats(finalAmountSats, amountUnit),
             onchainDustWarning: {
               previousSats: lab.originalAmountSats,
-              raisedToMin: raisedToMinDust,
+              raisedToDustMin: raisedToMinDust,
               bumpedChangeFree,
             },
           })

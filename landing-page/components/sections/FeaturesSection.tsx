@@ -54,7 +54,7 @@ export function FeaturesSection() {
           },
           {
             title: 'State of the Art Security',
-            desc: 'Your private data is protected by quantum-ready encryption algorithms (AES-256-GCM + Argon2id).',
+            desc: 'Your private data is protected with modern, widely trusted cryptography (AES-256-GCM + Argon2id).',
             icon: Shield,
           },
           {
