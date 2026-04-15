@@ -211,6 +211,7 @@ describe('NWC backend service', () => {
         ok: true,
         walletName: 'My Alby Hub',
         nwcBlockHeight: 800000,
+        lightningNetworkMode: 'mainnet',
       })
     })
 
@@ -232,7 +233,63 @@ describe('NWC backend service', () => {
         ok: true,
         walletName: 'NWC Wallet',
         nwcBlockHeight: 800000,
+        lightningNetworkMode: 'mainnet',
       })
+    })
+
+    it('returns error when get_info omits network', async () => {
+      mockGetInfo.mockResolvedValue({
+        alias: 'x',
+        color: '',
+        pubkey: 'abc',
+        block_height: 1,
+        block_hash: 'hash',
+        methods: [],
+      })
+
+      const service = createBackendService(TEST_CONFIG)
+      const result = await service.testConnection()
+
+      expect(result.ok).toBe(false)
+      if (!result.ok) {
+        expect(result.error).toMatch(/did not report a network/i)
+      }
+    })
+
+    it('returns error for regtest', async () => {
+      mockGetInfo.mockResolvedValue({
+        alias: 'reg',
+        network: 'regtest',
+        block_height: 1,
+        block_hash: 'h',
+        methods: [],
+      })
+
+      const service = createBackendService(TEST_CONFIG)
+      const result = await service.testConnection()
+
+      expect(result.ok).toBe(false)
+      if (!result.ok) {
+        expect(result.error).toMatch(/regtest/i)
+      }
+    })
+
+    it('returns error for unsupported network string', async () => {
+      mockGetInfo.mockResolvedValue({
+        alias: 'x',
+        network: 'liquid',
+        block_height: 1,
+        block_hash: 'h',
+        methods: [],
+      })
+
+      const service = createBackendService(TEST_CONFIG)
+      const result = await service.testConnection()
+
+      expect(result.ok).toBe(false)
+      if (!result.ok) {
+        expect(result.error).toMatch(/liquid/)
+      }
     })
 
     it('returns error on connection failure', async () => {
@@ -249,6 +306,7 @@ describe('NWC backend service', () => {
     it('returns block_height from getInfo', async () => {
       mockGetInfo.mockResolvedValue({
         alias: 'x',
+        network: 'mainnet',
         block_height: 12345,
         methods: [],
       })

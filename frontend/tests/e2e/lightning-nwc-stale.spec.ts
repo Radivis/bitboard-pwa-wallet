@@ -65,7 +65,6 @@ test.describe('Lightning NWC stale cache @nwc', () => {
     await goToWalletTab(page, 'Management')
     await expect(page.getByRole('heading', { name: 'Management' })).toBeVisible()
     await page.getByRole('button', { name: 'Connect Lightning Wallet' }).click()
-    await page.getByLabel('Lightning network *').selectOption('signet')
     await page
       .getByLabel('NWC Connection String')
       .fill(E2E_NWC_CONNECTION_STRING)

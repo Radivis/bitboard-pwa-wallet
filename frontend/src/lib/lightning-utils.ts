@@ -22,6 +22,22 @@ export function defaultLightningNetworkForAppMode(
     : 'mainnet'
 }
 
+/**
+ * Maps NIP-47 `get_info.network` to a Bitboard Lightning mode.
+ * Returns null for regtest, empty values, or strings Bitboard does not support.
+ */
+export function lightningNetworkModeFromNip47Network(
+  raw: string | undefined,
+): LightningNetworkMode | null {
+  if (raw == null) return null
+  const n = raw.trim().toLowerCase()
+  if (n === '') return null
+  if (n === 'mainnet' || n === 'bitcoin') return 'mainnet'
+  if (n === 'testnet') return 'testnet'
+  if (n === 'signet') return 'signet'
+  return null
+}
+
 const ALL_BOLT11_PREFIXES = ['lnbc', 'lntbs', 'lntb']
 
 export function isValidBolt11Invoice(input: string): boolean {

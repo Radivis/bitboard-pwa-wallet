@@ -1,6 +1,9 @@
 import { NWCClient } from '@getalby/sdk'
 import { MAX_NWC_CONNECTION_STRING_LENGTH } from '@/lib/lightning-input-limits'
-import type { LightningNetworkMode } from '@/lib/lightning-utils'
+import {
+  lightningNetworkModeFromNip47Network,
+  type LightningNetworkMode,
+} from '@/lib/lightning-utils'
 
 /** NWC `get_info` chain tip — used to compare against Esplora for the same network. */
 export async function fetchNwcChainTipBlockHeight(
@@ -50,14 +53,19 @@ export interface LightningBackendService {
     options?: { amountMsats?: number },
   ): Promise<{ preimage: string }>
   listPayments(): Promise<LightningPayment[]>
-  testConnection(): Promise<{
-    ok: boolean
-    walletName?: string
-    /** Present when `ok` and the backend exposes a chain tip (NWC `get_info`). */
-    nwcBlockHeight?: number
-    error?: string
-  }>
+  testConnection(): Promise<NwcTestConnectionResult>
 }
+
+/** Result of probing an NWC wallet; on success includes chain from `get_info.network`. */
+export type NwcTestConnectionResult =
+  | {
+      ok: true
+      walletName: string
+      /** Present when the backend exposes a chain tip (NWC `get_info`). */
+      nwcBlockHeight?: number
+      lightningNetworkMode: LightningNetworkMode
+    }
+  | { ok: false; error: string }
 
 export type LightningWalletType = 'nwc'
 
@@ -199,6 +207,7 @@ function createE2eNwcMockBackendService(): LightningBackendService {
         ok: true,
         walletName: e2eNwcMockState.alias,
         nwcBlockHeight: e2eNwcMockState.blockHeight,
+        lightningNetworkMode: 'signet',
       }
     },
   }
@@ -253,13 +262,37 @@ function createNwcBackendService(
       }))
     },
 
-    async testConnection() {
+    async testConnection(): Promise<NwcTestConnectionResult> {
       try {
         const info = await client.getInfo()
+        const rawNetwork = info.network
+        if (rawNetwork == null || String(rawNetwork).trim() === '') {
+          return {
+            ok: false,
+            error:
+              'The wallet did not report a network in NWC get_info. Try updating the wallet.',
+          }
+        }
+        const lower = String(rawNetwork).trim().toLowerCase()
+        const mode = lightningNetworkModeFromNip47Network(rawNetwork)
+        if (mode != null) {
+          return {
+            ok: true,
+            walletName: info.alias || 'NWC Wallet',
+            nwcBlockHeight: info.block_height,
+            lightningNetworkMode: mode,
+          }
+        }
+        if (lower === 'regtest') {
+          return {
+            ok: false,
+            error:
+              'This wallet reports regtest. Bitboard Lightning supports mainnet, testnet, and signet only.',
+          }
+        }
         return {
-          ok: true,
-          walletName: info.alias || 'NWC Wallet',
-          nwcBlockHeight: info.block_height,
+          ok: false,
+          error: `This wallet reported network "${String(rawNetwork).trim()}", which Bitboard does not support for Lightning. Use mainnet, testnet, or signet.`,
         }
       } catch (error) {
         const message =
