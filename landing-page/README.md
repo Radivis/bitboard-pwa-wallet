@@ -1,20 +1,15 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# Bitboard Wallet — landing page
 
-# Run and deploy your AI Studio app
+Static marketing site for [Bitboard PWA Wallet](https://github.com/Radivis/bitboard-pwa-wallet), built with Vite and React.
 
-This contains everything you need to run your app locally.
+## Run locally
 
-View your app in AI Studio: https://ai.studio/apps/dd941063-36ed-4d5f-8c3c-b2052b3ebce0
+**Prerequisites:** Node.js
 
-## Run Locally
+1. Install dependencies: `npm install`
+2. Start the dev server: `npm run dev` (listens on port 2800 by default)
+3. Production build: `npm run build` — output in `dist/`
 
-**Prerequisites:**  Node.js
+## Configuration
 
-
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+Outbound URLs (app, blog, website, GitHub, etc.) live in [`src/landing-page-links.ts`](src/landing-page-links.ts). Update that map when destinations go live.

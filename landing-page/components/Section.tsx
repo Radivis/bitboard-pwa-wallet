@@ -1,17 +1,32 @@
 import React from 'react';
 import { motion } from 'motion/react';
 
+type SectionAccent = 'matrix' | 'orange';
+
+const SECTION_ACCENT_CLASSES: Record<
+  SectionAccent,
+  { text: string; line: string }
+> = {
+  matrix: { text: 'text-matrix', line: 'bg-matrix/30' },
+  orange: { text: 'text-orange-500', line: 'bg-orange-500/30' },
+};
+
 interface SectionProps {
   title?: string;
   children: React.ReactNode;
   className?: string;
   id?: string;
-  accentColor?: string;
+  accent?: SectionAccent;
 }
 
-export const Section: React.FC<SectionProps> = ({ title, children, className = "", id, accentColor = "matrix" }) => {
-  const accentTextClass = accentColor === "matrix" ? "text-matrix" : `text-${accentColor}`;
-  const accentBgClass = accentColor === "matrix" ? "bg-matrix/30" : `bg-${accentColor}/30`;
+export const Section: React.FC<SectionProps> = ({
+  title,
+  children,
+  className = '',
+  id,
+  accent = 'matrix',
+}) => {
+  const { text: accentTextClass, line: accentBgClass } = SECTION_ACCENT_CLASSES[accent];
 
   return (
     <section id={id} className={`py-16 px-6 max-w-4xl mx-auto relative ${className}`}>

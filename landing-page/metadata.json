@@ -1,5 +1,5 @@
 {
-  "name": "BitBoard PWA Wallet",
-  "description": "A flashy landing page for BitBoard, a sleek Bitcoin PWA wallet with a mix of early web and modern design.",
+  "name": "BitBoard Wallet",
+  "description": "Landing page for Bitboard Wallet, an educational Bitcoin wallet as PWA",
   "requestFramePermissions": []
 }

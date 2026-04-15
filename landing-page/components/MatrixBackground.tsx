@@ -1,6 +1,10 @@
 import React, { useEffect, useRef } from 'react';
 
-export const MatrixBackground: React.FC = () => {
+interface MatrixBackgroundProps {
+  reducedMotion: boolean;
+}
+
+export const MatrixBackground: React.FC<MatrixBackgroundProps> = ({ reducedMotion }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -13,9 +17,19 @@ export const MatrixBackground: React.FC = () => {
     let width = (canvas.width = window.innerWidth);
     let height = (canvas.height = window.innerHeight);
 
-    // Initialize with solid black
     ctx.fillStyle = '#000000';
     ctx.fillRect(0, 0, width, height);
+
+    if (reducedMotion) {
+      const handleResize = () => {
+        width = canvas.width = window.innerWidth;
+        height = canvas.height = window.innerHeight;
+        ctx.fillStyle = '#000000';
+        ctx.fillRect(0, 0, width, height);
+      };
+      window.addEventListener('resize', handleResize);
+      return () => window.removeEventListener('resize', handleResize);
+    }
 
     const hexChars = '0123456789ABCDEF';
     const fontSize = 24;
@@ -25,29 +39,28 @@ export const MatrixBackground: React.FC = () => {
     let frameCount = 0;
 
     for (let i = 0; i < columns; i++) {
-      // Start some drops immediately, others delayed
-      drops[i] = Math.random() * height / fontSize;
-      chars[i] = hexChars[Math.floor(Math.random() * hexChars.length)] + hexChars[Math.floor(Math.random() * hexChars.length)];
+      drops[i] = (Math.random() * height) / fontSize;
+      chars[i] =
+        hexChars[Math.floor(Math.random() * hexChars.length)] +
+        hexChars[Math.floor(Math.random() * hexChars.length)];
     }
 
     const draw = () => {
       frameCount++;
-      // Use a higher opacity for the trail to ensure the background stays deep black
       ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
       ctx.fillRect(0, 0, width, height);
 
-      ctx.fillStyle = '#00FF41'; // Matrix neon green
-      ctx.shadowBlur = 0; // Remove glow entirely to prevent green tinting the background
+      ctx.fillStyle = '#00FF41';
+      ctx.shadowBlur = 0;
       ctx.font = `bold ${fontSize}px monospace`;
 
       for (let i = 0; i < drops.length; i++) {
-        // Update character only every 2 frames (50% slower)
         if (frameCount % 2 === 0) {
           const char1 = hexChars[Math.floor(Math.random() * hexChars.length)];
           const char2 = hexChars[Math.floor(Math.random() * hexChars.length)];
           chars[i] = char1 + char2;
         }
-        
+
         const text = chars[i];
         const x = i * fontSize;
         const y = drops[i] * fontSize;
@@ -77,7 +90,9 @@ export const MatrixBackground: React.FC = () => {
       if (newColumns > drops.length) {
         for (let i = drops.length; i < newColumns; i++) {
           drops[i] = Math.random() * -100;
-          chars[i] = hexChars[Math.floor(Math.random() * hexChars.length)] + hexChars[Math.floor(Math.random() * hexChars.length)];
+          chars[i] =
+            hexChars[Math.floor(Math.random() * hexChars.length)] +
+            hexChars[Math.floor(Math.random() * hexChars.length)];
         }
       }
     };
@@ -88,7 +103,7 @@ export const MatrixBackground: React.FC = () => {
       cancelAnimationFrame(animationId);
       window.removeEventListener('resize', handleResize);
     };
-  }, []);
+  }, [reducedMotion]);
 
   return (
     <canvas
