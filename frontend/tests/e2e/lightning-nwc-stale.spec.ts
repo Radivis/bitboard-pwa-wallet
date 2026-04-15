@@ -69,8 +69,7 @@ test.describe('Lightning NWC stale cache @nwc', () => {
       .getByLabel('NWC Connection String')
       .fill(E2E_NWC_CONNECTION_STRING)
     await page.getByRole('button', { name: 'Test Connection' }).click()
-    await expect(page.getByLabel('Label *')).toHaveValue('E2E NWC Mock')
-    await page.getByLabel('Label *').fill(E2E_NWC_LABEL)
+    await page.getByLabel('Label (optional)').fill(E2E_NWC_LABEL)
     await page.getByRole('button', { name: 'Save', exact: true }).click()
     await expect(page.getByText(E2E_NWC_LABEL)).toBeVisible()
 

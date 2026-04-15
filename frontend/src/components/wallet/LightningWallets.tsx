@@ -160,27 +160,21 @@ function ConnectWalletForm({ onConnected }: { onConnected: () => void }) {
   const testSucceeded =
     testMutation.isSuccess && testMutation.data?.ok === true
   const canSave =
-    canTest &&
-    label.trim().length > 0 &&
-    testSucceeded &&
-    testMutation.data?.ok === true
+    canTest && testSucceeded && testMutation.data?.ok === true
 
   const handleTestConnection = useCallback(async () => {
     if (!canTest) return
-    const result = await testMutation.mutateAsync({
+    await testMutation.mutateAsync({
       type: 'nwc',
       connectionString: connectionString.trim(),
     })
-    if (result.ok && label.trim() === '' && result.walletName) {
-      setLabel(result.walletName)
-    }
-  }, [canTest, connectionString, testMutation, label])
+  }, [canTest, connectionString, testMutation])
 
   const handleSave = useCallback(async () => {
     const testData = testMutation.data
     if (!canSave || activeWalletId == null || testData?.ok !== true) return
     try {
-      await addConnection({
+      const { label: savedLabel } = await addConnection({
         walletId: activeWalletId,
         label: label.trim(),
         networkMode: testData.lightningNetworkMode,
@@ -189,7 +183,7 @@ function ConnectWalletForm({ onConnected }: { onConnected: () => void }) {
           connectionString: connectionString.trim(),
         },
       })
-      toast.success(`Lightning wallet "${label.trim()}" connected`)
+      toast.success(`Lightning wallet "${savedLabel}" connected`)
       setLabel('')
       setConnectionString('')
       testMutation.reset()
@@ -300,9 +294,7 @@ function ConnectWalletForm({ onConnected }: { onConnected: () => void }) {
         )}
 
         <div className="space-y-1">
-          <Label htmlFor="ln-wallet-label">
-            Label <span className="text-destructive">*</span>
-          </Label>
+          <Label htmlFor="ln-wallet-label">Label</Label>
           <Input
             id="ln-wallet-label"
             value={label}
@@ -310,11 +302,6 @@ function ConnectWalletForm({ onConnected }: { onConnected: () => void }) {
             onChange={(e) => setLabel(e.target.value)}
             placeholder="My Lightning Wallet"
           />
-          {testSucceeded && label.trim().length === 0 && (
-            <p className="text-xs text-muted-foreground">
-              Enter a label to save this connection
-            </p>
-          )}
         </div>
         {testMutation.isSuccess && !testMutation.data.ok && (
           <div className="flex items-center gap-2 text-sm text-destructive">
