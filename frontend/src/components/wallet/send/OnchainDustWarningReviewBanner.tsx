@@ -13,7 +13,7 @@ export function OnchainDustWarningReviewBanner({
   if (warning == null) return null
   return (
     <div className="font-bold text-destructive text-sm space-y-1 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2">
-      {warning.raisedToMin546 ? (
+      {warning.raisedToMin ? (
         <p>
           Amount was below the minimum spendable output ({formatSats(UX_DUST_FLOOR_SATS)}{' '}
           sats). The amount shown above was set to{' '}
