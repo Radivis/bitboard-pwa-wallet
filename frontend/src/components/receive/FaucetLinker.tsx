@@ -131,7 +131,7 @@ export function FaucetLinker() {
             <div>
               <CardTitle className="text-base">Test faucets</CardTitle>
               <CardDescription className="mt-1">
-                Third-party sites; Bitboard does not control availability.
+                Third-party sites for getting test coins; Bitboard does not control availability.
               </CardDescription>
             </div>
             <Button

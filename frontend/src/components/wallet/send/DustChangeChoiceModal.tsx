@@ -1,6 +1,7 @@
 import { DialogDescription } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { AppModal } from '@/components/AppModal'
+import { ArticleLink } from '@/lib/library/article-shared'
 import { formatSats } from '@/lib/bitcoin-utils'
 
 interface DustChangeChoiceModalProps {
@@ -67,13 +68,17 @@ export function DustChangeChoiceModal({
           <p>
             With your inputs and fee rate, sending exactly{' '}
             <span className="font-medium text-foreground">{formatSats(exactAmountSats)}</span>{' '}
-            sats would leave no change output. The value that cannot be a valid change output
+            sats would leave no viable change output due to the dust limit. The value that cannot be a valid change output
             would add to the miner fee instead of coming back to you.
           </p>
           <p>
             You can keep that exact payment to the recipient, or increase the payment to{' '}
             <span className="font-medium text-foreground">{formatSats(changeFreeMaxSats)}</span>{' '}
             sats so more value goes to the recipient rather than to the fee.
+          </p>
+          <p>
+            <ArticleLink slug="dust-transactions">Dust Transactions</ArticleLink> (Library) explains
+            dust limits and why this situation comes up.
           </p>
         </div>
       </DialogDescription>

@@ -42,7 +42,7 @@ export function ReceiveMainnetDemoWarningModal({
         <p>
           Funds in this wallet must{' '}
           <strong className="text-foreground">under no circumstances</strong> be considered
-          secure. Treat any balance as experimental only.
+          secure. Please only use minimal amounts for testing and experimentation.
         </p>
       </div>
     </AppModal>
