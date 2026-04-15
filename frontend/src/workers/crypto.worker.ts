@@ -288,6 +288,32 @@ const cryptoService = {
     return wasmModule.get_lab_change_address();
   },
 
+  async labEntityDraftLabPsbtTransaction(
+    params: import('./crypto-api').LabEntityDraftLabPsbtTransactionParams,
+  ): Promise<import('./crypto-api').DraftLabPsbtTransactionResult> {
+    const wasmModule = await getWasm();
+    const result = wasmModule.lab_entity_draft_lab_psbt_transaction(
+      params.mnemonic,
+      params.changesetJson,
+      params.network,
+      params.addressType,
+      params.accountId,
+      params.utxosJson,
+      params.toAddress,
+      BigInt(params.amountSats),
+      params.feeRateSatPerVb,
+    );
+    const parsed = typeof result === 'string' ? JSON.parse(result) : result;
+    return {
+      psbtBase64: parsed.psbt_base64,
+      finalAmountSats: Number(parsed.final_amount_sats),
+      originalAmountSats: Number(parsed.original_amount_sats),
+      raisedToMinDust: Boolean(parsed.raised_to_min_dust),
+      changeFreeBumpAvailable: Boolean(parsed.change_free_bump_available),
+      changeFreeMaxSats: Number(parsed.change_free_max_sats),
+    };
+  },
+
   async labEntityBuildAndSignLabTransaction(
     params: import('./crypto-api').LabEntityBuildAndSignLabTransactionParams,
   ): Promise<unknown> {
@@ -302,6 +328,7 @@ const cryptoService = {
       params.toAddress,
       BigInt(params.amountSats),
       params.feeRateSatPerVb,
+      params.applyChangeFreeBump ?? false,
     );
   },
 

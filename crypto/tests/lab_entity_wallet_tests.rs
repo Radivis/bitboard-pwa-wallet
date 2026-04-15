@@ -51,6 +51,7 @@ fn lab_entity_create_and_sign_foreign_utxo() {
             to_address: &pay_to,
             amount_sats: 40_000,
             fee_rate_sat_per_vb: 1.0,
+            apply_change_free_bump: false,
         },
     )
     .expect("build and sign");

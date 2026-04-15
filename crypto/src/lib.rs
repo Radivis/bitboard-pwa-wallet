@@ -581,6 +581,39 @@ pub fn lab_entity_reveal_next_external_address(
     .map_err_to_js()
 }
 
+/// Draft an unsigned lab PSBT for a lab entity (dust / change-free metadata; no persisted changes).
+#[wasm_bindgen]
+#[allow(clippy::too_many_arguments)] // wasm_bindgen exposes a flat JS API; arity stays fixed for WASM ABI.
+pub fn lab_entity_draft_lab_psbt_transaction(
+    mnemonic_str: &str,
+    changeset_json: &str,
+    network: &str,
+    address_type: &str,
+    account_id: u32,
+    utxos_json: &str,
+    to_address: &str,
+    amount_sats: u64,
+    fee_rate_sat_per_vb: f64,
+) -> Result<JsValue, JsValue> {
+    let net = types::BitcoinNetwork::try_from(network).map_err(JsValue::from)?;
+    let addr_type = types::AddressType::try_from(address_type).map_err(JsValue::from)?;
+    let result = lab_entity_wallet::lab_entity_draft_lab_psbt_transaction(
+        lab_entity_wallet::LabEntityDraftArgs {
+            mnemonic: mnemonic_str,
+            changeset_json,
+            network: net,
+            address_type: addr_type,
+            account_id,
+            utxos_json,
+            to_address,
+            amount_sats,
+            fee_rate_sat_per_vb,
+        },
+    )
+    .map_err(JsValue::from)?;
+    serde_wasm_bindgen::to_value(&result).map_err_to_js()
+}
+
 /// Build and sign a lab mempool tx for a lab entity. Returns JSON including updated `changeset_json`.
 #[wasm_bindgen]
 #[allow(clippy::too_many_arguments)] // wasm_bindgen exposes a flat JS API; arity stays fixed for WASM ABI.
@@ -594,6 +627,7 @@ pub fn lab_entity_build_and_sign_lab_transaction(
     to_address: &str,
     amount_sats: u64,
     fee_rate_sat_per_vb: f64,
+    apply_change_free_bump: bool,
 ) -> Result<JsValue, JsValue> {
     let net = types::BitcoinNetwork::try_from(network).map_err(JsValue::from)?;
     let addr_type = types::AddressType::try_from(address_type).map_err(JsValue::from)?;
@@ -608,6 +642,7 @@ pub fn lab_entity_build_and_sign_lab_transaction(
             to_address,
             amount_sats,
             fee_rate_sat_per_vb,
+            apply_change_free_bump,
         },
     )
     .map_err(JsValue::from)?;

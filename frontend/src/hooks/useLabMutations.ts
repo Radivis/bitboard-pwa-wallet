@@ -76,6 +76,7 @@ export type LabCreateTransactionVariables = {
   amountSats: number
   feeRateSatPerVb: number
   knownRecipientOwner?: LabOwner | null
+  applyChangeFreeBump?: boolean
 }
 
 export function useLabCreateTransactionMutation() {
@@ -91,6 +92,7 @@ export function useLabCreateTransactionMutation() {
         amountSats: variables.amountSats,
         feeRateSatPerVb: variables.feeRateSatPerVb,
         knownRecipientOwner: variables.knownRecipientOwner,
+        applyChangeFreeBump: variables.applyChangeFreeBump,
       })
     },
     onSuccess: (state) => {

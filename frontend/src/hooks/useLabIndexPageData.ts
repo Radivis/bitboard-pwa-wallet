@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
+import { UX_DUST_FLOOR_SATS } from '@/lib/bitcoin-dust'
+import { errorMessage } from '@/lib/utils'
+import { labOpDraftLabEntityTransaction } from '@/lib/lab-worker-operations'
 import { useLabChainStateQuery } from '@/hooks/useLabChainStateQuery'
 import type { AddressType } from '@/lib/wallet-domain-types'
 import { selectCommittedAddressType, useWalletStore } from '@/stores/walletStore'
@@ -77,6 +80,13 @@ export function useLabIndexPageData() {
     addressType: AddressType
     variables: LabCreateTransactionVariables
   } | null>(null)
+  const [dustCase2Modal, setDustCase2Modal] = useState<{
+    exactAmountSats: number
+    changeFreeMaxSats: number
+    originalAmountSats: number
+    pendingVariables: LabCreateTransactionVariables
+  } | null>(null)
+  const [sendPrepPending, setSendPrepPending] = useState(false)
 
   const mineMutation = useLabMineBlocksMutation()
   const createTxMutation = useLabCreateTransactionMutation()
@@ -141,21 +151,134 @@ export function useLabIndexPageData() {
     setPendingDeadLabSend(null)
   }, [])
 
+  const clearSendForm = useCallback(() => {
+    setShowTxForm(false)
+    setFromAddress('')
+    setToAddress('')
+    setAmountSats('')
+  }, [])
+
+  const runLabEntitySendPipeline = useCallback(
+    async (variables: LabCreateTransactionVariables) => {
+      let amountSats = variables.amountSats
+      const fromBalance = getBalanceForAddress(variables.fromAddress.trim())
+      if (
+        fromBalance >= UX_DUST_FLOOR_SATS &&
+        amountSats > 0 &&
+        amountSats < UX_DUST_FLOOR_SATS
+      ) {
+        amountSats = UX_DUST_FLOOR_SATS
+        toast.warning(
+          `Amount was below the minimum output size (${UX_DUST_FLOOR_SATS} sats). It was increased automatically.`,
+        )
+        setAmountSats(String(UX_DUST_FLOOR_SATS))
+      }
+
+      setSendPrepPending(true)
+      try {
+        let draftResult: Awaited<ReturnType<typeof labOpDraftLabEntityTransaction>>
+        try {
+          draftResult = await labOpDraftLabEntityTransaction({
+            ...variables,
+            amountSats,
+          })
+        } catch (err) {
+          toast.error(errorMessage(err) || 'Failed to prepare lab transaction')
+          return
+        }
+
+        if (
+          draftResult.draft.raisedToMinDust &&
+          draftResult.draft.finalAmountSats !== amountSats
+        ) {
+          amountSats = draftResult.draft.finalAmountSats
+          setAmountSats(String(amountSats))
+          toast.warning(
+            `Amount was below the minimum output size (${UX_DUST_FLOOR_SATS} sats). It was increased automatically.`,
+          )
+          try {
+            draftResult = await labOpDraftLabEntityTransaction({
+              ...variables,
+              amountSats,
+            })
+          } catch (err) {
+            toast.error(errorMessage(err) || 'Failed to prepare lab transaction')
+            return
+          }
+        }
+
+        if (draftResult.draft.changeFreeBumpAvailable) {
+          setDustCase2Modal({
+            exactAmountSats: draftResult.draft.finalAmountSats,
+            changeFreeMaxSats: draftResult.draft.changeFreeMaxSats,
+            originalAmountSats: draftResult.draft.originalAmountSats,
+            pendingVariables: {
+              ...variables,
+              amountSats: draftResult.draft.finalAmountSats,
+            },
+          })
+          return
+        }
+
+        await createTxMutation.mutateAsync({
+          ...variables,
+          amountSats: draftResult.draft.finalAmountSats,
+          applyChangeFreeBump: false,
+        })
+        clearSendForm()
+      } finally {
+        setSendPrepPending(false)
+      }
+    },
+    [createTxMutation, getBalanceForAddress, clearSendForm],
+  )
+
   const confirmDeadRecipientSend = useCallback(() => {
     if (pendingDeadLabSend == null) return
+    const variables = pendingDeadLabSend.variables
+    setPendingDeadLabSend(null)
+    void runLabEntitySendPipeline(variables).catch(() => {
+      /* error toast from pipeline or mutation */
+    })
+  }, [pendingDeadLabSend, runLabEntitySendPipeline])
+
+  const onDustCase2KeepExact = useCallback(() => {
+    if (dustCase2Modal == null) return
+    const { pendingVariables } = dustCase2Modal
+    setDustCase2Modal(null)
     void createTxMutation
-      .mutateAsync(pendingDeadLabSend.variables)
+      .mutateAsync({
+        ...pendingVariables,
+        applyChangeFreeBump: false,
+      })
       .then(() => {
-        setPendingDeadLabSend(null)
-        setShowTxForm(false)
-        setFromAddress('')
-        setToAddress('')
-        setAmountSats('')
+        clearSendForm()
       })
       .catch(() => {
         /* error toast from mutation onError */
       })
-  }, [pendingDeadLabSend, createTxMutation])
+  }, [dustCase2Modal, createTxMutation, clearSendForm])
+
+  const onDustCase2IncreaseToChangeFree = useCallback(() => {
+    if (dustCase2Modal == null) return
+    const { pendingVariables } = dustCase2Modal
+    setDustCase2Modal(null)
+    void createTxMutation
+      .mutateAsync({
+        ...pendingVariables,
+        applyChangeFreeBump: true,
+      })
+      .then(() => {
+        clearSendForm()
+      })
+      .catch(() => {
+        /* error toast from mutation onError */
+      })
+  }, [dustCase2Modal, createTxMutation, clearSendForm])
+
+  const closeDustCase2Modal = useCallback(() => {
+    setDustCase2Modal(null)
+  }, [])
 
   const handleSend = useCallback(() => {
     const amount = parseInt(amountSats, 10)
@@ -211,30 +334,22 @@ export function useLabIndexPageData() {
       return
     }
 
-    void createTxMutation
-      .mutateAsync({
-        labEntityId: ownerLab.labEntityId,
-        fromAddress: trimmedFrom,
-        toAddress: trimmedTo,
-        amountSats: amount,
-        feeRateSatPerVb: fee,
-        knownRecipientOwner,
-      })
-      .then(() => {
-        setShowTxForm(false)
-        setFromAddress('')
-        setToAddress('')
-        setAmountSats('')
-      })
-      .catch(() => {
-        /* error toast from mutation onError */
-      })
+    void runLabEntitySendPipeline({
+      labEntityId: ownerLab.labEntityId,
+      fromAddress: trimmedFrom,
+      toAddress: trimmedTo,
+      amountSats: amount,
+      feeRateSatPerVb: fee,
+      knownRecipientOwner,
+    }).catch(() => {
+      /* error toast from pipeline or mutation */
+    })
   }, [
     fromAddress,
     toAddress,
     amountSats,
     feeRate,
-    createTxMutation,
+    runLabEntitySendPipeline,
     addressToOwner,
     activeWalletId,
     currentAddress,
@@ -355,7 +470,7 @@ export function useLabIndexPageData() {
     feeRate,
     setFeeRate,
     onSend: handleSend,
-    sending: createTxMutation.isPending,
+    sending: createTxMutation.isPending || sendPrepPending,
     sendDisabledFromDeadEntity: fromEntityDead,
     deadFromEntityDisplayName,
     deadRecipientModalOpen: pendingDeadLabSend != null,
@@ -363,6 +478,12 @@ export function useLabIndexPageData() {
     deadRecipientModalAddressType: pendingDeadLabSend?.addressType,
     onConfirmDeadRecipientSend: confirmDeadRecipientSend,
     onCloseDeadRecipientModal: closeDeadRecipientModal,
+    dustCase2ModalOpen: dustCase2Modal != null,
+    dustCase2ExactAmountSats: dustCase2Modal?.exactAmountSats ?? 0,
+    dustCase2ChangeFreeMaxSats: dustCase2Modal?.changeFreeMaxSats ?? 0,
+    onDustCase2KeepExact,
+    onDustCase2IncreaseToChangeFree,
+    onCloseDustCase2Modal: closeDustCase2Modal,
     controlledAddressesCount: controlledAddresses.length,
     randomTransactionCount,
     setRandomTransactionCount,

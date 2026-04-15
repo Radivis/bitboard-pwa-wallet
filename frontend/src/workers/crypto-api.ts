@@ -71,8 +71,8 @@ export interface DraftLabPsbtTransactionResult {
   changeFreeMaxSats: number;
 }
 
-/** Ephemeral lab-entity wallet signing (does not use the active user wallet). */
-export interface LabEntityBuildAndSignLabTransactionParams {
+/** Ephemeral lab-entity wallet draft (does not use the active user wallet). */
+export interface LabEntityDraftLabPsbtTransactionParams {
   mnemonic: string;
   changesetJson: string;
   network: string;
@@ -82,6 +82,13 @@ export interface LabEntityBuildAndSignLabTransactionParams {
   toAddress: string;
   amountSats: number;
   feeRateSatPerVb: number;
+}
+
+/** Ephemeral lab-entity wallet signing (does not use the active user wallet). */
+export interface LabEntityBuildAndSignLabTransactionParams
+  extends LabEntityDraftLabPsbtTransactionParams {
+  /** When true, increase payment to change-free max if that path exists. */
+  applyChangeFreeBump?: boolean;
 }
 
 export interface BuildTransactionParams {
@@ -184,6 +191,11 @@ export interface CryptoService {
   ): Promise<DraftLabPsbtTransactionResult>;
   /** First internal address for lab change outputs. */
   getLabChangeAddress(): Promise<string>;
+
+  /** Unsigned lab PSBT draft for a lab entity (dust / change-free metadata). */
+  labEntityDraftLabPsbtTransaction(
+    params: LabEntityDraftLabPsbtTransactionParams,
+  ): Promise<DraftLabPsbtTransactionResult>;
 
   /** Build and sign a lab mempool tx for a simulated lab entity (BDK + foreign UTXOs). */
   labEntityBuildAndSignLabTransaction(

@@ -253,6 +253,46 @@ export async function mineBlocksInLab(
 }
 
 /** Create a transaction in the lab UI (name-owned addresses only). */
+/** Lab → Transactions tab (heading must be visible). */
+export async function goToLabTransactionsPage(page: Page): Promise<void> {
+  await navigateToLab(page)
+  await expect(page.getByRole('heading', { name: 'Blocks' })).toBeVisible({
+    timeout: 15000,
+  })
+  await page.getByRole('navigation', { name: 'Lab' }).getByRole('link', { name: 'Transactions' }).click()
+  await expect(page.getByRole('heading', { name: 'Transactions' })).toBeVisible({
+    timeout: 15000,
+  })
+}
+
+/** After manual lab-entity Send (no wallet Review step): toast + mempool length. */
+export async function expectManualLabEntityTransactionInMempool(page: Page): Promise<void> {
+  await expect(page.getByText('Transaction added to mempool').first()).toBeVisible({
+    timeout: 60000,
+  })
+  await expect
+    .poll(
+      async () => (await getLabState(page)).mempool.length,
+      { timeout: 60000 },
+    )
+    .toBeGreaterThan(0)
+}
+
+/**
+ * Case-2 dust modal on `/lab/transactions` manual send (no Transaction Details step after bump).
+ */
+export async function clickLabDustChoiceManualLabEntityTx(
+  page: Page,
+  choice: LabDustChoice,
+): Promise<void> {
+  await expectLabChangeAndFeesModal(page)
+  if (choice === 'keepExact') {
+    await page.getByRole('button', { name: /Keep exact amount/ }).click()
+  } else {
+    await page.getByRole('button', { name: /Increase to change-free max/ }).click()
+  }
+}
+
 export async function createTransactionInLab(
   page: Page,
   fromAddress: string,
@@ -500,14 +540,21 @@ export function getUtxoSumByOwner(state: LabState, owner: string): number {
     .reduce((sum, u) => sum + u.amountSats, 0)
 }
 
-/** Resolve an address for a display owner (checks UTXOs first — always present after mining). */
+/** Resolve an address for a display owner (UTXOs, then known addresses, then any `addressToOwner` key). */
 export function findAddressForOwner(state: LabState, owner: string): string | undefined {
   const map = state.addressToOwner ?? {}
   const fromUtxo = state.utxos?.find((u) =>
     labOwnerMatchesDisplayKey(state, lookupLabAddressOwner(u.address, map), owner),
   )?.address
   if (fromUtxo) return fromUtxo
-  return state.addresses?.find((a) =>
+  const fromAddresses = state.addresses?.find((a) =>
     labOwnerMatchesDisplayKey(state, lookupLabAddressOwner(a.address, map), owner),
   )?.address
+  if (fromAddresses) return fromAddresses
+  for (const addr of Object.keys(map)) {
+    if (labOwnerMatchesDisplayKey(state, lookupLabAddressOwner(addr, map), owner)) {
+      return addr
+    }
+  }
+  return undefined
 }

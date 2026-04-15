@@ -3,6 +3,7 @@ import { ArrowLeftRight } from 'lucide-react'
 import { PageHeader } from '@/components/PageHeader'
 import { LabMakeTransactionCard } from '@/components/lab/MakeTransaction'
 import { DeadLabEntityRecipientModal } from '@/components/lab/DeadLabEntityRecipientModal'
+import { DustChangeChoiceModal } from '@/components/wallet/send/DustChangeChoiceModal'
 import { LabAddressesCard } from '@/components/lab/Addresses'
 import { LabUtxosCard } from '@/components/lab/Utxos'
 import { useLabIndexPageData } from '@/hooks/useLabIndexPageData'
@@ -27,6 +28,18 @@ function LabTransactionsPage() {
         entityDisplayName={lab.deadRecipientModalDisplayName}
         addressType={lab.deadRecipientModalAddressType}
         onConfirm={lab.onConfirmDeadRecipientSend}
+        isPending={lab.sending}
+      />
+
+      <DustChangeChoiceModal
+        open={lab.dustCase2ModalOpen}
+        onOpenChange={(open) => {
+          if (!open) lab.onCloseDustCase2Modal()
+        }}
+        exactAmountSats={lab.dustCase2ExactAmountSats}
+        changeFreeMaxSats={lab.dustCase2ChangeFreeMaxSats}
+        onKeepExact={lab.onDustCase2KeepExact}
+        onIncreaseToChangeFree={lab.onDustCase2IncreaseToChangeFree}
         isPending={lab.sending}
       />
 
