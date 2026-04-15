@@ -1,9 +1,8 @@
 import { useCallback, useMemo, useState } from 'react'
 import { useMutation, useIsFetching } from '@tanstack/react-query'
 import type { AddressType, NetworkMode } from '@/stores/walletStore'
-import { useWalletStore } from '@/stores/walletStore'
 import { executeSettingsNetworkSwitch } from '@/lib/network-mode-switch'
-import { switchDescriptorWallet } from '@/lib/settings-switch-wallet'
+import { executeSettingsAddressTypeSwitch } from '@/lib/execute-settings-address-type-switch'
 import { ACTIVE_WALLET_LOAD_QUERY_ROOT } from '@/lib/wallet-load-query-keys'
 import {
   DEFAULT_SWITCHING_ADDRESS_TYPE_STATUS_LINE,
@@ -51,16 +50,8 @@ export function useSubWalletSwitchMutation(switchContext: SubWalletSwitchContext
             onPhase,
           })
         } else {
-          const { networkMode, accountId, addressType: currentAddressType } =
-            useWalletStore.getState()
-          await switchDescriptorWallet({
-            targetNetworkMode: networkMode,
+          await executeSettingsAddressTypeSwitch({
             targetAddressType: target as AddressType,
-            targetAccountId: accountId,
-            currentNetworkMode: networkMode,
-            currentAddressType,
-            currentAccountId: accountId,
-            phaseContext: 'addressType',
             onPhase,
           })
         }

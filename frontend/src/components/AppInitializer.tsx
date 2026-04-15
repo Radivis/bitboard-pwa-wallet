@@ -13,7 +13,11 @@ import { prefetchLabChainState } from '@/hooks/useLabChainStateQuery'
 import { useHydrateLightningConnections } from '@/hooks/useHydrateLightningConnections'
 import { ActiveWalletBootstrap } from '@/components/ActiveWalletBootstrap'
 import { pathnameRequiresWalletCryptoSession } from '@/lib/pathname-requires-wallet-crypto-session'
+import { runMainnetStrictMigrationAfterHydration } from '@/lib/mainnet-access-strict-migration'
+import { runRegtestStrictMigrationAfterHydration } from '@/lib/regtest-mode-strict-migration'
+import { runSegwitAddressesStrictMigrationAfterHydration } from '@/lib/segwit-addresses-strict-migration'
 import { useWalletCryptoSessionPathGateStore } from '@/stores/walletCryptoSessionPathGateStore'
+import { useSecureStorageAvailabilityStore } from '@/stores/secureStorageAvailabilityStore'
 
 interface AppInitializerProps {
   children: ReactNode
@@ -32,6 +36,12 @@ export function AppInitializer({ children }: AppInitializerProps) {
   useLayoutEffect(() => {
     useWalletCryptoSessionPathGateStore.getState().setPathname(location.pathname)
   }, [location.pathname])
+
+  useEffect(() => {
+    runMainnetStrictMigrationAfterHydration()
+    runRegtestStrictMigrationAfterHydration()
+    runSegwitAddressesStrictMigrationAfterHydration()
+  }, [])
 
   useEffect(() => {
     if (networkMode !== 'lab') return
@@ -93,6 +103,7 @@ export function AppInitializer({ children }: AppInitializerProps) {
   useEffect(() => {
     if (sessionPassword !== null) return
     if (!pathnameRequiresWalletCryptoSession(location.pathname)) return
+    if (!useSecureStorageAvailabilityStore.getState().isAvailable) return
     void tryLoadNearZeroSessionIntoMemory(getDatabase())
   }, [sessionPassword, location.pathname])
 

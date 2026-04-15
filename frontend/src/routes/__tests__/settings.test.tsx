@@ -2,6 +2,51 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { renderWithProviders } from '@/test-utils/test-providers'
+import { toast } from 'sonner'
+
+const featureStoreState = vi.hoisted(() => {
+  const state = {
+    lightningEnabled: false,
+    mainnetAccessEnabled: false,
+    regtestModeEnabled: false,
+    segwitAddressesEnabled: false,
+    setLightningEnabled: vi.fn(),
+    setMainnetAccessEnabled: vi.fn(),
+    setRegtestModeEnabled: vi.fn(),
+    setSegwitAddressesEnabled: vi.fn(),
+  }
+  state.setLightningEnabled.mockImplementation((enabled: boolean) => {
+    state.lightningEnabled = enabled
+  })
+  state.setMainnetAccessEnabled.mockImplementation((enabled: boolean) => {
+    state.mainnetAccessEnabled = enabled
+  })
+  state.setRegtestModeEnabled.mockImplementation((enabled: boolean) => {
+    state.regtestModeEnabled = enabled
+  })
+  state.setSegwitAddressesEnabled.mockImplementation((enabled: boolean) => {
+    state.segwitAddressesEnabled = enabled
+  })
+  return state
+})
+
+vi.mock('sonner', () => ({
+  toast: {
+    info: vi.fn(),
+    error: vi.fn(),
+    success: vi.fn(),
+  },
+}))
+
+vi.mock('@/stores/featureStore', () => ({
+  useFeatureStore: Object.assign(
+    (selector: (s: typeof featureStoreState) => unknown) =>
+      selector(featureStoreState),
+    {
+      getState: () => featureStoreState,
+    },
+  ),
+}))
 
 vi.mock('@tanstack/react-router', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@tanstack/react-router')>()
@@ -92,6 +137,10 @@ vi.mock('@/stores/walletStore', async () => {
       }
       return s.loadedSubWallet?.networkMode ?? s.networkMode
     },
+    selectCommittedAccountId: (s: {
+      loadedSubWallet: { accountId: number } | null
+      accountId: number
+    }) => s.loadedSubWallet?.accountId ?? s.accountId,
   }
 })
 
@@ -127,10 +176,27 @@ vi.mock('@/stores/themeStore', () => ({
 const mockWalletsState: { data: { wallet_id: number; name: string; created_at: string }[] } = {
   data: [],
 }
+const mockLoadWalletSecretsPayload = vi.hoisted(() =>
+  vi.fn().mockResolvedValue({
+    descriptorWallets: [
+      {
+        network: 'signet',
+        addressType: 'taproot',
+        accountId: 0,
+        externalDescriptor: 'tr([mock]/0/*)',
+        internalDescriptor: 'tr([mock]/1/*)',
+        changeSet: '{}',
+        fullScanDone: true,
+      },
+    ],
+    lightningNwcConnections: [],
+  }),
+)
 vi.mock('@/db', () => ({
   getDatabase: vi.fn(),
   ensureMigrated: vi.fn().mockResolvedValue(undefined),
   loadWalletSecrets: vi.fn().mockRejectedValue(new Error('Wrong password')),
+  loadWalletSecretsPayload: mockLoadWalletSecretsPayload,
   useWallets: () => ({ data: mockWalletsState.data }),
 }))
 
@@ -184,10 +250,14 @@ const mockResolveDescriptorWallet = vi.hoisted(() =>
 const mockUpdateDescriptorWalletChangeset = vi.hoisted(() =>
   vi.fn().mockResolvedValue(undefined),
 )
-vi.mock('@/lib/descriptor-wallet-manager', () => ({
-  resolveDescriptorWallet: mockResolveDescriptorWallet,
-  updateDescriptorWalletChangeset: mockUpdateDescriptorWalletChangeset,
-}))
+vi.mock('@/lib/descriptor-wallet-manager', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/descriptor-wallet-manager')>()
+  return {
+    ...actual,
+    resolveDescriptorWallet: mockResolveDescriptorWallet,
+    updateDescriptorWalletChangeset: mockUpdateDescriptorWalletChangeset,
+  }
+})
 
 vi.mock('@/components/MnemonicGrid', () => ({
   MnemonicGrid: ({ words }: { words: string[] }) => (
@@ -221,6 +291,22 @@ import { SettingsPage } from '../settings'
 describe('SettingsPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    featureStoreState.lightningEnabled = false
+    featureStoreState.mainnetAccessEnabled = false
+    featureStoreState.regtestModeEnabled = false
+    featureStoreState.segwitAddressesEnabled = false
+    featureStoreState.setLightningEnabled.mockImplementation((enabled: boolean) => {
+      featureStoreState.lightningEnabled = enabled
+    })
+    featureStoreState.setMainnetAccessEnabled.mockImplementation((enabled: boolean) => {
+      featureStoreState.mainnetAccessEnabled = enabled
+    })
+    featureStoreState.setRegtestModeEnabled.mockImplementation((enabled: boolean) => {
+      featureStoreState.regtestModeEnabled = enabled
+    })
+    featureStoreState.setSegwitAddressesEnabled.mockImplementation((enabled: boolean) => {
+      featureStoreState.segwitAddressesEnabled = enabled
+    })
     nearZeroSecurityState.active = false
     mockWalletsState.data = []
     sessionStoreState.password = 'testpass'
@@ -242,13 +328,22 @@ describe('SettingsPage', () => {
     }
   })
 
-  it('renders all settings sections', () => {
+  it('renders core settings sections (Address Type hidden when SegWit feature is off)', () => {
     renderWithProviders(<SettingsPage />)
     expect(screen.getByText('Network')).toBeInTheDocument()
-    expect(screen.getByText('Address Type')).toBeInTheDocument()
+    expect(screen.queryByText('Address Type')).not.toBeInTheDocument()
     expect(screen.getByText('Appearance')).toBeInTheDocument()
     expect(screen.getByText('Security')).toBeInTheDocument()
     expect(screen.getByText('About')).toBeInTheDocument()
+  })
+
+  it('shows Address Type card when SegWit addresses feature is enabled', () => {
+    featureStoreState.segwitAddressesEnabled = true
+    renderWithProviders(<SettingsPage />)
+    expect(screen.getByText('Address Type')).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'Taproot (BIP86)' }),
+    ).toBeInTheDocument()
   })
 
   it('disables Change app password when there are no wallets', () => {
@@ -263,6 +358,35 @@ describe('SettingsPage', () => {
     ]
     renderWithProviders(<SettingsPage />)
     expect(screen.getByRole('button', { name: 'Change app password' })).toBeEnabled()
+  })
+
+  it('shows receiving descriptor when a wallet exists and session is unlocked', async () => {
+    const user = userEvent.setup()
+    mockWalletsState.data = [
+      { wallet_id: 1, name: 'Test', created_at: new Date().toISOString() },
+    ]
+    sessionStoreState.password = 'testpass'
+    renderWithProviders(<SettingsPage />)
+    expect(screen.getByText('Receiving descriptor')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(
+        screen.getByRole('button', { name: 'Show receiving descriptor' }),
+      ).toBeInTheDocument()
+    })
+    await user.click(screen.getByRole('button', { name: 'Show receiving descriptor' }))
+    expect(screen.getByText('tr([mock]/0/*)')).toBeInTheDocument()
+    expect(mockLoadWalletSecretsPayload).toHaveBeenCalled()
+  })
+
+  it('shows unlock hint for receiving descriptor when session has no password', () => {
+    mockWalletsState.data = [
+      { wallet_id: 1, name: 'Test', created_at: new Date().toISOString() },
+    ]
+    sessionStoreState.password = null
+    renderWithProviders(<SettingsPage />)
+    expect(
+      screen.getByText('Unlock your wallet to view the receiving descriptor.'),
+    ).toBeInTheDocument()
   })
 
   it('shows Set a real password when near-zero security mode is active', () => {
@@ -321,6 +445,7 @@ describe('SettingsPage', () => {
   })
 
   it('address type selector shows confirmation when wallet exists', async () => {
+    featureStoreState.segwitAddressesEnabled = true
     const user = userEvent.setup()
     renderWithProviders(<SettingsPage />)
 
@@ -366,5 +491,60 @@ describe('SettingsPage', () => {
     const updateCallOrder = mockUpdateDescriptorWalletChangeset.mock.invocationCallOrder[0]
     const resolveCallOrder = mockResolveDescriptorWallet.mock.invocationCallOrder[0]
     expect(updateCallOrder).toBeLessThan(resolveCallOrder)
+  })
+
+  it('hides Regtest network button when Regtest mode is disabled', () => {
+    featureStoreState.regtestModeEnabled = false
+    renderWithProviders(<SettingsPage />)
+    expect(screen.queryByRole('button', { name: 'Regtest' })).not.toBeInTheDocument()
+  })
+
+  it('shows Regtest network button when Regtest mode is enabled', () => {
+    featureStoreState.regtestModeEnabled = true
+    renderWithProviders(<SettingsPage />)
+    expect(screen.getByRole('button', { name: 'Regtest' })).toBeInTheDocument()
+  })
+
+  it('shows a toast when Mainnet is tapped while Mainnet access is off', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(<SettingsPage />)
+
+    await user.click(screen.getByRole('button', { name: 'Mainnet' }))
+
+    expect(vi.mocked(toast.info)).toHaveBeenCalledWith(
+      'Activate Mainnet access in Settings → Features before selecting Mainnet.',
+    )
+  })
+
+  it('opens Mainnet access confirmation modal when enabling the toggle', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(<SettingsPage />)
+
+    await user.click(screen.getByRole('switch', { name: 'Enable Mainnet access' }))
+
+    expect(
+      screen.getByRole('heading', { name: 'Mainnet access', level: 2 }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'Activate access' }),
+    ).toBeDisabled()
+  })
+
+  it('enables Activate access after acknowledging risks', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(<SettingsPage />)
+
+    await user.click(screen.getByRole('switch', { name: 'Enable Mainnet access' }))
+    await user.click(
+      screen.getByRole('checkbox', {
+        name: /I understand the risks and have a seed phrase backup ready/,
+      }),
+    )
+
+    const activate = screen.getByRole('button', { name: 'Activate access' })
+    await expect(activate).toBeEnabled()
+    await user.click(activate)
+
+    expect(featureStoreState.setMainnetAccessEnabled).toHaveBeenCalledWith(true)
   })
 })

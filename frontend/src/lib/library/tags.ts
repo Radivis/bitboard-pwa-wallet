@@ -19,6 +19,7 @@ export const LIBRARY_TAGS = {
   'hard-forks': { label: 'Hard forks' },
   standards: { label: 'Standards (BIPs, BOLTs)' },
   multisig: { label: 'Multisig' },
+  privacy: { label: 'Privacy' },
   wallets: { label: 'Wallets' },
   mining: { label: 'Mining' },
   hardware: { label: 'Hardware (signers, …)' },

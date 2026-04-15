@@ -1,8 +1,10 @@
 import { type ReactNode, useEffect, useState } from 'react'
 import { useLocation } from '@tanstack/react-router'
-import { checkDatabaseHealth, getDatabase, tryLoadNearZeroSessionIntoMemory } from '@/db'
+import { getDatabase, getInitialDatabaseHealth, tryLoadNearZeroSessionIntoMemory } from '@/db'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { pathnameRequiresWalletCryptoSession } from '@/lib/pathname-requires-wallet-crypto-session'
+import { assessOpfsLikelyUnsupported } from '@/lib/opfs-capability'
+import { useSecureStorageAvailabilityStore } from '@/stores/secureStorageAvailabilityStore'
 
 interface DatabaseReadyGateProps {
   children: ReactNode
@@ -20,15 +22,34 @@ export function DatabaseReadyGate({ children }: DatabaseReadyGateProps) {
 
   useEffect(() => {
     const pathOnColdStart = location.pathname
-    checkDatabaseHealth()
-      .then(async () => {
-        if (pathnameRequiresWalletCryptoSession(pathOnColdStart)) {
+    let cancelled = false
+
+    void (async () => {
+      const health = await getInitialDatabaseHealth()
+      if (cancelled) return
+
+      if (!health.ok) {
+        console.error('Database initialization failed:', health.error)
+        const opfsLikelyUnsupported = await assessOpfsLikelyUnsupported()
+        if (cancelled) return
+        useSecureStorageAvailabilityStore.getState().markUnavailable({
+          lastErrorMessage: health.error.message,
+          opfsLikelyUnsupported,
+        })
+      } else if (pathnameRequiresWalletCryptoSession(pathOnColdStart)) {
+        try {
           await tryLoadNearZeroSessionIntoMemory(getDatabase())
+        } catch (err) {
+          console.error('Near-zero session restore failed:', err)
         }
-      })
-      .then(() => {
-        setIsReady(true)
-      })
+      }
+
+      if (!cancelled) setIsReady(true)
+    })()
+
+    return () => {
+      cancelled = true
+    }
     // Intentionally once per app mount: re-running would replay DB init on every navigation.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- cold-start path only
   }, [])

@@ -22,6 +22,7 @@ import { InfomodeToggle } from '@/components/infomode/InfomodeToggle'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { NearZeroSecurityBanner } from '@/components/NearZeroSecurityBanner'
 import { NoMnemonicBackupBanner } from '@/components/NoMnemonicBackupBanner'
+import { SecureStorageUnavailableBanner } from '@/components/SecureStorageUnavailableBanner'
 import { useWallet } from '@/db'
 import { useWalletStore } from '@/stores/walletStore'
 import { useSessionStore } from '@/stores/sessionStore'
@@ -403,6 +404,7 @@ export function WalletLayout({ children }: WalletLayoutProps) {
         </div>
       </header>
 
+      <SecureStorageUnavailableBanner />
       <NearZeroSecurityBanner />
       <NoMnemonicBackupBanner />
 

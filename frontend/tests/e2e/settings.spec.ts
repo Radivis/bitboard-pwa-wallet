@@ -31,6 +31,11 @@ test.describe('Settings Page', () => {
     await page.getByRole('link', { name: /settings/i }).click()
     await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
 
+    const segwitFeatureSwitch = page.getByRole('switch', {
+      name: 'Enable SegWit address options and labels',
+    })
+    await segwitFeatureSwitch.scrollIntoViewIfNeeded()
+    await segwitFeatureSwitch.click()
     await expect(
       page.getByRole('button', { name: 'Taproot (BIP86)' }),
     ).toBeVisible()
@@ -47,6 +52,12 @@ test.describe('Settings Page', () => {
     await expect(page.getByText(/Esplora Endpoint/)).toBeVisible()
 
     // Switch to Regtest first: HTTP URLs are only valid for regtest (HTTPS required for others)
+    const regtestModeSwitch = page.getByRole('switch', {
+      name: 'Enable Regtest mode for developers',
+    })
+    await regtestModeSwitch.scrollIntoViewIfNeeded()
+    await regtestModeSwitch.click()
+
     await page.getByRole('button', { name: 'Regtest' }).click()
     await waitForSettingsNetworkSwitchComplete(page)
     await waitForSettingsNetworkModeButtonSelected(page, 'Regtest')
@@ -71,5 +82,22 @@ test.describe('Settings Page', () => {
       timeout: 20000,
     })
     await expect(urlInput).toHaveValue('http://custom-esplora:3002', { timeout: 5000 })
+  })
+
+  test('shows toast when Mainnet is tapped without Mainnet access enabled', async ({
+    page,
+  }) => {
+    test.setTimeout(120_000)
+    await createWalletViaUI(page)
+
+    await page.getByRole('link', { name: /settings/i }).click()
+    await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
+
+    await waitForSettingsNetworkSwitchComplete(page)
+    // Mainnet uses aria-disabled when access is off; Playwright treats that as non-clickable without force.
+    await page.getByRole('button', { name: 'Mainnet' }).click({ force: true })
+    await expect(
+      page.getByText('Activate Mainnet access in Settings → Features before selecting Mainnet.'),
+    ).toBeVisible({ timeout: 10000 })
   })
 })

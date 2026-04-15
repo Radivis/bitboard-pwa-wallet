@@ -69,6 +69,7 @@ fn build_and_sign_lab_transaction_returns_signed_tx() {
         PAYMENT_SATS,
         FEE_RATE_SAT_PER_VB,
         &change_address,
+        false,
     )
     .expect("build and sign");
 

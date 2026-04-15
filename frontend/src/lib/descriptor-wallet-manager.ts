@@ -4,7 +4,12 @@ import {
   getWalletSecretsEncrypted,
   updateWalletSecretsEncryptedPayloadWithRetry,
 } from '@/db'
-import type { DescriptorWalletData, EncryptedWalletSecretsBlob, WalletSecrets } from '@/db/wallet-persistence'
+import type {
+  DescriptorWalletData,
+  EncryptedWalletSecretsBlob,
+  WalletSecrets,
+  WalletSecretsPayload,
+} from '@/db/wallet-persistence'
 import type { EncryptedBlobForDb } from '@/workers/crypto-api'
 import type { AddressType, BitcoinNetwork } from '@/workers/crypto-types'
 import { ensureSecretsChannel } from '@/workers/secrets-channel'
@@ -15,7 +20,7 @@ import { useCryptoStore } from '@/stores/cryptoStore'
  * within the wallet secrets array.
  */
 export function findDescriptorWallet(params: {
-  secrets: WalletSecrets
+  secrets: WalletSecretsPayload | Pick<WalletSecrets, 'descriptorWallets'>
   network: BitcoinNetwork
   addressType: AddressType
   accountId: number

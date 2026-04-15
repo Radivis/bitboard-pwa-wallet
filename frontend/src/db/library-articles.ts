@@ -1,12 +1,5 @@
 import type { Kysely } from 'kysely'
-import type { Database } from './schema'
-
-/** SQLite `is_favorite` flag for “favorite” rows (absent or `0` means not favorite). */
-export const FAVORITE_SQLITE_TRUE = 1
-
-function isFavoriteValue(value: number): boolean {
-  return value === FAVORITE_SQLITE_TRUE
-}
+import { SQLITE_TRUE, type Database } from './schema'
 
 export async function getFavoriteBySlug(
   walletDb: Kysely<Database>,
@@ -18,14 +11,16 @@ export async function getFavoriteBySlug(
     .where('article_slug', '=', articleSlug)
     .executeTakeFirst()
   if (!row) return false
-  return isFavoriteValue(row.is_favorite)
+  // `== true` matches both boolean true and legacy INTEGER 1 from older DBs / drivers.
+  return row.is_favorite == true
 }
 
 export async function getAllFavoriteSlugs(walletDb: Kysely<Database>): Promise<string[]> {
   const rows = await walletDb
     .selectFrom('library_articles')
     .select('article_slug')
-    .where('is_favorite', '=', FAVORITE_SQLITE_TRUE)
+    // Runtime binds `1` (SQLite); `as boolean` satisfies Kysely OperandValue for ColumnType<boolean, …>.
+    .where('is_favorite', '=', SQLITE_TRUE as unknown as boolean)
     .execute()
   return rows.map((r) => r.article_slug)
 }
@@ -55,7 +50,7 @@ export async function setArticleFavorite(
   if (existing) {
     await walletDb
       .updateTable('library_articles')
-      .set({ is_favorite: FAVORITE_SQLITE_TRUE })
+      .set({ is_favorite: SQLITE_TRUE })
       .where('article_slug', '=', articleSlug)
       .execute()
     return
@@ -63,6 +58,6 @@ export async function setArticleFavorite(
 
   await walletDb
     .insertInto('library_articles')
-    .values({ article_slug: articleSlug, is_favorite: FAVORITE_SQLITE_TRUE })
+    .values({ article_slug: articleSlug, is_favorite: SQLITE_TRUE })
     .execute()
 }

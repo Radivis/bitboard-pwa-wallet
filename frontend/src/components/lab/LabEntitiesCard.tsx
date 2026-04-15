@@ -21,6 +21,7 @@ import {
   validateLabEntityRenameName,
 } from '@/lib/lab-owner'
 import { LAB_CARD_PAGE_SIZE } from '@/lib/lab-paginated-queries'
+import { useFeatureStore } from '@/stores/featureStore'
 import {
   AddressType,
   selectCommittedAddressType,
@@ -39,6 +40,7 @@ import { Skull, FlaskConical } from 'lucide-react'
 
 export function LabEntitiesCard() {
   const labNetworkEnabled = useWalletStore((s) => s.networkMode === 'lab')
+  const segwitAddressesEnabled = useFeatureStore((s) => s.segwitAddressesEnabled)
   const committedAddressType = useWalletStore(selectCommittedAddressType)
   const [pageIndex, setPageIndex] = useState(0)
   const [newEntityName, setNewEntityName] = useState('')
@@ -206,26 +208,28 @@ export function LabEntitiesCard() {
                   {createMutation.isPending ? 'Creating…' : 'Create lab entity'}
                 </Button>
               </div>
-              <div className="flex flex-col gap-2 max-w-md">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="space-y-0.5">
-                    <Label htmlFor="new-lab-entity-address-type" className="text-base">
-                      Address type
-                    </Label>
-                    <p className="text-xs text-muted-foreground">
-                      {newEntityUseTaproot ? 'Taproot (BIP86)' : 'SegWit (BIP84)'} — matches Settings until
-                      you change this switch.
-                    </p>
+              {segwitAddressesEnabled ? (
+                <div className="flex flex-col gap-2 max-w-md">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="space-y-0.5">
+                      <Label htmlFor="new-lab-entity-address-type" className="text-base">
+                        Address type
+                      </Label>
+                      <p className="text-xs text-muted-foreground">
+                        {newEntityUseTaproot ? 'Taproot (BIP86)' : 'SegWit (BIP84)'} — matches Settings until
+                        you change this switch.
+                      </p>
+                    </div>
+                    <Switch
+                      id="new-lab-entity-address-type"
+                      checked={newEntityUseTaproot}
+                      onCheckedChange={setNewEntityUseTaproot}
+                      disabled={!labNetworkEnabled || busy}
+                      aria-label="Use Taproot address type (BIP86); off for SegWit (BIP84)"
+                    />
                   </div>
-                  <Switch
-                    id="new-lab-entity-address-type"
-                    checked={newEntityUseTaproot}
-                    onCheckedChange={setNewEntityUseTaproot}
-                    disabled={!labNetworkEnabled || busy}
-                    aria-label="Use Taproot address type (BIP86); off for SegWit (BIP84)"
-                  />
                 </div>
-              </div>
+              ) : null}
             </div>
 
             {!labNetworkEnabled ? (

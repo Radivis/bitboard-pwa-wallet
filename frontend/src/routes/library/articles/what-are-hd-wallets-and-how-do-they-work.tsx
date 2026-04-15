@@ -4,7 +4,7 @@ import type { LibraryArticle } from '@/lib/library/library-article'
 export const article: LibraryArticle = {
   slug: 'what-are-hd-wallets-and-how-do-they-work',
   title: 'What are HD wallets and how do they work?',
-  tagIds: ['wallets', 'standards', 'bitcoin'],
+  tagIds: ['wallets', 'standards', 'bitcoin', 'privacy'],
   body: (
     <div className={ARTICLE_BODY_CLASS}>
       <p>
@@ -36,11 +36,12 @@ export const article: LibraryArticle = {
       </p>
       <p>
         HD schemes also define <strong>extended keys</strong>: data that includes a public or private
-        key plus extra material so child keys can be derived. An <strong>xpub</strong> (extended public
-        key) lets you generate receiving addresses and watch balances without holding private keys—useful
-        for a watch-only copy. See{' '}
+        key plus extra material so child keys can be derived. An{' '}
+        <ArticleLink slug="what-is-an-xpub">xpub</ArticleLink> (extended public key) lets you generate
+        receiving addresses and watch balances without holding private keys—useful for a watch-only
+        copy. See{' '}
         <ArticleLink slug="what-are-descriptors-and-descriptor-wallets">
-          What are descriptors and descriptor wallets?
+          Descriptors and descriptor wallets
         </ArticleLink>{' '}
         for how this is often written down in backups.
       </p>

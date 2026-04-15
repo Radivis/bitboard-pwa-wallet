@@ -5,13 +5,26 @@ import {
   TEST_MNEMONIC,
   TEST_PASSWORD,
 } from './helpers/wallet-setup'
-import { fundRegtestAddress, mineRegtestBlocks, waitForConfirmedBalance } from './helpers/regtest'
+import {
+  E2E_CI_AWARE_LONG_WAIT_MS,
+  fundRegtestAddress,
+  mineRegtestBlocks,
+  waitForConfirmedBalance,
+} from './helpers/regtest'
+import { runDashboardSyncUntilIdle } from './helpers/dashboard-sync'
 import { goToWalletTab } from './helpers/wallet-nav'
 import {
   waitForSettingsAddressTypeSwitchComplete,
   waitForSettingsNetworkModeButtonSelected,
   waitForSettingsNetworkSwitchComplete,
 } from './helpers/settings-waits'
+import { ensureSegwitAddressesFeatureOn } from './helpers/segwit-addresses-feature'
+
+/** At least 30s (historical default); on CI use the longer Esplora-aligned window. */
+const REVIEW_TRANSACTION_ENABLE_TIMEOUT_MS = Math.max(
+  30_000,
+  E2E_CI_AWARE_LONG_WAIT_MS,
+)
 
 test.describe('Send Page', () => {
   test.beforeEach(async ({ page }) => {
@@ -52,15 +65,23 @@ test.describe('Send Page', () => {
   })
 
   test('sends bitcoin on regtest @regtest', async ({ page }) => {
-    test.setTimeout(60_000)
+    test.setTimeout(process.env.CI ? 120_000 : 60_000)
 
     await importWalletViaUI(page, TEST_MNEMONIC, TEST_PASSWORD)
 
     await page.getByRole('link', { name: /settings/i }).click()
     await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
+    const regtestModeSwitch = page.getByRole('switch', {
+      name: 'Enable Regtest mode for developers',
+    })
+    await regtestModeSwitch.scrollIntoViewIfNeeded()
+    await regtestModeSwitch.click()
+
     await page.getByRole('button', { name: 'Regtest' }).click()
     await waitForSettingsNetworkSwitchComplete(page)
     await waitForSettingsNetworkModeButtonSelected(page, 'Regtest')
+
+    await ensureSegwitAddressesFeatureOn(page)
 
     await page.getByRole('button', { name: 'SegWit (BIP84)' }).click()
     await page.getByRole('button', { name: 'Change' }).click()
@@ -85,21 +106,9 @@ test.describe('Send Page', () => {
     await goToWalletTab(page, 'Dashboard')
     await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible()
 
-    // Wait for the Sync button to be ready (not "Syncing..." from a
-    // settings-switch sync that may still be running).
-    const syncButton = page.getByRole('button', { name: 'Sync' })
-    await expect(syncButton).toBeVisible({ timeout: 30000 })
-
-    await syncButton.click()
-
-    // Wait for the sync to START (button changes to "Syncing...") and then
-    // FINISH (button changes back to "Sync"). This is the only reliable way
-    // to know the current sync completed — success toasts from the settings
-    // switch were removed in favor of inline status; button state is reliable.
-    await expect(page.getByRole('button', { name: 'Syncing...' })).toBeVisible({
-      timeout: 5000,
-    })
-    await expect(syncButton).toBeVisible({ timeout: 60000 })
+    // One full sync (Sync enabled → Syncing… → idle) so wallet balance matches Esplora; do not
+    // assert a headline sat value — shared regtest state can show a cumulative total.
+    await runDashboardSyncUntilIdle(page)
 
     await goToWalletTab(page, 'Send')
     await expect(page.getByText('Send Bitcoin')).toBeVisible()
@@ -110,7 +119,7 @@ test.describe('Send Page', () => {
     await expect(amountInput).toHaveValue('1000')
     await expect(
       page.getByRole('button', { name: 'Review Transaction' }),
-    ).toBeEnabled({ timeout: 30000 })
+    ).toBeEnabled({ timeout: REVIEW_TRANSACTION_ENABLE_TIMEOUT_MS })
     const reviewButton = page.getByRole('button', { name: 'Review Transaction' })
     await reviewButton.click()
 

@@ -10,18 +10,22 @@ import type { LabOwner } from '@/lib/lab-owner'
 import type {
   LabBlockDetails,
   LabCurrentBlockTemplateParams,
+  LabEntityTransactionCryptoParams,
   LabMineBlocksResult,
   LabMempoolMetadata,
   LabState,
   PrepareRandomLabEntityTransactionResult,
 } from '@/workers/lab-api'
+import { toast } from 'sonner'
 import { getCryptoWorker } from '@/workers/crypto-factory'
+import type { DraftLabPsbtTransactionResult } from '@/workers/crypto-api'
 import {
   labPipelineDebugLog,
   labPipelineSnapshot,
 } from '@/lib/lab-pipeline-debug'
 import type { AddressType } from '@/lib/wallet-domain-types'
 import { LAB_MAX_RANDOM_ENTITY_TRANSACTIONS } from '@/lib/lab-random-limits'
+import { UX_DUST_FLOOR_SATS } from '@/lib/bitcoin-dust'
 
 function sumUtxoSats(utxos: { amountSats: number }[]): number {
   return utxos.reduce((s, u) => s + (Number(u.amountSats) || 0), 0)
@@ -81,6 +85,12 @@ function parseLabEntitySignResult(raw: unknown): {
   hasChange: boolean
   changesetJson: string
   changeAddress: string | null
+  finalAmountSats: number
+  originalAmountSats: number
+  raisedToMinDust: boolean
+  bumpedChangeFree: boolean
+  changeFreeBumpAvailable: boolean
+  changeFreeMaxSats: number
 } {
   const o: Record<string, unknown> =
     raw != null && typeof raw === 'object' && !Array.isArray(raw)
@@ -96,7 +106,55 @@ function parseLabEntitySignResult(raw: unknown): {
     changesetJson: String(o.changeset_json ?? ''),
     changeAddress:
       typeof changeRaw === 'string' && changeRaw.length > 0 ? changeRaw : null,
+    finalAmountSats: Number(o.final_amount_sats ?? 0),
+    originalAmountSats: Number(o.original_amount_sats ?? 0),
+    raisedToMinDust: Boolean(o.raised_to_min_dust),
+    bumpedChangeFree: Boolean(o.bumped_change_free),
+    changeFreeBumpAvailable: Boolean(o.change_free_bump_available),
+    changeFreeMaxSats: Number(o.change_free_max_sats ?? 0),
   }
+}
+
+/**
+ * Draft-only lab-entity PSBT (dust / change-free metadata). Does not persist mempool state.
+ */
+export async function labOpDraftLabEntityTransaction(params: {
+  labEntityId: number
+  fromAddress: string
+  toAddress: string
+  amountSats: number
+  feeRateSatPerVb: number
+  knownRecipientOwner?: LabOwner | null
+}): Promise<{
+  prep: {
+    crypto: LabEntityTransactionCryptoParams
+    mempoolMetadata: LabMempoolMetadata
+    totalInput: number
+  }
+  draft: DraftLabPsbtTransactionResult
+}> {
+  const prep = await runLabOp(async () => {
+    labPipelineDebugLog('draftLabEntityTransaction:prepare', {})
+    await initLabWorkerWithState()
+    const labWorker = getLabWorker()
+    return labWorker.prepareLabEntityTransaction(params)
+  })
+
+  const cryptoWorker = getCryptoWorker()
+  const c = prep.crypto
+  const draft = await cryptoWorker.labEntityDraftLabPsbtTransaction({
+    mnemonic: c.mnemonic,
+    changesetJson: c.changesetJson,
+    network: c.network,
+    addressType: c.addressType,
+    accountId: c.accountId,
+    utxosJson: c.utxosJson,
+    toAddress: c.toAddress,
+    amountSats: c.amountSats,
+    feeRateSatPerVb: c.feeRateSatPerVb,
+  })
+
+  return { prep, draft }
 }
 
 /**
@@ -109,6 +167,7 @@ export async function labOpCreateLabEntityTransaction(params: {
   amountSats: number
   feeRateSatPerVb: number
   knownRecipientOwner?: LabOwner | null
+  applyChangeFreeBump?: boolean
 }): Promise<LabState> {
   const prep = await runLabOp(async () => {
     labPipelineDebugLog('createLabEntityTransaction:prepare', {})
@@ -129,21 +188,52 @@ export async function labOpCreateLabEntityTransaction(params: {
     toAddress: c.toAddress,
     amountSats: c.amountSats,
     feeRateSatPerVb: c.feeRateSatPerVb,
+    applyChangeFreeBump: params.applyChangeFreeBump ?? false,
   })
-  const { signedTxHex, feeSats, hasChange, changesetJson, changeAddress } =
-    parseLabEntitySignResult(signRaw)
+  const parsed = parseLabEntitySignResult(signRaw)
+  const {
+    signedTxHex,
+    feeSats,
+    hasChange,
+    changesetJson,
+    changeAddress,
+    finalAmountSats,
+    raisedToMinDust,
+    bumpedChangeFree,
+  } = parsed
+
+  if (raisedToMinDust || bumpedChangeFree) {
+    const lines: string[] = []
+    if (raisedToMinDust) {
+      lines.push(
+        `Amount was below the minimum output size (${UX_DUST_FLOOR_SATS} sats). It was increased automatically.`,
+      )
+    }
+    if (bumpedChangeFree) {
+      lines.push(
+        'Change for this transaction would have been below the dust limit; the amount was increased to make the transfer change-free.',
+      )
+    }
+    toast.warning(lines.join(' '))
+  }
 
   if (hasChange && (changeAddress == null || changeAddress === '')) {
     throw new Error('labOpCreateLabEntityTransaction: change_address missing when has_change')
   }
 
   const totalInput = prep.totalInput
+  const recipientLineAmount =
+    finalAmountSats > 0 ? finalAmountSats : params.amountSats
+
   const outputsDetail = hasChange
     ? [
-        ...prep.mempoolMetadata.outputsDetail,
+        {
+          ...prep.mempoolMetadata.outputsDetail[0],
+          amountSats: recipientLineAmount,
+        },
         {
           address: changeAddress as string,
-          amountSats: totalInput - params.amountSats - feeSats,
+          amountSats: totalInput - recipientLineAmount - feeSats,
           isChange: true as const,
           owner: prep.mempoolMetadata.sender,
         },
@@ -220,9 +310,19 @@ export async function labOpCreateRandomLabEntityTransactions(
           await labWorker.prepareRandomLabEntityTransaction()
         if (!prepared) break
 
-        const signRaw = await cryptoWorker.labEntityBuildAndSignLabTransaction(prepared.crypto)
-        const { signedTxHex, feeSats, hasChange, changesetJson, changeAddress } =
-          parseLabEntitySignResult(signRaw)
+        const signRaw = await cryptoWorker.labEntityBuildAndSignLabTransaction({
+          ...prepared.crypto,
+          applyChangeFreeBump: false,
+        })
+        const parsedRandom = parseLabEntitySignResult(signRaw)
+        const {
+          signedTxHex,
+          feeSats,
+          hasChange,
+          changesetJson,
+          changeAddress,
+          finalAmountSats,
+        } = parsedRandom
 
         if (hasChange && (changeAddress == null || changeAddress === '')) {
           throw new Error(
@@ -230,12 +330,18 @@ export async function labOpCreateRandomLabEntityTransactions(
           )
         }
 
+        const recipientLineAmount =
+          finalAmountSats > 0 ? finalAmountSats : prepared.prepareParams.amountSats
+
         const outputsDetail = hasChange
           ? [
-              ...prepared.mempoolMetadata.outputsDetail,
+              {
+                ...prepared.mempoolMetadata.outputsDetail[0],
+                amountSats: recipientLineAmount,
+              },
               {
                 address: changeAddress as string,
-                amountSats: prepared.totalInput - prepared.prepareParams.amountSats - feeSats,
+                amountSats: prepared.totalInput - recipientLineAmount - feeSats,
                 isChange: true as const,
                 owner: prepared.mempoolMetadata.sender,
               },

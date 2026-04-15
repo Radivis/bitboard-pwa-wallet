@@ -4,9 +4,17 @@ import { Settings } from 'lucide-react'
 import { PageHeader } from '@/components/PageHeader'
 import { AppDescription } from '@/components/AppDescription'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import {
+  Card,
+  CardContent,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from '@/components/ui/card'
 import { ThemeSelector } from '@/components/settings/ThemeSelector'
 import { NetworkSelector } from '@/components/settings/NetworkSelector'
+import { NetworkCardCommittedDescriptor } from '@/components/settings/NetworkCardCommittedDescriptor'
 import { AddressTypeSelector } from '@/components/settings/AddressTypeSelector'
 import { EsploraUrlSettings } from '@/components/settings/EsploraUrlSettings'
 import { FeatureToggles } from '@/components/settings/FeatureToggles'
@@ -15,12 +23,14 @@ import { ChangeAppPasswordModal } from '@/components/ChangeAppPasswordModal'
 import { UpgradeFromNearZeroPasswordModal } from '@/components/UpgradeFromNearZeroPasswordModal'
 import { useWallets } from '@/db'
 import { useNearZeroSecurityStore } from '@/stores/nearZeroSecurityStore'
+import { useFeatureStore } from '@/stores/featureStore'
 
 export const Route = createFileRoute('/settings')({
   component: SettingsPage,
 })
 
 export function SettingsPage() {
+  const segwitAddressesEnabled = useFeatureStore((s) => s.segwitAddressesEnabled)
   const { data: wallets } = useWallets()
   const hasWallets = (wallets?.length ?? 0) > 0
   const nearZeroActive = useNearZeroSecurityStore((s) => s.active)
@@ -47,27 +57,34 @@ export function SettingsPage() {
           <CardContent>
             <NetworkSelector />
           </CardContent>
+          {hasWallets ? (
+            <CardFooter className="flex-col items-stretch border-t pt-6">
+              <NetworkCardCommittedDescriptor />
+            </CardFooter>
+          ) : null}
         </Card>
       </InfomodeWrapper>
 
-      <InfomodeWrapper
-        infoId="settings-address-type-card"
-        infoTitle="Address type"
-        infoText="This setting controls how Bitboard derives new receiving addresses from your seed—Taproot (BIP86) versus SegWit (BIP84). Both are standard and secure; they produce different address shapes. Changing it does not delete money you already received on the other style, but day-to-day you usually stick to one type for simplicity."
-        className="rounded-xl"
-      >
-        <Card>
-          <CardHeader>
-            <CardTitle>Address Type</CardTitle>
-            <CardDescription>
-              Choose the address format for new wallets.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <AddressTypeSelector />
-          </CardContent>
-        </Card>
-      </InfomodeWrapper>
+      {segwitAddressesEnabled ? (
+        <InfomodeWrapper
+          infoId="settings-address-type-card"
+          infoTitle="Address type"
+          infoText="This setting controls how Bitboard derives new receiving addresses from your seed—Taproot (BIP86) versus SegWit (BIP84). Both are standard and secure; they produce different address shapes. Changing it does not delete money you already received on the other style, but day-to-day you usually stick to one type for simplicity."
+          className="rounded-xl"
+        >
+          <Card>
+            <CardHeader>
+              <CardTitle>Address Type</CardTitle>
+              <CardDescription>
+                Choose the address format for new wallets.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <AddressTypeSelector />
+            </CardContent>
+          </Card>
+        </InfomodeWrapper>
+      ) : null}
 
       <Card>
         <CardHeader>
@@ -82,7 +99,7 @@ export function SettingsPage() {
       <InfomodeWrapper
         infoId="settings-features-card"
         infoTitle="Features"
-        infoText="Enable or disable optional wallet features. These are advanced capabilities that go beyond basic Bitcoin on-chain operations. Each feature can be turned on independently when you are ready to explore it."
+        infoText="Enable or disable optional wallet features. These are advanced capabilities that go beyond basic Bitcoin on-chain operations. Mainnet access must be turned on here before you can select Mainnet under Network. Each feature can be turned on independently when you are ready to explore it."
         className="rounded-xl"
       >
         <Card>

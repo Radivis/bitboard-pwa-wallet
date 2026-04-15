@@ -42,11 +42,18 @@ vi.mock('@/workers/lab-factory', () => ({
 
 vi.mock('@/workers/crypto-factory', () => ({
   getCryptoWorker: () => ({
+    labEntityDraftLabPsbtTransaction: vi.fn(),
     labEntityBuildAndSignLabTransaction: vi.fn().mockResolvedValue({
       signed_tx_hex: 'deadbeef',
       fee_sats: 140,
       has_change: false,
       changeset_json: '{}',
+      final_amount_sats: 5000,
+      original_amount_sats: 5000,
+      raised_to_min_dust: false,
+      bumped_change_free: false,
+      change_free_bump_available: false,
+      change_free_max_sats: 0,
     }),
   }),
 }))

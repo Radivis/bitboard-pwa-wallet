@@ -1,7 +1,11 @@
-import type { Generated, Insertable, Selectable, Updateable } from 'kysely'
+import type { ColumnType, Generated, Insertable, Selectable, Updateable } from 'kysely'
 import type { KdfVersion } from '@/lib/encrypted-blob-types'
 
 export type { KdfVersion }
+
+/** SQLite BOOLEAN columns: bindings use `0`/`1`, not JS `boolean`, in some drivers. */
+export const SQLITE_FALSE = 0
+export const SQLITE_TRUE = 1
 
 export interface Database {
   wallets: WalletsTable
@@ -62,7 +66,8 @@ export type NewLibraryHistoryRow = Insertable<LibraryHistoryTable>
 
 interface LibraryArticlesTable {
   article_slug: string
-  is_favorite: number
+  /** SQLite BOOLEAN; JS `boolean` when selected, bind `0`/`1` on insert/update (driver limitation). */
+  is_favorite: ColumnType<boolean, number, number>
 }
 
 export type LibraryArticleRow = Selectable<LibraryArticlesTable>

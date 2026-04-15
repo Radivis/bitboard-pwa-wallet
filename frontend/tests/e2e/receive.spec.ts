@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test'
 import { createWalletViaUI } from './helpers/wallet-setup'
 import { goToWalletTab } from './helpers/wallet-nav'
+import { enableSegwitAddressesFeature } from './helpers/segwit-addresses-feature'
 
 test.describe('Receive Page', () => {
   test.beforeEach(async ({ page }) => {
@@ -8,6 +9,10 @@ test.describe('Receive Page', () => {
   })
 
   test('receive page shows address and QR', async ({ page }) => {
+    await goToWalletTab(page, 'Receive')
+    await expect(page.getByText('Receive Bitcoin')).toBeVisible()
+
+    await enableSegwitAddressesFeature(page)
     await goToWalletTab(page, 'Receive')
     await expect(page.getByText('Receive Bitcoin')).toBeVisible()
 

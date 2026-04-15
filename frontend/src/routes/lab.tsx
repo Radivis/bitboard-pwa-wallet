@@ -4,6 +4,7 @@ import { useWalletStore } from '@/stores/walletStore'
 import { appQueryClient } from '@/lib/app-query-client'
 import { labChainStateQueryKey, toUiLabState } from '@/lib/lab-chain-query'
 import { labOpLoadChainFromDatabase } from '@/lib/lab-worker-operations'
+import { getLabWorker } from '@/workers/lab-factory'
 import { useLabChainStateQuery } from '@/hooks/useLabChainStateQuery'
 import { runLabRouteBeforeLoad } from '@/lib/lab-route-before-load'
 
@@ -58,6 +59,17 @@ function LabLayout() {
     }
     return () => {
       delete window.__labGetState
+    }
+  }, [networkMode])
+
+  useEffect(() => {
+    if (networkMode !== 'lab' || !import.meta.env.DEV) return
+    window.__labGetTransaction = async (txid: string) => {
+      const worker = getLabWorker()
+      return worker.getTransaction(txid)
+    }
+    return () => {
+      delete window.__labGetTransaction
     }
   }, [networkMode])
 

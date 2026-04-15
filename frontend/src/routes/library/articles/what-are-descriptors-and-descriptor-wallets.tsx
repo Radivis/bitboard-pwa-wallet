@@ -3,49 +3,62 @@ import type { LibraryArticle } from '@/lib/library/library-article'
 
 export const article: LibraryArticle = {
   slug: 'what-are-descriptors-and-descriptor-wallets',
-  title: 'What are descriptors and descriptor wallets?',
-  tagIds: ['wallets', 'standards', 'bitcoin'],
+  title: 'Descriptors and descriptor wallets',
+  tagIds: ['wallets', 'standards', 'bitcoin', 'privacy'],
   body: (
     <div className={ARTICLE_BODY_CLASS}>
       <p>
-        In Bitcoin, software needs to know <em>which</em> keys and scripts belong to your wallet: how
-        addresses are generated, whether funds require one signature or several, and how keys are
-        derived from a seed. An <strong>output script descriptor</strong> (usually just called a{' '}
-        <strong>descriptor</strong>) is a compact, human-readable text format that describes that
-        information in a standardized way so different programs can interpret it the same way.
+        If you are new to Bitcoin: you do not download “coins” into an app the way you install a
+        file. The public <ArticleLink slug="bitcoin">Bitcoin</ArticleLink> network records
+        transactions; your <ArticleLink slug="what-is-a-wallet">wallet</ArticleLink> holds the
+        secrets (keys) that let you prove you may spend certain funds, and it shows you balances by
+        tracking which <ArticleLink slug="what-is-a-utxo">outputs</ArticleLink> belong to you.
       </p>
       <p>
-        Think of a descriptor as a recipe: it names the type of script (for example pay-to-public-key
-        hash, multisig, or SegWit variants), includes the necessary public keys or{' '}
-        <strong>extended keys</strong> (such as an <strong>xpub</strong>—an extended public key from
-        which many child keys are derived), and may include derivation paths that say how to step from
-        a master key to individual addresses. The details are specified in BIPs in the 380 range and
-        related documents; see <ArticleLink slug="what-is-a-bip">What is BIP?</ArticleLink>.
+        To do that, wallet software must know <em>exactly</em> how your keys and addresses are
+        produced: which rules (script types) to use—such as{' '}
+        <ArticleLink slug="segwit">SegWit</ArticleLink> or <ArticleLink slug="taproot">Taproot</ArticleLink>
+        —and how keys are derived from your seed. Modern wallets derive many{' '}
+        <ArticleLink slug="how-many-addresses-can-a-bitcoin-wallet-have">addresses</ArticleLink> from
+        one backup using standards like{' '}
+        <ArticleLink slug="what-are-hd-wallets-and-how-do-they-work">HD wallets</ArticleLink>.
       </p>
       <p>
-        A <strong>descriptor wallet</strong> is a wallet that uses descriptors (and often related
-        metadata like birth heights) as the main way to describe what it controls. That makes backups
-        clearer—you can export text that fully specifies recovery—and helps interoperability between
-        wallets, hardware signers, and watch-only tools. A <strong>watch-only</strong> setup might
-        import only public descriptors and xpubs so you can monitor balances without holding private
-        keys on an online machine.
+        An <strong>output script descriptor</strong> (usually just called a <strong>descriptor</strong>)
+        is a compact, standardized <em>text recipe</em> that spells out that information: script type,
+        the relevant public or <strong>extended public keys</strong> (
+        <ArticleLink slug="what-is-an-xpub">xpubs</ArticleLink>
+        ), and derivation paths so
+        every program can interpret it the same way. The format is documented in BIPs in the 380 range;
+        for what a BIP is, see <ArticleLink slug="what-is-a-bip">What is BIP?</ArticleLink>.
       </p>
       <p>
-        Descriptors do not replace your responsibility to protect seeds and private key material; they
-        describe <em>how</em> keys are used. For general wallet concepts, see{' '}
-        <ArticleLink slug="what-is-a-wallet">What is a wallet</ArticleLink>; for keys, see{' '}
-        <ArticleLink slug="secret-and-public-keys-in-bitcoin">
+        A <strong>descriptor wallet</strong> is a wallet whose on-disk state is built around these
+        descriptors (often together with metadata like when scanning should start). That makes
+        backups and interoperability clearer: you can export text that describes what the wallet
+        controls, and tools like watch-only monitors can import the <em>public</em> side to show
+        balances without holding private keys—though you still must protect seeds and private keys
+        yourself; see <ArticleLink slug="secret-and-public-keys-in-bitcoin">
           Secret and public keys in Bitcoin
         </ArticleLink>
-        ; for HD derivation from a seed, see{' '}
-        <ArticleLink slug="what-are-hd-wallets-and-how-do-they-work">
-          What are HD wallets and how do they work?
-        </ArticleLink>
-        . For backup tradeoffs, see{' '}
+        .
+      </p>
+      <p>
+        In practice a wallet often keeps two related descriptors for the same account: an{' '}
+        <strong>external</strong> (receiving) chain and an <strong>internal</strong> (change) chain,
+        so fresh receiving addresses stay separate from change outputs. Descriptors describe{' '}
+        <em>how</em> keys are used; they do not replace safe backup of your seed. For backup options,
+        see{' '}
         <ArticleLink slug="bitcoin-backup-techniques-overview">
           An overview of different backup techniques for Bitcoin
         </ArticleLink>
         .
+      </p>
+      <p>
+        <strong>Privacy note:</strong> sharing a descriptor or{' '}
+        <ArticleLink slug="what-is-an-xpub">xpub</ArticleLink> can reveal your fingerprint and
+        derivation structure and let others link addresses—treat it as sensitive metadata, not like a
+        single public receiving address alone.
       </p>
     </div>
   ),

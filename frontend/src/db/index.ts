@@ -4,6 +4,7 @@ export {
   ensureMigrated,
   destroyDatabase,
   checkDatabaseHealth,
+  getInitialDatabaseHealth,
 } from './database'
 export type { DatabaseHealthResult } from './database'
 export { sqliteStorage } from './storage-adapter'

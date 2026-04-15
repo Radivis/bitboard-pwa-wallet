@@ -5,6 +5,7 @@ import {
   waitForSettingsNetworkModeButtonSelected,
   waitForSettingsNetworkSwitchComplete,
 } from './helpers/settings-waits'
+import { runDashboardSyncUntilIdle } from './helpers/dashboard-sync'
 
 const E2E_NWC_CONNECTION_STRING = 'nostr+walletconnect://e2e-mock'
 const E2E_NWC_LABEL = 'E2E Mock Wallet'
@@ -40,16 +41,6 @@ async function switchToNetworkInSettings(page: Page, networkLabel: 'Signet' | 'T
   await page.getByRole('button', { name: networkLabel }).click()
   await waitForSettingsNetworkSwitchComplete(page)
   await waitForSettingsNetworkModeButtonSelected(page, networkLabel)
-}
-
-async function triggerDashboardSync(page: Page) {
-  const syncButton = page.getByRole('button', { name: 'Sync' })
-  await expect(syncButton).toBeVisible({ timeout: 30_000 })
-  await syncButton.click()
-  await expect(page.getByRole('button', { name: 'Syncing...' })).toBeVisible({
-    timeout: 10_000,
-  })
-  await expect(syncButton).toBeVisible({ timeout: 60_000 })
 }
 
 test.describe('Lightning NWC stale cache @nwc', () => {
@@ -96,7 +87,7 @@ test.describe('Lightning NWC stale cache @nwc', () => {
     await switchToNetworkInSettings(page, 'Testnet')
     await switchToNetworkInSettings(page, 'Signet')
     await goToWalletTab(page, 'Dashboard')
-    await triggerDashboardSync(page)
+    await runDashboardSyncUntilIdle(page)
     await expect(page.getByTestId('lightning-balance-stale-banner')).toBeVisible({
       timeout: 15_000,
     })
@@ -108,11 +99,15 @@ test.describe('Lightning NWC stale cache @nwc', () => {
     await switchToNetworkInSettings(page, 'Testnet')
     await switchToNetworkInSettings(page, 'Signet')
     await goToWalletTab(page, 'Dashboard')
-    await triggerDashboardSync(page)
+    await runDashboardSyncUntilIdle(page)
     await expect(
       page.getByTestId(new RegExp(`ln-payment-.*-${RECOVERY_PAYMENT_HASH}`)),
     ).toBeVisible({ timeout: 20_000 })
-    await expect(page.getByTestId('lightning-balance-stale-banner')).toBeHidden()
-    await expect(page.getByTestId('lightning-history-stale-banner')).toBeHidden()
+    await expect(page.getByTestId('lightning-balance-stale-banner')).toBeHidden({
+      timeout: 20_000,
+    })
+    await expect(page.getByTestId('lightning-history-stale-banner')).toBeHidden({
+      timeout: 20_000,
+    })
   })
 })

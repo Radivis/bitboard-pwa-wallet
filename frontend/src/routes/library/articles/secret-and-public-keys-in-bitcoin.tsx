@@ -4,7 +4,7 @@ import type { LibraryArticle } from '@/lib/library/library-article'
 export const article: LibraryArticle = {
   slug: 'secret-and-public-keys-in-bitcoin',
   title: 'Secret and public keys in Bitcoin',
-  tagIds: ['elliptic-curves', 'cryptography', 'bitcoin'],
+  tagIds: ['elliptic-curves', 'cryptography', 'bitcoin', 'privacy'],
   body: (
     <div className={ARTICLE_BODY_CLASS}>
       <p>
@@ -28,7 +28,8 @@ export const article: LibraryArticle = {
         wallet tree.{' '}
         <ArticleLink slug="what-are-descriptors-and-descriptor-wallets">Descriptors</ArticleLink> are a
         text format that describes how keys and scripts fit together—helpful for recovery and advanced
-        setups.
+        setups. For the extended public export that can derive many addresses from one string, see{' '}
+        <ArticleLink slug="what-is-an-xpub">What is an xpub?</ArticleLink>
       </p>
       <p>
         Losing the private key or seed means losing access to funds; leaking it means anyone who has it

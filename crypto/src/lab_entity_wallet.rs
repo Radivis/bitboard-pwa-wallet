@@ -108,6 +108,54 @@ pub struct LabEntitySignResult {
     pub changeset_json: String,
     /// Internal change address used in the transaction, only set when the signed tx has change.
     pub change_address: Option<String>,
+    pub final_amount_sats: u64,
+    pub original_amount_sats: u64,
+    pub raised_to_min_dust: bool,
+    pub bumped_change_free: bool,
+    pub change_free_bump_available: bool,
+    pub change_free_max_sats: u64,
+}
+
+/// Inputs for [`lab_entity_draft_lab_psbt_transaction`].
+#[derive(Debug)]
+pub struct LabEntityDraftArgs<'a> {
+    pub mnemonic: &'a str,
+    pub changeset_json: &'a str,
+    pub network: BitcoinNetwork,
+    pub address_type: AddressType,
+    pub account_id: u32,
+    pub utxos_json: &'a str,
+    pub to_address: &'a str,
+    pub amount_sats: u64,
+    pub fee_rate_sat_per_vb: f64,
+}
+
+/// Unsigned PSBT + dust metadata for a lab-entity send (no chain mutation).
+pub fn lab_entity_draft_lab_psbt_transaction(
+    args: LabEntityDraftArgs<'_>,
+) -> Result<lab_psbt::LabDraftPsbtOutcome, CryptoError> {
+    let (mut wallet, _) = open_lab_entity_wallet(
+        args.mnemonic,
+        args.changeset_json,
+        args.network,
+        args.address_type,
+        args.account_id,
+    )?;
+
+    let next_internal_index = wallet.next_derivation_index(KeychainKind::Internal);
+    let change_address_for_build = wallet
+        .peek_address(KeychainKind::Internal, next_internal_index)
+        .address
+        .to_string();
+
+    lab_psbt::prepare_lab_psbt_draft(
+        &mut wallet,
+        args.utxos_json,
+        args.to_address,
+        args.amount_sats,
+        args.fee_rate_sat_per_vb,
+        &change_address_for_build,
+    )
 }
 
 /// Inputs for [`lab_entity_build_and_sign_lab_transaction`].
@@ -122,6 +170,7 @@ pub struct LabEntityBuildSignArgs<'a> {
     pub to_address: &'a str,
     pub amount_sats: u64,
     pub fee_rate_sat_per_vb: f64,
+    pub apply_change_free_bump: bool,
 }
 
 /// Build and sign a lab tx using a lab-entity wallet (foreign UTXOs + internal change).
@@ -142,17 +191,18 @@ pub fn lab_entity_build_and_sign_lab_transaction(
         .address
         .to_string();
 
-    let signed_tx = lab_psbt::build_and_sign_lab_transaction(
+    let outcome = lab_psbt::prepare_build_and_sign_lab_transaction(
         &mut wallet,
         args.utxos_json,
         args.to_address,
         args.amount_sats,
         args.fee_rate_sat_per_vb,
         &change_address_for_build,
+        args.apply_change_free_bump,
     )?;
     merge_staged_changeset(&mut wallet, &mut persisted_changeset)?;
 
-    let change_address = if signed_tx.has_change {
+    let change_address = if outcome.has_change {
         let revealed = wallet.reveal_next_address(KeychainKind::Internal);
         merge_staged_changeset(&mut wallet, &mut persisted_changeset)?;
         let revealed_str = revealed.address.to_string();
@@ -162,14 +212,19 @@ pub fn lab_entity_build_and_sign_lab_transaction(
         None
     };
 
-    let signed_tx_hex = hex::encode(&signed_tx.signed_tx_bytes);
     let changeset_json = serialize_changeset(&persisted_changeset)?;
 
     Ok(LabEntitySignResult {
-        signed_tx_hex,
-        fee_sats: signed_tx.fee_sats,
-        has_change: signed_tx.has_change,
+        signed_tx_hex: outcome.signed_tx_hex,
+        fee_sats: outcome.fee_sats,
+        has_change: outcome.has_change,
         changeset_json,
         change_address,
+        final_amount_sats: outcome.final_amount_sats,
+        original_amount_sats: outcome.original_amount_sats,
+        raised_to_min_dust: outcome.raised_to_min_dust,
+        bumped_change_free: outcome.bumped_change_free,
+        change_free_bump_available: outcome.change_free_bump_available,
+        change_free_max_sats: outcome.change_free_max_sats,
     })
 }

@@ -1,0 +1,13 @@
+dist/
+node_modules/
+
+# Local env (secrets / machine-specific)
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+
+# OS
+.DS_Store

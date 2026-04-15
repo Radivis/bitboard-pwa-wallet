@@ -3,6 +3,7 @@ import type { Kysely } from 'kysely'
 /**
  * Migration strategy: additive only; no destructive changes. No version table.
  * Fresh installs get the full schema from createTable; no separate ALTER steps.
+ * Legacy DBs may still list INTEGER for boolean columns in PRAGMA table_info until recreated; behavior is unchanged.
  */
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- migrations run over multiple DB shapes
@@ -65,6 +66,6 @@ export async function migrateToLatest(db: Kysely<any>): Promise<void> {
     .createTable('library_articles')
     .ifNotExists()
     .addColumn('article_slug', 'text', (col) => col.primaryKey())
-    .addColumn('is_favorite', 'integer', (col) => col.notNull().defaultTo(0))
+    .addColumn('is_favorite', 'boolean', (col) => col.notNull().defaultTo(false))
     .execute()
 }

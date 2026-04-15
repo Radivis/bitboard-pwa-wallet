@@ -4,7 +4,7 @@ import type { LibraryArticle } from '@/lib/library/library-article'
 export const article: LibraryArticle = {
   slug: 'bitcoin-backup-techniques-overview',
   title: 'An overview of different backup techniques for Bitcoin',
-  tagIds: ['backups', 'bitcoin'],
+  tagIds: ['backups', 'bitcoin', 'privacy'],
   body: (
     <div className={ARTICLE_BODY_CLASS}>
       <p>
@@ -12,10 +12,10 @@ export const article: LibraryArticle = {
         writing down a <strong>BIP-39</strong> seed phrase (a list of words encoding random data) on
         paper or metal, exporting{' '}
         <ArticleLink slug="what-are-descriptors-and-descriptor-wallets">descriptor</ArticleLink> or{' '}
-        <strong>xpub</strong> (extended public key) material for watch-only recovery, and using
-        multisig so loss of one key does not mean loss of funds. <strong>Xpub</strong> lets a wallet
-        derive many receiving addresses without holding private keys—useful for monitoring on a less
-        trusted device.
+        <ArticleLink slug="what-is-an-xpub">xpub</ArticleLink> (extended public key) material for
+        watch-only recovery, and using multisig so loss of one key does not mean loss of funds. An{' '}
+        <ArticleLink slug="what-is-an-xpub">xpub</ArticleLink> lets a wallet derive many receiving
+        addresses without holding private keys—useful for monitoring on a less trusted device.
       </p>
       <p>
         Each approach balances convenience, durability, and attack surface. Metal plates resist fire
