@@ -17,7 +17,7 @@ import {
   getUtxoSumByOwner,
   findAddressForOwner,
   goToLabTransactionsPage,
-  expectManualLabEntityTransactionInMempool,
+  expectManualLabEntityTransactionInMempoolAndInspectOutputs,
   clickLabDustChoiceManualLabEntityTx,
   createLabEntityViaControl,
 } from './helpers/lab'
@@ -53,7 +53,7 @@ test.describe('Lab manual transactions dust UX', { tag: '@lab' }, () => {
     await expect(
       page.getByText(/minimum output size \(546 sats\)/i).first(),
     ).toBeVisible({ timeout: 60000 })
-    await expectManualLabEntityTransactionInMempool(page)
+    await expectManualLabEntityTransactionInMempoolAndInspectOutputs(page)
   })
 
   /**
@@ -93,7 +93,7 @@ test.describe('Lab manual transactions dust UX', { tag: '@lab' }, () => {
     await page.getByRole('button', { name: 'Send' }).click()
 
     await clickLabDustChoiceManualLabEntityTx(page, 'keepExact')
-    await expectManualLabEntityTransactionInMempool(page)
+    await expectManualLabEntityTransactionInMempoolAndInspectOutputs(page)
   })
 
   /** Same funding as keep-exact; user chooses change-free max (bump) instead. */
@@ -130,6 +130,6 @@ test.describe('Lab manual transactions dust UX', { tag: '@lab' }, () => {
     await page.getByRole('button', { name: 'Send' }).click()
 
     await clickLabDustChoiceManualLabEntityTx(page, 'increaseToChangeFreeMax')
-    await expectManualLabEntityTransactionInMempool(page)
+    await expectManualLabEntityTransactionInMempoolAndInspectOutputs(page)
   })
 })

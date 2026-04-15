@@ -32,7 +32,10 @@ test.describe('Infomode on Settings', () => {
     const committedDescriptorBlock = page.locator(
       '[data-infomode-id="settings-network-committed-descriptor"]',
     )
-    await committedDescriptorBlock.getByText('Receiving descriptor').click()
+    // Visible label is exactly "Receiving descriptor"; sr-only help begins with "Receiving descriptor hidden…"
+    await committedDescriptorBlock
+      .getByText('Receiving descriptor', { exact: true })
+      .click()
     await expect(infomodeDialog).toBeVisible()
     await expect(infomodeDialog.getByRole('heading', { name: 'Output descriptors' })).toBeVisible()
 

@@ -30,6 +30,8 @@ import {
 const DEFAULT_LAB_FEE_RATE_SAT_PER_VB = 1
 const DEFAULT_RANDOM_TRANSACTION_COUNT = 1
 
+const LAB_ENTITY_MIN_OUTPUT_TOAST_MESSAGE = `Amount was below the minimum output size (${UX_DUST_FLOOR_SATS} sats). It was increased automatically.`
+
 /**
  * Form state, derived lab lists, and TanStack Query mutations for lab section routes.
  */
@@ -168,9 +170,7 @@ export function useLabIndexPageData() {
         amountSats < UX_DUST_FLOOR_SATS
       ) {
         amountSats = UX_DUST_FLOOR_SATS
-        toast.warning(
-          `Amount was below the minimum output size (${UX_DUST_FLOOR_SATS} sats). It was increased automatically.`,
-        )
+        toast.warning(LAB_ENTITY_MIN_OUTPUT_TOAST_MESSAGE)
         setAmountSats(String(UX_DUST_FLOOR_SATS))
       }
 
@@ -193,9 +193,7 @@ export function useLabIndexPageData() {
         ) {
           amountSats = draftResult.draft.finalAmountSats
           setAmountSats(String(amountSats))
-          toast.warning(
-            `Amount was below the minimum output size (${UX_DUST_FLOOR_SATS} sats). It was increased automatically.`,
-          )
+          toast.warning(LAB_ENTITY_MIN_OUTPUT_TOAST_MESSAGE)
           try {
             draftResult = await labOpDraftLabEntityTransaction({
               ...variables,
@@ -242,39 +240,33 @@ export function useLabIndexPageData() {
     })
   }, [pendingDeadLabSend, runLabEntitySendPipeline])
 
+  const completeDustCase2Mutation = useCallback(
+    (applyChangeFreeBump: boolean) => {
+      if (dustCase2Modal == null) return
+      const { pendingVariables } = dustCase2Modal
+      setDustCase2Modal(null)
+      void createTxMutation
+        .mutateAsync({
+          ...pendingVariables,
+          applyChangeFreeBump,
+        })
+        .then(() => {
+          clearSendForm()
+        })
+        .catch(() => {
+          /* error toast from mutation onError */
+        })
+    },
+    [dustCase2Modal, createTxMutation, clearSendForm],
+  )
+
   const onDustCase2KeepExact = useCallback(() => {
-    if (dustCase2Modal == null) return
-    const { pendingVariables } = dustCase2Modal
-    setDustCase2Modal(null)
-    void createTxMutation
-      .mutateAsync({
-        ...pendingVariables,
-        applyChangeFreeBump: false,
-      })
-      .then(() => {
-        clearSendForm()
-      })
-      .catch(() => {
-        /* error toast from mutation onError */
-      })
-  }, [dustCase2Modal, createTxMutation, clearSendForm])
+    completeDustCase2Mutation(false)
+  }, [completeDustCase2Mutation])
 
   const onDustCase2IncreaseToChangeFree = useCallback(() => {
-    if (dustCase2Modal == null) return
-    const { pendingVariables } = dustCase2Modal
-    setDustCase2Modal(null)
-    void createTxMutation
-      .mutateAsync({
-        ...pendingVariables,
-        applyChangeFreeBump: true,
-      })
-      .then(() => {
-        clearSendForm()
-      })
-      .catch(() => {
-        /* error toast from mutation onError */
-      })
-  }, [dustCase2Modal, createTxMutation, clearSendForm])
+    completeDustCase2Mutation(true)
+  }, [completeDustCase2Mutation])
 
   const closeDustCase2Modal = useCallback(() => {
     setDustCase2Modal(null)

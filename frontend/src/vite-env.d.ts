@@ -17,6 +17,10 @@ interface ImportMeta {
 /** Test hook for E2E: returns lab state. Only set when import.meta.env.DEV. */
 interface Window {
   __labGetState?: () => Promise<import('@/workers/lab-api').LabState>
+  /** E2E: full tx details (incl. mempool) from lab worker. Only set when import.meta.env.DEV. */
+  __labGetTransaction?: (
+    txid: string,
+  ) => Promise<import('@/workers/lab-api').LabTxDetails | null>
   __E2E_NWC__?: {
     setFailing: (value: boolean) => void
     setBalanceSats: (value: number) => void

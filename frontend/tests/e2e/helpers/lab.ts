@@ -1,4 +1,4 @@
-import { type Page, expect } from '@playwright/test'
+import { type Locator, type Page, expect } from '@playwright/test'
 import { AddressType } from '@/lib/wallet-domain-types'
 import { LabOwnerType } from '@/lib/lab-owner-type'
 import type { LabState } from '@/workers/lab-api'
@@ -278,6 +278,135 @@ export async function expectManualLabEntityTransactionInMempool(page: Page): Pro
     .toBeGreaterThan(0)
 }
 
+/** Parse the amount cell in a lab tx output row (`/lab/tx/$txid` Outputs card). */
+async function parseLabTxOutputRowSats(row: Locator): Promise<number> {
+  const amountText = await row.locator('.tabular-nums').last().textContent()
+  if (amountText == null) {
+    throw new Error('missing amount in lab tx output row')
+  }
+  const digits = amountText.replace(/\D/g, '')
+  return parseInt(digits, 10)
+}
+
+/**
+ * After `page.goto(/lab/tx/…)` the app fully reloads: Lab layout may show "Loading lab…",
+ * and DEV-only `window.__labGetTransaction` is installed in an effect — so waiting only
+ * for the "Transaction" heading races that setup. Poll the same hook the page uses until
+ * the tx resolves, then assert the heading.
+ */
+async function waitForLabTxViewerLoaded(page: Page, txid: string): Promise<void> {
+  await expect
+    .poll(
+      async () => {
+        return await page.evaluate(async (id) => {
+          const w = (window as unknown as {
+            __labGetTransaction?: (tid: string) => Promise<unknown | null>
+          }).__labGetTransaction
+          if (!w) {
+            return 'no-hook' as const
+          }
+          const d = await w(id)
+          return d != null ? ('ready' as const) : ('not-found' as const)
+        }, txid)
+      },
+      {
+        timeout: 60000,
+        message: `lab tx viewer: getTransaction(${txid.slice(0, 8)}…) did not become readable after navigation (DEV hook + worker)`,
+      },
+    )
+    .toBe('ready')
+
+  await expect(page.getByRole('heading', { name: 'Transaction' })).toBeVisible({
+    timeout: 30000,
+  })
+}
+
+/** Open `/lab/tx/$txid` and wait until the transaction viewer has loaded (stable after full reload). */
+export async function openLabMempoolTxInViewer(page: Page, txid: string): Promise<void> {
+  await page.goto(`/lab/tx/${txid}`)
+  await waitForLabTxViewerLoaded(page, txid)
+}
+
+/** Open `/lab/tx/$txid` for the last mempool entry (most recently added). */
+export async function openLatestLabMempoolTxInViewer(page: Page): Promise<string> {
+  const state = await getLabState(page)
+  expect(state.mempool.length).toBeGreaterThan(0)
+  const txid = state.mempool[state.mempool.length - 1]!.txid
+  await openLabMempoolTxInViewer(page, txid)
+  return txid
+}
+
+/** Read all output amounts in vout order from the lab transaction viewer. */
+export async function readLabTxOutputAmountsSatsFromViewer(page: Page): Promise<number[]> {
+  const out: number[] = []
+  for (let i = 0; i < 32; i++) {
+    const row = page.getByTestId(`lab-tx-vout-${i}`)
+    if ((await row.count()) === 0) {
+      break
+    }
+    out.push(await parseLabTxOutputRowSats(row))
+  }
+  return out
+}
+
+/**
+ * Assert each output row matches `expectedSats[i]` (same order as the tx viewer).
+ * Amounts are shown with `toLocaleString()`; we parse digits from the amount cell.
+ */
+export async function expectLabTxOutputAmountsSats(
+  page: Page,
+  expectedSats: number[],
+): Promise<void> {
+  for (let i = 0; i < expectedSats.length; i++) {
+    const row = page.getByTestId(`lab-tx-vout-${i}`)
+    await expect(row).toBeVisible()
+    const n = await parseLabTxOutputRowSats(row)
+    expect(n).toBe(expectedSats[i])
+  }
+}
+
+/**
+ * After a tx lands in the mempool, open its viewer and assert UI outputs match
+ * the lab worker's `getTransaction` (same source as `/lab/tx/$txid`; mempool txs are
+ * not in `LabState.txDetails`). Requires `window.__labGetTransaction` (DEV lab route).
+ */
+export async function expectLatestMempoolTxOutputsMatchLabStateAndViewer(
+  page: Page,
+): Promise<void> {
+  const state = await getLabState(page)
+  expect(state.mempool.length).toBeGreaterThan(0)
+  const txid = state.mempool[state.mempool.length - 1]!.txid
+
+  const expectedSats = await page.evaluate(async (id) => {
+    const w = window as unknown as {
+      __labGetTransaction?: (tid: string) => Promise<{
+        outputs: { amountSats: number }[]
+      } | null>
+    }
+    if (!w.__labGetTransaction) {
+      throw new Error(
+        '__labGetTransaction is not available (open /lab in a DEV build for E2E)',
+      )
+    }
+    const d = await w.__labGetTransaction(id)
+    if (d == null) {
+      throw new Error(`getTransaction returned null for ${id}`)
+    }
+    return d.outputs.map((o) => o.amountSats)
+  }, txid)
+
+  await openLabMempoolTxInViewer(page, txid)
+  await expectLabTxOutputAmountsSats(page, expectedSats)
+}
+
+/** Chains {@link expectManualLabEntityTransactionInMempool} and output inspection. */
+export async function expectManualLabEntityTransactionInMempoolAndInspectOutputs(
+  page: Page,
+): Promise<void> {
+  await expectManualLabEntityTransactionInMempool(page)
+  await expectLatestMempoolTxOutputsMatchLabStateAndViewer(page)
+}
+
 /**
  * Case-2 dust modal on `/lab/transactions` manual send (no Transaction Details step after bump).
  */
@@ -418,6 +547,16 @@ export async function expectLabCase1MinDustClampUi(page: Page): Promise<void> {
         const input = page.locator('#send-amount')
         if (await input.isVisible().catch(() => false)) {
           return (await input.inputValue()) === '546'
+        }
+        // Lab path: after clamping to 546, prepare may open case-2 first — still step 1, modal covers #send-amount.
+        const changeFeesHeading = page.getByRole('heading', { name: 'Change and fees' })
+        if (await changeFeesHeading.isVisible().catch(() => false)) {
+          const dialog = page
+            .getByRole('dialog')
+            .filter({ has: changeFeesHeading })
+            .first()
+          const dialogText = (await dialog.textContent().catch(() => null)) ?? ''
+          return /\b546\b/.test(dialogText)
         }
         return false
       },
