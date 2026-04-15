@@ -3,6 +3,10 @@ import type { KdfVersion } from '@/lib/encrypted-blob-types'
 
 export type { KdfVersion }
 
+/** SQLite BOOLEAN columns: bindings use `0`/`1`, not JS `boolean`, in some drivers. */
+export const SQLITE_FALSE = 0
+export const SQLITE_TRUE = 1
+
 export interface Database {
   wallets: WalletsTable
   settings: SettingsTable

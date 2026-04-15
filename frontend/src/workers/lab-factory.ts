@@ -21,6 +21,7 @@ import {
   getLabDatabase,
 } from '@/db'
 import type { LabDatabase } from '@/db/lab-schema'
+import { SQLITE_FALSE, SQLITE_TRUE } from '@/db/schema'
 import { labOwnerFromDbPair, labOwnerFromTxRow, labOwnerToDbPair } from '@/lib/lab-db-owner'
 import { parseAddressType } from '@/lib/wallet-domain-types'
 import { labEntityOwnerKey } from '@/lib/lab-entity-keys'
@@ -361,7 +362,7 @@ async function clearAndInsertLabState(
     account_id: e.accountId,
     created_at: e.createdAt,
     updated_at: e.updatedAt,
-    is_dead: e.isDead ? 1 : 0,
+    is_dead: e.isDead ? SQLITE_TRUE : SQLITE_FALSE,
   }))
   for (const chunk of chunkArray(entityRows, LAB_PERSIST_INSERT_BATCH_SIZE)) {
     await trx.insertInto('lab_entities').values(chunk).execute()

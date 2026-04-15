@@ -1,8 +1,5 @@
 import type { Kysely } from 'kysely'
-import type { Database } from './schema'
-
-/** better-sqlite3 / common SQLite bindings accept `0`/`1`, not JS `boolean`. */
-const FAVORITE_SQLITE_TRUE = 1
+import { SQLITE_TRUE, type Database } from './schema'
 
 export async function getFavoriteBySlug(
   walletDb: Kysely<Database>,
@@ -23,7 +20,7 @@ export async function getAllFavoriteSlugs(walletDb: Kysely<Database>): Promise<s
     .selectFrom('library_articles')
     .select('article_slug')
     // Runtime binds `1` (SQLite); `as boolean` satisfies Kysely OperandValue for ColumnType<boolean, …>.
-    .where('is_favorite', '=', FAVORITE_SQLITE_TRUE as unknown as boolean)
+    .where('is_favorite', '=', SQLITE_TRUE as unknown as boolean)
     .execute()
   return rows.map((r) => r.article_slug)
 }
@@ -53,7 +50,7 @@ export async function setArticleFavorite(
   if (existing) {
     await walletDb
       .updateTable('library_articles')
-      .set({ is_favorite: FAVORITE_SQLITE_TRUE })
+      .set({ is_favorite: SQLITE_TRUE })
       .where('article_slug', '=', articleSlug)
       .execute()
     return
@@ -61,6 +58,6 @@ export async function setArticleFavorite(
 
   await walletDb
     .insertInto('library_articles')
-    .values({ article_slug: articleSlug, is_favorite: FAVORITE_SQLITE_TRUE })
+    .values({ article_slug: articleSlug, is_favorite: SQLITE_TRUE })
     .execute()
 }
