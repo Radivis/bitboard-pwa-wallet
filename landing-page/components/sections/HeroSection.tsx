@@ -35,7 +35,7 @@ export function HeroSection({ appUrl, githubUrl, prefersReducedMotion }: HeroSec
           System Initialized: v0.0.1-demo
         </div>
         <h1 className="text-6xl md:text-9xl font-bold tracking-tighter mb-4 relative">
-          BIT<span className="text-matrix">BOARD WALLET</span>
+        <span className="text-bitcoin">BIT</span><span className="text-matrix">BOARD WALLET</span>
         </h1>
         <p className="text-xl md:text-3xl text-matrix font-retro uppercase tracking-[0.2em] mb-8">
           From Zero to Clarity

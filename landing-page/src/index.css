@@ -11,6 +11,8 @@
 
   --color-matrix: #00FF41;
   --color-matrix-dark: #003B00;
+  --color-bitcoin: #ff8000;
+  --color-bitcoin-dark: #703800;
 }
 
 @layer base {

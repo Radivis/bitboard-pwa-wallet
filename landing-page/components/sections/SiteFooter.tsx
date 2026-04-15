@@ -14,7 +14,7 @@ export function SiteFooter({ githubUrl, websiteUrl, blogUrl }: SiteFooterProps) 
       <div className="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-center gap-8">
         <div className="text-center md:text-left">
           <div className="text-2xl font-bold mb-2">
-            BIT<span className="text-matrix">BOARD WALLET</span>
+          <span className="text-bitcoin">BIT</span><span className="text-matrix">BOARD WALLET</span>
           </div>
           <p className="text-gray-500 text-sm">from zero to clarity</p>
         </div>
