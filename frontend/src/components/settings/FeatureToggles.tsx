@@ -3,11 +3,9 @@ import { AlertTriangle, FlaskConical, Layers, Zap } from 'lucide-react'
 import { useFeatureStore } from '@/stores/featureStore'
 import {
   AddressType,
-  useWalletStore,
   getCommittedAddressType,
   getCommittedNetworkMode,
 } from '@/stores/walletStore'
-import { isLightningSupported } from '@/lib/lightning-utils'
 import { executeSettingsNetworkSwitch } from '@/lib/network-mode-switch'
 import { executeSettingsAddressTypeSwitch } from '@/lib/execute-settings-address-type-switch'
 import { runFeatureToggleOffWork } from '@/lib/feature-toggle-async'
@@ -25,14 +23,11 @@ export function FeatureToggles() {
   const setRegtestModeEnabled = useFeatureStore((s) => s.setRegtestModeEnabled)
   const segwitAddressesEnabled = useFeatureStore((s) => s.segwitAddressesEnabled)
   const setSegwitAddressesEnabled = useFeatureStore((s) => s.setSegwitAddressesEnabled)
-  const networkMode = useWalletStore((s) => s.networkMode)
 
   const [mainnetConfirmOpen, setMainnetConfirmOpen] = useState(false)
   const [mainnetAccessSwitchBusy, setMainnetAccessSwitchBusy] = useState(false)
   const [regtestModeSwitchBusy, setRegtestModeSwitchBusy] = useState(false)
   const [segwitAddressesSwitchBusy, setSegwitAddressesSwitchBusy] = useState(false)
-
-  const networkSupportsLightning = isLightningSupported(networkMode)
 
   const handleMainnetAccessOff = useCallback(async () => {
     await runFeatureToggleOffWork(
@@ -164,7 +159,7 @@ export function FeatureToggles() {
       <InfomodeWrapper
         infoId="settings-feature-lightning"
         infoTitle="Lightning Network"
-        infoText="The Lightning Network is a layer-2 payment protocol on top of Bitcoin. It enables fast, low-cost transactions by creating payment channels between nodes. Enabling this adds Lightning receive (invoices) and channel management to the wallet. Lightning is only available on mainnet, testnet, and signet."
+        infoText="The Lightning Network is a layer-2 payment protocol on top of Bitcoin. It enables fast, low-cost transactions by creating payment channels between nodes. Turn this on to enable Lightning-capable screens and flows in the app. Actual Lightning send, receive, and channel management are available when your wallet is on Mainnet, Testnet, or Signet—not on Lab or Regtest."
       >
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -177,16 +172,10 @@ export function FeatureToggles() {
             id="lightning-toggle"
             checked={lightningEnabled}
             onCheckedChange={setLightningEnabled}
-            disabled={!networkSupportsLightning}
             aria-label="Enable Lightning Network"
           />
         </div>
       </InfomodeWrapper>
-      {!networkSupportsLightning && (
-        <p className="text-xs text-muted-foreground">
-          Lightning is not available on {networkMode === 'lab' ? 'Lab' : 'Regtest'} networks.
-        </p>
-      )}
 
       <MainnetAccessConfirmModal
         open={mainnetConfirmOpen}
