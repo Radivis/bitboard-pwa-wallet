@@ -38,9 +38,6 @@ function formatCameraScannerStartError(error: unknown): string {
   if (isLikelyCameraPermissionDenied(error)) {
     return CAMERA_BLOCKED_WITH_SETTINGS_HINT
   }
-  if (error instanceof Error) {
-    return `${error.message} You can still upload a QR image below.`
-  }
   return 'Could not start the camera or scanner. You can still upload a QR image below.'
 }
 

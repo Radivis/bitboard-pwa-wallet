@@ -25,7 +25,11 @@ describe('wallet-cross-tab-sync', () => {
     )
     notifyWalletDataMayHaveChangedAfterCommit()
     expect(postMessage).toHaveBeenCalledTimes(1)
-    const payload = postMessage.mock.calls[0][0] as { sourceTabId?: string }
+    const payload = postMessage.mock.calls[0][0] as {
+      sourceTabId?: string
+      t?: number
+    }
     expect(typeof payload?.sourceTabId).toBe('string')
+    expect(typeof payload?.t).toBe('number')
   })
 })

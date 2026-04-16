@@ -14,6 +14,22 @@ function getTabInstanceId(): string {
 
 export type TabScopedBroadcastMessage = { sourceTabId: string; t: number }
 
+/**
+ * Rejects malformed payloads so same-origin scripts cannot spam invalidations with `{}`.
+ * @internal Exported for unit tests.
+ */
+export function isValidTabScopedBroadcastMessage(
+  data: unknown,
+): data is TabScopedBroadcastMessage {
+  if (data == null || typeof data !== 'object') return false
+  const rec = data as Record<string, unknown>
+  const id = rec.sourceTabId
+  const t = rec.t
+  if (typeof id !== 'string' || id.trim() === '') return false
+  if (typeof t !== 'number' || !Number.isFinite(t)) return false
+  return true
+}
+
 function createPublishChannel(channelName: string): BroadcastChannel | null {
   if (typeof BroadcastChannel === 'undefined') return null
   try {
@@ -62,9 +78,9 @@ export function createTabScopedBroadcastChannelSync(channelName: string) {
       return () => undefined
     }
     const selfId = getTabInstanceId()
-    ch.onmessage = (ev: MessageEvent<TabScopedBroadcastMessage>) => {
-      const id = ev.data?.sourceTabId
-      if (id === selfId) return
+    ch.onmessage = (ev: MessageEvent<unknown>) => {
+      if (!isValidTabScopedBroadcastMessage(ev.data)) return
+      if (ev.data.sourceTabId === selfId) return
       onRemote()
     }
     return () => {
