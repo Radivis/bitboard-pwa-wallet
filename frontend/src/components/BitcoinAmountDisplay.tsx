@@ -57,6 +57,11 @@ export function BitcoinAmountDisplay({
     setIsSelectingUnit(false)
   }, [])
 
+  /** Parent `<Link>` / row click targets must not receive these — they would navigate instead of changing unit. */
+  const stopParentPointer = useCallback((e: { stopPropagation: () => void }) => {
+    e.stopPropagation()
+  }, [])
+
   const numericClass = cn(SIZE_CLASSES[size], tabular && 'tabular-nums')
 
   return (
@@ -70,6 +75,9 @@ export function BitcoinAmountDisplay({
           value={effectiveUnit}
           onChange={onUnitPicked}
           onBlur={() => setIsSelectingUnit(false)}
+          onPointerDown={stopParentPointer}
+          onMouseDown={stopParentPointer}
+          onClick={stopParentPointer}
           className="inline-flex max-w-[7rem] align-middle text-[length:inherit] font-[inherit]"
           aria-label="Display unit for this amount"
         />
@@ -80,7 +88,12 @@ export function BitcoinAmountDisplay({
             'inline rounded px-0.5 font-medium underline decoration-dotted underline-offset-2 hover:bg-muted/60',
             tabular && 'tabular-nums',
           )}
-          onClick={() => setIsSelectingUnit(true)}
+          onClick={(e) => {
+            stopParentPointer(e)
+            setIsSelectingUnit(true)
+          }}
+          onPointerDown={stopParentPointer}
+          onMouseDown={stopParentPointer}
         >
           {unitLabel}
         </button>

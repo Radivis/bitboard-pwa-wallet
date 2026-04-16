@@ -1,5 +1,9 @@
 import { forwardRef } from 'react'
-import type { FocusEventHandler } from 'react'
+import type {
+  FocusEventHandler,
+  MouseEventHandler,
+  PointerEventHandler,
+} from 'react'
 import type { BitcoinDisplayUnit } from '@/lib/bitcoin-display-unit'
 import {
   BITCOIN_DISPLAY_UNITS,
@@ -15,6 +19,9 @@ export type BitcoinUnitSelectProps = {
   className?: string
   'aria-label'?: string
   onBlur?: FocusEventHandler<HTMLSelectElement>
+  onPointerDown?: PointerEventHandler<HTMLSelectElement>
+  onMouseDown?: MouseEventHandler<HTMLSelectElement>
+  onClick?: MouseEventHandler<HTMLSelectElement>
 }
 
 export const BitcoinUnitSelect = forwardRef<
@@ -29,6 +36,9 @@ export const BitcoinUnitSelect = forwardRef<
     className,
     'aria-label': ariaLabel,
     onBlur,
+    onPointerDown,
+    onMouseDown,
+    onClick,
   },
   ref,
 ) {
@@ -37,6 +47,9 @@ export const BitcoinUnitSelect = forwardRef<
       ref={ref}
       id={id}
       onBlur={onBlur}
+      onPointerDown={onPointerDown}
+      onMouseDown={onMouseDown}
+      onClick={onClick}
       className={cn(
         'rounded-md border border-input bg-background px-2 py-1 text-sm font-medium text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
         className,
