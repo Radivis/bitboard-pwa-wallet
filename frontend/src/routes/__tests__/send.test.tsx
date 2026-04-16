@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { screen } from '@testing-library/react'
+import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { renderWithProviders } from '@/test-utils/test-providers'
 
@@ -85,6 +85,12 @@ vi.mock('@/lib/wallet-utils', () => ({
   loadCustomEsploraUrl: vi.fn().mockResolvedValue(null),
 }))
 
+const qrScannerInstanceMocks = vi.hoisted(() => ({
+  hasFlash: vi.fn().mockResolvedValue(false),
+  isFlashOn: vi.fn().mockReturnValue(false),
+  toggleFlash: vi.fn().mockResolvedValue(undefined),
+}))
+
 vi.mock('qr-scanner', () => ({
   default: class QrScanner {
     static scanImage = vi
@@ -98,6 +104,12 @@ vi.mock('qr-scanner', () => ({
     static async listCameras() {
       return []
     }
+
+    hasFlash = qrScannerInstanceMocks.hasFlash
+
+    isFlashOn = qrScannerInstanceMocks.isFlashOn
+
+    toggleFlash = qrScannerInstanceMocks.toggleFlash
 
     constructor(
       _video: HTMLVideoElement,
@@ -116,9 +128,22 @@ vi.mock('qr-scanner', () => ({
 import { useSendStore } from '@/stores/sendStore'
 import { SendPage } from '../wallet/send'
 
+const mockCameraMediaStream = {
+  getTracks: () => [{ stop: vi.fn(), kind: 'video' as const }],
+}
+
 describe('SendPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: {
+        getUserMedia: vi.fn().mockResolvedValue(mockCameraMediaStream),
+      },
+    })
+    qrScannerInstanceMocks.hasFlash.mockResolvedValue(false)
+    qrScannerInstanceMocks.isFlashOn.mockReturnValue(false)
+    qrScannerInstanceMocks.toggleFlash.mockResolvedValue(undefined)
     mockDraftLabPsbtTransaction.mockResolvedValue({
       psbtBase64: 'draft_psbt',
       finalAmountSats: 10_000,
@@ -167,6 +192,19 @@ describe('SendPage', () => {
     expect(
       screen.getByRole('button', { name: 'Upload image' }),
     ).toBeInTheDocument()
+  })
+
+  it('shows flash toggle when the camera reports flash support', async () => {
+    qrScannerInstanceMocks.hasFlash.mockResolvedValue(true)
+    qrScannerInstanceMocks.isFlashOn.mockReturnValue(false)
+    const user = userEvent.setup()
+    renderWithProviders(<SendPage />)
+    await user.click(screen.getByRole('button', { name: 'Scan QR code' }))
+    await waitFor(() => {
+      expect(
+        screen.getByRole('button', { name: 'Turn flash on' }),
+      ).toBeInTheDocument()
+    })
   })
 
   it('shows error for invalid address', async () => {

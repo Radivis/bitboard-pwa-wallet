@@ -6,6 +6,7 @@ import {
   type ChangeEvent,
 } from 'react'
 import QrScanner from 'qr-scanner'
+import { Zap, ZapOff } from 'lucide-react'
 import { AppModal } from '@/components/AppModal'
 import { Button } from '@/components/ui/button'
 
@@ -80,6 +81,8 @@ export function RecipientQrScanModal({
   const decodedOnceRef = useRef(false)
   const [cameraError, setCameraError] = useState<string | null>(null)
   const [fileDecodeError, setFileDecodeError] = useState<string | null>(null)
+  const [flashAvailable, setFlashAvailable] = useState(false)
+  const [flashOn, setFlashOn] = useState(false)
 
   const destroyScanner = () => {
     const s = scannerRef.current
@@ -88,7 +91,20 @@ export function RecipientQrScanModal({
       s.destroy()
       scannerRef.current = null
     }
+    setFlashAvailable(false)
+    setFlashOn(false)
   }
+
+  const handleFlashToggle = useCallback(async () => {
+    const s = scannerRef.current
+    if (!s) return
+    try {
+      await s.toggleFlash()
+      setFlashOn(s.isFlashOn())
+    } catch {
+      /* Torch may reject on unsupported devices */
+    }
+  }, [])
 
   const handleFileChange = useCallback(
     async (e: ChangeEvent<HTMLInputElement>) => {
@@ -134,6 +150,8 @@ export function RecipientQrScanModal({
 
     decodedOnceRef.current = false
     setFileDecodeError(null)
+    setFlashAvailable(false)
+    setFlashOn(false)
 
     if (!navigator.mediaDevices?.getUserMedia) {
       setCameraError(
@@ -142,7 +160,7 @@ export function RecipientQrScanModal({
       return undefined
     }
 
-    if (typeof window !== 'undefined' && !window.isSecureContext) {
+    if (typeof window !== 'undefined' && window.isSecureContext === false) {
       setCameraError(
         'Camera access needs a secure context — use HTTPS or localhost. You can still upload a QR image below.',
       )
@@ -158,6 +176,8 @@ export function RecipientQrScanModal({
       if (!video) {
         rafAttempts += 1
         if (rafAttempts > maxVideoWaitFrames) {
+          setFlashAvailable(false)
+          setFlashOn(false)
           setCameraError(
             'Could not initialize camera preview. You can still upload a QR image below.',
           )
@@ -196,6 +216,24 @@ export function RecipientQrScanModal({
           }
           scannerRef.current = scanner
           await scanner.start()
+          if (cancelled) {
+            destroyScanner()
+            return
+          }
+          try {
+            const has = await scanner.hasFlash()
+            if (!cancelled) {
+              setFlashAvailable(has)
+              if (has) {
+                setFlashOn(scanner.isFlashOn())
+              }
+            }
+          } catch {
+            if (!cancelled) {
+              setFlashAvailable(false)
+              setFlashOn(false)
+            }
+          }
         } catch (e) {
           if (!cancelled) {
             setCameraError(formatCameraScannerStartError(e))
@@ -264,6 +302,26 @@ export function RecipientQrScanModal({
             muted
             aria-label="Camera preview for QR scanning"
           />
+          {flashAvailable ? (
+            <Button
+              type="button"
+              variant="secondary"
+              size="icon"
+              className="absolute top-2 right-2 z-10 bg-background/80 shadow-md"
+              onClick={(e) => {
+                e.stopPropagation()
+                void handleFlashToggle()
+              }}
+              aria-pressed={flashOn}
+              aria-label={flashOn ? 'Turn flash off' : 'Turn flash on'}
+            >
+              {flashOn ? (
+                <ZapOff className="size-4" aria-hidden />
+              ) : (
+                <Zap className="size-4" aria-hidden />
+              )}
+            </Button>
+          ) : null}
         </div>
         {cameraError != null ? (
           <p className="text-sm text-destructive" role="alert">
