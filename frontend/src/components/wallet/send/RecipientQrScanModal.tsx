@@ -11,6 +11,38 @@ import { Button } from '@/components/ui/button'
 
 const MAX_IMAGE_BYTES = 15 * 1024 * 1024
 
+/** Shown when getUserMedia or the scanner fails due to blocked camera permission. */
+const CAMERA_BLOCKED_WITH_SETTINGS_HINT =
+  'Camera access was blocked. Allow camera in your browser or site settings for this page, then open Scan QR code again. You can still upload a QR image below.'
+
+function isLikelyCameraPermissionDenied(error: unknown): boolean {
+  if (error instanceof DOMException) {
+    return (
+      error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError'
+    )
+  }
+  if (error instanceof Error) {
+    const m = error.message.toLowerCase()
+    return (
+      m.includes('permission denied') ||
+      m.includes('notallowederror') ||
+      m.includes('denied by user') ||
+      m.includes('not allowed')
+    )
+  }
+  return false
+}
+
+function formatCameraScannerStartError(error: unknown): string {
+  if (isLikelyCameraPermissionDenied(error)) {
+    return CAMERA_BLOCKED_WITH_SETTINGS_HINT
+  }
+  if (error instanceof Error) {
+    return `${error.message} You can still upload a QR image below.`
+  }
+  return 'Could not start the camera or scanner. You can still upload a QR image below.'
+}
+
 function payloadFromScanResult(result: unknown): string {
   if (typeof result === 'string') {
     return result
@@ -166,11 +198,7 @@ export function RecipientQrScanModal({
           await scanner.start()
         } catch (e) {
           if (!cancelled) {
-            setCameraError(
-              e instanceof Error
-                ? `${e.message} You can still upload a QR image below.`
-                : 'Could not start the camera or scanner. You can still upload a QR image below.',
-            )
+            setCameraError(formatCameraScannerStartError(e))
             destroyScanner()
           }
         }
