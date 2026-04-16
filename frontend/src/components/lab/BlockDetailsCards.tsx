@@ -182,9 +182,12 @@ export function LabBlockMetadataCard({
   )
 }
 
-const labBlockTxRowLinkClassName =
-  'flex flex-wrap items-center gap-2 rounded px-2 py-2 transition-colors hover:bg-muted/50'
-const labBlockTxRowPlainClassName = 'flex flex-wrap items-center gap-2 rounded px-2 py-2'
+/** Row layout (no hover — hover lives on the overlay <Link> when linked). */
+const labBlockTxRowInnerClassName = 'flex flex-wrap items-center gap-2 rounded px-2 py-2'
+const labBlockTxRowPlainClassName = labBlockTxRowInnerClassName
+/** Full-row hit target behind content; avoids nested <button>/<select> inside <a>. */
+const labBlockTxRowLinkOverlayClassName =
+  'absolute inset-0 z-0 rounded-lg outline-none transition-colors hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring'
 
 function labBlockTxList(
   txs: LabBlockDetails['transactions'],
@@ -200,6 +203,7 @@ function labBlockTxList(
     <div className="space-y-2">
       {txs.map((tx) => {
         const coinbaseNoTxPageYet = isTemplate && isCoinbase(tx)
+        const needsPointerIsolation = !coinbaseNoTxPageYet
         const row = (
           <>
             {isCoinbase(tx) ? (
@@ -246,7 +250,13 @@ function labBlockTxList(
               )}
             </span>
             <span className="flex flex-wrap items-center gap-1 text-sm">
-              <BitcoinAmountDisplay amountSats={tx.feeSats} size="sm" />
+              {needsPointerIsolation ? (
+                <span className="pointer-events-auto">
+                  <BitcoinAmountDisplay amountSats={tx.feeSats} size="sm" />
+                </span>
+              ) : (
+                <BitcoinAmountDisplay amountSats={tx.feeSats} size="sm" />
+              )}
               <span className="text-muted-foreground">fee</span>
             </span>
           </>
@@ -256,14 +266,17 @@ function labBlockTxList(
             {row}
           </div>
         ) : (
-          <Link
-            key={tx.txid}
-            to="/lab/tx/$txid"
-            params={{ txid: tx.txid }}
-            className={labBlockTxRowLinkClassName}
-          >
-            {row}
-          </Link>
+          <div key={tx.txid} className="relative rounded-lg">
+            <Link
+              to="/lab/tx/$txid"
+              params={{ txid: tx.txid }}
+              className={labBlockTxRowLinkOverlayClassName}
+              aria-label={`Open transaction ${truncateAddress(tx.txid)}`}
+            />
+            <div className={`pointer-events-none relative z-10 ${labBlockTxRowInnerClassName}`}>
+              {row}
+            </div>
+          </div>
         )
       })}
     </div>
