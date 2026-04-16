@@ -19,6 +19,7 @@ import { runSegwitAddressesStrictMigrationAfterHydration } from '@/lib/segwit-ad
 import { useWalletCryptoSessionPathGateStore } from '@/stores/walletCryptoSessionPathGateStore'
 import { useSecureStorageAvailabilityStore } from '@/stores/secureStorageAvailabilityStore'
 import { useAutoLockActivityBumps } from '@/hooks/useAutoLockActivityBumps'
+import { useLabCrossTabCacheSync } from '@/hooks/useLabCrossTabCacheSync'
 
 interface AppInitializerProps {
   children: ReactNode
@@ -26,6 +27,7 @@ interface AppInitializerProps {
 
 export function AppInitializer({ children }: AppInitializerProps) {
   useAutoLockActivityBumps()
+  useLabCrossTabCacheSync()
   useHydrateLightningConnections()
   const navigate = useNavigate()
   const location = useLocation()

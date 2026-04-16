@@ -15,6 +15,9 @@ export function useLabChainStateQuery() {
     queryFn: fetchLabChainStateForQuery,
     enabled: networkMode === 'lab',
     staleTime: Infinity,
+    // Global default disables this; lab must refetch when the tab regains focus so we do not
+    // keep a week-old snapshot next to another tab that loaded fresh from SQLite.
+    refetchOnWindowFocus: 'always',
   })
 }
 

@@ -2,11 +2,37 @@ import { describe, expect, it } from 'vitest'
 import {
   LAB_ENTITY_NAME_MAX_LENGTH,
   labEntityMustBeAliveToSend,
+  labOwnerDisplayName,
   labOwnersEqual,
   validateLabEntityRenameName,
   walletLabOwner,
   labEntityLabOwner,
 } from '@/lib/lab-owner'
+
+describe('labOwnerDisplayName', () => {
+  const entities: { labEntityId: number; entityName: string | null }[] = [
+    { labEntityId: 1, entityName: null },
+    { labEntityId: 2, entityName: 'Alice' },
+  ]
+
+  it('uses wallet row name when present', () => {
+    expect(
+      labOwnerDisplayName(walletLabOwner(3), [{ wallet_id: 3, name: 'Main' }], entities),
+    ).toBe('Main')
+  })
+
+  it('falls back to Wallet #id when the wallet list is empty or missing the row', () => {
+    expect(labOwnerDisplayName(walletLabOwner(7), [], entities)).toBe('Wallet #7')
+    expect(
+      labOwnerDisplayName(walletLabOwner(7), [{ wallet_id: 1, name: 'Other' }], entities),
+    ).toBe('Wallet #7')
+  })
+
+  it('resolves lab entities by id including anonymous (null name)', () => {
+    expect(labOwnerDisplayName(labEntityLabOwner(1), [], entities)).toBe('Anonymous-1')
+    expect(labOwnerDisplayName(labEntityLabOwner(2), [], entities)).toBe('Alice')
+  })
+})
 
 describe('labOwnersEqual', () => {
   it('matches wallet ids', () => {

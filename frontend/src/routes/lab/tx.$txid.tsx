@@ -11,7 +11,8 @@ import { PageHeader } from '@/components/PageHeader'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { getLabWorker } from '@/workers/lab-factory'
+import { getLabWorker, initLabWorkerWithState } from '@/workers/lab-factory'
+import { runLabOp } from '@/lib/lab-coordinator'
 import { truncateAddress } from '@/lib/bitcoin-utils'
 import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
 import type { LabTxDetails } from '@/workers/lab-api'
@@ -47,8 +48,10 @@ function LabTxViewerPage() {
 
   const loadTx = useCallback(async () => {
     try {
-      const labWorker = getLabWorker()
-      const details = await labWorker.getTransaction(txid)
+      const details = await runLabOp(async () => {
+        await initLabWorkerWithState()
+        return getLabWorker().getTransaction(txid)
+      })
       setTx(details ?? null)
     } catch {
       setTx(null)

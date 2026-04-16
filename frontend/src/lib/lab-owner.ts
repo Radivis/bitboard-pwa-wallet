@@ -117,9 +117,11 @@ export function labOwnerDisplayName(
   entities: readonly { labEntityId: number; entityName: string | null }[],
 ): string {
   if (owner.kind === 'wallet') {
-    return (
-      wallets.find((walletRow) => walletRow.wallet_id === owner.walletId)?.name ?? 'Unknown wallet'
-    )
+    const row = wallets.find((walletRow) => walletRow.wallet_id === owner.walletId)
+    if (row != null) return row.name
+    // Wallet list may still be loading (callers often default to []). Lab ownership is
+    // defined by id in chain state — never drop that identity when the name is unavailable.
+    return `Wallet #${owner.walletId}`
   }
   const entityRow = entities.find((candidate) => candidate.labEntityId === owner.labEntityId)
   return entityRow ? labEntityOwnerKey(entityRow) : `Anonymous-${owner.labEntityId}`

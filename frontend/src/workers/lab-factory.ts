@@ -20,6 +20,7 @@ import {
   ensureLabMigrated,
   getLabDatabase,
 } from '@/db'
+import { notifyLabStatePersistedAfterCommit } from '@/lib/lab-cross-tab-sync'
 import type { LabDatabase } from '@/db/lab-schema'
 import { SQLITE_FALSE, SQLITE_TRUE } from '@/db/schema'
 import { labOwnerFromDbPair, labOwnerFromTxRow, labOwnerToDbPair } from '@/lib/lab-db-owner'
@@ -278,6 +279,11 @@ export async function loadLabStateFromDatabase(): Promise<LabState> {
   }
 }
 
+/**
+ * Hydrates the lab worker from **SQLite** (`loadLabStateFromDatabase`), not from TanStack
+ * Query. UI cache can be stale in another tab; operations always re-read the DB here before
+ * mutating so worker memory matches durable state.
+ */
 export async function initLabWorkerWithState(): Promise<{
   proxy: Remote<LabService>
   state: LabState
@@ -489,6 +495,7 @@ export async function persistLabState(state: LabState): Promise<void> {
   await labDb.transaction().execute(async (trx) => {
     await clearAndInsertLabState(trx, state)
   })
+  notifyLabStatePersistedAfterCommit()
 }
 
 export async function resetLab(): Promise<Remote<LabService>> {
