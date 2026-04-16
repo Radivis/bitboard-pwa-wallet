@@ -1,11 +1,9 @@
 import { Cpu, FlaskConical, Smartphone, BookOpen } from 'lucide-react';
 import { Section } from '@/components/Section';
 
-interface AboutSectionProps {
-  aboutBackgroundImageUrl: string;
-}
+const ABOUT_VISION_IMAGE_SRC = '/BitcoinMatrix.jpg';
 
-export function AboutSection({ aboutBackgroundImageUrl }: AboutSectionProps) {
+export function AboutSection() {
   return (
     <Section id="about" title="The Vision">
       <div className="grid md:grid-cols-2 gap-12 items-center">
@@ -30,12 +28,11 @@ export function AboutSection({ aboutBackgroundImageUrl }: AboutSectionProps) {
         </div>
         <div className="relative aspect-square bg-matrix/5 border border-matrix/20 p-8 flex items-center justify-center group overflow-hidden">
           <div
-            className="absolute inset-0 opacity-30 grayscale group-hover:grayscale-0 transition-all duration-700 bg-cover bg-center"
-            style={{ backgroundImage: `url('${aboutBackgroundImageUrl}')` }}
+            className="absolute inset-0 transition-all duration-700 bg-cover bg-center"
+            style={{ backgroundImage: `url('${ABOUT_VISION_IMAGE_SRC}')` }}
           />
           <div className="relative z-10 text-center">
-            <Cpu size={80} className="text-matrix mx-auto mb-4 drop-shadow-[0_0_15px_rgba(0,255,65,0.5)]" />
-            <div className="font-retro text-2xl text-matrix uppercase">The Matrix Revealed</div>
+            <div className="font-retro text-2xl text-matrix uppercase">The Bitcoin Matrix Revealed</div>
           </div>
         </div>
       </div>
