@@ -7,9 +7,9 @@ import {
   ensureMigrated,
   loadWalletSecrets,
   clearWalletNoMnemonicBackupFlag,
-  walletKeys,
   useWalletNoMnemonicBackupFlag,
 } from '@/db'
+import { invalidateWalletRelatedQueriesAndNotifyOtherTabs } from '@/lib/wallet-query-cache-sync'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { AppModal } from '@/components/AppModal'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -42,9 +42,7 @@ export function SeedPhraseBackup() {
       if (confirmed && activeWalletId) {
         await ensureMigrated()
         await clearWalletNoMnemonicBackupFlag(getDatabase(), activeWalletId)
-        await queryClient.invalidateQueries({
-          queryKey: walletKeys.noMnemonicBackup(activeWalletId),
-        })
+        invalidateWalletRelatedQueriesAndNotifyOtherTabs(queryClient)
       }
       setShowMnemonic(false)
       setMnemonicWords([])

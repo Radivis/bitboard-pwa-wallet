@@ -23,13 +23,12 @@ import {
   ensureMigrated,
   persistNewWalletWithSecrets,
   setWalletNoMnemonicBackupFlag,
-  walletKeys,
   useWallets,
   type SplitWalletSecretsEncryptedBlobs,
 } from '@/db'
 import { ensureSecretsChannel } from '@/workers/secrets-channel'
 import { toBitcoinNetwork } from '@/lib/bitcoin-utils'
-import { invalidateLightningDashboardQueries } from '@/lib/lightning-dashboard-sync'
+import { invalidateWalletRelatedQueriesAndNotifyOtherTabs } from '@/lib/wallet-query-cache-sync'
 
 export const Route = createFileRoute('/setup/create')({
   component: CreateWalletPage,
@@ -116,21 +115,18 @@ export function CreateWalletPage() {
           encryptedBlobs,
         })
       } catch (secretsErr) {
-        queryClient.invalidateQueries({ queryKey: walletKeys.all })
+        invalidateWalletRelatedQueriesAndNotifyOtherTabs(queryClient)
         throw secretsErr
       }
       if (markNoMnemonicBackup) {
         await setWalletNoMnemonicBackupFlag(walletDb, walletId)
-        await queryClient.invalidateQueries({
-          queryKey: walletKeys.noMnemonicBackup(walletId),
-        })
+        invalidateWalletRelatedQueriesAndNotifyOtherTabs(queryClient)
       }
       // Drop previous wallet's on-chain / sync UI so the dashboard never shows stale data.
       setBalance(null)
       setTransactions([])
       setLastSyncTime(null)
       setCurrentAddress(null)
-      invalidateLightningDashboardQueries()
       setActiveWallet(walletId)
       setCurrentAddress(firstAddress)
       commitLoadedSubWallet({

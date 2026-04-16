@@ -33,5 +33,6 @@ export function useHydrateLightningConnections() {
     },
     enabled,
     staleTime: Number.POSITIVE_INFINITY,
+    refetchOnWindowFocus: 'always',
   })
 }

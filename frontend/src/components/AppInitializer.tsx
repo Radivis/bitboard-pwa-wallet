@@ -20,6 +20,7 @@ import { useWalletCryptoSessionPathGateStore } from '@/stores/walletCryptoSessio
 import { useSecureStorageAvailabilityStore } from '@/stores/secureStorageAvailabilityStore'
 import { useAutoLockActivityBumps } from '@/hooks/useAutoLockActivityBumps'
 import { useLabCrossTabCacheSync } from '@/hooks/useLabCrossTabCacheSync'
+import { useWalletCrossTabCacheSync } from '@/hooks/useWalletCrossTabCacheSync'
 
 interface AppInitializerProps {
   children: ReactNode
@@ -28,6 +29,7 @@ interface AppInitializerProps {
 export function AppInitializer({ children }: AppInitializerProps) {
   useAutoLockActivityBumps()
   useLabCrossTabCacheSync()
+  useWalletCrossTabCacheSync()
   useHydrateLightningConnections()
   const navigate = useNavigate()
   const location = useLocation()
