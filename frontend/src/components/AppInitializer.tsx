@@ -18,12 +18,14 @@ import { runRegtestStrictMigrationAfterHydration } from '@/lib/regtest-mode-stri
 import { runSegwitAddressesStrictMigrationAfterHydration } from '@/lib/segwit-addresses-strict-migration'
 import { useWalletCryptoSessionPathGateStore } from '@/stores/walletCryptoSessionPathGateStore'
 import { useSecureStorageAvailabilityStore } from '@/stores/secureStorageAvailabilityStore'
+import { useAutoLockActivityBumps } from '@/hooks/useAutoLockActivityBumps'
 
 interface AppInitializerProps {
   children: ReactNode
 }
 
 export function AppInitializer({ children }: AppInitializerProps) {
+  useAutoLockActivityBumps()
   useHydrateLightningConnections()
   const navigate = useNavigate()
   const location = useLocation()
