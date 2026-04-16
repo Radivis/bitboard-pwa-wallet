@@ -87,6 +87,10 @@ vi.mock('@/lib/wallet-utils', () => ({
 
 vi.mock('qr-scanner', () => ({
   default: class QrScanner {
+    static scanImage = vi
+      .fn()
+      .mockResolvedValue({ data: 'tb1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx' })
+
     static async hasCamera() {
       return false
     }
@@ -152,6 +156,16 @@ describe('SendPage', () => {
     renderWithProviders(<SendPage />)
     expect(
       screen.getByRole('button', { name: 'Scan QR code' }),
+    ).toBeInTheDocument()
+  })
+
+  it('shows Upload image in the QR scan modal', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(<SendPage />)
+    await user.click(screen.getByRole('button', { name: 'Scan QR code' }))
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'Upload image' }),
     ).toBeInTheDocument()
   })
 

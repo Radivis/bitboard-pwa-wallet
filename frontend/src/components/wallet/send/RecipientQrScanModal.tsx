@@ -1,7 +1,30 @@
-import { useLayoutEffect, useRef, useState } from 'react'
+import {
+  useCallback,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ChangeEvent,
+} from 'react'
 import QrScanner from 'qr-scanner'
 import { AppModal } from '@/components/AppModal'
 import { Button } from '@/components/ui/button'
+
+const MAX_IMAGE_BYTES = 15 * 1024 * 1024
+
+function payloadFromScanResult(result: unknown): string {
+  if (typeof result === 'string') {
+    return result
+  }
+  if (
+    result !== null &&
+    typeof result === 'object' &&
+    'data' in result &&
+    typeof (result as { data: unknown }).data === 'string'
+  ) {
+    return (result as { data: string }).data
+  }
+  return String(result)
+}
 
 export type RecipientQrScanModalProps = {
   isOpen: boolean
@@ -11,8 +34,8 @@ export type RecipientQrScanModalProps = {
 }
 
 /**
- * Full-screen-style dialog: live camera preview and continuous QR decode via `qr-scanner`.
- * Cleans up `QrScanner` and the media stream on close or after a successful read.
+ * Dialog: live camera preview + optional **Upload image** using `QrScanner.scanImage`,
+ * or continuous decode via camera. Cleans up `QrScanner` and the media stream on close.
  */
 export function RecipientQrScanModal({
   isOpen,
@@ -20,9 +43,11 @@ export function RecipientQrScanModal({
   onScanned,
 }: RecipientQrScanModalProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null)
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
   const scannerRef = useRef<QrScanner | null>(null)
   const decodedOnceRef = useRef(false)
   const [cameraError, setCameraError] = useState<string | null>(null)
+  const [fileDecodeError, setFileDecodeError] = useState<string | null>(null)
 
   const destroyScanner = () => {
     const s = scannerRef.current
@@ -33,26 +58,61 @@ export function RecipientQrScanModal({
     }
   }
 
+  const handleFileChange = useCallback(
+    async (e: ChangeEvent<HTMLInputElement>) => {
+      const input = e.currentTarget
+      const file = input.files?.[0]
+      input.value = ''
+      if (!file) {
+        return
+      }
+
+      if (file.size > MAX_IMAGE_BYTES) {
+        setFileDecodeError(
+          'This image is too large. Try a file under 15 MB, or use a smaller screenshot.',
+        )
+        return
+      }
+
+      setFileDecodeError(null)
+      try {
+        const result = await QrScanner.scanImage(file, {
+          returnDetailedScanResult: true,
+        })
+        const data = payloadFromScanResult(result as unknown)
+        onScanned(data)
+        onOpenChange(false)
+      } catch {
+        setFileDecodeError(
+          'No QR code found in this image. Try a clearer photo or another file.',
+        )
+      }
+    },
+    [onOpenChange, onScanned],
+  )
+
   useLayoutEffect(() => {
     if (!isOpen) {
       decodedOnceRef.current = false
       destroyScanner()
       setCameraError(null)
+      setFileDecodeError(null)
       return
     }
 
     decodedOnceRef.current = false
+    setFileDecodeError(null)
 
     if (!navigator.mediaDevices?.getUserMedia) {
       setCameraError(
-        'Camera access is not available in this browser (no getUserMedia).',
+        'Camera access is not available in this browser (no getUserMedia). You can still upload a QR image below.',
       )
       return undefined
     }
 
     if (typeof window !== 'undefined' && !window.isSecureContext) {
       setCameraError(
-        'Camera access needs a secure context — use HTTPS or localhost.',
+        'Camera access needs a secure context — use HTTPS or localhost. You can still upload a QR image below.',
       )
       return undefined
     }
@@ -66,7 +126,9 @@ export function RecipientQrScanModal({
       if (!video) {
         rafAttempts += 1
         if (rafAttempts > maxVideoWaitFrames) {
-          setCameraError('Could not initialize camera preview.')
+          setCameraError(
+            'Could not initialize camera preview. You can still upload a QR image below.',
+          )
           return
         }
         requestAnimationFrame(() => {
@@ -84,10 +146,7 @@ export function RecipientQrScanModal({
             (result) => {
               if (decodedOnceRef.current) return
               decodedOnceRef.current = true
-              const data =
-                typeof result === 'string'
-                  ? result
-                  : (result as { data: string }).data
+              const data = payloadFromScanResult(result)
               destroyScanner()
               onScanned(data)
               onOpenChange(false)
@@ -109,8 +168,8 @@ export function RecipientQrScanModal({
           if (!cancelled) {
             setCameraError(
               e instanceof Error
-                ? e.message
-                : 'Could not start the camera or scanner.',
+                ? `${e.message} You can still upload a QR image below.`
+                : 'Could not start the camera or scanner. You can still upload a QR image below.',
             )
             destroyScanner()
           }
@@ -140,15 +199,34 @@ export function RecipientQrScanModal({
       onCancel={() => {}}
       contentClassName="sm:max-w-md"
       footer={(requestClose) => (
-        <Button type="button" variant="outline" onClick={requestClose}>
-          Cancel
-        </Button>
+        <div className="flex w-full flex-wrap items-center justify-end gap-2">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            className="sr-only"
+            tabIndex={-1}
+            aria-hidden
+            onChange={handleFileChange}
+          />
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => fileInputRef.current?.click()}
+          >
+            Upload image
+          </Button>
+          <Button type="button" variant="outline" onClick={requestClose}>
+            Cancel
+          </Button>
+        </div>
       )}
     >
       <div className="space-y-3">
         <p className="text-sm text-muted-foreground">
-          Point the camera at a Bitcoin address, payment URI, or Lightning
-          invoice.
+          Use the camera preview below, or choose an image file from the footer
+          if you have no camera or a screenshot. Decodes a Bitcoin address,
+          BIP21 payment URI, or Lightning invoice.
         </p>
         <div className="relative aspect-square w-full overflow-hidden rounded-md bg-black">
           <video
@@ -162,6 +240,11 @@ export function RecipientQrScanModal({
         {cameraError != null ? (
           <p className="text-sm text-destructive" role="alert">
             {cameraError}
+          </p>
+        ) : null}
+        {fileDecodeError != null ? (
+          <p className="text-sm text-destructive" role="alert">
+            {fileDecodeError}
           </p>
         ) : null}
       </div>

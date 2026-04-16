@@ -38,6 +38,12 @@ test.describe('Send Page', () => {
       page.getByRole('button', { name: 'Scan QR code' }),
     ).toBeVisible()
 
+    await page.getByRole('button', { name: 'Scan QR code' }).click()
+    await expect(
+      page.getByRole('button', { name: 'Upload image' }),
+    ).toBeVisible()
+    await page.getByRole('button', { name: 'Cancel' }).click()
+
     await expect(
       page.getByRole('button', { name: 'Review Transaction' }),
     ).toBeDisabled()
