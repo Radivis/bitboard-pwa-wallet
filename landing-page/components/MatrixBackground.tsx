@@ -32,7 +32,7 @@ export const MatrixBackground: React.FC<MatrixBackgroundProps> = ({ reducedMotio
     }
 
     const hexChars = '0123456789ABCDEF';
-    const fontSize = 24;
+    const fontSize = 18;
     const columns = Math.floor(width / fontSize);
     const drops: number[] = [];
     const chars: string[] = [];

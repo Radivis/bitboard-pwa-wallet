@@ -239,12 +239,7 @@ function GetStartedCard({
 
 export function GetStartedSection({ appUrl }: GetStartedSectionProps) {
   return (
-    <Section
-      id="get-started"
-      title="Get Started"
-      className="text-matrix"
-      plateClassName="bg-matrix-dark/90 border border-matrix/30 backdrop-blur-[2px]"
-    >
+    <Section id="get-started" title="Get Started" className="text-matrix" plateClassName="bg-transparent">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {GET_STARTED_STEPS.map((step, i) => (
           <GetStartedCard key={i} step={step} appUrl={appUrl} />

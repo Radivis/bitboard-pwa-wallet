@@ -1,4 +1,4 @@
-import { Cpu, FlaskConical, Smartphone, BookOpen } from 'lucide-react';
+import { FlaskConical, Smartphone, BookOpen } from 'lucide-react';
 import { Section } from '@/components/Section';
 
 const ABOUT_VISION_IMAGE_SRC = '/BitcoinMatrix.jpg';
@@ -26,13 +26,15 @@ export function AboutSection() {
             ))}
           </div>
         </div>
-        <div className="relative aspect-square bg-matrix/5 border border-matrix/20 p-8 flex items-center justify-center group overflow-hidden">
+        <div className="relative aspect-square bg-matrix/5 border border-matrix/20 overflow-hidden">
           <div
             className="absolute inset-0 transition-all duration-700 bg-cover bg-center"
             style={{ backgroundImage: `url('${ABOUT_VISION_IMAGE_SRC}')` }}
           />
-          <div className="relative z-10 text-center">
-            <div className="font-retro text-2xl text-matrix uppercase">The Bitcoin Matrix Revealed</div>
+          <div className="absolute bottom-0 left-0 right-0 z-10 px-4 pb-5 text-center">
+            <div className="font-retro text-2xl text-matrix uppercase drop-shadow-[0_2px_10px_rgba(0,0,0,0.9)]">
+              The Bitcoin Matrix Revealed
+            </div>
           </div>
         </div>
       </div>
