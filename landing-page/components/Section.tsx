@@ -11,12 +11,17 @@ const SECTION_ACCENT_CLASSES: Record<
   orange: { text: 'text-orange-500', line: 'bg-orange-500/30' },
 };
 
+const DEFAULT_SECTION_PLATE_CLASS =
+  'bg-black/40 backdrop-blur-[2px]';
+
 interface SectionProps {
   title?: string;
   children: React.ReactNode;
   className?: string;
   id?: string;
   accent?: SectionAccent;
+  /** Overrides the default dark readability plate behind section content */
+  plateClassName?: string;
 }
 
 export const Section: React.FC<SectionProps> = ({
@@ -25,13 +30,14 @@ export const Section: React.FC<SectionProps> = ({
   className = '',
   id,
   accent = 'matrix',
+  plateClassName = DEFAULT_SECTION_PLATE_CLASS,
 }) => {
   const { text: accentTextClass, line: accentBgClass } = SECTION_ACCENT_CLASSES[accent];
 
   return (
     <section id={id} className={`py-16 px-6 max-w-4xl mx-auto relative ${className}`}>
       {/* Subtle background plate for readability */}
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] -z-10 rounded-3xl" />
+      <div className={`absolute inset-0 -z-10 rounded-3xl ${plateClassName}`} />
       
       {title && (
         <motion.h2

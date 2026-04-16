@@ -6,6 +6,7 @@ import {
   AboutSection,
   FeaturesSection,
   FutureSection,
+  GetStartedSection,
   HeroSection,
   InterfaceSection,
   SiteFooter,
@@ -35,6 +36,8 @@ export default function App() {
         <HeroSection appUrl={appUrl} githubUrl={githubUrl} prefersReducedMotion={prefersReducedMotion} />
 
         <AboutSection aboutBackgroundImageUrl={aboutBgUrl} />
+
+        <GetStartedSection appUrl={appUrl} />
 
         <FeaturesSection />
 
