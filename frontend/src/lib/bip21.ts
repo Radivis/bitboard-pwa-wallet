@@ -1,6 +1,6 @@
 import type { BitcoinDisplayUnit } from '@/lib/bitcoin-display-unit'
 import { formatAmountInBitcoinDisplayUnit } from '@/lib/bitcoin-display-unit'
-import { SATS_PER_BTC } from '@/lib/bitcoin-dust'
+import { SATS_PER_BTC } from '@/lib/bitcoin-utils'
 import { MAX_SAFE_SATS } from '@/lib/bitcoin-utils'
 
 const BITCOIN_SCHEME = 'bitcoin:'
