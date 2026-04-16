@@ -1,6 +1,7 @@
 import type { ComponentProps } from 'react'
+import { useState } from 'react'
 import { Link } from '@tanstack/react-router'
-import { ArrowUpRight } from 'lucide-react'
+import { ArrowUpRight, ScanQrCode } from 'lucide-react'
 import { PageHeader } from '@/components/PageHeader'
 import { SendLightningWalletPicker } from '@/components/wallet/send/SendLightningWalletPicker'
 import { SendOnChainFeeSection } from '@/components/wallet/send/SendOnChainFeeSection'
@@ -16,6 +17,7 @@ import { isValidBolt11Invoice } from '@/lib/lightning-utils'
 import type { SendAmountUnit } from '@/stores/sendStore'
 import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
 import { BitcoinUnitSelect } from '@/components/BitcoinUnitSelect'
+import { RecipientQrScanModal } from '@/components/wallet/send/RecipientQrScanModal'
 
 type LightningWalletPickerProps = ComponentProps<typeof SendLightningWalletPicker>
 
@@ -68,6 +70,7 @@ export function SendTransactionEntryCard({
   buildOrLabPreparing,
   canBuild,
   onSubmitBuild,
+  onApplyScannedPayload,
 }: {
   pageTitle: string
   cardTitle: string
@@ -108,7 +111,10 @@ export function SendTransactionEntryCard({
   buildOrLabPreparing: boolean
   canBuild: boolean
   onSubmitBuild: () => void
+  onApplyScannedPayload: (raw: string) => void
 }) {
+  const [recipientScanOpen, setRecipientScanOpen] = useState(false)
+
   return (
     <div className="space-y-6">
       <PageHeader title={pageTitle} icon={ArrowUpRight} />
@@ -129,11 +135,24 @@ export function SendTransactionEntryCard({
             }}
           >
             <div className="space-y-2">
-              <Label htmlFor="recipient-address">
-                {isLightningSendMode
-                  ? 'Invoice or Lightning address'
-                  : 'Recipient Address'}
-              </Label>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <Label htmlFor="recipient-address">
+                  {isLightningSendMode
+                    ? 'Invoice or Lightning address'
+                    : 'Recipient Address'}
+                </Label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="shrink-0"
+                  disabled={isPending}
+                  onClick={() => setRecipientScanOpen(true)}
+                >
+                  <ScanQrCode className="mr-2 h-4 w-4" aria-hidden />
+                  Scan QR code
+                </Button>
+              </div>
               <Input
                 id="recipient-address"
                 value={recipient}
@@ -201,6 +220,12 @@ export function SendTransactionEntryCard({
                 </p>
               )}
             </div>
+
+            <RecipientQrScanModal
+              isOpen={recipientScanOpen}
+              onOpenChange={setRecipientScanOpen}
+              onScanned={onApplyScannedPayload}
+            />
 
             {isLightningSendMode && (
               <SendLightningWalletPicker

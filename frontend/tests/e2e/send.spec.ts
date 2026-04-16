@@ -34,6 +34,9 @@ test.describe('Send Page', () => {
   test('send page validates inputs', async ({ page }) => {
     await goToWalletTab(page, 'Send')
     await expect(page.getByText('Send Bitcoin')).toBeVisible()
+    await expect(
+      page.getByRole('button', { name: 'Scan QR code' }),
+    ).toBeVisible()
 
     await expect(
       page.getByRole('button', { name: 'Review Transaction' }),

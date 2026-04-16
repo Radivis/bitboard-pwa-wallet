@@ -85,6 +85,30 @@ vi.mock('@/lib/wallet-utils', () => ({
   loadCustomEsploraUrl: vi.fn().mockResolvedValue(null),
 }))
 
+vi.mock('qr-scanner', () => ({
+  default: class QrScanner {
+    static async hasCamera() {
+      return false
+    }
+
+    static async listCameras() {
+      return []
+    }
+
+    constructor(
+      _video: HTMLVideoElement,
+      _onDecode: (result: unknown) => void,
+      _options?: Record<string, unknown>,
+    ) {}
+
+    async start() {}
+
+    stop() {}
+
+    destroy() {}
+  },
+}))
+
 import { useSendStore } from '@/stores/sendStore'
 import { SendPage } from '../wallet/send'
 
@@ -122,6 +146,13 @@ describe('SendPage', () => {
     walletStoreState.walletStatus = 'locked'
     renderWithProviders(<SendPage />)
     expect(screen.getByTestId('wallet-unlock')).toBeInTheDocument()
+  })
+
+  it('shows Scan QR code button on send entry', () => {
+    renderWithProviders(<SendPage />)
+    expect(
+      screen.getByRole('button', { name: 'Scan QR code' }),
+    ).toBeInTheDocument()
   })
 
   it('shows error for invalid address', async () => {
