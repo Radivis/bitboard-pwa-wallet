@@ -62,11 +62,26 @@ export function BitcoinAmountDisplay({
     e.stopPropagation()
   }, [])
 
+  const interactiveUnit = allowUnitToggle
+  const passThroughForParentLink = interactiveUnit
   const numericClass = cn(SIZE_CLASSES[size], tabular && 'tabular-nums')
 
   return (
-    <span className={cn(numericClass, className)}>
-      <span className={tabular ? 'tabular-nums' : undefined}>{formatted}</span>{' '}
+    <span
+      className={cn(
+        numericClass,
+        className,
+        passThroughForParentLink && 'pointer-events-none',
+      )}
+    >
+      <span
+        className={cn(
+          tabular && 'tabular-nums',
+          passThroughForParentLink && 'pointer-events-none',
+        )}
+      >
+        {formatted}
+      </span>{' '}
       {!allowUnitToggle ? (
         <span className={cn('font-medium', tabular && 'tabular-nums')}>{unitLabel}</span>
       ) : isSelectingUnit ? (
@@ -78,14 +93,14 @@ export function BitcoinAmountDisplay({
           onPointerDown={stopParentPointer}
           onMouseDown={stopParentPointer}
           onClick={stopParentPointer}
-          className="inline-flex max-w-[7rem] align-middle text-[length:inherit] font-[inherit]"
+          className="pointer-events-auto inline-flex max-w-[7rem] align-middle text-[length:inherit] font-[inherit]"
           aria-label="Display unit for this amount"
         />
       ) : (
         <button
           type="button"
           className={cn(
-            'inline rounded px-0.5 font-medium underline decoration-dotted underline-offset-2 hover:bg-muted/60',
+            'pointer-events-auto inline rounded px-0.5 font-medium underline decoration-dotted underline-offset-2 hover:bg-muted/60',
             tabular && 'tabular-nums',
           )}
           onClick={(e) => {

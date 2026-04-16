@@ -280,7 +280,8 @@ export async function expectManualLabEntityTransactionInMempool(page: Page): Pro
 
 /** Parse the amount cell in a lab tx output row (`/lab/tx/$txid` Outputs card). */
 async function parseLabTxOutputRowSats(row: Locator): Promise<number> {
-  const amountText = await row.locator('.tabular-nums').last().textContent()
+  // `BitcoinAmountDisplay` uses `.tabular-nums` on both the numeric span and the unit control; use the first (amount).
+  const amountText = await row.locator('.tabular-nums').first().textContent()
   if (amountText == null) {
     throw new Error('missing amount in lab tx output row')
   }
@@ -351,7 +352,7 @@ export async function readLabTxOutputAmountsSatsFromViewer(page: Page): Promise<
 
 /**
  * Assert each output row matches `expectedSats[i]` (same order as the tx viewer).
- * Amounts are shown with `toLocaleString()`; we parse digits from the amount cell.
+ * Parses digits from the numeric span in `BitcoinAmountDisplay` (not the unit control).
  */
 export async function expectLabTxOutputAmountsSats(
   page: Page,

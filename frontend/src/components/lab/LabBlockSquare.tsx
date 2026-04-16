@@ -164,7 +164,7 @@ export function LabBlockSquare({
           <div className="flex min-w-0 items-center gap-1">
             <CakeSlice className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
             <span className="sr-only">Total fees</span>
-            <span className="pointer-events-auto min-w-0 text-[0.9375rem] leading-tight">
+            <span className="min-w-0 text-[0.9375rem] leading-tight">
               <BitcoinAmountDisplay amountSats={totalFeesSats} size="sm" />
             </span>
           </div>
@@ -172,7 +172,7 @@ export function LabBlockSquare({
           <div className="flex min-w-0 items-center gap-1 border-t border-border/60 pt-1">
             <Bitcoin className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
             <span className="sr-only">Net moved {netMovedAria}</span>
-            <span className="pointer-events-auto min-w-0 text-[1.05rem] leading-tight">
+            <span className="min-w-0 text-[1.05rem] leading-tight">
               <BitcoinAmountDisplay amountSats={netMovedSats} size="sm" />
             </span>
           </div>

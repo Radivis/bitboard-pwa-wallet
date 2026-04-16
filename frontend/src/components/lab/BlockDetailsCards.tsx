@@ -203,7 +203,6 @@ function labBlockTxList(
     <div className="space-y-2">
       {txs.map((tx) => {
         const coinbaseNoTxPageYet = isTemplate && isCoinbase(tx)
-        const needsPointerIsolation = !coinbaseNoTxPageYet
         const row = (
           <>
             {isCoinbase(tx) ? (
@@ -250,13 +249,7 @@ function labBlockTxList(
               )}
             </span>
             <span className="flex flex-wrap items-center gap-1 text-sm">
-              {needsPointerIsolation ? (
-                <span className="pointer-events-auto">
-                  <BitcoinAmountDisplay amountSats={tx.feeSats} size="sm" />
-                </span>
-              ) : (
-                <BitcoinAmountDisplay amountSats={tx.feeSats} size="sm" />
-              )}
+              <BitcoinAmountDisplay amountSats={tx.feeSats} size="sm" />
               <span className="text-muted-foreground">fee</span>
             </span>
           </>
