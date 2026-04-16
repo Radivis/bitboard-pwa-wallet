@@ -60,14 +60,20 @@ vi.mock('@/components/WalletUnlock', () => ({
   WalletUnlock: () => <div data-testid="wallet-unlock">Unlock</div>,
 }))
 
+vi.mock('@/hooks/useBitcoinUnit', () => ({
+  useBitcoinUnit: () => ({ data: 'BTC' }),
+}))
+
+vi.mock('@/lib/library/article-shared', () => ({
+  ArticleLink: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
+}))
+
 vi.mock('@/lib/bitcoin-utils', () => ({
   MAX_SAFE_SATS: Number.MAX_SAFE_INTEGER,
   isValidAddress: (address: string, network: string) => {
     if (network === 'signet') return address.startsWith('tb1')
     return false
   },
-  formatBTC: (sats: number) => (sats / 100_000_000).toFixed(8),
-  formatSats: (sats: number) => sats.toLocaleString(),
   truncateAddress: (addr: string) =>
     addr.length > 16 ? `${addr.slice(0, 8)}...${addr.slice(-8)}` : addr,
   getEsploraUrl: () => 'http://localhost:3002',
@@ -126,25 +132,25 @@ describe('SendPage', () => {
     expect(screen.getByText(/Invalid address for signet/)).toBeInTheDocument()
   })
 
-  it('BTC sats toggle switches unit display', async () => {
+  it('amount unit select changes entry unit', async () => {
     const user = userEvent.setup()
     renderWithProviders(<SendPage />)
 
-    expect(screen.getByLabelText('Amount (BTC)')).toBeInTheDocument()
+    expect(screen.getByLabelText('Amount')).toBeInTheDocument()
     expect(screen.getByPlaceholderText('0.00000000')).toBeInTheDocument()
-    expect(screen.getByText('Switch to sats')).toBeInTheDocument()
+    const unitSelect = screen.getByLabelText('Unit for amount entry')
+    expect(unitSelect).toBeInTheDocument()
 
-    await user.click(screen.getByText('Switch to sats'))
+    await user.selectOptions(unitSelect, 'sat')
 
-    expect(screen.getByLabelText('Amount (sats)')).toBeInTheDocument()
     expect(screen.getByPlaceholderText('0')).toBeInTheDocument()
-    expect(screen.getByText('Switch to BTC')).toBeInTheDocument()
+    expect(useSendStore.getState().amountUnit).toBe('sat')
   })
 
   it('displays available balance', () => {
     renderWithProviders(<SendPage />)
     expect(screen.getByText(/Available:/)).toBeInTheDocument()
-    expect(screen.getByText(/500,000 sats/)).toBeInTheDocument()
+    expect(screen.getByText('0.00500000')).toBeInTheDocument()
   })
 
   it('fee rate presets toggle correctly', async () => {

@@ -16,7 +16,7 @@ import { Button } from '@/components/ui/button'
 import { WalletUnlockOrNearZeroLoading } from '@/components/WalletUnlockOrNearZeroLoading'
 import { TransactionItem } from '@/components/TransactionItem'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
-import { formatBTC, formatSats } from '@/lib/bitcoin-utils'
+import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
 import { balanceInfoToOnChainDisplay } from '@/lib/onchain-balance-display'
 import { runIncrementalDashboardWalletSync } from '@/lib/wallet-utils'
 import { labOwnersEqual, walletLabOwner } from '@/lib/lab-owner'
@@ -123,39 +123,55 @@ function BalanceCard() {
             <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
               On-chain
             </p>
-            <p className="text-3xl font-semibold tabular-nums">
-              {formatBTC(primarySats)}
-            </p>
-            <p className="mt-1 text-sm text-muted-foreground">BTC</p>
-            <p className="mt-2 text-lg tabular-nums text-muted-foreground">
-              {formatSats(primarySats)} sats
-            </p>
+            <BitcoinAmountDisplay amountSats={primarySats} size="lg" />
             {onChainDisplay.showBreakdown && (
               <ul className="mt-3 space-y-1.5 text-sm">
                 {onChainDisplay.confirmedSats > 0 && (
-                  <li className="flex justify-between gap-2 tabular-nums text-muted-foreground">
+                  <li className="flex justify-between gap-2 text-muted-foreground">
                     <span>Spendable (settled)</span>
-                    <span>{formatSats(onChainDisplay.confirmedSats)} sats</span>
+                    <span className="text-right">
+                      <BitcoinAmountDisplay
+                        amountSats={onChainDisplay.confirmedSats}
+                        size="sm"
+                        className="text-muted-foreground"
+                      />
+                    </span>
                   </li>
                 )}
                 {onChainDisplay.trustedPendingSats > 0 && (
-                  <li className="flex justify-between gap-2 tabular-nums text-yellow-600 dark:text-yellow-400">
+                  <li className="flex justify-between gap-2 text-yellow-600 dark:text-yellow-400">
                     <span>Pending change</span>
-                    <span>{formatSats(onChainDisplay.trustedPendingSats)} sats</span>
+                    <span className="text-right">
+                      <BitcoinAmountDisplay
+                        amountSats={onChainDisplay.trustedPendingSats}
+                        size="sm"
+                        className="text-yellow-600 dark:text-yellow-400"
+                      />
+                    </span>
                   </li>
                 )}
                 {onChainDisplay.untrustedPendingSats > 0 && (
-                  <li className="flex justify-between gap-2 tabular-nums text-yellow-600 dark:text-yellow-400">
+                  <li className="flex justify-between gap-2 text-yellow-600 dark:text-yellow-400">
                     <span>Pending incoming</span>
-                    <span>
-                      {formatSats(onChainDisplay.untrustedPendingSats)} sats
+                    <span className="text-right">
+                      <BitcoinAmountDisplay
+                        amountSats={onChainDisplay.untrustedPendingSats}
+                        size="sm"
+                        className="text-yellow-600 dark:text-yellow-400"
+                      />
                     </span>
                   </li>
                 )}
                 {onChainDisplay.immatureSats > 0 && (
-                  <li className="flex justify-between gap-2 tabular-nums text-muted-foreground">
+                  <li className="flex justify-between gap-2 text-muted-foreground">
                     <span>Immature</span>
-                    <span>{formatSats(onChainDisplay.immatureSats)} sats</span>
+                    <span className="text-right">
+                      <BitcoinAmountDisplay
+                        amountSats={onChainDisplay.immatureSats}
+                        size="sm"
+                        className="text-muted-foreground"
+                      />
+                    </span>
                   </li>
                 )}
               </ul>
@@ -185,13 +201,11 @@ function BalanceCard() {
                     Total across {lightningBalanceRows.length} connected wallets
                   </p>
                 )}
-                <p className="text-2xl font-semibold tabular-nums">
-                  {formatBTC(lnTotalSats)}
-                </p>
-                <p className="mt-1 text-sm text-muted-foreground">BTC total</p>
-                <p className="mt-1 text-base tabular-nums text-muted-foreground">
-                  {formatSats(lnTotalSats)} sats
-                </p>
+                <BitcoinAmountDisplay
+                  amountSats={lnTotalSats}
+                  size="lg"
+                  className="text-2xl"
+                />
                 <ul className="mt-3 space-y-1.5 border-t border-border pt-3 text-sm">
                   {lightningBalanceRows.map((row) => (
                     <li
@@ -201,14 +215,18 @@ function BalanceCard() {
                       <span className="min-w-0 truncate font-medium text-foreground">
                         {row.label}
                       </span>
-                      <span className="shrink-0 tabular-nums text-muted-foreground">
+                      <span className="shrink-0 text-muted-foreground">
                         {row.error != null && !row.isStaleBalance ? (
                           <span className="text-amber-600 dark:text-amber-400">
                             —
                           </span>
                         ) : (
                           <>
-                            {formatSats(row.balanceSats)}
+                            <BitcoinAmountDisplay
+                              amountSats={row.balanceSats}
+                              size="sm"
+                              className="inline text-muted-foreground"
+                            />
                             {row.isStaleBalance ? (
                               <span
                                 className="ml-1 text-xs font-normal text-amber-700 dark:text-amber-400"
@@ -218,8 +236,7 @@ function BalanceCard() {
                               </span>
                             ) : null}
                           </>
-                        )}{' '}
-                        sats
+                        )}
                       </span>
                     </li>
                   ))}

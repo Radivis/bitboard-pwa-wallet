@@ -17,7 +17,7 @@ import { CardPagination } from '@/components/CardPagination'
 import { LabAddressTypeBadge } from '@/components/lab/LabAddressTypeBadge'
 import { ConfirmationDialog } from '@/components/ConfirmationDialog'
 import { CrossedLucideIcon } from '@/components/CrossedLucideIcon'
-import { formatSats } from '@/lib/bitcoin-utils'
+import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
 import {
   LAB_ENTITY_NAME_MAX_LENGTH,
   validateLabEntityRenameName,
@@ -307,9 +307,9 @@ export function LabEntitiesCard() {
                       </CardHeader>
                       <CardContent className="py-3">
                         <p className="text-xs font-medium text-muted-foreground">Balance</p>
-                        <p className="mt-1 text-lg font-semibold tabular-nums tracking-tight">
-                          {formatSats(row.balanceSats)} sats
-                        </p>
+                        <div className="mt-1 text-lg font-semibold tracking-tight">
+                          <BitcoinAmountDisplay amountSats={row.balanceSats} size="md" />
+                        </div>
                       </CardContent>
                       <CardFooter className="flex flex-wrap justify-center gap-2 pt-3 pb-4">
                         {renamingId !== row.labEntityId ? (

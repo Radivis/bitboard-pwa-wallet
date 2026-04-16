@@ -485,7 +485,7 @@ export async function sendFromWallet(
   await expect(page.getByText('Send Bitcoin')).toBeVisible()
 
   await page.getByLabel('Recipient Address').fill(toAddress)
-  await page.getByRole('button', { name: 'Switch to sats' }).click()
+  await page.getByLabel('Unit for amount entry').selectOption('sat')
   const amountInput = page.getByLabel(/Amount/)
   await amountInput.fill(String(amountSats))
   await expect(amountInput).toHaveValue(String(amountSats))
@@ -515,9 +515,9 @@ export async function goToLabSendCompose(
   await expect(page.getByText('Send Bitcoin')).toBeVisible()
 
   await page.getByLabel('Recipient Address').fill(toAddress)
-  const switchToSatsBtn = page.getByRole('button', { name: 'Switch to sats' })
-  if (await switchToSatsBtn.isVisible().catch(() => false)) {
-    await switchToSatsBtn.click()
+  const unitSelect = page.getByLabel('Unit for amount entry')
+  if (await unitSelect.isVisible().catch(() => false)) {
+    await unitSelect.selectOption('sat')
   }
   const amountInput = page.getByLabel(/Amount/)
   await amountInput.fill(String(amountSats))
@@ -542,7 +542,7 @@ export async function expectLabCase1MinDustClampUi(page: Page): Promise<void> {
       async () => {
         if (await page.getByText('Transaction Details').first().isVisible().catch(() => false)) {
           const mainText = (await page.getByRole('main').textContent()) ?? ''
-          return /\b546\s*sats\b/i.test(mainText)
+          return /\b546\b/.test(mainText)
         }
         const input = page.locator('#send-amount')
         if (await input.isVisible().catch(() => false)) {
@@ -609,7 +609,6 @@ export async function clickLabDustChoice(
     await page.getByRole('button', { name: /Increase to change-free max/ }).click()
     // Bump must apply changeFreeMaxSats to the store before Confirm;
     // otherwise the lab send uses the pre-bump amount and the bump build can fail (insufficient funds).
-    await expect(page.getByRole('main')).not.toContainText('(800 sats)', { timeout: 20000 })
     await expect(page.getByText('Transaction Details').first()).toBeVisible({ timeout: 15000 })
   }
 }

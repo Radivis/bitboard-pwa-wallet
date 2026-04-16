@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { ArrowDownLeft, ArrowUpRight, BadgeCheck, Clock, Zap } from 'lucide-react'
 import { formatDistanceToNow, format } from 'date-fns'
 import type { LightningPaymentWithWallet } from '@/lib/lightning-dashboard-sync'
-import { formatBTC, formatSats } from '@/lib/bitcoin-utils'
+import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
 import { cn } from '@/lib/utils'
 
 interface LightningPaymentItemProps {
@@ -68,15 +68,14 @@ export function LightningPaymentItem({ payment }: LightningPaymentItemProps) {
         <div className="text-right">
           <p
             className={cn(
-              'text-sm font-medium tabular-nums',
+              'text-sm font-medium',
               isSent ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400',
             )}
           >
-            {isSent ? '-' : '+'}
-            {formatBTC(payment.amountSats)} BTC
-          </p>
-          <p className="text-xs tabular-nums text-muted-foreground">
-            {formatSats(payment.amountSats)} sats
+            <span className="inline-flex items-baseline gap-0.5">
+              <span className="tabular-nums">{isSent ? '-' : '+'}</span>
+              <BitcoinAmountDisplay amountSats={payment.amountSats} size="sm" />
+            </span>
           </p>
         </div>
 
@@ -110,9 +109,11 @@ export function LightningPaymentItem({ payment }: LightningPaymentItemProps) {
             </div>
           ) : null}
           {payment.feesPaidSats > 0 && (
-            <div className="flex justify-between">
+            <div className="flex justify-between gap-2">
               <span>Fee</span>
-              <span>{formatSats(payment.feesPaidSats)} sats</span>
+              <span className="text-right">
+                <BitcoinAmountDisplay amountSats={payment.feesPaidSats} size="sm" />
+              </span>
             </div>
           )}
           <div className="flex justify-between">

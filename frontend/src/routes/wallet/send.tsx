@@ -640,9 +640,7 @@ export function SendFlow() {
         decodedBolt11={decodedBolt11}
         needsUserLightningAmount={needsUserLightningAmount}
         amountUnit={amountUnit}
-        onToggleAmountUnit={() =>
-          setAmountUnit(amountUnit === 'btc' ? 'sats' : 'btc')
-        }
+        onAmountUnitChange={setAmountUnit}
         amount={amount}
         onAmountChange={setAmount}
         lightningPayAmountSats={lightningPayAmountSats}

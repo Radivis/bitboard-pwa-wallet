@@ -11,9 +11,11 @@ import { Label } from '@/components/ui/label'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { NETWORK_LABELS, type NetworkMode } from '@/stores/walletStore'
 import { MAX_BOLT11_PAYMENT_REQUEST_LENGTH } from '@/lib/lightning-input-limits'
-import { formatBTC, formatSats } from '@/lib/bitcoin-utils'
+import { amountInputPlaceholderForUnit } from '@/lib/bitcoin-display-unit'
 import { isValidBolt11Invoice } from '@/lib/lightning-utils'
 import type { SendAmountUnit } from '@/stores/sendStore'
+import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
+import { BitcoinUnitSelect } from '@/components/BitcoinUnitSelect'
 
 type LightningWalletPickerProps = ComponentProps<typeof SendLightningWalletPicker>
 
@@ -48,7 +50,7 @@ export function SendTransactionEntryCard({
   decodedBolt11,
   needsUserLightningAmount,
   amountUnit,
-  onToggleAmountUnit,
+  onAmountUnitChange,
   amount,
   onAmountChange,
   lightningPayAmountSats,
@@ -88,7 +90,7 @@ export function SendTransactionEntryCard({
   decodedBolt11: DecodedBolt11ForMemo
   needsUserLightningAmount: boolean
   amountUnit: SendAmountUnit
-  onToggleAmountUnit: () => void
+  onAmountUnitChange: (unit: SendAmountUnit) => void
   amount: string
   onAmountChange: (value: string, opts: { fromUser: boolean }) => void
   lightningPayAmountSats: number
@@ -220,42 +222,41 @@ export function SendTransactionEntryCard({
               )}
 
             <div className="space-y-2">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <Label htmlFor="send-amount">
                   {needsUserLightningAmount
-                    ? `Amount (${amountUnit === 'btc' ? 'BTC' : 'sats'})`
+                    ? 'Amount'
                     : isLightningSendMode && !needsUserLightningAmount
                       ? 'Amount (from invoice)'
-                      : `Amount (${amountUnit === 'btc' ? 'BTC' : 'sats'})`}
+                      : 'Amount'}
                 </Label>
                 {(needsUserLightningAmount || !isLightningSendMode) && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={onToggleAmountUnit}
-                    className="h-auto py-0 text-xs"
-                  >
-                    Switch to {amountUnit === 'btc' ? 'sats' : 'BTC'}
-                  </Button>
+                  <BitcoinUnitSelect
+                    value={amountUnit}
+                    onChange={onAmountUnitChange}
+                    disabled={isPending}
+                    aria-label="Unit for amount entry"
+                  />
                 )}
               </div>
               {isLightningSendMode && !needsUserLightningAmount ? (
                 <p className="rounded-md border border-border bg-muted/30 px-3 py-2 text-sm tabular-nums">
-                  {formatBTC(lightningPayAmountSats)} BTC (
-                  {formatSats(lightningPayAmountSats)} sats)
+                  <BitcoinAmountDisplay
+                    amountSats={lightningPayAmountSats}
+                    size="sm"
+                  />
                 </p>
               ) : (
                 <Input
                   id="send-amount"
-                  type="number"
+                  type="text"
+                  inputMode="decimal"
+                  autoComplete="off"
                   value={amount}
                   onChange={(e) =>
                     onAmountChange(e.target.value, { fromUser: true })
                   }
-                  placeholder={amountUnit === 'btc' ? '0.00000000' : '0'}
-                  step={amountUnit === 'btc' ? '0.00000001' : '1'}
-                  min="0"
+                  placeholder={amountInputPlaceholderForUnit(amountUnit)}
                   disabled={isPending}
                 />
               )}
@@ -266,18 +267,23 @@ export function SendTransactionEntryCard({
                     {selectedLnBalanceQuery?.isPending ? (
                       'Loading balance…'
                     ) : selectedLnBalanceQuery?.isSuccess ? (
-                      <>
-                        {formatBTC(selectedLnBalanceSats ?? 0)} BTC (
-                        {formatSats(selectedLnBalanceSats ?? 0)} sats)
-                      </>
+                      <BitcoinAmountDisplay
+                        amountSats={selectedLnBalanceSats ?? 0}
+                        size="sm"
+                        className="inline text-muted-foreground"
+                      />
                     ) : (
                       '—'
                     )}
                   </>
                 ) : (
                   <>
-                    Available: {formatBTC(confirmedBalance)} BTC (
-                    {formatSats(confirmedBalance)} sats)
+                    Available:{' '}
+                    <BitcoinAmountDisplay
+                      amountSats={confirmedBalance}
+                      size="sm"
+                      className="inline text-muted-foreground"
+                    />
                   </>
                 )}
               </p>

@@ -47,11 +47,12 @@ test.describe('Send Page', () => {
       .getByLabel('Recipient Address')
       .fill('tb1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx')
 
-    await expect(page.getByText('Switch to sats')).toBeVisible()
-    await page.getByRole('button', { name: 'Switch to sats' }).click()
-    await expect(page.getByText('Switch to BTC')).toBeVisible()
-
-    await page.getByRole('button', { name: 'Switch to BTC' }).click()
+    const unitSelect = page.getByLabel('Unit for amount entry')
+    await expect(unitSelect).toBeVisible()
+    await unitSelect.selectOption('sat')
+    await expect(page.getByPlaceholder('0')).toBeVisible()
+    await unitSelect.selectOption('BTC')
+    await expect(page.getByPlaceholder('0.00000000')).toBeVisible()
 
     await page.getByLabel(/Amount/).fill('0.001')
 
@@ -113,7 +114,7 @@ test.describe('Send Page', () => {
     await goToWalletTab(page, 'Send')
     await expect(page.getByText('Send Bitcoin')).toBeVisible()
     await page.getByLabel('Recipient Address').fill(receiveAddress)
-    await page.getByRole('button', { name: 'Switch to sats' }).click()
+    await page.getByLabel('Unit for amount entry').selectOption('sat')
     const amountInput = page.getByLabel(/Amount/)
     await amountInput.fill('1000')
     await expect(amountInput).toHaveValue('1000')

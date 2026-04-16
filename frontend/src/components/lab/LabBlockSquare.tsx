@@ -11,7 +11,8 @@ import {
   Wallet,
 } from 'lucide-react'
 import type { LabOwner } from '@/lib/lab-owner'
-import { formatBTC, formatSats } from '@/lib/bitcoin-utils'
+import { formatAmountInBitcoinDisplayUnit } from '@/lib/bitcoin-display-unit'
+import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
 import { getOwnerDisplayName, getOwnerIcon } from '@/lib/lab-utils'
 import { cn } from '@/lib/utils'
 
@@ -69,7 +70,7 @@ export function LabBlockSquare({
   const minedDate = new Date(minedOnUnix * 1000)
   const dateLabel = Number.isFinite(minedOnUnix) && minedOnUnix > 0 ? minedDate.toLocaleDateString() : '—'
   const timeLabel = Number.isFinite(minedOnUnix) && minedOnUnix > 0 ? minedDate.toLocaleTimeString() : '—'
-  const netBtcLabel = formatBTC(netMovedSats)
+  const netMovedAria = `${formatAmountInBitcoinDisplayUnit(netMovedSats, 'BTC')} BTC`
   const minedByDisplayName =
     minedBy != null ? getOwnerDisplayName(minedBy, wallets, entities) : null
   const fillPercentRounded =
@@ -85,7 +86,7 @@ export function LabBlockSquare({
       params={{ height: String(height) }}
       preload={false}
       className={cn('group block min-w-0 outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-lg', className)}
-      aria-label={`Block ${height}, ${txCount} transactions, net moved ${netBtcLabel} BTC, mined ${dateLabel} ${timeLabel}${ariaWeightHint}`}
+      aria-label={`Block ${height}, ${txCount} transactions, net moved ${netMovedAria}, mined ${dateLabel} ${timeLabel}${ariaWeightHint}`}
     >
       <div
         className={cn(
@@ -156,17 +157,20 @@ export function LabBlockSquare({
             </span>
           </div>
 
-          <div className="flex min-w-0 items-center gap-1 tabular-nums">
+          <div className="flex min-w-0 items-center gap-1">
             <CakeSlice className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
             <span className="sr-only">Total fees</span>
-            <span className="min-w-0 truncate">{formatSats(totalFeesSats)} sats</span>
+            <span className="min-w-0 truncate text-[0.9375rem] leading-tight">
+              <BitcoinAmountDisplay amountSats={totalFeesSats} size="sm" />
+            </span>
           </div>
 
           <div className="flex min-w-0 items-center gap-1 border-t border-border/60 pt-1">
             <Bitcoin className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
-            <span className="sr-only">Net moved {netBtcLabel} BTC</span>
-            <span className="truncate font-mono tabular-nums text-[1.05rem] leading-tight">{netBtcLabel}</span>
-            <span className="sr-only">{formatSats(netMovedSats)} sats</span>
+            <span className="sr-only">Net moved {netMovedAria}</span>
+            <span className="min-w-0 truncate text-[1.05rem] leading-tight">
+              <BitcoinAmountDisplay amountSats={netMovedSats} size="sm" />
+            </span>
           </div>
 
           <div className="flex min-w-0 flex-col gap-0.5 border-t border-border/60 pt-1 text-sm text-muted-foreground">

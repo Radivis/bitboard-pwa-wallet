@@ -9,7 +9,8 @@ import {
 } from '@/components/ui/card'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { Badge } from '@/components/ui/badge'
-import { formatBTC, formatSats, truncateAddress } from '@/lib/bitcoin-utils'
+import { truncateAddress } from '@/lib/bitcoin-utils'
+import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
 import { LabOwnerDisplayWithAddressType } from '@/components/lab/LabOwnerDisplayWithAddressType'
 import { useLabChainStateQuery } from '@/hooks/useLabChainStateQuery'
 import type { LabBlockDetails } from '@/workers/lab-api'
@@ -161,12 +162,11 @@ export function LabBlockMetadataCard({
           </p>
           <p>
             <span className="text-muted-foreground">Total fees:</span>{' '}
-            {formatSats(block.metadata.totalFeesSats)} sats
+            <BitcoinAmountDisplay amountSats={block.metadata.totalFeesSats} size="sm" />
           </p>
           <p>
-            <span className="text-muted-foreground">Net moved (BTC):</span>{' '}
-            <span className="font-mono tabular-nums">{formatBTC(netMovedSats)}</span> BTC (
-            {formatSats(netMovedSats)} sats)
+            <span className="text-muted-foreground">Net moved:</span>{' '}
+            <BitcoinAmountDisplay amountSats={netMovedSats} size="sm" />
           </p>
           {weightAtMiningRecorded && mineOp != null ? (
             <p>
@@ -245,7 +245,10 @@ function labBlockTxList(
                 </>
               )}
             </span>
-            <span className="text-sm tabular-nums">{formatSats(tx.feeSats)} sats fee</span>
+            <span className="flex flex-wrap items-center gap-1 text-sm">
+              <BitcoinAmountDisplay amountSats={tx.feeSats} size="sm" />
+              <span className="text-muted-foreground">fee</span>
+            </span>
           </>
         )
         return coinbaseNoTxPageYet ? (

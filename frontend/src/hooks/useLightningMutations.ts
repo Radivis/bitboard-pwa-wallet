@@ -29,10 +29,13 @@ import {
 import { loadCustomEsploraUrl } from '@/lib/wallet-utils'
 import {
   DEFAULT_INVOICE_EXPIRY_SECONDS,
-  formatSatsCompact,
   isLightningSupported,
   type LightningNetworkMode,
 } from '@/lib/lightning-utils'
+import {
+  BITCOIN_DISPLAY_UNIT_LABEL,
+  formatAmountInBitcoinDisplayUnit,
+} from '@/lib/bitcoin-display-unit'
 import { getLightningConnectionsForActiveWallet } from '@/lib/lightning-connection-utils'
 import {
   fetchLightningBalancesForDashboard,
@@ -286,7 +289,9 @@ export function useCreateInvoiceMutation(onCreated: () => void) {
     },
     onSuccess: (invoice) => {
       addSessionInvoice(invoice)
-      toast.success(`Invoice created for ${formatSatsCompact(invoice.amountSats)}`)
+      toast.success(
+        `Invoice created for ${formatAmountInBitcoinDisplayUnit(invoice.amountSats, 'BTC')} ${BITCOIN_DISPLAY_UNIT_LABEL.BTC}`,
+      )
       onCreated()
     },
     onError: (err) => {

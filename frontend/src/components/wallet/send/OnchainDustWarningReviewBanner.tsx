@@ -1,4 +1,7 @@
-import { formatBTC, formatSats } from '@/lib/bitcoin-utils'
+import {
+  BITCOIN_DISPLAY_UNIT_LABEL,
+  formatAmountInBitcoinDisplayUnit,
+} from '@/lib/bitcoin-display-unit'
 import { UX_DUST_FLOOR_SATS } from '@/lib/bitcoin-dust'
 import type { OnchainDustWarning, SendAmountUnit } from '@/stores/sendStore'
 
@@ -15,12 +18,10 @@ export function OnchainDustWarningReviewBanner({
     <div className="font-bold text-destructive text-sm space-y-1 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2">
       {warning.raisedToDustMin ? (
         <p>
-          Amount was below the minimum spendable output ({formatSats(UX_DUST_FLOOR_SATS)}{' '}
-          sats). The amount shown above was set to{' '}
-          {amountUnit === 'btc'
-            ? `${formatBTC(UX_DUST_FLOOR_SATS)} BTC`
-            : `${formatSats(UX_DUST_FLOOR_SATS)} sats`}
-          .
+          Amount was below the minimum spendable output ({formatAmountInBitcoinDisplayUnit(UX_DUST_FLOOR_SATS, 'sat')}{' '}
+          {BITCOIN_DISPLAY_UNIT_LABEL.sat}). The amount shown above was set to{' '}
+          {formatAmountInBitcoinDisplayUnit(UX_DUST_FLOOR_SATS, amountUnit)}{' '}
+          {BITCOIN_DISPLAY_UNIT_LABEL[amountUnit]}.
         </p>
       ) : null}
       {warning.bumpedChangeFree ? (

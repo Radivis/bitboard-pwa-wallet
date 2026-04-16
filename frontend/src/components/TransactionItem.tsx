@@ -3,12 +3,11 @@ import { ArrowUpRight, ArrowDownLeft, Clock, CheckCircle2 } from 'lucide-react'
 import { formatDistanceToNow, format } from 'date-fns'
 import type { TransactionDetails } from '@/workers/crypto-types'
 import {
-  formatBTC,
-  formatSats,
   formatTxDirection,
   getTxAmount,
   truncateAddress,
 } from '@/lib/bitcoin-utils'
+import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
 import { cn } from '@/lib/utils'
 
 interface TransactionItemProps {
@@ -69,15 +68,14 @@ export function TransactionItem({ transaction }: TransactionItemProps) {
         <div className="text-right">
           <p
             className={cn(
-              'text-sm font-medium tabular-nums',
+              'text-sm font-medium',
               isSent ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400',
             )}
           >
-            {isSent ? '-' : '+'}
-            {formatBTC(amount)} BTC
-          </p>
-          <p className="text-xs tabular-nums text-muted-foreground">
-            {formatSats(amount)} sats
+            <span className="inline-flex items-baseline gap-0.5">
+              <span className="tabular-nums">{isSent ? '-' : '+'}</span>
+              <BitcoinAmountDisplay amountSats={amount} size="sm" />
+            </span>
           </p>
         </div>
 
@@ -97,9 +95,11 @@ export function TransactionItem({ transaction }: TransactionItemProps) {
             <span className="font-mono">{truncateAddress(transaction.txid, 12, 12)}</span>
           </div>
           {transaction.fee_sats != null && (
-            <div className="flex justify-between">
+            <div className="flex justify-between gap-2">
               <span>Fee</span>
-              <span>{formatSats(transaction.fee_sats)} sats</span>
+              <span className="text-right">
+                <BitcoinAmountDisplay amountSats={transaction.fee_sats} size="sm" />
+              </span>
             </div>
           )}
           {transaction.confirmation_block_height != null && (

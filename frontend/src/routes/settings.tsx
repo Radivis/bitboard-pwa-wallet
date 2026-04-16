@@ -18,12 +18,14 @@ import { NetworkCardCommittedDescriptor } from '@/components/settings/NetworkCar
 import { AddressTypeSelector } from '@/components/settings/AddressTypeSelector'
 import { EsploraUrlSettings } from '@/components/settings/EsploraUrlSettings'
 import { FeatureToggles } from '@/components/settings/FeatureToggles'
+import { BitcoinUnitSelect } from '@/components/BitcoinUnitSelect'
 import { SettingsSecurityCard } from '@/components/settings/SettingsSecurityCard'
 import { ChangeAppPasswordModal } from '@/components/ChangeAppPasswordModal'
 import { UpgradeFromNearZeroPasswordModal } from '@/components/UpgradeFromNearZeroPasswordModal'
 import { useWallets } from '@/db'
 import { useNearZeroSecurityStore } from '@/stores/nearZeroSecurityStore'
 import { useFeatureStore } from '@/stores/featureStore'
+import { useBitcoinDisplayUnitStore } from '@/stores/bitcoinDisplayUnitStore'
 
 export const Route = createFileRoute('/settings')({
   component: SettingsPage,
@@ -34,6 +36,10 @@ export function SettingsPage() {
   const { data: wallets } = useWallets()
   const hasWallets = (wallets?.length ?? 0) > 0
   const nearZeroActive = useNearZeroSecurityStore((s) => s.active)
+  const defaultBitcoinUnit = useBitcoinDisplayUnitStore((s) => s.defaultBitcoinUnit)
+  const setDefaultBitcoinUnit = useBitcoinDisplayUnitStore(
+    (s) => s.setDefaultBitcoinUnit,
+  )
   const [changePasswordOpen, setChangePasswordOpen] = useState(false)
   const [upgradeFromNearZeroOpen, setUpgradeFromNearZeroOpen] = useState(false)
 
@@ -93,6 +99,26 @@ export function SettingsPage() {
         </CardHeader>
         <CardContent>
           <ThemeSelector />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Bitcoin amounts</CardTitle>
+          <CardDescription>
+            Default unit for showing amounts in the app. You can still change the
+            unit on any amount by tapping its label.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <span className="text-sm text-muted-foreground">Default unit</span>
+            <BitcoinUnitSelect
+              value={defaultBitcoinUnit}
+              onChange={setDefaultBitcoinUnit}
+              aria-label="Default Bitcoin amount unit"
+            />
+          </div>
         </CardContent>
       </Card>
 

@@ -99,7 +99,7 @@ const sendStoreState: Record<string, unknown> = {
   step: 1,
   recipient: '',
   amount: '',
-  amountUnit: 'sats',
+  amountUnit: 'sat',
   feeRate: 3,
   customFeeRate: '',
   useCustomFee: false,
@@ -151,11 +151,13 @@ vi.mock('@/hooks/useLabChainStateQuery', () => ({
   useLabChainStateQuery: () => ({ data: null, isPending: false }),
 }))
 
+vi.mock('@/hooks/useBitcoinUnit', () => ({
+  useBitcoinUnit: () => ({ data: 'BTC' }),
+}))
+
 vi.mock('@/lib/bitcoin-utils', () => ({
   MAX_SAFE_SATS: Number.MAX_SAFE_INTEGER,
   isValidAddress: (addr: string) => addr.startsWith('bc1'),
-  formatBTC: (sats: number) => (sats / 100_000_000).toFixed(8),
-  formatSats: (sats: number) => sats.toLocaleString(),
   truncateAddress: (a: string) => a.slice(0, 8),
 }))
 

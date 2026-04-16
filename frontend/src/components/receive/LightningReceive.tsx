@@ -17,8 +17,8 @@ import { useCreateInvoiceMutation } from '@/hooks/useLightningMutations'
 import {
   INVOICE_EXPIRY_OPTIONS,
   DEFAULT_INVOICE_EXPIRY_SECONDS,
-  formatSatsCompact,
 } from '@/lib/lightning-utils'
+import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
 import { MAX_LIGHTNING_INVOICE_DESCRIPTION_LENGTH } from '@/lib/lightning-input-limits'
 
 function InvoiceQrDisplay({ invoice }: { invoice: LightningInvoice }) {
@@ -58,7 +58,13 @@ function InvoiceQrDisplay({ invoice }: { invoice: LightningInvoice }) {
             />
           </div>
           <p className="text-center text-sm text-muted-foreground">
-            {formatSatsCompact(invoice.amountSats)} &middot; {expiryLabel} expiry
+            <BitcoinAmountDisplay
+              amountSats={invoice.amountSats}
+              size="sm"
+              className="inline text-muted-foreground"
+              allowUnitToggle={false}
+            />{' '}
+            &middot; {expiryLabel} expiry
             {invoice.description && (
               <span className="block text-xs">{invoice.description}</span>
             )}
@@ -105,7 +111,11 @@ function InvoiceListItem({
       <div className="flex items-center justify-between">
         <div className="min-w-0 flex-1">
           <p className="text-sm font-medium">
-            {formatSatsCompact(invoice.amountSats)}
+            <BitcoinAmountDisplay
+              amountSats={invoice.amountSats}
+              size="sm"
+              allowUnitToggle={false}
+            />
           </p>
           {invoice.description && (
             <p className="truncate text-xs text-muted-foreground">
