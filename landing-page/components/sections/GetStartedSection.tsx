@@ -8,7 +8,10 @@ import {
   FlaskConical,
   GlobeLock,
   Handshake,
+  House,
   Pickaxe,
+  Settings,
+  ToggleRight,
   Wallet,
 } from 'lucide-react';
 import { Section } from '@/components/Section';
@@ -118,6 +121,22 @@ const GET_STARTED_STEPS: (StepSingle | StepDual)[] = [
   },
   {
     kind: 'single',
+    title: 'Switch to Testnet again',
+    desc: 'Connect to Testnet again to continue your journey.',
+    icon: Settings,
+    path: '/settings',
+    nav: { type: 'single', label: 'Settings' },
+  },
+  {
+    kind: 'single',
+    title: 'Check your balance',
+    desc: 'Check your balance in the wallet dashboard to check on the Testnet transaction.',
+    icon: House,
+    path: '/wallet',
+    nav: { type: 'pair', left: 'Wallet', right: 'Dashboard' },
+  },
+  {
+    kind: 'single',
     title: 'Share Testnet with friends',
     desc: 'Keep using your Testnet balance—send a few coins to someone else learning alongside you.',
     icon: Handshake,
@@ -135,10 +154,18 @@ const GET_STARTED_STEPS: (StepSingle | StepDual)[] = [
   {
     kind: 'single',
     title: 'Go deeper',
-    desc: 'Use the Library to study concepts and get ready for Mainnet.',
+    desc: 'Use the Library to study concepts and get ready for Mainnet - or even Lightning!',
     icon: BookOpen,
     path: '/library',
     nav: { type: 'single', label: 'Library' },
+  },
+  {
+    kind: 'single',
+    title: 'Activate features',
+    desc: 'Unlock Mainnet, Lightning and more features in Settings.',
+    icon: ToggleRight,
+    path: '/settings',
+    nav: { type: 'single', label: 'Settings' },
   },
 ];
 
