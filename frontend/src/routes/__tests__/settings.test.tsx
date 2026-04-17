@@ -56,6 +56,7 @@ vi.mock('@tanstack/react-router', async (importOriginal) => {
       options,
     }),
     useNavigate: () => vi.fn(),
+    useSearch: () => ({}),
   }
 })
 
@@ -165,6 +166,13 @@ const nearZeroSecurityState = { active: false }
 vi.mock('@/stores/nearZeroSecurityStore', () => ({
   useNearZeroSecurityStore: (selector: (s: typeof nearZeroSecurityState) => unknown) =>
     selector(nearZeroSecurityState),
+}))
+
+vi.mock('@/lib/opfs-root-file', () => ({
+  opfsRootFileExists: vi.fn().mockResolvedValue(false),
+  readBlobFromOpfsRootIfExists: vi.fn(),
+  readTextFileFromOpfsRootIfExists: vi.fn(),
+  triggerBrowserSaveLocalBlob: vi.fn(),
 }))
 
 const mockSetThemeMode = vi.fn()
@@ -334,7 +342,18 @@ describe('SettingsPage', () => {
     expect(screen.queryByText('Address Type')).not.toBeInTheDocument()
     expect(screen.getByText('Appearance')).toBeInTheDocument()
     expect(screen.getByText('Security')).toBeInTheDocument()
+    expect(screen.getByText('Data Backups')).toBeInTheDocument()
     expect(screen.getByText('About')).toBeInTheDocument()
+    expect(screen.getByText('Support contact: TBD')).toBeInTheDocument()
+  })
+
+  it('disables Export wallet data in near-zero security mode with hint', () => {
+    nearZeroSecurityState.active = true
+    renderWithProviders(<SettingsPage />)
+    expect(screen.getByRole('button', { name: 'Export wallet data' })).toBeDisabled()
+    expect(
+      screen.getByText(/Wallet export is not available in near-zero security mode/i),
+    ).toBeInTheDocument()
   })
 
   it('shows Address Type card when SegWit addresses feature is enabled', () => {

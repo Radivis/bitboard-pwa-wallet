@@ -1,7 +1,10 @@
 import { type ReactNode, useEffect, useState } from 'react'
 import { useLocation } from '@tanstack/react-router'
 import { getDatabase, getInitialDatabaseHealth, tryLoadNearZeroSessionIntoMemory } from '@/db'
+import { WALLET_MIGRATION_FAILURE_OPFS_FILENAME } from '@/db/migrations/wallet-migration-failure-report'
+import { readTextFileFromOpfsRootIfExists } from '@/lib/opfs-root-file'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
+import { MigrationFailureReportModal } from '@/components/MigrationFailureReportModal'
 import { pathnameRequiresWalletCryptoSession } from '@/lib/pathname-requires-wallet-crypto-session'
 import { assessOpfsLikelyUnsupported } from '@/lib/opfs-capability'
 import { useSecureStorageAvailabilityStore } from '@/stores/secureStorageAvailabilityStore'
@@ -19,6 +22,8 @@ interface DatabaseReadyGateProps {
 export function DatabaseReadyGate({ children }: DatabaseReadyGateProps) {
   const location = useLocation()
   const [isReady, setIsReady] = useState(false)
+  const [migrationFailureReportOpen, setMigrationFailureReportOpen] = useState(false)
+  const [migrationFailureReportText, setMigrationFailureReportText] = useState<string | null>(null)
 
   useEffect(() => {
     const pathOnColdStart = location.pathname
@@ -36,6 +41,11 @@ export function DatabaseReadyGate({ children }: DatabaseReadyGateProps) {
           lastErrorMessage: health.error.message,
           opfsLikelyUnsupported,
         })
+        const reportText = await readTextFileFromOpfsRootIfExists(WALLET_MIGRATION_FAILURE_OPFS_FILENAME)
+        if (!cancelled && reportText) {
+          setMigrationFailureReportText(reportText)
+          setMigrationFailureReportOpen(true)
+        }
       } else if (pathnameRequiresWalletCryptoSession(pathOnColdStart)) {
         try {
           await tryLoadNearZeroSessionIntoMemory(getDatabase())
@@ -62,5 +72,21 @@ export function DatabaseReadyGate({ children }: DatabaseReadyGateProps) {
     )
   }
 
-  return <>{children}</>
+  return (
+    <>
+      {migrationFailureReportText != null ? (
+        <MigrationFailureReportModal
+          isOpen={migrationFailureReportOpen}
+          reportText={migrationFailureReportText}
+          onOpenChange={(open) => {
+            setMigrationFailureReportOpen(open)
+            if (!open) {
+              setMigrationFailureReportText(null)
+            }
+          }}
+        />
+      ) : null}
+      {children}
+    </>
+  )
 }

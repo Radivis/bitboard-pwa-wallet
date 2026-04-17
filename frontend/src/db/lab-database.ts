@@ -2,8 +2,7 @@ import { Kysely } from 'kysely'
 import { WaSqliteWorkerDialect } from 'kysely-wasqlite-worker'
 import type { LabDatabase } from './lab-schema'
 import { runLabMigrations } from './migrations/run-lab-migrations'
-
-const LAB_DATABASE_FILE_NAME = 'bitboard-lab'
+import { LAB_SQLITE_OPFS_BASENAME } from './opfs-sqlite-database-names'
 
 let labInstance: Kysely<LabDatabase> | null = null
 let labMigrated = false
@@ -13,7 +12,7 @@ export function getLabDatabase(): Kysely<LabDatabase> {
   if (!labInstance) {
     labInstance = new Kysely<LabDatabase>({
       dialect: new WaSqliteWorkerDialect({
-        fileName: LAB_DATABASE_FILE_NAME,
+        fileName: LAB_SQLITE_OPFS_BASENAME,
         preferOPFS: true,
       }),
     })
@@ -22,7 +21,7 @@ export function getLabDatabase(): Kysely<LabDatabase> {
 }
 
 /**
- * Runs Kysely {@link Migrator} for the lab SQLite file (`bitboard-lab`).
+ * Runs Kysely {@link Migrator} for the lab SQLite file in OPFS.
  * Legacy lab DBs may still list INTEGER for boolean columns in PRAGMA table_info until recreated; behavior is unchanged.
  */
 export async function ensureLabMigrated(): Promise<void> {
