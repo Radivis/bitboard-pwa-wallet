@@ -350,12 +350,13 @@ describe('SettingsPage', () => {
     ).toBeInTheDocument()
   })
 
-  it('disables Export wallet data in near-zero security mode with hint', () => {
+  it('disables wallet backup export/import in near-zero security mode with hint', () => {
     nearZeroSecurityState.active = true
     renderWithProviders(<SettingsPage />)
     expect(screen.getByRole('button', { name: 'Export wallet data' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Import wallet backup' })).toBeDisabled()
     expect(
-      screen.getByText(/Wallet export is not available in near-zero security mode/i),
+      screen.getByText(/Wallet export and import are not available in near-zero security mode/i),
     ).toBeInTheDocument()
   })
 

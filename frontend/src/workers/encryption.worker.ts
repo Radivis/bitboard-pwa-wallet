@@ -3,6 +3,7 @@ import type { EncryptionService } from './encryption-api'
 import { DEFAULT_KDF_PHC_FOR_DERIVE } from './encryption-api'
 import type { EncryptedBlobMessage } from './secrets-channel-types'
 import type { EncryptedBlob } from '@/lib/encrypted-blob-types'
+import { resolveArgon2CiParamsOrThrow } from '@/lib/argon2-ci-env'
 import {
   ARGON2_KDF_PHC_CI,
   ARGON2_KDF_PHC_PRODUCTION,
@@ -11,20 +12,8 @@ import {
 const SALT_LENGTH_BYTES = 16
 const IV_LENGTH_BYTES = 12
 
-function resolveCiArgon2Flag(): boolean {
-  if (typeof import.meta.env === 'undefined') return false
-  const ciFlagEnabled = import.meta.env.VITE_ARGON2_CI === '1'
-  const isProductionBuild = import.meta.env.PROD === true
-  if (ciFlagEnabled && isProductionBuild) {
-    throw new Error(
-      'Security guardrail: VITE_ARGON2_CI=1 is not allowed in production builds.',
-    )
-  }
-  return ciFlagEnabled
-}
-
 /** CI params are allowed only outside production builds. */
-const USE_CI_PARAMS = resolveCiArgon2Flag()
+const USE_CI_PARAMS = resolveArgon2CiParamsOrThrow()
 
 let wasm: typeof import('@/wasm-pkg/bitboard_encryption/bitboard_encryption') | null = null
 
@@ -60,7 +49,8 @@ async function deriveKey(
       ['encrypt', 'decrypt'],
     )
   } finally {
-    ;(rawKey as Uint8Array).fill(0)
+    const cleared = rawKey as Uint8Array
+    cleared.fill(0)
   }
 }
 
@@ -138,6 +128,25 @@ const encryptionService: EncryptionService = {
 
   async decryptData(password: string, encrypted: EncryptedBlob): Promise<string> {
     return doDecrypt(password, encrypted)
+  },
+
+  async signWalletBackupManifest(
+    sqliteBytes: Uint8Array,
+    password: string,
+    salt: Uint8Array,
+    kdfPhc: string,
+  ): Promise<string> {
+    const w = await getWasm()
+    return w.signWalletBackupManifest(sqliteBytes, password, salt, kdfPhc)
+  },
+
+  async verifyWalletBackupManifest(
+    sqliteBytes: Uint8Array,
+    password: string,
+    manifestJson: string,
+  ): Promise<void> {
+    const w = await getWasm()
+    w.verifyWalletBackupManifest(sqliteBytes, password, manifestJson)
   },
 }
 

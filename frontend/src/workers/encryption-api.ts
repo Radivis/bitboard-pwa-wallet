@@ -12,6 +12,19 @@ export interface EncryptionService {
   ): Promise<Uint8Array>
   encryptData(password: string, plaintext: string): Promise<EncryptedBlob>
   decryptData(password: string, encrypted: EncryptedBlob): Promise<string>
+  /** ML-DSA-65 signed manifest JSON (pretty-printed). */
+  signWalletBackupManifest(
+    sqliteBytes: Uint8Array,
+    password: string,
+    salt: Uint8Array,
+    kdfPhc: string,
+  ): Promise<string>
+  /** Throws if signature invalid or password wrong. */
+  verifyWalletBackupManifest(
+    sqliteBytes: Uint8Array,
+    password: string,
+    manifestJson: string,
+  ): Promise<void>
 }
 
 /** Default KDF PHC when callers omit it (production Argon2id profile). */

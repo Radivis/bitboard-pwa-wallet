@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from 'react'
-import { Database, FlaskConical, FileWarning } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { Database, FlaskConical, FileWarning, Upload } from 'lucide-react'
 import { toast } from 'sonner'
 import {
   Card,
@@ -9,29 +9,59 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { ConfirmationDialog } from '@/components/ConfirmationDialog'
+import { WalletBackupExportPasswordModal } from '@/components/settings/WalletBackupExportPasswordModal'
+import { WalletBackupImportPasswordModal } from '@/components/settings/WalletBackupImportPasswordModal'
 import { LAB_SQLITE_OPFS_BASENAME, WALLET_SQLITE_OPFS_BASENAME } from '@/db/opfs-sqlite-database-names'
 import { WALLET_MIGRATION_FAILURE_OPFS_FILENAME } from '@/db/migrations/wallet-migration-failure-report'
+import { destroyDatabase, ensureMigrated, getDatabase } from '@/db/database'
+import { anyWalletHasNoMnemonicBackupFlag } from '@/db/wallet-no-mnemonic-backup'
+import { resolveArgon2CiParamsOrThrow } from '@/lib/argon2-ci-env'
 import {
   opfsRootFileExists,
   readBlobFromOpfsRootIfExists,
   readTextFileFromOpfsRootIfExists,
+  removeOpfsRootEntryIfExists,
   triggerBrowserSaveLocalBlob,
+  writeArrayBufferToOpfsRoot,
 } from '@/lib/opfs-root-file'
+import {
+  ARGON2_KDF_PHC_WALLET_BACKUP_SIGN_CI,
+  ARGON2_KDF_PHC_WALLET_BACKUP_SIGN_PRODUCTION,
+  WALLET_BACKUP_SIGNING_SALT_BYTES,
+  WALLET_BACKUP_ZIP_FILENAME,
+} from '@/lib/wallet-backup-constants'
+import { parseWalletBackupZipFile, WalletBackupZipInvalidError } from '@/lib/wallet-backup-import'
 import { zipSingleFileForLocalExport } from '@/lib/zip-single-file-export'
+import { zipWalletBackupForLocalExport } from '@/lib/zip-wallet-backup-export'
 import { useNearZeroSecurityStore } from '@/stores/nearZeroSecurityStore'
+import { getEncryptionWorker } from '@/workers/encryption-factory'
 
-const WALLET_EXPORT_INNER_NAME = 'bitboard-wallet-backup.sqlite'
-const WALLET_EXPORT_ZIP_NAME = 'bitboard-wallet-backup.zip'
 const LAB_EXPORT_INNER_NAME = 'bitboard-lab-backup.sqlite'
 const LAB_EXPORT_ZIP_NAME = 'bitboard-lab-backup.zip'
 const MIGRATION_REPORT_INNER_NAME = 'wallet-schema-migration-failure.json'
 const MIGRATION_REPORT_ZIP_NAME = 'wallet-schema-migration-failure.zip'
+
+function walletBackupSignKdfPhc(): string {
+  return resolveArgon2CiParamsOrThrow()
+    ? ARGON2_KDF_PHC_WALLET_BACKUP_SIGN_CI
+    : ARGON2_KDF_PHC_WALLET_BACKUP_SIGN_PRODUCTION
+}
 
 export function DataBackupsCard() {
   const nearZeroActive = useNearZeroSecurityStore((s) => s.active)
   const [migrationReportExists, setMigrationReportExists] = useState(false)
   const [labFileExists, setLabFileExists] = useState<boolean | null>(null)
   const [exportBusy, setExportBusy] = useState<'wallet' | 'lab' | 'report' | null>(null)
+  const [exportPasswordOpen, setExportPasswordOpen] = useState(false)
+  const [importWipeOpen, setImportWipeOpen] = useState(false)
+  const [importPasswordOpen, setImportPasswordOpen] = useState(false)
+  const [importBusy, setImportBusy] = useState(false)
+  const [pendingImport, setPendingImport] = useState<{
+    sqliteBytes: Uint8Array
+    manifestJson: string
+  } | null>(null)
+  const importFileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -57,7 +87,7 @@ export function DataBackupsCard() {
     }
   }, [])
 
-  const exportWallet = useCallback(async () => {
+  const runSignedWalletExport = useCallback(async (password: string) => {
     setExportBusy('wallet')
     try {
       const blob = await readBlobFromOpfsRootIfExists(WALLET_SQLITE_OPFS_BASENAME)
@@ -65,14 +95,29 @@ export function DataBackupsCard() {
         toast.error('Wallet data file was not found in local storage.')
         return
       }
-      const zipped = await zipSingleFileForLocalExport(blob, WALLET_EXPORT_INNER_NAME)
-      triggerBrowserSaveLocalBlob(zipped, WALLET_EXPORT_ZIP_NAME)
-      toast.success('Wallet data exported as a ZIP on this device.')
+      const sqliteBuf = await blob.arrayBuffer()
+      const sqliteBytes = new Uint8Array(sqliteBuf)
+      const salt = crypto.getRandomValues(new Uint8Array(WALLET_BACKUP_SIGNING_SALT_BYTES))
+      const enc = getEncryptionWorker()
+      const manifestJson = await enc.signWalletBackupManifest(
+        sqliteBytes,
+        password,
+        salt,
+        walletBackupSignKdfPhc(),
+      )
+      const zipped = await zipWalletBackupForLocalExport(blob, manifestJson)
+      triggerBrowserSaveLocalBlob(zipped, WALLET_BACKUP_ZIP_FILENAME)
+      toast.success('Signed wallet backup exported as a ZIP on this device.')
+      setExportPasswordOpen(false)
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Export failed.')
     } finally {
       setExportBusy(null)
     }
+  }, [])
+
+  const exportWallet = useCallback(() => {
+    setExportPasswordOpen(true)
   }, [])
 
   const exportLab = useCallback(async () => {
@@ -113,14 +158,126 @@ export function DataBackupsCard() {
     }
   }, [])
 
+  const onImportFilePick = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+    const lower = file.name.toLowerCase()
+    if (!lower.endsWith('.zip')) {
+      toast.error('Please choose a ZIP file.')
+      return
+    }
+    try {
+      const parsed = await parseWalletBackupZipFile(file)
+      await ensureMigrated()
+      const blocked = await anyWalletHasNoMnemonicBackupFlag(getDatabase())
+      if (blocked) {
+        toast.error(
+          'Import blocked: back up every wallet seed phrase in Settings before importing wallet data.',
+        )
+        return
+      }
+      setPendingImport(parsed)
+      setImportWipeOpen(true)
+    } catch (e) {
+      if (e instanceof WalletBackupZipInvalidError) {
+        toast.error(e.message)
+      } else {
+        toast.error(e instanceof Error ? e.message : 'Could not read backup ZIP.')
+      }
+    }
+  }, [])
+
+  const cancelImportFlow = useCallback(() => {
+    setPendingImport(null)
+    setImportWipeOpen(false)
+    setImportPasswordOpen(false)
+  }, [])
+
+  const confirmWipeImport = useCallback(() => {
+    setImportWipeOpen(false)
+    setImportPasswordOpen(true)
+  }, [])
+
+  const runVerifiedImport = useCallback(
+    async (password: string) => {
+      if (!pendingImport) return
+      setImportBusy(true)
+      try {
+        const enc = getEncryptionWorker()
+        await enc.verifyWalletBackupManifest(
+          pendingImport.sqliteBytes,
+          password,
+          pendingImport.manifestJson,
+        )
+        await destroyDatabase()
+        await removeOpfsRootEntryIfExists(`${WALLET_SQLITE_OPFS_BASENAME}-wal`)
+        await removeOpfsRootEntryIfExists(`${WALLET_SQLITE_OPFS_BASENAME}-shm`)
+        const ab = pendingImport.sqliteBytes.buffer.slice(
+          pendingImport.sqliteBytes.byteOffset,
+          pendingImport.sqliteBytes.byteOffset + pendingImport.sqliteBytes.byteLength,
+        ) as ArrayBuffer
+        await writeArrayBufferToOpfsRoot(WALLET_SQLITE_OPFS_BASENAME, ab)
+        await ensureMigrated()
+        toast.success('Wallet backup imported. Reloading…')
+        setImportPasswordOpen(false)
+        setPendingImport(null)
+        window.setTimeout(() => {
+          window.location.reload()
+        }, 400)
+      } catch (e) {
+        const msg =
+          e instanceof Error
+            ? e.message
+            : 'Import failed (wrong password or invalid backup).'
+        toast.error(msg)
+      } finally {
+        setImportBusy(false)
+      }
+    },
+    [pendingImport],
+  )
+
   return (
     <Card id="data-backups">
+      <input
+        ref={importFileInputRef}
+        type="file"
+        accept=".zip,application/zip"
+        className="hidden"
+        aria-hidden
+        onChange={(e) => void onImportFilePick(e)}
+      />
+      <WalletBackupExportPasswordModal
+        open={exportPasswordOpen}
+        onOpenChange={setExportPasswordOpen}
+        onCancel={() => setExportPasswordOpen(false)}
+        onConfirm={runSignedWalletExport}
+        isBusy={exportBusy === 'wallet'}
+      />
+      <ConfirmationDialog
+        open={importWipeOpen}
+        title="Replace local wallet data?"
+        message="This will permanently delete the wallet database stored on this device and replace it with the backup from the ZIP. Other tabs may still hold old state until you reload. This cannot be undone."
+        confirmText="Continue"
+        cancelText="Cancel"
+        variant="destructive"
+        onConfirm={confirmWipeImport}
+        onCancel={cancelImportFlow}
+      />
+      <WalletBackupImportPasswordModal
+        open={importPasswordOpen}
+        onOpenChange={setImportPasswordOpen}
+        onCancel={cancelImportFlow}
+        onConfirm={runVerifiedImport}
+        isBusy={importBusy}
+      />
       <CardHeader>
         <CardTitle>Data Backups</CardTitle>
         <CardDescription>
-          Export full local database files from this device as ZIP archives (one SQLite file
-          inside each). Nothing is uploaded. Wallet and lab exports contain sensitive data—store them
-          safely.
+          Export full local database files from this device as ZIP archives. Wallet exports are
+          signed with your app password (ML-DSA); import only accepts ZIPs that include the manifest
+          and verify. Nothing is uploaded.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
@@ -129,16 +286,26 @@ export function DataBackupsCard() {
             type="button"
             variant="outline"
             disabled={nearZeroActive || exportBusy !== null}
-            onClick={() => void exportWallet()}
+            onClick={() => exportWallet()}
             className="w-full sm:w-auto"
           >
             <Database className="size-4" aria-hidden />
             Export wallet data
           </Button>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={nearZeroActive || exportBusy !== null || importBusy}
+            onClick={() => importFileInputRef.current?.click()}
+            className="w-full sm:w-auto"
+          >
+            <Upload className="size-4" aria-hidden />
+            Import wallet backup
+          </Button>
           {nearZeroActive ? (
             <p className="text-sm text-muted-foreground sm:max-w-md">
-              Wallet export is not available in near-zero security mode. Set a real app password in
-              Security first so your backup reflects full encryption.
+              Wallet export and import are not available in near-zero security mode. Set a real app
+              password in Security first.
             </p>
           ) : null}
         </div>

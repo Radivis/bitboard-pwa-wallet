@@ -2,8 +2,19 @@
 //!
 //! KDF parameters are identified by PHC-style prefix strings (salt stays separate in the app DB).
 
+mod wallet_backup;
+
 use argon2::{Algorithm, Argon2, Params, Version};
 use wasm_bindgen::prelude::*;
+
+pub use wallet_backup::{
+    ARGON2_KDF_PHC_WALLET_BACKUP_SIGN_CI, ARGON2_KDF_PHC_WALLET_BACKUP_SIGN_PRODUCTION,
+    WALLET_BACKUP_MANIFEST_ENTRY_NAME, WALLET_BACKUP_MANIFEST_FORMAT_VERSION,
+    WALLET_BACKUP_MLDSA_PARAMETER_SET, WALLET_BACKUP_SIGNING_KEY_DERIVATION_ID,
+    WALLET_BACKUP_SQLITE_ENTRY_NAME, WalletBackupManifest, sign_wallet_backup_manifest,
+    sign_wallet_backup_manifest_inner, verify_wallet_backup_manifest,
+    verify_wallet_backup_manifest_inner,
+};
 
 /// Memory cost (KiB) for both profiles — 64 MiB.
 const ARGON2_MEMORY_KIB: u32 = 65536;
@@ -51,14 +62,8 @@ fn derive_argon2_key_with_mtp(
     iterations: u32,
     parallelism: u32,
 ) -> Result<Vec<u8>, JsValue> {
-    let params = Params::new(memory_kib, iterations, parallelism, Some(DERIVED_KEY_LEN))
-        .map_err(|e| JsValue::from_str(&format!("Argon2 params error: {e}")))?;
-    let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
-    let mut key = vec![0u8; DERIVED_KEY_LEN];
-    argon2
-        .hash_password_into(password.as_bytes(), salt, &mut key)
-        .map_err(|e| JsValue::from_str(&format!("Argon2 hash error: {e}")))?;
-    Ok(key)
+    derive_argon2_key_with_mtp_str(password, salt, memory_kib, iterations, parallelism)
+        .map_err(|e| JsValue::from_str(&e))
 }
 
 /// Parses `m=65536,t=2,p=1` from a PHC fragment (no `$` in this segment).
@@ -82,8 +87,11 @@ fn parse_mtp_segment(segment: &str) -> Option<(u32, u32, u32)> {
     }
 }
 
-/// Finds the PHC segment containing `m=`, `t=`, and `p=` (comma-separated).
-fn parse_mtp_from_phc(phc: &str) -> Result<(u32, u32, u32), JsValue> {
+const INVALID_KDF_PHC_MSG: &str =
+    "Invalid kdf_phc: expected Argon2id PHC with m,t,p (e.g. $argon2id$v=19$m=65536,t=3,p=4)";
+
+/// Same as [`parse_mtp_from_phc`] but with `String` errors (native tests / backup signing).
+pub(crate) fn parse_mtp_from_phc_str(phc: &str) -> Result<(u32, u32, u32), &'static str> {
     if phc == ARGON2_KDF_PHC_CI {
         return Ok((
             ARGON2_MEMORY_KIB,
@@ -107,9 +115,35 @@ fn parse_mtp_from_phc(phc: &str) -> Result<(u32, u32, u32), JsValue> {
             return Ok(mtp);
         }
     }
-    Err(JsValue::from_str(
-        "Invalid kdf_phc: expected Argon2id PHC with m,t,p (e.g. $argon2id$v=19$m=65536,t=3,p=4)",
-    ))
+    Err(INVALID_KDF_PHC_MSG)
+}
+
+fn derive_argon2_key_with_mtp_str(
+    password: &str,
+    salt: &[u8],
+    memory_kib: u32,
+    iterations: u32,
+    parallelism: u32,
+) -> Result<Vec<u8>, String> {
+    let params = Params::new(memory_kib, iterations, parallelism, Some(DERIVED_KEY_LEN))
+        .map_err(|e| format!("Argon2 params error: {e}"))?;
+    let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
+    let mut key = vec![0u8; DERIVED_KEY_LEN];
+    argon2
+        .hash_password_into(password.as_bytes(), salt, &mut key)
+        .map_err(|e| format!("Argon2 hash error: {e}"))?;
+    Ok(key)
+}
+
+/// Derive a 256-bit key from password, salt, and PHC (string errors — used by wallet backup and unit tests).
+pub(crate) fn derive_argon2_key_from_phc_str(
+    password: &str,
+    salt: &[u8],
+    phc: &str,
+) -> Result<Vec<u8>, String> {
+    let (memory_kib, iterations, parallelism) =
+        parse_mtp_from_phc_str(phc).map_err(String::from)?;
+    derive_argon2_key_with_mtp_str(password, salt, memory_kib, iterations, parallelism)
 }
 
 /// Derive a 256-bit key from password, salt, and a PHC-style Argon2id parameter string.
@@ -119,8 +153,7 @@ pub fn derive_argon2_key_from_phc(
     salt: &[u8],
     phc: &str,
 ) -> Result<Vec<u8>, JsValue> {
-    let (memory_kib, iterations, parallelism) = parse_mtp_from_phc(phc)?;
-    derive_argon2_key_with_mtp(password, salt, memory_kib, iterations, parallelism)
+    derive_argon2_key_from_phc_str(password, salt, phc).map_err(|e| JsValue::from_str(&e))
 }
 
 /// Derive a 256-bit key using Argon2id with **production** parameters.

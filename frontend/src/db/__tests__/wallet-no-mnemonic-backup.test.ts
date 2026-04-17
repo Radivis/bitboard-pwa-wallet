@@ -3,6 +3,7 @@ import type { Kysely } from 'kysely'
 import type { Database as AppDatabase } from '../schema'
 import { createTestDatabase } from '../test-helpers'
 import {
+  anyWalletHasNoMnemonicBackupFlag,
   clearWalletNoMnemonicBackupFlag,
   setWalletNoMnemonicBackupFlag,
   walletHasNoMnemonicBackupFlag,
@@ -46,6 +47,26 @@ describe('no-mnemonic-backup flag on wallets', () => {
     expect(await walletHasNoMnemonicBackupFlag(walletDb, walletId)).toBe(true)
     await clearWalletNoMnemonicBackupFlag(walletDb, walletId)
     expect(await walletHasNoMnemonicBackupFlag(walletDb, walletId)).toBe(false)
+  })
+
+  it('anyWalletHasNoMnemonicBackupFlag is true when at least one wallet has the flag', async () => {
+    const a = await walletDb
+      .insertInto('wallets')
+      .values({ name: 'A', created_at: new Date().toISOString() })
+      .executeTakeFirstOrThrow()
+    const b = await walletDb
+      .insertInto('wallets')
+      .values({ name: 'B', created_at: new Date().toISOString() })
+      .executeTakeFirstOrThrow()
+    const idA = Number(a.insertId)
+    const idB = Number(b.insertId)
+    expect(await anyWalletHasNoMnemonicBackupFlag(walletDb)).toBe(false)
+    await setWalletNoMnemonicBackupFlag(walletDb, idB)
+    expect(await anyWalletHasNoMnemonicBackupFlag(walletDb)).toBe(true)
+    await clearWalletNoMnemonicBackupFlag(walletDb, idB)
+    expect(await anyWalletHasNoMnemonicBackupFlag(walletDb)).toBe(false)
+    await setWalletNoMnemonicBackupFlag(walletDb, idA)
+    expect(await anyWalletHasNoMnemonicBackupFlag(walletDb)).toBe(true)
   })
 
   it('deleting wallet row clears flag lookup (no orphan state)', async () => {

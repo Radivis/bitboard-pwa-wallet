@@ -65,6 +65,38 @@ export async function writeTextFileToOpfsRoot(fileName: string, contents: string
   }
 }
 
+/** Writes raw bytes (e.g. SQLite) to a file in the OPFS root. */
+export async function writeArrayBufferToOpfsRoot(
+  fileName: string,
+  data: ArrayBuffer,
+): Promise<void> {
+  if (typeof navigator === 'undefined' || !navigator.storage?.getDirectory) {
+    throw new Error('OPFS (navigator.storage.getDirectory) is not available')
+  }
+  const root = await navigator.storage.getDirectory()
+  const handle = await root.getFileHandle(fileName, { create: true })
+  const writable = await handle.createWritable()
+  try {
+    await writable.write(data)
+  } finally {
+    await writable.close()
+  }
+}
+
+/** Removes a file in the OPFS root if it exists; ignores `NotFoundError`. */
+export async function removeOpfsRootEntryIfExists(fileName: string): Promise<void> {
+  if (typeof navigator === 'undefined' || !navigator.storage?.getDirectory) {
+    return
+  }
+  try {
+    const root = await navigator.storage.getDirectory()
+    await root.removeEntry(fileName)
+  } catch (error) {
+    if (isNotFoundError(error)) return
+    throw error
+  }
+}
+
 /**
  * Saves a blob as a local file (browser save / download attribute). Not a remote server; user-facing copy should say "Export".
  */

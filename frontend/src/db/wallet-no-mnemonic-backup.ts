@@ -2,6 +2,18 @@ import type { Kysely } from 'kysely'
 import type { Database } from './schema'
 import { SQLITE_FALSE, SQLITE_TRUE } from './schema'
 
+/** True if any wallet row has `no_mnemonic_backup` set (blocks backup import until seeds are backed up). */
+export async function anyWalletHasNoMnemonicBackupFlag(
+  walletDb: Kysely<Database>,
+): Promise<boolean> {
+  const row = await walletDb
+    .selectFrom('wallets')
+    .select('wallet_id')
+    .where('no_mnemonic_backup', '=', SQLITE_TRUE as unknown as boolean)
+    .executeTakeFirst()
+  return row != null
+}
+
 export async function setWalletNoMnemonicBackupFlag(
   walletDb: Kysely<Database>,
   walletId: number,
