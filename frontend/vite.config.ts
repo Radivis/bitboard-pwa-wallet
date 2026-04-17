@@ -7,6 +7,7 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
 import wasm from 'vite-plugin-wasm'
+import { viteImprintDefine } from '../load-imprint-env.mjs'
 
 const projectRoot = path.dirname(fileURLToPath(import.meta.url))
 
@@ -39,6 +40,7 @@ export default defineConfig({
     // Expose CI to app so we can disable dev overlays (e.g. TanStack Router Devtools)
     // that intercept pointer events and break E2E tests.
     'import.meta.env.CI': JSON.stringify(!!process.env.CI),
+    ...viteImprintDefine(),
   },
   plugins: [
     tanstackRouter({

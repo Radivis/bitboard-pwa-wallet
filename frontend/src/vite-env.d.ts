@@ -8,6 +8,8 @@ interface ImportMetaEnv {
   readonly VITE_E2E_NWC_MOCK?: string
   /** Set to `1` or `true` to hide TanStack Router devtools in dev (e.g. for screenshots). */
   readonly VITE_HIDE_ROUTER_DEVTOOLS?: string
+  /** Legal imprint (Impressum); injected at build time from repo-root `.env.imprint`. */
+  readonly VITE_IMPRINT?: string
 }
 
 interface ImportMeta {

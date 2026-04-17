@@ -19,6 +19,7 @@ import { AddressTypeSelector } from '@/components/settings/AddressTypeSelector'
 import { EsploraUrlSettings } from '@/components/settings/EsploraUrlSettings'
 import { FeatureToggles } from '@/components/settings/FeatureToggles'
 import { BitcoinUnitSelect } from '@/components/BitcoinUnitSelect'
+import { ImpressumBlock } from '@/components/ImpressumBlock'
 import { SettingsSecurityCard } from '@/components/settings/SettingsSecurityCard'
 import { DataBackupsCard } from '@/components/settings/DataBackupsCard'
 import { ChangeAppPasswordModal } from '@/components/ChangeAppPasswordModal'
@@ -190,6 +191,8 @@ export function SettingsPage() {
           <p className="pt-1">Support contact: TBD</p>
         </CardContent>
       </Card>
+
+      <ImpressumBlock />
     </div>
   )
 }
