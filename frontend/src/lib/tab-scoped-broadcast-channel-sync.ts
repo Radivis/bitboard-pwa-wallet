@@ -12,7 +12,7 @@ function getTabInstanceId(): string {
   return tabInstanceId
 }
 
-export type TabScopedBroadcastMessage = { sourceTabId: string; t: number }
+export type TabScopedBroadcastMessage = { sourceTabId: string; time: number }
 
 /**
  * Rejects malformed payloads so same-origin scripts cannot spam invalidations with `{}`.
@@ -24,9 +24,9 @@ export function isValidTabScopedBroadcastMessage(
   if (data == null || typeof data !== 'object') return false
   const rec = data as Record<string, unknown>
   const id = rec.sourceTabId
-  const t = rec.t
+  const time = rec.time
   if (typeof id !== 'string' || id.trim() === '') return false
-  if (typeof t !== 'number' || !Number.isFinite(t)) return false
+  if (typeof time !== 'number' || !Number.isFinite(time)) return false
   return true
 }
 
@@ -59,7 +59,7 @@ export function createTabScopedBroadcastChannelSync(channelName: string) {
       if (ch == null) return
       const msg: TabScopedBroadcastMessage = {
         sourceTabId: getTabInstanceId(),
-        t: Date.now(),
+        time: Date.now(),
       }
       ch.postMessage(msg)
     } catch {

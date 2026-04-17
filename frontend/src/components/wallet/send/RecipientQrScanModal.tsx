@@ -168,6 +168,20 @@ export function RecipientQrScanModal({
     let rafAttempts = 0
     const maxVideoWaitFrames = 40
 
+    /** When cancelled: destroy the given pre-ref scanner instance or the ref-backed scanner; returns whether we bailed. */
+    const ifCancelledDestroyScanner = (
+      isCancelled: boolean,
+      scannerBeforeRef?: InstanceType<typeof QrScanner> | null,
+    ): boolean => {
+      if (!isCancelled) return false
+      if (scannerBeforeRef != null) {
+        scannerBeforeRef.destroy()
+      } else {
+        destroyScanner()
+      }
+      return true
+    }
+
     const startScanner = () => {
       const video = videoRef.current
       if (!video) {
@@ -186,9 +200,8 @@ export function RecipientQrScanModal({
         return
       }
 
-      setCameraError(null)
-
-      ;(async () => {
+      setCameraError(null);
+      (async () => {
         try {
           const scanner = new QrScanner(
             video,
@@ -207,16 +220,10 @@ export function RecipientQrScanModal({
               onDecodeError: () => {},
             },
           )
-          if (cancelled) {
-            scanner.destroy()
-            return
-          }
+          if (ifCancelledDestroyScanner(cancelled, scanner)) return
           scannerRef.current = scanner
           await scanner.start()
-          if (cancelled) {
-            destroyScanner()
-            return
-          }
+          if (ifCancelledDestroyScanner(cancelled)) return
           try {
             const has = await scanner.hasFlash()
             if (!cancelled) {

@@ -27,9 +27,9 @@ describe('wallet-cross-tab-sync', () => {
     expect(postMessage).toHaveBeenCalledTimes(1)
     const payload = postMessage.mock.calls[0][0] as {
       sourceTabId?: string
-      t?: number
+      time?: number
     }
     expect(typeof payload?.sourceTabId).toBe('string')
-    expect(typeof payload?.t).toBe('number')
+    expect(typeof payload?.time).toBe('number')
   })
 })

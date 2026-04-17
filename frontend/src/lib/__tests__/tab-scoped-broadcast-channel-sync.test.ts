@@ -6,14 +6,14 @@ describe('isValidTabScopedBroadcastMessage', () => {
     expect(
       isValidTabScopedBroadcastMessage({
         sourceTabId: 'abc-123',
-        t: Date.now(),
+        time: Date.now(),
       }),
     ).toBe(true)
   })
 
   it('rejects empty sourceTabId', () => {
     expect(
-      isValidTabScopedBroadcastMessage({ sourceTabId: '   ', t: 1 }),
+      isValidTabScopedBroadcastMessage({ sourceTabId: '   ', time: 1 }),
     ).toBe(false)
   })
 
@@ -23,13 +23,13 @@ describe('isValidTabScopedBroadcastMessage', () => {
     expect(
       isValidTabScopedBroadcastMessage({
         sourceTabId: 'x',
-        t: NaN,
+        time: NaN,
       }),
     ).toBe(false)
     expect(
       isValidTabScopedBroadcastMessage({
         sourceTabId: 1,
-        t: 1,
+        time: 1,
       }),
     ).toBe(false)
   })

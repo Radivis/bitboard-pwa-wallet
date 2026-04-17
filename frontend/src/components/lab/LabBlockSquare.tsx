@@ -71,8 +71,10 @@ export function LabBlockSquare({
   const dateLabel = Number.isFinite(minedOnUnix) && minedOnUnix > 0 ? minedDate.toLocaleDateString() : '—'
   const timeLabel = Number.isFinite(minedOnUnix) && minedOnUnix > 0 ? minedDate.toLocaleTimeString() : '—'
   const netMovedAria = `${formatAmountInBitcoinDisplayUnit(netMovedSats, 'BTC')} BTC`
+  const feesAria = `${formatAmountInBitcoinDisplayUnit(totalFeesSats, 'BTC')} BTC`
   const minedByDisplayName =
     minedBy != null ? getOwnerDisplayName(minedBy, wallets, entities) : null
+  const minerAria = minedByDisplayName ?? 'unknown'
   const fillPercentRounded =
     fillFraction != null ? Math.round(fillFraction * 100) : null
   const ariaWeightHint =
@@ -80,7 +82,7 @@ export function LabBlockSquare({
       ? `, non-coinbase weight about ${fillPercentRounded}% of the limit at mining`
       : ''
 
-  const cardAriaLabel = `Block ${height}, ${txCount} transactions, net moved ${netMovedAria}, mined ${dateLabel} ${timeLabel}${ariaWeightHint}`
+  const cardAriaLabel = `Block ${height}, ${txCount} transactions, mined by ${minerAria}, total fees ${feesAria}, net moved ${netMovedAria}, mined ${dateLabel} ${timeLabel}${ariaWeightHint}`
 
   return (
     <div className={cn('group relative block min-w-0 rounded-lg', className)}>
