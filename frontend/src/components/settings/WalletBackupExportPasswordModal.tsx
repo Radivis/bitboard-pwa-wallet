@@ -22,14 +22,24 @@ export function WalletBackupExportPasswordModal({
   isBusy,
 }: WalletBackupExportPasswordModalProps) {
   const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
   const pwdId = useId()
+  const confirmPwdId = useId()
+
+  const passwordsMatch = password === confirmPassword
+  const canSubmit =
+    password.length > 0 && confirmPassword.length > 0 && passwordsMatch
 
   useEffect(() => {
-    if (!open) setPassword('')
+    if (!open) {
+      setPassword('')
+      setConfirmPassword('')
+    }
   }, [open])
 
   const handleCancel = useCallback(() => {
     setPassword('')
+    setConfirmPassword('')
     onCancel()
   }, [onCancel])
 
@@ -47,7 +57,7 @@ export function WalletBackupExportPasswordModal({
           </Button>
           <Button
             type="button"
-            disabled={isBusy || password.length === 0}
+            disabled={isBusy || !canSubmit}
             onClick={() => void onConfirm(password)}
           >
             {isBusy ? 'Signing…' : 'Sign and export'}
@@ -55,21 +65,50 @@ export function WalletBackupExportPasswordModal({
         </>
       )}
     >
-      <DialogDescription className="text-left">
-        Enter your Bitboard app password to create a cryptographic signature on this export. The ZIP
-        will include your wallet database plus a manifest file that proves integrity when you
-        import it later.
+      <DialogDescription asChild>
+        <div className="space-y-3 text-left text-sm text-foreground">
+          <p>
+            This export is cryptographically signed. Use a <strong>strong</strong> password for
+            signing—ideally your <strong>current Bitboard app password</strong>, so you only have one
+            secret to remember when you restore this backup later.
+          </p>
+          <p>
+            Enter that password twice below. Repeating it catches typos; you will need the{' '}
+            <em>exact</em> same password to verify the backup on import.
+          </p>
+          <p className="text-muted-foreground">
+            The ZIP contains your wallet database plus a small manifest file used to check integrity.
+          </p>
+        </div>
       </DialogDescription>
-      <div className="mt-4 space-y-2">
-        <Label htmlFor={pwdId}>App password</Label>
-        <Input
-          id={pwdId}
-          type="password"
-          autoComplete="current-password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          disabled={isBusy}
-        />
+      <div className="mt-4 space-y-4">
+        <div className="space-y-2">
+          <Label htmlFor={pwdId}>Password for signing</Label>
+          <Input
+            id={pwdId}
+            type="password"
+            autoComplete="current-password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            disabled={isBusy}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor={confirmPwdId}>Confirm password</Label>
+          <Input
+            id={confirmPwdId}
+            type="password"
+            autoComplete="new-password"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            disabled={isBusy}
+          />
+        </div>
+        {password.length > 0 && confirmPassword.length > 0 && !passwordsMatch ? (
+          <p className="text-sm text-destructive" role="alert">
+            Passwords do not match.
+          </p>
+        ) : null}
       </div>
     </AppModal>
   )
