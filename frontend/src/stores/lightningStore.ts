@@ -21,7 +21,10 @@ import { useWalletStore } from '@/stores/walletStore'
 import { useSessionStore } from '@/stores/sessionStore'
 import type { NetworkMode } from '@/stores/walletStore'
 import { MAX_LIGHTNING_WALLET_LABEL_LENGTH } from '@/lib/lightning-input-limits'
-import { resolveDefaultNwcConnectionLabel } from '@/lib/nwc-default-connection-label'
+import {
+  isReservedDefaultNwcConnectionLabel,
+  resolveDefaultNwcConnectionLabel,
+} from '@/lib/nwc-default-connection-label'
 
 /**
  * Whether the given Bitcoin wallet has at least one Lightning connection for the
@@ -86,6 +89,11 @@ interface LightningState {
   }) => Promise<{ id: string; label: string }>
 
   removeConnection: (connectionId: string) => Promise<void>
+
+  renameConnection: (params: {
+    connectionId: string
+    newLabel: string
+  }) => Promise<void>
 
   setActiveConnection: (
     walletId: number,
@@ -252,6 +260,57 @@ export const useLightningStore = create<LightningState>()(
             connections: forWallet,
           })
         }
+      },
+
+      renameConnection: async ({ connectionId, newLabel }) => {
+        const password = useSessionStore.getState().password
+        if (!password) {
+          throw new Error('Wallet must be unlocked to rename a Lightning connection')
+        }
+
+        const trimmed = newLabel.trim()
+        if (trimmed.length === 0) {
+          throw new Error('Enter a label for this Lightning wallet')
+        }
+        if (trimmed.length > MAX_LIGHTNING_WALLET_LABEL_LENGTH) {
+          throw new Error(
+            `Label must be at most ${MAX_LIGHTNING_WALLET_LABEL_LENGTH} characters`,
+          )
+        }
+        if (isReservedDefaultNwcConnectionLabel(trimmed)) {
+          throw new Error(
+            'That name is reserved for automatically named connections. Choose a different label.',
+          )
+        }
+
+        const target = get().connectedWallets.find((w) => w.id === connectionId)
+        if (!target) {
+          throw new Error('Lightning connection not found')
+        }
+
+        const { walletId } = target
+        const duplicate = get().connectedWallets.some(
+          (w) =>
+            w.walletId === walletId &&
+            w.id !== connectionId &&
+            w.label.trim() === trimmed,
+        )
+        if (duplicate) {
+          throw new Error('Another Lightning wallet already uses this label')
+        }
+
+        const nextWallets = get().connectedWallets.map((w) =>
+          w.id === connectionId ? { ...w, label: trimmed } : w,
+        )
+
+        set({ connectedWallets: nextWallets })
+
+        const forWallet = nextWallets.filter((w) => w.walletId === walletId)
+        await saveLightningConnectionsForWallet({
+          password,
+          walletId,
+          connections: forWallet,
+        })
       },
 
       setActiveConnection: (walletId, networkMode, connectionId) => {

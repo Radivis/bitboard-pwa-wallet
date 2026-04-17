@@ -1,5 +1,5 @@
-import { useState, useCallback, useMemo } from 'react'
-import { Zap, Trash2, CheckCircle, XCircle, Loader2, Wifi } from 'lucide-react'
+import { useState, useCallback, useMemo, useEffect } from 'react'
+import { Zap, Trash2, Pencil, CheckCircle, XCircle, Loader2, Wifi } from 'lucide-react'
 import { toast } from 'sonner'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -24,6 +24,14 @@ import {
 } from '@/lib/lightning-input-limits'
 import type { ConnectedLightningWallet } from '@/lib/lightning-backend-service'
 import { NWC_ESPLORA_BLOCK_HEIGHT_TOLERANCE } from '@/lib/bitcoin-utils'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 
 const WALLET_TYPE_LABELS: Record<string, string> = {
   nwc: 'NWC',
@@ -31,6 +39,97 @@ const WALLET_TYPE_LABELS: Record<string, string> = {
 
 function walletTypeBadgeLabel(type: string): string {
   return WALLET_TYPE_LABELS[type] ?? type
+}
+
+function RenameLightningWalletDialog({
+  wallet,
+  open,
+  onOpenChange,
+}: {
+  wallet: ConnectedLightningWallet
+  open: boolean
+  onOpenChange: (open: boolean) => void
+}) {
+  const renameConnection = useLightningStore((s) => s.renameConnection)
+  const [draftLabel, setDraftLabel] = useState('')
+  const [savePending, setSavePending] = useState(false)
+
+  const trimmedDraft = draftLabel.trim()
+  const storedTrimmed = wallet.label.trim()
+  const lengthValid =
+    trimmedDraft.length > 0 &&
+    trimmedDraft.length <= MAX_LIGHTNING_WALLET_LABEL_LENGTH
+  const canSave =
+    lengthValid && trimmedDraft !== storedTrimmed && !savePending
+
+  useEffect(() => {
+    if (open) {
+      setDraftLabel(wallet.label)
+    }
+  }, [open, wallet.id, wallet.label])
+
+  const handleSave = async () => {
+    if (!canSave) return
+    setSavePending(true)
+    try {
+      await renameConnection({
+        connectionId: wallet.id,
+        newLabel: draftLabel,
+      })
+      toast.success('Lightning wallet renamed')
+      onOpenChange(false)
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : 'Failed to rename Lightning wallet',
+      )
+    } finally {
+      setSavePending(false)
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Rename Lightning wallet</DialogTitle>
+          <DialogDescription>
+            Choose a unique label. Names reserved for automatic labels are not
+            allowed.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-2">
+          <Label htmlFor={`ln-rename-${wallet.id}`}>Label</Label>
+          <Input
+            id={`ln-rename-${wallet.id}`}
+            value={draftLabel}
+            maxLength={MAX_LIGHTNING_WALLET_LABEL_LENGTH}
+            onChange={(e) => setDraftLabel(e.target.value)}
+            autoComplete="off"
+          />
+        </div>
+        <DialogFooter>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            disabled={savePending}
+          >
+            Cancel
+          </Button>
+          <Button type="button" disabled={!canSave} onClick={() => void handleSave()}>
+            {savePending ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Saving…
+              </>
+            ) : (
+              'Save'
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
 }
 
 function WalletRow({
@@ -44,6 +143,7 @@ function WalletRow({
   onSetActive: () => void
   onRemove: () => void
 }) {
+  const [renameOpen, setRenameOpen] = useState(false)
   const balanceQuery = useLnWalletBalanceQuery({
     connectionId: wallet.id,
     walletId: wallet.walletId,
@@ -130,17 +230,35 @@ function WalletRow({
           </p>
         )}
       </div>
-      <Button
-        variant="ghost"
-        size="icon"
-        onClick={(e) => {
-          e.stopPropagation()
-          onRemove()
-        }}
-        aria-label={`Remove ${wallet.label}`}
-      >
-        <Trash2 className="h-4 w-4 text-destructive" />
-      </Button>
+      <div className="flex shrink-0 gap-1">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={(e) => {
+            e.stopPropagation()
+            setRenameOpen(true)
+          }}
+          aria-label={`Rename ${wallet.label}`}
+        >
+          <Pencil className="h-4 w-4" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={(e) => {
+            e.stopPropagation()
+            onRemove()
+          }}
+          aria-label={`Remove ${wallet.label}`}
+        >
+          <Trash2 className="h-4 w-4 text-destructive" />
+        </Button>
+      </div>
+      <RenameLightningWalletDialog
+        wallet={wallet}
+        open={renameOpen}
+        onOpenChange={setRenameOpen}
+      />
     </div>
   )
 }
