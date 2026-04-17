@@ -3,6 +3,7 @@ import { sql } from 'kysely'
 import type { Kysely } from 'kysely'
 import type { Database } from '../schema'
 import { APP_SETTINGS_LAST_OPENED_AT_KEY } from '@/lib/app-session-metadata'
+import { ARGON2_KDF_PHC_CI } from '@/lib/kdf-phc-constants'
 import { createTestDatabase } from '../test-helpers'
 
 describe('SQLite Database', () => {
@@ -102,11 +103,11 @@ describe('SQLite Database', () => {
             encrypted_data: new Uint8Array(0),
             iv: new Uint8Array(12),
             salt: new Uint8Array(16),
-            kdf_version: 1,
+            kdf_phc: ARGON2_KDF_PHC_CI,
             mnemonic_encrypted_data: new Uint8Array(0),
             mnemonic_iv: new Uint8Array(12),
             mnemonic_salt: new Uint8Array(16),
-            mnemonic_kdf_version: 1,
+            mnemonic_kdf_phc: ARGON2_KDF_PHC_CI,
             created_at: now,
             updated_at: now,
           }).execute()

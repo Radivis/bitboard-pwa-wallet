@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Kysely } from 'kysely'
 import type { Database } from '../schema'
 import { createTestDatabase } from '../test-helpers'
+import { ARGON2_KDF_PHC_CI } from '@/lib/kdf-phc-constants'
 
 const decryptDataMock = vi.fn()
 
@@ -33,11 +34,11 @@ describe('wallet secrets schema boundary', () => {
         encrypted_data: new Uint8Array([1, 2, 3]),
         iv: new Uint8Array(12),
         salt: new Uint8Array(16),
-        kdf_version: 1,
+        kdf_phc: ARGON2_KDF_PHC_CI,
         mnemonic_encrypted_data: new Uint8Array([1]),
         mnemonic_iv: new Uint8Array(12),
         mnemonic_salt: new Uint8Array(16),
-        mnemonic_kdf_version: 1,
+        mnemonic_kdf_phc: ARGON2_KDF_PHC_CI,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       })

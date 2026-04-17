@@ -4,6 +4,7 @@
  */
 import { pbkdf2Sync } from 'node:crypto'
 import type { EncryptedBlob } from '@/lib/encrypted-blob-types'
+import { ARGON2_KDF_PHC_PRODUCTION } from '@/lib/kdf-phc-constants'
 
 const SALT_LENGTH_BYTES = 16
 const IV_LENGTH_BYTES = 12
@@ -25,7 +26,11 @@ export function getMockEncryptionWorker() {
   return {
     setSecretsPort: async (_port: MessagePort): Promise<void> => {},
 
-    deriveKeyBytes: async (password: string, salt: Uint8Array): Promise<Uint8Array> =>
+    deriveKeyBytes: async (
+      password: string,
+      salt: Uint8Array,
+      _kdfPhc?: string,
+    ): Promise<Uint8Array> =>
       new Uint8Array(pbkdf2Sync(password, salt, 1000, 32, 'sha256')),
 
     async encryptData(password: string, plaintext: string): Promise<EncryptedBlob> {
@@ -42,7 +47,7 @@ export function getMockEncryptionWorker() {
         ciphertext: new Uint8Array(ciphertextBuffer),
         iv,
         salt,
-        kdfVersion: 1 as const,
+        kdfPhc: ARGON2_KDF_PHC_PRODUCTION,
       }
     },
 

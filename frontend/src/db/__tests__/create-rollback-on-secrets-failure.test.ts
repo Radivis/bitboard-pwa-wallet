@@ -3,6 +3,7 @@ import type { Kysely } from 'kysely'
 import type { Database } from '../schema'
 import { createTestDatabase } from '../test-helpers'
 import { persistNewWalletWithSecrets } from '../wallet-persistence'
+import { ARGON2_KDF_PHC_CI } from '@/lib/kdf-phc-constants'
 
 /**
  * Integration test: when secrets write fails, persistNewWalletWithSecrets (used by create/import)
@@ -25,7 +26,7 @@ describe('Create/import rollback on secrets write failure', () => {
       ciphertext: new Uint8Array(0),
       iv: new Uint8Array(12),
       salt: new Uint8Array(16),
-      kdfVersion: 1 as const,
+      kdfPhc: ARGON2_KDF_PHC_CI,
     }
 
     await expect(

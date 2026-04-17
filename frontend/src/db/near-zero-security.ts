@@ -1,6 +1,10 @@
 import type { Kysely } from 'kysely'
 import type { Database } from './schema'
 import type { EncryptedBlob } from '@/lib/encrypted-blob-types'
+import {
+  ARGON2_KDF_PHC_CI,
+  ARGON2_KDF_PHC_PRODUCTION,
+} from '@/lib/kdf-phc-constants'
 import { encryptData, decryptData } from './encryption'
 import {
   listWalletIdsWithSecrets,
@@ -38,12 +42,25 @@ function base64ToUint8(b64: string): Uint8Array {
   return out
 }
 
+function kdfPhcFromLegacySettings(o: {
+  kdfPhc?: string
+  kdfVersion?: number
+}): string {
+  if (o.kdfPhc !== undefined && o.kdfPhc.length > 0) {
+    return o.kdfPhc
+  }
+  if (o.kdfVersion === 1) {
+    return ARGON2_KDF_PHC_CI
+  }
+  return ARGON2_KDF_PHC_PRODUCTION
+}
+
 export function serializeEncryptedBlobForSettings(blob: EncryptedBlob): string {
   return JSON.stringify({
     ciphertext: uint8ToBase64(blob.ciphertext),
     iv: uint8ToBase64(blob.iv),
     salt: uint8ToBase64(blob.salt),
-    kdfVersion: blob.kdfVersion,
+    kdfPhc: blob.kdfPhc,
   })
 }
 
@@ -52,13 +69,14 @@ export function deserializeEncryptedBlobFromSettings(json: string): EncryptedBlo
     ciphertext: string
     iv: string
     salt: string
-    kdfVersion: EncryptedBlob['kdfVersion']
+    kdfPhc?: string
+    kdfVersion?: number
   }
   return {
     ciphertext: base64ToUint8(o.ciphertext),
     iv: base64ToUint8(o.iv),
     salt: base64ToUint8(o.salt),
-    kdfVersion: o.kdfVersion,
+    kdfPhc: kdfPhcFromLegacySettings(o),
   }
 }
 

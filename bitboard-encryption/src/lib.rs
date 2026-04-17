@@ -1,14 +1,15 @@
 //! Minimal WASM crate for key derivation (Argon2id). Used by the encryption worker only.
 //!
-//! Two parameter sets:
-//! - **Production:** 64 MB memory, 3 iterations, parallelism 4 (stronger, for real devices).
-//! - **CI** 64 MB memory, 2 iterations, parallelism 1 (faster, for CI).
+//! KDF parameters are identified by PHC-style prefix strings (salt stays separate in the app DB).
 
 use argon2::{Algorithm, Argon2, Params, Version};
 use wasm_bindgen::prelude::*;
 
 /// Memory cost (KiB) for both profiles — 64 MiB.
 const ARGON2_MEMORY_KIB: u32 = 65536;
+/// Output length for AES-256 key material (bytes).
+const DERIVED_KEY_LEN: usize = 32;
+
 /// Production: Argon2 time cost (iterations).
 const ARGON2_PRODUCTION_ITERATIONS: u32 = 3;
 /// Production: parallelism lanes.
@@ -17,8 +18,13 @@ const ARGON2_PRODUCTION_PARALLELISM: u32 = 4;
 const ARGON2_CI_ITERATIONS: u32 = 2;
 /// CI: parallelism lanes.
 const ARGON2_CI_PARALLELISM: u32 = 1;
-/// Output length for AES-256 key material (bytes).
-const DERIVED_KEY_LEN: usize = 32;
+
+/// PHC-style Argon2id descriptor: CI profile (matches former `kdf_version == 1`).
+/// `v=19` is Argon2 version 0x13.
+pub const ARGON2_KDF_PHC_CI: &str = "$argon2id$v=19$m=65536,t=2,p=1";
+
+/// PHC-style Argon2id descriptor: production profile (matches former `kdf_version == 2`).
+pub const ARGON2_KDF_PHC_PRODUCTION: &str = "$argon2id$v=19$m=65536,t=3,p=4";
 
 #[derive(Clone, Copy)]
 enum Argon2Profile {
@@ -35,19 +41,84 @@ fn derive_argon2_key_with_profile(
         Argon2Profile::Production => (ARGON2_PRODUCTION_ITERATIONS, ARGON2_PRODUCTION_PARALLELISM),
         Argon2Profile::Ci => (ARGON2_CI_ITERATIONS, ARGON2_CI_PARALLELISM),
     };
-    let params = Params::new(
-        ARGON2_MEMORY_KIB,
-        iterations,
-        parallelism,
-        Some(DERIVED_KEY_LEN),
-    )
-    .map_err(|e| JsValue::from_str(&format!("Argon2 params error: {e}")))?;
+    derive_argon2_key_with_mtp(password, salt, ARGON2_MEMORY_KIB, iterations, parallelism)
+}
+
+fn derive_argon2_key_with_mtp(
+    password: &str,
+    salt: &[u8],
+    memory_kib: u32,
+    iterations: u32,
+    parallelism: u32,
+) -> Result<Vec<u8>, JsValue> {
+    let params = Params::new(memory_kib, iterations, parallelism, Some(DERIVED_KEY_LEN))
+        .map_err(|e| JsValue::from_str(&format!("Argon2 params error: {e}")))?;
     let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
     let mut key = vec![0u8; DERIVED_KEY_LEN];
     argon2
         .hash_password_into(password.as_bytes(), salt, &mut key)
         .map_err(|e| JsValue::from_str(&format!("Argon2 hash error: {e}")))?;
     Ok(key)
+}
+
+/// Parses `m=65536,t=2,p=1` from a PHC fragment (no `$` in this segment).
+fn parse_mtp_segment(segment: &str) -> Option<(u32, u32, u32)> {
+    let mut memory_kib: Option<u32> = None;
+    let mut iterations: Option<u32> = None;
+    let mut parallelism: Option<u32> = None;
+    for part in segment.split(',') {
+        let part = part.trim();
+        if let Some(v) = part.strip_prefix("m=") {
+            memory_kib = v.parse().ok();
+        } else if let Some(v) = part.strip_prefix("t=") {
+            iterations = v.parse().ok();
+        } else if let Some(v) = part.strip_prefix("p=") {
+            parallelism = v.parse().ok();
+        }
+    }
+    match (memory_kib, iterations, parallelism) {
+        (Some(m), Some(t), Some(p)) => Some((m, t, p)),
+        _ => None,
+    }
+}
+
+/// Finds the PHC segment containing `m=`, `t=`, and `p=` (comma-separated).
+fn parse_mtp_from_phc(phc: &str) -> Result<(u32, u32, u32), JsValue> {
+    if phc == ARGON2_KDF_PHC_CI {
+        return Ok((
+            ARGON2_MEMORY_KIB,
+            ARGON2_CI_ITERATIONS,
+            ARGON2_CI_PARALLELISM,
+        ));
+    }
+    if phc == ARGON2_KDF_PHC_PRODUCTION {
+        return Ok((
+            ARGON2_MEMORY_KIB,
+            ARGON2_PRODUCTION_ITERATIONS,
+            ARGON2_PRODUCTION_PARALLELISM,
+        ));
+    }
+    for segment in phc.split('$') {
+        if segment.contains("m=") && segment.contains("t=") && segment.contains("p=") {
+            if let Some(mtp) = parse_mtp_segment(segment) {
+                return Ok(mtp);
+            }
+        }
+    }
+    Err(JsValue::from_str(
+        "Invalid kdf_phc: expected Argon2id PHC with m,t,p (e.g. $argon2id$v=19$m=65536,t=3,p=4)",
+    ))
+}
+
+/// Derive a 256-bit key from password, salt, and a PHC-style Argon2id parameter string.
+#[wasm_bindgen(js_name = deriveArgon2KeyFromPhc)]
+pub fn derive_argon2_key_from_phc(
+    password: &str,
+    salt: &[u8],
+    phc: &str,
+) -> Result<Vec<u8>, JsValue> {
+    let (memory_kib, iterations, parallelism) = parse_mtp_from_phc(phc)?;
+    derive_argon2_key_with_mtp(password, salt, memory_kib, iterations, parallelism)
 }
 
 /// Derive a 256-bit key using Argon2id with **production** parameters.
@@ -75,6 +146,24 @@ mod tests {
         let salt: [u8; 16] = [42; 16];
         let key = derive_argon2_key(password, &salt).expect("derive_argon2_key failed");
         assert_eq!(key.len(), 32);
+    }
+
+    #[test]
+    fn phc_ci_matches_derive_argon2_key_ci() {
+        let password = "pw";
+        let salt = [7u8; 16];
+        let a = derive_argon2_key_ci(password, &salt).unwrap();
+        let b = derive_argon2_key_from_phc(password, &salt, ARGON2_KDF_PHC_CI).unwrap();
+        assert_eq!(a, b);
+    }
+
+    #[test]
+    fn phc_production_matches_derive_argon2_key() {
+        let password = "pw";
+        let salt = [7u8; 16];
+        let a = derive_argon2_key(password, &salt).unwrap();
+        let b = derive_argon2_key_from_phc(password, &salt, ARGON2_KDF_PHC_PRODUCTION).unwrap();
+        assert_eq!(a, b);
     }
 
     #[test]

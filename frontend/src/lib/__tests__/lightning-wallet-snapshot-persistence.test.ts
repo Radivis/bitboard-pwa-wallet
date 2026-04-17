@@ -19,7 +19,7 @@ vi.mock('@/db/encryption', () => ({
     ciphertext: new TextEncoder().encode(plaintext),
     iv: new Uint8Array(12),
     salt: new Uint8Array(16),
-    kdfVersion: 2 as const,
+    kdfPhc: '$argon2id$v=19$m=65536,t=3,p=4',
   })),
 }))
 

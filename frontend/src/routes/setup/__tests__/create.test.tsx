@@ -118,7 +118,7 @@ function mockEncryptedBlob() {
     ciphertext: new Uint8Array(0),
     iv: new Uint8Array(12),
     salt: new Uint8Array(16),
-    kdfVersion: 1 as const,
+    kdfPhc: '$argon2id$v=19$m=65536,t=2,p=1',
   }
 }
 

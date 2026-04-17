@@ -1,9 +1,5 @@
 import type { ColumnType, Generated, Insertable, Selectable, Updateable } from 'kysely'
-import type { KdfVersion } from '@/lib/encrypted-blob-types'
 
-export type { KdfVersion }
-
-/** SQLite BOOLEAN columns: bindings use `0`/`1`, not JS `boolean`, in some drivers. */
 export const SQLITE_FALSE = 0
 export const SQLITE_TRUE = 1
 
@@ -43,12 +39,13 @@ interface WalletSecretsTable {
   encrypted_data: Uint8Array
   iv: Uint8Array
   salt: Uint8Array
-  kdf_version: KdfVersion
+  /** Argon2id PHC parameter prefix; salt stored separately. */
+  kdf_phc: string
   /** Separate mnemonic ciphertext (split storage layout). */
   mnemonic_encrypted_data: Uint8Array
   mnemonic_iv: Uint8Array
   mnemonic_salt: Uint8Array
-  mnemonic_kdf_version: KdfVersion
+  mnemonic_kdf_phc: string
   created_at: string
   updated_at: string
 }

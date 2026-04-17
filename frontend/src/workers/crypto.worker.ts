@@ -64,7 +64,7 @@ type EncryptedBlobStoreFields = {
   ciphertext: Uint8Array;
   iv: Uint8Array;
   salt: Uint8Array;
-  kdfVersion?: EncryptedBlobMessage['kdfVersion'];
+  kdfPhc: EncryptedBlobMessage['kdfPhc'];
 };
 
 function encryptedBlobMessageToStoreFields(
@@ -74,7 +74,7 @@ function encryptedBlobMessageToStoreFields(
     ciphertext: blob.ciphertext,
     iv: blob.iv,
     salt: blob.salt,
-    kdfVersion: blob.kdfVersion,
+    kdfPhc: blob.kdfPhc,
   };
 }
 

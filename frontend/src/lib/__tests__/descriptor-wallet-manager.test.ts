@@ -53,13 +53,13 @@ async function mockResolveDescriptorWallet(params: {
     ciphertext: Uint8Array
     iv: Uint8Array
     salt: Uint8Array
-    kdfVersion?: number
+    kdfPhc?: string
   }
   encryptedMnemonic: {
     ciphertext: Uint8Array
     iv: Uint8Array
     salt: Uint8Array
-    kdfVersion?: number
+    kdfPhc?: string
   }
   targetNetwork: BitcoinNetwork
   targetAddressType: AddressType
@@ -133,7 +133,7 @@ async function mockUpdateDescriptorWalletChangeset(params: {
     ciphertext: Uint8Array
     iv: Uint8Array
     salt: Uint8Array
-    kdfVersion?: number
+    kdfPhc?: string
   }
   network: BitcoinNetwork
   addressType: AddressType

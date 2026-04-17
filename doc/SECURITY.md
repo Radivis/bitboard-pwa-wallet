@@ -31,9 +31,9 @@ This document describes how Bitboard Wallet keeps user credentials and wallet se
 
 **Storage**
 
-- **Encrypted at rest:** The `wallet_secrets` table stores two ciphertexts per wallet row: a **payload** blob (`encrypted_data`, `iv`, `salt`, `kdf_version`) for the non-mnemonic secrets JSON (descriptor sub-wallets, Lightning NWC metadata), and a **separate mnemonic** blob (`mnemonic_encrypted_data`, `mnemonic_iv`, `mnemonic_salt`, `mnemonic_kdf_version`). Both are encrypted with the Bitboard app password using **Argon2id** + **AES-256-GCM**; salt and IV are unique per encryption. Two Argon2id parameter sets are used:
+- **Encrypted at rest:** The `wallet_secrets` table stores two ciphertexts per wallet row: a **payload** blob (`encrypted_data`, `iv`, `salt`, `kdf_phc`) for the non-mnemonic secrets JSON (descriptor sub-wallets, Lightning NWC metadata), and a **separate mnemonic** blob (`mnemonic_encrypted_data`, `mnemonic_iv`, `mnemonic_salt`, `mnemonic_kdf_phc`). Both are encrypted with the Bitboard app password using **Argon2id** + **AES-256-GCM**; salt and IV are unique per encryption. Each blob has a **PHC-style Argon2id parameter string** (`kdf_phc` / `mnemonic_kdf_phc`) so the correct memory, time, and parallelism costs are always explicit at rest. Two parameter sets are used in practice:
   - **Production (default):** 64 MB memory, 3 iterations, parallelism 4, 32-byte key. Used for new encryption when the app is not built with the CI flag.
-  - **CI:** 64 MB memory, 2 iterations, parallelism 1, 32-byte key. Used when `VITE_ARGON2_CI=1` at build time (e.g. in CI for faster tests and E2E), and for decrypting data that was encrypted with these params. The `kdf_version` column (1 = CI, 2 = production) records which set was used so decryption uses the correct params.
+  - **CI:** 64 MB memory, 2 iterations, parallelism 1, 32-byte key. Used when `VITE_ARGON2_CI=1` at build time (e.g. in CI for faster tests and E2E), and for decrypting data that was encrypted with these params.
 - **Unencrypted:** The `wallets` table (ids, names) and `settings` (e.g. custom Esplora URLs). No passwords or mnemonics are stored in settings.
 
 **Mnemonic vs. payload (moderate hardening, not sub-wallet isolation)**
