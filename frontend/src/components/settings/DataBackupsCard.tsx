@@ -15,6 +15,7 @@ import { WalletBackupImportPasswordModal } from '@/components/settings/WalletBac
 import { LAB_SQLITE_OPFS_BASENAME, WALLET_SQLITE_OPFS_BASENAME } from '@/db/opfs-sqlite-database-names'
 import { WALLET_MIGRATION_FAILURE_OPFS_FILENAME } from '@/db/migrations/wallet-migration-failure-report'
 import { destroyDatabase, ensureMigrated, getDatabase } from '@/db/database'
+import { destroyLabDatabase, ensureLabMigrated } from '@/db/lab-database'
 import { anyWalletHasNoMnemonicBackupFlag } from '@/db/wallet-no-mnemonic-backup'
 import { resolveArgon2CiParamsOrThrow } from '@/lib/argon2-ci-env'
 import {
@@ -31,14 +32,14 @@ import {
   WALLET_BACKUP_SIGNING_SALT_BYTES,
   WALLET_BACKUP_ZIP_FILENAME,
 } from '@/lib/wallet-backup-constants'
+import { LAB_BACKUP_SQLITE_ENTRY_NAME, LAB_BACKUP_ZIP_FILENAME } from '@/lib/lab-backup-constants'
+import { parseLabBackupZipFile, LabBackupZipInvalidError } from '@/lib/lab-backup-import'
 import { parseWalletBackupZipFile, WalletBackupZipInvalidError } from '@/lib/wallet-backup-import'
 import { zipSingleFileForLocalExport } from '@/lib/zip-single-file-export'
 import { zipWalletBackupForLocalExport } from '@/lib/zip-wallet-backup-export'
 import { useNearZeroSecurityStore } from '@/stores/nearZeroSecurityStore'
 import { getEncryptionWorker } from '@/workers/encryption-factory'
 
-const LAB_EXPORT_INNER_NAME = 'bitboard-lab-backup.sqlite'
-const LAB_EXPORT_ZIP_NAME = 'bitboard-lab-backup.zip'
 const MIGRATION_REPORT_INNER_NAME = 'wallet-schema-migration-failure.json'
 const MIGRATION_REPORT_ZIP_NAME = 'wallet-schema-migration-failure.zip'
 
@@ -57,11 +58,15 @@ export function DataBackupsCard() {
   const [importWipeOpen, setImportWipeOpen] = useState(false)
   const [importPasswordOpen, setImportPasswordOpen] = useState(false)
   const [importBusy, setImportBusy] = useState(false)
+  const [labImportWipeOpen, setLabImportWipeOpen] = useState(false)
+  const [labImportBusy, setLabImportBusy] = useState(false)
+  const [pendingLabSqlite, setPendingLabSqlite] = useState<Uint8Array | null>(null)
   const [pendingImport, setPendingImport] = useState<{
     sqliteBytes: Uint8Array
     manifestJson: string
   } | null>(null)
   const importFileInputRef = useRef<HTMLInputElement>(null)
+  const labImportFileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -128,8 +133,8 @@ export function DataBackupsCard() {
         toast.error('Lab data file was not found. Open the Lab at least once to create it.')
         return
       }
-      const zipped = await zipSingleFileForLocalExport(blob, LAB_EXPORT_INNER_NAME)
-      triggerBrowserSaveLocalBlob(zipped, LAB_EXPORT_ZIP_NAME)
+      const zipped = await zipSingleFileForLocalExport(blob, LAB_BACKUP_SQLITE_ENTRY_NAME)
+      triggerBrowserSaveLocalBlob(zipped, LAB_BACKUP_ZIP_FILENAME)
       toast.success('Lab data exported as a ZIP on this device.')
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Export failed.')
@@ -238,6 +243,62 @@ export function DataBackupsCard() {
     [pendingImport],
   )
 
+  const onLabImportFilePick = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+    if (!file.name.toLowerCase().endsWith('.zip')) {
+      toast.error('Please choose a ZIP file.')
+      return
+    }
+    try {
+      const { sqliteBytes } = await parseLabBackupZipFile(file)
+      setPendingLabSqlite(sqliteBytes)
+      setLabImportWipeOpen(true)
+    } catch (e) {
+      if (e instanceof LabBackupZipInvalidError) {
+        toast.error(e.message)
+      } else {
+        toast.error(e instanceof Error ? e.message : 'Could not read lab backup ZIP.')
+      }
+    }
+  }, [])
+
+  const cancelLabImportFlow = useCallback(() => {
+    setPendingLabSqlite(null)
+    setLabImportWipeOpen(false)
+  }, [])
+
+  const runLabImportAfterWipeConfirm = useCallback(async () => {
+    if (!pendingLabSqlite) return
+    const sqliteBytes = pendingLabSqlite
+    setPendingLabSqlite(null)
+    setLabImportWipeOpen(false)
+    setLabImportBusy(true)
+    try {
+      await destroyLabDatabase()
+      await removeOpfsRootEntryIfExists(`${LAB_SQLITE_OPFS_BASENAME}-wal`)
+      await removeOpfsRootEntryIfExists(`${LAB_SQLITE_OPFS_BASENAME}-shm`)
+      const ab = sqliteBytes.buffer.slice(
+        sqliteBytes.byteOffset,
+        sqliteBytes.byteOffset + sqliteBytes.byteLength,
+      ) as ArrayBuffer
+      await writeArrayBufferToOpfsRoot(LAB_SQLITE_OPFS_BASENAME, ab)
+      await ensureLabMigrated()
+      setLabFileExists(true)
+      toast.success('Lab backup imported. Reloading…')
+      window.setTimeout(() => {
+        window.location.reload()
+      }, 400)
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Lab import failed.')
+    } finally {
+      setLabImportBusy(false)
+    }
+  }, [pendingLabSqlite])
+
+  const anyImportBusy = importBusy || labImportBusy
+
   return (
     <Card id="data-backups">
       <input
@@ -265,6 +326,18 @@ export function DataBackupsCard() {
         onConfirm={confirmWipeImport}
         onCancel={cancelImportFlow}
       />
+      <ConfirmationDialog
+        open={labImportWipeOpen}
+        title="Replace local lab data?"
+        message="This replaces the lab database on this device with the SQLite file from the ZIP. All current lab data on this device will be lost. The page will reload after import."
+        confirmText="Continue"
+        cancelText="Cancel"
+        variant="destructive"
+        onConfirm={() => {
+          void runLabImportAfterWipeConfirm()
+        }}
+        onCancel={cancelLabImportFlow}
+      />
       <WalletBackupImportPasswordModal
         open={importPasswordOpen}
         onOpenChange={setImportPasswordOpen}
@@ -276,8 +349,9 @@ export function DataBackupsCard() {
         <CardTitle>Data Backups</CardTitle>
         <CardDescription>
           Export full local database files from this device as ZIP archives. Wallet exports are
-          signed with your app password (ML-DSA); import only accepts ZIPs that include the manifest
-          and verify. Nothing is uploaded.
+          signed with your app password (ML-DSA); wallet import only accepts ZIPs that include the
+          manifest and verify. Lab exports are a single SQLite file in a ZIP (no signature). Nothing
+          is uploaded.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
@@ -295,7 +369,7 @@ export function DataBackupsCard() {
           <Button
             type="button"
             variant="outline"
-            disabled={nearZeroActive || exportBusy !== null || importBusy}
+            disabled={nearZeroActive || exportBusy !== null || anyImportBusy}
             onClick={() => importFileInputRef.current?.click()}
             className="w-full sm:w-auto"
           >
@@ -311,6 +385,14 @@ export function DataBackupsCard() {
         </div>
 
         <div className="flex flex-col gap-2">
+          <input
+            ref={labImportFileInputRef}
+            type="file"
+            accept=".zip,application/zip"
+            className="hidden"
+            aria-hidden
+            onChange={(e) => void onLabImportFilePick(e)}
+          />
           <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
             <Button
               type="button"
@@ -322,9 +404,20 @@ export function DataBackupsCard() {
               <FlaskConical className="size-4" aria-hidden />
               Export lab data
             </Button>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={exportBusy !== null || anyImportBusy}
+              onClick={() => labImportFileInputRef.current?.click()}
+              className="w-full sm:w-auto"
+            >
+              <Upload className="size-4" aria-hidden />
+              Import lab backup
+            </Button>
             {labFileExists === false ? (
               <p className="text-sm text-muted-foreground sm:max-w-md">
-                No lab database file yet. Open the Lab once to create local lab data.
+                No lab database file yet. Open the Lab once to create local lab data, or import a lab
+                backup ZIP.
               </p>
             ) : null}
           </div>

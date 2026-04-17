@@ -1,20 +1,9 @@
 import JSZip from 'jszip'
+import { readFileAsArrayBuffer } from '@/lib/read-file-as-array-buffer'
 import {
   WALLET_BACKUP_MANIFEST_ENTRY_NAME,
   WALLET_BACKUP_SQLITE_ENTRY_NAME,
 } from '@/lib/wallet-backup-constants'
-
-async function fileToArrayBuffer(file: File): Promise<ArrayBuffer> {
-  if (typeof file.arrayBuffer === 'function') {
-    return file.arrayBuffer()
-  }
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => resolve(reader.result as ArrayBuffer)
-    reader.onerror = () => reject(reader.error ?? new Error('Failed to read file'))
-    reader.readAsArrayBuffer(file)
-  })
-}
 
 export class WalletBackupZipInvalidError extends Error {
   constructor(message: string) {
@@ -27,7 +16,7 @@ export async function parseWalletBackupZipFile(file: File): Promise<{
   sqliteBytes: Uint8Array
   manifestJson: string
 }> {
-  const buf = await fileToArrayBuffer(file)
+  const buf = await readFileAsArrayBuffer(file)
   const zip = await JSZip.loadAsync(buf)
   const sqliteEntry = zip.file(WALLET_BACKUP_SQLITE_ENTRY_NAME)
   const manifestEntry = zip.file(WALLET_BACKUP_MANIFEST_ENTRY_NAME)
