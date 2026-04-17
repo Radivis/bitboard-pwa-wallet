@@ -9,8 +9,9 @@ describe('bitcoin-dust', () => {
     expect(UX_DUST_FLOOR_SATS).toBe(546)
   })
 
-  it('formatAmountInputFromSats maps to sats and btc strings', () => {
-    expect(formatAmountInputFromSats(546, 'sats')).toBe('546')
-    expect(formatAmountInputFromSats(546, 'btc')).toBe('0.00000546')
+  it('formatAmountInputFromSats maps units for form field', () => {
+    expect(formatAmountInputFromSats(546, 'sat')).toBe('546')
+    expect(formatAmountInputFromSats(546, 'BTC')).toBe('0.00000546')
+    expect(formatAmountInputFromSats(100_000, 'mBTC')).toBe('1.00000')
   })
 })

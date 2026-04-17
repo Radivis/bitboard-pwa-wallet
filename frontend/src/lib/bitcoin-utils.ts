@@ -52,15 +52,16 @@ export function toBitcoinNetwork(mode: NetworkMode): BitcoinNetwork {
   return NETWORK_MODE_TO_BITCOIN[mode]
 }
 
+/** Satoshis per 1 BTC (consensus). */
+export const SATS_PER_BTC = 100_000_000
+
 export function formatBTC(sats: number): string {
-  return (sats / 100_000_000).toFixed(8)
+  return (sats / SATS_PER_BTC).toFixed(8)
 }
 
 export function formatSats(sats: number): string {
   return sats.toLocaleString()
 }
-
-const SATS_PER_BTC = 100_000_000
 
 /** Upper bound for sat amounts passed through JS (safe integer range). */
 export const MAX_SAFE_SATS = Number.MAX_SAFE_INTEGER

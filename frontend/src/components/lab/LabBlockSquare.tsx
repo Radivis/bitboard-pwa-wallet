@@ -11,7 +11,8 @@ import {
   Wallet,
 } from 'lucide-react'
 import type { LabOwner } from '@/lib/lab-owner'
-import { formatBTC, formatSats } from '@/lib/bitcoin-utils'
+import { formatAmountInBitcoinDisplayUnit } from '@/lib/bitcoin-display-unit'
+import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
 import { getOwnerDisplayName, getOwnerIcon } from '@/lib/lab-utils'
 import { cn } from '@/lib/utils'
 
@@ -69,9 +70,11 @@ export function LabBlockSquare({
   const minedDate = new Date(minedOnUnix * 1000)
   const dateLabel = Number.isFinite(minedOnUnix) && minedOnUnix > 0 ? minedDate.toLocaleDateString() : '—'
   const timeLabel = Number.isFinite(minedOnUnix) && minedOnUnix > 0 ? minedDate.toLocaleTimeString() : '—'
-  const netBtcLabel = formatBTC(netMovedSats)
+  const netMovedAria = `${formatAmountInBitcoinDisplayUnit(netMovedSats, 'BTC')} BTC`
+  const feesAria = `${formatAmountInBitcoinDisplayUnit(totalFeesSats, 'BTC')} BTC`
   const minedByDisplayName =
     minedBy != null ? getOwnerDisplayName(minedBy, wallets, entities) : null
+  const minerAria = minedByDisplayName ?? 'unknown'
   const fillPercentRounded =
     fillFraction != null ? Math.round(fillFraction * 100) : null
   const ariaWeightHint =
@@ -79,17 +82,21 @@ export function LabBlockSquare({
       ? `, non-coinbase weight about ${fillPercentRounded}% of the limit at mining`
       : ''
 
+  const cardAriaLabel = `Block ${height}, ${txCount} transactions, mined by ${minerAria}, total fees ${feesAria}, net moved ${netMovedAria}, mined ${dateLabel} ${timeLabel}${ariaWeightHint}`
+
   return (
-    <Link
-      to="/lab/block/$height"
-      params={{ height: String(height) }}
-      preload={false}
-      className={cn('group block min-w-0 outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-lg', className)}
-      aria-label={`Block ${height}, ${txCount} transactions, net moved ${netBtcLabel} BTC, mined ${dateLabel} ${timeLabel}${ariaWeightHint}`}
-    >
+    <div className={cn('group relative block min-w-0 rounded-lg', className)}>
+      {/* Full-card hit target behind content. Content uses pointer-events-none so clicks reach the link; amount rows opt in with pointer-events-auto (nested <button> inside <a> is invalid HTML and breaks event handling). */}
+      <Link
+        to="/lab/block/$height"
+        params={{ height: String(height) }}
+        preload={false}
+        className="absolute inset-0 z-0 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        aria-label={cardAriaLabel}
+      />
       <div
         className={cn(
-          'relative aspect-square min-h-[7.5rem] overflow-hidden rounded-lg border border-border',
+          'pointer-events-none relative z-10 aspect-square min-h-[7.5rem] overflow-hidden rounded-lg border border-border',
           fillFraction == null && 'bg-muted/40',
         )}
       >
@@ -107,7 +114,7 @@ export function LabBlockSquare({
           </>
         ) : null}
 
-        <div className="relative z-10 flex h-full min-h-0 flex-col justify-between gap-1 p-2 text-[0.9375rem] leading-tight">
+        <div className="relative flex h-full min-h-0 flex-col justify-between gap-1 p-2 text-[0.9375rem] leading-tight">
           <div className="grid min-w-0 grid-cols-2 gap-x-1 gap-y-1">
             <span className="flex min-w-0 items-center gap-1 tabular-nums">
               <Blocks
@@ -156,17 +163,20 @@ export function LabBlockSquare({
             </span>
           </div>
 
-          <div className="flex min-w-0 items-center gap-1 tabular-nums">
+          <div className="flex min-w-0 items-center gap-1">
             <CakeSlice className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
             <span className="sr-only">Total fees</span>
-            <span className="min-w-0 truncate">{formatSats(totalFeesSats)} sats</span>
+            <span className="min-w-0 text-[0.9375rem] leading-tight">
+              <BitcoinAmountDisplay amountSats={totalFeesSats} size="sm" />
+            </span>
           </div>
 
           <div className="flex min-w-0 items-center gap-1 border-t border-border/60 pt-1">
             <Bitcoin className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
-            <span className="sr-only">Net moved {netBtcLabel} BTC</span>
-            <span className="truncate font-mono tabular-nums text-[1.05rem] leading-tight">{netBtcLabel}</span>
-            <span className="sr-only">{formatSats(netMovedSats)} sats</span>
+            <span className="sr-only">Net moved {netMovedAria}</span>
+            <span className="min-w-0 text-[1.05rem] leading-tight">
+              <BitcoinAmountDisplay amountSats={netMovedSats} size="sm" />
+            </span>
           </div>
 
           <div className="flex min-w-0 flex-col gap-0.5 border-t border-border/60 pt-1 text-sm text-muted-foreground">
@@ -183,6 +193,6 @@ export function LabBlockSquare({
           </div>
         </div>
       </div>
-    </Link>
+    </div>
   )
 }

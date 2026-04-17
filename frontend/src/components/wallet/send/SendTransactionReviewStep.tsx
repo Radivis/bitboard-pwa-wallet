@@ -4,7 +4,8 @@ import { Button } from '@/components/ui/button'
 import { PageHeader } from '@/components/PageHeader'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { DeadLabEntityRecipientModal } from '@/components/lab/DeadLabEntityRecipientModal'
-import { truncateAddress, formatBTC, formatSats } from '@/lib/bitcoin-utils'
+import { truncateAddress } from '@/lib/bitcoin-utils'
+import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
 import { OnchainDustWarningReviewBanner } from '@/components/wallet/send/OnchainDustWarningReviewBanner'
 import type { AddressType, NetworkMode } from '@/stores/walletStore'
 import type { OnchainDustWarning, SendAmountUnit } from '@/stores/sendStore'
@@ -77,10 +78,10 @@ export function SendTransactionReviewStep({
               <span className="text-muted-foreground">Recipient</span>
               <span className="font-mono">{truncateAddress(recipient)}</span>
             </div>
-            <div className="flex justify-between">
+            <div className="flex justify-between gap-2">
               <span className="text-muted-foreground">Amount</span>
-              <span>
-                {formatBTC(amountSats)} BTC ({formatSats(amountSats)} sats)
+              <span className="text-right">
+                <BitcoinAmountDisplay amountSats={amountSats} size="sm" />
               </span>
             </div>
             {!isLightningSendMode && (

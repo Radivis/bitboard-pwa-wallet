@@ -7,6 +7,7 @@ import { walletHasNoMnemonicBackupFlag } from './no-mnemonic-backup-settings'
 import { deleteWalletCompletely } from './wallet-persistence'
 import { libraryKeys, walletKeys } from './query-keys'
 import type { NewWallet, WalletUpdate } from './schema'
+import { invalidateWalletRelatedQueriesAndNotifyOtherTabs } from '@/lib/wallet-query-cache-sync'
 
 export function useWallets() {
   return useQuery({
@@ -15,6 +16,7 @@ export function useWallets() {
       await ensureMigrated()
       return getDatabase().selectFrom('wallets').selectAll().execute()
     },
+    refetchOnWindowFocus: 'always',
   })
 }
 
@@ -31,6 +33,7 @@ export function useWallet(id: number | null) {
       return wallet ?? null
     },
     enabled: id !== null,
+    refetchOnWindowFocus: 'always',
   })
 }
 
@@ -46,7 +49,7 @@ export function useAddWallet() {
       return Number(result.insertId)
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: walletKeys.all })
+      invalidateWalletRelatedQueriesAndNotifyOtherTabs(queryClient)
     },
   })
 }
@@ -63,7 +66,7 @@ export function useUpdateWallet() {
         .execute()
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: walletKeys.all })
+      invalidateWalletRelatedQueriesAndNotifyOtherTabs(queryClient)
     },
   })
 }
@@ -79,9 +82,8 @@ export function useDeleteWallet() {
       await ensureMigrated()
       await deleteWalletCompletely(getDatabase(), id)
     },
-    onSuccess: (_data, id) => {
-      queryClient.invalidateQueries({ queryKey: walletKeys.all })
-      queryClient.invalidateQueries({ queryKey: walletKeys.noMnemonicBackup(id) })
+    onSuccess: () => {
+      invalidateWalletRelatedQueriesAndNotifyOtherTabs(queryClient)
     },
   })
 }
@@ -98,6 +100,7 @@ export function useWalletNoMnemonicBackupFlag(walletId: number | null) {
       return walletHasNoMnemonicBackupFlag(getDatabase(), walletId)
     },
     enabled: walletId !== null,
+    refetchOnWindowFocus: 'always',
   })
 }
 

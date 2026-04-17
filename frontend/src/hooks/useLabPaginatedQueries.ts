@@ -14,6 +14,7 @@ import {
   labOwnerKeysQueryKey,
   labUtxosByOwnerQueryKey,
   LAB_CARD_PAGE_SIZE,
+  LAB_ENTITIES_PAGE_SIZE,
   LAB_ENTITY_INNER_PAGE_SIZE,
 } from '@/lib/lab-paginated-queries'
 
@@ -48,7 +49,7 @@ export function useLabEntitiesPage(pageIndex: number, options: { enabled?: boole
 
   const query = useQuery({
     queryKey: labEntitiesPageQueryKey(pageIndex),
-    queryFn: () => fetchLabEntitiesPage(pageIndex, LAB_CARD_PAGE_SIZE),
+    queryFn: () => fetchLabEntitiesPage(pageIndex, LAB_ENTITIES_PAGE_SIZE),
     enabled,
   })
 
@@ -56,7 +57,7 @@ export function useLabEntitiesPage(pageIndex: number, options: { enabled?: boole
     if (!enabled) return
     void queryClient.prefetchQuery({
       queryKey: labEntitiesPageQueryKey(pageIndex + 1),
-      queryFn: () => fetchLabEntitiesPage(pageIndex + 1, LAB_CARD_PAGE_SIZE),
+      queryFn: () => fetchLabEntitiesPage(pageIndex + 1, LAB_ENTITIES_PAGE_SIZE),
     })
   }, [queryClient, pageIndex, enabled])
 

@@ -16,7 +16,7 @@ import {
   getDatabase,
   upgradeNearZeroToUserPassword,
 } from '@/db'
-import { walletKeys } from '@/db/query-keys'
+import { invalidateWalletRelatedQueriesAndNotifyOtherTabs } from '@/lib/wallet-query-cache-sync'
 import { useSessionStore } from '@/stores/sessionStore'
 import { errorMessage } from '@/lib/utils'
 
@@ -72,7 +72,7 @@ export function UpgradeFromNearZeroPasswordModal({
       })
     },
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: walletKeys.all })
+      invalidateWalletRelatedQueriesAndNotifyOtherTabs(queryClient)
       setPhase('success')
     },
     onError: (err) => {

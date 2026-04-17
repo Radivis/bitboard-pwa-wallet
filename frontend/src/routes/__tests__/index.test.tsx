@@ -56,9 +56,8 @@ vi.mock('@/components/TransactionItem', () => ({
   ),
 }))
 
-vi.mock('@/lib/bitcoin-utils', () => ({
-  formatBTC: (sats: number) => (sats / 100_000_000).toFixed(8),
-  formatSats: (sats: number) => sats.toLocaleString(),
+vi.mock('@/hooks/useBitcoinUnit', () => ({
+  useBitcoinUnit: () => ({ data: 'BTC' }),
 }))
 
 vi.mock('@/lib/wallet-utils', () => ({
@@ -116,10 +115,10 @@ describe('DashboardPage', () => {
     expect(screen.getByTestId('wallet-unlock')).toBeInTheDocument()
   })
 
-  it('displays balance in BTC and sats', () => {
+  it('displays balance with BitcoinAmountDisplay', () => {
     renderWithProviders(<DashboardPage />)
     expect(screen.getByText('0.00100000')).toBeInTheDocument()
-    expect(screen.getByText('100,000 sats')).toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: 'BTC' }).length).toBeGreaterThan(0)
   })
 
   it('shows on-chain breakdown when pending components are non-zero', () => {
@@ -132,7 +131,6 @@ describe('DashboardPage', () => {
     }
     renderWithProviders(<DashboardPage />)
     expect(screen.getByText('0.00108000')).toBeInTheDocument()
-    expect(screen.getByText('108,000 sats')).toBeInTheDocument()
     expect(screen.getByText('Spendable (settled)')).toBeInTheDocument()
     expect(screen.getByText('Pending change')).toBeInTheDocument()
     expect(screen.getByText('Pending incoming')).toBeInTheDocument()

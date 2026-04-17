@@ -95,6 +95,7 @@ export function useActiveWalletLoadQuery() {
     staleTime: Number.POSITIVE_INFINITY,
     gcTime: Number.POSITIVE_INFINITY,
     retry: 2,
+    refetchOnWindowFocus: 'always',
   })
 
   return { ...query, needsBootstrap }

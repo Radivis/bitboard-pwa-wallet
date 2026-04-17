@@ -103,8 +103,8 @@ vi.mock('@/lib/bitcoin-utils', () => ({
   toBitcoinNetwork: (mode: string) => mode,
 }))
 
-vi.mock('@/lib/lightning-dashboard-sync', () => ({
-  invalidateLightningDashboardQueries: vi.fn(),
+vi.mock('@/lib/wallet-query-cache-sync', () => ({
+  invalidateWalletRelatedQueriesAndNotifyOtherTabs: vi.fn(),
 }))
 
 vi.mock('@/components/MnemonicGrid', () => ({

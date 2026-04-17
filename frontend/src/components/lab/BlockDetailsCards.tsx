@@ -9,7 +9,8 @@ import {
 } from '@/components/ui/card'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { Badge } from '@/components/ui/badge'
-import { formatBTC, formatSats, truncateAddress } from '@/lib/bitcoin-utils'
+import { truncateAddress } from '@/lib/bitcoin-utils'
+import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
 import { LabOwnerDisplayWithAddressType } from '@/components/lab/LabOwnerDisplayWithAddressType'
 import { useLabChainStateQuery } from '@/hooks/useLabChainStateQuery'
 import type { LabBlockDetails } from '@/workers/lab-api'
@@ -161,12 +162,11 @@ export function LabBlockMetadataCard({
           </p>
           <p>
             <span className="text-muted-foreground">Total fees:</span>{' '}
-            {formatSats(block.metadata.totalFeesSats)} sats
+            <BitcoinAmountDisplay amountSats={block.metadata.totalFeesSats} size="sm" />
           </p>
           <p>
-            <span className="text-muted-foreground">Net moved (BTC):</span>{' '}
-            <span className="font-mono tabular-nums">{formatBTC(netMovedSats)}</span> BTC (
-            {formatSats(netMovedSats)} sats)
+            <span className="text-muted-foreground">Net moved:</span>{' '}
+            <BitcoinAmountDisplay amountSats={netMovedSats} size="sm" />
           </p>
           {weightAtMiningRecorded && mineOp != null ? (
             <p>
@@ -182,9 +182,12 @@ export function LabBlockMetadataCard({
   )
 }
 
-const labBlockTxRowLinkClassName =
-  'flex flex-wrap items-center gap-2 rounded px-2 py-2 transition-colors hover:bg-muted/50'
-const labBlockTxRowPlainClassName = 'flex flex-wrap items-center gap-2 rounded px-2 py-2'
+/** Row layout (no hover — hover lives on the overlay <Link> when linked). */
+const labBlockTxRowInnerClassName = 'flex flex-wrap items-center gap-2 rounded px-2 py-2'
+const labBlockTxRowPlainClassName = labBlockTxRowInnerClassName
+/** Full-row hit target behind content; avoids nested <button>/<select> inside <a>. */
+const labBlockTxRowLinkOverlayClassName =
+  'absolute inset-0 z-0 rounded-lg outline-none transition-colors hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring'
 
 function labBlockTxList(
   txs: LabBlockDetails['transactions'],
@@ -245,7 +248,10 @@ function labBlockTxList(
                 </>
               )}
             </span>
-            <span className="text-sm tabular-nums">{formatSats(tx.feeSats)} sats fee</span>
+            <span className="flex flex-wrap items-center gap-1 text-sm">
+              <BitcoinAmountDisplay amountSats={tx.feeSats} size="sm" />
+              <span className="text-muted-foreground">fee</span>
+            </span>
           </>
         )
         return coinbaseNoTxPageYet ? (
@@ -253,14 +259,17 @@ function labBlockTxList(
             {row}
           </div>
         ) : (
-          <Link
-            key={tx.txid}
-            to="/lab/tx/$txid"
-            params={{ txid: tx.txid }}
-            className={labBlockTxRowLinkClassName}
-          >
-            {row}
-          </Link>
+          <div key={tx.txid} className="relative rounded-lg">
+            <Link
+              to="/lab/tx/$txid"
+              params={{ txid: tx.txid }}
+              className={labBlockTxRowLinkOverlayClassName}
+              aria-label={`Open transaction ${truncateAddress(tx.txid)}`}
+            />
+            <div className={`pointer-events-none relative z-10 ${labBlockTxRowInnerClassName}`}>
+              {row}
+            </div>
+          </div>
         )
       })}
     </div>

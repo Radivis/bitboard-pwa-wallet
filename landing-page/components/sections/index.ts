@@ -1,5 +1,6 @@
 export { AboutSection } from './AboutSection';
 export { FeaturesSection } from './FeaturesSection';
+export { GetStartedSection } from './GetStartedSection';
 export { FooterOutboundLink } from './FooterOutboundLink';
 export { FutureSection } from './FutureSection';
 export { HeroSection } from './HeroSection';

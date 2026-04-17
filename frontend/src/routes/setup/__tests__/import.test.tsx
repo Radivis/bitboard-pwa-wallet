@@ -103,6 +103,10 @@ vi.mock('@/lib/wallet-utils', () => ({
   loadCustomEsploraUrl: vi.fn().mockResolvedValue(null),
 }))
 
+vi.mock('@/lib/wallet-query-cache-sync', () => ({
+  invalidateWalletRelatedQueriesAndNotifyOtherTabs: vi.fn(),
+}))
+
 import { ImportWalletPage } from '../import'
 
 describe('ImportWalletPage', () => {

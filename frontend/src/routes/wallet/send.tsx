@@ -12,6 +12,10 @@ import { useSendStore } from '@/stores/sendStore'
 import { useFeatureStore } from '@/stores/featureStore'
 import { useLabChainStateQuery } from '@/hooks/useLabChainStateQuery'
 import { isValidAddress } from '@/lib/bitcoin-utils'
+import {
+  recipientAndAmountFromScannedPayload,
+  tryParseBitcoinUri,
+} from '@/lib/bip21'
 import { errorMessage } from '@/lib/utils'
 import {
   formatAmountInputFromSats,
@@ -189,13 +193,12 @@ export function SendFlow() {
     [amount, amountUnit],
   )
 
-  const normalizedRecipient = useMemo(
-    () =>
-      normalizeLightningDestination(
-        recipient.trim().replace(/^bitcoin:/i, ''),
-      ),
-    [recipient],
-  )
+  const normalizedRecipient = useMemo(() => {
+    const t = recipient.trim()
+    const bip21 = tryParseBitcoinUri(t)
+    const core = bip21 ? bip21.address : t.replace(/^bitcoin:/i, '')
+    return normalizeLightningDestination(core)
+  }, [recipient])
 
   const deadLabRecipientInfo = useMemo(() => {
     if (networkMode !== 'lab' || !labChainReady) return null
@@ -571,6 +574,18 @@ export function SendFlow() {
     labApplyChangeFreeBump,
   ])
 
+  const applyScannedPayload = useCallback(
+    (raw: string) => {
+      const { recipient: nextRecipient, amountStr } =
+        recipientAndAmountFromScannedPayload(raw, amountUnit)
+      setRecipient(nextRecipient)
+      if (amountStr !== undefined) {
+        setAmount(amountStr, { fromUser: true })
+      }
+    },
+    [amountUnit, setRecipient, setAmount],
+  )
+
   const isPending =
     buildMutation.isPending ||
     labReviewPending ||
@@ -640,9 +655,7 @@ export function SendFlow() {
         decodedBolt11={decodedBolt11}
         needsUserLightningAmount={needsUserLightningAmount}
         amountUnit={amountUnit}
-        onToggleAmountUnit={() =>
-          setAmountUnit(amountUnit === 'btc' ? 'sats' : 'btc')
-        }
+        onAmountUnitChange={setAmountUnit}
         amount={amount}
         onAmountChange={setAmount}
         lightningPayAmountSats={lightningPayAmountSats}
@@ -662,6 +675,7 @@ export function SendFlow() {
         }
         canBuild={canBuild}
         onSubmitBuild={handleSubmitBuild}
+        onApplyScannedPayload={applyScannedPayload}
       />
 
       <DustChangeChoiceModal

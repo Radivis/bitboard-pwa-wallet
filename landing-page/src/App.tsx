@@ -6,6 +6,7 @@ import {
   AboutSection,
   FeaturesSection,
   FutureSection,
+  GetStartedSection,
   HeroSection,
   InterfaceSection,
   SiteFooter,
@@ -20,8 +21,6 @@ export default function App() {
   const githubUrl = landingPageLink('githubRepository');
   const blogUrl = landingPageLink('blog');
   const websiteUrl = landingPageLink('website');
-  const aboutBgUrl = landingPageLink('aboutSectionBackgroundImageUrl');
-
   return (
     <div className="min-h-screen text-white font-sans selection:bg-matrix selection:text-black relative overflow-x-hidden">
       <MatrixBackground reducedMotion={prefersReducedMotion ?? false} />
@@ -34,7 +33,9 @@ export default function App() {
 
         <HeroSection appUrl={appUrl} githubUrl={githubUrl} prefersReducedMotion={prefersReducedMotion} />
 
-        <AboutSection aboutBackgroundImageUrl={aboutBgUrl} />
+        <AboutSection />
+
+        <GetStartedSection appUrl={appUrl} />
 
         <FeaturesSection />
 

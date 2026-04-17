@@ -11,8 +11,10 @@ import { PageHeader } from '@/components/PageHeader'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { getLabWorker } from '@/workers/lab-factory'
-import { truncateAddress, formatSats } from '@/lib/bitcoin-utils'
+import { getLabWorker, initLabWorkerWithState } from '@/workers/lab-factory'
+import { runLabOp } from '@/lib/lab-coordinator'
+import { truncateAddress } from '@/lib/bitcoin-utils'
+import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
 import type { LabTxDetails } from '@/workers/lab-api'
 import { Copy, ArrowLeft, Wallet, FlaskConical } from 'lucide-react'
 import { toast } from 'sonner'
@@ -46,8 +48,10 @@ function LabTxViewerPage() {
 
   const loadTx = useCallback(async () => {
     try {
-      const labWorker = getLabWorker()
-      const details = await labWorker.getTransaction(txid)
+      const details = await runLabOp(async () => {
+        await initLabWorkerWithState()
+        return getLabWorker().getTransaction(txid)
+      })
       setTx(details ?? null)
     } catch {
       setTx(null)
@@ -142,7 +146,12 @@ function LabTxViewerPage() {
               {timestamp ? `${timestamp} · ` : ''}
               {confirmationsText}
               {' · '}
-              {formatSats(totalOutputs)} sats total out · {formatSats(feeSats)} sats fee
+              <span className="inline-flex flex-wrap items-center gap-x-1 gap-y-1">
+                <BitcoinAmountDisplay amountSats={totalOutputs} size="sm" />
+                <span>total out ·</span>
+                <BitcoinAmountDisplay amountSats={feeSats} size="sm" />
+                <span>fee</span>
+              </span>
             </CardDescription>
           </CardHeader>
         </Card>
@@ -234,8 +243,8 @@ function LabTxViewerPage() {
                           <Badge variant="secondary">unknown</Badge>
                         )}
                       </span>
-                      <span className="tabular-nums text-right sm:shrink-0">
-                        {formatSats(input.amountSats)} sats
+                      <span className="text-right sm:shrink-0">
+                        <BitcoinAmountDisplay amountSats={input.amountSats} size="sm" />
                       </span>
                     </div>
                   )
@@ -294,7 +303,9 @@ function LabTxViewerPage() {
                         <Badge variant="secondary">unknown</Badge>
                       )}
                     </span>
-                    <span className="tabular-nums text-right">{formatSats(output.amountSats)} sats</span>
+                    <span className="text-right">
+                      <BitcoinAmountDisplay amountSats={output.amountSats} size="sm" />
+                    </span>
                     {output.isChange && (
                       <Badge variant="secondary" className="shrink-0">
                         Change

@@ -1,6 +1,6 @@
 import { Loader2, Zap } from 'lucide-react'
 import { Label } from '@/components/ui/label'
-import { formatSats } from '@/lib/bitcoin-utils'
+import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
 import type { ConnectedLightningWallet } from '@/lib/lightning-backend-service'
 import { cn } from '@/lib/utils'
 
@@ -61,7 +61,12 @@ export function SendLightningWalletPicker(props: {
                   ) : (
                     <>
                       <Zap className="h-3 w-3" />
-                      {formatSats(q?.data?.balanceSats ?? 0)} sats
+                      <BitcoinAmountDisplay
+                        amountSats={q?.data?.balanceSats ?? 0}
+                        size="sm"
+                        className="inline text-muted-foreground"
+                        allowUnitToggle={false}
+                      />
                     </>
                   )}
                 </span>

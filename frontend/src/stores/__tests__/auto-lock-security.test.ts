@@ -57,7 +57,12 @@ vi.mock('@/stores/walletStore', () => {
 })
 
 import { useCryptoStore } from '../cryptoStore'
-import { useSessionStore, clearAutoLockTimer, startAutoLockTimer } from '../sessionStore'
+import {
+  useSessionStore,
+  bumpAutoLockTimer,
+  clearAutoLockTimer,
+  startAutoLockTimer,
+} from '../sessionStore'
 import { useWalletStore } from '../walletStore'
 
 describe('auto-lock security purge', () => {
@@ -90,5 +95,34 @@ describe('auto-lock security purge', () => {
     expect(terminateCryptoWorkerMock).toHaveBeenCalled()
     expect(useCryptoStore.getState()._worker).toBeNull()
     expect(purgeLightningConnectionsFromMemoryMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('bumpAutoLockTimer extends idle window so lock does not fire until 15min after last bump', async () => {
+    startAutoLockTimer(() =>
+      useCryptoStore.getState().lockAndPurgeSensitiveRuntimeState(),
+    )
+
+    await vi.advanceTimersByTimeAsync(14 * 60 * 1000)
+    expect(useSessionStore.getState().password).toBe('test-password')
+
+    bumpAutoLockTimer()
+    await vi.advanceTimersByTimeAsync(14 * 60 * 1000)
+    expect(useSessionStore.getState().password).toBe('test-password')
+
+    await vi.advanceTimersByTimeAsync(1 * 60 * 1000)
+    expect(useSessionStore.getState().password).toBeNull()
+    expect(useWalletStore.getState().walletStatus).toBe('locked')
+  })
+
+  it('bumpAutoLockTimer is a no-op after clearAutoLockTimer', async () => {
+    startAutoLockTimer(() =>
+      useCryptoStore.getState().lockAndPurgeSensitiveRuntimeState(),
+    )
+    clearAutoLockTimer()
+
+    bumpAutoLockTimer()
+    await vi.advanceTimersByTimeAsync(15 * 60 * 1000)
+
+    expect(useSessionStore.getState().password).toBe('test-password')
   })
 })

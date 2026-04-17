@@ -8,7 +8,8 @@ import {
 } from '@/components/ui/card'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { Button } from '@/components/ui/button'
-import { truncateAddress, formatSats } from '@/lib/bitcoin-utils'
+import { truncateAddress } from '@/lib/bitcoin-utils'
+import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
 import {
   getOwnerDisplayNameWithAddressTypeAria,
   getOwnerIcon,
@@ -70,7 +71,7 @@ function LabOwnerAddressesInner({
       <div className="space-y-2">
         <div className="flex gap-4 text-sm font-medium text-muted-foreground">
           <span className="flex-1 min-w-0">Address</span>
-          <span className="w-24 shrink-0 text-right">Balance</span>
+          <span className="w-28 shrink-0 text-right">Balance</span>
           <span className="w-10 shrink-0" />
         </div>
         {addresses.map((a) => (
@@ -81,8 +82,11 @@ function LabOwnerAddressesInner({
             <span className="font-mono text-sm break-all flex-1 min-w-0">
               {truncateAddress(a.address)}
             </span>
-            <span className="tabular-nums text-right w-24 shrink-0">
-              {formatSats(balanceByAddress?.get(a.address) ?? 0)} sats
+            <span className="text-right w-28 shrink-0">
+              <BitcoinAmountDisplay
+                amountSats={balanceByAddress?.get(a.address) ?? 0}
+                size="sm"
+              />
             </span>
             <Button
               size="icon"

@@ -1,6 +1,9 @@
 import { create } from 'zustand'
+import type { BitcoinDisplayUnit } from '@/lib/bitcoin-display-unit'
+import { useBitcoinDisplayUnitStore } from '@/stores/bitcoinDisplayUnitStore'
 
-export type SendAmountUnit = 'btc' | 'sats'
+/** Session-local unit for the Send amount field (not persisted). */
+export type SendAmountUnit = BitcoinDisplayUnit
 
 export type SendStep = 1 | 2
 
@@ -43,7 +46,7 @@ const initialState = {
   step: 1 as SendStep,
   recipient: '',
   amount: '',
-  amountUnit: 'btc' as SendAmountUnit,
+  amountUnit: 'BTC' as SendAmountUnit,
   feeRate: 1,
   customFeeRate: '',
   useCustomFee: false,
@@ -68,5 +71,9 @@ export const useSendStore = create<SendState>((set) => ({
   setPsbt: (psbt) => set({ psbt }),
   setOnchainDustWarning: (onchainDustWarning) => set({ onchainDustWarning }),
 
-  reset: () => set(initialState),
+  reset: () =>
+    set({
+      ...initialState,
+      amountUnit: useBitcoinDisplayUnitStore.getState().defaultBitcoinUnit,
+    }),
 }))

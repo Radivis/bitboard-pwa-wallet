@@ -196,16 +196,27 @@ export function useLabDeleteLabEntityMutation() {
   })
 }
 
+export type LabSetEntityDeadVariables = {
+  labEntityId: number
+  dead: boolean
+  labEntityDisplayName: string
+}
+
 export function useLabSetEntityDeadMutation() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationKey: ['lab', 'setLabEntityDead'] as const,
-    mutationFn: ({ labEntityId, dead }: { labEntityId: number; dead: boolean }) =>
+    mutationFn: ({ labEntityId, dead }: LabSetEntityDeadVariables) =>
       labOpSetLabEntityDead(labEntityId, dead),
-    onSuccess: (state) => {
+    onSuccess: (state, variables) => {
       setLabChainStateCache(queryClient, state)
       void invalidateLabPaginatedQueries(queryClient)
-      toast.success('Entity updated')
+      const name = variables.labEntityDisplayName
+      if (variables.dead) {
+        toast.success(`${name} has died suddenly!`)
+      } else {
+        toast.success(`The rumors of ${name}'s demise have been greatly exaggerated!`)
+      }
     },
     onError: (err) => {
       toast.error(err instanceof Error ? err.message : 'Update failed')

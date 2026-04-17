@@ -21,6 +21,7 @@ import { useWalletStore } from '@/stores/walletStore'
 import { useSessionStore } from '@/stores/sessionStore'
 import type { NetworkMode } from '@/stores/walletStore'
 import { MAX_LIGHTNING_WALLET_LABEL_LENGTH } from '@/lib/lightning-input-limits'
+import { resolveDefaultNwcConnectionLabel } from '@/lib/nwc-default-connection-label'
 
 /**
  * Whether the given Bitcoin wallet has at least one Lightning connection for the
@@ -82,7 +83,7 @@ interface LightningState {
     label: string
     networkMode: LightningNetworkMode
     config: LightningConnectionConfig
-  }) => Promise<string>
+  }) => Promise<{ id: string; label: string }>
 
   removeConnection: (connectionId: string) => Promise<void>
 
@@ -147,31 +148,41 @@ export const useLightningStore = create<LightningState>()(
         if (!password) {
           throw new Error('Wallet must be unlocked to save a Lightning connection')
         }
-        const trimmedLabel = label.trim()
-        if (trimmedLabel.length === 0) {
-          throw new Error('Label is required')
+        if (config.type !== 'nwc' || !isValidNwcConnectionString(config.connectionString)) {
+          throw new Error('Invalid NWC connection string')
         }
-        if (trimmedLabel.length > MAX_LIGHTNING_WALLET_LABEL_LENGTH) {
+
+        const others = get().connectedWallets.filter((w) => w.walletId !== walletId)
+        const forWallet = get().connectedWallets.filter((w) => w.walletId === walletId)
+
+        const trimmedLabel = label.trim()
+        if (
+          trimmedLabel.length > 0 &&
+          trimmedLabel.length > MAX_LIGHTNING_WALLET_LABEL_LENGTH
+        ) {
           throw new Error(
             `Label must be at most ${MAX_LIGHTNING_WALLET_LABEL_LENGTH} characters`,
           )
         }
-        if (config.type !== 'nwc' || !isValidNwcConnectionString(config.connectionString)) {
-          throw new Error('Invalid NWC connection string')
+        const labelToStore =
+          trimmedLabel.length > 0
+            ? trimmedLabel
+            : resolveDefaultNwcConnectionLabel(forWallet.map((w) => w.label))
+        if (labelToStore.length > MAX_LIGHTNING_WALLET_LABEL_LENGTH) {
+          throw new Error(
+            `Label must be at most ${MAX_LIGHTNING_WALLET_LABEL_LENGTH} characters`,
+          )
         }
 
         const id = crypto.randomUUID()
         const connection: ConnectedLightningWallet = {
           id,
           walletId,
-          label: trimmedLabel,
+          label: labelToStore,
           networkMode,
           config,
           createdAt: new Date().toISOString(),
         }
-
-        const others = get().connectedWallets.filter((w) => w.walletId !== walletId)
-        const forWallet = get().connectedWallets.filter((w) => w.walletId === walletId)
         const nextForWallet = [...forWallet, connection]
 
         const updatedActiveIds = { ...get().activeConnectionIds }
@@ -191,7 +202,7 @@ export const useLightningStore = create<LightningState>()(
           walletId,
           connections: nextForWallet,
         })
-        return id
+        return { id, label: labelToStore }
       },
 
       removeConnection: async (connectionId) => {

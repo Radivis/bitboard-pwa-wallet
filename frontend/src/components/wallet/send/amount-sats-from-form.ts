@@ -1,12 +1,9 @@
-import { SATS_PER_BTC } from '@/lib/bitcoin-dust'
 import type { SendAmountUnit } from '@/stores/sendStore'
+import { parseAmountToSatsFromBitcoinDisplayUnit } from '@/lib/bitcoin-display-unit'
 
 export function amountSatsFromForm(
   amountStr: string,
   unit: SendAmountUnit,
 ): number {
-  if (!amountStr) return 0
-  return unit === 'btc'
-    ? Math.floor(parseFloat(amountStr) * SATS_PER_BTC)
-    : parseInt(amountStr, 10) || 0
+  return parseAmountToSatsFromBitcoinDisplayUnit(amountStr, unit)
 }

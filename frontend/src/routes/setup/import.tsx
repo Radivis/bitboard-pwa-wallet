@@ -18,12 +18,12 @@ import {
   getDatabase,
   ensureMigrated,
   persistNewWalletWithSecrets,
-  walletKeys,
   useWallets,
 } from '@/db'
 import { ensureSecretsChannel } from '@/workers/secrets-channel'
 import { toBitcoinNetwork, getEsploraUrl } from '@/lib/bitcoin-utils'
 import { loadCustomEsploraUrl } from '@/lib/wallet-utils'
+import { invalidateWalletRelatedQueriesAndNotifyOtherTabs } from '@/lib/wallet-query-cache-sync'
 
 export const Route = createFileRoute('/setup/import')({
   component: ImportWalletPage,
@@ -154,7 +154,7 @@ export function ImportWalletPage() {
           },
         })
       } catch (secretsErr) {
-        queryClient.invalidateQueries({ queryKey: walletKeys.all })
+        invalidateWalletRelatedQueriesAndNotifyOtherTabs(queryClient)
         throw secretsErr
       }
 

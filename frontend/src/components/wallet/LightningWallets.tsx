@@ -23,11 +23,6 @@ import {
   MAX_NWC_CONNECTION_STRING_LENGTH,
 } from '@/lib/lightning-input-limits'
 import type { ConnectedLightningWallet } from '@/lib/lightning-backend-service'
-import {
-  LIGHTNING_NETWORK_MODES,
-  defaultLightningNetworkForAppMode,
-  type LightningNetworkMode,
-} from '@/lib/lightning-utils'
 import { NWC_ESPLORA_BLOCK_HEIGHT_TOLERANCE } from '@/lib/bitcoin-utils'
 
 const WALLET_TYPE_LABELS: Record<string, string> = {
@@ -152,66 +147,51 @@ function WalletRow({
 
 function ConnectWalletForm({ onConnected }: { onConnected: () => void }) {
   const activeWalletId = useWalletStore((s) => s.activeWalletId)
-  const appNetworkMode = useWalletStore((s) => s.networkMode)
   const addConnection = useLightningStore((s) => s.addConnection)
   const isInfomodeActive = useInfomodeStore((s) => s.isActive)
 
   const [label, setLabel] = useState('')
   const [connectionString, setConnectionString] = useState('')
-  const [lnNetwork, setLnNetwork] = useState<LightningNetworkMode>(() =>
-    defaultLightningNetworkForAppMode(appNetworkMode),
-  )
 
   const testMutation = useTestConnectionMutation()
 
   const connectionStringValid = isValidNwcConnectionString(connectionString.trim())
   const canTest = connectionStringValid
-  const testSucceeded = testMutation.isSuccess && testMutation.data.ok
-  const canSave = canTest && label.trim().length > 0 && testSucceeded
+  const testSucceeded =
+    testMutation.isSuccess && testMutation.data?.ok === true
+  const canSave =
+    canTest && testSucceeded && testMutation.data?.ok === true
 
   const handleTestConnection = useCallback(async () => {
     if (!canTest) return
-    const result = await testMutation.mutateAsync({
+    await testMutation.mutateAsync({
       type: 'nwc',
       connectionString: connectionString.trim(),
     })
-    if (result.ok && label.trim() === '' && result.walletName) {
-      setLabel(result.walletName)
-    }
-  }, [canTest, connectionString, testMutation, label])
+  }, [canTest, connectionString, testMutation])
 
   const handleSave = useCallback(async () => {
-    if (!canSave || activeWalletId == null) return
+    const testData = testMutation.data
+    if (!canSave || activeWalletId == null || testData?.ok !== true) return
     try {
-      await addConnection({
+      const { label: savedLabel } = await addConnection({
         walletId: activeWalletId,
         label: label.trim(),
-        networkMode: lnNetwork,
+        networkMode: testData.lightningNetworkMode,
         config: {
           type: 'nwc',
           connectionString: connectionString.trim(),
         },
       })
-      toast.success(`Lightning wallet "${label.trim()}" connected`)
+      toast.success(`Lightning wallet "${savedLabel}" connected`)
       setLabel('')
       setConnectionString('')
-      setLnNetwork(defaultLightningNetworkForAppMode(appNetworkMode))
       testMutation.reset()
       onConnected()
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to save Lightning connection')
     }
-  }, [
-    canSave,
-    activeWalletId,
-    label,
-    connectionString,
-    lnNetwork,
-    appNetworkMode,
-    addConnection,
-    testMutation,
-    onConnected,
-  ])
+  }, [canSave, activeWalletId, label, connectionString, testMutation, addConnection, onConnected])
 
   const resetTest = useCallback(() => {
     if (testMutation.isSuccess || testMutation.isError) {
@@ -282,31 +262,6 @@ function ConnectWalletForm({ onConnected }: { onConnected: () => void }) {
         </div>
 
         <div className="space-y-1">
-          <Label htmlFor="ln-network">
-            Lightning network <span className="text-destructive">*</span>
-          </Label>
-          <select
-            id="ln-network"
-            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-            value={lnNetwork}
-            onChange={(e) => {
-              setLnNetwork(e.target.value as LightningNetworkMode)
-              resetTest()
-            }}
-          >
-            {LIGHTNING_NETWORK_MODES.map((mode) => (
-              <option key={mode} value={mode}>
-                {NETWORK_LABELS[mode]}
-              </option>
-            ))}
-          </select>
-          <p className="text-xs text-muted-foreground">
-            Must match this wallet&apos;s Lightning network and your app network mode
-            when sending or receiving.
-          </p>
-        </div>
-
-        <div className="space-y-1">
           <Label htmlFor="nwc-connection-string">NWC Connection String</Label>
           <Input
             id="nwc-connection-string"
@@ -325,17 +280,21 @@ function ConnectWalletForm({ onConnected }: { onConnected: () => void }) {
           )}
         </div>
 
-        {testSucceeded && (
-          <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
-            <CheckCircle className="h-4 w-4" />
-            Connected to &ldquo;{testMutation.data.walletName}&rdquo;
+        {testSucceeded && testMutation.data.ok && (
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
+              <CheckCircle className="h-4 w-4" />
+              Connected to &ldquo;{testMutation.data.walletName}&rdquo;
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Network reported by wallet:{' '}
+              {NETWORK_LABELS[testMutation.data.lightningNetworkMode]}
+            </p>
           </div>
         )}
 
         <div className="space-y-1">
-          <Label htmlFor="ln-wallet-label">
-            Label <span className="text-destructive">*</span>
-          </Label>
+          <Label htmlFor="ln-wallet-label">Label</Label>
           <Input
             id="ln-wallet-label"
             value={label}
@@ -343,11 +302,6 @@ function ConnectWalletForm({ onConnected }: { onConnected: () => void }) {
             onChange={(e) => setLabel(e.target.value)}
             placeholder="My Lightning Wallet"
           />
-          {testSucceeded && label.trim().length === 0 && (
-            <p className="text-xs text-muted-foreground">
-              Enter a label to save this connection
-            </p>
-          )}
         </div>
         {testMutation.isSuccess && !testMutation.data.ok && (
           <div className="flex items-center gap-2 text-sm text-destructive">

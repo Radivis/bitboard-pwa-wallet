@@ -17,7 +17,7 @@ function coinbaseTx(overrides: Partial<LabTxDetails> = {}): LabTxDetails {
         prevVout: LAB_COINBASE_PREV_VOUT,
       },
     ],
-    outputs: [{ address: 'a', amountSats: 5_000_000_000 }],
+    outputs: [{ address: 'a', amountSats: 312_500_000 }],
     ...overrides,
   }
 }
@@ -26,11 +26,11 @@ describe('netMovedSatsForLabTx', () => {
   it('sums all outputs for coinbase', () => {
     const tx = coinbaseTx({
       outputs: [
-        { address: 'm', amountSats: 5_000_000_000 },
+        { address: 'm', amountSats: 312_500_000 },
         { address: 'x', amountSats: 1_000 },
       ],
     })
-    expect(netMovedSatsForLabTx(tx)).toBe(5_000_001_000)
+    expect(netMovedSatsForLabTx(tx)).toBe(312_501_000)
   })
 
   it('sums only non-change outputs for non-coinbase', () => {

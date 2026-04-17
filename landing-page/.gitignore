@@ -1,5 +1,6 @@
 dist/
 node_modules/
+.vite/deps/
 
 # Local env (secrets / machine-specific)
 .env

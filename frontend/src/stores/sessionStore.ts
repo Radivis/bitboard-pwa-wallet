@@ -20,12 +20,14 @@ export const useSessionStore = create<SessionState>((set) => ({
 }))
 
 let autoLockTimer: ReturnType<typeof setTimeout> | null = null
+let lastAutoLockHandler: (() => void | Promise<void>) | null = null
 
 export function startAutoLockTimer(onLock: () => void | Promise<void>) {
   resetAutoLockTimer(onLock)
 }
 
 export function resetAutoLockTimer(onLock: () => void | Promise<void>) {
+  lastAutoLockHandler = onLock
   if (autoLockTimer) {
     clearTimeout(autoLockTimer)
   }
@@ -42,7 +44,14 @@ export function resetAutoLockTimer(onLock: () => void | Promise<void>) {
   }, AUTO_LOCK_TIMEOUT_MS)
 }
 
+/** Reschedules the idle auto-lock from now; no-op when no timer is active (e.g. locked). */
+export function bumpAutoLockTimer() {
+  if (lastAutoLockHandler === null) return
+  resetAutoLockTimer(lastAutoLockHandler)
+}
+
 export function clearAutoLockTimer() {
+  lastAutoLockHandler = null
   if (autoLockTimer) {
     clearTimeout(autoLockTimer)
     autoLockTimer = null

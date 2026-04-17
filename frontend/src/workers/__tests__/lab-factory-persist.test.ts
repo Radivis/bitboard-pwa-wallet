@@ -3,10 +3,15 @@ import type { LabState } from '@/workers/lab-api'
 import { EMPTY_LAB_STATE } from '@/workers/lab-api'
 
 const getLabDatabase = vi.hoisted(() => vi.fn())
+const notifyLabStatePersistedAfterCommit = vi.hoisted(() => vi.fn())
 
 vi.mock('@/db', () => ({
   getLabDatabase,
   ensureLabMigrated: vi.fn().mockResolvedValue(undefined),
+}))
+
+vi.mock('@/lib/lab-cross-tab-sync', () => ({
+  notifyLabStatePersistedAfterCommit,
 }))
 
 import { persistLabState } from '@/workers/lab-factory'
@@ -18,6 +23,7 @@ describe('persistLabState', () => {
   beforeEach(() => {
     transactionCount = 0
     utxoBatchSizes.length = 0
+    notifyLabStatePersistedAfterCommit.mockClear()
 
     const mockTrx = {
       deleteFrom: vi.fn(() => ({
@@ -47,6 +53,7 @@ describe('persistLabState', () => {
     const state: LabState = { ...EMPTY_LAB_STATE }
     await persistLabState(state)
     expect(transactionCount).toBe(1)
+    expect(notifyLabStatePersistedAfterCommit).toHaveBeenCalledTimes(1)
   })
 
   it('batches large utxo persists into multiple INSERT chunks (persist batch size)', async () => {

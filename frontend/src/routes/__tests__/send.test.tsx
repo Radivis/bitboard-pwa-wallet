@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { screen } from '@testing-library/react'
+import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { renderWithProviders } from '@/test-utils/test-providers'
 
@@ -60,14 +60,20 @@ vi.mock('@/components/WalletUnlock', () => ({
   WalletUnlock: () => <div data-testid="wallet-unlock">Unlock</div>,
 }))
 
+vi.mock('@/hooks/useBitcoinUnit', () => ({
+  useBitcoinUnit: () => ({ data: 'BTC' }),
+}))
+
+vi.mock('@/lib/library/article-shared', () => ({
+  ArticleLink: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
+}))
+
 vi.mock('@/lib/bitcoin-utils', () => ({
   MAX_SAFE_SATS: Number.MAX_SAFE_INTEGER,
   isValidAddress: (address: string, network: string) => {
     if (network === 'signet') return address.startsWith('tb1')
     return false
   },
-  formatBTC: (sats: number) => (sats / 100_000_000).toFixed(8),
-  formatSats: (sats: number) => sats.toLocaleString(),
   truncateAddress: (addr: string) =>
     addr.length > 16 ? `${addr.slice(0, 8)}...${addr.slice(-8)}` : addr,
   getEsploraUrl: () => 'http://localhost:3002',
@@ -79,12 +85,65 @@ vi.mock('@/lib/wallet-utils', () => ({
   loadCustomEsploraUrl: vi.fn().mockResolvedValue(null),
 }))
 
+const qrScannerInstanceMocks = vi.hoisted(() => ({
+  hasFlash: vi.fn().mockResolvedValue(false),
+  isFlashOn: vi.fn().mockReturnValue(false),
+  toggleFlash: vi.fn().mockResolvedValue(undefined),
+}))
+
+vi.mock('qr-scanner', () => ({
+  default: class QrScanner {
+    static scanImage = vi
+      .fn()
+      .mockResolvedValue({ data: 'tb1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx' })
+
+    static async hasCamera() {
+      return false
+    }
+
+    static async listCameras() {
+      return []
+    }
+
+    hasFlash = qrScannerInstanceMocks.hasFlash
+
+    isFlashOn = qrScannerInstanceMocks.isFlashOn
+
+    toggleFlash = qrScannerInstanceMocks.toggleFlash
+
+    constructor(
+      _video: HTMLVideoElement,
+      _onDecode: (result: unknown) => void,
+      _options?: Record<string, unknown>,
+    ) {}
+
+    async start() {}
+
+    stop() {}
+
+    destroy() {}
+  },
+}))
+
 import { useSendStore } from '@/stores/sendStore'
 import { SendPage } from '../wallet/send'
+
+const mockCameraMediaStream = {
+  getTracks: () => [{ stop: vi.fn(), kind: 'video' as const }],
+}
 
 describe('SendPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: {
+        getUserMedia: vi.fn().mockResolvedValue(mockCameraMediaStream),
+      },
+    })
+    qrScannerInstanceMocks.hasFlash.mockResolvedValue(false)
+    qrScannerInstanceMocks.isFlashOn.mockReturnValue(false)
+    qrScannerInstanceMocks.toggleFlash.mockResolvedValue(undefined)
     mockDraftLabPsbtTransaction.mockResolvedValue({
       psbtBase64: 'draft_psbt',
       finalAmountSats: 10_000,
@@ -118,6 +177,36 @@ describe('SendPage', () => {
     expect(screen.getByTestId('wallet-unlock')).toBeInTheDocument()
   })
 
+  it('shows Scan QR code button on send entry', () => {
+    renderWithProviders(<SendPage />)
+    expect(
+      screen.getByRole('button', { name: 'Scan QR code' }),
+    ).toBeInTheDocument()
+  })
+
+  it('shows Upload image in the QR scan modal', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(<SendPage />)
+    await user.click(screen.getByRole('button', { name: 'Scan QR code' }))
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'Upload image' }),
+    ).toBeInTheDocument()
+  })
+
+  it('shows flash toggle when the camera reports flash support', async () => {
+    qrScannerInstanceMocks.hasFlash.mockResolvedValue(true)
+    qrScannerInstanceMocks.isFlashOn.mockReturnValue(false)
+    const user = userEvent.setup()
+    renderWithProviders(<SendPage />)
+    await user.click(screen.getByRole('button', { name: 'Scan QR code' }))
+    await waitFor(() => {
+      expect(
+        screen.getByRole('button', { name: 'Turn flash on' }),
+      ).toBeInTheDocument()
+    })
+  })
+
   it('shows error for invalid address', async () => {
     const user = userEvent.setup()
     renderWithProviders(<SendPage />)
@@ -126,25 +215,25 @@ describe('SendPage', () => {
     expect(screen.getByText(/Invalid address for signet/)).toBeInTheDocument()
   })
 
-  it('BTC sats toggle switches unit display', async () => {
+  it('amount unit select changes entry unit', async () => {
     const user = userEvent.setup()
     renderWithProviders(<SendPage />)
 
-    expect(screen.getByLabelText('Amount (BTC)')).toBeInTheDocument()
+    expect(screen.getByLabelText('Amount')).toBeInTheDocument()
     expect(screen.getByPlaceholderText('0.00000000')).toBeInTheDocument()
-    expect(screen.getByText('Switch to sats')).toBeInTheDocument()
+    const unitSelect = screen.getByLabelText('Unit for amount entry')
+    expect(unitSelect).toBeInTheDocument()
 
-    await user.click(screen.getByText('Switch to sats'))
+    await user.selectOptions(unitSelect, 'sat')
 
-    expect(screen.getByLabelText('Amount (sats)')).toBeInTheDocument()
     expect(screen.getByPlaceholderText('0')).toBeInTheDocument()
-    expect(screen.getByText('Switch to BTC')).toBeInTheDocument()
+    expect(useSendStore.getState().amountUnit).toBe('sat')
   })
 
   it('displays available balance', () => {
     renderWithProviders(<SendPage />)
     expect(screen.getByText(/Available:/)).toBeInTheDocument()
-    expect(screen.getByText(/500,000 sats/)).toBeInTheDocument()
+    expect(screen.getByText('0.00500000')).toBeInTheDocument()
   })
 
   it('fee rate presets toggle correctly', async () => {

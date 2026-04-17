@@ -65,13 +65,14 @@ test.describe('Lightning NWC stale cache @nwc', () => {
     await goToWalletTab(page, 'Management')
     await expect(page.getByRole('heading', { name: 'Management' })).toBeVisible()
     await page.getByRole('button', { name: 'Connect Lightning Wallet' }).click()
-    await page.getByLabel('Lightning network *').selectOption('signet')
     await page
       .getByLabel('NWC Connection String')
       .fill(E2E_NWC_CONNECTION_STRING)
     await page.getByRole('button', { name: 'Test Connection' }).click()
-    await expect(page.getByLabel('Label *')).toHaveValue('E2E NWC Mock')
-    await page.getByLabel('Label *').fill(E2E_NWC_LABEL)
+    await expect(page.getByRole('button', { name: 'Save', exact: true })).toBeEnabled({
+      timeout: 15_000,
+    })
+    await page.locator('#ln-wallet-label').fill(E2E_NWC_LABEL)
     await page.getByRole('button', { name: 'Save', exact: true }).click()
     await expect(page.getByText(E2E_NWC_LABEL)).toBeVisible()
 
