@@ -20,11 +20,14 @@ export async function runMigrationsToLatest(
     migrationLockTableName: SCHEMA_MIGRATIONS_LOCK_TABLE,
   })
   const { error, results } = await migrator.migrateToLatest()
+  const failedResult = results?.find((r) => r.status === 'Error')
   if (error) {
-    throw error instanceof Error ? error : new Error(String(error))
+    const message = failedResult
+      ? `Migration "${failedResult.migrationName}" failed`
+      : 'Wallet or lab schema migration failed'
+    throw new Error(message, { cause: error })
   }
-  const failed = results?.find((r) => r.status === 'Error')
-  if (failed) {
-    throw new Error(`Migration "${failed.migrationName}" failed`)
+  if (failedResult) {
+    throw new Error(`Migration "${failedResult.migrationName}" failed (unknown error)`)
   }
 }
