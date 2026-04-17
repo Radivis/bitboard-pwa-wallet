@@ -99,10 +99,12 @@ fn parse_mtp_from_phc(phc: &str) -> Result<(u32, u32, u32), JsValue> {
         ));
     }
     for segment in phc.split('$') {
-        if segment.contains("m=") && segment.contains("t=") && segment.contains("p=") {
-            if let Some(mtp) = parse_mtp_segment(segment) {
-                return Ok(mtp);
-            }
+        if segment.contains("m=")
+            && segment.contains("t=")
+            && segment.contains("p=")
+            && let Some(mtp) = parse_mtp_segment(segment)
+        {
+            return Ok(mtp);
         }
     }
     Err(JsValue::from_str(

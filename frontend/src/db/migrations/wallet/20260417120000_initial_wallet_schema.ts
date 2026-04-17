@@ -34,13 +34,14 @@ export async function up(db: Kysely<any>): Promise<void> {
     .addColumn('encrypted_data', 'blob', (col) => col.notNull())
     .addColumn('iv', 'blob', (col) => col.notNull())
     .addColumn('salt', 'blob', (col) => col.notNull())
-    .addColumn('kdf_version', 'integer', (col) => col.notNull().defaultTo(1))
+    /** Argon2id PHC parameter prefix; salt in `salt`. */
+    .addColumn('kdf_phc', 'text', (col) => col.notNull())
     .addColumn('created_at', 'text', (col) => col.notNull())
     .addColumn('updated_at', 'text', (col) => col.notNull())
     .addColumn('mnemonic_encrypted_data', 'blob', (col) => col.notNull())
     .addColumn('mnemonic_iv', 'blob', (col) => col.notNull())
     .addColumn('mnemonic_salt', 'blob', (col) => col.notNull())
-    .addColumn('mnemonic_kdf_version', 'integer', (col) => col.notNull())
+    .addColumn('mnemonic_kdf_phc', 'text', (col) => col.notNull())
     .execute()
 
   await db.schema
