@@ -37,6 +37,7 @@
     "clsx": "^2.1.1",
     "comlink": "^4.4.2",
     "date-fns": "^4.1.0",
+    "jszip": "^3.10.1",
     "kysely": "^0.28.11",
     "kysely-wasqlite-worker": "^1.2.1",
     "lucide-react": "^0.576.0",

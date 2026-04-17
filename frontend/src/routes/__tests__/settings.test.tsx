@@ -345,6 +345,9 @@ describe('SettingsPage', () => {
     expect(screen.getByText('Data Backups')).toBeInTheDocument()
     expect(screen.getByText('About')).toBeInTheDocument()
     expect(screen.getByText('Support contact: TBD')).toBeInTheDocument()
+    expect(
+      screen.getByText(/Lab data is tied to wallets on this device/i),
+    ).toBeInTheDocument()
   })
 
   it('disables Export wallet data in near-zero security mode with hint', () => {

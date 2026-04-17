@@ -17,10 +17,15 @@ import {
   readTextFileFromOpfsRootIfExists,
   triggerBrowserSaveLocalBlob,
 } from '@/lib/opfs-root-file'
+import { zipSingleFileForLocalExport } from '@/lib/zip-single-file-export'
 import { useNearZeroSecurityStore } from '@/stores/nearZeroSecurityStore'
 
-const WALLET_EXPORT_FILENAME = 'bitboard-wallet-backup.sqlite'
-const LAB_EXPORT_FILENAME = 'bitboard-lab-backup.sqlite'
+const WALLET_EXPORT_INNER_NAME = 'bitboard-wallet-backup.sqlite'
+const WALLET_EXPORT_ZIP_NAME = 'bitboard-wallet-backup.zip'
+const LAB_EXPORT_INNER_NAME = 'bitboard-lab-backup.sqlite'
+const LAB_EXPORT_ZIP_NAME = 'bitboard-lab-backup.zip'
+const MIGRATION_REPORT_INNER_NAME = 'wallet-schema-migration-failure.json'
+const MIGRATION_REPORT_ZIP_NAME = 'wallet-schema-migration-failure.zip'
 
 export function DataBackupsCard() {
   const nearZeroActive = useNearZeroSecurityStore((s) => s.active)
@@ -60,8 +65,9 @@ export function DataBackupsCard() {
         toast.error('Wallet data file was not found in local storage.')
         return
       }
-      triggerBrowserSaveLocalBlob(blob, WALLET_EXPORT_FILENAME)
-      toast.success('Wallet data exported to a file on this device.')
+      const zipped = await zipSingleFileForLocalExport(blob, WALLET_EXPORT_INNER_NAME)
+      triggerBrowserSaveLocalBlob(zipped, WALLET_EXPORT_ZIP_NAME)
+      toast.success('Wallet data exported as a ZIP on this device.')
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Export failed.')
     } finally {
@@ -77,8 +83,9 @@ export function DataBackupsCard() {
         toast.error('Lab data file was not found. Open the Lab at least once to create it.')
         return
       }
-      triggerBrowserSaveLocalBlob(blob, LAB_EXPORT_FILENAME)
-      toast.success('Lab data exported to a file on this device.')
+      const zipped = await zipSingleFileForLocalExport(blob, LAB_EXPORT_INNER_NAME)
+      triggerBrowserSaveLocalBlob(zipped, LAB_EXPORT_ZIP_NAME)
+      toast.success('Lab data exported as a ZIP on this device.')
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Export failed.')
     } finally {
@@ -95,11 +102,10 @@ export function DataBackupsCard() {
         setMigrationReportExists(false)
         return
       }
-      triggerBrowserSaveLocalBlob(
-        new Blob([text], { type: 'application/json' }),
-        WALLET_MIGRATION_FAILURE_OPFS_FILENAME,
-      )
-      toast.success('Error report exported to a file on this device.')
+      const jsonBlob = new Blob([text], { type: 'application/json' })
+      const zipped = await zipSingleFileForLocalExport(jsonBlob, MIGRATION_REPORT_INNER_NAME)
+      triggerBrowserSaveLocalBlob(zipped, MIGRATION_REPORT_ZIP_NAME)
+      toast.success('Error report exported as a ZIP on this device.')
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Export failed.')
     } finally {
@@ -112,8 +118,9 @@ export function DataBackupsCard() {
       <CardHeader>
         <CardTitle>Data Backups</CardTitle>
         <CardDescription>
-          Export full local database files from this device. They are not uploaded anywhere. Wallet and
-          lab exports contain sensitive data—store them safely.
+          Export full local database files from this device as ZIP archives (one SQLite file
+          inside each). Nothing is uploaded. Wallet and lab exports contain sensitive data—store them
+          safely.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
@@ -136,22 +143,29 @@ export function DataBackupsCard() {
           ) : null}
         </div>
 
-        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
-          <Button
-            type="button"
-            variant="outline"
-            disabled={labFileExists === false || exportBusy !== null}
-            onClick={() => void exportLab()}
-            className="w-full sm:w-auto"
-          >
-            <FlaskConical className="size-4" aria-hidden />
-            Export lab data
-          </Button>
-          {labFileExists === false ? (
-            <p className="text-sm text-muted-foreground sm:max-w-md">
-              No lab database file yet. Open the Lab once to create local lab data.
-            </p>
-          ) : null}
+        <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={labFileExists === false || exportBusy !== null}
+              onClick={() => void exportLab()}
+              className="w-full sm:w-auto"
+            >
+              <FlaskConical className="size-4" aria-hidden />
+              Export lab data
+            </Button>
+            {labFileExists === false ? (
+              <p className="text-sm text-muted-foreground sm:max-w-md">
+                No lab database file yet. Open the Lab once to create local lab data.
+              </p>
+            ) : null}
+          </div>
+          <p className="text-sm text-muted-foreground">
+            Lab data is tied to wallets on this device; only use this backup on your own restores.
+            Sharing lab exports between different Bitboard Wallet installs is not supported and may
+            confuse balances and owners in the lab.
+          </p>
         </div>
 
         {migrationReportExists ? (
