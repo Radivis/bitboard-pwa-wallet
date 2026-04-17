@@ -63,8 +63,7 @@ export {
   setWalletNoMnemonicBackupFlag,
   clearWalletNoMnemonicBackupFlag,
   walletHasNoMnemonicBackupFlag,
-  noMnemonicBackupSettingsKey,
-} from './no-mnemonic-backup-settings'
+} from './wallet-no-mnemonic-backup'
 export {
   NEAR_ZERO_WRAPPER_PASSWORD,
   NEAR_ZERO_SETTINGS_KEY_ACTIVE,

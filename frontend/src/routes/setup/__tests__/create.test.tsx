@@ -91,7 +91,7 @@ vi.mock('@/db', () => ({
   setWalletNoMnemonicBackupFlag: dbMocks.mockSetWalletNoMnemonicBackupFlag,
   walletKeys: {
     all: ['wallets'] as const,
-    noMnemonicBackup: (id: number) => ['settings', 'no_mnemonic_backup', id] as const,
+    noMnemonicBackup: (id: number) => ['wallets', 'no_mnemonic_backup', id] as const,
   },
 }))
 

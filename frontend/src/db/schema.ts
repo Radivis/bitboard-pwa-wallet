@@ -19,6 +19,8 @@ interface WalletsTable {
   wallet_id: Generated<number>
   name: string
   created_at: string
+  /** SQLite BOOLEAN; JS `boolean` when selected, bind `0`/`1` on insert/update (driver limitation). Omit on insert to use DB default `false`. */
+  no_mnemonic_backup: ColumnType<boolean, number | undefined, number>
 }
 
 export type Wallet = Selectable<WalletsTable>

@@ -15,6 +15,7 @@ export async function up(db: Kysely<any>): Promise<void> {
     .addColumn('wallet_id', 'integer', (col) => col.primaryKey().autoIncrement())
     .addColumn('name', 'text', (col) => col.notNull())
     .addColumn('created_at', 'text', (col) => col.notNull())
+    .addColumn('no_mnemonic_backup', 'boolean', (col) => col.notNull().defaultTo(false))
     .execute()
 
   await db.schema
