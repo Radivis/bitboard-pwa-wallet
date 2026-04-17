@@ -23,7 +23,7 @@ End to end tests: Playwright
 Language: Rust → WASM (via wasm-bindgen)
 Off-main-thread execution: Web Workers (with Comlink for RPC-like interface)
 Database: Sqlite via OPFS and wa-sqlite + AccessHandlePoolVFS (with encryption for sensitive data)
-Query builder: Kysely
+Query builder and schema migrations: Kysely (`Migrator`, tracked in `schema_migrations` per database file)
 Encryption: AES-256-GCM + Argon2id (via argon2 Rust crate)
 Crypto primitives: BDK (Bitcoin) + LDK (Lightning) via WASM bindings
 Key generation: Web Crypto API (crypto.getRandomValues)
@@ -126,7 +126,8 @@ So: **two workers each load the same wallet WASM** (crypto and lab; two instance
 
 ### Persistence
 
-- **DB:** `frontend/src/db`: `database.ts` / `lab-database.ts`, migrations, schema, Kysely, storage adapter (OPFS). Wallet metadata in the `wallets` table; sensitive payload in `wallet_secrets` (encrypted).
+- **DB:** `frontend/src/db`: `database.ts` / `lab-database.ts`, schema, Kysely, storage adapter (OPFS). The app uses **two** SQLite files in OPFS (`bitboard-wallet` and `bitboard-lab`), each opened via `kysely-wasqlite-worker`. Wallet metadata is in the `wallets` table; sensitive payload in `wallet_secrets` (encrypted).
+- **SQLite migrations:** All schema changes must go through **Kysely’s `Migrator`** (`frontend/src/db/migrations/`). Each database file has its own migration history in `schema_migrations` and a lock table `schema_migrations_lock` (required by Kysely). Add new migration modules under `frontend/src/db/migrations/wallet/` or `frontend/src/db/migrations/lab/` with an **ISO 8601 date-time prefix** in the filename (lexicographic order defines run order), register them in `wallet-migration-provider.ts` or `lab-migration-provider.ts`, and run them via `runWalletMigrations` / `runLabMigrations`. Do **not** ship ad-hoc DDL in `database.ts` or `lab-database.ts`. Do **not** edit migration files that have already been released; add a new forward migration instead. Wallet migrations typically omit `down` when rollback would be unsafe.
 - **Encryption:** `encryption.ts` delegates to `getEncryptionWorker()` for `encryptData` and `decryptData`; the worker performs Argon2id KDF (WASM in `wasm-pkg/bitboard_encryption/`) and AES-GCM via Web Crypto. **Persistence depends only on the encryption worker**; key derivation and symmetric encrypt/decrypt are isolated there (no key material on the main thread).
 - **Sensitive data:** Mnemonics and descriptor wallets live in `WalletSecrets`; encrypted at rest in `wallet_secrets`; decrypted only in memory when needed (e.g. to load the wallet into the crypto worker). Lab DB stores WIFs in `lab_addresses` (lab-only, not production keys). Sensitive data exists in memory only in the worker or main thread during unlock and during operations; it is not logged.
 

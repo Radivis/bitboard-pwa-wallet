@@ -1,4 +1,5 @@
 import { beforeEach, afterEach, describe, expect, it } from 'vitest'
+import { sql } from 'kysely'
 import type { Kysely } from 'kysely'
 import type { Database } from '../schema'
 import { APP_SETTINGS_LAST_OPENED_AT_KEY } from '@/lib/app-session-metadata'
@@ -13,6 +14,16 @@ describe('SQLite Database', () => {
 
   afterEach(async () => {
     await walletDb.destroy()
+  })
+
+  it('creates schema_migrations bookkeeping tables and records the initial migration', async () => {
+    const tables = await walletDb.introspection.getTables()
+    const names = new Set(tables.map((t) => t.name))
+    expect(names.has('schema_migrations')).toBe(true)
+    expect(names.has('schema_migrations_lock')).toBe(true)
+
+    const { rows } = await sql<{ name: string }[]>`SELECT name FROM schema_migrations`.execute(walletDb)
+    expect(rows.some((r) => r.name.includes('initial_wallet_schema'))).toBe(true)
   })
 
   describe('wallets table', () => {
