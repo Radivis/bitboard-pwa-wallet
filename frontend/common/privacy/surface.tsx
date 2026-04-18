@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- provider, hook, and typography helper share one module */
 import {
   createContext,
   useContext,

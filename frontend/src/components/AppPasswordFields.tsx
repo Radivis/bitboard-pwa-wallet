@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- field group exports supporting types alongside UI */
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { PasswordStrengthIndicator } from '@/components/PasswordStrengthIndicator'

@@ -91,7 +91,10 @@ function BalanceCard() {
   const showLightningBalances = hasMatchingLightningConnection
 
   const lnTotalSats = lnBalancesQuery.data?.totalSats ?? 0
-  const lightningBalanceRows = lnBalancesQuery.data?.lightningBalanceRows ?? []
+  const lightningBalanceRows = useMemo(
+    () => lnBalancesQuery.data?.lightningBalanceRows ?? [],
+    [lnBalancesQuery.data?.lightningBalanceRows],
+  )
   const hasStaleLnBalance = lightningBalanceRows.some((r) => r.isStaleBalance)
   const newestStaleBalanceIso = useMemo(() => {
     const times = lightningBalanceRows
@@ -350,7 +353,10 @@ function RecentTransactions() {
   const displayTransactions =
     networkMode === 'lab' ? labTransactionsForActiveWallet : transactions
 
-  const lnPayments = lnHistoryQuery.data?.payments ?? []
+  const lnPayments = useMemo(
+    () => lnHistoryQuery.data?.payments ?? [],
+    [lnHistoryQuery.data?.payments],
+  )
   const stalePaymentsAsOf = lnHistoryQuery.data?.stalePaymentsAsOf
 
   const mergedActivity = useMemo(() => {

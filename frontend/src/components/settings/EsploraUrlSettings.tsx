@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- settings block exports constants with the component */
 import { useState, useEffect } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Globe } from 'lucide-react'
