@@ -2,11 +2,22 @@ import { Globe, ExternalLink } from 'lucide-react';
 import { GitHubMark } from '@/src/GitHubMark';
 import { FooterOutboundLink } from './FooterOutboundLink';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import { useLegalNoticeDisplay } from '@legal-notice-display';
 import {
   LEGAL_NOTICE_FLAG_DE,
   LEGAL_NOTICE_FLAG_EN,
 } from '@legal-locale';
+
+/** Footer sits on dark bg; theme `default` button can be white-on-white — use explicit contrast. */
+function legalLocaleSwitcherButtonClass(active: boolean): string {
+  return cn(
+    'gap-1.5 border shadow-none',
+    active
+      ? 'border-white/50 bg-white/15 text-white hover:bg-white/20 hover:text-white'
+      : 'border-white/25 bg-transparent text-gray-300 hover:border-white/40 hover:bg-white/10 hover:text-white',
+  );
+}
 
 interface SiteFooterProps {
   githubUrl: string;
@@ -57,9 +68,11 @@ export function SiteFooter({ githubUrl, websiteUrl, blogUrl }: SiteFooterProps) 
                 >
                   <Button
                     type="button"
-                    variant={legal.activeLocale === 'de' ? 'default' : 'outline'}
+                    variant="outline"
                     size="sm"
-                    className="gap-1.5"
+                    className={legalLocaleSwitcherButtonClass(
+                      legal.activeLocale === 'de',
+                    )}
                     onClick={() => legal.setLocale('de')}
                     aria-pressed={legal.activeLocale === 'de'}
                   >
@@ -68,9 +81,11 @@ export function SiteFooter({ githubUrl, websiteUrl, blogUrl }: SiteFooterProps) 
                   </Button>
                   <Button
                     type="button"
-                    variant={legal.activeLocale === 'en' ? 'default' : 'outline'}
+                    variant="outline"
                     size="sm"
-                    className="gap-1.5"
+                    className={legalLocaleSwitcherButtonClass(
+                      legal.activeLocale === 'en',
+                    )}
                     onClick={() => legal.setLocale('en')}
                     aria-pressed={legal.activeLocale === 'en'}
                   >
