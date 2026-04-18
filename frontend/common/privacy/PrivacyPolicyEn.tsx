@@ -55,7 +55,20 @@ export function PrivacyPolicyEn() {
         exactly is requested depends on how you use the wallet (balances, transaction history, etc.).
       </p>
 
-      <h2>6. Encryption of sensitive app data</h2>
+      <h2>6. Nostr Wallet Connect (NWC)</h2>
+      <p>
+        Bitboard currently supports Lightning <strong>only via Nostr Wallet Connect (NWC)</strong>. You
+        connect to an <strong>already existing</strong> Lightning wallet by configuring its NWC
+        connection; Bitboard does not custody Lightning funds on its own servers.
+      </p>
+      <p>
+        The <strong>NWC connection string</strong> and <strong>snapshots</strong> of balances and
+        transactions pulled from that external Lightning wallet are stored locally in the app. They are{' '}
+        <strong>strongly encrypted at rest only after you set an app password</strong>, consistent with
+        the encryption rules in this policy.
+      </p>
+
+      <h2>7. Encryption of sensitive app data</h2>
       <p>
         Sensitive data such as recovery phrases (seeds), cryptographic keys, descriptors, NWC
         connection strings, and cached balances/transactions inside the wallet database is{' '}
@@ -63,7 +76,7 @@ export function PrivacyPolicyEn() {
         that strong encryption is not applied.
       </p>
 
-      <h2>7. Backups (exports)</h2>
+      <h2>8. Backups (exports)</h2>
       <p>
         You may export data from the app. <strong>Wallet data exports</strong> are{' '}
         <strong>digitally signed</strong> (required). The export file is still{' '}
@@ -75,7 +88,7 @@ export function PrivacyPolicyEn() {
         used inside the app — are <strong>never</strong> digitally signed.
       </p>
 
-      <h2>8. Your rights</h2>
+      <h2>9. Your rights</h2>
       <p>
         Where personal data is processed, GDPR rights (access, rectification, erasure, restriction,
         objection, portability, etc.) may apply. Much of the processing happens locally on your

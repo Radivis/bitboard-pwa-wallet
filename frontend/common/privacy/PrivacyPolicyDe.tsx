@@ -63,7 +63,22 @@ export function PrivacyPolicyDe() {
         (z. B. Kontostandsabfragen, Transaktionslisten) ab.
       </p>
 
-      <h2>6. Verschlüsselung sensibler App-Daten</h2>
+      <h2>6. Nostr Wallet Connect (NWC)</h2>
+      <p>
+        Bitboard unterstützt Lightning derzeit <strong>ausschließlich über Nostr Wallet Connect
+        (NWC)</strong>. Sie verbinden eine <strong>bereits bestehende</strong> Lightning-Wallet, indem
+        Sie die NWC-Verbindung konfigurieren; Bitboard verwahrt keine Lightning-Guthaben auf eigenen
+        Servern.
+      </p>
+      <p>
+        Die <strong>NWC-Verbindungszeichenfolge</strong> sowie <strong>Schnappschüsse</strong> von
+        Salden und Transaktionen, die von dieser externen Lightning-Wallet abgerufen werden, werden
+        lokal in der App gespeichert. Sie werden <strong>nur dann im Ruhezustand stark verschlüsselt</strong>,
+        wenn Sie ein <strong>App-Passwort</strong> gesetzt haben — im Einklang mit den übrigen
+        Ausführungen zur Verschlüsselung in dieser Datenschutzerklärung.
+      </p>
+
+      <h2>7. Verschlüsselung sensibler App-Daten</h2>
       <p>
         Sensible Daten wie Wiederherstellungsphrasen (Seeds), kryptographische Schlüssel, Deskriptoren,
         NWC-Verbindungszeichenfolgen sowie zwischengespeicherte Salden und Transaktionen in der
@@ -72,7 +87,7 @@ export function PrivacyPolicyDe() {
         nicht zur Anwendung.
       </p>
 
-      <h2>7. Datensicherungen (Exports)</h2>
+      <h2>8. Datensicherungen (Exports)</h2>
       <p>
         Sie können Daten aus der App exportieren. <strong>Wallet-Datenexporte</strong> sind mit einer{' '}
         <strong>digitalen Signatur</strong> versehen (<strong>Pflicht</strong>). Die Exportdatei ist
@@ -85,7 +100,7 @@ export function PrivacyPolicyDe() {
         der App — werden <strong>niemals</strong> digital signiert.
       </p>
 
-      <h2>8. Ihre Rechte</h2>
+      <h2>9. Ihre Rechte</h2>
       <p>
         Soweit personenbezogene Daten verarbeitet werden, stehen Ihnen die in der DSGVO vorgesehenen
         Rechte (u. a. Auskunft, Berichtigung, Löschung, Einschränkung, Widerspruch, Datenübertragbarkeit)
