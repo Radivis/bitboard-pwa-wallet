@@ -1,23 +1,8 @@
 import { Globe, ExternalLink } from 'lucide-react';
 import { GitHubMark } from '@/src/GitHubMark';
 import { FooterOutboundLink } from './FooterOutboundLink';
-import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
+import { LegalLocaleSwitcherLanding } from '@/src/components/LegalLocaleSwitcherLanding';
 import { useLegalNoticeDisplay } from '@legal-notice-display';
-import {
-  LEGAL_NOTICE_FLAG_DE,
-  LEGAL_NOTICE_FLAG_EN,
-} from '@legal-locale';
-
-/** Footer sits on dark bg; theme `default` button can be white-on-white — use explicit contrast. */
-function legalLocaleSwitcherButtonClass(active: boolean): string {
-  return cn(
-    'gap-1.5 border shadow-none',
-    active
-      ? 'border-white/50 bg-white/15 text-white hover:bg-white/20 hover:text-white'
-      : 'border-white/25 bg-transparent text-gray-300 hover:border-white/40 hover:bg-white/10 hover:text-white',
-  );
-}
 
 interface SiteFooterProps {
   githubUrl: string;
@@ -56,43 +41,25 @@ export function SiteFooter({ githubUrl, websiteUrl, blogUrl }: SiteFooterProps) 
           </div>
         </div>
 
+        <div className="text-center md:text-left">
+          <a
+            href="/privacy.html"
+            className="text-sm text-gray-400 underline underline-offset-4 hover:text-gray-200"
+          >
+            Privacy policy
+          </a>
+        </div>
+
         {legal.visible ? (
           <div className="border-t border-white/10 pt-6 text-left w-full">
             <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
               <h2 className="text-sm font-semibold text-gray-300 shrink-0">{legal.title}</h2>
               {legal.showSwitcher ? (
-                <div
-                  className="flex flex-wrap gap-2"
-                  role="group"
-                  aria-label="Legal notice language"
-                >
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className={legalLocaleSwitcherButtonClass(
-                      legal.activeLocale === 'de',
-                    )}
-                    onClick={() => legal.setLocale('de')}
-                    aria-pressed={legal.activeLocale === 'de'}
-                  >
-                    <span aria-hidden>{LEGAL_NOTICE_FLAG_DE}</span>
-                    Deutsch
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className={legalLocaleSwitcherButtonClass(
-                      legal.activeLocale === 'en',
-                    )}
-                    onClick={() => legal.setLocale('en')}
-                    aria-pressed={legal.activeLocale === 'en'}
-                  >
-                    <span aria-hidden>{LEGAL_NOTICE_FLAG_EN}</span>
-                    English
-                  </Button>
-                </div>
+                <LegalLocaleSwitcherLanding
+                  activeLocale={legal.activeLocale}
+                  onLocaleChange={legal.setLocale}
+                  ariaLabel="Legal notice language"
+                />
               ) : null}
             </div>
             <p className="text-gray-500 text-sm whitespace-pre-wrap max-w-3xl mt-2">{legal.body}</p>

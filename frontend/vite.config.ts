@@ -131,6 +131,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(projectRoot, './src'),
+      '@common': path.resolve(projectRoot, './common'),
     },
   },
   server: {

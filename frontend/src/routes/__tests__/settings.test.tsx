@@ -57,6 +57,19 @@ vi.mock('@tanstack/react-router', async (importOriginal) => {
     }),
     useNavigate: () => vi.fn(),
     useSearch: () => ({}),
+    Link: ({
+      children,
+      to,
+      className,
+    }: {
+      children: React.ReactNode
+      to: string
+      className?: string
+    }) => (
+      <a href={to} className={className}>
+        {children}
+      </a>
+    ),
   }
 })
 
@@ -348,6 +361,8 @@ describe('SettingsPage', () => {
     expect(screen.getByText('Security')).toBeInTheDocument()
     expect(screen.getByText('Data Backups')).toBeInTheDocument()
     expect(screen.getByText('About')).toBeInTheDocument()
+    const privacyPolicyLink = screen.getByRole('link', { name: /privacy policy/i })
+    expect(privacyPolicyLink).toHaveAttribute('href', '/privacy')
     expect(screen.queryByText('Support contact: TBD')).not.toBeInTheDocument()
     expect(
       screen.getByText(/Lab data is tied to wallets on this device/i),

@@ -1,5 +1,10 @@
 import { useEffect, useState } from 'react'
-import { createFileRoute, useNavigate, useSearch } from '@tanstack/react-router'
+import {
+  createFileRoute,
+  Link,
+  useNavigate,
+  useSearch,
+} from '@tanstack/react-router'
 import { Settings } from 'lucide-react'
 import { PageHeader } from '@/components/PageHeader'
 import { AppDescription } from '@/components/AppDescription'
@@ -189,6 +194,14 @@ export function SettingsPage() {
           <p>Bitboard Wallet &mdash; A Progressive Web App Bitcoin wallet.</p>
           <AppDescription />
           <p>Version {import.meta.env.VITE_APP_VERSION}</p>
+          <p className="pt-1">
+            <Link
+              to="/privacy"
+              className="text-primary underline underline-offset-4 hover:opacity-90"
+            >
+              Privacy policy
+            </Link>
+          </p>
         </CardContent>
       </Card>
 

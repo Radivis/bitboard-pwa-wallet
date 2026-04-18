@@ -30,6 +30,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(projectRoot, '.'),
+      '@common': path.resolve(projectRoot, '../frontend/common'),
       '@legal-locale': path.resolve(projectRoot, '../frontend/src/lib/legal-locale.ts'),
       '@legal-notice-display': path.resolve(
         projectRoot,
@@ -42,6 +43,7 @@ export default defineConfig({
       input: {
         main: path.resolve(projectRoot, 'index.html'),
         install: path.resolve(projectRoot, 'install.html'),
+        privacy: path.resolve(projectRoot, 'privacy.html'),
       },
     },
   },

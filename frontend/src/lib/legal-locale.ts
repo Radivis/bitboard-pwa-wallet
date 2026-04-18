@@ -6,6 +6,19 @@ export const LEGAL_LOCALE_STORAGE_KEY = 'bitboard.legalLocale' as const
 export const LEGAL_SECTION_TITLE_DE = 'Impressum'
 export const LEGAL_SECTION_TITLE_EN = 'Legal notice'
 
+export const PRIVACY_PAGE_TITLE_DE = 'Datenschutzerklärung'
+export const PRIVACY_PAGE_TITLE_EN = 'Privacy policy'
+
+/** Landing footer / dark background — contrast-safe (avoid theme primary white-on-white). */
+export function legalLocaleSwitcherLandingButtonClass(active: boolean): string {
+  return [
+    'gap-1.5 border shadow-none',
+    active
+      ? 'border-white/50 bg-white/15 text-white hover:bg-white/20 hover:text-white'
+      : 'border-white/25 bg-transparent text-gray-300 hover:border-white/40 hover:bg-white/10 hover:text-white',
+  ].join(' ')
+}
+
 export const LEGAL_NOTICE_FLAG_DE = '\u{1F1E9}\u{1F1EA}'
 export const LEGAL_NOTICE_FLAG_EN = '\u{1F1EC}\u{1F1E7}'
 
