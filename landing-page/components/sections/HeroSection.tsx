@@ -33,7 +33,7 @@ export function HeroSection({ appUrl, prefersReducedMotion }: HeroSectionProps) 
           />
         </motion.div>
         <div className="inline-block mb-4 px-3 py-1 border border-matrix text-matrix font-retro text-sm uppercase tracking-widest animate-pulse">
-          System Initialized: v0.0.1-demo
+          System Initialized: v{import.meta.env.VITE_WALLET_APP_VERSION}
         </div>
         <h1 className="text-6xl md:text-9xl font-bold tracking-tighter mb-4 relative">
         <span className="text-bitcoin">BIT</span><span className="text-matrix">BOARD WALLET</span>

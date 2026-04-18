@@ -20,6 +20,16 @@ function escapeRegExpSegment(s: string): string {
  * TanStack Router matches `routeFileIgnorePattern` against each filename under `routes/`.
  * TSX modules in `src/routes/library/articles/` are article content, not routes — discover them from disk so new files do not require manual regex updates.
  */
+function readAppVersion(): string {
+  try {
+    const pkgPath = path.join(projectRoot, 'package.json')
+    const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8')) as { version?: string }
+    return typeof pkg.version === 'string' ? pkg.version : '0.0.0'
+  } catch {
+    return '0.0.0'
+  }
+}
+
 function libraryArticleRouteIgnorePattern(): string {
   const articlesDir = path.join(projectRoot, 'src/routes/library/articles')
   let tsxFiles: string[] = []
@@ -40,6 +50,7 @@ export default defineConfig({
     // Expose CI to app so we can disable dev overlays (e.g. TanStack Router Devtools)
     // that intercept pointer events and break E2E tests.
     'import.meta.env.CI': JSON.stringify(!!process.env.CI),
+    'import.meta.env.VITE_APP_VERSION': JSON.stringify(readAppVersion()),
     ...viteImprintDefine(),
   },
   plugins: [

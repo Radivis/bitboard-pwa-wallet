@@ -187,7 +187,7 @@ export function SettingsPage() {
         <CardContent className="space-y-2 text-sm text-muted-foreground">
           <p>Bitboard Wallet &mdash; A Progressive Web App Bitcoin wallet.</p>
           <AppDescription />
-          <p>Version 0.1.0</p>
+          <p>Version {import.meta.env.VITE_APP_VERSION}</p>
           <p className="pt-1">Support contact: TBD</p>
         </CardContent>
       </Card>
