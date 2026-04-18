@@ -7,12 +7,12 @@ export const TEST_PASSWORD = 'TestP@ssword123'
 
 /**
  * Esplora initial sync can finish after navigation; failure surfaces as a Sonner error toast
- * (`import.tsx` copy or `useActiveWalletLoadQuery` bootstrap). Call after the dashboard is visible.
+ * (see `reportWalletSyncError` in wallet-sync-error-toast). Call after the dashboard is visible.
  * Uses a modest window so a late toast fails the test without dragging every passing run.
  */
 export async function expectNoInitialWalletSyncErrorToast(page: Page) {
   const syncErrorToast = page.getByText(
-    /Initial sync failed|wallet unlocked but data may be stale/,
+    /Initial sync failed|chain data may be stale|wallet unlocked but data may be stale/,
   )
   await expect(syncErrorToast).not.toBeVisible({ timeout: 12_000 })
 }

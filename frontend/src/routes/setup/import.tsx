@@ -23,6 +23,7 @@ import {
 import { ensureSecretsChannel } from '@/workers/secrets-channel'
 import { toBitcoinNetwork, getEsploraUrl } from '@/lib/bitcoin-utils'
 import { loadCustomEsploraUrl } from '@/lib/wallet-utils'
+import { reportWalletSyncError } from '@/lib/wallet-sync-error-toast'
 import { invalidateWalletRelatedQueriesAndNotifyOtherTabs } from '@/lib/wallet-query-cache-sync'
 
 export const Route = createFileRoute('/setup/import')({
@@ -102,8 +103,8 @@ export function ImportWalletPage() {
       setBalance(balance)
       setTransactions(txs)
       setWalletStatus('unlocked')
-    } catch {
-      toast.error('Initial sync failed — you can sync later from the dashboard')
+    } catch (err: unknown) {
+      reportWalletSyncError('initial-import', err)
       setWalletStatus('unlocked')
     }
   }, [

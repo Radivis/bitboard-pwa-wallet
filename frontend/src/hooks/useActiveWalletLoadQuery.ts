@@ -1,11 +1,11 @@
 import { useQuery } from '@tanstack/react-query'
-import { toast } from 'sonner'
 import { useWalletStore } from '@/stores/walletStore'
 import { useSessionStore } from '@/stores/sessionStore'
 import { loadDescriptorWalletAndSync, loadDescriptorWalletWithoutSync } from '@/lib/wallet-utils'
 import { activeWalletLoadQueryKey } from '@/lib/wallet-load-query-keys'
 import { waitForCryptoWorkerHealthy } from '@/workers/crypto-factory'
 import { pathnameRequiresWalletCryptoSession } from '@/lib/pathname-requires-wallet-crypto-session'
+import { reportWalletSyncError } from '@/lib/wallet-sync-error-toast'
 import { useWalletCryptoSessionPathGateStore } from '@/stores/walletCryptoSessionPathGateStore'
 
 /**
@@ -81,8 +81,7 @@ export function useActiveWalletLoadQuery() {
             accountId: bootstrapAccountId,
             awaitSync: false,
             onSyncError: (err) => {
-              const msg = err instanceof Error ? err.message : String(err)
-              toast.error(msg || 'Sync failed — wallet unlocked but data may be stale')
+              reportWalletSyncError('bootstrap-load', err)
             },
           })
         }
