@@ -167,8 +167,8 @@ export function PwaInstallPage() {
         </a>
 
         <h1 className="text-4xl md:text-5xl font-bold tracking-tighter mb-2">
-          <span className="text-bitcoin">Install</span>{' '}
-          <span className="text-matrix">Bitboard Wallet</span>
+          <span className="text-bitcoin">Install Bit</span>
+          <span className="text-matrix">board Wallet</span>
         </h1>
         <p className="text-matrix/90 font-mono text-sm mb-8 max-w-xl">
           Install the app for a home screen icon and a focused window. Detection below matches your current device when
@@ -213,15 +213,6 @@ export function PwaInstallPage() {
               </Button>
             </a>
           ) : null}
-          <a href={homeHref}>
-            <Button
-              variant="outline"
-              size="lg"
-              className="border-matrix text-matrix rounded-none font-mono px-8 h-14 text-lg w-full sm:w-auto"
-            >
-              Marketing site
-            </Button>
-          </a>
         </div>
       </div>
     </div>
