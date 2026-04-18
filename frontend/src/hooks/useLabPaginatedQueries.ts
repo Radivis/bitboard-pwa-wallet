@@ -13,6 +13,7 @@ import {
   labEntitiesPageQueryKey,
   labOwnerKeysQueryKey,
   labUtxosByOwnerQueryKey,
+  LAB_ADDRESS_UTXO_OWNER_PAGE_SIZE,
   LAB_CARD_PAGE_SIZE,
   LAB_ENTITIES_PAGE_SIZE,
   LAB_ENTITY_INNER_PAGE_SIZE,
@@ -70,7 +71,7 @@ export function useLabOwnerKeysPage(pageIndex: number, options: { enabled?: bool
 
   const query = useQuery({
     queryKey: labOwnerKeysQueryKey(pageIndex),
-    queryFn: () => fetchLabOwnerKeysPage(pageIndex, LAB_CARD_PAGE_SIZE),
+    queryFn: () => fetchLabOwnerKeysPage(pageIndex, LAB_ADDRESS_UTXO_OWNER_PAGE_SIZE),
     enabled,
   })
 
@@ -78,7 +79,7 @@ export function useLabOwnerKeysPage(pageIndex: number, options: { enabled?: bool
     if (!enabled) return
     void queryClient.prefetchQuery({
       queryKey: labOwnerKeysQueryKey(pageIndex + 1),
-      queryFn: () => fetchLabOwnerKeysPage(pageIndex + 1, LAB_CARD_PAGE_SIZE),
+      queryFn: () => fetchLabOwnerKeysPage(pageIndex + 1, LAB_ADDRESS_UTXO_OWNER_PAGE_SIZE),
     })
   }, [queryClient, pageIndex, enabled])
 

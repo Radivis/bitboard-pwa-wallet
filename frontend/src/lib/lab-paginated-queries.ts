@@ -23,7 +23,10 @@ import type { LabAddress, LabBlockTransactionSummary, LabTxDetails } from '@/wor
 export const LAB_CARD_PAGE_SIZE = 20
 /** Lab entities list (card grid) — keep small so each page fits a few rows. */
 export const LAB_ENTITIES_PAGE_SIZE = 6
+/** Addresses / UTXOs per owner on Lab Addresses & UTXOs cards (transactions page). */
 export const LAB_ENTITY_INNER_PAGE_SIZE = 5
+/** Owner groups per page on Lab Addresses & UTXOs cards (transactions page). */
+export const LAB_ADDRESS_UTXO_OWNER_PAGE_SIZE = 6
 
 export const labPaginatedQueryKeyPrefix = ['lab', 'paginated'] as const
 
@@ -159,7 +162,7 @@ export async function fetchLabBlockTransactionsPage(
 
 export async function fetchLabOwnerKeysPage(
   pageIndex: number,
-  pageSize: number = LAB_CARD_PAGE_SIZE,
+  pageSize: number = LAB_ADDRESS_UTXO_OWNER_PAGE_SIZE,
 ): Promise<{ ownerKeys: string[]; totalCount: number }> {
   await ensureLabMigrated()
   const labDb = getLabDatabase()
