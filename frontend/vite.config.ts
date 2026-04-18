@@ -94,6 +94,8 @@ export default defineConfig({
         ],
       },
       workbox: {
+        // Default 2 MiB is too small for main WASM (e.g. bitboard_crypto ~2.2 MiB after Vite 8 output).
+        maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2,wasm}'],
         runtimeCaching: [
           {
@@ -164,6 +166,8 @@ export default defineConfig({
   },
   worker: {
     format: 'es',
+    // Vite 8 (Rolldown) bundles workers separately; wasm imports need the plugin here too.
+    plugins: () => [wasm()],
   },
   build: {
     outDir: 'dist',

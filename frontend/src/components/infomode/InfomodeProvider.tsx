@@ -9,8 +9,7 @@ import {
   type ReactNode,
   type SetStateAction,
 } from 'react'
-import type { AnyRouter } from '@tanstack/router-core'
-import { useRouter, useRouterState } from '@tanstack/react-router'
+import { useLocation, useRouter } from '@tanstack/react-router'
 import { useInfomodeStore } from '@/stores/infomodeStore'
 import { InfomodePopup } from '@/components/infomode/InfomodePopup'
 import type { InfomodeRegistryEntry } from '@/components/infomode/infomode-types'
@@ -60,7 +59,6 @@ function InfomodeCloseOnNavigateIfRouter({
   }
   return (
     <InfomodeCloseOnNavigate
-      router={router}
       setPopupState={setPopupState}
       isPopupOpen={isPopupOpen}
     />
@@ -68,19 +66,16 @@ function InfomodeCloseOnNavigateIfRouter({
 }
 
 function InfomodeCloseOnNavigate({
-  router,
   setPopupState,
   isPopupOpen,
 }: {
-  router: AnyRouter
   setPopupState: Dispatch<SetStateAction<PopupState>>
   isPopupOpen: boolean
 }) {
   const setInfomodeActive = useInfomodeStore((s) => s.setInfomodeActive)
-  const locationKey = useRouterState({
-    router,
-    select: (s) =>
-      `${s.location.pathname}${s.location.search}${s.location.hash}`,
+  const locationKey = useLocation({
+    select: (loc) => `${loc.pathname}${loc.searchStr}${loc.hash}`,
+    structuralSharing: false,
   })
 
   const previousLocationKeyRef = useRef<string | null>(null)
