@@ -118,6 +118,14 @@ pub fn verify_wallet_backup_manifest_inner(
     if manifest.signing_key_derivation_id != WALLET_BACKUP_SIGNING_KEY_DERIVATION_ID {
         return Err("Unsupported signing_key_derivation_id".to_string());
     }
+    if manifest.kdf_phc != ARGON2_KDF_PHC_WALLET_BACKUP_SIGN_PRODUCTION
+        && manifest.kdf_phc != ARGON2_KDF_PHC_WALLET_BACKUP_SIGN_CI
+    {
+        return Err(
+            "Unsupported wallet backup kdf_phc (expected a known backup signing profile)"
+                .to_string(),
+        );
+    }
     let expected_hex = double_sha256_hex(sqlite_bytes);
     if manifest.message_hash_hex != expected_hex {
         return Err(
@@ -215,5 +223,27 @@ mod tests {
         )
         .expect("sign");
         assert!(verify_wallet_backup_manifest_inner(sqlite, "pw-b", &json).is_err());
+    }
+
+    #[test]
+    fn rejects_manifest_kdf_phc_not_in_backup_allowlist() {
+        let sqlite = b"fake sqlite bytes";
+        let salt = [1u8; 16];
+        let password = "test-app-password";
+        let json = sign_wallet_backup_manifest_inner(
+            sqlite,
+            password,
+            &salt,
+            ARGON2_KDF_PHC_WALLET_BACKUP_SIGN_CI,
+        )
+        .expect("sign");
+        let mut manifest: WalletBackupManifest = serde_json::from_str(&json).expect("parse");
+        manifest.kdf_phc = "$argon2id$v=19$m=65536,t=3,p=4".to_string();
+        let bad_json = serde_json::to_string(&manifest).expect("serialize");
+        let err = verify_wallet_backup_manifest_inner(sqlite, password, &bad_json).unwrap_err();
+        assert!(
+            err.contains("kdf_phc") || err.contains("Unsupported"),
+            "unexpected err: {err}"
+        );
     }
 }

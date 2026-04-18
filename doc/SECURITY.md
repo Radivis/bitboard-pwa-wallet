@@ -73,6 +73,13 @@ For **reporting vulnerabilities** in Bitboard Wallet, see the repository root [S
 
 - Production code does not log passwords, mnemonics, or key material. Worker init and health checks log only non-sensitive messages. Dev/test components (e.g. CryptoTest) that can display a mnemonic must not be included in production builds or must be behind a dev-only route.
 
+### 2.7 Data exports (local ZIP backups)
+
+Settings let users export the two SQLite databases as ZIP files on their device (nothing is uploaded by this flow).
+
+- **Wallet database export** — The archive includes the wallet SQLite file plus a manifest that **cryptographically signs** a digest of that file using ML-DSA; the signing key is derived from the user’s app password with Argon2id using **fixed backup-signing PHC profiles** (production and CI variants). Import verifies the manifest; verification only accepts those **known backup `kdf_phc` strings**, so manifests cannot smuggle arbitrary Argon2 cost parameters.
+- **Lab database export** — The archive contains only the lab SQLite file. There is **no signature and no authenticity guarantee**: integrity depends entirely on trusting the source of the ZIP. Importing a lab backup **replaces local lab state** (simulation / test data on this device). It does **not** by itself compromise main-wallet keys, but a malicious file could spoof lab balances or owners in the UI until the user notices.
+
 ---
 
 ## 3. Inherent limitations of the web / PWA environment

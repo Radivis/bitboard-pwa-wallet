@@ -40,7 +40,7 @@ Issues in **this codebase** that affect confidentiality, integrity, or availabil
 - Esplora URL handling, validation, and chain interaction **as implemented in the app**.
 - Transaction construction, signing, address parsing, backup/import, and related logic **in this repository**.
 
-A more detailed threat model and implementation notes are in [doc/SECURITY.md](doc/SECURITY.md).
+A more detailed threat model and implementation notes are in [doc/SECURITY.md](doc/SECURITY.md). Local ZIP exports are summarized there under **Data exports** (wallet backups are signed; **lab backups are not authenticated**—trust the file source).
 
 ### Out of scope
 

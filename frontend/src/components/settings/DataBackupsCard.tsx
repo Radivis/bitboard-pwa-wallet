@@ -71,7 +71,7 @@ export function DataBackupsCard() {
       <ConfirmationDialog
         open={labImportWipeOpen}
         title="Replace local lab data?"
-        message="This replaces the lab database on this device with the SQLite file from the ZIP. All current lab data on this device will be lost. The page will reload after import."
+        message="This replaces the lab database on this device with the SQLite file from the ZIP. Lab backups are not signed—only continue if you trust this file. All current lab data on this device will be lost. The page will reload after import."
         confirmText="Continue"
         cancelText="Cancel"
         variant="destructive"
@@ -92,8 +92,8 @@ export function DataBackupsCard() {
         <CardDescription>
           Export full local database files from this device as ZIP archives. Wallet exports are
           signed with your app password (ML-DSA); wallet import only accepts ZIPs that include the
-          manifest and verify. Lab exports are a single SQLite file in a ZIP (no signature). Nothing
-          is uploaded.
+          manifest and verify. Lab exports are a single SQLite file in a ZIP with no cryptographic
+          authentication—only import lab ZIPs you trust. Nothing is uploaded.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
