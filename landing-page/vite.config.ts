@@ -4,7 +4,7 @@ import path from 'path';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
-import { viteImprintDefine } from '../load-imprint-env.mjs';
+import { viteLegalNoticeDefine } from '../load-vite-env.mjs';
 
 const projectRoot = path.dirname(fileURLToPath(import.meta.url));
 
@@ -23,13 +23,18 @@ const walletAppVersion = readWalletAppVersion();
 
 export default defineConfig({
   define: {
-    ...viteImprintDefine(),
+    ...viteLegalNoticeDefine(),
     'import.meta.env.VITE_WALLET_APP_VERSION': JSON.stringify(walletAppVersion),
   },
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
       '@': path.resolve(projectRoot, '.'),
+      '@legal-locale': path.resolve(projectRoot, '../frontend/src/lib/legal-locale.ts'),
+      '@legal-notice-display': path.resolve(
+        projectRoot,
+        '../frontend/src/lib/legal-notice-display.ts',
+      ),
     },
   },
   build: {

@@ -1,8 +1,8 @@
 /**
  * Loads repo-root env files and exposes values to Vite via `define`:
- * - `.env.imprint` → `VITE_IMPRINT`
+ * - `.env.legal-notice.de` / `.env.legal-notice.en` → `VITE_LEGAL_NOTICE_DE` / `VITE_LEGAL_NOTICE_EN`
  * - `.env.contacts` → `VITE_CONTACTS`
- * Resolved `dotenv` from `frontend/node_modules` (both apps in this repo depend on tooling that pulls it in).
+ * Resolved `dotenv` from `frontend/node_modules` or `landing-page/node_modules`.
  */
 import fs from 'node:fs'
 import path from 'node:path'
@@ -25,27 +25,38 @@ function loadDotenvParse() {
     }
   }
   throw new Error(
-    'load-imprint-env: could not resolve dotenv from frontend or landing-page; run npm install in those packages.',
+    'load-vite-env: could not resolve dotenv from frontend or landing-page; run npm install in those packages.',
   )
 }
 
 const parse = loadDotenvParse()
 
-export function readViteImprintFromFile() {
-  const imprintPath = path.join(__dirname, '.env.imprint')
-  if (!fs.existsSync(imprintPath)) return ''
-  const raw = fs.readFileSync(imprintPath, 'utf8')
+function readStringKeyFromEnvFile(filePath, key) {
+  if (!fs.existsSync(filePath)) return ''
+  const raw = fs.readFileSync(filePath, 'utf8')
   const parsed = parse(raw)
-  const value = parsed.VITE_IMPRINT
+  const value = parsed[key]
   if (value === undefined || value === null) return ''
   return String(value).trim()
 }
 
-/** Values for Vite `define` so `import.meta.env.VITE_IMPRINT` is available in app code. */
-export function viteImprintDefine() {
-  const value = readViteImprintFromFile()
+export function readViteLegalNoticeDeFromFile() {
+  const envPath = path.join(__dirname, '.env.legal-notice.de')
+  return readStringKeyFromEnvFile(envPath, 'VITE_LEGAL_NOTICE_DE')
+}
+
+export function readViteLegalNoticeEnFromFile() {
+  const envPath = path.join(__dirname, '.env.legal-notice.en')
+  return readStringKeyFromEnvFile(envPath, 'VITE_LEGAL_NOTICE_EN')
+}
+
+/** Values for Vite `define` so legal notice strings are available in app code. */
+export function viteLegalNoticeDefine() {
+  const de = readViteLegalNoticeDeFromFile()
+  const en = readViteLegalNoticeEnFromFile()
   return {
-    'import.meta.env.VITE_IMPRINT': JSON.stringify(value),
+    'import.meta.env.VITE_LEGAL_NOTICE_DE': JSON.stringify(de),
+    'import.meta.env.VITE_LEGAL_NOTICE_EN': JSON.stringify(en),
   }
 }
 

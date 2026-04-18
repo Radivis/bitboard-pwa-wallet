@@ -19,6 +19,12 @@
     "paths": {
       "@/*": [
         "./*"
+      ],
+      "@legal-locale": [
+        "../frontend/src/lib/legal-locale.ts"
+      ],
+      "@legal-notice-display": [
+        "../frontend/src/lib/legal-notice-display.ts"
       ]
     },
     "allowImportingTsExtensions": true,

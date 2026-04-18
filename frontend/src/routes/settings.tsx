@@ -20,7 +20,7 @@ import { EsploraUrlSettings } from '@/components/settings/EsploraUrlSettings'
 import { FeatureToggles } from '@/components/settings/FeatureToggles'
 import { BitcoinUnitSelect } from '@/components/BitcoinUnitSelect'
 import { DeveloperContactCard } from '@/components/DeveloperContactCard'
-import { ImpressumBlock } from '@/components/ImpressumBlock'
+import { LegalNoticeCard } from '@/components/LegalNoticeCard'
 import { SettingsSecurityCard } from '@/components/settings/SettingsSecurityCard'
 import { DataBackupsCard } from '@/components/settings/DataBackupsCard'
 import { ChangeAppPasswordModal } from '@/components/ChangeAppPasswordModal'
@@ -194,7 +194,7 @@ export function SettingsPage() {
 
       <DeveloperContactCard />
 
-      <ImpressumBlock />
+      <LegalNoticeCard />
     </div>
   )
 }

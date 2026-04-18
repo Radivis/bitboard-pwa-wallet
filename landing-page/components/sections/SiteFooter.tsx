@@ -1,6 +1,12 @@
 import { Globe, ExternalLink } from 'lucide-react';
 import { GitHubMark } from '@/src/GitHubMark';
 import { FooterOutboundLink } from './FooterOutboundLink';
+import { Button } from '@/components/ui/button';
+import { useLegalNoticeDisplay } from '@legal-notice-display';
+import {
+  LEGAL_NOTICE_FLAG_DE,
+  LEGAL_NOTICE_FLAG_EN,
+} from '@legal-locale';
 
 interface SiteFooterProps {
   githubUrl: string;
@@ -9,7 +15,8 @@ interface SiteFooterProps {
 }
 
 export function SiteFooter({ githubUrl, websiteUrl, blogUrl }: SiteFooterProps) {
-  const imprintText = (import.meta.env.VITE_IMPRINT ?? '').trim()
+  const legal = useLegalNoticeDisplay();
+
   return (
     <footer className="border-t border-white/10 py-12 px-6 mt-20">
       <div className="max-w-6xl mx-auto flex flex-col gap-6">
@@ -38,10 +45,42 @@ export function SiteFooter({ githubUrl, websiteUrl, blogUrl }: SiteFooterProps) 
           </div>
         </div>
 
-        {imprintText ? (
+        {legal.visible ? (
           <div className="border-t border-white/10 pt-6 text-left w-full">
-            <h2 className="text-sm font-semibold text-gray-300 mb-2">Impressum</h2>
-            <p className="text-gray-500 text-sm whitespace-pre-wrap max-w-3xl">{imprintText}</p>
+            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
+              <h2 className="text-sm font-semibold text-gray-300 shrink-0">{legal.title}</h2>
+              {legal.showSwitcher ? (
+                <div
+                  className="flex flex-wrap gap-2"
+                  role="group"
+                  aria-label="Legal notice language"
+                >
+                  <Button
+                    type="button"
+                    variant={legal.activeLocale === 'de' ? 'default' : 'outline'}
+                    size="sm"
+                    className="gap-1.5"
+                    onClick={() => legal.setLocale('de')}
+                    aria-pressed={legal.activeLocale === 'de'}
+                  >
+                    <span aria-hidden>{LEGAL_NOTICE_FLAG_DE}</span>
+                    Deutsch
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={legal.activeLocale === 'en' ? 'default' : 'outline'}
+                    size="sm"
+                    className="gap-1.5"
+                    onClick={() => legal.setLocale('en')}
+                    aria-pressed={legal.activeLocale === 'en'}
+                  >
+                    <span aria-hidden>{LEGAL_NOTICE_FLAG_EN}</span>
+                    English
+                  </Button>
+                </div>
+              ) : null}
+            </div>
+            <p className="text-gray-500 text-sm whitespace-pre-wrap max-w-3xl mt-2">{legal.body}</p>
           </div>
         ) : null}
       </div>

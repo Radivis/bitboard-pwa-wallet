@@ -11,6 +11,9 @@
 
 /target
 .env
+.env.legal-notice.de
+.env.legal-notice.en
+# Legacy single-file imprint (replaced by .env.legal-notice.de / .en)
 .env.imprint
 .env.contacts
 !/scripts/README.md
