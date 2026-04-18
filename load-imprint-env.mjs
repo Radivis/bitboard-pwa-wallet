@@ -1,5 +1,7 @@
 /**
- * Loads `.env.imprint` from the repository root and exposes `VITE_IMPRINT` to Vite via `define`.
+ * Loads repo-root env files and exposes values to Vite via `define`:
+ * - `.env.imprint` → `VITE_IMPRINT`
+ * - `.env.contacts` → `VITE_CONTACTS`
  * Resolved `dotenv` from `frontend/node_modules` (both apps in this repo depend on tooling that pulls it in).
  */
 import fs from 'node:fs'
@@ -44,5 +46,23 @@ export function viteImprintDefine() {
   const value = readViteImprintFromFile()
   return {
     'import.meta.env.VITE_IMPRINT': JSON.stringify(value),
+  }
+}
+
+export function readViteContactsFromFile() {
+  const contactsPath = path.join(__dirname, '.env.contacts')
+  if (!fs.existsSync(contactsPath)) return ''
+  const raw = fs.readFileSync(contactsPath, 'utf8')
+  const parsed = parse(raw)
+  const value = parsed.VITE_CONTACTS
+  if (value === undefined || value === null) return ''
+  return String(value).trim()
+}
+
+/** Values for Vite `define` so `import.meta.env.VITE_CONTACTS` is available in app code. */
+export function viteContactsDefine() {
+  const value = readViteContactsFromFile()
+  return {
+    'import.meta.env.VITE_CONTACTS': JSON.stringify(value),
   }
 }

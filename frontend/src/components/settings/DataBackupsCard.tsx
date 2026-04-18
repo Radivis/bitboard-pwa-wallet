@@ -441,8 +441,8 @@ export function DataBackupsCard() {
               Export migration error report
             </Button>
             <p className="text-sm text-muted-foreground sm:min-w-0 sm:flex-1">
-              Send this file to app support for diagnosis. Support contact details are in the About
-              section (TBD).
+              Send this file to the project maintainer for diagnosis when your deployment lists
+              contact details under Settings → Developer contact.
             </p>
           </div>
         ) : null}

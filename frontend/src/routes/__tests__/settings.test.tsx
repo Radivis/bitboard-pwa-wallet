@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { renderWithProviders } from '@/test-utils/test-providers'
@@ -297,6 +297,10 @@ vi.mock('@/components/ConfirmationDialog', () => ({
 import { SettingsPage } from '../settings'
 
 describe('SettingsPage', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
   beforeEach(() => {
     vi.clearAllMocks()
     featureStoreState.lightningEnabled = false
@@ -344,10 +348,18 @@ describe('SettingsPage', () => {
     expect(screen.getByText('Security')).toBeInTheDocument()
     expect(screen.getByText('Data Backups')).toBeInTheDocument()
     expect(screen.getByText('About')).toBeInTheDocument()
-    expect(screen.getByText('Support contact: TBD')).toBeInTheDocument()
+    expect(screen.queryByText('Support contact: TBD')).not.toBeInTheDocument()
     expect(
       screen.getByText(/Lab data is tied to wallets on this device/i),
     ).toBeInTheDocument()
+  })
+
+  it('shows Developer contact card when VITE_CONTACTS is set', () => {
+    vi.stubEnv('VITE_CONTACTS', 'Line one\nLine two')
+    renderWithProviders(<SettingsPage />)
+    expect(screen.getByText('Developer contact')).toBeInTheDocument()
+    expect(screen.getByText(/Line one/)).toBeInTheDocument()
+    expect(screen.getByText(/Line two/)).toBeInTheDocument()
   })
 
   it('disables wallet backup export/import in near-zero security mode with hint', () => {

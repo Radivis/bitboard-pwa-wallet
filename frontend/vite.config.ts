@@ -7,7 +7,7 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
 import wasm from 'vite-plugin-wasm'
-import { viteImprintDefine } from '../load-imprint-env.mjs'
+import { viteContactsDefine, viteImprintDefine } from '../load-imprint-env.mjs'
 
 const projectRoot = path.dirname(fileURLToPath(import.meta.url))
 
@@ -52,6 +52,7 @@ export default defineConfig({
     'import.meta.env.CI': JSON.stringify(!!process.env.CI),
     'import.meta.env.VITE_APP_VERSION': JSON.stringify(readAppVersion()),
     ...viteImprintDefine(),
+    ...viteContactsDefine(),
   },
   plugins: [
     tanstackRouter({

@@ -12,6 +12,7 @@
 /target
 .env
 .env.imprint
+.env.contacts
 !/scripts/README.md
 # Coverage reports
 lcov.info

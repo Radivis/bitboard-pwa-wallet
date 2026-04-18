@@ -19,6 +19,7 @@ import { AddressTypeSelector } from '@/components/settings/AddressTypeSelector'
 import { EsploraUrlSettings } from '@/components/settings/EsploraUrlSettings'
 import { FeatureToggles } from '@/components/settings/FeatureToggles'
 import { BitcoinUnitSelect } from '@/components/BitcoinUnitSelect'
+import { DeveloperContactCard } from '@/components/DeveloperContactCard'
 import { ImpressumBlock } from '@/components/ImpressumBlock'
 import { SettingsSecurityCard } from '@/components/settings/SettingsSecurityCard'
 import { DataBackupsCard } from '@/components/settings/DataBackupsCard'
@@ -188,9 +189,10 @@ export function SettingsPage() {
           <p>Bitboard Wallet &mdash; A Progressive Web App Bitcoin wallet.</p>
           <AppDescription />
           <p>Version {import.meta.env.VITE_APP_VERSION}</p>
-          <p className="pt-1">Support contact: TBD</p>
         </CardContent>
       </Card>
+
+      <DeveloperContactCard />
 
       <ImpressumBlock />
     </div>
