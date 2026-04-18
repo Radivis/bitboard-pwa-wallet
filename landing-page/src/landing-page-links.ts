@@ -1,12 +1,12 @@
 /**
  * Outbound URLs for the landing page (single source of truth).
  *
- * `app` and `blog` are intentionally empty strings — those sites are not live yet.
- * `website` is intentionally empty — the public marketing site is not ready yet.
+ * Production: marketing at bitboard-wallet.com, PWA at app.bitboard-wallet.com.
+ * `blog` and `website` are empty until those surfaces go live.
  */
 export const LANDING_PAGE_LINKS = new Map<string, string>([
   ['githubRepository', 'https://github.com/Radivis/bitboard-pwa-wallet'],
-  ['app', ''],
+  ['app', 'https://app.bitboard-wallet.com'],
   ['blog', ''],
   ['website', ''],
 ]);

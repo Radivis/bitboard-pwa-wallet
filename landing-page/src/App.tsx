@@ -31,7 +31,7 @@ export default function App() {
           reducedMotion={prefersReducedMotion ?? false}
         />
 
-        <HeroSection appUrl={appUrl} githubUrl={githubUrl} prefersReducedMotion={prefersReducedMotion} />
+        <HeroSection appUrl={appUrl} prefersReducedMotion={prefersReducedMotion} />
 
         <AboutSection />
 
