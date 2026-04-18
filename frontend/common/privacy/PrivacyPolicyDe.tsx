@@ -47,9 +47,9 @@ export function PrivacyPolicyDe() {
       <p>
         Die Bitboard-Wallet-App ist eine <strong>lokal betriebene</strong> Anwendung in Ihrem
         Gerät (Browser). Es gibt <strong>keinen Bitboard-Backend-Server</strong>, auf dem Ihre
-        Wallet-Daten gespeichert oder ausgewertet werden. Wallet-relevante Daten liegen in der
-        lokalen Datenhaltung auf Ihrem Endgerät (z. B. IndexedDB/SQLite im Browserkontext), soweit
-        die App deren Speicher nutzt.
+        Wallet-Daten gespeichert oder ausgewertet werden. Wallet-relevante Daten werden in einer{' '}
+        <strong>SQLite</strong>-Datenbank im <strong>Origin Private File System (OPFS)</strong> des
+        Browsers gespeichert — nicht in IndexedDB.
       </p>
 
       <h2>5. Netzwerkzugriff (Esplora)</h2>
@@ -67,21 +67,22 @@ export function PrivacyPolicyDe() {
       <p>
         Sensible Daten wie Wiederherstellungsphrasen (Seeds), kryptographische Schlüssel, Deskriptoren,
         NWC-Verbindungszeichenfolgen sowie zwischengespeicherte Salden und Transaktionen in der
-        Wallet-Datenbank werden <strong>nur dann stark verschlüsselt</strong>, wenn Sie ein{' '}
-        <strong>App-Passwort</strong> gesetzt haben und die Anwendung diesen Schutzmodus nutzt.
-        Ohne von Ihnen eingerichteten Verschlüsselungsschutz können einzelne Modi mit sehr wenig
-        oder ohne zusätzliches Passwort technisch abweichen — orientieren Sie sich an den Hinweisen
-        in der App (z. B. zu Near-Zero-Sicherheit).
+        Wallet-Datenbank werden <strong>nur dann im Ruhezustand stark verschlüsselt</strong>, wenn Sie
+        ein <strong>App-Passwort</strong> gesetzt haben. Bis dahin kommt diese starke Verschlüsselung
+        nicht zur Anwendung.
       </p>
 
       <h2>7. Datensicherungen (Exports)</h2>
       <p>
-        Sie können Wallet-Datensicherungen exportieren. Die <strong>Exportdatei ist als Ganzes
-        nicht verschlüsselt</strong>. Die zuvor genannten sensiblen Inhalte können innerhalb der
-        Wallet-Datenbank weiterhin verschlüsselt vorliegen; die Datei kann zusätzlich Metadaten
-        enthalten, die für den Import oder die Diagnose notwendig sind. Die <strong>Integrität</strong>{' '}
-        von Exporten kann durch eine <strong>digitale Signatur</strong> geschützt sein — bitte
-        beachten Sie die konkrete Darstellung in der jeweiligen App-Version.
+        Sie können Daten aus der App exportieren. <strong>Wallet-Datenexporte</strong> sind mit einer{' '}
+        <strong>digitalen Signatur</strong> versehen (<strong>Pflicht</strong>). Die Exportdatei ist
+        dennoch <strong>als Ganzes nicht verschlüsselt</strong>; die zuvor genannten sensiblen Inhalte
+        können innerhalb der Wallet-Datenbank weiterhin verschlüsselt vorliegen; die Datei kann
+        zusätzlich Metadaten enthalten, die für den Import oder die Diagnose notwendig sind.
+      </p>
+      <p>
+        Exporte <strong>weniger sensibler Daten</strong> — etwa simulierter lokaler Blockchain-Daten in
+        der App — werden <strong>niemals</strong> digital signiert.
       </p>
 
       <h2>8. Ihre Rechte</h2>

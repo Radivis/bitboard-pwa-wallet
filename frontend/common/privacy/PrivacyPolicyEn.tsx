@@ -42,8 +42,8 @@ export function PrivacyPolicyEn() {
       <p>
         The wallet app runs <strong>locally</strong> on your device (browser). There is{' '}
         <strong>no Bitboard backend</strong> that stores your wallet data for you. Wallet-related
-        data is kept in local storage on your device (e.g. IndexedDB/SQLite in the browser context),
-        as implemented by the app.
+        data is stored in a <strong>SQLite</strong> database in the browser’s{' '}
+        <strong>Origin Private File System (OPFS)</strong> — not in IndexedDB.
       </p>
 
       <h2>5. Network access (Esplora)</h2>
@@ -59,17 +59,20 @@ export function PrivacyPolicyEn() {
       <p>
         Sensitive data such as recovery phrases (seeds), cryptographic keys, descriptors, NWC
         connection strings, and cached balances/transactions inside the wallet database is{' '}
-        <strong>strongly encrypted only if you set up an app password</strong> and the app uses that
-        protection mode. Some modes with minimal or no extra password may differ — follow the
-        in-app explanations (e.g. near-zero security).
+        <strong>strongly encrypted at rest only after you set an app password</strong>. Until you do,
+        that strong encryption is not applied.
       </p>
 
       <h2>7. Backups (exports)</h2>
       <p>
-        You may export wallet backups. The <strong>export file is not encrypted as a whole</strong>.
-        Sensitive fields may remain encrypted inside the wallet database format; the file may also
-        contain metadata needed for restore or diagnostics. <strong>Integrity</strong> of exports may
-        be protected by a <strong>digital signature</strong> — see the app for details for your build.
+        You may export data from the app. <strong>Wallet data exports</strong> are{' '}
+        <strong>digitally signed</strong> (required). The export file is still{' '}
+        <strong>not encrypted as a whole</strong>; sensitive fields may remain encrypted inside the
+        wallet database format, and the file may include metadata needed for restore or diagnostics.
+      </p>
+      <p>
+        Exports of <strong>less sensitive data</strong> — for example simulated local blockchain data
+        used inside the app — are <strong>never</strong> digitally signed.
       </p>
 
       <h2>8. Your rights</h2>
