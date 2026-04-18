@@ -1,5 +1,10 @@
 import { test, expect } from '@playwright/test'
-import { TEST_MNEMONIC, TEST_PASSWORD, dismissSetAppPasswordModalIfPresent } from './helpers/wallet-setup'
+import {
+  TEST_MNEMONIC,
+  TEST_PASSWORD,
+  dismissSetAppPasswordModalIfPresent,
+  expectNoInitialWalletSyncErrorToast,
+} from './helpers/wallet-setup'
 
 test.describe('Wallet Import Flow', () => {
   test('wallet import full flow', async ({ page }) => {
@@ -21,5 +26,6 @@ test.describe('Wallet Import Flow', () => {
 
     await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible({ timeout: 60000 })
     await expect(page.getByText('Balance')).toBeVisible()
+    await expectNoInitialWalletSyncErrorToast(page)
   })
 })

@@ -5,6 +5,18 @@ export const TEST_MNEMONIC = TEST_MNEMONIC_12
 
 export const TEST_PASSWORD = 'TestP@ssword123'
 
+/**
+ * Esplora initial sync can finish after navigation; failure surfaces as a Sonner error toast
+ * (`import.tsx` copy or `useActiveWalletLoadQuery` bootstrap). Call after the dashboard is visible.
+ * Uses a modest window so a late toast fails the test without dragging every passing run.
+ */
+export async function expectNoInitialWalletSyncErrorToast(page: Page) {
+  const syncErrorToast = page.getByText(
+    /Initial sync failed|wallet unlocked but data may be stale/,
+  )
+  await expect(syncErrorToast).not.toBeVisible({ timeout: 12_000 })
+}
+
 /** First-run blocking dialog on /setup/create and /setup/import when no wallets exist and no session password. */
 export async function dismissSetAppPasswordModalIfPresent(page: Page, password: string) {
   const heading = page.getByRole('heading', { name: 'Set Bitboard app password' })
@@ -71,6 +83,7 @@ export async function createWalletViaUI(page: Page) {
   await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible({
     timeout: 30000,
   })
+  await expectNoInitialWalletSyncErrorToast(page)
 }
 
 export async function importWalletViaUI(
@@ -92,6 +105,7 @@ export async function importWalletViaUI(
   await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible({
     timeout: 60000,
   })
+  await expectNoInitialWalletSyncErrorToast(page)
 }
 
 export async function unlockWalletViaUI(
