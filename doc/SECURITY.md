@@ -2,6 +2,8 @@
 
 This document describes how Bitboard Wallet keeps user credentials and wallet secrets safe, and states inherent limitations of the web / PWA environment.
 
+For **reporting vulnerabilities** in Bitboard Wallet, see the repository root [SECURITY.md](../SECURITY.md).
+
 ---
 
 ## 1. Threat model

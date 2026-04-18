@@ -25,6 +25,10 @@ Do not store more than you can afford to lose on it!
 
 ⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️
 
+## Security
+
+To report a security vulnerability, use **GitHub private vulnerability reporting** as described in [SECURITY.md](SECURITY.md). Technical threat model and implementation details are documented in [doc/SECURITY.md](doc/SECURITY.md).
+
 ## Principles
 
 **Please note that the features mentioned in this section are planned, but not fully implemented yet. They are mentioned to communicate the spirit and direction of this app.**
