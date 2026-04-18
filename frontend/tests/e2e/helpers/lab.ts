@@ -13,7 +13,9 @@ export async function switchToLab(page: Page): Promise<void> {
   await page.getByRole('link', { name: /settings/i }).click()
   await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
 
-  await page.getByRole('button', { name: 'Lab' }).click()
+  await page
+    .getByRole('button', { name: 'Lab', exact: true })
+    .click()
   await expect(page.getByRole('link', { name: 'Manage lab' })).toBeVisible({
     timeout: 60000,
   })
@@ -35,7 +37,7 @@ export async function resetLab(page: Page): Promise<void> {
     timeout: 15000,
   })
 
-  await page.getByRole('navigation', { name: 'Lab' }).getByRole('link', { name: 'Control' }).click()
+  await page.getByRole('navigation', { name: 'Lab', exact: true }).getByRole('link', { name: 'Control' }).click()
   await expect(page.getByRole('heading', { name: 'Control' })).toBeVisible({
     timeout: 15000,
   })
@@ -45,7 +47,7 @@ export async function resetLab(page: Page): Promise<void> {
   await page.getByRole('dialog').getByRole('button', { name: 'Reset lab' }).click()
   await expect(page.getByRole('dialog')).not.toBeVisible()
 
-  await page.getByRole('navigation', { name: 'Lab' }).getByRole('link', { name: 'Blocks' }).click()
+  await page.getByRole('navigation', { name: 'Lab', exact: true }).getByRole('link', { name: 'Blocks' }).click()
   await expect(page.getByRole('heading', { name: 'Blocks' })).toBeVisible({ timeout: 15000 })
   await expect(page.getByText(/Chain height \(blocks mined\): 0/)).toBeVisible({
     timeout: 10000,
@@ -98,7 +100,7 @@ export async function createLabEntityViaControl(
     })
   }
 
-  await page.getByRole('navigation', { name: 'Lab' }).getByRole('link', { name: 'Control' }).click()
+  await page.getByRole('navigation', { name: 'Lab', exact: true }).getByRole('link', { name: 'Control' }).click()
   await expect(page.getByRole('heading', { name: 'Control' })).toBeVisible({ timeout: 15000 })
 
   const taprootAddressTypeSwitch = page.getByRole('switch', {
@@ -118,7 +120,7 @@ export async function createLabEntityViaControl(
   }
   await page.getByRole('button', { name: 'Create lab entity' }).click()
   await expect(page.getByText('Lab entity created').first()).toBeVisible({ timeout: 15000 })
-  await page.getByRole('navigation', { name: 'Lab' }).getByRole('link', { name: 'Blocks' }).click()
+  await page.getByRole('navigation', { name: 'Lab', exact: true }).getByRole('link', { name: 'Blocks' }).click()
   await expect(page.getByRole('heading', { name: 'Blocks' })).toBeVisible({ timeout: 15000 })
 }
 
@@ -259,7 +261,7 @@ export async function goToLabTransactionsPage(page: Page): Promise<void> {
   await expect(page.getByRole('heading', { name: 'Blocks' })).toBeVisible({
     timeout: 15000,
   })
-  await page.getByRole('navigation', { name: 'Lab' }).getByRole('link', { name: 'Transactions' }).click()
+  await page.getByRole('navigation', { name: 'Lab', exact: true }).getByRole('link', { name: 'Transactions' }).click()
   await expect(page.getByRole('heading', { name: 'Transactions' })).toBeVisible({
     timeout: 15000,
   })
@@ -435,7 +437,7 @@ export async function createTransactionInLab(
     timeout: 15000,
   })
 
-  await page.getByRole('navigation', { name: 'Lab' }).getByRole('link', { name: 'Transactions' }).click()
+  await page.getByRole('navigation', { name: 'Lab', exact: true }).getByRole('link', { name: 'Transactions' }).click()
   await expect(page.getByRole('heading', { name: 'Transactions' })).toBeVisible({
     timeout: 15000,
   })
@@ -462,7 +464,7 @@ export async function createRandomTransactionsInLab(
     timeout: 15000,
   })
 
-  await page.getByRole('navigation', { name: 'Lab' }).getByRole('link', { name: 'Transactions' }).click()
+  await page.getByRole('navigation', { name: 'Lab', exact: true }).getByRole('link', { name: 'Transactions' }).click()
   await expect(page.getByRole('heading', { name: 'Transactions' })).toBeVisible({
     timeout: 15000,
   })

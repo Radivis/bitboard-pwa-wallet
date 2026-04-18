@@ -99,7 +99,7 @@ test.describe('Lab', { tag: '@lab' }, () => {
     await expect(page.getByRole('heading', { name: 'Blocks' })).toBeVisible({
       timeout: 15000,
     })
-    await page.getByRole('navigation', { name: 'Lab' }).getByRole('link', { name: 'Transactions' }).click()
+    await page.getByRole('navigation', { name: 'Lab', exact: true }).getByRole('link', { name: 'Transactions' }).click()
     await expect(page.getByText('Mining a block to a name enables random transactions.')).toBeVisible()
     await expect(page.getByRole('button', { name: 'Make random transaction' })).toBeDisabled()
   })
@@ -456,7 +456,7 @@ test.describe('Lab', { tag: '@lab' }, () => {
     await expect(page.getByRole('main').getByText('Contextual data', { exact: true })).toBeVisible()
     await expect(page.getByRole('main').getByText('Transactions', { exact: true })).toBeVisible()
 
-    await page.getByRole('navigation', { name: 'Lab' }).getByRole('link', { name: 'Blocks' }).click()
+    await page.getByRole('navigation', { name: 'Lab', exact: true }).getByRole('link', { name: 'Blocks' }).click()
     await expect(page.getByRole('heading', { name: 'Blocks' })).toBeVisible()
 
     await mineBlocksInLab(page, 1, LabOwnerType.LabEntity, { ownerName: 'Alice' })

@@ -63,7 +63,7 @@ test.describe('Lab manual transactions dust UX', { tag: '@lab' }, () => {
   test('case-2 keep exact after manual send from 1100-sat UTXO', async ({ page }) => {
     await mineBlocksInLab(page, 1, LabOwnerType.LabEntity, { ownerName: 'Bob' })
     await createLabEntityViaControl(page, { ownerName: 'Alice' })
-    await page.getByRole('navigation', { name: 'Lab' }).getByRole('link', { name: 'Blocks' }).click()
+    await page.getByRole('navigation', { name: 'Lab', exact: true }).getByRole('link', { name: 'Blocks' }).click()
     await expect(page.getByRole('heading', { name: 'Blocks' })).toBeVisible({ timeout: 15000 })
 
     let state = await getLabState(page)
@@ -100,7 +100,7 @@ test.describe('Lab manual transactions dust UX', { tag: '@lab' }, () => {
   test('case-2 increase to change-free max', async ({ page }) => {
     await mineBlocksInLab(page, 1, LabOwnerType.LabEntity, { ownerName: 'Bob' })
     await createLabEntityViaControl(page, { ownerName: 'Alice' })
-    await page.getByRole('navigation', { name: 'Lab' }).getByRole('link', { name: 'Blocks' }).click()
+    await page.getByRole('navigation', { name: 'Lab', exact: true }).getByRole('link', { name: 'Blocks' }).click()
     await expect(page.getByRole('heading', { name: 'Blocks' })).toBeVisible({ timeout: 15000 })
 
     let state = await getLabState(page)
