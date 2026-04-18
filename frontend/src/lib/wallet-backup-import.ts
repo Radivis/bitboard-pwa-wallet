@@ -1,16 +1,10 @@
 import JSZip from 'jszip'
+import { WalletBackupZipInvalidError } from '@/lib/backup-zip-invalid-error'
 import { readFileAsArrayBuffer } from '@/lib/read-file-as-array-buffer'
 import {
   WALLET_BACKUP_MANIFEST_ENTRY_NAME,
   WALLET_BACKUP_SQLITE_ENTRY_NAME,
 } from '@/lib/wallet-backup-constants'
-
-export class WalletBackupZipInvalidError extends Error {
-  constructor(message: string) {
-    super(message)
-    this.name = 'WalletBackupZipInvalidError'
-  }
-}
 
 export async function parseWalletBackupZipFile(file: File): Promise<{
   sqliteBytes: Uint8Array
@@ -29,3 +23,5 @@ export async function parseWalletBackupZipFile(file: File): Promise<{
   const manifestJson = await manifestEntry.async('string')
   return { sqliteBytes: new Uint8Array(sqliteBuf), manifestJson }
 }
+
+export { WalletBackupZipInvalidError }

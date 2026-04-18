@@ -1,6 +1,11 @@
 /**
  * Retries an async operation with a fixed delay between attempts (for intermittent storage / worker glitches).
  */
+
+/** Shared retry policy for Kysely schema migrations (wallet and lab databases). */
+export const SCHEMA_MIGRATION_RETRY_MAX_ATTEMPTS = 3
+export const SCHEMA_MIGRATION_RETRY_DELAY_MS = 2000
+
 export function delay(ms: number): Promise<void> {
   return new Promise((resolve) => {
     setTimeout(resolve, ms)

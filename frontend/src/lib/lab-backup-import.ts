@@ -1,13 +1,7 @@
 import JSZip from 'jszip'
+import { LabBackupZipInvalidError } from '@/lib/backup-zip-invalid-error'
 import { LAB_BACKUP_SQLITE_ENTRY_NAME } from '@/lib/lab-backup-constants'
 import { readFileAsArrayBuffer } from '@/lib/read-file-as-array-buffer'
-
-export class LabBackupZipInvalidError extends Error {
-  constructor(message: string) {
-    super(message)
-    this.name = 'LabBackupZipInvalidError'
-  }
-}
 
 /**
  * Reads an unsigned lab backup ZIP (single `bitboard-lab-backup.sqlite` entry).
@@ -24,3 +18,5 @@ export async function parseLabBackupZipFile(file: File): Promise<{ sqliteBytes: 
   const sqliteBuf = await sqliteEntry.async('arraybuffer')
   return { sqliteBytes: new Uint8Array(sqliteBuf) }
 }
+
+export { LabBackupZipInvalidError }
