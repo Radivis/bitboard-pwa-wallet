@@ -133,6 +133,14 @@ export async function syncActiveWalletAndUpdateState(
     useCryptoStore.getState()
   const { setBalance, setTransactions } = useWalletStore.getState()
 
+  if (!esploraUrl) {
+    const balance = await getBalance()
+    const txs = await getTransactionList()
+    setBalance(balance)
+    setTransactions(txs)
+    return
+  }
+
   if (options?.useFullScan) {
     const toastId = toast.loading('Scanning blockchain…')
     try {
