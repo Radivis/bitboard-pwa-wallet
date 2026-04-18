@@ -482,6 +482,8 @@ const cryptoService = {
         encryptedMnemonicToStore: null,
       };
     } finally {
+      // Best-effort wipe; value is not read afterward by design.
+      // eslint-disable-next-line no-useless-assignment -- zero decrypted mnemonic in scope
       mnemonicPlain = '';
     }
   },

@@ -67,7 +67,9 @@ async function verifyWorkerHealth(proxy: Remote<CryptoService>): Promise<void> {
     const message = err instanceof Error ? err.message : String(err);
     console.error('[crypto-factory] Worker health check failed:', message);
     setStatus('error', message);
-    throw new Error(`Crypto worker failed to initialize: ${message}`);
+    throw new Error(`Crypto worker failed to initialize: ${message}`, {
+      cause: err,
+    });
   }
 }
 

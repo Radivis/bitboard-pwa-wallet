@@ -32,7 +32,7 @@ function readAppVersion(): string {
 
 function libraryArticleRouteIgnorePattern(): string {
   const articlesDir = path.join(projectRoot, 'src/routes/library/articles')
-  let tsxFiles: string[] = []
+  let tsxFiles: string[]
   try {
     tsxFiles = fs.readdirSync(articlesDir).filter((f) => f.endsWith('.tsx'))
   } catch {

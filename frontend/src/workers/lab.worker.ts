@@ -326,7 +326,7 @@ const labService = {
       const amountSats = sampleRandomLabAmountSats(totalInput, requiredFeeSats)
       if (amountSats === null) continue
 
-      let toAddress = ''
+      let toAddress: string
       if (sourceEntity.labEntityId === targetEntity.labEntityId) {
         const revealedRaw = wasmModule.lab_entity_reveal_next_external_address(
           sourceEntity.mnemonic,
