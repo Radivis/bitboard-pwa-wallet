@@ -66,8 +66,8 @@ For **reporting vulnerabilities** in Bitboard Wallet, see the repository root [S
 
 ### 2.5 Dependencies and audits
 
-- **Rust:** `cargo deny check advisories` runs in CI (see `.github/workflows/audit.yml`).
-- **Frontend:** Same workflow runs Socket CLI for npm when the API key is set; Socket is optional, but strongly recommended for CI. Lefthook audit steps may be commented out; consider `npm audit` for local pre-push checks.
+- **Rust:** `cargo deny check advisories` runs in CI (see `.github/workflows/audit.yml`). The workspace pins **`ml-dsa`** to **`0.1.0-rc.8`** because upstream has not published a stable **`0.1.0`** on crates.io yet (only `0.1.0-rc.*`); the implementation targets FIPS-204; we will bump when RustCrypto ships a non-RC release.
+- **Frontend and landing page:** The same workflow runs Socket CLI for npm in **`frontend/`** and **`landing-page/`** when the API key is set; Socket is optional, but strongly recommended for CI. Lefthook audit steps may be commented out; consider `npm audit` for local pre-push checks.
 
 ### 2.6 Logging
 

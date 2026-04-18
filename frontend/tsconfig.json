@@ -14,8 +14,7 @@
     "noEmit": true,
     "jsx": "react-jsx",
 
-    /* Path aliases */
-    "baseUrl": ".",
+    /* Path aliases (no baseUrl — TS 6 deprecates baseUrl used only to prefix paths) */
     "paths": {
       "@/*": ["./src/*"],
       "@common/*": ["./common/*"]

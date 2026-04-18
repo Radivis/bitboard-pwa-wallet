@@ -9,6 +9,7 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 argon2 = { version = "0.5", features = ["std"] }
 getrandom = { version = "0.2", features = ["js"] }
+# crates.io has no ml-dsa 0.1.0 GA yet; RustCrypto publishes 0.1.0-rc.* only until then.
 ml-dsa = "0.1.0-rc.8"
 sha2 = { version = "0.10", default-features = false }
 wasm-bindgen = "0.2"
