@@ -23,18 +23,16 @@ export function PrivacyPolicyDe() {
 
       <h2>1. Verantwortlicher</h2>
       <p>
-        Verantwortlicher im Sinne der Datenschutz-Grundverordnung (DSGVO) ist die folgende Stelle.
-        Für Anfragen zum Datenschutz wenden Sie sich bitte vorzugsweise per E-Mail an die
-        angegebene Adresse.
+        Verantwortlicher im Sinne der Datenschutz-Grundverordnung (DSGVO) ist:
       </p>
       <LegalEntityFields entity={legalEntity} className="mb-3 space-y-1" />
       <p>
-        <strong>Hinweis:</strong> Vollständige gesetzliche Angaben (Impressum) finden Sie in
-        den Einstellungen unter{' '}
-        <Link to="/settings#legal-notice" className="text-primary underline underline-offset-4">
-          Impressum
-        </Link>
-        , ergänzend zu den oben genannten Kontaktdaten.
+        Für Anfragen zum Datenschutz erreichen Sie uns vorzugsweise per E-Mail an die oben
+        genannte Adresse. 
+      </p>
+      <p>
+        <strong>Datenschutzbeauftragter:</strong> Ein betrieblicher Datenschutzbeauftragter ist
+        nicht bestellt.
       </p>
 
       <h2>2. Hosting</h2>
@@ -76,10 +74,9 @@ export function PrivacyPolicyDe() {
       <h2>5. Netzwerkzugriff (Esplora)</h2>
       <p>
         Damit die App Blockchain-Informationen abrufen kann, baut sie Verbindungen zu den von Ihnen
-        unter <strong>Einstellungen</strong> konfigurierten <strong>Esplora</strong>-Endpunkten
-        (oder vergleichbaren HTTP(S)-Diensten) auf. Esplora ist typischerweise eine
-        Block-Explorer-API (HTTP(S)-Schnittstelle zu Blockchain-Daten). Dabei werden insbesondere
-        Ihre <strong>IP-Adresse</strong> sowie übliche technische Metadaten (z. B. TLS) für den
+        unter <strong>Einstellungen</strong> konfigurierten <strong>Esplora</strong>-Endpunkten auf.
+        Esplora ist eine Block-Explorer-API (HTTP(S)-Schnittstelle zu Blockchain-Daten).
+        Dabei werden insbesondere Ihre <strong>IP-Adresse</strong> sowie übliche technische Metadaten (z. B. TLS) für den
         jeweiligen Drittanbieter sichtbar — nicht für einen Bitboard-Server, den es für die
         App-Logik nicht gibt. Welche genauen Anfragen abgehen, hängt von Ihrer Nutzung der Wallet
         (z. B. Kontostandsabfragen, Transaktionslisten) ab.
@@ -117,20 +114,25 @@ export function PrivacyPolicyDe() {
 
       <h2>7. Verschlüsselung sensibler App-Daten</h2>
       <p>
-        Sensible Daten wie Wiederherstellungsphrasen (Seeds), kryptographische Schlüssel, Deskriptoren,
-        NWC-Verbindungszeichenfolgen sowie zwischengespeicherte Salden und Transaktionen in der
-        Wallet-Datenbank werden <strong>nur dann im Ruhezustand stark verschlüsselt</strong>, wenn Sie
-        ein <strong>App-Passwort</strong> gesetzt haben. Bis dahin kommt diese starke Verschlüsselung
-        nicht zur Anwendung.
+        Kurz gesagt: Ohne von Ihnen gesetztes <strong>App-Passwort</strong> liegen sensible Inhalte
+        (z. B. Wiederherstellungsphrase, Schlüssel, Verbindungsdaten zu Lightning) auf Ihrem Gerät{' '}
+        <strong>nicht</strong> mit der beschriebenen starken Verschlüsselung „im Ruhezustand“ geschützt.
+      </p>
+      <p>
+        Technisch: Daten wie Wiederherstellungsphrasen (Seeds), kryptographische Schlüssel,
+        Deskriptoren, NWC-Verbindungszeichenfolgen sowie zwischengespeicherte Salden und
+        Transaktionen in der Wallet-Datenbank werden <strong>nur dann im Ruhezustand stark
+        verschlüsselt</strong>, wenn Sie ein <strong>App-Passwort</strong> gesetzt haben. Bis dahin
+        kommt diese starke Verschlüsselung nicht zur Anwendung.
       </p>
 
       <h2>8. Datensicherungen (Exports)</h2>
       <p>
-        Sie können Daten aus der App exportieren. <strong>Wallet-Datenexporte</strong> sind mit einer{' '}
-        <strong>digitalen Signatur</strong> versehen (<strong>Pflicht</strong>). Die Exportdatei ist
-        dennoch <strong>als Ganzes nicht verschlüsselt</strong>; die zuvor genannten sensiblen Inhalte
-        können innerhalb der Wallet-Datenbank weiterhin verschlüsselt vorliegen; die Datei kann
-        zusätzlich Metadaten enthalten, die für den Import oder die Diagnose notwendig sind.
+        Sie können Daten aus der App herunterladen (Export). <strong>Wallet-Exporte</strong> sind
+        mit einer <strong>digitalen Signatur</strong> versehen — das hilft zu prüfen, dass die Datei
+        von der App stammt. Die Datei selbst ist <strong>als Ganzes nicht zusätzlich
+        verschlüsselt</strong>; einzelne Inhalte können weiterhin im Wallet-Format geschützt sein.
+        Die Datei kann Metadaten für Wiederherstellung oder Fehlersuche enthalten.
       </p>
       <p>
         Exporte <strong>weniger sensibler Daten</strong> — etwa simulierter lokaler Blockchain-Daten in
@@ -187,22 +189,37 @@ export function PrivacyPolicyDe() {
       </p>
       <p>
         <strong>Speicherdauer:</strong> Hosting-Logs bei Vercel richten sich nach den Aufbewahrungs-
-        und Löschfristen des Anbieters (siehe die Dokumentation von Vercel). Daten, die nur lokal in
-        Ihrem Browser bzw. auf Ihrem Gerät gespeichert werden, bleiben gespeichert, bis Sie sie
-        löschen (z. B. App- oder Website-Daten des Browsers entfernen, App-Daten der PWA löschen).
-        Von Ihnen heruntergeladene Exportdateien unterliegen Ihrer eigenen Verantwortung; Bitboard
-        hat darauf nach dem Download keinen Zugriff.
+        und Löschfristen des Anbieters (siehe die{' '}
+        <a
+          href="https://vercel.com/legal/privacy-policy"
+          className="text-primary underline underline-offset-4"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          Vercel Privacy Policy
+        </a>
+        ). Daten, die nur lokal in Ihrem Browser bzw. auf Ihrem Gerät gespeichert werden, bleiben
+        gespeichert, bis Sie sie löschen (z. B. App- oder Website-Daten des Browsers entfernen,
+        App-Daten der PWA löschen). Von Ihnen heruntergeladene Exportdateien unterliegen Ihrer
+        eigenen Verantwortung; Bitboard hat darauf nach dem Download keinen Zugriff.
       </p>
 
       <h2>11. Drittlandübermittlung (insbesondere USA / Vercel)</h2>
       <p>
-        Die Nutzung von Vercel kann eine <strong>Übermittlung personenbezogener Daten in ein
-        Drittland</strong> (u. a. die USA) beinhalten. Für solche Übermittlungen werden — je nach
-        Anbieter und Sachverhalt — <strong>angemessene Garantien</strong> im Sinne der DSGVO
-        eingesetzt, etwa die <strong>Standardvertragsklauseln</strong> der EU-Kommission und/oder
-        die Teilnahme am <strong>EU-US Data Privacy Framework</strong>, soweit der Anbieter
-        zertifiziert ist. Einzelheiten entnehmen Sie bitte der aktuellen Datenschutzerklärung und
-        den Vertragsunterlagen von Vercel.
+        Die Nutzung von Vercel kann eine <strong>Übermittlung personenbezogener Daten in die USA</strong>{' '}
+        beinhalten. <strong>Vercel ist unter dem EU-US Data Privacy Framework (DPF) zertifiziert. Dies
+        stellt eine angemessene Garantie für die Übermittlung in die USA dar.</strong> Ergänzend
+        können je nach Sachverhalt <strong>Standardvertragsklauseln</strong> der EU-Kommission und
+        weitere Maßnahmen eine Rolle spielen. Einzelheiten entnehmen Sie bitte der aktuellen{' '}
+        <a
+          href="https://vercel.com/legal/privacy-policy"
+          className="text-primary underline underline-offset-4"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          Vercel Privacy Policy
+        </a>{' '}
+        und den Vertragsunterlagen von Vercel.
       </p>
 
       <h2>12. Beschwerderecht</h2>
@@ -216,10 +233,31 @@ export function PrivacyPolicyDe() {
       <h2>13. Ihre Rechte</h2>
       <p>
         Soweit personenbezogene Daten verarbeitet werden, stehen Ihnen die in der DSGVO vorgesehenen
-        Rechte (u. a. Auskunft, Berichtigung, Löschung, Einschränkung der Verarbeitung, Widerspruch
-        gegen bestimmte Verarbeitungen, Datenübertragbarkeit) grundsätzlich zu. Viele
-        Verarbeitungsvorgänge in dieser App erfolgen jedoch lokal auf Ihrem Gerät — dort können Sie
-        Daten oft am direktesten löschen (z. B. App-Daten im Browser entfernen).
+        Rechte grundsätzlich zu, insbesondere:
+      </p>
+      <ul className="list-disc space-y-1 pl-5">
+        <li>
+          <strong>Auskunft</strong> (Art. 15 DSGVO),
+        </li>
+        <li>
+          <strong>Berichtigung</strong> (Art. 16 DSGVO),
+        </li>
+        <li>
+          <strong>Löschung</strong> („Recht auf Vergessenwerden“, Art. 17 DSGVO),
+        </li>
+        <li>
+          <strong>Einschränkung der Verarbeitung</strong> (Art. 18 DSGVO),
+        </li>
+        <li>
+          <strong>Widerspruch</strong> gegen die Verarbeitung (Art. 21 DSGVO),
+        </li>
+        <li>
+          <strong>Datenübertragbarkeit</strong> (Art. 20 DSGVO),
+        </li>
+      </ul>
+      <p>
+        Viele Verarbeitungsvorgänge in dieser App erfolgen jedoch lokal auf Ihrem Gerät — dort können
+        Sie Daten oft am direktesten löschen (z. B. App-Daten im Browser entfernen).
       </p>
       <p>
         Zur Ausübung Ihrer Rechte im Zusammenhang mit Verarbeitungen, die Bitboard als
@@ -236,7 +274,8 @@ export function PrivacyPolicyDe() {
         Wir behalten uns vor, diese Datenschutzerklärung anzupassen, wenn sich technische oder
         rechtliche Rahmenbedingungen ändern. Die jeweils aktuelle Version finden Sie hier auf der
         Seite <strong>/privacy</strong> der App (bzw. der öffentlich erreichbaren Version dieser
-        Seite).
+        Seite). Über <strong>wesentliche Änderungen</strong> informieren wir nach Möglichkeit, z. B.
+        über diese Website oder das öffentliche Projekt-Repository (z. B. GitHub).
       </p>
       <p>
         Da es sich um eine <strong>reine Client-seitige Wallet</strong> handelt, haben Sie in der

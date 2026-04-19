@@ -20,18 +20,14 @@ export function PrivacyPolicyEn() {
       </p>
 
       <h2>1. Controller</h2>
-      <p>
-        The controller under the GDPR is the entity listed below. For privacy-related requests,
-        please contact us preferably by email at the address provided.
-      </p>
+      <p>The controller under the GDPR is:</p>
       <LegalEntityFields entity={legalEntity} className="mb-3 space-y-1" />
       <p>
-        <strong>Note:</strong> Full statutory information (legal notice / Impressum) is available in
-        Settings under{' '}
-        <Link to="/settings#legal-notice" className="text-primary underline underline-offset-4">
-          Legal notice
-        </Link>
-        , in addition to the contact details above.
+        For privacy-related requests, please contact us preferably by email using the address above.
+      </p>
+      <p>
+        <strong>Data protection officer:</strong> We have{' '}
+        <strong>not appointed a data protection officer</strong> (not required for this project).
       </p>
 
       <h2>2. Hosting</h2>
@@ -58,22 +54,23 @@ export function PrivacyPolicyEn() {
 
       <h2>4. Wallet app (PWA)</h2>
       <p>
-        The wallet app runs <strong>locally</strong> on your device (browser). There is{' '}
-        <strong>no Bitboard backend</strong> that stores your wallet data for you. Wallet-related
-        data is stored in a <strong>SQLite</strong> database in the browser’s{' '}
-        <strong>Origin Private File System (OPFS)</strong> — not in IndexedDB. OPFS is an
-        origin-scoped file storage area provided by the browser (here holding the SQLite database
-        file).
+        In plain terms: your wallet runs <strong>on your own device</strong> in the browser. There is{' '}
+        <strong>no Bitboard server</strong> that holds your wallet data for you.
+      </p>
+      <p>
+        Technically, wallet data lives in a <strong>SQLite</strong> database stored in the browser’s{' '}
+        <strong>Origin Private File System (OPFS)</strong> — a private, website-specific file area —
+        not in IndexedDB. OPFS here simply holds the database file.
       </p>
 
       <h2>5. Network access (Esplora)</h2>
       <p>
-        To fetch blockchain data, the app connects to <strong>Esplora</strong> (or similar HTTP(S))
-        endpoints that <strong>you configure in Settings</strong>. Esplora is typically a
-        block-explorer-style HTTP(S) API for blockchain data. Those requests reveal your{' '}
-        <strong>IP address</strong> and usual technical metadata (e.g. TLS) to the operator of that
-        third-party service — not to a Bitboard server (there isn’t one for core wallet logic). What
-        exactly is requested depends on how you use the wallet (balances, transaction history, etc.).
+        To show balances and transactions, the app asks a service you pick in{' '}
+        <strong>Settings</strong>: An <strong>Esplora</strong>-style API (a standard way to
+        read public Bitcoin data over the web). Those requests reveal your{' '}
+        <strong>IP address</strong> and basic technical details to whoever runs that service — not to
+        Bitboard (we don’t run that infrastructure). What is requested depends on how you use the
+        wallet.
       </p>
       <p>
         For technical reasons, the operator of your chosen Esplora service may still attempt to build
@@ -86,9 +83,9 @@ export function PrivacyPolicyEn() {
 
       <h2>6. Nostr Wallet Connect (NWC)</h2>
       <p>
-        Bitboard currently supports Lightning <strong>only via Nostr Wallet Connect (NWC)</strong>.
-        NWC is a protocol for connecting an <strong>already existing</strong> Lightning wallet over
-        the Nostr network; Bitboard does not custody Lightning funds on its own servers.
+        For Lightning, Bitboard uses <strong>Nostr Wallet Connect (NWC)</strong> — a standard way to
+        link an <strong>existing</strong> Lightning wallet you already use. Bitboard does not hold your
+        Lightning funds on our servers.
       </p>
       <p>
         When you use NWC, <strong>metadata and operationally necessary content</strong> may be
@@ -106,18 +103,25 @@ export function PrivacyPolicyEn() {
 
       <h2>7. Encryption of sensitive app data</h2>
       <p>
-        Sensitive data such as recovery phrases (seeds), cryptographic keys, descriptors, NWC
-        connection strings, and cached balances/transactions inside the wallet database is{' '}
-        <strong>strongly encrypted at rest only after you set an app password</strong>. Until you do,
+        In short: unless you set an <strong>app password</strong>, sensitive material (recovery
+        phrase, keys, Lightning connection details, etc.) is{' '}
+        <strong>not</strong> protected on your device by the strong “encryption at rest” described
+        here.
+      </p>
+      <p>
+        In more detail: recovery phrases (seeds), keys, descriptors, NWC connection strings, and
+        cached balances/transactions in the wallet database are{' '}
+        <strong>strongly encrypted at rest only after you set an app password</strong>. Until then,
         that strong encryption is not applied.
       </p>
 
       <h2>8. Backups (exports)</h2>
       <p>
-        You may export data from the app. <strong>Wallet data exports</strong> are{' '}
-        <strong>digitally signed</strong> (required). The export file is still{' '}
-        <strong>not encrypted as a whole</strong>; sensitive fields may remain encrypted inside the
-        wallet database format, and the file may include metadata needed for restore or diagnostics.
+        You can download data from the app (export). <strong>Wallet exports</strong> are{' '}
+        <strong>digitally signed</strong> so you can verify they came from the app. The downloaded file
+        is <strong>not wrapped in an extra layer of whole-file encryption</strong>; some contents may
+        still be protected inside the wallet file format. The file may include metadata needed for
+        restore or troubleshooting.
       </p>
       <p>
         Exports of <strong>less sensitive data</strong> — for example simulated local blockchain data
@@ -171,20 +175,38 @@ export function PrivacyPolicyEn() {
       </p>
       <p>
         <strong>Storage periods:</strong> Vercel hosting logs are retained and deleted according to
-        the provider’s documentation and retention settings (see Vercel’s privacy materials). Data
-        stored only locally in your browser/device remains until you delete it (e.g. by clearing site
-        or app data). Export files you download are under your control; Bitboard has no access after
-        download.
+        the provider’s retention rules (see the{' '}
+        <a
+          href="https://vercel.com/legal/privacy-policy"
+          className="text-primary underline underline-offset-4"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          Vercel Privacy Policy
+        </a>
+        ). Data stored only locally in your browser or device remains until you delete it (e.g. by
+        clearing site or app data). Export files you download are under your control; Bitboard has no
+        access after download.
       </p>
 
       <h2>11. International transfers (in particular USA / Vercel)</h2>
       <p>
-        Use of Vercel may involve <strong>transferring personal data to third countries</strong>
-        (including the United States). Depending on the facts and provider practices, we rely on{' '}
-        <strong>appropriate safeguards</strong> under the GDPR, such as the EU Commission’s{' '}
-        <strong>Standard Contractual Clauses</strong> and/or the provider’s participation in the{' '}
-        <strong>EU-US Data Privacy Framework</strong>, where applicable. Please refer to Vercel’s
-        current privacy policy and contractual documents for details.
+        Use of Vercel may involve <strong>transferring personal data to the United States</strong>.{' '}
+        <strong>
+          Vercel is certified under the EU-US Data Privacy Framework (DPF). That certification
+          provides an appropriate safeguard for transfers to the US.
+        </strong>{' '}
+        Standard Contractual Clauses and other measures may also apply depending on the situation.
+        Please refer to Vercel’s current{' '}
+        <a
+          href="https://vercel.com/legal/privacy-policy"
+          className="text-primary underline underline-offset-4"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          Vercel Privacy Policy
+        </a>{' '}
+        and contractual documents for details.
       </p>
 
       <h2>12. Right to lodge a complaint</h2>
@@ -197,10 +219,32 @@ export function PrivacyPolicyEn() {
 
       <h2>13. Your rights</h2>
       <p>
-        Where personal data is processed, GDPR rights (access, rectification, erasure, restriction of
-        processing, objection to certain processing, data portability, etc.) generally apply. Much
-        of the processing happens locally on your device; you can often remove data most directly by
-        clearing site/app data in your browser.
+        Where personal data is processed, you generally have the following rights under the GDPR,
+        including:
+      </p>
+      <ul className="list-disc space-y-1 pl-5">
+        <li>
+          <strong>Access</strong> (Art. 15 GDPR),
+        </li>
+        <li>
+          <strong>Rectification</strong> (Art. 16 GDPR),
+        </li>
+        <li>
+          <strong>Erasure</strong> (“right to be forgotten”, Art. 17 GDPR),
+        </li>
+        <li>
+          <strong>Restriction of processing</strong> (Art. 18 GDPR),
+        </li>
+        <li>
+          <strong>Objection</strong> to processing (Art. 21 GDPR),
+        </li>
+        <li>
+          <strong>Data portability</strong> (Art. 20 GDPR).
+        </li>
+      </ul>
+      <p>
+        Much of the processing happens locally on your device; you can often remove data most
+        directly by clearing site or app data in your browser.
       </p>
       <p>
         To exercise your rights in connection with processing that Bitboard controls as controller,
@@ -216,7 +260,8 @@ export function PrivacyPolicyEn() {
       <p>
         We may update this privacy policy when technical or legal requirements change. The current
         version is always available on this page at <strong>/privacy</strong> (or the publicly
-        reachable equivalent).
+        reachable equivalent). Where changes are <strong>material</strong>, we will try to let you
+        know, for example via this website or the public project repository (e.g. GitHub).
       </p>
       <p>
         Because this is a <strong>pure client-side wallet</strong>, you generally have{' '}
