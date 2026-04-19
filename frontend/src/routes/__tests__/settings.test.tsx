@@ -1,14 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { screen, waitFor } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { renderWithProviders } from '@/test-utils/test-providers'
 import { toast } from 'sonner'
-
-const getDeveloperContactLinesMock = vi.hoisted(() => vi.fn(() => ''))
-
-vi.mock('@/developer-contact/contact-lines', () => ({
-  getDeveloperContactLines: () => getDeveloperContactLinesMock(),
-}))
 
 const featureStoreState = vi.hoisted(() => {
   const state = {
@@ -322,7 +316,6 @@ describe('SettingsPage', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
-    getDeveloperContactLinesMock.mockReturnValue('')
     featureStoreState.lightningEnabled = false
     featureStoreState.mainnetAccessEnabled = false
     featureStoreState.regtestModeEnabled = false
@@ -375,12 +368,18 @@ describe('SettingsPage', () => {
     ).toBeInTheDocument()
   })
 
-  it('shows Developer contact card when contact lines are set', () => {
-    getDeveloperContactLinesMock.mockReturnValue('Line one\nLine two')
+  it('shows Developer Contact Info card', () => {
     renderWithProviders(<SettingsPage />)
-    expect(screen.getByText('Developer contact')).toBeInTheDocument()
-    expect(screen.getByText(/Line one/)).toBeInTheDocument()
-    expect(screen.getByText(/Line two/)).toBeInTheDocument()
+    const devContactHeading = screen.getByText('Developer Contact Info')
+    expect(devContactHeading).toBeInTheDocument()
+    const devContactCard = devContactHeading.closest('[data-slot="card"]')
+    expect(devContactCard).toBeTruthy()
+    expect(within(devContactCard as HTMLElement).getByText('Michael Hrenka')).toBeInTheDocument()
+    expect(
+      within(devContactCard as HTMLElement).getByRole('link', {
+        name: 'michael.hrenka@protonmail.com',
+      }),
+    ).toBeInTheDocument()
   })
 
   it('disables wallet backup export/import in near-zero security mode with hint', () => {
