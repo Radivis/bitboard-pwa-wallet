@@ -8,7 +8,7 @@ export interface EncryptionService {
   deriveKeyBytes(
     password: string,
     salt: Uint8Array,
-    kdfPhc?: string,
+    kdfPhc: string,
   ): Promise<Uint8Array>
   encryptData(password: string, plaintext: string): Promise<EncryptedBlob>
   decryptData(password: string, encrypted: EncryptedBlob): Promise<string>

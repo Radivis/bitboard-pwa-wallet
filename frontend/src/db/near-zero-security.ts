@@ -1,10 +1,6 @@
 import type { Kysely } from 'kysely'
 import type { Database } from './schema'
 import type { EncryptedBlob } from '@/lib/encrypted-blob-types'
-import {
-  ARGON2_KDF_PHC_CI,
-  ARGON2_KDF_PHC_PRODUCTION,
-} from '@/lib/kdf-phc-constants'
 import { encryptData, decryptData } from './encryption'
 import {
   listWalletIdsWithSecrets,
@@ -42,19 +38,6 @@ function base64ToUint8(b64: string): Uint8Array {
   return out
 }
 
-function kdfPhcFromLegacySettings(o: {
-  kdfPhc?: string
-  kdfVersion?: number
-}): string {
-  if (o.kdfPhc !== undefined && o.kdfPhc.length > 0) {
-    return o.kdfPhc
-  }
-  if (o.kdfVersion === 1) {
-    return ARGON2_KDF_PHC_CI
-  }
-  return ARGON2_KDF_PHC_PRODUCTION
-}
-
 export function serializeEncryptedBlobForSettings(blob: EncryptedBlob): string {
   return JSON.stringify({
     ciphertext: uint8ToBase64(blob.ciphertext),
@@ -65,18 +48,19 @@ export function serializeEncryptedBlobForSettings(blob: EncryptedBlob): string {
 }
 
 export function deserializeEncryptedBlobFromSettings(json: string): EncryptedBlob {
-  const o = JSON.parse(json) as {
-    ciphertext: string
-    iv: string
-    salt: string
-    kdfPhc?: string
-    kdfVersion?: number
+  const o = JSON.parse(json) as Record<string, unknown>
+  const { ciphertext, iv, salt, kdfPhc } = o
+  if (typeof ciphertext !== 'string' || typeof iv !== 'string' || typeof salt !== 'string') {
+    throw new Error('Settings encrypted blob is missing ciphertext, iv, or salt')
+  }
+  if (typeof kdfPhc !== 'string' || kdfPhc.length === 0) {
+    throw new Error('Settings encrypted blob is missing kdfPhc')
   }
   return {
-    ciphertext: base64ToUint8(o.ciphertext),
-    iv: base64ToUint8(o.iv),
-    salt: base64ToUint8(o.salt),
-    kdfPhc: kdfPhcFromLegacySettings(o),
+    ciphertext: base64ToUint8(ciphertext),
+    iv: base64ToUint8(iv),
+    salt: base64ToUint8(salt),
+    kdfPhc,
   }
 }
 

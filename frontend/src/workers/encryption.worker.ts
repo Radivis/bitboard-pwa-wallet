@@ -1,6 +1,5 @@
 import { expose } from 'comlink'
 import type { EncryptionService } from './encryption-api'
-import { DEFAULT_KDF_PHC_FOR_DERIVE } from './encryption-api'
 import type { EncryptedBlobMessage } from './secrets-channel-types'
 import type { EncryptedBlob } from '@/lib/encrypted-blob-types'
 import { resolveArgon2CiParamsOrThrow } from '@/lib/argon2-ci-env'
@@ -117,7 +116,7 @@ const encryptionService: EncryptionService = {
   async deriveKeyBytes(
     password: string,
     salt: Uint8Array,
-    kdfPhc: string = DEFAULT_KDF_PHC_FOR_DERIVE,
+    kdfPhc: string,
   ): Promise<Uint8Array> {
     return deriveKeyBytes(password, salt, kdfPhc)
   },

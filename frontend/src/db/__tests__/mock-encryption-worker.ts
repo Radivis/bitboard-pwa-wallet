@@ -29,7 +29,7 @@ export function getMockEncryptionWorker() {
     deriveKeyBytes: async (
       password: string,
       salt: Uint8Array,
-      _kdfPhc?: string,
+      _kdfPhc: string,
     ): Promise<Uint8Array> =>
       new Uint8Array(pbkdf2Sync(password, salt, 1000, 32, 'sha256')),
 

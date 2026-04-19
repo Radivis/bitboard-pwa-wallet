@@ -13,6 +13,7 @@ import {
   resolveDescriptorWallet,
   updateDescriptorWalletChangeset,
 } from '../descriptor-wallet-manager'
+import type { EncryptedBlob } from '@/lib/encrypted-blob-types'
 import type { AddressType, BitcoinNetwork } from '@/workers/crypto-types'
 
 /**
@@ -49,18 +50,8 @@ const mockCreateWallet = vi.fn()
 
 async function mockResolveDescriptorWallet(params: {
   password: string
-  encryptedPayload: {
-    ciphertext: Uint8Array
-    iv: Uint8Array
-    salt: Uint8Array
-    kdfPhc?: string
-  }
-  encryptedMnemonic: {
-    ciphertext: Uint8Array
-    iv: Uint8Array
-    salt: Uint8Array
-    kdfPhc?: string
-  }
+  encryptedPayload: EncryptedBlob
+  encryptedMnemonic: EncryptedBlob
   targetNetwork: BitcoinNetwork
   targetAddressType: AddressType
   targetAccountId: number
@@ -129,12 +120,7 @@ async function mockResolveDescriptorWallet(params: {
 
 async function mockUpdateDescriptorWalletChangeset(params: {
   password: string
-  encryptedPayload: {
-    ciphertext: Uint8Array
-    iv: Uint8Array
-    salt: Uint8Array
-    kdfPhc?: string
-  }
+  encryptedPayload: EncryptedBlob
   network: BitcoinNetwork
   addressType: AddressType
   accountId: number
