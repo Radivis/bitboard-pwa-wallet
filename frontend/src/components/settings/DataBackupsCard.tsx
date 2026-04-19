@@ -110,10 +110,8 @@ export function DataBackupsCard() {
         <CardTitle>Data Backups</CardTitle>
         <CardDescription>
           Export full local database files from this device as ZIP archives. Wallet exports are
-          signed with a password you choose (ML-DSA); the export dialog warns if it differs from your
-          app password. Wallet import verifies the manifest by default; after repeated failures you
-          can choose to import without verification. Lab exports are a single SQLite file in a ZIP
-          with no cryptographic authentication—only import lab ZIPs you trust. Nothing is uploaded.
+          signed with a password you choose. Lab exports are a single SQLite file in a ZIP
+          with no cryptographic signature.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
