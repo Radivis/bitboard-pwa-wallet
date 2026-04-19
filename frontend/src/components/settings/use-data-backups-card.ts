@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { flushSync } from 'react-dom'
 import { toast } from 'sonner'
 import { LAB_SQLITE_OPFS_BASENAME, WALLET_SQLITE_OPFS_BASENAME } from '@/db/opfs-sqlite-database-names'
 import { WALLET_MIGRATION_FAILURE_OPFS_FILENAME } from '@/db/migrations/wallet-migration-failure-report'
@@ -286,10 +287,15 @@ export function useDataBackupsCard() {
   )
 
   const runUnverifiedWalletBackupImport = useCallback(async () => {
-    if (!pendingImport) return
-    setImportBusy(true)
+    const snapshot = pendingImport
+    if (!snapshot) return
+    // Commit busy state before any await so the bypass modal blocks dismiss and we do not
+    // interleave with other UI work that might touch the DB (same as verified import path).
+    flushSync(() => {
+      setImportBusy(true)
+    })
     try {
-      await applyWalletBackupReplace(pendingImport.sqliteBytes)
+      await applyWalletBackupReplace(snapshot.sqliteBytes)
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Import failed.')
     } finally {
