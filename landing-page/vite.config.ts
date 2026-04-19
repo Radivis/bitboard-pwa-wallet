@@ -4,7 +4,6 @@ import path from 'path';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
-import { viteLegalNoticeDefine } from '../load-vite-env.mjs';
 
 const projectRoot = path.dirname(fileURLToPath(import.meta.url));
 
@@ -23,7 +22,6 @@ const walletAppVersion = readWalletAppVersion();
 
 export default defineConfig({
   define: {
-    ...viteLegalNoticeDefine(),
     'import.meta.env.VITE_WALLET_APP_VERSION': JSON.stringify(walletAppVersion),
   },
   plugins: [react(), tailwindcss()],

@@ -7,7 +7,7 @@ import {
 import { LegalLocaleSwitcher } from '@/components/LegalLocaleSwitcher'
 import { useLegalNoticeDisplay } from '@/lib/legal-notice-display'
 
-/** Legal notice (Impressum / Legal notice) from repo-root `.env.legal-notice.*` at build time. */
+/** Legal notice (Impressum / Legal notice) from `frontend/src/locales/{de|en}/legal.json`. */
 export function LegalNoticeCard() {
   const display = useLegalNoticeDisplay()
   if (!display.visible) return null

@@ -1,11 +1,29 @@
-import { describe, it, expect, afterEach, vi, beforeEach } from 'vitest'
+import { describe, it, expect, afterEach, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { LegalNoticeCard } from '@/components/LegalNoticeCard'
+import {
+  legalI18n,
+  restoreLegalI18nResourceBundles,
+  type LegalNamespace,
+} from '@/i18n/legal-i18n'
+
+const emptyLegal: LegalNamespace = {
+  sectionTitle: '',
+  body: '',
+  name: '',
+  address: '',
+  email: '',
+}
+
+function setLegalResourceBundles(de: LegalNamespace, en: LegalNamespace): void {
+  legalI18n.addResourceBundle('de', 'legal', de, true, true)
+  legalI18n.addResourceBundle('en', 'legal', en, true, true)
+}
 
 describe('LegalNoticeCard', () => {
   afterEach(() => {
-    vi.unstubAllEnvs()
+    restoreLegalI18nResourceBundles()
     localStorage.clear()
   })
 
@@ -13,16 +31,17 @@ describe('LegalNoticeCard', () => {
     localStorage.clear()
   })
 
-  it('renders nothing when both legal notice env vars are empty', () => {
-    vi.stubEnv('VITE_LEGAL_NOTICE_DE', '')
-    vi.stubEnv('VITE_LEGAL_NOTICE_EN', '')
+  it('renders nothing when both legal notice bodies are empty', () => {
+    setLegalResourceBundles(emptyLegal, emptyLegal)
     const { container } = render(<LegalNoticeCard />)
     expect(container.firstChild).toBeNull()
   })
 
   it('renders German Impressum when only DE is set', () => {
-    vi.stubEnv('VITE_LEGAL_NOTICE_DE', 'Nur DE')
-    vi.stubEnv('VITE_LEGAL_NOTICE_EN', '')
+    setLegalResourceBundles(
+      { ...emptyLegal, sectionTitle: 'Impressum', body: 'Nur DE' },
+      emptyLegal,
+    )
     render(<LegalNoticeCard />)
     expect(screen.getByText('Impressum')).toBeInTheDocument()
     expect(screen.getByText('Nur DE')).toBeInTheDocument()
@@ -30,16 +49,21 @@ describe('LegalNoticeCard', () => {
   })
 
   it('renders English Legal notice when only EN is set', () => {
-    vi.stubEnv('VITE_LEGAL_NOTICE_DE', '')
-    vi.stubEnv('VITE_LEGAL_NOTICE_EN', 'EN only body')
+    setLegalResourceBundles(emptyLegal, {
+      ...emptyLegal,
+      sectionTitle: 'Legal notice',
+      body: 'EN only body',
+    })
     render(<LegalNoticeCard />)
     expect(screen.getByText('Legal notice')).toBeInTheDocument()
     expect(screen.getByText('EN only body')).toBeInTheDocument()
   })
 
   it('shows switcher and toggles body when both languages are set', async () => {
-    vi.stubEnv('VITE_LEGAL_NOTICE_DE', 'Text DE')
-    vi.stubEnv('VITE_LEGAL_NOTICE_EN', 'Text EN')
+    setLegalResourceBundles(
+      { ...emptyLegal, sectionTitle: 'Impressum', body: 'Text DE' },
+      { ...emptyLegal, sectionTitle: 'Legal notice', body: 'Text EN' },
+    )
     const user = userEvent.setup()
     render(<LegalNoticeCard />)
 

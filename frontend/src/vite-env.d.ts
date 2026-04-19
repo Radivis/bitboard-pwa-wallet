@@ -10,10 +10,6 @@ interface ImportMetaEnv {
   readonly VITE_E2E_NWC_MOCK?: string
   /** Set to `1` or `true` to hide TanStack Router devtools in dev (e.g. for screenshots). */
   readonly VITE_HIDE_ROUTER_DEVTOOLS?: string
-  /** German legal notice text; injected from repo-root `.env.legal-notice.de`. */
-  readonly VITE_LEGAL_NOTICE_DE?: string
-  /** English legal notice text; injected from repo-root `.env.legal-notice.en`. */
-  readonly VITE_LEGAL_NOTICE_EN?: string
   /** Developer contact lines; injected at build time from repo-root `.env.contacts`. */
   readonly VITE_CONTACTS?: string
 }

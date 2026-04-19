@@ -1,6 +1,5 @@
 /**
  * Loads repo-root env files and exposes values to Vite via `define`:
- * - `.env.legal-notice.de` / `.env.legal-notice.en` → `VITE_LEGAL_NOTICE_DE` / `VITE_LEGAL_NOTICE_EN`
  * - `.env.contacts` → `VITE_CONTACTS`
  * Resolved `dotenv` from `frontend/node_modules` or `landing-page/node_modules`.
  */
@@ -38,26 +37,6 @@ function readStringKeyFromEnvFile(filePath, key) {
   const value = parsed[key]
   if (value === undefined || value === null) return ''
   return String(value).trim()
-}
-
-export function readViteLegalNoticeDeFromFile() {
-  const envPath = path.join(__dirname, '.env.legal-notice.de')
-  return readStringKeyFromEnvFile(envPath, 'VITE_LEGAL_NOTICE_DE')
-}
-
-export function readViteLegalNoticeEnFromFile() {
-  const envPath = path.join(__dirname, '.env.legal-notice.en')
-  return readStringKeyFromEnvFile(envPath, 'VITE_LEGAL_NOTICE_EN')
-}
-
-/** Values for Vite `define` so legal notice strings are available in app code. */
-export function viteLegalNoticeDefine() {
-  const de = readViteLegalNoticeDeFromFile()
-  const en = readViteLegalNoticeEnFromFile()
-  return {
-    'import.meta.env.VITE_LEGAL_NOTICE_DE': JSON.stringify(de),
-    'import.meta.env.VITE_LEGAL_NOTICE_EN': JSON.stringify(en),
-  }
 }
 
 export function readViteContactsFromFile() {

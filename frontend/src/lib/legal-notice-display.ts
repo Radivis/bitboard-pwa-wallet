@@ -1,14 +1,6 @@
-import {
-  LEGAL_SECTION_TITLE_DE,
-  LEGAL_SECTION_TITLE_EN,
-  useLegalLocale,
-  type LegalLocale,
-} from './legal-locale'
-
-function trimLegalNoticeEnv(value: string | undefined): string {
-  if (value === undefined || value === null) return ''
-  return String(value).trim()
-}
+import { useMemo } from 'react'
+import { legalI18n, getLegalLocalesWithBody } from '../i18n/legal-i18n'
+import { useLegalLocale, type LegalLocale } from './legal-locale'
 
 export type LegalNoticeDisplay =
   | { visible: false }
@@ -22,22 +14,12 @@ export type LegalNoticeDisplay =
     }
 
 /**
- * Resolves which legal notice body and title to show from build-time env and user locale.
- * Hides entirely when both languages are empty. Omits switcher when only one language is configured.
+ * Resolves which legal notice body and title to show from `locales/{locale}/legal.json` and user locale.
+ * Hides entirely when both languages have empty body. Omits switcher when only one language has content.
  */
 export function useLegalNoticeDisplay(): LegalNoticeDisplay {
-  const textDe = trimLegalNoticeEnv(import.meta.env.VITE_LEGAL_NOTICE_DE)
-  const textEn = trimLegalNoticeEnv(import.meta.env.VITE_LEGAL_NOTICE_EN)
-  const hasDe = textDe.length > 0
-  const hasEn = textEn.length > 0
-
+  const { hasDe, hasEn } = getLegalLocalesWithBody()
   const { locale, setLocale } = useLegalLocale()
-
-  if (!hasDe && !hasEn) {
-    return { visible: false }
-  }
-
-  const showSwitcher = hasDe && hasEn
 
   let activeLocale: LegalLocale
   if (!hasDe) {
@@ -48,9 +30,18 @@ export function useLegalNoticeDisplay(): LegalNoticeDisplay {
     activeLocale = locale
   }
 
-  const title =
-    activeLocale === 'de' ? LEGAL_SECTION_TITLE_DE : LEGAL_SECTION_TITLE_EN
-  const body = activeLocale === 'de' ? textDe : textEn
+  const t = useMemo(
+    () => legalI18n.getFixedT(activeLocale, 'legal'),
+    [activeLocale],
+  )
+
+  if (!hasDe && !hasEn) {
+    return { visible: false }
+  }
+
+  const showSwitcher = hasDe && hasEn
+  const title = t('sectionTitle')
+  const body = t('body')
 
   return {
     visible: true,

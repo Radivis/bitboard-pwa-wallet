@@ -11,9 +11,10 @@
 
 /target
 .env
+# Legacy legal-notice env (imprint now lives in frontend/src/locales/*/legal.json)
 .env.legal-notice.de
 .env.legal-notice.en
-# Legacy single-file imprint (replaced by .env.legal-notice.de / .en)
+# Legacy single-file imprint
 .env.imprint
 .env.contacts
 !/scripts/README.md

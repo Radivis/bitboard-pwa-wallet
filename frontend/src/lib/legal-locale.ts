@@ -3,9 +3,6 @@ import { useCallback, useState } from 'react'
 /** Shared with future privacy policy and other legal copy. */
 export const LEGAL_LOCALE_STORAGE_KEY = 'bitboard.legalLocale' as const
 
-export const LEGAL_SECTION_TITLE_DE = 'Impressum'
-export const LEGAL_SECTION_TITLE_EN = 'Legal notice'
-
 export const PRIVACY_PAGE_TITLE_DE = 'Datenschutzerklärung'
 export const PRIVACY_PAGE_TITLE_EN = 'Privacy policy'
 
