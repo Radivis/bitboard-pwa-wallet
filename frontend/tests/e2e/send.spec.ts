@@ -17,6 +17,8 @@ import {
   waitForSettingsAddressTypeSwitchComplete,
   waitForSettingsNetworkModeButtonSelected,
   waitForSettingsNetworkSwitchComplete,
+  openSettingsFeaturesTab,
+  openSettingsMainTab,
 } from './helpers/settings-waits'
 import { ensureSegwitAddressesFeatureOn } from './helpers/segwit-addresses-feature'
 
@@ -85,11 +87,13 @@ test.describe('Send Page', () => {
 
     await page.getByRole('link', { name: /settings/i }).click()
     await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
+    await openSettingsFeaturesTab(page)
     const regtestModeSwitch = page.getByRole('switch', {
       name: 'Enable Regtest mode for developers',
     })
     await regtestModeSwitch.scrollIntoViewIfNeeded()
     await regtestModeSwitch.click()
+    await openSettingsMainTab(page)
 
     await page.getByRole('button', { name: 'Regtest' }).click()
     await waitForSettingsNetworkSwitchComplete(page)

@@ -1,10 +1,13 @@
 import { type Page, expect } from '@playwright/test'
+import { openSettingsFeaturesTab, openSettingsMainTab } from './settings-waits'
 
 /**
- * Turns on Settings → Features → SegWit addresses. Call when already on the Settings page.
+ * Turns on Settings → Features → SegWit addresses. Call when already on Settings (Main tab).
+ * Returns to Main so network and address controls are available.
  */
 export async function ensureSegwitAddressesFeatureOn(page: Page): Promise<void> {
   await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
+  await openSettingsFeaturesTab(page)
   const segwitFeatureSwitch = page.getByRole('switch', {
     name: 'Enable SegWit address options and labels',
   })
@@ -12,6 +15,7 @@ export async function ensureSegwitAddressesFeatureOn(page: Page): Promise<void> 
   if (!(await segwitFeatureSwitch.isChecked())) {
     await segwitFeatureSwitch.click()
   }
+  await openSettingsMainTab(page)
 }
 
 /**

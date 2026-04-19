@@ -36,7 +36,7 @@ export function AppDescription({ className }: AppDescriptionProps) {
       >
         wallet
       </InfomodeWrapper>{' '}
-      in your browser.
+      in your browser and mobile device.
     </p>
   )
 }

@@ -1,5 +1,22 @@
 import { type Page, expect } from '@playwright/test'
 
+/** Settings subsection bar (Main / Security / Features / About). */
+export async function openSettingsMainTab(page: Page): Promise<void> {
+  await page
+    .getByRole('navigation', { name: 'Settings' })
+    .getByRole('link', { name: 'Main' })
+    .click()
+  await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
+}
+
+export async function openSettingsFeaturesTab(page: Page): Promise<void> {
+  await page
+    .getByRole('navigation', { name: 'Settings' })
+    .getByRole('link', { name: 'Features' })
+    .click()
+  await expect(page.getByRole('heading', { name: 'Features' })).toBeVisible()
+}
+
 /**
  * After clicking a network on Settings, waits until the switch mutation finishes:
  * network mode buttons become enabled again (inline phase text is gone).

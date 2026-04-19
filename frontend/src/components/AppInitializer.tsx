@@ -64,7 +64,7 @@ export function AppInitializer({ children }: AppInitializerProps) {
 
     const isSetupRoute = location.pathname.startsWith('/setup')
     const isWalletsRoute = location.pathname === '/wallet/wallets'
-    const isSettingsRoute = location.pathname === '/settings'
+    const isSettingsRoute = location.pathname.startsWith('/settings')
     const isLibraryRoute = location.pathname.startsWith('/library')
     const isLabRoute = location.pathname.startsWith('/lab')
     const isPrivacyRoute = location.pathname === '/privacy'
