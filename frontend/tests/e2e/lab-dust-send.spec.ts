@@ -26,6 +26,7 @@ import {
   clickLabDustChoice,
   confirmLabSendAndWaitForMempool,
   getWalletOwnerKey,
+  waitForLabMempoolLength,
 } from './helpers/lab'
 import { goToWalletTab } from './helpers/wallet-nav'
 
@@ -65,17 +66,12 @@ test.describe('Lab dust send modal', { tag: '@lab' }, () => {
     expect(walletAddress).toMatch(/^bcrt1/)
 
     await createTransactionInLab(page, aliceAddress!, walletAddress!, 1100, 1)
-    await expect
-      .poll(
-        async () => (await getLabState(page)).mempool.length,
-        { timeout: 15000 },
-      )
-      .toBe(1)
+    await waitForLabMempoolLength(page, 1)
 
     await mineBlocksInLab(page, 1, LabOwnerType.LabEntity, { ownerName: 'Alice' })
-    state = await getLabState(page)
-    expect(state.mempool).toHaveLength(0)
+    await waitForLabMempoolLength(page, 0)
 
+    state = await getLabState(page)
     const walletKey = getWalletOwnerKey(state)
     expect(getUtxoSumByOwner(state, walletKey)).toBe(1100)
     const bobBefore = getUtxoSumByOwner(state, 'Bob')
@@ -126,17 +122,12 @@ test.describe('Lab dust send modal', { tag: '@lab' }, () => {
     expect(walletAddress).toMatch(/^bcrt1/)
 
     await createTransactionInLab(page, aliceAddress!, walletAddress!, 1100, 1)
-    await expect
-      .poll(
-        async () => (await getLabState(page)).mempool.length,
-        { timeout: 15000 },
-      )
-      .toBe(1)
+    await waitForLabMempoolLength(page, 1)
 
     await mineBlocksInLab(page, 1, LabOwnerType.LabEntity, { ownerName: 'Alice' })
-    state = await getLabState(page)
-    expect(state.mempool).toHaveLength(0)
+    await waitForLabMempoolLength(page, 0)
 
+    state = await getLabState(page)
     const walletKey = getWalletOwnerKey(state)
     expect(getUtxoSumByOwner(state, walletKey)).toBe(1100)
     const bobBefore = getUtxoSumByOwner(state, 'Bob')

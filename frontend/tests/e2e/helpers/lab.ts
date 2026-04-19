@@ -575,23 +575,40 @@ export async function clickLabReviewTransaction(page: Page): Promise<void> {
   await page.getByRole('button', { name: 'Review Transaction' }).click()
 }
 
-/** Case-1 (sub–dust-floor): toast + amount shown as 546 sats (compose or Transaction Details). */
+/**
+ * 546 sats is surfaced as a literal "546" in sat mode, but `BitcoinAmountDisplay` may use the
+ * wallet default unit (often BTC), producing `0.00000546` where `\b546\b` does not match.
+ */
+function textReflects546DustClamp(text: string): boolean {
+  if (/\b546\b/.test(text)) return true
+  if (text.includes('0.00000546')) return true
+  return false
+}
+
+/**
+ * Case-1 (sub–dust-floor): toast or review banner, then compose / Transaction Details / case-2 modal
+ * shows the clamped amount (any display unit).
+ */
 export async function expectLabCase1MinDustClampUi(page: Page): Promise<void> {
   await expect(
-    page.getByText(/minimum output size \(546 sats\)/i).first(),
+    page.getByText(/Amount was below the minimum/i).filter({ hasText: /546/ }).first(),
   ).toBeVisible({ timeout: 30000 })
+
   await expect
     .poll(
       async () => {
-        if (await page.getByText('Transaction Details').first().isVisible().catch(() => false)) {
-          const mainText = (await page.getByRole('main').textContent()) ?? ''
-          return /\b546\b/.test(mainText)
+        const bodyText = (await page.locator('body').textContent()) ?? ''
+        if (!textReflects546DustClamp(bodyText)) return false
+
+        const transactionDetails = await page
+          .getByText('Transaction Details')
+          .first()
+          .isVisible()
+          .catch(() => false)
+        if (transactionDetails) {
+          return textReflects546DustClamp((await page.getByRole('main').textContent()) ?? '')
         }
-        const input = page.locator('#send-amount')
-        if (await input.isVisible().catch(() => false)) {
-          return (await input.inputValue()) === '546'
-        }
-        // Lab path: after clamping to 546, prepare may open case-2 first — still step 1, modal covers #send-amount.
+
         const changeFeesHeading = page.getByRole('heading', { name: 'Change and fees' })
         if (await changeFeesHeading.isVisible().catch(() => false)) {
           const dialog = page
@@ -599,11 +616,22 @@ export async function expectLabCase1MinDustClampUi(page: Page): Promise<void> {
             .filter({ has: changeFeesHeading })
             .first()
           const dialogText = (await dialog.textContent().catch(() => null)) ?? ''
-          return /\b546\b/.test(dialogText)
+          return textReflects546DustClamp(dialogText)
         }
+
+        const input = page.locator('#send-amount')
+        if (await input.isVisible().catch(() => false)) {
+          return (await input.inputValue()) === '546'
+        }
+
         return false
       },
-      { timeout: 60000 },
+      {
+        timeout: 60_000,
+        intervals: [100, 250, 400],
+        message:
+          'Expected 546 dust clamp in Transaction Details, Change-and-fees dialog, or compose (#send-amount)',
+      },
     )
     .toBe(true)
 }
