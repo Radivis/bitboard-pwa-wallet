@@ -1,5 +1,4 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
-import { Link } from '@tanstack/react-router'
 import { toast } from 'sonner'
 import {
   useWalletStore,
@@ -154,21 +153,6 @@ export function NetworkSelector() {
           text={statusLine}
           className="flex-row items-start justify-start gap-2 py-1 [&_.animate-spin]:mt-0.5 [&_.animate-spin]:h-4 [&_.animate-spin]:w-4 [&_p]:max-w-[min(100%,28rem)] [&_p]:text-left [&_p]:leading-snug"
         />
-      )}
-      {displayNetworkMode === 'lab' && (
-        <div>
-          <InfomodeWrapper
-            infoId="settings-network-manage-lab"
-            infoTitle="Manage lab"
-            infoText="Opens Bitboard’s lab screen where you can mine pretend blocks, inspect addresses and UTXOs, and build practice transactions inside the simulator—still disconnected from real Bitcoin networks."
-          >
-            <Link to="/lab" preload={false}>
-              <Button variant="outline" size="sm" disabled={loading}>
-                Manage lab
-              </Button>
-            </Link>
-          </InfomodeWrapper>
-        </div>
       )}
 
       {showUnlockForNetworkChange && (

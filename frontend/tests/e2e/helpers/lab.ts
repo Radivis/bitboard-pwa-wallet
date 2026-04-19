@@ -5,8 +5,19 @@ import type { LabState } from '@/workers/lab-api'
 import { labEntityOwnerKey } from '@/lib/lab-entity-keys'
 import { lookupLabAddressOwner, WALLET_OWNER_PREFIX } from '@/lib/lab-utils'
 import { goToWalletTab } from './wallet-nav'
-import { waitForSettingsNetworkSwitchComplete } from './settings-waits'
+import {
+  waitForSettingsNetworkModeButtonSelected,
+  waitForSettingsNetworkSwitchComplete,
+} from './settings-waits'
 import { enableSegwitAddressesFeature } from './segwit-addresses-feature'
+
+/** Primary bottom nav (Wallet / Lab / Library / Settings). */
+export async function clickMainNavLab(page: Page): Promise<void> {
+  await page
+    .getByRole('navigation', { name: 'Main sections' })
+    .getByRole('link', { name: 'Lab' })
+    .click()
+}
 
 /** Switch to Lab network without changing address type (default is Taproot). */
 export async function switchToLab(page: Page): Promise<void> {
@@ -16,9 +27,7 @@ export async function switchToLab(page: Page): Promise<void> {
   await page
     .getByRole('button', { name: 'Lab', exact: true })
     .click()
-  await expect(page.getByRole('link', { name: 'Manage lab' })).toBeVisible({
-    timeout: 60000,
-  })
+  await waitForSettingsNetworkModeButtonSelected(page, 'Lab', 60_000)
 
   await waitForSettingsNetworkSwitchComplete(page)
 
@@ -32,7 +41,7 @@ export async function switchToLab(page: Page): Promise<void> {
 export async function resetLab(page: Page): Promise<void> {
   await page.getByRole('link', { name: /settings/i }).click()
   await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
-  await page.getByRole('link', { name: 'Manage lab' }).click()
+  await clickMainNavLab(page)
   await expect(page.getByRole('heading', { name: 'Blocks' })).toBeVisible({
     timeout: 15000,
   })
@@ -94,7 +103,7 @@ export async function createLabEntityViaControl(
   /** Native SegWit (BIP84) lab entities need the SegWit addresses feature so the Control switch exists. */
   if (addressType === AddressType.SegWit) {
     await enableSegwitAddressesFeature(page)
-    await page.getByRole('link', { name: 'Manage lab' }).click()
+    await clickMainNavLab(page)
     await expect(page.getByRole('heading', { name: 'Blocks' })).toBeVisible({
       timeout: 15000,
     })
@@ -137,9 +146,7 @@ function labOwnerMatchesDisplayKey(state: LabState, o: ReturnType<typeof lookupL
 async function navigateToLab(page: Page): Promise<void> {
   const blocksHeading = page.getByRole('heading', { name: 'Blocks' })
   if (await blocksHeading.isVisible()) return
-  await page.getByRole('link', { name: /settings/i }).click()
-  await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
-  await page.getByRole('link', { name: 'Manage lab' }).click()
+  await clickMainNavLab(page)
 }
 
 /** Mine blocks in the lab. */

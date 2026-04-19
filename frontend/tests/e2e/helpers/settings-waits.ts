@@ -32,9 +32,7 @@ export async function waitForSettingsNetworkModeButtonSelected(
   networkButtonName: string,
   timeout = 120_000,
 ): Promise<void> {
-  await expect(page.getByRole('button', { name: networkButtonName })).toHaveAttribute(
-    'data-variant',
-    'default',
-    { timeout },
-  )
+  await expect(
+    page.getByRole('button', { name: networkButtonName, exact: true }),
+  ).toHaveAttribute('data-variant', 'default', { timeout })
 }
