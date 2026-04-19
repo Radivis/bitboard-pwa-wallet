@@ -5,6 +5,7 @@ import { AppModal } from '@/components/AppModal'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { APP_PASSWORD_MIN_LENGTH } from '@/lib/app-password-policy'
 
 export type AppPasswordCompareResult =
   | { match: true; skipped: false }
@@ -44,7 +45,12 @@ export function WalletBackupExportPasswordModal({
   const confirmPwdId = useId()
 
   const passwordsMatch = password === confirmPassword
-  const canCompare = password.length > 0 && confirmPassword.length > 0 && passwordsMatch
+  const meetsMinLength = password.length >= APP_PASSWORD_MIN_LENGTH
+  const canCompare =
+    password.length > 0 &&
+    confirmPassword.length > 0 &&
+    passwordsMatch &&
+    meetsMinLength
 
   const canSubmit = canCompare && !comparePending && compareResult !== null
 
@@ -124,7 +130,8 @@ export function WalletBackupExportPasswordModal({
             secret to remember when you restore this backup later.
           </p>
           <p>
-            Enter that password twice below. Repeating it catches typos; you will need the{' '}
+            Enter that password twice below (at least {APP_PASSWORD_MIN_LENGTH} characters, same as
+            Bitboard app passwords). Repeating it catches typos; you will need the{' '}
             <em>exact</em> same password to verify the backup on import.
           </p>
           <p className="text-muted-foreground">
@@ -139,6 +146,7 @@ export function WalletBackupExportPasswordModal({
             id={pwdId}
             type="password"
             autoComplete="current-password"
+            minLength={APP_PASSWORD_MIN_LENGTH}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             disabled={isBusy}
@@ -150,6 +158,7 @@ export function WalletBackupExportPasswordModal({
             id={confirmPwdId}
             type="password"
             autoComplete="new-password"
+            minLength={APP_PASSWORD_MIN_LENGTH}
             value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}
             disabled={isBusy}
@@ -158,6 +167,14 @@ export function WalletBackupExportPasswordModal({
         {password.length > 0 && confirmPassword.length > 0 && !passwordsMatch ? (
           <p className="text-sm text-destructive" role="alert">
             Passwords do not match.
+          </p>
+        ) : null}
+        {password.length > 0 &&
+        confirmPassword.length > 0 &&
+        passwordsMatch &&
+        !meetsMinLength ? (
+          <p className="text-sm text-destructive" role="alert">
+            Use at least {APP_PASSWORD_MIN_LENGTH} characters (Bitboard’s minimum app password length).
           </p>
         ) : null}
         {canCompare ? (

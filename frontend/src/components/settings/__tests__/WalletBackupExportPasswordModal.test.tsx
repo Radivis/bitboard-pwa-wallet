@@ -67,11 +67,35 @@ describe('WalletBackupExportPasswordModal', () => {
 
     renderWithProviders(<WalletBackupExportPasswordModal {...defaultProps} />)
 
-    await user.type(screen.getByLabelText('Password for signing'), 'any')
-    await user.type(screen.getByLabelText('Confirm password'), 'any')
+    await user.type(
+      screen.getByLabelText('Password for signing'),
+      'long-enough-password',
+    )
+    await user.type(
+      screen.getByLabelText('Confirm password'),
+      'long-enough-password',
+    )
 
     await waitFor(() => {
       expect(screen.getByText(/Could not compare to the app password/i)).toBeInTheDocument()
     })
+  })
+
+  it('requires at least 12 characters and does not run app-password check until then', async () => {
+    const user = userEvent.setup()
+    const check = vi.fn().mockResolvedValue({ match: true, skipped: false })
+
+    renderWithProviders(
+      <WalletBackupExportPasswordModal {...defaultProps} checkSigningPasswordMatchesAppPassword={check} />,
+    )
+
+    await user.type(screen.getByLabelText('Password for signing'), 'short')
+    await user.type(screen.getByLabelText('Confirm password'), 'short')
+
+    expect(
+      screen.getByText(/Bitboard’s minimum app password length/i),
+    ).toBeInTheDocument()
+    expect(check).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: 'Sign and export' })).toBeDisabled()
   })
 })
