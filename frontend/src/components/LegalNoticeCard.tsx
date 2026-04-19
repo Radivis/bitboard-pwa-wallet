@@ -16,7 +16,7 @@ export function LegalNoticeCard() {
   const { title, body, entity, showSwitcher, activeLocale, setLocale } = display
 
   return (
-    <Card>
+    <Card id="legal-notice">
       <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-3 space-y-0">
         <CardTitle className="leading-tight">{title}</CardTitle>
         {showSwitcher ? (

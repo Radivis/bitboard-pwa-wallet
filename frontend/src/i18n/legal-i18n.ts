@@ -10,11 +10,13 @@ import legalEn from '../locales/en/legal.json'
 export type LegalNamespace = {
   sectionTitle: string
   body: string
+  privacySharedLanguageUserNote: string
 }
 
 const emptyLegalNs: LegalNamespace = {
   sectionTitle: '',
   body: '',
+  privacySharedLanguageUserNote: '',
 }
 
 const legalDeTyped = legalDe as LegalNamespace

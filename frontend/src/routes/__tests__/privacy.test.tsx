@@ -38,10 +38,16 @@ describe('PrivacyPage', () => {
         /Diese Datenschutzerklärung gilt für die Marketing-Website/i,
       ),
     ).toBeInTheDocument()
+    const imprintLink = screen.getByRole('link', { name: /Impressum/i })
+    expect(imprintLink).toHaveAttribute('href', '/settings#legal-notice')
 
     await user.click(screen.getByRole('button', { name: /English/i }))
     expect(
       screen.getByText(/This privacy policy covers both/i),
     ).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /Legal notice/i })).toHaveAttribute(
+      'href',
+      '/settings#legal-notice',
+    )
   })
 })

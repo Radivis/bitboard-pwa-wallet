@@ -1,7 +1,16 @@
-import { describe, it, expect, afterEach, beforeEach } from 'vitest'
+import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { LegalNoticeCard } from '@/components/LegalNoticeCard'
+
+vi.mock('@/legal-entity/legal-entity', () => {
+  const empty = { name: '', address: '', email: '' }
+  return {
+    legalEntity: empty,
+    hasLegalEntityData: (e: typeof empty) =>
+      [e.name, e.address, e.email].some((s) => s.trim().length > 0),
+  }
+})
 import {
   legalI18n,
   restoreLegalI18nResourceBundles,
@@ -11,6 +20,7 @@ import {
 const emptyLegal: LegalNamespace = {
   sectionTitle: '',
   body: '',
+  privacySharedLanguageUserNote: '',
 }
 
 function setLegalResourceBundles(de: LegalNamespace, en: LegalNamespace): void {

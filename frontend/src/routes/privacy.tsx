@@ -1,7 +1,9 @@
+import { useMemo } from 'react'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { Shield } from 'lucide-react'
 import { PageHeader } from '@/components/PageHeader'
 import { LegalLocaleSwitcher } from '@/components/LegalLocaleSwitcher'
+import { legalI18n } from '@/i18n/legal-i18n'
 import {
   PRIVACY_PAGE_TITLE_DE,
   PRIVACY_PAGE_TITLE_EN,
@@ -19,6 +21,10 @@ export function PrivacyPage() {
   const { locale, setLocale } = useLegalLocale()
   const title =
     locale === 'de' ? PRIVACY_PAGE_TITLE_DE : PRIVACY_PAGE_TITLE_EN
+  const tLegal = useMemo(
+    () => legalI18n.getFixedT(locale, 'legal'),
+    [locale],
+  )
 
   return (
     <div className="space-y-6">
@@ -26,7 +32,7 @@ export function PrivacyPage() {
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-muted-foreground">
-          Language for this page is shared with the legal notice (Impressum / Legal notice).
+          {tLegal('privacySharedLanguageUserNote')}
         </p>
         <LegalLocaleSwitcher
           activeLocale={locale}
