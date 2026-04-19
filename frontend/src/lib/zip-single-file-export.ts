@@ -1,14 +1,11 @@
 import JSZip from 'jszip'
+import { readFileAsArrayBuffer } from '@/lib/read-file-as-array-buffer'
 
-async function blobToArrayBuffer(blob: Blob): Promise<ArrayBuffer> {
-  if (typeof blob.arrayBuffer === 'function') {
-    return blob.arrayBuffer()
-  }
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => resolve(reader.result as ArrayBuffer)
-    reader.onerror = () => reject(reader.error ?? new Error('Failed to read blob'))
-    reader.readAsArrayBuffer(blob)
+/** Shared DEFLATE export options for local download ZIPs. */
+export async function finalizeZipExportWithDeflate(zip: JSZip): Promise<Blob> {
+  return zip.generateAsync({
+    type: 'blob',
+    compression: 'DEFLATE',
   })
 }
 
@@ -21,10 +18,7 @@ export async function zipSingleFileForLocalExport(
   entryFileName: string,
 ): Promise<Blob> {
   const zip = new JSZip()
-  const buffer = await blobToArrayBuffer(source)
+  const buffer = await readFileAsArrayBuffer(source)
   zip.file(entryFileName, buffer)
-  return zip.generateAsync({
-    type: 'blob',
-    compression: 'DEFLATE',
-  })
+  return finalizeZipExportWithDeflate(zip)
 }
