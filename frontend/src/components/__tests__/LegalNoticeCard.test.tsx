@@ -3,6 +3,16 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { LegalNoticeCard } from '@/components/LegalNoticeCard'
 
+vi.mock('@tanstack/react-router', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@tanstack/react-router')>()
+  return {
+    ...actual,
+    Link: ({ children, to }: { children: React.ReactNode; to: string }) => (
+      <a href={to}>{children}</a>
+    ),
+  }
+})
+
 vi.mock('@/legal-entity/legal-entity', () => {
   const empty = { name: '', address: '', email: '' }
   return {
@@ -52,6 +62,10 @@ describe('LegalNoticeCard', () => {
     render(<LegalNoticeCard />)
     expect(screen.getByText('Impressum')).toBeInTheDocument()
     expect(screen.getByText('Nur DE')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /privacy policy/i })).toHaveAttribute(
+      'href',
+      '/privacy',
+    )
     expect(screen.queryByRole('group', { name: /legal notice language/i })).not.toBeInTheDocument()
   })
 
@@ -64,6 +78,10 @@ describe('LegalNoticeCard', () => {
     render(<LegalNoticeCard />)
     expect(screen.getByText('Legal notice')).toBeInTheDocument()
     expect(screen.getByText('EN only body')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /privacy policy/i })).toHaveAttribute(
+      'href',
+      '/privacy',
+    )
   })
 
   it('shows switcher and toggles body when both languages are set', async () => {

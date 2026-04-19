@@ -1,3 +1,4 @@
+import { Link } from '@tanstack/react-router'
 import {
   Card,
   CardContent,
@@ -32,6 +33,14 @@ export function LegalNoticeCard() {
         {body.trim() ? (
           <p className="whitespace-pre-wrap text-sm text-muted-foreground">{body}</p>
         ) : null}
+        <p className="pt-1 text-sm">
+          <Link
+            to="/privacy"
+            className="text-primary underline underline-offset-4 hover:opacity-90"
+          >
+            Privacy policy
+          </Link>
+        </p>
       </CardContent>
     </Card>
   )

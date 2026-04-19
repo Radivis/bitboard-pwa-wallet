@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { createFileRoute, Link } from '@tanstack/react-router'
+import { createFileRoute } from '@tanstack/react-router'
 import { Shield } from 'lucide-react'
 import { PageHeader } from '@/components/PageHeader'
 import { LegalLocaleSwitcher } from '@/components/LegalLocaleSwitcher'
@@ -44,12 +44,6 @@ export function PrivacyPage() {
       <PrivacyPolicyLayout surface="app">
         {locale === 'de' ? <PrivacyPolicyDe /> : <PrivacyPolicyEn />}
       </PrivacyPolicyLayout>
-
-      <p className="text-sm text-muted-foreground">
-        <Link to="/settings" className="text-primary underline underline-offset-4">
-          Back to Settings
-        </Link>
-      </p>
     </div>
   )
 }
