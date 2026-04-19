@@ -1,5 +1,10 @@
 import { useMemo } from 'react'
 import { legalI18n, getLegalLocalesWithBody } from '../i18n/legal-i18n'
+import {
+  legalEntity,
+  hasLegalEntityData,
+  type LegalEntity,
+} from '../legal-entity/legal-entity'
 import { useLegalLocale, type LegalLocale } from './legal-locale'
 
 export type LegalNoticeDisplay =
@@ -8,21 +13,25 @@ export type LegalNoticeDisplay =
       visible: true
       title: string
       body: string
+      entity: LegalEntity
       showSwitcher: boolean
       activeLocale: LegalLocale
       setLocale: (locale: LegalLocale) => void
     }
 
 /**
- * Resolves which legal notice body and title to show from `locales/{locale}/legal.json` and user locale.
- * Hides entirely when both languages have empty body. Omits switcher when only one language has content.
+ * Resolves legal notice from `locales/{locale}/legal.json`, `legal-entity/entity.json`, and user locale.
+ * Hides when there is no body in either language and no entity data. Omits switcher when only one language has body.
  */
 export function useLegalNoticeDisplay(): LegalNoticeDisplay {
   const { hasDe, hasEn } = getLegalLocalesWithBody()
   const { locale, setLocale } = useLegalLocale()
+  const hasEntity = hasLegalEntityData(legalEntity)
 
   let activeLocale: LegalLocale
-  if (!hasDe) {
+  if (!hasDe && !hasEn) {
+    activeLocale = locale
+  } else if (!hasDe) {
     activeLocale = 'en'
   } else if (!hasEn) {
     activeLocale = 'de'
@@ -35,7 +44,7 @@ export function useLegalNoticeDisplay(): LegalNoticeDisplay {
     [activeLocale],
   )
 
-  if (!hasDe && !hasEn) {
+  if (!hasDe && !hasEn && !hasEntity) {
     return { visible: false }
   }
 
@@ -47,6 +56,7 @@ export function useLegalNoticeDisplay(): LegalNoticeDisplay {
     visible: true,
     title,
     body,
+    entity: legalEntity,
     showSwitcher,
     activeLocale,
     setLocale,

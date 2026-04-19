@@ -1,7 +1,4 @@
 {
   "sectionTitle": "Impressum",
-  "body": "Impressum (Beispiel — in frontend/src/locales/de/legal.json ersetzen)\n\nAnbieter: …\nAnschrift: …\nKontakt: …",
-  "name": "",
-  "address": "",
-  "email": ""
+  "body": "Impressum (Beispiel — in frontend/src/locales/de/legal.json ersetzen)\n\nAnbieter: …\nAnschrift: …\nKontakt: …"
 }

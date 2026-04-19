@@ -1,6 +1,7 @@
 import { Globe, ExternalLink } from 'lucide-react';
 import { GitHubMark } from '@/src/GitHubMark';
 import { FooterOutboundLink } from './FooterOutboundLink';
+import { LegalEntityFields } from '@legal-entity-fields';
 import { LegalLocaleSwitcherLanding } from '@/src/components/LegalLocaleSwitcherLanding';
 import { useLegalNoticeDisplay } from '@legal-notice-display';
 
@@ -62,7 +63,15 @@ export function SiteFooter({ githubUrl, websiteUrl, blogUrl }: SiteFooterProps) 
                 />
               ) : null}
             </div>
-            <p className="text-gray-500 text-sm whitespace-pre-wrap max-w-3xl mt-2">{legal.body}</p>
+            <LegalEntityFields
+              entity={legal.entity}
+              className="space-y-1 max-w-3xl mt-2"
+              lineClassName="whitespace-pre-wrap text-sm text-gray-500"
+              emailLinkClassName="text-gray-500 underline underline-offset-2 hover:text-gray-200"
+            />
+            {legal.body.trim() ? (
+              <p className="text-gray-500 text-sm whitespace-pre-wrap max-w-3xl mt-2">{legal.body}</p>
+            ) : null}
           </div>
         ) : null}
       </div>

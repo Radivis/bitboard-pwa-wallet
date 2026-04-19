@@ -34,6 +34,10 @@ export default defineConfig({
         projectRoot,
         '../frontend/src/lib/legal-notice-display.ts',
       ),
+      '@legal-entity-fields': path.resolve(
+        projectRoot,
+        '../frontend/src/components/LegalEntityFields.tsx',
+      ),
     },
   },
   build: {

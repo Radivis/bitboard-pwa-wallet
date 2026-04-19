@@ -11,9 +11,6 @@ import {
 const emptyLegal: LegalNamespace = {
   sectionTitle: '',
   body: '',
-  name: '',
-  address: '',
-  email: '',
 }
 
 function setLegalResourceBundles(de: LegalNamespace, en: LegalNamespace): void {

@@ -1,7 +1,4 @@
 {
   "sectionTitle": "Legal notice",
-  "body": "Legal notice (example — replace in frontend/src/locales/en/legal.json)\n\nProvider: …\nAddress: …\nContact: …",
-  "name": "",
-  "address": "",
-  "email": ""
+  "body": "Legal notice (example — replace in frontend/src/locales/en/legal.json)\n\nProvider: …\nAddress: …\nContact: …"
 }
