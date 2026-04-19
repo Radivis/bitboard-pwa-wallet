@@ -22,7 +22,7 @@ import { ensureSegwitAddressesFeatureOn } from './helpers/segwit-addresses-featu
 
 /**
  * `canBuild` needs `confirmedBalance` from the wallet store. One manual sync can leave the
- * Send route (mounted after navigation) briefly behind; a second sync + ≥90s Review wait
+ * Send route (mounted after navigation) briefly behind; a second sync + ≥30s Review wait
  * matches what often “fixes” a flaky retry on CI and locally.
  */
 const REVIEW_TRANSACTION_ENABLE_TIMEOUT_MS = Math.max(

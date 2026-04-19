@@ -4,7 +4,7 @@ import reactHooks from 'eslint-plugin-react-hooks'
 import reactRefresh from 'eslint-plugin-react-refresh'
 import tseslint from 'typescript-eslint'
 
-/** @see previous .eslintrc.cjs — react-hooks "recommended" here is the classic two rules, not plugin v7's expanded flat.recommended (React Compiler). */
+/** react-hooks "recommended" here is the classic two rules, not plugin v7's expanded flat.recommended (React Compiler). */
 export default tseslint.config(
   {
     ignores: [

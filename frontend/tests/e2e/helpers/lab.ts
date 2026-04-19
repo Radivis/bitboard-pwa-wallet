@@ -315,7 +315,7 @@ function normalizeLabTxid(txid: string): string {
  * Avoid relying on the "Transaction" heading alone — hooks and data can lag a frame or two.
  */
 async function waitForLabTxViewerLoaded(page: Page, txid: string): Promise<void> {
-  const idNorm = normalizeLabTxid(txid)
+  const normalTxId = normalizeLabTxid(txid)
   await expect
     .poll(
       async () => {
@@ -328,12 +328,12 @@ async function waitForLabTxViewerLoaded(page: Page, txid: string): Promise<void>
           }
           const d = await w(id)
           return d != null ? ('ready' as const) : ('not-found' as const)
-        }, idNorm)
+        }, normalTxId)
       },
       {
         timeout: 60000,
         intervals: [250],
-        message: `lab tx viewer: getTransaction(${idNorm.slice(0, 8)}…) did not become readable (DEV hook + worker)`,
+        message: `lab tx viewer: getTransaction(${normalTxId.slice(0, 8)}…) did not become readable (DEV hook + worker)`,
       },
     )
     .toBe('ready')
@@ -350,7 +350,7 @@ async function waitForLabTxViewerLoaded(page: Page, txid: string): Promise<void>
  * SQLite has flushed, and `__labGetState` would then miss the tx indefinitely.
  */
 export async function openLabMempoolTxInViewer(page: Page, txid: string): Promise<void> {
-  const idNorm = normalizeLabTxid(txid)
+  const normalTxId = normalizeLabTxid(txid)
   await page.evaluate(async (id) => {
     const nav = (window as unknown as {
       __e2eNavigateToLabTx?: (t: string) => Promise<void>
@@ -361,8 +361,8 @@ export async function openLabMempoolTxInViewer(page: Page, txid: string): Promis
       )
     }
     await nav(id)
-  }, idNorm)
-  await waitForLabTxViewerLoaded(page, idNorm)
+  }, normalTxId)
+  await waitForLabTxViewerLoaded(page, normalTxId)
 }
 
 /** Open `/lab/tx/$txid` for the last mempool entry (most recently added). */
@@ -417,27 +417,27 @@ export async function expectLatestMempoolTxOutputsMatchLabStateAndViewer(
   const state = await getLabState(page)
   expect(state.mempool.length).toBeGreaterThan(0)
   const txid = state.mempool[state.mempool.length - 1]!.txid
-  const idNorm = normalizeLabTxid(txid)
+  const normalTxId = normalizeLabTxid(txid)
 
-  await openLabMempoolTxInViewer(page, idNorm)
+  await openLabMempoolTxInViewer(page, normalTxId)
 
   const expectedSats = await page.evaluate(async (id) => {
-    const w = window as unknown as {
+    const win = window as unknown as {
       __labGetTransaction?: (tid: string) => Promise<{
         outputs: { amountSats: number }[]
       } | null>
     }
-    if (!w.__labGetTransaction) {
+    if (!win.__labGetTransaction) {
       throw new Error(
         '__labGetTransaction is not available (open /lab in a DEV build for E2E)',
       )
     }
-    const d = await w.__labGetTransaction(id)
-    if (d == null) {
+    const fetchedTx = await win.__labGetTransaction(id)
+    if (fetchedTx == null) {
       throw new Error(`getTransaction returned null for ${id}`)
     }
-    return d.outputs.map((o) => o.amountSats)
-  }, idNorm)
+    return fetchedTx.outputs.map((o) => o.amountSats)
+  }, normalTxId)
 
   await expectLabTxOutputAmountsSats(page, expectedSats)
 }

@@ -18,7 +18,7 @@ registerAppRouter(router)
  * finishes flushing, so the tx never appears in post-navigation `__labGetState`.
  */
 if (import.meta.env.DEV) {
-  ;(window as unknown as { __e2eNavigateToLabTx?: (txid: string) => Promise<void> }).__e2eNavigateToLabTx =
+  (window as unknown as { __e2eNavigateToLabTx?: (txid: string) => Promise<void> }).__e2eNavigateToLabTx =
     async (txid: string) => {
       const id = txid.trim().toLowerCase()
       await router.navigate({ to: '/lab/tx/$txid', params: { txid: id } })

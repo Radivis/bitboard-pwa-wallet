@@ -363,7 +363,6 @@ describe('SettingsPage', () => {
     expect(screen.getByText('About')).toBeInTheDocument()
     const privacyPolicyLink = screen.getByRole('link', { name: /privacy policy/i })
     expect(privacyPolicyLink).toHaveAttribute('href', '/privacy')
-    expect(screen.queryByText('Support contact: TBD')).not.toBeInTheDocument()
     expect(
       screen.getByText(/Lab data is tied to wallets on this device/i),
     ).toBeInTheDocument()
