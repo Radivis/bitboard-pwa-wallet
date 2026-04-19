@@ -267,6 +267,20 @@ export async function goToLabTransactionsPage(page: Page): Promise<void> {
   })
 }
 
+/** Poll until `__labGetState` reports the expected mempool size (toast can win the race). */
+export async function waitForLabMempoolLength(page: Page, expectedLength: number): Promise<void> {
+  await expect
+    .poll(
+      async () => (await getLabState(page)).mempool.length,
+      {
+        timeout: 60_000,
+        intervals: [50, 100, 200, 400],
+        message: `Expected lab mempool.length === ${expectedLength}`,
+      },
+    )
+    .toBe(expectedLength)
+}
+
 /** After manual lab-entity Send (no wallet Review step): toast + mempool length. */
 export async function expectManualLabEntityTransactionInMempool(page: Page): Promise<void> {
   await expect(page.getByText('Transaction added to mempool').first()).toBeVisible({

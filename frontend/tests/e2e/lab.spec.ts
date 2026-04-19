@@ -8,8 +8,10 @@ import {
   labEntityAddressTypeForCreationIndex,
   createTransactionInLab,
   createRandomTransactionsInLab,
+  openLabMempoolTxInViewer,
   sendFromWallet,
   getLabState,
+  waitForLabMempoolLength,
   getUtxoSumByOwner,
   findAddressForOwner,
 } from './helpers/lab'
@@ -161,25 +163,25 @@ test.describe('Lab', { tag: '@lab' }, () => {
     }
 
     await createTransactionInLab(page, await addressForOwner(segwitA), await addressForOwner(segwitB), 11_000, 1)
-    expect((await getLabState(page)).mempool).toHaveLength(1)
+    await waitForLabMempoolLength(page, 1)
     await mineBlocksInLab(page, 1, LabOwnerType.LabEntity, { ownerName: segwitA, labAddressType: 'segwit' })
-    expect((await getLabState(page)).mempool).toHaveLength(0)
+    await waitForLabMempoolLength(page, 0)
 
     await createTransactionInLab(page, await addressForOwner(segwitA), await addressForOwner(taprootA), 13_000, 1)
-    expect((await getLabState(page)).mempool).toHaveLength(1)
+    await waitForLabMempoolLength(page, 1)
     await mineBlocksInLab(page, 1, LabOwnerType.LabEntity, { ownerName: segwitA, labAddressType: 'segwit' })
-    expect((await getLabState(page)).mempool).toHaveLength(0)
+    await waitForLabMempoolLength(page, 0)
 
     await createTransactionInLab(page, await addressForOwner(taprootA), await addressForOwner(segwitA), 9_000, 1)
-    expect((await getLabState(page)).mempool).toHaveLength(1)
+    await waitForLabMempoolLength(page, 1)
     await mineBlocksInLab(page, 1, LabOwnerType.LabEntity, { ownerName: taprootA, labAddressType: 'taproot' })
-    expect((await getLabState(page)).mempool).toHaveLength(0)
+    await waitForLabMempoolLength(page, 0)
 
     await createTransactionInLab(page, await addressForOwner(taprootA), await addressForOwner(taprootB), 14_000, 1)
-    expect((await getLabState(page)).mempool).toHaveLength(1)
+    await waitForLabMempoolLength(page, 1)
     await mineBlocksInLab(page, 1, LabOwnerType.LabEntity, { ownerName: taprootA, labAddressType: 'taproot' })
+    await waitForLabMempoolLength(page, 0)
     state = await getLabState(page)
-    expect(state.mempool).toHaveLength(0)
     expect(
       state.transactions.filter((t) => {
         const d = state.txDetails.find((x) => x.txid === t.txid)
@@ -426,8 +428,7 @@ test.describe('Lab', { tag: '@lab' }, () => {
     const parentTxid = inputWithPrev!.prevTxid!
     const vout = inputWithPrev!.prevVout!
 
-    await page.goto(`/lab/tx/${spendDetail!.txid}`)
-    await expect(page.getByRole('heading', { name: 'Transaction' })).toBeVisible({ timeout: 15000 })
+    await openLabMempoolTxInViewer(page, spendDetail!.txid)
 
     await page.getByRole('link', { name: new RegExp(`:\\s*${vout}`) }).first().click()
 
