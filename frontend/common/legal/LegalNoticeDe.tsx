@@ -4,7 +4,7 @@
  */
 import { LegalNoticeEntityBlock } from './LegalNoticeEntityBlock'
 
-/** Must stay aligned with `legal-notice-availability`: both DE and EN flags must be true to show imprint. */
+/** Kept for tests or future gating; imprint is always offered in the product when true. */
 export const LEGAL_NOTICE_DE_HAS_CONTENT = true
 
 export function LegalNoticeDe({

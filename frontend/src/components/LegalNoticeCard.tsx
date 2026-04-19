@@ -8,10 +8,11 @@ import {
 import { LegalLocaleSwitcher } from '@/components/LegalLocaleSwitcher'
 import { LegalNoticeDe } from '@common/legal/LegalNoticeDe'
 import { LegalNoticeEn } from '@common/legal/LegalNoticeEn'
-import { shouldShowLegalNotice } from '@common/legal/legal-notice-availability'
 import {
   LEGAL_NOTICE_TITLE_DE,
   LEGAL_NOTICE_TITLE_EN,
+  PRIVACY_PAGE_TITLE_DE,
+  PRIVACY_PAGE_TITLE_EN,
   useLegalLocale,
 } from '@/lib/legal-locale'
 
@@ -19,9 +20,9 @@ import {
 export function LegalNoticeCard() {
   const { locale, setLocale } = useLegalLocale()
 
-  if (!shouldShowLegalNotice()) return null
-
   const title = locale === 'de' ? LEGAL_NOTICE_TITLE_DE : LEGAL_NOTICE_TITLE_EN
+  const privacyLinkLabel =
+    locale === 'de' ? PRIVACY_PAGE_TITLE_DE : PRIVACY_PAGE_TITLE_EN
 
   return (
     <Card id="legal-notice">
@@ -44,7 +45,7 @@ export function LegalNoticeCard() {
             to="/privacy"
             className="text-primary underline underline-offset-4 hover:opacity-90"
           >
-            Privacy policy
+            {privacyLinkLabel}
           </Link>
         </p>
       </CardContent>

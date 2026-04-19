@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest'
+import { describe, it, expect, afterEach, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { LegalNoticeCard } from '@/components/LegalNoticeCard'
@@ -14,22 +14,8 @@ vi.mock('@tanstack/react-router', async (importOriginal) => {
   }
 })
 
-const shouldShowLegalNoticeMock = vi.hoisted(() => vi.fn(() => true))
-
-vi.mock('@common/legal/legal-notice-availability', async (importOriginal) => {
-  const actual = await importOriginal<
-    typeof import('@common/legal/legal-notice-availability')
-  >()
-  return {
-    ...actual,
-    shouldShowLegalNotice: () => shouldShowLegalNoticeMock(),
-  }
-})
-
 describe('LegalNoticeCard', () => {
   afterEach(() => {
-    vi.clearAllMocks()
-    shouldShowLegalNoticeMock.mockReturnValue(true)
     localStorage.clear()
   })
 
@@ -37,40 +23,31 @@ describe('LegalNoticeCard', () => {
     localStorage.clear()
   })
 
-  it('renders nothing when legal notice is hidden', () => {
-    shouldShowLegalNoticeMock.mockReturnValue(false)
-    const { container } = render(<LegalNoticeCard />)
-    expect(container.firstChild).toBeNull()
-  })
-
   it('renders German imprint when stored legal locale is de', () => {
-    shouldShowLegalNoticeMock.mockReturnValue(true)
     localStorage.setItem(LEGAL_LOCALE_STORAGE_KEY, 'de')
     render(<LegalNoticeCard />)
     expect(screen.getByText('Impressum')).toBeInTheDocument()
     expect(screen.getByText(/Inhalte gemäß §5 DDG/)).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: /privacy policy/i })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: /Datenschutzerklärung/i })).toHaveAttribute(
       'href',
       '/privacy',
     )
   })
 
   it('renders English imprint when stored legal locale is en', () => {
-    shouldShowLegalNoticeMock.mockReturnValue(true)
     localStorage.setItem(LEGAL_LOCALE_STORAGE_KEY, 'en')
     render(<LegalNoticeCard />)
     expect(screen.getByText('Legal notice')).toBeInTheDocument()
     expect(
       screen.getByText(/Information pursuant to Section 5 of the German Digital Services Act \(DDG\)/),
     ).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: /privacy policy/i })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: /Privacy policy/i })).toHaveAttribute(
       'href',
       '/privacy',
     )
   })
 
   it('shows switcher and toggles body when both languages are set', async () => {
-    shouldShowLegalNoticeMock.mockReturnValue(true)
     const user = userEvent.setup()
     render(<LegalNoticeCard />)
 
