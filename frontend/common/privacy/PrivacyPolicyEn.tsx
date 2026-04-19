@@ -1,9 +1,12 @@
 /**
  * English privacy policy body — single source for landing + PWA.
+ *
+ * Imports use cross-project-safe aliases (@legal-entity-fields, @legal-entity)
+ * so this file resolves both from the frontend (PWA) Vite config and from the
+ * landing-page Vite config.
  */
-import { Link } from '@tanstack/react-router'
-import { LegalEntityFields } from '@/components/LegalEntityFields'
-import { legalEntity } from '@/legal-entity/legal-entity'
+import { LegalEntityFields } from '@legal-entity-fields'
+import { legalEntity } from '@legal-entity'
 
 export function PrivacyPolicyEn() {
   return (
@@ -24,6 +27,9 @@ export function PrivacyPolicyEn() {
       <LegalEntityFields entity={legalEntity} className="mb-3 space-y-1" />
       <p>
         For privacy-related requests, please contact us preferably by email using the address above.
+        Email correspondence you initiate is processed on the basis of{' '}
+        <strong>Art. 6(1)(b) and/or (f) GDPR</strong> in order to handle your request, and is deleted
+        once it is no longer needed, subject to any statutory retention obligations.
       </p>
       <p>
         <strong>Data protection officer:</strong> We have{' '}
@@ -61,6 +67,13 @@ export function PrivacyPolicyEn() {
         Technically, wallet data lives in a <strong>SQLite</strong> database stored in the browser’s{' '}
         <strong>Origin Private File System (OPFS)</strong> — a private, website-specific file area —
         not in IndexedDB. OPFS here simply holds the database file.
+      </p>
+      <p>
+        The PWA additionally registers a <strong>service worker</strong> and uses the browser’s{' '}
+        <strong>Cache Storage</strong> to cache static app assets (HTML, JavaScript, CSS, fonts,
+        WebAssembly modules) so the app can launch and function offline. These caches are
+        <strong> technically necessary</strong> for the PWA to work and do not contain your wallet
+        data.
       </p>
 
       <h2>5. Network access (Esplora)</h2>
@@ -106,7 +119,8 @@ export function PrivacyPolicyEn() {
         In short: unless you set an <strong>app password</strong>, sensitive material (recovery
         phrase, keys, Lightning connection details, etc.) is{' '}
         <strong>not</strong> protected on your device by the strong “encryption at rest” described
-        here.
+        here. We <strong>recommend setting an app password</strong> before storing any seed,
+        descriptor, or NWC connection string in the app.
       </p>
       <p>
         In more detail: recovery phrases (seeds), keys, descriptors, NWC connection strings, and
@@ -163,19 +177,56 @@ export function PrivacyPolicyEn() {
           <strong>Art. 6(1)(b) GDPR</strong> and/or <strong>Art. 6(1)(f) GDPR</strong>, where personal
           data is involved in that use.
         </li>
+        <li>
+          <strong>Email correspondence with the controller</strong> (for example privacy requests):{' '}
+          <strong>Art. 6(1)(b) GDPR</strong> and/or <strong>Art. 6(1)(f) GDPR</strong>.
+        </li>
       </ul>
 
-      <h2>10. Categories of data and storage periods</h2>
+      <h2>10. Recipients and categories of recipients</h2>
+      <p>
+        Beyond Bitboard itself as controller, personal data may — depending on how you use the
+        website and the app — be processed by the following categories of recipients:
+      </p>
+      <ul className="list-disc space-y-2 pl-5">
+        <li>
+          <strong>Hosting provider:</strong> <strong>Vercel Inc.</strong> and the underlying
+          infrastructure providers, in connection with delivering the website and the app.
+        </li>
+        <li>
+          <strong>Esplora operator(s):</strong> the operator of the Esplora-style endpoint{' '}
+          <strong>you configure in Settings</strong>, in connection with balance and transaction
+          queries you initiate.
+        </li>
+        <li>
+          <strong>Nostr relays and Lightning operator (NWC):</strong> the Nostr relays you choose or
+          that your connected Lightning wallet specifies, and the operator of that connected
+          Lightning infrastructure, in connection with NWC payments and notifications.
+        </li>
+        <li>
+          <strong>Email service provider</strong> of the controller (currently{' '}
+          <strong>Proton AG</strong>, Switzerland), in connection with email correspondence you
+          initiate.
+        </li>
+      </ul>
+      <p>
+        Bitboard does not sell personal data and does not pass it on to third parties beyond what is
+        necessary for the purposes described above.
+      </p>
+
+      <h2>11. Categories of data and storage periods</h2>
       <p>
         <strong>Categories</strong> may include in particular: technical connection/access data from
         hosting (Vercel); language preference (locally in the browser); on-device wallet data (e.g. key
         material, descriptors, transaction and balance information you create or fetch); NWC
-        connection data and cached Lightning information locally; and data visible to or processed
-        by Esplora and NWC/Lightning third parties in connection with requests you initiate.
+        connection data and cached Lightning information locally; data visible to or processed
+        by Esplora and NWC/Lightning third parties in connection with requests you initiate; and
+        contact data contained in any email correspondence with the controller.
       </p>
       <p>
-        <strong>Storage periods:</strong> Vercel hosting logs are retained and deleted according to
-        the provider’s retention rules (see the{' '}
+        <strong>Storage periods:</strong> Vercel hosting and security logs are retained and deleted
+        according to the provider’s retention rules — typically in the order of weeks for access and
+        firewall logs (see the{' '}
         <a
           href="https://vercel.com/legal/privacy-policy"
           className="text-primary underline underline-offset-4"
@@ -183,21 +234,21 @@ export function PrivacyPolicyEn() {
           rel="noopener noreferrer"
         >
           Vercel Privacy Policy
-        </a>
-        ). Data stored only locally in your browser or device remains until you delete it (e.g. by
-        clearing site or app data). Export files you download are under your control; Bitboard has no
-        access after download.
+        </a>{' '}
+        for the authoritative, current periods). Data stored only locally in your browser or device
+        remains until you delete it (e.g. by clearing site or app data). Export files you download
+        are under your control; Bitboard has no access after download. Email correspondence is
+        deleted once it is no longer needed for the purpose of handling your request, subject to
+        any statutory retention obligations.
       </p>
 
-      <h2>11. International transfers (in particular USA / Vercel)</h2>
+      <h2>12. International transfers (in particular USA / Vercel)</h2>
       <p>
-        Use of Vercel may involve <strong>transferring personal data to the United States</strong>.{' '}
-        <strong>
-          Vercel is certified under the EU-US Data Privacy Framework (DPF). That certification
-          provides an appropriate safeguard for transfers to the US.
-        </strong>{' '}
-        Standard Contractual Clauses and other measures may also apply depending on the situation.
-        Please refer to Vercel’s current{' '}
+        Use of Vercel may involve <strong>transferring personal data to the United States</strong>.
+        According to its own information, <strong>Vercel is certified under the EU-US Data Privacy
+        Framework (DPF)</strong> (status checked: April 2026), which is intended to provide an
+        appropriate safeguard for such transfers. Standard Contractual Clauses and other measures may
+        also apply depending on the situation. Please refer to Vercel’s current{' '}
         <a
           href="https://vercel.com/legal/privacy-policy"
           className="text-primary underline underline-offset-4"
@@ -209,7 +260,14 @@ export function PrivacyPolicyEn() {
         and contractual documents for details.
       </p>
 
-      <h2>12. Right to lodge a complaint</h2>
+      <h2>13. No automated decision-making</h2>
+      <p>
+        We do not carry out <strong>automated decision-making</strong>, including profiling, with
+        legal effect or similarly significant effect on you within the meaning of{' '}
+        <strong>Art. 22 GDPR</strong>.
+      </p>
+
+      <h2>14. Right to lodge a complaint</h2>
       <p>
         You have the right to lodge a complaint with a <strong>supervisory authority</strong>,
         in particular in the Member State of your habitual residence, place of work, or the place of
@@ -217,7 +275,7 @@ export function PrivacyPolicyEn() {
         your federal state is one example.
       </p>
 
-      <h2>13. Your rights</h2>
+      <h2>15. Your rights</h2>
       <p>
         Where personal data is processed, you generally have the following rights under the GDPR,
         including:
@@ -239,7 +297,12 @@ export function PrivacyPolicyEn() {
           <strong>Objection</strong> to processing (Art. 21 GDPR),
         </li>
         <li>
-          <strong>Data portability</strong> (Art. 20 GDPR).
+          <strong>Data portability</strong> (Art. 20 GDPR),
+        </li>
+        <li>
+          <strong>Withdrawal of consent</strong> at any time, with effect for the future, where
+          processing is based on your consent (<strong>Art. 7(3) GDPR</strong>); the lawfulness of
+          processing carried out before withdrawal is not affected.
         </li>
       </ul>
       <p>
@@ -253,15 +316,16 @@ export function PrivacyPolicyEn() {
         settings.
       </p>
 
-      <h2>14. Version and changes to this privacy policy</h2>
+      <h2>16. Version and changes to this privacy policy</h2>
       <p>
         <strong>Version:</strong> April 2026.
       </p>
       <p>
         We may update this privacy policy when technical or legal requirements change. The current
-        version is always available on this page at <strong>/privacy</strong> (or the publicly
-        reachable equivalent). Where changes are <strong>material</strong>, we will try to let you
-        know, for example via this website or the public project repository (e.g. GitHub).
+        version is always available at the URL of this page (e.g. <strong>/privacy</strong> in the
+        app, or the publicly reachable equivalent on the landing page). Where changes are{' '}
+        <strong>material</strong>, we will try to let you know, for example via this website or the
+        public project repository (e.g. GitHub).
       </p>
       <p>
         Because this is a <strong>pure client-side wallet</strong>, you generally have{' '}

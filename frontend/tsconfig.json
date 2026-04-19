@@ -17,7 +17,9 @@
     /* Path aliases (no baseUrl — TS 6 deprecates baseUrl used only to prefix paths) */
     "paths": {
       "@/*": ["./src/*"],
-      "@common/*": ["./common/*"]
+      "@common/*": ["./common/*"],
+      "@legal-entity-fields": ["./src/components/LegalEntityFields.tsx"],
+      "@legal-entity": ["./src/legal-entity/legal-entity.ts"]
     },
 
     /* Linting */

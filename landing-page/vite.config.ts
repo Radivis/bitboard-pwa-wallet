@@ -38,6 +38,10 @@ export default defineConfig({
         projectRoot,
         '../frontend/src/components/LegalEntityFields.tsx',
       ),
+      '@legal-entity': path.resolve(
+        projectRoot,
+        '../frontend/src/legal-entity/legal-entity.ts',
+      ),
     },
   },
   build: {

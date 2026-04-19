@@ -1,10 +1,13 @@
 /**
  * German privacy policy body — single source for landing + PWA.
  * Styling comes from the parent `PrivacyPolicyLayout` / article classes.
+ *
+ * Imports use cross-project-safe aliases (@legal-entity-fields, @legal-entity)
+ * so this file resolves both from the frontend (PWA) Vite config and from the
+ * landing-page Vite config.
  */
-import { Link } from '@tanstack/react-router'
-import { LegalEntityFields } from '@/components/LegalEntityFields'
-import { legalEntity } from '@/legal-entity/legal-entity'
+import { LegalEntityFields } from '@legal-entity-fields'
+import { legalEntity } from '@legal-entity'
 
 export function PrivacyPolicyDe() {
   return (
@@ -28,7 +31,10 @@ export function PrivacyPolicyDe() {
       <LegalEntityFields entity={legalEntity} className="mb-3 space-y-1" />
       <p>
         Für Anfragen zum Datenschutz erreichen Sie uns vorzugsweise per E-Mail an die oben
-        genannte Adresse. 
+        genannte Adresse. Inhalte solcher E-Mails verarbeiten wir auf Grundlage von{' '}
+        <strong>Art. 6 Abs. 1 lit. b und/oder f DSGVO</strong> zur Bearbeitung Ihres Anliegens und
+        löschen sie, sobald sie hierfür nicht mehr erforderlich sind, vorbehaltlich gesetzlicher
+        Aufbewahrungspflichten.
       </p>
       <p>
         <strong>Datenschutzbeauftragter:</strong> Ein betrieblicher Datenschutzbeauftragter ist
@@ -45,7 +51,7 @@ export function PrivacyPolicyDe() {
         speichert oder auswertet (siehe Abschnitt zur App).
       </p>
       <p>
-        <strong>Marketing-/Tracking-Tools:</strong> In der aktuellen Auslieferung sind uns keine
+        <strong>Marketing-/Tracking-Tools:</strong> In der aktuellen Auslieferung sind keine
         zusätzlichen Drittanbieter-Tools wie Web-Analytics oder Werbe-Tracker eingebunden; es
         entstehen insbesondere die technisch bedingten Hosting-Daten bei Vercel sowie die
         nachfolgend beschriebenen lokalen Einstellungen.
@@ -69,6 +75,13 @@ export function PrivacyPolicyDe() {
         <strong>SQLite</strong>-Datenbank im <strong>Origin Private File System (OPFS)</strong> des
         Browsers gespeichert — nicht in IndexedDB. OPFS ist ein vom Browser bereitgestellter,
         origin-gebundener Speicherbereich für Dateien (hier für die SQLite-Datenbank).
+      </p>
+      <p>
+        Die PWA registriert zusätzlich einen <strong>Service Worker</strong> und nutzt den{' '}
+        <strong>Cache Storage</strong> des Browsers, um statische App-Bestandteile (HTML,
+        JavaScript, CSS, Schriften, WebAssembly-Module) für den Offline-Betrieb zwischenzuspeichern.
+        Diese Caches sind <strong>technisch erforderlich</strong> für die Funktion der PWA und
+        enthalten keine Wallet-Inhalte.
       </p>
 
       <h2>5. Netzwerkzugriff (Esplora)</h2>
@@ -117,6 +130,8 @@ export function PrivacyPolicyDe() {
         Kurz gesagt: Ohne von Ihnen gesetztes <strong>App-Passwort</strong> liegen sensible Inhalte
         (z. B. Wiederherstellungsphrase, Schlüssel, Verbindungsdaten zu Lightning) auf Ihrem Gerät{' '}
         <strong>nicht</strong> mit der beschriebenen starken Verschlüsselung „im Ruhezustand“ geschützt.
+        Wir <strong>empfehlen, vor dem Speichern</strong> von Seed, Deskriptoren oder einer
+        NWC-Verbindungszeichenfolge in der App zunächst <strong>ein App-Passwort zu setzen</strong>.
       </p>
       <p>
         Technisch: Daten wie Wiederherstellungsphrasen (Seeds), kryptographische Schlüssel,
@@ -171,25 +186,62 @@ export function PrivacyPolicyDe() {
           jeweiligen Betreiber, soweit deren Verarbeitung relevant ist.
         </li>
         <li>
-          <strong>NWC-Verbindung</strong> (Anbindung an die von Ihnen gewählte Lightning-Wallet):
-          <strong> Art. 6 Abs. 1 lit. b DSGVO</strong> und/oder{' '}
+          <strong>NWC-Verbindung</strong> (Anbindung an die von Ihnen gewählte Lightning-Wallet):{' '}
+          <strong>Art. 6 Abs. 1 lit. b DSGVO</strong> und/oder{' '}
           <strong>Art. 6 Abs. 1 lit. f DSGVO</strong>, soweit personenbezogene Daten im Zusammenhang
           mit der Nutzung anfallen.
         </li>
+        <li>
+          <strong>E-Mail-Korrespondenz mit dem Verantwortlichen</strong> (z. B. Datenschutzanfragen):{' '}
+          <strong>Art. 6 Abs. 1 lit. b DSGVO</strong> und/oder <strong>Art. 6 Abs. 1 lit. f DSGVO</strong>.
+        </li>
       </ul>
 
-      <h2>10. Datenkategorien und Speicherdauer</h2>
+      <h2>10. Empfänger und Empfängerkategorien</h2>
+      <p>
+        Über Bitboard als Verantwortlichen hinaus können personenbezogene Daten — abhängig von Ihrer
+        Nutzung der Website und der App — von folgenden Kategorien von Empfängern verarbeitet werden:
+      </p>
+      <ul className="list-disc space-y-2 pl-5">
+        <li>
+          <strong>Hosting-Anbieter:</strong> <strong>Vercel Inc.</strong> sowie die dort genutzten
+          Infrastrukturanbieter, im Zusammenhang mit der Auslieferung der Website und der App.
+        </li>
+        <li>
+          <strong>Esplora-Betreiber:</strong> der Betreiber des in den{' '}
+          <strong>Einstellungen</strong> von Ihnen konfigurierten Esplora-Endpunkts, im Zusammenhang
+          mit den von Ihnen ausgelösten Konto- und Transaktionsabfragen.
+        </li>
+        <li>
+          <strong>Nostr-Relays und Lightning-Betreiber (NWC):</strong> die von Ihnen gewählten oder
+          von Ihrer angebundenen Lightning-Wallet vorgegebenen Nostr-Relays sowie der Betreiber der
+          verbundenen Lightning-Infrastruktur, im Zusammenhang mit NWC-Zahlungen und -Benachrichtigungen.
+        </li>
+        <li>
+          <strong>E-Mail-Anbieter</strong> des Verantwortlichen (derzeit{' '}
+          <strong>Proton AG</strong>, Schweiz), im Zusammenhang mit der von Ihnen initiierten
+          E-Mail-Korrespondenz.
+        </li>
+      </ul>
+      <p>
+        Eine Veräußerung personenbezogener Daten findet nicht statt; eine Weitergabe an Dritte
+        erfolgt nicht über das hinaus, was zur Erfüllung der oben genannten Zwecke erforderlich ist.
+      </p>
+
+      <h2>11. Datenkategorien und Speicherdauer</h2>
       <p>
         <strong>Kategorien:</strong> können insbesondere umfassen: technische Verbindungs- und
         Zugriffsdaten beim Hosting (Vercel); Sprachpräferenz (lokal im Browser); Wallet-Daten lokal
         (u. a. Schlüsselmaterial, Deskriptoren, Transaktions- und Kontostandsinformationen, sofern
         von Ihnen angelegt oder abgerufen); NWC-Verbindungsdaten und zwischengespeicherte
-        Lightning-Informationen lokal; sowie Daten, die im Rahmen der von Ihnen ausgelösten
-        Anfragen an Esplora- und NWC-/Lightning-Dritte sichtbar oder verarbeitet werden.
+        Lightning-Informationen lokal; Daten, die im Rahmen der von Ihnen ausgelösten Anfragen an
+        Esplora- und NWC-/Lightning-Dritte sichtbar oder verarbeitet werden; sowie Kontaktdaten in
+        einer E-Mail-Korrespondenz mit dem Verantwortlichen.
       </p>
       <p>
-        <strong>Speicherdauer:</strong> Hosting-Logs bei Vercel richten sich nach den Aufbewahrungs-
-        und Löschfristen des Anbieters (siehe die{' '}
+        <strong>Speicherdauer:</strong> Hosting- und Sicherheitsprotokolle bei Vercel richten sich
+        nach den Aufbewahrungs- und Löschfristen des Anbieters — typischerweise im Bereich weniger
+        Wochen für Zugriffs- und Firewall-Logs (maßgeblich ist die jeweils aktuelle{' '}
         <a
           href="https://vercel.com/legal/privacy-policy"
           className="text-primary underline underline-offset-4"
@@ -201,16 +253,20 @@ export function PrivacyPolicyDe() {
         ). Daten, die nur lokal in Ihrem Browser bzw. auf Ihrem Gerät gespeichert werden, bleiben
         gespeichert, bis Sie sie löschen (z. B. App- oder Website-Daten des Browsers entfernen,
         App-Daten der PWA löschen). Von Ihnen heruntergeladene Exportdateien unterliegen Ihrer
-        eigenen Verantwortung; Bitboard hat darauf nach dem Download keinen Zugriff.
+        eigenen Verantwortung; Bitboard hat darauf nach dem Download keinen Zugriff. Inhalte einer
+        E-Mail-Korrespondenz löschen wir, sobald sie für die Bearbeitung Ihres Anliegens nicht mehr
+        erforderlich sind, vorbehaltlich gesetzlicher Aufbewahrungspflichten.
       </p>
 
-      <h2>11. Drittlandübermittlung (insbesondere USA / Vercel)</h2>
+      <h2>12. Drittlandübermittlung (insbesondere USA / Vercel)</h2>
       <p>
         Die Nutzung von Vercel kann eine <strong>Übermittlung personenbezogener Daten in die USA</strong>{' '}
-        beinhalten. <strong>Vercel ist unter dem EU-US Data Privacy Framework (DPF) zertifiziert. Dies
-        stellt eine angemessene Garantie für die Übermittlung in die USA dar.</strong> Ergänzend
-        können je nach Sachverhalt <strong>Standardvertragsklauseln</strong> der EU-Kommission und
-        weitere Maßnahmen eine Rolle spielen. Einzelheiten entnehmen Sie bitte der aktuellen{' '}
+        beinhalten. Vercel ist nach eigenen Angaben unter dem{' '}
+        <strong>EU-US Data Privacy Framework (DPF) zertifiziert</strong> (Stand der Prüfung: April
+        2026); dies soll eine angemessene Garantie für derartige Übermittlungen darstellen.
+        Ergänzend können je nach Sachverhalt <strong>Standardvertragsklauseln</strong> der
+        EU-Kommission und weitere Maßnahmen eine Rolle spielen. Einzelheiten entnehmen Sie bitte der
+        aktuellen{' '}
         <a
           href="https://vercel.com/legal/privacy-policy"
           className="text-primary underline underline-offset-4"
@@ -222,7 +278,14 @@ export function PrivacyPolicyDe() {
         und den Vertragsunterlagen von Vercel.
       </p>
 
-      <h2>12. Beschwerderecht</h2>
+      <h2>13. Keine automatisierte Entscheidungsfindung</h2>
+      <p>
+        Eine <strong>automatisierte Entscheidungsfindung</strong> einschließlich Profiling mit
+        rechtlicher Wirkung oder ähnlich erheblicher Beeinträchtigung im Sinne von{' '}
+        <strong>Art. 22 DSGVO</strong> findet nicht statt.
+      </p>
+
+      <h2>14. Beschwerderecht</h2>
       <p>
         Sie haben das Recht, sich bei einer <strong>Aufsichtsbehörde</strong> über die Verarbeitung
         personenbezogener Daten zu beschweren, insbesondere in dem Mitgliedstaat Ihres gewöhnlichen
@@ -230,7 +293,7 @@ export function PrivacyPolicyDe() {
         ist hierfür beispielsweise die für Ihr Bundesland zuständige Datenschutzaufsicht zuständig.
       </p>
 
-      <h2>13. Ihre Rechte</h2>
+      <h2>15. Ihre Rechte</h2>
       <p>
         Soweit personenbezogene Daten verarbeitet werden, stehen Ihnen die in der DSGVO vorgesehenen
         Rechte grundsätzlich zu, insbesondere:
@@ -254,6 +317,11 @@ export function PrivacyPolicyDe() {
         <li>
           <strong>Datenübertragbarkeit</strong> (Art. 20 DSGVO),
         </li>
+        <li>
+          <strong>Widerruf einer Einwilligung</strong> jederzeit mit Wirkung für die Zukunft, sofern
+          eine Verarbeitung auf Ihrer Einwilligung beruht (<strong>Art. 7 Abs. 3 DSGVO</strong>);
+          die Rechtmäßigkeit der bis zum Widerruf erfolgten Verarbeitung bleibt unberührt.
+        </li>
       </ul>
       <p>
         Viele Verarbeitungsvorgänge in dieser App erfolgen jedoch lokal auf Ihrem Gerät — dort können
@@ -266,16 +334,17 @@ export function PrivacyPolicyDe() {
         App-Daten oder der gesamten Website-Daten im Browser möglich.
       </p>
 
-      <h2>14. Stand und Änderungen dieser Datenschutzerklärung</h2>
+      <h2>16. Stand und Änderungen dieser Datenschutzerklärung</h2>
       <p>
         <strong>Stand:</strong> April 2026.
       </p>
       <p>
         Wir behalten uns vor, diese Datenschutzerklärung anzupassen, wenn sich technische oder
-        rechtliche Rahmenbedingungen ändern. Die jeweils aktuelle Version finden Sie hier auf der
-        Seite <strong>/privacy</strong> der App (bzw. der öffentlich erreichbaren Version dieser
-        Seite). Über <strong>wesentliche Änderungen</strong> informieren wir nach Möglichkeit, z. B.
-        über diese Website oder das öffentliche Projekt-Repository (z. B. GitHub).
+        rechtliche Rahmenbedingungen ändern. Die jeweils aktuelle Version finden Sie unter der
+        URL dieser Seite (z. B. <strong>/privacy</strong> in der App bzw. unter der öffentlich
+        erreichbaren Entsprechung auf der Landing Page). Über <strong>wesentliche Änderungen</strong>{' '}
+        informieren wir nach Möglichkeit, z. B. über diese Website oder das öffentliche
+        Projekt-Repository (z. B. GitHub).
       </p>
       <p>
         Da es sich um eine <strong>reine Client-seitige Wallet</strong> handelt, haben Sie in der

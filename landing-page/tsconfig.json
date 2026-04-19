@@ -37,6 +37,9 @@
       "@legal-entity-fields": [
         "../frontend/src/components/LegalEntityFields.tsx"
       ],
+      "@legal-entity": [
+        "../frontend/src/legal-entity/legal-entity.ts"
+      ],
       "@common/*": [
         "../frontend/common/*"
       ]
