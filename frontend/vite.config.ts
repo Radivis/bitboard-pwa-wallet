@@ -130,6 +130,7 @@ export default defineConfig({
     alias: {
       '@': path.resolve(projectRoot, './src'),
       '@common': path.resolve(projectRoot, './common'),
+      '@legal-locale': path.resolve(projectRoot, './src/lib/legal-locale.ts'),
       // Cross-project-safe aliases — the same module identifiers also resolve
       // from the landing-page Vite/TS configs, so files under `frontend/common/`
       // can import them without depending on `@/...` (which differs per project root).

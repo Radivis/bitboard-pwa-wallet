@@ -11,7 +11,7 @@ import { legalEntity } from '@legal-entity'
 export function PrivacyPolicyEn() {
   return (
     <>
-      <h1>Privacy policy</h1>
+      <h1>Privacy Policy</h1>
       <p>
         This privacy policy covers both the Bitboard marketing website (landing page) and the Bitboard
         Wallet web app (Progressive Web App, “PWA”) as a single document. Sections below explain what

@@ -2,11 +2,10 @@ import { Globe, ExternalLink } from 'lucide-react';
 import { GitHubMark } from '@/src/GitHubMark';
 import { FooterOutboundLink } from './FooterOutboundLink';
 import { LegalLocaleSwitcherLanding } from '@/src/components/LegalLocaleSwitcherLanding';
-import { LegalNoticeDe } from '@common/legal/LegalNoticeDe';
-import { LegalNoticeEn } from '@common/legal/LegalNoticeEn';
+import { LegalHubSections } from '@common/legal/LegalHubSections';
 import {
-  LEGAL_NOTICE_TITLE_DE,
-  LEGAL_NOTICE_TITLE_EN,
+  LEGAL_HUB_TITLE_DE,
+  LEGAL_HUB_TITLE_EN,
   PRIVACY_PAGE_TITLE_DE,
   PRIVACY_PAGE_TITLE_EN,
   useLegalLocale,
@@ -20,7 +19,7 @@ interface SiteFooterProps {
 
 export function SiteFooter({ githubUrl, websiteUrl, blogUrl }: SiteFooterProps) {
   const { locale, setLocale } = useLegalLocale();
-  const legalTitle = locale === 'de' ? LEGAL_NOTICE_TITLE_DE : LEGAL_NOTICE_TITLE_EN;
+  const hubTitle = locale === 'de' ? LEGAL_HUB_TITLE_DE : LEGAL_HUB_TITLE_EN;
   const privacyLinkLabel =
     locale === 'de' ? PRIVACY_PAGE_TITLE_DE : PRIVACY_PAGE_TITLE_EN;
 
@@ -52,18 +51,9 @@ export function SiteFooter({ githubUrl, websiteUrl, blogUrl }: SiteFooterProps) 
           </div>
         </div>
 
-        <div className="text-center md:text-left">
-          <a
-            href="/privacy.html"
-            className="text-sm text-gray-400 underline underline-offset-4 hover:text-gray-200"
-          >
-            {privacyLinkLabel}
-          </a>
-        </div>
-
         <div className="border-t border-white/10 pt-6 text-left w-full">
           <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
-            <h2 className="text-sm font-semibold text-gray-300 shrink-0">{legalTitle}</h2>
+            <h2 className="text-sm font-semibold text-gray-300 shrink-0">{hubTitle}</h2>
             <LegalLocaleSwitcherLanding
               activeLocale={locale}
               onLocaleChange={setLocale}
@@ -71,11 +61,18 @@ export function SiteFooter({ githubUrl, websiteUrl, blogUrl }: SiteFooterProps) 
             />
           </div>
           <div className="max-w-3xl mt-2">
-            {locale === 'de' ? (
-              <LegalNoticeDe surface="landing" />
-            ) : (
-              <LegalNoticeEn surface="landing" />
-            )}
+            <LegalHubSections
+              locale={locale}
+              surface="landing"
+              privacyLink={
+                <a
+                  href="/privacy.html"
+                  className="text-sm text-gray-400 underline underline-offset-4 hover:text-gray-200"
+                >
+                  {privacyLinkLabel}
+                </a>
+              }
+            />
           </div>
         </div>
       </div>

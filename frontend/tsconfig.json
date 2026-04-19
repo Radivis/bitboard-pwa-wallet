@@ -18,6 +18,7 @@
     "paths": {
       "@/*": ["./src/*"],
       "@common/*": ["./common/*"],
+      "@legal-locale": ["./src/lib/legal-locale.ts"],
       "@legal-entity-fields": ["./src/components/LegalEntityFields.tsx"],
       "@legal-entity": ["./src/legal-entity/legal-entity.ts"]
     },
