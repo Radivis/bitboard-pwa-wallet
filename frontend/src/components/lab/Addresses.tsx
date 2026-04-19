@@ -23,7 +23,10 @@ import {
   useLabAddressesForOwnerPage,
   useLabOwnerKeysPage,
 } from '@/hooks/useLabPaginatedQueries'
-import { LAB_CARD_PAGE_SIZE, LAB_ENTITY_INNER_PAGE_SIZE } from '@/lib/lab-paginated-queries'
+import {
+  LAB_ADDRESS_UTXO_OWNER_PAGE_SIZE,
+  LAB_ENTITY_INNER_PAGE_SIZE,
+} from '@/lib/lab-paginated-queries'
 import type { AddressType } from '@/lib/wallet-domain-types'
 import { useWalletStore } from '@/stores/walletStore'
 import { Badge } from '@/components/ui/badge'
@@ -155,7 +158,7 @@ When you send from an address, the wallet spends whole previous outputs (UTXOs) 
             </p>
           ) : (
             <CardPagination
-              pageSize={LAB_CARD_PAGE_SIZE}
+              pageSize={LAB_ADDRESS_UTXO_OWNER_PAGE_SIZE}
               totalCount={totalOwnerCount}
               pageIndex={ownerPageIndex}
               onPageChange={setOwnerPageIndex}

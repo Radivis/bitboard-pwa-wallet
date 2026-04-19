@@ -1,7 +1,7 @@
 import { Kysely, SqliteDialect } from 'kysely'
 import Database from 'better-sqlite3'
 import type { Database as DbSchema } from './schema'
-import { migrateToLatest } from './migrations'
+import { runWalletMigrations } from './migrations/run-wallet-migrations'
 
 export async function createTestDatabase(): Promise<Kysely<DbSchema>> {
   const db = new Kysely<DbSchema>({
@@ -9,6 +9,6 @@ export async function createTestDatabase(): Promise<Kysely<DbSchema>> {
       database: new Database(':memory:'),
     }),
   })
-  await migrateToLatest(db)
+  await runWalletMigrations(db)
   return db
 }

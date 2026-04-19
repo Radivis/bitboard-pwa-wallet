@@ -3,8 +3,11 @@ import { deriveKeyBytes } from '../kdf'
 
 vi.mock('@/workers/encryption-factory', () => ({
   getEncryptionWorker: () => ({
-    deriveKeyBytes: async (_password: string, _salt: Uint8Array) =>
-      new Uint8Array(32).fill(0xab),
+    deriveKeyBytes: async (
+      _password: string,
+      _salt: Uint8Array,
+      _kdfPhc: string,
+    ) => new Uint8Array(32).fill(0xab),
   }),
 }))
 

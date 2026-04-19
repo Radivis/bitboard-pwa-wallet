@@ -2,6 +2,8 @@
 
 This document describes how Bitboard Wallet keeps user credentials and wallet secrets safe, and states inherent limitations of the web / PWA environment.
 
+For **reporting vulnerabilities** in Bitboard Wallet, see the repository root [SECURITY.md](../SECURITY.md).
+
 ---
 
 ## 1. Threat model
@@ -31,9 +33,9 @@ This document describes how Bitboard Wallet keeps user credentials and wallet se
 
 **Storage**
 
-- **Encrypted at rest:** The `wallet_secrets` table stores two ciphertexts per wallet row: a **payload** blob (`encrypted_data`, `iv`, `salt`, `kdf_version`) for the non-mnemonic secrets JSON (descriptor sub-wallets, Lightning NWC metadata), and a **separate mnemonic** blob (`mnemonic_encrypted_data`, `mnemonic_iv`, `mnemonic_salt`, `mnemonic_kdf_version`). Both are encrypted with the Bitboard app password using **Argon2id** + **AES-256-GCM**; salt and IV are unique per encryption. Two Argon2id parameter sets are used:
+- **Encrypted at rest:** The `wallet_secrets` table stores two ciphertexts per wallet row: a **payload** blob (`encrypted_data`, `iv`, `salt`, `kdf_phc`) for the non-mnemonic secrets JSON (descriptor sub-wallets, Lightning NWC metadata), and a **separate mnemonic** blob (`mnemonic_encrypted_data`, `mnemonic_iv`, `mnemonic_salt`, `mnemonic_kdf_phc`). Both are encrypted with the Bitboard app password using **Argon2id** + **AES-256-GCM**; salt and IV are unique per encryption. Each blob has a **PHC-style Argon2id parameter string** (`kdf_phc` / `mnemonic_kdf_phc`) so the correct memory, time, and parallelism costs are always explicit at rest. Two parameter sets are used in practice:
   - **Production (default):** 64 MB memory, 3 iterations, parallelism 4, 32-byte key. Used for new encryption when the app is not built with the CI flag.
-  - **CI:** 64 MB memory, 2 iterations, parallelism 1, 32-byte key. Used when `VITE_ARGON2_CI=1` at build time (e.g. in CI for faster tests and E2E), and for decrypting data that was encrypted with these params. The `kdf_version` column (1 = CI, 2 = production) records which set was used so decryption uses the correct params.
+  - **CI:** 64 MB memory, 2 iterations, parallelism 1, 32-byte key. Used when `VITE_ARGON2_CI=1` at build time (e.g. in CI for faster tests and E2E), and for decrypting data that was encrypted with these params.
 - **Unencrypted:** The `wallets` table (ids, names) and `settings` (e.g. custom Esplora URLs). No passwords or mnemonics are stored in settings.
 
 **Mnemonic vs. payload (moderate hardening, not sub-wallet isolation)**
@@ -64,12 +66,19 @@ This document describes how Bitboard Wallet keeps user credentials and wallet se
 
 ### 2.5 Dependencies and audits
 
-- **Rust:** `cargo deny check advisories` runs in CI (see `.github/workflows/audit.yml`).
-- **Frontend:** Same workflow runs Socket CLI for npm when the API key is set; Socket is optional, but strongly recommended for CI. Lefthook audit steps may be commented out; consider `npm audit` for local pre-push checks.
+- **Rust:** `cargo deny check advisories` runs in CI (see `.github/workflows/audit.yml`). The workspace pins **`ml-dsa`** to **`0.1.0-rc.8`** because upstream has not published a stable **`0.1.0`** on crates.io yet (only `0.1.0-rc.*`); the implementation targets FIPS-204; we will bump when RustCrypto ships a non-RC release.
+- **Frontend and landing page:** The same workflow runs Socket CLI for npm in **`frontend/`** and **`landing-page/`** when the API key is set; Socket is optional, but strongly recommended for CI. Lefthook audit steps may be commented out; consider `npm audit` for local pre-push checks.
 
 ### 2.6 Logging
 
 - Production code does not log passwords, mnemonics, or key material. Worker init and health checks log only non-sensitive messages. Dev/test components (e.g. CryptoTest) that can display a mnemonic must not be included in production builds or must be behind a dev-only route.
+
+### 2.7 Data exports (local ZIP backups)
+
+Settings let users export the two SQLite databases as ZIP files on their device (nothing is uploaded by this flow).
+
+- **Wallet database export** — The archive includes the wallet SQLite file plus a manifest that **cryptographically signs** a digest of that file using ML-DSA; the signing key is derived from the user’s app password with Argon2id using **fixed backup-signing PHC profiles** (production and CI variants). Import verifies the manifest; verification only accepts those **known backup `kdf_phc` strings**, so manifests cannot smuggle arbitrary Argon2 cost parameters.
+- **Lab database export** — The archive contains only the lab SQLite file. There is **no signature and no authenticity guarantee**: integrity depends entirely on trusting the source of the ZIP. Importing a lab backup **replaces local lab state** (simulation / test data on this device). It does **not** by itself compromise main-wallet keys, but a malicious file could spoof lab balances or owners in the UI until the user notices.
 
 ---
 

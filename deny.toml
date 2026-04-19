@@ -1,0 +1,5 @@
+# cargo-deny: https://embarkstudios.github.io/cargo-deny/
+# CI runs: cargo deny check advisories (see .github/workflows/audit.yml)
+
+[advisories]
+version = 2

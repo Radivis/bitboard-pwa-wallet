@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- banner exports supporting props type with the component */
 import { useState, useEffect, useLayoutEffect } from 'react'
 import { Link, useLocation } from '@tanstack/react-router'
 import { AlertTriangle } from 'lucide-react'

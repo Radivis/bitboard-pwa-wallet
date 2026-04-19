@@ -125,7 +125,10 @@ const labService = {
   },
 
   async getTransaction(txid: string): Promise<LabTxDetails | null> {
-    const mempoolEntry = state.mempool.find((entry) => entry.txid === txid)
+    const key = txid.trim().toLowerCase()
+    const mempoolEntry = state.mempool.find(
+      (entry) => entry.txid.toLowerCase() === key,
+    )
     if (mempoolEntry) {
       return {
         txid: mempoolEntry.txid,
@@ -139,7 +142,7 @@ const labService = {
         outputs: mempoolEntry.outputsDetail,
       }
     }
-    const details = state.txDetails.find((tx) => tx.txid === txid)
+    const details = state.txDetails.find((tx) => tx.txid.toLowerCase() === key)
     if (!details) return null
     const blockCount = getTip() ? getTip()!.height + 1 : 0
     return {
@@ -323,7 +326,7 @@ const labService = {
       const amountSats = sampleRandomLabAmountSats(totalInput, requiredFeeSats)
       if (amountSats === null) continue
 
-      let toAddress = ''
+      let toAddress: string
       if (sourceEntity.labEntityId === targetEntity.labEntityId) {
         const revealedRaw = wasmModule.lab_entity_reveal_next_external_address(
           sourceEntity.mnemonic,

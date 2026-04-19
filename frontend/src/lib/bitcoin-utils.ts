@@ -116,7 +116,7 @@ export function validateEsploraUrl(url: string, networkMode: NetworkMode): void 
     }
   } catch (err) {
     if (err instanceof TypeError) {
-      throw new Error('Invalid URL')
+      throw new Error('Invalid URL', { cause: err })
     }
     throw err
   }

@@ -181,8 +181,9 @@ test.describe('Crypto Worker Integration', () => {
         )
         const worker = getEncryptionWorker()
         const salt = new Uint8Array(16).fill(42)
-        const key = await worker.deriveKeyBytes('testpassword', salt)
-        const key2 = await worker.deriveKeyBytes('testpassword', salt)
+        const kdfPhc = '$argon2id$v=19$m=65536,t=3,p=4'
+        const key = await worker.deriveKeyBytes('testpassword', salt, kdfPhc)
+        const key2 = await worker.deriveKeyBytes('testpassword', salt, kdfPhc)
         return {
           keyLength: key.length,
           deterministic: JSON.stringify(key) === JSON.stringify(key2),

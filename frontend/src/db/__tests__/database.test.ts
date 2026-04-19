@@ -1,7 +1,9 @@
 import { beforeEach, afterEach, describe, expect, it } from 'vitest'
+import { sql } from 'kysely'
 import type { Kysely } from 'kysely'
 import type { Database } from '../schema'
 import { APP_SETTINGS_LAST_OPENED_AT_KEY } from '@/lib/app-session-metadata'
+import { ARGON2_KDF_PHC_CI } from '@/lib/kdf-phc-constants'
 import { createTestDatabase } from '../test-helpers'
 
 describe('SQLite Database', () => {
@@ -13,6 +15,16 @@ describe('SQLite Database', () => {
 
   afterEach(async () => {
     await walletDb.destroy()
+  })
+
+  it('creates schema_migrations bookkeeping tables and records the initial migration', async () => {
+    const tables = await walletDb.introspection.getTables()
+    const names = new Set(tables.map((t) => t.name))
+    expect(names.has('schema_migrations')).toBe(true)
+    expect(names.has('schema_migrations_lock')).toBe(true)
+
+    const { rows } = await sql<{ name: string }[]>`SELECT name FROM schema_migrations`.execute(walletDb)
+    expect(rows.some((r) => r.name.includes('initial_wallet_schema'))).toBe(true)
   })
 
   describe('wallets table', () => {
@@ -91,11 +103,11 @@ describe('SQLite Database', () => {
             encrypted_data: new Uint8Array(0),
             iv: new Uint8Array(12),
             salt: new Uint8Array(16),
-            kdf_version: 1,
+            kdf_phc: ARGON2_KDF_PHC_CI,
             mnemonic_encrypted_data: new Uint8Array(0),
             mnemonic_iv: new Uint8Array(12),
             mnemonic_salt: new Uint8Array(16),
-            mnemonic_kdf_version: 1,
+            mnemonic_kdf_phc: ARGON2_KDF_PHC_CI,
             created_at: now,
             updated_at: now,
           }).execute()

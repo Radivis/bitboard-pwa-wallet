@@ -37,15 +37,24 @@ const LAB_ENTITY_MIN_OUTPUT_TOAST_MESSAGE = `Amount was below the minimum output
  */
 export function useLabIndexPageData() {
   const { data: labState } = useLabChainStateQuery()
-  const blocks = labState?.blocks ?? []
-  const addresses = labState?.addresses ?? []
-  const addressToOwner = labState?.addressToOwner ?? {}
-  const utxos = labState?.utxos ?? []
-  const mempool = labState?.mempool ?? []
-  const transactions = labState?.transactions ?? []
-  const txDetails = labState?.txDetails ?? []
-  const mineOperations = labState?.mineOperations ?? []
-  const entities = labState?.entities ?? []
+  const blocks = useMemo(() => labState?.blocks ?? [], [labState?.blocks])
+  const addresses = useMemo(() => labState?.addresses ?? [], [labState?.addresses])
+  const addressToOwner = useMemo(
+    () => labState?.addressToOwner ?? {},
+    [labState?.addressToOwner],
+  )
+  const utxos = useMemo(() => labState?.utxos ?? [], [labState?.utxos])
+  const mempool = useMemo(() => labState?.mempool ?? [], [labState?.mempool])
+  const transactions = useMemo(
+    () => labState?.transactions ?? [],
+    [labState?.transactions],
+  )
+  const txDetails = useMemo(() => labState?.txDetails ?? [], [labState?.txDetails])
+  const mineOperations = useMemo(
+    () => labState?.mineOperations ?? [],
+    [labState?.mineOperations],
+  )
+  const entities = useMemo(() => labState?.entities ?? [], [labState?.entities])
 
   const blockCount = blocks.length === 0 ? 0 : blocks[blocks.length - 1].height + 1
 

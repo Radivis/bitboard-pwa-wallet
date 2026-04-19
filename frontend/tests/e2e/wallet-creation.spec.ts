@@ -1,5 +1,9 @@
 import { test, expect } from '@playwright/test'
-import { TEST_PASSWORD, dismissSetAppPasswordModalIfPresent } from './helpers/wallet-setup'
+import {
+  TEST_PASSWORD,
+  dismissSetAppPasswordModalIfPresent,
+  expectNoInitialWalletSyncErrorToast,
+} from './helpers/wallet-setup'
 
 test.describe('Wallet Creation Flow', () => {
   test('wallet creation full flow', async ({ page }) => {
@@ -52,5 +56,6 @@ test.describe('Wallet Creation Flow', () => {
 
     await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible({ timeout: 30000 })
     await expect(page.getByText('Balance')).toBeVisible()
+    await expectNoInitialWalletSyncErrorToast(page)
   })
 })

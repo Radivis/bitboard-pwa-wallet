@@ -20,7 +20,11 @@ import {
 } from './helpers/settings-waits'
 import { ensureSegwitAddressesFeatureOn } from './helpers/segwit-addresses-feature'
 
-/** At least 30s (historical default); on CI use the longer Esplora-aligned window. */
+/**
+ * `canBuild` needs `confirmedBalance` from the wallet store. One manual sync can leave the
+ * Send route (mounted after navigation) briefly behind; a second sync + ≥30s Review wait
+ * matches what often “fixes” a flaky retry on CI and locally.
+ */
 const REVIEW_TRANSACTION_ENABLE_TIMEOUT_MS = Math.max(
   30_000,
   E2E_CI_AWARE_LONG_WAIT_MS,
@@ -118,6 +122,7 @@ test.describe('Send Page', () => {
 
     // One full sync (Sync enabled → Syncing… → idle) so wallet balance matches Esplora; do not
     // assert a headline sat value — shared regtest state can show a cumulative total.
+    await runDashboardSyncUntilIdle(page)
     await runDashboardSyncUntilIdle(page)
 
     await goToWalletTab(page, 'Send')

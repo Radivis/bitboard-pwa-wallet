@@ -6,13 +6,14 @@ on:
     paths:
       - '**/Cargo.toml'
       - '**/Cargo.lock'
+      - 'deny.toml'
       - '**/package.json'
       - '**/package-lock.json'
 jobs:
   rust_security_audit:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: taiki-e/install-action@cargo-deny
       - name: Scan for vulnerabilities
         run: cargo deny check advisories
@@ -32,9 +33,15 @@ jobs:
           node-version: '24'
       - name: Install Socket CLI
         run: npm install -g @socketsecurity/cli
-      - name: Run Socket security scan
+      - name: Run Socket security scan (frontend)
         run: |
           cd frontend
+          socket npm audit --strict
+        env:
+          SOCKET_SECURITY_API_KEY: ${{ secrets.SOCKET_SECURITY_API_KEY }}
+      - name: Run Socket security scan (landing-page)
+        run: |
+          cd landing-page
           socket npm audit --strict
         env:
           SOCKET_SECURITY_API_KEY: ${{ secrets.SOCKET_SECURITY_API_KEY }}

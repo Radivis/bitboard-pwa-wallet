@@ -13,7 +13,9 @@ export async function switchToLab(page: Page): Promise<void> {
   await page.getByRole('link', { name: /settings/i }).click()
   await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
 
-  await page.getByRole('button', { name: 'Lab' }).click()
+  await page
+    .getByRole('button', { name: 'Lab', exact: true })
+    .click()
   await expect(page.getByRole('link', { name: 'Manage lab' })).toBeVisible({
     timeout: 60000,
   })
@@ -35,7 +37,7 @@ export async function resetLab(page: Page): Promise<void> {
     timeout: 15000,
   })
 
-  await page.getByRole('navigation', { name: 'Lab' }).getByRole('link', { name: 'Control' }).click()
+  await page.getByRole('navigation', { name: 'Lab', exact: true }).getByRole('link', { name: 'Control' }).click()
   await expect(page.getByRole('heading', { name: 'Control' })).toBeVisible({
     timeout: 15000,
   })
@@ -45,7 +47,7 @@ export async function resetLab(page: Page): Promise<void> {
   await page.getByRole('dialog').getByRole('button', { name: 'Reset lab' }).click()
   await expect(page.getByRole('dialog')).not.toBeVisible()
 
-  await page.getByRole('navigation', { name: 'Lab' }).getByRole('link', { name: 'Blocks' }).click()
+  await page.getByRole('navigation', { name: 'Lab', exact: true }).getByRole('link', { name: 'Blocks' }).click()
   await expect(page.getByRole('heading', { name: 'Blocks' })).toBeVisible({ timeout: 15000 })
   await expect(page.getByText(/Chain height \(blocks mined\): 0/)).toBeVisible({
     timeout: 10000,
@@ -98,7 +100,7 @@ export async function createLabEntityViaControl(
     })
   }
 
-  await page.getByRole('navigation', { name: 'Lab' }).getByRole('link', { name: 'Control' }).click()
+  await page.getByRole('navigation', { name: 'Lab', exact: true }).getByRole('link', { name: 'Control' }).click()
   await expect(page.getByRole('heading', { name: 'Control' })).toBeVisible({ timeout: 15000 })
 
   const taprootAddressTypeSwitch = page.getByRole('switch', {
@@ -118,7 +120,7 @@ export async function createLabEntityViaControl(
   }
   await page.getByRole('button', { name: 'Create lab entity' }).click()
   await expect(page.getByText('Lab entity created').first()).toBeVisible({ timeout: 15000 })
-  await page.getByRole('navigation', { name: 'Lab' }).getByRole('link', { name: 'Blocks' }).click()
+  await page.getByRole('navigation', { name: 'Lab', exact: true }).getByRole('link', { name: 'Blocks' }).click()
   await expect(page.getByRole('heading', { name: 'Blocks' })).toBeVisible({ timeout: 15000 })
 }
 
@@ -259,10 +261,24 @@ export async function goToLabTransactionsPage(page: Page): Promise<void> {
   await expect(page.getByRole('heading', { name: 'Blocks' })).toBeVisible({
     timeout: 15000,
   })
-  await page.getByRole('navigation', { name: 'Lab' }).getByRole('link', { name: 'Transactions' }).click()
+  await page.getByRole('navigation', { name: 'Lab', exact: true }).getByRole('link', { name: 'Transactions' }).click()
   await expect(page.getByRole('heading', { name: 'Transactions' })).toBeVisible({
     timeout: 15000,
   })
+}
+
+/** Poll until `__labGetState` reports the expected mempool size (toast can win the race). */
+export async function waitForLabMempoolLength(page: Page, expectedLength: number): Promise<void> {
+  await expect
+    .poll(
+      async () => (await getLabState(page)).mempool.length,
+      {
+        timeout: 60_000,
+        intervals: [50, 100, 200, 400],
+        message: `Expected lab mempool.length === ${expectedLength}`,
+      },
+    )
+    .toBe(expectedLength)
 }
 
 /** After manual lab-entity Send (no wallet Review step): toast + mempool length. */
@@ -289,13 +305,17 @@ async function parseLabTxOutputRowSats(row: Locator): Promise<number> {
   return parseInt(digits, 10)
 }
 
+/** Bitcoin txids are hex; URLs and router params may differ in case — match worker lookups. */
+function normalizeLabTxid(txid: string): string {
+  return txid.trim().toLowerCase()
+}
+
 /**
- * After `page.goto(/lab/tx/…)` the app fully reloads: Lab layout may show "Loading lab…",
- * and DEV-only `window.__labGetTransaction` is installed in an effect — so waiting only
- * for the "Transaction" heading races that setup. Poll the same hook the page uses until
- * the tx resolves, then assert the heading.
+ * Poll DEV `window.__labGetTransaction` until the worker returns the tx (same path as the page).
+ * Avoid relying on the "Transaction" heading alone — hooks and data can lag a frame or two.
  */
 async function waitForLabTxViewerLoaded(page: Page, txid: string): Promise<void> {
+  const normalTxId = normalizeLabTxid(txid)
   await expect
     .poll(
       async () => {
@@ -308,11 +328,12 @@ async function waitForLabTxViewerLoaded(page: Page, txid: string): Promise<void>
           }
           const d = await w(id)
           return d != null ? ('ready' as const) : ('not-found' as const)
-        }, txid)
+        }, normalTxId)
       },
       {
         timeout: 60000,
-        message: `lab tx viewer: getTransaction(${txid.slice(0, 8)}…) did not become readable after navigation (DEV hook + worker)`,
+        intervals: [250],
+        message: `lab tx viewer: getTransaction(${normalTxId.slice(0, 8)}…) did not become readable (DEV hook + worker)`,
       },
     )
     .toBe('ready')
@@ -322,10 +343,26 @@ async function waitForLabTxViewerLoaded(page: Page, txid: string): Promise<void>
   })
 }
 
-/** Open `/lab/tx/$txid` and wait until the transaction viewer has loaded (stable after full reload). */
+/**
+ * Open `/lab/tx/$txid` and wait until the transaction viewer has loaded.
+ * Uses DEV `window.__e2eNavigateToLabTx` (client-side navigation) so we do not full-reload
+ * the app immediately after a mempool write — `page.goto` can reload before OPFS-backed lab
+ * SQLite has flushed, and `__labGetState` would then miss the tx indefinitely.
+ */
 export async function openLabMempoolTxInViewer(page: Page, txid: string): Promise<void> {
-  await page.goto(`/lab/tx/${txid}`)
-  await waitForLabTxViewerLoaded(page, txid)
+  const normalTxId = normalizeLabTxid(txid)
+  await page.evaluate(async (id) => {
+    const nav = (window as unknown as {
+      __e2eNavigateToLabTx?: (t: string) => Promise<void>
+    }).__e2eNavigateToLabTx
+    if (!nav) {
+      throw new Error(
+        '__e2eNavigateToLabTx not available (DEV only — Playwright E2E must run against Vite dev)',
+      )
+    }
+    await nav(id)
+  }, normalTxId)
+  await waitForLabTxViewerLoaded(page, normalTxId)
 }
 
 /** Open `/lab/tx/$txid` for the last mempool entry (most recently added). */
@@ -370,6 +407,9 @@ export async function expectLabTxOutputAmountsSats(
  * After a tx lands in the mempool, open its viewer and assert UI outputs match
  * the lab worker's `getTransaction` (same source as `/lab/tx/$txid`; mempool txs are
  * not in `LabState.txDetails`). Requires `window.__labGetTransaction` (DEV lab route).
+ *
+ * Reads expected outputs **after** navigation: a full reload must see the same SQLite
+ * state; polling in {@link waitForLabTxViewerLoaded} avoids racing Vite/dev hooks.
  */
 export async function expectLatestMempoolTxOutputsMatchLabStateAndViewer(
   page: Page,
@@ -377,26 +417,28 @@ export async function expectLatestMempoolTxOutputsMatchLabStateAndViewer(
   const state = await getLabState(page)
   expect(state.mempool.length).toBeGreaterThan(0)
   const txid = state.mempool[state.mempool.length - 1]!.txid
+  const normalTxId = normalizeLabTxid(txid)
+
+  await openLabMempoolTxInViewer(page, normalTxId)
 
   const expectedSats = await page.evaluate(async (id) => {
-    const w = window as unknown as {
+    const win = window as unknown as {
       __labGetTransaction?: (tid: string) => Promise<{
         outputs: { amountSats: number }[]
       } | null>
     }
-    if (!w.__labGetTransaction) {
+    if (!win.__labGetTransaction) {
       throw new Error(
         '__labGetTransaction is not available (open /lab in a DEV build for E2E)',
       )
     }
-    const d = await w.__labGetTransaction(id)
-    if (d == null) {
+    const fetchedTx = await win.__labGetTransaction(id)
+    if (fetchedTx == null) {
       throw new Error(`getTransaction returned null for ${id}`)
     }
-    return d.outputs.map((o) => o.amountSats)
-  }, txid)
+    return fetchedTx.outputs.map((o) => o.amountSats)
+  }, normalTxId)
 
-  await openLabMempoolTxInViewer(page, txid)
   await expectLabTxOutputAmountsSats(page, expectedSats)
 }
 
@@ -435,7 +477,7 @@ export async function createTransactionInLab(
     timeout: 15000,
   })
 
-  await page.getByRole('navigation', { name: 'Lab' }).getByRole('link', { name: 'Transactions' }).click()
+  await page.getByRole('navigation', { name: 'Lab', exact: true }).getByRole('link', { name: 'Transactions' }).click()
   await expect(page.getByRole('heading', { name: 'Transactions' })).toBeVisible({
     timeout: 15000,
   })
@@ -462,7 +504,7 @@ export async function createRandomTransactionsInLab(
     timeout: 15000,
   })
 
-  await page.getByRole('navigation', { name: 'Lab' }).getByRole('link', { name: 'Transactions' }).click()
+  await page.getByRole('navigation', { name: 'Lab', exact: true }).getByRole('link', { name: 'Transactions' }).click()
   await expect(page.getByRole('heading', { name: 'Transactions' })).toBeVisible({
     timeout: 15000,
   })
@@ -533,23 +575,40 @@ export async function clickLabReviewTransaction(page: Page): Promise<void> {
   await page.getByRole('button', { name: 'Review Transaction' }).click()
 }
 
-/** Case-1 (sub–dust-floor): toast + amount shown as 546 sats (compose or Transaction Details). */
+/**
+ * 546 sats is surfaced as a literal "546" in sat mode, but `BitcoinAmountDisplay` may use the
+ * wallet default unit (often BTC), producing `0.00000546` where `\b546\b` does not match.
+ */
+function textReflects546DustClamp(text: string): boolean {
+  if (/\b546\b/.test(text)) return true
+  if (text.includes('0.00000546')) return true
+  return false
+}
+
+/**
+ * Case-1 (sub–dust-floor): toast or review banner, then compose / Transaction Details / case-2 modal
+ * shows the clamped amount (any display unit).
+ */
 export async function expectLabCase1MinDustClampUi(page: Page): Promise<void> {
   await expect(
-    page.getByText(/minimum output size \(546 sats\)/i).first(),
+    page.getByText(/Amount was below the minimum/i).filter({ hasText: /546/ }).first(),
   ).toBeVisible({ timeout: 30000 })
+
   await expect
     .poll(
       async () => {
-        if (await page.getByText('Transaction Details').first().isVisible().catch(() => false)) {
-          const mainText = (await page.getByRole('main').textContent()) ?? ''
-          return /\b546\b/.test(mainText)
+        const bodyText = (await page.locator('body').textContent()) ?? ''
+        if (!textReflects546DustClamp(bodyText)) return false
+
+        const transactionDetails = await page
+          .getByText('Transaction Details')
+          .first()
+          .isVisible()
+          .catch(() => false)
+        if (transactionDetails) {
+          return textReflects546DustClamp((await page.getByRole('main').textContent()) ?? '')
         }
-        const input = page.locator('#send-amount')
-        if (await input.isVisible().catch(() => false)) {
-          return (await input.inputValue()) === '546'
-        }
-        // Lab path: after clamping to 546, prepare may open case-2 first — still step 1, modal covers #send-amount.
+
         const changeFeesHeading = page.getByRole('heading', { name: 'Change and fees' })
         if (await changeFeesHeading.isVisible().catch(() => false)) {
           const dialog = page
@@ -557,11 +616,22 @@ export async function expectLabCase1MinDustClampUi(page: Page): Promise<void> {
             .filter({ has: changeFeesHeading })
             .first()
           const dialogText = (await dialog.textContent().catch(() => null)) ?? ''
-          return /\b546\b/.test(dialogText)
+          return textReflects546DustClamp(dialogText)
         }
+
+        const input = page.locator('#send-amount')
+        if (await input.isVisible().catch(() => false)) {
+          return (await input.inputValue()) === '546'
+        }
+
         return false
       },
-      { timeout: 60000 },
+      {
+        timeout: 60_000,
+        intervals: [100, 250, 400],
+        message:
+          'Expected 546 dust clamp in Transaction Details, Change-and-fees dialog, or compose (#send-amount)',
+      },
     )
     .toBe(true)
 }

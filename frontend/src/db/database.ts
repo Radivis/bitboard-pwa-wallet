@@ -1,9 +1,8 @@
 import { Kysely } from 'kysely'
 import { WaSqliteWorkerDialect } from 'kysely-wasqlite-worker'
 import type { Database } from './schema'
-import { migrateToLatest } from './migrations'
-
-const DATABASE_FILE_NAME = 'bitboard-wallet'
+import { runWalletMigrations } from './migrations/run-wallet-migrations'
+import { WALLET_SQLITE_OPFS_BASENAME } from './opfs-sqlite-database-names'
 
 let instance: Kysely<Database> | null = null
 let migrated = false
@@ -13,7 +12,7 @@ export function getDatabase(): Kysely<Database> {
   if (!instance) {
     instance = new Kysely<Database>({
       dialect: new WaSqliteWorkerDialect({
-        fileName: DATABASE_FILE_NAME,
+        fileName: WALLET_SQLITE_OPFS_BASENAME,
         preferOPFS: true,
       }),
     })
@@ -27,7 +26,7 @@ export async function ensureMigrated(): Promise<void> {
     await migrationPromise
     return
   }
-  migrationPromise = migrateToLatest(getDatabase())
+  migrationPromise = runWalletMigrations(getDatabase())
   await migrationPromise
   migrationPromise = null
   migrated = true

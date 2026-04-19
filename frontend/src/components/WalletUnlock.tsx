@@ -12,11 +12,11 @@ import { AppModal } from '@/components/AppModal'
 import { useWalletStore } from '@/stores/walletStore'
 import { useSessionStore } from '@/stores/sessionStore'
 import { useWallets } from '@/db'
-import { errorMessage } from '@/lib/utils'
 import {
   loadDescriptorWalletAndSync,
   loadDescriptorWalletWithoutSync,
 } from '@/lib/wallet-utils'
+import { reportWalletSyncError } from '@/lib/wallet-sync-error-toast'
 
 interface WalletUnlockProps {
   walletName?: string
@@ -84,9 +84,7 @@ export function WalletUnlock({
           accountId,
           awaitSync: false,
           onSyncError: (err) =>
-            toast.error(
-              errorMessage(err) || 'Sync failed — wallet unlocked but data may be stale',
-            ),
+            reportWalletSyncError('unlock-background-sync', err),
         })
       }
     },

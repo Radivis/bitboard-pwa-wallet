@@ -3,7 +3,7 @@ import { useWalletStore } from '@/stores/walletStore'
 import { getDatabase, ensureMigrated } from './database'
 import { getAllFavoriteSlugs, setArticleFavorite } from './library-articles'
 import { listLibraryHistory } from './library-history'
-import { walletHasNoMnemonicBackupFlag } from './no-mnemonic-backup-settings'
+import { walletHasNoMnemonicBackupFlag } from './wallet-no-mnemonic-backup'
 import { deleteWalletCompletely } from './wallet-persistence'
 import { libraryKeys, walletKeys } from './query-keys'
 import type { NewWallet, WalletUpdate } from './schema'
@@ -92,7 +92,7 @@ export function useWalletNoMnemonicBackupFlag(walletId: number | null) {
   return useQuery({
     queryKey:
       walletId === null
-        ? (['settings', 'no_mnemonic_backup', 'none'] as const)
+        ? (['wallets', 'no_mnemonic_backup', 'none'] as const)
         : walletKeys.noMnemonicBackup(walletId),
     queryFn: async () => {
       await ensureMigrated()

@@ -23,6 +23,7 @@ import {
 import { ensureSecretsChannel } from '@/workers/secrets-channel'
 import { toBitcoinNetwork, getEsploraUrl } from '@/lib/bitcoin-utils'
 import { loadCustomEsploraUrl } from '@/lib/wallet-utils'
+import { reportWalletSyncError } from '@/lib/wallet-sync-error-toast'
 import { invalidateWalletRelatedQueriesAndNotifyOtherTabs } from '@/lib/wallet-query-cache-sync'
 
 export const Route = createFileRoute('/setup/import')({
@@ -90,11 +91,23 @@ export function ImportWalletPage() {
 
   const canRestore = isValid === true
 
-  /** First Esplora full scan can take a long time; run it after navigation so the wallet UI is usable immediately. */
+  /**
+   * First Esplora full scan after import (long-running); runs after navigation.
+   * Lab mode has no Esplora URL — only refresh WASM balance/tx, do not call fullScanWallet.
+   */
   const runPostImportInitialSync = useCallback(async () => {
     try {
       const customUrl = await loadCustomEsploraUrl(networkMode)
       const esploraUrl = getEsploraUrl(networkMode, customUrl)
+      if (!esploraUrl) {
+        const balance = await getBalanceFromWorker()
+        const txs = await getTransactionList()
+        setBalance(balance)
+        setTransactions(txs)
+        setWalletStatus('unlocked')
+        return
+      }
+
       await fullScanWallet(esploraUrl, 20)
 
       const balance = await getBalanceFromWorker()
@@ -102,8 +115,8 @@ export function ImportWalletPage() {
       setBalance(balance)
       setTransactions(txs)
       setWalletStatus('unlocked')
-    } catch {
-      toast.error('Initial sync failed — you can sync later from the dashboard')
+    } catch (err: unknown) {
+      reportWalletSyncError('initial-import', err)
       setWalletStatus('unlocked')
     }
   }, [

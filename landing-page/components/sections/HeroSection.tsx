@@ -1,15 +1,16 @@
 import { motion } from 'motion/react';
-import { ChevronRight } from 'lucide-react';
-import { GitHubMark } from '@/src/GitHubMark';
+import { ChevronRight, Smartphone } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+
+/** Path to the PWA install instructions page (second Vite HTML entry). */
+export const PWA_INSTALL_PAGE_PATH = '/install.html';
 
 interface HeroSectionProps {
   appUrl: string;
-  githubUrl: string;
   prefersReducedMotion: boolean | null;
 }
 
-export function HeroSection({ appUrl, githubUrl, prefersReducedMotion }: HeroSectionProps) {
+export function HeroSection({ appUrl, prefersReducedMotion }: HeroSectionProps) {
   return (
     <header className="relative h-screen flex flex-col items-center justify-center text-center px-6 overflow-hidden">
       <motion.div
@@ -32,7 +33,7 @@ export function HeroSection({ appUrl, githubUrl, prefersReducedMotion }: HeroSec
           />
         </motion.div>
         <div className="inline-block mb-4 px-3 py-1 border border-matrix text-matrix font-retro text-sm uppercase tracking-widest animate-pulse">
-          System Initialized: v0.0.1-demo
+          System Initialized: v{import.meta.env.VITE_WALLET_APP_VERSION}
         </div>
         <h1 className="text-6xl md:text-9xl font-bold tracking-tighter mb-4 relative">
         <span className="text-bitcoin">BIT</span><span className="text-matrix">BOARD WALLET</span>
@@ -53,7 +54,8 @@ export function HeroSection({ appUrl, githubUrl, prefersReducedMotion }: HeroSec
                 size="lg"
                 className="bg-matrix text-black hover:bg-matrix/80 font-bold rounded-none px-8 h-14 text-lg group"
               >
-                LAUNCH APP <ChevronRight className="ml-2 group-hover:translate-x-1 transition-transform" />
+                OPEN APP{' '}
+                <ChevronRight className="ml-2 inline group-hover:translate-x-1 transition-transform" size={22} />
               </Button>
             </a>
           ) : (
@@ -63,15 +65,16 @@ export function HeroSection({ appUrl, githubUrl, prefersReducedMotion }: HeroSec
               title="App not published yet"
               className="bg-matrix/50 text-black/80 font-bold rounded-none px-8 h-14 text-lg cursor-not-allowed"
             >
-              LAUNCH APP <ChevronRight className="ml-2 opacity-50" />
+              OPEN APP <ChevronRight className="ml-2 inline opacity-50" size={22} />
             </Button>
           )}
-          <a href={githubUrl} target="_blank" rel="noopener noreferrer">
+          <a href={PWA_INSTALL_PAGE_PATH}>
             <Button
               size="lg"
-              className="bg-matrix text-black hover:bg-matrix/80 font-bold rounded-none px-8 h-14 text-lg group"
+              className="bg-matrix text-black hover:bg-matrix/80 font-bold rounded-none px-8 h-14 text-lg group border border-matrix/80"
             >
-              VIEW GITHUB <GitHubMark className="ml-2 group-hover:translate-x-1 transition-transform" />
+              INSTALL APP{' '}
+              <Smartphone className="ml-2 inline group-hover:scale-110 transition-transform" size={22} />
             </Button>
           </a>
         </div>

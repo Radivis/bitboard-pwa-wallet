@@ -43,22 +43,24 @@ export function serializeEncryptedBlobForSettings(blob: EncryptedBlob): string {
     ciphertext: uint8ToBase64(blob.ciphertext),
     iv: uint8ToBase64(blob.iv),
     salt: uint8ToBase64(blob.salt),
-    kdfVersion: blob.kdfVersion,
+    kdfPhc: blob.kdfPhc,
   })
 }
 
 export function deserializeEncryptedBlobFromSettings(json: string): EncryptedBlob {
-  const o = JSON.parse(json) as {
-    ciphertext: string
-    iv: string
-    salt: string
-    kdfVersion: EncryptedBlob['kdfVersion']
+  const o = JSON.parse(json) as Record<string, unknown>
+  const { ciphertext, iv, salt, kdfPhc } = o
+  if (typeof ciphertext !== 'string' || typeof iv !== 'string' || typeof salt !== 'string') {
+    throw new Error('Settings encrypted blob is missing ciphertext, iv, or salt')
+  }
+  if (typeof kdfPhc !== 'string' || kdfPhc.length === 0) {
+    throw new Error('Settings encrypted blob is missing kdfPhc')
   }
   return {
-    ciphertext: base64ToUint8(o.ciphertext),
-    iv: base64ToUint8(o.iv),
-    salt: base64ToUint8(o.salt),
-    kdfVersion: o.kdfVersion,
+    ciphertext: base64ToUint8(ciphertext),
+    iv: base64ToUint8(iv),
+    salt: base64ToUint8(salt),
+    kdfPhc,
   }
 }
 

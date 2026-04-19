@@ -21,6 +21,5 @@ export const WALLET_RELATED_QUERY_INVALIDATIONS: readonly InvalidateQueryFilters
     { queryKey: [...LIGHTNING_CONNECTIONS_HYDRATION_QUERY_KEY] },
     { queryKey: [...LIGHTNING_DASHBOARD_QUERY_KEY] },
     { queryKey: [COMMITTED_EXTERNAL_DESCRIPTOR_QUERY_KEY] },
-    { queryKey: ['settings', 'no_mnemonic_backup'] },
     { queryKey: ['customEsploraUrl'] },
   ]

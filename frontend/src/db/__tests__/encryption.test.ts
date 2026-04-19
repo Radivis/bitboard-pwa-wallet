@@ -46,6 +46,10 @@ describe('Encryption with Argon2id + AES-GCM', () => {
       expect(result).toHaveProperty('salt')
       expect(result.salt).toBeInstanceOf(Uint8Array)
       expect(result.salt.byteLength).toBe(16)
+
+      expect(result).toHaveProperty('kdfPhc')
+      expect(typeof result.kdfPhc).toBe('string')
+      expect(result.kdfPhc.length).toBeGreaterThan(0)
     })
 
     it('produces different ciphertext for same plaintext due to random IV', async () => {

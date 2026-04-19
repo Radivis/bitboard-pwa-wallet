@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as WalletRouteImport } from './routes/wallet'
 import { Route as SetupRouteImport } from './routes/setup'
 import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as LibraryRouteImport } from './routes/library'
 import { Route as LabRouteImport } from './routes/lab'
 import { Route as IndexRouteImport } from './routes/index'
@@ -50,6 +51,11 @@ const SetupRoute = SetupRouteImport.update({
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PrivacyRoute = PrivacyRouteImport.update({
+  id: '/privacy',
+  path: '/privacy',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LibraryRoute = LibraryRouteImport.update({
@@ -177,6 +183,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/lab': typeof LabRouteWithChildren
   '/library': typeof LibraryRouteWithChildren
+  '/privacy': typeof PrivacyRoute
   '/settings': typeof SettingsRoute
   '/setup': typeof SetupRouteWithChildren
   '/wallet': typeof WalletRouteWithChildren
@@ -204,6 +211,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/privacy': typeof PrivacyRoute
   '/settings': typeof SettingsRoute
   '/lab/blocks': typeof LabBlocksRoute
   '/lab/control': typeof LabControlRoute
@@ -232,6 +240,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/lab': typeof LabRouteWithChildren
   '/library': typeof LibraryRouteWithChildren
+  '/privacy': typeof PrivacyRoute
   '/settings': typeof SettingsRoute
   '/setup': typeof SetupRouteWithChildren
   '/wallet': typeof WalletRouteWithChildren
@@ -263,6 +272,7 @@ export interface FileRouteTypes {
     | '/'
     | '/lab'
     | '/library'
+    | '/privacy'
     | '/settings'
     | '/setup'
     | '/wallet'
@@ -290,6 +300,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/privacy'
     | '/settings'
     | '/lab/blocks'
     | '/lab/control'
@@ -317,6 +328,7 @@ export interface FileRouteTypes {
     | '/'
     | '/lab'
     | '/library'
+    | '/privacy'
     | '/settings'
     | '/setup'
     | '/wallet'
@@ -347,6 +359,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   LabRoute: typeof LabRouteWithChildren
   LibraryRoute: typeof LibraryRouteWithChildren
+  PrivacyRoute: typeof PrivacyRoute
   SettingsRoute: typeof SettingsRoute
   SetupRoute: typeof SetupRouteWithChildren
   WalletRoute: typeof WalletRouteWithChildren
@@ -373,6 +386,13 @@ declare module '@tanstack/react-router' {
       path: '/settings'
       fullPath: '/settings'
       preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/privacy': {
+      id: '/privacy'
+      path: '/privacy'
+      fullPath: '/privacy'
+      preLoaderRoute: typeof PrivacyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/library': {
@@ -626,6 +646,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   LabRoute: LabRouteWithChildren,
   LibraryRoute: LibraryRouteWithChildren,
+  PrivacyRoute: PrivacyRoute,
   SettingsRoute: SettingsRoute,
   SetupRoute: SetupRouteWithChildren,
   WalletRoute: WalletRouteWithChildren,

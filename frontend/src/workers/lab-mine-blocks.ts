@@ -56,7 +56,7 @@ export async function executeMineBlocks(
   const entityNameOpt = options?.ownerName?.trim()
 
   let coinbaseScriptPubkeyHex: string
-  let newAddress: LabAddress | null = null
+  let newAddress: LabAddress | null | undefined
   let coinbaseAddress: string
   /** Lab entity id for coinbase ownership (not used for wallet or bare target). */
   let ownerForCoinbase: LabOwner | undefined

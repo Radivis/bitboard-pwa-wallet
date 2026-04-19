@@ -1,5 +1,13 @@
 {
-  "include": ["src/**/*.ts", "src/**/*.tsx", "components/**/*.ts", "components/**/*.tsx", "lib/**/*.ts"],
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "components/**/*.ts",
+    "components/**/*.tsx",
+    "lib/**/*.ts",
+    "../frontend/common/**/*.ts",
+    "../frontend/common/**/*.tsx"
+  ],
   "compilerOptions": {
     "target": "ES2022",
     "experimentalDecorators": true,
@@ -19,6 +27,15 @@
     "paths": {
       "@/*": [
         "./*"
+      ],
+      "@legal-locale": [
+        "../frontend/src/lib/legal-locale.ts"
+      ],
+      "@legal-notice-display": [
+        "../frontend/src/lib/legal-notice-display.ts"
+      ],
+      "@common/*": [
+        "../frontend/common/*"
       ]
     },
     "allowImportingTsExtensions": true,

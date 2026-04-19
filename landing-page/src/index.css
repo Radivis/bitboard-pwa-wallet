@@ -3,6 +3,8 @@
 @import "@fontsource/jetbrains-mono/700.css";
 @import "@fontsource/vt323/400.css";
 @import "tailwindcss";
+/* Paths are relative to this file: src/ → repo `frontend/common` (not landing-page/frontend/...) */
+@source "../../frontend/common";
 
 @theme {
   --font-sans: "Geist Variable", ui-sans-serif, system-ui, sans-serif;

@@ -126,9 +126,12 @@ export function SendFlow() {
   } = useSendStore()
 
   const { data: labState, isPending: labChainPending } = useLabChainStateQuery()
-  const utxos = labState?.utxos ?? []
-  const addressToOwner = labState?.addressToOwner ?? {}
-  const labEntities = labState?.entities ?? []
+  const utxos = useMemo(() => labState?.utxos ?? [], [labState?.utxos])
+  const addressToOwner = useMemo(
+    () => labState?.addressToOwner ?? {},
+    [labState?.addressToOwner],
+  )
+  const labEntities = useMemo(() => labState?.entities ?? [], [labState?.entities])
   const labChainReady =
     networkMode === 'lab' && labState != null && !labChainPending
 
@@ -545,7 +548,6 @@ export function SendFlow() {
     networkMode,
     deadLabRecipientInfo,
     normalizedRecipient,
-    amountSats,
     effectiveFeeRate,
     labSendMutation,
     broadcastMutation,

@@ -19,7 +19,10 @@ import { isLabEntityOwnerGroupDead } from '@/lib/lab-owner'
 import { useLabChainStateQuery } from '@/hooks/useLabChainStateQuery'
 import { CardPagination } from '@/components/CardPagination'
 import { useLabOwnerKeysPage, useLabUtxosForOwnerPage } from '@/hooks/useLabPaginatedQueries'
-import { LAB_CARD_PAGE_SIZE, LAB_ENTITY_INNER_PAGE_SIZE } from '@/lib/lab-paginated-queries'
+import {
+  LAB_ADDRESS_UTXO_OWNER_PAGE_SIZE,
+  LAB_ENTITY_INNER_PAGE_SIZE,
+} from '@/lib/lab-paginated-queries'
 import type { AddressType } from '@/lib/wallet-domain-types'
 import { useWalletStore } from '@/stores/walletStore'
 import { Badge } from '@/components/ui/badge'
@@ -144,7 +147,7 @@ This is not the same as the Addresses card above: Addresses shows one combined b
             </p>
           ) : (
             <CardPagination
-              pageSize={LAB_CARD_PAGE_SIZE}
+              pageSize={LAB_ADDRESS_UTXO_OWNER_PAGE_SIZE}
               totalCount={totalOwnerCount}
               pageIndex={ownerPageIndex}
               onPageChange={setOwnerPageIndex}

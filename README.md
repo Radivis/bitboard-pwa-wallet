@@ -25,6 +25,10 @@ Do not store more than you can afford to lose on it!
 
 ⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️
 
+## Security
+
+To report a security vulnerability, use **GitHub private vulnerability reporting** as described in [SECURITY.md](SECURITY.md). Technical threat model and implementation details are documented in [doc/SECURITY.md](doc/SECURITY.md).
+
 ## Principles
 
 **Please note that the features mentioned in this section are planned, but not fully implemented yet. They are mentioned to communicate the spirit and direction of this app.**
@@ -51,7 +55,26 @@ This approach enables adequate performance and security for a web / PWA wallet. 
 
 For the full tech stack, see the [architecture documentation](doc/ARCHITECTURE.md)
 
-**Please note that native mobile versions of Bitboard are planned for the future!**
+## Roadmap
+
+Planned work is grouped into beta stages. Ordering within a stage is approximate.
+
+### Early Beta Stage
+
+- Fee estimation
+- Currency conversion
+- Use of global state for forms, so switching pages does not reset them
+- Raw hex data inspector
+- Support for BIP-39 passphrase ("25th word")
+- Coin control (UTXO selection)
+- Additional wallet accounts
+
+### Late Beta Stage
+
+- Integrated Lightning node
+- Connecting with hardware wallets in "gateway mode"
+- Integrating with mobile device functionality rather than using web-only tech
+- Supporting Ark (perhaps after beta)
 
 ## Development
 ### Requirements

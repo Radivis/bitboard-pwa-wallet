@@ -1,6 +1,5 @@
 import { sql, type Kysely } from 'kysely'
 import type { Database } from './schema'
-import type { KdfVersion } from './schema'
 import { encryptData, decryptData } from './encryption'
 import { trackWalletSecretsWrite } from '@/db/wallet-secrets-write-tracker'
 import {
@@ -10,8 +9,6 @@ import {
   type WalletSecrets,
   type WalletSecretsPayload,
 } from '@/lib/wallet-domain-types'
-import { noMnemonicBackupSettingsKey } from './no-mnemonic-backup-settings'
-
 export type { DescriptorWalletData, WalletSecrets }
 export type { WalletSecretsPayload } from '@/lib/wallet-domain-types'
 
@@ -20,8 +17,8 @@ export interface EncryptedWalletSecretsBlob {
   ciphertext: Uint8Array
   iv: Uint8Array
   salt: Uint8Array
-  /** 1 = CI, 2 = production. */
-  kdfVersion: KdfVersion
+  /** Argon2id PHC parameter prefix; see `kdf-phc-constants.ts`. */
+  kdfPhc: string
 }
 
 /** Encrypted wallet row: payload ciphertext (WalletSecretsPayload JSON) and separate mnemonic ciphertext. */
@@ -41,13 +38,13 @@ function rowToPayloadBlob(record: {
   encrypted_data: Uint8Array
   iv: Uint8Array
   salt: Uint8Array
-  kdf_version: number
+  kdf_phc: string
 }): EncryptedWalletSecretsBlob {
   return {
     ciphertext: record.encrypted_data,
     iv: record.iv,
     salt: record.salt,
-    kdfVersion: record.kdf_version as KdfVersion,
+    kdfPhc: record.kdf_phc,
   }
 }
 
@@ -56,13 +53,13 @@ function rowToMnemonicBlob(record: {
   mnemonic_encrypted_data: Uint8Array
   mnemonic_iv: Uint8Array
   mnemonic_salt: Uint8Array
-  mnemonic_kdf_version: number
+  mnemonic_kdf_phc: string
 }): EncryptedWalletSecretsBlob {
   return {
     ciphertext: record.mnemonic_encrypted_data,
     iv: record.mnemonic_iv,
     salt: record.mnemonic_salt,
-    kdfVersion: record.mnemonic_kdf_version as KdfVersion,
+    kdfPhc: record.mnemonic_kdf_phc,
   }
 }
 
@@ -91,11 +88,11 @@ export async function getWalletSecretsEncryptedWithRevision(
       'encrypted_data',
       'iv',
       'salt',
-      'kdf_version',
+      'kdf_phc',
       'mnemonic_encrypted_data',
       'mnemonic_iv',
       'mnemonic_salt',
-      'mnemonic_kdf_version',
+      'mnemonic_kdf_phc',
     ])
     .where('wallet_id', '=', walletId)
     .executeTakeFirst()
@@ -128,7 +125,7 @@ export async function putSplitWalletSecretsEncrypted(
   await assertWalletExists(walletDb, walletId)
 
   const now = new Date().toISOString()
-  const kdfVersion = blobs.payload.kdfVersion
+  const kdfPhc = blobs.payload.kdfPhc
   const existing = await walletDb
     .selectFrom('wallet_secrets')
     .select(['wallet_secrets_id', 'revision'])
@@ -139,7 +136,7 @@ export async function putSplitWalletSecretsEncrypted(
     encrypted_data: blobs.payload.ciphertext,
     iv: blobs.payload.iv,
     salt: blobs.payload.salt,
-    kdf_version: kdfVersion,
+    kdf_phc: kdfPhc,
     updated_at: now,
   }
 
@@ -149,7 +146,7 @@ export async function putSplitWalletSecretsEncrypted(
           mnemonic_encrypted_data: blobs.mnemonic.ciphertext,
           mnemonic_iv: blobs.mnemonic.iv,
           mnemonic_salt: blobs.mnemonic.salt,
-          mnemonic_kdf_version: blobs.mnemonic.kdfVersion,
+          mnemonic_kdf_phc: blobs.mnemonic.kdfPhc,
         }
       : {}
 
@@ -176,11 +173,11 @@ export async function putSplitWalletSecretsEncrypted(
         encrypted_data: blobs.payload.ciphertext,
         iv: blobs.payload.iv,
         salt: blobs.payload.salt,
-        kdf_version: kdfVersion,
+        kdf_phc: kdfPhc,
         mnemonic_encrypted_data: m.ciphertext,
         mnemonic_iv: m.iv,
         mnemonic_salt: m.salt,
-        mnemonic_kdf_version: m.kdfVersion,
+        mnemonic_kdf_phc: m.kdfPhc,
         created_at: now,
         updated_at: now,
       })
@@ -200,12 +197,12 @@ export async function putSplitWalletSecretsEncryptedIfRevisionMatches(
 ): Promise<boolean> {
   await assertWalletExists(walletDb, walletId)
   const now = new Date().toISOString()
-  const kdfVersion = blobs.payload.kdfVersion
+  const kdfPhc = blobs.payload.kdfPhc
   const baseSet = {
     encrypted_data: blobs.payload.ciphertext,
     iv: blobs.payload.iv,
     salt: blobs.payload.salt,
-    kdf_version: kdfVersion,
+    kdf_phc: kdfPhc,
     updated_at: now,
     revision: sql<number>`revision + 1`,
   }
@@ -215,7 +212,7 @@ export async function putSplitWalletSecretsEncryptedIfRevisionMatches(
           mnemonic_encrypted_data: blobs.mnemonic.ciphertext,
           mnemonic_iv: blobs.mnemonic.iv,
           mnemonic_salt: blobs.mnemonic.salt,
-          mnemonic_kdf_version: blobs.mnemonic.kdfVersion,
+          mnemonic_kdf_phc: blobs.mnemonic.kdfPhc,
         }
       : {}
 
@@ -274,7 +271,7 @@ async function updateWalletSecretsPayloadWithRetryImpl(params: {
           ciphertext: encryptedPayload.ciphertext,
           iv: encryptedPayload.iv,
           salt: encryptedPayload.salt,
-          kdfVersion: encryptedPayload.kdfVersion,
+          kdfPhc: encryptedPayload.kdfPhc,
         },
       },
       current.revision,
@@ -396,13 +393,13 @@ export async function saveWalletSecrets(params: {
       ciphertext: payloadEnc.ciphertext,
       iv: payloadEnc.iv,
       salt: payloadEnc.salt,
-      kdfVersion: payloadEnc.kdfVersion,
+      kdfPhc: payloadEnc.kdfPhc,
     },
     mnemonic: {
       ciphertext: mnemonicEnc.ciphertext,
       iv: mnemonicEnc.iv,
       salt: mnemonicEnc.salt,
-      kdfVersion: mnemonicEnc.kdfVersion,
+      kdfPhc: mnemonicEnc.kdfPhc,
     },
   })
 }
@@ -422,11 +419,11 @@ export async function loadWalletSecretsPayload(
       'encrypted_data',
       'iv',
       'salt',
-      'kdf_version',
+      'kdf_phc',
       'mnemonic_encrypted_data',
       'mnemonic_iv',
       'mnemonic_salt',
-      'mnemonic_kdf_version',
+      'mnemonic_kdf_phc',
     ])
     .where('wallet_id', '=', walletId)
     .executeTakeFirst()
@@ -440,7 +437,7 @@ export async function loadWalletSecretsPayload(
     ciphertext: record.encrypted_data,
     iv: record.iv,
     salt: record.salt,
-    kdfVersion: record.kdf_version as KdfVersion,
+    kdfPhc: record.kdf_phc,
   })
   return parseWalletPayloadJson(plaintext)
 }
@@ -459,11 +456,11 @@ export async function loadWalletSecrets(
       'encrypted_data',
       'iv',
       'salt',
-      'kdf_version',
+      'kdf_phc',
       'mnemonic_encrypted_data',
       'mnemonic_iv',
       'mnemonic_salt',
-      'mnemonic_kdf_version',
+      'mnemonic_kdf_phc',
     ])
     .where('wallet_id', '=', walletId)
     .executeTakeFirst()
@@ -476,20 +473,20 @@ export async function loadWalletSecrets(
     mnemonic_encrypted_data: record.mnemonic_encrypted_data,
     mnemonic_iv: record.mnemonic_iv,
     mnemonic_salt: record.mnemonic_salt,
-    mnemonic_kdf_version: record.mnemonic_kdf_version,
+    mnemonic_kdf_phc: record.mnemonic_kdf_phc,
   })
 
   const payloadPlaintext = await decryptData(password, {
     ciphertext: record.encrypted_data,
     iv: record.iv,
     salt: record.salt,
-    kdfVersion: record.kdf_version as KdfVersion,
+    kdfPhc: record.kdf_phc,
   })
   const mnemonicPlaintext = await decryptData(password, {
     ciphertext: mnemonicBlob.ciphertext,
     iv: mnemonicBlob.iv,
     salt: mnemonicBlob.salt,
-    kdfVersion: mnemonicBlob.kdfVersion,
+    kdfPhc: mnemonicBlob.kdfPhc,
   })
   const payload = parseWalletPayloadJson(payloadPlaintext)
   return assembleWalletSecrets(mnemonicPlaintext, payload)
@@ -506,17 +503,13 @@ export async function deleteWalletSecrets(
 }
 
 /**
- * Removes encrypted secrets, mnemonic backup flag row, and the wallet row.
+ * Removes encrypted secrets and the wallet row (including `no_mnemonic_backup` on `wallets`).
  */
 export async function deleteWalletCompletely(
   walletDb: Kysely<Database>,
   walletId: number,
 ): Promise<void> {
   await deleteWalletSecrets(walletDb, walletId)
-  await walletDb
-    .deleteFrom('settings')
-    .where('key', '=', noMnemonicBackupSettingsKey(walletId))
-    .execute()
   await walletDb.deleteFrom('wallets').where('wallet_id', '=', walletId).execute()
 }
 
@@ -567,13 +560,13 @@ export async function reencryptAllWalletSecretsWithNewPassword(params: {
         ciphertext: payloadEnc.ciphertext,
         iv: payloadEnc.iv,
         salt: payloadEnc.salt,
-        kdfVersion: payloadEnc.kdfVersion,
+        kdfPhc: payloadEnc.kdfPhc,
       },
       mnemonic: {
         ciphertext: mnemonicEnc.ciphertext,
         iv: mnemonicEnc.iv,
         salt: mnemonicEnc.salt,
-        kdfVersion: mnemonicEnc.kdfVersion,
+        kdfPhc: mnemonicEnc.kdfPhc,
       },
     })
   }

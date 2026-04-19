@@ -7,6 +7,7 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
 import wasm from 'vite-plugin-wasm'
+import { viteContactsDefine, viteLegalNoticeDefine } from '../load-vite-env.mjs'
 
 const projectRoot = path.dirname(fileURLToPath(import.meta.url))
 
@@ -19,9 +20,19 @@ function escapeRegExpSegment(s: string): string {
  * TanStack Router matches `routeFileIgnorePattern` against each filename under `routes/`.
  * TSX modules in `src/routes/library/articles/` are article content, not routes — discover them from disk so new files do not require manual regex updates.
  */
+function readAppVersion(): string {
+  try {
+    const pkgPath = path.join(projectRoot, 'package.json')
+    const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8')) as { version?: string }
+    return typeof pkg.version === 'string' ? pkg.version : '0.0.0'
+  } catch {
+    return '0.0.0'
+  }
+}
+
 function libraryArticleRouteIgnorePattern(): string {
   const articlesDir = path.join(projectRoot, 'src/routes/library/articles')
-  let tsxFiles: string[] = []
+  let tsxFiles: string[]
   try {
     tsxFiles = fs.readdirSync(articlesDir).filter((f) => f.endsWith('.tsx'))
   } catch {
@@ -39,6 +50,9 @@ export default defineConfig({
     // Expose CI to app so we can disable dev overlays (e.g. TanStack Router Devtools)
     // that intercept pointer events and break E2E tests.
     'import.meta.env.CI': JSON.stringify(!!process.env.CI),
+    'import.meta.env.VITE_APP_VERSION': JSON.stringify(readAppVersion()),
+    ...viteLegalNoticeDefine(),
+    ...viteContactsDefine(),
   },
   plugins: [
     tanstackRouter({
@@ -80,6 +94,8 @@ export default defineConfig({
         ],
       },
       workbox: {
+        // Default 2 MiB is too small for main WASM (e.g. bitboard_crypto ~2.2 MiB after Vite 8 output).
+        maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2,wasm}'],
         runtimeCaching: [
           {
@@ -117,6 +133,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(projectRoot, './src'),
+      '@common': path.resolve(projectRoot, './common'),
     },
   },
   server: {
@@ -149,6 +166,8 @@ export default defineConfig({
   },
   worker: {
     format: 'es',
+    // Vite 8 (Rolldown) bundles workers separately; wasm imports need the plugin here too.
+    plugins: () => [wasm()],
   },
   build: {
     outDir: 'dist',

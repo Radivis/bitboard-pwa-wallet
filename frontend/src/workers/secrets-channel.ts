@@ -38,7 +38,9 @@ export async function ensureSecretsChannel(): Promise<void> {
     } catch (error) {
       channelReady = false;
       const detail = error instanceof Error ? error.message : String(error);
-      throw new Error(`Failed to establish secrets channel: ${detail}`);
+      throw new Error(`Failed to establish secrets channel: ${detail}`, {
+        cause: error,
+      });
     }
   })();
   channelPromise = setupPromise.finally(() => {

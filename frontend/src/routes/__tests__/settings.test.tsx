@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { renderWithProviders } from '@/test-utils/test-providers'
@@ -56,6 +56,20 @@ vi.mock('@tanstack/react-router', async (importOriginal) => {
       options,
     }),
     useNavigate: () => vi.fn(),
+    useSearch: () => ({}),
+    Link: ({
+      children,
+      to,
+      className,
+    }: {
+      children: React.ReactNode
+      to: string
+      className?: string
+    }) => (
+      <a href={to} className={className}>
+        {children}
+      </a>
+    ),
   }
 })
 
@@ -165,6 +179,13 @@ const nearZeroSecurityState = { active: false }
 vi.mock('@/stores/nearZeroSecurityStore', () => ({
   useNearZeroSecurityStore: (selector: (s: typeof nearZeroSecurityState) => unknown) =>
     selector(nearZeroSecurityState),
+}))
+
+vi.mock('@/lib/opfs-root-file', () => ({
+  opfsRootFileExists: vi.fn().mockResolvedValue(false),
+  readBlobFromOpfsRootIfExists: vi.fn(),
+  readTextFileFromOpfsRootIfExists: vi.fn(),
+  triggerBrowserSaveLocalBlob: vi.fn(),
 }))
 
 const mockSetThemeMode = vi.fn()
@@ -289,6 +310,10 @@ vi.mock('@/components/ConfirmationDialog', () => ({
 import { SettingsPage } from '../settings'
 
 describe('SettingsPage', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
   beforeEach(() => {
     vi.clearAllMocks()
     featureStoreState.lightningEnabled = false
@@ -334,7 +359,31 @@ describe('SettingsPage', () => {
     expect(screen.queryByText('Address Type')).not.toBeInTheDocument()
     expect(screen.getByText('Appearance')).toBeInTheDocument()
     expect(screen.getByText('Security')).toBeInTheDocument()
+    expect(screen.getByText('Data Backups')).toBeInTheDocument()
     expect(screen.getByText('About')).toBeInTheDocument()
+    const privacyPolicyLink = screen.getByRole('link', { name: /privacy policy/i })
+    expect(privacyPolicyLink).toHaveAttribute('href', '/privacy')
+    expect(
+      screen.getByText(/Lab data is tied to wallets on this device/i),
+    ).toBeInTheDocument()
+  })
+
+  it('shows Developer contact card when VITE_CONTACTS is set', () => {
+    vi.stubEnv('VITE_CONTACTS', 'Line one\nLine two')
+    renderWithProviders(<SettingsPage />)
+    expect(screen.getByText('Developer contact')).toBeInTheDocument()
+    expect(screen.getByText(/Line one/)).toBeInTheDocument()
+    expect(screen.getByText(/Line two/)).toBeInTheDocument()
+  })
+
+  it('disables wallet backup export/import in near-zero security mode with hint', () => {
+    nearZeroSecurityState.active = true
+    renderWithProviders(<SettingsPage />)
+    expect(screen.getByRole('button', { name: 'Export wallet data' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Import wallet backup' })).toBeDisabled()
+    expect(
+      screen.getByText(/Wallet export and import are not available in near-zero security mode/i),
+    ).toBeInTheDocument()
   })
 
   it('shows Address Type card when SegWit addresses feature is enabled', () => {

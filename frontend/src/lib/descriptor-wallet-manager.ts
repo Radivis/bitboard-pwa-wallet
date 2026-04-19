@@ -39,7 +39,7 @@ function workerBlobToPersistence(blob: EncryptedBlobForDb): EncryptedWalletSecre
     ciphertext: blob.ciphertext,
     iv: blob.iv,
     salt: blob.salt,
-    kdfVersion: blob.kdfVersion as EncryptedWalletSecretsBlob['kdfVersion'],
+    kdfPhc: blob.kdfPhc,
   }
 }
 

@@ -1,5 +1,10 @@
-import { useState } from 'react'
-import { createFileRoute } from '@tanstack/react-router'
+import { useEffect, useState } from 'react'
+import {
+  createFileRoute,
+  Link,
+  useNavigate,
+  useSearch,
+} from '@tanstack/react-router'
 import { Settings } from 'lucide-react'
 import { PageHeader } from '@/components/PageHeader'
 import { AppDescription } from '@/components/AppDescription'
@@ -19,7 +24,10 @@ import { AddressTypeSelector } from '@/components/settings/AddressTypeSelector'
 import { EsploraUrlSettings } from '@/components/settings/EsploraUrlSettings'
 import { FeatureToggles } from '@/components/settings/FeatureToggles'
 import { BitcoinUnitSelect } from '@/components/BitcoinUnitSelect'
+import { DeveloperContactCard } from '@/components/DeveloperContactCard'
+import { LegalNoticeCard } from '@/components/LegalNoticeCard'
 import { SettingsSecurityCard } from '@/components/settings/SettingsSecurityCard'
+import { DataBackupsCard } from '@/components/settings/DataBackupsCard'
 import { ChangeAppPasswordModal } from '@/components/ChangeAppPasswordModal'
 import { UpgradeFromNearZeroPasswordModal } from '@/components/UpgradeFromNearZeroPasswordModal'
 import { useWallets } from '@/db'
@@ -28,10 +36,26 @@ import { useFeatureStore } from '@/stores/featureStore'
 import { useBitcoinDisplayUnitStore } from '@/stores/bitcoinDisplayUnitStore'
 
 export const Route = createFileRoute('/settings')({
+  validateSearch: (
+    search: Record<string, unknown>,
+  ): { section?: 'data-backups' } => {
+    const raw = search.section
+    if (raw === 'data-backups') return { section: 'data-backups' }
+    return {}
+  },
   component: SettingsPage,
 })
 
 export function SettingsPage() {
+  const { section } = useSearch({ from: '/settings' })
+  const navigate = useNavigate({ from: '/settings' })
+
+  useEffect(() => {
+    if (section !== 'data-backups') return
+    document.getElementById('data-backups')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    void navigate({ search: {}, replace: true })
+  }, [section, navigate])
+
   const segwitAddressesEnabled = useFeatureStore((s) => s.segwitAddressesEnabled)
   const { data: wallets } = useWallets()
   const hasWallets = (wallets?.length ?? 0) > 0
@@ -160,6 +184,8 @@ export function SettingsPage() {
         onOpenChange={setUpgradeFromNearZeroOpen}
       />
 
+      <DataBackupsCard />
+
       <Card>
         <CardHeader>
           <CardTitle>About</CardTitle>
@@ -167,9 +193,21 @@ export function SettingsPage() {
         <CardContent className="space-y-2 text-sm text-muted-foreground">
           <p>Bitboard Wallet &mdash; A Progressive Web App Bitcoin wallet.</p>
           <AppDescription />
-          <p>Version 0.1.0</p>
+          <p>Version {import.meta.env.VITE_APP_VERSION}</p>
+          <p className="pt-1">
+            <Link
+              to="/privacy"
+              className="text-primary underline underline-offset-4 hover:opacity-90"
+            >
+              Privacy policy
+            </Link>
+          </p>
         </CardContent>
       </Card>
+
+      <DeveloperContactCard />
+
+      <LegalNoticeCard />
     </div>
   )
 }
