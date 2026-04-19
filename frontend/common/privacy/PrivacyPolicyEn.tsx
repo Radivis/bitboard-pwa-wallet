@@ -17,10 +17,6 @@ export function PrivacyPolicyEn() {
         Wallet web app (Progressive Web App, “PWA”) as a single document. Sections below explain what
         applies to the website vs the app.
       </p>
-      <p>
-        <strong>Note:</strong> This page is not legal advice. Have it reviewed by qualified counsel
-        if you rely on it.
-      </p>
 
       <h2>1. Controller</h2>
       <p>The controller under the GDPR is:</p>

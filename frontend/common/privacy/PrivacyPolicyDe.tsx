@@ -19,10 +19,6 @@ export function PrivacyPolicyDe() {
         mit klar getrennten Abschnitten, je nachdem welche Datenverarbeitung für welche Oberfläche
         relevant ist.
       </p>
-      <p>
-        <strong>Hinweis:</strong> Diese Seite stellt keine Rechtsberatung dar. Lassen Sie den Text
-        im Zweifel von einer Rechtsanwaltskanzlei prüfen.
-      </p>
 
       <h2>1. Verantwortlicher</h2>
       <p>
