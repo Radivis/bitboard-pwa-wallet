@@ -48,7 +48,7 @@ describe('LegalNoticeCard', () => {
     localStorage.setItem(LEGAL_LOCALE_STORAGE_KEY, 'de')
     render(<LegalNoticeCard />)
     expect(screen.getByText('Impressum')).toBeInTheDocument()
-    expect(screen.getByText(/Anbieter/)).toBeInTheDocument()
+    expect(screen.getByText(/Inhalte gemäß §5 DDG/)).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /privacy policy/i })).toHaveAttribute(
       'href',
       '/privacy',
@@ -60,7 +60,9 @@ describe('LegalNoticeCard', () => {
     localStorage.setItem(LEGAL_LOCALE_STORAGE_KEY, 'en')
     render(<LegalNoticeCard />)
     expect(screen.getByText('Legal notice')).toBeInTheDocument()
-    expect(screen.getByText(/Provider/)).toBeInTheDocument()
+    expect(
+      screen.getByText(/Information pursuant to Section 5 of the German Digital Services Act \(DDG\)/),
+    ).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /privacy policy/i })).toHaveAttribute(
       'href',
       '/privacy',
@@ -78,10 +80,12 @@ describe('LegalNoticeCard', () => {
 
     await user.click(screen.getByRole('button', { name: /English/i }))
     expect(screen.getByText('Legal notice')).toBeInTheDocument()
-    expect(screen.getByText(/Provider/)).toBeInTheDocument()
+    expect(
+      screen.getByText(/Information pursuant to Section 5 of the German Digital Services Act \(DDG\)/),
+    ).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: /Deutsch/i }))
     expect(screen.getByText('Impressum')).toBeInTheDocument()
-    expect(screen.getByText(/Anbieter/)).toBeInTheDocument()
+    expect(screen.getByText(/Inhalte gemäß §5 DDG/)).toBeInTheDocument()
   })
 })
