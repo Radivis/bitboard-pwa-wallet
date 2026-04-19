@@ -11,6 +11,10 @@ interface WalletBackupImportPasswordModalProps {
   onCancel: () => void
   onConfirm: (password: string) => void | Promise<void>
   isBusy: boolean
+  /** Shown after a failed verification attempt (before the bypass modal). */
+  verificationError?: string | null
+  /** Increment to clear the password field and refocus (e.g. after a failed attempt). */
+  passwordResetKey?: number
 }
 
 export function WalletBackupImportPasswordModal({
@@ -19,6 +23,8 @@ export function WalletBackupImportPasswordModal({
   onCancel,
   onConfirm,
   isBusy,
+  verificationError = null,
+  passwordResetKey = 0,
 }: WalletBackupImportPasswordModalProps) {
   const [password, setPassword] = useState('')
   const pwdId = useId()
@@ -26,6 +32,14 @@ export function WalletBackupImportPasswordModal({
   useEffect(() => {
     if (!open) setPassword('')
   }, [open])
+
+  useEffect(() => {
+    if (!open || passwordResetKey === 0) return
+    setPassword('')
+    window.setTimeout(() => {
+      document.getElementById(pwdId)?.focus()
+    }, 0)
+  }, [open, passwordResetKey, pwdId])
 
   const handleCancel = useCallback(() => {
     setPassword('')
@@ -55,11 +69,11 @@ export function WalletBackupImportPasswordModal({
       )}
     >
       <DialogDescription className="text-left">
-        Enter the Bitboard app password that was used when this backup was signed. The file will
-        only be imported if the signature matches.
+        Enter the password that was used when this backup was signed (often your Bitboard app
+        password). The file will only be imported if the signature matches.
       </DialogDescription>
       <div className="mt-4 space-y-2">
-        <Label htmlFor={pwdId}>App password</Label>
+        <Label htmlFor={pwdId}>Signing password</Label>
         <Input
           id={pwdId}
           type="password"
@@ -68,6 +82,11 @@ export function WalletBackupImportPasswordModal({
           onChange={(e) => setPassword(e.target.value)}
           disabled={isBusy}
         />
+        {verificationError ? (
+          <p className="text-sm text-destructive" role="alert" aria-live="assertive">
+            {verificationError}
+          </p>
+        ) : null}
       </div>
     </AppModal>
   )

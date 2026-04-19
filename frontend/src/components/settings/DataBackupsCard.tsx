@@ -9,6 +9,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { ConfirmationDialog } from '@/components/ConfirmationDialog'
 import { WalletBackupExportPasswordModal } from '@/components/settings/WalletBackupExportPasswordModal'
+import { WalletBackupImportBypassModal } from '@/components/settings/WalletBackupImportBypassModal'
 import { WalletBackupImportPasswordModal } from '@/components/settings/WalletBackupImportPasswordModal'
 import { useDataBackupsCard } from '@/components/settings/use-data-backups-card'
 
@@ -35,6 +36,12 @@ export function DataBackupsCard() {
     cancelImportFlow,
     confirmWipeImport,
     runVerifiedImport,
+    runUnverifiedWalletBackupImport,
+    abortWalletBackupImportBypass,
+    checkSigningPasswordMatchesAppPassword,
+    importBypassModalOpen,
+    importVerifyInlineMessage,
+    importPasswordResetKey,
     onLabImportFilePick,
     cancelLabImportFlow,
     runLabImportAfterWipeConfirm,
@@ -57,6 +64,7 @@ export function DataBackupsCard() {
         onCancel={() => setExportPasswordOpen(false)}
         onConfirm={runSignedWalletExport}
         isBusy={exportBusy === 'wallet'}
+        checkSigningPasswordMatchesAppPassword={checkSigningPasswordMatchesAppPassword}
       />
       <ConfirmationDialog
         open={importWipeOpen}
@@ -80,20 +88,32 @@ export function DataBackupsCard() {
         }}
         onCancel={cancelLabImportFlow}
       />
+      <WalletBackupImportBypassModal
+        open={importBypassModalOpen}
+        onOpenChange={(open) => {
+          if (!open) abortWalletBackupImportBypass()
+        }}
+        onAbort={abortWalletBackupImportBypass}
+        onProceedAnyway={runUnverifiedWalletBackupImport}
+        isBusy={importBusy}
+      />
       <WalletBackupImportPasswordModal
         open={importPasswordOpen}
         onOpenChange={setImportPasswordOpen}
         onCancel={cancelImportFlow}
         onConfirm={runVerifiedImport}
         isBusy={importBusy}
+        verificationError={importVerifyInlineMessage}
+        passwordResetKey={importPasswordResetKey}
       />
       <CardHeader>
         <CardTitle>Data Backups</CardTitle>
         <CardDescription>
           Export full local database files from this device as ZIP archives. Wallet exports are
-          signed with your app password (ML-DSA); wallet import only accepts ZIPs that include the
-          manifest and verify. Lab exports are a single SQLite file in a ZIP with no cryptographic
-          authentication—only import lab ZIPs you trust. Nothing is uploaded.
+          signed with a password you choose (ML-DSA); the export dialog warns if it differs from your
+          app password. Wallet import verifies the manifest by default; after repeated failures you
+          can choose to import without verification. Lab exports are a single SQLite file in a ZIP
+          with no cryptographic authentication—only import lab ZIPs you trust. Nothing is uploaded.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
