@@ -4,6 +4,12 @@ import userEvent from '@testing-library/user-event'
 import { renderWithProviders } from '@/test-utils/test-providers'
 import { toast } from 'sonner'
 
+const getDeveloperContactLinesMock = vi.hoisted(() => vi.fn(() => ''))
+
+vi.mock('@/developer-contact/contact-lines', () => ({
+  getDeveloperContactLines: () => getDeveloperContactLinesMock(),
+}))
+
 const featureStoreState = vi.hoisted(() => {
   const state = {
     lightningEnabled: false,
@@ -316,6 +322,7 @@ describe('SettingsPage', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    getDeveloperContactLinesMock.mockReturnValue('')
     featureStoreState.lightningEnabled = false
     featureStoreState.mainnetAccessEnabled = false
     featureStoreState.regtestModeEnabled = false
@@ -368,8 +375,8 @@ describe('SettingsPage', () => {
     ).toBeInTheDocument()
   })
 
-  it('shows Developer contact card when VITE_CONTACTS is set', () => {
-    vi.stubEnv('VITE_CONTACTS', 'Line one\nLine two')
+  it('shows Developer contact card when contact lines are set', () => {
+    getDeveloperContactLinesMock.mockReturnValue('Line one\nLine two')
     renderWithProviders(<SettingsPage />)
     expect(screen.getByText('Developer contact')).toBeInTheDocument()
     expect(screen.getByText(/Line one/)).toBeInTheDocument()

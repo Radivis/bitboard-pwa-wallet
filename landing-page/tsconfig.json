@@ -31,9 +31,6 @@
       "@legal-locale": [
         "../frontend/src/lib/legal-locale.ts"
       ],
-      "@legal-notice-display": [
-        "../frontend/src/lib/legal-notice-display.ts"
-      ],
       "@legal-entity-fields": [
         "../frontend/src/components/LegalEntityFields.tsx"
       ],

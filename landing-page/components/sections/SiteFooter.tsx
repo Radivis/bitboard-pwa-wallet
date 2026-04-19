@@ -1,9 +1,15 @@
 import { Globe, ExternalLink } from 'lucide-react';
 import { GitHubMark } from '@/src/GitHubMark';
 import { FooterOutboundLink } from './FooterOutboundLink';
-import { LegalEntityFields } from '@legal-entity-fields';
 import { LegalLocaleSwitcherLanding } from '@/src/components/LegalLocaleSwitcherLanding';
-import { useLegalNoticeDisplay } from '@legal-notice-display';
+import { LegalNoticeDe } from '@common/legal/LegalNoticeDe';
+import { LegalNoticeEn } from '@common/legal/LegalNoticeEn';
+import { shouldShowLegalNotice } from '@common/legal/legal-notice-availability';
+import {
+  LEGAL_NOTICE_TITLE_DE,
+  LEGAL_NOTICE_TITLE_EN,
+  useLegalLocale,
+} from '@legal-locale';
 
 interface SiteFooterProps {
   githubUrl: string;
@@ -12,7 +18,9 @@ interface SiteFooterProps {
 }
 
 export function SiteFooter({ githubUrl, websiteUrl, blogUrl }: SiteFooterProps) {
-  const legal = useLegalNoticeDisplay();
+  const { locale, setLocale } = useLegalLocale();
+  const showLegal = shouldShowLegalNotice();
+  const legalTitle = locale === 'de' ? LEGAL_NOTICE_TITLE_DE : LEGAL_NOTICE_TITLE_EN;
 
   return (
     <footer className="border-t border-white/10 py-12 px-6 mt-20">
@@ -51,27 +59,23 @@ export function SiteFooter({ githubUrl, websiteUrl, blogUrl }: SiteFooterProps) 
           </a>
         </div>
 
-        {legal.visible ? (
+        {showLegal ? (
           <div className="border-t border-white/10 pt-6 text-left w-full">
             <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
-              <h2 className="text-sm font-semibold text-gray-300 shrink-0">{legal.title}</h2>
-              {legal.showSwitcher ? (
-                <LegalLocaleSwitcherLanding
-                  activeLocale={legal.activeLocale}
-                  onLocaleChange={legal.setLocale}
-                  ariaLabel="Legal notice language"
-                />
-              ) : null}
+              <h2 className="text-sm font-semibold text-gray-300 shrink-0">{legalTitle}</h2>
+              <LegalLocaleSwitcherLanding
+                activeLocale={locale}
+                onLocaleChange={setLocale}
+                ariaLabel="Legal notice language"
+              />
             </div>
-            <LegalEntityFields
-              entity={legal.entity}
-              className="space-y-1 max-w-3xl mt-2"
-              lineClassName="whitespace-pre-wrap text-sm text-gray-500"
-              emailLinkClassName="text-gray-500 underline underline-offset-2 hover:text-gray-200"
-            />
-            {legal.body.trim() ? (
-              <p className="text-gray-500 text-sm whitespace-pre-wrap max-w-3xl mt-2">{legal.body}</p>
-            ) : null}
+            <div className="max-w-3xl mt-2">
+              {locale === 'de' ? (
+                <LegalNoticeDe surface="landing" />
+              ) : (
+                <LegalNoticeEn surface="landing" />
+              )}
+            </div>
           </div>
         ) : null}
       </div>

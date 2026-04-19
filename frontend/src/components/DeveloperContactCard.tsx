@@ -4,16 +4,11 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
+import { getDeveloperContactLines } from '@/developer-contact/contact-lines'
 
-function getContactsText(): string {
-  const raw = import.meta.env.VITE_CONTACTS
-  if (raw === undefined || raw === null) return ''
-  return String(raw).trim()
-}
-
-/** Renders developer contact lines when `VITE_CONTACTS` is set at build time (`.env.contacts`). */
+/** Renders developer contact lines from `developer-contact/contact-lines.txt`. */
 export function DeveloperContactCard() {
-  const text = getContactsText()
+  const text = getDeveloperContactLines()
   if (!text) return null
 
   return (

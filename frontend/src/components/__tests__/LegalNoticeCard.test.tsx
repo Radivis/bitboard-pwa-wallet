@@ -2,6 +2,7 @@ import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { LegalNoticeCard } from '@/components/LegalNoticeCard'
+import { LEGAL_LOCALE_STORAGE_KEY } from '@/lib/legal-locale'
 
 vi.mock('@tanstack/react-router', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@tanstack/react-router')>()
@@ -13,34 +14,22 @@ vi.mock('@tanstack/react-router', async (importOriginal) => {
   }
 })
 
-vi.mock('@/legal-entity/legal-entity', () => {
-  const empty = { name: '', address: '', email: '' }
+const shouldShowLegalNoticeMock = vi.hoisted(() => vi.fn(() => true))
+
+vi.mock('@common/legal/legal-notice-availability', async (importOriginal) => {
+  const actual = await importOriginal<
+    typeof import('@common/legal/legal-notice-availability')
+  >()
   return {
-    legalEntity: empty,
-    hasLegalEntityData: (e: typeof empty) =>
-      [e.name, e.address, e.email].some((s) => s.trim().length > 0),
+    ...actual,
+    shouldShowLegalNotice: () => shouldShowLegalNoticeMock(),
   }
 })
-import {
-  legalI18n,
-  restoreLegalI18nResourceBundles,
-  type LegalNamespace,
-} from '@/i18n/legal-i18n'
-
-const emptyLegal: LegalNamespace = {
-  sectionTitle: '',
-  body: '',
-  privacySharedLanguageUserNote: '',
-}
-
-function setLegalResourceBundles(de: LegalNamespace, en: LegalNamespace): void {
-  legalI18n.addResourceBundle('de', 'legal', de, true, true)
-  legalI18n.addResourceBundle('en', 'legal', en, true, true)
-}
 
 describe('LegalNoticeCard', () => {
   afterEach(() => {
-    restoreLegalI18nResourceBundles()
+    vi.clearAllMocks()
+    shouldShowLegalNoticeMock.mockReturnValue(true)
     localStorage.clear()
   })
 
@@ -48,36 +37,30 @@ describe('LegalNoticeCard', () => {
     localStorage.clear()
   })
 
-  it('renders nothing when both legal notice bodies are empty', () => {
-    setLegalResourceBundles(emptyLegal, emptyLegal)
+  it('renders nothing when legal notice is hidden', () => {
+    shouldShowLegalNoticeMock.mockReturnValue(false)
     const { container } = render(<LegalNoticeCard />)
     expect(container.firstChild).toBeNull()
   })
 
-  it('renders German Impressum when only DE is set', () => {
-    setLegalResourceBundles(
-      { ...emptyLegal, sectionTitle: 'Impressum', body: 'Nur DE' },
-      emptyLegal,
-    )
+  it('renders German imprint when stored legal locale is de', () => {
+    shouldShowLegalNoticeMock.mockReturnValue(true)
+    localStorage.setItem(LEGAL_LOCALE_STORAGE_KEY, 'de')
     render(<LegalNoticeCard />)
     expect(screen.getByText('Impressum')).toBeInTheDocument()
-    expect(screen.getByText('Nur DE')).toBeInTheDocument()
+    expect(screen.getByText(/Anbieter/)).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /privacy policy/i })).toHaveAttribute(
       'href',
       '/privacy',
     )
-    expect(screen.queryByRole('group', { name: /legal notice language/i })).not.toBeInTheDocument()
   })
 
-  it('renders English Legal notice when only EN is set', () => {
-    setLegalResourceBundles(emptyLegal, {
-      ...emptyLegal,
-      sectionTitle: 'Legal notice',
-      body: 'EN only body',
-    })
+  it('renders English imprint when stored legal locale is en', () => {
+    shouldShowLegalNoticeMock.mockReturnValue(true)
+    localStorage.setItem(LEGAL_LOCALE_STORAGE_KEY, 'en')
     render(<LegalNoticeCard />)
     expect(screen.getByText('Legal notice')).toBeInTheDocument()
-    expect(screen.getByText('EN only body')).toBeInTheDocument()
+    expect(screen.getByText(/Provider/)).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /privacy policy/i })).toHaveAttribute(
       'href',
       '/privacy',
@@ -85,10 +68,7 @@ describe('LegalNoticeCard', () => {
   })
 
   it('shows switcher and toggles body when both languages are set', async () => {
-    setLegalResourceBundles(
-      { ...emptyLegal, sectionTitle: 'Impressum', body: 'Text DE' },
-      { ...emptyLegal, sectionTitle: 'Legal notice', body: 'Text EN' },
-    )
+    shouldShowLegalNoticeMock.mockReturnValue(true)
     const user = userEvent.setup()
     render(<LegalNoticeCard />)
 
@@ -98,10 +78,10 @@ describe('LegalNoticeCard', () => {
 
     await user.click(screen.getByRole('button', { name: /English/i }))
     expect(screen.getByText('Legal notice')).toBeInTheDocument()
-    expect(screen.getByText('Text EN')).toBeInTheDocument()
+    expect(screen.getByText(/Provider/)).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: /Deutsch/i }))
     expect(screen.getByText('Impressum')).toBeInTheDocument()
-    expect(screen.getByText('Text DE')).toBeInTheDocument()
+    expect(screen.getByText(/Anbieter/)).toBeInTheDocument()
   })
 })

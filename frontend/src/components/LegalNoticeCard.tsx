@@ -5,34 +5,40 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
-import { LegalEntityFields } from '@/components/LegalEntityFields'
 import { LegalLocaleSwitcher } from '@/components/LegalLocaleSwitcher'
-import { useLegalNoticeDisplay } from '@/lib/legal-notice-display'
+import { LegalNoticeDe } from '@common/legal/LegalNoticeDe'
+import { LegalNoticeEn } from '@common/legal/LegalNoticeEn'
+import { shouldShowLegalNotice } from '@common/legal/legal-notice-availability'
+import {
+  LEGAL_NOTICE_TITLE_DE,
+  LEGAL_NOTICE_TITLE_EN,
+  useLegalLocale,
+} from '@/lib/legal-locale'
 
-/** Legal notice: localized copy in `locales/{de|en}/legal.json`, entity in `legal-entity/entity.json`. */
+/** Legal notice: per-locale TSX in `common/legal/`, entity in `legal-entity/entity.json`. */
 export function LegalNoticeCard() {
-  const display = useLegalNoticeDisplay()
-  if (!display.visible) return null
+  const { locale, setLocale } = useLegalLocale()
 
-  const { title, body, entity, showSwitcher, activeLocale, setLocale } = display
+  if (!shouldShowLegalNotice()) return null
+
+  const title = locale === 'de' ? LEGAL_NOTICE_TITLE_DE : LEGAL_NOTICE_TITLE_EN
 
   return (
     <Card id="legal-notice">
       <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-3 space-y-0">
         <CardTitle className="leading-tight">{title}</CardTitle>
-        {showSwitcher ? (
-          <LegalLocaleSwitcher
-            activeLocale={activeLocale}
-            onLocaleChange={setLocale}
-            ariaLabel="Legal notice language"
-          />
-        ) : null}
+        <LegalLocaleSwitcher
+          activeLocale={locale}
+          onLocaleChange={setLocale}
+          ariaLabel="Legal notice language"
+        />
       </CardHeader>
       <CardContent className="space-y-3">
-        <LegalEntityFields entity={entity} className="space-y-1" />
-        {body.trim() ? (
-          <p className="whitespace-pre-wrap text-sm text-muted-foreground">{body}</p>
-        ) : null}
+        {locale === 'de' ? (
+          <LegalNoticeDe surface="app" />
+        ) : (
+          <LegalNoticeEn surface="app" />
+        )}
         <p className="pt-1 text-sm">
           <Link
             to="/privacy"

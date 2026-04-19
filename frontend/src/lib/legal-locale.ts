@@ -6,6 +6,9 @@ export const LEGAL_LOCALE_STORAGE_KEY = 'bitboard.legalLocale' as const
 export const PRIVACY_PAGE_TITLE_DE = 'Datenschutzerklärung'
 export const PRIVACY_PAGE_TITLE_EN = 'Privacy policy'
 
+export const LEGAL_NOTICE_TITLE_DE = 'Impressum'
+export const LEGAL_NOTICE_TITLE_EN = 'Legal notice'
+
 /** Landing footer / dark background — contrast-safe (avoid theme primary white-on-white). */
 export function legalLocaleSwitcherLandingButtonClass(active: boolean): string {
   return [

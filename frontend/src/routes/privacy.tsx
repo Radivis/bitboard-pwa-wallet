@@ -1,14 +1,16 @@
-import { useMemo } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
 import { Shield } from 'lucide-react'
 import { PageHeader } from '@/components/PageHeader'
 import { LegalLocaleSwitcher } from '@/components/LegalLocaleSwitcher'
-import { legalI18n } from '@/i18n/legal-i18n'
 import {
   PRIVACY_PAGE_TITLE_DE,
   PRIVACY_PAGE_TITLE_EN,
   useLegalLocale,
 } from '@/lib/legal-locale'
+import {
+  PRIVACY_SHARED_LANGUAGE_USER_NOTE_DE,
+  PRIVACY_SHARED_LANGUAGE_USER_NOTE_EN,
+} from '@common/privacy/privacy-language-notes'
 import { PrivacyPolicyLayout } from '@common/privacy/PrivacyPolicyLayout'
 import { PrivacyPolicyDe } from '@common/privacy/PrivacyPolicyDe'
 import { PrivacyPolicyEn } from '@common/privacy/PrivacyPolicyEn'
@@ -21,19 +23,17 @@ export function PrivacyPage() {
   const { locale, setLocale } = useLegalLocale()
   const title =
     locale === 'de' ? PRIVACY_PAGE_TITLE_DE : PRIVACY_PAGE_TITLE_EN
-  const tLegal = useMemo(
-    () => legalI18n.getFixedT(locale, 'legal'),
-    [locale],
-  )
+  const privacyLanguageNote =
+    locale === 'de'
+      ? PRIVACY_SHARED_LANGUAGE_USER_NOTE_DE
+      : PRIVACY_SHARED_LANGUAGE_USER_NOTE_EN
 
   return (
     <div className="space-y-6">
       <PageHeader title={title} icon={Shield} />
 
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-muted-foreground">
-          {tLegal('privacySharedLanguageUserNote')}
-        </p>
+        <p className="text-sm text-muted-foreground">{privacyLanguageNote}</p>
         <LegalLocaleSwitcher
           activeLocale={locale}
           onLocaleChange={setLocale}

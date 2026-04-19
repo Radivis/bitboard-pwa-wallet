@@ -30,10 +30,6 @@ export default defineConfig({
       '@': path.resolve(projectRoot, '.'),
       '@common': path.resolve(projectRoot, '../frontend/common'),
       '@legal-locale': path.resolve(projectRoot, '../frontend/src/lib/legal-locale.ts'),
-      '@legal-notice-display': path.resolve(
-        projectRoot,
-        '../frontend/src/lib/legal-notice-display.ts',
-      ),
       '@legal-entity-fields': path.resolve(
         projectRoot,
         '../frontend/src/components/LegalEntityFields.tsx',
