@@ -1,0 +1,65 @@
+# Landing site: build on GitHub Actions (Vite only), host on Vercel via prebuilt output.
+# One-time Vercel + secrets: docs/deploy-vercel.md (landing section)
+name: Deploy landing page to Vercel (production)
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-vercel-landing-production
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Build and deploy landing (prebuilt)
+    runs-on: ubuntu-latest
+    # Same monorepo patterns as deploy-vercel.yml: --cwd landing-page from repo root,
+    # strip settings.rootDirectory, mkdir landing-page/landing-page for deploy --prebuilt.
+
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_LANDING_PROJECT_ID }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: landing-page/package-lock.json
+
+      - name: Install Vercel CLI
+        run: npm install -g vercel@51.8.0
+
+      - name: Pull Vercel environment (production)
+        run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN" --cwd landing-page
+
+      - name: Strip rootDirectory from pulled project settings
+        uses: ./.github/actions/strip-vercel-project-root-directory
+        with:
+          project-json-path: landing-page/.vercel/project.json
+
+      - name: Vercel build (prebuilt output)
+        run: vercel build --token="$VERCEL_TOKEN" --prod --cwd landing-page
+
+      - name: Strip rootDirectory after build (before prebuilt deploy)
+        uses: ./.github/actions/strip-vercel-project-root-directory
+        with:
+          project-json-path: landing-page/.vercel/project.json
+
+      - name: Prepare prebuilt deploy (satisfy path check)
+        run: mkdir -p landing-page/landing-page
+
+      - name: Deploy prebuilt to production
+        working-directory: landing-page
+        run: vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN"

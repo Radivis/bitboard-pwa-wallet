@@ -65,6 +65,7 @@ function LabTransactionsPage() {
         creatingRandomTransactions={lab.creatingRandomTransactions}
         randomBatchProgress={lab.randomBatchProgress}
         labEntitiesCount={lab.labEntitiesCount}
+        hasMinedBlocks={lab.blockCount > 0}
       />
 
       <LabAddressesCard onCopyAddress={lab.onCopyAddress} wallets={lab.wallets} />

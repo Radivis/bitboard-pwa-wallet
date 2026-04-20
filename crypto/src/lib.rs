@@ -190,10 +190,7 @@ pub fn load_wallet(
     let net = types::BitcoinNetwork::try_from(network).map_err(JsValue::from)?;
 
     let (bdk_wallet, changeset) = if use_empty_chain {
-        let bdk_network = match net {
-            types::BitcoinNetwork::Testnet => bitcoin::Network::Testnet4,
-            _ => net.into(),
-        };
+        let bdk_network = wallet::bdk_network_for_app(net);
         let mut w = wallet::create_wallet_with_bdk_network(
             external_descriptor,
             internal_descriptor,

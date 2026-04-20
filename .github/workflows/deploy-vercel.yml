@@ -19,9 +19,11 @@ jobs:
   deploy:
     name: Build and deploy prebuilt
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: frontend
+    # Pull/build: `vercel … --cwd frontend` from repo root + strip `settings.rootDirectory` in
+    # `.vercel/project.json` (avoids install cwd bugs — vercel/community#2793).
+    # Deploy: `vercel deploy --prebuilt` still validates a filesystem path derived from Root
+    # Directory; monorepo `frontend` can resolve to …/frontend/frontend. We mkdir that path empty
+    # so the check passes (see docs/deploy-vercel.md).
 
     env:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
@@ -56,10 +58,26 @@ jobs:
         run: npm install -g vercel@51.8.0
 
       - name: Pull Vercel environment (production)
-        run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
+        run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN" --cwd frontend
+
+      - name: Strip rootDirectory from pulled project settings
+        uses: ./.github/actions/strip-vercel-project-root-directory
+        with:
+          project-json-path: frontend/.vercel/project.json
 
       - name: Vercel build (prebuilt output)
-        run: vercel build --token="$VERCEL_TOKEN" --prod
+        run: vercel build --token="$VERCEL_TOKEN" --prod --cwd frontend
+
+      # `vercel build` may refresh `.vercel/project.json`; deploy still merges Root Directory and can
+      # require …/frontend/frontend to exist for --prebuilt (CLI regression / strict check).
+      - name: Strip rootDirectory after build (before prebuilt deploy)
+        uses: ./.github/actions/strip-vercel-project-root-directory
+        with:
+          project-json-path: frontend/.vercel/project.json
+
+      - name: Prepare prebuilt deploy (satisfy path check)
+        run: mkdir -p frontend/frontend
 
       - name: Deploy prebuilt to production
+        working-directory: frontend
         run: vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN"

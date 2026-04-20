@@ -176,7 +176,7 @@ npm run build
 npm run preview
 ```
 
-The production build is optimized and ready to deploy to any static hosting service (Netlify, Vercel, GitHub Pages, etc.).
+The production build is optimized and ready to deploy to any static hosting service (Netlify, Vercel, GitHub Pages, etc.). For **Vercel**, use the canonical **GitHub Actions → prebuilt deploy** flow described in [`../docs/deploy-vercel.md`](../docs/deploy-vercel.md).
 
 ## Dark Mode
 

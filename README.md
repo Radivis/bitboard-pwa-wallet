@@ -25,6 +25,20 @@ Do not store more than you can afford to lose on it!
 
 ⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️
 
+## Live Deployment
+
+🌍🌍🌍🌍🌍🌍🌍
+
+This app is currently deployed via Vercel under:
+
+**[app.bitboard-wallet.com](https://app.bitboard-wallet.com)**
+
+If you want to start through the landing page first, visit:
+
+**[bitboard-wallet.com](https://bitboard-wallet.com)**
+
+🌍🌍🌍🌍🌍🌍🌍
+
 ## Security
 
 To report a security vulnerability, use **GitHub private vulnerability reporting** as described in [SECURITY.md](SECURITY.md). Technical threat model and implementation details are documented in [doc/SECURITY.md](doc/SECURITY.md).
@@ -181,6 +195,10 @@ Component tests:
 
 e2e tests:
 `npm run test:e2e`
+
+## Deployment (Vercel)
+
+The **canonical** production path is **GitHub Actions → `vercel build` on the runner → `vercel deploy --prebuilt`**; Vercel hosts the static output. The **wallet** ([`deploy-vercel.yml`](.github/workflows/deploy-vercel.yml)) and **landing page** ([`deploy-vercel-landing.yml`](.github/workflows/deploy-vercel-landing.yml)) are separate Vercel projects. See **[docs/deploy-vercel.md](docs/deploy-vercel.md)** for setup (secrets, including `VERCEL_LANDING_PROJECT_ID` for the landing site, and optional Vercel-native builds).
 
 ## License
 

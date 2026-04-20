@@ -5,13 +5,20 @@ import { AddressType } from '@/lib/wallet-domain-types'
  * Anonymous entities store `entityName: null` and use `Anonymous-{labEntityId}` as the key.
  */
 
-/** Plain-text option label for mining target select (no React in `<option>`). */
-export function formatLabEntityMineOptionLabel(e: {
-  labEntityId: number
-  entityName: string | null
-  addressType: AddressType
-}): string {
+/**
+ * Plain-text option label for mining target select (no React in `<option>`).
+ * Address type is appended only when SegWit address options are enabled (Settings → Features).
+ */
+export function formatLabEntityMineOptionLabel(
+  e: {
+    labEntityId: number
+    entityName: string | null
+    addressType: AddressType
+  },
+  showAddressTypeSuffix: boolean,
+): string {
   const name = labEntityOwnerKey(e)
+  if (!showAddressTypeSuffix) return name
   const suffix = e.addressType === AddressType.Taproot ? 'Taproot' : 'SegWit'
   return `${name} · ${suffix}`
 }

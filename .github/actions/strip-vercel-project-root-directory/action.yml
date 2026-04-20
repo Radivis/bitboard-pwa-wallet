@@ -1,0 +1,16 @@
+name: Strip Vercel project rootDirectory
+description: >
+  Removes settings.rootDirectory from .vercel/project.json after vercel pull/build so
+  monorepo --cwd works (avoids doubled paths; see docs/deploy-vercel.md).
+
+inputs:
+  project-json-path:
+    description: Path to .vercel/project.json from the repository root (e.g. frontend/.vercel/project.json)
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Strip settings.rootDirectory
+      shell: bash
+      run: node "${{ github.action_path }}/strip-root-directory.js" "${{ inputs.project-json-path }}"
