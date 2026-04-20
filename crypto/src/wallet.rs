@@ -5,6 +5,16 @@ use bitcoin::Network as BdkNetwork;
 use crate::error::CryptoError;
 use crate::types::{BalanceInfo, BitcoinNetwork, TransactionDetails};
 
+/// BDK network for our [`BitcoinNetwork::Testnet`] mode. Public Esplora defaults use
+/// Testnet4 (e.g. mempool.space/testnet4); BDK's `Network::Testnet` is Testnet3, which
+/// mismatches that backend and surfaces as `HeaderHashNotFound` during sync.
+pub(crate) fn bdk_network_for_app(network: BitcoinNetwork) -> BdkNetwork {
+    match network {
+        BitcoinNetwork::Testnet => BdkNetwork::Testnet4,
+        _ => network.into(),
+    }
+}
+
 /// Create a new BDK wallet from external and internal descriptor strings.
 ///
 /// Returns the `Wallet` instance. Callers should immediately call
@@ -14,12 +24,14 @@ pub fn create_wallet(
     internal_descriptor: &str,
     network: BitcoinNetwork,
 ) -> Result<Wallet, CryptoError> {
-    create_wallet_with_bdk_network(external_descriptor, internal_descriptor, network.into())
+    create_wallet_with_bdk_network(
+        external_descriptor,
+        internal_descriptor,
+        bdk_network_for_app(network),
+    )
 }
 
-/// Create a wallet using an explicit BDK network. Use this when the sync target
-/// is a different chain variant (e.g. Testnet4) than the default for our network
-/// (e.g. Testnet = Testnet3).
+/// Create a wallet using an explicit BDK network (e.g. tests or special cases).
 pub fn create_wallet_with_bdk_network(
     external_descriptor: &str,
     internal_descriptor: &str,
@@ -37,8 +49,9 @@ pub fn create_wallet_with_bdk_network(
 ///
 /// The descriptors must include private key material (xprv/tprv) for signing.
 /// The `ChangeSet` must be non-empty (BDK returns `None` for an empty changeset).
-/// For testnet when syncing to testnet4, the caller should use `create_wallet_with_bdk_network`
-/// with `Network::Testnet4` instead of loading a persisted Testnet3 changeset.
+///
+/// For [`BitcoinNetwork::Testnet`], tries Testnet4 first (matches current Esplora defaults), then
+/// BDK's legacy Testnet3 so older persisted wallets still load.
 pub fn load_wallet(
     external_descriptor: &str,
     internal_descriptor: &str,
@@ -47,14 +60,37 @@ pub fn load_wallet(
 ) -> Result<Wallet, CryptoError> {
     let external = external_descriptor.to_string();
     let internal = internal_descriptor.to_string();
-    Wallet::load()
-        .descriptor(KeychainKind::External, Some(external))
-        .descriptor(KeychainKind::Internal, Some(internal))
-        .extract_keys()
-        .check_network(network.into())
-        .load_wallet_no_persist(changeset)
-        .map_err(|e| CryptoError::Wallet(e.to_string()))?
-        .ok_or_else(|| CryptoError::Wallet("Wallet could not be loaded from changeset".to_string()))
+
+    let networks_to_try: Vec<BdkNetwork> = match network {
+        BitcoinNetwork::Testnet => vec![bdk_network_for_app(network), BdkNetwork::Testnet],
+        _ => vec![network.into()],
+    };
+
+    let mut last_err: Option<CryptoError> = None;
+
+    for check in networks_to_try {
+        match Wallet::load()
+            .descriptor(KeychainKind::External, Some(external.clone()))
+            .descriptor(KeychainKind::Internal, Some(internal.clone()))
+            .extract_keys()
+            .check_network(check)
+            .load_wallet_no_persist(changeset.clone())
+        {
+            Ok(Some(w)) => return Ok(w),
+            Ok(None) => {
+                last_err = Some(CryptoError::Wallet(
+                    "Wallet could not be loaded from changeset".to_string(),
+                ));
+            }
+            Err(e) => {
+                last_err = Some(CryptoError::Wallet(e.to_string()));
+            }
+        }
+    }
+
+    Err(last_err.unwrap_or_else(|| {
+        CryptoError::Wallet("Wallet could not be loaded from changeset".to_string())
+    }))
 }
 
 /// Reveal the next unused external address and return it as a string.
