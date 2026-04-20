@@ -182,6 +182,10 @@ Component tests:
 e2e tests:
 `npm run test:e2e`
 
+## Deployment (Vercel)
+
+The **canonical** production path is **GitHub Actions → `vercel build` on the runner → `vercel deploy --prebuilt`**; Vercel hosts the static output. See **[docs/deploy-vercel.md](docs/deploy-vercel.md)** for setup (secrets, disabling duplicate Vercel-only builds, and optional Vercel-native builds).
+
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.

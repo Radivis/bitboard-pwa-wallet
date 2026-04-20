@@ -19,9 +19,10 @@ jobs:
   deploy:
     name: Build and deploy prebuilt
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: frontend
+    # Run Vercel CLI from the repo root with `--cwd frontend`. If the job `cwd` is
+    # already `frontend/` while Vercel project settings include Root Directory `frontend`,
+    # the CLI can double the path and run `npm ci` with a non-existent cwd → `spawn sh ENOENT`
+    # (see https://github.com/vercel/community/discussions/2793).
 
     env:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
@@ -56,10 +57,13 @@ jobs:
         run: npm install -g vercel@51.8.0
 
       - name: Pull Vercel environment (production)
-        run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
+        run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN" --cwd frontend
+
+      - name: Strip rootDirectory from pulled project settings
+        run: node -e "const fs=require('fs');const p='frontend/.vercel/project.json';if(!fs.existsSync(p))process.exit(0);const j=JSON.parse(fs.readFileSync(p,'utf8'));if(j.settings&&Object.prototype.hasOwnProperty.call(j.settings,'rootDirectory')){delete j.settings.rootDirectory;fs.writeFileSync(p,JSON.stringify(j,null,'\t'));console.log('Removed settings.rootDirectory from',p);}"
 
       - name: Vercel build (prebuilt output)
-        run: vercel build --token="$VERCEL_TOKEN" --prod
+        run: vercel build --token="$VERCEL_TOKEN" --prod --cwd frontend
 
       - name: Deploy prebuilt to production
-        run: vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN"
+        run: vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN" --cwd frontend
