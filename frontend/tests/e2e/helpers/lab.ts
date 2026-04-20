@@ -202,9 +202,12 @@ export async function mineBlocksInLab(
     await expect(select).toBeVisible()
     if (options?.ownerName?.trim()) {
       const name = options.ownerName.trim()
+      /** Matches entity name alone or with " · Taproot/SegWit" when SegWit address options are on. */
       const optionLabel = await select
         .locator('option')
-        .filter({ hasText: new RegExp(`^${escapeRegExp(name)} ·`) })
+        .filter({
+          hasText: new RegExp(`^${escapeRegExp(name)}( \u00b7 .+)?$`),
+        })
         .first()
         .innerText()
       await select.selectOption({ label: optionLabel.trim() })

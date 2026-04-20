@@ -18,6 +18,7 @@ import type { LabEntityRecord } from '@/workers/lab-api'
 import { formatLabEntityMineOptionLabel } from '@/lib/lab-entity-keys'
 import { LabOwnerType } from '@/lib/lab-owner-type'
 import { cn } from '@/lib/utils'
+import { useFeatureStore } from '@/stores/featureStore'
 
 export function LabBlocksCard({
   blockCount,
@@ -48,6 +49,7 @@ export function LabBlocksCard({
   currentAddress: string | null
   activeWallet: { name: string } | undefined
 }) {
+  const segwitAddressesEnabled = useFeatureStore((s) => s.segwitAddressesEnabled)
   const livingEntities = entities.filter((e) => !e.isDead)
   const noLivingEntities =
     ownerType === LabOwnerType.LabEntity && livingEntities.length === 0
@@ -188,7 +190,7 @@ export function LabBlocksCard({
                 >
                   {livingEntities.map((e) => (
                     <option key={e.labEntityId} value={e.labEntityId}>
-                      {formatLabEntityMineOptionLabel(e)}
+                      {formatLabEntityMineOptionLabel(e, segwitAddressesEnabled)}
                     </option>
                   ))}
                 </select>
