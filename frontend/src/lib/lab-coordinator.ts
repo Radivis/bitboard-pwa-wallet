@@ -15,10 +15,9 @@ async function runAfterPreviousTail<T>(
 export async function runLabOp<T>(operation: () => Promise<T>): Promise<T> {
   const previousTail = labOperationChain
   const workPromise = runAfterPreviousTail(previousTail, operation)
-  labOperationChain = workPromise.then(
-    () => undefined,
-    () => undefined,
-  )
+  labOperationChain = workPromise
+    .then(() => undefined)
+    .catch(() => undefined)
   return workPromise
 }
 
@@ -27,8 +26,7 @@ export async function runLabOp<T>(operation: () => Promise<T>): Promise<T> {
  * Use before tearing down the lab SQLite connection (e.g. factory reset).
  */
 export function awaitLabOperationQueueDrained(): Promise<void> {
-  return labOperationChain.then(
-    () => undefined,
-    () => undefined,
-  )
+  return labOperationChain
+    .then(() => undefined)
+    .catch(() => undefined)
 }
