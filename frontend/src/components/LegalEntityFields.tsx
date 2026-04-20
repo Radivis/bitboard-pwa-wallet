@@ -1,5 +1,8 @@
 import type { LegalEntity } from '../legal-entity/legal-entity'
-import { hasLegalEntityData } from '../legal-entity/legal-entity'
+import {
+  hasLegalEntityData,
+  legalEntityAddressLines,
+} from '../legal-entity/legal-entity'
 
 type LegalEntityFieldsProps = {
   entity: LegalEntity
@@ -23,13 +26,14 @@ export function LegalEntityFields({
   if (!hasLegalEntityData(entity)) return null
 
   const name = entity.name.trim()
-  const address = entity.address.trim()
+  const addressLines = legalEntityAddressLines(entity.address)
+  const addressText = addressLines.join('\n')
   const email = entity.email.trim()
 
   return (
     <div className={className}>
       {name ? <p className={lineClassName}>{name}</p> : null}
-      {address ? <p className={lineClassName}>{address}</p> : null}
+      {addressText ? <p className={lineClassName}>{addressText}</p> : null}
       {email ? (
         <p className="text-sm">
           <a href={`mailto:${email}`} className={emailLinkClassName}>

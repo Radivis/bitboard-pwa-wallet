@@ -70,7 +70,18 @@ export function PrivacyPolicyDe() {
         Wallet-Daten gespeichert oder ausgewertet werden. Wallet-relevante Daten werden in einer{' '}
         <strong>SQLite</strong>-Datenbank im <strong>Origin Private File System (OPFS)</strong> des
         Browsers gespeichert — nicht in IndexedDB. OPFS ist ein vom Browser bereitgestellter,
-        origin-gebundener Speicherbereich für Dateien (hier für die SQLite-Datenbank).
+        origin-gebundener Speicherbereich für Dateien (hier für die SQLite-Datenbank). Der
+        In-App-Lab-Simulator nutzt eine <strong>weitere, getrennte</strong> SQLite-Datei in OPFS für
+        lokale Simulationsdaten der Kette.
+      </p>
+      <p>
+        Für einen datenschutzorientierten Reset auf diesem Gerät bietet die App unter{' '}
+        <strong>Einstellungen → Sicherheit</strong> die Funktion{' '}
+        <strong>Alle App-Daten löschen</strong>: Sie entfernt nach ausdrücklicher Bestätigung sowohl
+        die Wallet- als auch die Lab-SQLite-Datenbank aus OPFS. Nutzen Sie sie nur, wenn Sie
+        verstehen, dass Sie zur Wiederherstellung von Guthaben eine Seed-Phrase-Sicherung oder ein
+        signiertes Wallet-Exportarchiv benötigen — Bitboard kann gelöschte lokale Daten nicht für Sie
+        wiederherstellen.
       </p>
       <p>
         Die PWA registriert zusätzlich einen <strong>Service Worker</strong> und nutzt den{' '}
@@ -321,7 +332,10 @@ export function PrivacyPolicyDe() {
       </ul>
       <p>
         Viele Verarbeitungsvorgänge in dieser App erfolgen jedoch lokal auf Ihrem Gerät — dort können
-        Sie Daten oft am direktesten löschen (z. B. App-Daten im Browser entfernen).
+        Sie Daten oft am direktesten löschen (z. B. App-Daten im Browser entfernen). Wo die App es
+        anbietet, können Sie auch <strong>Einstellungen → Sicherheit → Alle App-Daten löschen</strong>{' '}
+        verwenden, um die lokalen Wallet- und Lab-Datenbanken zu löschen, ohne die globalen
+        Website-Daten des Browsers zu leeren.
       </p>
       <p>
         Zur Ausübung Ihrer Rechte im Zusammenhang mit Verarbeitungen, die Bitboard als

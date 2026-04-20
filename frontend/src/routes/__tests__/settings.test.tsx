@@ -188,6 +188,18 @@ vi.mock('@/lib/opfs-root-file', () => ({
   triggerBrowserSaveLocalBlob: vi.fn(),
 }))
 
+vi.mock('@/lib/mainnet-onchain-balance-probe', () => ({
+  listWalletsWithPositiveMainnetOnChainBalance: vi.fn().mockResolvedValue([]),
+}))
+
+vi.mock('@/lib/wipe-all-app-data-opfs-and-reload', () => ({
+  wipeAllAppDataOpfsAndReload: vi.fn().mockResolvedValue(undefined),
+}))
+
+vi.mock('@/db/wallet-no-mnemonic-backup', () => ({
+  anyWalletHasNoMnemonicBackupFlag: vi.fn().mockResolvedValue(false),
+}))
+
 const mockSetThemeMode = vi.fn()
 vi.mock('@/stores/themeStore', () => ({
   useThemeStore: (selector: (s: Record<string, unknown>) => unknown) =>
@@ -563,6 +575,29 @@ describe('Settings routes', () => {
     mockWalletsState.data = []
     renderWithProviders(<SettingsSecurityPage />)
     expect(screen.getByTestId('settings-security-card')).not.toHaveClass('border-destructive')
+  })
+
+  it('shows complete data wipe card with destructive border', () => {
+    renderWithProviders(<SettingsSecurityPage />)
+    const card = screen.getByTestId('complete-data-wipe-card')
+    expect(card).toHaveClass('border-destructive')
+  })
+
+  it('keeps Delete all app data enabled in near-zero mode when there are no wallets', () => {
+    nearZeroSecurityState.active = true
+    mockWalletsState.data = []
+    renderWithProviders(<SettingsSecurityPage />)
+    expect(screen.getByRole('button', { name: 'Delete all app data' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Export wallet data' })).toBeDisabled()
+  })
+
+  it('disables Delete all app data when wallets exist but the wallet is locked', () => {
+    mockWalletsState.data = [
+      { wallet_id: 1, name: 'Test', created_at: new Date().toISOString() },
+    ]
+    walletStoreState.walletStatus = 'locked'
+    renderWithProviders(<SettingsSecurityPage />)
+    expect(screen.getByRole('button', { name: 'Delete all app data' })).toBeDisabled()
   })
   })
 

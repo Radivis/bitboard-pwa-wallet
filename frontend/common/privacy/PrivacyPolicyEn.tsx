@@ -62,7 +62,15 @@ export function PrivacyPolicyEn() {
       <p>
         Technically, wallet data lives in a <strong>SQLite</strong> database stored in the browser’s{' '}
         <strong>Origin Private File System (OPFS)</strong> — a private, website-specific file area —
-        not in IndexedDB. OPFS here simply holds the database file.
+        not in IndexedDB. OPFS here simply holds the database file. The in-app lab simulator uses a{' '}
+        <strong>separate</strong> SQLite file in OPFS for local simulated chain data.
+      </p>
+      <p>
+        For a privacy-oriented reset on this device, <strong>Settings → Security</strong> offers{' '}
+        <strong>Delete all app data</strong>: it removes both the wallet and lab SQLite databases from
+        OPFS (after explicit confirmations). Use it only if you understand that you need a seed phrase
+        backup or a signed wallet export to recover funds—Bitboard cannot restore deleted local data
+        for you.
       </p>
       <p>
         The PWA additionally registers a <strong>service worker</strong> and uses the browser’s{' '}
@@ -303,7 +311,9 @@ export function PrivacyPolicyEn() {
       </ul>
       <p>
         Much of the processing happens locally on your device; you can often remove data most
-        directly by clearing site or app data in your browser.
+        directly by clearing site or app data in your browser. Where the app provides it, you can
+        also use <strong>Settings → Security → Delete all app data</strong> to wipe the on-device
+        wallet and lab databases without relying on the browser&apos;s global site-data controls.
       </p>
       <p>
         To exercise your rights in connection with processing that Bitboard controls as controller,

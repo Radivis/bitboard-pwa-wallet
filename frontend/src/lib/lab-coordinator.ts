@@ -21,3 +21,14 @@ export async function runLabOp<T>(operation: () => Promise<T>): Promise<T> {
   )
   return workPromise
 }
+
+/**
+ * Waits until the FIFO queue of lab + main-thread SQLite work is idle.
+ * Use before tearing down the lab SQLite connection (e.g. factory reset).
+ */
+export function awaitLabOperationQueueDrained(): Promise<void> {
+  return labOperationChain.then(
+    () => undefined,
+    () => undefined,
+  )
+}

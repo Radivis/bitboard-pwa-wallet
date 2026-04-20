@@ -3,6 +3,7 @@ import { createFileRoute, useNavigate, useSearch } from '@tanstack/react-router'
 import { Shield } from 'lucide-react'
 import { PageHeader } from '@/components/PageHeader'
 import { SettingsSecurityCard } from '@/components/settings/SettingsSecurityCard'
+import { CompleteDataWipeCard } from '@/components/settings/CompleteDataWipeCard'
 import { DataBackupsCard } from '@/components/settings/DataBackupsCard'
 import { ChangeAppPasswordModal } from '@/components/ChangeAppPasswordModal'
 import { UpgradeFromNearZeroPasswordModal } from '@/components/UpgradeFromNearZeroPasswordModal'
@@ -58,6 +59,8 @@ export function SettingsSecurityPage() {
       />
 
       <DataBackupsCard />
+
+      <CompleteDataWipeCard />
     </div>
   )
 }

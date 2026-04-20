@@ -3,6 +3,7 @@ import { WaSqliteWorkerDialect } from 'kysely-wasqlite-worker'
 import type { Database } from './schema'
 import { runWalletMigrations } from './migrations/run-wallet-migrations'
 import { WALLET_SQLITE_OPFS_BASENAME } from './opfs-sqlite-database-names'
+import { isBenignSqliteWorkerCloseFailure } from './sqlite-worker-close-error'
 
 let instance: Kysely<Database> | null = null
 let migrated = false
@@ -33,11 +34,34 @@ export async function ensureMigrated(): Promise<void> {
 }
 
 export async function destroyDatabase(): Promise<void> {
-  if (instance) {
+  if (migrationPromise) {
+    try {
+      await migrationPromise
+    } catch (err) {
+      console.error(
+        '[destroyDatabase] migrationPromise rejected while awaiting teardown (continuing):',
+        err,
+      )
+    }
+    migrationPromise = null
+  }
+  if (!instance) {
+    return
+  }
+  try {
     await instance.destroy()
+  } catch (err) {
+    console.error('[destroyDatabase] Kysely instance.destroy() failed:', err)
+    if (isBenignSqliteWorkerCloseFailure(err)) {
+      console.warn(
+        '[destroyDatabase] Non-fatal close error (worker dialect still tears down the worker). Clearing singleton so OPFS files can be removed.',
+      )
+    } else {
+      throw err
+    }
+  } finally {
     instance = null
     migrated = false
-    migrationPromise = null
   }
 }
 

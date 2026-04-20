@@ -1,5 +1,11 @@
 {
   "name": "Michael Hrenka",
-  "address": "c/o IP-Management #9796\nLudwig-Erhard-Straße 18\n20459 Hamburg",
+  "address": {
+    "careOf": "c/o IP-Management #9796",
+    "street": "Ludwig-Erhard-Straße 18",
+    "postalCode": "20459",
+    "locality": "Hamburg",
+    "country": "Germany"
+  },
   "email": "michael.hrenka@protonmail.com"
 }

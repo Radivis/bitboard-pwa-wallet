@@ -1,4 +1,4 @@
-import { legalEntity } from '@legal-entity'
+import { legalEntity, legalEntityAddressLines } from '@legal-entity'
 
 type LegalNoticeEntityBlockProps = {
   surface: 'app' | 'landing'
@@ -26,7 +26,7 @@ export function LegalNoticeEntityBlock({
     : 'text-muted-foreground underline underline-offset-2 hover:text-foreground'
 
   const name = legalEntity.name.trim()
-  const address = legalEntity.address.trim()
+  const address = legalEntityAddressLines(legalEntity.address).join('\n')
   const email = legalEntity.email.trim()
 
   return (
