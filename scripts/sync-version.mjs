@@ -10,41 +10,14 @@
  */
 import fs from 'node:fs'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
+import {
+  escapeRegExpLiteral,
+  getRepositoryRoot,
+  readTrimmedVersionFile,
+  updateCargoWorkspacePackageVersion,
+} from './version-lib.mjs'
 
-const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-
-const WORKSPACE_PACKAGE_VERSION_PATTERN =
-  /\[workspace\.package\][\s\S]*?^version\s*=\s*"([^"]+)"/m
-
-function readVersionFileContents() {
-  const trimmedVersion = fs.readFileSync(path.join(repositoryRoot, 'VERSION'), 'utf8').trim()
-  if (!trimmedVersion) throw new Error('VERSION is empty')
-  return trimmedVersion
-}
-
-function updateCargoWorkspacePackageVersion(newVersion) {
-  const cargoTomlPath = path.join(repositoryRoot, 'Cargo.toml')
-  const cargoTomlContents = fs.readFileSync(cargoTomlPath, 'utf8')
-  if (!cargoTomlContents.includes('[workspace.package]')) {
-    throw new Error('Cargo.toml must contain [workspace.package] with version')
-  }
-  const currentVersionMatch = cargoTomlContents.match(WORKSPACE_PACKAGE_VERSION_PATTERN)
-  if (!currentVersionMatch) {
-    throw new Error('Could not find [workspace.package] version in Cargo.toml')
-  }
-  if (currentVersionMatch[1] === newVersion) {
-    return
-  }
-  const updatedCargoTomlContents = cargoTomlContents.replace(
-    /(\[workspace\.package\][\s\S]*?^version\s*=\s*")([^"]+)(")/m,
-    `$1${newVersion}$3`,
-  )
-  if (updatedCargoTomlContents === cargoTomlContents) {
-    throw new Error('Could not patch workspace.package version in Cargo.toml')
-  }
-  fs.writeFileSync(cargoTomlPath, updatedCargoTomlContents)
-}
+const repositoryRoot = getRepositoryRoot()
 
 function updatePackageJsonVersionField(packageJsonPath, newVersion) {
   const packageJsonContents = fs.readFileSync(packageJsonPath, 'utf8')
@@ -62,14 +35,10 @@ function updatePackageJsonVersionField(packageJsonPath, newVersion) {
   fs.writeFileSync(packageJsonPath, updatedPackageJsonContents)
 }
 
-function escapeRegExp(literal) {
-  return literal.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-}
-
 function updateNpmLockfileRootPackageVersions(npmPackageName, lockfilePath, newVersion) {
   const lockfileContents = fs.readFileSync(lockfilePath, 'utf8')
   const rootPackageVersionPattern = new RegExp(
-    `("name": "${escapeRegExp(npmPackageName)}",\\s*\\n\\s*"version": ")([^"]+)(")`,
+    `("name": "${escapeRegExpLiteral(npmPackageName)}",\\s*\\n\\s*"version": ")([^"]+)(")`,
     'g',
   )
   const rootVersionStrings = []
@@ -93,9 +62,10 @@ function updateNpmLockfileRootPackageVersions(npmPackageName, lockfilePath, newV
   fs.writeFileSync(lockfilePath, updatedLockfileContents)
 }
 
-const syncedVersion = readVersionFileContents()
+const syncedVersion = readTrimmedVersionFile(repositoryRoot)
+if (!syncedVersion) throw new Error('VERSION is empty')
 console.log(`Syncing version "${syncedVersion}" from VERSION`)
-updateCargoWorkspacePackageVersion(syncedVersion)
+updateCargoWorkspacePackageVersion(repositoryRoot, syncedVersion)
 updatePackageJsonVersionField(path.join(repositoryRoot, 'frontend', 'package.json'), syncedVersion)
 updatePackageJsonVersionField(
   path.join(repositoryRoot, 'landing-page', 'package.json'),

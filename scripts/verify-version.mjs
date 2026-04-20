@@ -5,37 +5,23 @@
  */
 import fs from 'node:fs'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
+import {
+  escapeRegExpLiteral,
+  getCargoWorkspacePackageVersion,
+  getRepositoryRoot,
+  readTrimmedVersionFile,
+} from './version-lib.mjs'
 
-const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-
-function readVersionFileContents() {
-  return fs.readFileSync(path.join(repositoryRoot, 'VERSION'), 'utf8').trim()
-}
-
-function getCargoWorkspacePackageVersion() {
-  const cargoTomlContents = fs.readFileSync(path.join(repositoryRoot, 'Cargo.toml'), 'utf8')
-  const workspacePackageVersionMatch = cargoTomlContents.match(
-    /\[workspace\.package\][\s\S]*?^version\s*=\s*"([^"]+)"/m,
-  )
-  if (!workspacePackageVersionMatch) {
-    throw new Error('No [workspace.package] version in Cargo.toml')
-  }
-  return workspacePackageVersionMatch[1]
-}
+const repositoryRoot = getRepositoryRoot()
 
 function getPackageJsonVersion(packageJsonPath) {
   return JSON.parse(fs.readFileSync(packageJsonPath, 'utf8')).version
 }
 
-function escapeRegExp(literal) {
-  return literal.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-}
-
 function getNpmLockfileRootPackageVersions(lockfilePath, npmPackageName) {
   const lockfileContents = fs.readFileSync(lockfilePath, 'utf8')
   const nameVersionPairPattern = new RegExp(
-    `"name": "${escapeRegExp(npmPackageName)}",\\s*\\n\\s*"version": "([^"]+)"`,
+    `"name": "${escapeRegExpLiteral(npmPackageName)}",\\s*\\n\\s*"version": "([^"]+)"`,
     'g',
   )
   const rootVersionStrings = []
@@ -52,7 +38,7 @@ function getWorkspaceCrateVersionsFromCargoLock() {
   const versionByCrateName = {}
   for (const crateName of workspaceCrateNames) {
     const crateEntryPattern = new RegExp(
-      `name = "${escapeRegExp(crateName)}"\\nversion = "([^"]+)"`,
+      `name = "${escapeRegExpLiteral(crateName)}"\\nversion = "([^"]+)"`,
     )
     const crateVersionMatch = cargoLockContents.match(crateEntryPattern)
     if (!crateVersionMatch) {
@@ -63,7 +49,7 @@ function getWorkspaceCrateVersionsFromCargoLock() {
   return versionByCrateName
 }
 
-const expectedVersion = readVersionFileContents()
+const expectedVersion = readTrimmedVersionFile(repositoryRoot)
 if (!expectedVersion) {
   console.error('VERSION is empty')
   process.exit(1)
@@ -72,7 +58,7 @@ if (!expectedVersion) {
 const validationErrors = []
 
 try {
-  if (getCargoWorkspacePackageVersion() !== expectedVersion) {
+  if (getCargoWorkspacePackageVersion(repositoryRoot) !== expectedVersion) {
     validationErrors.push(
       `Cargo.toml [workspace.package].version !== VERSION (${expectedVersion})`,
     )

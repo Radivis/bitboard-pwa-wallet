@@ -43,7 +43,14 @@ After secrets are set, pushes to `main` run `.github/workflows/deploy-vercel.yml
 
 The workflow installs **Rust** (with `wasm32-unknown-unknown`), **wasm-pack**, and **Node 24**, then runs **`vercel pull`**, **`vercel build --prod`**, and **`vercel deploy --prebuilt --prod`** from `frontend/`. The **`vercel build`** step executes your project’s **Install** and **Build** commands from the Vercel dashboard (e.g. `npm ci` and `npm run build`), so the full `build:wasm` + `tsc` + `vite build` pipeline runs on the GitHub runner once per deploy.
 
-## 5. Smoke test after first deploy
+## 5. HTTP caching (`frontend/vercel.json`)
+
+Vercel applies the headers in [`frontend/vercel.json`](../frontend/vercel.json):
+
+- **`/assets/*`:** `Cache-Control: public, max-age=31536000, immutable` — one year for hashed filenames from Vite; safe because content hashes change on each release.
+- **`/`, `/index.html`, `/sw.js`, `/workbox-*.js`, `/registerSW.js`, `/manifest.webmanifest`:** `max-age=0, must-revalidate` so HTML and the service worker update promptly after deploy.
+
+## 6. Smoke test after first deploy
 
 - Open the production URL and confirm the app loads.
 - Navigate to a client route, then **hard refresh**; the SPA fallback in `frontend/vercel.json` should still serve the app.

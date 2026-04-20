@@ -1,3 +1,8 @@
+/**
+ * Privacy policy body lives in `PrivacyPolicyDe` / `PrivacyPolicyEn` (locale documents).
+ * Broader i18next adoption elsewhere is planned where appropriate; legal prose stays
+ * versioned per locale for clarity and review.
+ */
 import { createFileRoute } from '@tanstack/react-router'
 import { Shield } from 'lucide-react'
 import { PageHeader } from '@/components/PageHeader'

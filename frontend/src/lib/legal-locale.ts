@@ -1,5 +1,11 @@
 import { useCallback, useState } from 'react'
 
+/**
+ * Legal copy uses locale-specific TS/TSX modules plus small constants here (not i18next).
+ * Adopting i18next where it helps (e.g. shared UI chrome, pluralization) is planned for the
+ * future; long-form legal text will likely stay in dedicated locale documents per language.
+ */
+
 /** Shared with future privacy policy and other legal copy. */
 export const LEGAL_LOCALE_STORAGE_KEY = 'bitboard.legalLocale' as const
 
