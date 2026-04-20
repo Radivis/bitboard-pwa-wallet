@@ -11,7 +11,7 @@ interface AppDescriptionProps {
 export function AppDescription({ className }: AppDescriptionProps) {
   return (
     <p className={cn('text-muted-foreground', className)}>
-      A{' '}
+      An educational{' '}
       <InfomodeWrapper
         as="span"
         infoId="app-description-self-custody"
