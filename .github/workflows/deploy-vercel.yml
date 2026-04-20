@@ -19,10 +19,10 @@ jobs:
   deploy:
     name: Build and deploy prebuilt
     runs-on: ubuntu-latest
-    # Run Vercel CLI from the repo root with `--cwd frontend`. If the job `cwd` is
-    # already `frontend/` while Vercel project settings include Root Directory `frontend`,
-    # the CLI can double the path and run `npm ci` with a non-existent cwd → `spawn sh ENOENT`
-    # (see https://github.com/vercel/community/discussions/2793).
+    # Use `vercel … --cwd frontend` from the repo root for pull/build so Root Directory is not
+    # doubled with the shell cwd (spawn sh ENOENT during install — vercel/community#2793).
+    # For `vercel deploy --prebuilt`, use `working-directory: frontend` and no `--cwd`: `--cwd
+    # frontend` from the repo root can still resolve to …/frontend/frontend on deploy.
 
     env:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
@@ -66,4 +66,5 @@ jobs:
         run: vercel build --token="$VERCEL_TOKEN" --prod --cwd frontend
 
       - name: Deploy prebuilt to production
-        run: vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN" --cwd frontend
+        working-directory: frontend
+        run: vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN"

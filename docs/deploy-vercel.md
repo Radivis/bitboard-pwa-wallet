@@ -74,7 +74,7 @@ In **Settings → Environment Variables → Production**, add anything the app n
 
 After this, a push to **`main`** (or a manual workflow run) runs **`vercel pull`** (production env) → **`vercel build --prod`** → **`vercel deploy --prebuilt --prod`**.
 
-**Local debugging:** run those three commands from the **repository root** with **`--cwd frontend`** (same as CI). Do **not** `cd frontend` first if your Vercel project has **Root Directory** set to `frontend` — combining both can double the path and break `vercel build` (see below).
+**Local debugging:** run **`vercel pull`** and **`vercel build`** from the **repository root** with **`--cwd frontend`** (same as CI). Run **`vercel deploy --prebuilt --prod`** from **inside `frontend/`** (no `--cwd`), matching the deploy step in the workflow.
 
 ---
 
@@ -82,7 +82,7 @@ After this, a push to **`main`** (or a manual workflow run) runs **`vercel pull`
 
 - Installs **Rust** (`wasm32-unknown-unknown`), **wasm-pack**, **Node 24**.
 - Sets **`VITE_ARGON2_CI`** to empty for that job so production never uses fast Argon2 by mistake.
-- Runs **`vercel pull --environment=production --cwd frontend`**, strips **`settings.rootDirectory`** from **`frontend/.vercel/project.json`** when present (avoids a known CLI bug), then **`vercel build --prod --cwd frontend`**, then **`vercel deploy --prebuilt --prod --cwd frontend`** — all from the **repo root**, not from inside `frontend/`.
+- Runs **`vercel pull --environment=production --cwd frontend`** and **`vercel build --prod --cwd frontend`** from the **repo root**, strips **`settings.rootDirectory`** from **`frontend/.vercel/project.json`** when present (avoids doubled paths during install — see [vercel/community#2793](https://github.com/vercel/community/discussions/2793)), then **`vercel deploy --prebuilt --prod`** with **`working-directory: frontend`** (no `--cwd`; deploy’s path logic can otherwise resolve to `frontend/frontend`).
 
 The `vercel build` step uses your linked project’s settings plus [`frontend/vercel.json`](../frontend/vercel.json), so install/build commands match what Vercel would use for a prebuilt deploy.
 
