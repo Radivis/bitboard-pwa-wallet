@@ -107,6 +107,43 @@ Vercel applies the headers in [`frontend/vercel.json`](../frontend/vercel.json):
 
 ---
 
+## HTTP security headers
+
+Both the wallet ([`frontend/vercel.json`](../frontend/vercel.json)) and the landing site ([`landing-page/vercel.json`](../landing-page/vercel.json)) send defense-in-depth response headers on **every path** via a catch-all `source` of `/(.*)`.
+
+**Why a catch-all for the wallet:** Vercel matches header rules to the **incoming request path**. The SPA rewrite serves `index.html` for deep links such as `/wallet/receive`, but the browser still requests `/wallet/receive`. Rules limited to `/` and `/index.html` would **not** attach `Content-Security-Policy` (and related headers) to those navigations. The catch-all ensures HTML and the SPA behave consistently on all routes.
+
+### Wallet PWA
+
+In addition to caching, [`frontend/vercel.json`](../frontend/vercel.json) sets:
+
+- **`Content-Security-Policy`** — Tight baseline with allowances required by the stack: bundled scripts and WASM (`script-src` includes `'wasm-unsafe-eval'`), Vite **blob** workers (`worker-src` includes `blob:`), React **inline** `style={{…}}` (`style-src` includes `'unsafe-inline'`), Google Fonts hosts used by Workbox runtime caching, **`connect-src`** including `https:` and `wss:` for configurable Esplora endpoints and NWC relays, and **`img-src`** including `https:` for flexibility. **`upgrade-insecure-requests`** matches the product rule that non–**regtest** Esplora URLs must use HTTPS (see `validateEsploraUrl` in the app); fetching plain **HTTP** from the deployed **HTTPS** origin is already blocked as active mixed content for remote hosts. Local **regtest** URLs are partially covered via `http://127.0.0.1:*` and `http://localhost:*` in `connect-src` where browsers apply CSP port wildcards.
+- **`Strict-Transport-Security`** — `max-age=31536000; includeSubDomains; preload`. Remove `preload` from the header value until you intend to submit the apex domain to the preload list and are sure **all** subdomains will stay HTTPS-only.
+- **`X-Content-Type-Options: nosniff`**, **`X-Frame-Options: DENY`**, **`Referrer-Policy: strict-origin-when-cross-origin`**
+- **`Permissions-Policy`** — Disables unused features; **`camera=(self)`** keeps QR scanning (`getUserMedia`) working on the app origin.
+- **`Cross-Origin-Opener-Policy: same-origin`**
+
+`Cross-Origin-Embedder-Policy: require-corp` is **not** set: it can break WASM, workers, or third-party resources without a full cross-origin isolation review.
+
+### Landing site
+
+[`landing-page/vercel.json`](../landing-page/vercel.json) uses the same non-CSP headers as the wallet. The **CSP is stricter** (for example `connect-src 'self'` only, no `wasm-unsafe-eval`, no `worker-src blob:`), which fits the static marketing build. **`camera=()`** is safe because the landing app does not use the camera.
+
+### Verifying after deploy
+
+```bash
+curl -sI "https://YOUR_WALLET_HOST/" | grep -iE 'content-security|strict-transport|x-frame|referrer|permissions|cross-origin'
+curl -sI "https://YOUR_WALLET_HOST/wallet/receive" | grep -iE 'content-security|strict-transport'
+```
+
+Repeat with the landing host. In the browser, open DevTools → Console and filter for **Content Security Policy** while exercising unlock, Lab, WASM paths, Esplora-backed screens, NWC, and QR scan.
+
+### Optional: enforce CSP in two phases
+
+To reduce risk when changing the policy, you can deploy the same directive value as **`Content-Security-Policy-Report-Only`** first (optionally with a **`report-to`** or **`report-uri`** endpoint), watch reports, then switch to enforcing **`Content-Security-Policy`** only. The repository ships with an **enforcing** policy by default.
+
+---
+
 ## Smoke test after deploy
 
 - Open the production URL and confirm the app loads.
@@ -134,7 +171,7 @@ Link locally from `landing-page/` with `npx vercel link` if you need `projectId`
 
 **Local debugging:** from the repo root, `vercel pull` and `vercel build` with **`--cwd landing-page`**; before **`vercel deploy --prebuilt --prod`**, **`mkdir -p landing-page/landing-page`**, then **`cd landing-page`** and deploy.
 
-No **`landing-page/vercel.json`** is required for the default multi-page static output; add one later if you want cache headers or rewrites.
+[`landing-page/vercel.json`](../landing-page/vercel.json) defines **security headers** (and can be extended later with cache headers or rewrites if you want).
 
 ---
 
