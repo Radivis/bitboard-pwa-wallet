@@ -70,7 +70,9 @@ export function PrivacyPolicyEn() {
         <strong>Delete all app data</strong>: it removes both the wallet and lab SQLite databases from
         OPFS (after explicit confirmations). Use it only if you understand that you need a seed phrase
         backup or a signed wallet export to recover funds—Bitboard cannot restore deleted local data
-        for you.
+        for you. You can also remove local data by clearing site or app data for this origin in your
+        browser; using this in-app control is still <strong>strongly recommended</strong> for clear
+        scope and step-by-step confirmations.
       </p>
       <p>
         The PWA additionally registers a <strong>service worker</strong> and uses the browser’s{' '}
@@ -311,9 +313,11 @@ export function PrivacyPolicyEn() {
       </ul>
       <p>
         Much of the processing happens locally on your device; you can often remove data most
-        directly by clearing site or app data in your browser. Where the app provides it, you can
-        also use <strong>Settings → Security → Delete all app data</strong> to wipe the on-device
-        wallet and lab databases without relying on the browser&apos;s global site-data controls.
+        directly by clearing site or app data in your browser, which may also remove Bitboard&apos;s
+        local data. When you intend to wipe that app data, using the <strong>Delete all app data</strong>{' '}
+        control under <strong>Settings → Security</strong> is <strong>strongly recommended</strong>:
+        it removes the on-device wallet and lab SQLite databases with explicit confirmations, without
+        relying on the browser&apos;s global site-data controls alone.
       </p>
       <p>
         To exercise your rights in connection with processing that Bitboard controls as controller,
@@ -337,6 +341,9 @@ export function PrivacyPolicyEn() {
         Because this is a <strong>pure client-side wallet</strong>, you generally have{' '}
         <strong>maximum control over your local data</strong>: you can remove locally stored app
         data in your browser at any time and thereby end the local processing described here.
+        Clearing site data in the browser is one way to do that; for a focused wipe of this app&apos;s
+        databases, the <strong>Delete all app data</strong> button under <strong>Settings → Security</strong>{' '}
+        is <strong>strongly encouraged</strong>.
       </p>
     </>
   )

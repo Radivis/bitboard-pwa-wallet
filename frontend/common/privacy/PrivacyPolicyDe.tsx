@@ -81,7 +81,10 @@ export function PrivacyPolicyDe() {
         die Wallet- als auch die Lab-SQLite-Datenbank aus OPFS. Nutzen Sie sie nur, wenn Sie
         verstehen, dass Sie zur Wiederherstellung von Guthaben eine Seed-Phrase-Sicherung oder ein
         signiertes Wallet-Exportarchiv benötigen — Bitboard kann gelöschte lokale Daten nicht für Sie
-        wiederherstellen.
+        wiederherstellen. Lokale Daten können Sie auch entfernen, indem Sie Website- oder App-Daten
+        für diesen Ursprung im Browser löschen; die Nutzung der genannten Funktion in der App wird
+        jedoch weiterhin <strong>ausdrücklich empfohlen</strong>, weil Umfang und Bestätigungsschritte
+        dort klar geführt sind.
       </p>
       <p>
         Die PWA registriert zusätzlich einen <strong>Service Worker</strong> und nutzt den{' '}
@@ -332,10 +335,13 @@ export function PrivacyPolicyDe() {
       </ul>
       <p>
         Viele Verarbeitungsvorgänge in dieser App erfolgen jedoch lokal auf Ihrem Gerät — dort können
-        Sie Daten oft am direktesten löschen (z. B. App-Daten im Browser entfernen). Wo die App es
-        anbietet, können Sie auch <strong>Einstellungen → Sicherheit → Alle App-Daten löschen</strong>{' '}
-        verwenden, um die lokalen Wallet- und Lab-Datenbanken zu löschen, ohne die globalen
-        Website-Daten des Browsers zu leeren.
+        Sie Daten oft am direktesten löschen (z. B. App-Daten im Browser entfernen), was auch die
+        lokalen Daten von Bitboard betreffen kann. Wenn Sie diese App-Daten gezielt löschen möchten, ist
+        die Nutzung von <strong>Alle App-Daten löschen</strong> unter{' '}
+        <strong>Einstellungen → Sicherheit</strong> <strong>ausdrücklich empfohlen</strong>: Damit
+        werden die lokalen Wallet- und Lab-SQLite-Datenbanken nach ausdrücklicher Bestätigung
+        entfernt, ohne sich allein auf die globalen Website-Daten-Steuerungen des Browsers zu
+        verlassen.
       </p>
       <p>
         Zur Ausübung Ihrer Rechte im Zusammenhang mit Verarbeitungen, die Bitboard als
@@ -360,7 +366,10 @@ export function PrivacyPolicyDe() {
         Da es sich um eine <strong>reine Client-seitige Wallet</strong> handelt, haben Sie in der
         Regel die <strong>maximale Kontrolle über Ihre lokalen Daten</strong>: Sie können
         jederzeit die lokal gespeicherten Daten der App im Browser entfernen und damit die
-        beschriebene lokale Verarbeitung beenden.
+        beschriebene lokale Verarbeitung beenden. Das Leeren der Website-Daten im Browser ist ein
+        dafür möglicher Weg; für einen gezielten Reset der App-Datenbanken wird die Schaltfläche{' '}
+        <strong>Alle App-Daten löschen</strong> unter <strong>Einstellungen → Sicherheit</strong>{' '}
+        <strong>nachdrücklich empfohlen</strong>.
       </p>
     </>
   )
