@@ -27,6 +27,7 @@ function buildProps(overrides?: Partial<ComponentProps<typeof LabMakeTransaction
     creatingRandomTransactions: false,
     randomBatchProgress: null,
     labEntitiesCount: 1,
+    hasMinedBlocks: true,
     ...overrides,
   }
 }
@@ -39,6 +40,23 @@ describe('LabMakeTransactionCard', () => {
       screen.getByText('Mining a block to a name enables random transactions.'),
     ).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Make random transaction' })).toBeDisabled()
+  })
+
+  it('when no blocks mined yet, shows warning and disables both transaction buttons', () => {
+    renderWithProviders(
+      <LabMakeTransactionCard {...buildProps({ hasMinedBlocks: false, labEntitiesCount: 2 })} />,
+    )
+
+    expect(
+      screen.getByText(/No coins exist yet\. Please mine some blocks on the/i),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Blocks page' })).toHaveAttribute('href', '/lab/blocks')
+    expect(screen.getByRole('button', { name: 'Make transaction' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Make random transaction' })).toBeDisabled()
+    expect(screen.getByLabelText('Number of random transactions')).toBeDisabled()
+    expect(
+      screen.queryByText('Mining a block to a name enables random transactions.'),
+    ).not.toBeInTheDocument()
   })
 
   it('calls random transaction handler from button', async () => {

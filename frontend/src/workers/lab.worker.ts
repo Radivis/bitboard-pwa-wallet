@@ -221,7 +221,7 @@ const labService = {
     }
     labEntityMustBeAliveToSend(entity)
 
-    const fromUtxos = state.utxos.filter((u) => u.address === fromAddress)
+    const fromUtxos = state.utxos.filter((u) => labAddressesEqual(u.address, fromAddress))
     if (fromUtxos.length === 0) {
       throw new Error('No UTXOs for the selected from address')
     }
@@ -315,7 +315,9 @@ const labService = {
       if (sourceAddresses.length === 0) continue
 
       const fromAddress = sourceAddresses[randomIntInclusive(0, sourceAddresses.length - 1)]
-      const fromUtxos = state.utxos.filter((utxo) => utxo.address === fromAddress)
+      const fromUtxos = state.utxos.filter((utxo) =>
+        labAddressesEqual(utxo.address, fromAddress),
+      )
       if (fromUtxos.length === 0) continue
 
       const totalInput = fromUtxos.reduce((sum, utxo) => sum + utxo.amountSats, 0)

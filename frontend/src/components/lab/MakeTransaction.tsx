@@ -52,6 +52,7 @@ export function LabMakeTransactionCard({
   creatingRandomTransactions,
   randomBatchProgress,
   labEntitiesCount,
+  hasMinedBlocks,
   sendDisabledFromDeadEntity = false,
   deadFromEntityDisplayName = '',
 }: {
@@ -74,14 +75,18 @@ export function LabMakeTransactionCard({
   creatingRandomTransactions: boolean
   randomBatchProgress: { created: number; total: number } | null
   labEntitiesCount: number
+  /** False when the lab chain has no blocks yet (no coinbase UTXOs). */
+  hasMinedBlocks: boolean
   sendDisabledFromDeadEntity?: boolean
   deadFromEntityDisplayName?: string
 }) {
   const selectedRandomCount = parseRandomTransactionCountValue(randomTransactionCount)
   const showRandomBatchConflictWarning =
+    hasMinedBlocks &&
     labEntitiesCount > 0 &&
     selectedRandomCount != null &&
     selectedRandomCount > labEntitiesCount
+  const txActionsDisabled = !hasMinedBlocks
 
   return (
     <InfomodeWrapper
@@ -96,12 +101,27 @@ export function LabMakeTransactionCard({
           <CardDescription>Send coins to another address</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {txActionsDisabled ? (
+            <p
+              className="text-sm text-amber-600 dark:text-amber-400"
+              role="status"
+            >
+              No coins exist yet. Please mine some blocks on the{' '}
+              <a
+                href="/lab/blocks"
+                className="font-medium underline underline-offset-2 text-amber-700 dark:text-amber-300"
+              >
+                Blocks page
+              </a>{' '}
+              first.
+            </p>
+          ) : null}
           {!showTxForm ? (
             <div className="space-y-4">
               <Button
                 variant="outline"
                 onClick={() => setShowTxForm(true)}
-                disabled={controlledAddressesCount === 0}
+                disabled={txActionsDisabled || controlledAddressesCount === 0}
               >
                 Make transaction
               </Button>
@@ -116,9 +136,9 @@ export function LabMakeTransactionCard({
                   onChange={(e) =>
                     setRandomTransactionCount(parseAndClampRandomTransactionCount(e.target.value))
                   }
-                  disabled={creatingRandomTransactions}
+                  disabled={creatingRandomTransactions || txActionsDisabled}
                 />
-                {labEntitiesCount === 0 ? (
+                {hasMinedBlocks && labEntitiesCount === 0 ? (
                   <p className="text-sm text-muted-foreground">
                     Mining a block to a name enables random transactions.
                   </p>
@@ -135,7 +155,9 @@ export function LabMakeTransactionCard({
                 <Button
                   variant="secondary"
                   onClick={onCreateRandomTransactions}
-                  disabled={creatingRandomTransactions || labEntitiesCount === 0}
+                  disabled={
+                    txActionsDisabled || creatingRandomTransactions || labEntitiesCount === 0
+                  }
                 >
                   Make random transaction
                 </Button>
@@ -211,7 +233,10 @@ export function LabMakeTransactionCard({
                 />
               </div>
               <div className="flex gap-2">
-                <Button onClick={onSend} disabled={sending || sendDisabledFromDeadEntity}>
+                <Button
+                  onClick={onSend}
+                  disabled={txActionsDisabled || sending || sendDisabledFromDeadEntity}
+                >
                   {sending ? 'Sending...' : 'Send'}
                 </Button>
                 <Button
