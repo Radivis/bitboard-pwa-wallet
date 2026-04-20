@@ -1,3 +1,4 @@
+import fs from 'node:fs'
 import path from 'path'
 import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vite'
@@ -8,6 +9,15 @@ import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
 import wasm from 'vite-plugin-wasm'
 const projectRoot = path.dirname(fileURLToPath(import.meta.url))
+
+/** Safe segment for Workbox `cacheId` (alphanumeric + hyphens). */
+function sanitizeWorkboxCacheIdSegment(version: string): string {
+  const collapsed = version.replace(/[^a-zA-Z0-9-]+/g, '-').replace(/-+/g, '-')
+  const trimmed = collapsed.replace(/^-|-$/g, '')
+  return trimmed.length > 0 ? trimmed : 'unknown'
+}
+
+const workboxCacheId = `bitboard-wallet-${sanitizeWorkboxCacheIdSegment(readBitboardWalletVersion())}`
 
 /** Escape a string for use inside a RegExp (filename slug segments). */
 function escapeRegExpSegment(s: string): string {
@@ -80,6 +90,9 @@ export default defineConfig({
         ],
       },
       workbox: {
+        // Version-scoped so a new release gets a fresh precache namespace (see repository root VERSION).
+        cacheId: workboxCacheId,
+        cleanupOutdatedCaches: true,
         // Default 2 MiB is too small for main WASM (e.g. bitboard_crypto ~2.2 MiB after Vite 8 output).
         maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2,wasm}'],
@@ -168,6 +181,7 @@ export default defineConfig({
     plugins: () => [wasm()],
   },
   build: {
+    // Default Rollup output uses content-hashed filenames under `assets/`; those pair with long Cache-Control on Vercel.
     outDir: 'dist',
     target: 'esnext',
   },
