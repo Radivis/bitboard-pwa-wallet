@@ -91,7 +91,7 @@ export function PrivacyPolicyDe() {
         (z. B. Kontostandsabfragen, Transaktionslisten) ab.
       </p>
       <p>
-        Der Betreiber des jeweiligen Esplora-Dienstes kann technisch bedingt — auch wenn die
+        Der Betreiber des jeweiligen Esplora-Dienstes könnte vielleicht — auch wenn die
         Schnittstelle <strong>Anonymisierungsmaßnahmen</strong> vorsieht — versuchen, aus den von
         Ihrer Wallet ausgelösten Anfragen ein <strong>Nutzungs- bzw. Transaktionsprofil</strong> zu
         erstellen (z. B. welche Adressen oder Transaktionen wann abgefragt werden). Das{' '}

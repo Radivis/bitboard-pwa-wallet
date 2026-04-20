@@ -22,13 +22,13 @@ export function PrivacyPolicyEn() {
       <p>The controller under the GDPR is:</p>
       <LegalEntityFields entity={legalEntity} className="mb-3 space-y-1" />
       <p>
-        For privacy-related requests, please contact us preferably by email using the address above.
+        For privacy-related requests, please contact the operator preferably by email using the address above.
         Email correspondence you initiate is processed on the basis of{' '}
         <strong>Art. 6(1)(b) and/or (f) GDPR</strong> in order to handle your request, and is deleted
         once it is no longer needed, subject to any statutory retention obligations.
       </p>
       <p>
-        <strong>Data protection officer:</strong> We have{' '}
+        <strong>Data protection officer:</strong> The operator has{' '}
         <strong>not appointed a data protection officer</strong> (not required for this project).
       </p>
 
@@ -48,8 +48,8 @@ export function PrivacyPolicyEn() {
 
       <h2>3. Marketing website (landing page)</h2>
       <p>
-        The landing page is informational. Beyond normal browser mechanics when you load a site, we
-        intentionally store only your <strong>language preference for legal texts</strong> (German /
+        The landing page is informational. Beyond normal browser mechanics when you load a site, the
+        operator intentionally stores only your <strong>language preference for legal texts</strong> (German /
         English) in <code>localStorage</code> under the key <code>bitboard.legalLocale</code>. No
         other persistent, intentional landing-only personal data collection is described here.
       </p>
@@ -78,14 +78,14 @@ export function PrivacyPolicyEn() {
         <strong>Settings</strong>: An <strong>Esplora</strong>-style API (a standard way to
         read public Bitcoin data over the web). Those requests reveal your{' '}
         <strong>IP address</strong> and basic technical details to whoever runs that service — not to
-        Bitboard (we don’t run that infrastructure). What is requested depends on how you use the
+        Bitboard (the operator does not run that infrastructure). What is requested depends on how you use the
         wallet.
       </p>
       <p>
-        For technical reasons, the operator of your chosen Esplora service may still attempt to build
+        The operator of your chosen Esplora service might possibly attempt to build
         a <strong>usage or transaction-related profile</strong> from the requests your wallet makes —
         for example which addresses or transactions are queried and when —{' '}
-        <strong>even if</strong> the Esplora API includes <strong>anonymization measures</strong>. The{' '}
+        <strong>even though</strong> the Esplora API includes <strong>anonymization measures</strong>. The{' '}
         <strong>Bitboard wallet itself cannot influence this</strong>; your choice of endpoint and any
         additional protections (e.g. Tor, your own node) are up to you.
       </p>
@@ -94,7 +94,7 @@ export function PrivacyPolicyEn() {
       <p>
         For Lightning, Bitboard uses <strong>Nostr Wallet Connect (NWC)</strong> — a standard way to
         link an <strong>existing</strong> Lightning wallet you already use. Bitboard does not hold your
-        Lightning funds on our servers.
+        Lightning funds on the operator’s servers.
       </p>
       <p>
         When you use NWC, <strong>metadata and operationally necessary content</strong> may be
@@ -115,7 +115,7 @@ export function PrivacyPolicyEn() {
         In short: unless you set an <strong>app password</strong>, sensitive material (recovery
         phrase, keys, Lightning connection details, etc.) is{' '}
         <strong>not</strong> protected on your device by the strong “encryption at rest” described
-        here. We <strong>recommend setting an app password</strong> before storing any seed,
+        here. The operator <strong>recommends setting an app password</strong> before storing any seed,
         descriptor, or NWC connection string in the app.
       </p>
       <p>
@@ -140,8 +140,8 @@ export function PrivacyPolicyEn() {
 
       <h2>9. Legal bases (Art. 6 GDPR)</h2>
       <p>
-        Where we process personal data, we rely on the following legal bases (non-exhaustive — other
-        provisions may apply in individual cases):
+        Where the operator processes personal data, the operator relies on the following legal bases
+        (non-exhaustive — other provisions may apply in individual cases):
       </p>
       <ul className="list-disc space-y-2 pl-5">
         <li>
@@ -258,7 +258,7 @@ export function PrivacyPolicyEn() {
 
       <h2>13. No automated decision-making</h2>
       <p>
-        We do not carry out <strong>automated decision-making</strong>, including profiling, with
+        The operator does not carry out <strong>automated decision-making</strong>, including profiling, with
         legal effect or similarly significant effect on you within the meaning of{' '}
         <strong>Art. 22 GDPR</strong>.
       </p>
@@ -317,10 +317,10 @@ export function PrivacyPolicyEn() {
         <strong>Version:</strong> April 2026.
       </p>
       <p>
-        We may update this privacy policy when technical or legal requirements change. The current
+        The operator may update this privacy policy when technical or legal requirements change. The current
         version is always available at the URL of this page (e.g. <strong>/privacy</strong> in the
         app, or the publicly reachable equivalent on the landing page). Where changes are{' '}
-        <strong>material</strong>, we will try to let you know, for example via this website or the
+        <strong>material</strong>, the operator will try to let you know, for example via this website or the
         public project repository (e.g. GitHub).
       </p>
       <p>

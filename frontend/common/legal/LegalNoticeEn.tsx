@@ -3,9 +3,6 @@
  */
 import { LegalNoticeEntityBlock } from './LegalNoticeEntityBlock'
 
-/** Kept for tests or future gating; imprint is always offered in the product when true. */
-export const LEGAL_NOTICE_EN_HAS_CONTENT = true
-
 export function LegalNoticeEn({
   surface = 'app',
 }: {
