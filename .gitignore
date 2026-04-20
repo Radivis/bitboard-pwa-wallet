@@ -26,3 +26,6 @@ lcov.info
 /frontend/tests/logs/
 # Generated WASM package (output of wasm-pack build)
 /frontend/src/wasm-pkg/
+
+# Vercel CLI link / local pull (CI uses VERCEL_* secrets instead)
+/frontend/.vercel/
