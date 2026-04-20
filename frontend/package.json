@@ -1,7 +1,7 @@
 {
   "name": "bitboard-pwa-wallet",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.0-alpha",
   "type": "module",
   "license": "MIT",
   "engines": {
@@ -25,7 +25,9 @@
     "test:regtest:start": "../scripts/start-regtest.sh",
     "test:regtest:stop": "docker rm -f bitboard-regtest",
     "test:e2e:regtest": "npm run test:regtest:start && playwright test --grep @regtest",
-    "test:e2e:lab": "playwright test --grep @lab"
+    "test:e2e:lab": "playwright test --grep @lab",
+    "sync-version": "node ../scripts/sync-version.mjs",
+    "verify-version": "node ../scripts/verify-version.mjs"
   },
   "dependencies": {
     "@getalby/sdk": "7.0.0",

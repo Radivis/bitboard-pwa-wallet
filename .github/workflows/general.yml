@@ -14,8 +14,16 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  version:
+    name: Version consistency
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: node scripts/verify-version.mjs
+
   test:
     name: Test
+    needs: version
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository code
@@ -44,6 +52,7 @@ jobs:
 
   fmt:
     name: Rustfmt
+    needs: version
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -56,6 +65,7 @@ jobs:
 
   clippy:
     name: Clippy
+    needs: version
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -68,6 +78,7 @@ jobs:
 
   e2e:
     name: E2E Tests
+    needs: version
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -129,6 +140,7 @@ jobs:
 
   coverage:
     name: Code coverage
+    needs: version
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

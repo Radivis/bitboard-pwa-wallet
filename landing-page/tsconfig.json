@@ -22,6 +22,7 @@
     "moduleResolution": "bundler",
     "isolatedModules": true,
     "moduleDetection": "force",
+    "types": ["node"],
     "allowJs": true,
     "jsx": "react-jsx",
     "paths": {

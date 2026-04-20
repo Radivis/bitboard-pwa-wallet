@@ -1,7 +1,7 @@
 /// <reference types="vite/client" />
 
 interface ImportMetaEnv {
-  /** From `frontend/package.json` at build time (`vite.config.ts`). */
+  /** From repository root `VERSION` at build time (`vite.config.ts`). */
   readonly VITE_APP_VERSION: string
   readonly VITE_API_BASE_URL: string
   /** Set by Vite define when CI env var is present (e.g. GitHub Actions). Used to disable dev overlays in E2E. */

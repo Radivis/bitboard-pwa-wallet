@@ -1,24 +1,13 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
-import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
+import { readBitboardWalletVersion } from '../frontend/common/bitboard-wallet-version';
 
 const projectRoot = path.dirname(fileURLToPath(import.meta.url));
 
-/** PWA wallet version from `frontend/package.json` (same artifact users run at app.bitboard-wallet.com). */
-function readWalletAppVersion(): string {
-  try {
-    const pkgPath = path.resolve(projectRoot, '../frontend/package.json');
-    const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8')) as { version?: string };
-    return typeof pkg.version === 'string' ? pkg.version : '0.0.0';
-  } catch {
-    return '0.0.0';
-  }
-}
-
-const walletAppVersion = readWalletAppVersion();
+const walletAppVersion = readBitboardWalletVersion();
 
 export default defineConfig({
   define: {
