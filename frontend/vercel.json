@@ -1,5 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "installCommand": "bash scripts/vercel-install-wasm-toolchain.sh && npm ci",
+  "buildCommand": "export PATH=\"$HOME/.cargo/bin:$PATH\" && npm run build",
   "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }],
   "headers": [
     {
