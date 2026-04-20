@@ -24,12 +24,14 @@ flowchart LR
   P --> H
 ```
 
-**Workflow file:** [`.github/workflows/deploy-vercel.yml`](../.github/workflows/deploy-vercel.yml)  
+**Wallet workflow:** [`.github/workflows/deploy-vercel.yml`](../.github/workflows/deploy-vercel.yml)  
 **Triggers:** push to `main`, or **Run workflow** manually.
+
+**Landing page workflow:** [`.github/workflows/deploy-vercel-landing.yml`](../.github/workflows/deploy-vercel-landing.yml) — same prebuilt pattern without Rust/WASM (see [Landing page](#landing-page-second-vercel-project)).
 
 ---
 
-## One-time setup for the canonical pipeline
+## One-time setup for the canonical pipeline (wallet PWA)
 
 ### 1. Create the Vercel project (hosting only)
 
@@ -109,6 +111,30 @@ Vercel applies the headers in [`frontend/vercel.json`](../frontend/vercel.json):
 
 - Open the production URL and confirm the app loads.
 - Open a client-side route and **hard refresh**; SPA rewrites in `vercel.json` should still serve the app.
+
+---
+
+## Landing page (second Vercel project)
+
+The marketing site under [`landing-page/`](../landing-page/) is a **separate Vercel project**: **Root Directory** `landing-page`, **Framework** Vite, **Output** `dist`, **Node** 24. Build is only `npm ci` + `vite build` (imports from `../frontend/common` — full repo checkout required). Optionally disable Git-triggered Vercel builds and ship only from GitHub Actions, as for the wallet.
+
+### GitHub secrets
+
+Reuse **`VERCEL_TOKEN`** and **`VERCEL_ORG_ID`**. Add a **fourth** secret for the landing project only:
+
+| Secret | Purpose |
+|--------|---------|
+| **`VERCEL_LANDING_PROJECT_ID`** | `prj_…` of the **landing** Vercel project (not the wallet’s `VERCEL_PROJECT_ID`) |
+
+Link locally from `landing-page/` with `npx vercel link` if you need `projectId`/`orgId` from `landing-page/.vercel/project.json` (gitignored).
+
+### Workflow
+
+[`.github/workflows/deploy-vercel-landing.yml`](../.github/workflows/deploy-vercel-landing.yml) runs **`vercel pull` / `vercel build` / `vercel deploy --prebuilt`** with **`--cwd landing-page`**, strips **`settings.rootDirectory`** from **`landing-page/.vercel/project.json`**, and runs **`mkdir -p landing-page/landing-page`** before deploy (same prebuilt path validation quirk as the wallet: an empty nested directory satisfies the CLI check).
+
+**Local debugging:** from the repo root, `vercel pull` and `vercel build` with **`--cwd landing-page`**; before **`vercel deploy --prebuilt --prod`**, **`mkdir -p landing-page/landing-page`**, then **`cd landing-page`** and deploy.
+
+No **`landing-page/vercel.json`** is required for the default multi-page static output; add one later if you want cache headers or rewrites.
 
 ---
 

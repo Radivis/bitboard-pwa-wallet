@@ -29,3 +29,4 @@ lcov.info
 
 # Vercel CLI link / local pull (CI uses VERCEL_* secrets instead)
 /frontend/.vercel/
+/landing-page/.vercel/

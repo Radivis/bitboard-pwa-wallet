@@ -184,7 +184,7 @@ e2e tests:
 
 ## Deployment (Vercel)
 
-The **canonical** production path is **GitHub Actions → `vercel build` on the runner → `vercel deploy --prebuilt`**; Vercel hosts the static output. See **[docs/deploy-vercel.md](docs/deploy-vercel.md)** for setup (secrets, disabling duplicate Vercel-only builds, and optional Vercel-native builds).
+The **canonical** production path is **GitHub Actions → `vercel build` on the runner → `vercel deploy --prebuilt`**; Vercel hosts the static output. The **wallet** ([`deploy-vercel.yml`](.github/workflows/deploy-vercel.yml)) and **landing page** ([`deploy-vercel-landing.yml`](.github/workflows/deploy-vercel-landing.yml)) are separate Vercel projects. See **[docs/deploy-vercel.md](docs/deploy-vercel.md)** for setup (secrets, including `VERCEL_LANDING_PROJECT_ID` for the landing site, and optional Vercel-native builds).
 
 ## License
 
