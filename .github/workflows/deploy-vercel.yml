@@ -19,10 +19,11 @@ jobs:
   deploy:
     name: Build and deploy prebuilt
     runs-on: ubuntu-latest
-    # Use `vercel … --cwd frontend` from the repo root for pull/build so Root Directory is not
-    # doubled with the shell cwd (spawn sh ENOENT during install — vercel/community#2793).
-    # For `vercel deploy --prebuilt`, use `working-directory: frontend` and no `--cwd`: `--cwd
-    # frontend` from the repo root can still resolve to …/frontend/frontend on deploy.
+    # Pull/build: `vercel … --cwd frontend` from repo root + strip `settings.rootDirectory` in
+    # `.vercel/project.json` (avoids install cwd bugs — vercel/community#2793).
+    # Deploy: `vercel deploy --prebuilt` still validates a filesystem path derived from Root
+    # Directory; monorepo `frontend` can resolve to …/frontend/frontend. We mkdir that path empty
+    # so the check passes (see docs/deploy-vercel.md).
 
     env:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
@@ -64,6 +65,13 @@ jobs:
 
       - name: Vercel build (prebuilt output)
         run: vercel build --token="$VERCEL_TOKEN" --prod --cwd frontend
+
+      # `vercel build` may refresh `.vercel/project.json`; deploy still merges Root Directory and can
+      # require …/frontend/frontend to exist for --prebuilt (CLI regression / strict check).
+      - name: Prepare prebuilt deploy (strip rootDirectory, satisfy path check)
+        run: |
+          node -e "const fs=require('fs');const p='frontend/.vercel/project.json';if(!fs.existsSync(p))process.exit(0);const j=JSON.parse(fs.readFileSync(p,'utf8'));if(j.settings&&Object.prototype.hasOwnProperty.call(j.settings,'rootDirectory')){delete j.settings.rootDirectory;fs.writeFileSync(p,JSON.stringify(j,null,'\t'));console.log('Removed settings.rootDirectory before deploy');}"
+          mkdir -p frontend/frontend
 
       - name: Deploy prebuilt to production
         working-directory: frontend

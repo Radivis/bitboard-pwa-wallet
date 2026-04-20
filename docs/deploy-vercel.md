@@ -74,7 +74,7 @@ In **Settings → Environment Variables → Production**, add anything the app n
 
 After this, a push to **`main`** (or a manual workflow run) runs **`vercel pull`** (production env) → **`vercel build --prod`** → **`vercel deploy --prebuilt --prod`**.
 
-**Local debugging:** run **`vercel pull`** and **`vercel build`** from the **repository root** with **`--cwd frontend`** (same as CI). Run **`vercel deploy --prebuilt --prod`** from **inside `frontend/`** (no `--cwd`), matching the deploy step in the workflow.
+**Local debugging:** run **`vercel pull`** and **`vercel build`** from the **repository root** with **`--cwd frontend`** (same as CI). Before **`vercel deploy --prebuilt --prod`**, run **`mkdir -p frontend/frontend`** from the repo root (same workaround as CI), then **`cd frontend`** and deploy.
 
 ---
 
@@ -82,9 +82,13 @@ After this, a push to **`main`** (or a manual workflow run) runs **`vercel pull`
 
 - Installs **Rust** (`wasm32-unknown-unknown`), **wasm-pack**, **Node 24**.
 - Sets **`VITE_ARGON2_CI`** to empty for that job so production never uses fast Argon2 by mistake.
-- Runs **`vercel pull --environment=production --cwd frontend`** and **`vercel build --prod --cwd frontend`** from the **repo root**, strips **`settings.rootDirectory`** from **`frontend/.vercel/project.json`** when present (avoids doubled paths during install — see [vercel/community#2793](https://github.com/vercel/community/discussions/2793)), then **`vercel deploy --prebuilt --prod`** with **`working-directory: frontend`** (no `--cwd`; deploy’s path logic can otherwise resolve to `frontend/frontend`).
+- Runs **`vercel pull --environment=production --cwd frontend`** and **`vercel build --prod --cwd frontend`** from the **repo root**, strips **`settings.rootDirectory`** from **`frontend/.vercel/project.json`** after pull (avoids doubled paths during install — see [vercel/community#2793](https://github.com/vercel/community/discussions/2793)), strips again after **`vercel build`** if needed, then **`mkdir -p frontend/frontend`** and **`vercel deploy --prebuilt --prod`** with **`working-directory: frontend`**.
 
 The `vercel build` step uses your linked project’s settings plus [`frontend/vercel.json`](../frontend/vercel.json), so install/build commands match what Vercel would use for a prebuilt deploy.
+
+### If `vercel deploy --prebuilt` says `…/frontend/frontend` does not exist
+
+The CLI **validates** a filesystem path derived from the dashboard **Root Directory** (`frontend`) even for **prebuilt** deploys (see [Vercel Community](https://community.vercel.com/t/vercel-deploy-prebuilt-now-requiring-access-to-root-directory/2137)). In a monorepo that can resolve to **`frontend/frontend`**, which is not a real folder. The workflow creates an **empty** `frontend/frontend` directory on the runner so that check passes; nothing is deployed from it (the prebuilt output is under **`frontend/.vercel/output`**).
 
 ### If `vercel build` fails with `spawn sh ENOENT` during `npm ci`
 
