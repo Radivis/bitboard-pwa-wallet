@@ -45,15 +45,20 @@ jobs:
         run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN" --cwd landing-page
 
       - name: Strip rootDirectory from pulled project settings
-        run: node -e "const fs=require('fs');const p='landing-page/.vercel/project.json';if(!fs.existsSync(p))process.exit(0);const j=JSON.parse(fs.readFileSync(p,'utf8'));if(j.settings&&Object.prototype.hasOwnProperty.call(j.settings,'rootDirectory')){delete j.settings.rootDirectory;fs.writeFileSync(p,JSON.stringify(j,null,'\t'));console.log('Removed settings.rootDirectory from',p);}"
+        uses: ./.github/actions/strip-vercel-project-root-directory
+        with:
+          project-json-path: landing-page/.vercel/project.json
 
       - name: Vercel build (prebuilt output)
         run: vercel build --token="$VERCEL_TOKEN" --prod --cwd landing-page
 
-      - name: Prepare prebuilt deploy (strip rootDirectory, satisfy path check)
-        run: |
-          node -e "const fs=require('fs');const p='landing-page/.vercel/project.json';if(!fs.existsSync(p))process.exit(0);const j=JSON.parse(fs.readFileSync(p,'utf8'));if(j.settings&&Object.prototype.hasOwnProperty.call(j.settings,'rootDirectory')){delete j.settings.rootDirectory;fs.writeFileSync(p,JSON.stringify(j,null,'\t'));console.log('Removed settings.rootDirectory before deploy');}"
-          mkdir -p landing-page/landing-page
+      - name: Strip rootDirectory after build (before prebuilt deploy)
+        uses: ./.github/actions/strip-vercel-project-root-directory
+        with:
+          project-json-path: landing-page/.vercel/project.json
+
+      - name: Prepare prebuilt deploy (satisfy path check)
+        run: mkdir -p landing-page/landing-page
 
       - name: Deploy prebuilt to production
         working-directory: landing-page
