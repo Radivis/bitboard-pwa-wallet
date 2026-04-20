@@ -27,6 +27,8 @@ jobs:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
       VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      # Never use fast Argon2id in production; override repo/org Actions vars if mis-set
+      VITE_ARGON2_CI: ''
 
     steps:
       - name: Check out repository

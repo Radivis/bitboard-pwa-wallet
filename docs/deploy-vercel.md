@@ -17,6 +17,8 @@ Production builds run **only in GitHub Actions**; Vercel hosts the static output
 
 In the project **Settings → Environment Variables**, add **Production** values for anything required at build time. At minimum configure **`VITE_API_BASE_URL`** to your production API base URL (see `frontend/src/vite-env.d.ts`).
 
+**Do not** set **`VITE_ARGON2_CI=1`** for **Production** (or any environment used for real users). That flag selects fast Argon2id parameters for dev/CI only. The GitHub deploy workflow sets **`VITE_ARGON2_CI`** to empty for the build so production never picks up fast Argon2 from a mis-set repository variable or Vercel env. **`vite build`** also fails if `VITE_ARGON2_CI=1` is still in effect for a production bundle (`frontend/vite.config.ts`).
+
 ## 3. Avoid broken duplicate builds on Vercel
 
 The real wallet build needs **Rust + wasm-pack** on the runner; Vercel’s default Git-triggered build cannot reproduce that alone. Either:

@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import path from 'path'
 import { fileURLToPath } from 'node:url'
-import { defineConfig } from 'vite'
+import { defineConfig, type Plugin } from 'vite'
 import { readBitboardWalletVersion } from './common/bitboard-wallet-version'
 import { tanstackRouter } from '@tanstack/router-plugin/vite'
 import react from '@vitejs/plugin-react'
@@ -43,6 +43,21 @@ function libraryArticleRouteIgnorePattern(): string {
   return `__tests__|^(?:${escapedBasenames.join('|')})\\.tsx$`
 }
 
+/** Fail `vite build` if fast Argon2 (CI) is enabled for a production bundle. */
+function rejectArgon2CiInProductionBuild(): Plugin {
+  return {
+    name: 'reject-argon2-ci-in-production-build',
+    configResolved(config) {
+      if (config.mode !== 'production') return
+      if (process.env.VITE_ARGON2_CI === '1') {
+        throw new Error(
+          'Security: VITE_ARGON2_CI=1 is not allowed in production builds. Use fast Argon2 only in dev/CI (non-production Vite mode).',
+        )
+      }
+    },
+  }
+}
+
 export default defineConfig({
   define: {
     // Expose CI to app so we can disable dev overlays (e.g. TanStack Router Devtools)
@@ -51,6 +66,7 @@ export default defineConfig({
     'import.meta.env.VITE_APP_VERSION': JSON.stringify(readBitboardWalletVersion()),
   },
   plugins: [
+    rejectArgon2CiInProductionBuild(),
     tanstackRouter({
       target: 'react',
       autoCodeSplitting: true,

@@ -10,6 +10,11 @@ interface ImportMetaEnv {
   readonly VITE_E2E_NWC_MOCK?: string
   /** Set to `1` or `true` to hide TanStack Router devtools in dev (e.g. for screenshots). */
   readonly VITE_HIDE_ROUTER_DEVTOOLS?: string
+  /**
+   * Set to `1` only in dev/CI (non-production Vite builds) to use fast Argon2id params.
+   * Must not be set for `vite build` / production; see `argon2-ci-env.ts` and `vite.config.ts`.
+   */
+  readonly VITE_ARGON2_CI?: string
 }
 
 interface ImportMeta {
