@@ -25,6 +25,20 @@ Do not store more than you can afford to lose on it!
 
 ⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️
 
+## Live Deployment
+
+🌍🌍🌍🌍🌍🌍🌍
+
+This app is currently deployed via Vercel under:
+
+**[app.bitboard-wallet.com](https://app.bitboard-wallet.com)**
+
+If you want to start through the landing page first, visit:
+
+**[bitboard-wallet.com](https://bitboard-wallet.com)**
+
+🌍🌍🌍🌍🌍🌍🌍
+
 ## Security
 
 To report a security vulnerability, use **GitHub private vulnerability reporting** as described in [SECURITY.md](SECURITY.md). Technical threat model and implementation details are documented in [doc/SECURITY.md](doc/SECURITY.md).
