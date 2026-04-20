@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { screen, waitFor } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { renderWithProviders } from '@/test-utils/test-providers'
 import { toast } from 'sonner'
@@ -188,6 +188,18 @@ vi.mock('@/lib/opfs-root-file', () => ({
   triggerBrowserSaveLocalBlob: vi.fn(),
 }))
 
+vi.mock('@/lib/mainnet-onchain-balance-probe', () => ({
+  listWalletsWithPositiveMainnetOnChainBalance: vi.fn().mockResolvedValue([]),
+}))
+
+vi.mock('@/lib/wipe-all-app-data-opfs-and-reload', () => ({
+  wipeAllAppDataOpfsAndReload: vi.fn().mockResolvedValue(undefined),
+}))
+
+vi.mock('@/db/wallet-no-mnemonic-backup', () => ({
+  anyWalletHasNoMnemonicBackupFlag: vi.fn().mockResolvedValue(false),
+}))
+
 const mockSetThemeMode = vi.fn()
 vi.mock('@/stores/themeStore', () => ({
   useThemeStore: (selector: (s: Record<string, unknown>) => unknown) =>
@@ -307,9 +319,12 @@ vi.mock('@/components/ConfirmationDialog', () => ({
     ) : null,
 }))
 
-import { SettingsPage } from '../settings'
+import { SettingsMainPage } from '../settings/index'
+import { SettingsSecurityPage } from '../settings/security'
+import { SettingsFeaturesPage } from '../settings/features'
+import { SettingsAboutPage } from '../settings/about'
 
-describe('SettingsPage', () => {
+describe('Settings routes', () => {
   afterEach(() => {
     vi.unstubAllEnvs()
   })
@@ -353,110 +368,29 @@ describe('SettingsPage', () => {
     }
   })
 
-  it('renders core settings sections (Address Type hidden when SegWit feature is off)', () => {
-    renderWithProviders(<SettingsPage />)
+  describe('SettingsMainPage', () => {
+  it('renders core main sections (Address Type hidden when SegWit feature is off)', () => {
+    renderWithProviders(<SettingsMainPage />)
     expect(screen.getByText('Network')).toBeInTheDocument()
     expect(screen.queryByText('Address Type')).not.toBeInTheDocument()
     expect(screen.getByText('Appearance')).toBeInTheDocument()
-    expect(screen.getByText('Security')).toBeInTheDocument()
-    expect(screen.getByText('Data Backups')).toBeInTheDocument()
-    expect(screen.getByText('About')).toBeInTheDocument()
-    const privacyPolicyLink = screen.getByRole('link', { name: /privacy policy/i })
-    expect(privacyPolicyLink).toHaveAttribute('href', '/privacy')
-    expect(
-      screen.getByText(/Lab data is tied to wallets on this device/i),
-    ).toBeInTheDocument()
-  })
-
-  it('shows Developer contact card when VITE_CONTACTS is set', () => {
-    vi.stubEnv('VITE_CONTACTS', 'Line one\nLine two')
-    renderWithProviders(<SettingsPage />)
-    expect(screen.getByText('Developer contact')).toBeInTheDocument()
-    expect(screen.getByText(/Line one/)).toBeInTheDocument()
-    expect(screen.getByText(/Line two/)).toBeInTheDocument()
-  })
-
-  it('disables wallet backup export/import in near-zero security mode with hint', () => {
-    nearZeroSecurityState.active = true
-    renderWithProviders(<SettingsPage />)
-    expect(screen.getByRole('button', { name: 'Export wallet data' })).toBeDisabled()
-    expect(screen.getByRole('button', { name: 'Import wallet backup' })).toBeDisabled()
-    expect(
-      screen.getByText(/Wallet export and import are not available in near-zero security mode/i),
-    ).toBeInTheDocument()
+    expect(screen.getByText('Bitcoin amounts')).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Security' })).not.toBeInTheDocument()
+    expect(screen.queryByText('Data Backups')).not.toBeInTheDocument()
   })
 
   it('shows Address Type card when SegWit addresses feature is enabled', () => {
     featureStoreState.segwitAddressesEnabled = true
-    renderWithProviders(<SettingsPage />)
+    renderWithProviders(<SettingsMainPage />)
     expect(screen.getByText('Address Type')).toBeInTheDocument()
     expect(
       screen.getByRole('button', { name: 'Taproot (BIP86)' }),
     ).toBeInTheDocument()
   })
 
-  it('disables Change app password when there are no wallets', () => {
-    mockWalletsState.data = []
-    renderWithProviders(<SettingsPage />)
-    expect(screen.getByRole('button', { name: 'Change app password' })).toBeDisabled()
-  })
-
-  it('enables Change app password when at least one wallet exists', () => {
-    mockWalletsState.data = [
-      { wallet_id: 1, name: 'Test', created_at: new Date().toISOString() },
-    ]
-    renderWithProviders(<SettingsPage />)
-    expect(screen.getByRole('button', { name: 'Change app password' })).toBeEnabled()
-  })
-
-  it('shows receiving descriptor when a wallet exists and session is unlocked', async () => {
-    const user = userEvent.setup()
-    mockWalletsState.data = [
-      { wallet_id: 1, name: 'Test', created_at: new Date().toISOString() },
-    ]
-    sessionStoreState.password = 'testpass'
-    renderWithProviders(<SettingsPage />)
-    expect(screen.getByText('Receiving descriptor')).toBeInTheDocument()
-    await waitFor(() => {
-      expect(
-        screen.getByRole('button', { name: 'Show receiving descriptor' }),
-      ).toBeInTheDocument()
-    })
-    await user.click(screen.getByRole('button', { name: 'Show receiving descriptor' }))
-    expect(screen.getByText('tr([mock]/0/*)')).toBeInTheDocument()
-    expect(mockLoadWalletSecretsPayload).toHaveBeenCalled()
-  })
-
-  it('shows unlock hint for receiving descriptor when session has no password', () => {
-    mockWalletsState.data = [
-      { wallet_id: 1, name: 'Test', created_at: new Date().toISOString() },
-    ]
-    sessionStoreState.password = null
-    renderWithProviders(<SettingsPage />)
-    expect(
-      screen.getByText('Unlock your wallet to view the receiving descriptor.'),
-    ).toBeInTheDocument()
-  })
-
-  it('shows Set a real password when near-zero security mode is active', () => {
-    nearZeroSecurityState.active = true
-    mockWalletsState.data = []
-    renderWithProviders(<SettingsPage />)
-    expect(screen.getByRole('button', { name: 'Set a real password' })).toBeEnabled()
-    expect(screen.queryByRole('button', { name: 'Change app password' })).not.toBeInTheDocument()
-    expect(screen.getByTestId('settings-security-card')).toHaveClass('border-destructive')
-  })
-
-  it('does not highlight security card when near-zero security mode is inactive', () => {
-    nearZeroSecurityState.active = false
-    mockWalletsState.data = []
-    renderWithProviders(<SettingsPage />)
-    expect(screen.getByTestId('settings-security-card')).not.toHaveClass('border-destructive')
-  })
-
   it('network selector commits loaded sub-wallet after switch completes', async () => {
     const user = userEvent.setup()
-    renderWithProviders(<SettingsPage />)
+    renderWithProviders(<SettingsMainPage />)
 
     await user.click(screen.getByRole('button', { name: 'Testnet' }))
     await waitFor(() => {
@@ -472,7 +406,7 @@ describe('SettingsPage', () => {
     walletStoreState.walletStatus = 'locked'
     sessionStoreState.password = null
     const user = userEvent.setup()
-    renderWithProviders(<SettingsPage />)
+    renderWithProviders(<SettingsMainPage />)
 
     await user.click(screen.getByRole('button', { name: 'Testnet' }))
 
@@ -485,7 +419,7 @@ describe('SettingsPage', () => {
     walletStoreState.walletStatus = 'none'
     sessionStoreState.password = null
     const user = userEvent.setup()
-    renderWithProviders(<SettingsPage />)
+    renderWithProviders(<SettingsMainPage />)
 
     await user.click(screen.getByRole('button', { name: 'Testnet' }))
 
@@ -496,7 +430,7 @@ describe('SettingsPage', () => {
   it('address type selector shows confirmation when wallet exists', async () => {
     featureStoreState.segwitAddressesEnabled = true
     const user = userEvent.setup()
-    renderWithProviders(<SettingsPage />)
+    renderWithProviders(<SettingsMainPage />)
 
     await user.click(screen.getByRole('button', { name: 'SegWit (BIP84)' }))
     await waitFor(() => {
@@ -507,7 +441,7 @@ describe('SettingsPage', () => {
 
   it('theme selector calls setThemeMode', async () => {
     const user = userEvent.setup()
-    renderWithProviders(<SettingsPage />)
+    renderWithProviders(<SettingsMainPage />)
 
     await user.click(screen.getByRole('button', { name: /Dark/ }))
     expect(mockSetThemeMode).toHaveBeenCalledWith('dark')
@@ -516,7 +450,7 @@ describe('SettingsPage', () => {
   it('network switch when unlocked calls updateDescriptorWalletChangeset then resolveDescriptorWallet in order', async () => {
     mockExportChangeset.mockResolvedValueOnce('{"last_reveal":{"0":0}}')
     const user = userEvent.setup()
-    renderWithProviders(<SettingsPage />)
+    renderWithProviders(<SettingsMainPage />)
 
     await user.click(screen.getByRole('button', { name: 'Testnet' }))
 
@@ -544,19 +478,19 @@ describe('SettingsPage', () => {
 
   it('hides Regtest network button when Regtest mode is disabled', () => {
     featureStoreState.regtestModeEnabled = false
-    renderWithProviders(<SettingsPage />)
+    renderWithProviders(<SettingsMainPage />)
     expect(screen.queryByRole('button', { name: 'Regtest' })).not.toBeInTheDocument()
   })
 
   it('shows Regtest network button when Regtest mode is enabled', () => {
     featureStoreState.regtestModeEnabled = true
-    renderWithProviders(<SettingsPage />)
+    renderWithProviders(<SettingsMainPage />)
     expect(screen.getByRole('button', { name: 'Regtest' })).toBeInTheDocument()
   })
 
   it('shows a toast when Mainnet is tapped while Mainnet access is off', async () => {
     const user = userEvent.setup()
-    renderWithProviders(<SettingsPage />)
+    renderWithProviders(<SettingsMainPage />)
 
     await user.click(screen.getByRole('button', { name: 'Mainnet' }))
 
@@ -565,9 +499,112 @@ describe('SettingsPage', () => {
     )
   })
 
+  it('shows receiving descriptor when a wallet exists and session is unlocked', async () => {
+    const user = userEvent.setup()
+    mockWalletsState.data = [
+      { wallet_id: 1, name: 'Test', created_at: new Date().toISOString() },
+    ]
+    sessionStoreState.password = 'testpass'
+    renderWithProviders(<SettingsMainPage />)
+    expect(screen.getByText('Receiving descriptor')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(
+        screen.getByRole('button', { name: 'Show receiving descriptor' }),
+      ).toBeInTheDocument()
+    })
+    await user.click(screen.getByRole('button', { name: 'Show receiving descriptor' }))
+    expect(screen.getByText('tr([mock]/0/*)')).toBeInTheDocument()
+    expect(mockLoadWalletSecretsPayload).toHaveBeenCalled()
+  })
+
+  it('shows unlock hint for receiving descriptor when session has no password', () => {
+    mockWalletsState.data = [
+      { wallet_id: 1, name: 'Test', created_at: new Date().toISOString() },
+    ]
+    sessionStoreState.password = null
+    renderWithProviders(<SettingsMainPage />)
+    expect(
+      screen.getByText('Unlock your wallet to view the receiving descriptor.'),
+    ).toBeInTheDocument()
+  })
+  })
+
+  describe('SettingsSecurityPage', () => {
+  it('disables wallet backup export/import in near-zero security mode with hint', () => {
+    nearZeroSecurityState.active = true
+    renderWithProviders(<SettingsSecurityPage />)
+    expect(screen.getByRole('button', { name: 'Export wallet data' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Import wallet backup' })).toBeDisabled()
+    expect(
+      screen.getByText(/Wallet export and import are not available in near-zero security mode/i),
+    ).toBeInTheDocument()
+  })
+
+  it('disables Change app password when there are no wallets', () => {
+    mockWalletsState.data = []
+    renderWithProviders(<SettingsSecurityPage />)
+    expect(screen.getByRole('button', { name: 'Change app password' })).toBeDisabled()
+  })
+
+  it('enables Change app password when at least one wallet exists', () => {
+    mockWalletsState.data = [
+      { wallet_id: 1, name: 'Test', created_at: new Date().toISOString() },
+    ]
+    renderWithProviders(<SettingsSecurityPage />)
+    expect(screen.getByRole('button', { name: 'Change app password' })).toBeEnabled()
+  })
+
+  it('mentions lab data scope in Data Backups card', () => {
+    renderWithProviders(<SettingsSecurityPage />)
+    expect(
+      screen.getByText(/Lab data is tied to wallets on this device/i),
+    ).toBeInTheDocument()
+  })
+
+  it('shows Set a real password when near-zero security mode is active', () => {
+    nearZeroSecurityState.active = true
+    mockWalletsState.data = []
+    renderWithProviders(<SettingsSecurityPage />)
+    expect(screen.getByRole('button', { name: 'Set a real password' })).toBeEnabled()
+    expect(screen.queryByRole('button', { name: 'Change app password' })).not.toBeInTheDocument()
+    expect(screen.getByTestId('settings-security-card')).toHaveClass('border-destructive')
+  })
+
+  it('does not highlight security card when near-zero security mode is inactive', () => {
+    nearZeroSecurityState.active = false
+    mockWalletsState.data = []
+    renderWithProviders(<SettingsSecurityPage />)
+    expect(screen.getByTestId('settings-security-card')).not.toHaveClass('border-destructive')
+  })
+
+  it('shows complete data wipe card with destructive border', () => {
+    renderWithProviders(<SettingsSecurityPage />)
+    const card = screen.getByTestId('complete-data-wipe-card')
+    expect(card).toHaveClass('border-destructive')
+  })
+
+  it('keeps Delete all app data enabled in near-zero mode when there are no wallets', () => {
+    nearZeroSecurityState.active = true
+    mockWalletsState.data = []
+    renderWithProviders(<SettingsSecurityPage />)
+    expect(screen.getByRole('button', { name: 'Delete all app data' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Export wallet data' })).toBeDisabled()
+  })
+
+  it('disables Delete all app data when wallets exist but the wallet is locked', () => {
+    mockWalletsState.data = [
+      { wallet_id: 1, name: 'Test', created_at: new Date().toISOString() },
+    ]
+    walletStoreState.walletStatus = 'locked'
+    renderWithProviders(<SettingsSecurityPage />)
+    expect(screen.getByRole('button', { name: 'Delete all app data' })).toBeDisabled()
+  })
+  })
+
+  describe('SettingsFeaturesPage', () => {
   it('opens Mainnet access confirmation modal when enabling the toggle', async () => {
     const user = userEvent.setup()
-    renderWithProviders(<SettingsPage />)
+    renderWithProviders(<SettingsFeaturesPage />)
 
     await user.click(screen.getByRole('switch', { name: 'Enable Mainnet access' }))
 
@@ -581,7 +618,7 @@ describe('SettingsPage', () => {
 
   it('enables Activate access after acknowledging risks', async () => {
     const user = userEvent.setup()
-    renderWithProviders(<SettingsPage />)
+    renderWithProviders(<SettingsFeaturesPage />)
 
     await user.click(screen.getByRole('switch', { name: 'Enable Mainnet access' }))
     await user.click(
@@ -595,5 +632,30 @@ describe('SettingsPage', () => {
     await user.click(activate)
 
     expect(featureStoreState.setMainnetAccessEnabled).toHaveBeenCalledWith(true)
+  })
+  })
+
+  describe('SettingsAboutPage', () => {
+  it('shows About, legal hub, and privacy policy link', () => {
+    renderWithProviders(<SettingsAboutPage />)
+    expect(screen.getByRole('heading', { name: 'About', level: 2 })).toBeInTheDocument()
+    expect(document.getElementById('legal-notice')).toBeTruthy()
+    const privacyPolicyLink = screen.getByRole('link', { name: /privacy policy/i })
+    expect(privacyPolicyLink).toHaveAttribute('href', '/privacy')
+  })
+
+  it('shows Developer Contact Info card', () => {
+    renderWithProviders(<SettingsAboutPage />)
+    const devContactHeading = screen.getByText('Developer Contact Info')
+    expect(devContactHeading).toBeInTheDocument()
+    const devContactCard = devContactHeading.closest('[data-slot="card"]')
+    expect(devContactCard).toBeTruthy()
+    expect(within(devContactCard as HTMLElement).getByText('Michael Hrenka')).toBeInTheDocument()
+    expect(
+      within(devContactCard as HTMLElement).getByRole('link', {
+        name: 'michael.hrenka@protonmail.com',
+      }),
+    ).toBeInTheDocument()
+  })
   })
 })

@@ -11,7 +11,7 @@ interface AppDescriptionProps {
 export function AppDescription({ className }: AppDescriptionProps) {
   return (
     <p className={cn('text-muted-foreground', className)}>
-      A{' '}
+      An educational{' '}
       <InfomodeWrapper
         as="span"
         infoId="app-description-self-custody"
@@ -36,7 +36,7 @@ export function AppDescription({ className }: AppDescriptionProps) {
       >
         wallet
       </InfomodeWrapper>{' '}
-      in your browser.
+      in your browser and mobile device.
     </p>
   )
 }

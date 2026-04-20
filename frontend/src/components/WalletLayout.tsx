@@ -6,6 +6,10 @@ import {
   ArrowUpRight,
   ArrowLeftRight,
   Settings,
+  Settings2,
+  Shield,
+  Sparkles,
+  Info,
   Wallet,
   FlaskConical,
   BookOpen,
@@ -64,7 +68,12 @@ const PRIMARY_NAV_ITEMS: PrimaryNavItem[] = [
     icon: BookOpen,
     isActive: (pathname) => pathname.startsWith('/library'),
   },
-  { to: '/settings', label: 'Settings', icon: Settings },
+  {
+    to: '/settings',
+    label: 'Settings',
+    icon: Settings,
+    isActive: (pathname) => pathname.startsWith('/settings'),
+  },
 ]
 
 type SectionSubNavItem =
@@ -119,6 +128,38 @@ const LIBRARY_SUB_NAV_ITEMS: SectionSubNavItem[] = [
     label: 'History',
     icon: History,
     isActive: (pathname) => pathname === '/library/history',
+  },
+]
+
+const SETTINGS_SUB_NAV_ITEMS: SectionSubNavItem[] = [
+  {
+    kind: 'pathname',
+    to: '/settings',
+    label: 'Main',
+    icon: Settings2,
+    isActive: (pathname) =>
+      pathname === '/settings' || pathname === '/settings/',
+  },
+  {
+    kind: 'pathname',
+    to: '/settings/security',
+    label: 'Security',
+    icon: Shield,
+    isActive: (pathname) => pathname === '/settings/security',
+  },
+  {
+    kind: 'pathname',
+    to: '/settings/features',
+    label: 'Features',
+    icon: Sparkles,
+    isActive: (pathname) => pathname === '/settings/features',
+  },
+  {
+    kind: 'pathname',
+    to: '/settings/about',
+    label: 'About',
+    icon: Info,
+    isActive: (pathname) => pathname === '/settings/about',
   },
 ]
 
@@ -191,6 +232,10 @@ function isLibrarySectionPath(pathname: string): boolean {
 
 function isLabSectionPath(pathname: string): boolean {
   return pathname.startsWith('/lab')
+}
+
+function isSettingsSectionPath(pathname: string): boolean {
+  return pathname.startsWith('/settings')
 }
 
 const NAV_LINK_CLASS =
@@ -332,6 +377,7 @@ function BottomNavigationChrome() {
   const showLibrarySubNav = isLibrarySectionPath(location.pathname)
   const showWalletSubNav = isWalletSectionPath(location.pathname)
   const showLabSubNav = isLabSectionPath(location.pathname)
+  const showSettingsSubNav = isSettingsSectionPath(location.pathname)
 
   return (
     <>
@@ -344,6 +390,9 @@ function BottomNavigationChrome() {
       {showLabSubNav && (
         <SectionSubNav ariaLabel="Lab" items={LAB_SUB_NAV_ITEMS} />
       )}
+      {showSettingsSubNav && (
+        <SectionSubNav ariaLabel="Settings" items={SETTINGS_SUB_NAV_ITEMS} />
+      )}
       <PrimarySectionNav />
     </>
   )
@@ -355,6 +404,7 @@ export function WalletLayout({ children }: WalletLayoutProps) {
   const showLibrarySubNav = !isSetupRoute && isLibrarySectionPath(location.pathname)
   const showWalletSubNav = !isSetupRoute && isWalletSectionPath(location.pathname)
   const showLabSubNav = !isSetupRoute && isLabSectionPath(location.pathname)
+  const showSettingsSubNav = !isSetupRoute && isSettingsSectionPath(location.pathname)
 
   const activeWalletId = useWalletStore((s) => s.activeWalletId)
   const sessionPassword = useSessionStore((s) => s.password)
@@ -412,7 +462,10 @@ export function WalletLayout({ children }: WalletLayoutProps) {
         className={cn(
           'mx-auto max-w-screen-xl px-4 py-6',
           !isSetupRoute &&
-            (showWalletSubNav || showLibrarySubNav || showLabSubNav
+            (showWalletSubNav ||
+            showLibrarySubNav ||
+            showLabSubNav ||
+            showSettingsSubNav
               ? MAIN_BOTTOM_PADDING_WALLET_SECTION_CLASS
               : MAIN_BOTTOM_PADDING_PRIMARY_ONLY_CLASS),
         )}

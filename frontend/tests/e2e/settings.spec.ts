@@ -1,6 +1,8 @@
 import { test, expect } from '@playwright/test'
 import { createWalletViaUI } from './helpers/wallet-setup'
 import {
+  openSettingsFeaturesTab,
+  openSettingsMainTab,
   waitForSettingsNetworkSwitchComplete,
   waitForSettingsNetworkModeButtonSelected,
 } from './helpers/settings-waits'
@@ -31,11 +33,13 @@ test.describe('Settings Page', () => {
     await page.getByRole('link', { name: /settings/i }).click()
     await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
 
+    await openSettingsFeaturesTab(page)
     const segwitFeatureSwitch = page.getByRole('switch', {
       name: 'Enable SegWit address options and labels',
     })
     await segwitFeatureSwitch.scrollIntoViewIfNeeded()
     await segwitFeatureSwitch.click()
+    await openSettingsMainTab(page)
     await expect(
       page.getByRole('button', { name: 'Taproot (BIP86)' }),
     ).toBeVisible()
@@ -52,11 +56,13 @@ test.describe('Settings Page', () => {
     await expect(page.getByText(/Esplora Endpoint/)).toBeVisible()
 
     // Switch to Regtest first: HTTP URLs are only valid for regtest (HTTPS required for others)
+    await openSettingsFeaturesTab(page)
     const regtestModeSwitch = page.getByRole('switch', {
       name: 'Enable Regtest mode for developers',
     })
     await regtestModeSwitch.scrollIntoViewIfNeeded()
     await regtestModeSwitch.click()
+    await openSettingsMainTab(page)
 
     await page.getByRole('button', { name: 'Regtest' }).click()
     await waitForSettingsNetworkSwitchComplete(page)

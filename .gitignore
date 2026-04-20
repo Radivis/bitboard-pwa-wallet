@@ -11,11 +11,8 @@
 
 /target
 .env
-.env.legal-notice.de
-.env.legal-notice.en
-# Legacy single-file imprint (replaced by .env.legal-notice.de / .en)
+# Legacy single-file imprint
 .env.imprint
-.env.contacts
 !/scripts/README.md
 # Coverage reports
 lcov.info
@@ -29,3 +26,6 @@ lcov.info
 /frontend/tests/logs/
 # Generated WASM package (output of wasm-pack build)
 /frontend/src/wasm-pkg/
+
+# Vercel CLI link / local pull (CI uses VERCEL_* secrets instead)
+/frontend/.vercel/

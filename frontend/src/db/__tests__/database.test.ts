@@ -2,6 +2,7 @@ import { beforeEach, afterEach, describe, expect, it } from 'vitest'
 import { sql } from 'kysely'
 import type { Kysely } from 'kysely'
 import type { Database } from '../schema'
+import { readBitboardWalletVersion } from '@common/bitboard-wallet-version'
 import { APP_SETTINGS_LAST_OPENED_AT_KEY } from '@/lib/app-session-metadata'
 import { ARGON2_KDF_PHC_CI } from '@/lib/kdf-phc-constants'
 import { createTestDatabase } from '../test-helpers'
@@ -134,7 +135,10 @@ describe('SQLite Database', () => {
     })
 
     it('upserts a setting with onConflict', async () => {
-      await walletDb.insertInto('settings').values({ key: 'app-version', value: '0.1.0' }).execute()
+      await walletDb
+        .insertInto('settings')
+        .values({ key: 'app-version', value: readBitboardWalletVersion() })
+        .execute()
       await walletDb
         .insertInto('settings')
         .values({ key: 'app-version', value: '0.2.0' })

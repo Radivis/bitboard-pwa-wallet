@@ -108,3 +108,38 @@ export async function sumMainnetOnChainSatsForWallet(params: {
   await restoreActiveSubWalletView()
   return balanceSum
 }
+
+export type MainnetPositiveWalletRow = {
+  walletId: number
+  /** Display name from the wallets table */
+  name: string
+  /** Sum of on-chain mainnet sats for that wallet (BDK-reported; Lightning not included). */
+  totalSats: number
+}
+
+/**
+ * Probes each wallet in order; same side effects per call as {@link sumMainnetOnChainSatsForWallet}.
+ * Returns only wallets with a positive mainnet on-chain total.
+ */
+export async function listWalletsWithPositiveMainnetOnChainBalance(params: {
+  password: string
+  wallets: { wallet_id: number; name: string }[]
+}): Promise<MainnetPositiveWalletRow[]> {
+  const { password, wallets } = params
+  const rows: MainnetPositiveWalletRow[] = []
+  for (const w of wallets) {
+    const totalSats = await sumMainnetOnChainSatsForWallet({
+      password,
+      walletId: w.wallet_id,
+    })
+    if (totalSats > 0) {
+      const trimmed = w.name.trim()
+      rows.push({
+        walletId: w.wallet_id,
+        name: trimmed.length > 0 ? trimmed : `Wallet ${w.wallet_id}`,
+        totalSats,
+      })
+    }
+  }
+  return rows
+}

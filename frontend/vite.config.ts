@@ -1,15 +1,23 @@
 import fs from 'node:fs'
 import path from 'path'
 import { fileURLToPath } from 'node:url'
-import { defineConfig } from 'vite'
+import { defineConfig, type Plugin } from 'vite'
+import { readBitboardWalletVersion } from './common/bitboard-wallet-version'
 import { tanstackRouter } from '@tanstack/router-plugin/vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
 import wasm from 'vite-plugin-wasm'
-import { viteContactsDefine, viteLegalNoticeDefine } from '../load-vite-env.mjs'
-
 const projectRoot = path.dirname(fileURLToPath(import.meta.url))
+
+/** Safe segment for Workbox `cacheId` (alphanumeric + hyphens). */
+function sanitizeWorkboxCacheIdSegment(version: string): string {
+  const collapsed = version.replace(/[^a-zA-Z0-9-]+/g, '-').replace(/-+/g, '-')
+  const trimmed = collapsed.replace(/^-|-$/g, '')
+  return trimmed.length > 0 ? trimmed : 'unknown'
+}
+
+const workboxCacheId = `bitboard-wallet-${sanitizeWorkboxCacheIdSegment(readBitboardWalletVersion())}`
 
 /** Escape a string for use inside a RegExp (filename slug segments). */
 function escapeRegExpSegment(s: string): string {
@@ -20,16 +28,6 @@ function escapeRegExpSegment(s: string): string {
  * TanStack Router matches `routeFileIgnorePattern` against each filename under `routes/`.
  * TSX modules in `src/routes/library/articles/` are article content, not routes — discover them from disk so new files do not require manual regex updates.
  */
-function readAppVersion(): string {
-  try {
-    const pkgPath = path.join(projectRoot, 'package.json')
-    const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8')) as { version?: string }
-    return typeof pkg.version === 'string' ? pkg.version : '0.0.0'
-  } catch {
-    return '0.0.0'
-  }
-}
-
 function libraryArticleRouteIgnorePattern(): string {
   const articlesDir = path.join(projectRoot, 'src/routes/library/articles')
   let tsxFiles: string[]
@@ -45,16 +43,30 @@ function libraryArticleRouteIgnorePattern(): string {
   return `__tests__|^(?:${escapedBasenames.join('|')})\\.tsx$`
 }
 
+/** Fail `vite build` if fast Argon2 (CI) is enabled for a production bundle. */
+function rejectArgon2CiInProductionBuild(): Plugin {
+  return {
+    name: 'reject-argon2-ci-in-production-build',
+    configResolved(config) {
+      if (config.mode !== 'production') return
+      if (process.env.VITE_ARGON2_CI === '1') {
+        throw new Error(
+          'Security: VITE_ARGON2_CI=1 is not allowed in production builds. Use fast Argon2 only in dev/CI (non-production Vite mode).',
+        )
+      }
+    },
+  }
+}
+
 export default defineConfig({
   define: {
     // Expose CI to app so we can disable dev overlays (e.g. TanStack Router Devtools)
     // that intercept pointer events and break E2E tests.
     'import.meta.env.CI': JSON.stringify(!!process.env.CI),
-    'import.meta.env.VITE_APP_VERSION': JSON.stringify(readAppVersion()),
-    ...viteLegalNoticeDefine(),
-    ...viteContactsDefine(),
+    'import.meta.env.VITE_APP_VERSION': JSON.stringify(readBitboardWalletVersion()),
   },
   plugins: [
+    rejectArgon2CiInProductionBuild(),
     tanstackRouter({
       target: 'react',
       autoCodeSplitting: true,
@@ -94,6 +106,9 @@ export default defineConfig({
         ],
       },
       workbox: {
+        // Version-scoped so a new release gets a fresh precache namespace (see repository root VERSION).
+        cacheId: workboxCacheId,
+        cleanupOutdatedCaches: true,
         // Default 2 MiB is too small for main WASM (e.g. bitboard_crypto ~2.2 MiB after Vite 8 output).
         maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2,wasm}'],
@@ -134,6 +149,18 @@ export default defineConfig({
     alias: {
       '@': path.resolve(projectRoot, './src'),
       '@common': path.resolve(projectRoot, './common'),
+      '@legal-locale': path.resolve(projectRoot, './src/lib/legal-locale.ts'),
+      // Cross-project-safe aliases — the same module identifiers also resolve
+      // from the landing-page Vite/TS configs, so files under `frontend/common/`
+      // can import them without depending on `@/...` (which differs per project root).
+      '@legal-entity-fields': path.resolve(
+        projectRoot,
+        './src/components/LegalEntityFields.tsx',
+      ),
+      '@legal-entity': path.resolve(
+        projectRoot,
+        './src/legal-entity/legal-entity.ts',
+      ),
     },
   },
   server: {
@@ -170,6 +197,7 @@ export default defineConfig({
     plugins: () => [wasm()],
   },
   build: {
+    // Default Rollup output uses content-hashed filenames under `assets/`; those pair with long Cache-Control on Vercel.
     outDir: 'dist',
     target: 'esnext',
   },

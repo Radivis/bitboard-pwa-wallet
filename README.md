@@ -31,7 +31,7 @@ To report a security vulnerability, use **GitHub private vulnerability reporting
 
 ## Principles
 
-**Please note that the features mentioned in this section are planned, but not fully implemented yet. They are mentioned to communicate the spirit and direction of this app.**
+**Please note that the features mentioned in this section are planned, but not fully implemented yet. They are mentioned to communicate the spirit and direction of this app. Not every principle can be achieved fully - they are meant as aspirational ideals.**
 
 ### Simplicity First
 Start with the absolute basics and unlock additional features deliberately, as you understand the technology better.
@@ -49,7 +49,7 @@ You decide how this wallet works. Don't like the default behavior? Then change t
 A hot wallet is faced with certain risks inherently. Use a hardware wallet for better security and manage your funds with Bitboard. Or couple Bitboard with an external always-on Lightning wallet to never miss a payment.
 
 ## Technology
-Bitboard is a PWA using React for the frontend. All crypto operations are performed in a separate web worker using WASM. The WASM code is generated using Rust as the source language. A second web worker deals with persisting the data in an in-browser SQLite database using the OPFS storage. Keys and other sensitive data are encrypted by the crypto web worker using AES-256-GCM and Argon2id before they are stored.
+Bitboard is a PWA using React for the frontend. All genuine "crypto" operations are performed in a separate web worker using WASM. A second web worker is responsible for encrypting and decrypting secrets only. The WASM code is generated using Rust as the source language. A third web worker (via Kysely) deals with persisting the data in an in-browser SQLite database using the OPFS storage. Keys and other sensitive data are encrypted by the encryption web worker using AES-256-GCM and Argon2id before they are stored.
 
 This approach enables adequate performance and security for a web / PWA wallet. For even better security, please choose one of the supported upgrade paths when available.
 
@@ -61,12 +61,14 @@ Planned work is grouped into beta stages. Ordering within a stage is approximate
 
 ### Early Beta Stage
 
+- Cleaning up the codebase after the rapid iteration that lead to the current and somewhat messy state
 - Fee estimation
 - Currency conversion
 - Use of global state for forms, so switching pages does not reset them
 - Raw hex data inspector
 - Support for BIP-39 passphrase ("25th word")
 - Coin control (UTXO selection)
+- UTXO labeling
 - Additional wallet accounts
 
 ### Late Beta Stage

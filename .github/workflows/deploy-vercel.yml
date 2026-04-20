@@ -1,0 +1,65 @@
+# Production deploy: build on GitHub Actions (Rust + wasm-pack + Vite), host on Vercel via prebuilt output.
+# One-time Vercel + GitHub secrets: docs/deploy-vercel.md
+name: Deploy to Vercel (production)
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-vercel-production
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Build and deploy prebuilt
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      # Never use fast Argon2id in production; override repo/org Actions vars if mis-set
+      VITE_ARGON2_CI: ''
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain (wasm32)
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          target: wasm32-unknown-unknown
+
+      - name: Install wasm-pack
+        uses: jetli/wasm-pack-action@v0.4.0
+
+      # `vercel build` runs the project Build Command (`npm run build`), which includes
+      # `build:wasm` + `tsc` + `vite build`. Rust + wasm-pack must be on PATH first.
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install Vercel CLI
+        run: npm install -g vercel@51.8.0
+
+      - name: Pull Vercel environment (production)
+        run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
+
+      - name: Vercel build (prebuilt output)
+        run: vercel build --token="$VERCEL_TOKEN" --prod
+
+      - name: Deploy prebuilt to production
+        run: vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN"

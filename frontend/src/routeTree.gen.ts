@@ -18,6 +18,7 @@ import { Route as LabRouteImport } from './routes/lab'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as WalletIndexRouteImport } from './routes/wallet/index'
 import { Route as SetupIndexRouteImport } from './routes/setup/index'
+import { Route as SettingsIndexRouteImport } from './routes/settings/index'
 import { Route as LibraryIndexRouteImport } from './routes/library/index'
 import { Route as LabIndexRouteImport } from './routes/lab/index'
 import { Route as WalletWalletsRouteImport } from './routes/wallet/wallets'
@@ -26,6 +27,9 @@ import { Route as WalletReceiveRouteImport } from './routes/wallet/receive'
 import { Route as WalletManagementRouteImport } from './routes/wallet/management'
 import { Route as SetupImportRouteImport } from './routes/setup/import'
 import { Route as SetupCreateRouteImport } from './routes/setup/create'
+import { Route as SettingsSecurityRouteImport } from './routes/settings/security'
+import { Route as SettingsFeaturesRouteImport } from './routes/settings/features'
+import { Route as SettingsAboutRouteImport } from './routes/settings/about'
 import { Route as LibraryTagsRouteImport } from './routes/library/tags'
 import { Route as LibraryHistoryRouteImport } from './routes/library/history'
 import { Route as LibraryFavoritesRouteImport } from './routes/library/favorites'
@@ -83,6 +87,11 @@ const SetupIndexRoute = SetupIndexRouteImport.update({
   path: '/',
   getParentRoute: () => SetupRoute,
 } as any)
+const SettingsIndexRoute = SettingsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => SettingsRoute,
+} as any)
 const LibraryIndexRoute = LibraryIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -122,6 +131,21 @@ const SetupCreateRoute = SetupCreateRouteImport.update({
   id: '/create',
   path: '/create',
   getParentRoute: () => SetupRoute,
+} as any)
+const SettingsSecurityRoute = SettingsSecurityRouteImport.update({
+  id: '/security',
+  path: '/security',
+  getParentRoute: () => SettingsRoute,
+} as any)
+const SettingsFeaturesRoute = SettingsFeaturesRouteImport.update({
+  id: '/features',
+  path: '/features',
+  getParentRoute: () => SettingsRoute,
+} as any)
+const SettingsAboutRoute = SettingsAboutRouteImport.update({
+  id: '/about',
+  path: '/about',
+  getParentRoute: () => SettingsRoute,
 } as any)
 const LibraryTagsRoute = LibraryTagsRouteImport.update({
   id: '/tags',
@@ -184,7 +208,7 @@ export interface FileRoutesByFullPath {
   '/lab': typeof LabRouteWithChildren
   '/library': typeof LibraryRouteWithChildren
   '/privacy': typeof PrivacyRoute
-  '/settings': typeof SettingsRoute
+  '/settings': typeof SettingsRouteWithChildren
   '/setup': typeof SetupRouteWithChildren
   '/wallet': typeof WalletRouteWithChildren
   '/lab/blocks': typeof LabBlocksRoute
@@ -194,6 +218,9 @@ export interface FileRoutesByFullPath {
   '/library/favorites': typeof LibraryFavoritesRoute
   '/library/history': typeof LibraryHistoryRoute
   '/library/tags': typeof LibraryTagsRoute
+  '/settings/about': typeof SettingsAboutRoute
+  '/settings/features': typeof SettingsFeaturesRoute
+  '/settings/security': typeof SettingsSecurityRoute
   '/setup/create': typeof SetupCreateRoute
   '/setup/import': typeof SetupImportRoute
   '/wallet/management': typeof WalletManagementRoute
@@ -202,6 +229,7 @@ export interface FileRoutesByFullPath {
   '/wallet/wallets': typeof WalletWalletsRoute
   '/lab/': typeof LabIndexRoute
   '/library/': typeof LibraryIndexRoute
+  '/settings/': typeof SettingsIndexRoute
   '/setup/': typeof SetupIndexRoute
   '/wallet/': typeof WalletIndexRoute
   '/lab/block/$height': typeof LabBlockHeightRoute
@@ -212,7 +240,6 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/privacy': typeof PrivacyRoute
-  '/settings': typeof SettingsRoute
   '/lab/blocks': typeof LabBlocksRoute
   '/lab/control': typeof LabControlRoute
   '/lab/layer-2': typeof LabLayer2Route
@@ -220,6 +247,9 @@ export interface FileRoutesByTo {
   '/library/favorites': typeof LibraryFavoritesRoute
   '/library/history': typeof LibraryHistoryRoute
   '/library/tags': typeof LibraryTagsRoute
+  '/settings/about': typeof SettingsAboutRoute
+  '/settings/features': typeof SettingsFeaturesRoute
+  '/settings/security': typeof SettingsSecurityRoute
   '/setup/create': typeof SetupCreateRoute
   '/setup/import': typeof SetupImportRoute
   '/wallet/management': typeof WalletManagementRoute
@@ -228,6 +258,7 @@ export interface FileRoutesByTo {
   '/wallet/wallets': typeof WalletWalletsRoute
   '/lab': typeof LabIndexRoute
   '/library': typeof LibraryIndexRoute
+  '/settings': typeof SettingsIndexRoute
   '/setup': typeof SetupIndexRoute
   '/wallet': typeof WalletIndexRoute
   '/lab/block/$height': typeof LabBlockHeightRoute
@@ -241,7 +272,7 @@ export interface FileRoutesById {
   '/lab': typeof LabRouteWithChildren
   '/library': typeof LibraryRouteWithChildren
   '/privacy': typeof PrivacyRoute
-  '/settings': typeof SettingsRoute
+  '/settings': typeof SettingsRouteWithChildren
   '/setup': typeof SetupRouteWithChildren
   '/wallet': typeof WalletRouteWithChildren
   '/lab/blocks': typeof LabBlocksRoute
@@ -251,6 +282,9 @@ export interface FileRoutesById {
   '/library/favorites': typeof LibraryFavoritesRoute
   '/library/history': typeof LibraryHistoryRoute
   '/library/tags': typeof LibraryTagsRoute
+  '/settings/about': typeof SettingsAboutRoute
+  '/settings/features': typeof SettingsFeaturesRoute
+  '/settings/security': typeof SettingsSecurityRoute
   '/setup/create': typeof SetupCreateRoute
   '/setup/import': typeof SetupImportRoute
   '/wallet/management': typeof WalletManagementRoute
@@ -259,6 +293,7 @@ export interface FileRoutesById {
   '/wallet/wallets': typeof WalletWalletsRoute
   '/lab/': typeof LabIndexRoute
   '/library/': typeof LibraryIndexRoute
+  '/settings/': typeof SettingsIndexRoute
   '/setup/': typeof SetupIndexRoute
   '/wallet/': typeof WalletIndexRoute
   '/lab/block/$height': typeof LabBlockHeightRoute
@@ -283,6 +318,9 @@ export interface FileRouteTypes {
     | '/library/favorites'
     | '/library/history'
     | '/library/tags'
+    | '/settings/about'
+    | '/settings/features'
+    | '/settings/security'
     | '/setup/create'
     | '/setup/import'
     | '/wallet/management'
@@ -291,6 +329,7 @@ export interface FileRouteTypes {
     | '/wallet/wallets'
     | '/lab/'
     | '/library/'
+    | '/settings/'
     | '/setup/'
     | '/wallet/'
     | '/lab/block/$height'
@@ -301,7 +340,6 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/privacy'
-    | '/settings'
     | '/lab/blocks'
     | '/lab/control'
     | '/lab/layer-2'
@@ -309,6 +347,9 @@ export interface FileRouteTypes {
     | '/library/favorites'
     | '/library/history'
     | '/library/tags'
+    | '/settings/about'
+    | '/settings/features'
+    | '/settings/security'
     | '/setup/create'
     | '/setup/import'
     | '/wallet/management'
@@ -317,6 +358,7 @@ export interface FileRouteTypes {
     | '/wallet/wallets'
     | '/lab'
     | '/library'
+    | '/settings'
     | '/setup'
     | '/wallet'
     | '/lab/block/$height'
@@ -339,6 +381,9 @@ export interface FileRouteTypes {
     | '/library/favorites'
     | '/library/history'
     | '/library/tags'
+    | '/settings/about'
+    | '/settings/features'
+    | '/settings/security'
     | '/setup/create'
     | '/setup/import'
     | '/wallet/management'
@@ -347,6 +392,7 @@ export interface FileRouteTypes {
     | '/wallet/wallets'
     | '/lab/'
     | '/library/'
+    | '/settings/'
     | '/setup/'
     | '/wallet/'
     | '/lab/block/$height'
@@ -360,7 +406,7 @@ export interface RootRouteChildren {
   LabRoute: typeof LabRouteWithChildren
   LibraryRoute: typeof LibraryRouteWithChildren
   PrivacyRoute: typeof PrivacyRoute
-  SettingsRoute: typeof SettingsRoute
+  SettingsRoute: typeof SettingsRouteWithChildren
   SetupRoute: typeof SetupRouteWithChildren
   WalletRoute: typeof WalletRouteWithChildren
 }
@@ -430,6 +476,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SetupIndexRouteImport
       parentRoute: typeof SetupRoute
     }
+    '/settings/': {
+      id: '/settings/'
+      path: '/'
+      fullPath: '/settings/'
+      preLoaderRoute: typeof SettingsIndexRouteImport
+      parentRoute: typeof SettingsRoute
+    }
     '/library/': {
       id: '/library/'
       path: '/'
@@ -485,6 +538,27 @@ declare module '@tanstack/react-router' {
       fullPath: '/setup/create'
       preLoaderRoute: typeof SetupCreateRouteImport
       parentRoute: typeof SetupRoute
+    }
+    '/settings/security': {
+      id: '/settings/security'
+      path: '/security'
+      fullPath: '/settings/security'
+      preLoaderRoute: typeof SettingsSecurityRouteImport
+      parentRoute: typeof SettingsRoute
+    }
+    '/settings/features': {
+      id: '/settings/features'
+      path: '/features'
+      fullPath: '/settings/features'
+      preLoaderRoute: typeof SettingsFeaturesRouteImport
+      parentRoute: typeof SettingsRoute
+    }
+    '/settings/about': {
+      id: '/settings/about'
+      path: '/about'
+      fullPath: '/settings/about'
+      preLoaderRoute: typeof SettingsAboutRouteImport
+      parentRoute: typeof SettingsRoute
     }
     '/library/tags': {
       id: '/library/tags'
@@ -609,6 +683,24 @@ const LibraryRouteChildren: LibraryRouteChildren = {
 const LibraryRouteWithChildren =
   LibraryRoute._addFileChildren(LibraryRouteChildren)
 
+interface SettingsRouteChildren {
+  SettingsAboutRoute: typeof SettingsAboutRoute
+  SettingsFeaturesRoute: typeof SettingsFeaturesRoute
+  SettingsSecurityRoute: typeof SettingsSecurityRoute
+  SettingsIndexRoute: typeof SettingsIndexRoute
+}
+
+const SettingsRouteChildren: SettingsRouteChildren = {
+  SettingsAboutRoute: SettingsAboutRoute,
+  SettingsFeaturesRoute: SettingsFeaturesRoute,
+  SettingsSecurityRoute: SettingsSecurityRoute,
+  SettingsIndexRoute: SettingsIndexRoute,
+}
+
+const SettingsRouteWithChildren = SettingsRoute._addFileChildren(
+  SettingsRouteChildren,
+)
+
 interface SetupRouteChildren {
   SetupCreateRoute: typeof SetupCreateRoute
   SetupImportRoute: typeof SetupImportRoute
@@ -647,7 +739,7 @@ const rootRouteChildren: RootRouteChildren = {
   LabRoute: LabRouteWithChildren,
   LibraryRoute: LibraryRouteWithChildren,
   PrivacyRoute: PrivacyRoute,
-  SettingsRoute: SettingsRoute,
+  SettingsRoute: SettingsRouteWithChildren,
   SetupRoute: SetupRouteWithChildren,
   WalletRoute: WalletRouteWithChildren,
 }

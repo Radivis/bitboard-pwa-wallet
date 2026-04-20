@@ -31,7 +31,7 @@ export function MigrationFailureReportModal({
   const handleGoToSettings = () => {
     onOpenChange(false)
     void navigate({
-      to: '/settings',
+      to: '/settings/security',
       search: { section: 'data-backups' },
     })
   }

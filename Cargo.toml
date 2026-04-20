@@ -1,3 +1,6 @@
+[workspace.package]
+version = "0.1.0-alpha"
+
 [workspace]
 members = ["crypto", "bitboard-encryption", "bitboard-lightning"]
 resolver = "2"

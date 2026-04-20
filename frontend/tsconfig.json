@@ -17,7 +17,10 @@
     /* Path aliases (no baseUrl — TS 6 deprecates baseUrl used only to prefix paths) */
     "paths": {
       "@/*": ["./src/*"],
-      "@common/*": ["./common/*"]
+      "@common/*": ["./common/*"],
+      "@legal-locale": ["./src/lib/legal-locale.ts"],
+      "@legal-entity-fields": ["./src/components/LegalEntityFields.tsx"],
+      "@legal-entity": ["./src/legal-entity/legal-entity.ts"]
     },
 
     /* Linting */
@@ -27,6 +30,5 @@
     "noFallthroughCasesInSwitch": true
   },
   "include": ["src", "common/**/*.ts", "common/**/*.tsx"],
-  "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx", "src/**/*.spec.ts", "src/**/*.spec.tsx", "src/test-utils"],
-  "references": [{ "path": "./tsconfig.node.json" }]
+  "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx", "src/**/*.spec.ts", "src/**/*.spec.tsx", "src/test-utils"]
 }

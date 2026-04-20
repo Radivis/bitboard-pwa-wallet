@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test'
 import { LabOwnerType } from '@/lib/lab-owner-type'
 import { importWalletViaUI, TEST_MNEMONIC, TEST_PASSWORD } from './helpers/wallet-setup'
 import {
+  clickMainNavLab,
   switchToLab,
   resetLab,
   mineBlocksInLab,
@@ -95,9 +96,7 @@ test.describe('Lab', { tag: '@lab' }, () => {
   })
 
   test('transactions page explains random generation requires entities', async ({ page }) => {
-    await page.getByRole('link', { name: /settings/i }).click()
-    await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
-    await page.getByRole('link', { name: 'Manage lab' }).click()
+    await clickMainNavLab(page)
     await expect(page.getByRole('heading', { name: 'Blocks' })).toBeVisible({
       timeout: 15000,
     })
@@ -441,9 +440,7 @@ test.describe('Lab', { tag: '@lab' }, () => {
   })
 
   test('block details routes and mempool card behavior', async ({ page }) => {
-    await page.getByRole('link', { name: /settings/i }).click()
-    await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
-    await page.getByRole('link', { name: 'Manage lab' }).click()
+    await clickMainNavLab(page)
     await expect(page.getByRole('heading', { name: 'Blocks' })).toBeVisible({
       timeout: 15000,
     })

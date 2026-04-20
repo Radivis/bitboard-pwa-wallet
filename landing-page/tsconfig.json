@@ -22,6 +22,7 @@
     "moduleResolution": "bundler",
     "isolatedModules": true,
     "moduleDetection": "force",
+    "types": ["node"],
     "allowJs": true,
     "jsx": "react-jsx",
     "paths": {
@@ -31,8 +32,11 @@
       "@legal-locale": [
         "../frontend/src/lib/legal-locale.ts"
       ],
-      "@legal-notice-display": [
-        "../frontend/src/lib/legal-notice-display.ts"
+      "@legal-entity-fields": [
+        "../frontend/src/components/LegalEntityFields.tsx"
+      ],
+      "@legal-entity": [
+        "../frontend/src/legal-entity/legal-entity.ts"
       ],
       "@common/*": [
         "../frontend/common/*"

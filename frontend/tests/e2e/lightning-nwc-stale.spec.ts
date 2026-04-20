@@ -2,6 +2,7 @@ import { test, expect, type Page } from '@playwright/test'
 import { createWalletViaUI } from './helpers/wallet-setup'
 import { goToWalletTab } from './helpers/wallet-nav'
 import {
+  openSettingsFeaturesTab,
   waitForSettingsNetworkModeButtonSelected,
   waitForSettingsNetworkSwitchComplete,
 } from './helpers/settings-waits'
@@ -54,6 +55,7 @@ test.describe('Lightning NWC stale cache @nwc', () => {
     await createWalletViaUI(page)
 
     await switchToNetworkInSettings(page, 'Signet')
+    await openSettingsFeaturesTab(page)
     const lightningToggle = page.getByRole('switch', {
       name: 'Enable Lightning Network',
     })
