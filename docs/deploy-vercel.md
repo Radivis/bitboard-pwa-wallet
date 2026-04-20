@@ -45,12 +45,41 @@ flowchart LR
 
 ### 2. Stop duplicate or failing builds on Vercel
 
-If the repo stays connected to Vercel, **Git pushes can still trigger a Vercel-side build** that does not match the GHA toolchain unless you add the optional WASM install script. To avoid **two** deploys or a **redundant** slow/failing build:
+If the repo stays connected to Vercel, pushes to GitHub can still create **Vercel-driven deployments** (with a build on Vercel’s infrastructure) in addition to the deployment from GitHub Actions. That toolchain usually **does not** match what CI does (Rust, `wasm-pack`, same Node as GHA), so you either maintain a separate “build on Vercel” setup or you **stop Vercel from building on Git** and rely on **prebuilt** deploys from the Action only.
 
-- **Disable** automatic production deployments from Git for this project, **or**
-- Set an **Ignored Build Step** that always skips (e.g. `exit 0`),
+#### What happens when the project is linked to Git
 
-so **only** the GitHub Action performs production releases.
+With a [connected Git repository](https://vercel.com/docs/git), Vercel **creates a new deployment for each new commit** pushed to that repo (subject to [Ignored Build Step](#option-b-ignore-git-driven-builds-keep-the-repo-connected) behavior and deduplication: if that commit was already deployed, Vercel may reuse the existing deployment instead of building again). In practice:
+
+- **Production:** Pushes to your **production branch** (often `main`) trigger **production** deployments.
+- **Previews:** Other branches and pull requests typically get **preview** deployments and preview URLs.
+
+That is **independent** of GitHub Actions: a single `git push` can therefore produce **two** flows you care about unless you configure one of the options below — (1) a Vercel Git deployment, and (2) your workflow’s `vercel deploy --prebuilt --prod`.
+
+#### Option A: Disconnect Git (simplest: no automatic Git deploys at all)
+
+1. In the [Vercel dashboard](https://vercel.com/dashboard), open the **project** → **Settings** → **Git**.
+2. Under **Connected Git Repository**, choose **Disconnect** ([docs](https://vercel.com/docs/project-configuration/git-settings#disconnect-your-git-repository)).
+
+After this, **pushes no longer create deployments** from Vercel’s Git integration. Production updates come only from **GitHub Actions** (or manual `vercel deploy` using your token). **Trade-off:** you lose **automatic preview deployments** from Vercel for branches/PRs unless you add something else (for example [Deploy Hooks](https://vercel.com/docs/deploy-hooks) or a separate preview workflow).
+
+#### Option B: Ignore Git-driven builds (keep the repo connected)
+
+1. Open **Settings** → **Build and Deployment** → **Ignored Build Step** ([docs](https://vercel.com/docs/project-configuration/project-settings#ignored-build-step)).
+2. Choose **Don’t build anything** — Vercel will not run your Install/Build for Git-triggered deployments — **or** choose **Custom** and use a command that exits **`0`** to cancel the build (exit **`1`** means “run the build as usual”).
+
+> **Note:** Per Vercel’s docs, canceled builds may still count toward [deployment limits](https://vercel.com/docs/limits#deployments-per-day-hobby); the important part for this repo is avoiding a **second, incompatible** build and keeping **production** on the prebuilt pipeline.
+
+Deployments that **`vercel deploy --prebuilt`** creates from CI **do not** use this Git “ignored build” path in the same way; they upload the output your job already built.
+
+#### Summary
+
+| Approach | Git still connected? | Auto deploy on push from Vercel? | Production from GHA prebuilt? |
+|----------|----------------------|----------------------------------|-------------------------------|
+| **A. Disconnect Git** | No | No | Yes (recommended pattern) |
+| **B. Ignored Build Step** | Yes | Deployments are created then **canceled** / not built (see Vercel docs) | Yes |
+
+If you need **both** automatic Vercel previews **and** production only from GHA, use a **second Vercel project** or a more tailored ignore script (for example only skip when `VERCEL_ENV === 'production'`) — that is outside this doc’s default setup.
 
 ### 3. Environment variables (Production)
 
