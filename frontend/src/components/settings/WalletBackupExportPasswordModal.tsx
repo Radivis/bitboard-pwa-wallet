@@ -3,7 +3,7 @@ import { AlertTriangle, CheckCircle2, Loader2 } from 'lucide-react'
 import { DialogDescription } from '@/components/ui/dialog'
 import { AppModal } from '@/components/AppModal'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { PasswordInput } from '@/components/ui/password-input'
 import { Label } from '@/components/ui/label'
 import { APP_PASSWORD_MIN_LENGTH } from '@/lib/app-password-policy'
 
@@ -142,10 +142,9 @@ export function WalletBackupExportPasswordModal({
       <div className="mt-4 space-y-4">
         <div className="space-y-2">
           <Label htmlFor={pwdId}>Password for signing</Label>
-          <Input
+          <PasswordInput
             id={pwdId}
-            type="password"
-            autoComplete="current-password"
+            passwordKind="export"
             minLength={APP_PASSWORD_MIN_LENGTH}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
@@ -154,10 +153,10 @@ export function WalletBackupExportPasswordModal({
         </div>
         <div className="space-y-2">
           <Label htmlFor={confirmPwdId}>Confirm password</Label>
-          <Input
+          <PasswordInput
             id={confirmPwdId}
-            type="password"
-            autoComplete="new-password"
+            passwordKind="export"
+            nameSuffix="confirm"
             minLength={APP_PASSWORD_MIN_LENGTH}
             value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}
