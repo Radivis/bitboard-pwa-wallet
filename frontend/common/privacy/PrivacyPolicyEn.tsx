@@ -28,58 +28,88 @@ export function PrivacyPolicyEn() {
         once it is no longer needed, subject to any statutory retention obligations.
       </p>
       <p>
-        <strong>Data protection officer:</strong> The operator has{' '}
-        <strong>not appointed a data protection officer</strong> (not required for this project).
+        <strong>Data protection officer:</strong> A data protection officer has{' '}
+        <strong>not been appointed</strong>.
       </p>
 
       <h2>2. Hosting</h2>
       <p>
-        Both the landing page and the app delivery are hosted on <strong>Vercel</strong>. As with
-        any website, Vercel and the underlying infrastructure may process technical data such as IP
-        addresses, timestamps, and requested URLs for security and operations. Bitboard does{' '}
-        <strong>not</strong> operate an application server that stores your wallet contents for the
-        app (see the app section below).
+        Both the landing page and app delivery are provided through <strong>Vercel</strong> as a
+        hosting and edge platform. This can generate technical access, server, and security logs
+        (including IP addresses, timestamps, and requested URLs). Bitboard does <strong>not</strong>{' '}
+        operate an application server that stores or evaluates wallet contents for the app (see the
+        app section below).
       </p>
       <p>
-        <strong>Marketing / analytics tools:</strong> The current build does not embed additional
-        third-party tools such as web analytics or advertising trackers; the main categories are
-        the technical hosting data described above and the local settings described below.
+        Vercel processes this data on our behalf as a <strong>processor</strong> under{' '}
+        <strong>Art. 28 GDPR</strong>. We have entered into the Data Processing Addendum (DPA) with
+        Vercel (see{' '}
+        <a
+          href="https://vercel.com/legal/dpa"
+          className="text-primary underline underline-offset-4"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          https://vercel.com/legal/dpa
+        </a>
+        ). Retention periods follow Vercel’s current privacy policy and are typically a few days up to
+        30 days for security and access logs, depending on the selected plan and observability
+        settings.
+      </p>
+      <p>
+        The current deployment does not include additional third-party tools such as web analytics
+        or advertising trackers.
       </p>
 
       <h2>3. Marketing website (landing page)</h2>
       <p>
-        The landing page is informational. Beyond normal browser mechanics when you load a site, the
-        operator intentionally stores only your <strong>language preference for legal texts</strong> (German /
-        English) in <code>localStorage</code> under the key <code>bitboard.legalLocale</code>. No
-        other persistent, intentional landing-only personal data collection is described here.
+        The landing page provides information about the product. When you visit, the usual technical
+        access data described in the Hosting section are generated.
+      </p>
+      <p>
+        In addition, your language choice for legal texts (German/English) is stored locally in the
+        browser (<code>localStorage</code>, key <code>bitboard.legalLocale</code>).
+      </p>
+      <p>
+        Storing information on your terminal equipment without consent is permitted under{' '}
+        <strong>Section 25(2) No. 2 TDDDG</strong> (
+        <span lang="de">Telekommunikation-Digitale-Dienste-Datenschutz-Gesetz</span>), because it is
+        strictly necessary to provide the service you explicitly requested (displaying content in your
+        chosen language). The data remains in your browser until you manually clear the cache or site
+        data.
       </p>
 
       <h2>4. Wallet app (PWA)</h2>
       <p>
-        In plain terms: your wallet runs <strong>on your own device</strong> in the browser. There is{' '}
-        <strong>no Bitboard server</strong> that holds your wallet data for you.
+        The Bitboard app is an integrated Bitcoin learning platform that combines practical wallet
+        management, safe experimentation in the Lab, and a knowledge base (Library) about Bitcoin and
+        Lightning. There is <strong>no Bitboard backend server</strong>. All data stays on your device.
       </p>
       <p>
-        Technically, wallet data lives in a <strong>SQLite</strong> database stored in the browser’s{' '}
-        <strong>Origin Private File System (OPFS)</strong> — a private, website-specific file area —
-        not in IndexedDB. OPFS here simply holds the database file. The in-app lab simulator uses a{' '}
-        <strong>separate</strong> SQLite file in OPFS for local simulated chain data.
+        Wallet-related data is stored in a <strong>SQLite</strong> database in the{' '}
+        <strong>Origin Private File System (OPFS)</strong>. The in-app Lab simulator uses a{' '}
+        <strong>separate</strong> SQLite file in OPFS for local simulation data.
       </p>
       <p>
-        For a privacy-oriented reset on this device, <strong>Settings → Security</strong> offers{' '}
-        <strong>Delete all app data</strong>: it removes both the wallet and lab SQLite databases from
-        OPFS (after explicit confirmations). Use it only if you understand that you need a seed phrase
-        backup or a signed wallet export to recover funds—Bitboard cannot restore deleted local data
-        for you. You can also remove local data by clearing site or app data for this origin in your
-        browser; using this in-app control is still <strong>strongly recommended</strong> for clear
-        scope and step-by-step confirmations.
+        The wallet database may optionally store Library favorites and a history of recently viewed
+        articles to make navigation in the knowledge base easier. This convenience feature supports a
+        better learning experience.
       </p>
       <p>
-        The PWA additionally registers a <strong>service worker</strong> and uses the browser’s{' '}
-        <strong>Cache Storage</strong> to cache static app assets (HTML, JavaScript, CSS, fonts,
-        WebAssembly modules) so the app can launch and function offline. These caches are
-        <strong> technically necessary</strong> for the PWA to work and do not contain your wallet
-        data.
+        For a privacy-oriented reset, the app offers <strong>Delete all app data</strong> under{' '}
+        <strong>Settings → Security</strong>.
+      </p>
+      <p>
+        Use this only if you understand that you need a seed phrase backup or a signed wallet export
+        to recover funds — Bitboard cannot restore deleted local data for you. You can also remove
+        local data by clearing site or app data for this origin in your browser; using the in-app
+        control is still <strong>strongly recommended</strong> for clear scope and step-by-step
+        confirmations.
+      </p>
+      <p>
+        The PWA also registers a <strong>service worker</strong> and uses the browser’s{' '}
+        <strong>Cache Storage</strong> for static assets (technically necessary for offline
+        operation; it does not contain personal data).
       </p>
 
       <h2>5. Network access (Esplora)</h2>
@@ -155,15 +185,21 @@ export function PrivacyPolicyEn() {
       </p>
       <ul className="list-disc space-y-2 pl-5">
         <li>
-          <strong>Delivery of the website/app via Vercel</strong> (technical logs such as IP,
+          <strong>Processing of technical log data by Vercel</strong> (including IP addresses,
           timestamps, requested URLs):{' '}
-          <strong>Art. 6(1)(f) GDPR</strong> (legitimate interests in secure and reliable hosting).
+          <strong>Art. 6(1)(f) GDPR</strong> (legitimate interests in secure hosting);{' '}
+          <strong>Vercel</strong> acts as a processor under <strong>Art. 28 GDPR</strong>.
         </li>
         <li>
-          <strong>Language preference for legal texts</strong> (<code>localStorage</code>{' '}
-          <code>bitboard.legalLocale</code>):{' '}
-          <strong>Art. 6(1)(f) GDPR</strong> (legitimate interests in consistent presentation of
-          legal content).
+          <strong>Storing the language choice in localStorage</strong> (<code>bitboard.legalLocale</code>
+          ):{' '}
+          <strong>Section 25(2) No. 2 TDDDG</strong> (strictly necessary).
+        </li>
+        <li>
+          <strong>Storing Library favorites and reading history</strong>:{' '}
+          <strong>Art. 6(1)(f) GDPR</strong> (legitimate interests in an improved learning and user
+          experience) in connection with <strong>Section 25(2) No. 2 TDDDG</strong> (where it
+          functionally supports storage on the device).
         </li>
         <li>
           <strong>Local wallet and app functionality</strong> (storage and processing on your device,
@@ -196,8 +232,9 @@ export function PrivacyPolicyEn() {
       </p>
       <ul className="list-disc space-y-2 pl-5">
         <li>
-          <strong>Hosting provider:</strong> <strong>Vercel Inc.</strong> and the underlying
-          infrastructure providers, in connection with delivering the website and the app.
+          <strong>Hosting provider:</strong> <strong>Vercel Inc.</strong> as processor under{' '}
+          <strong>Art. 28 GDPR</strong>, and the underlying infrastructure providers, in connection
+          with delivering the website and the app.
         </li>
         <li>
           <strong>Esplora operator(s):</strong> the operator of the Esplora-style endpoint{' '}
@@ -224,15 +261,16 @@ export function PrivacyPolicyEn() {
       <p>
         <strong>Categories</strong> may include in particular: technical connection/access data from
         hosting (Vercel); language preference (locally in the browser); on-device wallet data (e.g. key
-        material, descriptors, transaction and balance information you create or fetch); NWC
+        material, descriptors, transaction and balance information you create or fetch); optional
+        Library article favorites and reading history (locally in the wallet database); NWC
         connection data and cached Lightning information locally; data visible to or processed
         by Esplora and NWC/Lightning third parties in connection with requests you initiate; and
         contact data contained in any email correspondence with the controller.
       </p>
       <p>
         <strong>Storage periods:</strong> Vercel hosting and security logs are retained and deleted
-        according to the provider’s retention rules — typically in the order of weeks for access and
-        firewall logs (see the{' '}
+        according to the provider’s retention rules — typically a few days up to 30 days for security
+        and access logs, depending on plan and settings (see the{' '}
         <a
           href="https://vercel.com/legal/privacy-policy"
           className="text-primary underline underline-offset-4"
@@ -254,7 +292,8 @@ export function PrivacyPolicyEn() {
         According to its own information, <strong>Vercel is certified under the EU-US Data Privacy
         Framework (DPF)</strong> (status checked: April 2026), which is intended to provide an
         appropriate safeguard for such transfers. Standard Contractual Clauses and other measures may
-        also apply depending on the situation. Please refer to Vercel’s current{' '}
+        also apply depending on the situation, including the DPA agreed with Vercel. Please refer to
+        Vercel’s current{' '}
         <a
           href="https://vercel.com/legal/privacy-policy"
           className="text-primary underline underline-offset-4"

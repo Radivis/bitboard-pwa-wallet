@@ -42,56 +42,87 @@ export function PrivacyPolicyDe() {
         Sowohl die Landing Page als auch die Auslieferung der App werden über{' '}
         <strong>Vercel</strong> als Hosting- und Edge-Plattform bereitgestellt. Dabei können
         technisch bedingt Zugriffs‑/Server‑ und Sicherheitsprotokolle entstehen (u. a. IP-Adressen,
-        Zeitstempel, URLs), wie sie Vercel und die zugrundeliegende Infrastruktur dokumentieren.
-        Für Bitboard besteht <strong>kein eigener Anwendungs-Server</strong>, der Wallet-Inhalte
-        speichert oder auswertet (siehe Abschnitt zur App).
+        Zeitstempel, angeforderte URLs). Für Bitboard besteht <strong>kein eigener
+        Anwendungs-Server</strong>, der Wallet-Inhalte speichert oder auswertet (siehe Abschnitt zur
+        App).
       </p>
       <p>
-        <strong>Marketing-/Tracking-Tools:</strong> In der aktuellen Auslieferung sind keine
-        zusätzlichen Drittanbieter-Tools wie Web-Analytics oder Werbe-Tracker eingebunden; es
-        entstehen insbesondere die technisch bedingten Hosting-Daten bei Vercel sowie die
-        nachfolgend beschriebenen lokalen Einstellungen.
+        Vercel verarbeitet diese Daten in unserem Auftrag als Auftragsverarbeiter gemäß{' '}
+        <strong>Art. 28 DSGVO</strong>. Wir haben mit Vercel das Data Processing Addendum (DPA)
+        vereinbart (siehe{' '}
+        <a
+          href="https://vercel.com/legal/dpa"
+          className="text-primary underline underline-offset-4"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          https://vercel.com/legal/dpa
+        </a>
+        ). Die genauen Aufbewahrungsfristen richten sich nach der aktuellen Vercel Privacy Policy und
+        betragen in der Regel wenige Tage bis maximal 30 Tage für Security- und Zugriffslogs (je nach
+        gewähltem Plan und Observability-Einstellungen).
+      </p>
+      <p>
+        In der aktuellen Auslieferung sind keine zusätzlichen Drittanbieter-Tools wie Web-Analytics
+        oder Werbe-Tracker eingebunden.
       </p>
 
       <h2>3. Marketing-Website (Landing Page)</h2>
       <p>
-        Die Landing Page dient der Information über das Produkt. In Ihrem Browser wird — neben den
-        üblichen technischen Vorgängen beim Aufruf einer Website — ausdrücklich nur Ihre{' '}
-        <strong>Sprachauswahl für rechtliche Texte</strong> (Deutsch/Englisch) lokal im Browser
-        gespeichert (<code>localStorage</code>, Schlüssel <code>bitboard.legalLocale</code>).
-        Weitere von der Landing Page bewusst gesetzte, personenbezogene Daten werden hier nicht
-        beschrieben.
+        Die Landing Page dient der Information über das Produkt. Beim Aufruf entstehen die üblichen
+        technischen Zugriffsdaten (siehe Abschnitt Hosting).
+      </p>
+      <p>
+        Darüber hinaus wird Ihre Sprachauswahl für rechtliche Texte (Deutsch/Englisch) lokal im
+        Browser gespeichert (<code>localStorage</code>, Schlüssel{' '}
+        <code>bitboard.legalLocale</code>).
+      </p>
+      <p>
+        Diese Speicherung von Informationen auf Ihrer Endeinrichtung erfolgt ohne Einwilligung auf
+        Grundlage von <strong>§ 25 Abs. 2 Nr. 2 TDDDG</strong> (
+        Telekommunikation-Digitale-Dienste-Datenschutz-Gesetz), da sie unbedingt erforderlich ist, um
+        den von Ihnen ausdrücklich
+        gewünschten Dienst (Anzeige der Inhalte in der gewählten Sprache) zur Verfügung zu stellen.
+        Die Daten bleiben im Browser gespeichert, bis Sie den Cache bzw. die Website-Daten manuell
+        löschen.
       </p>
 
       <h2>4. Wallet-App (PWA)</h2>
       <p>
-        Die Bitboard-Wallet-App ist eine <strong>lokal betriebene</strong> Anwendung in Ihrem
-        Gerät (Browser). Es gibt <strong>keinen Bitboard-Backend-Server</strong>, auf dem Ihre
-        Wallet-Daten gespeichert oder ausgewertet werden. Wallet-relevante Daten werden in einer{' '}
-        <strong>SQLite</strong>-Datenbank im <strong>Origin Private File System (OPFS)</strong> des
-        Browsers gespeichert — nicht in IndexedDB. OPFS ist ein vom Browser bereitgestellter,
-        origin-gebundener Speicherbereich für Dateien (hier für die SQLite-Datenbank). Der
-        In-App-Lab-Simulator nutzt eine <strong>weitere, getrennte</strong> SQLite-Datei in OPFS für
-        lokale Simulationsdaten der Kette.
+        Die Bitboard-App ist eine integrierte Bitcoin-Lernplattform, die praktisches
+        Wallet-Management, sicheres Experimentieren im Lab und eine Knowledge-Base (Library) zu
+        Bitcoin und Lightning kombiniert. Es gibt <strong>keinen Bitboard-Backend-Server</strong>.
+        Alle Daten bleiben lokal auf Ihrem Gerät.
       </p>
       <p>
-        Für einen datenschutzorientierten Reset auf diesem Gerät bietet die App unter{' '}
+        Wallet-relevante Daten werden in einer <strong>SQLite</strong>-Datenbank im{' '}
+        <strong>Origin Private File System (OPFS)</strong> gespeichert. Der In-App-Lab-Simulator
+        nutzt eine <strong>weitere, getrennte</strong> SQLite-Datei in OPFS für lokale
+        Simulationsdaten.
+      </p>
+      <p>
+        Innerhalb der Wallet-Datenbank werden optional Favoriten und die Historie zuletzt
+        angesehener Artikel der Library gespeichert, um die Navigation in der Knowledge-Base zu
+        erleichtern. Diese Komfort-Funktion dient einer besseren Lern-Erfahrung.
+      </p>
+      <p>
+        Für einen datenschutzorientierten Reset bietet die App unter{' '}
         <strong>Einstellungen → Sicherheit</strong> die Funktion{' '}
-        <strong>Alle App-Daten löschen</strong>: Sie entfernt nach ausdrücklicher Bestätigung sowohl
-        die Wallet- als auch die Lab-SQLite-Datenbank aus OPFS. Nutzen Sie sie nur, wenn Sie
-        verstehen, dass Sie zur Wiederherstellung von Guthaben eine Seed-Phrase-Sicherung oder ein
-        signiertes Wallet-Exportarchiv benötigen — Bitboard kann gelöschte lokale Daten nicht für Sie
-        wiederherstellen. Lokale Daten können Sie auch entfernen, indem Sie Website- oder App-Daten
-        für diesen Ursprung im Browser löschen; die Nutzung der genannten Funktion in der App wird
-        jedoch weiterhin <strong>ausdrücklich empfohlen</strong>, weil Umfang und Bestätigungsschritte
-        dort klar geführt sind.
+        <strong>„Alle App-Daten löschen“</strong>.
+      </p>
+      <p>
+        Nutzen Sie diese Funktion nur, wenn Sie verstehen, dass Sie zur Wiederherstellung von
+        Guthaben eine Seed-Phrase-Sicherung oder ein signiertes Wallet-Exportarchiv benötigen —
+        Bitboard kann gelöschte lokale Daten nicht für Sie wiederherstellen. Lokale Daten können Sie
+        auch entfernen, indem Sie Website- oder App-Daten für diesen Ursprung im Browser löschen; die
+        Nutzung der genannten Funktion in der App wird jedoch weiterhin{' '}
+        <strong>ausdrücklich empfohlen</strong>, weil Umfang und Bestätigungsschritte dort klar
+        geführt sind.
       </p>
       <p>
         Die PWA registriert zusätzlich einen <strong>Service Worker</strong> und nutzt den{' '}
-        <strong>Cache Storage</strong> des Browsers, um statische App-Bestandteile (HTML,
-        JavaScript, CSS, Schriften, WebAssembly-Module) für den Offline-Betrieb zwischenzuspeichern.
-        Diese Caches sind <strong>technisch erforderlich</strong> für die Funktion der PWA und
-        enthalten keine Wallet-Inhalte.
+        <strong>Cache Storage</strong> des Browsers für statische Assets (technisch erforderlich für
+        Offline-Betrieb, enthält keine personenbezogenen Inhalte).
       </p>
 
       <h2>5. Netzwerkzugriff (Esplora)</h2>
@@ -171,16 +202,20 @@ export function PrivacyPolicyDe() {
       </p>
       <ul className="list-disc space-y-2 pl-5">
         <li>
-          <strong>Auslieferung der Website/App über Vercel</strong> (technische Protokolle wie IP,
+          <strong>Verarbeitung technischer Protokolldaten durch Vercel</strong> (u. a. IP,
           Zeitstempel, angeforderte URLs):{' '}
-          <strong>Art. 6 Abs. 1 lit. f DSGVO</strong> (berechtigtes Interesse an einem sicheren und
-          stabilen Betrieb des Hostings).
+          <strong>Art. 6 Abs. 1 lit. f DSGVO</strong> (berechtigtes Interesse an sicherem Hosting);{' '}
+          <strong>Vercel</strong> handelt als Auftragsverarbeiter gemäß <strong>Art. 28 DSGVO</strong>.
         </li>
         <li>
-          <strong>Sprachwahl für rechtliche Texte</strong> (localStorage{' '}
-          <code>bitboard.legalLocale</code>):{' '}
-          <strong>Art. 6 Abs. 1 lit. f DSGVO</strong> (berechtigtes Interesse an einer konsistenten
-          Darstellung rechtlicher Inhalte).
+          <strong>Speicherung der Sprachauswahl im localStorage</strong> (<code>bitboard.legalLocale</code>
+          ): <strong>§ 25 Abs. 2 Nr. 2 TDDDG</strong> (unbedingt erforderlich).
+        </li>
+        <li>
+          <strong>Speicherung von Favoriten und Lese-Historie in der Library</strong>:{' '}
+          <strong>Art. 6 Abs. 1 lit. f DSGVO</strong> (berechtigtes Interesse an einer verbesserten
+          Lern- und Nutzererfahrung) in Verbindung mit <strong>§ 25 Abs. 2 Nr. 2 TDDDG</strong>{' '}
+          (soweit funktional unterstützend).
         </li>
         <li>
           <strong>Lokale Wallet- und App-Funktionen</strong> (Speicherung und Verarbeitung auf Ihrem
@@ -214,8 +249,9 @@ export function PrivacyPolicyDe() {
       </p>
       <ul className="list-disc space-y-2 pl-5">
         <li>
-          <strong>Hosting-Anbieter:</strong> <strong>Vercel Inc.</strong> sowie die dort genutzten
-          Infrastrukturanbieter, im Zusammenhang mit der Auslieferung der Website und der App.
+          <strong>Hosting-Anbieter:</strong> <strong>Vercel Inc.</strong> als Auftragsverarbeiter
+          sowie die dort genutzten Infrastrukturanbieter, im Zusammenhang mit der Auslieferung der
+          Website und der App.
         </li>
         <li>
           <strong>Esplora-Betreiber:</strong> der Betreiber des in den{' '}
@@ -243,15 +279,17 @@ export function PrivacyPolicyDe() {
         <strong>Kategorien:</strong> können insbesondere umfassen: technische Verbindungs- und
         Zugriffsdaten beim Hosting (Vercel); Sprachpräferenz (lokal im Browser); Wallet-Daten lokal
         (u. a. Schlüsselmaterial, Deskriptoren, Transaktions- und Kontostandsinformationen, sofern
-        von Ihnen angelegt oder abgerufen); NWC-Verbindungsdaten und zwischengespeicherte
+        von Ihnen angelegt oder abgerufen); optional Favoriten und Lese-Historie der Library-Artikel
+        (lokal in der Wallet-Datenbank); NWC-Verbindungsdaten und zwischengespeicherte
         Lightning-Informationen lokal; Daten, die im Rahmen der von Ihnen ausgelösten Anfragen an
         Esplora- und NWC-/Lightning-Dritte sichtbar oder verarbeitet werden; sowie Kontaktdaten in
         einer E-Mail-Korrespondenz mit dem Verantwortlichen.
       </p>
       <p>
         <strong>Speicherdauer:</strong> Hosting- und Sicherheitsprotokolle bei Vercel richten sich
-        nach den Aufbewahrungs- und Löschfristen des Anbieters — typischerweise im Bereich weniger
-        Wochen für Zugriffs- und Firewall-Logs (maßgeblich ist die jeweils aktuelle{' '}
+        nach den Aufbewahrungs- und Löschfristen des Anbieters — typischerweise wenige Tage bis
+        maximal 30 Tage für Security- und Zugriffslogs, je nach Plan und Einstellungen (maßgeblich
+        ist die jeweils aktuelle{' '}
         <a
           href="https://vercel.com/legal/privacy-policy"
           className="text-primary underline underline-offset-4"
@@ -275,7 +313,9 @@ export function PrivacyPolicyDe() {
         <strong>EU-US Data Privacy Framework (DPF) zertifiziert</strong> (Stand der Prüfung: April
         2026); dies soll eine angemessene Garantie für derartige Übermittlungen darstellen.
         Ergänzend können je nach Sachverhalt <strong>Standardvertragsklauseln</strong> der
-        EU-Kommission und weitere Maßnahmen eine Rolle spielen. Einzelheiten entnehmen Sie bitte der
+        EU-Kommission und weitere Maßnahmen eine Rolle spielen (darunter das mit Vercel vereinbarte
+        DPA).
+        Einzelheiten entnehmen Sie bitte der
         aktuellen{' '}
         <a
           href="https://vercel.com/legal/privacy-policy"
