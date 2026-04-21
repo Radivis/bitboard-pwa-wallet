@@ -12,7 +12,7 @@ interface HeroSectionProps {
 
 export function HeroSection({ appUrl, prefersReducedMotion }: HeroSectionProps) {
   return (
-    <header className="relative h-screen flex flex-col items-center justify-center text-center px-6 overflow-hidden">
+    <header className="relative flex min-h-[100dvh] flex-col items-center justify-center px-6 pt-8 pb-28 text-center md:pt-12 md:pb-32">
       <motion.div
         initial={{ scale: 0.8, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
