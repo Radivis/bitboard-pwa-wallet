@@ -36,17 +36,13 @@ export const PasswordInput = React.forwardRef<HTMLInputElement, PasswordInputPro
         <Input
           {...props}
           ref={ref}
-          type="text"
+          type={showPassword ? 'text' : 'password'}
           name={name}
           autoComplete="off"
           spellCheck={false}
           autoCorrect="off"
           aria-describedby={ariaDescribedBy}
-          className={cn(
-            'pr-10',
-            showPassword ? '[-webkit-text-security:none]' : '[-webkit-text-security:disc]',
-            className,
-          )}
+          className={cn('pr-10', className)}
         />
         <Button
           type="button"
@@ -63,3 +59,5 @@ export const PasswordInput = React.forwardRef<HTMLInputElement, PasswordInputPro
     )
   },
 )
+
+PasswordInput.displayName = 'PasswordInput'

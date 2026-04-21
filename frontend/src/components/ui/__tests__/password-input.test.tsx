@@ -14,7 +14,8 @@ describe('PasswordInput', () => {
     expect(screen.getByLabelText('Password')).toHaveAttribute('name', 'export-confirm')
   })
 
-  it('uses type text, autocomplete off, and merges aria-describedby', () => {
+  it('uses type password when masked, type text when revealed, autocomplete off, and merges aria-describedby', async () => {
+    const user = userEvent.setup()
     render(
       <PasswordInput
         passwordKind="app"
@@ -23,11 +24,14 @@ describe('PasswordInput', () => {
       />,
     )
     const input = screen.getByLabelText('Password')
-    expect(input).toHaveAttribute('type', 'text')
+    expect(input).toHaveAttribute('type', 'password')
     expect(input).toHaveAttribute('autocomplete', 'off')
     const describedBy = input.getAttribute('aria-describedby')
     expect(describedBy).toContain('extra-help')
     expect(describedBy?.split(/\s+/).length).toBeGreaterThanOrEqual(2)
+
+    await user.click(screen.getByRole('button', { name: 'Show password' }))
+    expect(screen.getByLabelText('Password')).toHaveAttribute('type', 'text')
   })
 
   it('toggles visibility control', async () => {
@@ -39,5 +43,9 @@ describe('PasswordInput', () => {
 
     await user.click(toggle)
     expect(screen.getByRole('button', { name: 'Hide password' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByLabelText('Password')).toHaveAttribute('type', 'text')
+
+    await user.click(screen.getByRole('button', { name: 'Hide password' }))
+    expect(screen.getByLabelText('Password')).toHaveAttribute('type', 'password')
   })
 })
