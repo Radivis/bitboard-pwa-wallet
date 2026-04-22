@@ -39,7 +39,7 @@ export type SwitchDescriptorPhaseContext = 'network' | 'addressType'
  *
  * Contract:
  * - Load phase (resolve + loadWallet + address): on failure, rejects after toast — callers must not commit new network/address in the store.
- * - Sync phase (Esplora): on failure after a successful load, still resolves — callers should commit store so UI matches WASM; wallet stays `syncing` until the user retries or fixes network.
+ * - Sync phase (Esplora): on failure after a successful load, still resolves — callers should commit store so UI matches WASM. Status returns to `unlocked` so the user can use Sync to retry; an error toast explains the failed sync.
  */
 export async function switchDescriptorWallet(params: {
   targetNetworkMode: NetworkMode
@@ -134,7 +134,7 @@ export async function switchDescriptorWallet(params: {
       onPhase?.(syncingTargetNetworkMessage(targetNetworkMode))
       setWalletStatus('syncing')
       const fullScanNeeded = !descriptorWallet.fullScanDone
-      const syncResult = await syncLoadedSubWalletWithEsplora({
+      await syncLoadedSubWalletWithEsplora({
         networkMode: targetNetworkMode,
         activeWalletId,
         sessionPassword,
@@ -143,10 +143,9 @@ export async function switchDescriptorWallet(params: {
         targetAccountId,
         fullScanNeeded,
       })
-      if (syncResult === 'completed') {
-        setWalletStatus('unlocked')
-      }
-      // On `sync_failed`, keep `syncing` — load succeeded but chain data may be stale.
+      // Always return to `unlocked` so dashboard Sync/UX is usable. On `sync_failed`,
+      // an error toast was shown; chain data in WASM may still be stale.
+      setWalletStatus('unlocked')
     } else {
       setWalletStatus('unlocked')
     }

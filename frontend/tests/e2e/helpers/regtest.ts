@@ -28,9 +28,9 @@ function sleep(ms: number): Promise<void> {
 const isCi = !!process.env.CI
 
 /** Esplora/electrs can lag more on GitHub Actions than on a warm local Docker setup. */
-const ESPLORA_INDEX_WAIT_MS = isCi ? 45_000 : 15_000
+const ESPLORA_INDEX_WAIT_MS = isCi ? 60_000 : 15_000
 
-const CONFIRMED_UTXO_WAIT_MS = isCi ? 45_000 : 15_000
+const CONFIRMED_UTXO_WAIT_MS = isCi ? 60_000 : 15_000
 
 /** Same window as Esplora UTXO polling — use when UI must reflect post-sync wallet state. */
 export const E2E_CI_AWARE_LONG_WAIT_MS = CONFIRMED_UTXO_WAIT_MS
@@ -103,7 +103,9 @@ interface EsploraUtxo {
  */
 export async function waitForDashboardShowsFundedOnChainBalance(page: Page): Promise<void> {
   const card = page.locator('[data-infomode-id="dashboard-balance-card"]')
-  const timeoutMs = Math.max(60_000, E2E_CI_AWARE_LONG_WAIT_MS)
+  const timeoutMs = isCi
+    ? Math.max(90_000, E2E_CI_AWARE_LONG_WAIT_MS)
+    : Math.max(60_000, E2E_CI_AWARE_LONG_WAIT_MS)
   await expect(card).toBeVisible({ timeout: 10_000 })
   await expect
     .poll(

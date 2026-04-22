@@ -178,7 +178,7 @@ describe('switchDescriptorWallet', () => {
     expect(toast.success).not.toHaveBeenCalled()
   })
 
-  it('resolves without success toast when sync fails after load; stays syncing', async () => {
+  it('resolves without success toast when sync fails after load; unlocks for manual retry', async () => {
     mockSyncLoadedSubWalletWithEsplora.mockResolvedValueOnce('sync_failed')
 
     await expect(
@@ -203,7 +203,7 @@ describe('switchDescriptorWallet', () => {
       false,
     )
     expect(mockSetWalletStatus).toHaveBeenCalledWith('syncing')
-    expect(mockSetWalletStatus).not.toHaveBeenCalledWith('unlocked')
+    expect(mockSetWalletStatus).toHaveBeenCalledWith('unlocked')
   })
 
   it('retries load with fresh chain when persisted changeset network mismatches target', async () => {
