@@ -30,7 +30,7 @@ export function NetworkCardCommittedDescriptor() {
     <InfomodeWrapper
       infoId="settings-network-committed-descriptor"
       infoComponent={CommittedDescriptorInfomodeContent}
-      className="space-y-2"
+      className="min-w-0 space-y-2"
     >
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
@@ -92,7 +92,7 @@ export function NetworkCardCommittedDescriptor() {
             {query.data}
           </p>
         ) : (
-          <p className="select-none font-mono text-xs leading-relaxed text-muted-foreground/80">
+          <p className="min-w-0 select-none break-all font-mono text-xs leading-relaxed text-muted-foreground/80">
             <span aria-hidden>{'•'.repeat(48)}</span>
             <span className="sr-only">
               Receiving descriptor hidden. Use the show button next to the label to reveal it.
