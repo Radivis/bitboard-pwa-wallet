@@ -1,5 +1,5 @@
 [workspace.package]
-version = "0.1.0-beta"
+version = "0.1.0-beta.2"
 
 [workspace]
 members = ["crypto", "bitboard-encryption", "bitboard-lightning"]

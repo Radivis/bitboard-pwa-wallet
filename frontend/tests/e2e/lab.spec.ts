@@ -96,6 +96,9 @@ test.describe('Lab', { tag: '@lab' }, () => {
   })
 
   test('transactions page explains random generation requires entities', async ({ page }) => {
+    // Random txs need named lab entities; the hint only appears once coins exist (mined blocks)
+    // but no lab entities yet — e.g. after mining to the wallet only.
+    await mineBlocksInLab(page, 1, LabOwnerType.Wallet)
     await clickMainNavLab(page)
     await expect(page.getByRole('heading', { name: 'Blocks' })).toBeVisible({
       timeout: 15000,
@@ -106,6 +109,7 @@ test.describe('Lab', { tag: '@lab' }, () => {
   })
 
   test('creates random transactions between lab entities', async ({ page }) => {
+    test.setTimeout(120_000)
     await mineBlocksInLab(page, 1, LabOwnerType.LabEntity, {
       ownerName: 'Alice',
       labAddressType: labEntityAddressTypeForCreationIndex(1),
@@ -119,7 +123,9 @@ test.describe('Lab', { tag: '@lab' }, () => {
       labAddressType: labEntityAddressTypeForCreationIndex(3),
     })
 
-    const randomTxCount = 16
+    // Each random tx picks a sender uniformly among entities with UTXOs. With too few draws
+    // (e.g. 16), P(never selecting a given entity) is high enough to flake on CI.
+    const randomTxCount = 48
     await createRandomTransactionsInLab(page, randomTxCount)
 
     const state = await getLabState(page)

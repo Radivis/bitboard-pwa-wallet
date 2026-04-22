@@ -1,5 +1,5 @@
 /* eslint-disable react-refresh/only-export-components -- field group exports supporting types alongside UI */
-import { Input } from '@/components/ui/input'
+import { PasswordInput } from '@/components/ui/password-input'
 import { Label } from '@/components/ui/label'
 import { PasswordStrengthIndicator } from '@/components/PasswordStrengthIndicator'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
@@ -56,14 +56,14 @@ export function AppPasswordFields({
             Password
           </InfomodeWrapper>
         </Label>
-        <Input
+        <PasswordInput
           id={ids.newPassword}
-          type="password"
+          passwordKind="app"
+          nameSuffix="new"
           value={newPassword}
           onChange={(e) => onNewPasswordChange(e.target.value)}
           placeholder="Enter a strong password"
           autoFocus={autoFocusNewPassword}
-          autoComplete="new-password"
         />
         <InfomodeWrapper
           as="div"
@@ -82,13 +82,13 @@ export function AppPasswordFields({
 
       <div className="space-y-2">
         <Label htmlFor={ids.confirmPassword}>Confirm password</Label>
-        <Input
+        <PasswordInput
           id={ids.confirmPassword}
-          type="password"
+          passwordKind="app"
+          nameSuffix="confirm"
           value={confirmPassword}
           onChange={(e) => onConfirmPasswordChange(e.target.value)}
           placeholder="Confirm your password"
-          autoComplete="new-password"
         />
         {confirmPassword && !passwordsMatch && (
           <p className="text-xs text-destructive">Passwords do not match</p>

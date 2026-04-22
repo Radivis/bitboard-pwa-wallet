@@ -5,7 +5,7 @@ import { Lock } from 'lucide-react'
 import { toast } from 'sonner'
 import { DialogDescription } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { PasswordInput } from '@/components/ui/password-input'
 import { Label } from '@/components/ui/label'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { AppModal } from '@/components/AppModal'
@@ -131,9 +131,9 @@ export function WalletUnlock({
         >
           <div className="space-y-2">
             <Label htmlFor="unlock-password">Bitboard app password</Label>
-            <Input
+            <PasswordInput
               id="unlock-password"
-              type="password"
+              passwordKind="app"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Enter your Bitboard app password"

@@ -26,9 +26,9 @@ export function PrivacyPolicyDe() {
       </p>
       <LegalEntityFields entity={legalEntity} className="mb-3 space-y-1" />
       <p>
-        Für Anfragen zum Datenschutz erreichen Sie uns vorzugsweise per E-Mail an die oben
-        genannte Adresse. Inhalte solcher E-Mails verarbeiten wir auf Grundlage von{' '}
-        <strong>Art. 6 Abs. 1 lit. b und/oder f DSGVO</strong> zur Bearbeitung Ihres Anliegens und
+        Für Anfragen zum Datenschutz erreichen Sie den Betreiber vorzugsweise per E-Mail an die oben
+        genannte Adresse. Inhalte solcher E-Mails verarbeitet der Betreiber auf Grundlage von{' '}
+        <strong>Art. 6 Abs. 1 lit. f DSGVO</strong> zur Bearbeitung Ihres Anliegens und
         löschen sie, sobald sie hierfür nicht mehr erforderlich sind, vorbehaltlich gesetzlicher
         Aufbewahrungspflichten.
       </p>
@@ -39,59 +39,97 @@ export function PrivacyPolicyDe() {
 
       <h2>2. Hosting</h2>
       <p>
-        Sowohl die Landing Page als auch die Auslieferung der App werden über{' '}
-        <strong>Vercel</strong> als Hosting- und Edge-Plattform bereitgestellt. Dabei können
-        technisch bedingt Zugriffs‑/Server‑ und Sicherheitsprotokolle entstehen (u. a. IP-Adressen,
-        Zeitstempel, URLs), wie sie Vercel und die zugrundeliegende Infrastruktur dokumentieren.
-        Für Bitboard besteht <strong>kein eigener Anwendungs-Server</strong>, der Wallet-Inhalte
-        speichert oder auswertet (siehe Abschnitt zur App).
+        Die Landing Page und die Bitboard-App werden über <strong>Vercel</strong> (
+        <strong>Vercel Inc.</strong>, USA) als Hosting- und Edge-Plattform ausgeliefert.
       </p>
       <p>
-        <strong>Marketing-/Tracking-Tools:</strong> In der aktuellen Auslieferung sind keine
-        zusätzlichen Drittanbieter-Tools wie Web-Analytics oder Werbe-Tracker eingebunden; es
-        entstehen insbesondere die technisch bedingten Hosting-Daten bei Vercel sowie die
-        nachfolgend beschriebenen lokalen Einstellungen.
+        Bei jedem Aufruf entstehen technisch notwendige Zugriffs- und Sicherheitsprotokolle (u. a.
+        IP-Adresse, Zeitstempel, angeforderte URL und technische Metadaten). Diese Logs sind für den
+        sicheren und stabilen Betrieb jeder öffentlich erreichbaren Website unvermeidbar.
+      </p>
+      <p>
+        Vercel verarbeitet diese Daten im Auftrag des Betreibers zur Erbringung des Hostings. Die Speicherung
+        erfolgt nur für kurze Zeiträume (auf dem Hobby-Plan in der Regel wenige Stunden bis maximal
+        wenige Tage, je nach Art des Logs). Einzelheiten finden Sie in der{' '}
+        <a
+          href="https://vercel.com/legal/privacy-policy"
+          className="text-primary underline underline-offset-4"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          Vercel Privacy Policy
+        </a>
+        .
+      </p>
+      <p>
+        Eine weitergehende Verarbeitung oder Weitergabe dieser Daten zu anderen Zwecken erfolgt nicht.
+      </p>
+      <p>
+        In der aktuellen Auslieferung sind keine zusätzlichen Drittanbieter-Tools wie Web-Analytics
+        oder Werbe-Tracker eingebunden.
       </p>
 
       <h2>3. Marketing-Website (Landing Page)</h2>
       <p>
-        Die Landing Page dient der Information über das Produkt. In Ihrem Browser wird — neben den
-        üblichen technischen Vorgängen beim Aufruf einer Website — ausdrücklich nur Ihre{' '}
-        <strong>Sprachauswahl für rechtliche Texte</strong> (Deutsch/Englisch) lokal im Browser
-        gespeichert (<code>localStorage</code>, Schlüssel <code>bitboard.legalLocale</code>).
-        Weitere von der Landing Page bewusst gesetzte, personenbezogene Daten werden hier nicht
-        beschrieben.
+        Die Landing Page dient der Information über das Produkt. Beim Aufruf entstehen die üblichen
+        technischen Zugriffsdaten (siehe Abschnitt Hosting).
+      </p>
+      <p>
+        Darüber hinaus wird Ihre Sprachauswahl für rechtliche Texte (Deutsch/Englisch) lokal im
+        Browser gespeichert (<code>localStorage</code>, Schlüssel{' '}
+        <code>bitboard.legalLocale</code>).
+      </p>
+      <p>
+        Diese Speicherung ist eine Komfortfunktion, die eine wiederholte Sprachauswahl beim Neuladen
+        der Seite vermeidet. Sie erfolgt auf Grundlage des berechtigten Interesses des Betreibers (
+        <strong>Art. 6 Abs. 1 lit. f DSGVO</strong>) an einer verbesserten Nutzererfahrung. Eine
+        Einwilligung ist nicht erforderlich, da es sich um eine einfache Präferenzspeicherung ohne
+        Tracking- oder Profiling-Zweck handelt. Die Daten bleiben im Browser gespeichert, bis Sie den
+        Cache bzw. die Website-Daten manuell löschen.
       </p>
 
       <h2>4. Wallet-App (PWA)</h2>
       <p>
-        Die Bitboard-Wallet-App ist eine <strong>lokal betriebene</strong> Anwendung in Ihrem
-        Gerät (Browser). Es gibt <strong>keinen Bitboard-Backend-Server</strong>, auf dem Ihre
-        Wallet-Daten gespeichert oder ausgewertet werden. Wallet-relevante Daten werden in einer{' '}
-        <strong>SQLite</strong>-Datenbank im <strong>Origin Private File System (OPFS)</strong> des
-        Browsers gespeichert — nicht in IndexedDB. OPFS ist ein vom Browser bereitgestellter,
-        origin-gebundener Speicherbereich für Dateien (hier für die SQLite-Datenbank). Der
-        In-App-Lab-Simulator nutzt eine <strong>weitere, getrennte</strong> SQLite-Datei in OPFS für
-        lokale Simulationsdaten der Kette.
+        Die Bitboard-App ist eine integrierte Bitcoin-Lernplattform, die praktisches
+        Wallet-Management, sicheres Experimentieren im Lab und eine Knowledge-Base (Library) zu
+        Bitcoin und Lightning kombiniert. Es gibt <strong>keinen Bitboard-Backend-Server</strong>.
+        Alle Daten bleiben lokal auf Ihrem Gerät.
       </p>
       <p>
-        Für einen datenschutzorientierten Reset auf diesem Gerät bietet die App unter{' '}
+        Wallet-relevante Daten werden in einer <strong>SQLite</strong>-Datenbank im{' '}
+        <strong>Origin Private File System (OPFS)</strong> gespeichert. Der In-App-Lab-Simulator
+        nutzt eine <strong>weitere, getrennte</strong> SQLite-Datei in OPFS für lokale
+        Simulationsdaten.
+      </p>
+      <p>
+        Innerhalb der Wallet-Datenbank werden optional Favoriten und die Historie zuletzt
+        angesehener Artikel der Library gespeichert, um die Navigation in der Knowledge-Base zu
+        erleichtern. Diese Komfort-Funktion dient einer besseren Lern-Erfahrung.
+      </p>
+      <p>
+        Für einen datenschutzorientierten Reset bietet die App unter{' '}
         <strong>Einstellungen → Sicherheit</strong> die Funktion{' '}
-        <strong>Alle App-Daten löschen</strong>: Sie entfernt nach ausdrücklicher Bestätigung sowohl
-        die Wallet- als auch die Lab-SQLite-Datenbank aus OPFS. Nutzen Sie sie nur, wenn Sie
-        verstehen, dass Sie zur Wiederherstellung von Guthaben eine Seed-Phrase-Sicherung oder ein
-        signiertes Wallet-Exportarchiv benötigen — Bitboard kann gelöschte lokale Daten nicht für Sie
-        wiederherstellen. Lokale Daten können Sie auch entfernen, indem Sie Website- oder App-Daten
-        für diesen Ursprung im Browser löschen; die Nutzung der genannten Funktion in der App wird
-        jedoch weiterhin <strong>ausdrücklich empfohlen</strong>, weil Umfang und Bestätigungsschritte
-        dort klar geführt sind.
+        <strong>„Alle App-Daten löschen“</strong>.
+      </p>
+      <p>
+        Nutzen Sie diese Funktion nur, wenn Sie verstehen, dass Sie zur Wiederherstellung von
+        Guthaben eine Seed-Phrase-Sicherung oder ein signiertes Wallet-Exportarchiv benötigen —
+        Bitboard kann gelöschte lokale Daten nicht für Sie wiederherstellen. Lokale Daten können Sie
+        auch entfernen, indem Sie Website- oder App-Daten für diesen Ursprung im Browser löschen; die
+        Nutzung der genannten Funktion in der App wird jedoch weiterhin{' '}
+        <strong>ausdrücklich empfohlen</strong>, weil Umfang und Bestätigungsschritte dort klar
+        geführt sind.
       </p>
       <p>
         Die PWA registriert zusätzlich einen <strong>Service Worker</strong> und nutzt den{' '}
-        <strong>Cache Storage</strong> des Browsers, um statische App-Bestandteile (HTML,
-        JavaScript, CSS, Schriften, WebAssembly-Module) für den Offline-Betrieb zwischenzuspeichern.
-        Diese Caches sind <strong>technisch erforderlich</strong> für die Funktion der PWA und
-        enthalten keine Wallet-Inhalte.
+        <strong>Cache Storage</strong> des Browsers für statische Assets (technisch erforderlich für
+        Offline-Betrieb, enthält keine personenbezogenen Inhalte).
+      </p>
+      <p>
+        Für einmalig ausgeblendete Hinweisbanner (z. B. zu Near-Zero-Security oder einer noch
+        fehlenden Seed-Phrase-Sicherung) nutzt die PWA zusätzlich den{' '}
+        <strong>sessionStorage</strong> des Browsers. Diese Einträge sind tab-bezogen und
+        verschwinden beim Schließen des Tabs; sie enthalten keine personenbezogenen Inhalte.
       </p>
 
       <h2>5. Netzwerkzugriff (Esplora)</h2>
@@ -105,12 +143,20 @@ export function PrivacyPolicyDe() {
         (z. B. Kontostandsabfragen, Transaktionslisten) ab.
       </p>
       <p>
-        Der Betreiber des jeweiligen Esplora-Dienstes könnte vielleicht — auch wenn die
-        Schnittstelle <strong>Anonymisierungsmaßnahmen</strong> vorsieht — versuchen, aus den von
-        Ihrer Wallet ausgelösten Anfragen ein <strong>Nutzungs- bzw. Transaktionsprofil</strong> zu
-        erstellen (z. B. welche Adressen oder Transaktionen wann abgefragt werden). Das{' '}
+        Der Betreiber des jeweiligen Esplora-Dienstes kann aus den von Ihrer Wallet ausgelösten
+        Anfragen technisch ein <strong>Nutzungs- bzw. Transaktionsprofil</strong> rekonstruieren
+        (z. B. welche Skripte/Adressen und Transaktionen wann abgefragt werden). Die
+        Esplora-REST-Schnittstelle ist <strong>pro Skript/Adresse</strong> aufgebaut: Für jede
+        bereits aufgedeckte Wallet-Adresse geht eine eigene Anfrage an den Server, sodass dieser
+        alle Anfragen derselben IP zu einem Adressset bündeln kann. <strong>TLS</strong> schützt
+        dabei nur den Transportweg; entschlüsselte Anfragen sieht der Anbieter in jedem Fall.{' '}
+        <strong>Eingebaute Anonymisierungsmaßnahmen auf Protokollebene</strong> (etwa über
+        kompakte Blockfilter, die einen Abgleich lokal auf Ihrem Gerät erlauben würden) sind{' '}
+        <strong>nicht</strong> Bestandteil von Esplora und werden von Bitboard derzeit auch nicht
+        zusätzlich eingesetzt. Das{' '}
         <strong>Bitboard-Wallet selbst hat darauf keinen Einfluss</strong>; die Wahl des Endpunkts
-        und ggf. zusätzliche Schutzmaßnahmen (z. B. Tor, eigener Knoten) liegen bei Ihnen.
+        und ggf. zusätzliche Schutzmaßnahmen (z. B. ein Esplora-Server unter Ihrer eigenen
+        Kontrolle, Zugriff über Tor) liegen bei Ihnen.
       </p>
 
       <h2>6. Nostr Wallet Connect (NWC)</h2>
@@ -140,7 +186,7 @@ export function PrivacyPolicyDe() {
         Kurz gesagt: Ohne von Ihnen gesetztes <strong>App-Passwort</strong> liegen sensible Inhalte
         (z. B. Wiederherstellungsphrase, Schlüssel, Verbindungsdaten zu Lightning) auf Ihrem Gerät{' '}
         <strong>nicht</strong> mit der beschriebenen starken Verschlüsselung „im Ruhezustand“ geschützt.
-        Wir <strong>empfehlen, vor dem Speichern</strong> von Seed, Deskriptoren oder einer
+        Der Betreiber <strong>empfiehlt, vor dem Speichern</strong> von Seed, Deskriptoren oder einer
         NWC-Verbindungszeichenfolge in der App zunächst <strong>ein App-Passwort zu setzen</strong>.
       </p>
       <p>
@@ -150,12 +196,22 @@ export function PrivacyPolicyDe() {
         verschlüsselt</strong>, wenn Sie ein <strong>App-Passwort</strong> gesetzt haben. Bis dahin
         kommt diese starke Verschlüsselung nicht zur Anwendung.
       </p>
+      <p>
+        Bitboard bietet zusätzlich einen <strong>Near-Zero-Security-Modus</strong>, in dem sensible
+        Inhalte zwar technisch verschlüsselt abgelegt werden, der dafür verwendete Session-Schlüssel
+        jedoch mit einem <strong>öffentlich dokumentierten Platzhalter-Passwort</strong> gewrappt ist.
+        Dieser Modus bietet daher <strong>keinen wirksamen Schutz im Ruhezustand</strong> und ist nur
+        als Einstiegs-/Komfortmodus gedacht (z. B. um die App ohne Passworteingabe auszuprobieren).
+        Für echten Schutz ist ein App-Passwort erforderlich; die App bietet hierfür einen geführten
+        Upgrade-Weg vom Near-Zero-Modus zu einem echten App-Passwort.
+      </p>
 
       <h2>8. Datensicherungen (Exports)</h2>
       <p>
         Sie können Daten aus der App herunterladen (Export). <strong>Wallet-Exporte</strong> sind
-        mit einer <strong>digitalen Signatur</strong> versehen — das hilft zu prüfen, dass die Datei
-        von der App stammt. Die Datei selbst ist <strong>als Ganzes nicht zusätzlich
+        mit einer <strong>digitalen Signatur</strong> versehen; diese soll gewährleisten, dass der
+        Export nicht von Dritten manipuliert wurde und alle exportierten Daten weiterhin exakt ihrem
+        ursprünglichen Zustand entsprechen. Die Datei selbst ist <strong>als Ganzes nicht zusätzlich
         verschlüsselt</strong>; einzelne Inhalte können weiterhin im Wallet-Format geschützt sein.
         Die Datei kann Metadaten für Wiederherstellung oder Fehlersuche enthalten.
       </p>
@@ -163,47 +219,55 @@ export function PrivacyPolicyDe() {
         Exporte <strong>weniger sensibler Daten</strong> — etwa simulierter lokaler Blockchain-Daten in
         der App — werden <strong>niemals</strong> digital signiert.
       </p>
+      <p>
+        Tritt beim Aktualisieren des Wallet-Datenbank-Schemas ein Fehler auf, kann die App
+        zusätzlich einen <strong>Migrations-Fehlerbericht</strong> als JSON in einem ZIP
+        exportieren. Dieser Bericht enthält technische Diagnosedaten zum Fehler, liegt bis zu
+        einem Export oder einer manuellen Löschung lokal im OPFS und ist <strong>nicht</strong>{' '}
+        digital signiert. Sie entscheiden selbst, ob und an wen Sie diesen Bericht zur Fehlersuche
+        weitergeben (z. B. an den Betreiber).
+      </p>
+      <p>
+        Im <strong>Near-Zero-Security-Modus</strong> sind Wallet-Export und -Import aus
+        Sicherheitsgründen gesperrt; setzen Sie zunächst ein App-Passwort, um diese Funktionen zu
+        nutzen. Lab-Exporte und der Migrations-Fehlerbericht sind davon nicht betroffen.
+      </p>
 
       <h2>9. Rechtsgrundlagen (Art. 6 DSGVO)</h2>
       <p>
-        Soweit personenbezogene Daten verarbeitet werden, stützen wir uns auf folgende
-        Rechtsgrundlagen (Auszug — im Einzelfall kann auch eine andere Vorschrift einschlägig sein):
+        Soweit personenbezogene Daten verarbeitet werden, stützt sich der Betreiber auf folgende
+        Rechtsgrundlagen:
       </p>
       <ul className="list-disc space-y-2 pl-5">
         <li>
-          <strong>Auslieferung der Website/App über Vercel</strong> (technische Protokolle wie IP,
-          Zeitstempel, angeforderte URLs):{' '}
+          <strong>Technische Hosting-Protokolle bei Vercel</strong> (IP-Adressen, Zugriffsdaten u. a.):{' '}
           <strong>Art. 6 Abs. 1 lit. f DSGVO</strong> (berechtigtes Interesse an einem sicheren und
-          stabilen Betrieb des Hostings).
+          stabilen Hosting). Die Verarbeitung erfolgt im Auftrag des Betreibers zur Erbringung des
+          Hostings.
         </li>
         <li>
-          <strong>Sprachwahl für rechtliche Texte</strong> (localStorage{' '}
-          <code>bitboard.legalLocale</code>):{' '}
-          <strong>Art. 6 Abs. 1 lit. f DSGVO</strong> (berechtigtes Interesse an einer konsistenten
-          Darstellung rechtlicher Inhalte).
+          <strong>Speicherung der Sprachpräferenz im localStorage</strong> (Schlüssel{' '}
+          <code>bitboard.legalLocale</code>): <strong>Art. 6 Abs. 1 lit. f DSGVO</strong> (berechtigtes
+          Interesse an einer komfortablen Nutzererfahrung; Komfortfunktion ohne Tracking- oder
+          Profiling-Zweck).
         </li>
         <li>
-          <strong>Lokale Wallet- und App-Funktionen</strong> (Speicherung und Verarbeitung auf Ihrem
-          Gerät, einschließlich optionaler Verschlüsselung mit App-Passwort):{' '}
-          <strong>Art. 6 Abs. 1 lit. b DSGVO</strong> (Vertrag über die Nutzung der Wallet-App) und/oder{' '}
+          <strong>Lokale Speicherung von Wallet-Daten, Lab-Daten, Library-Daten (Favoriten/Historie)
+          und Anwendungseinstellungen (in der <code>settings</code>-Tabelle innerhalb der
+          Wallet-SQLite-Datenbank) im OPFS</strong>: <strong>Art. 6 Abs. 1 lit. f DSGVO</strong> (berechtigtes
+          Interesse an der Bereitstellung einer funktionsfähigen Bitcoin-Lernplattform) in Verbindung
+          mit <strong>§ 25 Abs. 2 Nr. 2 TDDDG</strong> (soweit die Speicherung unbedingt erforderlich
+          ist, um den vom Nutzer gewünschten Dienst zu erbringen).
+        </li>
+        <li>
+          <strong>Verbindungen zu Esplora-Endpoints und Nostr Wallet Connect</strong>:{' '}
           <strong>Art. 6 Abs. 1 lit. f DSGVO</strong> (berechtigtes Interesse an der Funktionsfähigkeit
-          der App), soweit anwendbar.
-        </li>
-        <li>
-          <strong>Verbindungen zu von Ihnen konfigurierten Esplora-Endpoints</strong>:{' '}
-          <strong>Art. 6 Abs. 1 lit. b DSGVO</strong> (Durchführung der von Ihnen gewünschten
-          Wallet-Funktionen) und/oder <strong>Art. 6 Abs. 1 lit. f DSGVO</strong> gegenüber dem
-          jeweiligen Betreiber, soweit deren Verarbeitung relevant ist.
-        </li>
-        <li>
-          <strong>NWC-Verbindung</strong> (Anbindung an die von Ihnen gewählte Lightning-Wallet):{' '}
-          <strong>Art. 6 Abs. 1 lit. b DSGVO</strong> und/oder{' '}
-          <strong>Art. 6 Abs. 1 lit. f DSGVO</strong>, soweit personenbezogene Daten im Zusammenhang
-          mit der Nutzung anfallen.
+          der gewünschten Wallet- und Lightning-Funktionen).
         </li>
         <li>
           <strong>E-Mail-Korrespondenz mit dem Verantwortlichen</strong> (z. B. Datenschutzanfragen):{' '}
-          <strong>Art. 6 Abs. 1 lit. b DSGVO</strong> und/oder <strong>Art. 6 Abs. 1 lit. f DSGVO</strong>.
+          <strong>Art. 6 Abs. 1 lit. f DSGVO</strong> (berechtigtes Interesse an der Bearbeitung des
+          Anliegens).
         </li>
       </ul>
 
@@ -214,8 +278,9 @@ export function PrivacyPolicyDe() {
       </p>
       <ul className="list-disc space-y-2 pl-5">
         <li>
-          <strong>Hosting-Anbieter:</strong> <strong>Vercel Inc.</strong> sowie die dort genutzten
-          Infrastrukturanbieter, im Zusammenhang mit der Auslieferung der Website und der App.
+          <strong>Hosting-Anbieter:</strong> <strong>Vercel Inc.</strong> (USA) sowie die dort
+          genutzten Infrastrukturanbieter, im Zusammenhang mit der Auslieferung der Website und der
+          App.
         </li>
         <li>
           <strong>Esplora-Betreiber:</strong> der Betreiber des in den{' '}
@@ -243,15 +308,20 @@ export function PrivacyPolicyDe() {
         <strong>Kategorien:</strong> können insbesondere umfassen: technische Verbindungs- und
         Zugriffsdaten beim Hosting (Vercel); Sprachpräferenz (lokal im Browser); Wallet-Daten lokal
         (u. a. Schlüsselmaterial, Deskriptoren, Transaktions- und Kontostandsinformationen, sofern
-        von Ihnen angelegt oder abgerufen); NWC-Verbindungsdaten und zwischengespeicherte
-        Lightning-Informationen lokal; Daten, die im Rahmen der von Ihnen ausgelösten Anfragen an
-        Esplora- und NWC-/Lightning-Dritte sichtbar oder verarbeitet werden; sowie Kontaktdaten in
-        einer E-Mail-Korrespondenz mit dem Verantwortlichen.
+        von Ihnen angelegt oder abgerufen); optional Favoriten und Lese-Historie der Library-Artikel
+        (lokal in der Wallet-Datenbank); NWC-Verbindungsdaten und zwischengespeicherte
+        Lightning-Informationen lokal; kurzlebige UI-Präferenzen (z. B. Banner-Ausblendungen) im
+        <code>sessionStorage</code> des Browsers; optional ein lokal in OPFS abgelegter
+        Migrations-Fehlerbericht (nur wenn eine Schema-Migration fehlgeschlagen ist); Daten, die im
+        Rahmen der von Ihnen ausgelösten Anfragen an Esplora- und NWC-/Lightning-Dritte sichtbar
+        oder verarbeitet werden; sowie Kontaktdaten in einer E-Mail-Korrespondenz mit dem
+        Verantwortlichen.
       </p>
       <p>
         <strong>Speicherdauer:</strong> Hosting- und Sicherheitsprotokolle bei Vercel richten sich
-        nach den Aufbewahrungs- und Löschfristen des Anbieters — typischerweise im Bereich weniger
-        Wochen für Zugriffs- und Firewall-Logs (maßgeblich ist die jeweils aktuelle{' '}
+        nach den Aufbewahrungs- und Löschfristen des Anbieters — auf dem Hobby-Plan in der Regel
+        wenige Stunden bis maximal wenige Tage, je nach Art des Logs (maßgeblich ist die jeweils
+        aktuelle{' '}
         <a
           href="https://vercel.com/legal/privacy-policy"
           className="text-primary underline underline-offset-4"
@@ -264,7 +334,7 @@ export function PrivacyPolicyDe() {
         gespeichert, bis Sie sie löschen (z. B. App- oder Website-Daten des Browsers entfernen,
         App-Daten der PWA löschen). Von Ihnen heruntergeladene Exportdateien unterliegen Ihrer
         eigenen Verantwortung; Bitboard hat darauf nach dem Download keinen Zugriff. Inhalte einer
-        E-Mail-Korrespondenz löschen wir, sobald sie für die Bearbeitung Ihres Anliegens nicht mehr
+        E-Mail-Korrespondenz löscht der Betreiber, sobald sie für die Bearbeitung Ihres Anliegens nicht mehr
         erforderlich sind, vorbehaltlich gesetzlicher Aufbewahrungspflichten.
       </p>
 
@@ -355,11 +425,11 @@ export function PrivacyPolicyDe() {
         <strong>Stand:</strong> April 2026.
       </p>
       <p>
-        Wir behalten uns vor, diese Datenschutzerklärung anzupassen, wenn sich technische oder
+        Der Betreiber behält sich vor, diese Datenschutzerklärung anzupassen, wenn sich technische oder
         rechtliche Rahmenbedingungen ändern. Die jeweils aktuelle Version finden Sie unter der
         URL dieser Seite (z. B. <strong>/privacy</strong> in der App bzw. unter der öffentlich
         erreichbaren Entsprechung auf der Landing Page). Über <strong>wesentliche Änderungen</strong>{' '}
-        informieren wir nach Möglichkeit, z. B. über diese Website oder das öffentliche
+        informiert der Betreiber nach Möglichkeit, z. B. über diese Website oder das öffentliche
         Projekt-Repository (z. B. GitHub).
       </p>
       <p>

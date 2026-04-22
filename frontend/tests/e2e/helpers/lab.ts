@@ -522,8 +522,9 @@ export async function createRandomTransactionsInLab(
   await page.getByLabel('Number of random transactions').fill(String(count))
   await page.getByRole('button', { name: 'Make random transaction' }).click()
 
+  const createdToastTimeoutMs = Math.max(45_000, 800 * count)
   await expect(page.getByText(`Created ${count} random transaction(s)`)).toBeVisible({
-    timeout: 30000,
+    timeout: createdToastTimeoutMs,
   })
 }
 

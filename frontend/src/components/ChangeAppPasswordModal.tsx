@@ -4,7 +4,7 @@ import { Shield, CheckCircle2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { DialogDescription } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { PasswordInput } from '@/components/ui/password-input'
 import { Label } from '@/components/ui/label'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { AppModal } from '@/components/AppModal'
@@ -132,13 +132,13 @@ export function ChangeAppPasswordModal({
                       Current password
                     </InfomodeWrapper>
                   </Label>
-                  <Input
+                  <PasswordInput
                     id="change-app-current-password"
-                    type="password"
+                    passwordKind="app"
+                    nameSuffix="current"
                     value={currentPassword}
                     onChange={(e) => setCurrentPassword(e.target.value)}
                     placeholder="Enter your current app password"
-                    autoComplete="current-password"
                     autoFocus
                   />
                 </div>

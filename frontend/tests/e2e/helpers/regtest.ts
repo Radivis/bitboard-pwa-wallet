@@ -1,3 +1,5 @@
+import { expect, type Page } from '@playwright/test'
+
 /**
  * Helpers for E2E tests that use the regtest environment (bitcoinerlab/tester).
  * Requires the regtest container to be running: npm run test:regtest:start
@@ -92,6 +94,35 @@ interface EsploraUtxo {
   vout: number
   value: number
   status: { confirmed: boolean; block_height?: number }
+}
+
+/**
+ * After regtest fund + mine + Esplora polling, the dashboard can still show 0 until BDK
+ * finishes ingesting the sync. Sync idle is not always enough on slow CI; wait until the
+ * balance card clearly shows a non-dust on-chain total (Send’s canBuild needs this).
+ */
+export async function waitForDashboardShowsFundedOnChainBalance(page: Page): Promise<void> {
+  const card = page.locator('[data-infomode-id="dashboard-balance-card"]')
+  const timeoutMs = Math.max(60_000, E2E_CI_AWARE_LONG_WAIT_MS)
+  await expect(card).toBeVisible({ timeout: 10_000 })
+  await expect
+    .poll(
+      async () => {
+        const text = (await card.textContent()) ?? ''
+        // Default ~0.00100000 BTC = 100k sats; also cover common unit toggles (sat / mBTC / ksat).
+        if (/0\.00[1-9]\d*/.test(text)) return true
+        if (/(100,000|100[,\s]000|100000)\b/.test(text)) return true
+        if (/\b100\.(000|00\d)\b/.test(text) && /mBTC|milli|ksat/i.test(text)) return true
+        return false
+      },
+      {
+        timeout: timeoutMs,
+        intervals: [250, 500, 1000],
+        message:
+          'Dashboard on-chain balance still looks empty (BDK may not have caught Esplora yet)',
+      },
+    )
+    .toBe(true)
 }
 
 /**

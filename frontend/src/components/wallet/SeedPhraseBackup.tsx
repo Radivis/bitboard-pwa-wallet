@@ -14,7 +14,7 @@ import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { AppModal } from '@/components/AppModal'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { PasswordInput } from '@/components/ui/password-input'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
 import { DialogDescription } from '@/components/ui/dialog'
@@ -141,9 +141,9 @@ export function SeedPhraseBackup() {
           >
             <div className="space-y-2">
               <Label htmlFor="backup-password">Bitboard app password</Label>
-              <Input
+              <PasswordInput
                 id="backup-password"
-                type="password"
+                passwordKind="app"
                 value={promptPassword}
                 onChange={(e) => setPromptPassword(e.target.value)}
                 placeholder="Enter your Bitboard app password"

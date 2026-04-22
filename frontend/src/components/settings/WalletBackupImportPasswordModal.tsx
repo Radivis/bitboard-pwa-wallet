@@ -2,7 +2,7 @@ import { useCallback, useEffect, useId, useState } from 'react'
 import { DialogDescription } from '@/components/ui/dialog'
 import { AppModal } from '@/components/AppModal'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { PasswordInput } from '@/components/ui/password-input'
 import { Label } from '@/components/ui/label'
 
 interface WalletBackupImportPasswordModalProps {
@@ -74,10 +74,9 @@ export function WalletBackupImportPasswordModal({
       </DialogDescription>
       <div className="mt-4 space-y-2">
         <Label htmlFor={pwdId}>Signing password</Label>
-        <Input
+        <PasswordInput
           id={pwdId}
-          type="password"
-          autoComplete="current-password"
+          passwordKind="export"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           disabled={isBusy}
