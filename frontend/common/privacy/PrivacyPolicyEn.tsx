@@ -131,12 +131,19 @@ export function PrivacyPolicyEn() {
         balance queries, transaction lists).
       </p>
       <p>
-        The operator of your chosen Esplora service might possibly attempt to build
-        a <strong>usage or transaction-related profile</strong> from the requests your wallet makes —
-        for example which addresses or transactions are queried and when —{' '}
-        <strong>even though</strong> the Esplora API includes <strong>anonymization measures</strong>. The{' '}
-        <strong>Bitboard wallet itself cannot influence this</strong>; your choice of endpoint and any
-        additional protections (e.g. Tor, your own node) are up to you.
+        The operator of your chosen Esplora service can, in principle, reconstruct a{' '}
+        <strong>usage or transaction-related profile</strong> from the requests your wallet makes
+        (for example which scripts/addresses and transactions are queried and when). The Esplora
+        REST interface is <strong>per-script/per-address</strong>: for every revealed wallet
+        address a separate request goes to the server, so it can easily cluster all requests from
+        the same IP into a single address set. <strong>TLS</strong> only protects the transport;
+        on the server side the provider sees your requests in the clear.{' '}
+        <strong>Protocol-level anonymization measures</strong> (for example compact block filters
+        that would let your device match chain data locally instead of asking the server per
+        address) are <strong>not</strong> part of Esplora, and Bitboard does not currently layer
+        any such mitigation on top. The <strong>Bitboard wallet itself cannot influence this</strong>;
+        your choice of endpoint and any additional protections (e.g. an Esplora server you run
+        yourself, access via Tor) are up to you.
       </p>
 
       <h2>6. Nostr Wallet Connect (NWC)</h2>

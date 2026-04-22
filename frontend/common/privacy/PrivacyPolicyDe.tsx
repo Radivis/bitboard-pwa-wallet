@@ -143,12 +143,20 @@ export function PrivacyPolicyDe() {
         (z. B. Kontostandsabfragen, Transaktionslisten) ab.
       </p>
       <p>
-        Der Betreiber des jeweiligen Esplora-Dienstes könnte vielleicht — auch wenn die
-        Schnittstelle <strong>Anonymisierungsmaßnahmen</strong> vorsieht — versuchen, aus den von
-        Ihrer Wallet ausgelösten Anfragen ein <strong>Nutzungs- bzw. Transaktionsprofil</strong> zu
-        erstellen (z. B. welche Adressen oder Transaktionen wann abgefragt werden). Das{' '}
+        Der Betreiber des jeweiligen Esplora-Dienstes kann aus den von Ihrer Wallet ausgelösten
+        Anfragen technisch ein <strong>Nutzungs- bzw. Transaktionsprofil</strong> rekonstruieren
+        (z. B. welche Skripte/Adressen und Transaktionen wann abgefragt werden). Die
+        Esplora-REST-Schnittstelle ist <strong>pro Skript/Adresse</strong> aufgebaut: Für jede
+        bereits aufgedeckte Wallet-Adresse geht eine eigene Anfrage an den Server, sodass dieser
+        alle Anfragen derselben IP zu einem Adressset bündeln kann. <strong>TLS</strong> schützt
+        dabei nur den Transportweg; entschlüsselte Anfragen sieht der Anbieter in jedem Fall.{' '}
+        <strong>Eingebaute Anonymisierungsmaßnahmen auf Protokollebene</strong> (etwa über
+        kompakte Blockfilter, die einen Abgleich lokal auf Ihrem Gerät erlauben würden) sind{' '}
+        <strong>nicht</strong> Bestandteil von Esplora und werden von Bitboard derzeit auch nicht
+        zusätzlich eingesetzt. Das{' '}
         <strong>Bitboard-Wallet selbst hat darauf keinen Einfluss</strong>; die Wahl des Endpunkts
-        und ggf. zusätzliche Schutzmaßnahmen (z. B. Tor, eigener Knoten) liegen bei Ihnen.
+        und ggf. zusätzliche Schutzmaßnahmen (z. B. ein Esplora-Server unter Ihrer eigenen
+        Kontrolle, Zugriff über Tor) liegen bei Ihnen.
       </p>
 
       <h2>6. Nostr Wallet Connect (NWC)</h2>
