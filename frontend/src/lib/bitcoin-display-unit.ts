@@ -1,4 +1,4 @@
-import { MAX_SAFE_SATS } from '@/lib/bitcoin-utils'
+import { formatSats, MAX_SAFE_SATS } from '@/lib/bitcoin-utils'
 
 const SATS_PER_BTC = 100_000_000
 
@@ -47,7 +47,7 @@ export function formatAmountInBitcoinDisplayUnit(
     case 'uBTC':
       return (s / SATS_PER_uBTC).toFixed(2)
     case 'sat':
-      return Math.floor(s).toLocaleString()
+      return formatSats(s)
     case 'ksat':
       return (s / SATS_PER_ksat).toFixed(3)
     default: {

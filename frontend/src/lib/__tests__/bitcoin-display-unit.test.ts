@@ -12,7 +12,7 @@ describe('bitcoin-display-unit', () => {
     expect(formatAmountInBitcoinDisplayUnit(100_000, 'mBTC')).toBe('1.00000')
     expect(formatAmountInBitcoinDisplayUnit(100, 'uBTC')).toBe('1.00')
     expect(formatAmountInBitcoinDisplayUnit(1_000, 'ksat')).toBe('1.000')
-    expect(formatAmountInBitcoinDisplayUnit(1234, 'sat')).toBe('1,234')
+    expect(formatAmountInBitcoinDisplayUnit(1234, 'sat')).toBe('1234')
   })
 
   it('parseAmountToSatsFromBitcoinDisplayUnit inverts format for round trips', () => {

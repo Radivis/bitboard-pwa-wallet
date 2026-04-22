@@ -55,16 +55,24 @@ export function toBitcoinNetwork(mode: NetworkMode): BitcoinNetwork {
 /** Satoshis per 1 BTC (consensus). */
 export const SATS_PER_BTC = 100_000_000
 
+/** Upper bound for sat amounts passed through JS (safe integer range). */
+export const MAX_SAFE_SATS = Number.MAX_SAFE_INTEGER
+
 export function formatBTC(sats: number): string {
   return (sats / SATS_PER_BTC).toFixed(8)
 }
 
+/**
+ * Formats a satoshi amount as a base-10 integer string: plain digits, no thousands
+ * grouping and no fraction part. Sats are indivisible on-chain; any float is floored
+ * (sub-sat or Lightning-fractional display is out of scope until needed).
+ */
 export function formatSats(sats: number): string {
-  return sats.toLocaleString()
+  if (!Number.isFinite(sats) || sats < 0) {
+    return '0'
+  }
+  return String(Math.floor(Math.min(sats, MAX_SAFE_SATS)))
 }
-
-/** Upper bound for sat amounts passed through JS (safe integer range). */
-export const MAX_SAFE_SATS = Number.MAX_SAFE_INTEGER
 
 /**
  * Parses a BTC amount string to satoshis. Returns 0 for invalid or negative
