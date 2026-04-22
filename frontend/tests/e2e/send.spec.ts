@@ -10,6 +10,7 @@ import {
   fundRegtestAddress,
   mineRegtestBlocks,
   waitForConfirmedBalance,
+  waitForDashboardShowsFundedOnChainBalance,
 } from './helpers/regtest'
 import { runDashboardSyncUntilIdle } from './helpers/dashboard-sync'
 import { goToWalletTab } from './helpers/wallet-nav'
@@ -128,6 +129,7 @@ test.describe('Send Page', () => {
     // assert a headline sat value — shared regtest state can show a cumulative total.
     await runDashboardSyncUntilIdle(page)
     await runDashboardSyncUntilIdle(page)
+    await waitForDashboardShowsFundedOnChainBalance(page)
 
     await goToWalletTab(page, 'Send')
     await expect(page.getByText('Send Bitcoin')).toBeVisible()

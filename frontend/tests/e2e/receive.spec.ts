@@ -37,10 +37,12 @@ test.describe('Receive Page', () => {
       name: 'Generate New Address',
     })
     await expect(newAddressButton).toBeVisible()
-    const oldTrimmed = addressText!.trim()
+    // Re-read immediately before clicking: the display can update after copy (e.g. async
+    // wallet work) and oldToMatch would otherwise stay out of sync with what "new" means.
+    const addressBeforeNew = (await addressDisplay.textContent())?.trim() ?? ''
     await newAddressButton.click()
     // getNewAddress is async; poll until the UI shows a different address (fixed
     // sleeps are flaky under load).
-    await expect(addressDisplay).not.toHaveText(oldTrimmed, { timeout: 20000 })
+    await expect(addressDisplay).not.toHaveText(addressBeforeNew, { timeout: 25_000 })
   })
 })
