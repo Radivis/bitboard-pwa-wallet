@@ -1,6 +1,13 @@
 import { useCallback, useMemo, useState } from 'react'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import { Wallet, RefreshCw, Home, Loader2, ScanSearch } from 'lucide-react'
+import {
+  Wallet,
+  RefreshCw,
+  Home,
+  Loader2,
+  ScanSearch,
+  AlertTriangle,
+} from 'lucide-react'
 import { toast } from 'sonner'
 import {
   useWalletStore,
@@ -25,6 +32,7 @@ import { balanceInfoToOnChainDisplay } from '@/lib/onchain-balance-display'
 import {
   runIncrementalDashboardWalletSync,
   runFullScanDashboardWalletSync,
+  retryImportInitialEsploraSyncWithWalletStatus,
 } from '@/lib/wallet-utils'
 import { labOwnersEqual, walletLabOwner } from '@/lib/lab-owner'
 import { labTransactionsForWallet, lookupLabAddressOwner } from '@/lib/lab-utils'
@@ -41,6 +49,65 @@ import { LightningPaymentItem } from '@/components/LightningPaymentItem'
 export const Route = createFileRoute('/wallet/')({
   component: DashboardPage,
 })
+
+function ImportInitialSyncErrorBanner() {
+  const networkMode = useWalletStore((s) => s.networkMode)
+  const message = useWalletStore((s) => s.importInitialSyncErrorMessage)
+  const setImportInitialSyncErrorMessage = useWalletStore(
+    (s) => s.setImportInitialSyncErrorMessage,
+  )
+  const walletStatus = useWalletStore((s) => s.walletStatus)
+  const isSyncing = walletStatus === 'syncing'
+
+  if (networkMode === 'lab' || message == null || message === '') {
+    return null
+  }
+
+  return (
+    <div
+      role="alert"
+      className="flex flex-col gap-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+    >
+      <div className="flex min-w-0 flex-1 gap-3">
+        <AlertTriangle
+          className="h-5 w-5 shrink-0 text-amber-700 dark:text-amber-500"
+          aria-hidden
+        />
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-foreground">
+            Initial sync did not finish
+          </p>
+          <p className="text-xs break-words text-muted-foreground">
+            {message}
+          </p>
+        </div>
+      </div>
+      <div className="flex shrink-0 items-center justify-end gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={isSyncing}
+          onClick={() => {
+            void retryImportInitialEsploraSyncWithWalletStatus()
+          }}
+        >
+          {isSyncing ? 'Syncing...' : 'Retry'}
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="text-muted-foreground"
+          disabled={isSyncing}
+          onClick={() => setImportInitialSyncErrorMessage(null)}
+        >
+          Dismiss
+        </Button>
+      </div>
+    </div>
+  )
+}
 
 function BalanceCard() {
   const networkMode = useWalletStore((s) => s.networkMode)
@@ -591,6 +658,8 @@ export function DashboardPage() {
           </p>
         ) : null}
       </PageHeader>
+
+      <ImportInitialSyncErrorBanner />
 
       {walletStatus === 'syncing' && (
         <LoadingSpinner text="Syncing wallet..." />

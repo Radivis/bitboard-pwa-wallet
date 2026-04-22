@@ -46,3 +46,28 @@ export function reportWalletSyncError(
     toast.error('Sync failed — wallet unlocked but data may be stale')
   }
 }
+
+/**
+ * Import-time initial Esplora full scan failed; offer the same retry as the dashboard banner.
+ */
+export function showImportInitialSyncFailureToast(
+  err: unknown,
+  onRetry: () => void | Promise<void>,
+): void {
+  console.error('Post-import initial sync failed', err)
+
+  const detail = sanitizeErrorMessageForUi(errorMessage(err))
+  const description = detail
+    ? `${detail} · Retry or use Full rescan on the dashboard.`
+    : 'Retry or use Full rescan on the dashboard.'
+
+  toast.error('Initial sync failed', {
+    description,
+    action: {
+      label: 'Retry',
+      onClick: () => {
+        void onRetry()
+      },
+    },
+  })
+}

@@ -75,6 +75,11 @@ interface TransientWalletState {
   lastSyncTime: Date | null
   transactions: TransactionDetails[]
   loadedSubWallet: LoadedSubWallet | null
+  /**
+   * Set when post-import Esplora full scan fails; in-memory only (not persisted).
+   * Cleared on successful retry, lock, or dismiss.
+   */
+  importInitialSyncErrorMessage: string | null
 }
 
 interface WalletActions {
@@ -90,6 +95,7 @@ interface WalletActions {
   setLastSyncTime: (time: Date | null) => void
   setTransactions: (txs: TransactionDetails[]) => void
   setActiveWalletBootstrapInFlight: (inFlight: boolean) => void
+  setImportInitialSyncErrorMessage: (message: string | null) => void
   lockWallet: () => void
   resetWallet: () => void
 }
@@ -104,6 +110,7 @@ const TRANSIENT_DEFAULTS: TransientWalletState = {
   lastSyncTime: null,
   transactions: [],
   loadedSubWallet: null,
+  importInitialSyncErrorMessage: null,
 }
 
 export const useWalletStore = create<WalletState>()(
@@ -134,9 +141,15 @@ export const useWalletStore = create<WalletState>()(
       setTransactions: (txs) => set({ transactions: txs }),
       setActiveWalletBootstrapInFlight: (inFlight) =>
         set({ activeWalletBootstrapInFlight: inFlight }),
+      setImportInitialSyncErrorMessage: (message) =>
+        set({ importInitialSyncErrorMessage: message }),
 
       lockWallet: () =>
-        set({ ...TRANSIENT_DEFAULTS, walletStatus: 'locked', loadedSubWallet: null }),
+        set({
+          ...TRANSIENT_DEFAULTS,
+          walletStatus: 'locked',
+          loadedSubWallet: null,
+        }),
 
       resetWallet: () =>
         set({

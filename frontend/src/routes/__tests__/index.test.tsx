@@ -60,16 +60,24 @@ vi.mock('@/hooks/useBitcoinUnit', () => ({
   useBitcoinUnit: () => ({ data: 'BTC' }),
 }))
 
-const { mockRunIncrementalDashboardWalletSync, mockRunFullScanDashboardWalletSync } =
-  vi.hoisted(() => {
-    return {
-      mockRunIncrementalDashboardWalletSync: vi.fn().mockResolvedValue(undefined),
-      mockRunFullScanDashboardWalletSync: vi.fn().mockResolvedValue(undefined),
-    }
-  })
+const {
+  mockRunIncrementalDashboardWalletSync,
+  mockRunFullScanDashboardWalletSync,
+  mockRetryImportInitialEsploraSyncWithWalletStatus,
+} = vi.hoisted(() => {
+  return {
+    mockRunIncrementalDashboardWalletSync: vi.fn().mockResolvedValue(undefined),
+    mockRunFullScanDashboardWalletSync: vi.fn().mockResolvedValue(undefined),
+    mockRetryImportInitialEsploraSyncWithWalletStatus: vi
+      .fn()
+      .mockResolvedValue(undefined),
+  }
+})
 vi.mock('@/lib/wallet-utils', () => ({
   runIncrementalDashboardWalletSync: mockRunIncrementalDashboardWalletSync,
   runFullScanDashboardWalletSync: mockRunFullScanDashboardWalletSync,
+  retryImportInitialEsploraSyncWithWalletStatus:
+    mockRetryImportInitialEsploraSyncWithWalletStatus,
 }))
 
 vi.mock('@/hooks/useLightningMutations', () => ({
@@ -108,6 +116,8 @@ describe('DashboardPage', () => {
       setBalance: vi.fn(),
       setTransactions: vi.fn(),
       setLastSyncTime: vi.fn(),
+      importInitialSyncErrorMessage: null as string | null,
+      setImportInitialSyncErrorMessage: vi.fn(),
     }
   })
 
@@ -193,6 +203,24 @@ describe('DashboardPage', () => {
     expect(
       screen.queryByRole('button', { name: 'Full rescan' }),
     ).not.toBeInTheDocument()
+  })
+
+  it('shows import initial sync error banner when message is set', () => {
+    walletStoreState.importInitialSyncErrorMessage = 'HTTP 429'
+    renderWithProviders(<DashboardPage />)
+    expect(screen.getByRole('alert')).toBeInTheDocument()
+    expect(screen.getByText('Initial sync did not finish')).toBeInTheDocument()
+    expect(screen.getByText('HTTP 429')).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'Retry' }),
+    ).toBeInTheDocument()
+  })
+
+  it('does not show import sync error banner on lab', () => {
+    walletStoreState.networkMode = 'lab'
+    walletStoreState.importInitialSyncErrorMessage = 'failed'
+    renderWithProviders(<DashboardPage />)
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 
   it('renders transaction list', () => {

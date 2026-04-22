@@ -21,9 +21,14 @@ import {
   useWallets,
 } from '@/db'
 import { ensureSecretsChannel } from '@/workers/secrets-channel'
-import { toBitcoinNetwork, getEsploraUrl } from '@/lib/bitcoin-utils'
-import { loadCustomEsploraUrl } from '@/lib/wallet-utils'
-import { reportWalletSyncError } from '@/lib/wallet-sync-error-toast'
+import { toBitcoinNetwork } from '@/lib/bitcoin-utils'
+import {
+  runImportInitialEsploraSync,
+  retryImportInitialEsploraSyncWithWalletStatus,
+} from '@/lib/wallet-utils'
+import { showImportInitialSyncFailureToast } from '@/lib/wallet-sync-error-toast'
+import { sanitizeErrorMessageForUi } from '@/lib/sanitize-error-for-ui'
+import { errorMessage } from '@/lib/utils'
 import { invalidateWalletRelatedQueriesAndNotifyOtherTabs } from '@/lib/wallet-query-cache-sync'
 
 export const Route = createFileRoute('/setup/import')({
@@ -41,7 +46,6 @@ export function ImportWalletPage() {
 
   const validateMnemonic = useCryptoStore((s) => s.validateMnemonic)
   const importWalletAndEncryptSecrets = useCryptoStore((s) => s.importWalletAndEncryptSecrets)
-  const fullScanWallet = useCryptoStore((s) => s.fullScanWallet)
   const networkMode = useWalletStore((s) => s.networkMode)
   const addressType = useWalletStore((s) => s.addressType)
   const accountId = useWalletStore((s) => s.accountId)
@@ -49,10 +53,9 @@ export function ImportWalletPage() {
   const setWalletStatus = useWalletStore((s) => s.setWalletStatus)
   const setCurrentAddress = useWalletStore((s) => s.setCurrentAddress)
   const commitLoadedSubWallet = useWalletStore((s) => s.commitLoadedSubWallet)
-  const setBalance = useWalletStore((s) => s.setBalance)
-  const setTransactions = useWalletStore((s) => s.setTransactions)
-  const getBalanceFromWorker = useCryptoStore((s) => s.getBalance)
-  const getTransactionList = useCryptoStore((s) => s.getTransactionList)
+  const setImportInitialSyncErrorMessage = useWalletStore(
+    (s) => s.setImportInitialSyncErrorMessage,
+  )
   const addWallet = useAddWallet()
   const queryClient = useQueryClient()
 
@@ -93,41 +96,23 @@ export function ImportWalletPage() {
 
   /**
    * First Esplora full scan after import (long-running); runs after navigation.
-   * Lab mode has no Esplora URL — only refresh WASM balance/tx, do not call fullScanWallet.
+   * Lab / no Esplora URL: refresh WASM balance/tx only (see {@link runImportInitialEsploraSync}).
    */
   const runPostImportInitialSync = useCallback(async () => {
     try {
-      const customUrl = await loadCustomEsploraUrl(networkMode)
-      const esploraUrl = getEsploraUrl(networkMode, customUrl)
-      if (!esploraUrl) {
-        const balance = await getBalanceFromWorker()
-        const txs = await getTransactionList()
-        setBalance(balance)
-        setTransactions(txs)
-        setWalletStatus('unlocked')
-        return
-      }
-
-      await fullScanWallet(esploraUrl, 20)
-
-      const balance = await getBalanceFromWorker()
-      const txs = await getTransactionList()
-      setBalance(balance)
-      setTransactions(txs)
+      await runImportInitialEsploraSync()
       setWalletStatus('unlocked')
     } catch (err: unknown) {
-      reportWalletSyncError('initial-import', err)
       setWalletStatus('unlocked')
+      const msg =
+        sanitizeErrorMessageForUi(errorMessage(err) ?? String(err)) ||
+        'Initial sync failed'
+      setImportInitialSyncErrorMessage(msg)
+      showImportInitialSyncFailureToast(err, () => {
+        void retryImportInitialEsploraSyncWithWalletStatus()
+      })
     }
-  }, [
-    networkMode,
-    fullScanWallet,
-    getBalanceFromWorker,
-    getTransactionList,
-    setBalance,
-    setTransactions,
-    setWalletStatus,
-  ])
+  }, [setImportInitialSyncErrorMessage, setWalletStatus])
 
   const restoreMutation = useMutation({
     mutationFn: async () => {
