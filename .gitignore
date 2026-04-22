@@ -8,6 +8,7 @@
 /.cursor/tdd-protocols/
 # PR reviews are performed locally - no need to spam the repo with them
 /.cursor/pr-reviews/
+/.cursor/ux-audits/
 
 /target
 .env
