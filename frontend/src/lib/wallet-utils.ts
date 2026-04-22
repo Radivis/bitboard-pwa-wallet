@@ -233,6 +233,37 @@ export async function runIncrementalDashboardWalletSync(options: {
 }
 
 /**
+ * Full Esplora scan for the dashboard "Full rescan" control: re-scans the
+ * address gap (same BDK path as import). Use when incremental sync cannot fix
+ * a wrong balance or history.
+ *
+ * Does not add its own success toast: {@link syncActiveWalletAndUpdateState} shows
+ * loading and success toasts for the full-scan path.
+ */
+export async function runFullScanDashboardWalletSync(options: {
+  networkMode: NetworkMode
+  password: string | null
+  activeWalletId: number | null
+}): Promise<void> {
+  await syncActiveWalletAndUpdateState(options.networkMode, {
+    useFullScan: true,
+  })
+  invalidateLightningDashboardQueries()
+  const { setLastSyncTime } = useWalletStore.getState()
+  setLastSyncTime(new Date())
+  if (options.password && options.activeWalletId != null) {
+    const { exportChangeset } = useCryptoStore.getState()
+    const changeset = await exportChangeset()
+    await updateWalletChangeset({
+      password: options.password,
+      walletId: options.activeWalletId,
+      changesetJson: changeset,
+      markFullScanDone: true,
+    })
+  }
+}
+
+/**
  * Loads from persisted changeset when possible. If BDK reports a persisted chain
  * that does not match the target network (e.g. testnet4 state stored under another
  * sub-wallet slot), retries with a fresh chain for that network so the UI can recover.

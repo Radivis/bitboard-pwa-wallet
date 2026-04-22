@@ -1,8 +1,12 @@
-import { useCallback, useMemo } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import { Wallet, RefreshCw, Home, Loader2 } from 'lucide-react'
+import { Wallet, RefreshCw, Home, Loader2, ScanSearch } from 'lucide-react'
 import { toast } from 'sonner'
-import { useWalletStore, NETWORK_LABELS } from '@/stores/walletStore'
+import {
+  useWalletStore,
+  NETWORK_LABELS,
+  type NetworkMode,
+} from '@/stores/walletStore'
 import {
   hasNetworkConnectedWallet,
   useLightningStore,
@@ -18,7 +22,10 @@ import { TransactionItem } from '@/components/TransactionItem'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
 import { balanceInfoToOnChainDisplay } from '@/lib/onchain-balance-display'
-import { runIncrementalDashboardWalletSync } from '@/lib/wallet-utils'
+import {
+  runIncrementalDashboardWalletSync,
+  runFullScanDashboardWalletSync,
+} from '@/lib/wallet-utils'
 import { labOwnersEqual, walletLabOwner } from '@/lib/lab-owner'
 import { labTransactionsForWallet, lookupLabAddressOwner } from '@/lib/lab-utils'
 import { useLabChainStateQuery } from '@/hooks/useLabChainStateQuery'
@@ -275,17 +282,23 @@ function BalanceCard() {
   )
 }
 
-function SyncButton() {
-  const walletStatus = useWalletStore((s) => s.walletStatus)
+function SyncButton({
+  isBusy,
+  isThisOp,
+  onThisOp,
+}: {
+  isBusy: boolean
+  isThisOp: boolean
+  onThisOp: (running: boolean) => void
+}) {
   const networkMode = useWalletStore((s) => s.networkMode)
   const activeWalletId = useWalletStore((s) => s.activeWalletId)
   const setWalletStatus = useWalletStore((s) => s.setWalletStatus)
   const password = useSessionStore((s) => s.password)
 
-  const isSyncing = walletStatus === 'syncing'
-
   const handleSync = useCallback(async () => {
     try {
+      onThisOp(true)
       setWalletStatus('syncing')
       await runIncrementalDashboardWalletSync({
         networkMode,
@@ -298,8 +311,10 @@ function SyncButton() {
       setWalletStatus('unlocked')
       const detail = err instanceof Error ? err.message : String(err)
       toast.error(detail || 'Sync failed')
+    } finally {
+      onThisOp(false)
     }
-  }, [networkMode, activeWalletId, password, setWalletStatus])
+  }, [networkMode, activeWalletId, password, onThisOp, setWalletStatus])
 
   return (
     <InfomodeWrapper
@@ -311,12 +326,92 @@ function SyncButton() {
         variant="outline"
         size="sm"
         onClick={handleSync}
-        disabled={isSyncing}
+        disabled={isBusy}
       >
-        <RefreshCw className={`mr-2 h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
-        {isSyncing ? 'Syncing...' : 'Sync'}
+        <RefreshCw className={`mr-2 h-4 w-4 ${isThisOp ? 'animate-spin' : ''}`} />
+        {isThisOp ? 'Syncing...' : 'Sync'}
       </Button>
     </InfomodeWrapper>
+  )
+}
+
+const FULL_RESCAN_NETWORKS: NetworkMode[] = ['mainnet', 'testnet', 'signet']
+
+function FullRescanButton({
+  isBusy,
+  isThisOp,
+  onThisOp,
+}: {
+  isBusy: boolean
+  isThisOp: boolean
+  onThisOp: (running: boolean) => void
+}) {
+  const networkMode = useWalletStore((s) => s.networkMode)
+  const activeWalletId = useWalletStore((s) => s.activeWalletId)
+  const setWalletStatus = useWalletStore((s) => s.setWalletStatus)
+  const password = useSessionStore((s) => s.password)
+
+  const handleFullRescan = useCallback(async () => {
+    try {
+      onThisOp(true)
+      setWalletStatus('syncing')
+      await runFullScanDashboardWalletSync({
+        networkMode,
+        password,
+        activeWalletId,
+      })
+      setWalletStatus('unlocked')
+    } catch (err) {
+      setWalletStatus('unlocked')
+      const detail = err instanceof Error ? err.message : String(err)
+      toast.error(detail || 'Full rescan failed')
+    } finally {
+      onThisOp(false)
+    }
+  }, [networkMode, activeWalletId, password, onThisOp, setWalletStatus])
+
+  if (!FULL_RESCAN_NETWORKS.includes(networkMode)) {
+    return null
+  }
+
+  return (
+    <InfomodeWrapper
+      infoId="dashboard-full-rescan-button"
+      infoTitle="Full rescan"
+      infoText="Re-scans a window of your addresses against Esplora (slower than Sync). Use if your balance or transaction list still looks wrong after a normal sync—for example a poor connection during restore."
+    >
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={handleFullRescan}
+        disabled={isBusy}
+        className="text-muted-foreground"
+      >
+        <ScanSearch className={`mr-2 h-4 w-4 ${isThisOp ? 'animate-pulse' : ''}`} />
+        {isThisOp ? 'Scanning...' : 'Full rescan'}
+      </Button>
+    </InfomodeWrapper>
+  )
+}
+
+function DashboardOnChainSyncControls() {
+  const [activeOp, setActiveOp] = useState<'sync' | 'full' | null>(null)
+  const walletStatus = useWalletStore((s) => s.walletStatus)
+  const isBusy = walletStatus === 'syncing'
+
+  return (
+    <div className="flex flex-col items-end gap-2">
+      <SyncButton
+        isBusy={isBusy}
+        isThisOp={activeOp === 'sync'}
+        onThisOp={(running) => setActiveOp(running ? 'sync' : null)}
+      />
+      <FullRescanButton
+        isBusy={isBusy}
+        isThisOp={activeOp === 'full'}
+        onThisOp={(running) => setActiveOp(running ? 'full' : null)}
+      />
+    </div>
   )
 }
 
@@ -401,7 +496,7 @@ function RecentTransactions() {
       <CardHeader>
         <div className="flex items-center justify-between">
           <CardTitle>Recent Transactions</CardTitle>
-          {networkMode !== 'lab' && <SyncButton />}
+          {networkMode !== 'lab' && <DashboardOnChainSyncControls />}
         </div>
       </CardHeader>
       <CardContent>

@@ -60,8 +60,16 @@ vi.mock('@/hooks/useBitcoinUnit', () => ({
   useBitcoinUnit: () => ({ data: 'BTC' }),
 }))
 
+const { mockRunIncrementalDashboardWalletSync, mockRunFullScanDashboardWalletSync } =
+  vi.hoisted(() => {
+    return {
+      mockRunIncrementalDashboardWalletSync: vi.fn().mockResolvedValue(undefined),
+      mockRunFullScanDashboardWalletSync: vi.fn().mockResolvedValue(undefined),
+    }
+  })
 vi.mock('@/lib/wallet-utils', () => ({
-  runIncrementalDashboardWalletSync: vi.fn().mockResolvedValue(undefined),
+  runIncrementalDashboardWalletSync: mockRunIncrementalDashboardWalletSync,
+  runFullScanDashboardWalletSync: mockRunFullScanDashboardWalletSync,
 }))
 
 vi.mock('@/hooks/useLightningMutations', () => ({
@@ -161,6 +169,30 @@ describe('DashboardPage', () => {
     expect(
       screen.getByText(/No activity yet/),
     ).toBeInTheDocument()
+  })
+
+  it('shows Full rescan on testnet', () => {
+    walletStoreState.networkMode = 'testnet'
+    renderWithProviders(<DashboardPage />)
+    expect(
+      screen.getByRole('button', { name: 'Full rescan' }),
+    ).toBeInTheDocument()
+  })
+
+  it('does not show Full rescan on regtest', () => {
+    walletStoreState.networkMode = 'regtest'
+    renderWithProviders(<DashboardPage />)
+    expect(
+      screen.queryByRole('button', { name: 'Full rescan' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('does not show Full rescan on lab', () => {
+    walletStoreState.networkMode = 'lab'
+    renderWithProviders(<DashboardPage />)
+    expect(
+      screen.queryByRole('button', { name: 'Full rescan' }),
+    ).not.toBeInTheDocument()
   })
 
   it('renders transaction list', () => {
