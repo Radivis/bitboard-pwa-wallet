@@ -12,6 +12,8 @@ import {
 } from 'react'
 import { useLocation, useRouter } from '@tanstack/react-router'
 import { useInfomodeStore } from '@/stores/infomodeStore'
+import { clickTargetWouldActivatePrimaryAction } from '@/lib/infomode-primary-action-detect'
+import { notifyInfomodePrimaryActionSuppressed } from '@/lib/infomode-suppression-feedback'
 import { InfomodePopup } from '@/components/infomode/InfomodePopup'
 import type { InfomodeRegistryEntry } from '@/components/infomode/infomode-types'
 
@@ -151,6 +153,9 @@ export function InfomodeProvider({ children }: InfomodeProviderProps) {
         if (infoId && registryRef.current.has(infoId)) {
           event.preventDefault()
           event.stopPropagation()
+          if (clickTargetWouldActivatePrimaryAction(event, infomodeElement)) {
+            notifyInfomodePrimaryActionSuppressed()
+          }
           setPopupState({ anchorElement: infomodeElement, infoId })
           return
         }
