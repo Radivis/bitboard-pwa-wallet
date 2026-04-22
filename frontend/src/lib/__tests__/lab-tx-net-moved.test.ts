@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { netMovedSatsForBlock, netMovedSatsForLabTx } from '@/lib/lab-tx-net-moved'
-import type { LabTxDetails } from '@/workers/lab-api'
+import {
+  netMovedSatsForBlock,
+  netMovedSatsForLabTx,
+  netMovedSatsFromMempoolEntry,
+} from '@/lib/lab-tx-net-moved'
+import type { LabTxDetails, MempoolEntry } from '@/workers/lab-api'
 import { LAB_COINBASE_PREV_TXID_HEX, LAB_COINBASE_PREV_VOUT } from '@/lib/lab-operations'
 
 function coinbaseTx(overrides: Partial<LabTxDetails> = {}): LabTxDetails {
@@ -63,6 +67,34 @@ describe('netMovedSatsForLabTx', () => {
       ],
     }
     expect(netMovedSatsForLabTx(tx)).toBe(90)
+  })
+})
+
+function baseMempoolEntry(overrides: Partial<MempoolEntry> = {}): MempoolEntry {
+  return {
+    signedTxHex: '00',
+    txid: 'a'.repeat(64),
+    sender: null,
+    receiver: null,
+    feeSats: 100,
+    weight: 400,
+    vsize: 100,
+    inputs: [],
+    inputsDetail: [],
+    outputsDetail: [],
+    ...overrides,
+  }
+}
+
+describe('netMovedSatsFromMempoolEntry', () => {
+  it('sums only non-change outputs', () => {
+    const e = baseMempoolEntry({
+      outputsDetail: [
+        { address: 'a', amountSats: 1_000, isChange: false },
+        { address: 'b', amountSats: 9_000, isChange: true },
+      ],
+    })
+    expect(netMovedSatsFromMempoolEntry(e)).toBe(1_000)
   })
 })
 

@@ -101,6 +101,8 @@ export interface LabBlockTransactionSummary {
   txid: string
   sender: LabOwner | null
   receiver: LabOwner | null
+  /** Net moved: non-change outputs (non-coinbase) or all outputs (coinbase). */
+  amountSats: number
   feeSats: number
   inputs: LabTxInputDetail[]
 }

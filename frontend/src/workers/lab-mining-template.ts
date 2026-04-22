@@ -2,6 +2,10 @@ import { AddressType } from '@/lib/wallet-domain-types'
 import { nextLabEntityId } from '@/lib/lab-entity-keys'
 import { LabOwnerType } from '@/lib/lab-owner-type'
 import { feeSatsFromTxDetails } from '@/lib/lab-tx-fee'
+import {
+  netMovedSatsForLabTx,
+  netMovedSatsFromMempoolEntry,
+} from '@/lib/lab-tx-net-moved'
 import { type LabOwner, labEntityLabOwner, walletLabOwner } from '@/lib/lab-owner'
 import { isCoinbase } from '@/lib/lab-operations'
 import {
@@ -107,6 +111,7 @@ export function blockTransactionsForHeight(height: number): LabBlockTransactionS
         txid: tx.txid,
         sender: txRecord?.sender ?? null,
         receiver: txRecord?.receiver ?? null,
+        amountSats: netMovedSatsForLabTx(tx),
         feeSats: feeSatsFromTxDetails(tx),
         inputs: tx.inputs,
       }
@@ -257,23 +262,43 @@ export async function buildCurrentBlockTemplate(
   const rawEffects = wasmModule.lab_block_effects(blockHex)
   const previewEffects = parseBlockEffects(rawEffects)
   const entryByTxid = new Map(selectedEntries.map((entry) => [entry.txid, entry]))
+  const previewBlockTime =
+    typeof previewEffects.block_time === 'number' ? previewEffects.block_time : header.timestamp
 
   const transactions: LabBlockTransactionSummary[] = previewEffects.transactions.map((tx) => {
     const matchedEntry = entryByTxid.get(tx.txid)
     const isCb = isCoinbase(tx)
+    const inputs: LabTxInputDetail[] = tx.inputs.map(
+      (inp): LabTxInputDetail => ({
+        address: '',
+        amountSats: 0,
+        prevTxid: inp.prev_txid,
+        prevVout: inp.prev_vout,
+      }),
+    )
+    const outputs = (tx.outputs ?? []).map((o) => ({
+      address: o.address,
+      amountSats: o.amount_sats,
+    }))
+    const txDetails: LabTxDetails = {
+      txid: tx.txid,
+      blockHeight: previewHeight,
+      blockTime: previewBlockTime,
+      confirmations: 0,
+      inputs,
+      outputs,
+    }
+    const amountSats =
+      !isCb && outputs.length === 0 && matchedEntry
+        ? netMovedSatsFromMempoolEntry(matchedEntry)
+        : netMovedSatsForLabTx(txDetails)
     return {
       txid: tx.txid,
       sender: matchedEntry?.sender ?? null,
       receiver: isCb ? minedBy : (matchedEntry?.receiver ?? null),
+      amountSats,
       feeSats: matchedEntry?.feeSats ?? 0,
-      inputs: tx.inputs.map(
-        (inp): LabTxInputDetail => ({
-          address: '',
-          amountSats: 0,
-          prevTxid: inp.prev_txid,
-          prevVout: inp.prev_vout,
-        }),
-      ),
+      inputs,
     }
   })
 
