@@ -209,6 +209,31 @@ export async function syncLoadedSubWalletWithEsplora(options: {
 }
 
 /**
+ * After {@link syncActiveWalletAndUpdateState} for dashboard actions: refresh LN queries,
+ * last-sync time, and optional persisted changeset.
+ */
+async function finishDashboardSyncAfterStateUpdate(options: {
+  password: string | null
+  activeWalletId: number | null
+  markFullScanDone: boolean
+}): Promise<void> {
+  invalidateLightningDashboardQueries()
+  const { setLastSyncTime } = useWalletStore.getState()
+  setLastSyncTime(new Date())
+  if (options.password == null || options.activeWalletId == null) {
+    return
+  }
+  const { exportChangeset } = useCryptoStore.getState()
+  const changeset = await exportChangeset()
+  await updateWalletChangeset({
+    password: options.password,
+    walletId: options.activeWalletId,
+    changesetJson: changeset,
+    ...(options.markFullScanDone ? { markFullScanDone: true } : {}),
+  })
+}
+
+/**
  * Esplora sync for the dashboard "Sync" button: updates balance and
  * transactions in the store, last sync time, and persisted changeset.
  *
@@ -224,18 +249,10 @@ export async function runIncrementalDashboardWalletSync(options: {
   await syncActiveWalletAndUpdateState(options.networkMode, {
     useFullScan: options.networkMode === 'regtest',
   })
-  invalidateLightningDashboardQueries()
-  const { setLastSyncTime } = useWalletStore.getState()
-  setLastSyncTime(new Date())
-  if (options.password && options.activeWalletId != null) {
-    const { exportChangeset } = useCryptoStore.getState()
-    const changeset = await exportChangeset()
-    await updateWalletChangeset({
-      password: options.password,
-      walletId: options.activeWalletId,
-      changesetJson: changeset,
-    })
-  }
+  await finishDashboardSyncAfterStateUpdate({
+    ...options,
+    markFullScanDone: false,
+  })
 }
 
 /**
@@ -254,19 +271,10 @@ export async function runFullScanDashboardWalletSync(options: {
   await syncActiveWalletAndUpdateState(options.networkMode, {
     useFullScan: true,
   })
-  invalidateLightningDashboardQueries()
-  const { setLastSyncTime } = useWalletStore.getState()
-  setLastSyncTime(new Date())
-  if (options.password && options.activeWalletId != null) {
-    const { exportChangeset } = useCryptoStore.getState()
-    const changeset = await exportChangeset()
-    await updateWalletChangeset({
-      password: options.password,
-      walletId: options.activeWalletId,
-      changesetJson: changeset,
-      markFullScanDone: true,
-    })
-  }
+  await finishDashboardSyncAfterStateUpdate({
+    ...options,
+    markFullScanDone: true,
+  })
 }
 
 /**

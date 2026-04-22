@@ -4,6 +4,7 @@ export const DEFAULT_ESPLORA_FULL_SCAN_MAX_ATTEMPTS = 3
 
 const DEFAULT_BASE_DELAY_MS = 1000
 const DEFAULT_MAX_DELAY_MS = 8000
+const BACKOFF_JITTER_MAX_MS = 300
 
 function sleepMs(ms: number): Promise<void> {
   return new Promise((resolve) => {
@@ -68,7 +69,7 @@ export async function withEsploraFullScanRetries<T>(
         throw err
       }
       const backoff = Math.min(maxDelayMs, baseDelayMs * 2 ** attempt)
-      const jitter = Math.floor(Math.random() * 300)
+      const jitter = Math.floor(Math.random() * BACKOFF_JITTER_MAX_MS)
       await sleepMs(backoff + jitter)
     }
   }
