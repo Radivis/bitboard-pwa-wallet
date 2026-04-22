@@ -19,6 +19,7 @@ export default function App() {
   const prefersReducedMotion = useReducedMotion();
   const appUrl = landingPageLink('app');
   const githubUrl = landingPageLink('githubRepository');
+  const changelogUrl = landingPageLink('changelog');
   const blogUrl = landingPageLink('blog');
   const websiteUrl = landingPageLink('website');
   return (
@@ -49,7 +50,12 @@ export default function App() {
 
         <StorySection />
 
-        <SiteFooter githubUrl={githubUrl} websiteUrl={websiteUrl} blogUrl={blogUrl} />
+        <SiteFooter
+          githubUrl={githubUrl}
+          changelogUrl={changelogUrl}
+          websiteUrl={websiteUrl}
+          blogUrl={blogUrl}
+        />
       </div>
     </div>
   );

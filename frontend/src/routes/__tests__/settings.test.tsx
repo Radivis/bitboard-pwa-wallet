@@ -319,6 +319,7 @@ vi.mock('@/components/ConfirmationDialog', () => ({
     ) : null,
 }))
 
+import { GITHUB_CHANGELOG_URL } from '@common/public-links'
 import { SettingsMainPage } from '../settings/index'
 import { SettingsSecurityPage } from '../settings/security'
 import { SettingsFeaturesPage } from '../settings/features'
@@ -642,6 +643,8 @@ describe('Settings routes', () => {
     expect(document.getElementById('legal-notice')).toBeTruthy()
     const privacyPolicyLink = screen.getByRole('link', { name: /privacy policy/i })
     expect(privacyPolicyLink).toHaveAttribute('href', '/privacy')
+    const changelogLink = screen.getByRole('link', { name: 'Changelog' })
+    expect(changelogLink).toHaveAttribute('href', GITHUB_CHANGELOG_URL)
   })
 
   it('shows Developer Contact Info card', () => {
