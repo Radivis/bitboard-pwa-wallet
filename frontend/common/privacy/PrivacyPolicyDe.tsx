@@ -28,7 +28,7 @@ export function PrivacyPolicyDe() {
       <p>
         Für Anfragen zum Datenschutz erreichen Sie den Betreiber vorzugsweise per E-Mail an die oben
         genannte Adresse. Inhalte solcher E-Mails verarbeitet der Betreiber auf Grundlage von{' '}
-        <strong>Art. 6 Abs. 1 lit. b und/oder f DSGVO</strong> zur Bearbeitung Ihres Anliegens und
+        <strong>Art. 6 Abs. 1 lit. f DSGVO</strong> zur Bearbeitung Ihres Anliegens und
         löschen sie, sobald sie hierfür nicht mehr erforderlich sind, vorbehaltlich gesetzlicher
         Aufbewahrungspflichten.
       </p>
@@ -80,13 +80,12 @@ export function PrivacyPolicyDe() {
         <code>bitboard.legalLocale</code>).
       </p>
       <p>
-        Diese Speicherung von Informationen auf Ihrer Endeinrichtung erfolgt ohne Einwilligung auf
-        Grundlage von <strong>§ 25 Abs. 2 Nr. 2 TDDDG</strong> (
-        Telekommunikation-Digitale-Dienste-Datenschutz-Gesetz), da sie unbedingt erforderlich ist, um
-        den von Ihnen ausdrücklich
-        gewünschten Dienst (Anzeige der Inhalte in der gewählten Sprache) zur Verfügung zu stellen.
-        Die Daten bleiben im Browser gespeichert, bis Sie den Cache bzw. die Website-Daten manuell
-        löschen.
+        Diese Speicherung ist eine Komfortfunktion, die eine wiederholte Sprachauswahl beim Neuladen
+        der Seite vermeidet. Sie erfolgt auf Grundlage des berechtigten Interesses des Betreibers (
+        <strong>Art. 6 Abs. 1 lit. f DSGVO</strong>) an einer verbesserten Nutzererfahrung. Eine
+        Einwilligung ist nicht erforderlich, da es sich um eine einfache Präferenzspeicherung ohne
+        Tracking- oder Profiling-Zweck handelt. Die Daten bleiben im Browser gespeichert, bis Sie den
+        Cache bzw. die Website-Daten manuell löschen.
       </p>
 
       <h2>4. Wallet-App (PWA)</h2>
@@ -187,8 +186,9 @@ export function PrivacyPolicyDe() {
       <h2>8. Datensicherungen (Exports)</h2>
       <p>
         Sie können Daten aus der App herunterladen (Export). <strong>Wallet-Exporte</strong> sind
-        mit einer <strong>digitalen Signatur</strong> versehen — das hilft zu prüfen, dass die Datei
-        von der App stammt. Die Datei selbst ist <strong>als Ganzes nicht zusätzlich
+        mit einer <strong>digitalen Signatur</strong> versehen; diese soll gewährleisten, dass der
+        Export nicht von Dritten manipuliert wurde und alle exportierten Daten weiterhin exakt ihrem
+        ursprünglichen Zustand entsprechen. Die Datei selbst ist <strong>als Ganzes nicht zusätzlich
         verschlüsselt</strong>; einzelne Inhalte können weiterhin im Wallet-Format geschützt sein.
         Die Datei kann Metadaten für Wiederherstellung oder Fehlersuche enthalten.
       </p>
@@ -200,47 +200,37 @@ export function PrivacyPolicyDe() {
       <h2>9. Rechtsgrundlagen (Art. 6 DSGVO)</h2>
       <p>
         Soweit personenbezogene Daten verarbeitet werden, stützt sich der Betreiber auf folgende
-        Rechtsgrundlagen (Auszug — im Einzelfall kann auch eine andere Vorschrift einschlägig sein):
+        Rechtsgrundlagen:
       </p>
       <ul className="list-disc space-y-2 pl-5">
         <li>
-          <strong>Verarbeitung technischer Protokolldaten durch Vercel</strong> (u. a. IP,
-          Zeitstempel, angeforderte URLs):{' '}
-          <strong>Art. 6 Abs. 1 lit. f DSGVO</strong> (berechtigtes Interesse an sicherem Hosting).
-          Die Verarbeitung erfolgt im Auftrag des Betreibers zur Erbringung des Hostings.
+          <strong>Technische Hosting-Protokolle bei Vercel</strong> (IP-Adressen, Zugriffsdaten u. a.):{' '}
+          <strong>Art. 6 Abs. 1 lit. f DSGVO</strong> (berechtigtes Interesse an einem sicheren und
+          stabilen Hosting). Die Verarbeitung erfolgt im Auftrag des Betreibers zur Erbringung des
+          Hostings.
         </li>
         <li>
-          <strong>Speicherung der Sprachauswahl im localStorage</strong> (<code>bitboard.legalLocale</code>
-          ): <strong>§ 25 Abs. 2 Nr. 2 TDDDG</strong> (unbedingt erforderlich).
+          <strong>Speicherung der Sprachpräferenz im localStorage</strong> (Schlüssel{' '}
+          <code>bitboard.legalLocale</code>): <strong>Art. 6 Abs. 1 lit. f DSGVO</strong> (berechtigtes
+          Interesse an einer komfortablen Nutzererfahrung; Komfortfunktion ohne Tracking- oder
+          Profiling-Zweck).
         </li>
         <li>
-          <strong>Speicherung von Favoriten und Lese-Historie in der Library</strong>:{' '}
-          <strong>Art. 6 Abs. 1 lit. f DSGVO</strong> (berechtigtes Interesse an einer verbesserten
-          Lern- und Nutzererfahrung) in Verbindung mit <strong>§ 25 Abs. 2 Nr. 2 TDDDG</strong>{' '}
-          (soweit funktional unterstützend).
+          <strong>Lokale Speicherung von Wallet-Daten, Lab-Daten, Library-Daten (Favoriten/Historie)
+          und Einstellungen im OPFS</strong>: <strong>Art. 6 Abs. 1 lit. f DSGVO</strong> (berechtigtes
+          Interesse an der Bereitstellung einer funktionsfähigen Bitcoin-Lernplattform) in Verbindung
+          mit <strong>§ 25 Abs. 2 Nr. 2 TDDDG</strong> (soweit die Speicherung unbedingt erforderlich
+          ist, um den vom Nutzer gewünschten Dienst zu erbringen).
         </li>
         <li>
-          <strong>Lokale Wallet- und App-Funktionen</strong> (Speicherung und Verarbeitung auf Ihrem
-          Gerät, einschließlich optionaler Verschlüsselung mit App-Passwort):{' '}
-          <strong>Art. 6 Abs. 1 lit. b DSGVO</strong> (Vertrag über die Nutzung der Wallet-App) und/oder{' '}
+          <strong>Verbindungen zu Esplora-Endpoints und Nostr Wallet Connect</strong>:{' '}
           <strong>Art. 6 Abs. 1 lit. f DSGVO</strong> (berechtigtes Interesse an der Funktionsfähigkeit
-          der App), soweit anwendbar.
-        </li>
-        <li>
-          <strong>Verbindungen zu von Ihnen konfigurierten Esplora-Endpoints</strong>:{' '}
-          <strong>Art. 6 Abs. 1 lit. b DSGVO</strong> (Durchführung der von Ihnen gewünschten
-          Wallet-Funktionen) und/oder <strong>Art. 6 Abs. 1 lit. f DSGVO</strong> gegenüber dem
-          jeweiligen Betreiber, soweit deren Verarbeitung relevant ist.
-        </li>
-        <li>
-          <strong>NWC-Verbindung</strong> (Anbindung an die von Ihnen gewählte Lightning-Wallet):{' '}
-          <strong>Art. 6 Abs. 1 lit. b DSGVO</strong> und/oder{' '}
-          <strong>Art. 6 Abs. 1 lit. f DSGVO</strong>, soweit personenbezogene Daten im Zusammenhang
-          mit der Nutzung anfallen.
+          der gewünschten Wallet- und Lightning-Funktionen).
         </li>
         <li>
           <strong>E-Mail-Korrespondenz mit dem Verantwortlichen</strong> (z. B. Datenschutzanfragen):{' '}
-          <strong>Art. 6 Abs. 1 lit. b DSGVO</strong> und/oder <strong>Art. 6 Abs. 1 lit. f DSGVO</strong>.
+          <strong>Art. 6 Abs. 1 lit. f DSGVO</strong> (berechtigtes Interesse an der Bearbeitung des
+          Anliegens).
         </li>
       </ul>
 

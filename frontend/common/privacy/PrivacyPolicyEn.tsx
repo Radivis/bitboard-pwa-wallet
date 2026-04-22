@@ -24,7 +24,7 @@ export function PrivacyPolicyEn() {
       <p>
         For privacy-related requests, please contact the operator preferably by email using the address above.
         Email correspondence you initiate is processed on the basis of{' '}
-        <strong>Art. 6(1)(b) and/or (f) GDPR</strong> in order to handle your request, and is deleted
+        <strong>Art. 6(1)(f) GDPR</strong> in order to handle your request, and is deleted
         once it is no longer needed, subject to any statutory retention obligations.
       </p>
       <p>
@@ -74,12 +74,11 @@ export function PrivacyPolicyEn() {
         browser (<code>localStorage</code>, key <code>bitboard.legalLocale</code>).
       </p>
       <p>
-        Storing information on your terminal equipment without consent is permitted under{' '}
-        <strong>Section 25(2) No. 2 TDDDG</strong> (
-        <span lang="de">Telekommunikation-Digitale-Dienste-Datenschutz-Gesetz</span>), because it is
-        strictly necessary to provide the service you explicitly requested (displaying content in your
-        chosen language). The data remains in your browser until you manually clear the cache or site
-        data.
+        This storage is a convenience feature that avoids having to choose the language again each
+        time you reload the page. It is based on the operator’s legitimate interests (
+        <strong>Art. 6(1)(f) GDPR</strong>) in a better user experience. Consent is not required,
+        because it is simple preference storage without tracking or profiling. The data remains in your
+        browser until you manually clear the cache or site data.
       </p>
 
       <h2>4. Wallet app (PWA)</h2>
@@ -171,7 +170,8 @@ export function PrivacyPolicyEn() {
       <h2>8. Backups (exports)</h2>
       <p>
         You can download data from the app (export). <strong>Wallet exports</strong> are{' '}
-        <strong>digitally signed</strong> so you can verify they came from the app. The downloaded file
+        <strong>digitally signed</strong> to help ensure the export has not been tampered with by
+        third parties and that all exported data remains exactly in its original state. The downloaded file
         is <strong>not wrapped in an extra layer of whole-file encryption</strong>; some contents may
         still be protected inside the wallet file format. The file may include metadata needed for
         restore or troubleshooting.
@@ -183,48 +183,34 @@ export function PrivacyPolicyEn() {
 
       <h2>9. Legal bases (Art. 6 GDPR)</h2>
       <p>
-        Where the operator processes personal data, the operator relies on the following legal bases
-        (non-exhaustive — other provisions may apply in individual cases):
+        Where the operator processes personal data, the operator relies on the following legal bases:
       </p>
       <ul className="list-disc space-y-2 pl-5">
         <li>
-          <strong>Processing of technical log data by Vercel</strong> (including IP addresses,
-          timestamps, requested URLs):{' '}
-          <strong>Art. 6(1)(f) GDPR</strong> (legitimate interests in secure hosting). Processing is
-          carried out on the operator’s behalf to provide the hosting service.
+          <strong>Technical hosting logs at Vercel</strong> (IP addresses, access data, etc.):{' '}
+          <strong>Art. 6(1)(f) GDPR</strong> (legitimate interests in secure and stable hosting).
+          Processing is carried out on the operator’s behalf to provide the hosting service.
         </li>
         <li>
-          <strong>Storing the language choice in localStorage</strong> (<code>bitboard.legalLocale</code>
-          ):{' '}
-          <strong>Section 25(2) No. 2 TDDDG</strong> (strictly necessary).
+          <strong>Storing the language preference in localStorage</strong> (key{' '}
+          <code>bitboard.legalLocale</code>): <strong>Art. 6(1)(f) GDPR</strong> (legitimate interests
+          in a convenient user experience; convenience feature without tracking or profiling).
         </li>
         <li>
-          <strong>Storing Library favorites and reading history</strong>:{' '}
-          <strong>Art. 6(1)(f) GDPR</strong> (legitimate interests in an improved learning and user
-          experience) in connection with <strong>Section 25(2) No. 2 TDDDG</strong> (where it
-          functionally supports storage on the device).
+          <strong>Local storage of wallet data, lab data, library data (favorites/history), and
+          settings in OPFS</strong>: <strong>Art. 6(1)(f) GDPR</strong> (legitimate interests in
+          providing a functional Bitcoin learning platform) in connection with{' '}
+          <strong>Section 25(2) No. 2 TDDDG</strong> (where storage is strictly necessary to provide
+          the service the user wants).
         </li>
         <li>
-          <strong>Local wallet and app functionality</strong> (storage and processing on your device,
-          including optional encryption with an app password):{' '}
-          <strong>Art. 6(1)(b) GDPR</strong> (performance of the wallet app contract) and/or{' '}
-          <strong>Art. 6(1)(f) GDPR</strong> (legitimate interests in providing app functionality),
-          where applicable.
-        </li>
-        <li>
-          <strong>Connections to Esplora endpoints you configure</strong>:{' '}
-          <strong>Art. 6(1)(b) GDPR</strong> (providing the wallet features you request) and/or{' '}
-          <strong>Art. 6(1)(f) GDPR</strong> with respect to the relevant third-party operator,
-          where applicable.
-        </li>
-        <li>
-          <strong>NWC connection</strong> (linking your chosen Lightning wallet):{' '}
-          <strong>Art. 6(1)(b) GDPR</strong> and/or <strong>Art. 6(1)(f) GDPR</strong>, where personal
-          data is involved in that use.
+          <strong>Connections to Esplora endpoints and Nostr Wallet Connect</strong>:{' '}
+          <strong>Art. 6(1)(f) GDPR</strong> (legitimate interests in the functionality of the wallet
+          and Lightning features you use).
         </li>
         <li>
           <strong>Email correspondence with the controller</strong> (for example privacy requests):{' '}
-          <strong>Art. 6(1)(b) GDPR</strong> and/or <strong>Art. 6(1)(f) GDPR</strong>.
+          <strong>Art. 6(1)(f) GDPR</strong> (legitimate interests in handling your request).
         </li>
       </ul>
 
