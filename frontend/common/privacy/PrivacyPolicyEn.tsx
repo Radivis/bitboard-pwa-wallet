@@ -113,15 +113,22 @@ export function PrivacyPolicyEn() {
         <strong>Cache Storage</strong> for static assets (technically necessary for offline
         operation; it does not contain personal data).
       </p>
+      <p>
+        For one-off dismissed hint banners (for example about near-zero security or a missing
+        seed-phrase backup) the PWA also uses the browser’s <strong>sessionStorage</strong>.
+        These entries are scoped to the current tab and disappear when you close it; they do not
+        contain personal data.
+      </p>
 
       <h2>5. Network access (Esplora)</h2>
       <p>
-        To show balances and transactions, the app asks a service you pick in{' '}
-        <strong>Settings</strong>: An <strong>Esplora</strong>-style API (a standard way to
-        read public Bitcoin data over the web). Those requests reveal your{' '}
-        <strong>IP address</strong> and basic technical details to whoever runs that service — not to
-        Bitboard (the operator does not run that infrastructure). What is requested depends on how you use the
-        wallet.
+        To fetch blockchain information, the app connects to the <strong>Esplora</strong> endpoints
+        you configure under <strong>Settings</strong>. Esplora is a block-explorer API (an HTTP(S)
+        interface for blockchain data). In the process, in particular your{' '}
+        <strong>IP address</strong> and the usual technical metadata (e.g. TLS) become visible to
+        the respective third-party operator — not to a Bitboard server, which does not exist for
+        the app’s logic. Which exact requests go out depends on how you use the wallet (e.g.
+        balance queries, transaction lists).
       </p>
       <p>
         The operator of your chosen Esplora service might possibly attempt to build
@@ -166,6 +173,15 @@ export function PrivacyPolicyEn() {
         <strong>strongly encrypted at rest only after you set an app password</strong>. Until then,
         that strong encryption is not applied.
       </p>
+      <p>
+        Bitboard additionally offers a <strong>near-zero security mode</strong> in which sensitive
+        material is technically stored in encrypted form, but the session key used for this is
+        wrapped with a <strong>publicly documented placeholder password</strong>. This mode
+        therefore <strong>does not provide meaningful at-rest protection</strong> and is intended
+        only as an entry-level/convenience mode (for example, to try the app without entering a
+        password). Real protection requires a real app password; the app offers a guided upgrade
+        path from near-zero mode to a proper app password.
+      </p>
 
       <h2>8. Backups (exports)</h2>
       <p>
@@ -179,6 +195,18 @@ export function PrivacyPolicyEn() {
       <p>
         Exports of <strong>less sensitive data</strong> — for example simulated local blockchain data
         used inside the app — are <strong>never</strong> digitally signed.
+      </p>
+      <p>
+        If an error occurs while upgrading the wallet database schema, the app can additionally
+        export a <strong>migration error report</strong> as JSON inside a ZIP. This report contains
+        technical diagnostic data about the failure, is kept locally in OPFS until you export or
+        manually delete it, and is <strong>not</strong> digitally signed. You decide whether and to
+        whom you share this report for troubleshooting (for example, with the operator).
+      </p>
+      <p>
+        In <strong>near-zero security mode</strong>, wallet export and import are disabled for
+        safety; set a real app password first to use those features. Lab exports and the migration
+        error report are not affected by this restriction.
       </p>
 
       <h2>9. Legal bases (Art. 6 GDPR)</h2>
@@ -198,7 +226,8 @@ export function PrivacyPolicyEn() {
         </li>
         <li>
           <strong>Local storage of wallet data, lab data, library data (favorites/history), and
-          settings in OPFS</strong>: <strong>Art. 6(1)(f) GDPR</strong> (legitimate interests in
+          application settings (in the <code>settings</code> table inside the wallet SQLite
+          database) in OPFS</strong>: <strong>Art. 6(1)(f) GDPR</strong> (legitimate interests in
           providing a functional Bitcoin learning platform) in connection with{' '}
           <strong>Section 25(2) No. 2 TDDDG</strong> (where storage is strictly necessary to provide
           the service the user wants).
@@ -251,9 +280,11 @@ export function PrivacyPolicyEn() {
         hosting (Vercel); language preference (locally in the browser); on-device wallet data (e.g. key
         material, descriptors, transaction and balance information you create or fetch); optional
         Library article favorites and reading history (locally in the wallet database); NWC
-        connection data and cached Lightning information locally; data visible to or processed
-        by Esplora and NWC/Lightning third parties in connection with requests you initiate; and
-        contact data contained in any email correspondence with the controller.
+        connection data and cached Lightning information locally; short-lived UI preferences (e.g.
+        dismissed banners) in the browser’s <code>sessionStorage</code>; optionally a migration
+        error report stored locally in OPFS (only if a schema migration has failed); data visible to
+        or processed by Esplora and NWC/Lightning third parties in connection with requests you
+        initiate; and contact data contained in any email correspondence with the controller.
       </p>
       <p>
         <strong>Storage periods:</strong> Vercel hosting and security logs are retained and deleted

@@ -125,6 +125,12 @@ export function PrivacyPolicyDe() {
         <strong>Cache Storage</strong> des Browsers für statische Assets (technisch erforderlich für
         Offline-Betrieb, enthält keine personenbezogenen Inhalte).
       </p>
+      <p>
+        Für einmalig ausgeblendete Hinweisbanner (z. B. zu Near-Zero-Security oder einer noch
+        fehlenden Seed-Phrase-Sicherung) nutzt die PWA zusätzlich den{' '}
+        <strong>sessionStorage</strong> des Browsers. Diese Einträge sind tab-bezogen und
+        verschwinden beim Schließen des Tabs; sie enthalten keine personenbezogenen Inhalte.
+      </p>
 
       <h2>5. Netzwerkzugriff (Esplora)</h2>
       <p>
@@ -182,6 +188,15 @@ export function PrivacyPolicyDe() {
         verschlüsselt</strong>, wenn Sie ein <strong>App-Passwort</strong> gesetzt haben. Bis dahin
         kommt diese starke Verschlüsselung nicht zur Anwendung.
       </p>
+      <p>
+        Bitboard bietet zusätzlich einen <strong>Near-Zero-Security-Modus</strong>, in dem sensible
+        Inhalte zwar technisch verschlüsselt abgelegt werden, der dafür verwendete Session-Schlüssel
+        jedoch mit einem <strong>öffentlich dokumentierten Platzhalter-Passwort</strong> gewrappt ist.
+        Dieser Modus bietet daher <strong>keinen wirksamen Schutz im Ruhezustand</strong> und ist nur
+        als Einstiegs-/Komfortmodus gedacht (z. B. um die App ohne Passworteingabe auszuprobieren).
+        Für echten Schutz ist ein App-Passwort erforderlich; die App bietet hierfür einen geführten
+        Upgrade-Weg vom Near-Zero-Modus zu einem echten App-Passwort.
+      </p>
 
       <h2>8. Datensicherungen (Exports)</h2>
       <p>
@@ -195,6 +210,19 @@ export function PrivacyPolicyDe() {
       <p>
         Exporte <strong>weniger sensibler Daten</strong> — etwa simulierter lokaler Blockchain-Daten in
         der App — werden <strong>niemals</strong> digital signiert.
+      </p>
+      <p>
+        Tritt beim Aktualisieren des Wallet-Datenbank-Schemas ein Fehler auf, kann die App
+        zusätzlich einen <strong>Migrations-Fehlerbericht</strong> als JSON in einem ZIP
+        exportieren. Dieser Bericht enthält technische Diagnosedaten zum Fehler, liegt bis zu
+        einem Export oder einer manuellen Löschung lokal im OPFS und ist <strong>nicht</strong>{' '}
+        digital signiert. Sie entscheiden selbst, ob und an wen Sie diesen Bericht zur Fehlersuche
+        weitergeben (z. B. an den Betreiber).
+      </p>
+      <p>
+        Im <strong>Near-Zero-Security-Modus</strong> sind Wallet-Export und -Import aus
+        Sicherheitsgründen gesperrt; setzen Sie zunächst ein App-Passwort, um diese Funktionen zu
+        nutzen. Lab-Exporte und der Migrations-Fehlerbericht sind davon nicht betroffen.
       </p>
 
       <h2>9. Rechtsgrundlagen (Art. 6 DSGVO)</h2>
@@ -217,7 +245,8 @@ export function PrivacyPolicyDe() {
         </li>
         <li>
           <strong>Lokale Speicherung von Wallet-Daten, Lab-Daten, Library-Daten (Favoriten/Historie)
-          und Einstellungen im OPFS</strong>: <strong>Art. 6 Abs. 1 lit. f DSGVO</strong> (berechtigtes
+          und Anwendungseinstellungen (in der <code>settings</code>-Tabelle innerhalb der
+          Wallet-SQLite-Datenbank) im OPFS</strong>: <strong>Art. 6 Abs. 1 lit. f DSGVO</strong> (berechtigtes
           Interesse an der Bereitstellung einer funktionsfähigen Bitcoin-Lernplattform) in Verbindung
           mit <strong>§ 25 Abs. 2 Nr. 2 TDDDG</strong> (soweit die Speicherung unbedingt erforderlich
           ist, um den vom Nutzer gewünschten Dienst zu erbringen).
@@ -273,9 +302,12 @@ export function PrivacyPolicyDe() {
         (u. a. Schlüsselmaterial, Deskriptoren, Transaktions- und Kontostandsinformationen, sofern
         von Ihnen angelegt oder abgerufen); optional Favoriten und Lese-Historie der Library-Artikel
         (lokal in der Wallet-Datenbank); NWC-Verbindungsdaten und zwischengespeicherte
-        Lightning-Informationen lokal; Daten, die im Rahmen der von Ihnen ausgelösten Anfragen an
-        Esplora- und NWC-/Lightning-Dritte sichtbar oder verarbeitet werden; sowie Kontaktdaten in
-        einer E-Mail-Korrespondenz mit dem Verantwortlichen.
+        Lightning-Informationen lokal; kurzlebige UI-Präferenzen (z. B. Banner-Ausblendungen) im
+        <code>sessionStorage</code> des Browsers; optional ein lokal in OPFS abgelegter
+        Migrations-Fehlerbericht (nur wenn eine Schema-Migration fehlgeschlagen ist); Daten, die im
+        Rahmen der von Ihnen ausgelösten Anfragen an Esplora- und NWC-/Lightning-Dritte sichtbar
+        oder verarbeitet werden; sowie Kontaktdaten in einer E-Mail-Korrespondenz mit dem
+        Verantwortlichen.
       </p>
       <p>
         <strong>Speicherdauer:</strong> Hosting- und Sicherheitsprotokolle bei Vercel richten sich
