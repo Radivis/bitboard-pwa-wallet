@@ -34,27 +34,30 @@ export function PrivacyPolicyEn() {
 
       <h2>2. Hosting</h2>
       <p>
-        Both the landing page and app delivery are provided through <strong>Vercel</strong> as a
-        hosting and edge platform. This can generate technical access, server, and security logs
-        (including IP addresses, timestamps, and requested URLs). Bitboard does <strong>not</strong>{' '}
-        operate an application server that stores or evaluates wallet contents for the app (see the
-        app section below).
+        The landing page and the Bitboard app are delivered via <strong>Vercel</strong> (
+        <strong>Vercel Inc.</strong>, USA) as a hosting and edge platform.
       </p>
       <p>
-        Vercel processes this data on our behalf as a <strong>processor</strong> under{' '}
-        <strong>Art. 28 GDPR</strong>. We have entered into the Data Processing Addendum (DPA) with
-        Vercel (see{' '}
+        Each visit generates technically necessary access and security logs (including IP address,
+        timestamp, requested URL, and technical metadata). These logs are unavoidable for the secure
+        and stable operation of any publicly reachable website.
+      </p>
+      <p>
+        Vercel processes this data on the operator’s behalf to provide the hosting service. Storage is only for
+        short periods (on the Hobby plan, typically a few hours up to a few days at most, depending on
+        the type of log). For details, see the{' '}
         <a
-          href="https://vercel.com/legal/dpa"
+          href="https://vercel.com/legal/privacy-policy"
           className="text-primary underline underline-offset-4"
           target="_blank"
           rel="noopener noreferrer"
         >
-          https://vercel.com/legal/dpa
+          Vercel Privacy Policy
         </a>
-        ). Retention periods follow Vercel’s current privacy policy and are typically a few days up to
-        30 days for security and access logs, depending on the selected plan and observability
-        settings.
+        .
+      </p>
+      <p>
+        No further processing or disclosure of this data for other purposes takes place.
       </p>
       <p>
         The current deployment does not include additional third-party tools such as web analytics
@@ -187,8 +190,8 @@ export function PrivacyPolicyEn() {
         <li>
           <strong>Processing of technical log data by Vercel</strong> (including IP addresses,
           timestamps, requested URLs):{' '}
-          <strong>Art. 6(1)(f) GDPR</strong> (legitimate interests in secure hosting);{' '}
-          <strong>Vercel</strong> acts as a processor under <strong>Art. 28 GDPR</strong>.
+          <strong>Art. 6(1)(f) GDPR</strong> (legitimate interests in secure hosting). Processing is
+          carried out on the operator’s behalf to provide the hosting service.
         </li>
         <li>
           <strong>Storing the language choice in localStorage</strong> (<code>bitboard.legalLocale</code>
@@ -232,9 +235,8 @@ export function PrivacyPolicyEn() {
       </p>
       <ul className="list-disc space-y-2 pl-5">
         <li>
-          <strong>Hosting provider:</strong> <strong>Vercel Inc.</strong> as processor under{' '}
-          <strong>Art. 28 GDPR</strong>, and the underlying infrastructure providers, in connection
-          with delivering the website and the app.
+          <strong>Hosting provider:</strong> <strong>Vercel Inc.</strong> (USA) and the underlying
+          infrastructure providers, in connection with delivering the website and the app.
         </li>
         <li>
           <strong>Esplora operator(s):</strong> the operator of the Esplora-style endpoint{' '}
@@ -269,8 +271,8 @@ export function PrivacyPolicyEn() {
       </p>
       <p>
         <strong>Storage periods:</strong> Vercel hosting and security logs are retained and deleted
-        according to the provider’s retention rules — typically a few days up to 30 days for security
-        and access logs, depending on plan and settings (see the{' '}
+        according to the provider’s retention rules — on the Hobby plan, typically a few hours up to
+        a few days at most, depending on the type of log (see the{' '}
         <a
           href="https://vercel.com/legal/privacy-policy"
           className="text-primary underline underline-offset-4"
@@ -292,8 +294,7 @@ export function PrivacyPolicyEn() {
         According to its own information, <strong>Vercel is certified under the EU-US Data Privacy
         Framework (DPF)</strong> (status checked: April 2026), which is intended to provide an
         appropriate safeguard for such transfers. Standard Contractual Clauses and other measures may
-        also apply depending on the situation, including the DPA agreed with Vercel. Please refer to
-        Vercel’s current{' '}
+        also apply depending on the situation. Please refer to Vercel’s current{' '}
         <a
           href="https://vercel.com/legal/privacy-policy"
           className="text-primary underline underline-offset-4"

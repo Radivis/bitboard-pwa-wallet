@@ -26,8 +26,8 @@ export function PrivacyPolicyDe() {
       </p>
       <LegalEntityFields entity={legalEntity} className="mb-3 space-y-1" />
       <p>
-        Für Anfragen zum Datenschutz erreichen Sie uns vorzugsweise per E-Mail an die oben
-        genannte Adresse. Inhalte solcher E-Mails verarbeiten wir auf Grundlage von{' '}
+        Für Anfragen zum Datenschutz erreichen Sie den Betreiber vorzugsweise per E-Mail an die oben
+        genannte Adresse. Inhalte solcher E-Mails verarbeitet der Betreiber auf Grundlage von{' '}
         <strong>Art. 6 Abs. 1 lit. b und/oder f DSGVO</strong> zur Bearbeitung Ihres Anliegens und
         löschen sie, sobald sie hierfür nicht mehr erforderlich sind, vorbehaltlich gesetzlicher
         Aufbewahrungspflichten.
@@ -39,28 +39,30 @@ export function PrivacyPolicyDe() {
 
       <h2>2. Hosting</h2>
       <p>
-        Sowohl die Landing Page als auch die Auslieferung der App werden über{' '}
-        <strong>Vercel</strong> als Hosting- und Edge-Plattform bereitgestellt. Dabei können
-        technisch bedingt Zugriffs‑/Server‑ und Sicherheitsprotokolle entstehen (u. a. IP-Adressen,
-        Zeitstempel, angeforderte URLs). Für Bitboard besteht <strong>kein eigener
-        Anwendungs-Server</strong>, der Wallet-Inhalte speichert oder auswertet (siehe Abschnitt zur
-        App).
+        Die Landing Page und die Bitboard-App werden über <strong>Vercel</strong> (
+        <strong>Vercel Inc.</strong>, USA) als Hosting- und Edge-Plattform ausgeliefert.
       </p>
       <p>
-        Vercel verarbeitet diese Daten in unserem Auftrag als Auftragsverarbeiter gemäß{' '}
-        <strong>Art. 28 DSGVO</strong>. Wir haben mit Vercel das Data Processing Addendum (DPA)
-        vereinbart (siehe{' '}
+        Bei jedem Aufruf entstehen technisch notwendige Zugriffs- und Sicherheitsprotokolle (u. a.
+        IP-Adresse, Zeitstempel, angeforderte URL und technische Metadaten). Diese Logs sind für den
+        sicheren und stabilen Betrieb jeder öffentlich erreichbaren Website unvermeidbar.
+      </p>
+      <p>
+        Vercel verarbeitet diese Daten im Auftrag des Betreibers zur Erbringung des Hostings. Die Speicherung
+        erfolgt nur für kurze Zeiträume (auf dem Hobby-Plan in der Regel wenige Stunden bis maximal
+        wenige Tage, je nach Art des Logs). Einzelheiten finden Sie in der{' '}
         <a
-          href="https://vercel.com/legal/dpa"
+          href="https://vercel.com/legal/privacy-policy"
           className="text-primary underline underline-offset-4"
           target="_blank"
           rel="noopener noreferrer"
         >
-          https://vercel.com/legal/dpa
+          Vercel Privacy Policy
         </a>
-        ). Die genauen Aufbewahrungsfristen richten sich nach der aktuellen Vercel Privacy Policy und
-        betragen in der Regel wenige Tage bis maximal 30 Tage für Security- und Zugriffslogs (je nach
-        gewähltem Plan und Observability-Einstellungen).
+        .
+      </p>
+      <p>
+        Eine weitergehende Verarbeitung oder Weitergabe dieser Daten zu anderen Zwecken erfolgt nicht.
       </p>
       <p>
         In der aktuellen Auslieferung sind keine zusätzlichen Drittanbieter-Tools wie Web-Analytics
@@ -171,7 +173,7 @@ export function PrivacyPolicyDe() {
         Kurz gesagt: Ohne von Ihnen gesetztes <strong>App-Passwort</strong> liegen sensible Inhalte
         (z. B. Wiederherstellungsphrase, Schlüssel, Verbindungsdaten zu Lightning) auf Ihrem Gerät{' '}
         <strong>nicht</strong> mit der beschriebenen starken Verschlüsselung „im Ruhezustand“ geschützt.
-        Wir <strong>empfehlen, vor dem Speichern</strong> von Seed, Deskriptoren oder einer
+        Der Betreiber <strong>empfiehlt, vor dem Speichern</strong> von Seed, Deskriptoren oder einer
         NWC-Verbindungszeichenfolge in der App zunächst <strong>ein App-Passwort zu setzen</strong>.
       </p>
       <p>
@@ -197,15 +199,15 @@ export function PrivacyPolicyDe() {
 
       <h2>9. Rechtsgrundlagen (Art. 6 DSGVO)</h2>
       <p>
-        Soweit personenbezogene Daten verarbeitet werden, stützen wir uns auf folgende
+        Soweit personenbezogene Daten verarbeitet werden, stützt sich der Betreiber auf folgende
         Rechtsgrundlagen (Auszug — im Einzelfall kann auch eine andere Vorschrift einschlägig sein):
       </p>
       <ul className="list-disc space-y-2 pl-5">
         <li>
           <strong>Verarbeitung technischer Protokolldaten durch Vercel</strong> (u. a. IP,
           Zeitstempel, angeforderte URLs):{' '}
-          <strong>Art. 6 Abs. 1 lit. f DSGVO</strong> (berechtigtes Interesse an sicherem Hosting);{' '}
-          <strong>Vercel</strong> handelt als Auftragsverarbeiter gemäß <strong>Art. 28 DSGVO</strong>.
+          <strong>Art. 6 Abs. 1 lit. f DSGVO</strong> (berechtigtes Interesse an sicherem Hosting).
+          Die Verarbeitung erfolgt im Auftrag des Betreibers zur Erbringung des Hostings.
         </li>
         <li>
           <strong>Speicherung der Sprachauswahl im localStorage</strong> (<code>bitboard.legalLocale</code>
@@ -249,9 +251,9 @@ export function PrivacyPolicyDe() {
       </p>
       <ul className="list-disc space-y-2 pl-5">
         <li>
-          <strong>Hosting-Anbieter:</strong> <strong>Vercel Inc.</strong> als Auftragsverarbeiter
-          sowie die dort genutzten Infrastrukturanbieter, im Zusammenhang mit der Auslieferung der
-          Website und der App.
+          <strong>Hosting-Anbieter:</strong> <strong>Vercel Inc.</strong> (USA) sowie die dort
+          genutzten Infrastrukturanbieter, im Zusammenhang mit der Auslieferung der Website und der
+          App.
         </li>
         <li>
           <strong>Esplora-Betreiber:</strong> der Betreiber des in den{' '}
@@ -287,9 +289,9 @@ export function PrivacyPolicyDe() {
       </p>
       <p>
         <strong>Speicherdauer:</strong> Hosting- und Sicherheitsprotokolle bei Vercel richten sich
-        nach den Aufbewahrungs- und Löschfristen des Anbieters — typischerweise wenige Tage bis
-        maximal 30 Tage für Security- und Zugriffslogs, je nach Plan und Einstellungen (maßgeblich
-        ist die jeweils aktuelle{' '}
+        nach den Aufbewahrungs- und Löschfristen des Anbieters — auf dem Hobby-Plan in der Regel
+        wenige Stunden bis maximal wenige Tage, je nach Art des Logs (maßgeblich ist die jeweils
+        aktuelle{' '}
         <a
           href="https://vercel.com/legal/privacy-policy"
           className="text-primary underline underline-offset-4"
@@ -302,7 +304,7 @@ export function PrivacyPolicyDe() {
         gespeichert, bis Sie sie löschen (z. B. App- oder Website-Daten des Browsers entfernen,
         App-Daten der PWA löschen). Von Ihnen heruntergeladene Exportdateien unterliegen Ihrer
         eigenen Verantwortung; Bitboard hat darauf nach dem Download keinen Zugriff. Inhalte einer
-        E-Mail-Korrespondenz löschen wir, sobald sie für die Bearbeitung Ihres Anliegens nicht mehr
+        E-Mail-Korrespondenz löscht der Betreiber, sobald sie für die Bearbeitung Ihres Anliegens nicht mehr
         erforderlich sind, vorbehaltlich gesetzlicher Aufbewahrungspflichten.
       </p>
 
@@ -313,9 +315,7 @@ export function PrivacyPolicyDe() {
         <strong>EU-US Data Privacy Framework (DPF) zertifiziert</strong> (Stand der Prüfung: April
         2026); dies soll eine angemessene Garantie für derartige Übermittlungen darstellen.
         Ergänzend können je nach Sachverhalt <strong>Standardvertragsklauseln</strong> der
-        EU-Kommission und weitere Maßnahmen eine Rolle spielen (darunter das mit Vercel vereinbarte
-        DPA).
-        Einzelheiten entnehmen Sie bitte der
+        EU-Kommission und weitere Maßnahmen eine Rolle spielen. Einzelheiten entnehmen Sie bitte der
         aktuellen{' '}
         <a
           href="https://vercel.com/legal/privacy-policy"
@@ -395,11 +395,11 @@ export function PrivacyPolicyDe() {
         <strong>Stand:</strong> April 2026.
       </p>
       <p>
-        Wir behalten uns vor, diese Datenschutzerklärung anzupassen, wenn sich technische oder
+        Der Betreiber behält sich vor, diese Datenschutzerklärung anzupassen, wenn sich technische oder
         rechtliche Rahmenbedingungen ändern. Die jeweils aktuelle Version finden Sie unter der
         URL dieser Seite (z. B. <strong>/privacy</strong> in der App bzw. unter der öffentlich
         erreichbaren Entsprechung auf der Landing Page). Über <strong>wesentliche Änderungen</strong>{' '}
-        informieren wir nach Möglichkeit, z. B. über diese Website oder das öffentliche
+        informiert der Betreiber nach Möglichkeit, z. B. über diese Website oder das öffentliche
         Projekt-Repository (z. B. GitHub).
       </p>
       <p>
