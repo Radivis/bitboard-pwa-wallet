@@ -21,7 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Full scan button on dashboard to deal with failures of initial full scan
 - New presentation of Lab transactions as cards in mempool and block details
-- Suppressed regular app actions during active infomode now trigger a toast  message and a horizontal jitter of the lightbulb icon
+- Suppressed regular app actions during active infomode now trigger a toast message and a horizontal jitter of the lightbulb icon
 - og:image tags for sharing landing page or app on social media
 
 ### Changed
