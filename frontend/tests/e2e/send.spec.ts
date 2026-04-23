@@ -7,6 +7,7 @@ import {
 } from './helpers/wallet-setup'
 import {
   E2E_CI_AWARE_LONG_WAIT_MS,
+  E2E_IS_CI,
   fundRegtestAddress,
   mineRegtestBlocks,
   waitForConfirmedBalance,
@@ -32,6 +33,9 @@ const REVIEW_TRANSACTION_ENABLE_TIMEOUT_MS = Math.max(
   30_000,
   E2E_CI_AWARE_LONG_WAIT_MS,
 )
+
+/** Broadcast runs `syncWallet` before `navigate({ to: '/wallet' })` — on CI the WASM+Esplora path can be slow. */
+const POST_BROADCAST_DASHBOARD_TIMEOUT_MS = E2E_IS_CI ? 90_000 : 45_000
 
 test.describe('Send Page', () => {
   test.beforeEach(async ({ page }) => {
@@ -82,7 +86,7 @@ test.describe('Send Page', () => {
   })
 
   test('sends bitcoin on regtest @regtest', async ({ page }) => {
-    test.setTimeout(process.env.CI ? 120_000 : 60_000)
+    test.setTimeout(E2E_IS_CI ? 300_000 : 60_000)
 
     await importWalletViaUI(page, TEST_MNEMONIC, TEST_PASSWORD)
 
@@ -129,6 +133,9 @@ test.describe('Send Page', () => {
     // assert a headline sat value — shared regtest state can show a cumulative total.
     await runDashboardSyncUntilIdle(page)
     await runDashboardSyncUntilIdle(page)
+    if (E2E_IS_CI) {
+      await runDashboardSyncUntilIdle(page)
+    }
     await waitForDashboardShowsFundedOnChainBalance(page)
 
     await goToWalletTab(page, 'Send')
@@ -169,8 +176,11 @@ test.describe('Send Page', () => {
 
     await page.getByRole('button', { name: 'Confirm and Send' }).click()
 
+    await expect(page).toHaveURL(/.*\/wallet\/?$/, {
+      timeout: POST_BROADCAST_DASHBOARD_TIMEOUT_MS,
+    })
     await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible({
-      timeout: 30000,
+      timeout: 25_000,
     })
   })
 })

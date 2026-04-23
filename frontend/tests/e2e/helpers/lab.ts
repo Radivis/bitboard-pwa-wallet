@@ -10,6 +10,11 @@ import {
   waitForSettingsNetworkSwitchComplete,
 } from './settings-waits'
 import { enableSegwitAddressesFeature } from './segwit-addresses-feature'
+import { E2E_IS_CI } from './regtest'
+import {
+  satsFromFirstFormattedBitcoinDisplayInRoot,
+  textReflectsSatsInFormattedDisplaysOrLiteral,
+} from './bitcoin-amount-display'
 
 /** Primary bottom nav (Wallet / Lab / Library / Settings). */
 export async function clickMainNavLab(page: Page): Promise<void> {
@@ -306,13 +311,12 @@ export async function expectManualLabEntityTransactionInMempool(page: Page): Pro
 
 /** Parse the amount cell in a lab tx output row (`/lab/tx/$txid` Outputs card). */
 async function parseLabTxOutputRowSats(row: Locator): Promise<number> {
-  // `BitcoinAmountDisplay` uses `.tabular-nums` on both the numeric span and the unit control; use the first (amount).
-  const amountText = await row.locator('.tabular-nums').first().textContent()
-  if (amountText == null) {
-    throw new Error('missing amount in lab tx output row')
+  const root = row.locator('span:has(> .tabular-nums)').first()
+  const sats = await satsFromFirstFormattedBitcoinDisplayInRoot(root)
+  if (sats == null) {
+    throw new Error('missing amount in lab tx output row (expected BitcoinAmountDisplay root)')
   }
-  const digits = amountText.replace(/\D/g, '')
-  return parseInt(digits, 10)
+  return sats
 }
 
 /** Bitcoin txids are hex; URLs and router params may differ in case — match worker lookups. */
@@ -587,16 +591,6 @@ export async function clickLabReviewTransaction(page: Page): Promise<void> {
 }
 
 /**
- * 546 sats is surfaced as a literal "546" in sat mode, but `BitcoinAmountDisplay` may use the
- * wallet default unit (often BTC), producing `0.00000546` where `\b546\b` does not match.
- */
-function textReflects546DustClamp(text: string): boolean {
-  if (/\b546\b/.test(text)) return true
-  if (text.includes('0.00000546')) return true
-  return false
-}
-
-/**
  * Case-1 (sub–dust-floor): toast or review banner, then compose / Transaction Details / case-2 modal
  * shows the clamped amount (any display unit).
  */
@@ -605,19 +599,26 @@ export async function expectLabCase1MinDustClampUi(page: Page): Promise<void> {
     page.getByText(/Amount was below the minimum/i).filter({ hasText: /546/ }).first(),
   ).toBeVisible({ timeout: 30000 })
 
+  /**
+   * The toast is often read once and auto-dismisses; the body can lose `546` while the
+   * review / modal / amount field still show the clamped value. Do not require `546` on
+   * the full `body` for the full poll.
+   */
   await expect
     .poll(
       async () => {
-        const bodyText = (await page.locator('body').textContent()) ?? ''
-        if (!textReflects546DustClamp(bodyText)) return false
+        const mainText = (await page.getByRole('main').textContent()) ?? ''
 
-        const transactionDetails = await page
+        const detailVisible = await page
           .getByText('Transaction Details')
           .first()
           .isVisible()
           .catch(() => false)
-        if (transactionDetails) {
-          return textReflects546DustClamp((await page.getByRole('main').textContent()) ?? '')
+        if (
+          detailVisible &&
+          textReflectsSatsInFormattedDisplaysOrLiteral(mainText, 546)
+        ) {
+          return true
         }
 
         const changeFeesHeading = page.getByRole('heading', { name: 'Change and fees' })
@@ -627,19 +628,19 @@ export async function expectLabCase1MinDustClampUi(page: Page): Promise<void> {
             .filter({ has: changeFeesHeading })
             .first()
           const dialogText = (await dialog.textContent().catch(() => null)) ?? ''
-          return textReflects546DustClamp(dialogText)
+          if (textReflectsSatsInFormattedDisplaysOrLiteral(dialogText, 546)) return true
         }
 
         const input = page.locator('#send-amount')
         if (await input.isVisible().catch(() => false)) {
-          return (await input.inputValue()) === '546'
+          if ((await input.inputValue()) === '546') return true
         }
 
         return false
       },
       {
-        timeout: 60_000,
-        intervals: [100, 250, 400],
+        timeout: E2E_IS_CI ? 90_000 : 60_000,
+        intervals: [100, 250, 400, 800],
         message:
           'Expected 546 dust clamp in Transaction Details, Change-and-fees dialog, or compose (#send-amount)',
       },
