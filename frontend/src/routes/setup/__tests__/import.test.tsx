@@ -39,6 +39,8 @@ const mockSetWalletStatus = vi.fn()
 const mockSetCurrentAddress = vi.fn()
 const mockSetBalance = vi.fn()
 const mockSetTransactions = vi.fn()
+const mockCommitLoadedSubWallet = vi.fn()
+const mockSetImportInitialSyncErrorMessage = vi.fn()
 vi.mock('@/stores/walletStore', () => ({
   useWalletStore: Object.assign(
     (selector: (s: Record<string, unknown>) => unknown) =>
@@ -51,6 +53,8 @@ vi.mock('@/stores/walletStore', () => ({
         setCurrentAddress: mockSetCurrentAddress,
         setBalance: mockSetBalance,
         setTransactions: mockSetTransactions,
+        commitLoadedSubWallet: mockCommitLoadedSubWallet,
+        setImportInitialSyncErrorMessage: mockSetImportInitialSyncErrorMessage,
       }),
     {
       getState: () => ({ lockWallet: vi.fn() }),
@@ -96,11 +100,22 @@ vi.mock('@/workers/secrets-channel', () => ({
 
 vi.mock('@/lib/bitcoin-utils', () => ({
   toBitcoinNetwork: (mode: string) => mode,
-  getEsploraUrl: () => 'http://localhost:3002',
 }))
 
+const { mockRunImportInitialEsploraSync, mockRetryImportInitialSync } = vi.hoisted(
+  () => ({
+    mockRunImportInitialEsploraSync: vi.fn().mockResolvedValue(undefined),
+    mockRetryImportInitialSync: vi.fn().mockResolvedValue(undefined),
+  }),
+)
+
 vi.mock('@/lib/wallet-utils', () => ({
-  loadCustomEsploraUrl: vi.fn().mockResolvedValue(null),
+  runImportInitialEsploraSync: mockRunImportInitialEsploraSync,
+  retryImportInitialEsploraSyncWithWalletStatus: mockRetryImportInitialSync,
+}))
+
+vi.mock('@/lib/wallet-sync-error-toast', () => ({
+  showImportInitialSyncFailureToast: vi.fn(),
 }))
 
 vi.mock('@/lib/wallet-query-cache-sync', () => ({

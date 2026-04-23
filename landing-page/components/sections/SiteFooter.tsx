@@ -1,4 +1,4 @@
-import { Globe, ExternalLink } from 'lucide-react';
+import { Globe, ExternalLink, ScrollText } from 'lucide-react';
 import { GitHubMark } from '@/src/GitHubMark';
 import { FooterOutboundLink } from './FooterOutboundLink';
 import { LegalLocaleSwitcherLanding } from '@/src/components/LegalLocaleSwitcherLanding';
@@ -13,11 +13,12 @@ import {
 
 interface SiteFooterProps {
   githubUrl: string;
+  changelogUrl: string;
   websiteUrl: string;
   blogUrl: string;
 }
 
-export function SiteFooter({ githubUrl, websiteUrl, blogUrl }: SiteFooterProps) {
+export function SiteFooter({ githubUrl, changelogUrl, websiteUrl, blogUrl }: SiteFooterProps) {
   const { locale, setLocale } = useLegalLocale();
   const hubTitle = locale === 'de' ? LEGAL_HUB_TITLE_DE : LEGAL_HUB_TITLE_EN;
   const privacyLinkLabel =
@@ -37,6 +38,9 @@ export function SiteFooter({ githubUrl, websiteUrl, blogUrl }: SiteFooterProps) 
           <div className="flex gap-6">
             <FooterOutboundLink href={githubUrl} label="GitHub repository">
               <GitHubMark />
+            </FooterOutboundLink>
+            <FooterOutboundLink href={changelogUrl} label="Changelog">
+              <ScrollText size={20} />
             </FooterOutboundLink>
             <FooterOutboundLink href={websiteUrl} label="Website">
               <Globe size={20} />

@@ -77,6 +77,8 @@ async fn full_scan_wallet_applies_update() {
     let mut mock_client = MockBC::new();
     mock_client
         .expect_full_scan()
+        // Parallel request count is `1` here; WASM uses a lower value for `full_scan`
+        // than for incremental `sync`—see `FULL_SCAN_PARALLEL_REQUESTS` in `lib.rs`.
         .returning(|_wallet, _stop_gap, _now, _parallel| Ok(Update::default()));
 
     let result = sync::full_scan_wallet(&mut wallet, &mock_client, 20, 1).await;

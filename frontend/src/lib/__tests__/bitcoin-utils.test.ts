@@ -1,6 +1,7 @@
 import { describe, it, expect, afterEach, vi } from 'vitest'
 import {
   fetchEsploraTipBlockHeight,
+  formatSats,
   parseBTC,
   validateEsploraUrl,
 } from '../bitcoin-utils'
@@ -84,6 +85,19 @@ describe('fetchEsploraTipBlockHeight', () => {
     expect(vi.mocked(fetch)).toHaveBeenCalledWith(
       'https://example.com/api/blocks/tip/height',
     )
+  })
+})
+
+describe('formatSats', () => {
+  it('formats as a plain integer string (no grouping, no fraction)', () => {
+    expect(formatSats(1234)).toBe('1234')
+    expect(formatSats(1000.9)).toBe('1000')
+    expect(formatSats(546)).toBe('546')
+  })
+
+  it('returns 0 for invalid inputs', () => {
+    expect(formatSats(-1)).toBe('0')
+    expect(formatSats(Number.NaN)).toBe('0')
   })
 })
 

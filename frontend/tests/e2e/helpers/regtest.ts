@@ -1,4 +1,5 @@
 import { expect, type Page } from '@playwright/test'
+import { maxSatsInTextFromFormattedBitcoinAmountDisplays } from '@/lib/bitcoin-amount-text-parse'
 
 /**
  * Helpers for E2E tests that use the regtest environment (bitcoinerlab/tester).
@@ -27,10 +28,13 @@ function sleep(ms: number): Promise<void> {
 
 const isCi = !!process.env.CI
 
-/** Esplora/electrs can lag more on GitHub Actions than on a warm local Docker setup. */
-const ESPLORA_INDEX_WAIT_MS = isCi ? 45_000 : 15_000
+/** Re-export for specs that need CI branching but should not depend on `process` typing. */
+export const E2E_IS_CI = isCi
 
-const CONFIRMED_UTXO_WAIT_MS = isCi ? 45_000 : 15_000
+/** Esplora/electrs can lag more on GitHub Actions than on a warm local Docker setup. */
+const ESPLORA_INDEX_WAIT_MS = isCi ? 60_000 : 15_000
+
+const CONFIRMED_UTXO_WAIT_MS = isCi ? 60_000 : 15_000
 
 /** Same window as Esplora UTXO polling — use when UI must reflect post-sync wallet state. */
 export const E2E_CI_AWARE_LONG_WAIT_MS = CONFIRMED_UTXO_WAIT_MS
@@ -96,6 +100,9 @@ interface EsploraUtxo {
   status: { confirmed: boolean; block_height?: number }
 }
 
+/** Send flow needs a non-dust on-chain view; 1000 sats matches typical regtest headroom. */
+const REGTEST_DASHBOARD_MIN_VISIBLE_SATS = 1_000
+
 /**
  * After regtest fund + mine + Esplora polling, the dashboard can still show 0 until BDK
  * finishes ingesting the sync. Sync idle is not always enough on slow CI; wait until the
@@ -103,21 +110,22 @@ interface EsploraUtxo {
  */
 export async function waitForDashboardShowsFundedOnChainBalance(page: Page): Promise<void> {
   const card = page.locator('[data-infomode-id="dashboard-balance-card"]')
-  const timeoutMs = Math.max(60_000, E2E_CI_AWARE_LONG_WAIT_MS)
+  const timeoutMs = isCi
+    ? Math.max(120_000, E2E_CI_AWARE_LONG_WAIT_MS)
+    : Math.max(60_000, E2E_CI_AWARE_LONG_WAIT_MS)
   await expect(card).toBeVisible({ timeout: 10_000 })
   await expect
     .poll(
       async () => {
-        const text = (await card.textContent()) ?? ''
-        // Default ~0.00100000 BTC = 100k sats; also cover common unit toggles (sat / mBTC / ksat).
-        if (/0\.00[1-9]\d*/.test(text)) return true
-        if (/(100,000|100[,\s]000|100000)\b/.test(text)) return true
-        if (/\b100\.(000|00\d)\b/.test(text) && /mBTC|milli|ksat/i.test(text)) return true
-        return false
+        const text = (await card.innerText()) ?? ''
+        return (
+          maxSatsInTextFromFormattedBitcoinAmountDisplays(text) >=
+          REGTEST_DASHBOARD_MIN_VISIBLE_SATS
+        )
       },
       {
         timeout: timeoutMs,
-        intervals: [250, 500, 1000],
+        intervals: [200, 400, 800, 1500],
         message:
           'Dashboard on-chain balance still looks empty (BDK may not have caught Esplora yet)',
       },

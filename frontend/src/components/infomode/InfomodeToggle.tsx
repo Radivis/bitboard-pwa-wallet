@@ -13,6 +13,7 @@ interface InfomodeToggleProps {
 export function InfomodeToggle({ className }: InfomodeToggleProps) {
   const isActive = useInfomodeStore((state) => state.isActive)
   const toggleInfomode = useInfomodeStore((state) => state.toggleInfomode)
+  const lightbulbSuppressionCue = useInfomodeStore((state) => state.lightbulbSuppressionCue)
 
   return (
     <button
@@ -43,7 +44,15 @@ export function InfomodeToggle({ className }: InfomodeToggleProps) {
         className,
       )}
     >
-      {isActive ? <Lightbulb className="h-5 w-5" /> : <LightbulbOff className="h-5 w-5" />}
+      <span
+        key={lightbulbSuppressionCue}
+        className={cn(
+          'inline-flex',
+          lightbulbSuppressionCue > 0 && 'infomode-lightbulb-jitter--active',
+        )}
+      >
+        {isActive ? <Lightbulb className="h-5 w-5" /> : <LightbulbOff className="h-5 w-5" />}
+      </span>
     </button>
   )
 }

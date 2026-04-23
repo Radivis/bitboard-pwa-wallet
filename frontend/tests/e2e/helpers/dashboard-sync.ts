@@ -5,6 +5,11 @@ const isCi = !!process.env.CI
 /** Extra headroom on CI: runners are slower and Playwright may use two workers. */
 const SYNC_FINISH_TIMEOUT_MS = isCi ? 90_000 : 60_000
 
+function syncControlTimeoutMs(override?: number): number {
+  if (override !== undefined) return override
+  return SYNC_FINISH_TIMEOUT_MS
+}
+
 /**
  * The dashboard Sync control is visible whenever the dashboard is shown, but it is
  * disabled while `walletStatus === 'syncing'` (e.g. after a network switch).
@@ -12,7 +17,8 @@ const SYNC_FINISH_TIMEOUT_MS = isCi ? 90_000 : 60_000
  */
 export async function waitForDashboardSyncButtonEnabled(
   page: Page,
-  timeout = 60_000,
+  /** Defaults to CI-aware syncControlTimeoutMs (same as post-Sync idle on CI) unless overridden. */
+  timeout = syncControlTimeoutMs(),
 ): Promise<void> {
   const syncButton = page.getByRole('button', { name: 'Sync' })
   await expect(syncButton).toBeVisible({ timeout })

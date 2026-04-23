@@ -37,6 +37,8 @@ If you want to start through the landing page first, visit:
 
 **[bitboard-wallet.com](https://bitboard-wallet.com)**
 
+Version history and release notes: [Changelog on GitHub](https://github.com/Radivis/bitboard-pwa-wallet/blob/main/CHANGELOG.md).
+
 🌍🌍🌍🌍🌍🌍🌍
 
 ## Security

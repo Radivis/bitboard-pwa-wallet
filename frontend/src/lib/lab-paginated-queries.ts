@@ -14,6 +14,7 @@ import { labEntityOwnerKey } from '@/lib/lab-entity-keys'
 import { labOwnerFromDbPair } from '@/lib/lab-db-owner'
 import { labOwnerFromSortKey, labOwnerFromWalletOwnerKey } from '@/lib/lab-owner'
 import { feeSatsFromTxDetails } from '@/lib/lab-tx-fee'
+import { netMovedSatsForLabTx } from '@/lib/lab-tx-net-moved'
 import {
   type AddressType,
   parseAddressType,
@@ -112,6 +113,7 @@ function parseTxDetailsRow(
     txid: row.txid,
     sender: labOwnerFromDbPair(row.sender_lab_entity_id, row.sender_wallet_id),
     receiver: labOwnerFromDbPair(row.receiver_lab_entity_id, row.receiver_wallet_id),
+    amountSats: netMovedSatsForLabTx(tx),
     feeSats: feeSatsFromTxDetails(tx),
     inputs,
   }

@@ -264,6 +264,8 @@ pub fn export_changeset() -> Result<String, JsValue> {
 // a mock BlockchainClient; the WASM entrypoints here use EsploraClient directly.
 
 const PARALLEL_REQUESTS: usize = 5;
+/// Full scan is bursty; lower concurrency reduces 429s on public Esplora hosts.
+const FULL_SCAN_PARALLEL_REQUESTS: usize = 2;
 
 fn to_js<T: serde::Serialize>(value: &T) -> Result<JsValue, JsValue> {
     serde_wasm_bindgen::to_value(value).map_err_to_js()
@@ -305,7 +307,7 @@ pub async fn full_scan_wallet(esplora_url: &str, stop_gap: usize) -> Result<JsVa
     use bdk_esplora::EsploraAsyncExt;
     let update: bdk_wallet::Update = client
         .inner()
-        .full_scan(scan_request, stop_gap, PARALLEL_REQUESTS)
+        .full_scan(scan_request, stop_gap, FULL_SCAN_PARALLEL_REQUESTS)
         .await
         .map_err_to_js()?
         .into();

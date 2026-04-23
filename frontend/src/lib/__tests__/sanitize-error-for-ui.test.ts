@@ -19,6 +19,17 @@ describe('sanitizeErrorMessageForUi', () => {
     ).toBe('could not open [file]')
   })
 
+  it('replaces http and https URLs', () => {
+    expect(
+      sanitizeErrorMessageForUi(
+        'Failed to fetch https://mempool.space/api/tx/abc / timeout',
+      ),
+    ).toBe('Failed to fetch [url] / timeout')
+    expect(
+      sanitizeErrorMessageForUi('GET http://127.0.0.1:3002/blocks/tip/height'),
+    ).toBe('GET [url]')
+  })
+
   it('replaces Windows paths', () => {
     expect(
       sanitizeErrorMessageForUi('failed C:\\Users\\me\\wallet.db'),

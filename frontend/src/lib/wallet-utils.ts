@@ -3,7 +3,11 @@ import { toast } from 'sonner'
 import { getDatabase, ensureMigrated } from '@/db/database'
 import type { NetworkMode } from '@/stores/walletStore'
 import { useWalletStore } from '@/stores/walletStore'
+import { useSessionStore } from '@/stores/sessionStore'
 import { useCryptoStore } from '@/stores/cryptoStore'
+import { withEsploraFullScanRetries } from '@/lib/esplora-full-scan-retry'
+import { sanitizeErrorMessageForUi } from '@/lib/sanitize-error-for-ui'
+import { showImportInitialSyncFailureToast } from '@/lib/wallet-sync-error-toast'
 import {
   getEsploraUrl,
   toBitcoinNetwork,
@@ -144,7 +148,9 @@ export async function syncActiveWalletAndUpdateState(
   if (options?.useFullScan) {
     const toastId = toast.loading('Scanning blockchain…')
     try {
-      await fullScanWallet(esploraUrl, FULL_SCAN_STOP_GAP)
+      await withEsploraFullScanRetries(() =>
+        fullScanWallet(esploraUrl, FULL_SCAN_STOP_GAP),
+      )
       toast.success('Wallet synced', { id: toastId })
     } catch (err) {
       toast.dismiss(toastId)
@@ -203,6 +209,31 @@ export async function syncLoadedSubWalletWithEsplora(options: {
 }
 
 /**
+ * After {@link syncActiveWalletAndUpdateState} for dashboard actions: refresh LN queries,
+ * last-sync time, and optional persisted changeset.
+ */
+async function finishDashboardSyncAfterStateUpdate(options: {
+  password: string | null
+  activeWalletId: number | null
+  markFullScanDone: boolean
+}): Promise<void> {
+  invalidateLightningDashboardQueries()
+  const { setLastSyncTime } = useWalletStore.getState()
+  setLastSyncTime(new Date())
+  if (options.password == null || options.activeWalletId == null) {
+    return
+  }
+  const { exportChangeset } = useCryptoStore.getState()
+  const changeset = await exportChangeset()
+  await updateWalletChangeset({
+    password: options.password,
+    walletId: options.activeWalletId,
+    changesetJson: changeset,
+    ...(options.markFullScanDone ? { markFullScanDone: true } : {}),
+  })
+}
+
+/**
  * Esplora sync for the dashboard "Sync" button: updates balance and
  * transactions in the store, last sync time, and persisted changeset.
  *
@@ -218,16 +249,96 @@ export async function runIncrementalDashboardWalletSync(options: {
   await syncActiveWalletAndUpdateState(options.networkMode, {
     useFullScan: options.networkMode === 'regtest',
   })
-  invalidateLightningDashboardQueries()
-  const { setLastSyncTime } = useWalletStore.getState()
-  setLastSyncTime(new Date())
-  if (options.password && options.activeWalletId != null) {
+  await finishDashboardSyncAfterStateUpdate({
+    ...options,
+    markFullScanDone: false,
+  })
+}
+
+/**
+ * Full Esplora scan for the dashboard "Full rescan" control: re-scans the
+ * address gap (same BDK path as import). Use when incremental sync cannot fix
+ * a wrong balance or history.
+ *
+ * Does not add its own success toast: {@link syncActiveWalletAndUpdateState} shows
+ * loading and success toasts for the full-scan path.
+ */
+export async function runFullScanDashboardWalletSync(options: {
+  networkMode: NetworkMode
+  password: string | null
+  activeWalletId: number | null
+}): Promise<void> {
+  await syncActiveWalletAndUpdateState(options.networkMode, {
+    useFullScan: true,
+  })
+  await finishDashboardSyncAfterStateUpdate({
+    ...options,
+    markFullScanDone: true,
+  })
+}
+
+/**
+ * Post-import initial Esplora flow: full scan (with retries via
+ * {@link syncActiveWalletAndUpdateState}), refresh store, persist `fullScanDone`,
+ * clear any import error banner. Does not set `walletStatus`.
+ */
+export async function runImportInitialEsploraSync(): Promise<void> {
+  const networkMode = useWalletStore.getState().networkMode
+  const sessionPassword = useSessionStore.getState().password
+  const activeWalletId = useWalletStore.getState().activeWalletId
+  const { setImportInitialSyncErrorMessage } = useWalletStore.getState()
+
+  const customUrl = await loadCustomEsploraUrl(networkMode)
+  const esploraUrl = getEsploraUrl(networkMode, customUrl)
+
+  if (!esploraUrl) {
+    const { getBalance, getTransactionList } = useCryptoStore.getState()
+    const { setBalance, setTransactions } = useWalletStore.getState()
+    const balance = await getBalance()
+    const txs = await getTransactionList()
+    setBalance(balance)
+    setTransactions(txs)
+    setImportInitialSyncErrorMessage(null)
+    return
+  }
+
+  await syncActiveWalletAndUpdateState(networkMode, { useFullScan: true })
+
+  if (sessionPassword && activeWalletId != null) {
     const { exportChangeset } = useCryptoStore.getState()
     const changeset = await exportChangeset()
     await updateWalletChangeset({
-      password: options.password,
-      walletId: options.activeWalletId,
+      password: sessionPassword,
+      walletId: activeWalletId,
       changesetJson: changeset,
+      markFullScanDone: true,
+    })
+  }
+  invalidateLightningDashboardQueries()
+  setImportInitialSyncErrorMessage(null)
+}
+
+/**
+ * Retry handler for import initial sync (toast action, dashboard banner): sets syncing,
+ * runs {@link runImportInitialEsploraSync}, shows toasts, repopulates error state on failure.
+ */
+export async function retryImportInitialEsploraSyncWithWalletStatus(): Promise<void> {
+  const { setWalletStatus, setImportInitialSyncErrorMessage } =
+    useWalletStore.getState()
+  try {
+    setWalletStatus('syncing')
+    setImportInitialSyncErrorMessage(null)
+    await runImportInitialEsploraSync()
+    setWalletStatus('unlocked')
+    toast.success('Initial sync complete')
+  } catch (err) {
+    setWalletStatus('unlocked')
+    const msg =
+      sanitizeErrorMessageForUi(errorMessage(err) ?? String(err)) ||
+      'Initial sync failed'
+    setImportInitialSyncErrorMessage(msg)
+    showImportInitialSyncFailureToast(err, () => {
+      void retryImportInitialEsploraSyncWithWalletStatus()
     })
   }
 }

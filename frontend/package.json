@@ -1,7 +1,7 @@
 {
   "name": "bitboard-pwa-wallet",
   "private": true,
-  "version": "0.1.0-beta.2",
+  "version": "0.1.0",
   "type": "module",
   "license": "MIT",
   "engines": {
@@ -44,7 +44,6 @@
     "kysely": "0.28.16",
     "kysely-wasqlite-worker": "1.2.1",
     "lucide-react": "1.8.0",
-    "next-themes": "0.4.6",
     "qr-scanner": "1.4.2",
     "qrcode.react": "4.2.0",
     "radix-ui": "1.4.3",

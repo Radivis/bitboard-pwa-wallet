@@ -7,16 +7,16 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
-import { truncateAddress } from '@/lib/bitcoin-utils'
-import { LabOwnerDisplayWithAddressType } from '@/components/lab/LabOwnerDisplayWithAddressType'
-import type { LabOwner } from '@/lib/lab-owner'
+import { LabTxCard } from '@/components/lab/LabTxCard'
+import { netMovedSatsFromMempoolEntry } from '@/lib/lab-tx-net-moved'
+import type { MempoolEntry } from '@/workers/lab-api'
 import { useLabChainStateQuery } from '@/hooks/useLabChainStateQuery'
 
 export function LabMempoolCard({
   mempool,
   wallets,
 }: {
-  mempool: Array<{ txid: string; sender: LabOwner | null; receiver: LabOwner | null }>
+  mempool: MempoolEntry[]
   wallets: Array<{ wallet_id: number; name: string }>
 }) {
   const { data: labState } = useLabChainStateQuery()
@@ -39,40 +39,29 @@ export function LabMempoolCard({
               Mempool is empty. Create a transaction to see it here.
             </p>
           ) : (
-            <div className="space-y-2">
-              {mempool.map((tx) => (
-                <Link
-                  key={tx.txid}
-                  to="/lab/tx/$txid"
-                  params={{ txid: tx.txid }}
-                  className="flex gap-4 items-center py-2 border-b border-border last:border-0 hover:bg-muted/50 rounded px-2 -mx-2 transition-colors"
-                >
-                  <span className="font-mono text-sm truncate flex-1 min-w-0" title={tx.txid}>
-                    {truncateAddress(tx.txid)}
-                  </span>
-                  <span className="text-muted-foreground text-sm flex flex-wrap items-center gap-x-1 gap-y-1">
-                    {tx.sender ? (
-                      <LabOwnerDisplayWithAddressType
-                        owner={tx.sender}
-                        wallets={wallets}
-                        entities={entities}
-                      />
-                    ) : (
-                      'unknown'
-                    )}
-                    <span aria-hidden="true">→</span>
-                    {tx.receiver ? (
-                      <LabOwnerDisplayWithAddressType
-                        owner={tx.receiver}
-                        wallets={wallets}
-                        entities={entities}
-                      />
-                    ) : (
-                      'unknown'
-                    )}
-                  </span>
-                </Link>
-              ))}
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(9.5rem,1fr))] gap-3">
+              {mempool.map((tx) => {
+                const amountSats = netMovedSatsFromMempoolEntry(tx)
+                return (
+                  <Link
+                    key={tx.txid}
+                    to="/lab/tx/$txid"
+                    params={{ txid: tx.txid }}
+                    className="block min-w-0 rounded-lg border border-border p-2 transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <LabTxCard
+                      txid={tx.txid}
+                      sender={tx.sender}
+                      receiver={tx.receiver}
+                      amountSats={amountSats}
+                      feeSats={tx.feeSats}
+                      wallets={wallets}
+                      entities={entities}
+                      variant="transfer"
+                    />
+                  </Link>
+                )
+              })}
             </div>
           )}
         </CardContent>

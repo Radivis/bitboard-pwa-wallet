@@ -1,5 +1,5 @@
 import { isCoinbase } from '@/lib/lab-operations'
-import type { LabTxDetails } from '@/workers/lab-api'
+import type { LabTxDetails, MempoolEntry } from '@/workers/lab-api'
 
 /**
  * “Net moved” sats for one lab transaction: aligns with wallet `sent_sats` semantics in
@@ -10,6 +10,13 @@ export function netMovedSatsForLabTx(tx: LabTxDetails): number {
     return tx.outputs.reduce((sum, o) => sum + o.amountSats, 0)
   }
   return tx.outputs
+    .filter((o) => o.isChange !== true)
+    .reduce((sum, o) => sum + o.amountSats, 0)
+}
+
+/** Mempool unconfirmed transfer amount: sum of non-change outputs (same filter as non-coinbase net moved). */
+export function netMovedSatsFromMempoolEntry(entry: MempoolEntry): number {
+  return entry.outputsDetail
     .filter((o) => o.isChange !== true)
     .reduce((sum, o) => sum + o.amountSats, 0)
 }

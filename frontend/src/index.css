@@ -247,3 +247,28 @@ body {
   pointer-events: none;
   z-index: 1;
 }
+
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes infomode-lightbulb-jitter {
+    0%,
+    100% {
+      transform: translateX(0);
+    }
+    20% {
+      transform: translateX(4px);
+    }
+    40% {
+      transform: translateX(-4px);
+    }
+    60% {
+      transform: translateX(3px);
+    }
+    80% {
+      transform: translateX(-2px);
+    }
+  }
+
+  .infomode-lightbulb-jitter--active {
+    animation: infomode-lightbulb-jitter 0.45s ease-out;
+  }
+}

@@ -1,3 +1,5 @@
+import { GITHUB_CHANGELOG_URL, GITHUB_REPOSITORY_URL } from '@common/public-links'
+
 /**
  * Outbound URLs for the landing page (single source of truth).
  *
@@ -5,7 +7,8 @@
  * `blog` and `website` are empty until those surfaces go live.
  */
 export const LANDING_PAGE_LINKS = new Map<string, string>([
-  ['githubRepository', 'https://github.com/Radivis/bitboard-pwa-wallet'],
+  ['githubRepository', GITHUB_REPOSITORY_URL],
+  ['changelog', GITHUB_CHANGELOG_URL],
   ['app', 'https://app.bitboard-wallet.com'],
   ['blog', ''],
   ['website', ''],

@@ -16,15 +16,28 @@ test.describe('Infomode on Settings', () => {
     const networkCardDescription = page
       .locator('[data-infomode-id="settings-network-card"]')
       .getByText('Select the Bitcoin network to connect to.')
+    const networkCard = page.locator('[data-infomode-id="settings-network-card"]')
+    const testnetInNetworkCard = networkCard.getByRole('button', { name: 'Testnet' })
     const labButton = page.getByRole('button', { name: 'Lab', exact: true })
     const infomodeDialog = page.getByRole('dialog', { name: 'Infomode explanation' })
 
     await page.getByRole('button', { name: 'Turn on infomode' }).click()
     await expect(page.getByText('Infomode on')).toBeVisible()
 
+    const suppressionRe = /Action has been suppressed due to active infomode/
+
     await networkCardDescription.click()
+    await expect(page.getByText(suppressionRe)).toHaveCount(0)
     await expect(infomodeDialog).toBeVisible()
     await expect(infomodeDialog.getByRole('heading', { name: 'Bitcoin networks' })).toBeVisible()
+
+    await page.getByRole('button', { name: 'Close explanation' }).click()
+    await expect(page.locator('[data-infomode-popup]')).toHaveCount(0)
+
+    await testnetInNetworkCard.click()
+    await expect(page.getByText(suppressionRe)).toBeVisible()
+    await expect(infomodeDialog).toBeVisible()
+    await expect(infomodeDialog.getByRole('heading', { name: 'Testnet' })).toBeVisible()
 
     await page.getByRole('button', { name: 'Close explanation' }).click()
     await expect(page.locator('[data-infomode-popup]')).toHaveCount(0)
@@ -36,6 +49,8 @@ test.describe('Infomode on Settings', () => {
     await committedDescriptorBlock
       .getByText('Receiving descriptor', { exact: true })
       .click()
+    // Static label only (no control): no *new* suppression from this tap; a toast may still
+    // be visible from the network-mode button above until Sonner’s duration elapses.
     await expect(infomodeDialog).toBeVisible()
     await expect(infomodeDialog.getByRole('heading', { name: 'Output descriptors' })).toBeVisible()
 
@@ -46,6 +61,7 @@ test.describe('Infomode on Settings', () => {
     expect(networkBefore).toBeDefined()
 
     await labButton.click()
+    await expect(page.getByText(suppressionRe)).toBeVisible()
     await expect(infomodeDialog).toBeVisible()
     await expect(
       infomodeDialog.getByRole('heading', { name: 'Lab', exact: true }),
