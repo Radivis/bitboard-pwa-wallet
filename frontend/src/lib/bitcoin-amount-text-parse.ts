@@ -47,7 +47,9 @@ function normalizeNumberTokenForUnit(raw: string, displayUnit: BitcoinDisplayUni
   return trimmed.replace(/,/g, '')
 }
 
-const AMOUNT_NUMBER_BEFORE_LABEL = /([\d.,\s\u00a0\u202F]+)\s*$/s
+// \u00a0 = U+00A0 NO-BREAK SPACE (NBSP)
+// \u202F = U+202F NARROW NO-BREAK SPACE (NNBSP)
+const AMOUNT_NUMBER_BEFORE_LABEL = /([\d.,\s\u00a0\u202F]+)\s*$/
 
 /**
  * The numeric token immediately before a unit label, e.g. "0.00100000" or "1.00000"
