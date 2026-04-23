@@ -6,6 +6,7 @@
  * `npx playwright test tests/e2e/lab-manual-transactions-dust.spec.ts`
  */
 import { test, expect } from '@playwright/test'
+import { UX_DUST_FLOOR_SATS } from '@/lib/bitcoin-dust'
 import { LabOwnerType } from '@/lib/lab-owner-type'
 import { importWalletViaUI, TEST_MNEMONIC, TEST_PASSWORD } from './helpers/wallet-setup'
 import {
@@ -21,6 +22,7 @@ import {
   clickLabDustChoiceManualLabEntityTx,
   createLabEntityViaControl,
 } from './helpers/lab'
+import { textReflectsSatsInFormattedDisplaysOrLiteral } from './helpers/bitcoin-amount-display'
 
 test.describe('Lab manual transactions dust UX', { tag: '@lab' }, () => {
   test.describe.configure({ mode: 'serial' })
@@ -50,9 +52,14 @@ test.describe('Lab manual transactions dust UX', { tag: '@lab' }, () => {
     await page.getByLabel('Fee rate (sat/vB)').fill('1')
     await page.getByRole('button', { name: 'Send' }).click()
 
-    await expect(
-      page.getByText(/minimum output size \(546 sats\)/i).first(),
-    ).toBeVisible({ timeout: 60000 })
+    const minOutputMessage = page.getByText(/minimum output size/i).first()
+    await expect(minOutputMessage).toBeVisible({ timeout: 60_000 })
+    expect(
+      textReflectsSatsInFormattedDisplaysOrLiteral(
+        (await minOutputMessage.textContent()) ?? '',
+        UX_DUST_FLOOR_SATS,
+      ),
+    ).toBe(true)
     await expectManualLabEntityTransactionInMempoolAndInspectOutputs(page)
   })
 

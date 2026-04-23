@@ -4,6 +4,7 @@ import { LabOwnerType } from '@/lib/lab-owner-type'
 import type { LabState } from '@/workers/lab-api'
 import { labEntityOwnerKey } from '@/lib/lab-entity-keys'
 import { lookupLabAddressOwner, WALLET_OWNER_PREFIX } from '@/lib/lab-utils'
+import { UX_DUST_FLOOR_SATS } from '@/lib/bitcoin-dust'
 import { goToWalletTab } from './wallet-nav'
 import {
   waitForSettingsNetworkModeButtonSelected,
@@ -403,7 +404,8 @@ export async function readLabTxOutputAmountsSatsFromViewer(page: Page): Promise<
 
 /**
  * Assert each output row matches `expectedSats[i]` (same order as the tx viewer).
- * Parses digits from the numeric span in `BitcoinAmountDisplay` (not the unit control).
+ * Each row’s amount is read via `satsFromFirstFormattedBitcoinDisplayInRoot` (same
+ * amount+unit rules as the app’s `BitcoinAmountDisplay`).
  */
 export async function expectLabTxOutputAmountsSats(
   page: Page,
@@ -595,9 +597,18 @@ export async function clickLabReviewTransaction(page: Page): Promise<void> {
  * shows the clamped amount (any display unit).
  */
 export async function expectLabCase1MinDustClampUi(page: Page): Promise<void> {
-  await expect(
-    page.getByText(/Amount was below the minimum/i).filter({ hasText: /546/ }).first(),
-  ).toBeVisible({ timeout: 30000 })
+  const subDustMinToast = page.getByText(/Amount was below the minimum/i).first()
+  await expect(subDustMinToast).toBeVisible({ timeout: 30_000 })
+  await expect
+    .poll(
+      async () =>
+        textReflectsSatsInFormattedDisplaysOrLiteral(
+          (await subDustMinToast.textContent()) ?? '',
+          UX_DUST_FLOOR_SATS,
+        ),
+      { timeout: 5_000, intervals: [50, 100] },
+    )
+    .toBe(true)
 
   /**
    * The toast is often read once and auto-dismisses; the body can lose `546` while the
@@ -616,7 +627,10 @@ export async function expectLabCase1MinDustClampUi(page: Page): Promise<void> {
           .catch(() => false)
         if (
           detailVisible &&
-          textReflectsSatsInFormattedDisplaysOrLiteral(mainText, 546)
+          textReflectsSatsInFormattedDisplaysOrLiteral(
+            mainText,
+            UX_DUST_FLOOR_SATS,
+          )
         ) {
           return true
         }
@@ -628,12 +642,19 @@ export async function expectLabCase1MinDustClampUi(page: Page): Promise<void> {
             .filter({ has: changeFeesHeading })
             .first()
           const dialogText = (await dialog.textContent().catch(() => null)) ?? ''
-          if (textReflectsSatsInFormattedDisplaysOrLiteral(dialogText, 546)) return true
+          if (
+            textReflectsSatsInFormattedDisplaysOrLiteral(
+              dialogText,
+              UX_DUST_FLOOR_SATS,
+            )
+          ) {
+            return true
+          }
         }
 
         const input = page.locator('#send-amount')
         if (await input.isVisible().catch(() => false)) {
-          if ((await input.inputValue()) === '546') return true
+          if ((await input.inputValue()) === String(UX_DUST_FLOOR_SATS)) return true
         }
 
         return false
@@ -641,8 +662,7 @@ export async function expectLabCase1MinDustClampUi(page: Page): Promise<void> {
       {
         timeout: E2E_IS_CI ? 90_000 : 60_000,
         intervals: [100, 250, 400, 800],
-        message:
-          'Expected 546 dust clamp in Transaction Details, Change-and-fees dialog, or compose (#send-amount)',
+        message: `Expected dust clamp to ${UX_DUST_FLOOR_SATS} sats in Transaction Details, Change-and-fees dialog, or compose (#send-amount)`,
       },
     )
     .toBe(true)

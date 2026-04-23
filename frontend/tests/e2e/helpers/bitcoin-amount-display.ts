@@ -1,6 +1,15 @@
 import type { Locator } from '@playwright/test'
 import { parseAllSatsInTextFromFormattedBitcoinAmountDisplays } from '@/lib/bitcoin-amount-text-parse'
 
+/**
+ * E2E helpers for reading amounts the same way `BitcoinAmountDisplay` formats them, via
+ * `parseAllSatsInTextFromFormattedBitcoinAmountDisplays` / re-exports below.
+ * Use `satsFromFirstFormattedBitcoinDisplayInRoot` when the locator is the display root; use
+ * the parse helpers for `innerText` of larger regions (e.g. balance cards, review steps).
+ * Dust-floor assertions can use `textReflectsSatsInFormattedDisplaysOrLiteral` together with
+ * `UX_DUST_FLOOR_SATS` from `@/lib/bitcoin-dust`.
+ */
+
 export {
   maxSatsInTextFromFormattedBitcoinAmountDisplays,
   parseAllSatsInTextFromFormattedBitcoinAmountDisplays,

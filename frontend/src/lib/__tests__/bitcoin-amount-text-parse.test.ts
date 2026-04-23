@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+import { UX_DUST_FLOOR_SATS } from '@/lib/bitcoin-dust'
 import { formatAmountInBitcoinDisplayUnit } from '@/lib/bitcoin-display-unit'
 import {
   maxSatsInTextFromFormattedBitcoinAmountDisplays,
@@ -44,15 +45,17 @@ ${mockDisplay(50_000, 'mBTC')}`
     )
   })
 
-  it('resolves 546 sats in every unit or literal 546 in prose (dust case)', () => {
+  it('resolves dust floor sats in every unit or literal sats in prose (dust case)', () => {
     for (const unit of ['BTC', 'mBTC', 'uBTC', 'ksat', 'sat'] as const) {
-      const t = mockDisplay(546, unit)
-      expect(textReflectsSatsInFormattedDisplaysOrLiteral(t, 546)).toBe(true)
+      const t = mockDisplay(UX_DUST_FLOOR_SATS, unit)
+      expect(
+        textReflectsSatsInFormattedDisplaysOrLiteral(t, UX_DUST_FLOOR_SATS),
+      ).toBe(true)
     }
     expect(
       textReflectsSatsInFormattedDisplaysOrLiteral(
-        'Amount was below the minimum output size (546 sats).',
-        546,
+        `Amount was below the minimum output size (${UX_DUST_FLOOR_SATS} sats).`,
+        UX_DUST_FLOOR_SATS,
       ),
     ).toBe(true)
   })
