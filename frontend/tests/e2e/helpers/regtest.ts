@@ -1,5 +1,6 @@
 import { expect, type Page } from '@playwright/test'
 import { maxSatsInTextFromFormattedBitcoinAmountDisplays } from '@/lib/bitcoin-amount-text-parse'
+import { runDashboardSyncUntilIdle } from './dashboard-sync'
 
 /**
  * Helpers for E2E tests that use the regtest environment (bitcoinerlab/tester).
@@ -131,6 +132,18 @@ export async function waitForDashboardShowsFundedOnChainBalance(page: Page): Pro
       },
     )
     .toBe(true)
+}
+
+/**
+ * Mine one block and run a full dashboard sync so BDK’s chain tip matches bitcoind before
+ * building a spend. Otherwise `sendrawtransaction` can fail with RPC -26 "non-final" when the
+ * wallet’s PSBT `nLockTime` is still ahead of the node’s tip (fee-sniping / locktime races).
+ */
+export async function mineRegtestBlockAndResyncWalletFromDashboard(
+  page: Page,
+): Promise<void> {
+  await mineRegtestBlocks(1)
+  await runDashboardSyncUntilIdle(page)
 }
 
 /**

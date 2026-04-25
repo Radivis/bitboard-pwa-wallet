@@ -8,6 +8,7 @@ import {
 import {
   E2E_IS_CI,
   fundRegtestAddress,
+  mineRegtestBlockAndResyncWalletFromDashboard,
   mineRegtestBlocks,
   waitForConfirmedBalance,
   waitForDashboardShowsFundedOnChainBalance,
@@ -124,6 +125,8 @@ test.describe('Send Page', () => {
     // One full manual sync, then wait until the balance card reflects funds (polls; no fixed sleep).
     await runDashboardSyncUntilIdle(page)
     await waitForDashboardShowsFundedOnChainBalance(page)
+    // Align tip with bitcoind before Review builds the PSBT (avoids flaky RPC -26 "non-final").
+    await mineRegtestBlockAndResyncWalletFromDashboard(page)
 
     await goToWalletTab(page, 'Send')
     await expect(page.getByText('Send Bitcoin')).toBeVisible()
