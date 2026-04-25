@@ -1,9 +1,15 @@
 import { FlaskConical, Smartphone, BookOpen } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { Section } from '@/components/Section';
 
 const ABOUT_VISION_IMAGE_SRC = '/BitcoinMatrix.jpg';
 
-export function AboutSection() {
+interface AboutSectionProps {
+  matrixPaused: boolean;
+  onMatrixPauseToggle: () => void;
+}
+
+export function AboutSection({ matrixPaused, onMatrixPauseToggle }: AboutSectionProps) {
   return (
     <Section id="about" title="The Vision">
       <div className="grid md:grid-cols-2 gap-12 items-center">
@@ -24,6 +30,19 @@ export function AboutSection() {
                 <span>{item.text}</span>
               </div>
             ))}
+          </div>
+          <div className="mt-8">
+            <Button
+              type="button"
+              id="vision-matrix-pause-toggle"
+              variant="outline"
+              aria-pressed={matrixPaused}
+              aria-label={matrixPaused ? 'Resume the Matrix background animation' : 'Pause the Matrix background animation'}
+              className="rounded-none border-matrix/60 bg-black/40 text-matrix hover:bg-matrix/10 hover:text-matrix"
+              onClick={onMatrixPauseToggle}
+            >
+              {matrixPaused ? 'Resume the Matrix' : 'Pause the Matrix'}
+            </Button>
           </div>
         </div>
         <div className="relative aspect-square bg-matrix/5 border border-matrix/20 overflow-hidden">

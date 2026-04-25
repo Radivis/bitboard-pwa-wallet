@@ -16,6 +16,7 @@ import { landingPageLink } from './landing-page-links';
 
 export default function App() {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [matrixPaused, setMatrixPaused] = useState(false);
   const prefersReducedMotion = useReducedMotion();
   const appUrl = landingPageLink('app');
   const githubUrl = landingPageLink('githubRepository');
@@ -24,7 +25,7 @@ export default function App() {
   const websiteUrl = landingPageLink('website');
   return (
     <div className="min-h-screen text-white font-sans selection:bg-matrix selection:text-black relative overflow-x-hidden">
-      <MatrixBackground reducedMotion={prefersReducedMotion ?? false} />
+      <MatrixBackground reducedMotion={prefersReducedMotion ?? false} paused={matrixPaused} />
 
       <div className="relative z-10">
         <RetroMarquee
@@ -34,7 +35,10 @@ export default function App() {
 
         <HeroSection appUrl={appUrl} prefersReducedMotion={prefersReducedMotion} />
 
-        <AboutSection />
+        <AboutSection
+          matrixPaused={matrixPaused}
+          onMatrixPauseToggle={() => setMatrixPaused((p) => !p)}
+        />
 
         <GetStartedSection appUrl={appUrl} />
 

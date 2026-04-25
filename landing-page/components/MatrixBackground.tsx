@@ -2,10 +2,16 @@ import React, { useEffect, useRef } from 'react';
 
 interface MatrixBackgroundProps {
   reducedMotion: boolean;
+  /** When true, animation stops and the last frame stays visible (saves CPU/GPU). */
+  paused?: boolean;
 }
 
-export const MatrixBackground: React.FC<MatrixBackgroundProps> = ({ reducedMotion }) => {
+export const MatrixBackground: React.FC<MatrixBackgroundProps> = ({ reducedMotion, paused = false }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const pausedRef = useRef(paused);
+  pausedRef.current = paused;
+
+  const resumeRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -21,6 +27,7 @@ export const MatrixBackground: React.FC<MatrixBackgroundProps> = ({ reducedMotio
     ctx.fillRect(0, 0, width, height);
 
     if (reducedMotion) {
+      resumeRef.current = null;
       const handleResize = () => {
         width = canvas.width = window.innerWidth;
         height = canvas.height = window.innerHeight;
@@ -28,7 +35,10 @@ export const MatrixBackground: React.FC<MatrixBackgroundProps> = ({ reducedMotio
         ctx.fillRect(0, 0, width, height);
       };
       window.addEventListener('resize', handleResize);
-      return () => window.removeEventListener('resize', handleResize);
+      return () => {
+        window.removeEventListener('resize', handleResize);
+        resumeRef.current = null;
+      };
     }
 
     const hexChars = '0123456789ABCDEF';
@@ -75,13 +85,30 @@ export const MatrixBackground: React.FC<MatrixBackgroundProps> = ({ reducedMotio
       }
     };
 
-    let animationId: number;
+    let animationId: number | undefined;
+    let isLoopActive = false;
+
     const animate = () => {
+      if (pausedRef.current) {
+        isLoopActive = false;
+        return;
+      }
       draw();
       animationId = requestAnimationFrame(animate);
     };
 
-    animate();
+    const resume = () => {
+      if (pausedRef.current) return;
+      if (!isLoopActive) {
+        isLoopActive = true;
+        animationId = requestAnimationFrame(animate);
+      }
+    };
+
+    resumeRef.current = resume;
+    if (!pausedRef.current) {
+      resume();
+    }
 
     const handleResize = () => {
       width = canvas.width = window.innerWidth;
@@ -100,10 +127,19 @@ export const MatrixBackground: React.FC<MatrixBackgroundProps> = ({ reducedMotio
     window.addEventListener('resize', handleResize);
 
     return () => {
-      cancelAnimationFrame(animationId);
+      if (animationId !== undefined) {
+        cancelAnimationFrame(animationId);
+      }
+      isLoopActive = false;
+      resumeRef.current = null;
       window.removeEventListener('resize', handleResize);
     };
   }, [reducedMotion]);
+
+  useEffect(() => {
+    if (reducedMotion || paused) return;
+    resumeRef.current?.();
+  }, [paused, reducedMotion]);
 
   return (
     <canvas
