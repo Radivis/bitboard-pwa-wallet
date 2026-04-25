@@ -11,11 +11,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Revamped all Library articles
-
 ### Fixed
 
 ### Security
+
+## [0.1.1] - 2026-04-25
+
+### Added
+
+- Toggle button on landing page for stopping and resuming the Matrix background effect
+- Extended the Future section of the landing page
+- Added some new Library articles:
+  - ECDSA (Elliptic Curve Digital Signature Algorithm)
+  - Elliptic Curve Algebra
+  - Finite Fields
+  - Lightning Invoices
+  - ML-DSA (Module Lattice Digital Signature Algorithm)
+  - Schnorr signatures
+  - UTXO Model vs. Account Model
+
+### Changed
+
+- Restrcutured all Library articles
 
 ## [0.1.0] - 2026-04-23
 
