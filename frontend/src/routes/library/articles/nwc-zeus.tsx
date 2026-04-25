@@ -1,4 +1,4 @@
-import { ArticleLink, ARTICLE_BODY_CLASS } from '@/lib/library/article-shared'
+import { ArticleLink, ArticleSection, ARTICLE_BODY_CLASS } from '@/lib/library/article-shared'
 import type { LibraryArticle } from '@/lib/library/library-article'
 
 export const article: LibraryArticle = {
@@ -7,30 +7,63 @@ export const article: LibraryArticle = {
   tagIds: ['lightning', 'wallets'],
   body: (
     <div className={ARTICLE_BODY_CLASS}>
-      <p>
-        <strong>Zeus</strong> is a mobile (and embedded) Lightning node front-end. Advanced users
-        connect it to their own <strong>LND</strong>, <strong>Core Lightning</strong>, or similar
-        node, then enable <strong>Nostr Wallet Connect</strong> so external apps can request
-        payments with your approval.
-      </p>
-      <p>
-        This path prioritizes <strong>self-custody</strong> of Lightning keys on infrastructure you
-        control. Expect more setup than a hosted wallet: channels, backups, and updates are your
-        responsibility. See <ArticleLink slug="the-lightning-network">The Lightning network</ArticleLink>{' '}
-        and <ArticleLink slug="what-is-a-wallet">What is a wallet?</ArticleLink> for context.
-      </p>
-      <p>
-        Official site:{' '}
-        <a
-          href="https://zeusln.com/"
-          className="text-primary underline-offset-4 hover:underline"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          zeusln.com
-        </a>
-        .
-      </p>
+      <ArticleSection title="In a Nutshell">
+        <p>
+          <strong>Zeus</strong> is a mobile Lightning wallet that connects to your own node (LND,
+          Core Lightning, etc.). It prioritizes <strong>self-custody</strong>—you control the keys
+          and infrastructure. Enable NWC to let apps like Bitboard request payments. For context,
+          see <ArticleLink slug="the-lightning-network">The Lightning network</ArticleLink> and{' '}
+          <ArticleLink slug="what-is-a-wallet">What is a wallet?</ArticleLink>
+        </p>
+      </ArticleSection>
+
+      <ArticleSection title="Setup Steps">
+        <ol className="list-decimal space-y-2 pl-5">
+          <li>
+            Install Zeus from{' '}
+            <a
+              href="https://zeusln.com/"
+              className="text-primary underline-offset-4 hover:underline"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              zeusln.com
+            </a>{' '}
+            and connect it to your Lightning node.
+          </li>
+          <li>
+            In Zeus settings, find <strong>Nostr Wallet Connect</strong> or{' '}
+            <strong>NWC</strong> and enable it.
+          </li>
+          <li>
+            Create a connection and copy the{' '}
+            <code className="text-sm">nostr+walletconnect://</code> URI.
+          </li>
+          <li>
+            In Bitboard, open <strong>Management → Lightning</strong> and paste the URI.
+          </li>
+          <li>Save. Bitboard can now request payments through your Zeus-connected node.</li>
+        </ol>
+      </ArticleSection>
+
+      <ArticleSection title="Deep Dive Resources">
+        <ul className="list-disc space-y-1 pl-5">
+          <li>
+            <a
+              href="https://zeusln.com/"
+              className="text-primary underline-offset-4 hover:underline"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Zeus — official site
+            </a>
+          </li>
+          <li>
+            <ArticleLink slug="nostr-wallet-connect">Nostr Wallet Connect (NWC)</ArticleLink> — how
+            the protocol works
+          </li>
+        </ul>
+      </ArticleSection>
     </div>
   ),
 }
