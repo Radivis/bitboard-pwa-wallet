@@ -45,7 +45,8 @@ export const article: LibraryArticle = {
           <ArticleLink slug="secret-and-public-keys-in-bitcoin">
             Secret and public keys in Bitcoin
           </ArticleLink>
-          .
+          . To understand why Bitcoin uses this model instead of a simpler balance system, see{' '}
+          <ArticleLink slug="utxo-model-vs-account-model">UTXO Model vs. Account Model</ArticleLink>.
         </p>
       </ArticleSection>
     </div>
