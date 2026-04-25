@@ -11,6 +11,16 @@ export const ARTICLE_BODY_CLASS =
 export const LIBRARY_ARTICLE_TITLE_CLASS =
   'text-2xl font-bold tracking-tight text-black dark:text-white'
 
+/** Consistent h2 + body wrapper for library article sections (e.g. In a Nutshell, How it Works). */
+export function ArticleSection({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section className="space-y-3">
+      <h2 className="text-lg font-semibold text-black dark:text-white">{title}</h2>
+      {children}
+    </section>
+  )
+}
+
 /** Internal link to another library article by slug. */
 export function ArticleLink({ slug, children }: { slug: string; children: ReactNode }) {
   return (
