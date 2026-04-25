@@ -11,9 +11,7 @@ export const article: LibraryArticle = {
         <p>
           <strong>Zeus</strong> is a mobile Lightning wallet that connects to your own node (LND,
           Core Lightning, etc.). It prioritizes <strong>self-custody</strong>—you control the keys
-          and infrastructure. Enable NWC to let apps like Bitboard request payments. For context,
-          see <ArticleLink slug="the-lightning-network">The Lightning network</ArticleLink> and{' '}
-          <ArticleLink slug="what-is-a-wallet">What is a wallet?</ArticleLink>
+          and infrastructure. Enable NWC to let apps like Bitboard request payments.
         </p>
       </ArticleSection>
 

@@ -28,8 +28,8 @@ export const article: LibraryArticle = {
           .
         </p>
         <p>
-          <strong>ECDSA</strong> (Elliptic Curve Digital Signature Algorithm) and{' '}
-          <strong>Schnorr</strong>{' '}
+          <ArticleLink slug="ecdsa">ECDSA</ArticleLink> (Elliptic Curve Digital Signature Algorithm)
+          and <ArticleLink slug="schnorr-signatures">Schnorr</ArticleLink>{' '}
           <ArticleLink slug="cryptographic-signatures">signatures</ArticleLink> let you prove you
           know a private key without revealing it. Both work on the{' '}
           <ArticleLink slug="what-is-secp256k1">secp256k1</ArticleLink> curve used in Bitcoin.

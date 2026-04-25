@@ -25,8 +25,9 @@ export const article: LibraryArticle = {
         </p>
         <p>
           Good signature schemes make forgery computationally infeasible without the secret key.
-          Bitcoin uses <strong>ECDSA</strong> and (with Taproot) <strong>Schnorr</strong>-style
-          signatures on the <ArticleLink slug="what-is-secp256k1">secp256k1</ArticleLink> curve.
+          Bitcoin uses <ArticleLink slug="ecdsa">ECDSA</ArticleLink> and (with Taproot){' '}
+          <ArticleLink slug="schnorr-signatures">Schnorr</ArticleLink> signatures on the{' '}
+          <ArticleLink slug="what-is-secp256k1">secp256k1</ArticleLink> curve.
         </p>
       </ArticleSection>
 
