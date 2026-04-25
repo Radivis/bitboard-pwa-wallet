@@ -117,6 +117,18 @@ The `crypto` crate is structured in three conceptual layers:
 
 Wallet state lives in **thread-local** `ACTIVE_WALLET` and related `RefCell`s in WASM; a single crypto worker holds one logical wallet. Lab-related descriptors are copied into `EXTERNAL_DESCRIPTOR_FOR_LAB` / `INTERNAL_DESCRIPTOR_FOR_LAB` when the wallet is created or loaded.
 
+### On-chain sends: `nLockTime` and fee sniping (design choice)
+
+**Context:** BDK’s default transaction build uses the wallet’s synced chain tip to set a **non-zero** `nLockTime`. That follows common “fee sniping” guidance: tying the spend to the current best height (or a derived lock time) is meant to make certain reorg-based games marginally less attractive.
+
+**Bitboard’s policy:** In `prepare_onchain_send` (`crypto/src/transaction.rs`), the app **overrides** that default with **`nLockTime = 0`** (via BDK’s `nlocktime(…::ZERO)` on the `TxBuilder`).
+
+**Why:** A non-zero lock time means acceptance by the network depends on the **view of chain height** at the moment a node checks whether the transaction is **final**. Any mismatch (sync height vs. the node that handles broadcast, or timing right after a block) can surface as a rejected broadcast (for example Bitcoin Core’s **RPC `sendrawtransaction` error -26, “non-final”**). `nLockTime = 0` is always final under standard finality rules, so broadcasts are **robust** across Esplora sync, PWA, and regtest/CI.
+
+**Trade-off:** We give up BDK’s **default** tip-based `nLockTime` and the extra bit of **theoretical** fee-sniping resistance that comes with it. For typical self-custody retail use, that is an intentional product choice: **reliable send** and predictable behavior matter more than that marginal effect. Wallets that always use `nLockTime = 0` are common for the same reason.
+
+**Scope:** This applies to **on-chain** sends built through `prepare_onchain_send` in the `crypto` crate. Lab and other code paths that build transactions separately are not automatically covered by this section; call sites should document their own lock-time policy if it differs.
+
 ### Workers
 
 - **crypto-api** (`frontend/src/workers/crypto-api.ts`): Type-only; defines the `CryptoService` interface. Implementation is in `crypto.worker.ts`, which loads the WASM once and forwards every method to the WASM module. State lives **inside WASM** (thread-locals).

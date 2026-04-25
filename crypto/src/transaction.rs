@@ -1,6 +1,7 @@
 use std::str::FromStr;
 
 use bdk_wallet::Wallet;
+use bitcoin::absolute;
 use bitcoin::{Address, Amount, FeeRate, Network, Psbt, Transaction};
 use serde::Serialize;
 
@@ -78,9 +79,12 @@ pub fn prepare_onchain_send(
     let fee_rate_sats = validation::validate_fee_rate_sat_per_vb(fee_rate_sat_per_vb)?;
     let fee_rate = FeeRate::from_sat_per_vb_unchecked(fee_rate_sats);
 
+    // `nLockTime = 0` instead of BDK’s default (tip-based fee-sniping lock time) — see
+    // `doc/ARCHITECTURE.md` (On-chain sends: nLockTime and fee sniping).
     let build_once = |w: &mut Wallet, amt: u64| -> Result<Psbt, CryptoError> {
         let mut tx_builder = w.build_tx();
         tx_builder
+            .nlocktime(absolute::LockTime::ZERO)
             .add_recipient(recipient_spk.clone(), Amount::from_sat(amt))
             .fee_rate(fee_rate);
         tx_builder.finish().map_err(CryptoError::from)

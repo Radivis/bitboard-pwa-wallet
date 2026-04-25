@@ -1,4 +1,4 @@
-import { ArticleLink, ARTICLE_BODY_CLASS } from '@/lib/library/article-shared'
+import { ArticleLink, ArticleSection, ARTICLE_BODY_CLASS } from '@/lib/library/article-shared'
 import type { LibraryArticle } from '@/lib/library/library-article'
 
 export const article: LibraryArticle = {
@@ -7,33 +7,44 @@ export const article: LibraryArticle = {
   tagIds: ['cryptocurrencies', 'bitcoin'],
   body: (
     <div className={ARTICLE_BODY_CLASS}>
-      <p>
-        If you are new to the topic, think of a cryptocurrency as <strong>internet-native money</strong>
-        : rules written in software define who owns what and who can transfer value. There are no
-        physical coins; ownership is recorded digitally. Math-based locks (cryptography) and
-        network rules replace the role of a bank clerk or cashier checking your identity at a counter.
-      </p>
-      <p>
-        A <strong>cryptocurrency</strong> is a digital asset whose ownership and transfers are enforced
-        by cryptography and shared rules rather than by physical possession or a single company. Many
-        participants run compatible software; together they agree on balances and the order of
-        transactions so that everyone sees the same history.
-      </p>
-      <p>
-        Most cryptocurrencies rely on a <strong>shared ledger</strong> (often implemented as a{' '}
-        <strong>blockchain</strong>: a chain of blocks, each bundling recent transactions and linking
-        to the previous block). They also use <strong>peer-to-peer networking</strong> so nodes can
-        relay data without one central server, and <strong>economic incentives</strong>—for example
-        rewards for people who help secure the network through{' '}
-        <ArticleLink slug="proof-of-work-and-mining-basics">proof-of-work mining</ArticleLink> or,
-        in other systems, staking—to keep the system honest at scale.
-      </p>
-      <p>
-        Bitcoin was the first widely deployed example. For how it combines these pieces in practice,
-        see <ArticleLink slug="bitcoin">Bitcoin</ArticleLink>. For why the machinery behind that goal
-        is intricate, see{' '}
-        <ArticleLink slug="why-is-bitcoin-so-complicated">Why is Bitcoin so complicated?</ArticleLink>.
-      </p>
+      <ArticleSection title="In a Nutshell">
+        <p>
+          A cryptocurrency is internet-native money: digital value that you can send to anyone
+          without a bank in the middle. Math and software replace the bank clerk—cryptography proves
+          you own it, and shared rules prevent cheating.
+        </p>
+      </ArticleSection>
+
+      <ArticleSection title="How it Works">
+        <p>
+          A <strong>cryptocurrency</strong> is a digital asset whose ownership and transfers are
+          enforced by cryptography and shared rules rather than by physical possession or a single
+          company. Many participants run compatible software; together they agree on balances and
+          transaction order so everyone sees the same history.
+        </p>
+        <p>
+          Most cryptocurrencies rely on a <strong>shared ledger</strong> (often a{' '}
+          <strong>blockchain</strong>), <strong>peer-to-peer networking</strong>, and{' '}
+          <strong>economic incentives</strong>—like{' '}
+          <ArticleLink slug="proof-of-work-and-mining-basics">proof-of-work mining</ArticleLink>{' '}
+          rewards—to keep the system honest.
+        </p>
+      </ArticleSection>
+
+      <ArticleSection title="How it Really Works">
+        <p>
+          The blockchain is a chain of blocks, each bundling recent transactions and linking to the
+          previous block via cryptographic hashes. Nodes relay data without a central server.
+          Economic incentives align participants toward honest behavior even when they do not trust
+          each other.
+        </p>
+        <p>
+          Bitcoin was the first widely deployed example. See{' '}
+          <ArticleLink slug="bitcoin">Bitcoin</ArticleLink> for how it works in practice, and{' '}
+          <ArticleLink slug="why-is-bitcoin-so-complicated">Why is Bitcoin so complicated?</ArticleLink>{' '}
+          for why the machinery is intricate.
+        </p>
+      </ArticleSection>
     </div>
   ),
 }

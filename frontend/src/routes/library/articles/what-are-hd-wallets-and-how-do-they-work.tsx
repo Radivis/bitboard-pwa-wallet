@@ -1,4 +1,4 @@
-import { ArticleLink, ARTICLE_BODY_CLASS } from '@/lib/library/article-shared'
+import { ArticleLink, ArticleSection, ARTICLE_BODY_CLASS } from '@/lib/library/article-shared'
 import type { LibraryArticle } from '@/lib/library/library-article'
 
 export const article: LibraryArticle = {
@@ -7,52 +7,51 @@ export const article: LibraryArticle = {
   tagIds: ['wallets', 'standards', 'bitcoin', 'privacy'],
   body: (
     <div className={ARTICLE_BODY_CLASS}>
-      <p>
-        An <strong>HD wallet</strong> (hierarchical deterministic wallet) derives many{' '}
-        <ArticleLink slug="secret-and-public-keys-in-bitcoin">private and public keys</ArticleLink> from
-        a single starting secret, instead of generating unrelated keys one by one. If you back up that
-        starting point correctly, you can later regenerate the same sequence of keys and addresses—so
-        one backup can restore your whole wallet.
-      </p>
-      <p>
-        The usual starting point is a <strong>master seed</strong>: random data that is often shown
-        to you as a 12- or 24-word phrase (<strong>BIP-39</strong> mnemonic). From the seed, the
-        wallet follows open standards (notably <strong>BIP-32</strong>) to build a <strong>tree</strong>{' '}
-        of keys: a master key, then <strong>child</strong> keys along <strong>derivation paths</strong>
-        . Paths look like{' '}
-        <code className="rounded bg-muted px-1 py-0.5 text-xs">m/84&apos;/0&apos;/0&apos;/0/0</code>{' '}
-        : prefixes describe purpose and account; trailing indices pick receive vs change addresses and
-        individual addresses. Wallets hide this detail until you export or troubleshoot.
-      </p>
-      <p>
-        <strong>Hierarchical</strong> means keys are grouped (for example separate accounts or
-        coin types). <strong>Deterministic</strong> means given the same seed and path, every
-        compliant wallet derives the same keys—important for recovery across devices and apps. For how
-        many addresses that implies in practice, see{' '}
-        <ArticleLink slug="how-many-addresses-can-a-bitcoin-wallet-have">
-          How many addresses can a Bitcoin wallet have?
-        </ArticleLink>
-        .
-      </p>
-      <p>
-        HD schemes also define <strong>extended keys</strong>: data that includes a public or private
-        key plus extra material so child keys can be derived. An{' '}
-        <ArticleLink slug="what-is-an-xpub">xpub</ArticleLink> (extended public key) lets you generate
-        receiving addresses and watch balances without holding private keys—useful for a watch-only
-        copy. See{' '}
-        <ArticleLink slug="what-are-descriptors-and-descriptor-wallets">
-          Descriptors and descriptor wallets
-        </ArticleLink>{' '}
-        for how this is often written down in backups.
-      </p>
-      <p>
-        Standards for mnemonics, derivation, and common paths are documented as BIPs; see{' '}
-        <ArticleLink slug="what-is-a-bip">What is BIP?</ArticleLink>. For backup tradeoffs, see{' '}
-        <ArticleLink slug="bitcoin-backup-techniques-overview">
-          An overview of different backup techniques for Bitcoin
-        </ArticleLink>
-        .
-      </p>
+      <ArticleSection title="In a Nutshell">
+        <p>
+          An HD wallet generates all your keys from a single master secret—like a tree growing from
+          one seed. Back up that seed (usually 12 or 24 words), and you can regrow the entire tree of
+          addresses later on any compatible wallet.
+        </p>
+      </ArticleSection>
+
+      <ArticleSection title="How it Works">
+        <p>
+          An <strong>HD wallet</strong> (hierarchical deterministic) derives many{' '}
+          <ArticleLink slug="secret-and-public-keys-in-bitcoin">keys</ArticleLink> from a single
+          starting secret instead of generating unrelated keys one by one. The usual starting point
+          is a <strong>master seed</strong> shown as a 12- or 24-word phrase (
+          <strong>BIP-39</strong> mnemonic).
+        </p>
+        <p>
+          <strong>Hierarchical</strong> means keys are grouped (accounts, coin types).{' '}
+          <strong>Deterministic</strong> means the same seed always produces the same keys—critical
+          for recovery. See{' '}
+          <ArticleLink slug="how-many-addresses-can-a-bitcoin-wallet-have">
+            How many addresses can a Bitcoin wallet have?
+          </ArticleLink>
+          .
+        </p>
+      </ArticleSection>
+
+      <ArticleSection title="How it Really Works">
+        <p>
+          From the seed, wallets follow <strong>BIP-32</strong> to build a tree of keys along{' '}
+          <strong>derivation paths</strong> like{' '}
+          <code className="rounded bg-muted px-1 py-0.5 text-xs">m/84&apos;/0&apos;/0&apos;/0/0</code>
+          . Prefixes describe purpose and account; trailing indices pick receive vs change addresses.
+        </p>
+        <p>
+          HD schemes define <strong>extended keys</strong>: an{' '}
+          <ArticleLink slug="what-is-an-xpub">xpub</ArticleLink> lets you generate receiving addresses
+          without private keys—useful for watch-only wallets. See{' '}
+          <ArticleLink slug="what-are-descriptors-and-descriptor-wallets">
+            Descriptors and descriptor wallets
+          </ArticleLink>{' '}
+          for backup formats, and <ArticleLink slug="what-is-a-bip">What is BIP?</ArticleLink> for
+          standards.
+        </p>
+      </ArticleSection>
     </div>
   ),
 }

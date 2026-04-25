@@ -39,7 +39,7 @@ export function FeaturesSection() {
           },
           {
             title: 'Web to Mobile',
-            desc: "Start on the web, then 'Add to Home Screen' for a full native mobile experience.",
+            desc: "Start on the web, then 'Add to Home Screen' for handling Bitboard Wallet like an installed app with basic offline functionality.",
             icon: Smartphone,
           },
           {

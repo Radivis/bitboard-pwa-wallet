@@ -1,4 +1,4 @@
-import { ArticleLink, ARTICLE_BODY_CLASS } from '@/lib/library/article-shared'
+import { ArticleLink, ArticleSection, ARTICLE_BODY_CLASS } from '@/lib/library/article-shared'
 import type { LibraryArticle } from '@/lib/library/library-article'
 
 export const article: LibraryArticle = {
@@ -7,43 +7,50 @@ export const article: LibraryArticle = {
   tagIds: ['wallets', 'privacy'],
   body: (
     <div className={ARTICLE_BODY_CLASS}>
-      <p>
-        In everyday language, a physical wallet holds cash. In Bitcoin, a <strong>wallet</strong> is
-        software (and sometimes hardware) that manages <strong>cryptographic keys</strong> and helps
-        you receive and spend bitcoin. The blockchain records which amounts are associated with which
-        addresses; your wallet proves you are allowed to move funds by producing valid cryptographic
-        signatures with keys you control.
-      </p>
-      <p>
-        Wallets can be <strong>custodial</strong>: a service holds the keys for you (similar to a bank
-        holding an account). They can also be <strong>non-custodial</strong>: only you control the
-        keys; if you lose the backup, no one can reset your password. See{' '}
-        <ArticleLink slug="not-your-keys-not-your-coins-explained">
-          &quot;Not your keys, not your coins&quot; explained
-        </ArticleLink>
-        . For how this lines up with cash versus banks, see{' '}
-        <ArticleLink slug="security-models-for-cryptocurrencies-and-conventional-currencies">
-          Security models for cryptocurrencies and conventional currencies
-        </ArticleLink>
-        . This app is built around non-custodial use—protect your backup accordingly.
-      </p>
-      <p>
-        Modern wallets often derive many keys from a single secret called a <strong>seed</strong> (often
-        shown as a 12- or 24-word phrase)—the usual pattern is a{' '}
-        <ArticleLink slug="what-are-hd-wallets-and-how-do-they-work">
-          hierarchical deterministic (HD) wallet
-        </ArticleLink>
-        . They may also use{' '}
-        <ArticleLink slug="what-are-descriptors-and-descriptor-wallets">descriptors</ArticleLink>
-        —structured text that tells the wallet how keys and addresses relate to scripts—useful for
-        recovery and advanced setups. See <ArticleLink slug="what-is-a-bip">What is BIP?</ArticleLink>{' '}
-        for how seed and backup standards are documented.
-      </p>
-      <p>
-        To understand what those balances represent on the network, see the{' '}
-        <ArticleLink slug="bitcoin">Bitcoin</ArticleLink> article. For how transaction weight and
-        fees relate to modern addresses, see <ArticleLink slug="segwit">SegWit</ArticleLink>.
-      </p>
+      <ArticleSection title="In a Nutshell">
+        <p>
+          A Bitcoin wallet is not a coin purse—it is more like a keychain. It holds the cryptographic
+          keys that prove you own bitcoin recorded on the blockchain. Lose the keys (or their backup)
+          and you lose access to the funds.
+        </p>
+      </ArticleSection>
+
+      <ArticleSection title="How it Works">
+        <p>
+          A <strong>wallet</strong> is software (and sometimes hardware) that manages{' '}
+          <strong>cryptographic keys</strong> and helps you receive and spend bitcoin. The blockchain
+          records which amounts are associated with which addresses; your wallet proves you may move
+          funds by producing valid signatures with keys you control.
+        </p>
+        <p>
+          Wallets can be <strong>custodial</strong> (a service holds keys for you) or{' '}
+          <strong>non-custodial</strong> (only you control the keys). See{' '}
+          <ArticleLink slug="not-your-keys-not-your-coins-explained">
+            &quot;Not your keys, not your coins&quot; explained
+          </ArticleLink>
+          . Bitboard is non-custodial—protect your backup accordingly.
+        </p>
+      </ArticleSection>
+
+      <ArticleSection title="How it Really Works">
+        <p>
+          Modern wallets derive many keys from a single <strong>seed</strong> (12 or 24 words)—the{' '}
+          <ArticleLink slug="what-are-hd-wallets-and-how-do-they-work">HD wallet</ArticleLink>{' '}
+          pattern. They may use{' '}
+          <ArticleLink slug="what-are-descriptors-and-descriptor-wallets">descriptors</ArticleLink>
+          —structured text describing how keys relate to scripts. See{' '}
+          <ArticleLink slug="what-is-a-bip">What is BIP?</ArticleLink> for standards.
+        </p>
+        <p>
+          For how this lines up with cash versus banks, see{' '}
+          <ArticleLink slug="security-models-for-cryptocurrencies-and-conventional-currencies">
+            Security models for cryptocurrencies and conventional currencies
+          </ArticleLink>
+          . For what balances represent on the network, see{' '}
+          <ArticleLink slug="bitcoin">Bitcoin</ArticleLink> and{' '}
+          <ArticleLink slug="segwit">SegWit</ArticleLink>.
+        </p>
+      </ArticleSection>
     </div>
   ),
 }

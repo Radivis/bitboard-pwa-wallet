@@ -6,7 +6,6 @@ import {
   TEST_PASSWORD,
 } from './helpers/wallet-setup'
 import {
-  E2E_CI_AWARE_LONG_WAIT_MS,
   E2E_IS_CI,
   fundRegtestAddress,
   mineRegtestBlocks,
@@ -24,18 +23,11 @@ import {
 } from './helpers/settings-waits'
 import { ensureSegwitAddressesFeatureOn } from './helpers/segwit-addresses-feature'
 
-/**
- * `canBuild` needs `confirmedBalance` from the wallet store. One manual sync can leave the
- * Send route (mounted after navigation) briefly behind; a second sync + ≥30s Review wait
- * matches what often “fixes” a flaky retry on CI and locally.
- */
-const REVIEW_TRANSACTION_ENABLE_TIMEOUT_MS = Math.max(
-  30_000,
-  E2E_CI_AWARE_LONG_WAIT_MS,
-)
+/** After funding, dashboard balance poll + one full sync should give the store enough headroom for `canBuild`. */
+const REVIEW_BUTTON_ENABLE_TIMEOUT_MS = 20_000
 
-/** Broadcast runs `syncWallet` before `navigate({ to: '/wallet' })` — on CI the WASM+Esplora path can be slow. */
-const POST_BROADCAST_DASHBOARD_TIMEOUT_MS = E2E_IS_CI ? 90_000 : 45_000
+/** Redirect follows broadcast + persistence; post-broadcast sync runs in the background (see useBroadcastTransactionMutation). */
+const POST_BROADCAST_URL_TIMEOUT_MS = 20_000
 
 test.describe('Send Page', () => {
   test.beforeEach(async ({ page }) => {
@@ -129,13 +121,8 @@ test.describe('Send Page', () => {
     await goToWalletTab(page, 'Dashboard')
     await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible()
 
-    // One full sync (Sync enabled → Syncing… → idle) so wallet balance matches Esplora; do not
-    // assert a headline sat value — shared regtest state can show a cumulative total.
+    // One full manual sync, then wait until the balance card reflects funds (polls; no fixed sleep).
     await runDashboardSyncUntilIdle(page)
-    await runDashboardSyncUntilIdle(page)
-    if (E2E_IS_CI) {
-      await runDashboardSyncUntilIdle(page)
-    }
     await waitForDashboardShowsFundedOnChainBalance(page)
 
     await goToWalletTab(page, 'Send')
@@ -147,7 +134,7 @@ test.describe('Send Page', () => {
     await expect(amountInput).toHaveValue('1000')
     await expect(
       page.getByRole('button', { name: 'Review Transaction' }),
-    ).toBeEnabled({ timeout: REVIEW_TRANSACTION_ENABLE_TIMEOUT_MS })
+    ).toBeEnabled({ timeout: REVIEW_BUTTON_ENABLE_TIMEOUT_MS })
     const reviewButton = page.getByRole('button', { name: 'Review Transaction' })
     await reviewButton.click()
 
@@ -176,11 +163,19 @@ test.describe('Send Page', () => {
 
     await page.getByRole('button', { name: 'Confirm and Send' }).click()
 
-    await expect(page).toHaveURL(/.*\/wallet\/?$/, {
-      timeout: POST_BROADCAST_DASHBOARD_TIMEOUT_MS,
-    })
+    await Promise.race([
+      page.waitForURL(/.*\/wallet\/?$/, { timeout: POST_BROADCAST_URL_TIMEOUT_MS }),
+      page
+        .getByText(/Broadcast failed/i)
+        .first()
+        .waitFor({ state: 'visible', timeout: POST_BROADCAST_URL_TIMEOUT_MS })
+        .then(async () => {
+          const t = await page.getByText(/Broadcast failed/i).first().textContent()
+          throw new Error(t ?? 'Broadcast failed')
+        }),
+    ])
     await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible({
-      timeout: 25_000,
+      timeout: 15_000,
     })
   })
 })

@@ -52,7 +52,9 @@ export function useBuildTransactionMutation() {
 
 /**
  * Mutation to broadcast a transaction (mainnet/testnet/signet/regtest).
- * Signs and extracts from PSBT, broadcasts via Esplora, optionally syncs and updates changeset.
+ * Signs and extracts from PSBT, broadcasts via Esplora, persists the changeset, then returns
+ * so `onSuccess` can reset UI and navigate. Post-broadcast `syncWallet` runs in the
+ * background so the user is not blocked on a full sync before leaving the send flow.
  */
 export function useBroadcastTransactionMutation() {
   const navigate = useNavigate()
@@ -92,18 +94,20 @@ export function useBroadcastTransactionMutation() {
         })
       }
 
-      setWalletStatus('syncing')
-      try {
-        await syncWallet(esploraUrl)
-        const newBalance = await getBalance()
-        const newTxs = await getTransactionList()
-        setBalance(newBalance)
-        setTransactions(newTxs)
-        setLastSyncTime(new Date())
-      } catch {
-        // keep unlocked on sync failure
-      }
-      setWalletStatus('unlocked')
+      void (async () => {
+        setWalletStatus('syncing')
+        try {
+          await syncWallet(esploraUrl)
+          const newBalance = await getBalance()
+          const newTxs = await getTransactionList()
+          setBalance(newBalance)
+          setTransactions(newTxs)
+          setLastSyncTime(new Date())
+        } catch {
+          // keep unlocked on sync failure
+        }
+        setWalletStatus('unlocked')
+      })()
 
       return { txid }
     },

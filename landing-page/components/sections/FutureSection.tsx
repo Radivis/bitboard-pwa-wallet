@@ -1,4 +1,4 @@
-import { HardDrive, Activity, Sailboat } from 'lucide-react';
+import { HardDrive, Activity, Sailboat, Smartphone, Languages, ShieldCheck } from 'lucide-react';
 import { Section } from '@/components/Section';
 import { Card, CardContent } from '@/components/ui/card';
 
@@ -22,6 +22,21 @@ export function FutureSection() {
             desc: 'Use the brand new Ark protocol as alternative to Lightning. Avoid the complexities of Lightning and move coins cheaply with ease.',
             icon: Sailboat,
           },
+          {
+            title: 'In Mobile App Stores',
+            desc: "Bitboard Wallet as mobile app you can get from a store",
+            icon: Smartphone,
+          },
+          {
+            title: 'Multilingual',
+            desc: "Browse the Libary in multiple languages and use the app in your language",
+            icon: Languages,
+          },
+          {
+            title: 'Audited Security',
+            desc: "Proper third party security audits",
+            icon: ShieldCheck,
+          }
         ].map((item, i) => (
           <Card
             key={i}

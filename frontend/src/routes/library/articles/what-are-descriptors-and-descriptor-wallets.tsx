@@ -1,4 +1,4 @@
-import { ArticleLink, ARTICLE_BODY_CLASS } from '@/lib/library/article-shared'
+import { ArticleLink, ArticleSection, ARTICLE_BODY_CLASS } from '@/lib/library/article-shared'
 import type { LibraryArticle } from '@/lib/library/library-article'
 
 export const article: LibraryArticle = {
@@ -7,59 +7,52 @@ export const article: LibraryArticle = {
   tagIds: ['wallets', 'standards', 'bitcoin', 'privacy'],
   body: (
     <div className={ARTICLE_BODY_CLASS}>
-      <p>
-        If you are new to Bitcoin: you do not download “coins” into an app the way you install a
-        file. The public <ArticleLink slug="bitcoin">Bitcoin</ArticleLink> network records
-        transactions; your <ArticleLink slug="what-is-a-wallet">wallet</ArticleLink> holds the
-        secrets (keys) that let you prove you may spend certain funds, and it shows you balances by
-        tracking which <ArticleLink slug="what-is-a-utxo">outputs</ArticleLink> belong to you.
-      </p>
-      <p>
-        To do that, wallet software must know <em>exactly</em> how your keys and addresses are
-        produced: which rules (script types) to use—such as{' '}
-        <ArticleLink slug="segwit">SegWit</ArticleLink> or <ArticleLink slug="taproot">Taproot</ArticleLink>
-        —and how keys are derived from your seed. Modern wallets derive many{' '}
-        <ArticleLink slug="how-many-addresses-can-a-bitcoin-wallet-have">addresses</ArticleLink> from
-        one backup using standards like{' '}
-        <ArticleLink slug="what-are-hd-wallets-and-how-do-they-work">HD wallets</ArticleLink>.
-      </p>
-      <p>
-        An <strong>output script descriptor</strong> (usually just called a <strong>descriptor</strong>)
-        is a compact, standardized <em>text recipe</em> that spells out that information: script type,
-        the relevant public or <strong>extended public keys</strong> (
-        <ArticleLink slug="what-is-an-xpub">xpubs</ArticleLink>
-        ), and derivation paths so
-        every program can interpret it the same way. The format is documented in BIPs in the 380 range;
-        for what a BIP is, see <ArticleLink slug="what-is-a-bip">What is BIP?</ArticleLink>.
-      </p>
-      <p>
-        A <strong>descriptor wallet</strong> is a wallet whose on-disk state is built around these
-        descriptors (often together with metadata like when scanning should start). That makes
-        backups and interoperability clearer: you can export text that describes what the wallet
-        controls, and tools like watch-only monitors can import the <em>public</em> side to show
-        balances without holding private keys—though you still must protect seeds and private keys
-        yourself; see <ArticleLink slug="secret-and-public-keys-in-bitcoin">
-          Secret and public keys in Bitcoin
-        </ArticleLink>
-        .
-      </p>
-      <p>
-        In practice a wallet often keeps two related descriptors for the same account: an{' '}
-        <strong>external</strong> (receiving) chain and an <strong>internal</strong> (change) chain,
-        so fresh receiving addresses stay separate from change outputs. Descriptors describe{' '}
-        <em>how</em> keys are used; they do not replace safe backup of your seed. For backup options,
-        see{' '}
-        <ArticleLink slug="bitcoin-backup-techniques-overview">
-          An overview of different backup techniques for Bitcoin
-        </ArticleLink>
-        .
-      </p>
-      <p>
-        <strong>Privacy note:</strong> sharing a descriptor or{' '}
-        <ArticleLink slug="what-is-an-xpub">xpub</ArticleLink> can reveal your fingerprint and
-        derivation structure and let others link addresses—treat it as sensitive metadata, not like a
-        single public receiving address alone.
-      </p>
+      <ArticleSection title="In a Nutshell">
+        <p>
+          A descriptor is a recipe that tells wallet software exactly how to find your bitcoin: which
+          script types to use, which keys, and how they are derived. Think of it like GPS coordinates
+          plus instructions—anyone with the recipe can locate the funds (but only the key holder can
+          spend them).
+        </p>
+      </ArticleSection>
+
+      <ArticleSection title="How it Works">
+        <p>
+          Wallet software must know <em>exactly</em> how your keys and addresses are produced: which
+          rules (<ArticleLink slug="segwit">SegWit</ArticleLink>,{' '}
+          <ArticleLink slug="taproot">Taproot</ArticleLink>) and how keys derive from your seed. An{' '}
+          <strong>output script descriptor</strong> is a standardized text recipe that spells this
+          out.
+        </p>
+        <p>
+          A <strong>descriptor wallet</strong> is built around these descriptors, making backups and
+          interoperability clearer. You can export text describing what the wallet controls, and
+          watch-only tools can import the public side to show balances. See{' '}
+          <ArticleLink slug="what-are-hd-wallets-and-how-do-they-work">HD wallets</ArticleLink>.
+        </p>
+      </ArticleSection>
+
+      <ArticleSection title="How it Really Works">
+        <p>
+          Descriptors include script type, <ArticleLink slug="what-is-an-xpub">xpubs</ArticleLink>,
+          and derivation paths. Wallets typically keep two descriptors per account:{' '}
+          <strong>external</strong> (receiving) and <strong>internal</strong> (change). The format is
+          documented in BIPs 380+; see <ArticleLink slug="what-is-a-bip">What is BIP?</ArticleLink>.
+        </p>
+        <p>
+          <strong>Privacy note:</strong> sharing a descriptor or xpub reveals your derivation
+          structure and lets others link addresses—treat it as sensitive metadata. For key
+          protection, see{' '}
+          <ArticleLink slug="secret-and-public-keys-in-bitcoin">
+            Secret and public keys in Bitcoin
+          </ArticleLink>
+          . For backup options, see{' '}
+          <ArticleLink slug="bitcoin-backup-techniques-overview">
+            An overview of different backup techniques for Bitcoin
+          </ArticleLink>
+          .
+        </p>
+      </ArticleSection>
     </div>
   ),
 }
