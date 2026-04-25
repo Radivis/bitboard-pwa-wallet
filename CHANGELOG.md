@@ -33,6 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Restructured all Library articles
+- Using `nLockTime = 0` now instead of BDK's default in order to improve transaction broadcast stability
 
 ## [0.1.0] - 2026-04-23
 
