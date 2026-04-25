@@ -13,7 +13,7 @@ export const article: LibraryArticle = {
           (balances tied to addresses, like a bank ledger) and the <strong>UTXO model</strong>{' '}
           (discrete &quot;coins&quot; that get consumed and created). Bitcoin deliberately chose
           UTXOs because they offer better <strong>baseline privacy</strong>—a design choice aligned
-          with its origins as a system for anonymous payments.
+          with its origins as <strong>pseudonymous</strong> peer-to-peer electronic cash.
         </p>
       </ArticleSection>
 
@@ -56,7 +56,8 @@ export const article: LibraryArticle = {
 
       <ArticleSection title="Why Bitcoin Chose UTXOs: Privacy by Design">
         <p>
-          Bitcoin was created as a system for <strong>anonymous electronic cash</strong>. While
+          Bitcoin was designed as <strong>peer-to-peer electronic cash</strong> with{' '}
+          <strong>pseudonymous</strong> addressing on-chain—not strong anonymity by default. While
           neither model provides perfect privacy, the UTXO model offers significantly better{' '}
           <strong>baseline privacy</strong> out of the box:
         </p>

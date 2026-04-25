@@ -55,14 +55,25 @@ export const article: LibraryArticle = {
         </p>
 
         <p className="mt-4">
-          <strong>Why prime p is essential:</strong> In <InlineMath math="\mathbb{F}_p" />, every
-          non-zero element <InlineMath math="a" /> is coprime to <InlineMath math="p" /> (shares no
-          common factors). By{' '}
-          <ArticleLink slug="ecdsa">Fermat&apos;s Little Theorem</ArticleLink>, this means:
+          <strong>Fermat&apos;s Little Theorem:</strong> If <InlineMath math="p" /> is prime and{' '}
+          <InlineMath math="a" /> is any integer not divisible by <InlineMath math="p" />, then
         </p>
         <BlockMath math="a^{p-1} \equiv 1 \pmod{p}" />
         <p>
-          Therefore <InlineMath math="a^{-1} = a^{p-2}" />—every non-zero element has an inverse.
+          Multiplying both sides by <InlineMath math="a^{-1}" /> shows that every non-zero element
+          of <InlineMath math="\mathbb{F}_p" /> has a multiplicative inverse, namely{' '}
+          <InlineMath math="a^{-1} \equiv a^{p-2} \pmod{p}" />. Computing that power with
+          square-and-multiply (binary exponentiation) is a standard way to invert in the field,
+          including in cryptographic protocols. For the same idea modulo the{' '}
+          <ArticleLink slug="what-is-secp256k1">secp256k1</ArticleLink> subgroup order when signing
+          Bitcoin transactions, see <ArticleLink slug="ecdsa">ECDSA</ArticleLink>.
+        </p>
+
+        <p className="mt-4">
+          <strong>Why prime p is essential:</strong> The theorem needs a prime modulus. If the
+          modulus were composite (for example 12), the integers mod that number do not form a
+          field—some non-zero elements have no multiplicative inverse, and the tidy inverse formula
+          above need not apply.
         </p>
 
         <p className="mt-4">

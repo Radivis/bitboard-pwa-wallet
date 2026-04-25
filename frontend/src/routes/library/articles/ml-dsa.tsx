@@ -39,17 +39,19 @@ export const article: LibraryArticle = {
 
       <ArticleSection title="How it Really Works">
         <p>
-          ML-DSA comes in three security levels:
+          FIPS 204 defines three parameter sets, each claimed by NIST to meet a specific{' '}
+          <strong>security strength category</strong> (see the standard for precise definitions—they
+          do not line up one-to-one with informal labels like &quot;AES-128-style&quot; bits):
         </p>
         <ul className="list-disc space-y-1 pl-5">
           <li>
-            <strong>ML-DSA-44</strong>: ~128 bits of security (category 2)
+            <strong>ML-DSA-44</strong> — category 2
           </li>
           <li>
-            <strong>ML-DSA-65</strong>: ~192 bits of security (category 3)
+            <strong>ML-DSA-65</strong> — category 3
           </li>
           <li>
-            <strong>ML-DSA-87</strong>: ~256 bits of security (category 5)
+            <strong>ML-DSA-87</strong> — category 5
           </li>
         </ul>
         <p className="mt-4">

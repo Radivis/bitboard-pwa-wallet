@@ -10,9 +10,11 @@ export const article: LibraryArticle = {
     <div className={ARTICLE_BODY_CLASS}>
       <ArticleSection title="In a Nutshell">
         <p>
-          ECDSA is the original signature algorithm Bitcoin uses. It combines elliptic curve math
-          with random numbers (nonces) to create unforgeable proofs that you own a private key—without
-          ever revealing that key. Every Bitcoin transaction before Taproot used ECDSA signatures.
+          ECDSA is Bitcoin&apos;s original elliptic-curve signature scheme. It combines elliptic
+          curve math with random numbers (nonces) to create unforgeable proofs that you own a
+          private key—without ever revealing that key. Legacy outputs and common P2WPKH spends
+          still use ECDSA; <ArticleLink slug="taproot">Taproot</ArticleLink> key-path spending uses{' '}
+          <ArticleLink slug="schnorr-signatures">BIP-340 Schnorr</ArticleLink> instead.
         </p>
       </ArticleSection>
 
@@ -130,8 +132,9 @@ export const article: LibraryArticle = {
         <p className="mt-4">
           <strong>Computing modular inverses:</strong> The formulas above use modular inverses like{' '}
           <InlineMath math="k^{-1}" /> and <InlineMath math="s^{-1}" />. Since{' '}
-          <InlineMath math="n" /> (the curve order) is prime, <strong>Fermat&apos;s Little Theorem</strong>{' '}
-          provides an efficient method:
+          <InlineMath math="n" /> (the curve order) is prime,{' '}
+          <ArticleLink slug="finite-fields">Fermat&apos;s Little Theorem</ArticleLink> provides an
+          efficient method:
         </p>
         <BlockMath math="a^{-1} \equiv a^{n-2} \pmod{n}" />
         <p>
