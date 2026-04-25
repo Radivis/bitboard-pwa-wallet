@@ -79,10 +79,8 @@ pub fn prepare_onchain_send(
     let fee_rate_sats = validation::validate_fee_rate_sat_per_vb(fee_rate_sat_per_vb)?;
     let fee_rate = FeeRate::from_sat_per_vb_unchecked(fee_rate_sats);
 
-    // Do not use BDK’s default nLockTime (= synced chain tip) for “fee sniping” resistance. When
-    // the Esplora-backed tip is even one block ahead of the bitcoind that serves `sendrawtransaction`
-    // (or electrs lags the RPC node), the tx is rejected as non-final (Bitcoin Core -26). LockTime 0
-    // is always final; we accept the tiny fee-sniping trade-off for reliable broadcast.
+    // `nLockTime = 0` instead of BDK’s default (tip-based fee-sniping lock time) — see
+    // `doc/ARCHITECTURE.md` (On-chain sends: nLockTime and fee sniping).
     let build_once = |w: &mut Wallet, amt: u64| -> Result<Psbt, CryptoError> {
         let mut tx_builder = w.build_tx();
         tx_builder
