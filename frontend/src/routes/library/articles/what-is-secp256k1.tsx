@@ -26,7 +26,7 @@ export const article: LibraryArticle = {
         <p>
           Your <strong>private key</strong> is an integer; your <strong>public key</strong> is a
           point on the curve obtained by scalar multiplication. See{' '}
-          <ArticleLink slug="what-is-an-elliptic-curve">What is an elliptic curve?</ArticleLink> for
+          <ArticleLink slug="elliptic-curves">Elliptic Curves</ArticleLink> for
           the general idea.
         </p>
       </ArticleSection>

@@ -42,7 +42,7 @@ export const article: LibraryArticle = {
       <ArticleSection title="How it Really Works">
         <p>
           <strong>The crypto toolkit.</strong>{' '}
-          <ArticleLink slug="what-is-an-elliptic-curve">Elliptic curves</ArticleLink> and{' '}
+          <ArticleLink slug="elliptic-curves">Elliptic curves</ArticleLink> and{' '}
           <ArticleLink slug="the-discrete-logarithm-problem">hard mathematical problems</ArticleLink>{' '}
           make signatures workable at scale;{' '}
           <ArticleLink slug="hashes-and-merkle-trees-in-bitcoin">hashing</ArticleLink> underpins

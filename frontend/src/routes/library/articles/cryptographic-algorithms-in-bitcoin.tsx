@@ -46,7 +46,7 @@ export const article: LibraryArticle = {
           <strong>Taproot</strong> builds on Schnorr for more compact multisignature-style
           authorizations and advanced script features; see{' '}
           <ArticleLink slug="taproot">Taproot</ArticleLink>. For the curve Bitcoin uses, see{' '}
-          <ArticleLink slug="what-is-an-elliptic-curve">What is an elliptic curve?</ArticleLink>,{' '}
+          <ArticleLink slug="elliptic-curves">Elliptic Curves</ArticleLink>,{' '}
           <ArticleLink slug="what-is-secp256k1">What is secp256k1?</ArticleLink>, and{' '}
           <ArticleLink slug="secret-and-public-keys-in-bitcoin">
             Secret and public keys in Bitcoin

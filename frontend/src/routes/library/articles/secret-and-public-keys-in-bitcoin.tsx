@@ -46,7 +46,7 @@ export const article: LibraryArticle = {
         <p>
           Losing the private key or seed means losing access to funds; leaking it means anyone can
           steal them. For curve background, see{' '}
-          <ArticleLink slug="what-is-an-elliptic-curve">What is an elliptic curve?</ArticleLink> and{' '}
+          <ArticleLink slug="elliptic-curves">Elliptic Curves</ArticleLink> and{' '}
           <ArticleLink slug="what-is-secp256k1">What is secp256k1?</ArticleLink>. For wallet
           concepts, see <ArticleLink slug="what-is-a-wallet">What is a wallet</ArticleLink>.
         </p>

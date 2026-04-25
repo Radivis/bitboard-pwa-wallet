@@ -19,7 +19,7 @@ export const article: LibraryArticle = {
       <ArticleSection title="How it Works">
         <p>
           ECDSA works on an{' '}
-          <ArticleLink slug="what-is-an-elliptic-curve">elliptic curve</ArticleLink>—Bitcoin uses{' '}
+          <ArticleLink slug="elliptic-curves">elliptic curve</ArticleLink>—Bitcoin uses{' '}
           <ArticleLink slug="what-is-secp256k1">secp256k1</ArticleLink>. The curve has a special
           base point <InlineMath math="G" /> and a large prime order <InlineMath math="n" />.
         </p>

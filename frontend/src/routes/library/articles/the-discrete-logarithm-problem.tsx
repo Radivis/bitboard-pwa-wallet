@@ -35,7 +35,7 @@ export const article: LibraryArticle = {
           <ArticleLink slug="what-is-secp256k1">secp256k1</ArticleLink>: given a public point on the
           curve, finding the integer multiple of a base point that yields it is believed infeasible
           at 256-bit security levels. See{' '}
-          <ArticleLink slug="what-is-an-elliptic-curve">What is an elliptic curve?</ArticleLink> and{' '}
+          <ArticleLink slug="elliptic-curves">Elliptic Curves</ArticleLink> and{' '}
           <ArticleLink slug="secret-and-public-keys-in-bitcoin">
             Secret and public keys in Bitcoin
           </ArticleLink>

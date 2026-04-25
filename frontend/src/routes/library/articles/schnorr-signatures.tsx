@@ -57,7 +57,10 @@ export const article: LibraryArticle = {
             Compute the challenge hash:
             <BlockMath math="e = H_{\text{BIP340/challenge}}(R_x \| P_x \| m)" />
             where <InlineMath math="R_x" /> and <InlineMath math="P_x" /> are the x-coordinates,
-            and <InlineMath math="H" /> is a tagged SHA256 hash.
+            and <InlineMath math="H" /> is a tagged SHA256 hash. The <InlineMath math="\|" />{' '}
+            symbol means <strong>concatenation</strong>—the byte representations of{' '}
+            <InlineMath math="R_x" />, <InlineMath math="P_x" />, and <InlineMath math="m" /> are
+            joined end-to-end before hashing.
           </li>
           <li>
             Compute the response:
