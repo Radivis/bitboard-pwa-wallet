@@ -239,6 +239,29 @@ describe('switchDescriptorWallet', () => {
       changesetJson: '{}',
       useEmptyChain: true,
     })
+    expect(mockSyncLoadedSubWalletWithEsplora).toHaveBeenCalledWith(
+      expect.objectContaining({ fullScanNeeded: true }),
+    )
+  })
+
+  it('retries load with fresh chain when changeset cannot be loaded and forces full scan', async () => {
+    mockLoadWallet
+      .mockRejectedValueOnce(new Error('Wallet could not be loaded from changeset'))
+      .mockResolvedValueOnce(undefined)
+
+    await switchDescriptorWallet({
+      targetNetworkMode: 'testnet',
+      targetAddressType: 'taproot',
+      targetAccountId: 0,
+      currentNetworkMode: 'mainnet',
+      currentAddressType: 'taproot',
+      currentAccountId: 0,
+    })
+
+    expect(mockLoadWallet).toHaveBeenCalledTimes(2)
+    expect(mockSyncLoadedSubWalletWithEsplora).toHaveBeenCalledWith(
+      expect.objectContaining({ fullScanNeeded: true }),
+    )
   })
 
   it('does not run Esplora sync for lab target', async () => {

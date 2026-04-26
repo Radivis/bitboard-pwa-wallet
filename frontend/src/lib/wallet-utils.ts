@@ -348,24 +348,31 @@ export async function retryImportInitialEsploraSyncWithWalletStatus(): Promise<v
  * that does not match the target network (e.g. testnet4 state stored under another
  * sub-wallet slot), retries with a fresh chain for that network so the UI can recover.
  */
+export type LoadWalletPersistedChainMismatchResult = {
+  /** True when the persisted changeset could not be applied and a fresh chain was loaded instead. */
+  usedEmptyChainFallback: boolean
+}
+
 export async function loadWalletHandlingPersistedChainMismatch(
   loadWallet: (params: LoadWalletParams) => Promise<boolean>,
   params: LoadWalletParams,
-): Promise<void> {
+): Promise<LoadWalletPersistedChainMismatchResult> {
   try {
     await loadWallet(params)
+    return { usedEmptyChainFallback: false }
   } catch (err) {
     if (params.useEmptyChain) throw err
     const detail = errorMessage(err) ?? String(err)
     if (
       detail.includes('Network mismatch') ||
-      detail.includes('Genesis hash mismatch')
+      detail.includes('Genesis hash mismatch') ||
+      detail.includes('could not be loaded from changeset')
     ) {
       await loadWallet({
         ...params,
         useEmptyChain: true,
       })
-      return
+      return { usedEmptyChainFallback: true }
     }
     throw err
   }
@@ -405,13 +412,12 @@ export async function loadDescriptorWalletWithoutSync(params: {
   setBalance(null)
   setTransactions([])
 
-  const useEmptyChain = network === 'testnet'
   await loadWalletHandlingPersistedChainMismatch(loadWallet, {
     externalDescriptor: descriptorWallet.externalDescriptor,
     internalDescriptor: descriptorWallet.internalDescriptor,
     network,
     changesetJson: descriptorWallet.changeSet,
-    useEmptyChain,
+    useEmptyChain: false,
   })
 
   const address = await getCurrentAddress()
@@ -481,13 +487,12 @@ export async function loadDescriptorWalletAndSync(params: {
   setTransactions([])
   setLastSyncTime(null)
 
-  const useEmptyChain = network === 'testnet'
   await loadWalletHandlingPersistedChainMismatch(loadWallet, {
     externalDescriptor: descriptorWallet.externalDescriptor,
     internalDescriptor: descriptorWallet.internalDescriptor,
     network,
     changesetJson: descriptorWallet.changeSet,
-    useEmptyChain,
+    useEmptyChain: false,
   })
 
   const address = await getCurrentAddress()

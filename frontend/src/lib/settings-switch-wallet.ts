@@ -113,14 +113,14 @@ export async function switchDescriptorWallet(params: {
       targetAccountId,
     })
 
-    const useEmptyChain = targetNetwork === 'testnet'
-    await loadWalletHandlingPersistedChainMismatch(loadWallet, {
-      externalDescriptor: descriptorWallet.externalDescriptor,
-      internalDescriptor: descriptorWallet.internalDescriptor,
-      network: targetNetwork,
-      changesetJson: descriptorWallet.changeSet,
-      useEmptyChain,
-    })
+    const { usedEmptyChainFallback } =
+      await loadWalletHandlingPersistedChainMismatch(loadWallet, {
+        externalDescriptor: descriptorWallet.externalDescriptor,
+        internalDescriptor: descriptorWallet.internalDescriptor,
+        network: targetNetwork,
+        changesetJson: descriptorWallet.changeSet,
+        useEmptyChain: false,
+      })
 
     const address = await getCurrentAddress()
     setCurrentAddress(address)
@@ -133,7 +133,8 @@ export async function switchDescriptorWallet(params: {
     if (targetNetworkMode !== 'lab') {
       onPhase?.(syncingTargetNetworkMessage(targetNetworkMode))
       setWalletStatus('syncing')
-      const fullScanNeeded = !descriptorWallet.fullScanDone
+      const fullScanNeeded =
+        !descriptorWallet.fullScanDone || usedEmptyChainFallback
       await syncLoadedSubWalletWithEsplora({
         networkMode: targetNetworkMode,
         activeWalletId,

@@ -27,6 +27,7 @@ import {
 } from './helpers/settings-waits'
 import { waitForDashboardSyncButtonEnabled } from './helpers/dashboard-sync'
 import { waitForFullScanLoadingToastGone } from './helpers/full-scan-toast'
+import { goToWalletTab } from './helpers/wallet-nav'
 
 const seed = process.env.E2E_TESTNET_SEED?.trim()
 const appPassword = process.env.E2E_TESTNET_APP_PASSWORD
@@ -97,7 +98,8 @@ test.describe('Funded testnet wallet (live Esplora)', () => {
     await waitForSettingsNetworkSwitchComplete(page)
     await waitForSettingsNetworkModeButtonSelected(page, 'Mainnet')
 
-    await page.getByRole('link', { name: /dashboard/i }).click()
+    // On Settings, the Wallet sub-nav (Dashboard) is hidden — use primary "Wallet" first.
+    await goToWalletTab(page, 'Dashboard')
     await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible({
       timeout: 60_000,
     })
@@ -113,7 +115,7 @@ test.describe('Funded testnet wallet (live Esplora)', () => {
     await waitForSettingsNetworkSwitchComplete(page)
     await waitForSettingsNetworkModeButtonSelected(page, 'Testnet')
 
-    await page.getByRole('link', { name: /dashboard/i }).click()
+    await goToWalletTab(page, 'Dashboard')
     await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible({
       timeout: 60_000,
     })
