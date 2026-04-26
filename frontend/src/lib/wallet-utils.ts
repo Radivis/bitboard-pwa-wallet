@@ -202,8 +202,12 @@ export async function syncLoadedSubWalletWithEsplora(options: {
     }
     return 'completed'
   } catch (syncErr) {
-    const detail = errorMessage(syncErr)
-    toast.error(`Sync failed after switching: ${detail}`)
+    const detail = sanitizeErrorMessageForUi(errorMessage(syncErr))
+    toast.error(
+      detail
+        ? `Sync failed after switching: ${detail}`
+        : 'Sync failed after switching',
+    )
     return 'sync_failed'
   }
 }
