@@ -7,6 +7,9 @@ use crate::blockchain::BlockchainClient;
 use crate::error::CryptoError;
 use crate::wasm_sleep::WasmSleeper;
 
+/// Upper bound for each Esplora HTTP request (seconds). Keeps failed sync from hanging on stalled fetches (especially on WASM).
+const ESPLORA_HTTP_TIMEOUT_SECS: u64 = 5;
+
 pub struct EsploraClient {
     client: bdk_esplora::esplora_client::AsyncClient<WasmSleeper>,
 }
@@ -17,6 +20,7 @@ impl EsploraClient {
             return Err(CryptoError::Blockchain("URL must not be empty".to_string()));
         }
         let client = bdk_esplora::esplora_client::Builder::new(url)
+            .timeout(ESPLORA_HTTP_TIMEOUT_SECS)
             .build_async_with_sleeper::<WasmSleeper>()
             .map_err(|e| CryptoError::Blockchain(e.to_string()))?;
         Ok(Self { client })

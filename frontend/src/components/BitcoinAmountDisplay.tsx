@@ -27,6 +27,7 @@ type BitcoinAmountDisplayProps = {
    * to avoid invalid nested interactive elements.
    */
   allowUnitToggle?: boolean
+  'data-testid'?: string
 }
 
 export function BitcoinAmountDisplay({
@@ -35,6 +36,7 @@ export function BitcoinAmountDisplay({
   className,
   tabular = true,
   allowUnitToggle = true,
+  'data-testid': dataTestId,
 }: BitcoinAmountDisplayProps) {
   const { data: defaultUnit = 'BTC' } = useBitcoinUnit()
   const [localUnitOverride, setLocalUnitOverride] =
@@ -68,6 +70,7 @@ export function BitcoinAmountDisplay({
 
   return (
     <span
+      data-testid={dataTestId}
       className={cn(
         numericClass,
         className,

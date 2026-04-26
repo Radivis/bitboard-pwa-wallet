@@ -200,7 +200,11 @@ function BalanceCard() {
             <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
               On-chain
             </p>
-            <BitcoinAmountDisplay amountSats={primarySats} size="lg" />
+            <BitcoinAmountDisplay
+              amountSats={primarySats}
+              size="lg"
+              data-testid="dashboard-onchain-balance-amount"
+            />
             {onChainDisplay.showBreakdown && (
               <ul className="mt-3 space-y-1.5 text-sm">
                 {onChainDisplay.confirmedSats > 0 && (
