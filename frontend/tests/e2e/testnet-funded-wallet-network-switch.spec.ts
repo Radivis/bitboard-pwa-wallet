@@ -1,7 +1,7 @@
 /**
  * Live Testnet Esplora E2E (optional, local only).
  *
- * Requires `frontend/.env.testnet` (gitignored) with:
+ * Requires `.env.testnet` in `frontend/` or at repo root (gitignored) with:
  * - E2E_TESTNET_SEED — space-separated 12-word mnemonic for a **testnet-only** wallet
  * - E2E_TESTNET_APP_PASSWORD — Bitboard app password used on first-run setup
  *
@@ -26,9 +26,13 @@ import {
   waitForSettingsNetworkModeButtonSelected,
 } from './helpers/settings-waits'
 import { waitForDashboardSyncButtonEnabled } from './helpers/dashboard-sync'
+import { waitForFullScanLoadingToastGone } from './helpers/full-scan-toast'
 
 const seed = process.env.E2E_TESTNET_SEED?.trim()
 const appPassword = process.env.E2E_TESTNET_APP_PASSWORD
+
+/** Full Esplora full scan can exceed default action timeouts; toast must clear before balance is trustworthy. */
+const FULL_SCAN_TOAST_TIMEOUT_MS = 480_000
 
 async function readDashboardOnchainSats(page: Page): Promise<number> {
   const loc = page.getByTestId('dashboard-onchain-balance-amount')
@@ -65,6 +69,7 @@ test.describe('Funded testnet wallet (live Esplora)', () => {
     await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible({
       timeout: 180_000,
     })
+    await waitForFullScanLoadingToastGone(page, FULL_SCAN_TOAST_TIMEOUT_MS)
     await waitForDashboardSyncButtonEnabled(page, 300_000)
     await expectNoInitialWalletSyncErrorToast(page)
 
@@ -92,10 +97,11 @@ test.describe('Funded testnet wallet (live Esplora)', () => {
     await waitForSettingsNetworkSwitchComplete(page)
     await waitForSettingsNetworkModeButtonSelected(page, 'Mainnet')
 
-    await page.getByRole('link', { name: 'Dashboard' }).click()
+    await page.getByRole('link', { name: /dashboard/i }).click()
     await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible({
       timeout: 60_000,
     })
+    await waitForFullScanLoadingToastGone(page, FULL_SCAN_TOAST_TIMEOUT_MS)
     await waitForDashboardSyncButtonEnabled(page, 300_000)
 
     const mainnetSats = await readDashboardOnchainSats(page)
@@ -107,10 +113,11 @@ test.describe('Funded testnet wallet (live Esplora)', () => {
     await waitForSettingsNetworkSwitchComplete(page)
     await waitForSettingsNetworkModeButtonSelected(page, 'Testnet')
 
-    await page.getByRole('link', { name: 'Dashboard' }).click()
+    await page.getByRole('link', { name: /dashboard/i }).click()
     await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible({
       timeout: 60_000,
     })
+    await waitForFullScanLoadingToastGone(page, FULL_SCAN_TOAST_TIMEOUT_MS)
     await waitForDashboardSyncButtonEnabled(page, 300_000)
 
     const restoredTestnetSats = await readDashboardOnchainSats(page)

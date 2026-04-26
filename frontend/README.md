@@ -105,7 +105,7 @@ npx playwright show-report
 
 This repo includes an **optional** Playwright flow that hits public Testnet Esplora (not run in CI). Use a **dedicated** testnet-only wallet with a non-zero balance.
 
-1. Create `frontend/.env.testnet` (gitignored) with:
+1. Create `.env.testnet` in `frontend/` **or** at the **repo root** (both gitignored) with:
    - `E2E_TESTNET_SEED` — space-separated 12-word mnemonic
    - `E2E_TESTNET_APP_PASSWORD` — Bitboard app password for first-run setup
 2. Fund that wallet on testnet.

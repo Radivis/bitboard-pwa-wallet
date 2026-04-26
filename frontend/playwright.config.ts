@@ -5,7 +5,13 @@ import { defineConfig, devices } from '@playwright/test'
 import dotenv from 'dotenv'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-dotenv.config({ path: path.join(__dirname, '.env.testnet') })
+/** Prefer `frontend/.env.testnet`; fall back to repo-root `.env.testnet` (common when editing from workspace root). */
+for (const envPath of [
+  path.join(__dirname, '.env.testnet'),
+  path.join(__dirname, '..', '.env.testnet'),
+]) {
+  dotenv.config({ path: envPath })
+}
 
 const devServerCommand =
   process.env.VITE_E2E_NWC_MOCK === 'true'
