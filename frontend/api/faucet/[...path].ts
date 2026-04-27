@@ -1,4 +1,4 @@
-import { passthroughUpstreamResponse } from '../_lib/passthrough-upstream-response'
+import type { VercelRequest, VercelResponse } from '@vercel/node'
 import {
   getUpstreamBaseForFaucetProxy,
   isKnownFaucetId,
@@ -9,40 +9,49 @@ import {
 } from '../../src/lib/validate-proxied-upstream-url'
 
 export const config = {
-  runtime: 'edge',
+  maxDuration: 10,
 }
 
 const UPSTREAM_TIMEOUT_MS = 8_000
 
-export default async function handler(request: Request): Promise<Response> {
-  const url = new URL(request.url)
+export default async function handler(
+  req: VercelRequest,
+  res: VercelResponse,
+): Promise<void> {
+  const url = new URL(req.url!, `https://${req.headers.host}`)
   const prefix = '/api/faucet/'
   if (!url.pathname.startsWith(prefix)) {
-    return new Response('Not found', { status: 404 })
+    res.status(404).send('Not found')
+    return
   }
 
   const rest = url.pathname.slice(prefix.length)
   const segments = rest.split('/').filter(Boolean)
   if (segments.length < 1) {
-    return new Response('Bad path', { status: 400 })
+    res.status(400).send('Bad path')
+    return
   }
   if (hasUnsafePathSegment(segments)) {
-    return new Response('Bad path', { status: 400 })
+    res.status(400).send('Bad path')
+    return
   }
 
   const faucetId = segments[0]!
   if (!isKnownFaucetId(faucetId)) {
-    return new Response('Unknown faucet', { status: 404 })
+    res.status(404).send('Unknown faucet')
+    return
   }
 
   const base = getUpstreamBaseForFaucetProxy(faucetId)
   if (base == null) {
-    return new Response('Unknown faucet', { status: 404 })
+    res.status(404).send('Unknown faucet')
+    return
   }
 
-  const method = request.method.toUpperCase()
+  const method = (req.method ?? 'GET').toUpperCase()
   if (method !== 'GET' && method !== 'HEAD') {
-    return new Response('Method not allowed', { status: 405 })
+    res.status(405).send('Method not allowed')
+    return
   }
 
   const faucetSubpath = segments.slice(1).join('/')
@@ -50,12 +59,13 @@ export default async function handler(request: Request): Promise<Response> {
   const pathSuffix = faucetSubpath ? `/${faucetSubpath}` : ''
   const upstreamUrl = `${baseTrim}${pathSuffix}${url.search}`
   if (!isProxiedUrlPathWithinAllowlistedBase(upstreamUrl, baseTrim)) {
-    return new Response('Bad path', { status: 400 })
+    res.status(400).send('Bad path')
+    return
   }
 
-  const forwardHeaders = new Headers()
-  const accept = request.headers.get('accept')
-  if (accept) forwardHeaders.set('accept', accept)
+  const forwardHeaders: Record<string, string> = {}
+  const accept = req.headers['accept']
+  if (accept && typeof accept === 'string') forwardHeaders['accept'] = accept
 
   const init: RequestInit = {
     method,
@@ -67,8 +77,41 @@ export default async function handler(request: Request): Promise<Response> {
   try {
     upstream = await fetch(upstreamUrl, init)
   } catch {
-    return new Response('Upstream unreachable', { status: 502 })
+    res.status(502).send('Upstream unreachable')
+    return
   }
 
-  return passthroughUpstreamResponse(upstream)
+  const outHeaders: Record<string, string> = {}
+  upstream.headers.forEach((value, key) => {
+    const lower = key.toLowerCase()
+    if (HOP_BY_HOP_RESPONSE_HEADERS.has(lower)) return
+    if (DROP_FOR_SAME_ORIGIN_CLIENT.has(lower)) return
+    outHeaders[key] = value
+  })
+
+  res.status(upstream.status)
+  Object.entries(outHeaders).forEach(([k, v]) => res.setHeader(k, v))
+
+  if (upstream.body) {
+    const reader = upstream.body.getReader()
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      res.write(value)
+    }
+  }
+  res.end()
 }
+
+const HOP_BY_HOP_RESPONSE_HEADERS = new Set([
+  'connection',
+  'keep-alive',
+  'proxy-authenticate',
+  'proxy-authorization',
+  'te',
+  'trailers',
+  'transfer-encoding',
+  'upgrade',
+])
+
+const DROP_FOR_SAME_ORIGIN_CLIENT = new Set(['set-cookie', 'set-cookie2'])

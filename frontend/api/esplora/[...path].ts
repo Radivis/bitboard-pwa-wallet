@@ -1,4 +1,4 @@
-import { passthroughUpstreamResponse } from '../_lib/passthrough-upstream-response'
+import type { VercelRequest, VercelResponse } from '@vercel/node'
 import {
   getUpstreamBaseForEsploraProxy,
   isKnownEsploraProviderId,
@@ -9,7 +9,7 @@ import {
 } from '../../src/lib/validate-proxied-upstream-url'
 
 export const config = {
-  runtime: 'edge',
+  maxDuration: 10,
 }
 
 /** Align with client Esplora client timeout + small margin (ms). */
@@ -17,36 +17,45 @@ const UPSTREAM_TIMEOUT_MS = 5_000
 
 const MAX_POST_BODY_BYTES = 512_000
 
-export default async function handler(request: Request): Promise<Response> {
-  const url = new URL(request.url)
+export default async function handler(
+  req: VercelRequest,
+  res: VercelResponse,
+): Promise<void> {
+  const url = new URL(req.url!, `https://${req.headers.host}`)
   const prefix = '/api/esplora/'
   if (!url.pathname.startsWith(prefix)) {
-    return new Response('Not found', { status: 404 })
+    res.status(404).send('Not found')
+    return
   }
 
   const rest = url.pathname.slice(prefix.length)
   const segments = rest.split('/').filter(Boolean)
   if (segments.length < 2) {
-    return new Response('Bad path', { status: 400 })
+    res.status(400).send('Bad path')
+    return
   }
   if (hasUnsafePathSegment(segments)) {
-    return new Response('Bad path', { status: 400 })
+    res.status(400).send('Bad path')
+    return
   }
 
   const providerId = segments[0]!
   const network = segments[1]!
   if (!isKnownEsploraProviderId(providerId)) {
-    return new Response('Unknown provider', { status: 404 })
+    res.status(404).send('Unknown provider')
+    return
   }
 
   const base = getUpstreamBaseForEsploraProxy(providerId, network)
   if (base == null) {
-    return new Response('Unknown network for provider', { status: 404 })
+    res.status(404).send('Unknown network for provider')
+    return
   }
 
-  const method = request.method.toUpperCase()
+  const method = (req.method ?? 'GET').toUpperCase()
   if (method !== 'GET' && method !== 'HEAD' && method !== 'POST') {
-    return new Response('Method not allowed', { status: 405 })
+    res.status(405).send('Method not allowed')
+    return
   }
 
   const esploraSubpath = segments.slice(2).join('/')
@@ -54,14 +63,16 @@ export default async function handler(request: Request): Promise<Response> {
   const pathSuffix = esploraSubpath ? `/${esploraSubpath}` : ''
   const upstreamUrl = `${baseTrim}${pathSuffix}${url.search}`
   if (!isProxiedUrlPathWithinAllowlistedBase(upstreamUrl, baseTrim)) {
-    return new Response('Bad path', { status: 400 })
+    res.status(400).send('Bad path')
+    return
   }
 
-  const forwardHeaders = new Headers()
-  const accept = request.headers.get('accept')
-  if (accept) forwardHeaders.set('accept', accept)
-  const contentType = request.headers.get('content-type')
-  if (contentType) forwardHeaders.set('content-type', contentType)
+  const forwardHeaders: Record<string, string> = {}
+  const accept = req.headers['accept']
+  if (accept && typeof accept === 'string') forwardHeaders['accept'] = accept
+  const contentType = req.headers['content-type']
+  if (contentType && typeof contentType === 'string')
+    forwardHeaders['content-type'] = contentType
 
   const init: RequestInit = {
     method,
@@ -69,19 +80,57 @@ export default async function handler(request: Request): Promise<Response> {
     signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
   }
   if (method === 'POST') {
-    const buf = await request.arrayBuffer()
-    if (buf.byteLength > MAX_POST_BODY_BYTES) {
-      return new Response('Payload too large', { status: 413 })
+    const chunks: Buffer[] = []
+    for await (const chunk of req) {
+      chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : chunk)
     }
-    init.body = buf
+    const body = Buffer.concat(chunks)
+    if (body.byteLength > MAX_POST_BODY_BYTES) {
+      res.status(413).send('Payload too large')
+      return
+    }
+    init.body = body
   }
 
   let upstream: Response
   try {
     upstream = await fetch(upstreamUrl, init)
   } catch {
-    return new Response('Upstream unreachable', { status: 502 })
+    res.status(502).send('Upstream unreachable')
+    return
   }
 
-  return passthroughUpstreamResponse(upstream)
+  const outHeaders: Record<string, string> = {}
+  upstream.headers.forEach((value, key) => {
+    const lower = key.toLowerCase()
+    if (HOP_BY_HOP_RESPONSE_HEADERS.has(lower)) return
+    if (DROP_FOR_SAME_ORIGIN_CLIENT.has(lower)) return
+    outHeaders[key] = value
+  })
+
+  res.status(upstream.status)
+  Object.entries(outHeaders).forEach(([k, v]) => res.setHeader(k, v))
+
+  if (upstream.body) {
+    const reader = upstream.body.getReader()
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      res.write(value)
+    }
+  }
+  res.end()
 }
+
+const HOP_BY_HOP_RESPONSE_HEADERS = new Set([
+  'connection',
+  'keep-alive',
+  'proxy-authenticate',
+  'proxy-authorization',
+  'te',
+  'trailers',
+  'transfer-encoding',
+  'upgrade',
+])
+
+const DROP_FOR_SAME_ORIGIN_CLIENT = new Set(['set-cookie', 'set-cookie2'])
