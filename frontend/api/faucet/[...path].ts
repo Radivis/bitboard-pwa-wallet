@@ -75,6 +75,8 @@ const HOP_BY_HOP_RESPONSE_HEADERS = new Set([
   'trailers',
   'transfer-encoding',
   'upgrade',
+  'content-encoding', // Don't forward - fetch auto-decompresses, Vercel re-compresses
+  'content-length', // Length changes after decompression
 ])
 
 const DROP_FOR_SAME_ORIGIN_CLIENT = new Set(['set-cookie', 'set-cookie2'])
