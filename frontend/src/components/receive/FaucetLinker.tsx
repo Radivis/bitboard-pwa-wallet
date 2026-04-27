@@ -93,7 +93,7 @@ export function FaucetLinker() {
             controller.abort()
           }, REACHABILITY_TIMEOUT_MS)
           try {
-            const status = await checkFaucetReachability(f.url, controller.signal)
+            const status = await checkFaucetReachability(f.id, controller.signal)
             return [f.id, status] as const
           } finally {
             globalThis.clearTimeout(timeoutId)

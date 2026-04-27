@@ -125,7 +125,7 @@ describe('checkFaucetReachability', () => {
     )
     const c = new AbortController()
     await expect(
-      checkFaucetReachability('https://example.com/', c.signal),
+      checkFaucetReachability('mempool-testnet4', c.signal),
     ).resolves.toBe('online')
   })
 
@@ -136,15 +136,26 @@ describe('checkFaucetReachability', () => {
     )
     const c = new AbortController()
     await expect(
-      checkFaucetReachability('https://example.com/', c.signal),
+      checkFaucetReachability('mempool-testnet4', c.signal),
     ).resolves.toBe('offline')
   })
 
-  it('returns unknown when fetch throws (e.g. CORS)', async () => {
+  it('returns offline when proxy returns 502 (upstream unreachable)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ ok: false, status: 502 }),
+    )
+    const c = new AbortController()
+    await expect(
+      checkFaucetReachability('mempool-testnet4', c.signal),
+    ).resolves.toBe('offline')
+  })
+
+  it('returns unknown when fetch throws (e.g. network error)', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')))
     const c = new AbortController()
     await expect(
-      checkFaucetReachability('https://example.com/', c.signal),
+      checkFaucetReachability('mempool-testnet4', c.signal),
     ).resolves.toBe('unknown')
   })
 })

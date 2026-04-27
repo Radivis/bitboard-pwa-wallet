@@ -1,6 +1,7 @@
 import type { NetworkMode } from '@/stores/walletStore'
 import {
   FAUCET_ENTRIES,
+  FAUCET_SAME_ORIGIN_PROXY_PREFIX,
   type FaucetEntry,
   type FaucetStackId,
 } from '@/lib/faucet-definitions'
@@ -91,24 +92,32 @@ export function faucetsForStack(stackId: FaucetStackId): FaucetEntry[] {
 }
 
 /**
- * GET the faucet page; classify by HTTP status vs thrown errors (CORS / network / abort).
- * Thrown errors yield `unknown`, not offline — the site may still work in a new tab.
+ * Returns the same-origin proxy URL for a faucet by ID.
+ */
+function getFaucetProxyUrl(faucetId: string): string {
+  return `${globalThis.location.origin}${FAUCET_SAME_ORIGIN_PROXY_PREFIX}/${faucetId}`
+}
+
+/**
+ * GET the faucet page via same-origin proxy; classify by HTTP status vs thrown errors.
+ * Uses the proxy to avoid CORS issues with third-party faucet sites.
  */
 export async function checkFaucetReachability(
-  url: string,
+  faucetId: string,
   signal: AbortSignal,
 ): Promise<FaucetReachability> {
+  const proxyUrl = getFaucetProxyUrl(faucetId)
   try {
-    const res = await fetch(url, {
+    const res = await fetch(proxyUrl, {
       method: 'GET',
       redirect: 'follow',
       cache: 'no-store',
       signal,
     })
     if (res.ok) return 'online'
+    if (res.status === 502) return 'offline'
     return 'offline'
   } catch {
-    // UNKNOWN: CORS, network errors, abort — no HTTP status to show as OFFLINE.
     return 'unknown'
   }
 }

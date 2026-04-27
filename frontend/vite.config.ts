@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url'
 import { defineConfig, type Plugin } from 'vite'
 import { readBitboardWalletVersion } from './common/bitboard-wallet-version'
 import { esploraViteProxyEntries } from './src/lib/esplora-service-whitelist'
+import { faucetViteProxyEntries } from './src/lib/faucet-definitions'
 import { tanstackRouter } from '@tanstack/router-plugin/vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
@@ -31,6 +32,22 @@ function escapeRegExpPath(s: string): string {
 
 const esploraDevProxy = Object.fromEntries(
   esploraViteProxyEntries().map((e) => [
+    e.localPrefix,
+    {
+      target: e.targetOrigin,
+      changeOrigin: true,
+      secure: true,
+      rewrite: (reqPath: string) =>
+        reqPath.replace(
+          new RegExp(`^${escapeRegExpPath(e.localPrefix)}`),
+          e.upstreamPathPrefix,
+        ),
+    },
+  ]),
+)
+
+const faucetDevProxy = Object.fromEntries(
+  faucetViteProxyEntries().map((e) => [
     e.localPrefix,
     {
       target: e.targetOrigin,
@@ -159,6 +176,7 @@ export default defineConfig({
     port: 3000,
     proxy: {
       ...esploraDevProxy,
+      ...faucetDevProxy,
     },
   },
   optimizeDeps: {
