@@ -7,7 +7,11 @@
       "includeFiles": "src/lib/**"
     }
   },
-  "rewrites": [{ "source": "/((?!api/).*)", "destination": "/index.html" }],
+  "rewrites": [
+    { "source": "/api/esplora/:path*", "destination": "/api/esplora/[...path]" },
+    { "source": "/api/faucet/:path*", "destination": "/api/faucet/[...path]" },
+    { "source": "/((?!api/).*)", "destination": "/index.html" }
+  ],
   "headers": [
     {
       "source": "/(.*)",
