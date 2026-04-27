@@ -163,16 +163,8 @@ export default async function handler(
     outHeaders[key] = value
   })
 
-  res.status(upstream.status)
   Object.entries(outHeaders).forEach(([k, v]) => res.setHeader(k, v))
 
-  if (upstream.body) {
-    const reader = upstream.body.getReader()
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-      res.write(value)
-    }
-  }
-  res.end()
+  const body = await upstream.arrayBuffer()
+  res.status(upstream.status).send(Buffer.from(body))
 }
