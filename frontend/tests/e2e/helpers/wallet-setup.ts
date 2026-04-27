@@ -11,9 +11,13 @@ export const TEST_PASSWORD = 'TestP@ssword123'
  * Uses a modest window so a late toast fails the test without dragging every passing run.
  */
 export async function expectNoInitialWalletSyncErrorToast(page: Page) {
-  const syncErrorToast = page.getByText(
-    /Initial sync failed|chain data may be stale|wallet unlocked but data may be stale/,
-  )
+  // Use .first() because Sonner toasts have separate title/description divs that
+  // might both match the pattern, causing strict mode violations.
+  const syncErrorToast = page
+    .getByText(
+      /Initial sync failed|chain data may be stale|wallet unlocked but data may be stale/,
+    )
+    .first()
   await expect(syncErrorToast).not.toBeVisible({ timeout: 12_000 })
 }
 
