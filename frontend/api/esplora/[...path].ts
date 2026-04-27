@@ -1,3 +1,4 @@
+import { passthroughUpstreamResponse } from '../_lib/passthrough-upstream-response'
 import {
   getUpstreamBaseForEsploraProxy,
   isKnownEsploraProviderId,
@@ -11,17 +12,6 @@ export const config = {
 const UPSTREAM_TIMEOUT_MS = 5_000
 
 const MAX_POST_BODY_BYTES = 512_000
-
-const HOP_BY_HOP_RESPONSE_HEADERS = new Set([
-  'connection',
-  'keep-alive',
-  'proxy-authenticate',
-  'proxy-authorization',
-  'te',
-  'trailers',
-  'transfer-encoding',
-  'upgrade',
-])
 
 export default async function handler(request: Request): Promise<Response> {
   const url = new URL(request.url)
@@ -83,16 +73,5 @@ export default async function handler(request: Request): Promise<Response> {
     return new Response('Upstream unreachable', { status: 502 })
   }
 
-  const outHeaders = new Headers()
-  upstream.headers.forEach((value, key) => {
-    if (!HOP_BY_HOP_RESPONSE_HEADERS.has(key.toLowerCase())) {
-      outHeaders.set(key, value)
-    }
-  })
-
-  return new Response(upstream.body, {
-    status: upstream.status,
-    statusText: upstream.statusText,
-    headers: outHeaders,
-  })
+  return passthroughUpstreamResponse(upstream)
 }

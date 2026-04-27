@@ -1,7 +1,7 @@
 import type { NetworkMode } from '@/stores/walletStore'
 import {
   FAUCET_ENTRIES,
-  FAUCET_SAME_ORIGIN_PROXY_PREFIX,
+  getFaucetProxyUrl,
   type FaucetEntry,
   type FaucetStackId,
 } from '@/lib/faucet-definitions'
@@ -89,13 +89,6 @@ export function resolveFaucetStack(
 
 export function faucetsForStack(stackId: FaucetStackId): FaucetEntry[] {
   return FAUCET_ENTRIES.filter((f) => f.stackId === stackId)
-}
-
-/**
- * Returns the same-origin proxy URL for a faucet by ID.
- */
-function getFaucetProxyUrl(faucetId: string): string {
-  return `${globalThis.location.origin}${FAUCET_SAME_ORIGIN_PROXY_PREFIX}/${faucetId}`
 }
 
 /**

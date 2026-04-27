@@ -21,12 +21,8 @@ function sanitizeWorkboxCacheIdSegment(version: string): string {
 
 const workboxCacheId = `bitboard-wallet-${sanitizeWorkboxCacheIdSegment(readBitboardWalletVersion())}`
 
-/** Escape a string for use inside a RegExp (filename slug segments). */
-function escapeRegExpSegment(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-}
-
-function escapeRegExpPath(s: string): string {
+/** Escape a string for use literally inside a RegExp source (paths, filename slugs, etc.). */
+function escapeRegExpLiteral(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
@@ -39,7 +35,7 @@ const esploraDevProxy = Object.fromEntries(
       secure: true,
       rewrite: (reqPath: string) =>
         reqPath.replace(
-          new RegExp(`^${escapeRegExpPath(e.localPrefix)}`),
+          new RegExp(`^${escapeRegExpLiteral(e.localPrefix)}`),
           e.upstreamPathPrefix,
         ),
     },
@@ -55,7 +51,7 @@ const faucetDevProxy = Object.fromEntries(
       secure: true,
       rewrite: (reqPath: string) =>
         reqPath.replace(
-          new RegExp(`^${escapeRegExpPath(e.localPrefix)}`),
+          new RegExp(`^${escapeRegExpLiteral(e.localPrefix)}`),
           e.upstreamPathPrefix,
         ),
     },
@@ -77,7 +73,7 @@ function libraryArticleRouteIgnorePattern(): string {
   if (tsxFiles.length === 0) {
     return '__tests__'
   }
-  const escapedBasenames = tsxFiles.map((f) => escapeRegExpSegment(f.replace(/\.tsx$/i, '')))
+  const escapedBasenames = tsxFiles.map((f) => escapeRegExpLiteral(f.replace(/\.tsx$/i, '')))
   return `__tests__|^(?:${escapedBasenames.join('|')})\\.tsx$`
 }
 
