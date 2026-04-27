@@ -1,21 +1,91 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import {
-  getUpstreamBaseForEsploraProxy,
-  isKnownEsploraProviderId,
-} from '@/lib/esplora-service-whitelist'
-import {
-  hasUnsafePathSegment,
-  isProxiedUrlPathWithinAllowlistedBase,
-} from '@/lib/validate-proxied-upstream-url'
 
 export const config = {
   maxDuration: 10,
 }
 
-/** Align with client Esplora client timeout + small margin (ms). */
-const UPSTREAM_TIMEOUT_MS = 5_000
+// Inlined from src/lib/esplora-service-whitelist.ts
+type EsploraProxyNetwork = 'mainnet' | 'testnet' | 'signet'
+type EsploraProviderId = 'default' | 'blockstream' | 'legacy'
+type ProviderBases = Partial<Record<EsploraProxyNetwork, string>>
 
+const ESPLORA_PROVIDER_BASES: Record<EsploraProviderId, ProviderBases> = {
+  default: {
+    mainnet: 'https://mempool.space/api',
+    testnet: 'https://mempool.space/testnet4/api',
+    signet: 'https://mutinynet.com/api',
+  },
+  blockstream: {
+    mainnet: 'https://blockstream.info/api',
+    signet: 'https://blockstream.info/signet/api',
+  },
+  legacy: {
+    testnet: 'https://blockstream.info/testnet/api',
+    signet: 'https://mempool.space/signet/api',
+  },
+}
+
+function isEsploraProxyNetwork(mode: string): mode is EsploraProxyNetwork {
+  return mode === 'mainnet' || mode === 'testnet' || mode === 'signet'
+}
+
+function isKnownEsploraProviderId(id: string): id is EsploraProviderId {
+  return id === 'default' || id === 'blockstream' || id === 'legacy'
+}
+
+function getUpstreamBaseForEsploraProxy(
+  providerId: string,
+  network: string,
+): string | null {
+  if (!isEsploraProxyNetwork(network)) return null
+  if (!isKnownEsploraProviderId(providerId)) return null
+  const base = ESPLORA_PROVIDER_BASES[providerId][network]
+  return base ?? null
+}
+
+// Inlined from src/lib/validate-proxied-upstream-url.ts
+function hasUnsafePathSegment(segments: string[]): boolean {
+  return segments.some((s) => s === '.' || s === '..')
+}
+
+function isProxiedUrlPathWithinAllowlistedBase(
+  upstreamUrl: string,
+  allowlistedBaseTrimmed: string,
+): boolean {
+  let resolved: URL
+  let base: URL
+  try {
+    resolved = new URL(upstreamUrl)
+    base = new URL(allowlistedBaseTrimmed)
+  } catch {
+    return false
+  }
+  if (resolved.origin !== base.origin) return false
+
+  const basePath = base.pathname.replace(/\/$/, '') || '/'
+  const resPath = resolved.pathname
+
+  if (basePath === '/') return true
+  if (resPath === basePath) return true
+  return resPath.startsWith(`${basePath}/`)
+}
+
+// Constants
+const UPSTREAM_TIMEOUT_MS = 5_000
 const MAX_POST_BODY_BYTES = 512_000
+
+const HOP_BY_HOP_RESPONSE_HEADERS = new Set([
+  'connection',
+  'keep-alive',
+  'proxy-authenticate',
+  'proxy-authorization',
+  'te',
+  'trailers',
+  'transfer-encoding',
+  'upgrade',
+])
+
+const DROP_FOR_SAME_ORIGIN_CLIENT = new Set(['set-cookie', 'set-cookie2'])
 
 export default async function handler(
   req: VercelRequest,
@@ -121,16 +191,3 @@ export default async function handler(
   }
   res.end()
 }
-
-const HOP_BY_HOP_RESPONSE_HEADERS = new Set([
-  'connection',
-  'keep-alive',
-  'proxy-authenticate',
-  'proxy-authorization',
-  'te',
-  'trailers',
-  'transfer-encoding',
-  'upgrade',
-])
-
-const DROP_FOR_SAME_ORIGIN_CLIENT = new Set(['set-cookie', 'set-cookie2'])
