@@ -3,6 +3,10 @@ import {
   getUpstreamBaseForEsploraProxy,
   isKnownEsploraProviderId,
 } from '../../src/lib/esplora-service-whitelist'
+import {
+  hasUnsafePathSegment,
+  isProxiedUrlPathWithinAllowlistedBase,
+} from '../../src/lib/validate-proxied-upstream-url'
 
 export const config = {
   runtime: 'edge',
@@ -23,6 +27,9 @@ export default async function handler(request: Request): Promise<Response> {
   const rest = url.pathname.slice(prefix.length)
   const segments = rest.split('/').filter(Boolean)
   if (segments.length < 2) {
+    return new Response('Bad path', { status: 400 })
+  }
+  if (hasUnsafePathSegment(segments)) {
     return new Response('Bad path', { status: 400 })
   }
 
@@ -46,6 +53,9 @@ export default async function handler(request: Request): Promise<Response> {
   const baseTrim = base.replace(/\/$/, '')
   const pathSuffix = esploraSubpath ? `/${esploraSubpath}` : ''
   const upstreamUrl = `${baseTrim}${pathSuffix}${url.search}`
+  if (!isProxiedUrlPathWithinAllowlistedBase(upstreamUrl, baseTrim)) {
+    return new Response('Bad path', { status: 400 })
+  }
 
   const forwardHeaders = new Headers()
   const accept = request.headers.get('accept')
