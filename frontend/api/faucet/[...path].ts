@@ -9,7 +9,7 @@ import {
 } from '../../src/lib/validate-proxied-upstream-url'
 
 export const config = {
-  runtime: 'edge',
+  maxDuration: 10,
 }
 
 const UPSTREAM_TIMEOUT_MS = 8_000

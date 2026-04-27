@@ -4,6 +4,7 @@
   "buildCommand": "export PATH=\"$HOME/.cargo/bin:$PATH\" && npm run build",
   "functions": {
     "api/**/*.ts": {
+      "runtime": "@vercel/node@4",
       "includeFiles": "src/lib/**"
     }
   },
