@@ -73,31 +73,35 @@ describe('resolveFaucetStack', () => {
   })
 })
 
-describe('resolveFaucetStack DEV Esplora proxy', () => {
-  afterEach(() => {
-    vi.unstubAllEnvs()
-  })
-
-  it('maps localhost esplora-proxy testnet to mempool_testnet4 when DEV', () => {
-    vi.stubEnv('DEV', true)
+describe('resolveFaucetStack same-origin Esplora proxy', () => {
+  it('maps localhost default API proxy testnet to mempool_testnet4', () => {
     expect(
       resolveFaucetStack(
         'testnet',
         null,
-        'http://localhost:3000/esplora-proxy/testnet',
+        'http://localhost:3000/api/esplora/default/testnet',
       ),
     ).toBe('mempool_testnet4')
   })
 
-  it('maps localhost esplora-proxy signet to mutinynet_signet when DEV', () => {
-    vi.stubEnv('DEV', true)
+  it('maps localhost default API proxy signet to mutinynet_signet', () => {
     expect(
       resolveFaucetStack(
         'signet',
         null,
-        'http://localhost:3000/esplora-proxy/signet',
+        'http://localhost:3000/api/esplora/default/signet',
       ),
     ).toBe('mutinynet_signet')
+  })
+
+  it('does not map blockstream signet proxy path to mutinynet faucet', () => {
+    expect(
+      resolveFaucetStack(
+        'signet',
+        null,
+        'http://localhost:3000/api/esplora/blockstream/signet',
+      ),
+    ).toBeNull()
   })
 })
 
@@ -121,7 +125,7 @@ describe('checkFaucetReachability', () => {
     )
     const c = new AbortController()
     await expect(
-      checkFaucetReachability('https://example.com/', c.signal),
+      checkFaucetReachability('mempool-testnet4', c.signal),
     ).resolves.toBe('online')
   })
 
@@ -132,15 +136,26 @@ describe('checkFaucetReachability', () => {
     )
     const c = new AbortController()
     await expect(
-      checkFaucetReachability('https://example.com/', c.signal),
+      checkFaucetReachability('mempool-testnet4', c.signal),
     ).resolves.toBe('offline')
   })
 
-  it('returns unknown when fetch throws (e.g. CORS)', async () => {
+  it('returns offline when proxy returns 502 (upstream unreachable)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ ok: false, status: 502 }),
+    )
+    const c = new AbortController()
+    await expect(
+      checkFaucetReachability('mempool-testnet4', c.signal),
+    ).resolves.toBe('offline')
+  })
+
+  it('returns unknown when fetch throws (e.g. network error)', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')))
     const c = new AbortController()
     await expect(
-      checkFaucetReachability('https://example.com/', c.signal),
+      checkFaucetReachability('mempool-testnet4', c.signal),
     ).resolves.toBe('unknown')
   })
 })

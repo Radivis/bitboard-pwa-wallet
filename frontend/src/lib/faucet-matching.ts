@@ -1,6 +1,7 @@
 import type { NetworkMode } from '@/stores/walletStore'
 import {
   FAUCET_ENTRIES,
+  getFaucetProxyUrl,
   type FaucetEntry,
   type FaucetStackId,
 } from '@/lib/faucet-definitions'
@@ -33,13 +34,14 @@ function isMutinynetHost(urlString: string): boolean {
   return parsed != null && parsed.hostname === 'mutinynet.com'
 }
 
-function devEsploraProxyPathIncludes(
-  resolvedEsploraUrl: string,
-  segment: '/esplora-proxy/testnet' | '/esplora-proxy/signet',
+/** Same-origin proxy using the `default` provider (mempool testnet4 / mutinynet signet). */
+function isDefaultApiEsploraProxyForNetwork(
+  urlString: string,
+  network: 'testnet' | 'signet',
 ): boolean {
-  if (!import.meta.env.DEV) return false
-  const parsed = parseUrlHostPath(resolvedEsploraUrl)
-  return parsed != null && parsed.pathname.includes(segment)
+  const parsed = parseUrlHostPath(urlString)
+  if (parsed == null) return false
+  return parsed.pathname.includes(`/api/esplora/default/${network}`)
 }
 
 /**
@@ -52,7 +54,7 @@ export function resolveFaucetStack(
 ): FaucetStackId | null {
   if (networkMode === 'testnet') {
     if (customEsploraUrl === null) {
-      if (devEsploraProxyPathIncludes(resolvedEsploraUrl, '/esplora-proxy/testnet')) {
+      if (isDefaultApiEsploraProxyForNetwork(resolvedEsploraUrl, 'testnet')) {
         return 'mempool_testnet4'
       }
       if (isMempoolSpaceTestnet4(resolvedEsploraUrl)) {
@@ -68,7 +70,7 @@ export function resolveFaucetStack(
 
   if (networkMode === 'signet') {
     if (customEsploraUrl === null) {
-      if (devEsploraProxyPathIncludes(resolvedEsploraUrl, '/esplora-proxy/signet')) {
+      if (isDefaultApiEsploraProxyForNetwork(resolvedEsploraUrl, 'signet')) {
         return 'mutinynet_signet'
       }
       if (isMutinynetHost(resolvedEsploraUrl)) {
@@ -90,24 +92,25 @@ export function faucetsForStack(stackId: FaucetStackId): FaucetEntry[] {
 }
 
 /**
- * GET the faucet page; classify by HTTP status vs thrown errors (CORS / network / abort).
- * Thrown errors yield `unknown`, not offline — the site may still work in a new tab.
+ * GET the faucet page via same-origin proxy; classify by HTTP status vs thrown errors.
+ * Uses the proxy to avoid CORS issues with third-party faucet sites.
  */
 export async function checkFaucetReachability(
-  url: string,
+  faucetId: string,
   signal: AbortSignal,
 ): Promise<FaucetReachability> {
+  const proxyUrl = getFaucetProxyUrl(faucetId)
   try {
-    const res = await fetch(url, {
+    const res = await fetch(proxyUrl, {
       method: 'GET',
       redirect: 'follow',
       cache: 'no-store',
       signal,
     })
     if (res.ok) return 'online'
+    if (res.status === 502) return 'offline'
     return 'offline'
   } catch {
-    // UNKNOWN: CORS, network errors, abort — no HTTP status to show as OFFLINE.
     return 'unknown'
   }
 }

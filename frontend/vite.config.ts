@@ -3,6 +3,8 @@ import path from 'path'
 import { fileURLToPath } from 'node:url'
 import { defineConfig, type Plugin } from 'vite'
 import { readBitboardWalletVersion } from './common/bitboard-wallet-version'
+import { esploraViteProxyEntries } from './src/lib/esplora-service-whitelist'
+import { faucetViteProxyEntries } from './src/lib/faucet-definitions'
 import { tanstackRouter } from '@tanstack/router-plugin/vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
@@ -19,10 +21,42 @@ function sanitizeWorkboxCacheIdSegment(version: string): string {
 
 const workboxCacheId = `bitboard-wallet-${sanitizeWorkboxCacheIdSegment(readBitboardWalletVersion())}`
 
-/** Escape a string for use inside a RegExp (filename slug segments). */
-function escapeRegExpSegment(s: string): string {
+/** Escape a string for use literally inside a RegExp source (paths, filename slugs, etc.). */
+function escapeRegExpLiteral(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
+
+const esploraDevProxy = Object.fromEntries(
+  esploraViteProxyEntries().map((e) => [
+    e.localPrefix,
+    {
+      target: e.targetOrigin,
+      changeOrigin: true,
+      secure: true,
+      rewrite: (reqPath: string) =>
+        reqPath.replace(
+          new RegExp(`^${escapeRegExpLiteral(e.localPrefix)}`),
+          e.upstreamPathPrefix,
+        ),
+    },
+  ]),
+)
+
+const faucetDevProxy = Object.fromEntries(
+  faucetViteProxyEntries().map((e) => [
+    e.localPrefix,
+    {
+      target: e.targetOrigin,
+      changeOrigin: true,
+      secure: true,
+      rewrite: (reqPath: string) =>
+        reqPath.replace(
+          new RegExp(`^${escapeRegExpLiteral(e.localPrefix)}`),
+          e.upstreamPathPrefix,
+        ),
+    },
+  ]),
+)
 
 /**
  * TanStack Router matches `routeFileIgnorePattern` against each filename under `routes/`.
@@ -39,7 +73,7 @@ function libraryArticleRouteIgnorePattern(): string {
   if (tsxFiles.length === 0) {
     return '__tests__'
   }
-  const escapedBasenames = tsxFiles.map((f) => escapeRegExpSegment(f.replace(/\.tsx$/i, '')))
+  const escapedBasenames = tsxFiles.map((f) => escapeRegExpLiteral(f.replace(/\.tsx$/i, '')))
   return `__tests__|^(?:${escapedBasenames.join('|')})\\.tsx$`
 }
 
@@ -137,26 +171,8 @@ export default defineConfig({
   server: {
     port: 3000,
     proxy: {
-      '/esplora-proxy/signet': {
-        target: 'https://mutinynet.com',
-        changeOrigin: true,
-        secure: true,
-        rewrite: (path) =>
-          path.replace(/^\/esplora-proxy\/signet/, '/api'),
-      },
-      '/esplora-proxy/testnet': {
-        target: 'https://mempool.space',
-        changeOrigin: true,
-        secure: true,
-        rewrite: (path) =>
-          path.replace(/^\/esplora-proxy\/testnet/, '/testnet4/api'),
-      },
-      '/esplora-proxy/mainnet': {
-        target: 'https://mempool.space',
-        changeOrigin: true,
-        secure: true,
-        rewrite: (path) => path.replace(/^\/esplora-proxy\/mainnet/, '/api'),
-      },
+      ...esploraDevProxy,
+      ...faucetDevProxy,
     },
   },
   optimizeDeps: {

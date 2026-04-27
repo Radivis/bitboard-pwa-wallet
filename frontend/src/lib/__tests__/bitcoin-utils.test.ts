@@ -2,9 +2,46 @@ import { describe, it, expect, afterEach, vi } from 'vitest'
 import {
   fetchEsploraTipBlockHeight,
   formatSats,
+  getEsploraUrl,
   parseBTC,
   validateEsploraUrl,
 } from '../bitcoin-utils'
+
+describe('getEsploraUrl', () => {
+  it('returns same-origin proxy base for default mainnet', () => {
+    expect(getEsploraUrl('mainnet', null)).toBe(
+      `${window.location.origin}/api/esplora/default/mainnet`,
+    )
+  })
+
+  it('returns direct URL for regtest default', () => {
+    expect(getEsploraUrl('regtest', null)).toBe('http://localhost:3002')
+  })
+
+  it('maps whitelisted custom mempool mainnet to proxy', () => {
+    expect(getEsploraUrl('mainnet', 'https://mempool.space/api')).toBe(
+      `${window.location.origin}/api/esplora/default/mainnet`,
+    )
+  })
+
+  it('maps legacy testnet3 base to legacy proxy', () => {
+    expect(getEsploraUrl('testnet', 'https://blockstream.info/testnet/api')).toBe(
+      `${window.location.origin}/api/esplora/legacy/testnet`,
+    )
+  })
+
+  it('maps legacy standard signet base to legacy proxy', () => {
+    expect(getEsploraUrl('signet', 'https://mempool.space/signet/api')).toBe(
+      `${window.location.origin}/api/esplora/legacy/signet`,
+    )
+  })
+
+  it('passes through non-whitelisted custom URL', () => {
+    expect(getEsploraUrl('mainnet', 'https://example.com/api')).toBe(
+      'https://example.com/api',
+    )
+  })
+})
 
 describe('validateEsploraUrl', () => {
   it('accepts valid https URL for mainnet', () => {

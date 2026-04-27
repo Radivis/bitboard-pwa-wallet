@@ -1,7 +1,7 @@
 {
   "name": "bitboard-pwa-wallet",
   "private": true,
-  "version": "0.1.1",
+  "version": "0.1.2",
   "type": "module",
   "license": "MIT",
   "engines": {
@@ -17,6 +17,7 @@
     "test:ui": "vitest --ui",
     "test:coverage": "vitest --coverage",
     "test:e2e": "playwright test",
+    "test:e2e:testnet-live": "playwright test tests/e2e/testnet-funded-wallet-network-switch.spec.ts",
     "test:e2e:headed": "HEADED=true playwright test",
     "test:e2e:sequential": "E2E_SEQUENTIAL=true playwright test",
     "test:e2e:ui": "playwright test --ui",
@@ -78,6 +79,7 @@
     "@vitest/coverage-v8": "4.1.4",
     "@vitest/ui": "4.1.4",
     "better-sqlite3": "12.9.0",
+    "dotenv": "^17.4.2",
     "eslint": "10.2.1",
     "eslint-plugin-react-hooks": "7.1.1",
     "eslint-plugin-react-refresh": "0.5.2",

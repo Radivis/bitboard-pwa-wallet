@@ -30,6 +30,15 @@ describe('sanitizeErrorMessageForUi', () => {
     ).toBe('GET [url]')
   })
 
+  it('replaces bundle URLs inside WASM/reqwest-style stack snippets', () => {
+    const raw =
+      'reqwest::Error { kind: Request, source: "JsValue(TypeError: Failed to fetch\\n' +
+      'TypeError: Failed to fetch\\n at Re(https://example.com/assets/bitboard_crypto-abc.js:1:15629)" }'
+    const out = sanitizeErrorMessageForUi(raw)
+    expect(out).not.toMatch(/https?:\/\//)
+    expect(out).toContain('[url]')
+  })
+
   it('replaces Windows paths', () => {
     expect(
       sanitizeErrorMessageForUi('failed C:\\Users\\me\\wallet.db'),

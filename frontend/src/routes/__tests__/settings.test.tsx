@@ -233,16 +233,14 @@ vi.mock('@/db', () => ({
   useWallets: () => ({ data: mockWalletsState.data }),
 }))
 
-vi.mock('@/lib/bitcoin-utils', () => ({
-  DEFAULT_ESPLORA_URLS: {
-    regtest: 'http://localhost:3002',
-    signet: 'https://mutinynet.com/api',
-    testnet: 'https://mempool.space/testnet/api',
-    mainnet: 'https://mempool.space/api',
-  },
-  toBitcoinNetwork: (mode: string) => mode,
-  getEsploraUrl: () => 'http://localhost:3002',
-}))
+vi.mock('@/lib/bitcoin-utils', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/bitcoin-utils')>()
+  return {
+    ...actual,
+    /** Avoid live Esplora fetches in settings tests; keep real `toBitcoinNetwork` for switches. */
+    getEsploraUrl: () => 'http://localhost:3002',
+  }
+})
 
 const mockLoadDescriptorWalletAndSync = vi.hoisted(() =>
   vi.fn().mockResolvedValue(undefined),

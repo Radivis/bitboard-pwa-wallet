@@ -17,16 +17,34 @@ export async function openSettingsFeaturesTab(page: Page): Promise<void> {
   await expect(page.getByRole('heading', { name: 'Features' })).toBeVisible()
 }
 
+/** Networks that are only disabled during an in-flight switch (not feature-gated). */
+const SETTINGS_NETWORK_SWITCH_IDLE_BUTTONS = ['Testnet', 'Signet', 'Lab'] as const
+
 /**
  * After clicking a network on Settings, waits until the switch mutation finishes:
- * network mode buttons become enabled again (inline phase text is gone).
- * Uses Testnet (not Mainnet) because Mainnet can stay aria-disabled when Mainnet access is off.
+ * non–feature-gated network buttons become enabled again (no `disabled={loading}`).
+ * Mainnet is excluded: it can stay aria-disabled until Mainnet access is enabled in Features.
  */
 export async function waitForSettingsNetworkSwitchComplete(
   page: Page,
   timeout = 120_000,
 ): Promise<void> {
-  await expect(page.getByRole('button', { name: 'Testnet' })).toBeEnabled({
+  for (const name of SETTINGS_NETWORK_SWITCH_IDLE_BUTTONS) {
+    await expect(page.getByRole('button', { name, exact: true })).toBeEnabled({
+      timeout,
+    })
+  }
+}
+
+/**
+ * After Mainnet access is on, waits until no network switch is in progress and Mainnet is selectable.
+ */
+export async function waitForSettingsNetworkSwitchCompleteIncludingMainnet(
+  page: Page,
+  timeout = 120_000,
+): Promise<void> {
+  await waitForSettingsNetworkSwitchComplete(page, timeout)
+  await expect(page.getByRole('button', { name: 'Mainnet', exact: true })).toBeEnabled({
     timeout,
   })
 }

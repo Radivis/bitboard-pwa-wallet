@@ -20,7 +20,8 @@ export async function waitForDashboardSyncButtonEnabled(
   /** Defaults to CI-aware syncControlTimeoutMs (same as post-Sync idle on CI) unless overridden. */
   timeout = syncControlTimeoutMs(),
 ): Promise<void> {
-  const syncButton = page.getByRole('button', { name: 'Sync' })
+  // Use exact: true to avoid matching "Syncing..." (which contains "Sync")
+  const syncButton = page.getByRole('button', { name: 'Sync', exact: true })
   await expect(syncButton).toBeVisible({ timeout })
   await expect(syncButton).toBeEnabled({ timeout })
 }
@@ -30,10 +31,15 @@ export async function waitForDashboardSyncButtonEnabled(
  * the button is enabled (idle) before returning.
  */
 export async function runDashboardSyncUntilIdle(page: Page): Promise<void> {
-  const syncButton = page.getByRole('button', { name: 'Sync' })
+  // Use exact: true to avoid matching "Syncing..." (which contains "Sync")
+  const syncButton = page.getByRole('button', { name: 'Sync', exact: true })
   await waitForDashboardSyncButtonEnabled(page)
   await syncButton.click()
-  await expect(page.getByRole('button', { name: 'Syncing...' })).toBeVisible({
+  // Use .first() to handle case where ImportInitialSyncErrorBanner's Retry
+  // button also shows "Syncing..." simultaneously with the main Sync button.
+  await expect(
+    page.getByRole('button', { name: 'Syncing...' }).first(),
+  ).toBeVisible({
     timeout: 10_000,
   })
   await expect(syncButton).toBeVisible({ timeout: SYNC_FINISH_TIMEOUT_MS })

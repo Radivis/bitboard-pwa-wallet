@@ -174,11 +174,13 @@ pub fn create_wallet(
 
 /// Load a previously persisted wallet from descriptors and a changeset JSON.
 ///
-/// When `use_empty_chain` is true (e.g. for testnet), the wallet is created fresh with
-/// the same descriptors so the next sync uses the correct chain genesis. For testnet we
-/// use BDK's Testnet4 so the genesis matches testnet4 Esplora (avoids HeaderHashNotFound
-/// from Testnet3 genesis). BDK's load returns None for an empty changeset, so we use
-/// create + take_staged instead of load.
+/// When `use_empty_chain` is true, the wallet is created fresh with the same descriptors
+/// (ignoring `changeset_json`) so the next sync uses the correct chain genesis. The UI
+/// uses this only as a **fallback** after a normal load fails (network/genesis mismatch or
+/// unloadable changeset), not for every testnet load — otherwise switching networks would
+/// discard persisted tx state. For that fallback on testnet, BDK's Testnet4 matches
+/// default Esplora. BDK's load returns None for an empty changeset, so we use create +
+/// take_staged instead of load.
 #[wasm_bindgen]
 pub fn load_wallet(
     external_descriptor: &str,

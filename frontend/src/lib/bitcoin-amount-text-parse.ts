@@ -102,11 +102,23 @@ function findNextFormattedDisplayMatch(
   return { consumeToIndex, displayUnit: pattern.displayUnit, amountString }
 }
 
+export type ParseFormattedBitcoinDisplayOptions = {
+  /**
+   * When true, include formatted segments that resolve to 0 sats (e.g. dashboard headline).
+   * Default false so dust/review flows that scan visible amounts ignore empty-looking rows.
+   */
+  includeZeroSats?: boolean
+}
+
 /**
  * Inverts the visible (amount + space + unit) strings produced with
  * `formatAmountInBitcoinDisplayUnit` + `BITCOIN_DISPLAY_UNIT_LABEL`, in document order.
  */
-export function parseAllSatsInTextFromFormattedBitcoinAmountDisplays(text: string): number[] {
+export function parseAllSatsInTextFromFormattedBitcoinAmountDisplays(
+  text: string,
+  options?: ParseFormattedBitcoinDisplayOptions,
+): number[] {
+  const includeZero = options?.includeZeroSats ?? false
   const normalizedText = text.replace(/\u00a0/g, ' ').replace(/\r/g, '\n')
   const satsInOrder: number[] = []
   let searchFrom = 0
@@ -123,7 +135,7 @@ export function parseAllSatsInTextFromFormattedBitcoinAmountDisplays(text: strin
       normalizeNumberTokenForUnit(next.amountString, next.displayUnit),
       next.displayUnit,
     )
-    if (satsFromSegment > 0) {
+    if (satsFromSegment > 0 || (includeZero && satsFromSegment === 0)) {
       satsInOrder.push(satsFromSegment)
     }
     searchFrom = next.consumeToIndex

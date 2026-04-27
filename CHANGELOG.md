@@ -15,6 +15,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+## [0.1.2] - 2026-04-27
+
+### Changed
+- Reduced number of retries for initial full sync from 3 to 1 to make errors appear faster
+- Using edge proxy server in productive app to eliminate CORS issues
+- Using Vite proxy in development app to make Faucet availability check work there, too
+
 ## [0.1.1] - 2026-04-25
 
 ### Added

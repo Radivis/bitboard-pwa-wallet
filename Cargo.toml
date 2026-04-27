@@ -1,5 +1,5 @@
 [workspace.package]
-version = "0.1.1"
+version = "0.1.2"
 
 [workspace]
 members = ["crypto", "bitboard-encryption", "bitboard-lightning"]
@@ -11,3 +11,7 @@ lto = true
 codegen-units = 1
 panic = "abort"
 strip = true
+
+# esplora-client ignores Builder::timeout on wasm32; we need it for PWA Esplora sync (see third_party patch).
+[patch.crates-io]
+esplora-client = { path = "third_party/esplora-client" }

@@ -12,6 +12,7 @@
 
 /target
 .env
+.env.testnet
 # Legacy single-file imprint
 .env.imprint
 !/scripts/README.md
@@ -31,3 +32,4 @@ lcov.info
 # Vercel CLI link / local pull (CI uses VERCEL_* secrets instead)
 /frontend/.vercel/
 /landing-page/.vercel/
+.vercel

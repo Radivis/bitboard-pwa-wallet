@@ -34,6 +34,8 @@ import {
   runFullScanDashboardWalletSync,
   retryImportInitialEsploraSyncWithWalletStatus,
 } from '@/lib/wallet-utils'
+import { sanitizeErrorMessageForUi } from '@/lib/sanitize-error-for-ui'
+import { errorMessage } from '@/lib/utils'
 import { labOwnersEqual, walletLabOwner } from '@/lib/lab-owner'
 import { labTransactionsForWallet, lookupLabAddressOwner } from '@/lib/lab-utils'
 import { useLabChainStateQuery } from '@/hooks/useLabChainStateQuery'
@@ -200,7 +202,11 @@ function BalanceCard() {
             <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
               On-chain
             </p>
-            <BitcoinAmountDisplay amountSats={primarySats} size="lg" />
+            <BitcoinAmountDisplay
+              amountSats={primarySats}
+              size="lg"
+              data-testid="dashboard-onchain-balance-amount"
+            />
             {onChainDisplay.showBreakdown && (
               <ul className="mt-3 space-y-1.5 text-sm">
                 {onChainDisplay.confirmedSats > 0 && (
@@ -376,7 +382,8 @@ function SyncButton({
       toast.success('Wallet synced')
     } catch (err) {
       setWalletStatus('unlocked')
-      const detail = err instanceof Error ? err.message : String(err)
+      console.error('Dashboard sync failed', err)
+      const detail = sanitizeErrorMessageForUi(errorMessage(err))
       toast.error(detail || 'Sync failed')
     } finally {
       onThisOp(false)
@@ -430,7 +437,8 @@ function FullRescanButton({
       setWalletStatus('unlocked')
     } catch (err) {
       setWalletStatus('unlocked')
-      const detail = err instanceof Error ? err.message : String(err)
+      console.error('Full rescan failed', err)
+      const detail = sanitizeErrorMessageForUi(errorMessage(err))
       toast.error(detail || 'Full rescan failed')
     } finally {
       onThisOp(false)

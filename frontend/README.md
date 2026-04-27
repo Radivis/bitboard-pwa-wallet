@@ -101,6 +101,22 @@ npx playwright test --ui
 npx playwright show-report
 ```
 
+### Optional: funded Testnet wallet (live Esplora)
+
+This repo includes an **optional** Playwright flow that hits public Testnet Esplora (not run in CI). Use a **dedicated** testnet-only wallet with a non-zero balance.
+
+1. Create `.env.testnet` in `frontend/` **or** at the **repo root** (both gitignored) with:
+   - `E2E_TESTNET_SEED` — space-separated 12-word mnemonic
+   - `E2E_TESTNET_APP_PASSWORD` — Bitboard app password for first-run setup
+2. Fund that wallet on testnet.
+3. Run from `frontend/`:
+
+```bash
+npm run test:e2e:testnet-live
+```
+
+Never commit `.env.testnet` or reuse a mainnet seed.
+
 ### E2E Test Architecture
 
 Tests use custom Playwright fixtures for:

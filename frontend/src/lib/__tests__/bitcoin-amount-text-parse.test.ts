@@ -35,6 +35,16 @@ describe('bitcoin-amount-text-parse', () => {
     }
   })
 
+  it('can include zero-sat headline segments when requested', () => {
+    const t = mockDisplay(0, 'BTC')
+    expect(parseAllSatsInTextFromFormattedBitcoinAmountDisplays(t)).toEqual([])
+    expect(
+      parseAllSatsInTextFromFormattedBitcoinAmountDisplays(t, {
+        includeZeroSats: true,
+      }),
+    ).toEqual([0])
+  })
+
   it('takes the max of several formatted segments (e.g. headline + breakdown lines)', () => {
     const t = `On-chain
 ${mockDisplay(SATS_CUM, 'BTC')}

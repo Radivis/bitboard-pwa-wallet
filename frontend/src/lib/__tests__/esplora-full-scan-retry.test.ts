@@ -54,4 +54,13 @@ describe('withEsploraFullScanRetries', () => {
     await expect(p).rejects.toThrow('Invalid witness')
     expect(fn).toHaveBeenCalledTimes(1)
   })
+
+  it('default maxAttempts is 1: does not retry retryable errors', async () => {
+    const fn = vi
+      .fn()
+      .mockRejectedValue(new Error('HTTP status 429'))
+    const p = withEsploraFullScanRetries(fn)
+    await expect(p).rejects.toThrow('HTTP status 429')
+    expect(fn).toHaveBeenCalledTimes(1)
+  })
 })

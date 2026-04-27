@@ -1,6 +1,7 @@
 import { errorMessage } from '@/lib/utils'
 
-export const DEFAULT_ESPLORA_FULL_SCAN_MAX_ATTEMPTS = 3
+/** Single attempt: full-scan failures are usually persistent; user can retry manually (e.g. full rescan). */
+export const DEFAULT_ESPLORA_FULL_SCAN_MAX_ATTEMPTS = 1
 
 const DEFAULT_BASE_DELAY_MS = 1000
 const DEFAULT_MAX_DELAY_MS = 8000
