@@ -2,11 +2,11 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import {
   getUpstreamBaseForFaucetProxy,
   isKnownFaucetId,
-} from '../../src/lib/faucet-definitions'
+} from '@/lib/faucet-definitions'
 import {
   hasUnsafePathSegment,
   isProxiedUrlPathWithinAllowlistedBase,
-} from '../../src/lib/validate-proxied-upstream-url'
+} from '@/lib/validate-proxied-upstream-url'
 
 export const config = {
   maxDuration: 10,

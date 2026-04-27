@@ -2,11 +2,11 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import {
   getUpstreamBaseForEsploraProxy,
   isKnownEsploraProviderId,
-} from '../../src/lib/esplora-service-whitelist'
+} from '@/lib/esplora-service-whitelist'
 import {
   hasUnsafePathSegment,
   isProxiedUrlPathWithinAllowlistedBase,
-} from '../../src/lib/validate-proxied-upstream-url'
+} from '@/lib/validate-proxied-upstream-url'
 
 export const config = {
   maxDuration: 10,
