@@ -1,4 +1,9 @@
 import type { NetworkMode } from '@/stores/walletStore'
+import {
+  customEsploraMatchesWhitelistedBase,
+  ESPLORA_SAME_ORIGIN_PROXY_PREFIX,
+  type EsploraProxyNetwork,
+} from '@/lib/esplora-service-whitelist'
 import type { BitcoinNetwork, TransactionDetails } from '@/workers/crypto-types'
 
 export const DEFAULT_ESPLORA_URLS: Record<NetworkMode, string> = {
@@ -34,10 +39,11 @@ export async function fetchEsploraTipBlockHeight(
   return height
 }
 
-const DEV_ESPLORA_PROXY_PATHS: Partial<Record<NetworkMode, string>> = {
-  signet: '/esplora-proxy/signet',
-  testnet: '/esplora-proxy/testnet',
-  mainnet: '/esplora-proxy/mainnet',
+function sameOriginEsploraProxyBase(
+  providerId: string,
+  network: EsploraProxyNetwork,
+): string {
+  return `${globalThis.location.origin}${ESPLORA_SAME_ORIGIN_PROXY_PREFIX}/${providerId}/${network}`
 }
 
 const NETWORK_MODE_TO_BITCOIN: Record<NetworkMode, BitcoinNetwork> = {
@@ -137,15 +143,23 @@ export function getEsploraUrl(
   if (network === 'lab') {
     return '' // In-app chain; no Esplora
   }
-  if (customUrl) return customUrl
-
-  if (import.meta.env.DEV) {
-    const proxyPath = DEV_ESPLORA_PROXY_PATHS[network]
-    if (proxyPath) {
-      return `${globalThis.location.origin}${proxyPath}`
-    }
+  if (network === 'regtest') {
+    return customUrl ?? DEFAULT_ESPLORA_URLS[network]
   }
-
+  if (
+    network === 'mainnet' ||
+    network === 'testnet' ||
+    network === 'signet'
+  ) {
+    if (customUrl) {
+      const match = customEsploraMatchesWhitelistedBase(customUrl, network)
+      if (match) {
+        return sameOriginEsploraProxyBase(match.providerId, network)
+      }
+      return customUrl
+    }
+    return sameOriginEsploraProxyBase('default', network)
+  }
   return DEFAULT_ESPLORA_URLS[network]
 }
 

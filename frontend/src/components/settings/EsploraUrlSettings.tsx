@@ -22,6 +22,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
+import { shouldWarnEsploraNotWhitelisted } from '@/lib/esplora-service-whitelist'
 import { errorMessage } from '@/lib/utils'
 import { notifyWalletDataMayHaveChangedAfterCommit } from '@/lib/wallet-cross-tab-sync'
 
@@ -89,6 +90,10 @@ export function EsploraUrlSettings() {
 
   const loading = saveMutation.isPending || resetMutation.isPending
 
+  const showNonWhitelistedEsploraWarning =
+    editUrl.trim() !== '' &&
+    shouldWarnEsploraNotWhitelisted(editUrl, networkMode)
+
   return (
     <InfomodeWrapper
       infoId="settings-esplora-endpoint-card"
@@ -111,6 +116,18 @@ export function EsploraUrlSettings() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
+          {showNonWhitelistedEsploraWarning && (
+            <div
+              role="status"
+              className="rounded-md border border-amber-600/50 bg-amber-50 px-3 py-2 text-sm text-amber-950 dark:border-amber-500/40 dark:bg-amber-950/40 dark:text-amber-100"
+              data-testid="esplora-non-whitelisted-warning"
+            >
+              This app runs in your browser. Endpoints that are not in Bitboard’s
+              known public Esplora list may block cross-origin requests (CORS), so
+              sync, full rescan, or broadcast can fail on the hosted build. Prefer a
+              listed public Esplora mirror or run your own server with CORS enabled.
+            </div>
+          )}
           <div className="space-y-2">
             <Label htmlFor="esplora-url">Endpoint URL</Label>
             <Input

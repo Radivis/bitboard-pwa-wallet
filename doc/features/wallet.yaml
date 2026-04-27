@@ -193,8 +193,9 @@ feature:
       - requirements:
         - Wallet must exist for backup and lock sections to appear
         - Network and address type settings are available even without a wallet
-        - Default Esplora endpoints per network:
+        - Default Esplora endpoints per network (same-origin proxy path `/api/esplora/default/...` in the web app):
           - regtest: "http://localhost:3002"
-          - signet: "https://mutinynet.ltbl.io/api"
-          - testnet: "https://mempool.space/testnet/api"
+          - signet: "https://mutinynet.com/api"
+          - testnet: "https://mempool.space/testnet4/api"
           - mainnet: "https://mempool.space/api"
+        - Legacy whitelisted Esplora provider (`legacy`): testnet3 via Blockstream `/testnet/api`, standard signet via mempool.space `/signet/api` (not Mutinynet); proxy path `/api/esplora/legacy/...`

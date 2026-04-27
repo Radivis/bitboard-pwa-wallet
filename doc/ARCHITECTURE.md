@@ -50,7 +50,7 @@ UI reads lab chain state from TanStack Query (`['lab','chainState']`); mutations
 
 ### Esplora
 
-The frontend uses relative URLs. `frontend/vite.config.ts` proxies `/esplora-proxy/{signet|testnet|mainnet}` to mempool.space. WASM receives the same path (e.g. `/esplora-proxy/signet`) and performs fetch from the crypto worker.
+For **mainnet**, **testnet**, and **signet**, default and [whitelisted](frontend/src/lib/esplora-service-whitelist.ts) public Esplora bases are resolved to same-origin paths **`/api/esplora/{providerId}/{network}/…`**. Provider slugs include **`default`**, **`blockstream`**, and **`legacy`**. The **`legacy`** provider targets **testnet3** (Blockstream `/testnet/api`) and **standard signet** on mempool.space, whereas **`default`** uses **testnet4** and Mutinynet for signet. In development, `frontend/vite.config.ts` proxies those paths via `esploraViteProxyEntries()`. On **Vercel**, an **Edge** handler under `frontend/api/esplora/` forwards only allowlisted upstreams so the browser avoids third-party CORS. **Custom** Esplora URLs that are not on the whitelist still call the host directly; Settings shows a warning for those. **Regtest** continues to use `http://localhost:3002` (or a custom URL) without this proxy.
 
 ### Component diagram
 

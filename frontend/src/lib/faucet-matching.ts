@@ -33,13 +33,14 @@ function isMutinynetHost(urlString: string): boolean {
   return parsed != null && parsed.hostname === 'mutinynet.com'
 }
 
-function devEsploraProxyPathIncludes(
-  resolvedEsploraUrl: string,
-  segment: '/esplora-proxy/testnet' | '/esplora-proxy/signet',
+/** Same-origin proxy using the `default` provider (mempool testnet4 / mutinynet signet). */
+function isDefaultApiEsploraProxyForNetwork(
+  urlString: string,
+  network: 'testnet' | 'signet',
 ): boolean {
-  if (!import.meta.env.DEV) return false
-  const parsed = parseUrlHostPath(resolvedEsploraUrl)
-  return parsed != null && parsed.pathname.includes(segment)
+  const parsed = parseUrlHostPath(urlString)
+  if (parsed == null) return false
+  return parsed.pathname.includes(`/api/esplora/default/${network}`)
 }
 
 /**
@@ -52,7 +53,7 @@ export function resolveFaucetStack(
 ): FaucetStackId | null {
   if (networkMode === 'testnet') {
     if (customEsploraUrl === null) {
-      if (devEsploraProxyPathIncludes(resolvedEsploraUrl, '/esplora-proxy/testnet')) {
+      if (isDefaultApiEsploraProxyForNetwork(resolvedEsploraUrl, 'testnet')) {
         return 'mempool_testnet4'
       }
       if (isMempoolSpaceTestnet4(resolvedEsploraUrl)) {
@@ -68,7 +69,7 @@ export function resolveFaucetStack(
 
   if (networkMode === 'signet') {
     if (customEsploraUrl === null) {
-      if (devEsploraProxyPathIncludes(resolvedEsploraUrl, '/esplora-proxy/signet')) {
+      if (isDefaultApiEsploraProxyForNetwork(resolvedEsploraUrl, 'signet')) {
         return 'mutinynet_signet'
       }
       if (isMutinynetHost(resolvedEsploraUrl)) {

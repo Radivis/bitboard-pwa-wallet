@@ -73,31 +73,35 @@ describe('resolveFaucetStack', () => {
   })
 })
 
-describe('resolveFaucetStack DEV Esplora proxy', () => {
-  afterEach(() => {
-    vi.unstubAllEnvs()
-  })
-
-  it('maps localhost esplora-proxy testnet to mempool_testnet4 when DEV', () => {
-    vi.stubEnv('DEV', true)
+describe('resolveFaucetStack same-origin Esplora proxy', () => {
+  it('maps localhost default API proxy testnet to mempool_testnet4', () => {
     expect(
       resolveFaucetStack(
         'testnet',
         null,
-        'http://localhost:3000/esplora-proxy/testnet',
+        'http://localhost:3000/api/esplora/default/testnet',
       ),
     ).toBe('mempool_testnet4')
   })
 
-  it('maps localhost esplora-proxy signet to mutinynet_signet when DEV', () => {
-    vi.stubEnv('DEV', true)
+  it('maps localhost default API proxy signet to mutinynet_signet', () => {
     expect(
       resolveFaucetStack(
         'signet',
         null,
-        'http://localhost:3000/esplora-proxy/signet',
+        'http://localhost:3000/api/esplora/default/signet',
       ),
     ).toBe('mutinynet_signet')
+  })
+
+  it('does not map blockstream signet proxy path to mutinynet faucet', () => {
+    expect(
+      resolveFaucetStack(
+        'signet',
+        null,
+        'http://localhost:3000/api/esplora/blockstream/signet',
+      ),
+    ).toBeNull()
   })
 })
 

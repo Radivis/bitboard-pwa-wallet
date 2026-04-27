@@ -3,6 +3,7 @@ import path from 'path'
 import { fileURLToPath } from 'node:url'
 import { defineConfig, type Plugin } from 'vite'
 import { readBitboardWalletVersion } from './common/bitboard-wallet-version'
+import { esploraViteProxyEntries } from './src/lib/esplora-service-whitelist'
 import { tanstackRouter } from '@tanstack/router-plugin/vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
@@ -23,6 +24,26 @@ const workboxCacheId = `bitboard-wallet-${sanitizeWorkboxCacheIdSegment(readBitb
 function escapeRegExpSegment(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
+
+function escapeRegExpPath(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+const esploraDevProxy = Object.fromEntries(
+  esploraViteProxyEntries().map((e) => [
+    e.localPrefix,
+    {
+      target: e.targetOrigin,
+      changeOrigin: true,
+      secure: true,
+      rewrite: (reqPath: string) =>
+        reqPath.replace(
+          new RegExp(`^${escapeRegExpPath(e.localPrefix)}`),
+          e.upstreamPathPrefix,
+        ),
+    },
+  ]),
+)
 
 /**
  * TanStack Router matches `routeFileIgnorePattern` against each filename under `routes/`.
@@ -137,26 +158,7 @@ export default defineConfig({
   server: {
     port: 3000,
     proxy: {
-      '/esplora-proxy/signet': {
-        target: 'https://mutinynet.com',
-        changeOrigin: true,
-        secure: true,
-        rewrite: (path) =>
-          path.replace(/^\/esplora-proxy\/signet/, '/api'),
-      },
-      '/esplora-proxy/testnet': {
-        target: 'https://mempool.space',
-        changeOrigin: true,
-        secure: true,
-        rewrite: (path) =>
-          path.replace(/^\/esplora-proxy\/testnet/, '/testnet4/api'),
-      },
-      '/esplora-proxy/mainnet': {
-        target: 'https://mempool.space',
-        changeOrigin: true,
-        secure: true,
-        rewrite: (path) => path.replace(/^\/esplora-proxy\/mainnet/, '/api'),
-      },
+      ...esploraDevProxy,
     },
   },
   optimizeDeps: {
