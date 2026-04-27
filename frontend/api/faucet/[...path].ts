@@ -58,6 +58,14 @@ function isProxiedUrlPathWithinAllowlistedBase(
 // Constants
 const UPSTREAM_TIMEOUT_MS = 8_000
 
+// CORS headers for browser requests
+function setCorsHeaders(res: VercelResponse): void {
+  res.setHeader('Access-Control-Allow-Origin', '*')
+  res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS')
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Accept')
+  res.setHeader('Access-Control-Max-Age', '86400')
+}
+
 const HOP_BY_HOP_RESPONSE_HEADERS = new Set([
   'connection',
   'keep-alive',
@@ -75,6 +83,15 @@ export default async function handler(
   req: VercelRequest,
   res: VercelResponse,
 ): Promise<void> {
+  // Set CORS headers for all responses
+  setCorsHeaders(res)
+
+  // Handle CORS preflight
+  if (req.method === 'OPTIONS') {
+    res.status(204).end()
+    return
+  }
+
   const url = new URL(req.url!, `https://${req.headers.host}`)
   const prefix = '/api/faucet/'
   if (!url.pathname.startsWith(prefix)) {
