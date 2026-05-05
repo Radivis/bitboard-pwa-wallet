@@ -201,8 +201,11 @@ const LAB_SUB_NAV_ITEMS: SectionSubNavItem[] = [
   },
 ]
 
-const NAV_SURFACE_CLASS =
+const SECONDARY_NAV_SURFACE_CLASS =
   'border-border bg-header/95 backdrop-blur supports-[backdrop-filter]:bg-header/80'
+
+const LOWER_NAV_SURFACE_CLASS =
+  'border-border bg-nav-lower-tier/95 backdrop-blur supports-[backdrop-filter]:bg-nav-lower-tier/80'
 
 /**
  * Primary section bar (Tailwind `h-16`). Wallet sub-nav uses literal `bottom-16` in JSX
@@ -259,6 +262,8 @@ type BottomNavLinkProps = {
   label: string
   icon: LucideIcon
   isActive: boolean
+  /** Active category chip matches subsection bar brightness (lower nav only). */
+  activeUsesSecondaryTierSurface?: boolean
   preload?: false
 }
 
@@ -267,13 +272,19 @@ function BottomNavLink({
   label,
   icon: Icon,
   isActive,
+  activeUsesSecondaryTierSurface = false,
   preload,
 }: BottomNavLinkProps) {
   return (
     <Link
       to={to}
       preload={preload}
-      className={NAV_LINK_CLASS}
+      className={cn(
+        NAV_LINK_CLASS,
+        activeUsesSecondaryTierSurface &&
+          isActive &&
+          'bg-header/95 backdrop-blur supports-[backdrop-filter]:bg-header/80',
+      )}
       aria-current={isActive ? 'page' : undefined}
     >
       <span className={navItemInnerClassNames(isActive)}>
@@ -294,7 +305,7 @@ function PrimarySectionNav() {
       aria-label="Main sections"
       className={cn(
         'fixed bottom-0 left-0 right-0 z-50 border-t',
-        NAV_SURFACE_CLASS,
+        LOWER_NAV_SURFACE_CLASS,
       )}
     >
       <div
@@ -316,6 +327,7 @@ function PrimarySectionNav() {
                 label={label}
                 icon={icon}
                 isActive={isActive}
+                activeUsesSecondaryTierSurface={isActive}
                 preload={linkPreload}
               />
             )
@@ -342,7 +354,7 @@ function SectionSubNav({
       aria-label={ariaLabel}
       className={cn(
         'fixed bottom-16 left-0 right-0 z-40 border-t',
-        NAV_SURFACE_CLASS,
+        SECONDARY_NAV_SURFACE_CLASS,
       )}
     >
       <div
