@@ -262,8 +262,6 @@ type BottomNavLinkProps = {
   label: string
   icon: LucideIcon
   isActive: boolean
-  /** Active category chip matches subsection bar brightness (lower nav only). */
-  activeUsesSecondaryTierSurface?: boolean
   preload?: false
 }
 
@@ -272,19 +270,13 @@ function BottomNavLink({
   label,
   icon: Icon,
   isActive,
-  activeUsesSecondaryTierSurface = false,
   preload,
 }: BottomNavLinkProps) {
   return (
     <Link
       to={to}
       preload={preload}
-      className={cn(
-        NAV_LINK_CLASS,
-        activeUsesSecondaryTierSurface &&
-          isActive &&
-          'bg-header/95 backdrop-blur supports-[backdrop-filter]:bg-header/80',
-      )}
+      className={NAV_LINK_CLASS}
       aria-current={isActive ? 'page' : undefined}
     >
       <span className={navItemInnerClassNames(isActive)}>
@@ -295,44 +287,94 @@ function BottomNavLink({
   )
 }
 
-function PrimarySectionNav() {
-  const matchRoute = useMatchRoute()
-  const location = useLocation()
-  const pathname = location.pathname
+function isPrimaryNavItemActive(
+  item: PrimaryNavItem,
+  pathname: string,
+  matchRoute: ReturnType<typeof useMatchRoute>,
+): boolean {
+  return item.isActive
+    ? item.isActive(pathname)
+    : !!matchRoute({ to: item.to, fuzzy: false })
+}
 
+/**
+ * Inactive columns: frosted nav-lower over main content. Active slot: transparent
+ * "hole" so the foreground tier uses `SECONDARY_NAV_SURFACE` over content (same stack as sub-nav).
+ */
+function PrimaryNavBackdropCells({ activeSlotIndex }: { activeSlotIndex: number }) {
   return (
-    <nav
-      aria-label="Main sections"
+    <div
+      className="pointer-events-none absolute inset-y-0 left-2 right-2 grid gap-0"
+      style={{
+        gridTemplateColumns: `repeat(${PRIMARY_NAV_ITEMS.length}, minmax(0, 1fr))`,
+      }}
+      aria-hidden
+    >
+      {PRIMARY_NAV_ITEMS.map((_item, slotIndex) => (
+        <div
+          key={slotIndex}
+          className={
+            slotIndex === activeSlotIndex ? undefined : LOWER_NAV_SURFACE_CLASS
+          }
+        />
+      ))}
+    </div>
+  )
+}
+
+/** Foreground: active slot uses secondary bar surface; inactive slots are transparent over the backdrop grid. */
+function PrimaryNavForegroundSlot({
+  isActiveCategory,
+  children,
+}: {
+  isActiveCategory: boolean
+  children: React.ReactNode
+}) {
+  return (
+    <div
       className={cn(
-        'fixed bottom-0 left-0 right-0 z-50 border-t',
-        LOWER_NAV_SURFACE_CLASS,
+        'relative z-[1] flex min-h-0 flex-1 flex-col',
+        isActiveCategory && SECONDARY_NAV_SURFACE_CLASS,
+        isActiveCategory ? 'border-t border-t-transparent' : 'border-t border-border',
       )}
     >
+      {children}
+    </div>
+  )
+}
+
+function PrimarySectionNav() {
+  const matchRoute = useMatchRoute()
+  const pathname = useLocation().pathname
+
+  const activeSlotIndex = PRIMARY_NAV_ITEMS.findIndex((item) =>
+    isPrimaryNavItemActive(item, pathname, matchRoute),
+  )
+  const backdropHoleIndex = activeSlotIndex >= 0 ? activeSlotIndex : 0
+
+  return (
+    <nav aria-label="Main sections" className="fixed bottom-0 left-0 right-0 z-50">
       <div
         className={cn(
-          'mx-auto flex max-w-screen-xl items-stretch justify-around px-2',
+          'relative mx-auto flex w-full max-w-screen-xl items-stretch px-2',
           PRIMARY_BOTTOM_NAV_HEIGHT_CLASS,
         )}
       >
-        {PRIMARY_NAV_ITEMS.map(
-          ({ to, label, icon, isActive: customActive, linkPreload }) => {
-            const isActive = customActive
-              ? customActive(pathname)
-              : !!matchRoute({ to, fuzzy: false })
-
-            return (
+        <PrimaryNavBackdropCells activeSlotIndex={backdropHoleIndex} />
+        {PRIMARY_NAV_ITEMS.map((item) => {
+          const isActive = isPrimaryNavItemActive(item, pathname, matchRoute)
+          return (
+            <PrimaryNavForegroundSlot key={item.to} isActiveCategory={isActive}>
               <BottomNavLink
-                key={to}
-                to={to}
-                label={label}
-                icon={icon}
+                to={item.to}
+                label={item.label}
+                icon={item.icon}
                 isActive={isActive}
-                activeUsesSecondaryTierSurface={isActive}
-                preload={linkPreload}
+                preload={item.linkPreload}
               />
-            )
-          },
-        )}
+            </PrimaryNavForegroundSlot>
+          )
+        })}
       </div>
     </nav>
   )
