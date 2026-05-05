@@ -5,8 +5,24 @@ const BAD_LOCAL_CHAIN_MARKERS = [
   'HeaderHeightNotFound',
 ] as const
 
-const USER_FACING_MESSAGE =
-  'Saved wallet blockchain data does not match data from Esplora. Use Full rescan on the wallet dashboard to repair.'
+/**
+ * Matches `Debug`/`Display` snippets from the WASM/blockchain worker. If upstream renames these
+ * variants, update markers and `bad-local-chain-state-error.test.ts`.
+ * Prefer structured error codes from the worker when that layer exposes them.
+ */
+export function isBadLocalChainStateMessage(detail: string): boolean {
+  return BAD_LOCAL_CHAIN_MARKERS.some((m) => detail.includes(m))
+}
+
+/** Single line explaining that persisted chain and Esplora disagree. */
+const BAD_LOCAL_CHAIN_ESPLORA_MISMATCH =
+  'Saved wallet blockchain data does not match data from Esplora.'
+
+/** Shared UX anchor for the dashboard repair action (keep toast and error text aligned). */
+export const BAD_LOCAL_CHAIN_FULL_RESCAN_ACTION =
+  'Full rescan on the wallet dashboard'
+
+const USER_FACING_MESSAGE = `${BAD_LOCAL_CHAIN_ESPLORA_MISMATCH} Use ${BAD_LOCAL_CHAIN_FULL_RESCAN_ACTION} to repair.`
 
 /**
  * Thrown when Esplora sync indicates the persisted local chain cannot be reconciled with
@@ -19,10 +35,6 @@ export class BadLocalChainStateError extends Error {
     super(message, options)
     this.name = 'BadLocalChainStateError'
   }
-}
-
-export function isBadLocalChainStateMessage(detail: string): boolean {
-  return BAD_LOCAL_CHAIN_MARKERS.some((m) => detail.includes(m))
 }
 
 /**

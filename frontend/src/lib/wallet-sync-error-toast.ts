@@ -1,10 +1,12 @@
 import { toast } from 'sonner'
-import { asBadLocalChainStateError } from '@/lib/bad-local-chain-state-error'
+import {
+  asBadLocalChainStateError,
+  BAD_LOCAL_CHAIN_FULL_RESCAN_ACTION,
+} from '@/lib/bad-local-chain-state-error'
 import { sanitizeErrorMessageForUi } from '@/lib/sanitize-error-for-ui'
 import { errorMessage } from '@/lib/utils'
 
-const BAD_CHAIN_SYNC_HINT =
-  'Try Full rescan on the wallet dashboard — it can repair saved chain data.'
+const BAD_CHAIN_SYNC_HINT = `Try ${BAD_LOCAL_CHAIN_FULL_RESCAN_ACTION} — it can repair saved chain data.`
 
 type WalletSyncErrorContext =
   | 'initial-import'
@@ -79,8 +81,8 @@ export function showImportInitialSyncFailureToast(
   const description = badChain
     ? `${badChain.message} ${BAD_CHAIN_SYNC_HINT} You can also retry.`
     : detail
-      ? `${detail} · Retry or use Full rescan on the dashboard.`
-      : 'Retry or use Full rescan on the dashboard.'
+      ? `${detail} · Retry or use ${BAD_LOCAL_CHAIN_FULL_RESCAN_ACTION}.`
+      : `Retry or use ${BAD_LOCAL_CHAIN_FULL_RESCAN_ACTION}.`
 
   toast.error('Initial sync failed', {
     description,

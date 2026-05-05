@@ -414,6 +414,7 @@ function SyncButton({
   )
 }
 
+/** Public networks only: regtest already runs a full-scan path on dashboard Sync (see `runIncrementalDashboardWalletSync`). */
 const FULL_RESCAN_NETWORKS: NetworkMode[] = ['mainnet', 'testnet', 'signet']
 
 function FullRescanButton({

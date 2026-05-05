@@ -134,6 +134,25 @@ export const useCryptoStore = create<CryptoState>((set, get) => {
     }
   };
 
+  const invokeEsploraSyncOperation = async <T,>(
+    operation: (worker: Remote<CryptoService>) => Promise<T>
+  ): Promise<T> => {
+    const worker = get()._getWorker();
+    try {
+      set({ error: null });
+      return await operation(worker);
+    } catch (err) {
+      const badLocalChainStateError = asBadLocalChainStateError(err);
+      if (badLocalChainStateError) {
+        set({ error: badLocalChainStateError.message });
+        throw badLocalChainStateError;
+      }
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      set({ error: errorMsg });
+      throw err;
+    }
+  };
+
   return {
     _worker: null,
     error: null,
@@ -192,39 +211,13 @@ export const useCryptoStore = create<CryptoState>((set, get) => {
     exportChangeset: () =>
       withErrorHandling((worker) => worker.exportChangeset()),
 
-    syncWallet: async (esploraUrl) => {
-      const worker = get()._getWorker();
-      try {
-        set({ error: null });
-        return await worker.syncWallet(esploraUrl);
-      } catch (err) {
-        const badLocalChainStateError = asBadLocalChainStateError(err);
-        if (badLocalChainStateError) {
-          set({ error: badLocalChainStateError.message });
-          throw badLocalChainStateError;
-        }
-        const errorMsg = err instanceof Error ? err.message : String(err);
-        set({ error: errorMsg });
-        throw err;
-      }
-    },
+    syncWallet: async (esploraUrl) =>
+      invokeEsploraSyncOperation((worker) => worker.syncWallet(esploraUrl)),
 
-    fullScanWallet: async (esploraUrl, stopGap) => {
-      const worker = get()._getWorker();
-      try {
-        set({ error: null });
-        return await worker.fullScanWallet(esploraUrl, stopGap);
-      } catch (err) {
-        const badLocalChainStateError = asBadLocalChainStateError(err);
-        if (badLocalChainStateError) {
-          set({ error: badLocalChainStateError.message });
-          throw badLocalChainStateError;
-        }
-        const errorMsg = err instanceof Error ? err.message : String(err);
-        set({ error: errorMsg });
-        throw err;
-      }
-    },
+    fullScanWallet: async (esploraUrl, stopGap) =>
+      invokeEsploraSyncOperation((worker) =>
+        worker.fullScanWallet(esploraUrl, stopGap),
+      ),
 
     buildTransaction: (params) =>
       withErrorHandling((worker) => worker.buildTransaction(params)),

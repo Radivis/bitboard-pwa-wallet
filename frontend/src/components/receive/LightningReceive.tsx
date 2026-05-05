@@ -21,16 +21,23 @@ import {
 import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
 import { MAX_LIGHTNING_INVOICE_DESCRIPTION_LENGTH } from '@/lib/lightning-input-limits'
 
+/** Shown when a BOLT11 invoice has no fixed amount (NWC amountless flow). */
+const LIGHTNING_INVOICE_AMOUNT_SET_BY_PAYER_LABEL = 'Amount set by payer'
+
 type InvoiceAmountFieldParse =
   | { kind: 'amountless' }
   | { kind: 'fixed'; sats: number }
   | { kind: 'invalid' }
 
-function parseInvoiceAmountField(raw: string): InvoiceAmountFieldParse {
+/** Parses receive UI amount field: empty or zero → amountless; digits only, capped for safe `Number` conversion. */
+export function parseInvoiceAmountField(raw: string): InvoiceAmountFieldParse {
   const trimmedAmount = raw.trim()
   if (trimmedAmount === '') return { kind: 'amountless' }
+  if (!/^\d+$/.test(trimmedAmount)) return { kind: 'invalid' }
+  if (trimmedAmount.length > 15) return { kind: 'invalid' }
   const sats = Number(trimmedAmount)
-  if (!Number.isInteger(sats) || sats < 1) return { kind: 'invalid' }
+  if (!Number.isInteger(sats) || sats < 0) return { kind: 'invalid' }
+  if (sats === 0) return { kind: 'amountless' }
   return { kind: 'fixed', sats }
 }
 
@@ -72,7 +79,9 @@ function InvoiceQrDisplay({ invoice }: { invoice: LightningInvoice }) {
           </div>
           <p className="text-center text-sm text-muted-foreground">
             {invoice.amountSats == null ? (
-              <span className="text-muted-foreground">Amount set by payer</span>
+              <span className="text-muted-foreground">
+                {LIGHTNING_INVOICE_AMOUNT_SET_BY_PAYER_LABEL}
+              </span>
             ) : (
               <BitcoinAmountDisplay
                 amountSats={invoice.amountSats}
@@ -129,7 +138,7 @@ function InvoiceListItem({
         <div className="min-w-0 flex-1">
           <p className="text-sm font-medium">
             {invoice.amountSats == null ? (
-              'Amount set by payer'
+              LIGHTNING_INVOICE_AMOUNT_SET_BY_PAYER_LABEL
             ) : (
               <BitcoinAmountDisplay
                 amountSats={invoice.amountSats}
@@ -217,12 +226,13 @@ function InvoiceCreateForm({ onCreated }: { onCreated: () => void }) {
               <Label htmlFor="invoice-amount">Amount (sats) (optional)</Label>
               <Input
                 id="invoice-amount"
-                type="number"
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
                 value={amountSats}
                 onChange={(e) => setAmountSats(e.target.value)}
-                placeholder="0"
-                min="0"
-                step="1"
+                placeholder="Leave empty for amountless"
+                autoComplete="off"
               />
               {amountParse.kind === 'amountless' ? (
                 <p className="text-sm text-muted-foreground">

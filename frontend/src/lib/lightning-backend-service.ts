@@ -90,6 +90,8 @@ export interface ConnectedLightningWallet {
 const NWC_CONNECTION_STRING_PREFIX = 'nostr+walletconnect://'
 const E2E_NWC_MOCK_CONNECTION_STRING = 'nostr+walletconnect://e2e-mock'
 
+const MSATS_PER_SAT = 1000
+
 export function isValidNwcConnectionString(value: string): boolean {
   const v = value.trim()
   return (
@@ -99,11 +101,11 @@ export function isValidNwcConnectionString(value: string): boolean {
 }
 
 function msatsToSats(msats: number): number {
-  return Math.floor(msats / 1000)
+  return Math.floor(msats / MSATS_PER_SAT)
 }
 
 function satsToMsats(sats: number): number {
-  return sats * 1000
+  return sats * MSATS_PER_SAT
 }
 
 /**
