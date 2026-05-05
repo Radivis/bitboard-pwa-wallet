@@ -15,6 +15,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+## [0.1.3] - 2026-05-05
+
+### Added
+- Support for "amountless" (payer specified) Lightning payments via NWC
+
+### Changed
+- Privacy policy now includes mentions of the Vercel serverless handler for connecting to Esplora services and faucets in production
+
+### Fixed
+- In the case that the wallet should have persisted any chain state inconsistent with the Espolora service, the error is classified as BadLocalChainStateError. Using the "Full Scan" button on the wallet dashboard page retries the full scan with an empty chain as a convenient recovery path in that case.
+
 ## [0.1.2] - 2026-04-27
 
 ### Changed
