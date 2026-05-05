@@ -85,7 +85,18 @@ export function PrivacyPolicyEn() {
       <p>
         The Bitboard app is an integrated Bitcoin learning platform that combines practical wallet
         management, safe experimentation in the Lab, and a knowledge base (Library) about Bitcoin and
-        Lightning. There is <strong>no Bitboard backend server</strong>. All data stays on your device.
+        Lightning. Bitboard <strong>does not operate a wallet backend</strong> that stores your keys,
+        descriptors, or balances: wallet logic and encryption run in your browser, and sensitive app
+        data stays on your device.
+      </p>
+      <p>
+        On the <strong>production build hosted on Vercel</strong>, the deployment includes{' '}
+        <strong>minimal serverless API routes</strong> under <code>/api/esplora</code> and{' '}
+        <code>/api/faucet</code> that <strong>proxy</strong> browser HTTP requests only to{' '}
+        <strong>allowlisted</strong> public Esplora and (for test networks) faucet websites. This exists
+        so the PWA can talk to those third parties from the browser without running into cross-origin
+        restrictions. The routes forward requests and responses; they do not implement wallet logic and
+        are not used to store your recovery material.
       </p>
       <p>
         Wallet-related data is stored in a <strong>SQLite</strong> database in the{' '}
@@ -120,15 +131,31 @@ export function PrivacyPolicyEn() {
         contain personal data.
       </p>
 
-      <h2>5. Network access (Esplora)</h2>
+      <h2>5. Network access (Esplora and test faucets)</h2>
       <p>
         To fetch blockchain information, the app connects to the <strong>Esplora</strong> endpoints
         you configure under <strong>Settings</strong>. Esplora is a block-explorer API (an HTTP(S)
-        interface for blockchain data). In the process, in particular your{' '}
-        <strong>IP address</strong> and the usual technical metadata (e.g. TLS) become visible to
-        the respective third-party operator — not to a Bitboard server, which does not exist for
-        the app’s logic. Which exact requests go out depends on how you use the wallet (e.g.
+        interface for blockchain data). For <strong>default and other allowlisted</strong> Esplora
+        bases on <strong>mainnet, testnet, and signet</strong>, the <strong>hosted</strong> PWA
+        typically calls <strong>same-origin</strong> URLs (paths under <code>/api/esplora/…</code>),
+        and <strong>Vercel</strong> forwards those requests to the matching public Esplora host (see{' '}
+        <strong>Hosting</strong> and <strong>Wallet app</strong>). For <strong>custom</strong> Esplora
+        URLs that are <strong>not</strong> on that allowlist, your browser usually contacts the
+        configured host <strong>directly</strong>.
+      </p>
+      <p>
+        In all cases, your <strong>IP address</strong> and usual technical metadata (e.g. TLS) are
+        visible to the <strong>Esplora operator</strong> handling the request. When the hosted proxy
+        is used, <strong>Vercel</strong> also processes the HTTP request as part of forwarding
+        (including the requested path and query string, which can reflect blockchain objects your
+        wallet is fetching). Which exact requests go out depends on how you use the wallet (e.g.
         balance queries, transaction lists).
+      </p>
+      <p>
+        When you use <strong>testnet or signet faucets</strong>, the hosted app may
+        load the faucet over <code>/api/faucet/…</code> instead of calling the faucet site directly,
+        under the same allowlisted proxy pattern. Faucet operators—and, when proxied,{' '}
+        <strong>Vercel</strong>—can see the usual connection metadata for those HTTP requests.
       </p>
       <p>
         The operator of your chosen Esplora service can, in principle, reconstruct a{' '}
@@ -222,9 +249,11 @@ export function PrivacyPolicyEn() {
       </p>
       <ul className="list-disc space-y-2 pl-5">
         <li>
-          <strong>Technical hosting logs at Vercel</strong> (IP addresses, access data, etc.):{' '}
-          <strong>Art. 6(1)(f) GDPR</strong> (legitimate interests in secure and stable hosting).
-          Processing is carried out on the operator’s behalf to provide the hosting service.
+          <strong>Technical hosting logs at Vercel</strong> (IP addresses, access data, etc.),
+          including for the hosted app’s <code>/api/esplora</code> and <code>/api/faucet</code> proxy
+          routes when those URLs are invoked: <strong>Art. 6(1)(f) GDPR</strong> (legitimate interests
+          in secure and stable hosting and in providing the proxied connectivity the app needs in the
+          browser). Processing is carried out on the operator’s behalf to provide the hosting service.
         </li>
         <li>
           <strong>Storing the language preference in localStorage</strong> (key{' '}
@@ -240,9 +269,9 @@ export function PrivacyPolicyEn() {
           the service the user wants).
         </li>
         <li>
-          <strong>Connections to Esplora endpoints and Nostr Wallet Connect</strong>:{' '}
-          <strong>Art. 6(1)(f) GDPR</strong> (legitimate interests in the functionality of the wallet
-          and Lightning features you use).
+          <strong>Connections to Esplora endpoints, allowlisted test faucets, and Nostr Wallet Connect</strong>:{' '}
+          <strong>Art. 6(1)(f) GDPR</strong> (legitimate interests in the functionality of the wallet,
+          Lab test networks, and Lightning features you use).
         </li>
         <li>
           <strong>Email correspondence with the controller</strong> (for example privacy requests):{' '}
@@ -258,12 +287,20 @@ export function PrivacyPolicyEn() {
       <ul className="list-disc space-y-2 pl-5">
         <li>
           <strong>Hosting provider:</strong> <strong>Vercel Inc.</strong> (USA) and the underlying
-          infrastructure providers, in connection with delivering the website and the app.
+          infrastructure providers, in connection with delivering the website and the app — including,
+          for the hosted PWA, technically processing HTTP requests that pass through the{' '}
+          <code>/api/esplora</code> and <code>/api/faucet</code> proxy routes described above.
         </li>
         <li>
           <strong>Esplora operator(s):</strong> the operator of the Esplora-style endpoint{' '}
           <strong>you configure in Settings</strong>, in connection with balance and transaction
-          queries you initiate.
+          queries you initiate (whether your browser reaches them directly or via the hosted
+          same-origin proxy for allowlisted bases).
+        </li>
+        <li>
+          <strong>Test-faucet operator(s):</strong> the operator(s) of the public faucet site(s) you
+          use on test networks, in connection with those requests (direct or via the hosted{' '}
+          <code>/api/faucet</code> proxy).
         </li>
         <li>
           <strong>Nostr relays and Lightning operator (NWC):</strong> the Nostr relays you choose or
@@ -290,8 +327,10 @@ export function PrivacyPolicyEn() {
         connection data and cached Lightning information locally; short-lived UI preferences (e.g.
         dismissed banners) in the browser’s <code>sessionStorage</code>; optionally a migration
         error report stored locally in OPFS (only if a schema migration has failed); data visible to
-        or processed by Esplora and NWC/Lightning third parties in connection with requests you
-        initiate; and contact data contained in any email correspondence with the controller.
+        or processed by Esplora, public test faucets, and NWC/Lightning third parties in connection
+        with requests you initiate; HTTP metadata processed by Vercel when you use the hosted app’s{' '}
+        <code>/api/esplora</code> or <code>/api/faucet</code> proxies; and contact data contained in
+        any email correspondence with the controller.
       </p>
       <p>
         <strong>Storage periods:</strong> Vercel hosting and security logs are retained and deleted
@@ -392,7 +431,7 @@ export function PrivacyPolicyEn() {
 
       <h2>16. Version and changes to this privacy policy</h2>
       <p>
-        <strong>Version:</strong> April 2026.
+        <strong>Version:</strong> May 2026.
       </p>
       <p>
         The operator may update this privacy policy when technical or legal requirements change. The current
@@ -402,8 +441,9 @@ export function PrivacyPolicyEn() {
         public project repository (e.g. GitHub).
       </p>
       <p>
-        Because this is a <strong>pure client-side wallet</strong>, you generally have{' '}
-        <strong>maximum control over your local data</strong>: you can remove locally stored app
+        Because wallet <strong>keys and core wallet logic</strong> run <strong>only on your device</strong>{' '}
+        (hosted infrastructure is limited to static delivery and the thin HTTP proxies above), you
+        generally have <strong>maximum control over your local data</strong>: you can remove locally stored app
         data in your browser at any time and thereby end the local processing described here.
         Clearing site data in the browser is one way to do that; for a focused wipe of this app&apos;s
         databases, the <strong>Delete all app data</strong> button under <strong>Settings → Security</strong>{' '}

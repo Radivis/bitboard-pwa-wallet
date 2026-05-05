@@ -21,6 +21,26 @@ import {
 import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
 import { MAX_LIGHTNING_INVOICE_DESCRIPTION_LENGTH } from '@/lib/lightning-input-limits'
 
+/** Shown when a BOLT11 invoice has no fixed amount (NWC amountless flow). */
+const LIGHTNING_INVOICE_AMOUNT_SET_BY_PAYER_LABEL = 'Amount set by payer'
+
+type InvoiceAmountFieldParse =
+  | { kind: 'amountless' }
+  | { kind: 'fixed'; sats: number }
+  | { kind: 'invalid' }
+
+/** Parses receive UI amount field: empty or zero → amountless; digits only, capped for safe `Number` conversion. */
+export function parseInvoiceAmountField(raw: string): InvoiceAmountFieldParse {
+  const trimmedAmount = raw.trim()
+  if (trimmedAmount === '') return { kind: 'amountless' }
+  if (!/^\d+$/.test(trimmedAmount)) return { kind: 'invalid' }
+  if (trimmedAmount.length > 15) return { kind: 'invalid' }
+  const sats = Number(trimmedAmount)
+  if (!Number.isInteger(sats) || sats < 0) return { kind: 'invalid' }
+  if (sats === 0) return { kind: 'amountless' }
+  return { kind: 'fixed', sats }
+}
+
 function InvoiceQrDisplay({ invoice }: { invoice: LightningInvoice }) {
   const expiryLabel =
     INVOICE_EXPIRY_OPTIONS.find((o) => o.seconds === invoice.expirySeconds)?.label ?? 'Custom'
@@ -58,12 +78,18 @@ function InvoiceQrDisplay({ invoice }: { invoice: LightningInvoice }) {
             />
           </div>
           <p className="text-center text-sm text-muted-foreground">
-            <BitcoinAmountDisplay
-              amountSats={invoice.amountSats}
-              size="sm"
-              className="inline text-muted-foreground"
-              allowUnitToggle={false}
-            />{' '}
+            {invoice.amountSats == null ? (
+              <span className="text-muted-foreground">
+                {LIGHTNING_INVOICE_AMOUNT_SET_BY_PAYER_LABEL}
+              </span>
+            ) : (
+              <BitcoinAmountDisplay
+                amountSats={invoice.amountSats}
+                size="sm"
+                className="inline text-muted-foreground"
+                allowUnitToggle={false}
+              />
+            )}{' '}
             &middot; {expiryLabel} expiry
             {invoice.description && (
               <span className="block text-xs">{invoice.description}</span>
@@ -111,11 +137,15 @@ function InvoiceListItem({
       <div className="flex items-center justify-between">
         <div className="min-w-0 flex-1">
           <p className="text-sm font-medium">
-            <BitcoinAmountDisplay
-              amountSats={invoice.amountSats}
-              size="sm"
-              allowUnitToggle={false}
-            />
+            {invoice.amountSats == null ? (
+              LIGHTNING_INVOICE_AMOUNT_SET_BY_PAYER_LABEL
+            ) : (
+              <BitcoinAmountDisplay
+                amountSats={invoice.amountSats}
+                size="sm"
+                allowUnitToggle={false}
+              />
+            )}
           </p>
           {invoice.description && (
             <p className="truncate text-xs text-muted-foreground">
@@ -147,23 +177,34 @@ function InvoiceCreateForm({ onCreated }: { onCreated: () => void }) {
     onCreated()
   })
 
-  const parsedAmount = parseInt(amountSats) || 0
-  const canCreate = parsedAmount >= 1 && !createMutation.isPending
+  const amountParse = useMemo(
+    () => parseInvoiceAmountField(amountSats),
+    [amountSats],
+  )
+  const canCreate = amountParse.kind !== 'invalid' && !createMutation.isPending
 
   const handleCreate = useCallback(() => {
-    if (!canCreate) return
-    createMutation.mutate({
-      amountSats: parsedAmount,
-      description: description.trim(),
-      expirySeconds,
-    })
-  }, [canCreate, parsedAmount, description, expirySeconds, createMutation])
+    if (amountParse.kind === 'invalid' || createMutation.isPending) return
+    const trimmedDescription = description.trim()
+    if (amountParse.kind === 'amountless') {
+      createMutation.mutate({
+        description: trimmedDescription,
+        expirySeconds,
+      })
+    } else {
+      createMutation.mutate({
+        amountSats: amountParse.sats,
+        description: trimmedDescription,
+        expirySeconds,
+      })
+    }
+  }, [amountParse, createMutation, description, expirySeconds])
 
   return (
     <InfomodeWrapper
       infoId="receive-lightning-invoice-form"
       infoTitle="Lightning invoice"
-      infoText="A Lightning invoice (also called a BOLT11 invoice) is a one-time payment request. You specify how many satoshis you want to receive, an optional description, and how long the invoice stays valid. The payer scans the QR code or pastes the invoice string into their Lightning wallet to pay you."
+      infoText="A Lightning invoice (also called a BOLT11 invoice) is a one-time payment request. You may enter how many satoshis you want to receive or leave the amount empty for an amountless invoice (the payer must choose the amount when paying). You can add an optional description and choose how long the invoice stays valid. The payer scans the QR code or pastes the invoice string into their Lightning wallet to pay you."
       className="rounded-xl"
     >
       <Card>
@@ -182,16 +223,23 @@ function InvoiceCreateForm({ onCreated }: { onCreated: () => void }) {
             }}
           >
             <div className="space-y-2">
-              <Label htmlFor="invoice-amount">Amount (sats)</Label>
+              <Label htmlFor="invoice-amount">Amount (sats) (optional)</Label>
               <Input
                 id="invoice-amount"
-                type="number"
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
                 value={amountSats}
                 onChange={(e) => setAmountSats(e.target.value)}
-                placeholder="0"
-                min="1"
-                step="1"
+                placeholder="Leave empty for amountless"
+                autoComplete="off"
               />
+              {amountParse.kind === 'amountless' ? (
+                <p className="text-sm text-muted-foreground">
+                  If you don&apos;t define an amount, the amount for this invoice
+                  must be specified by payer.
+                </p>
+              ) : null}
             </div>
 
             <div className="space-y-2">

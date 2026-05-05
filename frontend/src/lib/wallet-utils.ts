@@ -5,6 +5,7 @@ import type { NetworkMode } from '@/stores/walletStore'
 import { useWalletStore } from '@/stores/walletStore'
 import { useSessionStore } from '@/stores/sessionStore'
 import { useCryptoStore } from '@/stores/cryptoStore'
+import { asBadLocalChainStateError } from '@/lib/bad-local-chain-state-error'
 import { withEsploraFullScanRetries } from '@/lib/esplora-full-scan-retry'
 import { sanitizeErrorMessageForUi } from '@/lib/sanitize-error-for-ui'
 import { showImportInitialSyncFailureToast } from '@/lib/wallet-sync-error-toast'
@@ -260,9 +261,47 @@ export async function runIncrementalDashboardWalletSync(options: {
 }
 
 /**
+ * Reload the active sub-wallet in WASM with an empty chain (same descriptors/network),
+ * then refreshes {@link useWalletStore}'s receive address pointer.
+ *
+ * Used to recover when persisted `local_chain` does not match the Esplora indexer.
+ */
+export async function reloadActiveLoadedSubWalletWithEmptyChain(params: {
+  password: string
+  walletId: number
+  networkMode: NetworkMode
+  addressType: AddressType
+  accountId: number
+}): Promise<void> {
+  const { password, walletId, networkMode, addressType, accountId } = params
+  const network = toBitcoinNetwork(networkMode)
+  const descriptorWallet = await resolveDescriptorWallet({
+    password,
+    walletId,
+    targetNetwork: network,
+    targetAddressType: addressType,
+    targetAccountId: accountId,
+  })
+  const { loadWallet, getCurrentAddress } = useCryptoStore.getState()
+  const { setCurrentAddress } = useWalletStore.getState()
+  await loadWallet({
+    externalDescriptor: descriptorWallet.externalDescriptor,
+    internalDescriptor: descriptorWallet.internalDescriptor,
+    network,
+    changesetJson: descriptorWallet.changeSet,
+    useEmptyChain: true,
+  })
+  const address = await getCurrentAddress()
+  setCurrentAddress(address)
+}
+
+/**
  * Full Esplora scan for the dashboard "Full rescan" control: re-scans the
  * address gap (same BDK path as import). Use when incremental sync cannot fix
  * a wrong balance or history.
+ *
+ * If the first scan fails with bad local chain state, reloads with an empty chain
+ * once and retries the full scan (then persists).
  *
  * Does not add its own success toast: {@link syncActiveWalletAndUpdateState} shows
  * loading and success toasts for the full-scan path.
@@ -272,13 +311,47 @@ export async function runFullScanDashboardWalletSync(options: {
   password: string | null
   activeWalletId: number | null
 }): Promise<void> {
-  await syncActiveWalletAndUpdateState(options.networkMode, {
-    useFullScan: true,
-  })
-  await finishDashboardSyncAfterStateUpdate({
-    ...options,
-    markFullScanDone: true,
-  })
+  const { networkMode, password, activeWalletId } = options
+
+  const scanAndPersist = async () => {
+    await syncActiveWalletAndUpdateState(networkMode, { useFullScan: true })
+    await finishDashboardSyncAfterStateUpdate({
+      password,
+      activeWalletId,
+      markFullScanDone: true,
+    })
+  }
+
+  try {
+    await scanAndPersist()
+  } catch (err) {
+    const badLocalChainStateError = asBadLocalChainStateError(err)
+    if (badLocalChainStateError == null) {
+      throw err
+    }
+
+    if (password == null || activeWalletId == null) {
+      throw badLocalChainStateError
+    }
+
+    const { loadedSubWallet, addressType, accountId } =
+      useWalletStore.getState()
+    const triple = loadedSubWallet ?? {
+      networkMode,
+      addressType,
+      accountId,
+    }
+
+    await reloadActiveLoadedSubWalletWithEmptyChain({
+      password,
+      walletId: activeWalletId,
+      networkMode: triple.networkMode,
+      addressType: triple.addressType,
+      accountId: triple.accountId,
+    })
+
+    await scanAndPersist()
+  }
 }
 
 /**

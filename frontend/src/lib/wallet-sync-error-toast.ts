@@ -1,6 +1,12 @@
 import { toast } from 'sonner'
+import {
+  asBadLocalChainStateError,
+  BAD_LOCAL_CHAIN_FULL_RESCAN_ACTION,
+} from '@/lib/bad-local-chain-state-error'
 import { sanitizeErrorMessageForUi } from '@/lib/sanitize-error-for-ui'
 import { errorMessage } from '@/lib/utils'
+
+const BAD_CHAIN_SYNC_HINT = `Try ${BAD_LOCAL_CHAIN_FULL_RESCAN_ACTION} — it can repair saved chain data.`
 
 type WalletSyncErrorContext =
   | 'initial-import'
@@ -23,9 +29,16 @@ export function reportWalletSyncError(
         : 'Wallet bootstrap sync failed'
   console.error(logLabel, err)
 
+  const badChain = asBadLocalChainStateError(err)
   const detail = sanitizeErrorMessageForUi(errorMessage(err))
 
   if (context === 'initial-import') {
+    if (badChain) {
+      toast.error('Initial sync failed', {
+        description: `${badChain.message} ${BAD_CHAIN_SYNC_HINT}`,
+      })
+      return
+    }
     if (detail) {
       toast.error('Initial sync failed', {
         description: `${detail} · You can sync later from the dashboard.`,
@@ -35,6 +48,13 @@ export function reportWalletSyncError(
         'Initial sync failed — you can sync later from the dashboard.',
       )
     }
+    return
+  }
+
+  if (badChain) {
+    toast.error('Sync failed', {
+      description: `${badChain.message} ${BAD_CHAIN_SYNC_HINT}`,
+    })
     return
   }
 
@@ -56,10 +76,13 @@ export function showImportInitialSyncFailureToast(
 ): void {
   console.error('Post-import initial sync failed', err)
 
+  const badChain = asBadLocalChainStateError(err)
   const detail = sanitizeErrorMessageForUi(errorMessage(err))
-  const description = detail
-    ? `${detail} · Retry or use Full rescan on the dashboard.`
-    : 'Retry or use Full rescan on the dashboard.'
+  const description = badChain
+    ? `${badChain.message} ${BAD_CHAIN_SYNC_HINT} You can also retry.`
+    : detail
+      ? `${detail} · Retry or use ${BAD_LOCAL_CHAIN_FULL_RESCAN_ACTION}.`
+      : `Retry or use ${BAD_LOCAL_CHAIN_FULL_RESCAN_ACTION}.`
 
   toast.error('Initial sync failed', {
     description,

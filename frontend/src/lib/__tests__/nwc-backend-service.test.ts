@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 const mockGetBalance = vi.fn()
 const mockMakeInvoice = vi.fn()
+const mockExecuteNip47Request = vi.fn()
 const mockPayInvoice = vi.fn()
 const mockListTransactions = vi.fn()
 const mockGetInfo = vi.fn()
@@ -11,6 +12,7 @@ vi.mock('@getalby/sdk', () => {
     NWCClient: class MockNWCClient {
       getBalance = mockGetBalance
       makeInvoice = mockMakeInvoice
+      executeNip47Request = mockExecuteNip47Request
       payInvoice = mockPayInvoice
       listTransactions = mockListTransactions
       getInfo = mockGetInfo
@@ -18,6 +20,7 @@ vi.mock('@getalby/sdk', () => {
   }
 })
 
+import { MAX_SATS_MSAT_AMOUNT_NUMBER } from '../bitcoin-utils'
 import { MAX_NWC_CONNECTION_STRING_LENGTH } from '../lightning-input-limits'
 import {
   createBackendService,
@@ -91,6 +94,105 @@ describe('NWC backend service', () => {
         bolt11: 'lntb500n1mock...',
         paymentHash: 'hash123',
       })
+    })
+
+    it('requests amountless invoice via executeNip47Request without calling makeInvoice', async () => {
+      mockExecuteNip47Request.mockResolvedValue({
+        invoice: 'lntb1amountlessmock',
+        payment_hash: 'hash_amtless',
+        type: 'incoming',
+        state: 'pending',
+        description: '',
+        description_hash: '',
+        preimage: '',
+        amount: 0,
+        fees_paid: 0,
+        settled_at: 0,
+        created_at: 1700000000,
+        expires_at: 1700003600,
+      })
+
+      const service = createBackendService(TEST_CONFIG)
+      const result = await service.createInvoice({
+        memo: 'tips',
+        expiry: 7200,
+      })
+
+      expect(mockMakeInvoice).not.toHaveBeenCalled()
+      expect(mockExecuteNip47Request).toHaveBeenCalledOnce()
+      expect(mockExecuteNip47Request).toHaveBeenCalledWith(
+        'make_invoice',
+        { description: 'tips', expiry: 7200 },
+        expect.any(Function),
+      )
+      expect(result).toEqual({
+        bolt11: 'lntb1amountlessmock',
+        paymentHash: 'hash_amtless',
+      })
+    })
+
+    it('omits description for amountless invoice when memo is empty', async () => {
+      mockExecuteNip47Request.mockResolvedValue({
+        invoice: 'lntb1amountless2',
+        payment_hash: 'h2',
+        type: 'incoming',
+        state: 'pending',
+        description: '',
+        description_hash: '',
+        preimage: '',
+        amount: 0,
+        fees_paid: 0,
+        settled_at: 0,
+        created_at: 1700000000,
+        expires_at: 1700003600,
+      })
+
+      const service = createBackendService(TEST_CONFIG)
+      await service.createInvoice({ memo: '', expiry: 3600 })
+
+      expect(mockExecuteNip47Request).toHaveBeenCalledWith(
+        'make_invoice',
+        { expiry: 3600 },
+        expect.any(Function),
+      )
+    })
+
+    it('passes exact msat amount for maximal safe integer sats→msats product', async () => {
+      mockMakeInvoice.mockResolvedValue({
+        invoice: 'lntbMaxExact1mock',
+        payment_hash: 'hx',
+        type: 'incoming',
+        state: 'pending',
+        description: '',
+        description_hash: '',
+        preimage: '',
+        amount: 0,
+        fees_paid: 0,
+        settled_at: 0,
+        created_at: 1700000000,
+        expires_at: 1700003600,
+      })
+      const service = createBackendService(TEST_CONFIG)
+      await service.createInvoice({
+        amountSats: MAX_SATS_MSAT_AMOUNT_NUMBER,
+        memo: 'stress',
+      })
+      expect(mockMakeInvoice).toHaveBeenCalledWith(
+        expect.objectContaining({
+          amount: MAX_SATS_MSAT_AMOUNT_NUMBER * 1000,
+        }),
+      )
+    })
+
+    it('throws when invoice sats would exceed IEEE-safe msat conversion', async () => {
+      const service = createBackendService(TEST_CONFIG)
+      await expect(
+        service.createInvoice({
+          amountSats: MAX_SATS_MSAT_AMOUNT_NUMBER + 1,
+          memo: '',
+        }),
+      ).rejects.toThrow(RangeError)
+      expect(mockMakeInvoice).not.toHaveBeenCalled()
     })
   })
 

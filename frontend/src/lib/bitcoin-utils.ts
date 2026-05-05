@@ -61,6 +61,34 @@ export function toBitcoinNetwork(mode: NetworkMode): BitcoinNetwork {
 /** Satoshis per 1 BTC (consensus). */
 export const SATS_PER_BTC = 100_000_000
 
+/** Millisatoshis per satoshi (LN / NIP conventions). */
+export const MSATS_PER_SAT = 1000
+
+/**
+ * Largest integral satoshi amount such that {@link MSATS_PER_SAT} × sats is exactly
+ * representable as a JS `number` (at most `Number.MAX_SAFE_INTEGER`). NIP-47 millisat payloads
+ * and some SDK APIs use IEEE doubles; multiplying above this range can silently round wrong.
+ */
+export const MAX_SATS_MSAT_AMOUNT_NUMBER = Math.floor(
+  Number.MAX_SAFE_INTEGER / MSATS_PER_SAT,
+)
+
+/**
+ * Converts satoshis to millisatoshis as a numeric NIP-47/SDK `amount`, only when the product is exact in JS.
+ * @throws RangeError when `sats` is not an integer or outside `[0, MAX_SATS_MSAT_AMOUNT_NUMBER]`.
+ */
+export function msatsAmountNumberFromSatsExact(sats: number): number {
+  if (!Number.isInteger(sats)) {
+    throw new RangeError('sats must be an integer')
+  }
+  if (sats < 0 || sats > MAX_SATS_MSAT_AMOUNT_NUMBER) {
+    throw new RangeError(
+      `sats out of safe millisatoshi conversion range (0-${MAX_SATS_MSAT_AMOUNT_NUMBER})`,
+    )
+  }
+  return sats * MSATS_PER_SAT
+}
+
 /** Upper bound for sat amounts passed through JS (safe integer range). */
 export const MAX_SAFE_SATS = Number.MAX_SAFE_INTEGER
 

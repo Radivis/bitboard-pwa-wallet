@@ -92,8 +92,19 @@ export function PrivacyPolicyDe() {
       <p>
         Die Bitboard-App ist eine integrierte Bitcoin-Lernplattform, die praktisches
         Wallet-Management, sicheres Experimentieren im Lab und eine Knowledge-Base (Library) zu
-        Bitcoin und Lightning kombiniert. Es gibt <strong>keinen Bitboard-Backend-Server</strong>.
-        Alle Daten bleiben lokal auf Ihrem Gerät.
+        Bitcoin und Lightning kombiniert. Bitboard <strong>betreibt kein Wallet-Backend</strong>, das
+        Ihre Schlüssel, Deskriptoren oder Kontostände speichert: Wallet-Logik und Verschlüsselung
+        laufen in Ihrem Browser, und sensible App-Daten bleiben auf Ihrem Gerät.
+      </p>
+      <p>
+        In der <strong>auf Vercel gehosteten Produktionsversion</strong> umfasst das Deployment{' '}
+        <strong>minimale serverlose API-Routen</strong> unter <code>/api/esplora</code> und{' '}
+        <code>/api/faucet</code>, die HTTP-Anfragen aus dem Browser <strong>nur</strong> an{' '}
+        <strong>auf einer Positivliste stehende</strong> öffentliche Esplora- und (für Testnetze)
+        Faucet-Websites <strong>weiterleiten</strong>. Dies dient dazu, dass die PWA diese
+        Drittanbieter aus dem Browser heraus ohne Cross-Origin-Probleme erreichen kann. Die Routen
+        leiten Anfragen und Antworten weiter; sie implementieren keine Wallet-Logik und werden nicht
+        genutzt, um Ihre Wiederherstellungsdaten zu speichern.
       </p>
       <p>
         Wallet-relevante Daten werden in einer <strong>SQLite</strong>-Datenbank im{' '}
@@ -132,15 +143,33 @@ export function PrivacyPolicyDe() {
         verschwinden beim Schließen des Tabs; sie enthalten keine personenbezogenen Inhalte.
       </p>
 
-      <h2>5. Netzwerkzugriff (Esplora)</h2>
+      <h2>5. Netzwerkzugriff (Esplora und Test-Faucets)</h2>
       <p>
         Damit die App Blockchain-Informationen abrufen kann, baut sie Verbindungen zu den von Ihnen
         unter <strong>Einstellungen</strong> konfigurierten <strong>Esplora</strong>-Endpunkten auf.
-        Esplora ist eine Block-Explorer-API (HTTP(S)-Schnittstelle zu Blockchain-Daten).
-        Dabei werden insbesondere Ihre <strong>IP-Adresse</strong> sowie übliche technische Metadaten (z. B. TLS) für den
-        jeweiligen Drittanbieter sichtbar — nicht für einen Bitboard-Server, den es für die
-        App-Logik nicht gibt. Welche genauen Anfragen abgehen, hängt von Ihrer Nutzung der Wallet
-        (z. B. Kontostandsabfragen, Transaktionslisten) ab.
+        Esplora ist eine Block-Explorer-API (HTTP(S)-Schnittstelle zu Blockchain-Daten). Für{' '}
+        <strong>Standard- und andere positiv gelistete</strong> Esplora-Basis-URLs auf{' '}
+        <strong>Mainnet, Testnet und Signet</strong> ruft die <strong>gehostete</strong> PWA typischerweise{' '}
+        <strong>same-origin</strong>-URLs auf (Pfade unter <code>/api/esplora/…</code>), und{' '}
+        <strong>Vercel</strong> leitet diese Anfragen an den passenden öffentlichen Esplora-Host
+        weiter (siehe <strong>Hosting</strong> und <strong>Wallet-App</strong>). Bei{' '}
+        <strong>benutzerdefinierten</strong> Esplora-URLs, die <strong>nicht</strong> auf dieser Liste
+        stehen, kontaktiert Ihr Browser die konfigurierte Adresse in der Regel <strong>direkt</strong>.
+      </p>
+      <p>
+        In jedem Fall sind Ihre <strong>IP-Adresse</strong> und übliche technische Metadaten (z. B.
+        TLS) für den <strong>Esplora-Betreiber</strong> der Anfrage sichtbar. Wird der gehostete Proxy
+        genutzt, verarbeitet <strong>Vercel</strong> die HTTP-Anfrage ebenfalls im Rahmen der
+        Weiterleitung (einschließlich angefordertem Pfad und Abfragezeichenkette, die Blockchain-Objekte
+        widerspiegeln kann, die Ihre Wallet abruft). Welche konkreten Anfragen ausgehen, hängt von Ihrer
+        Nutzung der Wallet ab (z. B. Kontostandsabfragen, Transaktionslisten).
+      </p>
+      <p>
+        Wenn Sie <strong>Testnet- oder Signet-Faucets</strong> nutzen, kann die gehostete
+        App den Faucet-Aufruf über <code>/api/faucet/…</code> statt direkt zur Faucet-Website laden —
+        nach demselben Muster mit positiv gelisteter Weiterleitung. Faucet-Betreiber — und bei
+        Proxy-Nutzung <strong>Vercel</strong> — sehen die üblichen Verbindungsmetadaten dieser
+        HTTP-Anfragen.
       </p>
       <p>
         Der Betreiber des jeweiligen Esplora-Dienstes kann aus den von Ihrer Wallet ausgelösten
@@ -240,9 +269,12 @@ export function PrivacyPolicyDe() {
       </p>
       <ul className="list-disc space-y-2 pl-5">
         <li>
-          <strong>Technische Hosting-Protokolle bei Vercel</strong> (IP-Adressen, Zugriffsdaten u. a.):{' '}
+          <strong>Technische Hosting-Protokolle bei Vercel</strong> (IP-Adressen, Zugriffsdaten u. a.),
+          einschließlich der gehosteten Proxy-Routen <code>/api/esplora</code> und{' '}
+          <code>/api/faucet</code>, wenn diese URLs aufgerufen werden:{' '}
           <strong>Art. 6 Abs. 1 lit. f DSGVO</strong> (berechtigtes Interesse an einem sicheren und
-          stabilen Hosting). Die Verarbeitung erfolgt im Auftrag des Betreibers zur Erbringung des
+          stabilen Hosting sowie an der für die Browser-App erforderlichen technischen
+          Weiterleitung). Die Verarbeitung erfolgt im Auftrag des Betreibers zur Erbringung des
           Hostings.
         </li>
         <li>
@@ -260,9 +292,9 @@ export function PrivacyPolicyDe() {
           ist, um den vom Nutzer gewünschten Dienst zu erbringen).
         </li>
         <li>
-          <strong>Verbindungen zu Esplora-Endpoints und Nostr Wallet Connect</strong>:{' '}
+          <strong>Verbindungen zu Esplora, positiv gelisteten Test-Faucets und Nostr Wallet Connect</strong>:{' '}
           <strong>Art. 6 Abs. 1 lit. f DSGVO</strong> (berechtigtes Interesse an der Funktionsfähigkeit
-          der gewünschten Wallet- und Lightning-Funktionen).
+          der gewünschten Wallet-, Lab- und Lightning-Funktionen).
         </li>
         <li>
           <strong>E-Mail-Korrespondenz mit dem Verantwortlichen</strong> (z. B. Datenschutzanfragen):{' '}
@@ -280,12 +312,20 @@ export function PrivacyPolicyDe() {
         <li>
           <strong>Hosting-Anbieter:</strong> <strong>Vercel Inc.</strong> (USA) sowie die dort
           genutzten Infrastrukturanbieter, im Zusammenhang mit der Auslieferung der Website und der
-          App.
+          App — einschließlich der technischen Verarbeitung von HTTP-Anfragen, die durch die oben
+          genannten Proxy-Routen <code>/api/esplora</code> und <code>/api/faucet</code> der gehosteten
+          PWA laufen.
         </li>
         <li>
           <strong>Esplora-Betreiber:</strong> der Betreiber des in den{' '}
-          <strong>Einstellungen</strong> von Ihnen konfigurierten Esplora-Endpunkts, im Zusammenhang
-          mit den von Ihnen ausgelösten Konto- und Transaktionsabfragen.
+          <strong>Einstellungen</strong> konfigurierten Esplora-Endpunkts, im Zusammenhang mit den von
+          Ihnen ausgelösten Konto- und Transaktionsabfragen (ob Ihr Browser direkt oder über den
+          Same-Origin-Proxy für positiv gelistete Basis-URLs darauf zugreift).
+        </li>
+        <li>
+          <strong>Betreiber öffentlicher Test-Faucets:</strong> der Betreiber der jeweiligen Faucet-Site,
+          die Sie in Testnetzen nutzen, im Zusammenhang mit diesen Anfragen (direkt oder über den
+          gehosteten Proxy <code>/api/faucet</code>).
         </li>
         <li>
           <strong>Nostr-Relays und Lightning-Betreiber (NWC):</strong> die von Ihnen gewählten oder
@@ -313,9 +353,10 @@ export function PrivacyPolicyDe() {
         Lightning-Informationen lokal; kurzlebige UI-Präferenzen (z. B. Banner-Ausblendungen) im
         <code>sessionStorage</code> des Browsers; optional ein lokal in OPFS abgelegter
         Migrations-Fehlerbericht (nur wenn eine Schema-Migration fehlgeschlagen ist); Daten, die im
-        Rahmen der von Ihnen ausgelösten Anfragen an Esplora- und NWC-/Lightning-Dritte sichtbar
-        oder verarbeitet werden; sowie Kontaktdaten in einer E-Mail-Korrespondenz mit dem
-        Verantwortlichen.
+        Rahmen der von Ihnen ausgelösten Anfragen an Esplora, öffentliche Test-Faucets sowie
+        NWC-/Lightning-Dritte sichtbar oder verarbeitet werden; HTTP-Metadaten, die Vercel bei Nutzung
+        der Proxy-Pfade <code>/api/esplora</code> oder <code>/api/faucet</code> der gehosteten App
+        verarbeitet; sowie Kontaktdaten in einer E-Mail-Korrespondenz mit dem Verantwortlichen.
       </p>
       <p>
         <strong>Speicherdauer:</strong> Hosting- und Sicherheitsprotokolle bei Vercel richten sich
@@ -422,7 +463,7 @@ export function PrivacyPolicyDe() {
 
       <h2>16. Stand und Änderungen dieser Datenschutzerklärung</h2>
       <p>
-        <strong>Stand:</strong> April 2026.
+        <strong>Stand:</strong> Mai 2026.
       </p>
       <p>
         Der Betreiber behält sich vor, diese Datenschutzerklärung anzupassen, wenn sich technische oder
@@ -433,10 +474,12 @@ export function PrivacyPolicyDe() {
         Projekt-Repository (z. B. GitHub).
       </p>
       <p>
-        Da es sich um eine <strong>reine Client-seitige Wallet</strong> handelt, haben Sie in der
-        Regel die <strong>maximale Kontrolle über Ihre lokalen Daten</strong>: Sie können
-        jederzeit die lokal gespeicherten Daten der App im Browser entfernen und damit die
-        beschriebene lokale Verarbeitung beenden. Das Leeren der Website-Daten im Browser ist ein
+        Da <strong>Schlüssel und die zentrale Wallet-Logik</strong> <strong>nur auf Ihrem Gerät</strong>{' '}
+        laufen (die gehostete Infrastruktur beschränkt sich auf statische Auslieferung und die oben
+        beschriebenen schlanken HTTP-Proxys), haben Sie in der Regel die{' '}
+        <strong>maximale Kontrolle über Ihre lokalen Daten</strong>: Sie können jederzeit die lokal
+        gespeicherten Daten der App im Browser entfernen und damit die beschriebene lokale
+        Verarbeitung beenden. Das Leeren der Website-Daten im Browser ist ein
         dafür möglicher Weg; für einen gezielten Reset der App-Datenbanken wird die Schaltfläche{' '}
         <strong>Alle App-Daten löschen</strong> unter <strong>Einstellungen → Sicherheit</strong>{' '}
         <strong>nachdrücklich empfohlen</strong>.
