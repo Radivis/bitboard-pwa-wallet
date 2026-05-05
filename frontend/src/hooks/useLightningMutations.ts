@@ -276,12 +276,12 @@ export function useCreateInvoiceMutation(onCreated: () => void) {
 
   return useMutation({
     mutationFn: async (params: {
-      amountSats: number
+      amountSats?: number
       description: string
       expirySeconds?: number
     }) => {
       return createInvoice({
-        amountSats: params.amountSats,
+        ...(params.amountSats != null ? { amountSats: params.amountSats } : {}),
         description: params.description,
         expirySeconds: params.expirySeconds ?? DEFAULT_INVOICE_EXPIRY_SECONDS,
         networkMode,
@@ -289,9 +289,13 @@ export function useCreateInvoiceMutation(onCreated: () => void) {
     },
     onSuccess: (invoice) => {
       addSessionInvoice(invoice)
-      toast.success(
-        `Invoice created for ${formatAmountInBitcoinDisplayUnit(invoice.amountSats, 'BTC')} ${BITCOIN_DISPLAY_UNIT_LABEL.BTC}`,
-      )
+      if (invoice.amountSats == null) {
+        toast.success('Amountless invoice created')
+      } else {
+        toast.success(
+          `Invoice created for ${formatAmountInBitcoinDisplayUnit(invoice.amountSats, 'BTC')} ${BITCOIN_DISPLAY_UNIT_LABEL.BTC}`,
+        )
+      }
       onCreated()
     },
     onError: (err) => {

@@ -55,7 +55,8 @@ export type ActiveLightningConnectionsByNetwork = Partial<
 export interface LightningInvoice {
   bolt11: string
   paymentHash: string
-  amountSats: number
+  /** Fixed amount in sats, or `null` when the BOLT11 is amountless (payer chooses). */
+  amountSats: number | null
   description: string
   expirySeconds: number
   createdAt: string
@@ -114,7 +115,7 @@ interface LightningState {
   ) => boolean
 
   createInvoice: (params: {
-    amountSats: number
+    amountSats?: number
     description: string
     expirySeconds?: number
     networkMode: NetworkMode
@@ -363,6 +364,8 @@ export const useLightningStore = create<LightningState>()(
         const effectiveExpiry =
           expirySeconds ?? DEFAULT_INVOICE_EXPIRY_SECONDS
         const activeWalletId = useWalletStore.getState().activeWalletId
+        const storedAmountSats =
+          amountSats != null && amountSats >= 1 ? amountSats : null
 
         if (activeWalletId != null) {
           const connection = get().getActiveConnection(
@@ -372,14 +375,14 @@ export const useLightningStore = create<LightningState>()(
           if (connection) {
             const service = createBackendService(connection.config)
             const result = await service.createInvoice({
-              amountSats,
+              ...(storedAmountSats != null ? { amountSats: storedAmountSats } : {}),
               memo: description,
               expiry: effectiveExpiry,
             })
             const invoice: LightningInvoice = {
               bolt11: result.bolt11,
               paymentHash: result.paymentHash,
-              amountSats,
+              amountSats: storedAmountSats,
               description,
               expirySeconds: effectiveExpiry,
               createdAt: new Date().toISOString(),

@@ -36,8 +36,9 @@ export interface LightningPayment {
 
 export interface LightningBackendService {
   getBalance(): Promise<{ balanceSats: number }>
+  /** Omit `amountSats` (or leave unset) for an amountless BOLT11; payer supplies amount when paying. */
   createInvoice(params: {
-    amountSats: number
+    amountSats?: number
     memo?: string
     expiry?: number
   }): Promise<{ bolt11: string; paymentHash: string }>
@@ -103,6 +104,62 @@ function msatsToSats(msats: number): number {
 
 function satsToMsats(sats: number): number {
   return sats * 1000
+}
+
+/**
+ * NWC amountless `make_invoice`: `@getalby/sdk`'s public `makeInvoice` throws when `amount` is
+ * omitted or zero. The client still sends arbitrary params via private `executeNip47Request`.
+ * Revisit if the SDK exposes a supported amountless API.
+ */
+type NwcClientWithExecute = {
+  executeNip47Request: <TResult>(
+    method: 'make_invoice',
+    requestParams: Record<string, unknown>,
+    resultValidator: (result: TResult) => boolean,
+  ) => Promise<TResult>
+}
+
+type NwcMakeInvoiceResult = {
+  invoice: string
+  payment_hash: string
+}
+
+async function nwcCreateInvoice(
+  client: NWCClient,
+  params: { amountSats?: number; memo?: string; expiry?: number },
+): Promise<{ bolt11: string; paymentHash: string }> {
+  const fixedAmountSats = params.amountSats
+  if (fixedAmountSats != null && fixedAmountSats >= 1) {
+    const result = await client.makeInvoice({
+      amount: satsToMsats(fixedAmountSats),
+      description: params.memo,
+      expiry: params.expiry,
+    })
+    return {
+      bolt11: result.invoice,
+      paymentHash: result.payment_hash,
+    }
+  }
+
+  const nip47Params: Record<string, unknown> = {}
+  if (params.memo != null && params.memo !== '') {
+    nip47Params.description = params.memo
+  }
+  if (params.expiry != null) {
+    nip47Params.expiry = params.expiry
+  }
+
+  const exec = client as unknown as NwcClientWithExecute
+  const result = await exec.executeNip47Request<NwcMakeInvoiceResult>(
+    'make_invoice',
+    nip47Params,
+    (r) => !!r.invoice,
+  )
+
+  return {
+    bolt11: result.invoice,
+    paymentHash: result.payment_hash,
+  }
 }
 
 type E2eNwcMockState = {
@@ -184,8 +241,15 @@ function createE2eNwcMockBackendService(): LightningBackendService {
     },
     async createInvoice(params) {
       throwIfE2eNwcMockFailing()
-      const sats = Math.max(0, Math.floor(params.amountSats))
       const paymentHash = `e2e-invoice-${Date.now()}`
+      const fixed = params.amountSats
+      if (fixed == null || fixed < 1) {
+        return {
+          bolt11: 'lnbc1e2einvoiceamountless',
+          paymentHash,
+        }
+      }
+      const sats = Math.max(0, Math.floor(fixed))
       return {
         bolt11: `lnbc1e2einvoice${sats}`,
         paymentHash,
@@ -227,15 +291,7 @@ function createNwcBackendService(
     },
 
     async createInvoice(params) {
-      const result = await client.makeInvoice({
-        amount: satsToMsats(params.amountSats),
-        description: params.memo,
-        expiry: params.expiry,
-      })
-      return {
-        bolt11: result.invoice,
-        paymentHash: result.payment_hash,
-      }
+      return nwcCreateInvoice(client, params)
     },
 
     async payInvoice(bolt11, options) {
