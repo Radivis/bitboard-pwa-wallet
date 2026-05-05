@@ -11,7 +11,7 @@ import { useWalletStore } from '@/stores/walletStore'
 import { useSendStore } from '@/stores/sendStore'
 import { useFeatureStore } from '@/stores/featureStore'
 import { useLabChainStateQuery } from '@/hooks/useLabChainStateQuery'
-import { isValidAddress } from '@/lib/bitcoin-utils'
+import { isValidAddress, msatsAmountNumberFromSatsExact, MAX_SATS_MSAT_AMOUNT_NUMBER } from '@/lib/bitcoin-utils'
 import {
   recipientAndAmountFromScannedPayload,
   tryParseBitcoinUri,
@@ -304,6 +304,21 @@ export function SendFlow() {
     selectedLnBalanceSats !== undefined &&
     lightningPayAmountSats <= selectedLnBalanceSats
 
+  /** Amountless bolt11 pays pass msats (= sats * 1000); require exact IEEE-safe products (see `msatsAmountNumberFromSatsExact`). */
+  const lightningAmountlessBolt11PayMsatsExactOk = useMemo(() => {
+    if (!needsUserLightningAmount) return true
+    if (!isValidBolt11Invoice(normalizedRecipient)) return true
+    if (decodedBolt11 == null || decodedBolt11.satoshi !== 0) return true
+    return (
+      Number.isInteger(amountSats) && amountSats <= MAX_SATS_MSAT_AMOUNT_NUMBER
+    )
+  }, [
+    needsUserLightningAmount,
+    normalizedRecipient,
+    decodedBolt11,
+    amountSats,
+  ])
+
   const canBuildLightning =
     recipientFormatValid &&
     lightningRecipientOk &&
@@ -315,6 +330,7 @@ export function SendFlow() {
     lightningAmountInputOk &&
     lightningPayAmountSats >= 1 &&
     lightningBalanceOk &&
+    lightningAmountlessBolt11PayMsatsExactOk &&
     (isLightningAddress(normalizedRecipient)
       ? isValidSendAmountSats(amountSats)
       : true)
@@ -387,8 +403,9 @@ export function SendFlow() {
       const amountMsatsForAmountless =
         decodedBolt11 != null &&
         decodedBolt11.satoshi === 0 &&
-        isValidSendAmountSats(amountSats)
-          ? amountSats * 1000
+        isValidSendAmountSats(amountSats) &&
+        amountSats <= MAX_SATS_MSAT_AMOUNT_NUMBER
+          ? msatsAmountNumberFromSatsExact(amountSats)
           : undefined
 
       lightningPayMutation.mutate({
@@ -513,8 +530,6 @@ export function SendFlow() {
     amountSats,
     effectiveFeeRate,
     handleLightningAddressPay,
-    decodedBolt11,
-    confirmedBalance,
     amountUnit,
     applyOnchainPrepareOutcomeToSendStore,
     activeWalletId,

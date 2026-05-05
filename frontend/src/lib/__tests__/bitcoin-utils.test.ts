@@ -3,6 +3,9 @@ import {
   fetchEsploraTipBlockHeight,
   formatSats,
   getEsploraUrl,
+  msatsAmountNumberFromSatsExact,
+  MAX_SATS_MSAT_AMOUNT_NUMBER,
+  MSATS_PER_SAT,
   parseBTC,
   validateEsploraUrl,
 } from '../bitcoin-utils'
@@ -174,3 +177,29 @@ describe('parseBTC', () => {
     expect(sats).toBeLessThanOrEqual(Number.MAX_SAFE_INTEGER)
   })
 })
+
+describe('msatsAmountNumberFromSatsExact', () => {
+  it(`accepts maximal sats with exact product (${MAX_SATS_MSAT_AMOUNT_NUMBER} × msat)`, () => {
+    expect(msatsAmountNumberFromSatsExact(MAX_SATS_MSAT_AMOUNT_NUMBER)).toBe(
+      MAX_SATS_MSAT_AMOUNT_NUMBER * MSATS_PER_SAT,
+    )
+    expect(
+      MAX_SATS_MSAT_AMOUNT_NUMBER * MSATS_PER_SAT,
+    ).toBeLessThanOrEqual(Number.MAX_SAFE_INTEGER)
+  })
+
+  it('rejects sats whose msat product is not IEEE-safe', () => {
+    expect(() =>
+      msatsAmountNumberFromSatsExact(MAX_SATS_MSAT_AMOUNT_NUMBER + 1),
+    ).toThrow(RangeError)
+  })
+
+  it('rejects non-integers', () => {
+    expect(() => msatsAmountNumberFromSatsExact(1.5)).toThrow(RangeError)
+  })
+
+  it('accepts zero', () => {
+    expect(msatsAmountNumberFromSatsExact(0)).toBe(0)
+  })
+})
+

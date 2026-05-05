@@ -1,4 +1,8 @@
 import { NWCClient } from '@getalby/sdk'
+import {
+  msatsAmountNumberFromSatsExact,
+  MSATS_PER_SAT,
+} from '@/lib/bitcoin-utils'
 import { MAX_NWC_CONNECTION_STRING_LENGTH } from '@/lib/lightning-input-limits'
 import {
   lightningNetworkModeFromNip47Network,
@@ -90,8 +94,6 @@ export interface ConnectedLightningWallet {
 const NWC_CONNECTION_STRING_PREFIX = 'nostr+walletconnect://'
 const E2E_NWC_MOCK_CONNECTION_STRING = 'nostr+walletconnect://e2e-mock'
 
-const MSATS_PER_SAT = 1000
-
 export function isValidNwcConnectionString(value: string): boolean {
   const v = value.trim()
   return (
@@ -104,8 +106,8 @@ function msatsToSats(msats: number): number {
   return Math.floor(msats / MSATS_PER_SAT)
 }
 
-function satsToMsats(sats: number): number {
-  return sats * MSATS_PER_SAT
+function satsToMsatsForNwcInvoice(sats: number): number {
+  return msatsAmountNumberFromSatsExact(sats)
 }
 
 /**
@@ -133,7 +135,7 @@ async function nwcCreateInvoice(
   const fixedAmountSats = params.amountSats
   if (fixedAmountSats != null && fixedAmountSats >= 1) {
     const result = await client.makeInvoice({
-      amount: satsToMsats(fixedAmountSats),
+      amount: satsToMsatsForNwcInvoice(fixedAmountSats),
       description: params.memo,
       expiry: params.expiry,
     })

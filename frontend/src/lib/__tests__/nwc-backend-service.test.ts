@@ -20,6 +20,7 @@ vi.mock('@getalby/sdk', () => {
   }
 })
 
+import { MAX_SATS_MSAT_AMOUNT_NUMBER } from '../bitcoin-utils'
 import { MAX_NWC_CONNECTION_STRING_LENGTH } from '../lightning-input-limits'
 import {
   createBackendService,
@@ -154,6 +155,44 @@ describe('NWC backend service', () => {
         { expiry: 3600 },
         expect.any(Function),
       )
+    })
+
+    it('passes exact msat amount for maximal safe integer sats→msats product', async () => {
+      mockMakeInvoice.mockResolvedValue({
+        invoice: 'lntbMaxExact1mock',
+        payment_hash: 'hx',
+        type: 'incoming',
+        state: 'pending',
+        description: '',
+        description_hash: '',
+        preimage: '',
+        amount: 0,
+        fees_paid: 0,
+        settled_at: 0,
+        created_at: 1700000000,
+        expires_at: 1700003600,
+      })
+      const service = createBackendService(TEST_CONFIG)
+      await service.createInvoice({
+        amountSats: MAX_SATS_MSAT_AMOUNT_NUMBER,
+        memo: 'stress',
+      })
+      expect(mockMakeInvoice).toHaveBeenCalledWith(
+        expect.objectContaining({
+          amount: MAX_SATS_MSAT_AMOUNT_NUMBER * 1000,
+        }),
+      )
+    })
+
+    it('throws when invoice sats would exceed IEEE-safe msat conversion', async () => {
+      const service = createBackendService(TEST_CONFIG)
+      await expect(
+        service.createInvoice({
+          amountSats: MAX_SATS_MSAT_AMOUNT_NUMBER + 1,
+          memo: '',
+        }),
+      ).rejects.toThrow(RangeError)
+      expect(mockMakeInvoice).not.toHaveBeenCalled()
     })
   })
 
