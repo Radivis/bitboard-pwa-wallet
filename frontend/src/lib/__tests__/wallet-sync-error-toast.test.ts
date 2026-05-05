@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { BadLocalChainStateError } from '@/lib/bad-local-chain-state-error'
 import {
   reportWalletSyncError,
   showImportInitialSyncFailureToast,
@@ -46,6 +47,30 @@ describe('reportWalletSyncError', () => {
         'Failed to fetch · Wallet is unlocked but chain data may be stale until sync succeeds.',
     })
   })
+
+  it('shows repair hint for bootstrap when error indicates bad local chain', () => {
+    reportWalletSyncError(
+      'bootstrap-load',
+      new Error(
+        'Blockchain error: HeaderHashNotFound(BlockHash(000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f))',
+      ),
+    )
+
+    expect(toastError).toHaveBeenCalledWith('Sync failed', {
+      description: expect.stringMatching(/Full rescan/),
+    })
+  })
+
+  it('shows repair hint for initial-import when error indicates bad local chain', () => {
+    reportWalletSyncError(
+      'initial-import',
+      new Error('Blockchain error: HeaderHeightNotFound(1)'),
+    )
+
+    expect(toastError).toHaveBeenCalledWith('Initial sync failed', {
+      description: expect.stringMatching(/Full rescan/),
+    })
+  })
 })
 
 describe('showImportInitialSyncFailureToast', () => {
@@ -70,5 +95,20 @@ describe('showImportInitialSyncFailureToast', () => {
     const call = toastError.mock.calls[0][1] as { action: { onClick: () => void } }
     call.action.onClick()
     expect(onRetry).toHaveBeenCalled()
+  })
+
+  it('shows Full rescan hint for bad local chain', () => {
+    const onRetry = vi.fn()
+    showImportInitialSyncFailureToast(
+      new BadLocalChainStateError(),
+      onRetry,
+    )
+    expect(toastError).toHaveBeenCalledWith(
+      'Initial sync failed',
+      expect.objectContaining({
+        description: expect.stringMatching(/Full rescan/),
+        action: { label: 'Retry', onClick: expect.any(Function) },
+      }),
+    )
   })
 })

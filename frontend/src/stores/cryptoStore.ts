@@ -12,6 +12,7 @@ import { useSessionStore, clearAutoLockTimer } from '@/stores/sessionStore';
 import { resetSecretsChannel } from '@/workers/secrets-channel';
 import { awaitInFlightWalletSecretsWrites } from '@/db/wallet-secrets-write-tracker';
 import { navigateToLibraryIfOnWalletRoute } from '@/lib/app-router';
+import { asBadLocalChainStateError } from '@/lib/bad-local-chain-state-error';
 import type { Remote } from 'comlink';
 import type {
   CryptoService,
@@ -191,11 +192,39 @@ export const useCryptoStore = create<CryptoState>((set, get) => {
     exportChangeset: () =>
       withErrorHandling((worker) => worker.exportChangeset()),
 
-    syncWallet: (esploraUrl) =>
-      withErrorHandling((worker) => worker.syncWallet(esploraUrl)),
+    syncWallet: async (esploraUrl) => {
+      const worker = get()._getWorker();
+      try {
+        set({ error: null });
+        return await worker.syncWallet(esploraUrl);
+      } catch (err) {
+        const badLocalChainStateError = asBadLocalChainStateError(err);
+        if (badLocalChainStateError) {
+          set({ error: badLocalChainStateError.message });
+          throw badLocalChainStateError;
+        }
+        const errorMsg = err instanceof Error ? err.message : String(err);
+        set({ error: errorMsg });
+        throw err;
+      }
+    },
 
-    fullScanWallet: (esploraUrl, stopGap) =>
-      withErrorHandling((worker) => worker.fullScanWallet(esploraUrl, stopGap)),
+    fullScanWallet: async (esploraUrl, stopGap) => {
+      const worker = get()._getWorker();
+      try {
+        set({ error: null });
+        return await worker.fullScanWallet(esploraUrl, stopGap);
+      } catch (err) {
+        const badLocalChainStateError = asBadLocalChainStateError(err);
+        if (badLocalChainStateError) {
+          set({ error: badLocalChainStateError.message });
+          throw badLocalChainStateError;
+        }
+        const errorMsg = err instanceof Error ? err.message : String(err);
+        set({ error: errorMsg });
+        throw err;
+      }
+    },
 
     buildTransaction: (params) =>
       withErrorHandling((worker) => worker.buildTransaction(params)),

@@ -34,6 +34,7 @@ import {
   runFullScanDashboardWalletSync,
   retryImportInitialEsploraSyncWithWalletStatus,
 } from '@/lib/wallet-utils'
+import { BadLocalChainStateError } from '@/lib/bad-local-chain-state-error'
 import { sanitizeErrorMessageForUi } from '@/lib/sanitize-error-for-ui'
 import { errorMessage } from '@/lib/utils'
 import { labOwnersEqual, walletLabOwner } from '@/lib/lab-owner'
@@ -383,8 +384,12 @@ function SyncButton({
     } catch (err) {
       setWalletStatus('unlocked')
       console.error('Dashboard sync failed', err)
-      const detail = sanitizeErrorMessageForUi(errorMessage(err))
-      toast.error(detail || 'Sync failed')
+      if (err instanceof BadLocalChainStateError) {
+        toast.error('Sync failed', { description: err.message })
+      } else {
+        const detail = sanitizeErrorMessageForUi(errorMessage(err))
+        toast.error(detail || 'Sync failed')
+      }
     } finally {
       onThisOp(false)
     }

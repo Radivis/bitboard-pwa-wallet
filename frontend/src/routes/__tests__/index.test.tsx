@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { screen } from '@testing-library/react'
+import { screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { renderWithProviders } from '@/test-utils/test-providers'
+import { BadLocalChainStateError } from '@/lib/bad-local-chain-state-error'
 
 const mockNavigate = vi.fn()
 vi.mock('@tanstack/react-router', async (importOriginal) => {
@@ -91,6 +93,21 @@ vi.mock('@/hooks/useLightningMutations', () => ({
     isSuccess: false,
   }),
   useNavigatorOnline: () => true,
+}))
+
+const dashboardToastMocks = vi.hoisted(() => ({
+  error: vi.fn(),
+  success: vi.fn(),
+  loading: vi.fn(() => 'toast-id'),
+  dismiss: vi.fn(),
+}))
+vi.mock('sonner', () => ({
+  toast: {
+    error: (...args: unknown[]) => dashboardToastMocks.error(...args),
+    success: (...args: unknown[]) => dashboardToastMocks.success(...args),
+    loading: (...args: unknown[]) => dashboardToastMocks.loading(...args),
+    dismiss: dashboardToastMocks.dismiss,
+  },
 }))
 
 import { DashboardPage } from '../wallet/index'
@@ -221,6 +238,24 @@ describe('DashboardPage', () => {
     walletStoreState.importInitialSyncErrorMessage = 'failed'
     renderWithProviders(<DashboardPage />)
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('Sync shows Full rescan hint when sync fails with BadLocalChainStateError', async () => {
+    mockRunIncrementalDashboardWalletSync.mockRejectedValueOnce(
+      new BadLocalChainStateError(),
+    )
+    walletStoreState.networkMode = 'mainnet'
+    const user = userEvent.setup()
+    renderWithProviders(<DashboardPage />)
+    await user.click(screen.getByRole('button', { name: 'Sync' }))
+    await waitFor(() => {
+      expect(dashboardToastMocks.error).toHaveBeenCalledWith(
+        'Sync failed',
+        expect.objectContaining({
+          description: expect.stringContaining('Full rescan'),
+        }),
+      )
+    })
   })
 
   it('renders transaction list', () => {
