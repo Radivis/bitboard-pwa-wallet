@@ -353,32 +353,52 @@ function PrimarySectionNav() {
   const backdropHoleIndex = activeSlotIndex >= 0 ? activeSlotIndex : 0
 
   return (
-    <nav aria-label="Main sections" className="fixed bottom-0 left-0 right-0 z-50">
-      <div
-        className={cn(
-          'relative mx-auto grid w-full max-w-screen-xl items-stretch px-2',
-          PRIMARY_BOTTOM_NAV_HEIGHT_CLASS,
-        )}
-        style={{
-          gridTemplateColumns: `repeat(${PRIMARY_NAV_ITEMS.length}, minmax(0, 1fr))`,
-        }}
-      >
+    <nav
+      aria-label="Main sections"
+      className={cn(
+        'fixed bottom-0 left-0 right-0 z-50 grid w-full items-stretch',
+        PRIMARY_BOTTOM_NAV_HEIGHT_CLASS,
+      )}
+      style={{
+        gridTemplateColumns:
+          'minmax(0, 1fr) minmax(0, min(100%, 80rem)) minmax(0, 1fr)',
+      }}
+    >
+      <div className={cn('min-h-0 min-w-0', LOWER_NAV_SURFACE_CLASS)} aria-hidden />
+      <div className="relative flex h-full min-h-0 min-w-0 flex-col">
+        <div
+          aria-hidden
+          className={cn(
+            'pointer-events-none absolute inset-y-0 left-0 z-0 w-2',
+            LOWER_NAV_SURFACE_CLASS,
+          )}
+        />
+        <div
+          aria-hidden
+          className={cn(
+            'pointer-events-none absolute inset-y-0 right-0 z-0 w-2',
+            LOWER_NAV_SURFACE_CLASS,
+          )}
+        />
         <PrimaryNavBackdropCells activeSlotIndex={backdropHoleIndex} />
-        {PRIMARY_NAV_ITEMS.map((item) => {
-          const isActive = isPrimaryNavItemActive(item, pathname, matchRoute)
-          return (
-            <PrimaryNavForegroundSlot key={item.to} isActiveCategory={isActive}>
-              <BottomNavLink
-                to={item.to}
-                label={item.label}
-                icon={item.icon}
-                isActive={isActive}
-                preload={item.linkPreload}
-              />
-            </PrimaryNavForegroundSlot>
-          )
-        })}
+        <div className="relative z-[1] flex h-full min-h-0 w-full min-w-0 flex-1 items-stretch px-2">
+          {PRIMARY_NAV_ITEMS.map((item) => {
+            const isActive = isPrimaryNavItemActive(item, pathname, matchRoute)
+            return (
+              <PrimaryNavForegroundSlot key={item.to} isActiveCategory={isActive}>
+                <BottomNavLink
+                  to={item.to}
+                  label={item.label}
+                  icon={item.icon}
+                  isActive={isActive}
+                  preload={item.linkPreload}
+                />
+              </PrimaryNavForegroundSlot>
+            )
+          })}
+        </div>
       </div>
+      <div className={cn('min-h-0 min-w-0', LOWER_NAV_SURFACE_CLASS)} aria-hidden />
     </nav>
   )
 }
