@@ -15,6 +15,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+## [0.1.4] - 2026-05-08
+
+### Changed
+- Changed styling for two level nav to make it more intuitive that it's actually a two level nav
+
+### Fixed
+- Fixed some display issues for small screens
+- LaTeX formulas and symbols should now also be displayed properly in production
+
 ## [0.1.3] - 2026-05-05
 
 ### Added
