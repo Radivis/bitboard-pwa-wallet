@@ -1,5 +1,5 @@
 import { ArticleLink, ArticleSection, ARTICLE_BODY_CLASS } from '@/lib/library/article-shared'
-import { InlineMath, BlockMath } from '@/lib/library/math'
+import { BlockMath, InlineMath } from '@/lib/library/math'
 import type { LibraryArticle } from '@/lib/library/library-article'
 
 // TODO: Consider adding graphics later showing the real-number curve shape (y^2 = x^3 + 7)
@@ -40,17 +40,17 @@ export const article: LibraryArticle = {
           The curve is defined by an equation over a{' '}
           <ArticleLink slug="finite-fields">finite field</ArticleLink>:
         </p>
-        <BlockMath math="y^2 = x^3 + ax + b \pmod{p}" />
+        <BlockMath math={BlockMath.tex`y^2 = x^3 + ax + b \pmod{p}`} />
         <p>
           Points <InlineMath math="(x, y)" /> satisfying this equation, plus a special &quot;point
           at infinity,&quot; form a <strong>finite cyclic group</strong>. The group has a{' '}
           <strong>generator point</strong> <InlineMath math="G" /> such that every point can be
-          written as <InlineMath math="k \cdot G" /> for some integer <InlineMath math="k" />.
+          written as <InlineMath math={InlineMath.tex`k \cdot G`} /> for some integer <InlineMath math="k" />.
         </p>
 
         <p className="mt-4">
           <strong>Key generation:</strong> Pick a random private key <InlineMath math="d" />.
-          Compute your public key as <InlineMath math="P = d \cdot G" /> using{' '}
+          Compute your public key as <InlineMath math={InlineMath.tex`P = d \cdot G`} /> using{' '}
           <ArticleLink slug="elliptic-curve-algebra">scalar multiplication</ArticleLink>. This is
           fast. But given only <InlineMath math="P" /> and <InlineMath math="G" />, finding{' '}
           <InlineMath math="d" /> is the{' '}
@@ -67,7 +67,7 @@ export const article: LibraryArticle = {
           or numerical methods. But over a finite field, the points are scattered with no obvious
           pattern—there is no shortcut to &quot;walk backwards&quot; from <InlineMath math="P" />{' '}
           to find <InlineMath math="d" />. The best known classical algorithms take{' '}
-          <InlineMath math="O(\sqrt{n})" /> operations where <InlineMath math="n" /> is the group
+          <InlineMath math={InlineMath.tex`O(\sqrt{n})`} /> operations where <InlineMath math="n" /> is the group
           order.
         </p>
 
@@ -107,7 +107,7 @@ export const article: LibraryArticle = {
             computation
           </li>
           <li>
-            <InlineMath math="n \approx 2^{256}" /> — the group has roughly{' '}
+            <InlineMath math={InlineMath.tex`n \approx 2^{256}`} /> — the group has roughly{' '}
             <InlineMath math="2^{256}" /> points
           </li>
           <li>
@@ -125,14 +125,14 @@ export const article: LibraryArticle = {
         <p className="mt-4">
           <strong>Why scalar multiplication is fast:</strong> The{' '}
           <ArticleLink slug="elliptic-curve-algebra">double-and-add algorithm</ArticleLink>{' '}
-          computes <InlineMath math="d \cdot G" /> in about <InlineMath math="\log_2(d)" />{' '}
+          computes <InlineMath math={InlineMath.tex`d \cdot G`} /> in about <InlineMath math={InlineMath.tex`\log_2(d)`} />{' '}
           point operations. For a 256-bit <InlineMath math="d" />, that is at most 512
           operations—trivial for a computer.
         </p>
 
         <p className="mt-4">
           <strong>Why discrete log is slow:</strong> The best classical attack (Pollard&apos;s rho)
-          requires <InlineMath math="O(\sqrt{n}) \approx 2^{128}" /> operations. There is no known
+          requires <InlineMath math={InlineMath.tex`O(\sqrt{n}) \approx 2^{128}`} /> operations. There is no known
           shortcut that exploits the algebraic structure to do better. This asymmetry—fast forward,
           slow reverse—is the foundation of{' '}
           <ArticleLink slug="ecdsa">ECDSA</ArticleLink> and{' '}

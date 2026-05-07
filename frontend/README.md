@@ -160,6 +160,31 @@ Create a `.env` file for local configuration:
 VITE_API_URL=http://localhost:8000
 ```
 
+## LaTeX (KaTeX) in TSX
+
+Library articles (and any other TSX that renders KaTeX) must import **`InlineMath`** and **`BlockMath`** from `@/lib/library/math`, not from `react-katex`, so `katex/dist/katex.min.css` is bundled consistently.
+
+### Macros and backslashes (`InlineMath.tex` / `BlockMath.tex`)
+
+Whenever the formula contains LaTeX macros (`\frac`, `\cdot`, `\mathbb`, …), pass the source through the tagged template on the **same** component:
+
+```tsx
+import { BlockMath, InlineMath } from '@/lib/library/math'
+
+<InlineMath math={InlineMath.tex`\lambda = \frac{y_2 - y_1}{x_2 - x_1}`} />
+<BlockMath math={BlockMath.tex`a^{p-1} \equiv 1 \pmod{p}`} />
+```
+
+`InlineMath.tex` and `BlockMath.tex` are **`String.raw`**: backslashes are preserved exactly for KaTeX.
+
+**Why not plain `math="\frac{…}{…}"`?**
+
+1. Values that are genuinely **JavaScript string literals** interpret escapes such as `\f`, `\n`, and `\t`, which silently corrupts many macro names (`\frac`, `\cdot`, `\text`, …).
+
+2. **JSX / toolchain differences** between `vite dev` and production builds (and across compiler upgrades) are not something we want to rely on for correctness. Using `.tex` keeps one stable rule: macros always come from a tagged template.
+
+Plain strings remain fine for tiny fragments with **no** macro backslashes (for example `math="G"`). Prefer `.tex` whenever the snippet includes `\`.
+
 ## Project Structure
 
 ```
