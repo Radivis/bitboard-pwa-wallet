@@ -242,11 +242,11 @@ function isSettingsSectionPath(pathname: string): boolean {
 }
 
 const NAV_LINK_CLASS =
-  'group flex min-h-0 flex-1 items-center justify-center py-1.5 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background'
+  'group flex min-h-0 min-w-0 flex-1 items-center justify-center overflow-hidden py-1.5 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background'
 
 function navItemInnerClassNames(isActive: boolean) {
   return cn(
-    'inline-flex flex-col items-center gap-1 rounded-md px-2 py-1 text-xs transition-[color,box-shadow,ring]',
+    'inline-flex w-max min-w-0 max-w-full flex-col items-center gap-1 rounded-md px-1 py-1 text-xs transition-[color,box-shadow,ring] sm:px-2',
     isActive
       ? cn(
           'font-medium text-primary',
@@ -281,7 +281,7 @@ function BottomNavLink({
     >
       <span className={navItemInnerClassNames(isActive)}>
         <Icon className="h-5 w-5 shrink-0" aria-hidden />
-        <span>{label}</span>
+        <span className="max-w-[14ch] truncate text-center leading-tight">{label}</span>
       </span>
     </Link>
   )
@@ -333,7 +333,7 @@ function PrimaryNavForegroundSlot({
   return (
     <div
       className={cn(
-        'relative z-[1] flex min-h-0 flex-1 flex-col',
+        'relative z-[1] flex min-h-0 min-w-0 flex-1 flex-col',
         isActiveCategory && SECONDARY_NAV_SURFACE_CLASS,
         isActiveCategory ? 'border-t border-t-transparent' : 'border-t border-border',
       )}
@@ -356,9 +356,12 @@ function PrimarySectionNav() {
     <nav aria-label="Main sections" className="fixed bottom-0 left-0 right-0 z-50">
       <div
         className={cn(
-          'relative mx-auto flex w-full max-w-screen-xl items-stretch px-2',
+          'relative mx-auto grid w-full max-w-screen-xl items-stretch px-2',
           PRIMARY_BOTTOM_NAV_HEIGHT_CLASS,
         )}
+        style={{
+          gridTemplateColumns: `repeat(${PRIMARY_NAV_ITEMS.length}, minmax(0, 1fr))`,
+        }}
       >
         <PrimaryNavBackdropCells activeSlotIndex={backdropHoleIndex} />
         {PRIMARY_NAV_ITEMS.map((item) => {
@@ -401,9 +404,12 @@ function SectionSubNav({
     >
       <div
         className={cn(
-          'mx-auto flex max-w-screen-xl items-stretch justify-around px-2',
+          'mx-auto grid w-full max-w-screen-xl items-stretch px-2',
           WALLET_SUB_NAV_HEIGHT_CLASS,
         )}
+        style={{
+          gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))`,
+        }}
       >
         {items.map((item) => {
           const isActive =
