@@ -201,8 +201,15 @@ const LAB_SUB_NAV_ITEMS: SectionSubNavItem[] = [
   },
 ]
 
-const NAV_SURFACE_CLASS =
+const SECONDARY_NAV_SURFACE_CLASS =
   'border-border bg-header/95 backdrop-blur supports-[backdrop-filter]:bg-header/80'
+
+const LOWER_NAV_SURFACE_CLASS =
+  'border-border bg-nav-lower-tier/95 backdrop-blur supports-[backdrop-filter]:bg-nav-lower-tier/80'
+
+/** Bottom nav item labels: narrow screens truncate past ~14 character widths. */
+const BOTTOM_NAV_LABEL_SPAN_CLASS =
+  'max-w-[14ch] truncate text-center leading-tight'
 
 /**
  * Primary section bar (Tailwind `h-16`). Wallet sub-nav uses literal `bottom-16` in JSX
@@ -239,11 +246,11 @@ function isSettingsSectionPath(pathname: string): boolean {
 }
 
 const NAV_LINK_CLASS =
-  'group flex min-h-0 flex-1 items-center justify-center py-1.5 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background'
+  'group flex min-h-0 min-w-0 flex-1 items-center justify-center overflow-hidden py-1.5 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background'
 
 function navItemInnerClassNames(isActive: boolean) {
   return cn(
-    'inline-flex flex-col items-center gap-1 rounded-md px-2 py-1 text-xs transition-[color,box-shadow,ring]',
+    'inline-flex w-max min-w-0 max-w-full flex-col items-center gap-1 rounded-md px-1 py-1 text-xs transition-[color,box-shadow,ring] sm:px-2',
     isActive
       ? cn(
           'font-medium text-primary',
@@ -278,49 +285,74 @@ function BottomNavLink({
     >
       <span className={navItemInnerClassNames(isActive)}>
         <Icon className="h-5 w-5 shrink-0" aria-hidden />
-        <span>{label}</span>
+        <span className={BOTTOM_NAV_LABEL_SPAN_CLASS}>{label}</span>
       </span>
     </Link>
   )
 }
 
+function isPrimaryNavItemActive(
+  item: PrimaryNavItem,
+  pathname: string,
+  matchRoute: ReturnType<typeof useMatchRoute>,
+): boolean {
+  return item.isActive
+    ? item.isActive(pathname)
+    : !!matchRoute({ to: item.to, fuzzy: false })
+}
+
+/**
+ * One column in the primary bottom nav: inactive tabs show the parent nav’s lower-tier surface;
+ * active tab uses the same header-tier surface as `SectionSubNav`.
+ */
+function PrimaryNavTabColumn({
+  isActiveCategory,
+  children,
+}: {
+  isActiveCategory: boolean
+  children: React.ReactNode
+}) {
+  return (
+    <div
+      className={cn(
+        'flex min-h-0 min-w-0 flex-1 flex-col',
+        isActiveCategory && SECONDARY_NAV_SURFACE_CLASS,
+        isActiveCategory ? 'border-t border-t-transparent' : 'border-t border-border',
+      )}
+    >
+      {children}
+    </div>
+  )
+}
+
 function PrimarySectionNav() {
   const matchRoute = useMatchRoute()
-  const location = useLocation()
-  const pathname = location.pathname
+  const pathname = useLocation().pathname
 
   return (
     <nav
       aria-label="Main sections"
       className={cn(
-        'fixed bottom-0 left-0 right-0 z-50 border-t',
-        NAV_SURFACE_CLASS,
+        'fixed bottom-0 left-0 right-0 z-50 w-full',
+        PRIMARY_BOTTOM_NAV_HEIGHT_CLASS,
+        LOWER_NAV_SURFACE_CLASS,
       )}
     >
-      <div
-        className={cn(
-          'mx-auto flex max-w-screen-xl items-stretch justify-around px-2',
-          PRIMARY_BOTTOM_NAV_HEIGHT_CLASS,
-        )}
-      >
-        {PRIMARY_NAV_ITEMS.map(
-          ({ to, label, icon, isActive: customActive, linkPreload }) => {
-            const isActive = customActive
-              ? customActive(pathname)
-              : !!matchRoute({ to, fuzzy: false })
-
-            return (
+      <div className="mx-auto flex h-full min-h-0 w-full max-w-screen-xl min-w-0 items-stretch px-2">
+        {PRIMARY_NAV_ITEMS.map((item) => {
+          const isActive = isPrimaryNavItemActive(item, pathname, matchRoute)
+          return (
+            <PrimaryNavTabColumn key={item.to} isActiveCategory={isActive}>
               <BottomNavLink
-                key={to}
-                to={to}
-                label={label}
-                icon={icon}
+                to={item.to}
+                label={item.label}
+                icon={item.icon}
                 isActive={isActive}
-                preload={linkPreload}
+                preload={item.linkPreload}
               />
-            )
-          },
-        )}
+            </PrimaryNavTabColumn>
+          )
+        })}
       </div>
     </nav>
   )
@@ -342,14 +374,17 @@ function SectionSubNav({
       aria-label={ariaLabel}
       className={cn(
         'fixed bottom-16 left-0 right-0 z-40 border-t',
-        NAV_SURFACE_CLASS,
+        SECONDARY_NAV_SURFACE_CLASS,
       )}
     >
       <div
         className={cn(
-          'mx-auto flex max-w-screen-xl items-stretch justify-around px-2',
+          'mx-auto grid w-full max-w-screen-xl items-stretch px-2',
           WALLET_SUB_NAV_HEIGHT_CLASS,
         )}
+        style={{
+          gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))`,
+        }}
       >
         {items.map((item) => {
           const isActive =

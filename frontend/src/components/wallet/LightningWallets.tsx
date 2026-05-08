@@ -324,11 +324,11 @@ function ConnectWalletForm({ onConnected }: { onConnected: () => void }) {
       <div className="space-y-3">
         <div className="space-y-1">
           <Label className="text-xs text-muted-foreground">Type</Label>
-          <div className="flex gap-2">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-stretch">
             <InfomodeWrapper
               infoId="connect-lightning-nwc-type"
               infoComponent={NwcWalletOptionsInfomodeContent}
-              className="min-w-0 flex-1"
+              className="min-w-0 w-full sm:flex-1"
             >
               <Button
                 variant="default"
@@ -354,7 +354,7 @@ function ConnectWalletForm({ onConnected }: { onConnected: () => void }) {
               infoId="connect-lightning-app-internal-type"
               infoTitle="App-internal Lightning (planned)"
               infoText="This mode will implement a fully Bitboard-internal Lightning wallet: channels and keys live in the app instead of an external wallet over NWC. That can be a simple way to get started with everything in one place, but the caveats are serious. Lightning requires you to react to certain on-chain events in time; without connecting to a watchtower service that monitors the chain on your behalf, you would need to log into Bitboard on your own about once a day to review and act on time-critical transactions—until watchtower support exists or you use another connection mode."
-              className="min-w-0 flex-1"
+              className="min-w-0 w-full sm:flex-1"
             >
               <Button
                 variant="outline"

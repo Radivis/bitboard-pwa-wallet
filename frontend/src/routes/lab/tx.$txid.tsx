@@ -277,40 +277,42 @@ function LabTxViewerPage() {
                     data-testid={`lab-tx-vout-${index}`}
                     key={`${output.address}-${index}`}
                     className={cn(
-                      'flex gap-4 items-center py-2 border-b border-border last:border-0 rounded-md -mx-1 px-1 transition-colors',
+                      'flex flex-col gap-1 py-2 border-b border-border last:border-0 rounded-md -mx-1 px-1 transition-colors sm:flex-row sm:items-center sm:gap-4',
                       highlightVout === index &&
                         'ring-2 ring-primary/60 ring-offset-2 ring-offset-background bg-muted/40',
                     )}
                   >
-                    <span className="font-mono text-sm break-all flex-1 min-w-0">
+                    <span className="font-mono text-sm break-all min-w-0 sm:flex-1">
                       {truncateAddress(output.address)}
                     </span>
-                    <span className="flex items-center gap-1 shrink-0">
-                      {output.owner ? (
-                        getOwnerIcon(output.owner) === 'wallet' ? (
-                          <Wallet className="h-4 w-4" />
+                    <div className="flex min-w-0 flex-nowrap items-center gap-2 overflow-x-auto sm:shrink-0 sm:gap-4 sm:overflow-visible">
+                      <span className="flex min-w-0 items-center gap-1">
+                        {output.owner ? (
+                          getOwnerIcon(output.owner) === 'wallet' ? (
+                            <Wallet className="h-4 w-4 shrink-0" />
+                          ) : (
+                            <FlaskConical className="h-4 w-4 shrink-0" />
+                          )
+                        ) : null}
+                        {output.owner ? (
+                          <LabOwnerDisplayWithAddressType
+                            owner={output.owner}
+                            wallets={wallets}
+                            entities={entities}
+                          />
                         ) : (
-                          <FlaskConical className="h-4 w-4" />
-                        )
-                      ) : null}
-                      {output.owner ? (
-                        <LabOwnerDisplayWithAddressType
-                          owner={output.owner}
-                          wallets={wallets}
-                          entities={entities}
-                        />
-                      ) : (
-                        <Badge variant="secondary">unknown</Badge>
+                          <Badge variant="secondary">unknown</Badge>
+                        )}
+                      </span>
+                      <span className="shrink-0 text-right">
+                        <BitcoinAmountDisplay amountSats={output.amountSats} size="sm" />
+                      </span>
+                      {output.isChange && (
+                        <Badge variant="secondary" className="shrink-0">
+                          Change
+                        </Badge>
                       )}
-                    </span>
-                    <span className="text-right">
-                      <BitcoinAmountDisplay amountSats={output.amountSats} size="sm" />
-                    </span>
-                    {output.isChange && (
-                      <Badge variant="secondary" className="shrink-0">
-                        Change
-                      </Badge>
-                    )}
+                    </div>
                   </div>
                 ))}
               </div>

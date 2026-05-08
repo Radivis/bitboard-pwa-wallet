@@ -24,6 +24,8 @@
   /* Light theme lightness values */
   --background-l: 90%;
   --header-l: 86%;
+  /* Bottom category strip: darker than header in light, lighter in dark (.dark overrides L). */
+  --nav-lower-tier-l: calc(var(--header-l) - 3%);
   --foreground-l: 10%;
   --card-l: 95%;
   --card-foreground-l: 15%;
@@ -63,6 +65,7 @@
   /* HSL colors - network modulates hue, addressType modulates saturation, theme modulates lightness */
   --background: hsl(var(--hue) calc(var(--low-h) * var(--saturation-scale)) var(--background-l));
   --header: hsl(var(--hue) calc(var(--low-h) * var(--saturation-scale)) var(--header-l));
+  --nav-lower-tier: hsl(var(--hue) calc(var(--low-h) * var(--saturation-scale)) var(--nav-lower-tier-l));
   --foreground: hsl(var(--hue) calc(var(--minimal-h) * var(--saturation-scale)) var(--foreground-l));
   --card: hsl(var(--hue) calc(var(--low-h) * var(--saturation-scale)) var(--card-l));
   --card-foreground: hsl(var(--hue) calc(var(--minimal-h) * var(--saturation-scale)) var(--card-foreground-l));
@@ -148,6 +151,7 @@ body {
   --radius-4xl: calc(var(--radius) + 16px);
   --color-background: var(--background);
   --color-header: var(--header);
+  --color-nav-lower-tier: var(--nav-lower-tier);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
   --color-card-foreground: var(--card-foreground);
@@ -184,6 +188,7 @@ body {
   /* Dark theme: inverted lightness */
   --background-l: 9%;
   --header-l: 12%;
+  --nav-lower-tier-l: calc(var(--header-l) + 3%);
   --foreground-l: 98%;
   --card-l: 14%;
   --card-foreground-l: 98%;

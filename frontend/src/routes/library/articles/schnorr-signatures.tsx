@@ -1,5 +1,5 @@
 import { ArticleLink, ArticleSection, ARTICLE_BODY_CLASS } from '@/lib/library/article-shared'
-import { InlineMath, BlockMath } from '@/lib/library/math'
+import { BlockMath, InlineMath } from '@/lib/library/math'
 import type { LibraryArticle } from '@/lib/library/library-article'
 
 export const article: LibraryArticle = {
@@ -28,10 +28,10 @@ export const article: LibraryArticle = {
           <strong>Key generation:</strong> Identical to ECDSA—pick a random private key{' '}
           <InlineMath math="d" />, compute public key:
         </p>
-        <BlockMath math="P = d \cdot G" />
+        <BlockMath math={BlockMath.tex`P = d \cdot G`} />
         <p>
           <strong>Signing:</strong> To sign a message <InlineMath math="m" />, generate a random
-          nonce <InlineMath math="k" />, compute <InlineMath math="R = k \cdot G" />, then compute
+          nonce <InlineMath math="k" />, compute <InlineMath math={InlineMath.tex`R = k \cdot G`} />, then compute
           a challenge <InlineMath math="e" /> by hashing everything together, and finally compute
           a response <InlineMath math="s" />.
         </p>
@@ -48,23 +48,23 @@ export const article: LibraryArticle = {
         </p>
         <ol className="list-decimal space-y-2 pl-5">
           <li>
-            Generate a random nonce <InlineMath math="k \in [1, n-1]" />.
+            Generate a random nonce <InlineMath math={InlineMath.tex`k \in [1, n-1]`} />.
           </li>
           <li>
-            Compute the nonce point <InlineMath math="R = k \cdot G" />.
+            Compute the nonce point <InlineMath math={InlineMath.tex`R = k \cdot G`} />.
           </li>
           <li>
             Compute the challenge hash:
-            <BlockMath math="e = H_{\text{BIP340/challenge}}(R_x \| P_x \| m)" />
+            <BlockMath math={BlockMath.tex`e = H_{\text{BIP340/challenge}}(R_x \| P_x \| m)`} />
             where <InlineMath math="R_x" /> and <InlineMath math="P_x" /> are the x-coordinates,
-            and <InlineMath math="H" /> is a tagged SHA256 hash. The <InlineMath math="\|" />{' '}
+            and <InlineMath math="H" /> is a tagged SHA256 hash. The <InlineMath math={InlineMath.tex`\|`} />{' '}
             symbol means <strong>concatenation</strong>—the byte representations of{' '}
             <InlineMath math="R_x" />, <InlineMath math="P_x" />, and <InlineMath math="m" /> are
             joined end-to-end before hashing.
           </li>
           <li>
             Compute the response:
-            <BlockMath math="s = k + e \cdot d \mod n" />
+            <BlockMath math={BlockMath.tex`s = k + e \cdot d \mod n`} />
           </li>
           <li>
             The signature is <InlineMath math="(R, s)" />, typically encoded as 64 bytes (32 for{' '}
@@ -82,11 +82,11 @@ export const article: LibraryArticle = {
           </li>
           <li>
             Recompute the challenge{' '}
-            <InlineMath math="e = H_{\text{BIP340/challenge}}(R_x \| P_x \| m)" />.
+            <InlineMath math={InlineMath.tex`e = H_{\text{BIP340/challenge}}(R_x \| P_x \| m)`} />.
           </li>
           <li>
             Check:
-            <BlockMath math="s \cdot G = R + e \cdot P" />
+            <BlockMath math={BlockMath.tex`s \cdot G = R + e \cdot P`} />
           </li>
         </ol>
 
@@ -94,7 +94,7 @@ export const article: LibraryArticle = {
           <strong>Why verification works:</strong> The equation is linear. Substituting{' '}
           <InlineMath math="s = k + ed" /> and <InlineMath math="P = dG" />:
         </p>
-        <BlockMath math="s \cdot G = (k + ed) \cdot G = k \cdot G + ed \cdot G = R + e \cdot (d \cdot G) = R + e \cdot P" />
+        <BlockMath math={BlockMath.tex`s \cdot G = (k + ed) \cdot G = k \cdot G + ed \cdot G = R + e \cdot (d \cdot G) = R + e \cdot P`} />
         <p>
           The signature proves knowledge of <InlineMath math="d" /> without revealing it—a{' '}
           <strong>zero-knowledge proof</strong> of discrete log knowledge.
@@ -107,7 +107,7 @@ export const article: LibraryArticle = {
           <li>
             <strong>Key aggregation (MuSig):</strong> Multiple parties can combine their public
             keys into a single aggregate key{' '}
-            <InlineMath math="P_{\text{agg}} = P_1 + P_2 + \ldots" /> and produce a single
+            <InlineMath math={InlineMath.tex`P_{\text{agg}} = P_1 + P_2 + \ldots`} /> and produce a single
             signature that is indistinguishable from a regular signature. This enables compact{' '}
             <ArticleLink slug="what-does-multisig-mean">multisig</ArticleLink> without revealing
             the number of signers.
@@ -145,7 +145,7 @@ export const article: LibraryArticle = {
           <strong>Security note:</strong> Like ECDSA, nonce reuse is catastrophic. If two messages
           are signed with the same <InlineMath math="k" />, the private key can be computed:
         </p>
-        <BlockMath math="d = \frac{s_1 - s_2}{e_1 - e_2} \mod n" />
+        <BlockMath math={BlockMath.tex`d = \frac{s_1 - s_2}{e_1 - e_2} \mod n`} />
         <p>BIP-340 recommends deterministic nonce generation using the private key and message.</p>
       </ArticleSection>
 

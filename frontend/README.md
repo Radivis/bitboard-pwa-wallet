@@ -1,24 +1,37 @@
-# Zero2Prod Frontend
+# Bitboard Wallet Frontend
 
-React + TypeScript frontend for the Zero2Prod newsletter application.
+React + TypeScript frontend for the Bitboard Wallet application.
+
+For how this fits with Rust/WASM workers, OPFS SQLite, and deployment, see the [repository root README](../README.md) and [architecture overview](../doc/ARCHITECTURE.md).
 
 ## Tech Stack
 
-- **React 19** - UI library
-- **TypeScript** - Type safety
-- **Vite** - Build tool and dev server
-- **Material-UI (MUI) v6** - Component library
-- **React Router** - Client-side routing
-- **TanStack Query** - Server state management
-- **Playwright** - E2E testing
-- **Swagger UI React** - API documentation
+- **React 19** — UI
+- **TypeScript** — Types
+- **Vite** — Dev server and production build
+- **TanStack Router** — File-based client routing (`@tanstack/react-router`, `@tanstack/router-plugin`)
+- **TanStack Query** — Async / server-adjacent state
+- **Tailwind CSS v4** — Styling (`@tailwindcss/vite`)
+- **Radix UI** — Primitives; component patterns follow **shadcn**-style conventions ([`components.json`](components.json))
+- **Zustand** — Client state (with persistence where needed)
+- **Kysely + SQLite (WASM)** — In-browser persistence via workers and OPFS
+- **Rust → WebAssembly** — Crypto, encryption, and Lightning logic (`npm run build:wasm` / `wasm-pack`); loaded with `vite-plugin-wasm`
+- **vite-plugin-pwa** — Progressive Web App / service worker
+- **Vitest** + **Testing Library** — Unit and component tests (`jsdom`)
+- **Playwright** — End-to-end tests
+
+## Features
+
+- Installable **PWA** with offline-oriented caching for static assets (see `vite.config.ts`).
+- **Wallet** flows: on-chain and Lightning (including NWC-related paths); **Lab** for local chain exploration; **Library** for in-app articles with math.
+- Esplora-backed chain data in dev/production is proxied safely (Vite dev proxies and the [`api/`](api/) Vercel handlers).
 
 ## Development
 
 ### Prerequisites
 
-- Node.js 24+ and npm
-- Backend server running on `http://localhost:8000`
+- **Node.js** 24+ and **npm** (`package.json` `engines`)
+- For **`npm run build`** (production bundle): **Rust** toolchain, **`wasm-pack`**, and the sibling crates under `../crypto`, `../bitboard-encryption`, and `../bitboard-lightning` (the `build` script runs `build:wasm` before `tsc` and `vite build`)
 
 ### Getting Started
 
@@ -30,84 +43,58 @@ npm install
 npm run dev
 ```
 
-The frontend will be available at `http://localhost:3000`
+The app is served at `http://localhost:3000` (see `vite.config.ts`).
 
 ### Available Scripts
 
-- `npm run dev` - Start development server
-- `npm run build` - Build for production
-- `npm run preview` - Preview production build
-- `npm test` - Run E2E tests with Playwright
-- `npm run test:ui` - Run E2E tests with Playwright UI
-
-## Features
-
-### Public Pages
-
-- **Home** (`/`) - Landing page
-- **Blog** (`/blog`) - Public blog posts
-- **Blog Post** (`/blog/:id`) - Individual blog post
-- **API Documentation** (`/docs`) - Interactive Swagger UI
-- **Login** (`/login`) - User authentication
-- **Initial Password** (`/initial-password`) - First-time setup
-
-### Admin Pages (Protected)
-
-- **Dashboard** (`/admin/dashboard`) - Admin overview
-- **Newsletters** (`/admin/newsletters`) - Send newsletters
-- **Password** (`/admin/password`) - Change password
-- **Blog Management** (`/admin/blog`) - Manage blog posts
-  - Create new posts (`/admin/blog/new`)
-  - Edit posts (`/admin/blog/:id/edit`)
-
-## API Documentation
-
-The frontend includes an interactive Swagger UI at `/docs` that loads the OpenAPI specification from the backend (`/api/openapi.json`). This allows you to:
-
-- Browse all available API endpoints
-- See request/response schemas
-- Test endpoints directly from the browser
-- View authentication requirements
-
-Access it via the "API Docs" link in the main navigation.
+- `npm run dev` — Vite dev server
+- `npm run build` — `build:wasm` → `tsc` → production Vite build (`dist/`)
+- `npm run build:wasm` — Rebuild all frontend WASM packages via `wasm-pack` (requires Rust + `wasm-pack`)
+- `npm run preview` — Preview the production build locally
+- `npm run lint` — ESLint
+- `npm test` — Vitest
+- `npm run test:ui` — Vitest with UI
+- `npm run test:coverage` — Vitest with coverage
+- `npm run test:e2e` — Playwright E2E suite
+- `npm run test:e2e:ui` — Playwright with UI mode
+- `npm run test:e2e:headed` — Playwright headed
+- `npm run test:e2e:sequential` — Playwright with `E2E_SEQUENTIAL=true`
+- `npm run test:e2e:debug` — Playwright debug mode
+- `npm run test:e2e:nwc` — Grep NWC-tagged tests with in-memory NWC mock
+- `npm run test:e2e:lab` — Lab-tagged E2E subset
+- `npm run test:e2e:regtest` — Starts regtest docker helper then regtest-tagged tests
+- `npm run test:regtest:start` / `npm run test:regtest:stop` — Regtest environment helpers
+- `npm run sync-version` / `npm run verify-version` — Version sync with repo root (see `../scripts`)
 
 ## E2E Testing
 
-End-to-end tests are written with Playwright and cover:
-
-- Initial password setup
-- Login flow
-- Admin dashboard
-- Newsletter management
-- Password change
-- Blog management
-
 ### Running E2E Tests
 
+From `frontend/`, prefer npm scripts so the same config as CI is used:
+
 ```bash
-# Run all tests
-npx playwright test
+npm run test:e2e
 
-# Run in headed mode
-npx playwright test --headed
+npm run test:e2e:headed
 
-# Run specific test file
-npx playwright test tests/e2e/login.spec.ts
+npm run test:e2e -- tests/e2e/lab.spec.ts
 
-# Run with UI mode
-npx playwright test --ui
+npm run test:e2e:ui
 
-# View test report
 npx playwright show-report
 ```
+
+Equivalent `npx playwright test` invocations work as well (`playwright.config.ts` lives in this directory).
 
 ### Optional: funded Testnet wallet (live Esplora)
 
 This repo includes an **optional** Playwright flow that hits public Testnet Esplora (not run in CI). Use a **dedicated** testnet-only wallet with a non-zero balance.
 
 1. Create `.env.testnet` in `frontend/` **or** at the **repo root** (both gitignored) with:
+
    - `E2E_TESTNET_SEED` — space-separated 12-word mnemonic
    - `E2E_TESTNET_APP_PASSWORD` — Bitboard app password for first-run setup
+
 2. Fund that wallet on testnet.
 3. Run from `frontend/`:
 
@@ -117,85 +104,82 @@ npm run test:e2e:testnet-live
 
 Never commit `.env.testnet` or reuse a mainnet seed.
 
-### E2E Test Architecture
+## Environment variables
 
-Tests use custom Playwright fixtures for:
-- `backendApp` - Isolated backend server instance
-- `frontendServer` - Vite dev server instance
-- `authenticatedPage` - Pre-authenticated browser context with user credentials
+Vite exposes `import.meta.env.*`. Commonly useful **optional** vars (see [`src/vite-env.d.ts`](src/vite-env.d.ts) for the full typed list):
 
-Test logs are consolidated in `tests/logs/e2e-telemetry/` with prefixes:
-- `[TEST]` - Test execution messages
-- `[FRONTEND]` - Vite server output
-- `[BACKEND]` - Backend server tracing
+| Variable | Purpose |
+| --- | --- |
+| `VITE_E2E_NWC_MOCK` | When `true`, dev server + NWC-focused E2E use the in-memory Lightning mock (`npm run test:e2e:nwc`). |
+| `VITE_HIDE_ROUTER_DEVTOOLS` | `1` or `true` hides TanStack Router devtools in development. |
+| `VITE_ARGON2_CI` | `1` uses faster Argon2 parameters in **non-production** builds only; forbidden in production bundles (enforced in `vite.config.ts`). |
 
-See `tests/README.md` for detailed testing documentation.
+Use a `.env`, `.env.local`, or other [Vite env files](https://vite.dev/guide/env-and-mode.html) as needed. The app talks to Esplora via same-origin proxies (dev: `vite.config.ts`; production: `api/esplora/[...path].ts`)—not via a single “backend base URL” env in current code. For data flow details, see [`../doc/ARCHITECTURE.md`](../doc/ARCHITECTURE.md).
 
-## Vite Configuration
+## LaTeX (KaTeX) in TSX
 
-### Proxy Configuration
+Library articles (and any other TSX that renders KaTeX) must import **`InlineMath`** and **`BlockMath`** from `@/lib/library/math`, not from `react-katex`, so `katex/dist/katex.min.css` is bundled consistently.
 
-The Vite dev server proxies API requests to the backend:
+### Macros and backslashes (`InlineMath.tex` / `BlockMath.tex`)
 
-```typescript
-proxy: {
-  '/api': {
-    target: 'http://localhost:8000',
-    changeOrigin: true,
-  },
-  '/health_check': {
-    target: 'http://localhost:8000',
-    changeOrigin: true,
-  },
-}
+Whenever the formula contains LaTeX macros (`\frac`, `\cdot`, `\mathbb`, …), pass the source through the tagged template on the **same** component:
+
+```tsx
+import { BlockMath, InlineMath } from '@/lib/library/math'
+
+<InlineMath math={InlineMath.tex`\lambda = \frac{y_2 - y_1}{x_2 - x_1}`} />
+<BlockMath math={BlockMath.tex`a^{p-1} \equiv 1 \pmod{p}`} />
 ```
 
-All other routes are handled by React Router (SPA).
+`InlineMath.tex` and `BlockMath.tex` are **`String.raw`**: backslashes are preserved exactly for KaTeX.
 
-### Environment Variables
+**Why not plain `math="\frac{…}{…}"`?**
 
-Create a `.env` file for local configuration:
+1. Values that are genuinely **JavaScript string literals** interpret escapes such as `\f`, `\n`, and `\t`, which silently corrupts many macro names (`\frac`, `\cdot`, `\text`, …).
 
-```env
-VITE_API_URL=http://localhost:8000
-```
+2. **JSX / toolchain differences** between `vite dev` and production builds (and across compiler upgrades) are not something we want to rely on for correctness. Using `.tex` keeps one stable rule: macros always come from a tagged template.
+
+Plain strings remain fine for tiny fragments with **no** macro backslashes (for example `math="G"`). Prefer `.tex` whenever the snippet includes `\`.
 
 ## Project Structure
 
 ```
 frontend/
+├── api/                 # Vercel serverless handlers (e.g. Esplora proxy)
+├── common/              # Shared code (legal copies, privacy helpers, …)
+├── public/              # Static assets
 ├── src/
-│   ├── api/           # API client functions
-│   ├── components/    # Reusable components
-│   ├── contexts/      # React contexts (theme, etc.)
-│   ├── pages/         # Page components
-│   ├── utils/         # Utility functions
-│   ├── App.tsx        # Main app component with routing
-│   └── main.tsx       # Entry point
+│   ├── components/      # Reusable UI
+│   ├── db/              # SQLite / Kysely, migrations, wallet persistence
+│   ├── hooks/
+│   ├── lib/             # Domain helpers, Esplora whitelist, library math, …
+│   ├── routes/          # TanStack Router routes and pages
+│   ├── stores/          # Zustand stores
+│   ├── test-utils/      # Vitest setup and providers
+│   ├── workers/         # Web workers (crypto, lab, encryption, …)
+│   ├── wasm-pkg/        # Generated WASM packages (via `npm run build:wasm`)
+│   ├── main.tsx         # SPA entry
+│   └── routeTree.gen.ts # Generated route tree (TanStack Router plugin)
 ├── tests/
-│   ├── e2e/           # E2E test files
-│   ├── fixtures.ts    # Playwright fixtures
-│   ├── helpers.ts     # Test helper functions
-│   └── init.ts        # Test initialization
+│   ├── e2e/             # Playwright specs
+│   └── e2e/helpers/     # E2E helpers
 ├── playwright.config.ts
-└── vite.config.ts
+├── vite.config.ts
+└── index.html
 ```
 
 ## Building for Production
 
 ```bash
-# Build the frontend
+# Full production build (WASM + TypeScript check + Vite)
 npm run build
 
-# The output will be in the dist/ folder
-# Serve it with any static file server
+# Output in dist/
 npm run preview
 ```
 
-The production build is optimized and ready to deploy to any static hosting service (Netlify, Vercel, GitHub Pages, etc.). For **Vercel**, use the canonical **GitHub Actions → prebuilt deploy** flow described in [`../docs/deploy-vercel.md`](../docs/deploy-vercel.md).
+The production build is optimized for static hosting. On **Vercel**, follow the canonical **GitHub Actions → prebuilt deploy** flow in [`../docs/deploy-vercel.md`](../docs/deploy-vercel.md).
 
 ## Dark Mode
 
-The app includes a built-in dark mode toggle available in the top-right corner of the navigation bar. The theme preference is persisted in localStorage.
-
-**Swagger UI Integration**: The API documentation at `/docs` automatically syncs with the MUI theme. All Swagger UI components (endpoints, parameters, responses, code examples) are styled to match the current theme with proper contrast and readability. See `doc/SWAGGER_UI_DARK_MODE.md` for implementation details.
+The header includes a **theme** control (**light** / **dark** / **system**) next to Infomode. The choice is persisted locally (Zustand `persist`).

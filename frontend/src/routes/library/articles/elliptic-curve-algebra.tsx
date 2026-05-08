@@ -1,5 +1,5 @@
 import { ArticleLink, ArticleSection, ARTICLE_BODY_CLASS } from '@/lib/library/article-shared'
-import { InlineMath, BlockMath } from '@/lib/library/math'
+import { BlockMath, InlineMath } from '@/lib/library/math'
 import type { LibraryArticle } from '@/lib/library/library-article'
 
 // TODO: Consider adding graphics later to illustrate point addition geometrically
@@ -17,7 +17,7 @@ export const article: LibraryArticle = {
           Elliptic curve algebra defines how to &quot;add&quot; points on a curve to get new points.
           This strange addition—repeated many times as <strong>scalar multiplication</strong>—is
           what makes cryptographic keys work. You can quickly compute{' '}
-          <InlineMath math="k \cdot P" /> (adding <InlineMath math="P" /> to itself{' '}
+          <InlineMath math={InlineMath.tex`k \cdot P`} /> (adding <InlineMath math="P" /> to itself{' '}
           <InlineMath math="k" /> times), but reversing it to find <InlineMath math="k" /> is the{' '}
           <ArticleLink slug="the-discrete-logarithm-problem">discrete logarithm problem</ArticleLink>
           .
@@ -52,11 +52,11 @@ export const article: LibraryArticle = {
         </ol>
 
         <p className="mt-4">
-          <strong>The point at infinity</strong> (<InlineMath math="\mathcal{O}" />) acts as
+          <strong>The point at infinity</strong> (<InlineMath math={InlineMath.tex`\mathcal{O}`} />) acts as
           zero—adding it to any point gives that point back:{' '}
-          <InlineMath math="P + \mathcal{O} = P" />. When a line is vertical (adding{' '}
+          <InlineMath math={InlineMath.tex`P + \mathcal{O} = P`} />. When a line is vertical (adding{' '}
           <InlineMath math="P" /> to its reflection <InlineMath math="-P" />), it
-          &quot;intersects&quot; at infinity: <InlineMath math="P + (-P) = \mathcal{O}" />.
+          &quot;intersects&quot; at infinity: <InlineMath math={InlineMath.tex`P + (-P) = \mathcal{O}`} />.
         </p>
       </ArticleSection>
 
@@ -68,22 +68,22 @@ export const article: LibraryArticle = {
         </p>
 
         <p className="mt-4">
-          <strong>For distinct points</strong> (<InlineMath math="P \neq Q" />), the slope of the
+          <strong>For distinct points</strong> (<InlineMath math={InlineMath.tex`P \neq Q`} />), the slope of the
           line through them is:
         </p>
-        <BlockMath math="\lambda = \frac{y_2 - y_1}{x_2 - x_1}" />
+        <BlockMath math={BlockMath.tex`\lambda = \frac{y_2 - y_1}{x_2 - x_1}`} />
 
         <p className="mt-4">
           <strong>For point doubling</strong> (<InlineMath math="P = Q" />), use the tangent slope
           derived from implicit differentiation:
         </p>
-        <BlockMath math="\lambda = \frac{3x_1^2 + a}{2y_1}" />
+        <BlockMath math={BlockMath.tex`\lambda = \frac{3x_1^2 + a}{2y_1}`} />
 
         <p className="mt-4">
           <strong>The resulting point:</strong>
         </p>
-        <BlockMath math="x_3 = \lambda^2 - x_1 - x_2" />
-        <BlockMath math="y_3 = \lambda(x_1 - x_3) - y_1" />
+        <BlockMath math={BlockMath.tex`x_3 = \lambda^2 - x_1 - x_2`} />
+        <BlockMath math={BlockMath.tex`y_3 = \lambda(x_1 - x_3) - y_1`} />
 
         <p className="mt-4">
           All arithmetic is done in a{' '}
@@ -93,10 +93,10 @@ export const article: LibraryArticle = {
         </p>
 
         <p className="mt-4">
-          <strong>Scalar multiplication:</strong> <InlineMath math="k \cdot P" /> means adding{' '}
+          <strong>Scalar multiplication:</strong> <InlineMath math={InlineMath.tex`k \cdot P`} /> means adding{' '}
           <InlineMath math="P" /> to itself <InlineMath math="k" /> times. The naive approach
           requires <InlineMath math="k" /> additions, but the <strong>double-and-add</strong>{' '}
-          algorithm does it in roughly <InlineMath math="\log_2(k)" /> steps:
+          algorithm does it in roughly <InlineMath math={InlineMath.tex`\log_2(k)`} /> steps:
         </p>
         <ol className="list-decimal space-y-1 pl-5">
           <li>
@@ -127,7 +127,7 @@ export const article: LibraryArticle = {
             <strong>Commutativity:</strong> <InlineMath math="P + Q = Q + P" />
           </li>
           <li>
-            <strong>Identity:</strong> The point at infinity <InlineMath math="\mathcal{O}" />
+            <strong>Identity:</strong> The point at infinity <InlineMath math={InlineMath.tex`\mathcal{O}`} />
           </li>
           <li>
             <strong>Inverse:</strong> <InlineMath math="-P = (x, -y)" /> (negate the y-coordinate;

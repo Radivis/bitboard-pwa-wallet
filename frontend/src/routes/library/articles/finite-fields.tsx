@@ -1,5 +1,5 @@
 import { ArticleLink, ArticleSection, ARTICLE_BODY_CLASS } from '@/lib/library/article-shared'
-import { InlineMath, BlockMath } from '@/lib/library/math'
+import { BlockMath, InlineMath } from '@/lib/library/math'
 import type { LibraryArticle } from '@/lib/library/library-article'
 
 // TODO: Consider adding graphics later to illustrate modular arithmetic visually
@@ -15,8 +15,8 @@ export const article: LibraryArticle = {
         <p>
           A finite field is a set of numbers where you can add, subtract, multiply, and divide, but
           everything &quot;wraps around&quot; at a prime number. For example, in{' '}
-          <InlineMath math="\mathbb{F}_7" />, we have <InlineMath math="5 + 4 = 2" /> (since{' '}
-          <InlineMath math="9 \mod 7 = 2" />). This &quot;clock arithmetic&quot; is the foundation
+          <InlineMath math={InlineMath.tex`\mathbb{F}_7`} />, we have <InlineMath math="5 + 4 = 2" /> (since{' '}
+          <InlineMath math={InlineMath.tex`9 \mod 7 = 2`} />). This &quot;clock arithmetic&quot; is the foundation
           for elliptic curve cryptography.
         </p>
       </ArticleSection>
@@ -26,7 +26,7 @@ export const article: LibraryArticle = {
           In regular arithmetic, numbers go on forever. In <strong>modular arithmetic</strong>,
           numbers wrap around at a certain value called the <strong>modulus</strong>. When the
           modulus is a prime number <InlineMath math="p" />, the resulting structure is called a{' '}
-          <strong>prime field</strong>, written as <InlineMath math="\mathbb{F}_p" />.
+          <strong>prime field</strong>, written as <InlineMath math={InlineMath.tex`\mathbb{F}_p`} />.
         </p>
         <p>
           A field has two key properties that make it useful for cryptography:
@@ -58,11 +58,11 @@ export const article: LibraryArticle = {
           <strong>Fermat&apos;s Little Theorem:</strong> If <InlineMath math="p" /> is prime and{' '}
           <InlineMath math="a" /> is any integer not divisible by <InlineMath math="p" />, then
         </p>
-        <BlockMath math="a^{p-1} \equiv 1 \pmod{p}" />
+        <BlockMath math={BlockMath.tex`a^{p-1} \equiv 1 \pmod{p}`} />
         <p>
           Multiplying both sides by <InlineMath math="a^{-1}" /> shows that every non-zero element
-          of <InlineMath math="\mathbb{F}_p" /> has a multiplicative inverse, namely{' '}
-          <InlineMath math="a^{-1} \equiv a^{p-2} \pmod{p}" />. Computing that power with
+          of <InlineMath math={InlineMath.tex`\mathbb{F}_p`} /> has a multiplicative inverse, namely{' '}
+          <InlineMath math={InlineMath.tex`a^{-1} \equiv a^{p-2} \pmod{p}`} />. Computing that power with
           square-and-multiply (binary exponentiation) is a standard way to invert in the field,
           including in cryptographic protocols. For the same idea modulo the{' '}
           <ArticleLink slug="what-is-secp256k1">secp256k1</ArticleLink> subgroup order when signing
@@ -78,26 +78,26 @@ export const article: LibraryArticle = {
 
         <p className="mt-4">
           <strong>
-            Example calculations in <InlineMath math="\mathbb{F}_7" />:
+            Example calculations in <InlineMath math={InlineMath.tex`\mathbb{F}_7`} />:
           </strong>
         </p>
         <ul className="list-disc space-y-1 pl-5">
           <li>
-            <strong>Addition:</strong> <InlineMath math="5 + 4 = 9 \equiv 2 \pmod{7}" />
+            <strong>Addition:</strong> <InlineMath math={InlineMath.tex`5 + 4 = 9 \equiv 2 \pmod{7}`} />
           </li>
           <li>
-            <strong>Subtraction:</strong> <InlineMath math="2 - 5 = -3 \equiv 4 \pmod{7}" />
+            <strong>Subtraction:</strong> <InlineMath math={InlineMath.tex`2 - 5 = -3 \equiv 4 \pmod{7}`} />
           </li>
           <li>
-            <strong>Multiplication:</strong> <InlineMath math="3 \times 4 = 12 \equiv 5 \pmod{7}" />
+            <strong>Multiplication:</strong> <InlineMath math={InlineMath.tex`3 \times 4 = 12 \equiv 5 \pmod{7}`} />
           </li>
           <li>
-            <strong>Inverse of 3:</strong> We need <InlineMath math="3 \times x \equiv 1 \pmod{7}" />
-            . Since <InlineMath math="3 \times 5 = 15 \equiv 1" />, we have{' '}
+            <strong>Inverse of 3:</strong> We need <InlineMath math={InlineMath.tex`3 \times x \equiv 1 \pmod{7}`} />
+            . Since <InlineMath math={InlineMath.tex`3 \times 5 = 15 \equiv 1`} />, we have{' '}
             <InlineMath math="3^{-1} = 5" />
           </li>
           <li>
-            <strong>Division:</strong> <InlineMath math="4 \div 3 = 4 \times 3^{-1} = 4 \times 5 = 20 \equiv 6 \pmod{7}" />
+            <strong>Division:</strong> <InlineMath math={InlineMath.tex`4 \div 3 = 4 \times 3^{-1} = 4 \times 5 = 20 \equiv 6 \pmod{7}`} />
           </li>
         </ul>
 
