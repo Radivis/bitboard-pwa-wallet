@@ -2,22 +2,36 @@
 
 React + TypeScript frontend for the Bitboard Wallet application.
 
+For how this fits with Rust/WASM workers, OPFS SQLite, and deployment, see the [repository root README](../README.md) and [architecture overview](../doc/ARCHITECTURE.md).
+
 ## Tech Stack
 
-- **React 19** - UI library
-- **TypeScript** - Type safety
-- **Vite** - Build tool and dev server
-- **Material-UI (MUI) v6** - Component library
-- **React Router** - Client-side routing
-- **TanStack Query** - Server state management
-- **Playwright** - E2E testing
-- **Swagger UI React** - API documentation
+- **React 19** — UI
+- **TypeScript** — Types
+- **Vite** — Dev server and production build
+- **TanStack Router** — File-based client routing (`@tanstack/react-router`, `@tanstack/router-plugin`)
+- **TanStack Query** — Async / server-adjacent state
+- **Tailwind CSS v4** — Styling (`@tailwindcss/vite`)
+- **Radix UI** — Primitives; component patterns follow **shadcn**-style conventions ([`components.json`](components.json))
+- **Zustand** — Client state (with persistence where needed)
+- **Kysely + SQLite (WASM)** — In-browser persistence via workers and OPFS
+- **Rust → WebAssembly** — Crypto, encryption, and Lightning logic (`npm run build:wasm` / `wasm-pack`); loaded with `vite-plugin-wasm`
+- **vite-plugin-pwa** — Progressive Web App / service worker
+- **Vitest** + **Testing Library** — Unit and component tests (`jsdom`)
+- **Playwright** — End-to-end tests
+
+## Features
+
+- Installable **PWA** with offline-oriented caching for static assets (see `vite.config.ts`).
+- **Wallet** flows: on-chain and Lightning (including NWC-related paths); **Lab** for local chain exploration; **Library** for in-app articles with math.
+- Esplora-backed chain data in dev/production is proxied safely (Vite dev proxies and the [`api/`](api/) Vercel handlers).
 
 ## Development
 
 ### Prerequisites
 
-- Node.js 24+ and npm
+- **Node.js** 24+ and **npm** (`package.json` `engines`)
+- For **`npm run build`** (production bundle): **Rust** toolchain, **`wasm-pack`**, and the sibling crates under `../crypto`, `../bitboard-encryption`, and `../bitboard-lightning` (the `build` script runs `build:wasm` before `tsc` and `vite build`)
 
 ### Getting Started
 
@@ -29,46 +43,58 @@ npm install
 npm run dev
 ```
 
-The frontend will be available at `http://localhost:3000`
+The app is served at `http://localhost:3000` (see `vite.config.ts`).
 
 ### Available Scripts
 
-- `npm run dev` - Start development server
-- `npm run build` - Build for production
-- `npm run preview` - Preview production build
-- `npm test` - Run E2E tests with Playwright
-- `npm run test:ui` - Run E2E tests with Playwright UI
-
-## Features
+- `npm run dev` — Vite dev server
+- `npm run build` — `build:wasm` → `tsc` → production Vite build (`dist/`)
+- `npm run build:wasm` — Rebuild all frontend WASM packages via `wasm-pack` (requires Rust + `wasm-pack`)
+- `npm run preview` — Preview the production build locally
+- `npm run lint` — ESLint
+- `npm test` — Vitest
+- `npm run test:ui` — Vitest with UI
+- `npm run test:coverage` — Vitest with coverage
+- `npm run test:e2e` — Playwright E2E suite
+- `npm run test:e2e:ui` — Playwright with UI mode
+- `npm run test:e2e:headed` — Playwright headed
+- `npm run test:e2e:sequential` — Playwright with `E2E_SEQUENTIAL=true`
+- `npm run test:e2e:debug` — Playwright debug mode
+- `npm run test:e2e:nwc` — Grep NWC-tagged tests with in-memory NWC mock
+- `npm run test:e2e:lab` — Lab-tagged E2E subset
+- `npm run test:e2e:regtest` — Starts regtest docker helper then regtest-tagged tests
+- `npm run test:regtest:start` / `npm run test:regtest:stop` — Regtest environment helpers
+- `npm run sync-version` / `npm run verify-version` — Version sync with repo root (see `../scripts`)
 
 ## E2E Testing
 
 ### Running E2E Tests
 
+From `frontend/`, prefer npm scripts so the same config as CI is used:
+
 ```bash
-# Run all tests
-npx playwright test
+npm run test:e2e
 
-# Run in headed mode
-npx playwright test --headed
+npm run test:e2e:headed
 
-# Run specific test file
-npx playwright test tests/e2e/lab.spec.ts
+npm run test:e2e -- tests/e2e/lab.spec.ts
 
-# Run with UI mode
-npx playwright test --ui
+npm run test:e2e:ui
 
-# View test report
 npx playwright show-report
 ```
+
+Equivalent `npx playwright test` invocations work as well (`playwright.config.ts` lives in this directory).
 
 ### Optional: funded Testnet wallet (live Esplora)
 
 This repo includes an **optional** Playwright flow that hits public Testnet Esplora (not run in CI). Use a **dedicated** testnet-only wallet with a non-zero balance.
 
 1. Create `.env.testnet` in `frontend/` **or** at the **repo root** (both gitignored) with:
+
    - `E2E_TESTNET_SEED` — space-separated 12-word mnemonic
    - `E2E_TESTNET_APP_PASSWORD` — Bitboard app password for first-run setup
+
 2. Fund that wallet on testnet.
 3. Run from `frontend/`:
 
@@ -78,15 +104,17 @@ npm run test:e2e:testnet-live
 
 Never commit `.env.testnet` or reuse a mainnet seed.
 
-## Vite Configuration
+## Environment variables
 
-### Environment Variables
+Vite exposes `import.meta.env.*`. Commonly useful **optional** vars (see [`src/vite-env.d.ts`](src/vite-env.d.ts) for the full typed list):
 
-Create a `.env` file for local configuration:
+| Variable | Purpose |
+| --- | --- |
+| `VITE_E2E_NWC_MOCK` | When `true`, dev server + NWC-focused E2E use the in-memory Lightning mock (`npm run test:e2e:nwc`). |
+| `VITE_HIDE_ROUTER_DEVTOOLS` | `1` or `true` hides TanStack Router devtools in development. |
+| `VITE_ARGON2_CI` | `1` uses faster Argon2 parameters in **non-production** builds only; forbidden in production bundles (enforced in `vite.config.ts`). |
 
-```env
-VITE_API_URL=http://localhost:8000
-```
+Use a `.env`, `.env.local`, or other [Vite env files](https://vite.dev/guide/env-and-mode.html) as needed. The app talks to Esplora via same-origin proxies (dev: `vite.config.ts`; production: `api/esplora/[...path].ts`)—not via a single “backend base URL” env in current code. For data flow details, see [`../doc/ARCHITECTURE.md`](../doc/ARCHITECTURE.md).
 
 ## LaTeX (KaTeX) in TSX
 
@@ -117,36 +145,41 @@ Plain strings remain fine for tiny fragments with **no** macro backslashes (for 
 
 ```
 frontend/
+├── api/                 # Vercel serverless handlers (e.g. Esplora proxy)
+├── common/              # Shared code (legal copies, privacy helpers, …)
+├── public/              # Static assets
 ├── src/
-│   ├── api/           # API client functions
-│   ├── components/    # Reusable components
-│   ├── contexts/      # React contexts (theme, etc.)
-│   ├── pages/         # Page components
-│   ├── utils/         # Utility functions
-│   ├── App.tsx        # Main app component with routing
-│   └── main.tsx       # Entry point
+│   ├── components/      # Reusable UI
+│   ├── db/              # SQLite / Kysely, migrations, wallet persistence
+│   ├── hooks/
+│   ├── lib/             # Domain helpers, Esplora whitelist, library math, …
+│   ├── routes/          # TanStack Router routes and pages
+│   ├── stores/          # Zustand stores
+│   ├── test-utils/      # Vitest setup and providers
+│   ├── workers/         # Web workers (crypto, lab, encryption, …)
+│   ├── wasm-pkg/        # Generated WASM packages (via `npm run build:wasm`)
+│   ├── main.tsx         # SPA entry
+│   └── routeTree.gen.ts # Generated route tree (TanStack Router plugin)
 ├── tests/
-│   ├── e2e/           # E2E test files
-│   ├── fixtures.ts    # Playwright fixtures
-│   ├── helpers.ts     # Test helper functions
-│   └── init.ts        # Test initialization
+│   ├── e2e/             # Playwright specs
+│   └── e2e/helpers/     # E2E helpers
 ├── playwright.config.ts
-└── vite.config.ts
+├── vite.config.ts
+└── index.html
 ```
 
 ## Building for Production
 
 ```bash
-# Build the frontend
+# Full production build (WASM + TypeScript check + Vite)
 npm run build
 
-# The output will be in the dist/ folder
-# Serve it with any static file server
+# Output in dist/
 npm run preview
 ```
 
-The production build is optimized and ready to deploy to any static hosting service (Netlify, Vercel, GitHub Pages, etc.). For **Vercel**, use the canonical **GitHub Actions → prebuilt deploy** flow described in [`../docs/deploy-vercel.md`](../docs/deploy-vercel.md).
+The production build is optimized for static hosting. On **Vercel**, follow the canonical **GitHub Actions → prebuilt deploy** flow in [`../docs/deploy-vercel.md`](../docs/deploy-vercel.md).
 
 ## Dark Mode
 
-The app includes a built-in dark mode toggle available in the top-right corner of the navigation bar. The theme preference is persisted in localStorage.
+The header includes a **theme** control (**light** / **dark** / **system**) next to Infomode. The choice is persisted locally (Zustand `persist`).
