@@ -24,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Sending Lightning payments should not cause an insufficient balance error, if onchain balance is below the payment amount
 - Fixed some display issues for small screens
 - LaTeX formulas and symbols should now also be displayed properly in production
+- Using absolute paths for open graph images as required by social media for open graph previews
 
 ## [0.1.3] - 2026-05-05
 
