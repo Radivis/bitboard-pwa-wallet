@@ -207,22 +207,6 @@ const SECONDARY_NAV_SURFACE_CLASS =
 const LOWER_NAV_SURFACE_CLASS =
   'border-border bg-nav-lower-tier/95 backdrop-blur supports-[backdrop-filter]:bg-nav-lower-tier/80'
 
-/**
- * Same width as Tailwind `max-w-screen-xl` (1280px = 80rem at default 16px root).
- * Sub-nav and header use the `max-w-screen-xl` class; the primary bottom nav center column
- * uses this value inline — change together if the layout breakpoint changes.
- */
-const LAYOUT_CONTENT_MAX_WIDTH_REM = '80rem'
-
-const PRIMARY_NAV_OUTER_GRID_TEMPLATE_COLUMNS = `minmax(0, 1fr) minmax(0, min(100%, ${LAYOUT_CONTENT_MAX_WIDTH_REM})) minmax(0, 1fr)`
-
-/**
- * Tailwind spacing step `2` (0.5rem): outer edge fillers (`w-2`) match backdrop inset (`left-2 right-2`).
- */
-const PRIMARY_NAV_PAGE_EDGE_GUTTER_WIDTH_CLASS = 'w-2'
-
-const PRIMARY_NAV_BACKDROP_HORIZONTAL_INSET_CLASS = 'left-2 right-2'
-
 /** Bottom nav item labels: narrow screens truncate past ~14 character widths. */
 const BOTTOM_NAV_LABEL_SPAN_CLASS =
   'max-w-[14ch] truncate text-center leading-tight'
@@ -318,35 +302,10 @@ function isPrimaryNavItemActive(
 }
 
 /**
- * Inactive columns: frosted nav-lower over main content. Active slot: transparent
- * "hole" so the foreground tier uses `SECONDARY_NAV_SURFACE` over content (same stack as sub-nav).
+ * One column in the primary bottom nav: inactive tabs show the parent nav’s lower-tier surface;
+ * active tab uses the same header-tier surface as `SectionSubNav`.
  */
-function PrimaryNavBackdropCells({ activeSlotIndex }: { activeSlotIndex: number }) {
-  return (
-    <div
-      className={cn(
-        'pointer-events-none absolute inset-y-0 grid gap-0',
-        PRIMARY_NAV_BACKDROP_HORIZONTAL_INSET_CLASS,
-      )}
-      style={{
-        gridTemplateColumns: `repeat(${PRIMARY_NAV_ITEMS.length}, minmax(0, 1fr))`,
-      }}
-      aria-hidden
-    >
-      {PRIMARY_NAV_ITEMS.map((_item, slotIndex) => (
-        <div
-          key={slotIndex}
-          className={
-            slotIndex === activeSlotIndex ? undefined : LOWER_NAV_SURFACE_CLASS
-          }
-        />
-      ))}
-    </div>
-  )
-}
-
-/** Foreground: active slot uses secondary bar surface; inactive slots are transparent over the backdrop grid. */
-function PrimaryNavForegroundSlot({
+function PrimaryNavTabColumn({
   isActiveCategory,
   children,
 }: {
@@ -356,7 +315,7 @@ function PrimaryNavForegroundSlot({
   return (
     <div
       className={cn(
-        'relative z-[1] flex min-h-0 min-w-0 flex-1 flex-col',
+        'flex min-h-0 min-w-0 flex-1 flex-col',
         isActiveCategory && SECONDARY_NAV_SURFACE_CLASS,
         isActiveCategory ? 'border-t border-t-transparent' : 'border-t border-border',
       )}
@@ -370,59 +329,31 @@ function PrimarySectionNav() {
   const matchRoute = useMatchRoute()
   const pathname = useLocation().pathname
 
-  const activeSlotIndex = PRIMARY_NAV_ITEMS.findIndex((item) =>
-    isPrimaryNavItemActive(item, pathname, matchRoute),
-  )
-  const backdropHoleIndex = activeSlotIndex >= 0 ? activeSlotIndex : 0
-
   return (
     <nav
       aria-label="Main sections"
       className={cn(
-        'fixed bottom-0 left-0 right-0 z-50 grid w-full items-stretch',
+        'fixed bottom-0 left-0 right-0 z-50 w-full',
         PRIMARY_BOTTOM_NAV_HEIGHT_CLASS,
+        LOWER_NAV_SURFACE_CLASS,
       )}
-      style={{
-        gridTemplateColumns: PRIMARY_NAV_OUTER_GRID_TEMPLATE_COLUMNS,
-      }}
     >
-      <div className={cn('min-h-0 min-w-0', LOWER_NAV_SURFACE_CLASS)} aria-hidden />
-      <div className="relative flex h-full min-h-0 min-w-0 flex-col">
-        <div
-          aria-hidden
-          className={cn(
-            'pointer-events-none absolute inset-y-0 left-0 z-0',
-            PRIMARY_NAV_PAGE_EDGE_GUTTER_WIDTH_CLASS,
-            LOWER_NAV_SURFACE_CLASS,
-          )}
-        />
-        <div
-          aria-hidden
-          className={cn(
-            'pointer-events-none absolute inset-y-0 right-0 z-0',
-            PRIMARY_NAV_PAGE_EDGE_GUTTER_WIDTH_CLASS,
-            LOWER_NAV_SURFACE_CLASS,
-          )}
-        />
-        <PrimaryNavBackdropCells activeSlotIndex={backdropHoleIndex} />
-        <div className="relative z-[1] flex h-full min-h-0 w-full min-w-0 flex-1 items-stretch px-2">
-          {PRIMARY_NAV_ITEMS.map((item) => {
-            const isActive = isPrimaryNavItemActive(item, pathname, matchRoute)
-            return (
-              <PrimaryNavForegroundSlot key={item.to} isActiveCategory={isActive}>
-                <BottomNavLink
-                  to={item.to}
-                  label={item.label}
-                  icon={item.icon}
-                  isActive={isActive}
-                  preload={item.linkPreload}
-                />
-              </PrimaryNavForegroundSlot>
-            )
-          })}
-        </div>
+      <div className="mx-auto flex h-full min-h-0 w-full max-w-screen-xl min-w-0 items-stretch px-2">
+        {PRIMARY_NAV_ITEMS.map((item) => {
+          const isActive = isPrimaryNavItemActive(item, pathname, matchRoute)
+          return (
+            <PrimaryNavTabColumn key={item.to} isActiveCategory={isActive}>
+              <BottomNavLink
+                to={item.to}
+                label={item.label}
+                icon={item.icon}
+                isActive={isActive}
+                preload={item.linkPreload}
+              />
+            </PrimaryNavTabColumn>
+          )
+        })}
       </div>
-      <div className={cn('min-h-0 min-w-0', LOWER_NAV_SURFACE_CLASS)} aria-hidden />
     </nav>
   )
 }
