@@ -209,4 +209,12 @@ describe('SendFlow', () => {
     expect(screen.queryByText(/Fee Rate \(sat\/vB\)/)).not.toBeInTheDocument()
     expect(screen.getByText('Send Lightning')).toBeInTheDocument()
   })
+
+  it('defaults unified BIP21 (?lightning=…) to Lightning not on-chain balance check', () => {
+    sendStoreState.recipient =
+      'bitcoin:bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq?amount=0.00001&lightning=lntbs1testinvoiceplaceholder123456789012345678901234567890'
+    renderWithProviders(<SendFlow />)
+    expect(screen.queryByText(/Fee Rate \(sat\/vB\)/)).not.toBeInTheDocument()
+    expect(screen.getByText('Send Lightning')).toBeInTheDocument()
+  })
 })

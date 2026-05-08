@@ -13,6 +13,7 @@ import { useFeatureStore } from '@/stores/featureStore'
 import { useLabChainStateQuery } from '@/hooks/useLabChainStateQuery'
 import { isValidAddress, msatsAmountNumberFromSatsExact, MAX_SATS_MSAT_AMOUNT_NUMBER } from '@/lib/bitcoin-utils'
 import {
+  preferredRecipientFromBitcoinUri,
   recipientAndAmountFromScannedPayload,
   tryParseBitcoinUri,
 } from '@/lib/bip21'
@@ -199,7 +200,10 @@ export function SendFlow() {
   const normalizedRecipient = useMemo(() => {
     const t = recipient.trim()
     const bip21 = tryParseBitcoinUri(t)
-    const core = bip21 ? bip21.address : t.replace(/^bitcoin:/i, '')
+    if (bip21 != null) {
+      return normalizeLightningDestination(preferredRecipientFromBitcoinUri(bip21))
+    }
+    const core = t.replace(/^bitcoin:/i, '')
     return normalizeLightningDestination(core)
   }, [recipient])
 
