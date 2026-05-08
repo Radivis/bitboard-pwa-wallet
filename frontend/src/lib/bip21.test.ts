@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  type ParsedBitcoinUri,
   preferredRecipientFromBitcoinUri,
   recipientAndAmountFromScannedPayload,
   tryParseBitcoinUri,
@@ -7,7 +8,7 @@ import {
 
 const addr = 'tb1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx'
 
-const uriBase = (): ParsedUri => ({
+const uriBase = (): ParsedBitcoinUri => ({
   address: addr,
   amountBtc: null,
   lightningParam: null,

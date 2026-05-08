@@ -208,6 +208,26 @@ const LOWER_NAV_SURFACE_CLASS =
   'border-border bg-nav-lower-tier/95 backdrop-blur supports-[backdrop-filter]:bg-nav-lower-tier/80'
 
 /**
+ * Same width as Tailwind `max-w-screen-xl` (1280px = 80rem at default 16px root).
+ * Sub-nav and header use the `max-w-screen-xl` class; the primary bottom nav center column
+ * uses this value inline — change together if the layout breakpoint changes.
+ */
+const LAYOUT_CONTENT_MAX_WIDTH_REM = '80rem'
+
+const PRIMARY_NAV_OUTER_GRID_TEMPLATE_COLUMNS = `minmax(0, 1fr) minmax(0, min(100%, ${LAYOUT_CONTENT_MAX_WIDTH_REM})) minmax(0, 1fr)`
+
+/**
+ * Tailwind spacing step `2` (0.5rem): outer edge fillers (`w-2`) match backdrop inset (`left-2 right-2`).
+ */
+const PRIMARY_NAV_PAGE_EDGE_GUTTER_WIDTH_CLASS = 'w-2'
+
+const PRIMARY_NAV_BACKDROP_HORIZONTAL_INSET_CLASS = 'left-2 right-2'
+
+/** Bottom nav item labels: narrow screens truncate past ~14 character widths. */
+const BOTTOM_NAV_LABEL_SPAN_CLASS =
+  'max-w-[14ch] truncate text-center leading-tight'
+
+/**
  * Primary section bar (Tailwind `h-16`). Wallet sub-nav uses literal `bottom-16` in JSX
  * (same 4rem offset) so Tailwind’s scanner keeps the class; do not change one without the other.
  */
@@ -281,7 +301,7 @@ function BottomNavLink({
     >
       <span className={navItemInnerClassNames(isActive)}>
         <Icon className="h-5 w-5 shrink-0" aria-hidden />
-        <span className="max-w-[14ch] truncate text-center leading-tight">{label}</span>
+        <span className={BOTTOM_NAV_LABEL_SPAN_CLASS}>{label}</span>
       </span>
     </Link>
   )
@@ -304,7 +324,10 @@ function isPrimaryNavItemActive(
 function PrimaryNavBackdropCells({ activeSlotIndex }: { activeSlotIndex: number }) {
   return (
     <div
-      className="pointer-events-none absolute inset-y-0 left-2 right-2 grid gap-0"
+      className={cn(
+        'pointer-events-none absolute inset-y-0 grid gap-0',
+        PRIMARY_NAV_BACKDROP_HORIZONTAL_INSET_CLASS,
+      )}
       style={{
         gridTemplateColumns: `repeat(${PRIMARY_NAV_ITEMS.length}, minmax(0, 1fr))`,
       }}
@@ -360,8 +383,7 @@ function PrimarySectionNav() {
         PRIMARY_BOTTOM_NAV_HEIGHT_CLASS,
       )}
       style={{
-        gridTemplateColumns:
-          'minmax(0, 1fr) minmax(0, min(100%, 80rem)) minmax(0, 1fr)',
+        gridTemplateColumns: PRIMARY_NAV_OUTER_GRID_TEMPLATE_COLUMNS,
       }}
     >
       <div className={cn('min-h-0 min-w-0', LOWER_NAV_SURFACE_CLASS)} aria-hidden />
@@ -369,14 +391,16 @@ function PrimarySectionNav() {
         <div
           aria-hidden
           className={cn(
-            'pointer-events-none absolute inset-y-0 left-0 z-0 w-2',
+            'pointer-events-none absolute inset-y-0 left-0 z-0',
+            PRIMARY_NAV_PAGE_EDGE_GUTTER_WIDTH_CLASS,
             LOWER_NAV_SURFACE_CLASS,
           )}
         />
         <div
           aria-hidden
           className={cn(
-            'pointer-events-none absolute inset-y-0 right-0 z-0 w-2',
+            'pointer-events-none absolute inset-y-0 right-0 z-0',
+            PRIMARY_NAV_PAGE_EDGE_GUTTER_WIDTH_CLASS,
             LOWER_NAV_SURFACE_CLASS,
           )}
         />
