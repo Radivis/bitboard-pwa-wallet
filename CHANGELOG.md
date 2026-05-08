@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Changed styling for two level nav to make it more intuitive that it's actually a two level nav
 
 ### Fixed
+- Sending Lightning payments should not cause an insufficient balance error, if onchain balance is below the payment amount
 - Fixed some display issues for small screens
 - LaTeX formulas and symbols should now also be displayed properly in production
 

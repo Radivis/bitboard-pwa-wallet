@@ -1,6 +1,6 @@
-# Zero2Prod Frontend
+# Bitboard Wallet Frontend
 
-React + TypeScript frontend for the Zero2Prod newsletter application.
+React + TypeScript frontend for the Bitboard Wallet application.
 
 ## Tech Stack
 
@@ -18,7 +18,6 @@ React + TypeScript frontend for the Zero2Prod newsletter application.
 ### Prerequisites
 
 - Node.js 24+ and npm
-- Backend server running on `http://localhost:8000`
 
 ### Getting Started
 
@@ -42,45 +41,7 @@ The frontend will be available at `http://localhost:3000`
 
 ## Features
 
-### Public Pages
-
-- **Home** (`/`) - Landing page
-- **Blog** (`/blog`) - Public blog posts
-- **Blog Post** (`/blog/:id`) - Individual blog post
-- **API Documentation** (`/docs`) - Interactive Swagger UI
-- **Login** (`/login`) - User authentication
-- **Initial Password** (`/initial-password`) - First-time setup
-
-### Admin Pages (Protected)
-
-- **Dashboard** (`/admin/dashboard`) - Admin overview
-- **Newsletters** (`/admin/newsletters`) - Send newsletters
-- **Password** (`/admin/password`) - Change password
-- **Blog Management** (`/admin/blog`) - Manage blog posts
-  - Create new posts (`/admin/blog/new`)
-  - Edit posts (`/admin/blog/:id/edit`)
-
-## API Documentation
-
-The frontend includes an interactive Swagger UI at `/docs` that loads the OpenAPI specification from the backend (`/api/openapi.json`). This allows you to:
-
-- Browse all available API endpoints
-- See request/response schemas
-- Test endpoints directly from the browser
-- View authentication requirements
-
-Access it via the "API Docs" link in the main navigation.
-
 ## E2E Testing
-
-End-to-end tests are written with Playwright and cover:
-
-- Initial password setup
-- Login flow
-- Admin dashboard
-- Newsletter management
-- Password change
-- Blog management
 
 ### Running E2E Tests
 
@@ -92,7 +53,7 @@ npx playwright test
 npx playwright test --headed
 
 # Run specific test file
-npx playwright test tests/e2e/login.spec.ts
+npx playwright test tests/e2e/lab.spec.ts
 
 # Run with UI mode
 npx playwright test --ui
@@ -117,40 +78,7 @@ npm run test:e2e:testnet-live
 
 Never commit `.env.testnet` or reuse a mainnet seed.
 
-### E2E Test Architecture
-
-Tests use custom Playwright fixtures for:
-- `backendApp` - Isolated backend server instance
-- `frontendServer` - Vite dev server instance
-- `authenticatedPage` - Pre-authenticated browser context with user credentials
-
-Test logs are consolidated in `tests/logs/e2e-telemetry/` with prefixes:
-- `[TEST]` - Test execution messages
-- `[FRONTEND]` - Vite server output
-- `[BACKEND]` - Backend server tracing
-
-See `tests/README.md` for detailed testing documentation.
-
 ## Vite Configuration
-
-### Proxy Configuration
-
-The Vite dev server proxies API requests to the backend:
-
-```typescript
-proxy: {
-  '/api': {
-    target: 'http://localhost:8000',
-    changeOrigin: true,
-  },
-  '/health_check': {
-    target: 'http://localhost:8000',
-    changeOrigin: true,
-  },
-}
-```
-
-All other routes are handled by React Router (SPA).
 
 ### Environment Variables
 
@@ -222,5 +150,3 @@ The production build is optimized and ready to deploy to any static hosting serv
 ## Dark Mode
 
 The app includes a built-in dark mode toggle available in the top-right corner of the navigation bar. The theme preference is persisted in localStorage.
-
-**Swagger UI Integration**: The API documentation at `/docs` automatically syncs with the MUI theme. All Swagger UI components (endpoints, parameters, responses, code examples) are styled to match the current theme with proper contrast and readability. See `doc/SWAGGER_UI_DARK_MODE.md` for implementation details.
