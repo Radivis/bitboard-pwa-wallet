@@ -12,7 +12,10 @@ import { useSendStore } from '@/stores/sendStore'
 import { useFeatureStore } from '@/stores/featureStore'
 import { useLabChainStateQuery } from '@/hooks/useLabChainStateQuery'
 import { useEsploraFeePresets } from '@/hooks/useEsploraFeePresets'
-import type { SendFeePresetLabel } from '@/lib/esplora-fee-estimates'
+import {
+  NON_ESPLORA_FEE_PRESET_RATES_SAT_PER_VB,
+  type SendFeePresetLabel,
+} from '@/lib/esplora-fee-estimates'
 import { isValidAddress, msatsAmountNumberFromSatsExact, MAX_SATS_MSAT_AMOUNT_NUMBER } from '@/lib/bitcoin-utils'
 import {
   preferredRecipientFromBitcoinUri,
@@ -130,7 +133,8 @@ export function SendFlow() {
   } = useSendStore()
 
   const feePresetsQuery = useEsploraFeePresets(networkMode)
-  const presetSatPerVbByLabel = feePresetsQuery.data
+  const presetSatPerVbByLabel =
+    feePresetsQuery.data ?? NON_ESPLORA_FEE_PRESET_RATES_SAT_PER_VB
   const feeEstimatesRefreshing = feePresetsQuery.isFetching
 
   const handleSelectFeePreset = useCallback(
@@ -221,11 +225,14 @@ export function SendFlow() {
   useEffect(() => {
     if (useCustomFee) return
     const syncedRate = presetSatPerVbByLabel[feePresetSelection]
+    if (syncedRate === undefined) return
+    if (syncedRate === feeRate) return
     setFeeRate(syncedRate)
   }, [
     useCustomFee,
     feePresetSelection,
     presetSatPerVbByLabel,
+    feeRate,
     setFeeRate,
   ])
 

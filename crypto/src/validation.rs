@@ -49,9 +49,9 @@ pub fn fee_rate_from_sat_per_vb_float(rate_sat_per_vb: f64) -> Result<FeeRate, C
         ));
     }
     if rounded > u64::MAX as f64 {
-        return Err(CryptoError::Transaction(format!(
-            "Fee rate exceeds internal limit (scaled sat/kWU overflow)",
-        )));
+        return Err(CryptoError::Transaction(
+            "Fee rate exceeds internal limit (scaled sat/kWU overflow)".to_string(),
+        ));
     }
     let sat_kwu_u64 = rounded as u64;
     if sat_kwu_u64 == 0 {

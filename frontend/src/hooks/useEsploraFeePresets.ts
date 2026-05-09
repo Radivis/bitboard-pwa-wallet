@@ -31,16 +31,26 @@ async function presetRatesForNetwork(
   }
 }
 
+/**
+ * Shown immediately while `/fee-estimates` loads. Unlike `initialData`, this does not mark cached data as
+ * fresh, so `queryFn` still runs on mount (fixes Send page sometimes staying on fallbacks until stale time).
+ */
+const PLACEHOLDER_FEE_PRESET_RATES_SAT_PER_VB: Record<
+  SendFeePresetLabel,
+  number
+> = {
+  Low: NON_ESPLORA_FEE_PRESET_RATES_SAT_PER_VB.Low,
+  Medium: NON_ESPLORA_FEE_PRESET_RATES_SAT_PER_VB.Medium,
+  High: NON_ESPLORA_FEE_PRESET_RATES_SAT_PER_VB.High,
+}
+
 /** Live Esplora `fee-estimates` mapped to Low/Medium/High using targets 144 / 6 / 1, or fallback table. */
 export function useEsploraFeePresets(networkMode: NetworkMode) {
   return useQuery({
     queryKey: [...ESPLORA_FEE_PRESETS_QUERY_KEY, networkMode] as const,
     queryFn: () => presetRatesForNetwork(networkMode),
     staleTime: 60_000,
-    initialData: {
-      Low: NON_ESPLORA_FEE_PRESET_RATES_SAT_PER_VB.Low,
-      Medium: NON_ESPLORA_FEE_PRESET_RATES_SAT_PER_VB.Medium,
-      High: NON_ESPLORA_FEE_PRESET_RATES_SAT_PER_VB.High,
-    },
+    placeholderData: PLACEHOLDER_FEE_PRESET_RATES_SAT_PER_VB,
+    refetchOnMount: 'always',
   })
 }
