@@ -318,10 +318,10 @@ vi.mock('@/components/ConfirmationDialog', () => ({
 }))
 
 import { GITHUB_CHANGELOG_URL } from '@common/public-links'
-import { SettingsMainPage } from '../settings/index'
-import { SettingsSecurityPage } from '../settings/security'
-import { SettingsFeaturesPage } from '../settings/features'
-import { SettingsAboutPage } from '../settings/about'
+import { SettingsMainPage } from '@/pages/settings/SettingsMainPage'
+import { SettingsSecurityPage } from '@/pages/settings/SettingsSecurityPage'
+import { SettingsFeaturesPage } from '@/pages/settings/SettingsFeaturesPage'
+import { SettingsAboutPage } from '@/pages/settings/SettingsAboutPage'
 
 describe('Settings routes', () => {
   afterEach(() => {
@@ -388,10 +388,13 @@ describe('Settings routes', () => {
   })
 
   it('network selector commits loaded sub-wallet after switch completes', async () => {
+    // Default crypto mock rejects export; one resolved export completes the descriptor switch like the sibling test below.
+    mockExportChangeset.mockResolvedValueOnce('{}')
     const user = userEvent.setup()
     renderWithProviders(<SettingsMainPage />)
 
     await user.click(screen.getByRole('button', { name: 'Testnet' }))
+
     await waitFor(() => {
       expect(mockCommitLoadedSubWallet).toHaveBeenCalledWith({
         networkMode: 'testnet',

@@ -110,7 +110,7 @@ vi.mock('sonner', () => ({
   },
 }))
 
-import { DashboardPage } from '../wallet/index'
+import { DashboardPage } from '@/pages/wallet/DashboardPage'
 
 describe('DashboardPage', () => {
   beforeEach(() => {

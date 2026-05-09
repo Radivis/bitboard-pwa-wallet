@@ -133,7 +133,7 @@ vi.mock('qr-scanner', () => ({
 }))
 
 import { useSendStore } from '@/stores/sendStore'
-import { SendPage } from '../wallet/send'
+import { SendPage } from '@/pages/wallet/SendPage'
 
 const mockCameraMediaStream = {
   getTracks: () => [{ stop: vi.fn(), kind: 'video' as const }],

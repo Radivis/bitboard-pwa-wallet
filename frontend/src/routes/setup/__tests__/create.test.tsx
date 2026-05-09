@@ -136,7 +136,7 @@ function createWalletCryptoResult(overrides: {
   }
 }
 
-import { CreateWalletPage } from '../create'
+import { CreateWalletPage } from '@/pages/setup/CreateWalletPage'
 
 describe('CreateWalletPage', () => {
   beforeEach(() => {

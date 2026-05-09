@@ -122,7 +122,7 @@ vi.mock('@/lib/wallet-query-cache-sync', () => ({
   invalidateWalletRelatedQueriesAndNotifyOtherTabs: vi.fn(),
 }))
 
-import { ImportWalletPage } from '../import'
+import { ImportWalletPage } from '@/pages/setup/ImportWalletPage'
 
 describe('ImportWalletPage', () => {
   beforeEach(() => {
