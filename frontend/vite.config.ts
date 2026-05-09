@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import path from 'path'
 import { fileURLToPath } from 'node:url'
-import { defineConfig, type Plugin } from 'vite'
+import { defineConfig, loadEnv, type Plugin } from 'vite'
 import { readBitboardWalletVersion } from './common/bitboard-wallet-version'
 import { esploraViteProxyEntries } from './src/lib/esplora-service-whitelist'
 import { faucetViteProxyEntries } from './src/lib/faucet-definitions'
@@ -88,8 +88,8 @@ const SOCIAL_META_OG_URL_LINE = '    <!--SOCIAL_META_OG_URL-->\n'
  * only if the Vercel project has **System environment variables** enabled (dashboard →
  * Environment Variables → checkbox). Otherwise set `VITE_SITE_ORIGIN` for Preview/Production.
  */
-function resolvePublicSiteOriginForSocialMeta(): string {
-  const raw = process.env.VITE_SITE_ORIGIN?.trim()
+function resolvePublicSiteOriginForSocialMeta(env: NodeJS.ProcessEnv): string {
+  const raw = env.VITE_SITE_ORIGIN?.trim() || env.SITE_ORIGIN?.trim()
   if (raw) {
     if (raw.includes('"') || raw.includes("'") || raw.includes('<')) return ''
     const noTrailingSlash = raw.replace(/\/+$/, '')
@@ -98,7 +98,7 @@ function resolvePublicSiteOriginForSocialMeta(): string {
     if (!/^[a-z0-9].*$/i.test(host)) return ''
     return `https://${host}`
   }
-  const vercelHost = process.env.VERCEL_URL?.trim() || process.env.VERCEL_BRANCH_URL?.trim()
+  const vercelHost = env.VERCEL_URL?.trim() || env.VERCEL_BRANCH_URL?.trim()
   if (vercelHost && /^[a-z0-9.-]+$/i.test(vercelHost)) {
     return `https://${vercelHost}`
   }
@@ -108,14 +108,21 @@ function resolvePublicSiteOriginForSocialMeta(): string {
 /** Rewrites social meta tags so image URLs are absolute (required by X and other crawlers). */
 function injectSocialMetaSiteOrigin(): Plugin {
   let isProductionBuild = false
+  /** Dev server only — do not use `ctx.server` (Vite 8+ can expose a server handle during build). */
+  let viteCommand: 'build' | 'serve' = 'build'
+  let mergedEnv: NodeJS.ProcessEnv = process.env
   return {
     name: 'inject-social-meta-site-origin',
     configResolved(config) {
       isProductionBuild = config.command === 'build' && config.mode === 'production'
+      viteCommand = config.command
+      const viteScopedEnv = loadEnv(config.mode, config.envDir, 'VITE_')
+      mergedEnv = { ...viteScopedEnv, ...process.env }
     },
-    transformIndexHtml(html, ctx) {
-      const origin = ctx.server ? '' : resolvePublicSiteOriginForSocialMeta()
-      if (isProductionBuild && !ctx.server && origin === '') {
+    transformIndexHtml(html) {
+      const origin =
+        viteCommand === 'serve' ? '' : resolvePublicSiteOriginForSocialMeta(mergedEnv)
+      if (isProductionBuild && viteCommand === 'build' && origin === '') {
         console.warn(
           '[inject-social-meta-site-origin] Production build: og:image has no absolute origin. ' +
             'Set VITE_SITE_ORIGIN in Vercel env, enable System environment variables so VERCEL_URL is set, ' +
