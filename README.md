@@ -99,6 +99,7 @@ Planned work is grouped into beta stages. Ordering within a stage is approximate
 - Node.js (>=24.0.0)
 - npm
 - Rust
+- C (for the bitcoin Rust crate)
 - Optional, but suggested: Go and lefthook for the Git hooks
 
 ### Build and Run
