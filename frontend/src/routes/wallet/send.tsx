@@ -1,8 +1,26 @@
+import { lazy, Suspense } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
-import { SendPage } from '@/pages/wallet/SendPage'
+import { LoadingSpinner } from '@/components/LoadingSpinner'
 
-export { SendPage, SendFlow } from '@/pages/wallet/SendPage'
+/** Code-split: keep the heavy send flow out of the main dev/prod entry graph (E2E `/setup` cold start). */
+const SendPageLazy = lazy(() =>
+  import('@/pages/wallet/SendPage').then((m) => ({ default: m.SendPage })),
+)
+
+function SendRouteShell() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center">
+          <LoadingSpinner text="Loading..." />
+        </div>
+      }
+    >
+      <SendPageLazy />
+    </Suspense>
+  )
+}
 
 export const Route = createFileRoute('/wallet/send')({
-  component: SendPage,
+  component: SendRouteShell,
 })

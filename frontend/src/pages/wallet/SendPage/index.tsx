@@ -1,7 +1,6 @@
-import { useMemo, useCallback, useState, useEffect, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { toast } from 'sonner'
-import { LightningAddress } from '@getalby/lightning-tools'
 import { isValidSendAmountSats } from '@/components/wallet/send/send-amount'
 import { WalletUnlockOrNearZeroLoading } from '@/components/WalletUnlockOrNearZeroLoading'
 import { amountSatsFromForm } from '@/components/wallet/send/amount-sats-from-form'
@@ -11,12 +10,7 @@ import { useWalletStore } from '@/stores/walletStore'
 import { useSendStore } from '@/stores/sendStore'
 import { useFeatureStore } from '@/stores/featureStore'
 import { useLabChainStateQuery } from '@/hooks/useLabChainStateQuery'
-import { useEsploraFeePresets } from '@/hooks/useEsploraFeePresets'
-import {
-  NON_ESPLORA_FEE_PRESET_RATES_SAT_PER_VB,
-  type SendFeePresetLabel,
-} from '@/lib/esplora-fee-estimates'
-import { isValidAddress, msatsAmountNumberFromSatsExact, MAX_SATS_MSAT_AMOUNT_NUMBER } from '@/lib/bitcoin-utils'
+import { isValidAddress } from '@/lib/bitcoin-utils'
 import {
   preferredRecipientFromBitcoinUri,
   recipientAndAmountFromScannedPayload,
@@ -27,21 +21,9 @@ import {
   formatAmountInputFromSats,
   UX_DUST_FLOOR_SATS,
 } from '@/lib/bitcoin-dust'
-import {
-  isLightningSupported,
-  isValidLightningDestination,
-  isValidBolt11Invoice,
-  isLightningAddress,
-  normalizeLightningDestination,
-  bolt11NetworkModeFromPrefix,
-  tryDecodeBolt11Invoice,
-} from '@/lib/lightning-utils'
+import { normalizeLightningDestination } from '@/lib/lightning-utils'
 import { useLightningStore } from '@/stores/lightningStore'
-import { useLightningPayMutation } from '@/hooks/useLightningMutations'
-import { useSendLightningBalances } from '@/hooks/useSendLightningBalances'
-import { MAX_BOLT11_PAYMENT_REQUEST_LENGTH } from '@/lib/lightning-input-limits'
 import { labOwnersEqual, walletLabOwner } from '@/lib/lab-owner'
-import { DustChangeChoiceModal } from '@/components/wallet/send/DustChangeChoiceModal'
 import {
   labBitcoinAddressesEqual,
   lookupLabAddressOwner,
@@ -56,6 +38,10 @@ import {
 } from '@/hooks/useSendMutations'
 import type { PrepareOnchainSendResult } from '@/workers/crypto-api'
 import { useCryptoStore } from '@/stores/cryptoStore'
+
+import { useSendFlowFees } from './fees'
+import { useSendFlowLightning } from './lightning'
+import { SendFlowDustModals } from './modals'
 
 export function SendPage() {
   const navigate = useNavigate()
@@ -80,7 +66,6 @@ export function SendFlow() {
   const activeWalletId = useWalletStore((s) => s.activeWalletId)
   const currentAddress = useWalletStore((s) => s.currentAddress)
   const lightningEnabled = useFeatureStore((s) => s.lightningEnabled)
-  const lightningAvailable = lightningEnabled && isLightningSupported(networkMode)
   const connectedLightningWallets = useLightningStore((s) => s.connectedWallets)
 
   const hasAnyLightningConnection = useLightningStore((s) =>
@@ -89,8 +74,6 @@ export function SendFlow() {
       : false,
   )
 
-  const [isResolvingLightningAddress, setIsResolvingLightningAddress] =
-    useState(false)
   const [deadLabRecipientModalOpen, setDeadLabRecipientModalOpen] = useState(false)
   const [dustCase2Modal, setDustCase2Modal] = useState<null | {
     pendingOutcome: PrepareOnchainSendResult
@@ -106,43 +89,31 @@ export function SendFlow() {
   /** Pre-bump payment (e.g. 800). Lab crypto builds from this and applies `applyChangeFreeBump` internally; the store amount is the max for display only. */
   const labChangeFreeBumpBaseAmountSatsRef = useRef<number | null>(null)
 
-  const lightningPayMutation = useLightningPayMutation()
-
   const {
     step,
     recipient,
     amount,
     amountUnit,
     feePresetSelection,
-    feeRate,
-    customFeeRate,
-    useCustomFee,
     psbt,
     onchainDustWarning,
     setStep,
     setRecipient,
     setAmount,
     setAmountUnit,
-    setFeeRate,
-    setCustomFeeRate,
-    setUseCustomFee,
   } = useSendStore()
 
-  const feePresetsQuery = useEsploraFeePresets(networkMode)
-  const presetSatPerVbByLabel =
-    feePresetsQuery.data ?? NON_ESPLORA_FEE_PRESET_RATES_SAT_PER_VB
-  const feeEstimatesRefreshing = feePresetsQuery.isFetching
-
-  const handleSelectFeePreset = useCallback(
-    (preset: SendFeePresetLabel, rateSatPerVb: number) => {
-      useSendStore.setState({
-        feePresetSelection: preset,
-        feeRate: rateSatPerVb,
-        useCustomFee: false,
-      })
-    },
-    [],
-  )
+  const {
+    presetSatPerVbByLabel,
+    feeEstimatesRefreshing,
+    handleSelectFeePreset,
+    effectiveFeeRate,
+    customFeeRate,
+    customFeeParsed,
+    useCustomFee,
+    setCustomFeeRate,
+    setUseCustomFee,
+  } = useSendFlowFees()
 
   const { data: labState, isPending: labChainPending } = useLabChainStateQuery()
   const utxos = useMemo(() => labState?.utxos ?? [], [labState?.utxos])
@@ -172,16 +143,6 @@ export function SendFlow() {
     networkMode === 'lab' && labBalanceSats !== null
       ? labBalanceSats
       : balance?.confirmed ?? 0
-
-  const customFeeParsed = useMemo(() => {
-    const n = Number.parseFloat(customFeeRate.trim())
-    if (!Number.isFinite(n) || n <= 0) return null
-    return n
-  }, [customFeeRate])
-
-  const effectiveFeeRate = useCustomFee
-    ? (customFeeParsed ?? presetSatPerVbByLabel.Medium)
-    : feeRate
 
   const applyOnchainPrepareOutcomeToSendStore = useCallback(
     (outcome: PrepareOnchainSendResult) => {
@@ -218,20 +179,6 @@ export function SendFlow() {
     if (step === 1) setLabApplyChangeFreeBump(false)
   }, [step])
 
-  useEffect(() => {
-    if (useCustomFee) return
-    const syncedRate = presetSatPerVbByLabel[feePresetSelection]
-    if (syncedRate === undefined) return
-    if (syncedRate === feeRate) return
-    setFeeRate(syncedRate)
-  }, [
-    useCustomFee,
-    feePresetSelection,
-    presetSatPerVbByLabel,
-    feeRate,
-    setFeeRate,
-  ])
-
   const amountSats = useMemo(
     () => amountSatsFromForm(amount, amountUnit),
     [amount, amountUnit],
@@ -246,6 +193,35 @@ export function SendFlow() {
     const core = t.replace(/^bitcoin:/i, '')
     return normalizeLightningDestination(core)
   }, [recipient])
+
+  const {
+    lightningAvailable,
+    isLightningSendMode,
+    isResolvingLightningAddress,
+    lightningPayMutation,
+    matchingLightningConnections,
+    selectedLightningConnectionId,
+    setSelectedLightningConnectionId,
+    balanceQueries,
+    selectedLnBalanceQuery,
+    selectedLnBalanceSats,
+    decodedBolt11,
+    bolt11NetworkMismatch,
+    bolt11DecodeOk,
+    needsUserLightningAmount,
+    lightningPayAmountSats,
+    lightningRecipientOk,
+    recipientFormatValid,
+    canBuildLightning,
+    submitLightningPayment,
+  } = useSendFlowLightning({
+    lightningEnabled,
+    networkMode,
+    activeWalletId,
+    connectedLightningWallets,
+    normalizedRecipient,
+    amountSats,
+  })
 
   const deadLabRecipientInfo = useMemo(() => {
     if (networkMode !== 'lab' || !labChainReady) return null
@@ -264,121 +240,6 @@ export function SendFlow() {
     if (step !== 2) setDeadLabRecipientModalOpen(false)
   }, [step])
 
-  const isLightningDestination = useMemo(
-    () => lightningAvailable && isValidLightningDestination(normalizedRecipient),
-    [lightningAvailable, normalizedRecipient],
-  )
-
-  const isLightningSendMode = isLightningDestination
-
-  const {
-    matchingLightningConnections,
-    selectedLightningConnectionId,
-    setSelectedLightningConnectionId,
-    balanceQueries,
-    selectedLightningWallet,
-    selectedLnBalanceQuery,
-    selectedLnBalanceSats,
-    hasLightningWalletSelected,
-  } = useSendLightningBalances({
-    lightningEnabled,
-    networkMode,
-    activeWalletId,
-    connectedLightningWallets,
-    isLightningSendMode,
-  })
-
-  const decodedBolt11 = useMemo(() => {
-    if (!isValidBolt11Invoice(normalizedRecipient)) return null
-    return tryDecodeBolt11Invoice(normalizedRecipient)
-  }, [normalizedRecipient])
-
-  const bolt11NetworkMismatch = useMemo(() => {
-    if (!isValidBolt11Invoice(normalizedRecipient)) return false
-    const invNetwork = bolt11NetworkModeFromPrefix(normalizedRecipient)
-    if (invNetwork == null) return false
-    return invNetwork !== networkMode
-  }, [normalizedRecipient, networkMode])
-
-  const needsUserLightningAmount = useMemo(() => {
-    if (!isLightningSendMode) return false
-    if (isLightningAddress(normalizedRecipient)) return true
-    if (!isValidBolt11Invoice(normalizedRecipient)) return false
-    return decodedBolt11 == null || decodedBolt11.satoshi === 0
-  }, [isLightningSendMode, normalizedRecipient, decodedBolt11])
-
-  const lightningPayAmountSats = useMemo(() => {
-    if (!isLightningSendMode) return 0
-    if (isValidBolt11Invoice(normalizedRecipient)) {
-      if (decodedBolt11 != null && decodedBolt11.satoshi > 0) {
-        return decodedBolt11.satoshi
-      }
-      return amountSats
-    }
-    return amountSats
-  }, [isLightningSendMode, normalizedRecipient, decodedBolt11, amountSats])
-
-  const bolt11DecodeOk = useMemo(() => {
-    if (!isValidBolt11Invoice(normalizedRecipient)) return true
-    return decodedBolt11 != null
-  }, [normalizedRecipient, decodedBolt11])
-
-  const recipientFormatValid = useMemo(
-    () =>
-      normalizedRecipient.length > 0 &&
-      (isValidAddress(normalizedRecipient, networkMode) ||
-        (lightningAvailable &&
-          isValidLightningDestination(normalizedRecipient))),
-    [normalizedRecipient, networkMode, lightningAvailable],
-  )
-
-  const lightningRecipientOk =
-    !isLightningSendMode || matchingLightningConnections.length > 0
-
-  const lightningPayloadLengthOk =
-    !isLightningSendMode ||
-    normalizedRecipient.length <= MAX_BOLT11_PAYMENT_REQUEST_LENGTH
-
-  const lightningAmountInputOk =
-    !needsUserLightningAmount || isValidSendAmountSats(amountSats)
-
-  const lightningBalanceOk =
-    hasLightningWalletSelected &&
-    selectedLnBalanceQuery?.isSuccess === true &&
-    selectedLnBalanceSats !== undefined &&
-    lightningPayAmountSats <= selectedLnBalanceSats
-
-  /** Amountless bolt11 pays pass msats (= sats * 1000); require exact IEEE-safe products (see `msatsAmountNumberFromSatsExact`). */
-  const lightningAmountlessBolt11PayMsatsExactOk = useMemo(() => {
-    if (!needsUserLightningAmount) return true
-    if (!isValidBolt11Invoice(normalizedRecipient)) return true
-    if (decodedBolt11 == null || decodedBolt11.satoshi !== 0) return true
-    return (
-      Number.isInteger(amountSats) && amountSats <= MAX_SATS_MSAT_AMOUNT_NUMBER
-    )
-  }, [
-    needsUserLightningAmount,
-    normalizedRecipient,
-    decodedBolt11,
-    amountSats,
-  ])
-
-  const canBuildLightning =
-    recipientFormatValid &&
-    lightningRecipientOk &&
-    lightningPayloadLengthOk &&
-    matchingLightningConnections.length > 0 &&
-    hasLightningWalletSelected &&
-    !bolt11NetworkMismatch &&
-    bolt11DecodeOk &&
-    lightningAmountInputOk &&
-    lightningPayAmountSats >= 1 &&
-    lightningBalanceOk &&
-    lightningAmountlessBolt11PayMsatsExactOk &&
-    (isLightningAddress(normalizedRecipient)
-      ? isValidSendAmountSats(amountSats)
-      : true)
-
   const isLabWithNoBalance =
     networkMode === 'lab' && (labBalanceSats === 0 || labBalanceSats === null)
 
@@ -393,73 +254,11 @@ export function SendFlow() {
 
   const canBuild = isLightningSendMode ? canBuildLightning : canBuildOnChain
 
-  const handleLightningAddressPay = useCallback(async () => {
-    if (!selectedLightningWallet || !isValidSendAmountSats(amountSats)) return
-    setIsResolvingLightningAddress(true)
-    try {
-      const recipientLightningAddress = new LightningAddress(normalizedRecipient)
-      await recipientLightningAddress.fetch()
-      const lud16Invoice = await recipientLightningAddress.requestInvoice({
-        satoshi: amountSats,
-      })
-      const bolt11PaymentRequest = lud16Invoice.paymentRequest
-      const invoiceNetworkMode = bolt11NetworkModeFromPrefix(bolt11PaymentRequest)
-      if (invoiceNetworkMode !== networkMode) {
-        toast.error(
-          'This invoice is for a different network. Switch network in Settings.',
-        )
-        return
-      }
-      lightningPayMutation.mutate({
-        bolt11: bolt11PaymentRequest,
-        config: selectedLightningWallet.config,
-      })
-    } catch (err) {
-      toast.error(
-        err instanceof Error ? err.message : 'Could not fetch Lightning invoice',
-      )
-    } finally {
-      setIsResolvingLightningAddress(false)
-    }
-  }, [
-    selectedLightningWallet,
-    amountSats,
-    normalizedRecipient,
-    networkMode,
-    lightningPayMutation,
-  ])
-
   const handleSubmitBuild = useCallback(async () => {
     if (!canBuild) return
 
     if (isLightningSendMode) {
-      if (isLightningAddress(normalizedRecipient)) {
-        void handleLightningAddressPay()
-        return
-      }
-
-      if (!selectedLightningWallet) {
-        toast.error('Select a Lightning wallet to pay from.')
-        return
-      }
-
-      if (!isValidBolt11Invoice(normalizedRecipient)) return
-
-      const amountMsatsForAmountless =
-        decodedBolt11 != null &&
-        decodedBolt11.satoshi === 0 &&
-        isValidSendAmountSats(amountSats) &&
-        amountSats <= MAX_SATS_MSAT_AMOUNT_NUMBER
-          ? msatsAmountNumberFromSatsExact(amountSats)
-          : undefined
-
-      lightningPayMutation.mutate({
-        bolt11: normalizedRecipient,
-        config: selectedLightningWallet.config,
-        ...(amountMsatsForAmountless != null
-          ? { amountMsats: amountMsatsForAmountless }
-          : {}),
-      })
+      submitLightningPayment()
       return
     }
 
@@ -568,18 +367,17 @@ export function SendFlow() {
     canBuild,
     isLightningSendMode,
     normalizedRecipient,
-    selectedLightningWallet,
     networkMode,
-    lightningPayMutation,
     buildMutation,
     amountSats,
     effectiveFeeRate,
-    handleLightningAddressPay,
     amountUnit,
     applyOnchainPrepareOutcomeToSendStore,
     activeWalletId,
     currentAddress,
     setStep,
+    submitLightningPayment,
+    confirmedBalance,
   ])
 
   const handleConfirmSend = useCallback(() => {
@@ -742,70 +540,20 @@ export function SendFlow() {
         onApplyScannedPayload={applyScannedPayload}
       />
 
-      <DustChangeChoiceModal
-        open={dustCase2Modal != null}
-        onOpenChange={(o) => {
-          if (!o) setDustCase2Modal(null)
-        }}
-        exactAmountSats={dustCase2Modal?.pendingOutcome.finalAmountSats ?? 0}
-        changeFreeMaxSats={dustCase2Modal?.changeFreeMaxSats ?? 0}
-        onKeepExact={() => {
-          if (!dustCase2Modal) return
-          const pending = dustCase2Modal.pendingOutcome
-          setDustCase2Modal(null)
-          applyOnchainPrepareOutcomeToSendStore(pending)
-        }}
-        onIncreaseToChangeFree={async () => {
-          if (!dustCase2Modal) return
-          try {
-            const outcome = await buildMutation.mutateAsync({
-              normalizedRecipient,
-              amountSats,
-              effectiveFeeRate,
-              applyChangeFreeBump: true,
-            })
-            setDustCase2Modal(null)
-            applyOnchainPrepareOutcomeToSendStore(outcome)
-          } catch {
-            /* mutation onError */
-          }
-        }}
-        isPending={buildMutation.isPending}
-      />
-      <DustChangeChoiceModal
-        open={labDustCase2Modal != null}
-        onOpenChange={(o) => {
-          if (!o) {
-            setLabDustCase2Modal(null)
-            labChangeFreeBumpBaseAmountSatsRef.current = null
-          }
-        }}
-        exactAmountSats={labDustCase2Modal?.exactAmountSats ?? 0}
-        changeFreeMaxSats={labDustCase2Modal?.changeFreeMaxSats ?? 0}
-        onKeepExact={() => {
-          setLabDustCase2Modal(null)
-          setLabApplyChangeFreeBump(false)
-          labChangeFreeBumpBaseAmountSatsRef.current = null
-          setStep(2)
-        }}
-        onIncreaseToChangeFree={() => {
-          if (!labDustCase2Modal) return
-          useSendStore.setState({
-            amount: formatAmountInputFromSats(
-              labDustCase2Modal.changeFreeMaxSats,
-              amountUnit,
-            ),
-            onchainDustWarning: {
-              previousSats: labDustCase2Modal.originalAmountSats,
-              raisedToDustMin: false,
-              bumpedChangeFree: true,
-            },
-          })
-          setLabApplyChangeFreeBump(true)
-          setLabDustCase2Modal(null)
-          setStep(2)
-        }}
-        isPending={false}
+      <SendFlowDustModals
+        dustCase2Modal={dustCase2Modal}
+        setDustCase2Modal={setDustCase2Modal}
+        labDustCase2Modal={labDustCase2Modal}
+        setLabDustCase2Modal={setLabDustCase2Modal}
+        labChangeFreeBumpBaseAmountSatsRef={labChangeFreeBumpBaseAmountSatsRef}
+        buildMutation={buildMutation}
+        normalizedRecipient={normalizedRecipient}
+        amountSats={amountSats}
+        effectiveFeeRate={effectiveFeeRate}
+        amountUnit={amountUnit}
+        applyOnchainPrepareOutcomeToSendStore={applyOnchainPrepareOutcomeToSendStore}
+        setStep={setStep}
+        setLabApplyChangeFreeBump={setLabApplyChangeFreeBump}
       />
     </div>
   )

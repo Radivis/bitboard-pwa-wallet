@@ -1,18 +1,24 @@
 /**
- * Esplora `/fee-estimates` + send preset mapping (targets 144 / 6 / 1 blocks).
+ * Esplora `/fee-estimates` + send preset mapping.
+ * Confirmation targets come from {@link SEND_FEE_PRESET_ENTRIES} in `./send-fee-preset-definitions`.
  * @see https://github.com/Blockstream/esplora/blob/master/API.md
  */
 
-/** Lab or failed-fetch fallback (sat/vB), aligned with mempool-style scale. */
-export const NON_ESPLORA_FEE_PRESET_RATES_SAT_PER_VB = {
-  Low: 0.5,
-  Medium: 2,
-  High: 10,
-} as const
+import {
+  NON_ESPLORA_FEE_PRESET_RATES_SAT_PER_VB,
+  SEND_FEE_PRESET_ENTRIES,
+  type SendFeePresetLabel,
+} from '@/lib/send-fee-preset-definitions'
 
-export type SendFeePresetLabel =
-  keyof typeof NON_ESPLORA_FEE_PRESET_RATES_SAT_PER_VB
+export {
+  NON_ESPLORA_FEE_PRESET_RATES_SAT_PER_VB,
+  type SendFeePresetLabel,
+}
 
+/**
+ * Upper bound when parsing `/fee-estimates` JSON — must stay in sync with
+ * `MAX_FEE_RATE_SAT_PER_VB` in `crypto/src/validation.rs`.
+ */
 export const MAX_FEE_RATE_SAT_PER_VB = 1_000_000
 
 function isValidPositiveFeeRateSatPerVb(
@@ -126,6 +132,16 @@ export function estimateSatPerVbForTarget(
   return highestConfirmationTargetPair[1]
 }
 
+function fallbackPresetRatesSatPerVb(): Record<SendFeePresetLabel, number> {
+  return SEND_FEE_PRESET_ENTRIES.reduce(
+    (acc, { label }) => {
+      acc[label] = NON_ESPLORA_FEE_PRESET_RATES_SAT_PER_VB[label]
+      return acc
+    },
+    {} as Record<SendFeePresetLabel, number>,
+  )
+}
+
 /** Preset sat/vB for Live (+ regtest/signet/etc. with Esplora) from map or fallback for any missing preset. */
 export function pickPresetRatesFromEsploraOrFallback(
   estimatesByConfirmationTargetKey: Record<string, number> | null | undefined,
@@ -135,23 +151,19 @@ export function pickPresetRatesFromEsploraOrFallback(
     estimatesByConfirmationTargetKey == null ||
     Object.keys(estimatesByConfirmationTargetKey).length === 0
   ) {
-    return {
-      Low: fallbackRatesSatPerVbByPreset.Low,
-      Medium: fallbackRatesSatPerVbByPreset.Medium,
-      High: fallbackRatesSatPerVbByPreset.High,
-    }
+    return fallbackPresetRatesSatPerVb()
   }
-  return {
-    Low:
-      estimateSatPerVbForTarget(estimatesByConfirmationTargetKey, 144) ??
-      fallbackRatesSatPerVbByPreset.Low,
-    Medium:
-      estimateSatPerVbForTarget(estimatesByConfirmationTargetKey, 6) ??
-      fallbackRatesSatPerVbByPreset.Medium,
-    High:
-      estimateSatPerVbForTarget(estimatesByConfirmationTargetKey, 1) ??
-      fallbackRatesSatPerVbByPreset.High,
-  }
+  return SEND_FEE_PRESET_ENTRIES.reduce(
+    (acc, { label, confirmationTargetBlocks }) => {
+      acc[label] =
+        estimateSatPerVbForTarget(
+          estimatesByConfirmationTargetKey,
+          confirmationTargetBlocks,
+        ) ?? fallbackRatesSatPerVbByPreset[label]
+      return acc
+    },
+    {} as Record<SendFeePresetLabel, number>,
+  )
 }
 
 export function formatSatPerVbTwoDecimals(feerateSatPerVb: number): string {

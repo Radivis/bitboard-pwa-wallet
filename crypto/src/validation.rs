@@ -5,6 +5,7 @@ use bitcoin::FeeRate;
 use crate::error::CryptoError;
 
 /// Maximum allowed fee rate (sat/vB). Prevents overflow or nonsensical values from JS.
+/// Must match `MAX_FEE_RATE_SAT_PER_VB` in `frontend/src/lib/esplora-fee-estimates.ts`.
 const MAX_FEE_RATE_SAT_PER_VB: f64 = 1_000_000.0;
 
 /// `FeeRate::from_sat_per_vb_unchecked(sat_vb)` uses `sat_vb * (1000 / 4)` sat/kwu (`rust-bitcoin`).

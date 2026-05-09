@@ -173,7 +173,7 @@ vi.mock('@/lib/bitcoin-utils', () => ({
   truncateAddress: (a: string) => a.slice(0, 8),
 }))
 
-import { SendFlow } from '../send'
+import { SendFlow } from '@/pages/wallet/SendPage'
 
 describe('SendFlow', () => {
   beforeEach(() => {
