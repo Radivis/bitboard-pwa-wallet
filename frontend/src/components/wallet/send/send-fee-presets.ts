@@ -1,28 +1,37 @@
-export const SEND_FEE_PRESETS = [
-  { label: 'Low', rate: 1 },
-  { label: 'Medium', rate: 3 },
-  { label: 'High', rate: 5 },
-] as const
+/**
+ * Fee preset UX metadata (confirmation targets tie into Esplora `fee-estimates` in the Send flow).
+ * Numeric rates come from `/fee-estimates` or {@link NON_ESPLORA_FEE_PRESET_RATES_SAT_PER_VB}.
+ */
+import type { SendFeePresetLabel } from '@/lib/esplora-fee-estimates'
 
-export type SendFeePresetLabel = (typeof SEND_FEE_PRESETS)[number]['label']
+export type { SendFeePresetLabel }
+
+export const SEND_FEE_PRESETS: readonly {
+  label: SendFeePresetLabel
+  confirmationTargetBlocks: number
+}[] = [
+  { label: 'Low', confirmationTargetBlocks: 144 },
+  { label: 'Medium', confirmationTargetBlocks: 6 },
+  { label: 'High', confirmationTargetBlocks: 1 },
+] as const
 
 export const SEND_FEE_PRESET_INFOMODE: Record<
   SendFeePresetLabel,
   { infoTitle: string; infoText: string }
 > = {
   Low: {
-    infoTitle: 'Low fee',
+    infoTitle: 'Low fee (~144 blocks)',
     infoText:
-      'Best when the mempool is calm or you do not care if confirmation takes longer. You pay less total fee, but in a busy period your transaction might sit unconfirmed longer than with Medium or High.',
+      'Targets confirming in roughly 144 blocks on average—not a guarantee when the mempool is volatile. Lowest preset; good when you want to minimise fees and can wait.',
   },
   Medium: {
-    infoTitle: 'Medium fee',
+    infoTitle: 'Medium fee (~6 blocks)',
     infoText:
-      'A reasonable default when you want a normal confirmation time without overpaying. Pick this for typical transfers if you are unsure—then switch to High if blocks are full or you are in a hurry, or Low if you are happy to wait.',
+      'Targets confirming in roughly 6 blocks—still not guaranteed during congestion. Sensible everyday default between cost and urgency.',
   },
   High: {
-    infoTitle: 'High fee',
+    infoTitle: 'High fee (~1 block)',
     infoText:
-      'Use when you want priority during congestion—paying more per vB makes it more attractive for miners to include your transaction in the next blocks. Good for time-sensitive payments; you spend more in fees than with Low or Medium.',
+      'Targets confirming in roughly the next block when conditions allow—never guaranteed during congestion or relay policy quirks. Highest preset for time-sensitive transfers.',
   },
 }

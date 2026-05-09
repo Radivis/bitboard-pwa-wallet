@@ -2,7 +2,7 @@ use std::str::FromStr;
 
 use bdk_wallet::Wallet;
 use bitcoin::absolute;
-use bitcoin::{Address, Amount, FeeRate, Network, Psbt, Transaction};
+use bitcoin::{Address, Amount, Network, Psbt, Transaction};
 use serde::Serialize;
 
 use crate::error::CryptoError;
@@ -76,8 +76,7 @@ pub fn prepare_onchain_send(
         .map_err(|e| CryptoError::Transaction(e.to_string()))?;
     let recipient_spk = address.script_pubkey();
 
-    let fee_rate_sats = validation::validate_fee_rate_sat_per_vb(fee_rate_sat_per_vb)?;
-    let fee_rate = FeeRate::from_sat_per_vb_unchecked(fee_rate_sats);
+    let fee_rate = validation::fee_rate_from_sat_per_vb_float(fee_rate_sat_per_vb)?;
 
     // `nLockTime = 0` instead of BDK’s default (tip-based fee-sniping lock time) — see
     // `doc/ARCHITECTURE.md` (On-chain sends: nLockTime and fee sniping).

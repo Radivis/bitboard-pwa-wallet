@@ -11,6 +11,8 @@ import { useWalletStore } from '@/stores/walletStore'
 import { useSendStore } from '@/stores/sendStore'
 import { useFeatureStore } from '@/stores/featureStore'
 import { useLabChainStateQuery } from '@/hooks/useLabChainStateQuery'
+import { useEsploraFeePresets } from '@/hooks/useEsploraFeePresets'
+import type { SendFeePresetLabel } from '@/lib/esplora-fee-estimates'
 import { isValidAddress, msatsAmountNumberFromSatsExact, MAX_SATS_MSAT_AMOUNT_NUMBER } from '@/lib/bitcoin-utils'
 import {
   preferredRecipientFromBitcoinUri,
@@ -112,6 +114,7 @@ export function SendFlow() {
     recipient,
     amount,
     amountUnit,
+    feePresetSelection,
     feeRate,
     customFeeRate,
     useCustomFee,
@@ -125,6 +128,21 @@ export function SendFlow() {
     setCustomFeeRate,
     setUseCustomFee,
   } = useSendStore()
+
+  const feePresetsQuery = useEsploraFeePresets(networkMode)
+  const presetSatPerVbByLabel = feePresetsQuery.data
+  const feeEstimatesRefreshing = feePresetsQuery.isFetching
+
+  const handleSelectFeePreset = useCallback(
+    (preset: SendFeePresetLabel, rateSatPerVb: number) => {
+      useSendStore.setState({
+        feePresetSelection: preset,
+        feeRate: rateSatPerVb,
+        useCustomFee: false,
+      })
+    },
+    [],
+  )
 
   const { data: labState, isPending: labChainPending } = useLabChainStateQuery()
   const utxos = useMemo(() => labState?.utxos ?? [], [labState?.utxos])
@@ -155,7 +173,15 @@ export function SendFlow() {
       ? labBalanceSats
       : balance?.confirmed ?? 0
 
-  const effectiveFeeRate = useCustomFee ? parseInt(customFeeRate) || 1 : feeRate
+  const customFeeParsed = useMemo(() => {
+    const n = Number.parseFloat(customFeeRate.trim())
+    if (!Number.isFinite(n) || n <= 0) return null
+    return n
+  }, [customFeeRate])
+
+  const effectiveFeeRate = useCustomFee
+    ? (customFeeParsed ?? presetSatPerVbByLabel.Medium)
+    : feeRate
 
   const applyOnchainPrepareOutcomeToSendStore = useCallback(
     (outcome: PrepareOnchainSendResult) => {
@@ -191,6 +217,17 @@ export function SendFlow() {
   useEffect(() => {
     if (step === 1) setLabApplyChangeFreeBump(false)
   }, [step])
+
+  useEffect(() => {
+    if (useCustomFee) return
+    const syncedRate = presetSatPerVbByLabel[feePresetSelection]
+    setFeeRate(syncedRate)
+  }, [
+    useCustomFee,
+    feePresetSelection,
+    presetSatPerVbByLabel,
+    setFeeRate,
+  ])
 
   const amountSats = useMemo(
     () => amountSatsFromForm(amount, amountUnit),
@@ -348,7 +385,8 @@ export function SendFlow() {
     isValidAddress(normalizedRecipient, networkMode) &&
     isValidSendAmountSats(amountSats) &&
     amountSats <= confirmedBalance &&
-    !isLabWithNoBalance
+    !isLabWithNoBalance &&
+    (!useCustomFee || customFeeParsed !== null)
 
   const canBuild = isLightningSendMode ? canBuildLightning : canBuildOnChain
 
@@ -684,10 +722,12 @@ export function SendFlow() {
         selectedLnBalanceSats={selectedLnBalanceSats}
         confirmedBalance={confirmedBalance}
         isLabWithNoBalance={isLabWithNoBalance}
-        feeRate={feeRate}
+        feePresetSelection={feePresetSelection}
+        presetSatPerVbByLabel={presetSatPerVbByLabel}
+        feeEstimatesRefreshing={feeEstimatesRefreshing}
         customFeeRate={customFeeRate}
         useCustomFee={useCustomFee}
-        onFeeRateChange={setFeeRate}
+        onSelectFeePreset={handleSelectFeePreset}
         onCustomFeeRateChange={setCustomFeeRate}
         onUseCustomFeeChange={setUseCustomFee}
         isPending={isPending}

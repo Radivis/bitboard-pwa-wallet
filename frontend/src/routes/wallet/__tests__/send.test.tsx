@@ -100,10 +100,12 @@ const sendStoreState: Record<string, unknown> = {
   recipient: '',
   amount: '',
   amountUnit: 'sat',
-  feeRate: 3,
+  feePresetSelection: 'Medium',
+  feeRate: 2,
   customFeeRate: '',
   useCustomFee: false,
   psbt: null,
+  onchainDustWarning: null,
   setStep: vi.fn(),
   setRecipient: vi.fn((v: string) => {
     sendStoreState.recipient = v
@@ -112,10 +114,13 @@ const sendStoreState: Record<string, unknown> = {
     sendStoreState.amount = v
   }),
   setAmountUnit: vi.fn(),
+  setFeePresetSelection: vi.fn(),
   setFeeRate: vi.fn(),
   setCustomFeeRate: vi.fn(),
   setUseCustomFee: vi.fn(),
   setPsbt: vi.fn(),
+  setOnchainDustWarning: vi.fn(),
+  reset: vi.fn(),
 }
 
 vi.mock('@/stores/sendStore', () => ({
@@ -149,6 +154,13 @@ vi.mock('@/hooks/useLightningMutations', () => ({
 
 vi.mock('@/hooks/useLabChainStateQuery', () => ({
   useLabChainStateQuery: () => ({ data: null, isPending: false }),
+}))
+
+vi.mock('@/hooks/useEsploraFeePresets', () => ({
+  useEsploraFeePresets: () => ({
+    data: { Low: 0.5, Medium: 2, High: 10 },
+    isFetching: false,
+  }),
 }))
 
 vi.mock('@/hooks/useBitcoinUnit', () => ({

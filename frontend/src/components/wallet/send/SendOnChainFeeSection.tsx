@@ -6,24 +6,32 @@ import {
   SEND_FEE_PRESETS,
   SEND_FEE_PRESET_INFOMODE,
 } from '@/components/wallet/send/send-fee-presets'
+import {
+  formatSatPerVbTwoDecimals,
+  type SendFeePresetLabel,
+} from '@/lib/esplora-fee-estimates'
 
 export function SendOnChainFeeSection(props: {
-  feeRate: number
+  feePresetSelection: SendFeePresetLabel
+  presetSatPerVbByLabel: Record<SendFeePresetLabel, number>
+  feeEstimatesRefreshing: boolean
   customFeeRate: string
   useCustomFee: boolean
   isPending: boolean
-  setFeeRate: (rate: number) => void
+  onSelectPreset: (preset: SendFeePresetLabel, rateSatPerVb: number) => void
   setCustomFeeRate: (value: string) => void
-  setUseCustomFee: (value: boolean) => void
+  onSelectCustomMode: () => void
 }) {
   const {
-    feeRate,
+    feePresetSelection,
+    presetSatPerVbByLabel,
+    feeEstimatesRefreshing,
     customFeeRate,
     useCustomFee,
     isPending,
-    setFeeRate,
+    onSelectPreset,
     setCustomFeeRate,
-    setUseCustomFee,
+    onSelectCustomMode,
   } = props
 
   return (
@@ -33,17 +41,21 @@ export function SendOnChainFeeSection(props: {
           as="span"
           infoId="send-fee-rate-label"
           infoTitle="Fee rate (sat/vB)"
-          infoText="Miners prioritize transactions that pay more per byte of block space. The number is satoshis per virtual byte (sat/vB). Bitboard currently offers simple fixed presets (not live mempool data—smarter estimation may come later). In general: use Low when you are not in a rush, Medium for everyday sends, High when the network is busy or you need faster confirmation, and Custom only when you already have a target rate from an explorer or another trusted source."
+          infoText={
+            'Miners prioritize transactions that pay more per virtual byte (sat/vB). Preset buttons use estimates from your configured Esplora server’s fee-estimates API (confirmation targets roughly 144 / 6 / 1 block for Low / Medium / High). Targets are not guarantees. If fetching fails—or in the Lab—we show fixed fallback presets. Pick Custom only when you already have a precise rate.'
+          }
         >
           Fee Rate (sat/vB)
         </InfomodeWrapper>
       </Label>
-      <p className="text-xs text-muted-foreground">
-        Static presets for now. Dynamic fee estimation will be added later.
-      </p>
+      {feeEstimatesRefreshing ? (
+        <p className="text-xs text-muted-foreground">Refreshing fee estimates…</p>
+      ) : null}
       <div className="flex gap-2">
         {SEND_FEE_PRESETS.map((preset) => {
           const { infoTitle, infoText } = SEND_FEE_PRESET_INFOMODE[preset.label]
+          const presetRate = presetSatPerVbByLabel[preset.label]
+          const rateShown = formatSatPerVbTwoDecimals(presetRate)
           return (
             <InfomodeWrapper
               key={preset.label}
@@ -55,16 +67,16 @@ export function SendOnChainFeeSection(props: {
               <Button
                 type="button"
                 variant={
-                  !useCustomFee && feeRate === preset.rate ? 'default' : 'outline'
+                  !useCustomFee && feePresetSelection === preset.label
+                    ? 'default'
+                    : 'outline'
                 }
                 size="sm"
                 className="w-full"
-                onClick={() => {
-                  setFeeRate(preset.rate)
-                  setUseCustomFee(false)
-                }}
+                disabled={isPending}
+                onClick={() => onSelectPreset(preset.label, presetRate)}
               >
-                {preset.label} ({preset.rate})
+                {preset.label} ({rateShown})
               </Button>
             </InfomodeWrapper>
           )
@@ -80,7 +92,8 @@ export function SendOnChainFeeSection(props: {
             variant={useCustomFee ? 'default' : 'outline'}
             size="sm"
             className="w-full"
-            onClick={() => setUseCustomFee(true)}
+            disabled={isPending}
+            onClick={() => onSelectCustomMode()}
           >
             Custom
           </Button>
@@ -89,10 +102,12 @@ export function SendOnChainFeeSection(props: {
       {useCustomFee && (
         <Input
           type="number"
+          inputMode="decimal"
+          step="any"
+          aria-label="Custom fee rate (sat/vB)"
           value={customFeeRate}
           onChange={(e) => setCustomFeeRate(e.target.value)}
-          placeholder="Custom fee rate"
-          min="1"
+          placeholder="sat/vB"
           disabled={isPending}
         />
       )}

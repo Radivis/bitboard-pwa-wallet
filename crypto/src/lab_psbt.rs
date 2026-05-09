@@ -260,8 +260,7 @@ fn resolve_lab_send_inputs(
         .max_weight_to_satisfy()
         .map_err(|e| CryptoError::Transaction(e.to_string()))?;
 
-    let fee_rate_sats = validation::validate_fee_rate_sat_per_vb(fee_rate_sat_per_vb)?;
-    let fee_rate = FeeRate::from_sat_per_vb_unchecked(fee_rate_sats);
+    let fee_rate = validation::fee_rate_from_sat_per_vb_float(fee_rate_sat_per_vb)?;
 
     Ok((
         utxos,

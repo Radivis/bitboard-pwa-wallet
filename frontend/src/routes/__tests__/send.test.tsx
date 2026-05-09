@@ -85,6 +85,13 @@ vi.mock('@/lib/wallet-utils', () => ({
   loadCustomEsploraUrl: vi.fn().mockResolvedValue(null),
 }))
 
+vi.mock('@/hooks/useEsploraFeePresets', () => ({
+  useEsploraFeePresets: () => ({
+    data: { Low: 0.5, Medium: 2, High: 10 },
+    isFetching: false,
+  }),
+}))
+
 const qrScannerInstanceMocks = vi.hoisted(() => ({
   hasFlash: vi.fn().mockResolvedValue(false),
   isFlashOn: vi.fn().mockReturnValue(false),
@@ -240,8 +247,8 @@ describe('SendPage', () => {
     const user = userEvent.setup()
     renderWithProviders(<SendPage />)
 
-    const lowBtn = screen.getByRole('button', { name: /Low/ })
-    const mediumBtn = screen.getByRole('button', { name: /Medium/ })
+    const lowBtn = screen.getByRole('button', { name: /Low \(0\.50\)/ })
+    const mediumBtn = screen.getByRole('button', { name: /Medium \(2\.00\)/ })
     expect(lowBtn).toBeInTheDocument()
     expect(mediumBtn).toBeInTheDocument()
 
@@ -253,7 +260,9 @@ describe('SendPage', () => {
     renderWithProviders(<SendPage />)
 
     await user.click(screen.getByRole('button', { name: 'Custom' }))
-    expect(screen.getByPlaceholderText('Custom fee rate')).toBeInTheDocument()
+    expect(
+      screen.getByLabelText('Custom fee rate (sat/vB)'),
+    ).toBeInTheDocument()
   })
 
   it('Review Transaction disabled with invalid inputs', () => {
