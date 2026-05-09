@@ -20,6 +20,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Fee rate estimates via Esplora API
 
+### Changed
+- Refactored pages to a new pages directory to align with Vite 8 best practices (addressing many warnings)
+
+### Security
+- Various updates of npm dependencies connected to Vercel, due to flagged vulnerabilities 
+
 
 ## [0.1.4] - 2026-05-08
 
