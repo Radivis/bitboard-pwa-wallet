@@ -1,5 +1,4 @@
-import { useMemo } from 'react'
-import zxcvbn from 'zxcvbn'
+import { useEffect, useState } from 'react'
 import { APP_PASSWORD_MIN_LENGTH } from '@/lib/app-password-policy'
 
 interface PasswordStrengthIndicatorProps {
@@ -18,9 +17,21 @@ const STRENGTH_COLORS = [
 export function PasswordStrengthIndicator({
   password,
 }: PasswordStrengthIndicatorProps) {
-  const result = useMemo(() => {
-    if (!password) return null
-    return zxcvbn(password)
+  const [result, setResult] = useState<{ score: number } | null>(null)
+
+  useEffect(() => {
+    if (!password) {
+      setResult(null)
+      return
+    }
+    let cancelled = false
+    void import('zxcvbn').then((mod) => {
+      if (cancelled) return
+      setResult(mod.default(password))
+    })
+    return () => {
+      cancelled = true
+    }
   }, [password])
 
   if (!result) return null
