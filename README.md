@@ -78,7 +78,6 @@ Planned work is grouped into beta stages. Ordering within a stage is approximate
 ### Early Beta Stage
 
 - Cleaning up the codebase after the rapid iteration that lead to the current and somewhat messy state
-- Fee estimation
 - Currency conversion
 - Use of global state for forms, so switching pages does not reset them
 - Raw hex data inspector
@@ -99,7 +98,7 @@ Planned work is grouped into beta stages. Ordering within a stage is approximate
 - Node.js (>=24.0.0)
 - npm
 - Rust
-- Clang
+- C / Clang (for the bitcoin Rust crate)
 - Optional, but suggested: Go and lefthook for the Git hooks
 
 ### Build and Run

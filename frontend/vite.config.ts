@@ -240,6 +240,36 @@ export default defineConfig({
     // Default Rollup output uses content-hashed filenames under `assets/`; those pair with long Cache-Control on Vercel.
     outDir: 'dist',
     target: 'esnext',
+    // Rolldown default is 500 kB (see chunkSizeWarningLimit). Per-package vendor groups fix the former ~1.5 MiB
+    // entry chunk. The `zxcvbn` library remains one ~800 kB async chunk when lazy-loaded (cannot be split further).
+    chunkSizeWarningLimit: 1024,
+    // Put each top-level package in its own async chunk so no single vendor blob embeds unrelated dependencies.
+    rolldownOptions: {
+      output: {
+        codeSplitting: {
+          minSize: 20_000,
+          groups: [
+            {
+              priority: 1,
+              test: /node_modules[\\/]/,
+              name(moduleId: string) {
+                const normalized = moduleId.replace(/\\/g, '/')
+                const marker = '/node_modules/'
+                const idx = normalized.indexOf(marker)
+                if (idx === -1) return null
+                const rest = normalized.slice(idx + marker.length)
+                const segments = rest.split('/').filter(Boolean)
+                if (segments.length === 0) return 'vendor'
+                const packageRoot = segments[0].startsWith('@')
+                  ? `${segments[0]}/${segments[1] ?? ''}`
+                  : segments[0]
+                return `vendor-${packageRoot.replace(/[@/]/g, '-')}`
+              },
+            },
+          ],
+        },
+      },
+    },
   },
   test: {
     globals: true,

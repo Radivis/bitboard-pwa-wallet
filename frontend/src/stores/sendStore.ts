@@ -1,5 +1,9 @@
 import { create } from 'zustand'
 import type { BitcoinDisplayUnit } from '@/lib/bitcoin-display-unit'
+import {
+  NON_ESPLORA_FEE_PRESET_RATES_SAT_PER_VB,
+  type SendFeePresetLabel,
+} from '@/lib/esplora-fee-estimates'
 import { useBitcoinDisplayUnitStore } from '@/stores/bitcoinDisplayUnitStore'
 
 /** Session-local unit for the Send amount field (not persisted). */
@@ -19,6 +23,7 @@ interface SendState {
   recipient: string
   amount: string
   amountUnit: SendAmountUnit
+  feePresetSelection: SendFeePresetLabel
   feeRate: number
   customFeeRate: string
   useCustomFee: boolean
@@ -32,6 +37,7 @@ interface SendState {
   /** Pass `{ fromUser: true }` when the user types in the field (clears dust warnings). */
   setAmount: (amount: string, opts?: { fromUser?: boolean }) => void
   setAmountUnit: (unit: SendAmountUnit) => void
+  setFeePresetSelection: (preset: SendFeePresetLabel) => void
   setFeeRate: (rate: number) => void
   setCustomFeeRate: (rate: string) => void
   setUseCustomFee: (use: boolean) => void
@@ -42,12 +48,15 @@ interface SendState {
   reset: () => void
 }
 
+const initialFeePresetSelection: SendFeePresetLabel = 'Medium'
+
 const initialState = {
   step: 1 as SendStep,
   recipient: '',
   amount: '',
   amountUnit: 'BTC' as SendAmountUnit,
-  feeRate: 1,
+  feePresetSelection: initialFeePresetSelection,
+  feeRate: NON_ESPLORA_FEE_PRESET_RATES_SAT_PER_VB[initialFeePresetSelection],
   customFeeRate: '',
   useCustomFee: false,
   psbt: null as string | null,
@@ -65,6 +74,7 @@ export const useSendStore = create<SendState>((set) => ({
       onchainDustWarning: opts?.fromUser === true ? null : s.onchainDustWarning,
     })),
   setAmountUnit: (amountUnit) => set({ amountUnit }),
+  setFeePresetSelection: (feePresetSelection) => set({ feePresetSelection }),
   setFeeRate: (feeRate) => set({ feeRate }),
   setCustomFeeRate: (customFeeRate) => set({ customFeeRate }),
   setUseCustomFee: (useCustomFee) => set({ useCustomFee }),

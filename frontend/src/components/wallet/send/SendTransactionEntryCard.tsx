@@ -60,10 +60,12 @@ export function SendTransactionEntryCard({
   selectedLnBalanceSats,
   confirmedBalance,
   isLabWithNoBalance,
-  feeRate,
+  feePresetSelection,
+  presetSatPerVbByLabel,
+  feeEstimatesRefreshing,
   customFeeRate,
   useCustomFee,
-  onFeeRateChange,
+  onSelectFeePreset,
   onCustomFeeRateChange,
   onUseCustomFeeChange,
   isPending,
@@ -101,10 +103,18 @@ export function SendTransactionEntryCard({
   selectedLnBalanceSats: number | undefined
   confirmedBalance: number
   isLabWithNoBalance: boolean
-  feeRate: number
+  feePresetSelection: import('@/lib/esplora-fee-estimates').SendFeePresetLabel
+  presetSatPerVbByLabel: Record<
+    import('@/lib/esplora-fee-estimates').SendFeePresetLabel,
+    number
+  >
+  feeEstimatesRefreshing: boolean
   customFeeRate: string
   useCustomFee: boolean
-  onFeeRateChange: (n: number) => void
+  onSelectFeePreset: (
+    preset: import('@/lib/esplora-fee-estimates').SendFeePresetLabel,
+    rateSatPerVb: number,
+  ) => void
   onCustomFeeRateChange: (s: string) => void
   onUseCustomFeeChange: (b: boolean) => void
   isPending: boolean
@@ -322,13 +332,15 @@ export function SendTransactionEntryCard({
 
             {!isLightningSendMode && (
               <SendOnChainFeeSection
-                feeRate={feeRate}
+                feePresetSelection={feePresetSelection}
+                presetSatPerVbByLabel={presetSatPerVbByLabel}
+                feeEstimatesRefreshing={feeEstimatesRefreshing}
                 customFeeRate={customFeeRate}
                 useCustomFee={useCustomFee}
                 isPending={isPending}
-                setFeeRate={onFeeRateChange}
+                onSelectPreset={onSelectFeePreset}
                 setCustomFeeRate={onCustomFeeRateChange}
-                setUseCustomFee={onUseCustomFeeChange}
+                onSelectCustomMode={() => onUseCustomFeeChange(true)}
               />
             )}
 

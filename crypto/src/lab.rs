@@ -15,8 +15,8 @@ use bitcoin::locktime::absolute;
 use bitcoin::secp256k1::{Message, Secp256k1, SecretKey};
 use bitcoin::sighash::{EcdsaSighashType, Prevouts, SighashCache, TapSighashType};
 use bitcoin::{
-    Address, Amount, Block, BlockHash, CompactTarget, CompressedPublicKey, FeeRate, Network,
-    Target, Transaction, TxIn, TxMerkleNode, TxOut, Txid, transaction,
+    Address, Amount, Block, BlockHash, CompactTarget, CompressedPublicKey, Network, Target,
+    Transaction, TxIn, TxMerkleNode, TxOut, Txid, transaction,
 };
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
@@ -218,9 +218,8 @@ pub fn lab_build_transaction(
     }
 
     let fee = total_in - total_out;
-    let fee_rate_sats =
-        validation::validate_fee_rate_sat_per_vb(fee_rate_sat_per_vb).map_err_to_js()?;
-    let fee_rate = FeeRate::from_sat_per_vb_unchecked(fee_rate_sats);
+    let fee_rate =
+        validation::fee_rate_from_sat_per_vb_float(fee_rate_sat_per_vb).map_err_to_js()?;
 
     let mut input_vec = Vec::with_capacity(utxos.len());
     let mut prev_outputs: Vec<(TxOut, u32)> = Vec::with_capacity(utxos.len());
@@ -463,9 +462,8 @@ pub fn lab_build_transaction_with_change(
         return Err(JsValue::from_str("Payment exceeds total inputs"));
     }
 
-    let fee_rate_sats =
-        validation::validate_fee_rate_sat_per_vb(fee_rate_sat_per_vb).map_err_to_js()?;
-    let fee_rate = FeeRate::from_sat_per_vb_unchecked(fee_rate_sats);
+    let fee_rate =
+        validation::fee_rate_from_sat_per_vb_float(fee_rate_sat_per_vb).map_err_to_js()?;
     let utxos_len = utxos.len() as u64;
     let estimated_vsize = LAB_ESTIMATE_TX_VSIZE_BASE
         + utxos_len * LAB_ESTIMATE_P2WPKH_INPUT_VSIZE
@@ -501,7 +499,7 @@ pub fn lab_build_transaction_with_change(
     };
 
     let outputs_json = serde_json::to_string(&outputs).map_err_to_js()?;
-    let tx_hex = lab_build_transaction(utxos_json, &outputs_json, fee_rate_sats as f64)?;
+    let tx_hex = lab_build_transaction(utxos_json, &outputs_json, fee_rate_sat_per_vb)?;
 
     let result = LabBuildTransactionWithChangeResult {
         tx_hex,

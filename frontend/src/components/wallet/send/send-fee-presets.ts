@@ -1,28 +1,45 @@
-export const SEND_FEE_PRESETS = [
-  { label: 'Low', rate: 1 },
-  { label: 'Medium', rate: 3 },
-  { label: 'High', rate: 5 },
-] as const
+/**
+ * Fee preset UX metadata (confirmation targets tie into Esplora `fee-estimates` in the Send flow).
+ * Block counts and fallback rates are defined in `@/lib/send-fee-preset-definitions`.
+ */
+import {
+  SEND_FEE_PRESET_ENTRIES,
+  type SendFeePresetLabel,
+} from '@/lib/send-fee-preset-definitions'
 
-export type SendFeePresetLabel = (typeof SEND_FEE_PRESETS)[number]['label']
+export type { SendFeePresetLabel }
+
+export const SEND_FEE_PRESETS = SEND_FEE_PRESET_ENTRIES
+
+const FEE_PRESET_LEVEL_TITLE: Record<SendFeePresetLabel, string> = {
+  Low: 'Low',
+  Medium: 'Medium',
+  High: 'High',
+}
+
+const FEE_PRESET_INFO_TEXT: Record<
+  SendFeePresetLabel,
+  (confirmationTargetBlocks: number) => string
+> = {
+  Low: (blocks) =>
+    `Targets confirming in roughly ${blocks} blocks on average—not a guarantee when the mempool is volatile. Lowest preset; good when you want to minimise fees and can wait.`,
+  Medium: (blocks) =>
+    `Targets confirming in roughly ${blocks} blocks—still not guaranteed during congestion. Sensible everyday default between cost and urgency.`,
+  High: () =>
+    'Targets confirming in roughly the next block when conditions allow—never guaranteed during congestion or relay policy quirks. Highest preset for time-sensitive transfers.',
+}
 
 export const SEND_FEE_PRESET_INFOMODE: Record<
   SendFeePresetLabel,
   { infoTitle: string; infoText: string }
-> = {
-  Low: {
-    infoTitle: 'Low fee',
-    infoText:
-      'Best when the mempool is calm or you do not care if confirmation takes longer. You pay less total fee, but in a busy period your transaction might sit unconfirmed longer than with Medium or High.',
+> = SEND_FEE_PRESET_ENTRIES.reduce(
+  (acc, { label, confirmationTargetBlocks }) => {
+    const blockWord = confirmationTargetBlocks === 1 ? 'block' : 'blocks'
+    acc[label] = {
+      infoTitle: `${FEE_PRESET_LEVEL_TITLE[label]} fee (~${confirmationTargetBlocks} ${blockWord})`,
+      infoText: FEE_PRESET_INFO_TEXT[label](confirmationTargetBlocks),
+    }
+    return acc
   },
-  Medium: {
-    infoTitle: 'Medium fee',
-    infoText:
-      'A reasonable default when you want a normal confirmation time without overpaying. Pick this for typical transfers if you are unsure—then switch to High if blocks are full or you are in a hurry, or Low if you are happy to wait.',
-  },
-  High: {
-    infoTitle: 'High fee',
-    infoText:
-      'Use when you want priority during congestion—paying more per vB makes it more attractive for miners to include your transaction in the next blocks. Good for time-sensitive payments; you spend more in fees than with Low or Medium.',
-  },
-}
+  {} as Record<SendFeePresetLabel, { infoTitle: string; infoText: string }>,
+)

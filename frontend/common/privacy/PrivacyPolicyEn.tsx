@@ -152,6 +152,14 @@ export function PrivacyPolicyEn() {
         balance queries, transaction lists).
       </p>
       <p>
+        When you use the <strong>on-chain Send</strong> screen, the app also fetches{' '}
+        <strong>suggested fee-rate estimates</strong> from your configured Esplora server (the{' '}
+        <strong><code>/fee-estimates</code></strong> API). Those responses are aggregated network-wide
+        fee hints, not your transaction details, but the request goes to the{' '}
+        <strong>same endpoint host</strong> as other Esplora traffic, so the same connection metadata applies
+        (IP address etc., and Vercel when the hosted proxy is used).
+      </p>
+      <p>
         When you use <strong>testnet or signet faucets</strong>, the hosted app may
         load the faucet over <code>/api/faucet/…</code> instead of calling the faucet site directly,
         under the same allowlisted proxy pattern. Faucet operators—and, when proxied,{' '}
@@ -293,8 +301,8 @@ export function PrivacyPolicyEn() {
         </li>
         <li>
           <strong>Esplora operator(s):</strong> the operator of the Esplora-style endpoint{' '}
-          <strong>you configure in Settings</strong>, in connection with balance and transaction
-          queries you initiate (whether your browser reaches them directly or via the hosted
+          <strong>you configure in Settings</strong>, in connection with balance, transaction, and{' '}
+          fee-estimate queries you initiate (whether your browser reaches them directly or via the hosted
           same-origin proxy for allowlisted bases).
         </li>
         <li>
@@ -327,7 +335,8 @@ export function PrivacyPolicyEn() {
         connection data and cached Lightning information locally; short-lived UI preferences (e.g.
         dismissed banners) in the browser’s <code>sessionStorage</code>; optionally a migration
         error report stored locally in OPFS (only if a schema migration has failed); data visible to
-        or processed by Esplora, public test faucets, and NWC/Lightning third parties in connection
+        or processed by Esplora (including <strong>/fee-estimates</strong> calls when you use on-chain Send),
+        public test faucets, and NWC/Lightning third parties in connection
         with requests you initiate; HTTP metadata processed by Vercel when you use the hosted app’s{' '}
         <code>/api/esplora</code> or <code>/api/faucet</code> proxies; and contact data contained in
         any email correspondence with the controller.

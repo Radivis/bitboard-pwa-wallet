@@ -1,0 +1,69 @@
+# Preview deploy (manual): same prebuilt pipeline as production, but Vercel Preview env + URLs.
+# Use when Git is disconnected from Vercel. Secrets: docs/deploy-vercel.md
+name: Deploy to Vercel (preview)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-vercel-preview
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Build and deploy prebuilt (preview)
+    runs-on: ubuntu-latest
+
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      VITE_ARGON2_CI: ''
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain (wasm32)
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          target: wasm32-unknown-unknown
+
+      - name: Install wasm-pack
+        uses: jetli/wasm-pack-action@v0.4.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install Vercel CLI
+        run: npm install -g vercel@51.8.0
+
+      - name: Pull Vercel environment (preview)
+        run: vercel pull --yes --environment=preview --token="$VERCEL_TOKEN" --cwd frontend
+
+      - name: Strip rootDirectory from pulled project settings
+        uses: ./.github/actions/strip-vercel-project-root-directory
+        with:
+          project-json-path: frontend/.vercel/project.json
+
+      - name: Vercel build (prebuilt output)
+        run: vercel build --token="$VERCEL_TOKEN" --cwd frontend
+
+      - name: Strip rootDirectory after build (before prebuilt deploy)
+        uses: ./.github/actions/strip-vercel-project-root-directory
+        with:
+          project-json-path: frontend/.vercel/project.json
+
+      - name: Prepare prebuilt deploy (satisfy path check)
+        run: mkdir -p frontend/frontend
+
+      - name: Deploy prebuilt (preview)
+        working-directory: frontend
+        run: vercel deploy --prebuilt --token="$VERCEL_TOKEN"

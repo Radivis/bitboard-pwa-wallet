@@ -92,7 +92,7 @@ export function SendTransactionReviewStep({
             )}
             <div className="flex justify-between">
               <span className="text-muted-foreground">Fee rate</span>
-              <span>{effectiveFeeRate} sat/vB</span>
+              <span>{effectiveFeeRate.toFixed(2)} sat/vB</span>
             </div>
           </div>
 

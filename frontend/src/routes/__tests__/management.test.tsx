@@ -97,7 +97,7 @@ vi.mock('@/db', () => ({
   }),
 }))
 
-import { ManagementPage } from '../wallet/management'
+import { ManagementPage } from '@/pages/wallet/ManagementPage'
 
 describe('ManagementPage', () => {
   beforeEach(() => {

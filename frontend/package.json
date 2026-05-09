@@ -1,7 +1,7 @@
 {
   "name": "bitboard-pwa-wallet",
   "private": true,
-  "version": "0.1.4",
+  "version": "0.1.5",
   "type": "module",
   "license": "MIT",
   "engines": {
@@ -99,6 +99,17 @@
     "serialize-javascript": "7.0.5",
     "vite-plugin-pwa": {
       "vite": "$vite"
+    },
+    "@vercel/python-analysis@0.11.1": {
+      "minimatch": "10.2.5",
+      "smol-toml": "1.6.1"
+    },
+    "@vercel/node": {
+      "path-to-regexp": "^6.3.0",
+      "undici": "^6.25.0",
+      "@vercel/static-config": {
+        "ajv": "^8.20.0"
+      }
     }
   }
 }

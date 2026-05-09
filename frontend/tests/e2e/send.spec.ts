@@ -74,7 +74,7 @@ test.describe('Send Page', () => {
     await expect(page.getByRole('button', { name: 'Custom' })).toBeVisible()
 
     await page.getByRole('button', { name: 'Custom' }).click()
-    await expect(page.getByPlaceholder('Custom fee rate')).toBeVisible()
+    await expect(page.getByPlaceholder('sat/vB')).toBeVisible()
   })
 
   test('sends bitcoin on regtest @regtest', async ({ page }) => {
