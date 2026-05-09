@@ -165,6 +165,14 @@ export function PrivacyPolicyDe() {
         Nutzung der Wallet ab (z. B. Kontostandsabfragen, Transaktionslisten).
       </p>
       <p>
+        Wenn Sie den Bildschirm für <strong>On-Chain-Versendung</strong> nutzen, ruft die App außerdem{' '}
+        <strong>Hinweise zu empfohlenen Gebührensätzen</strong> von Ihrem konfigurierten Esplora-Server ab
+        (REST-API <strong><code>/fee-estimates</code></strong>). Die Antworten sind aggregierte,
+        netzwerkweite Gebühreninformationen und enthalten keine Angaben zu Ihrer konkreten Transaktion,
+        die Anfrage läuft jedoch an denselben <strong>Esplora-Host</strong> wie andere Esplora-Aufrufe —
+        mit denselben Auswirkungen für Verbindungsmetadaten (z. B. IP-Adresse; bei Proxy-Nutzung auch Vercel).
+      </p>
+      <p>
         Wenn Sie <strong>Testnet- oder Signet-Faucets</strong> nutzen, kann die gehostete
         App den Faucet-Aufruf über <code>/api/faucet/…</code> statt direkt zur Faucet-Website laden —
         nach demselben Muster mit positiv gelisteter Weiterleitung. Faucet-Betreiber — und bei
@@ -319,8 +327,8 @@ export function PrivacyPolicyDe() {
         <li>
           <strong>Esplora-Betreiber:</strong> der Betreiber des in den{' '}
           <strong>Einstellungen</strong> konfigurierten Esplora-Endpunkts, im Zusammenhang mit den von
-          Ihnen ausgelösten Konto- und Transaktionsabfragen (ob Ihr Browser direkt oder über den
-          Same-Origin-Proxy für positiv gelistete Basis-URLs darauf zugreift).
+          Ihnen ausgelösten Konto-, Transaktions- und Gebührenschätzungs-Abfragen (ob Ihr Browser
+          direkt oder über den Same-Origin-Proxy für positiv gelistete Basis-URLs darauf zugreift).
         </li>
         <li>
           <strong>Betreiber öffentlicher Test-Faucets:</strong> der Betreiber der jeweiligen Faucet-Site,
@@ -353,7 +361,8 @@ export function PrivacyPolicyDe() {
         Lightning-Informationen lokal; kurzlebige UI-Präferenzen (z. B. Banner-Ausblendungen) im
         <code>sessionStorage</code> des Browsers; optional ein lokal in OPFS abgelegter
         Migrations-Fehlerbericht (nur wenn eine Schema-Migration fehlgeschlagen ist); Daten, die im
-        Rahmen der von Ihnen ausgelösten Anfragen an Esplora, öffentliche Test-Faucets sowie
+        Rahmen der von Ihnen ausgelösten Anfragen an Esplora (einschließlich{' '}
+        <strong><code>/fee-estimates</code></strong>-Aufrufen bei On-Chain-Versendung), öffentliche Test-Faucets sowie
         NWC-/Lightning-Dritte sichtbar oder verarbeitet werden; HTTP-Metadaten, die Vercel bei Nutzung
         der Proxy-Pfade <code>/api/esplora</code> oder <code>/api/faucet</code> der gehosteten App
         verarbeitet; sowie Kontaktdaten in einer E-Mail-Korrespondenz mit dem Verantwortlichen.
