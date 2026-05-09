@@ -263,6 +263,7 @@ vi.mock('@/lib/wallet-utils', () => ({
       params: Record<string, unknown>,
     ) => {
       await loadWallet(params)
+      return { usedEmptyChainFallback: false }
     },
   ),
 }))
