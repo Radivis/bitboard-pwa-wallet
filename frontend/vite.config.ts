@@ -84,7 +84,9 @@ const SOCIAL_META_OG_URL_LINE = '    <!--SOCIAL_META_OG_URL-->\n'
 /**
  * Public origin used only in `index.html` for og:image / twitter:image (must be absolute URLs).
  * Set `VITE_SITE_ORIGIN` for the canonical HTTPS URL (especially when the public host is not
- * `*.vercel.app`). During `vercel build`, `VERCEL_URL` is usually available as a fallback.
+ * `*.vercel.app`). During `vercel build`, `VERCEL_URL` or `VERCEL_BRANCH_URL` is available
+ * only if the Vercel project has **System environment variables** enabled (dashboard →
+ * Environment Variables → checkbox). Otherwise set `VITE_SITE_ORIGIN` for Preview/Production.
  */
 function resolvePublicSiteOriginForSocialMeta(): string {
   const raw = process.env.VITE_SITE_ORIGIN?.trim()
@@ -96,9 +98,9 @@ function resolvePublicSiteOriginForSocialMeta(): string {
     if (!/^[a-z0-9].*$/i.test(host)) return ''
     return `https://${host}`
   }
-  const vercel = process.env.VERCEL_URL?.trim()
-  if (vercel && /^[a-z0-9.-]+$/i.test(vercel)) {
-    return `https://${vercel}`
+  const vercelHost = process.env.VERCEL_URL?.trim() || process.env.VERCEL_BRANCH_URL?.trim()
+  if (vercelHost && /^[a-z0-9.-]+$/i.test(vercelHost)) {
+    return `https://${vercelHost}`
   }
   return ''
 }
@@ -115,8 +117,9 @@ function injectSocialMetaSiteOrigin(): Plugin {
       const origin = ctx.server ? '' : resolvePublicSiteOriginForSocialMeta()
       if (isProductionBuild && !ctx.server && origin === '') {
         console.warn(
-          '[inject-social-meta-site-origin] Production build: set VITE_SITE_ORIGIN (canonical https URL) ' +
-            'or rely on VERCEL_URL; relative og:image is ignored by many social crawlers.',
+          '[inject-social-meta-site-origin] Production build: og:image has no absolute origin. ' +
+            'Set VITE_SITE_ORIGIN in Vercel env, enable System environment variables so VERCEL_URL is set, ' +
+            'or export VERCEL_URL when running vite build. Relative og:image is ignored by many crawlers.',
         )
       }
       let out = html.replaceAll(SOCIAL_SITE_ORIGIN_PLACEHOLDER, origin)
