@@ -6,6 +6,7 @@ import {
   pickPresetRatesFromEsploraOrFallback,
   type SendFeePresetLabel,
 } from '@/lib/esplora-fee-estimates'
+import { errorMessage } from '@/lib/utils'
 import type { NetworkMode } from '@/stores/walletStore'
 import { loadCustomEsploraUrl } from '@/lib/wallet-utils'
 
@@ -26,7 +27,13 @@ async function presetRatesForNetwork(
   try {
     const estimates = await fetchFeeEstimates(esploraUrl)
     return pickPresetRatesFromEsploraOrFallback(estimates)
-  } catch {
+  } catch (err) {
+    if (import.meta.env.DEV) {
+      console.debug(
+        '[esplora-fee-presets] Fee estimates request failed; using static fallback rates.',
+        { networkMode, esploraBaseUrl: esploraUrl, error: errorMessage(err) },
+      )
+    }
     return { ...pickPresetRatesFromEsploraOrFallback(null) }
   }
 }

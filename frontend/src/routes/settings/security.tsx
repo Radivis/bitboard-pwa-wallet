@@ -1,8 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { SettingsSecurityPage } from '@/pages/settings/SettingsSecurityPage'
 
-export { SettingsSecurityPage } from '@/pages/settings/SettingsSecurityPage'
-
 export const Route = createFileRoute('/settings/security')({
   validateSearch: (
     search: Record<string, unknown>,
