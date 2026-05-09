@@ -84,9 +84,10 @@ const SOCIAL_META_OG_URL_LINE = '    <!--SOCIAL_META_OG_URL-->\n'
 /**
  * Public origin used only in `index.html` for og:image / twitter:image (must be absolute URLs).
  * Set `VITE_SITE_ORIGIN` for the canonical HTTPS URL (especially when the public host is not
- * `*.vercel.app`). During `vercel build`, `VERCEL_URL` or `VERCEL_BRANCH_URL` is available
- * only if the Vercel project has **System environment variables** enabled (dashboard →
- * Environment Variables → checkbox). Otherwise set `VITE_SITE_ORIGIN` for Preview/Production.
+ * `*.vercel.app`). On **Vercel-hosted** builds, `VERCEL_URL` / `VERCEL_BRANCH_URL` work if system
+ * env access is enabled. On **GitHub Actions + vercel build**, those system vars are not injected
+ * (`VERCEL=1` may be missing); set **`VITE_SITE_ORIGIN`** on the runner (e.g. repo variable
+ * `vars.VITE_SITE_ORIGIN` in deploy workflows) or in `.env.production`.
  */
 function resolvePublicSiteOriginForSocialMeta(env: NodeJS.ProcessEnv): string {
   const raw = env.VITE_SITE_ORIGIN?.trim() || env.SITE_ORIGIN?.trim()
@@ -125,8 +126,9 @@ function injectSocialMetaSiteOrigin(): Plugin {
       if (isProductionBuild && viteCommand === 'build' && origin === '') {
         console.warn(
           '[inject-social-meta-site-origin] Production build: og:image has no absolute origin. ' +
-            'Set VITE_SITE_ORIGIN in Vercel env, enable System environment variables so VERCEL_URL is set, ' +
-            'or export VERCEL_URL when running vite build. Relative og:image is ignored by many crawlers.',
+            'Set VITE_SITE_ORIGIN (e.g. GitHub repository variable vars.VITE_SITE_ORIGIN on the ' +
+            'deploy workflow), or run vite build on Vercel with system env enabled. ' +
+            'Relative og:image is ignored by many crawlers.',
         )
       }
       let out = html.replaceAll(SOCIAL_SITE_ORIGIN_PLACEHOLDER, origin)

@@ -22,6 +22,9 @@ jobs:
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
       VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
       VITE_ARGON2_CI: ''
+      # Same as production: external CI does not get Vercel system URLs; set vars.VITE_SITE_ORIGIN
+      # (e.g. production origin or a dedicated preview hostname) so og:image is absolute.
+      VITE_SITE_ORIGIN: ${{ vars.VITE_SITE_ORIGIN }}
 
     steps:
       - name: Check out repository

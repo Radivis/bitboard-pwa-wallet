@@ -31,6 +31,10 @@ jobs:
       VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
       # Never use fast Argon2id in production; override repo/org Actions vars if mis-set
       VITE_ARGON2_CI: ''
+      # `vercel build` runs on the runner, not on Vercel — system env vars (e.g. VERCEL_URL) are not
+      # injected. Set repository variable VITE_SITE_ORIGIN to canonical https origin for Open Graph
+      # (see docs/deploy-vercel.md).
+      VITE_SITE_ORIGIN: ${{ vars.VITE_SITE_ORIGIN }}
 
     steps:
       - name: Check out repository
