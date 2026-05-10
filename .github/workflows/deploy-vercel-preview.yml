@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: deploy-vercel-preview
@@ -22,13 +23,19 @@ jobs:
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
       VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
       VITE_ARGON2_CI: ''
-      # Same as production: external CI does not get Vercel system URLs; set vars.VITE_SITE_ORIGIN
-      # (e.g. production origin or a dedicated preview hostname) so og:image is absolute.
-      VITE_SITE_ORIGIN: ${{ vars.VITE_SITE_ORIGIN }}
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+
+      - name: Load BITBOARD_SITE_ORIGIN into VITE_SITE_ORIGIN for Vite (Open Graph)
+        run: |
+          value="$(gh api "repos/${{ github.repository }}/actions/variables/BITBOARD_SITE_ORIGIN" --jq .value 2>/dev/null || true)"
+          if [ -n "$value" ]; then
+            echo "VITE_SITE_ORIGIN=$value" >> "$GITHUB_ENV"
+          fi
+        env:
+          GH_TOKEN: ${{ github.token }}
 
       - name: Install Rust toolchain (wasm32)
         uses: actions-rust-lang/setup-rust-toolchain@v1

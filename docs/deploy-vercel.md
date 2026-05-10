@@ -85,7 +85,7 @@ If you need **both** automatic Vercel previews **and** production only from GHA,
 
 In **Settings → Environment Variables → Production**, add anything the app needs at **build** time (see `frontend/src/vite-env.d.ts`). **`VITE_API_BASE_URL`** is only for a future HTTP API client — it is **not** your `*.vercel.app` URL.
 
-**Open Graph (`og:image`, etc.):** Production builds run with **`vercel build` on GitHub Actions**, not on Vercel’s build machines. Vercel therefore prints that **system environment variables** (for example `VERCEL_URL`) are **not** available, and `vite` cannot infer your public URL from them. Set a **GitHub Actions repository variable** **`VITE_SITE_ORIGIN`** to your canonical HTTPS origin (no trailing slash), for example `https://wallet.example.com`. The wallet deploy workflows pass it into the job as `env.VITE_SITE_ORIGIN` so `frontend/vite.config.ts` can emit absolute social preview URLs. You may still define the same name in Vercel for local `vercel build` after `vercel pull`, but **do not rely on system `VERCEL_*` URLs when building on the runner**.
+**Open Graph (`og:image`, etc.):** Production builds run with **`vercel build` on GitHub Actions**, not on Vercel’s build machines. Vercel therefore prints that **system environment variables** (for example `VERCEL_URL`) are **not** available, and `vite` cannot infer your public URL from them. Add a **GitHub Actions repository variable** named **`BITBOARD_SITE_ORIGIN`** (canonical HTTPS origin, no trailing slash), for example `https://wallet.example.com`. The wallet deploy workflows read it with the GitHub API after checkout and export **`VITE_SITE_ORIGIN`** for `npm run build`, so `frontend/vite.config.ts` can emit absolute social preview URLs. You may still define **`VITE_SITE_ORIGIN`** in Vercel for local `vercel build` after `vercel pull`, but **do not rely on system `VERCEL_*` URLs when building on the runner**.
 
 **Do not** set **`VITE_ARGON2_CI=1`** for Production. The deploy workflow clears inherited `VITE_ARGON2_CI`; `vite build` also rejects `VITE_ARGON2_CI=1` in production mode (`frontend/vite.config.ts`).
 
@@ -107,7 +107,7 @@ In **Settings → Environment Variables → Production**, add anything the app n
 
 | GitHub variable (repository) | Purpose |
 |------------------------------|---------|
-| `VITE_SITE_ORIGIN` | Canonical HTTPS origin (no trailing slash), e.g. `https://wallet.example.com`. Required for absolute `og:image` URLs when **`vercel build` runs on GitHub Actions** (system `VERCEL_URL` is not injected there). Set under **Settings → Secrets and variables → Actions → Variables**. |
+| `BITBOARD_SITE_ORIGIN` | Canonical HTTPS origin (no trailing slash), e.g. `https://wallet.example.com`. Read at deploy time into `VITE_SITE_ORIGIN` for absolute `og:image` when **`vercel build` runs on GitHub Actions**. Set under **Settings → Secrets and variables → Actions → Variables**. |
 
 After this, a push to **`main`** (or a manual workflow run) runs **`vercel pull`** (production env) → **`vercel build --prod`** → **`vercel deploy --prebuilt --prod`**.
 
@@ -119,7 +119,7 @@ After this, a push to **`main`** (or a manual workflow run) runs **`vercel pull`
 
 - Installs **Rust** (`wasm32-unknown-unknown`), **wasm-pack**, **Node 24**.
 - Sets **`VITE_ARGON2_CI`** to empty for that job so production never uses fast Argon2 by mistake.
-- Passes **`VITE_SITE_ORIGIN`** from **`vars.VITE_SITE_ORIGIN`** (optional but recommended for Open Graph when building on the runner).
+- Reads **`BITBOARD_SITE_ORIGIN`** via the GitHub API into **`VITE_SITE_ORIGIN`** after checkout (optional; needed for absolute `og:image` when building on the runner). Requires **`permissions: actions: read`**.
 - Runs **`vercel pull --environment=production --cwd frontend`** and **`vercel build --prod --cwd frontend`** from the **repo root**, strips **`settings.rootDirectory`** from **`frontend/.vercel/project.json`** after pull (avoids doubled paths during install — see [vercel/community#2793](https://github.com/vercel/community/discussions/2793)), strips again after **`vercel build`** if needed, then **`mkdir -p frontend/frontend`** and **`vercel deploy --prebuilt --prod`** with **`working-directory: frontend`**.
 
 The `vercel build` step uses your linked project’s settings plus [`frontend/vercel.json`](../frontend/vercel.json), so install/build commands match what Vercel would use for a prebuilt deploy.

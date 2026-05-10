@@ -86,8 +86,9 @@ const SOCIAL_META_OG_URL_LINE = '    <!--SOCIAL_META_OG_URL-->\n'
  * Set `VITE_SITE_ORIGIN` for the canonical HTTPS URL (especially when the public host is not
  * `*.vercel.app`). On **Vercel-hosted** builds, `VERCEL_URL` / `VERCEL_BRANCH_URL` work if system
  * env access is enabled. On **GitHub Actions + vercel build**, those system vars are not injected
- * (`VERCEL=1` may be missing); set **`VITE_SITE_ORIGIN`** on the runner (e.g. repo variable
- * `vars.VITE_SITE_ORIGIN` in deploy workflows) or in `.env.production`.
+ * (`VERCEL=1` may be missing); set **`VITE_SITE_ORIGIN`** on the runner (deploy workflows load
+ * repository variable **`BITBOARD_SITE_ORIGIN`** via the GitHub API into `VITE_SITE_ORIGIN`) or in
+ * `.env.production`.
  */
 function resolvePublicSiteOriginForSocialMeta(env: NodeJS.ProcessEnv): string {
   const raw = env.VITE_SITE_ORIGIN?.trim() || env.SITE_ORIGIN?.trim()
@@ -126,8 +127,8 @@ function injectSocialMetaSiteOrigin(): Plugin {
       if (isProductionBuild && viteCommand === 'build' && origin === '') {
         console.warn(
           '[inject-social-meta-site-origin] Production build: og:image has no absolute origin. ' +
-            'Set VITE_SITE_ORIGIN (e.g. GitHub repository variable vars.VITE_SITE_ORIGIN on the ' +
-            'deploy workflow), or run vite build on Vercel with system env enabled. ' +
+            'Set VITE_SITE_ORIGIN (e.g. repo variable BITBOARD_SITE_ORIGIN loaded in deploy workflows, ' +
+            'see docs/deploy-vercel.md), or run vite build on Vercel with system env enabled. ' +
             'Relative og:image is ignored by many crawlers.',
         )
       }
