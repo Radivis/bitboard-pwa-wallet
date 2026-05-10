@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import path from 'path'
 import { fileURLToPath } from 'node:url'
-import { defineConfig, loadEnv, type Plugin } from 'vite'
+import { defineConfig, type Plugin } from 'vite'
 import { readBitboardWalletVersion } from './common/bitboard-wallet-version'
 import { esploraViteProxyEntries } from './src/lib/esplora-service-whitelist'
 import { faucetViteProxyEntries } from './src/lib/faucet-definitions'
@@ -77,71 +77,6 @@ function libraryArticleRouteIgnorePattern(): string {
   return `__tests__|^(?:${escapedBasenames.join('|')})\\.tsx$`
 }
 
-const SOCIAL_SITE_ORIGIN_PLACEHOLDER = '__SOCIAL_SITE_ORIGIN__'
-/** Full line in `index.html` (leading spaces + comment); replaced so og:url is not double-indented. */
-const SOCIAL_META_OG_URL_LINE = '    <!--SOCIAL_META_OG_URL-->\n'
-
-/**
- * Public origin used only in `index.html` for og:image / twitter:image (must be absolute URLs).
- * Set `VITE_SITE_ORIGIN` for the canonical HTTPS URL (especially when the public host is not
- * `*.vercel.app`). On **Vercel-hosted** builds, `VERCEL_URL` / `VERCEL_BRANCH_URL` work if system
- * env access is enabled. On **GitHub Actions + vercel build**, those system vars are not injected
- * (`VERCEL=1` may be missing); set **`VITE_SITE_ORIGIN`** on the runner (deploy workflows load
- * repository variable **`BITBOARD_SITE_ORIGIN`** via the GitHub API into `VITE_SITE_ORIGIN`) or in
- * `.env.production`.
- */
-function resolvePublicSiteOriginForSocialMeta(env: NodeJS.ProcessEnv): string {
-  const raw = env.VITE_SITE_ORIGIN?.trim() || env.SITE_ORIGIN?.trim()
-  if (raw) {
-    if (raw.includes('"') || raw.includes("'") || raw.includes('<')) return ''
-    const noTrailingSlash = raw.replace(/\/+$/, '')
-    if (/^https:\/\//i.test(noTrailingSlash)) return noTrailingSlash
-    const host = noTrailingSlash.replace(/^\/+/, '')
-    if (!/^[a-z0-9].*$/i.test(host)) return ''
-    return `https://${host}`
-  }
-  const vercelHost = env.VERCEL_URL?.trim() || env.VERCEL_BRANCH_URL?.trim()
-  if (vercelHost && /^[a-z0-9.-]+$/i.test(vercelHost)) {
-    return `https://${vercelHost}`
-  }
-  return ''
-}
-
-/** Rewrites social meta tags so image URLs are absolute (required by X and other crawlers). */
-function injectSocialMetaSiteOrigin(): Plugin {
-  let isProductionBuild = false
-  /** Dev server only — do not use `ctx.server` (Vite 8+ can expose a server handle during build). */
-  let viteCommand: 'build' | 'serve' = 'build'
-  let mergedEnv: NodeJS.ProcessEnv = process.env
-  return {
-    name: 'inject-social-meta-site-origin',
-    configResolved(config) {
-      isProductionBuild = config.command === 'build' && config.mode === 'production'
-      viteCommand = config.command
-      const viteScopedEnv = loadEnv(config.mode, config.envDir, 'VITE_')
-      mergedEnv = { ...viteScopedEnv, ...process.env }
-    },
-    transformIndexHtml(html) {
-      const origin =
-        viteCommand === 'serve' ? '' : resolvePublicSiteOriginForSocialMeta(mergedEnv)
-      if (isProductionBuild && viteCommand === 'build' && origin === '') {
-        console.warn(
-          '[inject-social-meta-site-origin] Production build: og:image has no absolute origin. ' +
-            'Set VITE_SITE_ORIGIN (e.g. repo variable BITBOARD_SITE_ORIGIN loaded in deploy workflows, ' +
-            'see docs/deploy-vercel.md), or run vite build on Vercel with system env enabled. ' +
-            'Relative og:image is ignored by many crawlers.',
-        )
-      }
-      let out = html.replaceAll(SOCIAL_SITE_ORIGIN_PLACEHOLDER, origin)
-      const ogUrlLine = origin
-        ? `    <meta property="og:url" content="${origin}/" />\n`
-        : ''
-      out = out.replace(SOCIAL_META_OG_URL_LINE, ogUrlLine)
-      return out
-    },
-  }
-}
-
 /** Fail `vite build` if fast Argon2 (CI) is enabled for a production bundle. */
 function rejectArgon2CiInProductionBuild(): Plugin {
   return {
@@ -166,7 +101,6 @@ export default defineConfig({
   },
   plugins: [
     rejectArgon2CiInProductionBuild(),
-    injectSocialMetaSiteOrigin(),
     tanstackRouter({
       target: 'react',
       autoCodeSplitting: true,

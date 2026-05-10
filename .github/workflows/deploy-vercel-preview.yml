@@ -7,7 +7,6 @@ on:
 
 permissions:
   contents: read
-  actions: read
 
 concurrency:
   group: deploy-vercel-preview
@@ -27,15 +26,6 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
-
-      - name: Load BITBOARD_SITE_ORIGIN into VITE_SITE_ORIGIN for Vite (Open Graph)
-        run: |
-          value="$(gh api "repos/${{ github.repository }}/actions/variables/BITBOARD_SITE_ORIGIN" --jq .value 2>/dev/null || true)"
-          if [ -n "$value" ]; then
-            echo "VITE_SITE_ORIGIN=$value" >> "$GITHUB_ENV"
-          fi
-        env:
-          GH_TOKEN: ${{ github.token }}
 
       - name: Install Rust toolchain (wasm32)
         uses: actions-rust-lang/setup-rust-toolchain@v1
