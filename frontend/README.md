@@ -133,15 +133,24 @@ import { BlockMath, InlineMath } from '@/lib/library/math'
 
 `InlineMath.tex` and `BlockMath.tex` read **`TemplateStringsArray.raw` only** (same idea as `String.raw`): backslashes reach KaTeX exactly as written. They **reject `${…}`** inside the template — interpolations are merged using JavaScript “cooked” segments, where `\n` inside `\not`, `\neq`, etc. can become a real newline and corrupt the formula.
 
-**`\in` and KaTeX errors:** If KaTeX shows a red `\i`, the engine parsed `\i` without the following `n` (often because a newline slipped between `\i` and `n`). For interval-style notation, prefer **`{\in}`** (for example `` r, s {\in} [1, n-1] ``) so `\in` is one grouped atom.
-
 **Why not plain `math="\frac{…}{…}"`?**
 
-1. Values that are genuinely **JavaScript string literals** interpret escapes such as `\f`, `\n`, and `\t`, which silently corrupts many macro names (`\frac`, `\cdot`, `\text`, …).
+1. Values that are genuinely **JavaScript string literals** interpret escapes such as `\f`, `\n`, `\t`, and `\b`, which silently corrupts many macro names (`\frac`, `\cdot`, `\binom`, `\text`, …).
 
 2. **JSX / toolchain differences** between `vite dev` and production builds (and across compiler upgrades) are not something we want to rely on for correctness. Using `.tex` keeps one stable rule: macros always come from a tagged template.
 
 Plain strings remain fine for tiny fragments with **no** macro backslashes (for example `math="G"`). Prefer `.tex` whenever the snippet includes `\`.
+
+### KaTeX in production (Rolldown chunk-execution-order fix)
+
+KaTeX's `dist/katex.mjs` registers ~340 macros (`\frac`, `\in`, `\mod`, `\equiv`, `\cdot`, …) and ~650 symbols through **top-level `defineMacro(...)` / `defineSymbol(...)` side-effect calls** spread across several modules (`macros.ts`, `symbols.ts`, …). Rolldown (the bundler that powers Vite 8) has a known class of bug where chunk extraction and shared-chunk hoisting can reorder modules so that side-effect modules execute **before** the parser's macro/symbol tables exist — the same defect documented for TinyMCE in [rolldown/rolldown#8812](https://github.com/rolldown/rolldown/issues/8812) and for `@noble/curves` + `@noble/hashes` in [rolldown/rolldown#9225](https://github.com/rolldown/rolldown/issues/9225). For us it surfaced as production rendering every macro as a red `\f`/`\i`/`\m`/… “undefined control sequence”.
+
+The fix in `vite.config.ts` is two lines under `build.rolldownOptions.output`:
+
+- **`strictExecutionOrder: true`** — forces the output to evaluate modules in static-dependency order, which is exactly what Rolldown's docs and the TinyMCE thread recommend for this class of bug.
+- The existing `codeSplitting.groups` rule keeps the whole `katex` package together in a single `vendor-katex-*` chunk so the side-effect calls and the parser end up in the same module graph.
+
+If you bump KaTeX, Vite, or Rolldown, smoke-test the production bundle by running `npm run build && npm run preview` and visiting one of the math-heavy library articles (e.g. ECDSA, Schnorr signatures); if any macro renders red, re-check that `strictExecutionOrder` is still set and that newer Rolldown releases haven't regressed the relevant fixes.
 
 ## Project Structure
 

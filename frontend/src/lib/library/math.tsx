@@ -3,7 +3,15 @@
  * Wraps `react-katex` and loads KaTeX CSS once.
  *
  * Formulas with LaTeX macros must use `math={InlineMath.tex`…`}` or `math={BlockMath.tex`…`}`.
- * The tag reads **only** `TemplateStringsArray.raw` (never `${…}` — see README).
+ * The tag reads **only** `TemplateStringsArray.raw` (never `${…}` — see README). That preserves
+ * every backslash (`\frac`, `\pmod`, `\equiv`, `\mod`, `\cdot`, …) — plain JSX quoted strings do
+ * not, because `\f`, `\n`, `\t`, `\b`, … are JavaScript escape sequences and silently corrupt
+ * LaTeX source.
+ *
+ * Note (production builds): `vite.config.ts` sets `build.rolldownOptions.output.strictExecutionOrder`
+ * so that KaTeX's top-level `defineMacro(...)` / `defineSymbol(...)` calls run before the parser
+ * uses them — without it, Rolldown's chunk extraction can reorder modules across vendor chunks
+ * and macros render red as “undefined control sequence”. See the README and `vite.config.ts`.
  *
  * @see ../../../README.md — section **LaTeX (KaTeX) in TSX**
  */

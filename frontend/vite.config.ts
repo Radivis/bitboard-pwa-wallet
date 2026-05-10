@@ -151,22 +151,31 @@ export default defineConfig({
     }),
   ],
   resolve: {
-    alias: {
-      '@': path.resolve(projectRoot, './src'),
-      '@common': path.resolve(projectRoot, './common'),
-      '@legal-locale': path.resolve(projectRoot, './src/lib/legal-locale.ts'),
+    alias: [
+      { find: '@', replacement: path.resolve(projectRoot, './src') },
+      { find: '@common', replacement: path.resolve(projectRoot, './common') },
+      {
+        find: '@legal-locale',
+        replacement: path.resolve(projectRoot, './src/lib/legal-locale.ts'),
+      },
       // Cross-project-safe aliases — the same module identifiers also resolve
       // from the landing-page Vite/TS configs, so files under `frontend/common/`
       // can import them without depending on `@/...` (which differs per project root).
-      '@legal-entity-fields': path.resolve(
-        projectRoot,
-        './src/components/LegalEntityFields.tsx',
-      ),
-      '@legal-entity': path.resolve(
-        projectRoot,
-        './src/legal-entity/legal-entity.ts',
-      ),
-    },
+      {
+        find: '@legal-entity-fields',
+        replacement: path.resolve(
+          projectRoot,
+          './src/components/LegalEntityFields.tsx',
+        ),
+      },
+      {
+        find: '@legal-entity',
+        replacement: path.resolve(
+          projectRoot,
+          './src/legal-entity/legal-entity.ts',
+        ),
+      },
+    ],
   },
   server: {
     port: 3000,
@@ -193,6 +202,17 @@ export default defineConfig({
     // Put each top-level package in its own async chunk so no single vendor blob embeds unrelated dependencies.
     rolldownOptions: {
       output: {
+        // Force module evaluation order to follow the static dependency graph.
+        // Without this, Rolldown's chunk optimizer can reorder modules across
+        // shared/vendor chunks and run side-effect-heavy modules before their
+        // dependencies finish initializing — the same class of bug as
+        // rolldown/rolldown#8812 (TinyMCE) and #9225 (@noble/curves+@noble/hashes).
+        // For us this manifested as KaTeX rendering `\frac`, `\in`, `\mod`,
+        // `\equiv`, `\cdot`, … as red "undefined control sequence" fragments
+        // because the ~340 `defineMacro(...)` and ~650 `defineSymbol(...)`
+        // top-level calls inside `katex.mjs` were not consistently executed
+        // against the parser's macro table.
+        strictExecutionOrder: true,
         codeSplitting: {
           minSize: 20_000,
           groups: [
