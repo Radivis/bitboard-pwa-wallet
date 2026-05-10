@@ -6,6 +6,16 @@ import path from 'node:path'
 
 const ARTICLES = ['/library/articles/ecdsa', '/library/articles/schnorr-signatures']
 const BASE_URL = process.env.PROBE_URL ?? 'http://localhost:4178'
+function readBypassTokenFromFile() {
+  const tokenFile = process.env.VERCEL_BYPASS_TOKEN_FILE
+  if (!tokenFile) return ''
+  try {
+    return fs.readFileSync(tokenFile, 'utf8').trim()
+  } catch {
+    return ''
+  }
+}
+const VERCEL_BYPASS_TOKEN = process.env.VERCEL_BYPASS_TOKEN ?? readBypassTokenFromFile()
 
 function resolveChromiumExecutable() {
   const cacheRoot = path.join(homedir(), '.cache/ms-playwright')
@@ -26,7 +36,12 @@ function resolveChromiumExecutable() {
 
 const executablePath = resolveChromiumExecutable()
 const browser = await chromium.launch({ headless: true, executablePath })
-const context = await browser.newContext({ serviceWorkers: 'block' })
+const context = await browser.newContext({
+  serviceWorkers: 'block',
+  extraHTTPHeaders: VERCEL_BYPASS_TOKEN
+    ? { 'x-vercel-protection-bypass': VERCEL_BYPASS_TOKEN, 'x-vercel-set-bypass-cookie': 'true' }
+    : undefined,
+})
 const page = await context.newPage()
 
 page.on('console', (msg) => {
@@ -58,22 +73,51 @@ for (const route of ARTICLES) {
   }
 
   const summary = await page.evaluate(() => {
-    const errs = Array.from(document.querySelectorAll('.katex .err, .katex-error'))
+    const errs = Array.from(
+      document.querySelectorAll(
+        '.katex .err, .katex-error, .katex [title*="ParseError" i], .katex [title*="Undefined control" i]',
+      ),
+    )
+
+    function isRedish(rgb) {
+      const m = /rgb\((\d+),\s*(\d+),\s*(\d+)\)/.exec(rgb)
+      if (!m) return false
+      const [, r, g, b] = m.map(Number)
+      return r > 150 && g < 80 && b < 80
+    }
+    const allKatexDescendants = Array.from(document.querySelectorAll('.katex *'))
+    const redElements = allKatexDescendants.filter((node) => {
+      const cs = window.getComputedStyle(node)
+      return isRedish(cs.color)
+    })
+
     const errSamples = errs.slice(0, 8).map((node) => ({
       text: node.textContent ?? '',
       title: node.getAttribute('title') ?? '',
+      cls: node.className,
+    }))
+    const redSamples = redElements.slice(0, 8).map((node) => ({
+      text: (node.textContent ?? '').slice(0, 60),
+      cls: typeof node.className === 'string' ? node.className : '',
+      tag: node.tagName.toLowerCase(),
     }))
     const tex = Array.from(document.querySelectorAll('.katex annotation'))
-      .slice(0, 5)
+      .slice(0, 10)
       .map((n) => n.textContent ?? '')
+    const allKatexHtml = Array.from(document.querySelectorAll('.katex'))
+      .slice(0, 3)
+      .map((n) => n.outerHTML.slice(0, 400))
     return {
       katexCount: document.querySelectorAll('.katex').length,
       errorCount: errs.length,
+      redElementCount: redElements.length,
       errSamples,
+      redSamples,
       texSamples: tex,
+      katexHtmlPreview: allKatexHtml,
     }
   })
-  totalErrors += summary.errorCount
+  totalErrors += summary.errorCount + summary.redElementCount
   console.log(JSON.stringify({ url, ...summary }, null, 2))
 }
 

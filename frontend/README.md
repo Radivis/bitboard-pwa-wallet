@@ -141,16 +141,26 @@ import { BlockMath, InlineMath } from '@/lib/library/math'
 
 Plain strings remain fine for tiny fragments with **no** macro backslashes (for example `math="G"`). Prefer `.tex` whenever the snippet includes `\`.
 
-### KaTeX in production (Rolldown chunk-execution-order fix)
+### KaTeX in production (alias `katex` to its ESM entry)
 
-KaTeX's `dist/katex.mjs` registers ~340 macros (`\frac`, `\in`, `\mod`, `\equiv`, `\cdot`, …) and ~650 symbols through **top-level `defineMacro(...)` / `defineSymbol(...)` side-effect calls** spread across several modules (`macros.ts`, `symbols.ts`, …). Rolldown (the bundler that powers Vite 8) has a known class of bug where chunk extraction and shared-chunk hoisting can reorder modules so that side-effect modules execute **before** the parser's macro/symbol tables exist — the same defect documented for TinyMCE in [rolldown/rolldown#8812](https://github.com/rolldown/rolldown/issues/8812) and for `@noble/curves` + `@noble/hashes` in [rolldown/rolldown#9225](https://github.com/rolldown/rolldown/issues/9225). For us it surfaced as production rendering every macro as a red `\f`/`\i`/`\m`/… “undefined control sequence”.
+KaTeX ships two builds: `katex/dist/katex.mjs` (ESM) and `katex/dist/katex.js` (CJS UMD — a single webpack closure). `react-katex` 3.1 is itself a CJS UMD bundle that does `require("katex")`, so by default Node's conditional-exports resolution picks the **CJS** variant. Rolldown's CJS-to-CJS interop hoists that webpack UMD closure incorrectly: the ~343 top-level `defineMacro(...)` calls register macros in one scope while the parser ends up reading a different macros table at render time — the same class of bug as [vitejs/vite#22176](https://github.com/vitejs/vite/issues/22176). The visible symptom is that production renders **macros** like `\frac`, `\in`, `\mod`, `\equiv`, `\pmod` as red `\f`/`\i`/`\m`/`\e`/`\p` "undefined control sequence" fragments — while **symbols** like `\cdot` (registered via the always-exported `defineSymbol(...)` table) still work fine.
 
-The fix in `vite.config.ts` is two lines under `build.rolldownOptions.output`:
+The fix in `vite.config.ts` is a single `resolve.alias` entry that routes the bare `katex` specifier to the ESM file:
 
-- **`strictExecutionOrder: true`** — forces the output to evaluate modules in static-dependency order, which is exactly what Rolldown's docs and the TinyMCE thread recommend for this class of bug.
-- The existing `codeSplitting.groups` rule keeps the whole `katex` package together in a single `vendor-katex-*` chunk so the side-effect calls and the parser end up in the same module graph.
+```ts
+resolve: {
+  alias: [
+    { find: /^katex$/, replacement: '…/node_modules/katex/dist/katex.mjs' },
+    // …
+  ],
+}
+```
 
-If you bump KaTeX, Vite, or Rolldown, smoke-test the production bundle by running `npm run build && npm run preview` and visiting one of the math-heavy library articles (e.g. ECDSA, Schnorr signatures); if any macro renders red, re-check that `strictExecutionOrder` is still set and that newer Rolldown releases haven't regressed the relevant fixes.
+The regex anchor (`/^katex$/`) keeps `katex/dist/katex.min.css` and other sub-paths unchanged. Rolldown bundles the ESM cleanly, all top-level side effects execute, and `react-katex`'s `_interopRequireDefault(_katex)` adapts the ESM module to its CJS expectations.
+
+The neighbouring `build.rolldownOptions.output.strictExecutionOrder: true` is unrelated to this specific bug but defends against the rolldown/rolldown#8812 (TinyMCE) / #9225 (@noble/curves+@noble/hashes) class of chunk-execution-order issue and is cheap insurance.
+
+If you bump KaTeX, `react-katex`, Vite, or Rolldown, smoke-test the production bundle by running `npm run build && npm run preview` and either visiting a math-heavy library article (ECDSA, Schnorr) by hand or running `node scripts/probe-katex.mjs`. The probe checks specifically for red KaTeX fragments — `redElementCount: 0` is the signal that all macros render correctly.
 
 ## Project Structure
 

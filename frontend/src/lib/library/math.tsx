@@ -8,12 +8,13 @@
  * not, because `\f`, `\n`, `\t`, `\b`, … are JavaScript escape sequences and silently corrupt
  * LaTeX source.
  *
- * Note (production builds): `vite.config.ts` sets `build.rolldownOptions.output.strictExecutionOrder`
- * so that KaTeX's top-level `defineMacro(...)` / `defineSymbol(...)` calls run before the parser
- * uses them — without it, Rolldown's chunk extraction can reorder modules across vendor chunks
- * and macros render red as “undefined control sequence”. See the README and `vite.config.ts`.
+ * Note (production builds): `vite.config.ts` aliases the bare `katex` specifier to KaTeX's
+ * **ESM** entry (`katex/dist/katex.mjs`). Without that alias, `react-katex`'s `require("katex")`
+ * resolves to the CJS UMD build, and Rolldown's CJS interop bundles it in a way where macro
+ * registrations land in a different scope than the parser reads — production then shows
+ * `\frac`, `\in`, `\mod`, `\equiv`, `\pmod`, … as red “undefined control sequence” fragments.
  *
- * @see ../../../README.md — section **LaTeX (KaTeX) in TSX**
+ * @see ../../../README.md — section **KaTeX in production (alias `katex` to its ESM entry)**
  */
 import 'katex/dist/katex.min.css'
 import {

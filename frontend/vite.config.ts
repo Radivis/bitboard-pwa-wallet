@@ -152,6 +152,26 @@ export default defineConfig({
   ],
   resolve: {
     alias: [
+      // Force the bare `katex` specifier to resolve to KaTeX's **ESM** entry
+      // (`katex/dist/katex.mjs`) rather than its CJS UMD entry
+      // (`katex/dist/katex.js`). `react-katex` is itself a CJS UMD bundle
+      // that does `require("katex")`, and Node's conditional-exports
+      // resolution would normally pick the CJS variant. Rolldown's CJS-to-CJS
+      // interop hoists the webpack UMD closure incorrectly: the ~343
+      // top-level `defineMacro(...)` calls register macros in one scope while
+      // the parser ends up reading a different macros table at render time —
+      // this is the same class of bug as vitejs/vite#22176. Routing the
+      // `katex` specifier to the ESM build sidesteps the CJS interop entirely
+      // and lets Rolldown bundle KaTeX as plain ESM with all side effects
+      // intact. The regex anchor keeps `katex/dist/katex.min.css` and other
+      // sub-paths unchanged.
+      {
+        find: /^katex$/,
+        replacement: path.resolve(
+          projectRoot,
+          './node_modules/katex/dist/katex.mjs',
+        ),
+      },
       { find: '@', replacement: path.resolve(projectRoot, './src') },
       { find: '@common', replacement: path.resolve(projectRoot, './common') },
       {
@@ -203,15 +223,11 @@ export default defineConfig({
     rolldownOptions: {
       output: {
         // Force module evaluation order to follow the static dependency graph.
-        // Without this, Rolldown's chunk optimizer can reorder modules across
-        // shared/vendor chunks and run side-effect-heavy modules before their
-        // dependencies finish initializing — the same class of bug as
-        // rolldown/rolldown#8812 (TinyMCE) and #9225 (@noble/curves+@noble/hashes).
-        // For us this manifested as KaTeX rendering `\frac`, `\in`, `\mod`,
-        // `\equiv`, `\cdot`, … as red "undefined control sequence" fragments
-        // because the ~340 `defineMacro(...)` and ~650 `defineSymbol(...)`
-        // top-level calls inside `katex.mjs` were not consistently executed
-        // against the parser's macro table.
+        // Defends against the rolldown/rolldown#8812 (TinyMCE) /
+        // rolldown/rolldown#9225 (@noble/curves+@noble/hashes) class of bug
+        // where chunk extraction reorders side-effect modules across vendor
+        // chunks. Cheap insurance — see also the `katex` alias under
+        // `resolve.alias` for the actual KaTeX-specific fix.
         strictExecutionOrder: true,
         codeSplitting: {
           minSize: 20_000,
