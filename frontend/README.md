@@ -160,7 +160,7 @@ The regex anchor (`/^katex$/`) keeps `katex/dist/katex.min.css` and other sub-pa
 
 The neighbouring `build.rolldownOptions.output.strictExecutionOrder: true` is unrelated to this specific bug but defends against the rolldown/rolldown#8812 (TinyMCE) / #9225 (@noble/curves+@noble/hashes) class of chunk-execution-order issue and is cheap insurance.
 
-If you bump KaTeX, `react-katex`, Vite, or Rolldown, smoke-test the production bundle by running `npm run build && npm run preview` and either visiting a math-heavy library article (ECDSA, Schnorr) by hand or running `node scripts/probe-katex.mjs`. The probe checks specifically for red KaTeX fragments — `redElementCount: 0` is the signal that all macros render correctly.
+If you bump KaTeX, `react-katex`, Vite, or Rolldown, smoke-test the production bundle by running `npm run build && npm run preview` and either visiting a math-heavy library article (ECDSA, Schnorr) by hand or running `npm run probe:katex` (expects `PROBE_URL`, default `http://localhost:4173`). For Vercel Preview Protection, pass `VERCEL_BYPASS_TOKEN` or `VERCEL_BYPASS_TOKEN_FILE`. Set `DEBUG_PROBE=1` for extra logging. The probe treats red KaTeX fragments as failures — `redElementCount: 0` means macros rendered correctly.
 
 ## Project Structure
 

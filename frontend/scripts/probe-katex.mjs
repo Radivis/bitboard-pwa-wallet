@@ -1,11 +1,12 @@
 import { chromium } from 'playwright'
-import fs from 'node:fs'
-import { existsSync } from 'node:fs'
+import fs, { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
 import path from 'node:path'
 
 const ARTICLES = ['/library/articles/ecdsa', '/library/articles/schnorr-signatures']
-const BASE_URL = process.env.PROBE_URL ?? 'http://localhost:4178'
+/** Matches `vite preview` default port (`npm run preview` without `--port`). */
+const BASE_URL = process.env.PROBE_URL ?? 'http://localhost:4173'
+const DEBUG_PROBE = process.env.DEBUG_PROBE === '1'
 function readBypassTokenFromFile() {
   const tokenFile = process.env.VERCEL_BYPASS_TOKEN_FILE
   if (!tokenFile) return ''
@@ -62,7 +63,7 @@ for (const route of ARTICLES) {
     katexCount: document.querySelectorAll('.katex').length,
     katexErrCount: document.querySelectorAll('.katex .err, .katex-error').length,
   }))
-  console.log('initial:', initial)
+  if (DEBUG_PROBE) console.log('initial:', initial)
 
   if (initial.katexCount === 0) {
     try {
@@ -104,9 +105,6 @@ for (const route of ARTICLES) {
     const tex = Array.from(document.querySelectorAll('.katex annotation'))
       .slice(0, 10)
       .map((n) => n.textContent ?? '')
-    const allKatexHtml = Array.from(document.querySelectorAll('.katex'))
-      .slice(0, 3)
-      .map((n) => n.outerHTML.slice(0, 400))
     return {
       katexCount: document.querySelectorAll('.katex').length,
       errorCount: errs.length,
@@ -114,7 +112,6 @@ for (const route of ARTICLES) {
       errSamples,
       redSamples,
       texSamples: tex,
-      katexHtmlPreview: allKatexHtml,
     }
   })
   totalErrors += summary.errorCount + summary.redElementCount

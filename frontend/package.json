@@ -13,6 +13,7 @@
     "build:wasm": "cd ../crypto && wasm-pack build --target bundler --out-dir ../frontend/src/wasm-pkg && cd ../bitboard-encryption && wasm-pack build --target bundler --out-dir ../frontend/src/wasm-pkg/bitboard_encryption && cd ../bitboard-lightning && wasm-pack build --target bundler --out-dir ../frontend/src/wasm-pkg/bitboard_lightning",
     "lint": "eslint . --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
+    "probe:katex": "node scripts/probe-katex.mjs",
     "test": "vitest",
     "test:ui": "vitest --ui",
     "test:coverage": "vitest --coverage",
