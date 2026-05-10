@@ -131,7 +131,9 @@ import { BlockMath, InlineMath } from '@/lib/library/math'
 <BlockMath math={BlockMath.tex`a^{p-1} \equiv 1 \pmod{p}`} />
 ```
 
-`InlineMath.tex` and `BlockMath.tex` are **`String.raw`**: backslashes are preserved exactly for KaTeX.
+`InlineMath.tex` and `BlockMath.tex` read **`TemplateStringsArray.raw` only** (same idea as `String.raw`): backslashes reach KaTeX exactly as written. They **reject `${…}`** inside the template — interpolations are merged using JavaScript “cooked” segments, where `\n` inside `\not`, `\neq`, etc. can become a real newline and corrupt the formula.
+
+**`\in` and KaTeX errors:** If KaTeX shows a red `\i`, the engine parsed `\i` without the following `n` (often because a newline slipped between `\i` and `n`). For interval-style notation, prefer **`{\in}`** (for example `` r, s {\in} [1, n-1] ``) so `\in` is one grouped atom.
 
 **Why not plain `math="\frac{…}{…}"`?**
 

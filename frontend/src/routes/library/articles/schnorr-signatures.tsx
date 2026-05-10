@@ -48,7 +48,7 @@ export const article: LibraryArticle = {
         </p>
         <ol className="list-decimal space-y-2 pl-5">
           <li>
-            Generate a random nonce <InlineMath math={InlineMath.tex`k \in [1, n-1]`} />.
+            Generate a random nonce <InlineMath math={InlineMath.tex`k {\in} [1, n-1]`} />.
           </li>
           <li>
             Compute the nonce point <InlineMath math={InlineMath.tex`R = k \cdot G`} />.

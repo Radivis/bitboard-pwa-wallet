@@ -58,7 +58,7 @@ export const article: LibraryArticle = {
             transaction data).
           </li>
           <li>
-            Pick a cryptographically random nonce <InlineMath math={InlineMath.tex`k \in [1, n-1]`} />.
+            Pick a cryptographically random nonce <InlineMath math={InlineMath.tex`k {\in} [1, n-1]`} />.
           </li>
           <li>
             Compute the curve point <InlineMath math={InlineMath.tex`R = k \cdot G`} />.
@@ -83,7 +83,7 @@ export const article: LibraryArticle = {
         </p>
         <ol className="list-decimal space-y-2 pl-5">
           <li>
-            Check that <InlineMath math={InlineMath.tex`r, s \in [1, n-1]`} />.
+            Check that <InlineMath math={InlineMath.tex`r, s {\in} [1, n-1]`} />.
           </li>
           <li>
             Compute <InlineMath math={InlineMath.tex`w = s^{-1} \mod n`} />.
