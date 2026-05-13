@@ -29,6 +29,7 @@ import {
   parsePositiveFiatAmountInput,
 } from '@/lib/fiat-amount-to-sats'
 import { fiatAmountInputPlaceholder } from '@/lib/format-fiat-display'
+import { isUsableBtcSpotPriceInFiat } from '@/lib/is-usable-btc-spot-price-in-fiat'
 import type { BitcoinAmountDisplaySize } from '@/components/BitcoinAmountDisplay'
 
 /** Shown when a BOLT11 invoice has no fixed amount (NWC amountless flow). */
@@ -74,8 +75,7 @@ function LightningInvoiceAmountBlock({
   const showFiat =
     networkMode === 'mainnet' &&
     fiatDenominationMode &&
-    btcPriceInFiat != null &&
-    btcPriceInFiat > 0
+    isUsableBtcSpotPriceInFiat(btcPriceInFiat)
 
   if (showFiat) {
     return (
@@ -249,6 +249,7 @@ function InvoiceCreateForm({ onCreated }: { onCreated: () => void }) {
     allowFetchWhenPortfolioZeroForReceivePage: true,
   })
   const btcPriceInFiat = fiatRatesQuery.data?.btcPriceInFiat
+  const hasUsableFiatSpot = isUsableBtcSpotPriceInFiat(btcPriceInFiat)
 
   const mainnetFiatEntry =
     networkMode === 'mainnet' && fiatDenominationMode
@@ -267,8 +268,7 @@ function InvoiceCreateForm({ onCreated }: { onCreated: () => void }) {
       const fiat = parsePositiveFiatAmountInput(t)
       if (fiat == null) return { kind: 'invalid' }
       if (fiat === 0) return { kind: 'amountless' }
-      if (btcPriceInFiat == null || !(btcPriceInFiat > 0))
-        return { kind: 'invalid' }
+      if (!isUsableBtcSpotPriceInFiat(btcPriceInFiat)) return { kind: 'invalid' }
       const sats = amountSatsFromFiatAndBtcPrice(fiat, btcPriceInFiat)
       if (sats == null || sats < 1) return { kind: 'invalid' }
       return { kind: 'fixed', sats }
@@ -342,8 +342,7 @@ function InvoiceCreateForm({ onCreated }: { onCreated: () => void }) {
               />
               {mainnetFiatEntry &&
                 parsedSatsForPreview != null &&
-                btcPriceInFiat != null &&
-                btcPriceInFiat > 0 && (
+                hasUsableFiatSpot && (
                   <p className="text-sm text-muted-foreground">
                     ≈{' '}
                     <BitcoinAmountDisplay
@@ -358,7 +357,7 @@ function InvoiceCreateForm({ onCreated }: { onCreated: () => void }) {
                 amountRaw.trim() !== '' &&
                 parsePositiveFiatAmountInput(amountRaw) != null &&
                 parsePositiveFiatAmountInput(amountRaw)! > 0 &&
-                (btcPriceInFiat == null || !(btcPriceInFiat > 0)) &&
+                !hasUsableFiatSpot &&
                 !fiatRatesQuery.isPending && (
                   <p className="text-xs text-destructive">
                     Exchange rate unavailable. Check your connection or rate service

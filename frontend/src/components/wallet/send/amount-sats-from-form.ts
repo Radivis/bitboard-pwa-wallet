@@ -4,6 +4,7 @@ import {
   amountSatsFromFiatAndBtcPrice,
   parsePositiveFiatAmountInput,
 } from '@/lib/fiat-amount-to-sats'
+import { isUsableBtcSpotPriceInFiat } from '@/lib/is-usable-btc-spot-price-in-fiat'
 
 export function amountSatsFromForm(
   amountStr: string,
@@ -24,11 +25,7 @@ export function amountSatsFromSendForm(
     btcPriceInFiat: number | null | undefined
   },
 ): number {
-  if (
-    opts.useFiatAmountEntry &&
-    opts.btcPriceInFiat != null &&
-    opts.btcPriceInFiat > 0
-  ) {
+  if (opts.useFiatAmountEntry && isUsableBtcSpotPriceInFiat(opts.btcPriceInFiat)) {
     const fiat = parsePositiveFiatAmountInput(amountStr)
     if (fiat == null) return 0
     return amountSatsFromFiatAndBtcPrice(fiat, opts.btcPriceInFiat) ?? 0

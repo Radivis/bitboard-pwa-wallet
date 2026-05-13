@@ -42,6 +42,7 @@ import { useFiatDenominationStore } from '@/stores/fiatDenominationStore'
 import { useBitcoinDisplayUnitStore } from '@/stores/bitcoinDisplayUnitStore'
 import { useMainnetFiatRatesQuery } from '@/hooks/useMainnetFiatRatesQuery'
 import { formatFiatInputStringFromSats } from '@/lib/format-fiat-display'
+import { isUsableBtcSpotPriceInFiat } from '@/lib/is-usable-btc-spot-price-in-fiat'
 
 import { useSendFlowFees } from './fees'
 import { useSendFlowLightning } from './lightning'
@@ -275,9 +276,7 @@ export function SendFlow() {
   const fiatRateOk =
     !mainnetFiatMode ||
     (isLightningSendMode && !needsUserLightningAmount) ||
-    (btcPriceInFiat != null &&
-      btcPriceInFiat > 0 &&
-      !fiatRatesQuery.isError)
+    (isUsableBtcSpotPriceInFiat(btcPriceInFiat) && !fiatRatesQuery.isError)
 
   const canBuild =
     (isLightningSendMode ? canBuildLightning : canBuildOnChain) && fiatRateOk
@@ -471,8 +470,7 @@ export function SendFlow() {
         if (
           networkMode === 'mainnet' &&
           fiatDenominationMode &&
-          btcPriceInFiat != null &&
-          btcPriceInFiat > 0
+          isUsableBtcSpotPriceInFiat(btcPriceInFiat)
         ) {
           const satsFromQr = amountSatsFromForm(amountStr, amountUnit)
           setAmount(

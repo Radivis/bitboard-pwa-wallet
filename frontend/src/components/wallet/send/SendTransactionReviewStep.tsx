@@ -11,6 +11,7 @@ import { OnchainDustWarningReviewBanner } from '@/components/wallet/send/Onchain
 import type { AddressType, NetworkMode } from '@/stores/walletStore'
 import type { OnchainDustWarning, SendAmountUnit } from '@/stores/sendStore'
 import type { SupportedDefaultFiatCurrency } from '@/lib/supported-fiat-currencies'
+import { isUsableBtcSpotPriceInFiat } from '@/lib/is-usable-btc-spot-price-in-fiat'
 
 type DeadLabRecipientInfo = {
   displayName: string
@@ -62,6 +63,8 @@ export function SendTransactionReviewStep({
   btcPriceInFiat: number | null | undefined
   fiatRatesLoading: boolean
 }) {
+  const hasUsableFiatSpot = isUsableBtcSpotPriceInFiat(btcPriceInFiat)
+
   return (
     <div className="space-y-6">
       {networkMode === 'lab' && deadLabRecipientInfo != null ? (
@@ -91,7 +94,7 @@ export function SendTransactionReviewStep({
             <div className="flex justify-between gap-2">
               <span className="text-muted-foreground">Amount</span>
               <span className="text-right">
-                {mainnetFiatMode && btcPriceInFiat != null && btcPriceInFiat > 0 ? (
+                {mainnetFiatMode && hasUsableFiatSpot ? (
                   <div className="flex flex-col items-end gap-1">
                     <FiatAmountDisplay
                       amountSats={amountSats}

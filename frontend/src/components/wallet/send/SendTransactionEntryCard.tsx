@@ -22,6 +22,7 @@ import { BitcoinFiatDenominationSwitch } from '@/components/BitcoinFiatDenominat
 import { FiatAmountDisplay } from '@/components/FiatAmountDisplay'
 import type { SupportedDefaultFiatCurrency } from '@/lib/supported-fiat-currencies'
 import { fiatAmountInputPlaceholder } from '@/lib/format-fiat-display'
+import { isUsableBtcSpotPriceInFiat } from '@/lib/is-usable-btc-spot-price-in-fiat'
 
 type LightningWalletPickerProps = ComponentProps<typeof SendLightningWalletPicker>
 
@@ -142,6 +143,7 @@ export function SendTransactionEntryCard({
   onFiatModeUserToggle?: (nextFiatMode: boolean) => void
 }) {
   const [recipientScanOpen, setRecipientScanOpen] = useState(false)
+  const hasUsableFiatSpot = isUsableBtcSpotPriceInFiat(btcPriceInFiat)
 
   const hideEditableAmountForZeroMainnet =
     networkMode === 'mainnet' &&
@@ -167,7 +169,7 @@ export function SendTransactionEntryCard({
     (needsUserLightningAmount || !isLightningSendMode)
 
   function spendableAmountRows(balanceSats: number) {
-    if (mainnetFiatMode && btcPriceInFiat != null && btcPriceInFiat > 0) {
+    if (mainnetFiatMode && hasUsableFiatSpot) {
       return (
         <div className="space-y-1">
           <div>
@@ -376,7 +378,7 @@ export function SendTransactionEntryCard({
                 </div>
               ) : isLightningSendMode && !needsUserLightningAmount ? (
                 <div className="space-y-2 rounded-md border border-border bg-muted/30 px-3 py-2 text-sm tabular-nums">
-                  {mainnetFiatMode && btcPriceInFiat != null && btcPriceInFiat > 0 ? (
+                  {mainnetFiatMode && hasUsableFiatSpot ? (
                     <>
                       <FiatAmountDisplay
                         amountSats={lightningPayAmountSats}
@@ -429,10 +431,7 @@ export function SendTransactionEntryCard({
                     }
                     disabled={isPending}
                   />
-                  {mainnetFiatMode &&
-                    useFiatAmountField &&
-                    btcPriceInFiat != null &&
-                    btcPriceInFiat > 0 && (
+                  {mainnetFiatMode && useFiatAmountField && hasUsableFiatSpot && (
                       <p className="text-sm text-muted-foreground">
                         <span className="mr-1">≈</span>
                         <BitcoinAmountDisplay
@@ -445,7 +444,7 @@ export function SendTransactionEntryCard({
                     )}
                   {mainnetFiatMode && useFiatAmountField && !fiatRatesLoading && (
                     <>
-                      {(btcPriceInFiat == null || !(btcPriceInFiat > 0)) ? (
+                      {!hasUsableFiatSpot ? (
                         <p className="text-xs text-destructive">
                           Exchange rate unavailable. Check your connection or rate
                           service in Settings.

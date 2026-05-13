@@ -1,6 +1,11 @@
 /**
  * Allowlisted FX API bases for `/api/fiat-rates/{providerId}/...`.
  * Only the listed path prefixes may be proxied (see api/fiat-rates handler).
+ *
+ * **Keep in sync with `frontend/api/fiat-rates/[...path].ts`.** That Vercel serverless
+ * handler intentionally duplicates this allowlist: importing shared TS from `src/` into the
+ * lean proxy broke deployments in a prior refactor, so both places must be updated together
+ * when adding providers or paths.
  */
 export type FiatRateProviderId = 'kraken' | 'coingecko' | 'blockchain'
 

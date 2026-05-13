@@ -1,3 +1,10 @@
+/**
+ * Same-origin proxy for public fiat-rate APIs (allowlisted providers + paths only).
+ *
+ * **Keep in sync with `frontend/src/lib/fiat-rate-service-whitelist.ts`.** Provider IDs,
+ * upstream bases, and path prefixes are duplicated here on purpose: wiring this handler to
+ * shared `src/` modules broke the lean serverless bundle before; change both files together.
+ */
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 export const config = {
