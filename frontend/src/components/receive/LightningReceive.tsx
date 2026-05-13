@@ -19,7 +19,18 @@ import {
   DEFAULT_INVOICE_EXPIRY_SECONDS,
 } from '@/lib/lightning-utils'
 import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
+import { BitcoinFiatDenominationSwitch } from '@/components/BitcoinFiatDenominationSwitch'
+import { FiatAmountDisplay } from '@/components/FiatAmountDisplay'
 import { MAX_LIGHTNING_INVOICE_DESCRIPTION_LENGTH } from '@/lib/lightning-input-limits'
+import { useFiatDenominationStore } from '@/stores/fiatDenominationStore'
+import { useMainnetFiatRatesQuery } from '@/hooks/useMainnetFiatRatesQuery'
+import {
+  amountSatsFromFiatAndBtcPrice,
+  parsePositiveFiatAmountInput,
+} from '@/lib/fiat-amount-to-sats'
+import { fiatAmountInputPlaceholder } from '@/lib/format-fiat-display'
+import { isUsableBtcSpotPriceInFiat } from '@/lib/is-usable-btc-spot-price-in-fiat'
+import type { BitcoinAmountDisplaySize } from '@/components/BitcoinAmountDisplay'
 
 /** Shown when a BOLT11 invoice has no fixed amount (NWC amountless flow). */
 const LIGHTNING_INVOICE_AMOUNT_SET_BY_PAYER_LABEL = 'Amount set by payer'
@@ -39,6 +50,68 @@ export function parseInvoiceAmountField(raw: string): InvoiceAmountFieldParse {
   if (!Number.isInteger(sats) || sats < 0) return { kind: 'invalid' }
   if (sats === 0) return { kind: 'amountless' }
   return { kind: 'fixed', sats }
+}
+
+function LightningInvoiceAmountBlock({
+  amountSats,
+  size,
+  className,
+}: {
+  amountSats: number
+  size: BitcoinAmountDisplaySize
+  className?: string
+}) {
+  const networkMode = useWalletStore((s) => s.networkMode)
+  const fiatDenominationMode = useFiatDenominationStore(
+    (s) => s.fiatDenominationMode,
+  )
+  const defaultFiatCurrency = useFiatDenominationStore(
+    (s) => s.defaultFiatCurrency,
+  )
+  const fiatRatesQuery = useMainnetFiatRatesQuery({
+    allowFetchWhenPortfolioZeroForReceivePage: true,
+  })
+  const btcPriceInFiat = fiatRatesQuery.data?.btcPriceInFiat
+  const showFiat =
+    networkMode === 'mainnet' &&
+    fiatDenominationMode &&
+    isUsableBtcSpotPriceInFiat(btcPriceInFiat)
+
+  if (showFiat) {
+    return (
+      <span className={className}>
+        <span className="inline-flex flex-col items-start gap-0.5">
+          <FiatAmountDisplay
+            amountSats={amountSats}
+            btcPriceInFiat={btcPriceInFiat}
+            currency={defaultFiatCurrency}
+            size={size}
+            rateLoading={fiatRatesQuery.isPending}
+          />
+          <BitcoinAmountDisplay
+            amountSats={amountSats}
+            size={size}
+            allowUnitToggle={false}
+            className="text-muted-foreground"
+          />
+        </span>
+      </span>
+    )
+  }
+  return (
+    <BitcoinAmountDisplay
+      amountSats={amountSats}
+      size={size}
+      className={className}
+      allowUnitToggle={false}
+    />
+  )
+}
+
+function MainnetReceiveDenominationSwitch() {
+  const networkMode = useWalletStore((s) => s.networkMode)
+  if (networkMode !== 'mainnet') return null
+  return <BitcoinFiatDenominationSwitch />
 }
 
 function InvoiceQrDisplay({ invoice }: { invoice: LightningInvoice }) {
@@ -83,11 +156,10 @@ function InvoiceQrDisplay({ invoice }: { invoice: LightningInvoice }) {
                 {LIGHTNING_INVOICE_AMOUNT_SET_BY_PAYER_LABEL}
               </span>
             ) : (
-              <BitcoinAmountDisplay
+              <LightningInvoiceAmountBlock
                 amountSats={invoice.amountSats}
                 size="sm"
                 className="inline text-muted-foreground"
-                allowUnitToggle={false}
               />
             )}{' '}
             &middot; {expiryLabel} expiry
@@ -140,11 +212,7 @@ function InvoiceListItem({
             {invoice.amountSats == null ? (
               LIGHTNING_INVOICE_AMOUNT_SET_BY_PAYER_LABEL
             ) : (
-              <BitcoinAmountDisplay
-                amountSats={invoice.amountSats}
-                size="sm"
-                allowUnitToggle={false}
-              />
+              <LightningInvoiceAmountBlock amountSats={invoice.amountSats} size="sm" />
             )}
           </p>
           {invoice.description && (
@@ -166,21 +234,51 @@ function InvoiceListItem({
 }
 
 function InvoiceCreateForm({ onCreated }: { onCreated: () => void }) {
-  const [amountSats, setAmountSats] = useState('')
+  const networkMode = useWalletStore((s) => s.networkMode)
+  const [amountRaw, setAmountRaw] = useState('')
   const [description, setDescription] = useState('')
   const [expirySeconds, setExpirySeconds] = useState(DEFAULT_INVOICE_EXPIRY_SECONDS)
 
+  const fiatDenominationMode = useFiatDenominationStore(
+    (s) => s.fiatDenominationMode,
+  )
+  const defaultFiatCurrency = useFiatDenominationStore(
+    (s) => s.defaultFiatCurrency,
+  )
+  const fiatRatesQuery = useMainnetFiatRatesQuery({
+    allowFetchWhenPortfolioZeroForReceivePage: true,
+  })
+  const btcPriceInFiat = fiatRatesQuery.data?.btcPriceInFiat
+  const hasUsableFiatSpot = isUsableBtcSpotPriceInFiat(btcPriceInFiat)
+
+  const mainnetFiatEntry =
+    networkMode === 'mainnet' && fiatDenominationMode
+
   const createMutation = useCreateInvoiceMutation(() => {
-    setAmountSats('')
+    setAmountRaw('')
     setDescription('')
     setExpirySeconds(DEFAULT_INVOICE_EXPIRY_SECONDS)
     onCreated()
   })
 
-  const amountParse = useMemo(
-    () => parseInvoiceAmountField(amountSats),
-    [amountSats],
-  )
+  const amountParse = useMemo((): InvoiceAmountFieldParse => {
+    if (mainnetFiatEntry) {
+      const t = amountRaw.trim()
+      if (t === '') return { kind: 'amountless' }
+      const fiat = parsePositiveFiatAmountInput(t)
+      if (fiat == null) return { kind: 'invalid' }
+      if (fiat === 0) return { kind: 'amountless' }
+      if (!isUsableBtcSpotPriceInFiat(btcPriceInFiat)) return { kind: 'invalid' }
+      const sats = amountSatsFromFiatAndBtcPrice(fiat, btcPriceInFiat)
+      if (sats == null || sats < 1) return { kind: 'invalid' }
+      return { kind: 'fixed', sats }
+    }
+    return parseInvoiceAmountField(amountRaw)
+  }, [mainnetFiatEntry, amountRaw, btcPriceInFiat])
+
+  const parsedSatsForPreview =
+    amountParse.kind === 'fixed' ? amountParse.sats : null
+
   const canCreate = amountParse.kind !== 'invalid' && !createMutation.isPending
 
   const handleCreate = useCallback(() => {
@@ -223,21 +321,53 @@ function InvoiceCreateForm({ onCreated }: { onCreated: () => void }) {
             }}
           >
             <div className="space-y-2">
-              <Label htmlFor="invoice-amount">Amount (sats) (optional)</Label>
+              <Label htmlFor="invoice-amount">
+                {mainnetFiatEntry
+                  ? `Amount (${defaultFiatCurrency}) (optional)`
+                  : 'Amount (sats) (optional)'}
+              </Label>
               <Input
                 id="invoice-amount"
                 type="text"
-                inputMode="numeric"
-                pattern="[0-9]*"
-                value={amountSats}
-                onChange={(e) => setAmountSats(e.target.value)}
-                placeholder="Leave empty for amountless"
+                inputMode={mainnetFiatEntry ? 'decimal' : 'numeric'}
+                pattern={mainnetFiatEntry ? undefined : '[0-9]*'}
+                value={amountRaw}
+                onChange={(e) => setAmountRaw(e.target.value)}
+                placeholder={
+                  mainnetFiatEntry
+                    ? fiatAmountInputPlaceholder(defaultFiatCurrency)
+                    : 'Leave empty for amountless'
+                }
                 autoComplete="off"
               />
+              {mainnetFiatEntry &&
+                parsedSatsForPreview != null &&
+                hasUsableFiatSpot && (
+                  <p className="text-sm text-muted-foreground">
+                    ≈{' '}
+                    <BitcoinAmountDisplay
+                      amountSats={parsedSatsForPreview}
+                      size="sm"
+                      className="inline"
+                      allowUnitToggle={false}
+                    />
+                  </p>
+                )}
+              {mainnetFiatEntry &&
+                amountRaw.trim() !== '' &&
+                parsePositiveFiatAmountInput(amountRaw) != null &&
+                parsePositiveFiatAmountInput(amountRaw)! > 0 &&
+                !hasUsableFiatSpot &&
+                !fiatRatesQuery.isPending && (
+                  <p className="text-xs text-destructive">
+                    Exchange rate unavailable. Check your connection or rate service
+                    in Settings.
+                  </p>
+                )}
               {amountParse.kind === 'amountless' ? (
                 <p className="text-sm text-muted-foreground">
-                  If you don&apos;t define an amount, the amount for this invoice
-                  must be specified by payer.
+                  If you don&apos;t define an amount, the amount for this invoice must
+                  be specified by payer.
                 </p>
               ) : null}
             </div>
@@ -309,9 +439,7 @@ function NoConnectionPrompt({
               : 'No Lightning wallet connected. Connect one to create real invoices.'}
           </p>
           <Button asChild variant="outline">
-            <Link to="/wallet/management">
-              Connect Lightning Wallet
-            </Link>
+            <Link to="/wallet/management">Connect Lightning Wallet</Link>
           </Button>
         </div>
       </CardContent>
@@ -328,9 +456,7 @@ export function LightningReceive() {
       : null,
   )
   const hasAnyLightningConnection = useLightningStore((s) =>
-    activeWalletId != null
-      ? s.getConnectionsForWallet(activeWalletId).length > 0
-      : false,
+    activeWalletId != null ? s.getConnectionsForWallet(activeWalletId).length > 0 : false,
   )
   const activeInvoice = useReceiveStore((s) => s.activeInvoice)
   const sessionInvoices = useReceiveStore((s) => s.sessionInvoices)
@@ -355,6 +481,7 @@ export function LightningReceive() {
   if (showForm && activeInvoice == null && sessionInvoices.length === 0) {
     return (
       <div className="space-y-4">
+        <MainnetReceiveDenominationSwitch />
         {!hasMatchingConnection && (
           <NoConnectionPrompt
             networkLabel={networkLabel}
@@ -370,6 +497,7 @@ export function LightningReceive() {
 
   return (
     <div className="space-y-4">
+      <MainnetReceiveDenominationSwitch />
       {!hasMatchingConnection && (
         <NoConnectionPrompt
           networkLabel={networkLabel}

@@ -131,15 +131,36 @@ import { BlockMath, InlineMath } from '@/lib/library/math'
 <BlockMath math={BlockMath.tex`a^{p-1} \equiv 1 \pmod{p}`} />
 ```
 
-`InlineMath.tex` and `BlockMath.tex` are **`String.raw`**: backslashes are preserved exactly for KaTeX.
+`InlineMath.tex` and `BlockMath.tex` read **`TemplateStringsArray.raw` only** (same idea as `String.raw`): backslashes reach KaTeX exactly as written. They **reject `${…}`** inside the template — interpolations are merged using JavaScript “cooked” segments, where `\n` inside `\not`, `\neq`, etc. can become a real newline and corrupt the formula.
 
 **Why not plain `math="\frac{…}{…}"`?**
 
-1. Values that are genuinely **JavaScript string literals** interpret escapes such as `\f`, `\n`, and `\t`, which silently corrupts many macro names (`\frac`, `\cdot`, `\text`, …).
+1. Values that are genuinely **JavaScript string literals** interpret escapes such as `\f`, `\n`, `\t`, and `\b`, which silently corrupts many macro names (`\frac`, `\cdot`, `\binom`, `\text`, …).
 
 2. **JSX / toolchain differences** between `vite dev` and production builds (and across compiler upgrades) are not something we want to rely on for correctness. Using `.tex` keeps one stable rule: macros always come from a tagged template.
 
 Plain strings remain fine for tiny fragments with **no** macro backslashes (for example `math="G"`). Prefer `.tex` whenever the snippet includes `\`.
+
+### KaTeX in production (alias `katex` to its ESM entry)
+
+KaTeX ships two builds: `katex/dist/katex.mjs` (ESM) and `katex/dist/katex.js` (CJS UMD — a single webpack closure). `react-katex` 3.1 is itself a CJS UMD bundle that does `require("katex")`, so by default Node's conditional-exports resolution picks the **CJS** variant. Rolldown's CJS-to-CJS interop hoists that webpack UMD closure incorrectly: the ~343 top-level `defineMacro(...)` calls register macros in one scope while the parser ends up reading a different macros table at render time — the same class of bug as [vitejs/vite#22176](https://github.com/vitejs/vite/issues/22176). The visible symptom is that production renders **macros** like `\frac`, `\in`, `\mod`, `\equiv`, `\pmod` as red `\f`/`\i`/`\m`/`\e`/`\p` "undefined control sequence" fragments — while **symbols** like `\cdot` (registered via the always-exported `defineSymbol(...)` table) still work fine.
+
+The fix in `vite.config.ts` is a single `resolve.alias` entry that routes the bare `katex` specifier to the ESM file:
+
+```ts
+resolve: {
+  alias: [
+    { find: /^katex$/, replacement: '…/node_modules/katex/dist/katex.mjs' },
+    // …
+  ],
+}
+```
+
+The regex anchor (`/^katex$/`) keeps `katex/dist/katex.min.css` and other sub-paths unchanged. Rolldown bundles the ESM cleanly, all top-level side effects execute, and `react-katex`'s `_interopRequireDefault(_katex)` adapts the ESM module to its CJS expectations.
+
+The neighbouring `build.rolldownOptions.output.strictExecutionOrder: true` is unrelated to this specific bug but defends against the rolldown/rolldown#8812 (TinyMCE) / #9225 (@noble/curves+@noble/hashes) class of chunk-execution-order issue and is cheap insurance.
+
+If you bump KaTeX, `react-katex`, Vite, or Rolldown, smoke-test the production bundle by running `npm run build && npm run preview` and either visiting a math-heavy library article (ECDSA, Schnorr) by hand or running `npm run probe:katex` (expects `PROBE_URL`, default `http://localhost:4173`). For Vercel Preview Protection, pass `VERCEL_BYPASS_TOKEN` or `VERCEL_BYPASS_TOKEN_FILE`. Set `DEBUG_PROBE=1` for extra logging. The probe treats red KaTeX fragments as failures — `redElementCount: 0` means macros rendered correctly.
 
 ## Project Structure
 

@@ -127,6 +127,62 @@ That often means the CLI tried to run the install script with a **working direct
 
 ---
 
+## Preview deployments and the `bitboard-preview.vercel.app` alias
+
+[`.github/workflows/deploy-vercel-preview.yml`](../.github/workflows/deploy-vercel-preview.yml) deploys a preview build via the same prebuilt pipeline as production. It is **manual-only** (`workflow_dispatch`) — there is no automatic PR/branch trigger.
+
+Each run produces a **new immutable preview URL** of the shape `https://bitboard-pwa-wallet-<id>-radivis-projects.vercel.app`. The URL of the latest run is the last line printed by the `Deploy prebuilt (preview)` step and is also surfaced near the bottom of the GHA workflow log:
+
+```bash
+LATEST_RUN_ID=$(gh run list --workflow="deploy-vercel-preview.yml" --limit 1 --json databaseId --jq '.[0].databaseId')
+gh run view "$LATEST_RUN_ID" --log \
+  | rg -o 'https://bitboard-pwa-wallet-[a-z0-9]+-radivis-projects\.vercel\.app' | tail -1
+```
+
+To avoid chasing per-deployment URLs, the workflow runs `vercel alias set <deploy-url> bitboard-preview.vercel.app` after each deploy. **`https://bitboard-preview.vercel.app`** therefore always points at the **most recent preview**. The previous deployment-specific URLs stay reachable at their old code; only the alias moves.
+
+If a fetch against the alias still shows old behavior immediately after a deploy, double-check the run completed and the `Alias latest preview deploy to bitboard-preview.vercel.app` step succeeded — there is no atomic swap, the alias is just a normal Vercel API call against the new deployment.
+
+---
+
+## Serverless API handlers (`frontend/api/`)
+
+The wallet ships three same-origin proxies under [`frontend/api/`](../frontend/api/):
+
+- [`api/esplora/[...path].ts`](../frontend/api/esplora/[...path].ts) — Esplora endpoints (provider + network allowlist).
+- [`api/faucet/[...path].ts`](../frontend/api/faucet/[...path].ts) — Testnet faucets (id allowlist).
+- [`api/fiat-rates/[...path].ts`](../frontend/api/fiat-rates/[...path].ts) — Kraken / CoinGecko / blockchain.info ticker endpoints.
+
+### Rule: handlers must be fully self-contained
+
+API handlers in this project must **import nothing outside the entry file itself** beyond `@vercel/node` types — **no `src/`, no `api/_lib/`, no sibling `vercel-proxy-shared/` folder**. On this project, `@vercel/node`'s NFT bundling / `includeFiles` has repeatedly produced `FUNCTION_INVOCATION_FAILED` at runtime when handlers imported shared files, even with `includeFiles` set. The three handlers inline their constants and helpers on purpose; see each file's header comment for which `src/lib` module is shadowed and must be kept in sync.
+
+### Rule: explicit rewrite per proxy in `vercel.json`
+
+Each handler needs an explicit rewrite in [`frontend/vercel.json`](../frontend/vercel.json):
+
+```json
+{ "source": "/api/<name>/:path*", "destination": "/api/<name>/[...path]" }
+```
+
+Without that explicit rewrite, the SPA fallback (`/((?!api/).*)` → `/index.html`) can shadow the API path in some Vercel configurations — preview deploys returned 404s for `/api/fiat-rates/...` before this rewrite was added.
+
+### Rule: keep the `functions` glob in `vercel.json` narrow
+
+List each real handler file individually rather than using a broad glob:
+
+```json
+"functions": {
+  "api/esplora/[...path].ts": { "maxDuration": 10 },
+  "api/faucet/[...path].ts":  { "maxDuration": 10 },
+  "api/fiat-rates/[...path].ts": { "maxDuration": 10 }
+}
+```
+
+A broad `api/**/*.ts` match has been observed to deploy non-entry files (for example shared helpers under `api/_lib/`) as standalone serverless functions, which can corrupt bundling and inflate the deploy.
+
+---
+
 ## HTTP caching (`frontend/vercel.json`)
 
 Vercel applies the headers in [`frontend/vercel.json`](../frontend/vercel.json):

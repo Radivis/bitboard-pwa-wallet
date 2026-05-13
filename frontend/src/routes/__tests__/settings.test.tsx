@@ -374,7 +374,7 @@ describe('Settings routes', () => {
     expect(screen.getByText('Network')).toBeInTheDocument()
     expect(screen.queryByText('Address Type')).not.toBeInTheDocument()
     expect(screen.getByText('Appearance')).toBeInTheDocument()
-    expect(screen.getByText('Bitcoin amounts')).toBeInTheDocument()
+    expect(screen.getByText('Currency / unit defaults')).toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: 'Security' })).not.toBeInTheDocument()
     expect(screen.queryByText('Data Backups')).not.toBeInTheDocument()
   })

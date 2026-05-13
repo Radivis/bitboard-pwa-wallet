@@ -46,4 +46,14 @@ export default tseslint.config(
       'react-refresh/only-export-components': 'off',
     },
   },
+  {
+    // Tooling scripts run under Node and routinely use Playwright's `page.evaluate(...)`,
+    // whose callback bodies execute inside a browser context. Both global sets are needed.
+    files: ['scripts/**/*.{js,mjs,cjs}'],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: 'module',
+      globals: { ...globals.node, ...globals.browser },
+    },
+  },
 )

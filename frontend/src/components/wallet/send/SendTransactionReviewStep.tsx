@@ -6,9 +6,12 @@ import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { DeadLabEntityRecipientModal } from '@/components/lab/DeadLabEntityRecipientModal'
 import { truncateAddress } from '@/lib/bitcoin-utils'
 import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
+import { FiatAmountDisplay } from '@/components/FiatAmountDisplay'
 import { OnchainDustWarningReviewBanner } from '@/components/wallet/send/OnchainDustWarningReviewBanner'
 import type { AddressType, NetworkMode } from '@/stores/walletStore'
 import type { OnchainDustWarning, SendAmountUnit } from '@/stores/sendStore'
+import type { SupportedDefaultFiatCurrency } from '@/lib/supported-fiat-currencies'
+import { isUsableBtcSpotPriceInFiat } from '@/lib/is-usable-btc-spot-price-in-fiat'
 
 type DeadLabRecipientInfo = {
   displayName: string
@@ -33,6 +36,10 @@ export function SendTransactionReviewStep({
   onBack,
   onConfirmSend,
   labConfirmSendDisabled,
+  mainnetFiatMode,
+  defaultFiatCurrency,
+  btcPriceInFiat,
+  fiatRatesLoading,
 }: {
   networkMode: NetworkMode
   recipient: string
@@ -51,7 +58,13 @@ export function SendTransactionReviewStep({
   onBack: () => void
   onConfirmSend: () => void
   labConfirmSendDisabled: boolean
+  mainnetFiatMode: boolean
+  defaultFiatCurrency: SupportedDefaultFiatCurrency
+  btcPriceInFiat: number | null | undefined
+  fiatRatesLoading: boolean
 }) {
+  const hasUsableFiatSpot = isUsableBtcSpotPriceInFiat(btcPriceInFiat)
+
   return (
     <div className="space-y-6">
       {networkMode === 'lab' && deadLabRecipientInfo != null ? (
@@ -81,7 +94,25 @@ export function SendTransactionReviewStep({
             <div className="flex justify-between gap-2">
               <span className="text-muted-foreground">Amount</span>
               <span className="text-right">
-                <BitcoinAmountDisplay amountSats={amountSats} size="sm" />
+                {mainnetFiatMode && hasUsableFiatSpot ? (
+                  <div className="flex flex-col items-end gap-1">
+                    <FiatAmountDisplay
+                      amountSats={amountSats}
+                      btcPriceInFiat={btcPriceInFiat}
+                      currency={defaultFiatCurrency}
+                      size="sm"
+                      rateLoading={fiatRatesLoading}
+                    />
+                    <BitcoinAmountDisplay
+                      amountSats={amountSats}
+                      size="sm"
+                      allowUnitToggle={false}
+                      className="text-muted-foreground"
+                    />
+                  </div>
+                ) : (
+                  <BitcoinAmountDisplay amountSats={amountSats} size="sm" />
+                )}
               </span>
             </div>
             {!isLightningSendMode && (

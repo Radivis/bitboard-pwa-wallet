@@ -3,13 +3,23 @@
   "installCommand": "bash scripts/vercel-install-wasm-toolchain.sh && npm ci",
   "buildCommand": "export PATH=\"$HOME/.cargo/bin:$PATH\" && npm run build",
   "functions": {
-    "api/**/*.ts": {
-      "includeFiles": "src/lib/**"
+    "api/esplora/[...path].ts": {
+      "maxDuration": 10
+    },
+    "api/faucet/[...path].ts": {
+      "maxDuration": 10
+    },
+    "api/fiat-rates/[...path].ts": {
+      "maxDuration": 10
     }
   },
   "rewrites": [
     { "source": "/api/esplora/:path*", "destination": "/api/esplora/[...path]" },
     { "source": "/api/faucet/:path*", "destination": "/api/faucet/[...path]" },
+    {
+      "source": "/api/fiat-rates/:path*",
+      "destination": "/api/fiat-rates/[...path]"
+    },
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ],
   "headers": [

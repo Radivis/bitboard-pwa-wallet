@@ -1,5 +1,9 @@
-import { Migrator, type MigrationProvider } from 'kysely'
 import type { Kysely } from 'kysely'
+import {
+  Migrator,
+  type MigrationProvider,
+  type MigrationResult,
+} from 'kysely/migration'
 
 export const SCHEMA_MIGRATIONS_TABLE = 'schema_migrations'
 export const SCHEMA_MIGRATIONS_LOCK_TABLE = 'schema_migrations_lock'
@@ -20,7 +24,9 @@ export async function runMigrationsToLatest(
     migrationLockTableName: SCHEMA_MIGRATIONS_LOCK_TABLE,
   })
   const { error, results } = await migrator.migrateToLatest()
-  const failedResult = results?.find((r) => r.status === 'Error')
+  const failedResult = results?.find(
+    (migrationResult: MigrationResult) => migrationResult.status === 'Error',
+  )
   if (error) {
     const message = failedResult
       ? `Migration "${failedResult.migrationName}" failed`

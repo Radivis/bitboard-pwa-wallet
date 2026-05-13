@@ -66,26 +66,32 @@ export function WalletUnlock({
     mutationFn: async (walletPassword: string) => {
       if (!activeWalletId) throw new Error('No active wallet')
 
-      setSessionPassword(walletPassword)
-      if (networkMode === 'lab') {
-        await loadDescriptorWalletWithoutSync({
-          password: walletPassword,
-          walletId: activeWalletId,
-          networkMode,
-          addressType,
-          accountId,
-        })
-      } else {
-        await loadDescriptorWalletAndSync({
-          password: walletPassword,
-          walletId: activeWalletId,
-          networkMode,
-          addressType,
-          accountId,
-          awaitSync: false,
-          onSyncError: (err) =>
-            reportWalletSyncError('unlock-background-sync', err),
-        })
+      const { setManualWalletUnlockInFlight } = useWalletStore.getState()
+      setManualWalletUnlockInFlight(true)
+      try {
+        setSessionPassword(walletPassword)
+        if (networkMode === 'lab') {
+          await loadDescriptorWalletWithoutSync({
+            password: walletPassword,
+            walletId: activeWalletId,
+            networkMode,
+            addressType,
+            accountId,
+          })
+        } else {
+          await loadDescriptorWalletAndSync({
+            password: walletPassword,
+            walletId: activeWalletId,
+            networkMode,
+            addressType,
+            accountId,
+            awaitSync: false,
+            onSyncError: (err) =>
+              reportWalletSyncError('unlock-background-sync', err),
+          })
+        }
+      } finally {
+        setManualWalletUnlockInFlight(false)
       }
     },
     onSuccess: () => {

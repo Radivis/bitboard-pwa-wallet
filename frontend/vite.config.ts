@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url'
 import { defineConfig, type Plugin } from 'vite'
 import { readBitboardWalletVersion } from './common/bitboard-wallet-version'
 import { esploraViteProxyEntries } from './src/lib/esplora-service-whitelist'
+import { fiatRateViteProxyEntries } from './src/lib/fiat-rate-service-whitelist'
 import { faucetViteProxyEntries } from './src/lib/faucet-definitions'
 import { tanstackRouter } from '@tanstack/router-plugin/vite'
 import react from '@vitejs/plugin-react'
@@ -25,6 +26,22 @@ const workboxCacheId = `bitboard-wallet-${sanitizeWorkboxCacheIdSegment(readBitb
 function escapeRegExpLiteral(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
+
+const fiatRatesDevProxy = Object.fromEntries(
+  fiatRateViteProxyEntries().map((e) => [
+    e.localPrefix,
+    {
+      target: e.targetOrigin,
+      changeOrigin: true,
+      secure: true,
+      rewrite: (reqPath: string) =>
+        reqPath.replace(
+          new RegExp(`^${escapeRegExpLiteral(e.localPrefix)}`),
+          e.upstreamPathPrefix,
+        ),
+    },
+  ]),
+)
 
 const esploraDevProxy = Object.fromEntries(
   esploraViteProxyEntries().map((e) => [
@@ -77,58 +94,6 @@ function libraryArticleRouteIgnorePattern(): string {
   return `__tests__|^(?:${escapedBasenames.join('|')})\\.tsx$`
 }
 
-const SOCIAL_SITE_ORIGIN_PLACEHOLDER = '__SOCIAL_SITE_ORIGIN__'
-/** Full line in `index.html` (leading spaces + comment); replaced so og:url is not double-indented. */
-const SOCIAL_META_OG_URL_LINE = '    <!--SOCIAL_META_OG_URL-->\n'
-
-/**
- * Public origin used only in `index.html` for og:image / twitter:image (must be absolute URLs).
- * Set `VITE_SITE_ORIGIN` for the canonical HTTPS URL (especially when the public host is not
- * `*.vercel.app`). During `vercel build`, `VERCEL_URL` is usually available as a fallback.
- */
-function resolvePublicSiteOriginForSocialMeta(): string {
-  const raw = process.env.VITE_SITE_ORIGIN?.trim()
-  if (raw) {
-    if (raw.includes('"') || raw.includes("'") || raw.includes('<')) return ''
-    const noTrailingSlash = raw.replace(/\/+$/, '')
-    if (/^https:\/\//i.test(noTrailingSlash)) return noTrailingSlash
-    const host = noTrailingSlash.replace(/^\/+/, '')
-    if (!/^[a-z0-9].*$/i.test(host)) return ''
-    return `https://${host}`
-  }
-  const vercel = process.env.VERCEL_URL?.trim()
-  if (vercel && /^[a-z0-9.-]+$/i.test(vercel)) {
-    return `https://${vercel}`
-  }
-  return ''
-}
-
-/** Rewrites social meta tags so image URLs are absolute (required by X and other crawlers). */
-function injectSocialMetaSiteOrigin(): Plugin {
-  let isProductionBuild = false
-  return {
-    name: 'inject-social-meta-site-origin',
-    configResolved(config) {
-      isProductionBuild = config.command === 'build' && config.mode === 'production'
-    },
-    transformIndexHtml(html, ctx) {
-      const origin = ctx.server ? '' : resolvePublicSiteOriginForSocialMeta()
-      if (isProductionBuild && !ctx.server && origin === '') {
-        console.warn(
-          '[inject-social-meta-site-origin] Production build: set VITE_SITE_ORIGIN (canonical https URL) ' +
-            'or rely on VERCEL_URL; relative og:image is ignored by many social crawlers.',
-        )
-      }
-      let out = html.replaceAll(SOCIAL_SITE_ORIGIN_PLACEHOLDER, origin)
-      const ogUrlLine = origin
-        ? `    <meta property="og:url" content="${origin}/" />\n`
-        : ''
-      out = out.replace(SOCIAL_META_OG_URL_LINE, ogUrlLine)
-      return out
-    },
-  }
-}
-
 /** Fail `vite build` if fast Argon2 (CI) is enabled for a production bundle. */
 function rejectArgon2CiInProductionBuild(): Plugin {
   return {
@@ -153,7 +118,6 @@ export default defineConfig({
   },
   plugins: [
     rejectArgon2CiInProductionBuild(),
-    injectSocialMetaSiteOrigin(),
     tanstackRouter({
       target: 'react',
       autoCodeSplitting: true,
@@ -204,27 +168,57 @@ export default defineConfig({
     }),
   ],
   resolve: {
-    alias: {
-      '@': path.resolve(projectRoot, './src'),
-      '@common': path.resolve(projectRoot, './common'),
-      '@legal-locale': path.resolve(projectRoot, './src/lib/legal-locale.ts'),
+    alias: [
+      // Force the bare `katex` specifier to resolve to KaTeX's **ESM** entry
+      // (`katex/dist/katex.mjs`) rather than its CJS UMD entry
+      // (`katex/dist/katex.js`). `react-katex` is itself a CJS UMD bundle
+      // that does `require("katex")`, and Node's conditional-exports
+      // resolution would normally pick the CJS variant. Rolldown's CJS-to-CJS
+      // interop hoists the webpack UMD closure incorrectly: the ~343
+      // top-level `defineMacro(...)` calls register macros in one scope while
+      // the parser ends up reading a different macros table at render time —
+      // this is the same class of bug as vitejs/vite#22176. Routing the
+      // `katex` specifier to the ESM build sidesteps the CJS interop entirely
+      // and lets Rolldown bundle KaTeX as plain ESM with all side effects
+      // intact. The regex anchor keeps `katex/dist/katex.min.css` and other
+      // sub-paths unchanged.
+      {
+        find: /^katex$/,
+        replacement: path.resolve(
+          projectRoot,
+          './node_modules/katex/dist/katex.mjs',
+        ),
+      },
+      { find: '@', replacement: path.resolve(projectRoot, './src') },
+      { find: '@common', replacement: path.resolve(projectRoot, './common') },
+      {
+        find: '@legal-locale',
+        replacement: path.resolve(projectRoot, './src/lib/legal-locale.ts'),
+      },
       // Cross-project-safe aliases — the same module identifiers also resolve
       // from the landing-page Vite/TS configs, so files under `frontend/common/`
       // can import them without depending on `@/...` (which differs per project root).
-      '@legal-entity-fields': path.resolve(
-        projectRoot,
-        './src/components/LegalEntityFields.tsx',
-      ),
-      '@legal-entity': path.resolve(
-        projectRoot,
-        './src/legal-entity/legal-entity.ts',
-      ),
-    },
+      {
+        find: '@legal-entity-fields',
+        replacement: path.resolve(
+          projectRoot,
+          './src/components/LegalEntityFields.tsx',
+        ),
+      },
+      {
+        find: '@legal-entity',
+        replacement: path.resolve(
+          projectRoot,
+          './src/legal-entity/legal-entity.ts',
+        ),
+      },
+    ],
   },
   server: {
     port: 3000,
     proxy: {
       ...esploraDevProxy,
+      ...fiatRatesDevProxy,
       ...faucetDevProxy,
     },
   },
@@ -246,6 +240,13 @@ export default defineConfig({
     // Put each top-level package in its own async chunk so no single vendor blob embeds unrelated dependencies.
     rolldownOptions: {
       output: {
+        // Force module evaluation order to follow the static dependency graph.
+        // Defends against the rolldown/rolldown#8812 (TinyMCE) /
+        // rolldown/rolldown#9225 (@noble/curves+@noble/hashes) class of bug
+        // where chunk extraction reorders side-effect modules across vendor
+        // chunks. Cheap insurance — see also the `katex` alias under
+        // `resolve.alias` for the actual KaTeX-specific fix.
+        strictExecutionOrder: true,
         codeSplitting: {
           minSize: 20_000,
           groups: [

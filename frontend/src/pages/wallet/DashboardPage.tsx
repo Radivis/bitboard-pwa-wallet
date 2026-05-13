@@ -28,6 +28,8 @@ import { WalletUnlockOrNearZeroLoading } from '@/components/WalletUnlockOrNearZe
 import { TransactionItem } from '@/components/TransactionItem'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
+import { BitcoinFiatDenominationSwitch } from '@/components/BitcoinFiatDenominationSwitch'
+import { FiatAmountDisplay } from '@/components/FiatAmountDisplay'
 import { balanceInfoToOnChainDisplay } from '@/lib/onchain-balance-display'
 import {
   runIncrementalDashboardWalletSync,
@@ -48,6 +50,8 @@ import { useFeatureStore } from '@/stores/featureStore'
 import { isLightningSupported } from '@/lib/lightning-utils'
 import { mergeAndSortDashboardActivity } from '@/lib/lightning-dashboard-sync'
 import { LightningPaymentItem } from '@/components/LightningPaymentItem'
+import { useFiatDenominationStore } from '@/stores/fiatDenominationStore'
+import { useMainnetFiatRatesQuery } from '@/hooks/useMainnetFiatRatesQuery'
 
 function ImportInitialSyncErrorBanner() {
   const networkMode = useWalletStore((s) => s.networkMode)
@@ -177,6 +181,85 @@ function BalanceCard() {
     return times.reduce((a, b) => (a > b ? a : b))
   }, [lightningBalanceRows])
 
+  const fiatDenominationMode = useFiatDenominationStore(
+    (s) => s.fiatDenominationMode,
+  )
+  const defaultFiatCurrency = useFiatDenominationStore(
+    (s) => s.defaultFiatCurrency,
+  )
+  const fiatRatesQuery = useMainnetFiatRatesQuery()
+  const btcPriceInFiat = fiatRatesQuery.data?.btcPriceInFiat
+  const mainnetFiatLayout =
+    networkMode === 'mainnet' && fiatDenominationMode
+
+  function renderOnChainHeadline() {
+    if (mainnetFiatLayout) {
+      return (
+        <>
+          <div className="space-y-1">
+            <FiatAmountDisplay
+              amountSats={primarySats}
+              btcPriceInFiat={btcPriceInFiat}
+              currency={defaultFiatCurrency}
+              size="lg"
+              data-testid="dashboard-onchain-balance-amount"
+              rateLoading={fiatRatesQuery.isPending}
+            />
+          </div>
+          <div className="space-y-1">
+            <BitcoinAmountDisplay
+              amountSats={primarySats}
+              size="md"
+              allowUnitToggle={false}
+              className="text-muted-foreground"
+            />
+          </div>
+        </>
+      )
+    }
+    return (
+      <BitcoinAmountDisplay
+        amountSats={primarySats}
+        size="lg"
+        data-testid="dashboard-onchain-balance-amount"
+      />
+    )
+  }
+
+  function renderLightningTotalHeadline() {
+    if (mainnetFiatLayout) {
+      return (
+        <>
+          <div className="space-y-1">
+            <FiatAmountDisplay
+              amountSats={lnTotalSats}
+              btcPriceInFiat={btcPriceInFiat}
+              currency={defaultFiatCurrency}
+              size="lg"
+              className="text-2xl"
+              rateLoading={fiatRatesQuery.isPending}
+            />
+          </div>
+          <div className="space-y-1">
+            <BitcoinAmountDisplay
+              amountSats={lnTotalSats}
+              size="md"
+              allowUnitToggle={false}
+              className="text-xl text-muted-foreground"
+            />
+          </div>
+        </>
+      )
+    }
+    return (
+      <BitcoinAmountDisplay
+        amountSats={lnTotalSats}
+        size="lg"
+        className="text-2xl"
+      />
+    )
+  }
+
   return (
     <InfomodeWrapper
       infoId="dashboard-balance-card"
@@ -186,12 +269,17 @@ function BalanceCard() {
     >
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <CardTitle className="flex items-center gap-2">
               <Wallet className="h-5 w-5" />
               Balance
             </CardTitle>
-            <Badge variant="outline">{NETWORK_LABELS[networkMode]}</Badge>
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              {networkMode === 'mainnet' ? (
+                <BitcoinFiatDenominationSwitch className="shrink-0" />
+              ) : null}
+              <Badge variant="outline">{NETWORK_LABELS[networkMode]}</Badge>
+            </div>
           </div>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -199,11 +287,7 @@ function BalanceCard() {
             <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
               On-chain
             </p>
-            <BitcoinAmountDisplay
-              amountSats={primarySats}
-              size="lg"
-              data-testid="dashboard-onchain-balance-amount"
-            />
+            {renderOnChainHeadline()}
             {onChainDisplay.showBreakdown && (
               <ul className="mt-3 space-y-1.5 text-sm">
                 {onChainDisplay.confirmedSats > 0 && (
@@ -281,11 +365,7 @@ function BalanceCard() {
                     Total across {lightningBalanceRows.length} connected wallets
                   </p>
                 )}
-                <BitcoinAmountDisplay
-                  amountSats={lnTotalSats}
-                  size="lg"
-                  className="text-2xl"
-                />
+                {renderLightningTotalHeadline()}
                 <ul className="mt-3 space-y-1.5 border-t border-border pt-3 text-sm">
                   {lightningBalanceRows.map((row) => (
                     <li
@@ -376,7 +456,6 @@ function SyncButton({
         activeWalletId,
       })
       setWalletStatus('unlocked')
-      toast.success('Wallet synced')
     } catch (err) {
       setWalletStatus('unlocked')
       console.error('Dashboard sync failed', err)
