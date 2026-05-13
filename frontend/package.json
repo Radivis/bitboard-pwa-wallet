@@ -44,7 +44,7 @@
     "date-fns": "4.1.0",
     "jszip": "3.10.1",
     "katex": "0.16.45",
-    "kysely": "0.28.16",
+    "kysely": "0.29.0",
     "kysely-wasqlite-worker": "1.2.1",
     "lucide-react": "1.8.0",
     "qr-scanner": "1.4.2",
