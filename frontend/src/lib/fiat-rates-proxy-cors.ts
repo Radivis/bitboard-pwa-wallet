@@ -1,11 +1,15 @@
 /**
- * CORS allowlist for `/api/fiat-rates` — lives **outside** `api/` so files here are never treated as
- * Vercel serverless entrypoints (see `vercel.json` `functions` globs). Do not import `src/` from
- * this module.
+ * CORS allowlist for the `/api/fiat-rates` Vercel handler. Reflect
+ * `Access-Control-Allow-Origin` only for these origins (never `*`).
+ *
+ * **Keep in sync with `frontend/api/fiat-rates/[...path].ts`.** The handler inlines the same
+ * logic on purpose — importing this module from `api/` broke serverless bundling (`includeFiles`
+ * + cross-tree imports are unreliable on Vercel for this project). Update both files together.
  */
 export const FIAT_RATES_PROXY_CORS_ALLOWED_ORIGINS_EXACT = [
   'https://bitboard-wallet.com',
   'https://app.bitboard-wallet.com',
+  'https://bitboard-preview.vercel.app',
 ] as const
 
 /**

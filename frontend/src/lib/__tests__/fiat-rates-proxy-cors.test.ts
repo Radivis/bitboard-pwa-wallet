@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { fiatRatesProxyCorsAllowedOrigin } from '../../../vercel-proxy-shared/fiat-rates-cors'
+import { fiatRatesProxyCorsAllowedOrigin } from '@/lib/fiat-rates-proxy-cors'
 
 describe('fiatRatesProxyCorsAllowedOrigin', () => {
   it('allows production origins', () => {
@@ -9,6 +9,12 @@ describe('fiatRatesProxyCorsAllowedOrigin', () => {
     expect(fiatRatesProxyCorsAllowedOrigin('https://app.bitboard-wallet.com')).toBe(
       'https://app.bitboard-wallet.com',
     )
+  })
+
+  it('allows the stable preview alias', () => {
+    expect(
+      fiatRatesProxyCorsAllowedOrigin('https://bitboard-preview.vercel.app'),
+    ).toBe('https://bitboard-preview.vercel.app')
   })
 
   it('allows Radivis Vercel preview host shape', () => {

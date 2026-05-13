@@ -29,12 +29,6 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": [
-    "src",
-    "api/**/*.ts",
-    "common/**/*.ts",
-    "common/**/*.tsx",
-    "vercel-proxy-shared/**/*.ts"
-  ],
+  "include": ["src", "api/**/*.ts", "common/**/*.ts", "common/**/*.tsx"],
   "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx", "src/**/*.spec.ts", "src/**/*.spec.tsx", "src/test-utils"]
 }

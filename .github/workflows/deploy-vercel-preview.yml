@@ -65,5 +65,20 @@ jobs:
         run: mkdir -p frontend/frontend
 
       - name: Deploy prebuilt (preview)
+        id: deploy-preview
         working-directory: frontend
-        run: vercel deploy --prebuilt --token="$VERCEL_TOKEN"
+        run: |
+          set -euo pipefail
+          DEPLOY_URL=$(vercel deploy --prebuilt --token="$VERCEL_TOKEN")
+          echo "Captured deploy URL: $DEPLOY_URL"
+          echo "deploy-url=$DEPLOY_URL" >> "$GITHUB_OUTPUT"
+
+      # Stable alias for the latest preview so we don't have to chase deployment-specific
+      # URLs (e.g. `bitboard-pwa-wallet-<id>-radivis-projects.vercel.app`).
+      - name: Alias latest preview deploy to bitboard-preview.vercel.app
+        working-directory: frontend
+        run: |
+          vercel alias set \
+            "${{ steps.deploy-preview.outputs.deploy-url }}" \
+            bitboard-preview.vercel.app \
+            --token="$VERCEL_TOKEN"

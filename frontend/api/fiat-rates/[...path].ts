@@ -1,20 +1,46 @@
 /**
  * Same-origin proxy for public fiat-rate APIs (allowlisted providers + paths only).
  *
- * **Keep in sync with `frontend/src/lib/fiat-rate-service-whitelist.ts`.** Provider IDs,
- * upstream bases, and path prefixes are duplicated here on purpose: wiring this handler to
- * shared `src/` modules broke the lean serverless bundle before; change both files together.
- *
- * **CORS:** `vercel-proxy-shared/fiat-rates-cors.ts` (outside `api/` — never import `src/` here).
+ * **Keep in sync with `frontend/src/lib/fiat-rate-service-whitelist.ts`** (provider IDs,
+ * upstream bases, path prefixes) **and `frontend/src/lib/fiat-rates-proxy-cors.ts`** (CORS
+ * allowlist). This handler intentionally has **zero imports outside this file** because Vercel's
+ * `includeFiles` / cross-tree NFT tracing has proven unreliable for this project; any extra
+ * import (including from `src/lib`, `api/_lib`, or a sibling `vercel-proxy-shared/` folder)
+ * caused `FUNCTION_INVOCATION_FAILED` at runtime. See `api/esplora/[...path].ts` and
+ * `api/faucet/[...path].ts` — they follow the same "fully self-contained" pattern.
  */
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { fiatRatesProxyCorsAllowedOrigin } from '../../vercel-proxy-shared/fiat-rates-cors'
 
 export const config = {
   maxDuration: 10,
 }
 
 type FiatRateProviderId = 'kraken' | 'coingecko' | 'blockchain'
+
+// Inlined from src/lib/fiat-rates-proxy-cors.ts — see file-level comment above.
+const FIAT_RATES_PROXY_CORS_ALLOWED_ORIGINS_EXACT: readonly string[] = [
+  'https://bitboard-wallet.com',
+  'https://app.bitboard-wallet.com',
+  'https://bitboard-preview.vercel.app',
+]
+
+const FIAT_RATES_PROXY_CORS_PREVIEW_ORIGIN_RE =
+  /^https:\/\/bitboard-pwa-wallet-[a-z0-9]+-radivis-projects\.vercel\.app$/i
+
+function fiatRatesProxyCorsAllowedOrigin(
+  originHeader: string | string[] | undefined,
+): string | null {
+  const raw =
+    typeof originHeader === 'string'
+      ? originHeader
+      : Array.isArray(originHeader)
+        ? originHeader[0]
+        : undefined
+  if (typeof raw !== 'string' || raw.length === 0) return null
+  if (FIAT_RATES_PROXY_CORS_ALLOWED_ORIGINS_EXACT.includes(raw)) return raw
+  if (FIAT_RATES_PROXY_CORS_PREVIEW_ORIGIN_RE.test(raw)) return raw
+  return null
+}
 
 const FIAT_RATE_PROVIDER_BASES: Record<FiatRateProviderId, string> = {
   kraken: 'https://api.kraken.com',
