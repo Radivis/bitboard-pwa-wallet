@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.1.6] - 2026-05-13
 ### Added
 - Currency conversion between Bitcoin and USD, EUR, or GBP using Kraken, CoinGecko, or Blockchain.com - selectable in Settings
+- Vercel preview build alias for the latest preview builds at https://bitboard-preview.vercel.app/
 
 ### Changed
 - Fee rate buttons now wrap on small screens

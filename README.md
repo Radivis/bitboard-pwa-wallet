@@ -78,7 +78,6 @@ Planned work is grouped into beta stages. Ordering within a stage is approximate
 ### Early Beta Stage
 
 - Cleaning up the codebase after the rapid iteration that lead to the current and somewhat messy state
-- Currency conversion
 - Use of global state for forms, so switching pages does not reset them
 - Raw hex data inspector
 - Support for BIP-39 passphrase ("25th word")
