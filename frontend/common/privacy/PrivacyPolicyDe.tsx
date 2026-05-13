@@ -98,13 +98,16 @@ export function PrivacyPolicyDe() {
       </p>
       <p>
         In der <strong>auf Vercel gehosteten Produktionsversion</strong> umfasst das Deployment{' '}
-        <strong>minimale serverlose API-Routen</strong> unter <code>/api/esplora</code> und{' '}
-        <code>/api/faucet</code>, die HTTP-Anfragen aus dem Browser <strong>nur</strong> an{' '}
-        <strong>auf einer Positivliste stehende</strong> öffentliche Esplora- und (für Testnetze)
-        Faucet-Websites <strong>weiterleiten</strong>. Dies dient dazu, dass die PWA diese
-        Drittanbieter aus dem Browser heraus ohne Cross-Origin-Probleme erreichen kann. Die Routen
-        leiten Anfragen und Antworten weiter; sie implementieren keine Wallet-Logik und werden nicht
-        genutzt, um Ihre Wiederherstellungsdaten zu speichern.
+        <strong>minimale serverlose API-Routen</strong> unter <code>/api/esplora</code>,{' '}
+        <code>/api/fiat-rates</code> und <code>/api/faucet</code>, die HTTP-Anfragen aus dem Browser{' '}
+        <strong>nur</strong> an <strong>auf Positivlisten stehende</strong> Drittanbieter{' '}
+        <strong>weiterleiten</strong>: öffentliche Esplora-Dienste und (für Testnetze) Faucet-Websites
+        sowie — für die <strong>optionale Mainnet-Anzeige in Fiat-Nennung</strong> — die öffentlichen
+        Ticker-APIs von <strong>Kraken</strong>, <strong>CoinGecko</strong> oder{' '}
+        <strong>Blockchain.com</strong> (je nach dem unter <strong>Einstellungen</strong> gewählten{' '}
+        <strong>Wechselkurs-Dienst</strong>). Dies dient dem Erreichen dieser Hosts aus dem Browser ohne
+        Cross-Origin-Probleme. Die Routen leiten Anfragen und Antworten weiter; sie implementieren keine
+        Wallet-Logik und werden nicht genutzt, um Ihre Wiederherstellungsdaten zu speichern.
       </p>
       <p>
         Wallet-relevante Daten werden in einer <strong>SQLite</strong>-Datenbank im{' '}
@@ -143,7 +146,7 @@ export function PrivacyPolicyDe() {
         verschwinden beim Schließen des Tabs; sie enthalten keine personenbezogenen Inhalte.
       </p>
 
-      <h2>5. Netzwerkzugriff (Esplora und Test-Faucets)</h2>
+      <h2>5. Netzwerkzugriff (Esplora, Wechselkurse und Test-Faucets)</h2>
       <p>
         Damit die App Blockchain-Informationen abrufen kann, baut sie Verbindungen zu den von Ihnen
         unter <strong>Einstellungen</strong> konfigurierten <strong>Esplora</strong>-Endpunkten auf.
@@ -171,6 +174,20 @@ export function PrivacyPolicyDe() {
         netzwerkweite Gebühreninformationen und enthalten keine Angaben zu Ihrer konkreten Transaktion,
         die Anfrage läuft jedoch an denselben <strong>Esplora-Host</strong> wie andere Esplora-Aufrufe —
         mit denselben Auswirkungen für Verbindungsmetadaten (z. B. IP-Adresse; bei Proxy-Nutzung auch Vercel).
+      </p>
+      <p>
+        Wenn Sie auf dem <strong>Mainnet</strong> Beträge in <strong>Fiat-Nennung</strong> anzeigen (oder
+        entsprechende Umrechnungen für die Darstellung nutzen), fordert die App{' '}
+        <strong>Bitcoin-Spotpreise</strong> beim <strong>öffentlichen Ticker-Dienst</strong> an, den Sie
+        unter <strong>Einstellungen</strong> wählen — <strong>Kraken</strong>, <strong>CoinGecko</strong>{' '}
+        oder <strong>Blockchain.com</strong>. Die gehostete PWA nutzt dazu <strong>same-origin</strong>-URLs
+        unter <code>/api/fiat-rates/…</code>, <strong>Vercel</strong> leitet die Anfragen an die jeweilige
+        öffentliche API weiter (dieselbe Proxy-Idee wie bei Esplora). Es werden <strong>keine API-Schlüssel</strong>{' '}
+        übermittelt. Ihre <strong>IP-Adresse</strong> und übliche technische Metadaten sind für den{' '}
+        <strong>Betreiber dieses Ticker-Dienstes</strong> (und bei Proxy-Nutzung für <strong>Vercel</strong>)
+        sichtbar. Diese Kurse dienen <strong>ausschließlich der indikativen Darstellung und näherungsweisen
+        Umrechnung in der Benutzeroberfläche</strong>; sie werden nicht zur Verwahrung oder zum Veranlassen
+        von Buchungen genutzt.
       </p>
       <p>
         Wenn Sie <strong>Testnet- oder Signet-Faucets</strong> nutzen, kann die gehostete
@@ -278,8 +295,8 @@ export function PrivacyPolicyDe() {
       <ul className="list-disc space-y-2 pl-5">
         <li>
           <strong>Technische Hosting-Protokolle bei Vercel</strong> (IP-Adressen, Zugriffsdaten u. a.),
-          einschließlich der gehosteten Proxy-Routen <code>/api/esplora</code> und{' '}
-          <code>/api/faucet</code>, wenn diese URLs aufgerufen werden:{' '}
+          einschließlich der gehosteten Proxy-Routen <code>/api/esplora</code>,{' '}
+          <code>/api/fiat-rates</code> und <code>/api/faucet</code>, wenn diese URLs aufgerufen werden:{' '}
           <strong>Art. 6 Abs. 1 lit. f DSGVO</strong> (berechtigtes Interesse an einem sicheren und
           stabilen Hosting sowie an der für die Browser-App erforderlichen technischen
           Weiterleitung). Die Verarbeitung erfolgt im Auftrag des Betreibers zur Erbringung des
@@ -300,7 +317,8 @@ export function PrivacyPolicyDe() {
           ist, um den vom Nutzer gewünschten Dienst zu erbringen).
         </li>
         <li>
-          <strong>Verbindungen zu Esplora, positiv gelisteten Test-Faucets und Nostr Wallet Connect</strong>:{' '}
+          <strong>Verbindungen zu Esplora, positiv gelisteten Fiat-Spot-Ticker-Diensten (sofern Sie
+          Fiat-Nennung auf dem Mainnet nutzen), positiv gelisteten Test-Faucets und Nostr Wallet Connect</strong>:{' '}
           <strong>Art. 6 Abs. 1 lit. f DSGVO</strong> (berechtigtes Interesse an der Funktionsfähigkeit
           der gewünschten Wallet-, Lab- und Lightning-Funktionen).
         </li>
@@ -321,14 +339,22 @@ export function PrivacyPolicyDe() {
           <strong>Hosting-Anbieter:</strong> <strong>Vercel Inc.</strong> (USA) sowie die dort
           genutzten Infrastrukturanbieter, im Zusammenhang mit der Auslieferung der Website und der
           App — einschließlich der technischen Verarbeitung von HTTP-Anfragen, die durch die oben
-          genannten Proxy-Routen <code>/api/esplora</code> und <code>/api/faucet</code> der gehosteten
-          PWA laufen.
+          genannten Proxy-Routen <code>/api/esplora</code>, <code>/api/fiat-rates</code> und{' '}
+          <code>/api/faucet</code> der gehosteten PWA laufen.
         </li>
         <li>
           <strong>Esplora-Betreiber:</strong> der Betreiber des in den{' '}
           <strong>Einstellungen</strong> konfigurierten Esplora-Endpunkts, im Zusammenhang mit den von
           Ihnen ausgelösten Konto-, Transaktions- und Gebührenschätzungs-Abfragen (ob Ihr Browser
           direkt oder über den Same-Origin-Proxy für positiv gelistete Basis-URLs darauf zugreift).
+        </li>
+        <li>
+          <strong>Betreiber des Fiat-Spot-Ticker-Dienstes:</strong> sofern Sie auf dem{' '}
+          <strong>Mainnet</strong> <strong>Fiat-Nennung</strong> nutzen, der Betreiber der öffentlichen
+          Ticker-API, die Sie unter <strong>Einstellungen</strong> wählen (<strong>Kraken</strong>,{' '}
+          <strong>CoinGecko</strong> oder <strong>Blockchain.com</strong>), im Zusammenhang mit diesen
+          Preisabfragen (Ihr Browser ruft <code>/api/fiat-rates/…</code> unter derselben Origin auf; die
+          gehostete Auslieferung leitet an den jeweiligen Anbieter weiter).
         </li>
         <li>
           <strong>Betreiber öffentlicher Test-Faucets:</strong> der Betreiber der jeweiligen Faucet-Site,
@@ -362,9 +388,11 @@ export function PrivacyPolicyDe() {
         <code>sessionStorage</code> des Browsers; optional ein lokal in OPFS abgelegter
         Migrations-Fehlerbericht (nur wenn eine Schema-Migration fehlgeschlagen ist); Daten, die im
         Rahmen der von Ihnen ausgelösten Anfragen an Esplora (einschließlich{' '}
-        <strong><code>/fee-estimates</code></strong>-Aufrufen bei On-Chain-Versendung), öffentliche Test-Faucets sowie
+        <strong><code>/fee-estimates</code></strong>-Aufrufen bei On-Chain-Versendung), positiv gelistete
+        öffentliche Fiat-Spot-Ticker-APIs, sofern Sie Fiat-Nennung auf dem Mainnet nutzen, öffentliche
+        Test-Faucets sowie
         NWC-/Lightning-Dritte sichtbar oder verarbeitet werden; HTTP-Metadaten, die Vercel bei Nutzung
-        der Proxy-Pfade <code>/api/esplora</code> oder <code>/api/faucet</code> der gehosteten App
+        der Proxy-Pfade <code>/api/esplora</code>, <code>/api/fiat-rates</code> oder <code>/api/faucet</code> der gehosteten App
         verarbeitet; sowie Kontaktdaten in einer E-Mail-Korrespondenz mit dem Verantwortlichen.
       </p>
       <p>
@@ -485,7 +513,7 @@ export function PrivacyPolicyDe() {
       <p>
         Da <strong>Schlüssel und die zentrale Wallet-Logik</strong> <strong>nur auf Ihrem Gerät</strong>{' '}
         laufen (die gehostete Infrastruktur beschränkt sich auf statische Auslieferung und die oben
-        beschriebenen schlanken HTTP-Proxys), haben Sie in der Regel die{' '}
+        beschriebenen schlanken HTTP-Proxys für Esplora, Wechselkurse und Faucets), haben Sie in der Regel die{' '}
         <strong>maximale Kontrolle über Ihre lokalen Daten</strong>: Sie können jederzeit die lokal
         gespeicherten Daten der App im Browser entfernen und damit die beschriebene lokale
         Verarbeitung beenden. Das Leeren der Website-Daten im Browser ist ein

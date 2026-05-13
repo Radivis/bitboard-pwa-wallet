@@ -91,12 +91,15 @@ export function PrivacyPolicyEn() {
       </p>
       <p>
         On the <strong>production build hosted on Vercel</strong>, the deployment includes{' '}
-        <strong>minimal serverless API routes</strong> under <code>/api/esplora</code> and{' '}
-        <code>/api/faucet</code> that <strong>proxy</strong> browser HTTP requests only to{' '}
-        <strong>allowlisted</strong> public Esplora and (for test networks) faucet websites. This exists
-        so the PWA can talk to those third parties from the browser without running into cross-origin
-        restrictions. The routes forward requests and responses; they do not implement wallet logic and
-        are not used to store your recovery material.
+        <strong>minimal serverless API routes</strong> under <code>/api/esplora</code>,{' '}
+        <code>/api/fiat-rates</code>, and <code>/api/faucet</code> that <strong>proxy</strong>{' '}
+        browser HTTP requests only to <strong>allowlisted</strong> third parties: public Esplora and
+        (for test networks) faucet sites, and — for <strong>optional mainnet fiat denomination</strong>{' '}
+        — the public ticker APIs of <strong>Kraken</strong>, <strong>CoinGecko</strong>, or{' '}
+        <strong>Blockchain.com</strong> (whichever <strong>currency rate service</strong> you select
+        under <strong>Settings</strong>). This exists so the PWA can reach those hosts from the browser
+        without cross-origin restrictions. The routes forward requests and responses; they do not
+        implement wallet logic and are not used to store your recovery material.
       </p>
       <p>
         Wallet-related data is stored in a <strong>SQLite</strong> database in the{' '}
@@ -131,7 +134,7 @@ export function PrivacyPolicyEn() {
         contain personal data.
       </p>
 
-      <h2>5. Network access (Esplora and test faucets)</h2>
+      <h2>5. Network access (Esplora, fiat rates, and test faucets)</h2>
       <p>
         To fetch blockchain information, the app connects to the <strong>Esplora</strong> endpoints
         you configure under <strong>Settings</strong>. Esplora is a block-explorer API (an HTTP(S)
@@ -158,6 +161,20 @@ export function PrivacyPolicyEn() {
         fee hints, not your transaction details, but the request goes to the{' '}
         <strong>same endpoint host</strong> as other Esplora traffic, so the same connection metadata applies
         (IP address etc., and Vercel when the hosted proxy is used).
+      </p>
+      <p>
+        When you show balances or amounts in <strong>fiat denomination</strong> on <strong>mainnet</strong>{' '}
+        (or use flows that rely on the same indicative conversion), the app requests{' '}
+        <strong>Bitcoin spot prices</strong> from the <strong>allowlisted public ticker service</strong>{' '}
+        you pick under <strong>Settings</strong> — <strong>Kraken</strong>, <strong>CoinGecko</strong>, or{' '}
+        <strong>Blockchain.com</strong>. On the hosted PWA, the browser calls{' '}
+        <strong>same-origin</strong> URLs under <code>/api/fiat-rates/…</code>, and{' '}
+        <strong>Vercel</strong> forwards those requests to that provider’s public API (the same proxy
+        idea as for Esplora). <strong>No API keys</strong> are sent. Your <strong>IP address</strong>{' '}
+        and usual technical metadata are visible to the <strong>operator of that ticker service</strong>{' '}
+        (and to <strong>Vercel</strong> when the hosted proxy is used). These prices are{' '}
+        <strong>for indicative display and approximate conversion in the UI only</strong>; they do not
+        custody or move funds.
       </p>
       <p>
         When you use <strong>testnet or signet faucets</strong>, the hosted app may
@@ -258,10 +275,11 @@ export function PrivacyPolicyEn() {
       <ul className="list-disc space-y-2 pl-5">
         <li>
           <strong>Technical hosting logs at Vercel</strong> (IP addresses, access data, etc.),
-          including for the hosted app’s <code>/api/esplora</code> and <code>/api/faucet</code> proxy
-          routes when those URLs are invoked: <strong>Art. 6(1)(f) GDPR</strong> (legitimate interests
-          in secure and stable hosting and in providing the proxied connectivity the app needs in the
-          browser). Processing is carried out on the operator’s behalf to provide the hosting service.
+          including for the hosted app’s <code>/api/esplora</code>, <code>/api/fiat-rates</code>, and{' '}
+          <code>/api/faucet</code> proxy routes when those URLs are invoked:{' '}
+          <strong>Art. 6(1)(f) GDPR</strong> (legitimate interests in secure and stable hosting and in
+          providing the proxied connectivity the app needs in the browser). Processing is carried out on
+          the operator’s behalf to provide the hosting service.
         </li>
         <li>
           <strong>Storing the language preference in localStorage</strong> (key{' '}
@@ -277,7 +295,8 @@ export function PrivacyPolicyEn() {
           the service the user wants).
         </li>
         <li>
-          <strong>Connections to Esplora endpoints, allowlisted test faucets, and Nostr Wallet Connect</strong>:{' '}
+          <strong>Connections to Esplora endpoints, allowlisted fiat spot-ticker providers (when you use
+          fiat denomination on mainnet), allowlisted test faucets, and Nostr Wallet Connect</strong>:{' '}
           <strong>Art. 6(1)(f) GDPR</strong> (legitimate interests in the functionality of the wallet,
           Lab test networks, and Lightning features you use).
         </li>
@@ -297,13 +316,21 @@ export function PrivacyPolicyEn() {
           <strong>Hosting provider:</strong> <strong>Vercel Inc.</strong> (USA) and the underlying
           infrastructure providers, in connection with delivering the website and the app — including,
           for the hosted PWA, technically processing HTTP requests that pass through the{' '}
-          <code>/api/esplora</code> and <code>/api/faucet</code> proxy routes described above.
+          <code>/api/esplora</code>, <code>/api/fiat-rates</code>, and <code>/api/faucet</code> proxy
+          routes described above.
         </li>
         <li>
           <strong>Esplora operator(s):</strong> the operator of the Esplora-style endpoint{' '}
           <strong>you configure in Settings</strong>, in connection with balance, transaction, and{' '}
           fee-estimate queries you initiate (whether your browser reaches them directly or via the hosted
           same-origin proxy for allowlisted bases).
+        </li>
+        <li>
+          <strong>Fiat spot-rate provider:</strong> when you use <strong>fiat denomination</strong> on
+          mainnet, the operator of the public ticker API you select in <strong>Settings</strong> (
+          <strong>Kraken</strong>, <strong>CoinGecko</strong>, or <strong>Blockchain.com</strong>), in
+          connection with those price requests (your browser calls same-origin{' '}
+          <code>/api/fiat-rates/…</code>; the hosted deployment forwards to that provider).
         </li>
         <li>
           <strong>Test-faucet operator(s):</strong> the operator(s) of the public faucet site(s) you
@@ -336,9 +363,10 @@ export function PrivacyPolicyEn() {
         dismissed banners) in the browser’s <code>sessionStorage</code>; optionally a migration
         error report stored locally in OPFS (only if a schema migration has failed); data visible to
         or processed by Esplora (including <strong>/fee-estimates</strong> calls when you use on-chain Send),
-        public test faucets, and NWC/Lightning third parties in connection
-        with requests you initiate; HTTP metadata processed by Vercel when you use the hosted app’s{' '}
-        <code>/api/esplora</code> or <code>/api/faucet</code> proxies; and contact data contained in
+        allowlisted fiat spot-ticker APIs when you use fiat denomination on mainnet, public test
+        faucets, and NWC/Lightning third parties in connection with requests you initiate; HTTP metadata
+        processed by Vercel when you use the hosted app’s <code>/api/esplora</code>,{' '}
+        <code>/api/fiat-rates</code>, or <code>/api/faucet</code> proxies; and contact data contained in
         any email correspondence with the controller.
       </p>
       <p>
@@ -451,7 +479,8 @@ export function PrivacyPolicyEn() {
       </p>
       <p>
         Because wallet <strong>keys and core wallet logic</strong> run <strong>only on your device</strong>{' '}
-        (hosted infrastructure is limited to static delivery and the thin HTTP proxies above), you
+        (hosted infrastructure is limited to static delivery and the thin HTTP proxies for Esplora,
+        faucets, and fiat rates above), you
         generally have <strong>maximum control over your local data</strong>: you can remove locally stored app
         data in your browser at any time and thereby end the local processing described here.
         Clearing site data in the browser is one way to do that; for a focused wipe of this app&apos;s
