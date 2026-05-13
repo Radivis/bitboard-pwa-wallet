@@ -10,6 +10,10 @@
   "rewrites": [
     { "source": "/api/esplora/:path*", "destination": "/api/esplora/[...path]" },
     { "source": "/api/faucet/:path*", "destination": "/api/faucet/[...path]" },
+    {
+      "source": "/api/fiat-rates/:path*",
+      "destination": "/api/fiat-rates/[...path]"
+    },
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ],
   "headers": [
