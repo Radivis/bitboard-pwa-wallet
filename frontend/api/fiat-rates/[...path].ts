@@ -4,9 +4,11 @@
  * **Keep in sync with `frontend/src/lib/fiat-rate-service-whitelist.ts`.** Provider IDs,
  * upstream bases, and path prefixes are duplicated here on purpose: wiring this handler to
  * shared `src/` modules broke the lean serverless bundle before; change both files together.
+ *
+ * **CORS allowlist:** `api/_lib/fiat-rates-proxy-cors.ts` only — never import other `src/` code here.
  */
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { fiatRatesProxyCorsAllowedOrigin } from '../../src/lib/fiat-rates-proxy-cors'
+import { fiatRatesProxyCorsAllowedOrigin } from '../_lib/fiat-rates-proxy-cors'
 
 export const config = {
   maxDuration: 10,
