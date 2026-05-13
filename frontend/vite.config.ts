@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url'
 import { defineConfig, type Plugin } from 'vite'
 import { readBitboardWalletVersion } from './common/bitboard-wallet-version'
 import { esploraViteProxyEntries } from './src/lib/esplora-service-whitelist'
+import { fiatRateViteProxyEntries } from './src/lib/fiat-rate-service-whitelist'
 import { faucetViteProxyEntries } from './src/lib/faucet-definitions'
 import { tanstackRouter } from '@tanstack/router-plugin/vite'
 import react from '@vitejs/plugin-react'
@@ -25,6 +26,22 @@ const workboxCacheId = `bitboard-wallet-${sanitizeWorkboxCacheIdSegment(readBitb
 function escapeRegExpLiteral(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
+
+const fiatRatesDevProxy = Object.fromEntries(
+  fiatRateViteProxyEntries().map((e) => [
+    e.localPrefix,
+    {
+      target: e.targetOrigin,
+      changeOrigin: true,
+      secure: true,
+      rewrite: (reqPath: string) =>
+        reqPath.replace(
+          new RegExp(`^${escapeRegExpLiteral(e.localPrefix)}`),
+          e.upstreamPathPrefix,
+        ),
+    },
+  ]),
+)
 
 const esploraDevProxy = Object.fromEntries(
   esploraViteProxyEntries().map((e) => [
@@ -201,6 +218,7 @@ export default defineConfig({
     port: 3000,
     proxy: {
       ...esploraDevProxy,
+      ...fiatRatesDevProxy,
       ...faucetDevProxy,
     },
   },

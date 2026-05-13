@@ -15,6 +15,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+## [0.1.6] - 2026-05-13
+### Changed
+- Fee rate buttons now wrap on small screens
+
+### Fixed
+- Fixed duplicate sync processes on startup
+- All LaTeX formulas and symbols should now actually be displayed properly in production
+- Paths for open graph images are now hardcoded to the assets on the landing page bypassing the unreliable domain injection during build
+
 ## [0.1.5] - 2026-05-09
 
 ### Added

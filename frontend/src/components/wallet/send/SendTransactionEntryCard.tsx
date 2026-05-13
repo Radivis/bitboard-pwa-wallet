@@ -1,7 +1,7 @@
 import type { ComponentProps } from 'react'
 import { useState } from 'react'
 import { Link } from '@tanstack/react-router'
-import { ArrowUpRight, ScanQrCode } from 'lucide-react'
+import { AlertTriangle, ArrowUpRight, ScanQrCode } from 'lucide-react'
 import { PageHeader } from '@/components/PageHeader'
 import { SendLightningWalletPicker } from '@/components/wallet/send/SendLightningWalletPicker'
 import { SendOnChainFeeSection } from '@/components/wallet/send/SendOnChainFeeSection'
@@ -18,6 +18,10 @@ import type { SendAmountUnit } from '@/stores/sendStore'
 import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
 import { BitcoinUnitSelect } from '@/components/BitcoinUnitSelect'
 import { RecipientQrScanModal } from '@/components/wallet/send/RecipientQrScanModal'
+import { BitcoinFiatDenominationSwitch } from '@/components/BitcoinFiatDenominationSwitch'
+import { FiatAmountDisplay } from '@/components/FiatAmountDisplay'
+import type { SupportedDefaultFiatCurrency } from '@/lib/supported-fiat-currencies'
+import { fiatAmountInputPlaceholder } from '@/lib/format-fiat-display'
 
 type LightningWalletPickerProps = ComponentProps<typeof SendLightningWalletPicker>
 
@@ -73,6 +77,12 @@ export function SendTransactionEntryCard({
   canBuild,
   onSubmitBuild,
   onApplyScannedPayload,
+  mainnetFiatMode,
+  defaultFiatCurrency,
+  btcPriceInFiat,
+  fiatRatesLoading,
+  parsedAmountSats,
+  onFiatModeUserToggle,
 }: {
   pageTitle: string
   cardTitle: string
@@ -122,12 +132,83 @@ export function SendTransactionEntryCard({
   canBuild: boolean
   onSubmitBuild: () => void
   onApplyScannedPayload: (raw: string) => void
+  /** Mainnet && persisted fiat denomination mode. */
+  mainnetFiatMode: boolean
+  defaultFiatCurrency: SupportedDefaultFiatCurrency
+  btcPriceInFiat: number | null | undefined
+  fiatRatesLoading: boolean
+  /** Parsed sats from the amount field (fiat or BTC) for readonly BTC / validation display. */
+  parsedAmountSats: number
+  onFiatModeUserToggle?: (nextFiatMode: boolean) => void
 }) {
   const [recipientScanOpen, setRecipientScanOpen] = useState(false)
+
+  const hideEditableAmountForZeroMainnet =
+    networkMode === 'mainnet' &&
+    !isLabWithNoBalance &&
+    ((!isLightningSendMode && confirmedBalance <= 0) ||
+      (isLightningSendMode &&
+        needsUserLightningAmount &&
+        selectedLnBalanceQuery?.isSuccess === true &&
+        (selectedLnBalanceSats ?? 0) <= 0))
+
+  const showMainnetZeroBalanceWarning =
+    hideEditableAmountForZeroMainnet &&
+    (needsUserLightningAmount || !isLightningSendMode)
+
+  const showBip11WithZeroBalance =
+    hideEditableAmountForZeroMainnet &&
+    isLightningSendMode &&
+    !needsUserLightningAmount
+
+  const useFiatAmountField =
+    mainnetFiatMode &&
+    !hideEditableAmountForZeroMainnet &&
+    (needsUserLightningAmount || !isLightningSendMode)
+
+  function spendableAmountRows(balanceSats: number) {
+    if (mainnetFiatMode && btcPriceInFiat != null && btcPriceInFiat > 0) {
+      return (
+        <div className="space-y-1">
+          <div>
+            <FiatAmountDisplay
+              amountSats={balanceSats}
+              btcPriceInFiat={btcPriceInFiat}
+              currency={defaultFiatCurrency}
+              size="sm"
+              className="inline text-muted-foreground"
+            />
+          </div>
+          <div>
+            <BitcoinAmountDisplay
+              amountSats={balanceSats}
+              size="sm"
+              className="inline text-muted-foreground"
+              allowUnitToggle={false}
+            />
+          </div>
+        </div>
+      )
+    }
+    return (
+      <BitcoinAmountDisplay
+        amountSats={balanceSats}
+        size="sm"
+        className="inline text-muted-foreground"
+      />
+    )
+  }
 
   return (
     <div className="space-y-6">
       <PageHeader title={pageTitle} icon={ArrowUpRight} />
+
+      {networkMode === 'mainnet' ? (
+        <BitcoinFiatDenominationSwitch
+          disabled={isPending}
+          onFiatModeChange={onFiatModeUserToggle}
+        />
+      ) : null}
 
       <Card>
         <CardHeader>
@@ -265,63 +346,133 @@ export function SendTransactionEntryCard({
                       ? 'Amount (from invoice)'
                       : 'Amount'}
                 </Label>
-                {(needsUserLightningAmount || !isLightningSendMode) && (
-                  <BitcoinUnitSelect
-                    value={amountUnit}
-                    onChange={onAmountUnitChange}
-                    disabled={isPending}
-                    aria-label="Unit for amount entry"
-                  />
-                )}
+                {(needsUserLightningAmount || !isLightningSendMode) &&
+                  !useFiatAmountField && (
+                    <BitcoinUnitSelect
+                      value={amountUnit}
+                      onChange={onAmountUnitChange}
+                      disabled={isPending}
+                      aria-label="Unit for amount entry"
+                    />
+                  )}
               </div>
-              {isLightningSendMode && !needsUserLightningAmount ? (
-                <p className="rounded-md border border-border bg-muted/30 px-3 py-2 text-sm tabular-nums">
-                  <BitcoinAmountDisplay
-                    amountSats={lightningPayAmountSats}
-                    size="sm"
+
+              {showMainnetZeroBalanceWarning ? (
+                <div
+                  role="alert"
+                  className="flex gap-3 rounded-lg border border-amber-500/50 bg-amber-500/10 px-3 py-3 text-sm text-amber-800 dark:border-amber-500/40 dark:text-amber-100"
+                >
+                  <AlertTriangle
+                    className="mt-0.5 h-5 w-5 shrink-0"
+                    aria-hidden
                   />
-                </p>
+                  <div>
+                    <p className="font-medium">No spendable balance</p>
+                    <p className="mt-1 text-muted-foreground">
+                      You cannot send on this network until you have funds. Receive
+                      Bitcoin first, then enter an amount here.
+                    </p>
+                  </div>
+                </div>
+              ) : isLightningSendMode && !needsUserLightningAmount ? (
+                <div className="space-y-2 rounded-md border border-border bg-muted/30 px-3 py-2 text-sm tabular-nums">
+                  {mainnetFiatMode && btcPriceInFiat != null && btcPriceInFiat > 0 ? (
+                    <>
+                      <FiatAmountDisplay
+                        amountSats={lightningPayAmountSats}
+                        btcPriceInFiat={btcPriceInFiat}
+                        currency={defaultFiatCurrency}
+                        size="sm"
+                      />
+                      <div className="text-muted-foreground">
+                        <BitcoinAmountDisplay
+                          amountSats={lightningPayAmountSats}
+                          size="sm"
+                          allowUnitToggle={false}
+                        />
+                      </div>
+                    </>
+                  ) : (
+                    <BitcoinAmountDisplay
+                      amountSats={lightningPayAmountSats}
+                      size="sm"
+                    />
+                  )}
+                  {showBip11WithZeroBalance ? (
+                    <div
+                      role="alert"
+                      className="mt-2 flex gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-2 text-xs text-amber-900 dark:text-amber-100"
+                    >
+                      <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden />
+                      <span>
+                        Not enough balance to pay this invoice. Fund your wallet
+                        first.
+                      </span>
+                    </div>
+                  ) : null}
+                </div>
               ) : (
-                <Input
-                  id="send-amount"
-                  type="text"
-                  inputMode="decimal"
-                  autoComplete="off"
-                  value={amount}
-                  onChange={(e) =>
-                    onAmountChange(e.target.value, { fromUser: true })
-                  }
-                  placeholder={amountInputPlaceholderForUnit(amountUnit)}
-                  disabled={isPending}
-                />
+                <>
+                  <Input
+                    id="send-amount"
+                    type="text"
+                    inputMode="decimal"
+                    autoComplete="off"
+                    value={amount}
+                    onChange={(e) =>
+                      onAmountChange(e.target.value, { fromUser: true })
+                    }
+                    placeholder={
+                      useFiatAmountField
+                        ? fiatAmountInputPlaceholder(defaultFiatCurrency)
+                        : amountInputPlaceholderForUnit(amountUnit)
+                    }
+                    disabled={isPending}
+                  />
+                  {mainnetFiatMode &&
+                    useFiatAmountField &&
+                    btcPriceInFiat != null &&
+                    btcPriceInFiat > 0 && (
+                      <p className="text-sm text-muted-foreground">
+                        <span className="mr-1">≈</span>
+                        <BitcoinAmountDisplay
+                          amountSats={parsedAmountSats}
+                          size="sm"
+                          className="inline"
+                          allowUnitToggle={false}
+                        />
+                      </p>
+                    )}
+                  {mainnetFiatMode && useFiatAmountField && !fiatRatesLoading && (
+                    <>
+                      {(btcPriceInFiat == null || !(btcPriceInFiat > 0)) ? (
+                        <p className="text-xs text-destructive">
+                          Exchange rate unavailable. Check your connection or rate
+                          service in Settings.
+                        </p>
+                      ) : null}
+                    </>
+                  )}
+                </>
               )}
-              <p className="text-xs text-muted-foreground">
+              <div className="text-xs text-muted-foreground">
                 {isLightningSendMode ? (
                   <>
                     Lightning wallet:{' '}
                     {selectedLnBalanceQuery?.isPending ? (
                       'Loading balance…'
                     ) : selectedLnBalanceQuery?.isSuccess ? (
-                      <BitcoinAmountDisplay
-                        amountSats={selectedLnBalanceSats ?? 0}
-                        size="sm"
-                        className="inline text-muted-foreground"
-                      />
+                      spendableAmountRows(selectedLnBalanceSats ?? 0)
                     ) : (
                       '—'
                     )}
                   </>
                 ) : (
                   <>
-                    Available:{' '}
-                    <BitcoinAmountDisplay
-                      amountSats={confirmedBalance}
-                      size="sm"
-                      className="inline text-muted-foreground"
-                    />
+                    Available: {spendableAmountRows(confirmedBalance)}
                   </>
                 )}
-              </p>
+              </div>
               {isLabWithNoBalance && !isLightningSendMode && (
                 <p className="text-xs text-amber-600 dark:text-amber-400">
                   No balance. Mine blocks or make a transaction to your wallet in

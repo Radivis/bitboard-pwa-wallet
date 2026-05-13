@@ -3,7 +3,7 @@ import { useNavigate } from '@tanstack/react-router'
 import { toast } from 'sonner'
 import { isValidSendAmountSats } from '@/components/wallet/send/send-amount'
 import { WalletUnlockOrNearZeroLoading } from '@/components/WalletUnlockOrNearZeroLoading'
-import { amountSatsFromForm } from '@/components/wallet/send/amount-sats-from-form'
+import { amountSatsFromForm, amountSatsFromSendForm } from '@/components/wallet/send/amount-sats-from-form'
 import { SendTransactionEntryCard } from '@/components/wallet/send/SendTransactionEntryCard'
 import { SendTransactionReviewStep } from '@/components/wallet/send/SendTransactionReviewStep'
 import { useWalletStore } from '@/stores/walletStore'
@@ -38,6 +38,10 @@ import {
 } from '@/hooks/useSendMutations'
 import type { PrepareOnchainSendResult } from '@/workers/crypto-api'
 import { useCryptoStore } from '@/stores/cryptoStore'
+import { useFiatDenominationStore } from '@/stores/fiatDenominationStore'
+import { useBitcoinDisplayUnitStore } from '@/stores/bitcoinDisplayUnitStore'
+import { useMainnetFiatRatesQuery } from '@/hooks/useMainnetFiatRatesQuery'
+import { formatFiatInputStringFromSats } from '@/lib/format-fiat-display'
 
 import { useSendFlowFees } from './fees'
 import { useSendFlowLightning } from './lightning'
@@ -179,9 +183,25 @@ export function SendFlow() {
     if (step === 1) setLabApplyChangeFreeBump(false)
   }, [step])
 
+  const fiatDenominationMode = useFiatDenominationStore(
+    (s) => s.fiatDenominationMode,
+  )
+  const defaultFiatCurrency = useFiatDenominationStore(
+    (s) => s.defaultFiatCurrency,
+  )
+  const mainnetFiatMode =
+    networkMode === 'mainnet' && fiatDenominationMode
+
+  const fiatRatesQuery = useMainnetFiatRatesQuery()
+  const btcPriceInFiat = fiatRatesQuery.data?.btcPriceInFiat
+
   const amountSats = useMemo(
-    () => amountSatsFromForm(amount, amountUnit),
-    [amount, amountUnit],
+    () =>
+      amountSatsFromSendForm(amount, amountUnit, {
+        useFiatAmountEntry: mainnetFiatMode,
+        btcPriceInFiat,
+      }),
+    [amount, amountUnit, mainnetFiatMode, btcPriceInFiat],
   )
 
   const normalizedRecipient = useMemo(() => {
@@ -252,7 +272,15 @@ export function SendFlow() {
     !isLabWithNoBalance &&
     (!useCustomFee || customFeeParsed !== null)
 
-  const canBuild = isLightningSendMode ? canBuildLightning : canBuildOnChain
+  const fiatRateOk =
+    !mainnetFiatMode ||
+    (isLightningSendMode && !needsUserLightningAmount) ||
+    (btcPriceInFiat != null &&
+      btcPriceInFiat > 0 &&
+      !fiatRatesQuery.isError)
+
+  const canBuild =
+    (isLightningSendMode ? canBuildLightning : canBuildOnChain) && fiatRateOk
 
   const handleSubmitBuild = useCallback(async () => {
     if (!canBuild) return
@@ -440,11 +468,45 @@ export function SendFlow() {
         recipientAndAmountFromScannedPayload(raw, amountUnit)
       setRecipient(nextRecipient)
       if (amountStr !== undefined) {
-        setAmount(amountStr, { fromUser: true })
+        if (
+          networkMode === 'mainnet' &&
+          fiatDenominationMode &&
+          btcPriceInFiat != null &&
+          btcPriceInFiat > 0
+        ) {
+          const satsFromQr = amountSatsFromForm(amountStr, amountUnit)
+          setAmount(
+            formatFiatInputStringFromSats(
+              satsFromQr,
+              btcPriceInFiat,
+              defaultFiatCurrency,
+            ),
+            { fromUser: true },
+          )
+        } else {
+          setAmount(amountStr, { fromUser: true })
+        }
       }
     },
-    [amountUnit, setRecipient, setAmount],
+    [
+      amountUnit,
+      setRecipient,
+      setAmount,
+      networkMode,
+      fiatDenominationMode,
+      btcPriceInFiat,
+      defaultFiatCurrency,
+    ],
   )
+
+  const handleFiatModeUserToggle = useCallback((nextFiatMode: boolean) => {
+    useSendStore.setState({ amount: '', onchainDustWarning: null })
+    if (!nextFiatMode) {
+      useSendStore
+        .getState()
+        .setAmountUnit(useBitcoinDisplayUnitStore.getState().defaultBitcoinUnit)
+    }
+  }, [])
 
   const isPending =
     buildMutation.isPending ||
@@ -479,6 +541,10 @@ export function SendFlow() {
         onBack={() => setStep(1)}
         onConfirmSend={handleConfirmSend}
         labConfirmSendDisabled={labConfirmSendDisabled}
+        mainnetFiatMode={mainnetFiatMode}
+        defaultFiatCurrency={defaultFiatCurrency}
+        btcPriceInFiat={btcPriceInFiat}
+        fiatRatesLoading={fiatRatesQuery.isPending}
       />
     )
   }
@@ -538,6 +604,12 @@ export function SendFlow() {
         canBuild={canBuild}
         onSubmitBuild={handleSubmitBuild}
         onApplyScannedPayload={applyScannedPayload}
+        mainnetFiatMode={mainnetFiatMode}
+        defaultFiatCurrency={defaultFiatCurrency}
+        btcPriceInFiat={btcPriceInFiat}
+        fiatRatesLoading={fiatRatesQuery.isPending}
+        parsedAmountSats={amountSats}
+        onFiatModeUserToggle={handleFiatModeUserToggle}
       />
 
       <SendFlowDustModals

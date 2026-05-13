@@ -51,7 +51,7 @@ export function SendOnChainFeeSection(props: {
       {feeEstimatesRefreshing ? (
         <p className="text-xs text-muted-foreground">Refreshing fee estimates…</p>
       ) : null}
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         {SEND_FEE_PRESETS.map((preset) => {
           const { infoTitle, infoText } = SEND_FEE_PRESET_INFOMODE[preset.label]
           const presetRate = presetSatPerVbByLabel[preset.label]
@@ -62,7 +62,7 @@ export function SendOnChainFeeSection(props: {
               infoId={`send-fee-preset-${preset.label.toLowerCase()}`}
               infoTitle={infoTitle}
               infoText={infoText}
-              className="min-w-0 flex-1"
+              className="min-w-[7.5rem] flex-1 sm:min-w-0"
             >
               <Button
                 type="button"
@@ -85,7 +85,7 @@ export function SendOnChainFeeSection(props: {
           infoId="send-fee-custom-button"
           infoTitle="Custom fee"
           infoText="Switch here when you already know the exact sat/vB you want—for example from a mempool dashboard, a node, or advice that matches current network conditions. After selecting Custom, type that number in the field below; use it if presets feel too coarse or you are following a specific recommendation."
-          className="min-w-0 flex-1"
+          className="min-w-[7.5rem] flex-1 sm:min-w-0"
         >
           <Button
             type="button"

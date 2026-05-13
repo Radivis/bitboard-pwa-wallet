@@ -251,13 +251,24 @@ export async function runIncrementalDashboardWalletSync(options: {
   password: string | null
   activeWalletId: number | null
 }): Promise<void> {
-  await syncActiveWalletAndUpdateState(options.networkMode, {
-    useFullScan: options.networkMode === 'regtest',
+  const { networkMode, password, activeWalletId } = options
+  const customUrl = await loadCustomEsploraUrl(networkMode)
+  const esploraUrl = getEsploraUrl(networkMode, customUrl)
+  /** Regtest dashboard sync uses full scan inside {@link syncActiveWalletAndUpdateState}, which already replaces the loading toast with this success message when Esplora is configured. */
+  const fullScanSuccessToastAlreadyShown =
+    networkMode === 'regtest' && esploraUrl != null
+
+  await syncActiveWalletAndUpdateState(networkMode, {
+    useFullScan: networkMode === 'regtest',
   })
   await finishDashboardSyncAfterStateUpdate({
-    ...options,
+    password,
+    activeWalletId,
     markFullScanDone: false,
   })
+  if (!fullScanSuccessToastAlreadyShown) {
+    toast.success('Wallet synced')
+  }
 }
 
 /**

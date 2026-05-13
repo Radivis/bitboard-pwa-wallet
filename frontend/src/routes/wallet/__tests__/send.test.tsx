@@ -150,6 +150,11 @@ vi.mock('@/hooks/useLightningMutations', () => ({
     isPending: false,
     mutate: vi.fn(),
   }),
+  useLightningBalancesForDashboardQuery: () => ({
+    data: { lightningBalanceRows: [], totalSats: 0 },
+    isPending: false,
+    isError: false,
+  }),
 }))
 
 vi.mock('@/hooks/useLabChainStateQuery', () => ({

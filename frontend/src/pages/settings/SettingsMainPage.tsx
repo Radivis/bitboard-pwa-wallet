@@ -18,6 +18,17 @@ import { BitcoinUnitSelect } from '@/components/BitcoinUnitSelect'
 import { useWallets } from '@/db'
 import { useFeatureStore } from '@/stores/featureStore'
 import { useBitcoinDisplayUnitStore } from '@/stores/bitcoinDisplayUnitStore'
+import { useFiatDenominationStore } from '@/stores/fiatDenominationStore'
+import {
+  SUPPORTED_DEFAULT_FIAT_CURRENCIES,
+  type SupportedDefaultFiatCurrency,
+  FIAT_CURRENCY_UI,
+} from '@/lib/supported-fiat-currencies'
+import {
+  FIAT_RATE_PROVIDER_IDS,
+  FIAT_RATE_PROVIDER_LABELS,
+  type FiatRateProviderId,
+} from '@/lib/fiat-rate-service-whitelist'
 
 export function SettingsMainPage() {
   const segwitAddressesEnabled = useFeatureStore((s) => s.segwitAddressesEnabled)
@@ -27,6 +38,12 @@ export function SettingsMainPage() {
   const setDefaultBitcoinUnit = useBitcoinDisplayUnitStore(
     (s) => s.setDefaultBitcoinUnit,
   )
+  const defaultFiatCurrency = useFiatDenominationStore((s) => s.defaultFiatCurrency)
+  const setDefaultFiatCurrency = useFiatDenominationStore(
+    (s) => s.setDefaultFiatCurrency,
+  )
+  const fiatRateProvider = useFiatDenominationStore((s) => s.fiatRateProvider)
+  const setFiatRateProvider = useFiatDenominationStore((s) => s.setFiatRateProvider)
 
   return (
     <div className="space-y-6">
@@ -89,20 +106,55 @@ export function SettingsMainPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Bitcoin amounts</CardTitle>
+          <CardTitle>Currency / unit defaults</CardTitle>
           <CardDescription>
-            Default unit for showing amounts in the app. You can still change the
-            unit on any amount by tapping its label.
+            Default Bitcoin display unit, fiat currency for mainnet conversion, and which
+            public ticker feeds indicative amounts. On mainnet you can still switch between
+            Bitcoin and fiat display on Dashboard, Send, and Receive.
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-6">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <span className="text-sm text-muted-foreground">Default unit</span>
+            <span className="text-sm text-muted-foreground">Default Bitcoin unit</span>
             <BitcoinUnitSelect
               value={defaultBitcoinUnit}
               onChange={setDefaultBitcoinUnit}
               aria-label="Default Bitcoin amount unit"
             />
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <span className="text-sm text-muted-foreground">Default fiat currency</span>
+            <select
+              className="rounded-md border border-input bg-background px-2 py-1 text-sm font-medium text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              value={defaultFiatCurrency}
+              aria-label="Default fiat currency"
+              onChange={(e) =>
+                setDefaultFiatCurrency(e.target.value as SupportedDefaultFiatCurrency)
+              }
+            >
+              {SUPPORTED_DEFAULT_FIAT_CURRENCIES.map((c) => (
+                <option key={c} value={c}>
+                  {FIAT_CURRENCY_UI[c].label} ({c})
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <span className="text-sm text-muted-foreground">Currency rate service</span>
+            <select
+              className="rounded-md border border-input bg-background px-2 py-1 text-sm font-medium text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              value={fiatRateProvider}
+              aria-label="Currency rate data provider"
+              onChange={(e) =>
+                setFiatRateProvider(e.target.value as FiatRateProviderId)
+              }
+            >
+              {FIAT_RATE_PROVIDER_IDS.map((id) => (
+                <option key={id} value={id}>
+                  {FIAT_RATE_PROVIDER_LABELS[id]}
+                </option>
+              ))}
+            </select>
           </div>
         </CardContent>
       </Card>
