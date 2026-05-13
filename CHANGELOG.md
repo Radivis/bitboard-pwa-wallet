@@ -16,6 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Security
 
 ## [0.1.6] - 2026-05-13
+### Added
+- Currency conversion between Bitcoin and USD, EUR, or GBP using Kraken, CoinGecko, or Blockchain.com - selectable in Settings
+
 ### Changed
 - Fee rate buttons now wrap on small screens
 
