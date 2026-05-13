@@ -1,10 +1,53 @@
+/**
+ * KaTeX production smoke test (Playwright, headless Chromium).
+ *
+ * Purpose
+ * -------
+ * Library articles use KaTeX via `react-katex`. When the bundle is wrong (e.g. Rolldown + CJS KaTeX),
+ * standard LaTeX macros like `\frac`, `\in`, `\mod` fail while symbols like `\cdot` may still work.
+ * `react-katex` often renders those failures as small red text (`throwOnError: false`), not always as
+ * `.katex-error`, so this script also counts descendant nodes whose computed color looks like KaTeX red.
+ *
+ * What it checks
+ * --------------
+ * Opens two math-heavy routes (ECDSA + Schnorr), waits for network idle, then reports counts and samples.
+ * Exit code `0` only when there are no `.katex-error` / `.err` matches **and** `redElementCount === 0`.
+ *
+ * How to run
+ * ----------
+ * Local production bundle (default URL matches `vite preview` without `--port`):
+ *
+ *   npm run build && npm run preview
+ *   npm run probe:katex
+ *
+ * Custom origin (e.g. another port or a Vercel preview):
+ *
+ *   PROBE_URL=https://your-deployment.example.app npm run probe:katex
+ *
+ * Vercel Deployment Protection: pass a bypass token (do not commit tokens):
+ *
+ *   VERCEL_BYPASS_TOKEN=… npm run probe:katex
+ *   # or: VERCEL_BYPASS_TOKEN_FILE=/path/to/token.txt npm run probe:katex
+ *
+ * Extra logging (first paint snapshot when `.katex` is still missing, etc.):
+ *
+ *   DEBUG_PROBE=1 npm run probe:katex
+ *
+ * Chromium: uses Playwright’s bundled browser from `~/.cache/ms-playwright` when present; otherwise
+ * Playwright’s default resolution.
+ *
+ * @see ../README.md — **KaTeX in production (alias `katex` to its ESM entry)**
+ */
+
 import { chromium } from 'playwright'
 import fs, { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
 import path from 'node:path'
 
+/** Library routes exercised — extend this list if you add articles with heavy KaTeX usage. */
 const ARTICLES = ['/library/articles/ecdsa', '/library/articles/schnorr-signatures']
-/** Matches `vite preview` default port (`npm run preview` without `--port`). */
+
+/** Base origin only; paths from `ARTICLES` are appended. Default = `vite preview` default port. */
 const BASE_URL = process.env.PROBE_URL ?? 'http://localhost:4173'
 const DEBUG_PROBE = process.env.DEBUG_PROBE === '1'
 function readBypassTokenFromFile() {
@@ -38,6 +81,7 @@ function resolveChromiumExecutable() {
 const executablePath = resolveChromiumExecutable()
 const browser = await chromium.launch({ headless: true, executablePath })
 const context = await browser.newContext({
+  // Always hit the network for JS/CSS so we do not inherit a stale precached bundle from an old SW.
   serviceWorkers: 'block',
   extraHTTPHeaders: VERCEL_BYPASS_TOKEN
     ? { 'x-vercel-protection-bypass': VERCEL_BYPASS_TOKEN, 'x-vercel-set-bypass-cookie': 'true' }
@@ -80,6 +124,7 @@ for (const route of ARTICLES) {
       ),
     )
 
+    // Catch react-katex's inline error styling (often `rgb(204, 0, 0)`), not only `.katex-error`.
     function isRedish(rgb) {
       const m = /rgb\((\d+),\s*(\d+),\s*(\d+)\)/.exec(rgb)
       if (!m) return false
