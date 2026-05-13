@@ -5,10 +5,10 @@
  * upstream bases, and path prefixes are duplicated here on purpose: wiring this handler to
  * shared `src/` modules broke the lean serverless bundle before; change both files together.
  *
- * **CORS allowlist:** `api/_lib/fiat-rates-proxy-cors.ts` only — never import other `src/` code here.
+ * **CORS:** `vercel-proxy-shared/fiat-rates-cors.ts` (outside `api/` — never import `src/` here).
  */
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { fiatRatesProxyCorsAllowedOrigin } from '../_lib/fiat-rates-proxy-cors'
+import { fiatRatesProxyCorsAllowedOrigin } from '../../vercel-proxy-shared/fiat-rates-cors'
 
 export const config = {
   maxDuration: 10,

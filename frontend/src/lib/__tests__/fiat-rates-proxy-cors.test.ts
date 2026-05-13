@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { fiatRatesProxyCorsAllowedOrigin } from '../../../api/_lib/fiat-rates-proxy-cors'
+import { fiatRatesProxyCorsAllowedOrigin } from '../../../vercel-proxy-shared/fiat-rates-cors'
 
 describe('fiatRatesProxyCorsAllowedOrigin', () => {
   it('allows production origins', () => {

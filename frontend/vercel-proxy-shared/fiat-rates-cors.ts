@@ -1,6 +1,7 @@
 /**
- * CORS allowlist for `/api/fiat-rates` — kept under `api/_lib` so the serverless bundle does not
- * depend on `src/` (see handler file header: importing `src/` modules broke this proxy before).
+ * CORS allowlist for `/api/fiat-rates` — lives **outside** `api/` so files here are never treated as
+ * Vercel serverless entrypoints (see `vercel.json` `functions` globs). Do not import `src/` from
+ * this module.
  */
 export const FIAT_RATES_PROXY_CORS_ALLOWED_ORIGINS_EXACT = [
   'https://bitboard-wallet.com',
