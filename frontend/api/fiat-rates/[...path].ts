@@ -6,6 +6,7 @@
  * shared `src/` modules broke the lean serverless bundle before; change both files together.
  */
 import type { VercelRequest, VercelResponse } from '@vercel/node'
+import { fiatRatesProxyCorsAllowedOrigin } from '../../src/lib/fiat-rates-proxy-cors'
 
 export const config = {
   maxDuration: 10,
@@ -72,8 +73,12 @@ function isProxiedUrlPathWithinAllowlistedBase(
 const UPSTREAM_TIMEOUT_MS = 5_000
 const MAX_POST_BODY_BYTES = 512_000
 
-function setCorsHeaders(res: VercelResponse): void {
-  res.setHeader('Access-Control-Allow-Origin', '*')
+function applyFiatRatesProxyCorsHeaders(req: VercelRequest, res: VercelResponse): void {
+  const origin = fiatRatesProxyCorsAllowedOrigin(req.headers.origin)
+  if (origin != null) {
+    res.setHeader('Access-Control-Allow-Origin', origin)
+    res.setHeader('Vary', 'Origin')
+  }
   res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, POST, OPTIONS')
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Accept')
   res.setHeader('Access-Control-Max-Age', '86400')
@@ -98,7 +103,7 @@ export default async function handler(
   req: VercelRequest,
   res: VercelResponse,
 ): Promise<void> {
-  setCorsHeaders(res)
+  applyFiatRatesProxyCorsHeaders(req, res)
 
   if (req.method === 'OPTIONS') {
     res.status(204).end()

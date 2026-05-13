@@ -16,7 +16,7 @@ describe('fiat rate proxy allowlist', () => {
     expect(getUpstreamBaseForFiatRateProxy('unknown')).toBeNull()
   })
 
-  it('allows exact Kraken ticker path (query is validated separately on the server)', () => {
+  it('allows exact Kraken ticker path (server proxy forwards query strings without validating them)', () => {
     expect(isFiatRatePathAllowedForProvider('kraken', '/0/public/Ticker')).toBe(true)
   })
 
