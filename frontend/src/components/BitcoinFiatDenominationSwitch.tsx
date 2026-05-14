@@ -2,7 +2,7 @@ import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
 import { useFiatDenominationStore } from '@/stores/fiatDenominationStore'
-import { FIAT_CURRENCY_UI } from '@/lib/supported-fiat-currencies'
+import { getFiatCurrencyUiMeta } from '@/lib/supported-fiat-currencies'
 
 type BitcoinFiatDenominationSwitchProps = {
   disabled?: boolean
@@ -27,7 +27,7 @@ export function BitcoinFiatDenominationSwitch({
   const defaultFiatCurrency = useFiatDenominationStore(
     (s) => s.defaultFiatCurrency,
   )
-  const fiatSymbol = FIAT_CURRENCY_UI[defaultFiatCurrency].symbol
+  const fiatSymbol = getFiatCurrencyUiMeta(defaultFiatCurrency).symbol
 
   return (
     <div

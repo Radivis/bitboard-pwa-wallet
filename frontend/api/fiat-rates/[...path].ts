@@ -52,8 +52,8 @@ const FIAT_RATE_PROVIDER_PATH_PREFIXES: Record<
   FiatRateProviderId,
   readonly string[]
 > = {
-  kraken: ['/0/public/Ticker'],
-  coingecko: ['/api/v3/simple/price'],
+  kraken: ['/0/public/Ticker', '/0/public/AssetPairs'],
+  coingecko: ['/api/v3/simple/price', '/api/v3/simple/supported_vs_currencies'],
   blockchain: ['/ticker'],
 }
 

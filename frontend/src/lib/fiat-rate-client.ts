@@ -1,18 +1,15 @@
 import type { FiatRateProviderId } from '@/lib/fiat-rate-service-whitelist'
 import { FIAT_SAME_ORIGIN_PROXY_PREFIX } from '@/lib/fiat-rate-service-whitelist'
-import type { SupportedDefaultFiatCurrency } from '@/lib/supported-fiat-currencies'
 import { fiatCurrencyToTickerKey } from '@/lib/supported-fiat-currencies'
 
-/** Kraken `pair` query values for XBT/Fiat (documented asset pairs). */
-const KRAKEN_XBT_PAIR: Record<SupportedDefaultFiatCurrency, string> = {
-  USD: 'XXBTZUSD',
-  EUR: 'XXBTZEUR',
-  GBP: 'XXBTZGBP',
-}
-
+/**
+ * Build proxied URL for BTC spot in `currency` (uppercase ISO 4217).
+ * Kraken requires {@link krakenTickerPair} from `AssetPairs` discovery (`Ticker?pair=` value).
+ */
 export function buildMainnetFiatRateRequestUrl(
   provider: FiatRateProviderId,
-  currency: SupportedDefaultFiatCurrency,
+  currency: string,
+  krakenTickerPair?: string,
 ): string {
   const origin =
     typeof globalThis.location !== 'undefined'
@@ -22,8 +19,10 @@ export function buildMainnetFiatRateRequestUrl(
   const key = fiatCurrencyToTickerKey(currency)
   switch (provider) {
     case 'kraken': {
-      const pair = KRAKEN_XBT_PAIR[currency]
-      return `${base}/0/public/Ticker?pair=${encodeURIComponent(pair)}`
+      if (krakenTickerPair == null || krakenTickerPair === '') {
+        throw new Error('Kraken ticker pair is required for fiat rate request')
+      }
+      return `${base}/0/public/Ticker?pair=${encodeURIComponent(krakenTickerPair)}`
     }
     case 'coingecko':
       return `${base}/api/v3/simple/price?ids=bitcoin&vs_currencies=${encodeURIComponent(key)}`
@@ -42,9 +41,10 @@ export type ParsedBtcPriceInFiat = {
 
 export function parseFiatRateProviderResponse(
   provider: FiatRateProviderId,
-  currency: SupportedDefaultFiatCurrency,
+  currency: string,
   json: unknown,
 ): ParsedBtcPriceInFiat | null {
+  const upper = currency.trim().toUpperCase()
   const key = fiatCurrencyToTickerKey(currency)
   switch (provider) {
     case 'coingecko': {
@@ -64,7 +64,7 @@ export function parseFiatRateProviderResponse(
     }
     case 'blockchain': {
       if (typeof json !== 'object' || json === null) return null
-      const row = (json as Record<string, { last?: unknown }>)[currency]
+      const row = (json as Record<string, { last?: unknown }>)[upper]
       if (row == null || typeof row !== 'object') return null
       const last = row.last
       const n =

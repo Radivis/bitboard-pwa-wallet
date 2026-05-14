@@ -1,21 +1,25 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useWalletStore } from '@/stores/walletStore'
 import { useFiatDenominationStore } from '@/stores/fiatDenominationStore'
 import { useLightningBalancesForDashboardQuery } from '@/hooks/useLightningMutations'
-import type { SupportedDefaultFiatCurrency } from '@/lib/supported-fiat-currencies'
 import type { FiatRateProviderId } from '@/lib/fiat-rate-service-whitelist'
 import {
   buildMainnetFiatRateRequestUrl,
   parseFiatRateProviderResponse,
 } from '@/lib/fiat-rate-client'
+import {
+  fetchFiatProviderCurrenciesData,
+  fiatProviderCurrenciesQueryKey,
+  FIAT_PROVIDER_CURRENCIES_STALE_MS,
+} from '@/lib/fiat-provider-currencies'
 import { errorMessage } from '@/lib/utils'
 
 export const MAINNET_FIAT_RATES_STALE_MS = 120_000
 
 export function mainnetFiatRatesQueryKey(
-  currency: SupportedDefaultFiatCurrency,
+  currency: string,
   provider: FiatRateProviderId,
-): readonly [string, SupportedDefaultFiatCurrency, FiatRateProviderId] {
+): readonly [string, string, FiatRateProviderId] {
   return ['mainnet-fiat-rates', currency, provider] as const
 }
 
@@ -35,6 +39,7 @@ function usePortfolioPositiveForFiatRatesFetch(): boolean {
 export function useMainnetFiatRatesQuery(options?: {
   allowFetchWhenPortfolioZeroForReceivePage?: boolean
 }) {
+  const queryClient = useQueryClient()
   const networkMode = useWalletStore((s) => s.networkMode)
   const walletStatus = useWalletStore((s) => s.walletStatus)
   const balance = useWalletStore((s) => s.balance)
@@ -54,7 +59,24 @@ export function useMainnetFiatRatesQuery(options?: {
   return useQuery({
     queryKey: mainnetFiatRatesQueryKey(currency, provider),
     queryFn: async () => {
-      const url = buildMainnetFiatRateRequestUrl(provider, currency)
+      const discovery = await queryClient.fetchQuery({
+        queryKey: fiatProviderCurrenciesQueryKey(provider),
+        queryFn: () => fetchFiatProviderCurrenciesData(provider),
+        staleTime: FIAT_PROVIDER_CURRENCIES_STALE_MS,
+      })
+
+      let krakenPair: string | undefined
+      if (provider === 'kraken') {
+        const code = currency.trim().toUpperCase()
+        krakenPair = discovery.krakenPairByCode[code]
+        if (krakenPair == null) {
+          throw new Error(
+            'This fiat currency is not available from Kraken for price data',
+          )
+        }
+      }
+
+      const url = buildMainnetFiatRateRequestUrl(provider, currency, krakenPair)
       const res = await fetch(url)
       if (!res.ok) {
         throw new Error(`Fiat rate request failed (${res.status})`)

@@ -19,10 +19,10 @@ import { useWallets } from '@/db'
 import { useFeatureStore } from '@/stores/featureStore'
 import { useBitcoinDisplayUnitStore } from '@/stores/bitcoinDisplayUnitStore'
 import { useFiatDenominationStore } from '@/stores/fiatDenominationStore'
+import { useFiatProviderSupportedCurrenciesQuery } from '@/hooks/useFiatProviderSupportedCurrenciesQuery'
 import {
-  SUPPORTED_DEFAULT_FIAT_CURRENCIES,
-  type SupportedDefaultFiatCurrency,
-  FIAT_CURRENCY_UI,
+  type FiatCurrencyCode,
+  getFiatCurrencyUiMeta,
 } from '@/lib/supported-fiat-currencies'
 import {
   FIAT_RATE_PROVIDER_IDS,
@@ -44,6 +44,12 @@ export function SettingsMainPage() {
   )
   const fiatRateProvider = useFiatDenominationStore((s) => s.fiatRateProvider)
   const setFiatRateProvider = useFiatDenominationStore((s) => s.setFiatRateProvider)
+
+  const fiatCurrenciesQuery = useFiatProviderSupportedCurrenciesQuery(
+    fiatRateProvider,
+  )
+  const fiatSelectClassName =
+    'rounded-md border border-input bg-background px-2 py-1 text-sm font-medium text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
 
   return (
     <div className="space-y-6">
@@ -123,26 +129,9 @@ export function SettingsMainPage() {
             />
           </div>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <span className="text-sm text-muted-foreground">Default fiat currency</span>
-            <select
-              className="rounded-md border border-input bg-background px-2 py-1 text-sm font-medium text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              value={defaultFiatCurrency}
-              aria-label="Default fiat currency"
-              onChange={(e) =>
-                setDefaultFiatCurrency(e.target.value as SupportedDefaultFiatCurrency)
-              }
-            >
-              {SUPPORTED_DEFAULT_FIAT_CURRENCIES.map((c) => (
-                <option key={c} value={c}>
-                  {FIAT_CURRENCY_UI[c].label} ({c})
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <span className="text-sm text-muted-foreground">Currency rate service</span>
             <select
-              className="rounded-md border border-input bg-background px-2 py-1 text-sm font-medium text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className={fiatSelectClassName}
               value={fiatRateProvider}
               aria-label="Currency rate data provider"
               onChange={(e) =>
@@ -155,6 +144,60 @@ export function SettingsMainPage() {
                 </option>
               ))}
             </select>
+          </div>
+          <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <span className="text-sm text-muted-foreground">
+                Default fiat currency
+              </span>
+              <select
+                className={fiatSelectClassName}
+                value={defaultFiatCurrency}
+                disabled={
+                  fiatCurrenciesQuery.isPending ||
+                  fiatCurrenciesQuery.isError ||
+                  (fiatCurrenciesQuery.isSuccess &&
+                    (fiatCurrenciesQuery.data?.codes.length ?? 0) === 0)
+                }
+                aria-label="Default fiat currency"
+                aria-busy={fiatCurrenciesQuery.isPending}
+                onChange={(e) =>
+                  setDefaultFiatCurrency(e.target.value as FiatCurrencyCode)
+                }
+              >
+                {fiatCurrenciesQuery.isPending ? (
+                  <option value={defaultFiatCurrency}>
+                    Loading options… ({defaultFiatCurrency})
+                  </option>
+                ) : fiatCurrenciesQuery.isError ? (
+                  <option value={defaultFiatCurrency}>
+                    {defaultFiatCurrency} (list unavailable)
+                  </option>
+                ) : (fiatCurrenciesQuery.data?.codes.length ?? 0) === 0 ? (
+                  <option value={defaultFiatCurrency}>
+                    No currencies reported ({defaultFiatCurrency})
+                  </option>
+                ) : (
+                  fiatCurrenciesQuery.data?.codes.map((c) => {
+                    const { label } = getFiatCurrencyUiMeta(c)
+                    return (
+                      <option key={c} value={c}>
+                        {label} ({c})
+                      </option>
+                    )
+                  })
+                )}
+              </select>
+            </div>
+            <p className="text-xs text-muted-foreground sm:text-right">
+              Available options depend on the selected rate service.
+            </p>
+            {fiatCurrenciesQuery.isError ? (
+              <p className="text-xs text-destructive sm:text-right" role="alert">
+                Could not load the currency list for this service. Try again or pick
+                another rate service.
+              </p>
+            ) : null}
           </div>
         </CardContent>
       </Card>

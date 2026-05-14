@@ -10,7 +10,7 @@ import { FiatAmountDisplay } from '@/components/FiatAmountDisplay'
 import { OnchainDustWarningReviewBanner } from '@/components/wallet/send/OnchainDustWarningReviewBanner'
 import type { AddressType, NetworkMode } from '@/stores/walletStore'
 import type { OnchainDustWarning, SendAmountUnit } from '@/stores/sendStore'
-import type { SupportedDefaultFiatCurrency } from '@/lib/supported-fiat-currencies'
+import type { FiatCurrencyCode } from '@/lib/supported-fiat-currencies'
 import { isUsableBtcSpotPriceInFiat } from '@/lib/is-usable-btc-spot-price-in-fiat'
 
 type DeadLabRecipientInfo = {
@@ -59,7 +59,7 @@ export function SendTransactionReviewStep({
   onConfirmSend: () => void
   labConfirmSendDisabled: boolean
   mainnetFiatMode: boolean
-  defaultFiatCurrency: SupportedDefaultFiatCurrency
+  defaultFiatCurrency: FiatCurrencyCode
   btcPriceInFiat: number | null | undefined
   fiatRatesLoading: boolean
 }) {

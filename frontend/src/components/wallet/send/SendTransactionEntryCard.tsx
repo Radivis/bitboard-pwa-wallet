@@ -20,7 +20,7 @@ import { BitcoinUnitSelect } from '@/components/BitcoinUnitSelect'
 import { RecipientQrScanModal } from '@/components/wallet/send/RecipientQrScanModal'
 import { BitcoinFiatDenominationSwitch } from '@/components/BitcoinFiatDenominationSwitch'
 import { FiatAmountDisplay } from '@/components/FiatAmountDisplay'
-import type { SupportedDefaultFiatCurrency } from '@/lib/supported-fiat-currencies'
+import type { FiatCurrencyCode } from '@/lib/supported-fiat-currencies'
 import { fiatAmountInputPlaceholder } from '@/lib/format-fiat-display'
 import { isUsableBtcSpotPriceInFiat } from '@/lib/is-usable-btc-spot-price-in-fiat'
 
@@ -135,7 +135,7 @@ export function SendTransactionEntryCard({
   onApplyScannedPayload: (raw: string) => void
   /** Mainnet && persisted fiat denomination mode. */
   mainnetFiatMode: boolean
-  defaultFiatCurrency: SupportedDefaultFiatCurrency
+  defaultFiatCurrency: FiatCurrencyCode
   btcPriceInFiat: number | null | undefined
   fiatRatesLoading: boolean
   /** Parsed sats from the amount field (fiat or BTC) for readonly BTC / validation display. */
