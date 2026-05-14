@@ -7,9 +7,9 @@ export const FIAT_PROVIDER_CURRENCIES_STALE_MS = 86_400_000
 export const FIAT_PROVIDER_CURRENCIES_QUERY_KEY_PREFIX = 'fiat-provider-currencies' as const
 
 export function fiatProviderCurrenciesQueryKey(
-  provider: FiatRateProviderId,
+  fiatRateProviderId: FiatRateProviderId,
 ): readonly [typeof FIAT_PROVIDER_CURRENCIES_QUERY_KEY_PREFIX, FiatRateProviderId] {
-  return [FIAT_PROVIDER_CURRENCIES_QUERY_KEY_PREFIX, provider] as const
+  return [FIAT_PROVIDER_CURRENCIES_QUERY_KEY_PREFIX, fiatRateProviderId] as const
 }
 
 export type FiatProviderCurrenciesData = {
@@ -19,7 +19,7 @@ export type FiatProviderCurrenciesData = {
   krakenPairByCode: Readonly<Record<string, string>>
 }
 
-const EMPTY_DATA: FiatProviderCurrenciesData = {
+const EMPTY_FIAT_PROVIDER_CURRENCIES: FiatProviderCurrenciesData = {
   codes: [],
   krakenPairByCode: {},
 }
@@ -28,21 +28,21 @@ const EMPTY_DATA: FiatProviderCurrenciesData = {
  * Build same-origin proxied URL to discover supported fiat codes for the selected provider.
  */
 export function buildFiatProviderCurrenciesDiscoveryUrl(
-  provider: FiatRateProviderId,
+  fiatRateProviderId: FiatRateProviderId,
 ): string {
   const origin =
     typeof globalThis.location !== 'undefined' ? globalThis.location.origin : ''
-  const base = `${origin}${FIAT_SAME_ORIGIN_PROXY_PREFIX}/${provider}`
-  switch (provider) {
+  const proxyBaseUrl = `${origin}${FIAT_SAME_ORIGIN_PROXY_PREFIX}/${fiatRateProviderId}`
+  switch (fiatRateProviderId) {
     case 'kraken':
-      return `${base}/0/public/AssetPairs`
+      return `${proxyBaseUrl}/0/public/AssetPairs`
     case 'coingecko':
-      return `${base}/api/v3/simple/supported_vs_currencies`
+      return `${proxyBaseUrl}/api/v3/simple/supported_vs_currencies`
     case 'blockchain':
-      return `${base}/ticker`
+      return `${proxyBaseUrl}/ticker`
     default: {
-      const _x: never = provider
-      return _x
+      const _exhaustive: never = fiatRateProviderId
+      return _exhaustive
     }
   }
 }
@@ -56,34 +56,41 @@ type KrakenAssetPairRow = {
  * Extract online XBT/fiat spot pairs from Kraken `AssetPairs` (`wsname` like `XBT/USD`).
  */
 export function parseKrakenAssetPairsForBtcFiat(
-  json: unknown,
+  rawResponseBody: unknown,
 ): FiatProviderCurrenciesData {
   if (
-    typeof json !== 'object' ||
-    json === null ||
-    !('result' in json) ||
-    typeof (json as { result: unknown }).result !== 'object' ||
-    (json as { result: object }).result === null
+    typeof rawResponseBody !== 'object' ||
+    rawResponseBody === null ||
+    !('result' in rawResponseBody) ||
+    typeof (rawResponseBody as { result: unknown }).result !== 'object' ||
+    (rawResponseBody as { result: object }).result === null
   ) {
-    return EMPTY_DATA
+    return EMPTY_FIAT_PROVIDER_CURRENCIES
   }
 
-  const result = (json as { result: Record<string, KrakenAssetPairRow> }).result
-  const pairByCode = new Map<string, string>()
+  const assetPairsByKrakenId = (rawResponseBody as {
+    result: Record<string, KrakenAssetPairRow>
+  }).result
+  const krakenTickerPairKeyByFiatCode = new Map<string, string>()
 
-  for (const [pairKey, row] of Object.entries(result)) {
-    if (row?.status !== 'online' || typeof row.wsname !== 'string') continue
-    const parts = row.wsname.split('/')
-    if (parts.length !== 2 || parts[0] !== 'XBT') continue
-    const quote = parts[1]!
-    if (!/^[A-Z]{3}$/.test(quote)) continue
-    if (!pairByCode.has(quote)) pairByCode.set(quote, pairKey)
+  for (const [krakenAssetPairId, assetPairRow] of Object.entries(assetPairsByKrakenId)) {
+    if (assetPairRow?.status !== 'online' || typeof assetPairRow.wsname !== 'string')
+      continue
+    const wsnameSegments = assetPairRow.wsname.split('/')
+    if (wsnameSegments.length !== 2 || wsnameSegments[0] !== 'XBT') continue
+    const quoteFiatCode = wsnameSegments[1]!
+    if (!/^[A-Z]{3}$/.test(quoteFiatCode)) continue
+    if (!krakenTickerPairKeyByFiatCode.has(quoteFiatCode)) {
+      krakenTickerPairKeyByFiatCode.set(quoteFiatCode, krakenAssetPairId)
+    }
   }
 
-  const codes = [...pairByCode.keys()].sort((a, b) => a.localeCompare(b))
+  const sortedFiatCurrencyCodes = [...krakenTickerPairKeyByFiatCode.keys()].sort((a, b) =>
+    a.localeCompare(b),
+  )
   return {
-    codes,
-    krakenPairByCode: Object.fromEntries(pairByCode),
+    codes: sortedFiatCurrencyCodes,
+    krakenPairByCode: Object.fromEntries(krakenTickerPairKeyByFiatCode),
   }
 }
 
@@ -91,53 +98,65 @@ export function parseKrakenAssetPairsForBtcFiat(
  * Intersect CoinGecko `simple/supported_vs_currencies` with ISO 4217 alpha-3.
  */
 export function parseCoinGeckoSupportedVsCurrencies(
-  json: unknown,
+  rawResponseBody: unknown,
 ): FiatProviderCurrenciesData {
-  if (!Array.isArray(json)) return EMPTY_DATA
+  if (!Array.isArray(rawResponseBody)) return EMPTY_FIAT_PROVIDER_CURRENCIES
 
-  const codes: string[] = []
-  for (const item of json) {
-    if (typeof item !== 'string') continue
-    const u = item.trim().toUpperCase()
-    if (!/^[A-Z]{3}$/.test(u) || !isIso4217Alpha3(u)) continue
-    codes.push(u)
+  const fiatCurrencyCodes: string[] = []
+  for (const rawVsCurrencyId of rawResponseBody) {
+    if (typeof rawVsCurrencyId !== 'string') continue
+    const uppercaseFiatCode = rawVsCurrencyId.trim().toUpperCase()
+    if (!/^[A-Z]{3}$/.test(uppercaseFiatCode) || !isIso4217Alpha3(uppercaseFiatCode))
+      continue
+    fiatCurrencyCodes.push(uppercaseFiatCode)
   }
 
-  const unique = [...new Set(codes)].sort((a, b) => a.localeCompare(b))
-  return { codes: unique, krakenPairByCode: {} }
+  const sortedUniqueFiatCodes = [...new Set(fiatCurrencyCodes)].sort((a, b) =>
+    a.localeCompare(b),
+  )
+  return { codes: sortedUniqueFiatCodes, krakenPairByCode: {} }
 }
 
 /**
  * Use Blockchain ticker top-level keys as fiat codes, filtered by ISO 4217.
  */
-export function parseBlockchainTickerKeys(json: unknown): FiatProviderCurrenciesData {
-  if (typeof json !== 'object' || json === null) return EMPTY_DATA
-
-  const codes: string[] = []
-  for (const key of Object.keys(json as Record<string, unknown>)) {
-    const u = key.trim().toUpperCase()
-    if (!/^[A-Z]{3}$/.test(u) || !isIso4217Alpha3(u)) continue
-    codes.push(u)
+export function parseBlockchainTickerKeys(
+  rawResponseBody: unknown,
+): FiatProviderCurrenciesData {
+  if (typeof rawResponseBody !== 'object' || rawResponseBody === null) {
+    return EMPTY_FIAT_PROVIDER_CURRENCIES
   }
 
-  const unique = [...new Set(codes)].sort((a, b) => a.localeCompare(b))
-  return { codes: unique, krakenPairByCode: {} }
+  const fiatCurrencyCodes: string[] = []
+  for (const tickerTopLevelKey of Object.keys(
+    rawResponseBody as Record<string, unknown>,
+  )) {
+    const uppercaseFiatCode = tickerTopLevelKey.trim().toUpperCase()
+    if (!/^[A-Z]{3}$/.test(uppercaseFiatCode) || !isIso4217Alpha3(uppercaseFiatCode))
+      continue
+    fiatCurrencyCodes.push(uppercaseFiatCode)
+  }
+
+  const sortedUniqueFiatCodes = [...new Set(fiatCurrencyCodes)].sort((a, b) =>
+    a.localeCompare(b),
+  )
+  return { codes: sortedUniqueFiatCodes, krakenPairByCode: {} }
 }
 
 export function parseFiatProviderCurrenciesResponse(
-  provider: FiatRateProviderId,
-  json: unknown,
+  fiatRateProviderId: FiatRateProviderId,
+  rawResponseBody: unknown,
 ): FiatProviderCurrenciesData {
-  switch (provider) {
+  switch (fiatRateProviderId) {
     case 'kraken':
-      return parseKrakenAssetPairsForBtcFiat(json)
+      return parseKrakenAssetPairsForBtcFiat(rawResponseBody)
     case 'coingecko':
-      return parseCoinGeckoSupportedVsCurrencies(json)
+      return parseCoinGeckoSupportedVsCurrencies(rawResponseBody)
     case 'blockchain':
-      return parseBlockchainTickerKeys(json)
+      return parseBlockchainTickerKeys(rawResponseBody)
     default: {
-      const _x: never = provider
-      return _x
+      const _exhaustive: never = fiatRateProviderId
+      return _exhaustive
     }
   }
 }
@@ -146,13 +165,13 @@ export function parseFiatProviderCurrenciesResponse(
  * Fetch + parse discovery JSON for a provider (for TanStack `queryFn` and `fetchQuery`).
  */
 export async function fetchFiatProviderCurrenciesData(
-  provider: FiatRateProviderId,
+  fiatRateProviderId: FiatRateProviderId,
 ): Promise<FiatProviderCurrenciesData> {
-  const url = buildFiatProviderCurrenciesDiscoveryUrl(provider)
-  const res = await fetch(url)
-  if (!res.ok) {
-    throw new Error(`Fiat currency list request failed (${res.status})`)
+  const discoveryUrl = buildFiatProviderCurrenciesDiscoveryUrl(fiatRateProviderId)
+  const discoveryHttpResponse = await fetch(discoveryUrl)
+  if (!discoveryHttpResponse.ok) {
+    throw new Error(`Fiat currency list request failed (${discoveryHttpResponse.status})`)
   }
-  const json: unknown = await res.json()
-  return parseFiatProviderCurrenciesResponse(provider, json)
+  const parsedResponseBody: unknown = await discoveryHttpResponse.json()
+  return parseFiatProviderCurrenciesResponse(fiatRateProviderId, parsedResponseBody)
 }

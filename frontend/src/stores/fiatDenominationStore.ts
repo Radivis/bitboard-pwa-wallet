@@ -17,14 +17,14 @@ interface FiatDenominationState {
   fiatDenominationMode: boolean
   defaultFiatCurrency: FiatCurrencyCode
   fiatRateProvider: FiatRateProviderId
-  setFiatDenominationMode: (v: boolean) => void
-  setDefaultFiatCurrency: (c: FiatCurrencyCode) => void
-  setFiatRateProvider: (p: FiatRateProviderId) => void
+  setFiatDenominationMode: (nextFiatDenominationMode: boolean) => void
+  setDefaultFiatCurrency: (fiatCurrencyCode: FiatCurrencyCode) => void
+  setFiatRateProvider: (nextFiatRateProviderId: FiatRateProviderId) => void
 }
 
-function coerceFiatRateProvider(v: unknown): FiatRateProviderId {
-  return typeof v === 'string' && isKnownFiatRateProviderId(v)
-    ? v
+function coerceFiatRateProvider(rawPersistedValue: unknown): FiatRateProviderId {
+  return typeof rawPersistedValue === 'string' && isKnownFiatRateProviderId(rawPersistedValue)
+    ? rawPersistedValue
     : DEFAULT_PROVIDER
 }
 

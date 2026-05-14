@@ -7,18 +7,20 @@ export const DEFAULT_FIAT_FALLBACK = 'USD'
 /** Uppercase ISO 4217 alpha-3 codes as stored in settings. */
 export type FiatCurrencyCode = string
 
-export function isValidFiatCurrencyCodeFormat(v: string): boolean {
-  return /^[A-Z]{3}$/.test(v.trim().toUpperCase())
+export function isValidFiatCurrencyCodeFormat(candidate: string): boolean {
+  return /^[A-Z]{3}$/.test(candidate.trim().toUpperCase())
 }
 
-export function coerceStoredFiatCurrencyCode(v: unknown): FiatCurrencyCode {
-  if (typeof v !== 'string') return DEFAULT_FIAT_FALLBACK
-  const t = v.trim().toUpperCase()
-  return isValidFiatCurrencyCodeFormat(t) ? t : DEFAULT_FIAT_FALLBACK
+export function coerceStoredFiatCurrencyCode(rawPersistedValue: unknown): FiatCurrencyCode {
+  if (typeof rawPersistedValue !== 'string') return DEFAULT_FIAT_FALLBACK
+  const normalizedFiatCode = rawPersistedValue.trim().toUpperCase()
+  return isValidFiatCurrencyCodeFormat(normalizedFiatCode)
+    ? normalizedFiatCode
+    : DEFAULT_FIAT_FALLBACK
 }
 
-export function fiatCurrencyToTickerKey(c: string): string {
-  return c.trim().toUpperCase().toLowerCase()
+export function fiatCurrencyToTickerKey(fiatCurrencyCode: string): string {
+  return fiatCurrencyCode.trim().toUpperCase().toLowerCase()
 }
 
 export type FiatCurrencyUiMeta = {
@@ -45,39 +47,43 @@ const FIAT_CURRENCY_UI_OVERRIDES: Partial<
   BRL: { symbol: 'R$', label: 'Brazilian Real', maxFractionDigits: 2 },
 }
 
-function currencySymbolFromIntl(code: string): string {
+function currencySymbolFromIntl(fiatCurrencyCode: string): string {
   try {
-    const parts = new Intl.NumberFormat(undefined, {
+    const numberFormatParts = new Intl.NumberFormat(undefined, {
       style: 'currency',
-      currency: code,
+      currency: fiatCurrencyCode,
       currencyDisplay: 'narrowSymbol',
     }).formatToParts(0)
-    const cur = parts.find((p) => p.type === 'currency')
-    if (cur?.value && cur.value.trim() !== '') return cur.value
+    const currencyFormatPart = numberFormatParts.find(
+      (part) => part.type === 'currency',
+    )
+    if (currencyFormatPart?.value && currencyFormatPart.value.trim() !== '') {
+      return currencyFormatPart.value
+    }
   } catch {
     /* invalid or missing in ICU */
   }
-  return `${code} `
+  return `${fiatCurrencyCode} `
 }
 
-function currencyLabelFromIntl(code: string): string {
+function currencyLabelFromIntl(fiatCurrencyCode: string): string {
   try {
-    const dn = new Intl.DisplayNames(undefined, { type: 'currency' })
-    const n = dn.of(code)
-    if (n) return n
+    const currencyDisplayNames = new Intl.DisplayNames(undefined, { type: 'currency' })
+    const localizedCurrencyName = currencyDisplayNames.of(fiatCurrencyCode)
+    if (localizedCurrencyName) return localizedCurrencyName
   } catch {
     /* ignore */
   }
-  return code
+  return fiatCurrencyCode
 }
 
-function maxFractionDigitsFromIntl(code: string): number {
+function maxFractionDigitsFromIntl(fiatCurrencyCode: string): number {
   try {
-    const n = new Intl.NumberFormat(undefined, {
+    const resolvedMaxFractionDigits = new Intl.NumberFormat(undefined, {
       style: 'currency',
-      currency: code,
+      currency: fiatCurrencyCode,
     }).resolvedOptions().maximumFractionDigits
-    return n ?? 2
+    return resolvedMaxFractionDigits ?? 2
   } catch {
     return 2
   }
@@ -86,13 +92,13 @@ function maxFractionDigitsFromIntl(code: string): number {
 /**
  * Display metadata for a fiat code (overrides + `Intl` fallback).
  */
-export function getFiatCurrencyUiMeta(code: string): FiatCurrencyUiMeta {
-  const upper = code.trim().toUpperCase()
-  const o = FIAT_CURRENCY_UI_OVERRIDES[upper]
-  if (o != null) return o
+export function getFiatCurrencyUiMeta(fiatCurrencyCode: string): FiatCurrencyUiMeta {
+  const normalizedFiatCode = fiatCurrencyCode.trim().toUpperCase()
+  const overrideMeta = FIAT_CURRENCY_UI_OVERRIDES[normalizedFiatCode]
+  if (overrideMeta != null) return overrideMeta
   return {
-    symbol: currencySymbolFromIntl(upper),
-    label: currencyLabelFromIntl(upper),
-    maxFractionDigits: maxFractionDigitsFromIntl(upper),
+    symbol: currencySymbolFromIntl(normalizedFiatCode),
+    label: currencyLabelFromIntl(normalizedFiatCode),
+    maxFractionDigits: maxFractionDigitsFromIntl(normalizedFiatCode),
   }
 }

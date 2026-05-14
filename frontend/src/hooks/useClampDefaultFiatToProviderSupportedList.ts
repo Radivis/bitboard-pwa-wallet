@@ -10,8 +10,8 @@ import { DEFAULT_FIAT_FALLBACK } from '@/lib/supported-fiat-currencies'
  */
 export function useClampDefaultFiatToProviderSupportedList(): void {
   const networkMode = useWalletStore((s) => s.networkMode)
-  const fiatMode = useFiatDenominationStore((s) => s.fiatDenominationMode)
-  const provider = useFiatDenominationStore((s) => s.fiatRateProvider)
+  const fiatDenominationMode = useFiatDenominationStore((s) => s.fiatDenominationMode)
+  const fiatRateProviderId = useFiatDenominationStore((s) => s.fiatRateProvider)
   const defaultFiatCurrency = useFiatDenominationStore(
     (s) => s.defaultFiatCurrency,
   )
@@ -19,20 +19,29 @@ export function useClampDefaultFiatToProviderSupportedList(): void {
     (s) => s.setDefaultFiatCurrency,
   )
 
-  const enabled = networkMode === 'mainnet' && fiatMode
-  const { data, isSuccess } = useFiatProviderSupportedCurrenciesQuery(provider, {
-    enabled,
-  })
+  const shouldLoadProviderFiatCodeList =
+    networkMode === 'mainnet' && fiatDenominationMode
+  const { data: providerSupportedFiatCurrencies, isSuccess: discoverySucceeded } =
+    useFiatProviderSupportedCurrenciesQuery(fiatRateProviderId, {
+      enabled: shouldLoadProviderFiatCodeList,
+    })
 
   useEffect(() => {
-    if (!enabled || !isSuccess || data == null || data.codes.length === 0) return
-    if (!data.codes.includes(defaultFiatCurrency)) {
+    if (
+      !shouldLoadProviderFiatCodeList ||
+      !discoverySucceeded ||
+      providerSupportedFiatCurrencies == null ||
+      providerSupportedFiatCurrencies.codes.length === 0
+    ) {
+      return
+    }
+    if (!providerSupportedFiatCurrencies.codes.includes(defaultFiatCurrency)) {
       setDefaultFiatCurrency(DEFAULT_FIAT_FALLBACK)
     }
   }, [
-    enabled,
-    isSuccess,
-    data,
+    shouldLoadProviderFiatCodeList,
+    discoverySucceeded,
+    providerSupportedFiatCurrencies,
     defaultFiatCurrency,
     setDefaultFiatCurrency,
   ])

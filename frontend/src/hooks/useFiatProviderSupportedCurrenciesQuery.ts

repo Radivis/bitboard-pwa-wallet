@@ -18,7 +18,4 @@ export function useFiatProviderSupportedCurrenciesQuery(
   return useQuery({
     queryKey: fiatProviderCurrenciesQueryKey(fiatRateProviderId),
     queryFn: () => fetchFiatProviderCurrenciesData(fiatRateProviderId),
-    staleTime: FIAT_PROVIDER_CURRENCIES_STALE_MS,
-    enabled: queryEnabled,
-  })
-}
+    staleTime: FIAT_provider_currencies_stale
