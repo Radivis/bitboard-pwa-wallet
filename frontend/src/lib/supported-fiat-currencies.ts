@@ -2,6 +2,8 @@
  * Fiat display metadata and helpers for any ISO 4217 code used in the app.
  */
 
+import { isIso4217Alpha3 } from '@/lib/iso-4217-alpha3'
+
 export const DEFAULT_FIAT_FALLBACK = 'USD'
 
 /** Uppercase ISO 4217 alpha-3 codes as stored in settings. */
@@ -11,10 +13,19 @@ export function isValidFiatCurrencyCodeFormat(candidate: string): boolean {
   return /^[A-Z]{3}$/.test(candidate.trim().toUpperCase())
 }
 
+/** Uppercase ISO 4217 alpha-3 shape and membership in the static fiat code set. */
+export function isRecognizedIsoFiatCurrencyCode(candidate: string): boolean {
+  const normalizedFiatCode = candidate.trim().toUpperCase()
+  return (
+    isValidFiatCurrencyCodeFormat(normalizedFiatCode) &&
+    isIso4217Alpha3(normalizedFiatCode)
+  )
+}
+
 export function coerceStoredFiatCurrencyCode(rawPersistedValue: unknown): FiatCurrencyCode {
   if (typeof rawPersistedValue !== 'string') return DEFAULT_FIAT_FALLBACK
   const normalizedFiatCode = rawPersistedValue.trim().toUpperCase()
-  return isValidFiatCurrencyCodeFormat(normalizedFiatCode)
+  return isRecognizedIsoFiatCurrencyCode(normalizedFiatCode)
     ? normalizedFiatCode
     : DEFAULT_FIAT_FALLBACK
 }

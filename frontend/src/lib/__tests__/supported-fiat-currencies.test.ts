@@ -9,6 +9,8 @@ describe('coerceStoredFiatCurrencyCode', () => {
     expect(coerceStoredFiatCurrencyCode(' eur ')).toBe('EUR')
     expect(coerceStoredFiatCurrencyCode('INVALID')).toBe('USD')
     expect(coerceStoredFiatCurrencyCode(null)).toBe('USD')
+    expect(coerceStoredFiatCurrencyCode('BTC')).toBe('USD')
+    expect(coerceStoredFiatCurrencyCode('XXX')).toBe('USD')
   })
 })
 

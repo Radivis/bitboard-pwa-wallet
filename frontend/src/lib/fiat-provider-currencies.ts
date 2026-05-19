@@ -1,6 +1,6 @@
 import type { FiatRateProviderId } from '@/lib/fiat-rate-service-whitelist'
 import { FIAT_SAME_ORIGIN_PROXY_PREFIX } from '@/lib/fiat-rate-service-whitelist'
-import { isIso4217Alpha3 } from '@/lib/iso-4217-alpha3'
+import { isRecognizedIsoFiatCurrencyCode } from '@/lib/supported-fiat-currencies'
 
 export const FIAT_PROVIDER_CURRENCIES_STALE_MS = 86_400_000
 
@@ -79,7 +79,7 @@ export function parseKrakenAssetPairsForBtcFiat(
     const wsnameSegments = assetPairRow.wsname.split('/')
     if (wsnameSegments.length !== 2 || wsnameSegments[0] !== 'XBT') continue
     const quoteFiatCode = wsnameSegments[1]!
-    if (!/^[A-Z]{3}$/.test(quoteFiatCode)) continue
+    if (!isRecognizedIsoFiatCurrencyCode(quoteFiatCode)) continue
     if (!krakenTickerPairKeyByFiatCode.has(quoteFiatCode)) {
       krakenTickerPairKeyByFiatCode.set(quoteFiatCode, krakenAssetPairId)
     }
@@ -106,8 +106,7 @@ export function parseCoinGeckoSupportedVsCurrencies(
   for (const rawVsCurrencyId of rawResponseBody) {
     if (typeof rawVsCurrencyId !== 'string') continue
     const uppercaseFiatCode = rawVsCurrencyId.trim().toUpperCase()
-    if (!/^[A-Z]{3}$/.test(uppercaseFiatCode) || !isIso4217Alpha3(uppercaseFiatCode))
-      continue
+    if (!isRecognizedIsoFiatCurrencyCode(uppercaseFiatCode)) continue
     fiatCurrencyCodes.push(uppercaseFiatCode)
   }
 
@@ -132,8 +131,7 @@ export function parseBlockchainTickerKeys(
     rawResponseBody as Record<string, unknown>,
   )) {
     const uppercaseFiatCode = tickerTopLevelKey.trim().toUpperCase()
-    if (!/^[A-Z]{3}$/.test(uppercaseFiatCode) || !isIso4217Alpha3(uppercaseFiatCode))
-      continue
+    if (!isRecognizedIsoFiatCurrencyCode(uppercaseFiatCode)) continue
     fiatCurrencyCodes.push(uppercaseFiatCode)
   }
 

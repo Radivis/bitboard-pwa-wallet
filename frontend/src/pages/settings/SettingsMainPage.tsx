@@ -20,10 +20,7 @@ import { useFeatureStore } from '@/stores/featureStore'
 import { useBitcoinDisplayUnitStore } from '@/stores/bitcoinDisplayUnitStore'
 import { useFiatDenominationStore } from '@/stores/fiatDenominationStore'
 import { useFiatProviderSupportedCurrenciesQuery } from '@/hooks/useFiatProviderSupportedCurrenciesQuery'
-import {
-  type FiatCurrencyCode,
-  getFiatCurrencyUiMeta,
-} from '@/lib/supported-fiat-currencies'
+import { FiatCurrencySettingsSelect } from '@/components/settings/FiatCurrencySettingsSelect'
 import {
   FIAT_RATE_PROVIDER_IDS,
   FIAT_RATE_PROVIDER_LABELS,
@@ -146,53 +143,12 @@ export function SettingsMainPage() {
             </select>
           </div>
           <div className="flex flex-col gap-2">
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <span className="text-sm text-muted-foreground">
-                Default fiat currency
-              </span>
-              <select
-                className={fiatSettingsSelectClassName}
-                value={defaultFiatCurrency}
-                disabled={
-                  fiatProviderSupportedCurrenciesQuery.isPending ||
-                  fiatProviderSupportedCurrenciesQuery.isError ||
-                  (fiatProviderSupportedCurrenciesQuery.isSuccess &&
-                    (fiatProviderSupportedCurrenciesQuery.data?.codes.length ?? 0) === 0)
-                }
-                aria-label="Default fiat currency"
-                aria-busy={fiatProviderSupportedCurrenciesQuery.isPending}
-                onChange={(e) =>
-                  setDefaultFiatCurrency(e.target.value as FiatCurrencyCode)
-                }
-              >
-                {fiatProviderSupportedCurrenciesQuery.isPending ? (
-                  <option value={defaultFiatCurrency}>
-                    Loading options… ({defaultFiatCurrency})
-                  </option>
-                ) : fiatProviderSupportedCurrenciesQuery.isError ? (
-                  <option value={defaultFiatCurrency}>
-                    {defaultFiatCurrency} (list unavailable)
-                  </option>
-                ) : (fiatProviderSupportedCurrenciesQuery.data?.codes.length ?? 0) ===
-                  0 ? (
-                  <option value={defaultFiatCurrency}>
-                    No currencies reported ({defaultFiatCurrency})
-                  </option>
-                ) : (
-                  fiatProviderSupportedCurrenciesQuery.data?.codes.map(
-                    (fiatCurrencyCodeOption) => {
-                      const { label: fiatCurrencyLabel } =
-                        getFiatCurrencyUiMeta(fiatCurrencyCodeOption)
-                      return (
-                        <option key={fiatCurrencyCodeOption} value={fiatCurrencyCodeOption}>
-                          {fiatCurrencyLabel} ({fiatCurrencyCodeOption})
-                        </option>
-                      )
-                    },
-                  )
-                )}
-              </select>
-            </div>
+            <FiatCurrencySettingsSelect
+              selectClassName={fiatSettingsSelectClassName}
+              defaultFiatCurrency={defaultFiatCurrency}
+              onDefaultFiatCurrencyChange={setDefaultFiatCurrency}
+              supportedCurrenciesQuery={fiatProviderSupportedCurrenciesQuery}
+            />
             <p className="text-xs text-muted-foreground sm:text-right">
               Available options depend on the selected rate service.
             </p>
