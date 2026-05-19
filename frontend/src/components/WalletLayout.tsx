@@ -30,7 +30,6 @@ import { SecureStorageUnavailableBanner } from '@/components/SecureStorageUnavai
 import { useWallet } from '@/db'
 import { useWalletStore } from '@/stores/walletStore'
 import { useSessionStore } from '@/stores/sessionStore'
-import { useClampDefaultFiatToProviderSupportedList } from '@/hooks/useClampDefaultFiatToProviderSupportedList'
 import { cn } from '@/lib/utils'
 
 const APP_TITLE = 'Bitboard Wallet'
@@ -458,8 +457,6 @@ export function WalletLayout({ children }: WalletLayoutProps) {
     document.title =
       walletDisplayName !== null ? `${APP_TITLE}: ${walletDisplayName}` : APP_TITLE
   }, [walletDisplayName])
-
-  useClampDefaultFiatToProviderSupportedList()
 
   return (
     <div className="min-h-screen bg-background text-foreground">

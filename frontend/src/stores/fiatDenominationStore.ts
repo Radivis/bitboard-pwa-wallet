@@ -8,6 +8,7 @@ import {
 } from '@/lib/supported-fiat-currencies'
 import type { FiatRateProviderId } from '@/lib/fiat-rate-service-whitelist'
 import { isKnownFiatRateProviderId } from '@/lib/fiat-rate-service-whitelist'
+import { clampDefaultFiatCurrencyToProviderDiscovery } from '@/stores/fiat-denomination-clamp'
 
 const STORAGE_KEY = 'fiat-denomination-storage'
 
@@ -28,6 +29,19 @@ function coerceFiatRateProvider(rawPersistedValue: unknown): FiatRateProviderId 
     : DEFAULT_PROVIDER
 }
 
+function scheduleClampDefaultFiatToProviderDiscovery(
+  fiatRateProviderId: FiatRateProviderId,
+): void {
+  void clampDefaultFiatCurrencyToProviderDiscovery(
+    fiatRateProviderId,
+    () => useFiatDenominationStore.getState(),
+    () =>
+      useFiatDenominationStore.setState({
+        defaultFiatCurrency: DEFAULT_FIAT_FALLBACK,
+      }),
+  )
+}
+
 export const useFiatDenominationStore = create<FiatDenominationState>()(
   persist(
     (set) => ({
@@ -37,7 +51,11 @@ export const useFiatDenominationStore = create<FiatDenominationState>()(
       setFiatDenominationMode: (fiatDenominationMode) => set({ fiatDenominationMode }),
       setDefaultFiatCurrency: (defaultFiatCurrency) =>
         set({ defaultFiatCurrency: coerceStoredFiatCurrencyCode(defaultFiatCurrency) }),
-      setFiatRateProvider: (fiatRateProvider) => set({ fiatRateProvider }),
+      setFiatRateProvider: (nextFiatRateProviderId) => {
+        if (!isKnownFiatRateProviderId(nextFiatRateProviderId)) return
+        set({ fiatRateProvider: nextFiatRateProviderId })
+        scheduleClampDefaultFiatToProviderDiscovery(nextFiatRateProviderId)
+      },
     }),
     {
       name: STORAGE_KEY,
@@ -62,6 +80,7 @@ export const useFiatDenominationStore = create<FiatDenominationState>()(
             fiatRateProvider,
           })
         }
+        scheduleClampDefaultFiatToProviderDiscovery(fiatRateProvider)
       },
     },
   ),
