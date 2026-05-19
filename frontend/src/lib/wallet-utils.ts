@@ -209,6 +209,16 @@ export async function syncLoadedSubWalletWithEsplora(options: {
         ? `Sync failed after switching: ${detail}`
         : 'Sync failed after switching',
     )
+    // WASM already holds the target sub-wallet; refresh store from it so we do not keep
+    // the previous network's balance when Esplora sync fails.
+    try {
+      const { getBalance, getTransactionList } = useCryptoStore.getState()
+      const { setBalance, setTransactions } = useWalletStore.getState()
+      setBalance(await getBalance())
+      setTransactions(await getTransactionList())
+    } catch {
+      // Leave balance cleared if WASM is unavailable.
+    }
     return 'sync_failed'
   }
 }

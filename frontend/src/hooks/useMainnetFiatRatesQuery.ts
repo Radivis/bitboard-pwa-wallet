@@ -1,30 +1,34 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useWalletStore } from '@/stores/walletStore'
 import { useFiatDenominationStore } from '@/stores/fiatDenominationStore'
 import { useLightningBalancesForDashboardQuery } from '@/hooks/useLightningMutations'
-import type { SupportedDefaultFiatCurrency } from '@/lib/supported-fiat-currencies'
 import type { FiatRateProviderId } from '@/lib/fiat-rate-service-whitelist'
 import {
   buildMainnetFiatRateRequestUrl,
   parseFiatRateProviderResponse,
 } from '@/lib/fiat-rate-client'
+import {
+  fetchFiatProviderCurrenciesData,
+  fiatProviderCurrenciesQueryKey,
+  FIAT_PROVIDER_CURRENCIES_STALE_MS,
+} from '@/lib/fiat-provider-currencies'
 import { errorMessage } from '@/lib/utils'
 
 export const MAINNET_FIAT_RATES_STALE_MS = 120_000
 
 export function mainnetFiatRatesQueryKey(
-  currency: SupportedDefaultFiatCurrency,
-  provider: FiatRateProviderId,
-): readonly [string, SupportedDefaultFiatCurrency, FiatRateProviderId] {
-  return ['mainnet-fiat-rates', currency, provider] as const
+  fiatCurrencyCode: string,
+  fiatRateProviderId: FiatRateProviderId,
+): readonly [string, string, FiatRateProviderId] {
+  return ['mainnet-fiat-rates', fiatCurrencyCode, fiatRateProviderId] as const
 }
 
 function usePortfolioPositiveForFiatRatesFetch(): boolean {
   const balance = useWalletStore((s) => s.balance)
-  const lnQuery = useLightningBalancesForDashboardQuery()
-  const onChainTotal = balance?.total ?? 0
-  const lnTotal = lnQuery.data?.totalSats ?? 0
-  return onChainTotal > 0 || lnTotal > 0
+  const lightningBalancesQuery = useLightningBalancesForDashboardQuery()
+  const onChainTotalSats = balance?.total ?? 0
+  const lightningTotalSats = lightningBalancesQuery.data?.totalSats ?? 0
+  return onChainTotalSats > 0 || lightningTotalSats > 0
 }
 
 /**
@@ -35,38 +39,66 @@ function usePortfolioPositiveForFiatRatesFetch(): boolean {
 export function useMainnetFiatRatesQuery(options?: {
   allowFetchWhenPortfolioZeroForReceivePage?: boolean
 }) {
+  const queryClient = useQueryClient()
   const networkMode = useWalletStore((s) => s.networkMode)
   const walletStatus = useWalletStore((s) => s.walletStatus)
   const balance = useWalletStore((s) => s.balance)
-  const fiatMode = useFiatDenominationStore((s) => s.fiatDenominationMode)
-  const currency = useFiatDenominationStore((s) => s.defaultFiatCurrency)
-  const provider = useFiatDenominationStore((s) => s.fiatRateProvider)
-  const portfolioPositive = usePortfolioPositiveForFiatRatesFetch()
-  const allowZero = options?.allowFetchWhenPortfolioZeroForReceivePage === true
+  const fiatDenominationMode = useFiatDenominationStore((s) => s.fiatDenominationMode)
+  const defaultFiatCurrency = useFiatDenominationStore((s) => s.defaultFiatCurrency)
+  const fiatRateProviderId = useFiatDenominationStore((s) => s.fiatRateProvider)
+  const portfolioHasPositiveBalance = usePortfolioPositiveForFiatRatesFetch()
+  const allowFetchWhenPortfolioZeroForReceivePage =
+    options?.allowFetchWhenPortfolioZeroForReceivePage === true
 
-  const enabled =
+  const shouldFetchMainnetFiatRate =
     networkMode === 'mainnet' &&
-    fiatMode &&
+    fiatDenominationMode &&
     (walletStatus === 'unlocked' || walletStatus === 'syncing') &&
     balance != null &&
-    (allowZero || portfolioPositive)
+    (allowFetchWhenPortfolioZeroForReceivePage || portfolioHasPositiveBalance)
 
   return useQuery({
-    queryKey: mainnetFiatRatesQueryKey(currency, provider),
+    queryKey: mainnetFiatRatesQueryKey(defaultFiatCurrency, fiatRateProviderId),
     queryFn: async () => {
-      const url = buildMainnetFiatRateRequestUrl(provider, currency)
-      const res = await fetch(url)
-      if (!res.ok) {
-        throw new Error(`Fiat rate request failed (${res.status})`)
+      const providerSupportedFiatCurrencies = await queryClient.fetchQuery({
+        queryKey: fiatProviderCurrenciesQueryKey(fiatRateProviderId),
+        queryFn: () => fetchFiatProviderCurrenciesData(fiatRateProviderId),
+        staleTime: FIAT_PROVIDER_CURRENCIES_STALE_MS,
+      })
+
+      let krakenTickerPairFromDiscovery: string | undefined
+      if (fiatRateProviderId === 'kraken') {
+        const normalizedDefaultFiatCode = defaultFiatCurrency.trim().toUpperCase()
+        krakenTickerPairFromDiscovery =
+          providerSupportedFiatCurrencies.krakenPairByCode[normalizedDefaultFiatCode]
+        if (krakenTickerPairFromDiscovery == null) {
+          throw new Error(
+            'This fiat currency is not available from Kraken for price data',
+          )
+        }
       }
-      const json: unknown = await res.json()
-      const parsed = parseFiatRateProviderResponse(provider, currency, json)
-      if (parsed == null) {
+
+      const rateRequestUrl = buildMainnetFiatRateRequestUrl(
+        fiatRateProviderId,
+        defaultFiatCurrency,
+        krakenTickerPairFromDiscovery,
+      )
+      const rateHttpResponse = await fetch(rateRequestUrl)
+      if (!rateHttpResponse.ok) {
+        throw new Error(`Fiat rate request failed (${rateHttpResponse.status})`)
+      }
+      const rateResponseBody: unknown = await rateHttpResponse.json()
+      const parsedRate = parseFiatRateProviderResponse(
+        fiatRateProviderId,
+        defaultFiatCurrency,
+        rateResponseBody,
+      )
+      if (parsedRate == null) {
         throw new Error('Unrecognized fiat rate response')
       }
-      return parsed
+      return parsedRate
     },
-    enabled,
+    enabled: shouldFetchMainnetFiatRate,
     staleTime: MAINNET_FIAT_RATES_STALE_MS,
   })
 }

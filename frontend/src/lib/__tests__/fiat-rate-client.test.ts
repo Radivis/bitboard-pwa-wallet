@@ -11,8 +11,15 @@ describe('buildMainnetFiatRateRequestUrl', () => {
 
   it('builds Kraken proxied ticker URL with encoded pair', () => {
     vi.stubGlobal('location', { origin: 'https://app.example' } as Location)
-    expect(buildMainnetFiatRateRequestUrl('kraken', 'USD')).toBe(
+    expect(buildMainnetFiatRateRequestUrl('kraken', 'USD', 'XXBTZUSD')).toBe(
       'https://app.example/api/fiat-rates/kraken/0/public/Ticker?pair=XXBTZUSD',
+    )
+  })
+
+  it('throws when Kraken pair is omitted', () => {
+    vi.stubGlobal('location', { origin: 'https://app.example' } as Location)
+    expect(() => buildMainnetFiatRateRequestUrl('kraken', 'USD')).toThrow(
+      /Kraken ticker pair is required/,
     )
   })
 

@@ -1,52 +1,57 @@
 import { SATS_PER_BTC } from '@/lib/bitcoin-utils'
-import type { SupportedDefaultFiatCurrency } from '@/lib/supported-fiat-currencies'
-import { FIAT_CURRENCY_UI } from '@/lib/supported-fiat-currencies'
+import type { FiatCurrencyCode } from '@/lib/supported-fiat-currencies'
+import { getFiatCurrencyUiMeta } from '@/lib/supported-fiat-currencies'
+
+function normalizeFiatCurrencyCode(currencyInput: string): FiatCurrencyCode {
+  return currencyInput.trim().toUpperCase()
+}
 
 export function formatFiatFromSatsAndBtcPrice(
   amountSats: number,
   btcPriceInFiat: number,
-  currency: SupportedDefaultFiatCurrency,
+  currencyInput: string,
 ): string {
-  const btc = amountSats / SATS_PER_BTC
-  const fiat = btc * btcPriceInFiat
-  const { maxFractionDigits } = FIAT_CURRENCY_UI[currency]
+  const fiatCurrencyCode = normalizeFiatCurrencyCode(currencyInput)
+  const btcAmount = amountSats / SATS_PER_BTC
+  const fiatAmount = btcAmount * btcPriceInFiat
+  const { maxFractionDigits } = getFiatCurrencyUiMeta(fiatCurrencyCode)
   return new Intl.NumberFormat(undefined, {
     style: 'currency',
-    currency,
+    currency: fiatCurrencyCode,
     minimumFractionDigits: 0,
     maximumFractionDigits: maxFractionDigits,
-  }).format(fiat)
+  }).format(fiatAmount)
 }
 
 /** Placeholder for a fiat-denominated amount field (e.g. `"$0.00"`). */
-export function fiatAmountInputPlaceholder(
-  currency: SupportedDefaultFiatCurrency,
-): string {
+export function fiatAmountInputPlaceholder(currencyInput: string): string {
+  const fiatCurrencyCode = normalizeFiatCurrencyCode(currencyInput)
   return new Intl.NumberFormat(undefined, {
     style: 'currency',
-    currency,
+    currency: fiatCurrencyCode,
     minimumFractionDigits: 0,
-    maximumFractionDigits: FIAT_CURRENCY_UI[currency].maxFractionDigits,
+    maximumFractionDigits: getFiatCurrencyUiMeta(fiatCurrencyCode).maxFractionDigits,
   }).format(0)
 }
 
 /** Formats a fiat numeric value for controlled inputs (trim trailing zeros). */
 export function formatFiatNumericStringForInput(
   fiatAmount: number,
-  currency: SupportedDefaultFiatCurrency,
+  currencyInput: string,
 ): string {
-  const { maxFractionDigits } = FIAT_CURRENCY_UI[currency]
-  let s = fiatAmount.toFixed(maxFractionDigits)
-  s = s.replace(/\.?0+$/, '')
-  return s === '' ? '0' : s
+  const fiatCurrencyCode = normalizeFiatCurrencyCode(currencyInput)
+  const { maxFractionDigits } = getFiatCurrencyUiMeta(fiatCurrencyCode)
+  let trimmedFixedDecimal = fiatAmount.toFixed(maxFractionDigits)
+  trimmedFixedDecimal = trimmedFixedDecimal.replace(/\.?0+$/, '')
+  return trimmedFixedDecimal === '' ? '0' : trimmedFixedDecimal
 }
 
 /** BIP21 / fixed-sats → fiat field string when the send UI is in fiat denomination mode. */
 export function formatFiatInputStringFromSats(
   amountSats: number,
   btcPriceInFiat: number,
-  currency: SupportedDefaultFiatCurrency,
+  currencyInput: string,
 ): string {
-  const fiat = (amountSats / SATS_PER_BTC) * btcPriceInFiat
-  return formatFiatNumericStringForInput(fiat, currency)
+  const fiatAmount = (amountSats / SATS_PER_BTC) * btcPriceInFiat
+  return formatFiatNumericStringForInput(fiatAmount, currencyInput)
 }

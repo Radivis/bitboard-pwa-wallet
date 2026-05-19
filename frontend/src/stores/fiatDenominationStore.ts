@@ -2,50 +2,60 @@ import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
 import { sqliteStorage } from '@/db/storage-adapter'
 import {
-  isSupportedDefaultFiatCurrency,
-  type SupportedDefaultFiatCurrency,
+  coerceStoredFiatCurrencyCode,
+  DEFAULT_FIAT_FALLBACK,
+  type FiatCurrencyCode,
 } from '@/lib/supported-fiat-currencies'
 import type { FiatRateProviderId } from '@/lib/fiat-rate-service-whitelist'
 import { isKnownFiatRateProviderId } from '@/lib/fiat-rate-service-whitelist'
+import { clampDefaultFiatCurrencyToProviderDiscovery } from '@/stores/fiat-denomination-clamp'
 
 const STORAGE_KEY = 'fiat-denomination-storage'
 
-const DEFAULT_FIAT: SupportedDefaultFiatCurrency = 'USD'
 const DEFAULT_PROVIDER: FiatRateProviderId = 'kraken'
 
 interface FiatDenominationState {
   fiatDenominationMode: boolean
-  defaultFiatCurrency: SupportedDefaultFiatCurrency
+  defaultFiatCurrency: FiatCurrencyCode
   fiatRateProvider: FiatRateProviderId
-  setFiatDenominationMode: (v: boolean) => void
-  setDefaultFiatCurrency: (c: SupportedDefaultFiatCurrency) => void
-  setFiatRateProvider: (p: FiatRateProviderId) => void
+  setFiatDenominationMode: (nextFiatDenominationMode: boolean) => void
+  setDefaultFiatCurrency: (fiatCurrencyCode: FiatCurrencyCode) => void
+  setFiatRateProvider: (nextFiatRateProviderId: FiatRateProviderId) => void
 }
 
-function coerceDefaultFiatCurrency(
-  v: unknown,
-): SupportedDefaultFiatCurrency {
-  return typeof v === 'string' && isSupportedDefaultFiatCurrency(v)
-    ? v
-    : DEFAULT_FIAT
-}
-
-function coerceFiatRateProvider(v: unknown): FiatRateProviderId {
-  return typeof v === 'string' && isKnownFiatRateProviderId(v)
-    ? v
+function coerceFiatRateProvider(rawPersistedValue: unknown): FiatRateProviderId {
+  return typeof rawPersistedValue === 'string' && isKnownFiatRateProviderId(rawPersistedValue)
+    ? rawPersistedValue
     : DEFAULT_PROVIDER
+}
+
+function scheduleClampDefaultFiatToProviderDiscovery(
+  fiatRateProviderId: FiatRateProviderId,
+): void {
+  void clampDefaultFiatCurrencyToProviderDiscovery(
+    fiatRateProviderId,
+    () => useFiatDenominationStore.getState(),
+    () =>
+      useFiatDenominationStore.setState({
+        defaultFiatCurrency: DEFAULT_FIAT_FALLBACK,
+      }),
+  )
 }
 
 export const useFiatDenominationStore = create<FiatDenominationState>()(
   persist(
     (set) => ({
       fiatDenominationMode: false,
-      defaultFiatCurrency: DEFAULT_FIAT,
+      defaultFiatCurrency: DEFAULT_FIAT_FALLBACK,
       fiatRateProvider: DEFAULT_PROVIDER,
       setFiatDenominationMode: (fiatDenominationMode) => set({ fiatDenominationMode }),
       setDefaultFiatCurrency: (defaultFiatCurrency) =>
-        set({ defaultFiatCurrency }),
-      setFiatRateProvider: (fiatRateProvider) => set({ fiatRateProvider }),
+        set({ defaultFiatCurrency: coerceStoredFiatCurrencyCode(defaultFiatCurrency) }),
+      setFiatRateProvider: (nextFiatRateProviderId) => {
+        if (!isKnownFiatRateProviderId(nextFiatRateProviderId)) return
+        set({ fiatRateProvider: nextFiatRateProviderId })
+        scheduleClampDefaultFiatToProviderDiscovery(nextFiatRateProviderId)
+      },
     }),
     {
       name: STORAGE_KEY,
@@ -57,7 +67,7 @@ export const useFiatDenominationStore = create<FiatDenominationState>()(
       }),
       onRehydrateStorage: () => (state) => {
         if (state == null) return
-        const defaultFiatCurrency = coerceDefaultFiatCurrency(
+        const defaultFiatCurrency = coerceStoredFiatCurrencyCode(
           state.defaultFiatCurrency,
         )
         const fiatRateProvider = coerceFiatRateProvider(state.fiatRateProvider)
@@ -70,11 +80,12 @@ export const useFiatDenominationStore = create<FiatDenominationState>()(
             fiatRateProvider,
           })
         }
+        scheduleClampDefaultFiatToProviderDiscovery(fiatRateProvider)
       },
     },
   ),
 )
 
-export function getDefaultFiatCurrencyStatic(): SupportedDefaultFiatCurrency {
-  return DEFAULT_FIAT
+export function getDefaultFiatCurrencyStatic(): FiatCurrencyCode {
+  return DEFAULT_FIAT_FALLBACK
 }

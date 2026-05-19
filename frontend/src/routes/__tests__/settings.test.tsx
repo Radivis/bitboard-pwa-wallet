@@ -318,6 +318,22 @@ vi.mock('@/components/ConfirmationDialog', () => ({
     ) : null,
 }))
 
+vi.mock('@/hooks/useFiatProviderSupportedCurrenciesQuery', () => ({
+  useFiatProviderSupportedCurrenciesQuery: () => ({
+    data: {
+      codes: ['EUR', 'GBP', 'USD'],
+      krakenPairByCode: {
+        EUR: 'XXBTZEUR',
+        GBP: 'XXBTZGBP',
+        USD: 'XXBTZUSD',
+      },
+    },
+    isPending: false,
+    isError: false,
+    isSuccess: true,
+  }),
+}))
+
 import { GITHUB_CHANGELOG_URL } from '@common/public-links'
 import { SettingsMainPage } from '@/pages/settings/SettingsMainPage'
 import { SettingsSecurityPage } from '@/pages/settings/SettingsSecurityPage'
@@ -375,6 +391,9 @@ describe('Settings routes', () => {
     expect(screen.queryByText('Address Type')).not.toBeInTheDocument()
     expect(screen.getByText('Appearance')).toBeInTheDocument()
     expect(screen.getByText('Currency / unit defaults')).toBeInTheDocument()
+    expect(
+      screen.getByText(/Available options depend on the selected rate service/i),
+    ).toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: 'Security' })).not.toBeInTheDocument()
     expect(screen.queryByText('Data Backups')).not.toBeInTheDocument()
   })

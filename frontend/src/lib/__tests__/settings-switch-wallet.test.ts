@@ -67,6 +67,9 @@ vi.mock('@/lib/wallet-utils', async (importOriginal) => {
 const mockSetWalletStatus = vi.fn()
 const mockSetCurrentAddress = vi.fn()
 const mockCommitLoadedSubWallet = vi.fn()
+const mockSetBalance = vi.fn()
+const mockSetTransactions = vi.fn()
+const mockSetLastSyncTime = vi.fn()
 const mockExportChangeset = vi.fn()
 const mockLoadWallet = vi.fn()
 const mockGetCurrentAddress = vi.fn()
@@ -93,6 +96,9 @@ describe('switchDescriptorWallet', () => {
       setWalletStatus: mockSetWalletStatus,
       setCurrentAddress: mockSetCurrentAddress,
       commitLoadedSubWallet: mockCommitLoadedSubWallet,
+      setBalance: mockSetBalance,
+      setTransactions: mockSetTransactions,
+      setLastSyncTime: mockSetLastSyncTime,
     } as ReturnType<typeof useWalletStore.getState>)
 
     vi.mocked(useSessionStore.getState).mockReturnValue({
@@ -116,6 +122,9 @@ describe('switchDescriptorWallet', () => {
       setWalletStatus: mockSetWalletStatus,
       setCurrentAddress: mockSetCurrentAddress,
       commitLoadedSubWallet: mockCommitLoadedSubWallet,
+      setBalance: mockSetBalance,
+      setTransactions: mockSetTransactions,
+      setLastSyncTime: mockSetLastSyncTime,
     } as ReturnType<typeof useWalletStore.getState>)
 
     await expect(
@@ -159,6 +168,9 @@ describe('switchDescriptorWallet', () => {
       currentAccountId: 0,
     })
 
+    expect(mockSetBalance).toHaveBeenCalledWith(null)
+    expect(mockSetTransactions).toHaveBeenCalledWith([])
+    expect(mockSetLastSyncTime).toHaveBeenCalledWith(null)
     expect(mockSyncLoadedSubWalletWithEsplora).toHaveBeenCalledWith({
       networkMode: 'testnet',
       activeWalletId: 1,
@@ -166,7 +178,7 @@ describe('switchDescriptorWallet', () => {
       targetNetwork: 'testnet',
       targetAddressType: 'taproot',
       targetAccountId: 0,
-      fullScanNeeded: false,
+      fullScanNeeded: true,
     })
     expect(mockCommitLoadedSubWallet).toHaveBeenCalledWith({
       networkMode: 'testnet',
@@ -204,6 +216,21 @@ describe('switchDescriptorWallet', () => {
     )
     expect(mockSetWalletStatus).toHaveBeenCalledWith('syncing')
     expect(mockSetWalletStatus).toHaveBeenCalledWith('unlocked')
+  })
+
+  it('forces full scan when switching between live networks even if fullScanDone is set', async () => {
+    await switchDescriptorWallet({
+      targetNetworkMode: 'mainnet',
+      targetAddressType: 'taproot',
+      targetAccountId: 0,
+      currentNetworkMode: 'testnet',
+      currentAddressType: 'taproot',
+      currentAccountId: 0,
+    })
+
+    expect(mockSyncLoadedSubWalletWithEsplora).toHaveBeenCalledWith(
+      expect.objectContaining({ fullScanNeeded: true }),
+    )
   })
 
   it('retries load with fresh chain when persisted changeset network mismatches target', async () => {

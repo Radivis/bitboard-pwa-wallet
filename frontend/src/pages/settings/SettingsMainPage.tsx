@@ -19,11 +19,8 @@ import { useWallets } from '@/db'
 import { useFeatureStore } from '@/stores/featureStore'
 import { useBitcoinDisplayUnitStore } from '@/stores/bitcoinDisplayUnitStore'
 import { useFiatDenominationStore } from '@/stores/fiatDenominationStore'
-import {
-  SUPPORTED_DEFAULT_FIAT_CURRENCIES,
-  type SupportedDefaultFiatCurrency,
-  FIAT_CURRENCY_UI,
-} from '@/lib/supported-fiat-currencies'
+import { useFiatProviderSupportedCurrenciesQuery } from '@/hooks/useFiatProviderSupportedCurrenciesQuery'
+import { FiatCurrencySettingsSelect } from '@/components/settings/FiatCurrencySettingsSelect'
 import {
   FIAT_RATE_PROVIDER_IDS,
   FIAT_RATE_PROVIDER_LABELS,
@@ -44,6 +41,12 @@ export function SettingsMainPage() {
   )
   const fiatRateProvider = useFiatDenominationStore((s) => s.fiatRateProvider)
   const setFiatRateProvider = useFiatDenominationStore((s) => s.setFiatRateProvider)
+
+  const fiatProviderSupportedCurrenciesQuery = useFiatProviderSupportedCurrenciesQuery(
+    fiatRateProvider,
+  )
+  const fiatSettingsSelectClassName =
+    'rounded-md border border-input bg-background px-2 py-1 text-sm font-medium text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
 
   return (
     <div className="space-y-6">
@@ -123,38 +126,38 @@ export function SettingsMainPage() {
             />
           </div>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <span className="text-sm text-muted-foreground">Default fiat currency</span>
-            <select
-              className="rounded-md border border-input bg-background px-2 py-1 text-sm font-medium text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              value={defaultFiatCurrency}
-              aria-label="Default fiat currency"
-              onChange={(e) =>
-                setDefaultFiatCurrency(e.target.value as SupportedDefaultFiatCurrency)
-              }
-            >
-              {SUPPORTED_DEFAULT_FIAT_CURRENCIES.map((c) => (
-                <option key={c} value={c}>
-                  {FIAT_CURRENCY_UI[c].label} ({c})
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <span className="text-sm text-muted-foreground">Currency rate service</span>
             <select
-              className="rounded-md border border-input bg-background px-2 py-1 text-sm font-medium text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className={fiatSettingsSelectClassName}
               value={fiatRateProvider}
               aria-label="Currency rate data provider"
               onChange={(e) =>
                 setFiatRateProvider(e.target.value as FiatRateProviderId)
               }
             >
-              {FIAT_RATE_PROVIDER_IDS.map((id) => (
-                <option key={id} value={id}>
-                  {FIAT_RATE_PROVIDER_LABELS[id]}
+              {FIAT_RATE_PROVIDER_IDS.map((fiatRateProviderOptionId) => (
+                <option key={fiatRateProviderOptionId} value={fiatRateProviderOptionId}>
+                  {FIAT_RATE_PROVIDER_LABELS[fiatRateProviderOptionId]}
                 </option>
               ))}
             </select>
+          </div>
+          <div className="flex flex-col gap-2">
+            <FiatCurrencySettingsSelect
+              selectClassName={fiatSettingsSelectClassName}
+              defaultFiatCurrency={defaultFiatCurrency}
+              onDefaultFiatCurrencyChange={setDefaultFiatCurrency}
+              supportedCurrenciesQuery={fiatProviderSupportedCurrenciesQuery}
+            />
+            <p className="text-xs text-muted-foreground sm:text-right">
+              Available options depend on the selected rate service.
+            </p>
+            {fiatProviderSupportedCurrenciesQuery.isError ? (
+              <p className="text-xs text-destructive sm:text-right" role="alert">
+                Could not load the currency list for this service. Try again or pick
+                another rate service.
+              </p>
+            ) : null}
           </div>
         </CardContent>
       </Card>

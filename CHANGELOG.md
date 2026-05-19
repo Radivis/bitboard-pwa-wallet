@@ -15,6 +15,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+## [0.1.7] - 2026-05-19
+### Changed
+- Conversion between Bitcoin and fiat currencies now supports all currencies from the currently selected currency rate service
+
+### Fixed
+- Reset currently loaded network specific wallet balance and transaction data when switching networks to prevent balances or transactions from the wrong network being displayed
+- Paths for open graph images are now hardcoded on the landing page, too.
+
 ## [0.1.6] - 2026-05-13
 ### Added
 - Currency conversion between Bitcoin and USD, EUR, or GBP using Kraken, CoinGecko, or Blockchain.com - selectable in Settings

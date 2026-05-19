@@ -73,8 +73,20 @@ export async function switchDescriptorWallet(params: {
 
   const { exportChangeset, loadWallet, getCurrentAddress } =
     useCryptoStore.getState()
-  const { setWalletStatus, setCurrentAddress, commitLoadedSubWallet } =
-    useWalletStore.getState()
+  const {
+    setWalletStatus,
+    setCurrentAddress,
+    commitLoadedSubWallet,
+    setBalance,
+    setTransactions,
+    setLastSyncTime,
+  } = useWalletStore.getState()
+
+  const isLiveNetworkSwitch =
+    phaseContext === 'network' &&
+    currentNetworkMode !== targetNetworkMode &&
+    currentNetworkMode !== 'lab' &&
+    targetNetworkMode !== 'lab'
 
   try {
     try {
@@ -103,6 +115,12 @@ export async function switchDescriptorWallet(params: {
         ? loadingTargetAddressTypeMessage(targetAddressType)
         : loadingTargetNetworkMessage(targetNetworkMode),
     )
+
+    // Drop previous sub-wallet balance/tx UI so the dashboard never shows another network's totals.
+    setCurrentAddress(null)
+    setBalance(null)
+    setTransactions([])
+    setLastSyncTime(null)
 
     const targetNetwork = toBitcoinNetwork(targetNetworkMode)
     const descriptorWallet = await resolveDescriptorWallet({
@@ -134,7 +152,9 @@ export async function switchDescriptorWallet(params: {
       onPhase?.(syncingTargetNetworkMessage(targetNetworkMode))
       setWalletStatus('syncing')
       const fullScanNeeded =
-        !descriptorWallet.fullScanDone || usedEmptyChainFallback
+        isLiveNetworkSwitch ||
+        !descriptorWallet.fullScanDone ||
+        usedEmptyChainFallback
       await syncLoadedSubWalletWithEsplora({
         networkMode: targetNetworkMode,
         activeWalletId,
