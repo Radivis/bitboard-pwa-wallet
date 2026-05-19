@@ -1,16 +1,13 @@
 import { useEffect } from 'react'
-import { useWalletStore } from '@/stores/walletStore'
 import { useFiatDenominationStore } from '@/stores/fiatDenominationStore'
 import { useFiatProviderSupportedCurrenciesQuery } from '@/hooks/useFiatProviderSupportedCurrenciesQuery'
 import { DEFAULT_FIAT_FALLBACK } from '@/lib/supported-fiat-currencies'
 
 /**
- * When mainnet fiat denomination is on, ensures persisted `defaultFiatCurrency` is in the
- * list returned by the selected rate provider (after discovery fetch).
+ * When the selected rate provider changes (or its discovery list loads), ensures
+ * persisted `defaultFiatCurrency` is among the codes that provider supports.
  */
 export function useClampDefaultFiatToProviderSupportedList(): void {
-  const networkMode = useWalletStore((s) => s.networkMode)
-  const fiatDenominationMode = useFiatDenominationStore((s) => s.fiatDenominationMode)
   const fiatRateProviderId = useFiatDenominationStore((s) => s.fiatRateProvider)
   const defaultFiatCurrency = useFiatDenominationStore(
     (s) => s.defaultFiatCurrency,
@@ -19,16 +16,11 @@ export function useClampDefaultFiatToProviderSupportedList(): void {
     (s) => s.setDefaultFiatCurrency,
   )
 
-  const shouldLoadProviderFiatCodeList =
-    networkMode === 'mainnet' && fiatDenominationMode
   const { data: providerSupportedFiatCurrencies, isSuccess: discoverySucceeded } =
-    useFiatProviderSupportedCurrenciesQuery(fiatRateProviderId, {
-      enabled: shouldLoadProviderFiatCodeList,
-    })
+    useFiatProviderSupportedCurrenciesQuery(fiatRateProviderId)
 
   useEffect(() => {
     if (
-      !shouldLoadProviderFiatCodeList ||
       !discoverySucceeded ||
       providerSupportedFiatCurrencies == null ||
       providerSupportedFiatCurrencies.codes.length === 0
@@ -39,7 +31,7 @@ export function useClampDefaultFiatToProviderSupportedList(): void {
       setDefaultFiatCurrency(DEFAULT_FIAT_FALLBACK)
     }
   }, [
-    shouldLoadProviderFiatCodeList,
+    fiatRateProviderId,
     discoverySucceeded,
     providerSupportedFiatCurrencies,
     defaultFiatCurrency,
