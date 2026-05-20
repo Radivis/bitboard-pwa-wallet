@@ -13,6 +13,10 @@ import {
 import type { LabOwner } from '@/lib/lab-owner'
 import { formatAmountInBitcoinDisplayUnit, getAccessibleBitcoinDisplayUnitLabel } from '@/lib/bitcoin-display-unit'
 import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
+import {
+  LAB_CARD_BLOCK_FEE_AMOUNT_TEXT_CLASS,
+  LAB_CARD_BLOCK_NET_MOVED_AMOUNT_TEXT_CLASS,
+} from '@/components/lab/lab-card-amount-text'
 import { getOwnerDisplayName, getOwnerIcon } from '@/lib/lab-utils'
 import { cn } from '@/lib/utils'
 
@@ -166,16 +170,24 @@ export function LabBlockSquare({
           <div className="flex min-w-0 items-center gap-1">
             <CakeSlice className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
             <span className="sr-only">Total fees</span>
-            <span className="min-w-0 text-[0.9375rem] leading-tight">
-              <BitcoinAmountDisplay amountSats={totalFeesSats} size="sm" />
+            <span className="min-w-0">
+              <BitcoinAmountDisplay
+                amountSats={totalFeesSats}
+                size="sm"
+                className={LAB_CARD_BLOCK_FEE_AMOUNT_TEXT_CLASS}
+              />
             </span>
           </div>
 
           <div className="flex min-w-0 items-center gap-1 border-t border-border/60 pt-1">
             <Bitcoin className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
             <span className="sr-only">Net moved {netMovedAria}</span>
-            <span className="min-w-0 text-[1.05rem] leading-tight">
-              <BitcoinAmountDisplay amountSats={netMovedSats} size="sm" />
+            <span className="min-w-0">
+              <BitcoinAmountDisplay
+                amountSats={netMovedSats}
+                size="sm"
+                className={LAB_CARD_BLOCK_NET_MOVED_AMOUNT_TEXT_CLASS}
+              />
             </span>
           </div>
 
