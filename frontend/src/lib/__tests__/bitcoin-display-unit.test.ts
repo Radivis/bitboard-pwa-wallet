@@ -3,6 +3,11 @@ import {
   formatAmountInBitcoinDisplayUnit,
   parseAmountToSatsFromBitcoinDisplayUnit,
   isBitcoinDisplayUnit,
+  isLiveTestNetwork,
+  getNetworkUnitIndicator,
+  getPrefixedBitcoinDisplayUnitLabel,
+  getAccessibleBitcoinDisplayUnitLabel,
+  BITCOIN_DISPLAY_UNITS,
 } from '@/lib/bitcoin-display-unit'
 import { MAX_SAFE_SATS } from '@/lib/bitcoin-utils'
 
@@ -39,5 +44,38 @@ describe('bitcoin-display-unit', () => {
     expect(isBitcoinDisplayUnit('BTC')).toBe(true)
     expect(isBitcoinDisplayUnit('btc')).toBe(false)
     expect(isBitcoinDisplayUnit(null)).toBe(false)
+  })
+
+  it('isLiveTestNetwork identifies testnet, signet, and regtest only', () => {
+    expect(isLiveTestNetwork('testnet')).toBe(true)
+    expect(isLiveTestNetwork('signet')).toBe(true)
+    expect(isLiveTestNetwork('regtest')).toBe(true)
+    expect(isLiveTestNetwork('mainnet')).toBe(false)
+    expect(isLiveTestNetwork('lab')).toBe(false)
+  })
+
+  it('getNetworkUnitIndicator returns test, lab, or null', () => {
+    expect(getNetworkUnitIndicator('testnet')).toBe('test')
+    expect(getNetworkUnitIndicator('signet')).toBe('test')
+    expect(getNetworkUnitIndicator('regtest')).toBe('test')
+    expect(getNetworkUnitIndicator('lab')).toBe('lab')
+    expect(getNetworkUnitIndicator('mainnet')).toBe(null)
+  })
+
+  it('getPrefixedBitcoinDisplayUnitLabel prefixes all units on live test networks', () => {
+    for (const unit of BITCOIN_DISPLAY_UNITS) {
+      expect(getPrefixedBitcoinDisplayUnitLabel(unit, 'testnet')).toMatch(/^t/)
+      expect(getPrefixedBitcoinDisplayUnitLabel(unit, 'mainnet')).not.toMatch(/^t/)
+      expect(getPrefixedBitcoinDisplayUnitLabel(unit, 'lab')).not.toMatch(/^t/)
+    }
+    expect(getPrefixedBitcoinDisplayUnitLabel('BTC', 'signet')).toBe('tBTC')
+    expect(getPrefixedBitcoinDisplayUnitLabel('sat', 'regtest')).toBe('tsat')
+  })
+
+  it('getAccessibleBitcoinDisplayUnitLabel uses Lab prefix for lab mode', () => {
+    expect(getAccessibleBitcoinDisplayUnitLabel('BTC', 'lab')).toBe('Lab BTC')
+    expect(getAccessibleBitcoinDisplayUnitLabel('sat', 'lab')).toBe('Lab sat')
+    expect(getAccessibleBitcoinDisplayUnitLabel('BTC', 'testnet')).toBe('tBTC')
+    expect(getAccessibleBitcoinDisplayUnitLabel('BTC', 'mainnet')).toBe('BTC')
   })
 })

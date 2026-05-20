@@ -33,8 +33,8 @@ import {
   type LightningNetworkMode,
 } from '@/lib/lightning-utils'
 import {
-  BITCOIN_DISPLAY_UNIT_LABEL,
   formatAmountInBitcoinDisplayUnit,
+  getPrefixedBitcoinDisplayUnitLabel,
 } from '@/lib/bitcoin-display-unit'
 import { getLightningConnectionsForActiveWallet } from '@/lib/lightning-connection-utils'
 import {
@@ -293,7 +293,7 @@ export function useCreateInvoiceMutation(onCreated: () => void) {
         toast.success('Amountless invoice created')
       } else {
         toast.success(
-          `Invoice created for ${formatAmountInBitcoinDisplayUnit(invoice.amountSats, 'BTC')} ${BITCOIN_DISPLAY_UNIT_LABEL.BTC}`,
+          `Invoice created for ${formatAmountInBitcoinDisplayUnit(invoice.amountSats, 'BTC')} ${getPrefixedBitcoinDisplayUnitLabel('BTC', networkMode)}`,
         )
       }
       onCreated()

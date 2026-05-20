@@ -46,10 +46,14 @@ vi.mock('@/stores/cryptoStore', () => ({
 }))
 
 let walletStoreState: Record<string, unknown> = {}
-vi.mock('@/stores/walletStore', () => ({
-  useWalletStore: (selector: (s: Record<string, unknown>) => unknown) =>
-    selector(walletStoreState),
-}))
+vi.mock('@/stores/walletStore', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/stores/walletStore')>()
+  return {
+    ...actual,
+    useWalletStore: (selector: (s: Record<string, unknown>) => unknown) =>
+      selector(walletStoreState),
+  }
+})
 
 vi.mock('@/stores/sessionStore', () => ({
   useSessionStore: (selector: (s: Record<string, unknown>) => unknown) =>

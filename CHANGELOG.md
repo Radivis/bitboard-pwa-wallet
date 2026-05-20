@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Bitcoin amount units on live test networks (testnet, signet, regtest) now show a grey `t` prefix before the unit label; Lab mode amounts show a grey flask icon instead
+
 ### Fixed
 
 ### Security

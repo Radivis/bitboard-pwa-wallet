@@ -11,7 +11,7 @@ import {
   Wallet,
 } from 'lucide-react'
 import type { LabOwner } from '@/lib/lab-owner'
-import { formatAmountInBitcoinDisplayUnit } from '@/lib/bitcoin-display-unit'
+import { formatAmountInBitcoinDisplayUnit, getAccessibleBitcoinDisplayUnitLabel } from '@/lib/bitcoin-display-unit'
 import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
 import { getOwnerDisplayName, getOwnerIcon } from '@/lib/lab-utils'
 import { cn } from '@/lib/utils'
@@ -70,8 +70,8 @@ export function LabBlockSquare({
   const minedDate = new Date(minedOnUnix * 1000)
   const dateLabel = Number.isFinite(minedOnUnix) && minedOnUnix > 0 ? minedDate.toLocaleDateString() : '—'
   const timeLabel = Number.isFinite(minedOnUnix) && minedOnUnix > 0 ? minedDate.toLocaleTimeString() : '—'
-  const netMovedAria = `${formatAmountInBitcoinDisplayUnit(netMovedSats, 'BTC')} BTC`
-  const feesAria = `${formatAmountInBitcoinDisplayUnit(totalFeesSats, 'BTC')} BTC`
+  const netMovedAria = `${formatAmountInBitcoinDisplayUnit(netMovedSats, 'BTC')} ${getAccessibleBitcoinDisplayUnitLabel('BTC', 'lab')}`
+  const feesAria = `${formatAmountInBitcoinDisplayUnit(totalFeesSats, 'BTC')} ${getAccessibleBitcoinDisplayUnitLabel('BTC', 'lab')}`
   const minedByDisplayName =
     minedBy != null ? getOwnerDisplayName(minedBy, wallets, entities) : null
   const minerAria = minedByDisplayName ?? 'unknown'

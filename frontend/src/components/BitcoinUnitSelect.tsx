@@ -7,9 +7,10 @@ import type {
 import type { BitcoinDisplayUnit } from '@/lib/bitcoin-display-unit'
 import {
   BITCOIN_DISPLAY_UNITS,
-  BITCOIN_DISPLAY_UNIT_LABEL,
+  getPrefixedBitcoinDisplayUnitLabel,
 } from '@/lib/bitcoin-display-unit'
 import { cn } from '@/lib/utils'
+import { selectCommittedNetworkMode, useWalletStore } from '@/stores/walletStore'
 
 export type BitcoinUnitSelectProps = {
   id?: string
@@ -42,6 +43,8 @@ export const BitcoinUnitSelect = forwardRef<
   },
   ref,
 ) {
+  const networkMode = useWalletStore(selectCommittedNetworkMode)
+
   return (
     <select
       ref={ref}
@@ -61,7 +64,7 @@ export const BitcoinUnitSelect = forwardRef<
     >
       {BITCOIN_DISPLAY_UNITS.map((unit) => (
         <option key={unit} value={unit}>
-          {BITCOIN_DISPLAY_UNIT_LABEL[unit]}
+          {getPrefixedBitcoinDisplayUnitLabel(unit, networkMode)}
         </option>
       ))}
     </select>
