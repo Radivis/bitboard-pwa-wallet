@@ -16,6 +16,7 @@ import {
   getUtxoSumByOwner,
   findAddressForOwner,
 } from './helpers/lab'
+import { LAB_WALLET_RECEIVE_PAGE_TITLE } from '@/lib/wallet-lab-ui-copy'
 import { goToWalletTab } from './helpers/wallet-nav'
 import { isCoinbase } from '@/lib/lab-operations'
 import { WALLET_OWNER_PREFIX } from '@/lib/lab-utils'
@@ -307,8 +308,10 @@ test.describe('Lab', { tag: '@lab' }, () => {
     const aliceAddress = findAddressForOwner(stateAfterMine, 'Alice')
     expect(aliceAddress).toBeDefined()
 
-    await goToWalletTab(page, 'Receive')
-    await expect(page.getByRole('heading', { name: 'Receive Bitcoin' })).toBeVisible({
+    await goToWalletTab(page, 'Receive', { networkMode: 'lab' })
+    await expect(
+      page.getByRole('heading', { name: LAB_WALLET_RECEIVE_PAGE_TITLE }),
+    ).toBeVisible({
       timeout: 15000,
     })
     const addressEl = page.getByRole('main').locator('.font-mono').first()
@@ -361,8 +364,10 @@ test.describe('Lab', { tag: '@lab' }, () => {
   test('transfer wallet to wallet', async ({ page }) => {
     await mineBlocksInLab(page, 2, LabOwnerType.Wallet)
 
-    await goToWalletTab(page, 'Receive')
-    await expect(page.getByRole('heading', { name: 'Receive Bitcoin' })).toBeVisible({
+    await goToWalletTab(page, 'Receive', { networkMode: 'lab' })
+    await expect(
+      page.getByRole('heading', { name: LAB_WALLET_RECEIVE_PAGE_TITLE }),
+    ).toBeVisible({
       timeout: 15000,
     })
     const addressEl = page.getByRole('main').locator('.font-mono').first()

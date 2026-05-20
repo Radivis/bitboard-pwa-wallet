@@ -52,6 +52,12 @@ import { mergeAndSortDashboardActivity } from '@/lib/lightning-dashboard-sync'
 import { LightningPaymentItem } from '@/components/LightningPaymentItem'
 import { useFiatDenominationStore } from '@/stores/fiatDenominationStore'
 import { useMainnetFiatRatesQuery } from '@/hooks/useMainnetFiatRatesQuery'
+import {
+  LAB_WALLET_BALANCE_DISCLAIMER,
+  walletBalanceCardTitle,
+  walletDashboardTitle,
+  walletOnChainSectionLabel,
+} from '@/lib/wallet-lab-ui-copy'
 
 function ImportInitialSyncErrorBanner() {
   const networkMode = useWalletStore((s) => s.networkMode)
@@ -272,7 +278,7 @@ function BalanceCard() {
           <div className="flex flex-wrap items-center justify-between gap-2">
             <CardTitle className="flex items-center gap-2">
               <Wallet className="h-5 w-5" />
-              Balance
+              {walletBalanceCardTitle(networkMode)}
             </CardTitle>
             <div className="flex flex-wrap items-center justify-end gap-2">
               {networkMode === 'mainnet' ? (
@@ -281,11 +287,16 @@ function BalanceCard() {
               <Badge variant="outline">{NETWORK_LABELS[networkMode]}</Badge>
             </div>
           </div>
+          {networkMode === 'lab' ? (
+            <p className="text-sm font-bold text-foreground">
+              {LAB_WALLET_BALANCE_DISCLAIMER}
+            </p>
+          ) : null}
         </CardHeader>
         <CardContent className="space-y-6">
           <div>
             <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              On-chain
+              {walletOnChainSectionLabel(networkMode)}
             </p>
             {renderOnChainHeadline()}
             {onChainDisplay.showBreakdown && (
@@ -728,6 +739,7 @@ export function DashboardPage() {
   const activeWalletId = useWalletStore((s) => s.activeWalletId)
   const walletStatus = useWalletStore((s) => s.walletStatus)
   const lastSyncTime = useWalletStore((s) => s.lastSyncTime)
+  const networkMode = useWalletStore((s) => s.networkMode)
 
   if (!activeWalletId) {
     navigate({ to: '/setup' })
@@ -740,7 +752,7 @@ export function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Dashboard" icon={Home}>
+      <PageHeader title={walletDashboardTitle(networkMode)} icon={Home}>
         {lastSyncTime ? (
           <p className="text-xs text-muted-foreground">
             Last synced: {lastSyncTime.toLocaleTimeString()}

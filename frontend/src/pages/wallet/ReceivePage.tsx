@@ -25,6 +25,7 @@ import { ReceiveModeToggle, type ReceiveMode } from '@/components/receive/Receiv
 import { LightningReceive } from '@/components/receive/LightningReceive'
 import { ReceiveMainnetDemoWarningModal } from '@/components/receive/ReceiveMainnetDemoWarningModal'
 import { FaucetLinker } from '@/components/receive/FaucetLinker'
+import { walletReceivePageTitle } from '@/lib/wallet-lab-ui-copy'
 
 export function ReceivePage() {
   const navigate = useNavigate()
@@ -139,7 +140,7 @@ export function ReceivePage() {
     <>
       {mainnetDemoModal}
       <div className="space-y-6">
-      <PageHeader title="Receive Bitcoin" icon={ArrowDownLeft} />
+      <PageHeader title={walletReceivePageTitle(networkMode)} icon={ArrowDownLeft} />
 
       {showLightningToggle && (
         <ReceiveModeToggle mode={receiveMode} onModeChange={setReceiveMode} />

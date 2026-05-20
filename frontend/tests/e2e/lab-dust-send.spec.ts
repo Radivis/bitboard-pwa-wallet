@@ -28,6 +28,7 @@ import {
   getWalletOwnerKey,
   waitForLabMempoolLength,
 } from './helpers/lab'
+import { LAB_WALLET_RECEIVE_PAGE_TITLE } from '@/lib/wallet-lab-ui-copy'
 import { goToWalletTab } from './helpers/wallet-nav'
 
 test.describe('Lab dust send modal', { tag: '@lab' }, () => {
@@ -56,8 +57,10 @@ test.describe('Lab dust send modal', { tag: '@lab' }, () => {
     expect(aliceAddress).toBeDefined()
     expect(bobAddress).toBeDefined()
 
-    await goToWalletTab(page, 'Receive')
-    await expect(page.getByRole('heading', { name: 'Receive Bitcoin' })).toBeVisible({
+    await goToWalletTab(page, 'Receive', { networkMode: 'lab' })
+    await expect(
+      page.getByRole('heading', { name: LAB_WALLET_RECEIVE_PAGE_TITLE }),
+    ).toBeVisible({
       timeout: 15000,
     })
     const addressEl = page.getByRole('main').locator('.font-mono').first()
@@ -112,8 +115,10 @@ test.describe('Lab dust send modal', { tag: '@lab' }, () => {
     expect(aliceAddress).toBeDefined()
     expect(bobAddress).toBeDefined()
 
-    await goToWalletTab(page, 'Receive')
-    await expect(page.getByRole('heading', { name: 'Receive Bitcoin' })).toBeVisible({
+    await goToWalletTab(page, 'Receive', { networkMode: 'lab' })
+    await expect(
+      page.getByRole('heading', { name: LAB_WALLET_RECEIVE_PAGE_TITLE }),
+    ).toBeVisible({
       timeout: 15000,
     })
     const addressEl = page.getByRole('main').locator('.font-mono').first()

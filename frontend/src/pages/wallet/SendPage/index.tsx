@@ -41,6 +41,7 @@ import { useCryptoStore } from '@/stores/cryptoStore'
 import { useFiatDenominationStore } from '@/stores/fiatDenominationStore'
 import { useBitcoinDisplayUnitStore } from '@/stores/bitcoinDisplayUnitStore'
 import { useMainnetFiatRatesQuery } from '@/hooks/useMainnetFiatRatesQuery'
+import { walletSendPageTitle } from '@/lib/wallet-lab-ui-copy'
 import { formatFiatInputStringFromSats } from '@/lib/format-fiat-display'
 import { isUsableBtcSpotPriceInFiat } from '@/lib/is-usable-btc-spot-price-in-fiat'
 
@@ -547,7 +548,9 @@ export function SendFlow() {
     )
   }
 
-  const pageTitle = isLightningSendMode ? 'Send Lightning' : 'Send Bitcoin'
+  const pageTitle = isLightningSendMode
+    ? 'Send Lightning'
+    : walletSendPageTitle(networkMode)
   const cardTitle = isLightningSendMode ? 'Pay with Lightning' : 'Send Transaction'
   const submitLabel = isLightningSendMode
     ? 'Pay with Lightning'

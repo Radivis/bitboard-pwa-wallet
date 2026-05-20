@@ -72,6 +72,7 @@ vi.mock('qrcode.react', () => ({
 }))
 
 import { ReceivePage } from '@/pages/wallet/ReceivePage'
+import { LAB_WALLET_RECEIVE_PAGE_TITLE } from '@/lib/wallet-lab-ui-copy'
 
 describe('ReceivePage', () => {
   beforeEach(() => {
@@ -143,6 +144,14 @@ describe('ReceivePage', () => {
     expect(
       screen.queryByRole('heading', { name: 'Demo mode (Mainnet)' }),
     ).not.toBeInTheDocument()
+  })
+
+  it('shows Receive Lab Bitcoin heading when network is lab', () => {
+    walletStoreState.networkMode = 'lab'
+    renderWithProviders(<ReceivePage />)
+    expect(
+      screen.getByRole('heading', { name: LAB_WALLET_RECEIVE_PAGE_TITLE }),
+    ).toBeInTheDocument()
   })
 
   it('displays address text and QR code', () => {

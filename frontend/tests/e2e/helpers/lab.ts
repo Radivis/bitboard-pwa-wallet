@@ -5,6 +5,10 @@ import type { LabState } from '@/workers/lab-api'
 import { labEntityOwnerKey } from '@/lib/lab-entity-keys'
 import { lookupLabAddressOwner, WALLET_OWNER_PREFIX } from '@/lib/lab-utils'
 import { UX_DUST_FLOOR_SATS } from '@/lib/bitcoin-dust'
+import {
+  LAB_WALLET_RECEIVE_PAGE_TITLE,
+  LAB_WALLET_SEND_PAGE_TITLE,
+} from '@/lib/wallet-lab-ui-copy'
 import { goToWalletTab } from './wallet-nav'
 import {
   waitForSettingsNetworkModeButtonSelected,
@@ -37,8 +41,10 @@ export async function switchToLab(page: Page): Promise<void> {
 
   await waitForSettingsNetworkSwitchComplete(page)
 
-  await goToWalletTab(page, 'Receive')
-  await expect(page.getByRole('heading', { name: 'Receive Bitcoin' })).toBeVisible({
+  await goToWalletTab(page, 'Receive', { networkMode: 'lab' })
+  await expect(
+    page.getByRole('heading', { name: LAB_WALLET_RECEIVE_PAGE_TITLE }),
+  ).toBeVisible({
     timeout: 15000,
   })
 }
@@ -163,8 +169,10 @@ export async function mineBlocksInLab(
   options?: MineOptions,
 ): Promise<void> {
   if (ownerType === LabOwnerType.Wallet) {
-    await goToWalletTab(page, 'Receive')
-    await expect(page.getByRole('heading', { name: 'Receive Bitcoin' })).toBeVisible({
+    await goToWalletTab(page, 'Receive', { networkMode: 'lab' })
+    await expect(
+      page.getByRole('heading', { name: LAB_WALLET_RECEIVE_PAGE_TITLE }),
+    ).toBeVisible({
       timeout: 10000,
     })
     await expect(page.getByRole('main').locator('.font-mono').first()).toContainText(/bcrt1/, {
@@ -541,8 +549,8 @@ export async function sendFromWallet(
   amountSats: number,
   _feeRate: number = 1,
 ): Promise<void> {
-  await goToWalletTab(page, 'Send')
-  await expect(page.getByText('Send Bitcoin')).toBeVisible()
+  await goToWalletTab(page, 'Send', { networkMode: 'lab' })
+  await expect(page.getByText(LAB_WALLET_SEND_PAGE_TITLE)).toBeVisible()
 
   await page.getByLabel('Recipient Address').fill(toAddress)
   await page.getByLabel('Unit for amount entry').selectOption('sat')
@@ -571,8 +579,8 @@ export async function goToLabSendCompose(
   toAddress: string,
   amountSats: number,
 ): Promise<void> {
-  await goToWalletTab(page, 'Send')
-  await expect(page.getByText('Send Bitcoin')).toBeVisible()
+  await goToWalletTab(page, 'Send', { networkMode: 'lab' })
+  await expect(page.getByText(LAB_WALLET_SEND_PAGE_TITLE)).toBeVisible()
 
   await page.getByLabel('Recipient Address').fill(toAddress)
   const unitSelect = page.getByLabel('Unit for amount entry')
@@ -684,13 +692,17 @@ export async function dismissLabDustModalOrBackFromReview(page: Page): Promise<v
   if (which === 'modal') {
     await page.getByRole('button', { name: 'Cancel' }).click()
     await expect(changeFeesHeading).not.toBeVisible({ timeout: 15000 })
-    await expect(page.getByText('Send Bitcoin')).toBeVisible({ timeout: 15000 })
+    await expect(page.getByText(LAB_WALLET_SEND_PAGE_TITLE)).toBeVisible({
+      timeout: 15000,
+    })
     return
   }
 
   await expect(transactionDetails).toBeVisible()
   await page.getByRole('button', { name: 'Back' }).click()
-  await expect(page.getByText('Send Bitcoin')).toBeVisible({ timeout: 15000 })
+  await expect(page.getByText(LAB_WALLET_SEND_PAGE_TITLE)).toBeVisible({
+    timeout: 15000,
+  })
 }
 
 export async function expectLabChangeAndFeesModal(page: Page): Promise<void> {

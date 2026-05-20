@@ -96,6 +96,20 @@ vi.mock('@/hooks/useEsploraFeePresets', () => ({
   }),
 }))
 
+vi.mock('@/hooks/useLabChainStateQuery', () => ({
+  useLabChainStateQuery: () => ({
+    data: {
+      utxos: [],
+      addressToOwner: {},
+      transactions: [],
+      txDetails: {},
+      mempool: [],
+      entities: [],
+    },
+    isPending: false,
+  }),
+}))
+
 const qrScannerInstanceMocks = vi.hoisted(() => ({
   hasFlash: vi.fn().mockResolvedValue(false),
   isFlashOn: vi.fn().mockReturnValue(false),
@@ -138,6 +152,7 @@ vi.mock('qr-scanner', () => ({
 
 import { useSendStore } from '@/stores/sendStore'
 import { SendPage } from '@/pages/wallet/SendPage'
+import { LAB_WALLET_SEND_PAGE_TITLE } from '@/lib/wallet-lab-ui-copy'
 
 const mockCameraMediaStream = {
   getTracks: () => [{ stop: vi.fn(), kind: 'video' as const }],
@@ -186,6 +201,12 @@ describe('SendPage', () => {
     walletStoreState.walletStatus = 'locked'
     renderWithProviders(<SendPage />)
     expect(screen.getByTestId('wallet-unlock')).toBeInTheDocument()
+  })
+
+  it('shows Send Lab Bitcoin heading when network is lab', () => {
+    walletStoreState.networkMode = 'lab'
+    renderWithProviders(<SendPage />)
+    expect(screen.getByText(LAB_WALLET_SEND_PAGE_TITLE)).toBeInTheDocument()
   })
 
   it('shows Scan QR code button on send entry', () => {

@@ -86,6 +86,29 @@ vi.mock('@/lib/wallet-utils', () => ({
     mockRetryImportInitialEsploraSyncWithWalletStatus,
 }))
 
+vi.mock('@/hooks/useLabChainStateQuery', () => ({
+  useLabChainStateQuery: () => ({
+    data: {
+      utxos: [
+        {
+          txid: 'labtx1',
+          vout: 0,
+          address: 'bcrt1qlabwallet',
+          amountSats: 42_000,
+        },
+      ],
+      addressToOwner: {
+        bcrt1qlabwallet: { kind: 'wallet', walletId: 1 },
+      },
+      transactions: [],
+      txDetails: [],
+      mempool: [],
+      entities: [],
+    },
+    isPending: false,
+  }),
+}))
+
 vi.mock('@/hooks/useLightningMutations', () => ({
   useLightningHistoryQuery: () => ({
     data: { payments: [] as unknown[], stalePaymentsAsOf: undefined },
@@ -115,6 +138,12 @@ vi.mock('sonner', () => ({
 }))
 
 import { DashboardPage } from '@/pages/wallet/DashboardPage'
+import {
+  LAB_WALLET_BALANCE_DISCLAIMER,
+  LAB_WALLET_BALANCE_CARD_TITLE,
+  LAB_WALLET_DASHBOARD_TITLE,
+  LAB_WALLET_ON_CHAIN_SECTION_LABEL,
+} from '@/lib/wallet-lab-ui-copy'
 
 describe('DashboardPage', () => {
   beforeEach(() => {
@@ -156,8 +185,26 @@ describe('DashboardPage', () => {
 
   it('displays balance with BitcoinAmountDisplay', () => {
     renderWithProviders(<DashboardPage />)
+    expect(
+      screen.getByRole('heading', { name: 'Dashboard' }),
+    ).toBeInTheDocument()
+    expect(screen.getByText('Balance')).toBeInTheDocument()
+    expect(screen.getByText('On-chain')).toBeInTheDocument()
     expect(screen.getByText('0.00100000')).toBeInTheDocument()
     expect(screen.getAllByRole('button', { name: 'tBTC' }).length).toBeGreaterThan(0)
+  })
+
+  it('shows lab wallet copy on dashboard when network is lab', () => {
+    walletStoreState.networkMode = 'lab'
+    walletStoreState.balance = null
+    renderWithProviders(<DashboardPage />)
+    expect(
+      screen.getByRole('heading', { name: LAB_WALLET_DASHBOARD_TITLE }),
+    ).toBeInTheDocument()
+    expect(screen.getByText(LAB_WALLET_BALANCE_CARD_TITLE)).toBeInTheDocument()
+    expect(screen.getByText(LAB_WALLET_BALANCE_DISCLAIMER)).toBeInTheDocument()
+    expect(screen.getByText(LAB_WALLET_ON_CHAIN_SECTION_LABEL)).toBeInTheDocument()
+    expect(screen.getByText('0.00042000')).toBeInTheDocument()
   })
 
   it('shows on-chain breakdown when pending components are non-zero', () => {
