@@ -209,6 +209,7 @@ export function labTransactionsForWallet(
       confirmation_block_height: null,
       confirmation_time: null,
       is_confirmed: false,
+      isLabTx: true,
     })
   }
 
@@ -232,6 +233,7 @@ export function labTransactionsForWallet(
         confirmation_block_height: details.blockHeight,
         confirmation_time: details.blockTime,
         is_confirmed: true,
+        isLabTx: true,
       })
       continue
     }
@@ -265,6 +267,7 @@ export function labTransactionsForWallet(
       confirmation_block_height: details.blockHeight,
       confirmation_time: details.blockTime,
       is_confirmed: true,
+      isLabTx: true,
     })
   }
 

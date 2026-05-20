@@ -204,6 +204,31 @@ export function formatTxDirection(tx: TransactionDetails): 'sent' | 'received' {
   return tx.sent_sats > tx.received_sats ? 'sent' : 'received'
 }
 
+/** Total wallet outflow for a sent tx (payment + fee), i.e. inputs minus change credited back. */
+export function getTxGrossWalletDebitSats(tx: TransactionDetails): number {
+  return tx.sent_sats - tx.received_sats
+}
+
+/**
+ * Amount shown in the transaction list: net to recipients for sent (excl. fee when known),
+ * net received for incoming.
+ *
+ * Esplora/BDK: gross wallet debit includes fee; subtract `fee_sats` when known.
+ * Lab (`isLabTx`): `sent_sats` is already payment-only — do not subtract fee again.
+ */
+export function getTxListDisplayAmountSats(tx: TransactionDetails): number {
+  if (formatTxDirection(tx) === 'received') {
+    return tx.received_sats - tx.sent_sats
+  }
+  const grossWalletDebit = getTxGrossWalletDebitSats(tx)
+  const feeSats = tx.fee_sats
+  if (!tx.isLabTx && feeSats != null) {
+    return grossWalletDebit - feeSats
+  }
+  return grossWalletDebit
+}
+
+/** @deprecated Prefer {@link getTxListDisplayAmountSats} for list UI. */
 export function getTxAmount(tx: TransactionDetails): number {
-  return Math.abs(tx.sent_sats - tx.received_sats)
+  return getTxListDisplayAmountSats(tx)
 }

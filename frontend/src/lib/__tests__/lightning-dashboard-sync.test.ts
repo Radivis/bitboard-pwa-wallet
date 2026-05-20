@@ -13,6 +13,7 @@ const chainOlder: TransactionDetails = {
   confirmation_block_height: 1,
   confirmation_time: 100,
   is_confirmed: true,
+  isLabTx: false,
 }
 
 const chainNewer: TransactionDetails = {
@@ -23,6 +24,7 @@ const chainNewer: TransactionDetails = {
   confirmation_block_height: 2,
   confirmation_time: 200,
   is_confirmed: true,
+  isLabTx: false,
 }
 
 const lnMiddle: LightningPaymentWithWallet = {

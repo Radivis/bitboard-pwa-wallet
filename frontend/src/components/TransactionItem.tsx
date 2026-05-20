@@ -4,7 +4,8 @@ import { formatDistanceToNow, format } from 'date-fns'
 import type { TransactionDetails } from '@/workers/crypto-types'
 import {
   formatTxDirection,
-  getTxAmount,
+  getTxGrossWalletDebitSats,
+  getTxListDisplayAmountSats,
   truncateAddress,
 } from '@/lib/bitcoin-utils'
 import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
@@ -19,8 +20,9 @@ export function TransactionItem({ transaction }: TransactionItemProps) {
   const [showAbsoluteTime, setShowAbsoluteTime] = useState(false)
 
   const direction = formatTxDirection(transaction)
-  const amount = getTxAmount(transaction)
+  const amount = getTxListDisplayAmountSats(transaction)
   const isSent = direction === 'sent'
+  const grossDebitSats = isSent ? getTxGrossWalletDebitSats(transaction) : 0
 
   const Icon = isSent ? ArrowUpRight : ArrowDownLeft
 
@@ -99,6 +101,14 @@ export function TransactionItem({ transaction }: TransactionItemProps) {
               <span>Fee</span>
               <span className="text-right">
                 <BitcoinAmountDisplay amountSats={transaction.fee_sats} size="sm" />
+              </span>
+            </div>
+          )}
+          {isSent && (
+            <div className="flex justify-between gap-2">
+              <span>Total (incl. fee)</span>
+              <span className="text-right">
+                <BitcoinAmountDisplay amountSats={grossDebitSats} size="sm" />
               </span>
             </div>
           )}
