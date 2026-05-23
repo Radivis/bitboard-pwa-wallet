@@ -121,4 +121,8 @@ pub struct TransactionDetails {
     /// Unix timestamp (seconds) of the block that confirmed this transaction.
     pub confirmation_time: Option<u64>,
     pub is_confirmed: bool,
+    /// True when the row was built from lab chain data (`lab-utils`), not BDK/Esplora.
+    /// Lab sets `sent_sats` to non-change outputs only; wallet sync uses input totals.
+    #[serde(rename = "isLabTx", default)]
+    pub is_lab_tx: bool,
 }

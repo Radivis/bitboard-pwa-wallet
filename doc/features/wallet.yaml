@@ -88,9 +88,14 @@ feature:
           - click_event:
             - trigger wallet sync against configured Esplora endpoint
         - recent transactions list
+          - paginated activity list (5 / 8 / 10 items per page on small / medium / large viewports; page navigator when more than one page)
+          - on public networks, on-chain and Lightning activity are merged in one list
+          - lab network dashboard uses the same pagination for wallet-scoped lab transactions
           - each transaction shows: direction (sent/received), amount, date, confirmation status
+            - sent amount in list = net paid to recipients (excludes fee)
+            - received amount in list = net received (unchanged)
           - click_event per transaction:
-            - expand to show transaction details (txid, fee, block height)
+            - expand to show transaction details (txid, fee, total including fee for sent, block height); Lightning sent payments show fee and total including fee when expanded
         - receive button
           - click_event:
             - navigate to Receive page
@@ -137,7 +142,7 @@ feature:
             - click_event:
               - build PSBT, advance to review step
         - Step 2 - Review:
-          - summary showing recipient, amount, fee, total
+          - summary showing recipient, amount, fee rate, fee (sats/BTC; fiat when Fiat Denomination Mode active on mainnet), total deducted, amount remaining (based on total wallet balance), change (always shown, 0 when change-free), immediately spendable remaining (confirmed spendable minus inputs used), show/hide toggle for input UTXO list (address + amount)
           - confirm and broadcast button
             - click_event:
               - sign PSBT, broadcast transaction via Esplora

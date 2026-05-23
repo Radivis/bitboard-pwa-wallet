@@ -26,6 +26,18 @@ function mockDisplay(sats: number, unit: keyof typeof DISPLAY_SUFFIX): string {
   return `${n}${DISPLAY_SUFFIX[unit]}`
 }
 
+function mockTestDisplay(sats: number, unit: keyof typeof DISPLAY_SUFFIX): string {
+  const n = formatAmountInBitcoinDisplayUnit(sats, unit)
+  const testSuffix: Record<keyof typeof DISPLAY_SUFFIX, string> = {
+    BTC: ' tBTC',
+    mBTC: ' tmBTC',
+    uBTC: ' tµBTC',
+    ksat: ' tksat',
+    sat: ' tsat',
+  }
+  return `${n}${testSuffix[unit]}`
+}
+
 describe('bitcoin-amount-text-parse', () => {
   it('parses each display unit the same as formatAmount (round trip)', () => {
     for (const unit of ['BTC', 'mBTC', 'uBTC', 'ksat', 'sat'] as const) {
@@ -33,6 +45,18 @@ describe('bitcoin-amount-text-parse', () => {
       const all = parseAllSatsInTextFromFormattedBitcoinAmountDisplays(t)
       expect(all).toEqual([SATS])
     }
+  })
+
+  it('parses t-prefixed test-network unit labels', () => {
+    for (const unit of ['BTC', 'mBTC', 'uBTC', 'ksat', 'sat'] as const) {
+      const t = `On-chain\n${mockTestDisplay(SATS, unit)}\n`
+      const all = parseAllSatsInTextFromFormattedBitcoinAmountDisplays(t)
+      expect(all).toEqual([SATS])
+    }
+    const mixed = `${mockTestDisplay(SATS_CUM, 'BTC')}\n${mockTestDisplay(50_000, 'mBTC')}`
+    expect(maxSatsInTextFromFormattedBitcoinAmountDisplays(mixed)).toBe(
+      Math.max(SATS_CUM, 50_000),
+    )
   })
 
   it('can include zero-sat headline segments when requested', () => {

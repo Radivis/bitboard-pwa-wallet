@@ -37,6 +37,10 @@ pub struct LabDraftPsbtOutcome {
     pub raised_to_min_dust: bool,
     pub change_free_bump_available: bool,
     pub change_free_max_sats: u64,
+    pub fee_sats: u64,
+    pub change_sats: u64,
+    pub total_input_sats: u64,
+    pub input_utxos: Vec<transaction::ReviewInputUtxo>,
 }
 
 #[derive(Debug, Serialize)]
@@ -67,6 +71,28 @@ struct LabPsbtRouteParams<'a> {
     change_address: &'a Address,
     satisfaction_weight: bitcoin::Weight,
     fee_rate: FeeRate,
+}
+
+fn review_inputs_from_lab_utxos(
+    utxos: &[LabUtxoInput],
+) -> Result<Vec<transaction::ReviewInputUtxo>, CryptoError> {
+    utxos
+        .iter()
+        .map(|utxo| {
+            let address = utxo.address.clone().ok_or_else(|| {
+                CryptoError::Transaction(format!(
+                    "Lab UTXO {}:{} missing address for review display",
+                    utxo.txid, utxo.vout
+                ))
+            })?;
+            Ok(transaction::ReviewInputUtxo {
+                address,
+                amount_sats: utxo.amount_sats,
+                txid: utxo.txid.clone(),
+                vout: utxo.vout,
+            })
+        })
+        .collect()
 }
 
 fn finish_lab_psbt(
@@ -279,6 +305,7 @@ pub fn prepare_lab_psbt_draft(
     amount_sats: u64,
     fee_rate_sat_per_vb: f64,
     change_address_str: &str,
+    apply_change_free_bump: bool,
 ) -> Result<LabDraftPsbtOutcome, CryptoError> {
     let (utxos, to_address, change_address, satisfaction_weight, fee_rate) =
         resolve_lab_send_inputs(
@@ -295,7 +322,13 @@ pub fn prepare_lab_psbt_draft(
         satisfaction_weight,
         fee_rate,
     };
-    let (psbt, meta) = prepare_lab_psbt_inner(wallet, &utxos, amount_sats, route, false)?;
+    let (psbt, meta) =
+        prepare_lab_psbt_inner(wallet, &utxos, amount_sats, route, apply_change_free_bump)?;
+    let fee_sats = transaction::fee_sats_from_unsigned_psbt(&psbt)?;
+    let total_input_sats: u64 = utxos.iter().map(|utxo| utxo.amount_sats).sum();
+    let change_sats =
+        transaction::change_sats_from_unsigned_psbt(&psbt, &change_address.script_pubkey());
+    let input_utxos = review_inputs_from_lab_utxos(&utxos)?;
     Ok(LabDraftPsbtOutcome {
         psbt_base64: psbt.to_string(),
         final_amount_sats: meta.final_amount_sats,
@@ -303,6 +336,10 @@ pub fn prepare_lab_psbt_draft(
         raised_to_min_dust: meta.raised_to_min_dust,
         change_free_bump_available: meta.change_free_bump_available,
         change_free_max_sats: meta.change_free_max_sats,
+        fee_sats,
+        change_sats,
+        total_input_sats,
+        input_utxos,
     })
 }
 

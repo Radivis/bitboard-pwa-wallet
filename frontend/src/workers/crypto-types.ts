@@ -39,6 +39,11 @@ export interface TransactionDetails {
   /** Unix timestamp (seconds) of the block that confirmed this transaction. */
   confirmation_time: number | null;
   is_confirmed: boolean;
+  /**
+   * True when this row comes from lab chain history (`lab-utils`).
+   * Lab `sent_sats` is payment to recipients only; BDK/Esplora uses wallet input totals.
+   */
+  isLabTx: boolean;
 }
 
 export interface NodeInfo {

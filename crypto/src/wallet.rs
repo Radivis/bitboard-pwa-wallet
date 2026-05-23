@@ -161,6 +161,7 @@ pub fn get_transaction_list(wallet: &Wallet) -> Vec<TransactionDetails> {
                 confirmation_block_height,
                 confirmation_time,
                 is_confirmed,
+                is_lab_tx: false,
             }
         })
         .collect()

@@ -22,6 +22,30 @@ type FormattedUnitLabelPattern = {
  * start at the same index (e.g. `mBTC` over a trailing `BTC` inside it).
  */
 const FORMATTED_UNIT_LABEL_PATTERNS: FormattedUnitLabelPattern[] = [
+  { labelInDomText: ' tmBTC', displayUnit: 'mBTC' },
+  { labelInDomText: 'tmBTC', displayUnit: 'mBTC' },
+  { labelInDomText: ` t${BITCOIN_DISPLAY_UNIT_LABEL.uBTC}`, displayUnit: 'uBTC' },
+  { labelInDomText: `t${BITCOIN_DISPLAY_UNIT_LABEL.uBTC}`, displayUnit: 'uBTC' },
+  { labelInDomText: ' tuBTC', displayUnit: 'uBTC' },
+  { labelInDomText: 'tuBTC', displayUnit: 'uBTC' },
+  { labelInDomText: ' tksat', displayUnit: 'ksat' },
+  { labelInDomText: 'tksat', displayUnit: 'ksat' },
+  {
+    labelInDomText: ' tsat',
+    displayUnit: 'sat',
+    isEmbeddedSuffixAt: (i, t) => i > 0 && (t[i - 1] === 'k' || t[i - 1] === 'K'),
+  },
+  {
+    labelInDomText: 'tsat',
+    displayUnit: 'sat',
+    isEmbeddedSuffixAt: (i, t) => i > 0 && (t[i - 1] === 'k' || t[i - 1] === 'K'),
+  },
+  { labelInDomText: ' tBTC', displayUnit: 'BTC' },
+  {
+    labelInDomText: 'tBTC',
+    displayUnit: 'BTC',
+    isEmbeddedSuffixAt: (i, t) => i > 0 && (t[i - 1] === 'm' || t[i - 1] === 'M'),
+  },
   { labelInDomText: 'mBTC', displayUnit: 'mBTC' },
   { labelInDomText: BITCOIN_DISPLAY_UNIT_LABEL.uBTC, displayUnit: 'uBTC' },
   { labelInDomText: 'uBTC', displayUnit: 'uBTC' },

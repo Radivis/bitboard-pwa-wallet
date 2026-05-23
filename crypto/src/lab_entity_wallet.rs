@@ -155,6 +155,7 @@ pub fn lab_entity_draft_lab_psbt_transaction(
         args.amount_sats,
         args.fee_rate_sat_per_vb,
         &change_address_for_build,
+        false,
     )
 }
 

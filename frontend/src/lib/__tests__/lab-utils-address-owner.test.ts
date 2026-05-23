@@ -2,14 +2,16 @@ import { describe, expect, it } from 'vitest'
 import {
   assertLabAddressOwnerResolved,
   groupLabRowsByResolvedOwner,
+  labTransactionsForWallet,
   lookupLabAddressOwner,
   mergeAddressesWithUtxos,
   resolveDeadLabEntityRecipient,
   resolveLabAddressOwnerDisplay,
   sortLabOwnerKeys,
+  sumLabWalletUtxoSats,
 } from '@/lib/lab-utils'
 import type { LabOwner } from '@/lib/lab-owner'
-import { labEntityLabOwner } from '@/lib/lab-owner'
+import { labEntityLabOwner, walletLabOwner } from '@/lib/lab-owner'
 import type { LabEntityRecord, LabTxDetails } from '@/workers/lab-api'
 
 function minimalEntity(
@@ -120,6 +122,87 @@ describe('assertLabAddressOwnerResolved', () => {
 describe('sortLabOwnerKeys', () => {
   it('sorts keys lexicographically', () => {
     expect(sortLabOwnerKeys(['Zed', 'Alice', 'Bob'])).toEqual(['Alice', 'Bob', 'Zed'])
+  })
+})
+
+describe('sumLabWalletUtxoSats', () => {
+  it('sums UTXOs owned by the active wallet', () => {
+    const walletOwner = walletLabOwner(1)
+    const otherOwner = labEntityLabOwner(2)
+    const addressToOwner = {
+      bcrt1qwallet: walletOwner,
+      bcrt1qother: otherOwner,
+    }
+    expect(
+      sumLabWalletUtxoSats(
+        [
+          {
+            txid: 'a',
+            vout: 0,
+            address: 'bcrt1qwallet',
+            amountSats: 10_000,
+            scriptPubkeyHex: '00',
+          },
+          {
+            txid: 'b',
+            vout: 1,
+            address: 'bcrt1qother',
+            amountSats: 99_000,
+            scriptPubkeyHex: '00',
+          },
+          {
+            txid: 'c',
+            vout: 0,
+            address: 'BCRT1QWALLET',
+            amountSats: 5_000,
+            scriptPubkeyHex: '00',
+          },
+        ],
+        addressToOwner,
+        1,
+      ),
+    ).toBe(15_000)
+  })
+})
+
+describe('labTransactionsForWallet', () => {
+  it('sorts unconfirmed mempool txs by txid when both are pending', () => {
+    const walletOwner = walletLabOwner(1)
+    const txs = labTransactionsForWallet(
+      {
+        transactions: [],
+        txDetails: [],
+        mempool: [
+          {
+            signedTxHex: '00',
+            txid: 'bbb',
+            sender: walletOwner,
+            receiver: null,
+            feeSats: 100,
+            weight: 400,
+            vsize: 100,
+            inputs: [],
+            inputsDetail: [],
+            outputsDetail: [],
+          },
+          {
+            signedTxHex: '00',
+            txid: 'aaa',
+            sender: walletOwner,
+            receiver: null,
+            feeSats: 100,
+            weight: 400,
+            vsize: 100,
+            inputs: [],
+            inputsDetail: [],
+            outputsDetail: [],
+          },
+        ],
+      },
+      1,
+    )
+
+    expect(txs.map((tx) => tx.txid)).toEqual(['aaa', 'bbb'])
   })
 })
 

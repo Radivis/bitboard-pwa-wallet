@@ -46,10 +46,14 @@ vi.mock('@/stores/cryptoStore', () => ({
 }))
 
 let walletStoreState: Record<string, unknown> = {}
-vi.mock('@/stores/walletStore', () => ({
-  useWalletStore: (selector: (s: Record<string, unknown>) => unknown) =>
-    selector(walletStoreState),
-}))
+vi.mock('@/stores/walletStore', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/stores/walletStore')>()
+  return {
+    ...actual,
+    useWalletStore: (selector: (s: Record<string, unknown>) => unknown) =>
+      selector(walletStoreState),
+  }
+})
 
 vi.mock('@/stores/sessionStore', () => ({
   useSessionStore: (selector: (s: Record<string, unknown>) => unknown) =>
@@ -70,6 +74,7 @@ vi.mock('@/lib/library/article-shared', () => ({
 
 vi.mock('@/lib/bitcoin-utils', () => ({
   MAX_SAFE_SATS: Number.MAX_SAFE_INTEGER,
+  SATS_PER_BTC: 100_000_000,
   isValidAddress: (address: string, network: string) => {
     if (network === 'signet') return address.startsWith('tb1')
     return false
@@ -89,6 +94,20 @@ vi.mock('@/hooks/useEsploraFeePresets', () => ({
   useEsploraFeePresets: () => ({
     data: { Low: 0.5, Medium: 2, High: 10 },
     isFetching: false,
+  }),
+}))
+
+vi.mock('@/hooks/useLabChainStateQuery', () => ({
+  useLabChainStateQuery: () => ({
+    data: {
+      utxos: [],
+      addressToOwner: {},
+      transactions: [],
+      txDetails: {},
+      mempool: [],
+      entities: [],
+    },
+    isPending: false,
   }),
 }))
 
@@ -134,9 +153,23 @@ vi.mock('qr-scanner', () => ({
 
 import { useSendStore } from '@/stores/sendStore'
 import { SendPage } from '@/pages/wallet/SendPage'
+import { LAB_WALLET_SEND_PAGE_TITLE } from '@/lib/wallet-lab-ui-copy'
 
 const mockCameraMediaStream = {
   getTracks: () => [{ stop: vi.fn(), kind: 'video' as const }],
+}
+
+const mockReviewSummaryFields = {
+  changeSats: 48_500,
+  totalInputSats: 150_000,
+  inputUtxos: [
+    {
+      address: 'tb1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx',
+      amountSats: 150_000,
+      txid: 'abc123',
+      vout: 0,
+    },
+  ],
 }
 
 describe('SendPage', () => {
@@ -158,6 +191,8 @@ describe('SendPage', () => {
       raisedToMinDust: false,
       changeFreeBumpAvailable: false,
       changeFreeMaxSats: 0,
+      feeSats: 1_500,
+      ...mockReviewSummaryFields,
     })
     useSendStore.getState().reset()
     walletStoreState = {
@@ -182,6 +217,12 @@ describe('SendPage', () => {
     walletStoreState.walletStatus = 'locked'
     renderWithProviders(<SendPage />)
     expect(screen.getByTestId('wallet-unlock')).toBeInTheDocument()
+  })
+
+  it('shows Send Lab Bitcoin heading when network is lab', () => {
+    walletStoreState.networkMode = 'lab'
+    renderWithProviders(<SendPage />)
+    expect(screen.getByText(LAB_WALLET_SEND_PAGE_TITLE)).toBeInTheDocument()
   })
 
   it('shows Scan QR code button on send entry', () => {
@@ -283,6 +324,40 @@ describe('SendPage', () => {
     expect(screen.getByRole('button', { name: 'Review Transaction' })).toBeEnabled()
   })
 
+  it('review step shows fee and utxo summary labels', async () => {
+    const user = userEvent.setup()
+    mockPrepareOnchainSendTransaction.mockResolvedValue({
+      psbtBase64: 'mock_psbt_base64',
+      finalAmountSats: 100_000,
+      originalAmountSats: 100_000,
+      raisedToMinDust: false,
+      bumpedChangeFree: false,
+      changeFreeBumpAvailable: false,
+      changeFreeMaxSats: 0,
+      feeSats: 1_500,
+      ...mockReviewSummaryFields,
+    })
+    renderWithProviders(<SendPage />)
+
+    await user.type(
+      screen.getByLabelText('Recipient Address'),
+      'tb1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx',
+    )
+    await user.type(screen.getByLabelText(/Amount/), '0.001')
+    await user.click(screen.getByRole('button', { name: 'Review Transaction' }))
+
+    expect(await screen.findByText('Fee')).toBeInTheDocument()
+    expect(screen.getByText('Total deducted')).toBeInTheDocument()
+    expect(screen.getByText('Balance remaining')).toBeInTheDocument()
+    expect(screen.getByText('Change')).toBeInTheDocument()
+    expect(
+      screen.getByText('Immediately spendable balance remaining'),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'Show UTXOs to be used' }),
+    ).toBeInTheDocument()
+  })
+
   it('review step shows transaction details', async () => {
     const user = userEvent.setup()
     mockPrepareOnchainSendTransaction.mockResolvedValue({
@@ -293,6 +368,8 @@ describe('SendPage', () => {
       bumpedChangeFree: false,
       changeFreeBumpAvailable: false,
       changeFreeMaxSats: 0,
+      feeSats: 1_500,
+      ...mockReviewSummaryFields,
     })
     renderWithProviders(<SendPage />)
 
@@ -319,6 +396,8 @@ describe('SendPage', () => {
         bumpedChangeFree: false,
         changeFreeBumpAvailable: true,
         changeFreeMaxSats: 9900,
+        feeSats: 1_500,
+        ...mockReviewSummaryFields,
       })
       .mockResolvedValueOnce({
         psbtBase64: 'psbt_bumped',
@@ -328,6 +407,8 @@ describe('SendPage', () => {
         bumpedChangeFree: true,
         changeFreeBumpAvailable: false,
         changeFreeMaxSats: 0,
+        feeSats: 1_200,
+        ...mockReviewSummaryFields,
       })
     renderWithProviders(<SendPage />)
 
@@ -369,6 +450,8 @@ describe('SendPage', () => {
       bumpedChangeFree: false,
       changeFreeBumpAvailable: true,
       changeFreeMaxSats: 9900,
+      feeSats: 1_500,
+      ...mockReviewSummaryFields,
     })
     renderWithProviders(<SendPage />)
 
@@ -398,6 +481,8 @@ describe('SendPage', () => {
       bumpedChangeFree: false,
       changeFreeBumpAvailable: false,
       changeFreeMaxSats: 0,
+      feeSats: 1_500,
+      ...mockReviewSummaryFields,
     })
     renderWithProviders(<SendPage />)
 

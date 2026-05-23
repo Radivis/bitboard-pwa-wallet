@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { ArrowDownLeft, ArrowUpRight, BadgeCheck, Clock, Zap } from 'lucide-react'
 import { formatDistanceToNow, format } from 'date-fns'
+import { getLnOutgoingTotalInclFeeSats } from '@/lib/lightning-backend-service'
 import type { LightningPaymentWithWallet } from '@/lib/lightning-dashboard-sync'
 import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
 import { cn } from '@/lib/utils'
@@ -113,6 +114,17 @@ export function LightningPaymentItem({ payment }: LightningPaymentItemProps) {
               <span>Fee</span>
               <span className="text-right">
                 <BitcoinAmountDisplay amountSats={payment.feesPaidSats} size="sm" />
+              </span>
+            </div>
+          )}
+          {isSent && (
+            <div className="flex justify-between gap-2">
+              <span>Total (incl. fee)</span>
+              <span className="text-right">
+                <BitcoinAmountDisplay
+                  amountSats={getLnOutgoingTotalInclFeeSats(payment)}
+                  size="sm"
+                />
               </span>
             </div>
           )}

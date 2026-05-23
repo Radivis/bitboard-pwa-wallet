@@ -147,20 +147,27 @@ export function PrivacyPolicyEn() {
         configured host <strong>directly</strong>.
       </p>
       <p>
-        In all cases, your <strong>IP address</strong> and usual technical metadata (e.g. TLS) are
-        visible to the <strong>Esplora operator</strong> handling the request. When the hosted proxy
-        is used, <strong>Vercel</strong> also processes the HTTP request as part of forwarding
-        (including the requested path and query string, which can reflect blockchain objects your
-        wallet is fetching). Which exact requests go out depends on how you use the wallet (e.g.
-        balance queries, transaction lists).
+        If you use a <strong>custom</strong> Esplora URL that is <strong>not</strong> on the allowlist,
+        your browser contacts that host <strong>directly</strong>. The <strong>Esplora operator</strong>{' '}
+        then sees your <strong>IP address</strong> and usual connection metadata (e.g. TLS).
+      </p>
+      <p>
+        When the <strong>hosted proxy</strong> is used (default and other allowlisted bases),{' '}
+        <strong>Vercel</strong> receives your browser request first — including your{' '}
+        <strong>IP address</strong> and the requested path and query string, which can reflect
+        blockchain objects your wallet is fetching (e.g. addresses and transaction IDs).{' '}
+        <strong>Vercel</strong> forwards the request to the Esplora operator. The Esplora operator
+        sees <strong>Vercel’s egress IP address</strong>, <strong>not</strong> yours, but still sees
+        the forwarded request path and body in the clear on its side. Which exact requests go out
+        depends on how you use the wallet (e.g. balance sync, transaction lists, broadcast).
       </p>
       <p>
         When you use the <strong>on-chain Send</strong> screen, the app also fetches{' '}
         <strong>suggested fee-rate estimates</strong> from your configured Esplora server (the{' '}
         <strong><code>/fee-estimates</code></strong> API). Those responses are aggregated network-wide
-        fee hints, not your transaction details, but the request goes to the{' '}
-        <strong>same endpoint host</strong> as other Esplora traffic, so the same connection metadata applies
-        (IP address etc., and Vercel when the hosted proxy is used).
+        fee hints, not your transaction details. The request follows the same routing as other Esplora
+        traffic: with the hosted proxy, <strong>Vercel</strong> sees your IP; the Esplora operator sees{' '}
+        <strong>Vercel’s egress IP</strong>, not yours.
       </p>
       <p>
         When you show balances or amounts in <strong>fiat denomination</strong> on <strong>mainnet</strong>{' '}
@@ -185,11 +192,13 @@ export function PrivacyPolicyEn() {
       <p>
         The operator of your chosen Esplora service can, in principle, reconstruct a{' '}
         <strong>usage or transaction-related profile</strong> from the requests your wallet makes
-        (for example which scripts/addresses and transactions are queried and when). The Esplora
-        REST interface is <strong>per-script/per-address</strong>: for every revealed wallet
-        address a separate request goes to the server, so it can easily cluster all requests from
-        the same IP into a single address set. <strong>TLS</strong> only protects the transport;
-        on the server side the provider sees your requests in the clear.{' '}
+        (for example which scripts/addresses and transactions are queried, when sync runs, and
+        transactions you broadcast). The Esplora REST interface is <strong>per-script/per-address</strong>:
+        for every revealed wallet address a separate request goes to the server. Because many such
+        requests are issued together during a wallet sync or after a send, the provider can{' '}
+        <strong>cluster those addresses and transactions as belonging to the same wallet</strong>,
+        even without knowing your IP address. <strong>TLS</strong> only protects the transport; on
+        the server side the provider sees your requests in the clear.{' '}
         <strong>Protocol-level anonymization measures</strong> (for example compact block filters
         that would let your device match chain data locally instead of asking the server per
         address) are <strong>not</strong> part of Esplora, and Bitboard does not currently layer

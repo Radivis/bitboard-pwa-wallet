@@ -15,6 +15,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+## [0.1.8] - 2026-05-23
+### Added
+- The "Review Transaction" page now also shows
+  - Actual fees
+  - Total deducted amount (sent + fees)
+  - Balance remaining
+  - Change
+  - Immediately spendable balance remaining
+  - Used UTXOs in a list toggled by a button (list not shown by default)
+- The transaction list on the dashboard now uses pagination
+- New Library article "Esplora Privacy"
+
+### Changed
+- Dashboard page: Sent on-chain and Lightning transactions show the net amount transferred (excluding fees) in the list; expanded details show fee and total including fee for sends
+- Bitcoin amount units on live test networks (testnet, signet, regtest) now show a `t` prefix before the unit label; Lab mode amounts show a flask icon instead
+- In Lab mode the wallet dashboard page shows clearer labels indicating that the wallet refers to the Lab, instead of any online blockchain
+- Made the wording in the privacy policy regarding Esplora requests via Vercel / directly for custom Esplora endpoints more specific
+
+### Fixed
+- Pending transactions were not shown on the dashboard, if there were already 10 transactions in the list due to an issue with sorting
+
+### Security
+
 ## [0.1.7] - 2026-05-19
 ### Changed
 - Conversion between Bitcoin and fiat currencies now supports all currencies from the currently selected currency rate service

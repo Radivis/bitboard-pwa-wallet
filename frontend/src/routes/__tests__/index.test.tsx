@@ -31,17 +31,21 @@ vi.mock('@/stores/cryptoStore', () => ({
 }))
 
 let walletStoreState: Record<string, unknown> = {}
-vi.mock('@/stores/walletStore', () => ({
-  useWalletStore: (selector: (s: Record<string, unknown>) => unknown) =>
-    selector(walletStoreState),
-  NETWORK_LABELS: {
-    lab: 'Lab',
-    regtest: 'Regtest',
-    signet: 'Signet',
-    testnet: 'Testnet',
-    mainnet: 'Mainnet',
-  },
-}))
+vi.mock('@/stores/walletStore', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/stores/walletStore')>()
+  return {
+    ...actual,
+    useWalletStore: (selector: (s: Record<string, unknown>) => unknown) =>
+      selector(walletStoreState),
+    NETWORK_LABELS: {
+      lab: 'Lab',
+      regtest: 'Regtest',
+      signet: 'Signet',
+      testnet: 'Testnet',
+      mainnet: 'Mainnet',
+    },
+  }
+})
 
 vi.mock('@/stores/sessionStore', () => ({
   useSessionStore: (selector: (s: Record<string, unknown>) => unknown) =>
@@ -62,6 +66,10 @@ vi.mock('@/hooks/useBitcoinUnit', () => ({
   useBitcoinUnit: () => ({ data: 'BTC' }),
 }))
 
+vi.mock('@/hooks/useDashboardActivityPageSize', () => ({
+  useDashboardActivityPageSize: () => 10,
+}))
+
 const {
   mockRunIncrementalDashboardWalletSync,
   mockRunFullScanDashboardWalletSync,
@@ -80,6 +88,29 @@ vi.mock('@/lib/wallet-utils', () => ({
   runFullScanDashboardWalletSync: mockRunFullScanDashboardWalletSync,
   retryImportInitialEsploraSyncWithWalletStatus:
     mockRetryImportInitialEsploraSyncWithWalletStatus,
+}))
+
+vi.mock('@/hooks/useLabChainStateQuery', () => ({
+  useLabChainStateQuery: () => ({
+    data: {
+      utxos: [
+        {
+          txid: 'labtx1',
+          vout: 0,
+          address: 'bcrt1qlabwallet',
+          amountSats: 42_000,
+        },
+      ],
+      addressToOwner: {
+        bcrt1qlabwallet: { kind: 'wallet', walletId: 1 },
+      },
+      transactions: [],
+      txDetails: [],
+      mempool: [],
+      entities: [],
+    },
+    isPending: false,
+  }),
 }))
 
 vi.mock('@/hooks/useLightningMutations', () => ({
@@ -111,6 +142,12 @@ vi.mock('sonner', () => ({
 }))
 
 import { DashboardPage } from '@/pages/wallet/DashboardPage'
+import {
+  LAB_WALLET_BALANCE_DISCLAIMER,
+  LAB_WALLET_BALANCE_CARD_TITLE,
+  LAB_WALLET_DASHBOARD_TITLE,
+  LAB_WALLET_ON_CHAIN_SECTION_LABEL,
+} from '@/lib/wallet-lab-ui-copy'
 
 describe('DashboardPage', () => {
   beforeEach(() => {
@@ -152,8 +189,26 @@ describe('DashboardPage', () => {
 
   it('displays balance with BitcoinAmountDisplay', () => {
     renderWithProviders(<DashboardPage />)
+    expect(
+      screen.getByRole('heading', { name: 'Dashboard' }),
+    ).toBeInTheDocument()
+    expect(screen.getByText('Balance')).toBeInTheDocument()
+    expect(screen.getByText('On-chain')).toBeInTheDocument()
     expect(screen.getByText('0.00100000')).toBeInTheDocument()
-    expect(screen.getAllByRole('button', { name: 'BTC' }).length).toBeGreaterThan(0)
+    expect(screen.getAllByRole('button', { name: 'tBTC' }).length).toBeGreaterThan(0)
+  })
+
+  it('shows lab wallet copy on dashboard when network is lab', () => {
+    walletStoreState.networkMode = 'lab'
+    walletStoreState.balance = null
+    renderWithProviders(<DashboardPage />)
+    expect(
+      screen.getByRole('heading', { name: LAB_WALLET_DASHBOARD_TITLE }),
+    ).toBeInTheDocument()
+    expect(screen.getByText(LAB_WALLET_BALANCE_CARD_TITLE)).toBeInTheDocument()
+    expect(screen.getByText(LAB_WALLET_BALANCE_DISCLAIMER)).toBeInTheDocument()
+    expect(screen.getByText(LAB_WALLET_ON_CHAIN_SECTION_LABEL)).toBeInTheDocument()
+    expect(screen.getByText('0.00042000')).toBeInTheDocument()
   })
 
   it('shows on-chain breakdown when pending components are non-zero', () => {
@@ -268,6 +323,7 @@ describe('DashboardPage', () => {
         confirmation_block_height: 100,
         confirmation_time: 1700000000,
         is_confirmed: true,
+        isLabTx: false,
       },
       {
         txid: 'def456',
@@ -277,10 +333,37 @@ describe('DashboardPage', () => {
         confirmation_block_height: null,
         confirmation_time: null,
         is_confirmed: false,
+        isLabTx: false,
       },
     ]
     renderWithProviders(<DashboardPage />)
     expect(screen.getByTestId('tx-abc123')).toBeInTheDocument()
     expect(screen.getByTestId('tx-def456')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'First page' })).not.toBeInTheDocument()
+  })
+
+  it('paginates transaction list when more than one page of activity', async () => {
+    walletStoreState.transactions = Array.from({ length: 21 }, (_, index) => ({
+      txid: `tx-page-${index}`,
+      sent_sats: 0,
+      received_sats: 1_000,
+      fee_sats: null,
+      confirmation_block_height: 800_000 + index,
+      confirmation_time: 1_700_000_000 + index,
+      is_confirmed: true,
+      isLabTx: false,
+    }))
+
+    const user = userEvent.setup()
+    renderWithProviders(<DashboardPage />)
+
+    expect(screen.getByRole('button', { name: 'First page' })).toBeInTheDocument()
+    expect(screen.getByTestId('tx-tx-page-20')).toBeInTheDocument()
+    expect(screen.queryByTestId('tx-tx-page-0')).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Last page' }))
+
+    expect(screen.getByTestId('tx-tx-page-0')).toBeInTheDocument()
+    expect(screen.queryByTestId('tx-tx-page-20')).not.toBeInTheDocument()
   })
 })

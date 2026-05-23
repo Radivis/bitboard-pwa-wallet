@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import {
   Wallet,
@@ -25,6 +25,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { WalletUnlockOrNearZeroLoading } from '@/components/WalletUnlockOrNearZeroLoading'
+import { CardPagination } from '@/components/CardPagination'
 import { TransactionItem } from '@/components/TransactionItem'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
@@ -39,8 +40,7 @@ import {
 import { BadLocalChainStateError } from '@/lib/bad-local-chain-state-error'
 import { sanitizeErrorMessageForUi } from '@/lib/sanitize-error-for-ui'
 import { errorMessage } from '@/lib/utils'
-import { labOwnersEqual, walletLabOwner } from '@/lib/lab-owner'
-import { labTransactionsForWallet, lookupLabAddressOwner } from '@/lib/lab-utils'
+import { labTransactionsForWallet, sumLabWalletUtxoSats } from '@/lib/lab-utils'
 import { useLabChainStateQuery } from '@/hooks/useLabChainStateQuery'
 import {
   useLightningBalancesForDashboardQuery,
@@ -49,9 +49,16 @@ import {
 import { useFeatureStore } from '@/stores/featureStore'
 import { isLightningSupported } from '@/lib/lightning-utils'
 import { mergeAndSortDashboardActivity } from '@/lib/lightning-dashboard-sync'
+import { useDashboardActivityPageSize } from '@/hooks/useDashboardActivityPageSize'
 import { LightningPaymentItem } from '@/components/LightningPaymentItem'
 import { useFiatDenominationStore } from '@/stores/fiatDenominationStore'
 import { useMainnetFiatRatesQuery } from '@/hooks/useMainnetFiatRatesQuery'
+import {
+  LAB_WALLET_BALANCE_DISCLAIMER,
+  walletBalanceCardTitle,
+  walletDashboardTitle,
+  walletOnChainSectionLabel,
+} from '@/lib/wallet-lab-ui-copy'
 
 function ImportInitialSyncErrorBanner() {
   const networkMode = useWalletStore((s) => s.networkMode)
@@ -126,12 +133,7 @@ function BalanceCard() {
 
   const labBalanceSats =
     networkMode === 'lab' && activeWalletId != null && labChainReady
-      ? utxos
-          .filter((u) => {
-            const o = lookupLabAddressOwner(u.address, addressToOwner)
-            return o != null && labOwnersEqual(o, walletLabOwner(activeWalletId))
-          })
-          .reduce((sum, u) => sum + u.amountSats, 0)
+      ? sumLabWalletUtxoSats(utxos, addressToOwner, activeWalletId)
       : null
 
   const onChainDisplay =
@@ -272,7 +274,7 @@ function BalanceCard() {
           <div className="flex flex-wrap items-center justify-between gap-2">
             <CardTitle className="flex items-center gap-2">
               <Wallet className="h-5 w-5" />
-              Balance
+              {walletBalanceCardTitle(networkMode)}
             </CardTitle>
             <div className="flex flex-wrap items-center justify-end gap-2">
               {networkMode === 'mainnet' ? (
@@ -281,11 +283,16 @@ function BalanceCard() {
               <Badge variant="outline">{NETWORK_LABELS[networkMode]}</Badge>
             </div>
           </div>
+          {networkMode === 'lab' ? (
+            <p className="text-sm font-bold text-foreground">
+              {LAB_WALLET_BALANCE_DISCLAIMER}
+            </p>
+          ) : null}
         </CardHeader>
         <CardContent className="space-y-6">
           <div>
             <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              On-chain
+              {walletOnChainSectionLabel(networkMode)}
             </p>
             {renderOnChainHeadline()}
             {onChainDisplay.showBreakdown && (
@@ -632,6 +639,38 @@ function RecentTransactions() {
     lnPayments,
   ])
 
+  const activityTotalCount =
+    networkMode === 'lab' ? displayTransactions.length : mergedActivity.length
+
+  const activityPageSize = useDashboardActivityPageSize()
+  const [pageIndex, setPageIndex] = useState(0)
+
+  useEffect(() => {
+    setPageIndex(0)
+  }, [activeWalletId, networkMode])
+
+  useEffect(() => {
+    setPageIndex(0)
+  }, [activityPageSize])
+
+  const maxPage = Math.max(
+    0,
+    Math.ceil(activityTotalCount / activityPageSize) - 1,
+  )
+  useEffect(() => {
+    if (pageIndex > maxPage) setPageIndex(maxPage)
+  }, [maxPage, pageIndex])
+
+  const labPageRows = useMemo(() => {
+    const start = pageIndex * activityPageSize
+    return displayTransactions.slice(start, start + activityPageSize)
+  }, [displayTransactions, pageIndex, activityPageSize])
+
+  const mergedPageRows = useMemo(() => {
+    const start = pageIndex * activityPageSize
+    return mergedActivity.slice(start, start + activityPageSize)
+  }, [mergedActivity, pageIndex, activityPageSize])
+
   if (networkMode === 'lab' && !labChainReady) {
     return (
       <Card>
@@ -698,25 +737,31 @@ function RecentTransactions() {
               No transactions yet. Mine blocks or send to see activity.
             </p>
           </div>
-        ) : networkMode === 'lab' ? (
-          <div className="space-y-2">
-            {displayTransactions.slice(0, 10).map((tx) => (
-              <TransactionItem key={tx.txid} transaction={tx} />
-            ))}
-          </div>
         ) : (
-          <div className="space-y-2">
-            {mergedActivity.slice(0, 10).map((item) =>
-              item.kind === 'chain' ? (
-                <TransactionItem key={item.tx.txid} transaction={item.tx} />
-              ) : (
-                <LightningPaymentItem
-                  key={`${item.payment.connectionId}-${item.payment.paymentHash}`}
-                  payment={item.payment}
-                />
-              ),
-            )}
-          </div>
+          <CardPagination
+            pageSize={activityPageSize}
+            totalCount={activityTotalCount}
+            pageIndex={pageIndex}
+            onPageChange={setPageIndex}
+            ariaLabel="Transaction activity page"
+          >
+            <div className="space-y-2">
+              {networkMode === 'lab'
+                ? labPageRows.map((tx) => (
+                    <TransactionItem key={tx.txid} transaction={tx} />
+                  ))
+                : mergedPageRows.map((item) =>
+                    item.kind === 'chain' ? (
+                      <TransactionItem key={item.tx.txid} transaction={item.tx} />
+                    ) : (
+                      <LightningPaymentItem
+                        key={`${item.payment.connectionId}-${item.payment.paymentHash}`}
+                        payment={item.payment}
+                      />
+                    ),
+                  )}
+            </div>
+          </CardPagination>
         )}
       </CardContent>
     </Card>
@@ -728,6 +773,7 @@ export function DashboardPage() {
   const activeWalletId = useWalletStore((s) => s.activeWalletId)
   const walletStatus = useWalletStore((s) => s.walletStatus)
   const lastSyncTime = useWalletStore((s) => s.lastSyncTime)
+  const networkMode = useWalletStore((s) => s.networkMode)
 
   if (!activeWalletId) {
     navigate({ to: '/setup' })
@@ -740,7 +786,7 @@ export function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Dashboard" icon={Home}>
+      <PageHeader title={walletDashboardTitle(networkMode)} icon={Home}>
         {lastSyncTime ? (
           <p className="text-xs text-muted-foreground">
             Last synced: {lastSyncTime.toLocaleTimeString()}

@@ -38,6 +38,13 @@ export interface LightningPayment {
   feesPaidSats: number
 }
 
+/** Outgoing LN wallet debit: invoice/payment amount plus fees. */
+export function getLnOutgoingTotalInclFeeSats(
+  payment: Pick<LightningPayment, 'amountSats' | 'feesPaidSats'>,
+): number {
+  return payment.amountSats + payment.feesPaidSats
+}
+
 export interface LightningBackendService {
   getBalance(): Promise<{ balanceSats: number }>
   /** Omit `amountSats` (or leave unset) for an amountless BOLT11; payer supplies amount when paying. */

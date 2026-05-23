@@ -1,5 +1,6 @@
 import { ArrowRight, Bitcoin, CakeSlice, Hash } from 'lucide-react'
 import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
+import { LAB_CARD_TX_AMOUNT_TEXT_CLASS } from '@/components/lab/lab-card-amount-text'
 import { LabOwnerDisplayWithAddressType } from '@/components/lab/LabOwnerDisplayWithAddressType'
 import { Badge } from '@/components/ui/badge'
 import { truncateAddress } from '@/lib/bitcoin-utils'
@@ -94,12 +95,20 @@ export function LabTxCard({
       <span className="inline-flex min-w-0 items-center gap-1">
         <Bitcoin className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
         <span className="sr-only">Amount</span>
-        <BitcoinAmountDisplay amountSats={amountSats} size="sm" />
+        <BitcoinAmountDisplay
+          amountSats={amountSats}
+          size="sm"
+          className={LAB_CARD_TX_AMOUNT_TEXT_CLASS}
+        />
       </span>
       <span className="inline-flex min-w-0 items-center gap-1">
         <CakeSlice className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
         <span className="sr-only">Fee</span>
-        <BitcoinAmountDisplay amountSats={feeSats} size="sm" />
+        <BitcoinAmountDisplay
+          amountSats={feeSats}
+          size="sm"
+          className={LAB_CARD_TX_AMOUNT_TEXT_CLASS}
+        />
       </span>
     </div>
   )

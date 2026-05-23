@@ -312,11 +312,14 @@ export type DashboardActivityItem =
   | { kind: 'chain'; tx: TransactionDetails }
   | { kind: 'lightning'; payment: LightningPaymentWithWallet }
 
+/** Sort key so unconfirmed on-chain txs stay above confirmed history (see lab mempool ordering). */
+const UNCONFIRMED_CHAIN_SORT_PRIORITY = Number.MAX_SAFE_INTEGER
+
 function chainSortTime(tx: TransactionDetails): number {
-  if (tx.confirmation_time != null) {
-    return tx.confirmation_time
+  if (!tx.is_confirmed) {
+    return UNCONFIRMED_CHAIN_SORT_PRIORITY
   }
-  return 0
+  return tx.confirmation_time ?? 0
 }
 
 function lightningSortTime(p: LightningPaymentWithWallet): number {
@@ -325,6 +328,7 @@ function lightningSortTime(p: LightningPaymentWithWallet): number {
 
 /**
  * Merges on-chain and Lightning activity, newest first (by sort timestamp).
+ * Unconfirmed on-chain txs are prioritized so they are not pushed out of the dashboard top-N slice.
  */
 export function mergeAndSortDashboardActivity(
   onChain: TransactionDetails[],

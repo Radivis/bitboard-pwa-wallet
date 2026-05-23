@@ -12,6 +12,7 @@ import type {
   LabEntityRecord,
   LabTxRecord,
   LabTxDetails,
+  LabUtxo,
   MempoolEntry,
   LabAddress,
   LabState,
@@ -38,6 +39,21 @@ export function labBitcoinAddressesEqual(a: string, b: string): boolean {
     return x.toLowerCase() === y.toLowerCase()
   }
   return false
+}
+
+/** Sum of UTXO values owned by the active wallet on the lab chain. */
+export function sumLabWalletUtxoSats(
+  utxos: LabUtxo[],
+  addressToOwner: Record<string, LabOwner>,
+  activeWalletId: number,
+): number {
+  const walletOwner = walletLabOwner(activeWalletId)
+  return utxos
+    .filter((utxo) => {
+      const owner = lookupLabAddressOwner(utxo.address, addressToOwner)
+      return owner != null && labOwnersEqual(owner, walletOwner)
+    })
+    .reduce((sum, utxo) => sum + utxo.amountSats, 0)
 }
 
 /**
@@ -209,6 +225,7 @@ export function labTransactionsForWallet(
       confirmation_block_height: null,
       confirmation_time: null,
       is_confirmed: false,
+      isLabTx: true,
     })
   }
 
@@ -232,6 +249,7 @@ export function labTransactionsForWallet(
         confirmation_block_height: details.blockHeight,
         confirmation_time: details.blockTime,
         is_confirmed: true,
+        isLabTx: true,
       })
       continue
     }
@@ -265,6 +283,7 @@ export function labTransactionsForWallet(
       confirmation_block_height: details.blockHeight,
       confirmation_time: details.blockTime,
       is_confirmed: true,
+      isLabTx: true,
     })
   }
 
@@ -274,9 +293,10 @@ export function labTransactionsForWallet(
     if (txA.is_confirmed && txB.is_confirmed) {
       const timeA = txA.confirmation_time ?? 0
       const timeB = txB.confirmation_time ?? 0
-      return timeB - timeA
+      if (timeB !== timeA) return timeB - timeA
+      return txB.txid.localeCompare(txA.txid)
     }
-    return 0
+    return txA.txid.localeCompare(txB.txid)
   })
 
   return result

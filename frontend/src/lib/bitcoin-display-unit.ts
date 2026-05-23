@@ -1,6 +1,50 @@
-import { formatSats, MAX_SAFE_SATS } from '@/lib/bitcoin-utils'
+import { formatSats, MAX_SAFE_SATS, SATS_PER_BTC } from '@/lib/bitcoin-utils'
+import type { NetworkMode } from '@/stores/walletStore'
 
-const SATS_PER_BTC = 100_000_000
+export type LiveTestNetworkMode = 'testnet' | 'signet' | 'regtest'
+
+export type NetworkUnitIndicator = 'test' | 'lab' | null
+
+export function isLiveTestNetwork(mode: NetworkMode): mode is LiveTestNetworkMode {
+  return mode === 'testnet' || mode === 'signet' || mode === 'regtest'
+}
+
+export function getNetworkUnitIndicator(mode: NetworkMode): NetworkUnitIndicator {
+  if (mode === 'lab') {
+    return 'lab'
+  }
+  if (isLiveTestNetwork(mode)) {
+    return 'test'
+  }
+  return null
+}
+
+/** Plain-text unit label with network prefix (t on live test networks; lab uses icon in rich UI). */
+export function getPrefixedBitcoinDisplayUnitLabel(
+  unit: BitcoinDisplayUnit,
+  mode: NetworkMode,
+): string {
+  const base = BITCOIN_DISPLAY_UNIT_LABEL[unit]
+  if (isLiveTestNetwork(mode)) {
+    return `t${base}`
+  }
+  return base
+}
+
+/** Accessible name for unit controls (includes Lab prefix for lab mode). */
+export function getAccessibleBitcoinDisplayUnitLabel(
+  unit: BitcoinDisplayUnit,
+  mode: NetworkMode,
+): string {
+  const base = BITCOIN_DISPLAY_UNIT_LABEL[unit]
+  if (isLiveTestNetwork(mode)) {
+    return `t${base}`
+  }
+  if (mode === 'lab') {
+    return `Lab ${base}`
+  }
+  return base
+}
 
 /** Code uses `uBTC`; UI labels use µBTC. */
 export type BitcoinDisplayUnit = 'BTC' | 'mBTC' | 'uBTC' | 'sat' | 'ksat'

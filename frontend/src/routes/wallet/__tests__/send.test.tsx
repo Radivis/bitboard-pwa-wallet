@@ -53,17 +53,21 @@ vi.mock('@/stores/cryptoStore', () => ({
 }))
 
 let walletStoreState: Record<string, unknown> = {}
-vi.mock('@/stores/walletStore', () => ({
-  useWalletStore: (selector: (s: Record<string, unknown>) => unknown) =>
-    selector(walletStoreState),
-  NETWORK_LABELS: {
-    lab: 'Lab',
-    regtest: 'Regtest',
-    signet: 'Signet',
-    testnet: 'Testnet',
-    mainnet: 'Mainnet',
-  },
-}))
+vi.mock('@/stores/walletStore', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/stores/walletStore')>()
+  return {
+    ...actual,
+    useWalletStore: (selector: (s: Record<string, unknown>) => unknown) =>
+      selector(walletStoreState),
+    NETWORK_LABELS: {
+      lab: 'Lab',
+      regtest: 'Regtest',
+      signet: 'Signet',
+      testnet: 'Testnet',
+      mainnet: 'Mainnet',
+    },
+  }
+})
 
 vi.mock('@/stores/sessionStore', () => ({
   useSessionStore: (selector: (s: Record<string, unknown>) => unknown) =>
@@ -105,6 +109,9 @@ const sendStoreState: Record<string, unknown> = {
   customFeeRate: '',
   useCustomFee: false,
   psbt: null,
+  reviewFeeSats: null,
+  reviewChangeSats: null,
+  reviewInputUtxos: null,
   onchainDustWarning: null,
   setStep: vi.fn(),
   setRecipient: vi.fn((v: string) => {
@@ -119,15 +126,32 @@ const sendStoreState: Record<string, unknown> = {
   setCustomFeeRate: vi.fn(),
   setUseCustomFee: vi.fn(),
   setPsbt: vi.fn(),
+  setReviewFeeSats: vi.fn((v: unknown) => {
+    sendStoreState.reviewFeeSats = v
+  }),
+  setReviewChangeSats: vi.fn((v: unknown) => {
+    sendStoreState.reviewChangeSats = v
+  }),
+  setReviewInputUtxos: vi.fn((v: unknown) => {
+    sendStoreState.reviewInputUtxos = v
+  }),
   setOnchainDustWarning: vi.fn(),
   reset: vi.fn(),
 }
 
 vi.mock('@/stores/sendStore', () => ({
-  useSendStore: (selector?: (s: Record<string, unknown>) => unknown) => {
-    if (typeof selector !== 'function') return sendStoreState
-    return selector(sendStoreState)
-  },
+  useSendStore: Object.assign(
+    (selector?: (s: Record<string, unknown>) => unknown) => {
+      if (typeof selector !== 'function') return sendStoreState
+      return selector(sendStoreState)
+    },
+    {
+      getState: () => sendStoreState,
+      setState: (partial: Record<string, unknown>) => {
+        Object.assign(sendStoreState, partial)
+      },
+    },
+  ),
 }))
 
 vi.mock('@/hooks/useSendMutations', () => ({
@@ -174,6 +198,7 @@ vi.mock('@/hooks/useBitcoinUnit', () => ({
 
 vi.mock('@/lib/bitcoin-utils', () => ({
   MAX_SAFE_SATS: Number.MAX_SAFE_INTEGER,
+  SATS_PER_BTC: 100_000_000,
   isValidAddress: (addr: string) => addr.startsWith('bc1'),
   truncateAddress: (a: string) => a.slice(0, 8),
 }))
