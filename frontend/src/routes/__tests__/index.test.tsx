@@ -66,6 +66,10 @@ vi.mock('@/hooks/useBitcoinUnit', () => ({
   useBitcoinUnit: () => ({ data: 'BTC' }),
 }))
 
+vi.mock('@/hooks/useDashboardActivityPageSize', () => ({
+  useDashboardActivityPageSize: () => 10,
+}))
+
 const {
   mockRunIncrementalDashboardWalletSync,
   mockRunFullScanDashboardWalletSync,
@@ -319,6 +323,7 @@ describe('DashboardPage', () => {
         confirmation_block_height: 100,
         confirmation_time: 1700000000,
         is_confirmed: true,
+        isLabTx: false,
       },
       {
         txid: 'def456',
@@ -328,10 +333,37 @@ describe('DashboardPage', () => {
         confirmation_block_height: null,
         confirmation_time: null,
         is_confirmed: false,
+        isLabTx: false,
       },
     ]
     renderWithProviders(<DashboardPage />)
     expect(screen.getByTestId('tx-abc123')).toBeInTheDocument()
     expect(screen.getByTestId('tx-def456')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'First page' })).not.toBeInTheDocument()
+  })
+
+  it('paginates transaction list when more than one page of activity', async () => {
+    walletStoreState.transactions = Array.from({ length: 21 }, (_, index) => ({
+      txid: `tx-page-${index}`,
+      sent_sats: 0,
+      received_sats: 1_000,
+      fee_sats: null,
+      confirmation_block_height: 800_000 + index,
+      confirmation_time: 1_700_000_000 + index,
+      is_confirmed: true,
+      isLabTx: false,
+    }))
+
+    const user = userEvent.setup()
+    renderWithProviders(<DashboardPage />)
+
+    expect(screen.getByRole('button', { name: 'First page' })).toBeInTheDocument()
+    expect(screen.getByTestId('tx-tx-page-20')).toBeInTheDocument()
+    expect(screen.queryByTestId('tx-tx-page-0')).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Last page' }))
+
+    expect(screen.getByTestId('tx-tx-page-0')).toBeInTheDocument()
+    expect(screen.queryByTestId('tx-tx-page-20')).not.toBeInTheDocument()
   })
 })

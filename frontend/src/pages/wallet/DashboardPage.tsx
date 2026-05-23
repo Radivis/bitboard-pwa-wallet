@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import {
   Wallet,
@@ -25,6 +25,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { WalletUnlockOrNearZeroLoading } from '@/components/WalletUnlockOrNearZeroLoading'
+import { CardPagination } from '@/components/CardPagination'
 import { TransactionItem } from '@/components/TransactionItem'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
@@ -49,6 +50,7 @@ import {
 import { useFeatureStore } from '@/stores/featureStore'
 import { isLightningSupported } from '@/lib/lightning-utils'
 import { mergeAndSortDashboardActivity } from '@/lib/lightning-dashboard-sync'
+import { useDashboardActivityPageSize } from '@/hooks/useDashboardActivityPageSize'
 import { LightningPaymentItem } from '@/components/LightningPaymentItem'
 import { useFiatDenominationStore } from '@/stores/fiatDenominationStore'
 import { useMainnetFiatRatesQuery } from '@/hooks/useMainnetFiatRatesQuery'
@@ -643,6 +645,38 @@ function RecentTransactions() {
     lnPayments,
   ])
 
+  const activityTotalCount =
+    networkMode === 'lab' ? displayTransactions.length : mergedActivity.length
+
+  const activityPageSize = useDashboardActivityPageSize()
+  const [pageIndex, setPageIndex] = useState(0)
+
+  useEffect(() => {
+    setPageIndex(0)
+  }, [activeWalletId, networkMode])
+
+  useEffect(() => {
+    setPageIndex(0)
+  }, [activityPageSize])
+
+  const maxPage = Math.max(
+    0,
+    Math.ceil(activityTotalCount / activityPageSize) - 1,
+  )
+  useEffect(() => {
+    if (pageIndex > maxPage) setPageIndex(maxPage)
+  }, [maxPage, pageIndex])
+
+  const labPageRows = useMemo(() => {
+    const start = pageIndex * activityPageSize
+    return displayTransactions.slice(start, start + activityPageSize)
+  }, [displayTransactions, pageIndex, activityPageSize])
+
+  const mergedPageRows = useMemo(() => {
+    const start = pageIndex * activityPageSize
+    return mergedActivity.slice(start, start + activityPageSize)
+  }, [mergedActivity, pageIndex, activityPageSize])
+
   if (networkMode === 'lab' && !labChainReady) {
     return (
       <Card>
@@ -709,25 +743,31 @@ function RecentTransactions() {
               No transactions yet. Mine blocks or send to see activity.
             </p>
           </div>
-        ) : networkMode === 'lab' ? (
-          <div className="space-y-2">
-            {displayTransactions.slice(0, 10).map((tx) => (
-              <TransactionItem key={tx.txid} transaction={tx} />
-            ))}
-          </div>
         ) : (
-          <div className="space-y-2">
-            {mergedActivity.slice(0, 10).map((item) =>
-              item.kind === 'chain' ? (
-                <TransactionItem key={item.tx.txid} transaction={item.tx} />
-              ) : (
-                <LightningPaymentItem
-                  key={`${item.payment.connectionId}-${item.payment.paymentHash}`}
-                  payment={item.payment}
-                />
-              ),
-            )}
-          </div>
+          <CardPagination
+            pageSize={activityPageSize}
+            totalCount={activityTotalCount}
+            pageIndex={pageIndex}
+            onPageChange={setPageIndex}
+            ariaLabel="Transaction activity page"
+          >
+            <div className="space-y-2">
+              {networkMode === 'lab'
+                ? labPageRows.map((tx) => (
+                    <TransactionItem key={tx.txid} transaction={tx} />
+                  ))
+                : mergedPageRows.map((item) =>
+                    item.kind === 'chain' ? (
+                      <TransactionItem key={item.tx.txid} transaction={item.tx} />
+                    ) : (
+                      <LightningPaymentItem
+                        key={`${item.payment.connectionId}-${item.payment.paymentHash}`}
+                        payment={item.payment}
+                      />
+                    ),
+                  )}
+            </div>
+          </CardPagination>
         )}
       </CardContent>
     </Card>
