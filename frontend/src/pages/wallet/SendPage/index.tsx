@@ -23,11 +23,11 @@ import {
 } from '@/lib/bitcoin-dust'
 import { normalizeLightningDestination } from '@/lib/lightning-utils'
 import { useLightningStore } from '@/stores/lightningStore'
-import { labOwnersEqual, walletLabOwner } from '@/lib/lab-owner'
+import { walletLabOwner } from '@/lib/lab-owner'
 import {
   labBitcoinAddressesEqual,
-  lookupLabAddressOwner,
   resolveDeadLabEntityRecipient,
+  sumLabWalletUtxoSats,
 } from '@/lib/lab-utils'
 import { getLabWorker, initLabWorkerWithState } from '@/workers/lab-factory'
 import { runLabOp } from '@/lib/lab-coordinator'
@@ -48,6 +48,7 @@ import {
   applySendReviewTxSummaryToStore,
   clearSendReviewTxSummaryFromStore,
 } from '@/lib/send-review-summary'
+import { buildLabSendMutationParams } from '@/lib/lab-send-submit'
 
 import { useSendFlowFees } from './fees'
 import { useSendFlowLightning } from './lightning'
@@ -144,12 +145,7 @@ export function SendFlow() {
 
   const labBalanceSats =
     networkMode === 'lab' && activeWalletId != null && labChainReady
-      ? utxos
-          .filter((u) => {
-            const o = lookupLabAddressOwner(u.address, addressToOwner)
-            return o != null && labOwnersEqual(o, walletLabOwner(activeWalletId))
-          })
-          .reduce((sum, u) => sum + u.amountSats, 0)
+      ? sumLabWalletUtxoSats(utxos, addressToOwner, activeWalletId)
       : null
 
   const confirmedBalance =
@@ -492,59 +488,43 @@ export function SendFlow() {
     prepareLabDraftForReview,
   ])
 
+  const submitLabSend = useCallback(() => {
+    labSendMutation.mutate(
+      buildLabSendMutationParams(
+        normalizedRecipient,
+        effectiveFeeRate,
+        labApplyChangeFreeBump,
+        labChangeFreeBumpBaseAmountSatsRef,
+      ),
+    )
+  }, [
+    labSendMutation,
+    normalizedRecipient,
+    effectiveFeeRate,
+    labApplyChangeFreeBump,
+  ])
+
   const handleConfirmSend = useCallback(() => {
     if (networkMode === 'lab') {
       if (deadLabRecipientInfo != null) {
         setDeadLabRecipientModalOpen(true)
         return
       }
-      const { amount: amountFromStore, amountUnit: unitFromStore } =
-        useSendStore.getState()
-      const parsedFromStore = amountSatsFromForm(amountFromStore, unitFromStore)
-      const amountForLab =
-        labApplyChangeFreeBump && labChangeFreeBumpBaseAmountSatsRef.current != null
-          ? labChangeFreeBumpBaseAmountSatsRef.current
-          : parsedFromStore
-      labSendMutation.mutate({
-        normalizedRecipient,
-        amountSats: amountForLab,
-        effectiveFeeRate,
-        applyChangeFreeBump: labApplyChangeFreeBump,
-      })
+      submitLabSend()
     } else {
       broadcastMutation.mutate()
     }
   }, [
     networkMode,
     deadLabRecipientInfo,
-    normalizedRecipient,
-    effectiveFeeRate,
-    labSendMutation,
+    submitLabSend,
     broadcastMutation,
-    labApplyChangeFreeBump,
   ])
 
   const handleConfirmDeadLabRecipientSend = useCallback(() => {
     setDeadLabRecipientModalOpen(false)
-    const { amount: amountFromStore, amountUnit: unitFromStore } =
-      useSendStore.getState()
-    const parsedFromStore = amountSatsFromForm(amountFromStore, unitFromStore)
-    const amountForLab =
-      labApplyChangeFreeBump && labChangeFreeBumpBaseAmountSatsRef.current != null
-        ? labChangeFreeBumpBaseAmountSatsRef.current
-        : parsedFromStore
-    labSendMutation.mutate({
-      normalizedRecipient,
-      amountSats: amountForLab,
-      effectiveFeeRate,
-      applyChangeFreeBump: labApplyChangeFreeBump,
-    })
-  }, [
-    labSendMutation,
-    normalizedRecipient,
-    effectiveFeeRate,
-    labApplyChangeFreeBump,
-  ])
+    submitLabSend()
+  }, [submitLabSend])
 
   const applyScannedPayload = useCallback(
     (raw: string) => {
@@ -641,11 +621,7 @@ export function SendFlow() {
     ? 'Send Lightning'
     : walletSendPageTitle(networkMode)
   const cardTitle = isLightningSendMode ? 'Pay with Lightning' : 'Send Transaction'
-  const submitLabel = isLightningSendMode
-    ? 'Pay with Lightning'
-    : networkMode === 'lab'
-      ? 'Review Transaction'
-      : 'Review Transaction'
+  const submitLabel = isLightningSendMode ? 'Pay with Lightning' : 'Review Transaction'
 
   return (
     <div className="space-y-6">

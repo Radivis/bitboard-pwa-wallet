@@ -1,4 +1,4 @@
-import { formatSats, MAX_SAFE_SATS } from '@/lib/bitcoin-utils'
+import { formatSats, MAX_SAFE_SATS, SATS_PER_BTC } from '@/lib/bitcoin-utils'
 import type { NetworkMode } from '@/stores/walletStore'
 
 export type LiveTestNetworkMode = 'testnet' | 'signet' | 'regtest'
@@ -45,8 +45,6 @@ export function getAccessibleBitcoinDisplayUnitLabel(
   }
   return base
 }
-
-const SATS_PER_BTC = 100_000_000
 
 /** Code uses `uBTC`; UI labels use µBTC. */
 export type BitcoinDisplayUnit = 'BTC' | 'mBTC' | 'uBTC' | 'sat' | 'ksat'

@@ -40,8 +40,7 @@ import {
 import { BadLocalChainStateError } from '@/lib/bad-local-chain-state-error'
 import { sanitizeErrorMessageForUi } from '@/lib/sanitize-error-for-ui'
 import { errorMessage } from '@/lib/utils'
-import { labOwnersEqual, walletLabOwner } from '@/lib/lab-owner'
-import { labTransactionsForWallet, lookupLabAddressOwner } from '@/lib/lab-utils'
+import { labTransactionsForWallet, sumLabWalletUtxoSats } from '@/lib/lab-utils'
 import { useLabChainStateQuery } from '@/hooks/useLabChainStateQuery'
 import {
   useLightningBalancesForDashboardQuery,
@@ -134,12 +133,7 @@ function BalanceCard() {
 
   const labBalanceSats =
     networkMode === 'lab' && activeWalletId != null && labChainReady
-      ? utxos
-          .filter((u) => {
-            const o = lookupLabAddressOwner(u.address, addressToOwner)
-            return o != null && labOwnersEqual(o, walletLabOwner(activeWalletId))
-          })
-          .reduce((sum, u) => sum + u.amountSats, 0)
+      ? sumLabWalletUtxoSats(utxos, addressToOwner, activeWalletId)
       : null
 
   const onChainDisplay =

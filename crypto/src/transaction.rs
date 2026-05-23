@@ -1,6 +1,6 @@
 use std::str::FromStr;
 
-use bdk_wallet::Wallet;
+use bdk_wallet::{KeychainKind, Wallet};
 use bitcoin::absolute;
 use bitcoin::{Address, Amount, Network, Psbt, ScriptBuf, Transaction};
 use serde::{Deserialize, Serialize};
@@ -211,9 +211,22 @@ pub fn prepare_onchain_send(
     let fee_sats = fee_sats_from_unsigned_psbt(&psbt)?;
     let total_input_sats = sum_psbt_input_values(&psbt)?;
     let input_utxos = review_inputs_from_wallet_psbt(wallet, &psbt)?;
-    let change_sats = total_input_sats
-        .saturating_sub(final_amt)
-        .saturating_sub(fee_sats);
+    let change_spk = psbt
+        .unsigned_tx
+        .output
+        .iter()
+        .find(|output| output.script_pubkey != recipient_spk)
+        .map(|output| output.script_pubkey.clone())
+        .unwrap_or_else(|| {
+            wallet
+                .peek_address(
+                    KeychainKind::Internal,
+                    wallet.next_derivation_index(KeychainKind::Internal),
+                )
+                .address
+                .script_pubkey()
+        });
+    let change_sats = change_sats_from_unsigned_psbt(&psbt, &change_spk);
 
     Ok(PrepareOnchainSendOutcome {
         psbt_base64: psbt.to_string(),

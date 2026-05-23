@@ -74,6 +74,7 @@ vi.mock('@/lib/library/article-shared', () => ({
 
 vi.mock('@/lib/bitcoin-utils', () => ({
   MAX_SAFE_SATS: Number.MAX_SAFE_INTEGER,
+  SATS_PER_BTC: 100_000_000,
   isValidAddress: (address: string, network: string) => {
     if (network === 'signet') return address.startsWith('tb1')
     return false
@@ -347,9 +348,11 @@ describe('SendPage', () => {
 
     expect(await screen.findByText('Fee')).toBeInTheDocument()
     expect(screen.getByText('Total deducted')).toBeInTheDocument()
-    expect(screen.getByText('Amount remaining')).toBeInTheDocument()
+    expect(screen.getByText('Balance remaining')).toBeInTheDocument()
     expect(screen.getByText('Change')).toBeInTheDocument()
-    expect(screen.getByText('Immediately spendable remaining')).toBeInTheDocument()
+    expect(
+      screen.getByText('Immediately spendable balance remaining'),
+    ).toBeInTheDocument()
     expect(
       screen.getByRole('button', { name: 'Show UTXOs to be used' }),
     ).toBeInTheDocument()

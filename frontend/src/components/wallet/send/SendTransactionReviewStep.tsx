@@ -12,6 +12,7 @@ import { FiatAmountDisplay } from '@/components/FiatAmountDisplay'
 import { OnchainDustWarningReviewBanner } from '@/components/wallet/send/OnchainDustWarningReviewBanner'
 import { ReviewInputUtxoList } from '@/components/wallet/send/ReviewInputUtxoList'
 import { SEND_REVIEW_INFOMODE } from '@/components/wallet/send/send-review-infomode'
+import { computeSendReviewDisplayAmounts } from '@/lib/send-review-summary'
 import type { AddressType, NetworkMode } from '@/stores/walletStore'
 import type { OnchainDustWarning, SendAmountUnit } from '@/stores/sendStore'
 import type { FiatCurrencyCode } from '@/lib/supported-fiat-currencies'
@@ -192,17 +193,19 @@ export function SendTransactionReviewStep({
   const showOnchainFeeSummary =
     !isLightningSendMode && reviewFeeSats != null
   const inputUtxos = reviewInputUtxos ?? []
-  const totalInputSats = inputUtxos.reduce(
-    (sum, utxo) => sum + utxo.amountSats,
-    0,
-  )
-  const totalDeductedSats = amountSats + (reviewFeeSats ?? 0)
-  const amountRemainingSats = Math.max(0, totalBalanceSats - totalDeductedSats)
-  const immediatelySpendableRemainingSats = Math.max(
-    0,
-    spendableBalanceSats - totalInputSats,
-  )
-  const changeSats = reviewChangeSats ?? 0
+  const {
+    totalDeductedSats,
+    amountRemainingSats,
+    immediatelySpendableRemainingSats,
+    changeSats,
+  } = computeSendReviewDisplayAmounts({
+    amountSats,
+    reviewFeeSats,
+    reviewChangeSats,
+    reviewInputUtxos,
+    spendableBalanceSats,
+    totalBalanceSats,
+  })
 
   return (
     <div className="space-y-6">
