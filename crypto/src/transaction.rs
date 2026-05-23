@@ -23,6 +23,8 @@ pub struct PrepareOnchainSendOutcome {
     pub change_free_bump_available: bool,
     /// Set when `change_free_bump_available` (copy for UI; 0 if not available).
     pub change_free_max_sats: u64,
+    /// Total fee in satoshis (input sum minus output sum on the unsigned tx).
+    pub fee_sats: u64,
 }
 
 fn sum_psbt_input_values(psbt: &Psbt) -> Result<u64, CryptoError> {
@@ -44,6 +46,17 @@ fn sum_psbt_input_values(psbt: &Psbt) -> Result<u64, CryptoError> {
             .ok_or_else(|| CryptoError::Transaction("Input value sum overflow".to_string()))?;
     }
     Ok(sum)
+}
+
+fn sum_unsigned_tx_output_values(tx: &Transaction) -> u64 {
+    tx.output.iter().map(|o| o.value.to_sat()).sum()
+}
+
+/// Fee in satoshis from an unsigned PSBT (sum of inputs minus sum of outputs).
+pub fn fee_sats_from_unsigned_psbt(psbt: &Psbt) -> Result<u64, CryptoError> {
+    let vin_sum = sum_psbt_input_values(psbt)?;
+    let vout_sum = sum_unsigned_tx_output_values(&psbt.unsigned_tx);
+    Ok(vin_sum.saturating_sub(vout_sum))
 }
 
 /// Build a PSBT with dust-floor clamp. When `apply_change_free_bump` is false (default for first
@@ -123,6 +136,8 @@ pub fn prepare_onchain_send(
         }
     }
 
+    let fee_sats = fee_sats_from_unsigned_psbt(&psbt)?;
+
     Ok(PrepareOnchainSendOutcome {
         psbt_base64: psbt.to_string(),
         final_amount_sats: final_amt,
@@ -131,6 +146,7 @@ pub fn prepare_onchain_send(
         bumped_change_free,
         change_free_bump_available,
         change_free_max_sats,
+        fee_sats,
     })
 }
 

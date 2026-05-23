@@ -114,6 +114,23 @@ fn prepare_onchain_send_raises_below_dust_floor() {
         "PSBT base64 must be returned"
     );
     assert!(!outcome.change_free_bump_available);
+    assert!(outcome.fee_sats > 0, "Prepare must return a positive fee");
+}
+
+#[test]
+fn prepare_onchain_send_returns_positive_fee_sats() {
+    let mut wallet = funded_wallet();
+    let outcome = transaction::prepare_onchain_send(
+        &mut wallet,
+        VALID_SIGNET_ADDRESS,
+        SEND_AMOUNT,
+        FEE_RATE,
+        Network::Testnet,
+        false,
+    )
+    .expect("Prepare should succeed");
+
+    assert!(outcome.fee_sats > 0, "fee_sats must be positive");
 }
 
 #[test]

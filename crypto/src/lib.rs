@@ -471,6 +471,7 @@ pub fn draft_lab_psbt_transaction(
     amount_sats: u64,
     fee_rate_sat_per_vb: f64,
     change_address: &str,
+    apply_change_free_bump: bool,
 ) -> Result<JsValue, JsValue> {
     let external = EXTERNAL_DESCRIPTOR_FOR_LAB.with(|d| d.borrow().clone());
     let internal = INTERNAL_DESCRIPTOR_FOR_LAB.with(|d| d.borrow().clone());
@@ -488,6 +489,7 @@ pub fn draft_lab_psbt_transaction(
             amount_sats,
             fee_rate_sat_per_vb,
             change_address,
+            apply_change_free_bump,
         )
     })?;
     let outcome = result.map_err_to_js()?;

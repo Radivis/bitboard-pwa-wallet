@@ -29,6 +29,8 @@ interface SendState {
   useCustomFee: boolean
   /** Base64-encoded PSBT (mainnet/testnet/signet/regtest); null for lab. */
   psbt: string | null
+  /** Fee from the prepared/drafted tx shown on review; null until review is reached. */
+  reviewFeeSats: number | null
   /** Dust UX: show red warning below amount; cleared on manual amount edit or reset. */
   onchainDustWarning: OnchainDustWarning | null
 
@@ -42,6 +44,7 @@ interface SendState {
   setCustomFeeRate: (rate: string) => void
   setUseCustomFee: (use: boolean) => void
   setPsbt: (psbt: string | null) => void
+  setReviewFeeSats: (feeSats: number | null) => void
   setOnchainDustWarning: (w: OnchainDustWarning | null) => void
 
   /** Reset form and step to initial state (e.g. after successful send or when leaving send page). */
@@ -60,6 +63,7 @@ const initialState = {
   customFeeRate: '',
   useCustomFee: false,
   psbt: null as string | null,
+  reviewFeeSats: null as number | null,
   onchainDustWarning: null as OnchainDustWarning | null,
 }
 
@@ -79,6 +83,7 @@ export const useSendStore = create<SendState>((set) => ({
   setCustomFeeRate: (customFeeRate) => set({ customFeeRate }),
   setUseCustomFee: (useCustomFee) => set({ useCustomFee }),
   setPsbt: (psbt) => set({ psbt }),
+  setReviewFeeSats: (reviewFeeSats) => set({ reviewFeeSats }),
   setOnchainDustWarning: (onchainDustWarning) => set({ onchainDustWarning }),
 
   reset: () =>

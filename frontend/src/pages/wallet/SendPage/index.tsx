@@ -103,6 +103,7 @@ export function SendFlow() {
     feePresetSelection,
     psbt,
     onchainDustWarning,
+    reviewFeeSats,
     setStep,
     setRecipient,
     setAmount,
@@ -150,6 +151,11 @@ export function SendFlow() {
       ? labBalanceSats
       : balance?.confirmed ?? 0
 
+  const totalBalanceSats =
+    networkMode === 'lab' && labBalanceSats !== null
+      ? labBalanceSats
+      : balance?.total ?? 0
+
   const applyOnchainPrepareOutcomeToSendStore = useCallback(
     (outcome: PrepareOnchainSendResult) => {
       const { amountUnit: unit } = useSendStore.getState()
@@ -175,6 +181,7 @@ export function SendFlow() {
           },
         })
       }
+      useSendStore.getState().setReviewFeeSats(outcome.feeSats)
       useSendStore.getState().setPsbt(outcome.psbtBase64)
       useSendStore.getState().setStep(2)
     },
@@ -182,7 +189,10 @@ export function SendFlow() {
   )
 
   useEffect(() => {
-    if (step === 1) setLabApplyChangeFreeBump(false)
+    if (step === 1) {
+      setLabApplyChangeFreeBump(false)
+      useSendStore.getState().setReviewFeeSats(null)
+    }
   }, [step])
 
   const fiatDenominationMode = useFiatDenominationStore(
@@ -282,6 +292,83 @@ export function SendFlow() {
   const canBuild =
     (isLightningSendMode ? canBuildLightning : canBuildOnChain) && fiatRateOk
 
+  const prepareLabDraftForReview = useCallback(
+    async (params: {
+      draftAmountSats: number
+      applyChangeFreeBump: boolean
+    }) => {
+      if (activeWalletId == null) {
+        throw new Error('No active wallet')
+      }
+      await initLabWorkerWithState()
+      const labWorker = getLabWorker()
+      const walletChangeAddress = await useCryptoStore
+        .getState()
+        .getLabChangeAddress()
+
+      const knownRecipientOwner =
+        currentAddress != null &&
+        labBitcoinAddressesEqual(normalizedRecipient, currentAddress)
+          ? walletLabOwner(activeWalletId)
+          : undefined
+
+      const { utxosJson } = await labWorker.prepareLabWalletTransaction({
+        walletId: activeWalletId,
+        toAddress: normalizedRecipient,
+        amountSats: params.draftAmountSats,
+        feeRateSatPerVb: effectiveFeeRate,
+        walletChangeAddress,
+        knownRecipientOwner,
+      })
+
+      return useCryptoStore.getState().draftLabPsbtTransaction({
+        utxosJson,
+        toAddress: normalizedRecipient,
+        amountSats: params.draftAmountSats,
+        feeRateSatPerVb: effectiveFeeRate,
+        changeAddress: walletChangeAddress,
+        applyChangeFreeBump: params.applyChangeFreeBump,
+      })
+    },
+    [activeWalletId, currentAddress, effectiveFeeRate, normalizedRecipient],
+  )
+
+  const handleLabIncreaseToChangeFreeReview = useCallback(async () => {
+    if (labDustCase2Modal == null) return
+    setLabReviewPending(true)
+    try {
+      await runLabOp(async () => {
+        const baseAmountSats = labDustCase2Modal.exactAmountSats
+        const draft = await prepareLabDraftForReview({
+          draftAmountSats: baseAmountSats,
+          applyChangeFreeBump: true,
+        })
+        useSendStore.setState({
+          amount: formatAmountInputFromSats(draft.finalAmountSats, amountUnit),
+          onchainDustWarning: {
+            previousSats: labDustCase2Modal.originalAmountSats,
+            raisedToDustMin: false,
+            bumpedChangeFree: true,
+          },
+          reviewFeeSats: draft.feeSats,
+        })
+        setLabApplyChangeFreeBump(true)
+        labChangeFreeBumpBaseAmountSatsRef.current = baseAmountSats
+        setLabDustCase2Modal(null)
+        setStep(2)
+      })
+    } catch (err) {
+      toast.error(errorMessage(err) || 'Failed to prepare lab transaction')
+    } finally {
+      setLabReviewPending(false)
+    }
+  }, [
+    labDustCase2Modal,
+    amountUnit,
+    prepareLabDraftForReview,
+    setStep,
+  ])
+
   const handleSubmitBuild = useCallback(async () => {
     if (!canBuild) return
 
@@ -322,34 +409,12 @@ export function SendFlow() {
       setLabReviewPending(true)
       try {
         await runLabOp(async () => {
-          await initLabWorkerWithState()
-          const labWorker = getLabWorker()
-          const walletChangeAddress = await useCryptoStore
-            .getState()
-            .getLabChangeAddress()
-
-          const knownRecipientOwner =
-            currentAddress != null &&
-            labBitcoinAddressesEqual(normalizedRecipient, currentAddress)
-              ? walletLabOwner(activeWalletId)
-              : undefined
-
-          const { utxosJson } = await labWorker.prepareLabWalletTransaction({
-            walletId: activeWalletId,
-            toAddress: normalizedRecipient,
-            amountSats: draftAmountSats,
-            feeRateSatPerVb: effectiveFeeRate,
-            walletChangeAddress,
-            knownRecipientOwner,
+          const draft = await prepareLabDraftForReview({
+            draftAmountSats,
+            applyChangeFreeBump: false,
           })
 
-          const draft = await useCryptoStore.getState().draftLabPsbtTransaction({
-            utxosJson,
-            toAddress: normalizedRecipient,
-            amountSats: draftAmountSats,
-            feeRateSatPerVb: effectiveFeeRate,
-            changeAddress: walletChangeAddress,
-          })
+          useSendStore.getState().setReviewFeeSats(draft.feeSats)
 
           if (draft.changeFreeBumpAvailable) {
             labChangeFreeBumpBaseAmountSatsRef.current = draft.finalAmountSats
@@ -406,6 +471,7 @@ export function SendFlow() {
     setStep,
     submitLightningPayment,
     confirmedBalance,
+    prepareLabDraftForReview,
   ])
 
   const handleConfirmSend = useCallback(() => {
@@ -544,6 +610,8 @@ export function SendFlow() {
         defaultFiatCurrency={defaultFiatCurrency}
         btcPriceInFiat={btcPriceInFiat}
         fiatRatesLoading={fiatRatesQuery.isPending}
+        reviewFeeSats={reviewFeeSats}
+        totalBalanceSats={totalBalanceSats}
       />
     )
   }
@@ -623,10 +691,11 @@ export function SendFlow() {
         normalizedRecipient={normalizedRecipient}
         amountSats={amountSats}
         effectiveFeeRate={effectiveFeeRate}
-        amountUnit={amountUnit}
         applyOnchainPrepareOutcomeToSendStore={applyOnchainPrepareOutcomeToSendStore}
         setStep={setStep}
         setLabApplyChangeFreeBump={setLabApplyChangeFreeBump}
+        onLabIncreaseToChangeFreeReview={handleLabIncreaseToChangeFreeReview}
+        labReviewPending={labReviewPending}
       />
     </div>
   )

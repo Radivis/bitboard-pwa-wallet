@@ -177,6 +177,7 @@ describe('SendPage', () => {
       raisedToMinDust: false,
       changeFreeBumpAvailable: false,
       changeFreeMaxSats: 0,
+      feeSats: 1_500,
     })
     useSendStore.getState().reset()
     walletStoreState = {
@@ -308,6 +309,32 @@ describe('SendPage', () => {
     expect(screen.getByRole('button', { name: 'Review Transaction' })).toBeEnabled()
   })
 
+  it('review step shows fee summary labels', async () => {
+    const user = userEvent.setup()
+    mockPrepareOnchainSendTransaction.mockResolvedValue({
+      psbtBase64: 'mock_psbt_base64',
+      finalAmountSats: 100_000,
+      originalAmountSats: 100_000,
+      raisedToMinDust: false,
+      bumpedChangeFree: false,
+      changeFreeBumpAvailable: false,
+      changeFreeMaxSats: 0,
+      feeSats: 1_500,
+    })
+    renderWithProviders(<SendPage />)
+
+    await user.type(
+      screen.getByLabelText('Recipient Address'),
+      'tb1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx',
+    )
+    await user.type(screen.getByLabelText(/Amount/), '0.001')
+    await user.click(screen.getByRole('button', { name: 'Review Transaction' }))
+
+    expect(await screen.findByText('Fee')).toBeInTheDocument()
+    expect(screen.getByText('Total deducted')).toBeInTheDocument()
+    expect(screen.getByText('Amount remaining')).toBeInTheDocument()
+  })
+
   it('review step shows transaction details', async () => {
     const user = userEvent.setup()
     mockPrepareOnchainSendTransaction.mockResolvedValue({
@@ -318,6 +345,7 @@ describe('SendPage', () => {
       bumpedChangeFree: false,
       changeFreeBumpAvailable: false,
       changeFreeMaxSats: 0,
+      feeSats: 1_500,
     })
     renderWithProviders(<SendPage />)
 
@@ -344,6 +372,7 @@ describe('SendPage', () => {
         bumpedChangeFree: false,
         changeFreeBumpAvailable: true,
         changeFreeMaxSats: 9900,
+        feeSats: 1_500,
       })
       .mockResolvedValueOnce({
         psbtBase64: 'psbt_bumped',
@@ -353,6 +382,7 @@ describe('SendPage', () => {
         bumpedChangeFree: true,
         changeFreeBumpAvailable: false,
         changeFreeMaxSats: 0,
+        feeSats: 1_200,
       })
     renderWithProviders(<SendPage />)
 
@@ -394,6 +424,7 @@ describe('SendPage', () => {
       bumpedChangeFree: false,
       changeFreeBumpAvailable: true,
       changeFreeMaxSats: 9900,
+      feeSats: 1_500,
     })
     renderWithProviders(<SendPage />)
 
@@ -423,6 +454,7 @@ describe('SendPage', () => {
       bumpedChangeFree: false,
       changeFreeBumpAvailable: false,
       changeFreeMaxSats: 0,
+      feeSats: 1_500,
     })
     renderWithProviders(<SendPage />)
 

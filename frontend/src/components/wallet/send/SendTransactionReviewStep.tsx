@@ -18,11 +18,85 @@ type DeadLabRecipientInfo = {
   addressType: AddressType
 } | null
 
+function ReviewAmountValue({
+  amountSats,
+  mainnetFiatMode,
+  hasUsableFiatSpot,
+  btcPriceInFiat,
+  defaultFiatCurrency,
+  fiatRatesLoading,
+}: {
+  amountSats: number
+  mainnetFiatMode: boolean
+  hasUsableFiatSpot: boolean
+  btcPriceInFiat: number | null | undefined
+  defaultFiatCurrency: FiatCurrencyCode
+  fiatRatesLoading: boolean
+}) {
+  if (mainnetFiatMode && hasUsableFiatSpot) {
+    return (
+      <div className="flex flex-col items-end gap-1">
+        <FiatAmountDisplay
+          amountSats={amountSats}
+          btcPriceInFiat={btcPriceInFiat}
+          currency={defaultFiatCurrency}
+          size="sm"
+          rateLoading={fiatRatesLoading}
+        />
+        <BitcoinAmountDisplay
+          amountSats={amountSats}
+          size="sm"
+          allowUnitToggle={false}
+          className="text-muted-foreground"
+        />
+      </div>
+    )
+  }
+
+  return <BitcoinAmountDisplay amountSats={amountSats} size="sm" />
+}
+
+function ReviewAmountRow({
+  label,
+  amountSats,
+  mainnetFiatMode,
+  hasUsableFiatSpot,
+  btcPriceInFiat,
+  defaultFiatCurrency,
+  fiatRatesLoading,
+}: {
+  label: string
+  amountSats: number
+  mainnetFiatMode: boolean
+  hasUsableFiatSpot: boolean
+  btcPriceInFiat: number | null | undefined
+  defaultFiatCurrency: FiatCurrencyCode
+  fiatRatesLoading: boolean
+}) {
+  return (
+    <div className="flex justify-between gap-2">
+      <span className="text-muted-foreground">{label}</span>
+      <span className="text-right">
+        <ReviewAmountValue
+          amountSats={amountSats}
+          mainnetFiatMode={mainnetFiatMode}
+          hasUsableFiatSpot={hasUsableFiatSpot}
+          btcPriceInFiat={btcPriceInFiat}
+          defaultFiatCurrency={defaultFiatCurrency}
+          fiatRatesLoading={fiatRatesLoading}
+        />
+      </span>
+    </div>
+  )
+}
+
 export function SendTransactionReviewStep({
   networkMode,
   recipient,
   amountSats,
   effectiveFeeRate,
+  reviewFeeSats,
+  totalBalanceSats,
   onchainDustWarning,
   amountUnit,
   isLightningSendMode,
@@ -45,6 +119,8 @@ export function SendTransactionReviewStep({
   recipient: string
   amountSats: number
   effectiveFeeRate: number
+  reviewFeeSats: number | null
+  totalBalanceSats: number
   onchainDustWarning: OnchainDustWarning | null
   amountUnit: SendAmountUnit
   isLightningSendMode: boolean
@@ -64,6 +140,10 @@ export function SendTransactionReviewStep({
   fiatRatesLoading: boolean
 }) {
   const hasUsableFiatSpot = isUsableBtcSpotPriceInFiat(btcPriceInFiat)
+  const showOnchainFeeSummary =
+    !isLightningSendMode && reviewFeeSats != null
+  const totalDeductedSats = amountSats + (reviewFeeSats ?? 0)
+  const amountRemainingSats = Math.max(0, totalBalanceSats - totalDeductedSats)
 
   return (
     <div className="space-y-6">
@@ -91,40 +171,58 @@ export function SendTransactionReviewStep({
               <span className="text-muted-foreground">Recipient</span>
               <span className="font-mono">{truncateAddress(recipient)}</span>
             </div>
-            <div className="flex justify-between gap-2">
-              <span className="text-muted-foreground">Amount</span>
-              <span className="text-right">
-                {mainnetFiatMode && hasUsableFiatSpot ? (
-                  <div className="flex flex-col items-end gap-1">
-                    <FiatAmountDisplay
-                      amountSats={amountSats}
-                      btcPriceInFiat={btcPriceInFiat}
-                      currency={defaultFiatCurrency}
-                      size="sm"
-                      rateLoading={fiatRatesLoading}
-                    />
-                    <BitcoinAmountDisplay
-                      amountSats={amountSats}
-                      size="sm"
-                      allowUnitToggle={false}
-                      className="text-muted-foreground"
-                    />
-                  </div>
-                ) : (
-                  <BitcoinAmountDisplay amountSats={amountSats} size="sm" />
-                )}
-              </span>
-            </div>
+            <ReviewAmountRow
+              label="Amount"
+              amountSats={amountSats}
+              mainnetFiatMode={mainnetFiatMode}
+              hasUsableFiatSpot={hasUsableFiatSpot}
+              btcPriceInFiat={btcPriceInFiat}
+              defaultFiatCurrency={defaultFiatCurrency}
+              fiatRatesLoading={fiatRatesLoading}
+            />
             {!isLightningSendMode && (
               <OnchainDustWarningReviewBanner
                 warning={onchainDustWarning}
                 amountUnit={amountUnit}
               />
             )}
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Fee rate</span>
-              <span>{effectiveFeeRate.toFixed(2)} sat/vB</span>
-            </div>
+            {!isLightningSendMode && (
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Fee rate</span>
+                <span>{effectiveFeeRate.toFixed(2)} sat/vB</span>
+              </div>
+            )}
+            {showOnchainFeeSummary ? (
+              <>
+                <ReviewAmountRow
+                  label="Fee"
+                  amountSats={reviewFeeSats}
+                  mainnetFiatMode={mainnetFiatMode}
+                  hasUsableFiatSpot={hasUsableFiatSpot}
+                  btcPriceInFiat={btcPriceInFiat}
+                  defaultFiatCurrency={defaultFiatCurrency}
+                  fiatRatesLoading={fiatRatesLoading}
+                />
+                <ReviewAmountRow
+                  label="Total deducted"
+                  amountSats={totalDeductedSats}
+                  mainnetFiatMode={mainnetFiatMode}
+                  hasUsableFiatSpot={hasUsableFiatSpot}
+                  btcPriceInFiat={btcPriceInFiat}
+                  defaultFiatCurrency={defaultFiatCurrency}
+                  fiatRatesLoading={fiatRatesLoading}
+                />
+                <ReviewAmountRow
+                  label="Amount remaining"
+                  amountSats={amountRemainingSats}
+                  mainnetFiatMode={mainnetFiatMode}
+                  hasUsableFiatSpot={hasUsableFiatSpot}
+                  btcPriceInFiat={btcPriceInFiat}
+                  defaultFiatCurrency={defaultFiatCurrency}
+                  fiatRatesLoading={fiatRatesLoading}
+                />
+              </>
+            ) : null}
           </div>
 
           <div className="flex gap-2">

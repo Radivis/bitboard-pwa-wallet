@@ -261,9 +261,16 @@ const cryptoService = {
     amountSats: number;
     feeRateSatPerVb: number;
     changeAddress: string;
+    applyChangeFreeBump?: boolean;
   }): Promise<import('./crypto-api').DraftLabPsbtTransactionResult> {
-    const { utxosJson, toAddress, amountSats, feeRateSatPerVb, changeAddress } =
-      params;
+    const {
+      utxosJson,
+      toAddress,
+      amountSats,
+      feeRateSatPerVb,
+      changeAddress,
+      applyChangeFreeBump = false,
+    } = params;
     const wasmModule = await getWasm();
     const result = wasmModule.draft_lab_psbt_transaction(
       utxosJson,
@@ -271,6 +278,7 @@ const cryptoService = {
       BigInt(amountSats),
       feeRateSatPerVb,
       changeAddress,
+      applyChangeFreeBump,
     );
     const parsed = typeof result === 'string' ? JSON.parse(result) : result;
     return {
@@ -280,6 +288,7 @@ const cryptoService = {
       raisedToMinDust: Boolean(parsed.raised_to_min_dust),
       changeFreeBumpAvailable: Boolean(parsed.change_free_bump_available),
       changeFreeMaxSats: Number(parsed.change_free_max_sats),
+      feeSats: Number(parsed.fee_sats),
     };
   },
 
@@ -311,6 +320,7 @@ const cryptoService = {
       raisedToMinDust: Boolean(parsed.raised_to_min_dust),
       changeFreeBumpAvailable: Boolean(parsed.change_free_bump_available),
       changeFreeMaxSats: Number(parsed.change_free_max_sats),
+      feeSats: Number(parsed.fee_sats),
     };
   },
 
@@ -399,6 +409,7 @@ const cryptoService = {
       bumpedChangeFree: Boolean(parsed.bumped_change_free),
       changeFreeBumpAvailable: Boolean(parsed.change_free_bump_available),
       changeFreeMaxSats: Number(parsed.change_free_max_sats),
+      feeSats: Number(parsed.fee_sats),
     };
   },
 

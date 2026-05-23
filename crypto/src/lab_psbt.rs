@@ -37,6 +37,7 @@ pub struct LabDraftPsbtOutcome {
     pub raised_to_min_dust: bool,
     pub change_free_bump_available: bool,
     pub change_free_max_sats: u64,
+    pub fee_sats: u64,
 }
 
 #[derive(Debug, Serialize)]
@@ -279,6 +280,7 @@ pub fn prepare_lab_psbt_draft(
     amount_sats: u64,
     fee_rate_sat_per_vb: f64,
     change_address_str: &str,
+    apply_change_free_bump: bool,
 ) -> Result<LabDraftPsbtOutcome, CryptoError> {
     let (utxos, to_address, change_address, satisfaction_weight, fee_rate) =
         resolve_lab_send_inputs(
@@ -295,7 +297,9 @@ pub fn prepare_lab_psbt_draft(
         satisfaction_weight,
         fee_rate,
     };
-    let (psbt, meta) = prepare_lab_psbt_inner(wallet, &utxos, amount_sats, route, false)?;
+    let (psbt, meta) =
+        prepare_lab_psbt_inner(wallet, &utxos, amount_sats, route, apply_change_free_bump)?;
+    let fee_sats = transaction::fee_sats_from_unsigned_psbt(&psbt)?;
     Ok(LabDraftPsbtOutcome {
         psbt_base64: psbt.to_string(),
         final_amount_sats: meta.final_amount_sats,
@@ -303,6 +307,7 @@ pub fn prepare_lab_psbt_draft(
         raised_to_min_dust: meta.raised_to_min_dust,
         change_free_bump_available: meta.change_free_bump_available,
         change_free_max_sats: meta.change_free_max_sats,
+        fee_sats,
     })
 }
 

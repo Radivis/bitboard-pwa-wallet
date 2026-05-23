@@ -1,8 +1,5 @@
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
 import { DustChangeChoiceModal } from '@/components/wallet/send/DustChangeChoiceModal'
-import { formatAmountInputFromSats } from '@/lib/bitcoin-dust'
-import type { SendAmountUnit } from '@/stores/sendStore'
-import { useSendStore } from '@/stores/sendStore'
 import type { PrepareOnchainSendResult } from '@/workers/crypto-api'
 
 type BuildTransactionMutationForDustModal = {
@@ -47,12 +44,13 @@ export function SendFlowDustModals(props: {
   normalizedRecipient: string
   amountSats: number
   effectiveFeeRate: number
-  amountUnit: SendAmountUnit
   applyOnchainPrepareOutcomeToSendStore: (
     outcome: PrepareOnchainSendResult,
   ) => void
   setStep: (step: 1 | 2) => void
   setLabApplyChangeFreeBump: Dispatch<SetStateAction<boolean>>
+  onLabIncreaseToChangeFreeReview: () => Promise<void>
+  labReviewPending: boolean
 }) {
   const {
     dustCase2Modal,
@@ -64,10 +62,11 @@ export function SendFlowDustModals(props: {
     normalizedRecipient,
     amountSats,
     effectiveFeeRate,
-    amountUnit,
     applyOnchainPrepareOutcomeToSendStore,
     setStep,
     setLabApplyChangeFreeBump,
+    onLabIncreaseToChangeFreeReview,
+    labReviewPending,
   } = props
 
   return (
@@ -118,24 +117,11 @@ export function SendFlowDustModals(props: {
           labChangeFreeBumpBaseAmountSatsRef.current = null
           setStep(2)
         }}
-        onIncreaseToChangeFree={() => {
+        onIncreaseToChangeFree={async () => {
           if (!labDustCase2Modal) return
-          useSendStore.setState({
-            amount: formatAmountInputFromSats(
-              labDustCase2Modal.changeFreeMaxSats,
-              amountUnit,
-            ),
-            onchainDustWarning: {
-              previousSats: labDustCase2Modal.originalAmountSats,
-              raisedToDustMin: false,
-              bumpedChangeFree: true,
-            },
-          })
-          setLabApplyChangeFreeBump(true)
-          setLabDustCase2Modal(null)
-          setStep(2)
+          await onLabIncreaseToChangeFreeReview()
         }}
-        isPending={false}
+        isPending={labReviewPending}
       />
     </>
   )

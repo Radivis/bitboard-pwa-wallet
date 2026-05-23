@@ -11,7 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Bitcoin amount units on live test networks (testnet, signet, regtest) now show a grey `t` prefix before the unit label; Lab mode amounts show a grey flask icon instead
+- Dashboard sent on-chain and Lightning transactions show the net amount transferred (excluding fees) in the list; expanded details show fee and total including fee for sends
+- Bitcoin amount units on live test networks (testnet, signet, regtest) now show a `t` prefix before the unit label; Lab mode amounts show a flask icon instead
+- In Lab mode the wallet page shows clearer labels indicating that the wallet refers to the Lab, instead of any online blockchain
 
 ### Fixed
 
