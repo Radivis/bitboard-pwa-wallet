@@ -58,4 +58,39 @@ describe('mergeAndSortDashboardActivity', () => {
     expect(merged).toHaveLength(1)
     expect(merged[0].kind).toBe('lightning')
   })
+
+  it('keeps unconfirmed on-chain txs in the top slice when many confirmed txs exist', () => {
+    const confirmedChain = Array.from({ length: 11 }, (_, index) => ({
+      txid: `confirmed-${index}`,
+      sent_sats: 0,
+      received_sats: 1_000,
+      fee_sats: null,
+      confirmation_block_height: 800_000 + index,
+      confirmation_time: 1_700_000_000 + index,
+      is_confirmed: true,
+      isLabTx: false,
+    }))
+
+    const pendingSend: TransactionDetails = {
+      txid: 'pending-send',
+      sent_sats: 5_000,
+      received_sats: 0,
+      fee_sats: 200,
+      confirmation_block_height: null,
+      confirmation_time: null,
+      is_confirmed: false,
+      isLabTx: false,
+    }
+
+    const merged = mergeAndSortDashboardActivity(
+      [...confirmedChain, pendingSend],
+      [lnMiddle],
+    )
+    const topTenTxids = merged
+      .slice(0, 10)
+      .map((item) => (item.kind === 'chain' ? item.tx.txid : item.payment.paymentHash))
+
+    expect(topTenTxids[0]).toBe('pending-send')
+    expect(topTenTxids).toContain('pending-send')
+  })
 })
