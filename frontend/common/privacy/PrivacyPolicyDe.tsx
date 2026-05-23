@@ -160,20 +160,30 @@ export function PrivacyPolicyDe() {
         stehen, kontaktiert Ihr Browser die konfigurierte Adresse in der Regel <strong>direkt</strong>.
       </p>
       <p>
-        In jedem Fall sind Ihre <strong>IP-Adresse</strong> und übliche technische Metadaten (z. B.
-        TLS) für den <strong>Esplora-Betreiber</strong> der Anfrage sichtbar. Wird der gehostete Proxy
-        genutzt, verarbeitet <strong>Vercel</strong> die HTTP-Anfrage ebenfalls im Rahmen der
-        Weiterleitung (einschließlich angefordertem Pfad und Abfragezeichenkette, die Blockchain-Objekte
-        widerspiegeln kann, die Ihre Wallet abruft). Welche konkreten Anfragen ausgehen, hängt von Ihrer
-        Nutzung der Wallet ab (z. B. Kontostandsabfragen, Transaktionslisten).
+        Wenn Sie eine <strong>benutzerdefinierte</strong> Esplora-URL nutzen, die <strong>nicht</strong>{' '}
+        auf der Positivliste steht, kontaktiert Ihr Browser diesen Host <strong>direkt</strong>. Der{' '}
+        <strong>Esplora-Betreiber</strong> sieht dann Ihre <strong>IP-Adresse</strong> und übliche
+        Verbindungsmetadaten (z. B. TLS).
+      </p>
+      <p>
+        Wird der <strong>gehostete Proxy</strong> genutzt (Standard- und andere positiv gelistete
+        Basis-URLs), empfängt <strong>Vercel</strong> Ihre Browser-Anfrage zuerst — einschließlich
+        Ihrer <strong>IP-Adresse</strong> sowie des angeforderten Pfads und der Abfragezeichenkette,
+        die Blockchain-Objekte widerspiegeln kann, die Ihre Wallet abruft (z. B. Adressen und
+        Transaktions-IDs). <strong>Vercel</strong> leitet die Anfrage an den Esplora-Betreiber
+        weiter. Der Esplora-Betreiber sieht die <strong>Ausgangs-IP-Adresse von Vercel</strong>,{' '}
+        <strong>nicht</strong> Ihre, kann aber den weitergeleiteten Anfragepfad und -inhalt auf
+        seiner Seite weiterhin im Klartext sehen. Welche konkreten Anfragen ausgehen, hängt von Ihrer
+        Nutzung der Wallet ab (z. B. Kontostand-Synchronisation, Transaktionslisten, Broadcast).
       </p>
       <p>
         Wenn Sie den Bildschirm für <strong>On-Chain-Versendung</strong> nutzen, ruft die App außerdem{' '}
         <strong>Hinweise zu empfohlenen Gebührensätzen</strong> von Ihrem konfigurierten Esplora-Server ab
         (REST-API <strong><code>/fee-estimates</code></strong>). Die Antworten sind aggregierte,
-        netzwerkweite Gebühreninformationen und enthalten keine Angaben zu Ihrer konkreten Transaktion,
-        die Anfrage läuft jedoch an denselben <strong>Esplora-Host</strong> wie andere Esplora-Aufrufe —
-        mit denselben Auswirkungen für Verbindungsmetadaten (z. B. IP-Adresse; bei Proxy-Nutzung auch Vercel).
+        netzwerkweite Gebühreninformationen und enthalten keine Angaben zu Ihrer konkreten Transaktion.
+        Die Anfrage folgt derselben Weiterleitung wie anderer Esplora-Traffic: Bei Nutzung des gehosteten
+        Proxys sieht <strong>Vercel</strong> Ihre IP; der Esplora-Betreiber sieht die{' '}
+        <strong>Ausgangs-IP von Vercel</strong>, nicht Ihre.
       </p>
       <p>
         Wenn Sie auf dem <strong>Mainnet</strong> Beträge in <strong>Fiat-Nennung</strong> anzeigen (oder
@@ -199,11 +209,14 @@ export function PrivacyPolicyDe() {
       <p>
         Der Betreiber des jeweiligen Esplora-Dienstes kann aus den von Ihrer Wallet ausgelösten
         Anfragen technisch ein <strong>Nutzungs- bzw. Transaktionsprofil</strong> rekonstruieren
-        (z. B. welche Skripte/Adressen und Transaktionen wann abgefragt werden). Die
-        Esplora-REST-Schnittstelle ist <strong>pro Skript/Adresse</strong> aufgebaut: Für jede
-        bereits aufgedeckte Wallet-Adresse geht eine eigene Anfrage an den Server, sodass dieser
-        alle Anfragen derselben IP zu einem Adressset bündeln kann. <strong>TLS</strong> schützt
-        dabei nur den Transportweg; entschlüsselte Anfragen sieht der Anbieter in jedem Fall.{' '}
+        (z. B. welche Skripte/Adressen und Transaktionen abgefragt werden, wann synchronisiert wird
+        und welche Transaktionen Sie broadcasten). Die Esplora-REST-Schnittstelle ist{' '}
+        <strong>pro Skript/Adresse</strong> aufgebaut: Für jede bereits aufgedeckte Wallet-Adresse
+        geht eine eigene Anfrage an den Server. Weil viele solcher Anfragen bei einer
+        Wallet-Synchronisation oder nach einer Versendung zusammen ausgelöst werden, kann der Anbieter{' '}
+        <strong>diese Adressen und Transaktionen als zu derselben Wallet gehörig zusammenfassen</strong>,
+        auch ohne Ihre IP-Adresse zu kennen. <strong>TLS</strong> schützt dabei nur den Transportweg;
+        entschlüsselte Anfragen sieht der Anbieter in jedem Fall.{' '}
         <strong>Eingebaute Anonymisierungsmaßnahmen auf Protokollebene</strong> (etwa über
         kompakte Blockfilter, die einen Abgleich lokal auf Ihrem Gerät erlauben würden) sind{' '}
         <strong>nicht</strong> Bestandteil von Esplora und werden von Bitboard derzeit auch nicht
