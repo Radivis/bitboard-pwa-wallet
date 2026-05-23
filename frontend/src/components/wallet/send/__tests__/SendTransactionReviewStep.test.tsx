@@ -4,12 +4,24 @@ import userEvent from '@testing-library/user-event'
 import { SendTransactionReviewStep } from '@/components/wallet/send/SendTransactionReviewStep'
 import { renderWithProviders } from '@/test-utils/test-providers'
 
+const reviewInputUtxos = [
+  {
+    address: 'tb1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx',
+    amountSats: 150_000,
+    txid: 'abc123',
+    vout: 0,
+  },
+]
+
 const defaultProps = {
   networkMode: 'signet' as const,
   recipient: 'tb1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx',
   amountSats: 100_000,
   effectiveFeeRate: 2,
   reviewFeeSats: 1_500,
+  reviewChangeSats: 48_500,
+  reviewInputUtxos,
+  spendableBalanceSats: 500_000,
   totalBalanceSats: 500_000,
   onchainDustWarning: null,
   amountUnit: 'BTC' as const,
@@ -31,16 +43,50 @@ const defaultProps = {
 }
 
 describe('SendTransactionReviewStep', () => {
-  it('renders Fee, Total deducted, and Amount remaining with BTC amounts', () => {
+  it('renders Fee, Total deducted, Amount remaining, Change, and Immediately spendable remaining', () => {
     renderWithProviders(<SendTransactionReviewStep {...defaultProps} />)
 
     expect(screen.getByText('Fee')).toBeInTheDocument()
     expect(screen.getByText('Total deducted')).toBeInTheDocument()
     expect(screen.getByText('Amount remaining')).toBeInTheDocument()
+    expect(screen.getByText('Change')).toBeInTheDocument()
+    expect(screen.getByText('Immediately spendable remaining')).toBeInTheDocument()
     expect(screen.getByText('0.00100000')).toBeInTheDocument()
-    expect(screen.getByText('0.00001500')).toBeInTheDocument()
-    expect(screen.getByText('0.00101500')).toBeInTheDocument()
-    expect(screen.getByText('0.00398500')).toBeInTheDocument()
+    expect(screen.getByText('0.00048500')).toBeInTheDocument()
+    expect(screen.getByText('0.00350000')).toBeInTheDocument()
+  })
+
+  it('shows zero Change when reviewChangeSats is 0', () => {
+    renderWithProviders(
+      <SendTransactionReviewStep {...defaultProps} reviewChangeSats={0} />,
+    )
+
+    expect(screen.getByText('Change')).toBeInTheDocument()
+    expect(screen.getAllByText('0.00000000').length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('toggles the input UTXO list', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(<SendTransactionReviewStep {...defaultProps} />)
+
+    expect(
+      screen.getByRole('button', { name: 'Show UTXOs to be used' }),
+    ).toBeInTheDocument()
+    expect(screen.queryByText('0.00150000')).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Show UTXOs to be used' }))
+
+    expect(
+      screen.getByRole('button', { name: 'Hide UTXOs to be used' }),
+    ).toBeInTheDocument()
+    expect(screen.getByText('0.00150000')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Hide UTXOs to be used' }))
+
+    expect(
+      screen.getByRole('button', { name: 'Show UTXOs to be used' }),
+    ).toBeInTheDocument()
+    expect(screen.queryByText('0.00150000')).not.toBeInTheDocument()
   })
 
   it('renders fiat primary and muted BTC secondary in mainnet fiat mode', () => {
@@ -53,9 +99,9 @@ describe('SendTransactionReviewStep', () => {
       />,
     )
 
-    expect(screen.getAllByText(/\$/).length).toBeGreaterThanOrEqual(3)
+    expect(screen.getAllByText(/\$/).length).toBeGreaterThanOrEqual(5)
     expect(screen.getAllByText('0.00100000').length).toBeGreaterThanOrEqual(1)
-    expect(screen.getAllByText('0.00001500').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getAllByText('0.00048500').length).toBeGreaterThanOrEqual(1)
   })
 
   it('calls onBack when Back is clicked', async () => {

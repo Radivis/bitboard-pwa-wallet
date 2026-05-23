@@ -139,7 +139,7 @@ feature:
             - click_event:
               - build PSBT, advance to review step
         - Step 2 - Review:
-          - summary showing recipient, amount, fee rate, fee (sats/BTC; fiat when Fiat Denomination Mode active on mainnet), total deducted, amount remaining (based on total wallet balance)
+          - summary showing recipient, amount, fee rate, fee (sats/BTC; fiat when Fiat Denomination Mode active on mainnet), total deducted, amount remaining (based on total wallet balance), change (always shown, 0 when change-free), immediately spendable remaining (confirmed spendable minus inputs used), show/hide toggle for input UTXO list (address + amount)
           - confirm and broadcast button
             - click_event:
               - sign PSBT, broadcast transaction via Esplora

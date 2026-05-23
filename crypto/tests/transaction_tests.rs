@@ -131,6 +131,26 @@ fn prepare_onchain_send_returns_positive_fee_sats() {
     .expect("Prepare should succeed");
 
     assert!(outcome.fee_sats > 0, "fee_sats must be positive");
+    assert!(
+        outcome.total_input_sats > 0,
+        "total_input_sats must be positive"
+    );
+    assert!(
+        !outcome.input_utxos.is_empty(),
+        "input_utxos must list selected coins"
+    );
+    assert!(
+        outcome
+            .input_utxos
+            .iter()
+            .all(|input| input.amount_sats > 0),
+        "each input_utxo must have positive amount"
+    );
+    assert_eq!(
+        outcome.change_sats + outcome.fee_sats + outcome.final_amount_sats,
+        outcome.total_input_sats,
+        "change + fee + payment must equal input sum"
+    );
 }
 
 #[test]

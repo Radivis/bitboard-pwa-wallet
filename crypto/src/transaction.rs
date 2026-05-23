@@ -2,14 +2,23 @@ use std::str::FromStr;
 
 use bdk_wallet::Wallet;
 use bitcoin::absolute;
-use bitcoin::{Address, Amount, Network, Psbt, Transaction};
-use serde::Serialize;
+use bitcoin::{Address, Amount, Network, Psbt, ScriptBuf, Transaction};
+use serde::{Deserialize, Serialize};
 
 use crate::error::CryptoError;
 use crate::validation;
 
 /// Product UX floor for typical P2WPKH-style outputs; BDK applies script-specific dust checks.
 pub const UX_DUST_FLOOR_SATS: u64 = 546;
+
+/// Input coin selected for a send, surfaced on the review step.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ReviewInputUtxo {
+    pub address: String,
+    pub amount_sats: u64,
+    pub txid: String,
+    pub vout: u32,
+}
 
 #[derive(Debug, Clone, Serialize)]
 pub struct PrepareOnchainSendOutcome {
@@ -25,6 +34,12 @@ pub struct PrepareOnchainSendOutcome {
     pub change_free_max_sats: u64,
     /// Total fee in satoshis (input sum minus output sum on the unsigned tx).
     pub fee_sats: u64,
+    /// Change output credited back to the wallet (0 when change-free).
+    pub change_sats: u64,
+    /// Sum of input values selected for this transaction.
+    pub total_input_sats: u64,
+    /// Coins that will be consumed as inputs.
+    pub input_utxos: Vec<ReviewInputUtxo>,
 }
 
 fn sum_psbt_input_values(psbt: &Psbt) -> Result<u64, CryptoError> {
@@ -57,6 +72,63 @@ pub fn fee_sats_from_unsigned_psbt(psbt: &Psbt) -> Result<u64, CryptoError> {
     let vin_sum = sum_psbt_input_values(psbt)?;
     let vout_sum = sum_unsigned_tx_output_values(&psbt.unsigned_tx);
     Ok(vin_sum.saturating_sub(vout_sum))
+}
+
+/// Sum of output values paying to the wallet change script (0 when change-free).
+pub fn change_sats_from_unsigned_psbt(psbt: &Psbt, change_spk: &ScriptBuf) -> u64 {
+    psbt.unsigned_tx
+        .output
+        .iter()
+        .filter(|output| output.script_pubkey == *change_spk)
+        .map(|output| output.value.to_sat())
+        .sum()
+}
+
+/// Resolve wallet-owned PSBT inputs to review rows (address + amount + outpoint).
+pub fn review_inputs_from_wallet_psbt(
+    wallet: &Wallet,
+    psbt: &Psbt,
+) -> Result<Vec<ReviewInputUtxo>, CryptoError> {
+    if psbt.inputs.len() != psbt.unsigned_tx.input.len() {
+        return Err(CryptoError::Transaction(
+            "PSBT input count mismatch".to_string(),
+        ));
+    }
+
+    let mut input_utxos = Vec::with_capacity(psbt.unsigned_tx.input.len());
+    for (idx, txin) in psbt.unsigned_tx.input.iter().enumerate() {
+        let outpoint = txin.previous_output;
+        let amount_sats = psbt.inputs[idx]
+            .witness_utxo
+            .as_ref()
+            .ok_or_else(|| CryptoError::Transaction("PSBT input missing witness_utxo".to_string()))?
+            .value
+            .to_sat();
+
+        let local_output = wallet
+            .list_unspent()
+            .find(|local_utxo| local_utxo.outpoint == outpoint)
+            .ok_or_else(|| {
+                CryptoError::Transaction(format!(
+                    "PSBT input outpoint not found in wallet UTXOs: {}:{}",
+                    outpoint.txid, outpoint.vout
+                ))
+            })?;
+
+        let address = wallet
+            .peek_address(local_output.keychain, local_output.derivation_index)
+            .address
+            .to_string();
+
+        input_utxos.push(ReviewInputUtxo {
+            address,
+            amount_sats,
+            txid: outpoint.txid.to_string(),
+            vout: outpoint.vout,
+        });
+    }
+
+    Ok(input_utxos)
 }
 
 /// Build a PSBT with dust-floor clamp. When `apply_change_free_bump` is false (default for first
@@ -137,6 +209,11 @@ pub fn prepare_onchain_send(
     }
 
     let fee_sats = fee_sats_from_unsigned_psbt(&psbt)?;
+    let total_input_sats = sum_psbt_input_values(&psbt)?;
+    let input_utxos = review_inputs_from_wallet_psbt(wallet, &psbt)?;
+    let change_sats = total_input_sats
+        .saturating_sub(final_amt)
+        .saturating_sub(fee_sats);
 
     Ok(PrepareOnchainSendOutcome {
         psbt_base64: psbt.to_string(),
@@ -147,6 +224,9 @@ pub fn prepare_onchain_send(
         change_free_bump_available,
         change_free_max_sats,
         fee_sats,
+        change_sats,
+        total_input_sats,
+        input_utxos,
     })
 }
 

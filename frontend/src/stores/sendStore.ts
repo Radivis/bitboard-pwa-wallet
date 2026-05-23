@@ -5,6 +5,7 @@ import {
   type SendFeePresetLabel,
 } from '@/lib/esplora-fee-estimates'
 import { useBitcoinDisplayUnitStore } from '@/stores/bitcoinDisplayUnitStore'
+import type { ReviewInputUtxo } from '@/workers/crypto-api'
 
 /** Session-local unit for the Send amount field (not persisted). */
 export type SendAmountUnit = BitcoinDisplayUnit
@@ -31,6 +32,10 @@ interface SendState {
   psbt: string | null
   /** Fee from the prepared/drafted tx shown on review; null until review is reached. */
   reviewFeeSats: number | null
+  /** Change output from the prepared/drafted tx; null until review is reached. */
+  reviewChangeSats: number | null
+  /** Input coins selected for the prepared/drafted tx; null until review is reached. */
+  reviewInputUtxos: ReviewInputUtxo[] | null
   /** Dust UX: show red warning below amount; cleared on manual amount edit or reset. */
   onchainDustWarning: OnchainDustWarning | null
 
@@ -45,6 +50,8 @@ interface SendState {
   setUseCustomFee: (use: boolean) => void
   setPsbt: (psbt: string | null) => void
   setReviewFeeSats: (feeSats: number | null) => void
+  setReviewChangeSats: (changeSats: number | null) => void
+  setReviewInputUtxos: (inputUtxos: ReviewInputUtxo[] | null) => void
   setOnchainDustWarning: (w: OnchainDustWarning | null) => void
 
   /** Reset form and step to initial state (e.g. after successful send or when leaving send page). */
@@ -64,6 +71,8 @@ const initialState = {
   useCustomFee: false,
   psbt: null as string | null,
   reviewFeeSats: null as number | null,
+  reviewChangeSats: null as number | null,
+  reviewInputUtxos: null as ReviewInputUtxo[] | null,
   onchainDustWarning: null as OnchainDustWarning | null,
 }
 
@@ -84,6 +93,8 @@ export const useSendStore = create<SendState>((set) => ({
   setUseCustomFee: (useCustomFee) => set({ useCustomFee }),
   setPsbt: (psbt) => set({ psbt }),
   setReviewFeeSats: (reviewFeeSats) => set({ reviewFeeSats }),
+  setReviewChangeSats: (reviewChangeSats) => set({ reviewChangeSats }),
+  setReviewInputUtxos: (reviewInputUtxos) => set({ reviewInputUtxos }),
   setOnchainDustWarning: (onchainDustWarning) => set({ onchainDustWarning }),
 
   reset: () =>

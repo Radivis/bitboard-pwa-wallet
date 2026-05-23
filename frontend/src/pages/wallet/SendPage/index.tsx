@@ -44,6 +44,10 @@ import { useMainnetFiatRatesQuery } from '@/hooks/useMainnetFiatRatesQuery'
 import { walletSendPageTitle } from '@/lib/wallet-lab-ui-copy'
 import { formatFiatInputStringFromSats } from '@/lib/format-fiat-display'
 import { isUsableBtcSpotPriceInFiat } from '@/lib/is-usable-btc-spot-price-in-fiat'
+import {
+  applySendReviewTxSummaryToStore,
+  clearSendReviewTxSummaryFromStore,
+} from '@/lib/send-review-summary'
 
 import { useSendFlowFees } from './fees'
 import { useSendFlowLightning } from './lightning'
@@ -104,6 +108,8 @@ export function SendFlow() {
     psbt,
     onchainDustWarning,
     reviewFeeSats,
+    reviewChangeSats,
+    reviewInputUtxos,
     setStep,
     setRecipient,
     setAmount,
@@ -181,7 +187,11 @@ export function SendFlow() {
           },
         })
       }
-      useSendStore.getState().setReviewFeeSats(outcome.feeSats)
+      applySendReviewTxSummaryToStore({
+        feeSats: outcome.feeSats,
+        changeSats: outcome.changeSats,
+        inputUtxos: outcome.inputUtxos,
+      })
       useSendStore.getState().setPsbt(outcome.psbtBase64)
       useSendStore.getState().setStep(2)
     },
@@ -191,7 +201,7 @@ export function SendFlow() {
   useEffect(() => {
     if (step === 1) {
       setLabApplyChangeFreeBump(false)
-      useSendStore.getState().setReviewFeeSats(null)
+      clearSendReviewTxSummaryFromStore()
     }
   }, [step])
 
@@ -350,7 +360,11 @@ export function SendFlow() {
             raisedToDustMin: false,
             bumpedChangeFree: true,
           },
-          reviewFeeSats: draft.feeSats,
+        })
+        applySendReviewTxSummaryToStore({
+          feeSats: draft.feeSats,
+          changeSats: draft.changeSats,
+          inputUtxos: draft.inputUtxos,
         })
         setLabApplyChangeFreeBump(true)
         labChangeFreeBumpBaseAmountSatsRef.current = baseAmountSats
@@ -414,7 +428,11 @@ export function SendFlow() {
             applyChangeFreeBump: false,
           })
 
-          useSendStore.getState().setReviewFeeSats(draft.feeSats)
+          applySendReviewTxSummaryToStore({
+            feeSats: draft.feeSats,
+            changeSats: draft.changeSats,
+            inputUtxos: draft.inputUtxos,
+          })
 
           if (draft.changeFreeBumpAvailable) {
             labChangeFreeBumpBaseAmountSatsRef.current = draft.finalAmountSats
@@ -611,6 +629,9 @@ export function SendFlow() {
         btcPriceInFiat={btcPriceInFiat}
         fiatRatesLoading={fiatRatesQuery.isPending}
         reviewFeeSats={reviewFeeSats}
+        reviewChangeSats={reviewChangeSats}
+        reviewInputUtxos={reviewInputUtxos}
+        spendableBalanceSats={confirmedBalance}
         totalBalanceSats={totalBalanceSats}
       />
     )

@@ -64,6 +64,14 @@ export interface DraftLabPsbtTransactionParams {
   applyChangeFreeBump?: boolean;
 }
 
+/** Input coin selected for a send, shown on the review step. */
+export interface ReviewInputUtxo {
+  address: string;
+  amountSats: number;
+  txid: string;
+  vout: number;
+}
+
 export interface DraftLabPsbtTransactionResult {
   psbtBase64: string;
   finalAmountSats: number;
@@ -72,6 +80,9 @@ export interface DraftLabPsbtTransactionResult {
   changeFreeBumpAvailable: boolean;
   changeFreeMaxSats: number;
   feeSats: number;
+  changeSats: number;
+  totalInputSats: number;
+  inputUtxos: ReviewInputUtxo[];
 }
 
 /** Ephemeral lab-entity wallet draft (does not use the active user wallet). */
@@ -116,6 +127,9 @@ export interface PrepareOnchainSendResult {
   changeFreeBumpAvailable: boolean;
   changeFreeMaxSats: number;
   feeSats: number;
+  changeSats: number;
+  totalInputSats: number;
+  inputUtxos: ReviewInputUtxo[];
 }
 
 /** Lab build+sign with dust UX (mapped from WASM in the worker). */

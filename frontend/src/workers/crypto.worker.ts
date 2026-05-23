@@ -14,6 +14,27 @@ import type { EncryptedBlobMessage, SecretsChannelService } from './secrets-chan
 import { parseWalletPayloadJson } from '@/lib/wallet-domain-types';
 import type { WalletSecretsPayload } from '@/lib/wallet-domain-types';
 
+function mapReviewInputUtxos(raw: unknown): import('./crypto-api').ReviewInputUtxo[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.map((item) => {
+    const row = item as Record<string, unknown>;
+    return {
+      address: String(row.address ?? ''),
+      amountSats: Number(row.amount_sats ?? 0),
+      txid: String(row.txid ?? ''),
+      vout: Number(row.vout ?? 0),
+    };
+  });
+}
+
+function mapPrepareOrDraftReviewFields(parsed: Record<string, unknown>) {
+  return {
+    changeSats: Number(parsed.change_sats ?? 0),
+    totalInputSats: Number(parsed.total_input_sats ?? 0),
+    inputUtxos: mapReviewInputUtxos(parsed.input_utxos),
+  };
+}
+
 let wasm: typeof import('@/wasm-pkg/bitboard_crypto') | null = null;
 let wasmInitError: string | null = null;
 let secretsProxy: Remote<SecretsChannelService> | null = null;
@@ -289,6 +310,7 @@ const cryptoService = {
       changeFreeBumpAvailable: Boolean(parsed.change_free_bump_available),
       changeFreeMaxSats: Number(parsed.change_free_max_sats),
       feeSats: Number(parsed.fee_sats),
+      ...mapPrepareOrDraftReviewFields(parsed),
     };
   },
 
@@ -321,6 +343,7 @@ const cryptoService = {
       changeFreeBumpAvailable: Boolean(parsed.change_free_bump_available),
       changeFreeMaxSats: Number(parsed.change_free_max_sats),
       feeSats: Number(parsed.fee_sats),
+      ...mapPrepareOrDraftReviewFields(parsed),
     };
   },
 
@@ -410,6 +433,7 @@ const cryptoService = {
       changeFreeBumpAvailable: Boolean(parsed.change_free_bump_available),
       changeFreeMaxSats: Number(parsed.change_free_max_sats),
       feeSats: Number(parsed.fee_sats),
+      ...mapPrepareOrDraftReviewFields(parsed),
     };
   },
 

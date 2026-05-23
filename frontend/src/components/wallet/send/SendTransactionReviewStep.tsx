@@ -1,4 +1,5 @@
 import { ArrowLeft, ArrowUpRight } from 'lucide-react'
+import { useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { PageHeader } from '@/components/PageHeader'
@@ -8,10 +9,12 @@ import { truncateAddress } from '@/lib/bitcoin-utils'
 import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
 import { FiatAmountDisplay } from '@/components/FiatAmountDisplay'
 import { OnchainDustWarningReviewBanner } from '@/components/wallet/send/OnchainDustWarningReviewBanner'
+import { ReviewInputUtxoList } from '@/components/wallet/send/ReviewInputUtxoList'
 import type { AddressType, NetworkMode } from '@/stores/walletStore'
 import type { OnchainDustWarning, SendAmountUnit } from '@/stores/sendStore'
 import type { FiatCurrencyCode } from '@/lib/supported-fiat-currencies'
 import { isUsableBtcSpotPriceInFiat } from '@/lib/is-usable-btc-spot-price-in-fiat'
+import type { ReviewInputUtxo } from '@/workers/crypto-api'
 
 type DeadLabRecipientInfo = {
   displayName: string
@@ -96,6 +99,9 @@ export function SendTransactionReviewStep({
   amountSats,
   effectiveFeeRate,
   reviewFeeSats,
+  reviewChangeSats,
+  reviewInputUtxos,
+  spendableBalanceSats,
   totalBalanceSats,
   onchainDustWarning,
   amountUnit,
@@ -120,6 +126,9 @@ export function SendTransactionReviewStep({
   amountSats: number
   effectiveFeeRate: number
   reviewFeeSats: number | null
+  reviewChangeSats: number | null
+  reviewInputUtxos: ReviewInputUtxo[] | null
+  spendableBalanceSats: number
   totalBalanceSats: number
   onchainDustWarning: OnchainDustWarning | null
   amountUnit: SendAmountUnit
@@ -139,11 +148,22 @@ export function SendTransactionReviewStep({
   btcPriceInFiat: number | null | undefined
   fiatRatesLoading: boolean
 }) {
+  const [showInputUtxos, setShowInputUtxos] = useState(false)
   const hasUsableFiatSpot = isUsableBtcSpotPriceInFiat(btcPriceInFiat)
   const showOnchainFeeSummary =
     !isLightningSendMode && reviewFeeSats != null
+  const inputUtxos = reviewInputUtxos ?? []
+  const totalInputSats = inputUtxos.reduce(
+    (sum, utxo) => sum + utxo.amountSats,
+    0,
+  )
   const totalDeductedSats = amountSats + (reviewFeeSats ?? 0)
   const amountRemainingSats = Math.max(0, totalBalanceSats - totalDeductedSats)
+  const immediatelySpendableRemainingSats = Math.max(
+    0,
+    spendableBalanceSats - totalInputSats,
+  )
+  const changeSats = reviewChangeSats ?? 0
 
   return (
     <div className="space-y-6">
@@ -221,6 +241,41 @@ export function SendTransactionReviewStep({
                   defaultFiatCurrency={defaultFiatCurrency}
                   fiatRatesLoading={fiatRatesLoading}
                 />
+                <ReviewAmountRow
+                  label="Change"
+                  amountSats={changeSats}
+                  mainnetFiatMode={mainnetFiatMode}
+                  hasUsableFiatSpot={hasUsableFiatSpot}
+                  btcPriceInFiat={btcPriceInFiat}
+                  defaultFiatCurrency={defaultFiatCurrency}
+                  fiatRatesLoading={fiatRatesLoading}
+                />
+                <ReviewAmountRow
+                  label="Immediately spendable remaining"
+                  amountSats={immediatelySpendableRemainingSats}
+                  mainnetFiatMode={mainnetFiatMode}
+                  hasUsableFiatSpot={hasUsableFiatSpot}
+                  btcPriceInFiat={btcPriceInFiat}
+                  defaultFiatCurrency={defaultFiatCurrency}
+                  fiatRatesLoading={fiatRatesLoading}
+                />
+                {inputUtxos.length > 0 ? (
+                  <div className="space-y-2 pt-1">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      className="h-auto w-full px-0 text-sm text-muted-foreground hover:text-foreground"
+                      onClick={() => setShowInputUtxos((open) => !open)}
+                    >
+                      {showInputUtxos
+                        ? 'Hide UTXOs to be used'
+                        : 'Show UTXOs to be used'}
+                    </Button>
+                    {showInputUtxos ? (
+                      <ReviewInputUtxoList inputUtxos={inputUtxos} />
+                    ) : null}
+                  </div>
+                ) : null}
               </>
             ) : null}
           </div>

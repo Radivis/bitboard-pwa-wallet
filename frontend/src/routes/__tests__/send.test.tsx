@@ -158,6 +158,19 @@ const mockCameraMediaStream = {
   getTracks: () => [{ stop: vi.fn(), kind: 'video' as const }],
 }
 
+const mockReviewSummaryFields = {
+  changeSats: 48_500,
+  totalInputSats: 150_000,
+  inputUtxos: [
+    {
+      address: 'tb1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx',
+      amountSats: 150_000,
+      txid: 'abc123',
+      vout: 0,
+    },
+  ],
+}
+
 describe('SendPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -178,6 +191,7 @@ describe('SendPage', () => {
       changeFreeBumpAvailable: false,
       changeFreeMaxSats: 0,
       feeSats: 1_500,
+      ...mockReviewSummaryFields,
     })
     useSendStore.getState().reset()
     walletStoreState = {
@@ -309,7 +323,7 @@ describe('SendPage', () => {
     expect(screen.getByRole('button', { name: 'Review Transaction' })).toBeEnabled()
   })
 
-  it('review step shows fee summary labels', async () => {
+  it('review step shows fee and utxo summary labels', async () => {
     const user = userEvent.setup()
     mockPrepareOnchainSendTransaction.mockResolvedValue({
       psbtBase64: 'mock_psbt_base64',
@@ -320,6 +334,7 @@ describe('SendPage', () => {
       changeFreeBumpAvailable: false,
       changeFreeMaxSats: 0,
       feeSats: 1_500,
+      ...mockReviewSummaryFields,
     })
     renderWithProviders(<SendPage />)
 
@@ -333,6 +348,11 @@ describe('SendPage', () => {
     expect(await screen.findByText('Fee')).toBeInTheDocument()
     expect(screen.getByText('Total deducted')).toBeInTheDocument()
     expect(screen.getByText('Amount remaining')).toBeInTheDocument()
+    expect(screen.getByText('Change')).toBeInTheDocument()
+    expect(screen.getByText('Immediately spendable remaining')).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'Show UTXOs to be used' }),
+    ).toBeInTheDocument()
   })
 
   it('review step shows transaction details', async () => {
@@ -346,6 +366,7 @@ describe('SendPage', () => {
       changeFreeBumpAvailable: false,
       changeFreeMaxSats: 0,
       feeSats: 1_500,
+      ...mockReviewSummaryFields,
     })
     renderWithProviders(<SendPage />)
 
@@ -373,6 +394,7 @@ describe('SendPage', () => {
         changeFreeBumpAvailable: true,
         changeFreeMaxSats: 9900,
         feeSats: 1_500,
+        ...mockReviewSummaryFields,
       })
       .mockResolvedValueOnce({
         psbtBase64: 'psbt_bumped',
@@ -383,6 +405,7 @@ describe('SendPage', () => {
         changeFreeBumpAvailable: false,
         changeFreeMaxSats: 0,
         feeSats: 1_200,
+        ...mockReviewSummaryFields,
       })
     renderWithProviders(<SendPage />)
 
@@ -425,6 +448,7 @@ describe('SendPage', () => {
       changeFreeBumpAvailable: true,
       changeFreeMaxSats: 9900,
       feeSats: 1_500,
+      ...mockReviewSummaryFields,
     })
     renderWithProviders(<SendPage />)
 
@@ -455,6 +479,7 @@ describe('SendPage', () => {
       changeFreeBumpAvailable: false,
       changeFreeMaxSats: 0,
       feeSats: 1_500,
+      ...mockReviewSummaryFields,
     })
     renderWithProviders(<SendPage />)
 
