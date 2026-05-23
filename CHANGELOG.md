@@ -24,7 +24,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Change
   - Immediately spendable balance remaining
   - Used UTXOs in a list toggled by a button (list not shown by default)
-- The transaction list on the dashboard now uses pagination 
+- The transaction list on the dashboard now uses pagination
+- New Library article "Esplora Privacy"
 
 ### Changed
 - Dashboard page: Sent on-chain and Lightning transactions show the net amount transferred (excluding fees) in the list; expanded details show fee and total including fee for sends

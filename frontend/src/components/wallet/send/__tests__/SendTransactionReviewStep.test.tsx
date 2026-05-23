@@ -43,17 +43,56 @@ const defaultProps = {
 }
 
 describe('SendTransactionReviewStep', () => {
-  it('renders Fee, Total deducted, Amount remaining, Change, and Immediately spendable remaining', () => {
+  it('renders Fee, Total deducted, Balance remaining, Change, and Immediately spendable balance remaining', () => {
     renderWithProviders(<SendTransactionReviewStep {...defaultProps} />)
 
     expect(screen.getByText('Fee')).toBeInTheDocument()
     expect(screen.getByText('Total deducted')).toBeInTheDocument()
-    expect(screen.getByText('Amount remaining')).toBeInTheDocument()
+    expect(screen.getByText('Balance remaining')).toBeInTheDocument()
     expect(screen.getByText('Change')).toBeInTheDocument()
-    expect(screen.getByText('Immediately spendable remaining')).toBeInTheDocument()
+    expect(
+      screen.getByText('Immediately spendable balance remaining'),
+    ).toBeInTheDocument()
     expect(screen.getByText('0.00100000')).toBeInTheDocument()
     expect(screen.getByText('0.00048500')).toBeInTheDocument()
     expect(screen.getByText('0.00350000')).toBeInTheDocument()
+  })
+
+  it('registers infomode targets for review amount labels', () => {
+    const { container } = renderWithProviders(
+      <SendTransactionReviewStep {...defaultProps} />,
+    )
+
+    expect(
+      container.querySelector('[data-infomode-id="send-review-amount-to-send"]'),
+    ).toBeInTheDocument()
+    expect(
+      container.querySelector('[data-infomode-id="send-review-fee-rate"]'),
+    ).toBeInTheDocument()
+    expect(
+      container.querySelector('[data-infomode-id="send-review-fee"]'),
+    ).toBeInTheDocument()
+    expect(
+      container.querySelector('[data-infomode-id="send-review-total-deducted"]'),
+    ).toBeInTheDocument()
+    expect(
+      container.querySelector(
+        '[data-infomode-id="send-review-balance-remaining"]',
+      ),
+    ).toBeInTheDocument()
+    expect(
+      container.querySelector('[data-infomode-id="send-review-change"]'),
+    ).toBeInTheDocument()
+    expect(
+      container.querySelector(
+        '[data-infomode-id="send-review-immediately-spendable-remaining"]',
+      ),
+    ).toBeInTheDocument()
+    expect(
+      container.querySelector(
+        '[data-infomode-id="send-review-input-utxos-toggle"]',
+      ),
+    ).toBeInTheDocument()
   })
 
   it('shows zero Change when reviewChangeSats is 0', () => {

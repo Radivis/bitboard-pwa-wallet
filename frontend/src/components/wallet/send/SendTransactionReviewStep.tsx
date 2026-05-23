@@ -1,15 +1,17 @@
 import { ArrowLeft, ArrowUpRight } from 'lucide-react'
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { PageHeader } from '@/components/PageHeader'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { DeadLabEntityRecipientModal } from '@/components/lab/DeadLabEntityRecipientModal'
+import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { truncateAddress } from '@/lib/bitcoin-utils'
 import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
 import { FiatAmountDisplay } from '@/components/FiatAmountDisplay'
 import { OnchainDustWarningReviewBanner } from '@/components/wallet/send/OnchainDustWarningReviewBanner'
 import { ReviewInputUtxoList } from '@/components/wallet/send/ReviewInputUtxoList'
+import { SEND_REVIEW_INFOMODE } from '@/components/wallet/send/send-review-infomode'
 import type { AddressType, NetworkMode } from '@/stores/walletStore'
 import type { OnchainDustWarning, SendAmountUnit } from '@/stores/sendStore'
 import type { FiatCurrencyCode } from '@/lib/supported-fiat-currencies'
@@ -59,8 +61,27 @@ function ReviewAmountValue({
   return <BitcoinAmountDisplay amountSats={amountSats} size="sm" />
 }
 
+function ReviewInfomodeLabel({
+  infoId,
+  infoTitle,
+  infoText,
+  children,
+}: {
+  infoId: string
+  infoTitle: string
+  infoText: string
+  children: ReactNode
+}) {
+  return (
+    <InfomodeWrapper as="span" infoId={infoId} infoTitle={infoTitle} infoText={infoText}>
+      {children}
+    </InfomodeWrapper>
+  )
+}
+
 function ReviewAmountRow({
   label,
+  infomode,
   amountSats,
   mainnetFiatMode,
   hasUsableFiatSpot,
@@ -69,6 +90,11 @@ function ReviewAmountRow({
   fiatRatesLoading,
 }: {
   label: string
+  infomode?: {
+    infoId: string
+    infoTitle: string
+    infoText: string
+  }
   amountSats: number
   mainnetFiatMode: boolean
   hasUsableFiatSpot: boolean
@@ -76,9 +102,22 @@ function ReviewAmountRow({
   defaultFiatCurrency: FiatCurrencyCode
   fiatRatesLoading: boolean
 }) {
+  const labelContent =
+    infomode != null ? (
+      <ReviewInfomodeLabel
+        infoId={infomode.infoId}
+        infoTitle={infomode.infoTitle}
+        infoText={infomode.infoText}
+      >
+        {label}
+      </ReviewInfomodeLabel>
+    ) : (
+      label
+    )
+
   return (
     <div className="flex justify-between gap-2">
-      <span className="text-muted-foreground">{label}</span>
+      <span className="text-muted-foreground">{labelContent}</span>
       <span className="text-right">
         <ReviewAmountValue
           amountSats={amountSats}
@@ -192,7 +231,8 @@ export function SendTransactionReviewStep({
               <span className="font-mono">{truncateAddress(recipient)}</span>
             </div>
             <ReviewAmountRow
-              label="Amount"
+              label="Amount to send"
+              infomode={SEND_REVIEW_INFOMODE.amountToSend}
               amountSats={amountSats}
               mainnetFiatMode={mainnetFiatMode}
               hasUsableFiatSpot={hasUsableFiatSpot}
@@ -208,7 +248,11 @@ export function SendTransactionReviewStep({
             )}
             {!isLightningSendMode && (
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Fee rate</span>
+                <span className="text-muted-foreground">
+                  <ReviewInfomodeLabel {...SEND_REVIEW_INFOMODE.feeRate}>
+                    Fee rate
+                  </ReviewInfomodeLabel>
+                </span>
                 <span>{effectiveFeeRate.toFixed(2)} sat/vB</span>
               </div>
             )}
@@ -216,6 +260,7 @@ export function SendTransactionReviewStep({
               <>
                 <ReviewAmountRow
                   label="Fee"
+                  infomode={SEND_REVIEW_INFOMODE.fee}
                   amountSats={reviewFeeSats}
                   mainnetFiatMode={mainnetFiatMode}
                   hasUsableFiatSpot={hasUsableFiatSpot}
@@ -225,6 +270,7 @@ export function SendTransactionReviewStep({
                 />
                 <ReviewAmountRow
                   label="Total deducted"
+                  infomode={SEND_REVIEW_INFOMODE.totalDeducted}
                   amountSats={totalDeductedSats}
                   mainnetFiatMode={mainnetFiatMode}
                   hasUsableFiatSpot={hasUsableFiatSpot}
@@ -233,7 +279,8 @@ export function SendTransactionReviewStep({
                   fiatRatesLoading={fiatRatesLoading}
                 />
                 <ReviewAmountRow
-                  label="Amount remaining"
+                  label="Balance remaining"
+                  infomode={SEND_REVIEW_INFOMODE.balanceRemaining}
                   amountSats={amountRemainingSats}
                   mainnetFiatMode={mainnetFiatMode}
                   hasUsableFiatSpot={hasUsableFiatSpot}
@@ -243,6 +290,7 @@ export function SendTransactionReviewStep({
                 />
                 <ReviewAmountRow
                   label="Change"
+                  infomode={SEND_REVIEW_INFOMODE.change}
                   amountSats={changeSats}
                   mainnetFiatMode={mainnetFiatMode}
                   hasUsableFiatSpot={hasUsableFiatSpot}
@@ -251,7 +299,8 @@ export function SendTransactionReviewStep({
                   fiatRatesLoading={fiatRatesLoading}
                 />
                 <ReviewAmountRow
-                  label="Immediately spendable remaining"
+                  label="Immediately spendable balance remaining"
+                  infomode={SEND_REVIEW_INFOMODE.immediatelySpendableRemaining}
                   amountSats={immediatelySpendableRemainingSats}
                   mainnetFiatMode={mainnetFiatMode}
                   hasUsableFiatSpot={hasUsableFiatSpot}
@@ -261,16 +310,22 @@ export function SendTransactionReviewStep({
                 />
                 {inputUtxos.length > 0 ? (
                   <div className="space-y-2 pt-1">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      className="h-auto w-full px-0 text-sm text-muted-foreground hover:text-foreground"
-                      onClick={() => setShowInputUtxos((open) => !open)}
+                    <InfomodeWrapper
+                      infoId={SEND_REVIEW_INFOMODE.inputUtxosToggle.infoId}
+                      infoTitle={SEND_REVIEW_INFOMODE.inputUtxosToggle.infoTitle}
+                      infoText={SEND_REVIEW_INFOMODE.inputUtxosToggle.infoText}
                     >
-                      {showInputUtxos
-                        ? 'Hide UTXOs to be used'
-                        : 'Show UTXOs to be used'}
-                    </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        className="h-auto w-full px-0 text-sm text-muted-foreground hover:text-foreground"
+                        onClick={() => setShowInputUtxos((open) => !open)}
+                      >
+                        {showInputUtxos
+                          ? 'Hide UTXOs to be used'
+                          : 'Show UTXOs to be used'}
+                      </Button>
+                    </InfomodeWrapper>
                     {showInputUtxos ? (
                       <ReviewInputUtxoList inputUtxos={inputUtxos} />
                     ) : null}
