@@ -52,7 +52,6 @@ function ReviewAmountValue({
         <BitcoinAmountDisplay
           amountSats={amountSats}
           size="sm"
-          allowUnitToggle={false}
           className="text-muted-foreground"
         />
       </div>
