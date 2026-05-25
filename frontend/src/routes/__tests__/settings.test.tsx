@@ -380,6 +380,7 @@ describe('Settings routes', () => {
       setCurrentAddress: mockSetCurrentAddress,
       setBalance: vi.fn(),
       setTransactions: vi.fn(),
+      setLastSyncTime: vi.fn(),
       lockWallet: mockLockWallet,
     }
   })

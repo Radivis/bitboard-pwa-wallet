@@ -481,7 +481,6 @@ export function SendFlow() {
     amountUnit,
     applyOnchainPrepareOutcomeToSendStore,
     activeWalletId,
-    currentAddress,
     setStep,
     submitLightningPayment,
     confirmedBalance,

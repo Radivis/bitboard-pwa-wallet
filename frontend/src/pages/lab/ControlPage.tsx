@@ -1,0 +1,28 @@
+import { SlidersHorizontal } from 'lucide-react'
+import { PageHeader } from '@/components/PageHeader'
+import { LabRulesCard } from '@/components/lab/Rules'
+import { LabEntitiesCard } from '@/components/lab/LabEntitiesCard'
+import { LabResetCard } from '@/components/lab/Reset'
+import { useLabIndexPageData } from '@/hooks/useLabIndexPageData'
+
+export function ControlPage() {
+  const lab = useLabIndexPageData()
+
+  return (
+    <>
+      <PageHeader title="Control" icon={SlidersHorizontal} />
+
+      <LabEntitiesCard />
+
+      <LabRulesCard />
+
+      <LabResetCard
+        onResetClick={() => lab.setShowResetConfirm(true)}
+        resetting={lab.resetting}
+        onConfirmReset={lab.onConfirmReset}
+        showConfirm={lab.showResetConfirm}
+        onCancelConfirm={() => lab.setShowResetConfirm(false)}
+      />
+    </>
+  )
+}

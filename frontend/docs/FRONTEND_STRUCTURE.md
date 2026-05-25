@@ -48,16 +48,16 @@ flowchart TB
 
 ### `pages/` migration status
 
-Most wallet, settings, setup, and privacy screens already live under `src/pages/`. **Lab and Library are not migrated yet**—their page components still sit inline in `src/routes/lab/` and `src/routes/library/`. New work in those areas should follow the target layout below; migrate existing route-inline pages in small PRs when touching them.
+Wallet, settings, setup, privacy, library route shells, and part of lab live under `src/pages/`. **Lab is partially migrated**—four route files still hold inline page UI. Article **content** modules remain under `routes/library/articles/` (see backlog).
 
 | Area | Status | Target |
 |--------|--------|--------|
-| `wallet/` | Migrated | `pages/wallet/` (e.g. `DashboardPage`, `SendPage/`) |
+| `wallet/` | **Migrated** | `pages/wallet/` (including `WalletsPage`, `SendPage/`, etc.) |
 | `settings/` | Migrated | `pages/settings/` |
 | `setup/` | Migrated | `pages/setup/` |
 | `privacy/` | Migrated | `pages/privacy/` |
-| `lab/` | **Pending** | `pages/lab/` — move `*Page` out of `routes/lab/*.tsx` |
-| `library/` | **Pending** | `pages/library/` — move index, history, favorites, article shells out of `routes/library/` |
+| `library/` | **Shells migrated** | `pages/library/` — index, history, favorites, article, tags; article content stays in `routes/library/articles/` until registry glob is updated |
+| `lab/` | **Partial** | `pages/lab/` — `BlocksPage`, `ControlPage`, `Layer2Page` done; `transactions`, block detail, and tx detail routes still inline in `routes/lab/` |
 
 **Migrated route pattern** (wallet send):
 
@@ -85,8 +85,8 @@ Not required. This hybrid matches TanStack file-based routes, `pages/` for scree
 
 ### `pages/` (route thinning)
 
-- **Lab:** extract inline page components from `routes/lab/*.tsx` into `pages/lab/` (blocks, control, transactions, block detail, tx detail, layer-2, etc.).
-- **Library:** extract index, history, favorites, and article route shells from `routes/library/` into `pages/library/` (article slug routes may stay thin wrappers that delegate to a shared article page component).
+- **Lab (remaining):** extract inline page components from `routes/lab/transactions.tsx`, `block.$height.tsx`, `block.current.tsx`, and `tx.$txid.tsx` into `pages/lab/`.
+- **Library (content):** article TSX modules under `routes/library/articles/` (~67 files) are content, not route shells. Moving them requires updating the glob in `lib/library/articles-registry.ts`—separate from shell migration.
 
 ### `lib/` (domain subfolders)
 

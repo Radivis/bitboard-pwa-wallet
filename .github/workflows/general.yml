@@ -76,6 +76,50 @@ jobs:
       - name: Linting
         run: cargo clippy --workspace --all-targets -- -D warnings
 
+  frontend-quality:
+    name: Frontend quality
+    needs: version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install the Rust toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          target: wasm32-unknown-unknown
+
+      - name: Install wasm-pack
+        uses: jetli/wasm-pack-action@v0.4.0
+
+      - name: Build WASM
+        run: |
+          cd crypto && wasm-pack build --target bundler --out-dir ../frontend/src/wasm-pkg
+          cd ../bitboard-encryption && wasm-pack build --target bundler --out-dir ../frontend/src/wasm-pkg/bitboard_encryption
+          cd ../bitboard-lightning && wasm-pack build --target bundler --out-dir ../frontend/src/wasm-pkg/bitboard_lightning
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Lint
+        working-directory: frontend
+        run: npm run lint
+
+      - name: Typecheck
+        working-directory: frontend
+        run: npm run typecheck
+
+      - name: Unit tests
+        working-directory: frontend
+        run: npm run test:unit
+
   e2e:
     name: E2E Tests
     needs: version

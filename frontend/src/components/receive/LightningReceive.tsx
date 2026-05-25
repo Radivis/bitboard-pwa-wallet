@@ -31,26 +31,13 @@ import {
 import { fiatAmountInputPlaceholder } from '@/lib/format-fiat-display'
 import { isUsableBtcSpotPriceInFiat } from '@/lib/is-usable-btc-spot-price-in-fiat'
 import type { BitcoinAmountDisplaySize } from '@/components/BitcoinAmountDisplay'
+import {
+  parseInvoiceAmountField,
+  type InvoiceAmountFieldParse,
+} from '@/components/receive/lightning-receive-amount-parse'
 
 /** Shown when a BOLT11 invoice has no fixed amount (NWC amountless flow). */
 const LIGHTNING_INVOICE_AMOUNT_SET_BY_PAYER_LABEL = 'Amount set by payer'
-
-type InvoiceAmountFieldParse =
-  | { kind: 'amountless' }
-  | { kind: 'fixed'; sats: number }
-  | { kind: 'invalid' }
-
-/** Parses receive UI amount field: empty or zero → amountless; digits only, capped for safe `Number` conversion. */
-export function parseInvoiceAmountField(raw: string): InvoiceAmountFieldParse {
-  const trimmedAmount = raw.trim()
-  if (trimmedAmount === '') return { kind: 'amountless' }
-  if (!/^\d+$/.test(trimmedAmount)) return { kind: 'invalid' }
-  if (trimmedAmount.length > 15) return { kind: 'invalid' }
-  const sats = Number(trimmedAmount)
-  if (!Number.isInteger(sats) || sats < 0) return { kind: 'invalid' }
-  if (sats === 0) return { kind: 'amountless' }
-  return { kind: 'fixed', sats }
-}
 
 function LightningInvoiceAmountBlock({
   amountSats,

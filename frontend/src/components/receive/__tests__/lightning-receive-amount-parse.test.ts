@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseInvoiceAmountField } from '@/components/receive/LightningReceive'
+import { parseInvoiceAmountField } from '@/components/receive/lightning-receive-amount-parse'
 
 describe('parseInvoiceAmountField', () => {
   it('treats blank as amountless', () => {

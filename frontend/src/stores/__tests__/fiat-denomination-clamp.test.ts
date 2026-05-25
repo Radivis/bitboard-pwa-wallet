@@ -25,7 +25,7 @@ describe('clampDefaultFiatCurrencyToProviderDiscovery', () => {
     })
 
     const clampToFallback = vi.fn()
-    let snapshot = {
+    const snapshot = {
       defaultFiatCurrency: 'CHF',
       fiatRateProvider: 'kraken' as FiatRateProviderId,
     }
