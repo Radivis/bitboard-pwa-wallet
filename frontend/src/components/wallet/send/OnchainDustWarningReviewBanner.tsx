@@ -1,5 +1,4 @@
 import {
-  BITCOIN_DISPLAY_UNIT_LABEL,
   formatAmountInBitcoinDisplayUnit,
   getPrefixedBitcoinDisplayUnitLabel,
 } from '@/lib/bitcoin-display-unit'

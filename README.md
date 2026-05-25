@@ -69,7 +69,7 @@ Bitboard is a PWA using React for the frontend. All genuine "crypto" operations 
 
 This approach enables adequate performance and security for a web / PWA wallet. For even better security, please choose one of the supported upgrade paths when available.
 
-For the full tech stack, see the [architecture documentation](doc/ARCHITECTURE.md)
+For the full tech stack, see the [architecture documentation](doc/ARCHITECTURE.md). Frontend code layout conventions: [frontend/docs/FRONTEND_STRUCTURE.md](frontend/docs/FRONTEND_STRUCTURE.md).
 
 ## Roadmap
 
