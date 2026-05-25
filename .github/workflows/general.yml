@@ -5,10 +5,15 @@ on:
   push:
     branches:
       - main
+      # Release lines: v{n}.{m} (e.g. v0.2) and v{n}.{m}.{k} (e.g. v0.2.1)
+      - 'v*.*'
+      - 'v*.*.*'
   pull_request:
     types: [opened, synchronize, reopened]
     branches:
       - main
+      - 'v*.*'
+      - 'v*.*.*'
 
 env:
   CARGO_TERM_COLOR: always

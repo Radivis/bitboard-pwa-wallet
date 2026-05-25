@@ -1,10 +1,7 @@
 import { useNavigate } from '@tanstack/react-router'
 import { Trash2, Wallet } from 'lucide-react'
 import { useWallets } from '@/db'
-import { useWalletStore } from '@/stores/walletStore'
-import { removeLightningConnectionsHydrationQueries } from '@/lib/lightning-connections-hydration'
-import { awaitInFlightWalletSecretsWrites } from '@/db/wallet-secrets-write-tracker'
-import { useLightningStore } from '@/stores/lightningStore'
+import { prepareActiveWalletSwitch } from '@/lib/wallet/prepare-active-wallet-switch'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { Button } from '@/components/ui/button'
@@ -12,15 +9,9 @@ import { Button } from '@/components/ui/button'
 export function WalletsPage() {
   const navigate = useNavigate()
   const { data: wallets, isLoading } = useWallets()
-  const setActiveWallet = useWalletStore((s) => s.setActiveWallet)
-  const lockWallet = useWalletStore((s) => s.lockWallet)
 
   const handleSelectWallet = async (walletId: number) => {
-    await awaitInFlightWalletSecretsWrites()
-    useLightningStore.getState().purgeLightningConnectionsFromMemory()
-    removeLightningConnectionsHydrationQueries()
-    lockWallet()
-    setActiveWallet(walletId)
+    await prepareActiveWalletSwitch(walletId)
     navigate({ to: '/wallet' })
   }
 
@@ -31,11 +22,7 @@ export function WalletsPage() {
    */
   const handleDeleteWalletIntent = async (event: React.MouseEvent, walletId: number) => {
     event.stopPropagation()
-    await awaitInFlightWalletSecretsWrites()
-    useLightningStore.getState().purgeLightningConnectionsFromMemory()
-    removeLightningConnectionsHydrationQueries()
-    lockWallet()
-    setActiveWallet(walletId)
+    await prepareActiveWalletSwitch(walletId)
     navigate({ to: '/wallet/management', search: { openDelete: true } })
   }
 

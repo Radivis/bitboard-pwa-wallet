@@ -34,7 +34,7 @@ import type { BitcoinAmountDisplaySize } from '@/components/BitcoinAmountDisplay
 import {
   parseInvoiceAmountField,
   type InvoiceAmountFieldParse,
-} from '@/components/receive/lightning-receive-amount-parse'
+} from '@/lib/lightning/parse-invoice-amount-field'
 
 /** Shown when a BOLT11 invoice has no fixed amount (NWC amountless flow). */
 const LIGHTNING_INVOICE_AMOUNT_SET_BY_PAYER_LABEL = 'Amount set by payer'

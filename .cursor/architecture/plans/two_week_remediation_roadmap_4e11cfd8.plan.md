@@ -4,10 +4,13 @@ overview: Convert the quality assessment into a 2-week, PR-sized delivery plan t
 todos:
   - id: week1-guardrails
     content: Deliver PR-1 and PR-2 to establish CI/lint enforcement before refactors
-    status: pending
+    status: in_progress
   - id: week1-frontend-structure-doc
     content: Deliver structure doc PR (frontend/docs/FRONTEND_STRUCTURE.md) on Day 1 with or immediately after PR-1
-    status: pending
+    status: completed
+  - id: week1-pages-migration-shells
+    content: Deliver PR-1c routes→pages shell migration (WalletsPage, lab partial, library shells) — bundled with PR-1/PR-1b in PR #32
+    status: completed
   - id: week1-hotspots
     content: Deliver PR-3 and PR-4 to reduce backup-hook complexity and invalidation coupling
     status: pending
@@ -78,7 +81,14 @@ flowchart TB
 | [`frontend/src/hooks/`](frontend/src/hooks/), [`frontend/src/stores/`](frontend/src/stores/) | Cross-feature hooks and global client state. |
 | [`frontend/src/db/`](frontend/src/db/), [`frontend/src/workers/`](frontend/src/workers/) | Persistence and worker boundaries; keep separate from “feature UI” unless a deliberate vertical slice is adopted later. |
 
-**`pages/` migration status:** Wallet, settings, setup, and privacy are migrated. **Lab and Library are pending**—page components still live inline in `routes/lab/` and `routes/library/`; new work and refactors should target `pages/lab/` and `pages/library/`.
+**`pages/` migration status:** Wallet, settings, setup, privacy, library route shells, and part of lab live under `pages/`. **Lab is partially migrated**—four route files still hold inline page UI. Article **content** modules remain under `routes/library/articles/` (see backlog). Authoritative detail: [frontend/docs/FRONTEND_STRUCTURE.md](frontend/docs/FRONTEND_STRUCTURE.md).
+
+| Area | Status |
+|--------|--------|
+| `wallet/` | **Migrated** — includes `WalletsPage`, `SendPage/`, etc. |
+| `settings/`, `setup/`, `privacy/` | Migrated |
+| `library/` | **Shells migrated** — index, history, favorites, article, tags in `pages/library/` |
+| `lab/` | **Partial** — `BlocksPage`, `ControlPage`, `Layer2Page` done; transactions, block detail, tx detail still inline |
 
 **Guardrails (reviews + agents)**
 
@@ -90,6 +100,8 @@ flowchart TB
 **Relationship to a full “features/” layout:** Not required. The hybrid above matches TanStack file-based routes, `pages/` for screens, and existing `components/<area>/` usage; avoid duplicating `routes/` + `pages/` + `features/` for the same screen without a migration project.
 
 ## Week 1 (Days 1-5): Safety Rails + Highest-Leverage Decomposition
+
+> **PR #32 (“Remediation basics”)** delivers the Day-1 foundation slice: PR-1, PR-1b, and PR-1c below, plus CI triggers for version branches (`v*.*`, `v*.*.*`).
 
 ### PR-1: Frontend CI quality gates
 
@@ -103,14 +115,13 @@ flowchart TB
 - **Risk**: Low
 - **Expected impact**: Immediate prevention of frontend quality regressions.
 - **Validation**
-  - CI runs lint + unit + typecheck on PRs.
+  - CI runs lint + unit + typecheck on PRs targeting `main` and version branches (`v{n}.{m}`, `v{n}.{m}.{k}`).
   - No flaky baseline failures after 2 consecutive runs.
 
 ### PR-1b: Frontend structure doc (same day or immediately after PR-1)
 
 - **Scope**
   - Add [frontend/docs/FRONTEND_STRUCTURE.md](frontend/docs/FRONTEND_STRUCTURE.md) containing the hybrid model table and guardrails above.
-  - **No mass file moves** in this PR.
   - Link from [frontend/README.md](frontend/README.md) (and root [README.md](README.md) if appropriate).
 - **Effort**: Small (< 0.5 day)
 - **Risk**: Low
@@ -118,6 +129,22 @@ flowchart TB
 - **Validation**
   - Doc is linked from the main developer entrypoint.
   - PR descriptions for PR-3–PR-6 reference it for file placement.
+
+### PR-1c: Routes → pages migration (shell thinning)
+
+- **Scope**
+  - Move whole-page UI out of `routes/` into `pages/` for areas not yet thinned, keeping route files as `createFileRoute` + import shells only.
+  - **Delivered in PR #32:**
+    - `pages/wallet/WalletsPage` ← `routes/wallet/wallets.tsx`
+    - `pages/lab/BlocksPage`, `ControlPage`, `Layer2Page` ← `routes/lab/blocks.tsx`, `control.tsx`, `layer-2.tsx`
+    - `pages/library/` — `LibraryIndexPage`, `HistoryPage`, `FavoritesPage`, `ArticlePage`, `TagsPage` ← corresponding `routes/library/*` shells
+  - **Still backlog** (see below): remaining lab routes (`transactions`, block detail, tx detail); library article **content** modules under `routes/library/articles/` (registry glob change).
+- **Effort**: Small-Medium (0.5–1 day, mechanical moves)
+- **Risk**: Low-Medium (wide touch surface, behavior should be unchanged)
+- **Expected impact**: Aligns codebase with hybrid structure; reduces route-file hotspot size.
+- **Validation**
+  - Route files contain no whole-page UI.
+  - Existing unit and E2E tests pass; migration status table in structure doc matches repo.
 
 ### PR-2: Tighten lint signal for hooks correctness
 
@@ -236,8 +263,9 @@ flowchart TB
 ```mermaid
 flowchart TD
   pr1[PR1_CI_Gates] --> pr1b[PR1b_StructureDoc]
+  pr1b --> pr1c[PR1c_PagesMigrationShells]
   pr1 --> pr2[PR2_HooksLintStrict]
-  pr1b --> pr3[PR3_BackupHookSplit]
+  pr1c --> pr3[PR3_BackupHookSplit]
   pr3 --> pr6[PR6_SettingsTestDecouple]
   pr4[PR4_QueryInvalidation] --> pr5[PR5_SendFlowSplit]
   pr5 --> pr6
@@ -246,7 +274,7 @@ flowchart TD
 
 ## Delivery Cadence
 
-- **Day 1:** PR-1 (CI gates) **+ PR-1b structure doc** (same day or immediately after PR-1 merge)
+- **Day 1:** PR-1 (CI gates) **+ PR-1b structure doc + PR-1c pages shell migration** — delivered together in PR #32
 - **Day 2:** PR-2
 - **Days 3-4:** PR-3
 - **Day 5:** PR-4
@@ -259,7 +287,7 @@ Reviewers use the structure doc as the default placement rule from Day 1 onward.
 
 ## Backlog (Explicitly Out of the 2-Week Critical Path)
 
-- **`pages/` migration (Lab, Library):** Extract inline page components from `routes/lab/` and `routes/library/` into `pages/lab/` and `pages/library/` in small PRs. Wallet, settings, setup, and privacy are already done.
+- **`pages/` migration (remaining):** Extract inline page UI from `routes/lab/transactions.tsx`, `block.$height.tsx`, `block.current.tsx`, and `tx.$txid.tsx` into `pages/lab/`. Move library article **content** TSX modules from `routes/library/articles/` only when updating the glob in `lib/library/articles-registry.ts`—separate from shell migration (shells done in PR #32).
 - **Gradual `lib/` migration:** Move prefixed clusters (`lab-*.ts`, `lightning-*.ts`, …) from flat `lib/` into `lib/lab/`, `lib/lightning/`, etc., in small PRs when touching those files.
 - **Optional strictness:** Enforce `lib` must not import from `components`; keep routes thin via lint or review convention.
 

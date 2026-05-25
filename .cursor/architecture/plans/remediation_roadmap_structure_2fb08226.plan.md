@@ -59,7 +59,7 @@ flowchart TB
 | [`frontend/src/hooks/`](frontend/src/hooks/), [`frontend/src/stores/`](frontend/src/stores/) | Cross-feature hooks and global client state. |
 | [`frontend/src/db/`](frontend/src/db/), [`frontend/src/workers/`](frontend/src/workers/) | Persistence and worker boundaries; keep separate from “feature UI” unless a deliberate vertical slice is adopted later. |
 
-**`pages/` migration status:** Wallet, settings, setup, and privacy are migrated. **Lab and Library are pending**—page components still live inline in `routes/lab/` and `routes/library/`.
+**`pages/` migration status:** Wallet, settings, setup, privacy, library route shells, and part of lab live under `pages/`. **Lab is partially migrated**—four route files still hold inline page UI. Article **content** modules remain under `routes/library/articles/`. See [frontend/docs/FRONTEND_STRUCTURE.md](frontend/docs/FRONTEND_STRUCTURE.md) for the authoritative table.
 
 **Guardrails (reviews + agents)**
 
@@ -72,9 +72,17 @@ flowchart TB
 
 ## Changes to the existing PR sequence
 
+> **PR #32 (“Remediation basics”)** bundles the original Day-1 doc PR with PR-1 (CI gates) and an added **PR-1c** routes→pages shell migration. The plan below reflects that combined deliverable.
+
+### Day 1 foundations (PR #32): CI + structure doc + pages shell migration
+
+- **PR-1 (CI gates):** Frontend lint, typecheck, and unit test job in CI; version-branch triggers (`v*.*`, `v*.*.*`).
+- **PR-1b (structure doc):** [frontend/docs/FRONTEND_STRUCTURE.md](frontend/docs/FRONTEND_STRUCTURE.md) with hybrid table + guardrails; linked from READMEs.
+- **PR-1c (pages shell migration):** Thin route shells for wallet `WalletsPage`, lab (`BlocksPage`, `ControlPage`, `Layer2Page`), and library (index, history, favorites, article, tags). No library article content move.
+
 ### New: doc PR (fold into Week 1, right after or with PR-1)
 
-- **Scope:** Add a short markdown doc (e.g. [`frontend/docs/FRONTEND_STRUCTURE.md`](frontend/docs/FRONTEND_STRUCTURE.md) or a “Frontend layout” section in [`frontend/README.md`](frontend/README.md) if it exists) containing the table + guardrails above—**no mass file moves** in this PR.
+- **Scope:** Add a short markdown doc (e.g. [`frontend/docs/FRONTEND_STRUCTURE.md`](frontend/docs/FRONTEND_STRUCTURE.md) or a “Frontend layout” section in [`frontend/README.md`](frontend/README.md) if it exists) containing the table + guardrails above. **Shell page moves ship with PR #32** (PR-1c); article content and remaining lab routes stay in backlog.
 - **Effort:** Small (&lt; 0.5 day).
 - **Risk:** Low.
 - **Validation:** Link from root [`README.md`](README.md) or [`CONTRIBUTING.md`](CONTRIBUTING.md) if the repo uses one; otherwise `frontend/README.md` is enough.
@@ -86,12 +94,12 @@ flowchart TB
 
 ### Backlog (explicitly out of the 2-week critical path)
 
-- **`pages/` migration (Lab, Library):** Move inline page components from `routes/lab/` and `routes/library/` into `pages/lab/` and `pages/library/` in small PRs. Wallet, settings, setup, and privacy are already migrated.
+- **`pages/` migration (remaining):** Extract inline page UI from `routes/lab/transactions.tsx`, `block.$height.tsx`, `block.current.tsx`, and `tx.$txid.tsx` into `pages/lab/`. Library **shells** are done (PR #32); article content under `routes/library/articles/` moves only with a registry glob update.
 - **Gradual `lib/` migration:** Move prefixed clusters (`lab-*.ts`, `lightning-*.ts`, …) from flat `lib/` into `lib/lab/`, `lib/lightning/`, etc., in small PRs after the conference or when touching those files.
 
 ## Updated sequence
 
-- **Day 1:** PR-1 (CI gates) **+ structure doc** (same day or immediately after PR-1 merge).
+- **Day 1:** PR-1 (CI gates) **+ structure doc + PR-1c pages shell migration** — delivered in PR #32.
 - **Days 2–10:** Unchanged PR-2 through PR-8; reviewers use the structure doc as the default placement rule.
 
 ## Definition of Done (additions)

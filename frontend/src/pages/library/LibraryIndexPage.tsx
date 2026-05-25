@@ -10,7 +10,7 @@ function normalizeSearch(value: string): string {
   return value.trim().toLowerCase()
 }
 
-export function IndexPage() {
+export function LibraryIndexPage() {
   const [query, setQuery] = useState('')
   const articles = useMemo(() => {
     const sorted = listArticlesSortedByTitle()
