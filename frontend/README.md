@@ -4,6 +4,8 @@ React + TypeScript frontend for the Bitboard Wallet application.
 
 For how this fits with Rust/WASM workers, OPFS SQLite, and deployment, see the [repository root README](../README.md) and [architecture overview](../doc/ARCHITECTURE.md).
 
+For where to place new routes, components, hooks, and domain logic, see [Frontend folder structure](docs/FRONTEND_STRUCTURE.md).
+
 ## Tech Stack
 
 - **React 19** — UI
