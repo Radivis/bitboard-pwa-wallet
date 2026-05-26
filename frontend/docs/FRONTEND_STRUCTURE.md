@@ -43,6 +43,7 @@ flowchart TB
 | `src/pages/<area>/` | Whole page components (`*Page.tsx`). Large screens may use a subfolder (e.g. `pages/wallet/SendPage/`). Pages compose `components/`, hooks, and stores. |
 | `src/components/<area>/` | Reusable feature UI (`lab`, `wallet`, `settings`, …)—cards, modals, forms, banners. Co-locate tiny private hooks next to a component when truly local. |
 | `src/lib/<domain>/` | Portable domain logic shared across routes—not a flat dump. Use subfolders such as `lib/lab/`, `lib/wallet/`, `lib/lightning/`, `lib/infomode/` for new and moved code. |
+| `src/lib/shared/` | **Intentional cross-cutting catch-all**—see policy below. Not a default destination for new code. |
 | `src/hooks/`, `src/stores/` | Cross-feature hooks and global client state. |
 | `src/db/`, `src/workers/` | Persistence and worker boundaries; keep separate from feature UI unless a deliberate vertical slice is adopted later. |
 | `src/db/opfs/` | OPFS root file I/O, SQLite basename constants, capability probes, replace-and-reload, and full data wipe helpers—colocated with persistence, not `lib/shared/`. |
@@ -73,7 +74,7 @@ export const Route = createFileRoute('/wallet/send')({ component: SendRouteShell
 ## Guardrails
 
 - **Do not add whole-page UI to `routes/`**; add `pages/<area>/` and import from the route module.
-- Prefer **no new single-purpose files at `lib/` root**; add under `lib/<domain>/` (or `lib/shared/` for truly generic helpers used across domains).
+- Prefer **no new single-purpose files at `lib/` root**; add under `lib/<domain>/` first.
 - **Reusable UI** belongs in `components/`; **screen-level composition** belongs in `pages/`; `lib/` stays mostly non-UI pure logic, types, and formatters.
 - When extracting from hotspot files (e.g. send flow, backup hooks), place page orchestration in `pages/<area>/`, feature hooks in `components/<area>/`, and pure logic in `lib/<domain>/`.
 - Optional later strictness: `lib` must not import from `components`; `routes` must not accumulate business logic.
@@ -95,6 +96,18 @@ Not required. This hybrid matches TanStack file-based routes, `pages/` for scree
 
 When adding code, use the domain folder directly—do not reintroduce flat root files.
 
+### `lib/shared/` policy
+
+`lib/shared/` holds modules with **no natural domain owner** that are consumed by **two or more** domain areas (e.g. app shell wiring, encryption primitives, generic error helpers, cross-tab sync).
+
+**Placement rule:** put new logic in the most specific `lib/<domain>/` folder first. Promote to `lib/shared/` only when a second unrelated consumer appears—or when the module is clearly app-wide infrastructure from the start (router, query client, session metadata).
+
+**Do not** use `shared/` as a convenience dump for “might be reused someday” code. If only one domain uses a module, it stays in that domain even if the name sounds generic.
+
+**Soft cap:** keep `lib/shared/` around its current size (~15 source modules). Growth should be deliberate; prefer extending an existing shared module or splitting a domain folder over adding one-off files here.
+
+**Not in `shared/`:** domain-specific logic (even if small), OPFS/DB helpers (`db/opfs/`), settings persistence, infomode rules (`lib/infomode/`), or modules that belong in `hooks/` / `stores/` when they are React/state concerns.
+
 ## PR placement checklist
 
 Before opening a refactor PR, confirm:
@@ -102,6 +115,6 @@ Before opening a refactor PR, confirm:
 1. Route file stays thin (`createFileRoute`, lazy shell, or redirect only).
 2. Whole-page UI lives under `pages/<area>/`, not in `routes/`.
 3. Reusable UI or modal logic is under `components/<area>/`.
-4. New shared pure functions are under `lib/<domain>/`, not `lib/` root.
+4. New shared pure functions go under `lib/<domain>/` first; use `lib/shared/` only per the cross-cutting policy above—not `lib/` root.
 5. Cross-route hooks go in `src/hooks/`; global state in `src/stores/`.
 6. DB and worker boundaries stay in `src/db/` and `src/workers/`.
