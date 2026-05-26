@@ -2,11 +2,11 @@ import { type ReactNode, useEffect, useState } from 'react'
 import { useLocation } from '@tanstack/react-router'
 import { getDatabase, getInitialDatabaseHealth, tryLoadNearZeroSessionIntoMemory } from '@/db'
 import { WALLET_MIGRATION_FAILURE_OPFS_FILENAME } from '@/db/migrations/wallet-migration-failure-report'
-import { readTextFileFromOpfsRootIfExists } from '@/lib/shared/opfs-root-file'
+import { readTextFileFromOpfsRootIfExists } from '@/db/opfs/opfs-root-file'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { MigrationFailureReportModal } from '@/components/MigrationFailureReportModal'
 import { pathnameRequiresWalletCryptoSession } from '@/lib/shared/pathname-requires-wallet-crypto-session'
-import { assessOpfsLikelyUnsupported } from '@/lib/shared/opfs-capability'
+import { assessOpfsLikelyUnsupported } from '@/db/opfs/opfs-capability'
 import { useSecureStorageAvailabilityStore } from '@/stores/secureStorageAvailabilityStore'
 
 interface DatabaseReadyGateProps {

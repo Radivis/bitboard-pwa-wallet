@@ -3,7 +3,7 @@ import {
   assessOpfsLikelyUnsupported,
   isOpfsApiPresent,
   tryProbeOpfsAccess,
-} from '@/lib/shared/opfs-capability'
+} from '@/db/opfs/opfs-capability'
 
 describe('isOpfsApiPresent', () => {
   const originalStorage = navigator.storage

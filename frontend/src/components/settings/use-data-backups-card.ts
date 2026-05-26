@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { toast } from 'sonner'
-import { LAB_SQLITE_OPFS_BASENAME, WALLET_SQLITE_OPFS_BASENAME } from '@/db/opfs-sqlite-database-names'
+import { LAB_SQLITE_OPFS_BASENAME, WALLET_SQLITE_OPFS_BASENAME } from '@/db/opfs/opfs-sqlite-database-names'
 import { WALLET_MIGRATION_FAILURE_OPFS_FILENAME } from '@/db/migrations/wallet-migration-failure-report'
 import { destroyDatabase, ensureMigrated, getDatabase } from '@/db/database'
 import { useWallets } from '@/db'
@@ -15,8 +15,8 @@ import {
   readBlobFromOpfsRootIfExists,
   readTextFileFromOpfsRootIfExists,
   triggerBrowserSaveLocalBlob,
-} from '@/lib/shared/opfs-root-file'
-import { replaceOpfsSqliteAfterDestroy } from '@/lib/shared/opfs-sqlite-replace-and-reload'
+} from '@/db/opfs/opfs-root-file'
+import { replaceOpfsSqliteAfterDestroy } from '@/db/opfs/opfs-sqlite-replace-and-reload'
 import {
   ARGON2_KDF_PHC_WALLET_BACKUP_SIGN_CI,
   ARGON2_KDF_PHC_WALLET_BACKUP_SIGN_PRODUCTION,

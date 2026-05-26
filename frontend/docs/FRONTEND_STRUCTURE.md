@@ -45,6 +45,7 @@ flowchart TB
 | `src/lib/<domain>/` | Portable domain logic shared across routes—not a flat dump. Use subfolders such as `lib/lab/`, `lib/wallet/`, `lib/lightning/` for new and moved code. |
 | `src/hooks/`, `src/stores/` | Cross-feature hooks and global client state. |
 | `src/db/`, `src/workers/` | Persistence and worker boundaries; keep separate from feature UI unless a deliberate vertical slice is adopted later. |
+| `src/db/opfs/` | OPFS root file I/O, SQLite basename constants, capability probes, and replace-and-reload helpers—colocated with persistence, not `lib/shared/`. |
 
 ### `pages/` migration status
 
@@ -90,7 +91,7 @@ Not required. This hybrid matches TanStack file-based routes, `pages/` for scree
 
 ### `lib/` (domain subfolders)
 
-**Done (PR-2):** Flat `lib/` root modules moved into domain subfolders (`lab/`, `wallet/`, `lightning/`, `library/`, `fiat/`, `esplora/`, `faucet/`, `settings/`, `shared/`). Tests co-located under each domain’s `__tests__/`. No new files at `lib/` root.
+**Done (PR-2):** Flat `lib/` root modules moved into domain subfolders (`lab/`, `wallet/`, `lightning/`, `library/`, `fiat/`, `esplora/`, `faucet/`, `settings/`, `shared/`). OPFS-specific modules live under `db/opfs/` (not `lib/shared/`). Tests co-located under each domain’s `__tests__/`. No new files at `lib/` root.
 
 When adding code, use the domain folder directly—do not reintroduce flat root files.
 

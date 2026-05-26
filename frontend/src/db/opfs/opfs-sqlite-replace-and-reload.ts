@@ -3,7 +3,7 @@ import { appQueryClient } from '@/lib/shared/app-query-client'
 import {
   removeOpfsRootEntryIfExists,
   writeArrayBufferToOpfsRoot,
-} from '@/lib/shared/opfs-root-file'
+} from '@/db/opfs/opfs-root-file'
 
 /** Brief delay so OPFS / SQLite settle before a full page reload. */
 export const RELOAD_AFTER_OPFS_WRITE_MS = 400

@@ -181,7 +181,7 @@ vi.mock('@/stores/nearZeroSecurityStore', () => ({
     selector(nearZeroSecurityState),
 }))
 
-vi.mock('@/lib/shared/opfs-root-file', () => ({
+vi.mock('@/db/opfs/opfs-root-file', () => ({
   opfsRootFileExists: vi.fn().mockResolvedValue(false),
   readBlobFromOpfsRootIfExists: vi.fn(),
   readTextFileFromOpfsRootIfExists: vi.fn(),

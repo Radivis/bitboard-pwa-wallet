@@ -2,7 +2,7 @@ import { Kysely } from 'kysely'
 import { WaSqliteWorkerDialect } from 'kysely-wasqlite-worker'
 import type { LabDatabase } from './lab-schema'
 import { runLabMigrations } from './migrations/run-lab-migrations'
-import { LAB_SQLITE_OPFS_BASENAME } from './opfs-sqlite-database-names'
+import { LAB_SQLITE_OPFS_BASENAME } from './opfs/opfs-sqlite-database-names'
 import { isBenignSqliteWorkerCloseFailure } from './sqlite-worker-close-error'
 
 let labInstance: Kysely<LabDatabase> | null = null
