@@ -1,9 +1,9 @@
 import { create } from 'zustand'
-import type { BitcoinDisplayUnit } from '@/lib/bitcoin-display-unit'
+import type { BitcoinDisplayUnit } from '@/lib/wallet/bitcoin-display-unit'
 import {
   NON_ESPLORA_FEE_PRESET_RATES_SAT_PER_VB,
   type SendFeePresetLabel,
-} from '@/lib/esplora-fee-estimates'
+} from '@/lib/esplora/esplora-fee-estimates'
 import { useBitcoinDisplayUnitStore } from '@/stores/bitcoinDisplayUnitStore'
 import type { ReviewInputUtxo } from '@/workers/crypto-api'
 

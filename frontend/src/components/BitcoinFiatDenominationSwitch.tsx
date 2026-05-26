@@ -1,8 +1,8 @@
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/shared/utils'
 import { useFiatDenominationStore } from '@/stores/fiatDenominationStore'
-import { getFiatCurrencyUiMeta } from '@/lib/supported-fiat-currencies'
+import { getFiatCurrencyUiMeta } from '@/lib/fiat/supported-fiat-currencies'
 
 type BitcoinFiatDenominationSwitchProps = {
   disabled?: boolean

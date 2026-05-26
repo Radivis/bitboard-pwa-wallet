@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useQueries } from '@tanstack/react-query'
-import { createBackendService } from '@/lib/lightning-backend-service'
-import type { ConnectedLightningWallet } from '@/lib/lightning-backend-service'
-import { getLightningConnectionsForActiveWallet } from '@/lib/lightning-connection-utils'
-import { LN_WALLET_BALANCE_STALE_MS } from '@/lib/lightning-query-timings'
+import { createBackendService } from '@/lib/lightning/lightning-backend-service'
+import type { ConnectedLightningWallet } from '@/lib/lightning/lightning-backend-service'
+import { getLightningConnectionsForActiveWallet } from '@/lib/lightning/lightning-connection-utils'
+import { LN_WALLET_BALANCE_STALE_MS } from '@/lib/lightning/lightning-query-timings'
 import type { NetworkMode } from '@/stores/walletStore'
 
 /**

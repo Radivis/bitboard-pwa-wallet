@@ -6,7 +6,7 @@ import {
   LEGAL_LOCALE_STORAGE_KEY,
   DISCLAIMER_BODY_DE,
   DISCLAIMER_BODY_EN,
-} from '@/lib/legal-locale'
+} from '@/lib/shared/legal-locale'
 
 vi.mock('@tanstack/react-router', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@tanstack/react-router')>()

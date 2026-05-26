@@ -8,14 +8,14 @@ import {
 } from '@/components/ui/card'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { Button } from '@/components/ui/button'
-import { truncateAddress } from '@/lib/bitcoin-utils'
+import { truncateAddress } from '@/lib/wallet/bitcoin-utils'
 import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
 import {
   getOwnerDisplayNameWithAddressTypeAria,
   getOwnerIcon,
-} from '@/lib/lab-utils'
+} from '@/lib/lab/lab-utils'
 import { LabOwnerDisplayWithAddressType } from '@/components/lab/LabOwnerDisplayWithAddressType'
-import { isLabEntityOwnerGroupDead } from '@/lib/lab-owner'
+import { isLabEntityOwnerGroupDead } from '@/lib/lab/lab-owner'
 import { useLabChainStateQuery } from '@/hooks/useLabChainStateQuery'
 import { CardPagination } from '@/components/CardPagination'
 import {
@@ -26,8 +26,8 @@ import {
 import {
   LAB_ADDRESS_UTXO_OWNER_PAGE_SIZE,
   LAB_ENTITY_INNER_PAGE_SIZE,
-} from '@/lib/lab-paginated-queries'
-import type { AddressType } from '@/lib/wallet-domain-types'
+} from '@/lib/lab/lab-paginated-queries'
+import type { AddressType } from '@/lib/wallet/wallet-domain-types'
 import { useWalletStore } from '@/stores/walletStore'
 import { Badge } from '@/components/ui/badge'
 import { Wallet, FlaskConical, Copy, Skull } from 'lucide-react'

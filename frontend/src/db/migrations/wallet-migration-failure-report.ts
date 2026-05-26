@@ -3,7 +3,7 @@
  * so support can inspect failures without asking the user to reproduce.
  */
 
-import { writeTextFileToOpfsRoot } from '@/lib/opfs-root-file'
+import { writeTextFileToOpfsRoot } from '@/db/opfs/opfs-root-file'
 
 export const WALLET_MIGRATION_FAILURE_OPFS_FILENAME = 'wallet-schema-migration-failure.json'
 

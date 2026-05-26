@@ -1,8 +1,8 @@
 import {
   formatAmountInBitcoinDisplayUnit,
   getPrefixedBitcoinDisplayUnitLabel,
-} from '@/lib/bitcoin-display-unit'
-import { UX_DUST_FLOOR_SATS } from '@/lib/bitcoin-dust'
+} from '@/lib/wallet/bitcoin-display-unit'
+import { UX_DUST_FLOOR_SATS } from '@/lib/wallet/bitcoin-dust'
 import type { OnchainDustWarning, SendAmountUnit } from '@/stores/sendStore'
 import { selectCommittedNetworkMode, useWalletStore } from '@/stores/walletStore'
 

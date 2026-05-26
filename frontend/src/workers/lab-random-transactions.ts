@@ -1,6 +1,6 @@
-import { UX_DUST_FLOOR_SATS } from '@/lib/bitcoin-dust'
+import { UX_DUST_FLOOR_SATS } from '@/lib/wallet/bitcoin-dust'
 
-/** @deprecated Use {@link UX_DUST_FLOOR_SATS} from `@/lib/bitcoin-dust` */
+/** @deprecated Use {@link UX_DUST_FLOOR_SATS} from `@/lib/wallet/bitcoin-dust` */
 export const LAB_DUST_LIMIT_SATS = UX_DUST_FLOOR_SATS
 export const LAB_ESTIMATE_TX_VSIZE_BASE = 10
 export const LAB_ESTIMATE_P2WPKH_INPUT_VSIZE = 68

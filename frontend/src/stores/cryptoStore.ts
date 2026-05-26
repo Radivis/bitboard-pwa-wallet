@@ -5,14 +5,14 @@ import {
   onWorkerHealthChange,
   type WorkerHealthStatus,
 } from '@/workers/crypto-factory';
-import { removeLightningConnectionsHydrationQueries } from '@/lib/lightning-connections-hydration';
+import { removeLightningConnectionsHydrationQueries } from '@/lib/lightning/lightning-connections-hydration';
 import { useWalletStore } from '@/stores/walletStore';
 import { useLightningStore } from '@/stores/lightningStore';
 import { useSessionStore, clearAutoLockTimer } from '@/stores/sessionStore';
 import { resetSecretsChannel } from '@/workers/secrets-channel';
 import { awaitInFlightWalletSecretsWrites } from '@/db/wallet-secrets-write-tracker';
-import { navigateToLibraryIfOnWalletRoute } from '@/lib/app-router';
-import { asBadLocalChainStateError } from '@/lib/bad-local-chain-state-error';
+import { navigateToLibraryIfOnWalletRoute } from '@/lib/shared/app-router';
+import { asBadLocalChainStateError } from '@/lib/shared/bad-local-chain-state-error';
 import type { Remote } from 'comlink';
 import type {
   CryptoService,

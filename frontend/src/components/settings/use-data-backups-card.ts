@@ -1,33 +1,33 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { toast } from 'sonner'
-import { LAB_SQLITE_OPFS_BASENAME, WALLET_SQLITE_OPFS_BASENAME } from '@/db/opfs-sqlite-database-names'
+import { LAB_SQLITE_OPFS_BASENAME, WALLET_SQLITE_OPFS_BASENAME } from '@/db/opfs/opfs-sqlite-database-names'
 import { WALLET_MIGRATION_FAILURE_OPFS_FILENAME } from '@/db/migrations/wallet-migration-failure-report'
 import { destroyDatabase, ensureMigrated, getDatabase } from '@/db/database'
 import { useWallets } from '@/db'
 import { loadWalletSecrets } from '@/db/wallet-persistence'
 import { destroyLabDatabase, ensureLabMigrated } from '@/db/lab-database'
 import { anyWalletHasNoMnemonicBackupFlag } from '@/db/wallet-no-mnemonic-backup'
-import { resolveArgon2CiParamsOrThrow } from '@/lib/argon2-ci-env'
-import { BackupZipInvalidError } from '@/lib/backup-zip-invalid-error'
+import { resolveArgon2CiParamsOrThrow } from '@/lib/shared/argon2-ci-env'
+import { BackupZipInvalidError } from '@/lib/shared/backup-zip-invalid-error'
 import {
   opfsRootFileExists,
   readBlobFromOpfsRootIfExists,
   readTextFileFromOpfsRootIfExists,
   triggerBrowserSaveLocalBlob,
-} from '@/lib/opfs-root-file'
-import { replaceOpfsSqliteAfterDestroy } from '@/lib/opfs-sqlite-replace-and-reload'
+} from '@/db/opfs/opfs-root-file'
+import { replaceOpfsSqliteAfterDestroy } from '@/db/opfs/opfs-sqlite-replace-and-reload'
 import {
   ARGON2_KDF_PHC_WALLET_BACKUP_SIGN_CI,
   ARGON2_KDF_PHC_WALLET_BACKUP_SIGN_PRODUCTION,
   WALLET_BACKUP_SIGNING_SALT_BYTES,
   WALLET_BACKUP_ZIP_FILENAME,
-} from '@/lib/wallet-backup-constants'
-import { LAB_BACKUP_SQLITE_ENTRY_NAME, LAB_BACKUP_ZIP_FILENAME } from '@/lib/lab-backup-constants'
-import { parseLabBackupZipFile } from '@/lib/lab-backup-import'
-import { parseWalletBackupZipFile } from '@/lib/wallet-backup-import'
-import { zipSingleFileForLocalExport } from '@/lib/zip-single-file-export'
-import { zipWalletBackupForLocalExport } from '@/lib/zip-wallet-backup-export'
+} from '@/lib/wallet/wallet-backup-constants'
+import { LAB_BACKUP_SQLITE_ENTRY_NAME, LAB_BACKUP_ZIP_FILENAME } from '@/lib/lab/lab-backup-constants'
+import { parseLabBackupZipFile } from '@/lib/lab/lab-backup-import'
+import { parseWalletBackupZipFile } from '@/lib/wallet/wallet-backup-import'
+import { zipSingleFileForLocalExport } from '@/lib/settings/zip-single-file-export'
+import { zipWalletBackupForLocalExport } from '@/lib/settings/zip-wallet-backup-export'
 import { useNearZeroSecurityStore } from '@/stores/nearZeroSecurityStore'
 import { useWalletStore } from '@/stores/walletStore'
 import { getEncryptionWorker } from '@/workers/encryption-factory'

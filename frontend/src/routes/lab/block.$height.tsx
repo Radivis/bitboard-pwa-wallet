@@ -9,7 +9,7 @@ import {
   LabBlockTransactionsCard,
 } from '@/components/lab/BlockDetailsCards'
 import { useWallets } from '@/db'
-import { labOpGetBlockByHeight } from '@/lib/lab-worker-operations'
+import { labOpGetBlockByHeight } from '@/lib/lab/lab-worker-operations'
 import type { LabBlockDetails } from '@/workers/lab-api'
 
 export const Route = createFileRoute('/lab/block/$height')({

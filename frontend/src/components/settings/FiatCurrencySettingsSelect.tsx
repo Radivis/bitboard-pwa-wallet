@@ -1,10 +1,10 @@
 import type { ReactNode } from 'react'
 import type { UseQueryResult } from '@tanstack/react-query'
-import type { FiatProviderCurrenciesData } from '@/lib/fiat-provider-currencies'
+import type { FiatProviderCurrenciesData } from '@/lib/fiat/fiat-provider-currencies'
 import {
   type FiatCurrencyCode,
   getFiatCurrencyUiMeta,
-} from '@/lib/supported-fiat-currencies'
+} from '@/lib/fiat/supported-fiat-currencies'
 
 export type FiatProviderSupportedCurrenciesQueryState = Pick<
   UseQueryResult<FiatProviderCurrenciesData>,

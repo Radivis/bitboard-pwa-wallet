@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { LabOwnerType } from '@/lib/lab-owner-type'
+import { LabOwnerType } from '@/lib/lab/lab-owner-type'
 import { importWalletViaUI, TEST_MNEMONIC, TEST_PASSWORD } from './helpers/wallet-setup'
 import {
   clickMainNavLab,
@@ -16,10 +16,10 @@ import {
   getUtxoSumByOwner,
   findAddressForOwner,
 } from './helpers/lab'
-import { LAB_WALLET_RECEIVE_PAGE_TITLE } from '@/lib/wallet-lab-ui-copy'
+import { LAB_WALLET_RECEIVE_PAGE_TITLE } from '@/lib/wallet/wallet-lab-ui-copy'
 import { goToWalletTab } from './helpers/wallet-nav'
-import { isCoinbase } from '@/lib/lab-operations'
-import { WALLET_OWNER_PREFIX } from '@/lib/lab-utils'
+import { isCoinbase } from '@/lib/lab/lab-operations'
+import { WALLET_OWNER_PREFIX } from '@/lib/lab/lab-utils'
 
 const COINBASE_SATS = 312_500_000 // 3.125 BTC (default lab miner subsidy; current epoch)
 

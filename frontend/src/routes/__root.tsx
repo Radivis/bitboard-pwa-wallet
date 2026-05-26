@@ -1,5 +1,5 @@
 import { QueryClientProvider } from '@tanstack/react-query'
-import { appQueryClient } from '@/lib/app-query-client'
+import { appQueryClient } from '@/lib/shared/app-query-client'
 import { createRootRoute, Outlet } from '@tanstack/react-router'
 import { lazy, Suspense } from 'react'
 import { Toaster } from '@/components/ui/sonner'

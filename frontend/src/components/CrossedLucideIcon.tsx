@@ -1,7 +1,7 @@
 import type { LucideIcon } from 'lucide-react'
 import { X } from 'lucide-react'
 
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/shared/utils'
 
 type CrossedLucideIconProps = {
   icon: LucideIcon

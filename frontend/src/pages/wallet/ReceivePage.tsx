@@ -19,13 +19,13 @@ import {
 import { useSessionStore } from '@/stores/sessionStore'
 import { useCryptoStore } from '@/stores/cryptoStore'
 import { useFeatureStore } from '@/stores/featureStore'
-import { updateWalletChangeset } from '@/lib/wallet-utils'
-import { isLightningSupported } from '@/lib/lightning-utils'
+import { updateWalletChangeset } from '@/lib/wallet/wallet-utils'
+import { isLightningSupported } from '@/lib/lightning/lightning-utils'
 import { ReceiveModeToggle, type ReceiveMode } from '@/components/receive/ReceiveModeToggle'
 import { LightningReceive } from '@/components/receive/LightningReceive'
 import { ReceiveMainnetDemoWarningModal } from '@/components/receive/ReceiveMainnetDemoWarningModal'
 import { FaucetLinker } from '@/components/receive/FaucetLinker'
-import { walletReceivePageTitle } from '@/lib/wallet-lab-ui-copy'
+import { walletReceivePageTitle } from '@/lib/wallet/wallet-lab-ui-copy'
 
 export function ReceivePage() {
   const navigate = useNavigate()

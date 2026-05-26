@@ -1,10 +1,10 @@
 import type { SendAmountUnit } from '@/stores/sendStore'
-import { parseAmountToSatsFromBitcoinDisplayUnit } from '@/lib/bitcoin-display-unit'
+import { parseAmountToSatsFromBitcoinDisplayUnit } from '@/lib/wallet/bitcoin-display-unit'
 import {
   amountSatsFromFiatAndBtcPrice,
   parsePositiveFiatAmountInput,
-} from '@/lib/fiat-amount-to-sats'
-import { isUsableBtcSpotPriceInFiat } from '@/lib/is-usable-btc-spot-price-in-fiat'
+} from '@/lib/fiat/fiat-amount-to-sats'
+import { isUsableBtcSpotPriceInFiat } from '@/lib/fiat/is-usable-btc-spot-price-in-fiat'
 
 export function amountSatsFromForm(
   amountStr: string,

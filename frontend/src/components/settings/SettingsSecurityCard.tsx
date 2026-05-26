@@ -8,7 +8,7 @@ import {
   CardDescription,
 } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/shared/utils'
 
 export interface SettingsSecurityCardProps {
   hasWallets: boolean

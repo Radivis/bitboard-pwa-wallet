@@ -7,7 +7,7 @@ import {
   Zap,
 } from 'lucide-react'
 import { ArticleLink } from '@/lib/library/article-shared'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/shared/utils'
 
 const rowClass =
   'flex gap-2 rounded-md border border-border/60 bg-muted/30 px-2 py-2 text-left'

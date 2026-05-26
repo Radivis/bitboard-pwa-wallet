@@ -15,8 +15,8 @@ import { useWallets } from '@/db'
 import {
   loadDescriptorWalletAndSync,
   loadDescriptorWalletWithoutSync,
-} from '@/lib/wallet-utils'
-import { reportWalletSyncError } from '@/lib/wallet-sync-error-toast'
+} from '@/lib/wallet/wallet-utils'
+import { reportWalletSyncError } from '@/lib/wallet/wallet-sync-error-toast'
 
 interface WalletUnlockProps {
   walletName?: string

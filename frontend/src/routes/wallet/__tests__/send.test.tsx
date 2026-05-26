@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { screen } from '@testing-library/react'
 import { renderWithProviders } from '@/test-utils/test-providers'
-import * as lightningUtils from '@/lib/lightning-utils'
+import * as lightningUtils from '@/lib/lightning/lightning-utils'
 
 const mockNavigate = vi.fn()
 vi.mock('@tanstack/react-router', async (importOriginal) => {
@@ -196,7 +196,7 @@ vi.mock('@/hooks/useBitcoinUnit', () => ({
   useBitcoinUnit: () => ({ data: 'BTC' }),
 }))
 
-vi.mock('@/lib/bitcoin-utils', () => ({
+vi.mock('@/lib/wallet/bitcoin-utils', () => ({
   MAX_SAFE_SATS: Number.MAX_SAFE_INTEGER,
   SATS_PER_BTC: 100_000_000,
   isValidAddress: (addr: string) => addr.startsWith('bc1'),

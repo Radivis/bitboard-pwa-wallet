@@ -8,7 +8,7 @@ import {
 } from '@/components/ui/card'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { LabTxCard } from '@/components/lab/LabTxCard'
-import { netMovedSatsFromMempoolEntry } from '@/lib/lab-tx-net-moved'
+import { netMovedSatsFromMempoolEntry } from '@/lib/lab/lab-tx-net-moved'
 import type { MempoolEntry } from '@/workers/lab-api'
 import { useLabChainStateQuery } from '@/hooks/useLabChainStateQuery'
 

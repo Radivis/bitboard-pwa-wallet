@@ -1,4 +1,4 @@
-import type { LabOwner } from '@/lib/lab-owner'
+import type { LabOwner } from '@/lib/lab/lab-owner'
 import type { LabTxDetails, LabTxOperationRecord, LabUtxo } from './lab-api'
 import type { BlockEffectsTx } from './lab-block-effects-types'
 import {
@@ -6,7 +6,7 @@ import {
   LAB_COINBASE_PREV_TXID_HEX,
   LAB_COINBASE_PREV_VOUT,
   LAB_COINBASE_SEQUENCE,
-} from '@/lib/lab-operations'
+} from '@/lib/lab/lab-operations'
 import {
   assertLabReceiverNonNull,
   labAddressesEqual,

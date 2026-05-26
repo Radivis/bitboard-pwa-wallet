@@ -13,7 +13,7 @@ import { useWalletCryptoSessionPathGateStore } from '@/stores/walletCryptoSessio
 const loadDescriptorWalletAndSync = vi.fn()
 const loadDescriptorWalletWithoutSync = vi.fn()
 
-vi.mock('@/lib/wallet-utils', () => ({
+vi.mock('@/lib/wallet/wallet-utils', () => ({
   loadDescriptorWalletAndSync: (...args: unknown[]) =>
     loadDescriptorWalletAndSync(...args),
   loadDescriptorWalletWithoutSync: (...args: unknown[]) =>
@@ -24,7 +24,7 @@ vi.mock('@/workers/crypto-factory', () => ({
   waitForCryptoWorkerHealthy: vi.fn().mockResolvedValue(undefined),
 }))
 
-vi.mock('@/lib/wallet-sync-error-toast', () => ({
+vi.mock('@/lib/wallet/wallet-sync-error-toast', () => ({
   reportWalletSyncError: vi.fn(),
 }))
 

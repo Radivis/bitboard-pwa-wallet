@@ -25,7 +25,7 @@ import {
   FIAT_RATE_PROVIDER_IDS,
   FIAT_RATE_PROVIDER_LABELS,
   type FiatRateProviderId,
-} from '@/lib/fiat-rate-service-whitelist'
+} from '@/lib/fiat/fiat-rate-service-whitelist'
 
 export function SettingsMainPage() {
   const segwitAddressesEnabled = useFeatureStore((s) => s.segwitAddressesEnabled)

@@ -1,11 +1,11 @@
 /**
  * Fee preset UX metadata (confirmation targets tie into Esplora `fee-estimates` in the Send flow).
- * Block counts and fallback rates are defined in `@/lib/send-fee-preset-definitions`.
+ * Block counts and fallback rates are defined in `@/lib/wallet/send-fee-preset-definitions`.
  */
 import {
   SEND_FEE_PRESET_ENTRIES,
   type SendFeePresetLabel,
-} from '@/lib/send-fee-preset-definitions'
+} from '@/lib/wallet/send-fee-preset-definitions'
 
 export type { SendFeePresetLabel }
 

@@ -6,25 +6,25 @@ import {
   LIGHTNING_NETWORK_MODES,
   isLightningSupported,
   type LightningNetworkMode,
-} from '@/lib/lightning-utils'
-import { MAX_LIGHTNING_INVOICE_DESCRIPTION_LENGTH } from '@/lib/lightning-input-limits'
+} from '@/lib/lightning/lightning-utils'
+import { MAX_LIGHTNING_INVOICE_DESCRIPTION_LENGTH } from '@/lib/lightning/lightning-input-limits'
 import {
   createBackendService,
   isValidNwcConnectionString,
   type ConnectedLightningWallet,
   type LightningConnectionConfig,
-} from '@/lib/lightning-backend-service'
+} from '@/lib/lightning/lightning-backend-service'
 import {
   saveLightningConnectionsForWallet,
-} from '@/lib/lightning-wallet-secrets'
+} from '@/lib/lightning/lightning-wallet-secrets'
 import { useWalletStore } from '@/stores/walletStore'
 import { useSessionStore } from '@/stores/sessionStore'
 import type { NetworkMode } from '@/stores/walletStore'
-import { MAX_LIGHTNING_WALLET_LABEL_LENGTH } from '@/lib/lightning-input-limits'
+import { MAX_LIGHTNING_WALLET_LABEL_LENGTH } from '@/lib/lightning/lightning-input-limits'
 import {
   isReservedDefaultNwcConnectionLabel,
   resolveDefaultNwcConnectionLabel,
-} from '@/lib/nwc-default-connection-label'
+} from '@/lib/lightning/nwc-default-connection-label'
 
 /**
  * Whether the given Bitcoin wallet has at least one Lightning connection for the
@@ -45,8 +45,8 @@ export function hasNetworkConnectedWallet(
 }
 
 export type { ConnectedLightningWallet, LightningConnectionConfig }
-export type { NwcConnectionConfig, LightningWalletType } from '@/lib/lightning-backend-service'
-export type { LightningNetworkMode } from '@/lib/lightning-utils'
+export type { NwcConnectionConfig, LightningWalletType } from '@/lib/lightning/lightning-backend-service'
+export type { LightningNetworkMode } from '@/lib/lightning/lightning-utils'
 
 export type ActiveLightningConnectionsByNetwork = Partial<
   Record<LightningNetworkMode, string>

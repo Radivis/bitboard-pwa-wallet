@@ -4,12 +4,12 @@ import type {
   MouseEventHandler,
   PointerEventHandler,
 } from 'react'
-import type { BitcoinDisplayUnit } from '@/lib/bitcoin-display-unit'
+import type { BitcoinDisplayUnit } from '@/lib/wallet/bitcoin-display-unit'
 import {
   BITCOIN_DISPLAY_UNITS,
   getPrefixedBitcoinDisplayUnitLabel,
-} from '@/lib/bitcoin-display-unit'
-import { cn } from '@/lib/utils'
+} from '@/lib/wallet/bitcoin-display-unit'
+import { cn } from '@/lib/shared/utils'
 import { selectCommittedNetworkMode, useWalletStore } from '@/stores/walletStore'
 
 export type BitcoinUnitSelectProps = {

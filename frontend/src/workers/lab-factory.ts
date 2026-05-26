@@ -20,20 +20,20 @@ import {
   ensureLabMigrated,
   getLabDatabase,
 } from '@/db'
-import { notifyLabStatePersistedAfterCommit } from '@/lib/lab-cross-tab-sync'
+import { notifyLabStatePersistedAfterCommit } from '@/lib/lab/lab-cross-tab-sync'
 import type { LabDatabase } from '@/db/lab-schema'
 import { SQLITE_FALSE, SQLITE_TRUE } from '@/db/schema'
-import { labOwnerFromDbPair, labOwnerFromTxRow, labOwnerToDbPair } from '@/lib/lab-db-owner'
-import { parseAddressType } from '@/lib/wallet-domain-types'
-import { labEntityOwnerKey } from '@/lib/lab-entity-keys'
-import { labVsizeFromWeight } from '@/lib/lab-tx-weight'
-import type { LabOwner } from '@/lib/lab-owner'
+import { labOwnerFromDbPair, labOwnerFromTxRow, labOwnerToDbPair } from '@/lib/lab/lab-db-owner'
+import { parseAddressType } from '@/lib/wallet/wallet-domain-types'
+import { labEntityOwnerKey } from '@/lib/lab/lab-entity-keys'
+import { labVsizeFromWeight } from '@/lib/lab/lab-tx-weight'
+import type { LabOwner } from '@/lib/lab/lab-owner'
 import {
   labEntityLabOwner,
   labOwnerDisplayKey,
   normalizeJsonOwnerToLabOwner,
   walletLabOwner,
-} from '@/lib/lab-owner'
+} from '@/lib/lab/lab-owner'
 import type { Transaction } from 'kysely'
 
 /**

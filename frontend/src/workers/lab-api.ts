@@ -1,6 +1,6 @@
-import type { AddressType } from '@/lib/wallet-domain-types'
-import type { LabOwnerType } from '@/lib/lab-owner-type'
-import type { LabOwner } from '@/lib/lab-owner'
+import type { AddressType } from '@/lib/wallet/wallet-domain-types'
+import type { LabOwnerType } from '@/lib/lab/lab-owner-type'
+import type { LabOwner } from '@/lib/lab/lab-owner'
 
 export interface LabBlock {
   blockHash: string

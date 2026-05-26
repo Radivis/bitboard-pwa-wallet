@@ -11,8 +11,8 @@ import {
 import { useWallets } from '@/db'
 import { useLabIndexPageData } from '@/hooks/useLabIndexPageData'
 import { selectCommittedAddressType, useWalletStore } from '@/stores/walletStore'
-import { LabOwnerType } from '@/lib/lab-owner-type'
-import { labOpGetCurrentBlockTemplate } from '@/lib/lab-worker-operations'
+import { LabOwnerType } from '@/lib/lab/lab-owner-type'
+import { labOpGetCurrentBlockTemplate } from '@/lib/lab/lab-worker-operations'
 import type { LabBlockDetails } from '@/workers/lab-api'
 
 export const Route = createFileRoute('/lab/block/current')({

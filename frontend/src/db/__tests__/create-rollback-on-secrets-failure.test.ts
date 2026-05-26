@@ -3,7 +3,7 @@ import type { Kysely } from 'kysely'
 import type { Database } from '../schema'
 import { createTestDatabase } from '../test-helpers'
 import { persistNewWalletWithSecrets } from '../wallet-persistence'
-import { ARGON2_KDF_PHC_CI } from '@/lib/kdf-phc-constants'
+import { ARGON2_KDF_PHC_CI } from '@/lib/shared/kdf-phc-constants'
 
 /**
  * Integration test: when secrets write fails, persistNewWalletWithSecrets (used by create/import)

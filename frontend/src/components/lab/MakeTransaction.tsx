@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
-import { LAB_MAX_RANDOM_ENTITY_TRANSACTIONS } from '@/lib/lab-random-limits'
+import { LAB_MAX_RANDOM_ENTITY_TRANSACTIONS } from '@/lib/lab/lab-random-limits'
 
 const MIN_AMOUNT_SATS = 1
 const MIN_RANDOM_TRANSACTION_COUNT = 1

@@ -99,11 +99,11 @@ vi.mock('@/workers/secrets-channel', () => ({
   ensureSecretsChannel: vi.fn().mockResolvedValue(undefined),
 }))
 
-vi.mock('@/lib/bitcoin-utils', () => ({
+vi.mock('@/lib/wallet/bitcoin-utils', () => ({
   toBitcoinNetwork: (mode: string) => mode,
 }))
 
-vi.mock('@/lib/wallet-query-cache-sync', () => ({
+vi.mock('@/lib/wallet/wallet-query-cache-sync', () => ({
   invalidateWalletRelatedQueriesAndNotifyOtherTabs: vi.fn(),
 }))
 

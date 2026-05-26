@@ -14,7 +14,7 @@ import { WalletUnlock } from '@/components/WalletUnlock'
 import { useSessionStore } from '@/stores/sessionStore'
 import { useNearZeroSecurityStore } from '@/stores/nearZeroSecurityStore'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/shared/utils'
 
 const NETWORK_OPTIONS: NetworkMode[] = [
   'mainnet',

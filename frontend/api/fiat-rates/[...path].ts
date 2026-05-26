@@ -1,8 +1,8 @@
 /**
  * Same-origin proxy for public fiat-rate APIs (allowlisted providers + paths only).
  *
- * **Keep in sync with `frontend/src/lib/fiat-rate-service-whitelist.ts`** (provider IDs,
- * upstream bases, path prefixes) **and `frontend/src/lib/fiat-rates-proxy-cors.ts`** (CORS
+ * **Keep in sync with `frontend/src/lib/fiat/fiat-rate-service-whitelist.ts`** (provider IDs,
+ * upstream bases, path prefixes) **and `frontend/src/lib/fiat/fiat-rates-proxy-cors.ts`** (CORS
  * allowlist). This handler intentionally has **zero imports outside this file** because Vercel's
  * `includeFiles` / cross-tree NFT tracing has proven unreliable for this project; any extra
  * import (including from `src/lib`, `api/_lib`, or a sibling `vercel-proxy-shared/` folder)
@@ -17,7 +17,7 @@ export const config = {
 
 type FiatRateProviderId = 'kraken' | 'coingecko' | 'blockchain'
 
-// Inlined from src/lib/fiat-rates-proxy-cors.ts — see file-level comment above.
+// Inlined from src/lib/fiat/fiat-rates-proxy-cors.ts — see file-level comment above.
 const FIAT_RATES_PROXY_CORS_ALLOWED_ORIGINS_EXACT: readonly string[] = [
   'https://bitboard-wallet.com',
   'https://app.bitboard-wallet.com',

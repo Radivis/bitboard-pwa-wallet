@@ -1,14 +1,14 @@
 import { type Locator, type Page, expect } from '@playwright/test'
-import { AddressType } from '@/lib/wallet-domain-types'
-import { LabOwnerType } from '@/lib/lab-owner-type'
+import { AddressType } from '@/lib/wallet/wallet-domain-types'
+import { LabOwnerType } from '@/lib/lab/lab-owner-type'
 import type { LabState } from '@/workers/lab-api'
-import { labEntityOwnerKey } from '@/lib/lab-entity-keys'
-import { lookupLabAddressOwner, WALLET_OWNER_PREFIX } from '@/lib/lab-utils'
-import { UX_DUST_FLOOR_SATS } from '@/lib/bitcoin-dust'
+import { labEntityOwnerKey } from '@/lib/lab/lab-entity-keys'
+import { lookupLabAddressOwner, WALLET_OWNER_PREFIX } from '@/lib/lab/lab-utils'
+import { UX_DUST_FLOOR_SATS } from '@/lib/wallet/bitcoin-dust'
 import {
   LAB_WALLET_RECEIVE_PAGE_TITLE,
   LAB_WALLET_SEND_PAGE_TITLE,
-} from '@/lib/wallet-lab-ui-copy'
+} from '@/lib/wallet/wallet-lab-ui-copy'
 import { goToWalletTab } from './wallet-nav'
 import {
   waitForSettingsNetworkModeButtonSelected,

@@ -14,29 +14,29 @@ import {
   type ConnectedLightningWallet,
   type NwcConnectionConfig,
   type LightningConnectionConfig,
-} from '@/lib/lightning-backend-service'
+} from '@/lib/lightning/lightning-backend-service'
 import { ensureMigrated } from '@/db/database'
 import { useSessionStore } from '@/stores/sessionStore'
 import {
   batchApplyNwcSnapshotPatches,
   loadNwcSnapshotForConnection,
-} from '@/lib/lightning-wallet-snapshot-persistence'
+} from '@/lib/lightning/lightning-wallet-snapshot-persistence'
 import {
   fetchEsploraTipBlockHeight,
   getEsploraUrl,
   NWC_ESPLORA_BLOCK_HEIGHT_TOLERANCE,
-} from '@/lib/bitcoin-utils'
-import { loadCustomEsploraUrl } from '@/lib/wallet-utils'
+} from '@/lib/wallet/bitcoin-utils'
+import { loadCustomEsploraUrl } from '@/lib/wallet/wallet-utils'
 import {
   DEFAULT_INVOICE_EXPIRY_SECONDS,
   isLightningSupported,
   type LightningNetworkMode,
-} from '@/lib/lightning-utils'
+} from '@/lib/lightning/lightning-utils'
 import {
   formatAmountInBitcoinDisplayUnit,
   getPrefixedBitcoinDisplayUnitLabel,
-} from '@/lib/bitcoin-display-unit'
-import { getLightningConnectionsForActiveWallet } from '@/lib/lightning-connection-utils'
+} from '@/lib/wallet/bitcoin-display-unit'
+import { getLightningConnectionsForActiveWallet } from '@/lib/lightning/lightning-connection-utils'
 import {
   fetchLightningBalancesForDashboard,
   fetchLightningPaymentsForActiveWallet,
@@ -44,13 +44,13 @@ import {
   lightningConnectionsFingerprint,
   lightningDashboardBalancesQueryKey,
   lightningDashboardHistoryQueryKey,
-} from '@/lib/lightning-dashboard-sync'
+} from '@/lib/lightning/lightning-dashboard-sync'
 import {
   LIGHTNING_DASHBOARD_REFETCH_MS,
   LIGHTNING_DASHBOARD_STALE_MS,
   LN_WALLET_BALANCE_STALE_MS,
   LN_WALLET_NETWORK_PLAUSIBILITY_STALE_MS,
-} from '@/lib/lightning-query-timings'
+} from '@/lib/lightning/lightning-query-timings'
 
 function subscribeOnlineStatus(onStoreChange: () => void) {
   window.addEventListener('online', onStoreChange)

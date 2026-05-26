@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { APP_PASSWORD_MIN_LENGTH } from '@/lib/app-password-policy'
+import { APP_PASSWORD_MIN_LENGTH } from '@/lib/shared/app-password-policy'
 
 interface PasswordStrengthIndicatorProps {
   password: string

@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { renderWithProviders } from '@/test-utils/test-providers'
-import { BadLocalChainStateError } from '@/lib/bad-local-chain-state-error'
+import { BadLocalChainStateError } from '@/lib/shared/bad-local-chain-state-error'
 
 const mockNavigate = vi.fn()
 vi.mock('@tanstack/react-router', async (importOriginal) => {
@@ -83,7 +83,7 @@ const {
       .mockResolvedValue(undefined),
   }
 })
-vi.mock('@/lib/wallet-utils', () => ({
+vi.mock('@/lib/wallet/wallet-utils', () => ({
   runIncrementalDashboardWalletSync: mockRunIncrementalDashboardWalletSync,
   runFullScanDashboardWalletSync: mockRunFullScanDashboardWalletSync,
   retryImportInitialEsploraSyncWithWalletStatus:
@@ -147,7 +147,7 @@ import {
   LAB_WALLET_BALANCE_CARD_TITLE,
   LAB_WALLET_DASHBOARD_TITLE,
   LAB_WALLET_ON_CHAIN_SECTION_LABEL,
-} from '@/lib/wallet-lab-ui-copy'
+} from '@/lib/wallet/wallet-lab-ui-copy'
 
 describe('DashboardPage', () => {
   beforeEach(() => {

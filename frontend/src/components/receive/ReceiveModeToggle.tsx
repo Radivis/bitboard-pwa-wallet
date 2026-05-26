@@ -1,5 +1,5 @@
 import { Bitcoin, Zap } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/shared/utils'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 
 export type ReceiveMode = 'bitcoin' | 'lightning'

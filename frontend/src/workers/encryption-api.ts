@@ -1,5 +1,5 @@
-import type { EncryptedBlob } from '@/lib/encrypted-blob-types'
-import { ARGON2_KDF_PHC_PRODUCTION } from '@/lib/kdf-phc-constants'
+import type { EncryptedBlob } from '@/lib/shared/encrypted-blob-types'
+import { ARGON2_KDF_PHC_PRODUCTION } from '@/lib/shared/kdf-phc-constants'
 
 export type { EncryptedBlob }
 

@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { Kysely } from 'kysely'
 import type { Database } from '../schema'
 import { createTestDatabase } from '../test-helpers'
-import { ARGON2_KDF_PHC_CI } from '@/lib/kdf-phc-constants'
+import { ARGON2_KDF_PHC_CI } from '@/lib/shared/kdf-phc-constants'
 import React from 'react'
 
 let testDb: Kysely<Database>

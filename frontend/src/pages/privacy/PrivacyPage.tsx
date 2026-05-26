@@ -10,7 +10,7 @@ import {
   PRIVACY_PAGE_TITLE_DE,
   PRIVACY_PAGE_TITLE_EN,
   useLegalLocale,
-} from '@/lib/legal-locale'
+} from '@/lib/shared/legal-locale'
 import {
   PRIVACY_SHARED_LANGUAGE_USER_NOTE_DE,
   PRIVACY_SHARED_LANGUAGE_USER_NOTE_EN,

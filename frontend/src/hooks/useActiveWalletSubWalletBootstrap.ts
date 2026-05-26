@@ -1,8 +1,8 @@
 import { useEffect } from 'react'
 import { useWalletStore } from '@/stores/walletStore'
 import { useSessionStore } from '@/stores/sessionStore'
-import { ACTIVE_WALLET_LOAD_QUERY_ROOT } from '@/lib/wallet-load-query-keys'
-import { appQueryClient } from '@/lib/app-query-client'
+import { ACTIVE_WALLET_LOAD_QUERY_ROOT } from '@/lib/wallet/wallet-load-query-keys'
+import { appQueryClient } from '@/lib/shared/app-query-client'
 import { useActiveWalletLoadQuery } from '@/hooks/useActiveWalletLoadQuery'
 
 /**

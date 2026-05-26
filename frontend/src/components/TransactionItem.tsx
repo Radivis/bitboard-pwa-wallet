@@ -7,9 +7,9 @@ import {
   getTxGrossWalletDebitSats,
   getTxListDisplayAmountSats,
   truncateAddress,
-} from '@/lib/bitcoin-utils'
+} from '@/lib/wallet/bitcoin-utils'
 import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/shared/utils'
 
 interface TransactionItemProps {
   transaction: TransactionDetails

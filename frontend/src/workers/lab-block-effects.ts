@@ -1,7 +1,7 @@
 import {
   LAB_COINBASE_PREV_TXID_HEX,
   LAB_COINBASE_PREV_VOUT,
-} from '@/lib/lab-operations'
+} from '@/lib/lab/lab-operations'
 import type { LabAddress } from './lab-api'
 import type { BlockEffectsParsed, BlockEffectsTx } from './lab-block-effects-types'
 import { applyTransactionsAndDetailsFromBlock } from './lab-apply-block-transactions'

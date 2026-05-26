@@ -5,14 +5,14 @@ import { customEsploraUrlQueryKey } from '@/components/settings/EsploraUrlSettin
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
-import { getEsploraUrl } from '@/lib/bitcoin-utils'
+import { getEsploraUrl } from '@/lib/wallet/bitcoin-utils'
 import {
   checkFaucetReachability,
   faucetsForStack,
   resolveFaucetStack,
   type FaucetReachability,
-} from '@/lib/faucet-matching'
-import { loadCustomEsploraUrl } from '@/lib/wallet-utils'
+} from '@/lib/faucet/faucet-matching'
+import { loadCustomEsploraUrl } from '@/lib/wallet/wallet-utils'
 import { selectCommittedNetworkMode, useWalletStore } from '@/stores/walletStore'
 
 const REACHABILITY_TIMEOUT_MS = 8000

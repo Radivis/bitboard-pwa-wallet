@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { UX_DUST_FLOOR_SATS } from '@/lib/bitcoin-dust'
-import { errorMessage } from '@/lib/utils'
-import { labOpDraftLabEntityTransaction } from '@/lib/lab-worker-operations'
+import { UX_DUST_FLOOR_SATS } from '@/lib/wallet/bitcoin-dust'
+import { errorMessage } from '@/lib/shared/utils'
+import { labOpDraftLabEntityTransaction } from '@/lib/lab/lab-worker-operations'
 import { useLabChainStateQuery } from '@/hooks/useLabChainStateQuery'
-import type { AddressType } from '@/lib/wallet-domain-types'
+import type { AddressType } from '@/lib/wallet/wallet-domain-types'
 import { selectCommittedAddressType, useWalletStore } from '@/stores/walletStore'
 import { useLabMiningStore } from '@/stores/labMiningStore'
 import { useWallet, useWallets } from '@/db'
@@ -16,16 +16,16 @@ import {
   type LabCreateTransactionVariables,
 } from '@/hooks/useLabMutations'
 import { LAB_MAX_BLOCKS_PER_MINE, LAB_MIN_BLOCKS_PER_MINE } from '@/workers/lab-api'
-import { LabOwnerType } from '@/lib/lab-owner-type'
-import { LAB_MAX_RANDOM_ENTITY_TRANSACTIONS } from '@/lib/lab-random-limits'
-import { labEntityOwnerKey } from '@/lib/lab-entity-keys'
-import { labEntityRecordForLabOwner, walletLabOwner } from '@/lib/lab-owner'
+import { LabOwnerType } from '@/lib/lab/lab-owner-type'
+import { LAB_MAX_RANDOM_ENTITY_TRANSACTIONS } from '@/lib/lab/lab-random-limits'
+import { labEntityOwnerKey } from '@/lib/lab/lab-entity-keys'
+import { labEntityRecordForLabOwner, walletLabOwner } from '@/lib/lab/lab-owner'
 import {
   assertLabAddressOwnerResolved,
   labBitcoinAddressesEqual,
   lookupLabAddressOwner,
   resolveDeadLabEntityRecipient,
-} from '@/lib/lab-utils'
+} from '@/lib/lab/lab-utils'
 
 const DEFAULT_LAB_FEE_RATE_SAT_PER_VB = 1
 const DEFAULT_RANDOM_TRANSACTION_COUNT = 1

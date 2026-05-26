@@ -1,15 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { BitcoinDisplayUnit } from '@/lib/bitcoin-display-unit'
+import type { BitcoinDisplayUnit } from '@/lib/wallet/bitcoin-display-unit'
 import {
   BITCOIN_DISPLAY_UNIT_LABEL,
   formatAmountInBitcoinDisplayUnit,
   getAccessibleBitcoinDisplayUnitLabel,
   getNetworkUnitIndicator,
-} from '@/lib/bitcoin-display-unit'
+} from '@/lib/wallet/bitcoin-display-unit'
 import { useBitcoinUnit } from '@/hooks/useBitcoinUnit'
 import { BitcoinUnitSelect } from '@/components/BitcoinUnitSelect'
 import { NetworkUnitPrefix } from '@/components/NetworkUnitPrefix'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/shared/utils'
 import { selectCommittedNetworkMode, useWalletStore } from '@/stores/walletStore'
 
 export type BitcoinAmountDisplaySize = 'sm' | 'md' | 'lg'

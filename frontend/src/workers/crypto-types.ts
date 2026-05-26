@@ -1,9 +1,9 @@
-export { AddressType } from '@/lib/wallet-domain-types'
+export { AddressType } from '@/lib/wallet/wallet-domain-types'
 export type {
   BitcoinNetwork,
   DescriptorWalletData,
   WalletSecrets,
-} from '@/lib/wallet-domain-types'
+} from '@/lib/wallet/wallet-domain-types'
 
 export interface DescriptorPair {
   external: string;

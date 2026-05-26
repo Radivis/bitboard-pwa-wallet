@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
 import { sqliteStorage } from '@/db/storage-adapter'
-import { AddressType } from '@/lib/wallet-domain-types'
+import { AddressType } from '@/lib/wallet/wallet-domain-types'
 import type { BalanceInfo, TransactionDetails } from '@/workers/crypto-types'
 
 export type NetworkMode = 'lab' | 'regtest' | 'signet' | 'testnet' | 'mainnet'

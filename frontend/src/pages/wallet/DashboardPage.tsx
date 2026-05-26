@@ -31,24 +31,24 @@ import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
 import { BitcoinFiatDenominationSwitch } from '@/components/BitcoinFiatDenominationSwitch'
 import { FiatAmountDisplay } from '@/components/FiatAmountDisplay'
-import { balanceInfoToOnChainDisplay } from '@/lib/onchain-balance-display'
+import { balanceInfoToOnChainDisplay } from '@/lib/wallet/onchain-balance-display'
 import {
   runIncrementalDashboardWalletSync,
   runFullScanDashboardWalletSync,
   retryImportInitialEsploraSyncWithWalletStatus,
-} from '@/lib/wallet-utils'
-import { BadLocalChainStateError } from '@/lib/bad-local-chain-state-error'
-import { sanitizeErrorMessageForUi } from '@/lib/sanitize-error-for-ui'
-import { errorMessage } from '@/lib/utils'
-import { labTransactionsForWallet, sumLabWalletUtxoSats } from '@/lib/lab-utils'
+} from '@/lib/wallet/wallet-utils'
+import { BadLocalChainStateError } from '@/lib/shared/bad-local-chain-state-error'
+import { sanitizeErrorMessageForUi } from '@/lib/shared/sanitize-error-for-ui'
+import { errorMessage } from '@/lib/shared/utils'
+import { labTransactionsForWallet, sumLabWalletUtxoSats } from '@/lib/lab/lab-utils'
 import { useLabChainStateQuery } from '@/hooks/useLabChainStateQuery'
 import {
   useLightningBalancesForDashboardQuery,
   useLightningHistoryQuery,
 } from '@/hooks/useLightningMutations'
 import { useFeatureStore } from '@/stores/featureStore'
-import { isLightningSupported } from '@/lib/lightning-utils'
-import { mergeAndSortDashboardActivity } from '@/lib/lightning-dashboard-sync'
+import { isLightningSupported } from '@/lib/lightning/lightning-utils'
+import { mergeAndSortDashboardActivity } from '@/lib/lightning/lightning-dashboard-sync'
 import { useDashboardActivityPageSize } from '@/hooks/useDashboardActivityPageSize'
 import { LightningPaymentItem } from '@/components/LightningPaymentItem'
 import { useFiatDenominationStore } from '@/stores/fiatDenominationStore'
@@ -58,7 +58,7 @@ import {
   walletBalanceCardTitle,
   walletDashboardTitle,
   walletOnChainSectionLabel,
-} from '@/lib/wallet-lab-ui-copy'
+} from '@/lib/wallet/wallet-lab-ui-copy'
 
 function ImportInitialSyncErrorBanner() {
   const networkMode = useWalletStore((s) => s.networkMode)

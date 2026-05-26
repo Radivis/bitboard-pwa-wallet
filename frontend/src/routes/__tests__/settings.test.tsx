@@ -117,7 +117,7 @@ const mockSetAddressType = vi.fn()
 const mockSetCurrentAddress = vi.fn()
 const mockCommitLoadedSubWallet = vi.fn()
 vi.mock('@/stores/walletStore', async () => {
-  const { AddressType } = await import('@/lib/wallet-domain-types')
+  const { AddressType } = await import('@/lib/wallet/wallet-domain-types')
   return {
     AddressType,
     useWalletStore: Object.assign(
@@ -181,18 +181,18 @@ vi.mock('@/stores/nearZeroSecurityStore', () => ({
     selector(nearZeroSecurityState),
 }))
 
-vi.mock('@/lib/opfs-root-file', () => ({
+vi.mock('@/db/opfs/opfs-root-file', () => ({
   opfsRootFileExists: vi.fn().mockResolvedValue(false),
   readBlobFromOpfsRootIfExists: vi.fn(),
   readTextFileFromOpfsRootIfExists: vi.fn(),
   triggerBrowserSaveLocalBlob: vi.fn(),
 }))
 
-vi.mock('@/lib/mainnet-onchain-balance-probe', () => ({
+vi.mock('@/lib/esplora/mainnet-onchain-balance-probe', () => ({
   listWalletsWithPositiveMainnetOnChainBalance: vi.fn().mockResolvedValue([]),
 }))
 
-vi.mock('@/lib/wipe-all-app-data-opfs-and-reload', () => ({
+vi.mock('@/db/opfs/wipe-all-app-data-opfs-and-reload', () => ({
   wipeAllAppDataOpfsAndReload: vi.fn().mockResolvedValue(undefined),
 }))
 
@@ -233,8 +233,8 @@ vi.mock('@/db', () => ({
   useWallets: () => ({ data: mockWalletsState.data }),
 }))
 
-vi.mock('@/lib/bitcoin-utils', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/bitcoin-utils')>()
+vi.mock('@/lib/wallet/bitcoin-utils', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/wallet/bitcoin-utils')>()
   return {
     ...actual,
     /** Avoid live Esplora fetches in settings tests; keep real `toBitcoinNetwork` for switches. */
@@ -248,7 +248,7 @@ const mockLoadDescriptorWalletAndSync = vi.hoisted(() =>
 const mockLoadDescriptorWalletWithoutSync = vi.hoisted(() =>
   vi.fn().mockResolvedValue(undefined),
 )
-vi.mock('@/lib/wallet-utils', () => ({
+vi.mock('@/lib/wallet/wallet-utils', () => ({
   saveCustomEsploraUrl: vi.fn().mockResolvedValue(undefined),
   deleteCustomEsploraUrl: vi.fn().mockResolvedValue(undefined),
   loadCustomEsploraUrl: vi.fn().mockResolvedValue(null),
@@ -282,8 +282,8 @@ const mockResolveDescriptorWallet = vi.hoisted(() =>
 const mockUpdateDescriptorWalletChangeset = vi.hoisted(() =>
   vi.fn().mockResolvedValue(undefined),
 )
-vi.mock('@/lib/descriptor-wallet-manager', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/descriptor-wallet-manager')>()
+vi.mock('@/lib/wallet/descriptor-wallet-manager', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/wallet/descriptor-wallet-manager')>()
   return {
     ...actual,
     resolveDescriptorWallet: mockResolveDescriptorWallet,

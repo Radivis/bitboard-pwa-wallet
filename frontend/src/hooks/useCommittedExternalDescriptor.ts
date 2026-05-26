@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { ensureMigrated, getDatabase, loadWalletSecretsPayload } from '@/db'
-import { findDescriptorWallet } from '@/lib/descriptor-wallet-manager'
-import { toBitcoinNetwork } from '@/lib/bitcoin-utils'
+import { findDescriptorWallet } from '@/lib/wallet/descriptor-wallet-manager'
+import { toBitcoinNetwork } from '@/lib/wallet/bitcoin-utils'
 import { useSessionStore } from '@/stores/sessionStore'
 import {
   selectCommittedAccountId,

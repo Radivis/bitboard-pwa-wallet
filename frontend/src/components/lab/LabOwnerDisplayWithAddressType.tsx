@@ -1,9 +1,9 @@
-import type { AddressType } from '@/lib/wallet-domain-types'
-import { labEntityRecordForLabOwner, type LabOwner } from '@/lib/lab-owner'
+import type { AddressType } from '@/lib/wallet/wallet-domain-types'
+import { labEntityRecordForLabOwner, type LabOwner } from '@/lib/lab/lab-owner'
 import {
   getOwnerDisplayName,
   resolveLabOwnerForDisplay,
-} from '@/lib/lab-utils'
+} from '@/lib/lab/lab-utils'
 import { LabAddressTypeBadge } from '@/components/lab/LabAddressTypeBadge'
 
 type EntityWithAddressType = {

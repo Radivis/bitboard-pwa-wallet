@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { toast } from 'sonner'
-import { getAppLastOpenedAt, touchAppLastOpenedAt } from '@/lib/app-session-metadata'
-import { getInfomodeHintKind } from '@/lib/infomode-hint-logic'
+import { getAppLastOpenedAt, touchAppLastOpenedAt } from '@/lib/shared/app-session-metadata'
+import { getInfomodeHintKind } from '@/lib/infomode/infomode-hint-logic'
 
 /** One intro/reminder per browser tab session (reload in same tab does not repeat). */
 const SESSION_STORAGE_KEY = 'bitboard_infomode_hint_shown'

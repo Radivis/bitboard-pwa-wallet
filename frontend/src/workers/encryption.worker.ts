@@ -1,12 +1,12 @@
 import { expose } from 'comlink'
 import type { EncryptionService } from './encryption-api'
 import type { EncryptedBlobMessage } from './secrets-channel-types'
-import type { EncryptedBlob } from '@/lib/encrypted-blob-types'
-import { resolveArgon2CiParamsOrThrow } from '@/lib/argon2-ci-env'
+import type { EncryptedBlob } from '@/lib/shared/encrypted-blob-types'
+import { resolveArgon2CiParamsOrThrow } from '@/lib/shared/argon2-ci-env'
 import {
   ARGON2_KDF_PHC_CI,
   ARGON2_KDF_PHC_PRODUCTION,
-} from '@/lib/kdf-phc-constants'
+} from '@/lib/shared/kdf-phc-constants'
 
 const SALT_LENGTH_BYTES = 16
 const IV_LENGTH_BYTES = 12

@@ -3,7 +3,7 @@ import { useEsploraFeePresets } from '@/hooks/useEsploraFeePresets'
 import {
   NON_ESPLORA_FEE_PRESET_RATES_SAT_PER_VB,
   type SendFeePresetLabel,
-} from '@/lib/esplora-fee-estimates'
+} from '@/lib/esplora/esplora-fee-estimates'
 import { useSendStore } from '@/stores/sendStore'
 import { useWalletStore } from '@/stores/walletStore'
 

@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { LabOwnerType } from '@/lib/lab-owner-type'
+import { LabOwnerType } from '@/lib/lab/lab-owner-type'
 import { LAB_MIN_BLOCKS_PER_MINE } from '@/workers/lab-api'
 
 interface LabMiningState {

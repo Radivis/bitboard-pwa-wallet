@@ -4,7 +4,7 @@ import {
   fetchLabChainStateForQuery,
   labChainStateQueryKey,
   toUiLabState,
-} from '@/lib/lab-chain-query'
+} from '@/lib/lab/lab-chain-query'
 import type { LabState } from '@/workers/lab-api'
 
 export function useLabChainStateQuery() {

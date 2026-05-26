@@ -1,11 +1,11 @@
-import { appQueryClient } from '@/lib/app-query-client'
+import { appQueryClient } from '@/lib/shared/app-query-client'
 import {
   fetchFiatProviderCurrenciesData,
   fiatProviderCurrenciesQueryKey,
   FIAT_PROVIDER_CURRENCIES_STALE_MS,
-} from '@/lib/fiat-provider-currencies'
-import type { FiatRateProviderId } from '@/lib/fiat-rate-service-whitelist'
-import type { FiatCurrencyCode } from '@/lib/supported-fiat-currencies'
+} from '@/lib/fiat/fiat-provider-currencies'
+import type { FiatRateProviderId } from '@/lib/fiat/fiat-rate-service-whitelist'
+import type { FiatCurrencyCode } from '@/lib/fiat/supported-fiat-currencies'
 
 /** Ignores stale discovery responses when the provider changes quickly. */
 let clampRequestGeneration = 0

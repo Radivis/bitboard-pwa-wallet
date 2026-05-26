@@ -3,7 +3,7 @@ import {
   LEGAL_NOTICE_FLAG_DE,
   LEGAL_NOTICE_FLAG_EN,
   type LegalLocale,
-} from '@/lib/legal-locale'
+} from '@/lib/shared/legal-locale'
 
 export function LegalLocaleSwitcher({
   activeLocale,

@@ -1,5 +1,5 @@
 import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
-import { truncateAddress } from '@/lib/bitcoin-utils'
+import { truncateAddress } from '@/lib/wallet/bitcoin-utils'
 import type { ReviewInputUtxo } from '@/workers/crypto-api'
 
 export function ReviewInputUtxoList({ inputUtxos }: { inputUtxos: ReviewInputUtxo[] }) {

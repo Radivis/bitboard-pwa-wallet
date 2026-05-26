@@ -16,7 +16,7 @@ vi.mock('@/stores/walletStore', () => ({
     selector(walletState),
 }))
 
-vi.mock('@/lib/wallet-utils', () => ({
+vi.mock('@/lib/wallet/wallet-utils', () => ({
   loadCustomEsploraUrl: vi.fn().mockResolvedValue(null),
 }))
 

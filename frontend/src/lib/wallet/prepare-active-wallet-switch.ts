@@ -1,5 +1,5 @@
 import { awaitInFlightWalletSecretsWrites } from '@/db/wallet-secrets-write-tracker'
-import { removeLightningConnectionsHydrationQueries } from '@/lib/lightning-connections-hydration'
+import { removeLightningConnectionsHydrationQueries } from '@/lib/lightning/lightning-connections-hydration'
 import { useLightningStore } from '@/stores/lightningStore'
 import { useWalletStore } from '@/stores/walletStore'
 

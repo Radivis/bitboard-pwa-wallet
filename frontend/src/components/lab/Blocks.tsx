@@ -15,9 +15,9 @@ import {
   LAB_MIN_BLOCKS_PER_MINE,
 } from '@/workers/lab-api'
 import type { LabEntityRecord } from '@/workers/lab-api'
-import { formatLabEntityMineOptionLabel } from '@/lib/lab-entity-keys'
-import { LabOwnerType } from '@/lib/lab-owner-type'
-import { cn } from '@/lib/utils'
+import { formatLabEntityMineOptionLabel } from '@/lib/lab/lab-entity-keys'
+import { LabOwnerType } from '@/lib/lab/lab-owner-type'
+import { cn } from '@/lib/shared/utils'
 import { useFeatureStore } from '@/stores/featureStore'
 
 export function LabBlocksCard({

@@ -6,8 +6,8 @@
  * `npx playwright test tests/e2e/lab-manual-transactions-dust.spec.ts`
  */
 import { test, expect } from '@playwright/test'
-import { UX_DUST_FLOOR_SATS } from '@/lib/bitcoin-dust'
-import { LabOwnerType } from '@/lib/lab-owner-type'
+import { UX_DUST_FLOOR_SATS } from '@/lib/wallet/bitcoin-dust'
+import { LabOwnerType } from '@/lib/lab/lab-owner-type'
 import { importWalletViaUI, TEST_MNEMONIC, TEST_PASSWORD } from './helpers/wallet-setup'
 import {
   switchToLab,

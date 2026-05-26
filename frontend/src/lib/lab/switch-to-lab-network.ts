@@ -1,0 +1,108 @@
+import { toast } from 'sonner'
+import {
+  useWalletStore,
+  type AddressType,
+  type NetworkMode,
+  type WalletStatus,
+} from '@/stores/walletStore'
+import { walletIsUnlockedOrSyncing } from '@/lib/wallet/wallet-unlocked-status'
+import { useSessionStore } from '@/stores/sessionStore'
+import { useCryptoStore } from '@/stores/cryptoStore'
+import { updateDescriptorWalletChangeset } from '@/lib/wallet/descriptor-wallet-manager'
+import { loadDescriptorWalletWithoutSync } from '@/lib/wallet/wallet-utils'
+import { toBitcoinNetwork } from '@/lib/wallet/bitcoin-utils'
+import { terminateLabWorker } from '@/workers/lab-factory'
+import { appQueryClient } from '@/lib/shared/app-query-client'
+import { prefetchLabChainState } from '@/hooks/useLabChainStateQuery'
+import { errorMessage } from '@/lib/shared/utils'
+import {
+  loadingTargetNetworkMessage,
+  savingPreviousNetworkMessage,
+  type NetworkSwitchPhaseReporter,
+} from '@/lib/settings/network-switch-status-messages'
+
+/**
+ * When switching *to* lab with an active WASM wallet: persist the current
+ * network’s descriptor wallet state to storage, then load the lab wallet in
+ * memory without starting sync. Skipped when there is no session password /
+ * active wallet, or when export/update fails (e.g. wallet not initialized yet).
+ */
+async function persistAndLoadLabWalletIfUnlockedOrSyncing(params: {
+  walletStatus: WalletStatus
+  previousNetworkMode: NetworkMode
+  addressType: AddressType
+  accountId: number
+  onPhase?: NetworkSwitchPhaseReporter
+}): Promise<void> {
+  const { walletStatus, previousNetworkMode, addressType, accountId, onPhase } =
+    params
+  if (!walletIsUnlockedOrSyncing(walletStatus)) return
+
+  const sessionPassword = useSessionStore.getState().password
+  const activeWalletId = useWalletStore.getState().activeWalletId
+  if (!sessionPassword || !activeWalletId) return
+
+  const { exportChangeset } = useCryptoStore.getState()
+  try {
+    const currentChangeset = await exportChangeset()
+    onPhase?.(savingPreviousNetworkMessage(previousNetworkMode))
+    await updateDescriptorWalletChangeset({
+      password: sessionPassword,
+      walletId: activeWalletId,
+      network: toBitcoinNetwork(previousNetworkMode),
+      addressType,
+      accountId,
+      changesetJson: currentChangeset,
+    })
+  } catch {
+    // No active WASM wallet yet (e.g., first load) -- safe to skip
+  }
+
+  onPhase?.(loadingTargetNetworkMessage('lab'))
+
+  await loadDescriptorWalletWithoutSync({
+    password: sessionPassword,
+    walletId: activeWalletId,
+    networkMode: 'lab',
+    addressType,
+    accountId,
+  })
+}
+
+export type SwitchToLabNetworkParams = {
+  previousNetworkMode: NetworkMode
+  walletStatus: WalletStatus
+  addressType: AddressType
+  accountId: number
+  onPhase?: NetworkSwitchPhaseReporter
+}
+
+/**
+ * Tear down any lab worker, optionally sync wallet state into lab mode, warm
+ * chain state for queries, then set network to lab. Returns whether the switch
+ * completed successfully (network is lab in store).
+ */
+export async function switchToLabNetwork(
+  params: SwitchToLabNetworkParams,
+): Promise<boolean> {
+  const { previousNetworkMode, walletStatus, addressType, accountId, onPhase } =
+    params
+  try {
+    terminateLabWorker()
+    await persistAndLoadLabWalletIfUnlockedOrSyncing({
+      walletStatus,
+      previousNetworkMode,
+      addressType,
+      accountId,
+      onPhase,
+    })
+    await prefetchLabChainState(appQueryClient)
+    if (!walletIsUnlockedOrSyncing(walletStatus)) {
+      useWalletStore.getState().setNetworkMode('lab')
+    }
+    return true
+  } catch (err) {
+    toast.error(errorMessage(err) || 'Failed to start lab')
+    return false
+  }
+}

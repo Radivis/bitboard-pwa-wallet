@@ -1,4 +1,4 @@
-import type { AddressType } from '@/lib/wallet-domain-types'
+import type { AddressType } from '@/lib/wallet/wallet-domain-types'
 import { parseWasmObject, state } from './lab-worker-state'
 import type { LabEntityRecord } from './lab-api'
 
