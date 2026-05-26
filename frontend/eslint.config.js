@@ -10,6 +10,7 @@ export default tseslint.config(
     ignores: [
       'dist/**',
       'eslint.config.js',
+      'playwright-report/**',
       'src/routeTree.gen.ts',
       'src/wasm-pkg/**',
     ],
