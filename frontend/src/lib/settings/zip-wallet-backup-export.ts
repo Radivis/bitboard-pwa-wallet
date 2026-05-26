@@ -4,7 +4,7 @@ import {
   WALLET_BACKUP_MANIFEST_ENTRY_NAME,
   WALLET_BACKUP_SQLITE_ENTRY_NAME,
 } from '@/lib/wallet/wallet-backup-constants'
-import { finalizeZipExportWithDeflate } from '@/lib/shared/zip-single-file-export'
+import { finalizeZipExportWithDeflate } from '@/lib/settings/zip-single-file-export'
 
 /**
  * Packs signed wallet backup: SQLite file + manifest JSON into one ZIP (DEFLATE).

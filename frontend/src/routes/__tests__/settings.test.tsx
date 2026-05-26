@@ -192,7 +192,7 @@ vi.mock('@/lib/esplora/mainnet-onchain-balance-probe', () => ({
   listWalletsWithPositiveMainnetOnChainBalance: vi.fn().mockResolvedValue([]),
 }))
 
-vi.mock('@/lib/shared/wipe-all-app-data-opfs-and-reload', () => ({
+vi.mock('@/db/opfs/wipe-all-app-data-opfs-and-reload', () => ({
   wipeAllAppDataOpfsAndReload: vi.fn().mockResolvedValue(undefined),
 }))
 

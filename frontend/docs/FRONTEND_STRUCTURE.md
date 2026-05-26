@@ -45,7 +45,7 @@ flowchart TB
 | `src/lib/<domain>/` | Portable domain logic shared across routes—not a flat dump. Use subfolders such as `lib/lab/`, `lib/wallet/`, `lib/lightning/`, `lib/infomode/` for new and moved code. |
 | `src/hooks/`, `src/stores/` | Cross-feature hooks and global client state. |
 | `src/db/`, `src/workers/` | Persistence and worker boundaries; keep separate from feature UI unless a deliberate vertical slice is adopted later. |
-| `src/db/opfs/` | OPFS root file I/O, SQLite basename constants, capability probes, and replace-and-reload helpers—colocated with persistence, not `lib/shared/`. |
+| `src/db/opfs/` | OPFS root file I/O, SQLite basename constants, capability probes, replace-and-reload, and full data wipe helpers—colocated with persistence, not `lib/shared/`. |
 
 ### `pages/` migration status
 

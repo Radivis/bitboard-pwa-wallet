@@ -1,6 +1,6 @@
 import { useFeatureStore } from '@/stores/featureStore'
 import { useWalletStore } from '@/stores/walletStore'
-import { waitForPersistedStoreHydration } from '@/lib/shared/persisted-store-hydration'
+import { waitForPersistedStoreHydration } from '@/lib/settings/persisted-store-hydration'
 
 export async function waitForWalletAndFeatureStoresHydrated(): Promise<void> {
   await Promise.all([
