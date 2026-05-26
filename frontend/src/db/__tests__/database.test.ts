@@ -3,8 +3,8 @@ import { sql } from 'kysely'
 import type { Kysely } from 'kysely'
 import type { Database } from '../schema'
 import { readBitboardWalletVersion } from '@common/bitboard-wallet-version'
-import { APP_SETTINGS_LAST_OPENED_AT_KEY } from '@/lib/app-session-metadata'
-import { ARGON2_KDF_PHC_CI } from '@/lib/kdf-phc-constants'
+import { APP_SETTINGS_LAST_OPENED_AT_KEY } from '@/lib/shared/app-session-metadata'
+import { ARGON2_KDF_PHC_CI } from '@/lib/shared/kdf-phc-constants'
 import { createTestDatabase } from '../test-helpers'
 
 describe('SQLite Database', () => {

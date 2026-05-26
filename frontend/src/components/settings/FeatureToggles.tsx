@@ -6,9 +6,9 @@ import {
   getCommittedAddressType,
   getCommittedNetworkMode,
 } from '@/stores/walletStore'
-import { executeSettingsNetworkSwitch } from '@/lib/network-mode-switch'
-import { executeSettingsAddressTypeSwitch } from '@/lib/execute-settings-address-type-switch'
-import { runFeatureToggleOffWork } from '@/lib/feature-toggle-async'
+import { executeSettingsNetworkSwitch } from '@/lib/settings/network-mode-switch'
+import { executeSettingsAddressTypeSwitch } from '@/lib/settings/execute-settings-address-type-switch'
+import { runFeatureToggleOffWork } from '@/lib/shared/feature-toggle-async'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { MainnetAccessConfirmModal } from '@/components/settings/MainnetAccessConfirmModal'
 import { Switch } from '@/components/ui/switch'

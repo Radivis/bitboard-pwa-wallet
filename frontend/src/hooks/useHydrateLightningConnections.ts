@@ -4,7 +4,7 @@ import { useSessionStore } from '@/stores/sessionStore'
 import {
   hydrateLightningConnectionsForWallet,
   LIGHTNING_CONNECTIONS_HYDRATION_QUERY_KEY,
-} from '@/lib/lightning-connections-hydration'
+} from '@/lib/lightning/lightning-connections-hydration'
 
 /**
  * After unlock, loads Lightning connections from encrypted wallet secrets into

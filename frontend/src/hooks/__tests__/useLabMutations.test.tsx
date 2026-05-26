@@ -7,14 +7,14 @@ import {
   useLabCreateRandomTransactionsMutation,
   useLabMineBlocksMutation,
 } from '@/hooks/useLabMutations'
-import { labChainStateQueryKey } from '@/lib/lab-chain-query'
-import { labPaginatedQueryKeyPrefix } from '@/lib/lab-paginated-queries'
+import { labChainStateQueryKey } from '@/lib/lab/lab-chain-query'
+import { labPaginatedQueryKeyPrefix } from '@/lib/lab/lab-paginated-queries'
 import { EMPTY_LAB_STATE, type LabMineBlocksResult } from '@/workers/lab-api'
 
 const labOpMineBlocks = vi.hoisted(() => vi.fn())
 const labOpCreateRandomLabEntityTransactions = vi.hoisted(() => vi.fn())
 
-vi.mock('@/lib/lab-worker-operations', () => ({
+vi.mock('@/lib/lab/lab-worker-operations', () => ({
   labOpMineBlocks,
   labOpCreateRandomLabEntityTransactions,
 }))

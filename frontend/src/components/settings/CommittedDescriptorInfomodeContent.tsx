@@ -1,5 +1,5 @@
 import { ArticleLink } from '@/lib/library/article-shared'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/shared/utils'
 
 const DESCRIPTORS_ARTICLE_SLUG = 'what-are-descriptors-and-descriptor-wallets' as const
 

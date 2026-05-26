@@ -10,27 +10,27 @@ import { useWalletStore } from '@/stores/walletStore'
 import { useSendStore } from '@/stores/sendStore'
 import { useFeatureStore } from '@/stores/featureStore'
 import { useLabChainStateQuery } from '@/hooks/useLabChainStateQuery'
-import { isValidAddress } from '@/lib/bitcoin-utils'
+import { isValidAddress } from '@/lib/wallet/bitcoin-utils'
 import {
   preferredRecipientFromBitcoinUri,
   recipientAndAmountFromScannedPayload,
   tryParseBitcoinUri,
-} from '@/lib/bip21'
-import { errorMessage } from '@/lib/utils'
+} from '@/lib/wallet/bip21'
+import { errorMessage } from '@/lib/shared/utils'
 import {
   formatAmountInputFromSats,
   UX_DUST_FLOOR_SATS,
-} from '@/lib/bitcoin-dust'
-import { normalizeLightningDestination } from '@/lib/lightning-utils'
+} from '@/lib/wallet/bitcoin-dust'
+import { normalizeLightningDestination } from '@/lib/lightning/lightning-utils'
 import { useLightningStore } from '@/stores/lightningStore'
-import { walletLabOwner } from '@/lib/lab-owner'
+import { walletLabOwner } from '@/lib/lab/lab-owner'
 import {
   labBitcoinAddressesEqual,
   resolveDeadLabEntityRecipient,
   sumLabWalletUtxoSats,
-} from '@/lib/lab-utils'
+} from '@/lib/lab/lab-utils'
 import { getLabWorker, initLabWorkerWithState } from '@/workers/lab-factory'
-import { runLabOp } from '@/lib/lab-coordinator'
+import { runLabOp } from '@/lib/lab/lab-coordinator'
 import {
   useBuildTransactionMutation,
   useBroadcastTransactionMutation,
@@ -41,14 +41,14 @@ import { useCryptoStore } from '@/stores/cryptoStore'
 import { useFiatDenominationStore } from '@/stores/fiatDenominationStore'
 import { useBitcoinDisplayUnitStore } from '@/stores/bitcoinDisplayUnitStore'
 import { useMainnetFiatRatesQuery } from '@/hooks/useMainnetFiatRatesQuery'
-import { walletSendPageTitle } from '@/lib/wallet-lab-ui-copy'
-import { formatFiatInputStringFromSats } from '@/lib/format-fiat-display'
-import { isUsableBtcSpotPriceInFiat } from '@/lib/is-usable-btc-spot-price-in-fiat'
+import { walletSendPageTitle } from '@/lib/wallet/wallet-lab-ui-copy'
+import { formatFiatInputStringFromSats } from '@/lib/fiat/format-fiat-display'
+import { isUsableBtcSpotPriceInFiat } from '@/lib/fiat/is-usable-btc-spot-price-in-fiat'
 import {
   applySendReviewTxSummaryToStore,
   clearSendReviewTxSummaryFromStore,
-} from '@/lib/send-review-summary'
-import { buildLabSendMutationParams } from '@/lib/lab-send-submit'
+} from '@/lib/wallet/send-review-summary'
+import { buildLabSendMutationParams } from '@/lib/lab/lab-send-submit'
 
 import { useSendFlowFees } from './fees'
 import { useSendFlowLightning } from './lightning'

@@ -1,4 +1,4 @@
-import type { EncryptedBlob } from '@/lib/encrypted-blob-types';
+import type { EncryptedBlob } from '@/lib/shared/encrypted-blob-types';
 import type {
   AddressType,
   BitcoinNetwork,

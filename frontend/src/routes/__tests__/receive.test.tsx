@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { AddressType } from '@/lib/wallet-domain-types'
+import { AddressType } from '@/lib/wallet/wallet-domain-types'
 import { renderWithProviders } from '@/test-utils/test-providers'
 
 const mockNavigate = vi.fn()
@@ -29,7 +29,7 @@ vi.mock('@/stores/cryptoStore', () => ({
 let walletStoreState: Record<string, unknown> = {}
 const mockSetCurrentAddress = vi.fn()
 vi.mock('@/stores/walletStore', async () => {
-  const { AddressType } = await import('@/lib/wallet-domain-types')
+  const { AddressType } = await import('@/lib/wallet/wallet-domain-types')
   return {
     AddressType,
     useWalletStore: (selector: (s: Record<string, unknown>) => unknown) =>
@@ -60,7 +60,7 @@ vi.mock('@/components/WalletUnlock', () => ({
   WalletUnlock: () => <div data-testid="wallet-unlock">Unlock</div>,
 }))
 
-vi.mock('@/lib/wallet-utils', () => ({
+vi.mock('@/lib/wallet/wallet-utils', () => ({
   updateWalletChangeset: vi.fn().mockResolvedValue(undefined),
   loadCustomEsploraUrl: vi.fn().mockResolvedValue(null),
 }))
@@ -72,7 +72,7 @@ vi.mock('qrcode.react', () => ({
 }))
 
 import { ReceivePage } from '@/pages/wallet/ReceivePage'
-import { LAB_WALLET_RECEIVE_PAGE_TITLE } from '@/lib/wallet-lab-ui-copy'
+import { LAB_WALLET_RECEIVE_PAGE_TITLE } from '@/lib/wallet/wallet-lab-ui-copy'
 
 describe('ReceivePage', () => {
   beforeEach(() => {

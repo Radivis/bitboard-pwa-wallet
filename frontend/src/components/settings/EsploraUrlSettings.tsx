@@ -10,21 +10,21 @@ import {
   getCommittedNetworkMode,
   type NetworkMode,
 } from '@/stores/walletStore'
-import { DEFAULT_ESPLORA_URLS } from '@/lib/bitcoin-utils'
+import { DEFAULT_ESPLORA_URLS } from '@/lib/wallet/bitcoin-utils'
 import {
   saveCustomEsploraUrl,
   deleteCustomEsploraUrl,
   loadCustomEsploraUrl,
-} from '@/lib/wallet-utils'
+} from '@/lib/wallet/wallet-utils'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
-import { shouldWarnEsploraNotWhitelisted } from '@/lib/esplora-service-whitelist'
-import { errorMessage } from '@/lib/utils'
-import { notifyWalletDataMayHaveChangedAfterCommit } from '@/lib/wallet-cross-tab-sync'
+import { shouldWarnEsploraNotWhitelisted } from '@/lib/esplora/esplora-service-whitelist'
+import { errorMessage } from '@/lib/shared/utils'
+import { notifyWalletDataMayHaveChangedAfterCommit } from '@/lib/wallet/wallet-cross-tab-sync'
 
 export const customEsploraUrlQueryKey = (networkMode: NetworkMode) =>
   ['customEsploraUrl', networkMode] as const

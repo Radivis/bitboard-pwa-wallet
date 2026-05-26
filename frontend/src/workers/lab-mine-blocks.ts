@@ -1,9 +1,9 @@
-import { AddressType } from '@/lib/wallet-domain-types'
-import { nextLabEntityId } from '@/lib/lab-entity-keys'
-import { isCoinbase } from '@/lib/lab-operations'
-import { discardedMempoolConflictTxCount } from '@/lib/lab-mempool-mine-stats'
-import { labEntityLabOwner, walletLabOwner } from '@/lib/lab-owner'
-import type { LabOwner } from '@/lib/lab-owner'
+import { AddressType } from '@/lib/wallet/wallet-domain-types'
+import { nextLabEntityId } from '@/lib/lab/lab-entity-keys'
+import { isCoinbase } from '@/lib/lab/lab-operations'
+import { discardedMempoolConflictTxCount } from '@/lib/lab/lab-mempool-mine-stats'
+import { labEntityLabOwner, walletLabOwner } from '@/lib/lab/lab-owner'
+import type { LabOwner } from '@/lib/lab/lab-owner'
 import type { LabAddress, LabMineBlocksResult, LabState } from './lab-api'
 import {
   LAB_DEFAULT_BLOCK_WEIGHT_UNITS,

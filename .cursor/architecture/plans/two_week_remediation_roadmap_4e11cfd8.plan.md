@@ -7,7 +7,7 @@ todos:
     status: completed
   - id: week1-lib-domain-restructure
     content: Deliver PR-2 — move flat lib/ root into domain subfolders (lab, wallet, lightning, library, shared, …) with import updates
-    status: pending
+    status: completed
   - id: week1-hotspots
     content: Deliver PR-4 and PR-5 (backup-hook split, query invalidation) — deferred after PR-2
     status: pending
@@ -46,7 +46,7 @@ Reduce the highest maintainability and regression risks using small, reviewable 
 | PR-1 | **Done** (Day 1, PR #32) | Frontend CI lint / unit / typecheck |
 | PR-1b | **Done** (Day 1, PR #32) | [frontend/docs/FRONTEND_STRUCTURE.md](frontend/docs/FRONTEND_STRUCTURE.md) |
 | PR-1c | **Done** (Day 1, PR #32) | Routes → pages shell migration (wallet, lab partial, library shells) |
-| PR-2 | **Next** | `lib/` domain restructuring |
+| PR-2 | **Done** | `lib/` domain restructuring |
 | PR-3 – PR-9 | **Deferred** | See queue below |
 
 ## Frontend Folder Structure (Hybrid)
@@ -160,9 +160,9 @@ flowchart TB
 
 ---
 
-## Phase 2 — Next PR
+## Phase 2 — `lib/` domain restructuring (completed)
 
-### PR-2: `lib/` domain restructuring
+### PR-2: `lib/` domain restructuring ✓
 
 **Why now:** ~106 modules still sit at `frontend/src/lib/` root. Only `library/`, partial `lightning/`, and a single `wallet/` file use subfolders. Every subsequent remediation PR touches `lib/` imports; fixing layout first removes the biggest navigation pain.
 
@@ -182,9 +182,10 @@ flowchart TB
 | `lib/lightning/` | All `lightning-*`, `nwc-*` (expand existing subfolder) |
 | `lib/library/` | Already populated — leave as-is |
 | `lib/fiat/` | `fiat-*`, `format-fiat-display`, `supported-fiat-currencies`, `iso-4217-alpha3`, `is-usable-btc-spot-price-in-fiat` |
-| `lib/esplora/` | `esplora-*`, `faucet-*`, `validate-proxied-upstream-url`, `mainnet-onchain-balance-probe` |
+| `lib/esplora/` | `esplora-*`, `mainnet-onchain-balance-probe` |
+| `lib/faucet/` | `faucet-*` (definitions, matching—distinct from Esplora; uses `/api/faucet/` proxy, not Esplora provider logic) |
 | `lib/settings/` | `execute-settings-address-type-switch`, `network-mode-switch`, `network-switch-status-messages`, strict migrations (`segwit-*`, `regtest-*`, `mainnet-*`, `strict-migration-run`) |
-| `lib/shared/` | `utils`, `app-*`, `sanitize-error-for-ui`, `opfs-*`, `zip-*`, `backup-zip-invalid-error`, `read-file-as-array-buffer`, `kdf-phc-constants`, `argon2-ci-env`, `encrypted-blob-types`, `tab-scoped-broadcast-channel-sync`, `persisted-store-hydration`, `feature-toggle-async`, `infomode-*`, `legal-locale`, `wipe-all-app-data-opfs-and-reload`, `pathname-requires-wallet-crypto-session`, `bad-local-chain-state-error` |
+| `lib/shared/` | `utils`, `app-*`, `sanitize-error-for-ui`, `validate-proxied-upstream-url`, `opfs-*`, `zip-*`, `backup-zip-invalid-error`, `read-file-as-array-buffer`, `kdf-phc-constants`, `argon2-ci-env`, `encrypted-blob-types`, `tab-scoped-broadcast-channel-sync`, `persisted-store-hydration`, `feature-toggle-async`, `infomode-*`, `legal-locale`, `wipe-all-app-data-opfs-and-reload`, `pathname-requires-wallet-crypto-session`, `bad-local-chain-state-error` |
 
 **Files**
 
@@ -365,7 +366,7 @@ Reviewers use the structure doc as the default placement rule from Day 1 onward.
 
 - [x] Frontend CI enforces lint/unit/typecheck on every PR.
 - [x] A checked-in **frontend structure** doc exists and is referenced from the main developer entrypoint.
-- [ ] Flat `lib/` root eliminated; domain subfolders match structure doc (PR-2).
+- [x] Flat `lib/` root eliminated; domain subfolders match structure doc (PR-2).
 - [ ] Hotspot extractions in PR-4 and PR-6 **follow** the documented placement (called out in PR descriptions).
 - [ ] At least 2 major hotspot files reduced in complexity through extraction.
 - [ ] One cross-cutting coupling risk reduced (query invalidation or global state path).

@@ -1,6 +1,6 @@
 import { expose } from 'comlink'
-import { AddressType } from '@/lib/wallet-domain-types'
-import type { LabOwner } from '@/lib/lab-owner'
+import { AddressType } from '@/lib/wallet/wallet-domain-types'
+import type { LabOwner } from '@/lib/lab/lab-owner'
 import {
   LAB_DEFAULT_BLOCK_WEIGHT_UNITS,
   LAB_DEFAULT_MINER_SUBSIDY_SATS,
@@ -15,16 +15,16 @@ import {
   type LabState,
   type LabTxDetails,
 } from './lab-api'
-import { findLabEntityById, nextLabEntityId } from '@/lib/lab-entity-keys'
-import { labVsizeFromWeight } from '@/lib/lab-tx-weight'
+import { findLabEntityById, nextLabEntityId } from '@/lib/lab/lab-entity-keys'
+import { labVsizeFromWeight } from '@/lib/lab/lab-tx-weight'
 import {
   labEntityLabOwner,
   labEntityMustBeAliveToSend,
   labOwnersEqual,
   validateLabEntityRenameName,
   walletLabOwner,
-} from '@/lib/lab-owner'
-import { mergeAddressesWithUtxos } from '@/lib/lab-utils'
+} from '@/lib/lab/lab-owner'
+import { mergeAddressesWithUtxos } from '@/lib/lab/lab-utils'
 import {
   estimateRequiredFeeSats,
   feeRateSatPerVbFromRandomRoll,

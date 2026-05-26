@@ -1,6 +1,6 @@
 import type { Kysely } from 'kysely'
 import type { Database } from './schema'
-import type { EncryptedBlob } from '@/lib/encrypted-blob-types'
+import type { EncryptedBlob } from '@/lib/shared/encrypted-blob-types'
 import { encryptData, decryptData } from './encryption'
 import {
   listWalletIdsWithSecrets,

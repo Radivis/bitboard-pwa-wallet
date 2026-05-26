@@ -17,14 +17,14 @@ import {
   useTestConnectionMutation,
 } from '@/hooks/useLightningMutations'
 import { Link } from '@tanstack/react-router'
-import { isValidNwcConnectionString } from '@/lib/lightning-backend-service'
+import { isValidNwcConnectionString } from '@/lib/lightning/lightning-backend-service'
 import {
   MAX_LIGHTNING_WALLET_LABEL_LENGTH,
   MAX_NWC_CONNECTION_STRING_LENGTH,
-} from '@/lib/lightning-input-limits'
-import type { ConnectedLightningWallet } from '@/lib/lightning-backend-service'
-import { NWC_ESPLORA_BLOCK_HEIGHT_TOLERANCE } from '@/lib/bitcoin-utils'
-import { getPrefixedBitcoinDisplayUnitLabel } from '@/lib/bitcoin-display-unit'
+} from '@/lib/lightning/lightning-input-limits'
+import type { ConnectedLightningWallet } from '@/lib/lightning/lightning-backend-service'
+import { NWC_ESPLORA_BLOCK_HEIGHT_TOLERANCE } from '@/lib/wallet/bitcoin-utils'
+import { getPrefixedBitcoinDisplayUnitLabel } from '@/lib/wallet/bitcoin-display-unit'
 import {
   Dialog,
   DialogContent,

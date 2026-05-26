@@ -1,13 +1,13 @@
-import { AddressType } from '@/lib/wallet-domain-types'
-import { nextLabEntityId } from '@/lib/lab-entity-keys'
-import { LabOwnerType } from '@/lib/lab-owner-type'
-import { feeSatsFromTxDetails } from '@/lib/lab-tx-fee'
+import { AddressType } from '@/lib/wallet/wallet-domain-types'
+import { nextLabEntityId } from '@/lib/lab/lab-entity-keys'
+import { LabOwnerType } from '@/lib/lab/lab-owner-type'
+import { feeSatsFromTxDetails } from '@/lib/lab/lab-tx-fee'
 import {
   netMovedSatsForLabTx,
   netMovedSatsFromMempoolEntry,
-} from '@/lib/lab-tx-net-moved'
-import { type LabOwner, labEntityLabOwner, walletLabOwner } from '@/lib/lab-owner'
-import { isCoinbase } from '@/lib/lab-operations'
+} from '@/lib/lab/lab-tx-net-moved'
+import { type LabOwner, labEntityLabOwner, walletLabOwner } from '@/lib/lab/lab-owner'
+import { isCoinbase } from '@/lib/lab/lab-operations'
 import {
   LAB_DEFAULT_BLOCK_WEIGHT_UNITS,
   LAB_DEFAULT_MINER_SUBSIDY_SATS,

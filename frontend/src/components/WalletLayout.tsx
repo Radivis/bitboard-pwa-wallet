@@ -30,7 +30,7 @@ import { SecureStorageUnavailableBanner } from '@/components/SecureStorageUnavai
 import { useWallet } from '@/db'
 import { useWalletStore } from '@/stores/walletStore'
 import { useSessionStore } from '@/stores/sessionStore'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/shared/utils'
 
 const APP_TITLE = 'Bitboard Wallet'
 

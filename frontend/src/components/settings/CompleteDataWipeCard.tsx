@@ -3,9 +3,9 @@ import { Eraser } from 'lucide-react'
 import { toast } from 'sonner'
 import { getDatabase, ensureMigrated, useWallets } from '@/db'
 import { anyWalletHasNoMnemonicBackupFlag } from '@/db/wallet-no-mnemonic-backup'
-import { formatBTC, formatSats } from '@/lib/bitcoin-utils'
-import { listWalletsWithPositiveMainnetOnChainBalance } from '@/lib/mainnet-onchain-balance-probe'
-import { wipeAllAppDataOpfsAndReload } from '@/lib/wipe-all-app-data-opfs-and-reload'
+import { formatBTC, formatSats } from '@/lib/wallet/bitcoin-utils'
+import { listWalletsWithPositiveMainnetOnChainBalance } from '@/lib/esplora/mainnet-onchain-balance-probe'
+import { wipeAllAppDataOpfsAndReload } from '@/lib/shared/wipe-all-app-data-opfs-and-reload'
 import { useSessionStore } from '@/stores/sessionStore'
 import { useWalletStore } from '@/stores/walletStore'
 import { AppModal } from '@/components/AppModal'
@@ -19,7 +19,7 @@ import {
 } from '@/components/ui/card'
 import { DialogDescription } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
-import { cn, errorMessage } from '@/lib/utils'
+import { cn, errorMessage } from '@/lib/shared/utils'
 
 export function CompleteDataWipeCard() {
   const walletStatus = useWalletStore((s) => s.walletStatus)

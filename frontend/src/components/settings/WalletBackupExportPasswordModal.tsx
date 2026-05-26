@@ -5,7 +5,7 @@ import { AppModal } from '@/components/AppModal'
 import { Button } from '@/components/ui/button'
 import { PasswordInput } from '@/components/ui/password-input'
 import { Label } from '@/components/ui/label'
-import { APP_PASSWORD_MIN_LENGTH } from '@/lib/app-password-policy'
+import { APP_PASSWORD_MIN_LENGTH } from '@/lib/shared/app-password-policy'
 
 export type AppPasswordCompareResult =
   | { match: true; skipped: false }

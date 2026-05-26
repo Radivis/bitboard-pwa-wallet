@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { fireEvent, screen } from '@testing-library/react'
 import { renderWithProviders } from '@/test-utils/test-providers'
 import { LabMakeTransactionCard } from '@/components/lab/MakeTransaction'
-import { LAB_MAX_RANDOM_ENTITY_TRANSACTIONS } from '@/lib/lab-random-limits'
+import { LAB_MAX_RANDOM_ENTITY_TRANSACTIONS } from '@/lib/lab/lab-random-limits'
 
 function buildProps(overrides?: Partial<ComponentProps<typeof LabMakeTransactionCard>>) {
   return {

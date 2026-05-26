@@ -17,19 +17,19 @@ import { useCreateInvoiceMutation } from '@/hooks/useLightningMutations'
 import {
   INVOICE_EXPIRY_OPTIONS,
   DEFAULT_INVOICE_EXPIRY_SECONDS,
-} from '@/lib/lightning-utils'
+} from '@/lib/lightning/lightning-utils'
 import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
 import { BitcoinFiatDenominationSwitch } from '@/components/BitcoinFiatDenominationSwitch'
 import { FiatAmountDisplay } from '@/components/FiatAmountDisplay'
-import { MAX_LIGHTNING_INVOICE_DESCRIPTION_LENGTH } from '@/lib/lightning-input-limits'
+import { MAX_LIGHTNING_INVOICE_DESCRIPTION_LENGTH } from '@/lib/lightning/lightning-input-limits'
 import { useFiatDenominationStore } from '@/stores/fiatDenominationStore'
 import { useMainnetFiatRatesQuery } from '@/hooks/useMainnetFiatRatesQuery'
 import {
   amountSatsFromFiatAndBtcPrice,
   parsePositiveFiatAmountInput,
-} from '@/lib/fiat-amount-to-sats'
-import { fiatAmountInputPlaceholder } from '@/lib/format-fiat-display'
-import { isUsableBtcSpotPriceInFiat } from '@/lib/is-usable-btc-spot-price-in-fiat'
+} from '@/lib/fiat/fiat-amount-to-sats'
+import { fiatAmountInputPlaceholder } from '@/lib/fiat/format-fiat-display'
+import { isUsableBtcSpotPriceInFiat } from '@/lib/fiat/is-usable-btc-spot-price-in-fiat'
 import type { BitcoinAmountDisplaySize } from '@/components/BitcoinAmountDisplay'
 import {
   parseInvoiceAmountField,

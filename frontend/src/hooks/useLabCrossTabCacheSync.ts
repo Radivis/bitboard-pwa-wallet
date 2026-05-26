@@ -1,9 +1,9 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect } from 'react'
 import { useWalletStore } from '@/stores/walletStore'
-import { labChainStateQueryKey } from '@/lib/lab-chain-query'
-import { invalidateLabPaginatedQueries } from '@/lib/lab-paginated-queries'
-import { subscribeLabStatePersistedFromOtherTabs } from '@/lib/lab-cross-tab-sync'
+import { labChainStateQueryKey } from '@/lib/lab/lab-chain-query'
+import { invalidateLabPaginatedQueries } from '@/lib/lab/lab-paginated-queries'
+import { subscribeLabStatePersistedFromOtherTabs } from '@/lib/lab/lab-cross-tab-sync'
 
 /**
  * Keeps lab TanStack Query caches aligned with SQLite when multiple tabs are open, and when

@@ -9,14 +9,14 @@ import {
   clearWalletNoMnemonicBackupFlag,
   useWalletNoMnemonicBackupFlag,
 } from '@/db'
-import { invalidateWalletRelatedQueriesAndNotifyOtherTabs } from '@/lib/wallet-query-cache-sync'
+import { invalidateWalletRelatedQueriesAndNotifyOtherTabs } from '@/lib/wallet/wallet-query-cache-sync'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { AppModal } from '@/components/AppModal'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { PasswordInput } from '@/components/ui/password-input'
 import { Label } from '@/components/ui/label'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/shared/utils'
 import { DialogDescription } from '@/components/ui/dialog'
 import { MnemonicGrid } from '@/components/MnemonicGrid'
 

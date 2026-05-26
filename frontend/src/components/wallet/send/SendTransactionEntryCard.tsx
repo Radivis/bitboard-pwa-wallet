@@ -11,18 +11,18 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { NETWORK_LABELS, type NetworkMode } from '@/stores/walletStore'
-import { MAX_BOLT11_PAYMENT_REQUEST_LENGTH } from '@/lib/lightning-input-limits'
-import { amountInputPlaceholderForUnit } from '@/lib/bitcoin-display-unit'
-import { isValidBolt11Invoice } from '@/lib/lightning-utils'
+import { MAX_BOLT11_PAYMENT_REQUEST_LENGTH } from '@/lib/lightning/lightning-input-limits'
+import { amountInputPlaceholderForUnit } from '@/lib/wallet/bitcoin-display-unit'
+import { isValidBolt11Invoice } from '@/lib/lightning/lightning-utils'
 import type { SendAmountUnit } from '@/stores/sendStore'
 import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
 import { BitcoinUnitSelect } from '@/components/BitcoinUnitSelect'
 import { RecipientQrScanModal } from '@/components/wallet/send/RecipientQrScanModal'
 import { BitcoinFiatDenominationSwitch } from '@/components/BitcoinFiatDenominationSwitch'
 import { FiatAmountDisplay } from '@/components/FiatAmountDisplay'
-import type { FiatCurrencyCode } from '@/lib/supported-fiat-currencies'
-import { fiatAmountInputPlaceholder } from '@/lib/format-fiat-display'
-import { isUsableBtcSpotPriceInFiat } from '@/lib/is-usable-btc-spot-price-in-fiat'
+import type { FiatCurrencyCode } from '@/lib/fiat/supported-fiat-currencies'
+import { fiatAmountInputPlaceholder } from '@/lib/fiat/format-fiat-display'
+import { isUsableBtcSpotPriceInFiat } from '@/lib/fiat/is-usable-btc-spot-price-in-fiat'
 
 type LightningWalletPickerProps = ComponentProps<typeof SendLightningWalletPicker>
 
@@ -114,16 +114,16 @@ export function SendTransactionEntryCard({
   selectedLnBalanceSats: number | undefined
   confirmedBalance: number
   isLabWithNoBalance: boolean
-  feePresetSelection: import('@/lib/esplora-fee-estimates').SendFeePresetLabel
+  feePresetSelection: import('@/lib/esplora/esplora-fee-estimates').SendFeePresetLabel
   presetSatPerVbByLabel: Record<
-    import('@/lib/esplora-fee-estimates').SendFeePresetLabel,
+    import('@/lib/esplora/esplora-fee-estimates').SendFeePresetLabel,
     number
   >
   feeEstimatesRefreshing: boolean
   customFeeRate: string
   useCustomFee: boolean
   onSelectFeePreset: (
-    preset: import('@/lib/esplora-fee-estimates').SendFeePresetLabel,
+    preset: import('@/lib/esplora/esplora-fee-estimates').SendFeePresetLabel,
     rateSatPerVb: number,
   ) => void
   onCustomFeeRateChange: (s: string) => void

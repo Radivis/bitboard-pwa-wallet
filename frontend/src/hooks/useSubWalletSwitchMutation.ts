@@ -1,14 +1,14 @@
 import { useCallback, useMemo, useState } from 'react'
 import { useMutation, useIsFetching } from '@tanstack/react-query'
 import type { AddressType, NetworkMode } from '@/stores/walletStore'
-import { executeSettingsNetworkSwitch } from '@/lib/network-mode-switch'
-import { executeSettingsAddressTypeSwitch } from '@/lib/execute-settings-address-type-switch'
-import { ACTIVE_WALLET_LOAD_QUERY_ROOT } from '@/lib/wallet-load-query-keys'
+import { executeSettingsNetworkSwitch } from '@/lib/settings/network-mode-switch'
+import { executeSettingsAddressTypeSwitch } from '@/lib/settings/execute-settings-address-type-switch'
+import { ACTIVE_WALLET_LOAD_QUERY_ROOT } from '@/lib/wallet/wallet-load-query-keys'
 import {
   DEFAULT_SWITCHING_ADDRESS_TYPE_STATUS_LINE,
   DEFAULT_SWITCHING_NETWORK_STATUS_LINE,
   LOADING_WALLET_FOR_SWITCH_STATUS_LINE,
-} from '@/lib/network-switch-status-messages'
+} from '@/lib/settings/network-switch-status-messages'
 
 export type SubWalletSwitchContext = 'network' | 'addressType'
 

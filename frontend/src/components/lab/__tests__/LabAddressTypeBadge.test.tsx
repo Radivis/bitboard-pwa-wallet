@@ -1,9 +1,9 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
-import { AddressType } from '@/lib/wallet-domain-types'
+import { AddressType } from '@/lib/wallet/wallet-domain-types'
 import { LabAddressTypeBadge } from '@/components/lab/LabAddressTypeBadge'
 import { LabOwnerDisplayWithAddressType } from '@/components/lab/LabOwnerDisplayWithAddressType'
-import { labEntityLabOwner } from '@/lib/lab-owner'
+import { labEntityLabOwner } from '@/lib/lab/lab-owner'
 
 const labFeatureState = vi.hoisted(() => ({
   segwitAddressesEnabled: true,

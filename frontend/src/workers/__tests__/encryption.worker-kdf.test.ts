@@ -3,7 +3,7 @@ import type { EncryptionService } from '../encryption-api'
 import {
   ARGON2_KDF_PHC_CI,
   ARGON2_KDF_PHC_PRODUCTION,
-} from '@/lib/kdf-phc-constants'
+} from '@/lib/shared/kdf-phc-constants'
 
 let exposedEncryptionService: EncryptionService | null = null
 

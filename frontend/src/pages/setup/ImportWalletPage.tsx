@@ -21,15 +21,15 @@ import {
   useWallets,
 } from '@/db'
 import { ensureSecretsChannel } from '@/workers/secrets-channel'
-import { toBitcoinNetwork } from '@/lib/bitcoin-utils'
+import { toBitcoinNetwork } from '@/lib/wallet/bitcoin-utils'
 import {
   runImportInitialEsploraSync,
   retryImportInitialEsploraSyncWithWalletStatus,
-} from '@/lib/wallet-utils'
-import { showImportInitialSyncFailureToast } from '@/lib/wallet-sync-error-toast'
-import { sanitizeErrorMessageForUi } from '@/lib/sanitize-error-for-ui'
-import { errorMessage } from '@/lib/utils'
-import { invalidateWalletRelatedQueriesAndNotifyOtherTabs } from '@/lib/wallet-query-cache-sync'
+} from '@/lib/wallet/wallet-utils'
+import { showImportInitialSyncFailureToast } from '@/lib/wallet/wallet-sync-error-toast'
+import { sanitizeErrorMessageForUi } from '@/lib/shared/sanitize-error-for-ui'
+import { errorMessage } from '@/lib/shared/utils'
+import { invalidateWalletRelatedQueriesAndNotifyOtherTabs } from '@/lib/wallet/wallet-query-cache-sync'
 
 export function ImportWalletPage() {
   const navigate = useNavigate()

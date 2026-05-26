@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useLibraryFavorites, useSetArticleFavorite } from '@/db'
 import { getArticle, isArticleSlug, LIBRARY_ARTICLE_TITLE_CLASS } from '@/lib/library/articles'
 import { getTagLabel } from '@/lib/library/tags'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/shared/utils'
 
 export function ArticlePage() {
   const { slug } = useParams({ from: '/library/articles/$slug' })

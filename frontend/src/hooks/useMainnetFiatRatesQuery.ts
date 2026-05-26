@@ -2,17 +2,17 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useWalletStore } from '@/stores/walletStore'
 import { useFiatDenominationStore } from '@/stores/fiatDenominationStore'
 import { useLightningBalancesForDashboardQuery } from '@/hooks/useLightningMutations'
-import type { FiatRateProviderId } from '@/lib/fiat-rate-service-whitelist'
+import type { FiatRateProviderId } from '@/lib/fiat/fiat-rate-service-whitelist'
 import {
   buildMainnetFiatRateRequestUrl,
   parseFiatRateProviderResponse,
-} from '@/lib/fiat-rate-client'
+} from '@/lib/fiat/fiat-rate-client'
 import {
   fetchFiatProviderCurrenciesData,
   fiatProviderCurrenciesQueryKey,
   FIAT_PROVIDER_CURRENCIES_STALE_MS,
-} from '@/lib/fiat-provider-currencies'
-import { errorMessage } from '@/lib/utils'
+} from '@/lib/fiat/fiat-provider-currencies'
+import { errorMessage } from '@/lib/shared/utils'
 
 export const MAINNET_FIAT_RATES_STALE_MS = 120_000
 

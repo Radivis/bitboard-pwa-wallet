@@ -8,9 +8,9 @@ import {
   type DescriptorWalletData,
   type WalletSecrets,
   type WalletSecretsPayload,
-} from '@/lib/wallet-domain-types'
+} from '@/lib/wallet/wallet-domain-types'
 export type { DescriptorWalletData, WalletSecrets }
-export type { WalletSecretsPayload } from '@/lib/wallet-domain-types'
+export type { WalletSecretsPayload } from '@/lib/wallet/wallet-domain-types'
 
 /** Encrypted blob shape for reading/writing without decryption (used by descriptor-wallet-manager with crypto worker). */
 export interface EncryptedWalletSecretsBlob {

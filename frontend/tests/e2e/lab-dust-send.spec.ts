@@ -8,7 +8,7 @@
  * `npx playwright test tests/e2e/lab-dust-send.spec.ts`
  */
 import { test, expect } from '@playwright/test'
-import { LabOwnerType } from '@/lib/lab-owner-type'
+import { LabOwnerType } from '@/lib/lab/lab-owner-type'
 import { importWalletViaUI, TEST_MNEMONIC, TEST_PASSWORD } from './helpers/wallet-setup'
 import {
   switchToLab,
@@ -28,7 +28,7 @@ import {
   getWalletOwnerKey,
   waitForLabMempoolLength,
 } from './helpers/lab'
-import { LAB_WALLET_RECEIVE_PAGE_TITLE } from '@/lib/wallet-lab-ui-copy'
+import { LAB_WALLET_RECEIVE_PAGE_TITLE } from '@/lib/wallet/wallet-lab-ui-copy'
 import { goToWalletTab } from './helpers/wallet-nav'
 
 test.describe('Lab dust send modal', { tag: '@lab' }, () => {

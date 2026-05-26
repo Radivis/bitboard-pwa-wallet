@@ -7,7 +7,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/shared/utils'
 import { InfomodeModalToggleCapsule } from '@/components/infomode/InfomodeModalToggleCapsule'
 
 export function AppModalFooter({

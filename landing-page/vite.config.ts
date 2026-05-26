@@ -23,7 +23,7 @@ export default defineConfig({
     alias: {
       '@': path.resolve(projectRoot, '.'),
       '@common': path.resolve(projectRoot, '../frontend/common'),
-      '@legal-locale': path.resolve(projectRoot, '../frontend/src/lib/legal-locale.ts'),
+      '@legal-locale': path.resolve(projectRoot, '../frontend/src/lib/shared/legal-locale.ts'),
       '@legal-entity-fields': path.resolve(
         projectRoot,
         '../frontend/src/components/LegalEntityFields.tsx',

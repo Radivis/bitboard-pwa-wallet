@@ -3,7 +3,7 @@ import { useMutation } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { ensureMigrated, getDatabase, generateAndPersistNearZeroSession } from '@/db'
-import { errorMessage } from '@/lib/utils'
+import { errorMessage } from '@/lib/shared/utils'
 
 /**
  * First-run optional path: "quick start" with cryptographically weak storage.

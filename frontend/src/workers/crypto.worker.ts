@@ -11,8 +11,8 @@ import type {
   TransactionDetails,
 } from './crypto-types';
 import type { EncryptedBlobMessage, SecretsChannelService } from './secrets-channel-types';
-import { parseWalletPayloadJson } from '@/lib/wallet-domain-types';
-import type { WalletSecretsPayload } from '@/lib/wallet-domain-types';
+import { parseWalletPayloadJson } from '@/lib/wallet/wallet-domain-types';
+import type { WalletSecretsPayload } from '@/lib/wallet/wallet-domain-types';
 
 function mapReviewInputUtxos(raw: unknown): import('./crypto-api').ReviewInputUtxo[] {
   if (!Array.isArray(raw)) return [];

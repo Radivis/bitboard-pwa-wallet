@@ -1,5 +1,5 @@
 import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/shared/utils'
 import { ChevronFirst, ChevronLast, ChevronLeft, ChevronRight } from 'lucide-react'
 
 /** Default when `pageSize` is omitted. Lab views should pass sizes from `lab-paginated-queries`. */

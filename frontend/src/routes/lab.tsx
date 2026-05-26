@@ -1,13 +1,13 @@
 import { useEffect } from 'react'
 import { createFileRoute, Outlet } from '@tanstack/react-router'
 import { useWalletStore } from '@/stores/walletStore'
-import { appQueryClient } from '@/lib/app-query-client'
-import { labChainStateQueryKey, toUiLabState } from '@/lib/lab-chain-query'
-import { labOpLoadChainFromDatabase } from '@/lib/lab-worker-operations'
+import { appQueryClient } from '@/lib/shared/app-query-client'
+import { labChainStateQueryKey, toUiLabState } from '@/lib/lab/lab-chain-query'
+import { labOpLoadChainFromDatabase } from '@/lib/lab/lab-worker-operations'
 import { getLabWorker, initLabWorkerWithState } from '@/workers/lab-factory'
-import { runLabOp } from '@/lib/lab-coordinator'
+import { runLabOp } from '@/lib/lab/lab-coordinator'
 import { useLabChainStateQuery } from '@/hooks/useLabChainStateQuery'
-import { runLabRouteBeforeLoad } from '@/lib/lab-route-before-load'
+import { runLabRouteBeforeLoad } from '@/lib/lab/lab-route-before-load'
 
 export const Route = createFileRoute('/lab')({
   /** Avoid intent preloads (hover/focus) switching the wallet to Lab early. */

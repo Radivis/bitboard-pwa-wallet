@@ -20,7 +20,7 @@ import {
   reencryptAllWalletSecretsWithNewPassword,
 } from '@/db'
 import { useSessionStore } from '@/stores/sessionStore'
-import { errorMessage } from '@/lib/utils'
+import { errorMessage } from '@/lib/shared/utils'
 
 const CHANGE_APP_PASSWORD_FIELDS_CONFIG = {
   ids: {

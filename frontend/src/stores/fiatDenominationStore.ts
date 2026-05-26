@@ -5,9 +5,9 @@ import {
   coerceStoredFiatCurrencyCode,
   DEFAULT_FIAT_FALLBACK,
   type FiatCurrencyCode,
-} from '@/lib/supported-fiat-currencies'
-import type { FiatRateProviderId } from '@/lib/fiat-rate-service-whitelist'
-import { isKnownFiatRateProviderId } from '@/lib/fiat-rate-service-whitelist'
+} from '@/lib/fiat/supported-fiat-currencies'
+import type { FiatRateProviderId } from '@/lib/fiat/fiat-rate-service-whitelist'
+import { isKnownFiatRateProviderId } from '@/lib/fiat/fiat-rate-service-whitelist'
 import { clampDefaultFiatCurrencyToProviderDiscovery } from '@/stores/fiat-denomination-clamp'
 
 const STORAGE_KEY = 'fiat-denomination-storage'

@@ -8,7 +8,7 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
-import { truncateAddress } from '@/lib/bitcoin-utils'
+import { truncateAddress } from '@/lib/wallet/bitcoin-utils'
 import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
 import { LabOwnerDisplayWithAddressType } from '@/components/lab/LabOwnerDisplayWithAddressType'
 import { LabTxCard } from '@/components/lab/LabTxCard'
@@ -19,11 +19,11 @@ import {
   LabBlockMerkleRootInfomodeContent,
 } from '@/components/lab/LabBlockHeaderInfomodeContent'
 import { CardPagination } from '@/components/CardPagination'
-import { isCoinbase } from '@/lib/lab-operations'
-import { netMovedSatsForBlock } from '@/lib/lab-tx-net-moved'
+import { isCoinbase } from '@/lib/lab/lab-operations'
+import { netMovedSatsForBlock } from '@/lib/lab/lab-tx-net-moved'
 import { useLabBlockTransactionsPage } from '@/hooks/useLabPaginatedQueries'
-import { LAB_CARD_PAGE_SIZE } from '@/lib/lab-paginated-queries'
-import type { AddressType } from '@/lib/wallet-domain-types'
+import { LAB_CARD_PAGE_SIZE } from '@/lib/lab/lab-paginated-queries'
+import type { AddressType } from '@/lib/wallet/wallet-domain-types'
 import { useWalletStore } from '@/stores/walletStore'
 
 function HeaderField({ label, value }: { label: string; value: string }) {

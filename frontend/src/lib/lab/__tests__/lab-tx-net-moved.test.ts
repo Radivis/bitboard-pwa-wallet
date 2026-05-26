@@ -1,0 +1,125 @@
+import { describe, expect, it } from 'vitest'
+import {
+  netMovedSatsForBlock,
+  netMovedSatsForLabTx,
+  netMovedSatsFromMempoolEntry,
+} from '@/lib/lab/lab-tx-net-moved'
+import type { LabTxDetails, MempoolEntry } from '@/workers/lab-api'
+import { LAB_COINBASE_PREV_TXID_HEX, LAB_COINBASE_PREV_VOUT } from '@/lib/lab/lab-operations'
+
+function coinbaseTx(overrides: Partial<LabTxDetails> = {}): LabTxDetails {
+  return {
+    txid: 'cb',
+    blockHeight: 0,
+    blockTime: 1,
+    confirmations: 1,
+    inputs: [
+      {
+        address: '',
+        amountSats: 0,
+        prevTxid: LAB_COINBASE_PREV_TXID_HEX,
+        prevVout: LAB_COINBASE_PREV_VOUT,
+      },
+    ],
+    outputs: [{ address: 'a', amountSats: 312_500_000 }],
+    ...overrides,
+  }
+}
+
+describe('netMovedSatsForLabTx', () => {
+  it('sums all outputs for coinbase', () => {
+    const tx = coinbaseTx({
+      outputs: [
+        { address: 'm', amountSats: 312_500_000 },
+        { address: 'x', amountSats: 1_000 },
+      ],
+    })
+    expect(netMovedSatsForLabTx(tx)).toBe(312_501_000)
+  })
+
+  it('sums only non-change outputs for non-coinbase', () => {
+    const tx: LabTxDetails = {
+      txid: 't1',
+      blockHeight: 1,
+      blockTime: 1,
+      confirmations: 1,
+      inputs: [
+        { address: 'a', amountSats: 10_000, prevTxid: 'p', prevVout: 0 },
+      ],
+      outputs: [
+        { address: 'pay', amountSats: 1_000, isChange: false },
+        { address: 'ch', amountSats: 8_500, isChange: true },
+      ],
+    }
+    expect(netMovedSatsForLabTx(tx)).toBe(1_000)
+  })
+
+  it('counts outputs with undefined isChange as non-change', () => {
+    const tx: LabTxDetails = {
+      txid: 't2',
+      blockHeight: 1,
+      blockTime: 1,
+      confirmations: 1,
+      inputs: [{ address: 'a', amountSats: 100, prevTxid: 'p', prevVout: 0 }],
+      outputs: [
+        { address: 'o1', amountSats: 40 },
+        { address: 'o2', amountSats: 50 },
+      ],
+    }
+    expect(netMovedSatsForLabTx(tx)).toBe(90)
+  })
+})
+
+function baseMempoolEntry(overrides: Partial<MempoolEntry> = {}): MempoolEntry {
+  return {
+    signedTxHex: '00',
+    txid: 'a'.repeat(64),
+    sender: null,
+    receiver: null,
+    feeSats: 100,
+    weight: 400,
+    vsize: 100,
+    inputs: [],
+    inputsDetail: [],
+    outputsDetail: [],
+    ...overrides,
+  }
+}
+
+describe('netMovedSatsFromMempoolEntry', () => {
+  it('sums only non-change outputs', () => {
+    const e = baseMempoolEntry({
+      outputsDetail: [
+        { address: 'a', amountSats: 1_000, isChange: false },
+        { address: 'b', amountSats: 9_000, isChange: true },
+      ],
+    })
+    expect(netMovedSatsFromMempoolEntry(e)).toBe(1_000)
+  })
+})
+
+describe('netMovedSatsForBlock', () => {
+  it('sums non-coinbase per-tx net moved for the given height (excludes coinbase)', () => {
+    const cb = coinbaseTx({ blockHeight: 2, txid: 'cb2' })
+    const spend: LabTxDetails = {
+      txid: 'sp',
+      blockHeight: 2,
+      blockTime: 1,
+      confirmations: 1,
+      inputs: [{ address: 'a', amountSats: 500, prevTxid: 'p', prevVout: 0 }],
+      outputs: [
+        { address: 'to', amountSats: 400, isChange: false },
+        { address: 'ch', amountSats: 50, isChange: true },
+      ],
+    }
+    const other: LabTxDetails = {
+      txid: 'other',
+      blockHeight: 99,
+      blockTime: 1,
+      confirmations: 1,
+      inputs: [{ address: 'a', amountSats: 1, prevTxid: 'p', prevVout: 0 }],
+      outputs: [{ address: 'o', amountSats: 1 }],
+    }
+    expect(netMovedSatsForBlock([cb, spend, other], 2)).toBe(400)
+  })
+})

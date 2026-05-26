@@ -10,7 +10,7 @@ vi.mock('@/db', () => ({
   ensureLabMigrated: vi.fn().mockResolvedValue(undefined),
 }))
 
-vi.mock('@/lib/lab-cross-tab-sync', () => ({
+vi.mock('@/lib/lab/lab-cross-tab-sync', () => ({
   notifyLabStatePersistedAfterCommit,
 }))
 

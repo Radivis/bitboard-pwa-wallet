@@ -21,8 +21,8 @@ import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
 import {
   LAB_ENTITY_NAME_MAX_LENGTH,
   validateLabEntityRenameName,
-} from '@/lib/lab-owner'
-import { LAB_ENTITIES_PAGE_SIZE } from '@/lib/lab-paginated-queries'
+} from '@/lib/lab/lab-owner'
+import { LAB_ENTITIES_PAGE_SIZE } from '@/lib/lab/lab-paginated-queries'
 import { useFeatureStore } from '@/stores/featureStore'
 import {
   AddressType,

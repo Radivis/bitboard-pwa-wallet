@@ -7,7 +7,7 @@ import { walletHasNoMnemonicBackupFlag } from './wallet-no-mnemonic-backup'
 import { deleteWalletCompletely } from './wallet-persistence'
 import { libraryKeys, walletKeys } from './query-keys'
 import type { NewWallet, WalletUpdate } from './schema'
-import { invalidateWalletRelatedQueriesAndNotifyOtherTabs } from '@/lib/wallet-query-cache-sync'
+import { invalidateWalletRelatedQueriesAndNotifyOtherTabs } from '@/lib/wallet/wallet-query-cache-sync'
 
 export function useWallets() {
   return useQuery({

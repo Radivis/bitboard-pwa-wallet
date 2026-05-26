@@ -72,7 +72,7 @@ vi.mock('@/lib/library/article-shared', () => ({
   ArticleLink: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
 }))
 
-vi.mock('@/lib/bitcoin-utils', () => ({
+vi.mock('@/lib/wallet/bitcoin-utils', () => ({
   MAX_SAFE_SATS: Number.MAX_SAFE_INTEGER,
   SATS_PER_BTC: 100_000_000,
   isValidAddress: (address: string, network: string) => {
@@ -85,7 +85,7 @@ vi.mock('@/lib/bitcoin-utils', () => ({
   toBitcoinNetwork: (mode: string) => mode,
 }))
 
-vi.mock('@/lib/wallet-utils', () => ({
+vi.mock('@/lib/wallet/wallet-utils', () => ({
   updateWalletChangeset: vi.fn().mockResolvedValue(undefined),
   loadCustomEsploraUrl: vi.fn().mockResolvedValue(null),
 }))
@@ -153,7 +153,7 @@ vi.mock('qr-scanner', () => ({
 
 import { useSendStore } from '@/stores/sendStore'
 import { SendPage } from '@/pages/wallet/SendPage'
-import { LAB_WALLET_SEND_PAGE_TITLE } from '@/lib/wallet-lab-ui-copy'
+import { LAB_WALLET_SEND_PAGE_TITLE } from '@/lib/wallet/wallet-lab-ui-copy'
 
 const mockCameraMediaStream = {
   getTracks: () => [{ stop: vi.fn(), kind: 'video' as const }],

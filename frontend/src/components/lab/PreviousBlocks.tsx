@@ -9,12 +9,12 @@ import {
 } from '@/components/ui/card'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { CardPagination } from '@/components/CardPagination'
-import { LAB_CARD_PAGE_SIZE } from '@/lib/lab-paginated-queries'
-import { feeSatsFromTxDetails } from '@/lib/lab-tx-fee'
-import { netMovedSatsForBlock } from '@/lib/lab-tx-net-moved'
+import { LAB_CARD_PAGE_SIZE } from '@/lib/lab/lab-paginated-queries'
+import { feeSatsFromTxDetails } from '@/lib/lab/lab-tx-fee'
+import { netMovedSatsForBlock } from '@/lib/lab/lab-tx-net-moved'
 import { LabBlockSquare } from '@/components/lab/LabBlockSquare'
-import type { AddressType } from '@/lib/wallet-domain-types'
-import type { LabOwner } from '@/lib/lab-owner'
+import type { AddressType } from '@/lib/wallet/wallet-domain-types'
+import type { LabOwner } from '@/lib/lab/lab-owner'
 
 function totalFeesForBlockHeight(txDetails: readonly LabTxDetails[], blockHeight: number): number {
   return txDetails

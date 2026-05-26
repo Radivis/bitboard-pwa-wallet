@@ -1,6 +1,6 @@
 import { AlertTriangle } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
-import { sanitizeErrorMessageForUi } from '@/lib/sanitize-error-for-ui'
+import { sanitizeErrorMessageForUi } from '@/lib/shared/sanitize-error-for-ui'
 import { useSecureStorageAvailabilityStore } from '@/stores/secureStorageAvailabilityStore'
 
 /**

@@ -1,7 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect } from 'react'
-import { invalidateWalletRelatedQueries } from '@/lib/wallet-query-cache-sync'
-import { subscribeWalletDataChangedFromOtherTabs } from '@/lib/wallet-cross-tab-sync'
+import { invalidateWalletRelatedQueries } from '@/lib/wallet/wallet-query-cache-sync'
+import { subscribeWalletDataChangedFromOtherTabs } from '@/lib/wallet/wallet-cross-tab-sync'
 
 /**
  * Keeps wallet-related TanStack Query caches aligned with the shared SQLite DB when multiple

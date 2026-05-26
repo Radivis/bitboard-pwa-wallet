@@ -11,10 +11,10 @@ import {
   isLightningAddress,
   bolt11NetworkModeFromPrefix,
   tryDecodeBolt11Invoice,
-} from '@/lib/lightning-utils'
-import { isValidAddress, msatsAmountNumberFromSatsExact, MAX_SATS_MSAT_AMOUNT_NUMBER } from '@/lib/bitcoin-utils'
-import { MAX_BOLT11_PAYMENT_REQUEST_LENGTH } from '@/lib/lightning-input-limits'
-import type { ConnectedLightningWallet } from '@/lib/lightning-backend-service'
+} from '@/lib/lightning/lightning-utils'
+import { isValidAddress, msatsAmountNumberFromSatsExact, MAX_SATS_MSAT_AMOUNT_NUMBER } from '@/lib/wallet/bitcoin-utils'
+import { MAX_BOLT11_PAYMENT_REQUEST_LENGTH } from '@/lib/lightning/lightning-input-limits'
+import type { ConnectedLightningWallet } from '@/lib/lightning/lightning-backend-service'
 import type { NetworkMode } from '@/stores/walletStore'
 
 export function useSendFlowLightning({

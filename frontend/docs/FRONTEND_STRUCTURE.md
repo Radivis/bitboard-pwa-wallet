@@ -90,14 +90,9 @@ Not required. This hybrid matches TanStack file-based routes, `pages/` for scree
 
 ### `lib/` (domain subfolders)
 
-Existing code still lives in flat `lib/` paths (e.g. `lab-*.ts`, `lightning-*.ts`). Move clusters into domain subfolders in small PRs when touching those files—no mass rename required upfront.
+**Done (PR-2):** Flat `lib/` root modules moved into domain subfolders (`lab/`, `wallet/`, `lightning/`, `library/`, `fiat/`, `esplora/`, `faucet/`, `settings/`, `shared/`). Tests co-located under each domain’s `__tests__/`. No new files at `lib/` root.
 
-Target examples:
-
-- `lib/lab/` — lab chain, entities, backup helpers
-- `lib/wallet/` — descriptors, sync, query invalidation
-- `lib/lightning/` — NWC, Bolt11, dashboard sync
-- `lib/shared/` — cross-cutting utilities (formatting, errors) with no domain owner
+When adding code, use the domain folder directly—do not reintroduce flat root files.
 
 ## PR placement checklist
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { labVsizeFromWeight } from '@/lib/lab-tx-weight'
+import { labVsizeFromWeight } from '@/lib/lab/lab-tx-weight'
 import type { MempoolEntry } from '@/workers/lab-api'
 import { selectMempoolTxsForBlock } from '@/workers/lab-mining-template'
 

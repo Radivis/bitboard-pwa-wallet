@@ -1,8 +1,8 @@
 import { Loader2, Zap } from 'lucide-react'
 import { Label } from '@/components/ui/label'
 import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
-import type { ConnectedLightningWallet } from '@/lib/lightning-backend-service'
-import { cn } from '@/lib/utils'
+import type { ConnectedLightningWallet } from '@/lib/lightning/lightning-backend-service'
+import { cn } from '@/lib/shared/utils'
 
 type BalanceQuery = {
   isPending: boolean

@@ -1,5 +1,5 @@
-import type { LabOwner } from '@/lib/lab-owner'
-import { labVsizeFromWeight } from '@/lib/lab-tx-weight'
+import type { LabOwner } from '@/lib/lab/lab-owner'
+import { labVsizeFromWeight } from '@/lib/lab/lab-tx-weight'
 import type { LabMempoolMetadata } from './lab-api'
 import { rebuildTxidToChangeAddressFromState, state } from './lab-worker-state'
 

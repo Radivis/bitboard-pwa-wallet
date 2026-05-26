@@ -27,8 +27,8 @@ import {
   type SplitWalletSecretsEncryptedBlobs,
 } from '@/db'
 import { ensureSecretsChannel } from '@/workers/secrets-channel'
-import { toBitcoinNetwork } from '@/lib/bitcoin-utils'
-import { invalidateWalletRelatedQueriesAndNotifyOtherTabs } from '@/lib/wallet-query-cache-sync'
+import { toBitcoinNetwork } from '@/lib/wallet/bitcoin-utils'
+import { invalidateWalletRelatedQueriesAndNotifyOtherTabs } from '@/lib/wallet/wallet-query-cache-sync'
 
 type Step = 1 | 2 | 3
 

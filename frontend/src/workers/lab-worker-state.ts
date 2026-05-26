@@ -1,5 +1,5 @@
-import type { LabOwner } from '@/lib/lab-owner'
-import { normalizeJsonOwnerToLabOwner } from '@/lib/lab-owner'
+import type { LabOwner } from '@/lib/lab/lab-owner'
+import { normalizeJsonOwnerToLabOwner } from '@/lib/lab/lab-owner'
 import type { LabState, MempoolEntry } from './lab-api'
 import { EMPTY_LAB_STATE } from './lab-api'
 

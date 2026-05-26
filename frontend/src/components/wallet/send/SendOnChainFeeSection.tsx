@@ -9,7 +9,7 @@ import {
 import {
   formatSatPerVbTwoDecimals,
   type SendFeePresetLabel,
-} from '@/lib/esplora-fee-estimates'
+} from '@/lib/esplora/esplora-fee-estimates'
 
 export function SendOnChainFeeSection(props: {
   feePresetSelection: SendFeePresetLabel

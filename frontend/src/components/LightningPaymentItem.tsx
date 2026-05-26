@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import { ArrowDownLeft, ArrowUpRight, BadgeCheck, Clock, Zap } from 'lucide-react'
 import { formatDistanceToNow, format } from 'date-fns'
-import { getLnOutgoingTotalInclFeeSats } from '@/lib/lightning-backend-service'
-import type { LightningPaymentWithWallet } from '@/lib/lightning-dashboard-sync'
+import { getLnOutgoingTotalInclFeeSats } from '@/lib/lightning/lightning-backend-service'
+import type { LightningPaymentWithWallet } from '@/lib/lightning/lightning-dashboard-sync'
 import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/shared/utils'
 
 interface LightningPaymentItemProps {
   payment: LightningPaymentWithWallet

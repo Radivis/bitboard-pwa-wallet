@@ -4,7 +4,7 @@ export const config = {
   maxDuration: 10,
 }
 
-// Inlined from src/lib/esplora-service-whitelist.ts
+// Inlined from src/lib/esplora/esplora-service-whitelist.ts
 type EsploraProxyNetwork = 'mainnet' | 'testnet' | 'signet'
 type EsploraProviderId = 'default' | 'blockstream' | 'legacy'
 type ProviderBases = Partial<Record<EsploraProxyNetwork, string>>
@@ -43,7 +43,7 @@ function getUpstreamBaseForEsploraProxy(
   return base ?? null
 }
 
-// Inlined from src/lib/validate-proxied-upstream-url.ts
+// Inlined from src/lib/shared/validate-proxied-upstream-url.ts
 function hasUnsafePathSegment(segments: string[]): boolean {
   return segments.some((s) => s === '.' || s === '..')
 }

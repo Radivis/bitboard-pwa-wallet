@@ -13,7 +13,7 @@ import {
   PRIVACY_PAGE_TITLE_DE,
   PRIVACY_PAGE_TITLE_EN,
   useLegalLocale,
-} from '@/lib/legal-locale'
+} from '@/lib/shared/legal-locale'
 
 /** Legal hub: imprint, privacy policy link, non-custodial disclaimer (`common/legal/`). */
 export function LegalNoticeCard() {

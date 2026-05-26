@@ -98,7 +98,7 @@ vi.mock('@/workers/secrets-channel', () => ({
   ensureSecretsChannel: vi.fn().mockResolvedValue(undefined),
 }))
 
-vi.mock('@/lib/bitcoin-utils', () => ({
+vi.mock('@/lib/wallet/bitcoin-utils', () => ({
   toBitcoinNetwork: (mode: string) => mode,
 }))
 
@@ -109,16 +109,16 @@ const { mockRunImportInitialEsploraSync, mockRetryImportInitialSync } = vi.hoist
   }),
 )
 
-vi.mock('@/lib/wallet-utils', () => ({
+vi.mock('@/lib/wallet/wallet-utils', () => ({
   runImportInitialEsploraSync: mockRunImportInitialEsploraSync,
   retryImportInitialEsploraSyncWithWalletStatus: mockRetryImportInitialSync,
 }))
 
-vi.mock('@/lib/wallet-sync-error-toast', () => ({
+vi.mock('@/lib/wallet/wallet-sync-error-toast', () => ({
   showImportInitialSyncFailureToast: vi.fn(),
 }))
 
-vi.mock('@/lib/wallet-query-cache-sync', () => ({
+vi.mock('@/lib/wallet/wallet-query-cache-sync', () => ({
   invalidateWalletRelatedQueriesAndNotifyOtherTabs: vi.fn(),
 }))
 
