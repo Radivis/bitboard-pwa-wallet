@@ -3,7 +3,7 @@ import {
   clickTargetWouldActivatePrimaryAction,
   DATA_INFOMODE_PRIMARY_SURFACE,
   nodeIsInfomodePrimaryActionSurface,
-} from '@/lib/shared/infomode-primary-action-detect'
+} from '@/lib/infomode/infomode-primary-action-detect'
 
 function dispatchClick(target: Element): MouseEvent {
   const ev = new MouseEvent('click', { bubbles: true, cancelable: true })

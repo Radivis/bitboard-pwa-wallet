@@ -12,8 +12,8 @@ import {
 } from 'react'
 import { useLocation, useRouter } from '@tanstack/react-router'
 import { useInfomodeStore } from '@/stores/infomodeStore'
-import { clickTargetWouldActivatePrimaryAction } from '@/lib/shared/infomode-primary-action-detect'
-import { notifyInfomodePrimaryActionSuppressed } from '@/lib/shared/infomode-suppression-feedback'
+import { clickTargetWouldActivatePrimaryAction } from '@/lib/infomode/infomode-primary-action-detect'
+import { notifyInfomodePrimaryActionSuppressed } from '@/lib/infomode/infomode-suppression-feedback'
 import { InfomodePopup } from '@/components/infomode/InfomodePopup'
 import type { InfomodeRegistryEntry } from '@/components/infomode/infomode-types'
 

@@ -5,7 +5,7 @@ import {
   INFOMODE_PRIMARY_SUPPRESSED_TOAST_ID,
   INFOMODE_SUPPRESSION_TOAST_TEXT,
   notifyInfomodePrimaryActionSuppressed,
-} from '@/lib/shared/infomode-suppression-feedback'
+} from '@/lib/infomode/infomode-suppression-feedback'
 
 vi.mock('sonner', () => ({
   toast: { message: vi.fn() },

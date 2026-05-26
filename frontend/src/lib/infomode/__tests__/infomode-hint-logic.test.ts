@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   APP_LAST_OPENED_REMINDER_AFTER_MS,
   getInfomodeHintKind,
-} from '@/lib/shared/infomode-hint-logic'
+} from '@/lib/infomode/infomode-hint-logic'
 
 describe('getInfomodeHintKind', () => {
   const now = new Date('2025-06-15T12:00:00.000Z').getTime()
