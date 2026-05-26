@@ -1,4 +1,25 @@
 /**
+ * Edge proxy URL safety checks (path traversal + allowlisted-base containment).
+ *
+ * ## Why this file exists alongside duplicated copies in `frontend/api/`
+ *
+ * Vercel serverless handlers under `frontend/api/` **cannot import** from `src/` (or any path
+ * outside `api/`). The bundler only packages the function directory; imports like
+ * `import { … } from '../../src/lib/…'` fail at runtime with `FUNCTION_INVOCATION_FAILED`.
+ * See `docs/vercel-api-functions.md` (§ “Imports from Outside `api/` Don't Work”).
+ *
+ * The same logic is therefore **inlined** (copy-pasted) into:
+ * - `frontend/api/esplora/[...path].ts`
+ * - `frontend/api/faucet/[...path].ts`
+ *
+ * This module is the **canonical, testable source of truth** for that logic in the app repo.
+ * It is not dead code — `lib/shared/__tests__/validate-proxied-upstream-url.test.ts` exercises it.
+ *
+ * **When you change either function here, update the inlined copies in both API handlers** (and
+ * their “Inlined from …” comments) so production proxies stay in sync with the tests.
+ */
+
+/**
  * Path segments that must not appear in edge proxy tail paths (`..` escapes the allowlisted base on resolution).
  */
 export function hasUnsafePathSegment(segments: string[]): boolean {

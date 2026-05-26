@@ -184,9 +184,9 @@ flowchart TB
 | `lib/fiat/` | `fiat-*`, `format-fiat-display`, `supported-fiat-currencies`, `iso-4217-alpha3`, `is-usable-btc-spot-price-in-fiat` |
 | `lib/esplora/` | `esplora-*`, `mainnet-onchain-balance-probe` |
 | `lib/faucet/` | `faucet-*` (definitions, matching—distinct from Esplora; uses `/api/faucet/` proxy, not Esplora provider logic) |
-| `lib/settings/` | `execute-settings-address-type-switch`, `network-mode-switch`, `network-switch-status-messages`, strict migrations (`segwit-*`, `regtest-*`, `mainnet-*`, `strict-migration-run`) |
+| `lib/settings/` | `execute-settings-address-type-switch`, `network-mode-switch`, strict migrations, `feature-toggle-async`, `persisted-store-hydration`, backup ZIP export helpers |
 | `lib/infomode/` | Hint logic, primary-action detection, suppression feedback (pairs with `components/infomode/` and `stores/infomodeStore`) |
-| `lib/shared/` | `utils`, `app-*`, `sanitize-error-for-ui`, `validate-proxied-upstream-url`, `zip-*`, `backup-zip-invalid-error`, `read-file-as-array-buffer`, `kdf-phc-constants`, `argon2-ci-env`, `encrypted-blob-types`, `tab-scoped-broadcast-channel-sync`, `persisted-store-hydration`, `feature-toggle-async`, `legal-locale`, `pathname-requires-wallet-crypto-session`, `bad-local-chain-state-error` |
+| `lib/shared/` | `utils`, `app-*`, `sanitize-error-for-ui`, `validate-proxied-upstream-url`, `backup-zip-invalid-error`, `read-file-as-array-buffer`, `kdf-phc-constants`, `argon2-ci-env`, `encrypted-blob-types`, `tab-scoped-broadcast-channel-sync`, `legal-locale`, `pathname-requires-wallet-crypto-session`, `bad-local-chain-state-error` |
 | `db/opfs/` | `opfs-*`, SQLite OPFS basename constants, replace-and-reload, wipe-all-app-data (moved out of `lib/shared/` post–PR-2) |
 
 **Files**

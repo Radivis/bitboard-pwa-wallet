@@ -106,22 +106,22 @@ const DOMAIN_BY_BASENAME = {
   'backup-zip-invalid-error': 'shared',
   'bad-local-chain-state-error': 'shared',
   'encrypted-blob-types': 'shared',
-  'feature-toggle-async': 'shared',
+  'feature-toggle-async': 'settings',
   'infomode-hint-logic': 'infomode',
   'infomode-primary-action-detect': 'infomode',
   'infomode-suppression-feedback': 'infomode',
   'kdf-phc-constants': 'shared',
   'legal-locale': 'shared',
   'pathname-requires-wallet-crypto-session': 'shared',
-  'persisted-store-hydration': 'shared',
+  'persisted-store-hydration': 'settings',
   'read-file-as-array-buffer': 'shared',
   'sanitize-error-for-ui': 'shared',
   'tab-scoped-broadcast-channel-sync': 'shared',
   utils: 'shared',
   'validate-proxied-upstream-url': 'shared',
   'wipe-all-app-data-opfs-and-reload': 'shared',
-  'zip-single-file-export': 'shared',
-  'zip-wallet-backup-export': 'shared',
+  'zip-single-file-export': 'settings',
+  'zip-wallet-backup-export': 'settings',
 }
 
 /** @type {Record<string, string>} test basename -> domain */
@@ -181,7 +181,7 @@ const TEST_DOMAIN = {
   'wallet-domain-types.test': 'wallet',
   'wallet-sync-error-toast.test': 'wallet',
   'wallet-utils-full-rescan-repair.test': 'wallet',
-  'zip-single-file-export.test': 'shared',
+  'zip-single-file-export.test': 'settings',
 }
 
 function gitMv(from, to) {
