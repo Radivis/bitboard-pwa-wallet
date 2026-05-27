@@ -3,6 +3,7 @@ import { loadWalletSecretsPayload } from '@/db/wallet-persistence'
 import { updateDescriptorWalletChangeset } from '@/lib/wallet/descriptor-wallet-manager'
 import { toBitcoinNetwork } from '@/lib/wallet/bitcoin-utils'
 import { errorMessage } from '@/lib/shared/utils'
+import { wasmCryptoErrorCode } from '@/lib/shared/wasm-crypto-error'
 import {
   loadDescriptorWalletWithoutSync,
   loadWalletHandlingPersistedChainMismatch,
@@ -14,6 +15,7 @@ const NO_ACTIVE_WALLET_IN_WASM =
   'No active wallet. Call create_wallet or load_wallet first.'
 
 function isBenignNoWalletLoadedForPersistError(err: unknown): boolean {
+  if (wasmCryptoErrorCode(err) === 'no_active_wallet') return true
   return errorMessage(err).includes(NO_ACTIVE_WALLET_IN_WASM)
 }
 

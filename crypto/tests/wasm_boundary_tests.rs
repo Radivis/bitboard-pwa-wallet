@@ -8,6 +8,20 @@ use bitboard_crypto::{
     get_new_address, validate_mnemonic,
 };
 
+fn wasm_error_code(error: &JsValue) -> String {
+    js_sys::Reflect::get(error, &JsValue::from_str("code"))
+        .ok()
+        .and_then(|value| value.as_string())
+        .unwrap_or_default()
+}
+
+fn wasm_error_message(error: &JsValue) -> String {
+    js_sys::Reflect::get(error, &JsValue::from_str("message"))
+        .ok()
+        .and_then(|value| value.as_string())
+        .unwrap_or_default()
+}
+
 fn create_test_wallet() -> JsValue {
     let mnemonic = generate_mnemonic(12).expect("generate_mnemonic failed");
     create_wallet(&mnemonic, "testnet", "taproot", 0).expect("create_wallet failed")
@@ -31,6 +45,26 @@ fn generate_mnemonic_returns_24_words_via_wasm() {
 fn generate_mnemonic_rejects_invalid_word_count() {
     let result = generate_mnemonic(13);
     assert!(result.is_err(), "word count 13 should be rejected");
+    let error = result.unwrap_err();
+    assert_eq!(wasm_error_code(&error), "mnemonic");
+    assert!(
+        wasm_error_message(&error).contains("Mnemonic"),
+        "message should mention Mnemonic, got: {}",
+        wasm_error_message(&error)
+    );
+}
+
+#[wasm_bindgen_test]
+fn get_balance_without_wallet_returns_structured_error() {
+    let result = get_balance();
+    assert!(result.is_err(), "get_balance without wallet should fail");
+    let error = result.unwrap_err();
+    assert_eq!(wasm_error_code(&error), "no_active_wallet");
+    assert!(
+        wasm_error_message(&error).contains("No active wallet"),
+        "message should mention no active wallet, got: {}",
+        wasm_error_message(&error)
+    );
 }
 
 #[wasm_bindgen_test]
@@ -149,6 +183,13 @@ fn build_transaction_fails_without_funds() {
     assert!(
         result.is_err(),
         "build_transaction should fail without funds"
+    );
+    let error = result.unwrap_err();
+    assert_eq!(wasm_error_code(&error), "transaction");
+    assert!(
+        wasm_error_message(&error).contains("Transaction"),
+        "message should mention Transaction, got: {}",
+        wasm_error_message(&error)
     );
 }
 

@@ -129,3 +129,4 @@ Before opening a refactor PR, confirm:
 4. New shared pure functions go under `lib/<domain>/` first; use `lib/shared/` only per the cross-cutting policy above—not `lib/` root.
 5. Cross-route hooks go in `src/hooks/`; global state in `src/stores/`.
 6. DB and worker boundaries stay in `src/db/` and `src/workers/`.
+7. Settings page tests: use [`test-utils/settings-page-test-harness.tsx`](../src/test-utils/settings-page-test-harness.tsx) for boundary mocks and `resetSettingsPageTestState()`—avoid duplicating `vi.mock` chains in route tests.

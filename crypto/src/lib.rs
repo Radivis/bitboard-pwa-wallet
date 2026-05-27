@@ -22,7 +22,11 @@ pub(crate) fn current_unix_time() -> u64 {
 pub mod blockchain;
 pub mod descriptors;
 pub mod error;
-use crate::error::MapErrToJs;
+use crate::error::{
+    CODE_NO_ACTIVE_WALLET, CODE_WALLET_ALREADY_BORROWED, CODE_WALLET_NOT_LOADED_FOR_LAB,
+    MSG_NO_ACTIVE_WALLET, MSG_WALLET_ALREADY_BORROWED, MSG_WALLET_NOT_LOADED_FOR_LAB,
+    MapDisplayErrToJs, MapErrToJs, wasm_crypto_error,
+};
 pub mod esplora;
 pub mod lab;
 pub mod lab_entity_wallet;
@@ -56,11 +60,11 @@ where
 {
     ACTIVE_WALLET.with(|w| {
         let borrow = w.try_borrow().map_err(|_| {
-            JsValue::from_str("Wallet is already borrowed — likely a previous operation panicked")
+            wasm_crypto_error(CODE_WALLET_ALREADY_BORROWED, MSG_WALLET_ALREADY_BORROWED)
         })?;
-        let wallet_ref = borrow.as_ref().ok_or_else(|| {
-            JsValue::from_str("No active wallet. Call create_wallet or load_wallet first.")
-        })?;
+        let wallet_ref = borrow
+            .as_ref()
+            .ok_or_else(|| wasm_crypto_error(CODE_NO_ACTIVE_WALLET, MSG_NO_ACTIVE_WALLET))?;
         Ok(op(wallet_ref))
     })
 }
@@ -71,11 +75,11 @@ where
 {
     ACTIVE_WALLET.with(|w| {
         let mut borrow = w.try_borrow_mut().map_err(|_| {
-            JsValue::from_str("Wallet is already borrowed — likely a previous operation panicked")
+            wasm_crypto_error(CODE_WALLET_ALREADY_BORROWED, MSG_WALLET_ALREADY_BORROWED)
         })?;
-        let wallet_ref = borrow.as_mut().ok_or_else(|| {
-            JsValue::from_str("No active wallet. Call create_wallet or load_wallet first.")
-        })?;
+        let wallet_ref = borrow
+            .as_mut()
+            .ok_or_else(|| wasm_crypto_error(CODE_NO_ACTIVE_WALLET, MSG_NO_ACTIVE_WALLET))?;
         Ok(op(wallet_ref))
     })
 }
@@ -124,7 +128,7 @@ pub fn derive_descriptors(
     let pair = descriptors::derive_descriptors(mnemonic_str, network, addr_type, account_id)
         .map_err(JsValue::from)?;
 
-    serde_wasm_bindgen::to_value(&pair).map_err_to_js()
+    serde_wasm_bindgen::to_value(&pair).map_display_err_to_js()
 }
 
 // ---------------------------------------------------------------------------
@@ -169,7 +173,7 @@ pub fn create_wallet(
         changeset_json,
     };
 
-    serde_wasm_bindgen::to_value(&result).map_err_to_js()
+    serde_wasm_bindgen::to_value(&result).map_display_err_to_js()
 }
 
 /// Load a previously persisted wallet from descriptors and a changeset JSON.
@@ -270,7 +274,7 @@ const PARALLEL_REQUESTS: usize = 5;
 const FULL_SCAN_PARALLEL_REQUESTS: usize = 2;
 
 fn to_js<T: serde::Serialize>(value: &T) -> Result<JsValue, JsValue> {
-    serde_wasm_bindgen::to_value(value).map_err_to_js()
+    serde_wasm_bindgen::to_value(value).map_display_err_to_js()
 }
 
 /// Sync the active wallet against an Esplora server (incremental).
@@ -287,7 +291,7 @@ pub async fn sync_wallet(esplora_url: &str) -> Result<JsValue, JsValue> {
         .inner()
         .sync(sync_request, PARALLEL_REQUESTS)
         .await
-        .map_err_to_js()?
+        .map_display_err_to_js()?
         .into();
 
     with_wallet_mut(|w| sync::apply_update(w, update).map_err(JsValue::from))??;
@@ -311,7 +315,7 @@ pub async fn full_scan_wallet(esplora_url: &str, stop_gap: usize) -> Result<JsVa
         .inner()
         .full_scan(scan_request, stop_gap, FULL_SCAN_PARALLEL_REQUESTS)
         .await
-        .map_err_to_js()?
+        .map_display_err_to_js()?
         .into();
 
     with_wallet_mut(|w| sync::apply_update(w, update).map_err(JsValue::from))??;
@@ -355,7 +359,7 @@ pub fn prepare_onchain_send_transaction(
     .map_err(JsValue::from)?;
 
     accumulate_staged_changes();
-    serde_wasm_bindgen::to_value(&outcome).map_err_to_js()
+    serde_wasm_bindgen::to_value(&outcome).map_display_err_to_js()
 }
 
 /// Build a transaction from the active wallet.
@@ -408,7 +412,7 @@ pub fn sign_and_extract_transaction(psbt_base64: &str) -> Result<String, JsValue
 #[wasm_bindgen]
 pub async fn broadcast_transaction(raw_tx_hex: &str, esplora_url: &str) -> Result<String, JsValue> {
     let tx_bytes = bitcoin::consensus::encode::deserialize_hex::<bitcoin::Transaction>(raw_tx_hex)
-        .map_err_to_js()?;
+        .map_display_err_to_js()?;
 
     let client = esplora::EsploraClient::new(esplora_url).map_err(JsValue::from)?;
 
@@ -443,8 +447,9 @@ pub fn build_and_sign_lab_transaction(
     let external = EXTERNAL_DESCRIPTOR_FOR_LAB.with(|d| d.borrow().clone());
     let internal = INTERNAL_DESCRIPTOR_FOR_LAB.with(|d| d.borrow().clone());
     if external.is_empty() || internal.is_empty() {
-        return Err(JsValue::from_str(
-            "No wallet loaded for lab. Load wallet first.",
+        return Err(wasm_crypto_error(
+            CODE_WALLET_NOT_LOADED_FOR_LAB,
+            MSG_WALLET_NOT_LOADED_FOR_LAB,
         ));
     }
 
@@ -460,7 +465,7 @@ pub fn build_and_sign_lab_transaction(
         )
     })?;
     let outcome = result.map_err_to_js()?;
-    serde_wasm_bindgen::to_value(&outcome).map_err_to_js()
+    serde_wasm_bindgen::to_value(&outcome).map_display_err_to_js()
 }
 
 /// Unsigned lab PSBT draft for preview before signing (dust / change-free metadata only).
@@ -476,8 +481,9 @@ pub fn draft_lab_psbt_transaction(
     let external = EXTERNAL_DESCRIPTOR_FOR_LAB.with(|d| d.borrow().clone());
     let internal = INTERNAL_DESCRIPTOR_FOR_LAB.with(|d| d.borrow().clone());
     if external.is_empty() || internal.is_empty() {
-        return Err(JsValue::from_str(
-            "No wallet loaded for lab. Load wallet first.",
+        return Err(wasm_crypto_error(
+            CODE_WALLET_NOT_LOADED_FOR_LAB,
+            MSG_WALLET_NOT_LOADED_FOR_LAB,
         ));
     }
 
@@ -493,7 +499,7 @@ pub fn draft_lab_psbt_transaction(
         )
     })?;
     let outcome = result.map_err_to_js()?;
-    serde_wasm_bindgen::to_value(&outcome).map_err_to_js()
+    serde_wasm_bindgen::to_value(&outcome).map_display_err_to_js()
 }
 
 /// Return the first internal address for lab change outputs.
@@ -501,8 +507,9 @@ pub fn draft_lab_psbt_transaction(
 pub fn get_lab_change_address() -> Result<String, JsValue> {
     let internal = INTERNAL_DESCRIPTOR_FOR_LAB.with(|d| d.borrow().clone());
     if internal.is_empty() {
-        return Err(JsValue::from_str(
-            "No wallet loaded for lab. Load wallet first.",
+        return Err(wasm_crypto_error(
+            CODE_WALLET_NOT_LOADED_FOR_LAB,
+            MSG_WALLET_NOT_LOADED_FOR_LAB,
         ));
     }
     with_wallet(|w| {
@@ -529,7 +536,7 @@ pub fn create_lab_entity_wallet(
     let result =
         lab_entity_wallet::create_lab_entity_wallet(mnemonic_str, net, addr_type, account_id)
             .map_err(JsValue::from)?;
-    serde_wasm_bindgen::to_value(&result).map_err_to_js()
+    serde_wasm_bindgen::to_value(&result).map_display_err_to_js()
 }
 
 /// Last revealed external address for mining coinbase to a lab entity.
@@ -581,7 +588,7 @@ pub fn lab_entity_reveal_next_external_address(
         address,
         changeset_json,
     })
-    .map_err_to_js()
+    .map_display_err_to_js()
 }
 
 /// Draft an unsigned lab PSBT for a lab entity (dust / change-free metadata; no persisted changes).
@@ -614,7 +621,7 @@ pub fn lab_entity_draft_lab_psbt_transaction(
         },
     )
     .map_err(JsValue::from)?;
-    serde_wasm_bindgen::to_value(&result).map_err_to_js()
+    serde_wasm_bindgen::to_value(&result).map_display_err_to_js()
 }
 
 /// Build and sign a lab mempool tx for a lab entity. Returns JSON including updated `changeset_json`.
@@ -649,5 +656,5 @@ pub fn lab_entity_build_and_sign_lab_transaction(
         },
     )
     .map_err(JsValue::from)?;
-    serde_wasm_bindgen::to_value(&result).map_err_to_js()
+    serde_wasm_bindgen::to_value(&result).map_display_err_to_js()
 }
