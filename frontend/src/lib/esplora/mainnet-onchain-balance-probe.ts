@@ -6,10 +6,13 @@ import { errorMessage } from '@/lib/shared/utils'
 import { wasmCryptoErrorCode } from '@/lib/shared/wasm-crypto-error'
 import {
   loadDescriptorWalletWithoutSync,
-  loadWalletHandlingPersistedChainMismatch,
 } from '@/lib/wallet/wallet-utils'
 import { useCryptoStore } from '@/stores/cryptoStore'
 import { useWalletStore } from '@/stores/walletStore'
+import type {
+  OpenWalletSessionParams,
+  WalletSessionHandle,
+} from '@/workers/crypto-api'
 
 const NO_ACTIVE_WALLET_IN_WASM =
   'No active wallet. Call create_wallet or load_wallet first.'
@@ -19,9 +22,33 @@ function isBenignNoWalletLoadedForPersistError(err: unknown): boolean {
   return errorMessage(err).includes(NO_ACTIVE_WALLET_IN_WASM)
 }
 
+async function openWalletSessionHandlingPersistedChainMismatch(
+  openWalletSession: (params: OpenWalletSessionParams) => Promise<WalletSessionHandle>,
+  params: OpenWalletSessionParams,
+): Promise<WalletSessionHandle> {
+  try {
+    return await openWalletSession(params)
+  } catch (err) {
+    if (params.useEmptyChain) throw err
+    const detail = errorMessage(err)
+    if (
+      detail.includes('Network mismatch') ||
+      detail.includes('Genesis hash mismatch') ||
+      detail.includes('could not be loaded from changeset')
+    ) {
+      return openWalletSession({
+        ...params,
+        useEmptyChain: true,
+      })
+    }
+    throw err
+  }
+}
+
 /**
  * Sums BDK-reported on-chain balance for every mainnet (`bitcoin`) descriptor sub-wallet.
- * Temporarily loads each into the single WASM slot, then restores the previously active sub-wallet.
+ * Uses ephemeral WASM wallet sessions in the probe loop so the global active wallet slot
+ * is not overwritten per descriptor. Restores the committed sub-wallet view afterward.
  * Ignores Lightning / NWC entirely.
  *
  * **Side effect:** After restoring the active sub-wallet, updates `useWalletStore` with the
@@ -47,8 +74,12 @@ export async function sumMainnetOnChainSatsForWallet(params: {
   const { loadedSubWallet, networkMode, addressType, accountId } = useWalletStore.getState()
   const committedSubWallet = loadedSubWallet ?? { networkMode, addressType, accountId }
 
-  const { loadWallet, getBalance, exportChangeset, getTransactionList } =
-    useCryptoStore.getState()
+  const {
+    openWalletSession,
+    exportChangeset,
+    getBalance,
+    getTransactionList,
+  } = useCryptoStore.getState()
 
   const restoreActiveSubWalletView = async (): Promise<void> => {
     await loadDescriptorWalletWithoutSync({
@@ -83,15 +114,22 @@ export async function sumMainnetOnChainSatsForWallet(params: {
     }
 
     for (const descriptorWalletData of mainnetDescriptors) {
-      await loadWalletHandlingPersistedChainMismatch(loadWallet, {
-        externalDescriptor: descriptorWalletData.externalDescriptor,
-        internalDescriptor: descriptorWalletData.internalDescriptor,
-        network: 'bitcoin',
-        changesetJson: descriptorWalletData.changeSet,
-        useEmptyChain: false,
-      })
-      const balance = await getBalance()
-      balanceSum += balance.total
+      const session = await openWalletSessionHandlingPersistedChainMismatch(
+        openWalletSession,
+        {
+          externalDescriptor: descriptorWalletData.externalDescriptor,
+          internalDescriptor: descriptorWalletData.internalDescriptor,
+          network: 'bitcoin',
+          changesetJson: descriptorWalletData.changeSet,
+          useEmptyChain: false,
+        },
+      )
+      try {
+        const balance = await session.getBalance()
+        balanceSum += balance.total
+      } finally {
+        session.free()
+      }
     }
   } catch (probeErr) {
     try {

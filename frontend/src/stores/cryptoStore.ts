@@ -27,11 +27,13 @@ import type {
   EncryptedBlobForDb,
   ImportWalletAndEncryptSecretsParams,
   LoadWalletParams,
+  OpenWalletSessionParams,
   PrepareOnchainSendParams,
   PrepareOnchainSendResult,
   ResolveDescriptorWalletParams,
   ResolveDescriptorWalletResult,
   UpdateDescriptorWalletChangesetParams,
+  WalletSessionHandle,
 } from '@/workers/crypto-api';
 import type {
   BalanceInfo,
@@ -57,6 +59,8 @@ interface CryptoState {
   createWallet: (params: CreateWalletParams) => Promise<CreateWalletResult>;
 
   loadWallet: (params: LoadWalletParams) => Promise<boolean>;
+
+  openWalletSession: (params: OpenWalletSessionParams) => Promise<WalletSessionHandle>;
 
   getNewAddress: () => Promise<string>;
   getCurrentAddress: () => Promise<string>;
@@ -186,6 +190,9 @@ export const useCryptoStore = create<CryptoState>((set, get) => {
 
     loadWallet: (params) =>
       withErrorHandling((worker) => worker.loadWallet(params)),
+
+    openWalletSession: (params) =>
+      withErrorHandling((worker) => worker.openWalletSession(params)),
 
     getNewAddress: () =>
       withErrorHandling((worker) => worker.getNewAddress()),

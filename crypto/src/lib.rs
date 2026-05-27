@@ -37,6 +37,7 @@ pub mod transaction;
 pub mod types;
 pub mod validation;
 pub mod wallet;
+pub mod wallet_session;
 pub mod wasm_sleep;
 
 #[cfg(test)]
@@ -195,29 +196,14 @@ pub fn load_wallet(
 ) -> Result<JsValue, JsValue> {
     let net = types::BitcoinNetwork::try_from(network).map_err(JsValue::from)?;
 
-    let (bdk_wallet, changeset) = if use_empty_chain {
-        let bdk_network = wallet::bdk_network_for_app(net);
-        let mut w = wallet::create_wallet_with_bdk_network(
-            external_descriptor,
-            internal_descriptor,
-            bdk_network,
-        )
-        .map_err(JsValue::from)?;
-        let initial = w
-            .take_staged()
-            .ok_or_else(|| JsValue::from("new wallet has no staged changeset"))?;
-        (w, initial)
-    } else {
-        let changeset = wallet::deserialize_changeset(changeset_json).map_err(JsValue::from)?;
-        let w = wallet::load_wallet(
-            external_descriptor,
-            internal_descriptor,
-            net,
-            changeset.clone(),
-        )
-        .map_err(JsValue::from)?;
-        (w, changeset)
-    };
+    let (bdk_wallet, changeset) = wallet_session::open_wallet_from_descriptors(
+        external_descriptor,
+        internal_descriptor,
+        net,
+        changeset_json,
+        use_empty_chain,
+    )
+    .map_err(JsValue::from)?;
 
     ACTIVE_WALLET.with(|cell| cell.replace(Some(bdk_wallet)));
     ACCUMULATED_CHANGESET.with(|cs| *cs.borrow_mut() = changeset);
@@ -657,4 +643,45 @@ pub fn lab_entity_build_and_sign_lab_transaction(
     )
     .map_err(JsValue::from)?;
     serde_wasm_bindgen::to_value(&result).map_display_err_to_js()
+}
+
+// ---------------------------------------------------------------------------
+// Ephemeral wallet session (no ACTIVE_WALLET; see wallet_session.rs)
+// ---------------------------------------------------------------------------
+
+#[wasm_bindgen]
+pub struct WalletSession {
+    session: wallet_session::WalletSession,
+}
+
+#[wasm_bindgen]
+impl WalletSession {
+    #[wasm_bindgen(constructor)]
+    pub fn new(
+        external_descriptor: &str,
+        internal_descriptor: &str,
+        network: &str,
+        changeset_json: &str,
+        use_empty_chain: bool,
+    ) -> Result<WalletSession, JsValue> {
+        let net = types::BitcoinNetwork::try_from(network).map_err(JsValue::from)?;
+        let session = wallet_session::WalletSession::open(
+            external_descriptor,
+            internal_descriptor,
+            net,
+            changeset_json,
+            use_empty_chain,
+        )
+        .map_err(JsValue::from)?;
+        Ok(WalletSession { session })
+    }
+
+    pub fn get_balance(&self) -> Result<JsValue, JsValue> {
+        let balance = self.session.get_balance();
+        serde_wasm_bindgen::to_value(&balance).map_display_err_to_js()
+    }
+
+    pub fn export_changeset(&mut self) -> Result<String, JsValue> {
+        self.session.export_changeset().map_err(JsValue::from)
+    }
 }

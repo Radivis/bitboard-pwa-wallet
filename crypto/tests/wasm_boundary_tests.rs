@@ -4,8 +4,8 @@ use wasm_bindgen_test::*;
 wasm_bindgen_test_configure!(run_in_browser);
 
 use bitboard_crypto::{
-    create_wallet, derive_descriptors, export_changeset, generate_mnemonic, get_balance,
-    get_new_address, validate_mnemonic,
+    WalletSession, create_wallet, derive_descriptors, export_changeset, generate_mnemonic,
+    get_balance, get_new_address, validate_mnemonic,
 };
 
 fn wasm_error_code(error: &JsValue) -> String {
@@ -65,6 +65,40 @@ fn get_balance_without_wallet_returns_structured_error() {
         "message should mention no active wallet, got: {}",
         wasm_error_message(&error)
     );
+}
+
+#[wasm_bindgen_test]
+fn wallet_session_get_balance_without_active_wallet() {
+    let mnemonic = generate_mnemonic(12).expect("generate failed");
+    let descriptors =
+        derive_descriptors(&mnemonic, "testnet", "taproot", 0).expect("derive failed");
+    let external = js_sys::Reflect::get(&descriptors, &JsValue::from_str("external"))
+        .expect("external descriptor")
+        .as_string()
+        .expect("external string");
+    let internal = js_sys::Reflect::get(&descriptors, &JsValue::from_str("internal"))
+        .expect("internal descriptor")
+        .as_string()
+        .expect("internal string");
+
+    let session = WalletSession::new(&external, &internal, "testnet", "{}", true)
+        .expect("open wallet session");
+    let balance = session.get_balance().expect("session get_balance");
+    let confirmed =
+        js_sys::Reflect::get(&balance, &JsValue::from_str("confirmed")).expect("missing confirmed");
+    assert_eq!(confirmed.as_f64().unwrap(), 0.0);
+
+    let global_balance = get_balance();
+    assert!(
+        global_balance.is_err(),
+        "global get_balance should still fail without active wallet"
+    );
+    assert_eq!(
+        wasm_error_code(&global_balance.unwrap_err()),
+        "no_active_wallet"
+    );
+
+    drop(session);
 }
 
 #[wasm_bindgen_test]

@@ -226,6 +226,37 @@ const cryptoService = {
     );
   },
 
+  async openWalletSession(params: {
+    externalDescriptor: string;
+    internalDescriptor: string;
+    network: BitcoinNetwork;
+    changesetJson: string;
+    useEmptyChain: boolean;
+  }): Promise<import('./crypto-api').WalletSessionHandle> {
+    const {
+      externalDescriptor,
+      internalDescriptor,
+      network,
+      changesetJson,
+      useEmptyChain,
+    } = params;
+    const wasmModule = await getWasm();
+    const session = new wasmModule.WalletSession(
+      externalDescriptor,
+      internalDescriptor,
+      network,
+      changesetJson,
+      useEmptyChain,
+    );
+    return {
+      getBalance: async () => session.get_balance(),
+      exportChangeset: async () => session.export_changeset(),
+      free: () => {
+        session.free();
+      },
+    };
+  },
+
   async getNewAddress(): Promise<string> {
     const wasmModule = await getWasm();
     return wasmModule.get_new_address();
