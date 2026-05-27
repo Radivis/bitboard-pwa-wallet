@@ -17,19 +17,24 @@ import {
   snapshotMapFromPayload,
 } from '@/lib/lightning/lightning-wallet-snapshot-persistence'
 import type { NwcConnectionSnapshot } from '@/lib/wallet/wallet-domain-types'
+import { WALLET_DB_QUERY_KEY_ROOT } from '@/lib/wallet/wallet-query-key-root'
 
-/** React Query key prefix for dashboard Lightning data (invalidate all with `['lightning-dashboard']`). */
-export const LIGHTNING_DASHBOARD_QUERY_KEY = ['lightning-dashboard'] as const
+/** React Query key prefix for dashboard Lightning data (invalidate all with prefix). */
+export const LIGHTNING_DASHBOARD_QUERY_KEY = [
+  ...WALLET_DB_QUERY_KEY_ROOT,
+  'lightning',
+  'dashboard',
+] as const
 
 export function lightningDashboardHistoryQueryKey(
   connectionFingerprint: string,
-): readonly ['lightning-dashboard', 'history', string] {
+): readonly ['wallet_db', 'lightning', 'dashboard', 'history', string] {
   return [...LIGHTNING_DASHBOARD_QUERY_KEY, 'history', connectionFingerprint]
 }
 
 export function lightningDashboardBalancesQueryKey(
   connectionFingerprint: string,
-): readonly ['lightning-dashboard', 'balances', string] {
+): readonly ['wallet_db', 'lightning', 'dashboard', 'balances', string] {
   return [...LIGHTNING_DASHBOARD_QUERY_KEY, 'balances', connectionFingerprint]
 }
 

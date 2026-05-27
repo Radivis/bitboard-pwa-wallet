@@ -25,9 +25,10 @@ import { Badge } from '@/components/ui/badge'
 import { shouldWarnEsploraNotWhitelisted } from '@/lib/esplora/esplora-service-whitelist'
 import { errorMessage } from '@/lib/shared/utils'
 import { notifyWalletDataMayHaveChangedAfterCommit } from '@/lib/wallet/wallet-cross-tab-sync'
+import { WALLET_DB_QUERY_KEY_ROOT } from '@/lib/wallet/wallet-query-key-root'
 
 export const customEsploraUrlQueryKey = (networkMode: NetworkMode) =>
-  ['customEsploraUrl', networkMode] as const
+  [...WALLET_DB_QUERY_KEY_ROOT, 'customEsploraUrl', networkMode] as const
 
 export function EsploraUrlSettings() {
   /** Match NetworkSelector / Esplora persistence: same “committed” network as the active mode button. */

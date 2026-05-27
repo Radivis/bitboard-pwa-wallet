@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { useWalletStore } from '@/stores/walletStore'
 import { useSessionStore } from '@/stores/sessionStore'
-import { ACTIVE_WALLET_LOAD_QUERY_ROOT } from '@/lib/wallet/wallet-load-query-keys'
+import { activeWalletLoadQueryKeyPrefix } from '@/lib/wallet/wallet-load-query-keys'
 import { appQueryClient } from '@/lib/shared/app-query-client'
 import { useActiveWalletLoadQuery } from '@/hooks/useActiveWalletLoadQuery'
 
@@ -17,7 +17,7 @@ export function useActiveWalletSubWalletBootstrap(): void {
 
   useEffect(() => {
     if (sessionPassword !== null) return
-    appQueryClient.removeQueries({ queryKey: [ACTIVE_WALLET_LOAD_QUERY_ROOT] })
+    appQueryClient.removeQueries({ queryKey: [...activeWalletLoadQueryKeyPrefix] })
   }, [sessionPassword])
 
   useEffect(() => {

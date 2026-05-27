@@ -1,10 +1,13 @@
 import { appQueryClient } from '@/lib/shared/app-query-client'
 import { useLightningStore } from '@/stores/lightningStore'
 import { loadLightningConnectionsForWallet } from '@/lib/lightning/lightning-wallet-secrets'
+import { WALLET_DB_QUERY_KEY_ROOT } from '@/lib/wallet/wallet-query-key-root'
 
 /** TanStack Query key prefix; pair with `activeWalletId` in hooks. */
 export const LIGHTNING_CONNECTIONS_HYDRATION_QUERY_KEY = [
-  'lightning-connections-hydration',
+  ...WALLET_DB_QUERY_KEY_ROOT,
+  'lightning',
+  'connections-hydration',
 ] as const
 
 /**

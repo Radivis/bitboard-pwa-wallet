@@ -10,7 +10,7 @@ todos:
     status: completed
   - id: week1-hotspots
     content: Deliver PR-4 and PR-5 (backup-hook split, query invalidation) — deferred after PR-2
-    status: pending
+    status: completed
   - id: week2-send-tests
     content: Deliver PR-6 and PR-7 (send decomposition, settings test decoupling) — deferred after PR-2
     status: pending
@@ -29,7 +29,7 @@ isProject: false
 
 Reduce the highest maintainability and regression risks using small, reviewable PRs with clear sequencing and validation gates.
 
-**Current priority:** PR-5 (query invalidation) and remaining deferred queue items per dependency order below.
+**Current priority:** PR-6 (send flow decomposition) and remaining deferred queue items per dependency order below.
 
 ## Prioritization Principles
 
@@ -49,7 +49,8 @@ Reduce the highest maintainability and regression risks using small, reviewable 
 | PR-2 | **Done** | `lib/` domain restructuring |
 | PR-3 | **Done** | `react-hooks/exhaustive-deps` promoted to error |
 | PR-4 | **Done** | Wallet backup export/import hooks extracted from `useDataBackupsCard` |
-| PR-5 – PR-9 | **Deferred** | See queue below |
+| PR-5 | **Done** | `wallet_db` query key prefix; bulk invalidation collapsed to single prefix match |
+| PR-6 – PR-9 | **Deferred** | See queue below |
 
 ## Frontend Folder Structure (Hybrid)
 
@@ -253,7 +254,7 @@ Order may shift, but **do not start these until PR-2 merges** — later PRs assu
   - New focused unit tests for extracted hooks added.
 - **Delivered:** `use-wallet-backup-export.ts`, `use-wallet-backup-import.ts`; orchestrator slimmed to lab/migration-report flows; 13 new hook unit tests; `DataBackupsCard` unchanged.
 
-### PR-5: Query invalidation contract hardening
+### PR-5: Query invalidation contract hardening ✓
 
 - **Scope**
   - Define wallet query-key prefix convention and migrate top-impact call sites.
@@ -268,6 +269,7 @@ Order may shift, but **do not start these until PR-2 merges** — later PRs assu
 - **Validation**
   - Cross-tab and wallet-switch tests remain green.
   - Invalidation list shrinks or is formally deprecated.
+- **Delivered:** `WALLET_DB_QUERY_KEY_ROOT`; all six prior invalidation roots migrated; `WALLET_DB_QUERY_INVALIDATION` replaces manual list; legacy array empty; structure doc updated; cache-sync unit test added.
 
 ### PR-6: Send flow decomposition (phase 1)
 

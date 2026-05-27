@@ -1,4 +1,5 @@
 import type { NetworkMode, AddressType } from '@/stores/walletStore'
+import { WALLET_DB_QUERY_KEY_ROOT } from '@/lib/wallet/wallet-query-key-root'
 
 export type ActiveWalletLoadQueryKeyInput = {
   activeWalletId: number | null
@@ -8,23 +9,32 @@ export type ActiveWalletLoadQueryKeyInput = {
   accountId: number
 }
 
-/** Root segment for `queryClient.removeQueries` when session clears. */
-export const ACTIVE_WALLET_LOAD_QUERY_ROOT = 'active-wallet-sub-wallet-load' as const
+/** Segment after `wallet_db` for active sub-wallet bootstrap queries. */
+export const ACTIVE_WALLET_LOAD_QUERY_SEGMENT = 'active-wallet-sub-wallet-load' as const
 
-const ROOT = ACTIVE_WALLET_LOAD_QUERY_ROOT
+/**
+ * @deprecated Prefer {@link activeWalletLoadQueryKeyPrefix} for prefix invalidation/removal.
+ * Kept as the segment name only (not a full query key root).
+ */
+export const ACTIVE_WALLET_LOAD_QUERY_ROOT = ACTIVE_WALLET_LOAD_QUERY_SEGMENT
+
+/** Prefix for `removeQueries` / `useIsFetching` on bootstrap load queries. */
+export const activeWalletLoadQueryKeyPrefix = [
+  ...WALLET_DB_QUERY_KEY_ROOT,
+  ACTIVE_WALLET_LOAD_QUERY_SEGMENT,
+] as const
 
 /**
  * TanStack Query key for bootstrapping WASM from session + persisted sub-wallet triple.
  */
-export function activeWalletLoadQueryKey(
-  input: ActiveWalletLoadQueryKeyInput,
-): readonly [typeof ROOT, number, boolean, NetworkMode, AddressType, number] {
+export function activeWalletLoadQueryKey(input: ActiveWalletLoadQueryKeyInput) {
   return [
-    ROOT,
+    ...WALLET_DB_QUERY_KEY_ROOT,
+    ACTIVE_WALLET_LOAD_QUERY_SEGMENT,
     input.activeWalletId ?? 0,
     input.sessionPresent,
     input.networkMode,
     input.addressType,
     input.accountId,
-  ]
+  ] as const
 }

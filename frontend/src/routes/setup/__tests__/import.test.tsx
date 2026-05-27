@@ -91,7 +91,7 @@ vi.mock('@/db', () => ({
   getDatabase: vi.fn(),
   ensureMigrated: vi.fn().mockResolvedValue(undefined),
   persistNewWalletWithSecrets: vi.fn().mockResolvedValue(1),
-  walletKeys: { all: ['wallets'] as const },
+  walletKeys: { all: ['wallet_db', 'wallets'] as const },
 }))
 
 vi.mock('@/workers/secrets-channel', () => ({

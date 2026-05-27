@@ -108,6 +108,14 @@ When adding code, use the domain folder directly—do not reintroduce flat root 
 
 **Not in `shared/`:** domain-specific logic (even if small), OPFS/DB helpers (`db/opfs/`), settings persistence, infomode rules (`lib/infomode/`), or modules that belong in `hooks/` / `stores/` when they are React/state concerns.
 
+## Wallet query cache
+
+TanStack Query keys that read wallet SQLite or encrypted wallet payloads must share the `wallet_db` prefix (`WALLET_DB_QUERY_KEY_ROOT` in [`lib/wallet/wallet-query-key-root.ts`](../src/lib/wallet/wallet-query-key-root.ts)).
+
+- After wallet DB mutations, use `invalidateWalletRelatedQueries` or `invalidateWalletRelatedQueriesAndNotifyOtherTabs` from [`lib/wallet/wallet-query-cache-sync.ts`](../src/lib/wallet/wallet-query-cache-sync.ts) (not ad-hoc per-query invalidation lists).
+- New wallet-backed queries: prefix keys with `wallet_db` so cross-tab sync and bulk invalidation stay correct.
+- `WALLET_RELATED_QUERY_INVALIDATIONS_LEGACY` is for stragglers not yet migrated to the prefix; keep it empty unless a query cannot use `wallet_db` yet.
+
 ## PR placement checklist
 
 Before opening a refactor PR, confirm:
