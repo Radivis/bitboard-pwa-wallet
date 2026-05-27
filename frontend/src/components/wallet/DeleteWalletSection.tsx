@@ -5,7 +5,7 @@ import { toast } from 'sonner'
 import { useDeleteWallet, useWallet, useWalletNoMnemonicBackupFlag, useWallets } from '@/db'
 import { finalizeWalletDeletion } from '@/lib/wallet/wallet-delete-finalize'
 import { sumMainnetOnChainSatsForWallet } from '@/lib/esplora/mainnet-onchain-balance-probe'
-import { errorMessage } from '@/lib/shared/utils'
+import { userFacingErrorMessage } from '@/lib/shared/utils'
 import { useSessionStore } from '@/stores/sessionStore'
 import { useWalletStore } from '@/stores/walletStore'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
@@ -94,7 +94,7 @@ export function DeleteWalletSection({
         }
       }
     } catch (err) {
-      toast.error(`Could not delete wallet: ${errorMessage(err)}`)
+      toast.error(`Could not delete wallet: ${userFacingErrorMessage(err)}`)
     }
   }, [
     activeWalletId,
@@ -125,7 +125,9 @@ export function DeleteWalletSection({
         await performDelete()
       }
     } catch (err) {
-      toast.error(`Could not check mainnet balance: ${errorMessage(err)}`)
+      toast.error(
+        `Could not check mainnet balance: ${userFacingErrorMessage(err)}`,
+      )
       setFirstDialogOpen(true)
     } finally {
       setProbingMainnet(false)
