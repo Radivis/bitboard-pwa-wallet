@@ -1,27 +1,20 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { toast } from 'sonner'
-import { isValidSendAmountSats } from '@/components/wallet/send/send-amount'
-import { WalletUnlockOrNearZeroLoading } from '@/components/WalletUnlockOrNearZeroLoading'
 import { amountSatsFromForm, amountSatsFromSendForm } from '@/components/wallet/send/amount-sats-from-form'
+import { WalletUnlockOrNearZeroLoading } from '@/components/WalletUnlockOrNearZeroLoading'
 import { SendTransactionEntryCard } from '@/components/wallet/send/SendTransactionEntryCard'
 import { SendTransactionReviewStep } from '@/components/wallet/send/SendTransactionReviewStep'
 import { useWalletStore } from '@/stores/walletStore'
 import { useSendStore } from '@/stores/sendStore'
 import { useFeatureStore } from '@/stores/featureStore'
 import { useLabChainStateQuery } from '@/hooks/useLabChainStateQuery'
-import { isValidAddress } from '@/lib/wallet/bitcoin-utils'
-import {
-  preferredRecipientFromBitcoinUri,
-  recipientAndAmountFromScannedPayload,
-  tryParseBitcoinUri,
-} from '@/lib/wallet/bip21'
+import { recipientAndAmountFromScannedPayload } from '@/lib/wallet/bip21'
 import { errorMessage } from '@/lib/shared/utils'
 import {
   formatAmountInputFromSats,
   UX_DUST_FLOOR_SATS,
 } from '@/lib/wallet/bitcoin-dust'
-import { normalizeLightningDestination } from '@/lib/lightning/lightning-utils'
 import { useLightningStore } from '@/stores/lightningStore'
 import { walletLabOwner } from '@/lib/lab/lab-owner'
 import {
@@ -49,6 +42,16 @@ import {
   clearSendReviewTxSummaryFromStore,
 } from '@/lib/wallet/send-review-summary'
 import { buildLabSendMutationParams } from '@/lib/lab/lab-send-submit'
+import { normalizeSendRecipient } from '@/lib/wallet/send/normalize-send-recipient'
+import { computeSendPageBalances } from '@/lib/wallet/send/send-page-balances'
+import {
+  canBuildOnChainSend,
+  canProceedToSendReview,
+  isLabWithNoBalance,
+  isSendFiatRateOk,
+} from '@/lib/wallet/send/send-build-eligibility'
+import { resolveLabDraftAmountWithMinDustFloor } from '@/lib/wallet/send/lab-min-dust-floor'
+import { onchainDustPrepareWarningLines } from '@/lib/wallet/send/onchain-dust-prepare-messages'
 
 import { useSendFlowFees } from './fees'
 import { useSendFlowLightning } from './lightning'
@@ -148,31 +151,17 @@ export function SendFlow() {
       ? sumLabWalletUtxoSats(utxos, addressToOwner, activeWalletId)
       : null
 
-  const confirmedBalance =
-    networkMode === 'lab' && labBalanceSats !== null
-      ? labBalanceSats
-      : balance?.confirmed ?? 0
-
-  const totalBalanceSats =
-    networkMode === 'lab' && labBalanceSats !== null
-      ? labBalanceSats
-      : balance?.total ?? 0
+  const { confirmedBalance, totalBalanceSats } = computeSendPageBalances({
+    networkMode,
+    labBalanceSats,
+    balance,
+  })
 
   const applyOnchainPrepareOutcomeToSendStore = useCallback(
     (outcome: PrepareOnchainSendResult) => {
       const { amountUnit: unit } = useSendStore.getState()
       if (outcome.raisedToMinDust || outcome.bumpedChangeFree) {
-        const lines: string[] = []
-        if (outcome.raisedToMinDust) {
-          lines.push(
-            `Amount was below the minimum output size (${UX_DUST_FLOOR_SATS} sats). It was increased automatically.`,
-          )
-        }
-        if (outcome.bumpedChangeFree) {
-          lines.push(
-            'Change for this transaction would have been below the dust limit; the amount was increased to make the transfer change-free.',
-          )
-        }
+        const lines = onchainDustPrepareWarningLines(outcome)
         toast.warning(lines.join(' '))
         useSendStore.setState({
           amount: formatAmountInputFromSats(outcome.finalAmountSats, unit),
@@ -222,15 +211,10 @@ export function SendFlow() {
     [amount, amountUnit, mainnetFiatMode, btcPriceInFiat],
   )
 
-  const normalizedRecipient = useMemo(() => {
-    const t = recipient.trim()
-    const bip21 = tryParseBitcoinUri(t)
-    if (bip21 != null) {
-      return normalizeLightningDestination(preferredRecipientFromBitcoinUri(bip21))
-    }
-    const core = t.replace(/^bitcoin:/i, '')
-    return normalizeLightningDestination(core)
-  }, [recipient])
+  const normalizedRecipient = useMemo(
+    () => normalizeSendRecipient(recipient),
+    [recipient],
+  )
 
   const {
     lightningAvailable,
@@ -278,25 +262,33 @@ export function SendFlow() {
     if (step !== 2) setDeadLabRecipientModalOpen(false)
   }, [step])
 
-  const isLabWithNoBalance =
-    networkMode === 'lab' && (labBalanceSats === 0 || labBalanceSats === null)
+  const labWithNoBalance = isLabWithNoBalance({ networkMode, labBalanceSats })
 
-  const canBuildOnChain =
-    !isLightningSendMode &&
-    normalizedRecipient.length > 0 &&
-    isValidAddress(normalizedRecipient, networkMode) &&
-    isValidSendAmountSats(amountSats) &&
-    amountSats <= confirmedBalance &&
-    !isLabWithNoBalance &&
-    (!useCustomFee || customFeeParsed !== null)
+  const canBuildOnChain = canBuildOnChainSend({
+    isLightningSendMode,
+    normalizedRecipient,
+    networkMode,
+    amountSats,
+    confirmedBalance,
+    isLabWithNoBalance: labWithNoBalance,
+    useCustomFee,
+    customFeeParsed,
+  })
 
-  const fiatRateOk =
-    !mainnetFiatMode ||
-    (isLightningSendMode && !needsUserLightningAmount) ||
-    (isUsableBtcSpotPriceInFiat(btcPriceInFiat) && !fiatRatesQuery.isError)
+  const fiatRateOk = isSendFiatRateOk({
+    mainnetFiatMode,
+    isLightningSendMode,
+    needsUserLightningAmount,
+    btcPriceInFiat,
+    fiatRatesQueryIsError: fiatRatesQuery.isError,
+  })
 
-  const canBuild =
-    (isLightningSendMode ? canBuildLightning : canBuildOnChain) && fiatRateOk
+  const canBuild = canProceedToSendReview({
+    isLightningSendMode,
+    canBuildLightning,
+    canBuildOnChain,
+    fiatRateOk,
+  })
 
   const prepareLabDraftForReview = useCallback(
     async (params: {
@@ -389,25 +381,18 @@ export function SendFlow() {
 
     if (networkMode === 'lab') {
       labChangeFreeBumpBaseAmountSatsRef.current = null
-      let draftAmountSats = amountSats
-      if (
-        confirmedBalance >= UX_DUST_FLOOR_SATS &&
-        isValidSendAmountSats(amountSats) &&
-        amountSats > 0 &&
-        amountSats < UX_DUST_FLOOR_SATS
-      ) {
-        draftAmountSats = UX_DUST_FLOOR_SATS
-        const prev = amountSats
+      const { draftAmountSats, dustAdjustment } =
+        resolveLabDraftAmountWithMinDustFloor({
+          amountSats,
+          confirmedBalance,
+        })
+      if (dustAdjustment != null) {
         toast.warning(
           `Amount was below the minimum output size (${UX_DUST_FLOOR_SATS} sats). It was increased automatically.`,
         )
         useSendStore.setState({
-          amount: formatAmountInputFromSats(UX_DUST_FLOOR_SATS, amountUnit),
-          onchainDustWarning: {
-            previousSats: prev,
-            raisedToDustMin: true,
-            bumpedChangeFree: false,
-          },
+          amount: formatAmountInputFromSats(draftAmountSats, amountUnit),
+          onchainDustWarning: dustAdjustment,
         })
       }
 
@@ -653,7 +638,7 @@ export function SendFlow() {
         selectedLnBalanceQuery={selectedLnBalanceQuery}
         selectedLnBalanceSats={selectedLnBalanceSats}
         confirmedBalance={confirmedBalance}
-        isLabWithNoBalance={isLabWithNoBalance}
+        isLabWithNoBalance={labWithNoBalance}
         feePresetSelection={feePresetSelection}
         presetSatPerVbByLabel={presetSatPerVbByLabel}
         feeEstimatesRefreshing={feeEstimatesRefreshing}

@@ -6,14 +6,21 @@ import { useLightningPayMutation } from '@/hooks/useLightningMutations'
 import { useSendLightningBalances } from '@/hooks/useSendLightningBalances'
 import {
   isLightningSupported,
-  isValidLightningDestination,
   isValidBolt11Invoice,
   isLightningAddress,
   bolt11NetworkModeFromPrefix,
-  tryDecodeBolt11Invoice,
 } from '@/lib/lightning/lightning-utils'
-import { isValidAddress, msatsAmountNumberFromSatsExact, MAX_SATS_MSAT_AMOUNT_NUMBER } from '@/lib/wallet/bitcoin-utils'
-import { MAX_BOLT11_PAYMENT_REQUEST_LENGTH } from '@/lib/lightning/lightning-input-limits'
+import {
+  canBuildLightningSend,
+  getDecodedBolt11ForSend,
+  isBolt11DecodeOk,
+  isBolt11NetworkMismatch,
+  isLightningSendMode as computeLightningSendMode,
+  needsUserLightningAmount as computeNeedsUserLightningAmount,
+  resolveLightningPayAmountSats,
+  isSendRecipientFormatValid,
+} from '@/lib/lightning/send-flow-validation'
+import { msatsAmountNumberFromSatsExact, MAX_SATS_MSAT_AMOUNT_NUMBER } from '@/lib/wallet/bitcoin-utils'
 import type { ConnectedLightningWallet } from '@/lib/lightning/lightning-backend-service'
 import type { NetworkMode } from '@/stores/walletStore'
 
@@ -36,12 +43,10 @@ export function useSendFlowLightning({
   const [isResolvingLightningAddress, setIsResolvingLightningAddress] =
     useState(false)
 
-  const isLightningDestination = useMemo(
-    () => lightningAvailable && isValidLightningDestination(normalizedRecipient),
+  const isLightningSendMode = useMemo(
+    () => computeLightningSendMode(lightningAvailable, normalizedRecipient),
     [lightningAvailable, normalizedRecipient],
   )
-
-  const isLightningSendMode = isLightningDestination
 
   const {
     matchingLightningConnections,
@@ -62,95 +67,70 @@ export function useSendFlowLightning({
 
   const lightningPayMutation = useLightningPayMutation()
 
-  const decodedBolt11 = useMemo(() => {
-    if (!isValidBolt11Invoice(normalizedRecipient)) return null
-    return tryDecodeBolt11Invoice(normalizedRecipient)
-  }, [normalizedRecipient])
+  const decodedBolt11 = useMemo(
+    () => getDecodedBolt11ForSend(normalizedRecipient),
+    [normalizedRecipient],
+  )
 
-  const bolt11NetworkMismatch = useMemo(() => {
-    if (!isValidBolt11Invoice(normalizedRecipient)) return false
-    const invNetwork = bolt11NetworkModeFromPrefix(normalizedRecipient)
-    if (invNetwork == null) return false
-    return invNetwork !== networkMode
-  }, [normalizedRecipient, networkMode])
+  const bolt11NetworkMismatch = useMemo(
+    () => isBolt11NetworkMismatch(normalizedRecipient, networkMode),
+    [normalizedRecipient, networkMode],
+  )
 
-  const needsUserLightningAmount = useMemo(() => {
-    if (!isLightningSendMode) return false
-    if (isLightningAddress(normalizedRecipient)) return true
-    if (!isValidBolt11Invoice(normalizedRecipient)) return false
-    return decodedBolt11 == null || decodedBolt11.satoshi === 0
-  }, [isLightningSendMode, normalizedRecipient, decodedBolt11])
+  const needsUserLightningAmount = useMemo(
+    () =>
+      computeNeedsUserLightningAmount({
+        isLightningSendMode,
+        normalizedRecipient,
+        decodedBolt11,
+      }),
+    [isLightningSendMode, normalizedRecipient, decodedBolt11],
+  )
 
-  const lightningPayAmountSats = useMemo(() => {
-    if (!isLightningSendMode) return 0
-    if (isValidBolt11Invoice(normalizedRecipient)) {
-      if (decodedBolt11 != null && decodedBolt11.satoshi > 0) {
-        return decodedBolt11.satoshi
-      }
-      return amountSats
-    }
-    return amountSats
-  }, [isLightningSendMode, normalizedRecipient, decodedBolt11, amountSats])
+  const lightningPayAmountSats = useMemo(
+    () =>
+      resolveLightningPayAmountSats({
+        isLightningSendMode,
+        normalizedRecipient,
+        decodedBolt11,
+        amountSats,
+      }),
+    [isLightningSendMode, normalizedRecipient, decodedBolt11, amountSats],
+  )
 
-  const bolt11DecodeOk = useMemo(() => {
-    if (!isValidBolt11Invoice(normalizedRecipient)) return true
-    return decodedBolt11 != null
-  }, [normalizedRecipient, decodedBolt11])
+  const bolt11DecodeOk = useMemo(
+    () => isBolt11DecodeOk(normalizedRecipient, decodedBolt11),
+    [normalizedRecipient, decodedBolt11],
+  )
 
   const recipientFormatValid = useMemo(
     () =>
-      normalizedRecipient.length > 0 &&
-      (isValidAddress(normalizedRecipient, networkMode) ||
-        (lightningAvailable &&
-          isValidLightningDestination(normalizedRecipient))),
+      isSendRecipientFormatValid({
+        normalizedRecipient,
+        networkMode,
+        lightningAvailable,
+      }),
     [normalizedRecipient, networkMode, lightningAvailable],
   )
 
   const lightningRecipientOk =
     !isLightningSendMode || matchingLightningConnections.length > 0
 
-  const lightningPayloadLengthOk =
-    !isLightningSendMode ||
-    normalizedRecipient.length <= MAX_BOLT11_PAYMENT_REQUEST_LENGTH
-
-  const lightningAmountInputOk =
-    !needsUserLightningAmount || isValidSendAmountSats(amountSats)
-
-  const lightningBalanceOk =
-    hasLightningWalletSelected &&
-    selectedLnBalanceQuery?.isSuccess === true &&
-    selectedLnBalanceSats !== undefined &&
-    lightningPayAmountSats <= selectedLnBalanceSats
-
-  const lightningAmountlessBolt11PayMsatsExactOk = useMemo(() => {
-    if (!needsUserLightningAmount) return true
-    if (!isValidBolt11Invoice(normalizedRecipient)) return true
-    if (decodedBolt11 == null || decodedBolt11.satoshi !== 0) return true
-    return (
-      Number.isInteger(amountSats) && amountSats <= MAX_SATS_MSAT_AMOUNT_NUMBER
-    )
-  }, [
-    needsUserLightningAmount,
+  const canBuildLightning = canBuildLightningSend({
     normalizedRecipient,
-    decodedBolt11,
     amountSats,
-  ])
-
-  const canBuildLightning =
-    recipientFormatValid &&
-    lightningRecipientOk &&
-    lightningPayloadLengthOk &&
-    matchingLightningConnections.length > 0 &&
-    hasLightningWalletSelected &&
-    !bolt11NetworkMismatch &&
-    bolt11DecodeOk &&
-    lightningAmountInputOk &&
-    lightningPayAmountSats >= 1 &&
-    lightningBalanceOk &&
-    lightningAmountlessBolt11PayMsatsExactOk &&
-    (isLightningAddress(normalizedRecipient)
-      ? isValidSendAmountSats(amountSats)
-      : true)
+    recipientFormatValid,
+    isLightningSendMode,
+    matchingLightningConnectionsCount: matchingLightningConnections.length,
+    hasLightningWalletSelected,
+    bolt11NetworkMismatch,
+    bolt11DecodeOk,
+    needsUserLightningAmount,
+    lightningPayAmountSats,
+    selectedLnBalanceQuerySuccess: selectedLnBalanceQuery?.isSuccess === true,
+    selectedLnBalanceSats,
+    decodedBolt11,
+  })
 
   const handleLightningAddressPay = useCallback(async () => {
     if (!selectedLightningWallet || !isValidSendAmountSats(amountSats)) return
