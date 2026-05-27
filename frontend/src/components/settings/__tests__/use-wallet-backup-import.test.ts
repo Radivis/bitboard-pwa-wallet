@@ -2,6 +2,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { renderHook, act, waitFor } from '@testing-library/react'
 import { toast } from 'sonner'
 import { useWalletBackupImport } from '@/components/settings/use-wallet-backup-import'
+import { WALLET_BACKUP_IMPORT_MAX_VERIFY_ATTEMPTS } from '@/lib/wallet/wallet-backup-constants'
+import { WALLET_SQLITE_OPFS_BASENAME } from '@/db/opfs/opfs-sqlite-database-names'
+import { WalletBackupZipInvalidError } from '@/lib/shared/backup-zip-invalid-error'
 
 const mockParseWalletBackupZipFile = vi.hoisted(() => vi.fn())
 const mockAnyWalletHasNoMnemonicBackupFlag = vi.hoisted(() => vi.fn())
@@ -120,6 +123,70 @@ describe('useWalletBackupImport', () => {
     expect(result.current.importWipeOpen).toBe(true)
   })
 
+  it('onImportFilePick shows BackupZipInvalidError message', async () => {
+    mockParseWalletBackupZipFile.mockRejectedValue(
+      new WalletBackupZipInvalidError('Manifest entry missing from backup ZIP.'),
+    )
+    const file = new File(['zip'], 'backup.zip', { type: 'application/zip' })
+    const { result } = renderHook(() => useWalletBackupImport())
+
+    await act(async () => {
+      await result.current.onImportFilePick(createZipChangeEvent(file))
+    })
+
+    expect(toast.error).toHaveBeenCalledWith('Manifest entry missing from backup ZIP.')
+    expect(result.current.importWipeOpen).toBe(false)
+  })
+
+  it('cancelImportFlow clears import UI state', async () => {
+    const file = new File(['zip'], 'backup.zip', { type: 'application/zip' })
+    const { result } = renderHook(() => useWalletBackupImport())
+
+    await act(async () => {
+      await result.current.onImportFilePick(createZipChangeEvent(file))
+    })
+    act(() => {
+      result.current.confirmWipeImport()
+    })
+
+    act(() => {
+      result.current.cancelImportFlow()
+    })
+
+    expect(result.current.importWipeOpen).toBe(false)
+    expect(result.current.importPasswordOpen).toBe(false)
+    expect(result.current.importBypassModalOpen).toBe(false)
+    expect(result.current.importVerifyInlineMessage).toBeNull()
+    expect(result.current.importPasswordResetKey).toBe(0)
+  })
+
+  it('abortWalletBackupImportBypass clears bypass state and pending import', async () => {
+    mockVerifyWalletBackupManifest.mockRejectedValue(new Error('bad password'))
+    const file = new File(['zip'], 'backup.zip', { type: 'application/zip' })
+    const { result } = renderHook(() => useWalletBackupImport())
+
+    await act(async () => {
+      await result.current.onImportFilePick(createZipChangeEvent(file))
+    })
+    act(() => {
+      result.current.confirmWipeImport()
+    })
+
+    for (let attempt = 0; attempt < WALLET_BACKUP_IMPORT_MAX_VERIFY_ATTEMPTS; attempt++) {
+      await act(async () => {
+        await result.current.runVerifiedImport('wrong')
+      })
+    }
+
+    act(() => {
+      result.current.abortWalletBackupImportBypass()
+    })
+
+    expect(result.current.importBypassModalOpen).toBe(false)
+    expect(result.current.importVerifyInlineMessage).toBeNull()
+    expect(result.current.importPasswordResetKey).toBe(0)
+  })
+
   it('runVerifiedImport calls replace helper on successful verify', async () => {
     const file = new File(['zip'], 'backup.zip', { type: 'application/zip' })
     const { result } = renderHook(() => useWalletBackupImport())
@@ -140,7 +207,14 @@ describe('useWalletBackupImport', () => {
       'correct-password',
       parsedBackup.manifestJson,
     )
-    expect(mockReplaceOpfsSqliteAfterDestroy).toHaveBeenCalled()
+    expect(mockReplaceOpfsSqliteAfterDestroy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        opfsBasename: WALLET_SQLITE_OPFS_BASENAME,
+        sqliteBytes: parsedBackup.sqliteBytes,
+        successToastMessage: 'Wallet backup imported. Reloading…',
+        onBeforeReload: expect.any(Function),
+      }),
+    )
   })
 
   it('runVerifiedImport shows remaining attempts after verify failure', async () => {
@@ -160,7 +234,7 @@ describe('useWalletBackupImport', () => {
     })
 
     expect(result.current.importVerifyInlineMessage).toBe(
-      'Verification failed. 2 attempt(s) remaining.',
+      `Verification failed. ${WALLET_BACKUP_IMPORT_MAX_VERIFY_ATTEMPTS - 1} attempt(s) remaining.`,
     )
     expect(result.current.importBypassModalOpen).toBe(false)
     expect(result.current.importPasswordOpen).toBe(true)
@@ -178,7 +252,7 @@ describe('useWalletBackupImport', () => {
       result.current.confirmWipeImport()
     })
 
-    for (let attempt = 0; attempt < 3; attempt++) {
+    for (let attempt = 0; attempt < WALLET_BACKUP_IMPORT_MAX_VERIFY_ATTEMPTS; attempt++) {
       await act(async () => {
         await result.current.runVerifiedImport('wrong')
       })
@@ -204,7 +278,7 @@ describe('useWalletBackupImport', () => {
       result.current.confirmWipeImport()
     })
 
-    for (let attempt = 0; attempt < 3; attempt++) {
+    for (let attempt = 0; attempt < WALLET_BACKUP_IMPORT_MAX_VERIFY_ATTEMPTS; attempt++) {
       await act(async () => {
         await result.current.runVerifiedImport('wrong')
       })

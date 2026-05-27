@@ -4,6 +4,12 @@ import { waitFor } from '@testing-library/react'
 import { walletKeys } from '@/db/query-keys'
 import { activeWalletLoadQueryKey } from '@/lib/wallet/wallet-load-query-keys'
 import { LIGHTNING_DASHBOARD_QUERY_KEY } from '@/lib/lightning/lightning-dashboard-sync'
+import {
+  lnNwcNetworkPlausibilityQueryKey,
+  lnWalletBalanceQueryKey,
+  sendPageLnBalanceQueryKey,
+} from '@/lib/lightning/lightning-query-keys'
+import { ESPLORA_FEE_PRESETS_QUERY_KEY } from '@/hooks/useEsploraFeePresets'
 import { labChainStateQueryKey } from '@/lib/lab/lab-chain-query'
 import { invalidateWalletRelatedQueries } from '@/lib/wallet/wallet-query-cache-sync'
 
@@ -33,10 +39,23 @@ describe('invalidateWalletRelatedQueries', () => {
       accountId: 0,
     })
     const lightningHistoryKey = [...LIGHTNING_DASHBOARD_QUERY_KEY, 'history', 'fp1'] as const
+    const esploraFeePresetsKey = [...ESPLORA_FEE_PRESETS_QUERY_KEY, 'testnet'] as const
+    const lnBalanceKey = lnWalletBalanceQueryKey({
+      connectionId: 'conn-1',
+      walletId: 1,
+      networkMode: 'testnet',
+      config: { type: 'nwc', connectionString: 'nostr+walletconnect://example' },
+    })
+    const lnPlausibilityKey = lnNwcNetworkPlausibilityQueryKey(null)
+    const sendPageBalanceKey = sendPageLnBalanceQueryKey('conn-1')
 
     seedQuery(walletKeys.all, [{ wallet_id: 1 }])
     seedQuery(walletLoadKey, 'loaded')
     seedQuery(lightningHistoryKey, [])
+    seedQuery(esploraFeePresetsKey, { Low: 1, Medium: 2, High: 3 })
+    seedQuery(lnBalanceKey, { balanceSats: 1000 })
+    seedQuery(lnPlausibilityKey, { delta: 0 })
+    seedQuery(sendPageBalanceKey, { balanceSats: 500 })
     seedQuery(labChainStateQueryKey, { blocks: [] })
 
     invalidateWalletRelatedQueries(queryClient)
@@ -45,6 +64,10 @@ describe('invalidateWalletRelatedQueries', () => {
       expect(queryIsInvalidated(walletKeys.all)).toBe(true)
       expect(queryIsInvalidated(walletLoadKey)).toBe(true)
       expect(queryIsInvalidated(lightningHistoryKey)).toBe(true)
+      expect(queryIsInvalidated(esploraFeePresetsKey)).toBe(true)
+      expect(queryIsInvalidated(lnBalanceKey)).toBe(true)
+      expect(queryIsInvalidated(lnPlausibilityKey)).toBe(true)
+      expect(queryIsInvalidated(sendPageBalanceKey)).toBe(true)
     })
     expect(queryIsInvalidated(labChainStateQueryKey)).toBe(false)
   })

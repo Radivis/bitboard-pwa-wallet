@@ -2,7 +2,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { renderHook, act, waitFor } from '@testing-library/react'
 import { toast } from 'sonner'
 import { useWalletBackupExport } from '@/components/settings/use-wallet-backup-export'
-import { WALLET_BACKUP_ZIP_FILENAME } from '@/lib/wallet/wallet-backup-constants'
+import {
+  ARGON2_KDF_PHC_WALLET_BACKUP_SIGN_PRODUCTION,
+  WALLET_BACKUP_SIGNING_SALT_BYTES,
+  WALLET_BACKUP_ZIP_FILENAME,
+} from '@/lib/wallet/wallet-backup-constants'
 import { WALLET_SQLITE_OPFS_BASENAME } from '@/db/opfs/opfs-sqlite-database-names'
 
 const mockReadBlobFromOpfsRootIfExists = vi.hoisted(() => vi.fn())
@@ -61,6 +65,10 @@ vi.mock('@/workers/encryption-factory', () => ({
 
 vi.mock('@/lib/settings/zip-wallet-backup-export', () => ({
   zipWalletBackupForLocalExport: mockZipWalletBackupForLocalExport,
+}))
+
+vi.mock('@/lib/shared/argon2-ci-env', () => ({
+  resolveArgon2CiParamsOrThrow: () => false,
 }))
 
 describe('useWalletBackupExport', () => {
@@ -149,7 +157,8 @@ describe('useWalletBackupExport', () => {
   })
 
   it('runSignedWalletExport saves ZIP and shows success toast', async () => {
-    const sqliteBlob = new Blob([new Uint8Array([1, 2, 3])])
+    const sqliteBytes = new Uint8Array([1, 2, 3])
+    const sqliteBlob = new Blob([sqliteBytes])
     mockReadBlobFromOpfsRootIfExists.mockResolvedValue(sqliteBlob)
     const zipBlob = new Blob(['zip-content'])
     mockZipWalletBackupForLocalExport.mockResolvedValue(zipBlob)
@@ -163,7 +172,14 @@ describe('useWalletBackupExport', () => {
       await result.current.runSignedWalletExport('export-password')
     })
 
-    expect(mockSignWalletBackupManifest).toHaveBeenCalled()
+    expect(mockSignWalletBackupManifest).toHaveBeenCalledWith(
+      sqliteBytes,
+      'export-password',
+      expect.any(Uint8Array),
+      ARGON2_KDF_PHC_WALLET_BACKUP_SIGN_PRODUCTION,
+    )
+    const signingSalt = mockSignWalletBackupManifest.mock.calls[0]?.[2] as Uint8Array
+    expect(signingSalt.byteLength).toBe(WALLET_BACKUP_SIGNING_SALT_BYTES)
     expect(mockZipWalletBackupForLocalExport).toHaveBeenCalledWith(
       sqliteBlob,
       '{"format_version":1}',

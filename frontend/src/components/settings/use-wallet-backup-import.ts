@@ -7,7 +7,12 @@ import { anyWalletHasNoMnemonicBackupFlag } from '@/db/wallet-no-mnemonic-backup
 import { BackupZipInvalidError } from '@/lib/shared/backup-zip-invalid-error'
 import { replaceOpfsSqliteAfterDestroy } from '@/db/opfs/opfs-sqlite-replace-and-reload'
 import { parseWalletBackupZipFile } from '@/lib/wallet/wallet-backup-import'
+import { WALLET_BACKUP_IMPORT_MAX_VERIFY_ATTEMPTS } from '@/lib/wallet/wallet-backup-constants'
 import { getEncryptionWorker } from '@/workers/encryption-factory'
+
+function walletBackupImportVerifyAttemptsRemaining(failureCount: number): number {
+  return WALLET_BACKUP_IMPORT_MAX_VERIFY_ATTEMPTS - failureCount
+}
 
 export function useWalletBackupImport() {
   const [importWipeOpen, setImportWipeOpen] = useState(false)
@@ -22,6 +27,27 @@ export function useWalletBackupImport() {
   const [importVerifyInlineMessage, setImportVerifyInlineMessage] = useState<string | null>(null)
   const [importPasswordResetKey, setImportPasswordResetKey] = useState(0)
   const importFileInputRef = useRef<HTMLInputElement>(null)
+
+  const resetImportVerificationUi = useCallback(() => {
+    setImportVerificationFailureCount(0)
+    setImportVerifyInlineMessage(null)
+    setImportPasswordResetKey(0)
+  }, [])
+
+  const resetWalletImportUiState = useCallback(
+    (options?: { keepPendingImport?: boolean; keepWipeOpen?: boolean }) => {
+      if (!options?.keepPendingImport) {
+        setPendingImport(null)
+      }
+      if (!options?.keepWipeOpen) {
+        setImportWipeOpen(false)
+      }
+      setImportPasswordOpen(false)
+      setImportBypassModalOpen(false)
+      resetImportVerificationUi()
+    },
+    [resetImportVerificationUi],
+  )
 
   const onImportFilePick = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
@@ -54,31 +80,18 @@ export function useWalletBackupImport() {
   }, [])
 
   const cancelImportFlow = useCallback(() => {
-    setPendingImport(null)
-    setImportWipeOpen(false)
-    setImportPasswordOpen(false)
-    setImportBypassModalOpen(false)
-    setImportVerificationFailureCount(0)
-    setImportVerifyInlineMessage(null)
-    setImportPasswordResetKey(0)
-  }, [])
+    resetWalletImportUiState()
+  }, [resetWalletImportUiState])
 
   const confirmWipeImport = useCallback(() => {
     setImportWipeOpen(false)
-    setImportVerificationFailureCount(0)
-    setImportVerifyInlineMessage(null)
-    setImportPasswordResetKey(0)
+    resetImportVerificationUi()
     setImportPasswordOpen(true)
-  }, [])
+  }, [resetImportVerificationUi])
 
   const clearWalletImportUiState = useCallback(() => {
-    setImportPasswordOpen(false)
-    setImportBypassModalOpen(false)
-    setPendingImport(null)
-    setImportVerificationFailureCount(0)
-    setImportVerifyInlineMessage(null)
-    setImportPasswordResetKey(0)
-  }, [])
+    resetWalletImportUiState({ keepWipeOpen: true })
+  }, [resetWalletImportUiState])
 
   const applyWalletBackupReplace = useCallback(
     async (sqliteBytes: Uint8Array) => {
@@ -110,12 +123,12 @@ export function useWalletBackupImport() {
       } catch {
         setImportVerificationFailureCount((prev) => {
           const next = prev + 1
-          if (next >= 3) {
+          if (next >= WALLET_BACKUP_IMPORT_MAX_VERIFY_ATTEMPTS) {
             setImportPasswordOpen(false)
             setImportBypassModalOpen(true)
           } else {
             setImportVerifyInlineMessage(
-              `Verification failed. ${3 - next} attempt(s) remaining.`,
+              `Verification failed. ${walletBackupImportVerifyAttemptsRemaining(next)} attempt(s) remaining.`,
             )
             setImportPasswordResetKey((k) => k + 1)
           }
@@ -148,10 +161,8 @@ export function useWalletBackupImport() {
   const abortWalletBackupImportBypass = useCallback(() => {
     setImportBypassModalOpen(false)
     setPendingImport(null)
-    setImportVerificationFailureCount(0)
-    setImportVerifyInlineMessage(null)
-    setImportPasswordResetKey(0)
-  }, [])
+    resetImportVerificationUi()
+  }, [resetImportVerificationUi])
 
   return {
     importWipeOpen,
