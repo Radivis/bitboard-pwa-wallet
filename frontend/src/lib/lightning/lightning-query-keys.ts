@@ -1,8 +1,8 @@
 import type {
   ConnectedLightningWallet,
   LightningConnectionConfig,
-  LightningNetworkMode,
 } from '@/lib/lightning/lightning-backend-service'
+import type { LightningNetworkMode } from '@/lib/lightning/lightning-utils'
 import { WALLET_DB_QUERY_KEY_ROOT } from '@/lib/wallet/wallet-query-key-root'
 
 /** Per-connection NWC balance (wallet management, receive). */
