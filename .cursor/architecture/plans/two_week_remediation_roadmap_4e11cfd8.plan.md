@@ -19,7 +19,7 @@ todos:
     status: pending
   - id: deferred-hooks-lint
     content: Deliver PR-3 (exhaustive-deps as error) — deferred after PR-2
-    status: pending
+    status: completed
 isProject: false
 ---
 
@@ -29,7 +29,7 @@ isProject: false
 
 Reduce the highest maintainability and regression risks using small, reviewable PRs with clear sequencing and validation gates.
 
-**Current priority:** eliminate the flat `lib/` root (~100+ single-purpose files) by restructuring along domains per [frontend/docs/FRONTEND_STRUCTURE.md](frontend/docs/FRONTEND_STRUCTURE.md). Hotspot refactors and Rust boundary work follow once imports live in predictable places.
+**Current priority:** hotspot refactors (PR-4, PR-5) and remaining deferred queue items per dependency order below.
 
 ## Prioritization Principles
 
@@ -47,7 +47,8 @@ Reduce the highest maintainability and regression risks using small, reviewable 
 | PR-1b | **Done** (Day 1, PR #32) | [frontend/docs/FRONTEND_STRUCTURE.md](frontend/docs/FRONTEND_STRUCTURE.md) |
 | PR-1c | **Done** (Day 1, PR #32) | Routes → pages shell migration (wallet, lab partial, library shells) |
 | PR-2 | **Done** | `lib/` domain restructuring |
-| PR-3 – PR-9 | **Deferred** | See queue below |
+| PR-3 | **Done** | `react-hooks/exhaustive-deps` promoted to error |
+| PR-4 – PR-9 | **Deferred** | See queue below |
 
 ## Frontend Folder Structure (Hybrid)
 
@@ -217,7 +218,7 @@ flowchart TB
 
 Order may shift, but **do not start these until PR-2 merges** — later PRs assume stable `lib/<domain>/` paths.
 
-### PR-3: Tighten lint signal for hooks correctness
+### PR-3: Tighten lint signal for hooks correctness ✓
 
 - **Scope**
   - Promote `react-hooks/exhaustive-deps` from warning to error.
@@ -231,6 +232,7 @@ Order may shift, but **do not start these until PR-2 merges** — later PRs assu
 - **Validation**
   - Lint passes with zero warnings budget.
   - No functional regression in related tests.
+- **Delivered:** config-only change; baseline lint was already clean (no code fixes required).
 
 ### PR-4: Break up backup/import orchestration hook (phase 1)
 

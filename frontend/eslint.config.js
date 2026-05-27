@@ -32,7 +32,7 @@ export default tseslint.config(
         'error',
         { argsIgnorePattern: '^_' },
       ],
-      'react-hooks/exhaustive-deps': 'warn',
+      'react-hooks/exhaustive-deps': 'error',
       'react-hooks/rules-of-hooks': 'error',
       'react-refresh/only-export-components': [
         'warn',
