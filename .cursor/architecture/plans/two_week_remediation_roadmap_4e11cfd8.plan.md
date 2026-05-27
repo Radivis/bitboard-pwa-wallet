@@ -29,7 +29,7 @@ isProject: false
 
 Reduce the highest maintainability and regression risks using small, reviewable PRs with clear sequencing and validation gates.
 
-**Current priority:** hotspot refactors (PR-4, PR-5) and remaining deferred queue items per dependency order below.
+**Current priority:** PR-5 (query invalidation) and remaining deferred queue items per dependency order below.
 
 ## Prioritization Principles
 
@@ -48,7 +48,8 @@ Reduce the highest maintainability and regression risks using small, reviewable 
 | PR-1c | **Done** (Day 1, PR #32) | Routes → pages shell migration (wallet, lab partial, library shells) |
 | PR-2 | **Done** | `lib/` domain restructuring |
 | PR-3 | **Done** | `react-hooks/exhaustive-deps` promoted to error |
-| PR-4 – PR-9 | **Deferred** | See queue below |
+| PR-4 | **Done** | Wallet backup export/import hooks extracted from `useDataBackupsCard` |
+| PR-5 – PR-9 | **Deferred** | See queue below |
 
 ## Frontend Folder Structure (Hybrid)
 
@@ -234,7 +235,7 @@ Order may shift, but **do not start these until PR-2 merges** — later PRs assu
   - No functional regression in related tests.
 - **Delivered:** config-only change; baseline lint was already clean (no code fixes required).
 
-### PR-4: Break up backup/import orchestration hook (phase 1)
+### PR-4: Break up backup/import orchestration hook (phase 1) ✓
 
 - **Scope**
   - Extract `useWalletBackupExport` and `useWalletBackupImport` from monolithic hook.
@@ -250,6 +251,7 @@ Order may shift, but **do not start these until PR-2 merges** — later PRs assu
 - **Validation**
   - Existing settings tests pass.
   - New focused unit tests for extracted hooks added.
+- **Delivered:** `use-wallet-backup-export.ts`, `use-wallet-backup-import.ts`; orchestrator slimmed to lab/migration-report flows; 13 new hook unit tests; `DataBackupsCard` unchanged.
 
 ### PR-5: Query invalidation contract hardening
 
