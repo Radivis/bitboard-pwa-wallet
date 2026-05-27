@@ -116,6 +116,7 @@ TanStack Query keys that read wallet SQLite or encrypted wallet payloads must sh
 - New wallet-backed queries: prefix keys with `wallet_db` so cross-tab sync and bulk invalidation stay correct.
 - Lightning wallet-backed query key helpers live in [`lib/lightning/lightning-query-keys.ts`](../src/lib/lightning/lightning-query-keys.ts); Esplora fee presets use `ESPLORA_FEE_PRESETS_QUERY_KEY` in [`hooks/useEsploraFeePresets.ts`](../src/hooks/useEsploraFeePresets.ts).
 - `WALLET_RELATED_QUERY_INVALIDATIONS_LEGACY` is for stragglers not yet migrated to the prefix; keep it empty unless a query cannot use `wallet_db` yet.
+- Settings-only query mirrors (e.g. `bitcoinUnitQueryKey` in [`lib/wallet/bitcoin-unit-query.ts`](../src/lib/wallet/bitcoin-unit-query.ts)) stay outside `wallet_db`; they are not invalidated on wallet SQLite mutations.
 
 ## PR placement checklist
 
