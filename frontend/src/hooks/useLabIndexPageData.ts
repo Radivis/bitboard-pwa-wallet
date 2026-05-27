@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
+import { UX_DUST_FLOOR_SATS } from '@/lib/wallet/bitcoin-dust'
 import { minOutputSizeRaisedToastMessage } from '@/lib/wallet/send/onchain-dust-prepare-messages'
 import { errorMessage } from '@/lib/shared/utils'
 import { labOpDraftLabEntityTransaction } from '@/lib/lab/lab-worker-operations'
