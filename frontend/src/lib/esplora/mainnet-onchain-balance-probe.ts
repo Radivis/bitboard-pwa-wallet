@@ -9,6 +9,20 @@ import {
 } from '@/lib/wallet/wallet-utils'
 import { useCryptoStore } from '@/stores/cryptoStore'
 import { useWalletStore } from '@/stores/walletStore'
+
+/**
+ * Probe could not read a trustworthy mainnet balance (e.g. persisted chain mismatch
+ * recovered via empty chain). Destructive flows must not treat this as zero balance.
+ */
+export class MainnetBalanceProbeUnverifiableError extends Error {
+  constructor() {
+    super(
+      'Could not verify mainnet on-chain balance because persisted wallet data does not match the expected network. Repair or sync this wallet before continuing.',
+    )
+    this.name = 'MainnetBalanceProbeUnverifiableError'
+  }
+}
+
 /**
  * Sums BDK-reported on-chain balance for every mainnet (`bitcoin`) descriptor sub-wallet.
  * Uses ephemeral WASM wallet sessions in the probe loop so the global active wallet slot
@@ -78,17 +92,18 @@ export async function sumMainnetOnChainSatsForWallet(params: {
     }
 
     for (const descriptorWalletData of mainnetDescriptors) {
-      const { result: session } = await withPersistedChainMismatchRetry(
-        openWalletSession,
-        {
+      const { result: session, usedEmptyChainFallback } =
+        await withPersistedChainMismatchRetry(openWalletSession, {
           externalDescriptor: descriptorWalletData.externalDescriptor,
           internalDescriptor: descriptorWalletData.internalDescriptor,
           network: 'bitcoin',
           changesetJson: descriptorWalletData.changeSet,
           useEmptyChain: false,
-        },
-      )
+        })
       try {
+        if (usedEmptyChainFallback) {
+          throw new MainnetBalanceProbeUnverifiableError()
+        }
         const balance = await session.getBalance()
         balanceSum += balance.total
       } finally {

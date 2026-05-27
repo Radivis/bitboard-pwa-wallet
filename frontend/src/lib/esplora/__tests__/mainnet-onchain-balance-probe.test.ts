@@ -1,5 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { sumMainnetOnChainSatsForWallet } from '@/lib/esplora/mainnet-onchain-balance-probe'
+import {
+  MainnetBalanceProbeUnverifiableError,
+  sumMainnetOnChainSatsForWallet,
+} from '@/lib/esplora/mainnet-onchain-balance-probe'
 import type { BalanceInfo } from '@/workers/crypto-types'
 
 const mockOpenWalletSession = vi.fn()
@@ -115,6 +118,30 @@ describe('sumMainnetOnChainSatsForWallet', () => {
     )
     expect(mockLoadWallet).not.toHaveBeenCalled()
     expect(mockSessionFree).toHaveBeenCalledTimes(1)
+  })
+
+  it('fails when empty-chain fallback would understate balance', async () => {
+    mockOpenWalletSession
+      .mockRejectedValueOnce(new Error('Wallet error: Network mismatch'))
+      .mockResolvedValueOnce({
+        getBalance: vi.fn().mockResolvedValue(zeroBalance),
+        exportChangeset: vi.fn(),
+        free: mockSessionFree,
+      })
+
+    await expect(
+      sumMainnetOnChainSatsForWallet({
+        password: 'test-password',
+        walletId: 1,
+      }),
+    ).rejects.toBeInstanceOf(MainnetBalanceProbeUnverifiableError)
+
+    expect(mockOpenWalletSession).toHaveBeenCalledTimes(2)
+    expect(mockOpenWalletSession.mock.calls[1][0]).toMatchObject({
+      useEmptyChain: true,
+    })
+    expect(mockSessionFree).toHaveBeenCalledTimes(1)
+    expect(mockLoadDescriptorWalletWithoutSync).toHaveBeenCalledTimes(1)
   })
 
   it('restores the active sub-wallet view after probing', async () => {
