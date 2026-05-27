@@ -19,7 +19,7 @@ import {
 } from '@/components/ui/card'
 import { DialogDescription } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
-import { cn, errorMessage } from '@/lib/shared/utils'
+import { cn, userFacingErrorMessage } from '@/lib/shared/utils'
 
 export function CompleteDataWipeCard() {
   const walletStatus = useWalletStore((s) => s.walletStatus)
@@ -55,7 +55,7 @@ export function CompleteDataWipeCard() {
       await wipeAllAppDataOpfsAndReload()
     } catch (err) {
       console.error('[CompleteDataWipeCard] wipeAllAppDataOpfsAndReload failed (advanceToNoBackupOrWipe)', err)
-      toast.error(errorMessage(err))
+      toast.error(userFacingErrorMessage(err))
       setWipeBusy(false)
     }
   }, [])
@@ -92,7 +92,9 @@ export function CompleteDataWipeCard() {
       }
     } catch (err) {
       console.error('[CompleteDataWipeCard] mainnet balance probe failed', err)
-      toast.error(`Could not check mainnet balance: ${errorMessage(err)}`)
+      toast.error(
+        `Could not check mainnet balance: ${userFacingErrorMessage(err)}`,
+      )
       setRiskModalOpen(true)
     } finally {
       setProbing(false)
@@ -118,7 +120,7 @@ export function CompleteDataWipeCard() {
       await wipeAllAppDataOpfsAndReload()
     } catch (err) {
       console.error('[CompleteDataWipeCard] wipeAllAppDataOpfsAndReload failed (onNoBackupProceedAnyway)', err)
-      toast.error(errorMessage(err))
+      toast.error(userFacingErrorMessage(err))
       setWipeBusy(false)
     }
   }, [])

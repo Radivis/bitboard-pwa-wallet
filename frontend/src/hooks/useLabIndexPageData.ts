@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { UX_DUST_FLOOR_SATS } from '@/lib/wallet/bitcoin-dust'
+import { minOutputSizeRaisedToastMessage } from '@/lib/wallet/send/onchain-dust-prepare-messages'
 import { errorMessage } from '@/lib/shared/utils'
 import { labOpDraftLabEntityTransaction } from '@/lib/lab/lab-worker-operations'
 import { useLabChainStateQuery } from '@/hooks/useLabChainStateQuery'
@@ -29,8 +30,6 @@ import {
 
 const DEFAULT_LAB_FEE_RATE_SAT_PER_VB = 1
 const DEFAULT_RANDOM_TRANSACTION_COUNT = 1
-
-const LAB_ENTITY_MIN_OUTPUT_TOAST_MESSAGE = `Amount was below the minimum output size (${UX_DUST_FLOOR_SATS} sats). It was increased automatically.`
 
 /**
  * Form state, derived lab lists, and TanStack Query mutations for lab section routes.
@@ -179,7 +178,7 @@ export function useLabIndexPageData() {
         amountSats < UX_DUST_FLOOR_SATS
       ) {
         amountSats = UX_DUST_FLOOR_SATS
-        toast.warning(LAB_ENTITY_MIN_OUTPUT_TOAST_MESSAGE)
+        toast.warning(minOutputSizeRaisedToastMessage())
         setAmountSats(String(UX_DUST_FLOOR_SATS))
       }
 
@@ -202,7 +201,7 @@ export function useLabIndexPageData() {
         ) {
           amountSats = draftResult.draft.finalAmountSats
           setAmountSats(String(amountSats))
-          toast.warning(LAB_ENTITY_MIN_OUTPUT_TOAST_MESSAGE)
+          toast.warning(minOutputSizeRaisedToastMessage())
           try {
             draftResult = await labOpDraftLabEntityTransaction({
               ...variables,

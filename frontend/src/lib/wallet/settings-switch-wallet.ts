@@ -5,6 +5,7 @@ import { useSessionStore } from '@/stores/sessionStore'
 import { useCryptoStore } from '@/stores/cryptoStore'
 import { toBitcoinNetwork } from '@/lib/wallet/bitcoin-utils'
 import { errorMessage } from '@/lib/shared/utils'
+import { isBenignNoActiveWalletError } from '@/lib/shared/wasm-crypto-error'
 import {
   updateDescriptorWalletChangeset,
   resolveDescriptorWallet,
@@ -21,14 +22,6 @@ import {
   syncingTargetNetworkMessage,
   type NetworkSwitchPhaseReporter,
 } from '@/lib/settings/network-switch-status-messages'
-
-/** WASM when no wallet is loaded in the worker — persisting previous state is not applicable. */
-const NO_ACTIVE_WALLET_IN_WASM =
-  'No active wallet. Call create_wallet or load_wallet first.'
-
-function isBenignNoWalletLoadedForPersistError(err: unknown): boolean {
-  return errorMessage(err).includes(NO_ACTIVE_WALLET_IN_WASM)
-}
 
 export type SwitchDescriptorPhaseContext = 'network' | 'addressType'
 
@@ -105,7 +98,7 @@ export async function switchDescriptorWallet(params: {
         changesetJson: currentChangeset,
       })
     } catch (err) {
-      if (!isBenignNoWalletLoadedForPersistError(err)) {
+      if (!isBenignNoActiveWalletError(err)) {
         throw err
       }
     }

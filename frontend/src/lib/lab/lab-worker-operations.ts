@@ -25,7 +25,7 @@ import {
 } from '@/lib/lab/lab-pipeline-debug'
 import type { AddressType } from '@/lib/wallet/wallet-domain-types'
 import { LAB_MAX_RANDOM_ENTITY_TRANSACTIONS } from '@/lib/lab/lab-random-limits'
-import { UX_DUST_FLOOR_SATS } from '@/lib/wallet/bitcoin-dust'
+import { onchainDustPrepareWarningLines } from '@/lib/wallet/send/onchain-dust-prepare-messages'
 
 function sumUtxoSats(utxos: { amountSats: number }[]): number {
   return utxos.reduce((s, u) => s + (Number(u.amountSats) || 0), 0)
@@ -203,18 +203,11 @@ export async function labOpCreateLabEntityTransaction(params: {
   } = parsed
 
   if (raisedToMinDust || bumpedChangeFree) {
-    const lines: string[] = []
-    if (raisedToMinDust) {
-      lines.push(
-        `Amount was below the minimum output size (${UX_DUST_FLOOR_SATS} sats). It was increased automatically.`,
-      )
-    }
-    if (bumpedChangeFree) {
-      lines.push(
-        'Change for this transaction would have been below the dust limit; the amount was increased to make the transfer change-free.',
-      )
-    }
-    toast.warning(lines.join(' '))
+    toast.warning(
+      onchainDustPrepareWarningLines({ raisedToMinDust, bumpedChangeFree }).join(
+        ' ',
+      ),
+    )
   }
 
   if (hasChange && (changeAddress == null || changeAddress === '')) {

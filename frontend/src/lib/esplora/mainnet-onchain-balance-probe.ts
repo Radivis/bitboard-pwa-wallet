@@ -2,24 +2,31 @@ import { getDatabase } from '@/db/database'
 import { loadWalletSecretsPayload } from '@/db/wallet-persistence'
 import { updateDescriptorWalletChangeset } from '@/lib/wallet/descriptor-wallet-manager'
 import { toBitcoinNetwork } from '@/lib/wallet/bitcoin-utils'
-import { errorMessage } from '@/lib/shared/utils'
+import { isBenignNoActiveWalletError } from '@/lib/shared/wasm-crypto-error'
+import { withPersistedChainMismatchRetry } from '@/lib/wallet/persisted-chain-mismatch'
 import {
   loadDescriptorWalletWithoutSync,
-  loadWalletHandlingPersistedChainMismatch,
 } from '@/lib/wallet/wallet-utils'
 import { useCryptoStore } from '@/stores/cryptoStore'
 import { useWalletStore } from '@/stores/walletStore'
 
-const NO_ACTIVE_WALLET_IN_WASM =
-  'No active wallet. Call create_wallet or load_wallet first.'
-
-function isBenignNoWalletLoadedForPersistError(err: unknown): boolean {
-  return errorMessage(err).includes(NO_ACTIVE_WALLET_IN_WASM)
+/**
+ * Probe could not read a trustworthy mainnet balance (e.g. persisted chain mismatch
+ * recovered via empty chain). Destructive flows must not treat this as zero balance.
+ */
+export class MainnetBalanceProbeUnverifiableError extends Error {
+  constructor() {
+    super(
+      'Could not verify mainnet on-chain balance because persisted wallet data does not match the expected network. Repair or sync this wallet before continuing.',
+    )
+    this.name = 'MainnetBalanceProbeUnverifiableError'
+  }
 }
 
 /**
  * Sums BDK-reported on-chain balance for every mainnet (`bitcoin`) descriptor sub-wallet.
- * Temporarily loads each into the single WASM slot, then restores the previously active sub-wallet.
+ * Uses ephemeral WASM wallet sessions in the probe loop so the global active wallet slot
+ * is not overwritten per descriptor. Restores the committed sub-wallet view afterward.
  * Ignores Lightning / NWC entirely.
  *
  * **Side effect:** After restoring the active sub-wallet, updates `useWalletStore` with the
@@ -45,8 +52,12 @@ export async function sumMainnetOnChainSatsForWallet(params: {
   const { loadedSubWallet, networkMode, addressType, accountId } = useWalletStore.getState()
   const committedSubWallet = loadedSubWallet ?? { networkMode, addressType, accountId }
 
-  const { loadWallet, getBalance, exportChangeset, getTransactionList } =
-    useCryptoStore.getState()
+  const {
+    openWalletSession,
+    exportChangeset,
+    getBalance,
+    getTransactionList,
+  } = useCryptoStore.getState()
 
   const restoreActiveSubWalletView = async (): Promise<void> => {
     await loadDescriptorWalletWithoutSync({
@@ -75,21 +86,29 @@ export async function sumMainnetOnChainSatsForWallet(params: {
         changesetJson: currentChangeset,
       })
     } catch (err) {
-      if (!isBenignNoWalletLoadedForPersistError(err)) {
+      if (!isBenignNoActiveWalletError(err)) {
         throw err
       }
     }
 
     for (const descriptorWalletData of mainnetDescriptors) {
-      await loadWalletHandlingPersistedChainMismatch(loadWallet, {
-        externalDescriptor: descriptorWalletData.externalDescriptor,
-        internalDescriptor: descriptorWalletData.internalDescriptor,
-        network: 'bitcoin',
-        changesetJson: descriptorWalletData.changeSet,
-        useEmptyChain: false,
-      })
-      const balance = await getBalance()
-      balanceSum += balance.total
+      const { result: session, usedEmptyChainFallback } =
+        await withPersistedChainMismatchRetry(openWalletSession, {
+          externalDescriptor: descriptorWalletData.externalDescriptor,
+          internalDescriptor: descriptorWalletData.internalDescriptor,
+          network: 'bitcoin',
+          changesetJson: descriptorWalletData.changeSet,
+          useEmptyChain: false,
+        })
+      try {
+        if (usedEmptyChainFallback) {
+          throw new MainnetBalanceProbeUnverifiableError()
+        }
+        const balance = await session.getBalance()
+        balanceSum += balance.total
+      } finally {
+        session.free()
+      }
     }
   } catch (probeErr) {
     try {

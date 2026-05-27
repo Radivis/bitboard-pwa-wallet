@@ -10,7 +10,10 @@ import {
   sendPageLnBalanceQueryKey,
 } from '@/lib/lightning/lightning-query-keys'
 import { ESPLORA_FEE_PRESETS_QUERY_KEY } from '@/hooks/useEsploraFeePresets'
+import { COMMITTED_EXTERNAL_DESCRIPTOR_QUERY_KEY } from '@/hooks/useCommittedExternalDescriptor'
+import { customEsploraUrlQueryKey } from '@/components/settings/EsploraUrlSettings'
 import { labChainStateQueryKey } from '@/lib/lab/lab-chain-query'
+import { WALLET_DB_QUERY_KEY_ROOT } from '@/lib/wallet/wallet-query-key-root'
 import { invalidateWalletRelatedQueries } from '@/lib/wallet/wallet-query-cache-sync'
 
 describe('invalidateWalletRelatedQueries', () => {
@@ -48,6 +51,15 @@ describe('invalidateWalletRelatedQueries', () => {
     })
     const lnPlausibilityKey = lnNwcNetworkPlausibilityQueryKey(null)
     const sendPageBalanceKey = sendPageLnBalanceQueryKey('conn-1')
+    const customEsploraKey = customEsploraUrlQueryKey('testnet')
+    const committedDescriptorKey = [
+      ...WALLET_DB_QUERY_KEY_ROOT,
+      COMMITTED_EXTERNAL_DESCRIPTOR_QUERY_KEY,
+      1,
+      'testnet',
+      'taproot',
+      0,
+    ] as const
 
     seedQuery(walletKeys.all, [{ wallet_id: 1 }])
     seedQuery(walletLoadKey, 'loaded')
@@ -56,6 +68,8 @@ describe('invalidateWalletRelatedQueries', () => {
     seedQuery(lnBalanceKey, { balanceSats: 1000 })
     seedQuery(lnPlausibilityKey, { delta: 0 })
     seedQuery(sendPageBalanceKey, { balanceSats: 500 })
+    seedQuery(customEsploraKey, 'https://mempool.space/testnet/api')
+    seedQuery(committedDescriptorKey, 'tr(...)')
     seedQuery(labChainStateQueryKey, { blocks: [] })
 
     invalidateWalletRelatedQueries(queryClient)
@@ -68,6 +82,8 @@ describe('invalidateWalletRelatedQueries', () => {
       expect(queryIsInvalidated(lnBalanceKey)).toBe(true)
       expect(queryIsInvalidated(lnPlausibilityKey)).toBe(true)
       expect(queryIsInvalidated(sendPageBalanceKey)).toBe(true)
+      expect(queryIsInvalidated(customEsploraKey)).toBe(true)
+      expect(queryIsInvalidated(committedDescriptorKey)).toBe(true)
     })
     expect(queryIsInvalidated(labChainStateQueryKey)).toBe(false)
   })

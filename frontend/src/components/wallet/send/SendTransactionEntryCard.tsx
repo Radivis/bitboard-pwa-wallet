@@ -12,6 +12,7 @@ import { Label } from '@/components/ui/label'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { NETWORK_LABELS, type NetworkMode } from '@/stores/walletStore'
 import { MAX_BOLT11_PAYMENT_REQUEST_LENGTH } from '@/lib/lightning/lightning-input-limits'
+import { isLightningPayloadLengthOk } from '@/lib/lightning/send-flow-validation'
 import { amountInputPlaceholderForUnit } from '@/lib/wallet/bitcoin-display-unit'
 import { isValidBolt11Invoice } from '@/lib/lightning/lightning-utils'
 import type { SendAmountUnit } from '@/stores/sendStore'
@@ -306,7 +307,8 @@ export function SendTransactionEntryCard({
                     and try again.
                   </p>
                 )}
-              {isLightningSendMode && !lightningPayloadLengthOk(normalizedRecipient) && (
+              {isLightningSendMode &&
+                !isLightningPayloadLengthOk(normalizedRecipient) && (
                 <p className="text-xs text-destructive">
                   Payment request is too long (
                   {MAX_BOLT11_PAYMENT_REQUEST_LENGTH} characters max).
@@ -512,8 +514,4 @@ export function SendTransactionEntryCard({
       </Card>
     </div>
   )
-}
-
-function lightningPayloadLengthOk(normalizedRecipient: string): boolean {
-  return normalizedRecipient.length <= MAX_BOLT11_PAYMENT_REQUEST_LENGTH
 }

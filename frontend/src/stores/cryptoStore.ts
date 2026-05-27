@@ -13,6 +13,7 @@ import { resetSecretsChannel } from '@/workers/secrets-channel';
 import { awaitInFlightWalletSecretsWrites } from '@/db/wallet-secrets-write-tracker';
 import { navigateToLibraryIfOnWalletRoute } from '@/lib/shared/app-router';
 import { asBadLocalChainStateError } from '@/lib/shared/bad-local-chain-state-error';
+import { errorMessage } from '@/lib/shared/utils';
 import type { Remote } from 'comlink';
 import type {
   CryptoService,
@@ -27,11 +28,13 @@ import type {
   EncryptedBlobForDb,
   ImportWalletAndEncryptSecretsParams,
   LoadWalletParams,
+  OpenWalletSessionParams,
   PrepareOnchainSendParams,
   PrepareOnchainSendResult,
   ResolveDescriptorWalletParams,
   ResolveDescriptorWalletResult,
   UpdateDescriptorWalletChangesetParams,
+  WalletSessionHandle,
 } from '@/workers/crypto-api';
 import type {
   BalanceInfo,
@@ -57,6 +60,8 @@ interface CryptoState {
   createWallet: (params: CreateWalletParams) => Promise<CreateWalletResult>;
 
   loadWallet: (params: LoadWalletParams) => Promise<boolean>;
+
+  openWalletSession: (params: OpenWalletSessionParams) => Promise<WalletSessionHandle>;
 
   getNewAddress: () => Promise<string>;
   getCurrentAddress: () => Promise<string>;
@@ -128,8 +133,7 @@ export const useCryptoStore = create<CryptoState>((set, get) => {
       set({ error: null });
       return await workerCall(worker);
     } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : String(err);
-      set({ error: errorMsg });
+      set({ error: errorMessage(err) });
       throw err;
     }
   };
@@ -186,6 +190,9 @@ export const useCryptoStore = create<CryptoState>((set, get) => {
 
     loadWallet: (params) =>
       withErrorHandling((worker) => worker.loadWallet(params)),
+
+    openWalletSession: (params) =>
+      withErrorHandling((worker) => worker.openWalletSession(params)),
 
     getNewAddress: () =>
       withErrorHandling((worker) => worker.getNewAddress()),

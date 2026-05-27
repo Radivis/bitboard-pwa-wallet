@@ -14,9 +14,3 @@ export const WALLET_DB_QUERY_INVALIDATION: InvalidateQueryFilters = {
  */
 export const WALLET_RELATED_QUERY_INVALIDATIONS_LEGACY: readonly InvalidateQueryFilters[] =
   []
-
-/**
- * @deprecated Use {@link WALLET_DB_QUERY_INVALIDATION}. Kept for imports during transition.
- */
-export const WALLET_RELATED_QUERY_INVALIDATIONS =
-  WALLET_RELATED_QUERY_INVALIDATIONS_LEGACY

@@ -15,7 +15,8 @@ import { labOpAddSignedTransaction } from '@/lib/lab/lab-worker-operations'
 import { setLabChainStateCache } from '@/hooks/useLabChainStateQuery'
 import { invalidateLabPaginatedQueries } from '@/lib/lab/lab-paginated-queries'
 import { errorMessage } from '@/lib/shared/utils'
-import { formatAmountInputFromSats, UX_DUST_FLOOR_SATS } from '@/lib/wallet/bitcoin-dust'
+import { formatAmountInputFromSats } from '@/lib/wallet/bitcoin-dust'
+import { onchainDustPrepareWarningLines } from '@/lib/wallet/send/onchain-dust-prepare-messages'
 
 /**
  * Mutation to prepare a PSBT (mainnet/testnet/signet/regtest).
@@ -184,18 +185,12 @@ export function useLabSendMutation() {
 
         const { amountUnit } = useSendStore.getState()
         if (raisedToMinDust || bumpedChangeFree) {
-          const lines: string[] = []
-          if (raisedToMinDust) {
-            lines.push(
-              `Amount was below the minimum output size (${UX_DUST_FLOOR_SATS} sats). It was increased automatically.`,
-            )
-          }
-          if (bumpedChangeFree) {
-            lines.push(
-              'Change for this transaction would have been below the dust limit; the amount was increased to make the transfer change-free.',
-            )
-          }
-          toast.warning(lines.join(' '))
+          toast.warning(
+            onchainDustPrepareWarningLines({
+              raisedToMinDust,
+              bumpedChangeFree,
+            }).join(' '),
+          )
           useSendStore.setState({
             amount: formatAmountInputFromSats(finalAmountSats, amountUnit),
             onchainDustWarning: {

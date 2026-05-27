@@ -12,12 +12,6 @@ export type ActiveWalletLoadQueryKeyInput = {
 /** Segment after `wallet_db` for active sub-wallet bootstrap queries. */
 export const ACTIVE_WALLET_LOAD_QUERY_SEGMENT = 'active-wallet-sub-wallet-load' as const
 
-/**
- * @deprecated Prefer {@link activeWalletLoadQueryKeyPrefix} for prefix invalidation/removal.
- * Kept as the segment name only (not a full query key root).
- */
-export const ACTIVE_WALLET_LOAD_QUERY_ROOT = ACTIVE_WALLET_LOAD_QUERY_SEGMENT
-
 /** Prefix for `removeQueries` / `useIsFetching` on bootstrap load queries. */
 export const activeWalletLoadQueryKeyPrefix = [
   ...WALLET_DB_QUERY_KEY_ROOT,

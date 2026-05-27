@@ -43,6 +43,21 @@ export interface LoadWalletParams {
   useEmptyChain: boolean;
 }
 
+export interface OpenWalletSessionParams {
+  externalDescriptor: string;
+  internalDescriptor: string;
+  network: BitcoinNetwork;
+  changesetJson: string;
+  useEmptyChain: boolean;
+}
+
+/** Ephemeral WASM wallet session; does not use the global active wallet slot. */
+export interface WalletSessionHandle {
+  getBalance(): Promise<BalanceInfo>;
+  exportChangeset(): Promise<string>;
+  free(): void;
+}
+
 export interface BuildAndSignLabTransactionParams {
   utxosJson: string;
   toAddress: string;
@@ -196,6 +211,8 @@ export interface CryptoService {
   createWallet(params: CreateWalletParams): Promise<CreateWalletResult>;
 
   loadWallet(params: LoadWalletParams): Promise<boolean>;
+
+  openWalletSession(params: OpenWalletSessionParams): Promise<WalletSessionHandle>;
 
   getNewAddress(): Promise<string>;
   getCurrentAddress(): Promise<string>;

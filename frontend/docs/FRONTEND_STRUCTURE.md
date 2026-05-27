@@ -114,8 +114,10 @@ TanStack Query keys that read wallet SQLite or encrypted wallet payloads must sh
 
 - After wallet DB mutations, use `invalidateWalletRelatedQueries` or `invalidateWalletRelatedQueriesAndNotifyOtherTabs` from [`lib/wallet/wallet-query-cache-sync.ts`](../src/lib/wallet/wallet-query-cache-sync.ts) (not ad-hoc per-query invalidation lists).
 - New wallet-backed queries: prefix keys with `wallet_db` so cross-tab sync and bulk invalidation stay correct.
+- Send pure logic (validators, amount/balance helpers) lives under [`lib/wallet/send/`](../src/lib/wallet/send/); Lightning send validation in [`lib/lightning/send-flow-validation.ts`](../src/lib/lightning/send-flow-validation.ts).
 - Lightning wallet-backed query key helpers live in [`lib/lightning/lightning-query-keys.ts`](../src/lib/lightning/lightning-query-keys.ts); Esplora fee presets use `ESPLORA_FEE_PRESETS_QUERY_KEY` in [`hooks/useEsploraFeePresets.ts`](../src/hooks/useEsploraFeePresets.ts).
 - `WALLET_RELATED_QUERY_INVALIDATIONS_LEGACY` is for stragglers not yet migrated to the prefix; keep it empty unless a query cannot use `wallet_db` yet.
+- Settings-only query mirrors (e.g. `bitcoinUnitQueryKey` in [`lib/wallet/bitcoin-unit-query.ts`](../src/lib/wallet/bitcoin-unit-query.ts)) stay outside `wallet_db`; they are not invalidated on wallet SQLite mutations.
 
 ## PR placement checklist
 
@@ -127,3 +129,4 @@ Before opening a refactor PR, confirm:
 4. New shared pure functions go under `lib/<domain>/` first; use `lib/shared/` only per the cross-cutting policy above—not `lib/` root.
 5. Cross-route hooks go in `src/hooks/`; global state in `src/stores/`.
 6. DB and worker boundaries stay in `src/db/` and `src/workers/`.
+7. Settings page tests: use [`test-utils/settings-page-test-harness.tsx`](../src/test-utils/settings-page-test-harness.tsx) for boundary mocks and `resetSettingsPageTestState()`—avoid duplicating `vi.mock` chains in route tests.
