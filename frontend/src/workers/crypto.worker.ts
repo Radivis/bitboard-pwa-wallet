@@ -36,7 +36,9 @@ function mapPrepareOrDraftReviewFields(parsed: Record<string, unknown>) {
   };
 }
 
-let wasm: typeof import('@/wasm-pkg/bitboard_crypto') | null = null;
+type BitboardCryptoModule = typeof import('@/wasm-pkg/bitboard_crypto');
+
+let wasm: BitboardCryptoModule | null = null;
 let wasmInitError: string | null = null;
 let secretsProxy: Remote<SecretsChannelService> | null = null;
 
@@ -49,7 +51,7 @@ async function getLightningWasm() {
   return lightningWasm;
 }
 
-async function getWasm() {
+async function getWasm(): Promise<BitboardCryptoModule> {
   if (wasmInitError) {
     throw new Error(`WASM init failed: ${wasmInitError}`);
   }
@@ -59,8 +61,6 @@ async function getWasm() {
   return wasm;
 }
 
-type BitboardCryptoModule = NonNullable<typeof wasm>;
-
 /** Ensures structured `{ code, message }` WASM errors survive Comlink on the main thread. */
 async function invokeWasmCrypto<T>(
   run: (wasmModule: BitboardCryptoModule) => T | Promise<T>,
@@ -69,7 +69,7 @@ async function invokeWasmCrypto<T>(
     const wasmModule = await getWasm();
     return await run(wasmModule);
   } catch (err) {
-    rethrowWasmCryptoErrorForComlink(err);
+    return rethrowWasmCryptoErrorForComlink(err);
   }
 }
 
