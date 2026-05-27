@@ -13,6 +13,7 @@ import { resetSecretsChannel } from '@/workers/secrets-channel';
 import { awaitInFlightWalletSecretsWrites } from '@/db/wallet-secrets-write-tracker';
 import { navigateToLibraryIfOnWalletRoute } from '@/lib/shared/app-router';
 import { asBadLocalChainStateError } from '@/lib/shared/bad-local-chain-state-error';
+import { errorMessage } from '@/lib/shared/utils';
 import type { Remote } from 'comlink';
 import type {
   CryptoService,
@@ -132,8 +133,7 @@ export const useCryptoStore = create<CryptoState>((set, get) => {
       set({ error: null });
       return await workerCall(worker);
     } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : String(err);
-      set({ error: errorMsg });
+      set({ error: errorMessage(err) });
       throw err;
     }
   };

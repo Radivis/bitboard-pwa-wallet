@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { errorMessage } from '@/lib/shared/utils'
 import {
+  isBenignNoActiveWalletError,
+  NO_ACTIVE_WALLET_WASM_MESSAGE,
   parseWasmCryptoError,
   wasmCryptoErrorCode,
   wasmCryptoErrorMessage,
@@ -27,6 +29,34 @@ describe('parseWasmCryptoError', () => {
   it('leaves legacy string errors unchanged', () => {
     expect(errorMessage('plain failure')).toBe('plain failure')
     expect(errorMessage(new Error('legacy message'))).toBe('legacy message')
+  })
+
+  it('parses JSON payload embedded in Error.message from Comlink worker boundary', () => {
+    const error = new Error(
+      JSON.stringify({
+        code: 'no_active_wallet',
+        message: NO_ACTIVE_WALLET_WASM_MESSAGE,
+      }),
+    )
+    expect(parseWasmCryptoError(error)).toEqual({
+      code: 'no_active_wallet',
+      message: NO_ACTIVE_WALLET_WASM_MESSAGE,
+    })
+  })
+
+  it('isBenignNoActiveWalletError accepts structured and legacy shapes', () => {
+    expect(
+      isBenignNoActiveWalletError({
+        code: 'no_active_wallet',
+        message: NO_ACTIVE_WALLET_WASM_MESSAGE,
+      }),
+    ).toBe(true)
+    expect(
+      isBenignNoActiveWalletError(
+        new Error(NO_ACTIVE_WALLET_WASM_MESSAGE),
+      ),
+    ).toBe(true)
+    expect(isBenignNoActiveWalletError(new Error('other failure'))).toBe(false)
   })
 
   it('wasmCryptoErrorCode returns no_active_wallet', () => {

@@ -13,6 +13,7 @@ import type {
 import type { EncryptedBlobMessage, SecretsChannelService } from './secrets-channel-types';
 import { parseWalletPayloadJson } from '@/lib/wallet/wallet-domain-types';
 import type { WalletSecretsPayload } from '@/lib/wallet/wallet-domain-types';
+import { rethrowWasmCryptoErrorForComlink } from '@/lib/shared/wasm-crypto-error';
 
 function mapReviewInputUtxos(raw: unknown): import('./crypto-api').ReviewInputUtxo[] {
   if (!Array.isArray(raw)) return [];
@@ -397,8 +398,12 @@ const cryptoService = {
   },
 
   async getBalance(): Promise<BalanceInfo> {
-    const wasmModule = await getWasm();
-    return wasmModule.get_balance();
+    try {
+      const wasmModule = await getWasm();
+      return wasmModule.get_balance();
+    } catch (err) {
+      rethrowWasmCryptoErrorForComlink(err);
+    }
   },
 
   async exportChangeset(): Promise<string> {
