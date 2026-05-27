@@ -52,6 +52,17 @@ describe('crypto worker WASM structured errors (integration)', () => {
     vi.resetModules()
   })
 
+  it('getNewAddress without loaded wallet returns no_active_wallet code via Comlink', async () => {
+    let caught: unknown
+    try {
+      await cryptoWorkerProxy.getNewAddress()
+    } catch (err) {
+      caught = err
+    }
+
+    expect(wasmCryptoErrorCode(caught)).toBe('no_active_wallet')
+  })
+
   it('getBalance without loaded wallet returns no_active_wallet code via Comlink', async () => {
     let caught: unknown
     try {
