@@ -46,6 +46,10 @@ import {
   lightningDashboardHistoryQueryKey,
 } from '@/lib/lightning/lightning-dashboard-sync'
 import {
+  lnNwcNetworkPlausibilityQueryKey,
+  lnWalletBalanceQueryKey,
+} from '@/lib/lightning/lightning-query-keys'
+import {
   LIGHTNING_DASHBOARD_REFETCH_MS,
   LIGHTNING_DASHBOARD_STALE_MS,
   LN_WALLET_BALANCE_STALE_MS,
@@ -162,7 +166,12 @@ export function useLnWalletBalanceQuery(params: {
 }) {
   const { connectionId, walletId, networkMode, config } = params
   return useQuery({
-    queryKey: ['ln-wallet-balance', connectionId, walletId, networkMode, config],
+    queryKey: lnWalletBalanceQueryKey({
+      connectionId,
+      walletId,
+      networkMode,
+      config,
+    }),
     queryFn: async (): Promise<LnWalletBalanceQueryResult> => {
       await ensureMigrated()
       try {
@@ -216,12 +225,7 @@ export function useLnWalletNetworkPlausibilityQuery(
   wallet: ConnectedLightningWallet | null,
 ) {
   return useQuery({
-    queryKey: [
-      'ln-nwc-network-plausibility',
-      wallet?.id,
-      wallet?.networkMode,
-      wallet?.config,
-    ],
+    queryKey: lnNwcNetworkPlausibilityQueryKey(wallet),
     queryFn: async () => {
       if (!wallet) {
         throw new Error('No Lightning wallet')

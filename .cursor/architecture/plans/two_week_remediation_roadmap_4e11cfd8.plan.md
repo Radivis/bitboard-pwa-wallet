@@ -10,7 +10,7 @@ todos:
     status: completed
   - id: week1-hotspots
     content: Deliver PR-4 and PR-5 (backup-hook split, query invalidation) — deferred after PR-2
-    status: pending
+    status: completed
   - id: week2-send-tests
     content: Deliver PR-6 and PR-7 (send decomposition, settings test decoupling) — deferred after PR-2
     status: pending
@@ -19,7 +19,7 @@ todos:
     status: pending
   - id: deferred-hooks-lint
     content: Deliver PR-3 (exhaustive-deps as error) — deferred after PR-2
-    status: pending
+    status: completed
 isProject: false
 ---
 
@@ -29,7 +29,7 @@ isProject: false
 
 Reduce the highest maintainability and regression risks using small, reviewable PRs with clear sequencing and validation gates.
 
-**Current priority:** eliminate the flat `lib/` root (~100+ single-purpose files) by restructuring along domains per [frontend/docs/FRONTEND_STRUCTURE.md](frontend/docs/FRONTEND_STRUCTURE.md). Hotspot refactors and Rust boundary work follow once imports live in predictable places.
+**Current priority:** PR-6 (send flow decomposition) and remaining deferred queue items per dependency order below.
 
 ## Prioritization Principles
 
@@ -47,7 +47,10 @@ Reduce the highest maintainability and regression risks using small, reviewable 
 | PR-1b | **Done** (Day 1, PR #32) | [frontend/docs/FRONTEND_STRUCTURE.md](frontend/docs/FRONTEND_STRUCTURE.md) |
 | PR-1c | **Done** (Day 1, PR #32) | Routes → pages shell migration (wallet, lab partial, library shells) |
 | PR-2 | **Done** | `lib/` domain restructuring |
-| PR-3 – PR-9 | **Deferred** | See queue below |
+| PR-3 | **Done** | `react-hooks/exhaustive-deps` promoted to error |
+| PR-4 | **Done** | Wallet backup export/import hooks extracted from `useDataBackupsCard` |
+| PR-5 | **Done** | `wallet_db` query key prefix; bulk invalidation collapsed to single prefix match |
+| PR-6 – PR-9 | **Deferred** | See queue below |
 
 ## Frontend Folder Structure (Hybrid)
 
@@ -217,7 +220,7 @@ flowchart TB
 
 Order may shift, but **do not start these until PR-2 merges** — later PRs assume stable `lib/<domain>/` paths.
 
-### PR-3: Tighten lint signal for hooks correctness
+### PR-3: Tighten lint signal for hooks correctness ✓
 
 - **Scope**
   - Promote `react-hooks/exhaustive-deps` from warning to error.
@@ -231,8 +234,9 @@ Order may shift, but **do not start these until PR-2 merges** — later PRs assu
 - **Validation**
   - Lint passes with zero warnings budget.
   - No functional regression in related tests.
+- **Delivered:** config-only change; baseline lint was already clean (no code fixes required).
 
-### PR-4: Break up backup/import orchestration hook (phase 1)
+### PR-4: Break up backup/import orchestration hook (phase 1) ✓
 
 - **Scope**
   - Extract `useWalletBackupExport` and `useWalletBackupImport` from monolithic hook.
@@ -248,8 +252,9 @@ Order may shift, but **do not start these until PR-2 merges** — later PRs assu
 - **Validation**
   - Existing settings tests pass.
   - New focused unit tests for extracted hooks added.
+- **Delivered:** `use-wallet-backup-export.ts`, `use-wallet-backup-import.ts`; orchestrator slimmed to lab/migration-report flows; 13 new hook unit tests; `DataBackupsCard` unchanged.
 
-### PR-5: Query invalidation contract hardening
+### PR-5: Query invalidation contract hardening ✓
 
 - **Scope**
   - Define wallet query-key prefix convention and migrate top-impact call sites.
@@ -264,6 +269,7 @@ Order may shift, but **do not start these until PR-2 merges** — later PRs assu
 - **Validation**
   - Cross-tab and wallet-switch tests remain green.
   - Invalidation list shrinks or is formally deprecated.
+- **Delivered:** `WALLET_DB_QUERY_KEY_ROOT`; all six prior invalidation roots migrated; `WALLET_DB_QUERY_INVALIDATION` replaces manual list; legacy array empty; structure doc updated; cache-sync unit test added.
 
 ### PR-6: Send flow decomposition (phase 1)
 

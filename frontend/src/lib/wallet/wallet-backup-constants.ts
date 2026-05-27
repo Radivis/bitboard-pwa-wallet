@@ -24,3 +24,6 @@ export const WALLET_BACKUP_MANIFEST_ENTRY_NAME = 'bitboard-wallet-backup.manifes
 export const WALLET_BACKUP_ZIP_FILENAME = 'bitboard-wallet-backup.zip'
 
 export const WALLET_BACKUP_SIGNING_SALT_BYTES = 16
+
+/** Password verification attempts before offering unverified import bypass. */
+export const WALLET_BACKUP_IMPORT_MAX_VERIFY_ATTEMPTS = 3

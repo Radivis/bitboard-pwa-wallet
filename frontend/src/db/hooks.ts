@@ -22,7 +22,7 @@ export function useWallets() {
 
 export function useWallet(id: number | null) {
   return useQuery({
-    queryKey: id === null ? (['wallets', 'detail', 'none'] as const) : walletKeys.byId(id),
+    queryKey: id === null ? walletKeys.detailNone : walletKeys.byId(id),
     queryFn: async () => {
       await ensureMigrated()
       const wallet = await getDatabase()
@@ -92,7 +92,7 @@ export function useWalletNoMnemonicBackupFlag(walletId: number | null) {
   return useQuery({
     queryKey:
       walletId === null
-        ? (['wallets', 'no_mnemonic_backup', 'none'] as const)
+        ? walletKeys.noMnemonicBackupNone
         : walletKeys.noMnemonicBackup(walletId),
     queryFn: async () => {
       await ensureMigrated()

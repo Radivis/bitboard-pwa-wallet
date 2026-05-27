@@ -9,9 +9,13 @@ import {
 import { errorMessage } from '@/lib/shared/utils'
 import type { NetworkMode } from '@/stores/walletStore'
 import { loadCustomEsploraUrl } from '@/lib/wallet/wallet-utils'
+import { WALLET_DB_QUERY_KEY_ROOT } from '@/lib/wallet/wallet-query-key-root'
 
 /** React Query stable key fragment (custom Esplora URL is resolved inside the fetcher). */
-export const ESPLORA_FEE_PRESETS_QUERY_KEY = ['esplora-fee-presets'] as const
+export const ESPLORA_FEE_PRESETS_QUERY_KEY = [
+  ...WALLET_DB_QUERY_KEY_ROOT,
+  'esplora-fee-presets',
+] as const
 
 async function presetRatesForNetwork(
   networkMode: NetworkMode,

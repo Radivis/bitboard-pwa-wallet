@@ -1,25 +1,22 @@
 import type { InvalidateQueryFilters } from '@tanstack/react-query'
-import { walletKeys } from '@/db/query-keys'
-import { COMMITTED_EXTERNAL_DESCRIPTOR_QUERY_KEY } from '@/hooks/useCommittedExternalDescriptor'
-import { ACTIVE_WALLET_LOAD_QUERY_ROOT } from '@/lib/wallet/wallet-load-query-keys'
-import { LIGHTNING_CONNECTIONS_HYDRATION_QUERY_KEY } from '@/lib/lightning/lightning-connections-hydration'
-import { LIGHTNING_DASHBOARD_QUERY_KEY } from '@/lib/lightning/lightning-dashboard-sync'
+import { WALLET_DB_QUERY_KEY_ROOT } from '@/lib/wallet/wallet-query-key-root'
 
 /**
- * Single source of truth for TanStack Query invalidations after wallet DB / related persisted
- * state changes (used with cross-tab `BroadcastChannel` and local invalidation).
- *
- * Follow-up (separate PR): migrate wallet-related `queryKey` values to share a common prefix
- * such as `['wallet_db', ...]` across all `useQuery` call sites, so one
- * `invalidateQueries({ queryKey: ['wallet_db'] })` (with prefix matching) can replace
- * maintaining this list. Deferred because it touches many hooks and query modules.
+ * Primary invalidation for TanStack Query caches backed by wallet SQLite or encrypted payloads.
+ * All wallet-related query keys must share the `wallet_db` prefix (TanStack prefix matching).
  */
-export const WALLET_RELATED_QUERY_INVALIDATIONS: readonly InvalidateQueryFilters[] =
-  [
-    { queryKey: walletKeys.all },
-    { queryKey: [ACTIVE_WALLET_LOAD_QUERY_ROOT] },
-    { queryKey: [...LIGHTNING_CONNECTIONS_HYDRATION_QUERY_KEY] },
-    { queryKey: [...LIGHTNING_DASHBOARD_QUERY_KEY] },
-    { queryKey: [COMMITTED_EXTERNAL_DESCRIPTOR_QUERY_KEY] },
-    { queryKey: ['customEsploraUrl'] },
-  ]
+export const WALLET_DB_QUERY_INVALIDATION: InvalidateQueryFilters = {
+  queryKey: [...WALLET_DB_QUERY_KEY_ROOT],
+}
+
+/**
+ * Empty during transition; add entries only for queries not yet under the `wallet_db` prefix.
+ */
+export const WALLET_RELATED_QUERY_INVALIDATIONS_LEGACY: readonly InvalidateQueryFilters[] =
+  []
+
+/**
+ * @deprecated Use {@link WALLET_DB_QUERY_INVALIDATION}. Kept for imports during transition.
+ */
+export const WALLET_RELATED_QUERY_INVALIDATIONS =
+  WALLET_RELATED_QUERY_INVALIDATIONS_LEGACY

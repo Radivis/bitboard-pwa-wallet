@@ -3,6 +3,7 @@ import { useQueries } from '@tanstack/react-query'
 import { createBackendService } from '@/lib/lightning/lightning-backend-service'
 import type { ConnectedLightningWallet } from '@/lib/lightning/lightning-backend-service'
 import { getLightningConnectionsForActiveWallet } from '@/lib/lightning/lightning-connection-utils'
+import { sendPageLnBalanceQueryKey } from '@/lib/lightning/lightning-query-keys'
 import { LN_WALLET_BALANCE_STALE_MS } from '@/lib/lightning/lightning-query-timings'
 import type { NetworkMode } from '@/stores/walletStore'
 
@@ -63,7 +64,7 @@ export function useSendLightningBalances(params: {
 
   const balanceQueries = useQueries({
     queries: matchingLightningConnections.map((conn) => ({
-      queryKey: ['send-page-ln-balance', conn.id],
+      queryKey: sendPageLnBalanceQueryKey(conn.id),
       queryFn: () => createBackendService(conn.config).getBalance(),
       enabled: isLightningSendMode && matchingLightningConnections.length > 0,
       staleTime: LN_WALLET_BALANCE_STALE_MS,

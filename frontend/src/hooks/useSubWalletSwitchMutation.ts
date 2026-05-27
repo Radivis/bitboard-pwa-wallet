@@ -3,7 +3,7 @@ import { useMutation, useIsFetching } from '@tanstack/react-query'
 import type { AddressType, NetworkMode } from '@/stores/walletStore'
 import { executeSettingsNetworkSwitch } from '@/lib/settings/network-mode-switch'
 import { executeSettingsAddressTypeSwitch } from '@/lib/settings/execute-settings-address-type-switch'
-import { ACTIVE_WALLET_LOAD_QUERY_ROOT } from '@/lib/wallet/wallet-load-query-keys'
+import { activeWalletLoadQueryKeyPrefix } from '@/lib/wallet/wallet-load-query-keys'
 import {
   DEFAULT_SWITCHING_ADDRESS_TYPE_STATUS_LINE,
   DEFAULT_SWITCHING_NETWORK_STATUS_LINE,
@@ -36,7 +36,7 @@ export function useSubWalletSwitchMutation(switchContext: SubWalletSwitchContext
   )
 
   const bootstrapFetchingRaw =
-    useIsFetching({ queryKey: [ACTIVE_WALLET_LOAD_QUERY_ROOT] }) > 0
+    useIsFetching({ queryKey: [...activeWalletLoadQueryKeyPrefix] }) > 0
 
   const runSwitch = useCallback(
     async (target: NetworkMode | AddressType) => {

@@ -3,6 +3,7 @@ import { ensureMigrated, getDatabase, loadWalletSecretsPayload } from '@/db'
 import { findDescriptorWallet } from '@/lib/wallet/descriptor-wallet-manager'
 import { toBitcoinNetwork } from '@/lib/wallet/bitcoin-utils'
 import { useSessionStore } from '@/stores/sessionStore'
+import { WALLET_DB_QUERY_KEY_ROOT } from '@/lib/wallet/wallet-query-key-root'
 import {
   selectCommittedAccountId,
   selectCommittedAddressType,
@@ -28,6 +29,7 @@ export function useCommittedExternalDescriptor() {
 
   return useQuery({
     queryKey: [
+      ...WALLET_DB_QUERY_KEY_ROOT,
       COMMITTED_EXTERNAL_DESCRIPTOR_QUERY_KEY,
       activeWalletId,
       committedNetworkMode,
