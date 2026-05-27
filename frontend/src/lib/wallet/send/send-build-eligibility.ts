@@ -1,4 +1,4 @@
-import { isValidSendAmountSats } from '@/components/wallet/send/send-amount'
+import { isValidSendAmountSats } from '@/lib/wallet/send/send-amount-validation'
 import { isUsableBtcSpotPriceInFiat } from '@/lib/fiat/is-usable-btc-spot-price-in-fiat'
 import { isValidAddress } from '@/lib/wallet/bitcoin-utils'
 import type { NetworkMode } from '@/stores/walletStore'

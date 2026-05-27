@@ -15,6 +15,7 @@ import {
   validateEsploraUrl,
 } from '@/lib/wallet/bitcoin-utils'
 import { errorMessage } from '@/lib/shared/utils'
+import { withPersistedChainMismatchRetry } from '@/lib/wallet/persisted-chain-mismatch'
 import type { LoadWalletParams } from '@/workers/crypto-api'
 import type { AddressType, BitcoinNetwork } from '@/workers/crypto-types'
 import {
@@ -455,25 +456,11 @@ export async function loadWalletHandlingPersistedChainMismatch(
   loadWallet: (params: LoadWalletParams) => Promise<boolean>,
   params: LoadWalletParams,
 ): Promise<LoadWalletPersistedChainMismatchResult> {
-  try {
-    await loadWallet(params)
-    return { usedEmptyChainFallback: false }
-  } catch (err) {
-    if (params.useEmptyChain) throw err
-    const detail = errorMessage(err) ?? String(err)
-    if (
-      detail.includes('Network mismatch') ||
-      detail.includes('Genesis hash mismatch') ||
-      detail.includes('could not be loaded from changeset')
-    ) {
-      await loadWallet({
-        ...params,
-        useEmptyChain: true,
-      })
-      return { usedEmptyChainFallback: true }
-    }
-    throw err
-  }
+  const { usedEmptyChainFallback } = await withPersistedChainMismatchRetry(
+    loadWallet,
+    params,
+  )
+  return { usedEmptyChainFallback }
 }
 
 /**

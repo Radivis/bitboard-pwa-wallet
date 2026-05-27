@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { LightningAddress } from '@getalby/lightning-tools'
-import { isValidSendAmountSats } from '@/components/wallet/send/send-amount'
+import { isValidSendAmountSats } from '@/lib/wallet/send/send-amount-validation'
 import { useLightningPayMutation } from '@/hooks/useLightningMutations'
 import { useSendLightningBalances } from '@/hooks/useSendLightningBalances'
 import {

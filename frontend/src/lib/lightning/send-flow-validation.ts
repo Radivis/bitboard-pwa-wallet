@@ -1,4 +1,4 @@
-import { isValidSendAmountSats } from '@/components/wallet/send/send-amount'
+import { isValidSendAmountSats } from '@/lib/wallet/send/send-amount-validation'
 import { MAX_BOLT11_PAYMENT_REQUEST_LENGTH } from '@/lib/lightning/lightning-input-limits'
 import {
   bolt11NetworkModeFromPrefix,
@@ -156,7 +156,6 @@ export function canBuildLightningSend(params: {
       params.isLightningSendMode,
       params.normalizedRecipient,
     ) &&
-    params.matchingLightningConnectionsCount > 0 &&
     params.hasLightningWalletSelected &&
     !params.bolt11NetworkMismatch &&
     params.bolt11DecodeOk &&

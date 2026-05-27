@@ -11,10 +11,7 @@ import { useFeatureStore } from '@/stores/featureStore'
 import { useLabChainStateQuery } from '@/hooks/useLabChainStateQuery'
 import { recipientAndAmountFromScannedPayload } from '@/lib/wallet/bip21'
 import { errorMessage } from '@/lib/shared/utils'
-import {
-  formatAmountInputFromSats,
-  UX_DUST_FLOOR_SATS,
-} from '@/lib/wallet/bitcoin-dust'
+import { formatAmountInputFromSats } from '@/lib/wallet/bitcoin-dust'
 import { useLightningStore } from '@/stores/lightningStore'
 import { walletLabOwner } from '@/lib/lab/lab-owner'
 import {
@@ -51,7 +48,10 @@ import {
   isSendFiatRateOk,
 } from '@/lib/wallet/send/send-build-eligibility'
 import { resolveLabDraftAmountWithMinDustFloor } from '@/lib/wallet/send/lab-min-dust-floor'
-import { onchainDustPrepareWarningLines } from '@/lib/wallet/send/onchain-dust-prepare-messages'
+import {
+  minOutputSizeRaisedToastMessage,
+  onchainDustPrepareWarningLines,
+} from '@/lib/wallet/send/onchain-dust-prepare-messages'
 
 import { useSendFlowFees } from './fees'
 import { useSendFlowLightning } from './lightning'
@@ -387,9 +387,7 @@ export function SendFlow() {
           confirmedBalance,
         })
       if (dustAdjustment != null) {
-        toast.warning(
-          `Amount was below the minimum output size (${UX_DUST_FLOOR_SATS} sats). It was increased automatically.`,
-        )
+        toast.warning(minOutputSizeRaisedToastMessage())
         useSendStore.setState({
           amount: formatAmountInputFromSats(draftAmountSats, amountUnit),
           onchainDustWarning: dustAdjustment,

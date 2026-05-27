@@ -1,6 +1,20 @@
 import { describe, expect, it } from 'vitest'
 import { UX_DUST_FLOOR_SATS } from '@/lib/wallet/bitcoin-dust'
-import { onchainDustPrepareWarningLines } from '../onchain-dust-prepare-messages'
+import {
+  minOutputSizeRaisedToastMessage,
+  onchainDustPrepareWarningLines,
+} from '../onchain-dust-prepare-messages'
+
+describe('minOutputSizeRaisedToastMessage', () => {
+  it('matches the raisedToMinDust warning line', () => {
+    expect(minOutputSizeRaisedToastMessage()).toBe(
+      onchainDustPrepareWarningLines({
+        raisedToMinDust: true,
+        bumpedChangeFree: false,
+      })[0],
+    )
+  })
+})
 
 describe('onchainDustPrepareWarningLines', () => {
   it('returns empty array when no adjustments', () => {

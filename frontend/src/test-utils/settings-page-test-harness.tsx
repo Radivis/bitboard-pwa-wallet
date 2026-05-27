@@ -1,3 +1,7 @@
+/**
+ * Settings route test mocks. Import this module before `@/pages/settings/*` in route tests
+ * so `vi.mock` registrations run before the page under test is loaded.
+ */
 import type { ReactNode } from 'react'
 import { vi } from 'vitest'
 

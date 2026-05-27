@@ -2,41 +2,13 @@ import { getDatabase } from '@/db/database'
 import { loadWalletSecretsPayload } from '@/db/wallet-persistence'
 import { updateDescriptorWalletChangeset } from '@/lib/wallet/descriptor-wallet-manager'
 import { toBitcoinNetwork } from '@/lib/wallet/bitcoin-utils'
-import { errorMessage } from '@/lib/shared/utils'
 import { isBenignNoActiveWalletError } from '@/lib/shared/wasm-crypto-error'
+import { withPersistedChainMismatchRetry } from '@/lib/wallet/persisted-chain-mismatch'
 import {
   loadDescriptorWalletWithoutSync,
 } from '@/lib/wallet/wallet-utils'
 import { useCryptoStore } from '@/stores/cryptoStore'
 import { useWalletStore } from '@/stores/walletStore'
-import type {
-  OpenWalletSessionParams,
-  WalletSessionHandle,
-} from '@/workers/crypto-api'
-
-async function openWalletSessionHandlingPersistedChainMismatch(
-  openWalletSession: (params: OpenWalletSessionParams) => Promise<WalletSessionHandle>,
-  params: OpenWalletSessionParams,
-): Promise<WalletSessionHandle> {
-  try {
-    return await openWalletSession(params)
-  } catch (err) {
-    if (params.useEmptyChain) throw err
-    const detail = errorMessage(err)
-    if (
-      detail.includes('Network mismatch') ||
-      detail.includes('Genesis hash mismatch') ||
-      detail.includes('could not be loaded from changeset')
-    ) {
-      return openWalletSession({
-        ...params,
-        useEmptyChain: true,
-      })
-    }
-    throw err
-  }
-}
-
 /**
  * Sums BDK-reported on-chain balance for every mainnet (`bitcoin`) descriptor sub-wallet.
  * Uses ephemeral WASM wallet sessions in the probe loop so the global active wallet slot
@@ -106,7 +78,7 @@ export async function sumMainnetOnChainSatsForWallet(params: {
     }
 
     for (const descriptorWalletData of mainnetDescriptors) {
-      const session = await openWalletSessionHandlingPersistedChainMismatch(
+      const { result: session } = await withPersistedChainMismatchRetry(
         openWalletSession,
         {
           externalDescriptor: descriptorWalletData.externalDescriptor,

@@ -1,4 +1,4 @@
-import { isValidSendAmountSats } from '@/components/wallet/send/send-amount'
+import { isValidSendAmountSats } from '@/lib/wallet/send/send-amount-validation'
 import { UX_DUST_FLOOR_SATS } from '@/lib/wallet/bitcoin-dust'
 
 export type LabMinDustFloorAdjustment = {
