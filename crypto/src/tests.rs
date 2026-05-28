@@ -47,19 +47,23 @@ mod error_tests {
     #[test]
     fn crypto_error_variants_include_inner_message() {
         let msg = "inner detail";
-        let s = CryptoError::Blockchain(msg.to_string()).to_string();
-        assert!(s.contains(msg), "Display must include inner message: {}", s);
+        let display_string = CryptoError::Blockchain(msg.to_string()).to_string();
+        assert!(
+            display_string.contains(msg),
+            "Display must include inner message: {}",
+            display_string
+        );
     }
 
     #[test]
     fn crypto_error_from_serde_json_produces_serialization() {
         let bad_json = serde_json::from_str::<()>("{ invalid }").unwrap_err();
         let crypto_err: CryptoError = bad_json.into();
-        let s = crypto_err.to_string();
+        let display_string = crypto_err.to_string();
         assert!(
-            s.contains("Serialization"),
+            display_string.contains("Serialization"),
             "serde_json::Error must map to Serialization: {}",
-            s
+            display_string
         );
     }
 

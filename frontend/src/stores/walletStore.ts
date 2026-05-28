@@ -45,25 +45,25 @@ export type LoadedSubWallet = {
 }
 
 /** Last-loaded sub-wallet, else persisted preference — use for UI selection and theme accents. */
-export function selectCommittedNetworkMode(s: {
+export function selectCommittedNetworkMode(state: {
   loadedSubWallet: LoadedSubWallet | null
   networkMode: NetworkMode
 }): NetworkMode {
-  return s.loadedSubWallet?.networkMode ?? s.networkMode
+  return state.loadedSubWallet?.networkMode ?? state.networkMode
 }
 
-export function selectCommittedAddressType(s: {
+export function selectCommittedAddressType(state: {
   loadedSubWallet: LoadedSubWallet | null
   addressType: AddressType
 }): AddressType {
-  return s.loadedSubWallet?.addressType ?? s.addressType
+  return state.loadedSubWallet?.addressType ?? state.addressType
 }
 
-export function selectCommittedAccountId(s: {
+export function selectCommittedAccountId(state: {
   loadedSubWallet: LoadedSubWallet | null
   accountId: number
 }): number {
-  return s.loadedSubWallet?.accountId ?? s.accountId
+  return state.loadedSubWallet?.accountId ?? state.accountId
 }
 
 interface TransientWalletState {

@@ -50,7 +50,7 @@ export function LabBlocksCard({
   activeWallet: { name: string } | undefined
 }) {
   const segwitAddressesEnabled = useFeatureStore((s) => s.segwitAddressesEnabled)
-  const livingEntities = entities.filter((e) => !e.isDead)
+  const livingEntities = entities.filter((entity) => !entity.isDead)
   const noLivingEntities =
     ownerType === LabOwnerType.LabEntity && livingEntities.length === 0
 
@@ -183,14 +183,14 @@ export function LabBlocksCard({
                     'ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
                   )}
                   value={selectedLabEntityId ?? ''}
-                  onChange={(e) => {
-                    const v = e.target.value
-                    setSelectedLabEntityId(v === '' ? null : Number(v))
+                  onChange={(event) => {
+                    const selectedValue = event.target.value
+                    setSelectedLabEntityId(selectedValue === '' ? null : Number(selectedValue))
                   }}
                 >
-                  {livingEntities.map((e) => (
-                    <option key={e.labEntityId} value={e.labEntityId}>
-                      {formatLabEntityMineOptionLabel(e, segwitAddressesEnabled)}
+                  {livingEntities.map((entity) => (
+                    <option key={entity.labEntityId} value={entity.labEntityId}>
+                      {formatLabEntityMineOptionLabel(entity, segwitAddressesEnabled)}
                     </option>
                   ))}
                 </select>

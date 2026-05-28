@@ -52,7 +52,9 @@ export function applyNwcSnapshotPatchesToPayload(
   patches: NwcSnapshotPatch[],
 ): WalletSecretsPayload {
   const byId = new Map(
-    payload.lightningNwcConnections.map((c) => [c.id, { ...c }] as const),
+    payload.lightningNwcConnections.map(
+      (storedConnection) => [storedConnection.id, { ...storedConnection }] as const,
+    ),
   )
 
   for (const patch of patches) {
@@ -66,7 +68,7 @@ export function applyNwcSnapshotPatchesToPayload(
   }
 
   const nextList = payload.lightningNwcConnections.map(
-    (c) => byId.get(c.id) ?? c,
+    (storedConnection) => byId.get(storedConnection.id) ?? storedConnection,
   )
   return {
     ...payload,
@@ -105,7 +107,9 @@ export async function loadNwcSnapshotForConnection(params: {
     password,
     walletId,
   )
-  const row = payload.lightningNwcConnections.find((c) => c.id === connectionId)
+  const row = payload.lightningNwcConnections.find(
+    (storedConnection) => storedConnection.id === connectionId,
+  )
   return row?.nwcSnapshot
 }
 
@@ -113,6 +117,9 @@ export function snapshotMapFromPayload(
   payload: WalletSecretsPayload,
 ): Map<string, NwcConnectionSnapshot | undefined> {
   return new Map(
-    payload.lightningNwcConnections.map((c) => [c.id, c.nwcSnapshot]),
+    payload.lightningNwcConnections.map((storedConnection) => [
+      storedConnection.id,
+      storedConnection.nwcSnapshot,
+    ]),
   )
 }

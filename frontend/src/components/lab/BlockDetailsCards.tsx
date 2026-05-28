@@ -119,7 +119,9 @@ export function LabBlockMetadataCard({
   const entities = labState?.entities ?? []
   const txDetails = labState?.txDetails ?? []
   const netMovedSats = netMovedSatsForBlock(txDetails, block.metadata.height)
-  const mineOp = labState?.mineOperations?.find((m) => m.height === block.metadata.height)
+  const mineOp = labState?.mineOperations?.find(
+    (mineOperation) => mineOperation.height === block.metadata.height,
+  )
   const weightAtMiningRecorded =
     mineOp?.blockWeightLimitWu != null &&
     mineOp?.nonCoinbaseWeightUsedWu != null &&

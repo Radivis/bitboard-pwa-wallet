@@ -102,14 +102,14 @@ export function useLabIndexPageData() {
   const createTxMutation = useLabCreateTransactionMutation()
 
   useEffect(() => {
-    const living = entities.filter((e) => !e.isDead)
-    if (living.length === 0) {
+    const livingEntities = entities.filter((entity) => !entity.isDead)
+    if (livingEntities.length === 0) {
       setSelectedLabEntityId(null)
       return
     }
     const prev = useLabMiningStore.getState().selectedLabEntityId
-    if (prev != null && living.some((e) => e.labEntityId === prev)) return
-    setSelectedLabEntityId(living[0].labEntityId)
+    if (prev != null && livingEntities.some((entity) => entity.labEntityId === prev)) return
+    setSelectedLabEntityId(livingEntities[0].labEntityId)
   }, [entities, setSelectedLabEntityId])
   const createRandomTxMutation = useLabCreateRandomTransactionsMutation()
   const resetMutation = useLabResetMutation()
@@ -420,25 +420,31 @@ export function useLabIndexPageData() {
   }, [createRandomTxMutation, randomTransactionCount])
 
   const controlledAddresses = useMemo(() => {
-    return addresses.filter((a) => {
-      if (a.wif) return true
-      const owner = lookupLabAddressOwner(a.address, addressToOwner)
+    return addresses.filter((addressRow) => {
+      if (addressRow.wif) return true
+      const owner = lookupLabAddressOwner(addressRow.address, addressToOwner)
       if (owner == null) return false
       if (owner.kind === 'wallet') return false
-      return getBalanceForAddress(a.address) > 0
+      return getBalanceForAddress(addressRow.address) > 0
     })
   }, [addresses, addressToOwner, getBalanceForAddress])
   const txDetailsByTxid = useMemo(
-    () => new Map(txDetails.map((d) => [d.txid, d])),
+    () => new Map(txDetails.map((txDetail) => [txDetail.txid, txDetail])),
     [txDetails],
   )
   const sortedTransactions = useMemo(
     () =>
       [...transactions].sort((a, b) => {
         const amountA =
-          txDetailsByTxid.get(a.txid)?.outputs.reduce((s, o) => s + o.amountSats, 0) ?? 0
+          txDetailsByTxid.get(a.txid)?.outputs.reduce(
+            (totalSats, output) => totalSats + output.amountSats,
+            0,
+          ) ?? 0
         const amountB =
-          txDetailsByTxid.get(b.txid)?.outputs.reduce((s, o) => s + o.amountSats, 0) ?? 0
+          txDetailsByTxid.get(b.txid)?.outputs.reduce(
+            (totalSats, output) => totalSats + output.amountSats,
+            0,
+          ) ?? 0
         return amountB - amountA
       }),
     [transactions, txDetailsByTxid],

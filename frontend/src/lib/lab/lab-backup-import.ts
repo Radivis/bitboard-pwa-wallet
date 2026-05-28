@@ -7,8 +7,8 @@ import { readFileAsArrayBuffer } from '@/lib/shared/read-file-as-array-buffer'
  * Reads an unsigned lab backup ZIP (single `bitboard-lab-backup.sqlite` entry).
  */
 export async function parseLabBackupZipFile(file: File): Promise<{ sqliteBytes: Uint8Array }> {
-  const buf = await readFileAsArrayBuffer(file)
-  const zip = await JSZip.loadAsync(buf)
+  const zipBytes = await readFileAsArrayBuffer(file)
+  const zip = await JSZip.loadAsync(zipBytes)
   const sqliteEntry = zip.file(LAB_BACKUP_SQLITE_ENTRY_NAME)
   if (!sqliteEntry) {
     throw new LabBackupZipInvalidError(

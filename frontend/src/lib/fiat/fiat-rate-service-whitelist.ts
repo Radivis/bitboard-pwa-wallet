@@ -59,8 +59,8 @@ export function isFiatRatePathAllowedForProvider(
 ): boolean {
   const normalized = pathname.replace(/\/$/, '') || '/'
   return FIAT_RATE_PROVIDER_PATH_PREFIXES[providerId].some((prefix) => {
-    const p = prefix.replace(/\/$/, '') || '/'
-    return normalized === p || normalized.startsWith(`${p}/`)
+    const normalizedPrefix = prefix.replace(/\/$/, '') || '/'
+    return normalized === normalizedPrefix || normalized.startsWith(`${normalizedPrefix}/`)
   })
 }
 
@@ -74,10 +74,10 @@ export function fiatRateViteProxyEntries(): FiatRateViteProxyEntry[] {
   return (Object.keys(FIAT_RATE_PROVIDER_BASES) as FiatRateProviderId[]).map(
     (providerId) => {
       const baseUrl = FIAT_RATE_PROVIDER_BASES[providerId]
-      const u = new URL(baseUrl)
+      const providerUrl = new URL(baseUrl)
       return {
         localPrefix: `${FIAT_SAME_ORIGIN_PROXY_PREFIX}/${providerId}`,
-        targetOrigin: `${u.protocol}//${u.host}`,
+        targetOrigin: `${providerUrl.protocol}//${providerUrl.host}`,
         upstreamPathPrefix: '',
       }
     },

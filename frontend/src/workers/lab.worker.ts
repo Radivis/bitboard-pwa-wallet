@@ -598,8 +598,8 @@ const labService = {
     if (!entity) throw new Error(`Unknown lab entity id ${labEntityId}`)
 
     const owner = labEntityLabOwner(labEntityId)
-    const touchesTx = (s: LabOwner | null, r: LabOwner | null) =>
-      labOwnersEqual(s, owner) || labOwnersEqual(r, owner)
+    const touchesTx = (sender: LabOwner | null, receiver: LabOwner | null) =>
+      labOwnersEqual(sender, owner) || labOwnersEqual(receiver, owner)
 
     const hasTx =
       (labWorkerState.transactions ?? []).some((transactionSummary) =>
@@ -619,8 +619,8 @@ const labService = {
       (entity) => entity.labEntityId !== labEntityId,
     )
     const addrMap = labWorkerState.addressToOwner ?? {}
-    for (const [addr, o] of Object.entries(addrMap)) {
-      if (labOwnersEqual(o, owner)) {
+    for (const [addr, addressOwner] of Object.entries(addrMap)) {
+      if (labOwnersEqual(addressOwner, owner)) {
         delete addrMap[addr]
       }
     }

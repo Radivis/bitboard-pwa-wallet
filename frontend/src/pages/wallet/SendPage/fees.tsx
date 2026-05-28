@@ -36,9 +36,9 @@ export function useSendFlowFees() {
   )
 
   const customFeeParsed = useMemo(() => {
-    const n = Number.parseFloat(customFeeRate.trim())
-    if (!Number.isFinite(n) || n <= 0) return null
-    return n
+    const customFeeRateValue = Number.parseFloat(customFeeRate.trim())
+    if (!Number.isFinite(customFeeRateValue) || customFeeRateValue <= 0) return null
+    return customFeeRateValue
   }, [customFeeRate])
 
   const effectiveFeeRate = useCustomFee

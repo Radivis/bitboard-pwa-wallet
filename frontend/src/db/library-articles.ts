@@ -22,7 +22,7 @@ export async function getAllFavoriteSlugs(walletDb: Kysely<Database>): Promise<s
     // Runtime binds `1` (SQLite); `as boolean` satisfies Kysely OperandValue for ColumnType<boolean, …>.
     .where('is_favorite', '=', SQLITE_TRUE as unknown as boolean)
     .execute()
-  return rows.map((r) => r.article_slug)
+  return rows.map((row) => row.article_slug)
 }
 
 /**

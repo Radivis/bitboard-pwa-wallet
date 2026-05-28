@@ -50,7 +50,7 @@ export function useSendLightningBalances(params: {
       setSelectedLightningConnectionId(null)
       return
     }
-    const ids = matchingLightningConnections.map((c) => c.id)
+    const ids = matchingLightningConnections.map((connection) => connection.id)
     if (matchingLightningConnections.length === 1) {
       setSelectedLightningConnectionId(matchingLightningConnections[0].id)
     } else if (matchingLightningConnections.length > 1) {

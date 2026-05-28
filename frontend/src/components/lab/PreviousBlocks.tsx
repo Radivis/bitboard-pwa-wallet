@@ -43,8 +43,8 @@ export function LabPreviousBlocksCard({
 
   const rows = useMemo(() => {
     return byHeightDesc.map((block) => {
-      const txsAtHeight = txDetails.filter((t) => t.blockHeight === block.height)
-      const mineOp = mineOperations.find((m) => m.height === block.height)
+      const txsAtHeight = txDetails.filter((tx) => tx.blockHeight === block.height)
+      const mineOp = mineOperations.find((mineOperation) => mineOperation.height === block.height)
       const minedBy: LabOwner | null = mineOp?.minedBy ?? null
       const firstTime = txsAtHeight[0]?.blockTime ?? 0
       return {

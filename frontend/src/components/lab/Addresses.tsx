@@ -59,7 +59,7 @@ function LabOwnerAddressesInner({
   const addresses = data?.addresses ?? []
   const totalCount = data?.totalCount ?? 0
   const { data: balanceByAddress } = useLabAddressBalancesForAddresses(
-    addresses.map((a) => a.address),
+    addresses.map((addressRow) => addressRow.address),
     { enabled: labNetworkEnabled && addresses.length > 0 },
   )
 
@@ -77,17 +77,17 @@ function LabOwnerAddressesInner({
           <span className="w-28 shrink-0 text-right">Balance</span>
           <span className="w-10 shrink-0" />
         </div>
-        {addresses.map((a) => (
+        {addresses.map((addressRow) => (
           <div
-            key={a.address}
+            key={addressRow.address}
             className="flex gap-4 items-center py-2 border-b border-border last:border-0"
           >
             <span className="font-mono text-sm break-all flex-1 min-w-0">
-              {truncateAddress(a.address)}
+              {truncateAddress(addressRow.address)}
             </span>
             <span className="text-right w-28 shrink-0">
               <BitcoinAmountDisplay
-                amountSats={balanceByAddress?.get(a.address) ?? 0}
+                amountSats={balanceByAddress?.get(addressRow.address) ?? 0}
                 size="sm"
               />
             </span>
@@ -95,8 +95,8 @@ function LabOwnerAddressesInner({
               size="icon"
               variant="ghost"
               className="h-8 w-8 shrink-0"
-              onClick={() => onCopyAddress(a.address)}
-              aria-label={`Copy ${truncateAddress(a.address)}`}
+              onClick={() => onCopyAddress(addressRow.address)}
+              aria-label={`Copy ${truncateAddress(addressRow.address)}`}
             >
               <Copy className="h-4 w-4" />
             </Button>

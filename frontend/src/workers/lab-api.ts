@@ -39,15 +39,15 @@ export function mergeMempoolInputsDetailWithOutpoints(
   inputs: { txid: string; vout: number }[],
   inputsDetail: LabTxInputDetail[],
 ): LabTxInputDetail[] {
-  return inputsDetail.map((d, i) => {
-    const out = inputs[i]
+  return inputsDetail.map((inputDetail, inputIndex) => {
+    const inputOutpoint = inputs[inputIndex]
     if (
-      out != null &&
-      (d.prevTxid == null || d.prevVout === undefined || d.prevVout === null)
+      inputOutpoint != null &&
+      (inputDetail.prevTxid == null || inputDetail.prevVout === undefined || inputDetail.prevVout === null)
     ) {
-      return { ...d, prevTxid: out.txid, prevVout: out.vout }
+      return { ...inputDetail, prevTxid: inputOutpoint.txid, prevVout: inputOutpoint.vout }
     }
-    return d
+    return inputDetail
   })
 }
 

@@ -69,23 +69,23 @@ function LabOwnerUtxosInner({
           <span className="w-28 shrink-0 text-right">Amount</span>
           <span className="w-10 shrink-0" />
         </div>
-        {utxos.map((u) => (
+        {utxos.map((utxo) => (
           <div
-            key={`${u.txid}:${u.vout}`}
+            key={`${utxo.txid}:${utxo.vout}`}
             className="flex gap-4 items-center py-2 border-b border-border last:border-0"
           >
             <span className="font-mono text-sm break-all flex-1 min-w-0">
-              {truncateAddress(u.address)}
+              {truncateAddress(utxo.address)}
             </span>
             <span className="text-right w-28 shrink-0">
-              <BitcoinAmountDisplay amountSats={u.amountSats} size="sm" />
+              <BitcoinAmountDisplay amountSats={utxo.amountSats} size="sm" />
             </span>
             <Button
               size="icon"
               variant="ghost"
               className="h-8 w-8 shrink-0"
-              onClick={() => onCopyAddress(u.address)}
-              aria-label={`Copy ${truncateAddress(u.address)}`}
+              onClick={() => onCopyAddress(utxo.address)}
+              aria-label={`Copy ${truncateAddress(utxo.address)}`}
             >
               <Copy className="h-4 w-4" />
             </Button>

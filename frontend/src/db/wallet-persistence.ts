@@ -164,7 +164,7 @@ export async function putSplitWalletSecretsEncrypted(
     if (blobs.mnemonic === undefined) {
       throw new Error('New wallet secrets row requires both payload and mnemonic ciphertexts')
     }
-    const m = blobs.mnemonic
+    const mnemonicBlob = blobs.mnemonic
     await walletDb
       .insertInto('wallet_secrets')
       .values({
@@ -174,10 +174,10 @@ export async function putSplitWalletSecretsEncrypted(
         iv: blobs.payload.iv,
         salt: blobs.payload.salt,
         kdf_phc: kdfPhc,
-        mnemonic_encrypted_data: m.ciphertext,
-        mnemonic_iv: m.iv,
-        mnemonic_salt: m.salt,
-        mnemonic_kdf_phc: m.kdfPhc,
+        mnemonic_encrypted_data: mnemonicBlob.ciphertext,
+        mnemonic_iv: mnemonicBlob.iv,
+        mnemonic_salt: mnemonicBlob.salt,
+        mnemonic_kdf_phc: mnemonicBlob.kdfPhc,
         created_at: now,
         updated_at: now,
       })
@@ -521,7 +521,7 @@ export async function listWalletIdsWithSecrets(
     .select('wallet_id')
     .orderBy('wallet_id', 'asc')
     .execute()
-  return rows.map((r) => r.wallet_id)
+  return rows.map((row) => row.wallet_id)
 }
 
 export async function reencryptAllWalletSecretsWithNewPassword(params: {

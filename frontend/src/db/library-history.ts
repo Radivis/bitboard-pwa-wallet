@@ -48,7 +48,7 @@ export async function pruneLibraryHistory(
     .limit(maxRows)
     .execute()
 
-  const keepIds = keep.map((r) => r.library_history_id)
+  const keepIds = keep.map((historyRow) => historyRow.library_history_id)
   if (keepIds.length === 0) return
 
   await walletDb

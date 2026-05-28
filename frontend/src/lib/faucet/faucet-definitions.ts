@@ -87,10 +87,10 @@ export function getFaucetProxyUrl(faucetId: string): string {
  * Returns the upstream base URL for a faucet ID, or null if unknown.
  */
 export function getUpstreamBaseForFaucetProxy(faucetId: string): string | null {
-  const entry = FAUCET_ENTRIES.find((e) => e.id === faucetId)
+  const entry = FAUCET_ENTRIES.find((faucetEntry) => faucetEntry.id === faucetId)
   return entry?.url ?? null
 }
 
 export function isKnownFaucetId(id: string): boolean {
-  return FAUCET_ENTRIES.some((e) => e.id === id)
+  return FAUCET_ENTRIES.some((faucetEntry) => faucetEntry.id === id)
 }

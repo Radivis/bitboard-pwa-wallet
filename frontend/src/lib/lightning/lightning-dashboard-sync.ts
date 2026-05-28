@@ -327,8 +327,8 @@ function chainSortTime(tx: TransactionDetails): number {
   return tx.confirmation_time ?? 0
 }
 
-function lightningSortTime(p: LightningPaymentWithWallet): number {
-  return p.timestamp
+function lightningSortTime(payment: LightningPaymentWithWallet): number {
+  return payment.timestamp
 }
 
 /**

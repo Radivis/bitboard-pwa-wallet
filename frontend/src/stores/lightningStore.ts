@@ -40,7 +40,8 @@ export function hasNetworkConnectedWallet(
   }
   const lnMode = networkMode as LightningNetworkMode
   return connectedWallets.some(
-    (w) => w.walletId === walletId && w.networkMode === lnMode,
+    (connection) =>
+      connection.walletId === walletId && connection.networkMode === lnMode,
   )
 }
 
@@ -131,9 +132,9 @@ export const useLightningStore = create<LightningState>()(
       invoices: [],
 
       replaceConnectionsForWallet: (walletId, connections) => {
-        set((s) => ({
+        set((state) => ({
           connectedWallets: [
-            ...s.connectedWallets.filter((w) => w.walletId !== walletId),
+            ...state.connectedWallets.filter((connection) => connection.walletId !== walletId),
             ...connections,
           ],
         }))
@@ -143,11 +144,13 @@ export const useLightningStore = create<LightningState>()(
         set({ connectedWallets: [], activeConnectionIds: {} }),
 
       removeLightningStateForWallet: (walletId) =>
-        set((s) => {
-          const nextActiveIds = { ...s.activeConnectionIds }
+        set((state) => {
+          const nextActiveIds = { ...state.activeConnectionIds }
           delete nextActiveIds[walletId]
           return {
-            connectedWallets: s.connectedWallets.filter((w) => w.walletId !== walletId),
+            connectedWallets: state.connectedWallets.filter(
+              (connection) => connection.walletId !== walletId,
+            ),
             activeConnectionIds: nextActiveIds,
           }
         }),
@@ -161,8 +164,8 @@ export const useLightningStore = create<LightningState>()(
           throw new Error('Invalid NWC connection string')
         }
 
-        const others = get().connectedWallets.filter((w) => w.walletId !== walletId)
-        const forWallet = get().connectedWallets.filter((w) => w.walletId === walletId)
+        const others = get().connectedWallets.filter((connection) => connection.walletId !== walletId)
+        const forWallet = get().connectedWallets.filter((connection) => connection.walletId === walletId)
 
         const trimmedLabel = label.trim()
         if (
@@ -176,7 +179,7 @@ export const useLightningStore = create<LightningState>()(
         const labelToStore =
           trimmedLabel.length > 0
             ? trimmedLabel
-            : resolveDefaultNwcConnectionLabel(forWallet.map((w) => w.label))
+            : resolveDefaultNwcConnectionLabel(forWallet.map((connection) => connection.label))
         if (labelToStore.length > MAX_LIGHTNING_WALLET_LABEL_LENGTH) {
           throw new Error(
             `Label must be at most ${MAX_LIGHTNING_WALLET_LABEL_LENGTH} characters`,
@@ -220,8 +223,8 @@ export const useLightningStore = create<LightningState>()(
           throw new Error('Wallet must be unlocked to remove a Lightning connection')
         }
 
-        const removed = get().connectedWallets.find((w) => w.id === connectionId)
-        const wallets = get().connectedWallets.filter((w) => w.id !== connectionId)
+        const removed = get().connectedWallets.find((connection) => connection.id === connectionId)
+        const wallets = get().connectedWallets.filter((connection) => connection.id !== connectionId)
         const updatedActiveIds = { ...get().activeConnectionIds }
 
         if (removed) {
@@ -232,7 +235,8 @@ export const useLightningStore = create<LightningState>()(
           for (const mode of LIGHTNING_NETWORK_MODES) {
             if (perNetwork[mode] === connectionId) {
               const replacement = wallets.find(
-                (w) => w.walletId === walletId && w.networkMode === mode,
+                (connection) =>
+                  connection.walletId === walletId && connection.networkMode === mode,
               )
               if (replacement) {
                 perNetwork[mode] = replacement.id
@@ -254,7 +258,7 @@ export const useLightningStore = create<LightningState>()(
         })
 
         if (removed) {
-          const forWallet = wallets.filter((w) => w.walletId === removed.walletId)
+          const forWallet = wallets.filter((connection) => connection.walletId === removed.walletId)
           await saveLightningConnectionsForWallet({
             password,
             walletId: removed.walletId,
@@ -284,29 +288,31 @@ export const useLightningStore = create<LightningState>()(
           )
         }
 
-        const target = get().connectedWallets.find((w) => w.id === connectionId)
+        const target = get().connectedWallets.find((connection) => connection.id === connectionId)
         if (!target) {
           throw new Error('Lightning connection not found')
         }
 
         const { walletId } = target
         const duplicate = get().connectedWallets.some(
-          (w) =>
-            w.walletId === walletId &&
-            w.id !== connectionId &&
-            w.label.trim() === trimmed,
+          (connection) =>
+            connection.walletId === walletId &&
+            connection.id !== connectionId &&
+            connection.label.trim() === trimmed,
         )
         if (duplicate) {
           throw new Error('Another Lightning wallet already uses this label')
         }
 
-        const nextWallets = get().connectedWallets.map((w) =>
-          w.id === connectionId ? { ...w, label: trimmed } : w,
+        const nextWallets = get().connectedWallets.map((connection) =>
+          connection.id === connectionId
+            ? { ...connection, label: trimmed }
+            : connection,
         )
 
         set({ connectedWallets: nextWallets })
 
-        const forWallet = nextWallets.filter((w) => w.walletId === walletId)
+        const forWallet = nextWallets.filter((connection) => connection.walletId === walletId)
         await saveLightningConnectionsForWallet({
           password,
           walletId,
@@ -315,7 +321,7 @@ export const useLightningStore = create<LightningState>()(
       },
 
       setActiveConnection: (walletId, networkMode, connectionId) => {
-        const lightningConnection = get().connectedWallets.find((w) => w.id === connectionId)
+        const lightningConnection = get().connectedWallets.find((connection) => connection.id === connectionId)
         if (
           !lightningConnection ||
           lightningConnection.walletId !== walletId ||
@@ -335,14 +341,14 @@ export const useLightningStore = create<LightningState>()(
       },
 
       getConnectionsForWallet: (walletId) =>
-        get().connectedWallets.filter((w) => w.walletId === walletId),
+        get().connectedWallets.filter((connection) => connection.walletId === walletId),
 
       getActiveConnection: (walletId, networkMode) => {
         if (!isLightningSupported(networkMode)) return null
         const lnMode = networkMode as LightningNetworkMode
         const activeId = get().activeConnectionIds[walletId]?.[lnMode]
         if (!activeId) return null
-        const lightningConnection = get().connectedWallets.find((w) => w.id === activeId)
+        const lightningConnection = get().connectedWallets.find((connection) => connection.id === activeId)
         if (!lightningConnection || lightningConnection.networkMode !== lnMode) return null
         return lightningConnection
       },

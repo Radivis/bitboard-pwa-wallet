@@ -70,9 +70,9 @@ mod tests {
     #[test]
     fn float_path_matches_integer_from_sat_per_vb() {
         for n in 1u64..=25 {
-            let f = fee_rate_from_sat_per_vb_float(n as f64).unwrap();
-            let i = FeeRate::from_sat_per_vb(n).expect("within range");
-            assert_eq!(f, i, "mismatch at {n} sat/vB");
+            let float_fee_rate = fee_rate_from_sat_per_vb_float(n as f64).unwrap();
+            let integer_fee_rate = FeeRate::from_sat_per_vb(n).expect("within range");
+            assert_eq!(float_fee_rate, integer_fee_rate, "mismatch at {n} sat/vB");
         }
     }
 

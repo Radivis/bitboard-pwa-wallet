@@ -154,16 +154,16 @@ function elementsOnPathBeforeZoneRoot(
       if (path[i] === zoneRoot) {
         return path
           .slice(0, i)
-          .filter((n): n is Element => n instanceof Element)
+          .filter((pathNode): pathNode is Element => pathNode instanceof Element)
       }
     }
   }
   const out: Element[] = []
-  let el: Element | null =
+  let currentElement: Element | null =
     event.target instanceof Element ? event.target : null
-  while (el && el !== zoneRoot) {
-    out.push(el)
-    el = el.parentElement
+  while (currentElement && currentElement !== zoneRoot) {
+    out.push(currentElement)
+    currentElement = currentElement.parentElement
   }
   return out
 }
@@ -176,8 +176,8 @@ export function clickTargetWouldActivatePrimaryAction(
   event: Event,
   explainerRoot: HTMLElement,
 ): boolean {
-  for (const el of elementsOnPathBeforeZoneRoot(event, explainerRoot)) {
-    if (nodeIsInfomodePrimaryActionSurface(el)) {
+  for (const pathElement of elementsOnPathBeforeZoneRoot(event, explainerRoot)) {
+    if (nodeIsInfomodePrimaryActionSurface(pathElement)) {
       return true
     }
   }

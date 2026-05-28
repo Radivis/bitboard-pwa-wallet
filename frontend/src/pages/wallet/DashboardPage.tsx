@@ -174,11 +174,15 @@ function BalanceCard() {
     () => lnBalancesQuery.data?.lightningBalanceRows ?? [],
     [lnBalancesQuery.data?.lightningBalanceRows],
   )
-  const hasStaleLnBalance = lightningBalanceRows.some((r) => r.isStaleBalance)
+  const hasStaleLnBalance = lightningBalanceRows.some(
+    (balanceRow) => balanceRow.isStaleBalance,
+  )
   const newestStaleBalanceIso = useMemo(() => {
     const times = lightningBalanceRows
-      .filter((r) => r.isStaleBalance && r.balanceSnapshotAt != null)
-      .map((r) => r.balanceSnapshotAt as string)
+      .filter(
+        (balanceRow) => balanceRow.isStaleBalance && balanceRow.balanceSnapshotAt != null,
+      )
+      .map((balanceRow) => balanceRow.balanceSnapshotAt as string)
     if (times.length === 0) return null
     return times.reduce((a, b) => (a > b ? a : b))
   }, [lightningBalanceRows])

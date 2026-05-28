@@ -70,9 +70,9 @@ export function LabEntitiesCard() {
 
   const { data: labState } = useLabChainStateQuery()
   const entitiesForValidation =
-    labState?.entities?.map((e) => ({
-      labEntityId: e.labEntityId,
-      entityName: e.entityName,
+    labState?.entities?.map((entity) => ({
+      labEntityId: entity.labEntityId,
+      entityName: entity.entityName,
     })) ?? []
 
   const { data, isLoading, isError, refetch } = useLabEntitiesPage(pageIndex, {
@@ -103,9 +103,9 @@ export function LabEntitiesCard() {
       ? AddressType.Taproot
       : AddressType.SegWit
     if (trimmed.length > 0) {
-      const v = validateLabEntityRenameName(trimmed, entitiesForValidation, -1)
-      if (!v.ok) {
-        toast.error(v.error)
+      const validationResult = validateLabEntityRenameName(trimmed, entitiesForValidation, -1)
+      if (!validationResult.ok) {
+        toast.error(validationResult.error)
         return
       }
     }
@@ -139,9 +139,9 @@ export function LabEntitiesCard() {
   const saveRename = () => {
     if (renamingId == null) return
     const trimmed = renameDraft.trim()
-    const v = validateLabEntityRenameName(trimmed, entitiesForValidation, renamingId)
-    if (!v.ok) {
-      toast.error(v.error)
+    const validationResult = validateLabEntityRenameName(trimmed, entitiesForValidation, renamingId)
+    if (!validationResult.ok) {
+      toast.error(validationResult.error)
       return
     }
     void renameMutation.mutateAsync(
@@ -168,7 +168,10 @@ export function LabEntitiesCard() {
     })
   }
 
-  const rowPendingDelete = deleteId != null ? rows.find((r) => r.labEntityId === deleteId) : undefined
+  const rowPendingDelete =
+    deleteId != null
+      ? rows.find((entityRow) => entityRow.labEntityId === deleteId)
+      : undefined
 
   return (
     <>

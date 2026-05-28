@@ -44,7 +44,10 @@ export function isLabPipelineDebugEnabled(): boolean {
 }
 
 function totalSats(utxos: { amountSats: number }[]): number {
-  return utxos.reduce((s, u) => s + (Number(u.amountSats) || 0), 0)
+  return utxos.reduce(
+    (totalSats, utxo) => totalSats + (Number(utxo.amountSats) || 0),
+    0,
+  )
 }
 
 export function labPipelineDebugLog(

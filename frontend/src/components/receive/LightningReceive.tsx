@@ -250,9 +250,9 @@ function InvoiceCreateForm({ onCreated }: { onCreated: () => void }) {
 
   const amountParse = useMemo((): InvoiceAmountFieldParse => {
     if (mainnetFiatEntry) {
-      const t = amountRaw.trim()
-      if (t === '') return { kind: 'amountless' }
-      const fiat = parsePositiveFiatAmountInput(t)
+      const trimmedAmount = amountRaw.trim()
+      if (trimmedAmount === '') return { kind: 'amountless' }
+      const fiat = parsePositiveFiatAmountInput(trimmedAmount)
       if (fiat == null) return { kind: 'invalid' }
       if (fiat === 0) return { kind: 'amountless' }
       if (!isUsableBtcSpotPriceInFiat(btcPriceInFiat)) return { kind: 'invalid' }
