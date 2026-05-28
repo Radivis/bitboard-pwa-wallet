@@ -1,7 +1,10 @@
 import type { AddressType } from '@/lib/wallet/wallet-domain-types'
-import { parseWasmObject, labWorkerState } from './lab-worker-state'
+import { labWorkerState } from './lab-worker-state'
 import type { LabEntityRecord } from './lab-api'
-import { mapWireCreateWalletResultToDomain } from './crypto-wire-mappers'
+import {
+  mapWireCreateWalletResultToDomain,
+  parseWasmJsonWire,
+} from './crypto-wire-mappers'
 import type { WireCreateWalletResult } from './crypto-wire-types'
 
 type WasmModule = Awaited<ReturnType<typeof import('./lab-wasm-loader').getWasm>>
@@ -27,7 +30,7 @@ export function createAndRegisterLabEntityFromWasm(
     0,
   )
   const walletCreationResult = mapWireCreateWalletResultToDomain(
-    parseWasmObject(createdRaw) as WireCreateWalletResult,
+    parseWasmJsonWire<WireCreateWalletResult>(createdRaw),
   )
   const entity: LabEntityRecord = {
     labEntityId,

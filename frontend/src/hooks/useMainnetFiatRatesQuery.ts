@@ -26,7 +26,7 @@ export function mainnetFiatRatesQueryKey(
 function usePortfolioPositiveForFiatRatesFetch(): boolean {
   const balance = useWalletStore((walletState) => walletState.balance)
   const lightningBalancesQuery = useLightningBalancesForDashboardQuery()
-  const onChainTotalSats = balance?.total ?? 0
+  const onChainTotalSats = balance?.totalSats ?? 0
   const lightningTotalSats = lightningBalancesQuery.data?.totalSats ?? 0
   return onChainTotalSats > 0 || lightningTotalSats > 0
 }
