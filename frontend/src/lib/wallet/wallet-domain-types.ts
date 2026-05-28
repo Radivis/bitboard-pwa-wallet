@@ -14,7 +14,7 @@ export enum AddressType {
 
 export type BitcoinNetwork = 'bitcoin' | 'testnet' | 'signet' | 'regtest'
 
-/** Domain wallet row from SQLite (camelCase). Mapped at the DB hook boundary. */
+/** Domain wallet summary; map from SQLite via `mapDbWalletToDomain()` at the DB hook boundary. */
 export interface WalletSummary {
   walletId: number
   name: string

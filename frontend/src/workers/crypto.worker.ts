@@ -423,15 +423,15 @@ const cryptoService = {
   },
 
   async buildTransaction(params: {
-    recipientAddress: string;
+    toAddress: string;
     amountSats: number;
     feeRateSatPerVb: number;
     network: BitcoinNetwork;
   }): Promise<string> {
-    const { recipientAddress, amountSats, feeRateSatPerVb, network } = params;
+    const { toAddress, amountSats, feeRateSatPerVb, network } = params;
     return invokeWasmCrypto((wasmModule) =>
       wasmModule.build_transaction(
-        recipientAddress,
+        toAddress,
         BigInt(amountSats),
         feeRateSatPerVb,
         network,
@@ -440,14 +440,14 @@ const cryptoService = {
   },
 
   async prepareOnchainSendTransaction(params: {
-    recipientAddress: string;
+    toAddress: string;
     amountSats: number;
     feeRateSatPerVb: number;
     network: BitcoinNetwork;
     applyChangeFreeBump?: boolean;
   }): Promise<import('./crypto-api').PrepareOnchainSendResult> {
     const {
-      recipientAddress,
+      toAddress,
       amountSats,
       feeRateSatPerVb,
       network,
@@ -455,7 +455,7 @@ const cryptoService = {
     } = params;
     const wasmPrepareResult = await invokeWasmCrypto((wasmModule) =>
       wasmModule.prepare_onchain_send_transaction(
-        recipientAddress,
+        toAddress,
         BigInt(amountSats),
         feeRateSatPerVb,
         network,

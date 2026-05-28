@@ -92,7 +92,7 @@ export interface DraftLabPsbtTransactionResult {
   finalAmountSats: number;
   originalAmountSats: number;
   isRaisedToMinDust: boolean;
-  changeFreeBumpAvailable: boolean;
+  isChangeFreeBumpAvailable: boolean;
   changeFreeMaxSats: number;
   feeSats: number;
   changeSats: number;
@@ -121,7 +121,7 @@ export interface LabEntityBuildAndSignTransactionParams
 }
 
 export interface BuildTransactionParams {
-  recipientAddress: string;
+  toAddress: string;
   amountSats: number;
   feeRateSatPerVb: number;
   network: BitcoinNetwork;
@@ -138,8 +138,8 @@ export interface PrepareOnchainSendResult {
   finalAmountSats: number;
   originalAmountSats: number;
   isRaisedToMinDust: boolean;
-  bumpedChangeFree: boolean;
-  changeFreeBumpAvailable: boolean;
+  isBumpedChangeFree: boolean;
+  isChangeFreeBumpAvailable: boolean;
   changeFreeMaxSats: number;
   feeSats: number;
   changeSats: number;
@@ -155,8 +155,8 @@ export interface BuildAndSignLabTransactionResult {
   finalAmountSats: number;
   originalAmountSats: number;
   isRaisedToMinDust: boolean;
-  bumpedChangeFree: boolean;
-  changeFreeBumpAvailable: boolean;
+  isBumpedChangeFree: boolean;
+  isChangeFreeBumpAvailable: boolean;
   changeFreeMaxSats: number;
 }
 

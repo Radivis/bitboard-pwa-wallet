@@ -10,7 +10,7 @@ describe('minOutputSizeRaisedToastMessage', () => {
     expect(minOutputSizeRaisedToastMessage()).toBe(
       onchainDustPrepareWarningLines({
         isRaisedToMinDust: true,
-        bumpedChangeFree: false,
+        isBumpedChangeFree: false,
       })[0],
     )
   })
@@ -21,7 +21,7 @@ describe('onchainDustPrepareWarningLines', () => {
     expect(
       onchainDustPrepareWarningLines({
         isRaisedToMinDust: false,
-        bumpedChangeFree: false,
+        isBumpedChangeFree: false,
       }),
     ).toEqual([])
   })
@@ -30,7 +30,7 @@ describe('onchainDustPrepareWarningLines', () => {
     expect(
       onchainDustPrepareWarningLines({
         isRaisedToMinDust: true,
-        bumpedChangeFree: false,
+        isBumpedChangeFree: false,
       }),
     ).toEqual([
       `Amount was below the minimum output size (${UX_DUST_FLOOR_SATS} sats). It was increased automatically.`,
@@ -41,7 +41,7 @@ describe('onchainDustPrepareWarningLines', () => {
     expect(
       onchainDustPrepareWarningLines({
         isRaisedToMinDust: false,
-        bumpedChangeFree: true,
+        isBumpedChangeFree: true,
       }),
     ).toEqual([
       'Change for this transaction would have been below the dust limit; the amount was increased to make the transfer change-free.',
@@ -51,7 +51,7 @@ describe('onchainDustPrepareWarningLines', () => {
   it('returns both lines when both adjustments apply', () => {
     const lines = onchainDustPrepareWarningLines({
       isRaisedToMinDust: true,
-      bumpedChangeFree: true,
+      isBumpedChangeFree: true,
     })
     expect(lines).toHaveLength(2)
     expect(lines[0]).toContain(String(UX_DUST_FLOOR_SATS))

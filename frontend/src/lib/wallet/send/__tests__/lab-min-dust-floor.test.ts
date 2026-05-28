@@ -13,8 +13,8 @@ describe('resolveLabDraftAmountWithMinDustFloor', () => {
       draftAmountSats: UX_DUST_FLOOR_SATS,
       dustAdjustment: {
         previousSats: 100,
-        raisedToDustMin: true,
-        bumpedChangeFree: false,
+        isRaisedToMinDust: true,
+        isBumpedChangeFree: false,
       },
     })
   })

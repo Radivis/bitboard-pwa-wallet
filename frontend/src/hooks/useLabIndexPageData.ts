@@ -213,7 +213,7 @@ export function useLabIndexPageData() {
           }
         }
 
-        if (draftResult.draft.changeFreeBumpAvailable) {
+        if (draftResult.draft.isChangeFreeBumpAvailable) {
           setDustCase2Modal({
             exactAmountSats: draftResult.draft.finalAmountSats,
             changeFreeMaxSats: draftResult.draft.changeFreeMaxSats,

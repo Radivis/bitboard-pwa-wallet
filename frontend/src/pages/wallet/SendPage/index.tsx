@@ -160,15 +160,15 @@ export function SendFlow() {
   const applyOnchainPrepareOutcomeToSendStore = useCallback(
     (outcome: PrepareOnchainSendResult) => {
       const { amountUnit: unit } = useSendStore.getState()
-      if (outcome.isRaisedToMinDust || outcome.bumpedChangeFree) {
+      if (outcome.isRaisedToMinDust || outcome.isBumpedChangeFree) {
         const lines = onchainDustPrepareWarningLines(outcome)
         toast.warning(lines.join(' '))
         useSendStore.setState({
           amount: formatAmountInputFromSats(outcome.finalAmountSats, unit),
           onchainDustWarning: {
             previousSats: outcome.originalAmountSats,
-            raisedToDustMin: outcome.isRaisedToMinDust,
-            bumpedChangeFree: outcome.bumpedChangeFree,
+            isRaisedToMinDust: outcome.isRaisedToMinDust,
+            isBumpedChangeFree: outcome.isBumpedChangeFree,
           },
         })
       }
@@ -345,8 +345,8 @@ export function SendFlow() {
           amount: formatAmountInputFromSats(draft.finalAmountSats, amountUnit),
           onchainDustWarning: {
             previousSats: labDustCase2Modal.originalAmountSats,
-            raisedToDustMin: false,
-            bumpedChangeFree: true,
+            isRaisedToMinDust: false,
+            isBumpedChangeFree: true,
           },
         })
         applySendReviewTxSummaryToStore({
@@ -413,7 +413,7 @@ export function SendFlow() {
             inputUtxos: draft.inputUtxos,
           })
 
-          if (draft.changeFreeBumpAvailable) {
+          if (draft.isChangeFreeBumpAvailable) {
             labChangeFreeBumpBaseAmountSatsRef.current = draft.finalAmountSats
             setLabDustCase2Modal({
               changeFreeMaxSats: draft.changeFreeMaxSats,
@@ -442,7 +442,7 @@ export function SendFlow() {
         effectiveFeeRate,
         applyChangeFreeBump: false,
       })
-      if (outcome.changeFreeBumpAvailable) {
+      if (outcome.isChangeFreeBumpAvailable) {
         setDustCase2Modal({
           pendingOutcome: outcome,
           changeFreeMaxSats: outcome.changeFreeMaxSats,

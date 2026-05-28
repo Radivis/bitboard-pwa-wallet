@@ -30,6 +30,9 @@ WASM **function exports** use `snake_case` across all Rust crates (`create_walle
 | Lab-sourced tx | — | `isLabTx` | `is_lab_tx` |
 | Esplora sub-wallet sync failure | — | `'syncFailed'` (union literal) | — |
 | Dust floor applied | — | `isRaisedToMinDust` | `raised_to_min_dust` |
+| Change-free bump applied | — | `isBumpedChangeFree` | `bumped_change_free` |
+| Change-free bump path exists | — | `isChangeFreeBumpAvailable` | `change_free_bump_available` |
+| PSBT has change output | — | `hasChange` | `has_change` |
 
 ### DB read boundary
 
@@ -52,6 +55,16 @@ For changesets, the serialized blob is the same string; only the **name** change
 
 On-chain and lab sends use **`to_address`** as the recipient parameter name in Rust WASM exports.
 
+### Send recipient (three layers)
+
+| Layer | Name | Where |
+|-------|------|-------|
+| UI / BIP21 | `recipient` | `sendStore`, `normalizeSendRecipient()`, amount entry step |
+| TS worker / hooks (on-chain & lab) | `toAddress` | `BuildTransactionParams`, `prepareOnchainSendTransaction`, lab worker APIs |
+| WASM / Rust | `to_address` | `prepare_onchain_send_transaction`, lab PSBT exports |
+
+Lightning send uses BOLT11 / `bolt11` — not `toAddress`.
+
 Signed transactions cross JSON boundaries as **`signed_tx_hex`** only; raw bytes stay internal to Rust.
 
 ## Intentional dual names (do not unify)
@@ -63,7 +76,9 @@ Signed transactions cross JSON boundaries as **`signed_tx_hex`** only; raw bytes
 
 ## Booleans
 
-In domain/UI code, prefer prefixes: `is*`, `has*`, `can*` (`isConfirmed`, `isPending`, `isRaisedToMinDust`, `isLightningEnabled`).
+In domain/UI code, prefer prefixes: `is*`, `has*`, `can*` (`isConfirmed`, `isPending`, `isRaisedToMinDust`, `isBumpedChangeFree`, `isChangeFreeBumpAvailable`, `isLightningEnabled`).
+
+**Intentional exception:** `noMnemonicBackup` (DB `no_mnemonic_backup`) — legacy `no*` prefix; do not rename without a DB migration.
 
 Persisted feature flags in `featureStore` use `is*Enabled` with a v1 migration from legacy `*Enabled` keys.
 
@@ -74,6 +89,14 @@ Lightning payment rows use `isPending` (legacy encrypted snapshots may still sto
 - Domain discriminant: `LabOwner` with `kind: 'lab_entity' | 'wallet'`
 - Mining UI enum: `LabOwnerType.LabEntity = 'lab_entity'` (aligned with domain/SQLite, not camelCase `labEntity`)
 
+## Lightning NWC wire
+
+NIP-47 / `@getalby/sdk` responses use `snake_case`. Map at the service boundary:
+
+- Wire types: `src/lib/lightning/lightning-wire-types.ts`
+- Mappers: `src/lib/lightning/lightning-wire-mappers.ts`
+- Domain types stay in `lightning-backend-service.ts` (`LightningPayment`, `NwcTestConnectionResult`, …)
+
 ## ESLint
 
-`@typescript-eslint/naming-convention` enforces camelCase object-literal properties in application code. Exceptions: wire types (`src/workers/**`), DB schema (`src/db/**`), migrations, generated `wasm-pkg`, setup pages, tests.
+`@typescript-eslint/naming-convention` enforces camelCase object-literal properties in application code. Exceptions: wire types (`src/workers/**`, `src/lib/lightning/lightning-wire-types.ts`), DB schema (`src/db/**`), migrations, generated `wasm-pkg`, setup pages, tests.

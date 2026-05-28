@@ -111,7 +111,7 @@ export function mapWireDraftPsbtResultToDomain(
     finalAmountSats: wire.final_amount_sats,
     originalAmountSats: wire.original_amount_sats,
     isRaisedToMinDust: wire.raised_to_min_dust,
-    changeFreeBumpAvailable: wire.change_free_bump_available,
+    isChangeFreeBumpAvailable: wire.change_free_bump_available,
     changeFreeMaxSats: wire.change_free_max_sats,
     feeSats: wire.fee_sats,
     ...mapWireDraftReviewFieldsToDomain(wire),
@@ -123,7 +123,7 @@ export function mapWirePrepareOnchainSendResultToDomain(
 ): PrepareOnchainSendResult {
   return {
     ...mapWireDraftPsbtResultToDomain(wire),
-    bumpedChangeFree: wire.bumped_change_free,
+    isBumpedChangeFree: wire.bumped_change_free,
   };
 }
 
@@ -137,8 +137,8 @@ export function mapWireLabSignResultToDomain(
     finalAmountSats: wire.final_amount_sats,
     originalAmountSats: wire.original_amount_sats,
     isRaisedToMinDust: wire.raised_to_min_dust,
-    bumpedChangeFree: wire.bumped_change_free,
-    changeFreeBumpAvailable: wire.change_free_bump_available,
+    isBumpedChangeFree: wire.bumped_change_free,
+    isChangeFreeBumpAvailable: wire.change_free_bump_available,
     changeFreeMaxSats: wire.change_free_max_sats,
   };
 }

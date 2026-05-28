@@ -174,12 +174,12 @@ export async function labOpCreateLabEntityTransaction(params: {
     changeAddress,
     finalAmountSats,
     isRaisedToMinDust,
-    bumpedChangeFree,
+    isBumpedChangeFree,
   } = labEntitySignResult
 
-  if (isRaisedToMinDust || bumpedChangeFree) {
+  if (isRaisedToMinDust || isBumpedChangeFree) {
     toast.warning(
-      onchainDustPrepareWarningLines({ isRaisedToMinDust, bumpedChangeFree }).join(
+      onchainDustPrepareWarningLines({ isRaisedToMinDust, isBumpedChangeFree }).join(
         ' ',
       ),
     )

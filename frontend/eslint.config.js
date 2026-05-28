@@ -45,6 +45,7 @@ export default tseslint.config(
     files: ['src/**/*.{ts,tsx}'],
     ignores: [
       'src/workers/**',
+      'src/lib/lightning/lightning-wire-types.ts',
       'src/db/**',
       'src/wasm-pkg/**',
       'src/**/*.test.ts',

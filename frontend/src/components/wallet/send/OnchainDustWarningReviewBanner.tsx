@@ -20,7 +20,7 @@ export function OnchainDustWarningReviewBanner({
   const amountUnitLabel = getPrefixedBitcoinDisplayUnitLabel(amountUnit, networkMode)
   return (
     <div className="font-bold text-destructive text-sm space-y-1 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2">
-      {warning.raisedToDustMin ? (
+      {warning.isRaisedToMinDust ? (
         <p>
           Amount was below the minimum spendable output ({formatAmountInBitcoinDisplayUnit(UX_DUST_FLOOR_SATS, 'sat')}{' '}
           {satLabel}). The amount shown above was set to{' '}
@@ -28,7 +28,7 @@ export function OnchainDustWarningReviewBanner({
           {amountUnitLabel}.
         </p>
       ) : null}
-      {warning.bumpedChangeFree ? (
+      {warning.isBumpedChangeFree ? (
         <p>
           The amount was increased so this payment does not leave change below the dust limit
           (change-free transfer).

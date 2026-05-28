@@ -37,7 +37,7 @@ export function useBuildTransactionMutation() {
     }) => {
       const network = toBitcoinNetwork(networkMode)
       return prepareOnchainSendTransaction({
-        recipientAddress: params.normalizedRecipient,
+        toAddress: params.normalizedRecipient,
         amountSats: params.amountSats,
         feeRateSatPerVb: params.effectiveFeeRate,
         network,
@@ -185,23 +185,23 @@ export function useLabSendMutation() {
           hasChange,
           finalAmountSats,
           isRaisedToMinDust,
-          bumpedChangeFree,
+          isBumpedChangeFree,
         } = signedLabTransaction
 
         const { amountUnit } = useSendStore.getState()
-        if (isRaisedToMinDust || bumpedChangeFree) {
+        if (isRaisedToMinDust || isBumpedChangeFree) {
           toast.warning(
             onchainDustPrepareWarningLines({
               isRaisedToMinDust,
-              bumpedChangeFree,
+              isBumpedChangeFree,
             }).join(' '),
           )
           useSendStore.setState({
             amount: formatAmountInputFromSats(finalAmountSats, amountUnit),
             onchainDustWarning: {
               previousSats: signedLabTransaction.originalAmountSats,
-              raisedToDustMin: isRaisedToMinDust,
-              bumpedChangeFree,
+              isRaisedToMinDust,
+              isBumpedChangeFree,
             },
           })
         }

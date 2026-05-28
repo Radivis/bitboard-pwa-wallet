@@ -1,13 +1,15 @@
 import { NWCClient } from '@getalby/sdk'
-import {
-  msatsAmountNumberFromSatsExact,
-  MSATS_PER_SAT,
-} from '@/lib/wallet/bitcoin-utils'
+import { msatsAmountNumberFromSatsExact } from '@/lib/wallet/bitcoin-utils'
 import { MAX_NWC_CONNECTION_STRING_LENGTH } from '@/lib/lightning/lightning-input-limits'
 import {
-  lightningNetworkModeFromNip47Network,
-  type LightningNetworkMode,
-} from '@/lib/lightning/lightning-utils'
+  mapWireNwcBalanceToDomain,
+  mapWireNwcMakeInvoiceToDomain,
+  mapWireNwcTransactionToDomain,
+  mapWireNwcWalletInfoBlockHeight,
+  mapWireNwcWalletInfoToTestConnectionResult,
+} from '@/lib/lightning/lightning-wire-mappers'
+import type { WireNwcMakeInvoiceResult } from '@/lib/lightning/lightning-wire-types'
+import type { LightningNetworkMode } from '@/lib/lightning/lightning-utils'
 
 /** NWC `get_info` chain tip — used to compare against Esplora for the same network. */
 export async function fetchNwcChainTipBlockHeight(
@@ -20,7 +22,7 @@ export async function fetchNwcChainTipBlockHeight(
     nostrWalletConnectUrl: config.connectionString,
   })
   const info = await client.getInfo()
-  return info.block_height
+  return mapWireNwcWalletInfoBlockHeight(info)
 }
 
 export type LightningPaymentDirection = 'incoming' | 'outgoing'
@@ -109,10 +111,6 @@ export function isValidNwcConnectionString(value: string): boolean {
   )
 }
 
-function msatsToSats(msats: number): number {
-  return Math.floor(msats / MSATS_PER_SAT)
-}
-
 function satsToMsatsForNwcInvoice(sats: number): number {
   return msatsAmountNumberFromSatsExact(sats)
 }
@@ -130,11 +128,6 @@ type NwcClientWithExecute = {
   ) => Promise<TResult>
 }
 
-type NwcMakeInvoiceResult = {
-  invoice: string
-  payment_hash: string
-}
-
 async function nwcCreateInvoice(
   client: NWCClient,
   params: { amountSats?: number; memo?: string; expiry?: number },
@@ -146,10 +139,7 @@ async function nwcCreateInvoice(
       description: params.memo,
       expiry: params.expiry,
     })
-    return {
-      bolt11: makeInvoiceResponse.invoice,
-      paymentHash: makeInvoiceResponse.payment_hash,
-    }
+    return mapWireNwcMakeInvoiceToDomain(makeInvoiceResponse)
   }
 
   const nip47Params: Record<string, unknown> = {}
@@ -161,16 +151,14 @@ async function nwcCreateInvoice(
   }
 
   const nip47Client = client as unknown as NwcClientWithExecute
-  const nip47InvoiceResult = await nip47Client.executeNip47Request<NwcMakeInvoiceResult>(
-    'make_invoice',
-    nip47Params,
-    (makeInvoiceResult) => !!makeInvoiceResult.invoice,
-  )
+  const nip47InvoiceResult =
+    await nip47Client.executeNip47Request<WireNwcMakeInvoiceResult>(
+      'make_invoice',
+      nip47Params,
+      (makeInvoiceResult) => !!makeInvoiceResult.invoice,
+    )
 
-  return {
-    bolt11: nip47InvoiceResult.invoice,
-    paymentHash: nip47InvoiceResult.payment_hash,
-  }
+  return mapWireNwcMakeInvoiceToDomain(nip47InvoiceResult)
 }
 
 type E2eNwcMockState = {
@@ -298,7 +286,7 @@ function createNwcBackendService(
   return {
     async getBalance() {
       const balanceResponse = await client.getBalance()
-      return { balanceSats: msatsToSats(balanceResponse.balance) }
+      return mapWireNwcBalanceToDomain(balanceResponse)
     },
 
     async createInvoice(params) {
@@ -317,50 +305,13 @@ function createNwcBackendService(
 
     async listPayments() {
       const listTransactionsResponse = await client.listTransactions({})
-      return listTransactionsResponse.transactions.map((nwcTransaction) => ({
-        paymentHash: nwcTransaction.payment_hash,
-        isPending: nwcTransaction.state === 'pending',
-        amountSats: msatsToSats(nwcTransaction.amount),
-        memo: nwcTransaction.description,
-        timestamp: nwcTransaction.created_at,
-        bolt11: nwcTransaction.invoice,
-        direction: nwcTransaction.type,
-        feesPaidSats: msatsToSats(nwcTransaction.fees_paid),
-      }))
+      return listTransactionsResponse.transactions.map(mapWireNwcTransactionToDomain)
     },
 
     async testConnection(): Promise<NwcTestConnectionResult> {
       try {
         const nwcWalletInfo = await client.getInfo()
-        const rawNetwork = nwcWalletInfo.network
-        if (rawNetwork == null || String(rawNetwork).trim() === '') {
-          return {
-            ok: false,
-            error:
-              'The wallet did not report a network in NWC get_info. Try updating the wallet.',
-          }
-        }
-        const lower = String(rawNetwork).trim().toLowerCase()
-        const mode = lightningNetworkModeFromNip47Network(rawNetwork)
-        if (mode != null) {
-          return {
-            ok: true,
-            walletName: nwcWalletInfo.alias || 'NWC Wallet',
-            nwcBlockHeight: nwcWalletInfo.block_height,
-            lightningNetworkMode: mode,
-          }
-        }
-        if (lower === 'regtest') {
-          return {
-            ok: false,
-            error:
-              'This wallet reports regtest. Bitboard Lightning supports mainnet, testnet, and signet only.',
-          }
-        }
-        return {
-          ok: false,
-          error: `This wallet reported network "${String(rawNetwork).trim()}", which Bitboard does not support for Lightning. Use mainnet, testnet, or signet.`,
-        }
+        return mapWireNwcWalletInfoToTestConnectionResult(nwcWalletInfo)
       } catch (error) {
         const message =
           error instanceof Error ? error.message : 'Unknown error'

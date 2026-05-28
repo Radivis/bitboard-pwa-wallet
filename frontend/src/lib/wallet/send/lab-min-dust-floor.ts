@@ -3,8 +3,8 @@ import { UX_DUST_FLOOR_SATS } from '@/lib/wallet/bitcoin-dust'
 
 export type LabMinDustFloorAdjustment = {
   previousSats: number
-  raisedToDustMin: true
-  bumpedChangeFree: false
+  isRaisedToMinDust: true
+  isBumpedChangeFree: false
 }
 
 export function resolveLabDraftAmountWithMinDustFloor(params: {
@@ -24,8 +24,8 @@ export function resolveLabDraftAmountWithMinDustFloor(params: {
       draftAmountSats: UX_DUST_FLOOR_SATS,
       dustAdjustment: {
         previousSats: params.amountSats,
-        raisedToDustMin: true,
-        bumpedChangeFree: false,
+        isRaisedToMinDust: true,
+        isBumpedChangeFree: false,
       },
     }
   }
