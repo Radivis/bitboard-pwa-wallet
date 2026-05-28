@@ -530,11 +530,11 @@ pub fn lab_generate_keypair() -> Result<JsValue, JsValue> {
     let address = Address::p2wpkh(&compressed_public_key, Network::Regtest);
     let private_key = PrivateKey::new(secret_key, Network::Regtest);
 
-    let keypair_payload = LabKeypairResult {
+    let keypair_result = LabKeypairResult {
         address: address.to_string(),
         wif: private_key.to_wif(),
     };
-    serde_wasm_bindgen::to_value(&keypair_payload).map_display_err_to_js()
+    serde_wasm_bindgen::to_value(&keypair_result).map_display_err_to_js()
 }
 
 /// Validates that an address is a valid P2WPKH or P2TR regtest address.

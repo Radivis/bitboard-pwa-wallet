@@ -185,14 +185,14 @@ pub fn create_wallet(
         *descriptor_cell.borrow_mut() = descriptor_pair.internal_descriptor.clone()
     });
 
-    let create_wallet_payload = types::CreateWalletResult {
+    let create_wallet_result = types::CreateWalletResult {
         external_descriptor: descriptor_pair.external_descriptor,
         internal_descriptor: descriptor_pair.internal_descriptor,
         first_address,
         changeset_json,
     };
 
-    serde_wasm_bindgen::to_value(&create_wallet_payload).map_display_err_to_js()
+    serde_wasm_bindgen::to_value(&create_wallet_result).map_display_err_to_js()
 }
 
 /// Load a previously persisted wallet from descriptors and a changeset JSON.
@@ -335,11 +335,11 @@ pub async fn full_scan_wallet(esplora_url: &str, stop_gap: usize) -> Result<JsVa
 fn build_sync_result() -> Result<JsValue, JsValue> {
     let balance = with_wallet(wallet::get_balance)?;
     let changeset_json = export_changeset()?;
-    let sync_result_payload = types::SyncResult {
+    let sync_result = types::SyncResult {
         balance,
         changeset_json,
     };
-    to_js(&sync_result_payload)
+    to_js(&sync_result)
 }
 
 /// Prepare an on-chain send: applies dust UX clamp; change-free bump only when
@@ -551,14 +551,14 @@ pub fn create_lab_entity_wallet(
 ) -> Result<JsValue, JsValue> {
     let bitcoin_network = types::BitcoinNetwork::try_from(network).map_err(JsValue::from)?;
     let address_type_enum = types::AddressType::try_from(address_type).map_err(JsValue::from)?;
-    let lab_entity_wallet_payload = lab_entity_wallet::create_lab_entity_wallet(
+    let entity_wallet_result = lab_entity_wallet::create_lab_entity_wallet(
         mnemonic_str,
         bitcoin_network,
         address_type_enum,
         account_id,
     )
     .map_err(JsValue::from)?;
-    serde_wasm_bindgen::to_value(&lab_entity_wallet_payload).map_display_err_to_js()
+    serde_wasm_bindgen::to_value(&entity_wallet_result).map_display_err_to_js()
 }
 
 /// Last revealed external address for mining coinbase to a lab entity.
@@ -629,7 +629,7 @@ pub fn lab_entity_draft_psbt_transaction(
 ) -> Result<JsValue, JsValue> {
     let bitcoin_network = types::BitcoinNetwork::try_from(network).map_err(JsValue::from)?;
     let address_type_enum = types::AddressType::try_from(address_type).map_err(JsValue::from)?;
-    let draft_lab_psbt_payload = lab_entity_wallet::lab_entity_draft_psbt_transaction(
+    let draft_psbt_result = lab_entity_wallet::lab_entity_draft_psbt_transaction(
         lab_entity_wallet::LabEntityDraftArgs {
             mnemonic: mnemonic_str,
             changeset_json,
@@ -643,7 +643,7 @@ pub fn lab_entity_draft_psbt_transaction(
         },
     )
     .map_err(JsValue::from)?;
-    serde_wasm_bindgen::to_value(&draft_lab_psbt_payload).map_display_err_to_js()
+    serde_wasm_bindgen::to_value(&draft_psbt_result).map_display_err_to_js()
 }
 
 /// Build and sign a lab mempool tx for a lab entity. Returns JSON including updated `changeset_json`.
@@ -663,7 +663,7 @@ pub fn lab_entity_build_and_sign_transaction(
 ) -> Result<JsValue, JsValue> {
     let bitcoin_network = types::BitcoinNetwork::try_from(network).map_err(JsValue::from)?;
     let address_type_enum = types::AddressType::try_from(address_type).map_err(JsValue::from)?;
-    let build_sign_lab_payload = lab_entity_wallet::lab_entity_build_and_sign_transaction(
+    let build_sign_result = lab_entity_wallet::lab_entity_build_and_sign_transaction(
         lab_entity_wallet::LabEntityBuildSignArgs {
             mnemonic: mnemonic_str,
             changeset_json,
@@ -678,7 +678,7 @@ pub fn lab_entity_build_and_sign_transaction(
         },
     )
     .map_err(JsValue::from)?;
-    serde_wasm_bindgen::to_value(&build_sign_lab_payload).map_display_err_to_js()
+    serde_wasm_bindgen::to_value(&build_sign_result).map_display_err_to_js()
 }
 
 // ---------------------------------------------------------------------------
