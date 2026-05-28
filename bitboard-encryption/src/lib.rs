@@ -73,12 +73,12 @@ fn parse_mtp_segment(segment: &str) -> Option<(u32, u32, u32)> {
     let mut parallelism: Option<u32> = None;
     for part in segment.split(',') {
         let part = part.trim();
-        if let Some(v) = part.strip_prefix("m=") {
-            memory_kib = v.parse().ok();
-        } else if let Some(v) = part.strip_prefix("t=") {
-            iterations = v.parse().ok();
-        } else if let Some(v) = part.strip_prefix("p=") {
-            parallelism = v.parse().ok();
+        if let Some(param_value) = part.strip_prefix("m=") {
+            memory_kib = param_value.parse().ok();
+        } else if let Some(param_value) = part.strip_prefix("t=") {
+            iterations = param_value.parse().ok();
+        } else if let Some(param_value) = part.strip_prefix("p=") {
+            parallelism = param_value.parse().ok();
         }
     }
     match (memory_kib, iterations, parallelism) {

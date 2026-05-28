@@ -57,44 +57,44 @@ describe('validateLabEntityRenameName', () => {
   ]
 
   it('rejects empty name', () => {
-    const r = validateLabEntityRenameName('', entities, 3)
-    expect(r.ok).toBe(false)
-    if (!r.ok) expect(r.error).toMatch(/empty/i)
+    const result = validateLabEntityRenameName('', entities, 3)
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error).toMatch(/empty/i)
   })
 
   it('rejects Anonymous- prefix', () => {
-    const r = validateLabEntityRenameName('Anonymous-1', entities, 3)
-    expect(r.ok).toBe(false)
-    if (!r.ok) expect(r.error).toMatch(/Anonymous-/i)
+    const result = validateLabEntityRenameName('Anonymous-1', entities, 3)
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error).toMatch(/Anonymous-/i)
   })
 
   it('rejects duplicate name', () => {
-    const r = validateLabEntityRenameName('Alice', entities, 3)
-    expect(r.ok).toBe(false)
-    if (!r.ok) expect(r.error).toMatch(/taken/i)
+    const result = validateLabEntityRenameName('Alice', entities, 3)
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error).toMatch(/taken/i)
   })
 
   it('allows same name when renaming the same entity', () => {
-    const r = validateLabEntityRenameName('Alice', entities, 1)
-    expect(r.ok).toBe(true)
+    const result = validateLabEntityRenameName('Alice', entities, 1)
+    expect(result.ok).toBe(true)
   })
 
   it('accepts valid unique name', () => {
-    const r = validateLabEntityRenameName('Carol', entities, 3)
-    expect(r.ok).toBe(true)
+    const result = validateLabEntityRenameName('Carol', entities, 3)
+    expect(result.ok).toBe(true)
   })
 
   it('rejects name longer than LAB_ENTITY_NAME_MAX_LENGTH', () => {
     const long = 'x'.repeat(LAB_ENTITY_NAME_MAX_LENGTH + 1)
-    const r = validateLabEntityRenameName(long, entities, 3)
-    expect(r.ok).toBe(false)
-    if (!r.ok) expect(r.error).toMatch(/128/)
+    const result = validateLabEntityRenameName(long, entities, 3)
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error).toMatch(/128/)
   })
 
   it('accepts name of exactly LAB_ENTITY_NAME_MAX_LENGTH', () => {
     const exact = 'y'.repeat(LAB_ENTITY_NAME_MAX_LENGTH)
-    const r = validateLabEntityRenameName(exact, entities, 3)
-    expect(r.ok).toBe(true)
+    const result = validateLabEntityRenameName(exact, entities, 3)
+    expect(result.ok).toBe(true)
   })
 })
 

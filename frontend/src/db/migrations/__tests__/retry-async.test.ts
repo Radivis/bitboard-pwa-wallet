@@ -27,9 +27,9 @@ describe('withRetries', () => {
 describe('delay', () => {
   it('resolves after the given ms', async () => {
     vi.useFakeTimers()
-    const p = delay(1000)
+    const delayPromise = delay(1000)
     await vi.advanceTimersByTimeAsync(1000)
-    await expect(p).resolves.toBeUndefined()
+    await expect(delayPromise).resolves.toBeUndefined()
     vi.useRealTimers()
   })
 })

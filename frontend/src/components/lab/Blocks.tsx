@@ -37,9 +37,9 @@ export function LabBlocksCard({
 }: {
   blockCount: number
   mineCount: string
-  setMineCount: (v: string) => void
+  setMineCount: (mineCount: string) => void
   ownerType: LabOwnerType
-  setOwnerType: (v: LabOwnerType) => void
+  setOwnerType: (ownerType: LabOwnerType) => void
   entities: readonly LabEntityRecord[]
   selectedLabEntityId: number | null
   setSelectedLabEntityId: (id: number | null) => void

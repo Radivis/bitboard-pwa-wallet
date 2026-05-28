@@ -238,9 +238,9 @@ export function RecipientQrScanModal({
               setFlashOn(false)
             }
           }
-        } catch (e) {
+        } catch (error) {
           if (!cancelled) {
-            setCameraError(formatCameraScannerStartError(e))
+            setCameraError(formatCameraScannerStartError(error))
             destroyScanner()
           }
         }

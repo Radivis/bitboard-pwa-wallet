@@ -43,8 +43,8 @@ describe('near-zero security', () => {
   it('serializeEncryptedBlobForSettings round-trips', async () => {
     const { encryptData } = await import('../encryption')
     const blob = await encryptData('pw', 'hello')
-    const s = serializeEncryptedBlobForSettings(blob)
-    const back = deserializeEncryptedBlobFromSettings(s)
+    const serializedBlob = serializeEncryptedBlobForSettings(blob)
+    const back = deserializeEncryptedBlobFromSettings(serializedBlob)
     const plain = await decryptData('pw', back)
     expect(plain).toBe('hello')
   })
@@ -66,23 +66,23 @@ describe('near-zero security', () => {
       .executeTakeFirst()
     expect(wrapped?.value).toBeTruthy()
 
-    const r = useSessionStore.getState().password
-    expect(r).toBeTruthy()
+    const sessionPassword = useSessionStore.getState().password
+    expect(sessionPassword).toBeTruthy()
     const blob = deserializeEncryptedBlobFromSettings(wrapped!.value)
     const decrypted = await decryptData(NEAR_ZERO_WRAPPER_PASSWORD, blob)
-    expect(decrypted).toBe(r)
+    expect(decrypted).toBe(sessionPassword)
     expect(useNearZeroSecurityStore.getState().active).toBe(true)
   })
 
   it('tryLoadNearZeroSessionIntoMemory restores session after clear', async () => {
     await generateAndPersistNearZeroSession(walletDb)
-    const savedR = useSessionStore.getState().password
+    const savedSessionPassword = useSessionStore.getState().password
     useSessionStore.setState({ password: null })
     useNearZeroSecurityStore.setState({ active: false })
 
     const ok = await tryLoadNearZeroSessionIntoMemory(walletDb)
     expect(ok).toBe(true)
-    expect(useSessionStore.getState().password).toBe(savedR)
+    expect(useSessionStore.getState().password).toBe(savedSessionPassword)
     expect(useNearZeroSecurityStore.getState().active).toBe(true)
   })
 
@@ -94,11 +94,11 @@ describe('near-zero security', () => {
 
   it('upgradeNearZeroToUserPassword with no wallets sets user password and clears near-zero settings', async () => {
     await generateAndPersistNearZeroSession(walletDb)
-    const oldR = useSessionStore.getState().password!
+    const oldSessionPassword = useSessionStore.getState().password!
 
     await upgradeNearZeroToUserPassword({
       walletDb,
-      oldPassword: oldR,
+      oldPassword: oldSessionPassword,
       newPassword: 'user-strong-password-ok',
     })
 
@@ -115,7 +115,7 @@ describe('near-zero security', () => {
 
   it('upgradeNearZeroToUserPassword re-encrypts wallet secrets', async () => {
     await generateAndPersistNearZeroSession(walletDb)
-    const r = useSessionStore.getState().password!
+    const sessionPassword = useSessionStore.getState().password!
 
     const insert = await walletDb
       .insertInto('wallets')
@@ -128,17 +128,17 @@ describe('near-zero security', () => {
       descriptorWallets: [],
       lightningNwcConnections: [],
     }
-    await saveWalletSecrets({ walletDb, password: r, walletId, secrets: sampleSecrets })
+    await saveWalletSecrets({ walletDb, password: sessionPassword, walletId, secrets: sampleSecrets })
 
     await upgradeNearZeroToUserPassword({
       walletDb,
-      oldPassword: r,
+      oldPassword: sessionPassword,
       newPassword: 'new-user-password-xx',
     })
 
     const loaded = await loadWalletSecrets(walletDb, 'new-user-password-xx', walletId)
     expect(loaded.mnemonic).toBe(TEST_MNEMONIC_12)
-    await expect(loadWalletSecrets(walletDb, r, walletId)).rejects.toThrow()
+    await expect(loadWalletSecrets(walletDb, sessionPassword, walletId)).rejects.toThrow()
   })
 
   it('clearNearZeroSecuritySettings removes keys', async () => {

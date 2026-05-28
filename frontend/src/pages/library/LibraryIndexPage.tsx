@@ -14,11 +14,13 @@ export function LibraryIndexPage() {
   const [query, setQuery] = useState('')
   const articles = useMemo(() => {
     const sorted = listArticlesSortedByTitle()
-    const q = normalizeSearch(query)
-    if (!q) return sorted
+    const normalizedQuery = normalizeSearch(query)
+    if (!normalizedQuery) return sorted
     return sorted.filter((article) => {
-      if (article.title.toLowerCase().includes(q)) return true
-      return article.tagIds.some((tagId) => getTagLabel(tagId).toLowerCase().includes(q))
+      if (article.title.toLowerCase().includes(normalizedQuery)) return true
+      return article.tagIds.some((tagId) =>
+        getTagLabel(tagId).toLowerCase().includes(normalizedQuery),
+      )
     })
   }, [query])
 

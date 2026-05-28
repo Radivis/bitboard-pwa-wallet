@@ -73,8 +73,8 @@ export function useWalletBackupExport() {
       triggerBrowserSaveLocalBlob(zipped, WALLET_BACKUP_ZIP_FILENAME)
       toast.success('Signed wallet backup exported as a ZIP on this device.')
       setExportPasswordOpen(false)
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Export failed.')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Export failed.')
     } finally {
       setWalletExportBusy(false)
     }

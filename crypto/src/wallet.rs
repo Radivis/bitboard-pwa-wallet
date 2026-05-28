@@ -157,7 +157,7 @@ pub fn get_transaction_list(wallet: &Wallet) -> Vec<TransactionDetails> {
                 txid: txid.to_string(),
                 sent_sats: sent.to_sat(),
                 received_sats: received.to_sat(),
-                fee_sats: fee.map(|f| f.to_sat()),
+                fee_sats: fee.map(|fee_amount| fee_amount.to_sat()),
                 confirmation_block_height,
                 confirmation_time,
                 is_confirmed,

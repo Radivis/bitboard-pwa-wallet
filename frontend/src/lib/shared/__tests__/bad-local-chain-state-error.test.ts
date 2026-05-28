@@ -32,8 +32,8 @@ describe('isBadLocalChainStateMessage', () => {
 
 describe('asBadLocalChainStateError', () => {
   it('returns the same instance when already BadLocalChainStateError', () => {
-    const e = new BadLocalChainStateError()
-    expect(asBadLocalChainStateError(e)).toBe(e)
+    const error = new BadLocalChainStateError()
+    expect(asBadLocalChainStateError(error)).toBe(error)
   })
 
   it('returns BadLocalChainStateError with cause when message matches', () => {
@@ -53,9 +53,9 @@ describe('asBadLocalChainStateError', () => {
 
 describe('BadLocalChainStateError', () => {
   it('has stable name for instanceof checks', () => {
-    const e = new BadLocalChainStateError()
-    expect(e.name).toBe('BadLocalChainStateError')
-    expect(e).toBeInstanceOf(Error)
-    expect(e).toBeInstanceOf(BadLocalChainStateError)
+    const error = new BadLocalChainStateError()
+    expect(error.name).toBe('BadLocalChainStateError')
+    expect(error).toBeInstanceOf(Error)
+    expect(error).toBeInstanceOf(BadLocalChainStateError)
   })
 })

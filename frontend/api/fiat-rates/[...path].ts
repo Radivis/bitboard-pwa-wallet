@@ -67,8 +67,8 @@ function isFiatRatePathAllowedForProvider(
 ): boolean {
   const normalized = pathname.replace(/\/$/, '') || '/'
   return FIAT_RATE_PROVIDER_PATH_PREFIXES[providerId].some((prefix) => {
-    const p = prefix.replace(/\/$/, '') || '/'
-    return normalized === p || normalized.startsWith(`${p}/`)
+    const normalizedPrefix = prefix.replace(/\/$/, '') || '/'
+    return normalized === normalizedPrefix || normalized.startsWith(`${normalizedPrefix}/`)
   })
 }
 

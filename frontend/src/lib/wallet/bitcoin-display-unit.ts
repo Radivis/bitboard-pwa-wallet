@@ -70,9 +70,9 @@ const SATS_PER_mBTC = 100_000
 const SATS_PER_uBTC = 100
 const SATS_PER_ksat = 1_000
 
-function clampSats(n: number): number {
-  if (!Number.isFinite(n) || n < 0) return 0
-  return Math.min(Math.floor(n), MAX_SAFE_SATS)
+function clampSats(sats: number): number {
+  if (!Number.isFinite(sats) || sats < 0) return 0
+  return Math.min(Math.floor(sats), MAX_SAFE_SATS)
 }
 
 /**

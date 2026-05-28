@@ -170,8 +170,8 @@ test.describe('Send Page', () => {
         .first()
         .waitFor({ state: 'visible', timeout: POST_BROADCAST_URL_TIMEOUT_MS })
         .then(async () => {
-          const t = await page.getByText(/Broadcast failed/i).first().textContent()
-          throw new Error(t ?? 'Broadcast failed')
+          const failureText = await page.getByText(/Broadcast failed/i).first().textContent()
+          throw new Error(failureText ?? 'Broadcast failed')
         }),
     ])
     await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible({

@@ -127,8 +127,8 @@ export function SendTransactionEntryCard({
     preset: import('@/lib/esplora/esplora-fee-estimates').SendFeePresetLabel,
     rateSatPerVb: number,
   ) => void
-  onCustomFeeRateChange: (s: string) => void
-  onUseCustomFeeChange: (b: boolean) => void
+  onCustomFeeRateChange: (customFeeRate: string) => void
+  onUseCustomFeeChange: (useCustomFee: boolean) => void
   isPending: boolean
   buildOrLabPreparing: boolean
   canBuild: boolean

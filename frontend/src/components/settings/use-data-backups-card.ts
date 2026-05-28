@@ -78,8 +78,8 @@ export function useDataBackupsCard() {
       const zipped = await zipSingleFileForLocalExport(blob, LAB_BACKUP_SQLITE_ENTRY_NAME)
       triggerBrowserSaveLocalBlob(zipped, LAB_BACKUP_ZIP_FILENAME)
       toast.success('Lab data exported as a ZIP on this device.')
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Export failed.')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Export failed.')
     } finally {
       setLabExportBusy(false)
     }
@@ -98,8 +98,8 @@ export function useDataBackupsCard() {
       const zipped = await zipSingleFileForLocalExport(jsonBlob, MIGRATION_REPORT_INNER_NAME)
       triggerBrowserSaveLocalBlob(zipped, MIGRATION_REPORT_ZIP_NAME)
       toast.success('Error report exported as a ZIP on this device.')
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Export failed.')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Export failed.')
     } finally {
       setReportExportBusy(false)
     }
@@ -117,11 +117,11 @@ export function useDataBackupsCard() {
       const { sqliteBytes } = await parseLabBackupZipFile(file)
       setPendingLabSqlite(sqliteBytes)
       setLabImportWipeOpen(true)
-    } catch (e) {
-      if (e instanceof BackupZipInvalidError) {
-        toast.error(e.message)
+    } catch (error) {
+      if (error instanceof BackupZipInvalidError) {
+        toast.error(error.message)
       } else {
-        toast.error(e instanceof Error ? e.message : 'Could not read lab backup ZIP.')
+        toast.error(error instanceof Error ? error.message : 'Could not read lab backup ZIP.')
       }
     }
   }, [])
@@ -146,8 +146,8 @@ export function useDataBackupsCard() {
         successToastMessage: 'Lab backup imported. Reloading…',
         onBeforeReload: () => setLabFileExists(true),
       })
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Lab import failed.')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Lab import failed.')
     } finally {
       setLabImportBusy(false)
     }

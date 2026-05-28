@@ -28,8 +28,8 @@ describe('withEsploraFullScanRetries', () => {
 
   it('succeeds on first call without delay', async () => {
     const fn = vi.fn().mockResolvedValue('ok')
-    const p = withEsploraFullScanRetries(fn, { maxAttempts: 3 })
-    await expect(p).resolves.toBe('ok')
+    const retryPromise = withEsploraFullScanRetries(fn, { maxAttempts: 3 })
+    await expect(retryPromise).resolves.toBe('ok')
     expect(fn).toHaveBeenCalledTimes(1)
   })
 
@@ -38,20 +38,20 @@ describe('withEsploraFullScanRetries', () => {
       .fn()
       .mockRejectedValueOnce(new Error('HTTP status 429'))
       .mockResolvedValueOnce('recovered')
-    const p = withEsploraFullScanRetries(fn, { maxAttempts: 3, baseDelayMs: 100 })
+    const retryPromise = withEsploraFullScanRetries(fn, { maxAttempts: 3, baseDelayMs: 100 })
     const advance = async () => {
       await vi.advanceTimersByTimeAsync(500)
     }
-    const resultP = p.then((r) => r)
+    const resultPromise = retryPromise.then((result) => result)
     await advance()
-    await expect(resultP).resolves.toBe('recovered')
+    await expect(resultPromise).resolves.toBe('recovered')
     expect(fn).toHaveBeenCalledTimes(2)
   })
 
   it('does not retry non-retryable errors', async () => {
     const fn = vi.fn().mockRejectedValue(new Error('Invalid witness'))
-    const p = withEsploraFullScanRetries(fn, { maxAttempts: 3 })
-    await expect(p).rejects.toThrow('Invalid witness')
+    const retryPromise = withEsploraFullScanRetries(fn, { maxAttempts: 3 })
+    await expect(retryPromise).rejects.toThrow('Invalid witness')
     expect(fn).toHaveBeenCalledTimes(1)
   })
 
@@ -59,8 +59,8 @@ describe('withEsploraFullScanRetries', () => {
     const fn = vi
       .fn()
       .mockRejectedValue(new Error('HTTP status 429'))
-    const p = withEsploraFullScanRetries(fn)
-    await expect(p).rejects.toThrow('HTTP status 429')
+    const retryPromise = withEsploraFullScanRetries(fn)
+    await expect(retryPromise).rejects.toThrow('HTTP status 429')
     expect(fn).toHaveBeenCalledTimes(1)
   })
 })

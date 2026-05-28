@@ -52,7 +52,7 @@ interface SendState {
   setReviewFeeSats: (feeSats: number | null) => void
   setReviewChangeSats: (changeSats: number | null) => void
   setReviewInputUtxos: (inputUtxos: ReviewInputUtxo[] | null) => void
-  setOnchainDustWarning: (w: OnchainDustWarning | null) => void
+  setOnchainDustWarning: (dustWarning: OnchainDustWarning | null) => void
 
   /** Reset form and step to initial state (e.g. after successful send or when leaving send page). */
   reset: () => void

@@ -33,18 +33,24 @@ const FORMATTED_UNIT_LABEL_PATTERNS: FormattedUnitLabelPattern[] = [
   {
     labelInDomText: ' tsat',
     displayUnit: 'sat',
-    isEmbeddedSuffixAt: (i, t) => i > 0 && (t[i - 1] === 'k' || t[i - 1] === 'K'),
+    isEmbeddedSuffixAt: (labelStartIndex, fullText) =>
+      labelStartIndex > 0 &&
+      (fullText[labelStartIndex - 1] === 'k' || fullText[labelStartIndex - 1] === 'K'),
   },
   {
     labelInDomText: 'tsat',
     displayUnit: 'sat',
-    isEmbeddedSuffixAt: (i, t) => i > 0 && (t[i - 1] === 'k' || t[i - 1] === 'K'),
+    isEmbeddedSuffixAt: (labelStartIndex, fullText) =>
+      labelStartIndex > 0 &&
+      (fullText[labelStartIndex - 1] === 'k' || fullText[labelStartIndex - 1] === 'K'),
   },
   { labelInDomText: ' tBTC', displayUnit: 'BTC' },
   {
     labelInDomText: 'tBTC',
     displayUnit: 'BTC',
-    isEmbeddedSuffixAt: (i, t) => i > 0 && (t[i - 1] === 'm' || t[i - 1] === 'M'),
+    isEmbeddedSuffixAt: (labelStartIndex, fullText) =>
+      labelStartIndex > 0 &&
+      (fullText[labelStartIndex - 1] === 'm' || fullText[labelStartIndex - 1] === 'M'),
   },
   { labelInDomText: 'mBTC', displayUnit: 'mBTC' },
   { labelInDomText: BITCOIN_DISPLAY_UNIT_LABEL.uBTC, displayUnit: 'uBTC' },
@@ -53,13 +59,17 @@ const FORMATTED_UNIT_LABEL_PATTERNS: FormattedUnitLabelPattern[] = [
   {
     labelInDomText: 'sat',
     displayUnit: 'sat',
-    isEmbeddedSuffixAt: (i, t) => i > 0 && (t[i - 1] === 'k' || t[i - 1] === 'K'),
+    isEmbeddedSuffixAt: (labelStartIndex, fullText) =>
+      labelStartIndex > 0 &&
+      (fullText[labelStartIndex - 1] === 'k' || fullText[labelStartIndex - 1] === 'K'),
   },
   { labelInDomText: ' BTC', displayUnit: 'BTC' },
   {
     labelInDomText: 'BTC',
     displayUnit: 'BTC',
-    isEmbeddedSuffixAt: (i, t) => i > 0 && (t[i - 1] === 'm' || t[i - 1] === 'M'),
+    isEmbeddedSuffixAt: (labelStartIndex, fullText) =>
+      labelStartIndex > 0 &&
+      (fullText[labelStartIndex - 1] === 'm' || fullText[labelStartIndex - 1] === 'M'),
   },
 ]
 
