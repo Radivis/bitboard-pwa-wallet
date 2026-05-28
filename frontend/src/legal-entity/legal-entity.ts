@@ -23,36 +23,36 @@ export type LegalEntity = {
 
 export const legalEntity: LegalEntity = entityJson as LegalEntity
 
-export function hasLegalEntityAddressData(a: LegalEntityAddress): boolean {
+export function hasLegalEntityAddressData(address: LegalEntityAddress): boolean {
   return [
-    a.careOf,
-    a.street,
-    a.postalCode,
-    a.locality,
-    a.country,
+    address.careOf,
+    address.street,
+    address.postalCode,
+    address.locality,
+    address.country,
   ].some((s) => s != null && String(s).trim().length > 0)
 }
 
 /** Non-empty lines in display order (care-of, street, postal + locality, country). */
-export function legalEntityAddressLines(a: LegalEntityAddress): string[] {
+export function legalEntityAddressLines(address: LegalEntityAddress): string[] {
   const lines: string[] = []
-  const careOf = a.careOf?.trim()
+  const careOf = address.careOf?.trim()
   if (careOf) lines.push(careOf)
-  const street = a.street.trim()
+  const street = address.street.trim()
   if (street) lines.push(street)
-  const pc = a.postalCode.trim()
-  const loc = a.locality.trim()
+  const pc = address.postalCode.trim()
+  const loc = address.locality.trim()
   const cityLine = [pc, loc].filter(Boolean).join(' ')
   if (cityLine) lines.push(cityLine)
-  const country = a.country?.trim()
+  const country = address.country?.trim()
   if (country) lines.push(country)
   return lines
 }
 
-export function hasLegalEntityData(e: LegalEntity): boolean {
+export function hasLegalEntityData(entity: LegalEntity): boolean {
   return (
-    e.name.trim().length > 0 ||
-    e.email.trim().length > 0 ||
-    hasLegalEntityAddressData(e.address)
+    entity.name.trim().length > 0 ||
+    entity.email.trim().length > 0 ||
+    hasLegalEntityAddressData(entity.address)
   )
 }

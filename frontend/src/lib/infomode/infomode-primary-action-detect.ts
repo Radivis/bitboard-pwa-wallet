@@ -38,23 +38,23 @@ function isInertish(el: Element): boolean {
 }
 
 function hasActionRole(el: Element): boolean {
-  const r = el.getAttribute('role')
-  if (!r) {
+  const role = el.getAttribute('role')
+  if (!role) {
     return false
   }
-  return ARIA_ROLES_ACTION.has(r.trim().toLowerCase())
+  return ARIA_ROLES_ACTION.has(role.trim().toLowerCase())
 }
 
 function isTabindexFocusableForAction(el: Element): boolean {
   if (!el.hasAttribute('tabindex')) {
     return false
   }
-  const t = el.getAttribute('tabindex')?.trim() ?? ''
-  if (t === '-1' || t === '') {
+  const tabindexRaw = el.getAttribute('tabindex')?.trim() ?? ''
+  if (tabindexRaw === '-1' || tabindexRaw === '') {
     return false
   }
-  const n = Number.parseInt(t, 10)
-  return n >= 0
+  const tabindexNumber = Number.parseInt(tabindexRaw, 10)
+  return tabindexNumber >= 0
 }
 
 function isNativeLink(el: Element): boolean {
@@ -99,8 +99,8 @@ function isFormControlLike(el: Element): boolean {
 function labelHasAssociatedOrNestedControl(label: HTMLLabelElement): boolean {
   const doc = label.ownerDocument
   if (label.htmlFor) {
-    const t = doc.getElementById(label.htmlFor)
-    if (t instanceof Element) {
+    const labelTarget = doc.getElementById(label.htmlFor)
+    if (labelTarget instanceof Element) {
       return true
     }
   }

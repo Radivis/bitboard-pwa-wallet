@@ -20,11 +20,16 @@ fn open_lab_entity_wallet(
     address_type: AddressType,
     account_id: u32,
 ) -> Result<(Wallet, ChangeSet), CryptoError> {
-    let pair = descriptors::derive_descriptors(mnemonic, network, address_type, account_id)?;
+    let descriptor_pair =
+        descriptors::derive_descriptors(mnemonic, network, address_type, account_id)?;
 
     let trimmed = changeset_json.trim();
     if trimmed.is_empty() || trimmed == "{}" {
-        let mut wallet = create_wallet(&pair.external, &pair.internal, network)?;
+        let mut wallet = create_wallet(
+            &descriptor_pair.external,
+            &descriptor_pair.internal,
+            network,
+        )?;
         let staged = wallet.take_staged().ok_or_else(|| {
             CryptoError::Wallet("new lab entity wallet has no staged changeset".to_string())
         })?;
@@ -32,7 +37,12 @@ fn open_lab_entity_wallet(
     }
 
     let changeset = deserialize_changeset(changeset_json)?;
-    let wallet = load_wallet(&pair.external, &pair.internal, network, changeset.clone())?;
+    let wallet = load_wallet(
+        &descriptor_pair.external,
+        &descriptor_pair.internal,
+        network,
+        changeset.clone(),
+    )?;
     Ok((wallet, changeset))
 }
 
@@ -53,9 +63,14 @@ pub fn create_lab_entity_wallet(
     address_type: AddressType,
     account_id: u32,
 ) -> Result<CreateWalletResult, CryptoError> {
-    let pair = descriptors::derive_descriptors(mnemonic, network, address_type, account_id)?;
+    let descriptor_pair =
+        descriptors::derive_descriptors(mnemonic, network, address_type, account_id)?;
 
-    let mut wallet = create_wallet(&pair.external, &pair.internal, network)?;
+    let mut wallet = create_wallet(
+        &descriptor_pair.external,
+        &descriptor_pair.internal,
+        network,
+    )?;
     let first_address = get_new_address(&mut wallet);
     let initial_changeset = wallet.take_staged().ok_or_else(|| {
         CryptoError::Wallet("new lab entity wallet has no staged changeset".to_string())
@@ -64,8 +79,8 @@ pub fn create_lab_entity_wallet(
     let changeset_json = serialize_changeset(&initial_changeset)?;
 
     Ok(CreateWalletResult {
-        external_descriptor: pair.external,
-        internal_descriptor: pair.internal,
+        external_descriptor: descriptor_pair.external,
+        internal_descriptor: descriptor_pair.internal,
         first_address,
         changeset_json,
     })

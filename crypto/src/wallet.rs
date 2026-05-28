@@ -68,15 +68,15 @@ pub fn load_wallet(
 
     let mut last_err: Option<CryptoError> = None;
 
-    for check in networks_to_try {
+    for network_candidate in networks_to_try {
         match Wallet::load()
             .descriptor(KeychainKind::External, Some(external.clone()))
             .descriptor(KeychainKind::Internal, Some(internal.clone()))
             .extract_keys()
-            .check_network(check)
+            .check_network(network_candidate)
             .load_wallet_no_persist(changeset.clone())
         {
-            Ok(Some(w)) => return Ok(w),
+            Ok(Some(loaded_wallet)) => return Ok(loaded_wallet),
             Ok(None) => {
                 last_err = Some(CryptoError::Wallet(
                     "Wallet could not be loaded from changeset".to_string(),

@@ -139,45 +139,45 @@ export async function fetchLightningPaymentsForActiveWallet(): Promise<
     payments: { payments: LightningPayment[]; paymentsUpdatedAt: string }
   }[] = []
 
-  for (const conn of matches) {
+  for (const lightningConnection of matches) {
     try {
-      const service = createBackendService(conn.config)
+      const service = createBackendService(lightningConnection.config)
       const payments = await service.listPayments()
       const nowIso = new Date().toISOString()
       paymentPatches.push({
-        connectionId: conn.id,
+        connectionId: lightningConnection.id,
         payments: { payments, paymentsUpdatedAt: nowIso },
       })
-      for (const p of payments) {
-        if (!byHash.has(p.paymentHash)) {
-          byHash.set(p.paymentHash, {
-            ...p,
-            connectionId: conn.id,
-            walletLabel: conn.label,
+      for (const payment of payments) {
+        if (!byHash.has(payment.paymentHash)) {
+          byHash.set(payment.paymentHash, {
+            ...payment,
+            connectionId: lightningConnection.id,
+            walletLabel: lightningConnection.label,
           })
         }
       }
-    } catch (err) {
+    } catch (listPaymentsError) {
       listPaymentsFailureCount += 1
       if (import.meta.env.DEV) {
         console.debug(
           '[lightning-dashboard] listPayments failed for connection',
-          { id: conn.id, label: conn.label },
-          err,
+          { id: lightningConnection.id, label: lightningConnection.label },
+          listPaymentsError,
         )
       }
-      const snap = snapshotById.get(conn.id)
+      const snap = snapshotById.get(lightningConnection.id)
       if (snap?.paymentsUpdatedAt != null) {
         stalePaymentsAsOf = maxIsoTimestamp(
           stalePaymentsAsOf,
           snap.paymentsUpdatedAt,
         )
-        for (const p of snap.payments) {
-          if (!byHash.has(p.paymentHash)) {
-            byHash.set(p.paymentHash, {
-              ...p,
-              connectionId: conn.id,
-              walletLabel: conn.label,
+        for (const payment of snap.payments) {
+          if (!byHash.has(payment.paymentHash)) {
+            byHash.set(payment.paymentHash, {
+              ...payment,
+              connectionId: lightningConnection.id,
+              walletLabel: lightningConnection.label,
             })
           }
         }
@@ -228,12 +228,12 @@ export async function fetchLightningBalancesForDashboard(): Promise<LightningBal
   const snapshotById = await readSnapshotMapForActiveWallet()
 
   const settled = await Promise.allSettled(
-    matches.map(async (conn) => {
-      const service = createBackendService(conn.config)
+    matches.map(async (lightningConnection) => {
+      const service = createBackendService(lightningConnection.config)
       const { balanceSats } = await service.getBalance()
       return {
-        connectionId: conn.id,
-        label: conn.label,
+        connectionId: lightningConnection.id,
+        label: lightningConnection.label,
         balanceSats,
         balanceUpdatedAt: new Date().toISOString(),
       }
@@ -246,14 +246,14 @@ export async function fetchLightningBalancesForDashboard(): Promise<LightningBal
   }[] = []
 
   for (let index = 0; index < settled.length; index += 1) {
-    const result = settled[index]
-    if (result.status === 'fulfilled') {
-      const v = result.value
+    const settledOutcome = settled[index]
+    if (settledOutcome.status === 'fulfilled') {
+      const fulfilledValue = settledOutcome.value
       balancePatches.push({
-        connectionId: v.connectionId,
+        connectionId: fulfilledValue.connectionId,
         balance: {
-          balanceSats: v.balanceSats,
-          balanceUpdatedAt: v.balanceUpdatedAt,
+          balanceSats: fulfilledValue.balanceSats,
+          balanceUpdatedAt: fulfilledValue.balanceUpdatedAt,
         },
       })
     }
@@ -273,10 +273,10 @@ export async function fetchLightningBalancesForDashboard(): Promise<LightningBal
   let totalSats = 0
 
   for (let index = 0; index < settled.length; index += 1) {
-    const result = settled[index]
-    const conn = matches[index]
-    if (result.status === 'fulfilled') {
-      const row = result.value
+    const settledOutcome = settled[index]
+    const lightningConnection = matches[index]
+    if (settledOutcome.status === 'fulfilled') {
+      const row = settledOutcome.value
       lightningBalanceRows.push({
         connectionId: row.connectionId,
         label: row.label,
@@ -285,11 +285,11 @@ export async function fetchLightningBalancesForDashboard(): Promise<LightningBal
       totalSats += row.balanceSats
       continue
     }
-    const snap = snapshotById.get(conn.id)
+    const snap = snapshotById.get(lightningConnection.id)
     if (snap != null && snap.balanceUpdatedAt.length > 0) {
       const staleRow: LightningBalanceRow = {
-        connectionId: conn.id,
-        label: conn.label,
+        connectionId: lightningConnection.id,
+        label: lightningConnection.label,
         balanceSats: snap.balanceSats,
         isStaleBalance: true,
         balanceSnapshotAt: snap.balanceUpdatedAt,
@@ -299,12 +299,12 @@ export async function fetchLightningBalancesForDashboard(): Promise<LightningBal
       continue
     }
     const message =
-      result.reason instanceof Error
-        ? result.reason.message
+      settledOutcome.reason instanceof Error
+        ? settledOutcome.reason.message
         : 'Balance unavailable'
     lightningBalanceRows.push({
-      connectionId: conn.id,
-      label: conn.label,
+      connectionId: lightningConnection.id,
+      label: lightningConnection.label,
       balanceSats: 0,
       error: message,
     })

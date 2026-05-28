@@ -101,14 +101,14 @@ export async function checkFaucetReachability(
 ): Promise<FaucetReachability> {
   const proxyUrl = getFaucetProxyUrl(faucetId)
   try {
-    const res = await fetch(proxyUrl, {
+    const fetchResponse = await fetch(proxyUrl, {
       method: 'GET',
       redirect: 'follow',
       cache: 'no-store',
       signal,
     })
-    if (res.ok) return 'online'
-    if (res.status === 502) return 'offline'
+    if (fetchResponse.ok) return 'online'
+    if (fetchResponse.status === 502) return 'offline'
     return 'offline'
   } catch {
     return 'unknown'

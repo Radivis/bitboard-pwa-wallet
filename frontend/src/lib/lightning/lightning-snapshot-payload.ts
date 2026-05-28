@@ -18,16 +18,16 @@ export function isLightningPaymentPayload(
   row: unknown,
 ): row is LightningPayment {
   if (row === null || typeof row !== 'object') return false
-  const o = row as Record<string, unknown>
+  const rowRecord = row as Record<string, unknown>
   return (
-    typeof o.paymentHash === 'string' &&
-    typeof o.pending === 'boolean' &&
-    typeof o.amountSats === 'number' &&
-    typeof o.memo === 'string' &&
-    typeof o.timestamp === 'number' &&
-    typeof o.bolt11 === 'string' &&
-    (o.direction === 'incoming' || o.direction === 'outgoing') &&
-    typeof o.feesPaidSats === 'number'
+    typeof rowRecord.paymentHash === 'string' &&
+    typeof rowRecord.pending === 'boolean' &&
+    typeof rowRecord.amountSats === 'number' &&
+    typeof rowRecord.memo === 'string' &&
+    typeof rowRecord.timestamp === 'number' &&
+    typeof rowRecord.bolt11 === 'string' &&
+    (rowRecord.direction === 'incoming' || rowRecord.direction === 'outgoing') &&
+    typeof rowRecord.feesPaidSats === 'number'
   )
 }
 

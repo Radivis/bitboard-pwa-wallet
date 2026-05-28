@@ -48,8 +48,8 @@ export function serializeEncryptedBlobForSettings(blob: EncryptedBlob): string {
 }
 
 export function deserializeEncryptedBlobFromSettings(json: string): EncryptedBlob {
-  const o = JSON.parse(json) as Record<string, unknown>
-  const { ciphertext, iv, salt, kdfPhc } = o
+  const parsedBlob = JSON.parse(json) as Record<string, unknown>
+  const { ciphertext, iv, salt, kdfPhc } = parsedBlob
   if (typeof ciphertext !== 'string' || typeof iv !== 'string' || typeof salt !== 'string') {
     throw new Error('Settings encrypted blob is missing ciphertext, iv, or salt')
   }
@@ -93,14 +93,14 @@ async function deleteSetting(walletDb: Kysely<Database>, key: string): Promise<v
 export async function generateAndPersistNearZeroSession(
   walletDb: Kysely<Database>,
 ): Promise<void> {
-  const r = generateSessionSecretR()
-  const wrapped = await encryptData(NEAR_ZERO_WRAPPER_PASSWORD, r)
+  const sessionSecret = generateSessionSecretR()
+  const wrapped = await encryptData(NEAR_ZERO_WRAPPER_PASSWORD, sessionSecret)
   const serialized = serializeEncryptedBlobForSettings(wrapped)
 
   await upsertSetting(walletDb, NEAR_ZERO_SETTINGS_KEY_ACTIVE, '1')
   await upsertSetting(walletDb, NEAR_ZERO_SETTINGS_KEY_WRAPPED, serialized)
 
-  useSessionStore.getState().setPassword(r)
+  useSessionStore.getState().setPassword(sessionSecret)
   useNearZeroSecurityStore.getState().setNearZeroSecurityActive(true)
 }
 
@@ -135,8 +135,8 @@ export async function tryLoadNearZeroSessionIntoMemory(
 
   try {
     const blob = deserializeEncryptedBlobFromSettings(wrappedRow.value)
-    const r = await decryptData(NEAR_ZERO_WRAPPER_PASSWORD, blob)
-    useSessionStore.getState().setPassword(r)
+    const decryptedSessionSecret = await decryptData(NEAR_ZERO_WRAPPER_PASSWORD, blob)
+    useSessionStore.getState().setPassword(decryptedSessionSecret)
     useNearZeroSecurityStore.getState().setNearZeroSecurityActive(true)
     return true
   } catch {

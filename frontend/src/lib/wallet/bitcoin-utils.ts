@@ -27,11 +27,11 @@ export async function fetchEsploraTipBlockHeight(
 ): Promise<number> {
   const base = esploraBaseUrl.replace(/\/$/, '')
   const url = `${base}/blocks/tip/height`
-  const res = await fetch(url)
-  if (!res.ok) {
-    throw new Error(`Esplora tip height failed: HTTP ${res.status}`)
+  const fetchResponse = await fetch(url)
+  if (!fetchResponse.ok) {
+    throw new Error(`Esplora tip height failed: HTTP ${fetchResponse.status}`)
   }
-  const text = (await res.text()).trim()
+  const text = (await fetchResponse.text()).trim()
   const height = parseInt(text, 10)
   if (!Number.isFinite(height) || height < 0) {
     throw new Error('Esplora returned an invalid tip height')

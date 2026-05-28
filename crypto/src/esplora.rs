@@ -11,7 +11,7 @@ use crate::wasm_sleep::WasmSleeper;
 const ESPLORA_HTTP_TIMEOUT_SECS: u64 = 5;
 
 pub struct EsploraClient {
-    client: bdk_esplora::esplora_client::AsyncClient<WasmSleeper>,
+    async_client: bdk_esplora::esplora_client::AsyncClient<WasmSleeper>,
 }
 
 impl EsploraClient {
@@ -19,11 +19,11 @@ impl EsploraClient {
         if url.is_empty() {
             return Err(CryptoError::Blockchain("URL must not be empty".to_string()));
         }
-        let client = bdk_esplora::esplora_client::Builder::new(url)
+        let async_client = bdk_esplora::esplora_client::Builder::new(url)
             .timeout(ESPLORA_HTTP_TIMEOUT_SECS)
             .build_async_with_sleeper::<WasmSleeper>()
             .map_err(|e| CryptoError::Blockchain(e.to_string()))?;
-        Ok(Self { client })
+        Ok(Self { async_client })
     }
 
     /// Access the underlying esplora async client directly.
@@ -31,7 +31,7 @@ impl EsploraClient {
     /// Used by WASM wrappers that need to separate the request-building
     /// step (which borrows the wallet) from the async network call.
     pub fn inner(&self) -> &bdk_esplora::esplora_client::AsyncClient<WasmSleeper> {
-        &self.client
+        &self.async_client
     }
 }
 
@@ -47,7 +47,7 @@ impl BlockchainClient for EsploraClient {
     ) -> Result<Update, CryptoError> {
         let request = wallet.start_full_scan_at(now);
         let response = self
-            .client
+            .async_client
             .full_scan(request, stop_gap, parallel_requests)
             .await?;
         Ok(response.into())
@@ -60,12 +60,12 @@ impl BlockchainClient for EsploraClient {
         parallel_requests: usize,
     ) -> Result<Update, CryptoError> {
         let request = wallet.start_sync_with_revealed_spks_at(now);
-        let response = self.client.sync(request, parallel_requests).await?;
+        let response = self.async_client.sync(request, parallel_requests).await?;
         Ok(response.into())
     }
 
     async fn broadcast(&self, tx: &Transaction) -> Result<Txid, CryptoError> {
-        self.client.broadcast(tx).await?;
+        self.async_client.broadcast(tx).await?;
         Ok(tx.compute_txid())
     }
 }

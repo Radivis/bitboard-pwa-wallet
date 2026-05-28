@@ -141,14 +141,14 @@ async function nwcCreateInvoice(
 ): Promise<{ bolt11: string; paymentHash: string }> {
   const fixedAmountSats = params.amountSats
   if (fixedAmountSats != null && fixedAmountSats >= 1) {
-    const result = await client.makeInvoice({
+    const makeInvoiceResponse = await client.makeInvoice({
       amount: satsToMsatsForNwcInvoice(fixedAmountSats),
       description: params.memo,
       expiry: params.expiry,
     })
     return {
-      bolt11: result.invoice,
-      paymentHash: result.payment_hash,
+      bolt11: makeInvoiceResponse.invoice,
+      paymentHash: makeInvoiceResponse.payment_hash,
     }
   }
 
@@ -161,15 +161,15 @@ async function nwcCreateInvoice(
   }
 
   const exec = client as unknown as NwcClientWithExecute
-  const result = await exec.executeNip47Request<NwcMakeInvoiceResult>(
+  const nip47InvoiceResult = await exec.executeNip47Request<NwcMakeInvoiceResult>(
     'make_invoice',
     nip47Params,
     (r) => !!r.invoice,
   )
 
   return {
-    bolt11: result.invoice,
-    paymentHash: result.payment_hash,
+    bolt11: nip47InvoiceResult.invoice,
+    paymentHash: nip47InvoiceResult.payment_hash,
   }
 }
 
@@ -297,8 +297,8 @@ function createNwcBackendService(
 
   return {
     async getBalance() {
-      const result = await client.getBalance()
-      return { balanceSats: msatsToSats(result.balance) }
+      const balanceResponse = await client.getBalance()
+      return { balanceSats: msatsToSats(balanceResponse.balance) }
     },
 
     async createInvoice(params) {
@@ -306,18 +306,18 @@ function createNwcBackendService(
     },
 
     async payInvoice(bolt11, options) {
-      const result = await client.payInvoice({
+      const payInvoiceResponse = await client.payInvoice({
         invoice: bolt11,
         ...(options?.amountMsats != null
           ? { amount: options.amountMsats }
           : {}),
       })
-      return { preimage: result.preimage }
+      return { preimage: payInvoiceResponse.preimage }
     },
 
     async listPayments() {
-      const result = await client.listTransactions({})
-      return result.transactions.map((tx) => ({
+      const listTransactionsResponse = await client.listTransactions({})
+      return listTransactionsResponse.transactions.map((tx) => ({
         paymentHash: tx.payment_hash,
         pending: tx.state === 'pending',
         amountSats: msatsToSats(tx.amount),

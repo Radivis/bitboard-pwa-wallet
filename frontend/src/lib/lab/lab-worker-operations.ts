@@ -92,26 +92,26 @@ function parseLabEntitySignResult(raw: unknown): {
   changeFreeBumpAvailable: boolean
   changeFreeMaxSats: number
 } {
-  const o: Record<string, unknown> =
+  const parsedWasmPayload: Record<string, unknown> =
     raw != null && typeof raw === 'object' && !Array.isArray(raw)
       ? (raw as Record<string, unknown>)
       : typeof raw === 'string'
         ? (JSON.parse(raw) as Record<string, unknown>)
         : {}
-  const changeRaw = o.change_address
+  const changeRaw = parsedWasmPayload.change_address
   return {
-    signedTxHex: String(o.signed_tx_hex ?? ''),
-    feeSats: Number(o.fee_sats ?? 0),
-    hasChange: Boolean(o.has_change),
-    changesetJson: String(o.changeset_json ?? ''),
+    signedTxHex: String(parsedWasmPayload.signed_tx_hex ?? ''),
+    feeSats: Number(parsedWasmPayload.fee_sats ?? 0),
+    hasChange: Boolean(parsedWasmPayload.has_change),
+    changesetJson: String(parsedWasmPayload.changeset_json ?? ''),
     changeAddress:
       typeof changeRaw === 'string' && changeRaw.length > 0 ? changeRaw : null,
-    finalAmountSats: Number(o.final_amount_sats ?? 0),
-    originalAmountSats: Number(o.original_amount_sats ?? 0),
-    raisedToMinDust: Boolean(o.raised_to_min_dust),
-    bumpedChangeFree: Boolean(o.bumped_change_free),
-    changeFreeBumpAvailable: Boolean(o.change_free_bump_available),
-    changeFreeMaxSats: Number(o.change_free_max_sats ?? 0),
+    finalAmountSats: Number(parsedWasmPayload.final_amount_sats ?? 0),
+    originalAmountSats: Number(parsedWasmPayload.original_amount_sats ?? 0),
+    raisedToMinDust: Boolean(parsedWasmPayload.raised_to_min_dust),
+    bumpedChangeFree: Boolean(parsedWasmPayload.bumped_change_free),
+    changeFreeBumpAvailable: Boolean(parsedWasmPayload.change_free_bump_available),
+    changeFreeMaxSats: Number(parsedWasmPayload.change_free_max_sats ?? 0),
   }
 }
 
@@ -141,17 +141,17 @@ export async function labOpDraftLabEntityTransaction(params: {
   })
 
   const cryptoWorker = getCryptoWorker()
-  const c = prep.crypto
+  const cryptoParams = prep.crypto
   const draft = await cryptoWorker.labEntityDraftLabPsbtTransaction({
-    mnemonic: c.mnemonic,
-    changesetJson: c.changesetJson,
-    network: c.network,
-    addressType: c.addressType,
-    accountId: c.accountId,
-    utxosJson: c.utxosJson,
-    toAddress: c.toAddress,
-    amountSats: c.amountSats,
-    feeRateSatPerVb: c.feeRateSatPerVb,
+    mnemonic: cryptoParams.mnemonic,
+    changesetJson: cryptoParams.changesetJson,
+    network: cryptoParams.network,
+    addressType: cryptoParams.addressType,
+    accountId: cryptoParams.accountId,
+    utxosJson: cryptoParams.utxosJson,
+    toAddress: cryptoParams.toAddress,
+    amountSats: cryptoParams.amountSats,
+    feeRateSatPerVb: cryptoParams.feeRateSatPerVb,
   })
 
   return { prep, draft }
@@ -177,17 +177,17 @@ export async function labOpCreateLabEntityTransaction(params: {
   })
 
   const cryptoWorker = getCryptoWorker()
-  const c = prep.crypto
+  const cryptoParams = prep.crypto
   const signRaw = await cryptoWorker.labEntityBuildAndSignLabTransaction({
-    mnemonic: c.mnemonic,
-    changesetJson: c.changesetJson,
-    network: c.network,
-    addressType: c.addressType,
-    accountId: c.accountId,
-    utxosJson: c.utxosJson,
-    toAddress: c.toAddress,
-    amountSats: c.amountSats,
-    feeRateSatPerVb: c.feeRateSatPerVb,
+    mnemonic: cryptoParams.mnemonic,
+    changesetJson: cryptoParams.changesetJson,
+    network: cryptoParams.network,
+    addressType: cryptoParams.addressType,
+    accountId: cryptoParams.accountId,
+    utxosJson: cryptoParams.utxosJson,
+    toAddress: cryptoParams.toAddress,
+    amountSats: cryptoParams.amountSats,
+    feeRateSatPerVb: cryptoParams.feeRateSatPerVb,
     applyChangeFreeBump: params.applyChangeFreeBump ?? false,
   })
   const parsed = parseLabEntitySignResult(signRaw)

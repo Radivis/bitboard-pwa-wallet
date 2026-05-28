@@ -321,12 +321,12 @@ export async function fetchLabEntitiesPage(
     .execute()
 
   const balanceByEntityId = new Map<number, number>()
-  for (const b of balanceRows) {
-    if (b.lab_entity_id == null) continue
-    const t = b.total
+  for (const balanceRow of balanceRows) {
+    if (balanceRow.lab_entity_id == null) continue
+    const totalSats = balanceRow.total
     balanceByEntityId.set(
-      b.lab_entity_id,
-      typeof t === 'bigint' ? Number(t) : Number(t ?? 0),
+      balanceRow.lab_entity_id,
+      typeof totalSats === 'bigint' ? Number(totalSats) : Number(totalSats ?? 0),
     )
   }
 
@@ -354,31 +354,35 @@ export async function fetchLabEntitiesPage(
   ])
 
   const hasTransactionsById = new Set<number>()
-  for (const r of confirmedSenders) {
-    if (r.sender_lab_entity_id != null) hasTransactionsById.add(r.sender_lab_entity_id)
+  for (const senderRow of confirmedSenders) {
+    if (senderRow.sender_lab_entity_id != null) hasTransactionsById.add(senderRow.sender_lab_entity_id)
   }
-  for (const r of confirmedReceivers) {
-    if (r.receiver_lab_entity_id != null) hasTransactionsById.add(r.receiver_lab_entity_id)
+  for (const receiverRow of confirmedReceivers) {
+    if (receiverRow.receiver_lab_entity_id != null) {
+      hasTransactionsById.add(receiverRow.receiver_lab_entity_id)
+    }
   }
-  for (const r of mempoolSenders) {
-    if (r.sender_lab_entity_id != null) hasTransactionsById.add(r.sender_lab_entity_id)
+  for (const senderRow of mempoolSenders) {
+    if (senderRow.sender_lab_entity_id != null) hasTransactionsById.add(senderRow.sender_lab_entity_id)
   }
-  for (const r of mempoolReceivers) {
-    if (r.receiver_lab_entity_id != null) hasTransactionsById.add(r.receiver_lab_entity_id)
+  for (const receiverRow of mempoolReceivers) {
+    if (receiverRow.receiver_lab_entity_id != null) {
+      hasTransactionsById.add(receiverRow.receiver_lab_entity_id)
+    }
   }
 
-  const rows: LabEntitiesPageRow[] = entityRows.map((r) => {
-    const labEntityId = r.lab_entity_id
-    const entityName = r.entity_name
+  const rows: LabEntitiesPageRow[] = entityRows.map((entityDbRow) => {
+    const labEntityId = entityDbRow.lab_entity_id
+    const entityName = entityDbRow.entity_name
     const displayName = labEntityOwnerKey({ labEntityId, entityName })
     return {
       labEntityId,
       entityName,
       displayName,
-      addressType: parseAddressType(r.address_type),
+      addressType: parseAddressType(entityDbRow.address_type),
       balanceSats: balanceByEntityId.get(labEntityId) ?? 0,
       hasTransactions: hasTransactionsById.has(labEntityId),
-      isDead: Boolean(r.is_dead),
+      isDead: Boolean(entityDbRow.is_dead),
     }
   })
 
@@ -388,11 +392,11 @@ export async function fetchLabEntitiesPage(
 export async function fetchLabAddressBalancesSats(
   addresses: readonly string[],
 ): Promise<Map<string, number>> {
-  const result = new Map<string, number>()
-  if (addresses.length === 0) return result
+  const addressBalanceByAddress = new Map<string, number>()
+  if (addresses.length === 0) return addressBalanceByAddress
 
   for (const address of addresses) {
-    result.set(address, 0)
+    addressBalanceByAddress.set(address, 0)
   }
 
   await ensureLabMigrated()
@@ -406,12 +410,12 @@ export async function fetchLabAddressBalancesSats(
     .execute()
 
   for (const row of rows) {
-    const t = row.total
-    result.set(
+    const totalSats = row.total
+    addressBalanceByAddress.set(
       row.address,
-      typeof t === 'bigint' ? Number(t) : Number(t ?? 0),
+      typeof totalSats === 'bigint' ? Number(totalSats) : Number(totalSats ?? 0),
     )
   }
 
-  return result
+  return addressBalanceByAddress
 }

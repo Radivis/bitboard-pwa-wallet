@@ -315,11 +315,11 @@ export const useLightningStore = create<LightningState>()(
       },
 
       setActiveConnection: (walletId, networkMode, connectionId) => {
-        const conn = get().connectedWallets.find((w) => w.id === connectionId)
+        const lightningConnection = get().connectedWallets.find((w) => w.id === connectionId)
         if (
-          !conn ||
-          conn.walletId !== walletId ||
-          conn.networkMode !== networkMode
+          !lightningConnection ||
+          lightningConnection.walletId !== walletId ||
+          lightningConnection.networkMode !== networkMode
         ) {
           return
         }
@@ -342,9 +342,9 @@ export const useLightningStore = create<LightningState>()(
         const lnMode = networkMode as LightningNetworkMode
         const activeId = get().activeConnectionIds[walletId]?.[lnMode]
         if (!activeId) return null
-        const conn = get().connectedWallets.find((w) => w.id === activeId)
-        if (!conn || conn.networkMode !== lnMode) return null
-        return conn
+        const lightningConnection = get().connectedWallets.find((w) => w.id === activeId)
+        if (!lightningConnection || lightningConnection.networkMode !== lnMode) return null
+        return lightningConnection
       },
 
       hasNetworkConnectedWallet: (walletId, networkMode) =>
@@ -374,14 +374,14 @@ export const useLightningStore = create<LightningState>()(
           )
           if (connection) {
             const service = createBackendService(connection.config)
-            const result = await service.createInvoice({
+            const invoiceResponse = await service.createInvoice({
               ...(storedAmountSats != null ? { amountSats: storedAmountSats } : {}),
               memo: description,
               expiry: effectiveExpiry,
             })
             const invoice: LightningInvoice = {
-              bolt11: result.bolt11,
-              paymentHash: result.paymentHash,
+              bolt11: invoiceResponse.bolt11,
+              paymentHash: invoiceResponse.paymentHash,
               amountSats: storedAmountSats,
               description,
               expirySeconds: effectiveExpiry,

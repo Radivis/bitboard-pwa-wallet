@@ -66,12 +66,12 @@ export function normalizeJsonOwnerToLabOwner(
 ): LabOwner | null {
   if (raw == null || raw === '') return null
   if (typeof raw === 'object' && raw !== null && !Array.isArray(raw)) {
-    const o = raw as Record<string, unknown>
-    if (o.kind === 'wallet' && typeof o.walletId === 'number') {
-      return { kind: 'wallet', walletId: o.walletId }
+    const candidateOwner = raw as Record<string, unknown>
+    if (candidateOwner.kind === 'wallet' && typeof candidateOwner.walletId === 'number') {
+      return { kind: 'wallet', walletId: candidateOwner.walletId }
     }
-    if (o.kind === 'lab_entity' && typeof o.labEntityId === 'number') {
-      return { kind: 'lab_entity', labEntityId: o.labEntityId }
+    if (candidateOwner.kind === 'lab_entity' && typeof candidateOwner.labEntityId === 'number') {
+      return { kind: 'lab_entity', labEntityId: candidateOwner.labEntityId }
     }
   }
   if (typeof raw === 'string') {

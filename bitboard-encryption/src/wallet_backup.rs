@@ -137,14 +137,15 @@ pub fn verify_wallet_backup_manifest_inner(
         .decode(&manifest.salt_b64)
         .map_err(|_| "Invalid salt_b64 in manifest".to_string())?;
     let signing_key = keypair_from_password(password, &salt, &manifest.kdf_phc)?;
-    let vk = signing_key.verifying_key();
+    let verifying_key = signing_key.verifying_key();
     let sig_bytes = base64::engine::general_purpose::STANDARD
         .decode(&manifest.signature_b64)
         .map_err(|_| "Invalid signature_b64 in manifest".to_string())?;
-    let sig = ml_dsa::Signature::<MlDsa65>::try_from(sig_bytes.as_slice())
+    let signature = ml_dsa::Signature::<MlDsa65>::try_from(sig_bytes.as_slice())
         .map_err(|_| "Invalid ML-DSA signature encoding".to_string())?;
     let message_hash = double_sha256_bytes(sqlite_bytes);
-    vk.verify(&message_hash, &sig)
+    verifying_key
+        .verify(&message_hash, &signature)
         .map_err(|_| "Invalid password or corrupted backup (signature does not verify)".to_string())
 }
 

@@ -4,12 +4,12 @@ import { SATS_PER_BTC } from '@/lib/wallet/bitcoin-utils'
  * Parses user fiat input (ASCII digits and one `.`) into a finite non-negative number.
  */
 export function parsePositiveFiatAmountInput(raw: string): number | null {
-  const t = raw.trim()
-  if (t === '') return null
-  if (!/^\d*\.?\d*$/.test(t)) return null
-  const n = Number(t)
-  if (!Number.isFinite(n) || n < 0) return null
-  return n
+  const trimmedAmount = raw.trim()
+  if (trimmedAmount === '') return null
+  if (!/^\d*\.?\d*$/.test(trimmedAmount)) return null
+  const parsedNumber = Number(trimmedAmount)
+  if (!Number.isFinite(parsedNumber) || parsedNumber < 0) return null
+  return parsedNumber
 }
 
 /**

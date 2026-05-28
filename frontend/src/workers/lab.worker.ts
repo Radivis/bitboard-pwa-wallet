@@ -76,8 +76,8 @@ const labService = {
     const mempool = (cloned.mempool ?? []).map((entry) => {
       let next = { ...entry }
       if (next.weight <= 0) {
-        const w = wasmU64ToNumber(wasmModule.lab_tx_weight(entry.signedTxHex))
-        next = { ...next, weight: w > 0 ? w : 1 }
+        const txWeight = wasmU64ToNumber(wasmModule.lab_tx_weight(entry.signedTxHex))
+        next = { ...next, weight: txWeight > 0 ? txWeight : 1 }
       }
       next = { ...next, vsize: labVsizeFromWeight(next.weight) }
       return next
@@ -584,8 +584,8 @@ const labService = {
 
   async renameLabEntity(labEntityId: number, newName: string): Promise<LabState> {
     const trimmed = newName.trim()
-    const v = validateLabEntityRenameName(trimmed, state.entities, labEntityId)
-    if (!v.ok) throw new Error(v.error)
+    const validationOutcome = validateLabEntityRenameName(trimmed, state.entities, labEntityId)
+    if (!validationOutcome.ok) throw new Error(validationOutcome.error)
     const entity = findLabEntityById(state.entities, labEntityId)
     if (!entity) throw new Error(`Unknown lab entity id ${labEntityId}`)
     entity.entityName = trimmed

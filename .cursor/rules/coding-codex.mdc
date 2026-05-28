@@ -51,8 +51,6 @@ Before making statements about the functionality of the code, make sure they are
 
 When it comes to matters of technologies, architecture, or algorithms question the rationale behind those choices, if the justifications for using them seem insufficient. Provide critical pushback and feel free to research and propose superior alternatives.
 
-Aim to self-improve by proposing updates to the agent rules. If you think something that is missing from these rules should become best practice, suggest the specific changes. However, you must never modify the rules themselves - rule changes require explicit human permission (see "Requires explicit permission" section below).
-
 ## Requires explicit permission by human user:
 - Deletion of pre-existing files, functions, or constants
 - Installing new libraries

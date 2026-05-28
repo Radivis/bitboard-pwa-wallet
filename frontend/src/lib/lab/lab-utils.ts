@@ -32,11 +32,11 @@ export function walletOwnerKey(walletId: number): string {
 
 /** Case-insensitive equality for bc1/tb1/bcrt1 addresses (matches lab worker / BIP173). */
 export function labBitcoinAddressesEqual(a: string, b: string): boolean {
-  const x = a.trim()
-  const y = b.trim()
-  if (x === y) return true
-  if (/^(bc|tb|bcrt)1/i.test(x) && /^(bc|tb|bcrt)1/i.test(y)) {
-    return x.toLowerCase() === y.toLowerCase()
+  const trimmedFirst = a.trim()
+  const trimmedSecond = b.trim()
+  if (trimmedFirst === trimmedSecond) return true
+  if (/^(bc|tb|bcrt)1/i.test(trimmedFirst) && /^(bc|tb|bcrt)1/i.test(trimmedSecond)) {
+    return trimmedFirst.toLowerCase() === trimmedSecond.toLowerCase()
   }
   return false
 }
@@ -104,9 +104,9 @@ export function resolveLabAddressOwnerDisplay(
     for (const output of detail.outputs ?? []) {
       if (!labBitcoinAddressesEqual(output.address, address)) continue
       if (output.owner != null) {
-        const o = output.owner
-        if (typeof o === 'object' && o !== null && 'kind' in o) {
-          return labOwnerDisplayName(o as LabOwner, wallets, entities)
+        const owner = output.owner
+        if (typeof owner === 'object' && owner !== null && 'kind' in owner) {
+          return labOwnerDisplayName(owner as LabOwner, wallets, entities)
         }
       }
     }
@@ -163,8 +163,8 @@ export function groupLabRowsByResolvedOwner<T>(
 
 /** Bech32 addresses are compared case-insensitively for deduplication (BIP173). */
 function canonicalLabAddressKey(address: string): string {
-  const t = address.trim()
-  return /^(bc|tb|bcrt)1/i.test(t) ? t.toLowerCase() : t
+  const trimmedAddress = address.trim()
+  return /^(bc|tb|bcrt)1/i.test(trimmedAddress) ? trimmedAddress.toLowerCase() : trimmedAddress
 }
 
 /** Merge controlled addresses with any addresses that appear in UTXOs but are not yet in the list. */
@@ -199,7 +199,7 @@ export function labTransactionsForWallet(
     labState.txDetails.map((detail) => [detail.txid, detail]),
   )
 
-  const result: TransactionDetails[] = []
+  const walletTransactionDetails: TransactionDetails[] = []
 
   for (const entry of labState.mempool ?? []) {
     const isSender = labOwnersEqual(entry.sender, walletOwner)
@@ -217,7 +217,7 @@ export function labTransactionsForWallet(
           .reduce((sumSats, output) => sumSats + output.amountSats, 0)
       : 0
 
-    result.push({
+    walletTransactionDetails.push({
       txid: entry.txid,
       sent_sats: sentSats,
       received_sats: receivedSats,
@@ -241,7 +241,7 @@ export function labTransactionsForWallet(
       const receivedSatsCoinbase = (details.outputs ?? [])
         .filter((output) => labOwnersEqual(output.owner ?? null, walletOwner))
         .reduce((sumSats, output) => sumSats + output.amountSats, 0)
-      result.push({
+      walletTransactionDetails.push({
         txid: record.txid,
         sent_sats: 0,
         received_sats: receivedSatsCoinbase,
@@ -275,7 +275,7 @@ export function labTransactionsForWallet(
     )
     const feeSats = totalInput - totalOutput
 
-    result.push({
+    walletTransactionDetails.push({
       txid: record.txid,
       sent_sats: sentSats,
       received_sats: receivedSats,
@@ -287,7 +287,7 @@ export function labTransactionsForWallet(
     })
   }
 
-  result.sort((txA, txB) => {
+  walletTransactionDetails.sort((txA, txB) => {
     if (!txA.is_confirmed && txB.is_confirmed) return -1
     if (txA.is_confirmed && !txB.is_confirmed) return 1
     if (txA.is_confirmed && txB.is_confirmed) {
@@ -299,7 +299,7 @@ export function labTransactionsForWallet(
     return txA.txid.localeCompare(txB.txid)
   })
 
-  return result
+  return walletTransactionDetails
 }
 
 /**

@@ -48,19 +48,19 @@ fn sum_psbt_input_values(psbt: &Psbt) -> Result<u64, CryptoError> {
             "PSBT input count mismatch".to_string(),
         ));
     }
-    let mut sum = 0u64;
-    for inp in &psbt.inputs {
-        let amt = inp
+    let mut input_value_sum = 0u64;
+    for psbt_input in &psbt.inputs {
+        let input_amount_sats = psbt_input
             .witness_utxo
             .as_ref()
             .ok_or_else(|| CryptoError::Transaction("PSBT input missing witness_utxo".to_string()))?
             .value
             .to_sat();
-        sum = sum
-            .checked_add(amt)
+        input_value_sum = input_value_sum
+            .checked_add(input_amount_sats)
             .ok_or_else(|| CryptoError::Transaction("Input value sum overflow".to_string()))?;
     }
-    Ok(sum)
+    Ok(input_value_sum)
 }
 
 fn sum_unsigned_tx_output_values(tx: &Transaction) -> u64 {
@@ -150,9 +150,9 @@ pub fn prepare_onchain_send(
 
     let original_amount_sats = amount_sats;
     let mut raised_to_min_dust = false;
-    let mut final_amt = amount_sats;
-    if final_amt < UX_DUST_FLOOR_SATS {
-        final_amt = UX_DUST_FLOOR_SATS;
+    let mut final_payment_sats = amount_sats;
+    if final_payment_sats < UX_DUST_FLOOR_SATS {
+        final_payment_sats = UX_DUST_FLOOR_SATS;
         raised_to_min_dust = true;
     }
 
@@ -165,16 +165,16 @@ pub fn prepare_onchain_send(
 
     // `nLockTime = 0` instead of BDK’s default (tip-based fee-sniping lock time) — see
     // `doc/ARCHITECTURE.md` (On-chain sends: nLockTime and fee sniping).
-    let build_once = |w: &mut Wallet, amt: u64| -> Result<Psbt, CryptoError> {
-        let mut tx_builder = w.build_tx();
+    let build_once = |wallet: &mut Wallet, payment_sats: u64| -> Result<Psbt, CryptoError> {
+        let mut tx_builder = wallet.build_tx();
         tx_builder
             .nlocktime(absolute::LockTime::ZERO)
-            .add_recipient(recipient_spk.clone(), Amount::from_sat(amt))
+            .add_recipient(recipient_spk.clone(), Amount::from_sat(payment_sats))
             .fee_rate(fee_rate);
         tx_builder.finish().map_err(CryptoError::from)
     };
 
-    let mut psbt = build_once(wallet, final_amt)?;
+    let mut psbt = build_once(wallet, final_payment_sats)?;
     let mut bumped_change_free = false;
 
     let unsigned = psbt.unsigned_tx.clone();
@@ -190,14 +190,14 @@ pub fn prepare_onchain_send(
             CryptoError::Transaction("Fee overflow for transaction weight".to_string())
         })?;
         let max_recipient = vin_sum.saturating_sub(min_total_fee.to_sat());
-        if max_recipient > final_amt {
+        if max_recipient > final_payment_sats {
             change_free_bump_available = true;
             change_free_max_sats = max_recipient;
             if apply_change_free_bump {
                 match build_once(wallet, max_recipient) {
                     Ok(psbt2) => {
                         psbt = psbt2;
-                        final_amt = max_recipient;
+                        final_payment_sats = max_recipient;
                         bumped_change_free = true;
                     }
                     Err(_) => {
@@ -230,7 +230,7 @@ pub fn prepare_onchain_send(
 
     Ok(PrepareOnchainSendOutcome {
         psbt_base64: psbt.to_string(),
-        final_amount_sats: final_amt,
+        final_amount_sats: final_payment_sats,
         original_amount_sats,
         raised_to_min_dust,
         bumped_change_free,

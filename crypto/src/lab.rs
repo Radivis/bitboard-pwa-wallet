@@ -246,13 +246,13 @@ pub fn lab_build_transaction(
     }
 
     let mut output_vec: Vec<TxOut> = Vec::with_capacity(outputs.len());
-    for out in &outputs {
-        let addr = Address::from_str(&out.address)
+    for output_spec in &outputs {
+        let addr = Address::from_str(&output_spec.address)
             .map_display_err_to_js()?
             .require_network(Network::Regtest)
             .map_display_err_to_js()?;
         output_vec.push(TxOut {
-            value: Amount::from_sat(out.amount_sats),
+            value: Amount::from_sat(output_spec.amount_sats),
             script_pubkey: addr.script_pubkey(),
         });
     }
@@ -315,16 +315,16 @@ pub fn lab_sign_transaction(tx_hex: &str, wif: &str, utxos_json: &str) -> Result
             )
             .map_display_err_to_js()?;
 
-        let msg = bitcoin::secp256k1::Message::from(sighash);
-        let signature = secp_engine.sign_ecdsa(&msg, &secret_key);
-        let sig = bitcoin::ecdsa::Signature {
+        let sighash_message = bitcoin::secp256k1::Message::from(sighash);
+        let signature = secp_engine.sign_ecdsa(&sighash_message, &secret_key);
+        let ecdsa_signature = bitcoin::ecdsa::Signature {
             signature,
             sighash_type,
         };
         *sighasher
             .witness_mut(i)
             .expect("input index i is bounded by input_len") =
-            Witness::p2wpkh(&sig, &public_key.inner);
+            Witness::p2wpkh(&ecdsa_signature, &public_key.inner);
     }
 
     let signed_tx = sighasher.into_transaction();
@@ -395,20 +395,21 @@ pub fn lab_sign_transaction_multi(
                 .taproot_key_spend_signature_hash(i, &prevouts, tap_sighash_type)
                 .map_display_err_to_js()?;
 
-            let msg = Message::from(sighash);
-            let signature = secp_engine.sign_schnorr(&msg, tweaked.as_keypair());
-            let sig = bitcoin::taproot::Signature {
+            let sighash_message = Message::from(sighash);
+            let signature = secp_engine.sign_schnorr(&sighash_message, tweaked.as_keypair());
+            let taproot_signature = bitcoin::taproot::Signature {
                 signature,
                 sighash_type: tap_sighash_type,
             };
             *sighasher
                 .witness_mut(i)
-                .expect("input index i is bounded by input_len") = Witness::p2tr_key_spend(&sig);
+                .expect("input index i is bounded by input_len") =
+                Witness::p2tr_key_spend(&taproot_signature);
         } else {
             let privkey = PrivateKey::from_wif(&wif).map_display_err_to_js()?;
-            let sk = privkey.inner;
-            let pk = bitcoin::PublicKey::new(sk.public_key(&secp_engine));
-            if pk.wpubkey_hash().is_err() {
+            let secret_key = privkey.inner;
+            let public_key = bitcoin::PublicKey::new(secret_key.public_key(&secp_engine));
+            if public_key.wpubkey_hash().is_err() {
                 return Err(JsValue::from_str("Key must be compressed for P2WPKH"));
             }
 
@@ -421,15 +422,16 @@ pub fn lab_sign_transaction_multi(
                 )
                 .map_display_err_to_js()?;
 
-            let msg = Message::from(sighash);
-            let signature = secp_engine.sign_ecdsa(&msg, &sk);
-            let sig = bitcoin::ecdsa::Signature {
+            let sighash_message = Message::from(sighash);
+            let signature = secp_engine.sign_ecdsa(&sighash_message, &secret_key);
+            let ecdsa_signature = bitcoin::ecdsa::Signature {
                 signature,
                 sighash_type: ecdsa_sighash_type,
             };
             *sighasher
                 .witness_mut(i)
-                .expect("input index i is bounded by input_len") = Witness::p2wpkh(&sig, &pk.inner);
+                .expect("input index i is bounded by input_len") =
+                Witness::p2wpkh(&ecdsa_signature, &public_key.inner);
         }
     }
 
@@ -525,22 +527,22 @@ pub fn lab_generate_keypair() -> Result<JsValue, JsValue> {
     let address = Address::p2wpkh(&compressed_public_key, Network::Regtest);
     let private_key = PrivateKey::new(secret_key, Network::Regtest);
 
-    let result = LabKeypairResult {
+    let keypair_payload = LabKeypairResult {
         address: address.to_string(),
         wif: private_key.to_wif(),
     };
-    serde_wasm_bindgen::to_value(&result).map_display_err_to_js()
+    serde_wasm_bindgen::to_value(&keypair_payload).map_display_err_to_js()
 }
 
 /// Validates that an address is a valid P2WPKH or P2TR regtest address.
 #[wasm_bindgen]
 pub fn lab_validate_address(address_str: &str) -> Result<bool, JsValue> {
     let address = match Address::from_str(address_str) {
-        Ok(a) => a,
+        Ok(parsed_address) => parsed_address,
         Err(_) => return Ok(false),
     };
     let checked = match address.require_network(Network::Regtest) {
-        Ok(a) => a,
+        Ok(regtest_address) => regtest_address,
         Err(_) => return Ok(false),
     };
     let script_pubkey = checked.script_pubkey();
@@ -619,7 +621,7 @@ pub fn lab_block_effects(block_hex: &str) -> Result<JsValue, JsValue> {
                 continue;
             }
             let address = match Address::from_script(script, Network::Regtest) {
-                Ok(a) => a.to_string(),
+                Ok(parsed_address) => parsed_address.to_string(),
                 Err(_) => continue,
             };
             tx_outputs.push(LabBlockTxOutputSummary {
@@ -643,7 +645,7 @@ pub fn lab_block_effects(block_hex: &str) -> Result<JsValue, JsValue> {
                 continue;
             }
             let address = match Address::from_script(script, Network::Regtest) {
-                Ok(a) => a.to_string(),
+                Ok(parsed_address) => parsed_address.to_string(),
                 Err(_) => continue,
             };
             new_utxos.push(LabBlockNewUtxo {

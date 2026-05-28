@@ -22,12 +22,12 @@ function registerBlockTxOutputsInWorkingUtxoMap(
   outputs: ReadonlyArray<{ address: string; amountSats: number }>,
 ): void {
   for (let vout = 0; vout < outputs.length; vout += 1) {
-    const o = outputs[vout]
+    const outputAtVout = outputs[vout]
     utxoMap.set(`${txid}:${vout}`, {
       txid,
       vout,
-      address: o.address,
-      amountSats: o.amountSats,
+      address: outputAtVout.address,
+      amountSats: outputAtVout.amountSats,
       scriptPubkeyHex: '',
     })
   }

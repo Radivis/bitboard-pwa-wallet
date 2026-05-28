@@ -128,11 +128,11 @@ fn derive_argon2_key_with_mtp_str(
     let params = Params::new(memory_kib, iterations, parallelism, Some(DERIVED_KEY_LEN))
         .map_err(|e| format!("Argon2 params error: {e}"))?;
     let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
-    let mut key = vec![0u8; DERIVED_KEY_LEN];
+    let mut derived_encryption_key = vec![0u8; DERIVED_KEY_LEN];
     argon2
-        .hash_password_into(password.as_bytes(), salt, &mut key)
+        .hash_password_into(password.as_bytes(), salt, &mut derived_encryption_key)
         .map_err(|e| format!("Argon2 hash error: {e}"))?;
-    Ok(key)
+    Ok(derived_encryption_key)
 }
 
 /// Derive a 256-bit key from password, salt, and PHC (string errors — used by wallet backup and unit tests).

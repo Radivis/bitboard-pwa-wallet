@@ -64,9 +64,9 @@ export function tryParseBitcoinUri(raw: string): ParsedBitcoinUri | null {
     const params = new URLSearchParams(query)
     const amountStr = getBitcoinUriQueryParam(params, 'amount')
     if (amountStr != null && amountStr !== '') {
-      const n = parseFloat(amountStr)
-      if (Number.isFinite(n) && n > 0) {
-        amountBtc = n
+      const parsedAmount = parseFloat(amountStr)
+      if (Number.isFinite(parsedAmount) && parsedAmount > 0) {
+        amountBtc = parsedAmount
       }
     }
     const lnEncoded = getBitcoinUriQueryParam(params, 'lightning')
@@ -109,8 +109,8 @@ export function recipientAndAmountFromScannedPayload(
   raw: string,
   amountUnit: BitcoinDisplayUnit,
 ): RecipientAndAmountFromScanned {
-  const t = raw.trim()
-  const bip21 = tryParseBitcoinUri(t)
+  const trimmedUri = raw.trim()
+  const bip21 = tryParseBitcoinUri(trimmedUri)
   if (bip21) {
     const out: RecipientAndAmountFromScanned = {
       recipient: preferredRecipientFromBitcoinUri(bip21),
@@ -124,5 +124,5 @@ export function recipientAndAmountFromScannedPayload(
     }
     return out
   }
-  return { recipient: t }
+  return { recipient: trimmedUri }
 }

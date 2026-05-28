@@ -19,11 +19,11 @@ export const txidToChangeOutput = new Map<string, { address: string; vout: numbe
 /** Bech32 (bc1/tb1/bcrt1) addresses can differ by case; BIP173 compares case-insensitively. */
 export function labAddressesEqual(a: string, b: string): boolean {
   if (a === b) return true
-  const x = a.trim()
-  const y = b.trim()
-  if (x === y) return true
-  if (/^(bc|tb|bcrt)1/i.test(x) && /^(bc|tb|bcrt)1/i.test(y)) {
-    return x.toLowerCase() === y.toLowerCase()
+  const trimmedFirst = a.trim()
+  const trimmedSecond = b.trim()
+  if (trimmedFirst === trimmedSecond) return true
+  if (/^(bc|tb|bcrt)1/i.test(trimmedFirst) && /^(bc|tb|bcrt)1/i.test(trimmedSecond)) {
+    return trimmedFirst.toLowerCase() === trimmedSecond.toLowerCase()
   }
   return false
 }
