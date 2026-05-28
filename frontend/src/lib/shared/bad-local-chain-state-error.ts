@@ -44,8 +44,8 @@ export function asBadLocalChainStateError(err: unknown): BadLocalChainStateError
   if (err instanceof BadLocalChainStateError) {
     return err
   }
-  const raw = errorMessage(err)
-  if (!isBadLocalChainStateMessage(raw)) {
+  const errorMessageText = errorMessage(err)
+  if (!isBadLocalChainStateMessage(errorMessageText)) {
     return null
   }
   return new BadLocalChainStateError(USER_FACING_MESSAGE, { cause: err })

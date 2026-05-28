@@ -542,11 +542,11 @@ pub fn lab_validate_address(address_str: &str) -> Result<bool, JsValue> {
         Ok(parsed_address) => parsed_address,
         Err(_) => return Ok(false),
     };
-    let checked = match address.require_network(Network::Regtest) {
-        Ok(regtest_address) => regtest_address,
+    let regtest_address = match address.require_network(Network::Regtest) {
+        Ok(network_checked_address) => network_checked_address,
         Err(_) => return Ok(false),
     };
-    let script_pubkey = checked.script_pubkey();
+    let script_pubkey = regtest_address.script_pubkey();
     Ok(script_pubkey.is_p2wpkh() || script_pubkey.is_p2tr())
 }
 
@@ -586,7 +586,7 @@ pub fn lab_block_effects(block_hex: &str) -> Result<JsValue, JsValue> {
     let block: Block = deserialize_hex(block_hex).map_display_err_to_js()?;
 
     let mut new_utxos = Vec::new();
-    let mut spent = Vec::new();
+    let mut spent_outpoints = Vec::new();
     let mut transactions = Vec::new();
 
     for (tx_idx, tx) in block.txdata.iter().enumerate() {
@@ -596,7 +596,7 @@ pub fn lab_block_effects(block_hex: &str) -> Result<JsValue, JsValue> {
         for input in &tx.input {
             if !input.previous_output.is_null() {
                 let spent_prevout = &input.previous_output;
-                spent.push(LabBlockSpentOut {
+                spent_outpoints.push(LabBlockSpentOut {
                     txid: spent_prevout.txid.to_string(),
                     vout: spent_prevout.vout,
                 });
@@ -662,7 +662,7 @@ pub fn lab_block_effects(block_hex: &str) -> Result<JsValue, JsValue> {
     let block_time = block.header.time;
     let block_effects_result = LabBlockEffectsResult {
         new_utxos,
-        spent,
+        spent: spent_outpoints,
         transactions,
         block_time,
     };
@@ -765,9 +765,9 @@ mod lab_tx_vbytes_tests {
                 script_pubkey: ScriptBuf::new(),
             }],
         };
-        let hex = serialize_hex(&tx);
+        let signed_tx_hex = serialize_hex(&tx);
         let expected = tx.weight().to_wu().div_ceil(4);
-        assert_eq!(lab_tx_vbytes(&hex).unwrap(), expected);
+        assert_eq!(lab_tx_vbytes(&signed_tx_hex).unwrap(), expected);
     }
 
     #[test]
@@ -786,8 +786,8 @@ mod lab_tx_vbytes_tests {
                 script_pubkey: ScriptBuf::new(),
             }],
         };
-        let hex = serialize_hex(&tx);
+        let signed_tx_hex = serialize_hex(&tx);
         let expected = tx.weight().to_wu();
-        assert_eq!(lab_tx_weight(&hex).unwrap(), expected);
+        assert_eq!(lab_tx_weight(&signed_tx_hex).unwrap(), expected);
     }
 }

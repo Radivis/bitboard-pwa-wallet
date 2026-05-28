@@ -125,7 +125,7 @@ function BalanceCard() {
   const activeWalletId = useWalletStore((s) => s.activeWalletId)
   const lightningEnabled = useFeatureStore((s) => s.lightningEnabled)
   const connectedLightningWallets = useLightningStore((s) => s.connectedWallets)
-  const lnBalancesQuery = useLightningBalancesForDashboardQuery()
+  const lightningBalancesQuery = useLightningBalancesForDashboardQuery()
   const { data: labState, isPending: labChainPending } = useLabChainStateQuery()
   const utxos = labState?.utxos ?? []
   const addressToOwner = labState?.addressToOwner ?? {}
@@ -169,12 +169,12 @@ function BalanceCard() {
 
   const showLightningBalances = hasMatchingLightningConnection
 
-  const lnTotalSats = lnBalancesQuery.data?.totalSats ?? 0
+  const lightningTotalSats = lightningBalancesQuery.data?.totalSats ?? 0
   const lightningBalanceRows = useMemo(
-    () => lnBalancesQuery.data?.lightningBalanceRows ?? [],
-    [lnBalancesQuery.data?.lightningBalanceRows],
+    () => lightningBalancesQuery.data?.lightningBalanceRows ?? [],
+    [lightningBalancesQuery.data?.lightningBalanceRows],
   )
-  const hasStaleLnBalance = lightningBalanceRows.some(
+  const hasStaleLightningBalance = lightningBalanceRows.some(
     (balanceRow) => balanceRow.isStaleBalance,
   )
   const newestStaleBalanceIso = useMemo(() => {
@@ -238,7 +238,7 @@ function BalanceCard() {
         <>
           <div className="space-y-1">
             <FiatAmountDisplay
-              amountSats={lnTotalSats}
+              amountSats={lightningTotalSats}
               btcPriceInFiat={btcPriceInFiat}
               currency={defaultFiatCurrency}
               size="lg"
@@ -248,7 +248,7 @@ function BalanceCard() {
           </div>
           <div className="space-y-1">
             <BitcoinAmountDisplay
-              amountSats={lnTotalSats}
+              amountSats={lightningTotalSats}
               size="md"
               allowUnitToggle={false}
               className="text-xl text-muted-foreground"
@@ -259,7 +259,7 @@ function BalanceCard() {
     }
     return (
       <BitcoinAmountDisplay
-        amountSats={lnTotalSats}
+        amountSats={lightningTotalSats}
         size="lg"
         className="text-2xl"
       />
@@ -353,7 +353,7 @@ function BalanceCard() {
             )}
           </div>
 
-          {showLightningBalances && lnBalancesQuery.isPending && (
+          {showLightningBalances && lightningBalancesQuery.isPending && (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" />
               Loading Lightning balances…
@@ -361,7 +361,7 @@ function BalanceCard() {
           )}
 
           {showLightningBalances &&
-            lnBalancesQuery.isSuccess &&
+            lightningBalancesQuery.isSuccess &&
             lightningBalanceRows.length > 0 && (
               <div>
                 <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
@@ -412,7 +412,7 @@ function BalanceCard() {
                     </li>
                   ))}
                 </ul>
-                {hasStaleLnBalance && (
+                {hasStaleLightningBalance && (
                   <p
                     className="mt-2 text-xs text-amber-700 dark:text-amber-400"
                     data-testid="lightning-balance-stale-banner"
@@ -597,7 +597,7 @@ function RecentTransactions() {
       ),
     [connectedLightningWallets, activeWalletId, networkMode],
   )
-  const lnHistoryQuery = useLightningHistoryQuery()
+  const lightningHistoryQuery = useLightningHistoryQuery()
   const { data: labState, isPending: labChainPending } = useLabChainStateQuery()
   const labTransactions = labState?.transactions ?? []
   const labTxDetails = labState?.txDetails ?? []
@@ -615,11 +615,11 @@ function RecentTransactions() {
   const displayTransactions =
     networkMode === 'lab' ? labTransactionsForActiveWallet : transactions
 
-  const lnPayments = useMemo(
-    () => lnHistoryQuery.data?.payments ?? [],
-    [lnHistoryQuery.data?.payments],
+  const lightningPayments = useMemo(
+    () => lightningHistoryQuery.data?.payments ?? [],
+    [lightningHistoryQuery.data?.payments],
   )
-  const stalePaymentsAsOf = lnHistoryQuery.data?.stalePaymentsAsOf
+  const stalePaymentsAsOf = lightningHistoryQuery.data?.stalePaymentsAsOf
 
   const mergedActivity = useMemo(() => {
     if (networkMode === 'lab') {
@@ -633,14 +633,14 @@ function RecentTransactions() {
     ) {
       return mergeAndSortDashboardActivity(transactions, [])
     }
-    return mergeAndSortDashboardActivity(transactions, lnPayments)
+    return mergeAndSortDashboardActivity(transactions, lightningPayments)
   }, [
     networkMode,
     lightningEnabled,
     activeWalletId,
     hasLnWalletForNetwork,
     transactions,
-    lnPayments,
+    lightningPayments,
   ])
 
   const activityTotalCount =
@@ -702,7 +702,7 @@ function RecentTransactions() {
         {networkMode !== 'lab' &&
           lightningEnabled &&
           hasLnWalletForNetwork &&
-          lnHistoryQuery.isLoading && (
+          lightningHistoryQuery.isLoading && (
           <p className="mb-3 flex items-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" />
             Loading Lightning activity…
@@ -712,7 +712,7 @@ function RecentTransactions() {
           lightningEnabled &&
           hasLnWalletForNetwork &&
           stalePaymentsAsOf != null &&
-          lnPayments.length > 0 && (
+          lightningPayments.length > 0 && (
             <p
               className="mb-3 text-xs text-amber-700 dark:text-amber-400"
               data-testid="lightning-history-stale-banner"

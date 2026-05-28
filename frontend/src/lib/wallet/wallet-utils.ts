@@ -39,18 +39,18 @@ export async function updateWalletChangeset(params: {
   const { password, walletId, changesetJson, markFullScanDone } = params
   const { loadedSubWallet, networkMode, addressType, accountId } =
     useWalletStore.getState()
-  const key = loadedSubWallet ?? {
+  const descriptorContext = loadedSubWallet ?? {
     networkMode,
     addressType,
     accountId,
   }
-  const network = toBitcoinNetwork(key.networkMode)
+  const network = toBitcoinNetwork(descriptorContext.networkMode)
   await updateDescriptorWalletChangeset({
     password,
     walletId,
     network,
-    addressType: key.addressType,
-    accountId: key.accountId,
+    addressType: descriptorContext.addressType,
+    accountId: descriptorContext.accountId,
     changesetJson,
     markFullScanDone,
   })
@@ -59,7 +59,7 @@ export async function updateWalletChangeset(params: {
 export function getWalletInitials(name: string): string {
   return name
     .split(' ')
-    .map((w) => w[0])
+    .map((word) => word[0])
     .join('')
     .toUpperCase()
     .slice(0, 2)
@@ -72,22 +72,25 @@ export async function saveCustomEsploraUrl(
   validateEsploraUrl(url, network)
   await ensureMigrated()
   const walletDb = getDatabase()
-  const key = `${CUSTOM_ESPLORA_URL_KEY_PREFIX}${network}`
+  const settingsKey = `${CUSTOM_ESPLORA_URL_KEY_PREFIX}${network}`
 
   const existing = await walletDb
     .selectFrom('settings')
     .select('key')
-    .where('key', '=', key)
+    .where('key', '=', settingsKey)
     .executeTakeFirst()
 
   if (existing) {
     await walletDb
       .updateTable('settings')
       .set({ value: url })
-      .where('key', '=', key)
+      .where('key', '=', settingsKey)
       .execute()
   } else {
-    await walletDb.insertInto('settings').values({ key, value: url }).execute()
+    await walletDb
+      .insertInto('settings')
+      .values({ key: settingsKey, value: url })
+      .execute()
   }
 }
 

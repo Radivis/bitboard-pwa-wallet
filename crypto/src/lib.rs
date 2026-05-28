@@ -60,10 +60,10 @@ where
     F: FnOnce(&BdkWallet) -> R,
 {
     ACTIVE_WALLET.with(|wallet_cell| {
-        let borrow = wallet_cell.try_borrow().map_err(|_| {
+        let wallet_borrow = wallet_cell.try_borrow().map_err(|_| {
             wasm_crypto_error(CODE_WALLET_ALREADY_BORROWED, MSG_WALLET_ALREADY_BORROWED)
         })?;
-        let wallet_ref = borrow
+        let wallet_ref = wallet_borrow
             .as_ref()
             .ok_or_else(|| wasm_crypto_error(CODE_NO_ACTIVE_WALLET, MSG_NO_ACTIVE_WALLET))?;
         Ok(wallet_callback(wallet_ref))
@@ -75,10 +75,10 @@ where
     F: FnOnce(&mut BdkWallet) -> R,
 {
     ACTIVE_WALLET.with(|wallet_cell| {
-        let mut borrow = wallet_cell.try_borrow_mut().map_err(|_| {
+        let mut wallet_borrow_mut = wallet_cell.try_borrow_mut().map_err(|_| {
             wasm_crypto_error(CODE_WALLET_ALREADY_BORROWED, MSG_WALLET_ALREADY_BORROWED)
         })?;
-        let wallet_ref = borrow
+        let wallet_ref = wallet_borrow_mut
             .as_mut()
             .ok_or_else(|| wasm_crypto_error(CODE_NO_ACTIVE_WALLET, MSG_NO_ACTIVE_WALLET))?;
         Ok(wallet_callback(wallet_ref))
@@ -88,8 +88,8 @@ where
 /// Collect any staged changes from the wallet and merge them into the accumulator.
 fn accumulate_staged_changes() {
     ACTIVE_WALLET.with(|wallet_cell| {
-        let mut borrow = wallet_cell.borrow_mut();
-        if let Some(wallet_ref) = borrow.as_mut()
+        let mut wallet_borrow_mut = wallet_cell.borrow_mut();
+        if let Some(wallet_ref) = wallet_borrow_mut.as_mut()
             && let Some(staged) = wallet_ref.take_staged()
         {
             ACCUMULATED_CHANGESET.with(|changeset_cell| {

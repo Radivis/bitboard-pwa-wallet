@@ -158,14 +158,14 @@ function elementsOnPathBeforeZoneRoot(
       }
     }
   }
-  const out: Element[] = []
+  const ancestorElements: Element[] = []
   let currentElement: Element | null =
     event.target instanceof Element ? event.target : null
   while (currentElement && currentElement !== zoneRoot) {
-    out.push(currentElement)
+    ancestorElements.push(currentElement)
     currentElement = currentElement.parentElement
   }
-  return out
+  return ancestorElements
 }
 
 /**

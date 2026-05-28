@@ -4,9 +4,11 @@ import { isLibraryTagId, type LibraryTagId } from '@/lib/library/tags'
 
 export const Route = createFileRoute('/library/tags')({
   validateSearch: (search: Record<string, unknown>): { tag?: LibraryTagId } => {
-    const raw = search.tag
-    if (typeof raw !== 'string' || !isLibraryTagId(raw)) return {}
-    return { tag: raw }
+    const tagFromSearch = search.tag
+    if (typeof tagFromSearch !== 'string' || !isLibraryTagId(tagFromSearch)) {
+      return {}
+    }
+    return { tag: tagFromSearch }
   },
   component: TagsPage,
 })

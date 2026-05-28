@@ -64,9 +64,9 @@ export async function withEsploraFullScanRetries<T>(
       return await operation()
     } catch (err) {
       lastErr = err
-      const msg = errorMessage(err) ?? String(err)
+      const errorMessageText = errorMessage(err) ?? String(err)
       const isLast = attempt === maxAttempts - 1
-      if (isLast || !isRetryableEsploraFullScanError(msg)) {
+      if (isLast || !isRetryableEsploraFullScanError(errorMessageText)) {
         throw err
       }
       const backoff = Math.min(maxDelayMs, baseDelayMs * 2 ** attempt)

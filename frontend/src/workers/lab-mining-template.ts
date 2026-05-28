@@ -46,9 +46,9 @@ export function selectMempoolTxsForBlock(
 ): import('./lab-api').MempoolEntry[] {
   const limit = Number.isFinite(blockWeightLimit) ? blockWeightLimit : LAB_DEFAULT_BLOCK_WEIGHT_UNITS
   const sortedEntries = [...mempool].sort((a, b) => {
-    const fa = feeSatPerVbyte(a)
-    const fb = feeSatPerVbyte(b)
-    if (fb !== fa) return fb - fa
+    const feeRateA = feeSatPerVbyte(a)
+    const feeRateB = feeSatPerVbyte(b)
+    if (feeRateB !== feeRateA) return feeRateB - feeRateA
     return a.txid.localeCompare(b.txid)
   })
   const spentBySelected = new Set<string>()
@@ -273,7 +273,7 @@ export async function buildCurrentBlockTemplate(
 
   const transactions: LabBlockTransactionSummary[] = previewEffects.transactions.map((tx) => {
     const matchedEntry = entryByTxid.get(tx.txid)
-    const isCb = isCoinbase(tx)
+    const isCoinbaseTx = isCoinbase(tx)
     const inputs: LabTxInputDetail[] = tx.inputs.map(
       (inp): LabTxInputDetail => ({
         address: '',
@@ -295,13 +295,13 @@ export async function buildCurrentBlockTemplate(
       outputs,
     }
     const amountSats =
-      !isCb && outputs.length === 0 && matchedEntry
+      !isCoinbaseTx && outputs.length === 0 && matchedEntry
         ? netMovedSatsFromMempoolEntry(matchedEntry)
         : netMovedSatsForLabTx(txDetails)
     return {
       txid: tx.txid,
       sender: matchedEntry?.sender ?? null,
-      receiver: isCb ? minedBy : (matchedEntry?.receiver ?? null),
+      receiver: isCoinbaseTx ? minedBy : (matchedEntry?.receiver ?? null),
       amountSats,
       feeSats: matchedEntry?.feeSats ?? 0,
       inputs,

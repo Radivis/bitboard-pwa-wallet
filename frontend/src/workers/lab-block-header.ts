@@ -20,11 +20,11 @@ const MERKLE_ROOT_HEX_END = 136
 
 function hexToBytes(hex: string): Uint8Array {
   const normalizedHex = hex.length % 2 === 0 ? hex : `0${hex}`
-  const out = new Uint8Array(normalizedHex.length / 2)
-  for (let i = 0; i < out.length; i += 1) {
-    out[i] = parseInt(normalizedHex.slice(i * 2, i * 2 + 2), 16)
+  const decodedBytes = new Uint8Array(normalizedHex.length / 2)
+  for (let i = 0; i < decodedBytes.length; i += 1) {
+    decodedBytes[i] = parseInt(normalizedHex.slice(i * 2, i * 2 + 2), 16)
   }
-  return out
+  return decodedBytes
 }
 
 function bytesToHex(bytes: Uint8Array): string {

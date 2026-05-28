@@ -29,10 +29,18 @@ export const Route = createFileRoute('/lab/tx/$txid')({
   validateSearch: (
     search: Record<string, unknown>,
   ): { highlightVout?: number } => {
-    const raw = search.highlightVout
-    if (raw === undefined || raw === null || raw === '') return {}
+    const highlightVoutFromSearch = search.highlightVout
+    if (
+      highlightVoutFromSearch === undefined ||
+      highlightVoutFromSearch === null ||
+      highlightVoutFromSearch === ''
+    ) {
+      return {}
+    }
     const highlightVoutIndex =
-      typeof raw === 'number' ? raw : Number.parseInt(String(raw), 10)
+      typeof highlightVoutFromSearch === 'number'
+        ? highlightVoutFromSearch
+        : Number.parseInt(String(highlightVoutFromSearch), 10)
     if (!Number.isFinite(highlightVoutIndex) || highlightVoutIndex < 0) return {}
     return { highlightVout: Math.floor(highlightVoutIndex) }
   },

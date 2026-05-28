@@ -53,9 +53,9 @@ export function AppInitializer({ children }: AppInitializerProps) {
     if (networkMode !== 'lab') return
     prefetchLabChainState(appQueryClient).catch((err) => {
       console.error('Lab chain prefetch failed:', err)
-      const msg =
+      const labPrefetchErrorMessage =
         err instanceof Error ? err.message : String(err) || 'Unknown error'
-      toast.error(`Failed to init lab: ${msg}`)
+      toast.error(`Failed to init lab: ${labPrefetchErrorMessage}`)
     })
   }, [networkMode])
 

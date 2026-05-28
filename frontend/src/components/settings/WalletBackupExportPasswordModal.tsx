@@ -71,20 +71,20 @@ export function WalletBackupExportPasswordModal({
       return
     }
 
-    const gen = ++compareGenerationRef.current
+    const compareGeneration = ++compareGenerationRef.current
     setComparePending(true)
     setCompareResult(null)
 
     void (async () => {
       try {
         const result = await checkSigningPasswordMatchesAppPassword(password)
-        if (compareGenerationRef.current !== gen) return
+        if (compareGenerationRef.current !== compareGeneration) return
         setCompareResult(result)
       } catch {
-        if (compareGenerationRef.current !== gen) return
+        if (compareGenerationRef.current !== compareGeneration) return
         setCompareResult({ match: false, skipped: false })
       } finally {
-        if (compareGenerationRef.current === gen) {
+        if (compareGenerationRef.current === compareGeneration) {
           setComparePending(false)
         }
       }

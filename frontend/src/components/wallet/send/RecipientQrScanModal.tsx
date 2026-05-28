@@ -225,10 +225,10 @@ export function RecipientQrScanModal({
           await scanner.start()
           if (ifCancelledDestroyScanner(cancelled)) return
           try {
-            const has = await scanner.hasFlash()
+            const flashAvailable = await scanner.hasFlash()
             if (!cancelled) {
-              setFlashAvailable(has)
-              if (has) {
+              setFlashAvailable(flashAvailable)
+              if (flashAvailable) {
                 setFlashOn(scanner.isFlashOn())
               }
             }

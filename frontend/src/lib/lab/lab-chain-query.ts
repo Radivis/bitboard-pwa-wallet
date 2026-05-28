@@ -12,8 +12,8 @@ export const labChainStateQueryKey = ['lab', 'chainState'] as const
 
 /** Shared query body: load lab state from DB/worker and shape it for the UI. */
 export async function fetchLabChainStateForQuery(): Promise<LabState> {
-  const raw = await labOpLoadChainFromDatabase()
-  return toUiLabState(raw)
+  const loadedLabState = await labOpLoadChainFromDatabase()
+  return toUiLabState(loadedLabState)
 }
 
 /** Worker/DB snapshot shaped for UI (merged controlled + utxo-derived addresses). */

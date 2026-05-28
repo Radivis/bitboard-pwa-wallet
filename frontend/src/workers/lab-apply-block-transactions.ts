@@ -55,11 +55,11 @@ function resolveChangeMetadataForBlockTx(tx: BlockEffectsTx): {
 
 function buildInputsForBlockEffectTx(
   tx: BlockEffectsTx,
-  isCb: boolean,
+  isCoinbaseTx: boolean,
   utxoMap: Map<string, LabUtxo>,
   addressToOwner: Record<string, LabOwner>,
 ): { inputs: LabTxDetails['inputs']; firstInputAddress: string | null } {
-  if (isCb) {
+  if (isCoinbaseTx) {
     return {
       inputs: [
         {
@@ -209,18 +209,18 @@ export function applyTransactionsAndDetailsFromBlock(
   const addressToOwner = labWorkerState.addressToOwner ?? {}
 
   for (const tx of transactions) {
-    const isCb = isCoinbase(tx)
+    const isCoinbaseTx = isCoinbase(tx)
     const { changeFromOp, txOperationPayload, changeOutputForTx } =
       resolveChangeMetadataForBlockTx(tx)
 
     const { inputs, firstInputAddress } = buildInputsForBlockEffectTx(
       tx,
-      isCb,
+      isCoinbaseTx,
       utxoMap,
       addressToOwner,
     )
 
-    const sender = isCb
+    const sender = isCoinbaseTx
       ? null
       : firstInputAddress
         ? lookupOwnerForLabAddress(firstInputAddress, addressToOwner) ?? null
@@ -246,7 +246,7 @@ export function applyTransactionsAndDetailsFromBlock(
       addressToOwner,
     )
 
-    if (isCb) {
+    if (isCoinbaseTx) {
       assertLabReceiverNonNull(
         receiver,
         `applyTransactionsFromBlock coinbase txid=${tx.txid} height=${height}`,

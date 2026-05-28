@@ -106,13 +106,13 @@ export type RecipientAndAmountFromScanned = {
  * optional amount; anything else passes through unchanged.
  */
 export function recipientAndAmountFromScannedPayload(
-  raw: string,
+  scannedPayload: string,
   amountUnit: BitcoinDisplayUnit,
 ): RecipientAndAmountFromScanned {
-  const trimmedUri = raw.trim()
+  const trimmedUri = scannedPayload.trim()
   const bip21 = tryParseBitcoinUri(trimmedUri)
   if (bip21) {
-    const out: RecipientAndAmountFromScanned = {
+    const parsedRecipientAndAmount: RecipientAndAmountFromScanned = {
       recipient: preferredRecipientFromBitcoinUri(bip21),
     }
     if (bip21.amountBtc != null) {
@@ -120,9 +120,12 @@ export function recipientAndAmountFromScannedPayload(
         MAX_SAFE_SATS,
         Math.round(bip21.amountBtc * SATS_PER_BTC),
       )
-      out.amountStr = formatAmountInBitcoinDisplayUnit(sats, amountUnit)
+      parsedRecipientAndAmount.amountStr = formatAmountInBitcoinDisplayUnit(
+        sats,
+        amountUnit,
+      )
     }
-    return out
+    return parsedRecipientAndAmount
   }
   return { recipient: trimmedUri }
 }

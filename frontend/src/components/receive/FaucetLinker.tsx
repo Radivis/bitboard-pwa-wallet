@@ -83,7 +83,7 @@ export function FaucetLinker() {
 
   const runChecks = useCallback(async () => {
     if (faucets.length === 0) return
-    const seq = ++runSeqRef.current
+    const runSequence = ++runSeqRef.current
     setChecking(true)
     try {
       const entries = await Promise.all(
@@ -100,10 +100,10 @@ export function FaucetLinker() {
           }
         }),
       )
-      if (seq !== runSeqRef.current) return
+      if (runSequence !== runSeqRef.current) return
       setReachabilityById(Object.fromEntries(entries))
     } finally {
-      if (seq === runSeqRef.current) {
+      if (runSequence === runSeqRef.current) {
         setChecking(false)
       }
     }

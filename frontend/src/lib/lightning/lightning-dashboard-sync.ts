@@ -276,13 +276,13 @@ export async function fetchLightningBalancesForDashboard(): Promise<LightningBal
     const settledOutcome = settled[index]
     const lightningConnection = matches[index]
     if (settledOutcome.status === 'fulfilled') {
-      const row = settledOutcome.value
+      const balanceRow = settledOutcome.value
       lightningBalanceRows.push({
-        connectionId: row.connectionId,
-        label: row.label,
-        balanceSats: row.balanceSats,
+        connectionId: balanceRow.connectionId,
+        label: balanceRow.label,
+        balanceSats: balanceRow.balanceSats,
       })
-      totalSats += row.balanceSats
+      totalSats += balanceRow.balanceSats
       continue
     }
     const connectionSnapshot = snapshotById.get(lightningConnection.id)
@@ -345,15 +345,15 @@ export function mergeAndSortDashboardActivity(
   ]
 
   items.sort((a, b) => {
-    const ta =
+    const sortTimeA =
       a.kind === 'chain'
         ? chainSortTime(a.tx)
         : lightningSortTime(a.payment)
-    const tb =
+    const sortTimeB =
       b.kind === 'chain'
         ? chainSortTime(b.tx)
         : lightningSortTime(b.payment)
-    return tb - ta
+    return sortTimeB - sortTimeA
   })
 
   return items

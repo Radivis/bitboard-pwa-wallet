@@ -100,10 +100,10 @@ export function ImportWalletPage() {
       setWalletStatus('unlocked')
     } catch (err: unknown) {
       setWalletStatus('unlocked')
-      const msg =
+      const syncErrorMessage =
         sanitizeErrorMessageForUi(errorMessage(err) ?? String(err)) ||
         'Initial sync failed'
-      setImportInitialSyncErrorMessage(msg)
+      setImportInitialSyncErrorMessage(syncErrorMessage)
       showImportInitialSyncFailureToast(err, () => {
         void retryImportInitialEsploraSyncWithWalletStatus()
       })

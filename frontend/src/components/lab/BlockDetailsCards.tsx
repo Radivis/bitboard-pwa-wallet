@@ -205,8 +205,8 @@ function labBlockTxList(
     <div className="grid grid-cols-[repeat(auto-fill,minmax(9.5rem,1fr))] gap-3">
       {txs.map((tx) => {
         const coinbaseNoTxPageYet = isTemplate && isCoinbase(tx)
-        const isCb = isCoinbase(tx)
-        const row = (
+        const isCoinbaseTx = isCoinbase(tx)
+        const transactionCard = (
           <LabTxCard
             txid={tx.txid}
             sender={tx.sender}
@@ -215,12 +215,12 @@ function labBlockTxList(
             feeSats={tx.feeSats}
             wallets={wallets}
             entities={entities}
-            variant={isCb ? 'coinbase' : 'transfer'}
+            variant={isCoinbaseTx ? 'coinbase' : 'transfer'}
           />
         )
         return coinbaseNoTxPageYet ? (
           <div key={tx.txid} className={labBlockTxCellClassName}>
-            {row}
+            {transactionCard}
           </div>
         ) : (
           <div key={tx.txid} className={`relative ${labBlockTxCellClassName}`}>
@@ -230,7 +230,7 @@ function labBlockTxList(
               className={labBlockTxRowLinkOverlayClassName}
               aria-label={`Open transaction ${truncateAddress(tx.txid)}`}
             />
-            <div className={labBlockTxRowInnerClassName}>{row}</div>
+            <div className={labBlockTxRowInnerClassName}>{transactionCard}</div>
           </div>
         )
       })}

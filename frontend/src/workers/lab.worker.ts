@@ -125,9 +125,9 @@ const labService = {
   },
 
   async getTransaction(txid: string): Promise<LabTxDetails | null> {
-    const key = txid.trim().toLowerCase()
+    const normalizedTxid = txid.trim().toLowerCase()
     const mempoolEntry = labWorkerState.mempool.find(
-      (entry) => entry.txid.toLowerCase() === key,
+      (entry) => entry.txid.toLowerCase() === normalizedTxid,
     )
     if (mempoolEntry) {
       return {
@@ -142,7 +142,9 @@ const labService = {
         outputs: mempoolEntry.outputsDetail,
       }
     }
-    const details = labWorkerState.txDetails.find((tx) => tx.txid.toLowerCase() === key)
+    const details = labWorkerState.txDetails.find(
+      (tx) => tx.txid.toLowerCase() === normalizedTxid,
+    )
     if (!details) return null
     const blockCount = getTip() ? getTip()!.height + 1 : 0
     return {
@@ -539,7 +541,7 @@ const labService = {
     const labNetwork = options?.labNetwork ?? 'regtest'
     const labAddressType = options?.labAddressType ?? AddressType.SegWit
     const entityNameOpt = options?.ownerName?.trim()
-    const now = new Date().toISOString()
+    const minedAtIso = new Date().toISOString()
 
     if (entityNameOpt != null && entityNameOpt !== '') {
       const nameCheck = validateLabEntityRenameName(entityNameOpt, labWorkerState.entities, -1)
@@ -551,7 +553,7 @@ const labService = {
           entityName: entityNameOpt,
           labNetwork,
           labAddressType,
-          nowIso: now,
+          nowIso: minedAtIso,
           noAddressErrorMessage: 'Lab entity wallet creation failed (no first address)',
         })
         entity = labWorkerState.entities.find((entityRecord) => entityRecord.entityName === entityNameOpt)
@@ -573,7 +575,7 @@ const labService = {
         entityName: null,
         labNetwork,
         labAddressType,
-        nowIso: now,
+        nowIso: minedAtIso,
         noAddressErrorMessage: 'Anonymous lab entity wallet creation failed (no first address)',
       })
       labWorkerState.addressToOwner = labWorkerState.addressToOwner ?? {}

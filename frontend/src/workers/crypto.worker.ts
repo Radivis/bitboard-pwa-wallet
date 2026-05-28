@@ -15,10 +15,12 @@ import { parseWalletPayloadJson } from '@/lib/wallet/wallet-domain-types';
 import type { WalletSecretsPayload } from '@/lib/wallet/wallet-domain-types';
 import { rethrowWasmCryptoErrorForComlink } from '@/lib/shared/wasm-crypto-error';
 
-function mapReviewInputUtxos(raw: unknown): import('./crypto-api').ReviewInputUtxo[] {
-  if (!Array.isArray(raw)) return [];
-  return raw.map((rawUtxo) => {
-    const utxoFields = rawUtxo as Record<string, unknown>;
+function mapReviewInputUtxos(
+  wasmUtxoList: unknown,
+): import('./crypto-api').ReviewInputUtxo[] {
+  if (!Array.isArray(wasmUtxoList)) return [];
+  return wasmUtxoList.map((untypedUtxoRecord) => {
+    const utxoFields = untypedUtxoRecord as Record<string, unknown>;
     return {
       address: String(utxoFields.address ?? ''),
       amountSats: Number(utxoFields.amount_sats ?? 0),
