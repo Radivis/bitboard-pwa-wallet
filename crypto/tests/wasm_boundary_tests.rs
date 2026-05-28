@@ -72,14 +72,14 @@ fn wallet_session_get_balance_without_active_wallet() {
     let mnemonic = generate_mnemonic(12).expect("generate failed");
     let descriptors =
         derive_descriptors(&mnemonic, "testnet", "taproot", 0).expect("derive failed");
-    let external = js_sys::Reflect::get(&descriptors, &JsValue::from_str("external"))
-        .expect("external descriptor")
+    let external = js_sys::Reflect::get(&descriptors, &JsValue::from_str("external_descriptor"))
+        .expect("external_descriptor")
         .as_string()
-        .expect("external string");
-    let internal = js_sys::Reflect::get(&descriptors, &JsValue::from_str("internal"))
-        .expect("internal descriptor")
+        .expect("external_descriptor string");
+    let internal = js_sys::Reflect::get(&descriptors, &JsValue::from_str("internal_descriptor"))
+        .expect("internal_descriptor")
         .as_string()
-        .expect("internal string");
+        .expect("internal_descriptor string");
 
     let session = WalletSession::new(&external, &internal, "testnet", "{}", true)
         .expect("open wallet session");
@@ -124,10 +124,10 @@ fn derive_descriptors_returns_valid_jsvalue() {
     let json_compatible_serializer = serde_wasm_bindgen::Serializer::json_compatible();
     let _ = json_compatible_serializer;
 
-    let external = js_sys::Reflect::get(&result, &JsValue::from_str("external"))
-        .expect("missing 'external' field");
-    let internal = js_sys::Reflect::get(&result, &JsValue::from_str("internal"))
-        .expect("missing 'internal' field");
+    let external = js_sys::Reflect::get(&result, &JsValue::from_str("external_descriptor"))
+        .expect("missing 'external_descriptor' field");
+    let internal = js_sys::Reflect::get(&result, &JsValue::from_str("internal_descriptor"))
+        .expect("missing 'internal_descriptor' field");
 
     assert!(external.is_string(), "external should be a string");
     assert!(internal.is_string(), "internal should be a string");

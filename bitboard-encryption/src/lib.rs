@@ -93,22 +93,22 @@ const INVALID_KDF_PHC_MSG: &str =
     "Invalid kdf_phc: expected Argon2id PHC with m,t,p (e.g. $argon2id$v=19$m=65536,t=3,p=4)";
 
 /// Same as [`parse_mtp_from_phc`] but with `String` errors (native tests / backup signing).
-pub(crate) fn parse_mtp_from_phc_str(phc: &str) -> Result<(u32, u32, u32), &'static str> {
-    if phc == ARGON2_KDF_PHC_CI {
+pub(crate) fn parse_mtp_from_kdf_phc_str(kdf_phc: &str) -> Result<(u32, u32, u32), &'static str> {
+    if kdf_phc == ARGON2_KDF_PHC_CI {
         return Ok((
             ARGON2_MEMORY_KIB,
             ARGON2_CI_ITERATIONS,
             ARGON2_CI_PARALLELISM,
         ));
     }
-    if phc == ARGON2_KDF_PHC_PRODUCTION {
+    if kdf_phc == ARGON2_KDF_PHC_PRODUCTION {
         return Ok((
             ARGON2_MEMORY_KIB,
             ARGON2_PRODUCTION_ITERATIONS,
             ARGON2_PRODUCTION_PARALLELISM,
         ));
     }
-    for segment in phc.split('$') {
+    for segment in kdf_phc.split('$') {
         if segment.contains("m=")
             && segment.contains("t=")
             && segment.contains("p=")
@@ -141,21 +141,21 @@ fn derive_argon2_key_with_mtp_str(
 pub(crate) fn derive_argon2_key_from_phc_str(
     password: &str,
     salt: &[u8],
-    phc: &str,
+    kdf_phc: &str,
 ) -> Result<Vec<u8>, String> {
     let (memory_kib, iterations, parallelism) =
-        parse_mtp_from_phc_str(phc).map_err(String::from)?;
+        parse_mtp_from_kdf_phc_str(kdf_phc).map_err(String::from)?;
     derive_argon2_key_with_mtp_str(password, salt, memory_kib, iterations, parallelism)
 }
 
 /// Derive a 256-bit key from password, salt, and a PHC-style Argon2id parameter string.
-#[wasm_bindgen(js_name = deriveArgon2KeyFromPhc)]
+#[wasm_bindgen]
 pub fn derive_argon2_key_from_phc(
     password: &str,
     salt: &[u8],
-    phc: &str,
+    kdf_phc: &str,
 ) -> Result<Vec<u8>, JsValue> {
-    derive_argon2_key_from_phc_str(password, salt, phc).map_err(|e| JsValue::from_str(&e))
+    derive_argon2_key_from_phc_str(password, salt, kdf_phc).map_err(|e| JsValue::from_str(&e))
 }
 
 /// Derive a 256-bit key using Argon2id with **production** parameters.

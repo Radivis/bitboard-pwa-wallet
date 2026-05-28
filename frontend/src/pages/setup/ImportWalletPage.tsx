@@ -153,7 +153,7 @@ export function ImportWalletPage() {
       }
 
       setActiveWallet(walletId)
-      setCurrentAddress(walletResult.first_address)
+      setCurrentAddress(walletResult.firstAddress)
       commitLoadedSubWallet({
         networkMode,
         addressType,

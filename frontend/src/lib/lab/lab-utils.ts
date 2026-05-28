@@ -222,12 +222,12 @@ export function labTransactionsForWallet(
 
     walletTransactionDetails.push({
       txid: entry.txid,
-      sent_sats: sentSats,
-      received_sats: receivedSats,
-      fee_sats: entry.feeSats,
-      confirmation_block_height: null,
-      confirmation_time: null,
-      is_confirmed: false,
+      sentSats,
+      receivedSats,
+      feeSats: entry.feeSats,
+      confirmationBlockHeight: null,
+      confirmationTime: null,
+      isConfirmed: false,
       isLabTx: true,
     })
   }
@@ -246,12 +246,12 @@ export function labTransactionsForWallet(
         .reduce((sumSats, output) => sumSats + output.amountSats, 0)
       walletTransactionDetails.push({
         txid: labTransactionSummary.txid,
-        sent_sats: 0,
-        received_sats: receivedSatsCoinbase,
-        fee_sats: 0,
-        confirmation_block_height: details.blockHeight,
-        confirmation_time: details.blockTime,
-        is_confirmed: true,
+        sentSats: 0,
+        receivedSats: receivedSatsCoinbase,
+        feeSats: 0,
+        confirmationBlockHeight: details.blockHeight,
+        confirmationTime: details.blockTime,
+        isConfirmed: true,
         isLabTx: true,
       })
       continue
@@ -280,22 +280,22 @@ export function labTransactionsForWallet(
 
     walletTransactionDetails.push({
       txid: labTransactionSummary.txid,
-      sent_sats: sentSats,
-      received_sats: receivedSats,
-      fee_sats: feeSats,
-      confirmation_block_height: details.blockHeight,
-      confirmation_time: details.blockTime,
-      is_confirmed: true,
+      sentSats,
+      receivedSats,
+      feeSats,
+      confirmationBlockHeight: details.blockHeight,
+      confirmationTime: details.blockTime,
+      isConfirmed: true,
       isLabTx: true,
     })
   }
 
   walletTransactionDetails.sort((txA, txB) => {
-    if (!txA.is_confirmed && txB.is_confirmed) return -1
-    if (txA.is_confirmed && !txB.is_confirmed) return 1
-    if (txA.is_confirmed && txB.is_confirmed) {
-      const timeA = txA.confirmation_time ?? 0
-      const timeB = txB.confirmation_time ?? 0
+    if (!txA.isConfirmed && txB.isConfirmed) return -1
+    if (txA.isConfirmed && !txB.isConfirmed) return 1
+    if (txA.isConfirmed && txB.isConfirmed) {
+      const timeA = txA.confirmationTime ?? 0
+      const timeB = txB.confirmationTime ?? 0
       if (timeB !== timeA) return timeB - timeA
       return txB.txid.localeCompare(txA.txid)
     }

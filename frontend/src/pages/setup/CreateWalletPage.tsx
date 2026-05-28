@@ -38,7 +38,7 @@ const SEED_VERIFICATION_WORD_COUNT = 3
 /** Stored after createWalletAndEncryptSecrets so we can persist in step 3 without keeping mnemonic. */
 interface CreateWalletPending {
   encryptedBlobs: SplitWalletSecretsEncryptedBlobs
-  walletResult: { first_address: string }
+  walletResult: { firstAddress: string }
 }
 
 export function CreateWalletPage() {
@@ -181,7 +181,7 @@ export function CreateWalletPage() {
           payload: createWalletOutcome.encryptedPayload,
           mnemonic: createWalletOutcome.encryptedMnemonic,
         },
-        walletResult: { first_address: createWalletOutcome.walletResult.first_address },
+        walletResult: { firstAddress: createWalletOutcome.walletResult.firstAddress },
       })
       setStep(2)
     },
@@ -202,7 +202,7 @@ export function CreateWalletPage() {
           payload: createWalletOutcome.encryptedPayload,
           mnemonic: createWalletOutcome.encryptedMnemonic,
         },
-        firstAddress: createWalletOutcome.walletResult.first_address,
+        firstAddress: createWalletOutcome.walletResult.firstAddress,
         markNoMnemonicBackup: true,
       })
     },
@@ -221,7 +221,7 @@ export function CreateWalletPage() {
   const finishCreateMutation = useMutation({
     mutationFn: async () => {
       if (!pendingCreate) throw new Error('No pending create')
-      const firstAddress = pendingCreate.walletResult.first_address
+      const firstAddress = pendingCreate.walletResult.firstAddress
       setMnemonicForBackup('')
       await persistAndActivateNewWallet({
         encryptedBlobs: pendingCreate.encryptedBlobs,

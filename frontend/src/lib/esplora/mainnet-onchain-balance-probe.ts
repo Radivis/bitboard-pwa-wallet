@@ -142,20 +142,20 @@ export type MainnetPositiveWalletRow = {
  */
 export async function listWalletsWithPositiveMainnetOnChainBalance(params: {
   password: string
-  wallets: { wallet_id: number; name: string }[]
+  wallets: { walletId: number; name: string }[]
 }): Promise<MainnetPositiveWalletRow[]> {
   const { password, wallets } = params
   const rows: MainnetPositiveWalletRow[] = []
   for (const walletRow of wallets) {
     const totalSats = await sumMainnetOnChainSatsForWallet({
       password,
-      walletId: walletRow.wallet_id,
+      walletId: walletRow.walletId,
     })
     if (totalSats > 0) {
       const trimmed = walletRow.name.trim()
       rows.push({
-        walletId: walletRow.wallet_id,
-        name: trimmed.length > 0 ? trimmed : `Wallet ${walletRow.wallet_id}`,
+        walletId: walletRow.walletId,
+        name: trimmed.length > 0 ? trimmed : `Wallet ${walletRow.walletId}`,
         totalSats,
       })
     }

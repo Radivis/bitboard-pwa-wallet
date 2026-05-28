@@ -10,6 +10,20 @@ import type {
   SyncResult,
   TransactionDetails,
 } from './crypto-types';
+import {
+  mapWireBalanceToDomain,
+  mapWireCreateWalletResultToDomain,
+  mapWireDescriptorPairToDomain,
+  mapWireSyncResultToDomain,
+  mapWireTransactionListToDomain,
+} from './crypto-wire-mappers';
+import type {
+  WireBalanceInfo,
+  WireCreateWalletResult,
+  WireDescriptorPair,
+  WireSyncResult,
+  WireTransactionDetails,
+} from './crypto-wire-types';
 import type { EncryptedBlobMessage, SecretsChannelService } from './secrets-channel-types';
 import { parseWalletPayloadJson } from '@/lib/wallet/wallet-domain-types';
 import type { WalletSecretsPayload } from '@/lib/wallet/wallet-domain-types';
@@ -141,9 +155,9 @@ function buildInitialWalletSecretsPayload({
         network,
         addressType,
         accountId,
-        externalDescriptor: walletResult.external_descriptor,
-        internalDescriptor: walletResult.internal_descriptor,
-        changeSet: walletResult.changeset_json,
+        externalDescriptor: walletResult.externalDescriptor,
+        internalDescriptor: walletResult.internalDescriptor,
+        changeSet: walletResult.changesetJson,
         fullScanDone: false,
       },
     ],
@@ -218,9 +232,10 @@ const cryptoService = {
     accountId: number;
   }): Promise<DescriptorPair> {
     const { mnemonic, network, addressType, accountId } = params;
-    return invokeWasmCrypto((wasmModule) =>
+    const wire = await invokeWasmCrypto((wasmModule) =>
       wasmModule.derive_descriptors(mnemonic, network, addressType, accountId),
     );
+    return mapWireDescriptorPairToDomain(wire as WireDescriptorPair);
   },
 
   async createWallet(params: {
@@ -230,9 +245,10 @@ const cryptoService = {
     accountId: number;
   }): Promise<CreateWalletResult> {
     const { mnemonic, network, addressType, accountId } = params;
-    return invokeWasmCrypto((wasmModule) =>
+    const wire = await invokeWasmCrypto((wasmModule) =>
       wasmModule.create_wallet(mnemonic, network, addressType, accountId),
     );
+    return mapWireCreateWalletResultToDomain(wire as WireCreateWalletResult);
   },
 
   async loadWallet(params: {
@@ -384,11 +400,11 @@ const cryptoService = {
     return invokeWasmCrypto((wasmModule) => wasmModule.get_lab_change_address());
   },
 
-  async labEntityDraftLabPsbtTransaction(
-    params: import('./crypto-api').LabEntityDraftLabPsbtTransactionParams,
+  async labEntityDraftPsbtTransaction(
+    params: import('./crypto-api').LabEntityDraftPsbtTransactionParams,
   ): Promise<import('./crypto-api').DraftLabPsbtTransactionResult> {
     const wasmLabEntityDraftPsbtResponse = await invokeWasmCrypto((wasmModule) =>
-      wasmModule.lab_entity_draft_lab_psbt_transaction(
+      wasmModule.lab_entity_draft_psbt_transaction(
         params.mnemonic,
         params.changesetJson,
         params.network,
@@ -418,11 +434,11 @@ const cryptoService = {
     };
   },
 
-  async labEntityBuildAndSignLabTransaction(
-    params: import('./crypto-api').LabEntityBuildAndSignLabTransactionParams,
+  async labEntityBuildAndSignTransaction(
+    params: import('./crypto-api').LabEntityBuildAndSignTransactionParams,
   ): Promise<unknown> {
     return invokeWasmCrypto((wasmModule) =>
-      wasmModule.lab_entity_build_and_sign_lab_transaction(
+      wasmModule.lab_entity_build_and_sign_transaction(
         params.mnemonic,
         params.changesetJson,
         params.network,
@@ -438,7 +454,8 @@ const cryptoService = {
   },
 
   async getBalance(): Promise<BalanceInfo> {
-    return invokeWasmCrypto((wasmModule) => wasmModule.get_balance());
+    const wire = await invokeWasmCrypto((wasmModule) => wasmModule.get_balance());
+    return mapWireBalanceToDomain(wire as WireBalanceInfo);
   },
 
   async exportChangeset(): Promise<string> {
@@ -446,13 +463,15 @@ const cryptoService = {
   },
 
   async syncWallet(esploraUrl: string): Promise<SyncResult> {
-    return invokeWasmCrypto((wasmModule) => wasmModule.sync_wallet(esploraUrl));
+    const wire = await invokeWasmCrypto((wasmModule) => wasmModule.sync_wallet(esploraUrl));
+    return mapWireSyncResultToDomain(wire as WireSyncResult);
   },
 
   async fullScanWallet(esploraUrl: string, stopGap: number): Promise<SyncResult> {
-    return invokeWasmCrypto((wasmModule) =>
+    const wire = await invokeWasmCrypto((wasmModule) =>
       wasmModule.full_scan_wallet(esploraUrl, stopGap),
     );
+    return mapWireSyncResultToDomain(wire as WireSyncResult);
   },
 
   async buildTransaction(params: {
@@ -528,7 +547,10 @@ const cryptoService = {
   },
 
   async getTransactionList(): Promise<TransactionDetails[]> {
-    return invokeWasmCrypto((wasmModule) => wasmModule.get_transaction_list());
+    const wireList = await invokeWasmCrypto((wasmModule) =>
+      wasmModule.get_transaction_list(),
+    );
+    return mapWireTransactionListToDomain(wireList as WireTransactionDetails[]);
   },
 
   async resolveDescriptorWallet(params: {
@@ -565,7 +587,7 @@ const cryptoService = {
 
     let mnemonicPlain = await requestDecrypt(password, encryptedMnemonic);
     try {
-      const walletResult = await invokeWasmCrypto((wasmModule) =>
+      const walletResultWire = await invokeWasmCrypto((wasmModule) =>
         wasmModule.create_wallet(
           mnemonicPlain,
           targetNetwork,
@@ -573,13 +595,16 @@ const cryptoService = {
           targetAccountId,
         ),
       );
+      const walletResult = mapWireCreateWalletResultToDomain(
+        walletResultWire as WireCreateWalletResult,
+      );
       const descriptorWallet: DescriptorWalletData = {
         network: targetNetwork,
         addressType: targetAddressType,
         accountId: targetAccountId,
-        externalDescriptor: walletResult.external_descriptor,
-        internalDescriptor: walletResult.internal_descriptor,
-        changeSet: walletResult.changeset_json,
+        externalDescriptor: walletResult.externalDescriptor,
+        internalDescriptor: walletResult.internalDescriptor,
+        changeSet: walletResult.changesetJson,
         fullScanDone: false,
       };
       payload.descriptorWallets.push(descriptorWallet);
@@ -648,13 +673,18 @@ const cryptoService = {
     const { password, network, addressType, accountId, wordCount } = params;
     const { mnemonic, walletResult } = await invokeWasmCrypto(async (wasmModule) => {
       const generatedMnemonic = wasmModule.generate_mnemonic(wordCount);
-      const createdWallet = wasmModule.create_wallet(
+      const createdWalletWire = wasmModule.create_wallet(
         generatedMnemonic,
         network,
         addressType,
         accountId,
       );
-      return { mnemonic: generatedMnemonic, walletResult: createdWallet };
+      return {
+        mnemonic: generatedMnemonic,
+        walletResult: mapWireCreateWalletResultToDomain(
+          createdWalletWire as WireCreateWalletResult,
+        ),
+      };
     });
     const payload = buildInitialWalletSecretsPayload({
       network,
@@ -684,8 +714,11 @@ const cryptoService = {
     accountId: number;
   }) {
     const { mnemonic, password, network, addressType, accountId } = params;
-    const walletResult = await invokeWasmCrypto((wasmModule) =>
+    const walletResultWire = await invokeWasmCrypto((wasmModule) =>
       wasmModule.create_wallet(mnemonic, network, addressType, accountId),
+    );
+    const walletResult = mapWireCreateWalletResultToDomain(
+      walletResultWire as WireCreateWalletResult,
     );
     const payload = buildInitialWalletSecretsPayload({
       network,

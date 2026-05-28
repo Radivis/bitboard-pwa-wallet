@@ -19,8 +19,8 @@ fn open_wallet_session_loads_changeset_and_reports_balance() {
     let changeset_json = wallet::serialize_changeset(&changeset).expect("serialize");
 
     let session = WalletSession::open(
-        &pair.external,
-        &pair.internal,
+        &pair.external_descriptor,
+        &pair.internal_descriptor,
         DEFAULT_NETWORK,
         &changeset_json,
         false,
@@ -41,8 +41,8 @@ fn export_changeset_includes_staged_updates() {
     let changeset_json = wallet::serialize_changeset(&changeset).expect("serialize");
 
     let mut session = WalletSession::open(
-        &pair.external,
-        &pair.internal,
+        &pair.external_descriptor,
+        &pair.internal_descriptor,
         DEFAULT_NETWORK,
         &changeset_json,
         false,
@@ -63,8 +63,8 @@ fn export_changeset_includes_staged_updates() {
 fn open_wallet_session_use_empty_chain_creates_fresh_chain() {
     let pair = descriptors_for_test(BitcoinNetwork::Bitcoin, AddressType::Taproot);
     let session = WalletSession::open(
-        &pair.external,
-        &pair.internal,
+        &pair.external_descriptor,
+        &pair.internal_descriptor,
         BitcoinNetwork::Bitcoin,
         "{}",
         true,
@@ -75,8 +75,8 @@ fn open_wallet_session_use_empty_chain_creates_fresh_chain() {
     assert_eq!(balance.total, 0);
 
     let (_, changeset) = open_wallet_from_descriptors(
-        &pair.external,
-        &pair.internal,
+        &pair.external_descriptor,
+        &pair.internal_descriptor,
         BitcoinNetwork::Bitcoin,
         "{}",
         true,

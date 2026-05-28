@@ -40,7 +40,7 @@ fn lab_entity_create_and_sign_foreign_utxo() {
     )
     .expect("second external for payment destination");
 
-    let out = lab_entity_wallet::lab_entity_build_and_sign_lab_transaction(
+    let out = lab_entity_wallet::lab_entity_build_and_sign_transaction(
         lab_entity_wallet::LabEntityBuildSignArgs {
             mnemonic,
             changeset_json: &created.changeset_json,

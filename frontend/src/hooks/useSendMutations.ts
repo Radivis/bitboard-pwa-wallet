@@ -87,11 +87,11 @@ export function useBroadcastTransactionMutation() {
       const txid = await broadcastTransaction(rawTxHex, esploraUrl)
 
       if (password && activeWalletId) {
-        const changeset = await exportChangeset()
+        const changesetJson = await exportChangeset()
         await updateWalletChangeset({
           password,
           walletId: activeWalletId,
-          changesetJson: changeset,
+          changesetJson,
         })
       }
 

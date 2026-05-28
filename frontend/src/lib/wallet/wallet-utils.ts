@@ -194,14 +194,14 @@ export async function syncLoadedSubWalletWithEsplora(options: {
     invalidateLightningDashboardQueries()
     if (options.fullScanNeeded) {
       const { exportChangeset } = useCryptoStore.getState()
-      const changeset = await exportChangeset()
+      const changesetJson = await exportChangeset()
       await updateDescriptorWalletChangeset({
         password: options.sessionPassword,
         walletId: options.activeWalletId,
         network: options.targetNetwork,
         addressType: options.targetAddressType,
         accountId: options.targetAccountId,
-        changesetJson: changeset,
+        changesetJson,
         markFullScanDone: true,
       })
     }
@@ -243,11 +243,11 @@ async function finishDashboardSyncAfterStateUpdate(options: {
     return
   }
   const { exportChangeset } = useCryptoStore.getState()
-  const changeset = await exportChangeset()
+  const changesetJson = await exportChangeset()
   await updateWalletChangeset({
     password: options.password,
     walletId: options.activeWalletId,
-    changesetJson: changeset,
+    changesetJson,
     ...(options.markFullScanDone ? { markFullScanDone: true } : {}),
   })
 }
@@ -408,11 +408,11 @@ export async function runImportInitialEsploraSync(): Promise<void> {
 
   if (sessionPassword && activeWalletId != null) {
     const { exportChangeset } = useCryptoStore.getState()
-    const changeset = await exportChangeset()
+    const changesetJson = await exportChangeset()
     await updateWalletChangeset({
       password: sessionPassword,
       walletId: activeWalletId,
-      changesetJson: changeset,
+      changesetJson,
       markFullScanDone: true,
     })
   }
@@ -601,11 +601,11 @@ export async function loadDescriptorWalletAndSync(params: {
     try {
       await syncActiveWalletAndUpdateState(networkMode, { useFullScan: true })
       invalidateLightningDashboardQueries()
-      const changeset = await exportChangeset()
+      const changesetJson = await exportChangeset()
       await updateWalletChangeset({
         password,
         walletId,
-        changesetJson: changeset,
+        changesetJson,
         markFullScanDone: true,
       })
     } catch (err) {

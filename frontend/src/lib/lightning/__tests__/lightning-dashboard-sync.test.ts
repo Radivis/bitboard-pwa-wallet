@@ -7,23 +7,23 @@ import type { TransactionDetails } from '@/workers/crypto-types'
 
 const chainOlder: TransactionDetails = {
   txid: 'aa',
-  sent_sats: 0,
-  received_sats: 100,
-  fee_sats: null,
-  confirmation_block_height: 1,
-  confirmation_time: 100,
-  is_confirmed: true,
+  sentSats: 0,
+  receivedSats: 100,
+  feeSats: null,
+  confirmationBlockHeight: 1,
+  confirmationTime: 100,
+  isConfirmed: true,
   isLabTx: false,
 }
 
 const chainNewer: TransactionDetails = {
   txid: 'bb',
-  sent_sats: 0,
-  received_sats: 200,
-  fee_sats: null,
-  confirmation_block_height: 2,
-  confirmation_time: 200,
-  is_confirmed: true,
+  sentSats: 0,
+  receivedSats: 200,
+  feeSats: null,
+  confirmationBlockHeight: 2,
+  confirmationTime: 200,
+  isConfirmed: true,
   isLabTx: false,
 }
 
@@ -62,23 +62,23 @@ describe('mergeAndSortDashboardActivity', () => {
   it('keeps unconfirmed on-chain txs in the top slice when many confirmed txs exist', () => {
     const confirmedChain = Array.from({ length: 11 }, (_, index) => ({
       txid: `confirmed-${index}`,
-      sent_sats: 0,
-      received_sats: 1_000,
-      fee_sats: null,
-      confirmation_block_height: 800_000 + index,
-      confirmation_time: 1_700_000_000 + index,
-      is_confirmed: true,
+      sentSats: 0,
+      receivedSats: 1_000,
+      feeSats: null,
+      confirmationBlockHeight: 800_000 + index,
+      confirmationTime: 1_700_000_000 + index,
+      isConfirmed: true,
       isLabTx: false,
     }))
 
     const pendingSend: TransactionDetails = {
       txid: 'pending-send',
-      sent_sats: 5_000,
-      received_sats: 0,
-      fee_sats: 200,
-      confirmation_block_height: null,
-      confirmation_time: null,
-      is_confirmed: false,
+      sentSats: 5_000,
+      receivedSats: 0,
+      feeSats: 200,
+      confirmationBlockHeight: null,
+      confirmationTime: null,
+      isConfirmed: false,
       isLabTx: false,
     }
 

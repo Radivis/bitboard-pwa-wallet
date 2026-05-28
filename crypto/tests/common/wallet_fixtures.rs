@@ -34,7 +34,12 @@ pub fn descriptors_for_test(network: BitcoinNetwork, address_type: AddressType) 
 
 pub fn create_test_wallet(network: BitcoinNetwork, address_type: AddressType) -> Wallet {
     let pair = descriptors_for_test(network, address_type);
-    wallet::create_wallet(&pair.external, &pair.internal, network).unwrap()
+    wallet::create_wallet(
+        &pair.external_descriptor,
+        &pair.internal_descriptor,
+        network,
+    )
+    .unwrap()
 }
 
 /// Inject a confirmed funding transaction into the wallet so it has spendable UTXOs.

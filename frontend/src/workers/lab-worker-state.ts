@@ -1,5 +1,6 @@
 import type { LabOwner } from '@/lib/lab/lab-owner'
 import { normalizeJsonOwnerToLabOwner } from '@/lib/lab/lab-owner'
+import { labBitcoinAddressesEqual } from '@/lib/lab/lab-utils'
 import type { LabState, MempoolEntry } from './lab-api'
 import { EMPTY_LAB_STATE } from './lab-api'
 
@@ -17,19 +18,7 @@ export function replaceLabWorkerState(newState: LabState): void {
 export const txidToChangeOutput = new Map<string, { address: string; vout: number | null }>()
 
 /** Bech32 (bc1/tb1/bcrt1) addresses can differ by case; BIP173 compares case-insensitively. */
-export function labAddressesEqual(
-  firstAddress: string,
-  secondAddress: string,
-): boolean {
-  if (firstAddress === secondAddress) return true
-  const trimmedFirst = firstAddress.trim()
-  const trimmedSecond = secondAddress.trim()
-  if (trimmedFirst === trimmedSecond) return true
-  if (/^(bc|tb|bcrt)1/i.test(trimmedFirst) && /^(bc|tb|bcrt)1/i.test(trimmedSecond)) {
-    return trimmedFirst.toLowerCase() === trimmedSecond.toLowerCase()
-  }
-  return false
-}
+export const labAddressesEqual = labBitcoinAddressesEqual
 
 /** Resolves owner when WASM-reported addresses differ in bech32 casing from stored map keys. */
 export function lookupOwnerForLabAddress(

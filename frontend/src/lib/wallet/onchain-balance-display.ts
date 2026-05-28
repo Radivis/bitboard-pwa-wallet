@@ -18,9 +18,9 @@ export function balanceInfoToOnChainDisplay(
   balance: BalanceInfo | null,
 ): OnChainBalanceDisplay {
   const confirmedSats = balance?.confirmed ?? 0
-  const trustedPendingSats = balance?.trusted_pending ?? 0
-  const untrustedPendingSats = balance?.untrusted_pending ?? 0
-  const immatureSats = balance?.immature ?? 0
+  const trustedPendingSats = balance?.trustedPendingSats ?? 0
+  const untrustedPendingSats = balance?.untrustedPendingSats ?? 0
+  const immatureSats = balance?.immatureSats ?? 0
   const totalSats = balance?.total ?? 0
 
   const showBreakdown =

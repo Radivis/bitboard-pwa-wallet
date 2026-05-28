@@ -76,11 +76,14 @@ impl TryFrom<&str> for BitcoinNetwork {
 }
 
 /// A pair of descriptor strings (external for receiving, internal for change).
-/// These are serialized to/from the WASM boundary as JSON.
+/// Serialized to/from the WASM boundary as JSON (`external_descriptor` / `internal_descriptor`).
+/// See `frontend/docs/NAMING.md`.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct DescriptorPair {
-    pub external: String,
-    pub internal: String,
+    #[serde(alias = "external")]
+    pub external_descriptor: String,
+    #[serde(alias = "internal")]
+    pub internal_descriptor: String,
 }
 
 /// Wallet balance broken down by confirmation status.
@@ -123,6 +126,6 @@ pub struct TransactionDetails {
     pub is_confirmed: bool,
     /// True when the row was built from lab chain data (`lab-utils`), not BDK/Esplora.
     /// Lab sets `sent_sats` to non-change outputs only; wallet sync uses input totals.
-    #[serde(rename = "isLabTx", default)]
+    #[serde(default)]
     pub is_lab_tx: bool,
 }

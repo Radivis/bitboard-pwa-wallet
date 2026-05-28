@@ -41,6 +41,37 @@ export default tseslint.config(
     },
   },
   {
+    // Catch snake_case field leaks in app code (wire/DB layers use dedicated files).
+    files: ['src/**/*.{ts,tsx}'],
+    ignores: [
+      'src/workers/**',
+      'src/db/**',
+      'src/wasm-pkg/**',
+      'src/**/*.test.ts',
+      'src/**/*.test.tsx',
+      'src/**/__tests__/**',
+      'src/test-utils/**',
+      'src/pages/setup/**',
+      'src/lib/lab/**',
+      'src/routeTree.gen.ts',
+      'src/vite-env.d.ts',
+    ],
+    rules: {
+      '@typescript-eslint/naming-convention': [
+        'error',
+        {
+          selector: 'objectLiteralProperty',
+          format: ['camelCase', 'UPPER_CASE'],
+          leadingUnderscore: 'allow',
+          filter: {
+            regex: '_',
+            match: true,
+          },
+        },
+      ],
+    },
+  },
+  {
     files: ['src/routes/**/*.{ts,tsx}'],
     rules: {
       // TanStack Router files export `Route` and define local route components; not compatible with "single component export".

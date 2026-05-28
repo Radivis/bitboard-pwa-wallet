@@ -101,9 +101,9 @@ async function mockResolveDescriptorWallet(params: {
     network: targetNetwork,
     addressType: targetAddressType,
     accountId: targetAccountId,
-    externalDescriptor: walletResult.external_descriptor,
-    internalDescriptor: walletResult.internal_descriptor,
-    changeSet: walletResult.changeset_json,
+    externalDescriptor: walletResult.externalDescriptor,
+    internalDescriptor: walletResult.internalDescriptor,
+    changeSet: walletResult.changesetJson,
     fullScanDone: false,
   }
   walletSecretsPayload.descriptorWallets.push(newDescriptorWallet)
@@ -322,9 +322,10 @@ describe('resolveDescriptorWallet', () => {
 
   it('creates and persists new descriptor wallet when not found', async () => {
     const newWalletResult = {
-      external_descriptor: 'tr(new...)',
-      internal_descriptor: 'tr(new...)',
-      changeset_json: '{"last_reveal":{"0":0}}',
+      externalDescriptor: 'tr(new...)',
+      internalDescriptor: 'tr(new...)',
+      firstAddress: 'tb1qnewaddress',
+      changesetJson: '{"last_reveal":{"0":0}}',
     }
     mockCreateWallet.mockResolvedValue(newWalletResult)
 
@@ -347,9 +348,9 @@ describe('resolveDescriptorWallet', () => {
       network: 'testnet',
       addressType: 'segwit',
       accountId: 0,
-      externalDescriptor: newWalletResult.external_descriptor,
-      internalDescriptor: newWalletResult.internal_descriptor,
-      changeSet: newWalletResult.changeset_json,
+      externalDescriptor: newWalletResult.externalDescriptor,
+      internalDescriptor: newWalletResult.internalDescriptor,
+      changeSet: newWalletResult.changesetJson,
       fullScanDone: false,
     })
     expect(mockCreateWallet).toHaveBeenCalledWith(

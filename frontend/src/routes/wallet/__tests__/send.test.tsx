@@ -216,9 +216,9 @@ describe('SendFlow', () => {
       networkMode: 'signet',
       balance: {
         confirmed: 100_000_000,
-        trusted_pending: 0,
-        untrusted_pending: 0,
-        immature: 0,
+        trustedPendingSats: 0,
+        untrustedPendingSats: 0,
+        immatureSats: 0,
         total: 100_000_000,
       },
       currentAddress: 'tb1qtest',

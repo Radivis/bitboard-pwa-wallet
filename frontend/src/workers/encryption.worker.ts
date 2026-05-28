@@ -29,7 +29,7 @@ async function deriveKeyBytes(
   kdfPhc: string,
 ): Promise<Uint8Array> {
   const wasmModule = await getWasm()
-  const key = wasmModule.deriveArgon2KeyFromPhc(password, salt, kdfPhc)
+  const key = wasmModule.derive_argon2_key_from_phc(password, salt, kdfPhc)
   return new Uint8Array(key)
 }
 
@@ -136,7 +136,7 @@ const encryptionService: EncryptionService = {
     kdfPhc: string,
   ): Promise<string> {
     const wasmModule = await getWasm()
-    return wasmModule.signWalletBackupManifest(sqliteBytes, password, salt, kdfPhc)
+    return wasmModule.sign_wallet_backup_manifest(sqliteBytes, password, salt, kdfPhc)
   },
 
   async verifyWalletBackupManifest(
@@ -145,7 +145,7 @@ const encryptionService: EncryptionService = {
     manifestJson: string,
   ): Promise<void> {
     const wasmModule = await getWasm()
-    wasmModule.verifyWalletBackupManifest(sqliteBytes, password, manifestJson)
+    wasmModule.verify_wallet_backup_manifest(sqliteBytes, password, manifestJson)
   },
 }
 

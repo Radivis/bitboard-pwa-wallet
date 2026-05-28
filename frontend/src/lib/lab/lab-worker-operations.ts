@@ -142,7 +142,7 @@ export async function labOpDraftLabEntityTransaction(params: {
 
   const cryptoWorker = getCryptoWorker()
   const cryptoParams = prep.crypto
-  const draft = await cryptoWorker.labEntityDraftLabPsbtTransaction({
+  const draft = await cryptoWorker.labEntityDraftPsbtTransaction({
     mnemonic: cryptoParams.mnemonic,
     changesetJson: cryptoParams.changesetJson,
     network: cryptoParams.network,
@@ -178,7 +178,7 @@ export async function labOpCreateLabEntityTransaction(params: {
 
   const cryptoWorker = getCryptoWorker()
   const cryptoParams = prep.crypto
-  const signRaw = await cryptoWorker.labEntityBuildAndSignLabTransaction({
+  const signRaw = await cryptoWorker.labEntityBuildAndSignTransaction({
     mnemonic: cryptoParams.mnemonic,
     changesetJson: cryptoParams.changesetJson,
     network: cryptoParams.network,
@@ -303,7 +303,7 @@ export async function labOpCreateRandomLabEntityTransactions(
           await labWorker.prepareRandomLabEntityTransaction()
         if (!prepared) break
 
-        const signRaw = await cryptoWorker.labEntityBuildAndSignLabTransaction({
+        const signRaw = await cryptoWorker.labEntityBuildAndSignTransaction({
           ...prepared.crypto,
           applyChangeFreeBump: false,
         })

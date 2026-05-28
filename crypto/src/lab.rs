@@ -29,7 +29,7 @@ pub const LAB_DEFAULT_MINER_SUBSIDY_SATS: u64 = 312_500_000;
 /// Bitcoin coinbase prevout index (all bits set), matches frontend `LAB_COINBASE_PREV_VOUT`.
 const LAB_COINBASE_PREV_VOUT: u32 = 0xffff_ffff;
 const LAB_BITS: u32 = 0x2000ffff; // Micro-PoW: compact target around 256 expected attempts
-const DUST_THRESHOLD_SATS: u64 = 546; // Min non-dust output for P2WPKH
+use crate::transaction::UX_DUST_FLOOR_SATS;
 
 // P2WPKH vsize estimates for fee calculation in lab_build_transaction_with_change
 const LAB_ESTIMATE_TX_VSIZE_BASE: u64 = 10;
@@ -479,7 +479,7 @@ pub fn lab_build_transaction_with_change(
     let change_sats = total_in
         .saturating_sub(payment_sats)
         .saturating_sub(required_fee_sats);
-    let has_change = change_sats >= DUST_THRESHOLD_SATS;
+    let has_change = change_sats >= UX_DUST_FLOOR_SATS;
     let (outputs, actual_fee_sats) = if has_change {
         let outputs = vec![
             LabTxOutput {

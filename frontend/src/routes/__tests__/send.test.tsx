@@ -199,7 +199,7 @@ describe('SendPage', () => {
       activeWalletId: 1,
       walletStatus: 'unlocked',
       networkMode: 'signet',
-      balance: { confirmed: 500_000, trusted_pending: 0, untrusted_pending: 0, immature: 0, total: 500_000 },
+      balance: { confirmed: 500_000, trustedPendingSats: 0, untrustedPendingSats: 0, immatureSats: 0, total: 500_000 },
       setWalletStatus: vi.fn(),
       setBalance: vi.fn(),
       setTransactions: vi.fn(),

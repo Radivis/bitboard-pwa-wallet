@@ -42,10 +42,10 @@ pub fn derive_descriptors(
     };
 
     Ok(DescriptorPair {
-        external: format!(
+        external_descriptor: format!(
             "{script_template_prefix}({xpriv}/{purpose}'/{coin_type}'/{account_id}'/0/*)"
         ),
-        internal: format!(
+        internal_descriptor: format!(
             "{script_template_prefix}({xpriv}/{purpose}'/{coin_type}'/{account_id}'/1/*)"
         ),
     })

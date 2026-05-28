@@ -4,5 +4,5 @@
  */
 export enum LabOwnerType {
   Wallet = 'wallet',
-  LabEntity = 'labEntity',
+  LabEntity = 'lab_entity',
 }

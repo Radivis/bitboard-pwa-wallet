@@ -150,7 +150,7 @@ pub fn verify_wallet_backup_manifest_inner(
 }
 
 /// Builds manifest JSON and signs `double_sha256(sqlite_bytes)` with ML-DSA-65 (deterministic).
-#[wasm_bindgen(js_name = signWalletBackupManifest)]
+#[wasm_bindgen]
 pub fn sign_wallet_backup_manifest(
     sqlite_bytes: &[u8],
     password: &str,
@@ -162,7 +162,7 @@ pub fn sign_wallet_backup_manifest(
 }
 
 /// Verifies manifest signature and that the message hash matches `sqlite_bytes`.
-#[wasm_bindgen(js_name = verifyWalletBackupManifest)]
+#[wasm_bindgen]
 pub fn verify_wallet_backup_manifest(
     sqlite_bytes: &[u8],
     password: &str,

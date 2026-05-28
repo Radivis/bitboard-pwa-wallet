@@ -23,9 +23,9 @@ vi.mock('comlink', () => ({
 }))
 
 vi.mock('@/wasm-pkg/bitboard_encryption/bitboard_encryption', () => ({
-  deriveArgon2KeyFromPhc: deriveArgon2KeyFromPhcMock,
-  signWalletBackupManifest: vi.fn(() => '{"format_version":1}'),
-  verifyWalletBackupManifest: vi.fn(),
+  derive_argon2_key_from_phc: deriveArgon2KeyFromPhcMock,
+  sign_wallet_backup_manifest: vi.fn(() => '{"format_version":1}'),
+  verify_wallet_backup_manifest: vi.fn(),
 }))
 
 async function encryptWithRawKey(

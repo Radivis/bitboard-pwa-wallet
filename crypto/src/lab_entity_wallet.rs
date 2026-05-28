@@ -26,8 +26,8 @@ fn open_lab_entity_wallet(
     let trimmed = changeset_json.trim();
     if trimmed.is_empty() || trimmed == "{}" {
         let mut wallet = create_wallet(
-            &descriptor_pair.external,
-            &descriptor_pair.internal,
+            &descriptor_pair.external_descriptor,
+            &descriptor_pair.internal_descriptor,
             network,
         )?;
         let staged = wallet.take_staged().ok_or_else(|| {
@@ -38,8 +38,8 @@ fn open_lab_entity_wallet(
 
     let changeset = deserialize_changeset(changeset_json)?;
     let wallet = load_wallet(
-        &descriptor_pair.external,
-        &descriptor_pair.internal,
+        &descriptor_pair.external_descriptor,
+        &descriptor_pair.internal_descriptor,
         network,
         changeset.clone(),
     )?;
@@ -67,8 +67,8 @@ pub fn create_lab_entity_wallet(
         descriptors::derive_descriptors(mnemonic, network, address_type, account_id)?;
 
     let mut wallet = create_wallet(
-        &descriptor_pair.external,
-        &descriptor_pair.internal,
+        &descriptor_pair.external_descriptor,
+        &descriptor_pair.internal_descriptor,
         network,
     )?;
     let first_address = get_new_address(&mut wallet);
@@ -79,8 +79,8 @@ pub fn create_lab_entity_wallet(
     let changeset_json = serialize_changeset(&initial_changeset)?;
 
     Ok(CreateWalletResult {
-        external_descriptor: descriptor_pair.external,
-        internal_descriptor: descriptor_pair.internal,
+        external_descriptor: descriptor_pair.external_descriptor,
+        internal_descriptor: descriptor_pair.internal_descriptor,
         first_address,
         changeset_json,
     })
@@ -131,7 +131,7 @@ pub struct LabEntitySignResult {
     pub change_free_max_sats: u64,
 }
 
-/// Inputs for [`lab_entity_draft_lab_psbt_transaction`].
+/// Inputs for [`lab_entity_draft_psbt_transaction`].
 #[derive(Debug)]
 pub struct LabEntityDraftArgs<'a> {
     pub mnemonic: &'a str,
@@ -146,7 +146,7 @@ pub struct LabEntityDraftArgs<'a> {
 }
 
 /// Unsigned PSBT + dust metadata for a lab-entity send (no chain mutation).
-pub fn lab_entity_draft_lab_psbt_transaction(
+pub fn lab_entity_draft_psbt_transaction(
     args: LabEntityDraftArgs<'_>,
 ) -> Result<lab_psbt::LabDraftPsbtOutcome, CryptoError> {
     let (mut wallet, _) = open_lab_entity_wallet(
@@ -174,7 +174,7 @@ pub fn lab_entity_draft_lab_psbt_transaction(
     )
 }
 
-/// Inputs for [`lab_entity_build_and_sign_lab_transaction`].
+/// Inputs for [`lab_entity_build_and_sign_transaction`].
 #[derive(Debug)]
 pub struct LabEntityBuildSignArgs<'a> {
     pub mnemonic: &'a str,
@@ -190,7 +190,7 @@ pub struct LabEntityBuildSignArgs<'a> {
 }
 
 /// Build and sign a lab tx using a lab-entity wallet (foreign UTXOs + internal change).
-pub fn lab_entity_build_and_sign_lab_transaction(
+pub fn lab_entity_build_and_sign_transaction(
     args: LabEntityBuildSignArgs<'_>,
 ) -> Result<LabEntitySignResult, CryptoError> {
     let (mut wallet, mut persisted_changeset) = open_lab_entity_wallet(

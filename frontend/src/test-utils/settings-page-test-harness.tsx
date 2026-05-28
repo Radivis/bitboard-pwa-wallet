@@ -22,7 +22,7 @@ export const mockExportChangeset = vi.fn().mockRejectedValue(
   new Error('No active wallet. Call create_wallet or load_wallet first.'),
 )
 export const mockLoadWallet = vi.fn().mockResolvedValue(true)
-export const mockSyncWallet = vi.fn().mockResolvedValue({ balance: {}, changeset_json: '{}' })
+export const mockSyncWallet = vi.fn().mockResolvedValue({ balance: {}, changesetJson: '{}' })
 export const mockGetBalance = vi.fn().mockResolvedValue({ confirmed: 0, total: 0 })
 export const mockGetTransactionList = vi.fn().mockResolvedValue([])
 export const mockGetCurrentAddress = vi.fn().mockResolvedValue('tb1qcurrent')

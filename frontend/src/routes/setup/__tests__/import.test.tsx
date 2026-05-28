@@ -215,21 +215,27 @@ describe('ImportWalletPage', () => {
     mockImportWalletAndEncryptSecrets.mockResolvedValue({
       encryptedBlob: { ciphertext: new Uint8Array(0), iv: new Uint8Array(12), salt: new Uint8Array(16) },
       walletResult: {
-        external_descriptor: 'ext',
-        internal_descriptor: 'int',
-        first_address: 'tb1test',
-        changeset_json: '{}',
+        externalDescriptor: 'ext',
+        internalDescriptor: 'int',
+        firstAddress: 'tb1test',
+        changesetJson: '{}',
       },
     })
     mockFullScanWallet.mockResolvedValue({
-      balance: { confirmed: 0, trusted_pending: 0, untrusted_pending: 0, immature: 0, total: 0 },
-      changeset_json: '{}',
+      balance: {
+        confirmed: 0,
+        trustedPendingSats: 0,
+        untrustedPendingSats: 0,
+        immatureSats: 0,
+        total: 0,
+      },
+      changesetJson: '{}',
     })
     mockGetBalance.mockResolvedValue({
       confirmed: 0,
-      trusted_pending: 0,
-      untrusted_pending: 0,
-      immature: 0,
+      trustedPendingSats: 0,
+      untrustedPendingSats: 0,
+      immatureSats: 0,
       total: 0,
     })
     mockGetTransactionList.mockResolvedValue([])
@@ -281,10 +287,10 @@ describe('ImportWalletPage', () => {
     resolveImport!({
       encryptedBlob: { ciphertext: new Uint8Array(0), iv: new Uint8Array(12), salt: new Uint8Array(16) },
       walletResult: {
-        external_descriptor: 'ext',
-        internal_descriptor: 'int',
-        first_address: 'tb1test',
-        changeset_json: '{}',
+        externalDescriptor: 'ext',
+        internalDescriptor: 'int',
+        firstAddress: 'tb1test',
+        changesetJson: '{}',
       },
     })
   })

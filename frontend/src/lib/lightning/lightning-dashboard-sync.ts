@@ -321,10 +321,10 @@ export type DashboardActivityItem =
 const UNCONFIRMED_CHAIN_SORT_PRIORITY = Number.MAX_SAFE_INTEGER
 
 function chainSortTime(tx: TransactionDetails): number {
-  if (!tx.is_confirmed) {
+  if (!tx.isConfirmed) {
     return UNCONFIRMED_CHAIN_SORT_PRIORITY
   }
-  return tx.confirmation_time ?? 0
+  return tx.confirmationTime ?? 0
 }
 
 function lightningSortTime(payment: LightningPaymentWithWallet): number {

@@ -164,8 +164,8 @@ pub fn create_wallet(
     .map_err(JsValue::from)?;
 
     let mut bdk_wallet = wallet::create_wallet(
-        &descriptor_pair.external,
-        &descriptor_pair.internal,
+        &descriptor_pair.external_descriptor,
+        &descriptor_pair.internal_descriptor,
         bitcoin_network,
     )
     .map_err(JsValue::from)?;
@@ -178,14 +178,16 @@ pub fn create_wallet(
 
     ACTIVE_WALLET.with(|wallet_cell| wallet_cell.replace(Some(bdk_wallet)));
     ACCUMULATED_CHANGESET.with(|changeset_cell| *changeset_cell.borrow_mut() = initial_changeset);
-    EXTERNAL_DESCRIPTOR_FOR_LAB
-        .with(|descriptor_cell| *descriptor_cell.borrow_mut() = descriptor_pair.external.clone());
-    INTERNAL_DESCRIPTOR_FOR_LAB
-        .with(|descriptor_cell| *descriptor_cell.borrow_mut() = descriptor_pair.internal.clone());
+    EXTERNAL_DESCRIPTOR_FOR_LAB.with(|descriptor_cell| {
+        *descriptor_cell.borrow_mut() = descriptor_pair.external_descriptor.clone()
+    });
+    INTERNAL_DESCRIPTOR_FOR_LAB.with(|descriptor_cell| {
+        *descriptor_cell.borrow_mut() = descriptor_pair.internal_descriptor.clone()
+    });
 
     let create_wallet_payload = types::CreateWalletResult {
-        external_descriptor: descriptor_pair.external,
-        internal_descriptor: descriptor_pair.internal,
+        external_descriptor: descriptor_pair.external_descriptor,
+        internal_descriptor: descriptor_pair.internal_descriptor,
         first_address,
         changeset_json,
     };
@@ -614,7 +616,7 @@ pub fn lab_entity_reveal_next_external_address(
 /// Draft an unsigned lab PSBT for a lab entity (dust / change-free metadata; no persisted changes).
 #[wasm_bindgen]
 #[allow(clippy::too_many_arguments)] // wasm_bindgen exposes a flat JS API; arity stays fixed for WASM ABI.
-pub fn lab_entity_draft_lab_psbt_transaction(
+pub fn lab_entity_draft_psbt_transaction(
     mnemonic_str: &str,
     changeset_json: &str,
     network: &str,
@@ -627,7 +629,7 @@ pub fn lab_entity_draft_lab_psbt_transaction(
 ) -> Result<JsValue, JsValue> {
     let bitcoin_network = types::BitcoinNetwork::try_from(network).map_err(JsValue::from)?;
     let address_type_enum = types::AddressType::try_from(address_type).map_err(JsValue::from)?;
-    let draft_lab_psbt_payload = lab_entity_wallet::lab_entity_draft_lab_psbt_transaction(
+    let draft_lab_psbt_payload = lab_entity_wallet::lab_entity_draft_psbt_transaction(
         lab_entity_wallet::LabEntityDraftArgs {
             mnemonic: mnemonic_str,
             changeset_json,
@@ -647,7 +649,7 @@ pub fn lab_entity_draft_lab_psbt_transaction(
 /// Build and sign a lab mempool tx for a lab entity. Returns JSON including updated `changeset_json`.
 #[wasm_bindgen]
 #[allow(clippy::too_many_arguments)] // wasm_bindgen exposes a flat JS API; arity stays fixed for WASM ABI.
-pub fn lab_entity_build_and_sign_lab_transaction(
+pub fn lab_entity_build_and_sign_transaction(
     mnemonic_str: &str,
     changeset_json: &str,
     network: &str,
@@ -661,7 +663,7 @@ pub fn lab_entity_build_and_sign_lab_transaction(
 ) -> Result<JsValue, JsValue> {
     let bitcoin_network = types::BitcoinNetwork::try_from(network).map_err(JsValue::from)?;
     let address_type_enum = types::AddressType::try_from(address_type).map_err(JsValue::from)?;
-    let build_sign_lab_payload = lab_entity_wallet::lab_entity_build_and_sign_lab_transaction(
+    let build_sign_lab_payload = lab_entity_wallet::lab_entity_build_and_sign_transaction(
         lab_entity_wallet::LabEntityBuildSignArgs {
             mnemonic: mnemonic_str,
             changeset_json,
