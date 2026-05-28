@@ -49,7 +49,7 @@ export function UpgradeFromNearZeroPasswordModal({
   const [phase, setPhase] = useState<Phase>('form')
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
-  const sessionPassword = useSessionStore((s) => s.password)
+  const sessionPassword = useSessionStore((sessionState) => sessionState.password)
 
   useEffect(() => {
     if (open) {

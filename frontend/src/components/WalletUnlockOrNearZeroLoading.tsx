@@ -20,8 +20,8 @@ type WalletUnlockOrNearZeroLoadingProps = {
 export function WalletUnlockOrNearZeroLoading(
   props: WalletUnlockOrNearZeroLoadingProps,
 ) {
-  const nearZeroActive = useNearZeroSecurityStore((s) => s.active)
-  const walletStatus = useWalletStore((s) => s.walletStatus)
+  const nearZeroActive = useNearZeroSecurityStore((nearZeroSecurityState) => nearZeroSecurityState.active)
+  const walletStatus = useWalletStore((walletState) => walletState.walletStatus)
   const { isError, isFetching, isPending, refetch } = useActiveWalletLoadQuery()
 
   const walletStillGated =

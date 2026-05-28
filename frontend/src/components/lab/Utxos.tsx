@@ -48,7 +48,7 @@ function LabOwnerUtxosInner({
   utxoPageIndex: number
   onUtxoPageChange: (pageIndex: number) => void
 }) {
-  const labNetworkEnabled = useWalletStore((s) => s.networkMode === 'lab')
+  const labNetworkEnabled = useWalletStore((walletState) => walletState.networkMode === 'lab')
   const { data: utxosPage } = useLabUtxosForOwnerPage(ownerKey, utxoPageIndex, {
     enabled: labNetworkEnabled,
   })
@@ -106,7 +106,7 @@ export function LabUtxosCard({
   const [ownerPageIndex, setOwnerPageIndex] = useState(0)
   const [innerUtxoPageByOwner, setInnerUtxoPageByOwner] = useState<Record<string, number>>({})
 
-  const labNetworkEnabled = useWalletStore((s) => s.networkMode === 'lab')
+  const labNetworkEnabled = useWalletStore((walletState) => walletState.networkMode === 'lab')
   const { data: labState } = useLabChainStateQuery()
   const entities = labState?.entities ?? []
   const { data: ownerPage, isLoading, isError } = useLabOwnerKeysPage(ownerPageIndex, {

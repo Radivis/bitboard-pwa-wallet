@@ -50,7 +50,7 @@ export function ImportWalletPage() {
   const setCurrentAddress = useWalletStore((walletState) => walletState.setCurrentAddress)
   const commitLoadedSubWallet = useWalletStore((walletState) => walletState.commitLoadedSubWallet)
   const setImportInitialSyncErrorMessage = useWalletStore(
-    (s) => s.setImportInitialSyncErrorMessage,
+    (walletState) => walletState.setImportInitialSyncErrorMessage,
   )
   const addWallet = useAddWallet()
   const queryClient = useQueryClient()

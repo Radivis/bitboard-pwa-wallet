@@ -52,7 +52,7 @@ function LabOwnerAddressesInner({
   addressPageIndex: number
   onAddressPageChange: (pageIndex: number) => void
 }) {
-  const labNetworkEnabled = useWalletStore((s) => s.networkMode === 'lab')
+  const labNetworkEnabled = useWalletStore((walletState) => walletState.networkMode === 'lab')
   const { data: addressesPage } = useLabAddressesForOwnerPage(ownerKey, addressPageIndex, {
     enabled: labNetworkEnabled,
   })
@@ -117,7 +117,7 @@ export function LabAddressesCard({
   const [ownerPageIndex, setOwnerPageIndex] = useState(0)
   const [innerAddressPageByOwner, setInnerAddressPageByOwner] = useState<Record<string, number>>({})
 
-  const labNetworkEnabled = useWalletStore((s) => s.networkMode === 'lab')
+  const labNetworkEnabled = useWalletStore((walletState) => walletState.networkMode === 'lab')
   const { data: labState } = useLabChainStateQuery()
   const entities = labState?.entities ?? []
   const { data: ownerPage, isLoading, isError } = useLabOwnerKeysPage(ownerPageIndex, {

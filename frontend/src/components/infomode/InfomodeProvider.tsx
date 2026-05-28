@@ -75,7 +75,7 @@ function InfomodeCloseOnNavigate({
   setPopupState: Dispatch<SetStateAction<PopupState>>
   isPopupOpen: boolean
 }) {
-  const setInfomodeActive = useInfomodeStore((s) => s.setInfomodeActive)
+  const setInfomodeActive = useInfomodeStore((infomodeState) => infomodeState.setInfomodeActive)
   const locationKey = useLocation({
     select: (loc) => `${loc.pathname}${loc.searchStr}${loc.hash}`,
     structuralSharing: false,

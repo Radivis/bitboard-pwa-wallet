@@ -15,14 +15,14 @@ import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
 
 export function FeatureToggles() {
-  const lightningEnabled = useFeatureStore((s) => s.lightningEnabled)
-  const setLightningEnabled = useFeatureStore((s) => s.setLightningEnabled)
-  const mainnetAccessEnabled = useFeatureStore((s) => s.mainnetAccessEnabled)
-  const setMainnetAccessEnabled = useFeatureStore((s) => s.setMainnetAccessEnabled)
-  const regtestModeEnabled = useFeatureStore((s) => s.regtestModeEnabled)
-  const setRegtestModeEnabled = useFeatureStore((s) => s.setRegtestModeEnabled)
-  const segwitAddressesEnabled = useFeatureStore((s) => s.segwitAddressesEnabled)
-  const setSegwitAddressesEnabled = useFeatureStore((s) => s.setSegwitAddressesEnabled)
+  const lightningEnabled = useFeatureStore((featureState) => featureState.lightningEnabled)
+  const setLightningEnabled = useFeatureStore((featureState) => featureState.setLightningEnabled)
+  const mainnetAccessEnabled = useFeatureStore((featureState) => featureState.mainnetAccessEnabled)
+  const setMainnetAccessEnabled = useFeatureStore((featureState) => featureState.setMainnetAccessEnabled)
+  const regtestModeEnabled = useFeatureStore((featureState) => featureState.regtestModeEnabled)
+  const setRegtestModeEnabled = useFeatureStore((featureState) => featureState.setRegtestModeEnabled)
+  const segwitAddressesEnabled = useFeatureStore((featureState) => featureState.segwitAddressesEnabled)
+  const setSegwitAddressesEnabled = useFeatureStore((featureState) => featureState.setSegwitAddressesEnabled)
 
   const [mainnetConfirmOpen, setMainnetConfirmOpen] = useState(false)
   const [mainnetAccessSwitchBusy, setMainnetAccessSwitchBusy] = useState(false)

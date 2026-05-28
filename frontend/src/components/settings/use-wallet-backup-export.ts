@@ -28,7 +28,7 @@ function walletBackupSignKdfPhc(): string {
 }
 
 export function useWalletBackupExport() {
-  const activeWalletId = useWalletStore((s) => s.activeWalletId)
+  const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
   const { data: wallets } = useWallets()
   const [walletExportBusy, setWalletExportBusy] = useState(false)
   const [exportPasswordOpen, setExportPasswordOpen] = useState(false)

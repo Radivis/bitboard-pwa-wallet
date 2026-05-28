@@ -24,10 +24,10 @@ export function WalletManagement({
   onDeleteWalletAutoOpenConsumed,
 }: WalletManagementProps = {}) {
   const navigate = useNavigate()
-  const activeWalletId = useWalletStore((s) => s.activeWalletId)
-  const walletStatus = useWalletStore((s) => s.walletStatus)
+  const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
+  const walletStatus = useWalletStore((walletState) => walletState.walletStatus)
   const lockAndPurgeSensitiveRuntimeState = useCryptoStore(
-    (s) => s.lockAndPurgeSensitiveRuntimeState,
+    (cryptoState) => cryptoState.lockAndPurgeSensitiveRuntimeState,
   )
   const { data: wallets } = useWallets()
   const { data: walletRow, isSuccess: walletRowLoaded } = useWallet(activeWalletId)

@@ -25,7 +25,7 @@ import { onchainDustPrepareWarningLines } from '@/lib/wallet/send/onchain-dust-p
 export function useBuildTransactionMutation() {
   const networkMode = useWalletStore((walletState) => walletState.networkMode)
   const prepareOnchainSendTransaction = useCryptoStore(
-    (s) => s.prepareOnchainSendTransaction,
+    (cryptoState) => cryptoState.prepareOnchainSendTransaction,
   )
 
   return useMutation({

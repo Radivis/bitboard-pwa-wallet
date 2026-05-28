@@ -35,7 +35,7 @@ export function SetAppPasswordModal({ open }: SetAppPasswordModalProps) {
   const navigate = useNavigate()
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
-  const setSessionPassword = useSessionStore((s) => s.setPassword)
+  const setSessionPassword = useSessionStore((sessionState) => sessionState.setPassword)
 
   useEffect(() => {
     if (open) {

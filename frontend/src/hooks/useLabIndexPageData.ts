@@ -57,16 +57,16 @@ export function useLabIndexPageData() {
 
   const blockCount = blocks.length === 0 ? 0 : blocks[blocks.length - 1].height + 1
 
-  const mineCount = useLabMiningStore((s) => s.mineCount)
-  const setMineCount = useLabMiningStore((s) => s.setMineCount)
-  const ownerType = useLabMiningStore((s) => s.ownerType)
-  const setOwnerType = useLabMiningStore((s) => s.setOwnerType)
-  const selectedLabEntityId = useLabMiningStore((s) => s.selectedLabEntityId)
-  const setSelectedLabEntityId = useLabMiningStore((s) => s.setSelectedLabEntityId)
+  const mineCount = useLabMiningStore((labMiningState) => labMiningState.mineCount)
+  const setMineCount = useLabMiningStore((labMiningState) => labMiningState.setMineCount)
+  const ownerType = useLabMiningStore((labMiningState) => labMiningState.ownerType)
+  const setOwnerType = useLabMiningStore((labMiningState) => labMiningState.setOwnerType)
+  const selectedLabEntityId = useLabMiningStore((labMiningState) => labMiningState.selectedLabEntityId)
+  const setSelectedLabEntityId = useLabMiningStore((labMiningState) => labMiningState.setSelectedLabEntityId)
 
-  const activeWalletId = useWalletStore((s) => s.activeWalletId)
-  const walletStatus = useWalletStore((s) => s.walletStatus)
-  const currentAddress = useWalletStore((s) => s.currentAddress)
+  const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
+  const walletStatus = useWalletStore((walletState) => walletState.walletStatus)
+  const currentAddress = useWalletStore((walletState) => walletState.currentAddress)
   const labAddressType = useWalletStore(selectCommittedAddressType)
   const { data: activeWallet } = useWallet(activeWalletId)
   const { data: wallets = [] } = useWallets()

@@ -23,8 +23,8 @@ function readDismissedForWallet(walletId: number | null): boolean {
  */
 export function NoMnemonicBackupBanner() {
   const location = useLocation()
-  const activeWalletId = useWalletStore((s) => s.activeWalletId)
-  const sessionPassword = useSessionStore((s) => s.password)
+  const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
+  const sessionPassword = useSessionStore((sessionState) => sessionState.password)
   const { data: noBackupFlagActive = false } = useWalletNoMnemonicBackupFlag(
     activeWalletId,
   )

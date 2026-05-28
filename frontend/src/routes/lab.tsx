@@ -30,7 +30,7 @@ function LabRoutePending() {
 }
 
 function LabLayout() {
-  const networkMode = useWalletStore((s) => s.networkMode)
+  const networkMode = useWalletStore((walletState) => walletState.networkMode)
   const { labAutoSwitchFailed } = Route.useRouteContext()
   const { isPending, isError, error, refetch } = useLabChainStateQuery()
 

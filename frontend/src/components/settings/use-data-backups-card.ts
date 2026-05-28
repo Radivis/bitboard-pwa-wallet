@@ -22,7 +22,7 @@ const MIGRATION_REPORT_INNER_NAME = 'wallet-schema-migration-failure.json'
 const MIGRATION_REPORT_ZIP_NAME = 'wallet-schema-migration-failure.zip'
 
 export function useDataBackupsCard() {
-  const nearZeroActive = useNearZeroSecurityStore((s) => s.active)
+  const nearZeroActive = useNearZeroSecurityStore((nearZeroSecurityState) => nearZeroSecurityState.active)
   const walletBackupExport = useWalletBackupExport()
   const walletBackupImport = useWalletBackupImport()
 

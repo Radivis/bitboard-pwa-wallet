@@ -19,11 +19,11 @@ export const COMMITTED_EXTERNAL_DESCRIPTOR_QUERY_KEY =
  * from encrypted payload when the session password is available.
  */
 export function useCommittedExternalDescriptor() {
-  const activeWalletId = useWalletStore((s) => s.activeWalletId)
+  const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
   const committedNetworkMode = useWalletStore(selectCommittedNetworkMode)
   const committedAddressType = useWalletStore(selectCommittedAddressType)
   const committedAccountId = useWalletStore(selectCommittedAccountId)
-  const sessionPassword = useSessionStore((s) => s.password)
+  const sessionPassword = useSessionStore((sessionState) => sessionState.password)
 
   const enabled = activeWalletId !== null && sessionPassword !== null
 

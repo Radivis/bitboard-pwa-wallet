@@ -34,10 +34,10 @@ export function AppInitializer({ children }: AppInitializerProps) {
   const navigate = useNavigate()
   const location = useLocation()
   const { data: wallets, isLoading, isFetching } = useWallets()
-  const activeWalletId = useWalletStore((s) => s.activeWalletId)
-  const setActiveWallet = useWalletStore((s) => s.setActiveWallet)
-  const networkMode = useWalletStore((s) => s.networkMode)
-  const sessionPassword = useSessionStore((s) => s.password)
+  const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
+  const setActiveWallet = useWalletStore((walletState) => walletState.setActiveWallet)
+  const networkMode = useWalletStore((walletState) => walletState.networkMode)
+  const sessionPassword = useSessionStore((sessionState) => sessionState.password)
 
   useLayoutEffect(() => {
     useWalletCryptoSessionPathGateStore.getState().setPathname(location.pathname)

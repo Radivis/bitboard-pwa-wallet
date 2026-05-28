@@ -8,7 +8,7 @@ import { useSendStore } from '@/stores/sendStore'
 import { useWalletStore } from '@/stores/walletStore'
 
 export function useSendFlowFees() {
-  const networkMode = useWalletStore((s) => s.networkMode)
+  const networkMode = useWalletStore((walletState) => walletState.networkMode)
   const {
     feePresetSelection,
     feeRate,

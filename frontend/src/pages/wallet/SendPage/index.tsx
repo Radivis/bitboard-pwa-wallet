@@ -59,8 +59,8 @@ import { SendFlowDustModals } from './modals'
 
 export function SendPage() {
   const navigate = useNavigate()
-  const activeWalletId = useWalletStore((s) => s.activeWalletId)
-  const walletStatus = useWalletStore((s) => s.walletStatus)
+  const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
+  const walletStatus = useWalletStore((walletState) => walletState.walletStatus)
 
   if (!activeWalletId) {
     navigate({ to: '/setup' })
@@ -75,16 +75,16 @@ export function SendPage() {
 }
 
 export function SendFlow() {
-  const networkMode = useWalletStore((s) => s.networkMode)
-  const balance = useWalletStore((s) => s.balance)
-  const activeWalletId = useWalletStore((s) => s.activeWalletId)
-  const currentAddress = useWalletStore((s) => s.currentAddress)
-  const lightningEnabled = useFeatureStore((s) => s.lightningEnabled)
-  const connectedLightningWallets = useLightningStore((s) => s.connectedWallets)
+  const networkMode = useWalletStore((walletState) => walletState.networkMode)
+  const balance = useWalletStore((walletState) => walletState.balance)
+  const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
+  const currentAddress = useWalletStore((walletState) => walletState.currentAddress)
+  const lightningEnabled = useFeatureStore((featureState) => featureState.lightningEnabled)
+  const connectedLightningWallets = useLightningStore((lightningState) => lightningState.connectedWallets)
 
-  const hasAnyLightningConnection = useLightningStore((s) =>
+  const hasAnyLightningConnection = useLightningStore((lightningState) =>
     activeWalletId != null
-      ? s.getConnectionsForWallet(activeWalletId).length > 0
+      ? lightningState.getConnectionsForWallet(activeWalletId).length > 0
       : false,
   )
 
@@ -191,10 +191,10 @@ export function SendFlow() {
   }, [step])
 
   const fiatDenominationMode = useFiatDenominationStore(
-    (s) => s.fiatDenominationMode,
+    (fiatDenominationState) => fiatDenominationState.fiatDenominationMode,
   )
   const defaultFiatCurrency = useFiatDenominationStore(
-    (s) => s.defaultFiatCurrency,
+    (fiatDenominationState) => fiatDenominationState.defaultFiatCurrency,
   )
   const mainnetFiatMode =
     networkMode === 'mainnet' && fiatDenominationMode

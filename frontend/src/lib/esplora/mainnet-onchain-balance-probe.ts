@@ -146,16 +146,16 @@ export async function listWalletsWithPositiveMainnetOnChainBalance(params: {
 }): Promise<MainnetPositiveWalletRow[]> {
   const { password, wallets } = params
   const rows: MainnetPositiveWalletRow[] = []
-  for (const w of wallets) {
+  for (const walletRow of wallets) {
     const totalSats = await sumMainnetOnChainSatsForWallet({
       password,
-      walletId: w.wallet_id,
+      walletId: walletRow.wallet_id,
     })
     if (totalSats > 0) {
-      const trimmed = w.name.trim()
+      const trimmed = walletRow.name.trim()
       rows.push({
-        walletId: w.wallet_id,
-        name: trimmed.length > 0 ? trimmed : `Wallet ${w.wallet_id}`,
+        walletId: walletRow.wallet_id,
+        name: trimmed.length > 0 ? trimmed : `Wallet ${walletRow.wallet_id}`,
         totalSats,
       })
     }

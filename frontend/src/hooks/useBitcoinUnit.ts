@@ -9,7 +9,7 @@ import { useBitcoinDisplayUnitStore } from '@/stores/bitcoinDisplayUnitStore'
  */
 export function useBitcoinUnit() {
   const queryClient = useQueryClient()
-  const defaultBitcoinUnit = useBitcoinDisplayUnitStore((s) => s.defaultBitcoinUnit)
+  const defaultBitcoinUnit = useBitcoinDisplayUnitStore((bitcoinDisplayUnitState) => bitcoinDisplayUnitState.defaultBitcoinUnit)
 
   const query = useQuery({
     queryKey: bitcoinUnitQueryKey,

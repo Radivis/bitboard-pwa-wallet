@@ -49,15 +49,15 @@ pub struct WalletBackupManifest {
 }
 
 fn double_sha256_hex(sqlite_bytes: &[u8]) -> String {
-    let first = Sha256::digest(sqlite_bytes);
-    let second = Sha256::digest(first);
-    hex::encode(second)
+    let first_sha256_digest = Sha256::digest(sqlite_bytes);
+    let double_sha256_digest = Sha256::digest(first_sha256_digest);
+    hex::encode(double_sha256_digest)
 }
 
 fn double_sha256_bytes(sqlite_bytes: &[u8]) -> [u8; 32] {
-    let first = Sha256::digest(sqlite_bytes);
-    let second = Sha256::digest(first);
-    second.into()
+    let first_sha256_digest = Sha256::digest(sqlite_bytes);
+    let double_sha256_digest = Sha256::digest(first_sha256_digest);
+    double_sha256_digest.into()
 }
 
 fn keypair_from_password(

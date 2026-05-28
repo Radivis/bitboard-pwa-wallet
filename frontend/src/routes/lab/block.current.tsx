@@ -22,8 +22,8 @@ export const Route = createFileRoute('/lab/block/current')({
 function LabCurrentBlockPage() {
   const [block, setBlock] = useState<LabBlockDetails | null | undefined>(undefined)
   const { data: wallets = [] } = useWallets()
-  const activeWalletId = useWalletStore((s) => s.activeWalletId)
-  const currentAddress = useWalletStore((s) => s.currentAddress)
+  const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
+  const currentAddress = useWalletStore((walletState) => walletState.currentAddress)
   const labAddressType = useWalletStore(selectCommittedAddressType)
   const labPageData = useLabIndexPageData()
 

@@ -121,8 +121,8 @@ fn derive_descriptors_returns_valid_jsvalue() {
     let mnemonic = generate_mnemonic(12).expect("generate failed");
     let result = derive_descriptors(&mnemonic, "testnet", "taproot", 0).expect("derive failed");
 
-    let pair: serde_wasm_bindgen::Serializer = serde_wasm_bindgen::Serializer::json_compatible();
-    let _ = pair;
+    let json_compatible_serializer = serde_wasm_bindgen::Serializer::json_compatible();
+    let _ = json_compatible_serializer;
 
     let external = js_sys::Reflect::get(&result, &JsValue::from_str("external"))
         .expect("missing 'external' field");

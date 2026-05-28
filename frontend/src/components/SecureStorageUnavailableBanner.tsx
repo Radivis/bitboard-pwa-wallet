@@ -9,10 +9,10 @@ import { useSecureStorageAvailabilityStore } from '@/stores/secureStorageAvailab
 export function SecureStorageUnavailableBanner() {
   const { isAvailable, lastErrorMessage, opfsLikelyUnsupported } =
     useSecureStorageAvailabilityStore(
-      useShallow((s) => ({
-        isAvailable: s.isAvailable,
-        lastErrorMessage: s.lastErrorMessage,
-        opfsLikelyUnsupported: s.opfsLikelyUnsupported,
+      useShallow((secureStorageAvailabilityState) => ({
+        isAvailable: secureStorageAvailabilityState.isAvailable,
+        lastErrorMessage: secureStorageAvailabilityState.lastErrorMessage,
+        opfsLikelyUnsupported: secureStorageAvailabilityState.opfsLikelyUnsupported,
       })),
     )
 

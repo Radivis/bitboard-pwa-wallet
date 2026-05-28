@@ -79,11 +79,11 @@ export function useNavigatorOnline(): boolean {
 }
 
 function useLightningDashboardQueryBase() {
-  const lightningEnabled = useFeatureStore((s) => s.lightningEnabled)
-  const networkMode = useWalletStore((s) => s.networkMode)
-  const activeWalletId = useWalletStore((s) => s.activeWalletId)
-  const walletStatus = useWalletStore((s) => s.walletStatus)
-  const connectedWallets = useLightningStore((s) => s.connectedWallets)
+  const lightningEnabled = useFeatureStore((featureState) => featureState.lightningEnabled)
+  const networkMode = useWalletStore((walletState) => walletState.networkMode)
+  const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
+  const walletStatus = useWalletStore((walletState) => walletState.walletStatus)
+  const connectedWallets = useLightningStore((lightningState) => lightningState.connectedWallets)
   const isOnline = useNavigatorOnline()
 
   const matchingConnections = useMemo(
@@ -274,9 +274,9 @@ export function useTestConnectionMutation() {
 }
 
 export function useCreateInvoiceMutation(onCreated: () => void) {
-  const networkMode = useWalletStore((s) => s.networkMode)
-  const createInvoice = useLightningStore((s) => s.createInvoice)
-  const addSessionInvoice = useReceiveStore((s) => s.addSessionInvoice)
+  const networkMode = useWalletStore((walletState) => walletState.networkMode)
+  const createInvoice = useLightningStore((lightningState) => lightningState.createInvoice)
+  const addSessionInvoice = useReceiveStore((receiveState) => receiveState.addSessionInvoice)
 
   return useMutation({
     mutationFn: async (params: {

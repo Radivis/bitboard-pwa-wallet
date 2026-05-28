@@ -51,7 +51,7 @@ function RenameLightningWalletDialog({
   open: boolean
   onOpenChange: (open: boolean) => void
 }) {
-  const renameConnection = useLightningStore((s) => s.renameConnection)
+  const renameConnection = useLightningStore((lightningState) => lightningState.renameConnection)
   const [draftLabel, setDraftLabel] = useState('')
   const [savePending, setSavePending] = useState(false)
 
@@ -266,9 +266,9 @@ function WalletRow({
 }
 
 function ConnectWalletForm({ onConnected }: { onConnected: () => void }) {
-  const activeWalletId = useWalletStore((s) => s.activeWalletId)
-  const addConnection = useLightningStore((s) => s.addConnection)
-  const isInfomodeActive = useInfomodeStore((s) => s.isActive)
+  const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
+  const addConnection = useLightningStore((lightningState) => lightningState.addConnection)
+  const isInfomodeActive = useInfomodeStore((infomodeState) => infomodeState.isActive)
 
   const [label, setLabel] = useState('')
   const [connectionString, setConnectionString] = useState('')
@@ -471,9 +471,9 @@ function ConnectWalletForm({ onConnected }: { onConnected: () => void }) {
 }
 
 export function LightningWallets() {
-  const activeWalletId = useWalletStore((s) => s.activeWalletId)
-  const connectedWallets = useLightningStore((s) => s.connectedWallets)
-  const activeConnectionIds = useLightningStore((s) => s.activeConnectionIds)
+  const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
+  const connectedWallets = useLightningStore((lightningState) => lightningState.connectedWallets)
+  const activeConnectionIds = useLightningStore((lightningState) => lightningState.activeConnectionIds)
 
   const connections = useMemo(
     () =>
@@ -482,8 +482,8 @@ export function LightningWallets() {
         : [],
     [connectedWallets, activeWalletId],
   )
-  const setActiveConnection = useLightningStore((s) => s.setActiveConnection)
-  const removeConnection = useLightningStore((s) => s.removeConnection)
+  const setActiveConnection = useLightningStore((lightningState) => lightningState.setActiveConnection)
+  const removeConnection = useLightningStore((lightningState) => lightningState.removeConnection)
 
   const [showConnectForm, setShowConnectForm] = useState(false)
 

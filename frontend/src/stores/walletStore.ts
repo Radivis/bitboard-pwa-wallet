@@ -90,17 +90,17 @@ interface TransientWalletState {
 }
 
 interface WalletActions {
-  setNetworkMode: (mode: NetworkMode) => void
-  setAddressType: (type: AddressType) => void
-  setAccountId: (id: number) => void
+  setNetworkMode: (networkMode: NetworkMode) => void
+  setAddressType: (addressType: AddressType) => void
+  setAccountId: (accountId: number) => void
   /** Persists network/address/account and sets `loadedSubWallet` together (use after a successful WASM load). */
-  commitLoadedSubWallet: (sub: LoadedSubWallet) => void
-  setActiveWallet: (id: number | null) => void
-  setWalletStatus: (status: WalletStatus) => void
+  commitLoadedSubWallet: (loadedSubWallet: LoadedSubWallet) => void
+  setActiveWallet: (walletId: number | null) => void
+  setWalletStatus: (walletStatus: WalletStatus) => void
   setBalance: (balance: BalanceInfo | null) => void
   setCurrentAddress: (address: string | null) => void
-  setLastSyncTime: (time: Date | null) => void
-  setTransactions: (txs: TransactionDetails[]) => void
+  setLastSyncTime: (lastSyncTime: Date | null) => void
+  setTransactions: (transactions: TransactionDetails[]) => void
   setActiveWalletBootstrapInFlight: (inFlight: boolean) => void
   setManualWalletUnlockInFlight: (inFlight: boolean) => void
   setImportInitialSyncErrorMessage: (message: string | null) => void
@@ -132,22 +132,22 @@ export const useWalletStore = create<WalletState>()(
 
       ...TRANSIENT_DEFAULTS,
 
-      setNetworkMode: (mode) => set({ networkMode: mode }),
-      setAddressType: (type) => set({ addressType: type }),
-      setAccountId: (id) => set({ accountId: id }),
-      commitLoadedSubWallet: (sub) =>
+      setNetworkMode: (networkMode) => set({ networkMode }),
+      setAddressType: (addressType) => set({ addressType }),
+      setAccountId: (accountId) => set({ accountId }),
+      commitLoadedSubWallet: (loadedSubWallet) =>
         set({
-          networkMode: sub.networkMode,
-          addressType: sub.addressType,
-          accountId: sub.accountId,
-          loadedSubWallet: sub,
+          networkMode: loadedSubWallet.networkMode,
+          addressType: loadedSubWallet.addressType,
+          accountId: loadedSubWallet.accountId,
+          loadedSubWallet,
         }),
-      setActiveWallet: (id) => set({ activeWalletId: id }),
-      setWalletStatus: (status) => set({ walletStatus: status }),
+      setActiveWallet: (walletId) => set({ activeWalletId: walletId }),
+      setWalletStatus: (walletStatus) => set({ walletStatus }),
       setBalance: (balance) => set({ balance }),
       setCurrentAddress: (address) => set({ currentAddress: address }),
-      setLastSyncTime: (time) => set({ lastSyncTime: time }),
-      setTransactions: (txs) => set({ transactions: txs }),
+      setLastSyncTime: (lastSyncTime) => set({ lastSyncTime }),
+      setTransactions: (transactions) => set({ transactions }),
       setActiveWalletBootstrapInFlight: (inFlight) =>
         set({ activeWalletBootstrapInFlight: inFlight }),
       setManualWalletUnlockInFlight: (inFlight) =>

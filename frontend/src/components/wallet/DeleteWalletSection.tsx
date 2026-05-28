@@ -28,8 +28,8 @@ export function DeleteWalletSection({
   onAutoOpenConsumed,
 }: DeleteWalletSectionProps) {
   const navigate = useNavigate()
-  const activeWalletId = useWalletStore((s) => s.activeWalletId)
-  const walletStatus = useWalletStore((s) => s.walletStatus)
+  const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
+  const walletStatus = useWalletStore((walletState) => walletState.walletStatus)
   const { data: walletRow } = useWallet(activeWalletId)
   const { data: wallets = [] } = useWallets()
   const { data: noMnemonicBackupFlag = false } = useWalletNoMnemonicBackupFlag(activeWalletId)
@@ -41,7 +41,7 @@ export function DeleteWalletSection({
   const [probingMainnet, setProbingMainnet] = useState(false)
 
   const walletName = walletRow?.name?.trim() || 'this wallet'
-  const sessionPassword = useSessionStore((s) => s.password)
+  const sessionPassword = useSessionStore((sessionState) => sessionState.password)
   const canAttemptDelete = walletStatus === 'unlocked' && sessionPassword != null
 
   useEffect(() => {

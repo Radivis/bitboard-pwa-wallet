@@ -49,11 +49,11 @@ const NETWORK_INFOMODE: Record<NetworkMode, { title: string; text: string }> = {
 
 export function NetworkSelector() {
   const displayNetworkMode = useWalletStore(selectCommittedNetworkMode)
-  const mainnetAccessEnabled = useFeatureStore((s) => s.mainnetAccessEnabled)
-  const regtestModeEnabled = useFeatureStore((s) => s.regtestModeEnabled)
-  const activeWalletId = useWalletStore((s) => s.activeWalletId)
-  const sessionPassword = useSessionStore((s) => s.password)
-  const nearZeroActive = useNearZeroSecurityStore((s) => s.active)
+  const mainnetAccessEnabled = useFeatureStore((featureState) => featureState.mainnetAccessEnabled)
+  const regtestModeEnabled = useFeatureStore((featureState) => featureState.regtestModeEnabled)
+  const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
+  const sessionPassword = useSessionStore((sessionState) => sessionState.password)
+  const nearZeroActive = useNearZeroSecurityStore((nearZeroSecurityState) => nearZeroSecurityState.active)
 
   const mainnetSelectionBlocked =
     !mainnetAccessEnabled && displayNetworkMode !== 'mainnet'

@@ -119,14 +119,14 @@ export function LabBlockMetadataCard({
   const entities = labState?.entities ?? []
   const txDetails = labState?.txDetails ?? []
   const netMovedSats = netMovedSatsForBlock(txDetails, block.metadata.height)
-  const mineOp = labState?.mineOperations?.find(
-    (mineOperation) => mineOperation.height === block.metadata.height,
+  const mineOperation = labState?.mineOperations?.find(
+    (mineOperationRecord) => mineOperationRecord.height === block.metadata.height,
   )
   const weightAtMiningRecorded =
-    mineOp?.blockWeightLimitWu != null &&
-    mineOp?.nonCoinbaseWeightUsedWu != null &&
-    Number.isFinite(mineOp.blockWeightLimitWu) &&
-    Number.isFinite(mineOp.nonCoinbaseWeightUsedWu)
+    mineOperation?.blockWeightLimitWu != null &&
+    mineOperation?.nonCoinbaseWeightUsedWu != null &&
+    Number.isFinite(mineOperation.blockWeightLimitWu) &&
+    Number.isFinite(mineOperation.nonCoinbaseWeightUsedWu)
 
   return (
     <InfomodeWrapper
@@ -170,11 +170,11 @@ export function LabBlockMetadataCard({
             <span className="text-muted-foreground">Net moved:</span>{' '}
             <BitcoinAmountDisplay amountSats={netMovedSats} size="sm" />
           </p>
-          {weightAtMiningRecorded && mineOp != null ? (
+          {weightAtMiningRecorded && mineOperation != null ? (
             <p>
               <span className="text-muted-foreground">Non-coinbase weight (at mining):</span>{' '}
               <span className="font-mono tabular-nums">
-                {mineOp.nonCoinbaseWeightUsedWu} / {mineOp.blockWeightLimitWu} WU
+                {mineOperation.nonCoinbaseWeightUsedWu} / {mineOperation.blockWeightLimitWu} WU
               </span>
             </p>
           ) : null}
@@ -248,7 +248,7 @@ export function LabBlockTransactionsCard({
   const [pageIndex, setPageIndex] = useState(0)
   const isTemplate = block.isTemplate
   const blockHeight = block.metadata.height
-  const labNetworkEnabled = useWalletStore((s) => s.networkMode === 'lab')
+  const labNetworkEnabled = useWalletStore((walletState) => walletState.networkMode === 'lab')
   const { data: labState } = useLabChainStateQuery()
   const entities = labState?.entities ?? []
 

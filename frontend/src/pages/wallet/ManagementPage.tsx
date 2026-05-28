@@ -11,9 +11,9 @@ import { LightningWallets } from '@/components/wallet/LightningWallets'
 export function ManagementPage() {
   const navigate = useNavigate({ from: '/wallet/management' })
   const { openDelete } = useSearch({ from: '/wallet/management' })
-  const activeWalletId = useWalletStore((s) => s.activeWalletId)
-  const networkMode = useWalletStore((s) => s.networkMode)
-  const lightningEnabled = useFeatureStore((s) => s.lightningEnabled)
+  const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
+  const networkMode = useWalletStore((walletState) => walletState.networkMode)
+  const lightningEnabled = useFeatureStore((featureState) => featureState.lightningEnabled)
   const showLightningWallets = lightningEnabled && isLightningSupported(networkMode)
 
   return (

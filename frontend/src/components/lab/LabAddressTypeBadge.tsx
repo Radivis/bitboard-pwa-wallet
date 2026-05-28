@@ -4,7 +4,7 @@ import { useFeatureStore } from '@/stores/featureStore'
 import type { AddressType } from '@/lib/wallet/wallet-domain-types'
 
 export function LabAddressTypeBadge({ addressType }: { addressType: AddressType }) {
-  const segwitAddressesEnabled = useFeatureStore((s) => s.segwitAddressesEnabled)
+  const segwitAddressesEnabled = useFeatureStore((featureState) => featureState.segwitAddressesEnabled)
   if (!segwitAddressesEnabled) return null
   return (
     <Badge variant="secondary" className="font-normal">

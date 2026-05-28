@@ -49,7 +49,7 @@ export function LabBlocksCard({
   currentAddress: string | null
   activeWallet: { name: string } | undefined
 }) {
-  const segwitAddressesEnabled = useFeatureStore((s) => s.segwitAddressesEnabled)
+  const segwitAddressesEnabled = useFeatureStore((featureState) => featureState.segwitAddressesEnabled)
   const livingEntities = entities.filter((entity) => !entity.isDead)
   const noLivingEntities =
     ownerType === LabOwnerType.LabEntity && livingEntities.length === 0

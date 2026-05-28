@@ -20,12 +20,12 @@ export function BitcoinFiatDenominationSwitch({
   className,
   onFiatModeChange,
 }: BitcoinFiatDenominationSwitchProps) {
-  const fiatMode = useFiatDenominationStore((s) => s.fiatDenominationMode)
+  const fiatMode = useFiatDenominationStore((fiatDenominationState) => fiatDenominationState.fiatDenominationMode)
   const setFiatDenominationMode = useFiatDenominationStore(
-    (s) => s.setFiatDenominationMode,
+    (fiatDenominationState) => fiatDenominationState.setFiatDenominationMode,
   )
   const defaultFiatCurrency = useFiatDenominationStore(
-    (s) => s.defaultFiatCurrency,
+    (fiatDenominationState) => fiatDenominationState.defaultFiatCurrency,
   )
   const fiatSymbol = getFiatCurrencyUiMeta(defaultFiatCurrency).symbol
 

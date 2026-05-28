@@ -441,8 +441,8 @@ export function WalletLayout({ children }: WalletLayoutProps) {
   const showLabSubNav = !isSetupRoute && isLabSectionPath(location.pathname)
   const showSettingsSubNav = !isSetupRoute && isSettingsSectionPath(location.pathname)
 
-  const activeWalletId = useWalletStore((s) => s.activeWalletId)
-  const sessionPassword = useSessionStore((s) => s.password)
+  const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
+  const sessionPassword = useSessionStore((sessionState) => sessionState.password)
   const { data: activeWalletRow, isSuccess: activeWalletLoaded } = useWallet(activeWalletId)
   const walletDisplayName =
     activeWalletId && activeWalletLoaded && activeWalletRow?.name

@@ -28,19 +28,19 @@ import {
 } from '@/lib/fiat/fiat-rate-service-whitelist'
 
 export function SettingsMainPage() {
-  const segwitAddressesEnabled = useFeatureStore((s) => s.segwitAddressesEnabled)
+  const segwitAddressesEnabled = useFeatureStore((featureState) => featureState.segwitAddressesEnabled)
   const { data: wallets } = useWallets()
   const hasWallets = (wallets?.length ?? 0) > 0
-  const defaultBitcoinUnit = useBitcoinDisplayUnitStore((s) => s.defaultBitcoinUnit)
+  const defaultBitcoinUnit = useBitcoinDisplayUnitStore((bitcoinDisplayUnitState) => bitcoinDisplayUnitState.defaultBitcoinUnit)
   const setDefaultBitcoinUnit = useBitcoinDisplayUnitStore(
-    (s) => s.setDefaultBitcoinUnit,
+    (bitcoinDisplayUnitState) => bitcoinDisplayUnitState.setDefaultBitcoinUnit,
   )
-  const defaultFiatCurrency = useFiatDenominationStore((s) => s.defaultFiatCurrency)
+  const defaultFiatCurrency = useFiatDenominationStore((fiatDenominationState) => fiatDenominationState.defaultFiatCurrency)
   const setDefaultFiatCurrency = useFiatDenominationStore(
-    (s) => s.setDefaultFiatCurrency,
+    (fiatDenominationState) => fiatDenominationState.setDefaultFiatCurrency,
   )
-  const fiatRateProvider = useFiatDenominationStore((s) => s.fiatRateProvider)
-  const setFiatRateProvider = useFiatDenominationStore((s) => s.setFiatRateProvider)
+  const fiatRateProvider = useFiatDenominationStore((fiatDenominationState) => fiatDenominationState.fiatRateProvider)
+  const setFiatRateProvider = useFiatDenominationStore((fiatDenominationState) => fiatDenominationState.setFiatRateProvider)
 
   const fiatProviderSupportedCurrenciesQuery = useFiatProviderSupportedCurrenciesQuery(
     fiatRateProvider,

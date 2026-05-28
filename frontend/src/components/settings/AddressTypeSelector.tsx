@@ -10,10 +10,10 @@ const ADDRESS_SWITCH_SPINNER_CLASS =
   'flex-row items-start justify-start gap-2 py-1 [&_.animate-spin]:mt-0.5 [&_.animate-spin]:h-4 [&_.animate-spin]:w-4 [&_p]:max-w-[min(100%,28rem)] [&_p]:text-left [&_p]:leading-snug'
 
 export function AddressTypeSelector() {
-  const addressType = useWalletStore((s) => s.addressType)
-  const setAddressType = useWalletStore((s) => s.setAddressType)
-  const activeWalletId = useWalletStore((s) => s.activeWalletId)
-  const walletStatus = useWalletStore((s) => s.walletStatus)
+  const addressType = useWalletStore((walletState) => walletState.addressType)
+  const setAddressType = useWalletStore((walletState) => walletState.setAddressType)
+  const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
+  const walletStatus = useWalletStore((walletState) => walletState.walletStatus)
   const [showWarning, setShowWarning] = useState(false)
   const [pendingType, setPendingType] = useState<AddressType | null>(null)
 

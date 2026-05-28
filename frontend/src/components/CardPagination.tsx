@@ -72,7 +72,7 @@ export function CardPagination({
               if (!Number.isNaN(next)) onPageChange(next - 1)
             }}
           >
-            {Array.from({ length: totalPages }, (_, pageIndex) => pageIndex + 1).map(
+            {Array.from({ length: totalPages }, (_, pageNumberIndex) => pageNumberIndex + 1).map(
               (pageNumberOneBased) => (
               <option key={pageNumberOneBased} value={pageNumberOneBased}>
                 {pageNumberOneBased} / {totalPages}

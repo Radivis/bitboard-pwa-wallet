@@ -14,19 +14,19 @@ import { useWalletCryptoSessionPathGateStore } from '@/stores/walletCryptoSessio
  * Safe to call from multiple components — they share one cache entry per key.
  */
 export function useActiveWalletLoadQuery() {
-  const sessionPassword = useSessionStore((s) => s.password)
-  const activeWalletId = useWalletStore((s) => s.activeWalletId)
-  const networkMode = useWalletStore((s) => s.networkMode)
-  const addressType = useWalletStore((s) => s.addressType)
-  const accountId = useWalletStore((s) => s.accountId)
-  const walletStatus = useWalletStore((s) => s.walletStatus)
+  const sessionPassword = useSessionStore((sessionState) => sessionState.password)
+  const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
+  const networkMode = useWalletStore((walletState) => walletState.networkMode)
+  const addressType = useWalletStore((walletState) => walletState.addressType)
+  const accountId = useWalletStore((walletState) => walletState.accountId)
+  const walletStatus = useWalletStore((walletState) => walletState.walletStatus)
   const activeWalletBootstrapInFlight = useWalletStore(
-    (s) => s.activeWalletBootstrapInFlight,
+    (walletState) => walletState.activeWalletBootstrapInFlight,
   )
   const manualWalletUnlockInFlight = useWalletStore(
-    (s) => s.manualWalletUnlockInFlight,
+    (walletState) => walletState.manualWalletUnlockInFlight,
   )
-  const pathname = useWalletCryptoSessionPathGateStore((s) => s.pathname)
+  const pathname = useWalletCryptoSessionPathGateStore((walletCryptoSessionPathGateState) => walletCryptoSessionPathGateState.pathname)
   const onWalletCryptoRoute = pathnameRequiresWalletCryptoSession(pathname)
 
   /**

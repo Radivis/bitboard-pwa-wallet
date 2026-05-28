@@ -15,12 +15,12 @@ import { useWalletStore } from '@/stores/walletStore'
 export function PostLockPrivacyBanner() {
   const navigate = useNavigate()
   const [returnUnlockOpen, setReturnUnlockOpen] = useState(false)
-  const privacyRedirect = usePostLockPrivacyRedirectStore((s) => s.privacyRedirect)
+  const privacyRedirect = usePostLockPrivacyRedirectStore((postLockPrivacyRedirectState) => postLockPrivacyRedirectState.privacyRedirect)
   const dismiss = usePostLockPrivacyRedirectStore(
-    (s) => s.dismissPrivacyRedirectBanner,
+    (postLockPrivacyRedirectState) => postLockPrivacyRedirectState.dismissPrivacyRedirectBanner,
   )
-  const nearZeroActive = useNearZeroSecurityStore((s) => s.active)
-  const activeWalletId = useWalletStore((s) => s.activeWalletId)
+  const nearZeroActive = useNearZeroSecurityStore((nearZeroSecurityState) => nearZeroSecurityState.active)
+  const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
   const { data: activeWalletRow, isSuccess: walletRowLoaded } =
     useWallet(activeWalletId)
   const walletDisplayName =

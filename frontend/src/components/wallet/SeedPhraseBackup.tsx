@@ -22,7 +22,7 @@ import { MnemonicGrid } from '@/components/MnemonicGrid'
 
 export function SeedPhraseBackup() {
   const queryClient = useQueryClient()
-  const activeWalletId = useWalletStore((s) => s.activeWalletId)
+  const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
   const { data: noMnemonicBackupFlag = false } =
     useWalletNoMnemonicBackupFlag(activeWalletId)
   const [showPasswordPrompt, setShowPasswordPrompt] = useState(false)
