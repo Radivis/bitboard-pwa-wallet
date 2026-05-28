@@ -94,7 +94,7 @@ pub fn lab_entity_get_current_external_address(
     address_type: AddressType,
     account_id: u32,
 ) -> Result<String, CryptoError> {
-    let (wallet, _) =
+    let (wallet, _ignored_persisted_changeset) =
         open_lab_entity_wallet(mnemonic, changeset_json, network, address_type, account_id)?;
     Ok(get_current_address(&wallet))
 }
@@ -207,7 +207,7 @@ pub fn lab_entity_build_and_sign_lab_transaction(
         .address
         .to_string();
 
-    let outcome = lab_psbt::prepare_build_and_sign_lab_transaction(
+    let lab_send_outcome = lab_psbt::prepare_build_and_sign_lab_transaction(
         &mut wallet,
         args.utxos_json,
         args.to_address,
@@ -218,7 +218,7 @@ pub fn lab_entity_build_and_sign_lab_transaction(
     )?;
     merge_staged_changeset(&mut wallet, &mut persisted_changeset)?;
 
-    let change_address = if outcome.has_change {
+    let change_address = if lab_send_outcome.has_change {
         let revealed = wallet.reveal_next_address(KeychainKind::Internal);
         merge_staged_changeset(&mut wallet, &mut persisted_changeset)?;
         let revealed_str = revealed.address.to_string();
@@ -231,16 +231,16 @@ pub fn lab_entity_build_and_sign_lab_transaction(
     let changeset_json = serialize_changeset(&persisted_changeset)?;
 
     Ok(LabEntitySignResult {
-        signed_tx_hex: outcome.signed_tx_hex,
-        fee_sats: outcome.fee_sats,
-        has_change: outcome.has_change,
+        signed_tx_hex: lab_send_outcome.signed_tx_hex,
+        fee_sats: lab_send_outcome.fee_sats,
+        has_change: lab_send_outcome.has_change,
         changeset_json,
         change_address,
-        final_amount_sats: outcome.final_amount_sats,
-        original_amount_sats: outcome.original_amount_sats,
-        raised_to_min_dust: outcome.raised_to_min_dust,
-        bumped_change_free: outcome.bumped_change_free,
-        change_free_bump_available: outcome.change_free_bump_available,
-        change_free_max_sats: outcome.change_free_max_sats,
+        final_amount_sats: lab_send_outcome.final_amount_sats,
+        original_amount_sats: lab_send_outcome.original_amount_sats,
+        raised_to_min_dust: lab_send_outcome.raised_to_min_dust,
+        bumped_change_free: lab_send_outcome.bumped_change_free,
+        change_free_bump_available: lab_send_outcome.change_free_bump_available,
+        change_free_max_sats: lab_send_outcome.change_free_max_sats,
     })
 }

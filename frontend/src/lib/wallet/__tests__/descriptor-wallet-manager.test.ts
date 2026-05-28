@@ -78,7 +78,7 @@ async function mockResolveDescriptorWallet(params: {
     lightningNwcConnections: walletSecretsPayload.lightningNwcConnections,
   }
   const existing = findDescriptorWallet({
-    secrets: secretsLike,
+    secretsPayload: secretsLike,
     network: targetNetwork,
     addressType: targetAddressType,
     accountId: targetAccountId,
@@ -140,7 +140,7 @@ async function mockUpdateDescriptorWalletChangeset(params: {
     descriptorWallets: walletSecretsPayload.descriptorWallets,
     lightningNwcConnections: walletSecretsPayload.lightningNwcConnections ?? [],
   }
-  const descriptorWallet = findDescriptorWallet({ secrets: secretsLike, network, addressType, accountId })
+  const descriptorWallet = findDescriptorWallet({ secretsPayload: secretsLike, network, addressType, accountId })
   if (!descriptorWallet) {
     throw new Error(`No descriptor wallet found for ${network}/${addressType}/${accountId}`)
   }
@@ -196,7 +196,7 @@ describe('findDescriptorWallet', () => {
 
   it('returns matching descriptor wallet for signet/taproot/0', () => {
     const result = findDescriptorWallet({
-      secrets,
+      secretsPayload: secrets,
       network: 'signet',
       addressType: 'taproot',
       accountId: 0,
@@ -206,7 +206,7 @@ describe('findDescriptorWallet', () => {
 
   it('returns matching descriptor wallet for testnet/segwit/0', () => {
     const result = findDescriptorWallet({
-      secrets,
+      secretsPayload: secrets,
       network: 'testnet',
       addressType: 'segwit',
       accountId: 0,
@@ -216,7 +216,7 @@ describe('findDescriptorWallet', () => {
 
   it('returns matching descriptor wallet for signet/taproot/1', () => {
     const result = findDescriptorWallet({
-      secrets,
+      secretsPayload: secrets,
       network: 'signet',
       addressType: 'taproot',
       accountId: 1,
@@ -226,7 +226,7 @@ describe('findDescriptorWallet', () => {
 
   it('returns undefined when no match for network', () => {
     const result = findDescriptorWallet({
-      secrets,
+      secretsPayload: secrets,
       network: 'mainnet',
       addressType: 'taproot',
       accountId: 0,
@@ -236,7 +236,7 @@ describe('findDescriptorWallet', () => {
 
   it('returns undefined when no match for address type', () => {
     const result = findDescriptorWallet({
-      secrets,
+      secretsPayload: secrets,
       network: 'signet',
       addressType: 'segwit',
       accountId: 0,
@@ -246,7 +246,7 @@ describe('findDescriptorWallet', () => {
 
   it('returns undefined when no match for account id', () => {
     const result = findDescriptorWallet({
-      secrets,
+      secretsPayload: secrets,
       network: 'signet',
       addressType: 'taproot',
       accountId: 2,
@@ -257,7 +257,7 @@ describe('findDescriptorWallet', () => {
   it('returns undefined when descriptorWallets is empty', () => {
     const emptySecrets: WalletSecrets = { ...secrets, descriptorWallets: [] }
     const result = findDescriptorWallet({
-      secrets: emptySecrets,
+      secretsPayload: emptySecrets,
       network: 'signet',
       addressType: 'taproot',
       accountId: 0,

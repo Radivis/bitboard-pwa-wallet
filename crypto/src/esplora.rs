@@ -46,11 +46,11 @@ impl BlockchainClient for EsploraClient {
         parallel_requests: usize,
     ) -> Result<Update, CryptoError> {
         let request = wallet.start_full_scan_at(now);
-        let response = self
+        let bdk_chain_update = self
             .async_client
             .full_scan(request, stop_gap, parallel_requests)
             .await?;
-        Ok(response.into())
+        Ok(bdk_chain_update.into())
     }
 
     async fn sync(
@@ -60,8 +60,8 @@ impl BlockchainClient for EsploraClient {
         parallel_requests: usize,
     ) -> Result<Update, CryptoError> {
         let request = wallet.start_sync_with_revealed_spks_at(now);
-        let response = self.async_client.sync(request, parallel_requests).await?;
-        Ok(response.into())
+        let bdk_chain_update = self.async_client.sync(request, parallel_requests).await?;
+        Ok(bdk_chain_update.into())
     }
 
     async fn broadcast(&self, tx: &Transaction) -> Result<Txid, CryptoError> {

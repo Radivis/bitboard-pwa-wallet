@@ -142,7 +142,10 @@ describe('TanStack Query hooks', () => {
       expect(walletsResult.current.data![0].name).toBe('Original Name')
 
       await act(async () => {
-        await updateResult.current.mutateAsync({ id: walletId, changes: { name: 'Updated Name' } })
+        await updateResult.current.mutateAsync({
+          walletId,
+          walletChanges: { name: 'Updated Name' },
+        })
       })
 
       await waitFor(() => expect(walletsResult.current.data![0].name).toBe('Updated Name'))

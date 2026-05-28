@@ -238,7 +238,7 @@ export async function labOpCreateLabEntityTransaction(params: {
         },
       ]
 
-  const fullMetadata = {
+  const labMempoolTransactionMetadata = {
     ...prep.mempoolMetadata,
     feeSats,
     hasChange,
@@ -246,7 +246,7 @@ export async function labOpCreateLabEntityTransaction(params: {
     walletChangeAddress: hasChange ? (changeAddress as string) : '',
   }
 
-  if (fullMetadata.receiver == null) {
+  if (labMempoolTransactionMetadata.receiver == null) {
     throw new Error('labOpCreateLabEntityTransaction: receiver is required before finalize')
   }
 
@@ -256,7 +256,7 @@ export async function labOpCreateLabEntityTransaction(params: {
     const labWorker = getLabWorker()
     const state = await labWorker.finalizeLabEntityMempoolTransaction({
       signedTxHex,
-      mempoolMetadata: fullMetadata,
+      mempoolMetadata: labMempoolTransactionMetadata,
       labEntityId: params.labEntityId,
       newChangesetJson: changesetJson,
     })

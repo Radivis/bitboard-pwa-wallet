@@ -509,9 +509,9 @@ export function SendFlow() {
   }, [submitLabSend])
 
   const applyScannedPayload = useCallback(
-    (raw: string) => {
+    (scannedPayload: string) => {
       const { recipient: nextRecipient, amountStr } =
-        recipientAndAmountFromScannedPayload(raw, amountUnit)
+        recipientAndAmountFromScannedPayload(scannedPayload, amountUnit)
       setRecipient(nextRecipient)
       if (amountStr !== undefined) {
         if (

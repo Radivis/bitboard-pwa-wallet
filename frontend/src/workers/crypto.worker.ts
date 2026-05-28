@@ -40,7 +40,7 @@ function mapPrepareOrDraftReviewFields(parsed: Record<string, unknown>) {
 
 type BitboardCryptoModule = typeof import('@/wasm-pkg/bitboard_crypto');
 
-let wasm: BitboardCryptoModule | null = null;
+let cryptoWasmModule: BitboardCryptoModule | null = null;
 let wasmInitError: string | null = null;
 let secretsProxy: Remote<SecretsChannelService> | null = null;
 
@@ -57,10 +57,10 @@ async function getWasm(): Promise<BitboardCryptoModule> {
   if (wasmInitError) {
     throw new Error(`WASM init failed: ${wasmInitError}`);
   }
-  if (!wasm) {
-    wasm = await import('@/wasm-pkg/bitboard_crypto');
+  if (!cryptoWasmModule) {
+    cryptoWasmModule = await import('@/wasm-pkg/bitboard_crypto');
   }
-  return wasm;
+  return cryptoWasmModule;
 }
 
 /** Ensures structured `{ code, message }` WASM errors survive Comlink on the main thread. */
@@ -77,7 +77,7 @@ async function invokeWasmCrypto<T>(
 
 async function initWasm() {
   try {
-    wasm = await import('@/wasm-pkg/bitboard_crypto');
+    cryptoWasmModule = await import('@/wasm-pkg/bitboard_crypto');
     console.info('[crypto.worker] WASM module loaded successfully');
   } catch (err) {
     wasmInitError = err instanceof Error ? err.message : String(err);
@@ -124,13 +124,17 @@ async function encryptPlaintextToStoreFields(
   return encryptedBlobMessageToStoreFields(encryptedBlob);
 }
 
-function buildInitialWalletSecretsPayload(params: {
+function buildInitialWalletSecretsPayload({
+  network,
+  addressType,
+  accountId,
+  walletResult,
+}: {
   network: BitcoinNetwork;
   addressType: AddressType;
   accountId: number;
   walletResult: CreateWalletResult;
 }): WalletSecretsPayload {
-  const { network, addressType, accountId, walletResult } = params;
   return {
     descriptorWallets: [
       {
@@ -147,7 +151,11 @@ function buildInitialWalletSecretsPayload(params: {
   };
 }
 
-async function encryptWalletSecretsPayloadAndMnemonic(params: {
+async function encryptWalletSecretsPayloadAndMnemonic({
+  password,
+  payload,
+  mnemonicPlaintext,
+}: {
   password: string;
   payload: WalletSecretsPayload;
   mnemonicPlaintext: string;
@@ -155,7 +163,6 @@ async function encryptWalletSecretsPayloadAndMnemonic(params: {
   encryptedPayload: EncryptedBlobStoreFields;
   encryptedMnemonic: EncryptedBlobStoreFields;
 }> {
-  const { password, payload, mnemonicPlaintext } = params;
   const encryptedPayload = await encryptPlaintextToStoreFields(
     password,
     JSON.stringify(payload)
@@ -167,18 +174,22 @@ async function encryptWalletSecretsPayloadAndMnemonic(params: {
   return { encryptedPayload, encryptedMnemonic };
 }
 
-function findDescriptorWalletInPayload(params: {
+function findDescriptorWalletInPayload({
+  payload,
+  network,
+  addressType,
+  accountId,
+}: {
   payload: WalletSecretsPayload;
   network: BitcoinNetwork;
   addressType: AddressType;
   accountId: number;
 }): DescriptorWalletData | undefined {
-  const { payload, network, addressType, accountId } = params;
   return payload.descriptorWallets.find(
-    (dw) =>
-      dw.network === network &&
-      dw.addressType === addressType &&
-      dw.accountId === accountId
+    (descriptorWallet) =>
+      descriptorWallet.network === network &&
+      descriptorWallet.addressType === addressType &&
+      descriptorWallet.accountId === accountId
   );
 }
 

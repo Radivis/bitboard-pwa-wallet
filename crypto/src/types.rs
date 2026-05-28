@@ -13,13 +13,13 @@ pub enum AddressType {
 impl TryFrom<&str> for AddressType {
     type Error = CryptoError;
 
-    fn try_from(value: &str) -> Result<Self, Self::Error> {
-        match value {
+    fn try_from(address_type_str: &str) -> Result<Self, Self::Error> {
+        match address_type_str {
             "taproot" => Ok(AddressType::Taproot),
             "segwit" => Ok(AddressType::Segwit),
             _ => Err(CryptoError::Descriptor(format!(
                 "Unknown address type: {}",
-                value
+                address_type_str
             ))),
         }
     }
@@ -61,15 +61,15 @@ impl From<Network> for BitcoinNetwork {
 impl TryFrom<&str> for BitcoinNetwork {
     type Error = CryptoError;
 
-    fn try_from(value: &str) -> Result<Self, Self::Error> {
-        match value {
+    fn try_from(network_str: &str) -> Result<Self, Self::Error> {
+        match network_str {
             "bitcoin" => Ok(BitcoinNetwork::Bitcoin),
             "testnet" => Ok(BitcoinNetwork::Testnet),
             "signet" => Ok(BitcoinNetwork::Signet),
             "regtest" => Ok(BitcoinNetwork::Regtest),
             _ => Err(CryptoError::Descriptor(format!(
                 "Unknown network: {}",
-                value
+                network_str
             ))),
         }
     }

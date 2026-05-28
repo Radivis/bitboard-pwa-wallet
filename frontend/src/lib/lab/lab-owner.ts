@@ -54,19 +54,19 @@ export function labOwnerFromSortKey(key: string): LabOwner | null {
 /** Legacy `wallet:{id}` string → LabOwner. */
 export function labOwnerFromWalletOwnerKey(key: string): LabOwner | null {
   if (!key.startsWith(WALLET_OWNER_PREFIX)) return null
-  const id = parseInt(key.slice(WALLET_OWNER_PREFIX.length), 10)
-  if (Number.isNaN(id)) return null
-  return { kind: 'wallet', walletId: id }
+  const walletId = parseInt(key.slice(WALLET_OWNER_PREFIX.length), 10)
+  if (Number.isNaN(walletId)) return null
+  return { kind: 'wallet', walletId }
 }
 
 /** Normalize owner stored in JSON (string vs object). */
 export function normalizeJsonOwnerToLabOwner(
-  raw: unknown,
+  rawOwnerJson: unknown,
   _entities: readonly { labEntityId: number; entityName: string | null }[],
 ): LabOwner | null {
-  if (raw == null || raw === '') return null
-  if (typeof raw === 'object' && raw !== null && !Array.isArray(raw)) {
-    const candidateOwner = raw as Record<string, unknown>
+  if (rawOwnerJson == null || rawOwnerJson === '') return null
+  if (typeof rawOwnerJson === 'object' && rawOwnerJson !== null && !Array.isArray(rawOwnerJson)) {
+    const candidateOwner = rawOwnerJson as Record<string, unknown>
     if (candidateOwner.kind === 'wallet' && typeof candidateOwner.walletId === 'number') {
       return { kind: 'wallet', walletId: candidateOwner.walletId }
     }
@@ -74,8 +74,10 @@ export function normalizeJsonOwnerToLabOwner(
       return { kind: 'lab_entity', labEntityId: candidateOwner.labEntityId }
     }
   }
-  if (typeof raw === 'string') {
-    return labOwnerFromSortKey(raw) ?? labOwnerFromWalletOwnerKey(raw)
+  if (typeof rawOwnerJson === 'string') {
+    return (
+      labOwnerFromSortKey(rawOwnerJson) ?? labOwnerFromWalletOwnerKey(rawOwnerJson)
+    )
   }
   return null
 }

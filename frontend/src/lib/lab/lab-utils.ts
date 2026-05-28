@@ -31,9 +31,12 @@ export function walletOwnerKey(walletId: number): string {
 }
 
 /** Case-insensitive equality for bc1/tb1/bcrt1 addresses (matches lab worker / BIP173). */
-export function labBitcoinAddressesEqual(a: string, b: string): boolean {
-  const trimmedFirst = a.trim()
-  const trimmedSecond = b.trim()
+export function labBitcoinAddressesEqual(
+  firstAddress: string,
+  secondAddress: string,
+): boolean {
+  const trimmedFirst = firstAddress.trim()
+  const trimmedSecond = secondAddress.trim()
   if (trimmedFirst === trimmedSecond) return true
   if (/^(bc|tb|bcrt)1/i.test(trimmedFirst) && /^(bc|tb|bcrt)1/i.test(trimmedSecond)) {
     return trimmedFirst.toLowerCase() === trimmedSecond.toLowerCase()
@@ -229,12 +232,12 @@ export function labTransactionsForWallet(
     })
   }
 
-  for (const record of labState.transactions ?? []) {
-    const isSender = labOwnersEqual(record.sender, walletOwner)
-    const isReceiver = labOwnersEqual(record.receiver, walletOwner)
+  for (const labTransactionSummary of labState.transactions ?? []) {
+    const isSender = labOwnersEqual(labTransactionSummary.sender, walletOwner)
+    const isReceiver = labOwnersEqual(labTransactionSummary.receiver, walletOwner)
     if (!isSender && !isReceiver) continue
 
-    const details = txDetailsByTxid.get(record.txid)
+    const details = txDetailsByTxid.get(labTransactionSummary.txid)
     if (!details) continue
 
     if (isCoinbase(details)) {
@@ -242,7 +245,7 @@ export function labTransactionsForWallet(
         .filter((output) => labOwnersEqual(output.owner ?? null, walletOwner))
         .reduce((sumSats, output) => sumSats + output.amountSats, 0)
       walletTransactionDetails.push({
-        txid: record.txid,
+        txid: labTransactionSummary.txid,
         sent_sats: 0,
         received_sats: receivedSatsCoinbase,
         fee_sats: 0,
@@ -276,7 +279,7 @@ export function labTransactionsForWallet(
     const feeSats = totalInput - totalOutput
 
     walletTransactionDetails.push({
-      txid: record.txid,
+      txid: labTransactionSummary.txid,
       sent_sats: sentSats,
       received_sats: receivedSats,
       fee_sats: feeSats,

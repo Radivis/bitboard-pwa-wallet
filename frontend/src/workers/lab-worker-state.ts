@@ -17,10 +17,13 @@ export function replaceLabWorkerState(newState: LabState): void {
 export const txidToChangeOutput = new Map<string, { address: string; vout: number | null }>()
 
 /** Bech32 (bc1/tb1/bcrt1) addresses can differ by case; BIP173 compares case-insensitively. */
-export function labAddressesEqual(a: string, b: string): boolean {
-  if (a === b) return true
-  const trimmedFirst = a.trim()
-  const trimmedSecond = b.trim()
+export function labAddressesEqual(
+  firstAddress: string,
+  secondAddress: string,
+): boolean {
+  if (firstAddress === secondAddress) return true
+  const trimmedFirst = firstAddress.trim()
+  const trimmedSecond = secondAddress.trim()
   if (trimmedFirst === trimmedSecond) return true
   if (/^(bc|tb|bcrt)1/i.test(trimmedFirst) && /^(bc|tb|bcrt)1/i.test(trimmedSecond)) {
     return trimmedFirst.toLowerCase() === trimmedSecond.toLowerCase()
@@ -98,11 +101,11 @@ export function parseTxOperationPayload(
   if (!payloadJson) return {}
   try {
     const parsed = JSON.parse(payloadJson) as Record<string, unknown>
-    const rawRecv = parsed.receiver
+    const rawReceiverOwner = parsed.receiver
     const receiver =
-      rawRecv === undefined || rawRecv === null
+      rawReceiverOwner === undefined || rawReceiverOwner === null
         ? null
-        : normalizeJsonOwnerToLabOwner(rawRecv, entities)
+        : normalizeJsonOwnerToLabOwner(rawReceiverOwner, entities)
     return {
       receiver,
       primaryToAddress:

@@ -123,12 +123,16 @@ pub fn derive_descriptors(
     address_type: &str,
     account_id: u32,
 ) -> Result<JsValue, JsValue> {
-    let network = types::BitcoinNetwork::try_from(network).map_err(JsValue::from)?;
+    let bitcoin_network = types::BitcoinNetwork::try_from(network).map_err(JsValue::from)?;
     let address_type_enum = types::AddressType::try_from(address_type).map_err(JsValue::from)?;
 
-    let descriptor_pair =
-        descriptors::derive_descriptors(mnemonic_str, network, address_type_enum, account_id)
-            .map_err(JsValue::from)?;
+    let descriptor_pair = descriptors::derive_descriptors(
+        mnemonic_str,
+        bitcoin_network,
+        address_type_enum,
+        account_id,
+    )
+    .map_err(JsValue::from)?;
 
     serde_wasm_bindgen::to_value(&descriptor_pair).map_display_err_to_js()
 }
@@ -283,13 +287,13 @@ fn to_js<T: serde::Serialize>(value: &T) -> Result<JsValue, JsValue> {
 /// Returns a `SyncResult` with updated balance and changeset JSON.
 #[wasm_bindgen]
 pub async fn sync_wallet(esplora_url: &str) -> Result<JsValue, JsValue> {
-    let client = esplora::EsploraClient::new(esplora_url).map_err(JsValue::from)?;
+    let esplora_client = esplora::EsploraClient::new(esplora_url).map_err(JsValue::from)?;
 
     let sync_request =
         with_wallet(|wallet| wallet.start_sync_with_revealed_spks_at(current_unix_time()))?;
 
     use bdk_esplora::EsploraAsyncExt;
-    let update: bdk_wallet::Update = client
+    let update: bdk_wallet::Update = esplora_client
         .inner()
         .sync(sync_request, PARALLEL_REQUESTS)
         .await
@@ -308,12 +312,12 @@ pub async fn sync_wallet(esplora_url: &str) -> Result<JsValue, JsValue> {
 /// Returns a `SyncResult` with updated balance and changeset JSON.
 #[wasm_bindgen]
 pub async fn full_scan_wallet(esplora_url: &str, stop_gap: usize) -> Result<JsValue, JsValue> {
-    let client = esplora::EsploraClient::new(esplora_url).map_err(JsValue::from)?;
+    let esplora_client = esplora::EsploraClient::new(esplora_url).map_err(JsValue::from)?;
 
     let scan_request = with_wallet(|wallet| wallet.start_full_scan_at(current_unix_time()))?;
 
     use bdk_esplora::EsploraAsyncExt;
-    let update: bdk_wallet::Update = client
+    let update: bdk_wallet::Update = esplora_client
         .inner()
         .full_scan(scan_request, stop_gap, FULL_SCAN_PARALLEL_REQUESTS)
         .await
@@ -417,10 +421,13 @@ pub async fn broadcast_transaction(raw_tx_hex: &str, esplora_url: &str) -> Resul
     let tx_bytes = bitcoin::consensus::encode::deserialize_hex::<bitcoin::Transaction>(raw_tx_hex)
         .map_display_err_to_js()?;
 
-    let client = esplora::EsploraClient::new(esplora_url).map_err(JsValue::from)?;
+    let esplora_client = esplora::EsploraClient::new(esplora_url).map_err(JsValue::from)?;
 
     use crate::blockchain::BlockchainClient;
-    let txid = client.broadcast(&tx_bytes).await.map_err(JsValue::from)?;
+    let txid = esplora_client
+        .broadcast(&tx_bytes)
+        .await
+        .map_err(JsValue::from)?;
 
     Ok(txid.to_string())
 }

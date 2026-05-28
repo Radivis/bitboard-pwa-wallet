@@ -176,15 +176,18 @@ fn prepare_lab_psbt_inner(
     let mut change_free_bump_available = false;
     let mut change_free_max_sats = 0u64;
 
-    let unsigned = psbt.unsigned_tx.clone();
+    let unsigned_transaction = psbt.unsigned_tx.clone();
     let payment_script_pubkey = route.to_address.script_pubkey();
-    let single_recipient_only =
-        unsigned.output.len() == 1 && unsigned.output[0].script_pubkey == payment_script_pubkey;
+    let single_recipient_only = unsigned_transaction.output.len() == 1
+        && unsigned_transaction.output[0].script_pubkey == payment_script_pubkey;
 
     if single_recipient_only {
-        let min_total_fee = route.fee_rate.fee_wu(unsigned.weight()).ok_or_else(|| {
-            CryptoError::Transaction("Fee overflow for transaction weight".to_string())
-        })?;
+        let min_total_fee = route
+            .fee_rate
+            .fee_wu(unsigned_transaction.weight())
+            .ok_or_else(|| {
+                CryptoError::Transaction("Fee overflow for transaction weight".to_string())
+            })?;
         let max_recipient = total_in.saturating_sub(min_total_fee.to_sat());
         if max_recipient > final_payment_sats && max_recipient < total_in {
             change_free_bump_available = true;
@@ -194,7 +197,7 @@ fn prepare_lab_psbt_inner(
                 // PSBT can differ slightly in weight, so min fee can be a few sats higher and BDK
                 // can reject `max_recipient` as "Insufficient funds". Walk down until a build succeeds.
                 let mut try_payment_sats = max_recipient;
-                let mut last_err: Option<String> = None;
+                let mut last_build_failure_message: Option<String> = None;
                 while try_payment_sats > final_payment_sats {
                     match finish_lab_psbt(
                         wallet,
@@ -205,22 +208,24 @@ fn prepare_lab_psbt_inner(
                         route.satisfaction_weight,
                         route.fee_rate,
                     ) {
-                        Ok(psbt2) => {
-                            psbt = psbt2;
+                        Ok(change_free_psbt) => {
+                            psbt = change_free_psbt;
                             final_payment_sats = try_payment_sats;
                             bumped_change_free = true;
                             break;
                         }
-                        Err(e) => {
-                            last_err = Some(e.to_string());
+                        Err(build_error) => {
+                            last_build_failure_message = Some(build_error.to_string());
                             try_payment_sats = try_payment_sats.saturating_sub(1);
                         }
                     }
                 }
                 if !bumped_change_free {
-                    return Err(CryptoError::Transaction(last_err.unwrap_or_else(|| {
-                        "Change-free bump could not be built within available funds".to_string()
-                    })));
+                    return Err(CryptoError::Transaction(
+                        last_build_failure_message.unwrap_or_else(|| {
+                            "Change-free bump could not be built within available funds".to_string()
+                        }),
+                    ));
                 }
             }
         }

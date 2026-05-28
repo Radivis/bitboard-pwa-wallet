@@ -317,22 +317,22 @@ function createNwcBackendService(
 
     async listPayments() {
       const listTransactionsResponse = await client.listTransactions({})
-      return listTransactionsResponse.transactions.map((tx) => ({
-        paymentHash: tx.payment_hash,
-        pending: tx.state === 'pending',
-        amountSats: msatsToSats(tx.amount),
-        memo: tx.description,
-        timestamp: tx.created_at,
-        bolt11: tx.invoice,
-        direction: tx.type,
-        feesPaidSats: msatsToSats(tx.fees_paid),
+      return listTransactionsResponse.transactions.map((nwcTransaction) => ({
+        paymentHash: nwcTransaction.payment_hash,
+        pending: nwcTransaction.state === 'pending',
+        amountSats: msatsToSats(nwcTransaction.amount),
+        memo: nwcTransaction.description,
+        timestamp: nwcTransaction.created_at,
+        bolt11: nwcTransaction.invoice,
+        direction: nwcTransaction.type,
+        feesPaidSats: msatsToSats(nwcTransaction.fees_paid),
       }))
     },
 
     async testConnection(): Promise<NwcTestConnectionResult> {
       try {
-        const info = await client.getInfo()
-        const rawNetwork = info.network
+        const nwcWalletInfo = await client.getInfo()
+        const rawNetwork = nwcWalletInfo.network
         if (rawNetwork == null || String(rawNetwork).trim() === '') {
           return {
             ok: false,
@@ -345,8 +345,8 @@ function createNwcBackendService(
         if (mode != null) {
           return {
             ok: true,
-            walletName: info.alias || 'NWC Wallet',
-            nwcBlockHeight: info.block_height,
+            walletName: nwcWalletInfo.alias || 'NWC Wallet',
+            nwcBlockHeight: nwcWalletInfo.block_height,
             lightningNetworkMode: mode,
           }
         }

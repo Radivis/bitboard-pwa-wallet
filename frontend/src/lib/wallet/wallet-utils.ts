@@ -361,7 +361,7 @@ export async function runFullScanDashboardWalletSync(options: {
 
     const { loadedSubWallet, addressType, accountId } =
       useWalletStore.getState()
-    const triple = loadedSubWallet ?? {
+    const subWalletCoordinates = loadedSubWallet ?? {
       networkMode,
       addressType,
       accountId,
@@ -370,9 +370,9 @@ export async function runFullScanDashboardWalletSync(options: {
     await reloadActiveLoadedSubWalletWithEmptyChain({
       password,
       walletId: activeWalletId,
-      networkMode: triple.networkMode,
-      addressType: triple.addressType,
-      accountId: triple.accountId,
+      networkMode: subWalletCoordinates.networkMode,
+      addressType: subWalletCoordinates.addressType,
+      accountId: subWalletCoordinates.accountId,
     })
 
     await scanAndPersist()

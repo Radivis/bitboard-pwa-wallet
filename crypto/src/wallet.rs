@@ -37,9 +37,9 @@ pub fn create_wallet_with_bdk_network(
     internal_descriptor: &str,
     bdk_network: BdkNetwork,
 ) -> Result<Wallet, CryptoError> {
-    let external = external_descriptor.to_string();
-    let internal = internal_descriptor.to_string();
-    Wallet::create(external, internal)
+    let external_descriptor_string = external_descriptor.to_string();
+    let internal_descriptor_string = internal_descriptor.to_string();
+    Wallet::create(external_descriptor_string, internal_descriptor_string)
         .network(bdk_network)
         .create_wallet_no_persist()
         .map_err(|e| CryptoError::Wallet(e.to_string()))
@@ -58,8 +58,8 @@ pub fn load_wallet(
     network: BitcoinNetwork,
     changeset: ChangeSet,
 ) -> Result<Wallet, CryptoError> {
-    let external = external_descriptor.to_string();
-    let internal = internal_descriptor.to_string();
+    let external_descriptor_string = external_descriptor.to_string();
+    let internal_descriptor_string = internal_descriptor.to_string();
 
     let networks_to_try: Vec<BdkNetwork> = match network {
         BitcoinNetwork::Testnet => vec![bdk_network_for_app(network), BdkNetwork::Testnet],
@@ -70,8 +70,14 @@ pub fn load_wallet(
 
     for network_candidate in networks_to_try {
         match Wallet::load()
-            .descriptor(KeychainKind::External, Some(external.clone()))
-            .descriptor(KeychainKind::Internal, Some(internal.clone()))
+            .descriptor(
+                KeychainKind::External,
+                Some(external_descriptor_string.clone()),
+            )
+            .descriptor(
+                KeychainKind::Internal,
+                Some(internal_descriptor_string.clone()),
+            )
             .extract_keys()
             .check_network(network_candidate)
             .load_wallet_no_persist(changeset.clone())

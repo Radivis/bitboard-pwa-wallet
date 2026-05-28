@@ -19,14 +19,20 @@ import { useCryptoStore } from '@/stores/cryptoStore'
  * Find a descriptor wallet matching the given (network, addressType, accountId)
  * within the wallet secrets array.
  */
-export function findDescriptorWallet(params: {
-  secrets: WalletSecretsPayload | Pick<WalletSecrets, 'descriptorWallets'>
+export type FindDescriptorWalletInput = {
+  secretsPayload: WalletSecretsPayload | Pick<WalletSecrets, 'descriptorWallets'>
   network: BitcoinNetwork
   addressType: AddressType
   accountId: number
-}): DescriptorWalletData | undefined {
-  const { secrets, network, addressType, accountId } = params
-  return secrets.descriptorWallets.find(
+}
+
+export function findDescriptorWallet({
+  secretsPayload,
+  network,
+  addressType,
+  accountId,
+}: FindDescriptorWalletInput): DescriptorWalletData | undefined {
+  return secretsPayload.descriptorWallets.find(
     (descriptorWallet) =>
       descriptorWallet.network === network &&
       descriptorWallet.addressType === addressType &&

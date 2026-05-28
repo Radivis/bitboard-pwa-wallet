@@ -100,9 +100,9 @@ export function useBroadcastTransactionMutation() {
         try {
           await syncWallet(esploraUrl)
           const newBalance = await getBalance()
-          const newTxs = await getTransactionList()
+          const newTransactionList = await getTransactionList()
           setBalance(newBalance)
-          setTransactions(newTxs)
+          setTransactions(newTransactionList)
           setLastSyncTime(new Date())
         } catch {
           // keep unlocked on sync failure
@@ -137,7 +137,12 @@ export function useLabSendMutation() {
   const reset = useSendStore((sendState) => sendState.reset)
 
   return useMutation({
-    mutationFn: async (params: {
+    mutationFn: async ({
+      normalizedRecipient,
+      amountSats,
+      effectiveFeeRate,
+      applyChangeFreeBump,
+    }: {
       normalizedRecipient: string
       amountSats: number
       effectiveFeeRate: number
@@ -145,34 +150,34 @@ export function useLabSendMutation() {
     }) => {
       if (activeWalletId == null) throw new Error('No active wallet')
 
-      const { signedTxHex, fullMetadata } = await runLabOp(async () => {
+      const { signedTxHex, labMempoolTransactionMetadata } = await runLabOp(async () => {
         await initLabWorkerWithState()
         const labWorker = getLabWorker()
         const walletChangeAddress = await getLabChangeAddress()
 
         const knownRecipientOwner =
           currentAddress != null &&
-          labBitcoinAddressesEqual(params.normalizedRecipient, currentAddress)
+          labBitcoinAddressesEqual(normalizedRecipient, currentAddress)
             ? walletLabOwner(activeWalletId)
             : undefined
 
         const { utxosJson, mempoolMetadata, totalInput } =
           await labWorker.prepareLabWalletTransaction({
             walletId: activeWalletId,
-            toAddress: params.normalizedRecipient,
-            amountSats: params.amountSats,
-            feeRateSatPerVb: params.effectiveFeeRate,
+            toAddress: normalizedRecipient,
+            amountSats,
+            feeRateSatPerVb: effectiveFeeRate,
             walletChangeAddress,
             knownRecipientOwner,
           })
 
         const signedLabTransaction = await buildAndSignLabTransaction({
           utxosJson,
-          toAddress: params.normalizedRecipient,
-          amountSats: params.amountSats,
-          feeRateSatPerVb: params.effectiveFeeRate,
+          toAddress: normalizedRecipient,
+          amountSats,
+          feeRateSatPerVb: effectiveFeeRate,
           changeAddress: walletChangeAddress,
-          applyChangeFreeBump: params.applyChangeFreeBump ?? false,
+          applyChangeFreeBump: applyChangeFreeBump ?? false,
         })
         const {
           signedTxHex,
@@ -221,17 +226,17 @@ export function useLabSendMutation() {
               },
             ]
 
-        const fullMetadata = {
+        const labMempoolTransactionMetadata = {
           ...mempoolMetadata,
           feeSats,
           hasChange,
           outputsDetail,
         }
 
-        return { signedTxHex, fullMetadata }
+        return { signedTxHex, labMempoolTransactionMetadata }
       })
 
-      return labOpAddSignedTransaction(signedTxHex, fullMetadata)
+      return labOpAddSignedTransaction(signedTxHex, labMempoolTransactionMetadata)
     },
     onSuccess: (state) => {
       setLabChainStateCache(queryClient, state)

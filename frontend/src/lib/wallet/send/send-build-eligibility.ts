@@ -3,17 +3,22 @@ import { isUsableBtcSpotPriceInFiat } from '@/lib/fiat/is-usable-btc-spot-price-
 import { isValidAddress } from '@/lib/wallet/bitcoin-utils'
 import type { NetworkMode } from '@/stores/walletStore'
 
-export function isLabWithNoBalance(params: {
+export type IsLabWithNoBalanceInput = {
   networkMode: NetworkMode
   labBalanceSats: number | null
-}): boolean {
+}
+
+export function isLabWithNoBalance({
+  networkMode,
+  labBalanceSats,
+}: IsLabWithNoBalanceInput): boolean {
   return (
-    params.networkMode === 'lab' &&
-    (params.labBalanceSats === 0 || params.labBalanceSats === null)
+    networkMode === 'lab' &&
+    (labBalanceSats === 0 || labBalanceSats === null)
   )
 }
 
-export function canBuildOnChainSend(params: {
+export type CanBuildOnChainSendInput = {
   isLightningSendMode: boolean
   normalizedRecipient: string
   networkMode: NetworkMode
@@ -22,42 +27,65 @@ export function canBuildOnChainSend(params: {
   isLabWithNoBalance: boolean
   useCustomFee: boolean
   customFeeParsed: number | null
-}): boolean {
+}
+
+export function canBuildOnChainSend({
+  isLightningSendMode,
+  normalizedRecipient,
+  networkMode,
+  amountSats,
+  confirmedBalance,
+  isLabWithNoBalance,
+  useCustomFee,
+  customFeeParsed,
+}: CanBuildOnChainSendInput): boolean {
   return (
-    !params.isLightningSendMode &&
-    params.normalizedRecipient.length > 0 &&
-    isValidAddress(params.normalizedRecipient, params.networkMode) &&
-    isValidSendAmountSats(params.amountSats) &&
-    params.amountSats <= params.confirmedBalance &&
-    !params.isLabWithNoBalance &&
-    (!params.useCustomFee || params.customFeeParsed !== null)
+    !isLightningSendMode &&
+    normalizedRecipient.length > 0 &&
+    isValidAddress(normalizedRecipient, networkMode) &&
+    isValidSendAmountSats(amountSats) &&
+    amountSats <= confirmedBalance &&
+    !isLabWithNoBalance &&
+    (!useCustomFee || customFeeParsed !== null)
   )
 }
 
-export function isSendFiatRateOk(params: {
+export type IsSendFiatRateOkInput = {
   mainnetFiatMode: boolean
   isLightningSendMode: boolean
   needsUserLightningAmount: boolean
   btcPriceInFiat: number | null | undefined
   fiatRatesQueryIsError: boolean
-}): boolean {
+}
+
+export function isSendFiatRateOk({
+  mainnetFiatMode,
+  isLightningSendMode,
+  needsUserLightningAmount,
+  btcPriceInFiat,
+  fiatRatesQueryIsError,
+}: IsSendFiatRateOkInput): boolean {
   return (
-    !params.mainnetFiatMode ||
-    (params.isLightningSendMode && !params.needsUserLightningAmount) ||
-    (isUsableBtcSpotPriceInFiat(params.btcPriceInFiat) &&
-      !params.fiatRatesQueryIsError)
+    !mainnetFiatMode ||
+    (isLightningSendMode && !needsUserLightningAmount) ||
+    (isUsableBtcSpotPriceInFiat(btcPriceInFiat) && !fiatRatesQueryIsError)
   )
 }
 
-export function canProceedToSendReview(params: {
+export type CanProceedToSendReviewInput = {
   isLightningSendMode: boolean
   canBuildLightning: boolean
   canBuildOnChain: boolean
   fiatRateOk: boolean
-}): boolean {
+}
+
+export function canProceedToSendReview({
+  isLightningSendMode,
+  canBuildLightning,
+  canBuildOnChain,
+  fiatRateOk,
+}: CanProceedToSendReviewInput): boolean {
   return (
-    (params.isLightningSendMode
-      ? params.canBuildLightning
-      : params.canBuildOnChain) && params.fiatRateOk
+    (isLightningSendMode ? canBuildLightning : canBuildOnChain) && fiatRateOk
   )
 }

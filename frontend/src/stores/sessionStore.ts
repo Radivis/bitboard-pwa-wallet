@@ -4,7 +4,7 @@ const AUTO_LOCK_TIMEOUT_MS = 15 * 60 * 1000
 
 interface SessionState {
   password: string | null
-  setPassword: (pw: string | null) => void
+  setPassword: (password: string | null) => void
   clear: () => void
 }
 

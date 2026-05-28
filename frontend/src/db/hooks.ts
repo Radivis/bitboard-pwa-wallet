@@ -57,12 +57,18 @@ export function useAddWallet() {
 export function useUpdateWallet() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: async ({ id, changes }: { id: number; changes: WalletUpdate }) => {
+    mutationFn: async ({
+      walletId,
+      walletChanges,
+    }: {
+      walletId: number
+      walletChanges: WalletUpdate
+    }) => {
       await ensureMigrated()
       await getDatabase()
         .updateTable('wallets')
-        .set(changes)
-        .where('wallet_id', '=', id)
+        .set(walletChanges)
+        .where('wallet_id', '=', walletId)
         .execute()
     },
     onSuccess: () => {

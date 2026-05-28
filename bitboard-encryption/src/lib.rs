@@ -71,13 +71,13 @@ fn parse_mtp_segment(segment: &str) -> Option<(u32, u32, u32)> {
     let mut memory_kib: Option<u32> = None;
     let mut iterations: Option<u32> = None;
     let mut parallelism: Option<u32> = None;
-    for part in segment.split(',') {
-        let part = part.trim();
-        if let Some(param_value) = part.strip_prefix("m=") {
+    for phc_param_fragment in segment.split(',') {
+        let phc_param_fragment = phc_param_fragment.trim();
+        if let Some(param_value) = phc_param_fragment.strip_prefix("m=") {
             memory_kib = param_value.parse().ok();
-        } else if let Some(param_value) = part.strip_prefix("t=") {
+        } else if let Some(param_value) = phc_param_fragment.strip_prefix("t=") {
             iterations = param_value.parse().ok();
-        } else if let Some(param_value) = part.strip_prefix("p=") {
+        } else if let Some(param_value) = phc_param_fragment.strip_prefix("p=") {
             parallelism = param_value.parse().ok();
         }
     }
@@ -112,9 +112,9 @@ pub(crate) fn parse_mtp_from_phc_str(phc: &str) -> Result<(u32, u32, u32), &'sta
         if segment.contains("m=")
             && segment.contains("t=")
             && segment.contains("p=")
-            && let Some(mtp) = parse_mtp_segment(segment)
+            && let Some(argon2_memory_iterations_parallelism) = parse_mtp_segment(segment)
         {
-            return Ok(mtp);
+            return Ok(argon2_memory_iterations_parallelism);
         }
     }
     Err(INVALID_KDF_PHC_MSG)

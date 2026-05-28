@@ -64,8 +64,8 @@ export function WalletManagement({
       return
     }
     await updateWallet.mutateAsync({
-      id: activeWalletId,
-      changes: { name: trimmedDraft },
+      walletId: activeWalletId,
+      walletChanges: { name: trimmedDraft },
     })
     toast.success('Wallet name updated')
   }

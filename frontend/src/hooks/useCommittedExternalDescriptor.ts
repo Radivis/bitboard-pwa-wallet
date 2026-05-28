@@ -53,7 +53,7 @@ export function useCommittedExternalDescriptor() {
       const walletDb = getDatabase()
       const payload = await loadWalletSecretsPayload(walletDb, password, walletId)
       const found = findDescriptorWallet({
-        secrets: payload,
+        secretsPayload: payload,
         network: toBitcoinNetwork(networkMode),
         addressType,
         accountId,

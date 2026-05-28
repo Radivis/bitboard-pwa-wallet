@@ -54,26 +54,30 @@ import {
   labWorkerState,
 } from './lab-worker-state'
 
-function wasmU64ToNumber(raw: unknown): number {
-  if (typeof raw === 'bigint') return Number(raw)
-  if (typeof raw === 'number' && Number.isFinite(raw)) return raw
+function wasmU64ToNumber(wasmU64Value: unknown): number {
+  if (typeof wasmU64Value === 'bigint') return Number(wasmU64Value)
+  if (typeof wasmU64Value === 'number' && Number.isFinite(wasmU64Value)) {
+    return wasmU64Value
+  }
   return 0
 }
 
 const labService = {
   async loadState(newState: LabState): Promise<void> {
-    const cloned = JSON.parse(JSON.stringify(newState)) as LabState
+    const persistedLabStateClone = JSON.parse(JSON.stringify(newState)) as LabState
     const wasmModule = await getWasm()
-    const legacy = cloned as LabState & { blockSizeLimitVbytes?: number }
+    const legacyPersistedLabState = persistedLabStateClone as LabState & {
+      blockSizeLimitVbytes?: number
+    }
     const blockWeightLimit = normalizeBlockWeightLimit(
-      cloned.blockWeightLimit ??
-        legacy.blockSizeLimitVbytes ??
+      persistedLabStateClone.blockWeightLimit ??
+        legacyPersistedLabState.blockSizeLimitVbytes ??
         LAB_DEFAULT_BLOCK_WEIGHT_UNITS,
     )
     const minerSubsidySats = normalizeMinerSubsidySats(
-      cloned.minerSubsidySats ?? LAB_DEFAULT_MINER_SUBSIDY_SATS,
+      persistedLabStateClone.minerSubsidySats ?? LAB_DEFAULT_MINER_SUBSIDY_SATS,
     )
-    const mempool = (cloned.mempool ?? []).map((entry) => {
+    const mempool = (persistedLabStateClone.mempool ?? []).map((entry) => {
       let normalizedEntry = { ...entry }
       if (normalizedEntry.weight <= 0) {
         const txWeight = wasmU64ToNumber(wasmModule.lab_tx_weight(entry.signedTxHex))
@@ -83,19 +87,19 @@ const labService = {
       return normalizedEntry
     })
     replaceLabWorkerState({
-      blocks: cloned.blocks ?? [],
-      utxos: cloned.utxos ?? [],
-      addresses: cloned.addresses ?? [],
-      entities: (cloned.entities ?? []).map((entity) => ({
+      blocks: persistedLabStateClone.blocks ?? [],
+      utxos: persistedLabStateClone.utxos ?? [],
+      addresses: persistedLabStateClone.addresses ?? [],
+      entities: (persistedLabStateClone.entities ?? []).map((entity) => ({
         ...entity,
         isDead: entity.isDead ?? false,
       })),
-      addressToOwner: cloned.addressToOwner ?? {},
+      addressToOwner: persistedLabStateClone.addressToOwner ?? {},
       mempool,
-      transactions: cloned.transactions ?? [],
-      txDetails: cloned.txDetails ?? [],
-      mineOperations: cloned.mineOperations ?? [],
-      txOperations: cloned.txOperations ?? [],
+      transactions: persistedLabStateClone.transactions ?? [],
+      txDetails: persistedLabStateClone.txDetails ?? [],
+      mineOperations: persistedLabStateClone.mineOperations ?? [],
+      txOperations: persistedLabStateClone.txOperations ?? [],
       blockWeightLimit,
       minerSubsidySats,
     })

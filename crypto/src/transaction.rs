@@ -180,18 +180,20 @@ pub fn prepare_onchain_send(
     let mut psbt = build_once(wallet, final_payment_sats)?;
     let mut bumped_change_free = false;
 
-    let unsigned = psbt.unsigned_tx.clone();
-    let single_recipient_only =
-        unsigned.output.len() == 1 && unsigned.output[0].script_pubkey == recipient_script_pubkey;
+    let unsigned_transaction = psbt.unsigned_tx.clone();
+    let single_recipient_only = unsigned_transaction.output.len() == 1
+        && unsigned_transaction.output[0].script_pubkey == recipient_script_pubkey;
 
     let mut change_free_bump_available = false;
     let mut change_free_max_sats = 0u64;
 
     if single_recipient_only {
         let input_value_sum = sum_psbt_input_values(&psbt)?;
-        let min_total_fee = fee_rate.fee_wu(unsigned.weight()).ok_or_else(|| {
-            CryptoError::Transaction("Fee overflow for transaction weight".to_string())
-        })?;
+        let min_total_fee = fee_rate
+            .fee_wu(unsigned_transaction.weight())
+            .ok_or_else(|| {
+                CryptoError::Transaction("Fee overflow for transaction weight".to_string())
+            })?;
         let max_recipient = input_value_sum.saturating_sub(min_total_fee.to_sat());
         if max_recipient > final_payment_sats {
             change_free_bump_available = true;
