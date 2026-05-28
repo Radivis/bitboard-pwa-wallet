@@ -155,8 +155,9 @@ pub fn lab_mine_block(
     let mut txdata = vec![coinbase];
 
     if !txs_hex.is_undefined() && !txs_hex.is_null() {
-        let arr: Vec<String> = serde_wasm_bindgen::from_value(txs_hex).map_display_err_to_js()?;
-        for tx_hex in arr {
+        let transaction_hex_strings: Vec<String> =
+            serde_wasm_bindgen::from_value(txs_hex).map_display_err_to_js()?;
+        for tx_hex in transaction_hex_strings {
             let tx: Transaction = deserialize_hex(&tx_hex).map_display_err_to_js()?;
             txdata.push(tx);
         }

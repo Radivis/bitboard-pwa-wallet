@@ -30,7 +30,7 @@ export function hasLegalEntityAddressData(address: LegalEntityAddress): boolean 
     address.postalCode,
     address.locality,
     address.country,
-  ].some((s) => s != null && String(s).trim().length > 0)
+  ].some((fieldValue) => fieldValue != null && String(fieldValue).trim().length > 0)
 }
 
 /** Non-empty lines in display order (care-of, street, postal + locality, country). */
@@ -40,9 +40,9 @@ export function legalEntityAddressLines(address: LegalEntityAddress): string[] {
   if (careOf) lines.push(careOf)
   const street = address.street.trim()
   if (street) lines.push(street)
-  const pc = address.postalCode.trim()
-  const loc = address.locality.trim()
-  const cityLine = [pc, loc].filter(Boolean).join(' ')
+  const postalCode = address.postalCode.trim()
+  const locality = address.locality.trim()
+  const cityLine = [postalCode, locality].filter(Boolean).join(' ')
   if (cityLine) lines.push(cityLine)
   const country = address.country?.trim()
   if (country) lines.push(country)

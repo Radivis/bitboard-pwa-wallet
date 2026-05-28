@@ -64,7 +64,7 @@ export function deserializeEncryptedBlobFromSettings(json: string): EncryptedBlo
   }
 }
 
-function generateSessionSecretR(): string {
+function generateRandomSessionSecret(): string {
   const bytes = new Uint8Array(NEAR_ZERO_SESSION_SECRET_BYTES)
   crypto.getRandomValues(bytes)
   return uint8ToBase64(bytes)
@@ -93,7 +93,7 @@ async function deleteSetting(walletDb: Kysely<Database>, key: string): Promise<v
 export async function generateAndPersistNearZeroSession(
   walletDb: Kysely<Database>,
 ): Promise<void> {
-  const sessionSecret = generateSessionSecretR()
+  const sessionSecret = generateRandomSessionSecret()
   const wrapped = await encryptData(NEAR_ZERO_WRAPPER_PASSWORD, sessionSecret)
   const serialized = serializeEncryptedBlobForSettings(wrapped)
 

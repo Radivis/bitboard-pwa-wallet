@@ -148,7 +148,7 @@ fn prepare_lab_psbt_inner(
     route: LabPsbtRouteParams<'_>,
     apply_change_free_bump: bool,
 ) -> Result<(Psbt, LabPsbtBuildMeta), CryptoError> {
-    let total_in: u64 = utxos.iter().map(|u| u.amount_sats).sum();
+    let total_in: u64 = utxos.iter().map(|utxo| utxo.amount_sats).sum();
     let original_amount_sats = amount_sats;
     let mut raised_to_min_dust = false;
     let mut final_payment_sats = amount_sats;
@@ -363,7 +363,7 @@ pub fn prepare_build_and_sign_lab_transaction(
             fee_rate_sat_per_vb,
         )?;
 
-    let total_in: u64 = utxos.iter().map(|u| u.amount_sats).sum();
+    let total_in: u64 = utxos.iter().map(|utxo| utxo.amount_sats).sum();
 
     let route = LabPsbtRouteParams {
         to_address: &to_address,
@@ -393,13 +393,13 @@ pub fn prepare_build_and_sign_lab_transaction(
 
     let tx = transaction::extract_transaction(psbt)?;
 
-    let total_out: u64 = tx.output.iter().map(|o| o.value.to_sat()).sum();
+    let total_out: u64 = tx.output.iter().map(|output| output.value.to_sat()).sum();
     let fee_sats = total_in.saturating_sub(total_out);
 
     let has_change = tx
         .output
         .iter()
-        .any(|o| o.script_pubkey == change_address.script_pubkey());
+        .any(|output| output.script_pubkey == change_address.script_pubkey());
 
     let signed_tx_hex = hex::encode(bitcoin::consensus::encode::serialize(&tx));
 

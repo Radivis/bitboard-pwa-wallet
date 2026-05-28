@@ -48,17 +48,17 @@ export function isEsploraProxyNetwork(
  */
 export function normalizeEsploraBaseUrl(urlString: string): string | null {
   try {
-    const u = new URL(urlString.trim())
-    if (u.protocol !== 'http:' && u.protocol !== 'https:') return null
-    u.hash = ''
-    u.search = ''
-    u.hostname = u.hostname.toLowerCase()
-    let path = u.pathname
+    const parsedUrl = new URL(urlString.trim())
+    if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') return null
+    parsedUrl.hash = ''
+    parsedUrl.search = ''
+    parsedUrl.hostname = parsedUrl.hostname.toLowerCase()
+    let path = parsedUrl.pathname
     while (path.length > 1 && path.endsWith('/')) {
       path = path.slice(0, -1)
     }
-    u.pathname = path
-    return u.toString().replace(/\/$/, '')
+    parsedUrl.pathname = path
+    return parsedUrl.toString().replace(/\/$/, '')
   } catch {
     return null
   }
@@ -107,9 +107,9 @@ export function shouldWarnEsploraNotWhitelisted(
   networkMode: string,
 ): boolean {
   if (!isEsploraProxyNetwork(networkMode)) return false
-  const t = url.trim()
-  if (t === '') return false
-  return !isWhitelistedEsploraBaseUrl(t, networkMode)
+  const trimmedUrl = url.trim()
+  if (trimmedUrl === '') return false
+  return !isWhitelistedEsploraBaseUrl(trimmedUrl, networkMode)
 }
 
 export function getUpstreamBaseForEsploraProxy(
@@ -144,11 +144,11 @@ export function esploraViteProxyEntries(): EsploraViteProxyEntry[] {
     for (const network of Object.keys(bases) as EsploraProxyNetwork[]) {
       const baseUrl = bases[network]
       if (baseUrl == null) continue
-      const u = new URL(baseUrl)
-      const upstreamPathPrefix = u.pathname.replace(/\/$/, '') || '/'
+      const parsedBaseUrl = new URL(baseUrl)
+      const upstreamPathPrefix = parsedBaseUrl.pathname.replace(/\/$/, '') || '/'
       entries.push({
         localPrefix: `${ESPLORA_SAME_ORIGIN_PROXY_PREFIX}/${providerId}/${network}`,
-        targetOrigin: `${u.protocol}//${u.host}`,
+        targetOrigin: `${parsedBaseUrl.protocol}//${parsedBaseUrl.host}`,
         upstreamPathPrefix,
       })
     }

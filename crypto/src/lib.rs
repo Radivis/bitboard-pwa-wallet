@@ -59,8 +59,8 @@ fn with_wallet<F, R>(wallet_callback: F) -> Result<R, JsValue>
 where
     F: FnOnce(&BdkWallet) -> R,
 {
-    ACTIVE_WALLET.with(|w| {
-        let borrow = w.try_borrow().map_err(|_| {
+    ACTIVE_WALLET.with(|wallet_cell| {
+        let borrow = wallet_cell.try_borrow().map_err(|_| {
             wasm_crypto_error(CODE_WALLET_ALREADY_BORROWED, MSG_WALLET_ALREADY_BORROWED)
         })?;
         let wallet_ref = borrow
@@ -74,8 +74,8 @@ fn with_wallet_mut<F, R>(wallet_callback: F) -> Result<R, JsValue>
 where
     F: FnOnce(&mut BdkWallet) -> R,
 {
-    ACTIVE_WALLET.with(|w| {
-        let mut borrow = w.try_borrow_mut().map_err(|_| {
+    ACTIVE_WALLET.with(|wallet_cell| {
+        let mut borrow = wallet_cell.try_borrow_mut().map_err(|_| {
             wasm_crypto_error(CODE_WALLET_ALREADY_BORROWED, MSG_WALLET_ALREADY_BORROWED)
         })?;
         let wallet_ref = borrow
@@ -87,13 +87,13 @@ where
 
 /// Collect any staged changes from the wallet and merge them into the accumulator.
 fn accumulate_staged_changes() {
-    ACTIVE_WALLET.with(|w| {
-        let mut borrow = w.borrow_mut();
+    ACTIVE_WALLET.with(|wallet_cell| {
+        let mut borrow = wallet_cell.borrow_mut();
         if let Some(wallet_ref) = borrow.as_mut()
             && let Some(staged) = wallet_ref.take_staged()
         {
-            ACCUMULATED_CHANGESET.with(|cs| {
-                cs.borrow_mut().merge(staged);
+            ACCUMULATED_CHANGESET.with(|changeset_cell| {
+                changeset_cell.borrow_mut().merge(staged);
             });
         }
     });
@@ -163,10 +163,12 @@ pub fn create_wallet(
 
     let changeset_json = wallet::serialize_changeset(&initial_changeset).map_err(JsValue::from)?;
 
-    ACTIVE_WALLET.with(|w| w.replace(Some(bdk_wallet)));
-    ACCUMULATED_CHANGESET.with(|cs| *cs.borrow_mut() = initial_changeset);
-    EXTERNAL_DESCRIPTOR_FOR_LAB.with(|d| *d.borrow_mut() = pair.external.clone());
-    INTERNAL_DESCRIPTOR_FOR_LAB.with(|d| *d.borrow_mut() = pair.internal.clone());
+    ACTIVE_WALLET.with(|wallet_cell| wallet_cell.replace(Some(bdk_wallet)));
+    ACCUMULATED_CHANGESET.with(|changeset_cell| *changeset_cell.borrow_mut() = initial_changeset);
+    EXTERNAL_DESCRIPTOR_FOR_LAB
+        .with(|descriptor_cell| *descriptor_cell.borrow_mut() = pair.external.clone());
+    INTERNAL_DESCRIPTOR_FOR_LAB
+        .with(|descriptor_cell| *descriptor_cell.borrow_mut() = pair.internal.clone());
 
     let create_wallet_payload = types::CreateWalletResult {
         external_descriptor: pair.external,
@@ -206,10 +208,12 @@ pub fn load_wallet(
     )
     .map_err(JsValue::from)?;
 
-    ACTIVE_WALLET.with(|cell| cell.replace(Some(bdk_wallet)));
-    ACCUMULATED_CHANGESET.with(|cs| *cs.borrow_mut() = changeset);
-    EXTERNAL_DESCRIPTOR_FOR_LAB.with(|d| *d.borrow_mut() = external_descriptor.to_string());
-    INTERNAL_DESCRIPTOR_FOR_LAB.with(|d| *d.borrow_mut() = internal_descriptor.to_string());
+    ACTIVE_WALLET.with(|wallet_cell| wallet_cell.replace(Some(bdk_wallet)));
+    ACCUMULATED_CHANGESET.with(|changeset_cell| *changeset_cell.borrow_mut() = changeset);
+    EXTERNAL_DESCRIPTOR_FOR_LAB
+        .with(|descriptor_cell| *descriptor_cell.borrow_mut() = external_descriptor.to_string());
+    INTERNAL_DESCRIPTOR_FOR_LAB
+        .with(|descriptor_cell| *descriptor_cell.borrow_mut() = internal_descriptor.to_string());
 
     Ok(JsValue::TRUE)
 }
@@ -242,8 +246,9 @@ pub fn get_balance() -> Result<JsValue, JsValue> {
 #[wasm_bindgen]
 pub fn export_changeset() -> Result<String, JsValue> {
     accumulate_staged_changes();
-    ACCUMULATED_CHANGESET
-        .with(|cs| wallet::serialize_changeset(&cs.borrow()).map_err(JsValue::from))
+    ACCUMULATED_CHANGESET.with(|changeset_cell| {
+        wallet::serialize_changeset(&changeset_cell.borrow()).map_err(JsValue::from)
+    })
 }
 
 // ---------------------------------------------------------------------------
@@ -271,7 +276,8 @@ fn to_js<T: serde::Serialize>(value: &T) -> Result<JsValue, JsValue> {
 pub async fn sync_wallet(esplora_url: &str) -> Result<JsValue, JsValue> {
     let client = esplora::EsploraClient::new(esplora_url).map_err(JsValue::from)?;
 
-    let sync_request = with_wallet(|w| w.start_sync_with_revealed_spks_at(current_unix_time()))?;
+    let sync_request =
+        with_wallet(|wallet| wallet.start_sync_with_revealed_spks_at(current_unix_time()))?;
 
     use bdk_esplora::EsploraAsyncExt;
     let update: bdk_wallet::Update = client
@@ -281,7 +287,7 @@ pub async fn sync_wallet(esplora_url: &str) -> Result<JsValue, JsValue> {
         .map_display_err_to_js()?
         .into();
 
-    with_wallet_mut(|w| sync::apply_update(w, update).map_err(JsValue::from))??;
+    with_wallet_mut(|wallet| sync::apply_update(wallet, update).map_err(JsValue::from))??;
 
     accumulate_staged_changes();
     build_sync_result()
@@ -295,7 +301,7 @@ pub async fn sync_wallet(esplora_url: &str) -> Result<JsValue, JsValue> {
 pub async fn full_scan_wallet(esplora_url: &str, stop_gap: usize) -> Result<JsValue, JsValue> {
     let client = esplora::EsploraClient::new(esplora_url).map_err(JsValue::from)?;
 
-    let scan_request = with_wallet(|w| w.start_full_scan_at(current_unix_time()))?;
+    let scan_request = with_wallet(|wallet| wallet.start_full_scan_at(current_unix_time()))?;
 
     use bdk_esplora::EsploraAsyncExt;
     let update: bdk_wallet::Update = client
@@ -305,7 +311,7 @@ pub async fn full_scan_wallet(esplora_url: &str, stop_gap: usize) -> Result<JsVa
         .map_display_err_to_js()?
         .into();
 
-    with_wallet_mut(|w| sync::apply_update(w, update).map_err(JsValue::from))??;
+    with_wallet_mut(|wallet| sync::apply_update(wallet, update).map_err(JsValue::from))??;
 
     accumulate_staged_changes();
     build_sync_result()
@@ -333,9 +339,9 @@ pub fn prepare_onchain_send_transaction(
     apply_change_free_bump: bool,
 ) -> Result<JsValue, JsValue> {
     let bitcoin_network = types::BitcoinNetwork::try_from(network).map_err(JsValue::from)?;
-    let outcome = with_wallet_mut(|w| {
+    let outcome = with_wallet_mut(|wallet| {
         transaction::prepare_onchain_send(
-            w,
+            wallet,
             recipient_address,
             amount_sats,
             fee_rate_sat_per_vb,
@@ -362,9 +368,9 @@ pub fn build_transaction(
     network: &str,
 ) -> Result<String, JsValue> {
     let bitcoin_network = types::BitcoinNetwork::try_from(network).map_err(JsValue::from)?;
-    let outcome = with_wallet_mut(|w| {
+    let outcome = with_wallet_mut(|wallet| {
         transaction::prepare_onchain_send(
-            w,
+            wallet,
             recipient_address,
             amount_sats,
             fee_rate_sat_per_vb,
@@ -387,7 +393,8 @@ pub fn sign_and_extract_transaction(psbt_base64: &str) -> Result<String, JsValue
         .parse()
         .map_err(|e: bitcoin::psbt::PsbtParseError| JsValue::from_str(&e.to_string()))?;
 
-    with_wallet(|w| transaction::sign_transaction(w, &mut psbt))?.map_err(JsValue::from)?;
+    with_wallet(|wallet| transaction::sign_transaction(wallet, &mut psbt))?
+        .map_err(JsValue::from)?;
 
     let tx = transaction::extract_transaction(psbt).map_err(JsValue::from)?;
     Ok(bitcoin::consensus::encode::serialize_hex(&tx))
@@ -431,8 +438,10 @@ pub fn build_and_sign_lab_transaction(
     change_address: &str,
     apply_change_free_bump: bool,
 ) -> Result<JsValue, JsValue> {
-    let external = EXTERNAL_DESCRIPTOR_FOR_LAB.with(|d| d.borrow().clone());
-    let internal = INTERNAL_DESCRIPTOR_FOR_LAB.with(|d| d.borrow().clone());
+    let external =
+        EXTERNAL_DESCRIPTOR_FOR_LAB.with(|descriptor_cell| descriptor_cell.borrow().clone());
+    let internal =
+        INTERNAL_DESCRIPTOR_FOR_LAB.with(|descriptor_cell| descriptor_cell.borrow().clone());
     if external.is_empty() || internal.is_empty() {
         return Err(wasm_crypto_error(
             CODE_WALLET_NOT_LOADED_FOR_LAB,
@@ -440,9 +449,9 @@ pub fn build_and_sign_lab_transaction(
         ));
     }
 
-    let lab_prepare_outcome = with_wallet_mut(|w| {
+    let lab_prepare_outcome = with_wallet_mut(|wallet| {
         lab_psbt::prepare_build_and_sign_lab_transaction(
-            w,
+            wallet,
             utxos_json,
             to_address,
             amount_sats,
@@ -465,8 +474,10 @@ pub fn draft_lab_psbt_transaction(
     change_address: &str,
     apply_change_free_bump: bool,
 ) -> Result<JsValue, JsValue> {
-    let external = EXTERNAL_DESCRIPTOR_FOR_LAB.with(|d| d.borrow().clone());
-    let internal = INTERNAL_DESCRIPTOR_FOR_LAB.with(|d| d.borrow().clone());
+    let external =
+        EXTERNAL_DESCRIPTOR_FOR_LAB.with(|descriptor_cell| descriptor_cell.borrow().clone());
+    let internal =
+        INTERNAL_DESCRIPTOR_FOR_LAB.with(|descriptor_cell| descriptor_cell.borrow().clone());
     if external.is_empty() || internal.is_empty() {
         return Err(wasm_crypto_error(
             CODE_WALLET_NOT_LOADED_FOR_LAB,
@@ -474,9 +485,9 @@ pub fn draft_lab_psbt_transaction(
         ));
     }
 
-    let lab_draft_outcome = with_wallet_mut(|w| {
+    let lab_draft_outcome = with_wallet_mut(|wallet| {
         lab_psbt::prepare_lab_psbt_draft(
-            w,
+            wallet,
             utxos_json,
             to_address,
             amount_sats,
@@ -492,15 +503,17 @@ pub fn draft_lab_psbt_transaction(
 /// Return the first internal address for lab change outputs.
 #[wasm_bindgen]
 pub fn get_lab_change_address() -> Result<String, JsValue> {
-    let internal = INTERNAL_DESCRIPTOR_FOR_LAB.with(|d| d.borrow().clone());
+    let internal =
+        INTERNAL_DESCRIPTOR_FOR_LAB.with(|descriptor_cell| descriptor_cell.borrow().clone());
     if internal.is_empty() {
         return Err(wasm_crypto_error(
             CODE_WALLET_NOT_LOADED_FOR_LAB,
             MSG_WALLET_NOT_LOADED_FOR_LAB,
         ));
     }
-    with_wallet(|w| {
-        w.peek_address(KeychainKind::Internal, 0)
+    with_wallet(|wallet| {
+        wallet
+            .peek_address(KeychainKind::Internal, 0)
             .address
             .to_string()
     })

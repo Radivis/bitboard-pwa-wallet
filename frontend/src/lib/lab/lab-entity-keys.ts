@@ -10,29 +10,32 @@ import { AddressType } from '@/lib/wallet/wallet-domain-types'
  * Address type is appended only when SegWit address options are enabled (Settings → Features).
  */
 export function formatLabEntityMineOptionLabel(
-  e: {
+  entity: {
     labEntityId: number
     entityName: string | null
     addressType: AddressType
   },
   showAddressTypeSuffix: boolean,
 ): string {
-  const name = labEntityOwnerKey(e)
+  const name = labEntityOwnerKey(entity)
   if (!showAddressTypeSuffix) return name
-  const suffix = e.addressType === AddressType.Taproot ? 'Taproot' : 'SegWit'
+  const suffix = entity.addressType === AddressType.Taproot ? 'Taproot' : 'SegWit'
   return `${name} · ${suffix}`
 }
 
-export function labEntityOwnerKey(e: { labEntityId: number; entityName: string | null }): string {
-  return e.entityName ?? `Anonymous-${e.labEntityId}`
+export function labEntityOwnerKey(entity: {
+  labEntityId: number
+  entityName: string | null
+}): string {
+  return entity.entityName ?? `Anonymous-${entity.labEntityId}`
 }
 
 export function nextLabEntityId(
   entities: readonly { labEntityId: number }[],
 ): number {
   let max = 0
-  for (const e of entities) {
-    if (e.labEntityId > max) max = e.labEntityId
+  for (const entity of entities) {
+    if (entity.labEntityId > max) max = entity.labEntityId
   }
   return max + 1
 }
@@ -40,11 +43,11 @@ export function nextLabEntityId(
 export function findLabEntityByOwnerKey<
   T extends { labEntityId: number; entityName: string | null },
 >(entities: readonly T[], ownerKey: string): T | undefined {
-  return entities.find((e) => labEntityOwnerKey(e) === ownerKey)
+  return entities.find((entity) => labEntityOwnerKey(entity) === ownerKey)
 }
 
 export function findLabEntityById<
   T extends { labEntityId: number },
 >(entities: readonly T[], labEntityId: number): T | undefined {
-  return entities.find((e) => e.labEntityId === labEntityId)
+  return entities.find((entity) => entity.labEntityId === labEntityId)
 }

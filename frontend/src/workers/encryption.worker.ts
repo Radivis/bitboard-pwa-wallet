@@ -14,13 +14,13 @@ const IV_LENGTH_BYTES = 12
 /** CI params are allowed only outside production builds. */
 const USE_CI_PARAMS = resolveArgon2CiParamsOrThrow()
 
-let wasm: typeof import('@/wasm-pkg/bitboard_encryption/bitboard_encryption') | null = null
+let encryptionWasmModule: typeof import('@/wasm-pkg/bitboard_encryption/bitboard_encryption') | null = null
 
 async function getWasm() {
-  if (!wasm) {
-    wasm = await import('@/wasm-pkg/bitboard_encryption/bitboard_encryption')
+  if (!encryptionWasmModule) {
+    encryptionWasmModule = await import('@/wasm-pkg/bitboard_encryption/bitboard_encryption')
   }
-  return wasm
+  return encryptionWasmModule
 }
 
 async function deriveKeyBytes(

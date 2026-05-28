@@ -133,9 +133,9 @@ export async function loadLabStateFromDatabase(): Promise<LabState> {
     if (row.owner_type === 'wallet' && row.wallet_id != null) {
       addressToOwner[row.address] = walletLabOwner(row.wallet_id)
     } else if (row.owner_type === 'lab_entity') {
-      const lei = (row as { lab_entity_id?: number | null }).lab_entity_id
-      if (lei != null && lei > 0) {
-        addressToOwner[row.address] = labEntityLabOwner(lei)
+      const labEntityId = (row as { lab_entity_id?: number | null }).lab_entity_id
+      if (labEntityId != null && labEntityId > 0) {
+        addressToOwner[row.address] = labEntityLabOwner(labEntityId)
       }
     }
   }
@@ -182,9 +182,12 @@ export async function loadLabStateFromDatabase(): Promise<LabState> {
 
   const txDetails = txDetailsRows.map((txDetailDbRow) => {
     const inputsRaw = JSON.parse(txDetailDbRow.inputs_json) as LabTxDetails['inputs']
-    const inputs = inputsRaw.map((inp) => ({
-      ...inp,
-      owner: normalizeJsonOwnerToLabOwner(inp.owner, entities) ?? inp.owner ?? null,
+    const inputs = inputsRaw.map((inputDetail) => ({
+      ...inputDetail,
+      owner:
+        normalizeJsonOwnerToLabOwner(inputDetail.owner, entities) ??
+        inputDetail.owner ??
+        null,
     }))
     const outputsRaw = JSON.parse(txDetailDbRow.outputs_json) as LabTxDetails['outputs']
     const outputs = outputsRaw.map((outputEntry) => ({

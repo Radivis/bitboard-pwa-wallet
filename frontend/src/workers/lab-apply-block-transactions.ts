@@ -12,7 +12,7 @@ import {
   labAddressesEqual,
   lookupOwnerForLabAddress,
   parseTxOperationPayload,
-  state,
+  labWorkerState,
   txidToChangeOutput,
 } from './lab-worker-state'
 
@@ -38,10 +38,12 @@ function resolveChangeMetadataForBlockTx(tx: BlockEffectsTx): {
   txOperationPayload: ReturnType<typeof parseTxOperationPayload>
   changeOutputForTx: { address: string; vout: number | null } | undefined
 } {
-  const changeFromOp = state.txOperations?.find((o) => o.txid === tx.txid)
+  const changeFromOp = labWorkerState.txOperations?.find(
+    (txOperation) => txOperation.txid === tx.txid,
+  )
   const txOperationPayload = parseTxOperationPayload(
     changeFromOp?.payloadJson,
-    state.entities ?? [],
+    labWorkerState.entities ?? [],
   )
   const changeOutputForTx =
     txidToChangeOutput.get(tx.txid) ??
@@ -122,8 +124,8 @@ function buildOutputsForBlockEffectTx(
       ? sender
       : (lookupOwnerForLabAddress(output.address, addressToOwner) ?? null)
     if (isChange && sender) {
-      state.addressToOwner = state.addressToOwner ?? {}
-      state.addressToOwner[output.address] = sender
+      labWorkerState.addressToOwner = labWorkerState.addressToOwner ?? {}
+      labWorkerState.addressToOwner[output.address] = sender
     }
     return {
       address: output.address,
@@ -154,14 +156,16 @@ function resolveReceiverForBlockEffectTx(
     // disagree with our mempool flags, and "only one !isChange" may then be the change output.
     let payOutput: (typeof outputs)[0] | undefined
     if (primaryFromOp !== '') {
-      payOutput = outputs.find((o) => labAddressesEqual(o.address, primaryFromOp))
+      payOutput = outputs.find((outputDetail) =>
+        labAddressesEqual(outputDetail.address, primaryFromOp),
+      )
     }
     if (payOutput == null && nonChangeOutputs.length === 1) {
       payOutput = nonChangeOutputs[0]
     }
     if (payOutput != null) {
-      state.addressToOwner = state.addressToOwner ?? {}
-      state.addressToOwner[payOutput.address] = txOperationPayload.receiver
+      labWorkerState.addressToOwner = labWorkerState.addressToOwner ?? {}
+      labWorkerState.addressToOwner[payOutput.address] = txOperationPayload.receiver
       receiver = txOperationPayload.receiver
     }
   }
@@ -174,23 +178,23 @@ function resolveReceiverForBlockEffectTx(
         output.isChange === true && labAddressesEqual(output.address, firstNonChangeOutput.address),
     )
   ) {
-    state.addressToOwner = state.addressToOwner ?? {}
-    state.addressToOwner[firstNonChangeOutput.address] = sender
+    labWorkerState.addressToOwner = labWorkerState.addressToOwner ?? {}
+    labWorkerState.addressToOwner[firstNonChangeOutput.address] = sender
     receiver = sender
   }
   for (const output of outputs) {
     if (!output.isChange && output.owner == null) {
       const resolved = lookupOwnerForLabAddress(
         output.address,
-        state.addressToOwner ?? {},
+        labWorkerState.addressToOwner ?? {},
       )
       if (resolved != null) output.owner = resolved
     }
   }
   for (const output of outputs) {
     if (output.owner != null) {
-      state.addressToOwner = state.addressToOwner ?? {}
-      state.addressToOwner[output.address] = output.owner
+      labWorkerState.addressToOwner = labWorkerState.addressToOwner ?? {}
+      labWorkerState.addressToOwner[output.address] = output.owner
     }
   }
   return receiver
@@ -201,8 +205,8 @@ export function applyTransactionsAndDetailsFromBlock(
   height: number,
   blockTime: number,
 ): void {
-  const utxoMap = new Map(state.utxos.map((utxo) => [`${utxo.txid}:${utxo.vout}`, utxo]))
-  const addressToOwner = state.addressToOwner ?? {}
+  const utxoMap = new Map(labWorkerState.utxos.map((utxo) => [`${utxo.txid}:${utxo.vout}`, utxo]))
+  const addressToOwner = labWorkerState.addressToOwner ?? {}
 
   for (const tx of transactions) {
     const isCb = isCoinbase(tx)
@@ -253,13 +257,13 @@ export function applyTransactionsAndDetailsFromBlock(
         `applyTransactionsFromBlock txid=${tx.txid} height=${height}`,
       )
     }
-    state.transactions.push({
+    labWorkerState.transactions.push({
       txid: tx.txid,
       sender,
       receiver,
     })
     if (inputs.length > 0 || outputs.length > 0) {
-      state.txDetails.push({
+      labWorkerState.txDetails.push({
         txid: tx.txid,
         blockHeight: height,
         blockTime,

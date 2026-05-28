@@ -75,11 +75,11 @@ pub fn fee_sats_from_unsigned_psbt(psbt: &Psbt) -> Result<u64, CryptoError> {
 }
 
 /// Sum of output values paying to the wallet change script (0 when change-free).
-pub fn change_sats_from_unsigned_psbt(psbt: &Psbt, change_spk: &ScriptBuf) -> u64 {
+pub fn change_sats_from_unsigned_psbt(psbt: &Psbt, change_script_pubkey: &ScriptBuf) -> u64 {
     psbt.unsigned_tx
         .output
         .iter()
-        .filter(|output| output.script_pubkey == *change_spk)
+        .filter(|output| output.script_pubkey == *change_script_pubkey)
         .map(|output| output.value.to_sat())
         .sum()
 }
@@ -159,7 +159,7 @@ pub fn prepare_onchain_send(
     let address = Address::from_str(recipient_address)?
         .require_network(network)
         .map_err(|e| CryptoError::Transaction(e.to_string()))?;
-    let recipient_spk = address.script_pubkey();
+    let recipient_script_pubkey = address.script_pubkey();
 
     let fee_rate = validation::fee_rate_from_sat_per_vb_float(fee_rate_sat_per_vb)?;
 
@@ -169,7 +169,10 @@ pub fn prepare_onchain_send(
         let mut tx_builder = wallet.build_tx();
         tx_builder
             .nlocktime(absolute::LockTime::ZERO)
-            .add_recipient(recipient_spk.clone(), Amount::from_sat(payment_sats))
+            .add_recipient(
+                recipient_script_pubkey.clone(),
+                Amount::from_sat(payment_sats),
+            )
             .fee_rate(fee_rate);
         tx_builder.finish().map_err(CryptoError::from)
     };
@@ -179,7 +182,7 @@ pub fn prepare_onchain_send(
 
     let unsigned = psbt.unsigned_tx.clone();
     let single_recipient_only =
-        unsigned.output.len() == 1 && unsigned.output[0].script_pubkey == recipient_spk;
+        unsigned.output.len() == 1 && unsigned.output[0].script_pubkey == recipient_script_pubkey;
 
     let mut change_free_bump_available = false;
     let mut change_free_max_sats = 0u64;
@@ -211,11 +214,11 @@ pub fn prepare_onchain_send(
     let fee_sats = fee_sats_from_unsigned_psbt(&psbt)?;
     let total_input_sats = sum_psbt_input_values(&psbt)?;
     let input_utxos = review_inputs_from_wallet_psbt(wallet, &psbt)?;
-    let change_spk = psbt
+    let change_script_pubkey = psbt
         .unsigned_tx
         .output
         .iter()
-        .find(|output| output.script_pubkey != recipient_spk)
+        .find(|output| output.script_pubkey != recipient_script_pubkey)
         .map(|output| output.script_pubkey.clone())
         .unwrap_or_else(|| {
             wallet
@@ -226,7 +229,7 @@ pub fn prepare_onchain_send(
                 .address
                 .script_pubkey()
         });
-    let change_sats = change_sats_from_unsigned_psbt(&psbt, &change_spk);
+    let change_sats = change_sats_from_unsigned_psbt(&psbt, &change_script_pubkey);
 
     Ok(PrepareOnchainSendOutcome {
         psbt_base64: psbt.to_string(),

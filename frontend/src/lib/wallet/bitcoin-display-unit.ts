@@ -82,18 +82,18 @@ export function formatAmountInBitcoinDisplayUnit(
   sats: number,
   unit: BitcoinDisplayUnit,
 ): string {
-  const s = Number.isFinite(sats) && sats >= 0 ? sats : 0
+  const clampedSats = Number.isFinite(sats) && sats >= 0 ? sats : 0
   switch (unit) {
     case 'BTC':
-      return (s / SATS_PER_BTC).toFixed(8)
+      return (clampedSats / SATS_PER_BTC).toFixed(8)
     case 'mBTC':
-      return (s / SATS_PER_mBTC).toFixed(5)
+      return (clampedSats / SATS_PER_mBTC).toFixed(5)
     case 'uBTC':
-      return (s / SATS_PER_uBTC).toFixed(2)
+      return (clampedSats / SATS_PER_uBTC).toFixed(2)
     case 'sat':
-      return formatSats(s)
+      return formatSats(clampedSats)
     case 'ksat':
-      return (s / SATS_PER_ksat).toFixed(3)
+      return (clampedSats / SATS_PER_ksat).toFixed(3)
     default: {
       const _exhaustive: never = unit
       return _exhaustive

@@ -42,7 +42,7 @@ export function lightningDashboardBalancesQueryKey(
 export function lightningConnectionsFingerprint(
   connections: ConnectedLightningWallet[],
 ): string {
-  return [...connections.map((c) => c.id)].sort().join(',')
+  return [...connections.map((connection) => connection.id)].sort().join(',')
 }
 
 export function getMatchingLightningConnectionsForDashboard(): ConnectedLightningWallet[] {
@@ -166,13 +166,13 @@ export async function fetchLightningPaymentsForActiveWallet(): Promise<
           listPaymentsError,
         )
       }
-      const snap = snapshotById.get(lightningConnection.id)
-      if (snap?.paymentsUpdatedAt != null) {
+      const connectionSnapshot = snapshotById.get(lightningConnection.id)
+      if (connectionSnapshot?.paymentsUpdatedAt != null) {
         stalePaymentsAsOf = maxIsoTimestamp(
           stalePaymentsAsOf,
-          snap.paymentsUpdatedAt,
+          connectionSnapshot.paymentsUpdatedAt,
         )
-        for (const payment of snap.payments) {
+        for (const payment of connectionSnapshot.payments) {
           if (!byHash.has(payment.paymentHash)) {
             byHash.set(payment.paymentHash, {
               ...payment,
@@ -285,14 +285,14 @@ export async function fetchLightningBalancesForDashboard(): Promise<LightningBal
       totalSats += row.balanceSats
       continue
     }
-    const snap = snapshotById.get(lightningConnection.id)
-    if (snap != null && snap.balanceUpdatedAt.length > 0) {
+    const connectionSnapshot = snapshotById.get(lightningConnection.id)
+    if (connectionSnapshot != null && connectionSnapshot.balanceUpdatedAt.length > 0) {
       const staleRow: LightningBalanceRow = {
         connectionId: lightningConnection.id,
         label: lightningConnection.label,
-        balanceSats: snap.balanceSats,
+        balanceSats: connectionSnapshot.balanceSats,
         isStaleBalance: true,
-        balanceSnapshotAt: snap.balanceUpdatedAt,
+        balanceSnapshotAt: connectionSnapshot.balanceUpdatedAt,
       }
       lightningBalanceRows.push(staleRow)
       totalSats += staleRow.balanceSats

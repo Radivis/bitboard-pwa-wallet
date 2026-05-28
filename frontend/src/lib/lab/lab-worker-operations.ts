@@ -28,7 +28,7 @@ import { LAB_MAX_RANDOM_ENTITY_TRANSACTIONS } from '@/lib/lab/lab-random-limits'
 import { onchainDustPrepareWarningLines } from '@/lib/wallet/send/onchain-dust-prepare-messages'
 
 function sumUtxoSats(utxos: { amountSats: number }[]): number {
-  return utxos.reduce((s, u) => s + (Number(u.amountSats) || 0), 0)
+  return utxos.reduce((totalSats, utxo) => totalSats + (Number(utxo.amountSats) || 0), 0)
 }
 
 export async function labOpLoadChainFromDatabase(): Promise<LabState> {

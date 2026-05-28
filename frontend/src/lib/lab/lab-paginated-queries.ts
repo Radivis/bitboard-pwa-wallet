@@ -185,7 +185,9 @@ export async function fetchLabOwnerKeysPage(
     LIMIT ${pageSize} OFFSET ${offset}
   `.execute(labDb)
 
-  const ownerKeys = pageResult.rows.map((r) => r.owner_key).filter((k) => k != null && k !== '')
+  const ownerKeys = pageResult.rows
+    .map((row) => row.owner_key)
+    .filter((ownerKey) => ownerKey != null && ownerKey !== '')
 
   return { ownerKeys, totalCount }
 }
@@ -216,9 +218,9 @@ export async function fetchLabAddressesForOwnerPage(
     .offset(offset)
     .execute()
 
-  const addresses: LabAddress[] = rows.map((r) => ({
-    address: r.address,
-    wif: r.wif,
+  const addresses: LabAddress[] = rows.map((addressRow) => ({
+    address: addressRow.address,
+    wif: addressRow.wif,
   }))
 
   return { addresses, totalCount }
@@ -258,11 +260,11 @@ export async function fetchLabUtxosForOwnerPage(
     .offset(offset)
     .execute()
 
-  const utxos: LabUtxoRow[] = rows.map((r) => ({
-    txid: r.txid,
-    vout: r.vout,
-    address: r.address,
-    amountSats: r.amount_sats,
+  const utxos: LabUtxoRow[] = rows.map((utxoRow) => ({
+    txid: utxoRow.txid,
+    vout: utxoRow.vout,
+    address: utxoRow.address,
+    amountSats: utxoRow.amount_sats,
   }))
 
   return { utxos, totalCount }
@@ -303,7 +305,7 @@ export async function fetchLabEntitiesPage(
     .offset(offset)
     .execute()
 
-  const ids = entityRows.map((r) => r.lab_entity_id)
+  const ids = entityRows.map((entityRow) => entityRow.lab_entity_id)
   if (ids.length === 0) {
     return { rows: [], totalCount }
   }

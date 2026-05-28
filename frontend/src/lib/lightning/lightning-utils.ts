@@ -30,11 +30,11 @@ export function lightningNetworkModeFromNip47Network(
   raw: string | undefined,
 ): LightningNetworkMode | null {
   if (raw == null) return null
-  const n = raw.trim().toLowerCase()
-  if (n === '') return null
-  if (n === 'mainnet' || n === 'bitcoin') return 'mainnet'
-  if (n === 'testnet') return 'testnet'
-  if (n === 'signet') return 'signet'
+  const normalizedNetwork = raw.trim().toLowerCase()
+  if (normalizedNetwork === '') return null
+  if (normalizedNetwork === 'mainnet' || normalizedNetwork === 'bitcoin') return 'mainnet'
+  if (normalizedNetwork === 'testnet') return 'testnet'
+  if (normalizedNetwork === 'signet') return 'signet'
   return null
 }
 

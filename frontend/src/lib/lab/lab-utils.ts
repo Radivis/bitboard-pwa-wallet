@@ -82,7 +82,7 @@ export function resolveDeadLabEntityRecipient(
 ): { displayName: string; addressType: AddressType } | null {
   const owner = lookupLabAddressOwner(recipientAddress, addressToOwner)
   if (owner?.kind !== 'lab_entity') return null
-  const entity = entities.find((e) => e.labEntityId === owner.labEntityId)
+  const entity = entities.find((entityRecord) => entityRecord.labEntityId === owner.labEntityId)
   if (entity == null || !entity.isDead) return null
   return { displayName: labEntityOwnerKey(entity), addressType: entity.addressType }
 }

@@ -102,10 +102,10 @@ const NWC_CONNECTION_STRING_PREFIX = 'nostr+walletconnect://'
 const E2E_NWC_MOCK_CONNECTION_STRING = 'nostr+walletconnect://e2e-mock'
 
 export function isValidNwcConnectionString(value: string): boolean {
-  const v = value.trim()
+  const trimmedConnectionString = value.trim()
   return (
-    v.startsWith(NWC_CONNECTION_STRING_PREFIX) &&
-    v.length <= MAX_NWC_CONNECTION_STRING_LENGTH
+    trimmedConnectionString.startsWith(NWC_CONNECTION_STRING_PREFIX) &&
+    trimmedConnectionString.length <= MAX_NWC_CONNECTION_STRING_LENGTH
   )
 }
 
@@ -160,11 +160,11 @@ async function nwcCreateInvoice(
     nip47Params.expiry = params.expiry
   }
 
-  const exec = client as unknown as NwcClientWithExecute
-  const nip47InvoiceResult = await exec.executeNip47Request<NwcMakeInvoiceResult>(
+  const nip47Client = client as unknown as NwcClientWithExecute
+  const nip47InvoiceResult = await nip47Client.executeNip47Request<NwcMakeInvoiceResult>(
     'make_invoice',
     nip47Params,
-    (r) => !!r.invoice,
+    (makeInvoiceResult) => !!makeInvoiceResult.invoice,
   )
 
   return {

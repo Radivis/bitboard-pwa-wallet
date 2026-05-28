@@ -3,10 +3,10 @@ import { normalizeJsonOwnerToLabOwner } from '@/lib/lab/lab-owner'
 import type { LabState, MempoolEntry } from './lab-api'
 import { EMPTY_LAB_STATE } from './lab-api'
 
-export let state: LabState = { ...EMPTY_LAB_STATE }
+export let labWorkerState: LabState = { ...EMPTY_LAB_STATE }
 
 export function replaceLabWorkerState(newState: LabState): void {
-  state = newState
+  labWorkerState = newState
 }
 
 /**
@@ -53,7 +53,7 @@ export function assertLabReceiverNonNull(
 
 export function rebuildTxidToChangeAddressFromMempool(mempool: MempoolEntry[]): void {
   for (const entry of mempool) {
-    const changeVout = entry.outputsDetail.findIndex((o) => o.isChange)
+    const changeVout = entry.outputsDetail.findIndex((outputDetail) => outputDetail.isChange)
     if (changeVout >= 0) {
       const changeOut = entry.outputsDetail[changeVout]
       txidToChangeOutput.set(entry.txid, { address: changeOut.address, vout: changeVout })
@@ -63,7 +63,7 @@ export function rebuildTxidToChangeAddressFromMempool(mempool: MempoolEntry[]): 
 
 export function rebuildTxidToChangeAddressFromState(): void {
   txidToChangeOutput.clear()
-  for (const op of state.txOperations ?? []) {
+  for (const op of labWorkerState.txOperations ?? []) {
     if (op.changeAddress) {
       txidToChangeOutput.set(op.txid, {
         address: op.changeAddress,
@@ -71,16 +71,16 @@ export function rebuildTxidToChangeAddressFromState(): void {
       })
     }
   }
-  rebuildTxidToChangeAddressFromMempool(state.mempool ?? [])
+  rebuildTxidToChangeAddressFromMempool(labWorkerState.mempool ?? [])
 }
 
-export function parseWasmObject(val: unknown): Record<string, unknown> {
-  if (val != null && typeof val === 'object' && !Array.isArray(val)) {
-    return val as Record<string, unknown>
+export function parseWasmObject(wasmValue: unknown): Record<string, unknown> {
+  if (wasmValue != null && typeof wasmValue === 'object' && !Array.isArray(wasmValue)) {
+    return wasmValue as Record<string, unknown>
   }
-  if (typeof val === 'string') {
+  if (typeof wasmValue === 'string') {
     try {
-      return JSON.parse(val) as Record<string, unknown>
+      return JSON.parse(wasmValue) as Record<string, unknown>
     } catch {
       return {}
     }

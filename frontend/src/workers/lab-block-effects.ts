@@ -5,7 +5,7 @@ import {
 import type { LabAddress } from './lab-api'
 import type { BlockEffectsParsed, BlockEffectsTx } from './lab-block-effects-types'
 import { applyTransactionsAndDetailsFromBlock } from './lab-apply-block-transactions'
-import { state } from './lab-worker-state'
+import { labWorkerState } from './lab-worker-state'
 
 type WasmModule = Awaited<ReturnType<typeof import('./lab-wasm-loader').getWasm>>
 
@@ -32,15 +32,17 @@ export function parseBlockEffects(raw: unknown): BlockEffectsParsed {
 }
 
 function readSatsFromUtxoRow(row: Record<string, unknown>): number {
-  const v = row.amount_sats ?? row.amountSats
-  if (typeof v === 'bigint') return Number(v)
-  if (typeof v === 'number' && Number.isFinite(v)) return Math.trunc(v)
+  const amountSatsRaw = row.amount_sats ?? row.amountSats
+  if (typeof amountSatsRaw === 'bigint') return Number(amountSatsRaw)
+  if (typeof amountSatsRaw === 'number' && Number.isFinite(amountSatsRaw)) {
+    return Math.trunc(amountSatsRaw)
+  }
   return 0
 }
 
 function removeSpentUtxos(spent: { txid: string; vout: number }[]): void {
   for (const stxo of spent) {
-    state.utxos = state.utxos.filter((utxo) => !(utxo.txid === stxo.txid && utxo.vout === stxo.vout))
+    labWorkerState.utxos = labWorkerState.utxos.filter((utxo) => !(utxo.txid === stxo.txid && utxo.vout === stxo.vout))
   }
 }
 
@@ -58,7 +60,7 @@ function addNewUtxos(
   for (const utxo of newUtxos) {
     const row = utxo as unknown as Record<string, unknown>
     const addressStr = String(utxo.address)
-    state.utxos.push({
+    labWorkerState.utxos.push({
       txid: String(utxo.txid),
       vout: Number(utxo.vout),
       address: addressStr,
@@ -75,10 +77,10 @@ function synthesizeCoinbaseTxFromNewUtxos(
 ): BlockEffectsTx[] {
   if (!Array.isArray(newUtxos) || newUtxos.length === 0) return []
   const byTxid = new Map<string, BlockEffectsParsed['new_utxos']>()
-  for (const u of newUtxos) {
-    const txid = String(u.txid)
+  for (const newUtxoRow of newUtxos) {
+    const txid = String(newUtxoRow.txid)
     const list = byTxid.get(txid) ?? []
-    list.push(u)
+    list.push(newUtxoRow)
     byTxid.set(txid, list)
   }
   const firstTxid = String(newUtxos[0].txid)
@@ -92,10 +94,10 @@ function synthesizeCoinbaseTxFromNewUtxos(
           prev_vout: LAB_COINBASE_PREV_VOUT,
         },
       ],
-      outputs: rows.map((u) => {
-        const row = u as unknown as Record<string, unknown>
+      outputs: rows.map((newUtxoRow) => {
+        const row = newUtxoRow as unknown as Record<string, unknown>
         return {
-          address: String(u.address),
+          address: String(newUtxoRow.address),
           amount_sats: readSatsFromUtxoRow(row),
         }
       }),
@@ -123,11 +125,11 @@ export function applyBlockEffects(
   removeSpentUtxos(spent)
   addNewUtxos(newUtxos)
   if (newAddress) {
-    state.addresses.push(newAddress)
+    labWorkerState.addresses.push(newAddress)
   }
 
   const blockHash = wasmModule.lab_block_hash(blockHex)
-  state.blocks.push({
+  labWorkerState.blocks.push({
     blockHash,
     height,
     blockData: blockHex,
