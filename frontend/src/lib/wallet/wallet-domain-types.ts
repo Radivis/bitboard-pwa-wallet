@@ -14,6 +14,14 @@ export enum AddressType {
 
 export type BitcoinNetwork = 'bitcoin' | 'testnet' | 'signet' | 'regtest'
 
+/** Domain wallet row from SQLite (camelCase). Mapped at the DB hook boundary. */
+export interface WalletSummary {
+  walletId: number
+  name: string
+  createdAt: string
+  noMnemonicBackup?: boolean
+}
+
 /** Parse a stored / wire string (e.g. SQLite `address_type`) into {@link AddressType}. */
 export function parseAddressType(raw: string): AddressType {
   const normalized = raw.trim().toLowerCase()

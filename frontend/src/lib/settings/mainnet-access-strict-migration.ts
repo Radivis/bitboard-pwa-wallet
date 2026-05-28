@@ -13,8 +13,8 @@ const mainnetStrictMigrationGuard = { started: false }
  */
 export function runMainnetStrictMigrationAfterHydration(): void {
   runStrictMigrationAfterHydration(mainnetStrictMigrationGuard, async () => {
-    const { mainnetAccessEnabled } = useFeatureStore.getState()
-    if (mainnetAccessEnabled) return
+    const { isMainnetAccessEnabled } = useFeatureStore.getState()
+    if (isMainnetAccessEnabled) return
 
     if (getCommittedNetworkMode() !== 'mainnet') return
 

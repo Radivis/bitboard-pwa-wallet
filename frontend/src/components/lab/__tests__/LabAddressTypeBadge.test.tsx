@@ -6,7 +6,7 @@ import { LabOwnerDisplayWithAddressType } from '@/components/lab/LabOwnerDisplay
 import { labEntityLabOwner } from '@/lib/lab/lab-owner'
 
 const labFeatureState = vi.hoisted(() => ({
-  segwitAddressesEnabled: true,
+  isSegwitAddressesEnabled: true,
 }))
 
 vi.mock('@/stores/featureStore', () => ({
@@ -16,7 +16,7 @@ vi.mock('@/stores/featureStore', () => ({
 
 describe('LabAddressTypeBadge', () => {
   beforeEach(() => {
-    labFeatureState.segwitAddressesEnabled = true
+    labFeatureState.isSegwitAddressesEnabled = true
   })
 
   it('renders SegWit for segwit address type', () => {
@@ -30,14 +30,14 @@ describe('LabAddressTypeBadge', () => {
   })
 
   it('renders nothing when SegWit addresses feature is off', () => {
-    labFeatureState.segwitAddressesEnabled = false
+    labFeatureState.isSegwitAddressesEnabled = false
     const { container } = render(<LabAddressTypeBadge addressType={AddressType.SegWit} />)
     expect(container).toBeEmptyDOMElement()
   })
 })
 
 describe('LabOwnerDisplayWithAddressType', () => {
-  const wallets = [{ wallet_id: 1, name: 'Main' }]
+  const wallets = [{ walletId: 1, name: 'Main', createdAt: new Date().toISOString() }]
   const entities = [
     {
       labEntityId: 1,
@@ -47,7 +47,7 @@ describe('LabOwnerDisplayWithAddressType', () => {
   ]
 
   beforeEach(() => {
-    labFeatureState.segwitAddressesEnabled = true
+    labFeatureState.isSegwitAddressesEnabled = true
   })
 
   it('shows name and SegWit badge for lab entity', () => {

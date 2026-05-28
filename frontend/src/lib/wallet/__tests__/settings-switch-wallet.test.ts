@@ -191,7 +191,7 @@ describe('switchDescriptorWallet', () => {
   })
 
   it('resolves without success toast when sync fails after load; unlocks for manual retry', async () => {
-    mockSyncLoadedSubWalletWithEsplora.mockResolvedValueOnce('sync_failed')
+    mockSyncLoadedSubWalletWithEsplora.mockResolvedValueOnce('syncFailed')
 
     await expect(
       switchDescriptorWallet({

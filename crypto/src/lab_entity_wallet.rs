@@ -94,7 +94,7 @@ pub fn lab_entity_get_current_external_address(
     address_type: AddressType,
     account_id: u32,
 ) -> Result<String, CryptoError> {
-    let (wallet, _ignored_persisted_changeset) =
+    let (wallet, _) =
         open_lab_entity_wallet(mnemonic, changeset_json, network, address_type, account_id)?;
     Ok(get_current_address(&wallet))
 }

@@ -171,7 +171,7 @@ export async function syncActiveWalletAndUpdateState(
   setTransactions(transactionList)
 }
 
-export type SubWalletEsploraSyncResult = 'completed' | 'sync_failed'
+export type SubWalletEsploraSyncResult = 'completed' | 'syncFailed'
 
 /**
  * After WASM is already loaded for a target sub-wallet, run Esplora sync
@@ -223,7 +223,7 @@ export async function syncLoadedSubWalletWithEsplora(options: {
     } catch {
       // Leave balance cleared if WASM is unavailable.
     }
-    return 'sync_failed'
+    return 'syncFailed'
   }
 }
 

@@ -17,7 +17,7 @@ export function AddressTypeSelector() {
   const [showWarning, setShowWarning] = useState(false)
   const [pendingType, setPendingType] = useState<AddressType | null>(null)
 
-  const { mutateAsync, loading, statusLine } =
+  const { mutateAsync, isSwitching, statusLine } =
     useSubWalletSwitchMutation('addressType')
 
   const handleChange = (type: AddressType) => {
@@ -56,7 +56,7 @@ export function AddressTypeSelector() {
             size="sm"
             onClick={() => handleChange(AddressType.Taproot)}
             className="w-full"
-            disabled={loading}
+            disabled={isSwitching}
           >
             Taproot (BIP86)
           </Button>
@@ -72,13 +72,13 @@ export function AddressTypeSelector() {
             size="sm"
             onClick={() => handleChange(AddressType.SegWit)}
             className="w-full"
-            disabled={loading}
+            disabled={isSwitching}
           >
             SegWit (BIP84)
           </Button>
         </InfomodeWrapper>
       </div>
-      {loading && statusLine && (
+      {isSwitching && statusLine && (
         <LoadingSpinner text={statusLine} className={ADDRESS_SWITCH_SPINNER_CLASS} />
       )}
       <ConfirmationDialog

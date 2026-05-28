@@ -136,7 +136,7 @@ pub fn review_inputs_from_wallet_psbt(
 /// user may choose a higher payment. When true, applies that bump if possible.
 pub fn prepare_onchain_send(
     wallet: &mut Wallet,
-    recipient_address: &str,
+    to_address: &str,
     amount_sats: u64,
     fee_rate_sat_per_vb: f64,
     network: Network,
@@ -156,7 +156,7 @@ pub fn prepare_onchain_send(
         raised_to_min_dust = true;
     }
 
-    let address = Address::from_str(recipient_address)?
+    let address = Address::from_str(to_address)?
         .require_network(network)
         .map_err(|e| CryptoError::Transaction(e.to_string()))?;
     let recipient_script_pubkey = address.script_pubkey();
@@ -250,14 +250,14 @@ pub fn prepare_onchain_send(
 
 pub fn build_transaction(
     wallet: &mut Wallet,
-    recipient_address: &str,
+    to_address: &str,
     amount_sats: u64,
     fee_rate_sat_per_vb: f64,
     network: Network,
 ) -> Result<Psbt, CryptoError> {
     let outcome = prepare_onchain_send(
         wallet,
-        recipient_address,
+        to_address,
         amount_sats,
         fee_rate_sat_per_vb,
         network,

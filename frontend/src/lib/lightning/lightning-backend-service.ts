@@ -27,7 +27,7 @@ export type LightningPaymentDirection = 'incoming' | 'outgoing'
 
 export interface LightningPayment {
   paymentHash: string
-  pending: boolean
+  isPending: boolean
   /** Absolute amount in satoshis (incoming or outgoing). */
   amountSats: number
   memo: string
@@ -184,7 +184,7 @@ type E2eNwcMockState = {
 function createInitialE2eMockPayment(): LightningPayment {
   return {
     paymentHash: 'e2e-mock-payment-1',
-    pending: false,
+    isPending: false,
     amountSats: 21,
     memo: 'Initial mock payment',
     timestamp: Math.floor(Date.now() / 1000),
@@ -319,7 +319,7 @@ function createNwcBackendService(
       const listTransactionsResponse = await client.listTransactions({})
       return listTransactionsResponse.transactions.map((nwcTransaction) => ({
         paymentHash: nwcTransaction.payment_hash,
-        pending: nwcTransaction.state === 'pending',
+        isPending: nwcTransaction.state === 'pending',
         amountSats: msatsToSats(nwcTransaction.amount),
         memo: nwcTransaction.description,
         timestamp: nwcTransaction.created_at,

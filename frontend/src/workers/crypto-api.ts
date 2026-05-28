@@ -91,7 +91,7 @@ export interface DraftLabPsbtTransactionResult {
   psbtBase64: string;
   finalAmountSats: number;
   originalAmountSats: number;
-  raisedToMinDust: boolean;
+  isRaisedToMinDust: boolean;
   changeFreeBumpAvailable: boolean;
   changeFreeMaxSats: number;
   feeSats: number;
@@ -137,7 +137,7 @@ export interface PrepareOnchainSendResult {
   psbtBase64: string;
   finalAmountSats: number;
   originalAmountSats: number;
-  raisedToMinDust: boolean;
+  isRaisedToMinDust: boolean;
   bumpedChangeFree: boolean;
   changeFreeBumpAvailable: boolean;
   changeFreeMaxSats: number;
@@ -154,7 +154,7 @@ export interface BuildAndSignLabTransactionResult {
   hasChange: boolean;
   finalAmountSats: number;
   originalAmountSats: number;
-  raisedToMinDust: boolean;
+  isRaisedToMinDust: boolean;
   bumpedChangeFree: boolean;
   changeFreeBumpAvailable: boolean;
   changeFreeMaxSats: number;

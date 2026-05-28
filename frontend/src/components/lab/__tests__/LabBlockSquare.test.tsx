@@ -29,7 +29,7 @@ const baseProps = {
   netMovedSats: 100_000_000,
   minedOnUnix: 1_700_000_000,
   minedBy: labEntityLabOwner(1),
-  wallets: [] as Array<{ wallet_id: number; name: string }>,
+  wallets: [] as Array<{ walletId: number; name: string; createdAt: string }>,
   entities: [
     {
       labEntityId: 1,

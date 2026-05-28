@@ -14,13 +14,20 @@ import {
   mapWireBalanceToDomain,
   mapWireCreateWalletResultToDomain,
   mapWireDescriptorPairToDomain,
+  mapWireDraftPsbtResultToDomain,
+  mapWireLabSignResultToDomain,
+  mapWirePrepareOnchainSendResultToDomain,
   mapWireSyncResultToDomain,
   mapWireTransactionListToDomain,
+  parseWasmJsonWire,
 } from './crypto-wire-mappers';
 import type {
   WireBalanceInfo,
   WireCreateWalletResult,
   WireDescriptorPair,
+  WireDraftPsbtResult,
+  WireLabSignResult,
+  WirePrepareOnchainSendResult,
   WireSyncResult,
   WireTransactionDetails,
 } from './crypto-wire-types';
@@ -28,29 +35,6 @@ import type { EncryptedBlobMessage, SecretsChannelService } from './secrets-chan
 import { parseWalletPayloadJson } from '@/lib/wallet/wallet-domain-types';
 import type { WalletSecretsPayload } from '@/lib/wallet/wallet-domain-types';
 import { rethrowWasmCryptoErrorForComlink } from '@/lib/shared/wasm-crypto-error';
-
-function mapReviewInputUtxos(
-  wasmUtxoList: unknown,
-): import('./crypto-api').ReviewInputUtxo[] {
-  if (!Array.isArray(wasmUtxoList)) return [];
-  return wasmUtxoList.map((untypedUtxoRecord) => {
-    const utxoFields = untypedUtxoRecord as Record<string, unknown>;
-    return {
-      address: String(utxoFields.address ?? ''),
-      amountSats: Number(utxoFields.amount_sats ?? 0),
-      txid: String(utxoFields.txid ?? ''),
-      vout: Number(utxoFields.vout ?? 0),
-    };
-  });
-}
-
-function mapPrepareOrDraftReviewFields(parsed: Record<string, unknown>) {
-  return {
-    changeSats: Number(parsed.change_sats ?? 0),
-    totalInputSats: Number(parsed.total_input_sats ?? 0),
-    inputUtxos: mapReviewInputUtxos(parsed.input_utxos),
-  };
-}
 
 type BitboardCryptoModule = typeof import('@/wasm-pkg/bitboard_crypto');
 
@@ -337,21 +321,9 @@ const cryptoService = {
         applyChangeFreeBump,
       ),
     );
-    const labSignResponseFields =
-      typeof wasmLabSignResponse === 'string'
-        ? JSON.parse(wasmLabSignResponse)
-        : wasmLabSignResponse;
-    return {
-      signedTxHex: labSignResponseFields.signed_tx_hex,
-      feeSats: labSignResponseFields.fee_sats,
-      hasChange: labSignResponseFields.has_change,
-      finalAmountSats: labSignResponseFields.final_amount_sats,
-      originalAmountSats: labSignResponseFields.original_amount_sats,
-      raisedToMinDust: labSignResponseFields.raised_to_min_dust,
-      bumpedChangeFree: labSignResponseFields.bumped_change_free,
-      changeFreeBumpAvailable: Boolean(labSignResponseFields.change_free_bump_available),
-      changeFreeMaxSats: Number(labSignResponseFields.change_free_max_sats),
-    };
+    return mapWireLabSignResultToDomain(
+      parseWasmJsonWire<WireLabSignResult>(wasmLabSignResponse),
+    );
   },
 
   async draftLabPsbtTransaction(params: {
@@ -380,20 +352,9 @@ const cryptoService = {
         applyChangeFreeBump,
       ),
     );
-    const draftPsbtResponseFields =
-      typeof wasmDraftPsbtResponse === 'string'
-        ? JSON.parse(wasmDraftPsbtResponse)
-        : wasmDraftPsbtResponse;
-    return {
-      psbtBase64: draftPsbtResponseFields.psbt_base64,
-      finalAmountSats: Number(draftPsbtResponseFields.final_amount_sats),
-      originalAmountSats: Number(draftPsbtResponseFields.original_amount_sats),
-      raisedToMinDust: Boolean(draftPsbtResponseFields.raised_to_min_dust),
-      changeFreeBumpAvailable: Boolean(draftPsbtResponseFields.change_free_bump_available),
-      changeFreeMaxSats: Number(draftPsbtResponseFields.change_free_max_sats),
-      feeSats: Number(draftPsbtResponseFields.fee_sats),
-      ...mapPrepareOrDraftReviewFields(draftPsbtResponseFields),
-    };
+    return mapWireDraftPsbtResultToDomain(
+      parseWasmJsonWire<WireDraftPsbtResult>(wasmDraftPsbtResponse),
+    );
   },
 
   async getLabChangeAddress(): Promise<string> {
@@ -416,22 +377,9 @@ const cryptoService = {
         params.feeRateSatPerVb,
       ),
     );
-    const labEntityDraftPsbtResponseFields =
-      typeof wasmLabEntityDraftPsbtResponse === 'string'
-        ? JSON.parse(wasmLabEntityDraftPsbtResponse)
-        : wasmLabEntityDraftPsbtResponse;
-    return {
-      psbtBase64: labEntityDraftPsbtResponseFields.psbt_base64,
-      finalAmountSats: Number(labEntityDraftPsbtResponseFields.final_amount_sats),
-      originalAmountSats: Number(labEntityDraftPsbtResponseFields.original_amount_sats),
-      raisedToMinDust: Boolean(labEntityDraftPsbtResponseFields.raised_to_min_dust),
-      changeFreeBumpAvailable: Boolean(
-        labEntityDraftPsbtResponseFields.change_free_bump_available,
-      ),
-      changeFreeMaxSats: Number(labEntityDraftPsbtResponseFields.change_free_max_sats),
-      feeSats: Number(labEntityDraftPsbtResponseFields.fee_sats),
-      ...mapPrepareOrDraftReviewFields(labEntityDraftPsbtResponseFields),
-    };
+    return mapWireDraftPsbtResultToDomain(
+      parseWasmJsonWire<WireDraftPsbtResult>(wasmLabEntityDraftPsbtResponse),
+    );
   },
 
   async labEntityBuildAndSignTransaction(
@@ -514,21 +462,9 @@ const cryptoService = {
         applyChangeFreeBump,
       ),
     );
-    const prepareSendResponseFields =
-      typeof wasmPrepareResult === 'string'
-        ? JSON.parse(wasmPrepareResult)
-        : wasmPrepareResult;
-    return {
-      psbtBase64: prepareSendResponseFields.psbt_base64,
-      finalAmountSats: Number(prepareSendResponseFields.final_amount_sats),
-      originalAmountSats: Number(prepareSendResponseFields.original_amount_sats),
-      raisedToMinDust: Boolean(prepareSendResponseFields.raised_to_min_dust),
-      bumpedChangeFree: Boolean(prepareSendResponseFields.bumped_change_free),
-      changeFreeBumpAvailable: Boolean(prepareSendResponseFields.change_free_bump_available),
-      changeFreeMaxSats: Number(prepareSendResponseFields.change_free_max_sats),
-      feeSats: Number(prepareSendResponseFields.fee_sats),
-      ...mapPrepareOrDraftReviewFields(prepareSendResponseFields),
-    };
+    return mapWirePrepareOnchainSendResultToDomain(
+      parseWasmJsonWire<WirePrepareOnchainSendResult>(wasmPrepareResult),
+    );
   },
 
   async signAndExtractTransaction(psbtBase64: string): Promise<string> {

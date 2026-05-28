@@ -75,7 +75,7 @@ export function DeleteWalletSection({
     /** This UI only deletes the wallet that is currently active. */
     const activeWalletIsBeingDeleted = true
     const nextActiveWalletId =
-      wallets.find((w) => w.wallet_id !== deletedWalletId)?.wallet_id ?? null
+      wallets.find((w) => w.walletId !== deletedWalletId)?.walletId ?? null
 
     try {
       await deleteWalletMutation.mutateAsync(deletedWalletId)

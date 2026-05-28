@@ -33,7 +33,7 @@ export function useWalletBackupExport() {
   const [walletExportBusy, setWalletExportBusy] = useState(false)
   const [exportPasswordOpen, setExportPasswordOpen] = useState(false)
 
-  const walletIdForBackupPasswordCompare = activeWalletId ?? wallets?.[0]?.wallet_id
+  const walletIdForBackupPasswordCompare = activeWalletId ?? wallets?.[0]?.walletId
 
   const checkSigningPasswordMatchesAppPassword = useCallback(
     async (password: string): Promise<AppPasswordCompareResult> => {

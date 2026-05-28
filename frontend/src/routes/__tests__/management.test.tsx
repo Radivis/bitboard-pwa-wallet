@@ -79,9 +79,9 @@ vi.mock('@/lib/wallet/wallet-delete-finalize', () => ({
 }))
 
 vi.mock('@/db', () => ({
-  useWallets: () => ({ data: [{ wallet_id: 1, name: 'Test Wallet', created_at: '' }] }),
+  useWallets: () => ({ data: [{ walletId: 1, name: 'Test Wallet', createdAt: '' }] }),
   useWallet: () => ({
-    data: { wallet_id: 1, name: 'Test Wallet', created_at: '' },
+    data: { walletId: 1, name: 'Test Wallet', createdAt: '' },
     isSuccess: true,
   }),
   useUpdateWallet: () => ({

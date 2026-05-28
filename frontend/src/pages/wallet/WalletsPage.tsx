@@ -50,9 +50,9 @@ export function WalletsPage() {
       <div className="space-y-3">
         {wallets.map((wallet) => (
           <Card
-            key={wallet.wallet_id}
+            key={wallet.walletId}
             className="cursor-pointer transition-colors hover:bg-muted/50"
-            onClick={() => handleSelectWallet(wallet.wallet_id)}
+            onClick={() => handleSelectWallet(wallet.walletId)}
           >
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="flex items-center gap-2 text-base">
@@ -65,14 +65,14 @@ export function WalletsPage() {
                 size="icon"
                 className="shrink-0 text-muted-foreground hover:text-destructive"
                 aria-label={`Delete wallet ${wallet.name}`}
-                onClick={(e) => void handleDeleteWalletIntent(e, wallet.wallet_id)}
+                onClick={(e) => void handleDeleteWalletIntent(e, wallet.walletId)}
               >
                 <Trash2 className="h-4 w-4" />
               </Button>
             </CardHeader>
             <CardContent>
               <CardDescription>
-                Created {new Date(wallet.created_at).toLocaleDateString()}
+                Created {new Date(wallet.createdAt).toLocaleDateString()}
               </CardDescription>
             </CardContent>
           </Card>

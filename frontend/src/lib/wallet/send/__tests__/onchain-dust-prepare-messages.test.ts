@@ -6,10 +6,10 @@ import {
 } from '../onchain-dust-prepare-messages'
 
 describe('minOutputSizeRaisedToastMessage', () => {
-  it('matches the raisedToMinDust warning line', () => {
+  it('matches the isRaisedToMinDust warning line', () => {
     expect(minOutputSizeRaisedToastMessage()).toBe(
       onchainDustPrepareWarningLines({
-        raisedToMinDust: true,
+        isRaisedToMinDust: true,
         bumpedChangeFree: false,
       })[0],
     )
@@ -20,7 +20,7 @@ describe('onchainDustPrepareWarningLines', () => {
   it('returns empty array when no adjustments', () => {
     expect(
       onchainDustPrepareWarningLines({
-        raisedToMinDust: false,
+        isRaisedToMinDust: false,
         bumpedChangeFree: false,
       }),
     ).toEqual([])
@@ -29,7 +29,7 @@ describe('onchainDustPrepareWarningLines', () => {
   it('returns min-dust line only', () => {
     expect(
       onchainDustPrepareWarningLines({
-        raisedToMinDust: true,
+        isRaisedToMinDust: true,
         bumpedChangeFree: false,
       }),
     ).toEqual([
@@ -40,7 +40,7 @@ describe('onchainDustPrepareWarningLines', () => {
   it('returns change-free line only', () => {
     expect(
       onchainDustPrepareWarningLines({
-        raisedToMinDust: false,
+        isRaisedToMinDust: false,
         bumpedChangeFree: true,
       }),
     ).toEqual([
@@ -50,7 +50,7 @@ describe('onchainDustPrepareWarningLines', () => {
 
   it('returns both lines when both adjustments apply', () => {
     const lines = onchainDustPrepareWarningLines({
-      raisedToMinDust: true,
+      isRaisedToMinDust: true,
       bumpedChangeFree: true,
     })
     expect(lines).toHaveLength(2)

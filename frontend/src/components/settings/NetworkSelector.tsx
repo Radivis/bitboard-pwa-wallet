@@ -49,16 +49,16 @@ const NETWORK_INFOMODE: Record<NetworkMode, { title: string; text: string }> = {
 
 export function NetworkSelector() {
   const displayNetworkMode = useWalletStore(selectCommittedNetworkMode)
-  const mainnetAccessEnabled = useFeatureStore((featureState) => featureState.mainnetAccessEnabled)
-  const regtestModeEnabled = useFeatureStore((featureState) => featureState.regtestModeEnabled)
+  const isMainnetAccessEnabled = useFeatureStore((featureState) => featureState.isMainnetAccessEnabled)
+  const isRegtestModeEnabled = useFeatureStore((featureState) => featureState.isRegtestModeEnabled)
   const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
   const sessionPassword = useSessionStore((sessionState) => sessionState.password)
   const nearZeroActive = useNearZeroSecurityStore((nearZeroSecurityState) => nearZeroSecurityState.active)
 
   const mainnetSelectionBlocked =
-    !mainnetAccessEnabled && displayNetworkMode !== 'mainnet'
+    !isMainnetAccessEnabled && displayNetworkMode !== 'mainnet'
 
-  const networkOptionsVisible: NetworkMode[] = regtestModeEnabled
+  const networkOptionsVisible: NetworkMode[] = isRegtestModeEnabled
     ? NETWORK_OPTIONS
     : NETWORK_OPTIONS.filter((n) => n !== 'regtest')
   const [showUnlockForNetworkChange, setShowUnlockForNetworkChange] =
@@ -66,7 +66,7 @@ export function NetworkSelector() {
   const pendingNetworkAfterUnlockRef = useRef<NetworkMode | null>(null)
   const pendingNearZeroNetworkRef = useRef<NetworkMode | null>(null)
 
-  const { mutate: switchMutate, loading, statusLine } =
+  const { mutate: switchMutate, isSwitching, statusLine } =
     useSubWalletSwitchMutation('network')
 
   useEffect(() => {
@@ -135,7 +135,7 @@ export function NetworkSelector() {
                   }
                   handleNetworkChange(network)
                 }}
-                disabled={loading}
+                disabled={isSwitching}
                 aria-disabled={isMainnetBlocked || undefined}
                 className={cn(
                   isMainnetBlocked &&
@@ -148,7 +148,7 @@ export function NetworkSelector() {
           )
         })}
       </div>
-      {loading && statusLine && (
+      {isSwitching && statusLine && (
         <LoadingSpinner
           text={statusLine}
           className="flex-row items-start justify-start gap-2 py-1 [&_.animate-spin]:mt-0.5 [&_.animate-spin]:h-4 [&_.animate-spin]:w-4 [&_p]:max-w-[min(100%,28rem)] [&_p]:text-left [&_p]:leading-snug"

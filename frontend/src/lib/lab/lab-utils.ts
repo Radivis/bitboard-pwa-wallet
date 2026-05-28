@@ -1,3 +1,4 @@
+import type { WalletSummary } from '@/lib/wallet/wallet-domain-types'
 import { labEntityOwnerKey } from '@/lib/lab/lab-entity-keys'
 import { isCoinbase } from '@/lib/lab/lab-operations'
 import type { LabOwner } from '@/lib/lab/lab-owner'
@@ -98,7 +99,7 @@ export function resolveLabAddressOwnerDisplay(
   addressToOwner: Record<string, LabOwner>,
   txDetails: LabTxDetails[],
   entities: readonly { labEntityId: number; entityName: string | null }[],
-  wallets: { wallet_id: number; name: string }[],
+  wallets: Pick<WalletSummary, 'walletId' | 'name'>[],
 ): string | undefined {
   const fromMap = lookupLabAddressOwner(address, addressToOwner)
   if (fromMap !== undefined) return labOwnerDisplayName(fromMap, wallets, entities)
@@ -310,7 +311,7 @@ export function labTransactionsForWallet(
  */
 export function resolveLabOwnerForDisplay(
   owner: LabOwner | string,
-  _wallets: { wallet_id: number; name: string }[],
+  _wallets: Pick<WalletSummary, 'walletId' | 'name'>[],
   _entities: readonly { labEntityId: number; entityName: string | null }[],
 ): LabOwner | null {
   if (typeof owner === 'object' && owner !== null && 'kind' in owner) {
@@ -341,7 +342,7 @@ export function labEntityAddressTypeForOwner(
  */
 export function getOwnerDisplayNameWithAddressTypeAria(
   owner: LabOwner | string,
-  wallets: { wallet_id: number; name: string }[],
+  wallets: Pick<WalletSummary, 'walletId' | 'name'>[],
   entities: readonly {
     labEntityId: number
     entityName: string | null
@@ -360,7 +361,7 @@ export function getOwnerDisplayNameWithAddressTypeAria(
  */
 export function getOwnerDisplayName(
   owner: LabOwner | string,
-  wallets: { wallet_id: number; name: string }[],
+  wallets: Pick<WalletSummary, 'walletId' | 'name'>[],
   entities: readonly { labEntityId: number; entityName: string | null }[],
 ): string {
   if (typeof owner === 'object' && owner !== null && 'kind' in owner) {
@@ -373,7 +374,7 @@ export function getOwnerDisplayName(
 
 export function getLabOwnerDisplayName(
   owner: LabOwner,
-  wallets: { wallet_id: number; name: string }[],
+  wallets: Pick<WalletSummary, 'walletId' | 'name'>[],
   entities: readonly { labEntityId: number; entityName: string | null }[],
 ): string {
   return labOwnerDisplayName(owner, wallets, entities)

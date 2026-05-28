@@ -14,14 +14,12 @@ export function capLightningPaymentsForSnapshot(
     .slice(0, MAX_STORED_LIGHTNING_PAYMENTS)
 }
 
-export function isLightningPaymentPayload(
-  row: unknown,
-): row is LightningPayment {
-  if (row === null || typeof row !== 'object') return false
-  const rowRecord = row as Record<string, unknown>
+function hasLightningPaymentCoreFields(rowRecord: Record<string, unknown>): boolean {
+  const pendingKnown =
+    typeof rowRecord.isPending === 'boolean' || typeof rowRecord.pending === 'boolean'
   return (
     typeof rowRecord.paymentHash === 'string' &&
-    typeof rowRecord.pending === 'boolean' &&
+    pendingKnown &&
     typeof rowRecord.amountSats === 'number' &&
     typeof rowRecord.memo === 'string' &&
     typeof rowRecord.timestamp === 'number' &&
@@ -31,11 +29,38 @@ export function isLightningPaymentPayload(
   )
 }
 
+export function normalizeLightningPaymentPayload(row: unknown): LightningPayment | null {
+  if (row === null || typeof row !== 'object') return null
+  const rowRecord = row as Record<string, unknown>
+  if (!hasLightningPaymentCoreFields(rowRecord)) return null
+  return {
+    paymentHash: rowRecord.paymentHash as string,
+    isPending:
+      typeof rowRecord.isPending === 'boolean'
+        ? rowRecord.isPending
+        : Boolean(rowRecord.pending),
+    amountSats: rowRecord.amountSats as number,
+    memo: rowRecord.memo as string,
+    timestamp: rowRecord.timestamp as number,
+    bolt11: rowRecord.bolt11 as string,
+    direction: rowRecord.direction as LightningPayment['direction'],
+    feesPaidSats: rowRecord.feesPaidSats as number,
+  }
+}
+
+export function isLightningPaymentPayload(
+  row: unknown,
+): row is LightningPayment {
+  return normalizeLightningPaymentPayload(row) != null
+}
+
 export function parseLightningPaymentsFromJson(json: string): LightningPayment[] {
   try {
     const parsed = JSON.parse(json) as unknown
     if (!Array.isArray(parsed)) return []
-    return parsed.filter(isLightningPaymentPayload)
+    return parsed
+      .map(normalizeLightningPaymentPayload)
+      .filter((payment): payment is LightningPayment => payment != null)
   } catch {
     return []
   }

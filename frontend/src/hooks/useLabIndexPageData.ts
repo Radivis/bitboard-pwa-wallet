@@ -196,7 +196,7 @@ export function useLabIndexPageData() {
         }
 
         if (
-          draftResult.draft.raisedToMinDust &&
+          draftResult.draft.isRaisedToMinDust &&
           draftResult.draft.finalAmountSats !== amountSats
         ) {
           amountSats = draftResult.draft.finalAmountSats

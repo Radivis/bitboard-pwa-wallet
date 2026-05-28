@@ -269,7 +269,7 @@ export async function buildCurrentBlockTemplate(
   const previewEffects = parseBlockEffects(rawEffects)
   const entryByTxid = new Map(selectedEntries.map((entry) => [entry.txid, entry]))
   const previewBlockTime =
-    typeof previewEffects.block_time === 'number' ? previewEffects.block_time : header.timestamp
+    typeof previewEffects.blockTime === 'number' ? previewEffects.blockTime : header.timestamp
 
   const transactions: LabBlockTransactionSummary[] = previewEffects.transactions.map((tx) => {
     const matchedEntry = entryByTxid.get(tx.txid)
@@ -278,13 +278,13 @@ export async function buildCurrentBlockTemplate(
       (inp): LabTxInputDetail => ({
         address: '',
         amountSats: 0,
-        prevTxid: inp.prev_txid,
-        prevVout: inp.prev_vout,
+        prevTxid: inp.prevTxid,
+        prevVout: inp.prevVout,
       }),
     )
     const outputs = (tx.outputs ?? []).map((outputDetail) => ({
       address: outputDetail.address,
-      amountSats: outputDetail.amount_sats,
+      amountSats: outputDetail.amountSats,
     }))
     const txDetails: LabTxDetails = {
       txid: tx.txid,

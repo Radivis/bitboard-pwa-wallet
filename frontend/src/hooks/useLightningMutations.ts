@@ -79,7 +79,7 @@ export function useNavigatorOnline(): boolean {
 }
 
 function useLightningDashboardQueryBase() {
-  const lightningEnabled = useFeatureStore((featureState) => featureState.lightningEnabled)
+  const isLightningEnabled = useFeatureStore((featureState) => featureState.isLightningEnabled)
   const networkMode = useWalletStore((walletState) => walletState.networkMode)
   const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
   const walletStatus = useWalletStore((walletState) => walletState.walletStatus)
@@ -92,15 +92,15 @@ function useLightningDashboardQueryBase() {
         connectedLightningWallets: connectedWallets,
         activeWalletId,
         networkMode,
-        isLightningEnabled: lightningEnabled,
+        isLightningEnabled: isLightningEnabled,
       }),
-    [lightningEnabled, networkMode, activeWalletId, connectedWallets],
+    [isLightningEnabled, networkMode, activeWalletId, connectedWallets],
   )
 
   const fingerprint = lightningConnectionsFingerprint(matchingConnections)
 
   const enabled =
-    lightningEnabled &&
+    isLightningEnabled &&
     isLightningSupported(networkMode) &&
     activeWalletId != null &&
     (walletStatus === 'unlocked' || walletStatus === 'syncing') &&

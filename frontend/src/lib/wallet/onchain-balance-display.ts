@@ -17,11 +17,11 @@ export interface OnChainBalanceDisplay {
 export function balanceInfoToOnChainDisplay(
   balance: BalanceInfo | null,
 ): OnChainBalanceDisplay {
-  const confirmedSats = balance?.confirmed ?? 0
+  const confirmedSats = balance?.confirmedSats ?? 0
   const trustedPendingSats = balance?.trustedPendingSats ?? 0
   const untrustedPendingSats = balance?.untrustedPendingSats ?? 0
   const immatureSats = balance?.immatureSats ?? 0
-  const totalSats = balance?.total ?? 0
+  const totalSats = balance?.totalSats ?? 0
 
   const showBreakdown =
     trustedPendingSats > 0 ||
@@ -38,7 +38,7 @@ export function balanceInfoToOnChainDisplay(
         immatureSats
   ) {
     console.warn(
-      '[onchain-balance-display] BalanceInfo.total does not match sum of components',
+      '[onchain-balance-display] BalanceInfo.totalSats does not match sum of components',
       balance,
     )
   }

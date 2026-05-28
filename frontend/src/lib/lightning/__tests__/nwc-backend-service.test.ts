@@ -273,7 +273,7 @@ describe('NWC backend service', () => {
       expect(payments).toHaveLength(2)
       expect(payments[0]).toEqual({
         paymentHash: 'hash1',
-        pending: false,
+        isPending: false,
         amountSats: 5_000,
         memo: 'Coffee',
         timestamp: 1700000000,
@@ -283,7 +283,7 @@ describe('NWC backend service', () => {
       })
       expect(payments[1]).toEqual({
         paymentHash: 'hash2',
-        pending: true,
+        isPending: true,
         amountSats: 10_000,
         memo: 'Pizza',
         timestamp: 1700000050,

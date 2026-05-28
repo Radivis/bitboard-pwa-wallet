@@ -105,7 +105,7 @@ export async function sumMainnetOnChainSatsForWallet(params: {
           throw new MainnetBalanceProbeUnverifiableError()
         }
         const balance = await session.getBalance()
-        balanceSum += balance.total
+        balanceSum += balance.totalSats
       } finally {
         session.free()
       }

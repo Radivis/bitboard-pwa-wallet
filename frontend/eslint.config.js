@@ -52,7 +52,6 @@ export default tseslint.config(
       'src/**/__tests__/**',
       'src/test-utils/**',
       'src/pages/setup/**',
-      'src/lib/lab/**',
       'src/routeTree.gen.ts',
       'src/vite-env.d.ts',
     ],

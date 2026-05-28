@@ -18,11 +18,11 @@ const hoisted = vi.hoisted(() => {
   const loadWalletMock = vi.fn().mockResolvedValue(true)
   const getCurrentAddressMock = vi.fn().mockResolvedValue('bc1qrepair')
   const getBalanceMock = vi.fn().mockResolvedValue({
-    confirmed: 0,
+    confirmedSats: 0,
     trustedPendingSats: 0,
     untrustedPendingSats: 0,
     immatureSats: 0,
-    total: 0,
+    totalSats: 0,
   })
   const getTransactionListMock = vi.fn().mockResolvedValue([])
   const exportChangesetMock = vi.fn().mockResolvedValue('{}')

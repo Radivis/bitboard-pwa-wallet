@@ -2,6 +2,7 @@
  * Canonical ownership in the lab simulator: wallet (real app wallet) vs lab entity (simulated).
  * Use stable IDs — never use entity_name or "Anonymous-*" strings as identity.
  */
+import type { WalletSummary } from '@/lib/wallet/wallet-domain-types'
 import { labEntityOwnerKey } from '@/lib/lab/lab-entity-keys'
 import { LAB_ENTITY_SORT_KEY_PREFIX, WALLET_OWNER_PREFIX } from '@/lib/lab/lab-utils'
 
@@ -115,11 +116,11 @@ export function labEntityMustBeAliveToSend(entity: { isDead: boolean }): void {
 
 export function labOwnerDisplayName(
   owner: LabOwner,
-  wallets: { wallet_id: number; name: string }[],
+  wallets: Pick<WalletSummary, 'walletId' | 'name'>[],
   entities: readonly { labEntityId: number; entityName: string | null }[],
 ): string {
   if (owner.kind === 'wallet') {
-    const row = wallets.find((walletRow) => walletRow.wallet_id === owner.walletId)
+    const row = wallets.find((walletRow) => walletRow.walletId === owner.walletId)
     if (row != null) return row.name
     // Wallet list may still be loading (callers often default to []). Lab ownership is
     // defined by id in chain state — never drop that identity when the name is unavailable.

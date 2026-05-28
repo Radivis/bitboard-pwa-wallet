@@ -25,21 +25,21 @@ import type { ConnectedLightningWallet } from '@/lib/lightning/lightning-backend
 import type { NetworkMode } from '@/stores/walletStore'
 
 export function useSendFlowLightning({
-  lightningEnabled,
+  isLightningEnabled,
   networkMode,
   activeWalletId,
   connectedLightningWallets,
   normalizedRecipient,
   amountSats,
 }: {
-  lightningEnabled: boolean
+  isLightningEnabled: boolean
   networkMode: NetworkMode
   activeWalletId: number | null
   connectedLightningWallets: ConnectedLightningWallet[]
   normalizedRecipient: string
   amountSats: number
 }) {
-  const lightningAvailable = lightningEnabled && isLightningSupported(networkMode)
+  const lightningAvailable = isLightningEnabled && isLightningSupported(networkMode)
   const [isResolvingLightningAddress, setIsResolvingLightningAddress] =
     useState(false)
 
@@ -58,7 +58,7 @@ export function useSendFlowLightning({
     selectedLnBalanceSats,
     hasLightningWalletSelected,
   } = useSendLightningBalances({
-    lightningEnabled,
+    isLightningEnabled,
     networkMode,
     activeWalletId,
     connectedLightningWallets,

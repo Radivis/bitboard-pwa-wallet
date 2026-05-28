@@ -13,8 +13,8 @@ export function ManagementPage() {
   const { openDelete } = useSearch({ from: '/wallet/management' })
   const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
   const networkMode = useWalletStore((walletState) => walletState.networkMode)
-  const lightningEnabled = useFeatureStore((featureState) => featureState.lightningEnabled)
-  const showLightningWallets = lightningEnabled && isLightningSupported(networkMode)
+  const isLightningEnabled = useFeatureStore((featureState) => featureState.isLightningEnabled)
+  const showLightningWallets = isLightningEnabled && isLightningSupported(networkMode)
 
   return (
     <div className="space-y-6">

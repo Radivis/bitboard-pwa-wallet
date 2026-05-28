@@ -184,15 +184,15 @@ export function useLabSendMutation() {
           feeSats,
           hasChange,
           finalAmountSats,
-          raisedToMinDust,
+          isRaisedToMinDust,
           bumpedChangeFree,
         } = signedLabTransaction
 
         const { amountUnit } = useSendStore.getState()
-        if (raisedToMinDust || bumpedChangeFree) {
+        if (isRaisedToMinDust || bumpedChangeFree) {
           toast.warning(
             onchainDustPrepareWarningLines({
-              raisedToMinDust,
+              isRaisedToMinDust,
               bumpedChangeFree,
             }).join(' '),
           )
@@ -200,7 +200,7 @@ export function useLabSendMutation() {
             amount: formatAmountInputFromSats(finalAmountSats, amountUnit),
             onchainDustWarning: {
               previousSats: signedLabTransaction.originalAmountSats,
-              raisedToDustMin: raisedToMinDust,
+              raisedToDustMin: isRaisedToMinDust,
               bumpedChangeFree,
             },
           })

@@ -20,6 +20,11 @@ import { toast } from 'sonner'
 import { getCryptoWorker } from '@/workers/crypto-factory'
 import type { DraftLabPsbtTransactionResult } from '@/workers/crypto-api'
 import {
+  mapWireLabEntitySignResultToDomain,
+  parseWasmJsonWire,
+} from '@/workers/crypto-wire-mappers'
+import type { WireLabEntitySignResult } from '@/workers/crypto-wire-types'
+import {
   labPipelineDebugLog,
   labPipelineSnapshot,
 } from '@/lib/lab/lab-pipeline-debug'
@@ -79,40 +84,10 @@ export async function labOpMineBlocks(
   })
 }
 
-function parseLabEntitySignResult(raw: unknown): {
-  signedTxHex: string
-  feeSats: number
-  hasChange: boolean
-  changesetJson: string
-  changeAddress: string | null
-  finalAmountSats: number
-  originalAmountSats: number
-  raisedToMinDust: boolean
-  bumpedChangeFree: boolean
-  changeFreeBumpAvailable: boolean
-  changeFreeMaxSats: number
-} {
-  const parsedWasmPayload: Record<string, unknown> =
-    raw != null && typeof raw === 'object' && !Array.isArray(raw)
-      ? (raw as Record<string, unknown>)
-      : typeof raw === 'string'
-        ? (JSON.parse(raw) as Record<string, unknown>)
-        : {}
-  const changeRaw = parsedWasmPayload.change_address
-  return {
-    signedTxHex: String(parsedWasmPayload.signed_tx_hex ?? ''),
-    feeSats: Number(parsedWasmPayload.fee_sats ?? 0),
-    hasChange: Boolean(parsedWasmPayload.has_change),
-    changesetJson: String(parsedWasmPayload.changeset_json ?? ''),
-    changeAddress:
-      typeof changeRaw === 'string' && changeRaw.length > 0 ? changeRaw : null,
-    finalAmountSats: Number(parsedWasmPayload.final_amount_sats ?? 0),
-    originalAmountSats: Number(parsedWasmPayload.original_amount_sats ?? 0),
-    raisedToMinDust: Boolean(parsedWasmPayload.raised_to_min_dust),
-    bumpedChangeFree: Boolean(parsedWasmPayload.bumped_change_free),
-    changeFreeBumpAvailable: Boolean(parsedWasmPayload.change_free_bump_available),
-    changeFreeMaxSats: Number(parsedWasmPayload.change_free_max_sats ?? 0),
-  }
+function parseLabEntitySignResult(raw: unknown) {
+  return mapWireLabEntitySignResultToDomain(
+    parseWasmJsonWire<WireLabEntitySignResult>(raw),
+  )
 }
 
 /**
@@ -198,13 +173,13 @@ export async function labOpCreateLabEntityTransaction(params: {
     changesetJson,
     changeAddress,
     finalAmountSats,
-    raisedToMinDust,
+    isRaisedToMinDust,
     bumpedChangeFree,
   } = labEntitySignResult
 
-  if (raisedToMinDust || bumpedChangeFree) {
+  if (isRaisedToMinDust || bumpedChangeFree) {
     toast.warning(
-      onchainDustPrepareWarningLines({ raisedToMinDust, bumpedChangeFree }).join(
+      onchainDustPrepareWarningLines({ isRaisedToMinDust, bumpedChangeFree }).join(
         ' ',
       ),
     )

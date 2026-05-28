@@ -157,7 +157,7 @@ export async function switchDescriptorWallet(params: {
         targetAccountId,
         fullScanNeeded,
       })
-      // Always return to `unlocked` so dashboard Sync/UX is usable. On `sync_failed`,
+      // Always return to `unlocked` so dashboard Sync/UX is usable. On `syncFailed`,
       // an error toast was shown; chain data in WASM may still be stale.
       setWalletStatus('unlocked')
     } else {

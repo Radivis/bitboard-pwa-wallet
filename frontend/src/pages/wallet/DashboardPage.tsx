@@ -123,7 +123,7 @@ function BalanceCard() {
   const networkMode = useWalletStore((walletState) => walletState.networkMode)
   const balance = useWalletStore((walletState) => walletState.balance)
   const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
-  const lightningEnabled = useFeatureStore((featureState) => featureState.lightningEnabled)
+  const isLightningEnabled = useFeatureStore((featureState) => featureState.isLightningEnabled)
   const connectedLightningWallets = useLightningStore((lightningState) => lightningState.connectedWallets)
   const lightningBalancesQuery = useLightningBalancesForDashboardQuery()
   const { data: labState, isPending: labChainPending } = useLabChainStateQuery()
@@ -152,7 +152,7 @@ function BalanceCard() {
 
   const hasMatchingLightningConnection = useMemo(
     () =>
-      lightningEnabled &&
+      isLightningEnabled &&
       networkMode !== 'lab' &&
       hasNetworkConnectedWallet(
         connectedLightningWallets,
@@ -160,7 +160,7 @@ function BalanceCard() {
         networkMode,
       ),
     [
-      lightningEnabled,
+      isLightningEnabled,
       networkMode,
       activeWalletId,
       connectedLightningWallets,
@@ -586,7 +586,7 @@ function RecentTransactions() {
   const networkMode = useWalletStore((walletState) => walletState.networkMode)
   const transactions = useWalletStore((walletState) => walletState.transactions)
   const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
-  const lightningEnabled = useFeatureStore((featureState) => featureState.lightningEnabled)
+  const isLightningEnabled = useFeatureStore((featureState) => featureState.isLightningEnabled)
   const connectedLightningWallets = useLightningStore((lightningState) => lightningState.connectedWallets)
   const hasLnWalletForNetwork = useMemo(
     () =>
@@ -626,7 +626,7 @@ function RecentTransactions() {
       return []
     }
     if (
-      !lightningEnabled ||
+      !isLightningEnabled ||
       !isLightningSupported(networkMode) ||
       activeWalletId == null ||
       !hasLnWalletForNetwork
@@ -636,7 +636,7 @@ function RecentTransactions() {
     return mergeAndSortDashboardActivity(transactions, lightningPayments)
   }, [
     networkMode,
-    lightningEnabled,
+    isLightningEnabled,
     activeWalletId,
     hasLnWalletForNetwork,
     transactions,
@@ -700,7 +700,7 @@ function RecentTransactions() {
       </CardHeader>
       <CardContent>
         {networkMode !== 'lab' &&
-          lightningEnabled &&
+          isLightningEnabled &&
           hasLnWalletForNetwork &&
           lightningHistoryQuery.isLoading && (
           <p className="mb-3 flex items-center gap-2 text-sm text-muted-foreground">
@@ -709,7 +709,7 @@ function RecentTransactions() {
           </p>
         )}
         {networkMode !== 'lab' &&
-          lightningEnabled &&
+          isLightningEnabled &&
           hasLnWalletForNetwork &&
           stalePaymentsAsOf != null &&
           lightningPayments.length > 0 && (

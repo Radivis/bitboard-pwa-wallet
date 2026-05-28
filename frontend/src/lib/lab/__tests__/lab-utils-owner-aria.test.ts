@@ -3,7 +3,7 @@ import { getOwnerDisplayNameWithAddressTypeAria } from '@/lib/lab/lab-utils'
 import { labEntityLabOwner } from '@/lib/lab/lab-owner'
 
 describe('getOwnerDisplayNameWithAddressTypeAria', () => {
-  const wallets = [{ wallet_id: 1, name: 'Main' }]
+  const wallets = [{ walletId: 1, name: 'Main' }]
   const entitiesSegwit = [
     { labEntityId: 1, entityName: 'Bob' as string | null, addressType: 'segwit' },
   ]

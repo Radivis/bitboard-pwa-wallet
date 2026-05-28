@@ -38,13 +38,13 @@ export function ReceivePage() {
   const password = useSessionStore((sessionState) => sessionState.password)
   const getNewAddress = useCryptoStore((cryptoState) => cryptoState.getNewAddress)
   const exportChangeset = useCryptoStore((cryptoState) => cryptoState.exportChangeset)
-  const lightningEnabled = useFeatureStore((featureState) => featureState.lightningEnabled)
-  const segwitAddressesEnabled = useFeatureStore((featureState) => featureState.segwitAddressesEnabled)
+  const isLightningEnabled = useFeatureStore((featureState) => featureState.isLightningEnabled)
+  const isSegwitAddressesEnabled = useFeatureStore((featureState) => featureState.isSegwitAddressesEnabled)
   const committedNetworkMode = useWalletStore(selectCommittedNetworkMode)
   const [mainnetDemoDismissed, setMainnetDemoDismissed] = useState(false)
   const previousCommittedNetworkModeRef = useRef<NetworkMode | null>(null)
 
-  const showLightningToggle = lightningEnabled && isLightningSupported(networkMode)
+  const showLightningToggle = isLightningEnabled && isLightningSupported(networkMode)
   const [receiveMode, setReceiveMode] = useState<ReceiveMode>('bitcoin')
 
   useEffect(() => {
@@ -159,7 +159,7 @@ export function ReceivePage() {
                 <QrCode className="h-5 w-5" />
                 QR Code
               </CardTitle>
-              {segwitAddressesEnabled ? (
+              {isSegwitAddressesEnabled ? (
                 <Badge variant="outline">
                   {addressType === AddressType.Taproot
                     ? 'Taproot (BIP86)'

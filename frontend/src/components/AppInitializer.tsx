@@ -89,7 +89,7 @@ export function AppInitializer({ children }: AppInitializerProps) {
     }
 
     if (wallets.length === 1 && !activeWalletId) {
-      setActiveWallet(wallets[0].wallet_id)
+      setActiveWallet(wallets[0].walletId)
       if (isWalletsRoute) {
         navigate({ to: '/wallet' })
       }

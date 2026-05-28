@@ -8,11 +8,11 @@ export function minOutputSizeRaisedToastMessage(): string {
 }
 
 export function onchainDustPrepareWarningLines(outcome: {
-  raisedToMinDust: boolean
+  isRaisedToMinDust: boolean
   bumpedChangeFree: boolean
 }): string[] {
   const lines: string[] = []
-  if (outcome.raisedToMinDust) {
+  if (outcome.isRaisedToMinDust) {
     lines.push(RAISED_TO_MIN_OUTPUT_WARNING)
   }
   if (outcome.bumpedChangeFree) {

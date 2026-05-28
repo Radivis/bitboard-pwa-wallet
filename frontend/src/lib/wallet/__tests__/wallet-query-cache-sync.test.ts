@@ -61,7 +61,7 @@ describe('invalidateWalletRelatedQueries', () => {
       0,
     ] as const
 
-    seedQuery(walletKeys.all, [{ wallet_id: 1 }])
+    seedQuery(walletKeys.all, [{ walletId: 1, name: 'W', createdAt: new Date().toISOString() }])
     seedQuery(walletLoadKey, 'loaded')
     seedQuery(lightningHistoryKey, [])
     seedQuery(esploraFeePresetsKey, { Low: 1, Medium: 2, High: 3 })

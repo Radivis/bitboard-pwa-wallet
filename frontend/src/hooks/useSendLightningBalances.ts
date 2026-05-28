@@ -12,14 +12,14 @@ import type { NetworkMode } from '@/stores/walletStore'
  * and the user’s selected wallet when paying a Lightning invoice.
  */
 export function useSendLightningBalances(params: {
-  lightningEnabled: boolean
+  isLightningEnabled: boolean
   networkMode: NetworkMode
   activeWalletId: number | null
   connectedLightningWallets: ConnectedLightningWallet[]
   isLightningSendMode: boolean
 }) {
   const {
-    lightningEnabled,
+    isLightningEnabled,
     networkMode,
     activeWalletId,
     connectedLightningWallets,
@@ -32,10 +32,10 @@ export function useSendLightningBalances(params: {
         connectedLightningWallets,
         activeWalletId,
         networkMode,
-        isLightningEnabled: lightningEnabled,
+        isLightningEnabled: isLightningEnabled,
       }),
     [
-      lightningEnabled,
+      isLightningEnabled,
       networkMode,
       activeWalletId,
       connectedLightningWallets,

@@ -16,11 +16,11 @@ use rstest::rstest;
 fn get_balance_returns_zero_for_new_wallet() {
     let wallet = create_test_wallet(DEFAULT_NETWORK, DEFAULT_ADDRESS_TYPE);
     let balance = wallet::get_balance(&wallet);
-    assert_eq!(balance.confirmed, 0);
-    assert_eq!(balance.trusted_pending, 0);
-    assert_eq!(balance.untrusted_pending, 0);
-    assert_eq!(balance.immature, 0);
-    assert_eq!(balance.total, 0);
+    assert_eq!(balance.confirmed_sats, 0);
+    assert_eq!(balance.trusted_pending_sats, 0);
+    assert_eq!(balance.untrusted_pending_sats, 0);
+    assert_eq!(balance.immature_sats, 0);
+    assert_eq!(balance.total_sats, 0);
 }
 
 // --- Address type tests ---

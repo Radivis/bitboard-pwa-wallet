@@ -84,8 +84,8 @@ fn wallet_session_get_balance_without_active_wallet() {
     let session = WalletSession::new(&external, &internal, "testnet", "{}", true)
         .expect("open wallet session");
     let balance = session.get_balance().expect("session get_balance");
-    let confirmed =
-        js_sys::Reflect::get(&balance, &JsValue::from_str("confirmed")).expect("missing confirmed");
+    let confirmed = js_sys::Reflect::get(&balance, &JsValue::from_str("confirmed_sats"))
+        .expect("missing confirmed_sats");
     assert_eq!(confirmed.as_f64().unwrap(), 0.0);
 
     let global_balance = get_balance();
@@ -185,12 +185,16 @@ fn get_balance_returns_jsvalue_after_wallet_creation() {
     create_test_wallet();
     let balance = get_balance().expect("get_balance failed");
 
-    let confirmed =
-        js_sys::Reflect::get(&balance, &JsValue::from_str("confirmed")).expect("missing confirmed");
-    let total = js_sys::Reflect::get(&balance, &JsValue::from_str("total")).expect("missing total");
+    let confirmed = js_sys::Reflect::get(&balance, &JsValue::from_str("confirmed_sats"))
+        .expect("missing confirmed_sats");
+    let total = js_sys::Reflect::get(&balance, &JsValue::from_str("total_sats"))
+        .expect("missing total_sats");
 
-    assert!(confirmed.as_f64().is_some(), "confirmed should be a number");
-    assert!(total.as_f64().is_some(), "total should be a number");
+    assert!(
+        confirmed.as_f64().is_some(),
+        "confirmed_sats should be a number"
+    );
+    assert!(total.as_f64().is_some(), "total_sats should be a number");
     assert_eq!(confirmed.as_f64().unwrap(), 0.0);
     assert_eq!(total.as_f64().unwrap(), 0.0);
 }

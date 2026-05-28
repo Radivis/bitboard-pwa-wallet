@@ -80,7 +80,7 @@ export function CompleteDataWipeCard() {
       const rows = await listWalletsWithPositiveMainnetOnChainBalance({
         password: sessionPassword,
         wallets: wallets.map((walletRow) => ({
-          walletId: walletRow.wallet_id,
+          walletId: walletRow.walletId,
           name: walletRow.name,
         })),
       })

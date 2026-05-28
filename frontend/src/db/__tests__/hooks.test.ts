@@ -88,6 +88,7 @@ describe('TanStack Query hooks', () => {
       const { result } = renderHook(() => useWallet(walletId), { wrapper })
 
       await waitFor(() => expect(result.current.isSuccess).toBe(true))
+      expect(result.current.data?.walletId).toBe(walletId)
       expect(result.current.data?.name).toBe('Target Wallet')
     })
 

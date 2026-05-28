@@ -79,7 +79,7 @@ export function SendFlow() {
   const balance = useWalletStore((walletState) => walletState.balance)
   const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
   const currentAddress = useWalletStore((walletState) => walletState.currentAddress)
-  const lightningEnabled = useFeatureStore((featureState) => featureState.lightningEnabled)
+  const isLightningEnabled = useFeatureStore((featureState) => featureState.isLightningEnabled)
   const connectedLightningWallets = useLightningStore((lightningState) => lightningState.connectedWallets)
 
   const hasAnyLightningConnection = useLightningStore((lightningState) =>
@@ -160,14 +160,14 @@ export function SendFlow() {
   const applyOnchainPrepareOutcomeToSendStore = useCallback(
     (outcome: PrepareOnchainSendResult) => {
       const { amountUnit: unit } = useSendStore.getState()
-      if (outcome.raisedToMinDust || outcome.bumpedChangeFree) {
+      if (outcome.isRaisedToMinDust || outcome.bumpedChangeFree) {
         const lines = onchainDustPrepareWarningLines(outcome)
         toast.warning(lines.join(' '))
         useSendStore.setState({
           amount: formatAmountInputFromSats(outcome.finalAmountSats, unit),
           onchainDustWarning: {
             previousSats: outcome.originalAmountSats,
-            raisedToDustMin: outcome.raisedToMinDust,
+            raisedToDustMin: outcome.isRaisedToMinDust,
             bumpedChangeFree: outcome.bumpedChangeFree,
           },
         })
@@ -237,7 +237,7 @@ export function SendFlow() {
     canBuildLightning,
     submitLightningPayment,
   } = useSendFlowLightning({
-    lightningEnabled,
+    isLightningEnabled,
     networkMode,
     activeWalletId,
     connectedLightningWallets,

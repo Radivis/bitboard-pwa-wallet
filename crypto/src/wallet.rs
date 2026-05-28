@@ -121,11 +121,11 @@ pub fn get_current_address(wallet: &Wallet) -> String {
 pub fn get_balance(wallet: &Wallet) -> BalanceInfo {
     let balance = wallet.balance();
     BalanceInfo {
-        confirmed: balance.confirmed.to_sat(),
-        trusted_pending: balance.trusted_pending.to_sat(),
-        untrusted_pending: balance.untrusted_pending.to_sat(),
-        immature: balance.immature.to_sat(),
-        total: balance.total().to_sat(),
+        confirmed_sats: balance.confirmed.to_sat(),
+        trusted_pending_sats: balance.trusted_pending.to_sat(),
+        untrusted_pending_sats: balance.untrusted_pending.to_sat(),
+        immature_sats: balance.immature.to_sat(),
+        total_sats: balance.total().to_sat(),
     }
 }
 

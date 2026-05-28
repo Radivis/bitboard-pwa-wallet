@@ -27,7 +27,7 @@ import {
   LAB_ADDRESS_UTXO_OWNER_PAGE_SIZE,
   LAB_ENTITY_INNER_PAGE_SIZE,
 } from '@/lib/lab/lab-paginated-queries'
-import type { AddressType } from '@/lib/wallet/wallet-domain-types'
+import type { AddressType, WalletSummary } from '@/lib/wallet/wallet-domain-types'
 import { useWalletStore } from '@/stores/walletStore'
 import { Badge } from '@/components/ui/badge'
 import { Wallet, FlaskConical, Copy, Skull } from 'lucide-react'
@@ -41,7 +41,7 @@ function LabOwnerAddressesInner({
   onAddressPageChange,
 }: {
   ownerKey: string
-  wallets: Array<{ wallet_id: number; name: string }>
+  wallets: WalletSummary[]
   entities: readonly {
     labEntityId: number
     entityName: string | null
@@ -112,7 +112,7 @@ export function LabAddressesCard({
   wallets,
 }: {
   onCopyAddress: (address: string) => void
-  wallets: Array<{ wallet_id: number; name: string }>
+  wallets: WalletSummary[]
 }) {
   const [ownerPageIndex, setOwnerPageIndex] = useState(0)
   const [innerAddressPageByOwner, setInnerAddressPageByOwner] = useState<Record<string, number>>({})

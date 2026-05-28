@@ -1,4 +1,10 @@
 import type {
+  BuildAndSignLabTransactionResult,
+  DraftLabPsbtTransactionResult,
+  PrepareOnchainSendResult,
+  ReviewInputUtxo,
+} from './crypto-api';
+import type {
   BalanceInfo,
   CreateWalletResult,
   DescriptorPair,
@@ -9,9 +15,21 @@ import type {
   WireBalanceInfo,
   WireCreateWalletResult,
   WireDescriptorPair,
+  WireDraftPsbtResult,
+  WireLabEntitySignResult,
+  WireLabSignResult,
+  WirePrepareOnchainSendResult,
+  WireReviewInputUtxo,
   WireSyncResult,
   WireTransactionDetails,
 } from './crypto-wire-types';
+
+export function parseWasmJsonWire<T>(raw: unknown): T {
+  if (typeof raw === 'string') {
+    return JSON.parse(raw) as T;
+  }
+  return raw as T;
+}
 
 export function mapWireDescriptorPairToDomain(wire: WireDescriptorPair): DescriptorPair {
   return {
@@ -22,11 +40,11 @@ export function mapWireDescriptorPairToDomain(wire: WireDescriptorPair): Descrip
 
 export function mapWireBalanceToDomain(wire: WireBalanceInfo): BalanceInfo {
   return {
-    confirmed: wire.confirmed,
-    trustedPendingSats: wire.trusted_pending,
-    untrustedPendingSats: wire.untrusted_pending,
-    immatureSats: wire.immature,
-    total: wire.total,
+    confirmedSats: wire.confirmed_sats,
+    trustedPendingSats: wire.trusted_pending_sats,
+    untrustedPendingSats: wire.untrusted_pending_sats,
+    immatureSats: wire.immature_sats,
+    totalSats: wire.total_sats,
   };
 }
 
@@ -63,4 +81,81 @@ export function mapWireTransactionListToDomain(
   wireList: WireTransactionDetails[],
 ): TransactionDetails[] {
   return wireList.map(mapWireTransactionToDomain);
+}
+
+function mapWireReviewInputUtxoToDomain(wire: WireReviewInputUtxo): ReviewInputUtxo {
+  return {
+    address: wire.address,
+    amountSats: wire.amount_sats,
+    txid: wire.txid,
+    vout: wire.vout,
+  };
+}
+
+function mapWireDraftReviewFieldsToDomain(wire: WireDraftPsbtResult): Pick<
+  DraftLabPsbtTransactionResult,
+  'changeSats' | 'totalInputSats' | 'inputUtxos'
+> {
+  return {
+    changeSats: wire.change_sats,
+    totalInputSats: wire.total_input_sats,
+    inputUtxos: (wire.input_utxos ?? []).map(mapWireReviewInputUtxoToDomain),
+  };
+}
+
+export function mapWireDraftPsbtResultToDomain(
+  wire: WireDraftPsbtResult,
+): DraftLabPsbtTransactionResult {
+  return {
+    psbtBase64: wire.psbt_base64,
+    finalAmountSats: wire.final_amount_sats,
+    originalAmountSats: wire.original_amount_sats,
+    isRaisedToMinDust: wire.raised_to_min_dust,
+    changeFreeBumpAvailable: wire.change_free_bump_available,
+    changeFreeMaxSats: wire.change_free_max_sats,
+    feeSats: wire.fee_sats,
+    ...mapWireDraftReviewFieldsToDomain(wire),
+  };
+}
+
+export function mapWirePrepareOnchainSendResultToDomain(
+  wire: WirePrepareOnchainSendResult,
+): PrepareOnchainSendResult {
+  return {
+    ...mapWireDraftPsbtResultToDomain(wire),
+    bumpedChangeFree: wire.bumped_change_free,
+  };
+}
+
+export function mapWireLabSignResultToDomain(
+  wire: WireLabSignResult,
+): BuildAndSignLabTransactionResult {
+  return {
+    signedTxHex: wire.signed_tx_hex,
+    feeSats: wire.fee_sats,
+    hasChange: wire.has_change,
+    finalAmountSats: wire.final_amount_sats,
+    originalAmountSats: wire.original_amount_sats,
+    isRaisedToMinDust: wire.raised_to_min_dust,
+    bumpedChangeFree: wire.bumped_change_free,
+    changeFreeBumpAvailable: wire.change_free_bump_available,
+    changeFreeMaxSats: wire.change_free_max_sats,
+  };
+}
+
+export interface LabEntitySignDomainResult extends BuildAndSignLabTransactionResult {
+  changesetJson: string;
+  changeAddress: string | null;
+}
+
+export function mapWireLabEntitySignResultToDomain(
+  wire: WireLabEntitySignResult,
+): LabEntitySignDomainResult {
+  const changeRaw = wire.change_address;
+  return {
+    ...mapWireLabSignResultToDomain(wire),
+    changesetJson: wire.changeset_json,
+    changeAddress:
+      typeof changeRaw === 'string' && changeRaw.length > 0 ? changeRaw : null,
+  };
 }

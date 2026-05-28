@@ -8,11 +8,11 @@ describe('computeSendPageBalances', () => {
         networkMode: 'lab',
         labBalanceSats: 42_000,
         balance: {
-          confirmed: 1,
+          confirmedSats: 1,
           trustedPendingSats: 0,
           untrustedPendingSats: 0,
           immatureSats: 0,
-          total: 2,
+          totalSats: 2,
         },
       }),
     ).toEqual({
@@ -27,11 +27,11 @@ describe('computeSendPageBalances', () => {
         networkMode: 'signet',
         labBalanceSats: null,
         balance: {
-          confirmed: 500_000,
+          confirmedSats: 500_000,
           trustedPendingSats: 0,
           untrustedPendingSats: 0,
           immatureSats: 0,
-          total: 600_000,
+          totalSats: 600_000,
         },
       }),
     ).toEqual({

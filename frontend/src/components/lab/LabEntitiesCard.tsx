@@ -50,7 +50,7 @@ const labEntityActionIconClassName = 'size-11 lg:size-7'
 
 export function LabEntitiesCard() {
   const labNetworkEnabled = useWalletStore((walletState) => walletState.networkMode === 'lab')
-  const segwitAddressesEnabled = useFeatureStore((featureState) => featureState.segwitAddressesEnabled)
+  const isSegwitAddressesEnabled = useFeatureStore((featureState) => featureState.isSegwitAddressesEnabled)
   const committedAddressType = useWalletStore(selectCommittedAddressType)
   const [pageIndex, setPageIndex] = useState(0)
   const [newEntityName, setNewEntityName] = useState('')
@@ -221,7 +221,7 @@ export function LabEntitiesCard() {
                   {createMutation.isPending ? 'Creating…' : 'Create lab entity'}
                 </Button>
               </div>
-              {segwitAddressesEnabled ? (
+              {isSegwitAddressesEnabled ? (
                 <div className="flex flex-col gap-2 max-w-md">
                   <div className="flex items-center justify-between gap-3">
                     <div className="space-y-0.5">

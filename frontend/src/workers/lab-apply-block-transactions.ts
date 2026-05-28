@@ -77,7 +77,7 @@ function buildInputsForBlockEffectTx(
   const inputs: LabTxDetails['inputs'] = []
   let firstInputAddress: string | null = null
   for (const input of tx.inputs) {
-    const key = `${input.prev_txid}:${input.prev_vout}`
+    const key = `${input.prevTxid}:${input.prevVout}`
     const utxo = utxoMap.get(key)
     if (utxo) {
       const owner = lookupOwnerForLabAddress(utxo.address, addressToOwner) ?? null
@@ -85,8 +85,8 @@ function buildInputsForBlockEffectTx(
         address: utxo.address,
         amountSats: utxo.amountSats,
         owner,
-        prevTxid: input.prev_txid,
-        prevVout: input.prev_vout,
+        prevTxid: input.prevTxid,
+        prevVout: input.prevVout,
       })
       if (firstInputAddress === null) firstInputAddress = utxo.address
     }
@@ -129,7 +129,7 @@ function buildOutputsForBlockEffectTx(
     }
     return {
       address: output.address,
-      amountSats: output.amount_sats,
+      amountSats: output.amountSats,
       isChange,
       owner,
     }

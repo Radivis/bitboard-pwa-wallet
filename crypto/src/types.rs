@@ -90,11 +90,11 @@ pub struct DescriptorPair {
 /// All amounts are in satoshis.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct BalanceInfo {
-    pub confirmed: u64,
-    pub trusted_pending: u64,
-    pub untrusted_pending: u64,
-    pub immature: u64,
-    pub total: u64,
+    pub confirmed_sats: u64,
+    pub trusted_pending_sats: u64,
+    pub untrusted_pending_sats: u64,
+    pub immature_sats: u64,
+    pub total_sats: u64,
 }
 
 /// Result returned to JS after creating a new wallet.

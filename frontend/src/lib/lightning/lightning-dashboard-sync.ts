@@ -47,14 +47,14 @@ export function lightningConnectionsFingerprint(
 
 export function getMatchingLightningConnectionsForDashboard(): ConnectedLightningWallet[] {
   const { activeWalletId, networkMode } = useWalletStore.getState()
-  const { lightningEnabled } = useFeatureStore.getState()
+  const { isLightningEnabled } = useFeatureStore.getState()
   const { connectedWallets } = useLightningStore.getState()
 
   return getLightningConnectionsForActiveWallet({
     connectedLightningWallets: connectedWallets,
     activeWalletId,
     networkMode,
-    isLightningEnabled: lightningEnabled,
+    isLightningEnabled: isLightningEnabled,
   })
 }
 

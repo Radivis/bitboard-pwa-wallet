@@ -7,6 +7,7 @@ import { walletHasNoMnemonicBackupFlag } from './wallet-no-mnemonic-backup'
 import { deleteWalletCompletely } from './wallet-persistence'
 import { libraryKeys, walletKeys } from './query-keys'
 import type { NewWallet, WalletUpdate } from './schema'
+import { mapDbWalletToDomain } from './wallet-domain-mapper'
 import { invalidateWalletRelatedQueriesAndNotifyOtherTabs } from '@/lib/wallet/wallet-query-cache-sync'
 
 export function useWallets() {
@@ -14,7 +15,8 @@ export function useWallets() {
     queryKey: walletKeys.all,
     queryFn: async () => {
       await ensureMigrated()
-      return getDatabase().selectFrom('wallets').selectAll().execute()
+      const rows = await getDatabase().selectFrom('wallets').selectAll().execute()
+      return rows.map(mapDbWalletToDomain)
     },
     refetchOnWindowFocus: 'always',
   })
@@ -30,7 +32,7 @@ export function useWallet(walletId: number | null) {
         .selectAll()
         .where('wallet_id', '=', walletId!)
         .executeTakeFirst()
-      return wallet ?? null
+      return wallet != null ? mapDbWalletToDomain(wallet) : null
     },
     enabled: walletId !== null,
     refetchOnWindowFocus: 'always',

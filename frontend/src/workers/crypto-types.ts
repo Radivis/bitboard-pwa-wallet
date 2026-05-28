@@ -13,11 +13,11 @@ export interface DescriptorPair {
 
 /** Domain balance from BDK/WASM (camelCase). */
 export interface BalanceInfo {
-  confirmed: number;
+  confirmedSats: number;
   trustedPendingSats: number;
   untrustedPendingSats: number;
   immatureSats: number;
-  total: number;
+  totalSats: number;
 }
 
 export interface CreateWalletResult {

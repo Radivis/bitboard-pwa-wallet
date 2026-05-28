@@ -157,11 +157,11 @@ describe('DashboardPage', () => {
       walletStatus: 'unlocked',
       networkMode: 'signet',
       balance: {
-        confirmed: 100_000,
+        confirmedSats: 100_000,
         trustedPendingSats: 0,
         untrustedPendingSats: 0,
         immatureSats: 0,
-        total: 100_000,
+        totalSats: 100_000,
       },
       currentAddress: 'tb1qtest',
       lastSyncTime: null,
@@ -213,11 +213,11 @@ describe('DashboardPage', () => {
 
   it('shows on-chain breakdown when pending components are non-zero', () => {
     walletStoreState.balance = {
-      confirmed: 100_000,
+      confirmedSats: 100_000,
       trustedPendingSats: 5_000,
       untrustedPendingSats: 3_000,
       immatureSats: 0,
-      total: 108_000,
+      totalSats: 108_000,
     }
     renderWithProviders(<DashboardPage />)
     expect(screen.getByText('0.00108000')).toBeInTheDocument()

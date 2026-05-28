@@ -92,7 +92,7 @@ fn parse_mtp_segment(segment: &str) -> Option<(u32, u32, u32)> {
 const INVALID_KDF_PHC_MSG: &str =
     "Invalid kdf_phc: expected Argon2id PHC with m,t,p (e.g. $argon2id$v=19$m=65536,t=3,p=4)";
 
-/// Same as [`parse_mtp_from_phc`] but with `String` errors (native tests / backup signing).
+/// Same as [`parse_mtp_from_kdf_phc_str`] but with `String` errors (native tests / backup signing).
 pub(crate) fn parse_mtp_from_kdf_phc_str(kdf_phc: &str) -> Result<(u32, u32, u32), &'static str> {
     if kdf_phc == ARGON2_KDF_PHC_CI {
         return Ok((

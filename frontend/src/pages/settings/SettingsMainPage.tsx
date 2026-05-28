@@ -28,7 +28,7 @@ import {
 } from '@/lib/fiat/fiat-rate-service-whitelist'
 
 export function SettingsMainPage() {
-  const segwitAddressesEnabled = useFeatureStore((featureState) => featureState.segwitAddressesEnabled)
+  const isSegwitAddressesEnabled = useFeatureStore((featureState) => featureState.isSegwitAddressesEnabled)
   const { data: wallets } = useWallets()
   const hasWallets = (wallets?.length ?? 0) > 0
   const defaultBitcoinUnit = useBitcoinDisplayUnitStore((bitcoinDisplayUnitState) => bitcoinDisplayUnitState.defaultBitcoinUnit)
@@ -76,7 +76,7 @@ export function SettingsMainPage() {
         </Card>
       </InfomodeWrapper>
 
-      {segwitAddressesEnabled ? (
+      {isSegwitAddressesEnabled ? (
         <InfomodeWrapper
           infoId="settings-address-type-card"
           infoTitle="Address type"

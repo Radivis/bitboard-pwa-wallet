@@ -23,7 +23,7 @@ import { isCoinbase } from '@/lib/lab/lab-operations'
 import { netMovedSatsForBlock } from '@/lib/lab/lab-tx-net-moved'
 import { useLabBlockTransactionsPage } from '@/hooks/useLabPaginatedQueries'
 import { LAB_CARD_PAGE_SIZE } from '@/lib/lab/lab-paginated-queries'
-import type { AddressType } from '@/lib/wallet/wallet-domain-types'
+import type { AddressType, WalletSummary } from '@/lib/wallet/wallet-domain-types'
 import { useWalletStore } from '@/stores/walletStore'
 
 function HeaderField({ label, value }: { label: string; value: string }) {
@@ -113,7 +113,7 @@ export function LabBlockMetadataCard({
   wallets,
 }: {
   block: LabBlockDetails
-  wallets: Array<{ wallet_id: number; name: string }>
+  wallets: WalletSummary[]
 }) {
   const { data: labState } = useLabChainStateQuery()
   const entities = labState?.entities ?? []
@@ -193,7 +193,7 @@ const labBlockTxRowLinkOverlayClassName =
 
 function labBlockTxList(
   txs: LabBlockDetails['transactions'],
-  wallets: Array<{ wallet_id: number; name: string }>,
+  wallets: WalletSummary[],
   entities: readonly {
     labEntityId: number
     entityName: string | null
@@ -243,7 +243,7 @@ export function LabBlockTransactionsCard({
   wallets,
 }: {
   block: LabBlockDetails
-  wallets: Array<{ wallet_id: number; name: string }>
+  wallets: WalletSummary[]
 }) {
   const [pageIndex, setPageIndex] = useState(0)
   const isTemplate = block.isTemplate

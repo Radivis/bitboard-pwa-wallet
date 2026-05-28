@@ -7,14 +7,14 @@ import { vi } from 'vitest'
 
 /** Mutable feature flags for settings page tests. */
 export const featureStoreState = {
-  lightningEnabled: false,
-  mainnetAccessEnabled: false,
-  regtestModeEnabled: false,
-  segwitAddressesEnabled: false,
-  setLightningEnabled: vi.fn(),
-  setMainnetAccessEnabled: vi.fn(),
-  setRegtestModeEnabled: vi.fn(),
-  setSegwitAddressesEnabled: vi.fn(),
+  isLightningEnabled: false,
+  isMainnetAccessEnabled: false,
+  isRegtestModeEnabled: false,
+  isSegwitAddressesEnabled: false,
+  setIsLightningEnabled: vi.fn(),
+  setIsMainnetAccessEnabled: vi.fn(),
+  setIsRegtestModeEnabled: vi.fn(),
+  setIsSegwitAddressesEnabled: vi.fn(),
 }
 
 export const mockTerminateWorker = vi.fn()
@@ -23,7 +23,13 @@ export const mockExportChangeset = vi.fn().mockRejectedValue(
 )
 export const mockLoadWallet = vi.fn().mockResolvedValue(true)
 export const mockSyncWallet = vi.fn().mockResolvedValue({ balance: {}, changesetJson: '{}' })
-export const mockGetBalance = vi.fn().mockResolvedValue({ confirmed: 0, total: 0 })
+export const mockGetBalance = vi.fn().mockResolvedValue({
+  confirmedSats: 0,
+  trustedPendingSats: 0,
+  untrustedPendingSats: 0,
+  immatureSats: 0,
+  totalSats: 0,
+})
 export const mockGetTransactionList = vi.fn().mockResolvedValue([])
 export const mockGetCurrentAddress = vi.fn().mockResolvedValue('tb1qcurrent')
 export const mockLockWallet = vi.fn()
@@ -76,7 +82,7 @@ export const nearZeroSecurityState = { active: false }
 export const mockSetThemeMode = vi.fn()
 
 export const mockWalletsState: {
-  data: { wallet_id: number; name: string; created_at: string }[]
+  data: { walletId: number; name: string; createdAt: string }[]
 } = {
   data: [],
 }
@@ -329,17 +335,17 @@ vi.mock('@/hooks/useFiatProviderSupportedCurrenciesQuery', () => ({
 }))
 
 function wireFeatureStoreMockImplementations(): void {
-  featureStoreState.setLightningEnabled.mockImplementation((enabled: boolean) => {
-    featureStoreState.lightningEnabled = enabled
+  featureStoreState.setIsLightningEnabled.mockImplementation((enabled: boolean) => {
+    featureStoreState.isLightningEnabled = enabled
   })
-  featureStoreState.setMainnetAccessEnabled.mockImplementation((enabled: boolean) => {
-    featureStoreState.mainnetAccessEnabled = enabled
+  featureStoreState.setIsMainnetAccessEnabled.mockImplementation((enabled: boolean) => {
+    featureStoreState.isMainnetAccessEnabled = enabled
   })
-  featureStoreState.setRegtestModeEnabled.mockImplementation((enabled: boolean) => {
-    featureStoreState.regtestModeEnabled = enabled
+  featureStoreState.setIsRegtestModeEnabled.mockImplementation((enabled: boolean) => {
+    featureStoreState.isRegtestModeEnabled = enabled
   })
-  featureStoreState.setSegwitAddressesEnabled.mockImplementation((enabled: boolean) => {
-    featureStoreState.segwitAddressesEnabled = enabled
+  featureStoreState.setIsSegwitAddressesEnabled.mockImplementation((enabled: boolean) => {
+    featureStoreState.isSegwitAddressesEnabled = enabled
   })
 }
 
@@ -399,10 +405,10 @@ export function resetSettingsPageTestState(): void {
   mockUpdateDescriptorWalletChangeset.mockResolvedValue(undefined)
   mockLoadDescriptorWalletAndSync.mockResolvedValue(undefined)
   mockLoadDescriptorWalletWithoutSync.mockResolvedValue(undefined)
-  featureStoreState.lightningEnabled = false
-  featureStoreState.mainnetAccessEnabled = false
-  featureStoreState.regtestModeEnabled = false
-  featureStoreState.segwitAddressesEnabled = false
+  featureStoreState.isLightningEnabled = false
+  featureStoreState.isMainnetAccessEnabled = false
+  featureStoreState.isRegtestModeEnabled = false
+  featureStoreState.isSegwitAddressesEnabled = false
   nearZeroSecurityState.active = false
   mockWalletsState.data = []
   sessionStoreState.password = 'testpass'

@@ -223,20 +223,20 @@ describe('ImportWalletPage', () => {
     })
     mockFullScanWallet.mockResolvedValue({
       balance: {
-        confirmed: 0,
+        confirmedSats: 0,
         trustedPendingSats: 0,
         untrustedPendingSats: 0,
         immatureSats: 0,
-        total: 0,
+        totalSats: 0,
       },
       changesetJson: '{}',
     })
     mockGetBalance.mockResolvedValue({
-      confirmed: 0,
+      confirmedSats: 0,
       trustedPendingSats: 0,
       untrustedPendingSats: 0,
       immatureSats: 0,
-      total: 0,
+      totalSats: 0,
     })
     mockGetTransactionList.mockResolvedValue([])
     renderWithProviders(<ImportWalletPage />)

@@ -28,8 +28,8 @@ fn open_wallet_session_loads_changeset_and_reports_balance() {
     .expect("open session");
 
     let balance = session.get_balance();
-    assert_eq!(balance.confirmed, 0);
-    assert_eq!(balance.total, 0);
+    assert_eq!(balance.confirmed_sats, 0);
+    assert_eq!(balance.total_sats, 0);
 }
 
 #[test]
@@ -72,7 +72,7 @@ fn open_wallet_session_use_empty_chain_creates_fresh_chain() {
     .expect("open with empty chain");
 
     let balance = session.get_balance();
-    assert_eq!(balance.total, 0);
+    assert_eq!(balance.total_sats, 0);
 
     let (_, changeset) = open_wallet_from_descriptors(
         &pair.external_descriptor,

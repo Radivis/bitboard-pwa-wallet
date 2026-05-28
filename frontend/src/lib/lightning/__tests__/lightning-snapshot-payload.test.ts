@@ -10,7 +10,7 @@ import type { LightningPayment } from '@/lib/lightning/lightning-backend-service
 function samplePayment(overrides: Partial<LightningPayment> = {}): LightningPayment {
   return {
     paymentHash: 'h',
-    pending: false,
+    isPending: false,
     amountSats: 1,
     memo: '',
     timestamp: 100,

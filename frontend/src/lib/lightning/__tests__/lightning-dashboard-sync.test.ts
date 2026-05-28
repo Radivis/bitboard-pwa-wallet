@@ -29,7 +29,7 @@ const chainNewer: TransactionDetails = {
 
 const lnMiddle: LightningPaymentWithWallet = {
   paymentHash: 'ln1',
-  pending: false,
+  isPending: false,
   amountSats: 50,
   memo: 'x',
   timestamp: 150,

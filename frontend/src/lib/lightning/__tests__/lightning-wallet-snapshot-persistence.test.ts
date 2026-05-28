@@ -34,7 +34,7 @@ function sampleLightningPayment(
 ): LightningPayment {
   return {
     paymentHash: 'h1',
-    pending: false,
+    isPending: false,
     amountSats: 10,
     memo: 'm',
     timestamp: 1,

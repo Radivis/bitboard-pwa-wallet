@@ -76,7 +76,7 @@ vi.mock('@/stores/sessionStore', () => ({
 
 vi.mock('@/stores/featureStore', () => ({
   useFeatureStore: (selector: (s: Record<string, unknown>) => unknown) =>
-    selector({ lightningEnabled: true }),
+    selector({ isLightningEnabled: true }),
 }))
 
 const mockConnections = [
@@ -215,11 +215,11 @@ describe('SendFlow', () => {
       walletStatus: 'unlocked',
       networkMode: 'signet',
       balance: {
-        confirmed: 100_000_000,
+        confirmedSats: 100_000_000,
         trustedPendingSats: 0,
         untrustedPendingSats: 0,
         immatureSats: 0,
-        total: 100_000_000,
+        totalSats: 100_000_000,
       },
       currentAddress: 'tb1qtest',
       lastSyncTime: null,

@@ -347,7 +347,7 @@ fn build_sync_result() -> Result<JsValue, JsValue> {
 /// Returns JSON including `change_free_bump_available`, `change_free_max_sats`.
 #[wasm_bindgen]
 pub fn prepare_onchain_send_transaction(
-    recipient_address: &str,
+    to_address: &str,
     amount_sats: u64,
     fee_rate_sat_per_vb: f64,
     network: &str,
@@ -357,7 +357,7 @@ pub fn prepare_onchain_send_transaction(
     let outcome = with_wallet_mut(|wallet| {
         transaction::prepare_onchain_send(
             wallet,
-            recipient_address,
+            to_address,
             amount_sats,
             fee_rate_sat_per_vb,
             bitcoin_network.into(),
@@ -377,7 +377,7 @@ pub fn prepare_onchain_send_transaction(
 /// and returns only the PSBT string.
 #[wasm_bindgen]
 pub fn build_transaction(
-    recipient_address: &str,
+    to_address: &str,
     amount_sats: u64,
     fee_rate_sat_per_vb: f64,
     network: &str,
@@ -386,7 +386,7 @@ pub fn build_transaction(
     let outcome = with_wallet_mut(|wallet| {
         transaction::prepare_onchain_send(
             wallet,
-            recipient_address,
+            to_address,
             amount_sats,
             fee_rate_sat_per_vb,
             bitcoin_network.into(),

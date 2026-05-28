@@ -19,8 +19,8 @@ const mockGetDatabase = vi.hoisted(() => vi.fn())
 
 const walletStoreState = vi.hoisted(() => ({ activeWalletId: 1 as number | null }))
 const walletsState = vi.hoisted(() => ({
-  data: [{ wallet_id: 1, name: 'Test', created_at: new Date().toISOString() }] as
-    | { wallet_id: number; name: string; created_at: string }[]
+  data: [{ walletId: 1, name: 'Test', createdAt: new Date().toISOString() }] as
+    | { walletId: number; name: string; createdAt: string }[]
     | undefined,
 }))
 
@@ -76,7 +76,7 @@ describe('useWalletBackupExport', () => {
     vi.clearAllMocks()
     walletStoreState.activeWalletId = 1
     walletsState.data = [
-      { wallet_id: 1, name: 'Test', created_at: new Date().toISOString() },
+      { walletId: 1, name: 'Test', createdAt: new Date().toISOString() },
     ]
     mockEnsureMigrated.mockResolvedValue(undefined)
     mockGetDatabase.mockReturnValue({})
