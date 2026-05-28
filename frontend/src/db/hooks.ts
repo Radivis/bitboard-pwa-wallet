@@ -20,19 +20,19 @@ export function useWallets() {
   })
 }
 
-export function useWallet(id: number | null) {
+export function useWallet(walletId: number | null) {
   return useQuery({
-    queryKey: id === null ? walletKeys.detailNone : walletKeys.byId(id),
+    queryKey: walletId === null ? walletKeys.detailNone : walletKeys.byId(walletId),
     queryFn: async () => {
       await ensureMigrated()
       const wallet = await getDatabase()
         .selectFrom('wallets')
         .selectAll()
-        .where('wallet_id', '=', id!)
+        .where('wallet_id', '=', walletId!)
         .executeTakeFirst()
       return wallet ?? null
     },
-    enabled: id !== null,
+    enabled: walletId !== null,
     refetchOnWindowFocus: 'always',
   })
 }
@@ -42,11 +42,11 @@ export function useAddWallet() {
   return useMutation({
     mutationFn: async (wallet: NewWallet) => {
       await ensureMigrated()
-      const result = await getDatabase()
+      const insertResult = await getDatabase()
         .insertInto('wallets')
         .values(wallet)
         .executeTakeFirstOrThrow()
-      return Number(result.insertId)
+      return Number(insertResult.insertId)
     },
     onSuccess: () => {
       invalidateWalletRelatedQueriesAndNotifyOtherTabs(queryClient)

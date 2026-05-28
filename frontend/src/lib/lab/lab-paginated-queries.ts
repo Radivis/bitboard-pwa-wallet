@@ -89,7 +89,7 @@ function ownerKeyMatches(ownerKey: string) {
 function parseTxDetailsRow(
   blockHeight: number,
   blockTime: number,
-  row: {
+  txDetailsRow: {
     txid: string
     inputs_json: string
     outputs_json: string
@@ -99,10 +99,10 @@ function parseTxDetailsRow(
     receiver_wallet_id: number | null
   },
 ): LabBlockTransactionSummary {
-  const inputs = JSON.parse(row.inputs_json) as LabTxDetails['inputs']
-  const outputs = JSON.parse(row.outputs_json) as LabTxDetails['outputs']
-  const tx: LabTxDetails = {
-    txid: row.txid,
+  const inputs = JSON.parse(txDetailsRow.inputs_json) as LabTxDetails['inputs']
+  const outputs = JSON.parse(txDetailsRow.outputs_json) as LabTxDetails['outputs']
+  const labTxDetails: LabTxDetails = {
+    txid: txDetailsRow.txid,
     blockHeight,
     blockTime,
     confirmations: 0,
@@ -110,11 +110,14 @@ function parseTxDetailsRow(
     outputs,
   }
   return {
-    txid: row.txid,
-    sender: labOwnerFromDbPair(row.sender_lab_entity_id, row.sender_wallet_id),
-    receiver: labOwnerFromDbPair(row.receiver_lab_entity_id, row.receiver_wallet_id),
-    amountSats: netMovedSatsForLabTx(tx),
-    feeSats: feeSatsFromTxDetails(tx),
+    txid: txDetailsRow.txid,
+    sender: labOwnerFromDbPair(txDetailsRow.sender_lab_entity_id, txDetailsRow.sender_wallet_id),
+    receiver: labOwnerFromDbPair(
+      txDetailsRow.receiver_lab_entity_id,
+      txDetailsRow.receiver_wallet_id,
+    ),
+    amountSats: netMovedSatsForLabTx(labTxDetails),
+    feeSats: feeSatsFromTxDetails(labTxDetails),
     inputs,
   }
 }
@@ -404,17 +407,17 @@ export async function fetchLabAddressBalancesSats(
   await ensureLabMigrated()
   const labDb = getLabDatabase()
 
-  const rows = await labDb
+  const utxoBalanceRows = await labDb
     .selectFrom('utxos')
     .select((eb) => ['address', eb.fn.sum<number | bigint | null>('amount_sats').as('total')])
     .where('address', 'in', [...addresses])
     .groupBy('address')
     .execute()
 
-  for (const row of rows) {
-    const totalSats = row.total
+  for (const balanceRow of utxoBalanceRows) {
+    const totalSats = balanceRow.total
     addressBalanceByAddress.set(
-      row.address,
+      balanceRow.address,
       typeof totalSats === 'bigint' ? Number(totalSats) : Number(totalSats ?? 0),
     )
   }

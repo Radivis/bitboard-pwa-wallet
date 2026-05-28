@@ -129,13 +129,13 @@ export async function loadLabStateFromDatabase(): Promise<LabState> {
     .execute()
 
   const addressToOwner: Record<string, LabOwner> = {}
-  for (const row of addressOwnersRows) {
-    if (row.owner_type === 'wallet' && row.wallet_id != null) {
-      addressToOwner[row.address] = walletLabOwner(row.wallet_id)
-    } else if (row.owner_type === 'lab_entity') {
-      const labEntityId = (row as { lab_entity_id?: number | null }).lab_entity_id
+  for (const addressOwnerRow of addressOwnersRows) {
+    if (addressOwnerRow.owner_type === 'wallet' && addressOwnerRow.wallet_id != null) {
+      addressToOwner[addressOwnerRow.address] = walletLabOwner(addressOwnerRow.wallet_id)
+    } else if (addressOwnerRow.owner_type === 'lab_entity') {
+      const labEntityId = (addressOwnerRow as { lab_entity_id?: number | null }).lab_entity_id
       if (labEntityId != null && labEntityId > 0) {
-        addressToOwner[row.address] = labEntityLabOwner(labEntityId)
+        addressToOwner[addressOwnerRow.address] = labEntityLabOwner(labEntityId)
       }
     }
   }

@@ -61,12 +61,12 @@ import {
 } from '@/lib/wallet/wallet-lab-ui-copy'
 
 function ImportInitialSyncErrorBanner() {
-  const networkMode = useWalletStore((s) => s.networkMode)
-  const message = useWalletStore((s) => s.importInitialSyncErrorMessage)
+  const networkMode = useWalletStore((walletState) => walletState.networkMode)
+  const message = useWalletStore((walletState) => walletState.importInitialSyncErrorMessage)
   const setImportInitialSyncErrorMessage = useWalletStore(
-    (s) => s.setImportInitialSyncErrorMessage,
+    (walletState) => walletState.setImportInitialSyncErrorMessage,
   )
-  const walletStatus = useWalletStore((s) => s.walletStatus)
+  const walletStatus = useWalletStore((walletState) => walletState.walletStatus)
   const isSyncing = walletStatus === 'syncing'
 
   if (networkMode === 'lab' || message == null || message === '') {
@@ -120,11 +120,11 @@ function ImportInitialSyncErrorBanner() {
 }
 
 function BalanceCard() {
-  const networkMode = useWalletStore((s) => s.networkMode)
-  const balance = useWalletStore((s) => s.balance)
-  const activeWalletId = useWalletStore((s) => s.activeWalletId)
-  const lightningEnabled = useFeatureStore((s) => s.lightningEnabled)
-  const connectedLightningWallets = useLightningStore((s) => s.connectedWallets)
+  const networkMode = useWalletStore((walletState) => walletState.networkMode)
+  const balance = useWalletStore((walletState) => walletState.balance)
+  const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
+  const lightningEnabled = useFeatureStore((featureState) => featureState.lightningEnabled)
+  const connectedLightningWallets = useLightningStore((lightningState) => lightningState.connectedWallets)
   const lightningBalancesQuery = useLightningBalancesForDashboardQuery()
   const { data: labState, isPending: labChainPending } = useLabChainStateQuery()
   const utxos = labState?.utxos ?? []
@@ -184,14 +184,14 @@ function BalanceCard() {
       )
       .map((balanceRow) => balanceRow.balanceSnapshotAt as string)
     if (times.length === 0) return null
-    return times.reduce((a, b) => (a > b ? a : b))
+    return times.reduce((newerIso, olderIso) => (newerIso > olderIso ? newerIso : olderIso))
   }, [lightningBalanceRows])
 
   const fiatDenominationMode = useFiatDenominationStore(
-    (s) => s.fiatDenominationMode,
+    (fiatDenominationState) => fiatDenominationState.fiatDenominationMode,
   )
   const defaultFiatCurrency = useFiatDenominationStore(
-    (s) => s.defaultFiatCurrency,
+    (fiatDenominationState) => fiatDenominationState.defaultFiatCurrency,
   )
   const fiatRatesQuery = useMainnetFiatRatesQuery()
   const btcPriceInFiat = fiatRatesQuery.data?.btcPriceInFiat
@@ -452,10 +452,10 @@ function SyncButton({
   isThisOp: boolean
   onThisOp: (running: boolean) => void
 }) {
-  const networkMode = useWalletStore((s) => s.networkMode)
-  const activeWalletId = useWalletStore((s) => s.activeWalletId)
-  const setWalletStatus = useWalletStore((s) => s.setWalletStatus)
-  const password = useSessionStore((s) => s.password)
+  const networkMode = useWalletStore((walletState) => walletState.networkMode)
+  const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
+  const setWalletStatus = useWalletStore((walletState) => walletState.setWalletStatus)
+  const password = useSessionStore((sessionState) => sessionState.password)
 
   const handleSync = useCallback(async () => {
     try {
@@ -512,10 +512,10 @@ function FullRescanButton({
   isThisOp: boolean
   onThisOp: (running: boolean) => void
 }) {
-  const networkMode = useWalletStore((s) => s.networkMode)
-  const activeWalletId = useWalletStore((s) => s.activeWalletId)
-  const setWalletStatus = useWalletStore((s) => s.setWalletStatus)
-  const password = useSessionStore((s) => s.password)
+  const networkMode = useWalletStore((walletState) => walletState.networkMode)
+  const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
+  const setWalletStatus = useWalletStore((walletState) => walletState.setWalletStatus)
+  const password = useSessionStore((sessionState) => sessionState.password)
 
   const handleFullRescan = useCallback(async () => {
     try {
@@ -563,7 +563,7 @@ function FullRescanButton({
 
 function DashboardOnChainSyncControls() {
   const [activeOp, setActiveOp] = useState<'sync' | 'full' | null>(null)
-  const walletStatus = useWalletStore((s) => s.walletStatus)
+  const walletStatus = useWalletStore((walletState) => walletState.walletStatus)
   const isBusy = walletStatus === 'syncing'
 
   return (
@@ -583,11 +583,11 @@ function DashboardOnChainSyncControls() {
 }
 
 function RecentTransactions() {
-  const networkMode = useWalletStore((s) => s.networkMode)
-  const transactions = useWalletStore((s) => s.transactions)
-  const activeWalletId = useWalletStore((s) => s.activeWalletId)
-  const lightningEnabled = useFeatureStore((s) => s.lightningEnabled)
-  const connectedLightningWallets = useLightningStore((s) => s.connectedWallets)
+  const networkMode = useWalletStore((walletState) => walletState.networkMode)
+  const transactions = useWalletStore((walletState) => walletState.transactions)
+  const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
+  const lightningEnabled = useFeatureStore((featureState) => featureState.lightningEnabled)
+  const connectedLightningWallets = useLightningStore((lightningState) => lightningState.connectedWallets)
   const hasLnWalletForNetwork = useMemo(
     () =>
       hasNetworkConnectedWallet(
@@ -774,10 +774,10 @@ function RecentTransactions() {
 
 export function DashboardPage() {
   const navigate = useNavigate()
-  const activeWalletId = useWalletStore((s) => s.activeWalletId)
-  const walletStatus = useWalletStore((s) => s.walletStatus)
-  const lastSyncTime = useWalletStore((s) => s.lastSyncTime)
-  const networkMode = useWalletStore((s) => s.networkMode)
+  const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
+  const walletStatus = useWalletStore((walletState) => walletState.walletStatus)
+  const lastSyncTime = useWalletStore((walletState) => walletState.lastSyncTime)
+  const networkMode = useWalletStore((walletState) => walletState.networkMode)
 
   if (!activeWalletId) {
     navigate({ to: '/setup' })

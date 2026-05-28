@@ -48,12 +48,12 @@ function LightningInvoiceAmountBlock({
   size: BitcoinAmountDisplaySize
   className?: string
 }) {
-  const networkMode = useWalletStore((s) => s.networkMode)
+  const networkMode = useWalletStore((walletState) => walletState.networkMode)
   const fiatDenominationMode = useFiatDenominationStore(
-    (s) => s.fiatDenominationMode,
+    (fiatDenominationState) => fiatDenominationState.fiatDenominationMode,
   )
   const defaultFiatCurrency = useFiatDenominationStore(
-    (s) => s.defaultFiatCurrency,
+    (fiatDenominationState) => fiatDenominationState.defaultFiatCurrency,
   )
   const fiatRatesQuery = useMainnetFiatRatesQuery({
     allowFetchWhenPortfolioZeroForReceivePage: true,
@@ -96,7 +96,7 @@ function LightningInvoiceAmountBlock({
 }
 
 function MainnetReceiveDenominationSwitch() {
-  const networkMode = useWalletStore((s) => s.networkMode)
+  const networkMode = useWalletStore((walletState) => walletState.networkMode)
   if (networkMode !== 'mainnet') return null
   return <BitcoinFiatDenominationSwitch />
 }
@@ -221,16 +221,16 @@ function InvoiceListItem({
 }
 
 function InvoiceCreateForm({ onCreated }: { onCreated: () => void }) {
-  const networkMode = useWalletStore((s) => s.networkMode)
+  const networkMode = useWalletStore((walletState) => walletState.networkMode)
   const [amountRaw, setAmountRaw] = useState('')
   const [description, setDescription] = useState('')
   const [expirySeconds, setExpirySeconds] = useState(DEFAULT_INVOICE_EXPIRY_SECONDS)
 
   const fiatDenominationMode = useFiatDenominationStore(
-    (s) => s.fiatDenominationMode,
+    (fiatDenominationState) => fiatDenominationState.fiatDenominationMode,
   )
   const defaultFiatCurrency = useFiatDenominationStore(
-    (s) => s.defaultFiatCurrency,
+    (fiatDenominationState) => fiatDenominationState.defaultFiatCurrency,
   )
   const fiatRatesQuery = useMainnetFiatRatesQuery({
     allowFetchWhenPortfolioZeroForReceivePage: true,
@@ -435,19 +435,21 @@ function NoConnectionPrompt({
 }
 
 export function LightningReceive() {
-  const activeWalletId = useWalletStore((s) => s.activeWalletId)
-  const networkMode = useWalletStore((s) => s.networkMode)
-  const matchingConnection = useLightningStore((s) =>
+  const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
+  const networkMode = useWalletStore((walletState) => walletState.networkMode)
+  const matchingConnection = useLightningStore((lightningState) =>
     activeWalletId != null
-      ? s.getActiveConnection(activeWalletId, networkMode)
+      ? lightningState.getActiveConnection(activeWalletId, networkMode)
       : null,
   )
-  const hasAnyLightningConnection = useLightningStore((s) =>
-    activeWalletId != null ? s.getConnectionsForWallet(activeWalletId).length > 0 : false,
+  const hasAnyLightningConnection = useLightningStore((lightningState) =>
+    activeWalletId != null
+      ? lightningState.getConnectionsForWallet(activeWalletId).length > 0
+      : false,
   )
-  const activeInvoice = useReceiveStore((s) => s.activeInvoice)
-  const sessionInvoices = useReceiveStore((s) => s.sessionInvoices)
-  const setActiveInvoice = useReceiveStore((s) => s.setActiveInvoice)
+  const activeInvoice = useReceiveStore((receiveState) => receiveState.activeInvoice)
+  const sessionInvoices = useReceiveStore((receiveState) => receiveState.sessionInvoices)
+  const setActiveInvoice = useReceiveStore((receiveState) => receiveState.setActiveInvoice)
 
   const [showCreateForm, setShowCreateForm] = useState(false)
   const hasMatchingConnection = matchingConnection != null

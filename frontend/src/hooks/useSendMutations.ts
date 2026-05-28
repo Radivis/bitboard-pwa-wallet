@@ -23,7 +23,7 @@ import { onchainDustPrepareWarningLines } from '@/lib/wallet/send/onchain-dust-p
  * Caller handles change-free modal then `applyChangeFreeBump: true` when the user opts in.
  */
 export function useBuildTransactionMutation() {
-  const networkMode = useWalletStore((s) => s.networkMode)
+  const networkMode = useWalletStore((walletState) => walletState.networkMode)
   const prepareOnchainSendTransaction = useCryptoStore(
     (s) => s.prepareOnchainSendTransaction,
   )
@@ -59,9 +59,9 @@ export function useBuildTransactionMutation() {
  */
 export function useBroadcastTransactionMutation() {
   const navigate = useNavigate()
-  const networkMode = useWalletStore((s) => s.networkMode)
-  const psbt = useSendStore((s) => s.psbt)
-  const reset = useSendStore((s) => s.reset)
+  const networkMode = useWalletStore((walletState) => walletState.networkMode)
+  const psbt = useSendStore((sendState) => sendState.psbt)
+  const reset = useSendStore((sendState) => sendState.reset)
 
   return useMutation({
     mutationFn: async () => {
@@ -130,11 +130,11 @@ export function useBroadcastTransactionMutation() {
 export function useLabSendMutation() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const activeWalletId = useWalletStore((s) => s.activeWalletId)
-  const currentAddress = useWalletStore((s) => s.currentAddress)
-  const getLabChangeAddress = useCryptoStore((s) => s.getLabChangeAddress)
-  const buildAndSignLabTransaction = useCryptoStore((s) => s.buildAndSignLabTransaction)
-  const reset = useSendStore((s) => s.reset)
+  const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
+  const currentAddress = useWalletStore((walletState) => walletState.currentAddress)
+  const getLabChangeAddress = useCryptoStore((cryptoState) => cryptoState.getLabChangeAddress)
+  const buildAndSignLabTransaction = useCryptoStore((cryptoState) => cryptoState.buildAndSignLabTransaction)
+  const reset = useSendStore((sendState) => sendState.reset)
 
   return useMutation({
     mutationFn: async (params: {

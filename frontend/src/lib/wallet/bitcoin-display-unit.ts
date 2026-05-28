@@ -115,40 +115,56 @@ export function parseAmountToSatsFromBitcoinDisplayUnit(
   const trimmed = amountStr.trim()
   switch (unit) {
     case 'BTC': {
-      const parsed = parseFloat(trimmed)
-      if (Number.isNaN(parsed) || !Number.isFinite(parsed) || parsed < 0) {
+      const parsedBtcAmount = parseFloat(trimmed)
+      if (
+        Number.isNaN(parsedBtcAmount) ||
+        !Number.isFinite(parsedBtcAmount) ||
+        parsedBtcAmount < 0
+      ) {
         return 0
       }
-      return clampSats(parsed * SATS_PER_BTC)
+      return clampSats(parsedBtcAmount * SATS_PER_BTC)
     }
     case 'mBTC': {
-      const parsed = parseFloat(trimmed)
-      if (Number.isNaN(parsed) || !Number.isFinite(parsed) || parsed < 0) {
+      const parsedMBtcAmount = parseFloat(trimmed)
+      if (
+        Number.isNaN(parsedMBtcAmount) ||
+        !Number.isFinite(parsedMBtcAmount) ||
+        parsedMBtcAmount < 0
+      ) {
         return 0
       }
-      return clampSats(parsed * SATS_PER_mBTC)
+      return clampSats(parsedMBtcAmount * SATS_PER_mBTC)
     }
     case 'uBTC': {
-      const parsed = parseFloat(trimmed)
-      if (Number.isNaN(parsed) || !Number.isFinite(parsed) || parsed < 0) {
+      const parsedUBtcAmount = parseFloat(trimmed)
+      if (
+        Number.isNaN(parsedUBtcAmount) ||
+        !Number.isFinite(parsedUBtcAmount) ||
+        parsedUBtcAmount < 0
+      ) {
         return 0
       }
-      return clampSats(parsed * SATS_PER_uBTC)
+      return clampSats(parsedUBtcAmount * SATS_PER_uBTC)
     }
     case 'ksat': {
-      const parsed = parseFloat(trimmed)
-      if (Number.isNaN(parsed) || !Number.isFinite(parsed) || parsed < 0) {
+      const parsedKsatAmount = parseFloat(trimmed)
+      if (
+        Number.isNaN(parsedKsatAmount) ||
+        !Number.isFinite(parsedKsatAmount) ||
+        parsedKsatAmount < 0
+      ) {
         return 0
       }
-      return clampSats(parsed * SATS_PER_ksat)
+      return clampSats(parsedKsatAmount * SATS_PER_ksat)
     }
     case 'sat': {
       const normalized = trimmed.replace(/,/g, '')
-      const parsed = parseInt(normalized, 10)
-      if (Number.isNaN(parsed) || parsed < 0) {
+      const parsedSatAmount = parseInt(normalized, 10)
+      if (Number.isNaN(parsedSatAmount) || parsedSatAmount < 0) {
         return 0
       }
-      return clampSats(parsed)
+      return clampSats(parsedSatAmount)
     }
     default: {
       const _exhaustive: never = unit

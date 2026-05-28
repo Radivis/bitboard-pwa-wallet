@@ -110,13 +110,13 @@ export async function loadCustomEsploraUrl(
 ): Promise<string | null> {
   await ensureMigrated()
   const walletDb = getDatabase()
-  const result = await walletDb
+  const settingsRow = await walletDb
     .selectFrom('settings')
     .select('value')
     .where('key', '=', `${CUSTOM_ESPLORA_URL_KEY_PREFIX}${network}`)
     .executeTakeFirst()
 
-  return result?.value ?? null
+  return settingsRow?.value ?? null
 }
 
 /** Stop-gap for full scan (consecutive unused addresses before stopping). Match import flow. */

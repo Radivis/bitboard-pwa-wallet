@@ -141,19 +141,19 @@ export function assertLabAddressOwnerResolved(
  */
 export function groupLabRowsByResolvedOwner<T>(
   items: T[],
-  getAddress: (item: T) => string,
+  getAddress: (labRow: T) => string,
   resolveOwner: (address: string) => LabOwner | undefined,
   assertContext: string,
 ): { byOwner: Map<string, T[]>; sortedOwnerKeys: string[] } {
   const byOwner = new Map<string, T[]>()
-  for (const item of items) {
-    const address = getAddress(item)
+  for (const labRow of items) {
+    const address = getAddress(labRow)
     const owner = resolveOwner(address)
     assertLabAddressOwnerResolved(address, owner, assertContext)
-    const key = labOwnerSortKey(owner)
-    const list = byOwner.get(key) ?? []
-    list.push(item)
-    byOwner.set(key, list)
+    const ownerSortKey = labOwnerSortKey(owner)
+    const rowsForOwner = byOwner.get(ownerSortKey) ?? []
+    rowsForOwner.push(labRow)
+    byOwner.set(ownerSortKey, rowsForOwner)
   }
   return {
     byOwner,
@@ -174,13 +174,13 @@ export function mergeAddressesWithUtxos(
 ): LabAddress[] {
   const byKey = new Map<string, LabAddress>()
   for (const labAddress of addresses) {
-    const key = canonicalLabAddressKey(labAddress.address)
-    if (!byKey.has(key)) byKey.set(key, labAddress)
+    const canonicalAddressKey = canonicalLabAddressKey(labAddress.address)
+    if (!byKey.has(canonicalAddressKey)) byKey.set(canonicalAddressKey, labAddress)
   }
   for (const utxo of utxos) {
-    const key = canonicalLabAddressKey(utxo.address)
-    if (!byKey.has(key)) {
-      byKey.set(key, { address: utxo.address, wif: '' })
+    const canonicalAddressKey = canonicalLabAddressKey(utxo.address)
+    if (!byKey.has(canonicalAddressKey)) {
+      byKey.set(canonicalAddressKey, { address: utxo.address, wif: '' })
     }
   }
   return [...byKey.values()]

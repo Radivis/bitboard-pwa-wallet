@@ -216,13 +216,13 @@ export async function putSplitWalletSecretsEncryptedIfRevisionMatches(
         }
       : {}
 
-  const result = await walletDb
+  const updateResult = await walletDb
     .updateTable('wallet_secrets')
     .set({ ...baseSet, ...mnemonicSet })
     .where('wallet_id', '=', walletId)
     .where('revision', '=', expectedRevision)
     .executeTakeFirst()
-  return Number(result.numUpdatedRows) === 1
+  return Number(updateResult.numUpdatedRows) === 1
 }
 
 function logWalletSecretsConflictRetry(attempt: number, maxRetries: number): void {

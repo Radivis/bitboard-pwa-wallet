@@ -50,19 +50,19 @@ export function CreateWalletPage() {
   const [verificationWords, setVerificationWords] = useState<Record<number, string>>({})
 
   const { data: wallets, isLoading: walletsLoading } = useWallets()
-  const sessionPassword = useSessionStore((s) => s.password)
+  const sessionPassword = useSessionStore((sessionState) => sessionState.password)
 
-  const createWalletAndEncryptSecrets = useCryptoStore((s) => s.createWalletAndEncryptSecrets)
-  const networkMode = useWalletStore((s) => s.networkMode)
-  const addressType = useWalletStore((s) => s.addressType)
-  const accountId = useWalletStore((s) => s.accountId)
-  const setActiveWallet = useWalletStore((s) => s.setActiveWallet)
-  const setWalletStatus = useWalletStore((s) => s.setWalletStatus)
-  const setCurrentAddress = useWalletStore((s) => s.setCurrentAddress)
-  const setBalance = useWalletStore((s) => s.setBalance)
-  const setTransactions = useWalletStore((s) => s.setTransactions)
-  const setLastSyncTime = useWalletStore((s) => s.setLastSyncTime)
-  const commitLoadedSubWallet = useWalletStore((s) => s.commitLoadedSubWallet)
+  const createWalletAndEncryptSecrets = useCryptoStore((cryptoState) => cryptoState.createWalletAndEncryptSecrets)
+  const networkMode = useWalletStore((walletState) => walletState.networkMode)
+  const addressType = useWalletStore((walletState) => walletState.addressType)
+  const accountId = useWalletStore((walletState) => walletState.accountId)
+  const setActiveWallet = useWalletStore((walletState) => walletState.setActiveWallet)
+  const setWalletStatus = useWalletStore((walletState) => walletState.setWalletStatus)
+  const setCurrentAddress = useWalletStore((walletState) => walletState.setCurrentAddress)
+  const setBalance = useWalletStore((walletState) => walletState.setBalance)
+  const setTransactions = useWalletStore((walletState) => walletState.setTransactions)
+  const setLastSyncTime = useWalletStore((walletState) => walletState.setLastSyncTime)
+  const commitLoadedSubWallet = useWalletStore((walletState) => walletState.commitLoadedSubWallet)
   const addWallet = useAddWallet()
 
   const words = useMemo(() => (mnemonicForBackup ? mnemonicForBackup.split(' ') : []), [mnemonicForBackup])
@@ -72,8 +72,8 @@ export function CreateWalletPage() {
     const indices: number[] = []
     const range = words.length
     while (indices.length < SEED_VERIFICATION_WORD_COUNT) {
-      const idx = Math.floor(Math.random() * range)
-      if (!indices.includes(idx)) indices.push(idx)
+      const randomWordIndex = Math.floor(Math.random() * range)
+      if (!indices.includes(randomWordIndex)) indices.push(randomWordIndex)
     }
     return indices.sort((a, b) => a - b)
   }, [words.length])
@@ -81,7 +81,8 @@ export function CreateWalletPage() {
   const verificationCorrect = useMemo(() => {
     if (verificationIndices.length === 0) return false
     return verificationIndices.every(
-      (idx) => verificationWords[idx]?.toLowerCase().trim() === words[idx],
+      (wordIndex) =>
+        verificationWords[wordIndex]?.toLowerCase().trim() === words[wordIndex],
     )
   }, [verificationIndices, verificationWords, words])
 
@@ -173,14 +174,14 @@ export function CreateWalletPage() {
 
   const createWalletMutation = useMutation({
     mutationFn: runCreateWalletAndEncryptSecrets,
-    onSuccess: (result) => {
-      setMnemonicForBackup(result.mnemonicForBackup)
+    onSuccess: (createWalletOutcome) => {
+      setMnemonicForBackup(createWalletOutcome.mnemonicForBackup)
       setPendingCreate({
         encryptedBlobs: {
-          payload: result.encryptedPayload,
-          mnemonic: result.encryptedMnemonic,
+          payload: createWalletOutcome.encryptedPayload,
+          mnemonic: createWalletOutcome.encryptedMnemonic,
         },
-        walletResult: { first_address: result.walletResult.first_address },
+        walletResult: { first_address: createWalletOutcome.walletResult.first_address },
       })
       setStep(2)
     },
@@ -195,13 +196,13 @@ export function CreateWalletPage() {
 
   const quickCreateWalletMutation = useMutation({
     mutationFn: async () => {
-      const result = await runCreateWalletAndEncryptSecrets()
+      const createWalletOutcome = await runCreateWalletAndEncryptSecrets()
       await persistAndActivateNewWallet({
         encryptedBlobs: {
-          payload: result.encryptedPayload,
-          mnemonic: result.encryptedMnemonic,
+          payload: createWalletOutcome.encryptedPayload,
+          mnemonic: createWalletOutcome.encryptedMnemonic,
         },
-        firstAddress: result.walletResult.first_address,
+        firstAddress: createWalletOutcome.walletResult.first_address,
         markNoMnemonicBackup: true,
       })
     },

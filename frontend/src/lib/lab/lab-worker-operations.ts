@@ -64,18 +64,18 @@ export async function labOpMineBlocks(
     })
     await initLabWorkerWithState()
     const labWorker = getLabWorker()
-    const result = await labWorker.mineBlocks(count, targetAddress, options)
+    const mineBlocksOutcome = await labWorker.mineBlocks(count, targetAddress, options)
     labPipelineDebugLog('mineBlocks:workerReturned', {
-      blockCount: result.state.blocks.length,
-      utxoCount: result.state.utxos.length,
-      totalSats: sumUtxoSats(result.state.utxos),
-      includedMempoolTxCount: result.includedMempoolTxCount,
-      discardedConflictTxCount: result.discardedConflictTxCount,
+      blockCount: mineBlocksOutcome.state.blocks.length,
+      utxoCount: mineBlocksOutcome.state.utxos.length,
+      totalSats: sumUtxoSats(mineBlocksOutcome.state.utxos),
+      includedMempoolTxCount: mineBlocksOutcome.includedMempoolTxCount,
+      discardedConflictTxCount: mineBlocksOutcome.discardedConflictTxCount,
     })
-    await persistLabState(result.state)
+    await persistLabState(mineBlocksOutcome.state)
     labPipelineDebugLog('mineBlocks:afterPersist', {})
-    labPipelineSnapshot('mineBlocks:end', result.state)
-    return result
+    labPipelineSnapshot('mineBlocks:end', mineBlocksOutcome.state)
+    return mineBlocksOutcome
   })
 }
 
@@ -190,7 +190,7 @@ export async function labOpCreateLabEntityTransaction(params: {
     feeRateSatPerVb: cryptoParams.feeRateSatPerVb,
     applyChangeFreeBump: params.applyChangeFreeBump ?? false,
   })
-  const parsed = parseLabEntitySignResult(signRaw)
+  const labEntitySignResult = parseLabEntitySignResult(signRaw)
   const {
     signedTxHex,
     feeSats,
@@ -200,7 +200,7 @@ export async function labOpCreateLabEntityTransaction(params: {
     finalAmountSats,
     raisedToMinDust,
     bumpedChangeFree,
-  } = parsed
+  } = labEntitySignResult
 
   if (raisedToMinDust || bumpedChangeFree) {
     toast.warning(

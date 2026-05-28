@@ -42,7 +42,7 @@ interface SendState {
   setStep: (step: SendStep) => void
   setRecipient: (recipient: string) => void
   /** Pass `{ fromUser: true }` when the user types in the field (clears dust warnings). */
-  setAmount: (amount: string, opts?: { fromUser?: boolean }) => void
+  setAmount: (amount: string, amountUpdateOptions?: { fromUser?: boolean }) => void
   setAmountUnit: (unit: SendAmountUnit) => void
   setFeePresetSelection: (preset: SendFeePresetLabel) => void
   setFeeRate: (rate: number) => void
@@ -81,10 +81,11 @@ export const useSendStore = create<SendState>((set) => ({
 
   setStep: (step) => set({ step }),
   setRecipient: (recipient) => set({ recipient }),
-  setAmount: (amount, opts) =>
-    set((s) => ({
+  setAmount: (amount, amountUpdateOptions) =>
+    set((previousSendState) => ({
       amount,
-      onchainDustWarning: opts?.fromUser === true ? null : s.onchainDustWarning,
+      onchainDustWarning:
+        amountUpdateOptions?.fromUser === true ? null : previousSendState.onchainDustWarning,
     })),
   setAmountUnit: (amountUnit) => set({ amountUnit }),
   setFeePresetSelection: (feePresetSelection) => set({ feePresetSelection }),

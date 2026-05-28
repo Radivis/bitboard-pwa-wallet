@@ -12,22 +12,36 @@ type WasmModule = Awaited<ReturnType<typeof import('./lab-wasm-loader').getWasm>
 export function parseBlockEffects(raw: unknown): BlockEffectsParsed {
   if (typeof raw === 'string') {
     try {
-      const parsed = JSON.parse(raw) as BlockEffectsParsed
+      const parsedBlockEffectsJson = JSON.parse(raw) as BlockEffectsParsed
       return {
-        spent: Array.isArray(parsed?.spent) ? parsed.spent : [],
-        new_utxos: Array.isArray(parsed?.new_utxos) ? parsed.new_utxos : [],
-        transactions: Array.isArray(parsed?.transactions) ? parsed.transactions : [],
-        block_time: typeof parsed?.block_time === 'number' ? parsed.block_time : 0,
+        spent: Array.isArray(parsedBlockEffectsJson?.spent)
+          ? parsedBlockEffectsJson.spent
+          : [],
+        new_utxos: Array.isArray(parsedBlockEffectsJson?.new_utxos)
+          ? parsedBlockEffectsJson.new_utxos
+          : [],
+        transactions: Array.isArray(parsedBlockEffectsJson?.transactions)
+          ? parsedBlockEffectsJson.transactions
+          : [],
+        block_time:
+          typeof parsedBlockEffectsJson?.block_time === 'number'
+            ? parsedBlockEffectsJson.block_time
+            : 0,
       }
     } catch {
       return { spent: [], new_utxos: [], transactions: [], block_time: 0 }
     }
   }
-  const effects = raw as Record<string, unknown>
-  const spent = Array.isArray(effects?.spent) ? effects.spent : []
-  const new_utxos = Array.isArray(effects?.new_utxos) ? effects.new_utxos : []
-  const transactions = Array.isArray(effects?.transactions) ? effects.transactions : []
-  const block_time = typeof effects?.block_time === 'number' ? effects.block_time : 0
+  const blockEffectsRecord = raw as Record<string, unknown>
+  const spent = Array.isArray(blockEffectsRecord?.spent) ? blockEffectsRecord.spent : []
+  const new_utxos = Array.isArray(blockEffectsRecord?.new_utxos)
+    ? blockEffectsRecord.new_utxos
+    : []
+  const transactions = Array.isArray(blockEffectsRecord?.transactions)
+    ? blockEffectsRecord.transactions
+    : []
+  const block_time =
+    typeof blockEffectsRecord?.block_time === 'number' ? blockEffectsRecord.block_time : 0
   return { spent, new_utxos, transactions, block_time }
 }
 
@@ -81,12 +95,12 @@ function synthesizeCoinbaseTxFromNewUtxos(
   const byTxid = new Map<string, BlockEffectsParsed['new_utxos']>()
   for (const newUtxoRow of newUtxos) {
     const txid = String(newUtxoRow.txid)
-    const list = byTxid.get(txid) ?? []
-    list.push(newUtxoRow)
-    byTxid.set(txid, list)
+    const utxosForTxid = byTxid.get(txid) ?? []
+    utxosForTxid.push(newUtxoRow)
+    byTxid.set(txid, utxosForTxid)
   }
   const firstTxid = String(newUtxos[0].txid)
-  const rows = byTxid.get(firstTxid) ?? []
+  const coinbaseOutputRows = byTxid.get(firstTxid) ?? []
   return [
     {
       txid: firstTxid,
@@ -96,7 +110,7 @@ function synthesizeCoinbaseTxFromNewUtxos(
           prev_vout: LAB_COINBASE_PREV_VOUT,
         },
       ],
-      outputs: rows.map((newUtxoRow) => {
+      outputs: coinbaseOutputRows.map((newUtxoRow) => {
         const utxoFields = newUtxoRow as unknown as Record<string, unknown>
         return {
           address: String(newUtxoRow.address),

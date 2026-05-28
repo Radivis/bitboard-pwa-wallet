@@ -65,7 +65,7 @@ export async function resolveDescriptorWallet(params: {
   const walletDb = getDatabase()
   const { resolveDescriptorWallet: workerResolve } = useCryptoStore.getState()
   const encryptedBlobs = await getWalletSecretsEncrypted(walletDb, walletId)
-  const result = await workerResolve({
+  const resolveDescriptorWorkerResponse = await workerResolve({
     password,
     encryptedPayload: encryptedBlobs.payload,
     encryptedMnemonic: encryptedBlobs.mnemonic,
@@ -73,14 +73,14 @@ export async function resolveDescriptorWallet(params: {
     targetAddressType,
     targetAccountId,
   })
-  if (result.encryptedMnemonicToStore !== null) {
+  if (resolveDescriptorWorkerResponse.encryptedMnemonicToStore !== null) {
     throw new Error(
       'resolveDescriptorWallet returned mnemonic update, which is unsupported in payload-only CAS writes',
     )
   }
-  if (result.encryptedPayloadToStore !== null) {
+  if (resolveDescriptorWorkerResponse.encryptedPayloadToStore !== null) {
     const encryptedPayloadToStore = workerBlobToPersistence(
-      result.encryptedPayloadToStore,
+      resolveDescriptorWorkerResponse.encryptedPayloadToStore,
     )
     await updateWalletSecretsEncryptedPayloadWithRetry({
       walletDb,
@@ -88,7 +88,7 @@ export async function resolveDescriptorWallet(params: {
       transform: async () => encryptedPayloadToStore,
     })
   }
-  return result.descriptorWalletData
+  return resolveDescriptorWorkerResponse.descriptorWalletData
 }
 
 /**

@@ -218,7 +218,7 @@ pub fn lab_build_transaction(
         return Err(JsValue::from_str("Outputs exceed inputs"));
     }
 
-    let fee = total_in - total_out;
+    let implicit_fee_sats = total_in - total_out;
     let fee_rate =
         validation::fee_rate_from_sat_per_vb_float(fee_rate_sat_per_vb).map_display_err_to_js()?;
 
@@ -258,23 +258,25 @@ pub fn lab_build_transaction(
         });
     }
 
-    let tx = Transaction {
+    let unsigned_transaction = Transaction {
         version: transaction::Version::TWO,
         lock_time: absolute::LockTime::ZERO,
         input: input_vec,
         output: output_vec,
     };
 
-    let required_fee = fee_rate.fee_wu(tx.weight()).unwrap_or(Amount::ZERO);
-    if fee < required_fee.to_sat() {
+    let required_fee = fee_rate
+        .fee_wu(unsigned_transaction.weight())
+        .unwrap_or(Amount::ZERO);
+    if implicit_fee_sats < required_fee.to_sat() {
         return Err(JsValue::from_str(&format!(
             "Insufficient fee: have {} sats, need at least {} sats",
-            fee,
+            implicit_fee_sats,
             required_fee.to_sat()
         )));
     }
 
-    Ok(serialize_hex(&tx))
+    Ok(serialize_hex(&unsigned_transaction))
 }
 
 /// Signs a P2WPKH transaction. Modifies the tx in place and returns the signed tx hex.
@@ -284,7 +286,7 @@ pub fn lab_build_transaction(
 /// - `utxos_json`: Same format as lab_build_transaction
 #[wasm_bindgen]
 pub fn lab_sign_transaction(tx_hex: &str, wif: &str, utxos_json: &str) -> Result<String, JsValue> {
-    let mut tx: Transaction = deserialize_hex(tx_hex).map_display_err_to_js()?;
+    let mut unsigned_transaction: Transaction = deserialize_hex(tx_hex).map_display_err_to_js()?;
 
     let utxos: Vec<LabUtxoInput> = serde_json::from_str(utxos_json).map_display_err_to_js()?;
 
@@ -297,8 +299,8 @@ pub fn lab_sign_transaction(tx_hex: &str, wif: &str, utxos_json: &str) -> Result
     }
 
     let sighash_type = EcdsaSighashType::All;
-    let input_len = tx.input.len();
-    let mut sighasher = SighashCache::new(&mut tx);
+    let input_len = unsigned_transaction.input.len();
+    let mut sighasher = SighashCache::new(&mut unsigned_transaction);
 
     for (i, utxo) in utxos.iter().enumerate() {
         if i >= input_len {
@@ -343,7 +345,7 @@ pub fn lab_sign_transaction_multi(
     utxos_json: &str,
     address_to_wif_json: &str,
 ) -> Result<String, JsValue> {
-    let mut tx: Transaction = deserialize_hex(tx_hex).map_display_err_to_js()?;
+    let mut unsigned_transaction: Transaction = deserialize_hex(tx_hex).map_display_err_to_js()?;
 
     let utxos: Vec<LabUtxoInput> = serde_json::from_str(utxos_json).map_display_err_to_js()?;
 
@@ -353,7 +355,7 @@ pub fn lab_sign_transaction_multi(
     let secp_engine = Secp256k1::new();
     let ecdsa_sighash_type = EcdsaSighashType::All;
     let tap_sighash_type = TapSighashType::Default;
-    let input_len = tx.input.len();
+    let input_len = unsigned_transaction.input.len();
 
     let prevouts: Vec<TxOut> = utxos
         .iter()
@@ -367,7 +369,7 @@ pub fn lab_sign_transaction_multi(
         .collect::<Result<Vec<_>, JsValue>>()?;
     let prevouts = Prevouts::All(&prevouts);
 
-    let mut sighasher = SighashCache::new(&mut tx);
+    let mut sighasher = SighashCache::new(&mut unsigned_transaction);
 
     for (i, utxo) in utxos.iter().enumerate() {
         if i >= input_len {
@@ -490,15 +492,15 @@ pub fn lab_build_transaction_with_change(
             },
         ];
         let total_out = payment_sats + change_sats;
-        let fee = total_in - total_out;
-        (outputs, fee)
+        let implicit_fee_sats = total_in - total_out;
+        (outputs, implicit_fee_sats)
     } else {
         let outputs = vec![LabTxOutput {
             address: payment_address.to_string(),
             amount_sats: payment_sats,
         }];
-        let fee = total_in - payment_sats;
-        (outputs, fee)
+        let implicit_fee_sats = total_in - payment_sats;
+        (outputs, implicit_fee_sats)
     };
 
     let outputs_json = serde_json::to_string(&outputs).map_display_err_to_js()?;

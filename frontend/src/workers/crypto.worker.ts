@@ -300,7 +300,7 @@ const cryptoService = {
       changeAddress,
       applyChangeFreeBump = false,
     } = params;
-    const result = await invokeWasmCrypto((wasmModule) =>
+    const wasmLabSignResponse = await invokeWasmCrypto((wasmModule) =>
       wasmModule.build_and_sign_lab_transaction(
         utxosJson,
         toAddress,
@@ -310,18 +310,20 @@ const cryptoService = {
         applyChangeFreeBump,
       ),
     );
-    const parsed =
-      typeof result === 'string' ? JSON.parse(result) : result;
+    const labSignResponseFields =
+      typeof wasmLabSignResponse === 'string'
+        ? JSON.parse(wasmLabSignResponse)
+        : wasmLabSignResponse;
     return {
-      signedTxHex: parsed.signed_tx_hex,
-      feeSats: parsed.fee_sats,
-      hasChange: parsed.has_change,
-      finalAmountSats: parsed.final_amount_sats,
-      originalAmountSats: parsed.original_amount_sats,
-      raisedToMinDust: parsed.raised_to_min_dust,
-      bumpedChangeFree: parsed.bumped_change_free,
-      changeFreeBumpAvailable: Boolean(parsed.change_free_bump_available),
-      changeFreeMaxSats: Number(parsed.change_free_max_sats),
+      signedTxHex: labSignResponseFields.signed_tx_hex,
+      feeSats: labSignResponseFields.fee_sats,
+      hasChange: labSignResponseFields.has_change,
+      finalAmountSats: labSignResponseFields.final_amount_sats,
+      originalAmountSats: labSignResponseFields.original_amount_sats,
+      raisedToMinDust: labSignResponseFields.raised_to_min_dust,
+      bumpedChangeFree: labSignResponseFields.bumped_change_free,
+      changeFreeBumpAvailable: Boolean(labSignResponseFields.change_free_bump_available),
+      changeFreeMaxSats: Number(labSignResponseFields.change_free_max_sats),
     };
   },
 
@@ -341,7 +343,7 @@ const cryptoService = {
       changeAddress,
       applyChangeFreeBump = false,
     } = params;
-    const result = await invokeWasmCrypto((wasmModule) =>
+    const wasmDraftPsbtResponse = await invokeWasmCrypto((wasmModule) =>
       wasmModule.draft_lab_psbt_transaction(
         utxosJson,
         toAddress,
@@ -351,16 +353,19 @@ const cryptoService = {
         applyChangeFreeBump,
       ),
     );
-    const parsed = typeof result === 'string' ? JSON.parse(result) : result;
+    const draftPsbtResponseFields =
+      typeof wasmDraftPsbtResponse === 'string'
+        ? JSON.parse(wasmDraftPsbtResponse)
+        : wasmDraftPsbtResponse;
     return {
-      psbtBase64: parsed.psbt_base64,
-      finalAmountSats: Number(parsed.final_amount_sats),
-      originalAmountSats: Number(parsed.original_amount_sats),
-      raisedToMinDust: Boolean(parsed.raised_to_min_dust),
-      changeFreeBumpAvailable: Boolean(parsed.change_free_bump_available),
-      changeFreeMaxSats: Number(parsed.change_free_max_sats),
-      feeSats: Number(parsed.fee_sats),
-      ...mapPrepareOrDraftReviewFields(parsed),
+      psbtBase64: draftPsbtResponseFields.psbt_base64,
+      finalAmountSats: Number(draftPsbtResponseFields.final_amount_sats),
+      originalAmountSats: Number(draftPsbtResponseFields.original_amount_sats),
+      raisedToMinDust: Boolean(draftPsbtResponseFields.raised_to_min_dust),
+      changeFreeBumpAvailable: Boolean(draftPsbtResponseFields.change_free_bump_available),
+      changeFreeMaxSats: Number(draftPsbtResponseFields.change_free_max_sats),
+      feeSats: Number(draftPsbtResponseFields.fee_sats),
+      ...mapPrepareOrDraftReviewFields(draftPsbtResponseFields),
     };
   },
 
@@ -371,7 +376,7 @@ const cryptoService = {
   async labEntityDraftLabPsbtTransaction(
     params: import('./crypto-api').LabEntityDraftLabPsbtTransactionParams,
   ): Promise<import('./crypto-api').DraftLabPsbtTransactionResult> {
-    const result = await invokeWasmCrypto((wasmModule) =>
+    const wasmLabEntityDraftPsbtResponse = await invokeWasmCrypto((wasmModule) =>
       wasmModule.lab_entity_draft_lab_psbt_transaction(
         params.mnemonic,
         params.changesetJson,
@@ -384,16 +389,21 @@ const cryptoService = {
         params.feeRateSatPerVb,
       ),
     );
-    const parsed = typeof result === 'string' ? JSON.parse(result) : result;
+    const labEntityDraftPsbtResponseFields =
+      typeof wasmLabEntityDraftPsbtResponse === 'string'
+        ? JSON.parse(wasmLabEntityDraftPsbtResponse)
+        : wasmLabEntityDraftPsbtResponse;
     return {
-      psbtBase64: parsed.psbt_base64,
-      finalAmountSats: Number(parsed.final_amount_sats),
-      originalAmountSats: Number(parsed.original_amount_sats),
-      raisedToMinDust: Boolean(parsed.raised_to_min_dust),
-      changeFreeBumpAvailable: Boolean(parsed.change_free_bump_available),
-      changeFreeMaxSats: Number(parsed.change_free_max_sats),
-      feeSats: Number(parsed.fee_sats),
-      ...mapPrepareOrDraftReviewFields(parsed),
+      psbtBase64: labEntityDraftPsbtResponseFields.psbt_base64,
+      finalAmountSats: Number(labEntityDraftPsbtResponseFields.final_amount_sats),
+      originalAmountSats: Number(labEntityDraftPsbtResponseFields.original_amount_sats),
+      raisedToMinDust: Boolean(labEntityDraftPsbtResponseFields.raised_to_min_dust),
+      changeFreeBumpAvailable: Boolean(
+        labEntityDraftPsbtResponseFields.change_free_bump_available,
+      ),
+      changeFreeMaxSats: Number(labEntityDraftPsbtResponseFields.change_free_max_sats),
+      feeSats: Number(labEntityDraftPsbtResponseFields.fee_sats),
+      ...mapPrepareOrDraftReviewFields(labEntityDraftPsbtResponseFields),
     };
   },
 
@@ -474,17 +484,20 @@ const cryptoService = {
         applyChangeFreeBump,
       ),
     );
-    const parsed = typeof wasmPrepareResult === 'string' ? JSON.parse(wasmPrepareResult) : wasmPrepareResult;
+    const prepareSendResponseFields =
+      typeof wasmPrepareResult === 'string'
+        ? JSON.parse(wasmPrepareResult)
+        : wasmPrepareResult;
     return {
-      psbtBase64: parsed.psbt_base64,
-      finalAmountSats: Number(parsed.final_amount_sats),
-      originalAmountSats: Number(parsed.original_amount_sats),
-      raisedToMinDust: Boolean(parsed.raised_to_min_dust),
-      bumpedChangeFree: Boolean(parsed.bumped_change_free),
-      changeFreeBumpAvailable: Boolean(parsed.change_free_bump_available),
-      changeFreeMaxSats: Number(parsed.change_free_max_sats),
-      feeSats: Number(parsed.fee_sats),
-      ...mapPrepareOrDraftReviewFields(parsed),
+      psbtBase64: prepareSendResponseFields.psbt_base64,
+      finalAmountSats: Number(prepareSendResponseFields.final_amount_sats),
+      originalAmountSats: Number(prepareSendResponseFields.original_amount_sats),
+      raisedToMinDust: Boolean(prepareSendResponseFields.raised_to_min_dust),
+      bumpedChangeFree: Boolean(prepareSendResponseFields.bumped_change_free),
+      changeFreeBumpAvailable: Boolean(prepareSendResponseFields.change_free_bump_available),
+      changeFreeMaxSats: Number(prepareSendResponseFields.change_free_max_sats),
+      feeSats: Number(prepareSendResponseFields.fee_sats),
+      ...mapPrepareOrDraftReviewFields(prepareSendResponseFields),
     };
   },
 
