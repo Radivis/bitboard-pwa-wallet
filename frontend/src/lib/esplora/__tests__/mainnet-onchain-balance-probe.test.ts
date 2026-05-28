@@ -15,19 +15,19 @@ const mockSessionFree = vi.fn()
 const mockSessionGetBalance = vi.fn()
 
 const zeroBalance: BalanceInfo = {
-  confirmed: 0,
-  trustedPending: 0,
-  untrustedPending: 0,
-  immature: 0,
-  total: 0,
+  confirmedSats: 0,
+  trustedPendingSats: 0,
+  untrustedPendingSats: 0,
+  immatureSats: 0,
+  totalSats: 0,
 }
 
 const mainnetBalance: BalanceInfo = {
-  confirmed: 50_000,
-  trustedPending: 0,
-  untrustedPending: 0,
-  immature: 0,
-  total: 50_000,
+  confirmedSats: 50_000,
+  trustedPendingSats: 0,
+  untrustedPendingSats: 0,
+  immatureSats: 0,
+  totalSats: 50_000,
 }
 
 vi.mock('@/db/database', () => ({

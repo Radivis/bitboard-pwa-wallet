@@ -19,8 +19,8 @@ function readDismissedFromSessionStorage(): boolean {
  */
 export function NearZeroSecurityBanner() {
   const location = useLocation()
-  const nearZeroActive = useNearZeroSecurityStore((s) => s.active)
-  const sessionPassword = useSessionStore((s) => s.password)
+  const nearZeroActive = useNearZeroSecurityStore((nearZeroSecurityState) => nearZeroSecurityState.active)
+  const sessionPassword = useSessionStore((sessionState) => sessionState.password)
   const [dismissed, setDismissed] = useState(readDismissedFromSessionStorage)
   const [upgradeOpen, setUpgradeOpen] = useState(false)
 

@@ -5,43 +5,46 @@ export type {
   WalletSecrets,
 } from '@/lib/wallet/wallet-domain-types'
 
+/** Domain descriptor pair (camelCase). */
 export interface DescriptorPair {
-  external: string;
-  internal: string;
+  externalDescriptor: string;
+  internalDescriptor: string;
 }
 
+/** Domain balance from BDK/WASM (camelCase). */
 export interface BalanceInfo {
-  confirmed: number;
-  trusted_pending: number;
-  untrusted_pending: number;
-  immature: number;
-  total: number;
+  confirmedSats: number;
+  trustedPendingSats: number;
+  untrustedPendingSats: number;
+  immatureSats: number;
+  totalSats: number;
 }
 
 export interface CreateWalletResult {
-  external_descriptor: string;
-  internal_descriptor: string;
-  first_address: string;
-  changeset_json: string;
+  externalDescriptor: string;
+  internalDescriptor: string;
+  firstAddress: string;
+  changesetJson: string;
 }
 
 export interface SyncResult {
   balance: BalanceInfo;
-  changeset_json: string;
+  changesetJson: string;
 }
 
+/** Domain transaction row for lists and dashboard (camelCase). */
 export interface TransactionDetails {
   txid: string;
-  sent_sats: number;
-  received_sats: number;
-  fee_sats: number | null;
-  confirmation_block_height: number | null;
+  sentSats: number;
+  receivedSats: number;
+  feeSats: number | null;
+  confirmationBlockHeight: number | null;
   /** Unix timestamp (seconds) of the block that confirmed this transaction. */
-  confirmation_time: number | null;
-  is_confirmed: boolean;
+  confirmationTime: number | null;
+  isConfirmed: boolean;
   /**
    * True when this row comes from lab chain history (`lab-utils`).
-   * Lab `sent_sats` is payment to recipients only; BDK/Esplora uses wallet input totals.
+   * Lab `sentSats` is payment to recipients only; BDK/Esplora uses wallet input totals.
    */
   isLabTx: boolean;
 }

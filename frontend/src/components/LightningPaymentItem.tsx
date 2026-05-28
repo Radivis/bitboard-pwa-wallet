@@ -81,7 +81,7 @@ export function LightningPaymentItem({ payment }: LightningPaymentItemProps) {
         </div>
 
         <div className="ml-1">
-          {payment.pending ? (
+          {payment.isPending ? (
             <Clock className="h-4 w-4 text-yellow-500" />
           ) : (
             <BadgeCheck className="h-4 w-4 text-green-500" />
@@ -130,7 +130,7 @@ export function LightningPaymentItem({ payment }: LightningPaymentItemProps) {
           )}
           <div className="flex justify-between">
             <span>Status</span>
-            <span>{payment.pending ? 'Pending' : 'Settled'}</span>
+            <span>{payment.isPending ? 'Pending' : 'Settled'}</span>
           </div>
         </div>
       )}

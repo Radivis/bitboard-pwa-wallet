@@ -114,8 +114,8 @@ describe('SQLite Database', () => {
           }).execute()
           throw new Error('rollback')
         })
-      } catch (e) {
-        expect((e as Error).message).toBe('rollback')
+      } catch (error) {
+        expect((error as Error).message).toBe('rollback')
       }
       const wallets = await walletDb.selectFrom('wallets').selectAll().execute()
       const secrets = await walletDb.selectFrom('wallet_secrets').selectAll().execute()

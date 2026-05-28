@@ -29,11 +29,20 @@ export const Route = createFileRoute('/lab/tx/$txid')({
   validateSearch: (
     search: Record<string, unknown>,
   ): { highlightVout?: number } => {
-    const raw = search.highlightVout
-    if (raw === undefined || raw === null || raw === '') return {}
-    const n = typeof raw === 'number' ? raw : Number.parseInt(String(raw), 10)
-    if (!Number.isFinite(n) || n < 0) return {}
-    return { highlightVout: Math.floor(n) }
+    const highlightVoutFromSearch = search.highlightVout
+    if (
+      highlightVoutFromSearch === undefined ||
+      highlightVoutFromSearch === null ||
+      highlightVoutFromSearch === ''
+    ) {
+      return {}
+    }
+    const highlightVoutIndex =
+      typeof highlightVoutFromSearch === 'number'
+        ? highlightVoutFromSearch
+        : Number.parseInt(String(highlightVoutFromSearch), 10)
+    if (!Number.isFinite(highlightVoutIndex) || highlightVoutIndex < 0) return {}
+    return { highlightVout: Math.floor(highlightVoutIndex) }
   },
   component: LabTxViewerPage,
 })
@@ -65,8 +74,8 @@ function LabTxViewerPage() {
   useEffect(() => {
     if (highlightVout === undefined || tx == null) return
     const id = `lab-tx-vout-${highlightVout}`
-    const el = document.getElementById(id)
-    el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    const voutElement = document.getElementById(id)
+    voutElement?.scrollIntoView({ behavior: 'smooth', block: 'center' })
   }, [highlightVout, txid, tx])
 
   const handleCopyTxid = useCallback(async () => {
@@ -100,8 +109,8 @@ function LabTxViewerPage() {
     )
   }
 
-  const totalInputs = tx.inputs.reduce((sum, i) => sum + i.amountSats, 0)
-  const totalOutputs = tx.outputs.reduce((sum, o) => sum + o.amountSats, 0)
+  const totalInputs = tx.inputs.reduce((sum, input) => sum + input.amountSats, 0)
+  const totalOutputs = tx.outputs.reduce((sum, output) => sum + output.amountSats, 0)
   const feeSats = isCoinbase(tx) ? 0 : totalInputs - totalOutputs
   const timestamp =
     tx.blockTime > 0 ? new Date(tx.blockTime * 1000).toLocaleString() : null

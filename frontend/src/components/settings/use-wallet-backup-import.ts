@@ -70,11 +70,11 @@ export function useWalletBackupImport() {
       }
       setPendingImport(parsed)
       setImportWipeOpen(true)
-    } catch (e) {
-      if (e instanceof BackupZipInvalidError) {
-        toast.error(e.message)
+    } catch (error) {
+      if (error instanceof BackupZipInvalidError) {
+        toast.error(error.message)
       } else {
-        toast.error(e instanceof Error ? e.message : 'Could not read backup ZIP.')
+        toast.error(error instanceof Error ? error.message : 'Could not read backup ZIP.')
       }
     }
   }, [])
@@ -113,8 +113,8 @@ export function useWalletBackupImport() {
       setImportBusy(true)
       setImportVerifyInlineMessage(null)
       try {
-        const enc = getEncryptionWorker()
-        await enc.verifyWalletBackupManifest(
+        const encryptionWorker = getEncryptionWorker()
+        await encryptionWorker.verifyWalletBackupManifest(
           pendingImport.sqliteBytes,
           password,
           pendingImport.manifestJson,
@@ -151,8 +151,8 @@ export function useWalletBackupImport() {
     })
     try {
       await applyWalletBackupReplace(snapshot.sqliteBytes)
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Import failed.')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Import failed.')
     } finally {
       setImportBusy(false)
     }

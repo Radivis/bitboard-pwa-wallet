@@ -36,13 +36,17 @@ pub fn derive_descriptors(
         COIN_TYPE_TESTNET
     };
 
-    let (purpose, wrapper) = match address_type {
+    let (purpose, script_template_prefix) = match address_type {
         AddressType::Taproot => (86, "tr"),
         AddressType::Segwit => (84, "wpkh"),
     };
 
     Ok(DescriptorPair {
-        external: format!("{wrapper}({xpriv}/{purpose}'/{coin_type}'/{account_id}'/0/*)"),
-        internal: format!("{wrapper}({xpriv}/{purpose}'/{coin_type}'/{account_id}'/1/*)"),
+        external_descriptor: format!(
+            "{script_template_prefix}({xpriv}/{purpose}'/{coin_type}'/{account_id}'/0/*)"
+        ),
+        internal_descriptor: format!(
+            "{script_template_prefix}({xpriv}/{purpose}'/{coin_type}'/{account_id}'/1/*)"
+        ),
     })
 }

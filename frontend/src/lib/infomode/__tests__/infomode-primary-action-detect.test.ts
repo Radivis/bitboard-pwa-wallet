@@ -6,9 +6,9 @@ import {
 } from '@/lib/infomode/infomode-primary-action-detect'
 
 function dispatchClick(target: Element): MouseEvent {
-  const ev = new MouseEvent('click', { bubbles: true, cancelable: true })
-  target.dispatchEvent(ev)
-  return ev
+  const clickEvent = new MouseEvent('click', { bubbles: true, cancelable: true })
+  target.dispatchEvent(clickEvent)
+  return clickEvent
 }
 
 describe('nodeIsInfomodePrimaryActionSurface', () => {
@@ -17,20 +17,20 @@ describe('nodeIsInfomodePrimaryActionSurface', () => {
   })
 
   it('is false for non-interactive text container', () => {
-    const p = document.createElement('p')
-    p.textContent = 'Select the Bitcoin network to connect to.'
-    document.body.appendChild(p)
-    expect(nodeIsInfomodePrimaryActionSurface(p)).toBe(false)
+    const paragraph = document.createElement('p')
+    paragraph.textContent = 'Select the Bitcoin network to connect to.'
+    document.body.appendChild(paragraph)
+    expect(nodeIsInfomodePrimaryActionSurface(paragraph)).toBe(false)
   })
 
   it('is true for a button and false when disabled', () => {
-    const b = document.createElement('button')
-    b.type = 'button'
-    b.textContent = 'Go'
-    document.body.appendChild(b)
-    expect(nodeIsInfomodePrimaryActionSurface(b)).toBe(true)
-    b.disabled = true
-    expect(nodeIsInfomodePrimaryActionSurface(b)).toBe(false)
+    const button = document.createElement('button')
+    button.type = 'button'
+    button.textContent = 'Go'
+    document.body.appendChild(button)
+    expect(nodeIsInfomodePrimaryActionSurface(button)).toBe(true)
+    button.disabled = true
+    expect(nodeIsInfomodePrimaryActionSurface(button)).toBe(false)
   })
 
   it('is true for a[href] and false for a without href', () => {
@@ -47,25 +47,25 @@ describe('nodeIsInfomodePrimaryActionSurface', () => {
   })
 
   it('is true for role=button on div', () => {
-    const d = document.createElement('div')
-    d.setAttribute('role', 'button')
-    document.body.appendChild(d)
-    expect(nodeIsInfomodePrimaryActionSurface(d)).toBe(true)
+    const divWithButtonRole = document.createElement('div')
+    divWithButtonRole.setAttribute('role', 'button')
+    document.body.appendChild(divWithButtonRole)
+    expect(nodeIsInfomodePrimaryActionSurface(divWithButtonRole)).toBe(true)
   })
 
   it('is true when data-infomode-primary-surface is set on a div', () => {
-    const d = document.createElement('div')
-    d.setAttribute(DATA_INFOMODE_PRIMARY_SURFACE, '')
-    document.body.appendChild(d)
-    expect(nodeIsInfomodePrimaryActionSurface(d)).toBe(true)
+    const primarySurfaceDiv = document.createElement('div')
+    primarySurfaceDiv.setAttribute(DATA_INFOMODE_PRIMARY_SURFACE, '')
+    document.body.appendChild(primarySurfaceDiv)
+    expect(nodeIsInfomodePrimaryActionSurface(primarySurfaceDiv)).toBe(true)
   })
 
   it('is false for aria-disabled button', () => {
-    const b = document.createElement('button')
-    b.type = 'button'
-    b.setAttribute('aria-disabled', 'true')
-    document.body.appendChild(b)
-    expect(nodeIsInfomodePrimaryActionSurface(b)).toBe(false)
+    const disabledButton = document.createElement('button')
+    disabledButton.type = 'button'
+    disabledButton.setAttribute('aria-disabled', 'true')
+    document.body.appendChild(disabledButton)
+    expect(nodeIsInfomodePrimaryActionSurface(disabledButton)).toBe(false)
   })
 })
 
@@ -77,33 +77,33 @@ describe('clickTargetWouldActivatePrimaryAction', () => {
   it('is false for click on p inside zone, true for click on button inside zone', () => {
     const zone = document.createElement('div')
     zone.setAttribute('data-infomode-id', 'z')
-    const p = document.createElement('p')
-    p.textContent = 'Help'
-    const b = document.createElement('button')
-    b.type = 'button'
-    b.textContent = 'Act'
-    zone.append(p, b)
+    const paragraph = document.createElement('p')
+    paragraph.textContent = 'Help'
+    const button = document.createElement('button')
+    button.type = 'button'
+    button.textContent = 'Act'
+    zone.append(paragraph, button)
     document.body.appendChild(zone)
 
-    const evP = dispatchClick(p)
-    expect(clickTargetWouldActivatePrimaryAction(evP, zone)).toBe(false)
+    const paragraphClick = dispatchClick(paragraph)
+    expect(clickTargetWouldActivatePrimaryAction(paragraphClick, zone)).toBe(false)
 
-    const evB = dispatchClick(b)
-    expect(clickTargetWouldActivatePrimaryAction(evB, zone)).toBe(true)
+    const buttonClick = dispatchClick(button)
+    expect(clickTargetWouldActivatePrimaryAction(buttonClick, zone)).toBe(true)
   })
 
   it('is true for nested path (span inside button)', () => {
     const zone = document.createElement('div')
     zone.setAttribute('data-infomode-id', 'z')
-    const b = document.createElement('button')
-    b.type = 'button'
-    const s = document.createElement('span')
-    s.textContent = 'L'
-    b.append(s)
-    zone.append(b)
+    const button = document.createElement('button')
+    button.type = 'button'
+    const labelSpan = document.createElement('span')
+    labelSpan.textContent = 'L'
+    button.append(labelSpan)
+    zone.append(button)
     document.body.appendChild(zone)
 
-    const ev = dispatchClick(s)
-    expect(clickTargetWouldActivatePrimaryAction(ev, zone)).toBe(true)
+    const spanClick = dispatchClick(labelSpan)
+    expect(clickTargetWouldActivatePrimaryAction(spanClick, zone)).toBe(true)
   })
 })

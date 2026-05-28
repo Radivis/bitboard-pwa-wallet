@@ -1,4 +1,4 @@
-import type { AddressType } from '@/lib/wallet/wallet-domain-types'
+import type { AddressType, WalletSummary } from '@/lib/wallet/wallet-domain-types'
 import { labEntityRecordForLabOwner, type LabOwner } from '@/lib/lab/lab-owner'
 import {
   getOwnerDisplayName,
@@ -18,7 +18,7 @@ export function LabOwnerDisplayWithAddressType({
   entities,
 }: {
   owner: LabOwner | string
-  wallets: { wallet_id: number; name: string }[]
+  wallets: WalletSummary[]
   entities: readonly EntityWithAddressType[]
 }) {
   const displayName = getOwnerDisplayName(owner, wallets, entities)

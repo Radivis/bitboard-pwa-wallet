@@ -89,7 +89,7 @@ function ownerKeyMatches(ownerKey: string) {
 function parseTxDetailsRow(
   blockHeight: number,
   blockTime: number,
-  row: {
+  txDetailsRow: {
     txid: string
     inputs_json: string
     outputs_json: string
@@ -99,10 +99,10 @@ function parseTxDetailsRow(
     receiver_wallet_id: number | null
   },
 ): LabBlockTransactionSummary {
-  const inputs = JSON.parse(row.inputs_json) as LabTxDetails['inputs']
-  const outputs = JSON.parse(row.outputs_json) as LabTxDetails['outputs']
-  const tx: LabTxDetails = {
-    txid: row.txid,
+  const inputs = JSON.parse(txDetailsRow.inputs_json) as LabTxDetails['inputs']
+  const outputs = JSON.parse(txDetailsRow.outputs_json) as LabTxDetails['outputs']
+  const labTxDetails: LabTxDetails = {
+    txid: txDetailsRow.txid,
     blockHeight,
     blockTime,
     confirmations: 0,
@@ -110,11 +110,14 @@ function parseTxDetailsRow(
     outputs,
   }
   return {
-    txid: row.txid,
-    sender: labOwnerFromDbPair(row.sender_lab_entity_id, row.sender_wallet_id),
-    receiver: labOwnerFromDbPair(row.receiver_lab_entity_id, row.receiver_wallet_id),
-    amountSats: netMovedSatsForLabTx(tx),
-    feeSats: feeSatsFromTxDetails(tx),
+    txid: txDetailsRow.txid,
+    sender: labOwnerFromDbPair(txDetailsRow.sender_lab_entity_id, txDetailsRow.sender_wallet_id),
+    receiver: labOwnerFromDbPair(
+      txDetailsRow.receiver_lab_entity_id,
+      txDetailsRow.receiver_wallet_id,
+    ),
+    amountSats: netMovedSatsForLabTx(labTxDetails),
+    feeSats: feeSatsFromTxDetails(labTxDetails),
     inputs,
   }
 }
@@ -185,7 +188,9 @@ export async function fetchLabOwnerKeysPage(
     LIMIT ${pageSize} OFFSET ${offset}
   `.execute(labDb)
 
-  const ownerKeys = pageResult.rows.map((r) => r.owner_key).filter((k) => k != null && k !== '')
+  const ownerKeys = pageResult.rows
+    .map((row) => row.owner_key)
+    .filter((ownerKey) => ownerKey != null && ownerKey !== '')
 
   return { ownerKeys, totalCount }
 }
@@ -216,9 +221,9 @@ export async function fetchLabAddressesForOwnerPage(
     .offset(offset)
     .execute()
 
-  const addresses: LabAddress[] = rows.map((r) => ({
-    address: r.address,
-    wif: r.wif,
+  const addresses: LabAddress[] = rows.map((addressRow) => ({
+    address: addressRow.address,
+    wif: addressRow.wif,
   }))
 
   return { addresses, totalCount }
@@ -258,11 +263,11 @@ export async function fetchLabUtxosForOwnerPage(
     .offset(offset)
     .execute()
 
-  const utxos: LabUtxoRow[] = rows.map((r) => ({
-    txid: r.txid,
-    vout: r.vout,
-    address: r.address,
-    amountSats: r.amount_sats,
+  const utxos: LabUtxoRow[] = rows.map((utxoRow) => ({
+    txid: utxoRow.txid,
+    vout: utxoRow.vout,
+    address: utxoRow.address,
+    amountSats: utxoRow.amount_sats,
   }))
 
   return { utxos, totalCount }
@@ -303,7 +308,7 @@ export async function fetchLabEntitiesPage(
     .offset(offset)
     .execute()
 
-  const ids = entityRows.map((r) => r.lab_entity_id)
+  const ids = entityRows.map((entityRow) => entityRow.lab_entity_id)
   if (ids.length === 0) {
     return { rows: [], totalCount }
   }
@@ -321,12 +326,12 @@ export async function fetchLabEntitiesPage(
     .execute()
 
   const balanceByEntityId = new Map<number, number>()
-  for (const b of balanceRows) {
-    if (b.lab_entity_id == null) continue
-    const t = b.total
+  for (const balanceRow of balanceRows) {
+    if (balanceRow.lab_entity_id == null) continue
+    const totalSats = balanceRow.total
     balanceByEntityId.set(
-      b.lab_entity_id,
-      typeof t === 'bigint' ? Number(t) : Number(t ?? 0),
+      balanceRow.lab_entity_id,
+      typeof totalSats === 'bigint' ? Number(totalSats) : Number(totalSats ?? 0),
     )
   }
 
@@ -354,31 +359,35 @@ export async function fetchLabEntitiesPage(
   ])
 
   const hasTransactionsById = new Set<number>()
-  for (const r of confirmedSenders) {
-    if (r.sender_lab_entity_id != null) hasTransactionsById.add(r.sender_lab_entity_id)
+  for (const senderRow of confirmedSenders) {
+    if (senderRow.sender_lab_entity_id != null) hasTransactionsById.add(senderRow.sender_lab_entity_id)
   }
-  for (const r of confirmedReceivers) {
-    if (r.receiver_lab_entity_id != null) hasTransactionsById.add(r.receiver_lab_entity_id)
+  for (const receiverRow of confirmedReceivers) {
+    if (receiverRow.receiver_lab_entity_id != null) {
+      hasTransactionsById.add(receiverRow.receiver_lab_entity_id)
+    }
   }
-  for (const r of mempoolSenders) {
-    if (r.sender_lab_entity_id != null) hasTransactionsById.add(r.sender_lab_entity_id)
+  for (const senderRow of mempoolSenders) {
+    if (senderRow.sender_lab_entity_id != null) hasTransactionsById.add(senderRow.sender_lab_entity_id)
   }
-  for (const r of mempoolReceivers) {
-    if (r.receiver_lab_entity_id != null) hasTransactionsById.add(r.receiver_lab_entity_id)
+  for (const receiverRow of mempoolReceivers) {
+    if (receiverRow.receiver_lab_entity_id != null) {
+      hasTransactionsById.add(receiverRow.receiver_lab_entity_id)
+    }
   }
 
-  const rows: LabEntitiesPageRow[] = entityRows.map((r) => {
-    const labEntityId = r.lab_entity_id
-    const entityName = r.entity_name
+  const rows: LabEntitiesPageRow[] = entityRows.map((entityDbRow) => {
+    const labEntityId = entityDbRow.lab_entity_id
+    const entityName = entityDbRow.entity_name
     const displayName = labEntityOwnerKey({ labEntityId, entityName })
     return {
       labEntityId,
       entityName,
       displayName,
-      addressType: parseAddressType(r.address_type),
+      addressType: parseAddressType(entityDbRow.address_type),
       balanceSats: balanceByEntityId.get(labEntityId) ?? 0,
       hasTransactions: hasTransactionsById.has(labEntityId),
-      isDead: Boolean(r.is_dead),
+      isDead: Boolean(entityDbRow.is_dead),
     }
   })
 
@@ -388,30 +397,30 @@ export async function fetchLabEntitiesPage(
 export async function fetchLabAddressBalancesSats(
   addresses: readonly string[],
 ): Promise<Map<string, number>> {
-  const result = new Map<string, number>()
-  if (addresses.length === 0) return result
+  const addressBalanceByAddress = new Map<string, number>()
+  if (addresses.length === 0) return addressBalanceByAddress
 
   for (const address of addresses) {
-    result.set(address, 0)
+    addressBalanceByAddress.set(address, 0)
   }
 
   await ensureLabMigrated()
   const labDb = getLabDatabase()
 
-  const rows = await labDb
+  const utxoBalanceRows = await labDb
     .selectFrom('utxos')
     .select((eb) => ['address', eb.fn.sum<number | bigint | null>('amount_sats').as('total')])
     .where('address', 'in', [...addresses])
     .groupBy('address')
     .execute()
 
-  for (const row of rows) {
-    const t = row.total
-    result.set(
-      row.address,
-      typeof t === 'bigint' ? Number(t) : Number(t ?? 0),
+  for (const balanceRow of utxoBalanceRows) {
+    const totalSats = balanceRow.total
+    addressBalanceByAddress.set(
+      balanceRow.address,
+      typeof totalSats === 'bigint' ? Number(totalSats) : Number(totalSats ?? 0),
     )
   }
 
-  return result
+  return addressBalanceByAddress
 }

@@ -214,7 +214,7 @@ fn build_transaction_creates_valid_psbt() {
         .unsigned_tx
         .output
         .iter()
-        .any(|o| o.value.to_sat() == SEND_AMOUNT);
+        .any(|output| output.value.to_sat() == SEND_AMOUNT);
     assert!(
         has_recipient_output,
         "PSBT must contain the recipient output"
@@ -250,7 +250,7 @@ fn build_transaction_respects_fee_rate() {
         .unsigned_tx
         .output
         .iter()
-        .map(|o| o.value.to_sat())
+        .map(|output| output.value.to_sat())
         .sum();
     let fee = total_input.saturating_sub(total_output);
 

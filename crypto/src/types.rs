@@ -13,13 +13,13 @@ pub enum AddressType {
 impl TryFrom<&str> for AddressType {
     type Error = CryptoError;
 
-    fn try_from(value: &str) -> Result<Self, Self::Error> {
-        match value {
+    fn try_from(address_type_str: &str) -> Result<Self, Self::Error> {
+        match address_type_str {
             "taproot" => Ok(AddressType::Taproot),
             "segwit" => Ok(AddressType::Segwit),
             _ => Err(CryptoError::Descriptor(format!(
                 "Unknown address type: {}",
-                value
+                address_type_str
             ))),
         }
     }
@@ -61,37 +61,40 @@ impl From<Network> for BitcoinNetwork {
 impl TryFrom<&str> for BitcoinNetwork {
     type Error = CryptoError;
 
-    fn try_from(value: &str) -> Result<Self, Self::Error> {
-        match value {
+    fn try_from(network_str: &str) -> Result<Self, Self::Error> {
+        match network_str {
             "bitcoin" => Ok(BitcoinNetwork::Bitcoin),
             "testnet" => Ok(BitcoinNetwork::Testnet),
             "signet" => Ok(BitcoinNetwork::Signet),
             "regtest" => Ok(BitcoinNetwork::Regtest),
             _ => Err(CryptoError::Descriptor(format!(
                 "Unknown network: {}",
-                value
+                network_str
             ))),
         }
     }
 }
 
 /// A pair of descriptor strings (external for receiving, internal for change).
-/// These are serialized to/from the WASM boundary as JSON.
+/// Serialized to/from the WASM boundary as JSON (`external_descriptor` / `internal_descriptor`).
+/// See `frontend/docs/NAMING.md`.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct DescriptorPair {
-    pub external: String,
-    pub internal: String,
+    #[serde(alias = "external")]
+    pub external_descriptor: String,
+    #[serde(alias = "internal")]
+    pub internal_descriptor: String,
 }
 
 /// Wallet balance broken down by confirmation status.
 /// All amounts are in satoshis.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct BalanceInfo {
-    pub confirmed: u64,
-    pub trusted_pending: u64,
-    pub untrusted_pending: u64,
-    pub immature: u64,
-    pub total: u64,
+    pub confirmed_sats: u64,
+    pub trusted_pending_sats: u64,
+    pub untrusted_pending_sats: u64,
+    pub immature_sats: u64,
+    pub total_sats: u64,
 }
 
 /// Result returned to JS after creating a new wallet.
@@ -123,6 +126,6 @@ pub struct TransactionDetails {
     pub is_confirmed: bool,
     /// True when the row was built from lab chain data (`lab-utils`), not BDK/Esplora.
     /// Lab sets `sent_sats` to non-change outputs only; wallet sync uses input totals.
-    #[serde(rename = "isLabTx", default)]
+    #[serde(default)]
     pub is_lab_tx: bool,
 }

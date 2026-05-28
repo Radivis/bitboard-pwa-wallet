@@ -23,12 +23,12 @@ function isLikelyCameraPermissionDenied(error: unknown): boolean {
     )
   }
   if (error instanceof Error) {
-    const m = error.message.toLowerCase()
+    const errorMessageLower = error.message.toLowerCase()
     return (
-      m.includes('permission denied') ||
-      m.includes('notallowederror') ||
-      m.includes('denied by user') ||
-      m.includes('not allowed')
+      errorMessageLower.includes('permission denied') ||
+      errorMessageLower.includes('notallowederror') ||
+      errorMessageLower.includes('denied by user') ||
+      errorMessageLower.includes('not allowed')
     )
   }
   return false
@@ -82,10 +82,10 @@ export function RecipientQrScanModal({
   const [flashOn, setFlashOn] = useState(false)
 
   const destroyScanner = () => {
-    const s = scannerRef.current
-    if (s) {
-      s.stop()
-      s.destroy()
+    const scanner = scannerRef.current
+    if (scanner) {
+      scanner.stop()
+      scanner.destroy()
       scannerRef.current = null
     }
     setFlashAvailable(false)
@@ -93,11 +93,11 @@ export function RecipientQrScanModal({
   }
 
   const handleFlashToggle = useCallback(async () => {
-    const s = scannerRef.current
-    if (!s) return
+    const scanner = scannerRef.current
+    if (!scanner) return
     try {
-      await s.toggleFlash()
-      setFlashOn(s.isFlashOn())
+      await scanner.toggleFlash()
+      setFlashOn(scanner.isFlashOn())
     } catch {
       /* Torch may reject on unsupported devices */
     }
@@ -121,11 +121,11 @@ export function RecipientQrScanModal({
 
       setFileDecodeError(null)
       try {
-        const result = await QrScanner.scanImage(file, {
+        const scanOutcome = await QrScanner.scanImage(file, {
           returnDetailedScanResult: true,
         })
-        const data = payloadFromScanResult(result as unknown)
-        onScanned(data)
+        const qrPayload = payloadFromScanResult(scanOutcome as unknown)
+        onScanned(qrPayload)
         onOpenChange(false)
       } catch {
         setFileDecodeError(
@@ -205,12 +205,12 @@ export function RecipientQrScanModal({
         try {
           const scanner = new QrScanner(
             video,
-            (result) => {
+            (scanOutcome) => {
               if (decodedOnceRef.current) return
               decodedOnceRef.current = true
-              const data = payloadFromScanResult(result)
+              const qrPayload = payloadFromScanResult(scanOutcome)
               destroyScanner()
-              onScanned(data)
+              onScanned(qrPayload)
               onOpenChange(false)
             },
             {
@@ -225,10 +225,10 @@ export function RecipientQrScanModal({
           await scanner.start()
           if (ifCancelledDestroyScanner(cancelled)) return
           try {
-            const has = await scanner.hasFlash()
+            const flashAvailable = await scanner.hasFlash()
             if (!cancelled) {
-              setFlashAvailable(has)
-              if (has) {
+              setFlashAvailable(flashAvailable)
+              if (flashAvailable) {
                 setFlashOn(scanner.isFlashOn())
               }
             }
@@ -238,9 +238,9 @@ export function RecipientQrScanModal({
               setFlashOn(false)
             }
           }
-        } catch (e) {
+        } catch (error) {
           if (!cancelled) {
-            setCameraError(formatCameraScannerStartError(e))
+            setCameraError(formatCameraScannerStartError(error))
             destroyScanner()
           }
         }

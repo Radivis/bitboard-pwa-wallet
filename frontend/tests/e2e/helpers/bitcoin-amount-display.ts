@@ -24,8 +24,8 @@ export {
 export async function satsFromFirstFormattedBitcoinDisplayInRoot(
   root: Locator,
 ): Promise<number | null> {
-  const t = (await root.innerText()).replace(/\s+/g, ' ').trim()
-  const all = parseAllSatsInTextFromFormattedBitcoinAmountDisplays(t, {
+  const displayText = (await root.innerText()).replace(/\s+/g, ' ').trim()
+  const all = parseAllSatsInTextFromFormattedBitcoinAmountDisplays(displayText, {
     includeZeroSats: true,
   })
   if (all.length === 0) {

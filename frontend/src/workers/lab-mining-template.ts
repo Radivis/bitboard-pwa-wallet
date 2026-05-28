@@ -24,7 +24,7 @@ import { getWasm } from './lab-wasm-loader'
 import {
   lookupOwnerForLabAddress,
   parseWasmObject,
-  state,
+  labWorkerState,
 } from './lab-worker-state'
 
 export function randomIntInclusive(min: number, max: number): number {
@@ -46,9 +46,9 @@ export function selectMempoolTxsForBlock(
 ): import('./lab-api').MempoolEntry[] {
   const limit = Number.isFinite(blockWeightLimit) ? blockWeightLimit : LAB_DEFAULT_BLOCK_WEIGHT_UNITS
   const sortedEntries = [...mempool].sort((a, b) => {
-    const fa = feeSatPerVbyte(a)
-    const fb = feeSatPerVbyte(b)
-    if (fb !== fa) return fb - fa
+    const feeRateA = feeSatPerVbyte(a)
+    const feeRateB = feeSatPerVbyte(b)
+    if (feeRateB !== feeRateA) return feeRateB - feeRateA
     return a.txid.localeCompare(b.txid)
   })
   const spentBySelected = new Set<string>()
@@ -58,7 +58,7 @@ export function selectMempoolTxsForBlock(
   while (true) {
     let added = false
     for (const entry of sortedEntries) {
-      if (selectedEntries.some((s) => s.txid === entry.txid)) continue
+      if (selectedEntries.some((selectedEntry) => selectedEntry.txid === entry.txid)) continue
       if (entry.weight > remainingWeight) continue
       const overlaps = entry.inputs.some((input) =>
         spentBySelected.has(`${input.txid}:${input.vout}`),
@@ -76,8 +76,8 @@ export function selectMempoolTxsForBlock(
 }
 
 export function getTip(): LabBlock | null {
-  if (state.blocks.length === 0) return null
-  return state.blocks[state.blocks.length - 1]
+  if (labWorkerState.blocks.length === 0) return null
+  return labWorkerState.blocks[labWorkerState.blocks.length - 1]
 }
 
 function minedByFromBlockTxs(
@@ -85,25 +85,27 @@ function minedByFromBlockTxs(
   addressToOwner: Record<string, LabOwner>,
 ): LabOwner | null {
   const coinbase = blockTxs.find((tx) => isCoinbase(tx))
-  const out0 = coinbase?.outputs[0]
-  if (!out0) return null
-  const fromStoredDetail = out0.owner ?? null
+  const coinbasePayoutOutput = coinbase?.outputs[0]
+  if (!coinbasePayoutOutput) return null
+  const fromStoredDetail = coinbasePayoutOutput.owner ?? null
   if (fromStoredDetail) return fromStoredDetail
-  return lookupOwnerForLabAddress(out0.address, addressToOwner) ?? null
+  return lookupOwnerForLabAddress(coinbasePayoutOutput.address, addressToOwner) ?? null
 }
 
 export function minedByForBlockHeight(height: number): LabOwner | null {
-  const op = state.mineOperations?.find((m) => m.height === height)
-  if (op != null && op.minedBy != null) {
-    return op.minedBy
+  const mineOperation = labWorkerState.mineOperations?.find(
+    (record) => record.height === height,
+  )
+  if (mineOperation != null && mineOperation.minedBy != null) {
+    return mineOperation.minedBy
   }
-  const blockTxs = state.txDetails.filter((tx) => tx.blockHeight === height)
-  return minedByFromBlockTxs(blockTxs, state.addressToOwner ?? {})
+  const blockTxs = labWorkerState.txDetails.filter((tx) => tx.blockHeight === height)
+  return minedByFromBlockTxs(blockTxs, labWorkerState.addressToOwner ?? {})
 }
 
 export function blockTransactionsForHeight(height: number): LabBlockTransactionSummary[] {
-  const txRecordByTxid = new Map(state.transactions.map((tx) => [tx.txid, tx]))
-  return state.txDetails
+  const txRecordByTxid = new Map(labWorkerState.transactions.map((tx) => [tx.txid, tx]))
+  return labWorkerState.txDetails
     .filter((tx) => tx.blockHeight === height)
     .map((tx) => {
       const txRecord = txRecordByTxid.get(tx.txid)
@@ -119,7 +121,7 @@ export function blockTransactionsForHeight(height: number): LabBlockTransactionS
 }
 
 /**
- * Resolves coinbase recipient and template "mined by" label without mutating lab state.
+ * Resolves coinbase recipient and template "mined by" label without mutating lab labWorkerState.
  * Mirrors mineBlocks branching (entity → explicit target → anonymous lab entity).
  */
 export async function resolveTemplateCoinbase(
@@ -144,7 +146,9 @@ export async function resolveTemplateCoinbase(
     params.ownerLabEntityId != null &&
     Number.isInteger(params.ownerLabEntityId)
   ) {
-    const entity = state.entities.find((e) => e.labEntityId === params.ownerLabEntityId)
+    const entity = labWorkerState.entities.find(
+      (entityRecord) => entityRecord.labEntityId === params.ownerLabEntityId,
+    )
     if (!entity) {
       throw new Error(`Unknown lab entity id ${params.ownerLabEntityId}`)
     }
@@ -171,8 +175,8 @@ export async function resolveTemplateCoinbase(
       labAddressType,
       0,
     )
-    const cr = parseWasmObject(createdRaw)
-    const first = String(cr.first_address ?? '')
+    const walletCreationResult = parseWasmObject(createdRaw)
+    const first = String(walletCreationResult.first_address ?? '')
     if (!first) {
       throw new Error('Lab entity wallet creation failed (no first address)')
     }
@@ -180,7 +184,9 @@ export async function resolveTemplateCoinbase(
   }
 
   if (entityNameOpt !== '') {
-    const entity = state.entities.find((e) => e.entityName === entityNameOpt)
+    const entity = labWorkerState.entities.find(
+      (entityRecord) => entityRecord.entityName === entityNameOpt,
+    )
     if (entity) {
       return {
         address: wasmModule.lab_entity_get_current_external_address(
@@ -195,7 +201,7 @@ export async function resolveTemplateCoinbase(
     }
     return {
       address: firstAddressFromNewEntityWallet(),
-      minedBy: labEntityLabOwner(nextLabEntityId(state.entities)),
+      minedBy: labEntityLabOwner(nextLabEntityId(labWorkerState.entities)),
     }
   }
 
@@ -209,13 +215,13 @@ export async function resolveTemplateCoinbase(
 
   return {
     address: firstAddressFromNewEntityWallet(),
-    minedBy: labEntityLabOwner(nextLabEntityId(state.entities)),
+    minedBy: labEntityLabOwner(nextLabEntityId(labWorkerState.entities)),
   }
 }
 
 export async function buildMinedBlockDetails(block: LabBlock): Promise<LabBlockDetails> {
   const header = await parseBlockHeader(block.blockData)
-  const blockTxDetails = state.txDetails.filter((tx) => tx.blockHeight === block.height)
+  const blockTxDetails = labWorkerState.txDetails.filter((tx) => tx.blockHeight === block.height)
   const transactions = blockTransactionsForHeight(block.height)
   const totalFeesSats = transactions.reduce((sum, tx) => sum + tx.feeSats, 0)
 
@@ -241,15 +247,15 @@ export async function buildCurrentBlockTemplate(
   const previewHeight = tip ? tip.height + 1 : 0
   const previousHash = tip?.blockHash ?? ''
 
-  const blockLimit = state.blockWeightLimit ?? LAB_DEFAULT_BLOCK_WEIGHT_UNITS
-  const selectedEntries = selectMempoolTxsForBlock([...(state.mempool ?? [])], blockLimit)
+  const blockLimit = labWorkerState.blockWeightLimit ?? LAB_DEFAULT_BLOCK_WEIGHT_UNITS
+  const selectedEntries = selectMempoolTxsForBlock([...(labWorkerState.mempool ?? [])], blockLimit)
   const mempoolTxHexes = selectedEntries.map((entry) => entry.signedTxHex)
   const totalFeesSats = selectedEntries.reduce((sum, entry) => sum + entry.feeSats, 0)
 
   const { address: targetAddress, minedBy } = await resolveTemplateCoinbase(params, wasmModule)
 
   const coinbaseScriptPubkeyHex = wasmModule.lab_address_to_script_pubkey_hex(targetAddress)
-  const minerSubsidySats = state.minerSubsidySats ?? LAB_DEFAULT_MINER_SUBSIDY_SATS
+  const minerSubsidySats = labWorkerState.minerSubsidySats ?? LAB_DEFAULT_MINER_SUBSIDY_SATS
   const blockHex = wasmModule.lab_mine_block(
     previousHash,
     previewHeight,
@@ -263,22 +269,22 @@ export async function buildCurrentBlockTemplate(
   const previewEffects = parseBlockEffects(rawEffects)
   const entryByTxid = new Map(selectedEntries.map((entry) => [entry.txid, entry]))
   const previewBlockTime =
-    typeof previewEffects.block_time === 'number' ? previewEffects.block_time : header.timestamp
+    typeof previewEffects.blockTime === 'number' ? previewEffects.blockTime : header.timestamp
 
   const transactions: LabBlockTransactionSummary[] = previewEffects.transactions.map((tx) => {
     const matchedEntry = entryByTxid.get(tx.txid)
-    const isCb = isCoinbase(tx)
+    const isCoinbaseTx = isCoinbase(tx)
     const inputs: LabTxInputDetail[] = tx.inputs.map(
       (inp): LabTxInputDetail => ({
         address: '',
         amountSats: 0,
-        prevTxid: inp.prev_txid,
-        prevVout: inp.prev_vout,
+        prevTxid: inp.prevTxid,
+        prevVout: inp.prevVout,
       }),
     )
-    const outputs = (tx.outputs ?? []).map((o) => ({
-      address: o.address,
-      amountSats: o.amount_sats,
+    const outputs = (tx.outputs ?? []).map((outputDetail) => ({
+      address: outputDetail.address,
+      amountSats: outputDetail.amountSats,
     }))
     const txDetails: LabTxDetails = {
       txid: tx.txid,
@@ -289,13 +295,13 @@ export async function buildCurrentBlockTemplate(
       outputs,
     }
     const amountSats =
-      !isCb && outputs.length === 0 && matchedEntry
+      !isCoinbaseTx && outputs.length === 0 && matchedEntry
         ? netMovedSatsFromMempoolEntry(matchedEntry)
         : netMovedSatsForLabTx(txDetails)
     return {
       txid: tx.txid,
       sender: matchedEntry?.sender ?? null,
-      receiver: isCb ? minedBy : (matchedEntry?.receiver ?? null),
+      receiver: isCoinbaseTx ? minedBy : (matchedEntry?.receiver ?? null),
       amountSats,
       feeSats: matchedEntry?.feeSats ?? 0,
       inputs,

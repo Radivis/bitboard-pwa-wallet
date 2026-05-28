@@ -6,11 +6,11 @@ import {
 } from '../onchain-dust-prepare-messages'
 
 describe('minOutputSizeRaisedToastMessage', () => {
-  it('matches the raisedToMinDust warning line', () => {
+  it('matches the isRaisedToMinDust warning line', () => {
     expect(minOutputSizeRaisedToastMessage()).toBe(
       onchainDustPrepareWarningLines({
-        raisedToMinDust: true,
-        bumpedChangeFree: false,
+        isRaisedToMinDust: true,
+        isBumpedChangeFree: false,
       })[0],
     )
   })
@@ -20,8 +20,8 @@ describe('onchainDustPrepareWarningLines', () => {
   it('returns empty array when no adjustments', () => {
     expect(
       onchainDustPrepareWarningLines({
-        raisedToMinDust: false,
-        bumpedChangeFree: false,
+        isRaisedToMinDust: false,
+        isBumpedChangeFree: false,
       }),
     ).toEqual([])
   })
@@ -29,8 +29,8 @@ describe('onchainDustPrepareWarningLines', () => {
   it('returns min-dust line only', () => {
     expect(
       onchainDustPrepareWarningLines({
-        raisedToMinDust: true,
-        bumpedChangeFree: false,
+        isRaisedToMinDust: true,
+        isBumpedChangeFree: false,
       }),
     ).toEqual([
       `Amount was below the minimum output size (${UX_DUST_FLOOR_SATS} sats). It was increased automatically.`,
@@ -40,8 +40,8 @@ describe('onchainDustPrepareWarningLines', () => {
   it('returns change-free line only', () => {
     expect(
       onchainDustPrepareWarningLines({
-        raisedToMinDust: false,
-        bumpedChangeFree: true,
+        isRaisedToMinDust: false,
+        isBumpedChangeFree: true,
       }),
     ).toEqual([
       'Change for this transaction would have been below the dust limit; the amount was increased to make the transfer change-free.',
@@ -50,8 +50,8 @@ describe('onchainDustPrepareWarningLines', () => {
 
   it('returns both lines when both adjustments apply', () => {
     const lines = onchainDustPrepareWarningLines({
-      raisedToMinDust: true,
-      bumpedChangeFree: true,
+      isRaisedToMinDust: true,
+      isBumpedChangeFree: true,
     })
     expect(lines).toHaveLength(2)
     expect(lines[0]).toContain(String(UX_DUST_FLOOR_SATS))

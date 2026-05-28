@@ -88,13 +88,13 @@ function baseMempoolEntry(overrides: Partial<MempoolEntry> = {}): MempoolEntry {
 
 describe('netMovedSatsFromMempoolEntry', () => {
   it('sums only non-change outputs', () => {
-    const e = baseMempoolEntry({
+    const mempoolEntry = baseMempoolEntry({
       outputsDetail: [
         { address: 'a', amountSats: 1_000, isChange: false },
         { address: 'b', amountSats: 9_000, isChange: true },
       ],
     })
-    expect(netMovedSatsFromMempoolEntry(e)).toBe(1_000)
+    expect(netMovedSatsFromMempoolEntry(mempoolEntry)).toBe(1_000)
   })
 })
 

@@ -7,6 +7,7 @@ import { walletHasNoMnemonicBackupFlag } from './wallet-no-mnemonic-backup'
 import { deleteWalletCompletely } from './wallet-persistence'
 import { libraryKeys, walletKeys } from './query-keys'
 import type { NewWallet, WalletUpdate } from './schema'
+import { mapDbWalletToDomain } from './wallet-domain-mapper'
 import { invalidateWalletRelatedQueriesAndNotifyOtherTabs } from '@/lib/wallet/wallet-query-cache-sync'
 
 export function useWallets() {
@@ -14,25 +15,26 @@ export function useWallets() {
     queryKey: walletKeys.all,
     queryFn: async () => {
       await ensureMigrated()
-      return getDatabase().selectFrom('wallets').selectAll().execute()
+      const rows = await getDatabase().selectFrom('wallets').selectAll().execute()
+      return rows.map(mapDbWalletToDomain)
     },
     refetchOnWindowFocus: 'always',
   })
 }
 
-export function useWallet(id: number | null) {
+export function useWallet(walletId: number | null) {
   return useQuery({
-    queryKey: id === null ? walletKeys.detailNone : walletKeys.byId(id),
+    queryKey: walletId === null ? walletKeys.detailNone : walletKeys.byId(walletId),
     queryFn: async () => {
       await ensureMigrated()
       const wallet = await getDatabase()
         .selectFrom('wallets')
         .selectAll()
-        .where('wallet_id', '=', id!)
+        .where('wallet_id', '=', walletId!)
         .executeTakeFirst()
-      return wallet ?? null
+      return wallet != null ? mapDbWalletToDomain(wallet) : null
     },
-    enabled: id !== null,
+    enabled: walletId !== null,
     refetchOnWindowFocus: 'always',
   })
 }
@@ -42,11 +44,11 @@ export function useAddWallet() {
   return useMutation({
     mutationFn: async (wallet: NewWallet) => {
       await ensureMigrated()
-      const result = await getDatabase()
+      const insertResult = await getDatabase()
         .insertInto('wallets')
         .values(wallet)
         .executeTakeFirstOrThrow()
-      return Number(result.insertId)
+      return Number(insertResult.insertId)
     },
     onSuccess: () => {
       invalidateWalletRelatedQueriesAndNotifyOtherTabs(queryClient)
@@ -57,12 +59,18 @@ export function useAddWallet() {
 export function useUpdateWallet() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: async ({ id, changes }: { id: number; changes: WalletUpdate }) => {
+    mutationFn: async ({
+      walletId,
+      walletChanges,
+    }: {
+      walletId: number
+      walletChanges: WalletUpdate
+    }) => {
       await ensureMigrated()
       await getDatabase()
         .updateTable('wallets')
-        .set(changes)
-        .where('wallet_id', '=', id)
+        .set(walletChanges)
+        .where('wallet_id', '=', walletId)
         .execute()
     },
     onSuccess: () => {

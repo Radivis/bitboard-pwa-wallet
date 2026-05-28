@@ -123,9 +123,9 @@ describe('checkFaucetReachability', () => {
       'fetch',
       vi.fn().mockResolvedValue({ ok: true, status: 200 }),
     )
-    const c = new AbortController()
+    const abortController = new AbortController()
     await expect(
-      checkFaucetReachability('mempool-testnet4', c.signal),
+      checkFaucetReachability('mempool-testnet4', abortController.signal),
     ).resolves.toBe('online')
   })
 
@@ -134,9 +134,9 @@ describe('checkFaucetReachability', () => {
       'fetch',
       vi.fn().mockResolvedValue({ ok: false, status: 503 }),
     )
-    const c = new AbortController()
+    const abortController = new AbortController()
     await expect(
-      checkFaucetReachability('mempool-testnet4', c.signal),
+      checkFaucetReachability('mempool-testnet4', abortController.signal),
     ).resolves.toBe('offline')
   })
 
@@ -145,17 +145,17 @@ describe('checkFaucetReachability', () => {
       'fetch',
       vi.fn().mockResolvedValue({ ok: false, status: 502 }),
     )
-    const c = new AbortController()
+    const abortController = new AbortController()
     await expect(
-      checkFaucetReachability('mempool-testnet4', c.signal),
+      checkFaucetReachability('mempool-testnet4', abortController.signal),
     ).resolves.toBe('offline')
   })
 
   it('returns unknown when fetch throws (e.g. network error)', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')))
-    const c = new AbortController()
+    const abortController = new AbortController()
     await expect(
-      checkFaucetReachability('mempool-testnet4', c.signal),
+      checkFaucetReachability('mempool-testnet4', abortController.signal),
     ).resolves.toBe('unknown')
   })
 })

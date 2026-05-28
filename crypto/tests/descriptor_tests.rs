@@ -24,15 +24,15 @@ fn derive_descriptors_produces_correct_type(
     )
     .unwrap();
     assert!(
-        pair.external.starts_with(expected_prefix),
+        pair.external_descriptor.starts_with(expected_prefix),
         "External descriptor '{}' should start with '{}'",
-        pair.external,
+        pair.external_descriptor,
         expected_prefix,
     );
     assert!(
-        pair.internal.starts_with(expected_prefix),
+        pair.internal_descriptor.starts_with(expected_prefix),
         "Internal descriptor '{}' should start with '{}'",
-        pair.internal,
+        pair.internal_descriptor,
         expected_prefix,
     );
 }
@@ -52,8 +52,8 @@ fn derive_descriptors_works_for_all_networks(#[case] network: BitcoinNetwork) {
         DEFAULT_ACCOUNT_ID,
     )
     .unwrap();
-    assert!(!pair.external.is_empty());
-    assert!(!pair.internal.is_empty());
+    assert!(!pair.external_descriptor.is_empty());
+    assert!(!pair.internal_descriptor.is_empty());
 }
 
 // --- Determinism tests ---
@@ -146,7 +146,7 @@ fn external_and_internal_descriptors_are_different() {
     )
     .unwrap();
     assert_ne!(
-        pair.external, pair.internal,
+        pair.external_descriptor, pair.internal_descriptor,
         "External and internal descriptors must differ"
     );
 }
@@ -161,11 +161,11 @@ fn descriptors_contain_wildcard_derivation() {
     )
     .unwrap();
     assert!(
-        pair.external.contains("/*"),
+        pair.external_descriptor.contains("/*"),
         "External descriptor should contain wildcard derivation path"
     );
     assert!(
-        pair.internal.contains("/*"),
+        pair.internal_descriptor.contains("/*"),
         "Internal descriptor should contain wildcard derivation path"
     );
 }
@@ -183,8 +183,8 @@ fn derive_descriptors_works_with_24_word_mnemonic(#[case] address_type: AddressT
         DEFAULT_ACCOUNT_ID,
     )
     .unwrap();
-    assert!(!pair.external.is_empty());
-    assert!(!pair.internal.is_empty());
+    assert!(!pair.external_descriptor.is_empty());
+    assert!(!pair.internal_descriptor.is_empty());
 }
 
 // --- Error case tests ---
@@ -242,14 +242,14 @@ fn account_id_appears_in_derivation_path() {
     )
     .unwrap();
     assert!(
-        pair.external.contains("/86'/1'/5'/0/*"),
+        pair.external_descriptor.contains("/86'/1'/5'/0/*"),
         "External descriptor should contain account 5 in path, got: {}",
-        pair.external,
+        pair.external_descriptor,
     );
     assert!(
-        pair.internal.contains("/86'/1'/5'/1/*"),
+        pair.internal_descriptor.contains("/86'/1'/5'/1/*"),
         "Internal descriptor should contain account 5 in path, got: {}",
-        pair.internal,
+        pair.internal_descriptor,
     );
 }
 
@@ -263,9 +263,9 @@ fn account_id_zero_matches_default_derivation_path() {
     )
     .unwrap();
     assert!(
-        pair.external.contains("/86'/1'/0'/0/*"),
+        pair.external_descriptor.contains("/86'/1'/0'/0/*"),
         "Account 0 should produce standard BIP86 path, got: {}",
-        pair.external,
+        pair.external_descriptor,
     );
 }
 
@@ -285,10 +285,10 @@ fn account_id_works_for_all_address_types(
     )
     .unwrap();
     assert!(
-        pair.external.contains(expected_path_fragment),
+        pair.external_descriptor.contains(expected_path_fragment),
         "Expected path fragment '{}' in descriptor, got: {}",
         expected_path_fragment,
-        pair.external,
+        pair.external_descriptor,
     );
 }
 
@@ -305,7 +305,8 @@ fn descriptors_contain_private_key_material() {
     .unwrap();
     // BDK descriptor templates with Xpriv include the private key
     // in the descriptor string (tprv... for testnet/signet, xprv... for mainnet)
-    let has_private_key = pair.external.contains("prv") || pair.external.contains("tprv");
+    let has_private_key =
+        pair.external_descriptor.contains("prv") || pair.external_descriptor.contains("tprv");
     assert!(
         has_private_key,
         "External descriptor should contain private key material for signing capability"

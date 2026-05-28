@@ -11,9 +11,9 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'
  */
 export function readBitboardWalletVersion(): string {
   const raw = fs.readFileSync(path.join(repoRoot, 'VERSION'), 'utf8')
-  const v = raw.trim()
-  if (!v) {
+  const version = raw.trim()
+  if (!version) {
     throw new Error('VERSION file is empty')
   }
-  return v
+  return version
 }

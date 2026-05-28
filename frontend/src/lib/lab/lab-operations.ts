@@ -20,38 +20,32 @@ export function isLabCoinbasePrevout(prevTxid: string, prevVout: number): boolea
   return zero && prevVout === LAB_COINBASE_PREV_VOUT
 }
 
-/** WASM block-effects input shape (snake_case prevouts). */
-type BlockEffectsTxInput = { prev_txid: string; prev_vout: number }
-
-/** Persisted lab tx input may use camelCase optional prevouts; spends often omit them. */
+/** Domain prevout fields on block-effects or persisted lab tx inputs. */
 type LabCoinbaseInputLike =
-  | BlockEffectsTxInput
+  | { prevTxid: string; prevVout: number }
   | {
-      prev_txid?: string
-      prev_vout?: number
       prevTxid?: string
       prevVout?: number
+      address?: string
+      amountSats?: number
     }
 
 function resolvePrevout(input: LabCoinbaseInputLike): { txid: string; vout: number } | null {
-  const rec = input as Record<string, string | number | undefined>
-  const txid = rec.prev_txid ?? rec.prevTxid
-  const vout = rec.prev_vout ?? rec.prevVout
-  if (txid === undefined || vout === undefined) return null
-  return { txid: String(txid), vout: Number(vout) }
+  const { prevTxid, prevVout } = input
+  if (prevTxid === undefined || prevVout === undefined) return null
+  return { txid: String(prevTxid), vout: Number(prevVout) }
 }
 
 /**
  * True when the tx is a lab coinbase: exactly one input with Bitcoin coinbase prevout (zero txid,
  * `0xffffffff` vout). Every transaction must have at least one input; WASM encodes coinbase with a
- * synthetic prevout ref. Accepts block-effects txs (snake_case) and persisted detail inputs
- * (camelCase optional prevouts).
+ * synthetic prevout ref.
  */
 export function isCoinbase(tx: { inputs: ReadonlyArray<LabCoinbaseInputLike> }): boolean {
   const { inputs } = tx
   if (inputs.length === 0) return false
   if (inputs.length > 1) return false
-  const prev = resolvePrevout(inputs[0])
-  if (prev == null) return false
-  return isLabCoinbasePrevout(prev.txid, prev.vout)
+  const prevout = resolvePrevout(inputs[0])
+  if (prevout == null) return false
+  return isLabCoinbasePrevout(prevout.txid, prevout.vout)
 }

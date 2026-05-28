@@ -157,11 +157,11 @@ describe('DashboardPage', () => {
       walletStatus: 'unlocked',
       networkMode: 'signet',
       balance: {
-        confirmed: 100_000,
-        trusted_pending: 0,
-        untrusted_pending: 0,
-        immature: 0,
-        total: 100_000,
+        confirmedSats: 100_000,
+        trustedPendingSats: 0,
+        untrustedPendingSats: 0,
+        immatureSats: 0,
+        totalSats: 100_000,
       },
       currentAddress: 'tb1qtest',
       lastSyncTime: null,
@@ -213,11 +213,11 @@ describe('DashboardPage', () => {
 
   it('shows on-chain breakdown when pending components are non-zero', () => {
     walletStoreState.balance = {
-      confirmed: 100_000,
-      trusted_pending: 5_000,
-      untrusted_pending: 3_000,
-      immature: 0,
-      total: 108_000,
+      confirmedSats: 100_000,
+      trustedPendingSats: 5_000,
+      untrustedPendingSats: 3_000,
+      immatureSats: 0,
+      totalSats: 108_000,
     }
     renderWithProviders(<DashboardPage />)
     expect(screen.getByText('0.00108000')).toBeInTheDocument()
@@ -317,22 +317,22 @@ describe('DashboardPage', () => {
     walletStoreState.transactions = [
       {
         txid: 'abc123',
-        sent_sats: 0,
-        received_sats: 50_000,
-        fee_sats: 200,
-        confirmation_block_height: 100,
-        confirmation_time: 1700000000,
-        is_confirmed: true,
+        sentSats: 0,
+        receivedSats: 50_000,
+        feeSats: 200,
+        confirmationBlockHeight: 100,
+        confirmationTime: 1700000000,
+        isConfirmed: true,
         isLabTx: false,
       },
       {
         txid: 'def456',
-        sent_sats: 10_000,
-        received_sats: 0,
-        fee_sats: 150,
-        confirmation_block_height: null,
-        confirmation_time: null,
-        is_confirmed: false,
+        sentSats: 10_000,
+        receivedSats: 0,
+        feeSats: 150,
+        confirmationBlockHeight: null,
+        confirmationTime: null,
+        isConfirmed: false,
         isLabTx: false,
       },
     ]
@@ -345,12 +345,12 @@ describe('DashboardPage', () => {
   it('paginates transaction list when more than one page of activity', async () => {
     walletStoreState.transactions = Array.from({ length: 21 }, (_, index) => ({
       txid: `tx-page-${index}`,
-      sent_sats: 0,
-      received_sats: 1_000,
-      fee_sats: null,
-      confirmation_block_height: 800_000 + index,
-      confirmation_time: 1_700_000_000 + index,
-      is_confirmed: true,
+      sentSats: 0,
+      receivedSats: 1_000,
+      feeSats: null,
+      confirmationBlockHeight: 800_000 + index,
+      confirmationTime: 1_700_000_000 + index,
+      isConfirmed: true,
       isLabTx: false,
     }))
 

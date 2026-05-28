@@ -34,21 +34,40 @@ export interface SplitWalletSecretsEncryptedWithRevision
 
 export const WALLET_SECRETS_CAS_MAX_RETRIES = 8
 
-function rowToPayloadBlob(record: {
+export type UpdateWalletSecretsPayloadWithRetryInput = {
+  walletDb: Kysely<Database>
+  walletId: number
+  password: string
+  transform: (
+    payload: WalletSecretsPayload,
+  ) => WalletSecretsPayload | Promise<WalletSecretsPayload>
+  maxRetries?: number
+}
+
+export type UpdateWalletSecretsEncryptedPayloadWithRetryInput = {
+  walletDb: Kysely<Database>
+  walletId: number
+  transform: (
+    payload: EncryptedWalletSecretsBlob,
+  ) => EncryptedWalletSecretsBlob | Promise<EncryptedWalletSecretsBlob>
+  maxRetries?: number
+}
+
+function rowToPayloadBlob(walletSecretsRow: {
   encrypted_data: Uint8Array
   iv: Uint8Array
   salt: Uint8Array
   kdf_phc: string
 }): EncryptedWalletSecretsBlob {
   return {
-    ciphertext: record.encrypted_data,
-    iv: record.iv,
-    salt: record.salt,
-    kdfPhc: record.kdf_phc,
+    ciphertext: walletSecretsRow.encrypted_data,
+    iv: walletSecretsRow.iv,
+    salt: walletSecretsRow.salt,
+    kdfPhc: walletSecretsRow.kdf_phc,
   }
 }
 
-function rowToMnemonicBlob(record: {
+function rowToMnemonicBlob(walletSecretsRow: {
   wallet_id: number
   mnemonic_encrypted_data: Uint8Array
   mnemonic_iv: Uint8Array
@@ -56,10 +75,10 @@ function rowToMnemonicBlob(record: {
   mnemonic_kdf_phc: string
 }): EncryptedWalletSecretsBlob {
   return {
-    ciphertext: record.mnemonic_encrypted_data,
-    iv: record.mnemonic_iv,
-    salt: record.mnemonic_salt,
-    kdfPhc: record.mnemonic_kdf_phc,
+    ciphertext: walletSecretsRow.mnemonic_encrypted_data,
+    iv: walletSecretsRow.mnemonic_iv,
+    salt: walletSecretsRow.mnemonic_salt,
+    kdfPhc: walletSecretsRow.mnemonic_kdf_phc,
   }
 }
 
@@ -80,7 +99,7 @@ export async function getWalletSecretsEncryptedWithRevision(
   walletDb: Kysely<Database>,
   walletId: number
 ): Promise<SplitWalletSecretsEncryptedWithRevision> {
-  const record = await walletDb
+  const walletSecretsRow = await walletDb
     .selectFrom('wallet_secrets')
     .select([
       'wallet_id',
@@ -97,14 +116,14 @@ export async function getWalletSecretsEncryptedWithRevision(
     .where('wallet_id', '=', walletId)
     .executeTakeFirst()
 
-  if (!record) {
+  if (!walletSecretsRow) {
     throw new Error(`Wallet secrets for wallet ${walletId} not found`)
   }
 
   return {
-    payload: rowToPayloadBlob(record),
-    mnemonic: rowToMnemonicBlob(record),
-    revision: record.revision,
+    payload: rowToPayloadBlob(walletSecretsRow),
+    mnemonic: rowToMnemonicBlob(walletSecretsRow),
+    revision: walletSecretsRow.revision,
   }
 }
 
@@ -164,7 +183,7 @@ export async function putSplitWalletSecretsEncrypted(
     if (blobs.mnemonic === undefined) {
       throw new Error('New wallet secrets row requires both payload and mnemonic ciphertexts')
     }
-    const m = blobs.mnemonic
+    const mnemonicBlob = blobs.mnemonic
     await walletDb
       .insertInto('wallet_secrets')
       .values({
@@ -174,10 +193,10 @@ export async function putSplitWalletSecretsEncrypted(
         iv: blobs.payload.iv,
         salt: blobs.payload.salt,
         kdf_phc: kdfPhc,
-        mnemonic_encrypted_data: m.ciphertext,
-        mnemonic_iv: m.iv,
-        mnemonic_salt: m.salt,
-        mnemonic_kdf_phc: m.kdfPhc,
+        mnemonic_encrypted_data: mnemonicBlob.ciphertext,
+        mnemonic_iv: mnemonicBlob.iv,
+        mnemonic_salt: mnemonicBlob.salt,
+        mnemonic_kdf_phc: mnemonicBlob.kdfPhc,
         created_at: now,
         updated_at: now,
       })
@@ -216,13 +235,13 @@ export async function putSplitWalletSecretsEncryptedIfRevisionMatches(
         }
       : {}
 
-  const result = await walletDb
+  const updateResult = await walletDb
     .updateTable('wallet_secrets')
     .set({ ...baseSet, ...mnemonicSet })
     .where('wallet_id', '=', walletId)
     .where('revision', '=', expectedRevision)
     .executeTakeFirst()
-  return Number(result.numUpdatedRows) === 1
+  return Number(updateResult.numUpdatedRows) === 1
 }
 
 function logWalletSecretsConflictRetry(attempt: number, maxRetries: number): void {
@@ -240,22 +259,13 @@ function walletSecretsConflictError(maxRetries: number): Error {
   )
 }
 
-async function updateWalletSecretsPayloadWithRetryImpl(params: {
-  walletDb: Kysely<Database>
-  walletId: number
-  password: string
-  transform: (
-    payload: WalletSecretsPayload,
-  ) => WalletSecretsPayload | Promise<WalletSecretsPayload>
-  maxRetries?: number
-}): Promise<void> {
-  const {
-    walletDb,
-    walletId,
-    password,
-    transform,
-    maxRetries = WALLET_SECRETS_CAS_MAX_RETRIES,
-  } = params
+async function updateWalletSecretsPayloadWithRetryImpl({
+  walletDb,
+  walletId,
+  password,
+  transform,
+  maxRetries = WALLET_SECRETS_CAS_MAX_RETRIES,
+}: UpdateWalletSecretsPayloadWithRetryInput): Promise<void> {
 
   for (let attempt = 1; attempt <= maxRetries; attempt += 1) {
     const current = await getWalletSecretsEncryptedWithRevision(walletDb, walletId)
@@ -282,32 +292,18 @@ async function updateWalletSecretsPayloadWithRetryImpl(params: {
   throw walletSecretsConflictError(maxRetries)
 }
 
-export function updateWalletSecretsPayloadWithRetry(params: {
-  walletDb: Kysely<Database>
-  walletId: number
-  password: string
-  transform: (
-    payload: WalletSecretsPayload,
-  ) => WalletSecretsPayload | Promise<WalletSecretsPayload>
-  maxRetries?: number
-}): Promise<void> {
-  return trackWalletSecretsWrite(updateWalletSecretsPayloadWithRetryImpl(params))
+export function updateWalletSecretsPayloadWithRetry(
+  input: UpdateWalletSecretsPayloadWithRetryInput,
+): Promise<void> {
+  return trackWalletSecretsWrite(updateWalletSecretsPayloadWithRetryImpl(input))
 }
 
-async function updateWalletSecretsEncryptedPayloadWithRetryImpl(params: {
-  walletDb: Kysely<Database>
-  walletId: number
-  transform: (
-    payload: EncryptedWalletSecretsBlob,
-  ) => EncryptedWalletSecretsBlob | Promise<EncryptedWalletSecretsBlob>
-  maxRetries?: number
-}): Promise<void> {
-  const {
-    walletDb,
-    walletId,
-    transform,
-    maxRetries = WALLET_SECRETS_CAS_MAX_RETRIES,
-  } = params
+async function updateWalletSecretsEncryptedPayloadWithRetryImpl({
+  walletDb,
+  walletId,
+  transform,
+  maxRetries = WALLET_SECRETS_CAS_MAX_RETRIES,
+}: UpdateWalletSecretsEncryptedPayloadWithRetryInput): Promise<void> {
 
   for (let attempt = 1; attempt <= maxRetries; attempt += 1) {
     const current = await getWalletSecretsEncryptedWithRevision(walletDb, walletId)
@@ -324,16 +320,11 @@ async function updateWalletSecretsEncryptedPayloadWithRetryImpl(params: {
   throw walletSecretsConflictError(maxRetries)
 }
 
-export function updateWalletSecretsEncryptedPayloadWithRetry(params: {
-  walletDb: Kysely<Database>
-  walletId: number
-  transform: (
-    payload: EncryptedWalletSecretsBlob,
-  ) => EncryptedWalletSecretsBlob | Promise<EncryptedWalletSecretsBlob>
-  maxRetries?: number
-}): Promise<void> {
+export function updateWalletSecretsEncryptedPayloadWithRetry(
+  input: UpdateWalletSecretsEncryptedPayloadWithRetryInput,
+): Promise<void> {
   return trackWalletSecretsWrite(
-    updateWalletSecretsEncryptedPayloadWithRetryImpl(params),
+    updateWalletSecretsEncryptedPayloadWithRetryImpl(input),
   )
 }
 
@@ -412,7 +403,7 @@ export async function loadWalletSecretsPayload(
   password: string,
   walletId: number,
 ): Promise<WalletSecretsPayload> {
-  const record = await walletDb
+  const walletSecretsRow = await walletDb
     .selectFrom('wallet_secrets')
     .select([
       'wallet_id',
@@ -428,16 +419,16 @@ export async function loadWalletSecretsPayload(
     .where('wallet_id', '=', walletId)
     .executeTakeFirst()
 
-  if (!record) {
+  if (!walletSecretsRow) {
     throw new Error(`Wallet secrets for wallet ${walletId} not found`)
   }
-  rowToMnemonicBlob(record)
+  rowToMnemonicBlob(walletSecretsRow)
 
   const plaintext = await decryptData(password, {
-    ciphertext: record.encrypted_data,
-    iv: record.iv,
-    salt: record.salt,
-    kdfPhc: record.kdf_phc,
+    ciphertext: walletSecretsRow.encrypted_data,
+    iv: walletSecretsRow.iv,
+    salt: walletSecretsRow.salt,
+    kdfPhc: walletSecretsRow.kdf_phc,
   })
   return parseWalletPayloadJson(plaintext)
 }
@@ -450,7 +441,7 @@ export async function loadWalletSecrets(
   password: string,
   walletId: number,
 ): Promise<WalletSecrets> {
-  const record = await walletDb
+  const walletSecretsRow = await walletDb
     .selectFrom('wallet_secrets')
     .select([
       'encrypted_data',
@@ -465,22 +456,22 @@ export async function loadWalletSecrets(
     .where('wallet_id', '=', walletId)
     .executeTakeFirst()
 
-  if (!record) {
+  if (!walletSecretsRow) {
     throw new Error(`Wallet secrets for wallet ${walletId} not found`)
   }
   const mnemonicBlob = rowToMnemonicBlob({
     wallet_id: walletId,
-    mnemonic_encrypted_data: record.mnemonic_encrypted_data,
-    mnemonic_iv: record.mnemonic_iv,
-    mnemonic_salt: record.mnemonic_salt,
-    mnemonic_kdf_phc: record.mnemonic_kdf_phc,
+    mnemonic_encrypted_data: walletSecretsRow.mnemonic_encrypted_data,
+    mnemonic_iv: walletSecretsRow.mnemonic_iv,
+    mnemonic_salt: walletSecretsRow.mnemonic_salt,
+    mnemonic_kdf_phc: walletSecretsRow.mnemonic_kdf_phc,
   })
 
   const payloadPlaintext = await decryptData(password, {
-    ciphertext: record.encrypted_data,
-    iv: record.iv,
-    salt: record.salt,
-    kdfPhc: record.kdf_phc,
+    ciphertext: walletSecretsRow.encrypted_data,
+    iv: walletSecretsRow.iv,
+    salt: walletSecretsRow.salt,
+    kdfPhc: walletSecretsRow.kdf_phc,
   })
   const mnemonicPlaintext = await decryptData(password, {
     ciphertext: mnemonicBlob.ciphertext,
@@ -521,7 +512,7 @@ export async function listWalletIdsWithSecrets(
     .select('wallet_id')
     .orderBy('wallet_id', 'asc')
     .execute()
-  return rows.map((r) => r.wallet_id)
+  return rows.map((row) => row.wallet_id)
 }
 
 export async function reencryptAllWalletSecretsWithNewPassword(params: {
@@ -571,9 +562,12 @@ export async function reencryptAllWalletSecretsWithNewPassword(params: {
     })
   }
 
-  await walletDb.transaction().execute(async (trx) => {
+  await walletDb.transaction().execute(async (kyselyTransaction) => {
     for (const { walletId, payload, mnemonic } of blobs) {
-      await putSplitWalletSecretsEncrypted(trx, walletId, { payload, mnemonic })
+      await putSplitWalletSecretsEncrypted(kyselyTransaction, walletId, {
+        payload,
+        mnemonic,
+      })
     }
   })
 }

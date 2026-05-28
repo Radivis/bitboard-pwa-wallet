@@ -157,7 +157,7 @@ export async function switchDescriptorWallet(params: {
         targetAccountId,
         fullScanNeeded,
       })
-      // Always return to `unlocked` so dashboard Sync/UX is usable. On `sync_failed`,
+      // Always return to `unlocked` so dashboard Sync/UX is usable. On `syncFailed`,
       // an error toast was shown; chain data in WASM may still be stale.
       setWalletStatus('unlocked')
     } else {
@@ -176,17 +176,20 @@ export async function switchDescriptorWallet(params: {
 }
 
 export function toUserFriendlySwitchError(err: unknown): string {
-  const msg =
+  const errorMessageLowercase =
     err instanceof Error ? err.message.toLowerCase() : String(err).toLowerCase()
   if (
-    msg.includes('password') ||
-    msg.includes('decrypt') ||
-    msg.includes('incorrect') ||
-    msg.includes('corrupted')
+    errorMessageLowercase.includes('password') ||
+    errorMessageLowercase.includes('decrypt') ||
+    errorMessageLowercase.includes('incorrect') ||
+    errorMessageLowercase.includes('corrupted')
   ) {
     return 'Wrong password or corrupted wallet data'
   }
-  if (msg.includes('secrets') && msg.includes('not found')) {
+  if (
+    errorMessageLowercase.includes('secrets') &&
+    errorMessageLowercase.includes('not found')
+  ) {
     return 'Wallet data not found'
   }
   return 'Failed to switch descriptor wallet'

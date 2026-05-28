@@ -15,8 +15,8 @@ export type SendStep = 1 | 2
 /** At least one flag is true; both can apply when the user entered a sub-dust amount that also needed a change-free bump after clamping. */
 export type OnchainDustWarning = {
   previousSats: number
-  raisedToDustMin: boolean
-  bumpedChangeFree: boolean
+  isRaisedToMinDust: boolean
+  isBumpedChangeFree: boolean
 }
 
 interface SendState {
@@ -42,7 +42,7 @@ interface SendState {
   setStep: (step: SendStep) => void
   setRecipient: (recipient: string) => void
   /** Pass `{ fromUser: true }` when the user types in the field (clears dust warnings). */
-  setAmount: (amount: string, opts?: { fromUser?: boolean }) => void
+  setAmount: (amount: string, amountUpdateOptions?: { fromUser?: boolean }) => void
   setAmountUnit: (unit: SendAmountUnit) => void
   setFeePresetSelection: (preset: SendFeePresetLabel) => void
   setFeeRate: (rate: number) => void
@@ -52,7 +52,7 @@ interface SendState {
   setReviewFeeSats: (feeSats: number | null) => void
   setReviewChangeSats: (changeSats: number | null) => void
   setReviewInputUtxos: (inputUtxos: ReviewInputUtxo[] | null) => void
-  setOnchainDustWarning: (w: OnchainDustWarning | null) => void
+  setOnchainDustWarning: (dustWarning: OnchainDustWarning | null) => void
 
   /** Reset form and step to initial state (e.g. after successful send or when leaving send page). */
   reset: () => void
@@ -81,10 +81,11 @@ export const useSendStore = create<SendState>((set) => ({
 
   setStep: (step) => set({ step }),
   setRecipient: (recipient) => set({ recipient }),
-  setAmount: (amount, opts) =>
-    set((s) => ({
+  setAmount: (amount, amountUpdateOptions) =>
+    set((previousSendState) => ({
       amount,
-      onchainDustWarning: opts?.fromUser === true ? null : s.onchainDustWarning,
+      onchainDustWarning:
+        amountUpdateOptions?.fromUser === true ? null : previousSendState.onchainDustWarning,
     })),
   setAmountUnit: (amountUnit) => set({ amountUnit }),
   setFeePresetSelection: (feePresetSelection) => set({ feePresetSelection }),

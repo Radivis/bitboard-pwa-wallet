@@ -24,9 +24,9 @@ export function mainnetFiatRatesQueryKey(
 }
 
 function usePortfolioPositiveForFiatRatesFetch(): boolean {
-  const balance = useWalletStore((s) => s.balance)
+  const balance = useWalletStore((walletState) => walletState.balance)
   const lightningBalancesQuery = useLightningBalancesForDashboardQuery()
-  const onChainTotalSats = balance?.total ?? 0
+  const onChainTotalSats = balance?.totalSats ?? 0
   const lightningTotalSats = lightningBalancesQuery.data?.totalSats ?? 0
   return onChainTotalSats > 0 || lightningTotalSats > 0
 }
@@ -40,12 +40,12 @@ export function useMainnetFiatRatesQuery(options?: {
   allowFetchWhenPortfolioZeroForReceivePage?: boolean
 }) {
   const queryClient = useQueryClient()
-  const networkMode = useWalletStore((s) => s.networkMode)
-  const walletStatus = useWalletStore((s) => s.walletStatus)
-  const balance = useWalletStore((s) => s.balance)
-  const fiatDenominationMode = useFiatDenominationStore((s) => s.fiatDenominationMode)
-  const defaultFiatCurrency = useFiatDenominationStore((s) => s.defaultFiatCurrency)
-  const fiatRateProviderId = useFiatDenominationStore((s) => s.fiatRateProvider)
+  const networkMode = useWalletStore((walletState) => walletState.networkMode)
+  const walletStatus = useWalletStore((walletState) => walletState.walletStatus)
+  const balance = useWalletStore((walletState) => walletState.balance)
+  const fiatDenominationMode = useFiatDenominationStore((fiatDenominationState) => fiatDenominationState.fiatDenominationMode)
+  const defaultFiatCurrency = useFiatDenominationStore((fiatDenominationState) => fiatDenominationState.defaultFiatCurrency)
+  const fiatRateProviderId = useFiatDenominationStore((fiatDenominationState) => fiatDenominationState.fiatRateProvider)
   const portfolioHasPositiveBalance = usePortfolioPositiveForFiatRatesFetch()
   const allowFetchWhenPortfolioZeroForReceivePage =
     options?.allowFetchWhenPortfolioZeroForReceivePage === true

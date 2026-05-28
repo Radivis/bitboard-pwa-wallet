@@ -30,15 +30,21 @@ const FIAT_RATES_PROXY_CORS_PREVIEW_ORIGIN_RE =
 function fiatRatesProxyCorsAllowedOrigin(
   originHeader: string | string[] | undefined,
 ): string | null {
-  const raw =
+  const requestOrigin =
     typeof originHeader === 'string'
       ? originHeader
       : Array.isArray(originHeader)
         ? originHeader[0]
         : undefined
-  if (typeof raw !== 'string' || raw.length === 0) return null
-  if (FIAT_RATES_PROXY_CORS_ALLOWED_ORIGINS_EXACT.includes(raw)) return raw
-  if (FIAT_RATES_PROXY_CORS_PREVIEW_ORIGIN_RE.test(raw)) return raw
+  if (typeof requestOrigin !== 'string' || requestOrigin.length === 0) {
+    return null
+  }
+  if (FIAT_RATES_PROXY_CORS_ALLOWED_ORIGINS_EXACT.includes(requestOrigin)) {
+    return requestOrigin
+  }
+  if (FIAT_RATES_PROXY_CORS_PREVIEW_ORIGIN_RE.test(requestOrigin)) {
+    return requestOrigin
+  }
   return null
 }
 
@@ -67,8 +73,8 @@ function isFiatRatePathAllowedForProvider(
 ): boolean {
   const normalized = pathname.replace(/\/$/, '') || '/'
   return FIAT_RATE_PROVIDER_PATH_PREFIXES[providerId].some((prefix) => {
-    const p = prefix.replace(/\/$/, '') || '/'
-    return normalized === p || normalized.startsWith(`${p}/`)
+    const normalizedPrefix = prefix.replace(/\/$/, '') || '/'
+    return normalized === normalizedPrefix || normalized.startsWith(`${normalizedPrefix}/`)
   })
 }
 

@@ -18,11 +18,11 @@ const hoisted = vi.hoisted(() => {
   const loadWalletMock = vi.fn().mockResolvedValue(true)
   const getCurrentAddressMock = vi.fn().mockResolvedValue('bc1qrepair')
   const getBalanceMock = vi.fn().mockResolvedValue({
-    confirmed: 0,
-    trusted_pending: 0,
-    untrusted_pending: 0,
-    immature: 0,
-    total: 0,
+    confirmedSats: 0,
+    trustedPendingSats: 0,
+    untrustedPendingSats: 0,
+    immatureSats: 0,
+    totalSats: 0,
   })
   const getTransactionListMock = vi.fn().mockResolvedValue([])
   const exportChangesetMock = vi.fn().mockResolvedValue('{}')
@@ -114,7 +114,7 @@ describe('runFullScanDashboardWalletSync repair path', () => {
           'Blockchain error: HeaderHashNotFound(BlockHash(000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f))',
         )
       }
-      return { changeset_json: '{}', balance: {} }
+      return { changesetJson: '{}', balance: {} }
     })
   })
 
@@ -139,7 +139,7 @@ describe('runFullScanDashboardWalletSync repair path', () => {
 
   it('does not reload when full scan succeeds on first attempt', async () => {
     hoisted.fullScanWalletMock.mockResolvedValue({
-      changeset_json: '{}',
+      changesetJson: '{}',
       balance: {},
     })
     await runFullScanDashboardWalletSync({

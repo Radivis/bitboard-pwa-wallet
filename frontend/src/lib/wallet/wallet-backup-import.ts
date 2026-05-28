@@ -10,8 +10,8 @@ export async function parseWalletBackupZipFile(file: File): Promise<{
   sqliteBytes: Uint8Array
   manifestJson: string
 }> {
-  const buf = await readFileAsArrayBuffer(file)
-  const zip = await JSZip.loadAsync(buf)
+  const zipBytes = await readFileAsArrayBuffer(file)
+  const zip = await JSZip.loadAsync(zipBytes)
   const sqliteEntry = zip.file(WALLET_BACKUP_SQLITE_ENTRY_NAME)
   const manifestEntry = zip.file(WALLET_BACKUP_MANIFEST_ENTRY_NAME)
   if (!sqliteEntry || !manifestEntry) {

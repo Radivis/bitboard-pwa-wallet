@@ -52,8 +52,8 @@ export function getNavigatorLegalLocale(): LegalLocale {
 
 export function readStoredLegalLocale(): LegalLocale | null {
   if (typeof window === 'undefined') return null
-  const raw = localStorage.getItem(LEGAL_LOCALE_STORAGE_KEY)
-  if (raw === 'de' || raw === 'en') return raw
+  const storedLocale = localStorage.getItem(LEGAL_LOCALE_STORAGE_KEY)
+  if (storedLocale === 'de' || storedLocale === 'en') return storedLocale
   return null
 }
 

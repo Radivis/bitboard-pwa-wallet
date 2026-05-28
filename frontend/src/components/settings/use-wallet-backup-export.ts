@@ -28,12 +28,12 @@ function walletBackupSignKdfPhc(): string {
 }
 
 export function useWalletBackupExport() {
-  const activeWalletId = useWalletStore((s) => s.activeWalletId)
+  const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
   const { data: wallets } = useWallets()
   const [walletExportBusy, setWalletExportBusy] = useState(false)
   const [exportPasswordOpen, setExportPasswordOpen] = useState(false)
 
-  const walletIdForBackupPasswordCompare = activeWalletId ?? wallets?.[0]?.wallet_id
+  const walletIdForBackupPasswordCompare = activeWalletId ?? wallets?.[0]?.walletId
 
   const checkSigningPasswordMatchesAppPassword = useCallback(
     async (password: string): Promise<AppPasswordCompareResult> => {
@@ -62,8 +62,8 @@ export function useWalletBackupExport() {
       const sqliteBuf = await blob.arrayBuffer()
       const sqliteBytes = new Uint8Array(sqliteBuf)
       const salt = crypto.getRandomValues(new Uint8Array(WALLET_BACKUP_SIGNING_SALT_BYTES))
-      const enc = getEncryptionWorker()
-      const manifestJson = await enc.signWalletBackupManifest(
+      const encryptionWorker = getEncryptionWorker()
+      const manifestJson = await encryptionWorker.signWalletBackupManifest(
         sqliteBytes,
         password,
         salt,
@@ -73,8 +73,8 @@ export function useWalletBackupExport() {
       triggerBrowserSaveLocalBlob(zipped, WALLET_BACKUP_ZIP_FILENAME)
       toast.success('Signed wallet backup exported as a ZIP on this device.')
       setExportPasswordOpen(false)
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Export failed.')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Export failed.')
     } finally {
       setWalletExportBusy(false)
     }

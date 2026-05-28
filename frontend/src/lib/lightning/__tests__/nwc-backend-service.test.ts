@@ -28,6 +28,7 @@ import {
   isValidNwcConnectionString,
 } from '../lightning-backend-service'
 import type { NwcConnectionConfig } from '../lightning-backend-service'
+import type { WireNwcTransaction } from '../lightning-wire-types'
 
 const TEST_CONFIG: NwcConnectionConfig = {
   type: 'nwc',
@@ -233,37 +234,36 @@ describe('NWC backend service', () => {
 
   describe('listPayments', () => {
     it('maps NWC transactions to LightningPayment format', async () => {
+      const wireIncomingTx: WireNwcTransaction = {
+        type: 'incoming',
+        state: 'settled',
+        invoice: 'lntb...',
+        description: 'Coffee',
+        description_hash: '',
+        preimage: 'pre1',
+        payment_hash: 'hash1',
+        amount: 5_000_000,
+        fees_paid: 0,
+        settled_at: 1700000100,
+        created_at: 1700000000,
+        expires_at: 1700003600,
+      }
+      const wireOutgoingTx: WireNwcTransaction = {
+        type: 'outgoing',
+        state: 'pending',
+        invoice: 'lntb2...',
+        description: 'Pizza',
+        description_hash: '',
+        preimage: '',
+        payment_hash: 'hash2',
+        amount: 10_000_000,
+        fees_paid: 1000,
+        settled_at: 0,
+        created_at: 1700000050,
+        expires_at: 1700003650,
+      }
       mockListTransactions.mockResolvedValue({
-        transactions: [
-          {
-            type: 'incoming',
-            state: 'settled',
-            invoice: 'lntb...',
-            description: 'Coffee',
-            description_hash: '',
-            preimage: 'pre1',
-            payment_hash: 'hash1',
-            amount: 5_000_000,
-            fees_paid: 0,
-            settled_at: 1700000100,
-            created_at: 1700000000,
-            expires_at: 1700003600,
-          },
-          {
-            type: 'outgoing',
-            state: 'pending',
-            invoice: 'lntb2...',
-            description: 'Pizza',
-            description_hash: '',
-            preimage: '',
-            payment_hash: 'hash2',
-            amount: 10_000_000,
-            fees_paid: 1000,
-            settled_at: 0,
-            created_at: 1700000050,
-            expires_at: 1700003650,
-          },
-        ],
+        transactions: [wireIncomingTx, wireOutgoingTx],
         total_count: 2,
       })
 
@@ -273,7 +273,7 @@ describe('NWC backend service', () => {
       expect(payments).toHaveLength(2)
       expect(payments[0]).toEqual({
         paymentHash: 'hash1',
-        pending: false,
+        isPending: false,
         amountSats: 5_000,
         memo: 'Coffee',
         timestamp: 1700000000,
@@ -283,7 +283,7 @@ describe('NWC backend service', () => {
       })
       expect(payments[1]).toEqual({
         paymentHash: 'hash2',
-        pending: true,
+        isPending: true,
         amountSats: 10_000,
         memo: 'Pizza',
         timestamp: 1700000050,

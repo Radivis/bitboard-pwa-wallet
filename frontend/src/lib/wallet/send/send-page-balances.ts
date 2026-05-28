@@ -14,7 +14,7 @@ export function computeSendPageBalances(params: {
   }
 
   return {
-    confirmedBalance: params.balance?.confirmed ?? 0,
-    totalBalanceSats: params.balance?.total ?? 0,
+    confirmedBalance: params.balance?.confirmedSats ?? 0,
+    totalBalanceSats: params.balance?.totalSats ?? 0,
   }
 }

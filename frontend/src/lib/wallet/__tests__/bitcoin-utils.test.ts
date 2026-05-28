@@ -18,12 +18,12 @@ function txFixture(
 ): TransactionDetails {
   return {
     txid: 'abc',
-    sent_sats: 0,
-    received_sats: 0,
-    fee_sats: null,
-    confirmation_block_height: null,
-    confirmation_time: null,
-    is_confirmed: false,
+    sentSats: 0,
+    receivedSats: 0,
+    feeSats: null,
+    confirmationBlockHeight: null,
+    confirmationTime: null,
+    isConfirmed: false,
     isLabTx: false,
     ...overrides,
   }
@@ -32,9 +32,9 @@ function txFixture(
 describe('getTxListDisplayAmountSats', () => {
   it('shows net transfer excluding fee for BDK-like sent tx', () => {
     const tx = txFixture({
-      sent_sats: 100_000,
-      received_sats: 89_850,
-      fee_sats: 150,
+      sentSats: 100_000,
+      receivedSats: 89_850,
+      feeSats: 150,
     })
     expect(getTxListDisplayAmountSats(tx)).toBe(10_000)
     expect(getTxGrossWalletDebitSats(tx)).toBe(10_150)
@@ -42,9 +42,9 @@ describe('getTxListDisplayAmountSats', () => {
 
   it('does not subtract fee for lab sent tx', () => {
     const tx = txFixture({
-      sent_sats: 10_000,
-      received_sats: 0,
-      fee_sats: 150,
+      sentSats: 10_000,
+      receivedSats: 0,
+      feeSats: 150,
       isLabTx: true,
     })
     expect(getTxListDisplayAmountSats(tx)).toBe(10_000)
@@ -53,9 +53,9 @@ describe('getTxListDisplayAmountSats', () => {
 
   it('subtracts fee for change-free on-chain sent tx', () => {
     const tx = txFixture({
-      sent_sats: 10_150,
-      received_sats: 0,
-      fee_sats: 150,
+      sentSats: 10_150,
+      receivedSats: 0,
+      feeSats: 150,
       isLabTx: false,
     })
     expect(getTxListDisplayAmountSats(tx)).toBe(10_000)
@@ -64,18 +64,18 @@ describe('getTxListDisplayAmountSats', () => {
 
   it('shows received amount unchanged', () => {
     const tx = txFixture({
-      sent_sats: 0,
-      received_sats: 50_000,
-      fee_sats: 200,
+      sentSats: 0,
+      receivedSats: 50_000,
+      feeSats: 200,
     })
     expect(getTxListDisplayAmountSats(tx)).toBe(50_000)
   })
 
   it('falls back to gross debit when BDK-like sent has unknown fee', () => {
     const tx = txFixture({
-      sent_sats: 100_000,
-      received_sats: 89_850,
-      fee_sats: null,
+      sentSats: 100_000,
+      receivedSats: 89_850,
+      feeSats: null,
     })
     expect(getTxListDisplayAmountSats(tx)).toBe(10_150)
   })

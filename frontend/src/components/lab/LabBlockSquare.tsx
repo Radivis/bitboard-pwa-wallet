@@ -18,6 +18,7 @@ import {
   LAB_CARD_BLOCK_NET_MOVED_AMOUNT_TEXT_CLASS,
 } from '@/components/lab/lab-card-amount-text'
 import { getOwnerDisplayName, getOwnerIcon } from '@/lib/lab/lab-utils'
+import type { WalletSummary } from '@/lib/wallet/wallet-domain-types'
 import { cn } from '@/lib/shared/utils'
 
 type EntityForOwnerName = {
@@ -35,7 +36,7 @@ export type LabBlockSquareProps = {
   minedBy: LabOwner | null
   blockWeightLimitWu: number | null
   nonCoinbaseWeightUsedWu: number | null
-  wallets: Array<{ wallet_id: number; name: string }>
+  wallets: WalletSummary[]
   entities: readonly EntityForOwnerName[]
   className?: string
 }

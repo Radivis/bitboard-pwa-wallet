@@ -10,8 +10,8 @@ import { truncateAddress } from '@/lib/wallet/bitcoin-utils'
 const fixtureLabEntities = [
   { labEntityId: 1, entityName: 'Alice', addressType: 'segwit' as const },
 ] as const
-const fixtureLabWallets: Array<{ wallet_id: number; name: string }> = [
-  { wallet_id: 1, name: 'W1' },
+const fixtureLabWallets = [
+  { walletId: 1, name: 'W1', createdAt: new Date().toISOString() },
 ]
 
 describe('LabTxCard', () => {

@@ -20,6 +20,11 @@ import { toast } from 'sonner'
 import { getCryptoWorker } from '@/workers/crypto-factory'
 import type { DraftLabPsbtTransactionResult } from '@/workers/crypto-api'
 import {
+  mapWireLabEntitySignResultToDomain,
+  parseWasmJsonWire,
+} from '@/workers/crypto-wire-mappers'
+import type { WireLabEntitySignResult } from '@/workers/crypto-wire-types'
+import {
   labPipelineDebugLog,
   labPipelineSnapshot,
 } from '@/lib/lab/lab-pipeline-debug'
@@ -28,7 +33,7 @@ import { LAB_MAX_RANDOM_ENTITY_TRANSACTIONS } from '@/lib/lab/lab-random-limits'
 import { onchainDustPrepareWarningLines } from '@/lib/wallet/send/onchain-dust-prepare-messages'
 
 function sumUtxoSats(utxos: { amountSats: number }[]): number {
-  return utxos.reduce((s, u) => s + (Number(u.amountSats) || 0), 0)
+  return utxos.reduce((totalSats, utxo) => totalSats + (Number(utxo.amountSats) || 0), 0)
 }
 
 export async function labOpLoadChainFromDatabase(): Promise<LabState> {
@@ -64,55 +69,25 @@ export async function labOpMineBlocks(
     })
     await initLabWorkerWithState()
     const labWorker = getLabWorker()
-    const result = await labWorker.mineBlocks(count, targetAddress, options)
+    const mineBlocksOutcome = await labWorker.mineBlocks(count, targetAddress, options)
     labPipelineDebugLog('mineBlocks:workerReturned', {
-      blockCount: result.state.blocks.length,
-      utxoCount: result.state.utxos.length,
-      totalSats: sumUtxoSats(result.state.utxos),
-      includedMempoolTxCount: result.includedMempoolTxCount,
-      discardedConflictTxCount: result.discardedConflictTxCount,
+      blockCount: mineBlocksOutcome.state.blocks.length,
+      utxoCount: mineBlocksOutcome.state.utxos.length,
+      totalSats: sumUtxoSats(mineBlocksOutcome.state.utxos),
+      includedMempoolTxCount: mineBlocksOutcome.includedMempoolTxCount,
+      discardedConflictTxCount: mineBlocksOutcome.discardedConflictTxCount,
     })
-    await persistLabState(result.state)
+    await persistLabState(mineBlocksOutcome.state)
     labPipelineDebugLog('mineBlocks:afterPersist', {})
-    labPipelineSnapshot('mineBlocks:end', result.state)
-    return result
+    labPipelineSnapshot('mineBlocks:end', mineBlocksOutcome.state)
+    return mineBlocksOutcome
   })
 }
 
-function parseLabEntitySignResult(raw: unknown): {
-  signedTxHex: string
-  feeSats: number
-  hasChange: boolean
-  changesetJson: string
-  changeAddress: string | null
-  finalAmountSats: number
-  originalAmountSats: number
-  raisedToMinDust: boolean
-  bumpedChangeFree: boolean
-  changeFreeBumpAvailable: boolean
-  changeFreeMaxSats: number
-} {
-  const o: Record<string, unknown> =
-    raw != null && typeof raw === 'object' && !Array.isArray(raw)
-      ? (raw as Record<string, unknown>)
-      : typeof raw === 'string'
-        ? (JSON.parse(raw) as Record<string, unknown>)
-        : {}
-  const changeRaw = o.change_address
-  return {
-    signedTxHex: String(o.signed_tx_hex ?? ''),
-    feeSats: Number(o.fee_sats ?? 0),
-    hasChange: Boolean(o.has_change),
-    changesetJson: String(o.changeset_json ?? ''),
-    changeAddress:
-      typeof changeRaw === 'string' && changeRaw.length > 0 ? changeRaw : null,
-    finalAmountSats: Number(o.final_amount_sats ?? 0),
-    originalAmountSats: Number(o.original_amount_sats ?? 0),
-    raisedToMinDust: Boolean(o.raised_to_min_dust),
-    bumpedChangeFree: Boolean(o.bumped_change_free),
-    changeFreeBumpAvailable: Boolean(o.change_free_bump_available),
-    changeFreeMaxSats: Number(o.change_free_max_sats ?? 0),
-  }
+function parseLabEntitySignResult(raw: unknown) {
+  return mapWireLabEntitySignResultToDomain(
+    parseWasmJsonWire<WireLabEntitySignResult>(raw),
+  )
 }
 
 /**
@@ -141,17 +116,17 @@ export async function labOpDraftLabEntityTransaction(params: {
   })
 
   const cryptoWorker = getCryptoWorker()
-  const c = prep.crypto
-  const draft = await cryptoWorker.labEntityDraftLabPsbtTransaction({
-    mnemonic: c.mnemonic,
-    changesetJson: c.changesetJson,
-    network: c.network,
-    addressType: c.addressType,
-    accountId: c.accountId,
-    utxosJson: c.utxosJson,
-    toAddress: c.toAddress,
-    amountSats: c.amountSats,
-    feeRateSatPerVb: c.feeRateSatPerVb,
+  const cryptoParams = prep.crypto
+  const draft = await cryptoWorker.labEntityDraftPsbtTransaction({
+    mnemonic: cryptoParams.mnemonic,
+    changesetJson: cryptoParams.changesetJson,
+    network: cryptoParams.network,
+    addressType: cryptoParams.addressType,
+    accountId: cryptoParams.accountId,
+    utxosJson: cryptoParams.utxosJson,
+    toAddress: cryptoParams.toAddress,
+    amountSats: cryptoParams.amountSats,
+    feeRateSatPerVb: cryptoParams.feeRateSatPerVb,
   })
 
   return { prep, draft }
@@ -177,20 +152,20 @@ export async function labOpCreateLabEntityTransaction(params: {
   })
 
   const cryptoWorker = getCryptoWorker()
-  const c = prep.crypto
-  const signRaw = await cryptoWorker.labEntityBuildAndSignLabTransaction({
-    mnemonic: c.mnemonic,
-    changesetJson: c.changesetJson,
-    network: c.network,
-    addressType: c.addressType,
-    accountId: c.accountId,
-    utxosJson: c.utxosJson,
-    toAddress: c.toAddress,
-    amountSats: c.amountSats,
-    feeRateSatPerVb: c.feeRateSatPerVb,
+  const cryptoParams = prep.crypto
+  const signRaw = await cryptoWorker.labEntityBuildAndSignTransaction({
+    mnemonic: cryptoParams.mnemonic,
+    changesetJson: cryptoParams.changesetJson,
+    network: cryptoParams.network,
+    addressType: cryptoParams.addressType,
+    accountId: cryptoParams.accountId,
+    utxosJson: cryptoParams.utxosJson,
+    toAddress: cryptoParams.toAddress,
+    amountSats: cryptoParams.amountSats,
+    feeRateSatPerVb: cryptoParams.feeRateSatPerVb,
     applyChangeFreeBump: params.applyChangeFreeBump ?? false,
   })
-  const parsed = parseLabEntitySignResult(signRaw)
+  const labEntitySignResult = parseLabEntitySignResult(signRaw)
   const {
     signedTxHex,
     feeSats,
@@ -198,13 +173,13 @@ export async function labOpCreateLabEntityTransaction(params: {
     changesetJson,
     changeAddress,
     finalAmountSats,
-    raisedToMinDust,
-    bumpedChangeFree,
-  } = parsed
+    isRaisedToMinDust,
+    isBumpedChangeFree,
+  } = labEntitySignResult
 
-  if (raisedToMinDust || bumpedChangeFree) {
+  if (isRaisedToMinDust || isBumpedChangeFree) {
     toast.warning(
-      onchainDustPrepareWarningLines({ raisedToMinDust, bumpedChangeFree }).join(
+      onchainDustPrepareWarningLines({ isRaisedToMinDust, isBumpedChangeFree }).join(
         ' ',
       ),
     )
@@ -238,7 +213,7 @@ export async function labOpCreateLabEntityTransaction(params: {
         },
       ]
 
-  const fullMetadata = {
+  const labMempoolTransactionMetadata = {
     ...prep.mempoolMetadata,
     feeSats,
     hasChange,
@@ -246,7 +221,7 @@ export async function labOpCreateLabEntityTransaction(params: {
     walletChangeAddress: hasChange ? (changeAddress as string) : '',
   }
 
-  if (fullMetadata.receiver == null) {
+  if (labMempoolTransactionMetadata.receiver == null) {
     throw new Error('labOpCreateLabEntityTransaction: receiver is required before finalize')
   }
 
@@ -256,7 +231,7 @@ export async function labOpCreateLabEntityTransaction(params: {
     const labWorker = getLabWorker()
     const state = await labWorker.finalizeLabEntityMempoolTransaction({
       signedTxHex,
-      mempoolMetadata: fullMetadata,
+      mempoolMetadata: labMempoolTransactionMetadata,
       labEntityId: params.labEntityId,
       newChangesetJson: changesetJson,
     })
@@ -303,7 +278,7 @@ export async function labOpCreateRandomLabEntityTransactions(
           await labWorker.prepareRandomLabEntityTransaction()
         if (!prepared) break
 
-        const signRaw = await cryptoWorker.labEntityBuildAndSignLabTransaction({
+        const signRaw = await cryptoWorker.labEntityBuildAndSignTransaction({
           ...prepared.crypto,
           applyChangeFreeBump: false,
         })

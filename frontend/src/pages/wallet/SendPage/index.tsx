@@ -59,8 +59,8 @@ import { SendFlowDustModals } from './modals'
 
 export function SendPage() {
   const navigate = useNavigate()
-  const activeWalletId = useWalletStore((s) => s.activeWalletId)
-  const walletStatus = useWalletStore((s) => s.walletStatus)
+  const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
+  const walletStatus = useWalletStore((walletState) => walletState.walletStatus)
 
   if (!activeWalletId) {
     navigate({ to: '/setup' })
@@ -75,16 +75,16 @@ export function SendPage() {
 }
 
 export function SendFlow() {
-  const networkMode = useWalletStore((s) => s.networkMode)
-  const balance = useWalletStore((s) => s.balance)
-  const activeWalletId = useWalletStore((s) => s.activeWalletId)
-  const currentAddress = useWalletStore((s) => s.currentAddress)
-  const lightningEnabled = useFeatureStore((s) => s.lightningEnabled)
-  const connectedLightningWallets = useLightningStore((s) => s.connectedWallets)
+  const networkMode = useWalletStore((walletState) => walletState.networkMode)
+  const balance = useWalletStore((walletState) => walletState.balance)
+  const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
+  const currentAddress = useWalletStore((walletState) => walletState.currentAddress)
+  const isLightningEnabled = useFeatureStore((featureState) => featureState.isLightningEnabled)
+  const connectedLightningWallets = useLightningStore((lightningState) => lightningState.connectedWallets)
 
-  const hasAnyLightningConnection = useLightningStore((s) =>
+  const hasAnyLightningConnection = useLightningStore((lightningState) =>
     activeWalletId != null
-      ? s.getConnectionsForWallet(activeWalletId).length > 0
+      ? lightningState.getConnectionsForWallet(activeWalletId).length > 0
       : false,
   )
 
@@ -160,15 +160,15 @@ export function SendFlow() {
   const applyOnchainPrepareOutcomeToSendStore = useCallback(
     (outcome: PrepareOnchainSendResult) => {
       const { amountUnit: unit } = useSendStore.getState()
-      if (outcome.raisedToMinDust || outcome.bumpedChangeFree) {
+      if (outcome.isRaisedToMinDust || outcome.isBumpedChangeFree) {
         const lines = onchainDustPrepareWarningLines(outcome)
         toast.warning(lines.join(' '))
         useSendStore.setState({
           amount: formatAmountInputFromSats(outcome.finalAmountSats, unit),
           onchainDustWarning: {
             previousSats: outcome.originalAmountSats,
-            raisedToDustMin: outcome.raisedToMinDust,
-            bumpedChangeFree: outcome.bumpedChangeFree,
+            isRaisedToMinDust: outcome.isRaisedToMinDust,
+            isBumpedChangeFree: outcome.isBumpedChangeFree,
           },
         })
       }
@@ -191,10 +191,10 @@ export function SendFlow() {
   }, [step])
 
   const fiatDenominationMode = useFiatDenominationStore(
-    (s) => s.fiatDenominationMode,
+    (fiatDenominationState) => fiatDenominationState.fiatDenominationMode,
   )
   const defaultFiatCurrency = useFiatDenominationStore(
-    (s) => s.defaultFiatCurrency,
+    (fiatDenominationState) => fiatDenominationState.defaultFiatCurrency,
   )
   const mainnetFiatMode =
     networkMode === 'mainnet' && fiatDenominationMode
@@ -237,7 +237,7 @@ export function SendFlow() {
     canBuildLightning,
     submitLightningPayment,
   } = useSendFlowLightning({
-    lightningEnabled,
+    isLightningEnabled,
     networkMode,
     activeWalletId,
     connectedLightningWallets,
@@ -345,8 +345,8 @@ export function SendFlow() {
           amount: formatAmountInputFromSats(draft.finalAmountSats, amountUnit),
           onchainDustWarning: {
             previousSats: labDustCase2Modal.originalAmountSats,
-            raisedToDustMin: false,
-            bumpedChangeFree: true,
+            isRaisedToMinDust: false,
+            isBumpedChangeFree: true,
           },
         })
         applySendReviewTxSummaryToStore({
@@ -413,7 +413,7 @@ export function SendFlow() {
             inputUtxos: draft.inputUtxos,
           })
 
-          if (draft.changeFreeBumpAvailable) {
+          if (draft.isChangeFreeBumpAvailable) {
             labChangeFreeBumpBaseAmountSatsRef.current = draft.finalAmountSats
             setLabDustCase2Modal({
               changeFreeMaxSats: draft.changeFreeMaxSats,
@@ -442,7 +442,7 @@ export function SendFlow() {
         effectiveFeeRate,
         applyChangeFreeBump: false,
       })
-      if (outcome.changeFreeBumpAvailable) {
+      if (outcome.isChangeFreeBumpAvailable) {
         setDustCase2Modal({
           pendingOutcome: outcome,
           changeFreeMaxSats: outcome.changeFreeMaxSats,
@@ -509,9 +509,9 @@ export function SendFlow() {
   }, [submitLabSend])
 
   const applyScannedPayload = useCallback(
-    (raw: string) => {
+    (scannedPayload: string) => {
       const { recipient: nextRecipient, amountStr } =
-        recipientAndAmountFromScannedPayload(raw, amountUnit)
+        recipientAndAmountFromScannedPayload(scannedPayload, amountUnit)
       setRecipient(nextRecipient)
       if (amountStr !== undefined) {
         if (

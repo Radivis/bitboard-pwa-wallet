@@ -22,8 +22,8 @@ import { Label } from '@/components/ui/label'
 import { cn, userFacingErrorMessage } from '@/lib/shared/utils'
 
 export function CompleteDataWipeCard() {
-  const walletStatus = useWalletStore((s) => s.walletStatus)
-  const sessionPassword = useSessionStore((s) => s.password)
+  const walletStatus = useWalletStore((walletState) => walletState.walletStatus)
+  const sessionPassword = useSessionStore((sessionState) => sessionState.password)
   const { data: wallets = [] } = useWallets()
 
   const [riskModalOpen, setRiskModalOpen] = useState(false)
@@ -79,9 +79,9 @@ export function CompleteDataWipeCard() {
     try {
       const rows = await listWalletsWithPositiveMainnetOnChainBalance({
         password: sessionPassword,
-        wallets: wallets.map((w) => ({
-          wallet_id: w.wallet_id,
-          name: w.name,
+        wallets: wallets.map((walletRow) => ({
+          walletId: walletRow.walletId,
+          name: walletRow.name,
         })),
       })
       if (rows.length > 0) {

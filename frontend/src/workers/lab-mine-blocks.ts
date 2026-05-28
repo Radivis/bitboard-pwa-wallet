@@ -15,7 +15,7 @@ import { applyBlockEffects } from './lab-block-effects'
 import { createAndRegisterLabEntityFromWasm } from './lab-entity-creation'
 import { getTip, selectMempoolTxsForBlock } from './lab-mining-template'
 import { getWasm } from './lab-wasm-loader'
-import { state } from './lab-worker-state'
+import { labWorkerState } from './lab-worker-state'
 
 export async function executeMineBlocks(
   blockCountToMine: number,
@@ -66,7 +66,9 @@ export async function executeMineBlocks(
     options.ownerWalletId == null &&
     Number.isInteger(options.ownerLabEntityId)
   ) {
-    const entity = state.entities.find((e) => e.labEntityId === options.ownerLabEntityId)
+    const entity = labWorkerState.entities.find(
+      (entityRecord) => entityRecord.labEntityId === options.ownerLabEntityId,
+    )
     if (!entity) {
       throw new Error(`Unknown lab entity id ${options.ownerLabEntityId}`)
     }
@@ -84,18 +86,22 @@ export async function executeMineBlocks(
     newAddress = null
     ownerForCoinbase = labEntityLabOwner(entity.labEntityId)
   } else if (entityNameOpt != null && entityNameOpt !== '' && options?.ownerWalletId == null) {
-    let entity = state.entities.find((e) => e.entityName === entityNameOpt)
+    let entity = labWorkerState.entities.find(
+      (entityRecord) => entityRecord.entityName === entityNameOpt,
+    )
     const now = new Date().toISOString()
     if (!entity) {
       coinbaseAddress = createAndRegisterLabEntityFromWasm(wasmModule, {
-        labEntityId: nextLabEntityId(state.entities),
+        labEntityId: nextLabEntityId(labWorkerState.entities),
         entityName: entityNameOpt,
         labNetwork,
         labAddressType,
         nowIso: now,
         noAddressErrorMessage: 'Lab entity wallet creation failed (no first address)',
       })
-      entity = state.entities.find((e) => e.entityName === entityNameOpt)
+      entity = labWorkerState.entities.find(
+        (entityRecord) => entityRecord.entityName === entityNameOpt,
+      )
       if (!entity) {
         throw new Error('Lab entity registration failed after wallet creation')
       }
@@ -116,7 +122,7 @@ export async function executeMineBlocks(
     coinbaseScriptPubkeyHex = wasmModule.lab_address_to_script_pubkey_hex(coinbaseAddress)
     newAddress = null
   } else {
-    const labEntityId = nextLabEntityId(state.entities)
+    const labEntityId = nextLabEntityId(labWorkerState.entities)
     const now = new Date().toISOString()
     coinbaseAddress = createAndRegisterLabEntityFromWasm(wasmModule, {
       labEntityId,
@@ -132,11 +138,11 @@ export async function executeMineBlocks(
   }
 
   if (options?.ownerWalletId != null) {
-    state.addressToOwner = state.addressToOwner ?? {}
-    state.addressToOwner[coinbaseAddress] = walletLabOwner(options.ownerWalletId)
+    labWorkerState.addressToOwner = labWorkerState.addressToOwner ?? {}
+    labWorkerState.addressToOwner[coinbaseAddress] = walletLabOwner(options.ownerWalletId)
   } else if (ownerForCoinbase != null) {
-    state.addressToOwner = state.addressToOwner ?? {}
-    state.addressToOwner[coinbaseAddress] = ownerForCoinbase
+    labWorkerState.addressToOwner = labWorkerState.addressToOwner ?? {}
+    labWorkerState.addressToOwner[coinbaseAddress] = ownerForCoinbase
   }
 
   const minedBy: LabOwner | null =
@@ -144,8 +150,8 @@ export async function executeMineBlocks(
       ? walletLabOwner(options.ownerWalletId)
       : ownerForCoinbase ?? null
 
-  const mempoolCopy = [...(state.mempool ?? [])]
-  const blockLimit = state.blockWeightLimit ?? LAB_DEFAULT_BLOCK_WEIGHT_UNITS
+  const mempoolCopy = [...(labWorkerState.mempool ?? [])]
+  const blockLimit = labWorkerState.blockWeightLimit ?? LAB_DEFAULT_BLOCK_WEIGHT_UNITS
   const selectedEntries = selectMempoolTxsForBlock(mempoolCopy, blockLimit)
   const nonCoinbaseWeightFirstBlock = selectedEntries.reduce((sum, entry) => sum + entry.weight, 0)
   const mempoolTxHexes = selectedEntries.map((entry) => entry.signedTxHex)
@@ -154,7 +160,7 @@ export async function executeMineBlocks(
     selectedEntries.flatMap((entry) => entry.inputs.map((input) => `${input.txid}:${input.vout}`)),
   )
 
-  const minerSubsidySats = state.minerSubsidySats ?? LAB_DEFAULT_MINER_SUBSIDY_SATS
+  const minerSubsidySats = labWorkerState.minerSubsidySats ?? LAB_DEFAULT_MINER_SUBSIDY_SATS
   const subsidyForBlock = BigInt(minerSubsidySats)
 
   for (let i = 0; i < blockCountToMine; i++) {
@@ -171,11 +177,11 @@ export async function executeMineBlocks(
     applyBlockEffects(wasmModule, blockHex, height, i === 0 ? newAddress ?? undefined : undefined)
     const minedAtHeight = height
     const tipAfter = getTip()!
-    const coinbaseDetail = state.txDetails.find(
-      (d) => d.blockHeight === minedAtHeight && isCoinbase(d),
+    const coinbaseDetail = labWorkerState.txDetails.find(
+      (txDetail) => txDetail.blockHeight === minedAtHeight && isCoinbase(txDetail),
     )
-    state.mineOperations = state.mineOperations ?? []
-    state.mineOperations.push({
+    labWorkerState.mineOperations = labWorkerState.mineOperations ?? []
+    labWorkerState.mineOperations.push({
       height: minedAtHeight,
       blockHash: tipAfter.blockHash,
       minedBy,
@@ -185,7 +191,7 @@ export async function executeMineBlocks(
       nonCoinbaseWeightUsedWu: i === 0 ? nonCoinbaseWeightFirstBlock : 0,
     })
     if (i === 0) {
-      state.mempool = (state.mempool ?? []).filter(
+      labWorkerState.mempool = (labWorkerState.mempool ?? []).filter(
         (entry) =>
           !selectedEntries.some((selectedEntry) => selectedEntry.txid === entry.txid) &&
           !entry.inputs.some((input) => spentByIncluded.has(`${input.txid}:${input.vout}`)),
@@ -198,7 +204,7 @@ export async function executeMineBlocks(
   }
 
   const includedMempoolTxCount = selectedEntries.length
-  const mempoolSizeAfterFirstBlock = (state.mempool ?? []).length
+  const mempoolSizeAfterFirstBlock = (labWorkerState.mempool ?? []).length
   const discardedConflictTxCount = discardedMempoolConflictTxCount({
     mempoolSizeBefore: mempoolCopy.length,
     mempoolSizeAfterFirstBlock,

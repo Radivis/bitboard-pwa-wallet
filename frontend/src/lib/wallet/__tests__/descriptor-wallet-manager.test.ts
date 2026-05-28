@@ -65,9 +65,9 @@ async function mockResolveDescriptorWallet(params: {
     targetAccountId,
   } = params
   const { getEncryptionWorker } = await import('@/workers/encryption-factory')
-  const enc = getEncryptionWorker()
+  const encryptionWorker = getEncryptionWorker()
 
-  const payloadPlain = await enc.decryptData(password, encryptedPayload)
+  const payloadPlain = await encryptionWorker.decryptData(password, encryptedPayload)
   const walletSecretsPayload = JSON.parse(payloadPlain) as {
     descriptorWallets: WalletSecrets['descriptorWallets']
     lightningNwcConnections: WalletSecrets['lightningNwcConnections']
@@ -78,7 +78,7 @@ async function mockResolveDescriptorWallet(params: {
     lightningNwcConnections: walletSecretsPayload.lightningNwcConnections,
   }
   const existing = findDescriptorWallet({
-    secrets: secretsLike,
+    secretsPayload: secretsLike,
     network: targetNetwork,
     addressType: targetAddressType,
     accountId: targetAccountId,
@@ -90,29 +90,29 @@ async function mockResolveDescriptorWallet(params: {
       encryptedMnemonicToStore: null,
     }
   }
-  const mnemonicPlain = await enc.decryptData(password, encryptedMnemonic)
+  const mnemonicPlain = await encryptionWorker.decryptData(password, encryptedMnemonic)
   const walletResult = await mockCreateWallet(
     mnemonicPlain,
     targetNetwork,
     targetAddressType,
     targetAccountId,
   )
-  const newDw = {
+  const newDescriptorWallet = {
     network: targetNetwork,
     addressType: targetAddressType,
     accountId: targetAccountId,
-    externalDescriptor: walletResult.external_descriptor,
-    internalDescriptor: walletResult.internal_descriptor,
-    changeSet: walletResult.changeset_json,
+    externalDescriptor: walletResult.externalDescriptor,
+    internalDescriptor: walletResult.internalDescriptor,
+    changeSet: walletResult.changesetJson,
     fullScanDone: false,
   }
-  walletSecretsPayload.descriptorWallets.push(newDw)
-  const payloadEnc = await enc.encryptData(
+  walletSecretsPayload.descriptorWallets.push(newDescriptorWallet)
+  const payloadEnc = await encryptionWorker.encryptData(
     password,
     JSON.stringify(walletSecretsPayload),
   )
   return {
-    descriptorWalletData: newDw,
+    descriptorWalletData: newDescriptorWallet,
     encryptedPayloadToStore: payloadEnc,
     encryptedMnemonicToStore: null,
   }
@@ -140,11 +140,11 @@ async function mockUpdateDescriptorWalletChangeset(params: {
     descriptorWallets: walletSecretsPayload.descriptorWallets,
     lightningNwcConnections: walletSecretsPayload.lightningNwcConnections ?? [],
   }
-  const dw = findDescriptorWallet({ secrets: secretsLike, network, addressType, accountId })
-  if (!dw) {
+  const descriptorWallet = findDescriptorWallet({ secretsPayload: secretsLike, network, addressType, accountId })
+  if (!descriptorWallet) {
     throw new Error(`No descriptor wallet found for ${network}/${addressType}/${accountId}`)
   }
-  dw.changeSet = changesetJson
+  descriptorWallet.changeSet = changesetJson
   const newBlob = await getEncryptionWorker().encryptData(
     password,
     JSON.stringify(walletSecretsPayload),
@@ -196,7 +196,7 @@ describe('findDescriptorWallet', () => {
 
   it('returns matching descriptor wallet for signet/taproot/0', () => {
     const result = findDescriptorWallet({
-      secrets,
+      secretsPayload: secrets,
       network: 'signet',
       addressType: 'taproot',
       accountId: 0,
@@ -206,7 +206,7 @@ describe('findDescriptorWallet', () => {
 
   it('returns matching descriptor wallet for testnet/segwit/0', () => {
     const result = findDescriptorWallet({
-      secrets,
+      secretsPayload: secrets,
       network: 'testnet',
       addressType: 'segwit',
       accountId: 0,
@@ -216,7 +216,7 @@ describe('findDescriptorWallet', () => {
 
   it('returns matching descriptor wallet for signet/taproot/1', () => {
     const result = findDescriptorWallet({
-      secrets,
+      secretsPayload: secrets,
       network: 'signet',
       addressType: 'taproot',
       accountId: 1,
@@ -226,7 +226,7 @@ describe('findDescriptorWallet', () => {
 
   it('returns undefined when no match for network', () => {
     const result = findDescriptorWallet({
-      secrets,
+      secretsPayload: secrets,
       network: 'mainnet',
       addressType: 'taproot',
       accountId: 0,
@@ -236,7 +236,7 @@ describe('findDescriptorWallet', () => {
 
   it('returns undefined when no match for address type', () => {
     const result = findDescriptorWallet({
-      secrets,
+      secretsPayload: secrets,
       network: 'signet',
       addressType: 'segwit',
       accountId: 0,
@@ -246,7 +246,7 @@ describe('findDescriptorWallet', () => {
 
   it('returns undefined when no match for account id', () => {
     const result = findDescriptorWallet({
-      secrets,
+      secretsPayload: secrets,
       network: 'signet',
       addressType: 'taproot',
       accountId: 2,
@@ -257,7 +257,7 @@ describe('findDescriptorWallet', () => {
   it('returns undefined when descriptorWallets is empty', () => {
     const emptySecrets: WalletSecrets = { ...secrets, descriptorWallets: [] }
     const result = findDescriptorWallet({
-      secrets: emptySecrets,
+      secretsPayload: emptySecrets,
       network: 'signet',
       addressType: 'taproot',
       accountId: 0,
@@ -322,9 +322,10 @@ describe('resolveDescriptorWallet', () => {
 
   it('creates and persists new descriptor wallet when not found', async () => {
     const newWalletResult = {
-      external_descriptor: 'tr(new...)',
-      internal_descriptor: 'tr(new...)',
-      changeset_json: '{"last_reveal":{"0":0}}',
+      externalDescriptor: 'tr(new...)',
+      internalDescriptor: 'tr(new...)',
+      firstAddress: 'tb1qnewaddress',
+      changesetJson: '{"last_reveal":{"0":0}}',
     }
     mockCreateWallet.mockResolvedValue(newWalletResult)
 
@@ -347,9 +348,9 @@ describe('resolveDescriptorWallet', () => {
       network: 'testnet',
       addressType: 'segwit',
       accountId: 0,
-      externalDescriptor: newWalletResult.external_descriptor,
-      internalDescriptor: newWalletResult.internal_descriptor,
-      changeSet: newWalletResult.changeset_json,
+      externalDescriptor: newWalletResult.externalDescriptor,
+      internalDescriptor: newWalletResult.internalDescriptor,
+      changeSet: newWalletResult.changesetJson,
       fullScanDone: false,
     })
     expect(mockCreateWallet).toHaveBeenCalledWith(

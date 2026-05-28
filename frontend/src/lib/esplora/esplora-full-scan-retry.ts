@@ -18,8 +18,8 @@ function sleepMs(ms: number): Promise<void> {
  * likely permanent errors (bad request, 404) by keeping this list explicit.
  */
 export function isRetryableEsploraFullScanError(detail: string): boolean {
-  const d = detail.toLowerCase()
-  if (!d) return false
+  const normalizedDetail = detail.toLowerCase()
+  if (!normalizedDetail) return false
   const patterns = [
     '429',
     '502',
@@ -39,7 +39,7 @@ export function isRetryableEsploraFullScanError(detail: string): boolean {
     'service unavailable',
     'gateway timeout',
   ]
-  return patterns.some((p) => d.includes(p))
+  return patterns.some((pattern) => normalizedDetail.includes(pattern))
 }
 
 /**
@@ -64,9 +64,9 @@ export async function withEsploraFullScanRetries<T>(
       return await operation()
     } catch (err) {
       lastErr = err
-      const msg = errorMessage(err) ?? String(err)
+      const errorMessageText = errorMessage(err) ?? String(err)
       const isLast = attempt === maxAttempts - 1
-      if (isLast || !isRetryableEsploraFullScanError(msg)) {
+      if (isLast || !isRetryableEsploraFullScanError(errorMessageText)) {
         throw err
       }
       const backoff = Math.min(maxDelayMs, baseDelayMs * 2 ** attempt)

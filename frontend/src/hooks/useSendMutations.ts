@@ -23,9 +23,9 @@ import { onchainDustPrepareWarningLines } from '@/lib/wallet/send/onchain-dust-p
  * Caller handles change-free modal then `applyChangeFreeBump: true` when the user opts in.
  */
 export function useBuildTransactionMutation() {
-  const networkMode = useWalletStore((s) => s.networkMode)
+  const networkMode = useWalletStore((walletState) => walletState.networkMode)
   const prepareOnchainSendTransaction = useCryptoStore(
-    (s) => s.prepareOnchainSendTransaction,
+    (cryptoState) => cryptoState.prepareOnchainSendTransaction,
   )
 
   return useMutation({
@@ -37,7 +37,7 @@ export function useBuildTransactionMutation() {
     }) => {
       const network = toBitcoinNetwork(networkMode)
       return prepareOnchainSendTransaction({
-        recipientAddress: params.normalizedRecipient,
+        toAddress: params.normalizedRecipient,
         amountSats: params.amountSats,
         feeRateSatPerVb: params.effectiveFeeRate,
         network,
@@ -59,9 +59,9 @@ export function useBuildTransactionMutation() {
  */
 export function useBroadcastTransactionMutation() {
   const navigate = useNavigate()
-  const networkMode = useWalletStore((s) => s.networkMode)
-  const psbt = useSendStore((s) => s.psbt)
-  const reset = useSendStore((s) => s.reset)
+  const networkMode = useWalletStore((walletState) => walletState.networkMode)
+  const psbt = useSendStore((sendState) => sendState.psbt)
+  const reset = useSendStore((sendState) => sendState.reset)
 
   return useMutation({
     mutationFn: async () => {
@@ -87,11 +87,11 @@ export function useBroadcastTransactionMutation() {
       const txid = await broadcastTransaction(rawTxHex, esploraUrl)
 
       if (password && activeWalletId) {
-        const changeset = await exportChangeset()
+        const changesetJson = await exportChangeset()
         await updateWalletChangeset({
           password,
           walletId: activeWalletId,
-          changesetJson: changeset,
+          changesetJson,
         })
       }
 
@@ -100,9 +100,9 @@ export function useBroadcastTransactionMutation() {
         try {
           await syncWallet(esploraUrl)
           const newBalance = await getBalance()
-          const newTxs = await getTransactionList()
+          const newTransactionList = await getTransactionList()
           setBalance(newBalance)
-          setTransactions(newTxs)
+          setTransactions(newTransactionList)
           setLastSyncTime(new Date())
         } catch {
           // keep unlocked on sync failure
@@ -130,14 +130,19 @@ export function useBroadcastTransactionMutation() {
 export function useLabSendMutation() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const activeWalletId = useWalletStore((s) => s.activeWalletId)
-  const currentAddress = useWalletStore((s) => s.currentAddress)
-  const getLabChangeAddress = useCryptoStore((s) => s.getLabChangeAddress)
-  const buildAndSignLabTransaction = useCryptoStore((s) => s.buildAndSignLabTransaction)
-  const reset = useSendStore((s) => s.reset)
+  const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
+  const currentAddress = useWalletStore((walletState) => walletState.currentAddress)
+  const getLabChangeAddress = useCryptoStore((cryptoState) => cryptoState.getLabChangeAddress)
+  const buildAndSignLabTransaction = useCryptoStore((cryptoState) => cryptoState.buildAndSignLabTransaction)
+  const reset = useSendStore((sendState) => sendState.reset)
 
   return useMutation({
-    mutationFn: async (params: {
+    mutationFn: async ({
+      normalizedRecipient,
+      amountSats,
+      effectiveFeeRate,
+      applyChangeFreeBump,
+    }: {
       normalizedRecipient: string
       amountSats: number
       effectiveFeeRate: number
@@ -145,58 +150,58 @@ export function useLabSendMutation() {
     }) => {
       if (activeWalletId == null) throw new Error('No active wallet')
 
-      const { signedTxHex, fullMetadata } = await runLabOp(async () => {
+      const { signedTxHex, labMempoolTransactionMetadata } = await runLabOp(async () => {
         await initLabWorkerWithState()
         const labWorker = getLabWorker()
         const walletChangeAddress = await getLabChangeAddress()
 
         const knownRecipientOwner =
           currentAddress != null &&
-          labBitcoinAddressesEqual(params.normalizedRecipient, currentAddress)
+          labBitcoinAddressesEqual(normalizedRecipient, currentAddress)
             ? walletLabOwner(activeWalletId)
             : undefined
 
         const { utxosJson, mempoolMetadata, totalInput } =
           await labWorker.prepareLabWalletTransaction({
             walletId: activeWalletId,
-            toAddress: params.normalizedRecipient,
-            amountSats: params.amountSats,
-            feeRateSatPerVb: params.effectiveFeeRate,
+            toAddress: normalizedRecipient,
+            amountSats,
+            feeRateSatPerVb: effectiveFeeRate,
             walletChangeAddress,
             knownRecipientOwner,
           })
 
-        const lab = await buildAndSignLabTransaction({
+        const signedLabTransaction = await buildAndSignLabTransaction({
           utxosJson,
-          toAddress: params.normalizedRecipient,
-          amountSats: params.amountSats,
-          feeRateSatPerVb: params.effectiveFeeRate,
+          toAddress: normalizedRecipient,
+          amountSats,
+          feeRateSatPerVb: effectiveFeeRate,
           changeAddress: walletChangeAddress,
-          applyChangeFreeBump: params.applyChangeFreeBump ?? false,
+          applyChangeFreeBump: applyChangeFreeBump ?? false,
         })
         const {
           signedTxHex,
           feeSats,
           hasChange,
           finalAmountSats,
-          raisedToMinDust,
-          bumpedChangeFree,
-        } = lab
+          isRaisedToMinDust,
+          isBumpedChangeFree,
+        } = signedLabTransaction
 
         const { amountUnit } = useSendStore.getState()
-        if (raisedToMinDust || bumpedChangeFree) {
+        if (isRaisedToMinDust || isBumpedChangeFree) {
           toast.warning(
             onchainDustPrepareWarningLines({
-              raisedToMinDust,
-              bumpedChangeFree,
+              isRaisedToMinDust,
+              isBumpedChangeFree,
             }).join(' '),
           )
           useSendStore.setState({
             amount: formatAmountInputFromSats(finalAmountSats, amountUnit),
             onchainDustWarning: {
-              previousSats: lab.originalAmountSats,
-              raisedToDustMin: raisedToMinDust,
-              bumpedChangeFree,
+              previousSats: signedLabTransaction.originalAmountSats,
+              isRaisedToMinDust,
+              isBumpedChangeFree,
             },
           })
         }
@@ -221,17 +226,17 @@ export function useLabSendMutation() {
               },
             ]
 
-        const fullMetadata = {
+        const labMempoolTransactionMetadata = {
           ...mempoolMetadata,
           feeSats,
           hasChange,
           outputsDetail,
         }
 
-        return { signedTxHex, fullMetadata }
+        return { signedTxHex, labMempoolTransactionMetadata }
       })
 
-      return labOpAddSignedTransaction(signedTxHex, fullMetadata)
+      return labOpAddSignedTransaction(signedTxHex, labMempoolTransactionMetadata)
     },
     onSuccess: (state) => {
       setLabChainStateCache(queryClient, state)

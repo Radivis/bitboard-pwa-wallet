@@ -32,7 +32,7 @@ export async function runLabRouteBeforeLoad(): Promise<LabRouteContext> {
   })
 
   const { walletStatus, addressType, accountId } = useWalletStore.getState()
-  const ok = await switchToLabNetwork({
+  const labNetworkSwitchSucceeded = await switchToLabNetwork({
     previousNetworkMode,
     walletStatus,
     addressType,
@@ -41,7 +41,7 @@ export async function runLabRouteBeforeLoad(): Promise<LabRouteContext> {
 
   toast.dismiss(LAB_SWITCH_LOADING_TOAST_ID)
 
-  if (!ok) {
+  if (!labNetworkSwitchSucceeded) {
     return { labAutoSwitchFailed: true }
   }
 

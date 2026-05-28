@@ -11,7 +11,7 @@ import { subscribeLabStatePersistedFromOtherTabs } from '@/lib/lab/lab-cross-tab
  * a BroadcastChannel message, e.g. read-only navigation).
  */
 export function useLabCrossTabCacheSync(): void {
-  const networkMode = useWalletStore((s) => s.networkMode)
+  const networkMode = useWalletStore((walletState) => walletState.networkMode)
   const queryClient = useQueryClient()
 
   const invalidateLabQueries = useCallback(() => {

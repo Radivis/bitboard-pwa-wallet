@@ -35,11 +35,11 @@ export async function replaceOpfsSqliteAfterDestroy(options: {
   // connection to the old file between destroy() and writeArrayBufferToOpfsRoot(), causing
   // intermittent locks or failed imports (especially on "Proceed anyway" when the UI yields).
   await removeOpfsRootEntryIfExists(opfsBasename)
-  const ab = sqliteBytes.buffer.slice(
+  const sqliteArrayBuffer = sqliteBytes.buffer.slice(
     sqliteBytes.byteOffset,
     sqliteBytes.byteOffset + sqliteBytes.byteLength,
   ) as ArrayBuffer
-  await writeArrayBufferToOpfsRoot(opfsBasename, ab)
+  await writeArrayBufferToOpfsRoot(opfsBasename, sqliteArrayBuffer)
   await ensureMigrated()
   onBeforeReload?.()
   toast.success(successToastMessage)

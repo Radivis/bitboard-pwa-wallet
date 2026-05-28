@@ -13,9 +13,9 @@ import {
  * `removeLightningConnectionsHydrationQueries`).
  */
 export function useHydrateLightningConnections() {
-  const activeWalletId = useWalletStore((s) => s.activeWalletId)
-  const walletStatus = useWalletStore((s) => s.walletStatus)
-  const sessionPassword = useSessionStore((s) => s.password)
+  const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
+  const walletStatus = useWalletStore((walletState) => walletState.walletStatus)
+  const sessionPassword = useSessionStore((sessionState) => sessionState.password)
 
   const enabled =
     activeWalletId != null &&

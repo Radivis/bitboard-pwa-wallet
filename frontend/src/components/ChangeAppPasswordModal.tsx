@@ -48,7 +48,7 @@ export function ChangeAppPasswordModal({
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
-  const setSessionPassword = useSessionStore((s) => s.setPassword)
+  const setSessionPassword = useSessionStore((sessionState) => sessionState.setPassword)
 
   useEffect(() => {
     if (open) {

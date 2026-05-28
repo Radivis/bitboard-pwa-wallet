@@ -42,8 +42,8 @@ vi.mock('@/workers/lab-factory', () => ({
 
 vi.mock('@/workers/crypto-factory', () => ({
   getCryptoWorker: () => ({
-    labEntityDraftLabPsbtTransaction: vi.fn(),
-    labEntityBuildAndSignLabTransaction: vi.fn().mockResolvedValue({
+    labEntityDraftPsbtTransaction: vi.fn(),
+    labEntityBuildAndSignTransaction: vi.fn().mockResolvedValue({
       signed_tx_hex: 'deadbeef',
       fee_sats: 140,
       has_change: false,

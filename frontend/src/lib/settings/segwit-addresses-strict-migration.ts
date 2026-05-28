@@ -17,8 +17,8 @@ export function runSegwitAddressesStrictMigrationAfterHydration(): void {
   runStrictMigrationAfterHydration(
     segwitAddressesStrictMigrationGuard,
     async () => {
-      const { segwitAddressesEnabled } = useFeatureStore.getState()
-      if (segwitAddressesEnabled) return
+      const { isSegwitAddressesEnabled } = useFeatureStore.getState()
+      if (isSegwitAddressesEnabled) return
       if (getCommittedAddressType() !== AddressType.SegWit) return
 
       try {

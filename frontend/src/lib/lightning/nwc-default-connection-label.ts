@@ -30,10 +30,10 @@ export function resolveDefaultNwcConnectionLabel(
   if (!labels.has(DEFAULT_NWC_CONNECTION_LABEL_BASE)) {
     return DEFAULT_NWC_CONNECTION_LABEL_BASE
   }
-  let n = 1
+  let slotNumber = 1
   for (;;) {
-    const candidate = `${DEFAULT_NWC_CONNECTION_LABEL_BASE}(${n})`
+    const candidate = `${DEFAULT_NWC_CONNECTION_LABEL_BASE}(${slotNumber})`
     if (!labels.has(candidate)) return candidate
-    n += 1
+    slotNumber += 1
   }
 }

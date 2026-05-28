@@ -9,7 +9,7 @@ import { CommittedDescriptorInfomodeContent } from '@/components/settings/Commit
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 
 export function NetworkCardCommittedDescriptor() {
-  const sessionPassword = useSessionStore((s) => s.password)
+  const sessionPassword = useSessionStore((sessionState) => sessionState.password)
   const query = useCommittedExternalDescriptor()
   const [descriptorVisible, setDescriptorVisible] = useState(false)
 

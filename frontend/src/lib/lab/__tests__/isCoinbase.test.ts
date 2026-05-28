@@ -10,15 +10,15 @@ describe('isCoinbase', () => {
     expect(isCoinbase({ inputs: [] })).toBe(false)
   })
 
-  it('returns true for block-effects single input with coinbase prevout (snake_case)', () => {
+  it('returns true for block-effects single input with coinbase prevout', () => {
     expect(
       isCoinbase({
-        inputs: [{ prev_txid: LAB_COINBASE_PREV_TXID_HEX, prev_vout: LAB_COINBASE_PREV_VOUT }],
+        inputs: [{ prevTxid: LAB_COINBASE_PREV_TXID_HEX, prevVout: LAB_COINBASE_PREV_VOUT }],
       }),
     ).toBe(true)
   })
 
-  it('returns true for persisted detail single input with coinbase prevout (camelCase)', () => {
+  it('returns true for persisted detail single input with coinbase prevout', () => {
     expect(
       isCoinbase({
         inputs: [{ prevTxid: LAB_COINBASE_PREV_TXID_HEX, prevVout: LAB_COINBASE_PREV_VOUT }],
@@ -38,8 +38,8 @@ describe('isCoinbase', () => {
     expect(
       isCoinbase({
         inputs: [
-          { prev_txid: LAB_COINBASE_PREV_TXID_HEX, prev_vout: LAB_COINBASE_PREV_VOUT },
-          { prev_txid: 'aa'.repeat(32), prev_vout: 0 },
+          { prevTxid: LAB_COINBASE_PREV_TXID_HEX, prevVout: LAB_COINBASE_PREV_VOUT },
+          { prevTxid: 'aa'.repeat(32), prevVout: 0 },
         ],
       }),
     ).toBe(false)

@@ -8,7 +8,7 @@ import {
 import type { LabState } from '@/workers/lab-api'
 
 export function useLabChainStateQuery() {
-  const networkMode = useWalletStore((s) => s.networkMode)
+  const networkMode = useWalletStore((walletState) => walletState.networkMode)
 
   return useQuery({
     queryKey: labChainStateQueryKey,

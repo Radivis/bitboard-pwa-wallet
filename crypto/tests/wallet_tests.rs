@@ -16,11 +16,11 @@ use rstest::rstest;
 fn get_balance_returns_zero_for_new_wallet() {
     let wallet = create_test_wallet(DEFAULT_NETWORK, DEFAULT_ADDRESS_TYPE);
     let balance = wallet::get_balance(&wallet);
-    assert_eq!(balance.confirmed, 0);
-    assert_eq!(balance.trusted_pending, 0);
-    assert_eq!(balance.untrusted_pending, 0);
-    assert_eq!(balance.immature, 0);
-    assert_eq!(balance.total, 0);
+    assert_eq!(balance.confirmed_sats, 0);
+    assert_eq!(balance.trusted_pending_sats, 0);
+    assert_eq!(balance.untrusted_pending_sats, 0);
+    assert_eq!(balance.immature_sats, 0);
+    assert_eq!(balance.total_sats, 0);
 }
 
 // --- Address type tests ---
@@ -125,8 +125,12 @@ fn create_wallet_returns_serializable_changeset() {
 #[test]
 fn load_wallet_from_changeset_restores_state() {
     let pair = descriptors_for_test(DEFAULT_NETWORK, DEFAULT_ADDRESS_TYPE);
-    let mut wallet = wallet::create_wallet(&pair.external, &pair.internal, DEFAULT_NETWORK)
-        .expect("Wallet creation should succeed");
+    let mut wallet = wallet::create_wallet(
+        &pair.external_descriptor,
+        &pair.internal_descriptor,
+        DEFAULT_NETWORK,
+    )
+    .expect("Wallet creation should succeed");
 
     let first_address = wallet
         .peek_address(KeychainKind::External, 0)
@@ -134,9 +138,13 @@ fn load_wallet_from_changeset_restores_state() {
         .to_string();
     let changeset = wallet.take_staged().expect("Must have initial changeset");
 
-    let loaded_wallet =
-        wallet::load_wallet(&pair.external, &pair.internal, DEFAULT_NETWORK, changeset)
-            .expect("Loading wallet from changeset should succeed");
+    let loaded_wallet = wallet::load_wallet(
+        &pair.external_descriptor,
+        &pair.internal_descriptor,
+        DEFAULT_NETWORK,
+        changeset,
+    )
+    .expect("Loading wallet from changeset should succeed");
 
     let loaded_address = loaded_wallet
         .peek_address(KeychainKind::External, 0)
@@ -152,8 +160,12 @@ fn load_wallet_from_changeset_restores_state() {
 #[test]
 fn changeset_round_trip_preserves_address_index() {
     let pair = descriptors_for_test(DEFAULT_NETWORK, DEFAULT_ADDRESS_TYPE);
-    let mut wallet = wallet::create_wallet(&pair.external, &pair.internal, DEFAULT_NETWORK)
-        .expect("Wallet creation should succeed");
+    let mut wallet = wallet::create_wallet(
+        &pair.external_descriptor,
+        &pair.internal_descriptor,
+        DEFAULT_NETWORK,
+    )
+    .expect("Wallet creation should succeed");
 
     wallet::get_new_address(&mut wallet);
     wallet::get_new_address(&mut wallet);
@@ -167,8 +179,8 @@ fn changeset_round_trip_preserves_address_index() {
         wallet::deserialize_changeset(&json).expect("Deserialization should succeed");
 
     let mut loaded = wallet::load_wallet(
-        &pair.external,
-        &pair.internal,
+        &pair.external_descriptor,
+        &pair.internal_descriptor,
         DEFAULT_NETWORK,
         deserialized,
     )
@@ -186,10 +198,18 @@ fn changeset_round_trip_preserves_address_index() {
 #[test]
 fn same_descriptors_produce_same_wallet() {
     let pair = descriptors_for_test(DEFAULT_NETWORK, DEFAULT_ADDRESS_TYPE);
-    let wallet1 = wallet::create_wallet(&pair.external, &pair.internal, DEFAULT_NETWORK)
-        .expect("First wallet creation should succeed");
-    let wallet2 = wallet::create_wallet(&pair.external, &pair.internal, DEFAULT_NETWORK)
-        .expect("Second wallet creation should succeed");
+    let wallet1 = wallet::create_wallet(
+        &pair.external_descriptor,
+        &pair.internal_descriptor,
+        DEFAULT_NETWORK,
+    )
+    .expect("First wallet creation should succeed");
+    let wallet2 = wallet::create_wallet(
+        &pair.external_descriptor,
+        &pair.internal_descriptor,
+        DEFAULT_NETWORK,
+    )
+    .expect("Second wallet creation should succeed");
 
     let addr1 = wallet1
         .peek_address(KeychainKind::External, 0)

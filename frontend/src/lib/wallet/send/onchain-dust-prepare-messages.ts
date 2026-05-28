@@ -8,14 +8,14 @@ export function minOutputSizeRaisedToastMessage(): string {
 }
 
 export function onchainDustPrepareWarningLines(outcome: {
-  raisedToMinDust: boolean
-  bumpedChangeFree: boolean
+  isRaisedToMinDust: boolean
+  isBumpedChangeFree: boolean
 }): string[] {
   const lines: string[] = []
-  if (outcome.raisedToMinDust) {
+  if (outcome.isRaisedToMinDust) {
     lines.push(RAISED_TO_MIN_OUTPUT_WARNING)
   }
-  if (outcome.bumpedChangeFree) {
+  if (outcome.isBumpedChangeFree) {
     lines.push(
       'Change for this transaction would have been below the dust limit; the amount was increased to make the transfer change-free.',
     )

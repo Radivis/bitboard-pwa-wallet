@@ -145,13 +145,17 @@ export async function createLabEntityViaControl(
   await expect(page.getByRole('heading', { name: 'Blocks' })).toBeVisible({ timeout: 15000 })
 }
 
-function labOwnerMatchesDisplayKey(state: LabState, o: ReturnType<typeof lookupLabAddressOwner>, key: string): boolean {
-  if (o == null) return false
-  if (o.kind === 'wallet') {
-    return `${WALLET_OWNER_PREFIX}${o.walletId}` === key
+function labOwnerMatchesDisplayKey(
+  state: LabState,
+  owner: ReturnType<typeof lookupLabAddressOwner>,
+  key: string,
+): boolean {
+  if (owner == null) return false
+  if (owner.kind === 'wallet') {
+    return `${WALLET_OWNER_PREFIX}${owner.walletId}` === key
   }
-  const entity = state.entities?.find((e) => e.labEntityId === o.labEntityId)
-  const display = entity ? labEntityOwnerKey(entity) : `Anonymous-${o.labEntityId}`
+  const entity = state.entities?.find((e) => e.labEntityId === owner.labEntityId)
+  const display = entity ? labEntityOwnerKey(entity) : `Anonymous-${owner.labEntityId}`
   return display === key
 }
 
@@ -267,9 +271,9 @@ export async function mineBlocksInLab(
         async () => {
           const st = await getLabState(page)
           const map = st.addressToOwner ?? {}
-          return (st.utxos ?? []).some((u) => {
-            const o = lookupLabAddressOwner(u.address, map)
-            return o != null && o.kind === 'wallet'
+          return (st.utxos ?? []).some((utxo) => {
+            const addressOwner = lookupLabAddressOwner(utxo.address, map)
+            return addressOwner != null && addressOwner.kind === 'wallet'
           })
         },
         { timeout: 20000, message: 'Expected wallet-owned lab UTXOs after mining' },
@@ -343,14 +347,14 @@ async function waitForLabTxViewerLoaded(page: Page, txid: string): Promise<void>
     .poll(
       async () => {
         return await page.evaluate(async (id) => {
-          const w = (window as unknown as {
+          const getLabTransaction = (window as unknown as {
             __labGetTransaction?: (tid: string) => Promise<unknown | null>
           }).__labGetTransaction
-          if (!w) {
+          if (!getLabTransaction) {
             return 'no-hook' as const
           }
-          const d = await w(id)
-          return d != null ? ('ready' as const) : ('not-found' as const)
+          const transactionDetail = await getLabTransaction(id)
+          return transactionDetail != null ? ('ready' as const) : ('not-found' as const)
         }, normalTxId)
       },
       {
@@ -422,8 +426,8 @@ export async function expectLabTxOutputAmountsSats(
   for (let i = 0; i < expectedSats.length; i++) {
     const row = page.getByTestId(`lab-tx-vout-${i}`)
     await expect(row).toBeVisible()
-    const n = await parseLabTxOutputRowSats(row)
-    expect(n).toBe(expectedSats[i])
+    const outputAmountSats = await parseLabTxOutputRowSats(row)
+    expect(outputAmountSats).toBe(expectedSats[i])
   }
 }
 

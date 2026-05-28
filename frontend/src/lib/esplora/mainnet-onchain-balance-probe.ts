@@ -105,7 +105,7 @@ export async function sumMainnetOnChainSatsForWallet(params: {
           throw new MainnetBalanceProbeUnverifiableError()
         }
         const balance = await session.getBalance()
-        balanceSum += balance.total
+        balanceSum += balance.totalSats
       } finally {
         session.free()
       }
@@ -142,20 +142,20 @@ export type MainnetPositiveWalletRow = {
  */
 export async function listWalletsWithPositiveMainnetOnChainBalance(params: {
   password: string
-  wallets: { wallet_id: number; name: string }[]
+  wallets: { walletId: number; name: string }[]
 }): Promise<MainnetPositiveWalletRow[]> {
   const { password, wallets } = params
   const rows: MainnetPositiveWalletRow[] = []
-  for (const w of wallets) {
+  for (const walletRow of wallets) {
     const totalSats = await sumMainnetOnChainSatsForWallet({
       password,
-      walletId: w.wallet_id,
+      walletId: walletRow.walletId,
     })
     if (totalSats > 0) {
-      const trimmed = w.name.trim()
+      const trimmed = walletRow.name.trim()
       rows.push({
-        walletId: w.wallet_id,
-        name: trimmed.length > 0 ? trimmed : `Wallet ${w.wallet_id}`,
+        walletId: walletRow.walletId,
+        name: trimmed.length > 0 ? trimmed : `Wallet ${walletRow.walletId}`,
         totalSats,
       })
     }

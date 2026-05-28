@@ -91,8 +91,8 @@ export interface DraftLabPsbtTransactionResult {
   psbtBase64: string;
   finalAmountSats: number;
   originalAmountSats: number;
-  raisedToMinDust: boolean;
-  changeFreeBumpAvailable: boolean;
+  isRaisedToMinDust: boolean;
+  isChangeFreeBumpAvailable: boolean;
   changeFreeMaxSats: number;
   feeSats: number;
   changeSats: number;
@@ -101,7 +101,7 @@ export interface DraftLabPsbtTransactionResult {
 }
 
 /** Ephemeral lab-entity wallet draft (does not use the active user wallet). */
-export interface LabEntityDraftLabPsbtTransactionParams {
+export interface LabEntityDraftPsbtTransactionParams {
   mnemonic: string;
   changesetJson: string;
   network: string;
@@ -114,14 +114,14 @@ export interface LabEntityDraftLabPsbtTransactionParams {
 }
 
 /** Ephemeral lab-entity wallet signing (does not use the active user wallet). */
-export interface LabEntityBuildAndSignLabTransactionParams
-  extends LabEntityDraftLabPsbtTransactionParams {
+export interface LabEntityBuildAndSignTransactionParams
+  extends LabEntityDraftPsbtTransactionParams {
   /** When true, increase payment to change-free max if that path exists. */
   applyChangeFreeBump?: boolean;
 }
 
 export interface BuildTransactionParams {
-  recipientAddress: string;
+  toAddress: string;
   amountSats: number;
   feeRateSatPerVb: number;
   network: BitcoinNetwork;
@@ -137,9 +137,9 @@ export interface PrepareOnchainSendResult {
   psbtBase64: string;
   finalAmountSats: number;
   originalAmountSats: number;
-  raisedToMinDust: boolean;
-  bumpedChangeFree: boolean;
-  changeFreeBumpAvailable: boolean;
+  isRaisedToMinDust: boolean;
+  isBumpedChangeFree: boolean;
+  isChangeFreeBumpAvailable: boolean;
   changeFreeMaxSats: number;
   feeSats: number;
   changeSats: number;
@@ -154,9 +154,9 @@ export interface BuildAndSignLabTransactionResult {
   hasChange: boolean;
   finalAmountSats: number;
   originalAmountSats: number;
-  raisedToMinDust: boolean;
-  bumpedChangeFree: boolean;
-  changeFreeBumpAvailable: boolean;
+  isRaisedToMinDust: boolean;
+  isBumpedChangeFree: boolean;
+  isChangeFreeBumpAvailable: boolean;
   changeFreeMaxSats: number;
 }
 
@@ -228,13 +228,13 @@ export interface CryptoService {
   getLabChangeAddress(): Promise<string>;
 
   /** Unsigned lab PSBT draft for a lab entity (dust / change-free metadata). */
-  labEntityDraftLabPsbtTransaction(
-    params: LabEntityDraftLabPsbtTransactionParams,
+  labEntityDraftPsbtTransaction(
+    params: LabEntityDraftPsbtTransactionParams,
   ): Promise<DraftLabPsbtTransactionResult>;
 
   /** Build and sign a lab mempool tx for a simulated lab entity (BDK + foreign UTXOs). */
-  labEntityBuildAndSignLabTransaction(
-    params: LabEntityBuildAndSignLabTransactionParams,
+  labEntityBuildAndSignTransaction(
+    params: LabEntityBuildAndSignTransactionParams,
   ): Promise<unknown>;
   getBalance(): Promise<BalanceInfo>;
   exportChangeset(): Promise<string>;

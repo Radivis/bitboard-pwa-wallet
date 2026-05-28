@@ -57,16 +57,16 @@ export function useLabIndexPageData() {
 
   const blockCount = blocks.length === 0 ? 0 : blocks[blocks.length - 1].height + 1
 
-  const mineCount = useLabMiningStore((s) => s.mineCount)
-  const setMineCount = useLabMiningStore((s) => s.setMineCount)
-  const ownerType = useLabMiningStore((s) => s.ownerType)
-  const setOwnerType = useLabMiningStore((s) => s.setOwnerType)
-  const selectedLabEntityId = useLabMiningStore((s) => s.selectedLabEntityId)
-  const setSelectedLabEntityId = useLabMiningStore((s) => s.setSelectedLabEntityId)
+  const mineCount = useLabMiningStore((labMiningState) => labMiningState.mineCount)
+  const setMineCount = useLabMiningStore((labMiningState) => labMiningState.setMineCount)
+  const ownerType = useLabMiningStore((labMiningState) => labMiningState.ownerType)
+  const setOwnerType = useLabMiningStore((labMiningState) => labMiningState.setOwnerType)
+  const selectedLabEntityId = useLabMiningStore((labMiningState) => labMiningState.selectedLabEntityId)
+  const setSelectedLabEntityId = useLabMiningStore((labMiningState) => labMiningState.setSelectedLabEntityId)
 
-  const activeWalletId = useWalletStore((s) => s.activeWalletId)
-  const walletStatus = useWalletStore((s) => s.walletStatus)
-  const currentAddress = useWalletStore((s) => s.currentAddress)
+  const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
+  const walletStatus = useWalletStore((walletState) => walletState.walletStatus)
+  const currentAddress = useWalletStore((walletState) => walletState.currentAddress)
   const labAddressType = useWalletStore(selectCommittedAddressType)
   const { data: activeWallet } = useWallet(activeWalletId)
   const { data: wallets = [] } = useWallets()
@@ -102,14 +102,14 @@ export function useLabIndexPageData() {
   const createTxMutation = useLabCreateTransactionMutation()
 
   useEffect(() => {
-    const living = entities.filter((e) => !e.isDead)
-    if (living.length === 0) {
+    const livingEntities = entities.filter((entity) => !entity.isDead)
+    if (livingEntities.length === 0) {
       setSelectedLabEntityId(null)
       return
     }
     const prev = useLabMiningStore.getState().selectedLabEntityId
-    if (prev != null && living.some((e) => e.labEntityId === prev)) return
-    setSelectedLabEntityId(living[0].labEntityId)
+    if (prev != null && livingEntities.some((entity) => entity.labEntityId === prev)) return
+    setSelectedLabEntityId(livingEntities[0].labEntityId)
   }, [entities, setSelectedLabEntityId])
   const createRandomTxMutation = useLabCreateRandomTransactionsMutation()
   const resetMutation = useLabResetMutation()
@@ -196,7 +196,7 @@ export function useLabIndexPageData() {
         }
 
         if (
-          draftResult.draft.raisedToMinDust &&
+          draftResult.draft.isRaisedToMinDust &&
           draftResult.draft.finalAmountSats !== amountSats
         ) {
           amountSats = draftResult.draft.finalAmountSats
@@ -213,7 +213,7 @@ export function useLabIndexPageData() {
           }
         }
 
-        if (draftResult.draft.changeFreeBumpAvailable) {
+        if (draftResult.draft.isChangeFreeBumpAvailable) {
           setDustCase2Modal({
             exactAmountSats: draftResult.draft.finalAmountSats,
             changeFreeMaxSats: draftResult.draft.changeFreeMaxSats,
@@ -420,25 +420,31 @@ export function useLabIndexPageData() {
   }, [createRandomTxMutation, randomTransactionCount])
 
   const controlledAddresses = useMemo(() => {
-    return addresses.filter((a) => {
-      if (a.wif) return true
-      const owner = lookupLabAddressOwner(a.address, addressToOwner)
+    return addresses.filter((addressRow) => {
+      if (addressRow.wif) return true
+      const owner = lookupLabAddressOwner(addressRow.address, addressToOwner)
       if (owner == null) return false
       if (owner.kind === 'wallet') return false
-      return getBalanceForAddress(a.address) > 0
+      return getBalanceForAddress(addressRow.address) > 0
     })
   }, [addresses, addressToOwner, getBalanceForAddress])
   const txDetailsByTxid = useMemo(
-    () => new Map(txDetails.map((d) => [d.txid, d])),
+    () => new Map(txDetails.map((txDetail) => [txDetail.txid, txDetail])),
     [txDetails],
   )
   const sortedTransactions = useMemo(
     () =>
       [...transactions].sort((a, b) => {
         const amountA =
-          txDetailsByTxid.get(a.txid)?.outputs.reduce((s, o) => s + o.amountSats, 0) ?? 0
+          txDetailsByTxid.get(a.txid)?.outputs.reduce(
+            (totalSats, output) => totalSats + output.amountSats,
+            0,
+          ) ?? 0
         const amountB =
-          txDetailsByTxid.get(b.txid)?.outputs.reduce((s, o) => s + o.amountSats, 0) ?? 0
+          txDetailsByTxid.get(b.txid)?.outputs.reduce(
+            (totalSats, output) => totalSats + output.amountSats,
+            0,
+          ) ?? 0
         return amountB - amountA
       }),
     [transactions, txDetailsByTxid],

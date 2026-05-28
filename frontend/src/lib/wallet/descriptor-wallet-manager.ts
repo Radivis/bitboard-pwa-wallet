@@ -19,18 +19,24 @@ import { useCryptoStore } from '@/stores/cryptoStore'
  * Find a descriptor wallet matching the given (network, addressType, accountId)
  * within the wallet secrets array.
  */
-export function findDescriptorWallet(params: {
-  secrets: WalletSecretsPayload | Pick<WalletSecrets, 'descriptorWallets'>
+export type FindDescriptorWalletInput = {
+  secretsPayload: WalletSecretsPayload | Pick<WalletSecrets, 'descriptorWallets'>
   network: BitcoinNetwork
   addressType: AddressType
   accountId: number
-}): DescriptorWalletData | undefined {
-  const { secrets, network, addressType, accountId } = params
-  return secrets.descriptorWallets.find(
-    (dw) =>
-      dw.network === network &&
-      dw.addressType === addressType &&
-      dw.accountId === accountId,
+}
+
+export function findDescriptorWallet({
+  secretsPayload,
+  network,
+  addressType,
+  accountId,
+}: FindDescriptorWalletInput): DescriptorWalletData | undefined {
+  return secretsPayload.descriptorWallets.find(
+    (descriptorWallet) =>
+      descriptorWallet.network === network &&
+      descriptorWallet.addressType === addressType &&
+      descriptorWallet.accountId === accountId,
   )
 }
 
@@ -65,7 +71,7 @@ export async function resolveDescriptorWallet(params: {
   const walletDb = getDatabase()
   const { resolveDescriptorWallet: workerResolve } = useCryptoStore.getState()
   const encryptedBlobs = await getWalletSecretsEncrypted(walletDb, walletId)
-  const result = await workerResolve({
+  const resolveDescriptorWorkerResponse = await workerResolve({
     password,
     encryptedPayload: encryptedBlobs.payload,
     encryptedMnemonic: encryptedBlobs.mnemonic,
@@ -73,14 +79,14 @@ export async function resolveDescriptorWallet(params: {
     targetAddressType,
     targetAccountId,
   })
-  if (result.encryptedMnemonicToStore !== null) {
+  if (resolveDescriptorWorkerResponse.encryptedMnemonicToStore !== null) {
     throw new Error(
       'resolveDescriptorWallet returned mnemonic update, which is unsupported in payload-only CAS writes',
     )
   }
-  if (result.encryptedPayloadToStore !== null) {
+  if (resolveDescriptorWorkerResponse.encryptedPayloadToStore !== null) {
     const encryptedPayloadToStore = workerBlobToPersistence(
-      result.encryptedPayloadToStore,
+      resolveDescriptorWorkerResponse.encryptedPayloadToStore,
     )
     await updateWalletSecretsEncryptedPayloadWithRetry({
       walletDb,
@@ -88,7 +94,7 @@ export async function resolveDescriptorWallet(params: {
       transform: async () => encryptedPayloadToStore,
     })
   }
-  return result.descriptorWalletData
+  return resolveDescriptorWorkerResponse.descriptorWalletData
 }
 
 /**

@@ -13,8 +13,8 @@ const regtestStrictMigrationGuard = { started: false }
  */
 export function runRegtestStrictMigrationAfterHydration(): void {
   runStrictMigrationAfterHydration(regtestStrictMigrationGuard, async () => {
-    const { regtestModeEnabled } = useFeatureStore.getState()
-    if (regtestModeEnabled) return
+    const { isRegtestModeEnabled } = useFeatureStore.getState()
+    if (isRegtestModeEnabled) return
 
     if (getCommittedNetworkMode() !== 'regtest') return
 

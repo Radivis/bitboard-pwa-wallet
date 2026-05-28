@@ -26,8 +26,8 @@ export function TransactionItem({ transaction }: TransactionItemProps) {
 
   const Icon = isSent ? ArrowUpRight : ArrowDownLeft
 
-  const timestamp = transaction.confirmation_time
-    ? new Date(transaction.confirmation_time * 1000)
+  const timestamp = transaction.confirmationTime
+    ? new Date(transaction.confirmationTime * 1000)
     : null
 
   return (
@@ -82,7 +82,7 @@ export function TransactionItem({ transaction }: TransactionItemProps) {
         </div>
 
         <div className="ml-1">
-          {transaction.is_confirmed ? (
+          {transaction.isConfirmed ? (
             <CheckCircle2 className="h-4 w-4 text-green-500" />
           ) : (
             <Clock className="h-4 w-4 text-yellow-500" />
@@ -96,11 +96,11 @@ export function TransactionItem({ transaction }: TransactionItemProps) {
             <span>TXID</span>
             <span className="font-mono">{truncateAddress(transaction.txid, 12, 12)}</span>
           </div>
-          {transaction.fee_sats != null && (
+          {transaction.feeSats != null && (
             <div className="flex justify-between gap-2">
               <span>Fee</span>
               <span className="text-right">
-                <BitcoinAmountDisplay amountSats={transaction.fee_sats} size="sm" />
+                <BitcoinAmountDisplay amountSats={transaction.feeSats} size="sm" />
               </span>
             </div>
           )}
@@ -112,15 +112,15 @@ export function TransactionItem({ transaction }: TransactionItemProps) {
               </span>
             </div>
           )}
-          {transaction.confirmation_block_height != null && (
+          {transaction.confirmationBlockHeight != null && (
             <div className="flex justify-between">
               <span>Block height</span>
-              <span>{transaction.confirmation_block_height.toLocaleString()}</span>
+              <span>{transaction.confirmationBlockHeight.toLocaleString()}</span>
             </div>
           )}
           <div className="flex justify-between">
             <span>Status</span>
-            <span>{transaction.is_confirmed ? 'Confirmed' : 'Pending'}</span>
+            <span>{transaction.isConfirmed ? 'Confirmed' : 'Pending'}</span>
           </div>
         </div>
       )}

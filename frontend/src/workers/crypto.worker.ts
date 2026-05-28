@@ -10,35 +10,35 @@ import type {
   SyncResult,
   TransactionDetails,
 } from './crypto-types';
+import {
+  mapWireBalanceToDomain,
+  mapWireCreateWalletResultToDomain,
+  mapWireDescriptorPairToDomain,
+  mapWireDraftPsbtResultToDomain,
+  mapWireLabSignResultToDomain,
+  mapWirePrepareOnchainSendResultToDomain,
+  mapWireSyncResultToDomain,
+  mapWireTransactionListToDomain,
+  parseWasmJsonWire,
+} from './crypto-wire-mappers';
+import type {
+  WireBalanceInfo,
+  WireCreateWalletResult,
+  WireDescriptorPair,
+  WireDraftPsbtResult,
+  WireLabSignResult,
+  WirePrepareOnchainSendResult,
+  WireSyncResult,
+  WireTransactionDetails,
+} from './crypto-wire-types';
 import type { EncryptedBlobMessage, SecretsChannelService } from './secrets-channel-types';
 import { parseWalletPayloadJson } from '@/lib/wallet/wallet-domain-types';
 import type { WalletSecretsPayload } from '@/lib/wallet/wallet-domain-types';
 import { rethrowWasmCryptoErrorForComlink } from '@/lib/shared/wasm-crypto-error';
 
-function mapReviewInputUtxos(raw: unknown): import('./crypto-api').ReviewInputUtxo[] {
-  if (!Array.isArray(raw)) return [];
-  return raw.map((item) => {
-    const row = item as Record<string, unknown>;
-    return {
-      address: String(row.address ?? ''),
-      amountSats: Number(row.amount_sats ?? 0),
-      txid: String(row.txid ?? ''),
-      vout: Number(row.vout ?? 0),
-    };
-  });
-}
-
-function mapPrepareOrDraftReviewFields(parsed: Record<string, unknown>) {
-  return {
-    changeSats: Number(parsed.change_sats ?? 0),
-    totalInputSats: Number(parsed.total_input_sats ?? 0),
-    inputUtxos: mapReviewInputUtxos(parsed.input_utxos),
-  };
-}
-
 type BitboardCryptoModule = typeof import('@/wasm-pkg/bitboard_crypto');
 
-let wasm: BitboardCryptoModule | null = null;
+let cryptoWasmModule: BitboardCryptoModule | null = null;
 let wasmInitError: string | null = null;
 let secretsProxy: Remote<SecretsChannelService> | null = null;
 
@@ -55,10 +55,10 @@ async function getWasm(): Promise<BitboardCryptoModule> {
   if (wasmInitError) {
     throw new Error(`WASM init failed: ${wasmInitError}`);
   }
-  if (!wasm) {
-    wasm = await import('@/wasm-pkg/bitboard_crypto');
+  if (!cryptoWasmModule) {
+    cryptoWasmModule = await import('@/wasm-pkg/bitboard_crypto');
   }
-  return wasm;
+  return cryptoWasmModule;
 }
 
 /** Ensures structured `{ code, message }` WASM errors survive Comlink on the main thread. */
@@ -75,7 +75,7 @@ async function invokeWasmCrypto<T>(
 
 async function initWasm() {
   try {
-    wasm = await import('@/wasm-pkg/bitboard_crypto');
+    cryptoWasmModule = await import('@/wasm-pkg/bitboard_crypto');
     console.info('[crypto.worker] WASM module loaded successfully');
   } catch (err) {
     wasmInitError = err instanceof Error ? err.message : String(err);
@@ -122,22 +122,26 @@ async function encryptPlaintextToStoreFields(
   return encryptedBlobMessageToStoreFields(encryptedBlob);
 }
 
-function buildInitialWalletSecretsPayload(params: {
+function buildInitialWalletSecretsPayload({
+  network,
+  addressType,
+  accountId,
+  walletResult,
+}: {
   network: BitcoinNetwork;
   addressType: AddressType;
   accountId: number;
   walletResult: CreateWalletResult;
 }): WalletSecretsPayload {
-  const { network, addressType, accountId, walletResult } = params;
   return {
     descriptorWallets: [
       {
         network,
         addressType,
         accountId,
-        externalDescriptor: walletResult.external_descriptor,
-        internalDescriptor: walletResult.internal_descriptor,
-        changeSet: walletResult.changeset_json,
+        externalDescriptor: walletResult.externalDescriptor,
+        internalDescriptor: walletResult.internalDescriptor,
+        changeSet: walletResult.changesetJson,
         fullScanDone: false,
       },
     ],
@@ -145,7 +149,11 @@ function buildInitialWalletSecretsPayload(params: {
   };
 }
 
-async function encryptWalletSecretsPayloadAndMnemonic(params: {
+async function encryptWalletSecretsPayloadAndMnemonic({
+  password,
+  payload,
+  mnemonicPlaintext,
+}: {
   password: string;
   payload: WalletSecretsPayload;
   mnemonicPlaintext: string;
@@ -153,7 +161,6 @@ async function encryptWalletSecretsPayloadAndMnemonic(params: {
   encryptedPayload: EncryptedBlobStoreFields;
   encryptedMnemonic: EncryptedBlobStoreFields;
 }> {
-  const { password, payload, mnemonicPlaintext } = params;
   const encryptedPayload = await encryptPlaintextToStoreFields(
     password,
     JSON.stringify(payload)
@@ -165,18 +172,22 @@ async function encryptWalletSecretsPayloadAndMnemonic(params: {
   return { encryptedPayload, encryptedMnemonic };
 }
 
-function findDescriptorWalletInPayload(params: {
+function findDescriptorWalletInPayload({
+  payload,
+  network,
+  addressType,
+  accountId,
+}: {
   payload: WalletSecretsPayload;
   network: BitcoinNetwork;
   addressType: AddressType;
   accountId: number;
 }): DescriptorWalletData | undefined {
-  const { payload, network, addressType, accountId } = params;
   return payload.descriptorWallets.find(
-    (dw) =>
-      dw.network === network &&
-      dw.addressType === addressType &&
-      dw.accountId === accountId
+    (descriptorWallet) =>
+      descriptorWallet.network === network &&
+      descriptorWallet.addressType === addressType &&
+      descriptorWallet.accountId === accountId
   );
 }
 
@@ -205,9 +216,10 @@ const cryptoService = {
     accountId: number;
   }): Promise<DescriptorPair> {
     const { mnemonic, network, addressType, accountId } = params;
-    return invokeWasmCrypto((wasmModule) =>
+    const wire = await invokeWasmCrypto((wasmModule) =>
       wasmModule.derive_descriptors(mnemonic, network, addressType, accountId),
     );
+    return mapWireDescriptorPairToDomain(wire as WireDescriptorPair);
   },
 
   async createWallet(params: {
@@ -217,9 +229,10 @@ const cryptoService = {
     accountId: number;
   }): Promise<CreateWalletResult> {
     const { mnemonic, network, addressType, accountId } = params;
-    return invokeWasmCrypto((wasmModule) =>
+    const wire = await invokeWasmCrypto((wasmModule) =>
       wasmModule.create_wallet(mnemonic, network, addressType, accountId),
     );
+    return mapWireCreateWalletResultToDomain(wire as WireCreateWalletResult);
   },
 
   async loadWallet(params: {
@@ -298,7 +311,7 @@ const cryptoService = {
       changeAddress,
       applyChangeFreeBump = false,
     } = params;
-    const result = await invokeWasmCrypto((wasmModule) =>
+    const wasmLabSignResponse = await invokeWasmCrypto((wasmModule) =>
       wasmModule.build_and_sign_lab_transaction(
         utxosJson,
         toAddress,
@@ -308,19 +321,9 @@ const cryptoService = {
         applyChangeFreeBump,
       ),
     );
-    const parsed =
-      typeof result === 'string' ? JSON.parse(result) : result;
-    return {
-      signedTxHex: parsed.signed_tx_hex,
-      feeSats: parsed.fee_sats,
-      hasChange: parsed.has_change,
-      finalAmountSats: parsed.final_amount_sats,
-      originalAmountSats: parsed.original_amount_sats,
-      raisedToMinDust: parsed.raised_to_min_dust,
-      bumpedChangeFree: parsed.bumped_change_free,
-      changeFreeBumpAvailable: Boolean(parsed.change_free_bump_available),
-      changeFreeMaxSats: Number(parsed.change_free_max_sats),
-    };
+    return mapWireLabSignResultToDomain(
+      parseWasmJsonWire<WireLabSignResult>(wasmLabSignResponse),
+    );
   },
 
   async draftLabPsbtTransaction(params: {
@@ -339,7 +342,7 @@ const cryptoService = {
       changeAddress,
       applyChangeFreeBump = false,
     } = params;
-    const result = await invokeWasmCrypto((wasmModule) =>
+    const wasmDraftPsbtResponse = await invokeWasmCrypto((wasmModule) =>
       wasmModule.draft_lab_psbt_transaction(
         utxosJson,
         toAddress,
@@ -349,28 +352,20 @@ const cryptoService = {
         applyChangeFreeBump,
       ),
     );
-    const parsed = typeof result === 'string' ? JSON.parse(result) : result;
-    return {
-      psbtBase64: parsed.psbt_base64,
-      finalAmountSats: Number(parsed.final_amount_sats),
-      originalAmountSats: Number(parsed.original_amount_sats),
-      raisedToMinDust: Boolean(parsed.raised_to_min_dust),
-      changeFreeBumpAvailable: Boolean(parsed.change_free_bump_available),
-      changeFreeMaxSats: Number(parsed.change_free_max_sats),
-      feeSats: Number(parsed.fee_sats),
-      ...mapPrepareOrDraftReviewFields(parsed),
-    };
+    return mapWireDraftPsbtResultToDomain(
+      parseWasmJsonWire<WireDraftPsbtResult>(wasmDraftPsbtResponse),
+    );
   },
 
   async getLabChangeAddress(): Promise<string> {
     return invokeWasmCrypto((wasmModule) => wasmModule.get_lab_change_address());
   },
 
-  async labEntityDraftLabPsbtTransaction(
-    params: import('./crypto-api').LabEntityDraftLabPsbtTransactionParams,
+  async labEntityDraftPsbtTransaction(
+    params: import('./crypto-api').LabEntityDraftPsbtTransactionParams,
   ): Promise<import('./crypto-api').DraftLabPsbtTransactionResult> {
-    const result = await invokeWasmCrypto((wasmModule) =>
-      wasmModule.lab_entity_draft_lab_psbt_transaction(
+    const wasmLabEntityDraftPsbtResponse = await invokeWasmCrypto((wasmModule) =>
+      wasmModule.lab_entity_draft_psbt_transaction(
         params.mnemonic,
         params.changesetJson,
         params.network,
@@ -382,24 +377,16 @@ const cryptoService = {
         params.feeRateSatPerVb,
       ),
     );
-    const parsed = typeof result === 'string' ? JSON.parse(result) : result;
-    return {
-      psbtBase64: parsed.psbt_base64,
-      finalAmountSats: Number(parsed.final_amount_sats),
-      originalAmountSats: Number(parsed.original_amount_sats),
-      raisedToMinDust: Boolean(parsed.raised_to_min_dust),
-      changeFreeBumpAvailable: Boolean(parsed.change_free_bump_available),
-      changeFreeMaxSats: Number(parsed.change_free_max_sats),
-      feeSats: Number(parsed.fee_sats),
-      ...mapPrepareOrDraftReviewFields(parsed),
-    };
+    return mapWireDraftPsbtResultToDomain(
+      parseWasmJsonWire<WireDraftPsbtResult>(wasmLabEntityDraftPsbtResponse),
+    );
   },
 
-  async labEntityBuildAndSignLabTransaction(
-    params: import('./crypto-api').LabEntityBuildAndSignLabTransactionParams,
+  async labEntityBuildAndSignTransaction(
+    params: import('./crypto-api').LabEntityBuildAndSignTransactionParams,
   ): Promise<unknown> {
     return invokeWasmCrypto((wasmModule) =>
-      wasmModule.lab_entity_build_and_sign_lab_transaction(
+      wasmModule.lab_entity_build_and_sign_transaction(
         params.mnemonic,
         params.changesetJson,
         params.network,
@@ -415,7 +402,8 @@ const cryptoService = {
   },
 
   async getBalance(): Promise<BalanceInfo> {
-    return invokeWasmCrypto((wasmModule) => wasmModule.get_balance());
+    const wire = await invokeWasmCrypto((wasmModule) => wasmModule.get_balance());
+    return mapWireBalanceToDomain(wire as WireBalanceInfo);
   },
 
   async exportChangeset(): Promise<string> {
@@ -423,25 +411,27 @@ const cryptoService = {
   },
 
   async syncWallet(esploraUrl: string): Promise<SyncResult> {
-    return invokeWasmCrypto((wasmModule) => wasmModule.sync_wallet(esploraUrl));
+    const wire = await invokeWasmCrypto((wasmModule) => wasmModule.sync_wallet(esploraUrl));
+    return mapWireSyncResultToDomain(wire as WireSyncResult);
   },
 
   async fullScanWallet(esploraUrl: string, stopGap: number): Promise<SyncResult> {
-    return invokeWasmCrypto((wasmModule) =>
+    const wire = await invokeWasmCrypto((wasmModule) =>
       wasmModule.full_scan_wallet(esploraUrl, stopGap),
     );
+    return mapWireSyncResultToDomain(wire as WireSyncResult);
   },
 
   async buildTransaction(params: {
-    recipientAddress: string;
+    toAddress: string;
     amountSats: number;
     feeRateSatPerVb: number;
     network: BitcoinNetwork;
   }): Promise<string> {
-    const { recipientAddress, amountSats, feeRateSatPerVb, network } = params;
+    const { toAddress, amountSats, feeRateSatPerVb, network } = params;
     return invokeWasmCrypto((wasmModule) =>
       wasmModule.build_transaction(
-        recipientAddress,
+        toAddress,
         BigInt(amountSats),
         feeRateSatPerVb,
         network,
@@ -450,40 +440,31 @@ const cryptoService = {
   },
 
   async prepareOnchainSendTransaction(params: {
-    recipientAddress: string;
+    toAddress: string;
     amountSats: number;
     feeRateSatPerVb: number;
     network: BitcoinNetwork;
     applyChangeFreeBump?: boolean;
   }): Promise<import('./crypto-api').PrepareOnchainSendResult> {
     const {
-      recipientAddress,
+      toAddress,
       amountSats,
       feeRateSatPerVb,
       network,
       applyChangeFreeBump = false,
     } = params;
-    const raw = await invokeWasmCrypto((wasmModule) =>
+    const wasmPrepareResult = await invokeWasmCrypto((wasmModule) =>
       wasmModule.prepare_onchain_send_transaction(
-        recipientAddress,
+        toAddress,
         BigInt(amountSats),
         feeRateSatPerVb,
         network,
         applyChangeFreeBump,
       ),
     );
-    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
-    return {
-      psbtBase64: parsed.psbt_base64,
-      finalAmountSats: Number(parsed.final_amount_sats),
-      originalAmountSats: Number(parsed.original_amount_sats),
-      raisedToMinDust: Boolean(parsed.raised_to_min_dust),
-      bumpedChangeFree: Boolean(parsed.bumped_change_free),
-      changeFreeBumpAvailable: Boolean(parsed.change_free_bump_available),
-      changeFreeMaxSats: Number(parsed.change_free_max_sats),
-      feeSats: Number(parsed.fee_sats),
-      ...mapPrepareOrDraftReviewFields(parsed),
-    };
+    return mapWirePrepareOnchainSendResultToDomain(
+      parseWasmJsonWire<WirePrepareOnchainSendResult>(wasmPrepareResult),
+    );
   },
 
   async signAndExtractTransaction(psbtBase64: string): Promise<string> {
@@ -502,7 +483,10 @@ const cryptoService = {
   },
 
   async getTransactionList(): Promise<TransactionDetails[]> {
-    return invokeWasmCrypto((wasmModule) => wasmModule.get_transaction_list());
+    const wireList = await invokeWasmCrypto((wasmModule) =>
+      wasmModule.get_transaction_list(),
+    );
+    return mapWireTransactionListToDomain(wireList as WireTransactionDetails[]);
   },
 
   async resolveDescriptorWallet(params: {
@@ -539,7 +523,7 @@ const cryptoService = {
 
     let mnemonicPlain = await requestDecrypt(password, encryptedMnemonic);
     try {
-      const walletResult = await invokeWasmCrypto((wasmModule) =>
+      const walletResultWire = await invokeWasmCrypto((wasmModule) =>
         wasmModule.create_wallet(
           mnemonicPlain,
           targetNetwork,
@@ -547,13 +531,16 @@ const cryptoService = {
           targetAccountId,
         ),
       );
+      const walletResult = mapWireCreateWalletResultToDomain(
+        walletResultWire as WireCreateWalletResult,
+      );
       const descriptorWallet: DescriptorWalletData = {
         network: targetNetwork,
         addressType: targetAddressType,
         accountId: targetAccountId,
-        externalDescriptor: walletResult.external_descriptor,
-        internalDescriptor: walletResult.internal_descriptor,
-        changeSet: walletResult.changeset_json,
+        externalDescriptor: walletResult.externalDescriptor,
+        internalDescriptor: walletResult.internalDescriptor,
+        changeSet: walletResult.changesetJson,
         fullScanDone: false,
       };
       payload.descriptorWallets.push(descriptorWallet);
@@ -622,13 +609,18 @@ const cryptoService = {
     const { password, network, addressType, accountId, wordCount } = params;
     const { mnemonic, walletResult } = await invokeWasmCrypto(async (wasmModule) => {
       const generatedMnemonic = wasmModule.generate_mnemonic(wordCount);
-      const createdWallet = wasmModule.create_wallet(
+      const createdWalletWire = wasmModule.create_wallet(
         generatedMnemonic,
         network,
         addressType,
         accountId,
       );
-      return { mnemonic: generatedMnemonic, walletResult: createdWallet };
+      return {
+        mnemonic: generatedMnemonic,
+        walletResult: mapWireCreateWalletResultToDomain(
+          createdWalletWire as WireCreateWalletResult,
+        ),
+      };
     });
     const payload = buildInitialWalletSecretsPayload({
       network,
@@ -658,8 +650,11 @@ const cryptoService = {
     accountId: number;
   }) {
     const { mnemonic, password, network, addressType, accountId } = params;
-    const walletResult = await invokeWasmCrypto((wasmModule) =>
+    const walletResultWire = await invokeWasmCrypto((wasmModule) =>
       wasmModule.create_wallet(mnemonic, network, addressType, accountId),
+    );
+    const walletResult = mapWireCreateWalletResultToDomain(
+      walletResultWire as WireCreateWalletResult,
     );
     const payload = buildInitialWalletSecretsPayload({
       network,
@@ -681,10 +676,10 @@ const cryptoService = {
   },
 
   async generateNodeId(seed: Uint8Array): Promise<NodeInfo> {
-    const ldk = await getLightningWasm();
+    const lightningWasm = await getLightningWasm();
     const currentTimeSecs = BigInt(Math.floor(Date.now() / 1000));
     const currentTimeNanos = 0;
-    const nodeId = ldk.generate_node_id(seed, currentTimeSecs, currentTimeNanos);
+    const nodeId = lightningWasm.generate_node_id(seed, currentTimeSecs, currentTimeNanos);
     return { nodeId };
   },
 };

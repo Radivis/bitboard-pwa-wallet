@@ -22,6 +22,8 @@ export async function ensureSegwitAddressesFeatureOn(page: Page): Promise<void> 
  * Opens Settings and enables SegWit address options (pickers and badges).
  */
 export async function enableSegwitAddressesFeature(page: Page): Promise<void> {
-  await page.getByRole('link', { name: /settings/i }).click()
+  await page.getByRole('link', { name: /^Settings$/i }).click()
+  await page.waitForURL(/\/settings/)
+  await openSettingsMainTab(page)
   await ensureSegwitAddressesFeatureOn(page)
 }

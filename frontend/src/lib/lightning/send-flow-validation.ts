@@ -35,31 +35,44 @@ export function isBolt11NetworkMismatch(
   return invoiceNetwork !== networkMode
 }
 
-export function needsUserLightningAmount(params: {
+export type NeedsUserLightningAmountInput = {
   isLightningSendMode: boolean
   normalizedRecipient: string
   decodedBolt11: DecodedBolt11Invoice | null
-}): boolean {
-  if (!params.isLightningSendMode) return false
-  if (isLightningAddress(params.normalizedRecipient)) return true
-  if (!isValidBolt11Invoice(params.normalizedRecipient)) return false
-  return params.decodedBolt11 == null || params.decodedBolt11.satoshi === 0
 }
 
-export function resolveLightningPayAmountSats(params: {
+export function needsUserLightningAmount({
+  isLightningSendMode,
+  normalizedRecipient,
+  decodedBolt11,
+}: NeedsUserLightningAmountInput): boolean {
+  if (!isLightningSendMode) return false
+  if (isLightningAddress(normalizedRecipient)) return true
+  if (!isValidBolt11Invoice(normalizedRecipient)) return false
+  return decodedBolt11 == null || decodedBolt11.satoshi === 0
+}
+
+export type ResolveLightningPayAmountSatsInput = {
   isLightningSendMode: boolean
   normalizedRecipient: string
   decodedBolt11: DecodedBolt11Invoice | null
   amountSats: number
-}): number {
-  if (!params.isLightningSendMode) return 0
-  if (isValidBolt11Invoice(params.normalizedRecipient)) {
-    if (params.decodedBolt11 != null && params.decodedBolt11.satoshi > 0) {
-      return params.decodedBolt11.satoshi
+}
+
+export function resolveLightningPayAmountSats({
+  isLightningSendMode,
+  normalizedRecipient,
+  decodedBolt11,
+  amountSats,
+}: ResolveLightningPayAmountSatsInput): number {
+  if (!isLightningSendMode) return 0
+  if (isValidBolt11Invoice(normalizedRecipient)) {
+    if (decodedBolt11 != null && decodedBolt11.satoshi > 0) {
+      return decodedBolt11.satoshi
     }
-    return params.amountSats
+    return amountSats
   }
-  return params.amountSats
+  return amountSats
 }
 
 export function isBolt11DecodeOk(
@@ -70,16 +83,22 @@ export function isBolt11DecodeOk(
   return decodedBolt11 != null
 }
 
-export function isSendRecipientFormatValid(params: {
+export type IsSendRecipientFormatValidInput = {
   normalizedRecipient: string
   networkMode: NetworkMode
   lightningAvailable: boolean
-}): boolean {
+}
+
+export function isSendRecipientFormatValid({
+  normalizedRecipient,
+  networkMode,
+  lightningAvailable,
+}: IsSendRecipientFormatValidInput): boolean {
   return (
-    params.normalizedRecipient.length > 0 &&
-    (isValidAddress(params.normalizedRecipient, params.networkMode) ||
-      (params.lightningAvailable &&
-        isValidLightningDestination(params.normalizedRecipient)))
+    normalizedRecipient.length > 0 &&
+    (isValidAddress(normalizedRecipient, networkMode) ||
+      (lightningAvailable &&
+        isValidLightningDestination(normalizedRecipient)))
   )
 }
 
@@ -103,38 +122,51 @@ export function isLightningAmountInputOk(
   return !needsUserLightningAmount || isValidSendAmountSats(amountSats)
 }
 
-export function isLightningBalanceOk(params: {
+export type IsLightningBalanceOkInput = {
   hasLightningWalletSelected: boolean
   selectedLnBalanceQuerySuccess: boolean
   selectedLnBalanceSats: number | undefined
   lightningPayAmountSats: number
-}): boolean {
+}
+
+export function isLightningBalanceOk({
+  hasLightningWalletSelected,
+  selectedLnBalanceQuerySuccess,
+  selectedLnBalanceSats,
+  lightningPayAmountSats,
+}: IsLightningBalanceOkInput): boolean {
   return (
-    params.hasLightningWalletSelected &&
-    params.selectedLnBalanceQuerySuccess &&
-    params.selectedLnBalanceSats !== undefined &&
-    params.lightningPayAmountSats <= params.selectedLnBalanceSats
+    hasLightningWalletSelected &&
+    selectedLnBalanceQuerySuccess &&
+    selectedLnBalanceSats !== undefined &&
+    lightningPayAmountSats <= selectedLnBalanceSats
   )
 }
 
-export function isLightningAmountlessBolt11PayMsatsExactOk(params: {
+export type IsLightningAmountlessBolt11PayMsatsExactOkInput = {
   needsUserLightningAmount: boolean
   normalizedRecipient: string
   decodedBolt11: DecodedBolt11Invoice | null
   amountSats: number
-}): boolean {
-  if (!params.needsUserLightningAmount) return true
-  if (!isValidBolt11Invoice(params.normalizedRecipient)) return true
-  if (params.decodedBolt11 == null || params.decodedBolt11.satoshi !== 0) {
+}
+
+export function isLightningAmountlessBolt11PayMsatsExactOk({
+  needsUserLightningAmount,
+  normalizedRecipient,
+  decodedBolt11,
+  amountSats,
+}: IsLightningAmountlessBolt11PayMsatsExactOkInput): boolean {
+  if (!needsUserLightningAmount) return true
+  if (!isValidBolt11Invoice(normalizedRecipient)) return true
+  if (decodedBolt11 == null || decodedBolt11.satoshi !== 0) {
     return true
   }
   return (
-    Number.isInteger(params.amountSats) &&
-    params.amountSats <= MAX_SATS_MSAT_AMOUNT_NUMBER
+    Number.isInteger(amountSats) && amountSats <= MAX_SATS_MSAT_AMOUNT_NUMBER
   )
 }
 
-export function canBuildLightningSend(params: {
+export type CanBuildLightningSendInput = {
   normalizedRecipient: string
   amountSats: number
   recipientFormatValid: boolean
@@ -148,33 +180,49 @@ export function canBuildLightningSend(params: {
   selectedLnBalanceQuerySuccess: boolean
   selectedLnBalanceSats: number | undefined
   decodedBolt11: DecodedBolt11Invoice | null
-}): boolean {
+}
+
+export function canBuildLightningSend({
+  normalizedRecipient,
+  amountSats,
+  recipientFormatValid,
+  isLightningSendMode,
+  matchingLightningConnectionsCount,
+  hasLightningWalletSelected,
+  bolt11NetworkMismatch,
+  bolt11DecodeOk,
+  needsUserLightningAmount,
+  lightningPayAmountSats,
+  selectedLnBalanceQuerySuccess,
+  selectedLnBalanceSats,
+  decodedBolt11,
+}: CanBuildLightningSendInput): boolean {
   return (
-    params.recipientFormatValid &&
-    (!params.isLightningSendMode || params.matchingLightningConnectionsCount > 0) &&
+    recipientFormatValid &&
+    (!isLightningSendMode || matchingLightningConnectionsCount > 0) &&
     isLightningPayloadLengthOkForSend(
-      params.isLightningSendMode,
-      params.normalizedRecipient,
+      isLightningSendMode,
+      normalizedRecipient,
     ) &&
-    params.hasLightningWalletSelected &&
-    !params.bolt11NetworkMismatch &&
-    params.bolt11DecodeOk &&
-    isLightningAmountInputOk(params.needsUserLightningAmount, params.amountSats) &&
-    params.lightningPayAmountSats >= 1 &&
+    hasLightningWalletSelected &&
+    !bolt11NetworkMismatch &&
+    bolt11DecodeOk &&
+    isLightningAmountInputOk(needsUserLightningAmount, amountSats) &&
+    lightningPayAmountSats >= 1 &&
     isLightningBalanceOk({
-      hasLightningWalletSelected: params.hasLightningWalletSelected,
-      selectedLnBalanceQuerySuccess: params.selectedLnBalanceQuerySuccess,
-      selectedLnBalanceSats: params.selectedLnBalanceSats,
-      lightningPayAmountSats: params.lightningPayAmountSats,
+      hasLightningWalletSelected,
+      selectedLnBalanceQuerySuccess,
+      selectedLnBalanceSats,
+      lightningPayAmountSats,
     }) &&
     isLightningAmountlessBolt11PayMsatsExactOk({
-      needsUserLightningAmount: params.needsUserLightningAmount,
-      normalizedRecipient: params.normalizedRecipient,
-      decodedBolt11: params.decodedBolt11,
-      amountSats: params.amountSats,
+      needsUserLightningAmount,
+      normalizedRecipient,
+      decodedBolt11,
+      amountSats,
     }) &&
-    (isLightningAddress(params.normalizedRecipient)
-      ? isValidSendAmountSats(params.amountSats)
+    (isLightningAddress(normalizedRecipient)
+      ? isValidSendAmountSats(amountSats)
       : true)
   )
 }

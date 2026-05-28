@@ -39,18 +39,18 @@ export async function updateWalletChangeset(params: {
   const { password, walletId, changesetJson, markFullScanDone } = params
   const { loadedSubWallet, networkMode, addressType, accountId } =
     useWalletStore.getState()
-  const key = loadedSubWallet ?? {
+  const descriptorContext = loadedSubWallet ?? {
     networkMode,
     addressType,
     accountId,
   }
-  const network = toBitcoinNetwork(key.networkMode)
+  const network = toBitcoinNetwork(descriptorContext.networkMode)
   await updateDescriptorWalletChangeset({
     password,
     walletId,
     network,
-    addressType: key.addressType,
-    accountId: key.accountId,
+    addressType: descriptorContext.addressType,
+    accountId: descriptorContext.accountId,
     changesetJson,
     markFullScanDone,
   })
@@ -59,7 +59,7 @@ export async function updateWalletChangeset(params: {
 export function getWalletInitials(name: string): string {
   return name
     .split(' ')
-    .map((w) => w[0])
+    .map((word) => word[0])
     .join('')
     .toUpperCase()
     .slice(0, 2)
@@ -72,22 +72,25 @@ export async function saveCustomEsploraUrl(
   validateEsploraUrl(url, network)
   await ensureMigrated()
   const walletDb = getDatabase()
-  const key = `${CUSTOM_ESPLORA_URL_KEY_PREFIX}${network}`
+  const settingsKey = `${CUSTOM_ESPLORA_URL_KEY_PREFIX}${network}`
 
   const existing = await walletDb
     .selectFrom('settings')
     .select('key')
-    .where('key', '=', key)
+    .where('key', '=', settingsKey)
     .executeTakeFirst()
 
   if (existing) {
     await walletDb
       .updateTable('settings')
       .set({ value: url })
-      .where('key', '=', key)
+      .where('key', '=', settingsKey)
       .execute()
   } else {
-    await walletDb.insertInto('settings').values({ key, value: url }).execute()
+    await walletDb
+      .insertInto('settings')
+      .values({ key: settingsKey, value: url })
+      .execute()
   }
 }
 
@@ -107,13 +110,13 @@ export async function loadCustomEsploraUrl(
 ): Promise<string | null> {
   await ensureMigrated()
   const walletDb = getDatabase()
-  const result = await walletDb
+  const settingsRow = await walletDb
     .selectFrom('settings')
     .select('value')
     .where('key', '=', `${CUSTOM_ESPLORA_URL_KEY_PREFIX}${network}`)
     .executeTakeFirst()
 
-  return result?.value ?? null
+  return settingsRow?.value ?? null
 }
 
 /** Stop-gap for full scan (consecutive unused addresses before stopping). Match import flow. */
@@ -141,9 +144,9 @@ export async function syncActiveWalletAndUpdateState(
 
   if (!esploraUrl) {
     const balance = await getBalance()
-    const txs = await getTransactionList()
+    const transactionList = await getTransactionList()
     setBalance(balance)
-    setTransactions(txs)
+    setTransactions(transactionList)
     return
   }
 
@@ -163,12 +166,12 @@ export async function syncActiveWalletAndUpdateState(
   }
 
   const balance = await getBalance()
-  const txs = await getTransactionList()
+  const transactionList = await getTransactionList()
   setBalance(balance)
-  setTransactions(txs)
+  setTransactions(transactionList)
 }
 
-export type SubWalletEsploraSyncResult = 'completed' | 'sync_failed'
+export type SubWalletEsploraSyncResult = 'completed' | 'syncFailed'
 
 /**
  * After WASM is already loaded for a target sub-wallet, run Esplora sync
@@ -191,14 +194,14 @@ export async function syncLoadedSubWalletWithEsplora(options: {
     invalidateLightningDashboardQueries()
     if (options.fullScanNeeded) {
       const { exportChangeset } = useCryptoStore.getState()
-      const changeset = await exportChangeset()
+      const changesetJson = await exportChangeset()
       await updateDescriptorWalletChangeset({
         password: options.sessionPassword,
         walletId: options.activeWalletId,
         network: options.targetNetwork,
         addressType: options.targetAddressType,
         accountId: options.targetAccountId,
-        changesetJson: changeset,
+        changesetJson,
         markFullScanDone: true,
       })
     }
@@ -220,7 +223,7 @@ export async function syncLoadedSubWalletWithEsplora(options: {
     } catch {
       // Leave balance cleared if WASM is unavailable.
     }
-    return 'sync_failed'
+    return 'syncFailed'
   }
 }
 
@@ -240,11 +243,11 @@ async function finishDashboardSyncAfterStateUpdate(options: {
     return
   }
   const { exportChangeset } = useCryptoStore.getState()
-  const changeset = await exportChangeset()
+  const changesetJson = await exportChangeset()
   await updateWalletChangeset({
     password: options.password,
     walletId: options.activeWalletId,
-    changesetJson: changeset,
+    changesetJson,
     ...(options.markFullScanDone ? { markFullScanDone: true } : {}),
   })
 }
@@ -358,7 +361,7 @@ export async function runFullScanDashboardWalletSync(options: {
 
     const { loadedSubWallet, addressType, accountId } =
       useWalletStore.getState()
-    const triple = loadedSubWallet ?? {
+    const subWalletCoordinates = loadedSubWallet ?? {
       networkMode,
       addressType,
       accountId,
@@ -367,9 +370,9 @@ export async function runFullScanDashboardWalletSync(options: {
     await reloadActiveLoadedSubWalletWithEmptyChain({
       password,
       walletId: activeWalletId,
-      networkMode: triple.networkMode,
-      addressType: triple.addressType,
-      accountId: triple.accountId,
+      networkMode: subWalletCoordinates.networkMode,
+      addressType: subWalletCoordinates.addressType,
+      accountId: subWalletCoordinates.accountId,
     })
 
     await scanAndPersist()
@@ -394,9 +397,9 @@ export async function runImportInitialEsploraSync(): Promise<void> {
     const { getBalance, getTransactionList } = useCryptoStore.getState()
     const { setBalance, setTransactions } = useWalletStore.getState()
     const balance = await getBalance()
-    const txs = await getTransactionList()
+    const transactionList = await getTransactionList()
     setBalance(balance)
-    setTransactions(txs)
+    setTransactions(transactionList)
     setImportInitialSyncErrorMessage(null)
     return
   }
@@ -405,11 +408,11 @@ export async function runImportInitialEsploraSync(): Promise<void> {
 
   if (sessionPassword && activeWalletId != null) {
     const { exportChangeset } = useCryptoStore.getState()
-    const changeset = await exportChangeset()
+    const changesetJson = await exportChangeset()
     await updateWalletChangeset({
       password: sessionPassword,
       walletId: activeWalletId,
-      changesetJson: changeset,
+      changesetJson,
       markFullScanDone: true,
     })
   }
@@ -432,10 +435,10 @@ export async function retryImportInitialEsploraSyncWithWalletStatus(): Promise<v
     toast.success('Initial sync complete')
   } catch (err) {
     setWalletStatus('unlocked')
-    const msg =
+    const userFacingErrorMessage =
       sanitizeErrorMessageForUi(errorMessage(err) ?? String(err)) ||
       'Initial sync failed'
-    setImportInitialSyncErrorMessage(msg)
+    setImportInitialSyncErrorMessage(userFacingErrorMessage)
     showImportInitialSyncFailureToast(err, () => {
       void retryImportInitialEsploraSyncWithWalletStatus()
     })
@@ -598,11 +601,11 @@ export async function loadDescriptorWalletAndSync(params: {
     try {
       await syncActiveWalletAndUpdateState(networkMode, { useFullScan: true })
       invalidateLightningDashboardQueries()
-      const changeset = await exportChangeset()
+      const changesetJson = await exportChangeset()
       await updateWalletChangeset({
         password,
         walletId,
-        changesetJson: changeset,
+        changesetJson,
         markFullScanDone: true,
       })
     } catch (err) {

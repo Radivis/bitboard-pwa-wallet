@@ -11,8 +11,8 @@ import { useActiveWalletLoadQuery } from '@/hooks/useActiveWalletLoadQuery'
  * the previous imperative auto-unlock effect in AppInitializer.
  */
 export function useActiveWalletSubWalletBootstrap(): void {
-  const sessionPassword = useSessionStore((s) => s.password)
-  const setWalletStatus = useWalletStore((s) => s.setWalletStatus)
+  const sessionPassword = useSessionStore((sessionState) => sessionState.password)
+  const setWalletStatus = useWalletStore((walletState) => walletState.setWalletStatus)
   const query = useActiveWalletLoadQuery()
 
   useEffect(() => {

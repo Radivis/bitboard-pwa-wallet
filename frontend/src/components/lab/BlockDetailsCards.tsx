@@ -23,7 +23,7 @@ import { isCoinbase } from '@/lib/lab/lab-operations'
 import { netMovedSatsForBlock } from '@/lib/lab/lab-tx-net-moved'
 import { useLabBlockTransactionsPage } from '@/hooks/useLabPaginatedQueries'
 import { LAB_CARD_PAGE_SIZE } from '@/lib/lab/lab-paginated-queries'
-import type { AddressType } from '@/lib/wallet/wallet-domain-types'
+import type { AddressType, WalletSummary } from '@/lib/wallet/wallet-domain-types'
 import { useWalletStore } from '@/stores/walletStore'
 
 function HeaderField({ label, value }: { label: string; value: string }) {
@@ -113,18 +113,20 @@ export function LabBlockMetadataCard({
   wallets,
 }: {
   block: LabBlockDetails
-  wallets: Array<{ wallet_id: number; name: string }>
+  wallets: WalletSummary[]
 }) {
   const { data: labState } = useLabChainStateQuery()
   const entities = labState?.entities ?? []
   const txDetails = labState?.txDetails ?? []
   const netMovedSats = netMovedSatsForBlock(txDetails, block.metadata.height)
-  const mineOp = labState?.mineOperations?.find((m) => m.height === block.metadata.height)
+  const mineOperation = labState?.mineOperations?.find(
+    (mineOperationRecord) => mineOperationRecord.height === block.metadata.height,
+  )
   const weightAtMiningRecorded =
-    mineOp?.blockWeightLimitWu != null &&
-    mineOp?.nonCoinbaseWeightUsedWu != null &&
-    Number.isFinite(mineOp.blockWeightLimitWu) &&
-    Number.isFinite(mineOp.nonCoinbaseWeightUsedWu)
+    mineOperation?.blockWeightLimitWu != null &&
+    mineOperation?.nonCoinbaseWeightUsedWu != null &&
+    Number.isFinite(mineOperation.blockWeightLimitWu) &&
+    Number.isFinite(mineOperation.nonCoinbaseWeightUsedWu)
 
   return (
     <InfomodeWrapper
@@ -168,11 +170,11 @@ export function LabBlockMetadataCard({
             <span className="text-muted-foreground">Net moved:</span>{' '}
             <BitcoinAmountDisplay amountSats={netMovedSats} size="sm" />
           </p>
-          {weightAtMiningRecorded && mineOp != null ? (
+          {weightAtMiningRecorded && mineOperation != null ? (
             <p>
               <span className="text-muted-foreground">Non-coinbase weight (at mining):</span>{' '}
               <span className="font-mono tabular-nums">
-                {mineOp.nonCoinbaseWeightUsedWu} / {mineOp.blockWeightLimitWu} WU
+                {mineOperation.nonCoinbaseWeightUsedWu} / {mineOperation.blockWeightLimitWu} WU
               </span>
             </p>
           ) : null}
@@ -191,7 +193,7 @@ const labBlockTxRowLinkOverlayClassName =
 
 function labBlockTxList(
   txs: LabBlockDetails['transactions'],
-  wallets: Array<{ wallet_id: number; name: string }>,
+  wallets: WalletSummary[],
   entities: readonly {
     labEntityId: number
     entityName: string | null
@@ -203,8 +205,8 @@ function labBlockTxList(
     <div className="grid grid-cols-[repeat(auto-fill,minmax(9.5rem,1fr))] gap-3">
       {txs.map((tx) => {
         const coinbaseNoTxPageYet = isTemplate && isCoinbase(tx)
-        const isCb = isCoinbase(tx)
-        const row = (
+        const isCoinbaseTx = isCoinbase(tx)
+        const transactionCard = (
           <LabTxCard
             txid={tx.txid}
             sender={tx.sender}
@@ -213,12 +215,12 @@ function labBlockTxList(
             feeSats={tx.feeSats}
             wallets={wallets}
             entities={entities}
-            variant={isCb ? 'coinbase' : 'transfer'}
+            variant={isCoinbaseTx ? 'coinbase' : 'transfer'}
           />
         )
         return coinbaseNoTxPageYet ? (
           <div key={tx.txid} className={labBlockTxCellClassName}>
-            {row}
+            {transactionCard}
           </div>
         ) : (
           <div key={tx.txid} className={`relative ${labBlockTxCellClassName}`}>
@@ -228,7 +230,7 @@ function labBlockTxList(
               className={labBlockTxRowLinkOverlayClassName}
               aria-label={`Open transaction ${truncateAddress(tx.txid)}`}
             />
-            <div className={labBlockTxRowInnerClassName}>{row}</div>
+            <div className={labBlockTxRowInnerClassName}>{transactionCard}</div>
           </div>
         )
       })}
@@ -241,12 +243,12 @@ export function LabBlockTransactionsCard({
   wallets,
 }: {
   block: LabBlockDetails
-  wallets: Array<{ wallet_id: number; name: string }>
+  wallets: WalletSummary[]
 }) {
   const [pageIndex, setPageIndex] = useState(0)
   const isTemplate = block.isTemplate
   const blockHeight = block.metadata.height
-  const labNetworkEnabled = useWalletStore((s) => s.networkMode === 'lab')
+  const labNetworkEnabled = useWalletStore((walletState) => walletState.networkMode === 'lab')
   const { data: labState } = useLabChainStateQuery()
   const entities = labState?.entities ?? []
 

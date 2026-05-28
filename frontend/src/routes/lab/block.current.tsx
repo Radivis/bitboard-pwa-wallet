@@ -22,19 +22,19 @@ export const Route = createFileRoute('/lab/block/current')({
 function LabCurrentBlockPage() {
   const [block, setBlock] = useState<LabBlockDetails | null | undefined>(undefined)
   const { data: wallets = [] } = useWallets()
-  const activeWalletId = useWalletStore((s) => s.activeWalletId)
-  const currentAddress = useWalletStore((s) => s.currentAddress)
+  const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
+  const currentAddress = useWalletStore((walletState) => walletState.currentAddress)
   const labAddressType = useWalletStore(selectCommittedAddressType)
-  const lab = useLabIndexPageData()
+  const labPageData = useLabIndexPageData()
 
   const loadCurrentBlockTemplate = useCallback(async () => {
     try {
       const details = await labOpGetCurrentBlockTemplate({
-        ownerType: lab.ownerType,
+        ownerType: labPageData.ownerType,
         targetAddress: '',
         ownerLabEntityId:
-          lab.ownerType === LabOwnerType.LabEntity
-            ? lab.selectedLabEntityId ?? undefined
+          labPageData.ownerType === LabOwnerType.LabEntity
+            ? labPageData.selectedLabEntityId ?? undefined
             : undefined,
         ownerWalletId: activeWalletId ?? undefined,
         walletCurrentAddress: currentAddress,
@@ -45,8 +45,8 @@ function LabCurrentBlockPage() {
       setBlock(null)
     }
   }, [
-    lab.ownerType,
-    lab.selectedLabEntityId,
+    labPageData.ownerType,
+    labPageData.selectedLabEntityId,
     activeWalletId,
     currentAddress,
     labAddressType,

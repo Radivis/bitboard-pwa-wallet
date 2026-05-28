@@ -5,8 +5,13 @@ export const Route = createFileRoute('/wallet/management')({
   validateSearch: (
     search: Record<string, unknown>,
   ): { openDelete?: boolean } => {
-    const raw = search.openDelete
-    if (raw === true || raw === 'true' || raw === 1 || raw === '1') {
+    const openDeleteFromSearch = search.openDelete
+    if (
+      openDeleteFromSearch === true ||
+      openDeleteFromSearch === 'true' ||
+      openDeleteFromSearch === 1 ||
+      openDeleteFromSearch === '1'
+    ) {
       return { openDelete: true }
     }
     return {}

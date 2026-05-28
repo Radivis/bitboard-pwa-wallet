@@ -72,20 +72,20 @@ fn wallet_session_get_balance_without_active_wallet() {
     let mnemonic = generate_mnemonic(12).expect("generate failed");
     let descriptors =
         derive_descriptors(&mnemonic, "testnet", "taproot", 0).expect("derive failed");
-    let external = js_sys::Reflect::get(&descriptors, &JsValue::from_str("external"))
-        .expect("external descriptor")
+    let external = js_sys::Reflect::get(&descriptors, &JsValue::from_str("external_descriptor"))
+        .expect("external_descriptor")
         .as_string()
-        .expect("external string");
-    let internal = js_sys::Reflect::get(&descriptors, &JsValue::from_str("internal"))
-        .expect("internal descriptor")
+        .expect("external_descriptor string");
+    let internal = js_sys::Reflect::get(&descriptors, &JsValue::from_str("internal_descriptor"))
+        .expect("internal_descriptor")
         .as_string()
-        .expect("internal string");
+        .expect("internal_descriptor string");
 
     let session = WalletSession::new(&external, &internal, "testnet", "{}", true)
         .expect("open wallet session");
     let balance = session.get_balance().expect("session get_balance");
-    let confirmed =
-        js_sys::Reflect::get(&balance, &JsValue::from_str("confirmed")).expect("missing confirmed");
+    let confirmed = js_sys::Reflect::get(&balance, &JsValue::from_str("confirmed_sats"))
+        .expect("missing confirmed_sats");
     assert_eq!(confirmed.as_f64().unwrap(), 0.0);
 
     let global_balance = get_balance();
@@ -121,13 +121,13 @@ fn derive_descriptors_returns_valid_jsvalue() {
     let mnemonic = generate_mnemonic(12).expect("generate failed");
     let result = derive_descriptors(&mnemonic, "testnet", "taproot", 0).expect("derive failed");
 
-    let pair: serde_wasm_bindgen::Serializer = serde_wasm_bindgen::Serializer::json_compatible();
-    let _ = pair;
+    let json_compatible_serializer = serde_wasm_bindgen::Serializer::json_compatible();
+    let _ = json_compatible_serializer;
 
-    let external = js_sys::Reflect::get(&result, &JsValue::from_str("external"))
-        .expect("missing 'external' field");
-    let internal = js_sys::Reflect::get(&result, &JsValue::from_str("internal"))
-        .expect("missing 'internal' field");
+    let external = js_sys::Reflect::get(&result, &JsValue::from_str("external_descriptor"))
+        .expect("missing 'external_descriptor' field");
+    let internal = js_sys::Reflect::get(&result, &JsValue::from_str("internal_descriptor"))
+        .expect("missing 'internal_descriptor' field");
 
     assert!(external.is_string(), "external should be a string");
     assert!(internal.is_string(), "internal should be a string");
@@ -185,12 +185,16 @@ fn get_balance_returns_jsvalue_after_wallet_creation() {
     create_test_wallet();
     let balance = get_balance().expect("get_balance failed");
 
-    let confirmed =
-        js_sys::Reflect::get(&balance, &JsValue::from_str("confirmed")).expect("missing confirmed");
-    let total = js_sys::Reflect::get(&balance, &JsValue::from_str("total")).expect("missing total");
+    let confirmed = js_sys::Reflect::get(&balance, &JsValue::from_str("confirmed_sats"))
+        .expect("missing confirmed_sats");
+    let total = js_sys::Reflect::get(&balance, &JsValue::from_str("total_sats"))
+        .expect("missing total_sats");
 
-    assert!(confirmed.as_f64().is_some(), "confirmed should be a number");
-    assert!(total.as_f64().is_some(), "total should be a number");
+    assert!(
+        confirmed.as_f64().is_some(),
+        "confirmed_sats should be a number"
+    );
+    assert!(total.as_f64().is_some(), "total_sats should be a number");
     assert_eq!(confirmed.as_f64().unwrap(), 0.0);
     assert_eq!(total.as_f64().unwrap(), 0.0);
 }

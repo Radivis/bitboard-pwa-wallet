@@ -25,12 +25,12 @@ export async function withPersistedChainMismatchRetry<
   params: P,
 ): Promise<{ result: T; usedEmptyChainFallback: boolean }> {
   try {
-    const result = await operation(params)
-    return { result, usedEmptyChainFallback: false }
+    const primaryOperationOutcome = await operation(params)
+    return { result: primaryOperationOutcome, usedEmptyChainFallback: false }
   } catch (err) {
     if (params.useEmptyChain) throw err
     if (!isPersistedChainMismatchError(err)) throw err
-    const result = await operation({ ...params, useEmptyChain: true })
-    return { result, usedEmptyChainFallback: true }
+    const fallbackOperationOutcome = await operation({ ...params, useEmptyChain: true })
+    return { result: fallbackOperationOutcome, usedEmptyChainFallback: true }
   }
 }

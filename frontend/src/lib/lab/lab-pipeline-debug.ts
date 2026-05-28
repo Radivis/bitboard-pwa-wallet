@@ -21,12 +21,12 @@
  *   - loadFromDb after mine with empty utxos → DB/worker desync; coordinator + persist order
  *
  * Manual WASM check (DevTools, after WASM loaded):
- *   const M = await import('@/wasm-pkg/bitboard_crypto.js'); await M.default?.();
- *   const a = M.lab_generate_keypair(); const addr = a.address;
- *   const spk = M.lab_address_to_script_pubkey_hex(addr);
- *   const hex = M.lab_mine_block('', 0, spk, [], 312500000n, 0n);
- *   const fx = M.lab_block_effects(hex);
- *   console.log(fx.new_utxos?.[0]?.amount_sats);  // expect 312500000
+ *   const wasmModule = await import('@/wasm-pkg/bitboard_crypto.js'); await wasmModule.default?.();
+ *   const keypair = wasmModule.lab_generate_keypair(); const coinbaseAddress = keypair.address;
+ *   const scriptPubkeyHex = wasmModule.lab_address_to_script_pubkey_hex(coinbaseAddress);
+ *   const blockHex = wasmModule.lab_mine_block('', 0, scriptPubkeyHex, [], 312500000n, 0n);
+ *   const blockEffects = wasmModule.lab_block_effects(blockHex);
+ *   console.log(blockEffects.new_utxos?.[0]?.amount_sats);  // expect 312500000
  */
 
 const STORAGE_KEY = 'bitboard_lab_debug'
@@ -44,7 +44,10 @@ export function isLabPipelineDebugEnabled(): boolean {
 }
 
 function totalSats(utxos: { amountSats: number }[]): number {
-  return utxos.reduce((s, u) => s + (Number(u.amountSats) || 0), 0)
+  return utxos.reduce(
+    (totalSats, utxo) => totalSats + (Number(utxo.amountSats) || 0),
+    0,
+  )
 }
 
 export function labPipelineDebugLog(

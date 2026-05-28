@@ -34,10 +34,10 @@ export function AppInitializer({ children }: AppInitializerProps) {
   const navigate = useNavigate()
   const location = useLocation()
   const { data: wallets, isLoading, isFetching } = useWallets()
-  const activeWalletId = useWalletStore((s) => s.activeWalletId)
-  const setActiveWallet = useWalletStore((s) => s.setActiveWallet)
-  const networkMode = useWalletStore((s) => s.networkMode)
-  const sessionPassword = useSessionStore((s) => s.password)
+  const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
+  const setActiveWallet = useWalletStore((walletState) => walletState.setActiveWallet)
+  const networkMode = useWalletStore((walletState) => walletState.networkMode)
+  const sessionPassword = useSessionStore((sessionState) => sessionState.password)
 
   useLayoutEffect(() => {
     useWalletCryptoSessionPathGateStore.getState().setPathname(location.pathname)
@@ -53,9 +53,9 @@ export function AppInitializer({ children }: AppInitializerProps) {
     if (networkMode !== 'lab') return
     prefetchLabChainState(appQueryClient).catch((err) => {
       console.error('Lab chain prefetch failed:', err)
-      const msg =
+      const labPrefetchErrorMessage =
         err instanceof Error ? err.message : String(err) || 'Unknown error'
-      toast.error(`Failed to init lab: ${msg}`)
+      toast.error(`Failed to init lab: ${labPrefetchErrorMessage}`)
     })
   }, [networkMode])
 
@@ -89,7 +89,7 @@ export function AppInitializer({ children }: AppInitializerProps) {
     }
 
     if (wallets.length === 1 && !activeWalletId) {
-      setActiveWallet(wallets[0].wallet_id)
+      setActiveWallet(wallets[0].walletId)
       if (isWalletsRoute) {
         navigate({ to: '/wallet' })
       }

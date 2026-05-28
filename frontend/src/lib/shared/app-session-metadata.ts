@@ -8,16 +8,16 @@ export const APP_SETTINGS_LAST_OPENED_AT_KEY = 'app_last_opened_at'
  */
 export async function getAppLastOpenedAt(): Promise<Date | null> {
   await ensureMigrated()
-  const row = await getDatabase()
+  const settingsRecord = await getDatabase()
     .selectFrom('settings')
     .select('value')
     .where('key', '=', APP_SETTINGS_LAST_OPENED_AT_KEY)
     .executeTakeFirst()
 
-  if (!row) {
+  if (!settingsRecord) {
     return null
   }
-  const parsed = new Date(row.value)
+  const parsed = new Date(settingsRecord.value)
   return Number.isNaN(parsed.getTime()) ? null : parsed
 }
 

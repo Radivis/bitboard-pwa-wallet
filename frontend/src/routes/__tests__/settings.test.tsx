@@ -49,7 +49,7 @@ describe('Settings routes', () => {
     })
 
     it('shows Address Type card when SegWit addresses feature is enabled', () => {
-      featureStoreState.segwitAddressesEnabled = true
+      featureStoreState.isSegwitAddressesEnabled = true
       renderWithProviders(<SettingsMainPage />)
       expect(screen.getByText('Address Type')).toBeInTheDocument()
       expect(
@@ -99,7 +99,7 @@ describe('Settings routes', () => {
     })
 
     it('address type selector shows confirmation when wallet exists', async () => {
-      featureStoreState.segwitAddressesEnabled = true
+      featureStoreState.isSegwitAddressesEnabled = true
       const user = userEvent.setup()
       renderWithProviders(<SettingsMainPage />)
 
@@ -148,13 +148,13 @@ describe('Settings routes', () => {
     })
 
     it('hides Regtest network button when Regtest mode is disabled', () => {
-      featureStoreState.regtestModeEnabled = false
+      featureStoreState.isRegtestModeEnabled = false
       renderWithProviders(<SettingsMainPage />)
       expect(screen.queryByRole('button', { name: 'Regtest' })).not.toBeInTheDocument()
     })
 
     it('shows Regtest network button when Regtest mode is enabled', () => {
-      featureStoreState.regtestModeEnabled = true
+      featureStoreState.isRegtestModeEnabled = true
       renderWithProviders(<SettingsMainPage />)
       expect(screen.getByRole('button', { name: 'Regtest' })).toBeInTheDocument()
     })
@@ -173,7 +173,7 @@ describe('Settings routes', () => {
     it('shows receiving descriptor when a wallet exists and session is unlocked', async () => {
       const user = userEvent.setup()
       mockWalletsState.data = [
-        { wallet_id: 1, name: 'Test', created_at: new Date().toISOString() },
+        { walletId: 1, name: 'Test', createdAt: new Date().toISOString() },
       ]
       sessionStoreState.password = 'testpass'
       renderWithProviders(<SettingsMainPage />)
@@ -190,7 +190,7 @@ describe('Settings routes', () => {
 
     it('shows unlock hint for receiving descriptor when session has no password', () => {
       mockWalletsState.data = [
-        { wallet_id: 1, name: 'Test', created_at: new Date().toISOString() },
+        { walletId: 1, name: 'Test', createdAt: new Date().toISOString() },
       ]
       sessionStoreState.password = null
       renderWithProviders(<SettingsMainPage />)
@@ -219,7 +219,7 @@ describe('Settings routes', () => {
 
     it('enables Change app password when at least one wallet exists', () => {
       mockWalletsState.data = [
-        { wallet_id: 1, name: 'Test', created_at: new Date().toISOString() },
+        { walletId: 1, name: 'Test', createdAt: new Date().toISOString() },
       ]
       renderWithProviders(<SettingsSecurityPage />)
       expect(screen.getByRole('button', { name: 'Change app password' })).toBeEnabled()
@@ -264,7 +264,7 @@ describe('Settings routes', () => {
 
     it('disables Delete all app data when wallets exist but the wallet is locked', () => {
       mockWalletsState.data = [
-        { wallet_id: 1, name: 'Test', created_at: new Date().toISOString() },
+        { walletId: 1, name: 'Test', createdAt: new Date().toISOString() },
       ]
       walletStoreState.walletStatus = 'locked'
       renderWithProviders(<SettingsSecurityPage />)
@@ -302,7 +302,7 @@ describe('Settings routes', () => {
       await expect(activate).toBeEnabled()
       await user.click(activate)
 
-      expect(featureStoreState.setMainnetAccessEnabled).toHaveBeenCalledWith(true)
+      expect(featureStoreState.setIsMainnetAccessEnabled).toHaveBeenCalledWith(true)
     })
   })
 

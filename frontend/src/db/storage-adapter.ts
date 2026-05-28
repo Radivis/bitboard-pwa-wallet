@@ -16,12 +16,12 @@ export const sqliteStorage: StateStorage = {
   async getItem(key: string): Promise<string | null> {
     if (sqliteStorageTeardownBlocked) return null
     await ensureMigrated()
-    const row = await getDatabase()
+    const settingsRecord = await getDatabase()
       .selectFrom('settings')
       .select('value')
       .where('key', '=', key)
       .executeTakeFirst()
-    return row?.value ?? null
+    return settingsRecord?.value ?? null
   },
 
   async setItem(key: string, value: string): Promise<void> {

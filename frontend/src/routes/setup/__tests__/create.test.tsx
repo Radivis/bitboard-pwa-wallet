@@ -131,7 +131,7 @@ function createWalletCryptoResult(overrides: {
   return {
     encryptedPayload: blob,
     encryptedMnemonic: blob,
-    walletResult: { first_address: 'addr' },
+    walletResult: { firstAddress: 'addr' },
     mnemonicForBackup: overrides.mnemonicForBackup ?? TEST_MNEMONIC_12,
     ...overrides,
   }

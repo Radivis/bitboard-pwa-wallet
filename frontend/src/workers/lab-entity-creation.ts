@@ -1,6 +1,11 @@
 import type { AddressType } from '@/lib/wallet/wallet-domain-types'
-import { parseWasmObject, state } from './lab-worker-state'
+import { labWorkerState } from './lab-worker-state'
 import type { LabEntityRecord } from './lab-api'
+import {
+  mapWireCreateWalletResultToDomain,
+  parseWasmJsonWire,
+} from './crypto-wire-mappers'
+import type { WireCreateWalletResult } from './crypto-wire-types'
 
 type WasmModule = Awaited<ReturnType<typeof import('./lab-wasm-loader').getWasm>>
 
@@ -24,14 +29,16 @@ export function createAndRegisterLabEntityFromWasm(
     labAddressType,
     0,
   )
-  const cr = parseWasmObject(createdRaw)
+  const walletCreationResult = mapWireCreateWalletResultToDomain(
+    parseWasmJsonWire<WireCreateWalletResult>(createdRaw),
+  )
   const entity: LabEntityRecord = {
     labEntityId,
     entityName,
     mnemonic,
-    changesetJson: String(cr.changeset_json ?? ''),
-    externalDescriptor: String(cr.external_descriptor ?? ''),
-    internalDescriptor: String(cr.internal_descriptor ?? ''),
+    changesetJson: walletCreationResult.changesetJson,
+    externalDescriptor: walletCreationResult.externalDescriptor,
+    internalDescriptor: walletCreationResult.internalDescriptor,
     network: labNetwork,
     addressType: labAddressType,
     accountId: 0,
@@ -39,8 +46,8 @@ export function createAndRegisterLabEntityFromWasm(
     updatedAt: nowIso,
     isDead: false,
   }
-  state.entities.push(entity)
-  const coinbaseAddress = String(cr.first_address ?? '')
+  labWorkerState.entities.push(entity)
+  const coinbaseAddress = walletCreationResult.firstAddress
   if (!coinbaseAddress) {
     throw new Error(noAddressErrorMessage)
   }

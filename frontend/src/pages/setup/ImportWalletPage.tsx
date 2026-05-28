@@ -38,19 +38,19 @@ export function ImportWalletPage() {
   const [isValid, setIsValid] = useState<boolean | null>(null)
 
   const { data: wallets, isLoading: walletsLoading } = useWallets()
-  const sessionPassword = useSessionStore((s) => s.password)
+  const sessionPassword = useSessionStore((sessionState) => sessionState.password)
 
-  const validateMnemonic = useCryptoStore((s) => s.validateMnemonic)
-  const importWalletAndEncryptSecrets = useCryptoStore((s) => s.importWalletAndEncryptSecrets)
-  const networkMode = useWalletStore((s) => s.networkMode)
-  const addressType = useWalletStore((s) => s.addressType)
-  const accountId = useWalletStore((s) => s.accountId)
-  const setActiveWallet = useWalletStore((s) => s.setActiveWallet)
-  const setWalletStatus = useWalletStore((s) => s.setWalletStatus)
-  const setCurrentAddress = useWalletStore((s) => s.setCurrentAddress)
-  const commitLoadedSubWallet = useWalletStore((s) => s.commitLoadedSubWallet)
+  const validateMnemonic = useCryptoStore((cryptoState) => cryptoState.validateMnemonic)
+  const importWalletAndEncryptSecrets = useCryptoStore((cryptoState) => cryptoState.importWalletAndEncryptSecrets)
+  const networkMode = useWalletStore((walletState) => walletState.networkMode)
+  const addressType = useWalletStore((walletState) => walletState.addressType)
+  const accountId = useWalletStore((walletState) => walletState.accountId)
+  const setActiveWallet = useWalletStore((walletState) => walletState.setActiveWallet)
+  const setWalletStatus = useWalletStore((walletState) => walletState.setWalletStatus)
+  const setCurrentAddress = useWalletStore((walletState) => walletState.setCurrentAddress)
+  const commitLoadedSubWallet = useWalletStore((walletState) => walletState.commitLoadedSubWallet)
   const setImportInitialSyncErrorMessage = useWalletStore(
-    (s) => s.setImportInitialSyncErrorMessage,
+    (walletState) => walletState.setImportInitialSyncErrorMessage,
   )
   const addWallet = useAddWallet()
   const queryClient = useQueryClient()
@@ -76,8 +76,8 @@ export function ImportWalletPage() {
     const timer = setTimeout(async () => {
       try {
         setValidating(true)
-        const valid = await validateMnemonic(mnemonic)
-        setIsValid(valid)
+        const mnemonicIsValid = await validateMnemonic(mnemonic)
+        setIsValid(mnemonicIsValid)
       } catch {
         setIsValid(false)
       } finally {
@@ -100,10 +100,10 @@ export function ImportWalletPage() {
       setWalletStatus('unlocked')
     } catch (err: unknown) {
       setWalletStatus('unlocked')
-      const msg =
+      const syncErrorMessage =
         sanitizeErrorMessageForUi(errorMessage(err) ?? String(err)) ||
         'Initial sync failed'
-      setImportInitialSyncErrorMessage(msg)
+      setImportInitialSyncErrorMessage(syncErrorMessage)
       showImportInitialSyncFailureToast(err, () => {
         void retryImportInitialEsploraSyncWithWalletStatus()
       })
@@ -153,7 +153,7 @@ export function ImportWalletPage() {
       }
 
       setActiveWallet(walletId)
-      setCurrentAddress(walletResult.first_address)
+      setCurrentAddress(walletResult.firstAddress)
       commitLoadedSubWallet({
         networkMode,
         addressType,

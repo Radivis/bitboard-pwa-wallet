@@ -37,9 +37,9 @@ pub fn create_wallet_with_bdk_network(
     internal_descriptor: &str,
     bdk_network: BdkNetwork,
 ) -> Result<Wallet, CryptoError> {
-    let external = external_descriptor.to_string();
-    let internal = internal_descriptor.to_string();
-    Wallet::create(external, internal)
+    let external_descriptor_string = external_descriptor.to_string();
+    let internal_descriptor_string = internal_descriptor.to_string();
+    Wallet::create(external_descriptor_string, internal_descriptor_string)
         .network(bdk_network)
         .create_wallet_no_persist()
         .map_err(|e| CryptoError::Wallet(e.to_string()))
@@ -58,8 +58,8 @@ pub fn load_wallet(
     network: BitcoinNetwork,
     changeset: ChangeSet,
 ) -> Result<Wallet, CryptoError> {
-    let external = external_descriptor.to_string();
-    let internal = internal_descriptor.to_string();
+    let external_descriptor_string = external_descriptor.to_string();
+    let internal_descriptor_string = internal_descriptor.to_string();
 
     let networks_to_try: Vec<BdkNetwork> = match network {
         BitcoinNetwork::Testnet => vec![bdk_network_for_app(network), BdkNetwork::Testnet],
@@ -68,15 +68,21 @@ pub fn load_wallet(
 
     let mut last_err: Option<CryptoError> = None;
 
-    for check in networks_to_try {
+    for network_candidate in networks_to_try {
         match Wallet::load()
-            .descriptor(KeychainKind::External, Some(external.clone()))
-            .descriptor(KeychainKind::Internal, Some(internal.clone()))
+            .descriptor(
+                KeychainKind::External,
+                Some(external_descriptor_string.clone()),
+            )
+            .descriptor(
+                KeychainKind::Internal,
+                Some(internal_descriptor_string.clone()),
+            )
             .extract_keys()
-            .check_network(check)
+            .check_network(network_candidate)
             .load_wallet_no_persist(changeset.clone())
         {
-            Ok(Some(w)) => return Ok(w),
+            Ok(Some(loaded_wallet)) => return Ok(loaded_wallet),
             Ok(None) => {
                 last_err = Some(CryptoError::Wallet(
                     "Wallet could not be loaded from changeset".to_string(),
@@ -115,11 +121,11 @@ pub fn get_current_address(wallet: &Wallet) -> String {
 pub fn get_balance(wallet: &Wallet) -> BalanceInfo {
     let balance = wallet.balance();
     BalanceInfo {
-        confirmed: balance.confirmed.to_sat(),
-        trusted_pending: balance.trusted_pending.to_sat(),
-        untrusted_pending: balance.untrusted_pending.to_sat(),
-        immature: balance.immature.to_sat(),
-        total: balance.total().to_sat(),
+        confirmed_sats: balance.confirmed.to_sat(),
+        trusted_pending_sats: balance.trusted_pending.to_sat(),
+        untrusted_pending_sats: balance.untrusted_pending.to_sat(),
+        immature_sats: balance.immature.to_sat(),
+        total_sats: balance.total().to_sat(),
     }
 }
 
@@ -157,7 +163,7 @@ pub fn get_transaction_list(wallet: &Wallet) -> Vec<TransactionDetails> {
                 txid: txid.to_string(),
                 sent_sats: sent.to_sat(),
                 received_sats: received.to_sat(),
-                fee_sats: fee.map(|f| f.to_sat()),
+                fee_sats: fee.map(|fee_amount| fee_amount.to_sat()),
                 confirmation_block_height,
                 confirmation_time,
                 is_confirmed,

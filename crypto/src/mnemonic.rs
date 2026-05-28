@@ -9,7 +9,7 @@ use crate::error::CryptoError;
 /// Only 12 and 24 word mnemonics are supported (per wallet spec).
 /// Returns the mnemonic as a space-separated string.
 pub fn generate_mnemonic(word_count: u32) -> Result<String, CryptoError> {
-    let wc = match word_count {
+    let word_count_enum = match word_count {
         12 => WordCount::Words12,
         24 => WordCount::Words24,
         _ => {
@@ -21,12 +21,14 @@ pub fn generate_mnemonic(word_count: u32) -> Result<String, CryptoError> {
     };
 
     let generated =
-        <Mnemonic as GeneratableKey<Tap>>::generate((wc, Language::English)).map_err(|e| {
-            CryptoError::Mnemonic(
-                e.map(|err| err.to_string())
-                    .unwrap_or_else(|| "Mnemonic generation failed".to_string()),
-            )
-        })?;
+        <Mnemonic as GeneratableKey<Tap>>::generate((word_count_enum, Language::English)).map_err(
+            |e| {
+                CryptoError::Mnemonic(
+                    e.map(|err| err.to_string())
+                        .unwrap_or_else(|| "Mnemonic generation failed".to_string()),
+                )
+            },
+        )?;
 
     Ok(generated.to_string())
 }

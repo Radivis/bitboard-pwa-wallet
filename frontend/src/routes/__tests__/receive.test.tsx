@@ -42,8 +42,8 @@ vi.mock('@/stores/walletStore', async () => {
 })
 
 const receiveFeatureState = {
-  lightningEnabled: false,
-  segwitAddressesEnabled: true,
+  isLightningEnabled: false,
+  isSegwitAddressesEnabled: true,
 }
 
 vi.mock('@/stores/featureStore', () => ({
@@ -81,7 +81,7 @@ describe('ReceivePage', () => {
       'fetch',
       vi.fn().mockResolvedValue({ ok: true, status: 200 }),
     )
-    receiveFeatureState.segwitAddressesEnabled = true
+    receiveFeatureState.isSegwitAddressesEnabled = true
     walletStoreState = {
       activeWalletId: 1,
       walletStatus: 'unlocked',
@@ -163,13 +163,13 @@ describe('ReceivePage', () => {
   })
 
   it('address type badge shows correct type when SegWit addresses feature is on', () => {
-    receiveFeatureState.segwitAddressesEnabled = true
+    receiveFeatureState.isSegwitAddressesEnabled = true
     renderWithProviders(<ReceivePage />)
     expect(screen.getByText('Taproot (BIP86)')).toBeInTheDocument()
   })
 
   it('hides address type badge when SegWit addresses feature is off', () => {
-    receiveFeatureState.segwitAddressesEnabled = false
+    receiveFeatureState.isSegwitAddressesEnabled = false
     renderWithProviders(<ReceivePage />)
     expect(screen.queryByText('Taproot (BIP86)')).not.toBeInTheDocument()
   })

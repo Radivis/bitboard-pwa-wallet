@@ -9,22 +9,22 @@ const MAX_UI_ERROR_LENGTH = 320
 export function sanitizeErrorMessageForUi(raw: string): string {
   if (!raw) return ''
 
-  let s = raw.replace(/\r\n/g, '\n').trim()
+  let normalizedMessage = raw.replace(/\r\n/g, '\n').trim()
 
-  s = s.replace(/file:\/\/[^\s<>'"`)]+/gi, '[file]')
-  s = s.replace(/https?:\/\/[^\s<>'"`)]+/gi, '[url]')
+  normalizedMessage = normalizedMessage.replace(/file:\/\/[^\s<>'"`)]+/gi, '[file]')
+  normalizedMessage = normalizedMessage.replace(/https?:\/\/[^\s<>'"`)]+/gi, '[url]')
 
   // Windows paths: C:\... or C:/...
-  s = s.replace(/\b[A-Za-z]:(?:\\|\/)[^\s<>'"`)]+/g, '[path]')
+  normalizedMessage = normalizedMessage.replace(/\b[A-Za-z]:(?:\\|\/)[^\s<>'"`)]+/g, '[path]')
 
   // Unix-style paths with at least one directory segment (/a/b).
   // (?<![:/]) avoids matching the "//" of "https://" as a path start.
-  s = s.replace(/(?<![:/])\/(?:[^/\s]+\/)+[^/\s]+/g, '[path]')
+  normalizedMessage = normalizedMessage.replace(/(?<![:/])\/(?:[^/\s]+\/)+[^/\s]+/g, '[path]')
 
-  s = s.replace(/\s+/g, ' ').trim()
+  normalizedMessage = normalizedMessage.replace(/\s+/g, ' ').trim()
 
-  if (s.length <= MAX_UI_ERROR_LENGTH) {
-    return s
+  if (normalizedMessage.length <= MAX_UI_ERROR_LENGTH) {
+    return normalizedMessage
   }
-  return `${s.slice(0, MAX_UI_ERROR_LENGTH - 1)}…`
+  return `${normalizedMessage.slice(0, MAX_UI_ERROR_LENGTH - 1)}…`
 }

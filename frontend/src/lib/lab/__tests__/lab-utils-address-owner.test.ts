@@ -32,7 +32,7 @@ function minimalEntity(
   }
 }
 
-const emptyWallets: { wallet_id: number; name: string }[] = []
+const emptyWallets: { walletId: number; name: string }[] = []
 
 describe('lookupLabAddressOwner', () => {
   it('finds owner when bech32 casing differs from map key', () => {

@@ -15,14 +15,14 @@ import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
 
 export function FeatureToggles() {
-  const lightningEnabled = useFeatureStore((s) => s.lightningEnabled)
-  const setLightningEnabled = useFeatureStore((s) => s.setLightningEnabled)
-  const mainnetAccessEnabled = useFeatureStore((s) => s.mainnetAccessEnabled)
-  const setMainnetAccessEnabled = useFeatureStore((s) => s.setMainnetAccessEnabled)
-  const regtestModeEnabled = useFeatureStore((s) => s.regtestModeEnabled)
-  const setRegtestModeEnabled = useFeatureStore((s) => s.setRegtestModeEnabled)
-  const segwitAddressesEnabled = useFeatureStore((s) => s.segwitAddressesEnabled)
-  const setSegwitAddressesEnabled = useFeatureStore((s) => s.setSegwitAddressesEnabled)
+  const isLightningEnabled = useFeatureStore((featureState) => featureState.isLightningEnabled)
+  const setIsLightningEnabled = useFeatureStore((featureState) => featureState.setIsLightningEnabled)
+  const isMainnetAccessEnabled = useFeatureStore((featureState) => featureState.isMainnetAccessEnabled)
+  const setIsMainnetAccessEnabled = useFeatureStore((featureState) => featureState.setIsMainnetAccessEnabled)
+  const isRegtestModeEnabled = useFeatureStore((featureState) => featureState.isRegtestModeEnabled)
+  const setIsRegtestModeEnabled = useFeatureStore((featureState) => featureState.setIsRegtestModeEnabled)
+  const isSegwitAddressesEnabled = useFeatureStore((featureState) => featureState.isSegwitAddressesEnabled)
+  const setIsSegwitAddressesEnabled = useFeatureStore((featureState) => featureState.setIsSegwitAddressesEnabled)
 
   const [mainnetConfirmOpen, setMainnetConfirmOpen] = useState(false)
   const [mainnetAccessSwitchBusy, setMainnetAccessSwitchBusy] = useState(false)
@@ -36,11 +36,11 @@ export function FeatureToggles() {
         if (getCommittedNetworkMode() === 'mainnet') {
           await executeSettingsNetworkSwitch({ targetNetwork: 'testnet' })
         }
-        setMainnetAccessEnabled(false)
+        setIsMainnetAccessEnabled(false)
       },
       'Could not switch away from Mainnet. Try again or change network in Settings.',
     )
-  }, [setMainnetAccessEnabled])
+  }, [setIsMainnetAccessEnabled])
 
   const handleRegtestModeOff = useCallback(async () => {
     await runFeatureToggleOffWork(
@@ -49,11 +49,11 @@ export function FeatureToggles() {
         if (getCommittedNetworkMode() === 'regtest') {
           await executeSettingsNetworkSwitch({ targetNetwork: 'testnet' })
         }
-        setRegtestModeEnabled(false)
+        setIsRegtestModeEnabled(false)
       },
       'Could not switch away from Regtest. Try again or change network in Settings.',
     )
-  }, [setRegtestModeEnabled])
+  }, [setIsRegtestModeEnabled])
 
   const handleSegwitAddressesOff = useCallback(async () => {
     await runFeatureToggleOffWork(
@@ -64,11 +64,11 @@ export function FeatureToggles() {
             targetAddressType: AddressType.Taproot,
           })
         }
-        setSegwitAddressesEnabled(false)
+        setIsSegwitAddressesEnabled(false)
       },
       'Could not switch to Taproot. Try again.',
     )
-  }, [setSegwitAddressesEnabled])
+  }, [setIsSegwitAddressesEnabled])
 
   return (
     <div className="space-y-4">
@@ -86,7 +86,7 @@ export function FeatureToggles() {
           </div>
           <Switch
             id="mainnet-access-toggle"
-            checked={mainnetAccessEnabled}
+            checked={isMainnetAccessEnabled}
             onCheckedChange={(checked) => {
               if (checked) {
                 setMainnetConfirmOpen(true)
@@ -114,10 +114,10 @@ export function FeatureToggles() {
           </div>
           <Switch
             id="regtest-mode-toggle"
-            checked={regtestModeEnabled}
+            checked={isRegtestModeEnabled}
             onCheckedChange={(checked) => {
               if (checked) {
-                setRegtestModeEnabled(true)
+                setIsRegtestModeEnabled(true)
               } else {
                 void handleRegtestModeOff()
               }
@@ -142,10 +142,10 @@ export function FeatureToggles() {
           </div>
           <Switch
             id="segwit-addresses-toggle"
-            checked={segwitAddressesEnabled}
+            checked={isSegwitAddressesEnabled}
             onCheckedChange={(checked) => {
               if (checked) {
-                setSegwitAddressesEnabled(true)
+                setIsSegwitAddressesEnabled(true)
               } else {
                 void handleSegwitAddressesOff()
               }
@@ -170,8 +170,8 @@ export function FeatureToggles() {
           </div>
           <Switch
             id="lightning-toggle"
-            checked={lightningEnabled}
-            onCheckedChange={setLightningEnabled}
+            checked={isLightningEnabled}
+            onCheckedChange={setIsLightningEnabled}
             aria-label="Enable Lightning Network"
           />
         </div>
@@ -180,7 +180,7 @@ export function FeatureToggles() {
       <MainnetAccessConfirmModal
         open={mainnetConfirmOpen}
         onOpenChange={setMainnetConfirmOpen}
-        onConfirm={() => setMainnetAccessEnabled(true)}
+        onConfirm={() => setIsMainnetAccessEnabled(true)}
       />
     </div>
   )

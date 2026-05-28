@@ -2,6 +2,7 @@
  * Canonical ownership in the lab simulator: wallet (real app wallet) vs lab entity (simulated).
  * Use stable IDs — never use entity_name or "Anonymous-*" strings as identity.
  */
+import type { WalletSummary } from '@/lib/wallet/wallet-domain-types'
 import { labEntityOwnerKey } from '@/lib/lab/lab-entity-keys'
 import { LAB_ENTITY_SORT_KEY_PREFIX, WALLET_OWNER_PREFIX } from '@/lib/lab/lab-utils'
 
@@ -54,28 +55,30 @@ export function labOwnerFromSortKey(key: string): LabOwner | null {
 /** Legacy `wallet:{id}` string → LabOwner. */
 export function labOwnerFromWalletOwnerKey(key: string): LabOwner | null {
   if (!key.startsWith(WALLET_OWNER_PREFIX)) return null
-  const id = parseInt(key.slice(WALLET_OWNER_PREFIX.length), 10)
-  if (Number.isNaN(id)) return null
-  return { kind: 'wallet', walletId: id }
+  const walletId = parseInt(key.slice(WALLET_OWNER_PREFIX.length), 10)
+  if (Number.isNaN(walletId)) return null
+  return { kind: 'wallet', walletId }
 }
 
 /** Normalize owner stored in JSON (string vs object). */
 export function normalizeJsonOwnerToLabOwner(
-  raw: unknown,
+  rawOwnerJson: unknown,
   _entities: readonly { labEntityId: number; entityName: string | null }[],
 ): LabOwner | null {
-  if (raw == null || raw === '') return null
-  if (typeof raw === 'object' && raw !== null && !Array.isArray(raw)) {
-    const o = raw as Record<string, unknown>
-    if (o.kind === 'wallet' && typeof o.walletId === 'number') {
-      return { kind: 'wallet', walletId: o.walletId }
+  if (rawOwnerJson == null || rawOwnerJson === '') return null
+  if (typeof rawOwnerJson === 'object' && rawOwnerJson !== null && !Array.isArray(rawOwnerJson)) {
+    const candidateOwner = rawOwnerJson as Record<string, unknown>
+    if (candidateOwner.kind === 'wallet' && typeof candidateOwner.walletId === 'number') {
+      return { kind: 'wallet', walletId: candidateOwner.walletId }
     }
-    if (o.kind === 'lab_entity' && typeof o.labEntityId === 'number') {
-      return { kind: 'lab_entity', labEntityId: o.labEntityId }
+    if (candidateOwner.kind === 'lab_entity' && typeof candidateOwner.labEntityId === 'number') {
+      return { kind: 'lab_entity', labEntityId: candidateOwner.labEntityId }
     }
   }
-  if (typeof raw === 'string') {
-    return labOwnerFromSortKey(raw) ?? labOwnerFromWalletOwnerKey(raw)
+  if (typeof rawOwnerJson === 'string') {
+    return (
+      labOwnerFromSortKey(rawOwnerJson) ?? labOwnerFromWalletOwnerKey(rawOwnerJson)
+    )
   }
   return null
 }
@@ -113,11 +116,11 @@ export function labEntityMustBeAliveToSend(entity: { isDead: boolean }): void {
 
 export function labOwnerDisplayName(
   owner: LabOwner,
-  wallets: { wallet_id: number; name: string }[],
+  wallets: Pick<WalletSummary, 'walletId' | 'name'>[],
   entities: readonly { labEntityId: number; entityName: string | null }[],
 ): string {
   if (owner.kind === 'wallet') {
-    const row = wallets.find((walletRow) => walletRow.wallet_id === owner.walletId)
+    const row = wallets.find((walletRow) => walletRow.walletId === owner.walletId)
     if (row != null) return row.name
     // Wallet list may still be loading (callers often default to []). Lab ownership is
     // defined by id in chain state — never drop that identity when the name is unavailable.

@@ -17,10 +17,10 @@ const MIN_RANDOM_TRANSACTION_COUNT = 1
 
 function parseAndClampRandomTransactionCount(raw: string): string {
   if (raw === '') return ''
-  const n = Number.parseInt(raw.trim(), 10)
-  if (Number.isNaN(n)) return raw
+  const parsedValue = Number.parseInt(raw.trim(), 10)
+  if (Number.isNaN(parsedValue)) return raw
   const clamped = Math.min(
-    Math.max(n, MIN_RANDOM_TRANSACTION_COUNT),
+    Math.max(parsedValue, MIN_RANDOM_TRANSACTION_COUNT),
     LAB_MAX_RANDOM_ENTITY_TRANSACTIONS,
   )
   return String(clamped)
@@ -28,8 +28,8 @@ function parseAndClampRandomTransactionCount(raw: string): string {
 
 function parseRandomTransactionCountValue(raw: string): number | null {
   if (raw === '') return null
-  const n = Number.parseInt(raw.trim(), 10)
-  return Number.isNaN(n) ? null : n
+  const parsedValue = Number.parseInt(raw.trim(), 10)
+  return Number.isNaN(parsedValue) ? null : parsedValue
 }
 
 export function LabMakeTransactionCard({
@@ -57,20 +57,20 @@ export function LabMakeTransactionCard({
   deadFromEntityDisplayName = '',
 }: {
   showTxForm: boolean
-  setShowTxForm: (v: boolean) => void
+  setShowTxForm: (value: boolean) => void
   fromAddress: string
-  setFromAddress: (v: string) => void
+  setFromAddress: (value: string) => void
   toAddress: string
-  setToAddress: (v: string) => void
+  setToAddress: (value: string) => void
   amountSats: string
-  setAmountSats: (v: string) => void
+  setAmountSats: (value: string) => void
   feeRate: string
-  setFeeRate: (v: string) => void
+  setFeeRate: (value: string) => void
   onSend: () => void
   sending: boolean
   controlledAddressesCount: number
   randomTransactionCount: string
-  setRandomTransactionCount: (v: string) => void
+  setRandomTransactionCount: (value: string) => void
   onCreateRandomTransactions: () => void
   creatingRandomTransactions: boolean
   randomBatchProgress: { created: number; total: number } | null
