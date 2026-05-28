@@ -49,11 +49,11 @@ function LabOwnerUtxosInner({
   onUtxoPageChange: (pageIndex: number) => void
 }) {
   const labNetworkEnabled = useWalletStore((s) => s.networkMode === 'lab')
-  const { data } = useLabUtxosForOwnerPage(ownerKey, utxoPageIndex, {
+  const { data: utxosPage } = useLabUtxosForOwnerPage(ownerKey, utxoPageIndex, {
     enabled: labNetworkEnabled,
   })
-  const utxos = data?.utxos ?? []
-  const totalCount = data?.totalCount ?? 0
+  const utxos = utxosPage?.utxos ?? []
+  const totalCount = utxosPage?.totalCount ?? 0
 
   return (
     <CardPagination

@@ -78,10 +78,10 @@ mod tests {
 
     #[test]
     fn point_two_sat_per_vb_is_not_ceiled_to_one() {
-        let fr = fee_rate_from_sat_per_vb_float(0.2_f64).unwrap();
+        let fractional_fee_rate = fee_rate_from_sat_per_vb_float(0.2_f64).unwrap();
         let one_sat_vb = FeeRate::from_sat_per_vb(1).expect("within range");
         assert_ne!(
-            fr.to_sat_per_kwu(),
+            fractional_fee_rate.to_sat_per_kwu(),
             one_sat_vb.to_sat_per_kwu(),
             "0.2 sat/vB must not quantize to same FeeRate as integer 1 sat/vB",
         );

@@ -75,11 +75,11 @@ export function LabEntitiesCard() {
       entityName: entity.entityName,
     })) ?? []
 
-  const { data, isLoading, isError, refetch } = useLabEntitiesPage(pageIndex, {
+  const { data: entitiesPage, isLoading, isError, refetch } = useLabEntitiesPage(pageIndex, {
     enabled: labNetworkEnabled,
   })
-  const rows = data?.rows ?? []
-  const totalCount = data?.totalCount ?? 0
+  const rows = entitiesPage?.rows ?? []
+  const totalCount = entitiesPage?.totalCount ?? 0
 
   const createMutation = useLabCreateLabEntityMutation()
   const renameMutation = useLabRenameLabEntityMutation()

@@ -53,11 +53,11 @@ function LabOwnerAddressesInner({
   onAddressPageChange: (pageIndex: number) => void
 }) {
   const labNetworkEnabled = useWalletStore((s) => s.networkMode === 'lab')
-  const { data } = useLabAddressesForOwnerPage(ownerKey, addressPageIndex, {
+  const { data: addressesPage } = useLabAddressesForOwnerPage(ownerKey, addressPageIndex, {
     enabled: labNetworkEnabled,
   })
-  const addresses = data?.addresses ?? []
-  const totalCount = data?.totalCount ?? 0
+  const addresses = addressesPage?.addresses ?? []
+  const totalCount = addressesPage?.totalCount ?? 0
   const { data: balanceByAddress } = useLabAddressBalancesForAddresses(
     addresses.map((addressRow) => addressRow.address),
     { enabled: labNetworkEnabled && addresses.length > 0 },

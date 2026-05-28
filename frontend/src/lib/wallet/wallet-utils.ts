@@ -141,9 +141,9 @@ export async function syncActiveWalletAndUpdateState(
 
   if (!esploraUrl) {
     const balance = await getBalance()
-    const txs = await getTransactionList()
+    const transactionList = await getTransactionList()
     setBalance(balance)
-    setTransactions(txs)
+    setTransactions(transactionList)
     return
   }
 
@@ -163,9 +163,9 @@ export async function syncActiveWalletAndUpdateState(
   }
 
   const balance = await getBalance()
-  const txs = await getTransactionList()
+  const transactionList = await getTransactionList()
   setBalance(balance)
-  setTransactions(txs)
+  setTransactions(transactionList)
 }
 
 export type SubWalletEsploraSyncResult = 'completed' | 'sync_failed'
@@ -394,9 +394,9 @@ export async function runImportInitialEsploraSync(): Promise<void> {
     const { getBalance, getTransactionList } = useCryptoStore.getState()
     const { setBalance, setTransactions } = useWalletStore.getState()
     const balance = await getBalance()
-    const txs = await getTransactionList()
+    const transactionList = await getTransactionList()
     setBalance(balance)
-    setTransactions(txs)
+    setTransactions(transactionList)
     setImportInitialSyncErrorMessage(null)
     return
   }
@@ -432,10 +432,10 @@ export async function retryImportInitialEsploraSyncWithWalletStatus(): Promise<v
     toast.success('Initial sync complete')
   } catch (err) {
     setWalletStatus('unlocked')
-    const msg =
+    const userFacingErrorMessage =
       sanitizeErrorMessageForUi(errorMessage(err) ?? String(err)) ||
       'Initial sync failed'
-    setImportInitialSyncErrorMessage(msg)
+    setImportInitialSyncErrorMessage(userFacingErrorMessage)
     showImportInitialSyncFailureToast(err, () => {
       void retryImportInitialEsploraSyncWithWalletStatus()
     })

@@ -22,10 +22,10 @@ export function isValidTabScopedBroadcastMessage(
   data: unknown,
 ): data is TabScopedBroadcastMessage {
   if (data == null || typeof data !== 'object') return false
-  const rec = data as Record<string, unknown>
-  const id = rec.sourceTabId
-  const time = rec.time
-  if (typeof id !== 'string' || id.trim() === '') return false
+  const messageRecord = data as Record<string, unknown>
+  const sourceTabId = messageRecord.sourceTabId
+  const time = messageRecord.time
+  if (typeof sourceTabId !== 'string' || sourceTabId.trim() === '') return false
   if (typeof time !== 'number' || !Number.isFinite(time)) return false
   return true
 }
@@ -55,13 +55,13 @@ export function createTabScopedBroadcastChannelSync(channelName: string) {
 
   function notify(): void {
     try {
-      const ch = getPublishChannel()
-      if (ch == null) return
+      const broadcastChannel = getPublishChannel()
+      if (broadcastChannel == null) return
       const msg: TabScopedBroadcastMessage = {
         sourceTabId: getTabInstanceId(),
         time: Date.now(),
       }
-      ch.postMessage(msg)
+      broadcastChannel.postMessage(msg)
     } catch {
       /* ignore */
     }
@@ -71,20 +71,20 @@ export function createTabScopedBroadcastChannelSync(channelName: string) {
     if (typeof BroadcastChannel === 'undefined') {
       return () => undefined
     }
-    let ch: BroadcastChannel
+    let broadcastChannel: BroadcastChannel
     try {
-      ch = new BroadcastChannel(channelName)
+      broadcastChannel = new BroadcastChannel(channelName)
     } catch {
       return () => undefined
     }
     const selfId = getTabInstanceId()
-    ch.onmessage = (ev: MessageEvent<unknown>) => {
+    broadcastChannel.onmessage = (ev: MessageEvent<unknown>) => {
       if (!isValidTabScopedBroadcastMessage(ev.data)) return
       if (ev.data.sourceTabId === selfId) return
       onRemote()
     }
     return () => {
-      ch.close()
+      broadcastChannel.close()
     }
   }
 

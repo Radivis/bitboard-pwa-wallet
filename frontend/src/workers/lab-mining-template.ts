@@ -85,19 +85,19 @@ function minedByFromBlockTxs(
   addressToOwner: Record<string, LabOwner>,
 ): LabOwner | null {
   const coinbase = blockTxs.find((tx) => isCoinbase(tx))
-  const out0 = coinbase?.outputs[0]
-  if (!out0) return null
-  const fromStoredDetail = out0.owner ?? null
+  const coinbasePayoutOutput = coinbase?.outputs[0]
+  if (!coinbasePayoutOutput) return null
+  const fromStoredDetail = coinbasePayoutOutput.owner ?? null
   if (fromStoredDetail) return fromStoredDetail
-  return lookupOwnerForLabAddress(out0.address, addressToOwner) ?? null
+  return lookupOwnerForLabAddress(coinbasePayoutOutput.address, addressToOwner) ?? null
 }
 
 export function minedByForBlockHeight(height: number): LabOwner | null {
-  const op = labWorkerState.mineOperations?.find(
-    (mineOperation) => mineOperation.height === height,
+  const mineOperation = labWorkerState.mineOperations?.find(
+    (record) => record.height === height,
   )
-  if (op != null && op.minedBy != null) {
-    return op.minedBy
+  if (mineOperation != null && mineOperation.minedBy != null) {
+    return mineOperation.minedBy
   }
   const blockTxs = labWorkerState.txDetails.filter((tx) => tx.blockHeight === height)
   return minedByFromBlockTxs(blockTxs, labWorkerState.addressToOwner ?? {})
@@ -175,8 +175,8 @@ export async function resolveTemplateCoinbase(
       labAddressType,
       0,
     )
-    const cr = parseWasmObject(createdRaw)
-    const first = String(cr.first_address ?? '')
+    const walletCreationResult = parseWasmObject(createdRaw)
+    const first = String(walletCreationResult.first_address ?? '')
     if (!first) {
       throw new Error('Lab entity wallet creation failed (no first address)')
     }

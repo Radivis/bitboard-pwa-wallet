@@ -6,39 +6,39 @@ import { LabPreviousBlocksCard } from '@/components/lab/PreviousBlocks'
 import { useLabIndexPageData } from '@/hooks/useLabIndexPageData'
 
 export function BlocksPage() {
-  const lab = useLabIndexPageData()
+  const labPageData = useLabIndexPageData()
 
   return (
     <>
       <PageHeader title="Blocks" icon={Blocks} />
 
       <LabBlocksCard
-        blockCount={lab.blockCount}
-        mineCount={lab.mineCount}
-        setMineCount={lab.setMineCount}
-        ownerType={lab.ownerType}
-        setOwnerType={lab.setOwnerType}
-        entities={lab.entities}
-        selectedLabEntityId={lab.selectedLabEntityId}
-        setSelectedLabEntityId={lab.setSelectedLabEntityId}
-        mining={lab.mining}
-        onMine={lab.onMine}
-        walletStatus={lab.walletStatus}
-        currentAddress={lab.currentAddress}
-        activeWallet={lab.activeWallet}
+        blockCount={labPageData.blockCount}
+        mineCount={labPageData.mineCount}
+        setMineCount={labPageData.setMineCount}
+        ownerType={labPageData.ownerType}
+        setOwnerType={labPageData.setOwnerType}
+        entities={labPageData.entities}
+        selectedLabEntityId={labPageData.selectedLabEntityId}
+        setSelectedLabEntityId={labPageData.setSelectedLabEntityId}
+        mining={labPageData.mining}
+        onMine={labPageData.onMine}
+        walletStatus={labPageData.walletStatus}
+        currentAddress={labPageData.currentAddress}
+        activeWallet={labPageData.activeWallet}
       />
 
       <LabMempoolCard
-        mempool={lab.mempool}
-        wallets={lab.wallets}
+        mempool={labPageData.mempool}
+        wallets={labPageData.wallets}
       />
 
       <LabPreviousBlocksCard
-        blocks={lab.blocks}
-        mineOperations={lab.mineOperations}
-        txDetails={lab.txDetails}
-        entities={lab.entities}
-        wallets={lab.wallets}
+        blocks={labPageData.blocks}
+        mineOperations={labPageData.mineOperations}
+        txDetails={labPageData.txDetails}
+        entities={labPageData.entities}
+        wallets={labPageData.wallets}
       />
     </>
   )

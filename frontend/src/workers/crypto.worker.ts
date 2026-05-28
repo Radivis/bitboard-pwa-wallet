@@ -17,13 +17,13 @@ import { rethrowWasmCryptoErrorForComlink } from '@/lib/shared/wasm-crypto-error
 
 function mapReviewInputUtxos(raw: unknown): import('./crypto-api').ReviewInputUtxo[] {
   if (!Array.isArray(raw)) return [];
-  return raw.map((item) => {
-    const row = item as Record<string, unknown>;
+  return raw.map((rawUtxo) => {
+    const utxoFields = rawUtxo as Record<string, unknown>;
     return {
-      address: String(row.address ?? ''),
-      amountSats: Number(row.amount_sats ?? 0),
-      txid: String(row.txid ?? ''),
-      vout: Number(row.vout ?? 0),
+      address: String(utxoFields.address ?? ''),
+      amountSats: Number(utxoFields.amount_sats ?? 0),
+      txid: String(utxoFields.txid ?? ''),
+      vout: Number(utxoFields.vout ?? 0),
     };
   });
 }
@@ -463,7 +463,7 @@ const cryptoService = {
       network,
       applyChangeFreeBump = false,
     } = params;
-    const raw = await invokeWasmCrypto((wasmModule) =>
+    const wasmPrepareResult = await invokeWasmCrypto((wasmModule) =>
       wasmModule.prepare_onchain_send_transaction(
         recipientAddress,
         BigInt(amountSats),
@@ -472,7 +472,7 @@ const cryptoService = {
         applyChangeFreeBump,
       ),
     );
-    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    const parsed = typeof wasmPrepareResult === 'string' ? JSON.parse(wasmPrepareResult) : wasmPrepareResult;
     return {
       psbtBase64: parsed.psbt_base64,
       finalAmountSats: Number(parsed.final_amount_sats),
@@ -681,10 +681,10 @@ const cryptoService = {
   },
 
   async generateNodeId(seed: Uint8Array): Promise<NodeInfo> {
-    const ldk = await getLightningWasm();
+    const lightningWasm = await getLightningWasm();
     const currentTimeSecs = BigInt(Math.floor(Date.now() / 1000));
     const currentTimeNanos = 0;
-    const nodeId = ldk.generate_node_id(seed, currentTimeSecs, currentTimeNanos);
+    const nodeId = lightningWasm.generate_node_id(seed, currentTimeSecs, currentTimeNanos);
     return { nodeId };
   },
 };

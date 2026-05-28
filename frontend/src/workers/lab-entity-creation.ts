@@ -24,14 +24,14 @@ export function createAndRegisterLabEntityFromWasm(
     labAddressType,
     0,
   )
-  const cr = parseWasmObject(createdRaw)
+  const walletCreationResult = parseWasmObject(createdRaw)
   const entity: LabEntityRecord = {
     labEntityId,
     entityName,
     mnemonic,
-    changesetJson: String(cr.changeset_json ?? ''),
-    externalDescriptor: String(cr.external_descriptor ?? ''),
-    internalDescriptor: String(cr.internal_descriptor ?? ''),
+    changesetJson: String(walletCreationResult.changeset_json ?? ''),
+    externalDescriptor: String(walletCreationResult.external_descriptor ?? ''),
+    internalDescriptor: String(walletCreationResult.internal_descriptor ?? ''),
     network: labNetwork,
     addressType: labAddressType,
     accountId: 0,
@@ -40,7 +40,7 @@ export function createAndRegisterLabEntityFromWasm(
     isDead: false,
   }
   labWorkerState.entities.push(entity)
-  const coinbaseAddress = String(cr.first_address ?? '')
+  const coinbaseAddress = String(walletCreationResult.first_address ?? '')
   if (!coinbaseAddress) {
     throw new Error(noAddressErrorMessage)
   }

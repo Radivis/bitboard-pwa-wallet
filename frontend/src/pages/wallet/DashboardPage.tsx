@@ -428,7 +428,7 @@ function BalanceCard() {
                     )}
                   </p>
                 )}
-                {lightningBalanceRows.some((r) => r.error != null) && (
+                {lightningBalanceRows.some((balanceRow) => balanceRow.error != null) && (
                   <p className="mt-2 text-xs text-amber-700 dark:text-amber-400">
                     Some Lightning wallets could not be reached and have no saved
                     balance yet; those show “—” and are not included in the
@@ -754,13 +754,13 @@ function RecentTransactions() {
                 ? labPageRows.map((tx) => (
                     <TransactionItem key={tx.txid} transaction={tx} />
                   ))
-                : mergedPageRows.map((item) =>
-                    item.kind === 'chain' ? (
-                      <TransactionItem key={item.tx.txid} transaction={item.tx} />
+                : mergedPageRows.map((activityItem) =>
+                    activityItem.kind === 'chain' ? (
+                      <TransactionItem key={activityItem.tx.txid} transaction={activityItem.tx} />
                     ) : (
                       <LightningPaymentItem
-                        key={`${item.payment.connectionId}-${item.payment.paymentHash}`}
-                        payment={item.payment}
+                        key={`${activityItem.payment.connectionId}-${activityItem.payment.paymentHash}`}
+                        payment={activityItem.payment}
                       />
                     ),
                   )}

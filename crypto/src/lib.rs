@@ -124,12 +124,13 @@ pub fn derive_descriptors(
     account_id: u32,
 ) -> Result<JsValue, JsValue> {
     let network = types::BitcoinNetwork::try_from(network).map_err(JsValue::from)?;
-    let addr_type = types::AddressType::try_from(address_type).map_err(JsValue::from)?;
+    let address_type_enum = types::AddressType::try_from(address_type).map_err(JsValue::from)?;
 
-    let pair = descriptors::derive_descriptors(mnemonic_str, network, addr_type, account_id)
-        .map_err(JsValue::from)?;
+    let descriptor_pair =
+        descriptors::derive_descriptors(mnemonic_str, network, address_type_enum, account_id)
+            .map_err(JsValue::from)?;
 
-    serde_wasm_bindgen::to_value(&pair).map_display_err_to_js()
+    serde_wasm_bindgen::to_value(&descriptor_pair).map_display_err_to_js()
 }
 
 // ---------------------------------------------------------------------------
@@ -148,14 +149,22 @@ pub fn create_wallet(
     account_id: u32,
 ) -> Result<JsValue, JsValue> {
     let bitcoin_network = types::BitcoinNetwork::try_from(network).map_err(JsValue::from)?;
-    let addr_type = types::AddressType::try_from(address_type).map_err(JsValue::from)?;
+    let address_type_enum = types::AddressType::try_from(address_type).map_err(JsValue::from)?;
 
-    let pair =
-        descriptors::derive_descriptors(mnemonic_str, bitcoin_network, addr_type, account_id)
-            .map_err(JsValue::from)?;
+    let descriptor_pair = descriptors::derive_descriptors(
+        mnemonic_str,
+        bitcoin_network,
+        address_type_enum,
+        account_id,
+    )
+    .map_err(JsValue::from)?;
 
-    let mut bdk_wallet = wallet::create_wallet(&pair.external, &pair.internal, bitcoin_network)
-        .map_err(JsValue::from)?;
+    let mut bdk_wallet = wallet::create_wallet(
+        &descriptor_pair.external,
+        &descriptor_pair.internal,
+        bitcoin_network,
+    )
+    .map_err(JsValue::from)?;
 
     let first_address = wallet::get_new_address(&mut bdk_wallet);
 
@@ -166,13 +175,13 @@ pub fn create_wallet(
     ACTIVE_WALLET.with(|wallet_cell| wallet_cell.replace(Some(bdk_wallet)));
     ACCUMULATED_CHANGESET.with(|changeset_cell| *changeset_cell.borrow_mut() = initial_changeset);
     EXTERNAL_DESCRIPTOR_FOR_LAB
-        .with(|descriptor_cell| *descriptor_cell.borrow_mut() = pair.external.clone());
+        .with(|descriptor_cell| *descriptor_cell.borrow_mut() = descriptor_pair.external.clone());
     INTERNAL_DESCRIPTOR_FOR_LAB
-        .with(|descriptor_cell| *descriptor_cell.borrow_mut() = pair.internal.clone());
+        .with(|descriptor_cell| *descriptor_cell.borrow_mut() = descriptor_pair.internal.clone());
 
     let create_wallet_payload = types::CreateWalletResult {
-        external_descriptor: pair.external,
-        internal_descriptor: pair.internal,
+        external_descriptor: descriptor_pair.external,
+        internal_descriptor: descriptor_pair.internal,
         first_address,
         changeset_json,
     };
@@ -438,11 +447,11 @@ pub fn build_and_sign_lab_transaction(
     change_address: &str,
     apply_change_free_bump: bool,
 ) -> Result<JsValue, JsValue> {
-    let external =
+    let external_descriptor =
         EXTERNAL_DESCRIPTOR_FOR_LAB.with(|descriptor_cell| descriptor_cell.borrow().clone());
-    let internal =
+    let internal_descriptor =
         INTERNAL_DESCRIPTOR_FOR_LAB.with(|descriptor_cell| descriptor_cell.borrow().clone());
-    if external.is_empty() || internal.is_empty() {
+    if external_descriptor.is_empty() || internal_descriptor.is_empty() {
         return Err(wasm_crypto_error(
             CODE_WALLET_NOT_LOADED_FOR_LAB,
             MSG_WALLET_NOT_LOADED_FOR_LAB,
@@ -474,11 +483,11 @@ pub fn draft_lab_psbt_transaction(
     change_address: &str,
     apply_change_free_bump: bool,
 ) -> Result<JsValue, JsValue> {
-    let external =
+    let external_descriptor =
         EXTERNAL_DESCRIPTOR_FOR_LAB.with(|descriptor_cell| descriptor_cell.borrow().clone());
-    let internal =
+    let internal_descriptor =
         INTERNAL_DESCRIPTOR_FOR_LAB.with(|descriptor_cell| descriptor_cell.borrow().clone());
-    if external.is_empty() || internal.is_empty() {
+    if external_descriptor.is_empty() || internal_descriptor.is_empty() {
         return Err(wasm_crypto_error(
             CODE_WALLET_NOT_LOADED_FOR_LAB,
             MSG_WALLET_NOT_LOADED_FOR_LAB,
@@ -503,9 +512,9 @@ pub fn draft_lab_psbt_transaction(
 /// Return the first internal address for lab change outputs.
 #[wasm_bindgen]
 pub fn get_lab_change_address() -> Result<String, JsValue> {
-    let internal =
+    let internal_descriptor =
         INTERNAL_DESCRIPTOR_FOR_LAB.with(|descriptor_cell| descriptor_cell.borrow().clone());
-    if internal.is_empty() {
+    if internal_descriptor.is_empty() {
         return Err(wasm_crypto_error(
             CODE_WALLET_NOT_LOADED_FOR_LAB,
             MSG_WALLET_NOT_LOADED_FOR_LAB,
@@ -532,11 +541,11 @@ pub fn create_lab_entity_wallet(
     account_id: u32,
 ) -> Result<JsValue, JsValue> {
     let bitcoin_network = types::BitcoinNetwork::try_from(network).map_err(JsValue::from)?;
-    let addr_type = types::AddressType::try_from(address_type).map_err(JsValue::from)?;
+    let address_type_enum = types::AddressType::try_from(address_type).map_err(JsValue::from)?;
     let lab_entity_wallet_payload = lab_entity_wallet::create_lab_entity_wallet(
         mnemonic_str,
         bitcoin_network,
-        addr_type,
+        address_type_enum,
         account_id,
     )
     .map_err(JsValue::from)?;
@@ -553,12 +562,12 @@ pub fn lab_entity_get_current_external_address(
     account_id: u32,
 ) -> Result<String, JsValue> {
     let bitcoin_network = types::BitcoinNetwork::try_from(network).map_err(JsValue::from)?;
-    let addr_type = types::AddressType::try_from(address_type).map_err(JsValue::from)?;
+    let address_type_enum = types::AddressType::try_from(address_type).map_err(JsValue::from)?;
     lab_entity_wallet::lab_entity_get_current_external_address(
         mnemonic_str,
         changeset_json,
         bitcoin_network,
-        addr_type,
+        address_type_enum,
         account_id,
     )
     .map_err(JsValue::from)
@@ -574,12 +583,12 @@ pub fn lab_entity_reveal_next_external_address(
     account_id: u32,
 ) -> Result<JsValue, JsValue> {
     let bitcoin_network = types::BitcoinNetwork::try_from(network).map_err(JsValue::from)?;
-    let addr_type = types::AddressType::try_from(address_type).map_err(JsValue::from)?;
+    let address_type_enum = types::AddressType::try_from(address_type).map_err(JsValue::from)?;
     let (address, changeset_json) = lab_entity_wallet::lab_entity_reveal_next_external_address(
         mnemonic_str,
         changeset_json,
         bitcoin_network,
-        addr_type,
+        address_type_enum,
         account_id,
     )
     .map_err(JsValue::from)?;
@@ -610,13 +619,13 @@ pub fn lab_entity_draft_lab_psbt_transaction(
     fee_rate_sat_per_vb: f64,
 ) -> Result<JsValue, JsValue> {
     let bitcoin_network = types::BitcoinNetwork::try_from(network).map_err(JsValue::from)?;
-    let addr_type = types::AddressType::try_from(address_type).map_err(JsValue::from)?;
+    let address_type_enum = types::AddressType::try_from(address_type).map_err(JsValue::from)?;
     let draft_lab_psbt_payload = lab_entity_wallet::lab_entity_draft_lab_psbt_transaction(
         lab_entity_wallet::LabEntityDraftArgs {
             mnemonic: mnemonic_str,
             changeset_json,
             network: bitcoin_network,
-            address_type: addr_type,
+            address_type: address_type_enum,
             account_id,
             utxos_json,
             to_address,
@@ -644,13 +653,13 @@ pub fn lab_entity_build_and_sign_lab_transaction(
     apply_change_free_bump: bool,
 ) -> Result<JsValue, JsValue> {
     let bitcoin_network = types::BitcoinNetwork::try_from(network).map_err(JsValue::from)?;
-    let addr_type = types::AddressType::try_from(address_type).map_err(JsValue::from)?;
+    let address_type_enum = types::AddressType::try_from(address_type).map_err(JsValue::from)?;
     let build_sign_lab_payload = lab_entity_wallet::lab_entity_build_and_sign_lab_transaction(
         lab_entity_wallet::LabEntityBuildSignArgs {
             mnemonic: mnemonic_str,
             changeset_json,
             network: bitcoin_network,
-            address_type: addr_type,
+            address_type: address_type_enum,
             account_id,
             utxos_json,
             to_address,

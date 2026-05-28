@@ -24,32 +24,32 @@ const ARIA_ROLES_ACTION = new Set([
   'spinbutton',
 ])
 
-function isInertish(el: Element): boolean {
-  if (el.getAttribute('aria-disabled') === 'true') {
+function isInertish(element: Element): boolean {
+  if (element.getAttribute('aria-disabled') === 'true') {
     return true
   }
-  if (el.closest('fieldset[disabled]') !== null) {
+  if (element.closest('fieldset[disabled]') !== null) {
     return true
   }
-  if ('disabled' in el && (el as HTMLInputElement & { disabled?: boolean }).disabled === true) {
+  if ('disabled' in element && (element as HTMLInputElement & { disabled?: boolean }).disabled === true) {
     return true
   }
   return false
 }
 
-function hasActionRole(el: Element): boolean {
-  const role = el.getAttribute('role')
+function hasActionRole(element: Element): boolean {
+  const role = element.getAttribute('role')
   if (!role) {
     return false
   }
   return ARIA_ROLES_ACTION.has(role.trim().toLowerCase())
 }
 
-function isTabindexFocusableForAction(el: Element): boolean {
-  if (!el.hasAttribute('tabindex')) {
+function isTabindexFocusableForAction(element: Element): boolean {
+  if (!element.hasAttribute('tabindex')) {
     return false
   }
-  const tabindexRaw = el.getAttribute('tabindex')?.trim() ?? ''
+  const tabindexRaw = element.getAttribute('tabindex')?.trim() ?? ''
   if (tabindexRaw === '-1' || tabindexRaw === '') {
     return false
   }
@@ -57,40 +57,40 @@ function isTabindexFocusableForAction(el: Element): boolean {
   return tabindexNumber >= 0
 }
 
-function isNativeLink(el: Element): boolean {
-  if (el.tagName !== 'A' && el.tagName !== 'a') {
+function isNativeLink(element: Element): boolean {
+  if (element.tagName !== 'A' && element.tagName !== 'a') {
     return false
   }
-  return el.hasAttribute('href') && (el.getAttribute('href') ?? '') !== ''
+  return element.hasAttribute('href') && (element.getAttribute('href') ?? '') !== ''
 }
 
-function isMapAreaWithHref(el: Element): boolean {
-  if (el.tagName !== 'AREA' && el.tagName !== 'area') {
+function isMapAreaWithHref(element: Element): boolean {
+  if (element.tagName !== 'AREA' && element.tagName !== 'area') {
     return false
   }
-  return el.hasAttribute('href') && (el.getAttribute('href') ?? '') !== ''
+  return element.hasAttribute('href') && (element.getAttribute('href') ?? '') !== ''
 }
 
-function isFormControlLike(el: Element): boolean {
-  if (el instanceof HTMLTextAreaElement) {
+function isFormControlLike(element: Element): boolean {
+  if (element instanceof HTMLTextAreaElement) {
     return true
   }
-  if (el instanceof HTMLSelectElement) {
+  if (element instanceof HTMLSelectElement) {
     return true
   }
-  if (el instanceof HTMLOptionElement) {
+  if (element instanceof HTMLOptionElement) {
     return true
   }
-  if (el instanceof HTMLButtonElement) {
+  if (element instanceof HTMLButtonElement) {
     return true
   }
-  if (el instanceof HTMLInputElement) {
-    if (el.type === 'hidden') {
+  if (element instanceof HTMLInputElement) {
+    if (element.type === 'hidden') {
       return false
     }
     return true
   }
-  if (el.tagName === 'SUMMARY' || el.tagName === 'summary') {
+  if (element.tagName === 'SUMMARY' || element.tagName === 'summary') {
     return true
   }
   return false

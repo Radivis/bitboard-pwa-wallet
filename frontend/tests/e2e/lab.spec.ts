@@ -162,10 +162,10 @@ test.describe('Lab', { tag: '@lab' }, () => {
     expect(state.entities!.find((e) => e.labEntityId === 4)?.addressType).toBe('taproot')
 
     const addressForOwner = async (owner: string) => {
-      const s = await getLabState(page)
-      const a = findAddressForOwner(s, owner)
-      expect(a).toBeDefined()
-      return a!
+      const labState = await getLabState(page)
+      const ownerAddress = findAddressForOwner(labState, owner)
+      expect(ownerAddress).toBeDefined()
+      return ownerAddress!
     }
 
     await createTransactionInLab(page, await addressForOwner(segwitA), await addressForOwner(segwitB), 11_000, 1)
@@ -189,9 +189,9 @@ test.describe('Lab', { tag: '@lab' }, () => {
     await waitForLabMempoolLength(page, 0)
     state = await getLabState(page)
     expect(
-      state.transactions.filter((t) => {
-        const d = state.txDetails.find((x) => x.txid === t.txid)
-        return d != null && !isCoinbase(d)
+      state.transactions.filter((transaction) => {
+        const txDetail = state.txDetails.find((detail) => detail.txid === transaction.txid)
+        return txDetail != null && !isCoinbase(txDetail)
       }),
     ).toHaveLength(4)
   })
@@ -275,8 +275,8 @@ test.describe('Lab', { tag: '@lab' }, () => {
     await expect
       .poll(
         async () => {
-          const s = await getLabState(page)
-          return s.mempool.length
+          const labState = await getLabState(page)
+          return labState.mempool.length
         },
         { timeout: 10000 },
       )
@@ -290,9 +290,9 @@ test.describe('Lab', { tag: '@lab' }, () => {
     state = await getLabState(page)
     expect(state.mempool).toHaveLength(0)
     expect(
-      state.transactions.filter((t) => {
-        const d = state.txDetails.find((x) => x.txid === t.txid)
-        return d != null && !isCoinbase(d)
+      state.transactions.filter((transaction) => {
+        const txDetail = state.txDetails.find((detail) => detail.txid === transaction.txid)
+        return txDetail != null && !isCoinbase(txDetail)
       }),
     ).toHaveLength(1)
     const aliceSum = getUtxoSumByOwner(state, 'Alice')

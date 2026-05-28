@@ -27,10 +27,10 @@ export function findDescriptorWallet(params: {
 }): DescriptorWalletData | undefined {
   const { secrets, network, addressType, accountId } = params
   return secrets.descriptorWallets.find(
-    (dw) =>
-      dw.network === network &&
-      dw.addressType === addressType &&
-      dw.accountId === accountId,
+    (descriptorWallet) =>
+      descriptorWallet.network === network &&
+      descriptorWallet.addressType === addressType &&
+      descriptorWallet.accountId === accountId,
   )
 }
 

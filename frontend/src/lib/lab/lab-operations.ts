@@ -34,9 +34,9 @@ type LabCoinbaseInputLike =
     }
 
 function resolvePrevout(input: LabCoinbaseInputLike): { txid: string; vout: number } | null {
-  const rec = input as Record<string, string | number | undefined>
-  const txid = rec.prev_txid ?? rec.prevTxid
-  const vout = rec.prev_vout ?? rec.prevVout
+  const inputFields = input as Record<string, string | number | undefined>
+  const txid = inputFields.prev_txid ?? inputFields.prevTxid
+  const vout = inputFields.prev_vout ?? inputFields.prevVout
   if (txid === undefined || vout === undefined) return null
   return { txid: String(txid), vout: Number(vout) }
 }
@@ -51,7 +51,7 @@ export function isCoinbase(tx: { inputs: ReadonlyArray<LabCoinbaseInputLike> }):
   const { inputs } = tx
   if (inputs.length === 0) return false
   if (inputs.length > 1) return false
-  const prev = resolvePrevout(inputs[0])
-  if (prev == null) return false
-  return isLabCoinbasePrevout(prev.txid, prev.vout)
+  const prevout = resolvePrevout(inputs[0])
+  if (prevout == null) return false
+  return isLabCoinbasePrevout(prevout.txid, prevout.vout)
 }

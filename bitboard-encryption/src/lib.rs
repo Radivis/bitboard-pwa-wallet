@@ -82,7 +82,9 @@ fn parse_mtp_segment(segment: &str) -> Option<(u32, u32, u32)> {
         }
     }
     match (memory_kib, iterations, parallelism) {
-        (Some(m), Some(t), Some(p)) => Some((m, t, p)),
+        (Some(memory_kib), Some(iterations), Some(parallelism)) => {
+            Some((memory_kib, iterations, parallelism))
+        }
         _ => None,
     }
 }
@@ -187,18 +189,20 @@ mod tests {
     fn phc_ci_matches_derive_argon2_key_ci() {
         let password = "pw";
         let salt = [7u8; 16];
-        let a = derive_argon2_key_ci(password, &salt).unwrap();
-        let b = derive_argon2_key_from_phc(password, &salt, ARGON2_KDF_PHC_CI).unwrap();
-        assert_eq!(a, b);
+        let ci_derived_key = derive_argon2_key_ci(password, &salt).unwrap();
+        let phc_derived_key =
+            derive_argon2_key_from_phc(password, &salt, ARGON2_KDF_PHC_CI).unwrap();
+        assert_eq!(ci_derived_key, phc_derived_key);
     }
 
     #[test]
     fn phc_production_matches_derive_argon2_key() {
         let password = "pw";
         let salt = [7u8; 16];
-        let a = derive_argon2_key(password, &salt).unwrap();
-        let b = derive_argon2_key_from_phc(password, &salt, ARGON2_KDF_PHC_PRODUCTION).unwrap();
-        assert_eq!(a, b);
+        let production_derived_key = derive_argon2_key(password, &salt).unwrap();
+        let phc_derived_key =
+            derive_argon2_key_from_phc(password, &salt, ARGON2_KDF_PHC_PRODUCTION).unwrap();
+        assert_eq!(production_derived_key, phc_derived_key);
     }
 
     #[test]

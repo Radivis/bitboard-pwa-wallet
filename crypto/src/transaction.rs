@@ -64,14 +64,14 @@ fn sum_psbt_input_values(psbt: &Psbt) -> Result<u64, CryptoError> {
 }
 
 fn sum_unsigned_tx_output_values(tx: &Transaction) -> u64 {
-    tx.output.iter().map(|o| o.value.to_sat()).sum()
+    tx.output.iter().map(|output| output.value.to_sat()).sum()
 }
 
 /// Fee in satoshis from an unsigned PSBT (sum of inputs minus sum of outputs).
 pub fn fee_sats_from_unsigned_psbt(psbt: &Psbt) -> Result<u64, CryptoError> {
-    let vin_sum = sum_psbt_input_values(psbt)?;
-    let vout_sum = sum_unsigned_tx_output_values(&psbt.unsigned_tx);
-    Ok(vin_sum.saturating_sub(vout_sum))
+    let input_value_sum = sum_psbt_input_values(psbt)?;
+    let output_value_sum = sum_unsigned_tx_output_values(&psbt.unsigned_tx);
+    Ok(input_value_sum.saturating_sub(output_value_sum))
 }
 
 /// Sum of output values paying to the wallet change script (0 when change-free).
@@ -188,18 +188,18 @@ pub fn prepare_onchain_send(
     let mut change_free_max_sats = 0u64;
 
     if single_recipient_only {
-        let vin_sum = sum_psbt_input_values(&psbt)?;
+        let input_value_sum = sum_psbt_input_values(&psbt)?;
         let min_total_fee = fee_rate.fee_wu(unsigned.weight()).ok_or_else(|| {
             CryptoError::Transaction("Fee overflow for transaction weight".to_string())
         })?;
-        let max_recipient = vin_sum.saturating_sub(min_total_fee.to_sat());
+        let max_recipient = input_value_sum.saturating_sub(min_total_fee.to_sat());
         if max_recipient > final_payment_sats {
             change_free_bump_available = true;
             change_free_max_sats = max_recipient;
             if apply_change_free_bump {
                 match build_once(wallet, max_recipient) {
-                    Ok(psbt2) => {
-                        psbt = psbt2;
+                    Ok(change_free_psbt) => {
+                        psbt = change_free_psbt;
                         final_payment_sats = max_recipient;
                         bumped_change_free = true;
                     }

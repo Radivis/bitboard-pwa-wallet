@@ -189,11 +189,11 @@ vi.mock('@/stores/walletStore', async () => {
       addressType: string
     }) => s.loadedSubWallet?.addressType ?? s.addressType,
     getCommittedNetworkMode: () => {
-      const s = walletStoreState as {
+      const walletState = walletStoreState as {
         loadedSubWallet: { networkMode: string } | null
         networkMode: string
       }
-      return s.loadedSubWallet?.networkMode ?? s.networkMode
+      return walletState.loadedSubWallet?.networkMode ?? walletState.networkMode
     },
     selectCommittedAccountId: (s: {
       loadedSubWallet: { accountId: number } | null

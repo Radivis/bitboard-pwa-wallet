@@ -113,8 +113,8 @@ export function useWalletBackupImport() {
       setImportBusy(true)
       setImportVerifyInlineMessage(null)
       try {
-        const enc = getEncryptionWorker()
-        await enc.verifyWalletBackupManifest(
+        const encryptionWorker = getEncryptionWorker()
+        await encryptionWorker.verifyWalletBackupManifest(
           pendingImport.sqliteBytes,
           password,
           pendingImport.manifestJson,

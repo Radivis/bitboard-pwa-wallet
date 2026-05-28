@@ -50,16 +50,16 @@ describe('no-mnemonic-backup flag on wallets', () => {
   })
 
   it('anyWalletHasNoMnemonicBackupFlag is true when at least one wallet has the flag', async () => {
-    const a = await walletDb
+    const walletInsertA = await walletDb
       .insertInto('wallets')
       .values({ name: 'A', created_at: new Date().toISOString() })
       .executeTakeFirstOrThrow()
-    const b = await walletDb
+    const walletInsertB = await walletDb
       .insertInto('wallets')
       .values({ name: 'B', created_at: new Date().toISOString() })
       .executeTakeFirstOrThrow()
-    const idA = Number(a.insertId)
-    const idB = Number(b.insertId)
+    const idA = Number(walletInsertA.insertId)
+    const idB = Number(walletInsertB.insertId)
     expect(await anyWalletHasNoMnemonicBackupFlag(walletDb)).toBe(false)
     await setWalletNoMnemonicBackupFlag(walletDb, idB)
     expect(await anyWalletHasNoMnemonicBackupFlag(walletDb)).toBe(true)

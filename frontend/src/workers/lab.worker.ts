@@ -74,13 +74,13 @@ const labService = {
       cloned.minerSubsidySats ?? LAB_DEFAULT_MINER_SUBSIDY_SATS,
     )
     const mempool = (cloned.mempool ?? []).map((entry) => {
-      let next = { ...entry }
-      if (next.weight <= 0) {
+      let normalizedEntry = { ...entry }
+      if (normalizedEntry.weight <= 0) {
         const txWeight = wasmU64ToNumber(wasmModule.lab_tx_weight(entry.signedTxHex))
-        next = { ...next, weight: txWeight > 0 ? txWeight : 1 }
+        normalizedEntry = { ...normalizedEntry, weight: txWeight > 0 ? txWeight : 1 }
       }
-      next = { ...next, vsize: labVsizeFromWeight(next.weight) }
-      return next
+      normalizedEntry = { ...normalizedEntry, vsize: labVsizeFromWeight(normalizedEntry.weight) }
+      return normalizedEntry
     })
     replaceLabWorkerState({
       blocks: cloned.blocks ?? [],
@@ -557,7 +557,7 @@ const labService = {
         entity = labWorkerState.entities.find((entityRecord) => entityRecord.entityName === entityNameOpt)
         if (!entity) throw new Error('Lab entity registration failed after wallet creation')
       }
-      const addr = wasmModule.lab_entity_get_current_external_address(
+      const entityAddress = wasmModule.lab_entity_get_current_external_address(
         entity.mnemonic,
         entity.changesetJson,
         entity.network,
@@ -565,10 +565,10 @@ const labService = {
         entity.accountId,
       )
       labWorkerState.addressToOwner = labWorkerState.addressToOwner ?? {}
-      labWorkerState.addressToOwner[addr] = labEntityLabOwner(entity.labEntityId)
+      labWorkerState.addressToOwner[entityAddress] = labEntityLabOwner(entity.labEntityId)
     } else {
       const labEntityId = nextLabEntityId(labWorkerState.entities)
-      const addr = createAndRegisterLabEntityFromWasm(wasmModule, {
+      const entityAddress = createAndRegisterLabEntityFromWasm(wasmModule, {
         labEntityId,
         entityName: null,
         labNetwork,
@@ -577,7 +577,7 @@ const labService = {
         noAddressErrorMessage: 'Anonymous lab entity wallet creation failed (no first address)',
       })
       labWorkerState.addressToOwner = labWorkerState.addressToOwner ?? {}
-      labWorkerState.addressToOwner[addr] = labEntityLabOwner(labEntityId)
+      labWorkerState.addressToOwner[entityAddress] = labEntityLabOwner(labEntityId)
     }
     return this.getStateSnapshot()
   },
@@ -618,13 +618,13 @@ const labService = {
     labWorkerState.entities = labWorkerState.entities.filter(
       (entity) => entity.labEntityId !== labEntityId,
     )
-    const addrMap = labWorkerState.addressToOwner ?? {}
-    for (const [addr, addressOwner] of Object.entries(addrMap)) {
+    const addressToOwnerMap = labWorkerState.addressToOwner ?? {}
+    for (const [address, addressOwner] of Object.entries(addressToOwnerMap)) {
       if (labOwnersEqual(addressOwner, owner)) {
-        delete addrMap[addr]
+        delete addressToOwnerMap[address]
       }
     }
-    labWorkerState.addressToOwner = addrMap
+    labWorkerState.addressToOwner = addressToOwnerMap
     return this.getStateSnapshot()
   },
 

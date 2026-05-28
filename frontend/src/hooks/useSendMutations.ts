@@ -166,7 +166,7 @@ export function useLabSendMutation() {
             knownRecipientOwner,
           })
 
-        const lab = await buildAndSignLabTransaction({
+        const signedLabTransaction = await buildAndSignLabTransaction({
           utxosJson,
           toAddress: params.normalizedRecipient,
           amountSats: params.amountSats,
@@ -181,7 +181,7 @@ export function useLabSendMutation() {
           finalAmountSats,
           raisedToMinDust,
           bumpedChangeFree,
-        } = lab
+        } = signedLabTransaction
 
         const { amountUnit } = useSendStore.getState()
         if (raisedToMinDust || bumpedChangeFree) {
@@ -194,7 +194,7 @@ export function useLabSendMutation() {
           useSendStore.setState({
             amount: formatAmountInputFromSats(finalAmountSats, amountUnit),
             onchainDustWarning: {
-              previousSats: lab.originalAmountSats,
+              previousSats: signedLabTransaction.originalAmountSats,
               raisedToDustMin: raisedToMinDust,
               bumpedChangeFree,
             },

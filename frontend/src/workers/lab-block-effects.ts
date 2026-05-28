@@ -31,8 +31,8 @@ export function parseBlockEffects(raw: unknown): BlockEffectsParsed {
   return { spent, new_utxos, transactions, block_time }
 }
 
-function readSatsFromUtxoRow(row: Record<string, unknown>): number {
-  const amountSatsRaw = row.amount_sats ?? row.amountSats
+function readSatsFromUtxoFields(utxoFields: Record<string, unknown>): number {
+  const amountSatsRaw = utxoFields.amount_sats ?? utxoFields.amountSats
   if (typeof amountSatsRaw === 'bigint') return Number(amountSatsRaw)
   if (typeof amountSatsRaw === 'number' && Number.isFinite(amountSatsRaw)) {
     return Math.trunc(amountSatsRaw)
@@ -41,8 +41,10 @@ function readSatsFromUtxoRow(row: Record<string, unknown>): number {
 }
 
 function removeSpentUtxos(spent: { txid: string; vout: number }[]): void {
-  for (const stxo of spent) {
-    labWorkerState.utxos = labWorkerState.utxos.filter((utxo) => !(utxo.txid === stxo.txid && utxo.vout === stxo.vout))
+  for (const spentOutpoint of spent) {
+    labWorkerState.utxos = labWorkerState.utxos.filter(
+      (utxo) => !(utxo.txid === spentOutpoint.txid && utxo.vout === spentOutpoint.vout),
+    )
   }
 }
 
@@ -58,13 +60,13 @@ function addNewUtxos(
   }[],
 ): void {
   for (const utxo of newUtxos) {
-    const row = utxo as unknown as Record<string, unknown>
+    const utxoFields = utxo as unknown as Record<string, unknown>
     const addressStr = String(utxo.address)
     labWorkerState.utxos.push({
       txid: String(utxo.txid),
       vout: Number(utxo.vout),
       address: addressStr,
-      amountSats: readSatsFromUtxoRow(row),
+      amountSats: readSatsFromUtxoFields(utxoFields),
       scriptPubkeyHex: String(
         utxo.script_pubkey_hex ?? utxo.scriptPubkeyHex ?? '',
       ),
@@ -95,10 +97,10 @@ function synthesizeCoinbaseTxFromNewUtxos(
         },
       ],
       outputs: rows.map((newUtxoRow) => {
-        const row = newUtxoRow as unknown as Record<string, unknown>
+        const utxoFields = newUtxoRow as unknown as Record<string, unknown>
         return {
           address: String(newUtxoRow.address),
-          amount_sats: readSatsFromUtxoRow(row),
+          amount_sats: readSatsFromUtxoFields(utxoFields),
         }
       }),
     },

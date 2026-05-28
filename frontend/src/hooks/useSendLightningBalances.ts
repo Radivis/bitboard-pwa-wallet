@@ -63,9 +63,9 @@ export function useSendLightningBalances(params: {
   }, [isLightningSendMode, matchingLightningConnections])
 
   const balanceQueries = useQueries({
-    queries: matchingLightningConnections.map((conn) => ({
-      queryKey: sendPageLnBalanceQueryKey(conn.id),
-      queryFn: () => createBackendService(conn.config).getBalance(),
+    queries: matchingLightningConnections.map((connection) => ({
+      queryKey: sendPageLnBalanceQueryKey(connection.id),
+      queryFn: () => createBackendService(connection.config).getBalance(),
       enabled: isLightningSendMode && matchingLightningConnections.length > 0,
       staleTime: LN_WALLET_BALANCE_STALE_MS,
     })),
@@ -74,13 +74,13 @@ export function useSendLightningBalances(params: {
   const selectedLightningWallet = useMemo(
     () =>
       matchingLightningConnections.find(
-        (c) => c.id === selectedLightningConnectionId,
+        (connection) => connection.id === selectedLightningConnectionId,
       ) ?? null,
     [matchingLightningConnections, selectedLightningConnectionId],
   )
 
   const selectedLnBalanceIndex = matchingLightningConnections.findIndex(
-    (c) => c.id === selectedLightningConnectionId,
+    (connection) => connection.id === selectedLightningConnectionId,
   )
   const selectedLnBalanceQuery =
     selectedLnBalanceIndex >= 0 ? balanceQueries[selectedLnBalanceIndex] : null

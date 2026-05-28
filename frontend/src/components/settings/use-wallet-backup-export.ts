@@ -62,8 +62,8 @@ export function useWalletBackupExport() {
       const sqliteBuf = await blob.arrayBuffer()
       const sqliteBytes = new Uint8Array(sqliteBuf)
       const salt = crypto.getRandomValues(new Uint8Array(WALLET_BACKUP_SIGNING_SALT_BYTES))
-      const enc = getEncryptionWorker()
-      const manifestJson = await enc.signWalletBackupManifest(
+      const encryptionWorker = getEncryptionWorker()
+      const manifestJson = await encryptionWorker.signWalletBackupManifest(
         sqliteBytes,
         password,
         salt,

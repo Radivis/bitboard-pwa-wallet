@@ -6,7 +6,7 @@ import { LabResetCard } from '@/components/lab/Reset'
 import { useLabIndexPageData } from '@/hooks/useLabIndexPageData'
 
 export function ControlPage() {
-  const lab = useLabIndexPageData()
+  const labPageData = useLabIndexPageData()
 
   return (
     <>
@@ -17,11 +17,11 @@ export function ControlPage() {
       <LabRulesCard />
 
       <LabResetCard
-        onResetClick={() => lab.setShowResetConfirm(true)}
-        resetting={lab.resetting}
-        onConfirmReset={lab.onConfirmReset}
-        showConfirm={lab.showResetConfirm}
-        onCancelConfirm={() => lab.setShowResetConfirm(false)}
+        onResetClick={() => labPageData.setShowResetConfirm(true)}
+        resetting={labPageData.resetting}
+        onConfirmReset={labPageData.onConfirmReset}
+        showConfirm={labPageData.showResetConfirm}
+        onCancelConfirm={() => labPageData.setShowResetConfirm(false)}
       />
     </>
   )

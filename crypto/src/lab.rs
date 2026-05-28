@@ -248,13 +248,13 @@ pub fn lab_build_transaction(
 
     let mut output_vec: Vec<TxOut> = Vec::with_capacity(outputs.len());
     for output_spec in &outputs {
-        let addr = Address::from_str(&output_spec.address)
+        let parsed_output_address = Address::from_str(&output_spec.address)
             .map_display_err_to_js()?
             .require_network(Network::Regtest)
             .map_display_err_to_js()?;
         output_vec.push(TxOut {
             value: Amount::from_sat(output_spec.amount_sats),
-            script_pubkey: addr.script_pubkey(),
+            script_pubkey: parsed_output_address.script_pubkey(),
         });
     }
 
@@ -388,8 +388,8 @@ pub fn lab_sign_transaction_multi(
         let script_pubkey = ScriptBuf::from_bytes(script_bytes);
 
         if script_pubkey.is_p2tr() {
-            let privkey = PrivateKey::from_wif(&wif).map_display_err_to_js()?;
-            let keypair = Keypair::from_secret_key(&secp_engine, &privkey.inner);
+            let private_key = PrivateKey::from_wif(&wif).map_display_err_to_js()?;
+            let keypair = Keypair::from_secret_key(&secp_engine, &private_key.inner);
             let tweaked: TweakedKeypair = keypair.tap_tweak(&secp_engine, None);
 
             let sighash = sighasher
@@ -407,8 +407,8 @@ pub fn lab_sign_transaction_multi(
                 .expect("input index i is bounded by input_len") =
                 Witness::p2tr_key_spend(&taproot_signature);
         } else {
-            let privkey = PrivateKey::from_wif(&wif).map_display_err_to_js()?;
-            let secret_key = privkey.inner;
+            let private_key = PrivateKey::from_wif(&wif).map_display_err_to_js()?;
+            let secret_key = private_key.inner;
             let public_key = bitcoin::PublicKey::new(secret_key.public_key(&secp_engine));
             if public_key.wpubkey_hash().is_err() {
                 return Err(JsValue::from_str("Key must be compressed for P2WPKH"));
@@ -504,12 +504,12 @@ pub fn lab_build_transaction_with_change(
     let outputs_json = serde_json::to_string(&outputs).map_display_err_to_js()?;
     let tx_hex = lab_build_transaction(utxos_json, &outputs_json, fee_rate_sat_per_vb)?;
 
-    let result = LabBuildTransactionWithChangeResult {
+    let build_with_change_result = LabBuildTransactionWithChangeResult {
         tx_hex,
         fee_sats: actual_fee_sats,
         has_change,
     };
-    serde_wasm_bindgen::to_value(&result).map_display_err_to_js()
+    serde_wasm_bindgen::to_value(&build_with_change_result).map_display_err_to_js()
 }
 
 /// Generates a new keypair for "random" mining. Returns address (P2WPKH) and WIF.
@@ -595,14 +595,14 @@ pub fn lab_block_effects(block_hex: &str) -> Result<JsValue, JsValue> {
         let mut inputs = Vec::new();
         for input in &tx.input {
             if !input.previous_output.is_null() {
-                let prev = &input.previous_output;
+                let spent_prevout = &input.previous_output;
                 spent.push(LabBlockSpentOut {
-                    txid: prev.txid.to_string(),
-                    vout: prev.vout,
+                    txid: spent_prevout.txid.to_string(),
+                    vout: spent_prevout.vout,
                 });
                 inputs.push(LabBlockTxInputRef {
-                    prev_txid: prev.txid.to_string(),
-                    prev_vout: prev.vout,
+                    prev_txid: spent_prevout.txid.to_string(),
+                    prev_vout: spent_prevout.vout,
                 });
             }
         }
@@ -660,13 +660,13 @@ pub fn lab_block_effects(block_hex: &str) -> Result<JsValue, JsValue> {
     }
 
     let block_time = block.header.time;
-    let result = LabBlockEffectsResult {
+    let block_effects_result = LabBlockEffectsResult {
         new_utxos,
         spent,
         transactions,
         block_time,
     };
-    serde_wasm_bindgen::to_value(&result).map_display_err_to_js()
+    serde_wasm_bindgen::to_value(&block_effects_result).map_display_err_to_js()
 }
 
 /// Extracts script_pubkey hex from a P2WPKH or P2TR address.
@@ -721,7 +721,9 @@ fn create_coinbase_tx(
 
 /// Computes the Merkle root of the transaction list. Returns `None` if `txdata` is empty.
 fn compute_merkle_root(txdata: &[Transaction]) -> Option<TxMerkleNode> {
-    let hashes = txdata.iter().map(|t| t.compute_txid().to_raw_hash());
+    let hashes = txdata
+        .iter()
+        .map(|transaction| transaction.compute_txid().to_raw_hash());
     bitcoin::merkle_tree::calculate_root(hashes).map(Into::into)
 }
 

@@ -27,36 +27,36 @@ describe('selectMempoolTxsForBlock', () => {
   })
 
   it('includes non-conflicting txs that fit in the weight budget', () => {
-    const a = makeEntry({
+    const higherFeeEntry = makeEntry({
       txid: 'aa',
       feeSats: 100,
       weight: 400,
       inputs: [{ txid: 'f1', vout: 0 }],
     })
-    const b = makeEntry({
+    const lowerFeeEntry = makeEntry({
       txid: 'bb',
       feeSats: 50,
       weight: 200,
       inputs: [{ txid: 'f2', vout: 0 }],
     })
-    const selected = selectMempoolTxsForBlock([a, b], 4000)
+    const selected = selectMempoolTxsForBlock([higherFeeEntry, lowerFeeEntry], 4000)
     expect(selected.map((e) => e.txid).sort()).toEqual(['aa', 'bb'])
   })
 
   it('stops when no remaining tx fits in the remaining weight budget', () => {
-    const a = makeEntry({
+    const higherFeeEntry = makeEntry({
       txid: 'aa',
       feeSats: 1000,
       weight: 100,
       inputs: [{ txid: 'f1', vout: 0 }],
     })
-    const b = makeEntry({
+    const lowerFeeEntry = makeEntry({
       txid: 'bb',
       feeSats: 500,
       weight: 100,
       inputs: [{ txid: 'f2', vout: 0 }],
     })
-    const selected = selectMempoolTxsForBlock([a, b], 150)
+    const selected = selectMempoolTxsForBlock([higherFeeEntry, lowerFeeEntry], 150)
     expect(selected.map((e) => e.txid)).toEqual(['aa'])
   })
 
@@ -95,19 +95,19 @@ describe('selectMempoolTxsForBlock', () => {
   })
 
   it('uses txid as tie-break when fee rates are equal', () => {
-    const b = makeEntry({
+    const entryBb = makeEntry({
       txid: 'bb',
       feeSats: 100,
       weight: 100,
       inputs: [{ txid: 'f1', vout: 0 }],
     })
-    const a = makeEntry({
+    const entryAa = makeEntry({
       txid: 'aa',
       feeSats: 100,
       weight: 100,
       inputs: [{ txid: 'f2', vout: 0 }],
     })
-    const selected = selectMempoolTxsForBlock([b, a], 100)
+    const selected = selectMempoolTxsForBlock([entryBb, entryAa], 100)
     expect(selected.map((e) => e.txid)).toEqual(['aa'])
   })
 })

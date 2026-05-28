@@ -13,64 +13,64 @@ export const Route = createFileRoute('/lab/transactions')({
 })
 
 function LabTransactionsPage() {
-  const lab = useLabIndexPageData()
+  const labPageData = useLabIndexPageData()
 
   return (
     <>
       <PageHeader title="Transactions" icon={ArrowLeftRight} />
 
       <DeadLabEntityRecipientModal
-        open={lab.deadRecipientModalOpen}
+        open={labPageData.deadRecipientModalOpen}
         onOpenChange={(open) => {
-          if (!open) lab.onCloseDeadRecipientModal()
+          if (!open) labPageData.onCloseDeadRecipientModal()
         }}
-        onCancel={lab.onCloseDeadRecipientModal}
-        entityDisplayName={lab.deadRecipientModalDisplayName}
-        addressType={lab.deadRecipientModalAddressType}
-        onConfirm={lab.onConfirmDeadRecipientSend}
-        isPending={lab.sending}
+        onCancel={labPageData.onCloseDeadRecipientModal}
+        entityDisplayName={labPageData.deadRecipientModalDisplayName}
+        addressType={labPageData.deadRecipientModalAddressType}
+        onConfirm={labPageData.onConfirmDeadRecipientSend}
+        isPending={labPageData.sending}
       />
 
       <DustChangeChoiceModal
-        open={lab.dustCase2ModalOpen}
+        open={labPageData.dustCase2ModalOpen}
         onOpenChange={(open) => {
-          if (!open) lab.onCloseDustCase2Modal()
+          if (!open) labPageData.onCloseDustCase2Modal()
         }}
-        exactAmountSats={lab.dustCase2ExactAmountSats}
-        changeFreeMaxSats={lab.dustCase2ChangeFreeMaxSats}
-        onKeepExact={lab.onDustCase2KeepExact}
-        onIncreaseToChangeFree={lab.onDustCase2IncreaseToChangeFree}
-        isPending={lab.sending}
+        exactAmountSats={labPageData.dustCase2ExactAmountSats}
+        changeFreeMaxSats={labPageData.dustCase2ChangeFreeMaxSats}
+        onKeepExact={labPageData.onDustCase2KeepExact}
+        onIncreaseToChangeFree={labPageData.onDustCase2IncreaseToChangeFree}
+        isPending={labPageData.sending}
       />
 
       <LabMakeTransactionCard
-        showTxForm={lab.showTxForm}
-        setShowTxForm={lab.setShowTxForm}
-        fromAddress={lab.fromAddress}
-        setFromAddress={lab.setFromAddress}
-        toAddress={lab.toAddress}
-        setToAddress={lab.setToAddress}
-        amountSats={lab.amountSats}
-        setAmountSats={lab.setAmountSats}
-        feeRate={lab.feeRate}
-        setFeeRate={lab.setFeeRate}
-        onSend={lab.onSend}
-        sending={lab.sending}
-        sendDisabledFromDeadEntity={lab.sendDisabledFromDeadEntity}
-        deadFromEntityDisplayName={lab.deadFromEntityDisplayName}
-        controlledAddressesCount={lab.controlledAddressesCount}
-        randomTransactionCount={lab.randomTransactionCount}
-        setRandomTransactionCount={lab.setRandomTransactionCount}
-        onCreateRandomTransactions={lab.onCreateRandomTransactions}
-        creatingRandomTransactions={lab.creatingRandomTransactions}
-        randomBatchProgress={lab.randomBatchProgress}
-        labEntitiesCount={lab.labEntitiesCount}
-        hasMinedBlocks={lab.blockCount > 0}
+        showTxForm={labPageData.showTxForm}
+        setShowTxForm={labPageData.setShowTxForm}
+        fromAddress={labPageData.fromAddress}
+        setFromAddress={labPageData.setFromAddress}
+        toAddress={labPageData.toAddress}
+        setToAddress={labPageData.setToAddress}
+        amountSats={labPageData.amountSats}
+        setAmountSats={labPageData.setAmountSats}
+        feeRate={labPageData.feeRate}
+        setFeeRate={labPageData.setFeeRate}
+        onSend={labPageData.onSend}
+        sending={labPageData.sending}
+        sendDisabledFromDeadEntity={labPageData.sendDisabledFromDeadEntity}
+        deadFromEntityDisplayName={labPageData.deadFromEntityDisplayName}
+        controlledAddressesCount={labPageData.controlledAddressesCount}
+        randomTransactionCount={labPageData.randomTransactionCount}
+        setRandomTransactionCount={labPageData.setRandomTransactionCount}
+        onCreateRandomTransactions={labPageData.onCreateRandomTransactions}
+        creatingRandomTransactions={labPageData.creatingRandomTransactions}
+        randomBatchProgress={labPageData.randomBatchProgress}
+        labEntitiesCount={labPageData.labEntitiesCount}
+        hasMinedBlocks={labPageData.blockCount > 0}
       />
 
-      <LabAddressesCard onCopyAddress={lab.onCopyAddress} wallets={lab.wallets} />
+      <LabAddressesCard onCopyAddress={labPageData.onCopyAddress} wallets={labPageData.wallets} />
 
-      <LabUtxosCard onCopyAddress={lab.onCopyAddress} wallets={lab.wallets} />
+      <LabUtxosCard onCopyAddress={labPageData.onCopyAddress} wallets={labPageData.wallets} />
     </>
   )
 }

@@ -36,15 +36,15 @@ export function SendLightningWalletPicker(props: {
           : 'Using your connected Lightning wallet for this network.'}
       </p>
       <ul className="space-y-2">
-        {connectedLightningWallets.map((conn, index) => {
-          const q = balanceQueries[index]
-          const isSelected = conn.id === selectedConnectionId
+        {connectedLightningWallets.map((connection, index) => {
+          const balanceQuery = balanceQueries[index]
+          const isSelected = connection.id === selectedConnectionId
           return (
-            <li key={conn.id}>
+            <li key={connection.id}>
               <button
                 type="button"
                 disabled={disabled}
-                onClick={() => onSelectConnection(conn.id)}
+                onClick={() => onSelectConnection(connection.id)}
                 className={cn(
                   'flex w-full items-center justify-between gap-2 rounded-md border p-3 text-left text-sm transition-colors',
                   isSelected
@@ -52,17 +52,17 @@ export function SendLightningWalletPicker(props: {
                     : 'border-border hover:bg-muted/50',
                 )}
               >
-                <span className="min-w-0 flex-1 font-medium">{conn.label}</span>
+                <span className="min-w-0 flex-1 font-medium">{connection.label}</span>
                 <span className="flex shrink-0 items-center gap-1 tabular-nums text-muted-foreground">
-                  {q?.isPending ? (
+                  {balanceQuery?.isPending ? (
                     <Loader2 className="h-3 w-3 animate-spin" />
-                  ) : q?.isError ? (
+                  ) : balanceQuery?.isError ? (
                     <span className="text-destructive">—</span>
                   ) : (
                     <>
                       <Zap className="h-3 w-3" />
                       <BitcoinAmountDisplay
-                        amountSats={q?.data?.balanceSats ?? 0}
+                        amountSats={balanceQuery?.data?.balanceSats ?? 0}
                         size="sm"
                         className="inline text-muted-foreground"
                         allowUnitToggle={false}

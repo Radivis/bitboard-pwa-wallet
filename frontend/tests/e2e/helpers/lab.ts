@@ -267,9 +267,9 @@ export async function mineBlocksInLab(
         async () => {
           const st = await getLabState(page)
           const map = st.addressToOwner ?? {}
-          return (st.utxos ?? []).some((u) => {
-            const o = lookupLabAddressOwner(u.address, map)
-            return o != null && o.kind === 'wallet'
+          return (st.utxos ?? []).some((utxo) => {
+            const addressOwner = lookupLabAddressOwner(utxo.address, map)
+            return addressOwner != null && addressOwner.kind === 'wallet'
           })
         },
         { timeout: 20000, message: 'Expected wallet-owned lab UTXOs after mining' },
@@ -343,14 +343,14 @@ async function waitForLabTxViewerLoaded(page: Page, txid: string): Promise<void>
     .poll(
       async () => {
         return await page.evaluate(async (id) => {
-          const w = (window as unknown as {
+          const getLabTransaction = (window as unknown as {
             __labGetTransaction?: (tid: string) => Promise<unknown | null>
           }).__labGetTransaction
-          if (!w) {
+          if (!getLabTransaction) {
             return 'no-hook' as const
           }
-          const d = await w(id)
-          return d != null ? ('ready' as const) : ('not-found' as const)
+          const transactionDetail = await getLabTransaction(id)
+          return transactionDetail != null ? ('ready' as const) : ('not-found' as const)
         }, normalTxId)
       },
       {
@@ -422,8 +422,8 @@ export async function expectLabTxOutputAmountsSats(
   for (let i = 0; i < expectedSats.length; i++) {
     const row = page.getByTestId(`lab-tx-vout-${i}`)
     await expect(row).toBeVisible()
-    const n = await parseLabTxOutputRowSats(row)
-    expect(n).toBe(expectedSats[i])
+    const outputAmountSats = await parseLabTxOutputRowSats(row)
+    expect(outputAmountSats).toBe(expectedSats[i])
   }
 }
 
