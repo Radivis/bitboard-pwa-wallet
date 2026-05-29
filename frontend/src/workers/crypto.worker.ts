@@ -19,8 +19,10 @@ import {
   mapWirePrepareOnchainSendResultToDomain,
   mapWireSyncResultToDomain,
   mapWireTransactionListToDomain,
+  mapWireWalletUtxoListToDomain,
   parseWasmJsonWire,
 } from './crypto-wire-mappers';
+import type { WalletUtxoRow } from './crypto-api';
 import type {
   WireBalanceInfo,
   WireCreateWalletResult,
@@ -30,6 +32,7 @@ import type {
   WirePrepareOnchainSendResult,
   WireSyncResult,
   WireTransactionDetails,
+  WireWalletUtxoRow,
 } from './crypto-wire-types';
 import type { EncryptedBlobMessage, SecretsChannelService } from './secrets-channel-types';
 import { parseWalletPayloadJson } from '@/lib/wallet/wallet-domain-types';
@@ -445,6 +448,7 @@ const cryptoService = {
     feeRateSatPerVb: number;
     network: BitcoinNetwork;
     applyChangeFreeBump?: boolean;
+    selectedOutpoints?: import('./crypto-api').UtxoOutpoint[];
   }): Promise<import('./crypto-api').PrepareOnchainSendResult> {
     const {
       toAddress,
@@ -452,7 +456,17 @@ const cryptoService = {
       feeRateSatPerVb,
       network,
       applyChangeFreeBump = false,
+      selectedOutpoints,
     } = params;
+    const selectedOutpointsJson =
+      selectedOutpoints != null && selectedOutpoints.length > 0
+        ? JSON.stringify(
+            selectedOutpoints.map((outpoint) => ({
+              txid: outpoint.txid,
+              vout: outpoint.vout,
+            })),
+          )
+        : undefined;
     const wasmPrepareResult = await invokeWasmCrypto((wasmModule) =>
       wasmModule.prepare_onchain_send_transaction(
         toAddress,
@@ -460,10 +474,20 @@ const cryptoService = {
         feeRateSatPerVb,
         network,
         applyChangeFreeBump,
+        selectedOutpointsJson ?? null,
       ),
     );
     return mapWirePrepareOnchainSendResultToDomain(
       parseWasmJsonWire<WirePrepareOnchainSendResult>(wasmPrepareResult),
+    );
+  },
+
+  async listWalletUtxos(): Promise<WalletUtxoRow[]> {
+    const wasmListResult = await invokeWasmCrypto((wasmModule) =>
+      wasmModule.list_wallet_utxos(),
+    );
+    return mapWireWalletUtxoListToDomain(
+      parseWasmJsonWire<WireWalletUtxoRow[]>(wasmListResult),
     );
   },
 

@@ -35,6 +35,7 @@ import type {
   ResolveDescriptorWalletResult,
   UpdateDescriptorWalletChangesetParams,
   WalletSessionHandle,
+  WalletUtxoRow,
 } from '@/workers/crypto-api';
 import type {
   BalanceInfo,
@@ -75,6 +76,7 @@ interface CryptoState {
   prepareOnchainSendTransaction: (
     params: PrepareOnchainSendParams,
   ) => Promise<PrepareOnchainSendResult>;
+  listWalletUtxos: () => Promise<WalletUtxoRow[]>;
   getLabChangeAddress: () => Promise<string>;
   getBalance: () => Promise<BalanceInfo>;
   exportChangeset: () => Promise<string>;
@@ -208,6 +210,9 @@ export const useCryptoStore = create<CryptoState>((set, get) => {
 
     prepareOnchainSendTransaction: (params) =>
       withErrorHandling((worker) => worker.prepareOnchainSendTransaction(params)),
+
+    listWalletUtxos: () =>
+      withErrorHandling((worker) => worker.listWalletUtxos()),
 
     getLabChangeAddress: () =>
       withErrorHandling((worker) => worker.getLabChangeAddress()),

@@ -87,6 +87,18 @@ export interface ReviewInputUtxo {
   vout: number;
 }
 
+/** Outpoint identifying a wallet UTXO for manual coin control. */
+export interface UtxoOutpoint {
+  txid: string;
+  vout: number;
+}
+
+/** Wallet-owned unspent output row from `list_wallet_utxos`. */
+export interface WalletUtxoRow extends ReviewInputUtxo {
+  isConfirmed: boolean;
+  keychain: 'external' | 'internal';
+}
+
 export interface DraftLabPsbtTransactionResult {
   psbtBase64: string;
   finalAmountSats: number;
@@ -130,6 +142,8 @@ export interface BuildTransactionParams {
 export interface PrepareOnchainSendParams extends BuildTransactionParams {
   /** First prepare uses false; second call after user chooses change-free bump uses true. */
   applyChangeFreeBump?: boolean;
+  /** When set, BDK uses only these inputs (`manually_selected_only`). */
+  selectedOutpoints?: UtxoOutpoint[];
 }
 
 /** `prepare_onchain_send_transaction` (mapped from WASM in the worker). */
@@ -247,6 +261,8 @@ export interface CryptoService {
   prepareOnchainSendTransaction(
     params: PrepareOnchainSendParams,
   ): Promise<PrepareOnchainSendResult>;
+
+  listWalletUtxos(): Promise<WalletUtxoRow[]>;
 
   signAndExtractTransaction(psbtBase64: string): Promise<string>;
 

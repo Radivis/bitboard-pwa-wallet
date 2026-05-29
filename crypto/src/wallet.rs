@@ -3,6 +3,7 @@ use bdk_wallet::{ChangeSet, KeychainKind, Wallet};
 use bitcoin::Network as BdkNetwork;
 
 use crate::error::CryptoError;
+use crate::transaction::WalletUtxoRow;
 use crate::types::{BalanceInfo, BitcoinNetwork, TransactionDetails};
 
 /// BDK network for our [`BitcoinNetwork::Testnet`] mode. Public Esplora defaults use
@@ -127,6 +128,37 @@ pub fn get_balance(wallet: &Wallet) -> BalanceInfo {
         immature_sats: balance.immature.to_sat(),
         total_sats: balance.total().to_sat(),
     }
+}
+
+fn keychain_label(keychain: KeychainKind) -> &'static str {
+    match keychain {
+        KeychainKind::External => "external",
+        KeychainKind::Internal => "internal",
+    }
+}
+
+/// List all unspent outputs owned by the wallet (for coin control UI).
+pub fn list_wallet_utxos(wallet: &Wallet) -> Vec<WalletUtxoRow> {
+    wallet
+        .list_unspent()
+        .map(|local_output| {
+            let is_confirmed =
+                matches!(local_output.chain_position, ChainPosition::Confirmed { .. });
+            let address = wallet
+                .peek_address(local_output.keychain, local_output.derivation_index)
+                .address
+                .to_string();
+
+            WalletUtxoRow {
+                address,
+                amount_sats: local_output.txout.value.to_sat(),
+                txid: local_output.outpoint.txid.to_string(),
+                vout: local_output.outpoint.vout,
+                is_confirmed,
+                keychain: keychain_label(local_output.keychain).to_string(),
+            }
+        })
+        .collect()
 }
 
 /// Serialize a `ChangeSet` to a JSON string for persistence.

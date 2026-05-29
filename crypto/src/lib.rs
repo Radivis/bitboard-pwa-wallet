@@ -342,9 +342,17 @@ fn build_sync_result() -> Result<JsValue, JsValue> {
     to_js(&sync_result)
 }
 
+/// Return all unspent wallet outputs for coin control listing.
+#[wasm_bindgen]
+pub fn list_wallet_utxos() -> Result<JsValue, JsValue> {
+    let utxos = with_wallet(wallet::list_wallet_utxos)?;
+    serde_wasm_bindgen::to_value(&utxos).map_display_err_to_js()
+}
+
 /// Prepare an on-chain send: applies dust UX clamp; change-free bump only when
 /// `apply_change_free_bump` is true (after user confirms in the UI).
 /// Returns JSON including `change_free_bump_available`, `change_free_max_sats`.
+/// Optional `selected_outpoints_json`: JSON array of `{ txid, vout }` for manual coin control.
 #[wasm_bindgen]
 pub fn prepare_onchain_send_transaction(
     to_address: &str,
@@ -352,9 +360,14 @@ pub fn prepare_onchain_send_transaction(
     fee_rate_sat_per_vb: f64,
     network: &str,
     apply_change_free_bump: bool,
+    selected_outpoints_json: Option<String>,
 ) -> Result<JsValue, JsValue> {
     let bitcoin_network = types::BitcoinNetwork::try_from(network).map_err(JsValue::from)?;
+    let parsed_outpoints =
+        transaction::parse_selected_outpoints_json(selected_outpoints_json.as_deref())
+            .map_err(JsValue::from)?;
     let outcome = with_wallet_mut(|wallet| {
+        let selected_slice = parsed_outpoints.as_deref();
         transaction::prepare_onchain_send(
             wallet,
             to_address,
@@ -362,6 +375,7 @@ pub fn prepare_onchain_send_transaction(
             fee_rate_sat_per_vb,
             bitcoin_network.into(),
             apply_change_free_bump,
+            selected_slice,
         )
     })?
     .map_err(JsValue::from)?;
@@ -391,6 +405,7 @@ pub fn build_transaction(
             fee_rate_sat_per_vb,
             bitcoin_network.into(),
             false,
+            None,
         )
     })?
     .map_err(JsValue::from)?;

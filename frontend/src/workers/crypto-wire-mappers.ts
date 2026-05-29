@@ -3,6 +3,7 @@ import type {
   DraftLabPsbtTransactionResult,
   PrepareOnchainSendResult,
   ReviewInputUtxo,
+  WalletUtxoRow,
 } from './crypto-api';
 import type {
   BalanceInfo,
@@ -22,6 +23,7 @@ import type {
   WireReviewInputUtxo,
   WireSyncResult,
   WireTransactionDetails,
+  WireWalletUtxoRow,
 } from './crypto-wire-types';
 
 export function parseWasmJsonWire<T>(raw: unknown): T {
@@ -90,6 +92,18 @@ function mapWireReviewInputUtxoToDomain(wire: WireReviewInputUtxo): ReviewInputU
     txid: wire.txid,
     vout: wire.vout,
   };
+}
+
+export function mapWireWalletUtxoRowToDomain(wire: WireWalletUtxoRow): WalletUtxoRow {
+  return {
+    ...mapWireReviewInputUtxoToDomain(wire),
+    isConfirmed: wire.is_confirmed,
+    keychain: wire.keychain === 'internal' ? 'internal' : 'external',
+  };
+}
+
+export function mapWireWalletUtxoListToDomain(wireList: WireWalletUtxoRow[]): WalletUtxoRow[] {
+  return wireList.map(mapWireWalletUtxoRowToDomain);
 }
 
 function mapWireDraftReviewFieldsToDomain(wire: WireDraftPsbtResult): Pick<
