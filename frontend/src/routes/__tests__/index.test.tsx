@@ -256,7 +256,7 @@ describe('DashboardPage', () => {
     walletStoreState.lastSyncTime = syncTime
     renderWithProviders(<DashboardPage />)
     expect(
-      screen.getByText(`Last synced: ${syncTime.toLocaleTimeString()}`),
+      screen.getByText(`Last synced: ${syncTime.toLocaleString()}`),
     ).toBeInTheDocument()
   })
 

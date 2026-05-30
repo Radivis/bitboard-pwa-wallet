@@ -816,7 +816,7 @@ export function DashboardPage() {
       <PageHeader title={walletDashboardTitle(networkMode)} icon={Home}>
         {lastSyncTime ? (
           <p className="text-xs text-muted-foreground">
-            Last synced: {lastSyncTime.toLocaleTimeString()}
+            Last synced: {lastSyncTime.toLocaleString()}
           </p>
         ) : null}
       </PageHeader>
