@@ -6,11 +6,11 @@ import { appQueryClient } from '@/lib/shared/app-query-client'
 import { useActiveWalletLoadQuery } from '@/hooks/useActiveWalletLoadQuery'
 
 /**
- * Loads the active sub-wallet into WASM when a session exists but the wallet is
+ * Loads the active descriptor wallet into WASM when a session exists but the wallet is
  * not yet unlocked (e.g. after reload or returning from a locked state). Replaces
  * the previous imperative auto-unlock effect in AppInitializer.
  */
-export function useActiveWalletSubWalletBootstrap(): void {
+export function useActiveWalletDescriptorWalletBootstrap(): void {
   const sessionPassword = useSessionStore((sessionState) => sessionState.password)
   const setWalletStatus = useWalletStore((walletState) => walletState.setWalletStatus)
   const query = useActiveWalletLoadQuery()

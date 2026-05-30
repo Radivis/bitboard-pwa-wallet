@@ -15,7 +15,7 @@ export const COMMITTED_EXTERNAL_DESCRIPTOR_QUERY_KEY =
   'committed-external-descriptor' as const
 
 /**
- * Loads the external (receiving) output descriptor for the committed sub-wallet
+ * Loads the external (receiving) output descriptor for the committed descriptor wallet
  * from encrypted payload when the session password is available.
  */
 export function useCommittedExternalDescriptor() {

@@ -39,7 +39,7 @@ const mockSetWalletStatus = vi.fn()
 const mockSetCurrentAddress = vi.fn()
 const mockSetBalance = vi.fn()
 const mockSetTransactions = vi.fn()
-const mockCommitLoadedSubWallet = vi.fn()
+const mockCommitLoadedDescriptorWallet = vi.fn()
 const mockSetImportInitialSyncErrorMessage = vi.fn()
 vi.mock('@/stores/walletStore', () => ({
   useWalletStore: Object.assign(
@@ -53,7 +53,7 @@ vi.mock('@/stores/walletStore', () => ({
         setCurrentAddress: mockSetCurrentAddress,
         setBalance: mockSetBalance,
         setTransactions: mockSetTransactions,
-        commitLoadedSubWallet: mockCommitLoadedSubWallet,
+        commitLoadedDescriptorWallet: mockCommitLoadedDescriptorWallet,
         setImportInitialSyncErrorMessage: mockSetImportInitialSyncErrorMessage,
       }),
     {

@@ -171,7 +171,7 @@ describe('DashboardPage', () => {
       networkMode: 'signet',
       addressType: 'taproot',
       accountId: 0,
-      loadedSubWallet: {
+      loadedDescriptorWallet: {
         networkMode: 'signet',
         addressType: 'taproot',
         accountId: 0,

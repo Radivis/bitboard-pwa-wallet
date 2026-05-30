@@ -285,7 +285,7 @@ export interface CryptoService {
   /**
    * Update the changeset for one descriptor wallet in encrypted secrets.
    * Returns the new encrypted blob to store.
-   * When markFullScanDone is true, sets that sub-wallet's fullScanDone flag.
+   * When markFullScanDone is true, sets that descriptor wallet's fullScanDone flag.
    */
   updateDescriptorWalletChangeset(
     params: UpdateDescriptorWalletChangesetParams,

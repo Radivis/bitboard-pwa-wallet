@@ -12,7 +12,7 @@ import {
 } from '@/lib/wallet/descriptor-wallet-manager'
 import {
   loadWalletHandlingPersistedChainMismatch,
-  syncLoadedSubWalletWithEsplora,
+  syncLoadedDescriptorWalletWithEsplora,
 } from '@/lib/wallet/wallet-utils'
 import { refreshWalletStoreFromLoadedBdk } from '@/lib/wallet/onchain-bdk-store-sync'
 import { invalidateOnchainDashboardQueries } from '@/lib/wallet/onchain-dashboard-sync'
@@ -71,7 +71,7 @@ export async function switchDescriptorWallet(params: {
   const {
     setWalletStatus,
     setCurrentAddress,
-    commitLoadedSubWallet,
+    commitLoadedDescriptorWallet,
     setBalance,
     setTransactions,
     setLastSyncTime,
@@ -111,7 +111,7 @@ export async function switchDescriptorWallet(params: {
         : loadingTargetNetworkMessage(targetNetworkMode),
     )
 
-    // Drop previous sub-wallet balance/tx UI so the dashboard never shows another network's totals.
+    // Drop previous descriptor wallet balance/tx UI so the dashboard never shows another network's totals.
     setCurrentAddress(null)
     setBalance(null)
     setTransactions([])
@@ -137,7 +137,7 @@ export async function switchDescriptorWallet(params: {
 
     const address = await getCurrentAddress()
     setCurrentAddress(address)
-    commitLoadedSubWallet({
+    commitLoadedDescriptorWallet({
       networkMode: targetNetworkMode,
       addressType: targetAddressType,
       accountId: targetAccountId,
@@ -145,9 +145,9 @@ export async function switchDescriptorWallet(params: {
 
     if (targetNetworkMode !== 'lab') {
       await refreshWalletStoreFromLoadedBdk()
-      // Stale-banner query caches per sub-wallet persisted `lastSuccessfulEsploraSyncAt`.
+      // Stale-banner query caches per descriptor wallet persisted `lastSuccessfulEsploraSyncAt`.
       // After switch we cleared lastSyncTime and repopulated balance/txs from BDK; invalidate
-      // so the dashboard refetches metadata for the new sub-wallet before Esplora sync runs.
+      // so the dashboard refetches metadata for the new descriptor wallet before Esplora sync runs.
       invalidateOnchainDashboardQueries()
     }
 
@@ -158,7 +158,7 @@ export async function switchDescriptorWallet(params: {
         isLiveNetworkSwitch ||
         !descriptorWallet.fullScanDone ||
         usedEmptyChainFallback
-      await syncLoadedSubWalletWithEsplora({
+      await syncLoadedDescriptorWalletWithEsplora({
         networkMode: targetNetworkMode,
         activeWalletId,
         sessionPassword,

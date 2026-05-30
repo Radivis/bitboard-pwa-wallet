@@ -24,16 +24,16 @@ export class MainnetBalanceProbeUnverifiableError extends Error {
 }
 
 /**
- * Sums BDK-reported on-chain balance for every mainnet (`bitcoin`) descriptor sub-wallet.
+ * Sums BDK-reported on-chain balance for every mainnet (`bitcoin`) descriptor wallet.
  * Uses ephemeral WASM wallet sessions in the probe loop so the global active wallet slot
- * is not overwritten per descriptor. Restores the committed sub-wallet view afterward.
+ * is not overwritten per descriptor. Restores the committed descriptor wallet view afterward.
  * Ignores Lightning / NWC entirely.
  *
- * **Side effect:** After restoring the active sub-wallet, updates `useWalletStore` with the
+ * **Side effect:** After restoring the active descriptor wallet, updates `useWalletStore` with the
  * current balance and transaction list from WASM so the UI does not show stale data from the
  * probe loop. Treat this as “probe + refresh active wallet view,” not a pure read.
  *
- * If loading mainnet wallets throws, still attempts to reload the committed sub-wallet and
+ * If loading mainnet wallets throws, still attempts to reload the committed descriptor wallet and
  * refresh store balance/transactions so the WASM slot is not left on an arbitrary network.
  */
 export async function sumMainnetOnChainSatsForWallet(params: {
@@ -49,8 +49,8 @@ export async function sumMainnetOnChainSatsForWallet(params: {
     return 0
   }
 
-  const { loadedSubWallet, networkMode, addressType, accountId } = useWalletStore.getState()
-  const committedSubWallet = loadedSubWallet ?? { networkMode, addressType, accountId }
+  const { loadedDescriptorWallet, networkMode, addressType, accountId } = useWalletStore.getState()
+  const committedDescriptorWallet = loadedDescriptorWallet ?? { networkMode, addressType, accountId }
 
   const {
     openWalletSession,
@@ -59,13 +59,13 @@ export async function sumMainnetOnChainSatsForWallet(params: {
     getTransactionList,
   } = useCryptoStore.getState()
 
-  const restoreActiveSubWalletView = async (): Promise<void> => {
+  const restoreActiveDescriptorWalletView = async (): Promise<void> => {
     await loadDescriptorWalletWithoutSync({
       password,
       walletId,
-      networkMode: committedSubWallet.networkMode,
-      addressType: committedSubWallet.addressType,
-      accountId: committedSubWallet.accountId,
+      networkMode: committedDescriptorWallet.networkMode,
+      addressType: committedDescriptorWallet.addressType,
+      accountId: committedDescriptorWallet.accountId,
     })
     const restoredBalance = await getBalance()
     const restoredTxs = await getTransactionList()
@@ -80,9 +80,9 @@ export async function sumMainnetOnChainSatsForWallet(params: {
       await updateDescriptorWalletChangeset({
         password,
         walletId,
-        network: toBitcoinNetwork(committedSubWallet.networkMode),
-        addressType: committedSubWallet.addressType,
-        accountId: committedSubWallet.accountId,
+        network: toBitcoinNetwork(committedDescriptorWallet.networkMode),
+        addressType: committedDescriptorWallet.addressType,
+        accountId: committedDescriptorWallet.accountId,
         changesetJson: currentChangeset,
       })
     } catch (err) {
@@ -112,7 +112,7 @@ export async function sumMainnetOnChainSatsForWallet(params: {
     }
   } catch (probeErr) {
     try {
-      await restoreActiveSubWalletView()
+      await restoreActiveDescriptorWalletView()
     } catch (restoreErr) {
       if (import.meta.env.DEV) {
         console.error(
@@ -124,7 +124,7 @@ export async function sumMainnetOnChainSatsForWallet(params: {
     throw probeErr
   }
 
-  await restoreActiveSubWalletView()
+  await restoreActiveDescriptorWalletView()
   return balanceSum
 }
 

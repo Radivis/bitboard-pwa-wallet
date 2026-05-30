@@ -20,7 +20,7 @@ export function savingPreviousNetworkMessage(network: NetworkMode): string {
   return `Switching network: Saving ${NETWORK_LABELS[network]} data`
 }
 
-/** Shown while resolving descriptors and loading the target sub-wallet into WASM. */
+/** Shown while resolving descriptors and loading the target descriptor wallet into WASM. */
 export function loadingTargetNetworkMessage(network: NetworkMode): string {
   return `Switching network: Loading ${NETWORK_LABELS[network]} data`
 }
@@ -30,7 +30,7 @@ export function syncingTargetNetworkMessage(network: NetworkMode): string {
   return `Updating network: Syncing with ${NETWORK_LABELS[network]}`
 }
 
-/** Shown while persisting the current sub-wallet for the previous address type. */
+/** Shown while persisting the current descriptor wallet for the previous address type. */
 export function savingPreviousAddressTypeMessage(addressType: AddressType): string {
   return `Switching address type: Saving ${ADDRESS_TYPE_LABELS[addressType]} wallet data`
 }

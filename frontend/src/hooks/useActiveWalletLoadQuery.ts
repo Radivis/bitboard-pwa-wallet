@@ -9,7 +9,7 @@ import { reportWalletSyncError } from '@/lib/wallet/wallet-sync-error-toast'
 import { useWalletCryptoSessionPathGateStore } from '@/stores/walletCryptoSessionPathGateStore'
 
 /**
- * TanStack Query observer for loading the active sub-wallet when a session exists
+ * TanStack Query observer for loading the active descriptor wallet when a session exists
  * but the wallet is not yet unlocked (reload, after lock + near-zero restore, etc.).
  * Safe to call from multiple components — they share one cache entry per key.
  */

@@ -28,7 +28,7 @@ WASM **function exports** use `snake_case` across all Rust crates (`create_walle
 | Transaction fee | — | `feeSats` | `fee_sats` |
 | Confirmed flag | — | `isConfirmed` | `is_confirmed` |
 | Lab-sourced tx | — | `isLabTx` | `is_lab_tx` |
-| Esplora sub-wallet sync failure | — | `'syncFailed'` (union literal) | — |
+| Esplora descriptor wallet sync failure | — | `'syncFailed'` (union literal) | — |
 | Dust floor applied | — | `isRaisedToMinDust` | `raised_to_min_dust` |
 | Change-free bump applied | — | `isBumpedChangeFree` | `bumped_change_free` |
 | Change-free bump path exists | — | `isChangeFreeBumpAvailable` | `change_free_bump_available` |

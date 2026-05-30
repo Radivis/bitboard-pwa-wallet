@@ -7,7 +7,7 @@ import {
   type NetworkMode,
 } from '@/stores/walletStore'
 import { useFeatureStore } from '@/stores/featureStore'
-import { useSubWalletSwitchMutation } from '@/hooks/useSubWalletSwitchMutation'
+import { useDescriptorWalletSwitchMutation } from '@/hooks/useDescriptorWalletSwitchMutation'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { Button } from '@/components/ui/button'
 import { WalletUnlock } from '@/components/WalletUnlock'
@@ -67,7 +67,7 @@ export function NetworkSelector() {
   const pendingNearZeroNetworkRef = useRef<NetworkMode | null>(null)
 
   const { mutate: switchMutate, isSwitching, statusLine } =
-    useSubWalletSwitchMutation('network')
+    useDescriptorWalletSwitchMutation('network')
 
   useEffect(() => {
     const pending = pendingNearZeroNetworkRef.current

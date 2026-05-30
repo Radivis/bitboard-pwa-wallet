@@ -1,6 +1,6 @@
 # On-chain data and Bitboard wallets
 
-This document records how Bitboard handles **on-chain balance and transaction display** relative to **Bitboard wallets** (`wallet_id`) and **descriptor sub-wallets**.
+This document records how Bitboard handles **on-chain balance and transaction display** relative to **Bitboard wallets** (`wallet_id`) and **descriptor wallets**.
 
 ## BDK changeset is the single source of truth
 
@@ -9,7 +9,7 @@ This document records how Bitboard handles **on-chain balance and transaction di
 
 ## Last successful Esplora sync timestamp
 
-- Each descriptor sub-wallet may store `lastSuccessfulEsploraSyncAt` (ISO string): when Esplora sync last completed successfully for that sub-wallet.
+- Each descriptor wallet may store `lastSuccessfulEsploraSyncAt` (ISO string): when Esplora sync last completed successfully for that descriptor wallet.
 - Used only for **stale UX** (“last verified with Esplora”) when the current session has not completed Esplora sync yet or sync failed.
 - **Not set** on lab mode or WASM-only paths without Esplora.
 

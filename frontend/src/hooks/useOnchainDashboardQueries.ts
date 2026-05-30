@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { useWalletStore } from '@/stores/walletStore'
 import {
-  getActiveSubWalletSnapshotKey,
+  getActiveDescriptorWalletKey,
   onchainEsploraSyncMetadataQueryKey,
   resolveOnchainEsploraSyncMetadata,
 } from '@/lib/wallet/onchain-dashboard-sync'
@@ -16,13 +16,13 @@ export function useOnchainEsploraSyncMetadataQuery() {
   const transactionCount = useWalletStore(
     (walletState) => walletState.transactions.length,
   )
-  const subWalletKey = getActiveSubWalletSnapshotKey()
+  const descriptorWalletKey = getActiveDescriptorWalletKey()
 
   return useQuery({
     queryKey:
-      subWalletKey != null
+      descriptorWalletKey != null
         ? [
-            ...onchainEsploraSyncMetadataQueryKey(subWalletKey),
+            ...onchainEsploraSyncMetadataQueryKey(descriptorWalletKey),
             lastSyncTime?.toISOString() ?? null,
             walletStatus,
             balanceTotalSats,
@@ -30,7 +30,7 @@ export function useOnchainEsploraSyncMetadataQuery() {
           ]
         : ['onchain', 'dashboard', 'esplora', 'inactive'],
     queryFn: resolveOnchainEsploraSyncMetadata,
-    enabled: networkMode !== 'lab' && subWalletKey != null,
+    enabled: networkMode !== 'lab' && descriptorWalletKey != null,
     staleTime: 0,
     refetchOnWindowFocus: false,
   })

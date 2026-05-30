@@ -9,12 +9,12 @@ vi.mock('@/db/storage-adapter', () => ({
   },
 }))
 
-const loadLastSuccessfulEsploraSyncAtForSubWallet = vi.fn()
+const loadLastSuccessfulEsploraSyncAtForDescriptorWallet = vi.fn()
 
 vi.mock('@/lib/wallet/onchain-esplora-sync-metadata', () => ({
-  loadLastSuccessfulEsploraSyncAtForSubWallet: (...args: unknown[]) =>
-    loadLastSuccessfulEsploraSyncAtForSubWallet(...args),
-  subWalletKey: vi.fn(
+  loadLastSuccessfulEsploraSyncAtForDescriptorWallet: (...args: unknown[]) =>
+    loadLastSuccessfulEsploraSyncAtForDescriptorWallet(...args),
+  descriptorWalletKey: vi.fn(
     (params: { network: string; addressType: string; accountId: number }) =>
       `${params.network}:${params.addressType}:${params.accountId}`,
   ),
@@ -47,7 +47,7 @@ describe('resolveOnchainEsploraSyncMetadata', () => {
         totalSats: 1000,
       },
       transactions: [],
-      loadedSubWallet: {
+      loadedDescriptorWallet: {
         networkMode: 'testnet',
         addressType: AddressType.Taproot,
         accountId: 0,
@@ -59,12 +59,12 @@ describe('resolveOnchainEsploraSyncMetadata', () => {
     useWalletStore.setState({ lastSyncTime: new Date() })
     const result = await resolveOnchainEsploraSyncMetadata()
     expect(result.isStaleOnchain).toBe(false)
-    expect(loadLastSuccessfulEsploraSyncAtForSubWallet).not.toHaveBeenCalled()
+    expect(loadLastSuccessfulEsploraSyncAtForDescriptorWallet).not.toHaveBeenCalled()
   })
 
   it('returns stale when BDK data exists and persisted Esplora sync timestamp exists', async () => {
     const isoTimestamp = '2020-01-02T00:00:00.000Z'
-    loadLastSuccessfulEsploraSyncAtForSubWallet.mockResolvedValue(isoTimestamp)
+    loadLastSuccessfulEsploraSyncAtForDescriptorWallet.mockResolvedValue(isoTimestamp)
     const result = await resolveOnchainEsploraSyncMetadata()
     expect(result.isStaleOnchain).toBe(true)
     expect(result.lastSuccessfulEsploraSyncAt).toBe(isoTimestamp)

@@ -9,7 +9,7 @@ import {
 } from '@/lib/wallet/descriptor-wallet-manager'
 import { switchDescriptorWallet } from '@/lib/wallet/settings-switch-wallet'
 
-const mockSyncLoadedSubWalletWithEsplora = vi.hoisted(() =>
+const mockSyncLoadedDescriptorWalletWithEsplora = vi.hoisted(() =>
   vi.fn().mockResolvedValue('completed' as const),
 )
 
@@ -36,7 +36,7 @@ vi.mock('@/stores/walletStore', () => ({
     taproot: 'Taproot',
     segwit: 'SegWit',
   },
-  getSubWalletLabel: () => 'Label',
+  getDescriptorWalletLabel: () => 'Label',
 }))
 
 vi.mock('@/stores/sessionStore', () => ({
@@ -60,7 +60,7 @@ vi.mock('@/lib/wallet/wallet-utils', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/wallet/wallet-utils')>()
   return {
     ...actual,
-    syncLoadedSubWalletWithEsplora: mockSyncLoadedSubWalletWithEsplora,
+    syncLoadedDescriptorWalletWithEsplora: mockSyncLoadedDescriptorWalletWithEsplora,
   }
 })
 
@@ -78,7 +78,7 @@ vi.mock('@/lib/wallet/onchain-dashboard-sync', () => ({
 
 const mockSetWalletStatus = vi.fn()
 const mockSetCurrentAddress = vi.fn()
-const mockCommitLoadedSubWallet = vi.fn()
+const mockCommitLoadedDescriptorWallet = vi.fn()
 const mockSetBalance = vi.fn()
 const mockSetTransactions = vi.fn()
 const mockSetLastSyncTime = vi.fn()
@@ -107,7 +107,7 @@ describe('switchDescriptorWallet', () => {
       activeWalletId: 1,
       setWalletStatus: mockSetWalletStatus,
       setCurrentAddress: mockSetCurrentAddress,
-      commitLoadedSubWallet: mockCommitLoadedSubWallet,
+      commitLoadedDescriptorWallet: mockCommitLoadedDescriptorWallet,
       setBalance: mockSetBalance,
       setTransactions: mockSetTransactions,
       setLastSyncTime: mockSetLastSyncTime,
@@ -124,7 +124,7 @@ describe('switchDescriptorWallet', () => {
     } as unknown as ReturnType<typeof useCryptoStore.getState>)
 
     vi.mocked(resolveDescriptorWallet).mockResolvedValue(descriptorWallet)
-    mockSyncLoadedSubWalletWithEsplora.mockResolvedValue('completed')
+    mockSyncLoadedDescriptorWalletWithEsplora.mockResolvedValue('completed')
     vi.mocked(updateDescriptorWalletChangeset).mockResolvedValue(undefined)
   })
 
@@ -133,7 +133,7 @@ describe('switchDescriptorWallet', () => {
       activeWalletId: null,
       setWalletStatus: mockSetWalletStatus,
       setCurrentAddress: mockSetCurrentAddress,
-      commitLoadedSubWallet: mockCommitLoadedSubWallet,
+      commitLoadedDescriptorWallet: mockCommitLoadedDescriptorWallet,
       setBalance: mockSetBalance,
       setTransactions: mockSetTransactions,
       setLastSyncTime: mockSetLastSyncTime,
@@ -184,7 +184,7 @@ describe('switchDescriptorWallet', () => {
     expect(mockSetTransactions).toHaveBeenCalledWith([])
     expect(mockSetLastSyncTime).toHaveBeenCalledWith(null)
     expect(mockRefreshWalletStoreFromLoadedBdk).toHaveBeenCalledTimes(1)
-    expect(mockSyncLoadedSubWalletWithEsplora).toHaveBeenCalledWith({
+    expect(mockSyncLoadedDescriptorWalletWithEsplora).toHaveBeenCalledWith({
       networkMode: 'testnet',
       activeWalletId: 1,
       sessionPassword: 'pw',
@@ -193,7 +193,7 @@ describe('switchDescriptorWallet', () => {
       targetAccountId: 0,
       fullScanNeeded: true,
     })
-    expect(mockCommitLoadedSubWallet).toHaveBeenCalledWith({
+    expect(mockCommitLoadedDescriptorWallet).toHaveBeenCalledWith({
       networkMode: 'testnet',
       addressType: 'taproot',
       accountId: 0,
@@ -204,7 +204,7 @@ describe('switchDescriptorWallet', () => {
   })
 
   it('resolves without success toast when sync fails after load; unlocks for manual retry', async () => {
-    mockSyncLoadedSubWalletWithEsplora.mockResolvedValueOnce('syncFailed')
+    mockSyncLoadedDescriptorWalletWithEsplora.mockResolvedValueOnce('syncFailed')
 
     await expect(
       switchDescriptorWallet({
@@ -217,14 +217,14 @@ describe('switchDescriptorWallet', () => {
       }),
     ).resolves.toBeUndefined()
 
-    expect(mockSyncLoadedSubWalletWithEsplora).toHaveBeenCalled()
-    expect(mockCommitLoadedSubWallet).toHaveBeenCalledWith({
+    expect(mockSyncLoadedDescriptorWalletWithEsplora).toHaveBeenCalled()
+    expect(mockCommitLoadedDescriptorWallet).toHaveBeenCalledWith({
       networkMode: 'testnet',
       addressType: 'taproot',
       accountId: 0,
     })
     const successCalls = vi.mocked(toast.success).mock.calls.map((c) => c[0])
-    expect(successCalls.some((m) => String(m).includes('sub-wallet loaded'))).toBe(
+    expect(successCalls.some((m) => String(m).includes('descriptor wallet loaded'))).toBe(
       false,
     )
     expect(mockSetWalletStatus).toHaveBeenCalledWith('syncing')
@@ -241,7 +241,7 @@ describe('switchDescriptorWallet', () => {
       currentAccountId: 0,
     })
 
-    expect(mockSyncLoadedSubWalletWithEsplora).toHaveBeenCalledWith(
+    expect(mockSyncLoadedDescriptorWalletWithEsplora).toHaveBeenCalledWith(
       expect.objectContaining({ fullScanNeeded: true }),
     )
   })
@@ -279,7 +279,7 @@ describe('switchDescriptorWallet', () => {
       changesetJson: '{}',
       useEmptyChain: true,
     })
-    expect(mockSyncLoadedSubWalletWithEsplora).toHaveBeenCalledWith(
+    expect(mockSyncLoadedDescriptorWalletWithEsplora).toHaveBeenCalledWith(
       expect.objectContaining({ fullScanNeeded: true }),
     )
   })
@@ -299,7 +299,7 @@ describe('switchDescriptorWallet', () => {
     })
 
     expect(mockLoadWallet).toHaveBeenCalledTimes(2)
-    expect(mockSyncLoadedSubWalletWithEsplora).toHaveBeenCalledWith(
+    expect(mockSyncLoadedDescriptorWalletWithEsplora).toHaveBeenCalledWith(
       expect.objectContaining({ fullScanNeeded: true }),
     )
   })
@@ -314,8 +314,8 @@ describe('switchDescriptorWallet', () => {
       currentAccountId: 0,
     })
 
-    expect(mockSyncLoadedSubWalletWithEsplora).not.toHaveBeenCalled()
-    expect(mockCommitLoadedSubWallet).toHaveBeenCalledWith({
+    expect(mockSyncLoadedDescriptorWalletWithEsplora).not.toHaveBeenCalled()
+    expect(mockCommitLoadedDescriptorWallet).toHaveBeenCalledWith({
       networkMode: 'lab',
       addressType: 'taproot',
       accountId: 0,

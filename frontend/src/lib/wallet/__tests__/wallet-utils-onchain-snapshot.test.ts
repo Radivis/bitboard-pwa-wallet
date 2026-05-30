@@ -85,9 +85,9 @@ vi.mock('sonner', () => ({
 }))
 
 import { useWalletStore } from '@/stores/walletStore'
-import { syncLoadedSubWalletWithEsplora } from '@/lib/wallet/wallet-utils'
+import { syncLoadedDescriptorWalletWithEsplora } from '@/lib/wallet/wallet-utils'
 
-describe('syncLoadedSubWalletWithEsplora BDK fallback', () => {
+describe('syncLoadedDescriptorWalletWithEsplora BDK fallback', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     refreshWalletStoreFromLoadedBdk.mockResolvedValue(undefined)
@@ -114,7 +114,7 @@ describe('syncLoadedSubWalletWithEsplora BDK fallback', () => {
           isLabTx: false,
         },
       ],
-      loadedSubWallet: {
+      loadedDescriptorWallet: {
         networkMode: 'testnet',
         addressType: AddressType.Taproot,
         accountId: 0,
@@ -124,7 +124,7 @@ describe('syncLoadedSubWalletWithEsplora BDK fallback', () => {
   })
 
   it('refreshes BDK store data when Esplora sync fails', async () => {
-    const result = await syncLoadedSubWalletWithEsplora({
+    const result = await syncLoadedDescriptorWalletWithEsplora({
       networkMode: 'testnet',
       activeWalletId: 1,
       sessionPassword: 'pw',

@@ -58,7 +58,7 @@ describe('useActiveWalletLoadQuery', () => {
       currentAddress: null,
       lastSyncTime: null,
       transactions: [],
-      loadedSubWallet: null,
+      loadedDescriptorWallet: null,
       importInitialSyncErrorMessage: null,
     })
   })

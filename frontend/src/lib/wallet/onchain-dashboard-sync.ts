@@ -2,8 +2,8 @@ import { ensureMigrated } from '@/db/database'
 import { appQueryClient } from '@/lib/shared/app-query-client'
 import { toBitcoinNetwork } from '@/lib/wallet/bitcoin-utils'
 import {
-  loadLastSuccessfulEsploraSyncAtForSubWallet,
-  subWalletKey,
+  loadLastSuccessfulEsploraSyncAtForDescriptorWallet,
+  descriptorWalletKey,
 } from '@/lib/wallet/onchain-esplora-sync-metadata'
 import { WALLET_DB_QUERY_KEY_ROOT } from '@/lib/wallet/wallet-query-key-root'
 import type { NetworkMode } from '@/stores/walletStore'
@@ -23,9 +23,9 @@ export const ONCHAIN_DASHBOARD_QUERY_KEY = [
 ] as const
 
 export function onchainEsploraSyncMetadataQueryKey(
-  subWalletKeyValue: string,
+  descriptorWalletKeyValue: string,
 ): readonly ['wallet_db', 'onchain', 'dashboard', 'esplora', string] {
-  return [...ONCHAIN_DASHBOARD_QUERY_KEY, 'esplora', subWalletKeyValue]
+  return [...ONCHAIN_DASHBOARD_QUERY_KEY, 'esplora', descriptorWalletKeyValue]
 }
 
 export interface OnchainEsploraSyncMetadataResult {
@@ -33,7 +33,7 @@ export interface OnchainEsploraSyncMetadataResult {
   lastSuccessfulEsploraSyncAt?: string
 }
 
-function activeSubWalletContext():
+function activeDescriptorWalletContext():
   | {
       networkMode: NetworkMode
       addressType: AddressType
@@ -63,13 +63,13 @@ function activeSubWalletContext():
   }
 }
 
-export function getActiveSubWalletSnapshotKey(): string | null {
+export function getActiveDescriptorWalletKey(): string | null {
   const walletState = useWalletStore.getState()
   if (walletState.networkMode === 'lab' || walletState.activeWalletId == null) {
     return null
   }
   const network = toBitcoinNetwork(walletState.networkMode)
-  return subWalletKey({
+  return descriptorWalletKey({
     network,
     addressType: selectCommittedAddressType(walletState),
     accountId: selectCommittedAccountId(walletState),
@@ -95,14 +95,14 @@ export async function resolveOnchainEsploraSyncMetadata(): Promise<
     return { isStaleOnchain: false }
   }
 
-  const context = activeSubWalletContext()
+  const context = activeDescriptorWalletContext()
   if (context == null) {
     return { isStaleOnchain: false }
   }
 
   await ensureMigrated()
   const lastSuccessfulEsploraSyncAt =
-    await loadLastSuccessfulEsploraSyncAtForSubWallet({
+    await loadLastSuccessfulEsploraSyncAtForDescriptorWallet({
       password: context.password,
       walletId: context.walletId,
       network: toBitcoinNetwork(context.networkMode),

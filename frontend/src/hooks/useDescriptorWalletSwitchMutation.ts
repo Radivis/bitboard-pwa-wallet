@@ -10,9 +10,9 @@ import {
   LOADING_WALLET_FOR_SWITCH_STATUS_LINE,
 } from '@/lib/settings/network-switch-status-messages'
 
-export type SubWalletSwitchContext = 'network' | 'addressType'
+export type DescriptorWalletSwitchContext = 'network' | 'addressType'
 
-export function useSubWalletSwitchMutation(
+export function useDescriptorWalletSwitchMutation(
   switchContext: 'network',
 ): {
   mutate: (target: NetworkMode) => void
@@ -20,7 +20,7 @@ export function useSubWalletSwitchMutation(
   isSwitching: boolean
   statusLine: string | null
 }
-export function useSubWalletSwitchMutation(
+export function useDescriptorWalletSwitchMutation(
   switchContext: 'addressType',
 ): {
   mutate: (target: AddressType) => void
@@ -28,7 +28,7 @@ export function useSubWalletSwitchMutation(
   isSwitching: boolean
   statusLine: string | null
 }
-export function useSubWalletSwitchMutation(switchContext: SubWalletSwitchContext) {
+export function useDescriptorWalletSwitchMutation(switchContext: DescriptorWalletSwitchContext) {
   const [switchPhaseMessage, setSwitchPhaseMessage] = useState<string | null>(
     null,
   )

@@ -9,8 +9,8 @@ export type ActiveWalletLoadQueryKeyInput = {
   accountId: number
 }
 
-/** Segment after `wallet_db` for active sub-wallet bootstrap queries. */
-export const ACTIVE_WALLET_LOAD_QUERY_SEGMENT = 'active-wallet-sub-wallet-load' as const
+/** Segment after `wallet_db` for active descriptor wallet bootstrap queries. */
+export const ACTIVE_WALLET_LOAD_QUERY_SEGMENT = 'active-wallet-descriptor-wallet-load' as const
 
 /** Prefix for `removeQueries` / `useIsFetching` on bootstrap load queries. */
 export const activeWalletLoadQueryKeyPrefix = [
@@ -19,7 +19,7 @@ export const activeWalletLoadQueryKeyPrefix = [
 ] as const
 
 /**
- * TanStack Query key for bootstrapping WASM from session + persisted sub-wallet triple.
+ * TanStack Query key for bootstrapping WASM from session + persisted descriptor wallet triple.
  */
 export function activeWalletLoadQueryKey(input: ActiveWalletLoadQueryKeyInput) {
   return [

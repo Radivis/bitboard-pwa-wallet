@@ -23,7 +23,7 @@ export const ADDRESS_TYPE_LABELS: Record<AddressType, string> = {
   [AddressType.SegWit]: 'SegWit',
 }
 
-export function getSubWalletLabel(
+export function getDescriptorWalletLabel(
   networkMode: NetworkMode,
   addressType: AddressType,
 ): string {
@@ -37,33 +37,33 @@ interface PersistedWalletState {
   activeWalletId: number | null
 }
 
-/** Sub-wallet triple that BDK/WASM was last loaded for; null when worker purged or not yet loaded. */
-export type LoadedSubWallet = {
+/** Descriptor wallet triple that BDK/WASM was last loaded for; null when worker purged or not yet loaded. */
+export type LoadedDescriptorWallet = {
   networkMode: NetworkMode
   addressType: AddressType
   accountId: number
 }
 
-/** Last-loaded sub-wallet, else persisted preference — use for UI selection and theme accents. */
+/** Last-loaded descriptor wallet, else persisted preference — use for UI selection and theme accents. */
 export function selectCommittedNetworkMode(state: {
-  loadedSubWallet: LoadedSubWallet | null
+  loadedDescriptorWallet: LoadedDescriptorWallet | null
   networkMode: NetworkMode
 }): NetworkMode {
-  return state.loadedSubWallet?.networkMode ?? state.networkMode
+  return state.loadedDescriptorWallet?.networkMode ?? state.networkMode
 }
 
 export function selectCommittedAddressType(state: {
-  loadedSubWallet: LoadedSubWallet | null
+  loadedDescriptorWallet: LoadedDescriptorWallet | null
   addressType: AddressType
 }): AddressType {
-  return state.loadedSubWallet?.addressType ?? state.addressType
+  return state.loadedDescriptorWallet?.addressType ?? state.addressType
 }
 
 export function selectCommittedAccountId(state: {
-  loadedSubWallet: LoadedSubWallet | null
+  loadedDescriptorWallet: LoadedDescriptorWallet | null
   accountId: number
 }): number {
-  return state.loadedSubWallet?.accountId ?? state.accountId
+  return state.loadedDescriptorWallet?.accountId ?? state.accountId
 }
 
 interface TransientWalletState {
@@ -81,7 +81,7 @@ interface TransientWalletState {
   currentAddress: string | null
   lastSyncTime: Date | null
   transactions: TransactionDetails[]
-  loadedSubWallet: LoadedSubWallet | null
+  loadedDescriptorWallet: LoadedDescriptorWallet | null
   /**
    * Set when post-import Esplora full scan fails; in-memory only (not persisted).
    * Cleared on successful retry, lock, or dismiss.
@@ -93,8 +93,8 @@ interface WalletActions {
   setNetworkMode: (networkMode: NetworkMode) => void
   setAddressType: (addressType: AddressType) => void
   setAccountId: (accountId: number) => void
-  /** Persists network/address/account and sets `loadedSubWallet` together (use after a successful WASM load). */
-  commitLoadedSubWallet: (loadedSubWallet: LoadedSubWallet) => void
+  /** Persists network/address/account and sets `loadedDescriptorWallet` together (use after a successful WASM load). */
+  commitLoadedDescriptorWallet: (loadedDescriptorWallet: LoadedDescriptorWallet) => void
   setActiveWallet: (walletId: number | null) => void
   setWalletStatus: (walletStatus: WalletStatus) => void
   setBalance: (balance: BalanceInfo | null) => void
@@ -118,7 +118,7 @@ const TRANSIENT_DEFAULTS: TransientWalletState = {
   currentAddress: null,
   lastSyncTime: null,
   transactions: [],
-  loadedSubWallet: null,
+  loadedDescriptorWallet: null,
   importInitialSyncErrorMessage: null,
 }
 
@@ -135,12 +135,12 @@ export const useWalletStore = create<WalletState>()(
       setNetworkMode: (networkMode) => set({ networkMode }),
       setAddressType: (addressType) => set({ addressType }),
       setAccountId: (accountId) => set({ accountId }),
-      commitLoadedSubWallet: (loadedSubWallet) =>
+      commitLoadedDescriptorWallet: (loadedDescriptorWallet) =>
         set({
-          networkMode: loadedSubWallet.networkMode,
-          addressType: loadedSubWallet.addressType,
-          accountId: loadedSubWallet.accountId,
-          loadedSubWallet,
+          networkMode: loadedDescriptorWallet.networkMode,
+          addressType: loadedDescriptorWallet.addressType,
+          accountId: loadedDescriptorWallet.accountId,
+          loadedDescriptorWallet,
         }),
       setActiveWallet: (walletId) => set({ activeWalletId: walletId }),
       setWalletStatus: (walletStatus) => set({ walletStatus }),
@@ -159,7 +159,7 @@ export const useWalletStore = create<WalletState>()(
         set({
           ...TRANSIENT_DEFAULTS,
           walletStatus: 'locked',
-          loadedSubWallet: null,
+          loadedDescriptorWallet: null,
         }),
 
       resetWallet: () =>

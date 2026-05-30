@@ -6,7 +6,7 @@ import {
 import type { WalletSecretsPayload } from '@/lib/wallet/wallet-domain-types'
 import type { AddressType, BitcoinNetwork } from '@/workers/crypto-types'
 
-export function subWalletKey(params: {
+export function descriptorWalletKey(params: {
   network: BitcoinNetwork
   addressType: AddressType
   accountId: number
@@ -66,7 +66,7 @@ export async function persistLastSuccessfulEsploraSyncAt(params: {
   })
 }
 
-export async function loadLastSuccessfulEsploraSyncAtForSubWallet(params: {
+export async function loadLastSuccessfulEsploraSyncAtForDescriptorWallet(params: {
   password: string
   walletId: number
   network: BitcoinNetwork

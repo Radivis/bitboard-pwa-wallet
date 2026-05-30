@@ -71,7 +71,7 @@ vi.mock('@/stores/cryptoStore', () => ({
 vi.mock('@/stores/walletStore', () => ({
   useWalletStore: {
     getState: () => ({
-      loadedSubWallet: {
+      loadedDescriptorWallet: {
         networkMode: 'testnet',
         addressType: 'taproot',
         accountId: 0,
@@ -144,7 +144,7 @@ describe('sumMainnetOnChainSatsForWallet', () => {
     expect(mockLoadDescriptorWalletWithoutSync).toHaveBeenCalledTimes(1)
   })
 
-  it('restores the active sub-wallet view after probing', async () => {
+  it('restores the active descriptor wallet view after probing', async () => {
     await sumMainnetOnChainSatsForWallet({
       password: 'test-password',
       walletId: 1,

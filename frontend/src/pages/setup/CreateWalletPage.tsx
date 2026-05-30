@@ -62,7 +62,7 @@ export function CreateWalletPage() {
   const setBalance = useWalletStore((walletState) => walletState.setBalance)
   const setTransactions = useWalletStore((walletState) => walletState.setTransactions)
   const setLastSyncTime = useWalletStore((walletState) => walletState.setLastSyncTime)
-  const commitLoadedSubWallet = useWalletStore((walletState) => walletState.commitLoadedSubWallet)
+  const commitLoadedDescriptorWallet = useWalletStore((walletState) => walletState.commitLoadedDescriptorWallet)
   const addWallet = useAddWallet()
 
   const words = useMemo(() => (mnemonicForBackup ? mnemonicForBackup.split(' ') : []), [mnemonicForBackup])
@@ -126,7 +126,7 @@ export function CreateWalletPage() {
       setCurrentAddress(null)
       setActiveWallet(walletId)
       setCurrentAddress(firstAddress)
-      commitLoadedSubWallet({
+      commitLoadedDescriptorWallet({
         networkMode,
         addressType,
         accountId,
@@ -140,7 +140,7 @@ export function CreateWalletPage() {
       accountId,
       addWallet,
       addressType,
-      commitLoadedSubWallet,
+      commitLoadedDescriptorWallet,
       networkMode,
       queryClient,
       setActiveWallet,

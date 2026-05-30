@@ -6,7 +6,7 @@ import { renderWithProviders } from '@/test-utils/test-providers'
 import {
   toast,
   featureStoreState,
-  mockCommitLoadedSubWallet,
+  mockCommitLoadedDescriptorWallet,
   mockExportChangeset,
   mockLoadWalletSecretsPayload,
   mockResolveDescriptorWallet,
@@ -57,7 +57,7 @@ describe('Settings routes', () => {
       ).toBeInTheDocument()
     })
 
-    it('network selector commits loaded sub-wallet after switch completes', async () => {
+    it('network selector commits loaded descriptor wallet after switch completes', async () => {
       mockExportChangeset.mockResolvedValueOnce('{}')
       const user = userEvent.setup()
       renderWithProviders(<SettingsMainPage />)
@@ -65,7 +65,7 @@ describe('Settings routes', () => {
       await user.click(screen.getByRole('button', { name: 'Testnet' }))
 
       await waitFor(() => {
-        expect(mockCommitLoadedSubWallet).toHaveBeenCalledWith({
+        expect(mockCommitLoadedDescriptorWallet).toHaveBeenCalledWith({
           networkMode: 'testnet',
           addressType: 'taproot',
           accountId: 0,

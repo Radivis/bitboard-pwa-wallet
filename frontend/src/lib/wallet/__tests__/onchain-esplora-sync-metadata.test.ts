@@ -38,7 +38,7 @@ describe('onchain-esplora-sync-metadata', () => {
     vi.clearAllMocks()
   })
 
-  it('applyLastSuccessfulEsploraSyncAtToPayload sets timestamp on matching sub-wallet', () => {
+  it('applyLastSuccessfulEsploraSyncAtToPayload sets timestamp on matching descriptor wallet', () => {
     const syncedAtIso = '2025-06-01T12:00:00.000Z'
     const patched = applyLastSuccessfulEsploraSyncAtToPayload(buildPayload(), {
       network: 'testnet',

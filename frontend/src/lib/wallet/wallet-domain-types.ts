@@ -38,9 +38,9 @@ export interface DescriptorWalletData {
   externalDescriptor: string
   internalDescriptor: string
   changeSet: string
-  /** True after a full scan has been run for this sub-wallet at least once. */
+  /** True after a full scan has been run for this descriptor wallet at least once. */
   fullScanDone: boolean
-  /** ISO timestamp of last successful Esplora sync for this sub-wallet (non-lab). */
+  /** ISO timestamp of last successful Esplora sync for this descriptor wallet (non-lab). */
   lastSuccessfulEsploraSyncAt?: string
 }
 

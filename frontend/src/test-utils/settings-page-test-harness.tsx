@@ -68,7 +68,7 @@ export let walletStoreState: Record<string, unknown> = {}
 export const mockSetNetworkMode = vi.fn()
 export const mockSetAddressType = vi.fn()
 export const mockSetCurrentAddress = vi.fn()
-export const mockCommitLoadedSubWallet = vi.fn()
+export const mockCommitLoadedDescriptorWallet = vi.fn()
 
 export const mockSetSessionPassword = vi.fn()
 export const sessionStoreState = {
@@ -184,27 +184,27 @@ vi.mock('@/stores/walletStore', async () => {
       testnet: 'Testnet',
       mainnet: 'Mainnet',
     },
-    getSubWalletLabel: (network: string, addressType: string) =>
+    getDescriptorWalletLabel: (network: string, addressType: string) =>
       `${network} ${addressType}`,
     selectCommittedNetworkMode: (s: {
-      loadedSubWallet: { networkMode: string } | null
+      loadedDescriptorWallet: { networkMode: string } | null
       networkMode: string
-    }) => s.loadedSubWallet?.networkMode ?? s.networkMode,
+    }) => s.loadedDescriptorWallet?.networkMode ?? s.networkMode,
     selectCommittedAddressType: (s: {
-      loadedSubWallet: { addressType: string } | null
+      loadedDescriptorWallet: { addressType: string } | null
       addressType: string
-    }) => s.loadedSubWallet?.addressType ?? s.addressType,
+    }) => s.loadedDescriptorWallet?.addressType ?? s.addressType,
     getCommittedNetworkMode: () => {
       const walletState = walletStoreState as {
-        loadedSubWallet: { networkMode: string } | null
+        loadedDescriptorWallet: { networkMode: string } | null
         networkMode: string
       }
-      return walletState.loadedSubWallet?.networkMode ?? walletState.networkMode
+      return walletState.loadedDescriptorWallet?.networkMode ?? walletState.networkMode
     },
     selectCommittedAccountId: (s: {
-      loadedSubWallet: { accountId: number } | null
+      loadedDescriptorWallet: { accountId: number } | null
       accountId: number
-    }) => s.loadedSubWallet?.accountId ?? s.accountId,
+    }) => s.loadedDescriptorWallet?.accountId ?? s.accountId,
   }
 })
 
@@ -267,7 +267,7 @@ vi.mock('@/lib/wallet/wallet-utils', () => ({
   deleteCustomEsploraUrl: vi.fn().mockResolvedValue(undefined),
   loadCustomEsploraUrl: vi.fn().mockResolvedValue(null),
   syncActiveWalletAndUpdateState: vi.fn().mockResolvedValue(undefined),
-  syncLoadedSubWalletWithEsplora: vi.fn().mockResolvedValue('completed'),
+  syncLoadedDescriptorWalletWithEsplora: vi.fn().mockResolvedValue('completed'),
   runIncrementalDashboardWalletSync: vi.fn().mockResolvedValue(undefined),
   loadDescriptorWalletAndSync: mockLoadDescriptorWalletAndSync,
   loadDescriptorWalletWithoutSync: mockLoadDescriptorWalletWithoutSync,
@@ -359,10 +359,10 @@ export function createDefaultWalletStoreState(): Record<string, unknown> {
     networkMode: 'signet',
     addressType: 'taproot',
     accountId: 0,
-    loadedSubWallet: null,
+    loadedDescriptorWallet: null,
     setNetworkMode: mockSetNetworkMode,
     setAddressType: mockSetAddressType,
-    commitLoadedSubWallet: mockCommitLoadedSubWallet,
+    commitLoadedDescriptorWallet: mockCommitLoadedDescriptorWallet,
     setWalletStatus: vi.fn(),
     setCurrentAddress: mockSetCurrentAddress,
     setBalance: vi.fn(),

@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react'
 import { AddressType, useWalletStore } from '@/stores/walletStore'
-import { useSubWalletSwitchMutation } from '@/hooks/useSubWalletSwitchMutation'
+import { useDescriptorWalletSwitchMutation } from '@/hooks/useDescriptorWalletSwitchMutation'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { Button } from '@/components/ui/button'
 import { ConfirmationDialog } from '@/components/ConfirmationDialog'
@@ -18,7 +18,7 @@ export function AddressTypeSelector() {
   const [pendingType, setPendingType] = useState<AddressType | null>(null)
 
   const { mutateAsync, isSwitching, statusLine } =
-    useSubWalletSwitchMutation('addressType')
+    useDescriptorWalletSwitchMutation('addressType')
 
   const handleChange = (type: AddressType) => {
     if (type === addressType) return
