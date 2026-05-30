@@ -2,6 +2,8 @@
 
 This document records how Bitboard handles **on-chain balance and transaction display** relative to **Bitboard wallets** (`wallet_id`) and **descriptor wallets**.
 
+For network/address switching, Esplora timing, and lab vs live paths, see [`descriptor-wallet-switching.md`](descriptor-wallet-switching.md).
+
 ## BDK changeset is the single source of truth
 
 - **Balance and transaction history** come from the BDK wallet loaded in WASM from `DescriptorWalletData.changeSet` (encrypted inside `wallet_secrets`).
