@@ -106,6 +106,9 @@ feature:
         - Wallet must be unlocked to view
         - If no wallet exists, redirect to CreateWallet or ImportWallet choice
         - If wallet is locked, show unlock prompt (Bitboard app password)
+        - On public networks (non-lab), the dashboard shows on-chain balance and activity from the loaded BDK wallet (changeset) immediately after unlock; Esplora sync refreshes that view in the background
+        - When Esplora sync has not succeeded this session but a prior successful sync exists, stale indicators show last verified with Esplora (`lastSuccessfulEsploraSyncAt`)
+        - Lab network does not use Esplora timestamps; lab dashboard uses simulator chain state only
     - Receive:
       - description: "Display a Bitcoin address and QR code for receiving payments"
       - path: /wallet/receive

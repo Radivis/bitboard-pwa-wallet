@@ -111,6 +111,7 @@ export async function updateDescriptorWalletChangeset(params: {
   accountId: number
   changesetJson: string
   markFullScanDone?: boolean
+  lastSuccessfulEsploraSyncAt?: string
 }): Promise<void> {
   const {
     password,
@@ -120,6 +121,7 @@ export async function updateDescriptorWalletChangeset(params: {
     accountId,
     changesetJson,
     markFullScanDone,
+    lastSuccessfulEsploraSyncAt,
   } = params
   await ensureMigrated()
   await ensureSecretsChannel()
@@ -137,6 +139,7 @@ export async function updateDescriptorWalletChangeset(params: {
         accountId,
         changesetJson,
         markFullScanDone,
+        lastSuccessfulEsploraSyncAt,
       })
       return workerBlobToPersistence(newEncrypted)
     },

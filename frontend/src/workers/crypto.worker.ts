@@ -584,6 +584,7 @@ const cryptoService = {
     accountId: number;
     changesetJson: string;
     markFullScanDone?: boolean;
+    lastSuccessfulEsploraSyncAt?: string;
   }) {
     const {
       password,
@@ -593,6 +594,7 @@ const cryptoService = {
       accountId,
       changesetJson,
       markFullScanDone,
+      lastSuccessfulEsploraSyncAt,
     } = params;
     const plaintext = await requestDecrypt(password, encryptedPayload);
     const payload = parseWalletPayloadJson(plaintext);
@@ -610,6 +612,9 @@ const cryptoService = {
     descriptorWallet.changeSet = changesetJson;
     if (markFullScanDone) {
       descriptorWallet.fullScanDone = true;
+    }
+    if (lastSuccessfulEsploraSyncAt != null) {
+      descriptorWallet.lastSuccessfulEsploraSyncAt = lastSuccessfulEsploraSyncAt;
     }
     const newPlaintext = JSON.stringify(payload);
     const newBlob = await requestEncrypt(password, newPlaintext);

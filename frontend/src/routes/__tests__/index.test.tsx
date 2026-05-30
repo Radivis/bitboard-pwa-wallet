@@ -33,10 +33,14 @@ vi.mock('@/stores/cryptoStore', () => ({
 let walletStoreState: Record<string, unknown> = {}
 vi.mock('@/stores/walletStore', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/stores/walletStore')>()
+  const useWalletStoreMock = (selector: (s: Record<string, unknown>) => unknown) =>
+    selector(walletStoreState)
+  Object.assign(useWalletStoreMock, {
+    getState: () => walletStoreState as ReturnType<typeof actual.useWalletStore.getState>,
+  })
   return {
     ...actual,
-    useWalletStore: (selector: (s: Record<string, unknown>) => unknown) =>
-      selector(walletStoreState),
+    useWalletStore: useWalletStoreMock,
     NETWORK_LABELS: {
       lab: 'Lab',
       regtest: 'Regtest',
@@ -48,8 +52,17 @@ vi.mock('@/stores/walletStore', async (importOriginal) => {
 })
 
 vi.mock('@/stores/sessionStore', () => ({
-  useSessionStore: (selector: (s: Record<string, unknown>) => unknown) =>
-    selector({ password: 'testpass' }),
+  useSessionStore: Object.assign(
+    (selector: (s: Record<string, unknown>) => unknown) =>
+      selector({ password: 'testpass' }),
+    { getState: () => ({ password: 'testpass' }) },
+  ),
+}))
+
+vi.mock('@/hooks/useOnchainDashboardQueries', () => ({
+  useOnchainEsploraSyncMetadataQuery: () => ({
+    data: { isStaleOnchain: false },
+  }),
 }))
 
 vi.mock('@/components/WalletUnlock', () => ({
@@ -156,6 +169,13 @@ describe('DashboardPage', () => {
       activeWalletId: 1,
       walletStatus: 'unlocked',
       networkMode: 'signet',
+      addressType: 'taproot',
+      accountId: 0,
+      loadedSubWallet: {
+        networkMode: 'signet',
+        addressType: 'taproot',
+        accountId: 0,
+      },
       balance: {
         confirmedSats: 100_000,
         trustedPendingSats: 0,

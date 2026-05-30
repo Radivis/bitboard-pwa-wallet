@@ -1,7 +1,7 @@
 import type { LightningPayment } from '@/lib/lightning/lightning-backend-service'
 
 /** Limit stored payment rows per connection inside the encrypted wallet payload. */
-export const MAX_STORED_LIGHTNING_PAYMENTS = 500
+export const MAX_STORED_LIGHTNING_PAYMENTS = 5000
 
 export function capLightningPaymentsForSnapshot(
   payments: LightningPayment[],

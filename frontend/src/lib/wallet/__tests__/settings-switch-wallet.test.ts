@@ -64,6 +64,18 @@ vi.mock('@/lib/wallet/wallet-utils', async (importOriginal) => {
   }
 })
 
+const mockRefreshWalletStoreFromLoadedBdk = vi.hoisted(() =>
+  vi.fn().mockResolvedValue(undefined),
+)
+
+vi.mock('@/lib/wallet/onchain-bdk-store-sync', () => ({
+  refreshWalletStoreFromLoadedBdk: mockRefreshWalletStoreFromLoadedBdk,
+}))
+
+vi.mock('@/lib/wallet/onchain-dashboard-sync', () => ({
+  invalidateOnchainDashboardQueries: vi.fn(),
+}))
+
 const mockSetWalletStatus = vi.fn()
 const mockSetCurrentAddress = vi.fn()
 const mockCommitLoadedSubWallet = vi.fn()
@@ -171,6 +183,7 @@ describe('switchDescriptorWallet', () => {
     expect(mockSetBalance).toHaveBeenCalledWith(null)
     expect(mockSetTransactions).toHaveBeenCalledWith([])
     expect(mockSetLastSyncTime).toHaveBeenCalledWith(null)
+    expect(mockRefreshWalletStoreFromLoadedBdk).toHaveBeenCalledTimes(1)
     expect(mockSyncLoadedSubWalletWithEsplora).toHaveBeenCalledWith({
       networkMode: 'testnet',
       activeWalletId: 1,

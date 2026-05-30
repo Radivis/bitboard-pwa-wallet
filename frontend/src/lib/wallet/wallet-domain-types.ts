@@ -40,6 +40,8 @@ export interface DescriptorWalletData {
   changeSet: string
   /** True after a full scan has been run for this sub-wallet at least once. */
   fullScanDone: boolean
+  /** ISO timestamp of last successful Esplora sync for this sub-wallet (non-lab). */
+  lastSuccessfulEsploraSyncAt?: string
 }
 
 /**
@@ -144,7 +146,7 @@ function isStoredNwcLightningConnection(
 
 function isDescriptorWalletData(value: unknown): value is DescriptorWalletData {
   if (!isRecord(value)) return false
-  return (
+  const base =
     SUPPORTED_BITCOIN_NETWORKS.includes(value.network as BitcoinNetwork) &&
     SUPPORTED_ADDRESS_TYPES.includes(value.addressType as AddressType) &&
     Number.isInteger(value.accountId) &&
@@ -153,7 +155,9 @@ function isDescriptorWalletData(value: unknown): value is DescriptorWalletData {
     isNonEmptyString(value.internalDescriptor) &&
     isNonEmptyString(value.changeSet) &&
     typeof value.fullScanDone === 'boolean'
-  )
+  if (!base) return false
+  if (value.lastSuccessfulEsploraSyncAt === undefined) return true
+  return isNonEmptyString(value.lastSuccessfulEsploraSyncAt)
 }
 
 export function isWalletSecretsPayload(value: unknown): value is WalletSecretsPayload {

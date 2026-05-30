@@ -14,6 +14,8 @@ import {
   loadWalletHandlingPersistedChainMismatch,
   syncLoadedSubWalletWithEsplora,
 } from '@/lib/wallet/wallet-utils'
+import { refreshWalletStoreFromLoadedBdk } from '@/lib/wallet/onchain-bdk-store-sync'
+import { invalidateOnchainDashboardQueries } from '@/lib/wallet/onchain-dashboard-sync'
 import {
   loadingTargetAddressTypeMessage,
   loadingTargetNetworkMessage,
@@ -140,6 +142,14 @@ export async function switchDescriptorWallet(params: {
       addressType: targetAddressType,
       accountId: targetAccountId,
     })
+
+    if (targetNetworkMode !== 'lab') {
+      await refreshWalletStoreFromLoadedBdk()
+      // Stale-banner query caches per sub-wallet persisted `lastSuccessfulEsploraSyncAt`.
+      // After switch we cleared lastSyncTime and repopulated balance/txs from BDK; invalidate
+      // so the dashboard refetches metadata for the new sub-wallet before Esplora sync runs.
+      invalidateOnchainDashboardQueries()
+    }
 
     if (targetNetworkMode !== 'lab') {
       onPhase?.(syncingTargetNetworkMessage(targetNetworkMode))

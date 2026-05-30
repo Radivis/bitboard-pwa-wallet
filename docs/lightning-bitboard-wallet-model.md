@@ -18,3 +18,4 @@ This document records how Bitboard scopes Lightning (NWC today, in-app node in t
 
 - **Private channel data** and **delegated NWC access** are tied to a single economic/UX context; mixing them across unrelated on-chain wallets is hard to reason about for security and privacy.
 - Keeping snapshots scoped by `connection_id` and `wallet_id` preserves a clear trust boundary: “this is what we last saw for **this** Bitcoin wallet’s Lightning setup.”
+- Up to **5000** payment rows are stored per NWC connection snapshot (newest first when capping applies).

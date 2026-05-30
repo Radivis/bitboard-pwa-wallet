@@ -46,6 +46,9 @@ import {
   useLightningBalancesForDashboardQuery,
   useLightningHistoryQuery,
 } from '@/hooks/useLightningMutations'
+import {
+  useOnchainEsploraSyncMetadataQuery,
+} from '@/hooks/useOnchainDashboardQueries'
 import { useFeatureStore } from '@/stores/featureStore'
 import { isLightningSupported } from '@/lib/lightning/lightning-utils'
 import { mergeAndSortDashboardActivity } from '@/lib/lightning/lightning-dashboard-sync'
@@ -126,6 +129,7 @@ function BalanceCard() {
   const isLightningEnabled = useFeatureStore((featureState) => featureState.isLightningEnabled)
   const connectedLightningWallets = useLightningStore((lightningState) => lightningState.connectedWallets)
   const lightningBalancesQuery = useLightningBalancesForDashboardQuery()
+  const onchainEsploraSyncQuery = useOnchainEsploraSyncMetadataQuery()
   const { data: labState, isPending: labChainPending } = useLabChainStateQuery()
   const utxos = labState?.utxos ?? []
   const addressToOwner = labState?.addressToOwner ?? {}
@@ -149,6 +153,9 @@ function BalanceCard() {
       : balanceInfoToOnChainDisplay(balance)
 
   const primarySats = onChainDisplay.totalSats
+  const isStaleOnchain = onchainEsploraSyncQuery.data?.isStaleOnchain ?? false
+  const lastSuccessfulEsploraSyncAt =
+    onchainEsploraSyncQuery.data?.lastSuccessfulEsploraSyncAt
 
   const hasMatchingLightningConnection = useMemo(
     () =>
@@ -299,6 +306,22 @@ function BalanceCard() {
               {walletOnChainSectionLabel(networkMode)}
             </p>
             {renderOnChainHeadline()}
+            {networkMode !== 'lab' && isStaleOnchain ? (
+              <p
+                className="mt-2 text-xs text-amber-700 dark:text-amber-400"
+                data-testid="onchain-esplora-stale-banner"
+              >
+                Showing on-chain data from your wallet&apos;s saved chain state.
+                Esplora has not been verified this session.
+                {lastSuccessfulEsploraSyncAt != null && (
+                  <>
+                    {' '}
+                    Last verified with Esplora:{' '}
+                    {new Date(lastSuccessfulEsploraSyncAt).toLocaleString()}.
+                  </>
+                )}
+              </p>
+            ) : null}
             {onChainDisplay.showBreakdown && (
               <ul className="mt-3 space-y-1.5 text-sm">
                 {onChainDisplay.confirmedSats > 0 && (

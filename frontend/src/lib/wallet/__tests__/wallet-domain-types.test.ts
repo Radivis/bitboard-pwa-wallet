@@ -32,6 +32,29 @@ describe('parseWalletPayloadJson', () => {
     expect(parsed.descriptorWallets).toHaveLength(1)
   })
 
+  it('accepts descriptor wallet with lastSuccessfulEsploraSyncAt', () => {
+    const isoTimestamp = '2025-01-01T12:00:00.000Z'
+    const json = JSON.stringify({
+      descriptorWallets: [
+        {
+          network: 'testnet',
+          addressType: 'taproot',
+          accountId: 0,
+          externalDescriptor: 'tr(xpub.../0/*)',
+          internalDescriptor: 'tr(xpub.../1/*)',
+          changeSet: '{}',
+          fullScanDone: false,
+          lastSuccessfulEsploraSyncAt: isoTimestamp,
+        },
+      ],
+      lightningNwcConnections: [],
+    })
+    const parsed = parseWalletPayloadJson(json)
+    expect(parsed.descriptorWallets[0].lastSuccessfulEsploraSyncAt).toBe(
+      isoTimestamp,
+    )
+  })
+
   it('accepts lightning connection with nwcSnapshot', () => {
     const isoTimestamp = '2025-01-01T12:00:00.000Z'
     const json = JSON.stringify({

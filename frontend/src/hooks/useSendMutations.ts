@@ -7,6 +7,16 @@ import { useCryptoStore } from '@/stores/cryptoStore'
 import { useSendStore } from '@/stores/sendStore'
 import { getEsploraUrl, toBitcoinNetwork } from '@/lib/wallet/bitcoin-utils'
 import { updateWalletChangeset, loadCustomEsploraUrl } from '@/lib/wallet/wallet-utils'
+import {
+  invalidateOnchainDashboardQueries,
+} from '@/lib/wallet/onchain-dashboard-sync'
+import {
+  persistLastSuccessfulEsploraSyncAt,
+} from '@/lib/wallet/onchain-esplora-sync-metadata'
+import {
+  selectCommittedAccountId,
+  selectCommittedAddressType,
+} from '@/stores/walletStore'
 import { walletLabOwner } from '@/lib/lab/lab-owner'
 import { labBitcoinAddressesEqual } from '@/lib/lab/lab-utils'
 import { getLabWorker, initLabWorkerWithState } from '@/workers/lab-factory'
@@ -105,6 +115,19 @@ export function useBroadcastTransactionMutation() {
           setBalance(newBalance)
           setTransactions(newTransactionList)
           setLastSyncTime(new Date())
+          if (password && activeWalletId) {
+            const walletState = useWalletStore.getState()
+            const syncedAtIso = new Date().toISOString()
+            await persistLastSuccessfulEsploraSyncAt({
+              password,
+              walletId: activeWalletId,
+              network: toBitcoinNetwork(networkMode),
+              addressType: selectCommittedAddressType(walletState),
+              accountId: selectCommittedAccountId(walletState),
+              syncedAtIso,
+            })
+            invalidateOnchainDashboardQueries()
+          }
         } catch {
           // keep unlocked on sync failure
         }

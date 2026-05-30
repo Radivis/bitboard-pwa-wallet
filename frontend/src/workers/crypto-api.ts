@@ -193,6 +193,7 @@ export interface UpdateDescriptorWalletChangesetParams {
   accountId: number;
   changesetJson: string;
   markFullScanDone?: boolean;
+  lastSuccessfulEsploraSyncAt?: string;
 }
 
 export interface CreateWalletAndEncryptSecretsParams {
