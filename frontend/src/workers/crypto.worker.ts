@@ -1,4 +1,5 @@
 import { expose, wrap, type Remote } from 'comlink';
+import { serializeSelectedOutpointsForWasm } from '@/lib/wallet/manual-utxo-selection';
 import type {
   AddressType,
   BitcoinNetwork,
@@ -458,15 +459,7 @@ const cryptoService = {
       applyChangeFreeBump = false,
       selectedOutpoints,
     } = params;
-    const selectedOutpointsJson =
-      selectedOutpoints != null && selectedOutpoints.length > 0
-        ? JSON.stringify(
-            selectedOutpoints.map((outpoint) => ({
-              txid: outpoint.txid,
-              vout: outpoint.vout,
-            })),
-          )
-        : undefined;
+    const selectedOutpointsJson = serializeSelectedOutpointsForWasm(selectedOutpoints);
     const wasmPrepareResult = await invokeWasmCrypto((wasmModule) =>
       wasmModule.prepare_onchain_send_transaction(
         toAddress,
@@ -474,7 +467,7 @@ const cryptoService = {
         feeRateSatPerVb,
         network,
         applyChangeFreeBump,
-        selectedOutpointsJson ?? null,
+        selectedOutpointsJson,
       ),
     );
     return mapWirePrepareOnchainSendResultToDomain(

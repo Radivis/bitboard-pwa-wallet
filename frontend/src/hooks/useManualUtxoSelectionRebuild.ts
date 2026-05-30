@@ -24,7 +24,11 @@ export function useManualUtxoSelectionRebuild({
   })
 
   useEffect(() => {
-    if (!manualSelectionEnabled || selectionRevision === 0) {
+    if (
+      !manualSelectionEnabled ||
+      selectionRevision === 0 ||
+      localSelectedUtxos.length === 0
+    ) {
       return
     }
 

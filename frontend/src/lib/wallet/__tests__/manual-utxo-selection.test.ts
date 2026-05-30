@@ -3,6 +3,7 @@ import {
   isManualUtxoSelectionSufficient,
   moveUtxoToAvailable,
   moveUtxoToSelected,
+  serializeSelectedOutpointsForWasm,
   splitUtxosBySelection,
   sumReviewUtxoAmountSats,
   utxoOutpointKey,
@@ -26,6 +27,14 @@ const utxoB: ReviewInputUtxo = {
 describe('manual-utxo-selection helpers', () => {
   it('builds stable outpoint keys', () => {
     expect(utxoOutpointKey(utxoA)).toBe('aaa:0')
+  })
+
+  it('serializes selected outpoints for WASM without coercing empty to auto', () => {
+    expect(serializeSelectedOutpointsForWasm(undefined)).toBeNull()
+    expect(serializeSelectedOutpointsForWasm([])).toBe('[]')
+    expect(serializeSelectedOutpointsForWasm([{ txid: 'aaa', vout: 0 }])).toBe(
+      JSON.stringify([{ txid: 'aaa', vout: 0 }]),
+    )
   })
 
   it('sums selected amounts', () => {

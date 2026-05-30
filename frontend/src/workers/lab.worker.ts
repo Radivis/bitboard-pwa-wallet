@@ -49,6 +49,7 @@ import {
 import { createAndRegisterLabEntityFromWasm } from './lab-entity-creation'
 import { executeMineBlocks } from './lab-mine-blocks'
 import { getWasm } from './lab-wasm-loader'
+import { MANUAL_COIN_CONTROL_EMPTY_SELECTION_MESSAGE } from '@/lib/wallet/manual-utxo-selection'
 import { utxosToJsonForLabWasm } from './lab-wasm-utxos'
 
 function filterLabUtxosBySelectedOutpoints(
@@ -490,6 +491,10 @@ const labService = {
         `No UTXOs available for the wallet. walletId=${walletId}. ` +
           `Ensure the wallet is loaded for lab (regtest) and you have mined to it.`,
       )
+    }
+
+    if (selectedOutpoints != null && selectedOutpoints.length === 0) {
+      throw new Error(MANUAL_COIN_CONTROL_EMPTY_SELECTION_MESSAGE)
     }
 
     const fromUtxos = filterLabUtxosBySelectedOutpoints(walletUtxos, selectedOutpoints)

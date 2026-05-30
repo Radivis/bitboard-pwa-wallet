@@ -1,5 +1,27 @@
 import type { ReviewInputUtxo, UtxoOutpoint } from '@/workers/crypto-api'
 
+/** Matches `crypto/src/transaction.rs` manual coin-control empty-selection error. */
+export const MANUAL_COIN_CONTROL_EMPTY_SELECTION_MESSAGE =
+  'At least one UTXO must be selected for manual coin control'
+
+/**
+ * Wire manual selection to WASM: `undefined` → auto coin selection; `[]` → manual mode with
+ * no inputs (prepare must fail); non-empty → explicit outpoints.
+ */
+export function serializeSelectedOutpointsForWasm(
+  selectedOutpoints: UtxoOutpoint[] | undefined,
+): string | null {
+  if (selectedOutpoints == null) {
+    return null
+  }
+  return JSON.stringify(
+    selectedOutpoints.map((outpoint) => ({
+      txid: outpoint.txid,
+      vout: outpoint.vout,
+    })),
+  )
+}
+
 export function utxoOutpointKey(utxo: Pick<ReviewInputUtxo, 'txid' | 'vout'>): string {
   return `${utxo.txid}:${utxo.vout}`
 }
