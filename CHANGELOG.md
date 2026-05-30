@@ -15,6 +15,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+## [0.2.0] - 2026-05-31
+### Added
+- Feature "UTXO selection" that allows to manually select the UTXOs to be used in a transaction
+
+### Changed
+- Structured frontend/src/lib folder by domain 
+- Improved variable naming in very many files
+- Some other various refactoring
+
+### Fixed
+
+### Security
+
 ## [0.1.8] - 2026-05-23
 ### Added
 - The "Review Transaction" page now also shows
@@ -35,8 +48,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Pending transactions were not shown on the dashboard, if there were already 10 transactions in the list due to an issue with sorting
-
-### Security
 
 ## [0.1.7] - 2026-05-19
 ### Changed
