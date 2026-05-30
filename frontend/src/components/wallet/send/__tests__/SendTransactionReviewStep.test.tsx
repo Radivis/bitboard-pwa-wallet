@@ -13,6 +13,14 @@ const reviewInputUtxos = [
   },
 ]
 
+const utxoSelectionDefaultProps = {
+  isUtxoSelectionEnabled: false,
+  onLoadAllWalletUtxos: async () => reviewInputUtxos,
+  onRebuildWithSelectedUtxos: async () => {},
+  onRevertToAutoSelection: async () => {},
+  onManualSelectionStateChange: () => {},
+}
+
 const defaultProps = {
   networkMode: 'signet' as const,
   recipient: 'tb1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx',
@@ -36,6 +44,7 @@ const defaultProps = {
   onBack: () => {},
   onConfirmSend: () => {},
   labConfirmSendDisabled: false,
+  ...utxoSelectionDefaultProps,
   mainnetFiatMode: false,
   defaultFiatCurrency: 'USD' as const,
   btcPriceInFiat: null,
@@ -157,5 +166,64 @@ describe('SendTransactionReviewStep', () => {
 
     await user.click(screen.getByRole('button', { name: /Back/i }))
     expect(backClicked).toBe(true)
+  })
+
+  it('does not show manual UTXO selection when feature is off', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(<SendTransactionReviewStep {...defaultProps} />)
+
+    await user.click(screen.getByRole('button', { name: 'Show UTXOs to be used' }))
+
+    expect(screen.queryByLabelText('Manual UTXO selection')).not.toBeInTheDocument()
+  })
+
+  it('shows manual UTXO selection controls when feature is on', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(
+      <SendTransactionReviewStep
+        {...defaultProps}
+        isUtxoSelectionEnabled
+      />,
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Show UTXOs to be used' }))
+
+    expect(screen.getByLabelText('Manual UTXO selection')).toBeInTheDocument()
+  })
+
+  it('disables confirm when manual selection is insufficient', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(
+      <SendTransactionReviewStep
+        {...defaultProps}
+        isUtxoSelectionEnabled
+        onLoadAllWalletUtxos={async () => [
+          ...reviewInputUtxos,
+          {
+            address: 'tb1other',
+            amountSats: 5_000,
+            txid: 'def456',
+            vout: 1,
+          },
+        ]}
+        onManualSelectionStateChange={(state) => {
+          if (state.confirmBlocked) {
+            // noop — state lifted in component
+          }
+        }}
+      />,
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Show UTXOs to be used' }))
+    await user.click(screen.getByLabelText('Manual UTXO selection'))
+
+    const confirmButton = screen.getByRole('button', { name: /Confirm and Send/i })
+    await user.click(
+      screen.getByRole('button', {
+        name: 'Remove UTXO abc123:0 from selected inputs',
+      }),
+    )
+
+    expect(confirmButton).toBeDisabled()
   })
 })

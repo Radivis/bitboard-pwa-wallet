@@ -43,6 +43,15 @@ export interface WireReviewInputUtxo {
   vout: number;
 }
 
+export interface WireWalletUtxoRow {
+  address: string;
+  amount_sats: number;
+  txid: string;
+  vout: number;
+  is_confirmed: boolean;
+  keychain: string;
+}
+
 /** Shared unsigned send / draft PSBT fields (`LabDraftPsbtOutcome`, `PrepareOnchainSendOutcome`). */
 export interface WireDraftPsbtResult {
   psbt_base64: string;

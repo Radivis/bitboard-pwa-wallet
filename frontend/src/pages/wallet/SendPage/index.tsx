@@ -26,8 +26,11 @@ import {
   useBroadcastTransactionMutation,
   useLabSendMutation,
 } from '@/hooks/useSendMutations'
-import type { PrepareOnchainSendResult } from '@/workers/crypto-api'
+import type { PrepareOnchainSendResult, ReviewInputUtxo } from '@/workers/crypto-api'
 import { useCryptoStore } from '@/stores/cryptoStore'
+import { toBitcoinNetwork } from '@/lib/wallet/bitcoin-utils'
+import { reviewUtxoToOutpoint } from '@/lib/wallet/manual-utxo-selection'
+import { resolveLabSendAmountSats } from '@/lib/lab/lab-send-submit'
 import { useFiatDenominationStore } from '@/stores/fiatDenominationStore'
 import { useBitcoinDisplayUnitStore } from '@/stores/bitcoinDisplayUnitStore'
 import { useMainnetFiatRatesQuery } from '@/hooks/useMainnetFiatRatesQuery'
@@ -80,6 +83,9 @@ export function SendFlow() {
   const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
   const currentAddress = useWalletStore((walletState) => walletState.currentAddress)
   const isLightningEnabled = useFeatureStore((featureState) => featureState.isLightningEnabled)
+  const isUtxoSelectionEnabled = useFeatureStore(
+    (featureState) => featureState.isUtxoSelectionEnabled,
+  )
   const connectedLightningWallets = useLightningStore((lightningState) => lightningState.connectedWallets)
 
   const hasAnyLightningConnection = useLightningStore((lightningState) =>
@@ -183,10 +189,23 @@ export function SendFlow() {
     [],
   )
 
+  const applyOnchainReviewSummaryFromOutcome = useCallback(
+    (outcome: PrepareOnchainSendResult) => {
+      applySendReviewTxSummaryToStore({
+        feeSats: outcome.feeSats,
+        changeSats: outcome.changeSats,
+        inputUtxos: outcome.inputUtxos,
+      })
+      useSendStore.getState().setPsbt(outcome.psbtBase64)
+    },
+    [],
+  )
+
   useEffect(() => {
     if (step === 1) {
       setLabApplyChangeFreeBump(false)
       clearSendReviewTxSummaryFromStore()
+      useSendStore.getState().setIsManualUtxoSelectionActive(false)
     }
   }, [step])
 
@@ -294,6 +313,7 @@ export function SendFlow() {
     async (params: {
       draftAmountSats: number
       applyChangeFreeBump: boolean
+      selectedOutpoints?: Array<{ txid: string; vout: number }>
     }) => {
       if (activeWalletId == null) {
         throw new Error('No active wallet')
@@ -317,6 +337,7 @@ export function SendFlow() {
         feeRateSatPerVb: effectiveFeeRate,
         walletChangeAddress,
         knownRecipientOwner,
+        selectedOutpoints: params.selectedOutpoints,
       })
 
       return useCryptoStore.getState().draftLabPsbtTransaction({
@@ -329,6 +350,116 @@ export function SendFlow() {
       })
     },
     [activeWalletId, currentAddress, effectiveFeeRate, normalizedRecipient],
+  )
+
+  const resolveReviewPaymentAmountSats = useCallback(() => {
+    if (networkMode === 'lab') {
+      return resolveLabSendAmountSats(
+        labApplyChangeFreeBump,
+        labChangeFreeBumpBaseAmountSatsRef,
+      )
+    }
+    return amountSats
+  }, [networkMode, labApplyChangeFreeBump, amountSats])
+
+  const loadAllWalletUtxos = useCallback(async (): Promise<ReviewInputUtxo[]> => {
+    if (activeWalletId == null) {
+      return []
+    }
+    if (networkMode === 'lab') {
+      await initLabWorkerWithState()
+      return getLabWorker().listLabWalletUtxos({ walletId: activeWalletId })
+    }
+    return useCryptoStore.getState().listWalletUtxos()
+  }, [activeWalletId, networkMode])
+
+  const rebuildWithSelectedUtxos = useCallback(
+    async (selected: ReviewInputUtxo[]) => {
+      const selectedOutpoints = selected.map(reviewUtxoToOutpoint)
+      const paymentAmountSats = resolveReviewPaymentAmountSats()
+
+      if (networkMode === 'lab') {
+        await runLabOp(async () => {
+          const draft = await prepareLabDraftForReview({
+            draftAmountSats: paymentAmountSats,
+            applyChangeFreeBump: labApplyChangeFreeBump,
+            selectedOutpoints,
+          })
+          applySendReviewTxSummaryToStore({
+            feeSats: draft.feeSats,
+            changeSats: draft.changeSats,
+            inputUtxos: draft.inputUtxos,
+          })
+        })
+        return
+      }
+
+      const outcome = await useCryptoStore.getState().prepareOnchainSendTransaction({
+        toAddress: normalizedRecipient,
+        amountSats: paymentAmountSats,
+        feeRateSatPerVb: effectiveFeeRate,
+        network: toBitcoinNetwork(networkMode),
+        applyChangeFreeBump: false,
+        selectedOutpoints,
+      })
+      applyOnchainReviewSummaryFromOutcome(outcome)
+    },
+    [
+      networkMode,
+      resolveReviewPaymentAmountSats,
+      labApplyChangeFreeBump,
+      prepareLabDraftForReview,
+      normalizedRecipient,
+      effectiveFeeRate,
+      applyOnchainReviewSummaryFromOutcome,
+    ],
+  )
+
+  const revertToAutoSelection = useCallback(async () => {
+    useSendStore.getState().setIsManualUtxoSelectionActive(false)
+    const paymentAmountSats = resolveReviewPaymentAmountSats()
+
+    if (networkMode === 'lab') {
+      await runLabOp(async () => {
+        const draft = await prepareLabDraftForReview({
+          draftAmountSats: paymentAmountSats,
+          applyChangeFreeBump: labApplyChangeFreeBump,
+        })
+        applySendReviewTxSummaryToStore({
+          feeSats: draft.feeSats,
+          changeSats: draft.changeSats,
+          inputUtxos: draft.inputUtxos,
+        })
+      })
+      return
+    }
+
+    const outcome = await useCryptoStore.getState().prepareOnchainSendTransaction({
+      toAddress: normalizedRecipient,
+      amountSats: paymentAmountSats,
+      feeRateSatPerVb: effectiveFeeRate,
+      network: toBitcoinNetwork(networkMode),
+      applyChangeFreeBump: false,
+    })
+    applyOnchainReviewSummaryFromOutcome(outcome)
+  }, [
+    networkMode,
+    resolveReviewPaymentAmountSats,
+    labApplyChangeFreeBump,
+    prepareLabDraftForReview,
+    normalizedRecipient,
+    effectiveFeeRate,
+    applyOnchainReviewSummaryFromOutcome,
+  ])
+
+  const handleManualSelectionStateChange = useCallback(
+    (state: { manualSelectionEnabled: boolean; confirmBlocked: boolean }) => {
+      const sendStore = useSendStore.getState()
+      if (sendStore.isManualUtxoSelectionActive !== state.manualSelectionEnabled) {
+        sendStore.setIsManualUtxoSelectionActive(state.manualSelectionEnabled)
+      }
+    },
+    [],
   )
 
   const handleLabIncreaseToChangeFreeReview = useCallback(async () => {
@@ -586,6 +717,11 @@ export function SendFlow() {
         onBack={() => setStep(1)}
         onConfirmSend={handleConfirmSend}
         labConfirmSendDisabled={labConfirmSendDisabled}
+        isUtxoSelectionEnabled={isUtxoSelectionEnabled}
+        onLoadAllWalletUtxos={loadAllWalletUtxos}
+        onRebuildWithSelectedUtxos={rebuildWithSelectedUtxos}
+        onRevertToAutoSelection={revertToAutoSelection}
+        onManualSelectionStateChange={handleManualSelectionStateChange}
         mainnetFiatMode={mainnetFiatMode}
         defaultFiatCurrency={defaultFiatCurrency}
         btcPriceInFiat={btcPriceInFiat}

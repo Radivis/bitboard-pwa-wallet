@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import { AlertTriangle, FlaskConical, Layers, Zap } from 'lucide-react'
+import { AlertTriangle, Coins, FlaskConical, Layers, Zap } from 'lucide-react'
 import { useFeatureStore } from '@/stores/featureStore'
 import {
   AddressType,
@@ -23,6 +23,8 @@ export function FeatureToggles() {
   const setIsRegtestModeEnabled = useFeatureStore((featureState) => featureState.setIsRegtestModeEnabled)
   const isSegwitAddressesEnabled = useFeatureStore((featureState) => featureState.isSegwitAddressesEnabled)
   const setIsSegwitAddressesEnabled = useFeatureStore((featureState) => featureState.setIsSegwitAddressesEnabled)
+  const isUtxoSelectionEnabled = useFeatureStore((featureState) => featureState.isUtxoSelectionEnabled)
+  const setIsUtxoSelectionEnabled = useFeatureStore((featureState) => featureState.setIsUtxoSelectionEnabled)
 
   const [mainnetConfirmOpen, setMainnetConfirmOpen] = useState(false)
   const [mainnetAccessSwitchBusy, setMainnetAccessSwitchBusy] = useState(false)
@@ -152,6 +154,27 @@ export function FeatureToggles() {
             }}
             disabled={segwitAddressesSwitchBusy}
             aria-label="Enable SegWit address options and labels"
+          />
+        </div>
+      </InfomodeWrapper>
+
+      <InfomodeWrapper
+        infoId="settings-feature-utxo-selection"
+        infoTitle="UTXO selection"
+        infoText="When enabled, the send review step lets you choose which unspent outputs fund an on-chain payment. You can move coins between selected and available lists before confirming. Useful for coin control and privacy; off by default for a simpler send flow."
+      >
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Coins className="h-4 w-4" />
+            <Label htmlFor="utxo-selection-toggle" className="cursor-pointer">
+              UTXO selection
+            </Label>
+          </div>
+          <Switch
+            id="utxo-selection-toggle"
+            checked={isUtxoSelectionEnabled}
+            onCheckedChange={setIsUtxoSelectionEnabled}
+            aria-label="Enable manual UTXO selection on send review"
           />
         </div>
       </InfomodeWrapper>

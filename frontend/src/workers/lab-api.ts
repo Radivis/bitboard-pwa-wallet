@@ -269,6 +269,16 @@ export interface PrepareLabWalletTransactionParams {
   walletChangeAddress: string
   /** When the payee is not in `addressToOwner` yet (e.g. newly generated receive address). */
   knownRecipientOwner?: LabOwner | null
+  /** When set, only these wallet UTXOs are used as inputs. */
+  selectedOutpoints?: Array<{ txid: string; vout: number }>
+}
+
+/** Review-shaped row for lab wallet UTXO listing. */
+export interface LabWalletUtxoRow {
+  address: string
+  amountSats: number
+  txid: string
+  vout: number
 }
 
 export interface PrepareRandomLabEntityTransactionParams {
@@ -385,6 +395,9 @@ export interface LabService {
     mempoolMetadata: LabMempoolMetadata
     totalInput: number
   }>
+
+  /** All UTXOs owned by the active wallet in lab (for manual coin control). */
+  listLabWalletUtxos(params: { walletId: number }): Promise<LabWalletUtxoRow[]>
 
   /**
    * Adds a signed transaction to the mempool. Call after buildAndSignLabTransaction.

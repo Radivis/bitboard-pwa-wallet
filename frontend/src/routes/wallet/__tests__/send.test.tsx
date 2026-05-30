@@ -113,6 +113,7 @@ const sendStoreState: Record<string, unknown> = {
   reviewChangeSats: null,
   reviewInputUtxos: null,
   onchainDustWarning: null,
+  isManualUtxoSelectionActive: false,
   setStep: vi.fn(),
   setRecipient: vi.fn((v: string) => {
     sendStoreState.recipient = v
@@ -136,6 +137,7 @@ const sendStoreState: Record<string, unknown> = {
     sendStoreState.reviewInputUtxos = v
   }),
   setOnchainDustWarning: vi.fn(),
+  setIsManualUtxoSelectionActive: vi.fn(),
   reset: vi.fn(),
 }
 

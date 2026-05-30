@@ -3,10 +3,11 @@
 mod common;
 
 use bitboard_crypto::transaction::{self, UX_DUST_FLOOR_SATS};
-use bitcoin::Network;
+use bitcoin::{Network, OutPoint, Txid};
 use common::wallet_fixtures::{
     DEFAULT_ADDRESS_TYPE, DEFAULT_NETWORK, create_test_wallet, fund_test_wallet,
 };
+use std::str::FromStr;
 
 const VALID_SIGNET_ADDRESS: &str = "tb1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx";
 const FUNDING_AMOUNT: u64 = 100_000;
@@ -103,6 +104,7 @@ fn prepare_onchain_send_raises_below_dust_floor() {
         FEE_RATE,
         Network::Testnet,
         false,
+        None,
     )
     .expect("Prepare below dust should clamp and succeed");
 
@@ -127,6 +129,7 @@ fn prepare_onchain_send_returns_positive_fee_sats() {
         FEE_RATE,
         Network::Testnet,
         false,
+        None,
     )
     .expect("Prepare should succeed");
 
@@ -163,6 +166,7 @@ fn prepare_onchain_send_apply_change_free_bump_matches_first_pass_when_no_bump_p
         FEE_RATE,
         Network::Testnet,
         false,
+        None,
     )
     .expect("first prepare");
 
@@ -173,6 +177,7 @@ fn prepare_onchain_send_apply_change_free_bump_matches_first_pass_when_no_bump_p
         FEE_RATE,
         Network::Testnet,
         true,
+        None,
     )
     .expect("second prepare");
 
@@ -299,4 +304,139 @@ fn extract_transaction_returns_valid_tx() {
         !tx.output.is_empty(),
         "Extracted transaction must have outputs"
     );
+}
+
+// --- Manual UTXO selection ---
+
+const PARSE_TEST_TXID: &str = "0000000000000000000000000000000000000000000000000000000000000001";
+
+#[test]
+fn parse_selected_outpoints_json_none_and_whitespace_returns_none() {
+    assert_eq!(
+        transaction::parse_selected_outpoints_json(None).unwrap(),
+        None
+    );
+    assert_eq!(
+        transaction::parse_selected_outpoints_json(Some("")).unwrap(),
+        None
+    );
+    assert_eq!(
+        transaction::parse_selected_outpoints_json(Some("   ")).unwrap(),
+        None
+    );
+}
+
+#[test]
+fn parse_selected_outpoints_json_empty_array_returns_some_empty() {
+    let parsed = transaction::parse_selected_outpoints_json(Some("[]")).unwrap();
+    assert_eq!(parsed, Some(vec![]));
+}
+
+#[test]
+fn parse_selected_outpoints_json_invalid_json_errors() {
+    let result = transaction::parse_selected_outpoints_json(Some("not-json"));
+    assert!(result.is_err(), "invalid JSON must error");
+}
+
+#[test]
+fn parse_selected_outpoints_json_invalid_txid_errors() {
+    let json = r#"[{"txid":"not-a-valid-txid","vout":0}]"#;
+    let result = transaction::parse_selected_outpoints_json(Some(json));
+    assert!(result.is_err(), "invalid txid must error");
+}
+
+#[test]
+fn parse_selected_outpoints_json_valid_outpoint() {
+    let json = format!(r#"[{{"txid":"{PARSE_TEST_TXID}","vout":1}}]"#);
+    let parsed = transaction::parse_selected_outpoints_json(Some(&json)).unwrap();
+    let outpoints = parsed.expect("expected Some");
+    assert_eq!(outpoints.len(), 1);
+    assert_eq!(outpoints[0].txid.to_string(), PARSE_TEST_TXID);
+    assert_eq!(outpoints[0].vout, 1);
+}
+
+#[test]
+fn prepare_onchain_send_manual_subset_uses_only_selected() {
+    let mut wallet = funded_wallet();
+    let listed = bitboard_crypto::wallet::list_wallet_utxos(&wallet);
+    assert_eq!(listed.len(), 1);
+    let outpoint = OutPoint {
+        txid: Txid::from_str(&listed[0].txid).expect("valid txid"),
+        vout: listed[0].vout,
+    };
+
+    let outcome = transaction::prepare_onchain_send(
+        &mut wallet,
+        VALID_SIGNET_ADDRESS,
+        SEND_AMOUNT,
+        FEE_RATE,
+        Network::Testnet,
+        false,
+        Some(&[outpoint]),
+    )
+    .expect("manual selection with sufficient funds should succeed");
+
+    assert_eq!(outcome.input_utxos.len(), 1);
+    assert_eq!(outcome.input_utxos[0].txid, listed[0].txid);
+    assert_eq!(outcome.input_utxos[0].vout, listed[0].vout);
+}
+
+#[test]
+fn prepare_onchain_send_manual_subset_insufficient_fails() {
+    let mut wallet = create_test_wallet(DEFAULT_NETWORK, DEFAULT_ADDRESS_TYPE);
+    fund_test_wallet(&mut wallet, 10_000);
+    let listed = bitboard_crypto::wallet::list_wallet_utxos(&wallet);
+    let outpoint = OutPoint {
+        txid: Txid::from_str(&listed[0].txid).expect("valid txid"),
+        vout: listed[0].vout,
+    };
+
+    let result = transaction::prepare_onchain_send(
+        &mut wallet,
+        VALID_SIGNET_ADDRESS,
+        SEND_AMOUNT,
+        FEE_RATE,
+        Network::Testnet,
+        false,
+        Some(&[outpoint]),
+    );
+
+    assert!(
+        result.is_err(),
+        "manual selection with insufficient funds must fail"
+    );
+}
+
+#[test]
+fn prepare_onchain_send_auto_selection_unchanged() {
+    let mut wallet = funded_wallet();
+    let outcome = transaction::prepare_onchain_send(
+        &mut wallet,
+        VALID_SIGNET_ADDRESS,
+        SEND_AMOUNT,
+        FEE_RATE,
+        Network::Testnet,
+        false,
+        None,
+    )
+    .expect("auto prepare should succeed");
+
+    assert!(!outcome.input_utxos.is_empty());
+    assert!(outcome.fee_sats > 0);
+}
+
+#[test]
+fn prepare_onchain_send_empty_manual_selection_fails() {
+    let mut wallet = funded_wallet();
+    let result = transaction::prepare_onchain_send(
+        &mut wallet,
+        VALID_SIGNET_ADDRESS,
+        SEND_AMOUNT,
+        FEE_RATE,
+        Network::Testnet,
+        false,
+        Some(&[]),
+    );
+
+    assert!(result.is_err(), "empty manual selection must fail");
 }

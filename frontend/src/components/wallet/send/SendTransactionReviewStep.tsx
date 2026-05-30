@@ -1,5 +1,5 @@
 import { ArrowLeft, ArrowUpRight } from 'lucide-react'
-import { useState, type ReactNode } from 'react'
+import { useCallback, useState, type ReactNode } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { PageHeader } from '@/components/PageHeader'
@@ -10,6 +10,7 @@ import { truncateAddress } from '@/lib/wallet/bitcoin-utils'
 import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
 import { FiatAmountDisplay } from '@/components/FiatAmountDisplay'
 import { OnchainDustWarningReviewBanner } from '@/components/wallet/send/OnchainDustWarningReviewBanner'
+import { ManualUtxoSelectionSection } from '@/components/wallet/send/ManualUtxoSelectionSection'
 import { ReviewInputUtxoList } from '@/components/wallet/send/ReviewInputUtxoList'
 import { SEND_REVIEW_INFOMODE } from '@/components/wallet/send/send-review-infomode'
 import { computeSendReviewDisplayAmounts } from '@/lib/wallet/send-review-summary'
@@ -155,6 +156,11 @@ export function SendTransactionReviewStep({
   onBack,
   onConfirmSend,
   labConfirmSendDisabled,
+  isUtxoSelectionEnabled,
+  onLoadAllWalletUtxos,
+  onRebuildWithSelectedUtxos,
+  onRevertToAutoSelection,
+  onManualSelectionStateChange,
   mainnetFiatMode,
   defaultFiatCurrency,
   btcPriceInFiat,
@@ -182,12 +188,32 @@ export function SendTransactionReviewStep({
   onBack: () => void
   onConfirmSend: () => void
   labConfirmSendDisabled: boolean
+  isUtxoSelectionEnabled: boolean
+  onLoadAllWalletUtxos: () => Promise<ReviewInputUtxo[]>
+  onRebuildWithSelectedUtxos: (selected: ReviewInputUtxo[]) => Promise<void>
+  onRevertToAutoSelection: () => Promise<void>
+  onManualSelectionStateChange: (state: {
+    manualSelectionEnabled: boolean
+    confirmBlocked: boolean
+  }) => void
   mainnetFiatMode: boolean
   defaultFiatCurrency: FiatCurrencyCode
   btcPriceInFiat: number | null | undefined
   fiatRatesLoading: boolean
 }) {
   const [showInputUtxos, setShowInputUtxos] = useState(false)
+  const [manualConfirmBlocked, setManualConfirmBlocked] = useState(false)
+
+  const handleManualSelectionStateChangeFromSection = useCallback(
+    (state: { manualSelectionEnabled: boolean; confirmBlocked: boolean }) => {
+      setManualConfirmBlocked((previousBlocked) =>
+        previousBlocked === state.confirmBlocked ? previousBlocked : state.confirmBlocked,
+      )
+      onManualSelectionStateChange(state)
+    },
+    [onManualSelectionStateChange],
+  )
+
   const hasUsableFiatSpot = isUsableBtcSpotPriceInFiat(btcPriceInFiat)
   const showOnchainFeeSummary =
     !isLightningSendMode && reviewFeeSats != null
@@ -329,7 +355,19 @@ export function SendTransactionReviewStep({
                       </Button>
                     </InfomodeWrapper>
                     {showInputUtxos ? (
-                      <ReviewInputUtxoList inputUtxos={inputUtxos} />
+                      isUtxoSelectionEnabled ? (
+                        <ManualUtxoSelectionSection
+                          amountSats={amountSats}
+                          reviewFeeSats={reviewFeeSats}
+                          selectedInputUtxos={inputUtxos}
+                          onLoadAllWalletUtxos={onLoadAllWalletUtxos}
+                          onRebuildWithSelectedUtxos={onRebuildWithSelectedUtxos}
+                          onRevertToAutoSelection={onRevertToAutoSelection}
+                          onManualSelectionStateChange={handleManualSelectionStateChangeFromSection}
+                        />
+                      ) : (
+                        <ReviewInputUtxoList inputUtxos={inputUtxos} />
+                      )
                     ) : null}
                   </div>
                 ) : null}
@@ -362,7 +400,7 @@ export function SendTransactionReviewStep({
               <Button
                 className="flex-1"
                 onClick={onConfirmSend}
-                disabled={labConfirmSendDisabled}
+                disabled={labConfirmSendDisabled || manualConfirmBlocked}
               >
                 Confirm and Send
               </Button>

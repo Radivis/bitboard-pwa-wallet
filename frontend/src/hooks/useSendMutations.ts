@@ -17,6 +17,7 @@ import { invalidateLabPaginatedQueries } from '@/lib/lab/lab-paginated-queries'
 import { errorMessage } from '@/lib/shared/utils'
 import { formatAmountInputFromSats } from '@/lib/wallet/bitcoin-dust'
 import { onchainDustPrepareWarningLines } from '@/lib/wallet/send/onchain-dust-prepare-messages'
+import { reviewUtxoToOutpoint } from '@/lib/wallet/manual-utxo-selection'
 
 /**
  * Mutation to prepare a PSBT (mainnet/testnet/signet/regtest).
@@ -161,6 +162,15 @@ export function useLabSendMutation() {
             ? walletLabOwner(activeWalletId)
             : undefined
 
+        const {
+          reviewInputUtxos,
+          isManualUtxoSelectionActive,
+        } = useSendStore.getState()
+        const selectedOutpoints =
+          isManualUtxoSelectionActive && reviewInputUtxos != null
+            ? reviewInputUtxos.map(reviewUtxoToOutpoint)
+            : undefined
+
         const { utxosJson, mempoolMetadata, totalInput } =
           await labWorker.prepareLabWalletTransaction({
             walletId: activeWalletId,
@@ -169,6 +179,7 @@ export function useLabSendMutation() {
             feeRateSatPerVb: effectiveFeeRate,
             walletChangeAddress,
             knownRecipientOwner,
+            selectedOutpoints,
           })
 
         const signedLabTransaction = await buildAndSignLabTransaction({

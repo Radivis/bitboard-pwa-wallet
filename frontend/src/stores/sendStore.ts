@@ -38,6 +38,8 @@ interface SendState {
   reviewInputUtxos: ReviewInputUtxo[] | null
   /** Dust UX: show red warning below amount; cleared on manual amount edit or reset. */
   onchainDustWarning: OnchainDustWarning | null
+  /** True while manual UTXO selection is active on the review step. */
+  isManualUtxoSelectionActive: boolean
 
   setStep: (step: SendStep) => void
   setRecipient: (recipient: string) => void
@@ -53,6 +55,7 @@ interface SendState {
   setReviewChangeSats: (changeSats: number | null) => void
   setReviewInputUtxos: (inputUtxos: ReviewInputUtxo[] | null) => void
   setOnchainDustWarning: (dustWarning: OnchainDustWarning | null) => void
+  setIsManualUtxoSelectionActive: (active: boolean) => void
 
   /** Reset form and step to initial state (e.g. after successful send or when leaving send page). */
   reset: () => void
@@ -74,6 +77,7 @@ const initialState = {
   reviewChangeSats: null as number | null,
   reviewInputUtxos: null as ReviewInputUtxo[] | null,
   onchainDustWarning: null as OnchainDustWarning | null,
+  isManualUtxoSelectionActive: false,
 }
 
 export const useSendStore = create<SendState>((set) => ({
@@ -97,6 +101,8 @@ export const useSendStore = create<SendState>((set) => ({
   setReviewChangeSats: (reviewChangeSats) => set({ reviewChangeSats }),
   setReviewInputUtxos: (reviewInputUtxos) => set({ reviewInputUtxos }),
   setOnchainDustWarning: (onchainDustWarning) => set({ onchainDustWarning }),
+  setIsManualUtxoSelectionActive: (isManualUtxoSelectionActive) =>
+    set({ isManualUtxoSelectionActive }),
 
   reset: () =>
     set({

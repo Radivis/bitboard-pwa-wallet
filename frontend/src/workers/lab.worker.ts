@@ -11,9 +11,15 @@ import {
   type LabAddress,
   type LabBlockDetails,
   type LabCurrentBlockTemplateParams,
+  type LabEntityTransactionCryptoParams,
+  type LabMempoolMetadata,
   type LabMineBlocksResult,
   type LabState,
   type LabTxDetails,
+  type LabUtxo,
+  type LabWalletUtxoRow,
+  type PrepareRandomLabEntityTransactionParams,
+  type PrepareRandomLabEntityTransactionResult,
 } from './lab-api'
 import { findLabEntityById, nextLabEntityId } from '@/lib/lab/lab-entity-keys'
 import { labVsizeFromWeight } from '@/lib/lab/lab-tx-weight'
@@ -43,7 +49,19 @@ import {
 import { createAndRegisterLabEntityFromWasm } from './lab-entity-creation'
 import { executeMineBlocks } from './lab-mine-blocks'
 import { getWasm } from './lab-wasm-loader'
+import {
+  filterUtxosBySelectedOutpoints,
+  MANUAL_COIN_CONTROL_EMPTY_SELECTION_MESSAGE,
+} from '@/lib/wallet/manual-utxo-selection'
 import { utxosToJsonForLabWasm } from './lab-wasm-utxos'
+
+function walletOwnedLabUtxos(walletId: number): LabUtxo[] {
+  const addressToOwner = labWorkerState.addressToOwner ?? {}
+  const walletOwner = walletLabOwner(walletId)
+  return labWorkerState.utxos.filter((utxo) =>
+    labOwnersEqual(lookupOwnerForLabAddress(utxo.address, addressToOwner), walletOwner),
+  )
+}
 import {
   assertLabReceiverNonNull,
   labAddressesEqual,
@@ -206,8 +224,8 @@ const labService = {
     feeRateSatPerVb: number
     knownRecipientOwner?: LabOwner | null
   }): Promise<{
-    crypto: import('./lab-api').LabEntityTransactionCryptoParams
-    mempoolMetadata: import('./lab-api').LabMempoolMetadata
+    crypto: LabEntityTransactionCryptoParams
+    mempoolMetadata: LabMempoolMetadata
     totalInput: number
   }> {
     const { labEntityId, fromAddress, toAddress, amountSats, feeRateSatPerVb } = params
@@ -287,8 +305,8 @@ const labService = {
   },
 
   async prepareRandomLabEntityTransaction(
-    params?: import('./lab-api').PrepareRandomLabEntityTransactionParams,
-  ): Promise<import('./lab-api').PrepareRandomLabEntityTransactionResult | null> {
+    params?: PrepareRandomLabEntityTransactionParams,
+  ): Promise<PrepareRandomLabEntityTransactionResult | null> {
     const wasmModule = await getWasm()
     const maxAttempts = Math.max(1, params?.maxAttempts ?? LAB_RANDOM_TX_MAX_ATTEMPTS_DEFAULT)
     const addressToOwner = labWorkerState.addressToOwner ?? {}
@@ -392,7 +410,7 @@ const labService = {
 
   async finalizeLabEntityMempoolTransaction(params: {
     signedTxHex: string
-    mempoolMetadata: import('./lab-api').LabMempoolMetadata
+    mempoolMetadata: LabMempoolMetadata
     labEntityId: number
     newChangesetJson: string
   }): Promise<LabState> {
@@ -430,6 +448,17 @@ const labService = {
     return this.getStateSnapshot()
   },
 
+  async listLabWalletUtxos(params: {
+    walletId: number
+  }): Promise<LabWalletUtxoRow[]> {
+    return walletOwnedLabUtxos(params.walletId).map((utxo) => ({
+      address: utxo.address,
+      amountSats: utxo.amountSats,
+      txid: utxo.txid,
+      vout: utxo.vout,
+    }))
+  },
+
   async prepareLabWalletTransaction(params: {
     walletId: number
     toAddress: string
@@ -437,28 +466,37 @@ const labService = {
     feeRateSatPerVb: number
     walletChangeAddress: string
     knownRecipientOwner?: LabOwner | null
+    selectedOutpoints?: Array<{ txid: string; vout: number }>
   }): Promise<{
     utxosJson: string
-    mempoolMetadata: import('./lab-api').LabMempoolMetadata
+    mempoolMetadata: LabMempoolMetadata
     totalInput: number
   }> {
-    const { walletId, toAddress, amountSats, walletChangeAddress } = params
+    const { walletId, toAddress, amountSats, walletChangeAddress, selectedOutpoints } = params
     const addressToOwner = labWorkerState.addressToOwner ?? {}
-    const walletOwner = walletLabOwner(walletId)
 
-    const fromUtxos = labWorkerState.utxos.filter((utxo) =>
-      labOwnersEqual(lookupOwnerForLabAddress(utxo.address, addressToOwner), walletOwner),
-    )
-    if (fromUtxos.length === 0) {
+    const walletUtxos = walletOwnedLabUtxos(walletId)
+    if (walletUtxos.length === 0) {
       throw new Error(
         `No UTXOs available for the wallet. walletId=${walletId}. ` +
           `Ensure the wallet is loaded for lab (regtest) and you have mined to it.`,
       )
     }
 
+    if (selectedOutpoints != null && selectedOutpoints.length === 0) {
+      throw new Error(MANUAL_COIN_CONTROL_EMPTY_SELECTION_MESSAGE)
+    }
+
+    const fromUtxos = filterUtxosBySelectedOutpoints(walletUtxos, selectedOutpoints)
+    if (fromUtxos.length === 0) {
+      throw new Error(
+        `No matching UTXOs for manual selection. walletId=${walletId}.`,
+      )
+    }
+
     const utxosJson = utxosToJsonForLabWasm(fromUtxos)
 
-    const sender = walletOwner
+    const sender = walletLabOwner(walletId)
     const knownRecipient = params.knownRecipientOwner ?? null
     let receiver = lookupOwnerForLabAddress(toAddress, addressToOwner) ?? null
     if (receiver === null && knownRecipient != null) {
@@ -506,7 +544,7 @@ const labService = {
 
   async addSignedTransactionToMempool(
     signedTxHex: string,
-    mempoolMetadata: import('./lab-api').LabMempoolMetadata,
+    mempoolMetadata: LabMempoolMetadata,
   ): Promise<LabState> {
     const wasmModule = await getWasm()
 

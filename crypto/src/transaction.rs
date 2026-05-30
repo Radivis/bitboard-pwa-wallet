@@ -2,7 +2,7 @@ use std::str::FromStr;
 
 use bdk_wallet::{KeychainKind, Wallet};
 use bitcoin::absolute;
-use bitcoin::{Address, Amount, Network, Psbt, ScriptBuf, Transaction};
+use bitcoin::{Address, Amount, Network, OutPoint, Psbt, ScriptBuf, Transaction, Txid};
 use serde::{Deserialize, Serialize};
 
 use crate::error::CryptoError;
@@ -18,6 +18,17 @@ pub struct ReviewInputUtxo {
     pub amount_sats: u64,
     pub txid: String,
     pub vout: u32,
+}
+
+/// Wallet-owned unspent output for listing and manual coin control.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct WalletUtxoRow {
+    pub address: String,
+    pub amount_sats: u64,
+    pub txid: String,
+    pub vout: u32,
+    pub is_confirmed: bool,
+    pub keychain: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -131,6 +142,38 @@ pub fn review_inputs_from_wallet_psbt(
     Ok(input_utxos)
 }
 
+/// Parse optional JSON array of `{ txid, vout }` for manual coin control.
+pub fn parse_selected_outpoints_json(
+    selected_outpoints_json: Option<&str>,
+) -> Result<Option<Vec<OutPoint>>, CryptoError> {
+    let Some(json) = selected_outpoints_json else {
+        return Ok(None);
+    };
+    if json.trim().is_empty() {
+        return Ok(None);
+    }
+
+    #[derive(Deserialize)]
+    struct OutpointWire {
+        txid: String,
+        vout: u32,
+    }
+
+    let wire_rows: Vec<OutpointWire> =
+        serde_json::from_str(json).map_err(|e| CryptoError::Transaction(e.to_string()))?;
+
+    let outpoints = wire_rows
+        .into_iter()
+        .map(|row| {
+            let txid =
+                Txid::from_str(&row.txid).map_err(|e| CryptoError::Transaction(e.to_string()))?;
+            Ok(OutPoint::new(txid, row.vout))
+        })
+        .collect::<Result<Vec<_>, CryptoError>>()?;
+
+    Ok(Some(outpoints))
+}
+
 /// Build a PSBT with dust-floor clamp. When `apply_change_free_bump` is false (default for first
 /// pass), never increases payment for change-free max; sets `change_free_bump_available` when the
 /// user may choose a higher payment. When true, applies that bump if possible.
@@ -141,6 +184,7 @@ pub fn prepare_onchain_send(
     fee_rate_sat_per_vb: f64,
     network: Network,
     apply_change_free_bump: bool,
+    selected_outpoints: Option<&[OutPoint]>,
 ) -> Result<PrepareOnchainSendOutcome, CryptoError> {
     if amount_sats == 0 {
         return Err(CryptoError::Transaction(
@@ -174,6 +218,17 @@ pub fn prepare_onchain_send(
                 Amount::from_sat(payment_sats),
             )
             .fee_rate(fee_rate);
+        if let Some(outpoints) = selected_outpoints {
+            if outpoints.is_empty() {
+                return Err(CryptoError::Transaction(
+                    "At least one UTXO must be selected for manual coin control".to_string(),
+                ));
+            }
+            tx_builder
+                .add_utxos(outpoints)
+                .map_err(|e| CryptoError::Transaction(e.to_string()))?;
+            tx_builder.manually_selected_only();
+        }
         tx_builder.finish().map_err(CryptoError::from)
     };
 
@@ -262,6 +317,7 @@ pub fn build_transaction(
         fee_rate_sat_per_vb,
         network,
         false,
+        None,
     )?;
     outcome
         .psbt_base64

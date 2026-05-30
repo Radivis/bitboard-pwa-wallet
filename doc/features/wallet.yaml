@@ -143,6 +143,11 @@ feature:
               - build PSBT, advance to review step
         - Step 2 - Review:
           - summary showing recipient, amount, fee rate, fee (sats/BTC; fiat when Fiat Denomination Mode active on mainnet), total deducted, amount remaining (based on total wallet balance), change (always shown, 0 when change-free), immediately spendable remaining (confirmed spendable minus inputs used), show/hide toggle for input UTXO list (address + amount)
+          - when UTXO selection feature is enabled on Settings → Features:
+            - manual UTXO selection checkbox below the selected-input list (after expanding show UTXOs)
+            - selected inputs total sum (red when insufficient for amount + fee)
+            - available UTXOs list with add/remove controls when manual mode is on
+            - confirm and broadcast disabled while manual selection is insufficient, rebuilding, or errored
           - confirm and broadcast button
             - click_event:
               - sign PSBT, broadcast transaction via Esplora

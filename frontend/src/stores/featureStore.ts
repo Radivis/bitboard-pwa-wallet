@@ -17,6 +17,9 @@ interface FeatureState {
    */
   isSegwitAddressesEnabled: boolean
   setIsSegwitAddressesEnabled: (enabled: boolean) => void
+  /** When true, send review shows manual UTXO selection controls. */
+  isUtxoSelectionEnabled: boolean
+  setIsUtxoSelectionEnabled: (enabled: boolean) => void
 }
 
 type LegacyFeaturePersistedState = {
@@ -32,13 +35,17 @@ function migrateLegacyFeatureState(persistedState: unknown): Partial<FeatureStat
   }
   const legacy = persistedState as LegacyFeaturePersistedState & Partial<FeatureState>
   if ('isLightningEnabled' in legacy) {
-    return legacy
+    return {
+      ...legacy,
+      isUtxoSelectionEnabled: legacy.isUtxoSelectionEnabled ?? false,
+    }
   }
   return {
     isLightningEnabled: legacy.lightningEnabled ?? false,
     isMainnetAccessEnabled: legacy.mainnetAccessEnabled ?? false,
     isRegtestModeEnabled: legacy.regtestModeEnabled ?? false,
     isSegwitAddressesEnabled: legacy.segwitAddressesEnabled ?? false,
+    isUtxoSelectionEnabled: false,
   }
 }
 
@@ -53,17 +60,20 @@ export const useFeatureStore = create<FeatureState>()(
       setIsRegtestModeEnabled: (enabled) => set({ isRegtestModeEnabled: enabled }),
       isSegwitAddressesEnabled: false,
       setIsSegwitAddressesEnabled: (enabled) => set({ isSegwitAddressesEnabled: enabled }),
+      isUtxoSelectionEnabled: false,
+      setIsUtxoSelectionEnabled: (enabled) => set({ isUtxoSelectionEnabled: enabled }),
     }),
     {
       name: 'feature-storage',
       storage: createJSONStorage(() => sqliteStorage),
-      version: 1,
+      version: 2,
       migrate: (persistedState) => migrateLegacyFeatureState(persistedState) ?? persistedState,
       partialize: (state) => ({
         isLightningEnabled: state.isLightningEnabled,
         isMainnetAccessEnabled: state.isMainnetAccessEnabled,
         isRegtestModeEnabled: state.isRegtestModeEnabled,
         isSegwitAddressesEnabled: state.isSegwitAddressesEnabled,
+        isUtxoSelectionEnabled: state.isUtxoSelectionEnabled,
       }),
     },
   ),
