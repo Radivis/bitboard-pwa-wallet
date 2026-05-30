@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  filterUtxosBySelectedOutpoints,
   isManualUtxoSelectionSufficient,
   moveUtxoToAvailable,
   moveUtxoToSelected,
@@ -51,6 +52,21 @@ describe('manual-utxo-selection helpers', () => {
     const { selected, available } = splitUtxosBySelection([utxoA, utxoB], [utxoA])
     expect(selected).toEqual([utxoA])
     expect(available).toEqual([utxoB])
+  })
+
+  it('filterUtxosBySelectedOutpoints returns all when selection omitted', () => {
+    expect(filterUtxosBySelectedOutpoints([utxoA, utxoB], undefined)).toEqual([utxoA, utxoB])
+    expect(filterUtxosBySelectedOutpoints([utxoA, utxoB], null)).toEqual([utxoA, utxoB])
+  })
+
+  it('filterUtxosBySelectedOutpoints returns subset for explicit outpoints', () => {
+    expect(
+      filterUtxosBySelectedOutpoints([utxoA, utxoB], [{ txid: 'aaa', vout: 0 }]),
+    ).toEqual([utxoA])
+  })
+
+  it('filterUtxosBySelectedOutpoints returns empty for empty selection list', () => {
+    expect(filterUtxosBySelectedOutpoints([utxoA, utxoB], [])).toEqual([])
   })
 
   it('moves utxos between selected and available lists', () => {

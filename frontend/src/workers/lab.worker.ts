@@ -50,21 +50,10 @@ import { createAndRegisterLabEntityFromWasm } from './lab-entity-creation'
 import { executeMineBlocks } from './lab-mine-blocks'
 import { getWasm } from './lab-wasm-loader'
 import {
+  filterUtxosBySelectedOutpoints,
   MANUAL_COIN_CONTROL_EMPTY_SELECTION_MESSAGE,
-  utxoOutpointKey,
 } from '@/lib/wallet/manual-utxo-selection'
 import { utxosToJsonForLabWasm } from './lab-wasm-utxos'
-
-function filterLabUtxosBySelectedOutpoints(
-  utxos: LabUtxo[],
-  selectedOutpoints?: Array<{ txid: string; vout: number }>,
-): LabUtxo[] {
-  if (selectedOutpoints == null) {
-    return utxos
-  }
-  const selectedKeys = new Set(selectedOutpoints.map((outpoint) => utxoOutpointKey(outpoint)))
-  return utxos.filter((utxo) => selectedKeys.has(utxoOutpointKey(utxo)))
-}
 
 function walletOwnedLabUtxos(walletId: number): LabUtxo[] {
   const addressToOwner = labWorkerState.addressToOwner ?? {}
@@ -498,7 +487,7 @@ const labService = {
       throw new Error(MANUAL_COIN_CONTROL_EMPTY_SELECTION_MESSAGE)
     }
 
-    const fromUtxos = filterLabUtxosBySelectedOutpoints(walletUtxos, selectedOutpoints)
+    const fromUtxos = filterUtxosBySelectedOutpoints(walletUtxos, selectedOutpoints)
     if (fromUtxos.length === 0) {
       throw new Error(
         `No matching UTXOs for manual selection. walletId=${walletId}.`,

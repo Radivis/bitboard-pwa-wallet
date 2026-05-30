@@ -308,6 +308,53 @@ fn extract_transaction_returns_valid_tx() {
 
 // --- Manual UTXO selection ---
 
+const PARSE_TEST_TXID: &str = "0000000000000000000000000000000000000000000000000000000000000001";
+
+#[test]
+fn parse_selected_outpoints_json_none_and_whitespace_returns_none() {
+    assert_eq!(
+        transaction::parse_selected_outpoints_json(None).unwrap(),
+        None
+    );
+    assert_eq!(
+        transaction::parse_selected_outpoints_json(Some("")).unwrap(),
+        None
+    );
+    assert_eq!(
+        transaction::parse_selected_outpoints_json(Some("   ")).unwrap(),
+        None
+    );
+}
+
+#[test]
+fn parse_selected_outpoints_json_empty_array_returns_some_empty() {
+    let parsed = transaction::parse_selected_outpoints_json(Some("[]")).unwrap();
+    assert_eq!(parsed, Some(vec![]));
+}
+
+#[test]
+fn parse_selected_outpoints_json_invalid_json_errors() {
+    let result = transaction::parse_selected_outpoints_json(Some("not-json"));
+    assert!(result.is_err(), "invalid JSON must error");
+}
+
+#[test]
+fn parse_selected_outpoints_json_invalid_txid_errors() {
+    let json = r#"[{"txid":"not-a-valid-txid","vout":0}]"#;
+    let result = transaction::parse_selected_outpoints_json(Some(json));
+    assert!(result.is_err(), "invalid txid must error");
+}
+
+#[test]
+fn parse_selected_outpoints_json_valid_outpoint() {
+    let json = format!(r#"[{{"txid":"{PARSE_TEST_TXID}","vout":1}}]"#);
+    let parsed = transaction::parse_selected_outpoints_json(Some(&json)).unwrap();
+    let outpoints = parsed.expect("expected Some");
+    assert_eq!(outpoints.len(), 1);
+    assert_eq!(outpoints[0].txid.to_string(), PARSE_TEST_TXID);
+    assert_eq!(outpoints[0].vout, 1);
+}
+
 #[test]
 fn prepare_onchain_send_manual_subset_uses_only_selected() {
     let mut wallet = funded_wallet();

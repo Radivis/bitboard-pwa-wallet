@@ -45,6 +45,17 @@ export function isManualUtxoSelectionSufficient(
   return selectedSumSats >= amountSats + feeSats
 }
 
+export function filterUtxosBySelectedOutpoints<T extends Pick<ReviewInputUtxo, 'txid' | 'vout'>>(
+  utxos: T[],
+  selectedOutpoints?: Array<{ txid: string; vout: number }> | null,
+): T[] {
+  if (selectedOutpoints == null) {
+    return utxos
+  }
+  const selectedKeys = new Set(selectedOutpoints.map((outpoint) => utxoOutpointKey(outpoint)))
+  return utxos.filter((utxo) => selectedKeys.has(utxoOutpointKey(utxo)))
+}
+
 export function splitUtxosBySelection(
   allUtxos: ReviewInputUtxo[],
   selectedUtxos: ReviewInputUtxo[],

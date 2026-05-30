@@ -4,7 +4,7 @@ import { toast } from 'sonner'
 import { errorMessage } from '@/lib/shared/utils'
 import type { ReviewInputUtxo } from '@/workers/crypto-api'
 
-const MANUAL_UTXO_REBUILD_DEBOUNCE_MS = 200
+export const MANUAL_UTXO_REBUILD_DEBOUNCE_MS = 200
 
 const MANUAL_UTXO_REBUILD_ERROR_TOAST =
   'Failed to update transaction for the selected inputs'
