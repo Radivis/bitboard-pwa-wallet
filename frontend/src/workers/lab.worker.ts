@@ -49,7 +49,10 @@ import {
 import { createAndRegisterLabEntityFromWasm } from './lab-entity-creation'
 import { executeMineBlocks } from './lab-mine-blocks'
 import { getWasm } from './lab-wasm-loader'
-import { MANUAL_COIN_CONTROL_EMPTY_SELECTION_MESSAGE } from '@/lib/wallet/manual-utxo-selection'
+import {
+  MANUAL_COIN_CONTROL_EMPTY_SELECTION_MESSAGE,
+  utxoOutpointKey,
+} from '@/lib/wallet/manual-utxo-selection'
 import { utxosToJsonForLabWasm } from './lab-wasm-utxos'
 
 function filterLabUtxosBySelectedOutpoints(
@@ -59,10 +62,8 @@ function filterLabUtxosBySelectedOutpoints(
   if (selectedOutpoints == null) {
     return utxos
   }
-  const selectedKeys = new Set(
-    selectedOutpoints.map((outpoint) => `${outpoint.txid}:${outpoint.vout}`),
-  )
-  return utxos.filter((utxo) => selectedKeys.has(`${utxo.txid}:${utxo.vout}`))
+  const selectedKeys = new Set(selectedOutpoints.map((outpoint) => utxoOutpointKey(outpoint)))
+  return utxos.filter((utxo) => selectedKeys.has(utxoOutpointKey(utxo)))
 }
 
 function walletOwnedLabUtxos(walletId: number): LabUtxo[] {

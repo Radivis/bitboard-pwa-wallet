@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
 import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
 import { ReviewInputUtxoList } from '@/components/wallet/send/ReviewInputUtxoList'
 import { useManualUtxoSelectionRebuild } from '@/hooks/useManualUtxoSelectionRebuild'
@@ -135,16 +136,22 @@ export function ManualUtxoSelectionSection({
 
   const showInsufficientSum =
     manualSelectionEnabled &&
+    !isRebuildPending &&
     (isRebuildError || !selectionSufficient || localSelectedUtxos.length === 0)
 
   return (
     <div className="space-y-3">
       {manualSelectionEnabled ? (
-        <div className="flex items-center justify-between gap-2 text-sm">
-          <span className="text-muted-foreground">Selected inputs total</span>
-          <span className={showInsufficientSum ? 'text-destructive' : undefined}>
-            <BitcoinAmountDisplay amountSats={selectedSumSats} size="sm" />
-          </span>
+        <div className="space-y-1">
+          <div className="flex items-center justify-between gap-2 text-sm">
+            <span className="text-muted-foreground">Selected inputs total</span>
+            <span className={showInsufficientSum ? 'text-destructive' : undefined}>
+              <BitcoinAmountDisplay amountSats={selectedSumSats} size="sm" />
+            </span>
+          </div>
+          {isRebuildPending ? (
+            <p className="text-xs text-muted-foreground">Updating fee…</p>
+          ) : null}
         </div>
       ) : null}
 
@@ -154,19 +161,18 @@ export function ManualUtxoSelectionSection({
         onAction={manualSelectionEnabled ? handleRemoveUtxo : undefined}
       />
 
-      <div className="flex items-center gap-2">
-        <input
-          id="manual-utxo-selection"
-          type="checkbox"
-          className="size-4 shrink-0 rounded border-input accent-primary"
-          checked={manualSelectionEnabled}
-          onChange={(event) => {
-            void handleManualToggle(event.target.checked)
-          }}
-        />
+      <div className="flex items-center justify-between gap-2">
         <Label htmlFor="manual-utxo-selection" className="cursor-pointer text-sm">
           Manual UTXO selection
         </Label>
+        <Switch
+          id="manual-utxo-selection"
+          checked={manualSelectionEnabled}
+          onCheckedChange={(checked) => {
+            void handleManualToggle(checked)
+          }}
+          aria-label="Enable manual UTXO selection"
+        />
       </div>
 
       {manualSelectionEnabled ? (

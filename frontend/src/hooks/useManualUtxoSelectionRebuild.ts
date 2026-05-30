@@ -1,8 +1,13 @@
 import { useMutation } from '@tanstack/react-query'
 import { useEffect, useRef } from 'react'
+import { toast } from 'sonner'
+import { errorMessage } from '@/lib/shared/utils'
 import type { ReviewInputUtxo } from '@/workers/crypto-api'
 
 const MANUAL_UTXO_REBUILD_DEBOUNCE_MS = 200
+
+const MANUAL_UTXO_REBUILD_ERROR_TOAST =
+  'Failed to update transaction for the selected inputs'
 
 export function useManualUtxoSelectionRebuild({
   manualSelectionEnabled,
@@ -21,6 +26,9 @@ export function useManualUtxoSelectionRebuild({
 
   const { mutate, reset, isPending, isError } = useMutation({
     mutationFn: (selected: ReviewInputUtxo[]) => onRebuildRef.current(selected),
+    onError: (err) => {
+      toast.error(errorMessage(err) || MANUAL_UTXO_REBUILD_ERROR_TOAST)
+    },
   })
 
   useEffect(() => {
