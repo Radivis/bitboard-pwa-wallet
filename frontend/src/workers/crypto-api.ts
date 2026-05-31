@@ -196,6 +196,15 @@ export interface UpdateDescriptorWalletChangesetParams {
   lastSuccessfulEsploraSyncAt?: string;
 }
 
+export interface ReadLastSuccessfulEsploraSyncAtParams {
+  password: string;
+  /** WalletSecretsPayload ciphertext only (after split migration). */
+  encryptedPayload: EncryptedBlobForDb;
+  network: BitcoinNetwork;
+  addressType: AddressType;
+  accountId: number;
+}
+
 export interface CreateWalletAndEncryptSecretsParams {
   password: string;
   network: BitcoinNetwork;
@@ -290,6 +299,14 @@ export interface CryptoService {
   updateDescriptorWalletChangeset(
     params: UpdateDescriptorWalletChangesetParams,
   ): Promise<EncryptedBlobForDb>;
+
+  /**
+   * Read `lastSuccessfulEsploraSyncAt` for one descriptor wallet from encrypted payload.
+   * Decrypt happens in the worker; only the ISO timestamp (or undefined) is returned.
+   */
+  readLastSuccessfulEsploraSyncAtForDescriptorWallet(
+    params: ReadLastSuccessfulEsploraSyncAtParams,
+  ): Promise<string | undefined>;
 
   /**
    * Create wallet (generate mnemonic, create in WASM, encrypt secrets).

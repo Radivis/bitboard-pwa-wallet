@@ -1,11 +1,13 @@
-import { getDatabase } from '@/db/database'
+import { ensureMigrated, getDatabase } from '@/db/database'
 import {
-  loadWalletSecretsPayload,
+  getWalletSecretsEncrypted,
   updateWalletSecretsPayloadWithRetry,
 } from '@/db/wallet-persistence'
 import type { WalletSecretsPayload } from '@/lib/wallet/wallet-domain-types'
 import { assertIso8601LastSuccessfulEsploraSyncAt } from '@/lib/wallet/wallet-domain-types'
 import type { AddressType, BitcoinNetwork } from '@/workers/crypto-types'
+import { ensureSecretsChannel } from '@/workers/secrets-channel'
+import { useCryptoStore } from '@/stores/cryptoStore'
 
 export function descriptorWalletKey(params: {
   network: BitcoinNetwork
@@ -73,6 +75,11 @@ export async function persistLastSuccessfulEsploraSyncAt(params: {
   })
 }
 
+/**
+ * Load persisted Esplora sync timestamp for one descriptor wallet.
+ * Decrypt and payload parse run in the crypto worker; the main thread receives
+ * only the ISO string (or undefined).
+ */
 export async function loadLastSuccessfulEsploraSyncAtForDescriptorWallet(params: {
   password: string
   walletId: number
@@ -81,12 +88,16 @@ export async function loadLastSuccessfulEsploraSyncAtForDescriptorWallet(params:
   accountId: number
 }): Promise<string | undefined> {
   const { password, walletId, network, addressType, accountId } = params
-  const payload = await loadWalletSecretsPayload(getDatabase(), password, walletId)
-  const descriptorWallet = payload.descriptorWallets.find(
-    (row) =>
-      row.network === network &&
-      row.addressType === addressType &&
-      row.accountId === accountId,
-  )
-  return descriptorWallet?.lastSuccessfulEsploraSyncAt
+  await ensureMigrated()
+  await ensureSecretsChannel()
+  const encryptedBlobs = await getWalletSecretsEncrypted(getDatabase(), walletId)
+  const { readLastSuccessfulEsploraSyncAtForDescriptorWallet } =
+    useCryptoStore.getState()
+  return readLastSuccessfulEsploraSyncAtForDescriptorWallet({
+    password,
+    encryptedPayload: encryptedBlobs.payload,
+    network,
+    addressType,
+    accountId,
+  })
 }

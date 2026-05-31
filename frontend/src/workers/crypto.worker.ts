@@ -625,6 +625,25 @@ const cryptoService = {
     return encryptedBlobMessageToStoreFields(newBlob);
   },
 
+  async readLastSuccessfulEsploraSyncAtForDescriptorWallet(params: {
+    password: string;
+    encryptedPayload: EncryptedBlobMessage;
+    network: BitcoinNetwork;
+    addressType: AddressType;
+    accountId: number;
+  }): Promise<string | undefined> {
+    const { password, encryptedPayload, network, addressType, accountId } = params;
+    const plaintext = await requestDecrypt(password, encryptedPayload);
+    const payload = parseWalletPayloadJson(plaintext);
+    const descriptorWallet = findDescriptorWalletInPayload({
+      payload,
+      network,
+      addressType,
+      accountId,
+    });
+    return descriptorWallet?.lastSuccessfulEsploraSyncAt;
+  },
+
   async createWalletAndEncryptSecrets(params: {
     password: string;
     network: BitcoinNetwork;

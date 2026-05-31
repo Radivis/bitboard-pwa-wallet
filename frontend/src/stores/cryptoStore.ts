@@ -34,6 +34,7 @@ import type {
   PrepareOnchainSendResult,
   ResolveDescriptorWalletParams,
   ResolveDescriptorWalletResult,
+  ReadLastSuccessfulEsploraSyncAtParams,
   UpdateDescriptorWalletChangesetParams,
   WalletSessionHandle,
   WalletUtxoRow,
@@ -103,6 +104,10 @@ interface CryptoState {
   updateDescriptorWalletChangeset: (
     params: UpdateDescriptorWalletChangesetParams,
   ) => Promise<EncryptedBlobForDb>;
+
+  readLastSuccessfulEsploraSyncAtForDescriptorWallet: (
+    params: ReadLastSuccessfulEsploraSyncAtParams,
+  ) => Promise<string | undefined>;
 
   createWalletAndEncryptSecrets: (
     params: CreateWalletAndEncryptSecretsParams,
@@ -249,6 +254,11 @@ export const useCryptoStore = create<CryptoState>((set, get) => {
 
     updateDescriptorWalletChangeset: (params) =>
       withErrorHandling((worker) => worker.updateDescriptorWalletChangeset(params)),
+
+    readLastSuccessfulEsploraSyncAtForDescriptorWallet: (params) =>
+      withErrorHandling((worker) =>
+        worker.readLastSuccessfulEsploraSyncAtForDescriptorWallet(params),
+      ),
 
     createWalletAndEncryptSecrets: (params) =>
       withErrorHandling((worker) => worker.createWalletAndEncryptSecrets(params)),

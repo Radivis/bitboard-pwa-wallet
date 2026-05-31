@@ -2,19 +2,43 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { WalletSecretsPayload } from '@/lib/wallet/wallet-domain-types'
 import { updateWalletSecretsPayloadWithRetry } from '@/db/wallet-persistence'
 
+const readLastSuccessfulEsploraSyncAtForDescriptorWallet = vi.fn()
+
 vi.mock('@/db/database', () => ({
+  ensureMigrated: vi.fn(async () => undefined),
   getDatabase: vi.fn(() => ({})),
 }))
 
+vi.mock('@/workers/secrets-channel', () => ({
+  ensureSecretsChannel: vi.fn(async () => undefined),
+}))
+
+vi.mock('@/stores/cryptoStore', () => ({
+  useCryptoStore: {
+    getState: () => ({
+      readLastSuccessfulEsploraSyncAtForDescriptorWallet,
+    }),
+  },
+}))
+
 vi.mock('@/db/wallet-persistence', () => ({
-  loadWalletSecretsPayload: vi.fn(),
+  getWalletSecretsEncrypted: vi.fn(),
   updateWalletSecretsPayloadWithRetry: vi.fn(),
 }))
 
+import { getWalletSecretsEncrypted } from '@/db/wallet-persistence'
 import {
   applyLastSuccessfulEsploraSyncAtToPayload,
+  loadLastSuccessfulEsploraSyncAtForDescriptorWallet,
   persistLastSuccessfulEsploraSyncAt,
 } from '@/lib/wallet/onchain-esplora-sync-metadata'
+
+const encryptedPayloadBlob = {
+  ciphertext: new Uint8Array([1]),
+  iv: new Uint8Array([2]),
+  salt: new Uint8Array([3]),
+  kdfPhc: 'argon2id',
+}
 
 function buildPayload(): WalletSecretsPayload {
   return {
@@ -36,6 +60,10 @@ function buildPayload(): WalletSecretsPayload {
 describe('onchain-esplora-sync-metadata', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.mocked(getWalletSecretsEncrypted).mockResolvedValue({
+      payload: encryptedPayloadBlob,
+      mnemonic: encryptedPayloadBlob,
+    })
   })
 
   it('applyLastSuccessfulEsploraSyncAtToPayload sets timestamp on matching descriptor wallet', () => {
@@ -75,5 +103,30 @@ describe('onchain-esplora-sync-metadata', () => {
         syncedAtIso: 'not-a-valid-timestamp',
       }),
     ).toThrow(/Invalid lastSuccessfulEsploraSyncAt/)
+  })
+
+  it('loadLastSuccessfulEsploraSyncAtForDescriptorWallet reads timestamp via crypto worker', async () => {
+    const isoTimestamp = '2025-06-01T12:00:00.000Z'
+    readLastSuccessfulEsploraSyncAtForDescriptorWallet.mockResolvedValue(
+      isoTimestamp,
+    )
+
+    const result = await loadLastSuccessfulEsploraSyncAtForDescriptorWallet({
+      password: 'pw',
+      walletId: 1,
+      network: 'testnet',
+      addressType: 'taproot',
+      accountId: 0,
+    })
+
+    expect(getWalletSecretsEncrypted).toHaveBeenCalledWith({}, 1)
+    expect(readLastSuccessfulEsploraSyncAtForDescriptorWallet).toHaveBeenCalledWith({
+      password: 'pw',
+      encryptedPayload: encryptedPayloadBlob,
+      network: 'testnet',
+      addressType: 'taproot',
+      accountId: 0,
+    })
+    expect(result).toBe(isoTimestamp)
   })
 })
