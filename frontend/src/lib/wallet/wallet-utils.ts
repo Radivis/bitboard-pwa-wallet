@@ -25,11 +25,6 @@ import {
 import { invalidateLightningDashboardQueries } from '@/lib/lightning/lightning-dashboard-sync'
 import { refreshWalletStoreFromLoadedBdk } from '@/lib/wallet/onchain-bdk-store-sync'
 import { invalidateOnchainDashboardQueries } from '@/lib/wallet/onchain-dashboard-sync'
-import { persistLastSuccessfulEsploraSyncAt } from '@/lib/wallet/onchain-esplora-sync-metadata'
-import {
-  selectCommittedAccountId,
-  selectCommittedAddressType,
-} from '@/stores/walletStore'
 
 const CUSTOM_ESPLORA_URL_KEY_PREFIX = 'custom_esplora_url_'
 
@@ -137,28 +132,6 @@ export async function loadCustomEsploraUrl(
 /** Stop-gap for full scan (consecutive unused addresses before stopping). Match import flow. */
 const FULL_SCAN_STOP_GAP = 20
 
-async function persistEsploraSyncTimestampForActiveDescriptorWallet(params: {
-  password: string
-  walletId: number
-  syncedAtIso: string
-}): Promise<void> {
-  const walletState = useWalletStore.getState()
-  if (walletState.networkMode === 'lab') {
-    return
-  }
-
-  await persistLastSuccessfulEsploraSyncAt({
-    password: params.password,
-    walletId: params.walletId,
-    network: toBitcoinNetwork(
-      walletState.loadedDescriptorWallet?.networkMode ?? walletState.networkMode,
-    ),
-    addressType: selectCommittedAddressType(walletState),
-    accountId: selectCommittedAccountId(walletState),
-    syncedAtIso: params.syncedAtIso,
-  })
-}
-
 function invalidateDashboardQueriesAfterOnchainUpdate(): void {
   invalidateLightningDashboardQueries()
   invalidateOnchainDashboardQueries()
@@ -213,6 +186,60 @@ export async function syncActiveWalletAndUpdateState(
   setTransactions(transactionList)
 }
 
+/**
+ * After Esplora sync updated WASM: set session lastSyncTime, persist changeset and
+ * `lastSuccessfulEsploraSyncAt` in one write, invalidate dashboard queries.
+ */
+export async function persistPostEsploraSyncDescriptorWalletState(options: {
+  password: string | null
+  walletId: number | null
+  markFullScanDone?: boolean
+  /**
+   * When switching descriptor wallets, pass explicit coordinates so the write
+   * targets the loaded wallet even if store commit order differs.
+   */
+  descriptorWalletCoordinates?: {
+    network: BitcoinNetwork
+    addressType: AddressType
+    accountId: number
+  }
+}): Promise<void> {
+  const syncedAtIso = new Date().toISOString()
+  useWalletStore.getState().setLastSyncTime(new Date(syncedAtIso))
+
+  if (options.password == null || options.walletId == null) {
+    invalidateDashboardQueriesAfterOnchainUpdate()
+    return
+  }
+
+  const { exportChangeset } = useCryptoStore.getState()
+  const changesetJson = await exportChangeset()
+
+  if (options.descriptorWalletCoordinates != null) {
+    const { network, addressType, accountId } =
+      options.descriptorWalletCoordinates
+    await updateDescriptorWalletChangeset({
+      password: options.password,
+      walletId: options.walletId,
+      network,
+      addressType,
+      accountId,
+      changesetJson,
+      markFullScanDone: options.markFullScanDone,
+      lastSuccessfulEsploraSyncAt: syncedAtIso,
+    })
+  } else {
+    await updateWalletChangeset({
+      password: options.password,
+      walletId: options.walletId,
+      changesetJson,
+      lastSuccessfulEsploraSyncAt: syncedAtIso,
+      ...(options.markFullScanDone ? { markFullScanDone: true } : {}),
+    })
+  }
+  invalidateDashboardQueriesAfterOnchainUpdate()
+}
+
 export type DescriptorWalletEsploraSyncResult = 'completed' | 'syncFailed'
 
 /**
@@ -233,29 +260,16 @@ export async function syncLoadedDescriptorWalletWithEsplora(options: {
     await syncActiveWalletAndUpdateState(options.networkMode, {
       useFullScan: options.fullScanNeeded,
     })
-    const syncedAtIso = new Date().toISOString()
-    useWalletStore.getState().setLastSyncTime(new Date(syncedAtIso))
-    if (options.fullScanNeeded) {
-      const { exportChangeset } = useCryptoStore.getState()
-      const changesetJson = await exportChangeset()
-      await updateDescriptorWalletChangeset({
-        password: options.sessionPassword,
-        walletId: options.activeWalletId,
+    await persistPostEsploraSyncDescriptorWalletState({
+      password: options.sessionPassword,
+      walletId: options.activeWalletId,
+      markFullScanDone: options.fullScanNeeded,
+      descriptorWalletCoordinates: {
         network: options.targetNetwork,
         addressType: options.targetAddressType,
         accountId: options.targetAccountId,
-        changesetJson,
-        markFullScanDone: true,
-        lastSuccessfulEsploraSyncAt: syncedAtIso,
-      })
-    } else {
-      await persistEsploraSyncTimestampForActiveDescriptorWallet({
-        password: options.sessionPassword,
-        walletId: options.activeWalletId,
-        syncedAtIso,
-      })
-    }
-    invalidateDashboardQueriesAfterOnchainUpdate()
+      },
+    })
     return 'completed'
   } catch (syncErr) {
     const detail = sanitizeErrorMessageForUi(errorMessage(syncErr))
@@ -283,21 +297,11 @@ async function finishDashboardSyncAfterStateUpdate(options: {
   activeWalletId: number | null
   markFullScanDone: boolean
 }): Promise<void> {
-  const syncedAtIso = new Date().toISOString()
-  const { setLastSyncTime } = useWalletStore.getState()
-  setLastSyncTime(new Date(syncedAtIso))
-  if (options.password != null && options.activeWalletId != null) {
-    const { exportChangeset } = useCryptoStore.getState()
-    const changesetJson = await exportChangeset()
-    await updateWalletChangeset({
-      password: options.password,
-      walletId: options.activeWalletId,
-      changesetJson,
-      lastSuccessfulEsploraSyncAt: syncedAtIso,
-      ...(options.markFullScanDone ? { markFullScanDone: true } : {}),
-    })
-  }
-  invalidateDashboardQueriesAfterOnchainUpdate()
+  await persistPostEsploraSyncDescriptorWalletState({
+    password: options.password,
+    walletId: options.activeWalletId,
+    markFullScanDone: options.markFullScanDone,
+  })
 }
 
 /**
@@ -454,20 +458,11 @@ export async function runImportInitialEsploraSync(): Promise<void> {
 
   await syncActiveWalletAndUpdateState(networkMode, { useFullScan: true })
 
-  if (sessionPassword && activeWalletId != null) {
-    const syncedAtIso = new Date().toISOString()
-    const { exportChangeset } = useCryptoStore.getState()
-    const changesetJson = await exportChangeset()
-    await updateWalletChangeset({
-      password: sessionPassword,
-      walletId: activeWalletId,
-      changesetJson,
-      markFullScanDone: true,
-      lastSuccessfulEsploraSyncAt: syncedAtIso,
-    })
-    useWalletStore.getState().setLastSyncTime(new Date(syncedAtIso))
-  }
-  invalidateDashboardQueriesAfterOnchainUpdate()
+  await persistPostEsploraSyncDescriptorWalletState({
+    password: sessionPassword,
+    walletId: activeWalletId,
+    markFullScanDone: true,
+  })
   setImportInitialSyncErrorMessage(null)
 }
 
@@ -610,8 +605,7 @@ export async function loadDescriptorWalletAndSync(params: {
     targetAccountId: accountId,
   })
 
-  const { loadWallet, getCurrentAddress, exportChangeset } =
-    useCryptoStore.getState()
+  const { loadWallet, getCurrentAddress } = useCryptoStore.getState()
   const {
     setWalletStatus,
     setBalance,
@@ -656,17 +650,11 @@ export async function loadDescriptorWalletAndSync(params: {
   const runEsploraSyncAndPersistChangeset = async () => {
     try {
       await syncActiveWalletAndUpdateState(networkMode, { useFullScan: true })
-      const syncedAtIso = new Date().toISOString()
-      const changesetJson = await exportChangeset()
-      await updateWalletChangeset({
+      await persistPostEsploraSyncDescriptorWalletState({
         password,
         walletId,
-        changesetJson,
         markFullScanDone: true,
-        lastSuccessfulEsploraSyncAt: syncedAtIso,
       })
-      setLastSyncTime(new Date(syncedAtIso))
-      invalidateDashboardQueriesAfterOnchainUpdate()
     } catch (err) {
       if (networkMode !== 'lab') {
         try {

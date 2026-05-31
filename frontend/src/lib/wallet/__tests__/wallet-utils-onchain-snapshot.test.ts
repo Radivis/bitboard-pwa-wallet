@@ -30,9 +30,7 @@ vi.mock('@/lib/wallet/onchain-bdk-store-sync', () => ({
     refreshWalletStoreFromLoadedBdk(...args),
 }))
 
-vi.mock('@/lib/wallet/onchain-esplora-sync-metadata', () => ({
-  persistLastSuccessfulEsploraSyncAt: vi.fn(),
-}))
+vi.mock('@/lib/wallet/onchain-esplora-sync-metadata', () => ({}))
 
 vi.mock('@/lib/lightning/lightning-dashboard-sync', () => ({
   invalidateLightningDashboardQueries: vi.fn(),
@@ -85,6 +83,7 @@ vi.mock('sonner', () => ({
 }))
 
 import { useWalletStore } from '@/stores/walletStore'
+import { updateDescriptorWalletChangeset } from '@/lib/wallet/descriptor-wallet-manager'
 import { syncLoadedDescriptorWalletWithEsplora } from '@/lib/wallet/wallet-utils'
 
 describe('syncLoadedDescriptorWalletWithEsplora BDK fallback', () => {
@@ -136,5 +135,33 @@ describe('syncLoadedDescriptorWalletWithEsplora BDK fallback', () => {
 
     expect(result).toBe('syncFailed')
     expect(refreshWalletStoreFromLoadedBdk).toHaveBeenCalled()
+  })
+
+  it('persists changeset and timestamp on incremental sync success', async () => {
+    syncWallet.mockResolvedValue(undefined)
+
+    const result = await syncLoadedDescriptorWalletWithEsplora({
+      networkMode: 'testnet',
+      activeWalletId: 1,
+      sessionPassword: 'pw',
+      targetNetwork: 'testnet',
+      targetAddressType: AddressType.Taproot,
+      targetAccountId: 0,
+      fullScanNeeded: false,
+    })
+
+    expect(result).toBe('completed')
+    expect(updateDescriptorWalletChangeset).toHaveBeenCalledWith(
+      expect.objectContaining({
+        password: 'pw',
+        walletId: 1,
+        network: 'testnet',
+        addressType: AddressType.Taproot,
+        accountId: 0,
+        changesetJson: '{}',
+        markFullScanDone: false,
+        lastSuccessfulEsploraSyncAt: expect.any(String),
+      }),
+    )
   })
 })

@@ -41,6 +41,11 @@ export function applyLastSuccessfulEsploraSyncAtToPayload(
   }
 }
 
+/**
+ * Persist only `lastSuccessfulEsploraSyncAt` without updating the changeset.
+ * Prefer {@link persistPostEsploraSyncDescriptorWalletState} in `wallet-utils.ts`
+ * after Esplora sync so changeset and timestamp are written together.
+ */
 export async function persistLastSuccessfulEsploraSyncAt(params: {
   password: string
   walletId: number
