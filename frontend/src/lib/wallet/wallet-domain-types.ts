@@ -38,8 +38,10 @@ export interface DescriptorWalletData {
   externalDescriptor: string
   internalDescriptor: string
   changeSet: string
-  /** True after a full scan has been run for this sub-wallet at least once. */
+  /** True after a full scan has been run for this descriptor wallet at least once. */
   fullScanDone: boolean
+  /** ISO timestamp of last successful Esplora sync for this descriptor wallet (non-lab). */
+  lastSuccessfulEsploraSyncAt?: string
 }
 
 /**
@@ -103,6 +105,20 @@ function isNonEmptyString(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0
 }
 
+function isIso8601Timestamp(value: unknown): value is string {
+  if (!isNonEmptyString(value)) return false
+  return Number.isFinite(Date.parse(value))
+}
+
+/** Throws when `value` is not a parseable ISO-8601 timestamp string. */
+export function assertIso8601LastSuccessfulEsploraSyncAt(value: string): void {
+  if (!isIso8601Timestamp(value)) {
+    throw new Error(
+      'Invalid lastSuccessfulEsploraSyncAt: expected parseable ISO-8601 timestamp',
+    )
+  }
+}
+
 function isLightningNetworkMode(value: unknown): value is LightningNetworkMode {
   return (
     typeof value === 'string' &&
@@ -144,7 +160,7 @@ function isStoredNwcLightningConnection(
 
 function isDescriptorWalletData(value: unknown): value is DescriptorWalletData {
   if (!isRecord(value)) return false
-  return (
+  const base =
     SUPPORTED_BITCOIN_NETWORKS.includes(value.network as BitcoinNetwork) &&
     SUPPORTED_ADDRESS_TYPES.includes(value.addressType as AddressType) &&
     Number.isInteger(value.accountId) &&
@@ -153,7 +169,9 @@ function isDescriptorWalletData(value: unknown): value is DescriptorWalletData {
     isNonEmptyString(value.internalDescriptor) &&
     isNonEmptyString(value.changeSet) &&
     typeof value.fullScanDone === 'boolean'
-  )
+  if (!base) return false
+  if (value.lastSuccessfulEsploraSyncAt === undefined) return true
+  return isIso8601Timestamp(value.lastSuccessfulEsploraSyncAt)
 }
 
 export function isWalletSecretsPayload(value: unknown): value is WalletSecretsPayload {

@@ -14,7 +14,7 @@ export type ExecuteSettingsAddressTypeSwitchParams = {
 
 /**
  * Settings / migrations: switch committed address type, or persist preference when the wallet is locked.
- * Matches {@link useSubWalletSwitchMutation} for `'addressType'`.
+ * Matches {@link useDescriptorWalletSwitchMutation} for `'addressType'`.
  */
 export async function executeSettingsAddressTypeSwitch(
   params: ExecuteSettingsAddressTypeSwitchParams,

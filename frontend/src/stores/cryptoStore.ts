@@ -6,6 +6,7 @@ import {
   type WorkerHealthStatus,
 } from '@/workers/crypto-factory';
 import { removeLightningConnectionsHydrationQueries } from '@/lib/lightning/lightning-connections-hydration';
+import { removeOnchainDashboardQueries } from '@/lib/wallet/onchain-dashboard-sync';
 import { useWalletStore } from '@/stores/walletStore';
 import { useLightningStore } from '@/stores/lightningStore';
 import { useSessionStore, clearAutoLockTimer } from '@/stores/sessionStore';
@@ -33,6 +34,7 @@ import type {
   PrepareOnchainSendResult,
   ResolveDescriptorWalletParams,
   ResolveDescriptorWalletResult,
+  ReadLastSuccessfulEsploraSyncAtParams,
   UpdateDescriptorWalletChangesetParams,
   WalletSessionHandle,
   WalletUtxoRow,
@@ -102,6 +104,10 @@ interface CryptoState {
   updateDescriptorWalletChangeset: (
     params: UpdateDescriptorWalletChangesetParams,
   ) => Promise<EncryptedBlobForDb>;
+
+  readLastSuccessfulEsploraSyncAtForDescriptorWallet: (
+    params: ReadLastSuccessfulEsploraSyncAtParams,
+  ) => Promise<string | undefined>;
 
   createWalletAndEncryptSecrets: (
     params: CreateWalletAndEncryptSecretsParams,
@@ -249,6 +255,11 @@ export const useCryptoStore = create<CryptoState>((set, get) => {
     updateDescriptorWalletChangeset: (params) =>
       withErrorHandling((worker) => worker.updateDescriptorWalletChangeset(params)),
 
+    readLastSuccessfulEsploraSyncAtForDescriptorWallet: (params) =>
+      withErrorHandling((worker) =>
+        worker.readLastSuccessfulEsploraSyncAtForDescriptorWallet(params),
+      ),
+
     createWalletAndEncryptSecrets: (params) =>
       withErrorHandling((worker) => worker.createWalletAndEncryptSecrets(params)),
 
@@ -265,6 +276,7 @@ export const useCryptoStore = create<CryptoState>((set, get) => {
       useWalletStore.getState().lockWallet();
       useLightningStore.getState().purgeLightningConnectionsFromMemory();
       removeLightningConnectionsHydrationQueries();
+      removeOnchainDashboardQueries();
       terminateCryptoWorker();
       resetSecretsChannel();
       useSessionStore.getState().clear();

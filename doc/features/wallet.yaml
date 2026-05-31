@@ -18,8 +18,8 @@ feature:
   requirements:
     - Mnemonic must be 12 or 24 words (BIP39 English wordlist)
     - All sensitive data encrypted at rest with the Bitboard app password (AES-256-GCM via Argon2id KDF); the same password encrypts every wallet on this device
-    - The mnemonic is stored as a separate ciphertext from the rest of wallet secrets (descriptor sub-wallets, Lightning NWC metadata); decrypt the mnemonic only when an operation requires the master seed (e.g. new sub-wallet derivation, seed backup, app password change).
-    - Security posture does not target isolating blast radius to a single descriptor sub-wallet; the shared payload can still reveal all materialized sub-wallet state when decrypted; see doc/SECURITY.md
+    - The mnemonic is stored as a separate ciphertext from the rest of wallet secrets (descriptor wallets, Lightning NWC metadata); decrypt the mnemonic only when an operation requires the master seed (e.g. new descriptor wallet derivation, seed backup, app password change).
+    - Security posture does not target isolating blast radius to a single descriptor wallet; the shared payload can still reveal all materialized descriptor wallet state when decrypted; see doc/SECURITY.md
     - Crypto operations run off-main-thread in a Web Worker
     - Default address type is Taproot (BIP86)
     - Default network is Signet
@@ -106,6 +106,9 @@ feature:
         - Wallet must be unlocked to view
         - If no wallet exists, redirect to CreateWallet or ImportWallet choice
         - If wallet is locked, show unlock prompt (Bitboard app password)
+        - On public networks (non-lab), the dashboard shows on-chain balance and activity from the loaded BDK wallet (changeset) immediately after unlock; Esplora sync refreshes that view in the background
+        - When Esplora sync has not succeeded this session but a prior successful sync exists, stale indicators show last verified with Esplora (`lastSuccessfulEsploraSyncAt`)
+        - Lab network does not use Esplora timestamps; lab dashboard uses simulator chain state only
     - Receive:
       - description: "Display a Bitcoin address and QR code for receiving payments"
       - path: /wallet/receive

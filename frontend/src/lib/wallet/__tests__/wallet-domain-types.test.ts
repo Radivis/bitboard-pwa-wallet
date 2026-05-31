@@ -1,7 +1,17 @@
 import { describe, expect, it } from 'vitest'
-import { parseWalletPayloadJson, parseWalletSecretsJson } from '../wallet-domain-types'
+import {
+  assertIso8601LastSuccessfulEsploraSyncAt,
+  parseWalletPayloadJson,
+  parseWalletSecretsJson,
+} from '../wallet-domain-types'
 
 describe('parseWalletPayloadJson', () => {
+  it('assertIso8601LastSuccessfulEsploraSyncAt rejects invalid timestamps', () => {
+    expect(() =>
+      assertIso8601LastSuccessfulEsploraSyncAt('not-a-valid-timestamp'),
+    ).toThrow(/Invalid lastSuccessfulEsploraSyncAt/)
+  })
+
   it('rejects JSON that includes a mnemonic field', () => {
     const json = JSON.stringify({
       mnemonic: 'abandon ability able about above absent absorb abstract absurd abuse access accident',
@@ -30,6 +40,50 @@ describe('parseWalletPayloadJson', () => {
     })
     const parsed = parseWalletPayloadJson(json)
     expect(parsed.descriptorWallets).toHaveLength(1)
+  })
+
+  it('accepts descriptor wallet with lastSuccessfulEsploraSyncAt', () => {
+    const isoTimestamp = '2025-01-01T12:00:00.000Z'
+    const json = JSON.stringify({
+      descriptorWallets: [
+        {
+          network: 'testnet',
+          addressType: 'taproot',
+          accountId: 0,
+          externalDescriptor: 'tr(xpub.../0/*)',
+          internalDescriptor: 'tr(xpub.../1/*)',
+          changeSet: '{}',
+          fullScanDone: false,
+          lastSuccessfulEsploraSyncAt: isoTimestamp,
+        },
+      ],
+      lightningNwcConnections: [],
+    })
+    const parsed = parseWalletPayloadJson(json)
+    expect(parsed.descriptorWallets[0].lastSuccessfulEsploraSyncAt).toBe(
+      isoTimestamp,
+    )
+  })
+
+  it('rejects descriptor wallet with invalid lastSuccessfulEsploraSyncAt', () => {
+    const json = JSON.stringify({
+      descriptorWallets: [
+        {
+          network: 'testnet',
+          addressType: 'taproot',
+          accountId: 0,
+          externalDescriptor: 'tr(xpub.../0/*)',
+          internalDescriptor: 'tr(xpub.../1/*)',
+          changeSet: '{}',
+          fullScanDone: false,
+          lastSuccessfulEsploraSyncAt: 'not-a-valid-timestamp',
+        },
+      ],
+      lightningNwcConnections: [],
+    })
+    expect(() => parseWalletPayloadJson(json)).toThrow(
+      'Invalid wallet secrets payload: schema validation failed',
+    )
   })
 
   it('accepts lightning connection with nwcSnapshot', () => {

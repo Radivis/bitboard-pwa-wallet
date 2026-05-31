@@ -60,7 +60,7 @@ vi.mock('@/stores/cryptoStore', () => ({
 vi.mock('@/stores/walletStore', () => ({
   useWalletStore: {
     getState: () => ({
-      loadedSubWallet: null,
+      loadedDescriptorWallet: null,
       networkMode: 'mainnet',
       addressType: 'wpkh',
       accountId: 0,
@@ -99,7 +99,7 @@ vi.mock('@/db/database', () => ({
 }))
 
 import {
-  reloadActiveLoadedSubWalletWithEmptyChain,
+  reloadActiveLoadedDescriptorWalletWithEmptyChain,
   runFullScanDashboardWalletSync,
 } from '@/lib/wallet/wallet-utils'
 
@@ -165,13 +165,13 @@ describe('runFullScanDashboardWalletSync repair path', () => {
   })
 })
 
-describe('reloadActiveLoadedSubWalletWithEmptyChain', () => {
+describe('reloadActiveLoadedDescriptorWalletWithEmptyChain', () => {
   beforeEach(() => {
     vi.clearAllMocks()
   })
 
   it('calls loadWallet with useEmptyChain true', async () => {
-    await reloadActiveLoadedSubWalletWithEmptyChain({
+    await reloadActiveLoadedDescriptorWalletWithEmptyChain({
       password: 'pw',
       walletId: 2,
       networkMode: 'mainnet',

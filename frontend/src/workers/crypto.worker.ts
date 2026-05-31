@@ -36,8 +36,11 @@ import type {
   WireWalletUtxoRow,
 } from './crypto-wire-types';
 import type { EncryptedBlobMessage, SecretsChannelService } from './secrets-channel-types';
-import { parseWalletPayloadJson } from '@/lib/wallet/wallet-domain-types';
-import type { WalletSecretsPayload } from '@/lib/wallet/wallet-domain-types';
+import {
+  assertIso8601LastSuccessfulEsploraSyncAt,
+  parseWalletPayloadJson,
+  type WalletSecretsPayload,
+} from '@/lib/wallet/wallet-domain-types';
 import { rethrowWasmCryptoErrorForComlink } from '@/lib/shared/wasm-crypto-error';
 
 type BitboardCryptoModule = typeof import('@/wasm-pkg/bitboard_crypto');
@@ -584,6 +587,7 @@ const cryptoService = {
     accountId: number;
     changesetJson: string;
     markFullScanDone?: boolean;
+    lastSuccessfulEsploraSyncAt?: string;
   }) {
     const {
       password,
@@ -593,6 +597,7 @@ const cryptoService = {
       accountId,
       changesetJson,
       markFullScanDone,
+      lastSuccessfulEsploraSyncAt,
     } = params;
     const plaintext = await requestDecrypt(password, encryptedPayload);
     const payload = parseWalletPayloadJson(plaintext);
@@ -611,9 +616,32 @@ const cryptoService = {
     if (markFullScanDone) {
       descriptorWallet.fullScanDone = true;
     }
+    if (lastSuccessfulEsploraSyncAt != null) {
+      assertIso8601LastSuccessfulEsploraSyncAt(lastSuccessfulEsploraSyncAt);
+      descriptorWallet.lastSuccessfulEsploraSyncAt = lastSuccessfulEsploraSyncAt;
+    }
     const newPlaintext = JSON.stringify(payload);
     const newBlob = await requestEncrypt(password, newPlaintext);
     return encryptedBlobMessageToStoreFields(newBlob);
+  },
+
+  async readLastSuccessfulEsploraSyncAtForDescriptorWallet(params: {
+    password: string;
+    encryptedPayload: EncryptedBlobMessage;
+    network: BitcoinNetwork;
+    addressType: AddressType;
+    accountId: number;
+  }): Promise<string | undefined> {
+    const { password, encryptedPayload, network, addressType, accountId } = params;
+    const plaintext = await requestDecrypt(password, encryptedPayload);
+    const payload = parseWalletPayloadJson(plaintext);
+    const descriptorWallet = findDescriptorWalletInPayload({
+      payload,
+      network,
+      addressType,
+      accountId,
+    });
+    return descriptorWallet?.lastSuccessfulEsploraSyncAt;
   },
 
   async createWalletAndEncryptSecrets(params: {

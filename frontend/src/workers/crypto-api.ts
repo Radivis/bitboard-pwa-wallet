@@ -193,6 +193,16 @@ export interface UpdateDescriptorWalletChangesetParams {
   accountId: number;
   changesetJson: string;
   markFullScanDone?: boolean;
+  lastSuccessfulEsploraSyncAt?: string;
+}
+
+export interface ReadLastSuccessfulEsploraSyncAtParams {
+  password: string;
+  /** WalletSecretsPayload ciphertext only (after split migration). */
+  encryptedPayload: EncryptedBlobForDb;
+  network: BitcoinNetwork;
+  addressType: AddressType;
+  accountId: number;
 }
 
 export interface CreateWalletAndEncryptSecretsParams {
@@ -284,11 +294,19 @@ export interface CryptoService {
   /**
    * Update the changeset for one descriptor wallet in encrypted secrets.
    * Returns the new encrypted blob to store.
-   * When markFullScanDone is true, sets that sub-wallet's fullScanDone flag.
+   * When markFullScanDone is true, sets that descriptor wallet's fullScanDone flag.
    */
   updateDescriptorWalletChangeset(
     params: UpdateDescriptorWalletChangesetParams,
   ): Promise<EncryptedBlobForDb>;
+
+  /**
+   * Read `lastSuccessfulEsploraSyncAt` for one descriptor wallet from encrypted payload.
+   * Decrypt happens in the worker; only the ISO timestamp (or undefined) is returned.
+   */
+  readLastSuccessfulEsploraSyncAtForDescriptorWallet(
+    params: ReadLastSuccessfulEsploraSyncAtParams,
+  ): Promise<string | undefined>;
 
   /**
    * Create wallet (generate mnemonic, create in WASM, encrypt secrets).

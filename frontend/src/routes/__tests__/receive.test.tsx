@@ -35,9 +35,9 @@ vi.mock('@/stores/walletStore', async () => {
     useWalletStore: (selector: (s: Record<string, unknown>) => unknown) =>
       selector(walletStoreState),
     selectCommittedNetworkMode: (s: {
-      loadedSubWallet: { networkMode: string } | null
+      loadedDescriptorWallet: { networkMode: string } | null
       networkMode: string
-    }) => s.loadedSubWallet?.networkMode ?? s.networkMode,
+    }) => s.loadedDescriptorWallet?.networkMode ?? s.networkMode,
   }
 })
 
@@ -88,7 +88,7 @@ describe('ReceivePage', () => {
       currentAddress: 'tb1qtest123address456',
       addressType: AddressType.Taproot,
       networkMode: 'testnet',
-      loadedSubWallet: null,
+      loadedDescriptorWallet: null,
       setCurrentAddress: mockSetCurrentAddress,
     }
   })

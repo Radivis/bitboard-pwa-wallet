@@ -37,7 +37,7 @@ Most exports call `with_wallet` / `with_wallet_mut` and assume one loaded wallet
 **Frontend**
 
 - `cryptoStore.openWalletSession(params)` → handle with `getBalance`, `exportChangeset`, `free`
-- [`mainnet-onchain-balance-probe.ts`](../../frontend/src/lib/esplora/mainnet-onchain-balance-probe.ts) uses sessions in the descriptor loop; restore of the active sub-wallet still uses global `loadWallet`.
+- [`mainnet-onchain-balance-probe.ts`](../../frontend/src/lib/esplora/mainnet-onchain-balance-probe.ts) uses sessions in the descriptor loop; restore of the active descriptor wallet still uses global `loadWallet`.
 
 ## Remaining global consumers (by priority)
 
@@ -50,7 +50,7 @@ Most exports call `with_wallet` / `with_wallet_mut` and assume one loaded wallet
 
 ### Medium — persistence helpers
 
-- Global `export_changeset` (pre-probe persist of active sub-wallet)
+- Global `export_changeset` (pre-probe persist of active descriptor wallet)
 - Settings network switch save path
 
 ### Separate track — lab PSBT
@@ -66,7 +66,7 @@ Most exports call `with_wallet` / `with_wallet_mut` and assume one loaded wallet
 ## Migration guidelines for new code
 
 1. Prefer `WalletSession` when the operation is **read-only** and must not disturb the active wallet slot.
-2. Keep using global `load_wallet` for the **committed active sub-wallet** until Phase 2.
+2. Keep using global `load_wallet` for the **committed active descriptor wallet** until Phase 2.
 3. Always call `free()` on ephemeral sessions in loops.
 4. Do not add new thread-local wallet state; extend `WalletSession` or pass explicit handles.
 

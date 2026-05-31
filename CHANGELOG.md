@@ -18,10 +18,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.2.0] - 2026-05-31
 ### Added
 - Feature "UTXO selection" that allows to manually select the UTXOs to be used in a transaction
+- Last successful Esplora sync time is now properly persisted in the wallet database
 
 ### Changed
+- Onchain balance and transactions for live networks are now loaded immediately from BDK chain data instead of waiting for an Esplora sync 
 - Structured frontend/src/lib folder by domain 
 - Improved variable naming in very many files
+- Renamed "sub wallet" terminology to "descriptor wallet" for consistency
 - Some other various refactoring
 
 ### Fixed

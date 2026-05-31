@@ -6,7 +6,7 @@ import { useSessionStore } from '@/stores/sessionStore'
 import { useCryptoStore } from '@/stores/cryptoStore'
 import { useSendStore } from '@/stores/sendStore'
 import { getEsploraUrl, toBitcoinNetwork } from '@/lib/wallet/bitcoin-utils'
-import { updateWalletChangeset, loadCustomEsploraUrl } from '@/lib/wallet/wallet-utils'
+import { updateWalletChangeset, loadCustomEsploraUrl, persistPostEsploraSyncDescriptorWalletState } from '@/lib/wallet/wallet-utils'
 import { walletLabOwner } from '@/lib/lab/lab-owner'
 import { labBitcoinAddressesEqual } from '@/lib/lab/lab-utils'
 import { getLabWorker, initLabWorkerWithState } from '@/workers/lab-factory'
@@ -76,7 +76,7 @@ export function useBroadcastTransactionMutation() {
         getBalance,
         getTransactionList,
       } = useCryptoStore.getState()
-      const { setWalletStatus, setBalance, setTransactions, setLastSyncTime } =
+      const { setWalletStatus, setBalance, setTransactions } =
         useWalletStore.getState()
       const password = useSessionStore.getState().password
       const activeWalletId = useWalletStore.getState().activeWalletId
@@ -104,7 +104,10 @@ export function useBroadcastTransactionMutation() {
           const newTransactionList = await getTransactionList()
           setBalance(newBalance)
           setTransactions(newTransactionList)
-          setLastSyncTime(new Date())
+          await persistPostEsploraSyncDescriptorWalletState({
+            password: password ?? null,
+            walletId: activeWalletId ?? null,
+          })
         } catch {
           // keep unlocked on sync failure
         }

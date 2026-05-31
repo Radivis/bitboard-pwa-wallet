@@ -1,6 +1,7 @@
 /**
  * Main-thread setup for the worker-to-worker secrets channel.
- * Call ensureSecretsChannel() before using resolveDescriptorWallet or updateDescriptorWalletChangeset
+ * Call ensureSecretsChannel() before using resolveDescriptorWallet,
+ * updateDescriptorWalletChangeset, or readLastSuccessfulEsploraSyncAtForDescriptorWallet
  * so that the encryption and crypto workers can communicate without the main thread seeing secrets.
  */
 

@@ -32,7 +32,7 @@ const mockSetCurrentAddress = vi.fn()
 const mockSetBalance = vi.fn()
 const mockSetTransactions = vi.fn()
 const mockSetLastSyncTime = vi.fn()
-const mockCommitLoadedSubWallet = vi.fn()
+const mockCommitLoadedDescriptorWallet = vi.fn()
 vi.mock('@/stores/walletStore', () => ({
   useWalletStore: Object.assign(
     (selector: (s: Record<string, unknown>) => unknown) =>
@@ -46,7 +46,7 @@ vi.mock('@/stores/walletStore', () => ({
         setBalance: mockSetBalance,
         setTransactions: mockSetTransactions,
         setLastSyncTime: mockSetLastSyncTime,
-        commitLoadedSubWallet: mockCommitLoadedSubWallet,
+        commitLoadedDescriptorWallet: mockCommitLoadedDescriptorWallet,
       }),
     {
       getState: () => ({ lockWallet: vi.fn() }),

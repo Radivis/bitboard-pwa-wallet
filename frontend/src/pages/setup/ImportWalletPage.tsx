@@ -48,7 +48,7 @@ export function ImportWalletPage() {
   const setActiveWallet = useWalletStore((walletState) => walletState.setActiveWallet)
   const setWalletStatus = useWalletStore((walletState) => walletState.setWalletStatus)
   const setCurrentAddress = useWalletStore((walletState) => walletState.setCurrentAddress)
-  const commitLoadedSubWallet = useWalletStore((walletState) => walletState.commitLoadedSubWallet)
+  const commitLoadedDescriptorWallet = useWalletStore((walletState) => walletState.commitLoadedDescriptorWallet)
   const setImportInitialSyncErrorMessage = useWalletStore(
     (walletState) => walletState.setImportInitialSyncErrorMessage,
   )
@@ -154,7 +154,7 @@ export function ImportWalletPage() {
 
       setActiveWallet(walletId)
       setCurrentAddress(walletResult.firstAddress)
-      commitLoadedSubWallet({
+      commitLoadedDescriptorWallet({
         networkMode,
         addressType,
         accountId,
