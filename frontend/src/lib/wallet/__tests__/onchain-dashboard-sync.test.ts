@@ -69,4 +69,34 @@ describe('resolveOnchainEsploraSyncMetadata', () => {
     expect(result.isStaleOnchain).toBe(true)
     expect(result.lastSuccessfulEsploraSyncAt).toBe(isoTimestamp)
   })
+
+  it('returns stale for empty zero-balance wallet when persisted Esplora sync timestamp exists', async () => {
+    useWalletStore.setState({
+      balance: {
+        confirmedSats: 0,
+        trustedPendingSats: 0,
+        untrustedPendingSats: 0,
+        immatureSats: 0,
+        totalSats: 0,
+      },
+      transactions: [],
+    })
+    const isoTimestamp = '2020-01-02T00:00:00.000Z'
+    loadLastSuccessfulEsploraSyncAtForDescriptorWallet.mockResolvedValue(isoTimestamp)
+    const result = await resolveOnchainEsploraSyncMetadata()
+    expect(result.isStaleOnchain).toBe(true)
+    expect(result.lastSuccessfulEsploraSyncAt).toBe(isoTimestamp)
+  })
+
+  it('returns stale when balance is not hydrated yet but session is unlocked', async () => {
+    useWalletStore.setState({
+      balance: null,
+      transactions: [],
+    })
+    const isoTimestamp = '2020-01-02T00:00:00.000Z'
+    loadLastSuccessfulEsploraSyncAtForDescriptorWallet.mockResolvedValue(isoTimestamp)
+    const result = await resolveOnchainEsploraSyncMetadata()
+    expect(result.isStaleOnchain).toBe(true)
+    expect(result.lastSuccessfulEsploraSyncAt).toBe(isoTimestamp)
+  })
 })

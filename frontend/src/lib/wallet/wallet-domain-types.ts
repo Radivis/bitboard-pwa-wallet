@@ -105,6 +105,11 @@ function isNonEmptyString(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0
 }
 
+function isIso8601Timestamp(value: unknown): value is string {
+  if (!isNonEmptyString(value)) return false
+  return Number.isFinite(Date.parse(value))
+}
+
 function isLightningNetworkMode(value: unknown): value is LightningNetworkMode {
   return (
     typeof value === 'string' &&
@@ -157,7 +162,7 @@ function isDescriptorWalletData(value: unknown): value is DescriptorWalletData {
     typeof value.fullScanDone === 'boolean'
   if (!base) return false
   if (value.lastSuccessfulEsploraSyncAt === undefined) return true
-  return isNonEmptyString(value.lastSuccessfulEsploraSyncAt)
+  return isIso8601Timestamp(value.lastSuccessfulEsploraSyncAt)
 }
 
 export function isWalletSecretsPayload(value: unknown): value is WalletSecretsPayload {

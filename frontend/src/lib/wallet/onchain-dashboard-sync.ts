@@ -89,11 +89,6 @@ export async function resolveOnchainEsploraSyncMetadata(): Promise<
   if (walletState.lastSyncTime != null) {
     return { isStaleOnchain: false }
   }
-  const hasBdkDisplayData =
-    walletState.balance != null || walletState.transactions.length > 0
-  if (!hasBdkDisplayData) {
-    return { isStaleOnchain: false }
-  }
 
   const context = activeDescriptorWalletContext()
   if (context == null) {

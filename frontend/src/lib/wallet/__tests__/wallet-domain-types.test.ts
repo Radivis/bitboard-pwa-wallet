@@ -55,6 +55,27 @@ describe('parseWalletPayloadJson', () => {
     )
   })
 
+  it('rejects descriptor wallet with invalid lastSuccessfulEsploraSyncAt', () => {
+    const json = JSON.stringify({
+      descriptorWallets: [
+        {
+          network: 'testnet',
+          addressType: 'taproot',
+          accountId: 0,
+          externalDescriptor: 'tr(xpub.../0/*)',
+          internalDescriptor: 'tr(xpub.../1/*)',
+          changeSet: '{}',
+          fullScanDone: false,
+          lastSuccessfulEsploraSyncAt: 'not-a-valid-timestamp',
+        },
+      ],
+      lightningNwcConnections: [],
+    })
+    expect(() => parseWalletPayloadJson(json)).toThrow(
+      'Invalid wallet secrets payload: schema validation failed',
+    )
+  })
+
   it('accepts lightning connection with nwcSnapshot', () => {
     const isoTimestamp = '2025-01-01T12:00:00.000Z'
     const json = JSON.stringify({
