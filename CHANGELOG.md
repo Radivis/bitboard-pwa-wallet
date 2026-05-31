@@ -8,8 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- PWA update banner: prompts to refresh when a new version is downloaded; checks for updates when the tab becomes visible again
 
 ### Changed
+- PWA service worker uses prompt-based updates instead of silent auto-reload (safer during sends and password changes)
+- Stricter no-store cache headers on `/sw.js`, `/workbox-*.js`, and `/manifest.webmanifest`
 
 ### Fixed
 

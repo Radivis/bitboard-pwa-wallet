@@ -127,7 +127,8 @@ export default defineConfig({
     tailwindcss(),
     wasm(),
     VitePWA({
-      registerType: 'autoUpdate',
+      // User confirms refresh so sends / password flows are not interrupted mid-action.
+      registerType: 'prompt',
       manifest: {
         name: 'Bitboard Wallet',
         short_name: 'Bitboard',

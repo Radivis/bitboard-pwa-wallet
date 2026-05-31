@@ -188,7 +188,7 @@ A broad `api/**/*.ts` match has been observed to deploy non-entry files (for exa
 Vercel applies the headers in [`frontend/vercel.json`](../frontend/vercel.json):
 
 - **`/assets/*`:** long cache for hashed assets.
-- **`/`, `/index.html`, PWA files (`/sw.js`, `/workbox-*.js`, `/registerSW.js`, `/manifest.webmanifest`):** `max-age=0, must-revalidate` so updates roll out quickly.
+- **`/`, `/index.html`, PWA files (`/sw.js`, `/workbox-*.js`, `/manifest.webmanifest`):** `no-cache, no-store, must-revalidate` (plus `Pragma` / `Expires`) so service worker updates are not stuck behind CDN or browser caches. The app registers the service worker from `virtual:pwa-register` (no separate `/registerSW.js` asset).
 
 ---
 
