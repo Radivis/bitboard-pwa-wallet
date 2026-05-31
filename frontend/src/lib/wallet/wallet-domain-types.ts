@@ -110,6 +110,15 @@ function isIso8601Timestamp(value: unknown): value is string {
   return Number.isFinite(Date.parse(value))
 }
 
+/** Throws when `value` is not a parseable ISO-8601 timestamp string. */
+export function assertIso8601LastSuccessfulEsploraSyncAt(value: string): void {
+  if (!isIso8601Timestamp(value)) {
+    throw new Error(
+      'Invalid lastSuccessfulEsploraSyncAt: expected parseable ISO-8601 timestamp',
+    )
+  }
+}
+
 function isLightningNetworkMode(value: unknown): value is LightningNetworkMode {
   return (
     typeof value === 'string' &&

@@ -1,7 +1,17 @@
 import { describe, expect, it } from 'vitest'
-import { parseWalletPayloadJson, parseWalletSecretsJson } from '../wallet-domain-types'
+import {
+  assertIso8601LastSuccessfulEsploraSyncAt,
+  parseWalletPayloadJson,
+  parseWalletSecretsJson,
+} from '../wallet-domain-types'
 
 describe('parseWalletPayloadJson', () => {
+  it('assertIso8601LastSuccessfulEsploraSyncAt rejects invalid timestamps', () => {
+    expect(() =>
+      assertIso8601LastSuccessfulEsploraSyncAt('not-a-valid-timestamp'),
+    ).toThrow(/Invalid lastSuccessfulEsploraSyncAt/)
+  })
+
   it('rejects JSON that includes a mnemonic field', () => {
     const json = JSON.stringify({
       mnemonic: 'abandon ability able about above absent absorb abstract absurd abuse access accident',

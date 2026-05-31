@@ -29,6 +29,12 @@ vi.mock('@/workers/secrets-channel', () => ({
 
 const purgeLightningConnectionsFromMemoryMock = vi.fn()
 
+const removeOnchainDashboardQueriesMock = vi.hoisted(() => vi.fn())
+
+vi.mock('@/lib/wallet/onchain-dashboard-sync', () => ({
+  removeOnchainDashboardQueries: removeOnchainDashboardQueriesMock,
+}))
+
 vi.mock('@/stores/lightningStore', () => ({
   useLightningStore: {
     getState: () => ({
@@ -95,6 +101,7 @@ describe('auto-lock security purge', () => {
     expect(terminateCryptoWorkerMock).toHaveBeenCalled()
     expect(useCryptoStore.getState()._worker).toBeNull()
     expect(purgeLightningConnectionsFromMemoryMock).toHaveBeenCalledTimes(1)
+    expect(removeOnchainDashboardQueriesMock).toHaveBeenCalledTimes(1)
   })
 
   it('bumpAutoLockTimer extends idle window so lock does not fire until 15min after last bump', async () => {

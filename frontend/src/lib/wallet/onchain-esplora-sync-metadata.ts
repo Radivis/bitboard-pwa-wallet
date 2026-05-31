@@ -4,6 +4,7 @@ import {
   updateWalletSecretsPayloadWithRetry,
 } from '@/db/wallet-persistence'
 import type { WalletSecretsPayload } from '@/lib/wallet/wallet-domain-types'
+import { assertIso8601LastSuccessfulEsploraSyncAt } from '@/lib/wallet/wallet-domain-types'
 import type { AddressType, BitcoinNetwork } from '@/workers/crypto-types'
 
 export function descriptorWalletKey(params: {
@@ -23,6 +24,7 @@ export function applyLastSuccessfulEsploraSyncAtToPayload(
     syncedAtIso: string
   },
 ): WalletSecretsPayload {
+  assertIso8601LastSuccessfulEsploraSyncAt(patch.syncedAtIso)
   return {
     ...payload,
     descriptorWallets: payload.descriptorWallets.map((descriptorWallet) => {

@@ -11,6 +11,8 @@ const mockPurgeLightningConnectionsFromMemory = vi.hoisted(() => vi.fn())
 
 const mockRemoveLightningConnectionsHydrationQueries = vi.hoisted(() => vi.fn())
 
+const mockRemoveOnchainDashboardQueries = vi.hoisted(() => vi.fn())
+
 const mockLockWallet = vi.hoisted(() => vi.fn())
 
 const mockSetActiveWallet = vi.hoisted(() => vi.fn())
@@ -22,6 +24,10 @@ vi.mock('@/db/wallet-secrets-write-tracker', () => ({
 vi.mock('@/lib/lightning/lightning-connections-hydration', () => ({
   removeLightningConnectionsHydrationQueries:
     mockRemoveLightningConnectionsHydrationQueries,
+}))
+
+vi.mock('@/lib/wallet/onchain-dashboard-sync', () => ({
+  removeOnchainDashboardQueries: mockRemoveOnchainDashboardQueries,
 }))
 
 vi.mock('@/stores/lightningStore', () => ({
@@ -62,6 +68,9 @@ describe('prepareActiveWalletSwitch', () => {
     mockRemoveLightningConnectionsHydrationQueries.mockImplementation(() => {
       callOrder.push('removeHydrationQueries')
     })
+    mockRemoveOnchainDashboardQueries.mockImplementation(() => {
+      callOrder.push('removeOnchainDashboardQueries')
+    })
     mockLockWallet.mockImplementation(() => {
       callOrder.push('lockWallet')
     })
@@ -74,12 +83,14 @@ describe('prepareActiveWalletSwitch', () => {
     expect(mockAwaitInFlightWalletSecretsWrites).toHaveBeenCalledOnce()
     expect(mockPurgeLightningConnectionsFromMemory).toHaveBeenCalledOnce()
     expect(mockRemoveLightningConnectionsHydrationQueries).toHaveBeenCalledOnce()
+    expect(mockRemoveOnchainDashboardQueries).toHaveBeenCalledOnce()
     expect(mockLockWallet).toHaveBeenCalledOnce()
     expect(mockSetActiveWallet).toHaveBeenCalledWith(42)
     expect(callOrder).toEqual([
       'awaitSecrets',
       'purgeLightning',
       'removeHydrationQueries',
+      'removeOnchainDashboardQueries',
       'lockWallet',
       'setActiveWallet',
     ])

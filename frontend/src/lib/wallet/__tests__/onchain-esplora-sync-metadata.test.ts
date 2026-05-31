@@ -65,4 +65,15 @@ describe('onchain-esplora-sync-metadata', () => {
 
     expect(updateWalletSecretsPayloadWithRetry).toHaveBeenCalledTimes(1)
   })
+
+  it('applyLastSuccessfulEsploraSyncAtToPayload rejects invalid syncedAtIso', () => {
+    expect(() =>
+      applyLastSuccessfulEsploraSyncAtToPayload(buildPayload(), {
+        network: 'testnet',
+        addressType: 'taproot',
+        accountId: 0,
+        syncedAtIso: 'not-a-valid-timestamp',
+      }),
+    ).toThrow(/Invalid lastSuccessfulEsploraSyncAt/)
+  })
 })

@@ -116,3 +116,8 @@ export async function resolveOnchainEsploraSyncMetadata(): Promise<
 export function invalidateOnchainDashboardQueries(): void {
   void appQueryClient.invalidateQueries({ queryKey: ONCHAIN_DASHBOARD_QUERY_KEY })
 }
+
+/** Call when purging wallet session state so stale metadata is not served from cache after lock. */
+export function removeOnchainDashboardQueries(): void {
+  appQueryClient.removeQueries({ queryKey: ONCHAIN_DASHBOARD_QUERY_KEY })
+}

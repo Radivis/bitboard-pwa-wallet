@@ -1,5 +1,6 @@
 import { awaitInFlightWalletSecretsWrites } from '@/db/wallet-secrets-write-tracker'
 import { removeLightningConnectionsHydrationQueries } from '@/lib/lightning/lightning-connections-hydration'
+import { removeOnchainDashboardQueries } from '@/lib/wallet/onchain-dashboard-sync'
 import { useLightningStore } from '@/stores/lightningStore'
 import { useWalletStore } from '@/stores/walletStore'
 import { useCryptoStore } from '@/stores/cryptoStore'
@@ -27,6 +28,7 @@ export async function finalizeWalletDeletion(params: {
   await awaitInFlightWalletSecretsWrites()
   clearAutoLockTimer()
   removeLightningConnectionsHydrationQueries()
+  removeOnchainDashboardQueries()
   useLightningStore.getState().purgeLightningConnectionsFromMemory()
 
   if (nextActiveWalletId === null) {

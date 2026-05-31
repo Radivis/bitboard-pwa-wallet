@@ -11,6 +11,15 @@ vi.mock('@/db/storage-adapter', () => ({
 
 const loadLastSuccessfulEsploraSyncAtForDescriptorWallet = vi.fn()
 
+const removeQueriesMock = vi.hoisted(() => vi.fn())
+
+vi.mock('@/lib/shared/app-query-client', () => ({
+  appQueryClient: {
+    invalidateQueries: vi.fn(),
+    removeQueries: (...args: unknown[]) => removeQueriesMock(...args),
+  },
+}))
+
 vi.mock('@/lib/wallet/onchain-esplora-sync-metadata', () => ({
   loadLastSuccessfulEsploraSyncAtForDescriptorWallet: (...args: unknown[]) =>
     loadLastSuccessfulEsploraSyncAtForDescriptorWallet(...args),
@@ -26,7 +35,7 @@ vi.mock('@/db/database', () => ({
 
 import { useWalletStore } from '@/stores/walletStore'
 import { useSessionStore } from '@/stores/sessionStore'
-import { resolveOnchainEsploraSyncMetadata } from '@/lib/wallet/onchain-dashboard-sync'
+import { resolveOnchainEsploraSyncMetadata, removeOnchainDashboardQueries, ONCHAIN_DASHBOARD_QUERY_KEY } from '@/lib/wallet/onchain-dashboard-sync'
 
 describe('resolveOnchainEsploraSyncMetadata', () => {
   beforeEach(() => {
@@ -98,5 +107,14 @@ describe('resolveOnchainEsploraSyncMetadata', () => {
     const result = await resolveOnchainEsploraSyncMetadata()
     expect(result.isStaleOnchain).toBe(true)
     expect(result.lastSuccessfulEsploraSyncAt).toBe(isoTimestamp)
+  })
+})
+
+describe('removeOnchainDashboardQueries', () => {
+  it('removes cached onchain dashboard query entries', () => {
+    removeOnchainDashboardQueries()
+    expect(removeQueriesMock).toHaveBeenCalledWith({
+      queryKey: ONCHAIN_DASHBOARD_QUERY_KEY,
+    })
   })
 })

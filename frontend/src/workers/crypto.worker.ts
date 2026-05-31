@@ -36,8 +36,11 @@ import type {
   WireWalletUtxoRow,
 } from './crypto-wire-types';
 import type { EncryptedBlobMessage, SecretsChannelService } from './secrets-channel-types';
-import { parseWalletPayloadJson } from '@/lib/wallet/wallet-domain-types';
-import type { WalletSecretsPayload } from '@/lib/wallet/wallet-domain-types';
+import {
+  assertIso8601LastSuccessfulEsploraSyncAt,
+  parseWalletPayloadJson,
+  type WalletSecretsPayload,
+} from '@/lib/wallet/wallet-domain-types';
 import { rethrowWasmCryptoErrorForComlink } from '@/lib/shared/wasm-crypto-error';
 
 type BitboardCryptoModule = typeof import('@/wasm-pkg/bitboard_crypto');
@@ -614,6 +617,7 @@ const cryptoService = {
       descriptorWallet.fullScanDone = true;
     }
     if (lastSuccessfulEsploraSyncAt != null) {
+      assertIso8601LastSuccessfulEsploraSyncAt(lastSuccessfulEsploraSyncAt);
       descriptorWallet.lastSuccessfulEsploraSyncAt = lastSuccessfulEsploraSyncAt;
     }
     const newPlaintext = JSON.stringify(payload);
