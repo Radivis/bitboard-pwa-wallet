@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { Kysely } from 'kysely'
 import type { Database } from '../schema'
 import { createTestDatabase } from '../test-helpers'
-import { ARGON2_KDF_PHC_CI } from '@/lib/kdf-phc-constants'
+import { ARGON2_KDF_PHC_CI } from '@/lib/shared/kdf-phc-constants'
 import React from 'react'
 
 let testDb: Kysely<Database>
@@ -88,6 +88,7 @@ describe('TanStack Query hooks', () => {
       const { result } = renderHook(() => useWallet(walletId), { wrapper })
 
       await waitFor(() => expect(result.current.isSuccess).toBe(true))
+      expect(result.current.data?.walletId).toBe(walletId)
       expect(result.current.data?.name).toBe('Target Wallet')
     })
 
@@ -142,7 +143,10 @@ describe('TanStack Query hooks', () => {
       expect(walletsResult.current.data![0].name).toBe('Original Name')
 
       await act(async () => {
-        await updateResult.current.mutateAsync({ id: walletId, changes: { name: 'Updated Name' } })
+        await updateResult.current.mutateAsync({
+          walletId,
+          walletChanges: { name: 'Updated Name' },
+        })
       })
 
       await waitFor(() => expect(walletsResult.current.data![0].name).toBe('Updated Name'))

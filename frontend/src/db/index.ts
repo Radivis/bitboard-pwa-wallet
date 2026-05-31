@@ -20,6 +20,7 @@ export {
   useWalletNoMnemonicBackupFlag,
 } from './hooks'
 export { walletKeys, libraryKeys } from './query-keys'
+export { mapDbWalletToDomain } from './wallet-domain-mapper'
 export type {
   Wallet,
   NewWallet,

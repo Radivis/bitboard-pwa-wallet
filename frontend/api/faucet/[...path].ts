@@ -4,7 +4,7 @@ export const config = {
   maxDuration: 10,
 }
 
-// Inlined from src/lib/faucet-definitions.ts
+// Inlined from src/lib/faucet/faucet-definitions.ts
 type FaucetEntry = {
   id: string
   url: string
@@ -28,7 +28,7 @@ function isKnownFaucetId(id: string): boolean {
   return FAUCET_ENTRIES.some((e) => e.id === id)
 }
 
-// Inlined from src/lib/validate-proxied-upstream-url.ts
+// Inlined from src/lib/shared/validate-proxied-upstream-url.ts
 function hasUnsafePathSegment(segments: string[]): boolean {
   return segments.some((s) => s === '.' || s === '..')
 }

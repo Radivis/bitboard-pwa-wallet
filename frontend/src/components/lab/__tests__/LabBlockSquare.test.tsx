@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { screen } from '@testing-library/react'
 import { renderWithProviders } from '@/test-utils/test-providers'
 import { LabBlockSquare } from '@/components/lab/LabBlockSquare'
-import { labEntityLabOwner } from '@/lib/lab-owner'
+import { labEntityLabOwner } from '@/lib/lab/lab-owner'
 
 vi.mock('@tanstack/react-router', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@tanstack/react-router')>()
@@ -29,7 +29,7 @@ const baseProps = {
   netMovedSats: 100_000_000,
   minedOnUnix: 1_700_000_000,
   minedBy: labEntityLabOwner(1),
-  wallets: [] as Array<{ wallet_id: number; name: string }>,
+  wallets: [] as Array<{ walletId: number; name: string; createdAt: string }>,
   entities: [
     {
       labEntityId: 1,

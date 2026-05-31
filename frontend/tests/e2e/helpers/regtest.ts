@@ -1,5 +1,5 @@
 import { expect, type Page } from '@playwright/test'
-import { maxSatsInTextFromFormattedBitcoinAmountDisplays } from '@/lib/bitcoin-amount-text-parse'
+import { maxSatsInTextFromFormattedBitcoinAmountDisplays } from '@/lib/wallet/bitcoin-amount-text-parse'
 
 /**
  * Helpers for E2E tests that use the regtest environment (bitcoinerlab/tester).

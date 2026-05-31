@@ -26,9 +26,9 @@ test.describe('Crypto Worker Integration', () => {
           wordCount: mnemonic.split(' ').length,
           isValid,
           hasDescriptors:
-            !!wallet.external_descriptor && !!wallet.internal_descriptor,
-          hasAddress: !!wallet.first_address,
-          hasChangeset: !!wallet.changeset_json,
+            !!wallet.externalDescriptor && !!wallet.internalDescriptor,
+          hasAddress: !!wallet.firstAddress,
+          hasChangeset: !!wallet.changesetJson,
         }
       }
       return null
@@ -79,9 +79,9 @@ test.describe('Crypto Worker Integration', () => {
           accountId: 0,
         })
         return {
-          taprootExternal: taproot.external,
-          segwitExternal: segwit.external,
-          different: taproot.external !== segwit.external,
+          taprootExternal: taproot.externalDescriptor,
+          segwitExternal: segwit.externalDescriptor,
+          different: taproot.externalDescriptor !== segwit.externalDescriptor,
         }
       } catch {
         return null

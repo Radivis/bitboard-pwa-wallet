@@ -3,7 +3,7 @@
  * Communication uses Comlink RPC over a MessagePort; main thread never reads this channel.
  */
 
-import type { EncryptedBlob } from '@/lib/encrypted-blob-types'
+import type { EncryptedBlob } from '@/lib/shared/encrypted-blob-types'
 
 /** Same shape as {@link EncryptedBlob}; name kept for channel-specific call sites. */
 export type EncryptedBlobMessage = EncryptedBlob

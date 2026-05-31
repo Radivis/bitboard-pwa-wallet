@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { renderWithProviders } from '@/test-utils/test-providers'
-import { BadLocalChainStateError } from '@/lib/bad-local-chain-state-error'
+import { BadLocalChainStateError } from '@/lib/shared/bad-local-chain-state-error'
 
 const mockNavigate = vi.fn()
 vi.mock('@tanstack/react-router', async (importOriginal) => {
@@ -33,10 +33,14 @@ vi.mock('@/stores/cryptoStore', () => ({
 let walletStoreState: Record<string, unknown> = {}
 vi.mock('@/stores/walletStore', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/stores/walletStore')>()
+  const useWalletStoreMock = (selector: (s: Record<string, unknown>) => unknown) =>
+    selector(walletStoreState)
+  Object.assign(useWalletStoreMock, {
+    getState: () => walletStoreState as ReturnType<typeof actual.useWalletStore.getState>,
+  })
   return {
     ...actual,
-    useWalletStore: (selector: (s: Record<string, unknown>) => unknown) =>
-      selector(walletStoreState),
+    useWalletStore: useWalletStoreMock,
     NETWORK_LABELS: {
       lab: 'Lab',
       regtest: 'Regtest',
@@ -48,8 +52,17 @@ vi.mock('@/stores/walletStore', async (importOriginal) => {
 })
 
 vi.mock('@/stores/sessionStore', () => ({
-  useSessionStore: (selector: (s: Record<string, unknown>) => unknown) =>
-    selector({ password: 'testpass' }),
+  useSessionStore: Object.assign(
+    (selector: (s: Record<string, unknown>) => unknown) =>
+      selector({ password: 'testpass' }),
+    { getState: () => ({ password: 'testpass' }) },
+  ),
+}))
+
+vi.mock('@/hooks/useOnchainDashboardQueries', () => ({
+  useOnchainEsploraSyncMetadataQuery: () => ({
+    data: { isStaleOnchain: false },
+  }),
 }))
 
 vi.mock('@/components/WalletUnlock', () => ({
@@ -83,7 +96,7 @@ const {
       .mockResolvedValue(undefined),
   }
 })
-vi.mock('@/lib/wallet-utils', () => ({
+vi.mock('@/lib/wallet/wallet-utils', () => ({
   runIncrementalDashboardWalletSync: mockRunIncrementalDashboardWalletSync,
   runFullScanDashboardWalletSync: mockRunFullScanDashboardWalletSync,
   retryImportInitialEsploraSyncWithWalletStatus:
@@ -147,7 +160,7 @@ import {
   LAB_WALLET_BALANCE_CARD_TITLE,
   LAB_WALLET_DASHBOARD_TITLE,
   LAB_WALLET_ON_CHAIN_SECTION_LABEL,
-} from '@/lib/wallet-lab-ui-copy'
+} from '@/lib/wallet/wallet-lab-ui-copy'
 
 describe('DashboardPage', () => {
   beforeEach(() => {
@@ -156,12 +169,19 @@ describe('DashboardPage', () => {
       activeWalletId: 1,
       walletStatus: 'unlocked',
       networkMode: 'signet',
+      addressType: 'taproot',
+      accountId: 0,
+      loadedDescriptorWallet: {
+        networkMode: 'signet',
+        addressType: 'taproot',
+        accountId: 0,
+      },
       balance: {
-        confirmed: 100_000,
-        trusted_pending: 0,
-        untrusted_pending: 0,
-        immature: 0,
-        total: 100_000,
+        confirmedSats: 100_000,
+        trustedPendingSats: 0,
+        untrustedPendingSats: 0,
+        immatureSats: 0,
+        totalSats: 100_000,
       },
       currentAddress: 'tb1qtest',
       lastSyncTime: null,
@@ -213,11 +233,11 @@ describe('DashboardPage', () => {
 
   it('shows on-chain breakdown when pending components are non-zero', () => {
     walletStoreState.balance = {
-      confirmed: 100_000,
-      trusted_pending: 5_000,
-      untrusted_pending: 3_000,
-      immature: 0,
-      total: 108_000,
+      confirmedSats: 100_000,
+      trustedPendingSats: 5_000,
+      untrustedPendingSats: 3_000,
+      immatureSats: 0,
+      totalSats: 108_000,
     }
     renderWithProviders(<DashboardPage />)
     expect(screen.getByText('0.00108000')).toBeInTheDocument()
@@ -236,7 +256,7 @@ describe('DashboardPage', () => {
     walletStoreState.lastSyncTime = syncTime
     renderWithProviders(<DashboardPage />)
     expect(
-      screen.getByText(`Last synced: ${syncTime.toLocaleTimeString()}`),
+      screen.getByText(`Last synced: ${syncTime.toLocaleString()}`),
     ).toBeInTheDocument()
   })
 
@@ -317,22 +337,22 @@ describe('DashboardPage', () => {
     walletStoreState.transactions = [
       {
         txid: 'abc123',
-        sent_sats: 0,
-        received_sats: 50_000,
-        fee_sats: 200,
-        confirmation_block_height: 100,
-        confirmation_time: 1700000000,
-        is_confirmed: true,
+        sentSats: 0,
+        receivedSats: 50_000,
+        feeSats: 200,
+        confirmationBlockHeight: 100,
+        confirmationTime: 1700000000,
+        isConfirmed: true,
         isLabTx: false,
       },
       {
         txid: 'def456',
-        sent_sats: 10_000,
-        received_sats: 0,
-        fee_sats: 150,
-        confirmation_block_height: null,
-        confirmation_time: null,
-        is_confirmed: false,
+        sentSats: 10_000,
+        receivedSats: 0,
+        feeSats: 150,
+        confirmationBlockHeight: null,
+        confirmationTime: null,
+        isConfirmed: false,
         isLabTx: false,
       },
     ]
@@ -345,12 +365,12 @@ describe('DashboardPage', () => {
   it('paginates transaction list when more than one page of activity', async () => {
     walletStoreState.transactions = Array.from({ length: 21 }, (_, index) => ({
       txid: `tx-page-${index}`,
-      sent_sats: 0,
-      received_sats: 1_000,
-      fee_sats: null,
-      confirmation_block_height: 800_000 + index,
-      confirmation_time: 1_700_000_000 + index,
-      is_confirmed: true,
+      sentSats: 0,
+      receivedSats: 1_000,
+      feeSats: null,
+      confirmationBlockHeight: 800_000 + index,
+      confirmationTime: 1_700_000_000 + index,
+      isConfirmed: true,
       isLabTx: false,
     }))
 

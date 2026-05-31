@@ -1,7 +1,7 @@
 import { DialogDescription } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { AppModal } from '@/components/AppModal'
-import type { AddressType } from '@/lib/wallet-domain-types'
+import type { AddressType } from '@/lib/wallet/wallet-domain-types'
 import { LabAddressTypeBadge } from '@/components/lab/LabAddressTypeBadge'
 
 interface DeadLabEntityRecipientModalProps {

@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { FiatRateProviderId } from '@/lib/fiat-rate-service-whitelist'
+import type { FiatRateProviderId } from '@/lib/fiat/fiat-rate-service-whitelist'
 
 const { fetchQueryMock } = vi.hoisted(() => ({
   fetchQueryMock: vi.fn(),
 }))
 
-vi.mock('@/lib/app-query-client', () => ({
+vi.mock('@/lib/shared/app-query-client', () => ({
   appQueryClient: {
     fetchQuery: fetchQueryMock,
   },
@@ -25,7 +25,7 @@ describe('clampDefaultFiatCurrencyToProviderDiscovery', () => {
     })
 
     const clampToFallback = vi.fn()
-    let snapshot = {
+    const snapshot = {
       defaultFiatCurrency: 'CHF',
       fiatRateProvider: 'kraken' as FiatRateProviderId,
     }

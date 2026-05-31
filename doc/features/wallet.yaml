@@ -18,8 +18,8 @@ feature:
   requirements:
     - Mnemonic must be 12 or 24 words (BIP39 English wordlist)
     - All sensitive data encrypted at rest with the Bitboard app password (AES-256-GCM via Argon2id KDF); the same password encrypts every wallet on this device
-    - The mnemonic is stored as a separate ciphertext from the rest of wallet secrets (descriptor sub-wallets, Lightning NWC metadata); decrypt the mnemonic only when an operation requires the master seed (e.g. new sub-wallet derivation, seed backup, app password change).
-    - Security posture does not target isolating blast radius to a single descriptor sub-wallet; the shared payload can still reveal all materialized sub-wallet state when decrypted; see doc/SECURITY.md
+    - The mnemonic is stored as a separate ciphertext from the rest of wallet secrets (descriptor wallets, Lightning NWC metadata); decrypt the mnemonic only when an operation requires the master seed (e.g. new descriptor wallet derivation, seed backup, app password change).
+    - Security posture does not target isolating blast radius to a single descriptor wallet; the shared payload can still reveal all materialized descriptor wallet state when decrypted; see doc/SECURITY.md
     - Crypto operations run off-main-thread in a Web Worker
     - Default address type is Taproot (BIP86)
     - Default network is Signet
@@ -106,6 +106,9 @@ feature:
         - Wallet must be unlocked to view
         - If no wallet exists, redirect to CreateWallet or ImportWallet choice
         - If wallet is locked, show unlock prompt (Bitboard app password)
+        - On public networks (non-lab), the dashboard shows on-chain balance and activity from the loaded BDK wallet (changeset) immediately after unlock; Esplora sync refreshes that view in the background
+        - When Esplora sync has not succeeded this session but a prior successful sync exists, stale indicators show last verified with Esplora (`lastSuccessfulEsploraSyncAt`)
+        - Lab network does not use Esplora timestamps; lab dashboard uses simulator chain state only
     - Receive:
       - description: "Display a Bitcoin address and QR code for receiving payments"
       - path: /wallet/receive
@@ -143,6 +146,11 @@ feature:
               - build PSBT, advance to review step
         - Step 2 - Review:
           - summary showing recipient, amount, fee rate, fee (sats/BTC; fiat when Fiat Denomination Mode active on mainnet), total deducted, amount remaining (based on total wallet balance), change (always shown, 0 when change-free), immediately spendable remaining (confirmed spendable minus inputs used), show/hide toggle for input UTXO list (address + amount)
+          - when UTXO selection feature is enabled on Settings → Features:
+            - manual UTXO selection checkbox below the selected-input list (after expanding show UTXOs)
+            - selected inputs total sum (red when insufficient for amount + fee)
+            - available UTXOs list with add/remove controls when manual mode is on
+            - confirm and broadcast disabled while manual selection is insufficient, rebuilding, or errored
           - confirm and broadcast button
             - click_event:
               - sign PSBT, broadcast transaction via Esplora

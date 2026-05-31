@@ -8,14 +8,14 @@ import {
   getDatabase,
   tryLoadNearZeroSessionIntoMemory,
 } from '@/db'
-import { appQueryClient } from '@/lib/app-query-client'
+import { appQueryClient } from '@/lib/shared/app-query-client'
 import { prefetchLabChainState } from '@/hooks/useLabChainStateQuery'
 import { useHydrateLightningConnections } from '@/hooks/useHydrateLightningConnections'
 import { ActiveWalletBootstrap } from '@/components/ActiveWalletBootstrap'
-import { pathnameRequiresWalletCryptoSession } from '@/lib/pathname-requires-wallet-crypto-session'
-import { runMainnetStrictMigrationAfterHydration } from '@/lib/mainnet-access-strict-migration'
-import { runRegtestStrictMigrationAfterHydration } from '@/lib/regtest-mode-strict-migration'
-import { runSegwitAddressesStrictMigrationAfterHydration } from '@/lib/segwit-addresses-strict-migration'
+import { pathnameRequiresWalletCryptoSession } from '@/lib/shared/pathname-requires-wallet-crypto-session'
+import { runMainnetStrictMigrationAfterHydration } from '@/lib/settings/mainnet-access-strict-migration'
+import { runRegtestStrictMigrationAfterHydration } from '@/lib/settings/regtest-mode-strict-migration'
+import { runSegwitAddressesStrictMigrationAfterHydration } from '@/lib/settings/segwit-addresses-strict-migration'
 import { useWalletCryptoSessionPathGateStore } from '@/stores/walletCryptoSessionPathGateStore'
 import { useSecureStorageAvailabilityStore } from '@/stores/secureStorageAvailabilityStore'
 import { useAutoLockActivityBumps } from '@/hooks/useAutoLockActivityBumps'
@@ -34,10 +34,10 @@ export function AppInitializer({ children }: AppInitializerProps) {
   const navigate = useNavigate()
   const location = useLocation()
   const { data: wallets, isLoading, isFetching } = useWallets()
-  const activeWalletId = useWalletStore((s) => s.activeWalletId)
-  const setActiveWallet = useWalletStore((s) => s.setActiveWallet)
-  const networkMode = useWalletStore((s) => s.networkMode)
-  const sessionPassword = useSessionStore((s) => s.password)
+  const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
+  const setActiveWallet = useWalletStore((walletState) => walletState.setActiveWallet)
+  const networkMode = useWalletStore((walletState) => walletState.networkMode)
+  const sessionPassword = useSessionStore((sessionState) => sessionState.password)
 
   useLayoutEffect(() => {
     useWalletCryptoSessionPathGateStore.getState().setPathname(location.pathname)
@@ -53,9 +53,9 @@ export function AppInitializer({ children }: AppInitializerProps) {
     if (networkMode !== 'lab') return
     prefetchLabChainState(appQueryClient).catch((err) => {
       console.error('Lab chain prefetch failed:', err)
-      const msg =
+      const labPrefetchErrorMessage =
         err instanceof Error ? err.message : String(err) || 'Unknown error'
-      toast.error(`Failed to init lab: ${msg}`)
+      toast.error(`Failed to init lab: ${labPrefetchErrorMessage}`)
     })
   }, [networkMode])
 
@@ -89,7 +89,7 @@ export function AppInitializer({ children }: AppInitializerProps) {
     }
 
     if (wallets.length === 1 && !activeWalletId) {
-      setActiveWallet(wallets[0].wallet_id)
+      setActiveWallet(wallets[0].walletId)
       if (isWalletsRoute) {
         navigate({ to: '/wallet' })
       }

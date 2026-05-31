@@ -1,0 +1,41 @@
+import {
+  LAB_DEFAULT_BLOCK_WEIGHT_UNITS,
+  LAB_DEFAULT_MINER_SUBSIDY_SATS,
+  normalizeBlockWeightLimit,
+  normalizeMinerSubsidySats,
+  type LabState,
+} from '@/workers/lab-api'
+import { mergeAddressesWithUtxos } from '@/lib/lab/lab-utils'
+import { labOpLoadChainFromDatabase } from '@/lib/lab/lab-worker-operations'
+
+export const labChainStateQueryKey = ['lab', 'chainState'] as const
+
+/** Shared query body: load lab state from DB/worker and shape it for the UI. */
+export async function fetchLabChainStateForQuery(): Promise<LabState> {
+  const loadedLabState = await labOpLoadChainFromDatabase()
+  return toUiLabState(loadedLabState)
+}
+
+/** Worker/DB snapshot shaped for UI (merged controlled + utxo-derived addresses). */
+export function toUiLabState(state: LabState): LabState {
+  return {
+    blocks: state.blocks,
+    utxos: state.utxos,
+    addresses: mergeAddressesWithUtxos(state.addresses, state.utxos),
+    entities: state.entities ?? [],
+    addressToOwner: state.addressToOwner ?? {},
+    mempool: state.mempool ?? [],
+    transactions: state.transactions ?? [],
+    txDetails: state.txDetails ?? [],
+    mineOperations: state.mineOperations ?? [],
+    txOperations: state.txOperations ?? [],
+    blockWeightLimit: normalizeBlockWeightLimit(
+      state.blockWeightLimit ??
+        (state as { blockSizeLimitVbytes?: number }).blockSizeLimitVbytes ??
+        LAB_DEFAULT_BLOCK_WEIGHT_UNITS,
+    ),
+    minerSubsidySats: normalizeMinerSubsidySats(
+      state.minerSubsidySats ?? LAB_DEFAULT_MINER_SUBSIDY_SATS,
+    ),
+  }
+}

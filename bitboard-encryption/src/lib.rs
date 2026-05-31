@@ -71,18 +71,20 @@ fn parse_mtp_segment(segment: &str) -> Option<(u32, u32, u32)> {
     let mut memory_kib: Option<u32> = None;
     let mut iterations: Option<u32> = None;
     let mut parallelism: Option<u32> = None;
-    for part in segment.split(',') {
-        let part = part.trim();
-        if let Some(v) = part.strip_prefix("m=") {
-            memory_kib = v.parse().ok();
-        } else if let Some(v) = part.strip_prefix("t=") {
-            iterations = v.parse().ok();
-        } else if let Some(v) = part.strip_prefix("p=") {
-            parallelism = v.parse().ok();
+    for phc_param_fragment in segment.split(',') {
+        let phc_param_fragment = phc_param_fragment.trim();
+        if let Some(param_value) = phc_param_fragment.strip_prefix("m=") {
+            memory_kib = param_value.parse().ok();
+        } else if let Some(param_value) = phc_param_fragment.strip_prefix("t=") {
+            iterations = param_value.parse().ok();
+        } else if let Some(param_value) = phc_param_fragment.strip_prefix("p=") {
+            parallelism = param_value.parse().ok();
         }
     }
     match (memory_kib, iterations, parallelism) {
-        (Some(m), Some(t), Some(p)) => Some((m, t, p)),
+        (Some(memory_kib), Some(iterations), Some(parallelism)) => {
+            Some((memory_kib, iterations, parallelism))
+        }
         _ => None,
     }
 }
@@ -90,29 +92,29 @@ fn parse_mtp_segment(segment: &str) -> Option<(u32, u32, u32)> {
 const INVALID_KDF_PHC_MSG: &str =
     "Invalid kdf_phc: expected Argon2id PHC with m,t,p (e.g. $argon2id$v=19$m=65536,t=3,p=4)";
 
-/// Same as [`parse_mtp_from_phc`] but with `String` errors (native tests / backup signing).
-pub(crate) fn parse_mtp_from_phc_str(phc: &str) -> Result<(u32, u32, u32), &'static str> {
-    if phc == ARGON2_KDF_PHC_CI {
+/// Same as [`parse_mtp_from_kdf_phc_str`] but with `String` errors (native tests / backup signing).
+pub(crate) fn parse_mtp_from_kdf_phc_str(kdf_phc: &str) -> Result<(u32, u32, u32), &'static str> {
+    if kdf_phc == ARGON2_KDF_PHC_CI {
         return Ok((
             ARGON2_MEMORY_KIB,
             ARGON2_CI_ITERATIONS,
             ARGON2_CI_PARALLELISM,
         ));
     }
-    if phc == ARGON2_KDF_PHC_PRODUCTION {
+    if kdf_phc == ARGON2_KDF_PHC_PRODUCTION {
         return Ok((
             ARGON2_MEMORY_KIB,
             ARGON2_PRODUCTION_ITERATIONS,
             ARGON2_PRODUCTION_PARALLELISM,
         ));
     }
-    for segment in phc.split('$') {
+    for segment in kdf_phc.split('$') {
         if segment.contains("m=")
             && segment.contains("t=")
             && segment.contains("p=")
-            && let Some(mtp) = parse_mtp_segment(segment)
+            && let Some(argon2_memory_iterations_parallelism) = parse_mtp_segment(segment)
         {
-            return Ok(mtp);
+            return Ok(argon2_memory_iterations_parallelism);
         }
     }
     Err(INVALID_KDF_PHC_MSG)
@@ -125,35 +127,35 @@ fn derive_argon2_key_with_mtp_str(
     iterations: u32,
     parallelism: u32,
 ) -> Result<Vec<u8>, String> {
-    let params = Params::new(memory_kib, iterations, parallelism, Some(DERIVED_KEY_LEN))
+    let argon2_params = Params::new(memory_kib, iterations, parallelism, Some(DERIVED_KEY_LEN))
         .map_err(|e| format!("Argon2 params error: {e}"))?;
-    let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
-    let mut key = vec![0u8; DERIVED_KEY_LEN];
+    let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, argon2_params);
+    let mut derived_encryption_key = vec![0u8; DERIVED_KEY_LEN];
     argon2
-        .hash_password_into(password.as_bytes(), salt, &mut key)
+        .hash_password_into(password.as_bytes(), salt, &mut derived_encryption_key)
         .map_err(|e| format!("Argon2 hash error: {e}"))?;
-    Ok(key)
+    Ok(derived_encryption_key)
 }
 
 /// Derive a 256-bit key from password, salt, and PHC (string errors — used by wallet backup and unit tests).
 pub(crate) fn derive_argon2_key_from_phc_str(
     password: &str,
     salt: &[u8],
-    phc: &str,
+    kdf_phc: &str,
 ) -> Result<Vec<u8>, String> {
     let (memory_kib, iterations, parallelism) =
-        parse_mtp_from_phc_str(phc).map_err(String::from)?;
+        parse_mtp_from_kdf_phc_str(kdf_phc).map_err(String::from)?;
     derive_argon2_key_with_mtp_str(password, salt, memory_kib, iterations, parallelism)
 }
 
 /// Derive a 256-bit key from password, salt, and a PHC-style Argon2id parameter string.
-#[wasm_bindgen(js_name = deriveArgon2KeyFromPhc)]
+#[wasm_bindgen]
 pub fn derive_argon2_key_from_phc(
     password: &str,
     salt: &[u8],
-    phc: &str,
+    kdf_phc: &str,
 ) -> Result<Vec<u8>, JsValue> {
-    derive_argon2_key_from_phc_str(password, salt, phc).map_err(|e| JsValue::from_str(&e))
+    derive_argon2_key_from_phc_str(password, salt, kdf_phc).map_err(|e| JsValue::from_str(&e))
 }
 
 /// Derive a 256-bit key using Argon2id with **production** parameters.
@@ -187,18 +189,20 @@ mod tests {
     fn phc_ci_matches_derive_argon2_key_ci() {
         let password = "pw";
         let salt = [7u8; 16];
-        let a = derive_argon2_key_ci(password, &salt).unwrap();
-        let b = derive_argon2_key_from_phc(password, &salt, ARGON2_KDF_PHC_CI).unwrap();
-        assert_eq!(a, b);
+        let ci_derived_key = derive_argon2_key_ci(password, &salt).unwrap();
+        let phc_derived_key =
+            derive_argon2_key_from_phc(password, &salt, ARGON2_KDF_PHC_CI).unwrap();
+        assert_eq!(ci_derived_key, phc_derived_key);
     }
 
     #[test]
     fn phc_production_matches_derive_argon2_key() {
         let password = "pw";
         let salt = [7u8; 16];
-        let a = derive_argon2_key(password, &salt).unwrap();
-        let b = derive_argon2_key_from_phc(password, &salt, ARGON2_KDF_PHC_PRODUCTION).unwrap();
-        assert_eq!(a, b);
+        let production_derived_key = derive_argon2_key(password, &salt).unwrap();
+        let phc_derived_key =
+            derive_argon2_key_from_phc(password, &salt, ARGON2_KDF_PHC_PRODUCTION).unwrap();
+        assert_eq!(production_derived_key, phc_derived_key);
     }
 
     #[test]

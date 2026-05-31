@@ -1,5 +1,5 @@
 import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/shared/utils'
 import { ChevronFirst, ChevronLast, ChevronLeft, ChevronRight } from 'lucide-react'
 
 /** Default when `pageSize` is omitted. Lab views should pass sizes from `lab-paginated-queries`. */
@@ -67,16 +67,18 @@ export function CardPagination({
             className="rounded-md border border-input bg-background px-2 py-1.5 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             aria-label={ariaLabel}
             value={displayPageOneBased}
-            onChange={(e) => {
-              const next = Number.parseInt(e.target.value, 10)
+            onChange={(selectChangeEvent) => {
+              const next = Number.parseInt(selectChangeEvent.target.value, 10)
               if (!Number.isNaN(next)) onPageChange(next - 1)
             }}
           >
-            {Array.from({ length: totalPages }, (_, i) => i + 1).map((n) => (
-              <option key={n} value={n}>
-                {n} / {totalPages}
+            {Array.from({ length: totalPages }, (_, pageNumberIndex) => pageNumberIndex + 1).map(
+              (pageNumberOneBased) => (
+              <option key={pageNumberOneBased} value={pageNumberOneBased}>
+                {pageNumberOneBased} / {totalPages}
               </option>
-            ))}
+            ),
+            )}
           </select>
         </label>
         <Button

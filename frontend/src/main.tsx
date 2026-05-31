@@ -1,7 +1,7 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { RouterProvider, createRouter } from '@tanstack/react-router'
-import { registerAppRouter } from '@/lib/app-router'
+import { registerAppRouter } from '@/lib/shared/app-router'
 import { routeTree } from './routeTree.gen'
 import './index.css'
 

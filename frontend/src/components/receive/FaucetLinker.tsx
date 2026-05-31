@@ -5,14 +5,14 @@ import { customEsploraUrlQueryKey } from '@/components/settings/EsploraUrlSettin
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
-import { getEsploraUrl } from '@/lib/bitcoin-utils'
+import { getEsploraUrl } from '@/lib/wallet/bitcoin-utils'
 import {
   checkFaucetReachability,
   faucetsForStack,
   resolveFaucetStack,
   type FaucetReachability,
-} from '@/lib/faucet-matching'
-import { loadCustomEsploraUrl } from '@/lib/wallet-utils'
+} from '@/lib/faucet/faucet-matching'
+import { loadCustomEsploraUrl } from '@/lib/wallet/wallet-utils'
 import { selectCommittedNetworkMode, useWalletStore } from '@/stores/walletStore'
 
 const REACHABILITY_TIMEOUT_MS = 8000
@@ -83,27 +83,27 @@ export function FaucetLinker() {
 
   const runChecks = useCallback(async () => {
     if (faucets.length === 0) return
-    const seq = ++runSeqRef.current
+    const runSequence = ++runSeqRef.current
     setChecking(true)
     try {
       const entries = await Promise.all(
-        faucets.map(async (f) => {
+        faucets.map(async (faucet) => {
           const controller = new AbortController()
           const timeoutId = globalThis.setTimeout(() => {
             controller.abort()
           }, REACHABILITY_TIMEOUT_MS)
           try {
-            const status = await checkFaucetReachability(f.id, controller.signal)
-            return [f.id, status] as const
+            const status = await checkFaucetReachability(faucet.id, controller.signal)
+            return [faucet.id, status] as const
           } finally {
             globalThis.clearTimeout(timeoutId)
           }
         }),
       )
-      if (seq !== runSeqRef.current) return
+      if (runSequence !== runSeqRef.current) return
       setReachabilityById(Object.fromEntries(entries))
     } finally {
-      if (seq === runSeqRef.current) {
+      if (runSequence === runSeqRef.current) {
         setChecking(false)
       }
     }
@@ -153,8 +153,8 @@ export function FaucetLinker() {
         </CardHeader>
         <CardContent className="space-y-3">
           <ul className="space-y-2">
-            {faucets.map((f) => {
-              const status = reachabilityById[f.id]
+            {faucets.map((faucet) => {
+              const status = reachabilityById[faucet.id]
               const label = reachabilityLabel(status, checking)
               const ariaStatus =
                 status === undefined
@@ -163,20 +163,20 @@ export function FaucetLinker() {
                     : 'not checked'
                   : label.replace(/[()]/g, '').toLowerCase()
               return (
-                <li key={f.id}>
+                <li key={faucet.id}>
                   <a
-                    href={f.url}
+                    href={faucet.url}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex items-start gap-2 rounded-md border border-transparent px-1 py-1 text-sm hover:border-border hover:bg-muted/50"
-                    aria-label={`${f.label}. ${ariaStatus}`}
+                    aria-label={`${faucet.label}. ${ariaStatus}`}
                   >
                     <Circle
                       className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${statusClasses(status)}`}
                       aria-hidden
                     />
                     <span className="min-w-0 flex-1 font-medium leading-snug">
-                      {f.label}
+                      {faucet.label}
                     </span>
                     <span className="shrink-0 font-mono text-xs text-muted-foreground">
                       {label}

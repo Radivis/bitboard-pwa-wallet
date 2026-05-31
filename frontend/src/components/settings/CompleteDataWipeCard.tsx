@@ -3,9 +3,9 @@ import { Eraser } from 'lucide-react'
 import { toast } from 'sonner'
 import { getDatabase, ensureMigrated, useWallets } from '@/db'
 import { anyWalletHasNoMnemonicBackupFlag } from '@/db/wallet-no-mnemonic-backup'
-import { formatBTC, formatSats } from '@/lib/bitcoin-utils'
-import { listWalletsWithPositiveMainnetOnChainBalance } from '@/lib/mainnet-onchain-balance-probe'
-import { wipeAllAppDataOpfsAndReload } from '@/lib/wipe-all-app-data-opfs-and-reload'
+import { formatBTC, formatSats } from '@/lib/wallet/bitcoin-utils'
+import { listWalletsWithPositiveMainnetOnChainBalance } from '@/lib/esplora/mainnet-onchain-balance-probe'
+import { wipeAllAppDataOpfsAndReload } from '@/db/opfs/wipe-all-app-data-opfs-and-reload'
 import { useSessionStore } from '@/stores/sessionStore'
 import { useWalletStore } from '@/stores/walletStore'
 import { AppModal } from '@/components/AppModal'
@@ -19,11 +19,11 @@ import {
 } from '@/components/ui/card'
 import { DialogDescription } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
-import { cn, errorMessage } from '@/lib/utils'
+import { cn, userFacingErrorMessage } from '@/lib/shared/utils'
 
 export function CompleteDataWipeCard() {
-  const walletStatus = useWalletStore((s) => s.walletStatus)
-  const sessionPassword = useSessionStore((s) => s.password)
+  const walletStatus = useWalletStore((walletState) => walletState.walletStatus)
+  const sessionPassword = useSessionStore((sessionState) => sessionState.password)
   const { data: wallets = [] } = useWallets()
 
   const [riskModalOpen, setRiskModalOpen] = useState(false)
@@ -55,7 +55,7 @@ export function CompleteDataWipeCard() {
       await wipeAllAppDataOpfsAndReload()
     } catch (err) {
       console.error('[CompleteDataWipeCard] wipeAllAppDataOpfsAndReload failed (advanceToNoBackupOrWipe)', err)
-      toast.error(errorMessage(err))
+      toast.error(userFacingErrorMessage(err))
       setWipeBusy(false)
     }
   }, [])
@@ -79,9 +79,9 @@ export function CompleteDataWipeCard() {
     try {
       const rows = await listWalletsWithPositiveMainnetOnChainBalance({
         password: sessionPassword,
-        wallets: wallets.map((w) => ({
-          wallet_id: w.wallet_id,
-          name: w.name,
+        wallets: wallets.map((walletRow) => ({
+          walletId: walletRow.walletId,
+          name: walletRow.name,
         })),
       })
       if (rows.length > 0) {
@@ -92,7 +92,9 @@ export function CompleteDataWipeCard() {
       }
     } catch (err) {
       console.error('[CompleteDataWipeCard] mainnet balance probe failed', err)
-      toast.error(`Could not check mainnet balance: ${errorMessage(err)}`)
+      toast.error(
+        `Could not check mainnet balance: ${userFacingErrorMessage(err)}`,
+      )
       setRiskModalOpen(true)
     } finally {
       setProbing(false)
@@ -118,7 +120,7 @@ export function CompleteDataWipeCard() {
       await wipeAllAppDataOpfsAndReload()
     } catch (err) {
       console.error('[CompleteDataWipeCard] wipeAllAppDataOpfsAndReload failed (onNoBackupProceedAnyway)', err)
-      toast.error(errorMessage(err))
+      toast.error(userFacingErrorMessage(err))
       setWipeBusy(false)
     }
   }, [])

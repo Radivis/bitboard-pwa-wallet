@@ -15,9 +15,9 @@ import {
   LAB_MIN_BLOCKS_PER_MINE,
 } from '@/workers/lab-api'
 import type { LabEntityRecord } from '@/workers/lab-api'
-import { formatLabEntityMineOptionLabel } from '@/lib/lab-entity-keys'
-import { LabOwnerType } from '@/lib/lab-owner-type'
-import { cn } from '@/lib/utils'
+import { formatLabEntityMineOptionLabel } from '@/lib/lab/lab-entity-keys'
+import { LabOwnerType } from '@/lib/lab/lab-owner-type'
+import { cn } from '@/lib/shared/utils'
 import { useFeatureStore } from '@/stores/featureStore'
 
 export function LabBlocksCard({
@@ -37,9 +37,9 @@ export function LabBlocksCard({
 }: {
   blockCount: number
   mineCount: string
-  setMineCount: (v: string) => void
+  setMineCount: (mineCount: string) => void
   ownerType: LabOwnerType
-  setOwnerType: (v: LabOwnerType) => void
+  setOwnerType: (ownerType: LabOwnerType) => void
   entities: readonly LabEntityRecord[]
   selectedLabEntityId: number | null
   setSelectedLabEntityId: (id: number | null) => void
@@ -49,8 +49,8 @@ export function LabBlocksCard({
   currentAddress: string | null
   activeWallet: { name: string } | undefined
 }) {
-  const segwitAddressesEnabled = useFeatureStore((s) => s.segwitAddressesEnabled)
-  const livingEntities = entities.filter((e) => !e.isDead)
+  const isSegwitAddressesEnabled = useFeatureStore((featureState) => featureState.isSegwitAddressesEnabled)
+  const livingEntities = entities.filter((entity) => !entity.isDead)
   const noLivingEntities =
     ownerType === LabOwnerType.LabEntity && livingEntities.length === 0
 
@@ -183,14 +183,14 @@ export function LabBlocksCard({
                     'ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
                   )}
                   value={selectedLabEntityId ?? ''}
-                  onChange={(e) => {
-                    const v = e.target.value
-                    setSelectedLabEntityId(v === '' ? null : Number(v))
+                  onChange={(event) => {
+                    const selectedValue = event.target.value
+                    setSelectedLabEntityId(selectedValue === '' ? null : Number(selectedValue))
                   }}
                 >
-                  {livingEntities.map((e) => (
-                    <option key={e.labEntityId} value={e.labEntityId}>
-                      {formatLabEntityMineOptionLabel(e, segwitAddressesEnabled)}
+                  {livingEntities.map((entity) => (
+                    <option key={entity.labEntityId} value={entity.labEntityId}>
+                      {formatLabEntityMineOptionLabel(entity, isSegwitAddressesEnabled)}
                     </option>
                   ))}
                 </select>

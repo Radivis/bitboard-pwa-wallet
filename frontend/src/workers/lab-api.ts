@@ -1,6 +1,6 @@
-import type { AddressType } from '@/lib/wallet-domain-types'
-import type { LabOwnerType } from '@/lib/lab-owner-type'
-import type { LabOwner } from '@/lib/lab-owner'
+import type { AddressType } from '@/lib/wallet/wallet-domain-types'
+import type { LabOwnerType } from '@/lib/lab/lab-owner-type'
+import type { LabOwner } from '@/lib/lab/lab-owner'
 
 export interface LabBlock {
   blockHash: string
@@ -39,15 +39,15 @@ export function mergeMempoolInputsDetailWithOutpoints(
   inputs: { txid: string; vout: number }[],
   inputsDetail: LabTxInputDetail[],
 ): LabTxInputDetail[] {
-  return inputsDetail.map((d, i) => {
-    const out = inputs[i]
+  return inputsDetail.map((inputDetail, inputIndex) => {
+    const inputOutpoint = inputs[inputIndex]
     if (
-      out != null &&
-      (d.prevTxid == null || d.prevVout === undefined || d.prevVout === null)
+      inputOutpoint != null &&
+      (inputDetail.prevTxid == null || inputDetail.prevVout === undefined || inputDetail.prevVout === null)
     ) {
-      return { ...d, prevTxid: out.txid, prevVout: out.vout }
+      return { ...inputDetail, prevTxid: inputOutpoint.txid, prevVout: inputOutpoint.vout }
     }
-    return d
+    return inputDetail
   })
 }
 
@@ -269,6 +269,16 @@ export interface PrepareLabWalletTransactionParams {
   walletChangeAddress: string
   /** When the payee is not in `addressToOwner` yet (e.g. newly generated receive address). */
   knownRecipientOwner?: LabOwner | null
+  /** When set, only these wallet UTXOs are used as inputs. */
+  selectedOutpoints?: Array<{ txid: string; vout: number }>
+}
+
+/** Review-shaped row for lab wallet UTXO listing. */
+export interface LabWalletUtxoRow {
+  address: string
+  amountSats: number
+  txid: string
+  vout: number
 }
 
 export interface PrepareRandomLabEntityTransactionParams {
@@ -385,6 +395,9 @@ export interface LabService {
     mempoolMetadata: LabMempoolMetadata
     totalInput: number
   }>
+
+  /** All UTXOs owned by the active wallet in lab (for manual coin control). */
+  listLabWalletUtxos(params: { walletId: number }): Promise<LabWalletUtxoRow[]>
 
   /**
    * Adds a signed transaction to the mempool. Call after buildAndSignLabTransaction.

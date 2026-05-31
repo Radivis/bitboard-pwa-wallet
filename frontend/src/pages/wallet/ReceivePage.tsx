@@ -19,32 +19,32 @@ import {
 import { useSessionStore } from '@/stores/sessionStore'
 import { useCryptoStore } from '@/stores/cryptoStore'
 import { useFeatureStore } from '@/stores/featureStore'
-import { updateWalletChangeset } from '@/lib/wallet-utils'
-import { isLightningSupported } from '@/lib/lightning-utils'
+import { updateWalletChangeset } from '@/lib/wallet/wallet-utils'
+import { isLightningSupported } from '@/lib/lightning/lightning-utils'
 import { ReceiveModeToggle, type ReceiveMode } from '@/components/receive/ReceiveModeToggle'
 import { LightningReceive } from '@/components/receive/LightningReceive'
 import { ReceiveMainnetDemoWarningModal } from '@/components/receive/ReceiveMainnetDemoWarningModal'
 import { FaucetLinker } from '@/components/receive/FaucetLinker'
-import { walletReceivePageTitle } from '@/lib/wallet-lab-ui-copy'
+import { walletReceivePageTitle } from '@/lib/wallet/wallet-lab-ui-copy'
 
 export function ReceivePage() {
   const navigate = useNavigate()
-  const activeWalletId = useWalletStore((s) => s.activeWalletId)
-  const walletStatus = useWalletStore((s) => s.walletStatus)
-  const currentAddress = useWalletStore((s) => s.currentAddress)
-  const addressType = useWalletStore((s) => s.addressType)
-  const networkMode = useWalletStore((s) => s.networkMode)
-  const setCurrentAddress = useWalletStore((s) => s.setCurrentAddress)
-  const password = useSessionStore((s) => s.password)
-  const getNewAddress = useCryptoStore((s) => s.getNewAddress)
-  const exportChangeset = useCryptoStore((s) => s.exportChangeset)
-  const lightningEnabled = useFeatureStore((s) => s.lightningEnabled)
-  const segwitAddressesEnabled = useFeatureStore((s) => s.segwitAddressesEnabled)
+  const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
+  const walletStatus = useWalletStore((walletState) => walletState.walletStatus)
+  const currentAddress = useWalletStore((walletState) => walletState.currentAddress)
+  const addressType = useWalletStore((walletState) => walletState.addressType)
+  const networkMode = useWalletStore((walletState) => walletState.networkMode)
+  const setCurrentAddress = useWalletStore((walletState) => walletState.setCurrentAddress)
+  const password = useSessionStore((sessionState) => sessionState.password)
+  const getNewAddress = useCryptoStore((cryptoState) => cryptoState.getNewAddress)
+  const exportChangeset = useCryptoStore((cryptoState) => cryptoState.exportChangeset)
+  const isLightningEnabled = useFeatureStore((featureState) => featureState.isLightningEnabled)
+  const isSegwitAddressesEnabled = useFeatureStore((featureState) => featureState.isSegwitAddressesEnabled)
   const committedNetworkMode = useWalletStore(selectCommittedNetworkMode)
   const [mainnetDemoDismissed, setMainnetDemoDismissed] = useState(false)
   const previousCommittedNetworkModeRef = useRef<NetworkMode | null>(null)
 
-  const showLightningToggle = lightningEnabled && isLightningSupported(networkMode)
+  const showLightningToggle = isLightningEnabled && isLightningSupported(networkMode)
   const [receiveMode, setReceiveMode] = useState<ReceiveMode>('bitcoin')
 
   useEffect(() => {
@@ -79,11 +79,11 @@ export function ReceivePage() {
       setCurrentAddress(address)
 
       if (password && activeWalletId) {
-        const changeset = await exportChangeset()
+        const changesetJson = await exportChangeset()
         await updateWalletChangeset({
           password,
           walletId: activeWalletId,
-          changesetJson: changeset,
+          changesetJson,
         })
       }
 
@@ -159,7 +159,7 @@ export function ReceivePage() {
                 <QrCode className="h-5 w-5" />
                 QR Code
               </CardTitle>
-              {segwitAddressesEnabled ? (
+              {isSegwitAddressesEnabled ? (
                 <Badge variant="outline">
                   {addressType === AddressType.Taproot
                     ? 'Taproot (BIP86)'

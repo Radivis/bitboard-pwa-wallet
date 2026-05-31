@@ -17,7 +17,7 @@ import {
   LAB_CARD_PAGE_SIZE,
   LAB_ENTITIES_PAGE_SIZE,
   LAB_ENTITY_INNER_PAGE_SIZE,
-} from '@/lib/lab-paginated-queries'
+} from '@/lib/lab/lab-paginated-queries'
 
 export function useLabBlockTransactionsPage(
   blockHeight: number,

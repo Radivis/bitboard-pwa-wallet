@@ -2,7 +2,7 @@ use std::str::FromStr;
 
 use bdk_wallet::{KeychainKind, Wallet};
 use bitcoin::absolute;
-use bitcoin::{Address, Amount, Network, Psbt, ScriptBuf, Transaction};
+use bitcoin::{Address, Amount, Network, OutPoint, Psbt, ScriptBuf, Transaction, Txid};
 use serde::{Deserialize, Serialize};
 
 use crate::error::CryptoError;
@@ -18,6 +18,17 @@ pub struct ReviewInputUtxo {
     pub amount_sats: u64,
     pub txid: String,
     pub vout: u32,
+}
+
+/// Wallet-owned unspent output for listing and manual coin control.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct WalletUtxoRow {
+    pub address: String,
+    pub amount_sats: u64,
+    pub txid: String,
+    pub vout: u32,
+    pub is_confirmed: bool,
+    pub keychain: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -48,38 +59,38 @@ fn sum_psbt_input_values(psbt: &Psbt) -> Result<u64, CryptoError> {
             "PSBT input count mismatch".to_string(),
         ));
     }
-    let mut sum = 0u64;
-    for inp in &psbt.inputs {
-        let amt = inp
+    let mut input_value_sum = 0u64;
+    for psbt_input in &psbt.inputs {
+        let input_amount_sats = psbt_input
             .witness_utxo
             .as_ref()
             .ok_or_else(|| CryptoError::Transaction("PSBT input missing witness_utxo".to_string()))?
             .value
             .to_sat();
-        sum = sum
-            .checked_add(amt)
+        input_value_sum = input_value_sum
+            .checked_add(input_amount_sats)
             .ok_or_else(|| CryptoError::Transaction("Input value sum overflow".to_string()))?;
     }
-    Ok(sum)
+    Ok(input_value_sum)
 }
 
 fn sum_unsigned_tx_output_values(tx: &Transaction) -> u64 {
-    tx.output.iter().map(|o| o.value.to_sat()).sum()
+    tx.output.iter().map(|output| output.value.to_sat()).sum()
 }
 
 /// Fee in satoshis from an unsigned PSBT (sum of inputs minus sum of outputs).
 pub fn fee_sats_from_unsigned_psbt(psbt: &Psbt) -> Result<u64, CryptoError> {
-    let vin_sum = sum_psbt_input_values(psbt)?;
-    let vout_sum = sum_unsigned_tx_output_values(&psbt.unsigned_tx);
-    Ok(vin_sum.saturating_sub(vout_sum))
+    let input_value_sum = sum_psbt_input_values(psbt)?;
+    let output_value_sum = sum_unsigned_tx_output_values(&psbt.unsigned_tx);
+    Ok(input_value_sum.saturating_sub(output_value_sum))
 }
 
 /// Sum of output values paying to the wallet change script (0 when change-free).
-pub fn change_sats_from_unsigned_psbt(psbt: &Psbt, change_spk: &ScriptBuf) -> u64 {
+pub fn change_sats_from_unsigned_psbt(psbt: &Psbt, change_script_pubkey: &ScriptBuf) -> u64 {
     psbt.unsigned_tx
         .output
         .iter()
-        .filter(|output| output.script_pubkey == *change_spk)
+        .filter(|output| output.script_pubkey == *change_script_pubkey)
         .map(|output| output.value.to_sat())
         .sum()
 }
@@ -131,16 +142,49 @@ pub fn review_inputs_from_wallet_psbt(
     Ok(input_utxos)
 }
 
+/// Parse optional JSON array of `{ txid, vout }` for manual coin control.
+pub fn parse_selected_outpoints_json(
+    selected_outpoints_json: Option<&str>,
+) -> Result<Option<Vec<OutPoint>>, CryptoError> {
+    let Some(json) = selected_outpoints_json else {
+        return Ok(None);
+    };
+    if json.trim().is_empty() {
+        return Ok(None);
+    }
+
+    #[derive(Deserialize)]
+    struct OutpointWire {
+        txid: String,
+        vout: u32,
+    }
+
+    let wire_rows: Vec<OutpointWire> =
+        serde_json::from_str(json).map_err(|e| CryptoError::Transaction(e.to_string()))?;
+
+    let outpoints = wire_rows
+        .into_iter()
+        .map(|row| {
+            let txid =
+                Txid::from_str(&row.txid).map_err(|e| CryptoError::Transaction(e.to_string()))?;
+            Ok(OutPoint::new(txid, row.vout))
+        })
+        .collect::<Result<Vec<_>, CryptoError>>()?;
+
+    Ok(Some(outpoints))
+}
+
 /// Build a PSBT with dust-floor clamp. When `apply_change_free_bump` is false (default for first
 /// pass), never increases payment for change-free max; sets `change_free_bump_available` when the
 /// user may choose a higher payment. When true, applies that bump if possible.
 pub fn prepare_onchain_send(
     wallet: &mut Wallet,
-    recipient_address: &str,
+    to_address: &str,
     amount_sats: u64,
     fee_rate_sat_per_vb: f64,
     network: Network,
     apply_change_free_bump: bool,
+    selected_outpoints: Option<&[OutPoint]>,
 ) -> Result<PrepareOnchainSendOutcome, CryptoError> {
     if amount_sats == 0 {
         return Err(CryptoError::Transaction(
@@ -150,54 +194,70 @@ pub fn prepare_onchain_send(
 
     let original_amount_sats = amount_sats;
     let mut raised_to_min_dust = false;
-    let mut final_amt = amount_sats;
-    if final_amt < UX_DUST_FLOOR_SATS {
-        final_amt = UX_DUST_FLOOR_SATS;
+    let mut final_payment_sats = amount_sats;
+    if final_payment_sats < UX_DUST_FLOOR_SATS {
+        final_payment_sats = UX_DUST_FLOOR_SATS;
         raised_to_min_dust = true;
     }
 
-    let address = Address::from_str(recipient_address)?
+    let address = Address::from_str(to_address)?
         .require_network(network)
         .map_err(|e| CryptoError::Transaction(e.to_string()))?;
-    let recipient_spk = address.script_pubkey();
+    let recipient_script_pubkey = address.script_pubkey();
 
     let fee_rate = validation::fee_rate_from_sat_per_vb_float(fee_rate_sat_per_vb)?;
 
     // `nLockTime = 0` instead of BDK’s default (tip-based fee-sniping lock time) — see
     // `doc/ARCHITECTURE.md` (On-chain sends: nLockTime and fee sniping).
-    let build_once = |w: &mut Wallet, amt: u64| -> Result<Psbt, CryptoError> {
-        let mut tx_builder = w.build_tx();
+    let build_once = |wallet: &mut Wallet, payment_sats: u64| -> Result<Psbt, CryptoError> {
+        let mut tx_builder = wallet.build_tx();
         tx_builder
             .nlocktime(absolute::LockTime::ZERO)
-            .add_recipient(recipient_spk.clone(), Amount::from_sat(amt))
+            .add_recipient(
+                recipient_script_pubkey.clone(),
+                Amount::from_sat(payment_sats),
+            )
             .fee_rate(fee_rate);
+        if let Some(outpoints) = selected_outpoints {
+            if outpoints.is_empty() {
+                return Err(CryptoError::Transaction(
+                    "At least one UTXO must be selected for manual coin control".to_string(),
+                ));
+            }
+            tx_builder
+                .add_utxos(outpoints)
+                .map_err(|e| CryptoError::Transaction(e.to_string()))?;
+            tx_builder.manually_selected_only();
+        }
         tx_builder.finish().map_err(CryptoError::from)
     };
 
-    let mut psbt = build_once(wallet, final_amt)?;
+    let mut psbt = build_once(wallet, final_payment_sats)?;
     let mut bumped_change_free = false;
 
-    let unsigned = psbt.unsigned_tx.clone();
-    let single_recipient_only =
-        unsigned.output.len() == 1 && unsigned.output[0].script_pubkey == recipient_spk;
+    let unsigned_transaction = psbt.unsigned_tx.clone();
+    let single_recipient_only = unsigned_transaction.output.len() == 1
+        && unsigned_transaction.output[0].script_pubkey == recipient_script_pubkey;
 
     let mut change_free_bump_available = false;
     let mut change_free_max_sats = 0u64;
 
     if single_recipient_only {
-        let vin_sum = sum_psbt_input_values(&psbt)?;
-        let min_total_fee = fee_rate.fee_wu(unsigned.weight()).ok_or_else(|| {
-            CryptoError::Transaction("Fee overflow for transaction weight".to_string())
-        })?;
-        let max_recipient = vin_sum.saturating_sub(min_total_fee.to_sat());
-        if max_recipient > final_amt {
+        let input_value_sum = sum_psbt_input_values(&psbt)?;
+        let min_total_fee = fee_rate
+            .fee_wu(unsigned_transaction.weight())
+            .ok_or_else(|| {
+                CryptoError::Transaction("Fee overflow for transaction weight".to_string())
+            })?;
+        let max_recipient = input_value_sum.saturating_sub(min_total_fee.to_sat());
+        if max_recipient > final_payment_sats {
             change_free_bump_available = true;
             change_free_max_sats = max_recipient;
             if apply_change_free_bump {
                 match build_once(wallet, max_recipient) {
-                    Ok(psbt2) => {
-                        psbt = psbt2;
-                        final_amt = max_recipient;
+                    Ok(change_free_psbt) => {
+                        psbt = change_free_psbt;
+                        final_payment_sats = max_recipient;
                         bumped_change_free = true;
                     }
                     Err(_) => {
@@ -211,11 +271,11 @@ pub fn prepare_onchain_send(
     let fee_sats = fee_sats_from_unsigned_psbt(&psbt)?;
     let total_input_sats = sum_psbt_input_values(&psbt)?;
     let input_utxos = review_inputs_from_wallet_psbt(wallet, &psbt)?;
-    let change_spk = psbt
+    let change_script_pubkey = psbt
         .unsigned_tx
         .output
         .iter()
-        .find(|output| output.script_pubkey != recipient_spk)
+        .find(|output| output.script_pubkey != recipient_script_pubkey)
         .map(|output| output.script_pubkey.clone())
         .unwrap_or_else(|| {
             wallet
@@ -226,11 +286,11 @@ pub fn prepare_onchain_send(
                 .address
                 .script_pubkey()
         });
-    let change_sats = change_sats_from_unsigned_psbt(&psbt, &change_spk);
+    let change_sats = change_sats_from_unsigned_psbt(&psbt, &change_script_pubkey);
 
     Ok(PrepareOnchainSendOutcome {
         psbt_base64: psbt.to_string(),
-        final_amount_sats: final_amt,
+        final_amount_sats: final_payment_sats,
         original_amount_sats,
         raised_to_min_dust,
         bumped_change_free,
@@ -245,18 +305,19 @@ pub fn prepare_onchain_send(
 
 pub fn build_transaction(
     wallet: &mut Wallet,
-    recipient_address: &str,
+    to_address: &str,
     amount_sats: u64,
     fee_rate_sat_per_vb: f64,
     network: Network,
 ) -> Result<Psbt, CryptoError> {
     let outcome = prepare_onchain_send(
         wallet,
-        recipient_address,
+        to_address,
         amount_sats,
         fee_rate_sat_per_vb,
         network,
         false,
+        None,
     )?;
     outcome
         .psbt_base64

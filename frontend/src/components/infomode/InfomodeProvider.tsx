@@ -12,8 +12,8 @@ import {
 } from 'react'
 import { useLocation, useRouter } from '@tanstack/react-router'
 import { useInfomodeStore } from '@/stores/infomodeStore'
-import { clickTargetWouldActivatePrimaryAction } from '@/lib/infomode-primary-action-detect'
-import { notifyInfomodePrimaryActionSuppressed } from '@/lib/infomode-suppression-feedback'
+import { clickTargetWouldActivatePrimaryAction } from '@/lib/infomode/infomode-primary-action-detect'
+import { notifyInfomodePrimaryActionSuppressed } from '@/lib/infomode/infomode-suppression-feedback'
 import { InfomodePopup } from '@/components/infomode/InfomodePopup'
 import type { InfomodeRegistryEntry } from '@/components/infomode/infomode-types'
 
@@ -75,7 +75,7 @@ function InfomodeCloseOnNavigate({
   setPopupState: Dispatch<SetStateAction<PopupState>>
   isPopupOpen: boolean
 }) {
-  const setInfomodeActive = useInfomodeStore((s) => s.setInfomodeActive)
+  const setInfomodeActive = useInfomodeStore((infomodeState) => infomodeState.setInfomodeActive)
   const locationKey = useLocation({
     select: (loc) => `${loc.pathname}${loc.searchStr}${loc.hash}`,
     structuralSharing: false,

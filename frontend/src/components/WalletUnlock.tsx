@@ -15,8 +15,8 @@ import { useWallets } from '@/db'
 import {
   loadDescriptorWalletAndSync,
   loadDescriptorWalletWithoutSync,
-} from '@/lib/wallet-utils'
-import { reportWalletSyncError } from '@/lib/wallet-sync-error-toast'
+} from '@/lib/wallet/wallet-utils'
+import { reportWalletSyncError } from '@/lib/wallet/wallet-sync-error-toast'
 
 interface WalletUnlockProps {
   walletName?: string
@@ -40,11 +40,11 @@ export function WalletUnlock({
   const navigate = useNavigate()
   const { data: wallets } = useWallets()
 
-  const activeWalletId = useWalletStore((s) => s.activeWalletId)
-  const networkMode = useWalletStore((s) => s.networkMode)
-  const addressType = useWalletStore((s) => s.addressType)
-  const accountId = useWalletStore((s) => s.accountId)
-  const setSessionPassword = useSessionStore((s) => s.setPassword)
+  const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
+  const networkMode = useWalletStore((walletState) => walletState.networkMode)
+  const addressType = useWalletStore((walletState) => walletState.addressType)
+  const accountId = useWalletStore((walletState) => walletState.accountId)
+  const setSessionPassword = useSessionStore((sessionState) => sessionState.setPassword)
 
   const handleClose = () => {
     if (onDismiss) {

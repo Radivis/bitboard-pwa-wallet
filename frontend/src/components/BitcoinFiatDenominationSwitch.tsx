@@ -1,8 +1,8 @@
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/shared/utils'
 import { useFiatDenominationStore } from '@/stores/fiatDenominationStore'
-import { getFiatCurrencyUiMeta } from '@/lib/supported-fiat-currencies'
+import { getFiatCurrencyUiMeta } from '@/lib/fiat/supported-fiat-currencies'
 
 type BitcoinFiatDenominationSwitchProps = {
   disabled?: boolean
@@ -20,12 +20,12 @@ export function BitcoinFiatDenominationSwitch({
   className,
   onFiatModeChange,
 }: BitcoinFiatDenominationSwitchProps) {
-  const fiatMode = useFiatDenominationStore((s) => s.fiatDenominationMode)
+  const fiatMode = useFiatDenominationStore((fiatDenominationState) => fiatDenominationState.fiatDenominationMode)
   const setFiatDenominationMode = useFiatDenominationStore(
-    (s) => s.setFiatDenominationMode,
+    (fiatDenominationState) => fiatDenominationState.setFiatDenominationMode,
   )
   const defaultFiatCurrency = useFiatDenominationStore(
-    (s) => s.defaultFiatCurrency,
+    (fiatDenominationState) => fiatDenominationState.defaultFiatCurrency,
   )
   const fiatSymbol = getFiatCurrencyUiMeta(defaultFiatCurrency).symbol
 

@@ -1,6 +1,6 @@
-import { UX_DUST_FLOOR_SATS } from '@/lib/bitcoin-dust'
+import { UX_DUST_FLOOR_SATS } from '@/lib/wallet/bitcoin-dust'
 
-/** @deprecated Use {@link UX_DUST_FLOOR_SATS} from `@/lib/bitcoin-dust` */
+/** @deprecated Use {@link UX_DUST_FLOOR_SATS} from `@/lib/wallet/bitcoin-dust` */
 export const LAB_DUST_LIMIT_SATS = UX_DUST_FLOOR_SATS
 export const LAB_ESTIMATE_TX_VSIZE_BASE = 10
 export const LAB_ESTIMATE_P2WPKH_INPUT_VSIZE = 68
@@ -23,9 +23,12 @@ export function feeRateSatPerVbFromRandomRoll(roll: number): number {
 
 /** Standard normal N(0,1) via Box–Muller (uses `Math.random`). */
 export function randomStandardNormal(): number {
-  const u1 = Math.max(Number.EPSILON, Math.random())
-  const u2 = Math.random()
-  return Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2)
+  const uniformSample1 = Math.max(Number.EPSILON, Math.random())
+  const uniformSample2 = Math.random()
+  return (
+    Math.sqrt(-2 * Math.log(uniformSample1)) *
+    Math.cos(2 * Math.PI * uniformSample2)
+  )
 }
 
 /**
@@ -42,7 +45,7 @@ export function sampleRandomLabAmountSats(
 
   const logMin = Math.log(minAmount)
   const logMax = Math.log(maxAmount)
-  const mu = (logMin + logMax) / 2
+  const logMean = (logMin + logMax) / 2
   const logSpan = logMax - logMin
   const sigma = Math.max(
     LAB_RANDOM_AMOUNT_LOG_SIGMA_MIN,
@@ -52,8 +55,10 @@ export function sampleRandomLabAmountSats(
     ),
   )
 
-  const z = randomStandardNormal()
-  const candidate = Math.floor(Math.exp(mu + sigma * z))
+  const standardNormalSample = randomStandardNormal()
+  const candidate = Math.floor(
+    Math.exp(logMean + sigma * standardNormalSample),
+  )
 
   if (candidate < minAmount || candidate > maxAmount) return null
   return candidate

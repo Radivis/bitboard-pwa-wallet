@@ -1,6 +1,6 @@
 import { FlaskConical } from 'lucide-react'
-import type { NetworkUnitIndicator } from '@/lib/bitcoin-display-unit'
-import { cn } from '@/lib/utils'
+import type { NetworkUnitIndicator } from '@/lib/wallet/bitcoin-display-unit'
+import { cn } from '@/lib/shared/utils'
 
 type NetworkUnitPrefixProps = {
   indicator: NetworkUnitIndicator

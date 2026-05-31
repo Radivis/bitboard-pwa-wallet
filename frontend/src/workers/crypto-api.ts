@@ -1,4 +1,4 @@
-import type { EncryptedBlob } from '@/lib/encrypted-blob-types';
+import type { EncryptedBlob } from '@/lib/shared/encrypted-blob-types';
 import type {
   AddressType,
   BitcoinNetwork,
@@ -43,6 +43,21 @@ export interface LoadWalletParams {
   useEmptyChain: boolean;
 }
 
+export interface OpenWalletSessionParams {
+  externalDescriptor: string;
+  internalDescriptor: string;
+  network: BitcoinNetwork;
+  changesetJson: string;
+  useEmptyChain: boolean;
+}
+
+/** Ephemeral WASM wallet session; does not use the global active wallet slot. */
+export interface WalletSessionHandle {
+  getBalance(): Promise<BalanceInfo>;
+  exportChangeset(): Promise<string>;
+  free(): void;
+}
+
 export interface BuildAndSignLabTransactionParams {
   utxosJson: string;
   toAddress: string;
@@ -72,12 +87,24 @@ export interface ReviewInputUtxo {
   vout: number;
 }
 
+/** Outpoint identifying a wallet UTXO for manual coin control. */
+export interface UtxoOutpoint {
+  txid: string;
+  vout: number;
+}
+
+/** Wallet-owned unspent output row from `list_wallet_utxos`. */
+export interface WalletUtxoRow extends ReviewInputUtxo {
+  isConfirmed: boolean;
+  keychain: 'external' | 'internal';
+}
+
 export interface DraftLabPsbtTransactionResult {
   psbtBase64: string;
   finalAmountSats: number;
   originalAmountSats: number;
-  raisedToMinDust: boolean;
-  changeFreeBumpAvailable: boolean;
+  isRaisedToMinDust: boolean;
+  isChangeFreeBumpAvailable: boolean;
   changeFreeMaxSats: number;
   feeSats: number;
   changeSats: number;
@@ -86,7 +113,7 @@ export interface DraftLabPsbtTransactionResult {
 }
 
 /** Ephemeral lab-entity wallet draft (does not use the active user wallet). */
-export interface LabEntityDraftLabPsbtTransactionParams {
+export interface LabEntityDraftPsbtTransactionParams {
   mnemonic: string;
   changesetJson: string;
   network: string;
@@ -99,14 +126,14 @@ export interface LabEntityDraftLabPsbtTransactionParams {
 }
 
 /** Ephemeral lab-entity wallet signing (does not use the active user wallet). */
-export interface LabEntityBuildAndSignLabTransactionParams
-  extends LabEntityDraftLabPsbtTransactionParams {
+export interface LabEntityBuildAndSignTransactionParams
+  extends LabEntityDraftPsbtTransactionParams {
   /** When true, increase payment to change-free max if that path exists. */
   applyChangeFreeBump?: boolean;
 }
 
 export interface BuildTransactionParams {
-  recipientAddress: string;
+  toAddress: string;
   amountSats: number;
   feeRateSatPerVb: number;
   network: BitcoinNetwork;
@@ -115,6 +142,8 @@ export interface BuildTransactionParams {
 export interface PrepareOnchainSendParams extends BuildTransactionParams {
   /** First prepare uses false; second call after user chooses change-free bump uses true. */
   applyChangeFreeBump?: boolean;
+  /** When set, BDK uses only these inputs (`manually_selected_only`). */
+  selectedOutpoints?: UtxoOutpoint[];
 }
 
 /** `prepare_onchain_send_transaction` (mapped from WASM in the worker). */
@@ -122,9 +151,9 @@ export interface PrepareOnchainSendResult {
   psbtBase64: string;
   finalAmountSats: number;
   originalAmountSats: number;
-  raisedToMinDust: boolean;
-  bumpedChangeFree: boolean;
-  changeFreeBumpAvailable: boolean;
+  isRaisedToMinDust: boolean;
+  isBumpedChangeFree: boolean;
+  isChangeFreeBumpAvailable: boolean;
   changeFreeMaxSats: number;
   feeSats: number;
   changeSats: number;
@@ -139,9 +168,9 @@ export interface BuildAndSignLabTransactionResult {
   hasChange: boolean;
   finalAmountSats: number;
   originalAmountSats: number;
-  raisedToMinDust: boolean;
-  bumpedChangeFree: boolean;
-  changeFreeBumpAvailable: boolean;
+  isRaisedToMinDust: boolean;
+  isBumpedChangeFree: boolean;
+  isChangeFreeBumpAvailable: boolean;
   changeFreeMaxSats: number;
 }
 
@@ -164,6 +193,16 @@ export interface UpdateDescriptorWalletChangesetParams {
   accountId: number;
   changesetJson: string;
   markFullScanDone?: boolean;
+  lastSuccessfulEsploraSyncAt?: string;
+}
+
+export interface ReadLastSuccessfulEsploraSyncAtParams {
+  password: string;
+  /** WalletSecretsPayload ciphertext only (after split migration). */
+  encryptedPayload: EncryptedBlobForDb;
+  network: BitcoinNetwork;
+  addressType: AddressType;
+  accountId: number;
 }
 
 export interface CreateWalletAndEncryptSecretsParams {
@@ -197,6 +236,8 @@ export interface CryptoService {
 
   loadWallet(params: LoadWalletParams): Promise<boolean>;
 
+  openWalletSession(params: OpenWalletSessionParams): Promise<WalletSessionHandle>;
+
   getNewAddress(): Promise<string>;
   getCurrentAddress(): Promise<string>;
   /** Build and sign a lab transaction using BDK add_foreign_utxo. */
@@ -211,13 +252,13 @@ export interface CryptoService {
   getLabChangeAddress(): Promise<string>;
 
   /** Unsigned lab PSBT draft for a lab entity (dust / change-free metadata). */
-  labEntityDraftLabPsbtTransaction(
-    params: LabEntityDraftLabPsbtTransactionParams,
+  labEntityDraftPsbtTransaction(
+    params: LabEntityDraftPsbtTransactionParams,
   ): Promise<DraftLabPsbtTransactionResult>;
 
   /** Build and sign a lab mempool tx for a simulated lab entity (BDK + foreign UTXOs). */
-  labEntityBuildAndSignLabTransaction(
-    params: LabEntityBuildAndSignLabTransactionParams,
+  labEntityBuildAndSignTransaction(
+    params: LabEntityBuildAndSignTransactionParams,
   ): Promise<unknown>;
   getBalance(): Promise<BalanceInfo>;
   exportChangeset(): Promise<string>;
@@ -230,6 +271,8 @@ export interface CryptoService {
   prepareOnchainSendTransaction(
     params: PrepareOnchainSendParams,
   ): Promise<PrepareOnchainSendResult>;
+
+  listWalletUtxos(): Promise<WalletUtxoRow[]>;
 
   signAndExtractTransaction(psbtBase64: string): Promise<string>;
 
@@ -251,11 +294,19 @@ export interface CryptoService {
   /**
    * Update the changeset for one descriptor wallet in encrypted secrets.
    * Returns the new encrypted blob to store.
-   * When markFullScanDone is true, sets that sub-wallet's fullScanDone flag.
+   * When markFullScanDone is true, sets that descriptor wallet's fullScanDone flag.
    */
   updateDescriptorWalletChangeset(
     params: UpdateDescriptorWalletChangesetParams,
   ): Promise<EncryptedBlobForDb>;
+
+  /**
+   * Read `lastSuccessfulEsploraSyncAt` for one descriptor wallet from encrypted payload.
+   * Decrypt happens in the worker; only the ISO timestamp (or undefined) is returned.
+   */
+  readLastSuccessfulEsploraSyncAtForDescriptorWallet(
+    params: ReadLastSuccessfulEsploraSyncAtParams,
+  ): Promise<string | undefined>;
 
   /**
    * Create wallet (generate mnemonic, create in WASM, encrypt secrets).

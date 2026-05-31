@@ -1,13 +1,13 @@
 import { useEffect } from 'react'
 import { createFileRoute, Outlet } from '@tanstack/react-router'
 import { useWalletStore } from '@/stores/walletStore'
-import { appQueryClient } from '@/lib/app-query-client'
-import { labChainStateQueryKey, toUiLabState } from '@/lib/lab-chain-query'
-import { labOpLoadChainFromDatabase } from '@/lib/lab-worker-operations'
+import { appQueryClient } from '@/lib/shared/app-query-client'
+import { labChainStateQueryKey, toUiLabState } from '@/lib/lab/lab-chain-query'
+import { labOpLoadChainFromDatabase } from '@/lib/lab/lab-worker-operations'
 import { getLabWorker, initLabWorkerWithState } from '@/workers/lab-factory'
-import { runLabOp } from '@/lib/lab-coordinator'
+import { runLabOp } from '@/lib/lab/lab-coordinator'
 import { useLabChainStateQuery } from '@/hooks/useLabChainStateQuery'
-import { runLabRouteBeforeLoad } from '@/lib/lab-route-before-load'
+import { runLabRouteBeforeLoad } from '@/lib/lab/lab-route-before-load'
 
 export const Route = createFileRoute('/lab')({
   /** Avoid intent preloads (hover/focus) switching the wallet to Lab early. */
@@ -30,7 +30,7 @@ function LabRoutePending() {
 }
 
 function LabLayout() {
-  const networkMode = useWalletStore((s) => s.networkMode)
+  const networkMode = useWalletStore((walletState) => walletState.networkMode)
   const { labAutoSwitchFailed } = Route.useRouteContext()
   const { isPending, isError, error, refetch } = useLabChainStateQuery()
 
@@ -40,22 +40,22 @@ function LabLayout() {
       // Always read from SQLite (worker reload), not Query cache alone. The cache can lag
       // behind persist: mutationFn awaits persistLabState before isPending clears, but
       // setQueryData runs in onSuccess — Playwright may read __labGetState in between.
-      const raw = await labOpLoadChainFromDatabase()
-      const ui = toUiLabState(raw)
-      appQueryClient.setQueryData(labChainStateQueryKey, ui)
+      const dbLabState = await labOpLoadChainFromDatabase()
+      const uiLabState = toUiLabState(dbLabState)
+      appQueryClient.setQueryData(labChainStateQueryKey, uiLabState)
       return {
-        blocks: ui.blocks,
-        utxos: ui.utxos,
-        addresses: ui.addresses,
-        entities: ui.entities,
-        addressToOwner: ui.addressToOwner,
-        mempool: ui.mempool,
-        transactions: ui.transactions,
-        txDetails: ui.txDetails,
-        mineOperations: ui.mineOperations,
-        txOperations: ui.txOperations,
-        blockWeightLimit: ui.blockWeightLimit,
-        minerSubsidySats: ui.minerSubsidySats,
+        blocks: uiLabState.blocks,
+        utxos: uiLabState.utxos,
+        addresses: uiLabState.addresses,
+        entities: uiLabState.entities,
+        addressToOwner: uiLabState.addressToOwner,
+        mempool: uiLabState.mempool,
+        transactions: uiLabState.transactions,
+        txDetails: uiLabState.txDetails,
+        mineOperations: uiLabState.mineOperations,
+        txOperations: uiLabState.txOperations,
+        blockWeightLimit: uiLabState.blockWeightLimit,
+        minerSubsidySats: uiLabState.minerSubsidySats,
       }
     }
     return () => {

@@ -12,7 +12,7 @@ describe('BitcoinAmountDisplay', () => {
   beforeEach(() => {
     useWalletStore.setState({
       networkMode: 'mainnet',
-      loadedSubWallet: null,
+      loadedDescriptorWallet: null,
     })
   })
 

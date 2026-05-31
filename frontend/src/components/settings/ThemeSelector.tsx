@@ -9,8 +9,8 @@ const THEME_OPTIONS: { value: ThemeMode; label: string; icon: typeof Sun }[] = [
 ]
 
 export function ThemeSelector() {
-  const themeMode = useThemeStore((s) => s.themeMode)
-  const setThemeMode = useThemeStore((s) => s.setThemeMode)
+  const themeMode = useThemeStore((themeState) => themeState.themeMode)
+  const setThemeMode = useThemeStore((themeState) => themeState.setThemeMode)
 
   return (
     <div className="flex flex-wrap gap-2">

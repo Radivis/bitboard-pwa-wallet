@@ -1,32 +1,32 @@
 import { useQuery } from '@tanstack/react-query'
 import { useWalletStore } from '@/stores/walletStore'
 import { useSessionStore } from '@/stores/sessionStore'
-import { loadDescriptorWalletAndSync, loadDescriptorWalletWithoutSync } from '@/lib/wallet-utils'
-import { activeWalletLoadQueryKey } from '@/lib/wallet-load-query-keys'
+import { loadDescriptorWalletAndSync, loadDescriptorWalletWithoutSync } from '@/lib/wallet/wallet-utils'
+import { activeWalletLoadQueryKey } from '@/lib/wallet/wallet-load-query-keys'
 import { waitForCryptoWorkerHealthy } from '@/workers/crypto-factory'
-import { pathnameRequiresWalletCryptoSession } from '@/lib/pathname-requires-wallet-crypto-session'
-import { reportWalletSyncError } from '@/lib/wallet-sync-error-toast'
+import { pathnameRequiresWalletCryptoSession } from '@/lib/shared/pathname-requires-wallet-crypto-session'
+import { reportWalletSyncError } from '@/lib/wallet/wallet-sync-error-toast'
 import { useWalletCryptoSessionPathGateStore } from '@/stores/walletCryptoSessionPathGateStore'
 
 /**
- * TanStack Query observer for loading the active sub-wallet when a session exists
+ * TanStack Query observer for loading the active descriptor wallet when a session exists
  * but the wallet is not yet unlocked (reload, after lock + near-zero restore, etc.).
  * Safe to call from multiple components — they share one cache entry per key.
  */
 export function useActiveWalletLoadQuery() {
-  const sessionPassword = useSessionStore((s) => s.password)
-  const activeWalletId = useWalletStore((s) => s.activeWalletId)
-  const networkMode = useWalletStore((s) => s.networkMode)
-  const addressType = useWalletStore((s) => s.addressType)
-  const accountId = useWalletStore((s) => s.accountId)
-  const walletStatus = useWalletStore((s) => s.walletStatus)
+  const sessionPassword = useSessionStore((sessionState) => sessionState.password)
+  const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
+  const networkMode = useWalletStore((walletState) => walletState.networkMode)
+  const addressType = useWalletStore((walletState) => walletState.addressType)
+  const accountId = useWalletStore((walletState) => walletState.accountId)
+  const walletStatus = useWalletStore((walletState) => walletState.walletStatus)
   const activeWalletBootstrapInFlight = useWalletStore(
-    (s) => s.activeWalletBootstrapInFlight,
+    (walletState) => walletState.activeWalletBootstrapInFlight,
   )
   const manualWalletUnlockInFlight = useWalletStore(
-    (s) => s.manualWalletUnlockInFlight,
+    (walletState) => walletState.manualWalletUnlockInFlight,
   )
-  const pathname = useWalletCryptoSessionPathGateStore((s) => s.pathname)
+  const pathname = useWalletCryptoSessionPathGateStore((walletCryptoSessionPathGateState) => walletCryptoSessionPathGateState.pathname)
   const onWalletCryptoRoute = pathnameRequiresWalletCryptoSession(pathname)
 
   /**

@@ -1,8 +1,13 @@
+import { WALLET_DB_QUERY_KEY_ROOT } from '@/lib/wallet/wallet-query-key-root'
+
 export const walletKeys = {
-  all: ['wallets'] as const,
-  byId: (id: number) => ['wallets', id] as const,
+  all: [...WALLET_DB_QUERY_KEY_ROOT, 'wallets'] as const,
+  byId: (id: number) => [...WALLET_DB_QUERY_KEY_ROOT, 'wallets', id] as const,
+  detailNone: [...WALLET_DB_QUERY_KEY_ROOT, 'wallets', 'detail', 'none'] as const,
   noMnemonicBackup: (walletId: number) =>
-    ['wallets', 'no_mnemonic_backup', walletId] as const,
+    [...WALLET_DB_QUERY_KEY_ROOT, 'wallets', 'no_mnemonic_backup', walletId] as const,
+  noMnemonicBackupNone:
+    [...WALLET_DB_QUERY_KEY_ROOT, 'wallets', 'no_mnemonic_backup', 'none'] as const,
 }
 
 export const libraryKeys = {

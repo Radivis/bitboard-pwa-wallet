@@ -49,15 +49,15 @@ pub struct WalletBackupManifest {
 }
 
 fn double_sha256_hex(sqlite_bytes: &[u8]) -> String {
-    let first = Sha256::digest(sqlite_bytes);
-    let second = Sha256::digest(first);
-    hex::encode(second)
+    let first_sha256_digest = Sha256::digest(sqlite_bytes);
+    let double_sha256_digest = Sha256::digest(first_sha256_digest);
+    hex::encode(double_sha256_digest)
 }
 
 fn double_sha256_bytes(sqlite_bytes: &[u8]) -> [u8; 32] {
-    let first = Sha256::digest(sqlite_bytes);
-    let second = Sha256::digest(first);
-    second.into()
+    let first_sha256_digest = Sha256::digest(sqlite_bytes);
+    let double_sha256_digest = Sha256::digest(first_sha256_digest);
+    double_sha256_digest.into()
 }
 
 fn keypair_from_password(
@@ -137,19 +137,20 @@ pub fn verify_wallet_backup_manifest_inner(
         .decode(&manifest.salt_b64)
         .map_err(|_| "Invalid salt_b64 in manifest".to_string())?;
     let signing_key = keypair_from_password(password, &salt, &manifest.kdf_phc)?;
-    let vk = signing_key.verifying_key();
+    let verifying_key = signing_key.verifying_key();
     let sig_bytes = base64::engine::general_purpose::STANDARD
         .decode(&manifest.signature_b64)
         .map_err(|_| "Invalid signature_b64 in manifest".to_string())?;
-    let sig = ml_dsa::Signature::<MlDsa65>::try_from(sig_bytes.as_slice())
+    let signature = ml_dsa::Signature::<MlDsa65>::try_from(sig_bytes.as_slice())
         .map_err(|_| "Invalid ML-DSA signature encoding".to_string())?;
     let message_hash = double_sha256_bytes(sqlite_bytes);
-    vk.verify(&message_hash, &sig)
+    verifying_key
+        .verify(&message_hash, &signature)
         .map_err(|_| "Invalid password or corrupted backup (signature does not verify)".to_string())
 }
 
 /// Builds manifest JSON and signs `double_sha256(sqlite_bytes)` with ML-DSA-65 (deterministic).
-#[wasm_bindgen(js_name = signWalletBackupManifest)]
+#[wasm_bindgen]
 pub fn sign_wallet_backup_manifest(
     sqlite_bytes: &[u8],
     password: &str,
@@ -161,7 +162,7 @@ pub fn sign_wallet_backup_manifest(
 }
 
 /// Verifies manifest signature and that the message hash matches `sqlite_bytes`.
-#[wasm_bindgen(js_name = verifyWalletBackupManifest)]
+#[wasm_bindgen]
 pub fn verify_wallet_backup_manifest(
     sqlite_bytes: &[u8],
     password: &str,

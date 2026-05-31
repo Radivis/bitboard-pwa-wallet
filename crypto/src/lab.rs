@@ -21,7 +21,7 @@ use bitcoin::{
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 
-use crate::error::MapErrToJs;
+use crate::error::MapDisplayErrToJs;
 use crate::validation;
 
 /// Default lab coinbase subsidy (3.125 BTC in sats; current mainnet epoch). JS passes per-block subsidy into `lab_mine_block`.
@@ -29,7 +29,7 @@ pub const LAB_DEFAULT_MINER_SUBSIDY_SATS: u64 = 312_500_000;
 /// Bitcoin coinbase prevout index (all bits set), matches frontend `LAB_COINBASE_PREV_VOUT`.
 const LAB_COINBASE_PREV_VOUT: u32 = 0xffff_ffff;
 const LAB_BITS: u32 = 0x2000ffff; // Micro-PoW: compact target around 256 expected attempts
-const DUST_THRESHOLD_SATS: u64 = 546; // Min non-dust output for P2WPKH
+use crate::transaction::UX_DUST_FLOOR_SATS;
 
 // P2WPKH vsize estimates for fee calculation in lab_build_transaction_with_change
 const LAB_ESTIMATE_TX_VSIZE_BASE: u64 = 10;
@@ -142,22 +142,23 @@ pub fn lab_mine_block(
     subsidy_sats: u64,
     total_fees_sats: u64,
 ) -> Result<String, JsValue> {
-    let script_pubkey_bytes = hex::decode(coinbase_script_pubkey_hex).map_err_to_js()?;
+    let script_pubkey_bytes = hex::decode(coinbase_script_pubkey_hex).map_display_err_to_js()?;
     let script_pubkey = ScriptBuf::from_bytes(script_pubkey_bytes);
 
     let prev_hash = if prev_block_hash_hex.is_empty() {
         BlockHash::all_zeros()
     } else {
-        BlockHash::from_str(prev_block_hash_hex).map_err_to_js()?
+        BlockHash::from_str(prev_block_hash_hex).map_display_err_to_js()?
     };
 
     let coinbase = create_coinbase_tx(height, script_pubkey, subsidy_sats, total_fees_sats)?;
     let mut txdata = vec![coinbase];
 
     if !txs_hex.is_undefined() && !txs_hex.is_null() {
-        let arr: Vec<String> = serde_wasm_bindgen::from_value(txs_hex).map_err_to_js()?;
-        for tx_hex in arr {
-            let tx: Transaction = deserialize_hex(&tx_hex).map_err_to_js()?;
+        let transaction_hex_strings: Vec<String> =
+            serde_wasm_bindgen::from_value(txs_hex).map_display_err_to_js()?;
+        for tx_hex in transaction_hex_strings {
+            let tx: Transaction = deserialize_hex(&tx_hex).map_display_err_to_js()?;
             txdata.push(tx);
         }
     }
@@ -201,8 +202,8 @@ pub fn lab_build_transaction(
     outputs_json: &str,
     fee_rate_sat_per_vb: f64,
 ) -> Result<String, JsValue> {
-    let utxos: Vec<LabUtxoInput> = serde_json::from_str(utxos_json).map_err_to_js()?;
-    let outputs: Vec<LabTxOutput> = serde_json::from_str(outputs_json).map_err_to_js()?;
+    let utxos: Vec<LabUtxoInput> = serde_json::from_str(utxos_json).map_display_err_to_js()?;
+    let outputs: Vec<LabTxOutput> = serde_json::from_str(outputs_json).map_display_err_to_js()?;
 
     if utxos.is_empty() {
         return Err(JsValue::from_str("At least one UTXO required"));
@@ -217,16 +218,16 @@ pub fn lab_build_transaction(
         return Err(JsValue::from_str("Outputs exceed inputs"));
     }
 
-    let fee = total_in - total_out;
+    let implicit_fee_sats = total_in - total_out;
     let fee_rate =
-        validation::fee_rate_from_sat_per_vb_float(fee_rate_sat_per_vb).map_err_to_js()?;
+        validation::fee_rate_from_sat_per_vb_float(fee_rate_sat_per_vb).map_display_err_to_js()?;
 
     let mut input_vec = Vec::with_capacity(utxos.len());
     let mut prev_outputs: Vec<(TxOut, u32)> = Vec::with_capacity(utxos.len());
 
     for utxo in &utxos {
-        let txid = Txid::from_str(&utxo.txid).map_err_to_js()?;
-        let script_bytes = hex::decode(&utxo.script_pubkey_hex).map_err_to_js()?;
+        let txid = Txid::from_str(&utxo.txid).map_display_err_to_js()?;
+        let script_bytes = hex::decode(&utxo.script_pubkey_hex).map_display_err_to_js()?;
         let script_pubkey = ScriptBuf::from_bytes(script_bytes);
 
         input_vec.push(TxIn {
@@ -246,34 +247,36 @@ pub fn lab_build_transaction(
     }
 
     let mut output_vec: Vec<TxOut> = Vec::with_capacity(outputs.len());
-    for out in &outputs {
-        let addr = Address::from_str(&out.address)
-            .map_err_to_js()?
+    for output_spec in &outputs {
+        let parsed_output_address = Address::from_str(&output_spec.address)
+            .map_display_err_to_js()?
             .require_network(Network::Regtest)
-            .map_err_to_js()?;
+            .map_display_err_to_js()?;
         output_vec.push(TxOut {
-            value: Amount::from_sat(out.amount_sats),
-            script_pubkey: addr.script_pubkey(),
+            value: Amount::from_sat(output_spec.amount_sats),
+            script_pubkey: parsed_output_address.script_pubkey(),
         });
     }
 
-    let tx = Transaction {
+    let unsigned_transaction = Transaction {
         version: transaction::Version::TWO,
         lock_time: absolute::LockTime::ZERO,
         input: input_vec,
         output: output_vec,
     };
 
-    let required_fee = fee_rate.fee_wu(tx.weight()).unwrap_or(Amount::ZERO);
-    if fee < required_fee.to_sat() {
+    let required_fee = fee_rate
+        .fee_wu(unsigned_transaction.weight())
+        .unwrap_or(Amount::ZERO);
+    if implicit_fee_sats < required_fee.to_sat() {
         return Err(JsValue::from_str(&format!(
             "Insufficient fee: have {} sats, need at least {} sats",
-            fee,
+            implicit_fee_sats,
             required_fee.to_sat()
         )));
     }
 
-    Ok(serialize_hex(&tx))
+    Ok(serialize_hex(&unsigned_transaction))
 }
 
 /// Signs a P2WPKH transaction. Modifies the tx in place and returns the signed tx hex.
@@ -283,11 +286,11 @@ pub fn lab_build_transaction(
 /// - `utxos_json`: Same format as lab_build_transaction
 #[wasm_bindgen]
 pub fn lab_sign_transaction(tx_hex: &str, wif: &str, utxos_json: &str) -> Result<String, JsValue> {
-    let mut tx: Transaction = deserialize_hex(tx_hex).map_err_to_js()?;
+    let mut unsigned_transaction: Transaction = deserialize_hex(tx_hex).map_display_err_to_js()?;
 
-    let utxos: Vec<LabUtxoInput> = serde_json::from_str(utxos_json).map_err_to_js()?;
+    let utxos: Vec<LabUtxoInput> = serde_json::from_str(utxos_json).map_display_err_to_js()?;
 
-    let private_key = PrivateKey::from_wif(wif).map_err_to_js()?;
+    let private_key = PrivateKey::from_wif(wif).map_display_err_to_js()?;
     let secp_engine = Secp256k1::new();
     let secret_key = private_key.inner;
     let public_key = bitcoin::PublicKey::new(secret_key.public_key(&secp_engine));
@@ -296,14 +299,14 @@ pub fn lab_sign_transaction(tx_hex: &str, wif: &str, utxos_json: &str) -> Result
     }
 
     let sighash_type = EcdsaSighashType::All;
-    let input_len = tx.input.len();
-    let mut sighasher = SighashCache::new(&mut tx);
+    let input_len = unsigned_transaction.input.len();
+    let mut sighasher = SighashCache::new(&mut unsigned_transaction);
 
     for (i, utxo) in utxos.iter().enumerate() {
         if i >= input_len {
             break;
         }
-        let script_bytes = hex::decode(&utxo.script_pubkey_hex).map_err_to_js()?;
+        let script_bytes = hex::decode(&utxo.script_pubkey_hex).map_display_err_to_js()?;
         let script_pubkey = ScriptBuf::from_bytes(script_bytes);
 
         let sighash = sighasher
@@ -313,18 +316,18 @@ pub fn lab_sign_transaction(tx_hex: &str, wif: &str, utxos_json: &str) -> Result
                 Amount::from_sat(utxo.amount_sats),
                 sighash_type,
             )
-            .map_err_to_js()?;
+            .map_display_err_to_js()?;
 
-        let msg = bitcoin::secp256k1::Message::from(sighash);
-        let signature = secp_engine.sign_ecdsa(&msg, &secret_key);
-        let sig = bitcoin::ecdsa::Signature {
+        let sighash_message = bitcoin::secp256k1::Message::from(sighash);
+        let signature = secp_engine.sign_ecdsa(&sighash_message, &secret_key);
+        let ecdsa_signature = bitcoin::ecdsa::Signature {
             signature,
             sighash_type,
         };
         *sighasher
             .witness_mut(i)
             .expect("input index i is bounded by input_len") =
-            Witness::p2wpkh(&sig, &public_key.inner);
+            Witness::p2wpkh(&ecdsa_signature, &public_key.inner);
     }
 
     let signed_tx = sighasher.into_transaction();
@@ -342,22 +345,22 @@ pub fn lab_sign_transaction_multi(
     utxos_json: &str,
     address_to_wif_json: &str,
 ) -> Result<String, JsValue> {
-    let mut tx: Transaction = deserialize_hex(tx_hex).map_err_to_js()?;
+    let mut unsigned_transaction: Transaction = deserialize_hex(tx_hex).map_display_err_to_js()?;
 
-    let utxos: Vec<LabUtxoInput> = serde_json::from_str(utxos_json).map_err_to_js()?;
+    let utxos: Vec<LabUtxoInput> = serde_json::from_str(utxos_json).map_display_err_to_js()?;
 
     let address_to_wif: std::collections::HashMap<String, String> =
-        serde_json::from_str(address_to_wif_json).map_err_to_js()?;
+        serde_json::from_str(address_to_wif_json).map_display_err_to_js()?;
 
     let secp_engine = Secp256k1::new();
     let ecdsa_sighash_type = EcdsaSighashType::All;
     let tap_sighash_type = TapSighashType::Default;
-    let input_len = tx.input.len();
+    let input_len = unsigned_transaction.input.len();
 
     let prevouts: Vec<TxOut> = utxos
         .iter()
         .map(|utxo| {
-            let script_bytes = hex::decode(&utxo.script_pubkey_hex).map_err_to_js()?;
+            let script_bytes = hex::decode(&utxo.script_pubkey_hex).map_display_err_to_js()?;
             Ok(TxOut {
                 value: Amount::from_sat(utxo.amount_sats),
                 script_pubkey: ScriptBuf::from_bytes(script_bytes),
@@ -366,7 +369,7 @@ pub fn lab_sign_transaction_multi(
         .collect::<Result<Vec<_>, JsValue>>()?;
     let prevouts = Prevouts::All(&prevouts);
 
-    let mut sighasher = SighashCache::new(&mut tx);
+    let mut sighasher = SighashCache::new(&mut unsigned_transaction);
 
     for (i, utxo) in utxos.iter().enumerate() {
         if i >= input_len {
@@ -383,32 +386,33 @@ pub fn lab_sign_transaction_multi(
                 ))
             })?;
 
-        let script_bytes = hex::decode(&utxo.script_pubkey_hex).map_err_to_js()?;
+        let script_bytes = hex::decode(&utxo.script_pubkey_hex).map_display_err_to_js()?;
         let script_pubkey = ScriptBuf::from_bytes(script_bytes);
 
         if script_pubkey.is_p2tr() {
-            let privkey = PrivateKey::from_wif(&wif).map_err_to_js()?;
-            let keypair = Keypair::from_secret_key(&secp_engine, &privkey.inner);
+            let private_key = PrivateKey::from_wif(&wif).map_display_err_to_js()?;
+            let keypair = Keypair::from_secret_key(&secp_engine, &private_key.inner);
             let tweaked: TweakedKeypair = keypair.tap_tweak(&secp_engine, None);
 
             let sighash = sighasher
                 .taproot_key_spend_signature_hash(i, &prevouts, tap_sighash_type)
-                .map_err_to_js()?;
+                .map_display_err_to_js()?;
 
-            let msg = Message::from(sighash);
-            let signature = secp_engine.sign_schnorr(&msg, tweaked.as_keypair());
-            let sig = bitcoin::taproot::Signature {
+            let sighash_message = Message::from(sighash);
+            let signature = secp_engine.sign_schnorr(&sighash_message, tweaked.as_keypair());
+            let taproot_signature = bitcoin::taproot::Signature {
                 signature,
                 sighash_type: tap_sighash_type,
             };
             *sighasher
                 .witness_mut(i)
-                .expect("input index i is bounded by input_len") = Witness::p2tr_key_spend(&sig);
+                .expect("input index i is bounded by input_len") =
+                Witness::p2tr_key_spend(&taproot_signature);
         } else {
-            let privkey = PrivateKey::from_wif(&wif).map_err_to_js()?;
-            let sk = privkey.inner;
-            let pk = bitcoin::PublicKey::new(sk.public_key(&secp_engine));
-            if pk.wpubkey_hash().is_err() {
+            let private_key = PrivateKey::from_wif(&wif).map_display_err_to_js()?;
+            let secret_key = private_key.inner;
+            let public_key = bitcoin::PublicKey::new(secret_key.public_key(&secp_engine));
+            if public_key.wpubkey_hash().is_err() {
                 return Err(JsValue::from_str("Key must be compressed for P2WPKH"));
             }
 
@@ -419,17 +423,18 @@ pub fn lab_sign_transaction_multi(
                     Amount::from_sat(utxo.amount_sats),
                     ecdsa_sighash_type,
                 )
-                .map_err_to_js()?;
+                .map_display_err_to_js()?;
 
-            let msg = Message::from(sighash);
-            let signature = secp_engine.sign_ecdsa(&msg, &sk);
-            let sig = bitcoin::ecdsa::Signature {
+            let sighash_message = Message::from(sighash);
+            let signature = secp_engine.sign_ecdsa(&sighash_message, &secret_key);
+            let ecdsa_signature = bitcoin::ecdsa::Signature {
                 signature,
                 sighash_type: ecdsa_sighash_type,
             };
             *sighasher
                 .witness_mut(i)
-                .expect("input index i is bounded by input_len") = Witness::p2wpkh(&sig, &pk.inner);
+                .expect("input index i is bounded by input_len") =
+                Witness::p2wpkh(&ecdsa_signature, &public_key.inner);
         }
     }
 
@@ -448,7 +453,7 @@ pub fn lab_build_transaction_with_change(
     fee_rate_sat_per_vb: f64,
     change_address: &str,
 ) -> Result<JsValue, JsValue> {
-    let utxos: Vec<LabUtxoInput> = serde_json::from_str(utxos_json).map_err_to_js()?;
+    let utxos: Vec<LabUtxoInput> = serde_json::from_str(utxos_json).map_display_err_to_js()?;
 
     if utxos.is_empty() {
         return Err(JsValue::from_str("At least one UTXO required"));
@@ -463,7 +468,7 @@ pub fn lab_build_transaction_with_change(
     }
 
     let fee_rate =
-        validation::fee_rate_from_sat_per_vb_float(fee_rate_sat_per_vb).map_err_to_js()?;
+        validation::fee_rate_from_sat_per_vb_float(fee_rate_sat_per_vb).map_display_err_to_js()?;
     let utxos_len = utxos.len() as u64;
     let estimated_vsize = LAB_ESTIMATE_TX_VSIZE_BASE
         + utxos_len * LAB_ESTIMATE_P2WPKH_INPUT_VSIZE
@@ -474,7 +479,7 @@ pub fn lab_build_transaction_with_change(
     let change_sats = total_in
         .saturating_sub(payment_sats)
         .saturating_sub(required_fee_sats);
-    let has_change = change_sats >= DUST_THRESHOLD_SATS;
+    let has_change = change_sats >= UX_DUST_FLOOR_SATS;
     let (outputs, actual_fee_sats) = if has_change {
         let outputs = vec![
             LabTxOutput {
@@ -487,26 +492,26 @@ pub fn lab_build_transaction_with_change(
             },
         ];
         let total_out = payment_sats + change_sats;
-        let fee = total_in - total_out;
-        (outputs, fee)
+        let implicit_fee_sats = total_in - total_out;
+        (outputs, implicit_fee_sats)
     } else {
         let outputs = vec![LabTxOutput {
             address: payment_address.to_string(),
             amount_sats: payment_sats,
         }];
-        let fee = total_in - payment_sats;
-        (outputs, fee)
+        let implicit_fee_sats = total_in - payment_sats;
+        (outputs, implicit_fee_sats)
     };
 
-    let outputs_json = serde_json::to_string(&outputs).map_err_to_js()?;
+    let outputs_json = serde_json::to_string(&outputs).map_display_err_to_js()?;
     let tx_hex = lab_build_transaction(utxos_json, &outputs_json, fee_rate_sat_per_vb)?;
 
-    let result = LabBuildTransactionWithChangeResult {
+    let build_with_change_result = LabBuildTransactionWithChangeResult {
         tx_hex,
         fee_sats: actual_fee_sats,
         has_change,
     };
-    serde_wasm_bindgen::to_value(&result).map_err_to_js()
+    serde_wasm_bindgen::to_value(&build_with_change_result).map_display_err_to_js()
 }
 
 /// Generates a new keypair for "random" mining. Returns address (P2WPKH) and WIF.
@@ -515,8 +520,8 @@ pub fn lab_generate_keypair() -> Result<JsValue, JsValue> {
     let secp_engine = Secp256k1::new();
     let secret_key = {
         let mut bytes = [0u8; 32];
-        getrandom::getrandom(&mut bytes).map_err_to_js()?;
-        SecretKey::from_slice(&bytes).map_err_to_js()?
+        getrandom::getrandom(&mut bytes).map_display_err_to_js()?;
+        SecretKey::from_slice(&bytes).map_display_err_to_js()?
     };
 
     let public_key = bitcoin::PublicKey::new(secret_key.public_key(&secp_engine));
@@ -525,53 +530,53 @@ pub fn lab_generate_keypair() -> Result<JsValue, JsValue> {
     let address = Address::p2wpkh(&compressed_public_key, Network::Regtest);
     let private_key = PrivateKey::new(secret_key, Network::Regtest);
 
-    let result = LabKeypairResult {
+    let keypair_result = LabKeypairResult {
         address: address.to_string(),
         wif: private_key.to_wif(),
     };
-    serde_wasm_bindgen::to_value(&result).map_err_to_js()
+    serde_wasm_bindgen::to_value(&keypair_result).map_display_err_to_js()
 }
 
 /// Validates that an address is a valid P2WPKH or P2TR regtest address.
 #[wasm_bindgen]
 pub fn lab_validate_address(address_str: &str) -> Result<bool, JsValue> {
     let address = match Address::from_str(address_str) {
-        Ok(a) => a,
+        Ok(parsed_address) => parsed_address,
         Err(_) => return Ok(false),
     };
-    let checked = match address.require_network(Network::Regtest) {
-        Ok(a) => a,
+    let regtest_address = match address.require_network(Network::Regtest) {
+        Ok(network_checked_address) => network_checked_address,
         Err(_) => return Ok(false),
     };
-    let script_pubkey = checked.script_pubkey();
+    let script_pubkey = regtest_address.script_pubkey();
     Ok(script_pubkey.is_p2wpkh() || script_pubkey.is_p2tr())
 }
 
 /// Returns the txid (hex) for a serialized transaction.
 #[wasm_bindgen]
 pub fn lab_txid(tx_hex: &str) -> Result<String, JsValue> {
-    let tx: Transaction = deserialize_hex(tx_hex).map_err_to_js()?;
+    let tx: Transaction = deserialize_hex(tx_hex).map_display_err_to_js()?;
     Ok(tx.compute_txid().to_string())
 }
 
 /// Returns virtual size in vBytes (`ceil(weight / 4)`) for a serialized transaction.
 #[wasm_bindgen]
 pub fn lab_tx_vbytes(tx_hex: &str) -> Result<u64, JsValue> {
-    let tx: Transaction = deserialize_hex(tx_hex).map_err_to_js()?;
+    let tx: Transaction = deserialize_hex(tx_hex).map_display_err_to_js()?;
     Ok(tx.weight().to_wu().div_ceil(4))
 }
 
 /// Returns BIP141 block weight units for a serialized transaction.
 #[wasm_bindgen]
 pub fn lab_tx_weight(tx_hex: &str) -> Result<u64, JsValue> {
-    let tx: Transaction = deserialize_hex(tx_hex).map_err_to_js()?;
+    let tx: Transaction = deserialize_hex(tx_hex).map_display_err_to_js()?;
     Ok(tx.weight().to_wu())
 }
 
 /// Returns the block hash (hex) for a serialized block.
 #[wasm_bindgen]
 pub fn lab_block_hash(block_hex: &str) -> Result<String, JsValue> {
-    let block: Block = deserialize_hex(block_hex).map_err_to_js()?;
+    let block: Block = deserialize_hex(block_hex).map_display_err_to_js()?;
     Ok(block.block_hash().to_string())
 }
 
@@ -580,10 +585,10 @@ pub fn lab_block_hash(block_hex: &str) -> Result<String, JsValue> {
 /// Used by the worker to update in-memory state and build transaction history.
 #[wasm_bindgen]
 pub fn lab_block_effects(block_hex: &str) -> Result<JsValue, JsValue> {
-    let block: Block = deserialize_hex(block_hex).map_err_to_js()?;
+    let block: Block = deserialize_hex(block_hex).map_display_err_to_js()?;
 
     let mut new_utxos = Vec::new();
-    let mut spent = Vec::new();
+    let mut spent_outpoints = Vec::new();
     let mut transactions = Vec::new();
 
     for (tx_idx, tx) in block.txdata.iter().enumerate() {
@@ -592,14 +597,14 @@ pub fn lab_block_effects(block_hex: &str) -> Result<JsValue, JsValue> {
         let mut inputs = Vec::new();
         for input in &tx.input {
             if !input.previous_output.is_null() {
-                let prev = &input.previous_output;
-                spent.push(LabBlockSpentOut {
-                    txid: prev.txid.to_string(),
-                    vout: prev.vout,
+                let spent_prevout = &input.previous_output;
+                spent_outpoints.push(LabBlockSpentOut {
+                    txid: spent_prevout.txid.to_string(),
+                    vout: spent_prevout.vout,
                 });
                 inputs.push(LabBlockTxInputRef {
-                    prev_txid: prev.txid.to_string(),
-                    prev_vout: prev.vout,
+                    prev_txid: spent_prevout.txid.to_string(),
+                    prev_vout: spent_prevout.vout,
                 });
             }
         }
@@ -619,7 +624,7 @@ pub fn lab_block_effects(block_hex: &str) -> Result<JsValue, JsValue> {
                 continue;
             }
             let address = match Address::from_script(script, Network::Regtest) {
-                Ok(a) => a.to_string(),
+                Ok(parsed_address) => parsed_address.to_string(),
                 Err(_) => continue,
             };
             tx_outputs.push(LabBlockTxOutputSummary {
@@ -643,7 +648,7 @@ pub fn lab_block_effects(block_hex: &str) -> Result<JsValue, JsValue> {
                 continue;
             }
             let address = match Address::from_script(script, Network::Regtest) {
-                Ok(a) => a.to_string(),
+                Ok(parsed_address) => parsed_address.to_string(),
                 Err(_) => continue,
             };
             new_utxos.push(LabBlockNewUtxo {
@@ -657,22 +662,22 @@ pub fn lab_block_effects(block_hex: &str) -> Result<JsValue, JsValue> {
     }
 
     let block_time = block.header.time;
-    let result = LabBlockEffectsResult {
+    let block_effects_result = LabBlockEffectsResult {
         new_utxos,
-        spent,
+        spent: spent_outpoints,
         transactions,
         block_time,
     };
-    serde_wasm_bindgen::to_value(&result).map_err_to_js()
+    serde_wasm_bindgen::to_value(&block_effects_result).map_display_err_to_js()
 }
 
 /// Extracts script_pubkey hex from a P2WPKH or P2TR address.
 #[wasm_bindgen]
 pub fn lab_address_to_script_pubkey_hex(address_str: &str) -> Result<String, JsValue> {
     let address = Address::from_str(address_str)
-        .map_err_to_js()?
+        .map_display_err_to_js()?
         .require_network(Network::Regtest)
-        .map_err_to_js()?;
+        .map_display_err_to_js()?;
     let script_pubkey = address.script_pubkey();
     if !script_pubkey.is_p2wpkh() && !script_pubkey.is_p2tr() {
         return Err(JsValue::from_str(
@@ -718,7 +723,9 @@ fn create_coinbase_tx(
 
 /// Computes the Merkle root of the transaction list. Returns `None` if `txdata` is empty.
 fn compute_merkle_root(txdata: &[Transaction]) -> Option<TxMerkleNode> {
-    let hashes = txdata.iter().map(|t| t.compute_txid().to_raw_hash());
+    let hashes = txdata
+        .iter()
+        .map(|transaction| transaction.compute_txid().to_raw_hash());
     bitcoin::merkle_tree::calculate_root(hashes).map(Into::into)
 }
 
@@ -760,9 +767,9 @@ mod lab_tx_vbytes_tests {
                 script_pubkey: ScriptBuf::new(),
             }],
         };
-        let hex = serialize_hex(&tx);
+        let signed_tx_hex = serialize_hex(&tx);
         let expected = tx.weight().to_wu().div_ceil(4);
-        assert_eq!(lab_tx_vbytes(&hex).unwrap(), expected);
+        assert_eq!(lab_tx_vbytes(&signed_tx_hex).unwrap(), expected);
     }
 
     #[test]
@@ -781,8 +788,8 @@ mod lab_tx_vbytes_tests {
                 script_pubkey: ScriptBuf::new(),
             }],
         };
-        let hex = serialize_hex(&tx);
+        let signed_tx_hex = serialize_hex(&tx);
         let expected = tx.weight().to_wu();
-        assert_eq!(lab_tx_weight(&hex).unwrap(), expected);
+        assert_eq!(lab_tx_weight(&signed_tx_hex).unwrap(), expected);
     }
 }

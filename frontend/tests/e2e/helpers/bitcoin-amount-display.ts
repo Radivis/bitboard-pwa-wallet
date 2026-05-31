@@ -1,5 +1,5 @@
 import type { Locator } from '@playwright/test'
-import { parseAllSatsInTextFromFormattedBitcoinAmountDisplays } from '@/lib/bitcoin-amount-text-parse'
+import { parseAllSatsInTextFromFormattedBitcoinAmountDisplays } from '@/lib/wallet/bitcoin-amount-text-parse'
 
 /**
  * E2E helpers for reading amounts the same way `BitcoinAmountDisplay` formats them, via
@@ -7,14 +7,14 @@ import { parseAllSatsInTextFromFormattedBitcoinAmountDisplays } from '@/lib/bitc
  * Use `satsFromFirstFormattedBitcoinDisplayInRoot` when the locator is the display root; use
  * the parse helpers for `innerText` of larger regions (e.g. balance cards, review steps).
  * Dust-floor assertions can use `textReflectsSatsInFormattedDisplaysOrLiteral` together with
- * `UX_DUST_FLOOR_SATS` from `@/lib/bitcoin-dust`.
+ * `UX_DUST_FLOOR_SATS` from `@/lib/wallet/bitcoin-dust`.
  */
 
 export {
   maxSatsInTextFromFormattedBitcoinAmountDisplays,
   parseAllSatsInTextFromFormattedBitcoinAmountDisplays,
   textReflectsSatsInFormattedDisplaysOrLiteral,
-} from '@/lib/bitcoin-amount-text-parse'
+} from '@/lib/wallet/bitcoin-amount-text-parse'
 
 /**
  * Root of a `BitcoinAmountDisplay` in the DOM: a `<span>` whose first child is the
@@ -24,8 +24,8 @@ export {
 export async function satsFromFirstFormattedBitcoinDisplayInRoot(
   root: Locator,
 ): Promise<number | null> {
-  const t = (await root.innerText()).replace(/\s+/g, ' ').trim()
-  const all = parseAllSatsInTextFromFormattedBitcoinAmountDisplays(t, {
+  const displayText = (await root.innerText()).replace(/\s+/g, ' ').trim()
+  const all = parseAllSatsInTextFromFormattedBitcoinAmountDisplays(displayText, {
     includeZeroSats: true,
   })
   if (all.length === 0) {

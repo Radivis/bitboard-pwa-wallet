@@ -1,7 +1,7 @@
 import { Lightbulb, LightbulbOff } from 'lucide-react'
 import { toast } from 'sonner'
 import { useInfomodeStore } from '@/stores/infomodeStore'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/shared/utils'
 
 const INFO_MODE_TOGGLE_TOAST_DURATION_MS = 6_000
 

@@ -4,7 +4,7 @@ import { Eye, EyeOff } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/shared/utils'
 
 export const PASSWORD_KINDS = ['app', 'export'] as const
 export type PasswordKind = (typeof PASSWORD_KINDS)[number]

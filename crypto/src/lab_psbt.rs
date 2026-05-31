@@ -148,15 +148,15 @@ fn prepare_lab_psbt_inner(
     route: LabPsbtRouteParams<'_>,
     apply_change_free_bump: bool,
 ) -> Result<(Psbt, LabPsbtBuildMeta), CryptoError> {
-    let total_in: u64 = utxos.iter().map(|u| u.amount_sats).sum();
+    let total_in: u64 = utxos.iter().map(|utxo| utxo.amount_sats).sum();
     let original_amount_sats = amount_sats;
     let mut raised_to_min_dust = false;
-    let mut final_amt = amount_sats;
-    if final_amt < UX_DUST_FLOOR_SATS {
-        final_amt = UX_DUST_FLOOR_SATS;
+    let mut final_payment_sats = amount_sats;
+    if final_payment_sats < UX_DUST_FLOOR_SATS {
+        final_payment_sats = UX_DUST_FLOOR_SATS;
         raised_to_min_dust = true;
     }
-    if final_amt >= total_in {
+    if final_payment_sats >= total_in {
         return Err(CryptoError::Transaction(
             "Payment amount must be less than total inputs".to_string(),
         ));
@@ -165,7 +165,7 @@ fn prepare_lab_psbt_inner(
     let mut psbt = finish_lab_psbt(
         wallet,
         utxos,
-        final_amt,
+        final_payment_sats,
         route.to_address,
         route.change_address,
         route.satisfaction_weight,
@@ -176,51 +176,56 @@ fn prepare_lab_psbt_inner(
     let mut change_free_bump_available = false;
     let mut change_free_max_sats = 0u64;
 
-    let unsigned = psbt.unsigned_tx.clone();
-    let pay_spk = route.to_address.script_pubkey();
-    let single_recipient_only =
-        unsigned.output.len() == 1 && unsigned.output[0].script_pubkey == pay_spk;
+    let unsigned_transaction = psbt.unsigned_tx.clone();
+    let payment_script_pubkey = route.to_address.script_pubkey();
+    let single_recipient_only = unsigned_transaction.output.len() == 1
+        && unsigned_transaction.output[0].script_pubkey == payment_script_pubkey;
 
     if single_recipient_only {
-        let min_total_fee = route.fee_rate.fee_wu(unsigned.weight()).ok_or_else(|| {
-            CryptoError::Transaction("Fee overflow for transaction weight".to_string())
-        })?;
+        let min_total_fee = route
+            .fee_rate
+            .fee_wu(unsigned_transaction.weight())
+            .ok_or_else(|| {
+                CryptoError::Transaction("Fee overflow for transaction weight".to_string())
+            })?;
         let max_recipient = total_in.saturating_sub(min_total_fee.to_sat());
-        if max_recipient > final_amt && max_recipient < total_in {
+        if max_recipient > final_payment_sats && max_recipient < total_in {
             change_free_bump_available = true;
             change_free_max_sats = max_recipient;
             if apply_change_free_bump {
                 // `max_recipient` uses the weight of the first single-output draft. The bumped
                 // PSBT can differ slightly in weight, so min fee can be a few sats higher and BDK
                 // can reject `max_recipient` as "Insufficient funds". Walk down until a build succeeds.
-                let mut try_amt = max_recipient;
-                let mut last_err: Option<String> = None;
-                while try_amt > final_amt {
+                let mut try_payment_sats = max_recipient;
+                let mut last_build_failure_message: Option<String> = None;
+                while try_payment_sats > final_payment_sats {
                     match finish_lab_psbt(
                         wallet,
                         utxos,
-                        try_amt,
+                        try_payment_sats,
                         route.to_address,
                         route.change_address,
                         route.satisfaction_weight,
                         route.fee_rate,
                     ) {
-                        Ok(psbt2) => {
-                            psbt = psbt2;
-                            final_amt = try_amt;
+                        Ok(change_free_psbt) => {
+                            psbt = change_free_psbt;
+                            final_payment_sats = try_payment_sats;
                             bumped_change_free = true;
                             break;
                         }
-                        Err(e) => {
-                            last_err = Some(e.to_string());
-                            try_amt = try_amt.saturating_sub(1);
+                        Err(build_error) => {
+                            last_build_failure_message = Some(build_error.to_string());
+                            try_payment_sats = try_payment_sats.saturating_sub(1);
                         }
                     }
                 }
                 if !bumped_change_free {
-                    return Err(CryptoError::Transaction(last_err.unwrap_or_else(|| {
-                        "Change-free bump could not be built within available funds".to_string()
-                    })));
+                    return Err(CryptoError::Transaction(
+                        last_build_failure_message.unwrap_or_else(|| {
+                            "Change-free bump could not be built within available funds".to_string()
+                        }),
+                    ));
                 }
             }
         }
@@ -229,7 +234,7 @@ fn prepare_lab_psbt_inner(
     Ok((
         psbt,
         LabPsbtBuildMeta {
-            final_amount_sats: final_amt,
+            final_amount_sats: final_payment_sats,
             original_amount_sats,
             raised_to_min_dust,
             bumped_change_free,
@@ -316,14 +321,19 @@ pub fn prepare_lab_psbt_draft(
             amount_sats,
             fee_rate_sat_per_vb,
         )?;
-    let route = LabPsbtRouteParams {
+    let send_route = LabPsbtRouteParams {
         to_address: &to_address,
         change_address: &change_address,
         satisfaction_weight,
         fee_rate,
     };
-    let (psbt, meta) =
-        prepare_lab_psbt_inner(wallet, &utxos, amount_sats, route, apply_change_free_bump)?;
+    let (psbt, build_meta) = prepare_lab_psbt_inner(
+        wallet,
+        &utxos,
+        amount_sats,
+        send_route,
+        apply_change_free_bump,
+    )?;
     let fee_sats = transaction::fee_sats_from_unsigned_psbt(&psbt)?;
     let total_input_sats: u64 = utxos.iter().map(|utxo| utxo.amount_sats).sum();
     let change_sats =
@@ -331,11 +341,11 @@ pub fn prepare_lab_psbt_draft(
     let input_utxos = review_inputs_from_lab_utxos(&utxos)?;
     Ok(LabDraftPsbtOutcome {
         psbt_base64: psbt.to_string(),
-        final_amount_sats: meta.final_amount_sats,
-        original_amount_sats: meta.original_amount_sats,
-        raised_to_min_dust: meta.raised_to_min_dust,
-        change_free_bump_available: meta.change_free_bump_available,
-        change_free_max_sats: meta.change_free_max_sats,
+        final_amount_sats: build_meta.final_amount_sats,
+        original_amount_sats: build_meta.original_amount_sats,
+        raised_to_min_dust: build_meta.raised_to_min_dust,
+        change_free_bump_available: build_meta.change_free_bump_available,
+        change_free_max_sats: build_meta.change_free_max_sats,
         fee_sats,
         change_sats,
         total_input_sats,
@@ -363,20 +373,25 @@ pub fn prepare_build_and_sign_lab_transaction(
             fee_rate_sat_per_vb,
         )?;
 
-    let total_in: u64 = utxos.iter().map(|u| u.amount_sats).sum();
+    let total_in: u64 = utxos.iter().map(|utxo| utxo.amount_sats).sum();
 
-    let route = LabPsbtRouteParams {
+    let send_route = LabPsbtRouteParams {
         to_address: &to_address,
         change_address: &change_address,
         satisfaction_weight,
         fee_rate,
     };
-    let (mut psbt, meta) =
-        prepare_lab_psbt_inner(wallet, &utxos, amount_sats, route, apply_change_free_bump)?;
+    let (mut psbt, build_meta) = prepare_lab_psbt_inner(
+        wallet,
+        &utxos,
+        amount_sats,
+        send_route,
+        apply_change_free_bump,
+    )?;
 
     // BDK wallet.sign(SignOptions) is deprecated; required until BDK provides replacement.
     #[allow(deprecated)]
-    let signed = wallet
+    let inputs_signed = wallet
         .sign(
             &mut psbt,
             SignOptions {
@@ -385,7 +400,7 @@ pub fn prepare_build_and_sign_lab_transaction(
             },
         )
         .map_err(|e| CryptoError::Transaction(e.to_string()))?;
-    if !signed {
+    if !inputs_signed {
         return Err(CryptoError::Transaction(
             "Wallet did not sign all inputs".to_string(),
         ));
@@ -393,13 +408,13 @@ pub fn prepare_build_and_sign_lab_transaction(
 
     let tx = transaction::extract_transaction(psbt)?;
 
-    let total_out: u64 = tx.output.iter().map(|o| o.value.to_sat()).sum();
+    let total_out: u64 = tx.output.iter().map(|output| output.value.to_sat()).sum();
     let fee_sats = total_in.saturating_sub(total_out);
 
     let has_change = tx
         .output
         .iter()
-        .any(|o| o.script_pubkey == change_address.script_pubkey());
+        .any(|output| output.script_pubkey == change_address.script_pubkey());
 
     let signed_tx_hex = hex::encode(bitcoin::consensus::encode::serialize(&tx));
 
@@ -407,12 +422,12 @@ pub fn prepare_build_and_sign_lab_transaction(
         signed_tx_hex,
         fee_sats,
         has_change,
-        final_amount_sats: meta.final_amount_sats,
-        original_amount_sats: meta.original_amount_sats,
-        raised_to_min_dust: meta.raised_to_min_dust,
-        bumped_change_free: meta.bumped_change_free,
-        change_free_bump_available: meta.change_free_bump_available,
-        change_free_max_sats: meta.change_free_max_sats,
+        final_amount_sats: build_meta.final_amount_sats,
+        original_amount_sats: build_meta.original_amount_sats,
+        raised_to_min_dust: build_meta.raised_to_min_dust,
+        bumped_change_free: build_meta.bumped_change_free,
+        change_free_bump_available: build_meta.change_free_bump_available,
+        change_free_max_sats: build_meta.change_free_max_sats,
     })
 }
 
@@ -425,7 +440,7 @@ pub fn build_and_sign_lab_transaction(
     fee_rate_sat_per_vb: f64,
     change_address_str: &str,
 ) -> Result<LabSignedTransactionResult, CryptoError> {
-    let out = prepare_build_and_sign_lab_transaction(
+    let prepare_outcome = prepare_build_and_sign_lab_transaction(
         wallet,
         utxos_json,
         to_address_str,
@@ -434,11 +449,11 @@ pub fn build_and_sign_lab_transaction(
         change_address_str,
         false,
     )?;
-    let tx_bytes =
-        hex::decode(&out.signed_tx_hex).map_err(|e| CryptoError::Transaction(e.to_string()))?;
+    let tx_bytes = hex::decode(&prepare_outcome.signed_tx_hex)
+        .map_err(|e| CryptoError::Transaction(e.to_string()))?;
     Ok(LabSignedTransactionResult {
         signed_tx_bytes: tx_bytes,
-        fee_sats: out.fee_sats,
-        has_change: out.has_change,
+        fee_sats: prepare_outcome.fee_sats,
+        has_change: prepare_outcome.has_change,
     })
 }

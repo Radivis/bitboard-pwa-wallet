@@ -16,7 +16,7 @@ function slugFromModulePath(modulePath: string): string {
 }
 
 function buildArticlesRecord(): Record<string, LibraryArticle> {
-  const out: Record<string, LibraryArticle> = {}
+  const articlesBySlug: Record<string, LibraryArticle> = {}
   for (const [modulePath, mod] of Object.entries(articleModules)) {
     const slug = slugFromModulePath(modulePath)
     if (mod.article.slug !== slug) {
@@ -24,9 +24,9 @@ function buildArticlesRecord(): Record<string, LibraryArticle> {
         `Library article slug mismatch: file "${modulePath}" exports slug "${mod.article.slug}" but filename implies "${slug}"`,
       )
     }
-    out[slug] = mod.article
+    articlesBySlug[slug] = mod.article
   }
-  return out
+  return articlesBySlug
 }
 
 export const ARTICLES = buildArticlesRecord()

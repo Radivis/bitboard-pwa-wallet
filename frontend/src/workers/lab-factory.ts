@@ -20,20 +20,20 @@ import {
   ensureLabMigrated,
   getLabDatabase,
 } from '@/db'
-import { notifyLabStatePersistedAfterCommit } from '@/lib/lab-cross-tab-sync'
+import { notifyLabStatePersistedAfterCommit } from '@/lib/lab/lab-cross-tab-sync'
 import type { LabDatabase } from '@/db/lab-schema'
 import { SQLITE_FALSE, SQLITE_TRUE } from '@/db/schema'
-import { labOwnerFromDbPair, labOwnerFromTxRow, labOwnerToDbPair } from '@/lib/lab-db-owner'
-import { parseAddressType } from '@/lib/wallet-domain-types'
-import { labEntityOwnerKey } from '@/lib/lab-entity-keys'
-import { labVsizeFromWeight } from '@/lib/lab-tx-weight'
-import type { LabOwner } from '@/lib/lab-owner'
+import { labOwnerFromDbPair, labOwnerFromTxRow, labOwnerToDbPair } from '@/lib/lab/lab-db-owner'
+import { parseAddressType } from '@/lib/wallet/wallet-domain-types'
+import { labEntityOwnerKey } from '@/lib/lab/lab-entity-keys'
+import { labVsizeFromWeight } from '@/lib/lab/lab-tx-weight'
+import type { LabOwner } from '@/lib/lab/lab-owner'
 import {
   labEntityLabOwner,
   labOwnerDisplayKey,
   normalizeJsonOwnerToLabOwner,
   walletLabOwner,
-} from '@/lib/lab-owner'
+} from '@/lib/lab/lab-owner'
 import type { Transaction } from 'kysely'
 
 /**
@@ -108,19 +108,19 @@ export async function loadLabStateFromDatabase(): Promise<LabState> {
     .execute()
 
   const entityRows = await labDb.selectFrom('lab_entities').selectAll().execute()
-  const entities: LabEntityRecord[] = entityRows.map((r) => ({
-    labEntityId: r.lab_entity_id,
-    entityName: r.entity_name,
-    mnemonic: r.mnemonic,
-    changesetJson: r.changeset_json,
-    externalDescriptor: r.external_descriptor,
-    internalDescriptor: r.internal_descriptor,
-    network: r.network,
-    addressType: parseAddressType(r.address_type),
-    accountId: r.account_id,
-    createdAt: r.created_at,
-    updatedAt: r.updated_at,
-    isDead: Boolean(r.is_dead),
+  const entities: LabEntityRecord[] = entityRows.map((entityDbRow) => ({
+    labEntityId: entityDbRow.lab_entity_id,
+    entityName: entityDbRow.entity_name,
+    mnemonic: entityDbRow.mnemonic,
+    changesetJson: entityDbRow.changeset_json,
+    externalDescriptor: entityDbRow.external_descriptor,
+    internalDescriptor: entityDbRow.internal_descriptor,
+    network: entityDbRow.network,
+    addressType: parseAddressType(entityDbRow.address_type),
+    accountId: entityDbRow.account_id,
+    createdAt: entityDbRow.created_at,
+    updatedAt: entityDbRow.updated_at,
+    isDead: Boolean(entityDbRow.is_dead),
   }))
 
   const addressOwnersRows = await labDb
@@ -129,40 +129,42 @@ export async function loadLabStateFromDatabase(): Promise<LabState> {
     .execute()
 
   const addressToOwner: Record<string, LabOwner> = {}
-  for (const row of addressOwnersRows) {
-    if (row.owner_type === 'wallet' && row.wallet_id != null) {
-      addressToOwner[row.address] = walletLabOwner(row.wallet_id)
-    } else if (row.owner_type === 'lab_entity') {
-      const lei = (row as { lab_entity_id?: number | null }).lab_entity_id
-      if (lei != null && lei > 0) {
-        addressToOwner[row.address] = labEntityLabOwner(lei)
+  for (const addressOwnerRow of addressOwnersRows) {
+    if (addressOwnerRow.owner_type === 'wallet' && addressOwnerRow.wallet_id != null) {
+      addressToOwner[addressOwnerRow.address] = walletLabOwner(addressOwnerRow.wallet_id)
+    } else if (addressOwnerRow.owner_type === 'lab_entity') {
+      const labEntityId = (addressOwnerRow as { lab_entity_id?: number | null }).lab_entity_id
+      if (labEntityId != null && labEntityId > 0) {
+        addressToOwner[addressOwnerRow.address] = labEntityLabOwner(labEntityId)
       }
     }
   }
 
   const mempoolRows = await labDb.selectFrom('lab_mempool').selectAll().execute()
 
-  const mempool = mempoolRows.map((r) => {
+  const mempool = mempoolRows.map((mempoolDbRow) => {
     const resolvedWeight =
-      r.weight != null && Number.isFinite(r.weight) && r.weight > 0 ? r.weight : 0
+      mempoolDbRow.weight != null && Number.isFinite(mempoolDbRow.weight) && mempoolDbRow.weight > 0
+        ? mempoolDbRow.weight
+        : 0
     return {
-      signedTxHex: r.signed_tx_hex,
-      txid: r.txid,
-      sender: labOwnerFromDbPair(r.sender_lab_entity_id, r.sender_wallet_id),
-      receiver: labOwnerFromDbPair(r.receiver_lab_entity_id, r.receiver_wallet_id),
-      feeSats: r.fee_sats,
+      signedTxHex: mempoolDbRow.signed_tx_hex,
+      txid: mempoolDbRow.txid,
+      sender: labOwnerFromDbPair(mempoolDbRow.sender_lab_entity_id, mempoolDbRow.sender_wallet_id),
+      receiver: labOwnerFromDbPair(mempoolDbRow.receiver_lab_entity_id, mempoolDbRow.receiver_wallet_id),
+      feeSats: mempoolDbRow.fee_sats,
       vsize: labVsizeFromWeight(resolvedWeight),
       weight: resolvedWeight,
-      inputs: JSON.parse(r.inputs_json) as { txid: string; vout: number }[],
+      inputs: JSON.parse(mempoolDbRow.inputs_json) as { txid: string; vout: number }[],
       inputsDetail: mergeMempoolInputsDetailWithOutpoints(
-        JSON.parse(r.inputs_json) as { txid: string; vout: number }[],
+        JSON.parse(mempoolDbRow.inputs_json) as { txid: string; vout: number }[],
         normalizeMempoolIoOwners(
-          JSON.parse(r.inputs_detail_json) as LabTxInputDetail[],
+          JSON.parse(mempoolDbRow.inputs_detail_json) as LabTxInputDetail[],
           entities,
         ),
       ),
       outputsDetail: normalizeMempoolIoOwners(
-        JSON.parse(r.outputs_detail_json) as {
+        JSON.parse(mempoolDbRow.outputs_detail_json) as {
           address: string
           amountSats: number
           isChange?: boolean
@@ -178,21 +180,24 @@ export async function loadLabStateFromDatabase(): Promise<LabState> {
     .select(['txid', 'block_height', 'block_time', 'inputs_json', 'outputs_json'])
     .execute()
 
-  const txDetails = txDetailsRows.map((r) => {
-    const inputsRaw = JSON.parse(r.inputs_json) as LabTxDetails['inputs']
-    const inputs = inputsRaw.map((inp) => ({
-      ...inp,
-      owner: normalizeJsonOwnerToLabOwner(inp.owner, entities) ?? inp.owner ?? null,
+  const txDetails = txDetailsRows.map((txDetailDbRow) => {
+    const inputsRaw = JSON.parse(txDetailDbRow.inputs_json) as LabTxDetails['inputs']
+    const inputs = inputsRaw.map((inputDetail) => ({
+      ...inputDetail,
+      owner:
+        normalizeJsonOwnerToLabOwner(inputDetail.owner, entities) ??
+        inputDetail.owner ??
+        null,
     }))
-    const outputsRaw = JSON.parse(r.outputs_json) as LabTxDetails['outputs']
-    const outputs = outputsRaw.map((out) => ({
-      ...out,
-      owner: normalizeJsonOwnerToLabOwner(out.owner, entities) ?? out.owner ?? null,
+    const outputsRaw = JSON.parse(txDetailDbRow.outputs_json) as LabTxDetails['outputs']
+    const outputs = outputsRaw.map((outputEntry) => ({
+      ...outputEntry,
+      owner: normalizeJsonOwnerToLabOwner(outputEntry.owner, entities) ?? outputEntry.owner ?? null,
     }))
     return {
-      txid: r.txid,
-      blockHeight: r.block_height,
-      blockTime: r.block_time,
+      txid: txDetailDbRow.txid,
+      blockHeight: txDetailDbRow.block_height,
+      blockTime: txDetailDbRow.block_time,
       confirmations: 0,
       inputs,
       outputs,
@@ -204,74 +209,75 @@ export async function loadLabStateFromDatabase(): Promise<LabState> {
   const mineOpRows = await labDb.selectFrom('lab_mine_operations').selectAll().orderBy('height', 'asc').execute()
   const txOpRows = await labDb.selectFrom('lab_tx_operations').selectAll().execute()
 
-  const mineOperations: LabMineOperationRecord[] = mineOpRows.map((r) => ({
-    mineOperationId: r.mine_operation_id,
-    height: r.height,
-    blockHash: r.block_hash,
+  const mineOperations: LabMineOperationRecord[] = mineOpRows.map((mineOpDbRow) => ({
+    mineOperationId: mineOpDbRow.mine_operation_id,
+    height: mineOpDbRow.height,
+    blockHash: mineOpDbRow.block_hash,
     minedBy: labOwnerFromTxRow(
-      r.mined_by_lab_entity_id,
-      r.mined_by_wallet_id,
-      r.mined_by_key,
+      mineOpDbRow.mined_by_lab_entity_id,
+      mineOpDbRow.mined_by_wallet_id,
+      mineOpDbRow.mined_by_key,
       entities,
     ),
-    coinbaseTxid: r.coinbase_txid,
-    createdAt: r.created_at,
+    coinbaseTxid: mineOpDbRow.coinbase_txid,
+    createdAt: mineOpDbRow.created_at,
     blockWeightLimitWu:
-      r.block_weight_limit_wu != null && Number.isFinite(r.block_weight_limit_wu)
-        ? r.block_weight_limit_wu
+      mineOpDbRow.block_weight_limit_wu != null && Number.isFinite(mineOpDbRow.block_weight_limit_wu)
+        ? mineOpDbRow.block_weight_limit_wu
         : null,
     nonCoinbaseWeightUsedWu:
-      r.non_coinbase_weight_used_wu != null && Number.isFinite(r.non_coinbase_weight_used_wu)
-        ? r.non_coinbase_weight_used_wu
+      mineOpDbRow.non_coinbase_weight_used_wu != null &&
+      Number.isFinite(mineOpDbRow.non_coinbase_weight_used_wu)
+        ? mineOpDbRow.non_coinbase_weight_used_wu
         : null,
   }))
 
-  const txOperations: LabTxOperationRecord[] = txOpRows.map((r) => {
+  const txOperations: LabTxOperationRecord[] = txOpRows.map((txOpDbRow) => {
     const sender = labOwnerFromTxRow(
-      r.sender_lab_entity_id,
-      r.sender_wallet_id,
-      r.sender_key,
+      txOpDbRow.sender_lab_entity_id,
+      txOpDbRow.sender_wallet_id,
+      txOpDbRow.sender_key,
       entities,
     )
     if (sender == null) {
-      throw new Error(`lab_tx_operations: cannot parse sender for txid=${r.txid}`)
+      throw new Error(`lab_tx_operations: cannot parse sender for txid=${txOpDbRow.txid}`)
     }
     return {
-      txOperationId: r.tx_operation_id,
-      txid: r.txid,
+      txOperationId: txOpDbRow.tx_operation_id,
+      txid: txOpDbRow.txid,
       sender,
-      changeAddress: r.change_address,
-      changeVout: r.change_vout,
-      payloadJson: r.payload_json,
+      changeAddress: txOpDbRow.change_address,
+      changeVout: txOpDbRow.change_vout,
+      payloadJson: txOpDbRow.payload_json,
     }
   })
 
   return {
     blockWeightLimit,
     minerSubsidySats,
-    blocks: blocks.map((b) => ({
-      blockHash: b.block_hash,
-      height: b.height,
-      blockData: b.block_data,
+    blocks: blocks.map((blockRow) => ({
+      blockHash: blockRow.block_hash,
+      height: blockRow.height,
+      blockData: blockRow.block_data,
     })),
-    utxos: utxos.map((u) => ({
-      txid: u.txid,
-      vout: u.vout,
-      address: u.address,
-      amountSats: u.amount_sats,
-      scriptPubkeyHex: u.script_pubkey_hex,
+    utxos: utxos.map((utxoRow) => ({
+      txid: utxoRow.txid,
+      vout: utxoRow.vout,
+      address: utxoRow.address,
+      amountSats: utxoRow.amount_sats,
+      scriptPubkeyHex: utxoRow.script_pubkey_hex,
     })),
-    addresses: addresses.map((a) => ({
-      address: a.address,
-      wif: a.wif,
+    addresses: addresses.map((addressRow) => ({
+      address: addressRow.address,
+      wif: addressRow.wif,
     })),
     entities,
     addressToOwner,
     mempool,
-    transactions: transactions.map((t) => ({
-      txid: t.txid,
-      sender: labOwnerFromDbPair(t.sender_lab_entity_id, t.sender_wallet_id),
-      receiver: labOwnerFromDbPair(t.receiver_lab_entity_id, t.receiver_wallet_id),
+    transactions: transactions.map((txRow) => ({
+      txid: txRow.txid,
+      sender: labOwnerFromDbPair(txRow.sender_lab_entity_id, txRow.sender_wallet_id),
+      receiver: labOwnerFromDbPair(txRow.receiver_lab_entity_id, txRow.receiver_wallet_id),
     })),
     txDetails,
     mineOperations,
@@ -295,83 +301,83 @@ export async function initLabWorkerWithState(): Promise<{
 }
 
 async function clearAndInsertLabState(
-  trx: Transaction<LabDatabase>,
+  labDbTransaction: Transaction<LabDatabase>,
   state: LabState,
 ): Promise<void> {
-  const ents = state.entities ?? []
-  await trx.deleteFrom('blocks').execute()
-  await trx.deleteFrom('utxos').execute()
-  await trx.deleteFrom('lab_addresses').execute()
-  await trx.deleteFrom('lab_entities').execute()
-  await trx.deleteFrom('lab_address_owners').execute()
-  await trx.deleteFrom('lab_mempool').execute()
-  await trx.deleteFrom('lab_transactions').execute()
-  await trx.deleteFrom('lab_tx_details').execute()
-  await trx.deleteFrom('lab_mine_operations').execute()
-  await trx.deleteFrom('lab_tx_operations').execute()
-  await trx.deleteFrom('lab_parameter_presets').execute()
+  const entities = state.entities ?? []
+  await labDbTransaction.deleteFrom('blocks').execute()
+  await labDbTransaction.deleteFrom('utxos').execute()
+  await labDbTransaction.deleteFrom('lab_addresses').execute()
+  await labDbTransaction.deleteFrom('lab_entities').execute()
+  await labDbTransaction.deleteFrom('lab_address_owners').execute()
+  await labDbTransaction.deleteFrom('lab_mempool').execute()
+  await labDbTransaction.deleteFrom('lab_transactions').execute()
+  await labDbTransaction.deleteFrom('lab_tx_details').execute()
+  await labDbTransaction.deleteFrom('lab_mine_operations').execute()
+  await labDbTransaction.deleteFrom('lab_tx_operations').execute()
+  await labDbTransaction.deleteFrom('lab_parameter_presets').execute()
 
   const now = new Date().toISOString()
-  const blockRows = state.blocks.map((b) => ({
-    block_hash: b.blockHash,
-    height: b.height,
-    block_data: b.blockData,
+  const blockRows = state.blocks.map((blockRow) => ({
+    block_hash: blockRow.blockHash,
+    height: blockRow.height,
+    block_data: blockRow.blockData,
     created_at: now,
   }))
   for (const chunk of chunkArray(blockRows, LAB_PERSIST_INSERT_BATCH_SIZE)) {
-    await trx.insertInto('blocks').values(chunk).execute()
+    await labDbTransaction.insertInto('blocks').values(chunk).execute()
   }
 
-  const utxoRows = state.utxos.map((u) => ({
-    txid: u.txid,
-    vout: u.vout,
-    address: u.address,
-    amount_sats: u.amountSats,
-    script_pubkey_hex: u.scriptPubkeyHex,
+  const utxoRows = state.utxos.map((utxoRow) => ({
+    txid: utxoRow.txid,
+    vout: utxoRow.vout,
+    address: utxoRow.address,
+    amount_sats: utxoRow.amountSats,
+    script_pubkey_hex: utxoRow.scriptPubkeyHex,
   }))
   for (const chunk of chunkArray(utxoRows, LAB_PERSIST_INSERT_BATCH_SIZE)) {
-    await trx.insertInto('utxos').values(chunk).execute()
+    await labDbTransaction.insertInto('utxos').values(chunk).execute()
   }
 
-  const addressRows = state.addresses.map((a) => ({
-    address: a.address,
-    wif: a.wif,
+  const addressRows = state.addresses.map((addressRow) => ({
+    address: addressRow.address,
+    wif: addressRow.wif,
   }))
   for (const chunk of chunkArray(addressRows, LAB_PERSIST_INSERT_BATCH_SIZE)) {
-    await trx.insertInto('lab_addresses').values(chunk).execute()
+    await labDbTransaction.insertInto('lab_addresses').values(chunk).execute()
   }
 
-  const transactionRows = state.transactions.map((t) => {
-    const s = labOwnerToDbPair(t.sender)
-    const r = labOwnerToDbPair(t.receiver)
+  const transactionRows = state.transactions.map((txRow) => {
+    const senderOwner = labOwnerToDbPair(txRow.sender)
+    const receiverOwner = labOwnerToDbPair(txRow.receiver)
     return {
-      txid: t.txid,
-      sender_lab_entity_id: s.labEntityId,
-      sender_wallet_id: s.walletId,
-      receiver_lab_entity_id: r.labEntityId,
-      receiver_wallet_id: r.walletId,
+      txid: txRow.txid,
+      sender_lab_entity_id: senderOwner.labEntityId,
+      sender_wallet_id: senderOwner.walletId,
+      receiver_lab_entity_id: receiverOwner.labEntityId,
+      receiver_wallet_id: receiverOwner.walletId,
     }
   })
   for (const chunk of chunkArray(transactionRows, LAB_PERSIST_INSERT_BATCH_SIZE)) {
-    await trx.insertInto('lab_transactions').values(chunk).execute()
+    await labDbTransaction.insertInto('lab_transactions').values(chunk).execute()
   }
 
-  const entityRows = (state.entities ?? []).map((e) => ({
-    lab_entity_id: e.labEntityId,
-    entity_name: e.entityName,
-    mnemonic: e.mnemonic,
-    changeset_json: e.changesetJson,
-    external_descriptor: e.externalDescriptor,
-    internal_descriptor: e.internalDescriptor,
-    network: e.network,
-    address_type: e.addressType,
-    account_id: e.accountId,
-    created_at: e.createdAt,
-    updated_at: e.updatedAt,
-    is_dead: e.isDead ? SQLITE_TRUE : SQLITE_FALSE,
+  const entityRows = (state.entities ?? []).map((entityRecord) => ({
+    lab_entity_id: entityRecord.labEntityId,
+    entity_name: entityRecord.entityName,
+    mnemonic: entityRecord.mnemonic,
+    changeset_json: entityRecord.changesetJson,
+    external_descriptor: entityRecord.externalDescriptor,
+    internal_descriptor: entityRecord.internalDescriptor,
+    network: entityRecord.network,
+    address_type: entityRecord.addressType,
+    account_id: entityRecord.accountId,
+    created_at: entityRecord.createdAt,
+    updated_at: entityRecord.updatedAt,
+    is_dead: entityRecord.isDead ? SQLITE_TRUE : SQLITE_FALSE,
   }))
   for (const chunk of chunkArray(entityRows, LAB_PERSIST_INSERT_BATCH_SIZE)) {
-    await trx.insertInto('lab_entities').values(chunk).execute()
+    await labDbTransaction.insertInto('lab_entities').values(chunk).execute()
   }
 
   const ownerRows: Array<{
@@ -391,7 +397,7 @@ async function clearAndInsertLabState(
         lab_entity_id: null,
       })
     } else {
-      const entity = ents.find((e) => e.labEntityId === owner.labEntityId)
+      const entity = entities.find((entityRecord) => entityRecord.labEntityId === owner.labEntityId)
       ownerRows.push({
         address,
         owner_type: 'lab_entity',
@@ -402,31 +408,31 @@ async function clearAndInsertLabState(
     }
   }
   for (const chunk of chunkArray(ownerRows, LAB_PERSIST_INSERT_BATCH_SIZE)) {
-    await trx.insertInto('lab_address_owners').values(chunk).execute()
+    await labDbTransaction.insertInto('lab_address_owners').values(chunk).execute()
   }
 
-  const mempoolRows = (state.mempool ?? []).map((m) => {
-    const s = labOwnerToDbPair(m.sender)
-    const r = labOwnerToDbPair(m.receiver)
+  const mempoolRows = (state.mempool ?? []).map((mempoolEntry) => {
+    const senderOwner = labOwnerToDbPair(mempoolEntry.sender)
+    const receiverOwner = labOwnerToDbPair(mempoolEntry.receiver)
     return {
-      signed_tx_hex: m.signedTxHex,
-      txid: m.txid,
-      sender_lab_entity_id: s.labEntityId,
-      sender_wallet_id: s.walletId,
-      receiver_lab_entity_id: r.labEntityId,
-      receiver_wallet_id: r.walletId,
-      fee_sats: m.feeSats,
-      weight: m.weight,
-      inputs_json: JSON.stringify(m.inputs),
-      inputs_detail_json: JSON.stringify(m.inputsDetail),
-      outputs_detail_json: JSON.stringify(m.outputsDetail),
+      signed_tx_hex: mempoolEntry.signedTxHex,
+      txid: mempoolEntry.txid,
+      sender_lab_entity_id: senderOwner.labEntityId,
+      sender_wallet_id: senderOwner.walletId,
+      receiver_lab_entity_id: receiverOwner.labEntityId,
+      receiver_wallet_id: receiverOwner.walletId,
+      fee_sats: mempoolEntry.feeSats,
+      weight: mempoolEntry.weight,
+      inputs_json: JSON.stringify(mempoolEntry.inputs),
+      inputs_detail_json: JSON.stringify(mempoolEntry.inputsDetail),
+      outputs_detail_json: JSON.stringify(mempoolEntry.outputsDetail),
     }
   })
   for (const chunk of chunkArray(mempoolRows, LAB_PERSIST_INSERT_BATCH_SIZE)) {
-    await trx.insertInto('lab_mempool').values(chunk).execute()
+    await labDbTransaction.insertInto('lab_mempool').values(chunk).execute()
   }
 
-  await trx
+  await labDbTransaction
     .insertInto('lab_parameter_presets')
     .values({
       block_size: state.blockWeightLimit ?? LAB_DEFAULT_BLOCK_WEIGHT_UNITS,
@@ -436,64 +442,66 @@ async function clearAndInsertLabState(
     })
     .execute()
 
-  const txDetailRows = (state.txDetails ?? []).map((d) => ({
-    txid: d.txid,
-    block_height: d.blockHeight,
-    block_time: d.blockTime,
-    inputs_json: JSON.stringify(d.inputs),
-    outputs_json: JSON.stringify(d.outputs),
+  const txDetailRows = (state.txDetails ?? []).map((txDetailRecord) => ({
+    txid: txDetailRecord.txid,
+    block_height: txDetailRecord.blockHeight,
+    block_time: txDetailRecord.blockTime,
+    inputs_json: JSON.stringify(txDetailRecord.inputs),
+    outputs_json: JSON.stringify(txDetailRecord.outputs),
   }))
   for (const chunk of chunkArray(txDetailRows, LAB_PERSIST_INSERT_BATCH_SIZE)) {
-    await trx.insertInto('lab_tx_details').values(chunk).execute()
+    await labDbTransaction.insertInto('lab_tx_details').values(chunk).execute()
   }
 
   const nowMine = new Date().toISOString()
-  const mineOpRows = (state.mineOperations ?? []).map((m) => {
-    const mb = labOwnerToDbPair(m.minedBy)
+  const mineOpRows = (state.mineOperations ?? []).map((mineOperationRecord) => {
+    const minedByOwner = labOwnerToDbPair(mineOperationRecord.minedBy)
     return {
-      height: m.height,
-      block_hash: m.blockHash,
-      mined_by_key: m.minedBy ? labOwnerDisplayKey(m.minedBy, ents) : null,
-      mined_by_lab_entity_id: mb.labEntityId,
-      mined_by_wallet_id: mb.walletId,
-      coinbase_txid: m.coinbaseTxid,
-      created_at: m.createdAt || nowMine,
+      height: mineOperationRecord.height,
+      block_hash: mineOperationRecord.blockHash,
+      mined_by_key: mineOperationRecord.minedBy ? labOwnerDisplayKey(mineOperationRecord.minedBy, entities) : null,
+      mined_by_lab_entity_id: minedByOwner.labEntityId,
+      mined_by_wallet_id: minedByOwner.walletId,
+      coinbase_txid: mineOperationRecord.coinbaseTxid,
+      created_at: mineOperationRecord.createdAt || nowMine,
       block_weight_limit_wu:
-        m.blockWeightLimitWu != null && Number.isFinite(m.blockWeightLimitWu)
-          ? Math.floor(m.blockWeightLimitWu)
+        mineOperationRecord.blockWeightLimitWu != null &&
+        Number.isFinite(mineOperationRecord.blockWeightLimitWu)
+          ? Math.floor(mineOperationRecord.blockWeightLimitWu)
           : null,
       non_coinbase_weight_used_wu:
-        m.nonCoinbaseWeightUsedWu != null && Number.isFinite(m.nonCoinbaseWeightUsedWu)
-          ? Math.floor(m.nonCoinbaseWeightUsedWu)
+        mineOperationRecord.nonCoinbaseWeightUsedWu != null &&
+        Number.isFinite(mineOperationRecord.nonCoinbaseWeightUsedWu)
+          ? Math.floor(mineOperationRecord.nonCoinbaseWeightUsedWu)
           : null,
     }
   })
   for (const chunk of chunkArray(mineOpRows, LAB_PERSIST_INSERT_BATCH_SIZE)) {
-    await trx.insertInto('lab_mine_operations').values(chunk).execute()
+    await labDbTransaction.insertInto('lab_mine_operations').values(chunk).execute()
   }
 
-  const txOpRows = (state.txOperations ?? []).map((o) => {
-    const sp = labOwnerToDbPair(o.sender)
+  const txOpRows = (state.txOperations ?? []).map((txOperationRecord) => {
+    const senderOwner = labOwnerToDbPair(txOperationRecord.sender)
     return {
-      txid: o.txid,
-      sender_key: labOwnerDisplayKey(o.sender, ents),
-      sender_lab_entity_id: sp.labEntityId,
-      sender_wallet_id: sp.walletId,
-      change_address: o.changeAddress,
-      change_vout: o.changeVout,
-      payload_json: o.payloadJson || '{}',
+      txid: txOperationRecord.txid,
+      sender_key: labOwnerDisplayKey(txOperationRecord.sender, entities),
+      sender_lab_entity_id: senderOwner.labEntityId,
+      sender_wallet_id: senderOwner.walletId,
+      change_address: txOperationRecord.changeAddress,
+      change_vout: txOperationRecord.changeVout,
+      payload_json: txOperationRecord.payloadJson || '{}',
     }
   })
   for (const chunk of chunkArray(txOpRows, LAB_PERSIST_INSERT_BATCH_SIZE)) {
-    await trx.insertInto('lab_tx_operations').values(chunk).execute()
+    await labDbTransaction.insertInto('lab_tx_operations').values(chunk).execute()
   }
 }
 
 export async function persistLabState(state: LabState): Promise<void> {
   await ensureLabMigrated()
   const labDb = getLabDatabase()
-  await labDb.transaction().execute(async (trx) => {
-    await clearAndInsertLabState(trx, state)
+  await labDb.transaction().execute(async (labDbTransaction) => {
+    await clearAndInsertLabState(labDbTransaction, state)
   })
   notifyLabStatePersistedAfterCommit()
 }

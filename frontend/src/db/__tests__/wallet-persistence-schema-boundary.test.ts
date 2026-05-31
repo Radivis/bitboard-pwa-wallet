@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Kysely } from 'kysely'
 import type { Database } from '../schema'
 import { createTestDatabase } from '../test-helpers'
-import { ARGON2_KDF_PHC_CI } from '@/lib/kdf-phc-constants'
+import { ARGON2_KDF_PHC_CI } from '@/lib/shared/kdf-phc-constants'
 
 const decryptDataMock = vi.fn()
 

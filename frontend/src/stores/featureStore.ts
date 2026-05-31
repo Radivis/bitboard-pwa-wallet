@@ -3,37 +3,78 @@ import { createJSONStorage, persist } from 'zustand/middleware'
 import { sqliteStorage } from '@/db/storage-adapter'
 
 interface FeatureState {
-  lightningEnabled: boolean
-  setLightningEnabled: (enabled: boolean) => void
+  isLightningEnabled: boolean
+  setIsLightningEnabled: (enabled: boolean) => void
   /** When false, Mainnet cannot be selected until enabled under Settings → Features. */
-  mainnetAccessEnabled: boolean
-  setMainnetAccessEnabled: (enabled: boolean) => void
+  isMainnetAccessEnabled: boolean
+  setIsMainnetAccessEnabled: (enabled: boolean) => void
   /** When false, Regtest cannot be selected until enabled under Settings → Features (developer use). */
-  regtestModeEnabled: boolean
-  setRegtestModeEnabled: (enabled: boolean) => void
+  isRegtestModeEnabled: boolean
+  setIsRegtestModeEnabled: (enabled: boolean) => void
   /**
    * When false (default), the wallet stays Taproot-first UX: no SegWit-vs-Taproot pickers or badges.
    * When true, users can choose SegWit (BIP84) vs Taproot (BIP86) in Settings and see related labels.
    */
-  segwitAddressesEnabled: boolean
-  setSegwitAddressesEnabled: (enabled: boolean) => void
+  isSegwitAddressesEnabled: boolean
+  setIsSegwitAddressesEnabled: (enabled: boolean) => void
+  /** When true, send review shows manual UTXO selection controls. */
+  isUtxoSelectionEnabled: boolean
+  setIsUtxoSelectionEnabled: (enabled: boolean) => void
+}
+
+type LegacyFeaturePersistedState = {
+  lightningEnabled?: boolean
+  mainnetAccessEnabled?: boolean
+  regtestModeEnabled?: boolean
+  segwitAddressesEnabled?: boolean
+}
+
+function migrateLegacyFeatureState(persistedState: unknown): Partial<FeatureState> | undefined {
+  if (persistedState == null || typeof persistedState !== 'object') {
+    return undefined
+  }
+  const legacy = persistedState as LegacyFeaturePersistedState & Partial<FeatureState>
+  if ('isLightningEnabled' in legacy) {
+    return {
+      ...legacy,
+      isUtxoSelectionEnabled: legacy.isUtxoSelectionEnabled ?? false,
+    }
+  }
+  return {
+    isLightningEnabled: legacy.lightningEnabled ?? false,
+    isMainnetAccessEnabled: legacy.mainnetAccessEnabled ?? false,
+    isRegtestModeEnabled: legacy.regtestModeEnabled ?? false,
+    isSegwitAddressesEnabled: legacy.segwitAddressesEnabled ?? false,
+    isUtxoSelectionEnabled: false,
+  }
 }
 
 export const useFeatureStore = create<FeatureState>()(
   persist(
     (set) => ({
-      lightningEnabled: false,
-      setLightningEnabled: (enabled) => set({ lightningEnabled: enabled }),
-      mainnetAccessEnabled: false,
-      setMainnetAccessEnabled: (enabled) => set({ mainnetAccessEnabled: enabled }),
-      regtestModeEnabled: false,
-      setRegtestModeEnabled: (enabled) => set({ regtestModeEnabled: enabled }),
-      segwitAddressesEnabled: false,
-      setSegwitAddressesEnabled: (enabled) => set({ segwitAddressesEnabled: enabled }),
+      isLightningEnabled: false,
+      setIsLightningEnabled: (enabled) => set({ isLightningEnabled: enabled }),
+      isMainnetAccessEnabled: false,
+      setIsMainnetAccessEnabled: (enabled) => set({ isMainnetAccessEnabled: enabled }),
+      isRegtestModeEnabled: false,
+      setIsRegtestModeEnabled: (enabled) => set({ isRegtestModeEnabled: enabled }),
+      isSegwitAddressesEnabled: false,
+      setIsSegwitAddressesEnabled: (enabled) => set({ isSegwitAddressesEnabled: enabled }),
+      isUtxoSelectionEnabled: false,
+      setIsUtxoSelectionEnabled: (enabled) => set({ isUtxoSelectionEnabled: enabled }),
     }),
     {
       name: 'feature-storage',
       storage: createJSONStorage(() => sqliteStorage),
+      version: 2,
+      migrate: (persistedState) => migrateLegacyFeatureState(persistedState) ?? persistedState,
+      partialize: (state) => ({
+        isLightningEnabled: state.isLightningEnabled,
+        isMainnetAccessEnabled: state.isMainnetAccessEnabled,
+        isRegtestModeEnabled: state.isRegtestModeEnabled,
+        isSegwitAddressesEnabled: state.isSegwitAddressesEnabled,
+        isUtxoSelectionEnabled: state.isUtxoSelectionEnabled,
+      }),
     },
   ),
 )

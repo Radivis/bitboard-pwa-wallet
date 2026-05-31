@@ -20,7 +20,7 @@ import {
   reencryptAllWalletSecretsWithNewPassword,
 } from '@/db'
 import { useSessionStore } from '@/stores/sessionStore'
-import { errorMessage } from '@/lib/utils'
+import { errorMessage } from '@/lib/shared/utils'
 
 const CHANGE_APP_PASSWORD_FIELDS_CONFIG = {
   ids: {
@@ -48,7 +48,7 @@ export function ChangeAppPasswordModal({
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
-  const setSessionPassword = useSessionStore((s) => s.setPassword)
+  const setSessionPassword = useSessionStore((sessionState) => sessionState.setPassword)
 
   useEffect(() => {
     if (open) {

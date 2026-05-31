@@ -9,12 +9,12 @@ import {
 } from '@/components/ui/card'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { CardPagination } from '@/components/CardPagination'
-import { LAB_CARD_PAGE_SIZE } from '@/lib/lab-paginated-queries'
-import { feeSatsFromTxDetails } from '@/lib/lab-tx-fee'
-import { netMovedSatsForBlock } from '@/lib/lab-tx-net-moved'
+import { LAB_CARD_PAGE_SIZE } from '@/lib/lab/lab-paginated-queries'
+import { feeSatsFromTxDetails } from '@/lib/lab/lab-tx-fee'
+import { netMovedSatsForBlock } from '@/lib/lab/lab-tx-net-moved'
 import { LabBlockSquare } from '@/components/lab/LabBlockSquare'
-import type { AddressType } from '@/lib/wallet-domain-types'
-import type { LabOwner } from '@/lib/lab-owner'
+import type { AddressType, WalletSummary } from '@/lib/wallet/wallet-domain-types'
+import type { LabOwner } from '@/lib/lab/lab-owner'
 
 function totalFeesForBlockHeight(txDetails: readonly LabTxDetails[], blockHeight: number): number {
   return txDetails
@@ -37,14 +37,14 @@ export function LabPreviousBlocksCard({
     entityName: string | null
     addressType: AddressType
   }[]
-  wallets: Array<{ wallet_id: number; name: string }>
+  wallets: WalletSummary[]
 }) {
   const byHeightDesc = useMemo(() => [...blocks].sort((a, b) => b.height - a.height), [blocks])
 
   const rows = useMemo(() => {
     return byHeightDesc.map((block) => {
-      const txsAtHeight = txDetails.filter((t) => t.blockHeight === block.height)
-      const mineOp = mineOperations.find((m) => m.height === block.height)
+      const txsAtHeight = txDetails.filter((tx) => tx.blockHeight === block.height)
+      const mineOp = mineOperations.find((mineOperation) => mineOperation.height === block.height)
       const minedBy: LabOwner | null = mineOp?.minedBy ?? null
       const firstTime = txsAtHeight[0]?.blockTime ?? 0
       return {

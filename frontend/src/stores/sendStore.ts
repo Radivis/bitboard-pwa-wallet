@@ -1,9 +1,9 @@
 import { create } from 'zustand'
-import type { BitcoinDisplayUnit } from '@/lib/bitcoin-display-unit'
+import type { BitcoinDisplayUnit } from '@/lib/wallet/bitcoin-display-unit'
 import {
   NON_ESPLORA_FEE_PRESET_RATES_SAT_PER_VB,
   type SendFeePresetLabel,
-} from '@/lib/esplora-fee-estimates'
+} from '@/lib/esplora/esplora-fee-estimates'
 import { useBitcoinDisplayUnitStore } from '@/stores/bitcoinDisplayUnitStore'
 import type { ReviewInputUtxo } from '@/workers/crypto-api'
 
@@ -15,8 +15,8 @@ export type SendStep = 1 | 2
 /** At least one flag is true; both can apply when the user entered a sub-dust amount that also needed a change-free bump after clamping. */
 export type OnchainDustWarning = {
   previousSats: number
-  raisedToDustMin: boolean
-  bumpedChangeFree: boolean
+  isRaisedToMinDust: boolean
+  isBumpedChangeFree: boolean
 }
 
 interface SendState {
@@ -38,11 +38,13 @@ interface SendState {
   reviewInputUtxos: ReviewInputUtxo[] | null
   /** Dust UX: show red warning below amount; cleared on manual amount edit or reset. */
   onchainDustWarning: OnchainDustWarning | null
+  /** True while manual UTXO selection is active on the review step. */
+  isManualUtxoSelectionActive: boolean
 
   setStep: (step: SendStep) => void
   setRecipient: (recipient: string) => void
   /** Pass `{ fromUser: true }` when the user types in the field (clears dust warnings). */
-  setAmount: (amount: string, opts?: { fromUser?: boolean }) => void
+  setAmount: (amount: string, amountUpdateOptions?: { fromUser?: boolean }) => void
   setAmountUnit: (unit: SendAmountUnit) => void
   setFeePresetSelection: (preset: SendFeePresetLabel) => void
   setFeeRate: (rate: number) => void
@@ -52,7 +54,8 @@ interface SendState {
   setReviewFeeSats: (feeSats: number | null) => void
   setReviewChangeSats: (changeSats: number | null) => void
   setReviewInputUtxos: (inputUtxos: ReviewInputUtxo[] | null) => void
-  setOnchainDustWarning: (w: OnchainDustWarning | null) => void
+  setOnchainDustWarning: (dustWarning: OnchainDustWarning | null) => void
+  setIsManualUtxoSelectionActive: (active: boolean) => void
 
   /** Reset form and step to initial state (e.g. after successful send or when leaving send page). */
   reset: () => void
@@ -74,6 +77,7 @@ const initialState = {
   reviewChangeSats: null as number | null,
   reviewInputUtxos: null as ReviewInputUtxo[] | null,
   onchainDustWarning: null as OnchainDustWarning | null,
+  isManualUtxoSelectionActive: false,
 }
 
 export const useSendStore = create<SendState>((set) => ({
@@ -81,10 +85,11 @@ export const useSendStore = create<SendState>((set) => ({
 
   setStep: (step) => set({ step }),
   setRecipient: (recipient) => set({ recipient }),
-  setAmount: (amount, opts) =>
-    set((s) => ({
+  setAmount: (amount, amountUpdateOptions) =>
+    set((previousSendState) => ({
       amount,
-      onchainDustWarning: opts?.fromUser === true ? null : s.onchainDustWarning,
+      onchainDustWarning:
+        amountUpdateOptions?.fromUser === true ? null : previousSendState.onchainDustWarning,
     })),
   setAmountUnit: (amountUnit) => set({ amountUnit }),
   setFeePresetSelection: (feePresetSelection) => set({ feePresetSelection }),
@@ -96,6 +101,8 @@ export const useSendStore = create<SendState>((set) => ({
   setReviewChangeSats: (reviewChangeSats) => set({ reviewChangeSats }),
   setReviewInputUtxos: (reviewInputUtxos) => set({ reviewInputUtxos }),
   setOnchainDustWarning: (onchainDustWarning) => set({ onchainDustWarning }),
+  setIsManualUtxoSelectionActive: (isManualUtxoSelectionActive) =>
+    set({ isManualUtxoSelectionActive }),
 
   reset: () =>
     set({

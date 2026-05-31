@@ -21,15 +21,15 @@ import {
   useWallets,
 } from '@/db'
 import { ensureSecretsChannel } from '@/workers/secrets-channel'
-import { toBitcoinNetwork } from '@/lib/bitcoin-utils'
+import { toBitcoinNetwork } from '@/lib/wallet/bitcoin-utils'
 import {
   runImportInitialEsploraSync,
   retryImportInitialEsploraSyncWithWalletStatus,
-} from '@/lib/wallet-utils'
-import { showImportInitialSyncFailureToast } from '@/lib/wallet-sync-error-toast'
-import { sanitizeErrorMessageForUi } from '@/lib/sanitize-error-for-ui'
-import { errorMessage } from '@/lib/utils'
-import { invalidateWalletRelatedQueriesAndNotifyOtherTabs } from '@/lib/wallet-query-cache-sync'
+} from '@/lib/wallet/wallet-utils'
+import { showImportInitialSyncFailureToast } from '@/lib/wallet/wallet-sync-error-toast'
+import { sanitizeErrorMessageForUi } from '@/lib/shared/sanitize-error-for-ui'
+import { errorMessage } from '@/lib/shared/utils'
+import { invalidateWalletRelatedQueriesAndNotifyOtherTabs } from '@/lib/wallet/wallet-query-cache-sync'
 
 export function ImportWalletPage() {
   const navigate = useNavigate()
@@ -38,19 +38,19 @@ export function ImportWalletPage() {
   const [isValid, setIsValid] = useState<boolean | null>(null)
 
   const { data: wallets, isLoading: walletsLoading } = useWallets()
-  const sessionPassword = useSessionStore((s) => s.password)
+  const sessionPassword = useSessionStore((sessionState) => sessionState.password)
 
-  const validateMnemonic = useCryptoStore((s) => s.validateMnemonic)
-  const importWalletAndEncryptSecrets = useCryptoStore((s) => s.importWalletAndEncryptSecrets)
-  const networkMode = useWalletStore((s) => s.networkMode)
-  const addressType = useWalletStore((s) => s.addressType)
-  const accountId = useWalletStore((s) => s.accountId)
-  const setActiveWallet = useWalletStore((s) => s.setActiveWallet)
-  const setWalletStatus = useWalletStore((s) => s.setWalletStatus)
-  const setCurrentAddress = useWalletStore((s) => s.setCurrentAddress)
-  const commitLoadedSubWallet = useWalletStore((s) => s.commitLoadedSubWallet)
+  const validateMnemonic = useCryptoStore((cryptoState) => cryptoState.validateMnemonic)
+  const importWalletAndEncryptSecrets = useCryptoStore((cryptoState) => cryptoState.importWalletAndEncryptSecrets)
+  const networkMode = useWalletStore((walletState) => walletState.networkMode)
+  const addressType = useWalletStore((walletState) => walletState.addressType)
+  const accountId = useWalletStore((walletState) => walletState.accountId)
+  const setActiveWallet = useWalletStore((walletState) => walletState.setActiveWallet)
+  const setWalletStatus = useWalletStore((walletState) => walletState.setWalletStatus)
+  const setCurrentAddress = useWalletStore((walletState) => walletState.setCurrentAddress)
+  const commitLoadedDescriptorWallet = useWalletStore((walletState) => walletState.commitLoadedDescriptorWallet)
   const setImportInitialSyncErrorMessage = useWalletStore(
-    (s) => s.setImportInitialSyncErrorMessage,
+    (walletState) => walletState.setImportInitialSyncErrorMessage,
   )
   const addWallet = useAddWallet()
   const queryClient = useQueryClient()
@@ -76,8 +76,8 @@ export function ImportWalletPage() {
     const timer = setTimeout(async () => {
       try {
         setValidating(true)
-        const valid = await validateMnemonic(mnemonic)
-        setIsValid(valid)
+        const mnemonicIsValid = await validateMnemonic(mnemonic)
+        setIsValid(mnemonicIsValid)
       } catch {
         setIsValid(false)
       } finally {
@@ -100,10 +100,10 @@ export function ImportWalletPage() {
       setWalletStatus('unlocked')
     } catch (err: unknown) {
       setWalletStatus('unlocked')
-      const msg =
+      const syncErrorMessage =
         sanitizeErrorMessageForUi(errorMessage(err) ?? String(err)) ||
         'Initial sync failed'
-      setImportInitialSyncErrorMessage(msg)
+      setImportInitialSyncErrorMessage(syncErrorMessage)
       showImportInitialSyncFailureToast(err, () => {
         void retryImportInitialEsploraSyncWithWalletStatus()
       })
@@ -153,8 +153,8 @@ export function ImportWalletPage() {
       }
 
       setActiveWallet(walletId)
-      setCurrentAddress(walletResult.first_address)
-      commitLoadedSubWallet({
+      setCurrentAddress(walletResult.firstAddress)
+      commitLoadedDescriptorWallet({
         networkMode,
         addressType,
         accountId,

@@ -17,40 +17,27 @@ import { useCreateInvoiceMutation } from '@/hooks/useLightningMutations'
 import {
   INVOICE_EXPIRY_OPTIONS,
   DEFAULT_INVOICE_EXPIRY_SECONDS,
-} from '@/lib/lightning-utils'
+} from '@/lib/lightning/lightning-utils'
 import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
 import { BitcoinFiatDenominationSwitch } from '@/components/BitcoinFiatDenominationSwitch'
 import { FiatAmountDisplay } from '@/components/FiatAmountDisplay'
-import { MAX_LIGHTNING_INVOICE_DESCRIPTION_LENGTH } from '@/lib/lightning-input-limits'
+import { MAX_LIGHTNING_INVOICE_DESCRIPTION_LENGTH } from '@/lib/lightning/lightning-input-limits'
 import { useFiatDenominationStore } from '@/stores/fiatDenominationStore'
 import { useMainnetFiatRatesQuery } from '@/hooks/useMainnetFiatRatesQuery'
 import {
   amountSatsFromFiatAndBtcPrice,
   parsePositiveFiatAmountInput,
-} from '@/lib/fiat-amount-to-sats'
-import { fiatAmountInputPlaceholder } from '@/lib/format-fiat-display'
-import { isUsableBtcSpotPriceInFiat } from '@/lib/is-usable-btc-spot-price-in-fiat'
+} from '@/lib/fiat/fiat-amount-to-sats'
+import { fiatAmountInputPlaceholder } from '@/lib/fiat/format-fiat-display'
+import { isUsableBtcSpotPriceInFiat } from '@/lib/fiat/is-usable-btc-spot-price-in-fiat'
 import type { BitcoinAmountDisplaySize } from '@/components/BitcoinAmountDisplay'
+import {
+  parseInvoiceAmountField,
+  type InvoiceAmountFieldParse,
+} from '@/lib/lightning/parse-invoice-amount-field'
 
 /** Shown when a BOLT11 invoice has no fixed amount (NWC amountless flow). */
 const LIGHTNING_INVOICE_AMOUNT_SET_BY_PAYER_LABEL = 'Amount set by payer'
-
-type InvoiceAmountFieldParse =
-  | { kind: 'amountless' }
-  | { kind: 'fixed'; sats: number }
-  | { kind: 'invalid' }
-
-/** Parses receive UI amount field: empty or zero → amountless; digits only, capped for safe `Number` conversion. */
-export function parseInvoiceAmountField(raw: string): InvoiceAmountFieldParse {
-  const trimmedAmount = raw.trim()
-  if (trimmedAmount === '') return { kind: 'amountless' }
-  if (!/^\d+$/.test(trimmedAmount)) return { kind: 'invalid' }
-  if (trimmedAmount.length > 15) return { kind: 'invalid' }
-  const sats = Number(trimmedAmount)
-  if (!Number.isInteger(sats) || sats < 0) return { kind: 'invalid' }
-  if (sats === 0) return { kind: 'amountless' }
-  return { kind: 'fixed', sats }
-}
 
 function LightningInvoiceAmountBlock({
   amountSats,
@@ -61,12 +48,12 @@ function LightningInvoiceAmountBlock({
   size: BitcoinAmountDisplaySize
   className?: string
 }) {
-  const networkMode = useWalletStore((s) => s.networkMode)
+  const networkMode = useWalletStore((walletState) => walletState.networkMode)
   const fiatDenominationMode = useFiatDenominationStore(
-    (s) => s.fiatDenominationMode,
+    (fiatDenominationState) => fiatDenominationState.fiatDenominationMode,
   )
   const defaultFiatCurrency = useFiatDenominationStore(
-    (s) => s.defaultFiatCurrency,
+    (fiatDenominationState) => fiatDenominationState.defaultFiatCurrency,
   )
   const fiatRatesQuery = useMainnetFiatRatesQuery({
     allowFetchWhenPortfolioZeroForReceivePage: true,
@@ -109,7 +96,7 @@ function LightningInvoiceAmountBlock({
 }
 
 function MainnetReceiveDenominationSwitch() {
-  const networkMode = useWalletStore((s) => s.networkMode)
+  const networkMode = useWalletStore((walletState) => walletState.networkMode)
   if (networkMode !== 'mainnet') return null
   return <BitcoinFiatDenominationSwitch />
 }
@@ -234,16 +221,16 @@ function InvoiceListItem({
 }
 
 function InvoiceCreateForm({ onCreated }: { onCreated: () => void }) {
-  const networkMode = useWalletStore((s) => s.networkMode)
+  const networkMode = useWalletStore((walletState) => walletState.networkMode)
   const [amountRaw, setAmountRaw] = useState('')
   const [description, setDescription] = useState('')
   const [expirySeconds, setExpirySeconds] = useState(DEFAULT_INVOICE_EXPIRY_SECONDS)
 
   const fiatDenominationMode = useFiatDenominationStore(
-    (s) => s.fiatDenominationMode,
+    (fiatDenominationState) => fiatDenominationState.fiatDenominationMode,
   )
   const defaultFiatCurrency = useFiatDenominationStore(
-    (s) => s.defaultFiatCurrency,
+    (fiatDenominationState) => fiatDenominationState.defaultFiatCurrency,
   )
   const fiatRatesQuery = useMainnetFiatRatesQuery({
     allowFetchWhenPortfolioZeroForReceivePage: true,
@@ -263,9 +250,9 @@ function InvoiceCreateForm({ onCreated }: { onCreated: () => void }) {
 
   const amountParse = useMemo((): InvoiceAmountFieldParse => {
     if (mainnetFiatEntry) {
-      const t = amountRaw.trim()
-      if (t === '') return { kind: 'amountless' }
-      const fiat = parsePositiveFiatAmountInput(t)
+      const trimmedAmount = amountRaw.trim()
+      if (trimmedAmount === '') return { kind: 'amountless' }
+      const fiat = parsePositiveFiatAmountInput(trimmedAmount)
       if (fiat == null) return { kind: 'invalid' }
       if (fiat === 0) return { kind: 'amountless' }
       if (!isUsableBtcSpotPriceInFiat(btcPriceInFiat)) return { kind: 'invalid' }
@@ -448,19 +435,21 @@ function NoConnectionPrompt({
 }
 
 export function LightningReceive() {
-  const activeWalletId = useWalletStore((s) => s.activeWalletId)
-  const networkMode = useWalletStore((s) => s.networkMode)
-  const matchingConnection = useLightningStore((s) =>
+  const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
+  const networkMode = useWalletStore((walletState) => walletState.networkMode)
+  const matchingConnection = useLightningStore((lightningState) =>
     activeWalletId != null
-      ? s.getActiveConnection(activeWalletId, networkMode)
+      ? lightningState.getActiveConnection(activeWalletId, networkMode)
       : null,
   )
-  const hasAnyLightningConnection = useLightningStore((s) =>
-    activeWalletId != null ? s.getConnectionsForWallet(activeWalletId).length > 0 : false,
+  const hasAnyLightningConnection = useLightningStore((lightningState) =>
+    activeWalletId != null
+      ? lightningState.getConnectionsForWallet(activeWalletId).length > 0
+      : false,
   )
-  const activeInvoice = useReceiveStore((s) => s.activeInvoice)
-  const sessionInvoices = useReceiveStore((s) => s.sessionInvoices)
-  const setActiveInvoice = useReceiveStore((s) => s.setActiveInvoice)
+  const activeInvoice = useReceiveStore((receiveState) => receiveState.activeInvoice)
+  const sessionInvoices = useReceiveStore((receiveState) => receiveState.sessionInvoices)
+  const setActiveInvoice = useReceiveStore((receiveState) => receiveState.setActiveInvoice)
 
   const [showCreateForm, setShowCreateForm] = useState(false)
   const hasMatchingConnection = matchingConnection != null

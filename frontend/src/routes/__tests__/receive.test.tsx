@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { AddressType } from '@/lib/wallet-domain-types'
+import { AddressType } from '@/lib/wallet/wallet-domain-types'
 import { renderWithProviders } from '@/test-utils/test-providers'
 
 const mockNavigate = vi.fn()
@@ -29,21 +29,21 @@ vi.mock('@/stores/cryptoStore', () => ({
 let walletStoreState: Record<string, unknown> = {}
 const mockSetCurrentAddress = vi.fn()
 vi.mock('@/stores/walletStore', async () => {
-  const { AddressType } = await import('@/lib/wallet-domain-types')
+  const { AddressType } = await import('@/lib/wallet/wallet-domain-types')
   return {
     AddressType,
     useWalletStore: (selector: (s: Record<string, unknown>) => unknown) =>
       selector(walletStoreState),
     selectCommittedNetworkMode: (s: {
-      loadedSubWallet: { networkMode: string } | null
+      loadedDescriptorWallet: { networkMode: string } | null
       networkMode: string
-    }) => s.loadedSubWallet?.networkMode ?? s.networkMode,
+    }) => s.loadedDescriptorWallet?.networkMode ?? s.networkMode,
   }
 })
 
 const receiveFeatureState = {
-  lightningEnabled: false,
-  segwitAddressesEnabled: true,
+  isLightningEnabled: false,
+  isSegwitAddressesEnabled: true,
 }
 
 vi.mock('@/stores/featureStore', () => ({
@@ -60,7 +60,7 @@ vi.mock('@/components/WalletUnlock', () => ({
   WalletUnlock: () => <div data-testid="wallet-unlock">Unlock</div>,
 }))
 
-vi.mock('@/lib/wallet-utils', () => ({
+vi.mock('@/lib/wallet/wallet-utils', () => ({
   updateWalletChangeset: vi.fn().mockResolvedValue(undefined),
   loadCustomEsploraUrl: vi.fn().mockResolvedValue(null),
 }))
@@ -72,7 +72,7 @@ vi.mock('qrcode.react', () => ({
 }))
 
 import { ReceivePage } from '@/pages/wallet/ReceivePage'
-import { LAB_WALLET_RECEIVE_PAGE_TITLE } from '@/lib/wallet-lab-ui-copy'
+import { LAB_WALLET_RECEIVE_PAGE_TITLE } from '@/lib/wallet/wallet-lab-ui-copy'
 
 describe('ReceivePage', () => {
   beforeEach(() => {
@@ -81,14 +81,14 @@ describe('ReceivePage', () => {
       'fetch',
       vi.fn().mockResolvedValue({ ok: true, status: 200 }),
     )
-    receiveFeatureState.segwitAddressesEnabled = true
+    receiveFeatureState.isSegwitAddressesEnabled = true
     walletStoreState = {
       activeWalletId: 1,
       walletStatus: 'unlocked',
       currentAddress: 'tb1qtest123address456',
       addressType: AddressType.Taproot,
       networkMode: 'testnet',
-      loadedSubWallet: null,
+      loadedDescriptorWallet: null,
       setCurrentAddress: mockSetCurrentAddress,
     }
   })
@@ -163,13 +163,13 @@ describe('ReceivePage', () => {
   })
 
   it('address type badge shows correct type when SegWit addresses feature is on', () => {
-    receiveFeatureState.segwitAddressesEnabled = true
+    receiveFeatureState.isSegwitAddressesEnabled = true
     renderWithProviders(<ReceivePage />)
     expect(screen.getByText('Taproot (BIP86)')).toBeInTheDocument()
   })
 
   it('hides address type badge when SegWit addresses feature is off', () => {
-    receiveFeatureState.segwitAddressesEnabled = false
+    receiveFeatureState.isSegwitAddressesEnabled = false
     renderWithProviders(<ReceivePage />)
     expect(screen.queryByText('Taproot (BIP86)')).not.toBeInTheDocument()
   })

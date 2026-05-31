@@ -3,8 +3,8 @@ import { sql } from 'kysely'
 import type { Kysely } from 'kysely'
 import type { Database } from '../schema'
 import { readBitboardWalletVersion } from '@common/bitboard-wallet-version'
-import { APP_SETTINGS_LAST_OPENED_AT_KEY } from '@/lib/app-session-metadata'
-import { ARGON2_KDF_PHC_CI } from '@/lib/kdf-phc-constants'
+import { APP_SETTINGS_LAST_OPENED_AT_KEY } from '@/lib/shared/app-session-metadata'
+import { ARGON2_KDF_PHC_CI } from '@/lib/shared/kdf-phc-constants'
 import { createTestDatabase } from '../test-helpers'
 
 describe('SQLite Database', () => {
@@ -114,8 +114,8 @@ describe('SQLite Database', () => {
           }).execute()
           throw new Error('rollback')
         })
-      } catch (e) {
-        expect((e as Error).message).toBe('rollback')
+      } catch (error) {
+        expect((error as Error).message).toBe('rollback')
       }
       const wallets = await walletDb.selectFrom('wallets').selectAll().execute()
       const secrets = await walletDb.selectFrom('wallet_secrets').selectAll().execute()

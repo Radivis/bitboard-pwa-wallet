@@ -104,7 +104,7 @@ fn build_and_sign_lab_transaction_returns_signed_tx() {
         bitcoin::Transaction::consensus_decode(&mut Cursor::new(&tx_bytes))
             .expect("signed tx must decode");
 
-    let total_out: u64 = tx.output.iter().map(|o| o.value.to_sat()).sum();
+    let total_out: u64 = tx.output.iter().map(|output| output.value.to_sat()).sum();
     assert_eq!(
         total_out + fee_sats,
         TOTAL_UTXO_SATS,

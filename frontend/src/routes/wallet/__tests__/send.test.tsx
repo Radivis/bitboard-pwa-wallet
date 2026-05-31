@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { screen } from '@testing-library/react'
 import { renderWithProviders } from '@/test-utils/test-providers'
-import * as lightningUtils from '@/lib/lightning-utils'
+import * as lightningUtils from '@/lib/lightning/lightning-utils'
 
 const mockNavigate = vi.fn()
 vi.mock('@tanstack/react-router', async (importOriginal) => {
@@ -76,7 +76,7 @@ vi.mock('@/stores/sessionStore', () => ({
 
 vi.mock('@/stores/featureStore', () => ({
   useFeatureStore: (selector: (s: Record<string, unknown>) => unknown) =>
-    selector({ lightningEnabled: true }),
+    selector({ isLightningEnabled: true }),
 }))
 
 const mockConnections = [
@@ -113,6 +113,7 @@ const sendStoreState: Record<string, unknown> = {
   reviewChangeSats: null,
   reviewInputUtxos: null,
   onchainDustWarning: null,
+  isManualUtxoSelectionActive: false,
   setStep: vi.fn(),
   setRecipient: vi.fn((v: string) => {
     sendStoreState.recipient = v
@@ -136,6 +137,7 @@ const sendStoreState: Record<string, unknown> = {
     sendStoreState.reviewInputUtxos = v
   }),
   setOnchainDustWarning: vi.fn(),
+  setIsManualUtxoSelectionActive: vi.fn(),
   reset: vi.fn(),
 }
 
@@ -196,7 +198,7 @@ vi.mock('@/hooks/useBitcoinUnit', () => ({
   useBitcoinUnit: () => ({ data: 'BTC' }),
 }))
 
-vi.mock('@/lib/bitcoin-utils', () => ({
+vi.mock('@/lib/wallet/bitcoin-utils', () => ({
   MAX_SAFE_SATS: Number.MAX_SAFE_INTEGER,
   SATS_PER_BTC: 100_000_000,
   isValidAddress: (addr: string) => addr.startsWith('bc1'),
@@ -215,11 +217,11 @@ describe('SendFlow', () => {
       walletStatus: 'unlocked',
       networkMode: 'signet',
       balance: {
-        confirmed: 100_000_000,
-        trusted_pending: 0,
-        untrusted_pending: 0,
-        immature: 0,
-        total: 100_000_000,
+        confirmedSats: 100_000_000,
+        trustedPendingSats: 0,
+        untrustedPendingSats: 0,
+        immatureSats: 0,
+        totalSats: 100_000_000,
       },
       currentAddress: 'tb1qtest',
       lastSyncTime: null,

@@ -1,12 +1,12 @@
 import { expose } from 'comlink'
 import type { EncryptionService } from './encryption-api'
 import type { EncryptedBlobMessage } from './secrets-channel-types'
-import type { EncryptedBlob } from '@/lib/encrypted-blob-types'
-import { resolveArgon2CiParamsOrThrow } from '@/lib/argon2-ci-env'
+import type { EncryptedBlob } from '@/lib/shared/encrypted-blob-types'
+import { resolveArgon2CiParamsOrThrow } from '@/lib/shared/argon2-ci-env'
 import {
   ARGON2_KDF_PHC_CI,
   ARGON2_KDF_PHC_PRODUCTION,
-} from '@/lib/kdf-phc-constants'
+} from '@/lib/shared/kdf-phc-constants'
 
 const SALT_LENGTH_BYTES = 16
 const IV_LENGTH_BYTES = 12
@@ -14,13 +14,13 @@ const IV_LENGTH_BYTES = 12
 /** CI params are allowed only outside production builds. */
 const USE_CI_PARAMS = resolveArgon2CiParamsOrThrow()
 
-let wasm: typeof import('@/wasm-pkg/bitboard_encryption/bitboard_encryption') | null = null
+let encryptionWasmModule: typeof import('@/wasm-pkg/bitboard_encryption/bitboard_encryption') | null = null
 
 async function getWasm() {
-  if (!wasm) {
-    wasm = await import('@/wasm-pkg/bitboard_encryption/bitboard_encryption')
+  if (!encryptionWasmModule) {
+    encryptionWasmModule = await import('@/wasm-pkg/bitboard_encryption/bitboard_encryption')
   }
-  return wasm
+  return encryptionWasmModule
 }
 
 async function deriveKeyBytes(
@@ -28,8 +28,8 @@ async function deriveKeyBytes(
   salt: Uint8Array,
   kdfPhc: string,
 ): Promise<Uint8Array> {
-  const w = await getWasm()
-  const key = w.deriveArgon2KeyFromPhc(password, salt, kdfPhc)
+  const wasmModule = await getWasm()
+  const key = wasmModule.derive_argon2_key_from_phc(password, salt, kdfPhc)
   return new Uint8Array(key)
 }
 
@@ -135,8 +135,8 @@ const encryptionService: EncryptionService = {
     salt: Uint8Array,
     kdfPhc: string,
   ): Promise<string> {
-    const w = await getWasm()
-    return w.signWalletBackupManifest(sqliteBytes, password, salt, kdfPhc)
+    const wasmModule = await getWasm()
+    return wasmModule.sign_wallet_backup_manifest(sqliteBytes, password, salt, kdfPhc)
   },
 
   async verifyWalletBackupManifest(
@@ -144,8 +144,8 @@ const encryptionService: EncryptionService = {
     password: string,
     manifestJson: string,
   ): Promise<void> {
-    const w = await getWasm()
-    w.verifyWalletBackupManifest(sqliteBytes, password, manifestJson)
+    const wasmModule = await getWasm()
+    wasmModule.verify_wallet_backup_manifest(sqliteBytes, password, manifestJson)
   },
 }
 

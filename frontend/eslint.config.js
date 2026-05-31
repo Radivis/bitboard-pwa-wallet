@@ -10,6 +10,7 @@ export default tseslint.config(
     ignores: [
       'dist/**',
       'eslint.config.js',
+      'playwright-report/**',
       'src/routeTree.gen.ts',
       'src/wasm-pkg/**',
     ],
@@ -31,11 +32,42 @@ export default tseslint.config(
         'error',
         { argsIgnorePattern: '^_' },
       ],
-      'react-hooks/exhaustive-deps': 'warn',
+      'react-hooks/exhaustive-deps': 'error',
       'react-hooks/rules-of-hooks': 'error',
       'react-refresh/only-export-components': [
         'warn',
         { allowConstantExport: true },
+      ],
+    },
+  },
+  {
+    // Catch snake_case field leaks in app code (wire/DB layers use dedicated files).
+    files: ['src/**/*.{ts,tsx}'],
+    ignores: [
+      'src/workers/**',
+      'src/lib/lightning/lightning-wire-types.ts',
+      'src/db/**',
+      'src/wasm-pkg/**',
+      'src/**/*.test.ts',
+      'src/**/*.test.tsx',
+      'src/**/__tests__/**',
+      'src/test-utils/**',
+      'src/pages/setup/**',
+      'src/routeTree.gen.ts',
+      'src/vite-env.d.ts',
+    ],
+    rules: {
+      '@typescript-eslint/naming-convention': [
+        'error',
+        {
+          selector: 'objectLiteralProperty',
+          format: ['camelCase', 'UPPER_CASE'],
+          leadingUnderscore: 'allow',
+          filter: {
+            regex: '_',
+            match: true,
+          },
+        },
       ],
     },
   },

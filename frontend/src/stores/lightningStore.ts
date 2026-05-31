@@ -6,25 +6,25 @@ import {
   LIGHTNING_NETWORK_MODES,
   isLightningSupported,
   type LightningNetworkMode,
-} from '@/lib/lightning-utils'
-import { MAX_LIGHTNING_INVOICE_DESCRIPTION_LENGTH } from '@/lib/lightning-input-limits'
+} from '@/lib/lightning/lightning-utils'
+import { MAX_LIGHTNING_INVOICE_DESCRIPTION_LENGTH } from '@/lib/lightning/lightning-input-limits'
 import {
   createBackendService,
   isValidNwcConnectionString,
   type ConnectedLightningWallet,
   type LightningConnectionConfig,
-} from '@/lib/lightning-backend-service'
+} from '@/lib/lightning/lightning-backend-service'
 import {
   saveLightningConnectionsForWallet,
-} from '@/lib/lightning-wallet-secrets'
+} from '@/lib/lightning/lightning-wallet-secrets'
 import { useWalletStore } from '@/stores/walletStore'
 import { useSessionStore } from '@/stores/sessionStore'
 import type { NetworkMode } from '@/stores/walletStore'
-import { MAX_LIGHTNING_WALLET_LABEL_LENGTH } from '@/lib/lightning-input-limits'
+import { MAX_LIGHTNING_WALLET_LABEL_LENGTH } from '@/lib/lightning/lightning-input-limits'
 import {
   isReservedDefaultNwcConnectionLabel,
   resolveDefaultNwcConnectionLabel,
-} from '@/lib/nwc-default-connection-label'
+} from '@/lib/lightning/nwc-default-connection-label'
 
 /**
  * Whether the given Bitcoin wallet has at least one Lightning connection for the
@@ -40,13 +40,14 @@ export function hasNetworkConnectedWallet(
   }
   const lnMode = networkMode as LightningNetworkMode
   return connectedWallets.some(
-    (w) => w.walletId === walletId && w.networkMode === lnMode,
+    (connection) =>
+      connection.walletId === walletId && connection.networkMode === lnMode,
   )
 }
 
 export type { ConnectedLightningWallet, LightningConnectionConfig }
-export type { NwcConnectionConfig, LightningWalletType } from '@/lib/lightning-backend-service'
-export type { LightningNetworkMode } from '@/lib/lightning-utils'
+export type { NwcConnectionConfig, LightningWalletType } from '@/lib/lightning/lightning-backend-service'
+export type { LightningNetworkMode } from '@/lib/lightning/lightning-utils'
 
 export type ActiveLightningConnectionsByNetwork = Partial<
   Record<LightningNetworkMode, string>
@@ -131,9 +132,9 @@ export const useLightningStore = create<LightningState>()(
       invoices: [],
 
       replaceConnectionsForWallet: (walletId, connections) => {
-        set((s) => ({
+        set((state) => ({
           connectedWallets: [
-            ...s.connectedWallets.filter((w) => w.walletId !== walletId),
+            ...state.connectedWallets.filter((connection) => connection.walletId !== walletId),
             ...connections,
           ],
         }))
@@ -143,11 +144,13 @@ export const useLightningStore = create<LightningState>()(
         set({ connectedWallets: [], activeConnectionIds: {} }),
 
       removeLightningStateForWallet: (walletId) =>
-        set((s) => {
-          const nextActiveIds = { ...s.activeConnectionIds }
+        set((state) => {
+          const nextActiveIds = { ...state.activeConnectionIds }
           delete nextActiveIds[walletId]
           return {
-            connectedWallets: s.connectedWallets.filter((w) => w.walletId !== walletId),
+            connectedWallets: state.connectedWallets.filter(
+              (connection) => connection.walletId !== walletId,
+            ),
             activeConnectionIds: nextActiveIds,
           }
         }),
@@ -161,8 +164,8 @@ export const useLightningStore = create<LightningState>()(
           throw new Error('Invalid NWC connection string')
         }
 
-        const others = get().connectedWallets.filter((w) => w.walletId !== walletId)
-        const forWallet = get().connectedWallets.filter((w) => w.walletId === walletId)
+        const others = get().connectedWallets.filter((connection) => connection.walletId !== walletId)
+        const forWallet = get().connectedWallets.filter((connection) => connection.walletId === walletId)
 
         const trimmedLabel = label.trim()
         if (
@@ -176,7 +179,7 @@ export const useLightningStore = create<LightningState>()(
         const labelToStore =
           trimmedLabel.length > 0
             ? trimmedLabel
-            : resolveDefaultNwcConnectionLabel(forWallet.map((w) => w.label))
+            : resolveDefaultNwcConnectionLabel(forWallet.map((connection) => connection.label))
         if (labelToStore.length > MAX_LIGHTNING_WALLET_LABEL_LENGTH) {
           throw new Error(
             `Label must be at most ${MAX_LIGHTNING_WALLET_LABEL_LENGTH} characters`,
@@ -220,8 +223,8 @@ export const useLightningStore = create<LightningState>()(
           throw new Error('Wallet must be unlocked to remove a Lightning connection')
         }
 
-        const removed = get().connectedWallets.find((w) => w.id === connectionId)
-        const wallets = get().connectedWallets.filter((w) => w.id !== connectionId)
+        const removed = get().connectedWallets.find((connection) => connection.id === connectionId)
+        const wallets = get().connectedWallets.filter((connection) => connection.id !== connectionId)
         const updatedActiveIds = { ...get().activeConnectionIds }
 
         if (removed) {
@@ -232,7 +235,8 @@ export const useLightningStore = create<LightningState>()(
           for (const mode of LIGHTNING_NETWORK_MODES) {
             if (perNetwork[mode] === connectionId) {
               const replacement = wallets.find(
-                (w) => w.walletId === walletId && w.networkMode === mode,
+                (connection) =>
+                  connection.walletId === walletId && connection.networkMode === mode,
               )
               if (replacement) {
                 perNetwork[mode] = replacement.id
@@ -254,7 +258,7 @@ export const useLightningStore = create<LightningState>()(
         })
 
         if (removed) {
-          const forWallet = wallets.filter((w) => w.walletId === removed.walletId)
+          const forWallet = wallets.filter((connection) => connection.walletId === removed.walletId)
           await saveLightningConnectionsForWallet({
             password,
             walletId: removed.walletId,
@@ -284,29 +288,31 @@ export const useLightningStore = create<LightningState>()(
           )
         }
 
-        const target = get().connectedWallets.find((w) => w.id === connectionId)
+        const target = get().connectedWallets.find((connection) => connection.id === connectionId)
         if (!target) {
           throw new Error('Lightning connection not found')
         }
 
         const { walletId } = target
         const duplicate = get().connectedWallets.some(
-          (w) =>
-            w.walletId === walletId &&
-            w.id !== connectionId &&
-            w.label.trim() === trimmed,
+          (connection) =>
+            connection.walletId === walletId &&
+            connection.id !== connectionId &&
+            connection.label.trim() === trimmed,
         )
         if (duplicate) {
           throw new Error('Another Lightning wallet already uses this label')
         }
 
-        const nextWallets = get().connectedWallets.map((w) =>
-          w.id === connectionId ? { ...w, label: trimmed } : w,
+        const nextWallets = get().connectedWallets.map((connection) =>
+          connection.id === connectionId
+            ? { ...connection, label: trimmed }
+            : connection,
         )
 
         set({ connectedWallets: nextWallets })
 
-        const forWallet = nextWallets.filter((w) => w.walletId === walletId)
+        const forWallet = nextWallets.filter((connection) => connection.walletId === walletId)
         await saveLightningConnectionsForWallet({
           password,
           walletId,
@@ -315,11 +321,11 @@ export const useLightningStore = create<LightningState>()(
       },
 
       setActiveConnection: (walletId, networkMode, connectionId) => {
-        const conn = get().connectedWallets.find((w) => w.id === connectionId)
+        const lightningConnection = get().connectedWallets.find((connection) => connection.id === connectionId)
         if (
-          !conn ||
-          conn.walletId !== walletId ||
-          conn.networkMode !== networkMode
+          !lightningConnection ||
+          lightningConnection.walletId !== walletId ||
+          lightningConnection.networkMode !== networkMode
         ) {
           return
         }
@@ -335,16 +341,16 @@ export const useLightningStore = create<LightningState>()(
       },
 
       getConnectionsForWallet: (walletId) =>
-        get().connectedWallets.filter((w) => w.walletId === walletId),
+        get().connectedWallets.filter((connection) => connection.walletId === walletId),
 
       getActiveConnection: (walletId, networkMode) => {
         if (!isLightningSupported(networkMode)) return null
         const lnMode = networkMode as LightningNetworkMode
         const activeId = get().activeConnectionIds[walletId]?.[lnMode]
         if (!activeId) return null
-        const conn = get().connectedWallets.find((w) => w.id === activeId)
-        if (!conn || conn.networkMode !== lnMode) return null
-        return conn
+        const lightningConnection = get().connectedWallets.find((connection) => connection.id === activeId)
+        if (!lightningConnection || lightningConnection.networkMode !== lnMode) return null
+        return lightningConnection
       },
 
       hasNetworkConnectedWallet: (walletId, networkMode) =>
@@ -374,14 +380,14 @@ export const useLightningStore = create<LightningState>()(
           )
           if (connection) {
             const service = createBackendService(connection.config)
-            const result = await service.createInvoice({
+            const invoiceResponse = await service.createInvoice({
               ...(storedAmountSats != null ? { amountSats: storedAmountSats } : {}),
               memo: description,
               expiry: effectiveExpiry,
             })
             const invoice: LightningInvoice = {
-              bolt11: result.bolt11,
-              paymentHash: result.paymentHash,
+              bolt11: invoiceResponse.bolt11,
+              paymentHash: invoiceResponse.paymentHash,
               amountSats: storedAmountSats,
               description,
               expirySeconds: effectiveExpiry,

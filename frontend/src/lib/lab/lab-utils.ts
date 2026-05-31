@@ -1,0 +1,394 @@
+import type { WalletSummary } from '@/lib/wallet/wallet-domain-types'
+import { labEntityOwnerKey } from '@/lib/lab/lab-entity-keys'
+import { isCoinbase } from '@/lib/lab/lab-operations'
+import type { LabOwner } from '@/lib/lab/lab-owner'
+import {
+  labOwnerDisplayName,
+  labOwnerFromSortKey,
+  labOwnersEqual,
+  labOwnerSortKey,
+  walletLabOwner,
+} from '@/lib/lab/lab-owner'
+import type {
+  LabEntityRecord,
+  LabTxRecord,
+  LabTxDetails,
+  LabUtxo,
+  MempoolEntry,
+  LabAddress,
+  LabState,
+} from '@/workers/lab-api'
+import type { TransactionDetails } from '@/workers/crypto-types'
+import { AddressType } from '@/lib/wallet/wallet-domain-types'
+
+export const WALLET_OWNER_PREFIX = 'wallet:'
+
+/** Sort / query key prefix for lab entities (pairs with {@link WALLET_OWNER_PREFIX} for wallets). */
+export const LAB_ENTITY_SORT_KEY_PREFIX = 'lab-entity:'
+
+/** Returns the wallet owner key used in lab state (e.g. addressToOwner, sender, receiver). */
+export function walletOwnerKey(walletId: number): string {
+  return `${WALLET_OWNER_PREFIX}${walletId}`
+}
+
+/** Case-insensitive equality for bc1/tb1/bcrt1 addresses (matches lab worker / BIP173). */
+export function labBitcoinAddressesEqual(
+  firstAddress: string,
+  secondAddress: string,
+): boolean {
+  const trimmedFirst = firstAddress.trim()
+  const trimmedSecond = secondAddress.trim()
+  if (trimmedFirst === trimmedSecond) return true
+  if (/^(bc|tb|bcrt)1/i.test(trimmedFirst) && /^(bc|tb|bcrt)1/i.test(trimmedSecond)) {
+    return trimmedFirst.toLowerCase() === trimmedSecond.toLowerCase()
+  }
+  return false
+}
+
+/** Sum of UTXO values owned by the active wallet on the lab chain. */
+export function sumLabWalletUtxoSats(
+  utxos: LabUtxo[],
+  addressToOwner: Record<string, LabOwner>,
+  activeWalletId: number,
+): number {
+  const walletOwner = walletLabOwner(activeWalletId)
+  return utxos
+    .filter((utxo) => {
+      const owner = lookupLabAddressOwner(utxo.address, addressToOwner)
+      return owner != null && labOwnersEqual(owner, walletOwner)
+    })
+    .reduce((sum, utxo) => sum + utxo.amountSats, 0)
+}
+
+/**
+ * Resolves `addressToOwner` the same way as the lab worker: direct key, then
+ * case-insensitive match for bc1/tb1/bcrt1 (BIP173).
+ */
+export function lookupLabAddressOwner(
+  address: string,
+  addressToOwner: Record<string, LabOwner>,
+): LabOwner | undefined {
+  const direct = addressToOwner[address]
+  if (direct !== undefined) return direct
+  for (const [storedAddr, owner] of Object.entries(addressToOwner)) {
+    if (labBitcoinAddressesEqual(storedAddr, address)) return owner
+  }
+  return undefined
+}
+
+/**
+ * If the recipient address maps to a dead lab entity, returns its display key; otherwise null.
+ */
+export function resolveDeadLabEntityRecipient(
+  recipientAddress: string,
+  addressToOwner: Record<string, LabOwner>,
+  entities: readonly LabEntityRecord[],
+): { displayName: string; addressType: AddressType } | null {
+  const owner = lookupLabAddressOwner(recipientAddress, addressToOwner)
+  if (owner?.kind !== 'lab_entity') return null
+  const entity = entities.find((entityRecord) => entityRecord.labEntityId === owner.labEntityId)
+  if (entity == null || !entity.isDead) return null
+  return { displayName: labEntityOwnerKey(entity), addressType: entity.addressType }
+}
+
+/**
+ * Owner for UI: map first, then confirmed outputs with a non-empty `owner` field.
+ */
+export function resolveLabAddressOwnerDisplay(
+  address: string,
+  addressToOwner: Record<string, LabOwner>,
+  txDetails: LabTxDetails[],
+  entities: readonly { labEntityId: number; entityName: string | null }[],
+  wallets: Pick<WalletSummary, 'walletId' | 'name'>[],
+): string | undefined {
+  const fromMap = lookupLabAddressOwner(address, addressToOwner)
+  if (fromMap !== undefined) return labOwnerDisplayName(fromMap, wallets, entities)
+
+  for (const detail of txDetails) {
+    for (const output of detail.outputs ?? []) {
+      if (!labBitcoinAddressesEqual(output.address, address)) continue
+      if (output.owner != null) {
+        const owner = output.owner
+        if (typeof owner === 'object' && owner !== null && 'kind' in owner) {
+          return labOwnerDisplayName(owner as LabOwner, wallets, entities)
+        }
+      }
+    }
+  }
+  return undefined
+}
+
+/** Stable sort for lab owner group keys (uses {@link labOwnerSortKey}). */
+export function sortLabOwnerKeys(ownerKeys: string[]): string[] {
+  return [...ownerKeys].sort((a, b) => a.localeCompare(b))
+}
+
+/**
+ * Lab invariant: every address shown or grouped must have a resolved owner key.
+ * Throws immediately if missing (data bug or stale state).
+ */
+export function assertLabAddressOwnerResolved(
+  address: string,
+  ownerKey: LabOwner | undefined | null,
+  context?: string,
+): asserts ownerKey is LabOwner {
+  if (ownerKey == null) {
+    throw new Error(
+      `Lab address has no resolved owner${context ? ` (${context})` : ''}: ${address}`,
+    )
+  }
+}
+
+/**
+ * Groups rows by resolved owner (addresses card, UTXOs card). Throws via
+ * {@link assertLabAddressOwnerResolved} if any address has no owner.
+ */
+export function groupLabRowsByResolvedOwner<T>(
+  items: T[],
+  getAddress: (labRow: T) => string,
+  resolveOwner: (address: string) => LabOwner | undefined,
+  assertContext: string,
+): { byOwner: Map<string, T[]>; sortedOwnerKeys: string[] } {
+  const byOwner = new Map<string, T[]>()
+  for (const labRow of items) {
+    const address = getAddress(labRow)
+    const owner = resolveOwner(address)
+    assertLabAddressOwnerResolved(address, owner, assertContext)
+    const ownerSortKey = labOwnerSortKey(owner)
+    const rowsForOwner = byOwner.get(ownerSortKey) ?? []
+    rowsForOwner.push(labRow)
+    byOwner.set(ownerSortKey, rowsForOwner)
+  }
+  return {
+    byOwner,
+    sortedOwnerKeys: sortLabOwnerKeys([...byOwner.keys()]),
+  }
+}
+
+/** Bech32 addresses are compared case-insensitively for deduplication (BIP173). */
+function canonicalLabAddressKey(address: string): string {
+  const trimmedAddress = address.trim()
+  return /^(bc|tb|bcrt)1/i.test(trimmedAddress) ? trimmedAddress.toLowerCase() : trimmedAddress
+}
+
+/** Merge controlled addresses with any addresses that appear in UTXOs but are not yet in the list. */
+export function mergeAddressesWithUtxos(
+  addresses: LabAddress[],
+  utxos: LabState['utxos'],
+): LabAddress[] {
+  const byKey = new Map<string, LabAddress>()
+  for (const labAddress of addresses) {
+    const canonicalAddressKey = canonicalLabAddressKey(labAddress.address)
+    if (!byKey.has(canonicalAddressKey)) byKey.set(canonicalAddressKey, labAddress)
+  }
+  for (const utxo of utxos) {
+    const canonicalAddressKey = canonicalLabAddressKey(utxo.address)
+    if (!byKey.has(canonicalAddressKey)) {
+      byKey.set(canonicalAddressKey, { address: utxo.address, wif: '' })
+    }
+  }
+  return [...byKey.values()]
+}
+
+export function labTransactionsForWallet(
+  labState: {
+    transactions: LabTxRecord[]
+    txDetails: LabTxDetails[]
+    mempool: MempoolEntry[]
+  },
+  activeWalletId: number,
+): TransactionDetails[] {
+  const walletOwner = walletLabOwner(activeWalletId)
+  const txDetailsByTxid = new Map(
+    labState.txDetails.map((detail) => [detail.txid, detail]),
+  )
+
+  const walletTransactionDetails: TransactionDetails[] = []
+
+  for (const entry of labState.mempool ?? []) {
+    const isSender = labOwnersEqual(entry.sender, walletOwner)
+    const isReceiver = labOwnersEqual(entry.receiver, walletOwner)
+    if (!isSender && !isReceiver) continue
+
+    const sentSats = isSender
+      ? (entry.outputsDetail ?? [])
+          .filter((output) => !output.isChange)
+          .reduce((sumSats, output) => sumSats + output.amountSats, 0)
+      : 0
+    const receivedSats = isReceiver
+      ? (entry.outputsDetail ?? [])
+          .filter((output) => labOwnersEqual(output.owner ?? null, walletOwner))
+          .reduce((sumSats, output) => sumSats + output.amountSats, 0)
+      : 0
+
+    walletTransactionDetails.push({
+      txid: entry.txid,
+      sentSats,
+      receivedSats,
+      feeSats: entry.feeSats,
+      confirmationBlockHeight: null,
+      confirmationTime: null,
+      isConfirmed: false,
+      isLabTx: true,
+    })
+  }
+
+  for (const labTransactionSummary of labState.transactions ?? []) {
+    const isSender = labOwnersEqual(labTransactionSummary.sender, walletOwner)
+    const isReceiver = labOwnersEqual(labTransactionSummary.receiver, walletOwner)
+    if (!isSender && !isReceiver) continue
+
+    const details = txDetailsByTxid.get(labTransactionSummary.txid)
+    if (!details) continue
+
+    if (isCoinbase(details)) {
+      const receivedSatsCoinbase = (details.outputs ?? [])
+        .filter((output) => labOwnersEqual(output.owner ?? null, walletOwner))
+        .reduce((sumSats, output) => sumSats + output.amountSats, 0)
+      walletTransactionDetails.push({
+        txid: labTransactionSummary.txid,
+        sentSats: 0,
+        receivedSats: receivedSatsCoinbase,
+        feeSats: 0,
+        confirmationBlockHeight: details.blockHeight,
+        confirmationTime: details.blockTime,
+        isConfirmed: true,
+        isLabTx: true,
+      })
+      continue
+    }
+
+    const sentSats = isSender
+      ? (details.outputs ?? [])
+          .filter((output) => !output.isChange)
+          .reduce((sumSats, output) => sumSats + output.amountSats, 0)
+      : 0
+    const receivedSats = isReceiver
+      ? (details.outputs ?? [])
+          .filter((output) => labOwnersEqual(output.owner ?? null, walletOwner))
+          .reduce((sumSats, output) => sumSats + output.amountSats, 0)
+      : 0
+
+    const totalInput = (details.inputs ?? []).reduce(
+      (sumSats, input) => sumSats + input.amountSats,
+      0,
+    )
+    const totalOutput = (details.outputs ?? []).reduce(
+      (sumSats, output) => sumSats + output.amountSats,
+      0,
+    )
+    const feeSats = totalInput - totalOutput
+
+    walletTransactionDetails.push({
+      txid: labTransactionSummary.txid,
+      sentSats,
+      receivedSats,
+      feeSats,
+      confirmationBlockHeight: details.blockHeight,
+      confirmationTime: details.blockTime,
+      isConfirmed: true,
+      isLabTx: true,
+    })
+  }
+
+  walletTransactionDetails.sort((txA, txB) => {
+    if (!txA.isConfirmed && txB.isConfirmed) return -1
+    if (txA.isConfirmed && !txB.isConfirmed) return 1
+    if (txA.isConfirmed && txB.isConfirmed) {
+      const timeA = txA.confirmationTime ?? 0
+      const timeB = txB.confirmationTime ?? 0
+      if (timeB !== timeA) return timeB - timeA
+      return txB.txid.localeCompare(txA.txid)
+    }
+    return txA.txid.localeCompare(txB.txid)
+  })
+
+  return walletTransactionDetails
+}
+
+/**
+ * Resolves a display-time owner reference to {@link LabOwner}, or null if unknown.
+ */
+export function resolveLabOwnerForDisplay(
+  owner: LabOwner | string,
+  _wallets: Pick<WalletSummary, 'walletId' | 'name'>[],
+  _entities: readonly { labEntityId: number; entityName: string | null }[],
+): LabOwner | null {
+  if (typeof owner === 'object' && owner !== null && 'kind' in owner) {
+    return owner
+  }
+  return labOwnerFromSortKey(owner)
+}
+
+/**
+ * Returns `addressType` for a lab-entity owner, or null for wallets / unknown owners.
+ */
+export function labEntityAddressTypeForOwner(
+  owner: LabOwner | string,
+  entities: readonly {
+    labEntityId: number
+    entityName: string | null
+    addressType: AddressType
+  }[],
+): AddressType | null {
+  const resolved = resolveLabOwnerForDisplay(owner, [], entities)
+  if (resolved?.kind !== 'lab_entity') return null
+  const entity = entities.find((entityRow) => entityRow.labEntityId === resolved.labEntityId)
+  return entity?.addressType ?? null
+}
+
+/**
+ * Accessible label including address type for lab entities (matches {@link LabOwnerDisplayWithAddressType}).
+ */
+export function getOwnerDisplayNameWithAddressTypeAria(
+  owner: LabOwner | string,
+  wallets: Pick<WalletSummary, 'walletId' | 'name'>[],
+  entities: readonly {
+    labEntityId: number
+    entityName: string | null
+    addressType: AddressType
+  }[],
+): string {
+  const base = getOwnerDisplayName(owner, wallets, entities)
+  const addrType = labEntityAddressTypeForOwner(owner, entities)
+  if (addrType == null) return base
+  if (addrType === AddressType.Taproot) return `${base}, Taproot`
+  return `${base}, SegWit`
+}
+
+/**
+ * Display label for a lab owner: {@link LabOwner} or sort key (`wallet:` / `lab-entity:`).
+ */
+export function getOwnerDisplayName(
+  owner: LabOwner | string,
+  wallets: Pick<WalletSummary, 'walletId' | 'name'>[],
+  entities: readonly { labEntityId: number; entityName: string | null }[],
+): string {
+  if (typeof owner === 'object' && owner !== null && 'kind' in owner) {
+    return labOwnerDisplayName(owner, wallets, entities)
+  }
+  const fromSort = labOwnerFromSortKey(owner)
+  if (fromSort) return labOwnerDisplayName(fromSort, wallets, entities)
+  return owner
+}
+
+export function getLabOwnerDisplayName(
+  owner: LabOwner,
+  wallets: Pick<WalletSummary, 'walletId' | 'name'>[],
+  entities: readonly { labEntityId: number; entityName: string | null }[],
+): string {
+  return labOwnerDisplayName(owner, wallets, entities)
+}
+
+export function getOwnerIcon(owner: LabOwner | string): 'wallet' | 'flask' {
+  if (typeof owner === 'object' && owner !== null && 'kind' in owner) {
+    return getLabOwnerIcon(owner)
+  }
+  const fromSort = labOwnerFromSortKey(owner)
+  if (fromSort) return getLabOwnerIcon(fromSort)
+  return owner.startsWith(WALLET_OWNER_PREFIX) ? 'wallet' : 'flask'
+}
+
+export function getLabOwnerIcon(owner: LabOwner): 'wallet' | 'flask' {
+  return owner.kind === 'wallet' ? 'wallet' : 'flask'
+}

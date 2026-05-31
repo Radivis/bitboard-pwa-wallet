@@ -8,8 +8,9 @@ import {
 } from '@/components/ui/card'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { LabTxCard } from '@/components/lab/LabTxCard'
-import { netMovedSatsFromMempoolEntry } from '@/lib/lab-tx-net-moved'
+import { netMovedSatsFromMempoolEntry } from '@/lib/lab/lab-tx-net-moved'
 import type { MempoolEntry } from '@/workers/lab-api'
+import type { WalletSummary } from '@/lib/wallet/wallet-domain-types'
 import { useLabChainStateQuery } from '@/hooks/useLabChainStateQuery'
 
 export function LabMempoolCard({
@@ -17,7 +18,7 @@ export function LabMempoolCard({
   wallets,
 }: {
   mempool: MempoolEntry[]
-  wallets: Array<{ wallet_id: number; name: string }>
+  wallets: WalletSummary[]
 }) {
   const { data: labState } = useLabChainStateQuery()
   const entities = labState?.entities ?? []

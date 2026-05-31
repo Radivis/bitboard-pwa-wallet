@@ -1,6 +1,6 @@
 import { AlertTriangle } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
-import { sanitizeErrorMessageForUi } from '@/lib/sanitize-error-for-ui'
+import { sanitizeErrorMessageForUi } from '@/lib/shared/sanitize-error-for-ui'
 import { useSecureStorageAvailabilityStore } from '@/stores/secureStorageAvailabilityStore'
 
 /**
@@ -9,10 +9,10 @@ import { useSecureStorageAvailabilityStore } from '@/stores/secureStorageAvailab
 export function SecureStorageUnavailableBanner() {
   const { isAvailable, lastErrorMessage, opfsLikelyUnsupported } =
     useSecureStorageAvailabilityStore(
-      useShallow((s) => ({
-        isAvailable: s.isAvailable,
-        lastErrorMessage: s.lastErrorMessage,
-        opfsLikelyUnsupported: s.opfsLikelyUnsupported,
+      useShallow((secureStorageAvailabilityState) => ({
+        isAvailable: secureStorageAvailabilityState.isAvailable,
+        lastErrorMessage: secureStorageAvailabilityState.lastErrorMessage,
+        opfsLikelyUnsupported: secureStorageAvailabilityState.opfsLikelyUnsupported,
       })),
     )
 

@@ -22,7 +22,7 @@ export function SettingsSecurityPage() {
 
   const { data: wallets } = useWallets()
   const hasWallets = (wallets?.length ?? 0) > 0
-  const nearZeroActive = useNearZeroSecurityStore((s) => s.active)
+  const nearZeroActive = useNearZeroSecurityStore((nearZeroSecurityState) => nearZeroSecurityState.active)
   const [changePasswordOpen, setChangePasswordOpen] = useState(false)
   const [upgradeFromNearZeroOpen, setUpgradeFromNearZeroOpen] = useState(false)
 

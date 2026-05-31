@@ -5,14 +5,16 @@ import {
   onWorkerHealthChange,
   type WorkerHealthStatus,
 } from '@/workers/crypto-factory';
-import { removeLightningConnectionsHydrationQueries } from '@/lib/lightning-connections-hydration';
+import { removeLightningConnectionsHydrationQueries } from '@/lib/lightning/lightning-connections-hydration';
+import { removeOnchainDashboardQueries } from '@/lib/wallet/onchain-dashboard-sync';
 import { useWalletStore } from '@/stores/walletStore';
 import { useLightningStore } from '@/stores/lightningStore';
 import { useSessionStore, clearAutoLockTimer } from '@/stores/sessionStore';
 import { resetSecretsChannel } from '@/workers/secrets-channel';
 import { awaitInFlightWalletSecretsWrites } from '@/db/wallet-secrets-write-tracker';
-import { navigateToLibraryIfOnWalletRoute } from '@/lib/app-router';
-import { asBadLocalChainStateError } from '@/lib/bad-local-chain-state-error';
+import { navigateToLibraryIfOnWalletRoute } from '@/lib/shared/app-router';
+import { asBadLocalChainStateError } from '@/lib/shared/bad-local-chain-state-error';
+import { errorMessage } from '@/lib/shared/utils';
 import type { Remote } from 'comlink';
 import type {
   CryptoService,
@@ -27,11 +29,15 @@ import type {
   EncryptedBlobForDb,
   ImportWalletAndEncryptSecretsParams,
   LoadWalletParams,
+  OpenWalletSessionParams,
   PrepareOnchainSendParams,
   PrepareOnchainSendResult,
   ResolveDescriptorWalletParams,
   ResolveDescriptorWalletResult,
+  ReadLastSuccessfulEsploraSyncAtParams,
   UpdateDescriptorWalletChangesetParams,
+  WalletSessionHandle,
+  WalletUtxoRow,
 } from '@/workers/crypto-api';
 import type {
   BalanceInfo,
@@ -58,6 +64,8 @@ interface CryptoState {
 
   loadWallet: (params: LoadWalletParams) => Promise<boolean>;
 
+  openWalletSession: (params: OpenWalletSessionParams) => Promise<WalletSessionHandle>;
+
   getNewAddress: () => Promise<string>;
   getCurrentAddress: () => Promise<string>;
   buildAndSignLabTransaction: (
@@ -70,6 +78,7 @@ interface CryptoState {
   prepareOnchainSendTransaction: (
     params: PrepareOnchainSendParams,
   ) => Promise<PrepareOnchainSendResult>;
+  listWalletUtxos: () => Promise<WalletUtxoRow[]>;
   getLabChangeAddress: () => Promise<string>;
   getBalance: () => Promise<BalanceInfo>;
   exportChangeset: () => Promise<string>;
@@ -95,6 +104,10 @@ interface CryptoState {
   updateDescriptorWalletChangeset: (
     params: UpdateDescriptorWalletChangesetParams,
   ) => Promise<EncryptedBlobForDb>;
+
+  readLastSuccessfulEsploraSyncAtForDescriptorWallet: (
+    params: ReadLastSuccessfulEsploraSyncAtParams,
+  ) => Promise<string | undefined>;
 
   createWalletAndEncryptSecrets: (
     params: CreateWalletAndEncryptSecretsParams,
@@ -128,8 +141,7 @@ export const useCryptoStore = create<CryptoState>((set, get) => {
       set({ error: null });
       return await workerCall(worker);
     } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : String(err);
-      set({ error: errorMsg });
+      set({ error: errorMessage(err) });
       throw err;
     }
   };
@@ -187,6 +199,9 @@ export const useCryptoStore = create<CryptoState>((set, get) => {
     loadWallet: (params) =>
       withErrorHandling((worker) => worker.loadWallet(params)),
 
+    openWalletSession: (params) =>
+      withErrorHandling((worker) => worker.openWalletSession(params)),
+
     getNewAddress: () =>
       withErrorHandling((worker) => worker.getNewAddress()),
 
@@ -201,6 +216,9 @@ export const useCryptoStore = create<CryptoState>((set, get) => {
 
     prepareOnchainSendTransaction: (params) =>
       withErrorHandling((worker) => worker.prepareOnchainSendTransaction(params)),
+
+    listWalletUtxos: () =>
+      withErrorHandling((worker) => worker.listWalletUtxos()),
 
     getLabChangeAddress: () =>
       withErrorHandling((worker) => worker.getLabChangeAddress()),
@@ -237,6 +255,11 @@ export const useCryptoStore = create<CryptoState>((set, get) => {
     updateDescriptorWalletChangeset: (params) =>
       withErrorHandling((worker) => worker.updateDescriptorWalletChangeset(params)),
 
+    readLastSuccessfulEsploraSyncAtForDescriptorWallet: (params) =>
+      withErrorHandling((worker) =>
+        worker.readLastSuccessfulEsploraSyncAtForDescriptorWallet(params),
+      ),
+
     createWalletAndEncryptSecrets: (params) =>
       withErrorHandling((worker) => worker.createWalletAndEncryptSecrets(params)),
 
@@ -253,6 +276,7 @@ export const useCryptoStore = create<CryptoState>((set, get) => {
       useWalletStore.getState().lockWallet();
       useLightningStore.getState().purgeLightningConnectionsFromMemory();
       removeLightningConnectionsHydrationQueries();
+      removeOnchainDashboardQueries();
       terminateCryptoWorker();
       resetSecretsChannel();
       useSessionStore.getState().clear();

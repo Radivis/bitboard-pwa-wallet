@@ -8,14 +8,14 @@ import {
 } from '@/components/ui/card'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { Button } from '@/components/ui/button'
-import { truncateAddress } from '@/lib/bitcoin-utils'
+import { truncateAddress } from '@/lib/wallet/bitcoin-utils'
 import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
 import {
   getOwnerDisplayNameWithAddressTypeAria,
   getOwnerIcon,
-} from '@/lib/lab-utils'
+} from '@/lib/lab/lab-utils'
 import { LabOwnerDisplayWithAddressType } from '@/components/lab/LabOwnerDisplayWithAddressType'
-import { isLabEntityOwnerGroupDead } from '@/lib/lab-owner'
+import { isLabEntityOwnerGroupDead } from '@/lib/lab/lab-owner'
 import { useLabChainStateQuery } from '@/hooks/useLabChainStateQuery'
 import { CardPagination } from '@/components/CardPagination'
 import {
@@ -26,8 +26,8 @@ import {
 import {
   LAB_ADDRESS_UTXO_OWNER_PAGE_SIZE,
   LAB_ENTITY_INNER_PAGE_SIZE,
-} from '@/lib/lab-paginated-queries'
-import type { AddressType } from '@/lib/wallet-domain-types'
+} from '@/lib/lab/lab-paginated-queries'
+import type { AddressType, WalletSummary } from '@/lib/wallet/wallet-domain-types'
 import { useWalletStore } from '@/stores/walletStore'
 import { Badge } from '@/components/ui/badge'
 import { Wallet, FlaskConical, Copy, Skull } from 'lucide-react'
@@ -41,7 +41,7 @@ function LabOwnerAddressesInner({
   onAddressPageChange,
 }: {
   ownerKey: string
-  wallets: Array<{ wallet_id: number; name: string }>
+  wallets: WalletSummary[]
   entities: readonly {
     labEntityId: number
     entityName: string | null
@@ -52,14 +52,14 @@ function LabOwnerAddressesInner({
   addressPageIndex: number
   onAddressPageChange: (pageIndex: number) => void
 }) {
-  const labNetworkEnabled = useWalletStore((s) => s.networkMode === 'lab')
-  const { data } = useLabAddressesForOwnerPage(ownerKey, addressPageIndex, {
+  const labNetworkEnabled = useWalletStore((walletState) => walletState.networkMode === 'lab')
+  const { data: addressesPage } = useLabAddressesForOwnerPage(ownerKey, addressPageIndex, {
     enabled: labNetworkEnabled,
   })
-  const addresses = data?.addresses ?? []
-  const totalCount = data?.totalCount ?? 0
+  const addresses = addressesPage?.addresses ?? []
+  const totalCount = addressesPage?.totalCount ?? 0
   const { data: balanceByAddress } = useLabAddressBalancesForAddresses(
-    addresses.map((a) => a.address),
+    addresses.map((addressRow) => addressRow.address),
     { enabled: labNetworkEnabled && addresses.length > 0 },
   )
 
@@ -77,17 +77,17 @@ function LabOwnerAddressesInner({
           <span className="w-28 shrink-0 text-right">Balance</span>
           <span className="w-10 shrink-0" />
         </div>
-        {addresses.map((a) => (
+        {addresses.map((addressRow) => (
           <div
-            key={a.address}
+            key={addressRow.address}
             className="flex gap-4 items-center py-2 border-b border-border last:border-0"
           >
             <span className="font-mono text-sm break-all flex-1 min-w-0">
-              {truncateAddress(a.address)}
+              {truncateAddress(addressRow.address)}
             </span>
             <span className="text-right w-28 shrink-0">
               <BitcoinAmountDisplay
-                amountSats={balanceByAddress?.get(a.address) ?? 0}
+                amountSats={balanceByAddress?.get(addressRow.address) ?? 0}
                 size="sm"
               />
             </span>
@@ -95,8 +95,8 @@ function LabOwnerAddressesInner({
               size="icon"
               variant="ghost"
               className="h-8 w-8 shrink-0"
-              onClick={() => onCopyAddress(a.address)}
-              aria-label={`Copy ${truncateAddress(a.address)}`}
+              onClick={() => onCopyAddress(addressRow.address)}
+              aria-label={`Copy ${truncateAddress(addressRow.address)}`}
             >
               <Copy className="h-4 w-4" />
             </Button>
@@ -112,12 +112,12 @@ export function LabAddressesCard({
   wallets,
 }: {
   onCopyAddress: (address: string) => void
-  wallets: Array<{ wallet_id: number; name: string }>
+  wallets: WalletSummary[]
 }) {
   const [ownerPageIndex, setOwnerPageIndex] = useState(0)
   const [innerAddressPageByOwner, setInnerAddressPageByOwner] = useState<Record<string, number>>({})
 
-  const labNetworkEnabled = useWalletStore((s) => s.networkMode === 'lab')
+  const labNetworkEnabled = useWalletStore((walletState) => walletState.networkMode === 'lab')
   const { data: labState } = useLabChainStateQuery()
   const entities = labState?.entities ?? []
   const { data: ownerPage, isLoading, isError } = useLabOwnerKeysPage(ownerPageIndex, {

@@ -1,4 +1,4 @@
-import type { LabOwner } from '@/lib/lab-owner'
+import type { LabOwner } from '@/lib/lab/lab-owner'
 import type { LabTxDetails, LabTxOperationRecord, LabUtxo } from './lab-api'
 import type { BlockEffectsTx } from './lab-block-effects-types'
 import {
@@ -6,13 +6,13 @@ import {
   LAB_COINBASE_PREV_TXID_HEX,
   LAB_COINBASE_PREV_VOUT,
   LAB_COINBASE_SEQUENCE,
-} from '@/lib/lab-operations'
+} from '@/lib/lab/lab-operations'
 import {
   assertLabReceiverNonNull,
   labAddressesEqual,
   lookupOwnerForLabAddress,
   parseTxOperationPayload,
-  state,
+  labWorkerState,
   txidToChangeOutput,
 } from './lab-worker-state'
 
@@ -22,12 +22,12 @@ function registerBlockTxOutputsInWorkingUtxoMap(
   outputs: ReadonlyArray<{ address: string; amountSats: number }>,
 ): void {
   for (let vout = 0; vout < outputs.length; vout += 1) {
-    const o = outputs[vout]
+    const outputAtVout = outputs[vout]
     utxoMap.set(`${txid}:${vout}`, {
       txid,
       vout,
-      address: o.address,
-      amountSats: o.amountSats,
+      address: outputAtVout.address,
+      amountSats: outputAtVout.amountSats,
       scriptPubkeyHex: '',
     })
   }
@@ -38,10 +38,12 @@ function resolveChangeMetadataForBlockTx(tx: BlockEffectsTx): {
   txOperationPayload: ReturnType<typeof parseTxOperationPayload>
   changeOutputForTx: { address: string; vout: number | null } | undefined
 } {
-  const changeFromOp = state.txOperations?.find((o) => o.txid === tx.txid)
+  const changeFromOp = labWorkerState.txOperations?.find(
+    (txOperation) => txOperation.txid === tx.txid,
+  )
   const txOperationPayload = parseTxOperationPayload(
     changeFromOp?.payloadJson,
-    state.entities ?? [],
+    labWorkerState.entities ?? [],
   )
   const changeOutputForTx =
     txidToChangeOutput.get(tx.txid) ??
@@ -53,11 +55,11 @@ function resolveChangeMetadataForBlockTx(tx: BlockEffectsTx): {
 
 function buildInputsForBlockEffectTx(
   tx: BlockEffectsTx,
-  isCb: boolean,
+  isCoinbaseTx: boolean,
   utxoMap: Map<string, LabUtxo>,
   addressToOwner: Record<string, LabOwner>,
 ): { inputs: LabTxDetails['inputs']; firstInputAddress: string | null } {
-  if (isCb) {
+  if (isCoinbaseTx) {
     return {
       inputs: [
         {
@@ -75,7 +77,7 @@ function buildInputsForBlockEffectTx(
   const inputs: LabTxDetails['inputs'] = []
   let firstInputAddress: string | null = null
   for (const input of tx.inputs) {
-    const key = `${input.prev_txid}:${input.prev_vout}`
+    const key = `${input.prevTxid}:${input.prevVout}`
     const utxo = utxoMap.get(key)
     if (utxo) {
       const owner = lookupOwnerForLabAddress(utxo.address, addressToOwner) ?? null
@@ -83,8 +85,8 @@ function buildInputsForBlockEffectTx(
         address: utxo.address,
         amountSats: utxo.amountSats,
         owner,
-        prevTxid: input.prev_txid,
-        prevVout: input.prev_vout,
+        prevTxid: input.prevTxid,
+        prevVout: input.prevVout,
       })
       if (firstInputAddress === null) firstInputAddress = utxo.address
     }
@@ -122,12 +124,12 @@ function buildOutputsForBlockEffectTx(
       ? sender
       : (lookupOwnerForLabAddress(output.address, addressToOwner) ?? null)
     if (isChange && sender) {
-      state.addressToOwner = state.addressToOwner ?? {}
-      state.addressToOwner[output.address] = sender
+      labWorkerState.addressToOwner = labWorkerState.addressToOwner ?? {}
+      labWorkerState.addressToOwner[output.address] = sender
     }
     return {
       address: output.address,
-      amountSats: output.amount_sats,
+      amountSats: output.amountSats,
       isChange,
       owner,
     }
@@ -154,14 +156,16 @@ function resolveReceiverForBlockEffectTx(
     // disagree with our mempool flags, and "only one !isChange" may then be the change output.
     let payOutput: (typeof outputs)[0] | undefined
     if (primaryFromOp !== '') {
-      payOutput = outputs.find((o) => labAddressesEqual(o.address, primaryFromOp))
+      payOutput = outputs.find((outputDetail) =>
+        labAddressesEqual(outputDetail.address, primaryFromOp),
+      )
     }
     if (payOutput == null && nonChangeOutputs.length === 1) {
       payOutput = nonChangeOutputs[0]
     }
     if (payOutput != null) {
-      state.addressToOwner = state.addressToOwner ?? {}
-      state.addressToOwner[payOutput.address] = txOperationPayload.receiver
+      labWorkerState.addressToOwner = labWorkerState.addressToOwner ?? {}
+      labWorkerState.addressToOwner[payOutput.address] = txOperationPayload.receiver
       receiver = txOperationPayload.receiver
     }
   }
@@ -174,23 +178,23 @@ function resolveReceiverForBlockEffectTx(
         output.isChange === true && labAddressesEqual(output.address, firstNonChangeOutput.address),
     )
   ) {
-    state.addressToOwner = state.addressToOwner ?? {}
-    state.addressToOwner[firstNonChangeOutput.address] = sender
+    labWorkerState.addressToOwner = labWorkerState.addressToOwner ?? {}
+    labWorkerState.addressToOwner[firstNonChangeOutput.address] = sender
     receiver = sender
   }
   for (const output of outputs) {
     if (!output.isChange && output.owner == null) {
       const resolved = lookupOwnerForLabAddress(
         output.address,
-        state.addressToOwner ?? {},
+        labWorkerState.addressToOwner ?? {},
       )
       if (resolved != null) output.owner = resolved
     }
   }
   for (const output of outputs) {
     if (output.owner != null) {
-      state.addressToOwner = state.addressToOwner ?? {}
-      state.addressToOwner[output.address] = output.owner
+      labWorkerState.addressToOwner = labWorkerState.addressToOwner ?? {}
+      labWorkerState.addressToOwner[output.address] = output.owner
     }
   }
   return receiver
@@ -201,22 +205,22 @@ export function applyTransactionsAndDetailsFromBlock(
   height: number,
   blockTime: number,
 ): void {
-  const utxoMap = new Map(state.utxos.map((utxo) => [`${utxo.txid}:${utxo.vout}`, utxo]))
-  const addressToOwner = state.addressToOwner ?? {}
+  const utxoMap = new Map(labWorkerState.utxos.map((utxo) => [`${utxo.txid}:${utxo.vout}`, utxo]))
+  const addressToOwner = labWorkerState.addressToOwner ?? {}
 
   for (const tx of transactions) {
-    const isCb = isCoinbase(tx)
+    const isCoinbaseTx = isCoinbase(tx)
     const { changeFromOp, txOperationPayload, changeOutputForTx } =
       resolveChangeMetadataForBlockTx(tx)
 
     const { inputs, firstInputAddress } = buildInputsForBlockEffectTx(
       tx,
-      isCb,
+      isCoinbaseTx,
       utxoMap,
       addressToOwner,
     )
 
-    const sender = isCb
+    const sender = isCoinbaseTx
       ? null
       : firstInputAddress
         ? lookupOwnerForLabAddress(firstInputAddress, addressToOwner) ?? null
@@ -242,7 +246,7 @@ export function applyTransactionsAndDetailsFromBlock(
       addressToOwner,
     )
 
-    if (isCb) {
+    if (isCoinbaseTx) {
       assertLabReceiverNonNull(
         receiver,
         `applyTransactionsFromBlock coinbase txid=${tx.txid} height=${height}`,
@@ -253,13 +257,13 @@ export function applyTransactionsAndDetailsFromBlock(
         `applyTransactionsFromBlock txid=${tx.txid} height=${height}`,
       )
     }
-    state.transactions.push({
+    labWorkerState.transactions.push({
       txid: tx.txid,
       sender,
       receiver,
     })
     if (inputs.length > 0 || outputs.length > 0) {
-      state.txDetails.push({
+      labWorkerState.txDetails.push({
         txid: tx.txid,
         blockHeight: height,
         blockTime,

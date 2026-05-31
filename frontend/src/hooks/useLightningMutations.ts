@@ -14,29 +14,29 @@ import {
   type ConnectedLightningWallet,
   type NwcConnectionConfig,
   type LightningConnectionConfig,
-} from '@/lib/lightning-backend-service'
+} from '@/lib/lightning/lightning-backend-service'
 import { ensureMigrated } from '@/db/database'
 import { useSessionStore } from '@/stores/sessionStore'
 import {
   batchApplyNwcSnapshotPatches,
   loadNwcSnapshotForConnection,
-} from '@/lib/lightning-wallet-snapshot-persistence'
+} from '@/lib/lightning/lightning-wallet-snapshot-persistence'
 import {
   fetchEsploraTipBlockHeight,
   getEsploraUrl,
   NWC_ESPLORA_BLOCK_HEIGHT_TOLERANCE,
-} from '@/lib/bitcoin-utils'
-import { loadCustomEsploraUrl } from '@/lib/wallet-utils'
+} from '@/lib/wallet/bitcoin-utils'
+import { loadCustomEsploraUrl } from '@/lib/wallet/wallet-utils'
 import {
   DEFAULT_INVOICE_EXPIRY_SECONDS,
   isLightningSupported,
   type LightningNetworkMode,
-} from '@/lib/lightning-utils'
+} from '@/lib/lightning/lightning-utils'
 import {
   formatAmountInBitcoinDisplayUnit,
   getPrefixedBitcoinDisplayUnitLabel,
-} from '@/lib/bitcoin-display-unit'
-import { getLightningConnectionsForActiveWallet } from '@/lib/lightning-connection-utils'
+} from '@/lib/wallet/bitcoin-display-unit'
+import { getLightningConnectionsForActiveWallet } from '@/lib/lightning/lightning-connection-utils'
 import {
   fetchLightningBalancesForDashboard,
   fetchLightningPaymentsForActiveWallet,
@@ -44,13 +44,17 @@ import {
   lightningConnectionsFingerprint,
   lightningDashboardBalancesQueryKey,
   lightningDashboardHistoryQueryKey,
-} from '@/lib/lightning-dashboard-sync'
+} from '@/lib/lightning/lightning-dashboard-sync'
+import {
+  lnNwcNetworkPlausibilityQueryKey,
+  lnWalletBalanceQueryKey,
+} from '@/lib/lightning/lightning-query-keys'
 import {
   LIGHTNING_DASHBOARD_REFETCH_MS,
   LIGHTNING_DASHBOARD_STALE_MS,
   LN_WALLET_BALANCE_STALE_MS,
   LN_WALLET_NETWORK_PLAUSIBILITY_STALE_MS,
-} from '@/lib/lightning-query-timings'
+} from '@/lib/lightning/lightning-query-timings'
 
 function subscribeOnlineStatus(onStoreChange: () => void) {
   window.addEventListener('online', onStoreChange)
@@ -75,11 +79,11 @@ export function useNavigatorOnline(): boolean {
 }
 
 function useLightningDashboardQueryBase() {
-  const lightningEnabled = useFeatureStore((s) => s.lightningEnabled)
-  const networkMode = useWalletStore((s) => s.networkMode)
-  const activeWalletId = useWalletStore((s) => s.activeWalletId)
-  const walletStatus = useWalletStore((s) => s.walletStatus)
-  const connectedWallets = useLightningStore((s) => s.connectedWallets)
+  const isLightningEnabled = useFeatureStore((featureState) => featureState.isLightningEnabled)
+  const networkMode = useWalletStore((walletState) => walletState.networkMode)
+  const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
+  const walletStatus = useWalletStore((walletState) => walletState.walletStatus)
+  const connectedWallets = useLightningStore((lightningState) => lightningState.connectedWallets)
   const isOnline = useNavigatorOnline()
 
   const matchingConnections = useMemo(
@@ -88,15 +92,15 @@ function useLightningDashboardQueryBase() {
         connectedLightningWallets: connectedWallets,
         activeWalletId,
         networkMode,
-        isLightningEnabled: lightningEnabled,
+        isLightningEnabled: isLightningEnabled,
       }),
-    [lightningEnabled, networkMode, activeWalletId, connectedWallets],
+    [isLightningEnabled, networkMode, activeWalletId, connectedWallets],
   )
 
   const fingerprint = lightningConnectionsFingerprint(matchingConnections)
 
   const enabled =
-    lightningEnabled &&
+    isLightningEnabled &&
     isLightningSupported(networkMode) &&
     activeWalletId != null &&
     (walletStatus === 'unlocked' || walletStatus === 'syncing') &&
@@ -162,7 +166,12 @@ export function useLnWalletBalanceQuery(params: {
 }) {
   const { connectionId, walletId, networkMode, config } = params
   return useQuery({
-    queryKey: ['ln-wallet-balance', connectionId, walletId, networkMode, config],
+    queryKey: lnWalletBalanceQueryKey({
+      connectionId,
+      walletId,
+      networkMode,
+      config,
+    }),
     queryFn: async (): Promise<LnWalletBalanceQueryResult> => {
       await ensureMigrated()
       try {
@@ -216,12 +225,7 @@ export function useLnWalletNetworkPlausibilityQuery(
   wallet: ConnectedLightningWallet | null,
 ) {
   return useQuery({
-    queryKey: [
-      'ln-nwc-network-plausibility',
-      wallet?.id,
-      wallet?.networkMode,
-      wallet?.config,
-    ],
+    queryKey: lnNwcNetworkPlausibilityQueryKey(wallet),
     queryFn: async () => {
       if (!wallet) {
         throw new Error('No Lightning wallet')
@@ -270,9 +274,9 @@ export function useTestConnectionMutation() {
 }
 
 export function useCreateInvoiceMutation(onCreated: () => void) {
-  const networkMode = useWalletStore((s) => s.networkMode)
-  const createInvoice = useLightningStore((s) => s.createInvoice)
-  const addSessionInvoice = useReceiveStore((s) => s.addSessionInvoice)
+  const networkMode = useWalletStore((walletState) => walletState.networkMode)
+  const createInvoice = useLightningStore((lightningState) => lightningState.createInvoice)
+  const addSessionInvoice = useReceiveStore((receiveState) => receiveState.addSessionInvoice)
 
   return useMutation({
     mutationFn: async (params: {

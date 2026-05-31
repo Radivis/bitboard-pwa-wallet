@@ -3,7 +3,7 @@
  * so support can inspect failures without asking the user to reproduce.
  */
 
-import { writeTextFileToOpfsRoot } from '@/lib/opfs-root-file'
+import { writeTextFileToOpfsRoot } from '@/db/opfs/opfs-root-file'
 
 export const WALLET_MIGRATION_FAILURE_OPFS_FILENAME = 'wallet-schema-migration-failure.json'
 
@@ -47,8 +47,8 @@ function serializeErrorChain(error: unknown): SerializedErrorNode {
 const MIGRATION_NAME_IN_MESSAGE = /^Migration "([^"]+)" failed/
 
 export function extractMigrationNameFromErrorMessage(message: string): string | undefined {
-  const m = message.match(MIGRATION_NAME_IN_MESSAGE)
-  return m?.[1]
+  const migrationNameMatch = message.match(MIGRATION_NAME_IN_MESSAGE)
+  return migrationNameMatch?.[1]
 }
 
 export function buildWalletMigrationFailureReportV1(input: {

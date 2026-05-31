@@ -1,5 +1,5 @@
 import { InfomodeToggle } from '@/components/infomode/InfomodeToggle'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/shared/utils'
 
 export const INFOMODE_MODAL_TOGGLE_TITLE =
   'Turn on Infomode to tap underlined labels for explanations'

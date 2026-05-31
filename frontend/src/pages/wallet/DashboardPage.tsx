@@ -31,24 +31,27 @@ import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
 import { BitcoinFiatDenominationSwitch } from '@/components/BitcoinFiatDenominationSwitch'
 import { FiatAmountDisplay } from '@/components/FiatAmountDisplay'
-import { balanceInfoToOnChainDisplay } from '@/lib/onchain-balance-display'
+import { balanceInfoToOnChainDisplay } from '@/lib/wallet/onchain-balance-display'
 import {
   runIncrementalDashboardWalletSync,
   runFullScanDashboardWalletSync,
   retryImportInitialEsploraSyncWithWalletStatus,
-} from '@/lib/wallet-utils'
-import { BadLocalChainStateError } from '@/lib/bad-local-chain-state-error'
-import { sanitizeErrorMessageForUi } from '@/lib/sanitize-error-for-ui'
-import { errorMessage } from '@/lib/utils'
-import { labTransactionsForWallet, sumLabWalletUtxoSats } from '@/lib/lab-utils'
+} from '@/lib/wallet/wallet-utils'
+import { BadLocalChainStateError } from '@/lib/shared/bad-local-chain-state-error'
+import { sanitizeErrorMessageForUi } from '@/lib/shared/sanitize-error-for-ui'
+import { errorMessage } from '@/lib/shared/utils'
+import { labTransactionsForWallet, sumLabWalletUtxoSats } from '@/lib/lab/lab-utils'
 import { useLabChainStateQuery } from '@/hooks/useLabChainStateQuery'
 import {
   useLightningBalancesForDashboardQuery,
   useLightningHistoryQuery,
 } from '@/hooks/useLightningMutations'
+import {
+  useOnchainEsploraSyncMetadataQuery,
+} from '@/hooks/useOnchainDashboardQueries'
 import { useFeatureStore } from '@/stores/featureStore'
-import { isLightningSupported } from '@/lib/lightning-utils'
-import { mergeAndSortDashboardActivity } from '@/lib/lightning-dashboard-sync'
+import { isLightningSupported } from '@/lib/lightning/lightning-utils'
+import { mergeAndSortDashboardActivity } from '@/lib/lightning/lightning-dashboard-sync'
 import { useDashboardActivityPageSize } from '@/hooks/useDashboardActivityPageSize'
 import { LightningPaymentItem } from '@/components/LightningPaymentItem'
 import { useFiatDenominationStore } from '@/stores/fiatDenominationStore'
@@ -58,15 +61,15 @@ import {
   walletBalanceCardTitle,
   walletDashboardTitle,
   walletOnChainSectionLabel,
-} from '@/lib/wallet-lab-ui-copy'
+} from '@/lib/wallet/wallet-lab-ui-copy'
 
 function ImportInitialSyncErrorBanner() {
-  const networkMode = useWalletStore((s) => s.networkMode)
-  const message = useWalletStore((s) => s.importInitialSyncErrorMessage)
+  const networkMode = useWalletStore((walletState) => walletState.networkMode)
+  const message = useWalletStore((walletState) => walletState.importInitialSyncErrorMessage)
   const setImportInitialSyncErrorMessage = useWalletStore(
-    (s) => s.setImportInitialSyncErrorMessage,
+    (walletState) => walletState.setImportInitialSyncErrorMessage,
   )
-  const walletStatus = useWalletStore((s) => s.walletStatus)
+  const walletStatus = useWalletStore((walletState) => walletState.walletStatus)
   const isSyncing = walletStatus === 'syncing'
 
   if (networkMode === 'lab' || message == null || message === '') {
@@ -120,12 +123,13 @@ function ImportInitialSyncErrorBanner() {
 }
 
 function BalanceCard() {
-  const networkMode = useWalletStore((s) => s.networkMode)
-  const balance = useWalletStore((s) => s.balance)
-  const activeWalletId = useWalletStore((s) => s.activeWalletId)
-  const lightningEnabled = useFeatureStore((s) => s.lightningEnabled)
-  const connectedLightningWallets = useLightningStore((s) => s.connectedWallets)
-  const lnBalancesQuery = useLightningBalancesForDashboardQuery()
+  const networkMode = useWalletStore((walletState) => walletState.networkMode)
+  const balance = useWalletStore((walletState) => walletState.balance)
+  const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
+  const isLightningEnabled = useFeatureStore((featureState) => featureState.isLightningEnabled)
+  const connectedLightningWallets = useLightningStore((lightningState) => lightningState.connectedWallets)
+  const lightningBalancesQuery = useLightningBalancesForDashboardQuery()
+  const onchainEsploraSyncQuery = useOnchainEsploraSyncMetadataQuery()
   const { data: labState, isPending: labChainPending } = useLabChainStateQuery()
   const utxos = labState?.utxos ?? []
   const addressToOwner = labState?.addressToOwner ?? {}
@@ -149,10 +153,13 @@ function BalanceCard() {
       : balanceInfoToOnChainDisplay(balance)
 
   const primarySats = onChainDisplay.totalSats
+  const isStaleOnchain = onchainEsploraSyncQuery.data?.isStaleOnchain ?? false
+  const lastSuccessfulEsploraSyncAt =
+    onchainEsploraSyncQuery.data?.lastSuccessfulEsploraSyncAt
 
   const hasMatchingLightningConnection = useMemo(
     () =>
-      lightningEnabled &&
+      isLightningEnabled &&
       networkMode !== 'lab' &&
       hasNetworkConnectedWallet(
         connectedLightningWallets,
@@ -160,7 +167,7 @@ function BalanceCard() {
         networkMode,
       ),
     [
-      lightningEnabled,
+      isLightningEnabled,
       networkMode,
       activeWalletId,
       connectedLightningWallets,
@@ -169,25 +176,29 @@ function BalanceCard() {
 
   const showLightningBalances = hasMatchingLightningConnection
 
-  const lnTotalSats = lnBalancesQuery.data?.totalSats ?? 0
+  const lightningTotalSats = lightningBalancesQuery.data?.totalSats ?? 0
   const lightningBalanceRows = useMemo(
-    () => lnBalancesQuery.data?.lightningBalanceRows ?? [],
-    [lnBalancesQuery.data?.lightningBalanceRows],
+    () => lightningBalancesQuery.data?.lightningBalanceRows ?? [],
+    [lightningBalancesQuery.data?.lightningBalanceRows],
   )
-  const hasStaleLnBalance = lightningBalanceRows.some((r) => r.isStaleBalance)
+  const hasStaleLightningBalance = lightningBalanceRows.some(
+    (balanceRow) => balanceRow.isStaleBalance,
+  )
   const newestStaleBalanceIso = useMemo(() => {
     const times = lightningBalanceRows
-      .filter((r) => r.isStaleBalance && r.balanceSnapshotAt != null)
-      .map((r) => r.balanceSnapshotAt as string)
+      .filter(
+        (balanceRow) => balanceRow.isStaleBalance && balanceRow.balanceSnapshotAt != null,
+      )
+      .map((balanceRow) => balanceRow.balanceSnapshotAt as string)
     if (times.length === 0) return null
-    return times.reduce((a, b) => (a > b ? a : b))
+    return times.reduce((newerIso, olderIso) => (newerIso > olderIso ? newerIso : olderIso))
   }, [lightningBalanceRows])
 
   const fiatDenominationMode = useFiatDenominationStore(
-    (s) => s.fiatDenominationMode,
+    (fiatDenominationState) => fiatDenominationState.fiatDenominationMode,
   )
   const defaultFiatCurrency = useFiatDenominationStore(
-    (s) => s.defaultFiatCurrency,
+    (fiatDenominationState) => fiatDenominationState.defaultFiatCurrency,
   )
   const fiatRatesQuery = useMainnetFiatRatesQuery()
   const btcPriceInFiat = fiatRatesQuery.data?.btcPriceInFiat
@@ -234,7 +245,7 @@ function BalanceCard() {
         <>
           <div className="space-y-1">
             <FiatAmountDisplay
-              amountSats={lnTotalSats}
+              amountSats={lightningTotalSats}
               btcPriceInFiat={btcPriceInFiat}
               currency={defaultFiatCurrency}
               size="lg"
@@ -244,7 +255,7 @@ function BalanceCard() {
           </div>
           <div className="space-y-1">
             <BitcoinAmountDisplay
-              amountSats={lnTotalSats}
+              amountSats={lightningTotalSats}
               size="md"
               allowUnitToggle={false}
               className="text-xl text-muted-foreground"
@@ -255,7 +266,7 @@ function BalanceCard() {
     }
     return (
       <BitcoinAmountDisplay
-        amountSats={lnTotalSats}
+        amountSats={lightningTotalSats}
         size="lg"
         className="text-2xl"
       />
@@ -295,6 +306,22 @@ function BalanceCard() {
               {walletOnChainSectionLabel(networkMode)}
             </p>
             {renderOnChainHeadline()}
+            {networkMode !== 'lab' && isStaleOnchain ? (
+              <p
+                className="mt-2 text-xs text-amber-700 dark:text-amber-400"
+                data-testid="onchain-esplora-stale-banner"
+              >
+                Showing on-chain data from your wallet&apos;s saved chain state.
+                Esplora has not been verified this session.
+                {lastSuccessfulEsploraSyncAt != null && (
+                  <>
+                    {' '}
+                    Last verified with Esplora:{' '}
+                    {new Date(lastSuccessfulEsploraSyncAt).toLocaleString()}.
+                  </>
+                )}
+              </p>
+            ) : null}
             {onChainDisplay.showBreakdown && (
               <ul className="mt-3 space-y-1.5 text-sm">
                 {onChainDisplay.confirmedSats > 0 && (
@@ -349,7 +376,7 @@ function BalanceCard() {
             )}
           </div>
 
-          {showLightningBalances && lnBalancesQuery.isPending && (
+          {showLightningBalances && lightningBalancesQuery.isPending && (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" />
               Loading Lightning balances…
@@ -357,7 +384,7 @@ function BalanceCard() {
           )}
 
           {showLightningBalances &&
-            lnBalancesQuery.isSuccess &&
+            lightningBalancesQuery.isSuccess &&
             lightningBalanceRows.length > 0 && (
               <div>
                 <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
@@ -408,7 +435,7 @@ function BalanceCard() {
                     </li>
                   ))}
                 </ul>
-                {hasStaleLnBalance && (
+                {hasStaleLightningBalance && (
                   <p
                     className="mt-2 text-xs text-amber-700 dark:text-amber-400"
                     data-testid="lightning-balance-stale-banner"
@@ -424,7 +451,7 @@ function BalanceCard() {
                     )}
                   </p>
                 )}
-                {lightningBalanceRows.some((r) => r.error != null) && (
+                {lightningBalanceRows.some((balanceRow) => balanceRow.error != null) && (
                   <p className="mt-2 text-xs text-amber-700 dark:text-amber-400">
                     Some Lightning wallets could not be reached and have no saved
                     balance yet; those show “—” and are not included in the
@@ -448,10 +475,10 @@ function SyncButton({
   isThisOp: boolean
   onThisOp: (running: boolean) => void
 }) {
-  const networkMode = useWalletStore((s) => s.networkMode)
-  const activeWalletId = useWalletStore((s) => s.activeWalletId)
-  const setWalletStatus = useWalletStore((s) => s.setWalletStatus)
-  const password = useSessionStore((s) => s.password)
+  const networkMode = useWalletStore((walletState) => walletState.networkMode)
+  const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
+  const setWalletStatus = useWalletStore((walletState) => walletState.setWalletStatus)
+  const password = useSessionStore((sessionState) => sessionState.password)
 
   const handleSync = useCallback(async () => {
     try {
@@ -508,10 +535,10 @@ function FullRescanButton({
   isThisOp: boolean
   onThisOp: (running: boolean) => void
 }) {
-  const networkMode = useWalletStore((s) => s.networkMode)
-  const activeWalletId = useWalletStore((s) => s.activeWalletId)
-  const setWalletStatus = useWalletStore((s) => s.setWalletStatus)
-  const password = useSessionStore((s) => s.password)
+  const networkMode = useWalletStore((walletState) => walletState.networkMode)
+  const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
+  const setWalletStatus = useWalletStore((walletState) => walletState.setWalletStatus)
+  const password = useSessionStore((sessionState) => sessionState.password)
 
   const handleFullRescan = useCallback(async () => {
     try {
@@ -559,7 +586,7 @@ function FullRescanButton({
 
 function DashboardOnChainSyncControls() {
   const [activeOp, setActiveOp] = useState<'sync' | 'full' | null>(null)
-  const walletStatus = useWalletStore((s) => s.walletStatus)
+  const walletStatus = useWalletStore((walletState) => walletState.walletStatus)
   const isBusy = walletStatus === 'syncing'
 
   return (
@@ -579,11 +606,11 @@ function DashboardOnChainSyncControls() {
 }
 
 function RecentTransactions() {
-  const networkMode = useWalletStore((s) => s.networkMode)
-  const transactions = useWalletStore((s) => s.transactions)
-  const activeWalletId = useWalletStore((s) => s.activeWalletId)
-  const lightningEnabled = useFeatureStore((s) => s.lightningEnabled)
-  const connectedLightningWallets = useLightningStore((s) => s.connectedWallets)
+  const networkMode = useWalletStore((walletState) => walletState.networkMode)
+  const transactions = useWalletStore((walletState) => walletState.transactions)
+  const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
+  const isLightningEnabled = useFeatureStore((featureState) => featureState.isLightningEnabled)
+  const connectedLightningWallets = useLightningStore((lightningState) => lightningState.connectedWallets)
   const hasLnWalletForNetwork = useMemo(
     () =>
       hasNetworkConnectedWallet(
@@ -593,7 +620,7 @@ function RecentTransactions() {
       ),
     [connectedLightningWallets, activeWalletId, networkMode],
   )
-  const lnHistoryQuery = useLightningHistoryQuery()
+  const lightningHistoryQuery = useLightningHistoryQuery()
   const { data: labState, isPending: labChainPending } = useLabChainStateQuery()
   const labTransactions = labState?.transactions ?? []
   const labTxDetails = labState?.txDetails ?? []
@@ -611,32 +638,32 @@ function RecentTransactions() {
   const displayTransactions =
     networkMode === 'lab' ? labTransactionsForActiveWallet : transactions
 
-  const lnPayments = useMemo(
-    () => lnHistoryQuery.data?.payments ?? [],
-    [lnHistoryQuery.data?.payments],
+  const lightningPayments = useMemo(
+    () => lightningHistoryQuery.data?.payments ?? [],
+    [lightningHistoryQuery.data?.payments],
   )
-  const stalePaymentsAsOf = lnHistoryQuery.data?.stalePaymentsAsOf
+  const stalePaymentsAsOf = lightningHistoryQuery.data?.stalePaymentsAsOf
 
   const mergedActivity = useMemo(() => {
     if (networkMode === 'lab') {
       return []
     }
     if (
-      !lightningEnabled ||
+      !isLightningEnabled ||
       !isLightningSupported(networkMode) ||
       activeWalletId == null ||
       !hasLnWalletForNetwork
     ) {
       return mergeAndSortDashboardActivity(transactions, [])
     }
-    return mergeAndSortDashboardActivity(transactions, lnPayments)
+    return mergeAndSortDashboardActivity(transactions, lightningPayments)
   }, [
     networkMode,
-    lightningEnabled,
+    isLightningEnabled,
     activeWalletId,
     hasLnWalletForNetwork,
     transactions,
-    lnPayments,
+    lightningPayments,
   ])
 
   const activityTotalCount =
@@ -696,19 +723,19 @@ function RecentTransactions() {
       </CardHeader>
       <CardContent>
         {networkMode !== 'lab' &&
-          lightningEnabled &&
+          isLightningEnabled &&
           hasLnWalletForNetwork &&
-          lnHistoryQuery.isLoading && (
+          lightningHistoryQuery.isLoading && (
           <p className="mb-3 flex items-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" />
             Loading Lightning activity…
           </p>
         )}
         {networkMode !== 'lab' &&
-          lightningEnabled &&
+          isLightningEnabled &&
           hasLnWalletForNetwork &&
           stalePaymentsAsOf != null &&
-          lnPayments.length > 0 && (
+          lightningPayments.length > 0 && (
             <p
               className="mb-3 text-xs text-amber-700 dark:text-amber-400"
               data-testid="lightning-history-stale-banner"
@@ -750,13 +777,13 @@ function RecentTransactions() {
                 ? labPageRows.map((tx) => (
                     <TransactionItem key={tx.txid} transaction={tx} />
                   ))
-                : mergedPageRows.map((item) =>
-                    item.kind === 'chain' ? (
-                      <TransactionItem key={item.tx.txid} transaction={item.tx} />
+                : mergedPageRows.map((activityItem) =>
+                    activityItem.kind === 'chain' ? (
+                      <TransactionItem key={activityItem.tx.txid} transaction={activityItem.tx} />
                     ) : (
                       <LightningPaymentItem
-                        key={`${item.payment.connectionId}-${item.payment.paymentHash}`}
-                        payment={item.payment}
+                        key={`${activityItem.payment.connectionId}-${activityItem.payment.paymentHash}`}
+                        payment={activityItem.payment}
                       />
                     ),
                   )}
@@ -770,10 +797,10 @@ function RecentTransactions() {
 
 export function DashboardPage() {
   const navigate = useNavigate()
-  const activeWalletId = useWalletStore((s) => s.activeWalletId)
-  const walletStatus = useWalletStore((s) => s.walletStatus)
-  const lastSyncTime = useWalletStore((s) => s.lastSyncTime)
-  const networkMode = useWalletStore((s) => s.networkMode)
+  const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
+  const walletStatus = useWalletStore((walletState) => walletState.walletStatus)
+  const lastSyncTime = useWalletStore((walletState) => walletState.lastSyncTime)
+  const networkMode = useWalletStore((walletState) => walletState.networkMode)
 
   if (!activeWalletId) {
     navigate({ to: '/setup' })
@@ -789,7 +816,7 @@ export function DashboardPage() {
       <PageHeader title={walletDashboardTitle(networkMode)} icon={Home}>
         {lastSyncTime ? (
           <p className="text-xs text-muted-foreground">
-            Last synced: {lastSyncTime.toLocaleTimeString()}
+            Last synced: {lastSyncTime.toLocaleString()}
           </p>
         ) : null}
       </PageHeader>

@@ -1,4 +1,5 @@
 /// <reference types="vite/client" />
+/// <reference types="vite-plugin-pwa/react" />
 
 interface ImportMetaEnv {
   /** From repository root `VERSION` at build time (`vite.config.ts`). */
@@ -33,7 +34,7 @@ interface Window {
   __E2E_NWC__?: {
     setFailing: (value: boolean) => void
     setBalanceSats: (value: number) => void
-    addPayment: (payment: import('@/lib/lightning-backend-service').LightningPayment) => void
+    addPayment: (payment: import('@/lib/lightning/lightning-backend-service').LightningPayment) => void
     reset: () => void
   }
 }

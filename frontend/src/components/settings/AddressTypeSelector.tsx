@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react'
 import { AddressType, useWalletStore } from '@/stores/walletStore'
-import { useSubWalletSwitchMutation } from '@/hooks/useSubWalletSwitchMutation'
+import { useDescriptorWalletSwitchMutation } from '@/hooks/useDescriptorWalletSwitchMutation'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { Button } from '@/components/ui/button'
 import { ConfirmationDialog } from '@/components/ConfirmationDialog'
@@ -10,15 +10,15 @@ const ADDRESS_SWITCH_SPINNER_CLASS =
   'flex-row items-start justify-start gap-2 py-1 [&_.animate-spin]:mt-0.5 [&_.animate-spin]:h-4 [&_.animate-spin]:w-4 [&_p]:max-w-[min(100%,28rem)] [&_p]:text-left [&_p]:leading-snug'
 
 export function AddressTypeSelector() {
-  const addressType = useWalletStore((s) => s.addressType)
-  const setAddressType = useWalletStore((s) => s.setAddressType)
-  const activeWalletId = useWalletStore((s) => s.activeWalletId)
-  const walletStatus = useWalletStore((s) => s.walletStatus)
+  const addressType = useWalletStore((walletState) => walletState.addressType)
+  const setAddressType = useWalletStore((walletState) => walletState.setAddressType)
+  const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
+  const walletStatus = useWalletStore((walletState) => walletState.walletStatus)
   const [showWarning, setShowWarning] = useState(false)
   const [pendingType, setPendingType] = useState<AddressType | null>(null)
 
-  const { mutateAsync, loading, statusLine } =
-    useSubWalletSwitchMutation('addressType')
+  const { mutateAsync, isSwitching, statusLine } =
+    useDescriptorWalletSwitchMutation('addressType')
 
   const handleChange = (type: AddressType) => {
     if (type === addressType) return
@@ -56,7 +56,7 @@ export function AddressTypeSelector() {
             size="sm"
             onClick={() => handleChange(AddressType.Taproot)}
             className="w-full"
-            disabled={loading}
+            disabled={isSwitching}
           >
             Taproot (BIP86)
           </Button>
@@ -72,13 +72,13 @@ export function AddressTypeSelector() {
             size="sm"
             onClick={() => handleChange(AddressType.SegWit)}
             className="w-full"
-            disabled={loading}
+            disabled={isSwitching}
           >
             SegWit (BIP84)
           </Button>
         </InfomodeWrapper>
       </div>
-      {loading && statusLine && (
+      {isSwitching && statusLine && (
         <LoadingSpinner text={statusLine} className={ADDRESS_SWITCH_SPINNER_CLASS} />
       )}
       <ConfirmationDialog

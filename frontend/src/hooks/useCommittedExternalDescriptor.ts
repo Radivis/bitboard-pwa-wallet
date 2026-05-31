@@ -1,8 +1,9 @@
 import { useQuery } from '@tanstack/react-query'
 import { ensureMigrated, getDatabase, loadWalletSecretsPayload } from '@/db'
-import { findDescriptorWallet } from '@/lib/descriptor-wallet-manager'
-import { toBitcoinNetwork } from '@/lib/bitcoin-utils'
+import { findDescriptorWallet } from '@/lib/wallet/descriptor-wallet-manager'
+import { toBitcoinNetwork } from '@/lib/wallet/bitcoin-utils'
 import { useSessionStore } from '@/stores/sessionStore'
+import { WALLET_DB_QUERY_KEY_ROOT } from '@/lib/wallet/wallet-query-key-root'
 import {
   selectCommittedAccountId,
   selectCommittedAddressType,
@@ -14,20 +15,21 @@ export const COMMITTED_EXTERNAL_DESCRIPTOR_QUERY_KEY =
   'committed-external-descriptor' as const
 
 /**
- * Loads the external (receiving) output descriptor for the committed sub-wallet
+ * Loads the external (receiving) output descriptor for the committed descriptor wallet
  * from encrypted payload when the session password is available.
  */
 export function useCommittedExternalDescriptor() {
-  const activeWalletId = useWalletStore((s) => s.activeWalletId)
+  const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
   const committedNetworkMode = useWalletStore(selectCommittedNetworkMode)
   const committedAddressType = useWalletStore(selectCommittedAddressType)
   const committedAccountId = useWalletStore(selectCommittedAccountId)
-  const sessionPassword = useSessionStore((s) => s.password)
+  const sessionPassword = useSessionStore((sessionState) => sessionState.password)
 
   const enabled = activeWalletId !== null && sessionPassword !== null
 
   return useQuery({
     queryKey: [
+      ...WALLET_DB_QUERY_KEY_ROOT,
       COMMITTED_EXTERNAL_DESCRIPTOR_QUERY_KEY,
       activeWalletId,
       committedNetworkMode,
@@ -51,7 +53,7 @@ export function useCommittedExternalDescriptor() {
       const walletDb = getDatabase()
       const payload = await loadWalletSecretsPayload(walletDb, password, walletId)
       const found = findDescriptorWallet({
-        secrets: payload,
+        secretsPayload: payload,
         network: toBitcoinNetwork(networkMode),
         addressType,
         accountId,

@@ -1,8 +1,8 @@
 import { getEncryptionWorker } from '@/workers/encryption-factory'
-import type { EncryptedBlob } from '@/lib/encrypted-blob-types'
+import type { EncryptedBlob } from '@/lib/shared/encrypted-blob-types'
 
 /** Re-export so wallet-persistence and tests keep the same import shape. */
-export type { EncryptedBlob } from '@/lib/encrypted-blob-types'
+export type { EncryptedBlob } from '@/lib/shared/encrypted-blob-types'
 
 /**
  * Encrypts plaintext using Argon2id KDF + AES-256-GCM.

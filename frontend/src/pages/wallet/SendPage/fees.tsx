@@ -3,12 +3,12 @@ import { useEsploraFeePresets } from '@/hooks/useEsploraFeePresets'
 import {
   NON_ESPLORA_FEE_PRESET_RATES_SAT_PER_VB,
   type SendFeePresetLabel,
-} from '@/lib/esplora-fee-estimates'
+} from '@/lib/esplora/esplora-fee-estimates'
 import { useSendStore } from '@/stores/sendStore'
 import { useWalletStore } from '@/stores/walletStore'
 
 export function useSendFlowFees() {
-  const networkMode = useWalletStore((s) => s.networkMode)
+  const networkMode = useWalletStore((walletState) => walletState.networkMode)
   const {
     feePresetSelection,
     feeRate,
@@ -36,9 +36,9 @@ export function useSendFlowFees() {
   )
 
   const customFeeParsed = useMemo(() => {
-    const n = Number.parseFloat(customFeeRate.trim())
-    if (!Number.isFinite(n) || n <= 0) return null
-    return n
+    const customFeeRateValue = Number.parseFloat(customFeeRate.trim())
+    if (!Number.isFinite(customFeeRateValue) || customFeeRateValue <= 0) return null
+    return customFeeRateValue
   }, [customFeeRate])
 
   const effectiveFeeRate = useCustomFee

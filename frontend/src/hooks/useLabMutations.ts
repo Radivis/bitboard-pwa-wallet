@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import type { LabOwner } from '@/lib/lab-owner'
+import type { LabOwner } from '@/lib/lab/lab-owner'
 import {
   labOpCreateLabEntity,
   labOpCreateLabEntityTransaction,
@@ -12,12 +12,12 @@ import {
   labOpSetLabEntityDead,
   labOpSetBlockWeightLimit,
   labOpSetMinerSubsidySats,
-} from '@/lib/lab-worker-operations'
+} from '@/lib/lab/lab-worker-operations'
 import { setLabChainStateCache } from '@/hooks/useLabChainStateQuery'
-import { labChainStateQueryKey } from '@/lib/lab-chain-query'
-import { invalidateLabPaginatedQueries } from '@/lib/lab-paginated-queries'
-import type { AddressType } from '@/lib/wallet-domain-types'
-import { errorMessage } from '@/lib/utils'
+import { labChainStateQueryKey } from '@/lib/lab/lab-chain-query'
+import { invalidateLabPaginatedQueries } from '@/lib/lab/lab-paginated-queries'
+import type { AddressType } from '@/lib/wallet/wallet-domain-types'
+import { errorMessage } from '@/lib/shared/utils'
 
 export type LabMineBlocksVariables = {
   count: number

@@ -3,9 +3,9 @@ import path from 'path'
 import { fileURLToPath } from 'node:url'
 import { defineConfig, type Plugin } from 'vite'
 import { readBitboardWalletVersion } from './common/bitboard-wallet-version'
-import { esploraViteProxyEntries } from './src/lib/esplora-service-whitelist'
-import { fiatRateViteProxyEntries } from './src/lib/fiat-rate-service-whitelist'
-import { faucetViteProxyEntries } from './src/lib/faucet-definitions'
+import { esploraViteProxyEntries } from './src/lib/esplora/esplora-service-whitelist'
+import { fiatRateViteProxyEntries } from './src/lib/fiat/fiat-rate-service-whitelist'
+import { faucetViteProxyEntries } from './src/lib/faucet/faucet-definitions'
 import { tanstackRouter } from '@tanstack/router-plugin/vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
@@ -127,7 +127,8 @@ export default defineConfig({
     tailwindcss(),
     wasm(),
     VitePWA({
-      registerType: 'autoUpdate',
+      // User confirms refresh so sends / password flows are not interrupted mid-action.
+      registerType: 'prompt',
       manifest: {
         name: 'Bitboard Wallet',
         short_name: 'Bitboard',
@@ -193,7 +194,7 @@ export default defineConfig({
       { find: '@common', replacement: path.resolve(projectRoot, './common') },
       {
         find: '@legal-locale',
-        replacement: path.resolve(projectRoot, './src/lib/legal-locale.ts'),
+        replacement: path.resolve(projectRoot, './src/lib/shared/legal-locale.ts'),
       },
       // Cross-project-safe aliases — the same module identifiers also resolve
       // from the landing-page Vite/TS configs, so files under `frontend/common/`

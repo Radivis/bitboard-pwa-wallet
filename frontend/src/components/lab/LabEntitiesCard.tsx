@@ -21,8 +21,8 @@ import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
 import {
   LAB_ENTITY_NAME_MAX_LENGTH,
   validateLabEntityRenameName,
-} from '@/lib/lab-owner'
-import { LAB_ENTITIES_PAGE_SIZE } from '@/lib/lab-paginated-queries'
+} from '@/lib/lab/lab-owner'
+import { LAB_ENTITIES_PAGE_SIZE } from '@/lib/lab/lab-paginated-queries'
 import { useFeatureStore } from '@/stores/featureStore'
 import {
   AddressType,
@@ -49,8 +49,8 @@ const labEntityActionButtonClassName = 'size-12 p-0 lg:size-8'
 const labEntityActionIconClassName = 'size-11 lg:size-7'
 
 export function LabEntitiesCard() {
-  const labNetworkEnabled = useWalletStore((s) => s.networkMode === 'lab')
-  const segwitAddressesEnabled = useFeatureStore((s) => s.segwitAddressesEnabled)
+  const labNetworkEnabled = useWalletStore((walletState) => walletState.networkMode === 'lab')
+  const isSegwitAddressesEnabled = useFeatureStore((featureState) => featureState.isSegwitAddressesEnabled)
   const committedAddressType = useWalletStore(selectCommittedAddressType)
   const [pageIndex, setPageIndex] = useState(0)
   const [newEntityName, setNewEntityName] = useState('')
@@ -70,16 +70,16 @@ export function LabEntitiesCard() {
 
   const { data: labState } = useLabChainStateQuery()
   const entitiesForValidation =
-    labState?.entities?.map((e) => ({
-      labEntityId: e.labEntityId,
-      entityName: e.entityName,
+    labState?.entities?.map((entity) => ({
+      labEntityId: entity.labEntityId,
+      entityName: entity.entityName,
     })) ?? []
 
-  const { data, isLoading, isError, refetch } = useLabEntitiesPage(pageIndex, {
+  const { data: entitiesPage, isLoading, isError, refetch } = useLabEntitiesPage(pageIndex, {
     enabled: labNetworkEnabled,
   })
-  const rows = data?.rows ?? []
-  const totalCount = data?.totalCount ?? 0
+  const rows = entitiesPage?.rows ?? []
+  const totalCount = entitiesPage?.totalCount ?? 0
 
   const createMutation = useLabCreateLabEntityMutation()
   const renameMutation = useLabRenameLabEntityMutation()
@@ -103,9 +103,9 @@ export function LabEntitiesCard() {
       ? AddressType.Taproot
       : AddressType.SegWit
     if (trimmed.length > 0) {
-      const v = validateLabEntityRenameName(trimmed, entitiesForValidation, -1)
-      if (!v.ok) {
-        toast.error(v.error)
+      const validationResult = validateLabEntityRenameName(trimmed, entitiesForValidation, -1)
+      if (!validationResult.ok) {
+        toast.error(validationResult.error)
         return
       }
     }
@@ -139,9 +139,9 @@ export function LabEntitiesCard() {
   const saveRename = () => {
     if (renamingId == null) return
     const trimmed = renameDraft.trim()
-    const v = validateLabEntityRenameName(trimmed, entitiesForValidation, renamingId)
-    if (!v.ok) {
-      toast.error(v.error)
+    const validationResult = validateLabEntityRenameName(trimmed, entitiesForValidation, renamingId)
+    if (!validationResult.ok) {
+      toast.error(validationResult.error)
       return
     }
     void renameMutation.mutateAsync(
@@ -168,7 +168,10 @@ export function LabEntitiesCard() {
     })
   }
 
-  const rowPendingDelete = deleteId != null ? rows.find((r) => r.labEntityId === deleteId) : undefined
+  const rowPendingDelete =
+    deleteId != null
+      ? rows.find((entityRow) => entityRow.labEntityId === deleteId)
+      : undefined
 
   return (
     <>
@@ -218,7 +221,7 @@ export function LabEntitiesCard() {
                   {createMutation.isPending ? 'Creating…' : 'Create lab entity'}
                 </Button>
               </div>
-              {segwitAddressesEnabled ? (
+              {isSegwitAddressesEnabled ? (
                 <div className="flex flex-col gap-2 max-w-md">
                   <div className="flex items-center justify-between gap-3">
                     <div className="space-y-0.5">

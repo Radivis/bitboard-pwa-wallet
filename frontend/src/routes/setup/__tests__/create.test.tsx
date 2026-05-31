@@ -32,7 +32,7 @@ const mockSetCurrentAddress = vi.fn()
 const mockSetBalance = vi.fn()
 const mockSetTransactions = vi.fn()
 const mockSetLastSyncTime = vi.fn()
-const mockCommitLoadedSubWallet = vi.fn()
+const mockCommitLoadedDescriptorWallet = vi.fn()
 vi.mock('@/stores/walletStore', () => ({
   useWalletStore: Object.assign(
     (selector: (s: Record<string, unknown>) => unknown) =>
@@ -46,7 +46,7 @@ vi.mock('@/stores/walletStore', () => ({
         setBalance: mockSetBalance,
         setTransactions: mockSetTransactions,
         setLastSyncTime: mockSetLastSyncTime,
-        commitLoadedSubWallet: mockCommitLoadedSubWallet,
+        commitLoadedDescriptorWallet: mockCommitLoadedDescriptorWallet,
       }),
     {
       getState: () => ({ lockWallet: vi.fn() }),
@@ -90,8 +90,9 @@ vi.mock('@/db', () => ({
   persistNewWalletWithSecrets: dbMocks.mockPersistNewWalletWithSecrets,
   setWalletNoMnemonicBackupFlag: dbMocks.mockSetWalletNoMnemonicBackupFlag,
   walletKeys: {
-    all: ['wallets'] as const,
-    noMnemonicBackup: (id: number) => ['wallets', 'no_mnemonic_backup', id] as const,
+    all: ['wallet_db', 'wallets'] as const,
+    noMnemonicBackup: (id: number) =>
+      ['wallet_db', 'wallets', 'no_mnemonic_backup', id] as const,
   },
 }))
 
@@ -99,11 +100,11 @@ vi.mock('@/workers/secrets-channel', () => ({
   ensureSecretsChannel: vi.fn().mockResolvedValue(undefined),
 }))
 
-vi.mock('@/lib/bitcoin-utils', () => ({
+vi.mock('@/lib/wallet/bitcoin-utils', () => ({
   toBitcoinNetwork: (mode: string) => mode,
 }))
 
-vi.mock('@/lib/wallet-query-cache-sync', () => ({
+vi.mock('@/lib/wallet/wallet-query-cache-sync', () => ({
   invalidateWalletRelatedQueriesAndNotifyOtherTabs: vi.fn(),
 }))
 
@@ -130,7 +131,7 @@ function createWalletCryptoResult(overrides: {
   return {
     encryptedPayload: blob,
     encryptedMnemonic: blob,
-    walletResult: { first_address: 'addr' },
+    walletResult: { firstAddress: 'addr' },
     mnemonicForBackup: overrides.mnemonicForBackup ?? TEST_MNEMONIC_12,
     ...overrides,
   }

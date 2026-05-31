@@ -39,7 +39,7 @@ const mockSetWalletStatus = vi.fn()
 const mockSetCurrentAddress = vi.fn()
 const mockSetBalance = vi.fn()
 const mockSetTransactions = vi.fn()
-const mockCommitLoadedSubWallet = vi.fn()
+const mockCommitLoadedDescriptorWallet = vi.fn()
 const mockSetImportInitialSyncErrorMessage = vi.fn()
 vi.mock('@/stores/walletStore', () => ({
   useWalletStore: Object.assign(
@@ -53,7 +53,7 @@ vi.mock('@/stores/walletStore', () => ({
         setCurrentAddress: mockSetCurrentAddress,
         setBalance: mockSetBalance,
         setTransactions: mockSetTransactions,
-        commitLoadedSubWallet: mockCommitLoadedSubWallet,
+        commitLoadedDescriptorWallet: mockCommitLoadedDescriptorWallet,
         setImportInitialSyncErrorMessage: mockSetImportInitialSyncErrorMessage,
       }),
     {
@@ -91,14 +91,14 @@ vi.mock('@/db', () => ({
   getDatabase: vi.fn(),
   ensureMigrated: vi.fn().mockResolvedValue(undefined),
   persistNewWalletWithSecrets: vi.fn().mockResolvedValue(1),
-  walletKeys: { all: ['wallets'] as const },
+  walletKeys: { all: ['wallet_db', 'wallets'] as const },
 }))
 
 vi.mock('@/workers/secrets-channel', () => ({
   ensureSecretsChannel: vi.fn().mockResolvedValue(undefined),
 }))
 
-vi.mock('@/lib/bitcoin-utils', () => ({
+vi.mock('@/lib/wallet/bitcoin-utils', () => ({
   toBitcoinNetwork: (mode: string) => mode,
 }))
 
@@ -109,16 +109,16 @@ const { mockRunImportInitialEsploraSync, mockRetryImportInitialSync } = vi.hoist
   }),
 )
 
-vi.mock('@/lib/wallet-utils', () => ({
+vi.mock('@/lib/wallet/wallet-utils', () => ({
   runImportInitialEsploraSync: mockRunImportInitialEsploraSync,
   retryImportInitialEsploraSyncWithWalletStatus: mockRetryImportInitialSync,
 }))
 
-vi.mock('@/lib/wallet-sync-error-toast', () => ({
+vi.mock('@/lib/wallet/wallet-sync-error-toast', () => ({
   showImportInitialSyncFailureToast: vi.fn(),
 }))
 
-vi.mock('@/lib/wallet-query-cache-sync', () => ({
+vi.mock('@/lib/wallet/wallet-query-cache-sync', () => ({
   invalidateWalletRelatedQueriesAndNotifyOtherTabs: vi.fn(),
 }))
 
@@ -215,22 +215,28 @@ describe('ImportWalletPage', () => {
     mockImportWalletAndEncryptSecrets.mockResolvedValue({
       encryptedBlob: { ciphertext: new Uint8Array(0), iv: new Uint8Array(12), salt: new Uint8Array(16) },
       walletResult: {
-        external_descriptor: 'ext',
-        internal_descriptor: 'int',
-        first_address: 'tb1test',
-        changeset_json: '{}',
+        externalDescriptor: 'ext',
+        internalDescriptor: 'int',
+        firstAddress: 'tb1test',
+        changesetJson: '{}',
       },
     })
     mockFullScanWallet.mockResolvedValue({
-      balance: { confirmed: 0, trusted_pending: 0, untrusted_pending: 0, immature: 0, total: 0 },
-      changeset_json: '{}',
+      balance: {
+        confirmedSats: 0,
+        trustedPendingSats: 0,
+        untrustedPendingSats: 0,
+        immatureSats: 0,
+        totalSats: 0,
+      },
+      changesetJson: '{}',
     })
     mockGetBalance.mockResolvedValue({
-      confirmed: 0,
-      trusted_pending: 0,
-      untrusted_pending: 0,
-      immature: 0,
-      total: 0,
+      confirmedSats: 0,
+      trustedPendingSats: 0,
+      untrustedPendingSats: 0,
+      immatureSats: 0,
+      totalSats: 0,
     })
     mockGetTransactionList.mockResolvedValue([])
     renderWithProviders(<ImportWalletPage />)
@@ -281,10 +287,10 @@ describe('ImportWalletPage', () => {
     resolveImport!({
       encryptedBlob: { ciphertext: new Uint8Array(0), iv: new Uint8Array(12), salt: new Uint8Array(16) },
       walletResult: {
-        external_descriptor: 'ext',
-        internal_descriptor: 'int',
-        first_address: 'tb1test',
-        changeset_json: '{}',
+        externalDescriptor: 'ext',
+        internalDescriptor: 'int',
+        firstAddress: 'tb1test',
+        changesetJson: '{}',
       },
     })
   })

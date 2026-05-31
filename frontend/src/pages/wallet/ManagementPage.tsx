@@ -3,7 +3,7 @@ import { SlidersHorizontal } from 'lucide-react'
 import { PageHeader } from '@/components/PageHeader'
 import { useWalletStore } from '@/stores/walletStore'
 import { useFeatureStore } from '@/stores/featureStore'
-import { isLightningSupported } from '@/lib/lightning-utils'
+import { isLightningSupported } from '@/lib/lightning/lightning-utils'
 import { WalletManagement } from '@/components/wallet/WalletManagement'
 import { SeedPhraseBackup } from '@/components/wallet/SeedPhraseBackup'
 import { LightningWallets } from '@/components/wallet/LightningWallets'
@@ -11,10 +11,10 @@ import { LightningWallets } from '@/components/wallet/LightningWallets'
 export function ManagementPage() {
   const navigate = useNavigate({ from: '/wallet/management' })
   const { openDelete } = useSearch({ from: '/wallet/management' })
-  const activeWalletId = useWalletStore((s) => s.activeWalletId)
-  const networkMode = useWalletStore((s) => s.networkMode)
-  const lightningEnabled = useFeatureStore((s) => s.lightningEnabled)
-  const showLightningWallets = lightningEnabled && isLightningSupported(networkMode)
+  const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
+  const networkMode = useWalletStore((walletState) => walletState.networkMode)
+  const isLightningEnabled = useFeatureStore((featureState) => featureState.isLightningEnabled)
+  const showLightningWallets = isLightningEnabled && isLightningSupported(networkMode)
 
   return (
     <div className="space-y-6">

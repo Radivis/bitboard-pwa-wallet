@@ -16,9 +16,9 @@ import {
   getDatabase,
   upgradeNearZeroToUserPassword,
 } from '@/db'
-import { invalidateWalletRelatedQueriesAndNotifyOtherTabs } from '@/lib/wallet-query-cache-sync'
+import { invalidateWalletRelatedQueriesAndNotifyOtherTabs } from '@/lib/wallet/wallet-query-cache-sync'
 import { useSessionStore } from '@/stores/sessionStore'
-import { errorMessage } from '@/lib/utils'
+import { errorMessage } from '@/lib/shared/utils'
 
 const UPGRADE_FIELDS_CONFIG = {
   ids: {
@@ -49,7 +49,7 @@ export function UpgradeFromNearZeroPasswordModal({
   const [phase, setPhase] = useState<Phase>('form')
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
-  const sessionPassword = useSessionStore((s) => s.password)
+  const sessionPassword = useSessionStore((sessionState) => sessionState.password)
 
   useEffect(() => {
     if (open) {

@@ -5,7 +5,7 @@ import { AppModal } from '@/components/AppModal'
 import { Button } from '@/components/ui/button'
 import { PasswordInput } from '@/components/ui/password-input'
 import { Label } from '@/components/ui/label'
-import { APP_PASSWORD_MIN_LENGTH } from '@/lib/app-password-policy'
+import { APP_PASSWORD_MIN_LENGTH } from '@/lib/shared/app-password-policy'
 
 export type AppPasswordCompareResult =
   | { match: true; skipped: false }
@@ -71,20 +71,20 @@ export function WalletBackupExportPasswordModal({
       return
     }
 
-    const gen = ++compareGenerationRef.current
+    const compareGeneration = ++compareGenerationRef.current
     setComparePending(true)
     setCompareResult(null)
 
     void (async () => {
       try {
         const result = await checkSigningPasswordMatchesAppPassword(password)
-        if (compareGenerationRef.current !== gen) return
+        if (compareGenerationRef.current !== compareGeneration) return
         setCompareResult(result)
       } catch {
-        if (compareGenerationRef.current !== gen) return
+        if (compareGenerationRef.current !== compareGeneration) return
         setCompareResult({ match: false, skipped: false })
       } finally {
-        if (compareGenerationRef.current === gen) {
+        if (compareGenerationRef.current === compareGeneration) {
           setComparePending(false)
         }
       }

@@ -1,9 +1,9 @@
 import type { BitcoinAmountDisplaySize } from '@/components/BitcoinAmountDisplay'
-import { cn } from '@/lib/utils'
-import type { FiatCurrencyCode } from '@/lib/supported-fiat-currencies'
-import { getFiatCurrencyUiMeta } from '@/lib/supported-fiat-currencies'
-import { formatFiatFromSatsAndBtcPrice } from '@/lib/format-fiat-display'
-import { isUsableBtcSpotPriceInFiat } from '@/lib/is-usable-btc-spot-price-in-fiat'
+import { cn } from '@/lib/shared/utils'
+import type { FiatCurrencyCode } from '@/lib/fiat/supported-fiat-currencies'
+import { getFiatCurrencyUiMeta } from '@/lib/fiat/supported-fiat-currencies'
+import { formatFiatFromSatsAndBtcPrice } from '@/lib/fiat/format-fiat-display'
+import { isUsableBtcSpotPriceInFiat } from '@/lib/fiat/is-usable-btc-spot-price-in-fiat'
 
 const SIZE_CLASSES: Record<BitcoinAmountDisplaySize, string> = {
   sm: 'text-sm',

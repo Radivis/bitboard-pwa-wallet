@@ -6,12 +6,12 @@ import { SQLITE_FALSE, SQLITE_TRUE } from './schema'
 export async function anyWalletHasNoMnemonicBackupFlag(
   walletDb: Kysely<Database>,
 ): Promise<boolean> {
-  const row = await walletDb
+  const walletWithNoBackupFlag = await walletDb
     .selectFrom('wallets')
     .select('wallet_id')
     .where('no_mnemonic_backup', '=', SQLITE_TRUE as unknown as boolean)
     .executeTakeFirst()
-  return row != null
+  return walletWithNoBackupFlag != null
 }
 
 export async function setWalletNoMnemonicBackupFlag(
@@ -40,10 +40,13 @@ export async function walletHasNoMnemonicBackupFlag(
   walletDb: Kysely<Database>,
   walletId: number,
 ): Promise<boolean> {
-  const row = await walletDb
+  const walletBackupFlagRecord = await walletDb
     .selectFrom('wallets')
     .select('no_mnemonic_backup')
     .where('wallet_id', '=', walletId)
     .executeTakeFirst()
-  return row != null && row.no_mnemonic_backup == true
+  return (
+    walletBackupFlagRecord != null &&
+    walletBackupFlagRecord.no_mnemonic_backup == true
+  )
 }

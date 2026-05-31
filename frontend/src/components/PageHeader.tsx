@@ -1,6 +1,6 @@
 import type { LucideIcon } from 'lucide-react'
 import type { ReactNode } from 'react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/shared/utils'
 
 /** Shared typography for top-of-page titles (see `PageHeader`). */
 export const PAGE_HEADER_TITLE_CLASS = 'text-2xl font-bold tracking-tight'

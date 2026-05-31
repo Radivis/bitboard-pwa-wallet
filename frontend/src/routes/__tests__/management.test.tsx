@@ -70,18 +70,18 @@ const sumMainnetOnChainSatsMock = vi.hoisted(() =>
   vi.fn().mockResolvedValue(0),
 )
 
-vi.mock('@/lib/mainnet-onchain-balance-probe', () => ({
+vi.mock('@/lib/esplora/mainnet-onchain-balance-probe', () => ({
   sumMainnetOnChainSatsForWallet: sumMainnetOnChainSatsMock,
 }))
 
-vi.mock('@/lib/wallet-delete-finalize', () => ({
+vi.mock('@/lib/wallet/wallet-delete-finalize', () => ({
   finalizeWalletDeletion: vi.fn().mockResolvedValue(undefined),
 }))
 
 vi.mock('@/db', () => ({
-  useWallets: () => ({ data: [{ wallet_id: 1, name: 'Test Wallet', created_at: '' }] }),
+  useWallets: () => ({ data: [{ walletId: 1, name: 'Test Wallet', createdAt: '' }] }),
   useWallet: () => ({
-    data: { wallet_id: 1, name: 'Test Wallet', created_at: '' },
+    data: { walletId: 1, name: 'Test Wallet', createdAt: '' },
     isSuccess: true,
   }),
   useUpdateWallet: () => ({

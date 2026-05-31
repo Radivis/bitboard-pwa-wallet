@@ -30,7 +30,7 @@ import { SecureStorageUnavailableBanner } from '@/components/SecureStorageUnavai
 import { useWallet } from '@/db'
 import { useWalletStore } from '@/stores/walletStore'
 import { useSessionStore } from '@/stores/sessionStore'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/shared/utils'
 
 const APP_TITLE = 'Bitboard Wallet'
 
@@ -441,8 +441,8 @@ export function WalletLayout({ children }: WalletLayoutProps) {
   const showLabSubNav = !isSetupRoute && isLabSectionPath(location.pathname)
   const showSettingsSubNav = !isSetupRoute && isSettingsSectionPath(location.pathname)
 
-  const activeWalletId = useWalletStore((s) => s.activeWalletId)
-  const sessionPassword = useSessionStore((s) => s.password)
+  const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
+  const sessionPassword = useSessionStore((sessionState) => sessionState.password)
   const { data: activeWalletRow, isSuccess: activeWalletLoaded } = useWallet(activeWalletId)
   const walletDisplayName =
     activeWalletId && activeWalletLoaded && activeWalletRow?.name

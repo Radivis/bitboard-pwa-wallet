@@ -3,9 +3,9 @@ import { useNavigate } from '@tanstack/react-router'
 import { Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useDeleteWallet, useWallet, useWalletNoMnemonicBackupFlag, useWallets } from '@/db'
-import { finalizeWalletDeletion } from '@/lib/wallet-delete-finalize'
-import { sumMainnetOnChainSatsForWallet } from '@/lib/mainnet-onchain-balance-probe'
-import { errorMessage } from '@/lib/utils'
+import { finalizeWalletDeletion } from '@/lib/wallet/wallet-delete-finalize'
+import { sumMainnetOnChainSatsForWallet } from '@/lib/esplora/mainnet-onchain-balance-probe'
+import { userFacingErrorMessage } from '@/lib/shared/utils'
 import { useSessionStore } from '@/stores/sessionStore'
 import { useWalletStore } from '@/stores/walletStore'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
@@ -28,8 +28,8 @@ export function DeleteWalletSection({
   onAutoOpenConsumed,
 }: DeleteWalletSectionProps) {
   const navigate = useNavigate()
-  const activeWalletId = useWalletStore((s) => s.activeWalletId)
-  const walletStatus = useWalletStore((s) => s.walletStatus)
+  const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
+  const walletStatus = useWalletStore((walletState) => walletState.walletStatus)
   const { data: walletRow } = useWallet(activeWalletId)
   const { data: wallets = [] } = useWallets()
   const { data: noMnemonicBackupFlag = false } = useWalletNoMnemonicBackupFlag(activeWalletId)
@@ -41,7 +41,7 @@ export function DeleteWalletSection({
   const [probingMainnet, setProbingMainnet] = useState(false)
 
   const walletName = walletRow?.name?.trim() || 'this wallet'
-  const sessionPassword = useSessionStore((s) => s.password)
+  const sessionPassword = useSessionStore((sessionState) => sessionState.password)
   const canAttemptDelete = walletStatus === 'unlocked' && sessionPassword != null
 
   useEffect(() => {
@@ -75,7 +75,7 @@ export function DeleteWalletSection({
     /** This UI only deletes the wallet that is currently active. */
     const activeWalletIsBeingDeleted = true
     const nextActiveWalletId =
-      wallets.find((w) => w.wallet_id !== deletedWalletId)?.wallet_id ?? null
+      wallets.find((w) => w.walletId !== deletedWalletId)?.walletId ?? null
 
     try {
       await deleteWalletMutation.mutateAsync(deletedWalletId)
@@ -94,7 +94,7 @@ export function DeleteWalletSection({
         }
       }
     } catch (err) {
-      toast.error(`Could not delete wallet: ${errorMessage(err)}`)
+      toast.error(`Could not delete wallet: ${userFacingErrorMessage(err)}`)
     }
   }, [
     activeWalletId,
@@ -125,7 +125,9 @@ export function DeleteWalletSection({
         await performDelete()
       }
     } catch (err) {
-      toast.error(`Could not check mainnet balance: ${errorMessage(err)}`)
+      toast.error(
+        `Could not check mainnet balance: ${userFacingErrorMessage(err)}`,
+      )
       setFirstDialogOpen(true)
     } finally {
       setProbingMainnet(false)

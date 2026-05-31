@@ -3,7 +3,7 @@ import type { EncryptionService } from '../encryption-api'
 import {
   ARGON2_KDF_PHC_CI,
   ARGON2_KDF_PHC_PRODUCTION,
-} from '@/lib/kdf-phc-constants'
+} from '@/lib/shared/kdf-phc-constants'
 
 let exposedEncryptionService: EncryptionService | null = null
 
@@ -23,9 +23,9 @@ vi.mock('comlink', () => ({
 }))
 
 vi.mock('@/wasm-pkg/bitboard_encryption/bitboard_encryption', () => ({
-  deriveArgon2KeyFromPhc: deriveArgon2KeyFromPhcMock,
-  signWalletBackupManifest: vi.fn(() => '{"format_version":1}'),
-  verifyWalletBackupManifest: vi.fn(),
+  derive_argon2_key_from_phc: deriveArgon2KeyFromPhcMock,
+  sign_wallet_backup_manifest: vi.fn(() => '{"format_version":1}'),
+  verify_wallet_backup_manifest: vi.fn(),
 }))
 
 async function encryptWithRawKey(

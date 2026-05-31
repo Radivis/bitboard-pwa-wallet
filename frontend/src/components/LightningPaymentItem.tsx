@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import { ArrowDownLeft, ArrowUpRight, BadgeCheck, Clock, Zap } from 'lucide-react'
 import { formatDistanceToNow, format } from 'date-fns'
-import { getLnOutgoingTotalInclFeeSats } from '@/lib/lightning-backend-service'
-import type { LightningPaymentWithWallet } from '@/lib/lightning-dashboard-sync'
+import { getLnOutgoingTotalInclFeeSats } from '@/lib/lightning/lightning-backend-service'
+import type { LightningPaymentWithWallet } from '@/lib/lightning/lightning-dashboard-sync'
 import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/shared/utils'
 
 interface LightningPaymentItemProps {
   payment: LightningPaymentWithWallet
@@ -81,7 +81,7 @@ export function LightningPaymentItem({ payment }: LightningPaymentItemProps) {
         </div>
 
         <div className="ml-1">
-          {payment.pending ? (
+          {payment.isPending ? (
             <Clock className="h-4 w-4 text-yellow-500" />
           ) : (
             <BadgeCheck className="h-4 w-4 text-green-500" />
@@ -130,7 +130,7 @@ export function LightningPaymentItem({ payment }: LightningPaymentItemProps) {
           )}
           <div className="flex justify-between">
             <span>Status</span>
-            <span>{payment.pending ? 'Pending' : 'Settled'}</span>
+            <span>{payment.isPending ? 'Pending' : 'Settled'}</span>
           </div>
         </div>
       )}

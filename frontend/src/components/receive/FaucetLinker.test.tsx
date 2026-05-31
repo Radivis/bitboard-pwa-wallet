@@ -6,17 +6,17 @@ import { renderWithProviders } from '@/test-utils/test-providers'
 
 const walletState = {
   networkMode: 'testnet' as const,
-  loadedSubWallet: null as { networkMode: 'testnet' } | null,
+  loadedDescriptorWallet: null as { networkMode: 'testnet' } | null,
 }
 
 vi.mock('@/stores/walletStore', () => ({
   selectCommittedNetworkMode: (s: typeof walletState) =>
-    s.loadedSubWallet?.networkMode ?? s.networkMode,
+    s.loadedDescriptorWallet?.networkMode ?? s.networkMode,
   useWalletStore: (selector: (s: typeof walletState) => unknown) =>
     selector(walletState),
 }))
 
-vi.mock('@/lib/wallet-utils', () => ({
+vi.mock('@/lib/wallet/wallet-utils', () => ({
   loadCustomEsploraUrl: vi.fn().mockResolvedValue(null),
 }))
 
@@ -26,7 +26,7 @@ describe('FaucetLinker', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     walletState.networkMode = 'testnet'
-    walletState.loadedSubWallet = null
+    walletState.loadedDescriptorWallet = null
     fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200 })
     vi.stubGlobal('fetch', fetchMock)
   })

@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import type { BitcoinDisplayUnit } from '@/lib/bitcoin-display-unit'
-import { bitcoinUnitQueryKey } from '@/lib/bitcoin-unit-query'
+import type { BitcoinDisplayUnit } from '@/lib/wallet/bitcoin-display-unit'
+import { bitcoinUnitQueryKey } from '@/lib/wallet/bitcoin-unit-query'
 import { useBitcoinDisplayUnitStore } from '@/stores/bitcoinDisplayUnitStore'
 
 /**
@@ -9,7 +9,7 @@ import { useBitcoinDisplayUnitStore } from '@/stores/bitcoinDisplayUnitStore'
  */
 export function useBitcoinUnit() {
   const queryClient = useQueryClient()
-  const defaultBitcoinUnit = useBitcoinDisplayUnitStore((s) => s.defaultBitcoinUnit)
+  const defaultBitcoinUnit = useBitcoinDisplayUnitStore((bitcoinDisplayUnitState) => bitcoinDisplayUnitState.defaultBitcoinUnit)
 
   const query = useQuery({
     queryKey: bitcoinUnitQueryKey,

@@ -1,71 +1,38 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { flushSync } from 'react-dom'
 import { toast } from 'sonner'
-import { LAB_SQLITE_OPFS_BASENAME, WALLET_SQLITE_OPFS_BASENAME } from '@/db/opfs-sqlite-database-names'
+import { LAB_SQLITE_OPFS_BASENAME } from '@/db/opfs/opfs-sqlite-database-names'
 import { WALLET_MIGRATION_FAILURE_OPFS_FILENAME } from '@/db/migrations/wallet-migration-failure-report'
-import { destroyDatabase, ensureMigrated, getDatabase } from '@/db/database'
-import { useWallets } from '@/db'
-import { loadWalletSecrets } from '@/db/wallet-persistence'
 import { destroyLabDatabase, ensureLabMigrated } from '@/db/lab-database'
-import { anyWalletHasNoMnemonicBackupFlag } from '@/db/wallet-no-mnemonic-backup'
-import { resolveArgon2CiParamsOrThrow } from '@/lib/argon2-ci-env'
-import { BackupZipInvalidError } from '@/lib/backup-zip-invalid-error'
+import { BackupZipInvalidError } from '@/lib/shared/backup-zip-invalid-error'
 import {
   opfsRootFileExists,
   readBlobFromOpfsRootIfExists,
   readTextFileFromOpfsRootIfExists,
   triggerBrowserSaveLocalBlob,
-} from '@/lib/opfs-root-file'
-import { replaceOpfsSqliteAfterDestroy } from '@/lib/opfs-sqlite-replace-and-reload'
-import {
-  ARGON2_KDF_PHC_WALLET_BACKUP_SIGN_CI,
-  ARGON2_KDF_PHC_WALLET_BACKUP_SIGN_PRODUCTION,
-  WALLET_BACKUP_SIGNING_SALT_BYTES,
-  WALLET_BACKUP_ZIP_FILENAME,
-} from '@/lib/wallet-backup-constants'
-import { LAB_BACKUP_SQLITE_ENTRY_NAME, LAB_BACKUP_ZIP_FILENAME } from '@/lib/lab-backup-constants'
-import { parseLabBackupZipFile } from '@/lib/lab-backup-import'
-import { parseWalletBackupZipFile } from '@/lib/wallet-backup-import'
-import { zipSingleFileForLocalExport } from '@/lib/zip-single-file-export'
-import { zipWalletBackupForLocalExport } from '@/lib/zip-wallet-backup-export'
+} from '@/db/opfs/opfs-root-file'
+import { replaceOpfsSqliteAfterDestroy } from '@/db/opfs/opfs-sqlite-replace-and-reload'
+import { LAB_BACKUP_SQLITE_ENTRY_NAME, LAB_BACKUP_ZIP_FILENAME } from '@/lib/lab/lab-backup-constants'
+import { parseLabBackupZipFile } from '@/lib/lab/lab-backup-import'
+import { zipSingleFileForLocalExport } from '@/lib/settings/zip-single-file-export'
 import { useNearZeroSecurityStore } from '@/stores/nearZeroSecurityStore'
-import { useWalletStore } from '@/stores/walletStore'
-import { getEncryptionWorker } from '@/workers/encryption-factory'
-
-import type { AppPasswordCompareResult } from '@/components/settings/WalletBackupExportPasswordModal'
+import { useWalletBackupExport } from '@/components/settings/use-wallet-backup-export'
+import { useWalletBackupImport } from '@/components/settings/use-wallet-backup-import'
 
 const MIGRATION_REPORT_INNER_NAME = 'wallet-schema-migration-failure.json'
 const MIGRATION_REPORT_ZIP_NAME = 'wallet-schema-migration-failure.zip'
 
-function walletBackupSignKdfPhc(): string {
-  return resolveArgon2CiParamsOrThrow()
-    ? ARGON2_KDF_PHC_WALLET_BACKUP_SIGN_CI
-    : ARGON2_KDF_PHC_WALLET_BACKUP_SIGN_PRODUCTION
-}
-
 export function useDataBackupsCard() {
-  const nearZeroActive = useNearZeroSecurityStore((s) => s.active)
-  const activeWalletId = useWalletStore((s) => s.activeWalletId)
-  const { data: wallets } = useWallets()
+  const nearZeroActive = useNearZeroSecurityStore((nearZeroSecurityState) => nearZeroSecurityState.active)
+  const walletBackupExport = useWalletBackupExport()
+  const walletBackupImport = useWalletBackupImport()
+
   const [migrationReportExists, setMigrationReportExists] = useState(false)
   const [labFileExists, setLabFileExists] = useState<boolean | null>(null)
-  const [exportBusy, setExportBusy] = useState<'wallet' | 'lab' | 'report' | null>(null)
-  const [exportPasswordOpen, setExportPasswordOpen] = useState(false)
-  const [importWipeOpen, setImportWipeOpen] = useState(false)
-  const [importPasswordOpen, setImportPasswordOpen] = useState(false)
-  const [importBusy, setImportBusy] = useState(false)
+  const [labExportBusy, setLabExportBusy] = useState(false)
+  const [reportExportBusy, setReportExportBusy] = useState(false)
   const [labImportWipeOpen, setLabImportWipeOpen] = useState(false)
   const [labImportBusy, setLabImportBusy] = useState(false)
   const [pendingLabSqlite, setPendingLabSqlite] = useState<Uint8Array | null>(null)
-  const [pendingImport, setPendingImport] = useState<{
-    sqliteBytes: Uint8Array
-    manifestJson: string
-  } | null>(null)
-  const [, setImportVerificationFailureCount] = useState(0)
-  const [importBypassModalOpen, setImportBypassModalOpen] = useState(false)
-  const [importVerifyInlineMessage, setImportVerifyInlineMessage] = useState<string | null>(null)
-  const [importPasswordResetKey, setImportPasswordResetKey] = useState(0)
-  const importFileInputRef = useRef<HTMLInputElement>(null)
   const labImportFileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -92,59 +59,16 @@ export function useDataBackupsCard() {
     }
   }, [])
 
-  const walletIdForBackupPasswordCompare = activeWalletId ?? wallets?.[0]?.wallet_id
-
-  const checkSigningPasswordMatchesAppPassword = useCallback(
-    async (password: string): Promise<AppPasswordCompareResult> => {
-      if (walletIdForBackupPasswordCompare == null) {
-        return { match: false, skipped: true }
-      }
-      await ensureMigrated()
-      try {
-        await loadWalletSecrets(getDatabase(), password, walletIdForBackupPasswordCompare)
-        return { match: true, skipped: false }
-      } catch {
-        return { match: false, skipped: false }
-      }
-    },
-    [walletIdForBackupPasswordCompare],
-  )
-
-  const runSignedWalletExport = useCallback(async (password: string) => {
-    setExportBusy('wallet')
-    try {
-      const blob = await readBlobFromOpfsRootIfExists(WALLET_SQLITE_OPFS_BASENAME)
-      if (!blob) {
-        toast.error('Wallet data file was not found in local storage.')
-        return
-      }
-      const sqliteBuf = await blob.arrayBuffer()
-      const sqliteBytes = new Uint8Array(sqliteBuf)
-      const salt = crypto.getRandomValues(new Uint8Array(WALLET_BACKUP_SIGNING_SALT_BYTES))
-      const enc = getEncryptionWorker()
-      const manifestJson = await enc.signWalletBackupManifest(
-        sqliteBytes,
-        password,
-        salt,
-        walletBackupSignKdfPhc(),
-      )
-      const zipped = await zipWalletBackupForLocalExport(blob, manifestJson)
-      triggerBrowserSaveLocalBlob(zipped, WALLET_BACKUP_ZIP_FILENAME)
-      toast.success('Signed wallet backup exported as a ZIP on this device.')
-      setExportPasswordOpen(false)
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Export failed.')
-    } finally {
-      setExportBusy(null)
-    }
-  }, [])
-
-  const exportWallet = useCallback(() => {
-    setExportPasswordOpen(true)
-  }, [])
+  const exportBusy = walletBackupExport.walletExportBusy
+    ? 'wallet'
+    : labExportBusy
+      ? 'lab'
+      : reportExportBusy
+        ? 'report'
+        : null
 
   const exportLab = useCallback(async () => {
-    setExportBusy('lab')
+    setLabExportBusy(true)
     try {
       const blob = await readBlobFromOpfsRootIfExists(LAB_SQLITE_OPFS_BASENAME)
       if (!blob) {
@@ -154,15 +78,15 @@ export function useDataBackupsCard() {
       const zipped = await zipSingleFileForLocalExport(blob, LAB_BACKUP_SQLITE_ENTRY_NAME)
       triggerBrowserSaveLocalBlob(zipped, LAB_BACKUP_ZIP_FILENAME)
       toast.success('Lab data exported as a ZIP on this device.')
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Export failed.')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Export failed.')
     } finally {
-      setExportBusy(null)
+      setLabExportBusy(false)
     }
   }, [])
 
   const exportMigrationReport = useCallback(async () => {
-    setExportBusy('report')
+    setReportExportBusy(true)
     try {
       const text = await readTextFileFromOpfsRootIfExists(WALLET_MIGRATION_FAILURE_OPFS_FILENAME)
       if (!text) {
@@ -174,141 +98,11 @@ export function useDataBackupsCard() {
       const zipped = await zipSingleFileForLocalExport(jsonBlob, MIGRATION_REPORT_INNER_NAME)
       triggerBrowserSaveLocalBlob(zipped, MIGRATION_REPORT_ZIP_NAME)
       toast.success('Error report exported as a ZIP on this device.')
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Export failed.')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Export failed.')
     } finally {
-      setExportBusy(null)
+      setReportExportBusy(false)
     }
-  }, [])
-
-  const onImportFilePick = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    event.target.value = ''
-    if (!file) return
-    const lower = file.name.toLowerCase()
-    if (!lower.endsWith('.zip')) {
-      toast.error('Please choose a ZIP file.')
-      return
-    }
-    try {
-      const parsed = await parseWalletBackupZipFile(file)
-      await ensureMigrated()
-      const blocked = await anyWalletHasNoMnemonicBackupFlag(getDatabase())
-      if (blocked) {
-        toast.error(
-          'Import blocked: back up every wallet seed phrase in Wallet Management before importing wallet data.',
-        )
-        return
-      }
-      setPendingImport(parsed)
-      setImportWipeOpen(true)
-    } catch (e) {
-      if (e instanceof BackupZipInvalidError) {
-        toast.error(e.message)
-      } else {
-        toast.error(e instanceof Error ? e.message : 'Could not read backup ZIP.')
-      }
-    }
-  }, [])
-
-  const cancelImportFlow = useCallback(() => {
-    setPendingImport(null)
-    setImportWipeOpen(false)
-    setImportPasswordOpen(false)
-    setImportBypassModalOpen(false)
-    setImportVerificationFailureCount(0)
-    setImportVerifyInlineMessage(null)
-    setImportPasswordResetKey(0)
-  }, [])
-
-  const confirmWipeImport = useCallback(() => {
-    setImportWipeOpen(false)
-    setImportVerificationFailureCount(0)
-    setImportVerifyInlineMessage(null)
-    setImportPasswordResetKey(0)
-    setImportPasswordOpen(true)
-  }, [])
-
-  const clearWalletImportUiState = useCallback(() => {
-    setImportPasswordOpen(false)
-    setImportBypassModalOpen(false)
-    setPendingImport(null)
-    setImportVerificationFailureCount(0)
-    setImportVerifyInlineMessage(null)
-    setImportPasswordResetKey(0)
-  }, [])
-
-  const applyWalletBackupReplace = useCallback(
-    async (sqliteBytes: Uint8Array) => {
-      await replaceOpfsSqliteAfterDestroy({
-        opfsBasename: WALLET_SQLITE_OPFS_BASENAME,
-        sqliteBytes,
-        destroyDatabase,
-        ensureMigrated,
-        successToastMessage: 'Wallet backup imported. Reloading…',
-        onBeforeReload: clearWalletImportUiState,
-      })
-    },
-    [clearWalletImportUiState],
-  )
-
-  const runVerifiedImport = useCallback(
-    async (password: string) => {
-      if (!pendingImport) return
-      setImportBusy(true)
-      setImportVerifyInlineMessage(null)
-      try {
-        const enc = getEncryptionWorker()
-        await enc.verifyWalletBackupManifest(
-          pendingImport.sqliteBytes,
-          password,
-          pendingImport.manifestJson,
-        )
-        await applyWalletBackupReplace(pendingImport.sqliteBytes)
-      } catch {
-        setImportVerificationFailureCount((prev) => {
-          const next = prev + 1
-          if (next >= 3) {
-            setImportPasswordOpen(false)
-            setImportBypassModalOpen(true)
-          } else {
-            setImportVerifyInlineMessage(
-              `Verification failed. ${3 - next} attempt(s) remaining.`,
-            )
-            setImportPasswordResetKey((k) => k + 1)
-          }
-          return next
-        })
-      } finally {
-        setImportBusy(false)
-      }
-    },
-    [pendingImport, applyWalletBackupReplace],
-  )
-
-  const runUnverifiedWalletBackupImport = useCallback(async () => {
-    const snapshot = pendingImport
-    if (!snapshot) return
-    // Commit busy state before any await so the bypass modal blocks dismiss and we do not
-    // interleave with other UI work that might touch the DB (same as verified import path).
-    flushSync(() => {
-      setImportBusy(true)
-    })
-    try {
-      await applyWalletBackupReplace(snapshot.sqliteBytes)
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Import failed.')
-    } finally {
-      setImportBusy(false)
-    }
-  }, [pendingImport, applyWalletBackupReplace])
-
-  const abortWalletBackupImportBypass = useCallback(() => {
-    setImportBypassModalOpen(false)
-    setPendingImport(null)
-    setImportVerificationFailureCount(0)
-    setImportVerifyInlineMessage(null)
-    setImportPasswordResetKey(0)
   }, [])
 
   const onLabImportFilePick = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -323,11 +117,11 @@ export function useDataBackupsCard() {
       const { sqliteBytes } = await parseLabBackupZipFile(file)
       setPendingLabSqlite(sqliteBytes)
       setLabImportWipeOpen(true)
-    } catch (e) {
-      if (e instanceof BackupZipInvalidError) {
-        toast.error(e.message)
+    } catch (error) {
+      if (error instanceof BackupZipInvalidError) {
+        toast.error(error.message)
       } else {
-        toast.error(e instanceof Error ? e.message : 'Could not read lab backup ZIP.')
+        toast.error(error instanceof Error ? error.message : 'Could not read lab backup ZIP.')
       }
     }
   }, [])
@@ -352,43 +146,43 @@ export function useDataBackupsCard() {
         successToastMessage: 'Lab backup imported. Reloading…',
         onBeforeReload: () => setLabFileExists(true),
       })
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Lab import failed.')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Lab import failed.')
     } finally {
       setLabImportBusy(false)
     }
   }, [pendingLabSqlite])
 
-  const anyImportBusy = importBusy || labImportBusy
+  const anyImportBusy = walletBackupImport.importBusy || labImportBusy
 
   return {
     nearZeroActive,
     migrationReportExists,
     labFileExists,
     exportBusy,
-    exportPasswordOpen,
-    setExportPasswordOpen,
-    importWipeOpen,
-    importPasswordOpen,
-    setImportPasswordOpen,
-    importBusy,
+    exportPasswordOpen: walletBackupExport.exportPasswordOpen,
+    setExportPasswordOpen: walletBackupExport.setExportPasswordOpen,
+    importWipeOpen: walletBackupImport.importWipeOpen,
+    importPasswordOpen: walletBackupImport.importPasswordOpen,
+    setImportPasswordOpen: walletBackupImport.setImportPasswordOpen,
+    importBusy: walletBackupImport.importBusy,
     labImportWipeOpen,
-    importFileInputRef,
+    importFileInputRef: walletBackupImport.importFileInputRef,
     labImportFileInputRef,
-    runSignedWalletExport,
-    exportWallet,
+    runSignedWalletExport: walletBackupExport.runSignedWalletExport,
+    exportWallet: walletBackupExport.exportWallet,
     exportLab,
     exportMigrationReport,
-    onImportFilePick,
-    cancelImportFlow,
-    confirmWipeImport,
-    runVerifiedImport,
-    runUnverifiedWalletBackupImport,
-    abortWalletBackupImportBypass,
-    checkSigningPasswordMatchesAppPassword,
-    importBypassModalOpen,
-    importVerifyInlineMessage,
-    importPasswordResetKey,
+    onImportFilePick: walletBackupImport.onImportFilePick,
+    cancelImportFlow: walletBackupImport.cancelImportFlow,
+    confirmWipeImport: walletBackupImport.confirmWipeImport,
+    runVerifiedImport: walletBackupImport.runVerifiedImport,
+    runUnverifiedWalletBackupImport: walletBackupImport.runUnverifiedWalletBackupImport,
+    abortWalletBackupImportBypass: walletBackupImport.abortWalletBackupImportBypass,
+    checkSigningPasswordMatchesAppPassword: walletBackupExport.checkSigningPasswordMatchesAppPassword,
+    importBypassModalOpen: walletBackupImport.importBypassModalOpen,
+    importVerifyInlineMessage: walletBackupImport.importVerifyInlineMessage,
+    importPasswordResetKey: walletBackupImport.importPasswordResetKey,
     onLabImportFilePick,
     cancelLabImportFlow,
     runLabImportAfterWipeConfirm,

@@ -1,5 +1,5 @@
 import { ArticleLink } from '@/lib/library/article-shared'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/shared/utils'
 
 /**
  * Rich Infomode body for the Lab block header card. No-props component for InfomodeRegistry.

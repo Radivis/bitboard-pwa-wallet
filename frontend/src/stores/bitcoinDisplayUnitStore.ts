@@ -1,10 +1,10 @@
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
 import { sqliteStorage } from '@/db/storage-adapter'
-import type { BitcoinDisplayUnit } from '@/lib/bitcoin-display-unit'
-import { isBitcoinDisplayUnit } from '@/lib/bitcoin-display-unit'
-import { appQueryClient } from '@/lib/app-query-client'
-import { bitcoinUnitQueryKey } from '@/lib/bitcoin-unit-query'
+import type { BitcoinDisplayUnit } from '@/lib/wallet/bitcoin-display-unit'
+import { isBitcoinDisplayUnit } from '@/lib/wallet/bitcoin-display-unit'
+import { appQueryClient } from '@/lib/shared/app-query-client'
+import { bitcoinUnitQueryKey } from '@/lib/wallet/bitcoin-unit-query'
 
 /**
  * Zustand persist key: one row in the SQLite `settings` table (via {@link sqliteStorage}),

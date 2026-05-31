@@ -72,7 +72,7 @@ vi.mock('@/lib/library/article-shared', () => ({
   ArticleLink: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
 }))
 
-vi.mock('@/lib/bitcoin-utils', () => ({
+vi.mock('@/lib/wallet/bitcoin-utils', () => ({
   MAX_SAFE_SATS: Number.MAX_SAFE_INTEGER,
   SATS_PER_BTC: 100_000_000,
   isValidAddress: (address: string, network: string) => {
@@ -85,7 +85,7 @@ vi.mock('@/lib/bitcoin-utils', () => ({
   toBitcoinNetwork: (mode: string) => mode,
 }))
 
-vi.mock('@/lib/wallet-utils', () => ({
+vi.mock('@/lib/wallet/wallet-utils', () => ({
   updateWalletChangeset: vi.fn().mockResolvedValue(undefined),
   loadCustomEsploraUrl: vi.fn().mockResolvedValue(null),
 }))
@@ -153,7 +153,7 @@ vi.mock('qr-scanner', () => ({
 
 import { useSendStore } from '@/stores/sendStore'
 import { SendPage } from '@/pages/wallet/SendPage'
-import { LAB_WALLET_SEND_PAGE_TITLE } from '@/lib/wallet-lab-ui-copy'
+import { LAB_WALLET_SEND_PAGE_TITLE } from '@/lib/wallet/wallet-lab-ui-copy'
 
 const mockCameraMediaStream = {
   getTracks: () => [{ stop: vi.fn(), kind: 'video' as const }],
@@ -188,8 +188,8 @@ describe('SendPage', () => {
       psbtBase64: 'draft_psbt',
       finalAmountSats: 10_000,
       originalAmountSats: 10_000,
-      raisedToMinDust: false,
-      changeFreeBumpAvailable: false,
+      isRaisedToMinDust: false,
+      isChangeFreeBumpAvailable: false,
       changeFreeMaxSats: 0,
       feeSats: 1_500,
       ...mockReviewSummaryFields,
@@ -199,7 +199,7 @@ describe('SendPage', () => {
       activeWalletId: 1,
       walletStatus: 'unlocked',
       networkMode: 'signet',
-      balance: { confirmed: 500_000, trusted_pending: 0, untrusted_pending: 0, immature: 0, total: 500_000 },
+      balance: { confirmedSats: 500_000, trustedPendingSats: 0, untrustedPendingSats: 0, immatureSats: 0, totalSats: 500_000 },
       setWalletStatus: vi.fn(),
       setBalance: vi.fn(),
       setTransactions: vi.fn(),
@@ -330,9 +330,9 @@ describe('SendPage', () => {
       psbtBase64: 'mock_psbt_base64',
       finalAmountSats: 100_000,
       originalAmountSats: 100_000,
-      raisedToMinDust: false,
-      bumpedChangeFree: false,
-      changeFreeBumpAvailable: false,
+      isRaisedToMinDust: false,
+      isBumpedChangeFree: false,
+      isChangeFreeBumpAvailable: false,
       changeFreeMaxSats: 0,
       feeSats: 1_500,
       ...mockReviewSummaryFields,
@@ -364,9 +364,9 @@ describe('SendPage', () => {
       psbtBase64: 'mock_psbt_base64',
       finalAmountSats: 100_000,
       originalAmountSats: 100_000,
-      raisedToMinDust: false,
-      bumpedChangeFree: false,
-      changeFreeBumpAvailable: false,
+      isRaisedToMinDust: false,
+      isBumpedChangeFree: false,
+      isChangeFreeBumpAvailable: false,
       changeFreeMaxSats: 0,
       feeSats: 1_500,
       ...mockReviewSummaryFields,
@@ -392,9 +392,9 @@ describe('SendPage', () => {
         psbtBase64: 'psbt_exact',
         finalAmountSats: 5000,
         originalAmountSats: 5000,
-        raisedToMinDust: false,
-        bumpedChangeFree: false,
-        changeFreeBumpAvailable: true,
+        isRaisedToMinDust: false,
+        isBumpedChangeFree: false,
+        isChangeFreeBumpAvailable: true,
         changeFreeMaxSats: 9900,
         feeSats: 1_500,
         ...mockReviewSummaryFields,
@@ -403,9 +403,9 @@ describe('SendPage', () => {
         psbtBase64: 'psbt_bumped',
         finalAmountSats: 9900,
         originalAmountSats: 5000,
-        raisedToMinDust: false,
-        bumpedChangeFree: true,
-        changeFreeBumpAvailable: false,
+        isRaisedToMinDust: false,
+        isBumpedChangeFree: true,
+        isChangeFreeBumpAvailable: false,
         changeFreeMaxSats: 0,
         feeSats: 1_200,
         ...mockReviewSummaryFields,
@@ -446,9 +446,9 @@ describe('SendPage', () => {
       psbtBase64: 'psbt_exact',
       finalAmountSats: 5000,
       originalAmountSats: 5000,
-      raisedToMinDust: false,
-      bumpedChangeFree: false,
-      changeFreeBumpAvailable: true,
+      isRaisedToMinDust: false,
+      isBumpedChangeFree: false,
+      isChangeFreeBumpAvailable: true,
       changeFreeMaxSats: 9900,
       feeSats: 1_500,
       ...mockReviewSummaryFields,
@@ -477,9 +477,9 @@ describe('SendPage', () => {
       psbtBase64: 'mock_psbt_base64',
       finalAmountSats: 100_000,
       originalAmountSats: 100_000,
-      raisedToMinDust: false,
-      bumpedChangeFree: false,
-      changeFreeBumpAvailable: false,
+      isRaisedToMinDust: false,
+      isBumpedChangeFree: false,
+      isChangeFreeBumpAvailable: false,
       changeFreeMaxSats: 0,
       feeSats: 1_500,
       ...mockReviewSummaryFields,

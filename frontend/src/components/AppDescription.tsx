@@ -1,5 +1,5 @@
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/shared/utils'
 
 interface AppDescriptionProps {
   className?: string

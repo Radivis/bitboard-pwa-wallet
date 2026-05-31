@@ -10,15 +10,16 @@ import {
   Pickaxe,
   Wallet,
 } from 'lucide-react'
-import type { LabOwner } from '@/lib/lab-owner'
-import { formatAmountInBitcoinDisplayUnit, getAccessibleBitcoinDisplayUnitLabel } from '@/lib/bitcoin-display-unit'
+import type { LabOwner } from '@/lib/lab/lab-owner'
+import { formatAmountInBitcoinDisplayUnit, getAccessibleBitcoinDisplayUnitLabel } from '@/lib/wallet/bitcoin-display-unit'
 import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
 import {
   LAB_CARD_BLOCK_FEE_AMOUNT_TEXT_CLASS,
   LAB_CARD_BLOCK_NET_MOVED_AMOUNT_TEXT_CLASS,
 } from '@/components/lab/lab-card-amount-text'
-import { getOwnerDisplayName, getOwnerIcon } from '@/lib/lab-utils'
-import { cn } from '@/lib/utils'
+import { getOwnerDisplayName, getOwnerIcon } from '@/lib/lab/lab-utils'
+import type { WalletSummary } from '@/lib/wallet/wallet-domain-types'
+import { cn } from '@/lib/shared/utils'
 
 type EntityForOwnerName = {
   labEntityId: number
@@ -35,7 +36,7 @@ export type LabBlockSquareProps = {
   minedBy: LabOwner | null
   blockWeightLimitWu: number | null
   nonCoinbaseWeightUsedWu: number | null
-  wallets: Array<{ wallet_id: number; name: string }>
+  wallets: WalletSummary[]
   entities: readonly EntityForOwnerName[]
   className?: string
 }

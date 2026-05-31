@@ -1,0 +1,676 @@
+import { toast } from 'sonner'
+
+import { getDatabase, ensureMigrated } from '@/db/database'
+import type { NetworkMode } from '@/stores/walletStore'
+import { useWalletStore } from '@/stores/walletStore'
+import { useSessionStore } from '@/stores/sessionStore'
+import { useCryptoStore } from '@/stores/cryptoStore'
+import { asBadLocalChainStateError } from '@/lib/shared/bad-local-chain-state-error'
+import { withEsploraFullScanRetries } from '@/lib/esplora/esplora-full-scan-retry'
+import { sanitizeErrorMessageForUi } from '@/lib/shared/sanitize-error-for-ui'
+import { showImportInitialSyncFailureToast } from '@/lib/wallet/wallet-sync-error-toast'
+import {
+  getEsploraUrl,
+  toBitcoinNetwork,
+  validateEsploraUrl,
+} from '@/lib/wallet/bitcoin-utils'
+import { errorMessage } from '@/lib/shared/utils'
+import { withPersistedChainMismatchRetry } from '@/lib/wallet/persisted-chain-mismatch'
+import type { LoadWalletParams } from '@/workers/crypto-api'
+import type { AddressType, BitcoinNetwork } from '@/workers/crypto-types'
+import {
+  updateDescriptorWalletChangeset,
+  resolveDescriptorWallet,
+} from '@/lib/wallet/descriptor-wallet-manager'
+import { invalidateLightningDashboardQueries } from '@/lib/lightning/lightning-dashboard-sync'
+import { refreshWalletStoreFromLoadedBdk } from '@/lib/wallet/onchain-bdk-store-sync'
+import { invalidateOnchainDashboardQueries } from '@/lib/wallet/onchain-dashboard-sync'
+
+const CUSTOM_ESPLORA_URL_KEY_PREFIX = 'custom_esplora_url_'
+
+/**
+ * Update the changeset of the currently active descriptor wallet.
+ * Keys by `loadedDescriptorWallet` when set (matches WASM); otherwise persisted triple.
+ */
+export async function updateWalletChangeset(params: {
+  password: string
+  walletId: number
+  changesetJson: string
+  markFullScanDone?: boolean
+  lastSuccessfulEsploraSyncAt?: string
+}): Promise<void> {
+  const {
+    password,
+    walletId,
+    changesetJson,
+    markFullScanDone,
+    lastSuccessfulEsploraSyncAt,
+  } = params
+  const { loadedDescriptorWallet, networkMode, addressType, accountId } =
+    useWalletStore.getState()
+  const descriptorContext = loadedDescriptorWallet ?? {
+    networkMode,
+    addressType,
+    accountId,
+  }
+  const network = toBitcoinNetwork(descriptorContext.networkMode)
+  await updateDescriptorWalletChangeset({
+    password,
+    walletId,
+    network,
+    addressType: descriptorContext.addressType,
+    accountId: descriptorContext.accountId,
+    changesetJson,
+    markFullScanDone,
+    lastSuccessfulEsploraSyncAt,
+  })
+}
+
+export function getWalletInitials(name: string): string {
+  return name
+    .split(' ')
+    .map((word) => word[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2)
+}
+
+export async function saveCustomEsploraUrl(
+  network: NetworkMode,
+  url: string,
+): Promise<void> {
+  validateEsploraUrl(url, network)
+  await ensureMigrated()
+  const walletDb = getDatabase()
+  const settingsKey = `${CUSTOM_ESPLORA_URL_KEY_PREFIX}${network}`
+
+  const existing = await walletDb
+    .selectFrom('settings')
+    .select('key')
+    .where('key', '=', settingsKey)
+    .executeTakeFirst()
+
+  if (existing) {
+    await walletDb
+      .updateTable('settings')
+      .set({ value: url })
+      .where('key', '=', settingsKey)
+      .execute()
+  } else {
+    await walletDb
+      .insertInto('settings')
+      .values({ key: settingsKey, value: url })
+      .execute()
+  }
+}
+
+export async function deleteCustomEsploraUrl(
+  network: NetworkMode,
+): Promise<void> {
+  await ensureMigrated()
+  const walletDb = getDatabase()
+  await walletDb
+    .deleteFrom('settings')
+    .where('key', '=', `${CUSTOM_ESPLORA_URL_KEY_PREFIX}${network}`)
+    .execute()
+}
+
+export async function loadCustomEsploraUrl(
+  network: NetworkMode,
+): Promise<string | null> {
+  await ensureMigrated()
+  const walletDb = getDatabase()
+  const settingsRow = await walletDb
+    .selectFrom('settings')
+    .select('value')
+    .where('key', '=', `${CUSTOM_ESPLORA_URL_KEY_PREFIX}${network}`)
+    .executeTakeFirst()
+
+  return settingsRow?.value ?? null
+}
+
+/** Stop-gap for full scan (consecutive unused addresses before stopping). Match import flow. */
+const FULL_SCAN_STOP_GAP = 20
+
+function invalidateDashboardQueriesAfterOnchainUpdate(): void {
+  invalidateLightningDashboardQueries()
+  invalidateOnchainDashboardQueries()
+}
+
+/**
+ * Sync the active WASM wallet against Esplora and update wallet store with
+ * balance and transactions.
+ *
+ * @param networkMode - Current network (e.g. testnet, mainnet)
+ * @param options.useFullScan - If true, run a full scan instead of incremental sync.
+ *   Use after loading a wallet so we discover all txs (e.g. faucet); use false or
+ *   omit for the manual Sync button (incremental sync).
+ */
+export async function syncActiveWalletAndUpdateState(
+  networkMode: NetworkMode,
+  options?: { useFullScan?: boolean },
+): Promise<void> {
+  const customUrl = await loadCustomEsploraUrl(networkMode)
+  const esploraUrl = getEsploraUrl(networkMode, customUrl)
+
+  const { syncWallet, fullScanWallet, getBalance, getTransactionList } =
+    useCryptoStore.getState()
+  const { setBalance, setTransactions } = useWalletStore.getState()
+
+  if (!esploraUrl) {
+    const balance = await getBalance()
+    const transactionList = await getTransactionList()
+    setBalance(balance)
+    setTransactions(transactionList)
+    return
+  }
+
+  if (options?.useFullScan) {
+    const toastId = toast.loading('Scanning blockchain…')
+    try {
+      await withEsploraFullScanRetries(() =>
+        fullScanWallet(esploraUrl, FULL_SCAN_STOP_GAP),
+      )
+      toast.success('Wallet synced', { id: toastId })
+    } catch (err) {
+      toast.dismiss(toastId)
+      throw err
+    }
+  } else {
+    await syncWallet(esploraUrl)
+  }
+
+  const balance = await getBalance()
+  const transactionList = await getTransactionList()
+  setBalance(balance)
+  setTransactions(transactionList)
+}
+
+/**
+ * After Esplora sync updated WASM: set session lastSyncTime, persist changeset and
+ * `lastSuccessfulEsploraSyncAt` in one write, invalidate dashboard queries.
+ */
+export async function persistPostEsploraSyncDescriptorWalletState(options: {
+  password: string | null
+  walletId: number | null
+  markFullScanDone?: boolean
+  /**
+   * When switching descriptor wallets, pass explicit coordinates so the write
+   * targets the loaded wallet even if store commit order differs.
+   */
+  descriptorWalletCoordinates?: {
+    network: BitcoinNetwork
+    addressType: AddressType
+    accountId: number
+  }
+}): Promise<void> {
+  const syncedAtIso = new Date().toISOString()
+  useWalletStore.getState().setLastSyncTime(new Date(syncedAtIso))
+
+  if (options.password == null || options.walletId == null) {
+    invalidateDashboardQueriesAfterOnchainUpdate()
+    return
+  }
+
+  const { exportChangeset } = useCryptoStore.getState()
+  const changesetJson = await exportChangeset()
+
+  if (options.descriptorWalletCoordinates != null) {
+    const { network, addressType, accountId } =
+      options.descriptorWalletCoordinates
+    await updateDescriptorWalletChangeset({
+      password: options.password,
+      walletId: options.walletId,
+      network,
+      addressType,
+      accountId,
+      changesetJson,
+      markFullScanDone: options.markFullScanDone,
+      lastSuccessfulEsploraSyncAt: syncedAtIso,
+    })
+  } else {
+    await updateWalletChangeset({
+      password: options.password,
+      walletId: options.walletId,
+      changesetJson,
+      lastSuccessfulEsploraSyncAt: syncedAtIso,
+      ...(options.markFullScanDone ? { markFullScanDone: true } : {}),
+    })
+  }
+  invalidateDashboardQueriesAfterOnchainUpdate()
+}
+
+export type DescriptorWalletEsploraSyncResult = 'completed' | 'syncFailed'
+
+/**
+ * After WASM is already loaded for a target descriptor wallet, run Esplora sync
+ * (incremental or full scan) and persist full-scan completion when needed.
+ * Does not set `walletStatus` — the caller owns UI state around this call.
+ */
+export async function syncLoadedDescriptorWalletWithEsplora(options: {
+  networkMode: NetworkMode
+  activeWalletId: number
+  sessionPassword: string
+  targetNetwork: BitcoinNetwork
+  targetAddressType: AddressType
+  targetAccountId: number
+  fullScanNeeded: boolean
+}): Promise<DescriptorWalletEsploraSyncResult> {
+  try {
+    await syncActiveWalletAndUpdateState(options.networkMode, {
+      useFullScan: options.fullScanNeeded,
+    })
+    await persistPostEsploraSyncDescriptorWalletState({
+      password: options.sessionPassword,
+      walletId: options.activeWalletId,
+      markFullScanDone: options.fullScanNeeded,
+      descriptorWalletCoordinates: {
+        network: options.targetNetwork,
+        addressType: options.targetAddressType,
+        accountId: options.targetAccountId,
+      },
+    })
+    return 'completed'
+  } catch (syncErr) {
+    const detail = sanitizeErrorMessageForUi(errorMessage(syncErr))
+    toast.error(
+      detail
+        ? `Sync failed after switching: ${detail}`
+        : 'Sync failed after switching',
+    )
+    try {
+      await refreshWalletStoreFromLoadedBdk()
+      invalidateOnchainDashboardQueries()
+    } catch {
+      // Leave balance cleared if WASM is unavailable.
+    }
+    return 'syncFailed'
+  }
+}
+
+/**
+ * After {@link syncActiveWalletAndUpdateState} for dashboard actions: refresh LN queries,
+ * last-sync time, and optional persisted changeset.
+ */
+async function finishDashboardSyncAfterStateUpdate(options: {
+  password: string | null
+  activeWalletId: number | null
+  markFullScanDone: boolean
+}): Promise<void> {
+  await persistPostEsploraSyncDescriptorWalletState({
+    password: options.password,
+    walletId: options.activeWalletId,
+    markFullScanDone: options.markFullScanDone,
+  })
+}
+
+/**
+ * Esplora sync for the dashboard "Sync" button: updates balance and
+ * transactions in the store, last sync time, and persisted changeset.
+ *
+ * Uses full scan for regtest (BDK's incremental sync via WASM does not
+ * reliably anchor confirmed transactions to their blocks on regtest).
+ * Uses incremental sync for all other networks for performance.
+ */
+export async function runIncrementalDashboardWalletSync(options: {
+  networkMode: NetworkMode
+  password: string | null
+  activeWalletId: number | null
+}): Promise<void> {
+  const { networkMode, password, activeWalletId } = options
+  const customUrl = await loadCustomEsploraUrl(networkMode)
+  const esploraUrl = getEsploraUrl(networkMode, customUrl)
+  /** Regtest dashboard sync uses full scan inside {@link syncActiveWalletAndUpdateState}, which already replaces the loading toast with this success message when Esplora is configured. */
+  const fullScanSuccessToastAlreadyShown =
+    networkMode === 'regtest' && esploraUrl != null
+
+  await syncActiveWalletAndUpdateState(networkMode, {
+    useFullScan: networkMode === 'regtest',
+  })
+  await finishDashboardSyncAfterStateUpdate({
+    password,
+    activeWalletId,
+    markFullScanDone: false,
+  })
+  if (!fullScanSuccessToastAlreadyShown) {
+    toast.success('Wallet synced')
+  }
+}
+
+/**
+ * Reload the active descriptor wallet in WASM with an empty chain (same descriptors/network),
+ * then refreshes {@link useWalletStore}'s receive address pointer.
+ *
+ * Used to recover when persisted `local_chain` does not match the Esplora indexer.
+ */
+export async function reloadActiveLoadedDescriptorWalletWithEmptyChain(params: {
+  password: string
+  walletId: number
+  networkMode: NetworkMode
+  addressType: AddressType
+  accountId: number
+}): Promise<void> {
+  const { password, walletId, networkMode, addressType, accountId } = params
+  const network = toBitcoinNetwork(networkMode)
+  const descriptorWallet = await resolveDescriptorWallet({
+    password,
+    walletId,
+    targetNetwork: network,
+    targetAddressType: addressType,
+    targetAccountId: accountId,
+  })
+  const { loadWallet, getCurrentAddress } = useCryptoStore.getState()
+  const { setCurrentAddress } = useWalletStore.getState()
+  await loadWallet({
+    externalDescriptor: descriptorWallet.externalDescriptor,
+    internalDescriptor: descriptorWallet.internalDescriptor,
+    network,
+    changesetJson: descriptorWallet.changeSet,
+    useEmptyChain: true,
+  })
+  const address = await getCurrentAddress()
+  setCurrentAddress(address)
+}
+
+/**
+ * Full Esplora scan for the dashboard "Full rescan" control: re-scans the
+ * address gap (same BDK path as import). Use when incremental sync cannot fix
+ * a wrong balance or history.
+ *
+ * If the first scan fails with bad local chain state, reloads with an empty chain
+ * once and retries the full scan (then persists).
+ *
+ * Does not add its own success toast: {@link syncActiveWalletAndUpdateState} shows
+ * loading and success toasts for the full-scan path.
+ */
+export async function runFullScanDashboardWalletSync(options: {
+  networkMode: NetworkMode
+  password: string | null
+  activeWalletId: number | null
+}): Promise<void> {
+  const { networkMode, password, activeWalletId } = options
+
+  const scanAndPersist = async () => {
+    await syncActiveWalletAndUpdateState(networkMode, { useFullScan: true })
+    await finishDashboardSyncAfterStateUpdate({
+      password,
+      activeWalletId,
+      markFullScanDone: true,
+    })
+  }
+
+  try {
+    await scanAndPersist()
+  } catch (err) {
+    const badLocalChainStateError = asBadLocalChainStateError(err)
+    if (badLocalChainStateError == null) {
+      throw err
+    }
+
+    if (password == null || activeWalletId == null) {
+      throw badLocalChainStateError
+    }
+
+    const { loadedDescriptorWallet, addressType, accountId } =
+      useWalletStore.getState()
+    const descriptorWalletCoordinates = loadedDescriptorWallet ?? {
+      networkMode,
+      addressType,
+      accountId,
+    }
+
+    await reloadActiveLoadedDescriptorWalletWithEmptyChain({
+      password,
+      walletId: activeWalletId,
+      networkMode: descriptorWalletCoordinates.networkMode,
+      addressType: descriptorWalletCoordinates.addressType,
+      accountId: descriptorWalletCoordinates.accountId,
+    })
+
+    await scanAndPersist()
+  }
+}
+
+/**
+ * Post-import initial Esplora flow: full scan (with retries via
+ * {@link syncActiveWalletAndUpdateState}), refresh store, persist `fullScanDone`,
+ * clear any import error banner. Does not set `walletStatus`.
+ */
+export async function runImportInitialEsploraSync(): Promise<void> {
+  const networkMode = useWalletStore.getState().networkMode
+  const sessionPassword = useSessionStore.getState().password
+  const activeWalletId = useWalletStore.getState().activeWalletId
+  const { setImportInitialSyncErrorMessage } = useWalletStore.getState()
+
+  const customUrl = await loadCustomEsploraUrl(networkMode)
+  const esploraUrl = getEsploraUrl(networkMode, customUrl)
+
+  if (!esploraUrl) {
+    const { getBalance, getTransactionList } = useCryptoStore.getState()
+    const { setBalance, setTransactions } = useWalletStore.getState()
+    const balance = await getBalance()
+    const transactionList = await getTransactionList()
+    setBalance(balance)
+    setTransactions(transactionList)
+    setImportInitialSyncErrorMessage(null)
+    return
+  }
+
+  await syncActiveWalletAndUpdateState(networkMode, { useFullScan: true })
+
+  await persistPostEsploraSyncDescriptorWalletState({
+    password: sessionPassword,
+    walletId: activeWalletId,
+    markFullScanDone: true,
+  })
+  setImportInitialSyncErrorMessage(null)
+}
+
+/**
+ * Retry handler for import initial sync (toast action, dashboard banner): sets syncing,
+ * runs {@link runImportInitialEsploraSync}, shows toasts, repopulates error state on failure.
+ */
+export async function retryImportInitialEsploraSyncWithWalletStatus(): Promise<void> {
+  const { setWalletStatus, setImportInitialSyncErrorMessage } =
+    useWalletStore.getState()
+  try {
+    setWalletStatus('syncing')
+    setImportInitialSyncErrorMessage(null)
+    await runImportInitialEsploraSync()
+    setWalletStatus('unlocked')
+    toast.success('Initial sync complete')
+  } catch (err) {
+    setWalletStatus('unlocked')
+    const userFacingErrorMessage =
+      sanitizeErrorMessageForUi(errorMessage(err) ?? String(err)) ||
+      'Initial sync failed'
+    setImportInitialSyncErrorMessage(userFacingErrorMessage)
+    showImportInitialSyncFailureToast(err, () => {
+      void retryImportInitialEsploraSyncWithWalletStatus()
+    })
+  }
+}
+
+/**
+ * Loads from persisted changeset when possible. If BDK reports a persisted chain
+ * that does not match the target network (e.g. testnet4 state stored under another
+ * descriptor wallet slot), retries with a fresh chain for that network so the UI can recover.
+ */
+export type LoadWalletPersistedChainMismatchResult = {
+  /** True when the persisted changeset could not be applied and a fresh chain was loaded instead. */
+  usedEmptyChainFallback: boolean
+}
+
+export async function loadWalletHandlingPersistedChainMismatch(
+  loadWallet: (params: LoadWalletParams) => Promise<boolean>,
+  params: LoadWalletParams,
+): Promise<LoadWalletPersistedChainMismatchResult> {
+  const { usedEmptyChainFallback } = await withPersistedChainMismatchRetry(
+    loadWallet,
+    params,
+  )
+  return { usedEmptyChainFallback }
+}
+
+/**
+ * Resolve descriptor wallet, load into WASM, set current address, start
+ * auto-lock timer. Does NOT sync. Used for lab mode where there is no Esplora.
+ */
+export async function loadDescriptorWalletWithoutSync(params: {
+  password: string
+  walletId: number
+  networkMode: NetworkMode
+  addressType: AddressType
+  accountId: number
+}): Promise<void> {
+  const { password, walletId, networkMode, addressType, accountId } = params
+  const network = toBitcoinNetwork(networkMode)
+  const descriptorWallet = await resolveDescriptorWallet({
+    password,
+    walletId,
+    targetNetwork: network,
+    targetAddressType: addressType,
+    targetAccountId: accountId,
+  })
+
+  const { loadWallet, getCurrentAddress } = useCryptoStore.getState()
+  const {
+    setWalletStatus,
+    setBalance,
+    setTransactions,
+    setCurrentAddress,
+    commitLoadedDescriptorWallet,
+  } = useWalletStore.getState()
+
+  setCurrentAddress(null)
+  setBalance(null)
+  setTransactions([])
+
+  await loadWalletHandlingPersistedChainMismatch(loadWallet, {
+    externalDescriptor: descriptorWallet.externalDescriptor,
+    internalDescriptor: descriptorWallet.internalDescriptor,
+    network,
+    changesetJson: descriptorWallet.changeSet,
+    useEmptyChain: false,
+  })
+
+  const address = await getCurrentAddress()
+  setCurrentAddress(address)
+  commitLoadedDescriptorWallet({
+    networkMode,
+    addressType,
+    accountId,
+  })
+  setWalletStatus('unlocked')
+
+  const { startAutoLockTimer } = await import('@/stores/sessionStore')
+  startAutoLockTimer(() =>
+    useCryptoStore.getState().lockAndPurgeSensitiveRuntimeState(),
+  )
+}
+
+/**
+ * Resolve descriptor wallet, load into WASM, set current address, start
+ * auto-lock timer, then run Esplora sync (by default in the background after unlock).
+ */
+export async function loadDescriptorWalletAndSync(params: {
+  password: string
+  walletId: number
+  networkMode: NetworkMode
+  addressType: AddressType
+  accountId: number
+  onSyncError?: (err: unknown) => void
+  /**
+   * When true, this function resolves only after Esplora sync and changeset persistence finish.
+   * When false (default), unlock completes as soon as WASM is ready; sync cannot block or
+   * fail the returned promise (errors go to `onSyncError` only).
+   */
+  awaitSync?: boolean
+}): Promise<void> {
+  const {
+    password,
+    walletId,
+    networkMode,
+    addressType,
+    accountId,
+    onSyncError,
+    awaitSync = false,
+  } = params
+  const network = toBitcoinNetwork(networkMode)
+  const descriptorWallet = await resolveDescriptorWallet({
+    password,
+    walletId,
+    targetNetwork: network,
+    targetAddressType: addressType,
+    targetAccountId: accountId,
+  })
+
+  const { loadWallet, getCurrentAddress } = useCryptoStore.getState()
+  const {
+    setWalletStatus,
+    setBalance,
+    setTransactions,
+    setCurrentAddress,
+    setLastSyncTime,
+    commitLoadedDescriptorWallet,
+  } = useWalletStore.getState()
+
+  setCurrentAddress(null)
+  setBalance(null)
+  setTransactions([])
+  setLastSyncTime(null)
+
+  await loadWalletHandlingPersistedChainMismatch(loadWallet, {
+    externalDescriptor: descriptorWallet.externalDescriptor,
+    internalDescriptor: descriptorWallet.internalDescriptor,
+    network,
+    changesetJson: descriptorWallet.changeSet,
+    useEmptyChain: false,
+  })
+
+  const address = await getCurrentAddress()
+  setCurrentAddress(address)
+  commitLoadedDescriptorWallet({
+    networkMode,
+    addressType,
+    accountId,
+  })
+  setWalletStatus('unlocked')
+
+  if (networkMode !== 'lab') {
+    await refreshWalletStoreFromLoadedBdk()
+    invalidateOnchainDashboardQueries()
+  }
+
+  const { startAutoLockTimer } = await import('@/stores/sessionStore')
+  startAutoLockTimer(() =>
+    useCryptoStore.getState().lockAndPurgeSensitiveRuntimeState(),
+  )
+
+  const runEsploraSyncAndPersistChangeset = async () => {
+    try {
+      await syncActiveWalletAndUpdateState(networkMode, { useFullScan: true })
+      await persistPostEsploraSyncDescriptorWalletState({
+        password,
+        walletId,
+        markFullScanDone: true,
+      })
+    } catch (err) {
+      if (networkMode !== 'lab') {
+        try {
+          await refreshWalletStoreFromLoadedBdk()
+          invalidateOnchainDashboardQueries()
+        } catch {
+          // Keep prior BDK-local store state when refresh fails.
+        }
+      }
+      onSyncError?.(err)
+    }
+  }
+
+  if (awaitSync) {
+    await runEsploraSyncAndPersistChangeset()
+  } else {
+    void runEsploraSyncAndPersistChangeset()
+  }
+}

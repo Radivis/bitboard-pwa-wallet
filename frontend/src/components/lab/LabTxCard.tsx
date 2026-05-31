@@ -3,10 +3,10 @@ import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
 import { LAB_CARD_TX_AMOUNT_TEXT_CLASS } from '@/components/lab/lab-card-amount-text'
 import { LabOwnerDisplayWithAddressType } from '@/components/lab/LabOwnerDisplayWithAddressType'
 import { Badge } from '@/components/ui/badge'
-import { truncateAddress } from '@/lib/bitcoin-utils'
-import type { LabOwner } from '@/lib/lab-owner'
-import type { AddressType } from '@/lib/wallet-domain-types'
-import { cn } from '@/lib/utils'
+import { truncateAddress } from '@/lib/wallet/bitcoin-utils'
+import type { LabOwner } from '@/lib/lab/lab-owner'
+import type { AddressType, WalletSummary } from '@/lib/wallet/wallet-domain-types'
+import { cn } from '@/lib/shared/utils'
 
 type EntityForLabTxCard = {
   labEntityId: number
@@ -20,7 +20,7 @@ export type LabTxCardProps = {
   receiver: LabOwner | null
   amountSats: number
   feeSats: number
-  wallets: Array<{ wallet_id: number; name: string }>
+  wallets: WalletSummary[]
   entities: readonly EntityForLabTxCard[]
   variant: 'transfer' | 'coinbase'
   className?: string

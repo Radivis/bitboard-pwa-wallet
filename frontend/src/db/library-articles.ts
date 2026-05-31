@@ -5,14 +5,14 @@ export async function getFavoriteBySlug(
   walletDb: Kysely<Database>,
   articleSlug: string,
 ): Promise<boolean> {
-  const row = await walletDb
+  const articleRecord = await walletDb
     .selectFrom('library_articles')
     .select('is_favorite')
     .where('article_slug', '=', articleSlug)
     .executeTakeFirst()
-  if (!row) return false
+  if (!articleRecord) return false
   // `== true` matches both boolean true and legacy INTEGER 1 from older DBs / drivers.
-  return row.is_favorite == true
+  return articleRecord.is_favorite == true
 }
 
 export async function getAllFavoriteSlugs(walletDb: Kysely<Database>): Promise<string[]> {
@@ -22,7 +22,7 @@ export async function getAllFavoriteSlugs(walletDb: Kysely<Database>): Promise<s
     // Runtime binds `1` (SQLite); `as boolean` satisfies Kysely OperandValue for ColumnType<boolean, …>.
     .where('is_favorite', '=', SQLITE_TRUE as unknown as boolean)
     .execute()
-  return rows.map((r) => r.article_slug)
+  return rows.map((favoriteRow) => favoriteRow.article_slug)
 }
 
 /**

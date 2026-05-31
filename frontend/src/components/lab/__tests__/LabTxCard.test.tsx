@@ -2,16 +2,16 @@ import { describe, expect, it } from 'vitest'
 import { screen } from '@testing-library/react'
 import { renderWithProviders } from '@/test-utils/test-providers'
 import { LabTxCard } from '@/components/lab/LabTxCard'
-import { labEntityLabOwner, walletLabOwner } from '@/lib/lab-owner'
-import { formatAmountInBitcoinDisplayUnit } from '@/lib/bitcoin-display-unit'
-import { truncateAddress } from '@/lib/bitcoin-utils'
+import { labEntityLabOwner, walletLabOwner } from '@/lib/lab/lab-owner'
+import { formatAmountInBitcoinDisplayUnit } from '@/lib/wallet/bitcoin-display-unit'
+import { truncateAddress } from '@/lib/wallet/bitcoin-utils'
 
 /** Shared card props: one lab entity "Alice" and one wallet "W1". */
 const fixtureLabEntities = [
   { labEntityId: 1, entityName: 'Alice', addressType: 'segwit' as const },
 ] as const
-const fixtureLabWallets: Array<{ wallet_id: number; name: string }> = [
-  { wallet_id: 1, name: 'W1' },
+const fixtureLabWallets = [
+  { walletId: 1, name: 'W1', createdAt: new Date().toISOString() },
 ]
 
 describe('LabTxCard', () => {

@@ -1,5 +1,5 @@
 import { QueryClientProvider } from '@tanstack/react-query'
-import { appQueryClient } from '@/lib/app-query-client'
+import { appQueryClient } from '@/lib/shared/app-query-client'
 import { createRootRoute, Outlet } from '@tanstack/react-router'
 import { lazy, Suspense } from 'react'
 import { Toaster } from '@/components/ui/sonner'
@@ -8,6 +8,7 @@ import { WalletLayout } from '@/components/WalletLayout'
 import { AppInitializer } from '@/components/AppInitializer'
 import { DatabaseReadyGate } from '@/components/DatabaseReadyGate'
 import { InfomodeHintToast } from '@/components/InfomodeHintToast'
+import { PwaUpdateBanner } from '@/components/PwaUpdateBanner'
 import { InfomodeProvider } from '@/components/infomode/InfomodeProvider'
 // Disable in CI: devtools overlay intercepts pointer events and breaks E2E tests.
 // Set VITE_HIDE_ROUTER_DEVTOOLS=1 when you want a dev build without the floating panel (e.g. screenshots).
@@ -32,6 +33,7 @@ export const Route = createRootRoute({
 function RootComponent() {
   return (
     <QueryClientProvider client={appQueryClient}>
+      <PwaUpdateBanner />
       <InfomodeProvider>
         <DatabaseReadyGate>
           <InfomodeHintToast />
