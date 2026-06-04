@@ -34,6 +34,27 @@ export const article: LibraryArticle = {
           if you disabled the default delegator.
         </p>
       </ArticleSection>
+
+      <ArticleSection title="Exiting to on-chain">
+        <p>
+          <strong>Collaborative exit</strong> (Management → Arkade) withdraws VTXOs to a normal
+          Bitcoin address with the operator—fastest when the network is reachable.
+        </p>
+        <p>
+          <strong>Unilateral exit</strong> lets you reclaim one VTXO without the operator by
+          unrolling its chain on-chain, then completing after the timelock. You must fund a small
+          bumper wallet for transaction fees. See{' '}
+          <a
+            href="https://docs.arkadeos.com/wallets/advanced/ramps"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-primary underline-offset-4 hover:underline"
+          >
+            Arkade ramps documentation
+          </a>
+          .
+        </p>
+      </ArticleSection>
     </div>
   ),
 }

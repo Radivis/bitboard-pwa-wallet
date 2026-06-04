@@ -14,6 +14,7 @@ import { openArkadeSessionForWallet } from '@/lib/arkade/arkade-session-service'
 import { useSessionStore } from '@/stores/sessionStore'
 import { useQuery } from '@tanstack/react-query'
 import { getArkadeWorker } from '@/workers/arkade-factory'
+import { ArkadeExitSection } from '@/components/wallet/ArkadeExitSection'
 
 export function ArkadePanel() {
   const networkMode = useWalletStore((s) => s.networkMode)
@@ -87,6 +88,8 @@ export function ArkadePanel() {
             Delegator service fee: {delegateFee} sats per renewal (Bitboard Fulmine)
           </p>
         )}
+
+        <ArkadeExitSection />
 
         <div className="flex flex-wrap gap-2">
           <Button type="button" variant="outline" size="sm" asChild>

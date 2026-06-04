@@ -11,6 +11,8 @@ feature:
     - As a user, I want to board Bitcoin from my on-chain wallet into Arkade
     - As a user, I want VTXO renewal delegated to Bitboard's Fulmine service so I do not need the app open 24/7
     - As a user, I want to understand VTXO expiry and optionally renew manually for learning
+    - As a user, I want to exit Arkade to an on-chain address collaboratively when the operator is available
+    - As a user, I want to exit a specific VTXO unilaterally without operator cooperation when needed
   requirements:
     - Arkade is gated by isArkadeEnabled (default off) and isMainnetAccessEnabled for mainnet
     - Arkade is available only on mainnet, testnet, and signet; not on lab or regtest in v1
@@ -31,8 +33,12 @@ feature:
         - delegator fee from getDelegateInfo when reachable
         - link to Arkade receive and send routes
         - expiring VTXO count when session open
+        - collaborative exit (on-chain destination, optional partial amount)
+        - unilateral exit per VTXO (select, unroll, complete after timelock)
       - requirements:
         - Shown only when isArkadeEnabled and current network supports Arkade
+        - Collaborative exit uses Ramps.offboard via arkade.worker
+        - Unilateral exit uses SDK Unroll session + completeUnroll; bumper wallet balance shown
     - ArkadeReceive:
       - path: /wallet/arkade/receive
       - file: frontend/src/routes/wallet/arkade/receive.tsx

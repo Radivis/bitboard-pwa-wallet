@@ -16,6 +16,17 @@ export const arkadeDelegateInfoQueryKey = (
   networkMode: ArkadeSupportedNetworkMode,
 ) => [...WALLET_DB_QUERY_KEY_ROOT, 'arkade', 'delegator', networkMode, 'info'] as const
 
+export const arkadeExitCandidatesQueryKey = (
+  walletId: number,
+  networkMode: ArkadeSupportedNetworkMode,
+) =>
+  [...WALLET_DB_QUERY_KEY_ROOT, 'arkade', walletId, networkMode, 'exit-candidates'] as const
+
+export const arkadeBumperInfoQueryKey = (
+  walletId: number,
+  networkMode: ArkadeSupportedNetworkMode,
+) => [...WALLET_DB_QUERY_KEY_ROOT, 'arkade', walletId, networkMode, 'bumper'] as const
+
 export function removeArkadeDashboardQueries(): void {
   appQueryClient.removeQueries({
     queryKey: [...WALLET_DB_QUERY_KEY_ROOT, 'arkade'],

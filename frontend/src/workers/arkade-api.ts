@@ -41,6 +41,41 @@ export interface ArkadeBoardingInfo {
   boardingAddress: string
 }
 
+export interface ArkadeExitCandidateRow {
+  id: string
+  txid: string
+  vout: number
+  amountSats: number
+  virtualStatusState: string
+  isRecoverable: boolean
+  isUnrolled: boolean
+  canStartUnroll: boolean
+  canComplete: boolean
+}
+
+export interface ArkadeOnchainBumperInfo {
+  address: string
+  balanceSats: number
+}
+
+export interface ArkadeCollaborativeExitParams {
+  destinationAddress: string
+  /** Omit for full offboard of virtual outputs. */
+  amountSats?: number
+}
+
+export interface ArkadeUnrollProgressEvent {
+  type: 'wait' | 'unroll' | 'done'
+  message: string
+  txid?: string
+  vtxoTxid?: string
+}
+
+export interface ArkadeCompleteUnilateralExitParams {
+  vtxoTxids: string[]
+  destinationAddress: string
+}
+
 export interface ArkadeService {
   setSdkPersistenceBridge(bridge: ArkadeSdkPersistenceBridge | null): Promise<void>
   openSession(params: OpenArkadeSessionParams): Promise<{ arkadeAddress: string }>
@@ -56,4 +91,12 @@ export interface ArkadeService {
   delegateSpendableVtxos(): Promise<{ delegated: number; failed: number }>
   finalizePendingTransactions(): Promise<{ finalized: number; pending: number }>
   onboardBoardedUtxos(): Promise<string | null>
+  listExitCandidates(): Promise<ArkadeExitCandidateRow[]>
+  getOnchainBumperInfo(): Promise<ArkadeOnchainBumperInfo>
+  collaborativeExit(params: ArkadeCollaborativeExitParams): Promise<string>
+  runUnilateralUnroll(
+    params: { txid: string; vout: number },
+    onProgress: (event: ArkadeUnrollProgressEvent) => void,
+  ): Promise<{ vtxoTxid: string }>
+  completeUnilateralExit(params: ArkadeCompleteUnilateralExitParams): Promise<string>
 }

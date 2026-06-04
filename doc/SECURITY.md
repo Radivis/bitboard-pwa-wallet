@@ -115,6 +115,7 @@ The following cannot be fully eliminated in a browser-based wallet:
 - **Mnemonic use:** The Arkade worker decrypts the mnemonic locally (same Argon2/AES stack as the encryption worker) only to build a `MnemonicIdentity`. The mnemonic is not part of the persisted SDK blob.
 - **Local VTXO state:** Full Arkade SDK repository state (VTXOs, contracts, boarding UTXOs, tx history) is stored in `sdkPersistenceJson` inside the encrypted `wallet_secrets` payload. Reopening the wallet does not require the Arkade operator; cooperative operations (send, board, delegate) still use the operator when online.
 - **Third parties:** Arkade payments rely on the **Arkade operator** (batch settlement) and, when enabled, a **Bitboard Fulmine delegator** per network for VTXO renewal. Delegation uses presigned intents; the delegator cannot change outputs or take custody.
+- **Exits:** Collaborative exit requires the operator. Unilateral exit broadcasts from local VTXO state and an on-chain bumper wallet (same mnemonic); it does not require the operator after unroll but needs sufficient bumper UTXOs for fees.
 - **Trust:** Users should understand preconfirmation vs on-chain finality. See [docs/arkade-bitboard-wallet-model.md](../docs/arkade-bitboard-wallet-model.md) and [Arkade security documentation](https://docs.arkadeos.com/learn/core-concepts/security-and-trust-model.md).
 
 

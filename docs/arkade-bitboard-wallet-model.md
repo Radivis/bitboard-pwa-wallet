@@ -28,6 +28,17 @@ For network switching and Esplora, see [`descriptor-wallet-switching.md`](descri
 
 Flush uses the **inner** handles because export reads repository maps via a direct field snapshot (not through the proxy). The SDK mutates the same underlying data through the proxies. Critical worker RPCs (send, onboard, delegate, etc.) also call an immediate flush.
 
+## Exiting to on-chain
+
+Management → Arkade offers two paths:
+
+| Path | Operator required | Use when |
+|------|-------------------|----------|
+| **Collaborative exit** | Yes | Default; batches with operator; one settlement to your `bc1` address |
+| **Unilateral exit** | No (after unroll) | Operator down or you need trustless exit; per-VTXO; multiple on-chain txs |
+
+Collaborative exit calls `Ramps.offboard` in `arkade.worker`. Unilateral exit uses `Unroll.Session` (P2A fees paid from an SDK `OnchainWallet` bumper derived from the same mnemonic) then `Unroll.completeUnroll` after the CSV timelock. Select one VTXO at a time in the UI.
+
 ## Mnemonic alignment
 
 - Same BIP39 mnemonic as the Bitboard wallet; Arkade uses `MnemonicIdentity` (BIP86 account 0).
