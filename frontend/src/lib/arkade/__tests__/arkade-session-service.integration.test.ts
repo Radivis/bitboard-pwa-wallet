@@ -1,0 +1,162 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { getArkadeEndpoints } from '@/lib/arkade/arkade-endpoints'
+
+const featureState = vi.hoisted(() => ({
+  isArkadeEnabled: true,
+  isMainnetAccessEnabled: false,
+}))
+
+const workerMocks = vi.hoisted(() => ({
+  openSession: vi.fn(),
+  closeSession: vi.fn(),
+  finalizePendingTransactions: vi.fn(),
+  delegateSpendableVtxos: vi.fn(),
+  getBalance: vi.fn(),
+  getTransactionHistory: vi.fn(),
+}))
+
+const upsertArkadeWalletStateMock = vi.hoisted(() => vi.fn())
+const applyArkadeSnapshotPatchMock = vi.hoisted(() => vi.fn())
+const ensureSecretsChannelMock = vi.hoisted(() => vi.fn())
+const terminateArkadeWorkerMock = vi.hoisted(() => vi.fn())
+const removeArkadeDashboardQueriesMock = vi.hoisted(() => vi.fn())
+
+const encryptedMnemonic = {
+  ciphertext: new Uint8Array([1, 2, 3]),
+  iv: new Uint8Array([4, 5, 6]),
+  salt: new Uint8Array([7, 8, 9]),
+  kdfPhc: '$argon2id$v=19$m=65536,t=3,p=4$test',
+}
+
+vi.mock('@/stores/featureStore', () => ({
+  useFeatureStore: {
+    getState: () => featureState,
+  },
+}))
+
+vi.mock('@/workers/secrets-channel', () => ({
+  ensureSecretsChannel: (...args: unknown[]) => ensureSecretsChannelMock(...args),
+}))
+
+vi.mock('@/db', () => ({
+  getDatabase: vi.fn(() => ({})),
+  getWalletSecretsEncrypted: vi.fn(async () => ({
+    mnemonic: encryptedMnemonic,
+    payload: {},
+  })),
+}))
+
+vi.mock('@/workers/arkade-factory', () => ({
+  getArkadeWorker: () => workerMocks,
+  terminateArkadeWorker: (...args: unknown[]) => terminateArkadeWorkerMock(...args),
+}))
+
+vi.mock('@/lib/arkade/arkade-wallet-secrets', () => ({
+  upsertArkadeWalletState: (...args: unknown[]) => upsertArkadeWalletStateMock(...args),
+}))
+
+vi.mock('@/lib/arkade/arkade-snapshot-persistence', () => ({
+  applyArkadeSnapshotPatch: (...args: unknown[]) => applyArkadeSnapshotPatchMock(...args),
+}))
+
+vi.mock('@/lib/arkade/arkade-query-keys', () => ({
+  removeArkadeDashboardQueries: (...args: unknown[]) =>
+    removeArkadeDashboardQueriesMock(...args),
+}))
+
+import {
+  closeArkadeSession,
+  openArkadeSessionForWallet,
+} from '@/lib/arkade/arkade-session-service'
+
+describe('openArkadeSessionForWallet (integration)', () => {
+  beforeEach(async () => {
+    featureState.isArkadeEnabled = true
+    featureState.isMainnetAccessEnabled = false
+    await closeArkadeSession()
+    vi.clearAllMocks()
+
+    workerMocks.openSession.mockResolvedValue({ arkadeAddress: 'tark1qtest' })
+    workerMocks.finalizePendingTransactions.mockResolvedValue({
+      finalized: 0,
+      pending: 0,
+    })
+    workerMocks.delegateSpendableVtxos.mockResolvedValue({
+      delegated: 0,
+      failed: 0,
+    })
+    workerMocks.getBalance.mockResolvedValue({
+      confirmedSats: 50_000,
+      totalSats: 50_000,
+    })
+    workerMocks.getTransactionHistory.mockResolvedValue([])
+    ensureSecretsChannelMock.mockResolvedValue(undefined)
+    upsertArkadeWalletStateMock.mockResolvedValue(undefined)
+    applyArkadeSnapshotPatchMock.mockResolvedValue(undefined)
+  })
+
+  it('opens worker session with network endpoints after unlock prerequisites', async () => {
+    const endpoints = getArkadeEndpoints('testnet')
+
+    await openArkadeSessionForWallet({
+      password: 'unlock-password',
+      walletId: 7,
+      networkMode: 'testnet',
+    })
+
+    expect(ensureSecretsChannelMock).toHaveBeenCalledTimes(1)
+    expect(workerMocks.openSession).toHaveBeenCalledWith({
+      password: 'unlock-password',
+      encryptedMnemonic,
+      walletId: 7,
+      networkMode: 'testnet',
+      arkServerUrl: endpoints.arkServerUrl,
+      delegatorUrl: endpoints.delegatorUrl,
+      esploraUrl: endpoints.esploraUrl,
+    })
+    expect(workerMocks.finalizePendingTransactions).toHaveBeenCalledTimes(1)
+    expect(workerMocks.delegateSpendableVtxos).toHaveBeenCalledTimes(1)
+    expect(upsertArkadeWalletStateMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        password: 'unlock-password',
+        walletId: 7,
+        networkMode: 'testnet',
+        patch: expect.objectContaining({
+          arkadeAddress: 'tark1qtest',
+          lastSessionOpenedAt: expect.any(String),
+        }),
+      }),
+    )
+    expect(applyArkadeSnapshotPatchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('closes session instead of opening when Arkade feature is disabled', async () => {
+    featureState.isArkadeEnabled = false
+
+    await openArkadeSessionForWallet({
+      password: 'unlock-password',
+      walletId: 7,
+      networkMode: 'testnet',
+    })
+
+    expect(workerMocks.openSession).not.toHaveBeenCalled()
+    expect(workerMocks.closeSession).toHaveBeenCalledTimes(1)
+    expect(terminateArkadeWorkerMock).toHaveBeenCalledTimes(1)
+    expect(removeArkadeDashboardQueriesMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not reopen when the same wallet and network session is already active', async () => {
+    await openArkadeSessionForWallet({
+      password: 'unlock-password',
+      walletId: 7,
+      networkMode: 'testnet',
+    })
+    await openArkadeSessionForWallet({
+      password: 'unlock-password',
+      walletId: 7,
+      networkMode: 'testnet',
+    })
+
+    expect(workerMocks.openSession).toHaveBeenCalledTimes(1)
+  })
+})

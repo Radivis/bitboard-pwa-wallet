@@ -54,6 +54,7 @@ import { isLightningSupported } from '@/lib/lightning/lightning-utils'
 import { mergeAndSortDashboardActivity } from '@/lib/lightning/lightning-dashboard-sync'
 import { useDashboardActivityPageSize } from '@/hooks/useDashboardActivityPageSize'
 import { LightningPaymentItem } from '@/components/LightningPaymentItem'
+import { ArkadeDashboardBalance } from '@/components/wallet/ArkadeDashboardBalance'
 import { useFiatDenominationStore } from '@/stores/fiatDenominationStore'
 import { useMainnetFiatRatesQuery } from '@/hooks/useMainnetFiatRatesQuery'
 import {
@@ -375,6 +376,8 @@ function BalanceCard() {
               </ul>
             )}
           </div>
+
+          <ArkadeDashboardBalance />
 
           {showLightningBalances && lightningBalancesQuery.isPending && (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">

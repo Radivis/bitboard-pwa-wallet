@@ -10,6 +10,7 @@ import { removeOnchainDashboardQueries } from '@/lib/wallet/onchain-dashboard-sy
 import { useWalletStore } from '@/stores/walletStore';
 import { useLightningStore } from '@/stores/lightningStore';
 import { useSessionStore, clearAutoLockTimer } from '@/stores/sessionStore';
+import { closeArkadeSession } from '@/lib/arkade/arkade-session-service';
 import { resetSecretsChannel } from '@/workers/secrets-channel';
 import { awaitInFlightWalletSecretsWrites } from '@/db/wallet-secrets-write-tracker';
 import { navigateToLibraryIfOnWalletRoute } from '@/lib/shared/app-router';
@@ -277,6 +278,7 @@ export const useCryptoStore = create<CryptoState>((set, get) => {
       useLightningStore.getState().purgeLightningConnectionsFromMemory();
       removeLightningConnectionsHydrationQueries();
       removeOnchainDashboardQueries();
+      await closeArkadeSession();
       terminateCryptoWorker();
       resetSecretsChannel();
       useSessionStore.getState().clear();

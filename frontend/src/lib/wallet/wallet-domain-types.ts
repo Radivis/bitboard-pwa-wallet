@@ -4,6 +4,8 @@ import {
 } from '@/lib/lightning/lightning-input-limits'
 import type { LightningPayment } from '@/lib/lightning/lightning-backend-service'
 import { isLightningPaymentPayload } from '@/lib/lightning/lightning-snapshot-payload'
+import type { ArkadeSupportedNetworkMode } from '@/lib/arkade/arkade-endpoints'
+import { ARKADE_SUPPORTED_NETWORK_MODES } from '@/lib/arkade/arkade-domain-types'
 import type { LightningNetworkMode } from '@/lib/lightning/lightning-utils'
 import { LIGHTNING_NETWORK_MODES } from '@/lib/lightning/lightning-utils'
 
@@ -56,6 +58,34 @@ export interface NwcConnectionSnapshot {
 }
 
 /**
+ * Arkade wallet metadata per live network (SDK state in worker IndexedDB).
+ * Created once per (wallet_id, networkMode) with delegator path in the Arkade address.
+ */
+export interface StoredArkadeWalletState {
+  networkMode: ArkadeSupportedNetworkMode
+  arkadeAddress?: string
+  createdAt: string
+  lastSessionOpenedAt?: string
+  arkadeSnapshot?: ArkadeConnectionSnapshot
+}
+
+export interface ArkadeConnectionSnapshot {
+  balance: {
+    confirmedSats: number
+    totalSats: number
+    updatedAt: string
+  }
+  payments: Array<{
+    direction: 'incoming' | 'outgoing'
+    amountSats: number
+    timestamp: number
+    txid: string
+    memo?: string
+  }>
+  paymentsUpdatedAt: string
+}
+
+/**
  * NWC connection persisted inside the encrypted wallet secrets blob (not in plain settings).
  * Same fields as UI `ConnectedLightningWallet` minus redundant `walletId`.
  */
@@ -78,6 +108,8 @@ export interface WalletSecretsPayload {
   descriptorWallets: DescriptorWalletData[]
   /** NWC URIs and metadata (empty array when the user has no Lightning connections). */
   lightningNwcConnections: StoredNwcLightningConnection[]
+  /** Arkade metadata per network (empty when user has not initialized Arkade). */
+  arkadeWallets: StoredArkadeWalletState[]
 }
 
 /** Sensitive wallet data stored encrypted. Shared with db layer and workers. */
@@ -140,6 +172,48 @@ function isNwcConnectionSnapshot(value: unknown): value is NwcConnectionSnapshot
   )
 }
 
+function isArkadeConnectionSnapshot(value: unknown): value is ArkadeConnectionSnapshot {
+  if (!isRecord(value)) return false
+  const balance = value.balance
+  if (!isRecord(balance)) return false
+  return (
+    typeof balance.confirmedSats === 'number' &&
+    Number.isFinite(balance.confirmedSats) &&
+    typeof balance.totalSats === 'number' &&
+    Number.isFinite(balance.totalSats) &&
+    isIso8601Timestamp(balance.updatedAt) &&
+    Array.isArray(value.payments) &&
+    value.payments.every((payment) => {
+      if (!isRecord(payment)) return false
+      return (
+        (payment.direction === 'incoming' || payment.direction === 'outgoing') &&
+        typeof payment.amountSats === 'number' &&
+        Number.isFinite(payment.amountSats) &&
+        typeof payment.timestamp === 'number' &&
+        Number.isFinite(payment.timestamp) &&
+        isNonEmptyString(payment.txid)
+      )
+    }) &&
+    isIso8601Timestamp(value.paymentsUpdatedAt)
+  )
+}
+
+function isStoredArkadeWalletState(value: unknown): value is StoredArkadeWalletState {
+  if (!isRecord(value)) return false
+  const networkOk =
+    typeof value.networkMode === 'string' &&
+    (ARKADE_SUPPORTED_NETWORK_MODES as readonly string[]).includes(value.networkMode)
+  if (!networkOk || !isIso8601Timestamp(value.createdAt)) return false
+  if (value.arkadeAddress !== undefined && !isNonEmptyString(value.arkadeAddress)) {
+    return false
+  }
+  if (value.lastSessionOpenedAt !== undefined && !isIso8601Timestamp(value.lastSessionOpenedAt)) {
+    return false
+  }
+  if (value.arkadeSnapshot === undefined) return true
+  return isArkadeConnectionSnapshot(value.arkadeSnapshot)
+}
+
 function isStoredNwcLightningConnection(
   value: unknown,
 ): value is StoredNwcLightningConnection {
@@ -195,6 +269,10 @@ export function isWalletSecretsPayload(value: unknown): value is WalletSecretsPa
   ) {
     return false
   }
+  if (!Array.isArray(value.arkadeWallets)) return false
+  if (!value.arkadeWallets.every((row) => isStoredArkadeWalletState(row))) {
+    return false
+  }
   return true
 }
 
@@ -217,6 +295,10 @@ export function isWalletSecrets(value: unknown): value is WalletSecrets {
   ) {
     return false
   }
+  if (!Array.isArray(value.arkadeWallets)) return false
+  if (!value.arkadeWallets.every((row) => isStoredArkadeWalletState(row))) {
+    return false
+  }
   return true
 }
 
@@ -228,15 +310,20 @@ export function assembleWalletSecrets(
     mnemonic,
     descriptorWallets: payload.descriptorWallets,
     lightningNwcConnections: payload.lightningNwcConnections,
+    arkadeWallets: payload.arkadeWallets,
   }
 }
 
 function normalizeWalletSecretsPayload(raw: unknown): unknown {
   if (!isRecord(raw)) return raw
-  if (raw.lightningNwcConnections === undefined) {
-    return { ...raw, lightningNwcConnections: [] }
+  let next = raw
+  if (next.lightningNwcConnections === undefined) {
+    next = { ...next, lightningNwcConnections: [] }
   }
-  return raw
+  if (next.arkadeWallets === undefined) {
+    next = { ...next, arkadeWallets: [] }
+  }
+  return next
 }
 
 export function parseWalletPayloadJson(walletSecretsJson: string): WalletSecretsPayload {

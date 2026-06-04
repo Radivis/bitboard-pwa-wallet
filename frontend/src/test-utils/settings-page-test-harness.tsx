@@ -100,6 +100,7 @@ export const mockLoadWalletSecretsPayload = vi.fn().mockResolvedValue({
     },
   ],
   lightningNwcConnections: [],
+  arkadeWallets: [],
 })
 
 export const mockLoadDescriptorWalletAndSync = vi.fn().mockResolvedValue(undefined)
@@ -392,6 +393,7 @@ export function resetSettingsPageTestState(): void {
       },
     ],
     lightningNwcConnections: [],
+  arkadeWallets: [],
   })
   mockResolveDescriptorWallet.mockResolvedValue({
     network: 'signet',

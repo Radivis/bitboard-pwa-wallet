@@ -8,8 +8,13 @@ import {
 import { walletIsUnlockedOrSyncing } from '@/lib/wallet/wallet-unlocked-status'
 import { switchDescriptorWallet } from '@/lib/wallet/settings-switch-wallet'
 import { terminateLabWorker } from '@/workers/lab-factory'
+import {
+  closeArkadeSession,
+  refreshArkadeSessionAfterNetworkSwitch,
+} from '@/lib/arkade/arkade-session-service'
 import { switchToLabNetwork } from '@/lib/lab/switch-to-lab-network'
 import type { NetworkSwitchPhaseReporter } from '@/lib/settings/network-switch-status-messages'
+import { useSessionStore } from '@/stores/sessionStore'
 
 async function switchDescriptorWalletWhileUnlockedOrSyncing(params: {
   targetNetwork: NetworkMode
@@ -126,6 +131,7 @@ export async function executeSettingsNetworkSwitch(
   const previousNetworkMode = currentMode
 
   if (targetNetwork === 'lab') {
+    await closeArkadeSession()
     await switchToLabNetwork({
       previousNetworkMode,
       walletStatus,
@@ -145,16 +151,23 @@ export async function executeSettingsNetworkSwitch(
       accountId,
       onPhase,
     })
-    return
+  } else {
+    await switchBetweenLiveNetworks({
+      setNetworkMode,
+      targetNetwork,
+      previousNetwork: previousNetworkMode,
+      walletStatus,
+      addressType,
+      accountId,
+      onPhase,
+    })
   }
 
-  await switchBetweenLiveNetworks({
-    setNetworkMode,
-    targetNetwork,
-    previousNetwork: previousNetworkMode,
-    walletStatus,
-    addressType,
-    accountId,
-    onPhase,
+  const sessionPassword = useSessionStore.getState().password
+  const activeWalletId = useWalletStore.getState().activeWalletId
+  await refreshArkadeSessionAfterNetworkSwitch({
+    password: sessionPassword,
+    walletId: activeWalletId,
+    networkMode: targetNetwork,
   })
 }

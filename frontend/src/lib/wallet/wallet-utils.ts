@@ -567,6 +567,10 @@ export async function loadDescriptorWalletWithoutSync(params: {
   startAutoLockTimer(() =>
     useCryptoStore.getState().lockAndPurgeSensitiveRuntimeState(),
   )
+
+  void import('@/lib/arkade/arkade-session-service').then(({ openArkadeSessionForWallet }) =>
+    openArkadeSessionForWallet({ password, walletId, networkMode }),
+  )
 }
 
 /**
@@ -673,4 +677,8 @@ export async function loadDescriptorWalletAndSync(params: {
   } else {
     void runEsploraSyncAndPersistChangeset()
   }
+
+  void import('@/lib/arkade/arkade-session-service').then(({ openArkadeSessionForWallet }) =>
+    openArkadeSessionForWallet({ password, walletId, networkMode }),
+  )
 }

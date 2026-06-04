@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import { AlertTriangle, Coins, FlaskConical, Layers, Zap } from 'lucide-react'
+import { AlertTriangle, CircleDot, Coins, FlaskConical, Layers, Zap } from 'lucide-react'
 import { useFeatureStore } from '@/stores/featureStore'
 import {
   AddressType,
@@ -25,6 +25,8 @@ export function FeatureToggles() {
   const setIsSegwitAddressesEnabled = useFeatureStore((featureState) => featureState.setIsSegwitAddressesEnabled)
   const isUtxoSelectionEnabled = useFeatureStore((featureState) => featureState.isUtxoSelectionEnabled)
   const setIsUtxoSelectionEnabled = useFeatureStore((featureState) => featureState.setIsUtxoSelectionEnabled)
+  const isArkadeEnabled = useFeatureStore((featureState) => featureState.isArkadeEnabled)
+  const setIsArkadeEnabled = useFeatureStore((featureState) => featureState.setIsArkadeEnabled)
 
   const [mainnetConfirmOpen, setMainnetConfirmOpen] = useState(false)
   const [mainnetAccessSwitchBusy, setMainnetAccessSwitchBusy] = useState(false)
@@ -175,6 +177,27 @@ export function FeatureToggles() {
             checked={isUtxoSelectionEnabled}
             onCheckedChange={setIsUtxoSelectionEnabled}
             aria-label="Enable manual UTXO selection on send review"
+          />
+        </div>
+      </InfomodeWrapper>
+
+      <InfomodeWrapper
+        infoId="settings-feature-arkade"
+        infoTitle="Arkade (offchain layer)"
+        infoText="Arkade provides instant offchain payments (VTXOs) without a Lightning wallet. Bitboard uses your mnemonic with a separate Arkade address. VTXO renewal is delegated to Bitboard-hosted Fulmine servers (one per network). Available on mainnet, testnet, and signet—not lab or regtest."
+      >
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <CircleDot className="h-4 w-4" />
+            <Label htmlFor="arkade-toggle" className="cursor-pointer">
+              Arkade
+            </Label>
+          </div>
+          <Switch
+            id="arkade-toggle"
+            checked={isArkadeEnabled}
+            onCheckedChange={setIsArkadeEnabled}
+            aria-label="Enable Arkade offchain layer"
           />
         </div>
       </InfomodeWrapper>

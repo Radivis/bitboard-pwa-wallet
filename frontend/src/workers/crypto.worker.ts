@@ -153,6 +153,7 @@ function buildInitialWalletSecretsPayload({
       },
     ],
     lightningNwcConnections: [],
+    arkadeWallets: [],
   };
 }
 

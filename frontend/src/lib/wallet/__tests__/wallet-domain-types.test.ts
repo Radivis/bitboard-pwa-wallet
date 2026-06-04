@@ -40,6 +40,16 @@ describe('parseWalletPayloadJson', () => {
     })
     const parsed = parseWalletPayloadJson(json)
     expect(parsed.descriptorWallets).toHaveLength(1)
+    expect(parsed.arkadeWallets).toEqual([])
+  })
+
+  it('normalizes missing arkadeWallets to empty array', () => {
+    const json = JSON.stringify({
+      descriptorWallets: [],
+      lightningNwcConnections: [],
+    })
+    const parsed = parseWalletPayloadJson(json)
+    expect(parsed.arkadeWallets).toEqual([])
   })
 
   it('accepts descriptor wallet with lastSuccessfulEsploraSyncAt', () => {

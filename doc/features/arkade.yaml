@@ -1,0 +1,60 @@
+feature:
+  name: Arkade
+  description: "Educational Arkade (VTXO) layer with Bitboard-hosted Fulmine delegator"
+  user_stories:
+    - As a user, I want to enable Arkade under Settings → Features so I can use an offchain Bitcoin layer without a Lightning wallet
+    - As a user, I want my Arkade wallet to use the correct operator and delegator for the network I selected (mainnet, testnet, signet/Mutinynet)
+    - As a user, I want to see my Arkade balance separately from my on-chain balance
+    - As a user, I want to receive funds on an Arkade address (ark1/tark1) with a QR code
+    - As a user, I want to send Arkade payments to an Arkade address
+    - As a user, I want to view Arkade payment history
+    - As a user, I want to board Bitcoin from my on-chain wallet into Arkade
+    - As a user, I want VTXO renewal delegated to Bitboard's Fulmine service so I do not need the app open 24/7
+    - As a user, I want to understand VTXO expiry and optionally renew manually for learning
+  requirements:
+    - Arkade is gated by isArkadeEnabled (default off) and isMainnetAccessEnabled for mainnet
+    - Arkade is available only on mainnet, testnet, and signet; not on lab or regtest in v1
+    - delegatorProvider must be configured at first Wallet.create per (wallet_id, networkMode)
+    - Mnemonic decryption runs only in workers (secrets channel); never on the main thread
+    - Default delegator and operator URLs come from arkade-endpoints.ts (env overrides supported)
+    - Network switch terminates and reopens the Arkade worker session for the new network
+    - Lock wallet terminates arkade.worker and clears session state
+  pages:
+    - ArkadeManagement:
+      - description: "Arkade status on Management page"
+      - file: frontend/src/components/wallet/ArkadePanel.tsx
+      - visible_elements:
+        - Arkade balance (confirmed/total when available)
+        - Arkade receive address with copy
+        - delegator fee from getDelegateInfo when reachable
+        - link to Arkade receive and send routes
+        - expiring VTXO count when session open
+      - requirements:
+        - Shown only when isArkadeEnabled and current network supports Arkade
+    - ArkadeReceive:
+      - path: /wallet/arkade/receive
+      - file: frontend/src/routes/wallet/arkade/receive.tsx
+      - visible_elements:
+        - Arkade address text and QR code
+        - copy button
+        - note that this is not the on-chain bc1 receive address
+    - ArkadeSend:
+      - path: /wallet/arkade/send
+      - file: frontend/src/routes/wallet/arkade/send.tsx
+      - visible_elements:
+        - recipient Arkade address input
+        - amount in sats
+        - review and confirm
+    - ArkadeBoard:
+      - path: /wallet/arkade/board
+      - file: frontend/src/routes/wallet/arkade/board.tsx
+      - visible_elements:
+        - boarding address from SDK
+        - amount to send from on-chain wallet
+        - steps for confirm on-chain then onboard via Ramps
+    - DashboardArkadeBlock:
+      - description: "Separate Arkade balance on dashboard"
+      - file: frontend/src/components/wallet/ArkadeDashboardBalance.tsx
+      - visible_elements:
+        - Arkade balance label
+        - link to Management Arkade section

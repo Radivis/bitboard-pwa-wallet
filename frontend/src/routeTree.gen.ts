@@ -37,6 +37,9 @@ import { Route as LabTransactionsRouteImport } from './routes/lab/transactions'
 import { Route as LabLayer2RouteImport } from './routes/lab/layer-2'
 import { Route as LabControlRouteImport } from './routes/lab/control'
 import { Route as LabBlocksRouteImport } from './routes/lab/blocks'
+import { Route as WalletArkadeSendRouteImport } from './routes/wallet/arkade/send'
+import { Route as WalletArkadeReceiveRouteImport } from './routes/wallet/arkade/receive'
+import { Route as WalletArkadeBoardRouteImport } from './routes/wallet/arkade/board'
 import { Route as LibraryArticlesSlugRouteImport } from './routes/library/articles.$slug'
 import { Route as LabTxTxidRouteImport } from './routes/lab/tx.$txid'
 import { Route as LabBlockCurrentRouteImport } from './routes/lab/block.current'
@@ -182,6 +185,21 @@ const LabBlocksRoute = LabBlocksRouteImport.update({
   path: '/blocks',
   getParentRoute: () => LabRoute,
 } as any)
+const WalletArkadeSendRoute = WalletArkadeSendRouteImport.update({
+  id: '/arkade/send',
+  path: '/arkade/send',
+  getParentRoute: () => WalletRoute,
+} as any)
+const WalletArkadeReceiveRoute = WalletArkadeReceiveRouteImport.update({
+  id: '/arkade/receive',
+  path: '/arkade/receive',
+  getParentRoute: () => WalletRoute,
+} as any)
+const WalletArkadeBoardRoute = WalletArkadeBoardRouteImport.update({
+  id: '/arkade/board',
+  path: '/arkade/board',
+  getParentRoute: () => WalletRoute,
+} as any)
 const LibraryArticlesSlugRoute = LibraryArticlesSlugRouteImport.update({
   id: '/articles/$slug',
   path: '/articles/$slug',
@@ -236,6 +254,9 @@ export interface FileRoutesByFullPath {
   '/lab/block/current': typeof LabBlockCurrentRoute
   '/lab/tx/$txid': typeof LabTxTxidRoute
   '/library/articles/$slug': typeof LibraryArticlesSlugRoute
+  '/wallet/arkade/board': typeof WalletArkadeBoardRoute
+  '/wallet/arkade/receive': typeof WalletArkadeReceiveRoute
+  '/wallet/arkade/send': typeof WalletArkadeSendRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -265,6 +286,9 @@ export interface FileRoutesByTo {
   '/lab/block/current': typeof LabBlockCurrentRoute
   '/lab/tx/$txid': typeof LabTxTxidRoute
   '/library/articles/$slug': typeof LibraryArticlesSlugRoute
+  '/wallet/arkade/board': typeof WalletArkadeBoardRoute
+  '/wallet/arkade/receive': typeof WalletArkadeReceiveRoute
+  '/wallet/arkade/send': typeof WalletArkadeSendRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -300,6 +324,9 @@ export interface FileRoutesById {
   '/lab/block/current': typeof LabBlockCurrentRoute
   '/lab/tx/$txid': typeof LabTxTxidRoute
   '/library/articles/$slug': typeof LibraryArticlesSlugRoute
+  '/wallet/arkade/board': typeof WalletArkadeBoardRoute
+  '/wallet/arkade/receive': typeof WalletArkadeReceiveRoute
+  '/wallet/arkade/send': typeof WalletArkadeSendRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -336,6 +363,9 @@ export interface FileRouteTypes {
     | '/lab/block/current'
     | '/lab/tx/$txid'
     | '/library/articles/$slug'
+    | '/wallet/arkade/board'
+    | '/wallet/arkade/receive'
+    | '/wallet/arkade/send'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -365,6 +395,9 @@ export interface FileRouteTypes {
     | '/lab/block/current'
     | '/lab/tx/$txid'
     | '/library/articles/$slug'
+    | '/wallet/arkade/board'
+    | '/wallet/arkade/receive'
+    | '/wallet/arkade/send'
   id:
     | '__root__'
     | '/'
@@ -399,6 +432,9 @@ export interface FileRouteTypes {
     | '/lab/block/current'
     | '/lab/tx/$txid'
     | '/library/articles/$slug'
+    | '/wallet/arkade/board'
+    | '/wallet/arkade/receive'
+    | '/wallet/arkade/send'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -609,6 +645,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LabBlocksRouteImport
       parentRoute: typeof LabRoute
     }
+    '/wallet/arkade/send': {
+      id: '/wallet/arkade/send'
+      path: '/arkade/send'
+      fullPath: '/wallet/arkade/send'
+      preLoaderRoute: typeof WalletArkadeSendRouteImport
+      parentRoute: typeof WalletRoute
+    }
+    '/wallet/arkade/receive': {
+      id: '/wallet/arkade/receive'
+      path: '/arkade/receive'
+      fullPath: '/wallet/arkade/receive'
+      preLoaderRoute: typeof WalletArkadeReceiveRouteImport
+      parentRoute: typeof WalletRoute
+    }
+    '/wallet/arkade/board': {
+      id: '/wallet/arkade/board'
+      path: '/arkade/board'
+      fullPath: '/wallet/arkade/board'
+      preLoaderRoute: typeof WalletArkadeBoardRouteImport
+      parentRoute: typeof WalletRoute
+    }
     '/library/articles/$slug': {
       id: '/library/articles/$slug'
       path: '/articles/$slug'
@@ -721,6 +778,9 @@ interface WalletRouteChildren {
   WalletSendRoute: typeof WalletSendRoute
   WalletWalletsRoute: typeof WalletWalletsRoute
   WalletIndexRoute: typeof WalletIndexRoute
+  WalletArkadeBoardRoute: typeof WalletArkadeBoardRoute
+  WalletArkadeReceiveRoute: typeof WalletArkadeReceiveRoute
+  WalletArkadeSendRoute: typeof WalletArkadeSendRoute
 }
 
 const WalletRouteChildren: WalletRouteChildren = {
@@ -729,6 +789,9 @@ const WalletRouteChildren: WalletRouteChildren = {
   WalletSendRoute: WalletSendRoute,
   WalletWalletsRoute: WalletWalletsRoute,
   WalletIndexRoute: WalletIndexRoute,
+  WalletArkadeBoardRoute: WalletArkadeBoardRoute,
+  WalletArkadeReceiveRoute: WalletArkadeReceiveRoute,
+  WalletArkadeSendRoute: WalletArkadeSendRoute,
 }
 
 const WalletRouteWithChildren =
