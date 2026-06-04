@@ -9,20 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Arkade (VTXO) layer: enable under Settings → Features; separate balance, receive, send, and board-from-on-chain flows on mainnet, testnet, and signet (Mutinynet)
-- Network-scoped default Fulmine delegator URLs (env-configurable) for background VTXO renewal
-- Library articles "Arkade in Bitboard Wallet" and "VTXO expiry and renewal"; deploy notes in `docs/deploy/fulmine-delegator-vps.md`
-- Arkade SDK persistence in encrypted `wallet_secrets` (`sdkPersistenceJson`) for local-first VTXO/contract state (replaces dev-only IndexedDB and redundant `arkadeSnapshot` cache)
-- Arkade collaborative and unilateral exit from Management (per-VTXO unilateral flow with unroll progress)
-- Arkade exit fee estimates: operator policy and satoshi preview for collaborative exit; unroll step count and bumper fee lower bound for unilateral exit
-
 ### Changed
-
-- Arkade receive and send are integrated into the main wallet Receive and Send pages (Bitcoin / Lightning / Arkade toggle on receive; address-format detection on send). Management panel links to separate Arkade send/receive routes were removed; legacy URLs redirect.
 
 ### Fixed
 
 ### Security
+
+## [0.3.0] - 2026-06-07
+### Added
+- Arkade (VTXO) layer: enable under Settings → Features; separate balance, receive, send, and board-from-on-chain flows on mainnet, testnet, and signet (Mutinynet)
+- Network-scoped default Fulmine delegator URLs (env-configurable) for background VTXO renewal
+- Library articles "Arkade in Bitboard Wallet" and "VTXO expiry and renewal"; deploy notes in `docs/deploy/fulmine-delegator-vps.md`
+- Arkade collaborative and unilateral exit from Management (per-VTXO unilateral flow with unroll progress)
+- Arkade exit fee estimates: operator policy and satoshi preview for collaborative exit; unroll step count and bumper fee lower bound for unilateral exit
 
 ## [0.2.0] - 2026-05-31
 ### Added
