@@ -1,7 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { getArkadeWorker } from '@/workers/arkade-factory'
-import { buildArkadeSnapshotFromWorkerData } from '@/workers/arkade-api'
 import {
   arkadeBalanceQueryKey,
   arkadeDelegateInfoQueryKey,
@@ -12,7 +11,6 @@ import {
   isArkadeActiveForNetworkMode,
 } from '@/lib/arkade/arkade-utils'
 import { requireArkadeSupportedNetworkMode } from '@/lib/arkade/arkade-utils'
-import { applyArkadeSnapshotPatch } from '@/lib/arkade/arkade-snapshot-persistence'
 import { openArkadeSessionForWallet } from '@/lib/arkade/arkade-session-service'
 import {
   getArkadeEndpoints,
@@ -113,15 +111,7 @@ export function useArkadeSendMutation() {
     },
     onSuccess: async (txid) => {
       toast.success(`Arkade payment sent (${txid.slice(0, 12)}…)`)
-      if (activeWalletId != null && isArkadeSupportedNetworkMode(networkMode) && password != null) {
-        const balance = await getArkadeWorker().getBalance()
-        const payments = await getArkadeWorker().getTransactionHistory()
-        await applyArkadeSnapshotPatch({
-          password,
-          walletId: activeWalletId,
-          networkMode,
-          snapshot: buildArkadeSnapshotFromWorkerData({ balance, payments }),
-        })
+      if (activeWalletId != null && isArkadeSupportedNetworkMode(networkMode)) {
         await queryClient.invalidateQueries({
           queryKey: arkadeBalanceQueryKey(activeWalletId, networkMode),
         })

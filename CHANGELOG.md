@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Arkade (VTXO) layer: enable under Settings → Features; separate balance, receive, send, and board-from-on-chain flows on mainnet, testnet, and signet (Mutinynet)
 - Network-scoped default Fulmine delegator URLs (env-configurable) for background VTXO renewal
 - Library articles "Arkade in Bitboard Wallet" and "VTXO expiry and renewal"; deploy notes in `docs/deploy/fulmine-delegator-vps.md`
+- Arkade SDK persistence in encrypted `wallet_secrets` (`sdkPersistenceJson`) for local-first VTXO/contract state (replaces dev-only IndexedDB and redundant `arkadeSnapshot` cache)
 
 ### Changed
 

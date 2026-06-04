@@ -1,5 +1,7 @@
 import { wrap, type Remote } from 'comlink'
 import type { ArkadeService } from '@/workers/arkade-api'
+import { resetArkadePersistenceChannel } from '@/workers/arkade-persistence-channel'
+import { setArkadeSdkPersistenceBridge } from '@/lib/arkade/storage/arkade-sdk-persistence-flush'
 
 let worker: Worker | null = null
 let arkadeWorkerProxy: Remote<ArkadeService> | null = null
@@ -20,4 +22,6 @@ export function terminateArkadeWorker(): void {
     worker = null
     arkadeWorkerProxy = null
   }
+  setArkadeSdkPersistenceBridge(null)
+  resetArkadePersistenceChannel()
 }

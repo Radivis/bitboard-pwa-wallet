@@ -1,7 +1,6 @@
 import type { EncryptedBlobForDb } from '@/workers/crypto-api'
 import type { ArkadeSupportedNetworkMode } from '@/lib/arkade/arkade-endpoints'
-import type { ArkadeConnectionSnapshot } from '@/lib/wallet/wallet-domain-types'
-
+import type { ArkadeSdkPersistenceBridge } from '@/lib/arkade/storage/arkade-sdk-persistence-flush'
 export interface ArkadeBalanceInfo {
   confirmedSats: number
   totalSats: number
@@ -29,6 +28,8 @@ export interface OpenArkadeSessionParams {
   arkServerUrl: string
   delegatorUrl: string
   esploraUrl: string
+  /** Hydrates SDK repos from encrypted wallet secrets (local-first VTXO state). */
+  sdkPersistenceJson?: string
 }
 
 export interface ArkadeSendParams {
@@ -41,6 +42,7 @@ export interface ArkadeBoardingInfo {
 }
 
 export interface ArkadeService {
+  setSdkPersistenceBridge(bridge: ArkadeSdkPersistenceBridge | null): Promise<void>
   openSession(params: OpenArkadeSessionParams): Promise<{ arkadeAddress: string }>
   closeSession(): Promise<void>
   getBalance(): Promise<ArkadeBalanceInfo>
@@ -54,20 +56,4 @@ export interface ArkadeService {
   delegateSpendableVtxos(): Promise<{ delegated: number; failed: number }>
   finalizePendingTransactions(): Promise<{ finalized: number; pending: number }>
   onboardBoardedUtxos(): Promise<string | null>
-}
-
-export function buildArkadeSnapshotFromWorkerData(params: {
-  balance: ArkadeBalanceInfo
-  payments: ArkadePaymentRow[]
-}): ArkadeConnectionSnapshot {
-  const now = new Date().toISOString()
-  return {
-    balance: {
-      confirmedSats: params.balance.confirmedSats,
-      totalSats: params.balance.totalSats,
-      updatedAt: now,
-    },
-    payments: params.payments.map((payment) => ({ ...payment })),
-    paymentsUpdatedAt: now,
-  }
 }

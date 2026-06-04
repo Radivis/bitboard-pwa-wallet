@@ -53,7 +53,7 @@ export async function upsertArkadeWalletState(params: {
         arkadeAddress: patch.arkadeAddress ?? existing?.arkadeAddress,
         lastSessionOpenedAt:
           patch.lastSessionOpenedAt ?? existing?.lastSessionOpenedAt,
-        arkadeSnapshot: patch.arkadeSnapshot ?? existing?.arkadeSnapshot,
+        sdkPersistenceJson: patch.sdkPersistenceJson ?? existing?.sdkPersistenceJson,
       }
       const others = payload.arkadeWallets.filter(
         (row) => row.networkMode !== networkMode,

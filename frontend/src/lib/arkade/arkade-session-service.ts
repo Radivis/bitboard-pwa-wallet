@@ -1,17 +1,17 @@
 import { getDatabase, getWalletSecretsEncrypted } from '@/db'
+import { loadSdkPersistenceJsonForNetwork } from '@/lib/arkade/arkade-sdk-persistence'
 import { ensureSecretsChannel } from '@/workers/secrets-channel'
+import { ensureArkadePersistenceChannel } from '@/workers/arkade-persistence-channel'
 import {
   getArkadeWorker,
   terminateArkadeWorker,
 } from '@/workers/arkade-factory'
-import { buildArkadeSnapshotFromWorkerData } from '@/workers/arkade-api'
 import {
   getArkadeEndpoints,
   isArkadeSupportedNetworkMode,
   type ArkadeSupportedNetworkMode,
 } from '@/lib/arkade/arkade-endpoints'
 import { isArkadeActiveForNetworkMode } from '@/lib/arkade/arkade-utils'
-import { applyArkadeSnapshotPatch } from '@/lib/arkade/arkade-snapshot-persistence'
 import { upsertArkadeWalletState } from '@/lib/arkade/arkade-wallet-secrets'
 import { removeArkadeDashboardQueries } from '@/lib/arkade/arkade-query-keys'
 import type { NetworkMode } from '@/stores/walletStore'
@@ -61,7 +61,13 @@ export async function openArkadeSessionForWallet(params: {
 
   openSessionInFlight = (async () => {
     await ensureSecretsChannel()
+    await ensureArkadePersistenceChannel()
     const encrypted = await getWalletSecretsEncrypted(getDatabase(), walletId)
+    const sdkPersistenceJson = await loadSdkPersistenceJsonForNetwork({
+      password,
+      walletId,
+      networkMode,
+    })
     const endpoints = getArkadeEndpoints(networkMode)
     const worker = getArkadeWorker()
     const { arkadeAddress } = await worker.openSession({
@@ -72,6 +78,7 @@ export async function openArkadeSessionForWallet(params: {
       arkServerUrl: endpoints.arkServerUrl,
       delegatorUrl: endpoints.delegatorUrl,
       esploraUrl: endpoints.esploraUrl,
+      sdkPersistenceJson,
     })
 
     await worker.finalizePendingTransactions()
@@ -88,20 +95,6 @@ export async function openArkadeSessionForWallet(params: {
         lastSessionOpenedAt: now,
       },
     })
-
-    try {
-      const balance = await worker.getBalance()
-      const payments = await worker.getTransactionHistory()
-      const snapshot = buildArkadeSnapshotFromWorkerData({ balance, payments })
-      await applyArkadeSnapshotPatch({
-        password,
-        walletId,
-        networkMode,
-        snapshot,
-      })
-    } catch {
-      // Snapshot is best-effort on open.
-    }
 
     lastOpenedSessionKey = key
   })()

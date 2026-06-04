@@ -1,7 +1,5 @@
 import { expose } from 'comlink'
 import {
-  IndexedDBContractRepository,
-  IndexedDBWalletRepository,
   MnemonicIdentity,
   Ramps,
   RestDelegatorProvider,
@@ -16,6 +14,14 @@ import {
   networkModeToArkadeIsMainnet,
   type ArkadeSupportedNetworkMode,
 } from '@/lib/arkade/arkade-endpoints'
+import { createPersistingArkadeStorage } from '@/lib/arkade/storage/create-persisting-arkade-storage'
+import {
+  flushSdkPersistenceNow,
+  setArkadeSdkPersistenceBridge,
+  setArkadeSdkPersistenceFlushContext,
+  clearDebouncedSdkPersistenceFlush,
+  type ArkadeSdkPersistenceBridge,
+} from '@/lib/arkade/storage/arkade-sdk-persistence-flush'
 import type {
   ArkadeBalanceInfo,
   ArkadeDelegateInfo,
@@ -24,12 +30,16 @@ import type {
   ArkadeService,
   OpenArkadeSessionParams,
 } from '@/workers/arkade-api'
-
 let encryptionWasmModule: typeof import('@/wasm-pkg/bitboard_encryption/bitboard_encryption') | null =
   null
 let activeWallet: Wallet | null = null
 let activeVtxoManager: VtxoManager | null = null
 let activeSessionKey: string | null = null
+let activeSessionParams: {
+  password: string
+  walletId: number
+  networkMode: ArkadeSupportedNetworkMode
+} | null = null
 
 async function getEncryptionWasm() {
   if (!encryptionWasmModule) {
@@ -72,8 +82,24 @@ async function requestDecrypt(
   }
 }
 
-function storageDbName(walletId: number, networkMode: ArkadeSupportedNetworkMode): string {
+function legacyIndexedDbName(
+  walletId: number,
+  networkMode: ArkadeSupportedNetworkMode,
+): string {
   return `bitboard-arkade-${walletId}-${networkMode}`
+}
+
+/** Best-effort dev hygiene for removed IndexedDB persistence. */
+function deleteLegacyArkadeIndexedDb(
+  walletId: number,
+  networkMode: ArkadeSupportedNetworkMode,
+): void {
+  if (typeof indexedDB === 'undefined') return
+  try {
+    indexedDB.deleteDatabase(legacyIndexedDbName(walletId, networkMode))
+  } catch {
+    // Ignore — database may not exist.
+  }
 }
 
 function sessionKey(walletId: number, networkMode: ArkadeSupportedNetworkMode): string {
@@ -108,7 +134,15 @@ async function getSpendableVtxos(wallet: Wallet) {
   })
 }
 
+async function persistAfterCriticalOperation(): Promise<void> {
+  await flushSdkPersistenceNow()
+}
+
 const arkadeService: ArkadeService = {
+  async setSdkPersistenceBridge(bridge: ArkadeSdkPersistenceBridge | null): Promise<void> {
+    setArkadeSdkPersistenceBridge(bridge)
+  },
+
   async openSession(params: OpenArkadeSessionParams): Promise<{ arkadeAddress: string }> {
     const key = sessionKey(params.walletId, params.networkMode)
     if (activeSessionKey === key && activeWallet != null) {
@@ -116,12 +150,25 @@ const arkadeService: ArkadeService = {
     }
 
     await arkadeService.closeSession()
+    deleteLegacyArkadeIndexedDb(params.walletId, params.networkMode)
 
     const mnemonic = await requestDecrypt(params.password, params.encryptedMnemonic)
     const isMainnet = networkModeToArkadeIsMainnet(params.networkMode)
     const identity = MnemonicIdentity.fromMnemonic(mnemonic, { isMainnet })
-    const dbName = storageDbName(params.walletId, params.networkMode)
     const delegatorProvider = new RestDelegatorProvider(params.delegatorUrl)
+
+    const storage = createPersistingArkadeStorage(params.sdkPersistenceJson)
+    activeSessionParams = {
+      password: params.password,
+      walletId: params.walletId,
+      networkMode: params.networkMode,
+    }
+    // Flush snapshots the inner repos; Wallet.create uses the proxies (same underlying data).
+    setArkadeSdkPersistenceFlushContext({
+      ...activeSessionParams,
+      walletRepository: storage.innerWalletRepository,
+      contractRepository: storage.innerContractRepository,
+    })
 
     const wallet = await Wallet.create({
       identity,
@@ -133,8 +180,8 @@ const arkadeService: ArkadeService = {
         boardingUtxoSweep: true,
       },
       storage: {
-        walletRepository: new IndexedDBWalletRepository(dbName),
-        contractRepository: new IndexedDBContractRepository(dbName),
+        walletRepository: storage.walletRepository,
+        contractRepository: storage.contractRepository,
       },
     })
 
@@ -147,6 +194,14 @@ const arkadeService: ArkadeService = {
   },
 
   async closeSession(): Promise<void> {
+    try {
+      await flushSdkPersistenceNow()
+    } catch {
+      // Best-effort flush before teardown.
+    }
+    clearDebouncedSdkPersistenceFlush()
+    setArkadeSdkPersistenceFlushContext(null)
+
     if (activeWallet != null) {
       try {
         await activeWallet.dispose?.()
@@ -157,6 +212,7 @@ const arkadeService: ArkadeService = {
     activeWallet = null
     activeVtxoManager = null
     activeSessionKey = null
+    activeSessionParams = null
   },
 
   async getBalance(): Promise<ArkadeBalanceInfo> {
@@ -179,6 +235,7 @@ const arkadeService: ArkadeService = {
       address: params.address,
       amount: params.amountSats,
     })
+    await persistAfterCriticalOperation()
     return txid
   },
 
@@ -227,7 +284,9 @@ const arkadeService: ArkadeService = {
     const manager = activeVtxoManager ?? (await requireWallet().getVtxoManager())
     const expiring = await manager.getExpiringVtxos()
     if (expiring.length === 0) return null
-    return manager.renewVtxos()
+    const txid = await manager.renewVtxos()
+    await persistAfterCriticalOperation()
+    return txid
   },
 
   async delegateSpendableVtxos(): Promise<{ delegated: number; failed: number }> {
@@ -245,6 +304,7 @@ const arkadeService: ArkadeService = {
       spendable as ContractVtxo[],
       renewalAddress,
     )
+    await persistAfterCriticalOperation()
     return {
       delegated: result.delegated?.length ?? 0,
       failed: result.failed?.length ?? 0,
@@ -254,6 +314,9 @@ const arkadeService: ArkadeService = {
   async finalizePendingTransactions(): Promise<{ finalized: number; pending: number }> {
     const wallet = requireWallet()
     const { finalized, pending } = await wallet.finalizePendingTxs()
+    if ((finalized?.length ?? 0) > 0) {
+      await persistAfterCriticalOperation()
+    }
     return {
       finalized: finalized?.length ?? 0,
       pending: pending?.length ?? 0,
@@ -266,6 +329,9 @@ const arkadeService: ArkadeService = {
     const fees = info.fees
     try {
       const txid = await new Ramps(wallet).onboard(fees)
+      if (txid != null) {
+        await persistAfterCriticalOperation()
+      }
       return txid
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)

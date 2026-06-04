@@ -6,6 +6,7 @@ import type { LightningPayment } from '@/lib/lightning/lightning-backend-service
 import { isLightningPaymentPayload } from '@/lib/lightning/lightning-snapshot-payload'
 import type { ArkadeSupportedNetworkMode } from '@/lib/arkade/arkade-endpoints'
 import { ARKADE_SUPPORTED_NETWORK_MODES } from '@/lib/arkade/arkade-domain-types'
+import { ARKADE_SDK_PERSISTENCE_JSON_MAX_BYTES } from '@/lib/arkade/arkade-sdk-persistence-types'
 import type { LightningNetworkMode } from '@/lib/lightning/lightning-utils'
 import { LIGHTNING_NETWORK_MODES } from '@/lib/lightning/lightning-utils'
 
@@ -58,31 +59,16 @@ export interface NwcConnectionSnapshot {
 }
 
 /**
- * Arkade wallet metadata per live network (SDK state in worker IndexedDB).
- * Created once per (wallet_id, networkMode) with delegator path in the Arkade address.
+ * Arkade wallet metadata per live network.
+ * Full SDK repo state lives in `sdkPersistenceJson` (encrypted inside wallet_secrets).
  */
 export interface StoredArkadeWalletState {
   networkMode: ArkadeSupportedNetworkMode
   arkadeAddress?: string
   createdAt: string
   lastSessionOpenedAt?: string
-  arkadeSnapshot?: ArkadeConnectionSnapshot
-}
-
-export interface ArkadeConnectionSnapshot {
-  balance: {
-    confirmedSats: number
-    totalSats: number
-    updatedAt: string
-  }
-  payments: Array<{
-    direction: 'incoming' | 'outgoing'
-    amountSats: number
-    timestamp: number
-    txid: string
-    memo?: string
-  }>
-  paymentsUpdatedAt: string
+  /** Versioned export of InMemory wallet + contract repositories (JSON string). */
+  sdkPersistenceJson?: string
 }
 
 /**
@@ -172,32 +158,6 @@ function isNwcConnectionSnapshot(value: unknown): value is NwcConnectionSnapshot
   )
 }
 
-function isArkadeConnectionSnapshot(value: unknown): value is ArkadeConnectionSnapshot {
-  if (!isRecord(value)) return false
-  const balance = value.balance
-  if (!isRecord(balance)) return false
-  return (
-    typeof balance.confirmedSats === 'number' &&
-    Number.isFinite(balance.confirmedSats) &&
-    typeof balance.totalSats === 'number' &&
-    Number.isFinite(balance.totalSats) &&
-    isIso8601Timestamp(balance.updatedAt) &&
-    Array.isArray(value.payments) &&
-    value.payments.every((payment) => {
-      if (!isRecord(payment)) return false
-      return (
-        (payment.direction === 'incoming' || payment.direction === 'outgoing') &&
-        typeof payment.amountSats === 'number' &&
-        Number.isFinite(payment.amountSats) &&
-        typeof payment.timestamp === 'number' &&
-        Number.isFinite(payment.timestamp) &&
-        isNonEmptyString(payment.txid)
-      )
-    }) &&
-    isIso8601Timestamp(value.paymentsUpdatedAt)
-  )
-}
-
 function isStoredArkadeWalletState(value: unknown): value is StoredArkadeWalletState {
   if (!isRecord(value)) return false
   const networkOk =
@@ -210,8 +170,13 @@ function isStoredArkadeWalletState(value: unknown): value is StoredArkadeWalletS
   if (value.lastSessionOpenedAt !== undefined && !isIso8601Timestamp(value.lastSessionOpenedAt)) {
     return false
   }
-  if (value.arkadeSnapshot === undefined) return true
-  return isArkadeConnectionSnapshot(value.arkadeSnapshot)
+  if (value.sdkPersistenceJson !== undefined) {
+    if (typeof value.sdkPersistenceJson !== 'string') return false
+    if (new TextEncoder().encode(value.sdkPersistenceJson).byteLength > ARKADE_SDK_PERSISTENCE_JSON_MAX_BYTES) {
+      return false
+    }
+  }
+  return true
 }
 
 function isStoredNwcLightningConnection(
@@ -314,6 +279,12 @@ export function assembleWalletSecrets(
   }
 }
 
+function stripLegacyArkadeSnapshotField(row: unknown): unknown {
+  if (!isRecord(row) || !('arkadeSnapshot' in row)) return row
+  const { arkadeSnapshot: _legacySnapshot, ...withoutSnapshot } = row
+  return withoutSnapshot
+}
+
 function normalizeWalletSecretsPayload(raw: unknown): unknown {
   if (!isRecord(raw)) return raw
   let next = raw
@@ -322,6 +293,11 @@ function normalizeWalletSecretsPayload(raw: unknown): unknown {
   }
   if (next.arkadeWallets === undefined) {
     next = { ...next, arkadeWallets: [] }
+  } else if (Array.isArray(next.arkadeWallets)) {
+    next = {
+      ...next,
+      arkadeWallets: next.arkadeWallets.map(stripLegacyArkadeSnapshotField),
+    }
   }
   return next
 }

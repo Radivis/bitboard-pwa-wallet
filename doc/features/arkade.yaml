@@ -19,6 +19,8 @@ feature:
     - Default delegator and operator URLs come from arkade-endpoints.ts (env overrides supported)
     - Network switch terminates and reopens the Arkade worker session for the new network
     - Lock wallet terminates arkade.worker and clears session state
+    - Full Arkade SDK repo state persists in sdkPersistenceJson inside encrypted wallet_secrets (no plaintext IndexedDB)
+    - Wallet reopen must not require Arkade operator reachability; balance/history are read from hydrated SDK state (sdkPersistenceJson), not a separate snapshot field
   pages:
     - ArkadeManagement:
       - description: "Arkade status on Management page"

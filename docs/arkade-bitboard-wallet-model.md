@@ -13,8 +13,20 @@ For network switching and Esplora, see [`descriptor-wallet-switching.md`](descri
 ## One Bitboard wallet, one Arkade context per live network
 
 - Arkade state is stored per `(wallet_id, networkMode)` for `mainnet`, `testnet`, and `signet` (Mutinynet).
-- Metadata and optional snapshots live in encrypted `wallet_secrets` (`arkadeWallets[]`).
-- SDK persistence uses **IndexedDB** inside `arkade.worker`, keyed by `bitboard-arkade-{walletId}-{networkMode}`.
+- Metadata and **full SDK repo state** (`sdkPersistenceJson`) live in encrypted `wallet_secrets` (`arkadeWallets[]`). Balance and history come from the hydrated SDK session (worker), not a separate snapshot field.
+- **Local-first:** VTXO and contract data are authoritative on device after unlock. The Arkade operator is used for cooperative boarding, send, and settlement when online—not required to load wallet state from disk.
+- **Unlike NWC:** Lightning snapshots are stale cache when the node is down; Arkade `sdkPersistenceJson` is the source of truth for offchain UTXOs (future unilateral exit reads this blob + Esplora, not the operator).
+
+## SDK storage in the worker (inner vs proxied repos)
+
+`createPersistingArkadeStorage` builds **one** in-memory `WalletRepository` + `ContractRepository` pair per session:
+
+| Handle | Role |
+|--------|------|
+| `inner*Repository` | Plain SDK in-memory repos. Hydrate from `sdkPersistenceJson` on open; export full repo state on flush. |
+| `walletRepository` / `contractRepository` | Proxies around the same instances. Passed to `Wallet.create` so SDK writes schedule a debounced persist to `wallet_secrets`. |
+
+Flush uses the **inner** handles because export reads repository maps via a direct field snapshot (not through the proxy). The SDK mutates the same underlying data through the proxies. Critical worker RPCs (send, onboard, delegate, etc.) also call an immediate flush.
 
 ## Mnemonic alignment
 

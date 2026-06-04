@@ -33,7 +33,7 @@ For **reporting vulnerabilities** in Bitboard Wallet, see the repository root [S
 
 **Storage**
 
-- **Encrypted at rest:** The `wallet_secrets` table stores two ciphertexts per wallet row: a **payload** blob (`encrypted_data`, `iv`, `salt`, `kdf_phc`) for the non-mnemonic secrets JSON (descriptor wallets, Lightning NWC metadata, Arkade wallet metadata and optional balance snapshots), and a **separate mnemonic** blob (`mnemonic_encrypted_data`, `mnemonic_iv`, `mnemonic_salt`, `mnemonic_kdf_phc`). Both are encrypted with the Bitboard app password using **Argon2id** + **AES-256-GCM**; salt and IV are unique per encryption. Each blob has a **PHC-style Argon2id parameter string** (`kdf_phc` / `mnemonic_kdf_phc`) so the correct memory, time, and parallelism costs are always explicit at rest. Two parameter sets are used in practice:
+- **Encrypted at rest:** The `wallet_secrets` table stores two ciphertexts per wallet row: a **payload** blob (`encrypted_data`, `iv`, `salt`, `kdf_phc`) for the non-mnemonic secrets JSON (descriptor wallets, Lightning NWC metadata, Arkade wallet metadata and SDK persistence blob), and a **separate mnemonic** blob (`mnemonic_encrypted_data`, `mnemonic_iv`, `mnemonic_salt`, `mnemonic_kdf_phc`). Both are encrypted with the Bitboard app password using **Argon2id** + **AES-256-GCM**; salt and IV are unique per encryption. Each blob has a **PHC-style Argon2id parameter string** (`kdf_phc` / `mnemonic_kdf_phc`) so the correct memory, time, and parallelism costs are always explicit at rest. Two parameter sets are used in practice:
   - **Production (default):** 64 MB memory, 3 iterations, parallelism 4, 32-byte key. Used for new encryption when the app is not built with the CI flag.
   - **CI:** 64 MB memory, 2 iterations, parallelism 1, 32-byte key. Used when `VITE_ARGON2_CI=1` at build time (e.g. in CI for faster tests and E2E), and for decrypting data that was encrypted with these params.
 - **Unencrypted:** The `wallets` table (ids, names) and `settings` (e.g. custom Esplora URLs). No passwords or mnemonics are stored in settings.
@@ -112,7 +112,8 @@ The following cannot be fully eliminated in a browser-based wallet:
 
 ### 2.2 Arkade (VTXO layer)
 
-- **Mnemonic use:** The Arkade worker decrypts the mnemonic locally (same Argon2/AES stack as the encryption worker) only to build a `MnemonicIdentity`. The mnemonic is not stored in Arkade IndexedDB.
+- **Mnemonic use:** The Arkade worker decrypts the mnemonic locally (same Argon2/AES stack as the encryption worker) only to build a `MnemonicIdentity`. The mnemonic is not part of the persisted SDK blob.
+- **Local VTXO state:** Full Arkade SDK repository state (VTXOs, contracts, boarding UTXOs, tx history) is stored in `sdkPersistenceJson` inside the encrypted `wallet_secrets` payload. Reopening the wallet does not require the Arkade operator; cooperative operations (send, board, delegate) still use the operator when online.
 - **Third parties:** Arkade payments rely on the **Arkade operator** (batch settlement) and, when enabled, a **Bitboard Fulmine delegator** per network for VTXO renewal. Delegation uses presigned intents; the delegator cannot change outputs or take custody.
 - **Trust:** Users should understand preconfirmation vs on-chain finality. See [docs/arkade-bitboard-wallet-model.md](../docs/arkade-bitboard-wallet-model.md) and [Arkade security documentation](https://docs.arkadeos.com/learn/core-concepts/security-and-trust-model.md).
 

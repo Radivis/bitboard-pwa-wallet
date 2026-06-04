@@ -16,10 +16,11 @@ const workerMocks = vi.hoisted(() => ({
 }))
 
 const upsertArkadeWalletStateMock = vi.hoisted(() => vi.fn())
-const applyArkadeSnapshotPatchMock = vi.hoisted(() => vi.fn())
 const ensureSecretsChannelMock = vi.hoisted(() => vi.fn())
 const terminateArkadeWorkerMock = vi.hoisted(() => vi.fn())
 const removeArkadeDashboardQueriesMock = vi.hoisted(() => vi.fn())
+const ensureArkadePersistenceChannelMock = vi.hoisted(() => vi.fn())
+const loadSdkPersistenceJsonForNetworkMock = vi.hoisted(() => vi.fn())
 
 const encryptedMnemonic = {
   ciphertext: new Uint8Array([1, 2, 3]),
@@ -55,13 +56,19 @@ vi.mock('@/lib/arkade/arkade-wallet-secrets', () => ({
   upsertArkadeWalletState: (...args: unknown[]) => upsertArkadeWalletStateMock(...args),
 }))
 
-vi.mock('@/lib/arkade/arkade-snapshot-persistence', () => ({
-  applyArkadeSnapshotPatch: (...args: unknown[]) => applyArkadeSnapshotPatchMock(...args),
-}))
-
 vi.mock('@/lib/arkade/arkade-query-keys', () => ({
   removeArkadeDashboardQueries: (...args: unknown[]) =>
     removeArkadeDashboardQueriesMock(...args),
+}))
+
+vi.mock('@/workers/arkade-persistence-channel', () => ({
+  ensureArkadePersistenceChannel: (...args: unknown[]) =>
+    ensureArkadePersistenceChannelMock(...args),
+}))
+
+vi.mock('@/lib/arkade/arkade-sdk-persistence', () => ({
+  loadSdkPersistenceJsonForNetwork: (...args: unknown[]) =>
+    loadSdkPersistenceJsonForNetworkMock(...args),
 }))
 
 import {
@@ -91,8 +98,9 @@ describe('openArkadeSessionForWallet (integration)', () => {
     })
     workerMocks.getTransactionHistory.mockResolvedValue([])
     ensureSecretsChannelMock.mockResolvedValue(undefined)
+    ensureArkadePersistenceChannelMock.mockResolvedValue(undefined)
+    loadSdkPersistenceJsonForNetworkMock.mockResolvedValue(undefined)
     upsertArkadeWalletStateMock.mockResolvedValue(undefined)
-    applyArkadeSnapshotPatchMock.mockResolvedValue(undefined)
   })
 
   it('opens worker session with network endpoints after unlock prerequisites', async () => {
@@ -105,6 +113,12 @@ describe('openArkadeSessionForWallet (integration)', () => {
     })
 
     expect(ensureSecretsChannelMock).toHaveBeenCalledTimes(1)
+    expect(ensureArkadePersistenceChannelMock).toHaveBeenCalledTimes(1)
+    expect(loadSdkPersistenceJsonForNetworkMock).toHaveBeenCalledWith({
+      password: 'unlock-password',
+      walletId: 7,
+      networkMode: 'testnet',
+    })
     expect(workerMocks.openSession).toHaveBeenCalledWith({
       password: 'unlock-password',
       encryptedMnemonic,
@@ -113,6 +127,7 @@ describe('openArkadeSessionForWallet (integration)', () => {
       arkServerUrl: endpoints.arkServerUrl,
       delegatorUrl: endpoints.delegatorUrl,
       esploraUrl: endpoints.esploraUrl,
+      sdkPersistenceJson: undefined,
     })
     expect(workerMocks.finalizePendingTransactions).toHaveBeenCalledTimes(1)
     expect(workerMocks.delegateSpendableVtxos).toHaveBeenCalledTimes(1)
@@ -127,7 +142,6 @@ describe('openArkadeSessionForWallet (integration)', () => {
         }),
       }),
     )
-    expect(applyArkadeSnapshotPatchMock).toHaveBeenCalledTimes(1)
   })
 
   it('closes session instead of opening when Arkade feature is disabled', async () => {
