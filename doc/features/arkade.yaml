@@ -21,8 +21,8 @@ feature:
     - Default delegator and operator URLs come from arkade-endpoints.ts (env overrides supported)
     - Network switch terminates and reopens the Arkade worker session for the new network
     - Lock wallet terminates arkade.worker and clears session state
-    - Full Arkade SDK repo state persists in sdkPersistenceJson inside encrypted wallet_secrets (no plaintext IndexedDB)
-    - Wallet reopen must not require Arkade operator reachability; balance/history are read from hydrated SDK state (sdkPersistenceJson), not a separate snapshot field
+    - Ark-rs persistence v2 (engine ark-rs) in sdkPersistenceJson inside encrypted wallet_secrets; v1 TS SDK snapshots reset on unlock
+    - Wallet reopen hydrates boarding outputs from sdkPersistenceJson; operator required for live balance sync and sends
   pages:
     - ArkadeManagement:
       - description: "Arkade status on Management page"
@@ -36,8 +36,8 @@ feature:
         - unilateral exit per VTXO (select, unroll, complete after timelock) with unroll step count and bumper fee estimate
       - requirements:
         - Shown only when isArkadeEnabled and current network supports Arkade
-        - Collaborative exit uses Ramps.offboard via arkade.worker
-        - Unilateral exit uses SDK Unroll session + completeUnroll; bumper balance and estimated P2A package fees shown when a VTXO is selected
+        - Collaborative exit and fee estimates via bitboard-ark WASM in arkade.worker
+        - Unilateral exit via ark-rs unroll APIs; bumper balance and fee estimates from worker
     - WalletReceiveArkadeMode:
       - description: "Arkade receive integrated in main Receive page"
       - file: frontend/src/pages/wallet/ReceivePage.tsx

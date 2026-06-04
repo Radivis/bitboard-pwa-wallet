@@ -269,7 +269,6 @@ export default defineConfig({
           './src/legal-entity/legal-entity.ts',
         ),
       },
-      ...arkadeSdkVendorResolveAliases(),
     ],
   },
   server: {

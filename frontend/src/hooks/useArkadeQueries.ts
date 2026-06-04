@@ -16,12 +16,8 @@ import {
   isArkadeActiveForCommittedNetwork,
   isArkadeActiveForNetworkMode,
 } from '@/lib/arkade/arkade-utils'
-import { requireArkadeSupportedNetworkMode } from '@/lib/arkade/arkade-utils'
 import { openArkadeSessionForWallet } from '@/lib/arkade/arkade-session-service'
-import {
-  getArkadeEndpoints,
-  isArkadeSupportedNetworkMode,
-} from '@/lib/arkade/arkade-endpoints'
+import { isArkadeSupportedNetworkMode } from '@/lib/arkade/arkade-endpoints'
 import { useSessionStore } from '@/stores/sessionStore'
 import { getCommittedNetworkMode, useWalletStore } from '@/stores/walletStore'
 import { errorMessage } from '@/lib/shared/utils'
@@ -116,7 +112,13 @@ export function useArkadeHistoryQuery() {
 
 export function useArkadeDelegateInfoQuery() {
   const networkMode = getCommittedNetworkMode()
-  const enabled = isArkadeActiveForCommittedNetwork() && isArkadeSupportedNetworkMode(networkMode)
+  const activeWalletId = useWalletStore((s) => s.activeWalletId)
+  const password = useSessionStore((s) => s.password)
+  const enabled =
+    isArkadeActiveForCommittedNetwork() &&
+    isArkadeSupportedNetworkMode(networkMode) &&
+    activeWalletId != null &&
+    password != null
 
   return useQuery({
     queryKey: isArkadeSupportedNetworkMode(networkMode)
@@ -124,10 +126,11 @@ export function useArkadeDelegateInfoQuery() {
       : ['arkade', 'delegator', 'disabled'],
     enabled,
     queryFn: async () => {
-      const endpoints = getArkadeEndpoints(requireArkadeSupportedNetworkMode(networkMode))
-      const { RestDelegatorProvider } = await import('@arkade-os/sdk')
-      const provider = new RestDelegatorProvider(endpoints.delegatorUrl)
-      return provider.getDelegateInfo()
+      if (activeWalletId == null || password == null) {
+        throw new Error('Wallet must be unlocked')
+      }
+      await openArkadeSessionForWallet({ password, walletId: activeWalletId, networkMode })
+      return getArkadeWorker().getDelegateInfo()
     },
     staleTime: 300_000,
   })

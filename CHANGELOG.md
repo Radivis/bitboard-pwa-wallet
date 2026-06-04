@@ -9,7 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `bitboard-ark` WASM crate (ark-rs 0.9.x): Arkade session, balance, send, delegate, exits, and persistence v2 in the Ark worker
+
 ### Changed
+
+- Arkade worker: `@arkade-os/sdk` replaced by `bitboard-ark` (operator access via REST in browser)
+- Arkade encrypted persistence: **v2** (`ark-rs` engine); existing v1 snapshots are ignored on unlock (re-board / re-delegate on unreleased builds)
 
 ### Fixed
 

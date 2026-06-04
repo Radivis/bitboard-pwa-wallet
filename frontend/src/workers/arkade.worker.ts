@@ -1,45 +1,11 @@
 import { expose } from 'comlink'
-import {
-  MnemonicIdentity,
-  Ramps,
-  RestDelegatorProvider,
-  TxType,
-  Unroll,
-  VtxoManager,
-  Wallet,
-  type ContractVtxo,
-  type Identity,
-  type OnchainWallet,
-} from '@arkade-os/sdk'
-import {
-  createArkadeIndexerProvider,
-  createOnchainBumperWallet,
-  networkModeToSdkNetworkName,
-} from '@/lib/arkade/arkade-onchain-bumper'
-import { mapVirtualCoinsToExitCandidates } from '@/lib/arkade/arkade-exit-candidates'
-import {
-  ARKADE_DESTINATION_DECODE_NETWORK_NAMES,
-  estimateChildBumpVsize,
-  estimateCollaborativeOffboardFees,
-  mapIntentFeeConfigured,
-  parentVsizeFromVirtualTxPsbtBase64,
-  resolveFeeRateSatPerVb,
-  simulateUnrollPlan,
-  sumUnilateralPackageFees,
-  txOnchainStatusFromExplorer,
-} from '@/lib/arkade/arkade-exit-fee-estimates'
 import type { EncryptedBlobMessage } from '@/workers/secrets-channel-types'
+import type { ArkadeSupportedNetworkMode } from '@/lib/arkade/arkade-endpoints'
 import {
-  ARKADE_DEFAULT_VTXO_THRESHOLD_SECONDS,
-  networkModeToArkadeIsMainnet,
-  type ArkadeSupportedNetworkMode,
-} from '@/lib/arkade/arkade-endpoints'
-import { createPersistingArkadeStorage } from '@/lib/arkade/storage/create-persisting-arkade-storage'
-import {
+  clearDebouncedSdkPersistenceFlush,
   flushSdkPersistenceNow,
   setArkadeSdkPersistenceBridge,
   setArkadeSdkPersistenceFlushContext,
-  clearDebouncedSdkPersistenceFlush,
   type ArkadeSdkPersistenceBridge,
 } from '@/lib/arkade/storage/arkade-sdk-persistence-flush'
 import type {
@@ -59,24 +25,27 @@ import type {
   ArkadeUnrollProgressEvent,
   OpenArkadeSessionParams,
 } from '@/workers/arkade-api'
+
+type BitboardArkWasm = typeof import('@/wasm-pkg/bitboard_ark/bitboard_ark')
+
+let arkWasmModule: BitboardArkWasm | null = null
 let encryptionWasmModule: typeof import('@/wasm-pkg/bitboard_encryption/bitboard_encryption') | null =
   null
-let activeWallet: Wallet | null = null
-let activeVtxoManager: VtxoManager | null = null
+
 let activeSessionKey: string | null = null
 let activeSessionParams: {
   password: string
   walletId: number
   networkMode: ArkadeSupportedNetworkMode
 } | null = null
-let activeSessionContext: {
-  identity: Identity
-  networkMode: ArkadeSupportedNetworkMode
-  esploraUrl: string
-  arkServerUrl: string
-} | null = null
-let cachedOnchainBumper: OnchainWallet | null = null
 let unrollInFlight = false
+
+async function getArkWasm(): Promise<BitboardArkWasm> {
+  if (!arkWasmModule) {
+    arkWasmModule = await import('@/wasm-pkg/bitboard_ark/bitboard_ark')
+  }
+  return arkWasmModule
+}
 
 async function getEncryptionWasm() {
   if (!encryptionWasmModule) {
@@ -119,6 +88,10 @@ async function requestDecrypt(
   }
 }
 
+function sessionKey(walletId: number, networkMode: ArkadeSupportedNetworkMode): string {
+  return `${walletId}:${networkMode}`
+}
+
 function legacyIndexedDbName(
   walletId: number,
   networkMode: ArkadeSupportedNetworkMode,
@@ -126,7 +99,6 @@ function legacyIndexedDbName(
   return `bitboard-arkade-${walletId}-${networkMode}`
 }
 
-/** Best-effort dev hygiene for removed IndexedDB persistence. */
 function deleteLegacyArkadeIndexedDb(
   walletId: number,
   networkMode: ArkadeSupportedNetworkMode,
@@ -139,59 +111,8 @@ function deleteLegacyArkadeIndexedDb(
   }
 }
 
-function sessionKey(walletId: number, networkMode: ArkadeSupportedNetworkMode): string {
-  return `${walletId}:${networkMode}`
-}
-
-function mapBalance(raw: { confirmed?: bigint | number; total?: bigint | number }): ArkadeBalanceInfo {
-  const confirmed = raw.confirmed ?? 0n
-  const total = raw.total ?? confirmed
-  return {
-    confirmedSats: Number(confirmed),
-    totalSats: Number(total),
-  }
-}
-
-function requireWallet(): Wallet {
-  if (!activeWallet) {
-    throw new Error('Arkade session is not open')
-  }
-  return activeWallet
-}
-
-async function getSpendableVtxos(wallet: Wallet) {
-  const vtxos = await wallet.getVtxos({ withRecoverable: true })
-  return vtxos.filter((vtxo) => {
-    const state = vtxo.virtualStatus?.state
-    return (
-      state != null &&
-      (state === 'settled' || state === 'preconfirmed') &&
-      vtxo.isSpent !== true
-    )
-  })
-}
-
 async function persistAfterCriticalOperation(): Promise<void> {
   await flushSdkPersistenceNow()
-}
-
-function clearSessionContext(): void {
-  activeSessionContext = null
-  cachedOnchainBumper = null
-  unrollInFlight = false
-}
-
-async function getOrCreateOnchainBumper(): Promise<OnchainWallet> {
-  if (cachedOnchainBumper != null) return cachedOnchainBumper
-  if (activeSessionContext == null) {
-    throw new Error('Arkade session context is not available')
-  }
-  cachedOnchainBumper = await createOnchainBumperWallet({
-    identity: activeSessionContext.identity,
-    networkMode: activeSessionContext.networkMode,
-    esploraUrl: activeSessionContext.esploraUrl,
-  })
-  return cachedOnchainBumper
 }
 
 const arkadeService: ArkadeService = {
@@ -201,59 +122,39 @@ const arkadeService: ArkadeService = {
 
   async openSession(params: OpenArkadeSessionParams): Promise<{ arkadeAddress: string }> {
     const key = sessionKey(params.walletId, params.networkMode)
-    if (activeSessionKey === key && activeWallet != null) {
-      return { arkadeAddress: await activeWallet.getAddress() }
+    const wasm = await getArkWasm()
+
+    if (activeSessionKey === key) {
+      try {
+        const address = wasm.ark_get_address()
+        return { arkadeAddress: address }
+      } catch {
+        // Fall through to full open.
+      }
     }
 
     await arkadeService.closeSession()
     deleteLegacyArkadeIndexedDb(params.walletId, params.networkMode)
 
     const mnemonic = await requestDecrypt(params.password, params.encryptedMnemonic)
-    const isMainnet = networkModeToArkadeIsMainnet(params.networkMode)
-    const identity = MnemonicIdentity.fromMnemonic(mnemonic, { isMainnet })
-    const delegatorProvider = new RestDelegatorProvider(params.delegatorUrl)
-
-    const storage = createPersistingArkadeStorage(params.sdkPersistenceJson)
     activeSessionParams = {
       password: params.password,
       walletId: params.walletId,
       networkMode: params.networkMode,
     }
-    // Flush snapshots the inner repos; Wallet.create uses the proxies (same underlying data).
-    setArkadeSdkPersistenceFlushContext({
-      ...activeSessionParams,
-      walletRepository: storage.innerWalletRepository,
-      contractRepository: storage.innerContractRepository,
-    })
+    setArkadeSdkPersistenceFlushContext(activeSessionParams)
 
-    const wallet = await Wallet.create({
-      identity,
-      esploraUrl: params.esploraUrl,
-      arkServerUrl: params.arkServerUrl,
-      delegatorProvider,
-      settlementConfig: {
-        vtxoThreshold: ARKADE_DEFAULT_VTXO_THRESHOLD_SECONDS,
-        boardingUtxoSweep: true,
-      },
-      storage: {
-        walletRepository: storage.walletRepository,
-        contractRepository: storage.contractRepository,
-      },
-    })
-
-    activeWallet = wallet
-    activeVtxoManager = await wallet.getVtxoManager()
-    activeSessionKey = key
-    activeSessionContext = {
-      identity,
+    const openResult = await wasm.ark_open_session({
+      mnemonic,
       networkMode: params.networkMode,
-      esploraUrl: params.esploraUrl,
       arkServerUrl: params.arkServerUrl,
-    }
-    cachedOnchainBumper = null
+      delegatorUrl: params.delegatorUrl,
+      esploraUrl: params.esploraUrl,
+      sdkPersistenceJson: params.sdkPersistenceJson,
+    })
 
-    const arkadeAddress = await wallet.getAddress()
-    return { arkadeAddress }
+    activeSessionKey = key
+    return { arkadeAddress: openResult.arkadeAddress as string }
   },
 
   async closeSession(): Promise<void> {
@@ -265,134 +166,84 @@ const arkadeService: ArkadeService = {
     clearDebouncedSdkPersistenceFlush()
     setArkadeSdkPersistenceFlushContext(null)
 
-    if (activeWallet != null) {
-      try {
-        await activeWallet.dispose?.()
-      } catch {
-        // Best-effort cleanup.
-      }
+    try {
+      const wasm = await getArkWasm()
+      await wasm.ark_close_session()
+    } catch {
+      // Module may not be loaded yet.
     }
-    activeWallet = null
-    activeVtxoManager = null
+
     activeSessionKey = null
     activeSessionParams = null
-    clearSessionContext()
+    unrollInFlight = false
   },
 
   async getBalance(): Promise<ArkadeBalanceInfo> {
-    const wallet = requireWallet()
-    const balance = await wallet.getBalance()
-    return mapBalance(balance)
+    const wasm = await getArkWasm()
+    return wasm.ark_get_balance() as Promise<ArkadeBalanceInfo>
   },
 
   async getAddress(): Promise<string> {
-    return requireWallet().getAddress()
+    const wasm = await getArkWasm()
+    return wasm.ark_get_address()
   },
 
   async getBoardingAddress(): Promise<string> {
-    return requireWallet().getBoardingAddress()
+    const wasm = await getArkWasm()
+    return wasm.ark_get_boarding_address()
   },
 
   async sendPayment(params: ArkadeSendParams): Promise<string> {
-    const wallet = requireWallet()
-    const txid = await wallet.send({
-      address: params.address,
-      amount: params.amountSats,
-    })
+    const wasm = await getArkWasm()
+    const txid = await wasm.ark_send_payment(params)
     await persistAfterCriticalOperation()
     return txid
   },
 
   async getTransactionHistory(): Promise<ArkadePaymentRow[]> {
-    const wallet = requireWallet()
-    const history = await wallet.getTransactionHistory()
-    return history.map((entry) => {
-      const direction =
-        entry.type === TxType.TxReceived ? 'incoming' : 'outgoing'
-      const txid =
-        entry.key.commitmentTxid ||
-        entry.key.arkTxid ||
-        entry.key.boardingTxid ||
-        ''
-      return {
-        direction,
-        amountSats: Math.abs(entry.amount),
-        timestamp: entry.createdAt,
-        txid,
-        memo: undefined,
-      }
-    })
+    const wasm = await getArkWasm()
+    return wasm.ark_get_transaction_history() as Promise<ArkadePaymentRow[]>
   },
 
   async getDelegateInfo(): Promise<ArkadeDelegateInfo> {
-    const wallet = requireWallet()
-    const delegatorManager = await wallet.getDelegatorManager()
-    if (delegatorManager == null) {
-      throw new Error('Delegator provider not configured')
-    }
-    const info = await delegatorManager.getDelegateInfo()
-    return {
-      pubkey: info.pubkey,
-      fee: Number(info.fee ?? 0),
-      delegatorAddress: info.delegatorAddress,
-    }
+    const wasm = await getArkWasm()
+    return wasm.ark_get_delegate_info() as Promise<ArkadeDelegateInfo>
   },
 
   async getExpiringVtxoCount(): Promise<number> {
-    const manager = activeVtxoManager ?? (await requireWallet().getVtxoManager())
-    const expiring = await manager.getExpiringVtxos()
-    return expiring.length
+    const wasm = await getArkWasm()
+    return wasm.ark_get_expiring_vtxo_count()
   },
 
   async renewVtxosNow(): Promise<string | null> {
-    const manager = activeVtxoManager ?? (await requireWallet().getVtxoManager())
-    const expiring = await manager.getExpiringVtxos()
-    if (expiring.length === 0) return null
-    const txid = await manager.renewVtxos()
-    await persistAfterCriticalOperation()
+    const wasm = await getArkWasm()
+    const txid = (await wasm.ark_renew_vtxos_now()) ?? null
+    if (txid != null) {
+      await persistAfterCriticalOperation()
+    }
     return txid
   },
 
   async delegateSpendableVtxos(): Promise<{ delegated: number; failed: number }> {
-    const wallet = requireWallet()
-    const spendable = await getSpendableVtxos(wallet)
-    if (spendable.length === 0) {
-      return { delegated: 0, failed: 0 }
-    }
-    const delegatorManager = await wallet.getDelegatorManager()
-    if (delegatorManager == null) {
-      throw new Error('Delegator provider not configured')
-    }
-    const renewalAddress = await wallet.getAddress()
-    const result = await delegatorManager.delegate(
-      spendable as ContractVtxo[],
-      renewalAddress,
-    )
+    const wasm = await getArkWasm()
+    const result = await wasm.ark_delegate_spendable_vtxos()
     await persistAfterCriticalOperation()
-    return {
-      delegated: result.delegated?.length ?? 0,
-      failed: result.failed?.length ?? 0,
-    }
+    return result as { delegated: number; failed: number }
   },
 
   async finalizePendingTransactions(): Promise<{ finalized: number; pending: number }> {
-    const wallet = requireWallet()
-    const { finalized, pending } = await wallet.finalizePendingTxs()
-    if ((finalized?.length ?? 0) > 0) {
+    const wasm = await getArkWasm()
+    const result = await wasm.ark_finalize_pending_transactions()
+    if ((result.finalized ?? 0) > 0) {
       await persistAfterCriticalOperation()
     }
-    return {
-      finalized: finalized?.length ?? 0,
-      pending: pending?.length ?? 0,
-    }
+    return result as { finalized: number; pending: number }
   },
 
   async onboardBoardedUtxos(): Promise<string | null> {
-    const wallet = requireWallet()
-    const info = await wallet.arkProvider.getInfo()
-    const fees = info.fees
+    const wasm = await getArkWasm()
     try {
-      const txid = await new Ramps(wallet).onboard(fees)
+      const txid = (await wasm.ark_onboard_boarded_utxos()) ?? null
       if (txid != null) {
         await persistAfterCriticalOperation()
       }
@@ -407,30 +258,18 @@ const arkadeService: ArkadeService = {
   },
 
   async listExitCandidates(): Promise<ArkadeExitCandidateRow[]> {
-    const wallet = requireWallet()
-    const vtxos = await wallet.getVtxos({ withRecoverable: true })
-    return mapVirtualCoinsToExitCandidates(vtxos)
+    const wasm = await getArkWasm()
+    return wasm.ark_list_exit_candidates() as Promise<ArkadeExitCandidateRow[]>
   },
 
   async getOnchainBumperInfo(): Promise<ArkadeOnchainBumperInfo> {
-    const bumper = await getOrCreateOnchainBumper()
-    const balanceSats = await bumper.getBalance()
-    return {
-      address: bumper.address,
-      balanceSats,
-    }
+    const wasm = await getArkWasm()
+    return wasm.ark_get_onchain_bumper_info() as Promise<ArkadeOnchainBumperInfo>
   },
 
   async collaborativeExit(params: ArkadeCollaborativeExitParams): Promise<string> {
-    const wallet = requireWallet()
-    const info = await wallet.arkProvider.getInfo()
-    const amount =
-      params.amountSats != null ? BigInt(params.amountSats) : undefined
-    const txid = await new Ramps(wallet).offboard(
-      params.destinationAddress,
-      info.fees,
-      amount,
-    )
+    const wasm = await getArkWasm()
+    const txid = await wasm.ark_collaborative_exit(params)
     await persistAfterCriticalOperation()
     return txid
   },
@@ -442,55 +281,19 @@ const arkadeService: ArkadeService = {
     if (unrollInFlight) {
       throw new Error('A unilateral unroll is already in progress')
     }
-    if (activeSessionContext == null) {
-      throw new Error('Arkade session context is not available')
-    }
 
     unrollInFlight = true
-    let doneVtxoTxid = params.txid
-
     try {
-      requireWallet()
-      const bumper = await getOrCreateOnchainBumper()
-      const indexer = createArkadeIndexerProvider(activeSessionContext.arkServerUrl)
-      const session = await Unroll.Session.create(
-        { txid: params.txid, vout: params.vout },
-        bumper,
-        bumper.provider,
-        indexer,
+      const wasm = await getArkWasm()
+      const result = await wasm.ark_run_unilateral_unroll(
+        params.txid,
+        params.vout,
+        (event: ArkadeUnrollProgressEvent) => {
+          onProgress(event)
+        },
       )
-
-      for await (const step of session) {
-        switch (step.type) {
-          case Unroll.StepType.WAIT:
-            onProgress({
-              type: 'wait',
-              message: `Waiting for confirmation of ${step.txid}`,
-              txid: step.txid,
-            })
-            break
-          case Unroll.StepType.UNROLL:
-            onProgress({
-              type: 'unroll',
-              message: `Broadcasting unroll ${step.tx.id}`,
-              txid: step.tx.id,
-            })
-            break
-          case Unroll.StepType.DONE:
-            doneVtxoTxid = step.vtxoTxid
-            onProgress({
-              type: 'done',
-              message: `Unroll complete for ${step.vtxoTxid}`,
-              vtxoTxid: step.vtxoTxid,
-            })
-            break
-          default:
-            break
-        }
-      }
-
       await persistAfterCriticalOperation()
-      return { vtxoTxid: doneVtxoTxid }
+      return result as { vtxoTxid: string }
     } finally {
       unrollInFlight = false
     }
@@ -499,12 +302,8 @@ const arkadeService: ArkadeService = {
   async completeUnilateralExit(
     params: ArkadeCompleteUnilateralExitParams,
   ): Promise<string> {
-    const wallet = requireWallet()
-    const txid = await Unroll.completeUnroll(
-      wallet,
-      params.vtxoTxids,
-      params.destinationAddress,
-    )
+    const wasm = await getArkWasm()
+    const txid = await wasm.ark_complete_unilateral_exit(params)
     await persistAfterCriticalOperation()
     return txid
   },
@@ -512,98 +311,17 @@ const arkadeService: ArkadeService = {
   async getCollaborativeExitFeeEstimate(
     params: ArkadeCollaborativeExitFeeEstimateParams,
   ): Promise<ArkadeCollaborativeExitFeeEstimate> {
-    const wallet = requireWallet()
-    const feeInfo = (await wallet.arkProvider.getInfo()).fees
-    const vtxos = await wallet.getVtxos({ withRecoverable: true, withUnrolled: false })
-    const feeEstimate = await estimateCollaborativeOffboardFees({
-      feeInfo,
-      vtxos,
-      destinationAddress: params.destinationAddress,
-      amountSats: params.amountSats,
-      networkNames: ARKADE_DESTINATION_DECODE_NETWORK_NAMES,
-    })
-    return {
-      txFeeRate: feeInfo.txFeeRate,
-      intentFeeConfigured: mapIntentFeeConfigured(feeInfo),
-      estimatedTotalFeeSats: feeEstimate.estimatedTotalFeeSats,
-      estimatedReceiveSats: feeEstimate.estimatedReceiveSats,
-      estimateError: feeEstimate.estimateError,
-    }
+    const wasm = await getArkWasm()
+    return wasm.ark_get_collaborative_exit_fee_estimate(
+      params,
+    ) as Promise<ArkadeCollaborativeExitFeeEstimate>
   },
 
   async estimateUnilateralExit(
     params: ArkadeUnilateralExitFeeEstimateParams,
   ): Promise<ArkadeUnilateralExitFeeEstimate> {
-    if (activeSessionContext == null) {
-      throw new Error('Arkade session context is not available')
-    }
-
-    const bumper = await getOrCreateOnchainBumper()
-    const indexer = createArkadeIndexerProvider(activeSessionContext.arkServerUrl)
-    const networkName = networkModeToSdkNetworkName(activeSessionContext.networkMode)
-
-    let chainTxCount = 0
-    let projectedUnrollSteps = 0
-    let projectedWaitSteps = 0
-    let unrollTxids: string[] = []
-    let estimateError: string | undefined
-
-    try {
-      const { chain } = await indexer.getVtxoChain({
-        txid: params.txid,
-        vout: params.vout,
-      })
-      const plan = await simulateUnrollPlan(chain, (txid) =>
-        txOnchainStatusFromExplorer(bumper.provider, txid),
-      )
-      chainTxCount = plan.chainTxCount
-      projectedUnrollSteps = plan.projectedUnrollSteps
-      projectedWaitSteps = plan.projectedWaitSteps
-      unrollTxids = plan.unrollTxids
-    } catch (error) {
-      estimateError =
-        error instanceof Error ? error.message : 'Failed to load VTXO chain for fee estimate'
-    }
-
-    const rawFeeRate = await bumper.provider.getFeeRate()
-    const feeRateSatPerVb = resolveFeeRateSatPerVb(rawFeeRate)
-    const bumperBalanceSats = await bumper.getBalance()
-    const childVsize = estimateChildBumpVsize({
-      bumperAddress: bumper.address,
-      networkName,
-    })
-
-    let estimatedPackageFeeSats = 0
-    if (estimateError == null && unrollTxids.length > 0) {
-      try {
-        estimatedPackageFeeSats = await sumUnilateralPackageFees({
-          unrollTxids,
-          feeRateSatPerVb,
-          childVsize,
-          loadParentVsize: async (txid) => {
-            const virtualTxs = await indexer.getVirtualTxs([txid])
-            if (virtualTxs.txs.length === 0) {
-              throw new Error(`Virtual tx ${txid} not found`)
-            }
-            return parentVsizeFromVirtualTxPsbtBase64(virtualTxs.txs[0])
-          },
-        })
-      } catch (error) {
-        estimateError =
-          error instanceof Error ? error.message : 'Failed to estimate unroll package fees'
-      }
-    }
-
-    return {
-      chainTxCount,
-      projectedUnrollSteps,
-      projectedWaitSteps,
-      feeRateSatPerVb,
-      estimatedPackageFeeSats,
-      bumperBalanceSats,
-      bumperSufficient: bumperBalanceSats >= estimatedPackageFeeSats,
-      estimateError,
-    }
+    const wasm = await getArkWasm()
+    return wasm.ark_estimate_unilateral_exit(params) as Promise<ArkadeUnilateralExitFeeEstimate>
   },
 }
 

@@ -1,8 +1,3 @@
-import type { InMemoryContractRepository, InMemoryWalletRepository } from '@arkade-os/sdk'
-import {
-  exportBitboardArkadeSdkPersistence,
-  stringifyBitboardArkadeSdkPersistence,
-} from '@/lib/arkade/storage/arkade-in-memory-repo-snapshot'
 import type { ArkadeSupportedNetworkMode } from '@/lib/arkade/arkade-endpoints'
 
 export interface ArkadeSdkPersistenceBridge {
@@ -17,13 +12,10 @@ export interface ArkadeSdkPersistenceBridge {
 const SDK_PERSISTENCE_FLUSH_DEBOUNCE_MS = 400
 
 let persistenceBridge: ArkadeSdkPersistenceBridge | null = null
-/** Inner (non-proxy) repos from {@link createPersistingArkadeStorage}; see that module for why. */
 let flushContext: {
   walletId: number
   networkMode: ArkadeSupportedNetworkMode
   password: string
-  walletRepository: InMemoryWalletRepository
-  contractRepository: InMemoryContractRepository
 } | null = null
 let debouncedFlushTimer: ReturnType<typeof setTimeout> | null = null
 let inFlightFlush: Promise<void> | null = null
@@ -59,6 +51,11 @@ export function scheduleSdkPersistenceFlush(): void {
   }, SDK_PERSISTENCE_FLUSH_DEBOUNCE_MS)
 }
 
+async function exportSdkPersistenceJsonFromWasm(): Promise<string> {
+  const wasm = await import('@/wasm-pkg/bitboard_ark/bitboard_ark')
+  return wasm.ark_export_persistence_json()
+}
+
 export async function flushSdkPersistenceNow(): Promise<void> {
   if (flushContext == null || persistenceBridge == null) return
   clearDebouncedSdkPersistenceFlush()
@@ -67,16 +64,11 @@ export async function flushSdkPersistenceNow(): Promise<void> {
     return
   }
 
-  const { walletId, networkMode, password, walletRepository, contractRepository } =
-    flushContext
+  const { walletId, networkMode, password } = flushContext
   const bridge = persistenceBridge
 
   inFlightFlush = (async () => {
-    const envelope = exportBitboardArkadeSdkPersistence({
-      walletRepository,
-      contractRepository,
-    })
-    const sdkPersistenceJson = stringifyBitboardArkadeSdkPersistence(envelope)
+    const sdkPersistenceJson = await exportSdkPersistenceJsonFromWasm()
     await bridge.persistSdkPersistence({
       walletId,
       networkMode,

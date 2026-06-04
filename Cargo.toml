@@ -2,7 +2,7 @@
 version = "0.3.0"
 
 [workspace]
-members = ["crypto", "bitboard-encryption", "bitboard-lightning"]
+members = ["crypto", "bitboard-encryption", "bitboard-lightning", "bitboard-ark"]
 resolver = "2"
 
 [profile.release]
@@ -15,3 +15,6 @@ strip = true
 # esplora-client ignores Builder::timeout on wasm32; we need it for PWA Esplora sync (see third_party patch).
 [patch.crates-io]
 esplora-client = { path = "third_party/esplora-client" }
+ark-client = { path = "third_party/ark-client" }
+ark-rest = { path = "third_party/ark-rest" }
+ark-bdk-wallet = { path = "third_party/ark-bdk-wallet" }

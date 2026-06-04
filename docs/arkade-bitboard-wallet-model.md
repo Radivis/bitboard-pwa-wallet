@@ -7,26 +7,21 @@ For network switching and Esplora, see [`descriptor-wallet-switching.md`](descri
 ## Separate rail, not BDK changeset
 
 - **On-chain** balance and history come from the BDK wallet (`DescriptorWalletData.changeSet`) and Esplora sync.
-- **Arkade** balance and history come from the Arkade operator and SDK (`@arkade-os/sdk`) in `arkade.worker`.
+- **Arkade** balance and history come from the Arkade operator and **ark-rs** (`bitboard-ark` WASM) in `arkade.worker`.
 - Do not merge Arkade totals into the BDK dashboard balance.
 
 ## One Bitboard wallet, one Arkade context per live network
 
 - Arkade state is stored per `(wallet_id, networkMode)` for `mainnet`, `testnet`, and `signet` (Mutinynet).
-- Metadata and **full SDK repo state** (`sdkPersistenceJson`) live in encrypted `wallet_secrets` (`arkadeWallets[]`). Balance and history come from the hydrated SDK session (worker), not a separate snapshot field.
+- Metadata and **persistence v2** (`sdkPersistenceJson`, engine `ark-rs`) live in encrypted `wallet_secrets` (`arkadeWallets[]`). Balance and history come from the hydrated session (worker), not a separate snapshot field.
 - **Local-first:** VTXO and contract data are authoritative on device after unlock. The Arkade operator is used for cooperative boarding, send, and settlement when online—not required to load wallet state from disk.
 - **Unlike NWC:** Lightning snapshots are stale cache when the node is down; Arkade `sdkPersistenceJson` is the source of truth for offchain UTXOs (future unilateral exit reads this blob + Esplora, not the operator).
 
-## SDK storage in the worker (inner vs proxied repos)
+## Persistence in the worker
 
-`createPersistingArkadeStorage` builds **one** in-memory `WalletRepository` + `ContractRepository` pair per session:
+`bitboard-ark` exports a JSON envelope (`version: 2`) after critical RPCs and on `closeSession`. v1 TypeScript SDK snapshots are ignored on unlock (one-time console notice); users re-board on unreleased builds.
 
-| Handle | Role |
-|--------|------|
-| `inner*Repository` | Plain SDK in-memory repos. Hydrate from `sdkPersistenceJson` on open; export full repo state on flush. |
-| `walletRepository` / `contractRepository` | Proxies around the same instances. Passed to `Wallet.create` so SDK writes schedule a debounced persist to `wallet_secrets`. |
-
-Flush uses the **inner** handles because export reads repository maps via a direct field snapshot (not through the proxy). The SDK mutates the same underlying data through the proxies. Critical worker RPCs (send, onboard, delegate, etc.) also call an immediate flush.
+Operator access from the browser uses **REST** (`ark-rest` + grpc API shim), not grpc-web.
 
 ## Exiting to on-chain
 
@@ -37,7 +32,7 @@ Management → Arkade offers two paths:
 | **Collaborative exit** | Yes | Default; batches with operator; one settlement to your `bc1` address |
 | **Unilateral exit** | No (after unroll) | Operator down or you need trustless exit; per-VTXO; multiple on-chain txs |
 
-Collaborative exit calls `Ramps.offboard` in `arkade.worker`. Unilateral exit uses `Unroll.Session` (P2A fees paid from an SDK `OnchainWallet` bumper derived from the same mnemonic) then `Unroll.completeUnroll` after the CSV timelock. Select one VTXO at a time in the UI.
+Collaborative exit and unilateral unroll are implemented in `bitboard-ark` (`collaborative_redeem`, `broadcast_next_unilateral_exit_node`, etc.). The on-chain bumper wallet shares the same BIP32-derived BDK wallet as boarding. Select one VTXO at a time in the UI.
 
 ## Mnemonic alignment
 
