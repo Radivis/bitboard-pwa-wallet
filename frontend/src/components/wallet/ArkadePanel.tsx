@@ -93,12 +93,6 @@ export function ArkadePanel() {
 
         <div className="flex flex-wrap gap-2">
           <Button type="button" variant="outline" size="sm" asChild>
-            <Link to="/wallet/arkade/receive">Receive</Link>
-          </Button>
-          <Button type="button" variant="outline" size="sm" asChild>
-            <Link to="/wallet/arkade/send">Send</Link>
-          </Button>
-          <Button type="button" variant="outline" size="sm" asChild>
             <Link to="/wallet/arkade/board">Board from on-chain</Link>
           </Button>
           <Button

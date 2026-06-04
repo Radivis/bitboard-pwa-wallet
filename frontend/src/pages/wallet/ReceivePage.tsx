@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useNavigate } from '@tanstack/react-router'
+import { useNavigate, useSearch } from '@tanstack/react-router'
 import { QrCode, Copy, RefreshCw, ArrowDownLeft } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
 import { toast } from 'sonner'
@@ -23,6 +23,8 @@ import { updateWalletChangeset } from '@/lib/wallet/wallet-utils'
 import { isLightningSupported } from '@/lib/lightning/lightning-utils'
 import { ReceiveModeToggle, type ReceiveMode } from '@/components/receive/ReceiveModeToggle'
 import { LightningReceive } from '@/components/receive/LightningReceive'
+import { ArkadeReceive } from '@/components/receive/ArkadeReceive'
+import { isArkadeActiveForNetworkMode } from '@/lib/arkade/arkade-utils'
 import { ReceiveMainnetDemoWarningModal } from '@/components/receive/ReceiveMainnetDemoWarningModal'
 import { FaucetLinker } from '@/components/receive/FaucetLinker'
 import { walletReceivePageTitle } from '@/lib/wallet/wallet-lab-ui-copy'
@@ -44,8 +46,19 @@ export function ReceivePage() {
   const [mainnetDemoDismissed, setMainnetDemoDismissed] = useState(false)
   const previousCommittedNetworkModeRef = useRef<NetworkMode | null>(null)
 
+  const search = useSearch({ from: '/wallet/receive' })
   const showLightningToggle = isLightningEnabled && isLightningSupported(networkMode)
-  const [receiveMode, setReceiveMode] = useState<ReceiveMode>('bitcoin')
+  const showArkadeToggle = isArkadeActiveForNetworkMode(networkMode)
+  const showModeToggle = showLightningToggle || showArkadeToggle
+  const [receiveMode, setReceiveMode] = useState<ReceiveMode>(() =>
+    search.mode === 'arkade' && isArkadeActiveForNetworkMode(networkMode) ? 'arkade' : 'bitcoin',
+  )
+
+  useEffect(() => {
+    if (search.mode === 'arkade' && showArkadeToggle) {
+      setReceiveMode('arkade')
+    }
+  }, [search.mode, showArkadeToggle])
 
   useEffect(() => {
     const previous = previousCommittedNetworkModeRef.current
@@ -123,14 +136,36 @@ export function ReceivePage() {
     />
   )
 
+  const modeToggle = showModeToggle ? (
+    <ReceiveModeToggle
+      mode={receiveMode}
+      onModeChange={setReceiveMode}
+      showLightning={showLightningToggle}
+      showArkade={showArkadeToggle}
+    />
+  ) : null
+
   if (showLightningToggle && receiveMode === 'lightning') {
     return (
       <>
         {mainnetDemoModal}
         <div className="space-y-6">
           <PageHeader title="Receive Lightning" icon={ArrowDownLeft} />
-          <ReceiveModeToggle mode={receiveMode} onModeChange={setReceiveMode} />
+          {modeToggle}
           <LightningReceive />
+        </div>
+      </>
+    )
+  }
+
+  if (showArkadeToggle && receiveMode === 'arkade') {
+    return (
+      <>
+        {mainnetDemoModal}
+        <div className="space-y-6">
+          <PageHeader title="Receive on Arkade" icon={ArrowDownLeft} />
+          {modeToggle}
+          <ArkadeReceive />
         </div>
       </>
     )
@@ -142,9 +177,7 @@ export function ReceivePage() {
       <div className="space-y-6">
       <PageHeader title={walletReceivePageTitle(networkMode)} icon={ArrowDownLeft} />
 
-      {showLightningToggle && (
-        <ReceiveModeToggle mode={receiveMode} onModeChange={setReceiveMode} />
-      )}
+      {modeToggle}
 
       <InfomodeWrapper
         infoId="receive-qr-code-card"

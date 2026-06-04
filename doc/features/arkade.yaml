@@ -31,7 +31,6 @@ feature:
         - Arkade balance (confirmed/total when available)
         - Arkade receive address with copy
         - delegator fee from getDelegateInfo when reachable
-        - link to Arkade receive and send routes
         - expiring VTXO count when session open
         - collaborative exit (on-chain destination, optional partial amount) with operator fee estimate from getInfo().fees
         - unilateral exit per VTXO (select, unroll, complete after timelock) with unroll step count and bumper fee estimate
@@ -39,20 +38,25 @@ feature:
         - Shown only when isArkadeEnabled and current network supports Arkade
         - Collaborative exit uses Ramps.offboard via arkade.worker
         - Unilateral exit uses SDK Unroll session + completeUnroll; bumper balance and estimated P2A package fees shown when a VTXO is selected
-    - ArkadeReceive:
-      - path: /wallet/arkade/receive
-      - file: frontend/src/routes/wallet/arkade/receive.tsx
+    - WalletReceiveArkadeMode:
+      - description: "Arkade receive integrated in main Receive page"
+      - file: frontend/src/pages/wallet/ReceivePage.tsx
+      - path: /wallet/receive
       - visible_elements:
-        - Arkade address text and QR code
-        - copy button
-        - note that this is not the on-chain bc1 receive address
-    - ArkadeSend:
-      - path: /wallet/arkade/send
-      - file: frontend/src/routes/wallet/arkade/send.tsx
+        - Receive mode toggle includes Arkade when isArkadeEnabled and network supported
+        - Arkade address QR and copy (not on-chain bc1)
+      - requirements:
+        - Legacy /wallet/arkade/receive redirects to /wallet/receive?mode=arkade
+    - WalletSendArkadeDetection:
+      - description: "Arkade send via address format on main Send page"
+      - file: frontend/src/pages/wallet/SendPage/index.tsx
+      - path: /wallet/send
       - visible_elements:
-        - recipient Arkade address input
-        - amount in sats
-        - review and confirm
+        - Recipient field accepts ark1/tark1 when Arkade active
+        - Arkade balance shown; on-chain fee section hidden for Arkade sends
+      - requirements:
+        - Lightning detection takes priority over Arkade; Arkade over on-chain
+        - Legacy /wallet/arkade/send redirects to /wallet/send
     - ArkadeBoard:
       - path: /wallet/arkade/board
       - file: frontend/src/routes/wallet/arkade/board.tsx

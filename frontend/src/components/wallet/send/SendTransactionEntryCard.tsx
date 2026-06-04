@@ -41,6 +41,10 @@ export function SendTransactionEntryCard({
   cardTitle,
   submitLabel,
   isLightningSendMode,
+  isArkadeSendMode,
+  arkadeAvailable,
+  arkadeBalanceSats,
+  arkadeBalanceLoading,
   networkMode,
   recipient,
   onRecipientChange,
@@ -90,6 +94,10 @@ export function SendTransactionEntryCard({
   cardTitle: string
   submitLabel: string
   isLightningSendMode: boolean
+  isArkadeSendMode: boolean
+  arkadeAvailable: boolean
+  arkadeBalanceSats: number | undefined
+  arkadeBalanceLoading: boolean
   networkMode: NetworkMode
   recipient: string
   onRecipientChange: (value: string) => void
@@ -146,10 +154,14 @@ export function SendTransactionEntryCard({
   const [recipientScanOpen, setRecipientScanOpen] = useState(false)
   const hasUsableFiatSpot = isUsableBtcSpotPriceInFiat(btcPriceInFiat)
 
+  const arkadeSpendableSats = arkadeBalanceSats ?? 0
   const hideEditableAmountForZeroMainnet =
     networkMode === 'mainnet' &&
     !isLabWithNoBalance &&
-    ((!isLightningSendMode && confirmedBalance <= 0) ||
+    ((!isLightningSendMode &&
+      !isArkadeSendMode &&
+      confirmedBalance <= 0) ||
+      (isArkadeSendMode && !arkadeBalanceLoading && arkadeSpendableSats <= 0) ||
       (isLightningSendMode &&
         needsUserLightningAmount &&
         selectedLnBalanceQuery?.isSuccess === true &&
@@ -157,7 +169,7 @@ export function SendTransactionEntryCard({
 
   const showMainnetZeroBalanceWarning =
     hideEditableAmountForZeroMainnet &&
-    (needsUserLightningAmount || !isLightningSendMode)
+    (needsUserLightningAmount || (!isLightningSendMode && !isArkadeSendMode) || isArkadeSendMode)
 
   const showBip11WithZeroBalance =
     hideEditableAmountForZeroMainnet &&
@@ -167,7 +179,7 @@ export function SendTransactionEntryCard({
   const useFiatAmountField =
     mainnetFiatMode &&
     !hideEditableAmountForZeroMainnet &&
-    (needsUserLightningAmount || !isLightningSendMode)
+    (needsUserLightningAmount || (!isLightningSendMode && !isArkadeSendMode))
 
   function spendableAmountRows(balanceSats: number) {
     if (mainnetFiatMode && hasUsableFiatSpot) {
@@ -233,7 +245,9 @@ export function SendTransactionEntryCard({
                 <Label htmlFor="recipient-address">
                   {isLightningSendMode
                     ? 'Invoice or Lightning address'
-                    : 'Recipient Address'}
+                    : isArkadeSendMode
+                      ? 'Arkade address'
+                      : 'Recipient Address'}
                 </Label>
                 <Button
                   type="button"
@@ -252,9 +266,15 @@ export function SendTransactionEntryCard({
                 value={recipient}
                 onChange={(e) => onRecipientChange(e.target.value)}
                 placeholder={
-                  lightningAvailable
-                    ? 'bc1q… or BOLT11 invoice or Lightning address'
-                    : 'bc1q…'
+                  isArkadeSendMode
+                    ? 'ark1… or tark1…'
+                    : lightningAvailable && arkadeAvailable
+                      ? 'bc1q…, ark1…, BOLT11, or Lightning address'
+                      : lightningAvailable
+                        ? 'bc1q… or BOLT11 invoice or Lightning address'
+                        : arkadeAvailable
+                          ? 'bc1q… or ark1… / tark1…'
+                          : 'bc1q…'
                 }
                 disabled={isPending}
               />
@@ -262,7 +282,13 @@ export function SendTransactionEntryCard({
                 <p className="text-xs text-destructive">
                   {isLightningSendMode
                     ? 'Invalid Lightning invoice or Lightning address.'
-                    : `Invalid address for ${networkMode}`}
+                    : isArkadeSendMode
+                      ? 'Invalid Arkade address (ark1 or tark1).'
+                      : arkadeAvailable && lightningAvailable
+                        ? `Invalid address for ${networkMode}, Arkade, or Lightning.`
+                        : arkadeAvailable
+                          ? `Invalid on-chain or Arkade address for ${networkMode}.`
+                          : `Invalid address for ${networkMode}`}
                 </p>
               )}
               {recipient && isLightningSendMode && !lightningRecipientOk && (
@@ -350,7 +376,8 @@ export function SendTransactionEntryCard({
                       ? 'Amount (from invoice)'
                       : 'Amount'}
                 </Label>
-                {(needsUserLightningAmount || !isLightningSendMode) &&
+                {(needsUserLightningAmount ||
+                  (!isLightningSendMode && !isArkadeSendMode)) &&
                   !useFiatAmountField && (
                     <BitcoinUnitSelect
                       value={amountUnit}
@@ -468,13 +495,22 @@ export function SendTransactionEntryCard({
                       '—'
                     )}
                   </>
+                ) : isArkadeSendMode ? (
+                  <>
+                    Arkade balance:{' '}
+                    {arkadeBalanceLoading ? (
+                      'Loading balance…'
+                    ) : (
+                      spendableAmountRows(arkadeSpendableSats)
+                    )}
+                  </>
                 ) : (
                   <>
                     Available: {spendableAmountRows(confirmedBalance)}
                   </>
                 )}
               </div>
-              {isLabWithNoBalance && !isLightningSendMode && (
+              {isLabWithNoBalance && !isLightningSendMode && !isArkadeSendMode && (
                 <p className="text-xs text-amber-600 dark:text-amber-400">
                   No balance. Mine blocks or make a transaction to your wallet in
                   the lab.
@@ -482,7 +518,7 @@ export function SendTransactionEntryCard({
               )}
             </div>
 
-            {!isLightningSendMode && (
+            {!isLightningSendMode && !isArkadeSendMode && (
               <SendOnChainFeeSection
                 feePresetSelection={feePresetSelection}
                 presetSatPerVbByLabel={presetSatPerVbByLabel}

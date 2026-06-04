@@ -20,6 +20,7 @@ export function isLabWithNoBalance({
 
 export type CanBuildOnChainSendInput = {
   isLightningSendMode: boolean
+  isArkadeSendMode: boolean
   normalizedRecipient: string
   networkMode: NetworkMode
   amountSats: number
@@ -31,6 +32,7 @@ export type CanBuildOnChainSendInput = {
 
 export function canBuildOnChainSend({
   isLightningSendMode,
+  isArkadeSendMode,
   normalizedRecipient,
   networkMode,
   amountSats,
@@ -41,6 +43,7 @@ export function canBuildOnChainSend({
 }: CanBuildOnChainSendInput): boolean {
   return (
     !isLightningSendMode &&
+    !isArkadeSendMode &&
     normalizedRecipient.length > 0 &&
     isValidAddress(normalizedRecipient, networkMode) &&
     isValidSendAmountSats(amountSats) &&
@@ -74,18 +77,25 @@ export function isSendFiatRateOk({
 
 export type CanProceedToSendReviewInput = {
   isLightningSendMode: boolean
+  isArkadeSendMode: boolean
   canBuildLightning: boolean
+  canBuildArkade: boolean
   canBuildOnChain: boolean
   fiatRateOk: boolean
 }
 
 export function canProceedToSendReview({
   isLightningSendMode,
+  isArkadeSendMode,
   canBuildLightning,
+  canBuildArkade,
   canBuildOnChain,
   fiatRateOk,
 }: CanProceedToSendReviewInput): boolean {
-  return (
-    (isLightningSendMode ? canBuildLightning : canBuildOnChain) && fiatRateOk
-  )
+  const canBuild = isLightningSendMode
+    ? canBuildLightning
+    : isArkadeSendMode
+      ? canBuildArkade
+      : canBuildOnChain
+  return canBuild && fiatRateOk
 }

@@ -18,6 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Arkade receive and send are integrated into the main wallet Receive and Send pages (Bitcoin / Lightning / Arkade toggle on receive; address-format detection on send). Management panel links to separate Arkade send/receive routes were removed; legacy URLs redirect.
+
 ### Fixed
 
 ### Security
