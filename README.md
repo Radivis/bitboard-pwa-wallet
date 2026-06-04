@@ -77,7 +77,6 @@ Planned work is grouped into beta stages. Ordering within a stage is approximate
 
 ### Early Beta Stage
 
-- Supporting Ark
 - Use of global state for forms, so switching pages does not reset them
 - Raw hex data inspector
 - Support for BIP-39 passphrase ("25th word")
@@ -87,6 +86,7 @@ Planned work is grouped into beta stages. Ordering within a stage is approximate
 ### Late Beta Stage
 
 - Integrated Lightning node
+- Layer 2 (Lightning / Ark) in the Lab
 - Connecting with hardware wallets in "gateway mode"
 - Integrating with mobile device functionality rather than using web-only tech
 
