@@ -33,12 +33,12 @@ feature:
         - delegator fee from getDelegateInfo when reachable
         - link to Arkade receive and send routes
         - expiring VTXO count when session open
-        - collaborative exit (on-chain destination, optional partial amount)
-        - unilateral exit per VTXO (select, unroll, complete after timelock)
+        - collaborative exit (on-chain destination, optional partial amount) with operator fee estimate from getInfo().fees
+        - unilateral exit per VTXO (select, unroll, complete after timelock) with unroll step count and bumper fee estimate
       - requirements:
         - Shown only when isArkadeEnabled and current network supports Arkade
         - Collaborative exit uses Ramps.offboard via arkade.worker
-        - Unilateral exit uses SDK Unroll session + completeUnroll; bumper wallet balance shown
+        - Unilateral exit uses SDK Unroll session + completeUnroll; bumper balance and estimated P2A package fees shown when a VTXO is selected
     - ArkadeReceive:
       - path: /wallet/arkade/receive
       - file: frontend/src/routes/wallet/arkade/receive.tsx

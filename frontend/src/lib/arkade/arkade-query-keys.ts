@@ -27,6 +27,40 @@ export const arkadeBumperInfoQueryKey = (
   networkMode: ArkadeSupportedNetworkMode,
 ) => [...WALLET_DB_QUERY_KEY_ROOT, 'arkade', walletId, networkMode, 'bumper'] as const
 
+export const arkadeCollaborativeExitFeeQueryKey = (
+  walletId: number,
+  networkMode: ArkadeSupportedNetworkMode,
+  destinationAddress: string,
+  amountSats: number | undefined,
+) =>
+  [
+    ...WALLET_DB_QUERY_KEY_ROOT,
+    'arkade',
+    walletId,
+    networkMode,
+    'exit-fee',
+    'collaborative',
+    destinationAddress,
+    amountSats ?? 'full',
+  ] as const
+
+export const arkadeUnilateralExitFeeQueryKey = (
+  walletId: number,
+  networkMode: ArkadeSupportedNetworkMode,
+  txid: string,
+  vout: number,
+) =>
+  [
+    ...WALLET_DB_QUERY_KEY_ROOT,
+    'arkade',
+    walletId,
+    networkMode,
+    'exit-fee',
+    'unilateral',
+    txid,
+    vout,
+  ] as const
+
 export function removeArkadeDashboardQueries(): void {
   appQueryClient.removeQueries({
     queryKey: [...WALLET_DB_QUERY_KEY_ROOT, 'arkade'],

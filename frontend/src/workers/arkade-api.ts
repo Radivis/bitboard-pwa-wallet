@@ -76,6 +76,40 @@ export interface ArkadeCompleteUnilateralExitParams {
   destinationAddress: string
 }
 
+export interface ArkadeCollaborativeExitFeeEstimate {
+  txFeeRate: string
+  intentFeeConfigured: {
+    offchainInput: boolean
+    onchainInput: boolean
+    offchainOutput: boolean
+    onchainOutput: boolean
+  }
+  estimatedTotalFeeSats: number | null
+  estimatedReceiveSats: number | null
+  estimateError?: string
+}
+
+export interface ArkadeUnilateralExitFeeEstimate {
+  chainTxCount: number
+  projectedUnrollSteps: number
+  projectedWaitSteps: number
+  feeRateSatPerVb: number
+  estimatedPackageFeeSats: number
+  bumperBalanceSats: number
+  bumperSufficient: boolean
+  estimateError?: string
+}
+
+export interface ArkadeCollaborativeExitFeeEstimateParams {
+  destinationAddress: string
+  amountSats?: number
+}
+
+export interface ArkadeUnilateralExitFeeEstimateParams {
+  txid: string
+  vout: number
+}
+
 export interface ArkadeService {
   setSdkPersistenceBridge(bridge: ArkadeSdkPersistenceBridge | null): Promise<void>
   openSession(params: OpenArkadeSessionParams): Promise<{ arkadeAddress: string }>
@@ -99,4 +133,10 @@ export interface ArkadeService {
     onProgress: (event: ArkadeUnrollProgressEvent) => void,
   ): Promise<{ vtxoTxid: string }>
   completeUnilateralExit(params: ArkadeCompleteUnilateralExitParams): Promise<string>
+  getCollaborativeExitFeeEstimate(
+    params: ArkadeCollaborativeExitFeeEstimateParams,
+  ): Promise<ArkadeCollaborativeExitFeeEstimate>
+  estimateUnilateralExit(
+    params: ArkadeUnilateralExitFeeEstimateParams,
+  ): Promise<ArkadeUnilateralExitFeeEstimate>
 }

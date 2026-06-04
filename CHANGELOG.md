@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Library articles "Arkade in Bitboard Wallet" and "VTXO expiry and renewal"; deploy notes in `docs/deploy/fulmine-delegator-vps.md`
 - Arkade SDK persistence in encrypted `wallet_secrets` (`sdkPersistenceJson`) for local-first VTXO/contract state (replaces dev-only IndexedDB and redundant `arkadeSnapshot` cache)
 - Arkade collaborative and unilateral exit from Management (per-VTXO unilateral flow with unroll progress)
+- Arkade exit fee estimates: operator policy and satoshi preview for collaborative exit; unroll step count and bumper fee lower bound for unilateral exit
 
 ### Changed
 

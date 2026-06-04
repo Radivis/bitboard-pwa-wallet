@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import { screen } from '@testing-library/react'
+import { screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { renderWithProviders } from '@/test-utils/test-providers'
 import { ArkadeExitSection } from '@/components/wallet/ArkadeExitSection'
 
@@ -54,6 +55,34 @@ vi.mock('@/hooks/useArkadeQueries', () => ({
   useArkadeExitCandidatesQuery: () => ({ data: [], isLoading: false }),
   useArkadeBumperInfoQuery: () => ({ data: null, isLoading: false }),
   useArkadeCollaborativeExitMutation: () => ({ mutate: vi.fn(), isPending: false }),
+  useArkadeCollaborativeExitFeeQuery: () => ({
+    isLoading: false,
+    isError: false,
+    data: {
+      txFeeRate: '2',
+      intentFeeConfigured: {
+        offchainInput: true,
+        onchainInput: false,
+        offchainOutput: false,
+        onchainOutput: true,
+      },
+      estimatedTotalFeeSats: 500,
+      estimatedReceiveSats: 99_500,
+    },
+  }),
+  useArkadeUnilateralExitFeeQuery: () => ({
+    isLoading: false,
+    isError: false,
+    data: {
+      chainTxCount: 2,
+      projectedUnrollSteps: 1,
+      projectedWaitSteps: 0,
+      feeRateSatPerVb: 5,
+      estimatedPackageFeeSats: 2_000,
+      bumperBalanceSats: 5_000,
+      bumperSufficient: true,
+    },
+  }),
   useArkadeUnilateralUnrollMutation: () => ({ mutate: vi.fn(), isPending: false }),
   useArkadeCompleteUnilateralExitMutation: () => ({ mutate: vi.fn(), isPending: false }),
 }))
@@ -79,5 +108,15 @@ describe('ArkadeExitSection', () => {
     renderWithProviders(<ArkadeExitSection />)
     expect(screen.getByRole('button', { name: 'Collaborative exit' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Unilateral exit' })).toBeInTheDocument()
+  })
+
+  it('shows collaborative fee estimate in the exit dialog', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(<ArkadeExitSection />)
+    await user.click(screen.getByRole('button', { name: 'Collaborative exit' }))
+    await waitFor(() => {
+      expect(screen.getByText('Operator fees (estimate)')).toBeInTheDocument()
+    })
+    expect(screen.getByText(/Estimated operator fee/i)).toBeInTheDocument()
   })
 })

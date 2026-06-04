@@ -14,8 +14,20 @@ import {
 import {
   createArkadeIndexerProvider,
   createOnchainBumperWallet,
+  networkModeToSdkNetworkName,
 } from '@/lib/arkade/arkade-onchain-bumper'
 import { mapVirtualCoinsToExitCandidates } from '@/lib/arkade/arkade-exit-candidates'
+import {
+  ARKADE_DESTINATION_DECODE_NETWORK_NAMES,
+  estimateChildBumpVsize,
+  estimateCollaborativeOffboardFees,
+  mapIntentFeeConfigured,
+  parentVsizeFromVirtualTxPsbtBase64,
+  resolveFeeRateSatPerVb,
+  simulateUnrollPlan,
+  sumUnilateralPackageFees,
+  txOnchainStatusFromExplorer,
+} from '@/lib/arkade/arkade-exit-fee-estimates'
 import type { EncryptedBlobMessage } from '@/workers/secrets-channel-types'
 import {
   ARKADE_DEFAULT_VTXO_THRESHOLD_SECONDS,
@@ -32,6 +44,8 @@ import {
 } from '@/lib/arkade/storage/arkade-sdk-persistence-flush'
 import type {
   ArkadeBalanceInfo,
+  ArkadeCollaborativeExitFeeEstimate,
+  ArkadeCollaborativeExitFeeEstimateParams,
   ArkadeCollaborativeExitParams,
   ArkadeCompleteUnilateralExitParams,
   ArkadeDelegateInfo,
@@ -40,6 +54,8 @@ import type {
   ArkadePaymentRow,
   ArkadeSendParams,
   ArkadeService,
+  ArkadeUnilateralExitFeeEstimate,
+  ArkadeUnilateralExitFeeEstimateParams,
   ArkadeUnrollProgressEvent,
   OpenArkadeSessionParams,
 } from '@/workers/arkade-api'
@@ -491,6 +507,103 @@ const arkadeService: ArkadeService = {
     )
     await persistAfterCriticalOperation()
     return txid
+  },
+
+  async getCollaborativeExitFeeEstimate(
+    params: ArkadeCollaborativeExitFeeEstimateParams,
+  ): Promise<ArkadeCollaborativeExitFeeEstimate> {
+    const wallet = requireWallet()
+    const feeInfo = (await wallet.arkProvider.getInfo()).fees
+    const vtxos = await wallet.getVtxos({ withRecoverable: true, withUnrolled: false })
+    const feeEstimate = await estimateCollaborativeOffboardFees({
+      feeInfo,
+      vtxos,
+      destinationAddress: params.destinationAddress,
+      amountSats: params.amountSats,
+      networkNames: ARKADE_DESTINATION_DECODE_NETWORK_NAMES,
+    })
+    return {
+      txFeeRate: feeInfo.txFeeRate,
+      intentFeeConfigured: mapIntentFeeConfigured(feeInfo),
+      estimatedTotalFeeSats: feeEstimate.estimatedTotalFeeSats,
+      estimatedReceiveSats: feeEstimate.estimatedReceiveSats,
+      estimateError: feeEstimate.estimateError,
+    }
+  },
+
+  async estimateUnilateralExit(
+    params: ArkadeUnilateralExitFeeEstimateParams,
+  ): Promise<ArkadeUnilateralExitFeeEstimate> {
+    if (activeSessionContext == null) {
+      throw new Error('Arkade session context is not available')
+    }
+
+    const bumper = await getOrCreateOnchainBumper()
+    const indexer = createArkadeIndexerProvider(activeSessionContext.arkServerUrl)
+    const networkName = networkModeToSdkNetworkName(activeSessionContext.networkMode)
+
+    let chainTxCount = 0
+    let projectedUnrollSteps = 0
+    let projectedWaitSteps = 0
+    let unrollTxids: string[] = []
+    let estimateError: string | undefined
+
+    try {
+      const { chain } = await indexer.getVtxoChain({
+        txid: params.txid,
+        vout: params.vout,
+      })
+      const plan = await simulateUnrollPlan(chain, (txid) =>
+        txOnchainStatusFromExplorer(bumper.provider, txid),
+      )
+      chainTxCount = plan.chainTxCount
+      projectedUnrollSteps = plan.projectedUnrollSteps
+      projectedWaitSteps = plan.projectedWaitSteps
+      unrollTxids = plan.unrollTxids
+    } catch (error) {
+      estimateError =
+        error instanceof Error ? error.message : 'Failed to load VTXO chain for fee estimate'
+    }
+
+    const rawFeeRate = await bumper.provider.getFeeRate()
+    const feeRateSatPerVb = resolveFeeRateSatPerVb(rawFeeRate)
+    const bumperBalanceSats = await bumper.getBalance()
+    const childVsize = estimateChildBumpVsize({
+      bumperAddress: bumper.address,
+      networkName,
+    })
+
+    let estimatedPackageFeeSats = 0
+    if (estimateError == null && unrollTxids.length > 0) {
+      try {
+        estimatedPackageFeeSats = await sumUnilateralPackageFees({
+          unrollTxids,
+          feeRateSatPerVb,
+          childVsize,
+          loadParentVsize: async (txid) => {
+            const virtualTxs = await indexer.getVirtualTxs([txid])
+            if (virtualTxs.txs.length === 0) {
+              throw new Error(`Virtual tx ${txid} not found`)
+            }
+            return parentVsizeFromVirtualTxPsbtBase64(virtualTxs.txs[0])
+          },
+        })
+      } catch (error) {
+        estimateError =
+          error instanceof Error ? error.message : 'Failed to estimate unroll package fees'
+      }
+    }
+
+    return {
+      chainTxCount,
+      projectedUnrollSteps,
+      projectedWaitSteps,
+      feeRateSatPerVb,
+      estimatedPackageFeeSats,
+      bumperBalanceSats,
+      bumperSufficient: bumperBalanceSats >= estimatedPackageFeeSats,
+      estimateError,
+    }
   },
 }
 

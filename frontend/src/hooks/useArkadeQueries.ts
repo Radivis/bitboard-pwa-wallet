@@ -5,9 +5,11 @@ import { getArkadeWorker } from '@/workers/arkade-factory'
 import {
   arkadeBalanceQueryKey,
   arkadeBumperInfoQueryKey,
+  arkadeCollaborativeExitFeeQueryKey,
   arkadeDelegateInfoQueryKey,
   arkadeExitCandidatesQueryKey,
   arkadeHistoryQueryKey,
+  arkadeUnilateralExitFeeQueryKey,
 } from '@/lib/arkade/arkade-query-keys'
 import type { ArkadeUnrollProgressEvent } from '@/workers/arkade-api'
 import {
@@ -349,5 +351,85 @@ export function useArkadeCompleteUnilateralExitMutation() {
     onError: (err) => {
       toast.error(errorMessage(err))
     },
+  })
+}
+
+export function useArkadeCollaborativeExitFeeQuery(params: {
+  enabled: boolean
+  destinationAddress: string
+  amountSats?: number
+}) {
+  const { networkMode, activeWalletId, password, sessionReady } = useArkadeSessionContext()
+  const destinationTrimmed = params.destinationAddress.trim()
+  const enabled =
+    params.enabled &&
+    sessionReady &&
+    destinationTrimmed.length > 0
+
+  return useQuery({
+    queryKey:
+      activeWalletId != null && isArkadeSupportedNetworkMode(networkMode)
+        ? arkadeCollaborativeExitFeeQueryKey(
+            activeWalletId,
+            networkMode,
+            destinationTrimmed,
+            params.amountSats,
+          )
+        : ['arkade', 'exit-fee', 'collaborative', 'disabled'],
+    enabled,
+    queryFn: async () => {
+      if (activeWalletId == null || password == null) {
+        throw new Error('Wallet must be unlocked')
+      }
+      await openArkadeSessionForWallet({ password, walletId: activeWalletId, networkMode })
+      return getArkadeWorker().getCollaborativeExitFeeEstimate({
+        destinationAddress: destinationTrimmed,
+        amountSats: params.amountSats,
+      })
+    },
+    staleTime: 30_000,
+  })
+}
+
+export function useArkadeUnilateralExitFeeQuery(params: {
+  enabled: boolean
+  txid: string | undefined
+  vout: number | undefined
+}) {
+  const { networkMode, activeWalletId, password, sessionReady } = useArkadeSessionContext()
+  const enabled =
+    params.enabled &&
+    sessionReady &&
+    params.txid != null &&
+    params.vout != null
+
+  return useQuery({
+    queryKey:
+      activeWalletId != null &&
+      isArkadeSupportedNetworkMode(networkMode) &&
+      params.txid != null &&
+      params.vout != null
+        ? arkadeUnilateralExitFeeQueryKey(
+            activeWalletId,
+            networkMode,
+            params.txid,
+            params.vout,
+          )
+        : ['arkade', 'exit-fee', 'unilateral', 'disabled'],
+    enabled,
+    queryFn: async () => {
+      if (activeWalletId == null || password == null) {
+        throw new Error('Wallet must be unlocked')
+      }
+      if (params.txid == null || params.vout == null) {
+        throw new Error('VTXO outpoint is required')
+      }
+      await openArkadeSessionForWallet({ password, walletId: activeWalletId, networkMode })
+      return getArkadeWorker().estimateUnilateralExit({
+        txid: params.txid,
+        vout: params.vout,
+      })
+    },
+    staleTime: 30_000,
   })
 }
