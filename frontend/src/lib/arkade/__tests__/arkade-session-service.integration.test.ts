@@ -130,7 +130,7 @@ describe('openArkadeSessionForWallet (integration)', () => {
       sdkPersistenceJson: undefined,
     })
     expect(workerMocks.finalizePendingTransactions).toHaveBeenCalledTimes(1)
-    expect(workerMocks.delegateSpendableVtxos).toHaveBeenCalledTimes(1)
+    expect(workerMocks.delegateSpendableVtxos).not.toHaveBeenCalled()
     expect(upsertArkadeWalletStateMock).toHaveBeenCalledWith(
       expect.objectContaining({
         password: 'unlock-password',

@@ -1,20 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
-import { getArkadeEndpoints } from '@/lib/arkade/arkade-endpoints'
 
 /**
- * Phase-0 smoke: default delegator URLs are well-formed and info endpoint shape matches Fulmine.
+ * Fulmine delegator info JSON shape (when a delegator URL is configured via env).
  * Live operator/delegator calls run in manual testnet checks (see docs/deploy/fulmine-delegator-vps.md).
  */
 describe('arkade delegator smoke', () => {
-  it.each(['mainnet', 'testnet', 'signet'] as const)(
-    'delegator URL for %s is HTTPS and has no trailing slash',
-    (mode) => {
-      const { delegatorUrl } = getArkadeEndpoints(mode)
-      expect(delegatorUrl).toMatch(/^https:\/\//)
-      expect(delegatorUrl.endsWith('/')).toBe(false)
-    },
-  )
-
   it('parses delegator info JSON shape', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
@@ -26,7 +16,7 @@ describe('arkade delegator smoke', () => {
     })
     vi.stubGlobal('fetch', fetchMock)
 
-    const { delegatorUrl } = getArkadeEndpoints('testnet')
+    const delegatorUrl = 'https://delegator-example.test'
     const response = await fetch(`${delegatorUrl}/api/v1/delegator/info`)
     const body = (await response.json()) as {
       pubkey: string

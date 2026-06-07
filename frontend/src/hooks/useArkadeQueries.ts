@@ -17,7 +17,10 @@ import {
   isArkadeActiveForNetworkMode,
 } from '@/lib/arkade/arkade-utils'
 import { openArkadeSessionForWallet } from '@/lib/arkade/arkade-session-service'
-import { isArkadeSupportedNetworkMode } from '@/lib/arkade/arkade-endpoints'
+import {
+  isArkadeDelegatorConfigured,
+  isArkadeSupportedNetworkMode,
+} from '@/lib/arkade/arkade-endpoints'
 import { useSessionStore } from '@/stores/sessionStore'
 import { getCommittedNetworkMode, useWalletStore } from '@/stores/walletStore'
 import { errorMessage } from '@/lib/shared/utils'
@@ -117,6 +120,7 @@ export function useArkadeDelegateInfoQuery() {
   const enabled =
     isArkadeActiveForCommittedNetwork() &&
     isArkadeSupportedNetworkMode(networkMode) &&
+    isArkadeDelegatorConfigured(networkMode) &&
     activeWalletId != null &&
     password != null
 
@@ -149,7 +153,9 @@ export function useArkadeSendMutation() {
       }
       await openArkadeSessionForWallet({ password, walletId: activeWalletId, networkMode })
       const txid = await getArkadeWorker().sendPayment(params)
-      await getArkadeWorker().delegateSpendableVtxos()
+      if (isArkadeDelegatorConfigured(networkMode)) {
+        await getArkadeWorker().delegateSpendableVtxos()
+      }
       return txid
     },
     onSuccess: async (txid) => {
@@ -214,7 +220,9 @@ export function useArkadeOnboardMutation() {
       }
       await openArkadeSessionForWallet({ password, walletId: activeWalletId, networkMode })
       const txid = await getArkadeWorker().onboardBoardedUtxos()
-      await getArkadeWorker().delegateSpendableVtxos()
+      if (isArkadeDelegatorConfigured(networkMode)) {
+        await getArkadeWorker().delegateSpendableVtxos()
+      }
       return txid
     },
     onSuccess: (txid) => {

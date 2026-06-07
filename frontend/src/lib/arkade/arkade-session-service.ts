@@ -8,6 +8,7 @@ import {
 } from '@/workers/arkade-factory'
 import {
   getArkadeEndpoints,
+  isArkadeDelegatorConfigured,
   isArkadeSupportedNetworkMode,
   type ArkadeSupportedNetworkMode,
 } from '@/lib/arkade/arkade-endpoints'
@@ -82,7 +83,9 @@ export async function openArkadeSessionForWallet(params: {
     })
 
     await worker.finalizePendingTransactions()
-    await worker.delegateSpendableVtxos()
+    if (isArkadeDelegatorConfigured(networkMode)) {
+      await worker.delegateSpendableVtxos()
+    }
 
     const now = new Date().toISOString()
     await upsertArkadeWalletState({

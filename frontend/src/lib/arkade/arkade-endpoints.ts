@@ -20,16 +20,11 @@ const DEFAULT_OPERATORS: Record<ArkadeSupportedNetworkMode, string> = {
     'https://mutinynet.arkade.sh',
 }
 
+/** Empty unless set via VITE_ARKADE_DELEGATOR_* (Bitboard Fulmine delegator is opt-in). */
 const DEFAULT_DELEGATORS: Record<ArkadeSupportedNetworkMode, string> = {
-  mainnet:
-    import.meta.env.VITE_ARKADE_DELEGATOR_MAINNET ??
-    'https://delegator-mainnet.bitboard-wallet.com',
-  testnet:
-    import.meta.env.VITE_ARKADE_DELEGATOR_TESTNET ??
-    'https://delegator-testnet4.bitboard-wallet.com',
-  signet:
-    import.meta.env.VITE_ARKADE_DELEGATOR_SIGNET ??
-    'https://delegator-mutinynet.bitboard-wallet.com',
+  mainnet: import.meta.env.VITE_ARKADE_DELEGATOR_MAINNET ?? '',
+  testnet: import.meta.env.VITE_ARKADE_DELEGATOR_TESTNET ?? '',
+  signet: import.meta.env.VITE_ARKADE_DELEGATOR_SIGNET ?? '',
 }
 
 const DEFAULT_ESPLORA: Record<ArkadeSupportedNetworkMode, string> = {
@@ -64,6 +59,12 @@ export function getArkadeEndpoints(
     delegatorUrl: DEFAULT_DELEGATORS[mode],
     esploraUrl: DEFAULT_ESPLORA[mode],
   }
+}
+
+export function isArkadeDelegatorConfigured(
+  mode: ArkadeSupportedNetworkMode,
+): boolean {
+  return getArkadeEndpoints(mode).delegatorUrl.trim().length > 0
 }
 
 /** Default VTXO renewal threshold: 3 days (seconds), per Arkade docs. */

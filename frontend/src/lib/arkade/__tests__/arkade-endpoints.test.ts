@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   getArkadeEndpoints,
+  isArkadeDelegatorConfigured,
   isArkadeSupportedNetworkMode,
   networkModeToArkadeIsMainnet,
 } from '@/lib/arkade/arkade-endpoints'
@@ -26,9 +27,15 @@ describe('arkade-endpoints', () => {
     const signet = getArkadeEndpoints('signet')
 
     expect(mainnet.arkServerUrl).toMatch(/^https:\/\//)
-    expect(mainnet.delegatorUrl).toContain('delegator-mainnet')
-    expect(testnet.delegatorUrl).toContain('delegator-testnet4')
-    expect(signet.delegatorUrl).toContain('delegator-mutinynet')
+    expect(mainnet.delegatorUrl).toBe('')
+    expect(testnet.delegatorUrl).toBe('')
+    expect(signet.delegatorUrl).toBe('')
     expect(signet.esploraUrl).toContain('mutinynet')
+  })
+
+  it('reports delegator as disabled when URL is empty', () => {
+    expect(isArkadeDelegatorConfigured('mainnet')).toBe(false)
+    expect(isArkadeDelegatorConfigured('testnet')).toBe(false)
+    expect(isArkadeDelegatorConfigured('signet')).toBe(false)
   })
 })

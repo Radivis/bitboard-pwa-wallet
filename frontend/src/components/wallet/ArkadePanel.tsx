@@ -8,6 +8,7 @@ import {
   useArkadeDelegateInfoQuery,
   useArkadeRenewMutation,
 } from '@/hooks/useArkadeQueries'
+import { isArkadeDelegatorConfigured } from '@/lib/arkade/arkade-endpoints'
 import { isArkadeActiveForNetworkMode } from '@/lib/arkade/arkade-utils'
 import { useWalletStore } from '@/stores/walletStore'
 import { openArkadeSessionForWallet } from '@/lib/arkade/arkade-session-service'
@@ -21,6 +22,8 @@ export function ArkadePanel() {
   const activeWalletId = useWalletStore((s) => s.activeWalletId)
   const password = useSessionStore((s) => s.password)
   const show = isArkadeActiveForNetworkMode(networkMode)
+  const delegatorConfigured =
+    show && isArkadeDelegatorConfigured(networkMode)
 
   const balanceQuery = useArkadeBalanceQuery()
   const delegateQuery = useArkadeDelegateInfoQuery()
@@ -55,8 +58,10 @@ export function ArkadePanel() {
       <CardContent className="space-y-4">
         <p className="text-sm text-muted-foreground">
           Instant payments on Arkade use separate addresses from your on-chain{' '}
-          <code className="text-xs">bc1</code> receive address. Renewal is handled by
-          the Bitboard delegator while this app is closed.
+          <code className="text-xs">bc1</code> receive address.
+          {delegatorConfigured
+            ? ' Renewal is handled by the delegator while this app is closed.'
+            : ' Use “Renew VTXOs now” while the app is open, or enable a delegator via deployment config.'}
         </p>
 
         {balanceQuery.isLoading ? (

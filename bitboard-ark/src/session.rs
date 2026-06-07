@@ -42,7 +42,7 @@ pub type ArkClient = Client<EsploraBlockchain, ArkWallet, InMemorySwapStorage, B
 pub struct ArkSession {
     client: ArkClient,
     wallet_db: Arc<JsonPersistenceDb>,
-    delegator: DelegatorClient,
+    delegator: Option<DelegatorClient>,
     network_mode: NetworkMode,
     esplora_url: String,
 }
@@ -65,10 +65,15 @@ impl ArkSession {
         let seed = mnemonic.to_seed("");
         let xpriv = Xpriv::new_master(network, &seed)?;
 
-        let delegator = DelegatorClient::new(delegator_url.clone());
-        let delegator_info = delegator.info().await?;
-        let delegator_pk = parse_delegator_public_key(&delegator_info.pubkey)?;
-        let delegator_xonly: XOnlyPublicKey = delegator_pk.into();
+        let (delegator, delegator_xonly) = if delegator_url.trim().is_empty() {
+            (None, None)
+        } else {
+            let delegator = DelegatorClient::new(delegator_url.clone());
+            let delegator_info = delegator.info().await?;
+            let delegator_pk = parse_delegator_public_key(&delegator_info.pubkey)?;
+            let delegator_xonly: XOnlyPublicKey = delegator_pk.into();
+            (Some(delegator), Some(delegator_xonly))
+        };
 
         let blockchain = Arc::new(EsploraBlockchain::new(&esplora_url)?);
         let wallet = Arc::new(
@@ -98,7 +103,7 @@ impl ArkSession {
             BOLTZ_URL.to_string(),
             None,
             CLIENT_TIMEOUT,
-            Some(delegator_xonly),
+            delegator_xonly,
             vec![],
         );
 
@@ -173,7 +178,11 @@ impl ArkSession {
     }
 
     pub async fn delegate_info(&self) -> ArkResult<DelegateInfoDto> {
-        let info = self.delegator.info().await?;
+        let delegator = self
+            .delegator
+            .as_ref()
+            .ok_or_else(|| ArkWasmError::Message("delegator service is not configured".into()))?;
+        let info = delegator.info().await?;
         let fee = info.fee.parse::<u64>().unwrap_or(0);
         Ok(DelegateInfoDto {
             pubkey: info.pubkey,
@@ -197,7 +206,14 @@ impl ArkSession {
     }
 
     pub async fn delegate_spendable_vtxos(&self) -> ArkResult<DelegateSpendableResult> {
-        let delegator_info = self.delegator.info().await?;
+        let Some(delegator) = self.delegator.as_ref() else {
+            return Ok(DelegateSpendableResult {
+                delegated: 0,
+                failed: 0,
+            });
+        };
+
+        let delegator_info = delegator.info().await?;
         let delegator_pubkey = parse_delegator_public_key(&delegator_info.pubkey)?;
         let mut delegated = 0u32;
         let mut failed = 0u32;
@@ -211,8 +227,7 @@ impl ArkSession {
                     .is_err()
                 {
                     failed += 1;
-                } else if self
-                    .delegator
+                } else if delegator
                     .delegate(&delegate.intent, &delegate.forfeit_psbts, None)
                     .await
                     .is_ok()
