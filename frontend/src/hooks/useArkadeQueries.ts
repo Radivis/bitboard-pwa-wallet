@@ -171,6 +171,7 @@ export function useArkadeBalanceQuery() {
     enabled: sessionReady,
     queryFn: () => withReadyArkadeWorker(() => getArkadeWorker().getBalance()),
     staleTime: 30_000,
+    refetchInterval: 15_000,
   })
 }
 
@@ -187,6 +188,7 @@ export function useArkadeHistoryQuery() {
     enabled: sessionReady,
     queryFn: () => withReadyArkadeWorker(() => getArkadeWorker().getTransactionHistory()),
     staleTime: 30_000,
+    refetchInterval: 15_000,
   })
 }
 

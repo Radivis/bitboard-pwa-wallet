@@ -54,7 +54,10 @@ import { isLightningSupported } from '@/lib/lightning/lightning-utils'
 import { mergeAndSortDashboardActivity } from '@/lib/lightning/lightning-dashboard-sync'
 import { useDashboardActivityPageSize } from '@/hooks/useDashboardActivityPageSize'
 import { LightningPaymentItem } from '@/components/LightningPaymentItem'
+import { ArkadePaymentItem } from '@/components/ArkadePaymentItem'
 import { ArkadeDashboardBalance } from '@/components/wallet/ArkadeDashboardBalance'
+import { useArkadeHistoryQuery } from '@/hooks/useArkadeQueries'
+import { isArkadeActiveForNetworkMode } from '@/lib/arkade/arkade-utils'
 import { useFiatDenominationStore } from '@/stores/fiatDenominationStore'
 import { useMainnetFiatRatesQuery } from '@/hooks/useMainnetFiatRatesQuery'
 import {
@@ -624,6 +627,8 @@ function RecentTransactions() {
     [connectedLightningWallets, activeWalletId, networkMode],
   )
   const lightningHistoryQuery = useLightningHistoryQuery()
+  const arkadeActive = isArkadeActiveForNetworkMode(networkMode)
+  const arkadeHistoryQuery = useArkadeHistoryQuery()
   const { data: labState, isPending: labChainPending } = useLabChainStateQuery()
   const labTransactions = labState?.transactions ?? []
   const labTxDetails = labState?.txDetails ?? []
@@ -645,21 +650,24 @@ function RecentTransactions() {
     () => lightningHistoryQuery.data?.payments ?? [],
     [lightningHistoryQuery.data?.payments],
   )
+  const arkadePayments = useMemo(
+    () => (arkadeActive ? arkadeHistoryQuery.data ?? [] : []),
+    [arkadeActive, arkadeHistoryQuery.data],
+  )
   const stalePaymentsAsOf = lightningHistoryQuery.data?.stalePaymentsAsOf
 
   const mergedActivity = useMemo(() => {
     if (networkMode === 'lab') {
       return []
     }
-    if (
-      !isLightningEnabled ||
-      !isLightningSupported(networkMode) ||
-      activeWalletId == null ||
-      !hasLnWalletForNetwork
-    ) {
-      return mergeAndSortDashboardActivity(transactions, [])
-    }
-    return mergeAndSortDashboardActivity(transactions, lightningPayments)
+    const lightningForMerge =
+      isLightningEnabled &&
+      isLightningSupported(networkMode) &&
+      activeWalletId != null &&
+      hasLnWalletForNetwork
+        ? lightningPayments
+        : []
+    return mergeAndSortDashboardActivity(transactions, lightningForMerge, arkadePayments)
   }, [
     networkMode,
     isLightningEnabled,
@@ -667,6 +675,7 @@ function RecentTransactions() {
     hasLnWalletForNetwork,
     transactions,
     lightningPayments,
+    arkadePayments,
   ])
 
   const activityTotalCount =
@@ -734,6 +743,12 @@ function RecentTransactions() {
             Loading Lightning activity…
           </p>
         )}
+        {networkMode !== 'lab' && arkadeActive && arkadeHistoryQuery.isLoading && (
+          <p className="mb-3 flex items-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Loading Arkade activity…
+          </p>
+        )}
         {networkMode !== 'lab' &&
           isLightningEnabled &&
           hasLnWalletForNetwork &&
@@ -755,6 +770,7 @@ function RecentTransactions() {
             </div>
             <p className="text-sm text-muted-foreground">
               No activity yet. On-chain transactions appear after you sync;
+              Arkade payments appear when your Arkade session is open;
               Lightning payments appear when your NWC wallet reports them.
             </p>
           </div>
@@ -780,16 +796,30 @@ function RecentTransactions() {
                 ? labPageRows.map((tx) => (
                     <TransactionItem key={tx.txid} transaction={tx} />
                   ))
-                : mergedPageRows.map((activityItem) =>
-                    activityItem.kind === 'chain' ? (
-                      <TransactionItem key={activityItem.tx.txid} transaction={activityItem.tx} />
-                    ) : (
-                      <LightningPaymentItem
-                        key={`${activityItem.payment.connectionId}-${activityItem.payment.paymentHash}`}
+                : mergedPageRows.map((activityItem) => {
+                    if (activityItem.kind === 'chain') {
+                      return (
+                        <TransactionItem
+                          key={activityItem.tx.txid}
+                          transaction={activityItem.tx}
+                        />
+                      )
+                    }
+                    if (activityItem.kind === 'lightning') {
+                      return (
+                        <LightningPaymentItem
+                          key={`${activityItem.payment.connectionId}-${activityItem.payment.paymentHash}`}
+                          payment={activityItem.payment}
+                        />
+                      )
+                    }
+                    return (
+                      <ArkadePaymentItem
+                        key={`arkade-${activityItem.payment.txid}-${activityItem.payment.timestamp}`}
                         payment={activityItem.payment}
                       />
-                    ),
-                  )}
+                    )
+                  })}
             </div>
           </CardPagination>
         )}

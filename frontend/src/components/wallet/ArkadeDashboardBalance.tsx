@@ -28,7 +28,15 @@ export function ArkadeDashboardBalance() {
             Loading…
           </div>
         ) : balanceQuery.data ? (
-          <BitcoinAmountDisplay amountSats={balanceQuery.data.confirmedSats} />
+          <div>
+            <BitcoinAmountDisplay amountSats={balanceQuery.data.confirmedSats} />
+            {balanceQuery.data.totalSats !== balanceQuery.data.confirmedSats && (
+              <p className="text-xs text-muted-foreground">
+                Total (incl. pending):{' '}
+                <BitcoinAmountDisplay amountSats={balanceQuery.data.totalSats} size="sm" />
+              </p>
+            )}
+          </div>
         ) : (
           <p className="text-sm text-muted-foreground">No Arkade session yet</p>
         )}

@@ -59,6 +59,26 @@ describe('mergeAndSortDashboardActivity', () => {
     expect(merged[0].kind).toBe('lightning')
   })
 
+  it('includes Arkade payments in merged activity', () => {
+    const merged = mergeAndSortDashboardActivity(
+      [chainOlder],
+      [],
+      [
+        {
+          direction: 'incoming',
+          amountSats: 25_000,
+          timestamp: 1_700_000_500,
+          txid: 'ark-in-1',
+        },
+      ],
+    )
+    expect(merged).toHaveLength(2)
+    expect(merged[0].kind).toBe('arkade')
+    if (merged[0].kind === 'arkade') {
+      expect(merged[0].payment.txid).toBe('ark-in-1')
+    }
+  })
+
   it('keeps unconfirmed on-chain txs in the top slice when many confirmed txs exist', () => {
     const confirmedChain = Array.from({ length: 11 }, (_, index) => ({
       txid: `confirmed-${index}`,

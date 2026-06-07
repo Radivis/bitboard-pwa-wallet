@@ -4,7 +4,9 @@ use std::time::Duration;
 
 use ark_bdk_wallet::Wallet as ArkBdkWallet;
 use ark_client::wallet::Persistence;
-use ark_client::{Bip32KeyProvider, Blockchain, Client, InMemorySwapStorage, OfflineClient};
+use ark_client::{
+    Bip32KeyProvider, Blockchain, Client, DEFAULT_GAP_LIMIT, InMemorySwapStorage, OfflineClient,
+};
 use ark_core::ArkAddress;
 use ark_core::BoardingOutput;
 use ark_core::ExplorerUtxo;
@@ -142,6 +144,7 @@ impl ArkSession {
     }
 
     pub async fn balance(&self) -> ArkResult<BalanceDto> {
+        self.sync_offchain_keys().await;
         let offchain = self.client.offchain_balance().await?;
         let onchain = self.client.onchain_wallet_balance()?;
         let confirmed = offchain.confirmed().to_sat() + onchain.confirmed.to_sat();
@@ -214,6 +217,7 @@ impl ArkSession {
     }
 
     pub async fn transaction_history(&self) -> ArkResult<Vec<PaymentRowDto>> {
+        self.sync_offchain_keys().await;
         let rows = self
             .client
             .transaction_history()
@@ -631,6 +635,15 @@ impl ArkSession {
 
     fn network(&self) -> Network {
         self.network_mode.to_bitcoin_network()
+    }
+
+    /// Re-scan derived Ark receive addresses against the operator indexer.
+    ///
+    /// Incoming VTXOs may land on indices that were not yet cached when the session opened.
+    async fn sync_offchain_keys(&self) {
+        if let Err(error) = self.client.discover_keys(DEFAULT_GAP_LIMIT).await {
+            let _ = error;
+        }
     }
 }
 

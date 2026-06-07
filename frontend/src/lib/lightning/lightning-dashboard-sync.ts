@@ -1,4 +1,5 @@
 import type { TransactionDetails } from '@/workers/crypto-types'
+import type { ArkadePaymentRow } from '@/workers/arkade-api'
 import { useWalletStore } from '@/stores/walletStore'
 import { useLightningStore } from '@/stores/lightningStore'
 import { useFeatureStore } from '@/stores/featureStore'
@@ -316,6 +317,7 @@ export async function fetchLightningBalancesForDashboard(): Promise<LightningBal
 export type DashboardActivityItem =
   | { kind: 'chain'; tx: TransactionDetails }
   | { kind: 'lightning'; payment: LightningPaymentWithWallet }
+  | { kind: 'arkade'; payment: ArkadePaymentRow }
 
 /** Sort key so unconfirmed on-chain txs stay above confirmed history (see lab mempool ordering). */
 const UNCONFIRMED_CHAIN_SORT_PRIORITY = Number.MAX_SAFE_INTEGER
@@ -331,30 +333,36 @@ function lightningSortTime(payment: LightningPaymentWithWallet): number {
   return payment.timestamp
 }
 
+function arkadeSortTime(payment: ArkadePaymentRow): number {
+  return payment.timestamp > 0 ? payment.timestamp : 0
+}
+
+function dashboardActivitySortTime(item: DashboardActivityItem): number {
+  if (item.kind === 'chain') {
+    return chainSortTime(item.tx)
+  }
+  if (item.kind === 'lightning') {
+    return lightningSortTime(item.payment)
+  }
+  return arkadeSortTime(item.payment)
+}
+
 /**
- * Merges on-chain and Lightning activity, newest first (by sort timestamp).
+ * Merges on-chain, Lightning, and Arkade activity, newest first (by sort timestamp).
  * Unconfirmed on-chain txs are prioritized so they are not pushed out of the dashboard top-N slice.
  */
 export function mergeAndSortDashboardActivity(
   onChain: TransactionDetails[],
   lightning: LightningPaymentWithWallet[],
+  arkade: ArkadePaymentRow[] = [],
 ): DashboardActivityItem[] {
   const items: DashboardActivityItem[] = [
     ...onChain.map((tx) => ({ kind: 'chain' as const, tx })),
     ...lightning.map((payment) => ({ kind: 'lightning' as const, payment })),
+    ...arkade.map((payment) => ({ kind: 'arkade' as const, payment })),
   ]
 
-  items.sort((a, b) => {
-    const sortTimeA =
-      a.kind === 'chain'
-        ? chainSortTime(a.tx)
-        : lightningSortTime(a.payment)
-    const sortTimeB =
-      b.kind === 'chain'
-        ? chainSortTime(b.tx)
-        : lightningSortTime(b.payment)
-    return sortTimeB - sortTimeA
-  })
+  items.sort((a, b) => dashboardActivitySortTime(b) - dashboardActivitySortTime(a))
 
   return items
 }
