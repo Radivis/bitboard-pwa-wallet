@@ -14,7 +14,11 @@ import {
   arkadeHistoryQueryKey,
   arkadeUnilateralExitFeeQueryKey,
 } from '@/lib/arkade/arkade-query-keys'
-import type { ArkadeUnrollProgressEvent } from '@/workers/arkade-api'
+import type {
+  ArkadeBalanceInfo,
+  ArkadeBoardingStatus,
+  ArkadeUnrollProgressEvent,
+} from '@/workers/arkade-api'
 import {
   isArkadeActiveForCommittedNetwork,
   isArkadeActiveForNetworkMode,
@@ -99,6 +103,37 @@ function walletScopedQueryKey(
     return buildKey(activeWalletId, networkMode)
   }
   return disabledArkadeQueryKey(disabledScope)
+}
+
+/** Clears boarding UTXO counts and bumps Arkade balance while settle refetches. */
+function applyOptimisticBoardingSettle(
+  queryClient: ReturnType<typeof useQueryClient>,
+  walletId: number,
+  networkMode: ArkadeSupportedNetworkMode,
+): void {
+  const boardingStatusKey = arkadeBoardingStatusQueryKey(walletId, networkMode)
+  const previousStatus = queryClient.getQueryData<ArkadeBoardingStatus>(boardingStatusKey)
+  const settledSats = previousStatus?.spendableSats ?? 0
+
+  if (previousStatus != null) {
+    queryClient.setQueryData<ArkadeBoardingStatus>(boardingStatusKey, {
+      ...previousStatus,
+      spendableSats: 0,
+      pendingSats: 0,
+      expiredSats: 0,
+    })
+  }
+
+  if (settledSats > 0) {
+    const balanceKey = arkadeBalanceQueryKey(walletId, networkMode)
+    const previousBalance = queryClient.getQueryData<ArkadeBalanceInfo>(balanceKey)
+    if (previousBalance != null) {
+      queryClient.setQueryData<ArkadeBalanceInfo>(balanceKey, {
+        confirmedSats: previousBalance.confirmedSats + settledSats,
+        totalSats: previousBalance.totalSats + settledSats,
+      })
+    }
+  }
 }
 
 async function invalidateArkadeWalletDataQueries(
@@ -283,17 +318,22 @@ export function useArkadeOnboardMutation() {
         getArkadeWorker().onboardBoardedUtxos(),
       )
     },
-    onSuccess: (txid) => {
+    onSuccess: async (txid) => {
       if (txid) {
         toast.success('Boarding completed')
       }
       if (activeWalletId != null && isArkadeSupportedNetworkMode(networkMode)) {
-        void queryClient.invalidateQueries({
-          queryKey: arkadeBalanceQueryKey(activeWalletId, networkMode),
-        })
-        void queryClient.invalidateQueries({
-          queryKey: arkadeBoardingStatusQueryKey(activeWalletId, networkMode),
-        })
+        if (txid) {
+          applyOptimisticBoardingSettle(queryClient, activeWalletId, networkMode)
+        }
+        await Promise.all([
+          queryClient.refetchQueries({
+            queryKey: arkadeBalanceQueryKey(activeWalletId, networkMode),
+          }),
+          queryClient.refetchQueries({
+            queryKey: arkadeBoardingStatusQueryKey(activeWalletId, networkMode),
+          }),
+        ])
       }
     },
     onError: (err) => {
