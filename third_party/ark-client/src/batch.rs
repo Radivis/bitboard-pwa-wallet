@@ -46,7 +46,6 @@ use bitcoin::TxOut;
 use bitcoin::Txid;
 use bitcoin::XOnlyPublicKey;
 use futures::StreamExt;
-use jiff::Timestamp;
 use rand::CryptoRng;
 use rand::Rng;
 use std::collections::HashMap;
@@ -1012,7 +1011,7 @@ where
         // To track unique outpoints and prevent duplicates
         let mut seen_outpoints = std::collections::HashSet::new();
 
-        let now = Timestamp::now();
+        let now = std::time::Duration::from_secs(unix_timestamp_secs().map_err(Error::ad_hoc)?);
 
         // Find outpoints for each boarding output.
         for boarding_output in boarding_outputs {
@@ -1039,7 +1038,7 @@ where
 
                     // Only include confirmed boarding outputs with an _inactive_ exit path.
                     if !boarding_output.can_be_claimed_unilaterally_by_owner(
-                        now.as_duration().try_into().map_err(Error::ad_hoc)?,
+                        now,
                         std::time::Duration::from_secs(*confirmation_blocktime),
                         *confirmations,
                     ) {

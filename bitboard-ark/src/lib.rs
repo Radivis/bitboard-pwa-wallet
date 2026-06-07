@@ -183,6 +183,11 @@ pub fn ark_get_boarding_address() -> Result<String, JsValue> {
 }
 
 #[wasm_bindgen]
+pub async fn ark_get_boarding_status() -> Result<JsValue, JsValue> {
+    map_js_async(async { to_js_value(active_session_rc()?.boarding_status().await?) }).await
+}
+
+#[wasm_bindgen]
 pub async fn ark_send_payment(params: JsValue) -> Result<String, JsValue> {
     map_js_async(async {
         let params: SendPaymentParams = serde_wasm_bindgen::from_value(params)?;

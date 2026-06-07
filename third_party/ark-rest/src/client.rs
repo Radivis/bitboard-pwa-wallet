@@ -49,7 +49,11 @@ use crate::sse::{poll_next_sse_event, SseDataLineBuffer};
 fn parse_batch_event_line(line: &str) -> Result<StreamEvent, Error> {
     let response: models::GetEventStreamResponse = serde_json::from_str(line)
         .map_err(|e| Error::conversion(format!("Failed to parse JSON: {e}")))?;
-    StreamEvent::try_from(response).map_err(Error::conversion)
+    match StreamEvent::try_from(response) {
+        Ok(event) => Ok(event),
+        Err(error) if error.0 == "No event found in response" => Ok(StreamEvent::Heartbeat),
+        Err(error) => Err(Error::conversion(error)),
+    }
 }
 
 fn parse_subscription_event_line(line: &str) -> Result<SubscriptionResponse, Error> {

@@ -113,8 +113,17 @@ impl JsonPersistenceDb {
             .parse()
             .map_err(|error| Error::wallet(format!("invalid owner pk: {error}")))?;
         let exit_delay = bitcoin::Sequence::from_consensus(snapshot.exit_delay_consensus);
-        BoardingOutput::new(&secp, server, owner, exit_delay, network)
-            .map_err(|error| Error::wallet(error.to_string()))
+        let boarding_output = BoardingOutput::new(&secp, server, owner, exit_delay, network)
+            .map_err(|error| Error::wallet(error.to_string()))?;
+        if boarding_output.address().to_string() != snapshot.address {
+            return Err(Error::wallet(format!(
+                "boarding output address mismatch for {}: persisted {} but reconstructed {}",
+                snapshot.owner_pk_hex,
+                snapshot.address,
+                boarding_output.address(),
+            )));
+        }
+        Ok(boarding_output)
     }
 }
 
@@ -169,11 +178,13 @@ impl Persistence for JsonPersistenceDb {
             .lock()
             .expect("persistence lock")
             .ok_or_else(|| Error::wallet("boarding load context not configured"))?;
-        state
+        Ok(state
             .boarding_outputs
             .iter()
-            .map(|snapshot| Self::boarding_output_from_snapshot(snapshot, server, network))
-            .collect()
+            .filter_map(|snapshot| {
+                Self::boarding_output_from_snapshot(snapshot, server, network).ok()
+            })
+            .collect())
     }
 
     fn sk_for_pk(&self, pk: &XOnlyPublicKey) -> Result<SecretKey, Error> {

@@ -37,8 +37,12 @@ export interface ArkadeSendParams {
   amountSats: number
 }
 
-export interface ArkadeBoardingInfo {
+export interface ArkadeBoardingStatus {
   boardingAddress: string
+  trackedAddresses: string[]
+  spendableSats: number
+  pendingSats: number
+  expiredSats: number
 }
 
 export interface ArkadeExitCandidateRow {
@@ -118,6 +122,7 @@ export interface ArkadeService {
   getBalance(): Promise<ArkadeBalanceInfo>
   getAddress(): Promise<string>
   getBoardingAddress(): Promise<string>
+  getBoardingStatus(): Promise<ArkadeBoardingStatus>
   sendPayment(params: ArkadeSendParams): Promise<string>
   getTransactionHistory(): Promise<ArkadePaymentRow[]>
   getDelegateInfo(): Promise<ArkadeDelegateInfo>

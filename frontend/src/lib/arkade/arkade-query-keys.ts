@@ -23,6 +23,12 @@ export const arkadeBoardingAddressQueryKey = (
 ) =>
   [...WALLET_DB_QUERY_KEY_ROOT, 'arkade', walletId, networkMode, 'boarding-address'] as const
 
+export const arkadeBoardingStatusQueryKey = (
+  walletId: number,
+  networkMode: ArkadeSupportedNetworkMode,
+) =>
+  [...WALLET_DB_QUERY_KEY_ROOT, 'arkade', walletId, networkMode, 'boarding-status'] as const
+
 export const arkadeDelegateInfoQueryKey = (
   networkMode: ArkadeSupportedNetworkMode,
 ) => [...WALLET_DB_QUERY_KEY_ROOT, 'arkade', 'delegator', networkMode, 'info'] as const

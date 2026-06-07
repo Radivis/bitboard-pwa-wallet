@@ -5,6 +5,7 @@ import { getArkadeWorker } from '@/workers/arkade-factory'
 import {
   arkadeBalanceQueryKey,
   arkadeBoardingAddressQueryKey,
+  arkadeBoardingStatusQueryKey,
   arkadeBumperInfoQueryKey,
   arkadeCollaborativeExitFeeQueryKey,
   arkadeAddressQueryKey,
@@ -186,6 +187,23 @@ export function useArkadeBoardingAddressQuery() {
   })
 }
 
+export function useArkadeBoardingStatusQuery() {
+  const { networkMode, activeWalletId, sessionReady } = useArkadeQueryBase()
+
+  return useQuery({
+    queryKey: walletScopedQueryKey(
+      activeWalletId,
+      networkMode,
+      arkadeBoardingStatusQueryKey,
+      'boarding-status',
+    ),
+    enabled: sessionReady,
+    queryFn: () => withReadyArkadeWorker(() => getArkadeWorker().getBoardingStatus()),
+    refetchInterval: 30_000,
+    staleTime: 15_000,
+  })
+}
+
 export function useArkadeDelegateInfoQuery() {
   const { networkMode, sessionReady } = useArkadeDelegateQueryBase()
 
@@ -268,12 +286,13 @@ export function useArkadeOnboardMutation() {
     onSuccess: (txid) => {
       if (txid) {
         toast.success('Boarding completed')
-      } else {
-        toast.message('No pending boarding UTXOs to settle')
       }
       if (activeWalletId != null && isArkadeSupportedNetworkMode(networkMode)) {
         void queryClient.invalidateQueries({
           queryKey: arkadeBalanceQueryKey(activeWalletId, networkMode),
+        })
+        void queryClient.invalidateQueries({
+          queryKey: arkadeBoardingStatusQueryKey(activeWalletId, networkMode),
         })
       }
     },

@@ -24,4 +24,12 @@ impl NetworkMode {
             Self::Signet => Network::Signet,
         }
     }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Mainnet => "mainnet",
+            Self::Testnet => "testnet",
+            Self::Signet => "signet (Mutinynet)",
+        }
+    }
 }

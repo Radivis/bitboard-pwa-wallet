@@ -201,6 +201,18 @@ impl_esplora_blockchain!(+ Send);
 #[cfg(target_arch = "wasm32")]
 impl_esplora_blockchain!();
 
+fn utxo_confirmations(status: &esplora_client::UtxoStatus, chain_tip_height: Option<u32>) -> u64 {
+    if !status.confirmed {
+        return 0;
+    }
+    match (status.block_height, chain_tip_height) {
+        (Some(block_height), Some(tip_height)) => {
+            u64::from(tip_height.saturating_sub(block_height) + 1)
+        }
+        _ => 1,
+    }
+}
+
 async fn collect_address_utxos(
     client: &EsploraAsyncClient,
     address: &Address,
@@ -210,21 +222,27 @@ async fn collect_address_utxos(
         .await
         .map_err(EsploraBlockchain::map_esplora_error)?;
 
+    let chain_tip_height = client
+        .get_height()
+        .await
+        .map_err(EsploraBlockchain::map_esplora_error)
+        .ok();
+
     let mut explorer_utxos = Vec::with_capacity(utxos.len());
     for utxo in utxos {
         let outpoint = OutPoint {
             txid: utxo.txid,
             vout: utxo.vout,
         };
-        let confirmation_blocktime = utxo.status.block_time;
-        let confirmations = if utxo.status.confirmed {
-            utxo.status
-                .block_height
-                .map(|height| height as u64 + 1)
-                .unwrap_or(1)
-        } else {
-            0
-        };
+        let mut confirmation_blocktime = utxo.status.block_time;
+        if utxo.status.confirmed && confirmation_blocktime.is_none() {
+            let tx_status = client
+                .get_tx_status(&utxo.txid)
+                .await
+                .map_err(EsploraBlockchain::map_esplora_error)?;
+            confirmation_blocktime = tx_status.block_time;
+        }
+        let confirmations = utxo_confirmations(&utxo.status, chain_tip_height);
         explorer_utxos.push(ExplorerUtxo {
             outpoint,
             amount: utxo.value,
@@ -234,6 +252,36 @@ async fn collect_address_utxos(
         });
     }
     Ok(explorer_utxos)
+}
+
+#[cfg(test)]
+mod tests {
+    use esplora_client::UtxoStatus;
+
+    use super::utxo_confirmations;
+
+    #[test]
+    fn confirmations_use_chain_tip_not_block_height() {
+        let status = UtxoStatus {
+            confirmed: true,
+            block_height: Some(100),
+            block_hash: None,
+            block_time: Some(1_700_000_000),
+        };
+        assert_eq!(utxo_confirmations(&status, Some(109)), 10);
+        assert_ne!(utxo_confirmations(&status, Some(109)), 101);
+    }
+
+    #[test]
+    fn unconfirmed_utxo_has_zero_confirmations() {
+        let status = UtxoStatus {
+            confirmed: false,
+            block_height: None,
+            block_hash: None,
+            block_time: None,
+        };
+        assert_eq!(utxo_confirmations(&status, Some(500)), 0);
+    }
 }
 
 async fn map_tx_status(

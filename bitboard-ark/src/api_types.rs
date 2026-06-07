@@ -69,6 +69,16 @@ pub struct OnchainBumperInfoDto {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct BoardingStatusDto {
+    pub boarding_address: String,
+    pub tracked_addresses: Vec<String>,
+    pub spendable_sats: u64,
+    pub pending_sats: u64,
+    pub expired_sats: u64,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct IntentFeeConfiguredDto {
     pub offchain_input: bool,
     pub onchain_input: bool,

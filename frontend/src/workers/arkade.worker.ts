@@ -239,7 +239,13 @@ const arkadeService: ArkadeService = {
   },
 
   async getBoardingAddress(): Promise<string> {
-    return invokeWasmArk((wasmModule) => wasmModule.ark_get_boarding_address())
+    const address = await invokeWasmArk((wasmModule) => wasmModule.ark_get_boarding_address())
+    await persistAfterCriticalOperation()
+    return address
+  },
+
+  async getBoardingStatus() {
+    return invokeWasmArk((wasmModule) => wasmModule.ark_get_boarding_status())
   },
 
   async sendPayment(params: ArkadeSendParams): Promise<string> {
@@ -291,20 +297,13 @@ const arkadeService: ArkadeService = {
   },
 
   async onboardBoardedUtxos(): Promise<string | null> {
-    try {
-      const txid =
-        (await invokeWasmArk((wasmModule) => wasmModule.ark_onboard_boarded_utxos())) ?? null
-      if (txid != null) {
-        await persistAfterCriticalOperation()
-      }
-      return txid
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      if (message.toLowerCase().includes('nothing') || message.toLowerCase().includes('no ')) {
-        return null
-      }
-      throw error
+    await this.getBoardingAddress()
+    const txid =
+      (await invokeWasmArk((wasmModule) => wasmModule.ark_onboard_boarded_utxos())) ?? null
+    if (txid != null) {
+      await persistAfterCriticalOperation()
     }
+    return txid
   },
 
   async listExitCandidates(): Promise<ArkadeExitCandidateRow[]> {

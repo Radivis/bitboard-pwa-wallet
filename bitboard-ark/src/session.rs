@@ -3,8 +3,11 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use ark_bdk_wallet::Wallet as ArkBdkWallet;
+use ark_client::wallet::Persistence;
 use ark_client::{Bip32KeyProvider, Blockchain, Client, InMemorySwapStorage, OfflineClient};
 use ark_core::ArkAddress;
+use ark_core::BoardingOutput;
+use ark_core::ExplorerUtxo;
 use ark_core::history::Transaction;
 use ark_core::send::SendReceiver;
 use ark_core::server::VirtualTxOutPoint;
@@ -16,7 +19,7 @@ use bitcoin::secp256k1::rand::rngs::OsRng;
 use bitcoin::{Address, Amount, Network, OutPoint, PublicKey, XOnlyPublicKey};
 
 use crate::api_types::{
-    BalanceDto, CollaborativeExitFeeEstimateDto, CollaborativeExitParams,
+    BalanceDto, BoardingStatusDto, CollaborativeExitFeeEstimateDto, CollaborativeExitParams,
     CompleteUnilateralExitParams, DelegateInfoDto, DelegateSpendableResult, ExitCandidateRow,
     FinalizePendingResult, IntentFeeConfiguredDto, OnchainBumperInfoDto, PaymentRowDto,
     SendPaymentParams, UnilateralExitFeeEstimateDto, UnilateralExitFeeParams, UnrollProgressEvent,
@@ -153,6 +156,52 @@ impl ArkSession {
         Ok(self.client.get_boarding_address()?.to_string())
     }
 
+    pub async fn boarding_status(&self) -> ArkResult<BoardingStatusDto> {
+        let boarding_address = self.client.get_boarding_address()?.to_string();
+        let persistence = SharedPersistenceDb(Arc::clone(&self.wallet_db));
+        let boarding_outputs = persistence.load_boarding_outputs()?;
+        let tracked_addresses = self
+            .wallet_db
+            .snapshot()
+            .boarding_outputs
+            .iter()
+            .map(|row| row.address.clone())
+            .collect::<Vec<_>>();
+
+        let now = wasm_safe_now();
+        let mut spendable_sats = 0u64;
+        let mut pending_sats = 0u64;
+        let mut expired_sats = 0u64;
+
+        for boarding_output in &boarding_outputs {
+            let outpoints = self
+                .client
+                .blockchain()
+                .find_outpoints(boarding_output.address())
+                .await
+                .map_err(|error| ArkWasmError::Message(error.to_string()))?;
+
+            for utxo in outpoints {
+                accumulate_boarding_utxo_balance(
+                    &utxo,
+                    boarding_output,
+                    now,
+                    &mut spendable_sats,
+                    &mut pending_sats,
+                    &mut expired_sats,
+                );
+            }
+        }
+
+        Ok(BoardingStatusDto {
+            boarding_address,
+            tracked_addresses,
+            spendable_sats,
+            pending_sats,
+            expired_sats,
+        })
+    }
+
     pub async fn send_payment(&self, params: SendPaymentParams) -> ArkResult<String> {
         let address = ArkAddress::decode(&params.address)
             .map_err(|error| ArkWasmError::Message(error.to_string()))?;
@@ -254,18 +303,37 @@ impl ArkSession {
     }
 
     pub async fn onboard_boarded_utxos(&self) -> ArkResult<Option<String>> {
+        let status = self.boarding_status().await?;
+        if status.spendable_sats == 0 {
+            if status.pending_sats > 0 {
+                return Err(ArkWasmError::Message(
+                    "Boarding payment is unconfirmed. Wait for at least one block confirmation, then try again.".to_string(),
+                ));
+            }
+            if status.expired_sats > 0 {
+                return Err(ArkWasmError::Message(
+                    "Boarding UTXO can only be spent unilaterally now. Use the unilateral exit flow instead of settle.".to_string(),
+                ));
+            }
+            if status.tracked_addresses.is_empty() {
+                return Err(ArkWasmError::Message(
+                    "No boarding address is registered for this wallet session.".to_string(),
+                ));
+            }
+            return Err(ArkWasmError::Message(format!(
+                "No spendable boarding UTXO found at {}. Confirm the payment was sent to that exact address on {}.",
+                status.boarding_address,
+                self.network_mode.label(),
+            )));
+        }
+
         let mut rng = OsRng;
         match self.client.settle(&mut rng).await {
             Ok(Some(txid)) => Ok(Some(txid.to_string())),
-            Ok(None) => Ok(None),
-            Err(error) => {
-                let message = error.to_string().to_lowercase();
-                if message.contains("nothing") || message.contains("no ") {
-                    Ok(None)
-                } else {
-                    Err(ArkWasmError::Message(error.to_string()))
-                }
-            }
+            Ok(None) => Err(ArkWasmError::Message(
+                "Settle returned no inputs even though boarding UTXOs looked spendable. Try again in a moment.".to_string(),
+            )),
+            Err(error) => Err(ArkWasmError::Message(error.to_string())),
         }
     }
 
@@ -695,6 +763,47 @@ fn empty_fee_info() -> ark_core::server::FeeInfo {
     ark_core::server::FeeInfo {
         intent_fee: ark_core::server::IntentFeeInfo::default(),
         tx_fee_rate: "1".to_string(),
+    }
+}
+
+fn wasm_safe_now() -> Duration {
+    Duration::from_secs(current_unix_timestamp().max(0) as u64)
+}
+
+fn accumulate_boarding_utxo_balance(
+    utxo: &ExplorerUtxo,
+    boarding_output: &BoardingOutput,
+    now: Duration,
+    spendable_sats: &mut u64,
+    pending_sats: &mut u64,
+    expired_sats: &mut u64,
+) {
+    let amount_sats = utxo.amount.to_sat();
+    match *utxo {
+        ExplorerUtxo {
+            confirmation_blocktime: Some(confirmation_blocktime),
+            confirmations,
+            is_spent: false,
+            ..
+        } => {
+            if boarding_output.can_be_claimed_unilaterally_by_owner(
+                now,
+                Duration::from_secs(confirmation_blocktime),
+                confirmations,
+            ) {
+                *expired_sats += amount_sats;
+            } else {
+                *spendable_sats += amount_sats;
+            }
+        }
+        ExplorerUtxo {
+            confirmation_blocktime: None,
+            is_spent: false,
+            ..
+        } => {
+            *pending_sats += amount_sats;
+        }
+        _ => {}
     }
 }
 

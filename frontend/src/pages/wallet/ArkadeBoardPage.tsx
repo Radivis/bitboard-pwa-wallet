@@ -1,21 +1,34 @@
 import { useState } from 'react'
 import { Link } from '@tanstack/react-router'
-import { Copy, Layers } from 'lucide-react'
+import { Copy, ExternalLink, Layers } from 'lucide-react'
 import { PageHeader } from '@/components/PageHeader'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   useArkadeBoardingAddressQuery,
+  useArkadeBoardingStatusQuery,
   useArkadeOnboardMutation,
 } from '@/hooks/useArkadeQueries'
 import { isArkadeActiveForNetworkMode } from '@/lib/arkade/arkade-utils'
+import { formatSats } from '@/lib/wallet/bitcoin-utils'
 import { useWalletStore } from '@/stores/walletStore'
 import { toast } from 'sonner'
+
+function boardingExplorerUrl(networkMode: string, address: string): string {
+  if (networkMode === 'signet') {
+    return `https://mutinynet.com/address/${address}`
+  }
+  if (networkMode === 'mainnet') {
+    return `https://mempool.space/address/${address}`
+  }
+  return `https://mempool.space/testnet4/address/${address}`
+}
 
 export function ArkadeBoardPage() {
   const networkMode = useWalletStore((s) => s.networkMode)
   const onboardMutation = useArkadeOnboardMutation()
   const boardingQuery = useArkadeBoardingAddressQuery()
+  const boardingStatusQuery = useArkadeBoardingStatusQuery()
   const [copied, setCopied] = useState(false)
 
   if (!isArkadeActiveForNetworkMode(networkMode)) {
@@ -31,6 +44,7 @@ export function ArkadeBoardPage() {
   }
 
   const boardingAddress = boardingQuery.data ?? ''
+  const boardingStatus = boardingStatusQuery.data
 
   const handleCopy = async () => {
     if (!boardingAddress) return
@@ -67,12 +81,47 @@ export function ArkadeBoardPage() {
               <p className="break-all rounded-md border bg-muted/40 p-2 font-mono text-xs">
                 {boardingAddress}
               </p>
-              <Button type="button" variant="outline" onClick={handleCopy} disabled={!boardingAddress}>
-                <Copy className="h-4 w-4" aria-hidden />
-                {copied ? 'Copied' : 'Copy boarding address'}
-              </Button>
+              <div className="flex flex-wrap gap-2">
+                <Button type="button" variant="outline" onClick={handleCopy} disabled={!boardingAddress}>
+                  <Copy className="h-4 w-4" aria-hidden />
+                  {copied ? 'Copied' : 'Copy boarding address'}
+                </Button>
+                {boardingAddress ? (
+                  <Button type="button" variant="outline" asChild>
+                    <a
+                      href={boardingExplorerUrl(networkMode, boardingAddress)}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      <ExternalLink className="h-4 w-4" aria-hidden />
+                      View on explorer
+                    </a>
+                  </Button>
+                ) : null}
+              </div>
             </>
           )}
+
+          {boardingStatusQuery.isLoading ? (
+            <p className="text-muted-foreground">Checking boarding UTXOs…</p>
+          ) : boardingStatus ? (
+            <div className="rounded-md border bg-muted/20 p-3 text-sm">
+              <p className="font-medium">On-chain boarding status</p>
+              <ul className="mt-2 space-y-1 text-muted-foreground">
+                <li>Ready to settle: {formatSats(boardingStatus.spendableSats)}</li>
+                <li>Pending confirmation: {formatSats(boardingStatus.pendingSats)}</li>
+                <li>Unilateral exit only: {formatSats(boardingStatus.expiredSats)}</li>
+              </ul>
+              {boardingStatus.spendableSats === 0 &&
+              boardingStatus.pendingSats === 0 &&
+              boardingStatus.expiredSats === 0 ? (
+                <p className="mt-2 text-muted-foreground">
+                  No UTXOs detected at this boarding address yet. Confirm the send used the address
+                  above, not your regular on-chain receive address.
+                </p>
+              ) : null}
+            </div>
+          ) : null}
 
           <Button
             type="button"
