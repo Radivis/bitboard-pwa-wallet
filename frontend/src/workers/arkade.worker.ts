@@ -26,9 +26,9 @@ import type {
   OpenArkadeSessionParams,
 } from '@/workers/arkade-api'
 
-type BitboardArkWasm = typeof import('@/wasm-pkg/bitboard_ark/bitboard_ark')
+import { loadBitboardArkWasm } from '@/lib/arkade/load-bitboard-ark-wasm'
 
-let arkWasmModule: BitboardArkWasm | null = null
+let arkWasmModule: Awaited<ReturnType<typeof loadBitboardArkWasm>> | null = null
 let encryptionWasmModule: typeof import('@/wasm-pkg/bitboard_encryption/bitboard_encryption') | null =
   null
 
@@ -40,9 +40,9 @@ let activeSessionParams: {
 } | null = null
 let unrollInFlight = false
 
-async function getArkWasm(): Promise<BitboardArkWasm> {
+async function getArkWasm() {
   if (!arkWasmModule) {
-    arkWasmModule = await import('@/wasm-pkg/bitboard_ark/bitboard_ark')
+    arkWasmModule = await loadBitboardArkWasm()
   }
   return arkWasmModule
 }

@@ -1,4 +1,5 @@
 import type { ArkadeSupportedNetworkMode } from '@/lib/arkade/arkade-endpoints'
+import { loadBitboardArkWasm } from '@/lib/arkade/load-bitboard-ark-wasm'
 
 export interface ArkadeSdkPersistenceBridge {
   persistSdkPersistence(params: {
@@ -52,7 +53,7 @@ export function scheduleSdkPersistenceFlush(): void {
 }
 
 async function exportSdkPersistenceJsonFromWasm(): Promise<string> {
-  const wasm = await import('@/wasm-pkg/bitboard_ark/bitboard_ark')
+  const wasm = await loadBitboardArkWasm()
   return wasm.ark_export_persistence_json()
 }
 
