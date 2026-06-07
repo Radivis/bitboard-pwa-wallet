@@ -113,6 +113,7 @@ Vite exposes `import.meta.env.*`. Commonly useful **optional** vars (see [`src/v
 | Variable | Purpose |
 | --- | --- |
 | `VITE_E2E_NWC_MOCK` | When `true`, dev server + NWC-focused E2E use the in-memory Lightning mock (`npm run test:e2e:nwc`). |
+| `VITE_E2E_ARKADE_MOCK` | When `true`, dev server serves mocked Ark operator responses for dashboard Arkade E2E (`npm run test:e2e:arkade`). |
 | `VITE_HIDE_ROUTER_DEVTOOLS` | `1` or `true` hides TanStack Router devtools in development. |
 | `VITE_ARGON2_CI` | `1` uses faster Argon2 parameters in **non-production** builds only; forbidden in production bundles (enforced in `vite.config.ts`). |
 

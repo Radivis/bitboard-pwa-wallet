@@ -4,6 +4,9 @@ import { RouterProvider, createRouter } from '@tanstack/react-router'
 import { registerAppRouter } from '@/lib/shared/app-router'
 import { routeTree } from './routeTree.gen'
 import './index.css'
+import { ensureE2eArkadeMockControl } from '@/lib/arkade/e2e/e2e-arkade-mock-control'
+
+ensureE2eArkadeMockControl()
 
 const router = createRouter({
   routeTree,

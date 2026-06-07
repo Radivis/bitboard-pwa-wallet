@@ -1,0 +1,77 @@
+feature:
+  name: Dashboard Arkade contracts
+  description: >-
+    Observable dashboard and unlock-session behavior for Arkade on the wallet
+    dashboard. Tests reference contract IDs defined here. Full Arkade feature
+    scope remains in arkade.yaml.
+  spec_file: doc/features/arkade.yaml
+  user_stories:
+    - As a user with Arkade enabled, I want the dashboard to show my Arkade balance without false empty-session messages after unlock
+    - As a user, I want Arkade payments to appear in the dashboard activity feed when the operator reports them
+    - As a user, I want navigating to Receive and back not to break the Arkade balance on the dashboard
+  requirements:
+    - Contracts are enforced by Vitest component/integration tests in CI
+    - E2E contracts use VITE_E2E_ARKADE_MOCK with a mocked Ark operator (ASP), not live Mutinynet
+    - Management link on the Arkade balance card is not part of this contract (may be removed)
+  contracts:
+    visibility:
+      - id: DASH-ARK-01
+        description: When isArkadeEnabled and network is mainnet, testnet, or signet, dashboard shows the Arkade balance card
+      - id: DASH-ARK-02
+        description: When Arkade is disabled or network is lab/regtest, the Arkade balance card is not rendered
+    balance_card:
+      - id: DASH-ARK-10
+        description: While balance query is loading, show spinner text "Loading…"
+      - id: DASH-ARK-11
+        description: When balance query returns data, show confirmedSats; show pending total only when totalSats differs
+      - id: DASH-ARK-12
+        description: When query is not loading and has no data, show "No Arkade session yet"
+      - id: DASH-ARK-13
+        description: When cached balance data exists, background refetch must not flash empty-session copy
+    activity_feed:
+      - id: DASH-ARK-20
+        description: When Arkade history returns rows, merged dashboard activity includes ArkadePaymentItem rows
+      - id: DASH-ARK-21
+        description: While Arkade history is loading, show "Loading Arkade activity…" banner
+    navigation:
+      - id: DASH-ARK-30
+        description: Dashboard → Receive (Arkade) → Dashboard preserves balance display without false empty-session state
+    unlock_session:
+      - id: UNLOCK-ARK-01
+        description: loadDescriptorWalletAndSync calls openArkadeSessionForWallet when Arkade is active
+      - id: UNLOCK-ARK-02
+        description: setWalletStatus unlocked occurs before openArkadeSessionForWallet (documents query/session race)
+      - id: UNLOCK-ARK-03
+        description: awaitArkadeSessionReady waits for in-flight session open before worker calls
+      - id: UNLOCK-ARK-04
+        description: >-
+          Desired follow-up — Arkade session open failure must not reject unlock or show
+          generic password toast on WalletUnlock
+        status: todo
+    e2e_mocked_asp:
+      - id: E2E-ARK-MOCK-01
+        description: With VITE_E2E_ARKADE_MOCK, Signet + Arkade enabled, dashboard shows balance card with fixture balance
+      - id: E2E-ARK-MOCK-02
+        description: Mock operator returns fixture incoming payment; activity feed includes Arkade row
+      - id: E2E-ARK-MOCK-03
+        description: Receive → Dashboard round-trip preserves Arkade balance display
+  pages:
+    - DashboardArkadeBlock:
+      path: /wallet
+      file: frontend/src/components/wallet/ArkadeDashboardBalance.tsx
+      visible_elements:
+        - Arkade balance card title
+        - Loading spinner while balance query loads
+        - BitcoinAmountDisplay for confirmed balance
+        - Optional pending total line
+        - Empty-session copy when no balance data
+      test_ids:
+        - dashboard-arkade-balance-card
+        - dashboard-arkade-balance-amount
+        - dashboard-arkade-session-empty
+    - DashboardActivity:
+      path: /wallet
+      file: frontend/src/pages/wallet/DashboardPage.tsx
+      visible_elements:
+        - Loading Arkade activity banner
+        - ArkadePaymentItem rows in merged activity

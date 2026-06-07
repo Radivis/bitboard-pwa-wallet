@@ -30,7 +30,7 @@
     "test:regtest:stop": "docker rm -f bitboard-regtest",
     "test:e2e:regtest": "npm run test:regtest:start && playwright test --grep @regtest",
     "test:e2e:lab": "playwright test --grep @lab",
-    "test:e2e:arkade": "playwright test --grep @arkade",
+    "test:e2e:arkade": "VITE_E2E_ARKADE_MOCK=true playwright test --grep @arkade",
     "sync-version": "node ../scripts/sync-version.mjs",
     "verify-version": "node ../scripts/verify-version.mjs"
   },

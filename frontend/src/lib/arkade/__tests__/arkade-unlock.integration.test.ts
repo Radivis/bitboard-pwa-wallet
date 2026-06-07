@@ -10,6 +10,14 @@ const openArkadeSessionForWalletMock = vi.hoisted(() =>
   vi.fn().mockResolvedValue(undefined),
 )
 
+const unlockCallOrder = vi.hoisted(() => [] as string[])
+
+const setWalletStatusMock = vi.hoisted(() =>
+  vi.fn((status: string) => {
+    unlockCallOrder.push(`setWalletStatus:${status}`)
+  }),
+)
+
 vi.mock('@/stores/featureStore', () => ({
   useFeatureStore: {
     getState: () => featureState,
@@ -17,8 +25,10 @@ vi.mock('@/stores/featureStore', () => ({
 }))
 
 vi.mock('@/lib/arkade/arkade-session-service', () => ({
-  openArkadeSessionForWallet: (...args: unknown[]) =>
-    openArkadeSessionForWalletMock(...args),
+  openArkadeSessionForWallet: (...args: unknown[]) => {
+    unlockCallOrder.push('openArkadeSessionForWallet')
+    return openArkadeSessionForWalletMock(...args)
+  },
   closeArkadeSession: vi.fn(),
   refreshArkadeSessionAfterNetworkSwitch: vi.fn(),
 }))
@@ -33,6 +43,16 @@ vi.mock('@/stores/cryptoStore', () => ({
     getState: () => ({
       loadWallet: unlockHoisted.loadWalletMock,
       getCurrentAddress: unlockHoisted.getCurrentAddressMock,
+      syncWallet: vi.fn().mockResolvedValue(undefined),
+      getBalance: vi.fn().mockResolvedValue({
+        confirmedSats: 0,
+        trustedPendingSats: 0,
+        untrustedPendingSats: 0,
+        immatureSats: 0,
+        totalSats: 0,
+      }),
+      getTransactionList: vi.fn().mockResolvedValue([]),
+      exportChangeset: vi.fn().mockResolvedValue('{}'),
     }),
   },
 }))
@@ -40,11 +60,17 @@ vi.mock('@/stores/cryptoStore', () => ({
 vi.mock('@/stores/walletStore', () => ({
   useWalletStore: {
     getState: () => ({
-      setWalletStatus: vi.fn(),
+      setWalletStatus: setWalletStatusMock,
       setBalance: vi.fn(),
       setTransactions: vi.fn(),
       setCurrentAddress: vi.fn(),
+      setLastSyncTime: vi.fn(),
       commitLoadedDescriptorWallet: vi.fn(),
+      networkMode: 'signet',
+      addressType: AddressType.Taproot,
+      accountId: 0,
+      activeWalletId: 3,
+      loadedDescriptorWallet: null,
     }),
   },
 }))
@@ -63,17 +89,34 @@ vi.mock('@/lib/wallet/descriptor-wallet-manager', () => ({
     changeSet: '{}',
     fullScanDone: false,
   }),
+  updateDescriptorWalletChangeset: vi.fn(),
 }))
 
-import { loadDescriptorWalletWithoutSync } from '@/lib/wallet/wallet-utils'
+vi.mock('@/lib/wallet/onchain-bdk-store-sync', () => ({
+  refreshWalletStoreFromLoadedBdk: vi.fn().mockResolvedValue(undefined),
+}))
+
+vi.mock('@/lib/wallet/onchain-dashboard-sync', () => ({
+  invalidateOnchainDashboardQueries: vi.fn(),
+}))
+
+vi.mock('@/lib/wallet/persisted-chain-mismatch', () => ({
+  withPersistedChainMismatchRetry: vi.fn((loadWallet, params) => loadWallet(params)),
+}))
+
+import {
+  loadDescriptorWalletAndSync,
+  loadDescriptorWalletWithoutSync,
+} from '@/lib/wallet/wallet-utils'
 
 describe('openArkadeSession after unlock (integration)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    unlockCallOrder.length = 0
     openArkadeSessionForWalletMock.mockResolvedValue(undefined)
   })
 
-  it('loadDescriptorWalletWithoutSync awaits openArkadeSessionForWallet when Arkade is active', async () => {
+  it('UNLOCK-ARK-01 loadDescriptorWalletWithoutSync awaits openArkadeSessionForWallet when Arkade is active', async () => {
     await loadDescriptorWalletWithoutSync({
       password: 'unlock-password',
       walletId: 3,
@@ -88,4 +131,39 @@ describe('openArkadeSession after unlock (integration)', () => {
       networkMode: 'signet',
     })
   })
+
+  it('UNLOCK-ARK-01 loadDescriptorWalletAndSync calls openArkadeSessionForWallet when Arkade is active', async () => {
+    await loadDescriptorWalletAndSync({
+      password: 'unlock-password',
+      walletId: 3,
+      networkMode: 'signet',
+      addressType: AddressType.Taproot,
+      accountId: 0,
+      awaitSync: true,
+    })
+
+    expect(openArkadeSessionForWalletMock).toHaveBeenCalledWith({
+      password: 'unlock-password',
+      walletId: 3,
+      networkMode: 'signet',
+    })
+  })
+
+  it('UNLOCK-ARK-02 sets wallet unlocked before opening Arkade session', async () => {
+    await loadDescriptorWalletAndSync({
+      password: 'unlock-password',
+      walletId: 3,
+      networkMode: 'signet',
+      addressType: AddressType.Taproot,
+      accountId: 0,
+      awaitSync: true,
+    })
+
+    const unlockedIndex = unlockCallOrder.indexOf('setWalletStatus:unlocked')
+    const sessionOpenIndex = unlockCallOrder.indexOf('openArkadeSessionForWallet')
+    expect(unlockedIndex).toBeGreaterThanOrEqual(0)
+    expect(sessionOpenIndex).toBeGreaterThan(unlockedIndex)
+  })
+
+  it.todo('UNLOCK-ARK-04 Arkade session open failure must not reject unlock')
 })

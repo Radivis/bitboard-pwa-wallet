@@ -14,7 +14,7 @@ export function ArkadeDashboardBalance() {
   if (!show) return null
 
   return (
-    <Card>
+    <Card data-testid="dashboard-arkade-balance-card">
       <CardHeader className="pb-2">
         <CardTitle className="flex items-center gap-2 text-base">
           <Layers className="h-4 w-4" aria-hidden />
@@ -29,7 +29,10 @@ export function ArkadeDashboardBalance() {
           </div>
         ) : balanceQuery.data ? (
           <div>
-            <BitcoinAmountDisplay amountSats={balanceQuery.data.confirmedSats} />
+            <BitcoinAmountDisplay
+              amountSats={balanceQuery.data.confirmedSats}
+              data-testid="dashboard-arkade-balance-amount"
+            />
             {balanceQuery.data.totalSats !== balanceQuery.data.confirmedSats && (
               <p className="text-xs text-muted-foreground">
                 Total (incl. pending):{' '}
@@ -38,7 +41,12 @@ export function ArkadeDashboardBalance() {
             )}
           </div>
         ) : (
-          <p className="text-sm text-muted-foreground">No Arkade session yet</p>
+          <p
+            className="text-sm text-muted-foreground"
+            data-testid="dashboard-arkade-session-empty"
+          >
+            No Arkade session yet
+          </p>
         )}
         <Link
           to="/wallet/management"

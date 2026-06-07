@@ -13,10 +13,23 @@ for (const envPath of [
   dotenv.config({ path: envPath })
 }
 
-const devServerCommand =
-  process.env.VITE_E2E_NWC_MOCK === 'true'
-    ? 'VITE_E2E_NWC_MOCK=true npm run dev'
-    : 'npm run dev'
+function buildE2eDevServerCommand(): string {
+  const envFlags: string[] = []
+  if (process.env.VITE_E2E_NWC_MOCK === 'true') {
+    envFlags.push('VITE_E2E_NWC_MOCK=true')
+  }
+  if (process.env.VITE_E2E_ARKADE_MOCK === 'true') {
+    envFlags.push('VITE_E2E_ARKADE_MOCK=true')
+  }
+  if (envFlags.length === 0) {
+    return 'npm run dev'
+  }
+  return `${envFlags.join(' ')} npm run dev`
+}
+
+const devServerCommand = buildE2eDevServerCommand()
+const usesE2eMockDevServer =
+  process.env.VITE_E2E_NWC_MOCK === 'true' || process.env.VITE_E2E_ARKADE_MOCK === 'true'
 
 const isCi = !!process.env.CI
 
@@ -50,8 +63,7 @@ export default defineConfig({
   webServer: {
     command: devServerCommand,
     url: 'http://localhost:3000',
-    reuseExistingServer:
-      !isCi && process.env.VITE_E2E_NWC_MOCK !== 'true',
+    reuseExistingServer: !isCi && !usesE2eMockDevServer,
     /** Cold Vite + first WASM init on CI can exceed the default 60s. */
     timeout: isCi ? 180_000 : 60_000,
   },
