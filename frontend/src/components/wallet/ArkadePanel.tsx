@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
 import {
+  useArkadeAddressQuery,
   useArkadeBalanceQuery,
   useArkadeDelegateInfoQuery,
   useArkadeRenewMutation,
@@ -11,16 +12,10 @@ import {
 import { isArkadeDelegatorConfigured } from '@/lib/arkade/arkade-endpoints'
 import { isArkadeActiveForNetworkMode } from '@/lib/arkade/arkade-utils'
 import { useWalletStore } from '@/stores/walletStore'
-import { openArkadeSessionForWallet } from '@/lib/arkade/arkade-session-service'
-import { useSessionStore } from '@/stores/sessionStore'
-import { useQuery } from '@tanstack/react-query'
-import { getArkadeWorker } from '@/workers/arkade-factory'
 import { ArkadeExitSection } from '@/components/wallet/ArkadeExitSection'
 
 export function ArkadePanel() {
   const networkMode = useWalletStore((s) => s.networkMode)
-  const activeWalletId = useWalletStore((s) => s.activeWalletId)
-  const password = useSessionStore((s) => s.password)
   const show = isArkadeActiveForNetworkMode(networkMode)
   const delegatorConfigured =
     show && isArkadeDelegatorConfigured(networkMode)
@@ -28,18 +23,7 @@ export function ArkadePanel() {
   const balanceQuery = useArkadeBalanceQuery()
   const delegateQuery = useArkadeDelegateInfoQuery()
   const renewMutation = useArkadeRenewMutation()
-
-  const addressQuery = useQuery({
-    queryKey: ['arkade', 'address', activeWalletId, networkMode],
-    enabled: show && activeWalletId != null && password != null,
-    queryFn: async () => {
-      if (activeWalletId == null || password == null) {
-        throw new Error('Wallet locked')
-      }
-      await openArkadeSessionForWallet({ password, walletId: activeWalletId, networkMode })
-      return getArkadeWorker().getAddress()
-    },
-  })
+  const addressQuery = useArkadeAddressQuery()
 
   if (!show) return null
 

@@ -48,175 +48,158 @@ impl EsploraBlockchain {
     fn map_esplora_error(error: esplora_client::Error) -> ark_client::Error {
         ark_client::Error::wallet(error.to_string())
     }
+
+    async fn find_outpoints_at(
+        client: &EsploraAsyncClient,
+        address: &Address,
+    ) -> Result<Vec<ExplorerUtxo>, ark_client::Error> {
+        collect_address_utxos(client, address).await
+    }
+
+    async fn find_tx_at(
+        client: &EsploraAsyncClient,
+        txid: &Txid,
+    ) -> Result<Option<Transaction>, ark_client::Error> {
+        client
+            .get_tx(txid)
+            .await
+            .map_err(EsploraBlockchain::map_esplora_error)
+    }
+
+    async fn get_tx_status_at(
+        client: &EsploraAsyncClient,
+        txid: &Txid,
+    ) -> Result<TxStatus, ark_client::Error> {
+        map_tx_status(client, txid).await
+    }
+
+    async fn get_output_status_at(
+        client: &EsploraAsyncClient,
+        txid: &Txid,
+        vout: u32,
+    ) -> Result<SpendStatus, ark_client::Error> {
+        map_output_status(client, txid, vout).await
+    }
+
+    async fn broadcast_at(
+        client: &EsploraAsyncClient,
+        tx: &Transaction,
+    ) -> Result<(), ark_client::Error> {
+        client
+            .broadcast(tx)
+            .await
+            .map_err(EsploraBlockchain::map_esplora_error)?;
+        Ok(())
+    }
+
+    async fn get_fee_rate_at(client: &EsploraAsyncClient) -> Result<f64, ark_client::Error> {
+        map_fee_rate(client).await
+    }
+
+    async fn broadcast_package_at(
+        client: &EsploraAsyncClient,
+        txs: &[&Transaction],
+    ) -> Result<(), ark_client::Error> {
+        for tx in txs {
+            client
+                .broadcast(tx)
+                .await
+                .map_err(EsploraBlockchain::map_esplora_error)?;
+        }
+        Ok(())
+    }
+}
+
+macro_rules! impl_esplora_blockchain {
+    ($($send_bound:tt)*) => {
+        impl Blockchain for EsploraBlockchain {
+            fn find_outpoints(
+                &self,
+                address: &Address,
+            ) -> impl std::future::Future<
+                Output = Result<Vec<ExplorerUtxo>, ark_client::Error>,
+            > $($send_bound)*
+            {
+                let client = Arc::clone(&self.client);
+                let address = address.clone();
+                async move { EsploraBlockchain::find_outpoints_at(&client, &address).await }
+            }
+
+            fn find_tx(
+                &self,
+                txid: &Txid,
+            ) -> impl std::future::Future<
+                Output = Result<Option<Transaction>, ark_client::Error>,
+            > $($send_bound)*
+            {
+                let client = Arc::clone(&self.client);
+                let txid = *txid;
+                async move { EsploraBlockchain::find_tx_at(&client, &txid).await }
+            }
+
+            fn get_tx_status(
+                &self,
+                txid: &Txid,
+            ) -> impl std::future::Future<Output = Result<TxStatus, ark_client::Error>> $($send_bound)*
+            {
+                let client = Arc::clone(&self.client);
+                let txid = *txid;
+                async move { EsploraBlockchain::get_tx_status_at(&client, &txid).await }
+            }
+
+            fn get_output_status(
+                &self,
+                txid: &Txid,
+                vout: u32,
+            ) -> impl std::future::Future<Output = Result<SpendStatus, ark_client::Error>> $($send_bound)*
+            {
+                let client = Arc::clone(&self.client);
+                let txid = *txid;
+                async move { EsploraBlockchain::get_output_status_at(&client, &txid, vout).await }
+            }
+
+            fn broadcast(
+                &self,
+                tx: &Transaction,
+            ) -> impl std::future::Future<Output = Result<(), ark_client::Error>> $($send_bound)*
+            {
+                let client = Arc::clone(&self.client);
+                let tx = tx.clone();
+                async move { EsploraBlockchain::broadcast_at(&client, &tx).await }
+            }
+
+            fn get_fee_rate(
+                &self,
+            ) -> impl std::future::Future<Output = Result<f64, ark_client::Error>> $($send_bound)*
+            {
+                let client = Arc::clone(&self.client);
+                async move { EsploraBlockchain::get_fee_rate_at(&client).await }
+            }
+
+            fn broadcast_package(
+                &self,
+                txs: &[&Transaction],
+            ) -> impl std::future::Future<Output = Result<(), ark_client::Error>> $($send_bound)*
+            {
+                let client = Arc::clone(&self.client);
+                let txs: Vec<Transaction> = txs.iter().map(|tx| (*tx).clone()).collect();
+                async move {
+                    EsploraBlockchain::broadcast_package_at(
+                        &client,
+                        &txs.iter().collect::<Vec<_>>(),
+                    )
+                    .await
+                }
+            }
+        }
+    };
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-impl Blockchain for EsploraBlockchain {
-    fn find_outpoints(
-        &self,
-        address: &Address,
-    ) -> impl std::future::Future<Output = Result<Vec<ExplorerUtxo>, ark_client::Error>> + Send
-    {
-        let client = Arc::clone(&self.client);
-        let address = address.clone();
-        async move { collect_address_utxos(&client, &address).await }
-    }
-
-    fn find_tx(
-        &self,
-        txid: &Txid,
-    ) -> impl std::future::Future<Output = Result<Option<Transaction>, ark_client::Error>> + Send
-    {
-        let client = Arc::clone(&self.client);
-        let txid = *txid;
-        async move {
-            client
-                .get_tx(&txid)
-                .await
-                .map_err(EsploraBlockchain::map_esplora_error)
-        }
-    }
-
-    fn get_tx_status(
-        &self,
-        txid: &Txid,
-    ) -> impl std::future::Future<Output = Result<TxStatus, ark_client::Error>> + Send {
-        let client = Arc::clone(&self.client);
-        let txid = *txid;
-        async move { map_tx_status(&client, &txid).await }
-    }
-
-    fn get_output_status(
-        &self,
-        txid: &Txid,
-        vout: u32,
-    ) -> impl std::future::Future<Output = Result<SpendStatus, ark_client::Error>> + Send {
-        let client = Arc::clone(&self.client);
-        let txid = *txid;
-        async move { map_output_status(&client, &txid, vout).await }
-    }
-
-    fn broadcast(
-        &self,
-        tx: &Transaction,
-    ) -> impl std::future::Future<Output = Result<(), ark_client::Error>> + Send {
-        let client = Arc::clone(&self.client);
-        let tx = tx.clone();
-        async move {
-            client
-                .broadcast(&tx)
-                .await
-                .map_err(EsploraBlockchain::map_esplora_error)?;
-            Ok(())
-        }
-    }
-
-    fn get_fee_rate(
-        &self,
-    ) -> impl std::future::Future<Output = Result<f64, ark_client::Error>> + Send {
-        let client = Arc::clone(&self.client);
-        async move { map_fee_rate(&client).await }
-    }
-
-    fn broadcast_package(
-        &self,
-        txs: &[&Transaction],
-    ) -> impl std::future::Future<Output = Result<(), ark_client::Error>> + Send {
-        let client = Arc::clone(&self.client);
-        let txs: Vec<Transaction> = txs.iter().map(|tx| (*tx).clone()).collect();
-        async move {
-            for tx in txs {
-                client
-                    .broadcast(&tx)
-                    .await
-                    .map_err(EsploraBlockchain::map_esplora_error)?;
-            }
-            Ok(())
-        }
-    }
-}
+impl_esplora_blockchain!(+ Send);
 
 #[cfg(target_arch = "wasm32")]
-impl Blockchain for EsploraBlockchain {
-    fn find_outpoints(
-        &self,
-        address: &Address,
-    ) -> impl std::future::Future<Output = Result<Vec<ExplorerUtxo>, ark_client::Error>> {
-        let client = Arc::clone(&self.client);
-        let address = address.clone();
-        async move { collect_address_utxos(&client, &address).await }
-    }
-
-    fn find_tx(
-        &self,
-        txid: &Txid,
-    ) -> impl std::future::Future<Output = Result<Option<Transaction>, ark_client::Error>> {
-        let client = Arc::clone(&self.client);
-        let txid = *txid;
-        async move {
-            client
-                .get_tx(&txid)
-                .await
-                .map_err(EsploraBlockchain::map_esplora_error)
-        }
-    }
-
-    fn get_tx_status(
-        &self,
-        txid: &Txid,
-    ) -> impl std::future::Future<Output = Result<TxStatus, ark_client::Error>> {
-        let client = Arc::clone(&self.client);
-        let txid = *txid;
-        async move { map_tx_status(&client, &txid).await }
-    }
-
-    fn get_output_status(
-        &self,
-        txid: &Txid,
-        vout: u32,
-    ) -> impl std::future::Future<Output = Result<SpendStatus, ark_client::Error>> {
-        let client = Arc::clone(&self.client);
-        let txid = *txid;
-        async move { map_output_status(&client, &txid, vout).await }
-    }
-
-    fn broadcast(
-        &self,
-        tx: &Transaction,
-    ) -> impl std::future::Future<Output = Result<(), ark_client::Error>> {
-        let client = Arc::clone(&self.client);
-        let tx = tx.clone();
-        async move {
-            client
-                .broadcast(&tx)
-                .await
-                .map_err(EsploraBlockchain::map_esplora_error)?;
-            Ok(())
-        }
-    }
-
-    fn get_fee_rate(&self) -> impl std::future::Future<Output = Result<f64, ark_client::Error>> {
-        let client = Arc::clone(&self.client);
-        async move { map_fee_rate(&client).await }
-    }
-
-    fn broadcast_package(
-        &self,
-        txs: &[&Transaction],
-    ) -> impl std::future::Future<Output = Result<(), ark_client::Error>> {
-        let client = Arc::clone(&self.client);
-        let txs: Vec<Transaction> = txs.iter().map(|tx| (*tx).clone()).collect();
-        async move {
-            for tx in txs {
-                client
-                    .broadcast(&tx)
-                    .await
-                    .map_err(EsploraBlockchain::map_esplora_error)?;
-            }
-            Ok(())
-        }
-    }
-}
+impl_esplora_blockchain!();
 
 async fn collect_address_utxos(
     client: &EsploraAsyncClient,

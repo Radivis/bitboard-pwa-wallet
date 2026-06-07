@@ -9,6 +9,7 @@ use ark_core::unilateral_exit;
 use ark_core::ExplorerUtxo;
 use bitcoin::Amount;
 use bitcoin::TxOut;
+use bitcoin::Txid;
 use jiff::Timestamp;
 use std::collections::HashSet;
 use std::time::Duration;
@@ -141,5 +142,102 @@ where
     Ok((
         selected_boarding_outputs.into_iter().collect(),
         selected_vtxo_outputs.into_iter().collect(),
+    ))
+}
+
+/// Select claimable on-chain VTXO inputs whose virtual or on-chain txid appears in `vtxo_txid_filter`.
+///
+/// Boarding outputs are excluded so completion only spends the requested unrolled VTXOs.
+pub async fn coin_select_vtxo_txids_for_onchain<B, W, S, K>(
+    client: &Client<B, W, S, K>,
+    vtxo_txid_filter: &HashSet<Txid>,
+) -> Result<
+    (
+        Vec<unilateral_exit::OnChainInput>,
+        Vec<unilateral_exit::VtxoInput>,
+        Amount,
+    ),
+    Error,
+>
+where
+    B: Blockchain,
+    W: BoardingWallet + OnchainWallet,
+    S: SwapStorage + 'static,
+    K: crate::KeyProvider,
+{
+    if vtxo_txid_filter.is_empty() {
+        return Err(Error::coin_select("vtxo txid filter must not be empty"));
+    }
+
+    let (vtxo_list, script_pubkey_to_vtxo) = client.list_vtxos().await?;
+    let now = Timestamp::now();
+    let mut selected_vtxo_outputs = HashSet::new();
+    let mut selected_amount = Amount::ZERO;
+
+    for virtual_tx_outpoint in vtxo_list
+        .all_unspent()
+        .filter(|vtp| vtp.is_unrolled && !vtp.is_spent)
+    {
+        let Some(vtxo) = script_pubkey_to_vtxo.get(&virtual_tx_outpoint.script) else {
+            continue;
+        };
+
+        let outpoints = client.blockchain().find_outpoints(vtxo.address()).await?;
+        let matches_virtual_txid = vtxo_txid_filter.contains(&virtual_tx_outpoint.outpoint.txid);
+        let matches_onchain_txid = outpoints.iter().any(|explorer_utxo| {
+            matches!(
+                explorer_utxo,
+                ExplorerUtxo { outpoint, .. } if vtxo_txid_filter.contains(&outpoint.txid)
+            )
+        });
+
+        if !matches_virtual_txid && !matches_onchain_txid {
+            continue;
+        }
+
+        for explorer_utxo in outpoints.iter() {
+            if let ExplorerUtxo {
+                outpoint,
+                amount,
+                confirmation_blocktime: Some(confirmation_blocktime),
+                confirmations,
+                is_spent: false,
+            } = explorer_utxo
+            {
+                let include_outpoint = matches_virtual_txid
+                    || vtxo_txid_filter.contains(&outpoint.txid);
+                if !include_outpoint {
+                    continue;
+                }
+
+                if vtxo.can_be_claimed_unilaterally_by_owner(
+                    now.as_duration().try_into().map_err(Error::ad_hoc)?,
+                    Duration::from_secs(*confirmation_blocktime),
+                    *confirmations,
+                ) && selected_vtxo_outputs.insert(unilateral_exit::VtxoInput::new(
+                    *outpoint,
+                    vtxo.exit_delay(),
+                    TxOut {
+                        value: *amount,
+                        script_pubkey: vtxo.script_pubkey(),
+                    },
+                    vtxo.exit_spend_info()?,
+                )) {
+                    selected_amount += *amount;
+                }
+            }
+        }
+    }
+
+    if selected_vtxo_outputs.is_empty() {
+        return Err(Error::coin_select(
+            "no matching unrolled VTXOs found for completion",
+        ));
+    }
+
+    Ok((
+        Vec::new(),
+        selected_vtxo_outputs.into_iter().collect(),
+        selected_amount,
     ))
 }

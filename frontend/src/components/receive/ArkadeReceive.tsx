@@ -3,35 +3,16 @@ import { Link } from '@tanstack/react-router'
 import { Copy, Loader2 } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
 import { toast } from 'sonner'
-import { useQuery } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { getArkadeWorker } from '@/workers/arkade-factory'
-import { openArkadeSessionForWallet } from '@/lib/arkade/arkade-session-service'
+import { useArkadeAddressQuery } from '@/hooks/useArkadeQueries'
 import { isArkadeActiveForNetworkMode } from '@/lib/arkade/arkade-utils'
 import { useWalletStore } from '@/stores/walletStore'
-import { useSessionStore } from '@/stores/sessionStore'
 
 export function ArkadeReceive() {
   const networkMode = useWalletStore((walletState) => walletState.networkMode)
-  const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
-  const password = useSessionStore((sessionState) => sessionState.password)
   const [copied, setCopied] = useState(false)
-
-  const addressQuery = useQuery({
-    queryKey: ['arkade', 'receive-address', activeWalletId, networkMode],
-    enabled:
-      isArkadeActiveForNetworkMode(networkMode) &&
-      activeWalletId != null &&
-      password != null,
-    queryFn: async () => {
-      if (activeWalletId == null || password == null) {
-        throw new Error('Wallet locked')
-      }
-      await openArkadeSessionForWallet({ password, walletId: activeWalletId, networkMode })
-      return getArkadeWorker().getAddress()
-    },
-  })
+  const addressQuery = useArkadeAddressQuery()
 
   if (!isArkadeActiveForNetworkMode(networkMode)) {
     return (

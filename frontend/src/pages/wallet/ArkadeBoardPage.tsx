@@ -4,36 +4,19 @@ import { Copy, Layers } from 'lucide-react'
 import { PageHeader } from '@/components/PageHeader'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { useQuery } from '@tanstack/react-query'
-import { getArkadeWorker } from '@/workers/arkade-factory'
-import { openArkadeSessionForWallet } from '@/lib/arkade/arkade-session-service'
-import { useArkadeOnboardMutation } from '@/hooks/useArkadeQueries'
+import {
+  useArkadeBoardingAddressQuery,
+  useArkadeOnboardMutation,
+} from '@/hooks/useArkadeQueries'
 import { isArkadeActiveForNetworkMode } from '@/lib/arkade/arkade-utils'
 import { useWalletStore } from '@/stores/walletStore'
-import { useSessionStore } from '@/stores/sessionStore'
 import { toast } from 'sonner'
 
 export function ArkadeBoardPage() {
   const networkMode = useWalletStore((s) => s.networkMode)
-  const activeWalletId = useWalletStore((s) => s.activeWalletId)
-  const password = useSessionStore((s) => s.password)
   const onboardMutation = useArkadeOnboardMutation()
+  const boardingQuery = useArkadeBoardingAddressQuery()
   const [copied, setCopied] = useState(false)
-
-  const boardingQuery = useQuery({
-    queryKey: ['arkade', 'boarding-address', activeWalletId, networkMode],
-    enabled:
-      isArkadeActiveForNetworkMode(networkMode) &&
-      activeWalletId != null &&
-      password != null,
-    queryFn: async () => {
-      if (activeWalletId == null || password == null) {
-        throw new Error('Wallet locked')
-      }
-      await openArkadeSessionForWallet({ password, walletId: activeWalletId, networkMode })
-      return getArkadeWorker().getBoardingAddress()
-    },
-  })
 
   if (!isArkadeActiveForNetworkMode(networkMode)) {
     return (

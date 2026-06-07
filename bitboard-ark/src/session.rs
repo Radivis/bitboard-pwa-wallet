@@ -497,12 +497,25 @@ impl ArkSession {
         &self,
         params: CompleteUnilateralExitParams,
     ) -> ArkResult<String> {
-        let _vtxo_txids = params.vtxo_txids;
+        if params.vtxo_txids.is_empty() {
+            return Err(ArkWasmError::Message(
+                "vtxo_txids must not be empty".to_string(),
+            ));
+        }
+
+        let vtxo_txids: Vec<bitcoin::Txid> = params
+            .vtxo_txids
+            .iter()
+            .map(|txid| {
+                txid.parse()
+                    .map_err(|error| ArkWasmError::Message(format!("invalid txid: {error}")))
+            })
+            .collect::<Result<_, _>>()?;
+
         let destination = parse_onchain_address(&params.destination_address, self.network())?;
-        let offchain = self.client.offchain_balance().await?;
         let txid = self
             .client
-            .send_on_chain(destination, offchain.total())
+            .send_on_chain_for_vtxo_txids(destination, &vtxo_txids)
             .await?;
         Ok(txid.to_string())
     }

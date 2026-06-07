@@ -4,8 +4,10 @@ import { toast } from 'sonner'
 import { getArkadeWorker } from '@/workers/arkade-factory'
 import {
   arkadeBalanceQueryKey,
+  arkadeBoardingAddressQueryKey,
   arkadeBumperInfoQueryKey,
   arkadeCollaborativeExitFeeQueryKey,
+  arkadeAddressQueryKey,
   arkadeDelegateInfoQueryKey,
   arkadeExitCandidatesQueryKey,
   arkadeHistoryQueryKey,
@@ -110,6 +112,46 @@ export function useArkadeHistoryQuery() {
       return getArkadeWorker().getTransactionHistory()
     },
     staleTime: 30_000,
+  })
+}
+
+export function useArkadeAddressQuery() {
+  const { networkMode, activeWalletId, password, sessionReady } = useArkadeSessionContext()
+
+  return useQuery({
+    queryKey:
+      activeWalletId != null && isArkadeSupportedNetworkMode(networkMode)
+        ? arkadeAddressQueryKey(activeWalletId, networkMode)
+        : ['arkade', 'address', 'disabled'],
+    enabled: sessionReady,
+    queryFn: async () => {
+      if (activeWalletId == null || password == null) {
+        throw new Error('Wallet must be unlocked')
+      }
+      await openArkadeSessionForWallet({ password, walletId: activeWalletId, networkMode })
+      return getArkadeWorker().getAddress()
+    },
+    staleTime: 300_000,
+  })
+}
+
+export function useArkadeBoardingAddressQuery() {
+  const { networkMode, activeWalletId, password, sessionReady } = useArkadeSessionContext()
+
+  return useQuery({
+    queryKey:
+      activeWalletId != null && isArkadeSupportedNetworkMode(networkMode)
+        ? arkadeBoardingAddressQueryKey(activeWalletId, networkMode)
+        : ['arkade', 'boarding-address', 'disabled'],
+    enabled: sessionReady,
+    queryFn: async () => {
+      if (activeWalletId == null || password == null) {
+        throw new Error('Wallet must be unlocked')
+      }
+      await openArkadeSessionForWallet({ password, walletId: activeWalletId, networkMode })
+      return getArkadeWorker().getBoardingAddress()
+    },
+    staleTime: 300_000,
   })
 }
 

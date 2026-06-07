@@ -1,4 +1,5 @@
 use crate::coin_select::coin_select_for_onchain;
+use crate::coin_select::coin_select_vtxo_txids_for_onchain;
 use crate::error::Error;
 use crate::error::ErrorContext;
 use crate::swap_storage::SwapStorage;
@@ -227,6 +228,56 @@ where
         Ok(txid)
     }
 
+    /// Spend selected unrolled VTXOs to an on-chain address.
+    ///
+    /// Only VTXOs whose virtual or on-chain txid appears in `vtxo_txids` are included. Boarding
+    /// outputs are never selected.
+    pub async fn send_on_chain_for_vtxo_txids(
+        &self,
+        to_address: Address,
+        vtxo_txids: &[Txid],
+    ) -> Result<Txid, Error> {
+        let vtxo_txid_filter: HashSet<Txid> = vtxo_txids.iter().copied().collect();
+        let (_, vtxo_inputs, selected_amount) =
+            coin_select_vtxo_txids_for_onchain(self, &vtxo_txid_filter).await?;
+
+        let fee = Amount::from_sat(1_000);
+        if selected_amount <= fee {
+            return Err(Error::ad_hoc(format!(
+                "selected amount {selected_amount} does not cover fee {fee}"
+            )));
+        }
+
+        let to_amount = selected_amount - fee;
+        if to_amount < self.server_info.dust {
+            return Err(Error::ad_hoc(format!(
+                "invalid amount {to_amount}, must be greater than dust: {}",
+                self.server_info.dust,
+            )));
+        }
+
+        let (tx, _) = self
+            .create_send_on_chain_transaction_from_inputs(
+                to_address,
+                to_amount,
+                Vec::new(),
+                vtxo_inputs,
+            )
+            .await?;
+
+        let txid = tx.compute_txid();
+        tracing::info!(
+            %txid,
+            "Broadcasting selective unilateral exit completion transaction"
+        );
+
+        timeout_op(self.inner.timeout, self.blockchain().broadcast(&tx))
+            .await
+            .with_context(|| format!("failed to broadcast transaction {txid}"))??;
+
+        Ok(txid)
+    }
+
     /// Build the on-chain send transaction without broadcasting.
     ///
     /// Primarily useful for testing. Exposed publicly behind the `test-utils` feature.
@@ -257,6 +308,22 @@ where
 
         let (onchain_inputs, vtxo_inputs) = coin_select_for_onchain(self, to_amount + fee).await?;
 
+        self.create_send_on_chain_transaction_from_inputs(
+            to_address,
+            to_amount,
+            onchain_inputs,
+            vtxo_inputs,
+        )
+        .await
+    }
+
+    async fn create_send_on_chain_transaction_from_inputs(
+        &self,
+        to_address: Address,
+        to_amount: Amount,
+        onchain_inputs: Vec<unilateral_exit::OnChainInput>,
+        vtxo_inputs: Vec<unilateral_exit::VtxoInput>,
+    ) -> Result<(Transaction, Vec<TxOut>), Error> {
         let change_address = self.inner.wallet.get_onchain_address()?;
 
         let sign = move |input: &mut psbt::Input, msg: bitcoin::secp256k1::Message| match &input

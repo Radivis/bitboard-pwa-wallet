@@ -43,28 +43,13 @@ vi.mock('@/stores/sessionStore', () => ({
 
 vi.mock('@/hooks/useArkadeQueries', () => ({
   useArkadeBalanceQuery: () => ({ isLoading: false, data: { confirmedSats: 1, totalSats: 1 } }),
+  useArkadeAddressQuery: () => ({ data: 'tark1qtest', isLoading: false }),
   useArkadeDelegateInfoQuery: () => ({ data: null }),
   useArkadeRenewMutation: () => ({ mutate: vi.fn(), isPending: false }),
 }))
 
 vi.mock('@/components/wallet/ArkadeExitSection', () => ({
   ArkadeExitSection: () => <div data-testid="exit-section" />,
-}))
-
-vi.mock('@tanstack/react-query', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@tanstack/react-query')>()
-  return {
-    ...actual,
-    useQuery: () => ({ data: 'tark1qtest', isLoading: false }),
-  }
-})
-
-vi.mock('@/lib/arkade/arkade-session-service', () => ({
-  openArkadeSessionForWallet: vi.fn(),
-}))
-
-vi.mock('@/workers/arkade-factory', () => ({
-  getArkadeWorker: () => ({ getAddress: vi.fn() }),
 }))
 
 describe('ArkadePanel', () => {
