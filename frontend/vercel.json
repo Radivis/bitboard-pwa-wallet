@@ -11,9 +11,16 @@
     },
     "api/fiat-rates/[...path].ts": {
       "maxDuration": 10
+    },
+    "api/arkade/operator/[...path].ts": {
+      "maxDuration": 30
     }
   },
   "rewrites": [
+    {
+      "source": "/api/arkade/operator/:path*",
+      "destination": "/api/arkade/operator/[...path]"
+    },
     { "source": "/api/esplora/:path*", "destination": "/api/esplora/[...path]" },
     { "source": "/api/faucet/:path*", "destination": "/api/faucet/[...path]" },
     {

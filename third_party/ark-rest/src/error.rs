@@ -72,7 +72,11 @@ impl fmt::Debug for Error {
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(self.description())
+        f.write_str(self.description())?;
+        if let Some(source) = &self.inner.source {
+            write!(f, ": {source}")?;
+        }
+        Ok(())
     }
 }
 

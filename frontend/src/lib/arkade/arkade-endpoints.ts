@@ -1,7 +1,12 @@
+import { getEsploraUrl } from '@/lib/wallet/bitcoin-utils'
 import type { NetworkMode } from '@/stores/walletStore'
+import { getArkOperatorUrl } from '@/lib/arkade/arkade-operator-proxy'
 
-/** Live networks with Arkade support in v1. */
-export type ArkadeSupportedNetworkMode = 'mainnet' | 'testnet' | 'signet'
+/**
+ * Live networks with a public Arkade operator in v1.
+ * Bitcoin testnet4 is excluded — Arkade docs list mainnet, Mutinynet, and Signet only.
+ */
+export type ArkadeSupportedNetworkMode = 'mainnet' | 'signet'
 
 export interface ArkadeEndpoints {
   arkServerUrl: string
@@ -9,28 +14,15 @@ export interface ArkadeEndpoints {
   esploraUrl: string
 }
 
-const DEFAULT_OPERATORS: Record<ArkadeSupportedNetworkMode, string> = {
-  mainnet:
-    import.meta.env.VITE_ARKADE_OPERATOR_MAINNET ?? 'https://arkade.computer',
-  testnet:
-    import.meta.env.VITE_ARKADE_OPERATOR_TESTNET ??
-    'https://testnet.arkade.computer',
-  signet:
-    import.meta.env.VITE_ARKADE_OPERATOR_SIGNET ??
-    'https://mutinynet.arkade.sh',
+const OPERATOR_ENV_OVERRIDES: Record<ArkadeSupportedNetworkMode, string | undefined> = {
+  mainnet: import.meta.env.VITE_ARKADE_OPERATOR_MAINNET,
+  signet: import.meta.env.VITE_ARKADE_OPERATOR_SIGNET,
 }
 
 /** Empty unless set via VITE_ARKADE_DELEGATOR_* (Bitboard Fulmine delegator is opt-in). */
 const DEFAULT_DELEGATORS: Record<ArkadeSupportedNetworkMode, string> = {
   mainnet: import.meta.env.VITE_ARKADE_DELEGATOR_MAINNET ?? '',
-  testnet: import.meta.env.VITE_ARKADE_DELEGATOR_TESTNET ?? '',
   signet: import.meta.env.VITE_ARKADE_DELEGATOR_SIGNET ?? '',
-}
-
-const DEFAULT_ESPLORA: Record<ArkadeSupportedNetworkMode, string> = {
-  mainnet: 'https://mempool.space/api',
-  testnet: 'https://mempool.space/testnet4/api',
-  signet: 'https://mutinynet.com/api',
 }
 
 /** Reserved for regtest Fulmine (v2); not used in UI yet. */
@@ -42,7 +34,7 @@ export const ARKADE_REGTEST_ENDPOINTS_RESERVED = {
 export function isArkadeSupportedNetworkMode(
   mode: NetworkMode,
 ): mode is ArkadeSupportedNetworkMode {
-  return mode === 'mainnet' || mode === 'testnet' || mode === 'signet'
+  return mode === 'mainnet' || mode === 'signet'
 }
 
 export function networkModeToArkadeIsMainnet(
@@ -55,9 +47,9 @@ export function getArkadeEndpoints(
   mode: ArkadeSupportedNetworkMode,
 ): ArkadeEndpoints {
   return {
-    arkServerUrl: DEFAULT_OPERATORS[mode],
+    arkServerUrl: getArkOperatorUrl(mode, OPERATOR_ENV_OVERRIDES[mode]),
     delegatorUrl: DEFAULT_DELEGATORS[mode],
-    esploraUrl: DEFAULT_ESPLORA[mode],
+    esploraUrl: getEsploraUrl(mode, null),
   }
 }
 

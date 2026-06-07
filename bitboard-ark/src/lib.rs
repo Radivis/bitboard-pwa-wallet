@@ -24,6 +24,10 @@ use crate::error::{ArkResult, map_js_error};
 use crate::network::NetworkMode;
 use crate::session::ArkSession;
 
+const MSG_SESSION_NOT_OPEN: &str = "Arkade session is not open";
+const MSG_SESSION_ALREADY_BORROWED: &str =
+    "Arkade session is already borrowed — likely a previous operation panicked";
+
 thread_local! {
     static ACTIVE_SESSION: RefCell<Option<Rc<ArkSession>>> = const { RefCell::new(None) };
     static RESET_V1_LOGGED: RefCell<bool> = const { RefCell::new(false) };
@@ -36,10 +40,12 @@ pub fn init() {
 
 fn active_session_rc() -> ArkResult<Rc<ArkSession>> {
     ACTIVE_SESSION.with(|session_cell| {
-        session_cell
-            .borrow()
+        let session_borrow = session_cell.try_borrow().map_err(|_| {
+            crate::error::ArkWasmError::Message(MSG_SESSION_ALREADY_BORROWED.into())
+        })?;
+        session_borrow
             .clone()
-            .ok_or_else(|| crate::error::ArkWasmError::Message("Arkade session is not open".into()))
+            .ok_or_else(|| crate::error::ArkWasmError::Message(MSG_SESSION_NOT_OPEN.into()))
     })
 }
 
@@ -49,6 +55,16 @@ where
 {
     let session = active_session_rc()?;
     callback(session.as_ref())
+}
+
+fn clear_active_session() -> ArkResult<()> {
+    ACTIVE_SESSION.with(|session_cell| {
+        let mut session_borrow_mut = session_cell.try_borrow_mut().map_err(|_| {
+            crate::error::ArkWasmError::Message(MSG_SESSION_ALREADY_BORROWED.into())
+        })?;
+        session_borrow_mut.take();
+        Ok(())
+    })
 }
 
 fn log_persistence_v1_reset_once() {
@@ -115,9 +131,13 @@ pub async fn ark_open_session(params: JsValue) -> Result<JsValue, JsValue> {
         }
 
         let arkade_address = session.offchain_address()?;
-        ACTIVE_SESSION.with(|session_cell| {
-            *session_cell.borrow_mut() = Some(Rc::new(session));
-        });
+        ACTIVE_SESSION.with(|session_cell| -> ArkResult<()> {
+            let mut session_borrow_mut = session_cell.try_borrow_mut().map_err(|_| {
+                crate::error::ArkWasmError::Message(MSG_SESSION_ALREADY_BORROWED.into())
+            })?;
+            *session_borrow_mut = Some(Rc::new(session));
+            Ok(())
+        })?;
 
         to_js_value(crate::api_types::OpenSessionResult { arkade_address })
     })
@@ -128,9 +148,7 @@ pub async fn ark_open_session(params: JsValue) -> Result<JsValue, JsValue> {
 pub async fn ark_close_session() -> Result<(), JsValue> {
     map_js_async(async {
         let _ = ark_export_persistence_json_internal();
-        ACTIVE_SESSION.with(|session_cell| {
-            session_cell.borrow_mut().take();
-        });
+        clear_active_session()?;
         Ok(())
     })
     .await

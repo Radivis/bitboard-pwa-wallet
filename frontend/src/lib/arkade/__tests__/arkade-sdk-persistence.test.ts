@@ -33,7 +33,7 @@ describe('arkade-sdk-persistence', () => {
     await saveSdkPersistenceJsonForNetwork({
       password: 'pw',
       walletId: 2,
-      networkMode: 'testnet',
+      networkMode: 'signet',
       sdkPersistenceJson,
     })
 
@@ -45,7 +45,7 @@ describe('arkade-sdk-persistence', () => {
       lightningNwcConnections: [],
       arkadeWallets: [
         {
-          networkMode: 'testnet',
+          networkMode: 'signet',
           createdAt: '2020-01-01T00:00:00.000Z',
           arkadeAddress: 'tark1qexisting',
         },

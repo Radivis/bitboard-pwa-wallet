@@ -1,5 +1,4 @@
 import type { ArkadeSupportedNetworkMode } from '@/lib/arkade/arkade-endpoints'
-import { loadBitboardArkWasm } from '@/lib/arkade/load-bitboard-ark-wasm'
 
 export interface ArkadeSdkPersistenceBridge {
   persistSdkPersistence(params: {
@@ -20,6 +19,14 @@ let flushContext: {
 } | null = null
 let debouncedFlushTimer: ReturnType<typeof setTimeout> | null = null
 let inFlightFlush: Promise<void> | null = null
+let exportSdkPersistenceJson: (() => Promise<string>) | null = null
+
+/** Worker registers a queue-aware exporter so flush never races async WASM entry. */
+export function setArkadeSdkPersistenceExporter(
+  exporter: (() => Promise<string>) | null,
+): void {
+  exportSdkPersistenceJson = exporter
+}
 
 export function setArkadeSdkPersistenceBridge(
   bridge: ArkadeSdkPersistenceBridge | null,
@@ -44,7 +51,9 @@ export function clearDebouncedSdkPersistenceFlush(): void {
 }
 
 export function scheduleSdkPersistenceFlush(): void {
-  if (flushContext == null || persistenceBridge == null) return
+  if (flushContext == null || persistenceBridge == null || exportSdkPersistenceJson == null) {
+    return
+  }
   clearDebouncedSdkPersistenceFlush()
   debouncedFlushTimer = setTimeout(() => {
     debouncedFlushTimer = null
@@ -52,13 +61,17 @@ export function scheduleSdkPersistenceFlush(): void {
   }, SDK_PERSISTENCE_FLUSH_DEBOUNCE_MS)
 }
 
-async function exportSdkPersistenceJsonFromWasm(): Promise<string> {
-  const wasm = await loadBitboardArkWasm()
-  return wasm.ark_export_persistence_json()
+async function readSdkPersistenceJson(): Promise<string> {
+  if (exportSdkPersistenceJson == null) {
+    throw new Error('Arkade SDK persistence exporter is not configured')
+  }
+  return exportSdkPersistenceJson()
 }
 
 export async function flushSdkPersistenceNow(): Promise<void> {
-  if (flushContext == null || persistenceBridge == null) return
+  if (flushContext == null || persistenceBridge == null || exportSdkPersistenceJson == null) {
+    return
+  }
   clearDebouncedSdkPersistenceFlush()
   if (inFlightFlush != null) {
     await inFlightFlush
@@ -69,7 +82,7 @@ export async function flushSdkPersistenceNow(): Promise<void> {
   const bridge = persistenceBridge
 
   inFlightFlush = (async () => {
-    const sdkPersistenceJson = await exportSdkPersistenceJsonFromWasm()
+    const sdkPersistenceJson = await readSdkPersistenceJson()
     await bridge.persistSdkPersistence({
       walletId,
       networkMode,

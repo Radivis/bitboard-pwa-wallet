@@ -33,9 +33,15 @@ describe('isArkadeActiveForNetworkMode', () => {
     expect(isArkadeActiveForNetworkMode('testnet')).toBe(false)
   })
 
-  it('returns true on testnet when feature is on', () => {
+  it('returns false on testnet even when feature is on (no public operator)', () => {
     featureState.isArkadeEnabled = true
-    expect(isArkadeActiveForNetworkMode('testnet')).toBe(true)
+    expect(isArkadeActiveForNetworkMode('testnet')).toBe(false)
+  })
+
+  it('returns true on signet when feature is on', () => {
+    featureState.isArkadeEnabled = true
+    walletState.networkMode = 'signet'
+    expect(isArkadeActiveForNetworkMode('signet')).toBe(true)
   })
 
   it('requires mainnet access on mainnet', () => {

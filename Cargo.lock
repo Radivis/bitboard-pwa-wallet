@@ -514,6 +514,7 @@ dependencies = [
  "getrandom 0.2.17",
  "gloo-timers",
  "hex",
+ "jiff",
  "js-sys",
  "rand 0.8.6",
  "serde",
@@ -1772,10 +1773,12 @@ checksum = "4603d3033e49e2b0e31229fcab20a5d40089c607d975cd9c80551dc69eed9102"
 dependencies = [
  "jiff-static",
  "jiff-tzdb-platform",
+ "js-sys",
  "log",
  "portable-atomic",
  "portable-atomic-util",
  "serde_core",
+ "wasm-bindgen",
  "windows-link",
 ]
 

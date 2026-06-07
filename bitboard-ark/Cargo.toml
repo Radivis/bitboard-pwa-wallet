@@ -51,6 +51,11 @@ features = ["futures"]
 version = "0.3"
 features = ["console"]
 
+# ark-bdk-wallet / ark-client use jiff::Timestamp::now() — needs browser time on wasm32-unknown-unknown.
+[target.'cfg(target_arch = "wasm32")'.dependencies.jiff]
+version = "0.2"
+features = ["js"]
+
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 

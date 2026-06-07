@@ -1,9 +1,20 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { AddressType } from '@/lib/wallet/wallet-domain-types'
 
+const featureState = vi.hoisted(() => ({
+  isArkadeEnabled: true,
+  isMainnetAccessEnabled: false,
+}))
+
 const openArkadeSessionForWalletMock = vi.hoisted(() =>
   vi.fn().mockResolvedValue(undefined),
 )
+
+vi.mock('@/stores/featureStore', () => ({
+  useFeatureStore: {
+    getState: () => featureState,
+  },
+}))
 
 vi.mock('@/lib/arkade/arkade-session-service', () => ({
   openArkadeSessionForWallet: (...args: unknown[]) =>
@@ -62,21 +73,19 @@ describe('openArkadeSession after unlock (integration)', () => {
     openArkadeSessionForWalletMock.mockResolvedValue(undefined)
   })
 
-  it('loadDescriptorWalletWithoutSync schedules openArkadeSessionForWallet', async () => {
+  it('loadDescriptorWalletWithoutSync awaits openArkadeSessionForWallet when Arkade is active', async () => {
     await loadDescriptorWalletWithoutSync({
       password: 'unlock-password',
       walletId: 3,
-      networkMode: 'testnet',
+      networkMode: 'signet',
       addressType: AddressType.Taproot,
       accountId: 0,
     })
 
-    await vi.waitFor(() => {
-      expect(openArkadeSessionForWalletMock).toHaveBeenCalledWith({
-        password: 'unlock-password',
-        walletId: 3,
-        networkMode: 'testnet',
-      })
+    expect(openArkadeSessionForWalletMock).toHaveBeenCalledWith({
+      password: 'unlock-password',
+      walletId: 3,
+      networkMode: 'signet',
     })
   })
 })

@@ -18,7 +18,7 @@ import {
   isArkadeActiveForCommittedNetwork,
   isArkadeActiveForNetworkMode,
 } from '@/lib/arkade/arkade-utils'
-import { openArkadeSessionForWallet } from '@/lib/arkade/arkade-session-service'
+import { awaitArkadeSessionReady } from '@/lib/arkade/arkade-session-service'
 import {
   isArkadeDelegatorConfigured,
   isArkadeSupportedNetworkMode,
@@ -37,6 +37,11 @@ function useArkadeSessionContext() {
     isArkadeActiveForNetworkMode(networkMode) &&
     isArkadeSupportedNetworkMode(networkMode)
   return { networkMode, activeWalletId, password, sessionReady }
+}
+
+async function withReadyArkadeWorker<T>(run: () => Promise<T>): Promise<T> {
+  await awaitArkadeSessionReady()
+  return run()
 }
 
 async function invalidateArkadeWalletDataQueries(
@@ -81,8 +86,7 @@ export function useArkadeBalanceQuery() {
       if (activeWalletId == null || password == null) {
         throw new Error('Wallet must be unlocked')
       }
-      await openArkadeSessionForWallet({ password, walletId: activeWalletId, networkMode })
-      return getArkadeWorker().getBalance()
+      return withReadyArkadeWorker(() => getArkadeWorker().getBalance())
     },
     staleTime: 30_000,
   })
@@ -108,8 +112,7 @@ export function useArkadeHistoryQuery() {
       if (activeWalletId == null || password == null) {
         throw new Error('Wallet must be unlocked')
       }
-      await openArkadeSessionForWallet({ password, walletId: activeWalletId, networkMode })
-      return getArkadeWorker().getTransactionHistory()
+      return withReadyArkadeWorker(() => getArkadeWorker().getTransactionHistory())
     },
     staleTime: 30_000,
   })
@@ -128,8 +131,7 @@ export function useArkadeAddressQuery() {
       if (activeWalletId == null || password == null) {
         throw new Error('Wallet must be unlocked')
       }
-      await openArkadeSessionForWallet({ password, walletId: activeWalletId, networkMode })
-      return getArkadeWorker().getAddress()
+      return withReadyArkadeWorker(() => getArkadeWorker().getAddress())
     },
     staleTime: 300_000,
   })
@@ -148,8 +150,7 @@ export function useArkadeBoardingAddressQuery() {
       if (activeWalletId == null || password == null) {
         throw new Error('Wallet must be unlocked')
       }
-      await openArkadeSessionForWallet({ password, walletId: activeWalletId, networkMode })
-      return getArkadeWorker().getBoardingAddress()
+      return withReadyArkadeWorker(() => getArkadeWorker().getBoardingAddress())
     },
     staleTime: 300_000,
   })
@@ -175,8 +176,7 @@ export function useArkadeDelegateInfoQuery() {
       if (activeWalletId == null || password == null) {
         throw new Error('Wallet must be unlocked')
       }
-      await openArkadeSessionForWallet({ password, walletId: activeWalletId, networkMode })
-      return getArkadeWorker().getDelegateInfo()
+      return withReadyArkadeWorker(() => getArkadeWorker().getDelegateInfo())
     },
     staleTime: 300_000,
   })
@@ -193,9 +193,12 @@ export function useArkadeSendMutation() {
       if (activeWalletId == null || password == null) {
         throw new Error('Wallet must be unlocked')
       }
-      await openArkadeSessionForWallet({ password, walletId: activeWalletId, networkMode })
+      await awaitArkadeSessionReady()
       const txid = await getArkadeWorker().sendPayment(params)
-      if (isArkadeDelegatorConfigured(networkMode)) {
+      if (
+        isArkadeSupportedNetworkMode(networkMode) &&
+        isArkadeDelegatorConfigured(networkMode)
+      ) {
         await getArkadeWorker().delegateSpendableVtxos()
       }
       return txid
@@ -228,8 +231,7 @@ export function useArkadeRenewMutation() {
       if (activeWalletId == null || password == null) {
         throw new Error('Wallet must be unlocked')
       }
-      await openArkadeSessionForWallet({ password, walletId: activeWalletId, networkMode })
-      return getArkadeWorker().renewVtxosNow()
+      return withReadyArkadeWorker(() => getArkadeWorker().renewVtxosNow())
     },
     onSuccess: (txid) => {
       if (txid) {
@@ -260,9 +262,12 @@ export function useArkadeOnboardMutation() {
       if (activeWalletId == null || password == null) {
         throw new Error('Wallet must be unlocked')
       }
-      await openArkadeSessionForWallet({ password, walletId: activeWalletId, networkMode })
+      await awaitArkadeSessionReady()
       const txid = await getArkadeWorker().onboardBoardedUtxos()
-      if (isArkadeDelegatorConfigured(networkMode)) {
+      if (
+        isArkadeSupportedNetworkMode(networkMode) &&
+        isArkadeDelegatorConfigured(networkMode)
+      ) {
         await getArkadeWorker().delegateSpendableVtxos()
       }
       return txid
@@ -298,8 +303,7 @@ export function useArkadeExitCandidatesQuery(enabled: boolean) {
       if (activeWalletId == null || password == null) {
         throw new Error('Wallet must be unlocked')
       }
-      await openArkadeSessionForWallet({ password, walletId: activeWalletId, networkMode })
-      return getArkadeWorker().listExitCandidates()
+      return withReadyArkadeWorker(() => getArkadeWorker().listExitCandidates())
     },
     staleTime: 15_000,
   })
@@ -318,8 +322,7 @@ export function useArkadeBumperInfoQuery(enabled: boolean) {
       if (activeWalletId == null || password == null) {
         throw new Error('Wallet must be unlocked')
       }
-      await openArkadeSessionForWallet({ password, walletId: activeWalletId, networkMode })
-      return getArkadeWorker().getOnchainBumperInfo()
+      return withReadyArkadeWorker(() => getArkadeWorker().getOnchainBumperInfo())
     },
     staleTime: 15_000,
   })
@@ -337,8 +340,7 @@ export function useArkadeCollaborativeExitMutation() {
       if (activeWalletId == null || password == null) {
         throw new Error('Wallet must be unlocked')
       }
-      await openArkadeSessionForWallet({ password, walletId: activeWalletId, networkMode })
-      return getArkadeWorker().collaborativeExit(params)
+      return withReadyArkadeWorker(() => getArkadeWorker().collaborativeExit(params))
     },
     onSuccess: async (txid) => {
       toast.success(`Collaborative exit started (${txid.slice(0, 12)}…)`)
@@ -365,7 +367,7 @@ export function useArkadeUnilateralUnrollMutation() {
       if (activeWalletId == null || password == null) {
         throw new Error('Wallet must be unlocked')
       }
-      await openArkadeSessionForWallet({ password, walletId: activeWalletId, networkMode })
+      await awaitArkadeSessionReady()
       return getArkadeWorker().runUnilateralUnroll(
         { txid: params.txid, vout: params.vout },
         proxy(params.onProgress),
@@ -392,8 +394,7 @@ export function useArkadeCompleteUnilateralExitMutation() {
       if (activeWalletId == null || password == null) {
         throw new Error('Wallet must be unlocked')
       }
-      await openArkadeSessionForWallet({ password, walletId: activeWalletId, networkMode })
-      return getArkadeWorker().completeUnilateralExit(params)
+      return withReadyArkadeWorker(() => getArkadeWorker().completeUnilateralExit(params))
     },
     onSuccess: async (txid) => {
       toast.success(`Exit completed on-chain (${txid.slice(0, 12)}…)`)
@@ -434,11 +435,12 @@ export function useArkadeCollaborativeExitFeeQuery(params: {
       if (activeWalletId == null || password == null) {
         throw new Error('Wallet must be unlocked')
       }
-      await openArkadeSessionForWallet({ password, walletId: activeWalletId, networkMode })
-      return getArkadeWorker().getCollaborativeExitFeeEstimate({
+      return withReadyArkadeWorker(() =>
+        getArkadeWorker().getCollaborativeExitFeeEstimate({
         destinationAddress: destinationTrimmed,
         amountSats: params.amountSats,
-      })
+      }),
+      )
     },
     staleTime: 30_000,
   })
@@ -477,11 +479,12 @@ export function useArkadeUnilateralExitFeeQuery(params: {
       if (params.txid == null || params.vout == null) {
         throw new Error('VTXO outpoint is required')
       }
-      await openArkadeSessionForWallet({ password, walletId: activeWalletId, networkMode })
-      return getArkadeWorker().estimateUnilateralExit({
-        txid: params.txid,
-        vout: params.vout,
-      })
+      return withReadyArkadeWorker(() =>
+        getArkadeWorker().estimateUnilateralExit({
+          txid: params.txid,
+          vout: params.vout,
+        }),
+      )
     },
     staleTime: 30_000,
   })

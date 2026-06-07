@@ -9,7 +9,10 @@ import {
   useArkadeDelegateInfoQuery,
   useArkadeRenewMutation,
 } from '@/hooks/useArkadeQueries'
-import { isArkadeDelegatorConfigured } from '@/lib/arkade/arkade-endpoints'
+import {
+  isArkadeDelegatorConfigured,
+  isArkadeSupportedNetworkMode,
+} from '@/lib/arkade/arkade-endpoints'
 import { isArkadeActiveForNetworkMode } from '@/lib/arkade/arkade-utils'
 import { useWalletStore } from '@/stores/walletStore'
 import { ArkadeExitSection } from '@/components/wallet/ArkadeExitSection'
@@ -18,7 +21,8 @@ export function ArkadePanel() {
   const networkMode = useWalletStore((s) => s.networkMode)
   const show = isArkadeActiveForNetworkMode(networkMode)
   const delegatorConfigured =
-    show && isArkadeDelegatorConfigured(networkMode)
+    isArkadeSupportedNetworkMode(networkMode) &&
+    isArkadeDelegatorConfigured(networkMode)
 
   const balanceQuery = useArkadeBalanceQuery()
   const delegateQuery = useArkadeDelegateInfoQuery()

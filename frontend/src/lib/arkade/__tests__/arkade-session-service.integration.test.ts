@@ -7,6 +7,7 @@ const featureState = vi.hoisted(() => ({
 }))
 
 const workerMocks = vi.hoisted(() => ({
+  ping: vi.fn(),
   openSession: vi.fn(),
   closeSession: vi.fn(),
   finalizePendingTransactions: vi.fn(),
@@ -83,6 +84,7 @@ describe('openArkadeSessionForWallet (integration)', () => {
     await closeArkadeSession()
     vi.clearAllMocks()
 
+    workerMocks.ping.mockResolvedValue(true)
     workerMocks.openSession.mockResolvedValue({ arkadeAddress: 'tark1qtest' })
     workerMocks.finalizePendingTransactions.mockResolvedValue({
       finalized: 0,
@@ -104,12 +106,12 @@ describe('openArkadeSessionForWallet (integration)', () => {
   })
 
   it('opens worker session with network endpoints after unlock prerequisites', async () => {
-    const endpoints = getArkadeEndpoints('testnet')
+    const endpoints = getArkadeEndpoints('signet')
 
     await openArkadeSessionForWallet({
       password: 'unlock-password',
       walletId: 7,
-      networkMode: 'testnet',
+      networkMode: 'signet',
     })
 
     expect(ensureSecretsChannelMock).toHaveBeenCalledTimes(1)
@@ -117,13 +119,13 @@ describe('openArkadeSessionForWallet (integration)', () => {
     expect(loadSdkPersistenceJsonForNetworkMock).toHaveBeenCalledWith({
       password: 'unlock-password',
       walletId: 7,
-      networkMode: 'testnet',
+      networkMode: 'signet',
     })
     expect(workerMocks.openSession).toHaveBeenCalledWith({
       password: 'unlock-password',
       encryptedMnemonic,
       walletId: 7,
-      networkMode: 'testnet',
+      networkMode: 'signet',
       arkServerUrl: endpoints.arkServerUrl,
       delegatorUrl: endpoints.delegatorUrl,
       esploraUrl: endpoints.esploraUrl,
@@ -135,7 +137,7 @@ describe('openArkadeSessionForWallet (integration)', () => {
       expect.objectContaining({
         password: 'unlock-password',
         walletId: 7,
-        networkMode: 'testnet',
+        networkMode: 'signet',
         patch: expect.objectContaining({
           arkadeAddress: 'tark1qtest',
           lastSessionOpenedAt: expect.any(String),
@@ -150,7 +152,7 @@ describe('openArkadeSessionForWallet (integration)', () => {
     await openArkadeSessionForWallet({
       password: 'unlock-password',
       walletId: 7,
-      networkMode: 'testnet',
+      networkMode: 'signet',
     })
 
     expect(workerMocks.openSession).not.toHaveBeenCalled()
@@ -159,16 +161,41 @@ describe('openArkadeSessionForWallet (integration)', () => {
     expect(removeArkadeDashboardQueriesMock).toHaveBeenCalledTimes(1)
   })
 
+  it('waits for an in-flight open before closing', async () => {
+    let resolveOpen: ((value: { arkadeAddress: string }) => void) | undefined
+    workerMocks.openSession.mockImplementation(
+      () =>
+        new Promise<{ arkadeAddress: string }>((resolve) => {
+          resolveOpen = resolve
+        }),
+    )
+
+    const openPromise = openArkadeSessionForWallet({
+      password: 'unlock-password',
+      walletId: 7,
+      networkMode: 'signet',
+    })
+    await vi.waitFor(() => expect(workerMocks.openSession).toHaveBeenCalled())
+
+    const closePromise = closeArkadeSession()
+    await Promise.resolve()
+    expect(workerMocks.closeSession).not.toHaveBeenCalled()
+
+    resolveOpen!({ arkadeAddress: 'tark1qtest' })
+    await Promise.all([openPromise, closePromise])
+    expect(workerMocks.closeSession).toHaveBeenCalledTimes(1)
+  })
+
   it('does not reopen when the same wallet and network session is already active', async () => {
     await openArkadeSessionForWallet({
       password: 'unlock-password',
       walletId: 7,
-      networkMode: 'testnet',
+      networkMode: 'signet',
     })
     await openArkadeSessionForWallet({
       password: 'unlock-password',
       walletId: 7,
-      networkMode: 'testnet',
+      networkMode: 'signet',
     })
 
     expect(workerMocks.openSession).toHaveBeenCalledTimes(1)

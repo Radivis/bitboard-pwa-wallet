@@ -25,6 +25,8 @@ import {
 import { invalidateLightningDashboardQueries } from '@/lib/lightning/lightning-dashboard-sync'
 import { refreshWalletStoreFromLoadedBdk } from '@/lib/wallet/onchain-bdk-store-sync'
 import { invalidateOnchainDashboardQueries } from '@/lib/wallet/onchain-dashboard-sync'
+import { isArkadeActiveForNetworkMode } from '@/lib/arkade/arkade-utils'
+import { openArkadeSessionForWallet } from '@/lib/arkade/arkade-session-service'
 
 const CUSTOM_ESPLORA_URL_KEY_PREFIX = 'custom_esplora_url_'
 
@@ -568,9 +570,9 @@ export async function loadDescriptorWalletWithoutSync(params: {
     useCryptoStore.getState().lockAndPurgeSensitiveRuntimeState(),
   )
 
-  void import('@/lib/arkade/arkade-session-service').then(({ openArkadeSessionForWallet }) =>
-    openArkadeSessionForWallet({ password, walletId, networkMode }),
-  )
+  if (isArkadeActiveForNetworkMode(networkMode)) {
+    await openArkadeSessionForWallet({ password, walletId, networkMode })
+  }
 }
 
 /**
@@ -678,7 +680,7 @@ export async function loadDescriptorWalletAndSync(params: {
     void runEsploraSyncAndPersistChangeset()
   }
 
-  void import('@/lib/arkade/arkade-session-service').then(({ openArkadeSessionForWallet }) =>
-    openArkadeSessionForWallet({ password, walletId, networkMode }),
-  )
+  if (isArkadeActiveForNetworkMode(networkMode)) {
+    await openArkadeSessionForWallet({ password, walletId, networkMode })
+  }
 }

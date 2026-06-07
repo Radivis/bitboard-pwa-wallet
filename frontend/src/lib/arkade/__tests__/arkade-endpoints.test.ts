@@ -9,33 +9,39 @@ import {
 describe('arkade-endpoints', () => {
   it('identifies supported network modes', () => {
     expect(isArkadeSupportedNetworkMode('mainnet')).toBe(true)
-    expect(isArkadeSupportedNetworkMode('testnet')).toBe(true)
     expect(isArkadeSupportedNetworkMode('signet')).toBe(true)
+    expect(isArkadeSupportedNetworkMode('testnet')).toBe(false)
     expect(isArkadeSupportedNetworkMode('lab')).toBe(false)
     expect(isArkadeSupportedNetworkMode('regtest')).toBe(false)
   })
 
   it('maps mainnet flag for identity', () => {
     expect(networkModeToArkadeIsMainnet('mainnet')).toBe(true)
-    expect(networkModeToArkadeIsMainnet('testnet')).toBe(false)
     expect(networkModeToArkadeIsMainnet('signet')).toBe(false)
   })
 
-  it('returns operator, delegator, and esplora URLs per network', () => {
+  it('returns proxied operator, empty delegator, and proxied esplora URLs', () => {
     const mainnet = getArkadeEndpoints('mainnet')
-    const testnet = getArkadeEndpoints('testnet')
     const signet = getArkadeEndpoints('signet')
 
-    expect(mainnet.arkServerUrl).toMatch(/^https:\/\//)
+    expect(mainnet.arkServerUrl).toBe(
+      `${window.location.origin}/api/arkade/operator/mainnet`,
+    )
+    expect(signet.arkServerUrl).toBe(
+      `${window.location.origin}/api/arkade/operator/signet`,
+    )
     expect(mainnet.delegatorUrl).toBe('')
-    expect(testnet.delegatorUrl).toBe('')
     expect(signet.delegatorUrl).toBe('')
-    expect(signet.esploraUrl).toContain('mutinynet')
+    expect(mainnet.esploraUrl).toBe(
+      `${window.location.origin}/api/esplora/default/mainnet`,
+    )
+    expect(signet.esploraUrl).toBe(
+      `${window.location.origin}/api/esplora/default/signet`,
+    )
   })
 
   it('reports delegator as disabled when URL is empty', () => {
     expect(isArkadeDelegatorConfigured('mainnet')).toBe(false)
-    expect(isArkadeDelegatorConfigured('testnet')).toBe(false)
     expect(isArkadeDelegatorConfigured('signet')).toBe(false)
   })
 })

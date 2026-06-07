@@ -130,8 +130,12 @@ export async function executeSettingsNetworkSwitch(
 
   const previousNetworkMode = currentMode
 
-  if (targetNetwork === 'lab') {
+  // Close before descriptor switch commits networkMode — otherwise Arkade queries race open/close.
+  if (targetNetwork !== 'lab' || previousNetworkMode !== 'lab') {
     await closeArkadeSession()
+  }
+
+  if (targetNetwork === 'lab') {
     await switchToLabNetwork({
       previousNetworkMode,
       walletStatus,

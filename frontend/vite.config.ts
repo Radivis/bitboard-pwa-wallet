@@ -3,6 +3,7 @@ import path from 'path'
 import { fileURLToPath } from 'node:url'
 import { defineConfig, type Plugin } from 'vite'
 import { readBitboardWalletVersion } from './common/bitboard-wallet-version'
+import { arkOperatorViteProxyEntries } from './src/lib/arkade/arkade-operator-proxy'
 import { esploraViteProxyEntries } from './src/lib/esplora/esplora-service-whitelist'
 import { fiatRateViteProxyEntries } from './src/lib/fiat/fiat-rate-service-whitelist'
 import { faucetViteProxyEntries } from './src/lib/faucet/faucet-definitions'
@@ -85,6 +86,22 @@ function escapeRegExpLiteral(s: string): string {
 
 const fiatRatesDevProxy = Object.fromEntries(
   fiatRateViteProxyEntries().map((e) => [
+    e.localPrefix,
+    {
+      target: e.targetOrigin,
+      changeOrigin: true,
+      secure: true,
+      rewrite: (reqPath: string) =>
+        reqPath.replace(
+          new RegExp(`^${escapeRegExpLiteral(e.localPrefix)}`),
+          e.upstreamPathPrefix,
+        ),
+    },
+  ]),
+)
+
+const arkOperatorDevProxy = Object.fromEntries(
+  arkOperatorViteProxyEntries().map((e) => [
     e.localPrefix,
     {
       target: e.targetOrigin,
@@ -274,6 +291,7 @@ export default defineConfig({
   server: {
     port: 3000,
     proxy: {
+      ...arkOperatorDevProxy,
       ...esploraDevProxy,
       ...fiatRatesDevProxy,
       ...faucetDevProxy,

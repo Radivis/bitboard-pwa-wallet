@@ -25,6 +25,13 @@ function sessionKey(walletId: number, networkMode: ArkadeSupportedNetworkMode): 
 }
 
 export async function closeArkadeSession(): Promise<void> {
+  if (openSessionInFlight != null) {
+    try {
+      await openSessionInFlight
+    } catch {
+      // Session open failed or was superseded — still tear down.
+    }
+  }
   openSessionInFlight = null
   lastOpenedSessionKey = null
   try {
@@ -106,6 +113,13 @@ export async function openArkadeSessionForWallet(params: {
     await openSessionInFlight
   } finally {
     openSessionInFlight = null
+  }
+}
+
+/** Wait for unlock/network-switch session open; queries must not call open themselves. */
+export async function awaitArkadeSessionReady(): Promise<void> {
+  if (openSessionInFlight != null) {
+    await openSessionInFlight.catch(() => undefined)
   }
 }
 

@@ -5,6 +5,7 @@ import {
   clearDebouncedSdkPersistenceFlush,
   flushSdkPersistenceNow,
   setArkadeSdkPersistenceBridge,
+  setArkadeSdkPersistenceExporter,
   setArkadeSdkPersistenceFlushContext,
   type ArkadeSdkPersistenceBridge,
 } from '@/lib/arkade/storage/arkade-sdk-persistence-flush'
@@ -28,7 +29,10 @@ import type {
 
 import { loadBitboardArkWasm } from '@/lib/arkade/load-bitboard-ark-wasm'
 
-let arkWasmModule: Awaited<ReturnType<typeof loadBitboardArkWasm>> | null = null
+type BitboardArkWasm = Awaited<ReturnType<typeof loadBitboardArkWasm>>
+
+let arkWasmModule: BitboardArkWasm | null = null
+let wasmInitError: string | null = null
 let encryptionWasmModule: typeof import('@/wasm-pkg/bitboard_encryption/bitboard_encryption') | null =
   null
 
@@ -40,12 +44,43 @@ let activeSessionParams: {
 } | null = null
 let unrollInFlight = false
 
-async function getArkWasm() {
+async function getArkWasm(): Promise<BitboardArkWasm> {
+  if (wasmInitError) {
+    throw new Error(`WASM init failed: ${wasmInitError}`)
+  }
   if (!arkWasmModule) {
     arkWasmModule = await loadBitboardArkWasm()
   }
   return arkWasmModule
 }
+
+/** Ensures WASM failures surface with readable messages through Comlink (mirrors crypto.worker). */
+async function invokeWasmArk<T>(
+  run: (wasmModule: BitboardArkWasm) => T | Promise<T>,
+): Promise<T> {
+  try {
+    const wasmModule = await getArkWasm()
+    return await run(wasmModule)
+  } catch (err) {
+    throw err instanceof Error ? err : new Error(String(err))
+  }
+}
+
+async function initWasm() {
+  try {
+    arkWasmModule = await loadBitboardArkWasm()
+    console.info('[arkade.worker] WASM module loaded successfully')
+  } catch (err) {
+    wasmInitError = err instanceof Error ? err.message : String(err)
+    console.error('[arkade.worker] WASM init failed:', wasmInitError)
+  }
+}
+
+initWasm()
+
+setArkadeSdkPersistenceExporter(() =>
+  invokeWasmArk((wasmModule) => wasmModule.ark_export_persistence_json()),
+)
 
 async function getEncryptionWasm() {
   if (!encryptionWasmModule) {
@@ -115,109 +150,124 @@ async function persistAfterCriticalOperation(): Promise<void> {
   await flushSdkPersistenceNow()
 }
 
-const arkadeService: ArkadeService = {
-  async setSdkPersistenceBridge(bridge: ArkadeSdkPersistenceBridge | null): Promise<void> {
-    setArkadeSdkPersistenceBridge(bridge)
-  },
+async function closeSessionImpl(): Promise<void> {
+  try {
+    await flushSdkPersistenceNow()
+  } catch {
+    // Best-effort flush before teardown.
+  }
+  clearDebouncedSdkPersistenceFlush()
+  setArkadeSdkPersistenceFlushContext(null)
 
-  async openSession(params: OpenArkadeSessionParams): Promise<{ arkadeAddress: string }> {
-    const key = sessionKey(params.walletId, params.networkMode)
-    const wasm = await getArkWasm()
+  try {
+    await invokeWasmArk((wasmModule) => wasmModule.ark_close_session())
+  } catch {
+    // Module may not be loaded yet.
+  }
 
-    if (activeSessionKey === key) {
-      try {
-        const address = wasm.ark_get_address()
-        return { arkadeAddress: address }
-      } catch {
-        // Fall through to full open.
-      }
+  activeSessionKey = null
+  activeSessionParams = null
+  unrollInFlight = false
+}
+
+async function openSessionImpl(
+  params: OpenArkadeSessionParams,
+): Promise<{ arkadeAddress: string }> {
+  const key = sessionKey(params.walletId, params.networkMode)
+
+  if (activeSessionKey === key) {
+    try {
+      const address = await invokeWasmArk((wasmModule) => wasmModule.ark_get_address())
+      return { arkadeAddress: address }
+    } catch {
+      // Fall through to full open.
     }
+  }
 
-    await arkadeService.closeSession()
-    deleteLegacyArkadeIndexedDb(params.walletId, params.networkMode)
+  await closeSessionImpl()
+  deleteLegacyArkadeIndexedDb(params.walletId, params.networkMode)
 
-    const mnemonic = await requestDecrypt(params.password, params.encryptedMnemonic)
-    activeSessionParams = {
-      password: params.password,
-      walletId: params.walletId,
-      networkMode: params.networkMode,
-    }
-    setArkadeSdkPersistenceFlushContext(activeSessionParams)
+  const mnemonic = await requestDecrypt(params.password, params.encryptedMnemonic)
+  activeSessionParams = {
+    password: params.password,
+    walletId: params.walletId,
+    networkMode: params.networkMode,
+  }
+  setArkadeSdkPersistenceFlushContext(activeSessionParams)
 
-    const openResult = await wasm.ark_open_session({
+  const openResult = await invokeWasmArk((wasmModule) =>
+    wasmModule.ark_open_session({
       mnemonic,
       networkMode: params.networkMode,
       arkServerUrl: params.arkServerUrl,
       delegatorUrl: params.delegatorUrl,
       esploraUrl: params.esploraUrl,
       sdkPersistenceJson: params.sdkPersistenceJson,
-    })
+    }),
+  )
 
-    activeSessionKey = key
-    return { arkadeAddress: openResult.arkadeAddress as string }
+  activeSessionKey = key
+  return { arkadeAddress: openResult.arkadeAddress as string }
+}
+
+const arkadeService: ArkadeService = {
+  async ping(): Promise<boolean> {
+    await getArkWasm()
+    return true
+  },
+
+  async setSdkPersistenceBridge(bridge: ArkadeSdkPersistenceBridge | null): Promise<void> {
+    setArkadeSdkPersistenceBridge(bridge)
+  },
+
+  async openSession(params: OpenArkadeSessionParams): Promise<{ arkadeAddress: string }> {
+    return openSessionImpl(params)
   },
 
   async closeSession(): Promise<void> {
-    try {
-      await flushSdkPersistenceNow()
-    } catch {
-      // Best-effort flush before teardown.
-    }
-    clearDebouncedSdkPersistenceFlush()
-    setArkadeSdkPersistenceFlushContext(null)
-
-    try {
-      const wasm = await getArkWasm()
-      await wasm.ark_close_session()
-    } catch {
-      // Module may not be loaded yet.
-    }
-
-    activeSessionKey = null
-    activeSessionParams = null
-    unrollInFlight = false
+    return closeSessionImpl()
   },
 
   async getBalance(): Promise<ArkadeBalanceInfo> {
-    const wasm = await getArkWasm()
-    return wasm.ark_get_balance() as Promise<ArkadeBalanceInfo>
+    return invokeWasmArk(
+      (wasmModule) => wasmModule.ark_get_balance() as Promise<ArkadeBalanceInfo>,
+    )
   },
 
   async getAddress(): Promise<string> {
-    const wasm = await getArkWasm()
-    return wasm.ark_get_address()
+    return invokeWasmArk((wasmModule) => wasmModule.ark_get_address())
   },
 
   async getBoardingAddress(): Promise<string> {
-    const wasm = await getArkWasm()
-    return wasm.ark_get_boarding_address()
+    return invokeWasmArk((wasmModule) => wasmModule.ark_get_boarding_address())
   },
 
   async sendPayment(params: ArkadeSendParams): Promise<string> {
-    const wasm = await getArkWasm()
-    const txid = await wasm.ark_send_payment(params)
+    const txid = await invokeWasmArk((wasmModule) => wasmModule.ark_send_payment(params))
     await persistAfterCriticalOperation()
     return txid
   },
 
   async getTransactionHistory(): Promise<ArkadePaymentRow[]> {
-    const wasm = await getArkWasm()
-    return wasm.ark_get_transaction_history() as Promise<ArkadePaymentRow[]>
+    return invokeWasmArk(
+      (wasmModule) =>
+        wasmModule.ark_get_transaction_history() as Promise<ArkadePaymentRow[]>,
+    )
   },
 
   async getDelegateInfo(): Promise<ArkadeDelegateInfo> {
-    const wasm = await getArkWasm()
-    return wasm.ark_get_delegate_info() as Promise<ArkadeDelegateInfo>
+    return invokeWasmArk(
+      (wasmModule) => wasmModule.ark_get_delegate_info() as Promise<ArkadeDelegateInfo>,
+    )
   },
 
   async getExpiringVtxoCount(): Promise<number> {
-    const wasm = await getArkWasm()
-    return wasm.ark_get_expiring_vtxo_count()
+    return invokeWasmArk((wasmModule) => wasmModule.ark_get_expiring_vtxo_count())
   },
 
   async renewVtxosNow(): Promise<string | null> {
-    const wasm = await getArkWasm()
-    const txid = (await wasm.ark_renew_vtxos_now()) ?? null
+    const txid =
+      (await invokeWasmArk((wasmModule) => wasmModule.ark_renew_vtxos_now())) ?? null
     if (txid != null) {
       await persistAfterCriticalOperation()
     }
@@ -225,15 +275,15 @@ const arkadeService: ArkadeService = {
   },
 
   async delegateSpendableVtxos(): Promise<{ delegated: number; failed: number }> {
-    const wasm = await getArkWasm()
-    const result = await wasm.ark_delegate_spendable_vtxos()
+    const result = await invokeWasmArk((wasmModule) => wasmModule.ark_delegate_spendable_vtxos())
     await persistAfterCriticalOperation()
     return result as { delegated: number; failed: number }
   },
 
   async finalizePendingTransactions(): Promise<{ finalized: number; pending: number }> {
-    const wasm = await getArkWasm()
-    const result = await wasm.ark_finalize_pending_transactions()
+    const result = await invokeWasmArk((wasmModule) =>
+      wasmModule.ark_finalize_pending_transactions(),
+    )
     if ((result.finalized ?? 0) > 0) {
       await persistAfterCriticalOperation()
     }
@@ -241,9 +291,9 @@ const arkadeService: ArkadeService = {
   },
 
   async onboardBoardedUtxos(): Promise<string | null> {
-    const wasm = await getArkWasm()
     try {
-      const txid = (await wasm.ark_onboard_boarded_utxos()) ?? null
+      const txid =
+        (await invokeWasmArk((wasmModule) => wasmModule.ark_onboard_boarded_utxos())) ?? null
       if (txid != null) {
         await persistAfterCriticalOperation()
       }
@@ -258,18 +308,21 @@ const arkadeService: ArkadeService = {
   },
 
   async listExitCandidates(): Promise<ArkadeExitCandidateRow[]> {
-    const wasm = await getArkWasm()
-    return wasm.ark_list_exit_candidates() as Promise<ArkadeExitCandidateRow[]>
+    return invokeWasmArk(
+      (wasmModule) =>
+        wasmModule.ark_list_exit_candidates() as Promise<ArkadeExitCandidateRow[]>,
+    )
   },
 
   async getOnchainBumperInfo(): Promise<ArkadeOnchainBumperInfo> {
-    const wasm = await getArkWasm()
-    return wasm.ark_get_onchain_bumper_info() as Promise<ArkadeOnchainBumperInfo>
+    return invokeWasmArk(
+      (wasmModule) =>
+        wasmModule.ark_get_onchain_bumper_info() as Promise<ArkadeOnchainBumperInfo>,
+    )
   },
 
   async collaborativeExit(params: ArkadeCollaborativeExitParams): Promise<string> {
-    const wasm = await getArkWasm()
-    const txid = await wasm.ark_collaborative_exit(params)
+    const txid = await invokeWasmArk((wasmModule) => wasmModule.ark_collaborative_exit(params))
     await persistAfterCriticalOperation()
     return txid
   },
@@ -284,13 +337,14 @@ const arkadeService: ArkadeService = {
 
     unrollInFlight = true
     try {
-      const wasm = await getArkWasm()
-      const result = await wasm.ark_run_unilateral_unroll(
-        params.txid,
-        params.vout,
-        (event: ArkadeUnrollProgressEvent) => {
-          onProgress(event)
-        },
+      const result = await invokeWasmArk((wasmModule) =>
+        wasmModule.ark_run_unilateral_unroll(
+          params.txid,
+          params.vout,
+          (event: ArkadeUnrollProgressEvent) => {
+            onProgress(event)
+          },
+        ),
       )
       await persistAfterCriticalOperation()
       return result as { vtxoTxid: string }
@@ -302,8 +356,9 @@ const arkadeService: ArkadeService = {
   async completeUnilateralExit(
     params: ArkadeCompleteUnilateralExitParams,
   ): Promise<string> {
-    const wasm = await getArkWasm()
-    const txid = await wasm.ark_complete_unilateral_exit(params)
+    const txid = await invokeWasmArk((wasmModule) =>
+      wasmModule.ark_complete_unilateral_exit(params),
+    )
     await persistAfterCriticalOperation()
     return txid
   },
@@ -311,17 +366,21 @@ const arkadeService: ArkadeService = {
   async getCollaborativeExitFeeEstimate(
     params: ArkadeCollaborativeExitFeeEstimateParams,
   ): Promise<ArkadeCollaborativeExitFeeEstimate> {
-    const wasm = await getArkWasm()
-    return wasm.ark_get_collaborative_exit_fee_estimate(
-      params,
-    ) as Promise<ArkadeCollaborativeExitFeeEstimate>
+    return invokeWasmArk(
+      (wasmModule) =>
+        wasmModule.ark_get_collaborative_exit_fee_estimate(
+          params,
+        ) as Promise<ArkadeCollaborativeExitFeeEstimate>,
+    )
   },
 
   async estimateUnilateralExit(
     params: ArkadeUnilateralExitFeeEstimateParams,
   ): Promise<ArkadeUnilateralExitFeeEstimate> {
-    const wasm = await getArkWasm()
-    return wasm.ark_estimate_unilateral_exit(params) as Promise<ArkadeUnilateralExitFeeEstimate>
+    return invokeWasmArk(
+      (wasmModule) =>
+        wasmModule.ark_estimate_unilateral_exit(params) as Promise<ArkadeUnilateralExitFeeEstimate>,
+    )
   },
 }
 
