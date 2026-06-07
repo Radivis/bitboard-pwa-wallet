@@ -178,6 +178,10 @@ path = "../ark-rest"
 version = "0.3.0"
 features = ["futures"]
 
+[target.'cfg(all(target_arch = "wasm32", target_os = "unknown"))'.dependencies.jiff]
+version = "0.2.1"
+features = ["js"]
+
 [target.'cfg(all(target_arch = "wasm32", target_os = "unknown"))'.dependencies.wasm-bindgen-futures]
 version = "0.4"
 

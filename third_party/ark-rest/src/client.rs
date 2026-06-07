@@ -39,9 +39,24 @@ use bitcoin::base64::Engine;
 use bitcoin::secp256k1::PublicKey;
 use bitcoin::Psbt;
 use bitcoin::Txid;
+use std::collections::VecDeque;
+
 use futures::stream;
 use futures::Stream;
-use futures::StreamExt;
+
+use crate::sse::{poll_next_sse_event, SseDataLineBuffer};
+
+fn parse_batch_event_line(line: &str) -> Result<StreamEvent, Error> {
+    let response: models::GetEventStreamResponse = serde_json::from_str(line)
+        .map_err(|e| Error::conversion(format!("Failed to parse JSON: {e}")))?;
+    StreamEvent::try_from(response).map_err(Error::conversion)
+}
+
+fn parse_subscription_event_line(line: &str) -> Result<SubscriptionResponse, Error> {
+    let response: models::GetSubscriptionResponse = serde_json::from_str(line)
+        .map_err(|e| Error::conversion(format!("Failed to parse JSON: {e}")))?;
+    SubscriptionResponse::try_from(response).map_err(Error::conversion)
+}
 
 pub struct Client {
     configuration: apis::configuration::Configuration,
@@ -332,51 +347,25 @@ impl Client {
             )));
         }
 
-        // Convert the response into a byte stream using async chunks
         let byte_stream = request.bytes_stream();
 
-        // Create the SSE event stream
-        let stream = stream::unfold(byte_stream, |mut byte_stream| async move {
-            loop {
-                match byte_stream.next().await {
-                    Some(chunk_result) => {
-                        let result = match chunk_result {
-                            Ok(bytes) => {
-                                let event = String::from_utf8(bytes.to_vec());
-                                match event {
-                                    Ok(event) => {
-                                        let event = event.trim();
-                                        // Skip empty lines and SSE comments
-                                        if event.is_empty() || event.starts_with(':') {
-                                            continue;
-                                        }
-                                        // Strip SSE `data: ` prefix
-                                        let event = event.strip_prefix("data: ").unwrap_or(event);
-                                        if let Ok(response) =
-                                            serde_json::from_str::<models::GetEventStreamResponse>(
-                                                event,
-                                            )
-                                        {
-                                            match StreamEvent::try_from(response) {
-                                                Ok(stream_event) => Ok(stream_event),
-                                                Err(e) => Err(Error::conversion(e)),
-                                            }
-                                        } else {
-                                            // Handle parse error
-                                            Err(Error::conversion("Failed to parse JSON"))
-                                        }
-                                    }
-                                    Err(error) => Err(Error::conversion(error)),
-                                }
-                            }
-                            Err(e) => Err(Error::request(e)),
-                        };
-                        return Some((result, byte_stream));
-                    }
-                    None => return None,
-                }
-            }
-        });
+        let stream = stream::unfold(
+            (
+                byte_stream,
+                SseDataLineBuffer::new(),
+                VecDeque::<Result<StreamEvent, Error>>::new(),
+            ),
+            |(mut byte_stream, mut line_buffer, mut pending_events)| async move {
+                let event = poll_next_sse_event(
+                    &mut byte_stream,
+                    &mut line_buffer,
+                    &mut pending_events,
+                    &mut parse_batch_event_line,
+                )
+                .await?;
+                Some((event, (byte_stream, line_buffer, pending_events)))
+            },
+        );
 
         Ok(Box::pin(stream))
     }
@@ -557,53 +546,25 @@ impl Client {
             )));
         }
 
-        // Convert the response into a byte stream using async chunks
         let byte_stream = request.bytes_stream();
 
-        // Create the SSE event stream
-        let stream = stream::unfold(byte_stream, |mut byte_stream| async move {
-            loop {
-                match byte_stream.next().await {
-                    Some(chunk_result) => {
-                        let result = match chunk_result {
-                            Ok(bytes) => {
-                                let event = String::from_utf8(bytes.to_vec());
-                                match event {
-                                    Ok(event) => {
-                                        let event = event.trim();
-                                        // Skip empty lines and SSE comments
-                                        if event.is_empty() || event.starts_with(':') {
-                                            continue;
-                                        }
-                                        // Strip SSE `data: ` prefix
-                                        let event = event.strip_prefix("data: ").unwrap_or(event);
-                                        if let Ok(response) =
-                                            serde_json::from_str::<models::GetSubscriptionResponse>(
-                                                event,
-                                            )
-                                        {
-                                            match SubscriptionResponse::try_from(response) {
-                                                Ok(subscription_response) => {
-                                                    Ok(subscription_response)
-                                                }
-                                                Err(e) => Err(Error::conversion(e)),
-                                            }
-                                        } else {
-                                            // Handle parse error
-                                            Err(Error::conversion("Failed to parse JSON"))
-                                        }
-                                    }
-                                    Err(error) => Err(Error::conversion(error)),
-                                }
-                            }
-                            Err(e) => Err(Error::request(e)),
-                        };
-                        return Some((result, byte_stream));
-                    }
-                    None => return None,
-                }
-            }
-        });
+        let stream = stream::unfold(
+            (
+                byte_stream,
+                SseDataLineBuffer::new(),
+                VecDeque::<Result<SubscriptionResponse, Error>>::new(),
+            ),
+            |(mut byte_stream, mut line_buffer, mut pending_events)| async move {
+                let event = poll_next_sse_event(
+                    &mut byte_stream,
+                    &mut line_buffer,
+                    &mut pending_events,
+                    &mut parse_subscription_event_line,
+                )
+                .await?;
+                Some((event, (byte_stream, line_buffer, pending_events)))
+            },
+        );
 
         Ok(Box::pin(stream))
     }

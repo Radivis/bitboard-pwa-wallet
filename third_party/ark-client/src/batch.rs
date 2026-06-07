@@ -2,6 +2,7 @@ use crate::error::ErrorContext as _;
 use crate::swap_storage::SwapStorage;
 use crate::utils::sleep;
 use crate::utils::timeout_op;
+use crate::utils::unix_timestamp_secs;
 use crate::wallet::BoardingWallet;
 use crate::wallet::OnchainWallet;
 use crate::Blockchain;
@@ -1249,11 +1250,7 @@ where
                 Ok((sig, owner_pk))
             };
 
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map_err(|e| Error::ad_hoc(e.to_string()))
-            .context("failed to compute now timestamp")?;
-        let now = now.as_secs();
+        let now = unix_timestamp_secs().context("failed to compute now timestamp")?;
         let expire_at = now + (2 * 60);
 
         if let Some(packet) = create_asset_preservation_packet(&inputs, &outputs)? {

@@ -1,6 +1,12 @@
 use crate::Error;
 use std::time::Duration;
 
+/// Unix seconds for intent expiry and similar (WASM-safe; avoids `std::time::SystemTime`).
+pub(crate) fn unix_timestamp_secs() -> Result<u64, Error> {
+    let seconds = jiff::Timestamp::now().as_second();
+    u64::try_from(seconds).map_err(|_| Error::ad_hoc("system clock before UNIX epoch"))
+}
+
 pub(crate) async fn sleep(duration: Duration) {
     #[cfg(target_arch = "wasm32")]
     {
