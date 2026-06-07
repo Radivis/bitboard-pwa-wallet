@@ -216,7 +216,7 @@ impl ArkSession {
         let mut delegated = 0u32;
         let mut failed = 0u32;
 
-        let cosigner_pk = bitcoin::secp256k1::PublicKey::from(delegator_pubkey.inner);
+        let cosigner_pk = delegator_pubkey.inner;
         match self.client.generate_delegate(cosigner_pk).await {
             Ok(mut delegate) => {
                 if self
@@ -604,7 +604,7 @@ fn map_history_row(transaction: Transaction) -> Option<PaymentRowDto> {
             amount,
             created_at,
         } => {
-            let signed = amount.to_sat() as i64;
+            let signed = amount.to_sat();
             Some(PaymentRowDto {
                 direction: if signed >= 0 {
                     "incoming".to_string()
@@ -623,7 +623,7 @@ fn map_history_row(transaction: Transaction) -> Option<PaymentRowDto> {
             created_at,
             ..
         } => {
-            let signed = amount.to_sat() as i64;
+            let signed = amount.to_sat();
             Some(PaymentRowDto {
                 direction: if signed >= 0 {
                     "incoming".to_string()
