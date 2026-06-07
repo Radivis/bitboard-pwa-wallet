@@ -263,6 +263,7 @@ export function useArkadeSendMutation() {
         getArkadeWorker().sendPayment(params),
       )
     },
+    retry: false,
     onSuccess: async (txid) => {
       toast.success(`Arkade payment sent (${txid.slice(0, 12)}…)`)
       if (activeWalletId != null && isArkadeSupportedNetworkMode(networkMode)) {

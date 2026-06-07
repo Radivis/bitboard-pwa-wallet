@@ -1,5 +1,5 @@
 import type { ComponentProps } from 'react'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Link } from '@tanstack/react-router'
 import { AlertTriangle, ArrowUpRight, ScanQrCode } from 'lucide-react'
 import { PageHeader } from '@/components/PageHeader'
@@ -140,7 +140,7 @@ export function SendTransactionEntryCard({
   isPending: boolean
   buildOrLabPreparing: boolean
   canBuild: boolean
-  onSubmitBuild: () => void
+  onSubmitBuild: () => void | Promise<void>
   onApplyScannedPayload: (raw: string) => void
   /** Mainnet && persisted fiat denomination mode. */
   mainnetFiatMode: boolean
@@ -152,7 +152,10 @@ export function SendTransactionEntryCard({
   onFiatModeUserToggle?: (nextFiatMode: boolean) => void
 }) {
   const [recipientScanOpen, setRecipientScanOpen] = useState(false)
+  const submitInFlightRef = useRef(false)
   const hasUsableFiatSpot = isUsableBtcSpotPriceInFiat(btcPriceInFiat)
+  const showSubmitSpinner =
+    buildOrLabPreparing || (isPending && (isArkadeSendMode || isLightningSendMode))
 
   const arkadeSpendableSats = arkadeBalanceSats ?? 0
   const hideEditableAmountForZeroMainnet =
@@ -237,7 +240,11 @@ export function SendTransactionEntryCard({
             className="space-y-4"
             onSubmit={(e) => {
               e.preventDefault()
-              onSubmitBuild()
+              if (!canBuild || isPending || submitInFlightRef.current) return
+              submitInFlightRef.current = true
+              void Promise.resolve(onSubmitBuild()).finally(() => {
+                submitInFlightRef.current = false
+              })
             }}
           >
             <div className="space-y-2">
@@ -532,16 +539,20 @@ export function SendTransactionEntryCard({
               />
             )}
 
-            {buildOrLabPreparing ? (
+            {showSubmitSpinner ? (
               <LoadingSpinner
                 text={
-                  networkMode === 'lab'
-                    ? 'Preparing transaction...'
-                    : 'Building transaction...'
+                  isArkadeSendMode
+                    ? 'Sending Arkade payment...'
+                    : isLightningSendMode
+                      ? 'Sending Lightning payment...'
+                      : networkMode === 'lab'
+                        ? 'Preparing transaction...'
+                        : 'Building transaction...'
                 }
               />
             ) : (
-              <Button type="submit" className="w-full" disabled={!canBuild}>
+              <Button type="submit" className="w-full" disabled={!canBuild || isPending}>
                 {submitLabel}
               </Button>
             )}

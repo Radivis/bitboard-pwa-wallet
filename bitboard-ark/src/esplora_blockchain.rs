@@ -254,36 +254,6 @@ async fn collect_address_utxos(
     Ok(explorer_utxos)
 }
 
-#[cfg(test)]
-mod tests {
-    use esplora_client::UtxoStatus;
-
-    use super::utxo_confirmations;
-
-    #[test]
-    fn confirmations_use_chain_tip_not_block_height() {
-        let status = UtxoStatus {
-            confirmed: true,
-            block_height: Some(100),
-            block_hash: None,
-            block_time: Some(1_700_000_000),
-        };
-        assert_eq!(utxo_confirmations(&status, Some(109)), 10);
-        assert_ne!(utxo_confirmations(&status, Some(109)), 101);
-    }
-
-    #[test]
-    fn unconfirmed_utxo_has_zero_confirmations() {
-        let status = UtxoStatus {
-            confirmed: false,
-            block_height: None,
-            block_hash: None,
-            block_time: None,
-        };
-        assert_eq!(utxo_confirmations(&status, Some(500)), 0);
-    }
-}
-
 async fn map_tx_status(
     client: &EsploraAsyncClient,
     txid: &Txid,
@@ -321,4 +291,34 @@ async fn map_fee_rate(client: &EsploraAsyncClient) -> Result<f64, ark_client::Er
         .or_else(|| estimates.values().copied().reduce(f64::min))
         .unwrap_or(1.0);
     Ok(fee_rate.max(1.0))
+}
+
+#[cfg(test)]
+mod tests {
+    use esplora_client::UtxoStatus;
+
+    use super::utxo_confirmations;
+
+    #[test]
+    fn confirmations_use_chain_tip_not_block_height() {
+        let status = UtxoStatus {
+            confirmed: true,
+            block_height: Some(100),
+            block_hash: None,
+            block_time: Some(1_700_000_000),
+        };
+        assert_eq!(utxo_confirmations(&status, Some(109)), 10);
+        assert_ne!(utxo_confirmations(&status, Some(109)), 101);
+    }
+
+    #[test]
+    fn unconfirmed_utxo_has_zero_confirmations() {
+        let status = UtxoStatus {
+            confirmed: false,
+            block_height: None,
+            block_hash: None,
+            block_time: None,
+        };
+        assert_eq!(utxo_confirmations(&status, Some(500)), 0);
+    }
 }

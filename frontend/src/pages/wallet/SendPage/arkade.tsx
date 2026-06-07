@@ -52,6 +52,7 @@ export function useSendFlowArkade({
   })
 
   const submitArkadePayment = useCallback(async () => {
+    if (arkadeSendMutation.isPending) return
     await arkadeSendMutation.mutateAsync({
       address: normalizedRecipient,
       amountSats,

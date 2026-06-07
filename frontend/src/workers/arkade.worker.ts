@@ -44,6 +44,17 @@ let activeSessionParams: {
 } | null = null
 let unrollInFlight = false
 
+type SendPaymentInFlight = {
+  fingerprint: string
+  promise: Promise<string>
+}
+
+let sendPaymentInFlight: SendPaymentInFlight | null = null
+
+function sendPaymentFingerprint(params: ArkadeSendParams): string {
+  return `${params.address}\0${params.amountSats}`
+}
+
 async function getArkWasm(): Promise<BitboardArkWasm> {
   if (wasmInitError) {
     throw new Error(`WASM init failed: ${wasmInitError}`)
@@ -168,6 +179,7 @@ async function closeSessionImpl(): Promise<void> {
   activeSessionKey = null
   activeSessionParams = null
   unrollInFlight = false
+  sendPaymentInFlight = null
 }
 
 async function openSessionImpl(
@@ -249,9 +261,28 @@ const arkadeService: ArkadeService = {
   },
 
   async sendPayment(params: ArkadeSendParams): Promise<string> {
-    const txid = await invokeWasmArk((wasmModule) => wasmModule.ark_send_payment(params))
-    await persistAfterCriticalOperation()
-    return txid
+    const fingerprint = sendPaymentFingerprint(params)
+    if (sendPaymentInFlight != null) {
+      if (sendPaymentInFlight.fingerprint === fingerprint) {
+        return sendPaymentInFlight.promise
+      }
+      throw new Error('Another Arkade payment is already in progress')
+    }
+
+    const promise = (async () => {
+      const txid = await invokeWasmArk((wasmModule) => wasmModule.ark_send_payment(params))
+      await persistAfterCriticalOperation()
+      return txid
+    })()
+
+    sendPaymentInFlight = { fingerprint, promise }
+    try {
+      return await promise
+    } finally {
+      if (sendPaymentInFlight?.promise === promise) {
+        sendPaymentInFlight = null
+      }
+    }
   },
 
   async getTransactionHistory(): Promise<ArkadePaymentRow[]> {
