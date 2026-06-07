@@ -1,9 +1,8 @@
 use std::sync::Arc;
-use std::time::Duration;
 
 use ark_client::{Blockchain, SpendStatus, TxStatus};
 use ark_core::ExplorerUtxo;
-use bitcoin::{Address, Amount, OutPoint, Transaction, Txid};
+use bitcoin::{Address, OutPoint, Transaction, Txid};
 
 use crate::error::{ArkResult, ArkWasmError};
 

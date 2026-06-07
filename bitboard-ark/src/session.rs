@@ -10,7 +10,7 @@ use ark_core::send::SendReceiver;
 use ark_core::server::VirtualTxOutPoint;
 use ark_delegator::DelegatorClient;
 use bip39::Mnemonic;
-use bitcoin::bip32::{DerivationPath, Xpriv};
+use bitcoin::bip32::Xpriv;
 use bitcoin::key::Secp256k1;
 use bitcoin::secp256k1::rand::rngs::OsRng;
 use bitcoin::{Address, Amount, Network, OutPoint, PublicKey, XOnlyPublicKey};
@@ -18,9 +18,9 @@ use bitcoin::{Address, Amount, Network, OutPoint, PublicKey, XOnlyPublicKey};
 use crate::api_types::{
     BalanceDto, CollaborativeExitFeeEstimateDto, CollaborativeExitParams,
     CompleteUnilateralExitParams, DelegateInfoDto, DelegateSpendableResult, ExitCandidateRow,
-    FinalizePendingResult, IntentFeeConfiguredDto, OnchainBumperInfoDto, OpenSessionResult,
-    PaymentRowDto, SendPaymentParams, UnilateralExitFeeEstimateDto, UnilateralExitFeeParams,
-    UnrollProgressEvent, UnrollResult,
+    FinalizePendingResult, IntentFeeConfiguredDto, OnchainBumperInfoDto, PaymentRowDto,
+    SendPaymentParams, UnilateralExitFeeEstimateDto, UnilateralExitFeeParams, UnrollProgressEvent,
+    UnrollResult,
 };
 use crate::error::{ArkResult, ArkWasmError};
 use crate::esplora_blockchain::EsploraBlockchain;
@@ -44,7 +44,6 @@ pub struct ArkSession {
     wallet_db: Arc<JsonPersistenceDb>,
     delegator: Option<DelegatorClient>,
     network_mode: NetworkMode,
-    esplora_url: String,
 }
 
 impl ArkSession {
@@ -118,7 +117,6 @@ impl ArkSession {
                 wallet_db,
                 delegator,
                 network_mode,
-                esplora_url,
             },
             reset_v1,
         ))
@@ -553,12 +551,6 @@ impl ArkSession {
     fn network(&self) -> Network {
         self.network_mode.to_bitcoin_network()
     }
-}
-
-fn parse_delegator_xonly_pubkey(value: &str) -> ArkResult<XOnlyPublicKey> {
-    value
-        .parse::<XOnlyPublicKey>()
-        .map_err(|error| ArkWasmError::Message(format!("invalid delegator pubkey: {error}")))
 }
 
 fn parse_delegator_public_key(value: &str) -> ArkResult<PublicKey> {
