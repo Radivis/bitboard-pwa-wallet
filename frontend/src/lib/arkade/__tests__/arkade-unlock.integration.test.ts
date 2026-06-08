@@ -10,6 +10,8 @@ const openArkadeSessionForWalletMock = vi.hoisted(() =>
   vi.fn().mockResolvedValue(undefined),
 )
 
+const reportArkadeSessionOpenErrorMock = vi.hoisted(() => vi.fn())
+
 const unlockCallOrder = vi.hoisted(() => [] as string[])
 
 const setWalletStatusMock = vi.hoisted(() =>
@@ -22,6 +24,11 @@ vi.mock('@/stores/featureStore', () => ({
   useFeatureStore: {
     getState: () => featureState,
   },
+}))
+
+vi.mock('@/lib/arkade/arkade-session-open-error-toast', () => ({
+  reportArkadeSessionOpenError: (...args: unknown[]) =>
+    reportArkadeSessionOpenErrorMock(...args),
 }))
 
 vi.mock('@/lib/arkade/arkade-session-service', () => ({
@@ -166,9 +173,8 @@ describe('openArkadeSession after unlock (integration)', () => {
   })
 
   it('UNLOCK-ARK-04 Arkade session open failure must not reject unlock', async () => {
-    openArkadeSessionForWalletMock.mockRejectedValueOnce(
-      new Error('Mutinynet operator unreachable'),
-    )
+    const sessionOpenError = new Error('Mutinynet operator unreachable')
+    openArkadeSessionForWalletMock.mockRejectedValueOnce(sessionOpenError)
 
     await expect(
       loadDescriptorWalletAndSync({
@@ -182,5 +188,6 @@ describe('openArkadeSession after unlock (integration)', () => {
     ).resolves.toBeUndefined()
 
     expect(setWalletStatusMock).toHaveBeenCalledWith('unlocked')
+    expect(reportArkadeSessionOpenErrorMock).toHaveBeenCalledWith(sessionOpenError)
   })
 })

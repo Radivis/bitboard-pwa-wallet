@@ -17,6 +17,11 @@ export function blockWalletDatabaseAccessForTeardown(): void {
   walletDatabaseAccessBlockedForTeardown = true
 }
 
+/** @internal Vitest only — clears module teardown guard between tests. */
+export function resetWalletDatabaseAccessTeardownGuardForTests(): void {
+  walletDatabaseAccessBlockedForTeardown = false
+}
+
 function assertWalletDatabaseAccessAllowed(): void {
   if (walletDatabaseAccessBlockedForTeardown) {
     throw new Error(WALLET_DATABASE_TEARDOWN_BLOCKED_MESSAGE)

@@ -17,6 +17,11 @@ export function blockLabDatabaseAccessForTeardown(): void {
   labDatabaseAccessBlockedForTeardown = true
 }
 
+/** @internal Vitest only — clears module teardown guard between tests. */
+export function resetLabDatabaseAccessTeardownGuardForTests(): void {
+  labDatabaseAccessBlockedForTeardown = false
+}
+
 function assertLabDatabaseAccessAllowed(): void {
   if (labDatabaseAccessBlockedForTeardown) {
     throw new Error(LAB_DATABASE_TEARDOWN_BLOCKED_MESSAGE)

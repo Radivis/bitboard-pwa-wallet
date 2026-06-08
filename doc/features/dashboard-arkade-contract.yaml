@@ -52,9 +52,8 @@ feature:
         description: awaitArkadeSessionReady waits for in-flight session open before worker calls
       - id: UNLOCK-ARK-04
         description: >-
-          Desired follow-up — Arkade session open failure must not reject unlock or show
-          generic password toast on WalletUnlock
-        status: todo
+          Arkade session open failure must not reject unlock; reportArkadeSessionOpenError
+          shows an Arkade-specific toast instead of generic password/corruption copy on WalletUnlock
     e2e_mocked_asp:
       - id: E2E-ARK-MOCK-01
         description: With VITE_E2E_ARKADE_MOCK, Signet + Arkade enabled, dashboard shows balance card with fixture balance
