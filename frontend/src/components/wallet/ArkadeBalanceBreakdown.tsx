@@ -2,9 +2,12 @@ import { Link } from '@tanstack/react-router'
 import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
 import type { ArkadeBalanceInfo } from '@/workers/arkade-api'
 import {
+  arkadeCollaborativeExitInProgressSats,
   arkadeDashboardSpendableSats,
   arkadeHasBoardingBalance,
+  arkadeHasExitInProgress,
   arkadeOffchainSpendableSats,
+  arkadeUnilateralExitInProgressSats,
 } from '@/lib/arkade/arkade-balance-display'
 
 interface ArkadeBalanceBreakdownProps {
@@ -21,6 +24,9 @@ export function ArkadeBalanceBreakdown({
   const offchainSpendableSats = arkadeOffchainSpendableSats(balance)
   const dashboardSpendableSats = arkadeDashboardSpendableSats(balance)
   const showBoardingBreakdown = arkadeHasBoardingBalance(balance)
+  const unilateralExitSats = arkadeUnilateralExitInProgressSats(balance)
+  const collaborativeExitSats = arkadeCollaborativeExitInProgressSats(balance)
+  const showExitBreakdown = arkadeHasExitInProgress(balance)
   const showRecoverableTotal =
     balance.totalSats > dashboardSpendableSats + boardingPendingSats
 
@@ -56,6 +62,22 @@ export function ArkadeBalanceBreakdown({
             <p>
               Offchain VTXOs:{' '}
               <BitcoinAmountDisplay amountSats={offchainSpendableSats} size="sm" />
+            </p>
+          )}
+        </div>
+      )}
+      {showExitBreakdown && (
+        <div className="space-y-0.5 text-xs text-muted-foreground">
+          {unilateralExitSats > 0 && (
+            <p data-testid="arkade-balance-unilateral-exit">
+              Unilateral exit in progress: −{' '}
+              <BitcoinAmountDisplay amountSats={unilateralExitSats} size="sm" />
+            </p>
+          )}
+          {collaborativeExitSats > 0 && (
+            <p data-testid="arkade-balance-collaborative-exit">
+              Collaborative exit in progress: −{' '}
+              <BitcoinAmountDisplay amountSats={collaborativeExitSats} size="sm" />
             </p>
           )}
         </div>

@@ -135,11 +135,21 @@ function deleteLegacyArkadeIndexedDb(
   }
 }
 
+/** WASM operator sync + SDK flush only — store refresh runs on the main thread. */
+async function syncWithOperatorCore(): Promise<void> {
+  await invokeWasmArk((wasmModule) => wasmModule.ark_sync_with_operator())
+  await flushSdkPersistenceNowOrThrow()
+}
+
 async function persistAfterCriticalOperation(): Promise<void> {
   const { awaitBackgroundArkadeOperatorSync } = await import(
     '@/lib/arkade/arkade-operator-sync'
   )
   await awaitBackgroundArkadeOperatorSync()
+  if (activeSessionParams != null) {
+    await syncWithOperatorCore()
+    return
+  }
   await flushSdkPersistenceNowOrThrow()
 }
 
@@ -263,8 +273,11 @@ const arkadeService: ArkadeService = {
   },
 
   async syncWithOperator(): Promise<void> {
-    await invokeWasmArk((wasmModule) => wasmModule.ark_sync_with_operator())
-    await persistAfterCriticalOperation()
+    const { awaitBackgroundArkadeOperatorSync } = await import(
+      '@/lib/arkade/arkade-operator-sync'
+    )
+    await awaitBackgroundArkadeOperatorSync()
+    await syncWithOperatorCore()
   },
 
   async flushSdkPersistence(): Promise<void> {

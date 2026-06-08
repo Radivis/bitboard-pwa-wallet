@@ -6,6 +6,8 @@ export interface ArkadeBalanceInfo {
   totalSats: number
   boardingSpendableSats?: number
   boardingPendingSats?: number
+  unilateralExitInProgressSats?: number
+  collaborativeExitInProgressSats?: number
 }
 
 export interface ArkadeDelegateInfo {

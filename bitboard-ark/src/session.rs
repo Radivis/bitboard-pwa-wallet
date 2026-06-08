@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
@@ -31,14 +32,19 @@ use crate::api_types::{
 use crate::balance_display::build_arkade_balance_dto;
 use crate::error::{ArkResult, ArkWasmError};
 use crate::esplora_blockchain::EsploraBlockchain;
+use crate::exit_balance::{
+    PENDING_EXIT_KIND_COLLABORATIVE, PENDING_EXIT_KIND_UNILATERAL,
+    gross_offchain_spendable_sats_from_snapshot, reconcile_pending_exit_deductions,
+    sum_pending_exit_sats_by_kind, unilateral_exit_in_progress_sats_from_snapshot,
+};
 use crate::network::NetworkMode;
 use crate::offchain_snapshot::{
     offchain_balance_sats_from_snapshot, offchain_history_from_snapshot,
     snapshot_from_virtual_tx_outpoints,
 };
 use crate::persistence::{
-    BitboardArkPersistence, JsonPersistenceDb, OperatorIdentity, SharedPersistenceDb,
-    network_label, validate_operator_identity,
+    BitboardArkPersistence, JsonPersistenceDb, OperatorIdentity, PendingExitDeductionRecord,
+    SharedPersistenceDb, network_label, validate_operator_identity,
 };
 
 const CLIENT_NAME: &str = "bitboard-pwa-wallet";
@@ -176,8 +182,107 @@ impl ArkSession {
             current_unix_timestamp(),
             all_points,
         );
-        self.wallet_db.set_offchain_vtxo_snapshot(snapshot);
+        self.wallet_db.set_offchain_vtxo_snapshot(snapshot.clone());
+        self.reconcile_pending_exit_deductions_with_snapshot(&snapshot)?;
         Ok(())
+    }
+
+    fn reconcile_pending_exit_deductions_with_snapshot(
+        &self,
+        snapshot: &crate::persistence::OffchainVtxoSnapshot,
+    ) -> ArkResult<()> {
+        let mut pending = self.wallet_db.pending_exit_deductions();
+        reconcile_pending_exit_deductions(&mut pending, snapshot)?;
+        self.wallet_db.set_pending_exit_deductions(pending);
+        Ok(())
+    }
+
+    fn exit_balance_components(&self) -> ArkResult<(u64, u64)> {
+        let pending = self.wallet_db.pending_exit_deductions();
+        let snapshot_unilateral_sats = self
+            .wallet_db
+            .snapshot()
+            .offchain_vtxo_snapshot
+            .as_ref()
+            .map(unilateral_exit_in_progress_sats_from_snapshot)
+            .transpose()?
+            .unwrap_or(0);
+        let pending_unilateral_sats =
+            sum_pending_exit_sats_by_kind(&pending, PENDING_EXIT_KIND_UNILATERAL);
+        let unilateral_exit_in_progress_sats =
+            snapshot_unilateral_sats.saturating_add(pending_unilateral_sats);
+        let collaborative_exit_in_progress_sats =
+            sum_pending_exit_sats_by_kind(&pending, PENDING_EXIT_KIND_COLLABORATIVE);
+        Ok((
+            unilateral_exit_in_progress_sats,
+            collaborative_exit_in_progress_sats,
+        ))
+    }
+
+    async fn vtxo_amount_sats_for_outpoint(&self, txid: &str, vout: u32) -> ArkResult<u64> {
+        if let Some(snapshot) = self.wallet_db.snapshot().offchain_vtxo_snapshot.as_ref() {
+            for record in &snapshot.virtual_tx_outpoints {
+                if record.txid == txid && record.vout == vout {
+                    return Ok(record.amount_sats);
+                }
+            }
+        }
+
+        let (vtxo_list, _) = self
+            .client
+            .list_vtxos()
+            .await
+            .map_err(|error| ArkWasmError::Message(error.to_string()))?;
+        let target_txid = txid
+            .parse()
+            .map_err(|error| ArkWasmError::Message(format!("invalid txid: {error}")))?;
+        let amount = vtxo_list
+            .all()
+            .find(|vtp| vtp.outpoint.txid == target_txid && vtp.outpoint.vout == vout)
+            .map(|vtp| vtp.amount.to_sat())
+            .ok_or_else(|| {
+                ArkWasmError::Message(format!("VTXO not found for outpoint {txid}:{vout}"))
+            })?;
+        Ok(amount)
+    }
+
+    fn record_pending_unilateral_exit(&self, txid: &str, vout: u32, amount_sats: u64) {
+        self.wallet_db
+            .push_pending_exit_deduction(PendingExitDeductionRecord {
+                kind: PENDING_EXIT_KIND_UNILATERAL.to_string(),
+                vtxo_txid: Some(txid.to_string()),
+                vout: Some(vout),
+                amount_sats,
+                started_at: current_unix_timestamp(),
+                baseline_offchain_spendable_sats: None,
+            });
+    }
+
+    fn record_pending_collaborative_exit(&self, amount_sats: u64, baseline_sats: u64) {
+        self.wallet_db
+            .push_pending_exit_deduction(PendingExitDeductionRecord {
+                kind: PENDING_EXIT_KIND_COLLABORATIVE.to_string(),
+                vtxo_txid: None,
+                vout: None,
+                amount_sats,
+                started_at: current_unix_timestamp(),
+                baseline_offchain_spendable_sats: Some(baseline_sats),
+            });
+    }
+
+    fn clear_pending_unilateral_exits_for_txids(&self, vtxo_txids: &[bitcoin::Txid]) {
+        let txid_set: HashSet<String> = vtxo_txids.iter().map(|txid| txid.to_string()).collect();
+        let mut pending = self.wallet_db.pending_exit_deductions();
+        pending.retain(|record| {
+            if record.kind != PENDING_EXIT_KIND_UNILATERAL {
+                return true;
+            }
+            record
+                .vtxo_txid
+                .as_ref()
+                .is_none_or(|txid| !txid_set.contains(txid))
+        });
+        self.wallet_db.set_pending_exit_deductions(pending);
     }
 
     pub fn peek_offchain_address(&self) -> ArkResult<String> {
@@ -191,12 +296,18 @@ impl ArkSession {
     }
 
     pub async fn balance(&self) -> ArkResult<BalanceDto> {
+        if let Some(snapshot) = self.wallet_db.snapshot().offchain_vtxo_snapshot.clone() {
+            self.reconcile_pending_exit_deductions_with_snapshot(&snapshot)?;
+        }
+
         let (pre_confirmed_sats, confirmed_sats, recoverable_sats) =
             if let Some(snapshot) = self.wallet_db.snapshot().offchain_vtxo_snapshot.as_ref() {
                 offchain_balance_sats_from_snapshot(snapshot)?
             } else {
                 (0, 0, 0)
             };
+        let (unilateral_exit_in_progress_sats, collaborative_exit_in_progress_sats) =
+            self.exit_balance_components()?;
         let onchain = self.client.onchain_wallet_balance()?;
         let boarding = self.boarding_status().await?;
         Ok(build_arkade_balance_dto(
@@ -206,6 +317,8 @@ impl ArkSession {
             onchain.confirmed.to_sat(),
             boarding.spendable_sats,
             boarding.pending_sats,
+            unilateral_exit_in_progress_sats,
+            collaborative_exit_in_progress_sats,
         ))
     }
 
@@ -422,6 +535,22 @@ impl ArkSession {
 
     pub async fn collaborative_exit(&self, params: CollaborativeExitParams) -> ArkResult<String> {
         let destination = parse_onchain_address(&params.destination_address, self.network())?;
+        let baseline_offchain_spendable_sats = self
+            .wallet_db
+            .snapshot()
+            .offchain_vtxo_snapshot
+            .as_ref()
+            .map(gross_offchain_spendable_sats_from_snapshot)
+            .transpose()?
+            .unwrap_or(0);
+        let exit_amount_sats = if let Some(amount_sats) = params.amount_sats {
+            amount_sats
+        } else {
+            let offchain = self.client.offchain_balance().await?;
+            offchain.total().to_sat()
+        };
+        self.record_pending_collaborative_exit(exit_amount_sats, baseline_offchain_spendable_sats);
+
         let mut rng = OsRng;
         let txid = if let Some(amount_sats) = params.amount_sats {
             self.client
@@ -569,6 +698,9 @@ impl ArkSession {
             vout,
         };
 
+        let amount_sats = self.vtxo_amount_sats_for_outpoint(txid, vout).await?;
+        self.record_pending_unilateral_exit(txid, vout, amount_sats);
+
         let branch = self.build_unilateral_branch(target).await?;
         let mut done_vtxo_txid = txid.to_string();
 
@@ -649,6 +781,7 @@ impl ArkSession {
             .client
             .send_on_chain_for_vtxo_txids(destination, &vtxo_txids)
             .await?;
+        self.clear_pending_unilateral_exits_for_txids(&vtxo_txids);
         Ok(txid.to_string())
     }
 

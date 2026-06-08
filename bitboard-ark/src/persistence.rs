@@ -62,6 +62,19 @@ pub struct OffchainVtxoSnapshot {
     pub virtual_tx_outpoints: Vec<VirtualTxOutPointRecord>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct PendingExitDeductionRecord {
+    pub kind: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub vtxo_txid: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub vout: Option<u32>,
+    pub amount_sats: u64,
+    pub started_at: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub baseline_offchain_spendable_sats: Option<u64>,
+}
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct WalletDbSnapshot {
     pub boarding_outputs: Vec<BoardingOutputSnapshot>,
@@ -70,6 +83,8 @@ pub struct WalletDbSnapshot {
     pub offchain_next_derivation_index: u32,
     #[serde(default)]
     pub offchain_vtxo_snapshot: Option<OffchainVtxoSnapshot>,
+    #[serde(default)]
+    pub pending_exit_deductions: Vec<PendingExitDeductionRecord>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -176,6 +191,29 @@ impl JsonPersistenceDb {
             .lock()
             .expect("persistence lock")
             .offchain_next_derivation_index = index;
+    }
+
+    pub fn pending_exit_deductions(&self) -> Vec<PendingExitDeductionRecord> {
+        self.inner
+            .lock()
+            .expect("persistence lock")
+            .pending_exit_deductions
+            .clone()
+    }
+
+    pub fn set_pending_exit_deductions(&self, records: Vec<PendingExitDeductionRecord>) {
+        self.inner
+            .lock()
+            .expect("persistence lock")
+            .pending_exit_deductions = records;
+    }
+
+    pub fn push_pending_exit_deduction(&self, record: PendingExitDeductionRecord) {
+        self.inner
+            .lock()
+            .expect("persistence lock")
+            .pending_exit_deductions
+            .push(record);
     }
 
     pub fn boarding_output_to_snapshot(boarding_output: &BoardingOutput) -> BoardingOutputSnapshot {

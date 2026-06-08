@@ -115,6 +115,7 @@ export function useArkadeExitFlow() {
       {
         txid: selectedCandidate.txid,
         vout: selectedCandidate.vout,
+        amountSats: selectedCandidate.amountSats,
         onProgress: (event) => {
           setUnrollProgress((previous) => [...previous, event])
           if (event.type === 'done' && event.vtxoTxid) {

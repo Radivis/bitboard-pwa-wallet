@@ -2,7 +2,6 @@ import { toast } from 'sonner'
 import { getArkadeWorker } from '@/workers/arkade-factory'
 import { saveLastSuccessfulOperatorSyncAtForConnection } from '@/lib/arkade/arkade-sdk-persistence'
 import { refreshArkadeStoreFromLoadedWasm } from '@/lib/arkade/arkade-persistence-store-sync'
-import { awaitArkadeSessionReady } from '@/lib/arkade/arkade-session-service'
 import { isArkadeActiveForNetworkMode } from '@/lib/arkade/arkade-utils'
 import { errorMessage } from '@/lib/shared/utils'
 import { invalidateArkadeDashboardQueries } from '@/lib/arkade/arkade-dashboard-sync'
@@ -53,14 +52,19 @@ async function syncArkadeWithOperatorCore(params: {
   invalidateArkadeDashboardQueries()
 }
 
-/** Operator sync when the WASM session may still be opening — waits for session open first. */
+/** Operator sync for dashboard polling — ensures the WASM session is open first. */
 export async function syncArkadeWithOperator(params: {
   password: string
   walletId: number
   networkMode: NetworkMode
   connectionId: string
 }): Promise<void> {
-  await awaitArkadeSessionReady()
+  const { openArkadeSessionForWallet } = await import('@/lib/arkade/arkade-session-service')
+  await openArkadeSessionForWallet({
+    password: params.password,
+    walletId: params.walletId,
+    networkMode: params.networkMode,
+  })
   await syncArkadeWithOperatorCore(params)
 }
 

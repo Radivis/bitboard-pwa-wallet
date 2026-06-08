@@ -2,6 +2,7 @@ mod api_types;
 mod balance_display;
 mod error;
 mod esplora_blockchain;
+mod exit_balance;
 mod network;
 mod offchain_snapshot;
 mod persistence;

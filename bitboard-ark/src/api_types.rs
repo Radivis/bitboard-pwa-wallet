@@ -10,13 +10,17 @@ pub struct OpenSessionResult {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BalanceDto {
-    /// Spendable offchain VTXOs (plus Ark on-chain bumper wallet when present).
+    /// Net spendable balance (offchain + bumper, minus exits in progress).
     pub confirmed_sats: u64,
     pub total_sats: u64,
     /// On-chain boarding UTXOs confirmed and ready to settle into VTXOs.
     pub boarding_spendable_sats: u64,
     /// On-chain boarding UTXOs awaiting confirmation.
     pub boarding_pending_sats: u64,
+    /// VTXOs unrolled on-chain awaiting timelock completion (unilateral exit).
+    pub unilateral_exit_in_progress_sats: u64,
+    /// VTXOs submitted for collaborative exit but still spendable in the last snapshot.
+    pub collaborative_exit_in_progress_sats: u64,
 }
 
 #[derive(Debug, Serialize)]

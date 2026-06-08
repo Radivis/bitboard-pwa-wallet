@@ -15,4 +15,14 @@ describe('arkade-balance-display', () => {
     expect(arkadeOffchainSpendableSats(balance)).toBe(30_603)
     expect(arkadeDashboardSpendableSats(balance)).toBe(230_603)
   })
+
+  it('uses net confirmedSats from wasm for dashboard headline', () => {
+    const balance = {
+      confirmedSats: 19_397,
+      totalSats: 19_397,
+      unilateralExitInProgressSats: 180_603,
+      collaborativeExitInProgressSats: 0,
+    }
+    expect(arkadeDashboardSpendableSats(balance)).toBe(19_397)
+  })
 })

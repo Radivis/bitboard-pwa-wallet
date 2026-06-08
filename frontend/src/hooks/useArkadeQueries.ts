@@ -31,10 +31,17 @@ import {
 import { scheduleBackgroundArkadeOperatorSync } from '@/lib/arkade/arkade-operator-sync'
 import { readArkadeDashboardStateFromStore } from '@/lib/arkade/arkade-persistence-store-sync'
 import {
+  applyOptimisticExitBalanceDeduction,
+  reconcileBalanceAfterExitOperation,
+  revertOptimisticExitBalanceDeduction,
+  type ExitBalanceOptimisticContext,
+} from '@/lib/arkade/arkade-exit-balance-optimistic'
+import {
   formatUnilateralUnrollSuccessMessage,
   shouldShowUnilateralUnrollProgressToast,
   unilateralUnrollProgressToastId,
 } from '@/lib/arkade/arkade-exit-utils'
+import { arkadeOffchainSpendableSats } from '@/lib/arkade/arkade-balance-display'
 import {
   isArkadeDelegatorConfigured,
   isArkadeSupportedNetworkMode,
@@ -552,7 +559,29 @@ export function useArkadeCollaborativeExitMutation() {
       assertArkadeSessionUnlocked(activeWalletId, password)
       return withReadyArkadeWorker(() => getArkadeWorker().collaborativeExit(params))
     },
-    onSuccess: async (txid) => {
+    onMutate: async (params) => {
+      if (activeWalletId == null || activeArkadeConnectionId == null) {
+        return undefined
+      }
+      const balanceKey = arkadeBalanceQueryKey(
+        activeWalletId,
+        networkMode,
+        activeArkadeConnectionId,
+      )
+      const previousBalance = queryClient.getQueryData<ArkadeBalanceInfo>(balanceKey)
+      const deductedSats =
+        params.amountSats ??
+        (previousBalance != null ? arkadeOffchainSpendableSats(previousBalance) : 0)
+      return applyOptimisticExitBalanceDeduction(
+        queryClient,
+        activeWalletId,
+        networkMode,
+        activeArkadeConnectionId,
+        deductedSats,
+        'collaborativeExitInProgressSats',
+      )
+    },
+    onSuccess: async (txid, _params, context) => {
       toast.success(`Collaborative exit started (${txid.slice(0, 12)}…)`)
       if (activeWalletId != null && activeArkadeConnectionId != null) {
         await invalidateArkadeWalletDataQueries(
@@ -561,11 +590,33 @@ export function useArkadeCollaborativeExitMutation() {
           networkMode,
           activeArkadeConnectionId,
         )
+        await reconcileExitBalanceAfterMutation(queryClient, context)
       }
     },
-    onError: (err) => {
+    onError: (err, _params, context) => {
+      if (context != null) {
+        revertOptimisticExitBalanceDeduction(queryClient, context)
+      }
       toast.error(errorMessage(err))
     },
+  })
+}
+
+async function reconcileExitBalanceAfterMutation(
+  queryClient: ReturnType<typeof useQueryClient>,
+  context: ExitBalanceOptimisticContext | undefined,
+): Promise<void> {
+  if (context == null) {
+    return
+  }
+  const fetched = await getArkadeWorker().getBalance()
+  const reconciled = reconcileBalanceAfterExitOperation(fetched, context)
+  queryClient.setQueryData(context.balanceKey, reconciled)
+  const walletState = useWalletStore.getState()
+  walletState.setArkadeDashboardState({
+    balance: reconciled,
+    payments: walletState.arkadePayments,
+    receiveAddress: walletState.arkadeReceiveAddress ?? '',
   })
 }
 
@@ -578,6 +629,7 @@ export function useArkadeUnilateralUnrollMutation() {
     mutationFn: async (params: {
       txid: string
       vout: number
+      amountSats: number
       onProgress: (event: ArkadeUnrollProgressEvent) => void
     }) => {
       assertArkadeSessionUnlocked(activeWalletId, password)
@@ -592,7 +644,20 @@ export function useArkadeUnilateralUnrollMutation() {
         }),
       )
     },
-    onSuccess: async (result) => {
+    onMutate: async (params) => {
+      if (activeWalletId == null || activeArkadeConnectionId == null) {
+        return undefined
+      }
+      return applyOptimisticExitBalanceDeduction(
+        queryClient,
+        activeWalletId,
+        networkMode,
+        activeArkadeConnectionId,
+        params.amountSats,
+        'unilateralExitInProgressSats',
+      )
+    },
+    onSuccess: async (result, _params, context) => {
       toast.dismiss(unilateralUnrollProgressToastId({ type: 'done', txid: result.vtxoTxid }))
       toast.success(formatUnilateralUnrollSuccessMessage(result.vtxoTxid))
       if (activeWalletId != null && activeArkadeConnectionId != null) {
@@ -602,9 +667,13 @@ export function useArkadeUnilateralUnrollMutation() {
           networkMode,
           activeArkadeConnectionId,
         )
+        await reconcileExitBalanceAfterMutation(queryClient, context)
       }
     },
-    onError: (err) => {
+    onError: (err, _params, context) => {
+      if (context != null) {
+        revertOptimisticExitBalanceDeduction(queryClient, context)
+      }
       toast.error(errorMessage(err))
     },
   })
