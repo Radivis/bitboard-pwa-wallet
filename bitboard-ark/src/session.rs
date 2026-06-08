@@ -29,7 +29,7 @@ use crate::api_types::{
     SendPaymentParams, UnilateralExitFeeEstimateDto, UnilateralExitFeeParams, UnrollProgressEvent,
     UnrollResult,
 };
-use crate::balance_display::build_arkade_balance_dto;
+use crate::balance_display::{ArkadeBalanceInputs, build_arkade_balance_dto};
 use crate::error::{ArkResult, ArkWasmError};
 use crate::esplora_blockchain::EsploraBlockchain;
 use crate::exit_balance::{
@@ -310,16 +310,16 @@ impl ArkSession {
             self.exit_balance_components()?;
         let onchain = self.client.onchain_wallet_balance()?;
         let boarding = self.boarding_status().await?;
-        Ok(build_arkade_balance_dto(
+        Ok(build_arkade_balance_dto(ArkadeBalanceInputs {
             pre_confirmed_sats,
-            confirmed_sats,
+            confirmed_offchain_sats: confirmed_sats,
             recoverable_sats,
-            onchain.confirmed.to_sat(),
-            boarding.spendable_sats,
-            boarding.pending_sats,
+            onchain_confirmed_sats: onchain.confirmed.to_sat(),
+            boarding_spendable_sats: boarding.spendable_sats,
+            boarding_pending_sats: boarding.pending_sats,
             unilateral_exit_in_progress_sats,
             collaborative_exit_in_progress_sats,
-        ))
+        }))
     }
 
     pub fn boarding_address(&self) -> ArkResult<String> {

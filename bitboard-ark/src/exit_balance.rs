@@ -4,9 +4,7 @@ use bitcoin::Amount;
 use bitcoin::Txid;
 
 use crate::offchain_snapshot::{offchain_balance_sats_from_snapshot, vtxo_list_from_snapshot};
-use crate::persistence::{
-    OffchainVtxoSnapshot, PendingExitDeductionRecord, VirtualTxOutPointRecord,
-};
+use crate::persistence::{OffchainVtxoSnapshot, PendingExitDeductionRecord};
 
 pub const PENDING_EXIT_KIND_UNILATERAL: &str = "unilateral";
 pub const PENDING_EXIT_KIND_COLLABORATIVE: &str = "collaborative";
@@ -90,6 +88,7 @@ pub fn reconcile_pending_exit_deductions(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::persistence::VirtualTxOutPointRecord;
     use bitcoin::hashes::Hash;
 
     fn sample_vtp_record(
