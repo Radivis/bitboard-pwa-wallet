@@ -60,6 +60,10 @@ feature:
         description: Mock operator returns fixture incoming payment; activity feed includes Arkade row
       - id: E2E-ARK-MOCK-03
         description: Receive → Dashboard round-trip preserves Arkade balance display
+      - id: E2E-ARK-MOCK-04
+        description: >-
+          Receive → inject mock incoming VTXO via control API → Dashboard shows updated
+          balance and activity row for the receive txid
   pages:
     - DashboardArkadeBlock:
       path: /wallet

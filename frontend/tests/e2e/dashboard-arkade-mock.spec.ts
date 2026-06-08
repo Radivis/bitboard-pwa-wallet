@@ -2,7 +2,7 @@
  * Dashboard Arkade contract E2E with mocked Ark operator (ASP).
  *
  * Run: `npm run test:e2e:arkade` from `frontend/` (sets VITE_E2E_ARKADE_MOCK=true).
- * Contracts: E2E-ARK-MOCK-01, E2E-ARK-MOCK-02, E2E-ARK-MOCK-03 — see
+ * Contracts: E2E-ARK-MOCK-01 … E2E-ARK-MOCK-04 — see
  * doc/features/dashboard-arkade-contract.yaml
  */
 import { test, expect } from '@playwright/test'
@@ -12,7 +12,10 @@ import { enableArkadeFeature, switchToSignet } from './helpers/arkade-settings'
 import {
   E2E_ARKADE_MOCK_DEFAULT_BALANCE_SATS,
   E2E_ARKADE_MOCK_INCOMING_TXID,
+  E2E_ARKADE_MOCK_RECEIVE_INCOMING_SATS,
+  E2E_ARKADE_MOCK_RECEIVE_INCOMING_TXID,
 } from '@/lib/arkade/e2e/arkade-operator-mock-state'
+import { simulateArkadeIncomingPayment } from './helpers/arkade-mock-control'
 import {
   buildArkadeMockPartitionId,
   installArkadeMockIsolation,
@@ -23,6 +26,8 @@ import {
   readDashboardArkadeBalanceSats,
   waitForArkadeActivityLoaded,
   waitForArkadeBalanceCard,
+  waitForDashboardArkadeBalanceSats,
+  waitForReceiveArkadeAddressReady,
 } from './helpers/dashboard-arkade'
 
 const ARKADE_MOCK_TEST_TIMEOUT_MS = process.env.CI ? 120_000 : 90_000
@@ -87,5 +92,37 @@ test.describe('Dashboard Arkade mock ASP @arkade', () => {
     })
     const afterSats = await readDashboardArkadeBalanceSats(page)
     expect(afterSats).toBe(beforeSats)
+  })
+
+  test('E2E-ARK-MOCK-04 simulated receive updates dashboard balance and activity', async ({
+    page,
+  }, testInfo) => {
+    const partitionId = buildArkadeMockPartitionId(testInfo)
+    const expectedTotalSats =
+      E2E_ARKADE_MOCK_DEFAULT_BALANCE_SATS + E2E_ARKADE_MOCK_RECEIVE_INCOMING_SATS
+
+    await createWalletViaUI(page)
+    await enableArkadeFeature(page)
+    await switchToSignet(page)
+    await goToWalletTab(page, 'Dashboard')
+
+    await expectArkadeBalanceNotEmptySession(page)
+    expect(await readDashboardArkadeBalanceSats(page)).toBe(E2E_ARKADE_MOCK_DEFAULT_BALANCE_SATS)
+
+    await goToReceiveArkadeMode(page)
+    await waitForReceiveArkadeAddressReady(page)
+
+    await simulateArkadeIncomingPayment(page, partitionId, {
+      txid: E2E_ARKADE_MOCK_RECEIVE_INCOMING_TXID,
+      amountSats: E2E_ARKADE_MOCK_RECEIVE_INCOMING_SATS,
+      timestamp: 1_700_000_100,
+    })
+
+    await goToWalletTab(page, 'Dashboard')
+    await waitForDashboardArkadeBalanceSats(page, expectedTotalSats)
+    await waitForArkadeActivityLoaded(page)
+    await expect(
+      page.getByTestId(`arkade-payment-${E2E_ARKADE_MOCK_RECEIVE_INCOMING_TXID}`),
+    ).toBeVisible()
   })
 })
