@@ -32,6 +32,7 @@ import {
 import { useSessionStore } from '@/stores/sessionStore'
 import { getCommittedNetworkMode, useWalletStore } from '@/stores/walletStore'
 import type { NetworkMode } from '@/stores/walletStore'
+import { arkadeDashboardWalletDataQueryOptions } from '@/lib/arkade/arkade-dashboard-query-options'
 import { errorMessage } from '@/lib/shared/utils'
 
 const ARKADE_WALLET_UNLOCKED_ERROR = 'Wallet must be unlocked'
@@ -170,8 +171,7 @@ export function useArkadeBalanceQuery() {
     ),
     enabled: sessionReady,
     queryFn: () => withReadyArkadeWorker(() => getArkadeWorker().getBalance()),
-    staleTime: 30_000,
-    refetchInterval: 15_000,
+    ...arkadeDashboardWalletDataQueryOptions,
   })
 }
 
@@ -187,8 +187,7 @@ export function useArkadeHistoryQuery() {
     ),
     enabled: sessionReady,
     queryFn: () => withReadyArkadeWorker(() => getArkadeWorker().getTransactionHistory()),
-    staleTime: 30_000,
-    refetchInterval: 15_000,
+    ...arkadeDashboardWalletDataQueryOptions,
   })
 }
 

@@ -37,6 +37,10 @@ feature:
     navigation:
       - id: DASH-ARK-30
         description: Dashboard → Receive (Arkade) → Dashboard preserves balance display without false empty-session state
+      - id: DASH-ARK-40
+        description: Dashboard Arkade balance/history refetch on remount and window focus so incoming payments register after Receive
+      - id: DASH-ARK-41
+        description: Receive (Arkade) polls balance while visible so WASM discovers incoming VTXOs before returning to Dashboard
     unlock_session:
       - id: UNLOCK-ARK-01
         description: loadDescriptorWalletAndSync calls openArkadeSessionForWallet when Arkade is active

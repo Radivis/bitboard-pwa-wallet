@@ -5,7 +5,7 @@ import { QRCodeSVG } from 'qrcode.react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { useArkadeAddressQuery } from '@/hooks/useArkadeQueries'
+import { useArkadeAddressQuery, useArkadeBalanceQuery } from '@/hooks/useArkadeQueries'
 import { isArkadeActiveForNetworkMode } from '@/lib/arkade/arkade-utils'
 import { useWalletStore } from '@/stores/walletStore'
 
@@ -13,6 +13,8 @@ export function ArkadeReceive() {
   const networkMode = useWalletStore((walletState) => walletState.networkMode)
   const [copied, setCopied] = useState(false)
   const addressQuery = useArkadeAddressQuery()
+  // Poll balance (and run WASM key discovery) while the user waits on Receive.
+  useArkadeBalanceQuery()
 
   if (!isArkadeActiveForNetworkMode(networkMode)) {
     return (
