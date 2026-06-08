@@ -40,10 +40,10 @@ describe('parseWalletPayloadJson', () => {
     })
     const parsed = parseWalletPayloadJson(json)
     expect(parsed.descriptorWallets).toHaveLength(1)
-    expect(parsed.arkadeWallets).toEqual([])
+    expect(parsed).not.toHaveProperty('arkadeWallets')
   })
 
-  it('strips legacy arkadeSnapshot on parse', () => {
+  it('strips legacy arkadeWallets key on parse', () => {
     const payload = {
       descriptorWallets: [],
       lightningNwcConnections: [],
@@ -51,46 +51,21 @@ describe('parseWalletPayloadJson', () => {
         {
           networkMode: 'signet',
           createdAt: '2020-01-01T00:00:00.000Z',
-          arkadeSnapshot: {
-            balance: {
-              confirmedSats: 1,
-              totalSats: 1,
-              updatedAt: '2020-01-01T00:00:00.000Z',
-            },
-            payments: [],
-            paymentsUpdatedAt: '2020-01-01T00:00:00.000Z',
-          },
         },
       ],
     }
     const parsed = parseWalletPayloadJson(JSON.stringify(payload))
-    expect(parsed.arkadeWallets[0]).not.toHaveProperty('arkadeSnapshot')
+    expect(parsed).not.toHaveProperty('arkadeWallets')
+    expect(parsed.arkadeOperatorConnections).toEqual([])
+    expect(parsed.activeArkadeConnectionIdByNetwork).toEqual({})
   })
 
-  it('accepts arkade wallet with sdkPersistenceJson', () => {
-    const json = JSON.stringify({ version: 1, wallet: {}, contract: {} })
-    const payload = {
-      descriptorWallets: [],
-      lightningNwcConnections: [],
-      arkadeWallets: [
-        {
-          networkMode: 'signet',
-          createdAt: '2020-01-01T00:00:00.000Z',
-          sdkPersistenceJson: json,
-        },
-      ],
-    }
-    const parsed = parseWalletPayloadJson(JSON.stringify(payload))
-    expect(parsed.arkadeWallets[0].sdkPersistenceJson).toBe(json)
-  })
-
-  it('normalizes missing arkadeWallets to empty array', () => {
+  it('normalizes missing arkade operator fields to empty defaults', () => {
     const json = JSON.stringify({
       descriptorWallets: [],
       lightningNwcConnections: [],
     })
     const parsed = parseWalletPayloadJson(json)
-    expect(parsed.arkadeWallets).toEqual([])
     expect(parsed.arkadeOperatorConnections).toEqual([])
     expect(parsed.activeArkadeConnectionIdByNetwork).toEqual({})
   })

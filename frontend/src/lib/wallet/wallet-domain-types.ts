@@ -59,17 +59,6 @@ export interface NwcConnectionSnapshot {
 }
 
 /**
- * @deprecated Migrated to {@link StoredArkadeOperatorConnection}. Retained for unlock-time import only.
- */
-export interface StoredArkadeWalletState {
-  networkMode: ArkadeSupportedNetworkMode
-  arkadeAddress?: string
-  createdAt: string
-  lastSessionOpenedAt?: string
-  sdkPersistenceJson?: string
-}
-
-/**
  * One Arkade operator connection (NWC-style). VTXO state lives in `sdkPersistenceJson` for this ASP only.
  */
 export interface StoredArkadeOperatorConnection {
@@ -115,8 +104,6 @@ export interface WalletSecretsPayload {
   activeArkadeConnectionIdByNetwork: Partial<
     Record<ArkadeSupportedNetworkMode, string>
   >
-  /** @deprecated Migrated into arkadeOperatorConnections on unlock. */
-  arkadeWallets?: StoredArkadeWalletState[]
 }
 
 /** Sensitive wallet data stored encrypted. Shared with db layer and workers. */
@@ -216,27 +203,6 @@ function isStoredArkadeOperatorConnection(
   return true
 }
 
-function isStoredArkadeWalletState(value: unknown): value is StoredArkadeWalletState {
-  if (!isRecord(value)) return false
-  const networkOk =
-    typeof value.networkMode === 'string' &&
-    (ARKADE_SUPPORTED_NETWORK_MODES as readonly string[]).includes(value.networkMode)
-  if (!networkOk || !isIso8601Timestamp(value.createdAt)) return false
-  if (value.arkadeAddress !== undefined && !isNonEmptyString(value.arkadeAddress)) {
-    return false
-  }
-  if (value.lastSessionOpenedAt !== undefined && !isIso8601Timestamp(value.lastSessionOpenedAt)) {
-    return false
-  }
-  if (value.sdkPersistenceJson !== undefined) {
-    if (typeof value.sdkPersistenceJson !== 'string') return false
-    if (new TextEncoder().encode(value.sdkPersistenceJson).byteLength > ARKADE_SDK_PERSISTENCE_JSON_MAX_BYTES) {
-      return false
-    }
-  }
-  return true
-}
-
 function isStoredNwcLightningConnection(
   value: unknown,
 ): value is StoredNwcLightningConnection {
@@ -306,12 +272,6 @@ export function isWalletSecretsPayload(value: unknown): value is WalletSecretsPa
   ) {
     return false
   }
-  if (value.arkadeWallets !== undefined) {
-    if (!Array.isArray(value.arkadeWallets)) return false
-    if (!value.arkadeWallets.every((row) => isStoredArkadeWalletState(row))) {
-      return false
-    }
-  }
   return true
 }
 
@@ -348,12 +308,6 @@ export function isWalletSecrets(value: unknown): value is WalletSecrets {
   ) {
     return false
   }
-  if (value.arkadeWallets !== undefined) {
-    if (!Array.isArray(value.arkadeWallets)) return false
-    if (!value.arkadeWallets.every((row) => isStoredArkadeWalletState(row))) {
-      return false
-    }
-  }
   return true
 }
 
@@ -367,14 +321,7 @@ export function assembleWalletSecrets(
     lightningNwcConnections: payload.lightningNwcConnections,
     arkadeOperatorConnections: payload.arkadeOperatorConnections,
     activeArkadeConnectionIdByNetwork: payload.activeArkadeConnectionIdByNetwork,
-    arkadeWallets: payload.arkadeWallets,
   }
-}
-
-function stripLegacyArkadeSnapshotField(row: unknown): unknown {
-  if (!isRecord(row) || !('arkadeSnapshot' in row)) return row
-  const { arkadeSnapshot: _legacySnapshot, ...withoutSnapshot } = row
-  return withoutSnapshot
 }
 
 function coalesceNullishArrayField(value: unknown): unknown {
@@ -432,23 +379,6 @@ function sanitizeStoredArkadeOperatorConnectionRow(
   return null
 }
 
-function sanitizeStoredArkadeWalletStateRow(row: unknown): StoredArkadeWalletState | null {
-  const stripped = stripLegacyArkadeSnapshotField(row)
-  if (!isRecord(stripped)) {
-    return null
-  }
-  const candidates = [stripped, stripOversizedSdkPersistenceJson(stripped)]
-  for (const candidate of candidates) {
-    if (isStoredArkadeWalletState(candidate)) {
-      return candidate
-    }
-  }
-  if (import.meta.env.DEV) {
-    console.warn('[wallet-secrets] Dropping invalid legacy arkadeWallets row', row)
-  }
-  return null
-}
-
 function sanitizeActiveArkadeConnectionIdByNetwork(
   value: unknown,
   validConnectionIds: ReadonlySet<string>,
@@ -474,8 +404,10 @@ function sanitizeActiveArkadeConnectionIdByNetwork(
 function normalizeWalletSecretsPayload(raw: unknown): unknown {
   if (!isRecord(raw)) return raw
 
+  const { arkadeWallets: _legacyArkadeWallets, ...withoutLegacyArkadeWallets } = raw
+
   const arkadeOperatorConnections = sanitizeOptionalObjectArray(
-    raw.arkadeOperatorConnections,
+    withoutLegacyArkadeWallets.arkadeOperatorConnections,
     sanitizeStoredArkadeOperatorConnectionRow,
   )
 
@@ -486,16 +418,14 @@ function normalizeWalletSecretsPayload(raw: unknown): unknown {
   )
 
   return {
-    ...raw,
-    lightningNwcConnections: coalesceNullishArrayField(raw.lightningNwcConnections),
+    ...withoutLegacyArkadeWallets,
+    lightningNwcConnections: coalesceNullishArrayField(
+      withoutLegacyArkadeWallets.lightningNwcConnections,
+    ),
     arkadeOperatorConnections,
     activeArkadeConnectionIdByNetwork: sanitizeActiveArkadeConnectionIdByNetwork(
-      raw.activeArkadeConnectionIdByNetwork,
+      withoutLegacyArkadeWallets.activeArkadeConnectionIdByNetwork,
       validConnectionIds,
-    ),
-    arkadeWallets: sanitizeOptionalObjectArray(
-      raw.arkadeWallets,
-      sanitizeStoredArkadeWalletStateRow,
     ),
   }
 }
@@ -536,13 +466,6 @@ function describeWalletSecretsPayloadValidationIssues(value: unknown): string[] 
     !isRecord(value.activeArkadeConnectionIdByNetwork)
   ) {
     issues.push('activeArkadeConnectionIdByNetwork must be an object')
-  }
-  if (value.arkadeWallets !== undefined) {
-    if (!Array.isArray(value.arkadeWallets)) {
-      issues.push('arkadeWallets must be an array when present')
-    } else if (!value.arkadeWallets.every((row) => isStoredArkadeWalletState(row))) {
-      issues.push('arkadeWallets contains an invalid row')
-    }
   }
   return issues
 }

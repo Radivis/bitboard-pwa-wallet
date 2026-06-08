@@ -37,7 +37,7 @@ use crate::offchain_snapshot::{
     snapshot_from_virtual_tx_outpoints,
 };
 use crate::persistence::{
-    BitboardArkPersistenceV3, JsonPersistenceDb, OperatorIdentity, SharedPersistenceDb,
+    BitboardArkPersistence, JsonPersistenceDb, OperatorIdentity, SharedPersistenceDb,
     network_label, validate_operator_identity,
 };
 
@@ -66,8 +66,8 @@ impl ArkSession {
         delegator_url: String,
         esplora_url: String,
         sdk_persistence_json: Option<&str>,
-    ) -> ArkResult<(Self, bool)> {
-        let parsed = BitboardArkPersistenceV3::parse_import(sdk_persistence_json);
+    ) -> ArkResult<Self> {
+        let parsed = BitboardArkPersistence::parse_import(sdk_persistence_json);
         let offchain_next_derivation_index = parsed.wallet_db.offchain_next_derivation_index;
         let network = network_mode.to_bitcoin_network();
 
@@ -139,16 +139,13 @@ impl ArkSession {
             network: network_label(network),
         };
 
-        Ok((
-            Self {
-                client,
-                wallet_db,
-                delegator,
-                network_mode,
-                operator_identity,
-            },
-            parsed.reset_v1,
-        ))
+        Ok(Self {
+            client,
+            wallet_db,
+            delegator,
+            network_mode,
+            operator_identity,
+        })
     }
 
     pub fn export_persistence(&self) -> ArkResult<String> {
@@ -157,7 +154,7 @@ impl ArkSession {
             .set_offchain_next_derivation_index(next_index);
         let mut wallet_db = self.wallet_db.snapshot();
         wallet_db.offchain_next_derivation_index = next_index;
-        let mut envelope = BitboardArkPersistenceV3::empty(self.operator_identity.clone());
+        let mut envelope = BitboardArkPersistence::empty(self.operator_identity.clone());
         envelope.wallet_db = wallet_db;
         Ok(serde_json::to_string(&envelope)?)
     }

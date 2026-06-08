@@ -377,7 +377,6 @@ export async function saveWalletSecrets(params: {
     lightningNwcConnections: secrets.lightningNwcConnections,
     arkadeOperatorConnections: secrets.arkadeOperatorConnections ?? [],
     activeArkadeConnectionIdByNetwork: secrets.activeArkadeConnectionIdByNetwork ?? {},
-    arkadeWallets: secrets.arkadeWallets ?? [],
   }
   const payloadEnc = await encryptData(password, JSON.stringify(payload))
   const mnemonicEnc = await encryptData(password, secrets.mnemonic)
@@ -547,7 +546,6 @@ export async function reencryptAllWalletSecretsWithNewPassword(params: {
       lightningNwcConnections: secrets.lightningNwcConnections,
       arkadeOperatorConnections: secrets.arkadeOperatorConnections ?? [],
       activeArkadeConnectionIdByNetwork: secrets.activeArkadeConnectionIdByNetwork ?? {},
-      arkadeWallets: secrets.arkadeWallets ?? [],
     }
     const payloadEnc = await encryptData(newPassword, JSON.stringify(payload))
     const mnemonicEnc = await encryptData(newPassword, secrets.mnemonic)

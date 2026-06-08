@@ -16,7 +16,7 @@ const workerMocks = vi.hoisted(() => ({
   reconcileActiveConnectionId: vi.fn().mockResolvedValue(undefined),
 }))
 
-const ensureLegacyArkadeWalletMigratedMock = vi.hoisted(() => vi.fn())
+const ensureArkadeOperatorConnectionMock = vi.hoisted(() => vi.fn())
 const loadWalletSecretsPayloadMock = vi.hoisted(() => vi.fn())
 const refreshArkadeStoreFromLoadedWasmMock = vi.hoisted(() => vi.fn())
 const runArkadeOperatorSyncAndPersistMock = vi.hoisted(() => vi.fn())
@@ -53,7 +53,6 @@ vi.mock('@/db/wallet-persistence', () => ({
 }))
 
 vi.mock('@/lib/arkade/arkade-sdk-persistence', () => ({
-  loadSdkPersistenceJsonForNetwork: vi.fn().mockResolvedValue(undefined),
   loadSdkPersistenceJsonForConnection: vi.fn(),
 }))
 
@@ -61,8 +60,8 @@ vi.mock('@/lib/arkade/arkade-operator-connections', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/arkade/arkade-operator-connections')>()
   return {
     ...actual,
-    ensureLegacyArkadeWalletMigrated: (...args: unknown[]) =>
-      ensureLegacyArkadeWalletMigratedMock(...args),
+    ensureArkadeOperatorConnection: (...args: unknown[]) =>
+      ensureArkadeOperatorConnectionMock(...args),
     loadActiveArkadeConnectionForNetwork: vi.fn().mockResolvedValue(undefined),
   }
 })
@@ -124,7 +123,7 @@ describe('awaitArkadeSessionReady (UNLOCK-ARK-03)', () => {
       arkadeOperatorConnections: [],
       activeArkadeConnectionIdByNetwork: {},
     })
-    ensureLegacyArkadeWalletMigratedMock.mockResolvedValue({
+    ensureArkadeOperatorConnectionMock.mockResolvedValue({
       id: TEST_CONNECTION_ID,
       networkMode: 'signet',
       operatorSignerPkHex: '02deadbeef',

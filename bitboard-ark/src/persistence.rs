@@ -76,16 +76,7 @@ pub struct WalletDbSnapshot {
 pub struct SwapStorageSnapshot {}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct BitboardArkPersistenceV2 {
-    pub version: u32,
-    pub engine: String,
-    pub ark_sdk_version: String,
-    pub wallet_db: WalletDbSnapshot,
-    pub swap_storage: SwapStorageSnapshot,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct BitboardArkPersistenceV3 {
+pub struct BitboardArkPersistence {
     pub version: u32,
     pub engine: String,
     pub ark_sdk_version: String,
@@ -97,10 +88,27 @@ pub struct BitboardArkPersistenceV3 {
 pub struct ParsedArkPersistence {
     pub wallet_db: WalletDbSnapshot,
     pub operator_identity: Option<OperatorIdentity>,
-    pub reset_v1: bool,
 }
 
-impl BitboardArkPersistenceV3 {
+fn default_parsed_ark_persistence() -> ParsedArkPersistence {
+    ParsedArkPersistence {
+        wallet_db: WalletDbSnapshot::default(),
+        operator_identity: None,
+    }
+}
+
+fn warn_unknown_persistence_version(version: Option<u64>) {
+    let message = format!(
+        "Ignoring unsupported Arkade persistence version {:?}; starting from empty wallet_db",
+        version
+    );
+    #[cfg(target_arch = "wasm32")]
+    web_sys::console::warn_1(&message.into());
+    #[cfg(not(target_arch = "wasm32"))]
+    eprintln!("{message}");
+}
+
+impl BitboardArkPersistence {
     pub fn empty(operator_identity: OperatorIdentity) -> Self {
         Self {
             version: BITBOARD_ARK_PERSISTENCE_VERSION,
@@ -114,69 +122,22 @@ impl BitboardArkPersistenceV3 {
 
     pub fn parse_import(json: Option<&str>) -> ParsedArkPersistence {
         let Some(raw) = json.filter(|value| !value.trim().is_empty()) else {
-            return ParsedArkPersistence {
-                wallet_db: WalletDbSnapshot::default(),
-                operator_identity: None,
-                reset_v1: false,
-            };
+            return default_parsed_ark_persistence();
         };
 
-        let value: serde_json::Value = match serde_json::from_str(raw) {
+        let envelope: BitboardArkPersistence = match serde_json::from_str(raw) {
             Ok(parsed) => parsed,
-            Err(_) => {
-                return ParsedArkPersistence {
-                    wallet_db: WalletDbSnapshot::default(),
-                    operator_identity: None,
-                    reset_v1: false,
-                };
-            }
+            Err(_) => return default_parsed_ark_persistence(),
         };
 
-        if value.get("version").and_then(|v| v.as_u64()) == Some(1) {
-            return ParsedArkPersistence {
-                wallet_db: WalletDbSnapshot::default(),
-                operator_identity: None,
-                reset_v1: true,
-            };
-        }
-
-        if let Ok(envelope) = serde_json::from_value::<BitboardArkPersistenceV3>(value.clone())
-            && envelope.version == BITBOARD_ARK_PERSISTENCE_VERSION
-        {
-            return ParsedArkPersistence {
-                wallet_db: envelope.wallet_db,
-                operator_identity: Some(envelope.operator_identity),
-                reset_v1: false,
-            };
-        }
-
-        if let Ok(envelope) = serde_json::from_value::<BitboardArkPersistenceV2>(value)
-            && envelope.version == 2
-        {
-            return ParsedArkPersistence {
-                wallet_db: envelope.wallet_db,
-                operator_identity: None,
-                reset_v1: false,
-            };
+        if envelope.version != BITBOARD_ARK_PERSISTENCE_VERSION {
+            warn_unknown_persistence_version(Some(envelope.version as u64));
+            return default_parsed_ark_persistence();
         }
 
         ParsedArkPersistence {
-            wallet_db: WalletDbSnapshot::default(),
-            operator_identity: None,
-            reset_v1: false,
-        }
-    }
-}
-
-impl BitboardArkPersistenceV2 {
-    #[cfg(test)]
-    pub fn empty() -> Self {
-        Self {
-            version: 2,
-            engine: ARK_RS_ENGINE.to_string(),
-            ark_sdk_version: ARK_RS_SDK_VERSION.to_string(),
-            wallet_db: WalletDbSnapshot::default(),
-            swap_storage: SwapStorageSnapshot::default(),
+            wallet_db: envelope.wallet_db,
+            operator_identity: Some(envelope.operator_identity),
         }
     }
 }

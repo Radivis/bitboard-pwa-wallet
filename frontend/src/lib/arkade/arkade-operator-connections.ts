@@ -7,7 +7,6 @@ import {
   getArkadeEndpoints,
   type ArkadeSupportedNetworkMode,
 } from '@/lib/arkade/arkade-endpoints'
-import { findStoredArkadeWallet } from '@/lib/arkade/arkade-wallet-secrets'
 import type {
   StoredArkadeOperatorConnection,
   WalletSecretsPayload,
@@ -92,7 +91,6 @@ export async function saveArkadeOperatorConnections(params: {
       ...payload,
       arkadeOperatorConnections: params.arkadeOperatorConnections,
       activeArkadeConnectionIdByNetwork: params.activeArkadeConnectionIdByNetwork,
-      arkadeWallets: [],
     }),
   })
 }
@@ -125,7 +123,6 @@ export async function upsertArkadeOperatorConnection(params: {
         ...payload,
         arkadeOperatorConnections: [...others, connection],
         activeArkadeConnectionIdByNetwork,
-        arkadeWallets: [],
       }
     },
   })
@@ -136,16 +133,11 @@ export async function upsertArkadeOperatorConnection(params: {
   return saved
 }
 
-/**
- * Creates a default connection from legacy `arkadeWallets` row after first online session open.
- */
-export function buildConnectionFromLegacyWalletState(params: {
+export function buildDefaultArkadeOperatorConnection(params: {
   networkMode: ArkadeSupportedNetworkMode
   operatorUrl: string
   delegatorUrl: string
   operatorSignerPkHex: string
-  legacyCreatedAt?: string
-  legacyLastSessionOpenedAt?: string
   sdkPersistenceJson?: string
 }): StoredArkadeOperatorConnection {
   const now = new Date().toISOString()
@@ -156,13 +148,12 @@ export function buildConnectionFromLegacyWalletState(params: {
     operatorUrl: params.operatorUrl,
     delegatorUrl: params.delegatorUrl || undefined,
     operatorSignerPkHex: params.operatorSignerPkHex,
-    createdAt: params.legacyCreatedAt ?? now,
-    lastSessionOpenedAt: params.legacyLastSessionOpenedAt,
+    createdAt: now,
     sdkPersistenceJson: params.sdkPersistenceJson,
   }
 }
 
-export async function ensureLegacyArkadeWalletMigrated(params: {
+export async function ensureArkadeOperatorConnection(params: {
   password: string
   walletId: number
   networkMode: ArkadeSupportedNetworkMode
@@ -212,15 +203,12 @@ export async function ensureLegacyArkadeWalletMigrated(params: {
     })
   }
 
-  const legacy = findStoredArkadeWallet(payload, params.networkMode)
-  const connection = buildConnectionFromLegacyWalletState({
+  const connection = buildDefaultArkadeOperatorConnection({
     networkMode: params.networkMode,
     operatorUrl: params.operatorUrl,
     delegatorUrl: params.delegatorUrl,
     operatorSignerPkHex: params.operatorSignerPkHex,
-    legacyCreatedAt: legacy?.createdAt,
-    legacyLastSessionOpenedAt: legacy?.lastSessionOpenedAt,
-    sdkPersistenceJson: params.sdkPersistenceJson ?? legacy?.sdkPersistenceJson,
+    sdkPersistenceJson: params.sdkPersistenceJson,
   })
 
   return upsertArkadeOperatorConnection({

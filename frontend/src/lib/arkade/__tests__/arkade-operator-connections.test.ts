@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   assertOperatorSignerMatches,
-  buildConnectionFromLegacyWalletState,
+  buildDefaultArkadeOperatorConnection,
   defaultArkadeOperatorLabel,
   findActiveArkadeOperatorConnection,
 } from '@/lib/arkade/arkade-operator-connections'
@@ -38,13 +38,12 @@ describe('arkade-operator-connections', () => {
     )
   })
 
-  it('buildConnectionFromLegacyWalletState carries sdkPersistenceJson', () => {
-    const connection = buildConnectionFromLegacyWalletState({
+  it('buildDefaultArkadeOperatorConnection carries sdkPersistenceJson', () => {
+    const connection = buildDefaultArkadeOperatorConnection({
       networkMode: 'signet',
       operatorUrl: 'https://signet.arkade.example/v1',
       delegatorUrl: 'https://delegator.example',
       operatorSignerPkHex: '02abc',
-      legacyCreatedAt: '2019-01-01T00:00:00.000Z',
       sdkPersistenceJson: '{"version":3}',
     })
     expect(connection.networkMode).toBe('signet')

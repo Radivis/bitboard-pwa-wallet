@@ -25,7 +25,7 @@ const workerMocks = vi.hoisted(() => ({
 }))
 
 const awaitInFlightWalletSecretsWritesMock = vi.hoisted(() => vi.fn())
-const ensureLegacyArkadeWalletMigratedMock = vi.hoisted(() => vi.fn())
+const ensureArkadeOperatorConnectionMock = vi.hoisted(() => vi.fn())
 const ensureSecretsChannelMock = vi.hoisted(() => vi.fn())
 const ensureArkadeWorkerSecretsChannelMock = vi.hoisted(() => vi.fn())
 const terminateArkadeWorkerMock = vi.hoisted(() => vi.fn())
@@ -33,7 +33,6 @@ const removeArkadeDashboardQueriesMock = vi.hoisted(() => vi.fn())
 const removeArkadeDashboardSyncQueriesMock = vi.hoisted(() => vi.fn())
 const clearArkadeDashboardStoreMock = vi.hoisted(() => vi.fn())
 const ensureArkadePersistenceChannelMock = vi.hoisted(() => vi.fn())
-const loadSdkPersistenceJsonForNetworkMock = vi.hoisted(() => vi.fn())
 const loadActiveArkadeConnectionForNetworkMock = vi.hoisted(() => vi.fn())
 const runArkadeOperatorSyncAndPersistMock = vi.hoisted(() => vi.fn())
 const refreshArkadeStoreFromLoadedWasmMock = vi.hoisted(() => vi.fn())
@@ -93,8 +92,8 @@ vi.mock('@/lib/arkade/arkade-operator-connections', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/arkade/arkade-operator-connections')>()
   return {
     ...actual,
-    ensureLegacyArkadeWalletMigrated: (...args: unknown[]) =>
-      ensureLegacyArkadeWalletMigratedMock(...args),
+    ensureArkadeOperatorConnection: (...args: unknown[]) =>
+      ensureArkadeOperatorConnectionMock(...args),
     loadActiveArkadeConnectionForNetwork: (...args: unknown[]) =>
       loadActiveArkadeConnectionForNetworkMock(...args),
   }
@@ -129,8 +128,6 @@ vi.mock('@/workers/arkade-persistence-channel', () => ({
 }))
 
 vi.mock('@/lib/arkade/arkade-sdk-persistence', () => ({
-  loadSdkPersistenceJsonForNetwork: (...args: unknown[]) =>
-    loadSdkPersistenceJsonForNetworkMock(...args),
   loadSdkPersistenceJsonForConnection: vi.fn(),
 }))
 
@@ -173,13 +170,12 @@ describe('openArkadeSessionForWallet (integration)', () => {
     ensureSecretsChannelMock.mockResolvedValue(undefined)
     ensureArkadeWorkerSecretsChannelMock.mockResolvedValue(undefined)
     ensureArkadePersistenceChannelMock.mockResolvedValue(undefined)
-    loadSdkPersistenceJsonForNetworkMock.mockResolvedValue(undefined)
     loadActiveArkadeConnectionForNetworkMock.mockResolvedValue(undefined)
     loadWalletSecretsPayloadMock.mockResolvedValue({
       arkadeOperatorConnections: [],
       activeArkadeConnectionIdByNetwork: {},
     })
-    ensureLegacyArkadeWalletMigratedMock.mockResolvedValue({
+    ensureArkadeOperatorConnectionMock.mockResolvedValue({
       id: TEST_CONNECTION_ID,
       label: 'signet',
       networkMode: 'signet',
@@ -203,11 +199,6 @@ describe('openArkadeSessionForWallet (integration)', () => {
     expect(ensureSecretsChannelMock).toHaveBeenCalledTimes(1)
     expect(ensureArkadeWorkerSecretsChannelMock).toHaveBeenCalledTimes(1)
     expect(ensureArkadePersistenceChannelMock).toHaveBeenCalledTimes(1)
-    expect(loadSdkPersistenceJsonForNetworkMock).toHaveBeenCalledWith({
-      password: 'unlock-password',
-      walletId: 7,
-      networkMode: 'signet',
-    })
     expect(workerMocks.openSession).toHaveBeenCalledWith(
       expect.objectContaining({
         password: 'unlock-password',
@@ -221,7 +212,7 @@ describe('openArkadeSessionForWallet (integration)', () => {
         sdkPersistenceJson: undefined,
       }),
     )
-    expect(ensureLegacyArkadeWalletMigratedMock).toHaveBeenCalledWith(
+    expect(ensureArkadeOperatorConnectionMock).toHaveBeenCalledWith(
       expect.objectContaining({
         operatorSignerPkHex: '02deadbeef',
       }),
@@ -317,7 +308,7 @@ describe('openArkadeSessionForWallet (integration)', () => {
       }),
     ).resolves.toBeUndefined()
 
-    expect(ensureLegacyArkadeWalletMigratedMock).toHaveBeenCalledTimes(1)
+    expect(ensureArkadeOperatorConnectionMock).toHaveBeenCalledTimes(1)
   })
 
   it('reopens when session key matches but the worker was terminated', async () => {

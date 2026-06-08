@@ -1,8 +1,5 @@
 import { awaitInFlightWalletSecretsWrites, getDatabase, getWalletSecretsEncrypted } from '@/db'
-import {
-  loadSdkPersistenceJsonForConnection,
-  loadSdkPersistenceJsonForNetwork,
-} from '@/lib/arkade/arkade-sdk-persistence'
+import { loadSdkPersistenceJsonForConnection } from '@/lib/arkade/arkade-sdk-persistence'
 import {
   clearArkadeDashboardStore,
   refreshArkadeStoreFromLoadedWasm,
@@ -12,7 +9,7 @@ import {
   runArkadeOperatorSyncAndPersist,
 } from '@/lib/arkade/arkade-operator-sync'
 import {
-  ensureLegacyArkadeWalletMigrated,
+  ensureArkadeOperatorConnection,
   findActiveArkadeOperatorConnection,
   resolveArkadeEndpointsForConnection,
 } from '@/lib/arkade/arkade-operator-connections'
@@ -179,13 +176,13 @@ function runArkadeSessionOpenWork(params: {
       : defaultEndpoints
     const connectionId = connection?.id ?? crypto.randomUUID()
     const sdkPersistenceJson =
-      (connection != null
+      connection != null
         ? await loadSdkPersistenceJsonForConnection({
             password,
             walletId,
             connectionId: connection.id,
           })
-        : undefined) ?? (await loadSdkPersistenceJsonForNetwork({ password, walletId, networkMode }))
+        : undefined
 
     const worker = getArkadeWorker()
     await ensureArkadeWorkerSecretsChannel()
@@ -201,7 +198,7 @@ function runArkadeSessionOpenWork(params: {
       sdkPersistenceJson,
     })
 
-    connection = await ensureLegacyArkadeWalletMigrated({
+    connection = await ensureArkadeOperatorConnection({
       password,
       walletId,
       networkMode,

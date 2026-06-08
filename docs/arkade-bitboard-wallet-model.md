@@ -14,14 +14,13 @@ For network switching and Esplora, see [`descriptor-wallet-switching.md`](descri
 
 - Arkade state is stored as **operator connections** in encrypted `wallet_secrets` (`arkadeOperatorConnections[]`), NWC-style. Each connection is one ASP with its own `sdkPersistenceJson`, URLs, and canonical `operatorSignerPkHex` from `getInfo`.
 - `activeArkadeConnectionIdByNetwork` picks the connection used for session, dashboard, and sync on `mainnet`, `testnet`, and `signet` (Mutinynet). Switching operators is adding/switching connections—not merging blobs across ASPs.
-- Legacy `arkadeWallets[]` rows migrate into a default connection on first online unlock.
-- **Persistence v3** (`sdkPersistenceJson`, engine `ark-rs`) includes `operator_identity` and an `offchain_vtxo_snapshot` inside `wallet_db`. Balance and history read from the loaded WASM session immediately after unlock (local snapshot + Esplora boarding + on-chain bumper).
+- **BitboardArkPersistence** (`sdkPersistenceJson`, engine `ark-rs`, wire `version: 3`) includes `operator_identity` and an `offchain_vtxo_snapshot` inside `wallet_db`. Balance and history read from the loaded WASM session immediately after unlock (local snapshot + Esplora boarding + on-chain bumper).
 - **Operator sync** (`sync_with_operator`) refreshes the snapshot and re-exports `sdkPersistenceJson` to the active connection row. `lastSuccessfulOperatorSyncAt` on the connection mirrors `lastSuccessfulEsploraSyncAt` for on-chain BDK.
 - **Local-first:** Operator failure during a session keeps the last-synced blob; the dashboard may show a stale banner until operator sync succeeds this unlock.
 
 ## Persistence in the worker
 
-`bitboard-ark` exports a JSON envelope (`version: 3`) after critical RPCs, operator sync, and on `closeSession`. v2 blobs uplift on import; v1 TypeScript SDK snapshots reset to empty v3 (one-time console notice).
+`bitboard-ark` exports a `BitboardArkPersistence` JSON envelope (`version: 3`) after critical RPCs, operator sync, and on `closeSession`. Unsupported or malformed blobs start from an empty `wallet_db` on session open.
 
 ### Offchain receive derivation cursor
 
