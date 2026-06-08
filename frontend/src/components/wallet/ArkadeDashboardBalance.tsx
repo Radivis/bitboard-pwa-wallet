@@ -35,7 +35,7 @@ export function ArkadeDashboardBalance() {
             />
             {balanceQuery.data.totalSats !== balanceQuery.data.confirmedSats && (
               <p className="text-xs text-muted-foreground">
-                Total (incl. pending):{' '}
+                Total (incl. recoverable):{' '}
                 <BitcoinAmountDisplay amountSats={balanceQuery.data.totalSats} size="sm" />
               </p>
             )}

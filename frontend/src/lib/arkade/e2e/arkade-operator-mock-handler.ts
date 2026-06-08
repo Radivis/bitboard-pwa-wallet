@@ -8,6 +8,7 @@ import {
   E2E_ARKADE_MOCK_DEFAULT_BALANCE_SATS,
   E2E_ARKADE_MOCK_INCOMING_TXID,
   E2E_ARKADE_MOCK_PARTITION_HEADER,
+  clearE2eArkadeOperatorMockDiscoveryState,
   getE2eArkadeOperatorMockState,
   readE2eArkadeMockPartitionIdFromRequestHeaders,
   resetE2eArkadeOperatorMockState,
@@ -110,7 +111,8 @@ function applyE2eArkadeMockControlAction(
       if (!isE2eArkadeMockIncomingPayment(payload.payment)) {
         return 'addIncomingPayment requires payment object'
       }
-      mockState.extraIncomingPayments = [payload.payment, ...mockState.extraIncomingPayments]
+      // Replaces any previously queued payment; only one pending slot per partition.
+      mockState.pendingIncomingPayment = payload.payment
       return null
     }
     case 'reset': {
@@ -191,7 +193,7 @@ function buildIndexerVtxo(
   const createdAtMs = payment.timestamp * 1000
   const expiresAtMs = createdAtMs + 86_400_000 * 365
   return {
-    amount: String(Math.max(mockState.balanceSats, payment.amountSats)),
+    amount: String(payment.amountSats),
     arkTxid: payment.txid,
     assets: [],
     commitmentTxids: [E2E_ARKADE_MOCK_COMMITMENT_TXID],
@@ -211,31 +213,66 @@ function buildIndexerVtxo(
   }
 }
 
-function buildMockVtxosForScripts(
-  mockState: E2eArkadeOperatorMockState,
-  scripts: string[],
-) {
-  const defaultPayment: MockIncomingPayment = {
+function createDefaultFixturePayment(): MockIncomingPayment {
+  return {
     txid: E2E_ARKADE_MOCK_INCOMING_TXID,
     amountSats: E2E_ARKADE_MOCK_DEFAULT_BALANCE_SATS,
     timestamp: 1_700_000_000,
   }
+}
 
+function ensureDefaultFixturePaymentOnFirstScript(
+  mockState: E2eArkadeOperatorMockState,
+  scripts: string[],
+): void {
+  if (scripts.length === 0) {
+    return
+  }
+  if (mockState.paymentsByScript.size > 0) {
+    return
+  }
+  if (mockState.pendingIncomingPayment != null) {
+    return
+  }
+  mockState.paymentsByScript.set(scripts[0], createDefaultFixturePayment())
+}
+
+function applyPendingIncomingPaymentToFirstUnfundedScript(
+  mockState: E2eArkadeOperatorMockState,
+  scripts: string[],
+): void {
+  if (mockState.pendingIncomingPayment == null) {
+    return
+  }
+  for (const script of scripts) {
+    if (mockState.paymentsByScript.has(script)) {
+      continue
+    }
+    mockState.paymentsByScript.set(script, mockState.pendingIncomingPayment)
+    mockState.pendingIncomingPayment = null
+    return
+  }
+}
+
+export function buildMockVtxosForScripts(
+  mockState: E2eArkadeOperatorMockState,
+  scripts: string[],
+) {
   if (scripts.length === 0) {
     return []
   }
 
-  const fundedScript = mockState.fundedScript
-  if (fundedScript != null) {
-    if (!scripts.includes(fundedScript)) {
-      return []
-    }
-    return [buildIndexerVtxo(mockState, fundedScript, 0, defaultPayment)]
-  }
+  ensureDefaultFixturePaymentOnFirstScript(mockState, scripts)
+  applyPendingIncomingPaymentToFirstUnfundedScript(mockState, scripts)
 
-  const firstScript = scripts[0]
-  mockState.fundedScript = firstScript
-  return [buildIndexerVtxo(mockState, firstScript, 0, defaultPayment)]
+  const vtxos = []
+  for (const script of scripts) {
+    const payment = mockState.paymentsByScript.get(script)
+    if (payment != null) {
+      vtxos.push(buildIndexerVtxo(mockState, script, vtxos.length, payment))
+    }
+  }
+  return vtxos
 }
 
 function emptyListVtxosResponse() {
@@ -302,7 +339,7 @@ export function handleE2eArkadeOperatorMockRequest(
 
   if (upstreamPath.startsWith('/v1/info')) {
     // Each WASM session open starts with /v1/info; reset discovery within this partition.
-    mockState.fundedScript = null
+    clearE2eArkadeOperatorMockDiscoveryState(mockState)
     res.statusCode = 200
     res.setHeader('Content-Type', 'application/json')
     res.setHeader('Access-Control-Allow-Origin', '*')

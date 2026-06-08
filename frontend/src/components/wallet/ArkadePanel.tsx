@@ -63,7 +63,7 @@ export function ArkadePanel() {
             <BitcoinAmountDisplay amountSats={balance.confirmedSats} />
             {balance.totalSats !== balance.confirmedSats && (
               <p className="text-xs text-muted-foreground">
-                Total (incl. pending):{' '}
+                Total (incl. recoverable):{' '}
                 <BitcoinAmountDisplay amountSats={balance.totalSats} size="sm" />
               </p>
             )}

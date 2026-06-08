@@ -47,3 +47,20 @@ export async function goToReceiveArkadeMode(page: Page): Promise<void> {
     timeout: 15_000,
   })
 }
+
+export async function waitForReceiveArkadeAddressReady(
+  page: Page,
+  timeout = ARKADE_MOCK_UI_TIMEOUT_MS,
+): Promise<void> {
+  await expect(page.getByRole('button', { name: 'Copy address' })).toBeEnabled({ timeout })
+}
+
+export async function waitForDashboardArkadeBalanceSats(
+  page: Page,
+  expectedSats: number,
+  timeout = ARKADE_MOCK_UI_TIMEOUT_MS,
+): Promise<void> {
+  await expect(async () => {
+    expect(await readDashboardArkadeBalanceSats(page)).toBe(expectedSats)
+  }).toPass({ timeout })
+}

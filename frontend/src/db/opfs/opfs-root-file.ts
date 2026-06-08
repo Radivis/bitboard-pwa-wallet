@@ -83,6 +83,14 @@ export async function writeArrayBufferToOpfsRoot(
   }
 }
 
+function isOpfsEntryLockedError(error: unknown): boolean {
+  return (
+    error instanceof DOMException &&
+    (error.name === 'NoModificationAllowedError' ||
+      error.name === 'InvalidStateError')
+  )
+}
+
 /** Removes a file in the OPFS root if it exists; ignores `NotFoundError`. */
 export async function removeOpfsRootEntryIfExists(fileName: string): Promise<void> {
   if (typeof navigator === 'undefined' || !navigator.storage?.getDirectory) {
@@ -94,6 +102,37 @@ export async function removeOpfsRootEntryIfExists(fileName: string): Promise<voi
   } catch (error) {
     if (isNotFoundError(error)) return
     throw error
+  }
+}
+
+const OPFS_REMOVE_RETRY_DEFAULT_MAX_ATTEMPTS = 8
+const OPFS_REMOVE_RETRY_BASE_DELAY_MS = 75
+
+function opfsRemoveRetryDelayMs(attempt: number): number {
+  return OPFS_REMOVE_RETRY_BASE_DELAY_MS * attempt
+}
+
+/**
+ * Retries OPFS removal when SQLite/wa-sqlite workers need extra time to release WAL/SHM handles.
+ */
+export async function removeOpfsRootEntryIfExistsWithRetry(
+  fileName: string,
+  options?: { maxAttempts?: number },
+): Promise<void> {
+  const maxAttempts = options?.maxAttempts ?? OPFS_REMOVE_RETRY_DEFAULT_MAX_ATTEMPTS
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      await removeOpfsRootEntryIfExists(fileName)
+      return
+    } catch (error) {
+      if (!isOpfsEntryLockedError(error) || attempt === maxAttempts) {
+        throw error
+      }
+      await new Promise<void>((resolve) => {
+        window.setTimeout(resolve, opfsRemoveRetryDelayMs(attempt))
+      })
+    }
   }
 }
 

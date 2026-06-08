@@ -17,6 +17,7 @@ import {
   loadDescriptorWalletWithoutSync,
 } from '@/lib/wallet/wallet-utils'
 import { reportWalletSyncError } from '@/lib/wallet/wallet-sync-error-toast'
+import { toUserFriendlyWalletSecretsError } from '@/lib/wallet/wallet-secrets-error-messages'
 
 interface WalletUnlockProps {
   walletName?: string
@@ -62,8 +63,11 @@ export function WalletUnlock({
     }
   }
 
+  const [unlockErrorMessage, setUnlockErrorMessage] = useState<string | null>(null)
+
   const unlockMutation = useMutation({
     mutationFn: async (walletPassword: string) => {
+      setUnlockErrorMessage(null)
       if (!activeWalletId) throw new Error('No active wallet')
 
       const { setManualWalletUnlockInFlight } = useWalletStore.getState()
@@ -97,8 +101,10 @@ export function WalletUnlock({
     onSuccess: () => {
       onUnlockSuccess?.()
     },
-    onError: () => {
-      toast.error('Wrong password or corrupted wallet data')
+    onError: (err) => {
+      const message = toUserFriendlyWalletSecretsError(err)
+      setUnlockErrorMessage(message)
+      toast.error(message)
     },
   })
 
@@ -148,10 +154,8 @@ export function WalletUnlock({
             />
           </div>
 
-          {unlockMutation.isError && (
-            <p className="text-sm text-destructive">
-              Wrong password or corrupted wallet data
-            </p>
+          {unlockErrorMessage != null && (
+            <p className="text-sm text-destructive">{unlockErrorMessage}</p>
           )}
 
           {unlockMutation.isPending ? (

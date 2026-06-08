@@ -70,14 +70,14 @@ describe('ArkadeDashboardBalance', () => {
     expect(screen.getByText('Loading…')).toBeInTheDocument()
   })
 
-  it('DASH-ARK-11 shows balance and pending total when they differ', () => {
+  it('DASH-ARK-11 shows balance and recoverable total when they differ', () => {
     balanceQueryMock.mockReturnValue({
       isLoading: false,
       data: { confirmedSats: 40_000, totalSats: 45_000 },
     })
     renderWithProviders(<ArkadeDashboardBalance />)
     expect(screen.getByTestId('dashboard-arkade-balance-amount')).toBeInTheDocument()
-    expect(screen.getByText('Total (incl. pending):')).toBeInTheDocument()
+    expect(screen.getByText('Total (incl. recoverable):')).toBeInTheDocument()
   })
 
   it('DASH-ARK-12 shows empty session copy when no data', () => {

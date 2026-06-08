@@ -8,8 +8,28 @@ import { isBenignSqliteWorkerCloseFailure } from './sqlite-worker-close-error'
 let labInstance: Kysely<LabDatabase> | null = null
 let labMigrated = false
 let labMigrationPromise: Promise<void> | null = null
+let labDatabaseAccessBlockedForTeardown = false
+
+const LAB_DATABASE_TEARDOWN_BLOCKED_MESSAGE =
+  'Lab database access blocked during teardown'
+
+export function blockLabDatabaseAccessForTeardown(): void {
+  labDatabaseAccessBlockedForTeardown = true
+}
+
+/** @internal Vitest only — clears module teardown guard between tests. */
+export function resetLabDatabaseAccessTeardownGuardForTests(): void {
+  labDatabaseAccessBlockedForTeardown = false
+}
+
+function assertLabDatabaseAccessAllowed(): void {
+  if (labDatabaseAccessBlockedForTeardown) {
+    throw new Error(LAB_DATABASE_TEARDOWN_BLOCKED_MESSAGE)
+  }
+}
 
 export function getLabDatabase(): Kysely<LabDatabase> {
+  assertLabDatabaseAccessAllowed()
   if (!labInstance) {
     labInstance = new Kysely<LabDatabase>({
       dialect: new WaSqliteWorkerDialect({
@@ -26,6 +46,7 @@ export function getLabDatabase(): Kysely<LabDatabase> {
  * Legacy lab DBs may still list INTEGER for boolean columns in PRAGMA table_info until recreated; behavior is unchanged.
  */
 export async function ensureLabMigrated(): Promise<void> {
+  assertLabDatabaseAccessAllowed()
   if (labMigrated) return
   if (labMigrationPromise) {
     await labMigrationPromise

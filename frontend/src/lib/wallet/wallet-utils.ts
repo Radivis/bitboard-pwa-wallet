@@ -25,10 +25,26 @@ import {
 import { invalidateLightningDashboardQueries } from '@/lib/lightning/lightning-dashboard-sync'
 import { refreshWalletStoreFromLoadedBdk } from '@/lib/wallet/onchain-bdk-store-sync'
 import { invalidateOnchainDashboardQueries } from '@/lib/wallet/onchain-dashboard-sync'
+import { reportArkadeSessionOpenError } from '@/lib/arkade/arkade-session-open-error-toast'
 import { isArkadeActiveForNetworkMode } from '@/lib/arkade/arkade-utils'
 import { openArkadeSessionForWallet } from '@/lib/arkade/arkade-session-service'
 
 const CUSTOM_ESPLORA_URL_KEY_PREFIX = 'custom_esplora_url_'
+
+async function openArkadeSessionAfterUnlockIfActive(params: {
+  password: string
+  walletId: number
+  networkMode: NetworkMode
+}): Promise<void> {
+  if (!isArkadeActiveForNetworkMode(params.networkMode)) {
+    return
+  }
+  try {
+    await openArkadeSessionForWallet(params)
+  } catch (err) {
+    reportArkadeSessionOpenError(err)
+  }
+}
 
 /**
  * Update the changeset of the currently active descriptor wallet.
@@ -570,9 +586,7 @@ export async function loadDescriptorWalletWithoutSync(params: {
     useCryptoStore.getState().lockAndPurgeSensitiveRuntimeState(),
   )
 
-  if (isArkadeActiveForNetworkMode(networkMode)) {
-    await openArkadeSessionForWallet({ password, walletId, networkMode })
-  }
+  await openArkadeSessionAfterUnlockIfActive({ password, walletId, networkMode })
 }
 
 /**
@@ -680,7 +694,5 @@ export async function loadDescriptorWalletAndSync(params: {
     void runEsploraSyncAndPersistChangeset()
   }
 
-  if (isArkadeActiveForNetworkMode(networkMode)) {
-    await openArkadeSessionForWallet({ password, walletId, networkMode })
-  }
+  await openArkadeSessionAfterUnlockIfActive({ password, walletId, networkMode })
 }

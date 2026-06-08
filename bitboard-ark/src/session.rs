@@ -27,6 +27,7 @@ use crate::api_types::{
     SendPaymentParams, UnilateralExitFeeEstimateDto, UnilateralExitFeeParams, UnrollProgressEvent,
     UnrollResult,
 };
+use crate::balance_display::build_arkade_balance_dto;
 use crate::error::{ArkResult, ArkWasmError};
 use crate::esplora_blockchain::EsploraBlockchain;
 use crate::network::NetworkMode;
@@ -147,12 +148,12 @@ impl ArkSession {
         self.sync_offchain_keys().await;
         let offchain = self.client.offchain_balance().await?;
         let onchain = self.client.onchain_wallet_balance()?;
-        let confirmed = offchain.confirmed().to_sat() + onchain.confirmed.to_sat();
-        let total = offchain.total().to_sat() + onchain.confirmed.to_sat();
-        Ok(BalanceDto {
-            confirmed_sats: confirmed,
-            total_sats: total,
-        })
+        Ok(build_arkade_balance_dto(
+            offchain.pre_confirmed().to_sat(),
+            offchain.confirmed().to_sat(),
+            offchain.recoverable().to_sat(),
+            onchain.confirmed.to_sat(),
+        ))
     }
 
     pub fn boarding_address(&self) -> ArkResult<String> {
@@ -640,11 +641,21 @@ impl ArkSession {
     /// Re-scan derived Ark receive addresses against the operator indexer.
     ///
     /// Incoming VTXOs may land on indices that were not yet cached when the session opened.
+    /// Discovery failures are logged but do not fail balance/history calls — stale cache is
+    /// preferable to breaking dashboard polling on transient operator/network errors.
     async fn sync_offchain_keys(&self) {
         if let Err(error) = self.client.discover_keys(DEFAULT_GAP_LIMIT).await {
-            let _ = error;
+            warn_offchain_key_discovery_failed(&error);
         }
     }
+}
+
+fn warn_offchain_key_discovery_failed(error: &ark_client::Error) {
+    let message = format!("Arkade offchain key discovery failed: {error}");
+    #[cfg(target_arch = "wasm32")]
+    web_sys::console::warn_1(&message.into());
+    #[cfg(not(target_arch = "wasm32"))]
+    eprintln!("{message}");
 }
 
 fn parse_delegator_public_key(value: &str) -> ArkResult<PublicKey> {

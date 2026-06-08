@@ -8,6 +8,11 @@ export const E2E_ARKADE_MOCK_COMMITMENT_TXID =
 
 export const E2E_ARKADE_MOCK_DEFAULT_BALANCE_SATS = 42_000
 
+/** Second incoming payment injected after Receive (E2E-ARK-MOCK-04). */
+export const E2E_ARKADE_MOCK_RECEIVE_INCOMING_TXID =
+  'feedfacefeedfacefeedfacefeedfacefeedfacefeedfacefeedfacefeedface'
+export const E2E_ARKADE_MOCK_RECEIVE_INCOMING_SATS = 5_000
+
 /**
  * Per-test mock partition id — sent as a request header (main thread) and cookie (worker fetch).
  * Worker operator calls bypass Playwright `page.route`; same-origin cookies reach Vite middleware.
@@ -27,22 +32,26 @@ export type E2eArkadeMockIncomingPayment = {
 export type E2eArkadeOperatorMockState = {
   shouldFail: boolean
   balanceSats: number
-  /**
-   * Dynamic incoming payments injected via the E2E control API.
-   * Not used by the default fixture path yet; reserved for future scenario tests.
-   */
-  extraIncomingPayments: E2eArkadeMockIncomingPayment[]
-  /** First Ark script that received the fixture VTXO (key discovery terminates after one hit). */
-  fundedScript: string | null
+  /** Script hex → indexer VTXO payment (supports multiple receive addresses per partition). */
+  paymentsByScript: Map<string, E2eArkadeMockIncomingPayment>
+  /** Queued by `addIncomingPayment` control action; applied on next unfunded script in a vtxos query. */
+  pendingIncomingPayment: E2eArkadeMockIncomingPayment | null
 }
 
 function createDefaultMockState(): E2eArkadeOperatorMockState {
   return {
     shouldFail: false,
     balanceSats: E2E_ARKADE_MOCK_DEFAULT_BALANCE_SATS,
-    extraIncomingPayments: [],
-    fundedScript: null,
+    paymentsByScript: new Map(),
+    pendingIncomingPayment: null,
   }
+}
+
+export function clearE2eArkadeOperatorMockDiscoveryState(
+  mockState: E2eArkadeOperatorMockState,
+): void {
+  mockState.paymentsByScript.clear()
+  mockState.pendingIncomingPayment = null
 }
 
 const mockStateByPartition = new Map<string, E2eArkadeOperatorMockState>()

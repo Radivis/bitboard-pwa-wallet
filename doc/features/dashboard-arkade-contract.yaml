@@ -24,7 +24,9 @@ feature:
       - id: DASH-ARK-10
         description: While balance query is loading, show spinner text "Loading…"
       - id: DASH-ARK-11
-        description: When balance query returns data, show confirmedSats; show pending total only when totalSats differs
+        description: >-
+          When balance query returns data, show confirmedSats (spendable offchain VTXOs including
+          pre-confirmed incoming payments); show total line only when totalSats differs (recoverable)
       - id: DASH-ARK-12
         description: When query is not loading and has no data, show "No Arkade session yet"
       - id: DASH-ARK-13
@@ -37,6 +39,10 @@ feature:
     navigation:
       - id: DASH-ARK-30
         description: Dashboard → Receive (Arkade) → Dashboard preserves balance display without false empty-session state
+      - id: DASH-ARK-40
+        description: Dashboard Arkade balance/history refetch on remount and window focus so incoming payments register after Receive
+      - id: DASH-ARK-41
+        description: Receive (Arkade) polls balance while visible so WASM discovers incoming VTXOs before returning to Dashboard
     unlock_session:
       - id: UNLOCK-ARK-01
         description: loadDescriptorWalletAndSync calls openArkadeSessionForWallet when Arkade is active
@@ -46,9 +52,8 @@ feature:
         description: awaitArkadeSessionReady waits for in-flight session open before worker calls
       - id: UNLOCK-ARK-04
         description: >-
-          Desired follow-up — Arkade session open failure must not reject unlock or show
-          generic password toast on WalletUnlock
-        status: todo
+          Arkade session open failure must not reject unlock; reportArkadeSessionOpenError
+          shows an Arkade-specific toast instead of generic password/corruption copy on WalletUnlock
     e2e_mocked_asp:
       - id: E2E-ARK-MOCK-01
         description: With VITE_E2E_ARKADE_MOCK, Signet + Arkade enabled, dashboard shows balance card with fixture balance
@@ -56,6 +61,10 @@ feature:
         description: Mock operator returns fixture incoming payment; activity feed includes Arkade row
       - id: E2E-ARK-MOCK-03
         description: Receive → Dashboard round-trip preserves Arkade balance display
+      - id: E2E-ARK-MOCK-04
+        description: >-
+          Receive → inject mock incoming VTXO via control API → Dashboard shows updated
+          balance and activity row for the receive txid
   pages:
     - DashboardArkadeBlock:
       path: /wallet
@@ -64,7 +73,7 @@ feature:
         - Arkade balance card title
         - Loading spinner while balance query loads
         - BitcoinAmountDisplay for confirmed balance
-        - Optional pending total line
+        - Optional recoverable total line
         - Empty-session copy when no balance data
       test_ids:
         - dashboard-arkade-balance-card
