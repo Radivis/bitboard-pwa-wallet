@@ -33,7 +33,6 @@ use crate::balance_display::{ArkadeBalanceInputs, build_arkade_balance_dto};
 use crate::error::{ArkResult, ArkWasmError};
 use crate::esplora_blockchain::EsploraBlockchain;
 use crate::exit_balance::{
-    PENDING_EXIT_KIND_COLLABORATIVE, PENDING_EXIT_KIND_UNILATERAL,
     gross_offchain_spendable_sats_from_snapshot, reconcile_pending_exit_deductions,
     sum_pending_exit_sats_by_kind, unilateral_exit_in_progress_sats_from_snapshot,
 };
@@ -44,7 +43,7 @@ use crate::offchain_snapshot::{
 };
 use crate::persistence::{
     BitboardArkPersistence, JsonPersistenceDb, OperatorIdentity, PendingExitDeductionRecord,
-    SharedPersistenceDb, network_label, validate_operator_identity,
+    PendingExitKind, SharedPersistenceDb, network_label, validate_operator_identity,
 };
 
 const CLIENT_NAME: &str = "bitboard-pwa-wallet";
@@ -208,11 +207,11 @@ impl ArkSession {
             .transpose()?
             .unwrap_or(0);
         let pending_unilateral_sats =
-            sum_pending_exit_sats_by_kind(&pending, PENDING_EXIT_KIND_UNILATERAL);
+            sum_pending_exit_sats_by_kind(&pending, PendingExitKind::Unilateral);
         let unilateral_exit_in_progress_sats =
             snapshot_unilateral_sats.saturating_add(pending_unilateral_sats);
         let collaborative_exit_in_progress_sats =
-            sum_pending_exit_sats_by_kind(&pending, PENDING_EXIT_KIND_COLLABORATIVE);
+            sum_pending_exit_sats_by_kind(&pending, PendingExitKind::Collaborative);
         Ok((
             unilateral_exit_in_progress_sats,
             collaborative_exit_in_progress_sats,
@@ -248,8 +247,8 @@ impl ArkSession {
 
     fn record_pending_unilateral_exit(&self, txid: &str, vout: u32, amount_sats: u64) {
         self.wallet_db
-            .push_pending_exit_deduction(PendingExitDeductionRecord {
-                kind: PENDING_EXIT_KIND_UNILATERAL.to_string(),
+            .upsert_pending_exit_deduction(PendingExitDeductionRecord {
+                kind: PendingExitKind::Unilateral,
                 vtxo_txid: Some(txid.to_string()),
                 vout: Some(vout),
                 amount_sats,
@@ -260,8 +259,8 @@ impl ArkSession {
 
     fn record_pending_collaborative_exit(&self, amount_sats: u64, baseline_sats: u64) {
         self.wallet_db
-            .push_pending_exit_deduction(PendingExitDeductionRecord {
-                kind: PENDING_EXIT_KIND_COLLABORATIVE.to_string(),
+            .upsert_pending_exit_deduction(PendingExitDeductionRecord {
+                kind: PendingExitKind::Collaborative,
                 vtxo_txid: None,
                 vout: None,
                 amount_sats,
@@ -274,7 +273,7 @@ impl ArkSession {
         let txid_set: HashSet<String> = vtxo_txids.iter().map(|txid| txid.to_string()).collect();
         let mut pending = self.wallet_db.pending_exit_deductions();
         pending.retain(|record| {
-            if record.kind != PENDING_EXIT_KIND_UNILATERAL {
+            if record.kind != PendingExitKind::Unilateral {
                 return true;
             }
             record

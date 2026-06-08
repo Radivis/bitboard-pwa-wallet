@@ -62,9 +62,16 @@ pub struct OffchainVtxoSnapshot {
     pub virtual_tx_outpoints: Vec<VirtualTxOutPointRecord>,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum PendingExitKind {
+    Unilateral,
+    Collaborative,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct PendingExitDeductionRecord {
-    pub kind: String,
+    pub kind: PendingExitKind,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub vtxo_txid: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -208,12 +215,33 @@ impl JsonPersistenceDb {
             .pending_exit_deductions = records;
     }
 
-    pub fn push_pending_exit_deduction(&self, record: PendingExitDeductionRecord) {
-        self.inner
-            .lock()
-            .expect("persistence lock")
-            .pending_exit_deductions
-            .push(record);
+    /// Insert or replace a pending exit record (no duplicate deductions on retry).
+    pub fn upsert_pending_exit_deduction(&self, record: PendingExitDeductionRecord) {
+        let mut inner = self.inner.lock().expect("persistence lock");
+        match record.kind {
+            PendingExitKind::Unilateral => {
+                let Some(txid) = record.vtxo_txid.as_deref() else {
+                    inner.pending_exit_deductions.push(record);
+                    return;
+                };
+                let vout = record.vout.unwrap_or(0);
+                if let Some(existing) = inner.pending_exit_deductions.iter_mut().find(|existing| {
+                    existing.kind == PendingExitKind::Unilateral
+                        && existing.vtxo_txid.as_deref() == Some(txid)
+                        && existing.vout.unwrap_or(0) == vout
+                }) {
+                    *existing = record;
+                    return;
+                }
+                inner.pending_exit_deductions.push(record);
+            }
+            PendingExitKind::Collaborative => {
+                inner
+                    .pending_exit_deductions
+                    .retain(|existing| existing.kind != PendingExitKind::Collaborative);
+                inner.pending_exit_deductions.push(record);
+            }
+        }
     }
 
     pub fn boarding_output_to_snapshot(boarding_output: &BoardingOutput) -> BoardingOutputSnapshot {

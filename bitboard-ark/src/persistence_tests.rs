@@ -1,6 +1,6 @@
 use crate::persistence::{
     BITBOARD_ARK_PERSISTENCE_VERSION, BitboardArkPersistence, JsonPersistenceDb, OperatorIdentity,
-    network_label,
+    PendingExitDeductionRecord, PendingExitKind, network_label,
 };
 use bitcoin::Network;
 
@@ -62,4 +62,66 @@ fn persistence_import_export_preserves_offchain_next_derivation_index() {
     let parsed = BitboardArkPersistence::parse_import(Some(&json));
 
     assert_eq!(parsed.wallet_db.offchain_next_derivation_index, 2);
+}
+
+#[test]
+fn pending_exit_kind_deserializes_from_lowercase_strings() {
+    let json = r#""collaborative""#;
+    let kind: PendingExitKind = serde_json::from_str(json).expect("deserialize");
+    assert_eq!(kind, PendingExitKind::Collaborative);
+}
+
+#[test]
+fn upsert_pending_unilateral_replaces_same_outpoint() {
+    let db = JsonPersistenceDb::default();
+    let txid = "aa".repeat(32);
+
+    db.upsert_pending_exit_deduction(PendingExitDeductionRecord {
+        kind: PendingExitKind::Unilateral,
+        vtxo_txid: Some(txid.clone()),
+        vout: Some(0),
+        amount_sats: 100_000,
+        started_at: 1,
+        baseline_offchain_spendable_sats: None,
+    });
+    db.upsert_pending_exit_deduction(PendingExitDeductionRecord {
+        kind: PendingExitKind::Unilateral,
+        vtxo_txid: Some(txid),
+        vout: Some(0),
+        amount_sats: 180_603,
+        started_at: 2,
+        baseline_offchain_spendable_sats: None,
+    });
+
+    let pending = db.pending_exit_deductions();
+    assert_eq!(pending.len(), 1);
+    assert_eq!(pending[0].amount_sats, 180_603);
+    assert_eq!(pending[0].started_at, 2);
+}
+
+#[test]
+fn upsert_pending_collaborative_replaces_existing_collaborative_record() {
+    let db = JsonPersistenceDb::default();
+
+    db.upsert_pending_exit_deduction(PendingExitDeductionRecord {
+        kind: PendingExitKind::Collaborative,
+        vtxo_txid: None,
+        vout: None,
+        amount_sats: 50_000,
+        started_at: 1,
+        baseline_offchain_spendable_sats: Some(200_000),
+    });
+    db.upsert_pending_exit_deduction(PendingExitDeductionRecord {
+        kind: PendingExitKind::Collaborative,
+        vtxo_txid: None,
+        vout: None,
+        amount_sats: 100_000,
+        started_at: 2,
+        baseline_offchain_spendable_sats: Some(180_000),
+    });
+
+    let pending = db.pending_exit_deductions();
+    assert_eq!(pending.len(), 1);
+    assert_eq!(pending[0].amount_sats, 100_000);
+    assert_eq!(pending[0].baseline_offchain_spendable_sats, Some(180_000));
 }
