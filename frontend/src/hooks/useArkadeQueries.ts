@@ -1,3 +1,4 @@
+import { awaitInFlightWalletSecretsWrites } from '@/db'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { proxy } from 'comlink'
 import { toast } from 'sonner'
@@ -233,7 +234,7 @@ export function useArkadeAddressQuery() {
       arkadeAddressQueryKey,
       'address',
     ),
-    enabled: sessionReady,
+    enabled: sessionReady && activeArkadeConnectionId != null,
     initialData: storeReceiveAddress ?? undefined,
     queryFn: () => withReadyArkadeWorker(() => getArkadeWorker().getAddress()),
     staleTime: Number.POSITIVE_INFINITY,
@@ -248,7 +249,9 @@ export function useArkadeNewAddressMutation() {
   return useMutation({
     mutationFn: async () => {
       assertArkadeSessionUnlocked(activeWalletId, password)
-      return withReadyArkadeWorker(() => getArkadeWorker().getNewAddress())
+      const newAddress = await withReadyArkadeWorker(() => getArkadeWorker().getNewAddress())
+      await awaitInFlightWalletSecretsWrites()
+      return newAddress
     },
     onSuccess: async (newAddress) => {
       toast.success('New Arkade address generated')

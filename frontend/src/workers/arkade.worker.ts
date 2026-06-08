@@ -7,6 +7,7 @@ import type { ArkadeSupportedNetworkMode } from '@/lib/arkade/arkade-endpoints'
 import {
   clearDebouncedSdkPersistenceFlush,
   flushSdkPersistenceNow,
+  flushSdkPersistenceNowOrThrow,
   scheduleSdkPersistenceFlush,
   setArkadeSdkPersistenceBridge,
   setArkadeSdkPersistenceExporter,
@@ -139,14 +140,14 @@ async function persistAfterCriticalOperation(): Promise<void> {
     '@/lib/arkade/arkade-operator-sync'
   )
   await awaitBackgroundArkadeOperatorSync()
-  await flushSdkPersistenceNow()
+  await flushSdkPersistenceNowOrThrow()
 }
 
 async function closeSessionImpl(): Promise<void> {
   try {
-    await flushSdkPersistenceNow()
+    await flushSdkPersistenceNowOrThrow()
   } catch {
-    // Best-effort flush before teardown.
+    // Best-effort flush before teardown when session was never fully opened.
   }
   clearDebouncedSdkPersistenceFlush()
   setArkadeSdkPersistenceFlushContext(null)
@@ -267,7 +268,7 @@ const arkadeService: ArkadeService = {
   },
 
   async flushSdkPersistence(): Promise<void> {
-    await flushSdkPersistenceNow()
+    await flushSdkPersistenceNowOrThrow()
   },
 
   async exportSdkPersistenceJson(): Promise<string> {

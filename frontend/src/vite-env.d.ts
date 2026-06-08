@@ -51,5 +51,10 @@ interface Window {
       offchainNextDerivationIndex: number
       peekAddress: string
     }>
+    /** E2E diagnostics — decrypted wallet-secrets receive cursor (independent of live WASM). */
+    readPersistedReceiveDebugSnapshot: () => Promise<{
+      connectionId: string
+      offchainNextDerivationIndex: number
+    }>
   }
 }

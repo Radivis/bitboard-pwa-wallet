@@ -56,6 +56,38 @@ export async function loadSdkPersistenceJsonForConnection(params: {
   return findArkadeOperatorConnection(payload, params.connectionId)?.sdkPersistenceJson
 }
 
+export async function saveLastSuccessfulOperatorSyncAtForConnection(params: {
+  password: string
+  walletId: number
+  connectionId: string
+  lastSuccessfulOperatorSyncAt: string
+}): Promise<void> {
+  const { password, walletId, connectionId, lastSuccessfulOperatorSyncAt } = params
+
+  await updateWalletSecretsPayloadWithRetry({
+    walletDb: getDatabase(),
+    walletId,
+    password,
+    transform: async (payload): Promise<WalletSecretsPayload> => {
+      const existing = findArkadeOperatorConnection(payload, connectionId)
+      if (existing == null) {
+        throw new Error(`Unknown Arkade connection: ${connectionId}`)
+      }
+      const merged = {
+        ...existing,
+        lastSuccessfulOperatorSyncAt,
+      }
+      const others = payload.arkadeOperatorConnections.filter(
+        (row) => row.id !== connectionId,
+      )
+      return {
+        ...payload,
+        arkadeOperatorConnections: [...others, merged],
+      }
+    },
+  })
+}
+
 export async function saveSdkPersistenceJsonForConnection(params: {
   password: string
   walletId: number

@@ -56,6 +56,16 @@ export async function waitForReceiveArkadeAddressReady(
   await expect(page.getByRole('button', { name: 'Copy address' })).toBeEnabled({ timeout })
 }
 
+/** Unlock starts Arkade session open in the background; wait before WASM diagnostics or Receive. */
+export async function waitForArkadeWasmSessionReady(
+  page: Page,
+  timeout = ARKADE_MOCK_UI_TIMEOUT_MS,
+): Promise<void> {
+  await expect(async () => {
+    await page.evaluate(() => window.__E2E_ARKADE__!.readReceiveDebugSnapshot())
+  }).toPass({ timeout })
+}
+
 export async function readReceiveArkadeAddress(page: Page): Promise<string> {
   await waitForReceiveArkadeAddressReady(page)
   const addressLocator = page.locator('.font-mono.break-all').first()

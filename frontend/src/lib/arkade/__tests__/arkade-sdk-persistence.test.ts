@@ -3,6 +3,7 @@ import {
   assertSdkPersistenceJsonWithinSizeLimit,
   mergeSdkPersistenceJsonMonotonic,
   readOffchainNextDerivationIndex,
+  saveLastSuccessfulOperatorSyncAtForConnection,
   saveSdkPersistenceJsonForConnection,
 } from '@/lib/arkade/arkade-sdk-persistence'
 import { ARKADE_SDK_PERSISTENCE_JSON_MAX_BYTES } from '@/lib/arkade/arkade-sdk-persistence-types'
@@ -64,6 +65,42 @@ describe('arkade-sdk-persistence', () => {
 
     expect(mergeSdkPersistenceJsonMonotonic(indexOne, indexTwo)).toBe(indexTwo)
     expect(mergeSdkPersistenceJsonMonotonic(indexTwo, indexOne)).toBe(indexTwo)
+  })
+
+  it('saveLastSuccessfulOperatorSyncAtForConnection updates sync timestamp only', async () => {
+    const existingJson = persistenceJsonWithReceiveIndex(2)
+
+    await saveLastSuccessfulOperatorSyncAtForConnection({
+      password: 'pw',
+      walletId: 2,
+      connectionId: 'conn-1',
+      lastSuccessfulOperatorSyncAt: '2020-01-03T00:00:00.000Z',
+    })
+
+    const transform = vi.mocked(updateWalletSecretsPayloadWithRetry).mock.calls[0][0]
+      .transform
+    const next = await transform({
+      descriptorWallets: [],
+      lightningNwcConnections: [],
+      arkadeOperatorConnections: [
+        {
+          id: 'conn-1',
+          label: 'Mutinynet',
+          networkMode: 'signet',
+          operatorUrl: 'https://signet.arkade.example/v1',
+          operatorSignerPkHex: '02abc',
+          createdAt: '2020-01-01T00:00:00.000Z',
+          sdkPersistenceJson: existingJson,
+          lastSuccessfulOperatorSyncAt: '2020-01-02T00:00:00.000Z',
+        },
+      ],
+      activeArkadeConnectionIdByNetwork: { signet: 'conn-1' },
+    })
+
+    expect(next.arkadeOperatorConnections[0].sdkPersistenceJson).toBe(existingJson)
+    expect(next.arkadeOperatorConnections[0].lastSuccessfulOperatorSyncAt).toBe(
+      '2020-01-03T00:00:00.000Z',
+    )
   })
 
   it('merges sdkPersistenceJson into active operator connection via CAS', async () => {

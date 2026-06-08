@@ -83,12 +83,12 @@ export async function closeArkadeSession(): Promise<void> {
   await awaitBackgroundArkadeOperatorSync()
   const arkadeWorker = getArkadeWorkerIfExists()
   if (arkadeWorker != null) {
+    await arkadeWorker.flushSdkPersistence()
+    await awaitInFlightWalletSecretsWrites()
     try {
-      await arkadeWorker.flushSdkPersistence()
-      await awaitInFlightWalletSecretsWrites()
       await arkadeWorker.closeSession()
     } catch {
-      // Worker may already be terminated.
+      // closeSession is best-effort during teardown.
     }
   }
   terminateArkadeWorker()
@@ -212,7 +212,6 @@ function runArkadeSessionOpenWork(params: {
 
     await worker.reconcileActiveConnectionId(connection.id)
 
-    useWalletStore.getState().setActiveArkadeConnectionId(connection.id)
     useWalletStore.getState().setLastOperatorSyncTime(null)
 
     const operatorSyncParams = {
@@ -224,13 +223,15 @@ function runArkadeSessionOpenWork(params: {
     const syncParams = { ...operatorSyncParams, sessionAlreadyOpen: true as const }
     if (connection.lastSuccessfulOperatorSyncAt == null) {
       await runArkadeOperatorSyncAndPersist(syncParams)
-      await refreshArkadeStoreFromLoadedWasm()
+      await refreshArkadeStoreFromLoadedWasm(connection.id)
     } else {
-      // Hydrate dashboard from local snapshot before background operator sync to avoid
-      // concurrent WASM entry (peek address vs sync_with_operator).
-      await refreshArkadeStoreFromLoadedWasm()
-      void runArkadeOperatorSyncAndPersist(syncParams)
+      // Hydrate from local persistence first so receive address is stable, then sync.
+      await refreshArkadeStoreFromLoadedWasm(connection.id)
+      await runArkadeOperatorSyncAndPersist(syncParams)
+      await refreshArkadeStoreFromLoadedWasm(connection.id)
     }
+    // Expose connection id only after receive address is hydrated from WASM persistence.
+    useWalletStore.getState().setActiveArkadeConnectionId(connection.id)
     lastOpenedSessionKey = sessionKey(walletId, networkMode, connection.id)
 
     void runPostOpenArkadeMaintenance(worker, networkMode)

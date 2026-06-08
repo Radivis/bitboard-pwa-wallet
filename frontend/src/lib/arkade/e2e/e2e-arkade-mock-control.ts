@@ -24,6 +24,11 @@ export type E2eArkadeReceiveDebugSnapshot = {
   peekAddress: string
 }
 
+export type E2eArkadePersistedReceiveDebugSnapshot = {
+  connectionId: string
+  offchainNextDerivationIndex: number
+}
+
 export type E2eArkadeMockControl = {
   setFailing: (value: boolean) => Promise<void>
   setBalanceSats: (value: number) => Promise<void>
@@ -31,6 +36,10 @@ export type E2eArkadeMockControl = {
   reset: () => Promise<void>
   /** @see E2eArkadeReceiveDebugSnapshot — manual DevTools only, not Playwright. */
   readReceiveDebugSnapshot: () => Promise<E2eArkadeReceiveDebugSnapshot>
+  /** Wallet-secrets row (decrypted), independent of live WASM — E2E diagnostics only. */
+  readPersistedReceiveDebugSnapshot: (
+    passwordOverride?: string,
+  ) => Promise<E2eArkadePersistedReceiveDebugSnapshot>
 }
 
 export function isE2eArkadeMockEnabled(): boolean {
@@ -83,6 +92,43 @@ export function ensureE2eArkadeMockControl(): void {
       return {
         offchainNextDerivationIndex: readOffchainNextDerivationIndex(sdkPersistenceJson),
         peekAddress: await worker.getAddress(),
+      }
+    },
+    readPersistedReceiveDebugSnapshot: async (passwordOverride?: string) => {
+      const { getDatabase } = await import('@/db')
+      const { loadWalletSecretsPayload } = await import('@/db/wallet-persistence')
+      const { findActiveArkadeOperatorConnection } = await import(
+        '@/lib/arkade/arkade-operator-connections'
+      )
+      const { readOffchainNextDerivationIndex } = await import(
+        '@/lib/arkade/arkade-sdk-persistence'
+      )
+      const { useWalletStore } = await import('@/stores/walletStore')
+      const { useSessionStore } = await import('@/stores/sessionStore')
+      const { isArkadeSupportedNetworkMode } = await import('@/lib/arkade/arkade-endpoints')
+
+      const walletId = useWalletStore.getState().activeWalletId
+      const password = passwordOverride ?? useSessionStore.getState().password
+      const networkMode = useWalletStore.getState().networkMode
+      if (
+        walletId == null ||
+        password == null ||
+        !isArkadeSupportedNetworkMode(networkMode)
+      ) {
+        throw new Error('Wallet must be unlocked on an Arkade network to read persisted snapshot')
+      }
+
+      const payload = await loadWalletSecretsPayload(getDatabase(), password, walletId)
+      const connection = findActiveArkadeOperatorConnection(payload, networkMode)
+      if (connection == null) {
+        throw new Error('No active Arkade operator connection in wallet secrets')
+      }
+
+      return {
+        connectionId: connection.id,
+        offchainNextDerivationIndex: readOffchainNextDerivationIndex(
+          connection.sdkPersistenceJson,
+        ),
       }
     },
   }

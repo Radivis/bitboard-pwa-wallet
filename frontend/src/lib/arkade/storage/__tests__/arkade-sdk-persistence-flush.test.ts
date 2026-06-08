@@ -43,6 +43,8 @@ describe('flushSdkPersistenceNow', () => {
 
     await Promise.all([firstFlush, secondFlush])
 
+    expect(await firstFlush).toBe(true)
+    expect(await secondFlush).toBe(true)
     expect(exportCount).toBe(2)
     expect(persistMock).toHaveBeenCalledTimes(2)
     expect(persistMock).toHaveBeenLastCalledWith(

@@ -1,6 +1,6 @@
 import { toast } from 'sonner'
 import { getArkadeWorker } from '@/workers/arkade-factory'
-import { saveSdkPersistenceJsonForConnection } from '@/lib/arkade/arkade-sdk-persistence'
+import { saveLastSuccessfulOperatorSyncAtForConnection } from '@/lib/arkade/arkade-sdk-persistence'
 import { refreshArkadeStoreFromLoadedWasm } from '@/lib/arkade/arkade-persistence-store-sync'
 import { awaitArkadeSessionReady } from '@/lib/arkade/arkade-session-service'
 import { isArkadeActiveForNetworkMode } from '@/lib/arkade/arkade-utils'
@@ -38,16 +38,15 @@ async function syncArkadeWithOperatorCore(params: {
   }
 
   const worker = getArkadeWorker()
+  // syncWithOperator persists the SDK blob via flushSdkPersistenceNow in the worker.
   await worker.syncWithOperator()
   await refreshArkadeStoreFromLoadedWasm()
 
   const now = new Date().toISOString()
-  const exportedJson = await worker.exportSdkPersistenceJson()
-  await saveSdkPersistenceJsonForConnection({
+  await saveLastSuccessfulOperatorSyncAtForConnection({
     password: params.password,
     walletId: params.walletId,
     connectionId: params.connectionId,
-    sdkPersistenceJson: exportedJson,
     lastSuccessfulOperatorSyncAt: now,
   })
   useWalletStore.getState().setLastOperatorSyncTime(new Date())

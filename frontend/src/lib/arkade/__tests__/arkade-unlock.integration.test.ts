@@ -87,14 +87,17 @@ vi.mock('@/stores/sessionStore', () => ({
 }))
 
 vi.mock('@/lib/wallet/descriptor-wallet-manager', () => ({
-  resolveDescriptorWallet: vi.fn().mockResolvedValue({
-    network: 'testnet',
-    addressType: AddressType.Taproot,
-    accountId: 0,
-    externalDescriptor: 'tr(xpub.../0/*)',
-    internalDescriptor: 'tr(xpub.../1/*)',
-    changeSet: '{}',
-    fullScanDone: false,
+  resolveDescriptorWallet: vi.fn().mockImplementation(async () => {
+    unlockCallOrder.push('resolveDescriptorWallet')
+    return {
+      network: 'testnet',
+      addressType: AddressType.Taproot,
+      accountId: 0,
+      externalDescriptor: 'tr(xpub.../0/*)',
+      internalDescriptor: 'tr(xpub.../1/*)',
+      changeSet: '{}',
+      fullScanDone: false,
+    }
   }),
   updateDescriptorWalletChangeset: vi.fn(),
 }))
@@ -197,7 +200,10 @@ describe('openArkadeSession after unlock (integration)', () => {
 
     const unlockedIndex = unlockCallOrder.indexOf('setWalletStatus:unlocked')
     const sessionOpenIndex = unlockCallOrder.indexOf('openArkadeSessionForWallet')
+    const resolveDescriptorIndex = unlockCallOrder.indexOf('resolveDescriptorWallet')
     expect(sessionOpenIndex).toBeGreaterThanOrEqual(0)
+    expect(resolveDescriptorIndex).toBeGreaterThanOrEqual(0)
+    expect(sessionOpenIndex).toBeGreaterThan(resolveDescriptorIndex)
     expect(unlockedIndex).toBeGreaterThan(sessionOpenIndex)
   })
 

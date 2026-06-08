@@ -71,9 +71,9 @@ async function readSdkPersistenceJson(): Promise<string> {
   return exportSdkPersistenceJson()
 }
 
-export async function flushSdkPersistenceNow(): Promise<void> {
+export async function flushSdkPersistenceNow(): Promise<boolean> {
   if (flushContext == null || persistenceBridge == null || exportSdkPersistenceJson == null) {
-    return
+    return false
   }
   clearDebouncedSdkPersistenceFlush()
   if (inFlightFlush != null) {
@@ -98,7 +98,16 @@ export async function flushSdkPersistenceNow(): Promise<void> {
 
   try {
     await inFlightFlush
+    return true
   } finally {
     inFlightFlush = null
+  }
+}
+
+/** Critical paths (reveal, lock) must not silently skip persistence when flush is configured. */
+export async function flushSdkPersistenceNowOrThrow(): Promise<void> {
+  const flushed = await flushSdkPersistenceNow()
+  if (!flushed) {
+    throw new Error('Arkade SDK persistence flush was skipped (bridge or flush context missing)')
   }
 }

@@ -48,3 +48,18 @@ fn persistence_v1_json_defaults_empty_wallet_db() {
     assert!(parsed.operator_identity.is_none());
     assert!(parsed.wallet_db.boarding_outputs.is_empty());
 }
+
+#[test]
+fn persistence_import_export_preserves_offchain_next_derivation_index() {
+    let identity = OperatorIdentity {
+        signer_pk_hex: "02abc".to_string(),
+        network: network_label(Network::Signet),
+    };
+    let mut envelope = BitboardArkPersistence::empty(identity);
+    envelope.wallet_db.offchain_next_derivation_index = 2;
+
+    let json = serde_json::to_string(&envelope).expect("serialize");
+    let parsed = BitboardArkPersistence::parse_import(Some(&json));
+
+    assert_eq!(parsed.wallet_db.offchain_next_derivation_index, 2);
+}
