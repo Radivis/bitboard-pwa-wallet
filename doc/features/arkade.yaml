@@ -67,6 +67,7 @@ feature:
     - DashboardArkadeBlock:
       - description: "Separate Arkade balance on dashboard"
       - file: frontend/src/components/wallet/ArkadeDashboardBalance.tsx
+      - contract_spec: doc/features/dashboard-arkade-contract.yaml
       - visible_elements:
         - Arkade balance label
-        - link to Management Arkade section
+        - confirmed and optional pending balance display

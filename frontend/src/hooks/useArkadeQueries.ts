@@ -507,14 +507,12 @@ export function useArkadeUnilateralExitFeeQuery(params: {
         : disabledArkadeQueryKey('exit-fee-unilateral'),
     enabled,
     queryFn: async () => {
-      if (params.txid == null || params.vout == null) {
+      const { txid, vout } = params
+      if (txid == null || vout == null) {
         throw new Error('VTXO outpoint is required')
       }
       return withReadyArkadeWorker(() =>
-        getArkadeWorker().estimateUnilateralExit({
-          txid: params.txid,
-          vout: params.vout,
-        }),
+        getArkadeWorker().estimateUnilateralExit({ txid, vout }),
       )
     },
     staleTime: 30_000,

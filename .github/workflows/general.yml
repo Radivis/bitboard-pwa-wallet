@@ -101,6 +101,7 @@ jobs:
           cd crypto && wasm-pack build --target bundler --out-dir ../frontend/src/wasm-pkg
           cd ../bitboard-encryption && wasm-pack build --target bundler --out-dir ../frontend/src/wasm-pkg/bitboard_encryption
           cd ../bitboard-lightning && wasm-pack build --target bundler --out-dir ../frontend/src/wasm-pkg/bitboard_lightning
+          cd ../bitboard-ark && wasm-pack build --target bundler --out-dir ../frontend/src/wasm-pkg/bitboard_ark
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -145,6 +146,7 @@ jobs:
           cd crypto && wasm-pack build --target bundler --out-dir ../frontend/src/wasm-pkg
           cd ../bitboard-encryption && wasm-pack build --target bundler --out-dir ../frontend/src/wasm-pkg/bitboard_encryption
           cd ../bitboard-lightning && wasm-pack build --target bundler --out-dir ../frontend/src/wasm-pkg/bitboard_lightning
+          cd ../bitboard-ark && wasm-pack build --target bundler --out-dir ../frontend/src/wasm-pkg/bitboard_ark
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -170,6 +172,7 @@ jobs:
         env:
           CI: true
           VITE_E2E_NWC_MOCK: "true"
+          VITE_E2E_ARKADE_MOCK: "true"
 
       - name: Upload Playwright report (on failure)
         if: failure()

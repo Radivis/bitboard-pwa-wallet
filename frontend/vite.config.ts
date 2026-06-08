@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url'
 import { defineConfig, type Plugin } from 'vite'
 import { readBitboardWalletVersion } from './common/bitboard-wallet-version'
 import { arkOperatorViteProxyEntries } from './src/lib/arkade/arkade-operator-proxy'
+import { e2eArkadeOperatorMockPlugin } from './src/lib/arkade/e2e/vite-e2e-arkade-operator-mock-plugin'
 import { esploraViteProxyEntries } from './src/lib/esplora/esplora-service-whitelist'
 import { fiatRateViteProxyEntries } from './src/lib/fiat/fiat-rate-service-whitelist'
 import { faucetViteProxyEntries } from './src/lib/faucet/faucet-definitions'
@@ -100,7 +101,11 @@ const fiatRatesDevProxy = Object.fromEntries(
   ]),
 )
 
-const arkOperatorDevProxy = Object.fromEntries(
+const isE2eArkadeMockEnabled = process.env.VITE_E2E_ARKADE_MOCK === 'true'
+
+const arkOperatorDevProxy = isE2eArkadeMockEnabled
+  ? {}
+  : Object.fromEntries(
   arkOperatorViteProxyEntries().map((e) => [
     e.localPrefix,
     {
@@ -191,6 +196,7 @@ export default defineConfig({
   },
   plugins: [
     rejectArgon2CiInProductionBuild(),
+    e2eArkadeOperatorMockPlugin(),
     tanstackRouter({
       target: 'react',
       autoCodeSplitting: true,

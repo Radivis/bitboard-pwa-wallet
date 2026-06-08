@@ -9,6 +9,8 @@ interface ImportMetaEnv {
   readonly CI?: boolean
   /** E2E-only switch to use in-memory Lightning NWC mock backend. */
   readonly VITE_E2E_NWC_MOCK?: string
+  /** E2E-only switch to serve mocked Ark operator responses via Vite middleware. */
+  readonly VITE_E2E_ARKADE_MOCK?: string
   /** Set to `1` or `true` to hide TanStack Router devtools in dev (e.g. for screenshots). */
   readonly VITE_HIDE_ROUTER_DEVTOOLS?: string
   /**
@@ -36,5 +38,13 @@ interface Window {
     setBalanceSats: (value: number) => void
     addPayment: (payment: import('@/lib/lightning/lightning-backend-service').LightningPayment) => void
     reset: () => void
+  }
+  __E2E_ARKADE__?: {
+    setFailing: (value: boolean) => Promise<void>
+    setBalanceSats: (value: number) => Promise<void>
+    addIncomingPayment: (
+      payment: import('@/lib/arkade/e2e/arkade-operator-mock-state').E2eArkadeMockIncomingPayment,
+    ) => Promise<void>
+    reset: () => Promise<void>
   }
 }
