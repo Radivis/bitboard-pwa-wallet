@@ -3,3 +3,9 @@
 
 [advisories]
 version = 2
+ignore = [
+    # Transitive via ark-fees → cel 0.12; only bitboard-ark uses this chain.
+    # Informational unmaintained advisory (no known vulnerability). Revisit when
+    # ark-fees adopts cel 0.13+ (pastey) on crates.io.
+    { id = "RUSTSEC-2024-0436", reason = "transitive paste via ark-fees/cel; bitboard-ark only; unmaintained INFO advisory" },
+]
