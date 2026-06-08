@@ -70,7 +70,7 @@ describe('ArkadeDashboardBalance', () => {
     expect(screen.getByText('Loading…')).toBeInTheDocument()
   })
 
-  it('DASH-ARK-11 shows balance and pending total when they differ', () => {
+  it('DASH-ARK-11 shows balance and recoverable total when they differ', () => {
     balanceQueryMock.mockReturnValue({
       isLoading: false,
       data: { confirmedSats: 40_000, totalSats: 45_000 },

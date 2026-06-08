@@ -111,6 +111,7 @@ function applyE2eArkadeMockControlAction(
       if (!isE2eArkadeMockIncomingPayment(payload.payment)) {
         return 'addIncomingPayment requires payment object'
       }
+      // Replaces any previously queued payment; only one pending slot per partition.
       mockState.pendingIncomingPayment = payload.payment
       return null
     }

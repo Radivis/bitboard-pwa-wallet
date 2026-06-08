@@ -74,7 +74,7 @@ feature:
         - Arkade balance card title
         - Loading spinner while balance query loads
         - BitcoinAmountDisplay for confirmed balance
-        - Optional pending total line
+        - Optional recoverable total line
         - Empty-session copy when no balance data
       test_ids:
         - dashboard-arkade-balance-card
