@@ -1,23 +1,39 @@
-import { arkadeAddressQueryKey } from '@/lib/arkade/arkade-query-keys'
+import {
+  arkadeAddressQueryKey,
+  arkadeBalanceQueryKey,
+  arkadeHistoryQueryKey,
+} from '@/lib/arkade/arkade-query-keys'
 import { isArkadeSupportedNetworkMode } from '@/lib/arkade/arkade-endpoints'
 import { appQueryClient } from '@/lib/shared/app-query-client'
 import { getArkadeWorker } from '@/workers/arkade-factory'
 import type { ArkadeBalanceInfo, ArkadePaymentRow } from '@/workers/arkade-api'
 import { useWalletStore, type NetworkMode } from '@/stores/walletStore'
 
-function syncArkadeAddressQueryCache(params: {
+function syncArkadeDashboardQueryCaches(params: {
   walletId: number
   networkMode: NetworkMode
   connectionId: string
+  balance: ArkadeBalanceInfo
+  payments: ArkadePaymentRow[]
   receiveAddress: string
 }): void {
   if (!isArkadeSupportedNetworkMode(params.networkMode)) {
     return
   }
   appQueryClient.setQueryData(
-    arkadeAddressQueryKey(params.walletId, params.networkMode, params.connectionId),
-    params.receiveAddress,
+    arkadeBalanceQueryKey(params.walletId, params.networkMode, params.connectionId),
+    params.balance,
   )
+  appQueryClient.setQueryData(
+    arkadeHistoryQueryKey(params.walletId, params.networkMode, params.connectionId),
+    params.payments,
+  )
+  if (params.receiveAddress.length > 0) {
+    appQueryClient.setQueryData(
+      arkadeAddressQueryKey(params.walletId, params.networkMode, params.connectionId),
+      params.receiveAddress,
+    )
+  }
 }
 
 /** Caller must ensure the Arkade WASM session is already open. */
@@ -38,15 +54,13 @@ export async function refreshArkadeStoreFromLoadedWasm(
 
   const walletState = useWalletStore.getState()
   const connectionId = connectionIdForQueryCache ?? walletState.activeArkadeConnectionId
-  if (
-    connectionId != null &&
-    walletState.activeWalletId != null &&
-    receiveAddress.length > 0
-  ) {
-    syncArkadeAddressQueryCache({
+  if (connectionId != null && walletState.activeWalletId != null) {
+    syncArkadeDashboardQueryCaches({
       walletId: walletState.activeWalletId,
       networkMode: walletState.networkMode,
       connectionId,
+      balance,
+      payments,
       receiveAddress,
     })
   }
