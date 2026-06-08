@@ -1100,13 +1100,12 @@ where
     pub async fn get_vtxo_chain(
         &self,
         out_point: OutPoint,
-        size: i32,
-        index: i32,
+        size_and_index: Option<(i32, i32)>,
     ) -> Result<Option<VtxoChainResponse>, Error> {
         let vtxo_chain = timeout_op(
             self.inner.timeout,
             self.network_client()
-                .get_vtxo_chain(Some(out_point), Some((size, index))),
+                .get_vtxo_chain(Some(out_point), size_and_index),
         )
         .await
         .context("Failed to fetch VTXO chain")??;

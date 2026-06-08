@@ -515,7 +515,7 @@ impl ArkSession {
         let mut projected_wait_steps = 0u32;
         let mut estimate_error = None;
 
-        match self.client.get_vtxo_chain(outpoint, 0, 0).await {
+        match self.client.get_vtxo_chain(outpoint, None).await {
             Ok(Some(chain)) => {
                 chain_tx_count = chain.chains.inner.len() as u32;
                 projected_unroll_steps = chain_tx_count.saturating_sub(1);
@@ -674,23 +674,10 @@ impl ArkSession {
         &self,
         target: OutPoint,
     ) -> ArkResult<Vec<bitcoin::Transaction>> {
-        let trees = self
-            .client
-            .build_unilateral_exit_trees()
+        self.client
+            .build_unilateral_exit_branch(target)
             .await
-            .map_err(|error| ArkWasmError::Message(error.to_string()))?;
-        for branch in trees {
-            if branch.first().is_some_and(|tx| {
-                tx.input
-                    .first()
-                    .is_some_and(|input| input.previous_output == target)
-            }) {
-                return Ok(branch);
-            }
-        }
-        Err(ArkWasmError::Message(
-            "No unilateral exit branch found for VTXO".to_string(),
-        ))
+            .map_err(|error| ArkWasmError::Message(error.to_string()))
     }
 
     fn network(&self) -> Network {

@@ -19,8 +19,10 @@ use backon::ExponentialBuilder;
 use backon::Retryable;
 use bitcoin::key::Secp256k1;
 use bitcoin::psbt;
+use ark_core::server::VirtualTxOutPoint;
 use bitcoin::Address;
 use bitcoin::Amount;
+use bitcoin::OutPoint;
 use bitcoin::Transaction;
 use bitcoin::TxOut;
 use bitcoin::Txid;
@@ -35,6 +37,46 @@ where
     S: SwapStorage + 'static,
     K: crate::KeyProvider,
 {
+    /// Build the finalized on-chain unroll branch for one VTXO.
+    ///
+    /// The returned transactions are ordered from the commitment side toward the VTXO leaf.
+    pub async fn build_unilateral_exit_branch(
+        &self,
+        target: OutPoint,
+    ) -> Result<Vec<Transaction>, Error> {
+        let (vtxo_list, _) = self
+            .list_vtxos()
+            .await
+            .context("failed to get spendable VTXOs")?;
+
+        let Some(virtual_tx_outpoint) = vtxo_list
+            .could_exit_unilaterally()
+            .find(|vtp| vtp.outpoint == target)
+        else {
+            return Err(Error::ad_hoc(format!(
+                "VTXO {target} is not eligible for unilateral exit"
+            )));
+        };
+
+        let unilateral_exit_tree = self
+            .unilateral_exit_tree_for_outpoint(virtual_tx_outpoint)
+            .await?;
+        let branches = self
+            .finalize_unilateral_exit_tree_on_chain(&unilateral_exit_tree)
+            .await?;
+
+        branches
+            .into_iter()
+            .find(|branch| {
+                branch
+                    .last()
+                    .is_some_and(|tx| tx.compute_txid() == target.txid)
+            })
+            .ok_or_else(|| {
+                Error::ad_hoc(format!("No unilateral exit branch found for VTXO {target}"))
+            })
+    }
+
     /// Build the unilateral exit transaction tree for all spendable VTXOs.
     ///
     /// ### Returns
@@ -48,85 +90,98 @@ where
             .await
             .context("failed to get spendable VTXOs")?;
 
-        let mut unilateral_exit_trees = Vec::new();
-
-        // For each spendable VTXO, generate its unilateral exit tree.
-        for virtual_tx_outpoint in vtxo_list.could_exit_unilaterally() {
-            let vtxo_chain_response = timeout_op(
-                self.inner.timeout,
-                self.network_client()
-                    .get_vtxo_chain(Some(virtual_tx_outpoint.outpoint), None),
-            )
-            .await
-            .context(format!(
-                "failed to get VTXO chain for outpoint {}",
-                virtual_tx_outpoint.outpoint
-            ))??;
-
-            let paths = build_unilateral_exit_tree_txids(
-                &vtxo_chain_response.chains,
-                virtual_tx_outpoint.outpoint.txid,
-            )?;
-
-            // We don't want to fetch transactions more than once.
-            let txs = HashSet::<Txid>::from_iter(paths.concat());
-
-            let virtual_txs_response = timeout_op(
-                self.inner.timeout,
-                self.network_client()
-                    .get_virtual_txs(txs.iter().map(|tx| tx.to_string()).collect(), None),
-            )
-            .await
-            .context("failed to get virtual TXs")??;
-
-            let paths = paths
-                .into_iter()
-                .map(|path| {
-                    path.into_iter()
-                        .map(|txid| {
-                            virtual_txs_response
-                                .txs
-                                .iter()
-                                .find(|t| t.unsigned_tx.compute_txid() == txid)
-                                .cloned()
-                                .ok_or_else(|| {
-                                    Error::ad_hoc(format!("no PSBT found for virtual TX {txid}"))
-                                })
-                        })
-                        .collect::<Result<Vec<_>, _>>()
-                })
-                .collect::<Result<Vec<_>, _>>()?;
-
-            let unilateral_exit_tree =
-                UnilateralExitTree::new(virtual_tx_outpoint.commitment_txids.clone(), paths);
-
-            unilateral_exit_trees.push(unilateral_exit_tree);
-        }
-
         let mut branches: Vec<Vec<Transaction>> = Vec::new();
-        for unilateral_exit_tree in unilateral_exit_trees {
-            let commitment_txids = unilateral_exit_tree.commitment_txids();
-
-            let mut commitment_txs = Vec::new();
-            for commitment_txid in commitment_txids.iter() {
-                let commitment_tx = timeout_op(
-                    self.inner.timeout,
-                    self.blockchain().find_tx(commitment_txid),
-                )
-                .await??
-                .ok_or_else(|| {
-                    Error::ad_hoc(format!("could not find commitment TX {commitment_txid}"))
-                })?;
-
-                commitment_txs.push(commitment_tx);
-            }
-
-            let finalized_unilateral_exit_tree =
-                finalize_unilateral_exit_tree(&unilateral_exit_tree, commitment_txs.as_slice())?;
-            branches.extend(finalized_unilateral_exit_tree);
+        for virtual_tx_outpoint in vtxo_list.could_exit_unilaterally() {
+            let unilateral_exit_tree = self
+                .unilateral_exit_tree_for_outpoint(virtual_tx_outpoint)
+                .await?;
+            branches.extend(
+                self.finalize_unilateral_exit_tree_on_chain(&unilateral_exit_tree)
+                    .await?,
+            );
         }
 
         Ok(branches)
+    }
+
+    async fn unilateral_exit_tree_for_outpoint(
+        &self,
+        virtual_tx_outpoint: &VirtualTxOutPoint,
+    ) -> Result<UnilateralExitTree, Error> {
+        let vtxo_chain_response = timeout_op(
+            self.inner.timeout,
+            self.network_client()
+                .get_vtxo_chain(Some(virtual_tx_outpoint.outpoint), None),
+        )
+        .await
+        .context(format!(
+            "failed to get VTXO chain for outpoint {}",
+            virtual_tx_outpoint.outpoint
+        ))??;
+
+        let paths = build_unilateral_exit_tree_txids(
+            &vtxo_chain_response.chains,
+            virtual_tx_outpoint.outpoint.txid,
+        )?;
+
+        let txs = HashSet::<Txid>::from_iter(paths.concat());
+
+        let virtual_txs_response = timeout_op(
+            self.inner.timeout,
+            self.network_client()
+                .get_virtual_txs(txs.iter().map(|tx| tx.to_string()).collect(), None),
+        )
+        .await
+        .context("failed to get virtual TXs")??;
+
+        let paths = paths
+            .into_iter()
+            .map(|path| {
+                path.into_iter()
+                    .map(|txid| {
+                        virtual_txs_response
+                            .txs
+                            .iter()
+                            .find(|t| t.unsigned_tx.compute_txid() == txid)
+                            .cloned()
+                            .ok_or_else(|| {
+                                Error::ad_hoc(format!("no PSBT found for virtual TX {txid}"))
+                            })
+                    })
+                    .collect::<Result<Vec<_>, _>>()
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(UnilateralExitTree::new(
+            virtual_tx_outpoint.commitment_txids.clone(),
+            paths,
+        ))
+    }
+
+    async fn finalize_unilateral_exit_tree_on_chain(
+        &self,
+        unilateral_exit_tree: &UnilateralExitTree,
+    ) -> Result<Vec<Vec<Transaction>>, Error> {
+        let commitment_txids = unilateral_exit_tree.commitment_txids();
+
+        let mut commitment_txs = Vec::new();
+        for commitment_txid in commitment_txids.iter() {
+            let commitment_tx = timeout_op(
+                self.inner.timeout,
+                self.blockchain().find_tx(commitment_txid),
+            )
+            .await??
+            .ok_or_else(|| {
+                Error::ad_hoc(format!("could not find commitment TX {commitment_txid}"))
+            })?;
+
+            commitment_txs.push(commitment_tx);
+        }
+
+        Ok(finalize_unilateral_exit_tree(
+            unilateral_exit_tree,
+            commitment_txs.as_slice(),
+        )?)
     }
 
     /// Broadcast the next unconfirmed transaction in a branch, skipping transactions that are
