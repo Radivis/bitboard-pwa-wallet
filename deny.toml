@@ -8,4 +8,8 @@ ignore = [
     # Informational unmaintained advisory (no known vulnerability). Revisit when
     # ark-fees adopts cel 0.13+ (pastey) on crates.io.
     { id = "RUSTSEC-2024-0436", reason = "transitive paste via ark-fees/cel; bitboard-ark only; unmaintained INFO advisory" },
+    # Transitive via ark-bdk-wallet → bdk_esplora 0.20 → esplora-client 0.11 → reqwest 0.11.
+    # Informational unmaintained advisory (no known vulnerability). Revisit with BDK stack bump
+    # (bdk_wallet 2.3 + bdk_esplora 0.22 + esplora-client 0.12) in ark-bdk-wallet patch.
+    { id = "RUSTSEC-2025-0134", reason = "transitive rustls-pemfile via ark-bdk-wallet/bdk_esplora; bitboard-ark only; unmaintained INFO advisory" },
 ]
