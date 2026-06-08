@@ -186,6 +186,24 @@ describe('openArkadeSessionForWallet (integration)', () => {
     expect(workerMocks.closeSession).toHaveBeenCalledTimes(1)
   })
 
+  it('UNLOCK-ARK-04 completes session open when finalizePendingTransactions fails', async () => {
+    workerMocks.finalizePendingTransactions.mockRejectedValueOnce(
+      new Error(
+        'failed to fetch pending VTXOs: request failed: error in response: status code 400 Bad Request',
+      ),
+    )
+
+    await expect(
+      openArkadeSessionForWallet({
+        password: 'unlock-password',
+        walletId: 7,
+        networkMode: 'signet',
+      }),
+    ).resolves.toBeUndefined()
+
+    expect(upsertArkadeWalletStateMock).toHaveBeenCalledTimes(1)
+  })
+
   it('does not reopen when the same wallet and network session is already active', async () => {
     await openArkadeSessionForWallet({
       password: 'unlock-password',

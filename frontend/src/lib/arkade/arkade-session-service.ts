@@ -24,6 +24,28 @@ function sessionKey(walletId: number, networkMode: ArkadeSupportedNetworkMode): 
   return `${walletId}:${networkMode}`
 }
 
+/** Best-effort maintenance after WASM session open; must not block session registration. */
+async function runPostOpenArkadeMaintenance(
+  worker: Awaited<ReturnType<typeof getArkadeWorker>>,
+  networkMode: ArkadeSupportedNetworkMode,
+): Promise<void> {
+  try {
+    await worker.finalizePendingTransactions()
+  } catch (err) {
+    console.warn('Arkade finalizePendingTransactions failed after session open', err)
+  }
+
+  if (!isArkadeDelegatorConfigured(networkMode)) {
+    return
+  }
+
+  try {
+    await worker.delegateSpendableVtxos()
+  } catch (err) {
+    console.warn('Arkade delegateSpendableVtxos failed after session open', err)
+  }
+}
+
 export async function closeArkadeSession(): Promise<void> {
   if (openSessionInFlight != null) {
     try {
@@ -89,10 +111,7 @@ export async function openArkadeSessionForWallet(params: {
       sdkPersistenceJson,
     })
 
-    await worker.finalizePendingTransactions()
-    if (isArkadeDelegatorConfigured(networkMode)) {
-      await worker.delegateSpendableVtxos()
-    }
+    await runPostOpenArkadeMaintenance(worker, networkMode)
 
     const now = new Date().toISOString()
     await upsertArkadeWalletState({

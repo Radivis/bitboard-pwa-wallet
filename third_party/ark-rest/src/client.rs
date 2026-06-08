@@ -205,19 +205,14 @@ impl Client {
                 (None, Some(o.iter().map(|o| o.to_string()).collect()))
             }
         };
+        // Indexer filters are mutually exclusive — send only the active filter flag.
         let (spendable_only, spent_only, recoverable_only, pending_only) = match filter {
-            None => (Some(false), Some(false), Some(false), Some(false)),
+            None => (None, None, None, None),
             Some(filter) => match filter {
-                GetVtxosRequestFilter::Spendable => {
-                    (Some(true), Some(false), Some(false), Some(false))
-                }
-                GetVtxosRequestFilter::Spent => (Some(false), Some(true), Some(false), Some(false)),
-                GetVtxosRequestFilter::Recoverable => {
-                    (Some(false), Some(false), Some(true), Some(false))
-                }
-                GetVtxosRequestFilter::PendingOnly => {
-                    (Some(false), Some(false), Some(false), Some(true))
-                }
+                GetVtxosRequestFilter::Spendable => (Some(true), None, None, None),
+                GetVtxosRequestFilter::Spent => (None, Some(true), None, None),
+                GetVtxosRequestFilter::Recoverable => (None, None, Some(true), None),
+                GetVtxosRequestFilter::PendingOnly => (None, None, None, Some(true)),
             },
         };
 
