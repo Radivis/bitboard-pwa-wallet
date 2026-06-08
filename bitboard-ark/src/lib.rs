@@ -1,4 +1,5 @@
 mod api_types;
+mod balance_display;
 mod error;
 mod esplora_blockchain;
 mod network;

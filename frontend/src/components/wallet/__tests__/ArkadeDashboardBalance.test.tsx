@@ -77,7 +77,7 @@ describe('ArkadeDashboardBalance', () => {
     })
     renderWithProviders(<ArkadeDashboardBalance />)
     expect(screen.getByTestId('dashboard-arkade-balance-amount')).toBeInTheDocument()
-    expect(screen.getByText('Total (incl. pending):')).toBeInTheDocument()
+    expect(screen.getByText('Total (incl. recoverable):')).toBeInTheDocument()
   })
 
   it('DASH-ARK-12 shows empty session copy when no data', () => {

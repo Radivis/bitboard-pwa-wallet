@@ -24,7 +24,9 @@ feature:
       - id: DASH-ARK-10
         description: While balance query is loading, show spinner text "Loading…"
       - id: DASH-ARK-11
-        description: When balance query returns data, show confirmedSats; show pending total only when totalSats differs
+        description: >-
+          When balance query returns data, show confirmedSats (spendable offchain VTXOs including
+          pre-confirmed incoming payments); show total line only when totalSats differs (recoverable)
       - id: DASH-ARK-12
         description: When query is not loading and has no data, show "No Arkade session yet"
       - id: DASH-ARK-13

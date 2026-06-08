@@ -27,6 +27,7 @@ use crate::api_types::{
     SendPaymentParams, UnilateralExitFeeEstimateDto, UnilateralExitFeeParams, UnrollProgressEvent,
     UnrollResult,
 };
+use crate::balance_display::build_arkade_balance_dto;
 use crate::error::{ArkResult, ArkWasmError};
 use crate::esplora_blockchain::EsploraBlockchain;
 use crate::network::NetworkMode;
@@ -147,12 +148,12 @@ impl ArkSession {
         self.sync_offchain_keys().await;
         let offchain = self.client.offchain_balance().await?;
         let onchain = self.client.onchain_wallet_balance()?;
-        let confirmed = offchain.confirmed().to_sat() + onchain.confirmed.to_sat();
-        let total = offchain.total().to_sat() + onchain.confirmed.to_sat();
-        Ok(BalanceDto {
-            confirmed_sats: confirmed,
-            total_sats: total,
-        })
+        Ok(build_arkade_balance_dto(
+            offchain.pre_confirmed().to_sat(),
+            offchain.confirmed().to_sat(),
+            offchain.recoverable().to_sat(),
+            onchain.confirmed.to_sat(),
+        ))
     }
 
     pub fn boarding_address(&self) -> ArkResult<String> {
