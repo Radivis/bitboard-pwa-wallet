@@ -81,11 +81,24 @@ describe('ArkadeDashboardBalance', () => {
   })
 
   it('DASH-ARK-12 shows empty session copy when no data', () => {
-    balanceQueryMock.mockReturnValue({ isLoading: false, data: undefined })
+    balanceQueryMock.mockReturnValue({ isLoading: false, isError: false, data: undefined })
     renderWithProviders(<ArkadeDashboardBalance />)
     expect(screen.getByTestId('dashboard-arkade-session-empty')).toHaveTextContent(
       'No Arkade session yet',
     )
+  })
+
+  it('DASH-ARK-14 shows error copy when balance query fails', () => {
+    balanceQueryMock.mockReturnValue({
+      isLoading: false,
+      isError: true,
+      data: undefined,
+    })
+    renderWithProviders(<ArkadeDashboardBalance />)
+    expect(screen.getByTestId('dashboard-arkade-balance-error')).toHaveTextContent(
+      'Could not load Arkade balance',
+    )
+    expect(screen.queryByTestId('dashboard-arkade-session-empty')).not.toBeInTheDocument()
   })
 
   it('DASH-ARK-13 shows balance not empty copy when cached data exists during refetch', () => {

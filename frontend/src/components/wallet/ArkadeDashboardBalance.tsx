@@ -27,6 +27,10 @@ export function ArkadeDashboardBalance() {
             <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
             Loading…
           </div>
+        ) : balanceQuery.isError ? (
+          <p className="text-sm text-destructive" data-testid="dashboard-arkade-balance-error">
+            Could not load Arkade balance. Check your network and try again.
+          </p>
         ) : balanceQuery.data ? (
           <div>
             <BitcoinAmountDisplay
