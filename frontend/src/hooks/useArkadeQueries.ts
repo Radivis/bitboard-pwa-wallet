@@ -31,6 +31,11 @@ import {
 import { scheduleBackgroundArkadeOperatorSync } from '@/lib/arkade/arkade-operator-sync'
 import { readArkadeDashboardStateFromStore } from '@/lib/arkade/arkade-persistence-store-sync'
 import {
+  formatUnilateralUnrollSuccessMessage,
+  shouldShowUnilateralUnrollProgressToast,
+  unilateralUnrollProgressToastId,
+} from '@/lib/arkade/arkade-exit-utils'
+import {
   isArkadeDelegatorConfigured,
   isArkadeSupportedNetworkMode,
   type ArkadeSupportedNetworkMode,
@@ -579,11 +584,17 @@ export function useArkadeUnilateralUnrollMutation() {
       await awaitArkadeSessionReady()
       return getArkadeWorker().runUnilateralUnroll(
         { txid: params.txid, vout: params.vout },
-        proxy(params.onProgress),
+        proxy((event: ArkadeUnrollProgressEvent) => {
+          params.onProgress(event)
+          if (shouldShowUnilateralUnrollProgressToast(event)) {
+            toast.info(event.message, { id: unilateralUnrollProgressToastId(event) })
+          }
+        }),
       )
     },
-    onSuccess: async () => {
-      toast.success('Unroll finished — complete exit after the timelock')
+    onSuccess: async (result) => {
+      toast.dismiss(unilateralUnrollProgressToastId({ type: 'done', txid: result.vtxoTxid }))
+      toast.success(formatUnilateralUnrollSuccessMessage(result.vtxoTxid))
       if (activeWalletId != null && activeArkadeConnectionId != null) {
         await invalidateArkadeWalletDataQueries(
           queryClient,

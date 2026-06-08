@@ -44,3 +44,18 @@ export function parseCollaborativeExitAmountSats(
 
   return { ok: true, amountSats }
 }
+
+export function formatUnilateralUnrollSuccessMessage(vtxoTxid: string): string {
+  return `Unroll complete (${vtxoTxid.slice(0, 12)}…) — complete exit after the timelock`
+}
+
+/** Sonner toast id so in-progress unroll updates one notification per on-chain tx. */
+export function unilateralUnrollProgressToastId(
+  event: Pick<{ type: string; txid?: string }, 'type' | 'txid'>,
+): string {
+  return `arkade-unroll-${event.txid ?? event.type}`
+}
+
+export function shouldShowUnilateralUnrollProgressToast(event: { type: string }): boolean {
+  return event.type === 'unroll' || event.type === 'wait'
+}
