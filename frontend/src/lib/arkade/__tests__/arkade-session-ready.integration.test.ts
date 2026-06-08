@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const workerMocks = vi.hoisted(() => ({
   openSession: vi.fn(),
+  hasOpenSession: vi.fn().mockResolvedValue(true),
   flushSdkPersistence: vi.fn().mockResolvedValue(undefined),
   closeSession: vi.fn(),
   finalizePendingTransactions: vi.fn().mockResolvedValue({ finalized: 0, pending: 0 }),

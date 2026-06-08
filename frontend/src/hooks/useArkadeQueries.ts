@@ -23,7 +23,10 @@ import {
   isArkadeActiveForCommittedNetwork,
   isArkadeActiveForNetworkMode,
 } from '@/lib/arkade/arkade-utils'
-import { awaitArkadeSessionReady } from '@/lib/arkade/arkade-session-service'
+import {
+  awaitArkadeSessionReady,
+  openArkadeSessionForWallet,
+} from '@/lib/arkade/arkade-session-service'
 import {
   isArkadeDelegatorConfigured,
   isArkadeSupportedNetworkMode,
@@ -79,8 +82,28 @@ function assertArkadeSessionUnlocked(
   }
 }
 
+async function ensureArkadeSessionOpenForActiveWallet(): Promise<void> {
+  const activeWalletId = useWalletStore.getState().activeWalletId
+  const networkMode = useWalletStore.getState().networkMode
+  const password = useSessionStore.getState().password
+  if (
+    activeWalletId == null ||
+    password == null ||
+    !isArkadeActiveForNetworkMode(networkMode) ||
+    !isArkadeSupportedNetworkMode(networkMode)
+  ) {
+    await awaitArkadeSessionReady()
+    return
+  }
+  await openArkadeSessionForWallet({
+    password,
+    walletId: activeWalletId,
+    networkMode,
+  })
+}
+
 async function withReadyArkadeWorker<T>(run: () => Promise<T>): Promise<T> {
-  await awaitArkadeSessionReady()
+  await ensureArkadeSessionOpenForActiveWallet()
   return run()
 }
 

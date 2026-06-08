@@ -102,8 +102,20 @@ export function getCryptoWorker(): Remote<CryptoService> {
     );
 
     worker.addEventListener('error', (event) => {
-      const message = event.message || 'Unknown worker error';
-      console.error('[crypto-factory] Worker error:', message, event);
+      const errorEvent = event as ErrorEvent;
+      const message =
+        errorEvent.message ||
+        (errorEvent.error instanceof Error
+          ? errorEvent.error.message
+          : errorEvent.error != null
+            ? String(errorEvent.error)
+            : 'Unknown worker error');
+      console.error('[crypto-factory] Worker error:', message, {
+        filename: errorEvent.filename,
+        lineno: errorEvent.lineno,
+        colno: errorEvent.colno,
+        error: errorEvent.error,
+      });
       setStatus('crashed', message);
     });
 

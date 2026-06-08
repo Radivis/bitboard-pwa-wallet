@@ -52,6 +52,7 @@ export async function waitForReceiveArkadeAddressReady(
   page: Page,
   timeout = ARKADE_MOCK_UI_TIMEOUT_MS,
 ): Promise<void> {
+  await expect(page.getByText('Loading address…')).not.toBeVisible({ timeout })
   await expect(page.getByRole('button', { name: 'Copy address' })).toBeEnabled({ timeout })
 }
 

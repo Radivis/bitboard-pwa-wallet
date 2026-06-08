@@ -111,6 +111,13 @@ vi.mock('@/lib/wallet/persisted-chain-mismatch', () => ({
   withPersistedChainMismatchRetry: vi.fn((loadWallet, params) => loadWallet(params)),
 }))
 
+const waitForCryptoWorkerHealthyMock = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
+
+vi.mock('@/workers/crypto-factory', () => ({
+  waitForCryptoWorkerHealthy: (...args: unknown[]) =>
+    waitForCryptoWorkerHealthyMock(...args),
+}))
+
 import {
   loadDescriptorWalletAndSync,
   loadDescriptorWalletWithoutSync,
@@ -140,6 +147,7 @@ describe('openArkadeSession after unlock (integration)', () => {
       accountId: 0,
     })
 
+    expect(waitForCryptoWorkerHealthyMock).toHaveBeenCalled()
     expect(openArkadeSessionForWalletMock).toHaveBeenCalledWith({
       password: 'unlock-password',
       walletId: 3,
@@ -167,6 +175,7 @@ describe('openArkadeSession after unlock (integration)', () => {
       awaitSync: false,
     })
 
+    expect(waitForCryptoWorkerHealthyMock).toHaveBeenCalled()
     expect(openArkadeSessionForWalletMock).toHaveBeenCalledWith({
       password: 'unlock-password',
       walletId: 3,
@@ -176,20 +185,20 @@ describe('openArkadeSession after unlock (integration)', () => {
     resolveOpen!()
   })
 
-  it('UNLOCK-ARK-02 sets wallet unlocked before opening Arkade session', async () => {
+  it('UNLOCK-ARK-02 starts Arkade session open during unlock load and still marks wallet unlocked', async () => {
     await loadDescriptorWalletAndSync({
       password: 'unlock-password',
       walletId: 3,
       networkMode: 'signet',
       addressType: AddressType.Taproot,
       accountId: 0,
-      awaitSync: true,
+      awaitSync: false,
     })
 
     const unlockedIndex = unlockCallOrder.indexOf('setWalletStatus:unlocked')
     const sessionOpenIndex = unlockCallOrder.indexOf('openArkadeSessionForWallet')
-    expect(unlockedIndex).toBeGreaterThanOrEqual(0)
-    expect(sessionOpenIndex).toBeGreaterThan(unlockedIndex)
+    expect(sessionOpenIndex).toBeGreaterThanOrEqual(0)
+    expect(unlockedIndex).toBeGreaterThan(sessionOpenIndex)
   })
 
   it('UNLOCK-ARK-04 Arkade session open failure must not reject unlock', async () => {

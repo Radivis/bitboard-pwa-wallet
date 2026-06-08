@@ -91,8 +91,16 @@ export async function openArkadeSessionForWallet(params: {
 
   const key = sessionKey(walletId, networkMode)
   if (lastOpenedSessionKey === key && openSessionInFlight == null) {
-    if (getArkadeWorkerIfExists() != null) {
-      return
+    const worker = getArkadeWorkerIfExists()
+    if (worker != null) {
+      try {
+        const sessionOpen = await worker.hasOpenSession({ walletId, networkMode })
+        if (sessionOpen) {
+          return
+        }
+      } catch {
+        // Worker unhealthy — fall through and reopen.
+      }
     }
     lastOpenedSessionKey = null
   }

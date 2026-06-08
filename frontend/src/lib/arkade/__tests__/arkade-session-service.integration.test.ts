@@ -9,6 +9,7 @@ const featureState = vi.hoisted(() => ({
 const workerMocks = vi.hoisted(() => ({
   ping: vi.fn(),
   openSession: vi.fn(),
+  hasOpenSession: vi.fn(),
   flushSdkPersistence: vi.fn(),
   closeSession: vi.fn(),
   finalizePendingTransactions: vi.fn(),
@@ -96,6 +97,7 @@ describe('openArkadeSessionForWallet (integration)', () => {
     vi.clearAllMocks()
 
     workerMocks.ping.mockResolvedValue(true)
+    workerMocks.hasOpenSession.mockResolvedValue(true)
     workerMocks.openSession.mockResolvedValue({ arkadeAddress: 'tark1qtest' })
     workerMocks.flushSdkPersistence.mockResolvedValue(undefined)
     getArkadeWorkerIfExistsMock.mockReturnValue(workerMocks)
@@ -249,6 +251,24 @@ describe('openArkadeSessionForWallet (integration)', () => {
     expect(workerMocks.openSession).toHaveBeenCalledTimes(1)
 
     getArkadeWorkerIfExistsMock.mockReturnValue(null)
+    await openArkadeSessionForWallet({
+      password: 'unlock-password',
+      walletId: 7,
+      networkMode: 'signet',
+    })
+
+    expect(workerMocks.openSession).toHaveBeenCalledTimes(2)
+  })
+
+  it('reopens when worker exists but WASM session is not active', async () => {
+    await openArkadeSessionForWallet({
+      password: 'unlock-password',
+      walletId: 7,
+      networkMode: 'signet',
+    })
+    expect(workerMocks.openSession).toHaveBeenCalledTimes(1)
+
+    workerMocks.hasOpenSession.mockResolvedValueOnce(false)
     await openArkadeSessionForWallet({
       password: 'unlock-password',
       walletId: 7,

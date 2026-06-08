@@ -121,6 +121,10 @@ export interface ArkadeService {
   setSecretsPort(port: MessagePort): Promise<void>
   setSdkPersistenceBridge(bridge: ArkadeSdkPersistenceBridge | null): Promise<void>
   openSession(params: OpenArkadeSessionParams): Promise<{ arkadeAddress: string }>
+  hasOpenSession(params: {
+    walletId: number
+    networkMode: ArkadeSupportedNetworkMode
+  }): Promise<boolean>
   flushSdkPersistence(): Promise<void>
   closeSession(): Promise<void>
   getBalance(): Promise<ArkadeBalanceInfo>

@@ -212,6 +212,13 @@ const arkadeService: ArkadeService = {
     return openSessionImpl(params)
   },
 
+  async hasOpenSession(params: {
+    walletId: number
+    networkMode: ArkadeSupportedNetworkMode
+  }): Promise<boolean> {
+    return activeSessionKey === sessionKey(params.walletId, params.networkMode)
+  },
+
   async flushSdkPersistence(): Promise<void> {
     await flushSdkPersistenceNow()
   },

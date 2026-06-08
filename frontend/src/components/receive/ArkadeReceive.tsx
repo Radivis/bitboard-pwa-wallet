@@ -34,6 +34,8 @@ export function ArkadeReceive() {
   }
 
   const address = addressQuery.data ?? ''
+  const addressLoading =
+    addressQuery.isLoading || (addressQuery.isFetching && address.length === 0)
 
   const handleCopy = async () => {
     if (!address) return
@@ -58,7 +60,7 @@ export function ArkadeReceive() {
           Arkade payments only to this address (<code className="text-xs">ark1</code> /{' '}
           <code className="text-xs">tark1</code>).
         </p>
-        {addressQuery.isLoading ? (
+        {addressLoading ? (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
             Loading address…
