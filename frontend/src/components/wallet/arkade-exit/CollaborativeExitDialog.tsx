@@ -31,6 +31,7 @@ export function CollaborativeExitDialog({ exitFlow }: CollaborativeExitDialogPro
     setCollabDestination,
     collabAmountSats,
     setCollabAmountSats,
+    collabAmountError,
     collaborativeFeeQuery,
     collaborativeExitMutation,
     canCollaborativeExit,
@@ -88,6 +89,9 @@ export function CollaborativeExitDialog({ exitFlow }: CollaborativeExitDialogPro
                 <BitcoinAmountDisplay amountSats={balanceQuery.data.confirmedSats} size="sm" />
               </p>
             )}
+            {collabAmountError && (
+              <p className="text-xs text-destructive">{collabAmountError}</p>
+            )}
           </div>
           {collaborativeFeeQuery.isLoading && (
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -142,9 +146,7 @@ export function CollaborativeExitDialog({ exitFlow }: CollaborativeExitDialogPro
           </Button>
           <Button
             type="button"
-            disabled={
-              !canCollaborativeExit || Boolean(collaborativeFeeQuery.data?.estimateError)
-            }
+            disabled={!canCollaborativeExit}
             onClick={handleCollaborativeExit}
           >
             {collaborativeExitMutation.isPending ? 'Exiting…' : 'Confirm exit'}

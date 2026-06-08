@@ -17,3 +17,30 @@ export function formatIntentFeePrograms(configured: ArkadeIntentFeeConfigured): 
 
 /** Fallback bumper threshold when unilateral fee estimate is unavailable (sats). */
 export const ARKADE_BUMPER_LOW_BALANCE_FALLBACK_SATS = 1_000
+
+const COLLABORATIVE_EXIT_AMOUNT_HELP =
+  'Enter a whole number of satoshis, or leave empty for full balance.'
+
+export type CollaborativeExitAmountParseResult =
+  | { ok: true; amountSats: number | undefined }
+  | { ok: false; message: string }
+
+export function parseCollaborativeExitAmountSats(
+  rawAmount: string,
+): CollaborativeExitAmountParseResult {
+  const trimmed = rawAmount.trim()
+  if (trimmed === '') {
+    return { ok: true, amountSats: undefined }
+  }
+
+  if (!/^\d+$/.test(trimmed)) {
+    return { ok: false, message: COLLABORATIVE_EXIT_AMOUNT_HELP }
+  }
+
+  const amountSats = Number(trimmed)
+  if (!Number.isSafeInteger(amountSats) || amountSats <= 0) {
+    return { ok: false, message: COLLABORATIVE_EXIT_AMOUNT_HELP }
+  }
+
+  return { ok: true, amountSats }
+}

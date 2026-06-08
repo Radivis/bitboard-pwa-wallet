@@ -120,7 +120,7 @@ impl fmt::Display for Error {
         };
         write!(f, "{description}")?;
         if let Some(source) = &self.inner.source {
-            write!(f, "{source}")?;
+            write!(f, ": {source}")?;
         }
         Ok(())
     }
@@ -407,11 +407,12 @@ impl Client {
         )
         .await
         .map_err(map_apis_error)?;
-        let fee = response
-            .fee
-            .ok_or_else(|| Error::conversion_message("missing fee"))?
-            .parse::<i64>()
-            .map_err(Error::conversion_message)?;
+        let fee = match response.fee {
+            Some(fee) => fee
+                .parse::<i64>()
+                .map_err(Error::conversion_message)?,
+            None => 0,
+        };
         Ok(SignedAmount::from_sat(fee))
     }
 

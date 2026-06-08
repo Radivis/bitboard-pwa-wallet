@@ -9,7 +9,10 @@ import {
   useArkadeUnilateralExitFeeQuery,
   useArkadeUnilateralUnrollMutation,
 } from '@/hooks/useArkadeQueries'
-import { ARKADE_BUMPER_LOW_BALANCE_FALLBACK_SATS } from '@/lib/arkade/arkade-exit-utils'
+import {
+  ARKADE_BUMPER_LOW_BALANCE_FALLBACK_SATS,
+  parseCollaborativeExitAmountSats,
+} from '@/lib/arkade/arkade-exit-utils'
 import type { ArkadeExitCandidateRow, ArkadeUnrollProgressEvent } from '@/workers/arkade-api'
 import { useWalletStore } from '@/stores/walletStore'
 
@@ -34,12 +37,10 @@ export function useArkadeExitFlow() {
   const [unrolledVtxoTxid, setUnrolledVtxoTxid] = useState<string | null>(null)
   const [completeDestination, setCompleteDestination] = useState('')
 
-  const collabAmountParsed =
-    collabAmountSats.trim() === '' ? undefined : Number.parseInt(collabAmountSats, 10)
-  const collabAmountValid =
-    collabAmountParsed === undefined ||
-    (Number.isFinite(collabAmountParsed) && collabAmountParsed > 0)
-  const collabAmount = collabAmountValid ? collabAmountParsed : undefined
+  const collabAmountParse = parseCollaborativeExitAmountSats(collabAmountSats)
+  const collabAmountValid = collabAmountParse.ok
+  const collabAmount = collabAmountParse.ok ? collabAmountParse.amountSats : undefined
+  const collabAmountError = collabAmountParse.ok ? null : collabAmountParse.message
 
   const exitCandidatesQuery = useArkadeExitCandidatesQuery(unilateralOpen)
   const bumperInfoQuery = useArkadeBumperInfoQuery(unilateralOpen)
@@ -170,6 +171,7 @@ export function useArkadeExitFlow() {
     collabAmountSats,
     setCollabAmountSats,
     collabAmount,
+    collabAmountError,
     unilateralStep,
     setUnilateralStep,
     selectedCandidate,
