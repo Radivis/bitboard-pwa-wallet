@@ -139,7 +139,6 @@ describe('openArkadeSessionForWallet (integration)', () => {
         walletId: 7,
         networkMode: 'signet',
         patch: expect.objectContaining({
-          arkadeAddress: 'tark1qtest',
           lastSessionOpenedAt: expect.any(String),
         }),
       }),

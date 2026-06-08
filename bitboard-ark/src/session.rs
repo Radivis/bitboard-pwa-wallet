@@ -62,6 +62,7 @@ impl ArkSession {
         sdk_persistence_json: Option<&str>,
     ) -> ArkResult<(Self, bool)> {
         let (persistence, reset_v1) = BitboardArkPersistenceV2::parse_import(sdk_persistence_json);
+        let offchain_next_derivation_index = persistence.wallet_db.offchain_next_derivation_index;
         let network = network_mode.to_bitcoin_network();
 
         let wallet_db = Arc::new(JsonPersistenceDb::from_snapshot(persistence.wallet_db));
@@ -92,15 +93,18 @@ impl ArkSession {
             .map_err(|error| ArkWasmError::Message(error.to_string()))?,
         );
 
+        // Always Bip32KeyProvider — never StaticKeyProvider/new_with_keypair — so ark-client
+        // receive peek/reveal paths use the indexed branch, not the static fallback.
         let offline = OfflineClient::<
             EsploraBlockchain,
             ArkWallet,
             InMemorySwapStorage,
             Bip32KeyProvider,
-        >::new_with_bip32(
+        >::new_with_bip32_at_index(
             CLIENT_NAME.to_string(),
             xpriv,
             None,
+            offchain_next_derivation_index,
             blockchain,
             wallet,
             ark_server_url,
@@ -113,6 +117,9 @@ impl ArkSession {
         );
 
         let client = offline.connect().await?;
+        if offchain_next_derivation_index > 0 {
+            client.warm_offchain_receive_key_cache(offchain_next_derivation_index)?;
+        }
         let server_signer: XOnlyPublicKey = client.server_info.signer_pk.into();
         wallet_db.set_load_context(network, server_signer);
         client.sync_onchain_wallet().await?;
@@ -129,18 +136,26 @@ impl ArkSession {
     }
 
     pub fn export_persistence(&self) -> ArkResult<String> {
+        let mut wallet_db = self.wallet_db.snapshot();
+        wallet_db.offchain_next_derivation_index =
+            self.client.peek_next_offchain_derivation_index();
         let envelope = BitboardArkPersistenceV2 {
             version: BITBOARD_ARK_PERSISTENCE_VERSION,
             engine: crate::persistence::ARK_RS_ENGINE.to_string(),
             ark_sdk_version: crate::persistence::ARK_RS_SDK_VERSION.to_string(),
-            wallet_db: self.wallet_db.snapshot(),
+            wallet_db,
             swap_storage: Default::default(),
         };
         Ok(serde_json::to_string(&envelope)?)
     }
 
-    pub fn offchain_address(&self) -> ArkResult<String> {
-        let (address, _) = self.client.get_offchain_address()?;
+    pub fn peek_offchain_address(&self) -> ArkResult<String> {
+        let (address, _) = self.client.peek_offchain_receive_address()?;
+        Ok(address.to_string())
+    }
+
+    pub fn reveal_next_offchain_address(&self) -> ArkResult<String> {
+        let (address, _) = self.client.reveal_next_offchain_receive_address()?;
         Ok(address.to_string())
     }
 

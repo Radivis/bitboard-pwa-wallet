@@ -43,6 +43,9 @@ feature:
         description: Dashboard Arkade balance/history refetch on remount and window focus so incoming payments register after Receive
       - id: DASH-ARK-41
         description: Receive (Arkade) polls balance while visible so WASM discovers incoming VTXOs before returning to Dashboard
+      - id: DASH-ARK-42
+        description: Receive balance poll must not change the displayed Arkade address (see ARK-RCV-03 in arkade.yaml)
+        spec_file: doc/features/arkade.yaml
     unlock_session:
       - id: UNLOCK-ARK-01
         description: loadDescriptorWalletAndSync calls openArkadeSessionForWallet when Arkade is active

@@ -8,6 +8,7 @@ export interface BitboardArkPersistenceV2 {
   version: typeof BITBOARD_ARK_PERSISTENCE_VERSION
   engine: 'ark-rs'
   arkSdkVersion: string
+  /** Opaque Rust `WalletDbSnapshot`; includes scalar `offchain_next_derivation_index`. */
   walletDb: unknown
   swapStorage: unknown
 }

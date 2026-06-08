@@ -10,6 +10,8 @@ mod wasm_sleep;
 
 #[cfg(test)]
 mod persistence_tests;
+#[cfg(test)]
+mod receive_address_tests;
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -131,7 +133,7 @@ pub async fn ark_open_session(params: JsValue) -> Result<JsValue, JsValue> {
             log_persistence_v1_reset_once();
         }
 
-        let arkade_address = session.offchain_address()?;
+        let arkade_address = session.peek_offchain_address()?;
         ACTIVE_SESSION.with(|session_cell| -> ArkResult<()> {
             let mut session_borrow_mut = session_cell.try_borrow_mut().map_err(|_| {
                 crate::error::ArkWasmError::Message(MSG_SESSION_ALREADY_BORROWED.into())
@@ -175,7 +177,14 @@ pub async fn ark_get_balance() -> Result<JsValue, JsValue> {
 
 #[wasm_bindgen]
 pub fn ark_get_address() -> Result<String, JsValue> {
-    map_js_error(with_session(|session| session.offchain_address()))
+    map_js_error(with_session(|session| session.peek_offchain_address()))
+}
+
+#[wasm_bindgen]
+pub fn ark_reveal_next_receive_address() -> Result<String, JsValue> {
+    map_js_error(with_session(|session| {
+        session.reveal_next_offchain_address()
+    }))
 }
 
 #[wasm_bindgen]

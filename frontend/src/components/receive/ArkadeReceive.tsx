@@ -1,11 +1,15 @@
 import { useState } from 'react'
 import { Link } from '@tanstack/react-router'
-import { Copy, Loader2 } from 'lucide-react'
+import { Copy, Loader2, RefreshCw } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { useArkadeAddressQuery, useArkadeBalanceQuery } from '@/hooks/useArkadeQueries'
+import {
+  useArkadeAddressQuery,
+  useArkadeBalanceQuery,
+  useArkadeNewAddressMutation,
+} from '@/hooks/useArkadeQueries'
 import { isArkadeActiveForNetworkMode } from '@/lib/arkade/arkade-utils'
 import { useWalletStore } from '@/stores/walletStore'
 
@@ -13,6 +17,7 @@ export function ArkadeReceive() {
   const networkMode = useWalletStore((walletState) => walletState.networkMode)
   const [copied, setCopied] = useState(false)
   const addressQuery = useArkadeAddressQuery()
+  const newAddressMutation = useArkadeNewAddressMutation()
   // Poll balance (and run WASM key discovery) while the user waits on Receive.
   useArkadeBalanceQuery()
 
@@ -68,10 +73,25 @@ export function ArkadeReceive() {
               <QRCodeSVG value={address} size={256} level="M" />
             </div>
             <p className="break-all font-mono text-sm">{address}</p>
-            <Button type="button" onClick={handleCopy} disabled={!address}>
-              <Copy className="h-4 w-4" aria-hidden />
-              {copied ? 'Copied' : 'Copy address'}
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" onClick={handleCopy} disabled={!address}>
+                <Copy className="h-4 w-4" aria-hidden />
+                {copied ? 'Copied' : 'Copy address'}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={newAddressMutation.isPending || !address}
+                onClick={() => newAddressMutation.mutate()}
+              >
+                {newAddressMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                ) : (
+                  <RefreshCw className="h-4 w-4" aria-hidden />
+                )}
+                Generate New Address
+              </Button>
+            </div>
           </>
         )}
       </CardContent>

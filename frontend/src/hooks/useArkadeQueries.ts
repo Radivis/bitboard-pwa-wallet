@@ -24,6 +24,7 @@ import {
   isArkadeActiveForNetworkMode,
 } from '@/lib/arkade/arkade-utils'
 import { awaitArkadeSessionReady } from '@/lib/arkade/arkade-session-service'
+import { upsertArkadeWalletState } from '@/lib/arkade/arkade-wallet-secrets'
 import {
   isArkadeDelegatorConfigured,
   isArkadeSupportedNetworkMode,
@@ -203,7 +204,36 @@ export function useArkadeAddressQuery() {
     ),
     enabled: sessionReady,
     queryFn: () => withReadyArkadeWorker(() => getArkadeWorker().getAddress()),
-    staleTime: 300_000,
+    staleTime: Number.POSITIVE_INFINITY,
+  })
+}
+
+export function useArkadeNewAddressMutation() {
+  const queryClient = useQueryClient()
+  const { networkMode, activeWalletId, password } = useArkadeQueryBase()
+
+  return useMutation({
+    mutationFn: async () => {
+      assertArkadeSessionUnlocked(activeWalletId, password)
+      return withReadyArkadeWorker(() => getArkadeWorker().getNewAddress())
+    },
+    onSuccess: async (address) => {
+      toast.success('New Arkade address generated')
+      if (activeWalletId != null && isArkadeSupportedNetworkMode(networkMode)) {
+        await queryClient.invalidateQueries({
+          queryKey: arkadeAddressQueryKey(activeWalletId, networkMode),
+        })
+        await upsertArkadeWalletState({
+          password: password!,
+          walletId: activeWalletId,
+          networkMode,
+          patch: { arkadeAddress: address },
+        })
+      }
+    },
+    onError: (err) => {
+      toast.error(errorMessage(err))
+    },
   })
 }
 

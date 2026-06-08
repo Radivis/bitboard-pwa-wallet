@@ -4,6 +4,7 @@ import type { ArkadeSupportedNetworkMode } from '@/lib/arkade/arkade-endpoints'
 import {
   clearDebouncedSdkPersistenceFlush,
   flushSdkPersistenceNow,
+  scheduleSdkPersistenceFlush,
   setArkadeSdkPersistenceBridge,
   setArkadeSdkPersistenceExporter,
   setArkadeSdkPersistenceFlushContext,
@@ -248,6 +249,14 @@ const arkadeService: ArkadeService = {
 
   async getAddress(): Promise<string> {
     return invokeWasmArk((wasmModule) => wasmModule.ark_get_address())
+  },
+
+  async getNewAddress(): Promise<string> {
+    const address = await invokeWasmArk((wasmModule) =>
+      wasmModule.ark_reveal_next_receive_address(),
+    )
+    scheduleSdkPersistenceFlush()
+    return address
   },
 
   async getBoardingAddress(): Promise<string> {

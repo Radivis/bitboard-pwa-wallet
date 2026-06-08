@@ -121,6 +121,7 @@ export interface ArkadeService {
   closeSession(): Promise<void>
   getBalance(): Promise<ArkadeBalanceInfo>
   getAddress(): Promise<string>
+  getNewAddress(): Promise<string>
   getBoardingAddress(): Promise<string>
   getBoardingStatus(): Promise<ArkadeBoardingStatus>
   sendPayment(params: ArkadeSendParams): Promise<string>

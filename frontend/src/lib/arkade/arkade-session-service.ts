@@ -100,7 +100,7 @@ export async function openArkadeSessionForWallet(params: {
     })
     const endpoints = getArkadeEndpoints(networkMode)
     const worker = getArkadeWorker()
-    const { arkadeAddress } = await worker.openSession({
+    await worker.openSession({
       password,
       encryptedMnemonic: encrypted.mnemonic,
       walletId,
@@ -120,7 +120,6 @@ export async function openArkadeSessionForWallet(params: {
       networkMode,
       patch: {
         networkMode,
-        arkadeAddress,
         lastSessionOpenedAt: now,
       },
     })
