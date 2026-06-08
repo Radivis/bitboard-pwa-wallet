@@ -582,6 +582,10 @@ export async function loadDescriptorWalletWithoutSync(params: {
   })
   setWalletStatus('unlocked')
 
+  if (networkMode !== 'lab') {
+    await refreshWalletStoreFromLoadedBdk()
+  }
+
   const { startAutoLockTimer } = await import('@/stores/sessionStore')
   startAutoLockTimer(() =>
     useCryptoStore.getState().lockAndPurgeSensitiveRuntimeState(),

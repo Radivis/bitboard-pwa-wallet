@@ -59,15 +59,30 @@ export interface NwcConnectionSnapshot {
 }
 
 /**
- * Arkade wallet metadata per live network.
- * Full SDK repo state lives in `sdkPersistenceJson` (encrypted inside wallet_secrets).
+ * @deprecated Migrated to {@link StoredArkadeOperatorConnection}. Retained for unlock-time import only.
  */
 export interface StoredArkadeWalletState {
   networkMode: ArkadeSupportedNetworkMode
   arkadeAddress?: string
   createdAt: string
   lastSessionOpenedAt?: string
-  /** Versioned export of InMemory wallet + contract repositories (JSON string). */
+  sdkPersistenceJson?: string
+}
+
+/**
+ * One Arkade operator connection (NWC-style). VTXO state lives in `sdkPersistenceJson` for this ASP only.
+ */
+export interface StoredArkadeOperatorConnection {
+  id: string
+  label: string
+  networkMode: ArkadeSupportedNetworkMode
+  operatorUrl: string
+  delegatorUrl?: string
+  /** Canonical identity from operator getInfo signer_pk. */
+  operatorSignerPkHex: string
+  createdAt: string
+  lastSessionOpenedAt?: string
+  lastSuccessfulOperatorSyncAt?: string
   sdkPersistenceJson?: string
 }
 
@@ -94,8 +109,14 @@ export interface WalletSecretsPayload {
   descriptorWallets: DescriptorWalletData[]
   /** NWC URIs and metadata (empty array when the user has no Lightning connections). */
   lightningNwcConnections: StoredNwcLightningConnection[]
-  /** Arkade metadata per network (empty when user has not initialized Arkade). */
-  arkadeWallets: StoredArkadeWalletState[]
+  /** Arkade operator connections (one blob per ASP). */
+  arkadeOperatorConnections: StoredArkadeOperatorConnection[]
+  /** Active connection id per live network for dashboard/session. */
+  activeArkadeConnectionIdByNetwork: Partial<
+    Record<ArkadeSupportedNetworkMode, string>
+  >
+  /** @deprecated Migrated into arkadeOperatorConnections on unlock. */
+  arkadeWallets?: StoredArkadeWalletState[]
 }
 
 /** Sensitive wallet data stored encrypted. Shared with db layer and workers. */
@@ -156,6 +177,43 @@ function isNwcConnectionSnapshot(value: unknown): value is NwcConnectionSnapshot
     typeof value.paymentsUpdatedAt === 'string' &&
     value.paymentsUpdatedAt.length > 0
   )
+}
+
+function isStoredArkadeOperatorConnection(
+  value: unknown,
+): value is StoredArkadeOperatorConnection {
+  if (!isRecord(value)) return false
+  const networkOk =
+    typeof value.networkMode === 'string' &&
+    (ARKADE_SUPPORTED_NETWORK_MODES as readonly string[]).includes(value.networkMode)
+  if (!networkOk) return false
+  if (!isNonEmptyString(value.id)) return false
+  if (typeof value.label !== 'string') return false
+  if (!isNonEmptyString(value.operatorUrl)) return false
+  if (!isNonEmptyString(value.operatorSignerPkHex)) return false
+  if (!isIso8601Timestamp(value.createdAt)) return false
+  if (value.delegatorUrl !== undefined && typeof value.delegatorUrl !== 'string') {
+    return false
+  }
+  if (value.lastSessionOpenedAt !== undefined && !isIso8601Timestamp(value.lastSessionOpenedAt)) {
+    return false
+  }
+  if (
+    value.lastSuccessfulOperatorSyncAt !== undefined &&
+    !isIso8601Timestamp(value.lastSuccessfulOperatorSyncAt)
+  ) {
+    return false
+  }
+  if (value.sdkPersistenceJson !== undefined) {
+    if (typeof value.sdkPersistenceJson !== 'string') return false
+    if (
+      new TextEncoder().encode(value.sdkPersistenceJson).byteLength >
+      ARKADE_SDK_PERSISTENCE_JSON_MAX_BYTES
+    ) {
+      return false
+    }
+  }
+  return true
 }
 
 function isStoredArkadeWalletState(value: unknown): value is StoredArkadeWalletState {
@@ -234,9 +292,25 @@ export function isWalletSecretsPayload(value: unknown): value is WalletSecretsPa
   ) {
     return false
   }
-  if (!Array.isArray(value.arkadeWallets)) return false
-  if (!value.arkadeWallets.every((row) => isStoredArkadeWalletState(row))) {
+  if (!Array.isArray(value.arkadeOperatorConnections)) return false
+  if (
+    !value.arkadeOperatorConnections.every((row) =>
+      isStoredArkadeOperatorConnection(row),
+    )
+  ) {
     return false
+  }
+  if (
+    value.activeArkadeConnectionIdByNetwork !== undefined &&
+    !isRecord(value.activeArkadeConnectionIdByNetwork)
+  ) {
+    return false
+  }
+  if (value.arkadeWallets !== undefined) {
+    if (!Array.isArray(value.arkadeWallets)) return false
+    if (!value.arkadeWallets.every((row) => isStoredArkadeWalletState(row))) {
+      return false
+    }
   }
   return true
 }
@@ -260,9 +334,25 @@ export function isWalletSecrets(value: unknown): value is WalletSecrets {
   ) {
     return false
   }
-  if (!Array.isArray(value.arkadeWallets)) return false
-  if (!value.arkadeWallets.every((row) => isStoredArkadeWalletState(row))) {
+  if (!Array.isArray(value.arkadeOperatorConnections)) return false
+  if (
+    !value.arkadeOperatorConnections.every((row) =>
+      isStoredArkadeOperatorConnection(row),
+    )
+  ) {
     return false
+  }
+  if (
+    value.activeArkadeConnectionIdByNetwork !== undefined &&
+    !isRecord(value.activeArkadeConnectionIdByNetwork)
+  ) {
+    return false
+  }
+  if (value.arkadeWallets !== undefined) {
+    if (!Array.isArray(value.arkadeWallets)) return false
+    if (!value.arkadeWallets.every((row) => isStoredArkadeWalletState(row))) {
+      return false
+    }
   }
   return true
 }
@@ -275,6 +365,8 @@ export function assembleWalletSecrets(
     mnemonic,
     descriptorWallets: payload.descriptorWallets,
     lightningNwcConnections: payload.lightningNwcConnections,
+    arkadeOperatorConnections: payload.arkadeOperatorConnections,
+    activeArkadeConnectionIdByNetwork: payload.activeArkadeConnectionIdByNetwork,
     arkadeWallets: payload.arkadeWallets,
   }
 }
@@ -290,6 +382,12 @@ function normalizeWalletSecretsPayload(raw: unknown): unknown {
   let next = raw
   if (next.lightningNwcConnections === undefined) {
     next = { ...next, lightningNwcConnections: [] }
+  }
+  if (next.arkadeOperatorConnections === undefined) {
+    next = { ...next, arkadeOperatorConnections: [] }
+  }
+  if (next.activeArkadeConnectionIdByNetwork === undefined) {
+    next = { ...next, activeArkadeConnectionIdByNetwork: {} }
   }
   if (next.arkadeWallets === undefined) {
     next = { ...next, arkadeWallets: [] }

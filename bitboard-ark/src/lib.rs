@@ -3,6 +3,7 @@ mod balance_display;
 mod error;
 mod esplora_blockchain;
 mod network;
+mod offchain_snapshot;
 mod persistence;
 mod session;
 #[cfg(target_arch = "wasm32")]
@@ -134,6 +135,7 @@ pub async fn ark_open_session(params: JsValue) -> Result<JsValue, JsValue> {
         }
 
         let arkade_address = session.peek_offchain_address()?;
+        let operator_signer_pk_hex = session.operator_signer_pk_hex();
         ACTIVE_SESSION.with(|session_cell| -> ArkResult<()> {
             let mut session_borrow_mut = session_cell.try_borrow_mut().map_err(|_| {
                 crate::error::ArkWasmError::Message(MSG_SESSION_ALREADY_BORROWED.into())
@@ -142,7 +144,24 @@ pub async fn ark_open_session(params: JsValue) -> Result<JsValue, JsValue> {
             Ok(())
         })?;
 
-        to_js_value(crate::api_types::OpenSessionResult { arkade_address })
+        to_js_value(crate::api_types::OpenSessionResult {
+            arkade_address,
+            operator_signer_pk_hex,
+        })
+    })
+    .await
+}
+
+#[wasm_bindgen]
+pub fn ark_operator_signer_pk_hex() -> Result<String, JsValue> {
+    map_js_error(with_session(|session| Ok(session.operator_signer_pk_hex())))
+}
+
+#[wasm_bindgen]
+pub async fn ark_sync_with_operator() -> Result<(), JsValue> {
+    map_js_async(async {
+        active_session_rc()?.sync_with_operator().await?;
+        Ok(())
     })
     .await
 }

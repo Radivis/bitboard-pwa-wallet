@@ -1,13 +1,19 @@
 import { proxy } from 'comlink'
 import type { ArkadeSdkPersistenceBridge } from '@/lib/arkade/storage/arkade-sdk-persistence-flush'
-import { saveSdkPersistenceJsonForNetwork } from '@/lib/arkade/arkade-sdk-persistence'
+import { saveSdkPersistenceJsonForConnection } from '@/lib/arkade/arkade-sdk-persistence'
 
 let bridgeReady = false
 let bridgePromise: Promise<void> | null = null
 
 const persistenceBridge: ArkadeSdkPersistenceBridge = {
   async persistSdkPersistence(params) {
-    await saveSdkPersistenceJsonForNetwork(params)
+    await saveSdkPersistenceJsonForConnection({
+      password: params.password,
+      walletId: params.walletId,
+      connectionId: params.connectionId,
+      sdkPersistenceJson: params.sdkPersistenceJson,
+      lastSuccessfulOperatorSyncAt: params.lastSuccessfulOperatorSyncAt,
+    })
   },
 }
 

@@ -31,9 +31,13 @@ use crate::balance_display::build_arkade_balance_dto;
 use crate::error::{ArkResult, ArkWasmError};
 use crate::esplora_blockchain::EsploraBlockchain;
 use crate::network::NetworkMode;
+use crate::offchain_snapshot::{
+    offchain_balance_sats_from_snapshot, offchain_history_from_snapshot,
+    snapshot_from_virtual_tx_outpoints,
+};
 use crate::persistence::{
-    BITBOARD_ARK_PERSISTENCE_VERSION, BitboardArkPersistenceV2, JsonPersistenceDb,
-    SharedPersistenceDb,
+    BitboardArkPersistenceV3, JsonPersistenceDb, OperatorIdentity, SharedPersistenceDb,
+    network_label, validate_operator_identity,
 };
 
 const CLIENT_NAME: &str = "bitboard-pwa-wallet";
@@ -50,6 +54,7 @@ pub struct ArkSession {
     wallet_db: Arc<JsonPersistenceDb>,
     delegator: Option<DelegatorClient>,
     network_mode: NetworkMode,
+    operator_identity: OperatorIdentity,
 }
 
 impl ArkSession {
@@ -61,11 +66,11 @@ impl ArkSession {
         esplora_url: String,
         sdk_persistence_json: Option<&str>,
     ) -> ArkResult<(Self, bool)> {
-        let (persistence, reset_v1) = BitboardArkPersistenceV2::parse_import(sdk_persistence_json);
-        let offchain_next_derivation_index = persistence.wallet_db.offchain_next_derivation_index;
+        let parsed = BitboardArkPersistenceV3::parse_import(sdk_persistence_json);
+        let offchain_next_derivation_index = parsed.wallet_db.offchain_next_derivation_index;
         let network = network_mode.to_bitcoin_network();
 
-        let wallet_db = Arc::new(JsonPersistenceDb::from_snapshot(persistence.wallet_db));
+        let wallet_db = Arc::new(JsonPersistenceDb::from_snapshot(parsed.wallet_db));
         let secp = Secp256k1::new();
         let mnemonic = Mnemonic::parse(mnemonic_words)?;
         let seed = mnemonic.to_seed("");
@@ -121,8 +126,15 @@ impl ArkSession {
             client.warm_offchain_receive_key_cache(offchain_next_derivation_index)?;
         }
         let server_signer: XOnlyPublicKey = client.server_info.signer_pk.into();
+        validate_operator_identity(parsed.operator_identity.as_ref(), server_signer, network)
+            .map_err(ArkWasmError::Message)?;
         wallet_db.set_load_context(network, server_signer);
         client.sync_onchain_wallet().await?;
+
+        let operator_identity = OperatorIdentity {
+            signer_pk_hex: server_signer.to_string(),
+            network: network_label(network),
+        };
 
         Ok((
             Self {
@@ -130,8 +142,9 @@ impl ArkSession {
                 wallet_db,
                 delegator,
                 network_mode,
+                operator_identity,
             },
-            reset_v1,
+            parsed.reset_v1,
         ))
     }
 
@@ -139,14 +152,36 @@ impl ArkSession {
         let mut wallet_db = self.wallet_db.snapshot();
         wallet_db.offchain_next_derivation_index =
             self.client.peek_next_offchain_derivation_index();
-        let envelope = BitboardArkPersistenceV2 {
-            version: BITBOARD_ARK_PERSISTENCE_VERSION,
+        let envelope = BitboardArkPersistenceV3 {
+            version: crate::persistence::BITBOARD_ARK_PERSISTENCE_VERSION,
             engine: crate::persistence::ARK_RS_ENGINE.to_string(),
             ark_sdk_version: crate::persistence::ARK_RS_SDK_VERSION.to_string(),
+            operator_identity: self.operator_identity.clone(),
             wallet_db,
             swap_storage: Default::default(),
         };
         Ok(serde_json::to_string(&envelope)?)
+    }
+
+    pub fn operator_signer_pk_hex(&self) -> String {
+        self.operator_identity.signer_pk_hex.clone()
+    }
+
+    pub async fn sync_with_operator(&self) -> ArkResult<()> {
+        self.sync_offchain_keys().await;
+        let (vtxo_list, _) = self
+            .client
+            .list_vtxos()
+            .await
+            .map_err(|error| ArkWasmError::Message(error.to_string()))?;
+        let all_points: Vec<VirtualTxOutPoint> = vtxo_list.all().cloned().collect();
+        let snapshot = snapshot_from_virtual_tx_outpoints(
+            self.client.server_info.dust.to_sat(),
+            current_unix_timestamp(),
+            all_points,
+        );
+        self.wallet_db.set_offchain_vtxo_snapshot(snapshot);
+        Ok(())
     }
 
     pub fn peek_offchain_address(&self) -> ArkResult<String> {
@@ -160,14 +195,18 @@ impl ArkSession {
     }
 
     pub async fn balance(&self) -> ArkResult<BalanceDto> {
-        self.sync_offchain_keys().await;
-        let offchain = self.client.offchain_balance().await?;
+        let (pre_confirmed_sats, confirmed_sats, recoverable_sats) =
+            if let Some(snapshot) = self.wallet_db.snapshot().offchain_vtxo_snapshot.as_ref() {
+                offchain_balance_sats_from_snapshot(snapshot)?
+            } else {
+                (0, 0, 0)
+            };
         let onchain = self.client.onchain_wallet_balance()?;
         let boarding = self.boarding_status().await?;
         Ok(build_arkade_balance_dto(
-            offchain.pre_confirmed().to_sat(),
-            offchain.confirmed().to_sat(),
-            offchain.recoverable().to_sat(),
+            pre_confirmed_sats,
+            confirmed_sats,
+            recoverable_sats,
             onchain.confirmed.to_sat(),
             boarding.spendable_sats,
             boarding.pending_sats,
@@ -236,11 +275,17 @@ impl ArkSession {
     }
 
     pub async fn transaction_history(&self) -> ArkResult<Vec<PaymentRowDto>> {
-        self.sync_offchain_keys().await;
-        let rows = self
-            .client
-            .transaction_history()
-            .await?
+        let boarding_commitment_transactions = self.boarding_commitment_txids().await?;
+        let mut transactions = self.boarding_history_transactions().await?;
+
+        if let Some(snapshot) = self.wallet_db.snapshot().offchain_vtxo_snapshot.clone() {
+            let mut offchain =
+                offchain_history_from_snapshot(&snapshot, &boarding_commitment_transactions)?;
+            transactions.append(&mut offchain);
+        }
+
+        ark_core::history::sort_transactions_by_created_at(&mut transactions);
+        let rows = transactions
             .into_iter()
             .filter_map(map_history_row)
             .collect();
@@ -654,6 +699,66 @@ impl ArkSession {
 
     fn network(&self) -> Network {
         self.network_mode.to_bitcoin_network()
+    }
+
+    async fn boarding_commitment_txids(&self) -> ArkResult<Vec<bitcoin::Txid>> {
+        let persistence = SharedPersistenceDb(Arc::clone(&self.wallet_db));
+        let boarding_outputs = persistence.load_boarding_outputs()?;
+        let mut boarding_commitment_transactions = Vec::new();
+
+        for boarding_output in &boarding_outputs {
+            let outpoints = self
+                .client
+                .blockchain()
+                .find_outpoints(boarding_output.address())
+                .await
+                .map_err(|error| ArkWasmError::Message(error.to_string()))?;
+
+            for ExplorerUtxo { outpoint, .. } in outpoints {
+                let status = self
+                    .client
+                    .blockchain()
+                    .get_output_status(&outpoint.txid, outpoint.vout)
+                    .await
+                    .map_err(|error| ArkWasmError::Message(error.to_string()))?;
+                if let Some(spend_txid) = status.spend_txid {
+                    boarding_commitment_transactions.push(spend_txid);
+                }
+            }
+        }
+
+        Ok(boarding_commitment_transactions)
+    }
+
+    async fn boarding_history_transactions(&self) -> ArkResult<Vec<Transaction>> {
+        let persistence = SharedPersistenceDb(Arc::clone(&self.wallet_db));
+        let boarding_outputs = persistence.load_boarding_outputs()?;
+        let mut boarding_transactions = Vec::new();
+
+        for boarding_output in &boarding_outputs {
+            let outpoints = self
+                .client
+                .blockchain()
+                .find_outpoints(boarding_output.address())
+                .await
+                .map_err(|error| ArkWasmError::Message(error.to_string()))?;
+
+            for ExplorerUtxo {
+                outpoint,
+                amount,
+                confirmation_blocktime,
+                ..
+            } in outpoints
+            {
+                boarding_transactions.push(Transaction::Boarding {
+                    txid: outpoint.txid,
+                    amount,
+                    confirmed_at: confirmation_blocktime.map(|timestamp| timestamp as i64),
+                });
+            }
+        }
+
+        Ok(boarding_transactions)
     }
 
     /// Re-scan derived Ark receive addresses against the operator indexer.

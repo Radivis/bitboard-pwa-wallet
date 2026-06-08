@@ -49,7 +49,7 @@ describe('parseWalletPayloadJson', () => {
       lightningNwcConnections: [],
       arkadeWallets: [
         {
-          networkMode: 'testnet',
+          networkMode: 'signet',
           createdAt: '2020-01-01T00:00:00.000Z',
           arkadeSnapshot: {
             balance: {
@@ -74,7 +74,7 @@ describe('parseWalletPayloadJson', () => {
       lightningNwcConnections: [],
       arkadeWallets: [
         {
-          networkMode: 'testnet',
+          networkMode: 'signet',
           createdAt: '2020-01-01T00:00:00.000Z',
           sdkPersistenceJson: json,
         },
@@ -91,6 +91,30 @@ describe('parseWalletPayloadJson', () => {
     })
     const parsed = parseWalletPayloadJson(json)
     expect(parsed.arkadeWallets).toEqual([])
+    expect(parsed.arkadeOperatorConnections).toEqual([])
+    expect(parsed.activeArkadeConnectionIdByNetwork).toEqual({})
+  })
+
+  it('accepts arkadeOperatorConnections and activeArkadeConnectionIdByNetwork', () => {
+    const json = JSON.stringify({
+      descriptorWallets: [],
+      lightningNwcConnections: [],
+      arkadeOperatorConnections: [
+        {
+          id: 'conn-1',
+          label: 'Mutinynet',
+          networkMode: 'signet',
+          operatorUrl: 'https://signet.arkade.example/v1',
+          operatorSignerPkHex: '02abc',
+          createdAt: '2020-01-01T00:00:00.000Z',
+          lastSuccessfulOperatorSyncAt: '2020-01-02T00:00:00.000Z',
+        },
+      ],
+      activeArkadeConnectionIdByNetwork: { signet: 'conn-1' },
+    })
+    const parsed = parseWalletPayloadJson(json)
+    expect(parsed.arkadeOperatorConnections).toHaveLength(1)
+    expect(parsed.activeArkadeConnectionIdByNetwork.signet).toBe('conn-1')
   })
 
   it('accepts descriptor wallet with lastSuccessfulEsploraSyncAt', () => {

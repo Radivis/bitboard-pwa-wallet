@@ -9,9 +9,15 @@ use bitcoin::secp256k1::SecretKey;
 use bitcoin::{Network, XOnlyPublicKey};
 use serde::{Deserialize, Serialize};
 
-pub const BITBOARD_ARK_PERSISTENCE_VERSION: u32 = 2;
+pub const BITBOARD_ARK_PERSISTENCE_VERSION: u32 = 3;
 pub const ARK_RS_ENGINE: &str = "ark-rs";
 pub const ARK_RS_SDK_VERSION: &str = "0.9.2";
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct OperatorIdentity {
+    pub signer_pk_hex: String,
+    pub network: String,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BoardingOutputSnapshot {
@@ -20,13 +26,50 @@ pub struct BoardingOutputSnapshot {
     pub address: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct VirtualTxOutPointAssetRecord {
+    pub asset_id_hex: String,
+    pub amount: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct VirtualTxOutPointRecord {
+    pub txid: String,
+    pub vout: u32,
+    pub created_at: i64,
+    pub expires_at: i64,
+    pub amount_sats: u64,
+    pub script_hex: String,
+    pub is_preconfirmed: bool,
+    pub is_swept: bool,
+    pub is_unrolled: bool,
+    pub is_spent: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub spent_by: Option<String>,
+    pub commitment_txids: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub settled_by: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ark_txid: Option<String>,
+    #[serde(default)]
+    pub assets: Vec<VirtualTxOutPointAssetRecord>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct OffchainVtxoSnapshot {
+    pub synced_at: i64,
+    pub dust_sats: u64,
+    pub virtual_tx_outpoints: Vec<VirtualTxOutPointRecord>,
+}
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct WalletDbSnapshot {
     pub boarding_outputs: Vec<BoardingOutputSnapshot>,
     pub secret_keys_by_owner_pk_hex: HashMap<String, String>,
-    /// Next offchain receive index to assign on reveal (`Bip32KeyProvider::next_index`).
     #[serde(default)]
     pub offchain_next_derivation_index: u32,
+    #[serde(default)]
+    pub offchain_vtxo_snapshot: Option<OffchainVtxoSnapshot>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -41,36 +84,98 @@ pub struct BitboardArkPersistenceV2 {
     pub swap_storage: SwapStorageSnapshot,
 }
 
-impl BitboardArkPersistenceV2 {
-    pub fn empty() -> Self {
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BitboardArkPersistenceV3 {
+    pub version: u32,
+    pub engine: String,
+    pub ark_sdk_version: String,
+    pub operator_identity: OperatorIdentity,
+    pub wallet_db: WalletDbSnapshot,
+    pub swap_storage: SwapStorageSnapshot,
+}
+
+pub struct ParsedArkPersistence {
+    pub wallet_db: WalletDbSnapshot,
+    pub operator_identity: Option<OperatorIdentity>,
+    pub reset_v1: bool,
+}
+
+impl BitboardArkPersistenceV3 {
+    pub fn empty(operator_identity: OperatorIdentity) -> Self {
         Self {
             version: BITBOARD_ARK_PERSISTENCE_VERSION,
             engine: ARK_RS_ENGINE.to_string(),
             ark_sdk_version: ARK_RS_SDK_VERSION.to_string(),
+            operator_identity,
             wallet_db: WalletDbSnapshot::default(),
             swap_storage: SwapStorageSnapshot::default(),
         }
     }
 
-    pub fn parse_import(json: Option<&str>) -> (Self, bool) {
+    pub fn parse_import(json: Option<&str>) -> ParsedArkPersistence {
         let Some(raw) = json.filter(|value| !value.trim().is_empty()) else {
-            return (Self::empty(), false);
+            return ParsedArkPersistence {
+                wallet_db: WalletDbSnapshot::default(),
+                operator_identity: None,
+                reset_v1: false,
+            };
         };
 
         let value: serde_json::Value = match serde_json::from_str(raw) {
             Ok(parsed) => parsed,
-            Err(_) => return (Self::empty(), false),
+            Err(_) => {
+                return ParsedArkPersistence {
+                    wallet_db: WalletDbSnapshot::default(),
+                    operator_identity: None,
+                    reset_v1: false,
+                };
+            }
         };
 
         if value.get("version").and_then(|v| v.as_u64()) == Some(1) {
-            return (Self::empty(), true);
+            return ParsedArkPersistence {
+                wallet_db: WalletDbSnapshot::default(),
+                operator_identity: None,
+                reset_v1: true,
+            };
         }
 
-        match serde_json::from_value::<Self>(value) {
-            Ok(envelope) if envelope.version == BITBOARD_ARK_PERSISTENCE_VERSION => {
-                (envelope, false)
+        if let Ok(envelope) = serde_json::from_value::<BitboardArkPersistenceV3>(value.clone()) {
+            if envelope.version == BITBOARD_ARK_PERSISTENCE_VERSION {
+                return ParsedArkPersistence {
+                    wallet_db: envelope.wallet_db,
+                    operator_identity: Some(envelope.operator_identity),
+                    reset_v1: false,
+                };
             }
-            _ => (Self::empty(), false),
+        }
+
+        if let Ok(envelope) = serde_json::from_value::<BitboardArkPersistenceV2>(value) {
+            if envelope.version == 2 {
+                return ParsedArkPersistence {
+                    wallet_db: envelope.wallet_db,
+                    operator_identity: None,
+                    reset_v1: false,
+                };
+            }
+        }
+
+        ParsedArkPersistence {
+            wallet_db: WalletDbSnapshot::default(),
+            operator_identity: None,
+            reset_v1: false,
+        }
+    }
+}
+
+impl BitboardArkPersistenceV2 {
+    pub fn empty() -> Self {
+        Self {
+            version: 2,
+            engine: ARK_RS_ENGINE.to_string(),
+            ark_sdk_version: ARK_RS_SDK_VERSION.to_string(),
+            wallet_db: WalletDbSnapshot::default(),
+            swap_storage: SwapStorageSnapshot::default(),
         }
     }
 }
@@ -95,6 +200,13 @@ impl JsonPersistenceDb {
 
     pub fn snapshot(&self) -> WalletDbSnapshot {
         self.inner.lock().expect("persistence lock").clone()
+    }
+
+    pub fn set_offchain_vtxo_snapshot(&self, snapshot: OffchainVtxoSnapshot) {
+        self.inner
+            .lock()
+            .expect("persistence lock")
+            .offchain_vtxo_snapshot = Some(snapshot);
     }
 
     pub fn boarding_output_to_snapshot(boarding_output: &BoardingOutput) -> BoardingOutputSnapshot {
@@ -199,4 +311,39 @@ impl Persistence for JsonPersistenceDb {
         let bytes = hex::decode(hex_sk).map_err(|error| Error::wallet(error.to_string()))?;
         SecretKey::from_slice(&bytes).map_err(|error| Error::wallet(error.to_string()))
     }
+}
+
+pub fn network_label(network: Network) -> String {
+    match network {
+        Network::Bitcoin => "bitcoin".to_string(),
+        Network::Testnet => "testnet".to_string(),
+        Network::Signet => "signet".to_string(),
+        Network::Regtest => "regtest".to_string(),
+        _ => "unknown".to_string(),
+    }
+}
+
+pub fn validate_operator_identity(
+    stored: Option<&OperatorIdentity>,
+    connected_signer: XOnlyPublicKey,
+    network: Network,
+) -> Result<(), String> {
+    let Some(stored) = stored else {
+        return Ok(());
+    };
+    let connected_hex = connected_signer.to_string();
+    if stored.signer_pk_hex != connected_hex {
+        return Err(format!(
+            "sdkPersistenceJson operator signer {} does not match connected operator {connected_hex}",
+            stored.signer_pk_hex
+        ));
+    }
+    if stored.network != network_label(network) {
+        return Err(format!(
+            "sdkPersistenceJson network {} does not match session network {}",
+            stored.network,
+            network_label(network)
+        ));
+    }
+    Ok(())
 }

@@ -4,8 +4,10 @@ export interface ArkadeSdkPersistenceBridge {
   persistSdkPersistence(params: {
     walletId: number
     networkMode: ArkadeSupportedNetworkMode
+    connectionId: string
     password: string
     sdkPersistenceJson: string
+    lastSuccessfulOperatorSyncAt?: string
   }): Promise<void>
 }
 
@@ -15,6 +17,7 @@ let persistenceBridge: ArkadeSdkPersistenceBridge | null = null
 let flushContext: {
   walletId: number
   networkMode: ArkadeSupportedNetworkMode
+  connectionId: string
   password: string
 } | null = null
 let debouncedFlushTimer: ReturnType<typeof setTimeout> | null = null
@@ -78,7 +81,7 @@ export async function flushSdkPersistenceNow(): Promise<void> {
     return
   }
 
-  const { walletId, networkMode, password } = flushContext
+  const { walletId, networkMode, connectionId, password } = flushContext
   const bridge = persistenceBridge
 
   inFlightFlush = (async () => {
@@ -86,6 +89,7 @@ export async function flushSdkPersistenceNow(): Promise<void> {
     await bridge.persistSdkPersistence({
       walletId,
       networkMode,
+      connectionId,
       password,
       sdkPersistenceJson,
     })

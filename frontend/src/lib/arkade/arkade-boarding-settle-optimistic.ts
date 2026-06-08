@@ -30,9 +30,10 @@ export function applyOptimisticBoardingSettle(
   queryClient: QueryClient,
   walletId: number,
   networkMode: ArkadeSupportedNetworkMode,
+  connectionId: string,
   settledSats: number,
 ): void {
-  const boardingStatusKey = arkadeBoardingStatusQueryKey(walletId, networkMode)
+  const boardingStatusKey = arkadeBoardingStatusQueryKey(walletId, networkMode, connectionId)
   const previousStatus = queryClient.getQueryData<ArkadeBoardingStatus>(boardingStatusKey)
 
   if (previousStatus != null) {
@@ -46,7 +47,7 @@ export function applyOptimisticBoardingSettle(
     return
   }
 
-  const balanceKey = arkadeBalanceQueryKey(walletId, networkMode)
+  const balanceKey = arkadeBalanceQueryKey(walletId, networkMode, connectionId)
   const previousBalance = queryClient.getQueryData<ArkadeBalanceInfo>(balanceKey)
   if (previousBalance == null) {
     return
@@ -108,14 +109,15 @@ export function beginOptimisticBoardingSettle(
   queryClient: QueryClient,
   walletId: number,
   networkMode: ArkadeSupportedNetworkMode,
+  connectionId: string,
 ): BoardingSettleOptimisticContext {
-  const boardingStatusKey = arkadeBoardingStatusQueryKey(walletId, networkMode)
-  const balanceKey = arkadeBalanceQueryKey(walletId, networkMode)
+  const boardingStatusKey = arkadeBoardingStatusQueryKey(walletId, networkMode, connectionId)
+  const balanceKey = arkadeBalanceQueryKey(walletId, networkMode, connectionId)
   const previousStatus = queryClient.getQueryData<ArkadeBoardingStatus>(boardingStatusKey)
   const previousBalance = queryClient.getQueryData<ArkadeBalanceInfo>(balanceKey)
   const settledSats = previousStatus?.spendableSats ?? 0
 
-  applyOptimisticBoardingSettle(queryClient, walletId, networkMode, settledSats)
+  applyOptimisticBoardingSettle(queryClient, walletId, networkMode, connectionId, settledSats)
 
   return {
     boardingStatusKey,

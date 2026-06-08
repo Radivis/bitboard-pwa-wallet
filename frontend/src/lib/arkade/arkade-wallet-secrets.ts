@@ -15,7 +15,7 @@ export function findStoredArkadeWallet(
   payload: WalletSecretsPayload,
   networkMode: ArkadeSupportedNetworkMode,
 ): StoredArkadeWalletState | undefined {
-  return payload.arkadeWallets.find((row) => row.networkMode === networkMode)
+  return (payload.arkadeWallets ?? []).find((row) => row.networkMode === networkMode)
 }
 
 export async function loadArkadeWalletStateForNetwork(params: {
@@ -55,7 +55,7 @@ export async function upsertArkadeWalletState(params: {
           patch.lastSessionOpenedAt ?? existing?.lastSessionOpenedAt,
         sdkPersistenceJson: patch.sdkPersistenceJson ?? existing?.sdkPersistenceJson,
       }
-      const others = payload.arkadeWallets.filter(
+      const others = (payload.arkadeWallets ?? []).filter(
         (row) => row.networkMode !== networkMode,
       )
       saved = merged

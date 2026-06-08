@@ -5,29 +5,72 @@ import { appQueryClient } from '@/lib/shared/app-query-client'
 export const arkadeBalanceQueryKey = (
   walletId: number,
   networkMode: ArkadeSupportedNetworkMode,
-) => [...WALLET_DB_QUERY_KEY_ROOT, 'arkade', walletId, networkMode, 'balance'] as const
+  connectionId: string,
+) =>
+  [
+    ...WALLET_DB_QUERY_KEY_ROOT,
+    'arkade',
+    walletId,
+    networkMode,
+    connectionId,
+    'balance',
+  ] as const
 
 export const arkadeHistoryQueryKey = (
   walletId: number,
   networkMode: ArkadeSupportedNetworkMode,
-) => [...WALLET_DB_QUERY_KEY_ROOT, 'arkade', walletId, networkMode, 'history'] as const
+  connectionId: string,
+) =>
+  [
+    ...WALLET_DB_QUERY_KEY_ROOT,
+    'arkade',
+    walletId,
+    networkMode,
+    connectionId,
+    'history',
+  ] as const
 
 export const arkadeAddressQueryKey = (
   walletId: number,
   networkMode: ArkadeSupportedNetworkMode,
-) => [...WALLET_DB_QUERY_KEY_ROOT, 'arkade', walletId, networkMode, 'address'] as const
+  connectionId: string,
+) =>
+  [
+    ...WALLET_DB_QUERY_KEY_ROOT,
+    'arkade',
+    walletId,
+    networkMode,
+    connectionId,
+    'address',
+  ] as const
 
 export const arkadeBoardingAddressQueryKey = (
   walletId: number,
   networkMode: ArkadeSupportedNetworkMode,
+  connectionId: string,
 ) =>
-  [...WALLET_DB_QUERY_KEY_ROOT, 'arkade', walletId, networkMode, 'boarding-address'] as const
+  [
+    ...WALLET_DB_QUERY_KEY_ROOT,
+    'arkade',
+    walletId,
+    networkMode,
+    connectionId,
+    'boarding-address',
+  ] as const
 
 export const arkadeBoardingStatusQueryKey = (
   walletId: number,
   networkMode: ArkadeSupportedNetworkMode,
+  connectionId: string,
 ) =>
-  [...WALLET_DB_QUERY_KEY_ROOT, 'arkade', walletId, networkMode, 'boarding-status'] as const
+  [
+    ...WALLET_DB_QUERY_KEY_ROOT,
+    'arkade',
+    walletId,
+    networkMode,
+    connectionId,
+    'boarding-status',
+  ] as const
 
 export const arkadeDelegateInfoQueryKey = (
   networkMode: ArkadeSupportedNetworkMode,
@@ -36,17 +79,35 @@ export const arkadeDelegateInfoQueryKey = (
 export const arkadeExitCandidatesQueryKey = (
   walletId: number,
   networkMode: ArkadeSupportedNetworkMode,
+  connectionId: string,
 ) =>
-  [...WALLET_DB_QUERY_KEY_ROOT, 'arkade', walletId, networkMode, 'exit-candidates'] as const
+  [
+    ...WALLET_DB_QUERY_KEY_ROOT,
+    'arkade',
+    walletId,
+    networkMode,
+    connectionId,
+    'exit-candidates',
+  ] as const
 
 export const arkadeBumperInfoQueryKey = (
   walletId: number,
   networkMode: ArkadeSupportedNetworkMode,
-) => [...WALLET_DB_QUERY_KEY_ROOT, 'arkade', walletId, networkMode, 'bumper'] as const
+  connectionId: string,
+) =>
+  [
+    ...WALLET_DB_QUERY_KEY_ROOT,
+    'arkade',
+    walletId,
+    networkMode,
+    connectionId,
+    'bumper',
+  ] as const
 
 export const arkadeCollaborativeExitFeeQueryKey = (
   walletId: number,
   networkMode: ArkadeSupportedNetworkMode,
+  connectionId: string,
   destinationAddress: string,
   amountSats: number | undefined,
 ) =>
@@ -55,6 +116,7 @@ export const arkadeCollaborativeExitFeeQueryKey = (
     'arkade',
     walletId,
     networkMode,
+    connectionId,
     'exit-fee',
     'collaborative',
     destinationAddress,
@@ -64,6 +126,7 @@ export const arkadeCollaborativeExitFeeQueryKey = (
 export const arkadeUnilateralExitFeeQueryKey = (
   walletId: number,
   networkMode: ArkadeSupportedNetworkMode,
+  connectionId: string,
   txid: string,
   vout: number,
 ) =>
@@ -72,6 +135,7 @@ export const arkadeUnilateralExitFeeQueryKey = (
     'arkade',
     walletId,
     networkMode,
+    connectionId,
     'exit-fee',
     'unilateral',
     txid,
