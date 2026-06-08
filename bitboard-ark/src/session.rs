@@ -897,7 +897,9 @@ fn map_exit_candidate(vtp: &VirtualTxOutPoint, dust: Amount) -> ExitCandidateRow
         virtual_status_state: state,
         is_recoverable: recoverable,
         is_unrolled: vtp.is_unrolled,
-        can_start_unroll: recoverable && !vtp.is_unrolled && !vtp.is_spent,
+        // Match ark_client::could_exit_unilaterally(): active confirmed/preconfirmed VTXOs, not
+        // recoverable (expired/swept/sub-dust) ones that use a different settlement path.
+        can_start_unroll: !recoverable && !vtp.is_unrolled && !vtp.is_spent && !vtp.is_swept,
         can_complete: vtp.is_unrolled && !vtp.is_spent,
     }
 }
@@ -959,6 +961,108 @@ fn current_unix_timestamp() -> i64 {
             .duration_since(std::time::UNIX_EPOCH)
             .expect("system clock before UNIX epoch")
             .as_secs() as i64
+    }
+}
+
+#[cfg(test)]
+mod exit_candidate_tests {
+    use super::{current_unix_timestamp, map_exit_candidate};
+    use ark_core::server::VirtualTxOutPoint;
+    use bitcoin::Amount;
+    use bitcoin::OutPoint;
+    use bitcoin::ScriptBuf;
+    use bitcoin::Txid;
+    use bitcoin::hashes::Hash;
+
+    const DUST: Amount = Amount::from_sat(330);
+
+    fn sample_vtp(expires_at: i64, flags: VtpFlags) -> VirtualTxOutPoint {
+        VirtualTxOutPoint {
+            outpoint: OutPoint::new(Txid::all_zeros(), 0),
+            created_at: expires_at - 86_400,
+            expires_at,
+            amount: Amount::from_sat(180_603),
+            script: ScriptBuf::new(),
+            is_preconfirmed: flags.is_preconfirmed,
+            is_swept: flags.is_swept,
+            is_unrolled: flags.is_unrolled,
+            is_spent: flags.is_spent,
+            spent_by: None,
+            commitment_txids: vec![],
+            settled_by: None,
+            ark_txid: None,
+            assets: vec![],
+        }
+    }
+
+    struct VtpFlags {
+        is_preconfirmed: bool,
+        is_swept: bool,
+        is_unrolled: bool,
+        is_spent: bool,
+    }
+
+    #[test]
+    fn settled_vtxo_can_start_unroll() {
+        let future_expiry = current_unix_timestamp() + 86_400;
+        let row = map_exit_candidate(
+            &sample_vtp(
+                future_expiry,
+                VtpFlags {
+                    is_preconfirmed: false,
+                    is_swept: false,
+                    is_unrolled: false,
+                    is_spent: false,
+                },
+            ),
+            DUST,
+        );
+
+        assert_eq!(row.virtual_status_state, "settled");
+        assert!(row.can_start_unroll);
+        assert!(!row.can_complete);
+    }
+
+    #[test]
+    fn expired_recoverable_vtxo_cannot_start_unroll() {
+        let past_expiry = current_unix_timestamp() - 86_400;
+        let row = map_exit_candidate(
+            &sample_vtp(
+                past_expiry,
+                VtpFlags {
+                    is_preconfirmed: false,
+                    is_swept: false,
+                    is_unrolled: false,
+                    is_spent: false,
+                },
+            ),
+            DUST,
+        );
+
+        assert_eq!(row.virtual_status_state, "recoverable");
+        assert!(!row.can_start_unroll);
+        assert!(!row.can_complete);
+    }
+
+    #[test]
+    fn unrolled_vtxo_can_complete_but_not_start_unroll() {
+        let future_expiry = current_unix_timestamp() + 86_400;
+        let row = map_exit_candidate(
+            &sample_vtp(
+                future_expiry,
+                VtpFlags {
+                    is_preconfirmed: false,
+                    is_swept: false,
+                    is_unrolled: true,
+                    is_spent: false,
+                },
+            ),
+            DUST,
+        );
+
+        assert_eq!(row.virtual_status_state, "unrolled");
+        assert!(!row.can_start_unroll);
+        assert!(row.can_complete);
     }
 }
 
