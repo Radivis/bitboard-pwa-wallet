@@ -1,5 +1,8 @@
 import type { Plugin } from 'vite'
-import { handleE2eArkadeOperatorMockRequest } from './arkade-operator-mock-handler'
+import {
+  handleE2eArkadeOperatorMockControlRequest,
+  handleE2eArkadeOperatorMockRequest,
+} from './arkade-operator-mock-handler'
 
 export function e2eArkadeOperatorMockPlugin(): Plugin {
   return {
@@ -11,10 +14,15 @@ export function e2eArkadeOperatorMockPlugin(): Plugin {
 
       server.middlewares.use((req, res, next) => {
         const url = req.url ?? ''
-        if (handleE2eArkadeOperatorMockRequest(req, res, url)) {
-          return
-        }
-        next()
+        void handleE2eArkadeOperatorMockControlRequest(req, res, url).then((handledControl) => {
+          if (handledControl) {
+            return
+          }
+          if (handleE2eArkadeOperatorMockRequest(req, res, url)) {
+            return
+          }
+          next()
+        })
       })
     },
   }

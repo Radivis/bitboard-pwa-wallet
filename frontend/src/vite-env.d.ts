@@ -40,9 +40,11 @@ interface Window {
     reset: () => void
   }
   __E2E_ARKADE__?: {
-    setFailing: (value: boolean) => void
-    setBalanceSats: (value: number) => void
-    addIncomingPayment: (payment: import('@/lib/arkade/e2e/arkade-operator-mock-state').E2eArkadeMockIncomingPayment) => void
-    reset: () => void
+    setFailing: (value: boolean) => Promise<void>
+    setBalanceSats: (value: number) => Promise<void>
+    addIncomingPayment: (
+      payment: import('@/lib/arkade/e2e/arkade-operator-mock-state').E2eArkadeMockIncomingPayment,
+    ) => Promise<void>
+    reset: () => Promise<void>
   }
 }

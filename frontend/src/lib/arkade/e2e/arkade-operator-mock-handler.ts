@@ -4,11 +4,14 @@ import { fileURLToPath } from 'node:url'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import {
   E2E_ARKADE_MOCK_COMMITMENT_TXID,
+  E2E_ARKADE_MOCK_CONTROL_PATH,
   E2E_ARKADE_MOCK_DEFAULT_BALANCE_SATS,
   E2E_ARKADE_MOCK_INCOMING_TXID,
-  E2E_ARKADE_MOCK_PARTITION_COOKIE,
   E2E_ARKADE_MOCK_PARTITION_HEADER,
   getE2eArkadeOperatorMockState,
+  readE2eArkadeMockPartitionIdFromRequestHeaders,
+  resetE2eArkadeOperatorMockState,
+  type E2eArkadeMockIncomingPayment,
   type E2eArkadeOperatorMockState,
 } from './arkade-operator-mock-state'
 
@@ -34,37 +37,6 @@ function loadServerInfoJson(): string {
   return cachedServerInfoJson
 }
 
-function readPartitionFromCookieHeader(cookieHeader: string): string | null {
-  const prefix = `${E2E_ARKADE_MOCK_PARTITION_COOKIE}=`
-  for (const part of cookieHeader.split(';')) {
-    const trimmed = part.trim()
-    if (trimmed.startsWith(prefix)) {
-      const value = decodeURIComponent(trimmed.slice(prefix.length)).trim()
-      if (value !== '') {
-        return value
-      }
-    }
-  }
-  return null
-}
-
-function readMockPartitionId(req: IncomingMessage): string {
-  const rawHeader = req.headers[E2E_ARKADE_MOCK_PARTITION_HEADER]
-  if (typeof rawHeader === 'string' && rawHeader.trim() !== '') {
-    return rawHeader.trim()
-  }
-
-  const cookieHeader = req.headers.cookie
-  if (typeof cookieHeader === 'string') {
-    const fromCookie = readPartitionFromCookieHeader(cookieHeader)
-    if (fromCookie != null) {
-      return fromCookie
-    }
-  }
-
-  return 'default'
-}
-
 function sendJson(res: ServerResponse, statusCode: number, body: unknown): void {
   const payload = JSON.stringify(body)
   res.statusCode = statusCode
@@ -73,6 +45,120 @@ function sendJson(res: ServerResponse, statusCode: number, body: unknown): void 
   res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, POST, OPTIONS')
   res.setHeader('Access-Control-Allow-Headers', CORS_ALLOW_HEADERS)
   res.end(payload)
+}
+
+function sendCorsPreflight(res: ServerResponse): void {
+  res.statusCode = 204
+  res.setHeader('Access-Control-Allow-Origin', '*')
+  res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, POST, OPTIONS')
+  res.setHeader('Access-Control-Allow-Headers', CORS_ALLOW_HEADERS)
+  res.end()
+}
+
+async function readJsonRequestBody(req: IncomingMessage): Promise<unknown> {
+  const chunks: Buffer[] = []
+  for await (const chunk of req) {
+    chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : chunk)
+  }
+  const rawBody = Buffer.concat(chunks).toString('utf8').trim()
+  if (rawBody === '') {
+    return null
+  }
+  return JSON.parse(rawBody) as unknown
+}
+
+function isE2eArkadeMockIncomingPayment(value: unknown): value is E2eArkadeMockIncomingPayment {
+  if (value == null || typeof value !== 'object') {
+    return false
+  }
+  const payment = value as E2eArkadeMockIncomingPayment
+  return (
+    typeof payment.txid === 'string' &&
+    typeof payment.amountSats === 'number' &&
+    Number.isFinite(payment.amountSats) &&
+    typeof payment.timestamp === 'number' &&
+    Number.isFinite(payment.timestamp)
+  )
+}
+
+function applyE2eArkadeMockControlAction(
+  partitionId: string,
+  mockState: E2eArkadeOperatorMockState,
+  body: unknown,
+): string | null {
+  if (body == null || typeof body !== 'object') {
+    return 'Invalid JSON body'
+  }
+
+  const payload = body as Record<string, unknown>
+  switch (payload.action) {
+    case 'setFailing': {
+      if (typeof payload.value !== 'boolean') {
+        return 'setFailing requires boolean value'
+      }
+      mockState.shouldFail = payload.value
+      return null
+    }
+    case 'setBalanceSats': {
+      if (typeof payload.value !== 'number' || !Number.isFinite(payload.value)) {
+        return 'setBalanceSats requires finite number'
+      }
+      mockState.balanceSats = Math.max(0, Math.floor(payload.value))
+      return null
+    }
+    case 'addIncomingPayment': {
+      if (!isE2eArkadeMockIncomingPayment(payload.payment)) {
+        return 'addIncomingPayment requires payment object'
+      }
+      mockState.extraIncomingPayments = [payload.payment, ...mockState.extraIncomingPayments]
+      return null
+    }
+    case 'reset': {
+      resetE2eArkadeOperatorMockState(partitionId)
+      return null
+    }
+    default:
+      return `Unknown action: ${String(payload.action)}`
+  }
+}
+
+export async function handleE2eArkadeOperatorMockControlRequest(
+  req: IncomingMessage,
+  res: ServerResponse,
+  rawUrl: string,
+): Promise<boolean> {
+  if (!rawUrl.startsWith(E2E_ARKADE_MOCK_CONTROL_PATH)) {
+    return false
+  }
+
+  if (req.method === 'OPTIONS') {
+    sendCorsPreflight(res)
+    return true
+  }
+
+  if (req.method !== 'POST') {
+    sendJson(res, 405, { message: 'Method not allowed' })
+    return true
+  }
+
+  const partitionId = readE2eArkadeMockPartitionIdFromRequestHeaders(req.headers)
+  let body: unknown
+  try {
+    body = await readJsonRequestBody(req)
+  } catch {
+    sendJson(res, 400, { message: 'Invalid JSON body' })
+    return true
+  }
+
+  const mockState = getE2eArkadeOperatorMockState(partitionId)
+  const errorMessage = applyE2eArkadeMockControlAction(partitionId, mockState, body)
+  if (errorMessage != null) {
+    sendJson(res, 400, { message: errorMessage })
+    return true
+  }
+
+  sendJson(res, 200, { ok: true })
+  return true
 }
 
 /** Operator sends `scripts` as a comma-separated query value (see ark-rest client). */
@@ -199,15 +285,13 @@ export function handleE2eArkadeOperatorMockRequest(
   }
 
   if (req.method === 'OPTIONS') {
-    res.statusCode = 204
-    res.setHeader('Access-Control-Allow-Origin', '*')
-    res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, POST, OPTIONS')
-    res.setHeader('Access-Control-Allow-Headers', CORS_ALLOW_HEADERS)
-    res.end()
+    sendCorsPreflight(res)
     return true
   }
 
-  const mockState = getE2eArkadeOperatorMockState(readMockPartitionId(req))
+  const mockState = getE2eArkadeOperatorMockState(
+    readE2eArkadeMockPartitionIdFromRequestHeaders(req.headers),
+  )
 
   if (mockState.shouldFail) {
     sendJson(res, 503, { message: 'E2E Arkade operator mock: simulated outage' })
