@@ -5,6 +5,7 @@ import { useSessionStore } from '@/stores/sessionStore'
 import { useCryptoStore } from '@/stores/cryptoStore'
 import { toBitcoinNetwork } from '@/lib/wallet/bitcoin-utils'
 import { errorMessage } from '@/lib/shared/utils'
+import { tryMapWalletSecretsError } from '@/lib/wallet/wallet-secrets-error-messages'
 import { isBenignNoActiveWalletError } from '@/lib/shared/wasm-crypto-error'
 import {
   updateDescriptorWalletChangeset,
@@ -186,21 +187,5 @@ export async function switchDescriptorWallet(params: {
 }
 
 export function toUserFriendlySwitchError(err: unknown): string {
-  const errorMessageLowercase =
-    err instanceof Error ? err.message.toLowerCase() : String(err).toLowerCase()
-  if (
-    errorMessageLowercase.includes('password') ||
-    errorMessageLowercase.includes('decrypt') ||
-    errorMessageLowercase.includes('incorrect') ||
-    errorMessageLowercase.includes('corrupted')
-  ) {
-    return 'Wrong password or corrupted wallet data'
-  }
-  if (
-    errorMessageLowercase.includes('secrets') &&
-    errorMessageLowercase.includes('not found')
-  ) {
-    return 'Wallet data not found'
-  }
-  return 'Failed to switch descriptor wallet'
+  return tryMapWalletSecretsError(err) ?? 'Failed to switch descriptor wallet'
 }

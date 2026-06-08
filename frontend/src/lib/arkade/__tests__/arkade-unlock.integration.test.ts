@@ -165,5 +165,22 @@ describe('openArkadeSession after unlock (integration)', () => {
     expect(sessionOpenIndex).toBeGreaterThan(unlockedIndex)
   })
 
-  it.todo('UNLOCK-ARK-04 Arkade session open failure must not reject unlock')
+  it('UNLOCK-ARK-04 Arkade session open failure must not reject unlock', async () => {
+    openArkadeSessionForWalletMock.mockRejectedValueOnce(
+      new Error('Mutinynet operator unreachable'),
+    )
+
+    await expect(
+      loadDescriptorWalletAndSync({
+        password: 'unlock-password',
+        walletId: 3,
+        networkMode: 'signet',
+        addressType: AddressType.Taproot,
+        accountId: 0,
+        awaitSync: true,
+      }),
+    ).resolves.toBeUndefined()
+
+    expect(setWalletStatusMock).toHaveBeenCalledWith('unlocked')
+  })
 })
