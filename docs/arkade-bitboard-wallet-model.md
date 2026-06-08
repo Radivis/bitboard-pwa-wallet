@@ -21,6 +21,15 @@ For network switching and Esplora, see [`descriptor-wallet-switching.md`](descri
 
 `bitboard-ark` exports a JSON envelope (`version: 2`) after critical RPCs and on `closeSession`. v1 TypeScript SDK snapshots are ignored on unlock (one-time console notice); users re-board on unreleased builds.
 
+### Offchain receive derivation cursor
+
+`walletDb` inside `sdkPersistenceJson` stores the offchain receive cursor as **one scalar**:
+
+- `offchain_next_derivation_index: u32` — next index to assign on reveal (`Bip32KeyProvider::next_index`); after the first reveal of index `0`, the value is `1`.
+- Display index on peek: `max(0, offchain_next_derivation_index - 1)` when `next > 0`, else `0` on first use.
+
+Do **not** persist arrays of derivation indices or per-index metadata in `sdkPersistenceJson`; that pattern bloated encrypted secrets and caused failed writes. Session open restores the scalar, warms the key cache locally for `0..index`, and read paths (`getAddress`, balance, history) never block on wallet-secrets re-encrypt.
+
 Operator access from the browser uses **REST** (`ark-rest` + grpc API shim), not grpc-web.
 
 ## Exiting to on-chain

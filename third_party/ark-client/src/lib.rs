@@ -1,4 +1,5 @@
 use crate::error::ErrorContext;
+use crate::key_provider::display_receive_derivation_index;
 use crate::key_provider::KeypairIndex;
 use crate::utils::sleep;
 use crate::utils::timeout_op;
@@ -589,10 +590,48 @@ where
         delegator_pk: Option<XOnlyPublicKey>,
         historical_delegator_pks: Vec<XOnlyPublicKey>,
     ) -> OfflineClient<B, W, S, Bip32KeyProvider> {
+        Self::new_with_bip32_at_index(
+            name,
+            xpriv,
+            path,
+            0,
+            blockchain,
+            wallet,
+            ark_server_url,
+            swap_storage,
+            boltz_url,
+            boltz_referral_id,
+            timeout,
+            delegator_pk,
+            historical_delegator_pks,
+        )
+    }
+
+    /// Like [`Self::new_with_bip32`] but restores `Bip32KeyProvider::next_index` from persistence.
+    #[allow(clippy::too_many_arguments)]
+    pub fn new_with_bip32_at_index(
+        name: String,
+        xpriv: Xpriv,
+        path: Option<DerivationPath>,
+        offchain_next_derivation_index: u32,
+        blockchain: Arc<B>,
+        wallet: Arc<W>,
+        ark_server_url: String,
+        swap_storage: Arc<S>,
+        boltz_url: String,
+        boltz_referral_id: Option<String>,
+        timeout: Duration,
+        delegator_pk: Option<XOnlyPublicKey>,
+        historical_delegator_pks: Vec<XOnlyPublicKey>,
+    ) -> OfflineClient<B, W, S, Bip32KeyProvider> {
         let path = path.unwrap_or(
             DerivationPath::from_str(DEFAULT_DERIVATION_PATH).expect("valid derivation path"),
         );
-        let key_provider = Arc::new(Bip32KeyProvider::new(xpriv, path));
+        let key_provider = Arc::new(Bip32KeyProvider::new_with_index(
+            xpriv,
+            path,
+            offchain_next_derivation_index,
+        ));
 
         OfflineClient::new(
             name,
@@ -722,27 +761,59 @@ where
         self.inner.boltz_referral_id()
     }
 
-    /// Get a new offchain receiving address.
+    /// Peek at the last revealed offchain receive address without incrementing the derivation index.
     ///
-    /// When a delegator is configured (via `delegator_pk` passed to [`OfflineClient::new`]),
-    /// returns a 3-leaf delegate address. Otherwise returns a standard 2-leaf address.
-    ///
-    /// For HD wallets, this will derive a new address each time it's called.
-    /// For static key providers, this will always return the same address.
-    pub fn get_offchain_address(&self) -> Result<(ArkAddress, Vtxo), Error> {
-        let server_info = &self.server_info;
+    /// Display index follows BDK semantics: `max(0, next_index - 1)` when `next_index > 0`, else `0`.
+    /// Ignores the `used` flag so incoming payments do not rotate the displayed address.
+    pub fn peek_offchain_receive_address(&self) -> Result<(ArkAddress, Vtxo), Error> {
+        let server_signer: XOnlyPublicKey = self.server_info.signer_pk.into();
+        let owner = self.receive_display_keypair()?.public_key().into();
+        let vtxo = self.make_vtxo(server_signer, owner)?;
+        Ok((vtxo.to_ark_address(), vtxo))
+    }
 
-        let server_signer = server_info.signer_pk.into();
+    /// Reveal the next offchain receive address (`KeypairIndex::New`) and advance the derivation cursor.
+    pub fn reveal_next_offchain_receive_address(&self) -> Result<(ArkAddress, Vtxo), Error> {
+        let server_signer: XOnlyPublicKey = self.server_info.signer_pk.into();
+        let owner = self
+            .next_keypair(KeypairIndex::New)?
+            .public_key()
+            .into();
+        let vtxo = self.make_vtxo(server_signer, owner)?;
+        Ok((vtxo.to_ark_address(), vtxo))
+    }
+
+    /// Next offchain derivation index to assign on reveal (scalar persisted in wallet DB).
+    ///
+    /// `unwrap_or(0)` only applies to [`StaticKeyProvider`]; Bitboard always uses
+    /// [`Bip32KeyProvider`] via `new_with_bip32_at_index`.
+    pub fn peek_next_offchain_derivation_index(&self) -> u32 {
+        self.inner
+            .key_provider
+            .peek_next_derivation_index()
+            .ok()
+            .flatten()
+            .unwrap_or(0)
+    }
+
+    /// Locally derive and cache receive indices `0..up_to_exclusive` (no operator calls).
+    pub fn warm_offchain_receive_key_cache(&self, up_to_exclusive: u32) -> Result<(), Error> {
+        self.inner
+            .key_provider
+            .warm_local_derivation_indices(up_to_exclusive)
+    }
+
+    /// Get an offchain address for change or internal flows (last unused key, may skip `used` keys).
+    ///
+    /// For stable receive display use [`Self::peek_offchain_receive_address`] instead.
+    pub fn get_offchain_address(&self) -> Result<(ArkAddress, Vtxo), Error> {
+        let server_signer: XOnlyPublicKey = self.server_info.signer_pk.into();
         let owner = self
             .next_keypair(KeypairIndex::LastUnused)?
             .public_key()
             .into();
-
         let vtxo = self.make_vtxo(server_signer, owner)?;
-
-        let ark_address = vtxo.to_ark_address();
-
-        Ok((ark_address, vtxo))
+        Ok((vtxo.to_ark_address(), vtxo))
     }
 
     /// Get all known offchain addresses for this wallet.
@@ -1250,6 +1321,18 @@ where
         }
 
         Ok(all_vtxos)
+    }
+
+    fn receive_display_keypair(&self) -> Result<Keypair, Error> {
+        if let Some(next_index) = self.inner.key_provider.peek_next_derivation_index()? {
+            let display_index = display_receive_derivation_index(next_index);
+            self.inner
+                .key_provider
+                .ensure_keypair_cached_at_index(display_index)
+        } else {
+            // StaticKeyProvider only (`new_with_keypair`). Bitboard uses Bip32KeyProvider instead.
+            self.next_keypair(KeypairIndex::LastUnused)
+        }
     }
 
     fn next_keypair(&self, keypair_index: KeypairIndex) -> Result<Keypair, Error> {

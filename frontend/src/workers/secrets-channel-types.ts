@@ -1,5 +1,5 @@
 /**
- * Types for the worker-to-worker secrets channel (encryption worker ↔ crypto worker).
+ * Types for the worker-to-worker secrets channel (encryption worker ↔ crypto / arkade workers).
  * Communication uses Comlink RPC over a MessagePort; main thread never reads this channel.
  */
 

@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const workerMocks = vi.hoisted(() => ({
   openSession: vi.fn(),
+  hasOpenSession: vi.fn().mockResolvedValue(true),
+  flushSdkPersistence: vi.fn().mockResolvedValue(undefined),
   closeSession: vi.fn(),
   finalizePendingTransactions: vi.fn().mockResolvedValue({ finalized: 0, pending: 0 }),
   delegateSpendableVtxos: vi.fn(),
@@ -10,11 +12,13 @@ const workerMocks = vi.hoisted(() => ({
 
 vi.mock('@/workers/arkade-factory', () => ({
   getArkadeWorker: () => workerMocks,
+  getArkadeWorkerIfExists: () => workerMocks,
   terminateArkadeWorker: vi.fn(),
 }))
 
 vi.mock('@/workers/secrets-channel', () => ({
   ensureSecretsChannel: vi.fn().mockResolvedValue(undefined),
+  ensureArkadeWorkerSecretsChannel: vi.fn().mockResolvedValue(undefined),
 }))
 
 vi.mock('@/workers/arkade-persistence-channel', () => ({
@@ -54,11 +58,13 @@ vi.mock('@/lib/arkade/arkade-utils', () => ({
 
 import {
   awaitArkadeSessionReady,
+  closeArkadeSession,
   openArkadeSessionForWallet,
 } from '@/lib/arkade/arkade-session-service'
 
 describe('awaitArkadeSessionReady (UNLOCK-ARK-03)', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
+    await closeArkadeSession()
     vi.clearAllMocks()
   })
 

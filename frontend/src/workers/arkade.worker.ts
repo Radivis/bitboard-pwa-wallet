@@ -1,9 +1,13 @@
-import { expose } from 'comlink'
-import type { EncryptedBlobMessage } from '@/workers/secrets-channel-types'
+import { expose, wrap, type Remote } from 'comlink'
+import type {
+  EncryptedBlobMessage,
+  SecretsChannelService,
+} from '@/workers/secrets-channel-types'
 import type { ArkadeSupportedNetworkMode } from '@/lib/arkade/arkade-endpoints'
 import {
   clearDebouncedSdkPersistenceFlush,
   flushSdkPersistenceNow,
+  scheduleSdkPersistenceFlush,
   setArkadeSdkPersistenceBridge,
   setArkadeSdkPersistenceExporter,
   setArkadeSdkPersistenceFlushContext,
@@ -33,8 +37,7 @@ type BitboardArkWasm = Awaited<ReturnType<typeof loadBitboardArkWasm>>
 
 let arkWasmModule: BitboardArkWasm | null = null
 let wasmInitError: string | null = null
-let encryptionWasmModule: typeof import('@/wasm-pkg/bitboard_encryption/bitboard_encryption') | null =
-  null
+let secretsProxy: Remote<SecretsChannelService> | null = null
 
 let activeSessionKey: string | null = null
 let activeSessionParams: {
@@ -93,45 +96,14 @@ setArkadeSdkPersistenceExporter(() =>
   invokeWasmArk((wasmModule) => wasmModule.ark_export_persistence_json()),
 )
 
-async function getEncryptionWasm() {
-  if (!encryptionWasmModule) {
-    encryptionWasmModule = await import(
-      '@/wasm-pkg/bitboard_encryption/bitboard_encryption'
-    )
-  }
-  return encryptionWasmModule
-}
-
-async function requestDecrypt(
+function requestDecrypt(
   password: string,
   encryptedBlob: EncryptedBlobMessage,
 ): Promise<string> {
-  const wasmModule = await getEncryptionWasm()
-  const keyBytes = wasmModule.derive_argon2_key_from_phc(
-    password,
-    encryptedBlob.salt,
-    encryptedBlob.kdfPhc,
-  )
-  try {
-    const cryptoKey = await crypto.subtle.importKey(
-      'raw',
-      keyBytes as BufferSource,
-      'AES-GCM',
-      false,
-      ['decrypt'],
-    )
-    const plaintextBuffer = await crypto.subtle.decrypt(
-      { name: 'AES-GCM', iv: encryptedBlob.iv as unknown as BufferSource },
-      cryptoKey,
-      encryptedBlob.ciphertext as unknown as BufferSource,
-    )
-    return new TextDecoder().decode(plaintextBuffer)
-  } catch {
-    throw new Error('Decryption failed: incorrect password or corrupted data')
-  } finally {
-    const cleared = keyBytes as Uint8Array
-    cleared.fill(0)
+  if (!secretsProxy) {
+    return Promise.reject(new Error('Secrets port not set'))
   }
+  return secretsProxy.decrypt(password, encryptedBlob)
 }
 
 function sessionKey(walletId: number, networkMode: ArkadeSupportedNetworkMode): string {
@@ -223,6 +195,10 @@ async function openSessionImpl(
 }
 
 const arkadeService: ArkadeService = {
+  async setSecretsPort(port: MessagePort): Promise<void> {
+    secretsProxy = wrap<SecretsChannelService>(port)
+  },
+
   async ping(): Promise<boolean> {
     await getArkWasm()
     return true
@@ -234,6 +210,17 @@ const arkadeService: ArkadeService = {
 
   async openSession(params: OpenArkadeSessionParams): Promise<{ arkadeAddress: string }> {
     return openSessionImpl(params)
+  },
+
+  async hasOpenSession(params: {
+    walletId: number
+    networkMode: ArkadeSupportedNetworkMode
+  }): Promise<boolean> {
+    return activeSessionKey === sessionKey(params.walletId, params.networkMode)
+  },
+
+  async flushSdkPersistence(): Promise<void> {
+    await flushSdkPersistenceNow()
   },
 
   async closeSession(): Promise<void> {
@@ -248,6 +235,14 @@ const arkadeService: ArkadeService = {
 
   async getAddress(): Promise<string> {
     return invokeWasmArk((wasmModule) => wasmModule.ark_get_address())
+  },
+
+  async getNewAddress(): Promise<string> {
+    const address = await invokeWasmArk((wasmModule) =>
+      wasmModule.ark_reveal_next_receive_address(),
+    )
+    await persistAfterCriticalOperation()
+    return address
   },
 
   async getBoardingAddress(): Promise<string> {

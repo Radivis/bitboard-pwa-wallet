@@ -1,15 +1,17 @@
 import { useState } from 'react'
-import { ArrowDownLeft, ArrowUpRight, Layers } from 'lucide-react'
+import { ArrowDownLeft, ArrowUpRight } from 'lucide-react'
 import { formatDistanceToNow, format } from 'date-fns'
 import type { ArkadePaymentRow } from '@/workers/arkade-api'
 import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
+import { DashboardActivityRailBadge } from '@/components/DashboardActivityRailBadge'
 import { cn } from '@/lib/shared/utils'
 
 interface ArkadePaymentItemProps {
   payment: ArkadePaymentRow
+  activityLabel?: string
 }
 
-export function ArkadePaymentItem({ payment }: ArkadePaymentItemProps) {
+export function ArkadePaymentItem({ payment, activityLabel }: ArkadePaymentItemProps) {
   const [expanded, setExpanded] = useState(false)
   const [showAbsoluteTime, setShowAbsoluteTime] = useState(false)
 
@@ -44,10 +46,7 @@ export function ArkadePaymentItem({ payment }: ArkadePaymentItemProps) {
             <p className="text-sm font-medium capitalize">
               {isSent ? 'Sent' : 'Received'}
             </p>
-            <span className="inline-flex items-center gap-0.5 rounded border border-border px-1.5 py-0.5 text-[10px] font-medium uppercase text-muted-foreground">
-              <Layers className="h-3 w-3" />
-              Arkade
-            </span>
+            <DashboardActivityRailBadge label={activityLabel ?? 'Arkade'} />
           </div>
           {timestamp != null && (
             <button

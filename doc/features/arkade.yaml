@@ -22,7 +22,20 @@ feature:
     - Network switch terminates and reopens the Arkade worker session for the new network
     - Lock wallet terminates arkade.worker and clears session state
     - Ark-rs persistence v2 (engine ark-rs) in sdkPersistenceJson inside encrypted wallet_secrets; v1 TS SDK snapshots reset on unlock
+    - Offchain receive derivation cursor is a single scalar in walletDb (see docs/arkade-bitboard-wallet-model.md); no index arrays in sdkPersistenceJson
     - Wallet reopen hydrates boarding outputs from sdkPersistenceJson; operator required for live balance sync and sends
+  contracts:
+    receive_address:
+      - id: ARK-RCV-01
+        description: Receive shows the last revealed offchain receive index until the user generates a new one
+      - id: ARK-RCV-02
+        description: Re-opening Receive, lock/unlock, or reload does not change the displayed address
+      - id: ARK-RCV-03
+        description: Incoming payments to the displayed index still appear in balance/history after operator sync
+      - id: ARK-RCV-04
+        description: Generate new address reveals the next index and persists offchain_next_derivation_index
+      - id: ARK-RCV-05
+        description: Read paths (getAddress, balance, history) never await wallet-secrets re-encrypt
   pages:
     - ArkadeManagement:
       - description: "Arkade status on Management page"
@@ -45,8 +58,10 @@ feature:
       - visible_elements:
         - Receive mode toggle includes Arkade when isArkadeEnabled and network supported
         - Arkade address QR and copy (not on-chain bc1)
+        - Generate new address control (mirrors on-chain Receive)
       - requirements:
         - Legacy /wallet/arkade/receive redirects to /wallet/receive?mode=arkade
+        - Contracts ARK-RCV-01 through ARK-RCV-05 apply to Arkade receive mode
     - WalletSendArkadeDetection:
       - description: "Arkade send via address format on main Send page"
       - file: frontend/src/pages/wallet/SendPage/index.tsx

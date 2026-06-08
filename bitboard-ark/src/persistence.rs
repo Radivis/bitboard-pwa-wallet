@@ -24,6 +24,9 @@ pub struct BoardingOutputSnapshot {
 pub struct WalletDbSnapshot {
     pub boarding_outputs: Vec<BoardingOutputSnapshot>,
     pub secret_keys_by_owner_pk_hex: HashMap<String, String>,
+    /// Next offchain receive index to assign on reveal (`Bip32KeyProvider::next_index`).
+    #[serde(default)]
+    pub offchain_next_derivation_index: u32,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]

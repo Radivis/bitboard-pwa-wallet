@@ -1,7 +1,7 @@
 import { Link } from '@tanstack/react-router'
 import { Layers, Loader2 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
+import { ArkadeBalanceBreakdown } from '@/components/wallet/ArkadeBalanceBreakdown'
 import { useArkadeBalanceQuery } from '@/hooks/useArkadeQueries'
 import { isArkadeActiveForNetworkMode } from '@/lib/arkade/arkade-utils'
 import { useWalletStore } from '@/stores/walletStore'
@@ -27,19 +27,15 @@ export function ArkadeDashboardBalance() {
             <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
             Loading…
           </div>
+        ) : balanceQuery.isError ? (
+          <p className="text-sm text-destructive" data-testid="dashboard-arkade-balance-error">
+            Could not load Arkade balance. Check your network and try again.
+          </p>
         ) : balanceQuery.data ? (
-          <div>
-            <BitcoinAmountDisplay
-              amountSats={balanceQuery.data.confirmedSats}
-              data-testid="dashboard-arkade-balance-amount"
-            />
-            {balanceQuery.data.totalSats !== balanceQuery.data.confirmedSats && (
-              <p className="text-xs text-muted-foreground">
-                Total (incl. recoverable):{' '}
-                <BitcoinAmountDisplay amountSats={balanceQuery.data.totalSats} size="sm" />
-              </p>
-            )}
-          </div>
+          <ArkadeBalanceBreakdown
+            balance={balanceQuery.data}
+            amountTestId="dashboard-arkade-balance-amount"
+          />
         ) : (
           <p
             className="text-sm text-muted-foreground"

@@ -4,6 +4,8 @@ import type { ArkadeSdkPersistenceBridge } from '@/lib/arkade/storage/arkade-sdk
 export interface ArkadeBalanceInfo {
   confirmedSats: number
   totalSats: number
+  boardingSpendableSats?: number
+  boardingPendingSats?: number
 }
 
 export interface ArkadeDelegateInfo {
@@ -116,11 +118,18 @@ export interface ArkadeUnilateralExitFeeEstimateParams {
 
 export interface ArkadeService {
   ping(): Promise<boolean>
+  setSecretsPort(port: MessagePort): Promise<void>
   setSdkPersistenceBridge(bridge: ArkadeSdkPersistenceBridge | null): Promise<void>
   openSession(params: OpenArkadeSessionParams): Promise<{ arkadeAddress: string }>
+  hasOpenSession(params: {
+    walletId: number
+    networkMode: ArkadeSupportedNetworkMode
+  }): Promise<boolean>
+  flushSdkPersistence(): Promise<void>
   closeSession(): Promise<void>
   getBalance(): Promise<ArkadeBalanceInfo>
   getAddress(): Promise<string>
+  getNewAddress(): Promise<string>
   getBoardingAddress(): Promise<string>
   getBoardingStatus(): Promise<ArkadeBoardingStatus>
   sendPayment(params: ArkadeSendParams): Promise<string>

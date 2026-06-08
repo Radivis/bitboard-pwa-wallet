@@ -5,8 +5,12 @@
  * Contracts: E2E-ARK-MOCK-01 … E2E-ARK-MOCK-04 — see
  * doc/features/dashboard-arkade-contract.yaml
  */
-import { test, expect } from '@playwright/test'
-import { createWalletViaUI, expectNoInitialWalletSyncErrorToast } from './helpers/wallet-setup'
+import { test, expect, type Page } from '@playwright/test'
+import {
+  createWalletViaUI,
+  expectNoInitialWalletSyncErrorToast,
+  TEST_PASSWORD,
+} from './helpers/wallet-setup'
 import { goToWalletTab } from './helpers/wallet-nav'
 import { enableArkadeFeature, switchToSignet } from './helpers/arkade-settings'
 import {
@@ -24,6 +28,7 @@ import {
   expectArkadeBalanceNotEmptySession,
   goToReceiveArkadeMode,
   readDashboardArkadeBalanceSats,
+  readReceiveArkadeAddress,
   waitForArkadeActivityLoaded,
   waitForArkadeBalanceCard,
   waitForDashboardArkadeBalanceSats,
@@ -31,6 +36,19 @@ import {
 } from './helpers/dashboard-arkade'
 
 const ARKADE_MOCK_TEST_TIMEOUT_MS = process.env.CI ? 120_000 : 90_000
+
+async function lockWalletFromManagementAndUnlock(page: Page) {
+  await goToWalletTab(page, 'Management')
+  await page.getByRole('button', { name: 'Lock Wallet' }).click()
+  await expect(page.getByRole('heading', { name: 'Library' })).toBeVisible({ timeout: 30_000 })
+  await page.getByRole('button', { name: 'Unlock wallet and go to previous page' }).click()
+  await expect(page.getByRole('heading', { name: 'Unlock Wallet' })).toBeVisible({
+    timeout: 15_000,
+  })
+  await page.getByLabel('Bitboard app password').fill(TEST_PASSWORD)
+  await page.getByRole('button', { name: 'Unlock' }).click()
+  await expect(page.getByLabel('Bitboard app password')).not.toBeVisible({ timeout: 60_000 })
+}
 
 test.describe('Dashboard Arkade mock ASP @arkade', () => {
   test.describe.configure({ timeout: ARKADE_MOCK_TEST_TIMEOUT_MS })
@@ -124,5 +142,42 @@ test.describe('Dashboard Arkade mock ASP @arkade', () => {
     await expect(
       page.getByTestId(`arkade-payment-${E2E_ARKADE_MOCK_RECEIVE_INCOMING_TXID}`),
     ).toBeVisible()
+  })
+
+  test('ARK-RCV-02 receive address stable across lock and unlock', async ({ page }) => {
+    test.setTimeout(ARKADE_MOCK_TEST_TIMEOUT_MS)
+    await createWalletViaUI(page)
+    await enableArkadeFeature(page)
+    await switchToSignet(page)
+
+    await goToReceiveArkadeMode(page)
+    const addressBeforeLock = await readReceiveArkadeAddress(page)
+
+    await lockWalletFromManagementAndUnlock(page)
+    await goToReceiveArkadeMode(page)
+    const addressAfterUnlock = await readReceiveArkadeAddress(page)
+    expect(addressAfterUnlock).toBe(addressBeforeLock)
+  })
+
+  test('ARK-RCV-04 generate new address persists across lock and unlock', async ({ page }) => {
+    test.setTimeout(ARKADE_MOCK_TEST_TIMEOUT_MS)
+    await createWalletViaUI(page)
+    await enableArkadeFeature(page)
+    await switchToSignet(page)
+
+    await goToReceiveArkadeMode(page)
+    const initialAddress = await readReceiveArkadeAddress(page)
+
+    await page.getByRole('button', { name: 'Generate New Address' }).click()
+    await expect(async () => {
+      const nextAddress = await readReceiveArkadeAddress(page)
+      expect(nextAddress).not.toBe(initialAddress)
+    }).toPass({ timeout: 15_000 })
+    const revealedAddress = await readReceiveArkadeAddress(page)
+
+    await lockWalletFromManagementAndUnlock(page)
+    await goToReceiveArkadeMode(page)
+    const addressAfterUnlock = await readReceiveArkadeAddress(page)
+    expect(addressAfterUnlock).toBe(revealedAddress)
   })
 })

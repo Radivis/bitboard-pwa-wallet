@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import {
+  ARKADE_BOARDING_ACTIVITY_LABEL,
+  ONCHAIN_ARKADE_BOARDING_ACTIVITY_LABEL,
+  isBoardingFundToVtxoPair,
   mergeAndSortDashboardActivity,
   type LightningPaymentWithWallet,
 } from '@/lib/lightning/lightning-dashboard-sync'
@@ -77,6 +80,68 @@ describe('mergeAndSortDashboardActivity', () => {
     if (merged[0].kind === 'arkade') {
       expect(merged[0].payment.txid).toBe('ark-in-1')
     }
+  })
+
+  it('places Arkade boarding receive above matching on-chain send when timestamps tie', () => {
+    const boardingSecond = 1_748_836_800
+    const chainSend: TransactionDetails = {
+      txid: 'chain-board-fund',
+      sentSats: 200_000,
+      receivedSats: 0,
+      feeSats: null,
+      confirmationBlockHeight: 100,
+      confirmationTime: boardingSecond,
+      isConfirmed: true,
+      isLabTx: false,
+    }
+    const arkReceive = {
+      direction: 'incoming' as const,
+      amountSats: 200_000,
+      timestamp: boardingSecond,
+      txid: 'ark-vtxo-from-board',
+    }
+
+    expect(isBoardingFundToVtxoPair(chainSend, arkReceive)).toBe(true)
+
+    const merged = mergeAndSortDashboardActivity([chainSend], [], [arkReceive])
+    expect(merged).toHaveLength(2)
+    expect(merged[0].kind).toBe('arkade')
+    if (merged[0].kind === 'arkade') {
+      expect(merged[0].payment.txid).toBe('ark-vtxo-from-board')
+    }
+    expect(merged[1].kind).toBe('chain')
+    if (merged[0].kind === 'arkade') {
+      expect(merged[0].activityLabel).toBe(ARKADE_BOARDING_ACTIVITY_LABEL)
+    }
+    if (merged[1].kind === 'chain') {
+      expect(merged[1].activityLabel).toBe(ONCHAIN_ARKADE_BOARDING_ACTIVITY_LABEL)
+    }
+  })
+
+  it('does not reorder unrelated chain and Arkade rows that share a timestamp', () => {
+    const sharedSecond = 1_748_836_900
+    const chainSend: TransactionDetails = {
+      txid: 'chain-unrelated',
+      sentSats: 50_000,
+      receivedSats: 0,
+      feeSats: null,
+      confirmationBlockHeight: 101,
+      confirmationTime: sharedSecond,
+      isConfirmed: true,
+      isLabTx: false,
+    }
+    const arkReceive = {
+      direction: 'incoming' as const,
+      amountSats: 200_000,
+      timestamp: sharedSecond,
+      txid: 'ark-unrelated',
+    }
+
+    expect(isBoardingFundToVtxoPair(chainSend, arkReceive)).toBe(false)
+
+    const merged = mergeAndSortDashboardActivity([chainSend], [], [arkReceive])
+    expect(merged[0].kind).toBe('chain')
+    expect(merged[1].kind).toBe('arkade')
   })
 
   it('keeps unconfirmed on-chain txs in the top slice when many confirmed txs exist', () => {

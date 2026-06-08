@@ -52,7 +52,19 @@ export async function waitForReceiveArkadeAddressReady(
   page: Page,
   timeout = ARKADE_MOCK_UI_TIMEOUT_MS,
 ): Promise<void> {
+  await expect(page.getByText('Loading address…')).not.toBeVisible({ timeout })
   await expect(page.getByRole('button', { name: 'Copy address' })).toBeEnabled({ timeout })
+}
+
+export async function readReceiveArkadeAddress(page: Page): Promise<string> {
+  await waitForReceiveArkadeAddressReady(page)
+  const addressLocator = page.locator('.font-mono.break-all').first()
+  await expect(addressLocator).toBeVisible({ timeout: 15_000 })
+  const address = (await addressLocator.textContent())?.trim() ?? ''
+  if (!address.startsWith('tark1') && !address.startsWith('ark1')) {
+    throw new Error(`Expected Arkade receive address, got: ${address}`)
+  }
+  return address
 }
 
 export async function waitForDashboardArkadeBalanceSats(

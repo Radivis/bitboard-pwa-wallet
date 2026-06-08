@@ -28,22 +28,21 @@ import { invalidateOnchainDashboardQueries } from '@/lib/wallet/onchain-dashboar
 import { reportArkadeSessionOpenError } from '@/lib/arkade/arkade-session-open-error-toast'
 import { isArkadeActiveForNetworkMode } from '@/lib/arkade/arkade-utils'
 import { openArkadeSessionForWallet } from '@/lib/arkade/arkade-session-service'
+import { waitForCryptoWorkerHealthy } from '@/workers/crypto-factory'
 
 const CUSTOM_ESPLORA_URL_KEY_PREFIX = 'custom_esplora_url_'
 
-async function openArkadeSessionAfterUnlockIfActive(params: {
+function beginArkadeSessionOpenAfterUnlockIfActive(params: {
   password: string
   walletId: number
   networkMode: NetworkMode
-}): Promise<void> {
+}): Promise<void> | null {
   if (!isArkadeActiveForNetworkMode(params.networkMode)) {
-    return
+    return null
   }
-  try {
-    await openArkadeSessionForWallet(params)
-  } catch (err) {
-    reportArkadeSessionOpenError(err)
-  }
+  return openArkadeSessionForWallet(params).catch((err) =>
+    reportArkadeSessionOpenError(err),
+  )
 }
 
 /**
@@ -542,6 +541,8 @@ export async function loadDescriptorWalletWithoutSync(params: {
   accountId: number
 }): Promise<void> {
   const { password, walletId, networkMode, addressType, accountId } = params
+  await waitForCryptoWorkerHealthy()
+  void beginArkadeSessionOpenAfterUnlockIfActive({ password, walletId, networkMode })
   const network = toBitcoinNetwork(networkMode)
   const descriptorWallet = await resolveDescriptorWallet({
     password,
@@ -585,8 +586,6 @@ export async function loadDescriptorWalletWithoutSync(params: {
   startAutoLockTimer(() =>
     useCryptoStore.getState().lockAndPurgeSensitiveRuntimeState(),
   )
-
-  await openArkadeSessionAfterUnlockIfActive({ password, walletId, networkMode })
 }
 
 /**
@@ -616,6 +615,12 @@ export async function loadDescriptorWalletAndSync(params: {
     onSyncError,
     awaitSync = false,
   } = params
+  await waitForCryptoWorkerHealthy()
+  const arkadeSessionOpenPromise = beginArkadeSessionOpenAfterUnlockIfActive({
+    password,
+    walletId,
+    networkMode,
+  })
   const network = toBitcoinNetwork(networkMode)
   const descriptorWallet = await resolveDescriptorWallet({
     password,
@@ -688,11 +693,16 @@ export async function loadDescriptorWalletAndSync(params: {
     }
   }
 
-  if (awaitSync) {
+  const runPostUnlockBackgroundWork = async () => {
+    if (arkadeSessionOpenPromise != null) {
+      await arkadeSessionOpenPromise.catch(() => undefined)
+    }
     await runEsploraSyncAndPersistChangeset()
-  } else {
-    void runEsploraSyncAndPersistChangeset()
   }
 
-  await openArkadeSessionAfterUnlockIfActive({ password, walletId, networkMode })
+  if (awaitSync) {
+    await runPostUnlockBackgroundWork()
+  } else {
+    void runPostUnlockBackgroundWork()
+  }
 }

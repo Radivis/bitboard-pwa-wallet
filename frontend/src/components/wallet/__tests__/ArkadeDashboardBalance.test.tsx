@@ -13,7 +13,18 @@ vi.mock('@tanstack/react-router', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@tanstack/react-router')>()
   return {
     ...actual,
-    Link: ({ children }: { children: React.ReactNode }) => <a href="#">{children}</a>,
+    Link: ({
+      children,
+      to,
+      ...props
+    }: {
+      children: React.ReactNode
+      to: string
+    }) => (
+      <a href={to} {...props}>
+        {children}
+      </a>
+    ),
   }
 })
 
@@ -80,12 +91,46 @@ describe('ArkadeDashboardBalance', () => {
     expect(screen.getByText('Total (incl. recoverable):')).toBeInTheDocument()
   })
 
+  it('includes ready-to-settle boarding in headline balance with breakdown', () => {
+    balanceQueryMock.mockReturnValue({
+      isLoading: false,
+      data: {
+        confirmedSats: 30_603,
+        totalSats: 30_603,
+        boardingSpendableSats: 200_000,
+        boardingPendingSats: 0,
+      },
+    })
+    renderWithProviders(<ArkadeDashboardBalance />)
+    expect(screen.getByTestId('dashboard-arkade-balance-amount')).toHaveTextContent('0.00230603')
+    expect(screen.getByTestId('arkade-balance-boarding-spendable')).toHaveTextContent(
+      'ready to settle in management',
+    )
+    expect(screen.getByTestId('arkade-balance-settle-in-management-link')).toHaveAttribute(
+      'href',
+      '/wallet/arkade/board',
+    )
+  })
+
   it('DASH-ARK-12 shows empty session copy when no data', () => {
-    balanceQueryMock.mockReturnValue({ isLoading: false, data: undefined })
+    balanceQueryMock.mockReturnValue({ isLoading: false, isError: false, data: undefined })
     renderWithProviders(<ArkadeDashboardBalance />)
     expect(screen.getByTestId('dashboard-arkade-session-empty')).toHaveTextContent(
       'No Arkade session yet',
     )
+  })
+
+  it('DASH-ARK-14 shows error copy when balance query fails', () => {
+    balanceQueryMock.mockReturnValue({
+      isLoading: false,
+      isError: true,
+      data: undefined,
+    })
+    renderWithProviders(<ArkadeDashboardBalance />)
+    expect(screen.getByTestId('dashboard-arkade-balance-error')).toHaveTextContent(
+      'Could not load Arkade balance',
+    )
+    expect(screen.queryByTestId('dashboard-arkade-session-empty')).not.toBeInTheDocument()
   })
 
   it('DASH-ARK-13 shows balance not empty copy when cached data exists during refetch', () => {
