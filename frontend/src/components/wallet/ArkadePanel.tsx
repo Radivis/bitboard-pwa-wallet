@@ -19,6 +19,7 @@ import { ArkadeExitSection } from '@/components/wallet/ArkadeExitSection'
 
 export function ArkadePanel() {
   const networkMode = useWalletStore((s) => s.networkMode)
+  const storeReceiveAddress = useWalletStore((s) => s.arkadeReceiveAddress)
   const show = isArkadeActiveForNetworkMode(networkMode)
   const delegatorConfigured =
     isArkadeSupportedNetworkMode(networkMode) &&
@@ -64,9 +65,9 @@ export function ArkadePanel() {
           </div>
         ) : null}
 
-        {addressQuery.data && (
+        {(storeReceiveAddress ?? addressQuery.data) && (
           <div className="break-all rounded-md border bg-muted/40 p-2 font-mono text-xs">
-            {addressQuery.data}
+            {storeReceiveAddress ?? addressQuery.data}
           </div>
         )}
 

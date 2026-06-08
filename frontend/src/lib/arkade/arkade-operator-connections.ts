@@ -188,7 +188,7 @@ export async function ensureLegacyArkadeWalletMigrated(params: {
         operatorUrl: params.operatorUrl,
         delegatorUrl: params.delegatorUrl || undefined,
         sdkPersistenceJson:
-          params.sdkPersistenceJson ?? existingActive.sdkPersistenceJson,
+          existingActive.sdkPersistenceJson ?? params.sdkPersistenceJson,
         lastSessionOpenedAt: new Date().toISOString(),
       },
     })
@@ -206,7 +206,7 @@ export async function ensureLegacyArkadeWalletMigrated(params: {
       connection: {
         ...matchingConnection,
         sdkPersistenceJson:
-          params.sdkPersistenceJson ?? matchingConnection.sdkPersistenceJson,
+          matchingConnection.sdkPersistenceJson ?? params.sdkPersistenceJson,
         lastSessionOpenedAt: new Date().toISOString(),
       },
     })

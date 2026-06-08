@@ -209,6 +209,13 @@ impl JsonPersistenceDb {
             .offchain_vtxo_snapshot = Some(snapshot);
     }
 
+    pub fn set_offchain_next_derivation_index(&self, index: u32) {
+        self.inner
+            .lock()
+            .expect("persistence lock")
+            .offchain_next_derivation_index = index;
+    }
+
     pub fn boarding_output_to_snapshot(boarding_output: &BoardingOutput) -> BoardingOutputSnapshot {
         BoardingOutputSnapshot {
             owner_pk_hex: boarding_output.owner_pk().to_string(),

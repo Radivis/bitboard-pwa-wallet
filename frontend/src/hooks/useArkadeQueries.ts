@@ -27,6 +27,8 @@ import {
   awaitArkadeSessionReady,
   openArkadeSessionForWallet,
 } from '@/lib/arkade/arkade-session-service'
+import { scheduleBackgroundArkadeOperatorSync } from '@/lib/arkade/arkade-operator-sync'
+import { readArkadeDashboardStateFromStore } from '@/lib/arkade/arkade-persistence-store-sync'
 import {
   isArkadeDelegatorConfigured,
   isArkadeSupportedNetworkMode,
@@ -42,7 +44,6 @@ import {
   revertOptimisticBoardingSettle,
   zeroBoardingStatus,
 } from '@/lib/arkade/arkade-boarding-settle-optimistic'
-import { syncArkadeWithOperator } from '@/lib/arkade/arkade-operator-sync'
 import { errorMessage } from '@/lib/shared/utils'
 
 const ARKADE_WALLET_UNLOCKED_ERROR = 'Wallet must be unlocked'
@@ -56,7 +57,6 @@ function useArkadeQueryBase() {
   const password = useSessionStore((sessionState) => sessionState.password)
   const sessionReady =
     activeWalletId != null &&
-    activeArkadeConnectionId != null &&
     password != null &&
     isArkadeActiveForNetworkMode(networkMode) &&
     isArkadeSupportedNetworkMode(networkMode)
@@ -139,37 +139,14 @@ function walletScopedQueryKey(
   ) => readonly unknown[],
   disabledScope: string,
 ): readonly unknown[] {
-  if (
-    activeWalletId != null &&
-    connectionId != null &&
-    isArkadeSupportedNetworkMode(networkMode)
-  ) {
-    return buildKey(activeWalletId, networkMode, connectionId)
+  if (activeWalletId != null && isArkadeSupportedNetworkMode(networkMode)) {
+    return buildKey(
+      activeWalletId,
+      networkMode,
+      connectionId ?? `pending-${networkMode}`,
+    )
   }
   return disabledArkadeQueryKey(disabledScope)
-}
-
-async function syncActiveArkadeConnectionWithOperator(): Promise<void> {
-  const { activeWalletId, networkMode, activeArkadeConnectionId } = useWalletStore.getState()
-  const password = useSessionStore.getState().password
-  if (
-    activeWalletId == null ||
-    activeArkadeConnectionId == null ||
-    password == null ||
-    !isArkadeSupportedNetworkMode(networkMode)
-  ) {
-    return
-  }
-  try {
-    await syncArkadeWithOperator({
-      password,
-      walletId: activeWalletId,
-      networkMode,
-      connectionId: activeArkadeConnectionId,
-    })
-  } catch {
-    // Operator unreachable — local snapshot from persistence remains valid.
-  }
 }
 
 async function invalidateArkadeWalletDataQueries(
@@ -212,7 +189,7 @@ export function useArkadeBalanceQuery() {
     initialData: storeBalance ?? undefined,
     queryFn: async () => {
       await ensureArkadeSessionOpenForActiveWallet()
-      await syncActiveArkadeConnectionWithOperator()
+      scheduleBackgroundArkadeOperatorSync()
       return getArkadeWorker().getBalance()
     },
     ...arkadeDashboardWalletDataQueryOptions,
@@ -236,7 +213,7 @@ export function useArkadeHistoryQuery() {
     initialData: storePayments.length > 0 ? storePayments : undefined,
     queryFn: async () => {
       await ensureArkadeSessionOpenForActiveWallet()
-      await syncActiveArkadeConnectionWithOperator()
+      scheduleBackgroundArkadeOperatorSync()
       return getArkadeWorker().getTransactionHistory()
     },
     ...arkadeDashboardWalletDataQueryOptions,
@@ -273,19 +250,24 @@ export function useArkadeNewAddressMutation() {
       assertArkadeSessionUnlocked(activeWalletId, password)
       return withReadyArkadeWorker(() => getArkadeWorker().getNewAddress())
     },
-    onSuccess: async () => {
+    onSuccess: async (newAddress) => {
       toast.success('New Arkade address generated')
       if (
         activeWalletId != null &&
         activeArkadeConnectionId != null &&
         isArkadeSupportedNetworkMode(networkMode)
       ) {
-        await queryClient.invalidateQueries({
-          queryKey: arkadeAddressQueryKey(
-            activeWalletId,
-            networkMode,
-            activeArkadeConnectionId,
-          ),
+        const addressQueryKey = arkadeAddressQueryKey(
+          activeWalletId,
+          networkMode,
+          activeArkadeConnectionId,
+        )
+        queryClient.setQueryData(addressQueryKey, newAddress)
+        const dashboardState = readArkadeDashboardStateFromStore()
+        useWalletStore.getState().setArkadeDashboardState({
+          balance: dashboardState.balance,
+          payments: dashboardState.payments,
+          receiveAddress: newAddress,
         })
       }
     },

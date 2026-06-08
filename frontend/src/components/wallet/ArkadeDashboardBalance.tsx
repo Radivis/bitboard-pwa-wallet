@@ -14,7 +14,7 @@ export function ArkadeDashboardBalance() {
   const balanceQuery = useArkadeBalanceQuery()
   const arkadeSyncQuery = useArkadeSyncMetadataQuery()
 
-  const balance = balanceQuery.data ?? storeBalance
+  const balance = storeBalance ?? balanceQuery.data
   const isLoading = balanceQuery.isLoading && balance == null
   const isStaleArkade = arkadeSyncQuery.data?.isStaleArkade ?? false
   const lastSuccessfulOperatorSyncAt =

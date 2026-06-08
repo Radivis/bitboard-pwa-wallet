@@ -3,6 +3,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use ark_bdk_wallet::Wallet as ArkBdkWallet;
+use ark_client::key_provider::display_receive_derivation_index;
 use ark_client::wallet::Persistence;
 use ark_client::{
     Bip32KeyProvider, Blockchain, Client, DEFAULT_GAP_LIMIT, InMemorySwapStorage, OfflineClient,
@@ -123,7 +124,9 @@ impl ArkSession {
 
         let client = offline.connect().await?;
         if offchain_next_derivation_index > 0 {
-            client.warm_offchain_receive_key_cache(offchain_next_derivation_index)?;
+            let warm_through =
+                display_receive_derivation_index(offchain_next_derivation_index).saturating_add(1);
+            client.warm_offchain_receive_key_cache(warm_through)?;
         }
         let server_signer: XOnlyPublicKey = client.server_info.signer_pk.into();
         validate_operator_identity(parsed.operator_identity.as_ref(), server_signer, network)
@@ -149,9 +152,11 @@ impl ArkSession {
     }
 
     pub fn export_persistence(&self) -> ArkResult<String> {
+        let next_index = self.client.peek_next_offchain_derivation_index();
+        self.wallet_db
+            .set_offchain_next_derivation_index(next_index);
         let mut wallet_db = self.wallet_db.snapshot();
-        wallet_db.offchain_next_derivation_index =
-            self.client.peek_next_offchain_derivation_index();
+        wallet_db.offchain_next_derivation_index = next_index;
         let envelope = BitboardArkPersistenceV3 {
             version: crate::persistence::BITBOARD_ARK_PERSISTENCE_VERSION,
             engine: crate::persistence::ARK_RS_ENGINE.to_string(),

@@ -21,6 +21,7 @@ const workerMocks = vi.hoisted(() => ({
   getTransactionHistory: vi.fn(),
   getAddress: vi.fn(),
   syncWithOperator: vi.fn(),
+  reconcileActiveConnectionId: vi.fn(),
 }))
 
 const awaitInFlightWalletSecretsWritesMock = vi.hoisted(() => vi.fn())
@@ -117,6 +118,7 @@ vi.mock('@/lib/arkade/arkade-persistence-store-sync', () => ({
 }))
 
 vi.mock('@/lib/arkade/arkade-operator-sync', () => ({
+  awaitBackgroundArkadeOperatorSync: vi.fn().mockResolvedValue(undefined),
   runArkadeOperatorSyncAndPersist: (...args: unknown[]) =>
     runArkadeOperatorSyncAndPersistMock(...args),
 }))
@@ -224,12 +226,13 @@ describe('openArkadeSessionForWallet (integration)', () => {
         operatorSignerPkHex: '02deadbeef',
       }),
     )
-    expect(refreshArkadeStoreFromLoadedWasmMock).toHaveBeenCalledTimes(1)
     expect(runArkadeOperatorSyncAndPersistMock).toHaveBeenCalledWith(
       expect.objectContaining({
         connectionId: TEST_CONNECTION_ID,
+        sessionAlreadyOpen: true,
       }),
     )
+    expect(refreshArkadeStoreFromLoadedWasmMock).toHaveBeenCalledTimes(1)
     expect(workerMocks.finalizePendingTransactions).toHaveBeenCalledTimes(1)
     expect(workerMocks.delegateSpendableVtxos).not.toHaveBeenCalled()
   })

@@ -7,7 +7,10 @@ import {
   clearArkadeDashboardStore,
   refreshArkadeStoreFromLoadedWasm,
 } from '@/lib/arkade/arkade-persistence-store-sync'
-import { runArkadeOperatorSyncAndPersist } from '@/lib/arkade/arkade-operator-sync'
+import {
+  awaitBackgroundArkadeOperatorSync,
+  runArkadeOperatorSyncAndPersist,
+} from '@/lib/arkade/arkade-operator-sync'
 import {
   ensureLegacyArkadeWalletMigrated,
   findActiveArkadeOperatorConnection,
@@ -80,6 +83,7 @@ export async function closeArkadeSession(): Promise<void> {
 
   openSessionInFlight = null
   lastOpenedSessionKey = null
+  await awaitBackgroundArkadeOperatorSync()
   const arkadeWorker = getArkadeWorkerIfExists()
   if (arkadeWorker != null) {
     try {
@@ -111,7 +115,7 @@ export async function openArkadeSessionForWallet(params: {
   }
 
   if (openSessionInFlight != null) {
-    await openSessionInFlight.catch(() => undefined)
+    await openSessionInFlight
     return
   }
 
@@ -141,6 +145,7 @@ function runArkadeSessionOpenWork(params: {
   return (async () => {
     const payload = await loadWalletSecretsPayload(getDatabase(), password, walletId)
     let connection = findActiveArkadeOperatorConnection(payload, networkMode)
+    const hadPersistedConnection = connection != null
     const provisionalKey = connection
       ? sessionKey(walletId, networkMode, connection.id)
       : null
@@ -203,21 +208,33 @@ function runArkadeSessionOpenWork(params: {
       operatorSignerPkHex: openResult.operatorSignerPkHex,
       operatorUrl: endpoints.arkServerUrl,
       delegatorUrl: endpoints.delegatorUrl,
-      sdkPersistenceJson: await worker.exportSdkPersistenceJson(),
+      sdkPersistenceJson: hadPersistedConnection
+        ? undefined
+        : await worker.exportSdkPersistenceJson(),
     })
+
+    await worker.reconcileActiveConnectionId(connection.id)
 
     useWalletStore.getState().setActiveArkadeConnectionId(connection.id)
     useWalletStore.getState().setLastOperatorSyncTime(null)
-    lastOpenedSessionKey = sessionKey(walletId, networkMode, connection.id)
 
-    await refreshArkadeStoreFromLoadedWasm()
-
-    void runArkadeOperatorSyncAndPersist({
+    const operatorSyncParams = {
       password,
       walletId,
       networkMode,
       connectionId: connection.id,
-    })
+    }
+    const syncParams = { ...operatorSyncParams, sessionAlreadyOpen: true as const }
+    if (connection.lastSuccessfulOperatorSyncAt == null) {
+      await runArkadeOperatorSyncAndPersist(syncParams)
+      await refreshArkadeStoreFromLoadedWasm()
+    } else {
+      // Hydrate dashboard from local snapshot before background operator sync to avoid
+      // concurrent WASM entry (peek address vs sync_with_operator).
+      await refreshArkadeStoreFromLoadedWasm()
+      void runArkadeOperatorSyncAndPersist(syncParams)
+    }
+    lastOpenedSessionKey = sessionKey(walletId, networkMode, connection.id)
 
     void runPostOpenArkadeMaintenance(worker, networkMode)
   })()

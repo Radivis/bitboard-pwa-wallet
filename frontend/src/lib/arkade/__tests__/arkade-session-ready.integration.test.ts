@@ -13,6 +13,7 @@ const workerMocks = vi.hoisted(() => ({
   getBalance: vi.fn().mockResolvedValue({ confirmedSats: 0, totalSats: 0 }),
   getTransactionHistory: vi.fn().mockResolvedValue([]),
   getAddress: vi.fn().mockResolvedValue('tark1qtest'),
+  reconcileActiveConnectionId: vi.fn().mockResolvedValue(undefined),
 }))
 
 const ensureLegacyArkadeWalletMigratedMock = vi.hoisted(() => vi.fn())
@@ -73,6 +74,7 @@ vi.mock('@/lib/arkade/arkade-persistence-store-sync', () => ({
 }))
 
 vi.mock('@/lib/arkade/arkade-operator-sync', () => ({
+  awaitBackgroundArkadeOperatorSync: vi.fn().mockResolvedValue(undefined),
   runArkadeOperatorSyncAndPersist: (...args: unknown[]) =>
     runArkadeOperatorSyncAndPersistMock(...args),
 }))

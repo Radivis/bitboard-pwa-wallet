@@ -78,7 +78,8 @@ export async function flushSdkPersistenceNow(): Promise<void> {
   clearDebouncedSdkPersistenceFlush()
   if (inFlightFlush != null) {
     await inFlightFlush
-    return
+    // A concurrent flush may have exported stale state; export again with latest WASM.
+    return flushSdkPersistenceNow()
   }
 
   const { walletId, networkMode, connectionId, password } = flushContext

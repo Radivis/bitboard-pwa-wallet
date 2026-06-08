@@ -7,11 +7,30 @@ import {
   type E2eArkadeMockIncomingPayment,
 } from '@/lib/arkade/e2e/arkade-operator-mock-state'
 
+/**
+ * Manual DevTools introspection only — not used by Playwright specs.
+ *
+ * When receive-address bugs look like "UI shows the wrong address", run in the
+ * browser console (E2E mock dev build):
+ *
+ *   await window.__E2E_ARKADE__.readReceiveDebugSnapshot()
+ *
+ * Compare `offchainNextDerivationIndex` + `peekAddress` (live WASM) against the
+ * address on screen and against the connection row in wallet secrets. That
+ * separates WASM/persistence problems from React store / query hydration races.
+ */
+export type E2eArkadeReceiveDebugSnapshot = {
+  offchainNextDerivationIndex: number
+  peekAddress: string
+}
+
 export type E2eArkadeMockControl = {
   setFailing: (value: boolean) => Promise<void>
   setBalanceSats: (value: number) => Promise<void>
   addIncomingPayment: (payment: E2eArkadeMockIncomingPayment) => Promise<void>
   reset: () => Promise<void>
+  /** @see E2eArkadeReceiveDebugSnapshot — manual DevTools only, not Playwright. */
+  readReceiveDebugSnapshot: () => Promise<E2eArkadeReceiveDebugSnapshot>
 }
 
 export function isE2eArkadeMockEnabled(): boolean {
@@ -53,6 +72,19 @@ export function ensureE2eArkadeMockControl(): void {
     addIncomingPayment: (payment) =>
       postE2eArkadeMockControl({ action: 'addIncomingPayment', payment }),
     reset: () => postE2eArkadeMockControl({ action: 'reset' }),
+    // Manual DevTools aid only — see E2eArkadeReceiveDebugSnapshot.
+    readReceiveDebugSnapshot: async () => {
+      const { getArkadeWorker } = await import('@/workers/arkade-factory')
+      const { readOffchainNextDerivationIndex } = await import(
+        '@/lib/arkade/arkade-sdk-persistence'
+      )
+      const worker = getArkadeWorker()
+      const sdkPersistenceJson = await worker.exportSdkPersistenceJson()
+      return {
+        offchainNextDerivationIndex: readOffchainNextDerivationIndex(sdkPersistenceJson),
+        peekAddress: await worker.getAddress(),
+      }
+    },
   }
 }
 

@@ -12,6 +12,7 @@ import {
   closeArkadeSession,
   refreshArkadeSessionAfterNetworkSwitch,
 } from '@/lib/arkade/arkade-session-service'
+import { reportArkadeSessionOpenError } from '@/lib/arkade/arkade-session-open-error-toast'
 import { switchToLabNetwork } from '@/lib/lab/switch-to-lab-network'
 import type { NetworkSwitchPhaseReporter } from '@/lib/settings/network-switch-status-messages'
 import { useSessionStore } from '@/stores/sessionStore'
@@ -169,9 +170,9 @@ export async function executeSettingsNetworkSwitch(
 
   const sessionPassword = useSessionStore.getState().password
   const activeWalletId = useWalletStore.getState().activeWalletId
-  await refreshArkadeSessionAfterNetworkSwitch({
+  void refreshArkadeSessionAfterNetworkSwitch({
     password: sessionPassword,
     walletId: activeWalletId,
     networkMode: targetNetwork,
-  })
+  }).catch(reportArkadeSessionOpenError)
 }

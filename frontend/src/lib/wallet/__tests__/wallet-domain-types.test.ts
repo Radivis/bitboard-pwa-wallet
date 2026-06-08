@@ -95,6 +95,45 @@ describe('parseWalletPayloadJson', () => {
     expect(parsed.activeArkadeConnectionIdByNetwork).toEqual({})
   })
 
+  it('drops invalid arkadeOperatorConnections instead of rejecting the wallet', () => {
+    const json = JSON.stringify({
+      descriptorWallets: [],
+      lightningNwcConnections: [],
+      arkadeOperatorConnections: [
+        {
+          id: 'conn-bad',
+          networkMode: 'signet',
+        },
+        {
+          id: 'conn-good',
+          label: 'Mutinynet',
+          networkMode: 'signet',
+          operatorUrl: 'https://signet.arkade.example/v1',
+          operatorSignerPkHex: '02abc',
+          createdAt: '2020-01-01T00:00:00.000Z',
+        },
+      ],
+      activeArkadeConnectionIdByNetwork: {
+        signet: 'conn-good',
+        testnet: 'conn-bad',
+      },
+    })
+    const parsed = parseWalletPayloadJson(json)
+    expect(parsed.arkadeOperatorConnections).toHaveLength(1)
+    expect(parsed.arkadeOperatorConnections[0].id).toBe('conn-good')
+    expect(parsed.activeArkadeConnectionIdByNetwork).toEqual({ signet: 'conn-good' })
+  })
+
+  it('normalizes null arkadeOperatorConnections to empty array', () => {
+    const json = JSON.stringify({
+      descriptorWallets: [],
+      lightningNwcConnections: [],
+      arkadeOperatorConnections: null,
+    })
+    const parsed = parseWalletPayloadJson(json)
+    expect(parsed.arkadeOperatorConnections).toEqual([])
+  })
+
   it('accepts arkadeOperatorConnections and activeArkadeConnectionIdByNetwork', () => {
     const json = JSON.stringify({
       descriptorWallets: [],
@@ -293,7 +332,7 @@ describe('parseWalletSecretsJson', () => {
     expect(parsed.lightningNwcConnections[0].label).toBe('Test')
   })
 
-  it('rejects lightningNwcConnections when not an array', () => {
+  it('normalizes null lightningNwcConnections to empty array', () => {
     const secretsJson = JSON.stringify({
       mnemonic: 'abandon ability able about above absent absorb abstract absurd abuse access accident',
       descriptorWallets: [
@@ -308,6 +347,27 @@ describe('parseWalletSecretsJson', () => {
         },
       ],
       lightningNwcConnections: null,
+    })
+
+    const parsed = parseWalletSecretsJson(secretsJson)
+    expect(parsed.lightningNwcConnections).toEqual([])
+  })
+
+  it('rejects lightningNwcConnections when not an array', () => {
+    const secretsJson = JSON.stringify({
+      mnemonic: 'abandon ability able about above absent absorb abstract absurd abuse access accident',
+      descriptorWallets: [
+        {
+          network: 'testnet',
+          addressType: 'taproot',
+          accountId: 0,
+          externalDescriptor: 'tr(xpub.../0/*)',
+          internalDescriptor: 'tr(xpub.../1/*)',
+          changeSet: '{}',
+          fullScanDone: false,
+        },
+      ],
+      lightningNwcConnections: 'not-an-array',
     })
 
     expect(() => parseWalletSecretsJson(secretsJson)).toThrow(

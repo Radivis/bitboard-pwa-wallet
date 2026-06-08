@@ -1,10 +1,9 @@
 import { getArkadeWorker } from '@/workers/arkade-factory'
 import type { ArkadeBalanceInfo, ArkadePaymentRow } from '@/workers/arkade-api'
-import { awaitArkadeSessionReady } from '@/lib/arkade/arkade-session-service'
 import { useWalletStore } from '@/stores/walletStore'
 
+/** Caller must ensure the Arkade WASM session is already open. */
 export async function refreshArkadeStoreFromLoadedWasm(): Promise<void> {
-  await awaitArkadeSessionReady()
   const worker = getArkadeWorker()
   const [balance, payments, receiveAddress] = await Promise.all([
     worker.getBalance(),

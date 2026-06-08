@@ -12,6 +12,33 @@ import { findStoredArkadeWallet } from '@/lib/arkade/arkade-wallet-secrets'
 import { ARKADE_SDK_PERSISTENCE_JSON_MAX_BYTES } from '@/lib/arkade/arkade-sdk-persistence-types'
 import type { WalletSecretsPayload } from '@/lib/wallet/wallet-domain-types'
 
+export function readOffchainNextDerivationIndex(sdkPersistenceJson: string | undefined): number {
+  if (sdkPersistenceJson == null) {
+    return 0
+  }
+  try {
+    const parsed = JSON.parse(sdkPersistenceJson) as {
+      wallet_db?: { offchain_next_derivation_index?: number }
+    }
+    return parsed.wallet_db?.offchain_next_derivation_index ?? 0
+  } catch {
+    return 0
+  }
+}
+
+/** Keep the blob with the higher receive cursor when concurrent writes race. */
+export function mergeSdkPersistenceJsonMonotonic(
+  existingJson: string | undefined,
+  incomingJson: string,
+): string {
+  if (existingJson == null) {
+    return incomingJson
+  }
+  const existingIndex = readOffchainNextDerivationIndex(existingJson)
+  const incomingIndex = readOffchainNextDerivationIndex(incomingJson)
+  return incomingIndex >= existingIndex ? incomingJson : existingJson
+}
+
 export function assertSdkPersistenceJsonWithinSizeLimit(sdkPersistenceJson: string): void {
   const byteLength = new TextEncoder().encode(sdkPersistenceJson).byteLength
   if (byteLength > ARKADE_SDK_PERSISTENCE_JSON_MAX_BYTES) {
@@ -73,7 +100,10 @@ export async function saveSdkPersistenceJsonForConnection(params: {
       }
       const merged = {
         ...existing,
-        sdkPersistenceJson,
+        sdkPersistenceJson: mergeSdkPersistenceJsonMonotonic(
+          existing.sdkPersistenceJson,
+          sdkPersistenceJson,
+        ),
         lastSuccessfulOperatorSyncAt:
           params.lastSuccessfulOperatorSyncAt ?? existing.lastSuccessfulOperatorSyncAt,
       }

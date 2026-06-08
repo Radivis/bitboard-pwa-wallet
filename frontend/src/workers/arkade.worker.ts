@@ -135,6 +135,10 @@ function deleteLegacyArkadeIndexedDb(
 }
 
 async function persistAfterCriticalOperation(): Promise<void> {
+  const { awaitBackgroundArkadeOperatorSync } = await import(
+    '@/lib/arkade/arkade-operator-sync'
+  )
+  await awaitBackgroundArkadeOperatorSync()
   await flushSdkPersistenceNow()
 }
 
@@ -234,6 +238,27 @@ const arkadeService: ArkadeService = {
       params.networkMode,
       params.connectionId,
     )
+  },
+
+  async reconcileActiveConnectionId(connectionId: string): Promise<void> {
+    if (activeSessionParams == null) {
+      return
+    }
+    activeSessionParams = {
+      ...activeSessionParams,
+      connectionId,
+    }
+    activeSessionKey = sessionKey(
+      activeSessionParams.walletId,
+      activeSessionParams.networkMode,
+      connectionId,
+    )
+    setArkadeSdkPersistenceFlushContext({
+      password: activeSessionParams.password,
+      walletId: activeSessionParams.walletId,
+      networkMode: activeSessionParams.networkMode,
+      connectionId,
+    })
   },
 
   async syncWithOperator(): Promise<void> {

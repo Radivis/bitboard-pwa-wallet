@@ -131,7 +131,9 @@ export interface ArkadeService {
   hasOpenSession(params: {
     walletId: number
     networkMode: ArkadeSupportedNetworkMode
+    connectionId: string
   }): Promise<boolean>
+  reconcileActiveConnectionId(connectionId: string): Promise<void>
   flushSdkPersistence(): Promise<void>
   exportSdkPersistenceJson(): Promise<string>
   closeSession(): Promise<void>
