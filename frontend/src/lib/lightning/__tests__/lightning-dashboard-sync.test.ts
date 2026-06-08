@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   ARKADE_BOARDING_ACTIVITY_LABEL,
+  ONCHAIN_ARKADE_BOARDING_ACTIVITY_LABEL,
   isBoardingFundToVtxoPair,
   mergeAndSortDashboardActivity,
   type LightningPaymentWithWallet,
@@ -113,7 +114,7 @@ describe('mergeAndSortDashboardActivity', () => {
       expect(merged[0].activityLabel).toBe(ARKADE_BOARDING_ACTIVITY_LABEL)
     }
     if (merged[1].kind === 'chain') {
-      expect(merged[1].activityLabel).toBe(ARKADE_BOARDING_ACTIVITY_LABEL)
+      expect(merged[1].activityLabel).toBe(ONCHAIN_ARKADE_BOARDING_ACTIVITY_LABEL)
     }
   })
 

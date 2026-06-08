@@ -2,7 +2,7 @@ import { Link } from '@tanstack/react-router'
 import { Layers, Loader2 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
+import { ArkadeBalanceBreakdown } from '@/components/wallet/ArkadeBalanceBreakdown'
 import {
   useArkadeAddressQuery,
   useArkadeBalanceQuery,
@@ -60,13 +60,7 @@ export function ArkadePanel() {
         ) : balance ? (
           <div>
             <p className="text-xs text-muted-foreground">Balance</p>
-            <BitcoinAmountDisplay amountSats={balance.confirmedSats} />
-            {balance.totalSats !== balance.confirmedSats && (
-              <p className="text-xs text-muted-foreground">
-                Total (incl. recoverable):{' '}
-                <BitcoinAmountDisplay amountSats={balance.totalSats} size="sm" />
-              </p>
-            )}
+            <ArkadeBalanceBreakdown balance={balance} />
           </div>
         ) : null}
 

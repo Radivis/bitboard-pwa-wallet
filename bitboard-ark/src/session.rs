@@ -163,11 +163,14 @@ impl ArkSession {
         self.sync_offchain_keys().await;
         let offchain = self.client.offchain_balance().await?;
         let onchain = self.client.onchain_wallet_balance()?;
+        let boarding = self.boarding_status().await?;
         Ok(build_arkade_balance_dto(
             offchain.pre_confirmed().to_sat(),
             offchain.confirmed().to_sat(),
             offchain.recoverable().to_sat(),
             onchain.confirmed.to_sat(),
+            boarding.spendable_sats,
+            boarding.pending_sats,
         ))
     }
 

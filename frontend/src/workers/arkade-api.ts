@@ -4,6 +4,8 @@ import type { ArkadeSdkPersistenceBridge } from '@/lib/arkade/storage/arkade-sdk
 export interface ArkadeBalanceInfo {
   confirmedSats: number
   totalSats: number
+  boardingSpendableSats?: number
+  boardingPendingSats?: number
 }
 
 export interface ArkadeDelegateInfo {

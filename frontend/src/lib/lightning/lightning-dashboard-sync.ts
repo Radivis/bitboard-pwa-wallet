@@ -319,6 +319,8 @@ export async function fetchLightningBalancesForDashboard(): Promise<LightningBal
 }
 
 export const ARKADE_BOARDING_ACTIVITY_LABEL = 'Arkade boarding' as const
+export const ONCHAIN_ARKADE_BOARDING_ACTIVITY_LABEL =
+  'Onchain Arkade boarding' as const
 
 export type DashboardActivityItem =
   | { kind: 'chain'; tx: TransactionDetails; activityLabel?: string }
@@ -454,7 +456,7 @@ function applyBoardingActivityLabels(
       }
       labeled[chainIndex] = {
         ...chainItem,
-        activityLabel: ARKADE_BOARDING_ACTIVITY_LABEL,
+        activityLabel: ONCHAIN_ARKADE_BOARDING_ACTIVITY_LABEL,
       }
       labeled[arkIndex] = {
         ...arkItem,

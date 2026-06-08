@@ -131,8 +131,10 @@ function applyOptimisticBoardingSettle(
     const previousBalance = queryClient.getQueryData<ArkadeBalanceInfo>(balanceKey)
     if (previousBalance != null) {
       queryClient.setQueryData<ArkadeBalanceInfo>(balanceKey, {
+        ...previousBalance,
         confirmedSats: previousBalance.confirmedSats + settledSats,
         totalSats: previousBalance.totalSats + settledSats,
+        boardingSpendableSats: 0,
       })
     }
   }

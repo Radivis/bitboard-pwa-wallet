@@ -9,8 +9,13 @@ pub struct OpenSessionResult {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BalanceDto {
+    /// Spendable offchain VTXOs (plus Ark on-chain bumper wallet when present).
     pub confirmed_sats: u64,
     pub total_sats: u64,
+    /// On-chain boarding UTXOs confirmed and ready to settle into VTXOs.
+    pub boarding_spendable_sats: u64,
+    /// On-chain boarding UTXOs awaiting confirmation.
+    pub boarding_pending_sats: u64,
 }
 
 #[derive(Debug, Serialize)]
