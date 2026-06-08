@@ -440,7 +440,7 @@ export function useArkadeOnboardMutation() {
     },
     onSuccess: async (txid, _variables, context) => {
       if (txid) {
-        toast.success('Boarding completed')
+        toast.success('Boarding settlement submitted to operator')
       }
       if (
         activeWalletId == null ||

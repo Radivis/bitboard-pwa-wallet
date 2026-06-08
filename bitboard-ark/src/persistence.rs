@@ -140,24 +140,24 @@ impl BitboardArkPersistenceV3 {
             };
         }
 
-        if let Ok(envelope) = serde_json::from_value::<BitboardArkPersistenceV3>(value.clone()) {
-            if envelope.version == BITBOARD_ARK_PERSISTENCE_VERSION {
-                return ParsedArkPersistence {
-                    wallet_db: envelope.wallet_db,
-                    operator_identity: Some(envelope.operator_identity),
-                    reset_v1: false,
-                };
-            }
+        if let Ok(envelope) = serde_json::from_value::<BitboardArkPersistenceV3>(value.clone())
+            && envelope.version == BITBOARD_ARK_PERSISTENCE_VERSION
+        {
+            return ParsedArkPersistence {
+                wallet_db: envelope.wallet_db,
+                operator_identity: Some(envelope.operator_identity),
+                reset_v1: false,
+            };
         }
 
-        if let Ok(envelope) = serde_json::from_value::<BitboardArkPersistenceV2>(value) {
-            if envelope.version == 2 {
-                return ParsedArkPersistence {
-                    wallet_db: envelope.wallet_db,
-                    operator_identity: None,
-                    reset_v1: false,
-                };
-            }
+        if let Ok(envelope) = serde_json::from_value::<BitboardArkPersistenceV2>(value)
+            && envelope.version == 2
+        {
+            return ParsedArkPersistence {
+                wallet_db: envelope.wallet_db,
+                operator_identity: None,
+                reset_v1: false,
+            };
         }
 
         ParsedArkPersistence {
@@ -169,6 +169,7 @@ impl BitboardArkPersistenceV3 {
 }
 
 impl BitboardArkPersistenceV2 {
+    #[cfg(test)]
     pub fn empty() -> Self {
         Self {
             version: 2,

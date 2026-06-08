@@ -384,6 +384,9 @@ export function isBoardingFundToVtxoPair(
   chainTx: TransactionDetails,
   arkPayment: ArkadePaymentRow,
 ): boolean {
+  if (!chainTx.isConfirmed) {
+    return false
+  }
   if (formatTxDirection(chainTx) !== 'sent' || arkPayment.direction !== 'incoming') {
     return false
   }
