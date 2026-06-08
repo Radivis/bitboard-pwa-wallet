@@ -2,6 +2,10 @@
 export const E2E_ARKADE_MOCK_INCOMING_TXID =
   'cafebabecafebabecafebabecafebabecafebabecafebabecafebabecafebabe'
 
+/** Batch commitment txid paired with the fixture VTXO (ark-core history requires commitment_txids[0]). */
+export const E2E_ARKADE_MOCK_COMMITMENT_TXID =
+  'deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef'
+
 export const E2E_ARKADE_MOCK_DEFAULT_BALANCE_SATS = 42_000
 
 /**

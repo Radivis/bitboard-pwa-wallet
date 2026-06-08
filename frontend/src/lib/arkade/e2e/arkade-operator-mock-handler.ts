@@ -3,6 +3,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import {
+  E2E_ARKADE_MOCK_COMMITMENT_TXID,
   E2E_ARKADE_MOCK_DEFAULT_BALANCE_SATS,
   E2E_ARKADE_MOCK_INCOMING_TXID,
   E2E_ARKADE_MOCK_PARTITION_COOKIE,
@@ -107,7 +108,7 @@ function buildIndexerVtxo(
     amount: String(Math.max(mockState.balanceSats, payment.amountSats)),
     arkTxid: payment.txid,
     assets: [],
-    commitmentTxids: [],
+    commitmentTxids: [E2E_ARKADE_MOCK_COMMITMENT_TXID],
     createdAt: String(createdAtMs),
     expiresAt: String(expiresAtMs),
     isPreconfirmed: false,
