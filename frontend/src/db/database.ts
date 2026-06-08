@@ -8,8 +8,23 @@ import { isBenignSqliteWorkerCloseFailure } from './sqlite-worker-close-error'
 let instance: Kysely<Database> | null = null
 let migrated = false
 let migrationPromise: Promise<void> | null = null
+let walletDatabaseAccessBlockedForTeardown = false
+
+const WALLET_DATABASE_TEARDOWN_BLOCKED_MESSAGE =
+  'Wallet database access blocked during teardown'
+
+export function blockWalletDatabaseAccessForTeardown(): void {
+  walletDatabaseAccessBlockedForTeardown = true
+}
+
+function assertWalletDatabaseAccessAllowed(): void {
+  if (walletDatabaseAccessBlockedForTeardown) {
+    throw new Error(WALLET_DATABASE_TEARDOWN_BLOCKED_MESSAGE)
+  }
+}
 
 export function getDatabase(): Kysely<Database> {
+  assertWalletDatabaseAccessAllowed()
   if (!instance) {
     instance = new Kysely<Database>({
       dialect: new WaSqliteWorkerDialect({
@@ -22,6 +37,7 @@ export function getDatabase(): Kysely<Database> {
 }
 
 export async function ensureMigrated(): Promise<void> {
+  assertWalletDatabaseAccessAllowed()
   if (migrated) return
   if (migrationPromise) {
     await migrationPromise

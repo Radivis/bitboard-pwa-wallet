@@ -63,6 +63,30 @@ describe('crypto worker WASM structured errors (integration)', () => {
     expect(wasmCryptoErrorCode(caught)).toBe('no_active_wallet')
   })
 
+  it('openWalletSession returns a Comlink-serializable ephemeral session handle', async () => {
+    const testMnemonic =
+      'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about'
+
+    const createdWallet = await cryptoWorkerProxy.createWallet({
+      mnemonic: testMnemonic,
+      network: 'testnet',
+      addressType: 'taproot',
+      accountId: 0,
+    })
+
+    const session = await cryptoWorkerProxy.openWalletSession({
+      externalDescriptor: createdWallet.externalDescriptor,
+      internalDescriptor: createdWallet.internalDescriptor,
+      network: 'testnet',
+      changesetJson: createdWallet.changesetJson,
+      useEmptyChain: false,
+    })
+
+    const balance = await session.getBalance()
+    expect(balance.totalSats).toBe(0)
+    session.free()
+  })
+
   it('getBalance without loaded wallet returns no_active_wallet code via Comlink', async () => {
     let caught: unknown
     try {

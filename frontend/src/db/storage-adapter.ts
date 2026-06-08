@@ -1,5 +1,6 @@
 import type { StateStorage } from 'zustand/middleware'
-import { getDatabase, ensureMigrated } from './database'
+import { blockWalletDatabaseAccessForTeardown, getDatabase, ensureMigrated } from './database'
+import { blockLabDatabaseAccessForTeardown } from './lab-database'
 
 /** When true, {@link sqliteStorage} must not touch SQLite (factory reset is closing the DB). */
 let sqliteStorageTeardownBlocked = false
@@ -10,6 +11,8 @@ let sqliteStorageTeardownBlocked = false
  */
 export function blockSqliteStorageForTeardown(): void {
   sqliteStorageTeardownBlocked = true
+  blockWalletDatabaseAccessForTeardown()
+  blockLabDatabaseAccessForTeardown()
 }
 
 export const sqliteStorage: StateStorage = {

@@ -1,12 +1,9 @@
 import { getDatabase } from '@/db/database'
 import { loadWalletSecretsPayload } from '@/db/wallet-persistence'
-import { updateDescriptorWalletChangeset } from '@/lib/wallet/descriptor-wallet-manager'
-import { toBitcoinNetwork } from '@/lib/wallet/bitcoin-utils'
-import { isBenignNoActiveWalletError } from '@/lib/shared/wasm-crypto-error'
+import type { DescriptorWalletData } from '@/db/wallet-persistence'
+import { awaitInFlightWalletSecretsWrites } from '@/db/wallet-secrets-write-tracker'
 import { withPersistedChainMismatchRetry } from '@/lib/wallet/persisted-chain-mismatch'
-import {
-  loadDescriptorWalletWithoutSync,
-} from '@/lib/wallet/wallet-utils'
+import { appQueryClient } from '@/lib/shared/app-query-client'
 import { useCryptoStore } from '@/stores/cryptoStore'
 import { useWalletStore } from '@/stores/walletStore'
 
@@ -23,109 +20,81 @@ export class MainnetBalanceProbeUnverifiableError extends Error {
   }
 }
 
+function walletDisplayName(walletRow: { walletId: number; name: string }): string {
+  const trimmed = walletRow.name.trim()
+  return trimmed.length > 0 ? trimmed : `Wallet ${walletRow.walletId}`
+}
+
+/**
+ * Avoid CAS races with background Esplora sync / bootstrap before a read-only probe.
+ * Ephemeral wallet sessions do not mutate the global WASM slot, so we must not persist
+ * changesets here (that collides with `persistPostEsploraSyncDescriptorWalletState`).
+ */
+export async function prepareMainnetBalanceProbePreflight(): Promise<void> {
+  await appQueryClient.cancelQueries()
+  await awaitInFlightWalletSecretsWrites()
+}
+
+async function sumMainnetOnChainSatsFromDescriptorWallets(
+  mainnetDescriptors: DescriptorWalletData[],
+): Promise<number> {
+  if (mainnetDescriptors.length === 0) {
+    return 0
+  }
+
+  const { openWalletSession } = useCryptoStore.getState()
+  let balanceSum = 0
+
+  for (const descriptorWalletData of mainnetDescriptors) {
+    const { result: session, usedEmptyChainFallback } =
+      await withPersistedChainMismatchRetry(openWalletSession, {
+        externalDescriptor: descriptorWalletData.externalDescriptor,
+        internalDescriptor: descriptorWalletData.internalDescriptor,
+        network: 'bitcoin',
+        changesetJson: descriptorWalletData.changeSet,
+        useEmptyChain: false,
+      })
+    try {
+      if (usedEmptyChainFallback) {
+        throw new MainnetBalanceProbeUnverifiableError()
+      }
+      const balance = await session.getBalance()
+      balanceSum += balance.totalSats
+    } finally {
+      session.free()
+    }
+  }
+
+  return balanceSum
+}
+
+function assertActiveWalletLoadedForProbe(): void {
+  const { activeWalletId } = useWalletStore.getState()
+  if (activeWalletId == null) {
+    throw new Error('No active wallet loaded for mainnet balance probe')
+  }
+}
+
 /**
  * Sums BDK-reported on-chain balance for every mainnet (`bitcoin`) descriptor wallet.
- * Uses ephemeral WASM wallet sessions in the probe loop so the global active wallet slot
- * is not overwritten per descriptor. Restores the committed descriptor wallet view afterward.
+ * Uses ephemeral WASM wallet sessions so the global active wallet slot is not overwritten.
  * Ignores Lightning / NWC entirely.
- *
- * **Side effect:** After restoring the active descriptor wallet, updates `useWalletStore` with the
- * current balance and transaction list from WASM so the UI does not show stale data from the
- * probe loop. Treat this as “probe + refresh active wallet view,” not a pure read.
- *
- * If loading mainnet wallets throws, still attempts to reload the committed descriptor wallet and
- * refresh store balance/transactions so the WASM slot is not left on an arbitrary network.
  */
 export async function sumMainnetOnChainSatsForWallet(params: {
   password: string
   walletId: number
 }): Promise<number> {
   const { password, walletId } = params
+  assertActiveWalletLoadedForProbe()
+  await prepareMainnetBalanceProbePreflight()
+
   const walletDb = getDatabase()
   const payload = await loadWalletSecretsPayload(walletDb, password, walletId)
-  const mainnetDescriptors = payload.descriptorWallets
-    .filter((descriptorWallet) => descriptorWallet.network === 'bitcoin')
-  if (mainnetDescriptors.length === 0) {
-    return 0
-  }
+  const mainnetDescriptors = payload.descriptorWallets.filter(
+    (descriptorWallet) => descriptorWallet.network === 'bitcoin',
+  )
 
-  const { loadedDescriptorWallet, networkMode, addressType, accountId } = useWalletStore.getState()
-  const committedDescriptorWallet = loadedDescriptorWallet ?? { networkMode, addressType, accountId }
-
-  const {
-    openWalletSession,
-    exportChangeset,
-    getBalance,
-    getTransactionList,
-  } = useCryptoStore.getState()
-
-  const restoreActiveDescriptorWalletView = async (): Promise<void> => {
-    await loadDescriptorWalletWithoutSync({
-      password,
-      walletId,
-      networkMode: committedDescriptorWallet.networkMode,
-      addressType: committedDescriptorWallet.addressType,
-      accountId: committedDescriptorWallet.accountId,
-    })
-    const restoredBalance = await getBalance()
-    const restoredTxs = await getTransactionList()
-    useWalletStore.getState().setBalance(restoredBalance)
-    useWalletStore.getState().setTransactions(restoredTxs)
-  }
-
-  let balanceSum = 0
-  try {
-    try {
-      const currentChangeset = await exportChangeset()
-      await updateDescriptorWalletChangeset({
-        password,
-        walletId,
-        network: toBitcoinNetwork(committedDescriptorWallet.networkMode),
-        addressType: committedDescriptorWallet.addressType,
-        accountId: committedDescriptorWallet.accountId,
-        changesetJson: currentChangeset,
-      })
-    } catch (err) {
-      if (!isBenignNoActiveWalletError(err)) {
-        throw err
-      }
-    }
-
-    for (const descriptorWalletData of mainnetDescriptors) {
-      const { result: session, usedEmptyChainFallback } =
-        await withPersistedChainMismatchRetry(openWalletSession, {
-          externalDescriptor: descriptorWalletData.externalDescriptor,
-          internalDescriptor: descriptorWalletData.internalDescriptor,
-          network: 'bitcoin',
-          changesetJson: descriptorWalletData.changeSet,
-          useEmptyChain: false,
-        })
-      try {
-        if (usedEmptyChainFallback) {
-          throw new MainnetBalanceProbeUnverifiableError()
-        }
-        const balance = await session.getBalance()
-        balanceSum += balance.totalSats
-      } finally {
-        session.free()
-      }
-    }
-  } catch (probeErr) {
-    try {
-      await restoreActiveDescriptorWalletView()
-    } catch (restoreErr) {
-      if (import.meta.env.DEV) {
-        console.error(
-          '[mainnet-onchain-balance-probe] Failed to restore wallet view after probe error',
-          restoreErr,
-        )
-      }
-    }
-    throw probeErr
-  }
-
-  await restoreActiveDescriptorWalletView()
-  return balanceSum
+  return sumMainnetOnChainSatsFromDescriptorWallets(mainnetDescriptors)
 }
 
 export type MainnetPositiveWalletRow = {
@@ -136,29 +105,55 @@ export type MainnetPositiveWalletRow = {
   totalSats: number
 }
 
+export type MainnetBalanceProbeSummary = {
+  positiveBalanceRows: MainnetPositiveWalletRow[]
+  /** Wallets whose mainnet balance could not be verified (e.g. corrupted persisted changeset). */
+  unverifiableWalletNames: string[]
+}
+
 /**
- * Probes each wallet in order; same side effects per call as {@link sumMainnetOnChainSatsForWallet}.
- * Returns only wallets with a positive mainnet on-chain total.
+ * Probes each wallet in order using ephemeral sessions only (read-only; no secrets CAS writes).
  */
 export async function listWalletsWithPositiveMainnetOnChainBalance(params: {
   password: string
   wallets: { walletId: number; name: string }[]
-}): Promise<MainnetPositiveWalletRow[]> {
+}): Promise<MainnetBalanceProbeSummary> {
   const { password, wallets } = params
-  const rows: MainnetPositiveWalletRow[] = []
+  assertActiveWalletLoadedForProbe()
+  await prepareMainnetBalanceProbePreflight()
+
+  const walletDb = getDatabase()
+  const positiveBalanceRows: MainnetPositiveWalletRow[] = []
+  const unverifiableWalletNames: string[] = []
+
   for (const walletRow of wallets) {
-    const totalSats = await sumMainnetOnChainSatsForWallet({
-      password,
-      walletId: walletRow.walletId,
-    })
-    if (totalSats > 0) {
-      const trimmed = walletRow.name.trim()
-      rows.push({
-        walletId: walletRow.walletId,
-        name: trimmed.length > 0 ? trimmed : `Wallet ${walletRow.walletId}`,
-        totalSats,
-      })
+    try {
+      const payload = await loadWalletSecretsPayload(
+        walletDb,
+        password,
+        walletRow.walletId,
+      )
+      const mainnetDescriptors = payload.descriptorWallets.filter(
+        (descriptorWallet) => descriptorWallet.network === 'bitcoin',
+      )
+      const totalSats = await sumMainnetOnChainSatsFromDescriptorWallets(
+        mainnetDescriptors,
+      )
+      if (totalSats > 0) {
+        positiveBalanceRows.push({
+          walletId: walletRow.walletId,
+          name: walletDisplayName(walletRow),
+          totalSats,
+        })
+      }
+    } catch (err) {
+      if (err instanceof MainnetBalanceProbeUnverifiableError) {
+        unverifiableWalletNames.push(walletDisplayName(walletRow))
+        continue
+      }
+      throw err
     }
   }
-  return rows
+
+  return { positiveBalanceRows, unverifiableWalletNames }
 }

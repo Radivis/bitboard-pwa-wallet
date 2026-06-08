@@ -28,6 +28,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Arkade collaborative and unilateral exit from Management (per-VTXO unilateral flow with unroll progress)
 - Arkade exit fee estimates: operator policy and satoshi preview for collaborative exit; unroll step count and bumper fee lower bound for unilateral exit
 
+### Fixed
+- Fixed certain edge cases that blocked a full data wipe.
+
 ## [0.2.0] - 2026-05-31
 ### Added
 - Feature "UTXO selection" that allows to manually select the UTXOs to be used in a transaction
