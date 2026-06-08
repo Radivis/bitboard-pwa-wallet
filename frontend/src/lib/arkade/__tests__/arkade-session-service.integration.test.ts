@@ -9,6 +9,7 @@ const featureState = vi.hoisted(() => ({
 const workerMocks = vi.hoisted(() => ({
   ping: vi.fn(),
   openSession: vi.fn(),
+  flushSdkPersistence: vi.fn(),
   closeSession: vi.fn(),
   finalizePendingTransactions: vi.fn(),
   delegateSpendableVtxos: vi.fn(),
@@ -16,8 +17,11 @@ const workerMocks = vi.hoisted(() => ({
   getTransactionHistory: vi.fn(),
 }))
 
+const awaitInFlightWalletSecretsWritesMock = vi.hoisted(() => vi.fn())
+
 const upsertArkadeWalletStateMock = vi.hoisted(() => vi.fn())
 const ensureSecretsChannelMock = vi.hoisted(() => vi.fn())
+const ensureArkadeWorkerSecretsChannelMock = vi.hoisted(() => vi.fn())
 const terminateArkadeWorkerMock = vi.hoisted(() => vi.fn())
 const removeArkadeDashboardQueriesMock = vi.hoisted(() => vi.fn())
 const ensureArkadePersistenceChannelMock = vi.hoisted(() => vi.fn())
@@ -38,6 +42,8 @@ vi.mock('@/stores/featureStore', () => ({
 
 vi.mock('@/workers/secrets-channel', () => ({
   ensureSecretsChannel: (...args: unknown[]) => ensureSecretsChannelMock(...args),
+  ensureArkadeWorkerSecretsChannel: (...args: unknown[]) =>
+    ensureArkadeWorkerSecretsChannelMock(...args),
 }))
 
 vi.mock('@/db', () => ({
@@ -46,10 +52,15 @@ vi.mock('@/db', () => ({
     mnemonic: encryptedMnemonic,
     payload: {},
   })),
+  awaitInFlightWalletSecretsWrites: (...args: unknown[]) =>
+    awaitInFlightWalletSecretsWritesMock(...args),
 }))
+
+const getArkadeWorkerIfExistsMock = vi.hoisted(() => vi.fn())
 
 vi.mock('@/workers/arkade-factory', () => ({
   getArkadeWorker: () => workerMocks,
+  getArkadeWorkerIfExists: (...args: unknown[]) => getArkadeWorkerIfExistsMock(...args),
   terminateArkadeWorker: (...args: unknown[]) => terminateArkadeWorkerMock(...args),
 }))
 
@@ -86,6 +97,9 @@ describe('openArkadeSessionForWallet (integration)', () => {
 
     workerMocks.ping.mockResolvedValue(true)
     workerMocks.openSession.mockResolvedValue({ arkadeAddress: 'tark1qtest' })
+    workerMocks.flushSdkPersistence.mockResolvedValue(undefined)
+    getArkadeWorkerIfExistsMock.mockReturnValue(workerMocks)
+    awaitInFlightWalletSecretsWritesMock.mockResolvedValue(undefined)
     workerMocks.finalizePendingTransactions.mockResolvedValue({
       finalized: 0,
       pending: 0,
@@ -100,6 +114,7 @@ describe('openArkadeSessionForWallet (integration)', () => {
     })
     workerMocks.getTransactionHistory.mockResolvedValue([])
     ensureSecretsChannelMock.mockResolvedValue(undefined)
+    ensureArkadeWorkerSecretsChannelMock.mockResolvedValue(undefined)
     ensureArkadePersistenceChannelMock.mockResolvedValue(undefined)
     loadSdkPersistenceJsonForNetworkMock.mockResolvedValue(undefined)
     upsertArkadeWalletStateMock.mockResolvedValue(undefined)
@@ -115,6 +130,7 @@ describe('openArkadeSessionForWallet (integration)', () => {
     })
 
     expect(ensureSecretsChannelMock).toHaveBeenCalledTimes(1)
+    expect(ensureArkadeWorkerSecretsChannelMock).toHaveBeenCalledTimes(1)
     expect(ensureArkadePersistenceChannelMock).toHaveBeenCalledTimes(1)
     expect(loadSdkPersistenceJsonForNetworkMock).toHaveBeenCalledWith({
       password: 'unlock-password',
@@ -160,6 +176,27 @@ describe('openArkadeSessionForWallet (integration)', () => {
     expect(removeArkadeDashboardQueriesMock).toHaveBeenCalledTimes(1)
   })
 
+  it('flushes SDK persistence and awaits wallet-secrets writes before closeSession', async () => {
+    const callOrder: string[] = []
+    workerMocks.flushSdkPersistence.mockImplementation(async () => {
+      callOrder.push('flushSdkPersistence')
+    })
+    workerMocks.closeSession.mockImplementation(async () => {
+      callOrder.push('closeSession')
+    })
+    awaitInFlightWalletSecretsWritesMock.mockImplementation(async () => {
+      callOrder.push('awaitInFlightWalletSecretsWrites')
+    })
+
+    await closeArkadeSession()
+
+    expect(callOrder).toEqual([
+      'flushSdkPersistence',
+      'awaitInFlightWalletSecretsWrites',
+      'closeSession',
+    ])
+  })
+
   it('waits for an in-flight open before closing', async () => {
     let resolveOpen: ((value: { arkadeAddress: string }) => void) | undefined
     workerMocks.openSession.mockImplementation(
@@ -201,6 +238,24 @@ describe('openArkadeSessionForWallet (integration)', () => {
     ).resolves.toBeUndefined()
 
     expect(upsertArkadeWalletStateMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('reopens when session key matches but the worker was terminated', async () => {
+    await openArkadeSessionForWallet({
+      password: 'unlock-password',
+      walletId: 7,
+      networkMode: 'signet',
+    })
+    expect(workerMocks.openSession).toHaveBeenCalledTimes(1)
+
+    getArkadeWorkerIfExistsMock.mockReturnValue(null)
+    await openArkadeSessionForWallet({
+      password: 'unlock-password',
+      walletId: 7,
+      networkMode: 'signet',
+    })
+
+    expect(workerMocks.openSession).toHaveBeenCalledTimes(2)
   })
 
   it('does not reopen when the same wallet and network session is already active', async () => {

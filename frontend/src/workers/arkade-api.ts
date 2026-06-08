@@ -118,8 +118,10 @@ export interface ArkadeUnilateralExitFeeEstimateParams {
 
 export interface ArkadeService {
   ping(): Promise<boolean>
+  setSecretsPort(port: MessagePort): Promise<void>
   setSdkPersistenceBridge(bridge: ArkadeSdkPersistenceBridge | null): Promise<void>
   openSession(params: OpenArkadeSessionParams): Promise<{ arkadeAddress: string }>
+  flushSdkPersistence(): Promise<void>
   closeSession(): Promise<void>
   getBalance(): Promise<ArkadeBalanceInfo>
   getAddress(): Promise<string>

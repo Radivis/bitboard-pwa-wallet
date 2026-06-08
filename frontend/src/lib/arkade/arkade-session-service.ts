@@ -1,9 +1,13 @@
-import { getDatabase, getWalletSecretsEncrypted } from '@/db'
+import { awaitInFlightWalletSecretsWrites, getDatabase, getWalletSecretsEncrypted } from '@/db'
 import { loadSdkPersistenceJsonForNetwork } from '@/lib/arkade/arkade-sdk-persistence'
-import { ensureSecretsChannel } from '@/workers/secrets-channel'
+import {
+  ensureArkadeWorkerSecretsChannel,
+  ensureSecretsChannel,
+} from '@/workers/secrets-channel'
 import { ensureArkadePersistenceChannel } from '@/workers/arkade-persistence-channel'
 import {
   getArkadeWorker,
+  getArkadeWorkerIfExists,
   terminateArkadeWorker,
 } from '@/workers/arkade-factory'
 import {
@@ -54,12 +58,18 @@ export async function closeArkadeSession(): Promise<void> {
       // Session open failed or was superseded — still tear down.
     }
   }
+
   openSessionInFlight = null
   lastOpenedSessionKey = null
-  try {
-    await getArkadeWorker().closeSession()
-  } catch {
-    // Worker may already be terminated.
+  const arkadeWorker = getArkadeWorkerIfExists()
+  if (arkadeWorker != null) {
+    try {
+      await arkadeWorker.flushSdkPersistence()
+      await awaitInFlightWalletSecretsWrites()
+      await arkadeWorker.closeSession()
+    } catch {
+      // Worker may already be terminated.
+    }
   }
   terminateArkadeWorker()
   removeArkadeDashboardQueries()
@@ -81,7 +91,10 @@ export async function openArkadeSessionForWallet(params: {
 
   const key = sessionKey(walletId, networkMode)
   if (lastOpenedSessionKey === key && openSessionInFlight == null) {
-    return
+    if (getArkadeWorkerIfExists() != null) {
+      return
+    }
+    lastOpenedSessionKey = null
   }
 
   if (openSessionInFlight != null) {
@@ -89,7 +102,34 @@ export async function openArkadeSessionForWallet(params: {
     if (lastOpenedSessionKey === key) return
   }
 
-  openSessionInFlight = (async () => {
+  const openWork = runArkadeSessionOpenWork({
+    password,
+    walletId,
+    networkMode,
+    key,
+  })
+  // Assign synchronously before awaiting so void unlock paths register in-flight
+  // work before post-unlock navigation mounts Arkade queries.
+  openSessionInFlight = openWork
+
+  try {
+    await openWork
+  } finally {
+    if (openSessionInFlight === openWork) {
+      openSessionInFlight = null
+    }
+  }
+}
+
+function runArkadeSessionOpenWork(params: {
+  password: string
+  walletId: number
+  networkMode: ArkadeSupportedNetworkMode
+  key: string
+}): Promise<void> {
+  const { password, walletId, networkMode, key } = params
+
+  return (async () => {
     await ensureSecretsChannel()
     await ensureArkadePersistenceChannel()
     const encrypted = await getWalletSecretsEncrypted(getDatabase(), walletId)
@@ -100,6 +140,7 @@ export async function openArkadeSessionForWallet(params: {
     })
     const endpoints = getArkadeEndpoints(networkMode)
     const worker = getArkadeWorker()
+    await ensureArkadeWorkerSecretsChannel()
     await worker.openSession({
       password,
       encryptedMnemonic: encrypted.mnemonic,
@@ -111,7 +152,7 @@ export async function openArkadeSessionForWallet(params: {
       sdkPersistenceJson,
     })
 
-    await runPostOpenArkadeMaintenance(worker, networkMode)
+    lastOpenedSessionKey = key
 
     const now = new Date().toISOString()
     await upsertArkadeWalletState({
@@ -124,14 +165,8 @@ export async function openArkadeSessionForWallet(params: {
       },
     })
 
-    lastOpenedSessionKey = key
+    void runPostOpenArkadeMaintenance(worker, networkMode)
   })()
-
-  try {
-    await openSessionInFlight
-  } finally {
-    openSessionInFlight = null
-  }
 }
 
 /** Wait for unlock/network-switch session open; queries must not call open themselves. */

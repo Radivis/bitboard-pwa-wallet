@@ -31,19 +31,17 @@ import { openArkadeSessionForWallet } from '@/lib/arkade/arkade-session-service'
 
 const CUSTOM_ESPLORA_URL_KEY_PREFIX = 'custom_esplora_url_'
 
-async function openArkadeSessionAfterUnlockIfActive(params: {
+function startArkadeSessionAfterUnlockIfActive(params: {
   password: string
   walletId: number
   networkMode: NetworkMode
-}): Promise<void> {
+}): void {
   if (!isArkadeActiveForNetworkMode(params.networkMode)) {
     return
   }
-  try {
-    await openArkadeSessionForWallet(params)
-  } catch (err) {
-    reportArkadeSessionOpenError(err)
-  }
+  void openArkadeSessionForWallet(params).catch((err) =>
+    reportArkadeSessionOpenError(err),
+  )
 }
 
 /**
@@ -586,7 +584,7 @@ export async function loadDescriptorWalletWithoutSync(params: {
     useCryptoStore.getState().lockAndPurgeSensitiveRuntimeState(),
   )
 
-  await openArkadeSessionAfterUnlockIfActive({ password, walletId, networkMode })
+  startArkadeSessionAfterUnlockIfActive({ password, walletId, networkMode })
 }
 
 /**
@@ -688,11 +686,13 @@ export async function loadDescriptorWalletAndSync(params: {
     }
   }
 
+  // Register Arkade session open synchronously so post-unlock navigation cannot
+  // mount queries before `openSessionInFlight` exists (void microtask race).
+  startArkadeSessionAfterUnlockIfActive({ password, walletId, networkMode })
+
   if (awaitSync) {
     await runEsploraSyncAndPersistChangeset()
   } else {
     void runEsploraSyncAndPersistChangeset()
   }
-
-  await openArkadeSessionAfterUnlockIfActive({ password, walletId, networkMode })
 }

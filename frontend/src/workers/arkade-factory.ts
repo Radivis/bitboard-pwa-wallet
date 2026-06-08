@@ -1,6 +1,7 @@
 import { wrap, type Remote } from 'comlink'
 import type { ArkadeService } from '@/workers/arkade-api'
 import { resetArkadePersistenceChannel } from '@/workers/arkade-persistence-channel'
+import { resetArkadeWorkerSecretsChannel } from '@/workers/secrets-channel'
 import { setArkadeSdkPersistenceBridge } from '@/lib/arkade/storage/arkade-sdk-persistence-flush'
 
 export type ArkadeWorkerHealthStatus = 'initializing' | 'healthy' | 'error' | 'crashed'
@@ -89,6 +90,10 @@ export async function waitForArkadeWorkerHealthy(): Promise<void> {
   }
 }
 
+export function getArkadeWorkerIfExists(): Remote<ArkadeService> | null {
+  return state?.proxy ?? null
+}
+
 export function getArkadeWorker(): Remote<ArkadeService> {
   if (!state) {
     const worker = new Worker(new URL('./arkade.worker.ts', import.meta.url), {
@@ -135,6 +140,7 @@ export function terminateArkadeWorker(): void {
   }
   setArkadeSdkPersistenceBridge(null)
   resetArkadePersistenceChannel()
+  resetArkadeWorkerSecretsChannel()
 }
 
 export function getArkadeWorkerHealthStatus(): {

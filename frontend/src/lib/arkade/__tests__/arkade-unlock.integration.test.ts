@@ -123,7 +123,15 @@ describe('openArkadeSession after unlock (integration)', () => {
     openArkadeSessionForWalletMock.mockResolvedValue(undefined)
   })
 
-  it('UNLOCK-ARK-01 loadDescriptorWalletWithoutSync awaits openArkadeSessionForWallet when Arkade is active', async () => {
+  it('UNLOCK-ARK-01 loadDescriptorWalletWithoutSync starts openArkadeSessionForWallet without blocking when Arkade is active', async () => {
+    let resolveOpen: (() => void) | undefined
+    openArkadeSessionForWalletMock.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveOpen = resolve
+        }),
+    )
+
     await loadDescriptorWalletWithoutSync({
       password: 'unlock-password',
       walletId: 3,
@@ -137,16 +145,26 @@ describe('openArkadeSession after unlock (integration)', () => {
       walletId: 3,
       networkMode: 'signet',
     })
+    expect(resolveOpen).toBeDefined()
+    resolveOpen!()
   })
 
-  it('UNLOCK-ARK-01 loadDescriptorWalletAndSync calls openArkadeSessionForWallet when Arkade is active', async () => {
+  it('UNLOCK-ARK-01 loadDescriptorWalletAndSync starts openArkadeSessionForWallet without blocking when Arkade is active', async () => {
+    let resolveOpen: (() => void) | undefined
+    openArkadeSessionForWalletMock.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveOpen = resolve
+        }),
+    )
+
     await loadDescriptorWalletAndSync({
       password: 'unlock-password',
       walletId: 3,
       networkMode: 'signet',
       addressType: AddressType.Taproot,
       accountId: 0,
-      awaitSync: true,
+      awaitSync: false,
     })
 
     expect(openArkadeSessionForWalletMock).toHaveBeenCalledWith({
@@ -154,6 +172,8 @@ describe('openArkadeSession after unlock (integration)', () => {
       walletId: 3,
       networkMode: 'signet',
     })
+    expect(resolveOpen).toBeDefined()
+    resolveOpen!()
   })
 
   it('UNLOCK-ARK-02 sets wallet unlocked before opening Arkade session', async () => {
@@ -188,6 +208,8 @@ describe('openArkadeSession after unlock (integration)', () => {
     ).resolves.toBeUndefined()
 
     expect(setWalletStatusMock).toHaveBeenCalledWith('unlocked')
-    expect(reportArkadeSessionOpenErrorMock).toHaveBeenCalledWith(sessionOpenError)
+    await vi.waitFor(() =>
+      expect(reportArkadeSessionOpenErrorMock).toHaveBeenCalledWith(sessionOpenError),
+    )
   })
 })
