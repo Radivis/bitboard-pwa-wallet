@@ -641,11 +641,21 @@ impl ArkSession {
     /// Re-scan derived Ark receive addresses against the operator indexer.
     ///
     /// Incoming VTXOs may land on indices that were not yet cached when the session opened.
+    /// Discovery failures are logged but do not fail balance/history calls — stale cache is
+    /// preferable to breaking dashboard polling on transient operator/network errors.
     async fn sync_offchain_keys(&self) {
         if let Err(error) = self.client.discover_keys(DEFAULT_GAP_LIMIT).await {
-            let _ = error;
+            warn_offchain_key_discovery_failed(&error);
         }
     }
+}
+
+fn warn_offchain_key_discovery_failed(error: &ark_client::Error) {
+    let message = format!("Arkade offchain key discovery failed: {error}");
+    #[cfg(target_arch = "wasm32")]
+    web_sys::console::warn_1(&message.into());
+    #[cfg(not(target_arch = "wasm32"))]
+    eprintln!("{message}");
 }
 
 fn parse_delegator_public_key(value: &str) -> ArkResult<PublicKey> {
