@@ -10,16 +10,17 @@ For network switching and Esplora, see [`descriptor-wallet-switching.md`](descri
 - **Arkade** balance and history come from the Arkade operator and **ark-rs** (`bitboard-ark` WASM) in `arkade.worker`.
 - Do not merge Arkade totals into the BDK dashboard balance.
 
-## One Bitboard wallet, one Arkade context per live network
+## One Bitboard wallet, operator connections per live network
 
-- Arkade state is stored per `(wallet_id, networkMode)` for `mainnet`, `testnet`, and `signet` (Mutinynet).
-- Metadata and **persistence v2** (`sdkPersistenceJson`, engine `ark-rs`) live in encrypted `wallet_secrets` (`arkadeWallets[]`). Balance and history come from the hydrated session (worker), not a separate snapshot field.
-- **Local-first:** VTXO and contract data are authoritative on device after unlock. The Arkade operator is used for cooperative boarding, send, and settlement when online—not required to load wallet state from disk.
-- **Unlike NWC:** Lightning snapshots are stale cache when the node is down; Arkade `sdkPersistenceJson` is the source of truth for offchain UTXOs (future unilateral exit reads this blob + Esplora, not the operator).
+- Arkade state is stored as **operator connections** in encrypted `wallet_secrets` (`arkadeOperatorConnections[]`), NWC-style. Each connection is one ASP with its own `sdkPersistenceJson`, URLs, and canonical `operatorSignerPkHex` from `getInfo`.
+- `activeArkadeConnectionIdByNetwork` picks the connection used for session, dashboard, and sync on `mainnet`, `testnet`, and `signet` (Mutinynet). Switching operators is adding/switching connections—not merging blobs across ASPs.
+- **BitboardArkPersistence** (`sdkPersistenceJson`, engine `ark-rs`, wire `version: 3`) includes `operator_identity` and an `offchain_vtxo_snapshot` inside `wallet_db`. Balance and history read from the loaded WASM session immediately after unlock (local snapshot + Esplora boarding + on-chain bumper).
+- **Operator sync** (`sync_with_operator`) refreshes the snapshot and re-exports `sdkPersistenceJson` to the active connection row. `lastSuccessfulOperatorSyncAt` on the connection mirrors `lastSuccessfulEsploraSyncAt` for on-chain BDK.
+- **Local-first:** Operator failure during a session keeps the last-synced blob; the dashboard may show a stale banner until operator sync succeeds this unlock.
 
 ## Persistence in the worker
 
-`bitboard-ark` exports a JSON envelope (`version: 2`) after critical RPCs and on `closeSession`. v1 TypeScript SDK snapshots are ignored on unlock (one-time console notice); users re-board on unreleased builds.
+`bitboard-ark` exports a `BitboardArkPersistence` JSON envelope (`version: 3`) after critical RPCs, operator sync, and on `closeSession`. Unsupported or malformed blobs start from an empty `wallet_db` on session open.
 
 ### Offchain receive derivation cursor
 

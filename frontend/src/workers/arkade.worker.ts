@@ -7,6 +7,7 @@ import type { ArkadeSupportedNetworkMode } from '@/lib/arkade/arkade-endpoints'
 import {
   clearDebouncedSdkPersistenceFlush,
   flushSdkPersistenceNow,
+  flushSdkPersistenceNowOrThrow,
   scheduleSdkPersistenceFlush,
   setArkadeSdkPersistenceBridge,
   setArkadeSdkPersistenceExporter,
@@ -44,6 +45,7 @@ let activeSessionParams: {
   password: string
   walletId: number
   networkMode: ArkadeSupportedNetworkMode
+  connectionId: string
 } | null = null
 let unrollInFlight = false
 
@@ -106,8 +108,12 @@ function requestDecrypt(
   return secretsProxy.decrypt(password, encryptedBlob)
 }
 
-function sessionKey(walletId: number, networkMode: ArkadeSupportedNetworkMode): string {
-  return `${walletId}:${networkMode}`
+function sessionKey(
+  walletId: number,
+  networkMode: ArkadeSupportedNetworkMode,
+  connectionId: string,
+): string {
+  return `${walletId}:${networkMode}:${connectionId}`
 }
 
 function legacyIndexedDbName(
@@ -130,14 +136,18 @@ function deleteLegacyArkadeIndexedDb(
 }
 
 async function persistAfterCriticalOperation(): Promise<void> {
-  await flushSdkPersistenceNow()
+  const { awaitBackgroundArkadeOperatorSync } = await import(
+    '@/lib/arkade/arkade-operator-sync'
+  )
+  await awaitBackgroundArkadeOperatorSync()
+  await flushSdkPersistenceNowOrThrow()
 }
 
 async function closeSessionImpl(): Promise<void> {
   try {
-    await flushSdkPersistenceNow()
+    await flushSdkPersistenceNowOrThrow()
   } catch {
-    // Best-effort flush before teardown.
+    // Best-effort flush before teardown when session was never fully opened.
   }
   clearDebouncedSdkPersistenceFlush()
   setArkadeSdkPersistenceFlushContext(null)
@@ -156,13 +166,16 @@ async function closeSessionImpl(): Promise<void> {
 
 async function openSessionImpl(
   params: OpenArkadeSessionParams,
-): Promise<{ arkadeAddress: string }> {
-  const key = sessionKey(params.walletId, params.networkMode)
+): Promise<{ arkadeAddress: string; operatorSignerPkHex: string }> {
+  const key = sessionKey(params.walletId, params.networkMode, params.connectionId)
 
   if (activeSessionKey === key) {
     try {
       const address = await invokeWasmArk((wasmModule) => wasmModule.ark_get_address())
-      return { arkadeAddress: address }
+      const operatorSignerPkHex = await invokeWasmArk((wasmModule) =>
+        wasmModule.ark_operator_signer_pk_hex(),
+      )
+      return { arkadeAddress: address, operatorSignerPkHex }
     } catch {
       // Fall through to full open.
     }
@@ -176,6 +189,7 @@ async function openSessionImpl(
     password: params.password,
     walletId: params.walletId,
     networkMode: params.networkMode,
+    connectionId: params.connectionId,
   }
   setArkadeSdkPersistenceFlushContext(activeSessionParams)
 
@@ -191,7 +205,10 @@ async function openSessionImpl(
   )
 
   activeSessionKey = key
-  return { arkadeAddress: openResult.arkadeAddress as string }
+  return {
+    arkadeAddress: openResult.arkadeAddress as string,
+    operatorSignerPkHex: openResult.operatorSignerPkHex as string,
+  }
 }
 
 const arkadeService: ArkadeService = {
@@ -208,19 +225,54 @@ const arkadeService: ArkadeService = {
     setArkadeSdkPersistenceBridge(bridge)
   },
 
-  async openSession(params: OpenArkadeSessionParams): Promise<{ arkadeAddress: string }> {
+  async openSession(params: OpenArkadeSessionParams) {
     return openSessionImpl(params)
   },
 
   async hasOpenSession(params: {
     walletId: number
     networkMode: ArkadeSupportedNetworkMode
+    connectionId: string
   }): Promise<boolean> {
-    return activeSessionKey === sessionKey(params.walletId, params.networkMode)
+    return activeSessionKey === sessionKey(
+      params.walletId,
+      params.networkMode,
+      params.connectionId,
+    )
+  },
+
+  async reconcileActiveConnectionId(connectionId: string): Promise<void> {
+    if (activeSessionParams == null) {
+      return
+    }
+    activeSessionParams = {
+      ...activeSessionParams,
+      connectionId,
+    }
+    activeSessionKey = sessionKey(
+      activeSessionParams.walletId,
+      activeSessionParams.networkMode,
+      connectionId,
+    )
+    setArkadeSdkPersistenceFlushContext({
+      password: activeSessionParams.password,
+      walletId: activeSessionParams.walletId,
+      networkMode: activeSessionParams.networkMode,
+      connectionId,
+    })
+  },
+
+  async syncWithOperator(): Promise<void> {
+    await invokeWasmArk((wasmModule) => wasmModule.ark_sync_with_operator())
+    await persistAfterCriticalOperation()
   },
 
   async flushSdkPersistence(): Promise<void> {
-    await flushSdkPersistenceNow()
+    await flushSdkPersistenceNowOrThrow()
+  },
+
+  async exportSdkPersistenceJson(): Promise<string> {
+    return invokeWasmArk((wasmModule) => wasmModule.ark_export_persistence_json())
   },
 
   async closeSession(): Promise<void> {

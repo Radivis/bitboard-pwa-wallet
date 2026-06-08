@@ -3,6 +3,7 @@ mod balance_display;
 mod error;
 mod esplora_blockchain;
 mod network;
+mod offchain_snapshot;
 mod persistence;
 mod session;
 #[cfg(target_arch = "wasm32")]
@@ -33,7 +34,6 @@ const MSG_SESSION_ALREADY_BORROWED: &str =
 
 thread_local! {
     static ACTIVE_SESSION: RefCell<Option<Rc<ArkSession>>> = const { RefCell::new(None) };
-    static RESET_V1_LOGGED: RefCell<bool> = const { RefCell::new(false) };
 }
 
 #[wasm_bindgen(start)]
@@ -70,21 +70,6 @@ fn clear_active_session() -> ArkResult<()> {
     })
 }
 
-fn log_persistence_v1_reset_once() {
-    RESET_V1_LOGGED.with(|logged| {
-        if *logged.borrow() {
-            return;
-        }
-        *logged.borrow_mut() = true;
-        #[cfg(target_arch = "wasm32")]
-        web_sys::console::log_1(
-            &"Arkade state reset after SDK migration (persistence v1 ignored)".into(),
-        );
-        #[cfg(not(target_arch = "wasm32"))]
-        eprintln!("Arkade state reset after SDK migration (persistence v1 ignored)");
-    });
-}
-
 fn to_js_value<T: serde::Serialize>(value: T) -> ArkResult<JsValue> {
     Ok(serde_wasm_bindgen::to_value(&value)?)
 }
@@ -119,7 +104,7 @@ pub async fn ark_open_session(params: JsValue) -> Result<JsValue, JsValue> {
             ))
         })?;
 
-        let (session, reset_v1) = ArkSession::open(
+        let session = ArkSession::open(
             &params.mnemonic,
             network_mode,
             params.ark_server_url,
@@ -129,11 +114,8 @@ pub async fn ark_open_session(params: JsValue) -> Result<JsValue, JsValue> {
         )
         .await?;
 
-        if reset_v1 {
-            log_persistence_v1_reset_once();
-        }
-
         let arkade_address = session.peek_offchain_address()?;
+        let operator_signer_pk_hex = session.operator_signer_pk_hex();
         ACTIVE_SESSION.with(|session_cell| -> ArkResult<()> {
             let mut session_borrow_mut = session_cell.try_borrow_mut().map_err(|_| {
                 crate::error::ArkWasmError::Message(MSG_SESSION_ALREADY_BORROWED.into())
@@ -142,7 +124,24 @@ pub async fn ark_open_session(params: JsValue) -> Result<JsValue, JsValue> {
             Ok(())
         })?;
 
-        to_js_value(crate::api_types::OpenSessionResult { arkade_address })
+        to_js_value(crate::api_types::OpenSessionResult {
+            arkade_address,
+            operator_signer_pk_hex,
+        })
+    })
+    .await
+}
+
+#[wasm_bindgen]
+pub fn ark_operator_signer_pk_hex() -> Result<String, JsValue> {
+    map_js_error(with_session(|session| Ok(session.operator_signer_pk_hex())))
+}
+
+#[wasm_bindgen]
+pub async fn ark_sync_with_operator() -> Result<(), JsValue> {
+    map_js_async(async {
+        active_session_rc()?.sync_with_operator().await?;
+        Ok(())
     })
     .await
 }

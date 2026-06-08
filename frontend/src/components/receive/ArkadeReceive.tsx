@@ -15,6 +15,7 @@ import { useWalletStore } from '@/stores/walletStore'
 
 export function ArkadeReceive() {
   const networkMode = useWalletStore((walletState) => walletState.networkMode)
+  const storeReceiveAddress = useWalletStore((walletState) => walletState.arkadeReceiveAddress)
   const [copied, setCopied] = useState(false)
   const addressQuery = useArkadeAddressQuery()
   const newAddressMutation = useArkadeNewAddressMutation()
@@ -33,9 +34,10 @@ export function ArkadeReceive() {
     )
   }
 
-  const address = addressQuery.data ?? ''
+  const address = storeReceiveAddress ?? addressQuery.data ?? ''
   const addressLoading =
-    addressQuery.isLoading || (addressQuery.isFetching && address.length === 0)
+    storeReceiveAddress == null &&
+    (addressQuery.isLoading || (addressQuery.isFetching && address.length === 0))
 
   const handleCopy = async () => {
     if (!address) return

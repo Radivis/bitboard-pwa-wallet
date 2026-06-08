@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 #[serde(rename_all = "camelCase")]
 pub struct OpenSessionResult {
     pub arkade_address: String,
+    pub operator_signer_pk_hex: String,
 }
 
 #[derive(Debug, Serialize)]

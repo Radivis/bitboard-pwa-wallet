@@ -82,6 +82,27 @@ describe('mergeAndSortDashboardActivity', () => {
     }
   })
 
+  it('does not pair unconfirmed on-chain boarding funding with Arkade receive', () => {
+    const arkReceive = {
+      direction: 'incoming' as const,
+      amountSats: 50_000,
+      timestamp: 1_700_000_000,
+      txid: 'ark-vtxo-from-board',
+    }
+    const pendingChainSend: TransactionDetails = {
+      txid: 'chain-board-fund-pending',
+      sentSats: 50_000,
+      receivedSats: 0,
+      feeSats: null,
+      confirmationBlockHeight: null,
+      confirmationTime: null,
+      isConfirmed: false,
+      isLabTx: false,
+    }
+
+    expect(isBoardingFundToVtxoPair(pendingChainSend, arkReceive)).toBe(false)
+  })
+
   it('places Arkade boarding receive above matching on-chain send when timestamps tie', () => {
     const boardingSecond = 1_748_836_800
     const chainSend: TransactionDetails = {

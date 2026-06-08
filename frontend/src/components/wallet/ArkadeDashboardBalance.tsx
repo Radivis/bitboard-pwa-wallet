@@ -2,14 +2,23 @@ import { Link } from '@tanstack/react-router'
 import { Layers, Loader2 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ArkadeBalanceBreakdown } from '@/components/wallet/ArkadeBalanceBreakdown'
+import { useArkadeSyncMetadataQuery } from '@/hooks/useArkadeDashboardQueries'
 import { useArkadeBalanceQuery } from '@/hooks/useArkadeQueries'
 import { isArkadeActiveForNetworkMode } from '@/lib/arkade/arkade-utils'
 import { useWalletStore } from '@/stores/walletStore'
 
 export function ArkadeDashboardBalance() {
   const networkMode = useWalletStore((s) => s.networkMode)
+  const storeBalance = useWalletStore((s) => s.arkadeBalance)
   const show = isArkadeActiveForNetworkMode(networkMode)
   const balanceQuery = useArkadeBalanceQuery()
+  const arkadeSyncQuery = useArkadeSyncMetadataQuery()
+
+  const balance = storeBalance ?? balanceQuery.data
+  const isLoading = balanceQuery.isLoading && balance == null
+  const isStaleArkade = arkadeSyncQuery.data?.isStaleArkade ?? false
+  const lastSuccessfulOperatorSyncAt =
+    arkadeSyncQuery.data?.lastSuccessfulOperatorSyncAt
 
   if (!show) return null
 
@@ -22,20 +31,38 @@ export function ArkadeDashboardBalance() {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-2">
-        {balanceQuery.isLoading ? (
+        {isLoading ? (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
             Loading…
           </div>
-        ) : balanceQuery.isError ? (
+        ) : balanceQuery.isError && balance == null ? (
           <p className="text-sm text-destructive" data-testid="dashboard-arkade-balance-error">
             Could not load Arkade balance. Check your network and try again.
           </p>
-        ) : balanceQuery.data ? (
-          <ArkadeBalanceBreakdown
-            balance={balanceQuery.data}
-            amountTestId="dashboard-arkade-balance-amount"
-          />
+        ) : balance ? (
+          <>
+            <ArkadeBalanceBreakdown
+              balance={balance}
+              amountTestId="dashboard-arkade-balance-amount"
+            />
+            {isStaleArkade ? (
+              <p
+                className="text-xs text-amber-700 dark:text-amber-400"
+                data-testid="arkade-operator-stale-banner"
+              >
+                Showing Arkade data from your wallet&apos;s saved operator state. The operator
+                has not been verified this session.
+                {lastSuccessfulOperatorSyncAt != null && (
+                  <>
+                    {' '}
+                    Last verified with operator:{' '}
+                    {new Date(lastSuccessfulOperatorSyncAt).toLocaleString()}.
+                  </>
+                )}
+              </p>
+            ) : null}
+          </>
         ) : (
           <p
             className="text-sm text-muted-foreground"

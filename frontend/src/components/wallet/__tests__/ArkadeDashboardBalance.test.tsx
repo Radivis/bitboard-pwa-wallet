@@ -32,6 +32,10 @@ vi.mock('@/hooks/useArkadeQueries', () => ({
   useArkadeBalanceQuery: () => balanceQueryMock(),
 }))
 
+vi.mock('@/hooks/useArkadeDashboardQueries', () => ({
+  useArkadeSyncMetadataQuery: () => ({ data: { isStaleArkade: false } }),
+}))
+
 vi.mock('@/stores/featureStore', () => ({
   useFeatureStore: Object.assign(
     (selector: (state: Record<string, unknown>) => unknown) =>

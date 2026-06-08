@@ -153,7 +153,8 @@ function buildInitialWalletSecretsPayload({
       },
     ],
     lightningNwcConnections: [],
-    arkadeWallets: [],
+    arkadeOperatorConnections: [],
+    activeArkadeConnectionIdByNetwork: {},
   };
 }
 

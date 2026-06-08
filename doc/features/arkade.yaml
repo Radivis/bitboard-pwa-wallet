@@ -21,7 +21,7 @@ feature:
     - Default delegator and operator URLs come from arkade-endpoints.ts (env overrides supported)
     - Network switch terminates and reopens the Arkade worker session for the new network
     - Lock wallet terminates arkade.worker and clears session state
-    - Ark-rs persistence v2 (engine ark-rs) in sdkPersistenceJson inside encrypted wallet_secrets; v1 TS SDK snapshots reset on unlock
+    - BitboardArkPersistence (engine ark-rs, wire version 3) in sdkPersistenceJson per operator connection inside encrypted wallet_secrets
     - Offchain receive derivation cursor is a single scalar in walletDb (see docs/arkade-bitboard-wallet-model.md); no index arrays in sdkPersistenceJson
     - Wallet reopen hydrates boarding outputs from sdkPersistenceJson; operator required for live balance sync and sends
   contracts:

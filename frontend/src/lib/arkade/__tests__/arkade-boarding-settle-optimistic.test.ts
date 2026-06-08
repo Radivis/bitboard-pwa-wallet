@@ -12,12 +12,13 @@ import {
 
 const walletId = 1
 const networkMode = 'signet' as const
+const connectionId = 'conn-boarding-test'
 
 describe('arkade-boarding-settle-optimistic', () => {
   it('zeros boarding status and moves spendable sats into balance on mutate', () => {
     const queryClient = new QueryClient()
-    const boardingStatusKey = arkadeBoardingStatusQueryKey(walletId, networkMode)
-    const balanceKey = arkadeBalanceQueryKey(walletId, networkMode)
+    const boardingStatusKey = arkadeBoardingStatusQueryKey(walletId, networkMode, connectionId)
+    const balanceKey = arkadeBalanceQueryKey(walletId, networkMode, connectionId)
 
     queryClient.setQueryData(boardingStatusKey, {
       boardingAddress: 'tb1boarding',
@@ -33,7 +34,7 @@ describe('arkade-boarding-settle-optimistic', () => {
       boardingPendingSats: 0,
     })
 
-    applyOptimisticBoardingSettle(queryClient, walletId, networkMode, 200_000)
+    applyOptimisticBoardingSettle(queryClient, walletId, networkMode, connectionId, 200_000)
 
     expect(queryClient.getQueryData(boardingStatusKey)).toMatchObject({
       spendableSats: 0,
@@ -49,8 +50,8 @@ describe('arkade-boarding-settle-optimistic', () => {
 
   it('reverts optimistic cache updates when settle fails', () => {
     const queryClient = new QueryClient()
-    const boardingStatusKey = arkadeBoardingStatusQueryKey(walletId, networkMode)
-    const balanceKey = arkadeBalanceQueryKey(walletId, networkMode)
+    const boardingStatusKey = arkadeBoardingStatusQueryKey(walletId, networkMode, connectionId)
+    const balanceKey = arkadeBalanceQueryKey(walletId, networkMode, connectionId)
     const previousStatus = {
       boardingAddress: 'tb1boarding',
       trackedAddresses: ['tb1boarding'],
@@ -67,7 +68,7 @@ describe('arkade-boarding-settle-optimistic', () => {
 
     queryClient.setQueryData(boardingStatusKey, previousStatus)
     queryClient.setQueryData(balanceKey, previousBalance)
-    applyOptimisticBoardingSettle(queryClient, walletId, networkMode, 200_000)
+    applyOptimisticBoardingSettle(queryClient, walletId, networkMode, connectionId, 200_000)
     revertOptimisticBoardingSettle(queryClient, {
       boardingStatusKey,
       balanceKey,

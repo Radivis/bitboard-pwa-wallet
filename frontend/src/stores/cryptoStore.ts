@@ -10,7 +10,9 @@ import { removeOnchainDashboardQueries } from '@/lib/wallet/onchain-dashboard-sy
 import { useWalletStore } from '@/stores/walletStore';
 import { useLightningStore } from '@/stores/lightningStore';
 import { useSessionStore, clearAutoLockTimer } from '@/stores/sessionStore';
+import { awaitBackgroundArkadeOperatorSync } from '@/lib/arkade/arkade-operator-sync';
 import { closeArkadeSession } from '@/lib/arkade/arkade-session-service';
+import { getArkadeWorkerIfExists } from '@/workers/arkade-factory';
 import { resetSecretsChannel } from '@/workers/secrets-channel';
 import { awaitInFlightWalletSecretsWrites } from '@/db/wallet-secrets-write-tracker';
 import { navigateToLibraryIfOnWalletRoute } from '@/lib/shared/app-router';
@@ -272,6 +274,11 @@ export const useCryptoStore = create<CryptoState>((set, get) => {
 
     lockAndPurgeSensitiveRuntimeState: async () => {
       clearAutoLockTimer();
+      await awaitBackgroundArkadeOperatorSync();
+      const arkadeWorker = getArkadeWorkerIfExists();
+      if (arkadeWorker != null) {
+        await arkadeWorker.flushSdkPersistence();
+      }
       await awaitInFlightWalletSecretsWrites();
       navigateToLibraryIfOnWalletRoute();
       useWalletStore.getState().lockWallet();

@@ -27,11 +27,17 @@ export interface OpenArkadeSessionParams {
   encryptedMnemonic: EncryptedBlobForDb
   walletId: number
   networkMode: ArkadeSupportedNetworkMode
+  connectionId: string
   arkServerUrl: string
   delegatorUrl: string
   esploraUrl: string
   /** Hydrates SDK repos from encrypted wallet secrets (local-first VTXO state). */
   sdkPersistenceJson?: string
+}
+
+export interface OpenArkadeSessionResult {
+  arkadeAddress: string
+  operatorSignerPkHex: string
 }
 
 export interface ArkadeSendParams {
@@ -120,12 +126,16 @@ export interface ArkadeService {
   ping(): Promise<boolean>
   setSecretsPort(port: MessagePort): Promise<void>
   setSdkPersistenceBridge(bridge: ArkadeSdkPersistenceBridge | null): Promise<void>
-  openSession(params: OpenArkadeSessionParams): Promise<{ arkadeAddress: string }>
+  openSession(params: OpenArkadeSessionParams): Promise<OpenArkadeSessionResult>
+  syncWithOperator(): Promise<void>
   hasOpenSession(params: {
     walletId: number
     networkMode: ArkadeSupportedNetworkMode
+    connectionId: string
   }): Promise<boolean>
+  reconcileActiveConnectionId(connectionId: string): Promise<void>
   flushSdkPersistence(): Promise<void>
+  exportSdkPersistenceJson(): Promise<string>
   closeSession(): Promise<void>
   getBalance(): Promise<ArkadeBalanceInfo>
   getAddress(): Promise<string>

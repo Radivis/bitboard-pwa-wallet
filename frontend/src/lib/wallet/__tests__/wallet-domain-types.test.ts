@@ -40,57 +40,95 @@ describe('parseWalletPayloadJson', () => {
     })
     const parsed = parseWalletPayloadJson(json)
     expect(parsed.descriptorWallets).toHaveLength(1)
-    expect(parsed.arkadeWallets).toEqual([])
+    expect(parsed).not.toHaveProperty('arkadeWallets')
   })
 
-  it('strips legacy arkadeSnapshot on parse', () => {
+  it('strips legacy arkadeWallets key on parse', () => {
     const payload = {
       descriptorWallets: [],
       lightningNwcConnections: [],
       arkadeWallets: [
         {
-          networkMode: 'testnet',
+          networkMode: 'signet',
           createdAt: '2020-01-01T00:00:00.000Z',
-          arkadeSnapshot: {
-            balance: {
-              confirmedSats: 1,
-              totalSats: 1,
-              updatedAt: '2020-01-01T00:00:00.000Z',
-            },
-            payments: [],
-            paymentsUpdatedAt: '2020-01-01T00:00:00.000Z',
-          },
         },
       ],
     }
     const parsed = parseWalletPayloadJson(JSON.stringify(payload))
-    expect(parsed.arkadeWallets[0]).not.toHaveProperty('arkadeSnapshot')
+    expect(parsed).not.toHaveProperty('arkadeWallets')
+    expect(parsed.arkadeOperatorConnections).toEqual([])
+    expect(parsed.activeArkadeConnectionIdByNetwork).toEqual({})
   })
 
-  it('accepts arkade wallet with sdkPersistenceJson', () => {
-    const json = JSON.stringify({ version: 1, wallet: {}, contract: {} })
-    const payload = {
-      descriptorWallets: [],
-      lightningNwcConnections: [],
-      arkadeWallets: [
-        {
-          networkMode: 'testnet',
-          createdAt: '2020-01-01T00:00:00.000Z',
-          sdkPersistenceJson: json,
-        },
-      ],
-    }
-    const parsed = parseWalletPayloadJson(JSON.stringify(payload))
-    expect(parsed.arkadeWallets[0].sdkPersistenceJson).toBe(json)
-  })
-
-  it('normalizes missing arkadeWallets to empty array', () => {
+  it('normalizes missing arkade operator fields to empty defaults', () => {
     const json = JSON.stringify({
       descriptorWallets: [],
       lightningNwcConnections: [],
     })
     const parsed = parseWalletPayloadJson(json)
-    expect(parsed.arkadeWallets).toEqual([])
+    expect(parsed.arkadeOperatorConnections).toEqual([])
+    expect(parsed.activeArkadeConnectionIdByNetwork).toEqual({})
+  })
+
+  it('drops invalid arkadeOperatorConnections instead of rejecting the wallet', () => {
+    const json = JSON.stringify({
+      descriptorWallets: [],
+      lightningNwcConnections: [],
+      arkadeOperatorConnections: [
+        {
+          id: 'conn-bad',
+          networkMode: 'signet',
+        },
+        {
+          id: 'conn-good',
+          label: 'Mutinynet',
+          networkMode: 'signet',
+          operatorUrl: 'https://signet.arkade.example/v1',
+          operatorSignerPkHex: '02abc',
+          createdAt: '2020-01-01T00:00:00.000Z',
+        },
+      ],
+      activeArkadeConnectionIdByNetwork: {
+        signet: 'conn-good',
+        testnet: 'conn-bad',
+      },
+    })
+    const parsed = parseWalletPayloadJson(json)
+    expect(parsed.arkadeOperatorConnections).toHaveLength(1)
+    expect(parsed.arkadeOperatorConnections[0].id).toBe('conn-good')
+    expect(parsed.activeArkadeConnectionIdByNetwork).toEqual({ signet: 'conn-good' })
+  })
+
+  it('normalizes null arkadeOperatorConnections to empty array', () => {
+    const json = JSON.stringify({
+      descriptorWallets: [],
+      lightningNwcConnections: [],
+      arkadeOperatorConnections: null,
+    })
+    const parsed = parseWalletPayloadJson(json)
+    expect(parsed.arkadeOperatorConnections).toEqual([])
+  })
+
+  it('accepts arkadeOperatorConnections and activeArkadeConnectionIdByNetwork', () => {
+    const json = JSON.stringify({
+      descriptorWallets: [],
+      lightningNwcConnections: [],
+      arkadeOperatorConnections: [
+        {
+          id: 'conn-1',
+          label: 'Mutinynet',
+          networkMode: 'signet',
+          operatorUrl: 'https://signet.arkade.example/v1',
+          operatorSignerPkHex: '02abc',
+          createdAt: '2020-01-01T00:00:00.000Z',
+          lastSuccessfulOperatorSyncAt: '2020-01-02T00:00:00.000Z',
+        },
+      ],
+      activeArkadeConnectionIdByNetwork: { signet: 'conn-1' },
+    })
+    const parsed = parseWalletPayloadJson(json)
+    expect(parsed.arkadeOperatorConnections).toHaveLength(1)
+    expect(parsed.activeArkadeConnectionIdByNetwork.signet).toBe('conn-1')
   })
 
   it('accepts descriptor wallet with lastSuccessfulEsploraSyncAt', () => {
@@ -269,7 +307,7 @@ describe('parseWalletSecretsJson', () => {
     expect(parsed.lightningNwcConnections[0].label).toBe('Test')
   })
 
-  it('rejects lightningNwcConnections when not an array', () => {
+  it('normalizes null lightningNwcConnections to empty array', () => {
     const secretsJson = JSON.stringify({
       mnemonic: 'abandon ability able about above absent absorb abstract absurd abuse access accident',
       descriptorWallets: [
@@ -284,6 +322,27 @@ describe('parseWalletSecretsJson', () => {
         },
       ],
       lightningNwcConnections: null,
+    })
+
+    const parsed = parseWalletSecretsJson(secretsJson)
+    expect(parsed.lightningNwcConnections).toEqual([])
+  })
+
+  it('rejects lightningNwcConnections when not an array', () => {
+    const secretsJson = JSON.stringify({
+      mnemonic: 'abandon ability able about above absent absorb abstract absurd abuse access accident',
+      descriptorWallets: [
+        {
+          network: 'testnet',
+          addressType: 'taproot',
+          accountId: 0,
+          externalDescriptor: 'tr(xpub.../0/*)',
+          internalDescriptor: 'tr(xpub.../1/*)',
+          changeSet: '{}',
+          fullScanDone: false,
+        },
+      ],
+      lightningNwcConnections: 'not-an-array',
     })
 
     expect(() => parseWalletSecretsJson(secretsJson)).toThrow(

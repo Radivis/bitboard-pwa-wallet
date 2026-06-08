@@ -4,8 +4,10 @@ export interface ArkadeSdkPersistenceBridge {
   persistSdkPersistence(params: {
     walletId: number
     networkMode: ArkadeSupportedNetworkMode
+    connectionId: string
     password: string
     sdkPersistenceJson: string
+    lastSuccessfulOperatorSyncAt?: string
   }): Promise<void>
 }
 
@@ -15,6 +17,7 @@ let persistenceBridge: ArkadeSdkPersistenceBridge | null = null
 let flushContext: {
   walletId: number
   networkMode: ArkadeSupportedNetworkMode
+  connectionId: string
   password: string
 } | null = null
 let debouncedFlushTimer: ReturnType<typeof setTimeout> | null = null
@@ -68,17 +71,18 @@ async function readSdkPersistenceJson(): Promise<string> {
   return exportSdkPersistenceJson()
 }
 
-export async function flushSdkPersistenceNow(): Promise<void> {
+export async function flushSdkPersistenceNow(): Promise<boolean> {
   if (flushContext == null || persistenceBridge == null || exportSdkPersistenceJson == null) {
-    return
+    return false
   }
   clearDebouncedSdkPersistenceFlush()
   if (inFlightFlush != null) {
     await inFlightFlush
-    return
+    // A concurrent flush may have exported stale state; export again with latest WASM.
+    return flushSdkPersistenceNow()
   }
 
-  const { walletId, networkMode, password } = flushContext
+  const { walletId, networkMode, connectionId, password } = flushContext
   const bridge = persistenceBridge
 
   inFlightFlush = (async () => {
@@ -86,6 +90,7 @@ export async function flushSdkPersistenceNow(): Promise<void> {
     await bridge.persistSdkPersistence({
       walletId,
       networkMode,
+      connectionId,
       password,
       sdkPersistenceJson,
     })
@@ -93,7 +98,16 @@ export async function flushSdkPersistenceNow(): Promise<void> {
 
   try {
     await inFlightFlush
+    return true
   } finally {
     inFlightFlush = null
+  }
+}
+
+/** Critical paths (reveal, lock) must not silently skip persistence when flush is configured. */
+export async function flushSdkPersistenceNowOrThrow(): Promise<void> {
+  const flushed = await flushSdkPersistenceNow()
+  if (!flushed) {
+    throw new Error('Arkade SDK persistence flush was skipped (bridge or flush context missing)')
   }
 }
