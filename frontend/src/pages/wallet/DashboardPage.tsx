@@ -802,6 +802,7 @@ function RecentTransactions() {
                         <TransactionItem
                           key={activityItem.tx.txid}
                           transaction={activityItem.tx}
+                          activityLabel={activityItem.activityLabel}
                         />
                       )
                     }
@@ -817,6 +818,7 @@ function RecentTransactions() {
                       <ArkadePaymentItem
                         key={`arkade-${activityItem.payment.txid}-${activityItem.payment.timestamp}`}
                         payment={activityItem.payment}
+                        activityLabel={activityItem.activityLabel}
                       />
                     )
                   })}

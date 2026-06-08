@@ -9,13 +9,15 @@ import {
   truncateAddress,
 } from '@/lib/wallet/bitcoin-utils'
 import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
+import { DashboardActivityRailBadge } from '@/components/DashboardActivityRailBadge'
 import { cn } from '@/lib/shared/utils'
 
 interface TransactionItemProps {
   transaction: TransactionDetails
+  activityLabel?: string
 }
 
-export function TransactionItem({ transaction }: TransactionItemProps) {
+export function TransactionItem({ transaction, activityLabel }: TransactionItemProps) {
   const [expanded, setExpanded] = useState(false)
   const [showAbsoluteTime, setShowAbsoluteTime] = useState(false)
 
@@ -51,7 +53,12 @@ export function TransactionItem({ transaction }: TransactionItemProps) {
         </div>
 
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium capitalize">{direction}</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-sm font-medium capitalize">{direction}</p>
+            {activityLabel != null && activityLabel !== '' && (
+              <DashboardActivityRailBadge label={activityLabel} />
+            )}
+          </div>
           {timestamp && (
             <button
               className="text-xs text-muted-foreground hover:underline"
