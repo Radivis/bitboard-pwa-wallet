@@ -12,6 +12,10 @@ export async function expectArkadeBalanceNotEmptySession(page: Page, timeout = 1
   await expect(page.getByTestId('dashboard-arkade-balance-amount')).toBeVisible({ timeout })
 }
 
+export async function waitForArkadeActivityLoaded(page: Page, timeout = 120_000): Promise<void> {
+  await expect(page.getByText('Loading Arkade activity…')).not.toBeVisible({ timeout })
+}
+
 export async function readDashboardArkadeBalanceSats(page: Page): Promise<number> {
   const amountLocator = page.getByTestId('dashboard-arkade-balance-amount')
   await expect(amountLocator).toBeVisible({ timeout: 60_000 })

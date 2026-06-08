@@ -12,6 +12,7 @@ feature:
   requirements:
     - Contracts are enforced by Vitest component/integration tests in CI
     - E2E contracts use VITE_E2E_ARKADE_MOCK with a mocked Ark operator (ASP), not live Mutinynet
+    - Parallel E2E uses per-test mock partitions (cookie + header) because the WASM worker fetches the operator proxy directly
     - Management link on the Arkade balance card is not part of this contract (may be removed)
   contracts:
     visibility:

@@ -5,7 +5,10 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import {
   E2E_ARKADE_MOCK_DEFAULT_BALANCE_SATS,
   E2E_ARKADE_MOCK_INCOMING_TXID,
-  e2eArkadeOperatorMockState,
+  E2E_ARKADE_MOCK_PARTITION_COOKIE,
+  E2E_ARKADE_MOCK_PARTITION_HEADER,
+  getE2eArkadeOperatorMockState,
+  type E2eArkadeOperatorMockState,
 } from './arkade-operator-mock-state'
 
 const mockHandlerDir = path.dirname(fileURLToPath(import.meta.url))
@@ -13,6 +16,13 @@ const serverInfoFixturePath = path.resolve(
   mockHandlerDir,
   '../../../../tests/e2e/fixtures/arkade-operator/server-info.json',
 )
+
+const CORS_ALLOW_HEADERS = [
+  'Content-Type',
+  'Accept',
+  'X-Build-Version',
+  E2E_ARKADE_MOCK_PARTITION_HEADER,
+].join(', ')
 
 let cachedServerInfoJson: string | null = null
 
@@ -23,13 +33,44 @@ function loadServerInfoJson(): string {
   return cachedServerInfoJson
 }
 
+function readPartitionFromCookieHeader(cookieHeader: string): string | null {
+  const prefix = `${E2E_ARKADE_MOCK_PARTITION_COOKIE}=`
+  for (const part of cookieHeader.split(';')) {
+    const trimmed = part.trim()
+    if (trimmed.startsWith(prefix)) {
+      const value = decodeURIComponent(trimmed.slice(prefix.length)).trim()
+      if (value !== '') {
+        return value
+      }
+    }
+  }
+  return null
+}
+
+function readMockPartitionId(req: IncomingMessage): string {
+  const rawHeader = req.headers[E2E_ARKADE_MOCK_PARTITION_HEADER]
+  if (typeof rawHeader === 'string' && rawHeader.trim() !== '') {
+    return rawHeader.trim()
+  }
+
+  const cookieHeader = req.headers.cookie
+  if (typeof cookieHeader === 'string') {
+    const fromCookie = readPartitionFromCookieHeader(cookieHeader)
+    if (fromCookie != null) {
+      return fromCookie
+    }
+  }
+
+  return 'default'
+}
+
 function sendJson(res: ServerResponse, statusCode: number, body: unknown): void {
   const payload = JSON.stringify(body)
   res.statusCode = statusCode
   res.setHeader('Content-Type', 'application/json')
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, POST, OPTIONS')
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Accept, X-Build-Version')
+  res.setHeader('Access-Control-Allow-Headers', CORS_ALLOW_HEADERS)
   res.end(payload)
 }
 
@@ -54,13 +95,16 @@ type MockIncomingPayment = {
   timestamp: number
 }
 
-function buildIndexerVtxo(script: string, index: number, payment: MockIncomingPayment) {
+function buildIndexerVtxo(
+  mockState: E2eArkadeOperatorMockState,
+  script: string,
+  index: number,
+  payment: MockIncomingPayment,
+) {
   const createdAtMs = payment.timestamp * 1000
   const expiresAtMs = createdAtMs + 86_400_000 * 365
   return {
-    amount: String(
-      Math.max(e2eArkadeOperatorMockState.balanceSats, payment.amountSats),
-    ),
+    amount: String(Math.max(mockState.balanceSats, payment.amountSats)),
     arkTxid: payment.txid,
     assets: [],
     commitmentTxids: [],
@@ -80,7 +124,10 @@ function buildIndexerVtxo(script: string, index: number, payment: MockIncomingPa
   }
 }
 
-function buildMockVtxosForScripts(scripts: string[]) {
+function buildMockVtxosForScripts(
+  mockState: E2eArkadeOperatorMockState,
+  scripts: string[],
+) {
   const defaultPayment: MockIncomingPayment = {
     txid: E2E_ARKADE_MOCK_INCOMING_TXID,
     amountSats: E2E_ARKADE_MOCK_DEFAULT_BALANCE_SATS,
@@ -91,17 +138,17 @@ function buildMockVtxosForScripts(scripts: string[]) {
     return []
   }
 
-  const fundedScript = e2eArkadeOperatorMockState.fundedScript
+  const fundedScript = mockState.fundedScript
   if (fundedScript != null) {
     if (!scripts.includes(fundedScript)) {
       return []
     }
-    return [buildIndexerVtxo(fundedScript, 0, defaultPayment)]
+    return [buildIndexerVtxo(mockState, fundedScript, 0, defaultPayment)]
   }
 
   const firstScript = scripts[0]
-  e2eArkadeOperatorMockState.fundedScript = firstScript
-  return [buildIndexerVtxo(firstScript, 0, defaultPayment)]
+  mockState.fundedScript = firstScript
+  return [buildIndexerVtxo(mockState, firstScript, 0, defaultPayment)]
 }
 
 function emptyListVtxosResponse() {
@@ -120,13 +167,16 @@ function isPendingOnlyVtxosRequest(requestUrl: string): boolean {
   return url.searchParams.get('pendingOnly') === 'true'
 }
 
-function buildListVtxosResponse(requestUrl: string) {
+function buildListVtxosResponse(
+  mockState: E2eArkadeOperatorMockState,
+  requestUrl: string,
+) {
   if (isPendingOnlyVtxosRequest(requestUrl)) {
     return emptyListVtxosResponse()
   }
 
   const scripts = parseScriptsFromRequestUrl(requestUrl)
-  const vtxos = buildMockVtxosForScripts(scripts)
+  const vtxos = buildMockVtxosForScripts(mockState, scripts)
   const total = vtxos.length
   return {
     vtxos,
@@ -151,12 +201,14 @@ export function handleE2eArkadeOperatorMockRequest(
     res.statusCode = 204
     res.setHeader('Access-Control-Allow-Origin', '*')
     res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, POST, OPTIONS')
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Accept, X-Build-Version')
+    res.setHeader('Access-Control-Allow-Headers', CORS_ALLOW_HEADERS)
     res.end()
     return true
   }
 
-  if (e2eArkadeOperatorMockState.shouldFail) {
+  const mockState = getE2eArkadeOperatorMockState(readMockPartitionId(req))
+
+  if (mockState.shouldFail) {
     sendJson(res, 503, { message: 'E2E Arkade operator mock: simulated outage' })
     return true
   }
@@ -164,6 +216,8 @@ export function handleE2eArkadeOperatorMockRequest(
   const upstreamPath = rawUrl.replace(/^\/api\/arkade\/operator\/signet/, '') || '/'
 
   if (upstreamPath.startsWith('/v1/info')) {
+    // Each WASM session open starts with /v1/info; reset discovery within this partition.
+    mockState.fundedScript = null
     res.statusCode = 200
     res.setHeader('Content-Type', 'application/json')
     res.setHeader('Access-Control-Allow-Origin', '*')
@@ -172,7 +226,7 @@ export function handleE2eArkadeOperatorMockRequest(
   }
 
   if (upstreamPath.startsWith('/v1/indexer/vtxos')) {
-    sendJson(res, 200, buildListVtxosResponse(rawUrl))
+    sendJson(res, 200, buildListVtxosResponse(mockState, rawUrl))
     return true
   }
 

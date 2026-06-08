@@ -4,6 +4,13 @@ export const E2E_ARKADE_MOCK_INCOMING_TXID =
 
 export const E2E_ARKADE_MOCK_DEFAULT_BALANCE_SATS = 42_000
 
+/**
+ * Per-test mock partition id — sent as a request header (main thread) and cookie (worker fetch).
+ * Worker operator calls bypass Playwright `page.route`; same-origin cookies reach Vite middleware.
+ */
+export const E2E_ARKADE_MOCK_PARTITION_HEADER = 'x-e2e-arkade-mock-partition'
+export const E2E_ARKADE_MOCK_PARTITION_COOKIE = E2E_ARKADE_MOCK_PARTITION_HEADER
+
 export type E2eArkadeMockIncomingPayment = {
   txid: string
   amountSats: number
@@ -18,16 +25,30 @@ export type E2eArkadeOperatorMockState = {
   fundedScript: string | null
 }
 
-export const e2eArkadeOperatorMockState: E2eArkadeOperatorMockState = {
-  shouldFail: false,
-  balanceSats: E2E_ARKADE_MOCK_DEFAULT_BALANCE_SATS,
-  extraIncomingPayments: [],
-  fundedScript: null,
+function createDefaultMockState(): E2eArkadeOperatorMockState {
+  return {
+    shouldFail: false,
+    balanceSats: E2E_ARKADE_MOCK_DEFAULT_BALANCE_SATS,
+    extraIncomingPayments: [],
+    fundedScript: null,
+  }
 }
 
-export function resetE2eArkadeOperatorMockState(): void {
-  e2eArkadeOperatorMockState.shouldFail = false
-  e2eArkadeOperatorMockState.balanceSats = E2E_ARKADE_MOCK_DEFAULT_BALANCE_SATS
-  e2eArkadeOperatorMockState.extraIncomingPayments = []
-  e2eArkadeOperatorMockState.fundedScript = null
+/** @deprecated Use {@link getE2eArkadeOperatorMockState} — kept for browser-side control stubs. */
+export const e2eArkadeOperatorMockState: E2eArkadeOperatorMockState = createDefaultMockState()
+
+const mockStateByPartition = new Map<string, E2eArkadeOperatorMockState>()
+
+export function getE2eArkadeOperatorMockState(partitionId: string): E2eArkadeOperatorMockState {
+  const key = partitionId.trim() !== '' ? partitionId.trim() : 'default'
+  let state = mockStateByPartition.get(key)
+  if (state == null) {
+    state = createDefaultMockState()
+    mockStateByPartition.set(key, state)
+  }
+  return state
+}
+
+export function resetE2eArkadeOperatorMockState(partitionId = 'default'): void {
+  mockStateByPartition.set(partitionId, createDefaultMockState())
 }

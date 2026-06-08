@@ -14,17 +14,27 @@ import {
   E2E_ARKADE_MOCK_INCOMING_TXID,
 } from '@/lib/arkade/e2e/arkade-operator-mock-state'
 import {
+  buildArkadeMockPartitionId,
+  installArkadeMockIsolation,
+} from './helpers/arkade-mock-isolation'
+import {
   expectArkadeBalanceNotEmptySession,
   goToReceiveArkadeMode,
   readDashboardArkadeBalanceSats,
+  waitForArkadeActivityLoaded,
   waitForArkadeBalanceCard,
 } from './helpers/dashboard-arkade'
 
 test.describe('Dashboard Arkade mock ASP @arkade', () => {
-  test.beforeEach(() => {
+  test.beforeEach(async ({ page, context }, testInfo) => {
     test.skip(
       process.env.VITE_E2E_ARKADE_MOCK !== 'true',
       'Run with VITE_E2E_ARKADE_MOCK=true (npm run test:e2e:arkade).',
+    )
+    await installArkadeMockIsolation(
+      context,
+      page,
+      buildArkadeMockPartitionId(testInfo),
     )
   })
 
@@ -54,6 +64,8 @@ test.describe('Dashboard Arkade mock ASP @arkade', () => {
     await goToWalletTab(page, 'Dashboard')
 
     await expectArkadeBalanceNotEmptySession(page)
+    expect(await readDashboardArkadeBalanceSats(page)).toBe(E2E_ARKADE_MOCK_DEFAULT_BALANCE_SATS)
+    await waitForArkadeActivityLoaded(page)
     await expect(page.getByTestId(`arkade-payment-${E2E_ARKADE_MOCK_INCOMING_TXID}`)).toBeVisible({
       timeout: 120_000,
     })
