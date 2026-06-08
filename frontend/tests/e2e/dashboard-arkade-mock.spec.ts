@@ -25,7 +25,11 @@ import {
   waitForArkadeBalanceCard,
 } from './helpers/dashboard-arkade'
 
+const ARKADE_MOCK_TEST_TIMEOUT_MS = process.env.CI ? 120_000 : 90_000
+
 test.describe('Dashboard Arkade mock ASP @arkade', () => {
+  test.describe.configure({ timeout: ARKADE_MOCK_TEST_TIMEOUT_MS })
+
   test.beforeEach(async ({ page, context }, testInfo) => {
     test.skip(
       process.env.VITE_E2E_ARKADE_MOCK !== 'true',
@@ -39,8 +43,6 @@ test.describe('Dashboard Arkade mock ASP @arkade', () => {
   })
 
   test('E2E-ARK-MOCK-01 shows Arkade balance card after unlock on signet', async ({ page }) => {
-    test.setTimeout(360_000)
-
     await createWalletViaUI(page)
     await expectNoInitialWalletSyncErrorToast(page)
 
@@ -56,8 +58,6 @@ test.describe('Dashboard Arkade mock ASP @arkade', () => {
   })
 
   test('E2E-ARK-MOCK-02 shows fixture incoming payment in activity feed', async ({ page }) => {
-    test.setTimeout(360_000)
-
     await createWalletViaUI(page)
     await enableArkadeFeature(page)
     await switchToSignet(page)
@@ -66,14 +66,10 @@ test.describe('Dashboard Arkade mock ASP @arkade', () => {
     await expectArkadeBalanceNotEmptySession(page)
     expect(await readDashboardArkadeBalanceSats(page)).toBe(E2E_ARKADE_MOCK_DEFAULT_BALANCE_SATS)
     await waitForArkadeActivityLoaded(page)
-    await expect(page.getByTestId(`arkade-payment-${E2E_ARKADE_MOCK_INCOMING_TXID}`)).toBeVisible({
-      timeout: 120_000,
-    })
+    await expect(page.getByTestId(`arkade-payment-${E2E_ARKADE_MOCK_INCOMING_TXID}`)).toBeVisible()
   })
 
   test('E2E-ARK-MOCK-03 receive round-trip preserves Arkade balance display', async ({ page }) => {
-    test.setTimeout(360_000)
-
     await createWalletViaUI(page)
     await enableArkadeFeature(page)
     await switchToSignet(page)
@@ -86,7 +82,9 @@ test.describe('Dashboard Arkade mock ASP @arkade', () => {
     await goToWalletTab(page, 'Dashboard')
 
     await waitForArkadeBalanceCard(page)
-    await expect(page.getByTestId('dashboard-arkade-session-empty')).not.toBeVisible()
+    await expect(page.getByTestId('dashboard-arkade-session-empty')).not.toBeVisible({
+      timeout: 15_000,
+    })
     const afterSats = await readDashboardArkadeBalanceSats(page)
     expect(afterSats).toBe(beforeSats)
   })

@@ -21,8 +21,8 @@ export async function enableArkadeFeature(page: Page): Promise<void> {
   await openSettingsMainTab(page)
 }
 
-/** Lab → Signet with Arkade enabled runs Esplora sync plus Arkade session open; allow extra time. */
-const ARKADE_SIGNET_SWITCH_TIMEOUT_MS = 240_000
+/** Mock ASP E2E: signet switch + mocked operator session (not live Mutinynet). */
+const ARKADE_SIGNET_SWITCH_TIMEOUT_MS = process.env.CI ? 90_000 : 60_000
 
 export async function switchToSignet(page: Page): Promise<void> {
   await page.getByRole('link', { name: /settings/i }).click()
