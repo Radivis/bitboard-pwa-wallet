@@ -9,12 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `bitboard-ark` WASM crate (ark-rs 0.9.x): Arkade session, balance, send, delegate, exits, and persistence v2 in the Ark worker
-
 ### Changed
-
-- Arkade worker: `@arkade-os/sdk` replaced by `bitboard-ark` (operator access via REST in browser)
-- Arkade encrypted persistence: **v2** (`ark-rs` engine); existing v1 snapshots are ignored on unlock (re-board / re-delegate on unreleased builds)
 
 ### Fixed
 
@@ -22,7 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.3.0] - 2026-06-07
 ### Added
-- Arkade (VTXO) layer: enable under Settings → Features; separate balance, receive, send, and board-from-on-chain flows on mainnet, testnet, and signet (Mutinynet)
+- Arkade Support: enable under Settings → Features; separate balance, receive, send, and board-from-on-chain flows on mainnet, and signet (Mutinynet)
 - Network-scoped default Fulmine delegator URLs (env-configurable) for background VTXO renewal
 - Library articles "Arkade in Bitboard Wallet" and "VTXO expiry and renewal"; deploy notes in `docs/deploy/fulmine-delegator-vps.md`
 - Arkade collaborative and unilateral exit from Management (per-VTXO unilateral flow with unroll progress)

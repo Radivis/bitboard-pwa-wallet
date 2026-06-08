@@ -543,25 +543,23 @@ impl ArkSession {
             .map(gross_offchain_spendable_sats_from_snapshot)
             .transpose()?
             .unwrap_or(0);
-        let exit_amount_sats = if let Some(amount_sats) = params.amount_sats {
-            amount_sats
+        let mut rng = OsRng;
+        let (txid, exit_amount_sats) = if let Some(amount_sats) = params.amount_sats {
+            let txid = self
+                .client
+                .collaborative_redeem(&mut rng, destination, Amount::from_sat(amount_sats))
+                .await?;
+            (txid, amount_sats)
         } else {
             let offchain = self.client.offchain_balance().await?;
-            offchain.total().to_sat()
+            let exit_total = offchain.total();
+            let txid = self
+                .client
+                .collaborative_redeem(&mut rng, destination, exit_total)
+                .await?;
+            (txid, exit_total.to_sat())
         };
         self.record_pending_collaborative_exit(exit_amount_sats, baseline_offchain_spendable_sats);
-
-        let mut rng = OsRng;
-        let txid = if let Some(amount_sats) = params.amount_sats {
-            self.client
-                .collaborative_redeem(&mut rng, destination, Amount::from_sat(amount_sats))
-                .await?
-        } else {
-            let offchain = self.client.offchain_balance().await?;
-            self.client
-                .collaborative_redeem(&mut rng, destination, offchain.total())
-                .await?
-        };
         Ok(txid.to_string())
     }
 
@@ -699,7 +697,7 @@ impl ArkSession {
         };
 
         let amount_sats = self.vtxo_amount_sats_for_outpoint(txid, vout).await?;
-        self.record_pending_unilateral_exit(txid, vout, amount_sats);
+        let mut pending_unilateral_exit_recorded = false;
 
         let branch = self.build_unilateral_branch(target).await?;
         let mut done_vtxo_txid = txid.to_string();
@@ -721,12 +719,16 @@ impl ArkSession {
                     vtxo_txid: None,
                 });
 
-                if let Some(broadcast_txid) = self
+                let broadcast_txid = self
                     .client
                     .broadcast_next_unilateral_exit_node(std::slice::from_ref(&parent_tx))
                     .await
-                    .map_err(|error| ArkWasmError::Message(error.to_string()))?
-                {
+                    .map_err(|error| ArkWasmError::Message(error.to_string()))?;
+                if !pending_unilateral_exit_recorded {
+                    self.record_pending_unilateral_exit(txid, vout, amount_sats);
+                    pending_unilateral_exit_recorded = true;
+                }
+                if let Some(broadcast_txid) = broadcast_txid {
                     done_vtxo_txid = broadcast_txid.to_string();
                     on_progress(UnrollProgressEvent {
                         event_type: "wait".to_string(),
@@ -736,6 +738,10 @@ impl ArkSession {
                     });
                 }
             } else {
+                if !pending_unilateral_exit_recorded {
+                    self.record_pending_unilateral_exit(txid, vout, amount_sats);
+                    pending_unilateral_exit_recorded = true;
+                }
                 on_progress(UnrollProgressEvent {
                     event_type: "wait".to_string(),
                     message: format!("Waiting for confirmation of {parent_txid}"),
