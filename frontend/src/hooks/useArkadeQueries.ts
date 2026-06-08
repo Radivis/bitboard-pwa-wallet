@@ -34,6 +34,12 @@ import { useSessionStore } from '@/stores/sessionStore'
 import { getCommittedNetworkMode, useWalletStore } from '@/stores/walletStore'
 import type { NetworkMode } from '@/stores/walletStore'
 import { arkadeDashboardWalletDataQueryOptions } from '@/lib/arkade/arkade-dashboard-query-options'
+import {
+  beginOptimisticBoardingSettle,
+  reconcileBalanceAfterBoardingSettle,
+  revertOptimisticBoardingSettle,
+  zeroBoardingStatus,
+} from '@/lib/arkade/arkade-boarding-settle-optimistic'
 import { errorMessage } from '@/lib/shared/utils'
 
 const ARKADE_WALLET_UNLOCKED_ERROR = 'Wallet must be unlocked'
@@ -105,39 +111,6 @@ function walletScopedQueryKey(
     return buildKey(activeWalletId, networkMode)
   }
   return disabledArkadeQueryKey(disabledScope)
-}
-
-/** Clears boarding UTXO counts and bumps Arkade balance while settle refetches. */
-function applyOptimisticBoardingSettle(
-  queryClient: ReturnType<typeof useQueryClient>,
-  walletId: number,
-  networkMode: ArkadeSupportedNetworkMode,
-): void {
-  const boardingStatusKey = arkadeBoardingStatusQueryKey(walletId, networkMode)
-  const previousStatus = queryClient.getQueryData<ArkadeBoardingStatus>(boardingStatusKey)
-  const settledSats = previousStatus?.spendableSats ?? 0
-
-  if (previousStatus != null) {
-    queryClient.setQueryData<ArkadeBoardingStatus>(boardingStatusKey, {
-      ...previousStatus,
-      spendableSats: 0,
-      pendingSats: 0,
-      expiredSats: 0,
-    })
-  }
-
-  if (settledSats > 0) {
-    const balanceKey = arkadeBalanceQueryKey(walletId, networkMode)
-    const previousBalance = queryClient.getQueryData<ArkadeBalanceInfo>(balanceKey)
-    if (previousBalance != null) {
-      queryClient.setQueryData<ArkadeBalanceInfo>(balanceKey, {
-        ...previousBalance,
-        confirmedSats: previousBalance.confirmedSats + settledSats,
-        totalSats: previousBalance.totalSats + settledSats,
-        boardingSpendableSats: 0,
-      })
-    }
-  }
 }
 
 async function invalidateArkadeWalletDataQueries(
@@ -352,25 +325,54 @@ export function useArkadeOnboardMutation() {
         getArkadeWorker().onboardBoardedUtxos(),
       )
     },
-    onSuccess: async (txid) => {
+    onMutate: async () => {
+      if (activeWalletId == null || !isArkadeSupportedNetworkMode(networkMode)) {
+        return undefined
+      }
+
+      const boardingStatusKey = arkadeBoardingStatusQueryKey(activeWalletId, networkMode)
+      const balanceKey = arkadeBalanceQueryKey(activeWalletId, networkMode)
+      await queryClient.cancelQueries({ queryKey: boardingStatusKey })
+      await queryClient.cancelQueries({ queryKey: balanceKey })
+
+      return beginOptimisticBoardingSettle(queryClient, activeWalletId, networkMode)
+    },
+    onSuccess: async (txid, _variables, context) => {
       if (txid) {
         toast.success('Boarding completed')
       }
-      if (activeWalletId != null && isArkadeSupportedNetworkMode(networkMode)) {
-        if (txid) {
-          applyOptimisticBoardingSettle(queryClient, activeWalletId, networkMode)
-        }
-        await Promise.all([
-          queryClient.refetchQueries({
-            queryKey: arkadeBalanceQueryKey(activeWalletId, networkMode),
-          }),
-          queryClient.refetchQueries({
-            queryKey: arkadeBoardingStatusQueryKey(activeWalletId, networkMode),
-          }),
-        ])
+      if (activeWalletId == null || !isArkadeSupportedNetworkMode(networkMode)) {
+        return
       }
+
+      const settledSats = context?.settledSats ?? 0
+      const boardingStatusKey = arkadeBoardingStatusQueryKey(activeWalletId, networkMode)
+      const balanceKey = arkadeBalanceQueryKey(activeWalletId, networkMode)
+
+      if (txid && settledSats > 0) {
+        const cachedStatus = queryClient.getQueryData<ArkadeBoardingStatus>(boardingStatusKey)
+        if (cachedStatus != null) {
+          queryClient.setQueryData(boardingStatusKey, zeroBoardingStatus(cachedStatus))
+        }
+      }
+
+      await queryClient.refetchQueries({ queryKey: balanceKey })
+      const fetchedBalance = queryClient.getQueryData<ArkadeBalanceInfo>(balanceKey)
+      if (fetchedBalance != null && settledSats > 0) {
+        queryClient.setQueryData(
+          balanceKey,
+          reconcileBalanceAfterBoardingSettle(fetchedBalance, settledSats),
+        )
+      }
+
+      await queryClient.invalidateQueries({
+        queryKey: arkadeHistoryQueryKey(activeWalletId, networkMode),
+      })
     },
-    onError: (err) => {
+    onError: (err, _variables, context) => {
+      if (context != null) {
+        revertOptimisticBoardingSettle(queryClient, context)
+      }
       toast.error(errorMessage(err))
     },
   })
