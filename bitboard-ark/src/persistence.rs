@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use ark_client::Error;
 use ark_client::wallet::Persistence;
@@ -10,6 +10,20 @@ use bitcoin::{Network, XOnlyPublicKey};
 use serde::{Deserialize, Serialize};
 
 pub const BITBOARD_ARK_PERSISTENCE_VERSION: u32 = 3;
+const PERSISTENCE_LOCK_POISONED: &str = "persistence lock poisoned";
+
+/// Single-threaded WASM: recover in-memory state after a prior panic instead of re-panicking.
+fn lock_persistence<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
+    mutex
+        .lock()
+        .unwrap_or_else(|poisoned: PoisonError<_>| poisoned.into_inner())
+}
+
+fn lock_persistence_result<T>(mutex: &Mutex<T>) -> Result<MutexGuard<'_, T>, Error> {
+    mutex
+        .lock()
+        .map_err(|_| Error::wallet(PERSISTENCE_LOCK_POISONED))
+}
 pub const ARK_RS_ENGINE: &str = "ark-rs";
 pub const ARK_RS_SDK_VERSION: &str = "0.9.2";
 
@@ -179,45 +193,34 @@ impl JsonPersistenceDb {
     }
 
     pub fn set_load_context(&self, network: Network, server_signer: XOnlyPublicKey) {
-        *self.load_context.lock().expect("persistence lock") = Some((network, server_signer));
+        *lock_persistence(&self.load_context) = Some((network, server_signer));
     }
 
     pub fn snapshot(&self) -> WalletDbSnapshot {
-        self.inner.lock().expect("persistence lock").clone()
+        lock_persistence(&self.inner).clone()
     }
 
     pub fn set_offchain_vtxo_snapshot(&self, snapshot: OffchainVtxoSnapshot) {
-        self.inner
-            .lock()
-            .expect("persistence lock")
-            .offchain_vtxo_snapshot = Some(snapshot);
+        lock_persistence(&self.inner).offchain_vtxo_snapshot = Some(snapshot);
     }
 
     pub fn set_offchain_next_derivation_index(&self, index: u32) {
-        self.inner
-            .lock()
-            .expect("persistence lock")
-            .offchain_next_derivation_index = index;
+        lock_persistence(&self.inner).offchain_next_derivation_index = index;
     }
 
     pub fn pending_exit_deductions(&self) -> Vec<PendingExitDeductionRecord> {
-        self.inner
-            .lock()
-            .expect("persistence lock")
+        lock_persistence(&self.inner)
             .pending_exit_deductions
             .clone()
     }
 
     pub fn set_pending_exit_deductions(&self, records: Vec<PendingExitDeductionRecord>) {
-        self.inner
-            .lock()
-            .expect("persistence lock")
-            .pending_exit_deductions = records;
+        lock_persistence(&self.inner).pending_exit_deductions = records;
     }
 
     /// Insert or replace a pending exit record (no duplicate deductions on retry).
     pub fn upsert_pending_exit_deduction(&self, record: PendingExitDeductionRecord) {
-        let mut inner = self.inner.lock().expect("persistence lock");
+        let mut inner = lock_persistence(&self.inner);
         match record.kind {
             PendingExitKind::Unilateral => {
                 let Some(txid) = record.vtxo_txid.as_deref() else {
@@ -307,7 +310,7 @@ impl Persistence for JsonPersistenceDb {
     ) -> Result<(), Error> {
         let owner_pk = boarding_output.owner_pk();
         let snapshot = Self::boarding_output_to_snapshot(&boarding_output);
-        let mut state = self.inner.lock().expect("persistence lock");
+        let mut state = lock_persistence_result(&self.inner)?;
         state
             .secret_keys_by_owner_pk_hex
             .insert(owner_pk.to_string(), hex::encode(sk.secret_bytes()));
@@ -322,11 +325,8 @@ impl Persistence for JsonPersistenceDb {
     }
 
     fn load_boarding_outputs(&self) -> Result<Vec<BoardingOutput>, Error> {
-        let state = self.inner.lock().expect("persistence lock");
-        let (network, server) = self
-            .load_context
-            .lock()
-            .expect("persistence lock")
+        let state = lock_persistence_result(&self.inner)?;
+        let (network, server) = lock_persistence_result(&self.load_context)?
             .ok_or_else(|| Error::wallet("boarding load context not configured"))?;
         Ok(state
             .boarding_outputs
@@ -338,7 +338,7 @@ impl Persistence for JsonPersistenceDb {
     }
 
     fn sk_for_pk(&self, pk: &XOnlyPublicKey) -> Result<SecretKey, Error> {
-        let state = self.inner.lock().expect("persistence lock");
+        let state = lock_persistence_result(&self.inner)?;
         let hex_sk = state
             .secret_keys_by_owner_pk_hex
             .get(&pk.to_string())

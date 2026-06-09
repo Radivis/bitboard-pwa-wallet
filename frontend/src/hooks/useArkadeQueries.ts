@@ -29,6 +29,12 @@ import {
 import { scheduleBackgroundArkadeOperatorSync } from '@/lib/arkade/arkade-operator-sync'
 import { readArkadeDashboardStateFromStore } from '@/lib/arkade/arkade-persistence-store-sync'
 import {
+  ARKADE_BOARDING_STATUS_REFETCH_MS,
+  ARKADE_FEE_ESTIMATE_STALE_MS,
+  ARKADE_SESSION_POLL_STALE_MS,
+  ARKADE_SLOW_METADATA_STALE_MS,
+} from '@/lib/arkade/arkade-query-timings'
+import {
   applyOptimisticExitBalanceDeduction,
   reconcileBalanceAfterExitOperation,
   revertOptimisticExitBalanceDeduction,
@@ -320,7 +326,7 @@ export function useArkadeBoardingAddressQuery() {
     ),
     enabled: sessionReady,
     queryFn: () => withReadyArkadeWorker(() => getArkadeWorker().getBoardingAddress()),
-    staleTime: 300_000,
+    staleTime: ARKADE_SLOW_METADATA_STALE_MS,
   })
 }
 
@@ -338,8 +344,8 @@ export function useArkadeBoardingStatusQuery() {
     ),
     enabled: sessionReady,
     queryFn: () => withReadyArkadeWorker(() => getArkadeWorker().getBoardingStatus()),
-    refetchInterval: 30_000,
-    staleTime: 15_000,
+    refetchInterval: ARKADE_BOARDING_STATUS_REFETCH_MS,
+    staleTime: ARKADE_SESSION_POLL_STALE_MS,
   })
 }
 
@@ -352,7 +358,7 @@ export function useArkadeDelegateInfoQuery() {
       : disabledArkadeQueryKey('delegator'),
     enabled: sessionReady,
     queryFn: () => withReadyArkadeWorker(() => getArkadeWorker().getDelegateInfo()),
-    staleTime: 300_000,
+    staleTime: ARKADE_SLOW_METADATA_STALE_MS,
   })
 }
 
@@ -559,7 +565,7 @@ export function useArkadeExitCandidatesQuery(enabled: boolean) {
     ),
     enabled: enabled && sessionReady,
     queryFn: () => withReadyArkadeWorker(() => getArkadeWorker().listExitCandidates()),
-    staleTime: 15_000,
+    staleTime: ARKADE_SESSION_POLL_STALE_MS,
   })
 }
 
@@ -577,7 +583,7 @@ export function useArkadeBumperInfoQuery(enabled: boolean) {
     ),
     enabled: enabled && sessionReady,
     queryFn: () => withReadyArkadeWorker(() => getArkadeWorker().getOnchainBumperInfo()),
-    staleTime: 15_000,
+    staleTime: ARKADE_SESSION_POLL_STALE_MS,
   })
 }
 
@@ -781,7 +787,7 @@ export function useArkadeCollaborativeExitFeeQuery(params: {
           amountSats: params.amountSats,
         }),
       ),
-    staleTime: 30_000,
+    staleTime: ARKADE_FEE_ESTIMATE_STALE_MS,
   })
 }
 
@@ -820,6 +826,6 @@ export function useArkadeUnilateralExitFeeQuery(params: {
         getArkadeWorker().estimateUnilateralExit({ txid, vout }),
       )
     },
-    staleTime: 30_000,
+    staleTime: ARKADE_FEE_ESTIMATE_STALE_MS,
   })
 }

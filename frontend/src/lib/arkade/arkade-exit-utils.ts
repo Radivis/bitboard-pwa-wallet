@@ -15,7 +15,11 @@ export function formatIntentFeePrograms(configured: ArkadeIntentFeeConfigured): 
   return labels.join(', ')
 }
 
-/** Fallback bumper threshold when unilateral fee estimate is unavailable (sats). */
+/**
+ * Fallback bumper low-balance threshold when the unilateral fee estimate is unavailable (sats).
+ * Roughly one child-package fee at minimum fee rate (~0.1 sat/vB × 140 vB); prompts funding the
+ * bumper before unroll when we cannot query Esplora for a tighter estimate.
+ */
 export const ARKADE_BUMPER_LOW_BALANCE_FALLBACK_SATS = 1_000
 
 const COLLABORATIVE_EXIT_AMOUNT_HELP =
