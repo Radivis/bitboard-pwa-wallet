@@ -16,7 +16,6 @@ import {
   mockWalletsState,
   nearZeroSecurityState,
   resetSettingsPageTestState,
-  sessionStoreState,
   walletStoreState,
 } from '@/test-utils/settings-page-test-harness'
 import { GITHUB_CHANGELOG_URL } from '@common/public-links'

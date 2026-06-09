@@ -35,7 +35,6 @@ import {
   waitForReceiveArkadeAddressReady,
   waitForArkadeWorkerReadyAfterUnlock,
   waitForDashboardArkadeSessionAfterUnlock,
-  waitForArkadeWasmSessionReady,
 } from './helpers/dashboard-arkade'
 
 const ARKADE_MOCK_TEST_TIMEOUT_MS = process.env.CI ? 120_000 : 90_000

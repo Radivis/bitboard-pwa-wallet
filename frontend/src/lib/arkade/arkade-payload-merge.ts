@@ -14,7 +14,8 @@ export type ArkadeOperatorConnectionSummary = Omit<
 export function toArkadeOperatorConnectionSummary(
   connection: StoredArkadeOperatorConnection,
 ): ArkadeOperatorConnectionSummary {
-  const { sdkPersistenceJson: _sdkPersistenceJson, ...summary } = connection
+  const { sdkPersistenceJson: _omittedSdkPersistenceJson, ...summary } = connection
+  void _omittedSdkPersistenceJson
   return summary
 }
 
