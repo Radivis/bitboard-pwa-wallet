@@ -201,6 +201,45 @@ mod tests {
     }
 
     #[test]
+    fn sum_pending_exit_sats_by_kind_filters_records() {
+        let records = vec![
+            PendingExitDeductionRecord {
+                kind: PendingExitKind::Unilateral,
+                vtxo_txid: Some("aa".repeat(32)),
+                vout: Some(0),
+                amount_sats: 50_000,
+                started_at: 1,
+                baseline_offchain_spendable_sats: None,
+            },
+            PendingExitDeductionRecord {
+                kind: PendingExitKind::Collaborative,
+                vtxo_txid: None,
+                vout: None,
+                amount_sats: 100_000,
+                started_at: 2,
+                baseline_offchain_spendable_sats: Some(200_000),
+            },
+            PendingExitDeductionRecord {
+                kind: PendingExitKind::Unilateral,
+                vtxo_txid: Some("bb".repeat(32)),
+                vout: Some(1),
+                amount_sats: 25_000,
+                started_at: 3,
+                baseline_offchain_spendable_sats: None,
+            },
+        ];
+
+        assert_eq!(
+            sum_pending_exit_sats_by_kind(&records, PendingExitKind::Unilateral),
+            75_000
+        );
+        assert_eq!(
+            sum_pending_exit_sats_by_kind(&records, PendingExitKind::Collaborative),
+            100_000
+        );
+    }
+
+    #[test]
     fn reconcile_drops_unilateral_with_invalid_txid_without_failing() {
         let snapshot = snapshot_with(vec![sample_vtp_record(2, 0, 30_000, false, false)]);
 

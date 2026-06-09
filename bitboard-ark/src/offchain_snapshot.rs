@@ -218,3 +218,109 @@ fn generate_outgoing_vtxo_transaction_history(
         .map_err(ArkWasmError::from)
         .map(|iterator| iterator.collect())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        offchain_balance_sats_from_snapshot, snapshot_from_virtual_tx_outpoints,
+        vtxo_list_from_snapshot,
+    };
+    use crate::error::ArkWasmError;
+    use crate::persistence::{OffchainVtxoSnapshot, VirtualTxOutPointRecord};
+    use ark_core::server::VirtualTxOutPoint;
+    use bitcoin::Amount;
+    use bitcoin::OutPoint;
+    use bitcoin::ScriptBuf;
+    use bitcoin::Txid;
+    use bitcoin::hashes::Hash;
+
+    fn sample_vtp(
+        txid_byte: u8,
+        amount_sats: u64,
+        is_preconfirmed: bool,
+        expires_at: i64,
+    ) -> VirtualTxOutPoint {
+        VirtualTxOutPoint {
+            outpoint: OutPoint::new(Txid::from_byte_array([txid_byte; 32]), 0),
+            created_at: expires_at - 86_400,
+            expires_at,
+            amount: Amount::from_sat(amount_sats),
+            script: ScriptBuf::new(),
+            is_preconfirmed,
+            is_swept: false,
+            is_unrolled: false,
+            is_spent: false,
+            spent_by: None,
+            commitment_txids: vec![],
+            settled_by: None,
+            ark_txid: None,
+            assets: vec![],
+        }
+    }
+
+    #[test]
+    fn offchain_balance_sats_from_snapshot_buckets() {
+        let future_expiry = 2_000_000_000_i64;
+        let past_expiry = 1_000_000_000_i64;
+        let snapshot = snapshot_from_virtual_tx_outpoints(
+            330,
+            1_700_000_000,
+            vec![
+                sample_vtp(1, 10_000, true, future_expiry),
+                sample_vtp(2, 20_000, false, future_expiry),
+                sample_vtp(3, 5_000, false, past_expiry),
+            ],
+        );
+
+        let (pre_confirmed, confirmed, recoverable) =
+            offchain_balance_sats_from_snapshot(&snapshot).expect("balance buckets");
+
+        assert_eq!(pre_confirmed, 10_000);
+        assert_eq!(confirmed, 20_000);
+        assert_eq!(recoverable, 5_000);
+    }
+
+    #[test]
+    fn snapshot_round_trip_preserves_vtxo_fields() {
+        let original = sample_vtp(9, 180_603, false, 1_900_000_000);
+        let snapshot =
+            snapshot_from_virtual_tx_outpoints(330, 1_700_000_000, vec![original.clone()]);
+        let vtxo_list = vtxo_list_from_snapshot(&snapshot).expect("vtxo list");
+        let round_tripped = vtxo_list
+            .all_unspent()
+            .find(|vtp| vtp.outpoint == original.outpoint)
+            .expect("round-tripped vtxo");
+
+        assert_eq!(round_tripped.amount, original.amount);
+        assert_eq!(round_tripped.expires_at, original.expires_at);
+        assert_eq!(round_tripped.is_preconfirmed, original.is_preconfirmed);
+    }
+
+    #[test]
+    fn vtxo_list_from_snapshot_rejects_invalid_txid() {
+        let snapshot = OffchainVtxoSnapshot {
+            synced_at: 1_700_000_000,
+            dust_sats: 330,
+            virtual_tx_outpoints: vec![VirtualTxOutPointRecord {
+                txid: "not-a-txid".to_string(),
+                vout: 0,
+                created_at: 1_700_000_000,
+                expires_at: 1_800_000_000,
+                amount_sats: 1_000,
+                script_hex: String::new(),
+                is_preconfirmed: false,
+                is_swept: false,
+                is_unrolled: false,
+                is_spent: false,
+                spent_by: None,
+                commitment_txids: vec![],
+                settled_by: None,
+                ark_txid: None,
+                assets: vec![],
+            }],
+        };
+
+        let error = vtxo_list_from_snapshot(&snapshot).expect_err("invalid txid");
+        assert!(matches!(error, ArkWasmError::Snapshot(_)));
+    }
+}

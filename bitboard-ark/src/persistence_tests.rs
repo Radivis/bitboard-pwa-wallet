@@ -1,8 +1,67 @@
 use crate::persistence::{
     BITBOARD_ARK_PERSISTENCE_VERSION, BitboardArkPersistence, JsonPersistenceDb, OperatorIdentity,
-    PendingExitDeductionRecord, PendingExitKind, network_label,
+    PendingExitDeductionRecord, PendingExitKind, network_label, validate_operator_identity,
 };
 use bitcoin::Network;
+use bitcoin::XOnlyPublicKey;
+use std::str::FromStr;
+
+#[test]
+fn network_label_maps_bitcoin_networks() {
+    assert_eq!(network_label(Network::Bitcoin), "bitcoin");
+    assert_eq!(network_label(Network::Signet), "signet");
+}
+
+#[test]
+fn validate_operator_identity_accepts_matching_identity() {
+    let signer = XOnlyPublicKey::from_str(
+        "18845781f631c48f1c9709e23092067d06837f30aa0cd0544ac887fe91ddd166",
+    )
+    .expect("valid key");
+    let stored = OperatorIdentity {
+        signer_pk_hex: signer.to_string(),
+        network: network_label(Network::Signet),
+    };
+
+    assert!(validate_operator_identity(Some(&stored), signer, Network::Signet).is_ok());
+    assert!(validate_operator_identity(None, signer, Network::Signet).is_ok());
+}
+
+#[test]
+fn validate_operator_identity_rejects_signer_mismatch() {
+    let stored_signer = XOnlyPublicKey::from_str(
+        "18845781f631c48f1c9709e23092067d06837f30aa0cd0544ac887fe91ddd166",
+    )
+    .expect("valid stored key");
+    let connected_signer = XOnlyPublicKey::from_str(
+        "28845781f631c48f1c9709e23092067d06837f30aa0cd0544ac887fe91ddd166",
+    )
+    .expect("valid connected key");
+    let stored = OperatorIdentity {
+        signer_pk_hex: stored_signer.to_string(),
+        network: network_label(Network::Signet),
+    };
+
+    let error = validate_operator_identity(Some(&stored), connected_signer, Network::Signet)
+        .expect_err("mismatched signer");
+    assert!(error.contains("does not match connected operator"));
+}
+
+#[test]
+fn validate_operator_identity_rejects_network_mismatch() {
+    let signer = XOnlyPublicKey::from_str(
+        "18845781f631c48f1c9709e23092067d06837f30aa0cd0544ac887fe91ddd166",
+    )
+    .expect("valid key");
+    let stored = OperatorIdentity {
+        signer_pk_hex: signer.to_string(),
+        network: network_label(Network::Bitcoin),
+    };
+
+    let error = validate_operator_identity(Some(&stored), signer, Network::Signet)
+        .expect_err("mismatched network");
+    assert!(error.contains("does not match session network"));
+}
 
 #[test]
 fn persistence_round_trip_json() {

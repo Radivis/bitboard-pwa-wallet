@@ -35,3 +35,20 @@ impl NetworkMode {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::NetworkMode;
+    use bitcoin::Network;
+
+    #[test]
+    fn network_mode_parse_and_label() {
+        assert_eq!(NetworkMode::parse("mainnet"), Some(NetworkMode::Mainnet));
+        assert_eq!(NetworkMode::parse("signet"), Some(NetworkMode::Signet));
+        assert_eq!(NetworkMode::parse("testnet"), Some(NetworkMode::Testnet));
+        assert_eq!(NetworkMode::parse("regtest"), None);
+
+        assert_eq!(NetworkMode::Signet.to_bitcoin_network(), Network::Signet);
+        assert_eq!(NetworkMode::Signet.label(), "signet (Mutinynet)");
+    }
+}
