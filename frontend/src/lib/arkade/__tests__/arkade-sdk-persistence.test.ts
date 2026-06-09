@@ -11,6 +11,7 @@ import {
   loadWalletSecretsPayload,
   updateWalletSecretsPayloadWithRetry,
 } from '@/db/wallet-persistence'
+import type { WalletSecretsPayload } from '@/lib/wallet/wallet-domain-types'
 
 vi.mock('@/db/database', () => ({
   getDatabase: vi.fn(() => ({})),
@@ -31,7 +32,13 @@ function persistenceJsonWithReceiveIndex(index: number): string {
 describe('arkade-sdk-persistence', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    vi.mocked(updateWalletSecretsPayloadWithRetry).mockResolvedValue(undefined)
+    vi.mocked(updateWalletSecretsPayloadWithRetry).mockImplementation(
+      async ({ transform }) => {
+        const payload = await vi.mocked(loadWalletSecretsPayload).mock.results.at(-1)!
+          .value
+        await transform(payload)
+      },
+    )
     vi.mocked(loadWalletSecretsPayload).mockResolvedValue({
       descriptorWallets: [],
       lightningNwcConnections: [],
@@ -69,17 +76,7 @@ describe('arkade-sdk-persistence', () => {
 
   it('saveLastSuccessfulOperatorSyncAtForConnection updates sync timestamp only', async () => {
     const existingJson = persistenceJsonWithReceiveIndex(2)
-
-    await saveLastSuccessfulOperatorSyncAtForConnection({
-      password: 'pw',
-      walletId: 2,
-      connectionId: 'conn-1',
-      lastSuccessfulOperatorSyncAt: '2020-01-03T00:00:00.000Z',
-    })
-
-    const transform = vi.mocked(updateWalletSecretsPayloadWithRetry).mock.calls[0][0]
-      .transform
-    const next = await transform({
+    vi.mocked(loadWalletSecretsPayload).mockResolvedValue({
       descriptorWallets: [],
       lightningNwcConnections: [],
       arkadeOperatorConnections: [
@@ -97,14 +94,38 @@ describe('arkade-sdk-persistence', () => {
       activeArkadeConnectionIdByNetwork: { signet: 'conn-1' },
     })
 
-    expect(next.arkadeOperatorConnections[0].sdkPersistenceJson).toBe(existingJson)
-    expect(next.arkadeOperatorConnections[0].lastSuccessfulOperatorSyncAt).toBe(
+    let savedPayload: WalletSecretsPayload | undefined
+    vi.mocked(updateWalletSecretsPayloadWithRetry).mockImplementation(
+      async ({ transform }) => {
+        const payload = await vi.mocked(loadWalletSecretsPayload).mock.results.at(-1)!
+          .value
+        savedPayload = await transform(payload)
+      },
+    )
+
+    await saveLastSuccessfulOperatorSyncAtForConnection({
+      password: 'pw',
+      walletId: 2,
+      connectionId: 'conn-1',
+      lastSuccessfulOperatorSyncAt: '2020-01-03T00:00:00.000Z',
+    })
+
+    expect(savedPayload!.arkadeOperatorConnections[0].sdkPersistenceJson).toBe(existingJson)
+    expect(savedPayload!.arkadeOperatorConnections[0].lastSuccessfulOperatorSyncAt).toBe(
       '2020-01-03T00:00:00.000Z',
     )
   })
 
   it('merges sdkPersistenceJson into active operator connection via CAS', async () => {
     const sdkPersistenceJson = JSON.stringify({ version: 3, wallet_db: {} })
+    let savedPayload: WalletSecretsPayload | undefined
+    vi.mocked(updateWalletSecretsPayloadWithRetry).mockImplementation(
+      async ({ transform }) => {
+        const payload = await vi.mocked(loadWalletSecretsPayload).mock.results.at(-1)!
+          .value
+        savedPayload = await transform(payload)
+      },
+    )
 
     await saveSdkPersistenceJsonForConnection({
       password: 'pw',
@@ -115,26 +136,9 @@ describe('arkade-sdk-persistence', () => {
     })
 
     expect(updateWalletSecretsPayloadWithRetry).toHaveBeenCalledTimes(1)
-    const transform = vi.mocked(updateWalletSecretsPayloadWithRetry).mock.calls[0][0]
-      .transform
-    const next = await transform({
-      descriptorWallets: [],
-      lightningNwcConnections: [],
-      arkadeOperatorConnections: [
-        {
-          id: 'conn-1',
-          label: 'Mutinynet',
-          networkMode: 'signet',
-          operatorUrl: 'https://signet.arkade.example/v1',
-          operatorSignerPkHex: '02abc',
-          createdAt: '2020-01-01T00:00:00.000Z',
-        },
-      ],
-      activeArkadeConnectionIdByNetwork: { signet: 'conn-1' },
-    })
-    expect(next.arkadeOperatorConnections).toHaveLength(1)
-    expect(next.arkadeOperatorConnections[0].sdkPersistenceJson).toBe(sdkPersistenceJson)
-    expect(next.arkadeOperatorConnections[0].lastSuccessfulOperatorSyncAt).toBe(
+    expect(savedPayload!.arkadeOperatorConnections).toHaveLength(1)
+    expect(savedPayload!.arkadeOperatorConnections[0].sdkPersistenceJson).toBe(sdkPersistenceJson)
+    expect(savedPayload!.arkadeOperatorConnections[0].lastSuccessfulOperatorSyncAt).toBe(
       '2020-01-02T00:00:00.000Z',
     )
   })
@@ -142,17 +146,7 @@ describe('arkade-sdk-persistence', () => {
   it('saveSdkPersistenceJsonForConnection keeps higher receive cursor on concurrent writes', async () => {
     const existingJson = persistenceJsonWithReceiveIndex(2)
     const staleIncomingJson = persistenceJsonWithReceiveIndex(1)
-
-    await saveSdkPersistenceJsonForConnection({
-      password: 'pw',
-      walletId: 2,
-      connectionId: 'conn-1',
-      sdkPersistenceJson: staleIncomingJson,
-    })
-
-    const transform = vi.mocked(updateWalletSecretsPayloadWithRetry).mock.calls[0][0]
-      .transform
-    const next = await transform({
+    vi.mocked(loadWalletSecretsPayload).mockResolvedValue({
       descriptorWallets: [],
       lightningNwcConnections: [],
       arkadeOperatorConnections: [
@@ -169,6 +163,22 @@ describe('arkade-sdk-persistence', () => {
       activeArkadeConnectionIdByNetwork: { signet: 'conn-1' },
     })
 
-    expect(next.arkadeOperatorConnections[0].sdkPersistenceJson).toBe(existingJson)
+    let savedPayload: WalletSecretsPayload | undefined
+    vi.mocked(updateWalletSecretsPayloadWithRetry).mockImplementation(
+      async ({ transform }) => {
+        const payload = await vi.mocked(loadWalletSecretsPayload).mock.results.at(-1)!
+          .value
+        savedPayload = await transform(payload)
+      },
+    )
+
+    await saveSdkPersistenceJsonForConnection({
+      password: 'pw',
+      walletId: 2,
+      connectionId: 'conn-1',
+      sdkPersistenceJson: staleIncomingJson,
+    })
+
+    expect(savedPayload!.arkadeOperatorConnections[0].sdkPersistenceJson).toBe(existingJson)
   })
 })

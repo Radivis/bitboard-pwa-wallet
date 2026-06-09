@@ -150,6 +150,26 @@ pub struct UnrollResult {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct OpenSessionParams {
+    pub mnemonic: String,
+    pub network_mode: String,
+    pub ark_server_url: String,
+    pub delegator_url: String,
+    pub esplora_url: String,
+    #[serde(default)]
+    pub sdk_persistence_json: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CollaborativeExitFeeEstimateParams {
+    pub destination_address: String,
+    #[serde(default)]
+    pub amount_sats: Option<u64>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SendPaymentParams {
     pub address: String,
     pub amount_sats: u64,

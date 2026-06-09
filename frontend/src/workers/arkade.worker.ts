@@ -4,6 +4,7 @@ import type {
   SecretsChannelService,
 } from '@/workers/secrets-channel-types'
 import type { ArkadeSupportedNetworkMode } from '@/lib/arkade/arkade-endpoints'
+import { arkadeSessionKey } from '@/lib/arkade/arkade-session-key'
 import {
   clearDebouncedSdkPersistenceFlush,
   flushSdkPersistenceNowOrThrow,
@@ -107,14 +108,6 @@ function requestDecrypt(
   return secretsProxy.decrypt(password, encryptedBlob)
 }
 
-function sessionKey(
-  walletId: number,
-  networkMode: ArkadeSupportedNetworkMode,
-  connectionId: string,
-): string {
-  return `${walletId}:${networkMode}:${connectionId}`
-}
-
 function legacyIndexedDbName(
   walletId: number,
   networkMode: ArkadeSupportedNetworkMode,
@@ -176,7 +169,7 @@ async function closeSessionImpl(): Promise<void> {
 async function openSessionImpl(
   params: OpenArkadeSessionParams,
 ): Promise<{ arkadeAddress: string; operatorSignerPkHex: string }> {
-  const key = sessionKey(params.walletId, params.networkMode, params.connectionId)
+  const key = arkadeSessionKey(params.walletId, params.networkMode, params.connectionId)
 
   if (activeSessionKey === key) {
     try {
@@ -243,7 +236,7 @@ const arkadeService: ArkadeService = {
     networkMode: ArkadeSupportedNetworkMode
     connectionId: string
   }): Promise<boolean> {
-    return activeSessionKey === sessionKey(
+    return activeSessionKey === arkadeSessionKey(
       params.walletId,
       params.networkMode,
       params.connectionId,
@@ -258,7 +251,7 @@ const arkadeService: ArkadeService = {
       ...activeSessionParams,
       connectionId,
     }
-    activeSessionKey = sessionKey(
+    activeSessionKey = arkadeSessionKey(
       activeSessionParams.walletId,
       activeSessionParams.networkMode,
       connectionId,

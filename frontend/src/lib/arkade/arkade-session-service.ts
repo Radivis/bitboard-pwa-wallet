@@ -29,6 +29,7 @@ import {
   isArkadeSupportedNetworkMode,
   type ArkadeSupportedNetworkMode,
 } from '@/lib/arkade/arkade-endpoints'
+import { arkadeSessionKey } from '@/lib/arkade/arkade-session-key'
 import { isArkadeActiveForNetworkMode } from '@/lib/arkade/arkade-utils'
 import { removeArkadeDashboardQueries } from '@/lib/arkade/arkade-query-keys'
 import { removeArkadeDashboardSyncQueries } from '@/lib/arkade/arkade-dashboard-sync'
@@ -38,14 +39,6 @@ import type { NetworkMode } from '@/stores/walletStore'
 
 let openSessionInFlight: Promise<void> | null = null
 let lastOpenedSessionKey: string | null = null
-
-function sessionKey(
-  walletId: number,
-  networkMode: ArkadeSupportedNetworkMode,
-  connectionId: string,
-): string {
-  return `${walletId}:${networkMode}:${connectionId}`
-}
 
 /** Best-effort maintenance after WASM session open; must not block session registration. */
 async function runPostOpenArkadeMaintenance(
@@ -144,7 +137,7 @@ function runArkadeSessionOpenWork(params: {
     let connection = findActiveArkadeOperatorConnection(payload, networkMode)
     const hadPersistedConnection = connection != null
     const provisionalKey = connection
-      ? sessionKey(walletId, networkMode, connection.id)
+      ? arkadeSessionKey(walletId, networkMode, connection.id)
       : null
 
     if (provisionalKey != null && lastOpenedSessionKey === provisionalKey) {
@@ -232,7 +225,7 @@ function runArkadeSessionOpenWork(params: {
     }
     // Expose connection id only after receive address is hydrated from WASM persistence.
     useWalletStore.getState().setActiveArkadeConnectionId(connection.id)
-    lastOpenedSessionKey = sessionKey(walletId, networkMode, connection.id)
+    lastOpenedSessionKey = arkadeSessionKey(walletId, networkMode, connection.id)
 
     void runPostOpenArkadeMaintenance(worker, networkMode)
   })()

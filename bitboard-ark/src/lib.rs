@@ -19,12 +19,11 @@ use std::cell::RefCell;
 use std::future::Future;
 use std::rc::Rc;
 
-use serde::Deserialize;
 use wasm_bindgen::prelude::*;
 
 use crate::api_types::{
-    CollaborativeExitParams, CompleteUnilateralExitParams, SendPaymentParams,
-    UnilateralExitFeeParams,
+    CollaborativeExitFeeEstimateParams, CollaborativeExitParams, CompleteUnilateralExitParams,
+    OpenSessionParams, SendPaymentParams, UnilateralExitFeeParams,
 };
 use crate::error::{ArkResult, map_js_error};
 use crate::network::NetworkMode;
@@ -96,21 +95,6 @@ fn to_js_value<T: serde::Serialize>(value: T) -> ArkResult<JsValue> {
 
 async fn map_js_async<T>(future: impl Future<Output = ArkResult<T>>) -> Result<T, JsValue> {
     map_js_error(future.await)
-}
-
-#[derive(Deserialize)]
-struct OpenSessionParams {
-    mnemonic: String,
-    #[serde(rename = "networkMode")]
-    network_mode: String,
-    #[serde(rename = "arkServerUrl")]
-    ark_server_url: String,
-    #[serde(rename = "delegatorUrl")]
-    delegator_url: String,
-    #[serde(rename = "esploraUrl")]
-    esplora_url: String,
-    #[serde(rename = "sdkPersistenceJson", default)]
-    sdk_persistence_json: Option<String>,
 }
 
 #[wasm_bindgen]
@@ -319,14 +303,7 @@ pub async fn ark_collaborative_exit(params: JsValue) -> Result<String, JsValue> 
 #[wasm_bindgen]
 pub async fn ark_get_collaborative_exit_fee_estimate(params: JsValue) -> Result<JsValue, JsValue> {
     map_js_async(async {
-        #[derive(Deserialize)]
-        struct Params {
-            #[serde(rename = "destinationAddress")]
-            destination_address: String,
-            #[serde(rename = "amountSats", default)]
-            amount_sats: Option<u64>,
-        }
-        let params: Params = serde_wasm_bindgen::from_value(params)?;
+        let params: CollaborativeExitFeeEstimateParams = serde_wasm_bindgen::from_value(params)?;
         export_session_json(|session| async move {
             session
                 .collaborative_exit_fee_estimate(&params.destination_address, params.amount_sats)

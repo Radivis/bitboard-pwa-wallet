@@ -1,11 +1,10 @@
 import { getDatabase } from '@/db/database'
+import { loadWalletSecretsPayload } from '@/db/wallet-persistence'
 import {
-  loadWalletSecretsPayload,
-  updateWalletSecretsPayloadWithRetry,
-} from '@/db/wallet-persistence'
-import { findArkadeOperatorConnection } from '@/lib/arkade/arkade-operator-connections'
+  findArkadeOperatorConnection,
+  upsertArkadeOperatorConnection,
+} from '@/lib/arkade/arkade-operator-connections'
 import { ARKADE_SDK_PERSISTENCE_JSON_MAX_BYTES } from '@/lib/arkade/arkade-sdk-persistence-types'
-import type { WalletSecretsPayload } from '@/lib/wallet/wallet-domain-types'
 
 export function readOffchainNextDerivationIndex(sdkPersistenceJson: string | undefined): number {
   if (sdkPersistenceJson == null) {
@@ -63,27 +62,19 @@ export async function saveLastSuccessfulOperatorSyncAtForConnection(params: {
   lastSuccessfulOperatorSyncAt: string
 }): Promise<void> {
   const { password, walletId, connectionId, lastSuccessfulOperatorSyncAt } = params
+  const payload = await loadWalletSecretsPayload(getDatabase(), password, walletId)
+  const existing = findArkadeOperatorConnection(payload, connectionId)
+  if (existing == null) {
+    throw new Error(`Unknown Arkade connection: ${connectionId}`)
+  }
 
-  await updateWalletSecretsPayloadWithRetry({
-    walletDb: getDatabase(),
-    walletId,
+  await upsertArkadeOperatorConnection({
     password,
-    transform: async (payload): Promise<WalletSecretsPayload> => {
-      const existing = findArkadeOperatorConnection(payload, connectionId)
-      if (existing == null) {
-        throw new Error(`Unknown Arkade connection: ${connectionId}`)
-      }
-      const merged = {
-        ...existing,
-        lastSuccessfulOperatorSyncAt,
-      }
-      const others = payload.arkadeOperatorConnections.filter(
-        (row) => row.id !== connectionId,
-      )
-      return {
-        ...payload,
-        arkadeOperatorConnections: [...others, merged],
-      }
+    walletId,
+    setActiveForNetwork: false,
+    connection: {
+      ...existing,
+      lastSuccessfulOperatorSyncAt,
     },
   })
 }
@@ -98,31 +89,24 @@ export async function saveSdkPersistenceJsonForConnection(params: {
   const { password, walletId, connectionId, sdkPersistenceJson } = params
   assertSdkPersistenceJsonWithinSizeLimit(sdkPersistenceJson)
 
-  await updateWalletSecretsPayloadWithRetry({
-    walletDb: getDatabase(),
-    walletId,
+  const payload = await loadWalletSecretsPayload(getDatabase(), password, walletId)
+  const existing = findArkadeOperatorConnection(payload, connectionId)
+  if (existing == null) {
+    throw new Error(`Unknown Arkade connection: ${connectionId}`)
+  }
+
+  await upsertArkadeOperatorConnection({
     password,
-    transform: async (payload): Promise<WalletSecretsPayload> => {
-      const existing = findArkadeOperatorConnection(payload, connectionId)
-      if (existing == null) {
-        throw new Error(`Unknown Arkade connection: ${connectionId}`)
-      }
-      const merged = {
-        ...existing,
-        sdkPersistenceJson: mergeSdkPersistenceJsonMonotonic(
-          existing.sdkPersistenceJson,
-          sdkPersistenceJson,
-        ),
-        lastSuccessfulOperatorSyncAt:
-          params.lastSuccessfulOperatorSyncAt ?? existing.lastSuccessfulOperatorSyncAt,
-      }
-      const others = payload.arkadeOperatorConnections.filter(
-        (row) => row.id !== connectionId,
-      )
-      return {
-        ...payload,
-        arkadeOperatorConnections: [...others, merged],
-      }
+    walletId,
+    setActiveForNetwork: false,
+    connection: {
+      ...existing,
+      sdkPersistenceJson: mergeSdkPersistenceJsonMonotonic(
+        existing.sdkPersistenceJson,
+        sdkPersistenceJson,
+      ),
+      lastSuccessfulOperatorSyncAt:
+        params.lastSuccessfulOperatorSyncAt ?? existing.lastSuccessfulOperatorSyncAt,
     },
   })
 }
