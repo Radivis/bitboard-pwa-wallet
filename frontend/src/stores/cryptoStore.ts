@@ -278,7 +278,11 @@ export const useCryptoStore = create<CryptoState>((set, get) => {
       await awaitBackgroundArkadeOperatorSync();
       const arkadeWorker = getArkadeWorkerIfExists();
       if (arkadeWorker != null) {
-        await arkadeWorker.flushSdkPersistence();
+        try {
+          await arkadeWorker.flushSdkPersistence();
+        } catch {
+          // Best-effort flush; lock/purge must still complete even when no Arkade session is active.
+        }
       }
       await awaitInFlightWalletSecretsWrites();
       navigateToLibraryIfOnWalletRoute();

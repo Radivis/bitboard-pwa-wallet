@@ -4,10 +4,12 @@ const {
   terminateCryptoWorkerMock,
   resetSecretsChannelMock,
   endWalletSecretsSessionReliablyMock,
+  getArkadeWorkerIfExistsMock,
 } = vi.hoisted(() => ({
   terminateCryptoWorkerMock: vi.fn(),
   resetSecretsChannelMock: vi.fn(),
   endWalletSecretsSessionReliablyMock: vi.fn().mockResolvedValue(undefined),
+  getArkadeWorkerIfExistsMock: vi.fn().mockReturnValue(null),
 }))
 
 vi.mock('@/workers/crypto-factory', () => {
@@ -46,7 +48,7 @@ vi.mock('@/lib/arkade/arkade-session-service', () => ({
 }))
 
 vi.mock('@/workers/arkade-factory', () => ({
-  getArkadeWorkerIfExists: vi.fn().mockReturnValue(null),
+  getArkadeWorkerIfExists: getArkadeWorkerIfExistsMock,
 }))
 
 const purgeLightningConnectionsFromMemoryMock = vi.fn()
@@ -151,5 +153,26 @@ describe('auto-lock security purge', () => {
     await vi.advanceTimersByTimeAsync(15 * 60 * 1000)
 
     expect(endWalletSecretsSessionReliablyMock).not.toHaveBeenCalled()
+  })
+
+  it('still locks and purges when Arkade flush throws', async () => {
+    const flushSdkPersistenceMock = vi
+      .fn()
+      .mockRejectedValue(new Error('Arkade SDK persistence flush was skipped (no active session)'))
+    getArkadeWorkerIfExistsMock.mockReturnValue({
+      flushSdkPersistence: flushSdkPersistenceMock,
+    })
+
+    startAutoLockTimer(() =>
+      useCryptoStore.getState().lockAndPurgeSensitiveRuntimeState(),
+    )
+
+    await vi.advanceTimersByTimeAsync(15 * 60 * 1000)
+
+    expect(flushSdkPersistenceMock).toHaveBeenCalledTimes(1)
+    expect(useWalletStore.getState().walletStatus).toBe('locked')
+    expect(endWalletSecretsSessionReliablyMock).toHaveBeenCalledTimes(1)
+    expect(resetSecretsChannelMock).toHaveBeenCalledTimes(1)
+    expect(terminateCryptoWorkerMock).toHaveBeenCalled()
   })
 })
