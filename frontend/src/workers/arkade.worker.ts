@@ -6,9 +6,7 @@ import type {
 import type { ArkadeSupportedNetworkMode } from '@/lib/arkade/arkade-endpoints'
 import {
   clearDebouncedSdkPersistenceFlush,
-  flushSdkPersistenceNow,
   flushSdkPersistenceNowOrThrow,
-  scheduleSdkPersistenceFlush,
   setArkadeSdkPersistenceBridge,
   setArkadeSdkPersistenceExporter,
   setArkadeSdkPersistenceFlushContext,

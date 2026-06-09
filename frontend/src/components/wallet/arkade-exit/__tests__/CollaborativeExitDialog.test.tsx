@@ -41,6 +41,11 @@ function buildExitFlow(overrides: Partial<ExitFlow>): ExitFlow {
 }
 
 describe('CollaborativeExitDialog', () => {
+  it('renders Infomode toggle in the modal header', () => {
+    renderWithProviders(<CollaborativeExitDialog exitFlow={buildExitFlow({})} />)
+    expect(screen.getByRole('button', { name: 'Turn on infomode' })).toBeInTheDocument()
+  })
+
   it('enables Confirm exit when fee estimate returns estimateError', () => {
     const exitFlow = buildExitFlow({
       collaborativeFeeQuery: {

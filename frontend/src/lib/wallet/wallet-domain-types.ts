@@ -357,7 +357,8 @@ function stripOversizedSdkPersistenceJson(row: Record<string, unknown>): Record<
       `[wallet-secrets] Stripped oversized sdkPersistenceJson (${byteLength} bytes) from Arkade row`,
     )
   }
-  const { sdkPersistenceJson: _removed, ...withoutSdkPersistenceJson } = row
+  const withoutSdkPersistenceJson = { ...row }
+  delete withoutSdkPersistenceJson.sdkPersistenceJson
   return withoutSdkPersistenceJson
 }
 
@@ -404,7 +405,8 @@ function sanitizeActiveArkadeConnectionIdByNetwork(
 function normalizeWalletSecretsPayload(raw: unknown): unknown {
   if (!isRecord(raw)) return raw
 
-  const { arkadeWallets: _legacyArkadeWallets, ...withoutLegacyArkadeWallets } = raw
+  const withoutLegacyArkadeWallets = { ...raw }
+  delete withoutLegacyArkadeWallets.arkadeWallets
 
   const arkadeOperatorConnections = sanitizeOptionalObjectArray(
     withoutLegacyArkadeWallets.arkadeOperatorConnections,

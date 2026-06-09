@@ -3,20 +3,14 @@ import { Loader2 } from 'lucide-react'
 import { ArkadeBumperWalletInfomodeContent } from '@/components/arkade/infomode/ArkadeBumperWalletInfomodeContent'
 import { ArkadeUnilateralExitInfomodeContent } from '@/components/arkade/infomode/ArkadeUnilateralExitInfomodeContent'
 import { ArkadeUnrollInfomodeContent } from '@/components/arkade/infomode/ArkadeUnrollInfomodeContent'
+import { AppModal } from '@/components/AppModal'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { Button } from '@/components/ui/button'
-import { ARKADE_INFOMODE_IDS } from '@/lib/arkade/arkade-infomode'
+import { DialogDescription } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
+import { ARKADE_INFOMODE_IDS } from '@/lib/arkade/arkade-infomode'
 import type { useArkadeExitFlow } from '@/hooks/useArkadeExitFlow'
 
 type ExitFlow = ReturnType<typeof useArkadeExitFlow>
@@ -50,27 +44,82 @@ export function UnilateralExitDialog({ exitFlow }: UnilateralExitDialogProps) {
     selectCandidate,
   } = exitFlow
 
+  const selectStepFooter = (requestClose: () => void) => (
+    <>
+      <Button type="button" variant="outline" onClick={requestClose}>
+        Cancel
+      </Button>
+      {selectedCandidate?.canComplete ? (
+        <Button type="button" onClick={skipToComplete}>
+          Skip to complete
+        </Button>
+      ) : (
+        <Button
+          type="button"
+          disabled={
+            selectedCandidate == null ||
+            !selectedCandidate.canStartUnroll ||
+            bumperLow
+          }
+          onClick={handleStartUnroll}
+        >
+          Start unroll
+        </Button>
+      )}
+    </>
+  )
+
+  const completeStepFooter = () => (
+    <>
+      <Button type="button" variant="outline" onClick={() => setUnilateralStep('select')}>
+        Back
+      </Button>
+      <Button
+        type="button"
+        disabled={
+          completeExitMutation.isPending ||
+          completeDestination.trim().length === 0 ||
+          (unrolledVtxoTxid == null && selectedCandidate == null)
+        }
+        onClick={handleCompleteExit}
+      >
+        {completeExitMutation.isPending ? 'Completing…' : 'Complete exit'}
+      </Button>
+    </>
+  )
+
   return (
-    <Dialog open={unilateralOpen} onOpenChange={setUnilateralOpen}>
-      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>
-            <InfomodeWrapper
-              infoId={ARKADE_INFOMODE_IDS.unilateralExit}
-              infoComponent={ArkadeUnilateralExitInfomodeContent}
-              as="span"
-            >
-              Unilateral exit
-            </InfomodeWrapper>
-          </DialogTitle>
-          <DialogDescription>
-            Exit without the operator by unrolling the VTXO chain on-chain, then completing after
-            the timelock. Requires on-chain fees on the bumper wallet below.
-          </DialogDescription>
-        </DialogHeader>
+    <AppModal
+      isOpen={unilateralOpen}
+      onOpenChange={setUnilateralOpen}
+      onCancel={() => setUnilateralOpen(false)}
+      title={
+        <InfomodeWrapper
+          infoId={ARKADE_INFOMODE_IDS.unilateralExit}
+          infoComponent={ArkadeUnilateralExitInfomodeContent}
+          as="span"
+        >
+          Unilateral exit
+        </InfomodeWrapper>
+      }
+      contentClassName="sm:max-w-lg max-h-[90vh] overflow-y-auto"
+      footer={
+        unilateralStep === 'select'
+          ? selectStepFooter
+          : unilateralStep === 'complete'
+            ? completeStepFooter
+            : undefined
+      }
+      footerClassName="justify-end gap-2"
+    >
+      <div className="space-y-3">
+        <DialogDescription>
+          Exit without the operator by unrolling the VTXO chain on-chain, then completing after
+          the timelock. Requires on-chain fees on the bumper wallet below.
+        </DialogDescription>
 
         {unilateralStep === 'select' && (
-          <div className="space-y-3">
+          <>
             {exitCandidatesQuery.isLoading ? (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
@@ -172,33 +221,11 @@ export function UnilateralExitDialog({ exitFlow }: UnilateralExitDialogProps) {
                 )}
               </div>
             )}
-            <DialogFooter className="gap-2 sm:justify-between">
-              <Button type="button" variant="outline" onClick={() => setUnilateralOpen(false)}>
-                Cancel
-              </Button>
-              {selectedCandidate?.canComplete ? (
-                <Button type="button" onClick={skipToComplete}>
-                  Skip to complete
-                </Button>
-              ) : (
-                <Button
-                  type="button"
-                  disabled={
-                    selectedCandidate == null ||
-                    !selectedCandidate.canStartUnroll ||
-                    bumperLow
-                  }
-                  onClick={handleStartUnroll}
-                >
-                  Start unroll
-                </Button>
-              )}
-            </DialogFooter>
-          </div>
+          </>
         )}
 
         {unilateralStep === 'unroll' && (
-          <div className="space-y-3">
+          <>
             <InfomodeWrapper
               infoId={ARKADE_INFOMODE_IDS.unroll}
               infoComponent={ArkadeUnrollInfomodeContent}
@@ -222,11 +249,11 @@ export function UnilateralExitDialog({ exitFlow }: UnilateralExitDialogProps) {
                 </li>
               ))}
             </ul>
-          </div>
+          </>
         )}
 
         {unilateralStep === 'complete' && (
-          <div className="space-y-3">
+          <>
             <p className="text-sm text-muted-foreground">
               After the CSV timelock expires, complete the exit to receive funds on-chain. A
               separate on-chain transaction fee applies when completing.
@@ -240,25 +267,9 @@ export function UnilateralExitDialog({ exitFlow }: UnilateralExitDialogProps) {
                 autoComplete="off"
               />
             </div>
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setUnilateralStep('select')}>
-                Back
-              </Button>
-              <Button
-                type="button"
-                disabled={
-                  completeExitMutation.isPending ||
-                  completeDestination.trim().length === 0 ||
-                  (unrolledVtxoTxid == null && selectedCandidate == null)
-                }
-                onClick={handleCompleteExit}
-              >
-                {completeExitMutation.isPending ? 'Completing…' : 'Complete exit'}
-              </Button>
-            </DialogFooter>
-          </div>
+          </>
         )}
-      </DialogContent>
-    </Dialog>
+      </div>
+    </AppModal>
   )
 }
