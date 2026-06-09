@@ -20,6 +20,8 @@ pub const CODE_BLOCKCHAIN: &str = "blockchain";
 pub const CODE_MNEMONIC: &str = "mnemonic";
 pub const CODE_SERIALIZATION: &str = "serialization";
 
+pub const MSG_SEND_AMOUNT_MUST_BE_POSITIVE: &str = "send amount must be greater than zero";
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WasmArkErrorPayload {
     pub code: &'static str,
@@ -51,6 +53,9 @@ pub enum ArkWasmError {
 
     #[error("invalid onchain address: {0}")]
     InvalidOnchainAddress(String),
+
+    #[error("{MSG_SEND_AMOUNT_MUST_BE_POSITIVE}")]
+    InvalidSendAmount,
 
     #[error("VTXO not found for outpoint {txid}:{vout}")]
     VtxoNotFound { txid: String, vout: u32 },
@@ -108,6 +113,7 @@ impl ArkWasmError {
             | Self::InvalidTxid(_)
             | Self::InvalidDelegatorPubkey(_)
             | Self::InvalidOnchainAddress(_)
+            | Self::InvalidSendAmount
             | Self::VtxoNotFound { .. }
             | Self::EmptyVtxoTxids => CODE_VALIDATION,
             Self::DelegatorNotConfigured | Self::Delegator(_) | Self::InvalidDelegatorFee(_) => {
@@ -159,6 +165,13 @@ mod tests {
         let error = ArkWasmError::InvalidTxid("bad".into());
         assert_eq!(error.code(), CODE_VALIDATION);
         assert!(error.to_string().contains("invalid txid"));
+    }
+
+    #[test]
+    fn invalid_send_amount_uses_validation_code() {
+        let error = ArkWasmError::InvalidSendAmount;
+        assert_eq!(error.code(), CODE_VALIDATION);
+        assert_eq!(error.to_string(), MSG_SEND_AMOUNT_MUST_BE_POSITIVE);
     }
 
     #[test]

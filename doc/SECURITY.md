@@ -61,7 +61,7 @@ For **reporting vulnerabilities** in Bitboard Wallet, see the repository root [S
 ### 2.4 Input and validation
 
 - **Addresses:** Frontend uses `isValidAddress` (prefix check); crypto uses full parsing and network checks.
-- **Amounts:** `parseBTC` converts user input to satoshis; it returns 0 for NaN, negative, or non-finite input and clamps to `Number.MAX_SAFE_INTEGER` to avoid overflow. Send flow enforces positive amount and balance checks; WASM rejects zero amounts.
+- **Amounts:** `parseBTC` converts user input to satoshis; it returns 0 for NaN, negative, or non-finite input and clamps to `Number.MAX_SAFE_INTEGER` to avoid overflow. Send flows enforce positive amounts and balance checks on the frontend; WASM also rejects zero send amounts (e.g. Arkade `send_payment` returns a validation error when `amount_sats` is 0).
 - **Descriptors:** Loaded from encrypted storage or produced by WASM; not user-typed. WASM boundary uses strings/serializable data only; no raw buffer pointers exposed.
 
 ### 2.5 Dependencies and audits

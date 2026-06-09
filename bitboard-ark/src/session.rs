@@ -371,6 +371,7 @@ impl ArkSession {
     }
 
     pub async fn send_payment(&self, params: SendPaymentParams) -> ArkResult<String> {
+        validate_send_amount_sats(params.amount_sats)?;
         let address = ArkAddress::decode(&params.address)?;
         let amount = Amount::from_sat(params.amount_sats);
         let txid = self
@@ -1098,6 +1099,13 @@ fn accumulate_boarding_utxo_balance(
     }
 }
 
+fn validate_send_amount_sats(amount_sats: u64) -> ArkResult<()> {
+    if amount_sats == 0 {
+        return Err(ArkWasmError::InvalidSendAmount);
+    }
+    Ok(())
+}
+
 fn current_unix_timestamp() -> i64 {
     #[cfg(target_arch = "wasm32")]
     {
@@ -1109,6 +1117,25 @@ fn current_unix_timestamp() -> i64 {
             .duration_since(std::time::UNIX_EPOCH)
             .expect("system clock before UNIX epoch")
             .as_secs() as i64
+    }
+}
+
+#[cfg(test)]
+mod send_amount_validation_tests {
+    use super::validate_send_amount_sats;
+    use crate::error::{ArkWasmError, MSG_SEND_AMOUNT_MUST_BE_POSITIVE};
+
+    #[test]
+    fn validate_send_amount_sats_rejects_zero() {
+        let error = validate_send_amount_sats(0).expect_err("zero amount");
+        assert!(matches!(error, ArkWasmError::InvalidSendAmount));
+        assert_eq!(error.to_string(), MSG_SEND_AMOUNT_MUST_BE_POSITIVE);
+    }
+
+    #[test]
+    fn validate_send_amount_sats_accepts_positive() {
+        validate_send_amount_sats(1).expect("one sat");
+        validate_send_amount_sats(21_000_000).expect("large amount");
     }
 }
 
