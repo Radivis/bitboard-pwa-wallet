@@ -164,14 +164,16 @@ async function invalidateArkadeWalletDataQueries(
   walletId: number,
   networkMode: NetworkMode,
   connectionId: string,
+  options?: { skipBalance?: boolean },
 ): Promise<void> {
   if (!isArkadeSupportedNetworkMode(networkMode)) return
-  await Promise.all([
-    queryClient.invalidateQueries({
-      queryKey: arkadeBalanceQueryKey(walletId, networkMode, connectionId),
-    }),
+
+  const invalidations = [
     queryClient.invalidateQueries({
       queryKey: arkadeHistoryQueryKey(walletId, networkMode, connectionId),
+    }),
+    queryClient.invalidateQueries({
+      queryKey: arkadeBoardingStatusQueryKey(walletId, networkMode, connectionId),
     }),
     queryClient.invalidateQueries({
       queryKey: arkadeExitCandidatesQueryKey(walletId, networkMode, connectionId),
@@ -182,7 +184,17 @@ async function invalidateArkadeWalletDataQueries(
     queryClient.invalidateQueries({
       queryKey: arkadeVtxoExpiryQueryKey(walletId, networkMode, connectionId),
     }),
-  ])
+  ]
+
+  if (!options?.skipBalance) {
+    invalidations.unshift(
+      queryClient.invalidateQueries({
+        queryKey: arkadeBalanceQueryKey(walletId, networkMode, connectionId),
+      }),
+    )
+  }
+
+  await Promise.all(invalidations)
 }
 
 export function useArkadeBalanceQuery() {
@@ -410,7 +422,7 @@ export function useArkadeRenewMutation() {
       assertArkadeSessionUnlocked(activeWalletId, password)
       return withReadyArkadeWorker(() => getArkadeWorker().renewVtxosNow())
     },
-    onSuccess: (txid) => {
+    onSuccess: async (txid) => {
       if (txid) {
         toast.success('VTXOs renewed')
       } else {
@@ -421,22 +433,12 @@ export function useArkadeRenewMutation() {
         activeArkadeConnectionId != null &&
         isArkadeSupportedNetworkMode(networkMode)
       ) {
-        void Promise.all([
-          queryClient.invalidateQueries({
-            queryKey: arkadeBalanceQueryKey(
-              activeWalletId,
-              networkMode,
-              activeArkadeConnectionId,
-            ),
-          }),
-          queryClient.invalidateQueries({
-            queryKey: arkadeVtxoExpiryQueryKey(
-              activeWalletId,
-              networkMode,
-              activeArkadeConnectionId,
-            ),
-          }),
-        ])
+        await invalidateArkadeWalletDataQueries(
+          queryClient,
+          activeWalletId,
+          networkMode,
+          activeArkadeConnectionId,
+        )
       }
     },
     onError: (err) => {
@@ -526,13 +528,13 @@ export function useArkadeOnboardMutation() {
         )
       }
 
-      await queryClient.invalidateQueries({
-        queryKey: arkadeHistoryQueryKey(
-          activeWalletId,
-          networkMode,
-          activeArkadeConnectionId,
-        ),
-      })
+      await invalidateArkadeWalletDataQueries(
+        queryClient,
+        activeWalletId,
+        networkMode,
+        activeArkadeConnectionId,
+        { skipBalance: true },
+      )
     },
     onError: (err, _variables, context) => {
       if (context != null) {
