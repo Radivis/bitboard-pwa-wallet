@@ -22,12 +22,12 @@ import {
   isArkadeSupportedNetworkMode,
 } from '@/lib/arkade/arkade-endpoints'
 import { isArkadeActiveForNetworkMode } from '@/lib/arkade/arkade-utils'
-import { useWalletStore } from '@/stores/walletStore'
+import { selectCommittedNetworkMode, useWalletStore } from '@/stores/walletStore'
 import { ArkadeExitSection } from '@/components/wallet/ArkadeExitSection'
 import { ArkadeVtxoExpiryIndicator } from '@/components/wallet/ArkadeVtxoExpiryIndicator'
 
 export function ArkadePanel() {
-  const networkMode = useWalletStore((s) => s.networkMode)
+  const networkMode = useWalletStore(selectCommittedNetworkMode)
   const storeReceiveAddress = useWalletStore((s) => s.arkadeReceiveAddress)
   const show = isArkadeActiveForNetworkMode(networkMode)
   const delegatorConfigured =

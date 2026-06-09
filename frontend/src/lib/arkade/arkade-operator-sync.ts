@@ -7,7 +7,7 @@ import { errorMessage } from '@/lib/shared/utils'
 import { invalidateArkadeDashboardQueries } from '@/lib/arkade/arkade-dashboard-sync'
 import { isArkadeSupportedNetworkMode } from '@/lib/arkade/arkade-endpoints'
 import { useSessionStore } from '@/stores/sessionStore'
-import { useWalletStore } from '@/stores/walletStore'
+import { getCommittedNetworkMode, useWalletStore } from '@/stores/walletStore'
 import type { NetworkMode } from '@/stores/walletStore'
 
 const BACKGROUND_OPERATOR_SYNC_DEBOUNCE_MS = 400
@@ -81,12 +81,13 @@ export function scheduleBackgroundArkadeOperatorSync(): void {
     backgroundOperatorSyncTimer = null
 
     const walletState = useWalletStore.getState()
+    const networkMode = getCommittedNetworkMode()
     const password = useSessionStore.getState().password
     if (
       password == null ||
       walletState.activeWalletId == null ||
       walletState.activeArkadeConnectionId == null ||
-      !isArkadeSupportedNetworkMode(walletState.networkMode)
+      !isArkadeSupportedNetworkMode(networkMode)
     ) {
       return
     }
@@ -98,7 +99,7 @@ export function scheduleBackgroundArkadeOperatorSync(): void {
     const syncWork = runArkadeOperatorSyncAndPersist({
       password,
       walletId: walletState.activeWalletId,
-      networkMode: walletState.networkMode,
+      networkMode,
       connectionId: walletState.activeArkadeConnectionId,
     })
     backgroundOperatorSyncInFlight = syncWork

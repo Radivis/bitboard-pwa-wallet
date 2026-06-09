@@ -14,10 +14,10 @@ import {
   useArkadeNewAddressMutation,
 } from '@/hooks/useArkadeQueries'
 import { isArkadeActiveForNetworkMode } from '@/lib/arkade/arkade-utils'
-import { useWalletStore } from '@/stores/walletStore'
+import { selectCommittedNetworkMode, useWalletStore } from '@/stores/walletStore'
 
 export function ArkadeReceive() {
-  const networkMode = useWalletStore((walletState) => walletState.networkMode)
+  const networkMode = useWalletStore(selectCommittedNetworkMode)
   const storeReceiveAddress = useWalletStore((walletState) => walletState.arkadeReceiveAddress)
   const addressQuery = useArkadeAddressQuery()
   const newAddressMutation = useArkadeNewAddressMutation()

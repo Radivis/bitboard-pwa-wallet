@@ -7,7 +7,11 @@ import { isArkadeSupportedNetworkMode } from '@/lib/arkade/arkade-endpoints'
 import { appQueryClient } from '@/lib/shared/app-query-client'
 import { getArkadeWorker } from '@/workers/arkade-factory'
 import type { ArkadeBalanceInfo, ArkadePaymentRow } from '@/workers/arkade-api'
-import { useWalletStore, type NetworkMode } from '@/stores/walletStore'
+import {
+  getCommittedNetworkMode,
+  useWalletStore,
+  type NetworkMode,
+} from '@/stores/walletStore'
 
 function syncArkadeDashboardQueryCaches(params: {
   walletId: number
@@ -53,11 +57,12 @@ export async function refreshArkadeStoreFromLoadedWasm(
   })
 
   const walletState = useWalletStore.getState()
+  const networkMode = getCommittedNetworkMode()
   const connectionId = connectionIdForQueryCache ?? walletState.activeArkadeConnectionId
   if (connectionId != null && walletState.activeWalletId != null) {
     syncArkadeDashboardQueryCaches({
       walletId: walletState.activeWalletId,
-      networkMode: walletState.networkMode,
+      networkMode,
       connectionId,
       balance,
       payments,

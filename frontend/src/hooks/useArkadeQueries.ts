@@ -21,10 +21,7 @@ import type {
   ArkadeBoardingStatus,
   ArkadeUnrollProgressEvent,
 } from '@/workers/arkade-api'
-import {
-  isArkadeActiveForCommittedNetwork,
-  isArkadeActiveForNetworkMode,
-} from '@/lib/arkade/arkade-utils'
+import { isArkadeActiveForNetworkMode } from '@/lib/arkade/arkade-utils'
 import {
   awaitArkadeSessionReady,
   openArkadeSessionForWallet,
@@ -49,7 +46,11 @@ import {
   type ArkadeSupportedNetworkMode,
 } from '@/lib/arkade/arkade-endpoints'
 import { useSessionStore } from '@/stores/sessionStore'
-import { getCommittedNetworkMode, useWalletStore } from '@/stores/walletStore'
+import {
+  getCommittedNetworkMode,
+  selectCommittedNetworkMode,
+  useWalletStore,
+} from '@/stores/walletStore'
 import type { NetworkMode } from '@/stores/walletStore'
 import { arkadeDashboardWalletDataQueryOptions } from '@/lib/arkade/arkade-dashboard-query-options'
 import {
@@ -63,7 +64,7 @@ import { errorMessage } from '@/lib/shared/utils'
 const ARKADE_WALLET_UNLOCKED_ERROR = 'Wallet must be unlocked'
 
 function useArkadeQueryBase() {
-  const networkMode = useWalletStore((walletState) => walletState.networkMode)
+  const networkMode = useWalletStore(selectCommittedNetworkMode)
   const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
   const activeArkadeConnectionId = useWalletStore(
     (walletState) => walletState.activeArkadeConnectionId,
@@ -79,15 +80,10 @@ function useArkadeQueryBase() {
 }
 
 function useArkadeDelegateQueryBase() {
-  const networkMode = getCommittedNetworkMode()
-  const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
-  const password = useSessionStore((sessionState) => sessionState.password)
+  const { networkMode, activeWalletId, password, sessionReady: arkadeSessionReady } =
+    useArkadeQueryBase()
   const sessionReady =
-    isArkadeActiveForCommittedNetwork() &&
-    isArkadeSupportedNetworkMode(networkMode) &&
-    isArkadeDelegatorConfigured(networkMode) &&
-    activeWalletId != null &&
-    password != null
+    arkadeSessionReady && isArkadeDelegatorConfigured(networkMode)
 
   return { networkMode, activeWalletId, password, sessionReady }
 }
@@ -103,7 +99,7 @@ function assertArkadeSessionUnlocked(
 
 async function ensureArkadeSessionOpenForActiveWallet(): Promise<void> {
   const activeWalletId = useWalletStore.getState().activeWalletId
-  const networkMode = useWalletStore.getState().networkMode
+  const networkMode = getCommittedNetworkMode()
   const password = useSessionStore.getState().password
   if (
     activeWalletId == null ||
