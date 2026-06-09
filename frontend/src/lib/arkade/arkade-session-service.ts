@@ -56,7 +56,13 @@ async function runPostOpenArkadeMaintenance(
   }
 
   try {
-    await worker.delegateSpendableVtxos()
+    const delegateResult = await worker.delegateSpendableVtxos()
+    if (delegateResult.failed > 0 && delegateResult.errorMessage != null) {
+      console.warn(
+        'Arkade delegateSpendableVtxos failed after session open',
+        delegateResult.errorMessage,
+      )
+    }
   } catch (err) {
     console.warn('Arkade delegateSpendableVtxos failed after session open', err)
   }

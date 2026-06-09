@@ -1,5 +1,6 @@
 mod api_types;
 mod balance_display;
+mod constants;
 mod error;
 mod esplora_blockchain;
 mod exit_balance;

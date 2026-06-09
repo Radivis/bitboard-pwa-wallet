@@ -30,6 +30,12 @@ use crate::api_types::{
     UnrollResult, VtxoExpiryStatusDto,
 };
 use crate::balance_display::{ArkadeBalanceInputs, build_arkade_balance_dto};
+use crate::constants::{
+    DEFAULT_TX_FEE_RATE, MIN_FEE_RATE_SAT_PER_VB, PAYMENT_DIRECTION_INCOMING,
+    PAYMENT_DIRECTION_OUTGOING, UNROLL_EVENT_TYPE_DONE, UNROLL_EVENT_TYPE_UNROLL,
+    UNROLL_EVENT_TYPE_WAIT, VTXO_STATUS_PRECONFIRMED, VTXO_STATUS_RECOVERABLE, VTXO_STATUS_SETTLED,
+    VTXO_STATUS_SPENT, VTXO_STATUS_UNROLLED,
+};
 use crate::error::{ArkResult, ArkWasmError};
 use crate::esplora_blockchain::EsploraBlockchain;
 use crate::exit_balance::{
@@ -437,6 +443,7 @@ impl ArkSession {
             return Ok(DelegateSpendableResult {
                 delegated: 0,
                 failed: 0,
+                error_message: None,
             });
         };
 
@@ -444,32 +451,38 @@ impl ArkSession {
         let delegator_pubkey = parse_delegator_public_key(&delegator_info.pubkey)?;
         let mut delegated = 0u32;
         let mut failed = 0u32;
+        let mut error_message = None;
 
         let cosigner_pk = delegator_pubkey.inner;
         match self.client.generate_delegate(cosigner_pk).await {
             Ok(mut delegate) => {
-                if self
+                if let Err(error) = self
                     .client
                     .sign_delegate_psbts(&mut delegate.intent.proof, &mut delegate.forfeit_psbts)
-                    .is_err()
                 {
-                    failed += 1;
-                } else if delegator
+                    failed = 1;
+                    error_message = Some(format!("sign delegate PSBTs: {error}"));
+                } else if let Err(error) = delegator
                     .delegate(&delegate.intent, &delegate.forfeit_psbts, None)
                     .await
-                    .is_ok()
                 {
-                    delegated = delegate.forfeit_psbts.len() as u32;
+                    failed = 1;
+                    error_message = Some(format!("delegator RPC: {error}"));
                 } else {
-                    failed += 1;
+                    delegated = delegate.forfeit_psbts.len() as u32;
                 }
             }
-            Err(_) => {
-                failed += 1;
+            Err(error) => {
+                failed = 1;
+                error_message = Some(format!("generate delegate: {error}"));
             }
         }
 
-        Ok(DelegateSpendableResult { delegated, failed })
+        Ok(DelegateSpendableResult {
+            delegated,
+            failed,
+            error_message,
+        })
     }
 
     pub async fn finalize_pending_transactions(&self) -> ArkResult<FinalizePendingResult> {
@@ -630,8 +643,13 @@ impl ArkSession {
     ) -> ArkResult<UnilateralExitFeeEstimateDto> {
         let outpoint = parse_outpoint(&params.txid, params.vout)?;
 
-        let fee_rate = self.client.blockchain().get_fee_rate().await.unwrap_or(1.0);
-        let fee_rate_sat_per_vb = fee_rate.max(1.0).ceil() as u64;
+        let fee_rate = self
+            .client
+            .blockchain()
+            .get_fee_rate()
+            .await
+            .unwrap_or(MIN_FEE_RATE_SAT_PER_VB);
+        let fee_rate_sat_per_vb = fee_rate.max(MIN_FEE_RATE_SAT_PER_VB);
         let bumper_balance_sats = self.onchain_bumper_info().await?.balance_sats;
 
         let mut chain_tx_count = 0u32;
@@ -660,7 +678,7 @@ impl ArkSession {
 
         let estimated_package_fee_sats = if estimate_error.is_none() {
             let steps = projected_unroll_steps.max(1) as u64;
-            steps * fee_rate_sat_per_vb * UNILATERAL_CHILD_VSIZE
+            (steps as f64 * fee_rate_sat_per_vb * UNILATERAL_CHILD_VSIZE as f64).ceil() as u64
         } else {
             0
         };
@@ -700,7 +718,7 @@ impl ArkSession {
 
             if status.is_none() {
                 on_progress(UnrollProgressEvent {
-                    event_type: "unroll".to_string(),
+                    event_type: UNROLL_EVENT_TYPE_UNROLL.to_string(),
                     message: format!("Broadcasting unroll {parent_txid}"),
                     txid: Some(parent_txid.to_string()),
                     vtxo_txid: None,
@@ -717,7 +735,7 @@ impl ArkSession {
                 if let Some(broadcast_txid) = broadcast_txid {
                     done_vtxo_txid = broadcast_txid.to_string();
                     on_progress(UnrollProgressEvent {
-                        event_type: "wait".to_string(),
+                        event_type: UNROLL_EVENT_TYPE_WAIT.to_string(),
                         message: format!("Waiting for confirmation of {broadcast_txid}"),
                         txid: Some(broadcast_txid.to_string()),
                         vtxo_txid: None,
@@ -729,7 +747,7 @@ impl ArkSession {
                     pending_unilateral_exit_recorded = true;
                 }
                 on_progress(UnrollProgressEvent {
-                    event_type: "wait".to_string(),
+                    event_type: UNROLL_EVENT_TYPE_WAIT.to_string(),
                     message: format!("Waiting for confirmation of {parent_txid}"),
                     txid: Some(parent_txid.to_string()),
                     vtxo_txid: None,
@@ -738,7 +756,7 @@ impl ArkSession {
         }
 
         on_progress(UnrollProgressEvent {
-            event_type: "done".to_string(),
+            event_type: UNROLL_EVENT_TYPE_DONE.to_string(),
             message: format!("Unroll complete for {done_vtxo_txid}"),
             txid: None,
             vtxo_txid: Some(done_vtxo_txid.clone()),
@@ -904,9 +922,12 @@ fn parse_outpoint(txid: &str, vout: u32) -> ArkResult<OutPoint> {
 
 fn payment_direction_and_amount_sats(signed_amount_sats: i64) -> (&'static str, u64) {
     if signed_amount_sats >= 0 {
-        ("incoming", signed_amount_sats as u64)
+        (PAYMENT_DIRECTION_INCOMING, signed_amount_sats as u64)
     } else {
-        ("outgoing", signed_amount_sats.unsigned_abs())
+        (
+            PAYMENT_DIRECTION_OUTGOING,
+            signed_amount_sats.unsigned_abs(),
+        )
     }
 }
 
@@ -937,7 +958,7 @@ fn map_history_row(transaction: Transaction) -> Option<PaymentRowDto> {
     let timestamp = transaction.created_at().unwrap_or(0);
     match transaction {
         Transaction::Boarding { txid, amount, .. } => Some(PaymentRowDto {
-            direction: "incoming".to_string(),
+            direction: PAYMENT_DIRECTION_INCOMING.to_string(),
             amount_sats: amount.to_sat(),
             timestamp,
             txid: txid.to_string(),
@@ -977,7 +998,7 @@ fn map_history_row(transaction: Transaction) -> Option<PaymentRowDto> {
             amount,
             confirmed_at,
         } => Some(PaymentRowDto {
-            direction: "outgoing".to_string(),
+            direction: PAYMENT_DIRECTION_OUTGOING.to_string(),
             amount_sats: amount.to_sat(),
             timestamp: confirmed_at.unwrap_or(0),
             txid: commitment_txid.to_string(),
@@ -989,15 +1010,15 @@ fn map_history_row(transaction: Transaction) -> Option<PaymentRowDto> {
 fn map_exit_candidate(vtp: &VirtualTxOutPoint, dust: Amount) -> ExitCandidateRow {
     let recoverable = vtp.is_recoverable(dust);
     let state = if vtp.is_spent {
-        "spent"
+        VTXO_STATUS_SPENT
     } else if vtp.is_unrolled {
-        "unrolled"
+        VTXO_STATUS_UNROLLED
     } else if vtp.is_preconfirmed {
-        "preconfirmed"
+        VTXO_STATUS_PRECONFIRMED
     } else if recoverable {
-        "recoverable"
+        VTXO_STATUS_RECOVERABLE
     } else {
-        "settled"
+        VTXO_STATUS_SETTLED
     }
     .to_string();
 
@@ -1019,7 +1040,7 @@ fn map_exit_candidate(vtp: &VirtualTxOutPoint, dust: Amount) -> ExitCandidateRow
 fn empty_fee_info() -> ark_core::server::FeeInfo {
     ark_core::server::FeeInfo {
         intent_fee: ark_core::server::IntentFeeInfo::default(),
-        tx_fee_rate: "1".to_string(),
+        tx_fee_rate: DEFAULT_TX_FEE_RATE.to_string(),
     }
 }
 
@@ -1079,6 +1100,7 @@ fn current_unix_timestamp() -> i64 {
 #[cfg(test)]
 mod exit_candidate_tests {
     use super::{current_unix_timestamp, map_exit_candidate};
+    use crate::constants::{VTXO_STATUS_RECOVERABLE, VTXO_STATUS_SETTLED};
     use ark_core::server::VirtualTxOutPoint;
     use bitcoin::Amount;
     use bitcoin::OutPoint;
@@ -1130,7 +1152,7 @@ mod exit_candidate_tests {
             DUST,
         );
 
-        assert_eq!(row.virtual_status_state, "settled");
+        assert_eq!(row.virtual_status_state, VTXO_STATUS_SETTLED);
         assert!(row.can_start_unroll);
         assert!(!row.can_complete);
     }
@@ -1151,7 +1173,7 @@ mod exit_candidate_tests {
             DUST,
         );
 
-        assert_eq!(row.virtual_status_state, "recoverable");
+        assert_eq!(row.virtual_status_state, VTXO_STATUS_RECOVERABLE);
         assert!(!row.can_start_unroll);
         assert!(!row.can_complete);
     }

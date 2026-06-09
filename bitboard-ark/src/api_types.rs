@@ -56,6 +56,8 @@ pub struct PaymentRowDto {
 pub struct DelegateSpendableResult {
     pub delegated: u32,
     pub failed: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error_message: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -122,7 +124,7 @@ pub struct UnilateralExitFeeEstimateDto {
     pub chain_tx_count: u32,
     pub projected_unroll_steps: u32,
     pub projected_wait_steps: u32,
-    pub fee_rate_sat_per_vb: u64,
+    pub fee_rate_sat_per_vb: f64,
     pub estimated_package_fee_sats: u64,
     pub bumper_balance_sats: u64,
     pub bumper_sufficient: bool,

@@ -4,6 +4,7 @@ use ark_client::{Blockchain, SpendStatus, TxStatus};
 use ark_core::ExplorerUtxo;
 use bitcoin::{Address, OutPoint, Transaction, Txid};
 
+use crate::constants::{ESPLORA_FEE_ESTIMATE_BLOCK_TARGET, MIN_FEE_RATE_SAT_PER_VB};
 use crate::error::{ArkResult, ArkWasmError};
 
 const ESPLORA_HTTP_TIMEOUT_SECS: u64 = 5;
@@ -284,11 +285,11 @@ async fn map_fee_rate(client: &EsploraAsyncClient) -> Result<f64, ark_client::Er
         .await
         .map_err(EsploraBlockchain::map_esplora_error)?;
     let fee_rate = estimates
-        .get(&1)
+        .get(&ESPLORA_FEE_ESTIMATE_BLOCK_TARGET)
         .copied()
         .or_else(|| estimates.values().copied().reduce(f64::min))
-        .unwrap_or(1.0);
-    Ok(fee_rate.max(1.0))
+        .unwrap_or(MIN_FEE_RATE_SAT_PER_VB);
+    Ok(fee_rate.max(MIN_FEE_RATE_SAT_PER_VB))
 }
 
 #[cfg(test)]

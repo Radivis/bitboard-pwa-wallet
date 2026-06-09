@@ -369,7 +369,11 @@ const arkadeService: ArkadeService = {
     return txid
   },
 
-  async delegateSpendableVtxos(): Promise<{ delegated: number; failed: number }> {
+  async delegateSpendableVtxos(): Promise<{
+    delegated: number
+    failed: number
+    errorMessage?: string
+  }> {
     const result = await invokeWasmArk((wasmModule) => wasmModule.ark_delegate_spendable_vtxos())
     await persistAfterCriticalOperation()
     return result as { delegated: number; failed: number }

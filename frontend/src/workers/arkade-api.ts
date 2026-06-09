@@ -156,7 +156,11 @@ export interface ArkadeService {
   getExpiringVtxoCount(): Promise<number>
   getVtxoExpiryStatus(): Promise<ArkadeVtxoExpiryStatus>
   renewVtxosNow(): Promise<string | null>
-  delegateSpendableVtxos(): Promise<{ delegated: number; failed: number }>
+  delegateSpendableVtxos(): Promise<{
+    delegated: number
+    failed: number
+    errorMessage?: string
+  }>
   finalizePendingTransactions(): Promise<{ finalized: number; pending: number }>
   onboardBoardedUtxos(): Promise<string | null>
   listExitCandidates(): Promise<ArkadeExitCandidateRow[]>

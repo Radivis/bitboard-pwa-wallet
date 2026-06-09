@@ -1,5 +1,7 @@
 use bitcoin::Network;
 
+use crate::constants::{NETWORK_MODE_MAINNET, NETWORK_MODE_SIGNET, NETWORK_MODE_TESTNET};
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum NetworkMode {
     Mainnet,
@@ -10,9 +12,9 @@ pub enum NetworkMode {
 impl NetworkMode {
     pub fn parse(value: &str) -> Option<Self> {
         match value {
-            "mainnet" => Some(Self::Mainnet),
-            "testnet" => Some(Self::Testnet),
-            "signet" => Some(Self::Signet),
+            NETWORK_MODE_MAINNET => Some(Self::Mainnet),
+            NETWORK_MODE_TESTNET => Some(Self::Testnet),
+            NETWORK_MODE_SIGNET => Some(Self::Signet),
             _ => None,
         }
     }
@@ -27,8 +29,8 @@ impl NetworkMode {
 
     pub fn label(self) -> &'static str {
         match self {
-            Self::Mainnet => "mainnet",
-            Self::Testnet => "testnet",
+            Self::Mainnet => NETWORK_MODE_MAINNET,
+            Self::Testnet => NETWORK_MODE_TESTNET,
             Self::Signet => "signet (Mutinynet)",
         }
     }
