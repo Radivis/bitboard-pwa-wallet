@@ -4,7 +4,10 @@ import { toast } from 'sonner'
 import { getDatabase, ensureMigrated, useWallets } from '@/db'
 import { anyWalletHasNoMnemonicBackupFlag } from '@/db/wallet-no-mnemonic-backup'
 import { formatBTC, formatSats } from '@/lib/wallet/bitcoin-utils'
-import { listWalletsWithPositiveMainnetOnChainBalance } from '@/lib/esplora/mainnet-onchain-balance-probe'
+import {
+  type MainnetPositiveWalletRow,
+  listWalletsWithPositiveMainnetOnChainBalance,
+} from '@/lib/esplora/mainnet-onchain-balance-probe'
 import { wipeAllAppDataOpfsAndReload } from '@/db/opfs/wipe-all-app-data-opfs-and-reload'
 import { useSessionStore } from '@/stores/sessionStore'
 import { useWalletStore } from '@/stores/walletStore'
@@ -30,9 +33,9 @@ export function CompleteDataWipeCard() {
   const [riskUnderstood, setRiskUnderstood] = useState(false)
   const [probing, setProbing] = useState(false)
   const [mainnetModalOpen, setMainnetModalOpen] = useState(false)
-  const [mainnetRows, setMainnetRows] = useState<
-    Awaited<ReturnType<typeof listWalletsWithPositiveMainnetOnChainBalance>>
-  >([])
+  const [mainnetRows, setMainnetRows] = useState<MainnetPositiveWalletRow[]>([])
+  const [unverifiableModalOpen, setUnverifiableModalOpen] = useState(false)
+  const [unverifiableWalletNames, setUnverifiableWalletNames] = useState<string[]>([])
   const [noBackupModalOpen, setNoBackupModalOpen] = useState(false)
   const [wipeBusy, setWipeBusy] = useState(false)
 
@@ -77,15 +80,21 @@ export function CompleteDataWipeCard() {
 
     setProbing(true)
     try {
-      const rows = await listWalletsWithPositiveMainnetOnChainBalance({
+      const probeSummary = await listWalletsWithPositiveMainnetOnChainBalance({
         password: sessionPassword,
         wallets: wallets.map((walletRow) => ({
           walletId: walletRow.walletId,
           name: walletRow.name,
         })),
       })
-      if (rows.length > 0) {
-        setMainnetRows(rows)
+      if (probeSummary.unverifiableWalletNames.length > 0) {
+        setUnverifiableWalletNames(probeSummary.unverifiableWalletNames)
+        setMainnetRows(probeSummary.positiveBalanceRows)
+        setUnverifiableModalOpen(true)
+        return
+      }
+      if (probeSummary.positiveBalanceRows.length > 0) {
+        setMainnetRows(probeSummary.positiveBalanceRows)
         setMainnetModalOpen(true)
       } else {
         await advanceToNoBackupOrWipe()
@@ -112,6 +121,15 @@ export function CompleteDataWipeCard() {
     setMainnetModalOpen(false)
     await advanceToNoBackupOrWipe()
   }, [advanceToNoBackupOrWipe])
+
+  const onUnverifiableModalContinue = useCallback(async () => {
+    setUnverifiableModalOpen(false)
+    if (mainnetRows.length > 0) {
+      setMainnetModalOpen(true)
+      return
+    }
+    await advanceToNoBackupOrWipe()
+  }, [advanceToNoBackupOrWipe, mainnetRows.length])
 
   const onNoBackupProceedAnyway = useCallback(async () => {
     setNoBackupModalOpen(false)
@@ -261,6 +279,49 @@ export function CompleteDataWipeCard() {
             <p>
               Confirm that backups of the corresponding seed phrases exist and are ready to use
               before you wipe this device.
+            </p>
+          </div>
+        </DialogDescription>
+      </AppModal>
+
+      <AppModal
+        isOpen={unverifiableModalOpen}
+        onOpenChange={setUnverifiableModalOpen}
+        onCancel={() => {}}
+        title="Some mainnet balances could not be verified"
+        footer={(requestClose) => (
+          <>
+            <Button type="button" variant="outline" onClick={requestClose}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={wipeBusy}
+              onClick={() => void onUnverifiableModalContinue()}
+            >
+              Continue anyway
+            </Button>
+          </>
+        )}
+      >
+        <DialogDescription asChild>
+          <div className="space-y-3 text-sm text-muted-foreground">
+            <p>
+              Bitboard could not read a trustworthy mainnet on-chain balance for the wallets below
+              (often due to corrupted or mismatched local wallet data). Lightning / NWC balances are
+              not checked here.
+            </p>
+            <ul className="list-disc space-y-1 pl-5">
+              {unverifiableWalletNames.map((walletName) => (
+                <li key={walletName}>
+                  <span className="text-foreground">{walletName}</span>
+                </li>
+              ))}
+            </ul>
+            <p>
+              If any of these wallets may hold mainnet bitcoin, confirm your seed phrase backups
+              before wiping. You can still continue if you accept that risk.
             </p>
           </div>
         </DialogDescription>

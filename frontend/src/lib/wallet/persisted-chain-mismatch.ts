@@ -4,6 +4,8 @@ const PERSISTED_CHAIN_MISMATCH_MARKERS = [
   'Network mismatch',
   'Genesis hash mismatch',
   'could not be loaded from changeset',
+  /** BDK rejects a changeset whose descriptors differ from the expected wallet (e.g. cross-wallet corruption). */
+  'Descriptor mismatch',
 ] as const
 
 export function isPersistedChainMismatchError(err: unknown): boolean {

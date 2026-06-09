@@ -1,0 +1,47 @@
+import { describe, expect, it } from 'vitest'
+import { buildMockVtxosForScripts } from '@/lib/arkade/e2e/arkade-operator-mock-handler'
+import {
+  E2E_ARKADE_MOCK_DEFAULT_BALANCE_SATS,
+  E2E_ARKADE_MOCK_INCOMING_TXID,
+  E2E_ARKADE_MOCK_RECEIVE_INCOMING_SATS,
+  E2E_ARKADE_MOCK_RECEIVE_INCOMING_TXID,
+  getE2eArkadeOperatorMockState,
+  resetE2eArkadeOperatorMockState,
+} from '@/lib/arkade/e2e/arkade-operator-mock-state'
+
+const PARTITION = 'mock-handler-unit-test'
+
+describe('arkade operator mock vtxo builder', () => {
+  it('E2E-ARK-MOCK-04 funds the default fixture on the first script', () => {
+    resetE2eArkadeOperatorMockState(PARTITION)
+    const mockState = getE2eArkadeOperatorMockState(PARTITION)
+
+    const vtxos = buildMockVtxosForScripts(mockState, ['script_a'])
+
+    expect(vtxos).toHaveLength(1)
+    expect(vtxos[0].amount).toBe(String(E2E_ARKADE_MOCK_DEFAULT_BALANCE_SATS))
+    expect(vtxos[0].commitmentTxids).toEqual([expect.any(String)])
+    expect(vtxos[0].commitmentTxids[0]).toHaveLength(64)
+  })
+
+  it('E2E-ARK-MOCK-04 applies a pending incoming payment to the next unfunded script', () => {
+    resetE2eArkadeOperatorMockState(PARTITION)
+    const mockState = getE2eArkadeOperatorMockState(PARTITION)
+
+    buildMockVtxosForScripts(mockState, ['script_a'])
+    mockState.pendingIncomingPayment = {
+      txid: E2E_ARKADE_MOCK_RECEIVE_INCOMING_TXID,
+      amountSats: E2E_ARKADE_MOCK_RECEIVE_INCOMING_SATS,
+      timestamp: 1_700_000_100,
+    }
+
+    const vtxos = buildMockVtxosForScripts(mockState, ['script_a', 'script_b'])
+
+    expect(vtxos).toHaveLength(2)
+    expect(vtxos[0].arkTxid).toBe(E2E_ARKADE_MOCK_INCOMING_TXID)
+    expect(vtxos[0].amount).toBe(String(E2E_ARKADE_MOCK_DEFAULT_BALANCE_SATS))
+    expect(vtxos[1].arkTxid).toBe(E2E_ARKADE_MOCK_RECEIVE_INCOMING_TXID)
+    expect(vtxos[1].amount).toBe(String(E2E_ARKADE_MOCK_RECEIVE_INCOMING_SATS))
+    expect(mockState.pendingIncomingPayment).toBeNull()
+  })
+})

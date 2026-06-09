@@ -1,4 +1,4 @@
-import { expose, wrap, type Remote } from 'comlink';
+import { expose, proxy, wrap, type Remote } from 'comlink';
 import { serializeSelectedOutpointsForWasm } from '@/lib/wallet/manual-utxo-selection';
 import type {
   AddressType,
@@ -153,6 +153,8 @@ function buildInitialWalletSecretsPayload({
       },
     ],
     lightningNwcConnections: [],
+    arkadeOperatorConnections: [],
+    activeArkadeConnectionIdByNetwork: {},
   };
 }
 
@@ -284,13 +286,18 @@ const cryptoService = {
         changesetJson,
         useEmptyChain,
       );
-      return {
-        getBalance: () => invokeWasmCrypto(() => session.get_balance()),
-        exportChangeset: () => invokeWasmCrypto(() => session.export_changeset()),
+      // Comlink cannot structured-clone function objects; proxy keeps the handle on the worker.
+      return proxy({
+        getBalance: async () => {
+          const wire = await invokeWasmCrypto(() => session.get_balance());
+          return mapWireBalanceToDomain(wire as WireBalanceInfo);
+        },
+        exportChangeset: async () =>
+          invokeWasmCrypto(() => session.export_changeset()),
         free: () => {
           session.free();
         },
-      };
+      });
     });
   },
 

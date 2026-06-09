@@ -1,4 +1,9 @@
 import type { TransactionDetails } from '@/workers/crypto-types'
+import type { ArkadePaymentRow } from '@/workers/arkade-api'
+import {
+  formatTxDirection,
+  getTxListDisplayAmountSats,
+} from '@/lib/wallet/bitcoin-utils'
 import { useWalletStore } from '@/stores/walletStore'
 import { useLightningStore } from '@/stores/lightningStore'
 import { useFeatureStore } from '@/stores/featureStore'
@@ -313,9 +318,18 @@ export async function fetchLightningBalancesForDashboard(): Promise<LightningBal
   return { lightningBalanceRows, totalSats }
 }
 
+export const ARKADE_BOARDING_ACTIVITY_LABEL = 'Arkade boarding' as const
+export const ONCHAIN_ARKADE_BOARDING_ACTIVITY_LABEL =
+  'Onchain Arkade boarding' as const
+
 export type DashboardActivityItem =
-  | { kind: 'chain'; tx: TransactionDetails }
+  | { kind: 'chain'; tx: TransactionDetails; activityLabel?: string }
   | { kind: 'lightning'; payment: LightningPaymentWithWallet }
+  | {
+      kind: 'arkade'
+      payment: ArkadePaymentRow
+      activityLabel?: string
+    }
 
 /** Sort key so unconfirmed on-chain txs stay above confirmed history (see lab mempool ordering). */
 const UNCONFIRMED_CHAIN_SORT_PRIORITY = Number.MAX_SAFE_INTEGER
@@ -331,30 +345,148 @@ function lightningSortTime(payment: LightningPaymentWithWallet): number {
   return payment.timestamp
 }
 
+function arkadeSortTime(payment: ArkadePaymentRow): number {
+  return payment.timestamp > 0 ? payment.timestamp : 0
+}
+
+function dashboardActivitySortTime(item: DashboardActivityItem): number {
+  if (item.kind === 'chain') {
+    return chainSortTime(item.tx)
+  }
+  if (item.kind === 'lightning') {
+    return lightningSortTime(item.payment)
+  }
+  return arkadeSortTime(item.payment)
+}
+
+/** Boarding onboard often shares a block second with the funding on-chain send. */
+const BOARDING_FUNDING_TIMESTAMP_SLACK_SECONDS = 1
+
+function boardingFundingTimestampsMatch(
+  chainConfirmationTime: number | null,
+  arkadeTimestamp: number,
+): boolean {
+  if (chainConfirmationTime == null || chainConfirmationTime === 0) {
+    return arkadeTimestamp === 0
+  }
+  if (arkadeTimestamp === 0) {
+    return false
+  }
+  return (
+    chainConfirmationTime === arkadeTimestamp ||
+    Math.abs(chainConfirmationTime - arkadeTimestamp) <=
+      BOARDING_FUNDING_TIMESTAMP_SLACK_SECONDS
+  )
+}
+
+/** On-chain payment to boarding address paired with the resulting Arkade VTXO credit. */
+export function isBoardingFundToVtxoPair(
+  chainTx: TransactionDetails,
+  arkPayment: ArkadePaymentRow,
+): boolean {
+  if (!chainTx.isConfirmed) {
+    return false
+  }
+  if (formatTxDirection(chainTx) !== 'sent' || arkPayment.direction !== 'incoming') {
+    return false
+  }
+  if (getTxListDisplayAmountSats(chainTx) !== arkPayment.amountSats) {
+    return false
+  }
+  return boardingFundingTimestampsMatch(chainTx.confirmationTime, arkPayment.timestamp)
+}
+
 /**
- * Merges on-chain and Lightning activity, newest first (by sort timestamp).
+ * When sort timestamps tie, stable merge order would list on-chain rows before Arkade.
+ * For boarding, the VTXO credit should appear above the funding send.
+ */
+function boardingActivitySortTieBreak(
+  left: DashboardActivityItem,
+  right: DashboardActivityItem,
+): number {
+  const leftIsArkIncoming =
+    left.kind === 'arkade' && left.payment.direction === 'incoming'
+  const rightIsArkIncoming =
+    right.kind === 'arkade' && right.payment.direction === 'incoming'
+  const leftIsChainSent = left.kind === 'chain' && formatTxDirection(left.tx) === 'sent'
+  const rightIsChainSent = right.kind === 'chain' && formatTxDirection(right.tx) === 'sent'
+
+  if (
+    leftIsArkIncoming &&
+    rightIsChainSent &&
+    isBoardingFundToVtxoPair(right.tx, left.payment)
+  ) {
+    return -1
+  }
+  if (
+    leftIsChainSent &&
+    rightIsArkIncoming &&
+    isBoardingFundToVtxoPair(left.tx, right.payment)
+  ) {
+    return 1
+  }
+  return 0
+}
+
+function compareDashboardActivityItems(
+  left: DashboardActivityItem,
+  right: DashboardActivityItem,
+): number {
+  const timeDelta = dashboardActivitySortTime(right) - dashboardActivitySortTime(left)
+  if (timeDelta !== 0) {
+    return timeDelta
+  }
+  return boardingActivitySortTieBreak(left, right)
+}
+
+function applyBoardingActivityLabels(
+  items: DashboardActivityItem[],
+): DashboardActivityItem[] {
+  const labeled = items.map((item) => ({ ...item }))
+
+  for (let chainIndex = 0; chainIndex < labeled.length; chainIndex += 1) {
+    const chainItem = labeled[chainIndex]
+    if (chainItem.kind !== 'chain') {
+      continue
+    }
+    for (let arkIndex = 0; arkIndex < labeled.length; arkIndex += 1) {
+      const arkItem = labeled[arkIndex]
+      if (arkItem.kind !== 'arkade') {
+        continue
+      }
+      if (!isBoardingFundToVtxoPair(chainItem.tx, arkItem.payment)) {
+        continue
+      }
+      labeled[chainIndex] = {
+        ...chainItem,
+        activityLabel: ONCHAIN_ARKADE_BOARDING_ACTIVITY_LABEL,
+      }
+      labeled[arkIndex] = {
+        ...arkItem,
+        activityLabel: ARKADE_BOARDING_ACTIVITY_LABEL,
+      }
+    }
+  }
+
+  return labeled
+}
+
+/**
+ * Merges on-chain, Lightning, and Arkade activity, newest first (by sort timestamp).
  * Unconfirmed on-chain txs are prioritized so they are not pushed out of the dashboard top-N slice.
  */
 export function mergeAndSortDashboardActivity(
   onChain: TransactionDetails[],
   lightning: LightningPaymentWithWallet[],
+  arkade: ArkadePaymentRow[] = [],
 ): DashboardActivityItem[] {
   const items: DashboardActivityItem[] = [
     ...onChain.map((tx) => ({ kind: 'chain' as const, tx })),
     ...lightning.map((payment) => ({ kind: 'lightning' as const, payment })),
+    ...arkade.map((payment) => ({ kind: 'arkade' as const, payment })),
   ]
 
-  items.sort((a, b) => {
-    const sortTimeA =
-      a.kind === 'chain'
-        ? chainSortTime(a.tx)
-        : lightningSortTime(a.payment)
-    const sortTimeB =
-      b.kind === 'chain'
-        ? chainSortTime(b.tx)
-        : lightningSortTime(b.payment)
-    return sortTimeB - sortTimeA
-  })
+  items.sort(compareDashboardActivityItems)
 
-  return items
+  return applyBoardingActivityLabels(items)
 }

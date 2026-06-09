@@ -1,0 +1,88 @@
+feature:
+  name: Arkade
+  description: "Educational Arkade (VTXO) layer with Bitboard-hosted Fulmine delegator"
+  user_stories:
+    - As a user, I want to enable Arkade under Settings → Features so I can use an offchain Bitcoin layer without a Lightning wallet
+    - As a user, I want my Arkade wallet to use the correct operator and delegator for the network I selected (mainnet, testnet, signet/Mutinynet)
+    - As a user, I want to see my Arkade balance separately from my on-chain balance
+    - As a user, I want to receive funds on an Arkade address (ark1/tark1) with a QR code
+    - As a user, I want to send Arkade payments to an Arkade address
+    - As a user, I want to view Arkade payment history
+    - As a user, I want to board Bitcoin from my on-chain wallet into Arkade
+    - As a user, I want VTXO renewal delegated to Bitboard's Fulmine service so I do not need the app open 24/7
+    - As a user, I want to understand VTXO expiry and optionally renew manually for learning
+    - As a user, I want to exit Arkade to an on-chain address collaboratively when the operator is available
+    - As a user, I want to exit a specific VTXO unilaterally without operator cooperation when needed
+  requirements:
+    - Arkade is gated by isArkadeEnabled (default off) and isMainnetAccessEnabled for mainnet
+    - Arkade is available only on mainnet, testnet, and signet; not on lab or regtest in v1
+    - delegatorProvider must be configured at first Wallet.create per (wallet_id, networkMode)
+    - Mnemonic decryption runs only in workers (secrets channel); never on the main thread
+    - Default delegator and operator URLs come from arkade-endpoints.ts (env overrides supported)
+    - Network switch terminates and reopens the Arkade worker session for the new network
+    - Lock wallet terminates arkade.worker and clears session state
+    - BitboardArkPersistence (engine ark-rs, wire version 3) in sdkPersistenceJson per operator connection inside encrypted wallet_secrets
+    - Offchain receive derivation cursor is a single scalar in walletDb (see docs/arkade-bitboard-wallet-model.md); no index arrays in sdkPersistenceJson
+    - Wallet reopen hydrates boarding outputs from sdkPersistenceJson; operator required for live balance sync and sends
+  contracts:
+    receive_address:
+      - id: ARK-RCV-01
+        description: Receive shows the last revealed offchain receive index until the user generates a new one
+      - id: ARK-RCV-02
+        description: Re-opening Receive, lock/unlock, or reload does not change the displayed address
+      - id: ARK-RCV-03
+        description: Incoming payments to the displayed index still appear in balance/history after operator sync
+      - id: ARK-RCV-04
+        description: Generate new address reveals the next index and persists offchain_next_derivation_index
+      - id: ARK-RCV-05
+        description: Read paths (getAddress, balance, history) never await wallet-secrets re-encrypt
+  pages:
+    - ArkadeManagement:
+      - description: "Arkade status on Management page"
+      - file: frontend/src/components/wallet/ArkadePanel.tsx
+      - visible_elements:
+        - Arkade balance (confirmed/total when available)
+        - Arkade receive address with copy
+        - delegator fee from getDelegateInfo when reachable
+        - expiring VTXO count when session open
+        - collaborative exit (on-chain destination, optional partial amount) with operator fee estimate from getInfo().fees
+        - unilateral exit per VTXO (select, unroll, complete after timelock) with unroll step count and bumper fee estimate
+      - requirements:
+        - Shown only when isArkadeEnabled and current network supports Arkade
+        - Collaborative exit and fee estimates via bitboard-ark WASM in arkade.worker
+        - Unilateral exit via ark-rs unroll APIs; bumper balance and fee estimates from worker
+    - WalletReceiveArkadeMode:
+      - description: "Arkade receive integrated in main Receive page"
+      - file: frontend/src/pages/wallet/ReceivePage.tsx
+      - path: /wallet/receive
+      - visible_elements:
+        - Receive mode toggle includes Arkade when isArkadeEnabled and network supported
+        - Arkade address QR and copy (not on-chain bc1)
+        - Generate new address control (mirrors on-chain Receive)
+      - requirements:
+        - Legacy /wallet/arkade/receive redirects to /wallet/receive?mode=arkade
+        - Contracts ARK-RCV-01 through ARK-RCV-05 apply to Arkade receive mode
+    - WalletSendArkadeDetection:
+      - description: "Arkade send via address format on main Send page"
+      - file: frontend/src/pages/wallet/SendPage/index.tsx
+      - path: /wallet/send
+      - visible_elements:
+        - Recipient field accepts ark1/tark1 when Arkade active
+        - Arkade balance shown; on-chain fee section hidden for Arkade sends
+      - requirements:
+        - Lightning detection takes priority over Arkade; Arkade over on-chain
+        - Legacy /wallet/arkade/send redirects to /wallet/send
+    - ArkadeBoard:
+      - path: /wallet/arkade/board
+      - file: frontend/src/routes/wallet/arkade/board.tsx
+      - visible_elements:
+        - boarding address from SDK
+        - amount to send from on-chain wallet
+        - steps for confirm on-chain then onboard via Ramps
+    - DashboardArkadeBlock:
+      - description: "Separate Arkade balance on dashboard"
+      - file: frontend/src/components/wallet/ArkadeDashboardBalance.tsx
+      - contract_spec: doc/features/dashboard-arkade-contract.yaml
+      - visible_elements:
+        - Arkade balance label
+        - confirmed and optional pending balance display

@@ -34,6 +34,7 @@ describe('isLabWithNoBalance', () => {
 describe('canBuildOnChainSend', () => {
   const base = {
     isLightningSendMode: false,
+    isArkadeSendMode: false,
     normalizedRecipient: recipient,
     networkMode: 'signet' as const,
     amountSats: 10_000,
@@ -51,6 +52,10 @@ describe('canBuildOnChainSend', () => {
     expect(canBuildOnChainSend({ ...base, isLightningSendMode: true })).toBe(
       false,
     )
+  })
+
+  it('rejects arkade send mode', () => {
+    expect(canBuildOnChainSend({ ...base, isArkadeSendMode: true })).toBe(false)
   })
 
   it('rejects invalid address', () => {
@@ -134,7 +139,9 @@ describe('canProceedToSendReview', () => {
     expect(
       canProceedToSendReview({
         isLightningSendMode: true,
+        isArkadeSendMode: false,
         canBuildLightning: true,
+        canBuildArkade: false,
         canBuildOnChain: false,
         fiatRateOk: true,
       }),
@@ -142,18 +149,35 @@ describe('canProceedToSendReview', () => {
     expect(
       canProceedToSendReview({
         isLightningSendMode: true,
+        isArkadeSendMode: false,
         canBuildLightning: false,
+        canBuildArkade: true,
         canBuildOnChain: true,
         fiatRateOk: true,
       }),
     ).toBe(false)
   })
 
+  it('uses arkade path when in arkade send mode', () => {
+    expect(
+      canProceedToSendReview({
+        isLightningSendMode: false,
+        isArkadeSendMode: true,
+        canBuildLightning: false,
+        canBuildArkade: true,
+        canBuildOnChain: false,
+        fiatRateOk: true,
+      }),
+    ).toBe(true)
+  })
+
   it('uses on-chain path otherwise', () => {
     expect(
       canProceedToSendReview({
         isLightningSendMode: false,
+        isArkadeSendMode: false,
         canBuildLightning: false,
+        canBuildArkade: false,
         canBuildOnChain: true,
         fiatRateOk: true,
       }),
@@ -164,7 +188,9 @@ describe('canProceedToSendReview', () => {
     expect(
       canProceedToSendReview({
         isLightningSendMode: false,
+        isArkadeSendMode: false,
         canBuildLightning: false,
+        canBuildArkade: false,
         canBuildOnChain: true,
         fiatRateOk: false,
       }),

@@ -15,6 +15,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+## [0.3.0] - 2026-06-07
+### Added
+- Arkade Support: enable under Settings → Features; separate balance, receive, send, and board-from-on-chain flows on mainnet, and signet (Mutinynet)
+- Network-scoped default Fulmine delegator URLs (env-configurable) for background VTXO renewal
+- Library articles "Arkade in Bitboard Wallet" and "VTXO expiry and renewal"; deploy notes in `docs/deploy/fulmine-delegator-vps.md`
+- Arkade collaborative and unilateral exit from Management (per-VTXO unilateral flow with unroll progress)
+- Arkade exit fee estimates: operator policy and satoshi preview for collaborative exit; unroll step count and bumper fee lower bound for unilateral exit
+
+### Fixed
+- Fixed certain edge cases that blocked a full data wipe.
+
 ## [0.2.0] - 2026-05-31
 ### Added
 - Feature "UTXO selection" that allows to manually select the UTXOs to be used in a transaction

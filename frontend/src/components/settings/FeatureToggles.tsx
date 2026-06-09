@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import { AlertTriangle, Coins, FlaskConical, Layers, Zap } from 'lucide-react'
+import { AlertTriangle, CircleDot, Coins, FlaskConical, Layers, Zap } from 'lucide-react'
 import { useFeatureStore } from '@/stores/featureStore'
 import {
   AddressType,
@@ -9,7 +9,10 @@ import {
 import { executeSettingsNetworkSwitch } from '@/lib/settings/network-mode-switch'
 import { executeSettingsAddressTypeSwitch } from '@/lib/settings/execute-settings-address-type-switch'
 import { runFeatureToggleOffWork } from '@/lib/settings/feature-toggle-async'
+import { ArkadeFeatureInfomodeContent } from '@/components/arkade/infomode/ArkadeFeatureInfomodeContent'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
+import { ARKADE_INFOMODE_IDS } from '@/lib/arkade/arkade-infomode'
+import { ArkadeEnableConfirmModal } from '@/components/settings/ArkadeEnableConfirmModal'
 import { MainnetAccessConfirmModal } from '@/components/settings/MainnetAccessConfirmModal'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
@@ -25,8 +28,11 @@ export function FeatureToggles() {
   const setIsSegwitAddressesEnabled = useFeatureStore((featureState) => featureState.setIsSegwitAddressesEnabled)
   const isUtxoSelectionEnabled = useFeatureStore((featureState) => featureState.isUtxoSelectionEnabled)
   const setIsUtxoSelectionEnabled = useFeatureStore((featureState) => featureState.setIsUtxoSelectionEnabled)
+  const isArkadeEnabled = useFeatureStore((featureState) => featureState.isArkadeEnabled)
+  const setIsArkadeEnabled = useFeatureStore((featureState) => featureState.setIsArkadeEnabled)
 
   const [mainnetConfirmOpen, setMainnetConfirmOpen] = useState(false)
+  const [arkadeConfirmOpen, setArkadeConfirmOpen] = useState(false)
   const [mainnetAccessSwitchBusy, setMainnetAccessSwitchBusy] = useState(false)
   const [regtestModeSwitchBusy, setRegtestModeSwitchBusy] = useState(false)
   const [segwitAddressesSwitchBusy, setSegwitAddressesSwitchBusy] = useState(false)
@@ -180,6 +186,32 @@ export function FeatureToggles() {
       </InfomodeWrapper>
 
       <InfomodeWrapper
+        infoId={ARKADE_INFOMODE_IDS.featureToggle}
+        infoComponent={ArkadeFeatureInfomodeContent}
+      >
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <CircleDot className="h-4 w-4" />
+            <Label htmlFor="arkade-toggle" className="cursor-pointer">
+              Arkade
+            </Label>
+          </div>
+          <Switch
+            id="arkade-toggle"
+            checked={isArkadeEnabled}
+            onCheckedChange={(checked) => {
+              if (checked) {
+                setArkadeConfirmOpen(true)
+              } else {
+                setIsArkadeEnabled(false)
+              }
+            }}
+            aria-label="Enable Arkade offchain layer"
+          />
+        </div>
+      </InfomodeWrapper>
+
+      <InfomodeWrapper
         infoId="settings-feature-lightning"
         infoTitle="Lightning Network"
         infoText="The Lightning Network is a layer-2 payment protocol on top of Bitcoin. It enables fast, low-cost transactions by creating payment channels between nodes. Turn this on to enable Lightning-capable screens and flows in the app. Actual Lightning send, receive, and channel management are available when your wallet is on Mainnet, Testnet, or Signet—not on Lab or Regtest."
@@ -204,6 +236,12 @@ export function FeatureToggles() {
         open={mainnetConfirmOpen}
         onOpenChange={setMainnetConfirmOpen}
         onConfirm={() => setIsMainnetAccessEnabled(true)}
+      />
+
+      <ArkadeEnableConfirmModal
+        open={arkadeConfirmOpen}
+        onOpenChange={setArkadeConfirmOpen}
+        onConfirm={() => setIsArkadeEnabled(true)}
       />
     </div>
   )

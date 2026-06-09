@@ -1,7 +1,7 @@
 {
   "name": "bitboard-pwa-wallet",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.3.0",
   "type": "module",
   "license": "MIT",
   "engines": {
@@ -10,7 +10,7 @@
   "scripts": {
     "dev": "vite",
     "build": "npm run build:wasm && tsc && vite build",
-    "build:wasm": "cd ../crypto && wasm-pack build --target bundler --out-dir ../frontend/src/wasm-pkg && cd ../bitboard-encryption && wasm-pack build --target bundler --out-dir ../frontend/src/wasm-pkg/bitboard_encryption && cd ../bitboard-lightning && wasm-pack build --target bundler --out-dir ../frontend/src/wasm-pkg/bitboard_lightning",
+    "build:wasm": "cd ../crypto && wasm-pack build --target bundler --out-dir ../frontend/src/wasm-pkg && cd ../bitboard-encryption && wasm-pack build --target bundler --out-dir ../frontend/src/wasm-pkg/bitboard_encryption && cd ../bitboard-lightning && wasm-pack build --target bundler --out-dir ../frontend/src/wasm-pkg/bitboard_lightning && cd ../bitboard-ark && wasm-pack build --target bundler --out-dir ../frontend/src/wasm-pkg/bitboard_ark",
     "lint": "eslint . --report-unused-disable-directives --max-warnings 0",
     "typecheck": "tsc --noEmit",
     "preview": "vite preview",
@@ -30,6 +30,7 @@
     "test:regtest:stop": "docker rm -f bitboard-regtest",
     "test:e2e:regtest": "npm run test:regtest:start && playwright test --grep @regtest",
     "test:e2e:lab": "playwright test --grep @lab",
+    "test:e2e:arkade": "VITE_E2E_ARKADE_MOCK=true playwright test --grep @arkade",
     "sync-version": "node ../scripts/sync-version.mjs",
     "verify-version": "node ../scripts/verify-version.mjs"
   },

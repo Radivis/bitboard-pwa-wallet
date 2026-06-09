@@ -3,6 +3,7 @@ import { createJSONStorage, persist } from 'zustand/middleware'
 import { sqliteStorage } from '@/db/storage-adapter'
 import { AddressType } from '@/lib/wallet/wallet-domain-types'
 import type { BalanceInfo, TransactionDetails } from '@/workers/crypto-types'
+import type { ArkadeBalanceInfo, ArkadePaymentRow } from '@/workers/arkade-api'
 
 export type NetworkMode = 'lab' | 'regtest' | 'signet' | 'testnet' | 'mainnet'
 
@@ -81,6 +82,11 @@ interface TransientWalletState {
   currentAddress: string | null
   lastSyncTime: Date | null
   transactions: TransactionDetails[]
+  activeArkadeConnectionId: string | null
+  arkadeBalance: ArkadeBalanceInfo | null
+  arkadePayments: ArkadePaymentRow[]
+  arkadeReceiveAddress: string | null
+  lastOperatorSyncTime: Date | null
   loadedDescriptorWallet: LoadedDescriptorWallet | null
   /**
    * Set when post-import Esplora full scan fails; in-memory only (not persisted).
@@ -101,6 +107,14 @@ interface WalletActions {
   setCurrentAddress: (address: string | null) => void
   setLastSyncTime: (lastSyncTime: Date | null) => void
   setTransactions: (transactions: TransactionDetails[]) => void
+  setActiveArkadeConnectionId: (connectionId: string | null) => void
+  setArkadeDashboardState: (state: {
+    balance: ArkadeBalanceInfo
+    payments: ArkadePaymentRow[]
+    receiveAddress: string
+  }) => void
+  clearArkadeDashboardState: () => void
+  setLastOperatorSyncTime: (lastOperatorSyncTime: Date | null) => void
   setActiveWalletBootstrapInFlight: (inFlight: boolean) => void
   setManualWalletUnlockInFlight: (inFlight: boolean) => void
   setImportInitialSyncErrorMessage: (message: string | null) => void
@@ -118,6 +132,11 @@ const TRANSIENT_DEFAULTS: TransientWalletState = {
   currentAddress: null,
   lastSyncTime: null,
   transactions: [],
+  activeArkadeConnectionId: null,
+  arkadeBalance: null,
+  arkadePayments: [],
+  arkadeReceiveAddress: null,
+  lastOperatorSyncTime: null,
   loadedDescriptorWallet: null,
   importInitialSyncErrorMessage: null,
 }
@@ -148,6 +167,23 @@ export const useWalletStore = create<WalletState>()(
       setCurrentAddress: (address) => set({ currentAddress: address }),
       setLastSyncTime: (lastSyncTime) => set({ lastSyncTime }),
       setTransactions: (transactions) => set({ transactions }),
+      setActiveArkadeConnectionId: (connectionId) =>
+        set({ activeArkadeConnectionId: connectionId }),
+      setArkadeDashboardState: ({ balance, payments, receiveAddress }) =>
+        set({
+          arkadeBalance: balance,
+          arkadePayments: payments,
+          arkadeReceiveAddress: receiveAddress,
+        }),
+      clearArkadeDashboardState: () =>
+        set({
+          activeArkadeConnectionId: null,
+          arkadeBalance: null,
+          arkadePayments: [],
+          arkadeReceiveAddress: null,
+          lastOperatorSyncTime: null,
+        }),
+      setLastOperatorSyncTime: (lastOperatorSyncTime) => set({ lastOperatorSyncTime }),
       setActiveWalletBootstrapInFlight: (inFlight) =>
         set({ activeWalletBootstrapInFlight: inFlight }),
       setManualWalletUnlockInFlight: (inFlight) =>
@@ -160,6 +196,11 @@ export const useWalletStore = create<WalletState>()(
           ...TRANSIENT_DEFAULTS,
           walletStatus: 'locked',
           loadedDescriptorWallet: null,
+          activeArkadeConnectionId: null,
+          arkadeBalance: null,
+          arkadePayments: [],
+          arkadeReceiveAddress: null,
+          lastOperatorSyncTime: null,
         }),
 
       resetWallet: () =>

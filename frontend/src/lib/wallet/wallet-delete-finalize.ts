@@ -5,6 +5,7 @@ import { useLightningStore } from '@/stores/lightningStore'
 import { useWalletStore } from '@/stores/walletStore'
 import { useCryptoStore } from '@/stores/cryptoStore'
 import { useSessionStore, clearAutoLockTimer } from '@/stores/sessionStore'
+import { closeArkadeSession } from '@/lib/arkade/arkade-session-service'
 import { resetSecretsChannel } from '@/workers/secrets-channel'
 
 /**
@@ -38,6 +39,7 @@ export async function finalizeWalletDeletion(params: {
     useWalletStore.getState().setActiveWallet(nextActiveWalletId)
   }
 
+  await closeArkadeSession()
   useCryptoStore.getState().terminateWorker()
   resetSecretsChannel()
   useSessionStore.getState().clear()

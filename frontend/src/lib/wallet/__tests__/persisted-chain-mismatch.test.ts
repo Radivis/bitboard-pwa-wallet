@@ -14,6 +14,16 @@ describe('isPersistedChainMismatchError', () => {
   it('returns false for unrelated errors', () => {
     expect(isPersistedChainMismatchError(new Error('timeout'))).toBe(false)
   })
+
+  it('detects descriptor mismatch messages', () => {
+    expect(
+      isPersistedChainMismatchError(
+        new Error(
+          'Wallet error: Descriptor mismatch for External keychain: loaded tr([aaa/0/*]), expected tr([bbb/0/*])',
+        ),
+      ),
+    ).toBe(true)
+  })
 })
 
 describe('withPersistedChainMismatchRetry', () => {

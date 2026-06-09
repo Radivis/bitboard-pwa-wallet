@@ -20,6 +20,9 @@ interface FeatureState {
   /** When true, send review shows manual UTXO selection controls. */
   isUtxoSelectionEnabled: boolean
   setIsUtxoSelectionEnabled: (enabled: boolean) => void
+  /** When true, Arkade (VTXO) layer is available on mainnet, testnet, and signet. */
+  isArkadeEnabled: boolean
+  setIsArkadeEnabled: (enabled: boolean) => void
 }
 
 type LegacyFeaturePersistedState = {
@@ -38,6 +41,7 @@ function migrateLegacyFeatureState(persistedState: unknown): Partial<FeatureStat
     return {
       ...legacy,
       isUtxoSelectionEnabled: legacy.isUtxoSelectionEnabled ?? false,
+      isArkadeEnabled: legacy.isArkadeEnabled ?? false,
     }
   }
   return {
@@ -46,6 +50,7 @@ function migrateLegacyFeatureState(persistedState: unknown): Partial<FeatureStat
     isRegtestModeEnabled: legacy.regtestModeEnabled ?? false,
     isSegwitAddressesEnabled: legacy.segwitAddressesEnabled ?? false,
     isUtxoSelectionEnabled: false,
+    isArkadeEnabled: false,
   }
 }
 
@@ -62,18 +67,27 @@ export const useFeatureStore = create<FeatureState>()(
       setIsSegwitAddressesEnabled: (enabled) => set({ isSegwitAddressesEnabled: enabled }),
       isUtxoSelectionEnabled: false,
       setIsUtxoSelectionEnabled: (enabled) => set({ isUtxoSelectionEnabled: enabled }),
+      isArkadeEnabled: false,
+      setIsArkadeEnabled: (enabled) => set({ isArkadeEnabled: enabled }),
     }),
     {
       name: 'feature-storage',
       storage: createJSONStorage(() => sqliteStorage),
-      version: 2,
-      migrate: (persistedState) => migrateLegacyFeatureState(persistedState) ?? persistedState,
+      version: 3,
+      migrate: (persistedState, version) => {
+        const base = migrateLegacyFeatureState(persistedState) ?? persistedState
+        if (version < 3 && base != null && typeof base === 'object') {
+          return { ...base, isArkadeEnabled: (base as FeatureState).isArkadeEnabled ?? false }
+        }
+        return base
+      },
       partialize: (state) => ({
         isLightningEnabled: state.isLightningEnabled,
         isMainnetAccessEnabled: state.isMainnetAccessEnabled,
         isRegtestModeEnabled: state.isRegtestModeEnabled,
         isSegwitAddressesEnabled: state.isSegwitAddressesEnabled,
         isUtxoSelectionEnabled: state.isUtxoSelectionEnabled,
+        isArkadeEnabled: state.isArkadeEnabled,
       }),
     },
   ),

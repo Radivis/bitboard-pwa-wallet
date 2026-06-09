@@ -304,6 +304,39 @@ describe('Settings routes', () => {
 
       expect(featureStoreState.setIsMainnetAccessEnabled).toHaveBeenCalledWith(true)
     })
+
+    it('opens Arkade confirmation modal when enabling the toggle', async () => {
+      const user = userEvent.setup()
+      renderWithProviders(<SettingsFeaturesPage />)
+
+      await user.click(screen.getByRole('switch', { name: 'Enable Arkade offchain layer' }))
+
+      expect(
+        screen.getByRole('heading', { name: 'Enable Arkade', level: 2 }),
+      ).toBeInTheDocument()
+      expect(screen.getByText(/Arkade support is brand new/i)).toBeInTheDocument()
+      expect(screen.getByText(/Signet is strongly advised/i)).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Enable Arkade' })).toBeDisabled()
+      expect(featureStoreState.setIsArkadeEnabled).not.toHaveBeenCalled()
+    })
+
+    it('enables Arkade after acknowledging the new-feature warning', async () => {
+      const user = userEvent.setup()
+      renderWithProviders(<SettingsFeaturesPage />)
+
+      await user.click(screen.getByRole('switch', { name: 'Enable Arkade offchain layer' }))
+      await user.click(
+        screen.getByRole('checkbox', {
+          name: /I understand Arkade is new/i,
+        }),
+      )
+
+      const enableArkade = screen.getByRole('button', { name: 'Enable Arkade' })
+      await expect(enableArkade).toBeEnabled()
+      await user.click(enableArkade)
+
+      expect(featureStoreState.setIsArkadeEnabled).toHaveBeenCalledWith(true)
+    })
   })
 
   describe('SettingsAboutPage', () => {

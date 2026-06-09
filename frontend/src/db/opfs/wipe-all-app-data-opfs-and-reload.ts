@@ -7,12 +7,17 @@ import { LAB_SQLITE_OPFS_BASENAME, WALLET_SQLITE_OPFS_BASENAME } from '@/db/opfs
 import { WALLET_MIGRATION_FAILURE_OPFS_FILENAME } from '@/db/migrations/wallet-migration-failure-report'
 import { appQueryClient } from '@/lib/shared/app-query-client'
 import { awaitLabOperationQueueDrained } from '@/lib/lab/lab-coordinator'
-import { removeOpfsRootEntryIfExists } from '@/db/opfs/opfs-root-file'
+import { removeOpfsRootEntryIfExistsWithRetry } from '@/db/opfs/opfs-root-file'
 import { RELOAD_AFTER_OPFS_WRITE_MS } from '@/db/opfs/opfs-sqlite-replace-and-reload'
+import { closeArkadeSession } from '@/lib/arkade/arkade-session-service'
 import { terminateCryptoWorker } from '@/workers/crypto-factory'
 import { terminateLabWorker } from '@/workers/lab-factory'
+import { resetSecretsChannel } from '@/workers/secrets-channel'
 
 const WIPE_LOG_PREFIX = '[wipe-all-app-data]'
+
+/** Yield after worker/database teardown so wa-sqlite can release OPFS handles. */
+const POST_DESTROY_SETTLE_MS = 250
 
 /** Logs and rethrows — use around each teardown step to see which one fails in the console. */
 async function wipeAsyncStep<T>(stepLabel: string, fn: () => Promise<T>): Promise<T> {
@@ -37,7 +42,7 @@ async function removeOpfsSqliteBundle(bundleLabel: string, opfsBasename: string)
   const paths = [`${opfsBasename}-wal`, `${opfsBasename}-shm`, opfsBasename] as const
   for (const fileName of paths) {
     await wipeAsyncStep(`removeOpfsRootEntry (${bundleLabel} ${fileName})`, () =>
-      removeOpfsRootEntryIfExists(fileName),
+      removeOpfsRootEntryIfExistsWithRetry(fileName),
     )
   }
 }
@@ -47,8 +52,8 @@ async function removeOpfsSqliteBundle(bundleLabel: string, opfsBasename: string)
  * Call only after destroying in-memory Kysely usage is safe (same pattern as backup replace).
  */
 export async function wipeAllAppDataOpfsAndReload(): Promise<void> {
-  // First: stop Zustand persist from opening new SQLite statements while we tear down (clear()
-  // and re-renders can otherwise trigger setItem concurrently with destroy()).
+  // First: stop Zustand persist and all Kysely access so re-renders cannot reopen OPFS SQLite
+  // while we tear down (clear() and modals still mounted can otherwise call getDatabase()).
   wipeSyncStep('blockSqliteStorageForTeardown', () => {
     blockSqliteStorageForTeardown()
   })
@@ -60,6 +65,10 @@ export async function wipeAllAppDataOpfsAndReload(): Promise<void> {
   await wipeAsyncStep('appQueryClient.cancelQueries', () => appQueryClient.cancelQueries())
   wipeSyncStep('appQueryClient.clear', () => {
     appQueryClient.clear()
+  })
+  await wipeAsyncStep('closeArkadeSession', () => closeArkadeSession())
+  wipeSyncStep('resetSecretsChannel', () => {
+    resetSecretsChannel()
   })
   wipeSyncStep('terminateLabWorker', () => {
     terminateLabWorker()
@@ -75,10 +84,15 @@ export async function wipeAllAppDataOpfsAndReload(): Promise<void> {
   })
   await wipeAsyncStep('destroyDatabase (wallet Kysely)', () => destroyDatabase())
   await wipeAsyncStep('destroyLabDatabase (lab Kysely)', () => destroyLabDatabase())
+  await wipeAsyncStep(`postDestroySettle(${POST_DESTROY_SETTLE_MS}ms)`, () => {
+    return new Promise<void>((resolve) => {
+      window.setTimeout(resolve, POST_DESTROY_SETTLE_MS)
+    })
+  })
   await removeOpfsSqliteBundle('wallet', WALLET_SQLITE_OPFS_BASENAME)
   await removeOpfsSqliteBundle('lab', LAB_SQLITE_OPFS_BASENAME)
   await wipeAsyncStep(`removeOpfsRootEntry (migration report ${WALLET_MIGRATION_FAILURE_OPFS_FILENAME})`, () =>
-    removeOpfsRootEntryIfExists(WALLET_MIGRATION_FAILURE_OPFS_FILENAME),
+    removeOpfsRootEntryIfExistsWithRetry(WALLET_MIGRATION_FAILURE_OPFS_FILENAME),
   )
 
   toast.success('All app data removed. Reloading…')

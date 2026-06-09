@@ -8,14 +8,26 @@ import {
   getTxListDisplayAmountSats,
   truncateAddress,
 } from '@/lib/wallet/bitcoin-utils'
+import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
+import { DashboardActivityRailBadge } from '@/components/DashboardActivityRailBadge'
+import {
+  ARKADE_ACTIVITY_BOARDING_INFOMODE,
+  ARKADE_ACTIVITY_PAYMENT_INFOMODE,
+  ARKADE_INFOMODE_IDS,
+} from '@/lib/arkade/arkade-infomode'
+import {
+  ARKADE_BOARDING_ACTIVITY_LABEL,
+  ONCHAIN_ARKADE_BOARDING_ACTIVITY_LABEL,
+} from '@/lib/lightning/lightning-dashboard-sync'
 import { cn } from '@/lib/shared/utils'
 
 interface TransactionItemProps {
   transaction: TransactionDetails
+  activityLabel?: string
 }
 
-export function TransactionItem({ transaction }: TransactionItemProps) {
+export function TransactionItem({ transaction, activityLabel }: TransactionItemProps) {
   const [expanded, setExpanded] = useState(false)
   const [showAbsoluteTime, setShowAbsoluteTime] = useState(false)
 
@@ -25,6 +37,26 @@ export function TransactionItem({ transaction }: TransactionItemProps) {
   const grossDebitSats = isSent ? getTxGrossWalletDebitSats(transaction) : 0
 
   const Icon = isSent ? ArrowUpRight : ArrowDownLeft
+
+  const isBoardingActivityLabel =
+    activityLabel === ARKADE_BOARDING_ACTIVITY_LABEL ||
+    activityLabel === ONCHAIN_ARKADE_BOARDING_ACTIVITY_LABEL
+  const activityInfomode =
+    activityLabel != null && activityLabel !== ''
+      ? isBoardingActivityLabel
+        ? {
+            infoId: ARKADE_INFOMODE_IDS.activityBoarding,
+            title: ARKADE_ACTIVITY_BOARDING_INFOMODE.title,
+            text: ARKADE_ACTIVITY_BOARDING_INFOMODE.text,
+          }
+        : activityLabel === 'Arkade'
+          ? {
+              infoId: ARKADE_INFOMODE_IDS.activityPayment,
+              title: ARKADE_ACTIVITY_PAYMENT_INFOMODE.title,
+              text: ARKADE_ACTIVITY_PAYMENT_INFOMODE.text,
+            }
+          : null
+      : null
 
   const timestamp = transaction.confirmationTime
     ? new Date(transaction.confirmationTime * 1000)
@@ -51,7 +83,21 @@ export function TransactionItem({ transaction }: TransactionItemProps) {
         </div>
 
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium capitalize">{direction}</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-sm font-medium capitalize">{direction}</p>
+            {activityLabel != null && activityLabel !== '' && activityInfomode != null ? (
+              <InfomodeWrapper
+                infoId={activityInfomode.infoId}
+                infoTitle={activityInfomode.title}
+                infoText={activityInfomode.text}
+                as="span"
+              >
+                <DashboardActivityRailBadge label={activityLabel} />
+              </InfomodeWrapper>
+            ) : activityLabel != null && activityLabel !== '' ? (
+              <DashboardActivityRailBadge label={activityLabel} />
+            ) : null}
+          </div>
           {timestamp && (
             <button
               className="text-xs text-muted-foreground hover:underline"

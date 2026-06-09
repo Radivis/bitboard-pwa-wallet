@@ -3,6 +3,8 @@ import path from 'path'
 import { fileURLToPath } from 'node:url'
 import { defineConfig, type Plugin } from 'vite'
 import { readBitboardWalletVersion } from './common/bitboard-wallet-version'
+import { arkOperatorViteProxyEntries } from './src/lib/arkade/arkade-operator-proxy'
+import { e2eArkadeOperatorMockPlugin } from './src/lib/arkade/e2e/vite-e2e-arkade-operator-mock-plugin'
 import { esploraViteProxyEntries } from './src/lib/esplora/esplora-service-whitelist'
 import { fiatRateViteProxyEntries } from './src/lib/fiat/fiat-rate-service-whitelist'
 import { faucetViteProxyEntries } from './src/lib/faucet/faucet-definitions'
@@ -22,6 +24,62 @@ function sanitizeWorkboxCacheIdSegment(version: string): string {
 
 const workboxCacheId = `bitboard-wallet-${sanitizeWorkboxCacheIdSegment(readBitboardWalletVersion())}`
 
+const ARKADE_SDK_VENDOR_NODE_MODULES = path.join(
+  projectRoot,
+  '.vendor-deps/node_modules',
+)
+
+/** Resolve path for a package name under a node_modules root (supports scoped names). */
+function resolvePackageDir(nodeModulesRoot: string, packageName: string): string {
+  if (packageName.startsWith('@')) {
+    const [scope, ...nameParts] = packageName.split('/')
+    return path.join(nodeModulesRoot, scope, nameParts.join('/'))
+  }
+  return path.join(nodeModulesRoot, packageName)
+}
+
+/**
+ * When root `node_modules` is incomplete (e.g. EACCES during `npm install`), alias
+ * `@arkade-os/sdk` and its runtime dependencies from `.vendor-deps/` if present.
+ */
+function arkadeSdkVendorResolveAliases(): { find: string | RegExp; replacement: string }[] {
+  const vendorRoot = ARKADE_SDK_VENDOR_NODE_MODULES
+  const mainBtcSigner = resolvePackageDir(
+    path.join(projectRoot, 'node_modules'),
+    '@scure/btc-signer',
+  )
+  const vendorSdk = resolvePackageDir(vendorRoot, '@arkade-os/sdk')
+  if (!fs.existsSync(vendorSdk) || fs.existsSync(mainBtcSigner)) {
+    return []
+  }
+
+  const packageNames = [
+    '@arkade-os/sdk',
+    '@bitcoinerlab/descriptors-scure',
+    '@marcbachmann/cel-js',
+    '@noble/curves',
+    '@noble/hashes',
+    '@noble/secp256k1',
+    '@scure/base',
+    '@scure/bip32',
+    '@scure/bip39',
+    '@scure/btc-signer',
+    'bip68',
+    'ws-electrumx-client',
+  ]
+
+  return packageNames
+    .map((packageName) => {
+      const packageDir = resolvePackageDir(vendorRoot, packageName)
+      if (!fs.existsSync(packageDir)) return null
+      return {
+        find: packageName,
+        replacement: packageDir,
+      }
+    })
+    .filter((entry): entry is { find: string; replacement: string } => entry != null)
+}
+
 /** Escape a string for use literally inside a RegExp source (paths, filename slugs, etc.). */
 function escapeRegExpLiteral(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -29,6 +87,26 @@ function escapeRegExpLiteral(s: string): string {
 
 const fiatRatesDevProxy = Object.fromEntries(
   fiatRateViteProxyEntries().map((e) => [
+    e.localPrefix,
+    {
+      target: e.targetOrigin,
+      changeOrigin: true,
+      secure: true,
+      rewrite: (reqPath: string) =>
+        reqPath.replace(
+          new RegExp(`^${escapeRegExpLiteral(e.localPrefix)}`),
+          e.upstreamPathPrefix,
+        ),
+    },
+  ]),
+)
+
+const isE2eArkadeMockEnabled = process.env.VITE_E2E_ARKADE_MOCK === 'true'
+
+const arkOperatorDevProxy = isE2eArkadeMockEnabled
+  ? {}
+  : Object.fromEntries(
+  arkOperatorViteProxyEntries().map((e) => [
     e.localPrefix,
     {
       target: e.targetOrigin,
@@ -118,6 +196,7 @@ export default defineConfig({
   },
   plugins: [
     rejectArgon2CiInProductionBuild(),
+    e2eArkadeOperatorMockPlugin(),
     tanstackRouter({
       target: 'react',
       autoCodeSplitting: true,
@@ -161,8 +240,8 @@ export default defineConfig({
         // Version-scoped so a new release gets a fresh precache namespace (see repository root VERSION).
         cacheId: workboxCacheId,
         cleanupOutdatedCaches: true,
-        // Default 2 MiB is too small for main WASM (e.g. bitboard_crypto ~2.2 MiB after Vite 8 output).
-        maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
+        // Default 2 MiB is too small for WASM bundles (bitboard_crypto ~2.2 MiB, bitboard_ark ~6.1 MiB).
+        maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2,wasm}'],
         runtimeCaching: [],
       },
@@ -213,11 +292,13 @@ export default defineConfig({
           './src/legal-entity/legal-entity.ts',
         ),
       },
+      ...arkadeSdkVendorResolveAliases(),
     ],
   },
   server: {
     port: 3000,
     proxy: {
+      ...arkOperatorDevProxy,
       ...esploraDevProxy,
       ...fiatRatesDevProxy,
       ...faucetDevProxy,

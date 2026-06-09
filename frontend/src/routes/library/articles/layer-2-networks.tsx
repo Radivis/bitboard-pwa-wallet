@@ -33,6 +33,16 @@ export const article: LibraryArticle = {
         </p>
       </ArticleSection>
 
+      <ArticleSection title="Other L2 approaches">
+        <p>
+          <strong>Arkade</strong> is another way to move Bitcoin off the main chain using{' '}
+          <strong>VTXOs</strong> (virtual UTXOs) and an operator that batches settlements. Bitboard
+          Wallet supports Arkade on mainnet and signet—see{' '}
+          <ArticleLink slug="what-is-a-vtxo">What is a VTXO?</ArticleLink> and{' '}
+          <ArticleLink slug="arkade-bitboard-wallet">Arkade in Bitboard Wallet</ArticleLink>.
+        </p>
+      </ArticleSection>
+
       <ArticleSection title="How it Really Works">
         <p>
           A network of <strong>routing nodes</strong> can forward payments across channels so payer

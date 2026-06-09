@@ -1,8 +1,13 @@
 import type { ComponentProps } from 'react'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Link } from '@tanstack/react-router'
 import { AlertTriangle, ArrowUpRight, ScanQrCode } from 'lucide-react'
+import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { PageHeader } from '@/components/PageHeader'
+import {
+  ARKADE_INFOMODE_IDS,
+  ARKADE_SEND_PAYMENT_INFOMODE,
+} from '@/lib/arkade/arkade-infomode'
 import { SendLightningWalletPicker } from '@/components/wallet/send/SendLightningWalletPicker'
 import { SendOnChainFeeSection } from '@/components/wallet/send/SendOnChainFeeSection'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -41,6 +46,10 @@ export function SendTransactionEntryCard({
   cardTitle,
   submitLabel,
   isLightningSendMode,
+  isArkadeSendMode,
+  arkadeAvailable,
+  arkadeBalanceSats,
+  arkadeBalanceLoading,
   networkMode,
   recipient,
   onRecipientChange,
@@ -90,6 +99,10 @@ export function SendTransactionEntryCard({
   cardTitle: string
   submitLabel: string
   isLightningSendMode: boolean
+  isArkadeSendMode: boolean
+  arkadeAvailable: boolean
+  arkadeBalanceSats: number | undefined
+  arkadeBalanceLoading: boolean
   networkMode: NetworkMode
   recipient: string
   onRecipientChange: (value: string) => void
@@ -132,7 +145,7 @@ export function SendTransactionEntryCard({
   isPending: boolean
   buildOrLabPreparing: boolean
   canBuild: boolean
-  onSubmitBuild: () => void
+  onSubmitBuild: () => void | Promise<void>
   onApplyScannedPayload: (raw: string) => void
   /** Mainnet && persisted fiat denomination mode. */
   mainnetFiatMode: boolean
@@ -144,12 +157,19 @@ export function SendTransactionEntryCard({
   onFiatModeUserToggle?: (nextFiatMode: boolean) => void
 }) {
   const [recipientScanOpen, setRecipientScanOpen] = useState(false)
+  const submitInFlightRef = useRef(false)
   const hasUsableFiatSpot = isUsableBtcSpotPriceInFiat(btcPriceInFiat)
+  const showSubmitSpinner =
+    buildOrLabPreparing || (isPending && (isArkadeSendMode || isLightningSendMode))
 
+  const arkadeSpendableSats = arkadeBalanceSats ?? 0
   const hideEditableAmountForZeroMainnet =
     networkMode === 'mainnet' &&
     !isLabWithNoBalance &&
-    ((!isLightningSendMode && confirmedBalance <= 0) ||
+    ((!isLightningSendMode &&
+      !isArkadeSendMode &&
+      confirmedBalance <= 0) ||
+      (isArkadeSendMode && !arkadeBalanceLoading && arkadeSpendableSats <= 0) ||
       (isLightningSendMode &&
         needsUserLightningAmount &&
         selectedLnBalanceQuery?.isSuccess === true &&
@@ -157,7 +177,7 @@ export function SendTransactionEntryCard({
 
   const showMainnetZeroBalanceWarning =
     hideEditableAmountForZeroMainnet &&
-    (needsUserLightningAmount || !isLightningSendMode)
+    (needsUserLightningAmount || (!isLightningSendMode && !isArkadeSendMode) || isArkadeSendMode)
 
   const showBip11WithZeroBalance =
     hideEditableAmountForZeroMainnet &&
@@ -167,7 +187,7 @@ export function SendTransactionEntryCard({
   const useFiatAmountField =
     mainnetFiatMode &&
     !hideEditableAmountForZeroMainnet &&
-    (needsUserLightningAmount || !isLightningSendMode)
+    (needsUserLightningAmount || (!isLightningSendMode && !isArkadeSendMode))
 
   function spendableAmountRows(balanceSats: number) {
     if (mainnetFiatMode && hasUsableFiatSpot) {
@@ -217,7 +237,18 @@ export function SendTransactionEntryCard({
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <ArrowUpRight className="h-5 w-5" />
-            {cardTitle}
+            {isArkadeSendMode ? (
+              <InfomodeWrapper
+                infoId={ARKADE_INFOMODE_IDS.sendPayment}
+                infoTitle={ARKADE_SEND_PAYMENT_INFOMODE.title}
+                infoText={ARKADE_SEND_PAYMENT_INFOMODE.text}
+                as="span"
+              >
+                {cardTitle}
+              </InfomodeWrapper>
+            ) : (
+              cardTitle
+            )}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -225,7 +256,11 @@ export function SendTransactionEntryCard({
             className="space-y-4"
             onSubmit={(e) => {
               e.preventDefault()
-              onSubmitBuild()
+              if (!canBuild || isPending || submitInFlightRef.current) return
+              submitInFlightRef.current = true
+              void Promise.resolve(onSubmitBuild()).finally(() => {
+                submitInFlightRef.current = false
+              })
             }}
           >
             <div className="space-y-2">
@@ -233,7 +268,9 @@ export function SendTransactionEntryCard({
                 <Label htmlFor="recipient-address">
                   {isLightningSendMode
                     ? 'Invoice or Lightning address'
-                    : 'Recipient Address'}
+                    : isArkadeSendMode
+                      ? 'Arkade address'
+                      : 'Recipient Address'}
                 </Label>
                 <Button
                   type="button"
@@ -252,9 +289,15 @@ export function SendTransactionEntryCard({
                 value={recipient}
                 onChange={(e) => onRecipientChange(e.target.value)}
                 placeholder={
-                  lightningAvailable
-                    ? 'bc1q… or BOLT11 invoice or Lightning address'
-                    : 'bc1q…'
+                  isArkadeSendMode
+                    ? 'ark1… or tark1…'
+                    : lightningAvailable && arkadeAvailable
+                      ? 'bc1q…, ark1…, BOLT11, or Lightning address'
+                      : lightningAvailable
+                        ? 'bc1q… or BOLT11 invoice or Lightning address'
+                        : arkadeAvailable
+                          ? 'bc1q… or ark1… / tark1…'
+                          : 'bc1q…'
                 }
                 disabled={isPending}
               />
@@ -262,7 +305,13 @@ export function SendTransactionEntryCard({
                 <p className="text-xs text-destructive">
                   {isLightningSendMode
                     ? 'Invalid Lightning invoice or Lightning address.'
-                    : `Invalid address for ${networkMode}`}
+                    : isArkadeSendMode
+                      ? 'Invalid Arkade address (ark1 or tark1).'
+                      : arkadeAvailable && lightningAvailable
+                        ? `Invalid address for ${networkMode}, Arkade, or Lightning.`
+                        : arkadeAvailable
+                          ? `Invalid on-chain or Arkade address for ${networkMode}.`
+                          : `Invalid address for ${networkMode}`}
                 </p>
               )}
               {recipient && isLightningSendMode && !lightningRecipientOk && (
@@ -350,7 +399,8 @@ export function SendTransactionEntryCard({
                       ? 'Amount (from invoice)'
                       : 'Amount'}
                 </Label>
-                {(needsUserLightningAmount || !isLightningSendMode) &&
+                {(needsUserLightningAmount ||
+                  (!isLightningSendMode && !isArkadeSendMode)) &&
                   !useFiatAmountField && (
                     <BitcoinUnitSelect
                       value={amountUnit}
@@ -468,13 +518,22 @@ export function SendTransactionEntryCard({
                       '—'
                     )}
                   </>
+                ) : isArkadeSendMode ? (
+                  <>
+                    Arkade balance:{' '}
+                    {arkadeBalanceLoading ? (
+                      'Loading balance…'
+                    ) : (
+                      spendableAmountRows(arkadeSpendableSats)
+                    )}
+                  </>
                 ) : (
                   <>
                     Available: {spendableAmountRows(confirmedBalance)}
                   </>
                 )}
               </div>
-              {isLabWithNoBalance && !isLightningSendMode && (
+              {isLabWithNoBalance && !isLightningSendMode && !isArkadeSendMode && (
                 <p className="text-xs text-amber-600 dark:text-amber-400">
                   No balance. Mine blocks or make a transaction to your wallet in
                   the lab.
@@ -482,7 +541,7 @@ export function SendTransactionEntryCard({
               )}
             </div>
 
-            {!isLightningSendMode && (
+            {!isLightningSendMode && !isArkadeSendMode && (
               <SendOnChainFeeSection
                 feePresetSelection={feePresetSelection}
                 presetSatPerVbByLabel={presetSatPerVbByLabel}
@@ -496,16 +555,20 @@ export function SendTransactionEntryCard({
               />
             )}
 
-            {buildOrLabPreparing ? (
+            {showSubmitSpinner ? (
               <LoadingSpinner
                 text={
-                  networkMode === 'lab'
-                    ? 'Preparing transaction...'
-                    : 'Building transaction...'
+                  isArkadeSendMode
+                    ? 'Sending Arkade payment...'
+                    : isLightningSendMode
+                      ? 'Sending Lightning payment...'
+                      : networkMode === 'lab'
+                        ? 'Preparing transaction...'
+                        : 'Building transaction...'
                 }
               />
             ) : (
-              <Button type="submit" className="w-full" disabled={!canBuild}>
+              <Button type="submit" className="w-full" disabled={!canBuild || isPending}>
                 {submitLabel}
               </Button>
             )}

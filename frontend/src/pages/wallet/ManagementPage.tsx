@@ -7,6 +7,7 @@ import { isLightningSupported } from '@/lib/lightning/lightning-utils'
 import { WalletManagement } from '@/components/wallet/WalletManagement'
 import { SeedPhraseBackup } from '@/components/wallet/SeedPhraseBackup'
 import { LightningWallets } from '@/components/wallet/LightningWallets'
+import { ArkadePanel } from '@/components/wallet/ArkadePanel'
 
 export function ManagementPage() {
   const navigate = useNavigate({ from: '/wallet/management' })
@@ -14,7 +15,9 @@ export function ManagementPage() {
   const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
   const networkMode = useWalletStore((walletState) => walletState.networkMode)
   const isLightningEnabled = useFeatureStore((featureState) => featureState.isLightningEnabled)
+  const isArkadeEnabled = useFeatureStore((featureState) => featureState.isArkadeEnabled)
   const showLightningWallets = isLightningEnabled && isLightningSupported(networkMode)
+  const showArkadePanel = isArkadeEnabled
 
   return (
     <div className="space-y-6">
@@ -32,6 +35,7 @@ export function ManagementPage() {
             }
           />
           <SeedPhraseBackup />
+          {showArkadePanel && <ArkadePanel />}
           {showLightningWallets && <LightningWallets />}
         </>
       ) : (
