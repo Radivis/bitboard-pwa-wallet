@@ -31,6 +31,7 @@ import { showImportInitialSyncFailureToast } from '@/lib/wallet/wallet-sync-erro
 import { sanitizeErrorMessageForUi } from '@/lib/shared/sanitize-error-for-ui'
 import { errorMessage } from '@/lib/shared/utils'
 import { invalidateWalletRelatedQueriesAndNotifyOtherTabs } from '@/lib/wallet/wallet-query-cache-sync'
+import { useSetupAppPasswordGateReady } from '@/hooks/useSetupAppPasswordGateReady'
 import {
   ensureWalletSecretsSession,
   isWalletSecretsSessionActive,
@@ -42,10 +43,11 @@ export function ImportWalletPage() {
   const [validating, setValidating] = useState(false)
   const [isValid, setIsValid] = useState<boolean | null>(null)
   const [confirmPasswordOpen, setConfirmPasswordOpen] = useState(false)
-  const [secretsSessionActive, setSecretsSessionActive] = useState(false)
 
   const { data: wallets, isLoading: walletsLoading } = useWallets()
   const walletStatus = useWalletStore((walletState) => walletState.walletStatus)
+  const { appPasswordReady, walletUnlockedOrSyncing, onAppPasswordSessionStarted } =
+    useSetupAppPasswordGateReady(walletStatus)
 
   const validateMnemonic = useCryptoStore((cryptoState) => cryptoState.validateMnemonic)
   const importWalletAndEncryptSecrets = useCryptoStore((cryptoState) => cryptoState.importWalletAndEncryptSecrets)
@@ -73,10 +75,6 @@ export function ImportWalletPage() {
   )
 
   const wordCount = useMemo(() => mnemonic.split(' ').filter(Boolean).length, [mnemonic])
-
-  useEffect(() => {
-    void isWalletSecretsSessionActive().then(setSecretsSessionActive)
-  }, [walletStatus])
 
   useEffect(() => {
     if (wordCount !== 12 && wordCount !== 24) {
@@ -196,10 +194,6 @@ export function ImportWalletPage() {
   }
 
   const hasWallets = (wallets?.length ?? 0) > 0
-  const walletUnlockedOrSyncing =
-    walletStatus === 'unlocked' || walletStatus === 'syncing'
-  const appPasswordReady = walletUnlockedOrSyncing || secretsSessionActive
-
   if (hasWallets && !walletUnlockedOrSyncing) {
     return <WalletUnlock variant="setup" />
   }
@@ -208,7 +202,7 @@ export function ImportWalletPage() {
     return (
       <SetAppPasswordModal
         open
-        onSessionStarted={() => setSecretsSessionActive(true)}
+        onSessionStarted={onAppPasswordSessionStarted}
       />
     )
   }

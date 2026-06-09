@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import { useNavigate, Link } from '@tanstack/react-router'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, RefreshCw } from 'lucide-react'
@@ -30,6 +30,7 @@ import {
 import { ensureSecretsChannel } from '@/workers/secrets-channel'
 import { toBitcoinNetwork } from '@/lib/wallet/bitcoin-utils'
 import { invalidateWalletRelatedQueriesAndNotifyOtherTabs } from '@/lib/wallet/wallet-query-cache-sync'
+import { useSetupAppPasswordGateReady } from '@/hooks/useSetupAppPasswordGateReady'
 import {
   ensureWalletSecretsSession,
   isWalletSecretsSessionActive,
@@ -54,7 +55,6 @@ export function CreateWalletPage() {
   const [pendingCreate, setPendingCreate] = useState<CreateWalletPending | null>(null)
   const [verificationWords, setVerificationWords] = useState<Record<number, string>>({})
   const [confirmPasswordOpen, setConfirmPasswordOpen] = useState(false)
-  const [secretsSessionActive, setSecretsSessionActive] = useState(false)
   const [pendingCreateAction, setPendingCreateAction] = useState<
     'generate' | 'quickCreate' | null
   >(null)
@@ -97,10 +97,8 @@ export function CreateWalletPage() {
   }, [verificationIndices, verificationWords, words])
 
   const queryClient = useQueryClient()
-
-  useEffect(() => {
-    void isWalletSecretsSessionActive().then(setSecretsSessionActive)
-  }, [walletStatus])
+  const { appPasswordReady, walletUnlockedOrSyncing, onAppPasswordSessionStarted } =
+    useSetupAppPasswordGateReady(walletStatus)
 
   const persistAndActivateNewWallet = useCallback(
     async ({
@@ -279,10 +277,6 @@ export function CreateWalletPage() {
 
   const hasWallets = (wallets?.length ?? 0) > 0
 
-  const walletUnlockedOrSyncing =
-    walletStatus === 'unlocked' || walletStatus === 'syncing'
-  const appPasswordReady = walletUnlockedOrSyncing || secretsSessionActive
-
   if (hasWallets && !walletUnlockedOrSyncing) {
     return <WalletUnlock variant="setup" />
   }
@@ -291,7 +285,7 @@ export function CreateWalletPage() {
     return (
       <SetAppPasswordModal
         open
-        onSessionStarted={() => setSecretsSessionActive(true)}
+        onSessionStarted={onAppPasswordSessionStarted}
       />
     )
   }

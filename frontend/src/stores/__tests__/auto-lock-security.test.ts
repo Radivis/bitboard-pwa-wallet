@@ -1,11 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { terminateCryptoWorkerMock, resetSecretsChannelMock, endWalletSecretsSessionMock } =
-  vi.hoisted(() => ({
-    terminateCryptoWorkerMock: vi.fn(),
-    resetSecretsChannelMock: vi.fn(),
-    endWalletSecretsSessionMock: vi.fn().mockResolvedValue(undefined),
-  }))
+const {
+  terminateCryptoWorkerMock,
+  resetSecretsChannelMock,
+  endWalletSecretsSessionReliablyMock,
+} = vi.hoisted(() => ({
+  terminateCryptoWorkerMock: vi.fn(),
+  resetSecretsChannelMock: vi.fn(),
+  endWalletSecretsSessionReliablyMock: vi.fn().mockResolvedValue(undefined),
+}))
 
 vi.mock('@/workers/crypto-factory', () => {
   const mockWorker = {
@@ -30,7 +33,7 @@ vi.mock('@/workers/secrets-channel', () => ({
 
 vi.mock('@/lib/wallet/wallet-secrets-session', () => ({
   beginWalletSecretsSession: vi.fn().mockResolvedValue(undefined),
-  endWalletSecretsSession: endWalletSecretsSessionMock,
+  endWalletSecretsSessionReliably: endWalletSecretsSessionReliablyMock,
   isWalletSecretsSessionActive: vi.fn().mockResolvedValue(true),
 }))
 
@@ -113,7 +116,7 @@ describe('auto-lock security purge', () => {
     await vi.advanceTimersByTimeAsync(15 * 60 * 1000)
 
     expect(useWalletStore.getState().walletStatus).toBe('locked')
-    expect(endWalletSecretsSessionMock).toHaveBeenCalledTimes(1)
+    expect(endWalletSecretsSessionReliablyMock).toHaveBeenCalledTimes(1)
     expect(resetSecretsChannelMock).toHaveBeenCalledTimes(1)
     expect(terminateCryptoWorkerMock).toHaveBeenCalled()
     expect(useCryptoStore.getState()._worker).toBeNull()
@@ -127,14 +130,14 @@ describe('auto-lock security purge', () => {
     )
 
     await vi.advanceTimersByTimeAsync(14 * 60 * 1000)
-    expect(endWalletSecretsSessionMock).not.toHaveBeenCalled()
+    expect(endWalletSecretsSessionReliablyMock).not.toHaveBeenCalled()
 
     bumpAutoLockTimer()
     await vi.advanceTimersByTimeAsync(14 * 60 * 1000)
-    expect(endWalletSecretsSessionMock).not.toHaveBeenCalled()
+    expect(endWalletSecretsSessionReliablyMock).not.toHaveBeenCalled()
 
     await vi.advanceTimersByTimeAsync(1 * 60 * 1000)
-    expect(endWalletSecretsSessionMock).toHaveBeenCalledTimes(1)
+    expect(endWalletSecretsSessionReliablyMock).toHaveBeenCalledTimes(1)
     expect(useWalletStore.getState().walletStatus).toBe('locked')
   })
 
@@ -147,6 +150,6 @@ describe('auto-lock security purge', () => {
     bumpAutoLockTimer()
     await vi.advanceTimersByTimeAsync(15 * 60 * 1000)
 
-    expect(endWalletSecretsSessionMock).not.toHaveBeenCalled()
+    expect(endWalletSecretsSessionReliablyMock).not.toHaveBeenCalled()
   })
 })

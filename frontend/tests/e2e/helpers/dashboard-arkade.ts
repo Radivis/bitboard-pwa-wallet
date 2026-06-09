@@ -53,7 +53,39 @@ export async function waitForReceiveArkadeAddressReady(
   timeout = ARKADE_MOCK_UI_TIMEOUT_MS,
 ): Promise<void> {
   await expect(page.getByText('Loading address…')).not.toBeVisible({ timeout })
-  await expect(page.getByRole('button', { name: 'Copy address' })).toBeEnabled({ timeout })
+  await expect(async () => {
+    const address =
+      (await page.getByTestId('arkade-receive-address').textContent())?.trim() ?? ''
+    if (!address.startsWith('tark1') && !address.startsWith('ark1')) {
+      throw new Error(`Arkade receive address not ready: "${address}"`)
+    }
+  }).toPass({ timeout })
+  await expect(page.getByRole('button', { name: 'Copy address' })).toBeEnabled({
+    timeout: 10_000,
+  })
+}
+
+/** After lock/unlock, Arkade session open runs in the background — use before Receive assertions. */
+export async function waitForDashboardArkadeSessionAfterUnlock(
+  page: Page,
+  timeout = ARKADE_MOCK_UI_TIMEOUT_MS,
+): Promise<void> {
+  await goToWalletTab(page, 'Dashboard')
+  await expectArkadeBalanceNotEmptySession(page, timeout)
+  await waitForArkadeWasmSessionReady(page, timeout)
+}
+
+/**
+ * Like {@link waitForDashboardArkadeSessionAfterUnlock} but does not require balance UI —
+ * use when the test only asserts receive-address persistence (balance query may lag).
+ */
+export async function waitForArkadeWorkerReadyAfterUnlock(
+  page: Page,
+  timeout = ARKADE_MOCK_UI_TIMEOUT_MS,
+): Promise<void> {
+  await goToWalletTab(page, 'Dashboard')
+  await waitForArkadeBalanceCard(page, timeout)
+  await waitForArkadeWasmSessionReady(page, timeout)
 }
 
 /** Unlock starts Arkade session open in the background; wait before WASM diagnostics or Receive. */
@@ -68,8 +100,9 @@ export async function waitForArkadeWasmSessionReady(
 
 export async function readReceiveArkadeAddress(page: Page): Promise<string> {
   await waitForReceiveArkadeAddressReady(page)
-  const addressLocator = page.locator('.font-mono.break-all').first()
+  const addressLocator = page.getByTestId('arkade-receive-address')
   await expect(addressLocator).toBeVisible({ timeout: 15_000 })
+  await expect(addressLocator).not.toHaveText(/^Loading/, { timeout: 15_000 })
   const address = (await addressLocator.textContent())?.trim() ?? ''
   if (!address.startsWith('tark1') && !address.startsWith('ark1')) {
     throw new Error(`Expected Arkade receive address, got: ${address}`)

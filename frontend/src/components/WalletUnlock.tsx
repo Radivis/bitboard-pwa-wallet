@@ -16,7 +16,7 @@ import {
   loadDescriptorWalletWithoutSync,
 } from '@/lib/wallet/wallet-utils'
 import {
-  beginWalletSecretsSession,
+  ensureWalletSecretsSession,
   endWalletSecretsSession,
 } from '@/lib/wallet/wallet-secrets-session'
 import { reportWalletSyncError } from '@/lib/wallet/wallet-sync-error-toast'
@@ -75,7 +75,7 @@ export function WalletUnlock({
       const { setManualWalletUnlockInFlight } = useWalletStore.getState()
       setManualWalletUnlockInFlight(true)
       try {
-        await beginWalletSecretsSession(walletPassword)
+        await ensureWalletSecretsSession(walletPassword)
         try {
           if (networkMode === 'lab') {
             await loadDescriptorWalletWithoutSync({
