@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const syncWithOperatorMock = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
 const refreshArkadeStoreFromLoadedWasmMock = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
 const openArkadeSessionForWalletMock = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
-const saveLastSuccessfulOperatorSyncAtForConnectionMock = vi.hoisted(() =>
+const saveLastSuccessfulOperatorSyncAtEncryptedMock = vi.hoisted(() =>
   vi.fn().mockResolvedValue(undefined),
 )
 
@@ -22,9 +22,9 @@ vi.mock('@/lib/arkade/arkade-session-service', () => ({
   openArkadeSessionForWallet: (...args: unknown[]) => openArkadeSessionForWalletMock(...args),
 }))
 
-vi.mock('@/lib/arkade/arkade-sdk-persistence', () => ({
-  saveLastSuccessfulOperatorSyncAtForConnection: (...args: unknown[]) =>
-    saveLastSuccessfulOperatorSyncAtForConnectionMock(...args),
+vi.mock('@/lib/arkade/arkade-encrypted-persistence-manager', () => ({
+  saveLastSuccessfulOperatorSyncAtEncrypted: (...args: unknown[]) =>
+    saveLastSuccessfulOperatorSyncAtEncryptedMock(...args),
 }))
 
 vi.mock('@/lib/arkade/arkade-dashboard-sync', () => ({
@@ -68,6 +68,13 @@ describe('syncArkadeWithOperator', () => {
     })
     expect(syncWithOperatorMock).toHaveBeenCalledTimes(1)
     expect(refreshArkadeStoreFromLoadedWasmMock).toHaveBeenCalledTimes(1)
+    expect(saveLastSuccessfulOperatorSyncAtEncryptedMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        password: 'pw',
+        walletId: 1,
+        connectionId: 'conn-1',
+      }),
+    )
     expect(useWalletStore.getState().lastOperatorSyncTime).toBeInstanceOf(Date)
   })
 })

@@ -2,7 +2,6 @@ import { wrap, type Remote } from 'comlink'
 import type { ArkadeService } from '@/workers/arkade-api'
 import { resetArkadePersistenceChannel } from '@/workers/arkade-persistence-channel'
 import { resetArkadeWorkerSecretsChannel } from '@/workers/secrets-channel'
-import { setArkadeSdkPersistenceBridge } from '@/lib/arkade/storage/arkade-sdk-persistence-flush'
 
 export type ArkadeWorkerHealthStatus = 'initializing' | 'healthy' | 'error' | 'crashed'
 
@@ -138,7 +137,6 @@ export function terminateArkadeWorker(): void {
     state.worker.terminate()
     state = null
   }
-  setArkadeSdkPersistenceBridge(null)
   resetArkadePersistenceChannel()
   resetArkadeWorkerSecretsChannel()
 }

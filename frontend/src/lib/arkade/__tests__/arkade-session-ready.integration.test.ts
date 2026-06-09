@@ -2,11 +2,17 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const TEST_CONNECTION_ID = 'conn-ready-test'
 
+const encryptedPayload = vi.hoisted(() => ({
+  ciphertext: new Uint8Array([10]),
+  iv: new Uint8Array([11]),
+  salt: new Uint8Array([12]),
+  kdfPhc: '$argon2id$v=19$m=65536,t=3,p=4$test',
+}))
+
 const workerMocks = vi.hoisted(() => ({
   openSession: vi.fn(),
   hasOpenSession: vi.fn().mockResolvedValue(true),
   flushSdkPersistence: vi.fn().mockResolvedValue(undefined),
-  exportSdkPersistenceJson: vi.fn().mockResolvedValue('{"version":3}'),
   closeSession: vi.fn(),
   finalizePendingTransactions: vi.fn().mockResolvedValue({ finalized: 0, pending: 0 }),
   delegateSpendableVtxos: vi.fn(),
@@ -17,7 +23,7 @@ const workerMocks = vi.hoisted(() => ({
 }))
 
 const ensureArkadeOperatorConnectionMock = vi.hoisted(() => vi.fn())
-const loadWalletSecretsPayloadMock = vi.hoisted(() => vi.fn())
+const findActiveArkadeConnectionSummaryMock = vi.hoisted(() => vi.fn())
 const refreshArkadeStoreFromLoadedWasmMock = vi.hoisted(() => vi.fn())
 const runArkadeOperatorSyncAndPersistMock = vi.hoisted(() => vi.fn())
 const encryptedMnemonic = vi.hoisted(() => ({
@@ -39,30 +45,26 @@ vi.mock('@/workers/secrets-channel', () => ({
 }))
 
 vi.mock('@/workers/arkade-persistence-channel', () => ({
-  ensureArkadePersistenceChannel: vi.fn().mockResolvedValue(undefined),
+  ensureArkadeEncryptedSecretsHost: vi.fn().mockResolvedValue(undefined),
 }))
 
 vi.mock('@/db', () => ({
   getDatabase: vi.fn(() => ({})),
-  getWalletSecretsEncrypted: vi.fn().mockResolvedValue({ mnemonic: encryptedMnemonic }),
+  getWalletSecretsEncrypted: vi.fn().mockResolvedValue({
+    mnemonic: encryptedMnemonic,
+    payload: encryptedPayload,
+  }),
   awaitInFlightWalletSecretsWrites: vi.fn().mockResolvedValue(undefined),
-}))
-
-vi.mock('@/db/wallet-persistence', () => ({
-  loadWalletSecretsPayload: (...args: unknown[]) => loadWalletSecretsPayloadMock(...args),
-}))
-
-vi.mock('@/lib/arkade/arkade-sdk-persistence', () => ({
-  loadSdkPersistenceJsonForConnection: vi.fn(),
 }))
 
 vi.mock('@/lib/arkade/arkade-operator-connections', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/arkade/arkade-operator-connections')>()
   return {
     ...actual,
+    findActiveArkadeConnectionSummary: (...args: unknown[]) =>
+      findActiveArkadeConnectionSummaryMock(...args),
     ensureArkadeOperatorConnection: (...args: unknown[]) =>
       ensureArkadeOperatorConnectionMock(...args),
-    loadActiveArkadeConnectionForNetwork: vi.fn().mockResolvedValue(undefined),
   }
 })
 
@@ -119,10 +121,7 @@ describe('awaitArkadeSessionReady (UNLOCK-ARK-03)', () => {
   beforeEach(async () => {
     await closeArkadeSession()
     vi.clearAllMocks()
-    loadWalletSecretsPayloadMock.mockResolvedValue({
-      arkadeOperatorConnections: [],
-      activeArkadeConnectionIdByNetwork: {},
-    })
+    findActiveArkadeConnectionSummaryMock.mockResolvedValue(undefined)
     ensureArkadeOperatorConnectionMock.mockResolvedValue({
       id: TEST_CONNECTION_ID,
       networkMode: 'signet',
@@ -130,6 +129,10 @@ describe('awaitArkadeSessionReady (UNLOCK-ARK-03)', () => {
     })
     refreshArkadeStoreFromLoadedWasmMock.mockResolvedValue(undefined)
     runArkadeOperatorSyncAndPersistMock.mockResolvedValue(undefined)
+    workerMocks.openSession.mockResolvedValue({
+      arkadeAddress: 'tark1qtest',
+      operatorSignerPkHex: '02deadbeef',
+    })
   })
 
   it('waits for in-flight session open before resolving', async () => {

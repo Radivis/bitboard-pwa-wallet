@@ -91,7 +91,9 @@ function useArkadeDelegateQueryBase() {
   const { networkMode, activeWalletId, password, sessionReady: arkadeSessionReady } =
     useArkadeQueryBase()
   const sessionReady =
-    arkadeSessionReady && isArkadeDelegatorConfigured(networkMode)
+    arkadeSessionReady &&
+    isArkadeSupportedNetworkMode(networkMode) &&
+    isArkadeDelegatorConfigured(networkMode)
 
   return { networkMode, activeWalletId, password, sessionReady }
 }

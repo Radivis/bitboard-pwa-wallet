@@ -1,156 +1,55 @@
-import { getDatabase } from '@/db/database'
-import {
-  loadWalletSecretsPayload,
-  updateWalletSecretsPayloadWithRetry,
-} from '@/db/wallet-persistence'
 import {
   getArkadeEndpoints,
   type ArkadeSupportedNetworkMode,
 } from '@/lib/arkade/arkade-endpoints'
+import {
+  ensureArkadeOperatorConnectionEncrypted,
+  findActiveArkadeConnectionSummary,
+  listArkadeConnectionSummaries,
+} from '@/lib/arkade/arkade-encrypted-persistence-manager'
+import type { ArkadeOperatorConnectionSummary } from '@/lib/arkade/arkade-payload-merge'
+import {
+  assertOperatorSignerMatches,
+  defaultArkadeOperatorLabel,
+  findArkadeOperatorConnection,
+  findActiveArkadeOperatorConnection,
+} from '@/lib/arkade/arkade-payload-merge'
 import type {
   StoredArkadeOperatorConnection,
   WalletSecretsPayload,
 } from '@/lib/wallet/wallet-domain-types'
+import { getDatabase, getWalletSecretsEncrypted } from '@/db'
 
-export function findArkadeOperatorConnection(
-  payload: WalletSecretsPayload,
-  connectionId: string,
-): StoredArkadeOperatorConnection | undefined {
-  return payload.arkadeOperatorConnections.find((row) => row.id === connectionId)
+export {
+  assertOperatorSignerMatches,
+  defaultArkadeOperatorLabel,
+  findArkadeOperatorConnection,
+  findActiveArkadeOperatorConnection,
 }
 
-export function findActiveArkadeOperatorConnection(
-  payload: WalletSecretsPayload,
-  networkMode: ArkadeSupportedNetworkMode,
-): StoredArkadeOperatorConnection | undefined {
-  const activeId = payload.activeArkadeConnectionIdByNetwork[networkMode]
-  if (activeId == null) return undefined
-  return findArkadeOperatorConnection(payload, activeId)
-}
+export type { ArkadeOperatorConnectionSummary }
 
-export function assertOperatorSignerMatches(
-  connection: StoredArkadeOperatorConnection,
-  operatorSignerPkHex: string,
-): void {
-  if (connection.operatorSignerPkHex !== operatorSignerPkHex) {
-    throw new Error(
-      'Arkade persistence belongs to a different operator (signer public key mismatch)',
-    )
-  }
-}
-
-export function defaultArkadeOperatorLabel(operatorUrl: string): string {
-  try {
-    const url = new URL(operatorUrl)
-    const pathSegment = url.pathname.split('/').filter(Boolean).pop()
-    if (pathSegment != null && pathSegment.length > 0) {
-      return pathSegment
-    }
-    return url.hostname
-  } catch {
-    return 'Arkade operator'
-  }
-}
+export { findActiveArkadeConnectionSummary } from '@/lib/arkade/arkade-encrypted-persistence-manager'
 
 export async function loadArkadeConnectionsForWallet(params: {
   password: string
   walletId: number
-}): Promise<WalletSecretsPayload['arkadeOperatorConnections']> {
-  const payload = await loadWalletSecretsPayload(
-    getDatabase(),
-    params.password,
-    params.walletId,
-  )
-  return payload.arkadeOperatorConnections
+}): Promise<ArkadeOperatorConnectionSummary[]> {
+  return listArkadeConnectionSummaries(params)
 }
 
 export async function loadActiveArkadeConnectionForNetwork(params: {
   password: string
   walletId: number
   networkMode: ArkadeSupportedNetworkMode
-}): Promise<StoredArkadeOperatorConnection | undefined> {
-  const payload = await loadWalletSecretsPayload(
-    getDatabase(),
-    params.password,
-    params.walletId,
-  )
-  return findActiveArkadeOperatorConnection(payload, params.networkMode)
-}
-
-export async function saveArkadeOperatorConnections(params: {
-  password: string
-  walletId: number
-  arkadeOperatorConnections: StoredArkadeOperatorConnection[]
-  activeArkadeConnectionIdByNetwork: WalletSecretsPayload['activeArkadeConnectionIdByNetwork']
-}): Promise<void> {
-  await updateWalletSecretsPayloadWithRetry({
-    walletDb: getDatabase(),
-    walletId: params.walletId,
+}): Promise<ArkadeOperatorConnectionSummary | undefined> {
+  const encrypted = await getWalletSecretsEncrypted(getDatabase(), params.walletId)
+  return findActiveArkadeConnectionSummary({
     password: params.password,
-    transform: async (payload): Promise<WalletSecretsPayload> => ({
-      ...payload,
-      arkadeOperatorConnections: params.arkadeOperatorConnections,
-      activeArkadeConnectionIdByNetwork: params.activeArkadeConnectionIdByNetwork,
-    }),
-  })
-}
-
-export async function upsertArkadeOperatorConnection(params: {
-  password: string
-  walletId: number
-  connection: StoredArkadeOperatorConnection
-  setActiveForNetwork?: boolean
-}): Promise<StoredArkadeOperatorConnection> {
-  const { password, walletId, connection, setActiveForNetwork = true } = params
-  let saved: StoredArkadeOperatorConnection | undefined
-
-  await updateWalletSecretsPayloadWithRetry({
-    walletDb: getDatabase(),
-    walletId,
-    password,
-    transform: async (payload): Promise<WalletSecretsPayload> => {
-      const others = payload.arkadeOperatorConnections.filter(
-        (row) => row.id !== connection.id,
-      )
-      saved = connection
-      const activeArkadeConnectionIdByNetwork = {
-        ...payload.activeArkadeConnectionIdByNetwork,
-      }
-      if (setActiveForNetwork) {
-        activeArkadeConnectionIdByNetwork[connection.networkMode] = connection.id
-      }
-      return {
-        ...payload,
-        arkadeOperatorConnections: [...others, connection],
-        activeArkadeConnectionIdByNetwork,
-      }
-    },
-  })
-
-  if (saved == null) {
-    throw new Error('Failed to persist Arkade operator connection')
-  }
-  return saved
-}
-
-export function buildDefaultArkadeOperatorConnection(params: {
-  networkMode: ArkadeSupportedNetworkMode
-  operatorUrl: string
-  delegatorUrl: string
-  operatorSignerPkHex: string
-  sdkPersistenceJson?: string
-}): StoredArkadeOperatorConnection {
-  const now = new Date().toISOString()
-  return {
-    id: crypto.randomUUID(),
-    label: defaultArkadeOperatorLabel(params.operatorUrl),
+    walletId: params.walletId,
     networkMode: params.networkMode,
-    operatorUrl: params.operatorUrl,
-    delegatorUrl: params.delegatorUrl || undefined,
-    operatorSignerPkHex: params.operatorSignerPkHex,
-    createdAt: now,
-    sdkPersistenceJson: params.sdkPersistenceJson,
-  }
+    encryptedPayload: encrypted.payload,
+  })
 }
 
 export async function ensureArkadeOperatorConnection(params: {
@@ -160,66 +59,14 @@ export async function ensureArkadeOperatorConnection(params: {
   operatorSignerPkHex: string
   operatorUrl: string
   delegatorUrl: string
-  sdkPersistenceJson?: string
-}): Promise<StoredArkadeOperatorConnection> {
-  const payload = await loadWalletSecretsPayload(
-    getDatabase(),
-    params.password,
-    params.walletId,
-  )
-
-  const existingActive = findActiveArkadeOperatorConnection(payload, params.networkMode)
-  if (existingActive != null) {
-    assertOperatorSignerMatches(existingActive, params.operatorSignerPkHex)
-    return upsertArkadeOperatorConnection({
-      password: params.password,
-      walletId: params.walletId,
-      connection: {
-        ...existingActive,
-        operatorUrl: params.operatorUrl,
-        delegatorUrl: params.delegatorUrl || undefined,
-        sdkPersistenceJson:
-          existingActive.sdkPersistenceJson ?? params.sdkPersistenceJson,
-        lastSessionOpenedAt: new Date().toISOString(),
-      },
-    })
-  }
-
-  const matchingConnection = payload.arkadeOperatorConnections.find(
-    (row) =>
-      row.networkMode === params.networkMode &&
-      row.operatorSignerPkHex === params.operatorSignerPkHex,
-  )
-  if (matchingConnection != null) {
-    return upsertArkadeOperatorConnection({
-      password: params.password,
-      walletId: params.walletId,
-      connection: {
-        ...matchingConnection,
-        sdkPersistenceJson:
-          matchingConnection.sdkPersistenceJson ?? params.sdkPersistenceJson,
-        lastSessionOpenedAt: new Date().toISOString(),
-      },
-    })
-  }
-
-  const connection = buildDefaultArkadeOperatorConnection({
-    networkMode: params.networkMode,
-    operatorUrl: params.operatorUrl,
-    delegatorUrl: params.delegatorUrl,
-    operatorSignerPkHex: params.operatorSignerPkHex,
-    sdkPersistenceJson: params.sdkPersistenceJson,
-  })
-
-  return upsertArkadeOperatorConnection({
-    password: params.password,
-    walletId: params.walletId,
-    connection,
-  })
+  connectionId: string
+  persistInitialSdkFromWasm?: boolean
+}): Promise<ArkadeOperatorConnectionSummary> {
+  return ensureArkadeOperatorConnectionEncrypted(params)
 }
 
 export function resolveArkadeEndpointsForConnection(
-  connection: StoredArkadeOperatorConnection,
+  connection: Pick<StoredArkadeOperatorConnection, 'networkMode' | 'operatorUrl' | 'delegatorUrl'>,
 ): { arkServerUrl: string; delegatorUrl: string; esploraUrl: string } {
   const defaults = getArkadeEndpoints(connection.networkMode)
   return {
@@ -228,3 +75,9 @@ export function resolveArkadeEndpointsForConnection(
     esploraUrl: defaults.esploraUrl,
   }
 }
+
+/** @deprecated Payload-shaped type for tests; production uses ArkadeOperatorConnectionSummary. */
+export type ArkadeOperatorConnectionsPayloadSlice = Pick<
+  WalletSecretsPayload,
+  'arkadeOperatorConnections' | 'activeArkadeConnectionIdByNetwork'
+>

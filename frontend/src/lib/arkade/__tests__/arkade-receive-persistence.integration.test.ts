@@ -1,28 +1,19 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { WalletSecretsPayload } from '@/lib/wallet/wallet-domain-types'
-import {
-  loadSdkPersistenceJsonForConnection,
-  readOffchainNextDerivationIndex,
-  saveSdkPersistenceJsonForConnection,
-} from '@/lib/arkade/arkade-sdk-persistence'
-import {
-  flushSdkPersistenceNow,
-  setArkadeSdkPersistenceBridge,
-  setArkadeSdkPersistenceExporter,
-  setArkadeSdkPersistenceFlushContext,
-} from '@/lib/arkade/storage/arkade-sdk-persistence-flush'
-import {
-  loadWalletSecretsPayload,
-  updateWalletSecretsPayloadWithRetry,
-} from '@/db/wallet-persistence'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { readOffchainNextDerivationIndex } from '@/lib/arkade/arkade-payload-merge'
+import { parseWalletPayloadJson } from '@/lib/wallet/wallet-domain-types'
+import { persistSdkJsonToEncryptedPayload } from '@/workers/arkade-worker-encrypted-payload'
 
-vi.mock('@/db/database', () => ({
-  getDatabase: vi.fn(() => ({})),
+const decryptDataMock = vi.hoisted(() => vi.fn())
+const encryptDataMock = vi.hoisted(() => vi.fn())
+
+vi.mock('@/db/encryption', () => ({
+  decryptData: (...args: unknown[]) => decryptDataMock(...args),
+  encryptData: (...args: unknown[]) => encryptDataMock(...args),
 }))
 
 vi.mock('@/db/wallet-persistence', () => ({
-  loadWalletSecretsPayload: vi.fn(),
-  updateWalletSecretsPayloadWithRetry: vi.fn(),
+  getWalletSecretsEncrypted: vi.fn(),
+  updateWalletSecretsEncryptedPayloadWithRetry: vi.fn(),
 }))
 
 const CONNECTION_ID = 'conn-receive-persist-test'
@@ -36,8 +27,8 @@ function persistenceJsonWithReceiveIndex(index: number): string {
   })
 }
 
-function emptyPayload(): WalletSecretsPayload {
-  return {
+function emptyPayloadJson(): string {
+  return JSON.stringify({
     descriptorWallets: [],
     lightningNwcConnections: [],
     arkadeOperatorConnections: [
@@ -51,86 +42,97 @@ function emptyPayload(): WalletSecretsPayload {
       },
     ],
     activeArkadeConnectionIdByNetwork: { signet: CONNECTION_ID },
-  }
+  })
 }
 
-describe('arkade receive persistence (integration)', () => {
-  let payload: WalletSecretsPayload
+describe('arkade receive persistence (encrypted worker path)', () => {
+  let storedPayloadJson: string
+  let encryptedRoundTripJson: string
+
+  const secretsProxy = {
+    decrypt: async (_password: string, _blob: unknown) => storedPayloadJson,
+    encrypt: async (_password: string, plaintext: string) => {
+      encryptedRoundTripJson = plaintext
+      return {
+        ciphertext: new Uint8Array([1]),
+        iv: new Uint8Array([2]),
+        salt: new Uint8Array([3]),
+        kdfPhc: 'phc',
+      }
+    },
+  }
+
+  const encryptedHost = {
+    readEncryptedPayload: async () => ({
+      ciphertext: new Uint8Array([9]),
+      iv: new Uint8Array([8]),
+      salt: new Uint8Array([7]),
+      kdfPhc: 'phc',
+    }),
+    writeEncryptedPayloadCAS: async (_walletId: number, _blob: unknown) => {
+      storedPayloadJson = encryptedRoundTripJson
+    },
+  }
 
   beforeEach(() => {
     vi.clearAllMocks()
-    payload = emptyPayload()
+    storedPayloadJson = emptyPayloadJson()
+    encryptedRoundTripJson = storedPayloadJson
+    decryptDataMock.mockReset()
+    encryptDataMock.mockReset()
+  })
 
-    vi.mocked(updateWalletSecretsPayloadWithRetry).mockImplementation(async ({ transform }) => {
-      payload = await transform(payload)
-    })
-    vi.mocked(loadWalletSecretsPayload).mockImplementation(async () => payload)
-
-    setArkadeSdkPersistenceExporter(async () => persistenceJsonWithReceiveIndex(2))
-    setArkadeSdkPersistenceBridge({
-      persistSdkPersistence: async (params) => {
-        await saveSdkPersistenceJsonForConnection({
-          password: params.password,
-          walletId: params.walletId,
-          connectionId: params.connectionId,
-          sdkPersistenceJson: params.sdkPersistenceJson,
-          lastSuccessfulOperatorSyncAt: params.lastSuccessfulOperatorSyncAt,
-        })
+  it('RCV-PERSIST-01 worker persist writes the revealed receive cursor without main-thread decrypt', async () => {
+    await persistSdkJsonToEncryptedPayload(
+      { secretsProxy, encryptedHost },
+      {
+        password: PASSWORD,
+        walletId: WALLET_ID,
+        connectionId: CONNECTION_ID,
+        sdkPersistenceJson: persistenceJsonWithReceiveIndex(2),
       },
-    })
-    setArkadeSdkPersistenceFlushContext({
-      walletId: WALLET_ID,
-      networkMode: 'signet',
-      connectionId: CONNECTION_ID,
-      password: PASSWORD,
-    })
-  })
+    )
+    await persistSdkJsonToEncryptedPayload(
+      { secretsProxy, encryptedHost },
+      {
+        password: PASSWORD,
+        walletId: WALLET_ID,
+        connectionId: CONNECTION_ID,
+        sdkPersistenceJson: persistenceJsonWithReceiveIndex(2),
+      },
+    )
 
-  afterEach(() => {
-    setArkadeSdkPersistenceExporter(null)
-    setArkadeSdkPersistenceBridge(null)
-    setArkadeSdkPersistenceFlushContext(null)
-  })
+    const payload = parseWalletPayloadJson(storedPayloadJson)
+    const sdkJson = payload.arkadeOperatorConnections[0]?.sdkPersistenceJson
 
-  it('RCV-PERSIST-01 lock-path flushes write the revealed receive cursor to wallet secrets', async () => {
-    await flushSdkPersistenceNow()
-    await flushSdkPersistenceNow()
-
-    const loaded = await loadSdkPersistenceJsonForConnection({
-      password: PASSWORD,
-      walletId: WALLET_ID,
-      connectionId: CONNECTION_ID,
-    })
-
-    expect(readOffchainNextDerivationIndex(loaded)).toBe(2)
+    expect(readOffchainNextDerivationIndex(sdkJson)).toBe(2)
+    expect(decryptDataMock).not.toHaveBeenCalled()
   })
 
   it('RCV-PERSIST-02 stale lower-index flush cannot regress a newer receive cursor', async () => {
-    await saveSdkPersistenceJsonForConnection({
-      password: PASSWORD,
-      walletId: WALLET_ID,
-      connectionId: CONNECTION_ID,
-      sdkPersistenceJson: persistenceJsonWithReceiveIndex(2),
-    })
+    await persistSdkJsonToEncryptedPayload(
+      { secretsProxy, encryptedHost },
+      {
+        password: PASSWORD,
+        walletId: WALLET_ID,
+        connectionId: CONNECTION_ID,
+        sdkPersistenceJson: persistenceJsonWithReceiveIndex(2),
+      },
+    )
 
-    setArkadeSdkPersistenceExporter(async () => persistenceJsonWithReceiveIndex(1))
-    await flushSdkPersistenceNow()
+    await persistSdkJsonToEncryptedPayload(
+      { secretsProxy, encryptedHost },
+      {
+        password: PASSWORD,
+        walletId: WALLET_ID,
+        connectionId: CONNECTION_ID,
+        sdkPersistenceJson: persistenceJsonWithReceiveIndex(1),
+      },
+    )
 
-    const loaded = await loadSdkPersistenceJsonForConnection({
-      password: PASSWORD,
-      walletId: WALLET_ID,
-      connectionId: CONNECTION_ID,
-    })
-
-    expect(readOffchainNextDerivationIndex(loaded)).toBe(2)
-  })
-
-  it('RCV-PERSIST-03 flushSdkPersistenceNow is a no-op when flush context is missing', async () => {
-    setArkadeSdkPersistenceFlushContext(null)
-
-    const flushed = await flushSdkPersistenceNow()
-
-    expect(flushed).toBe(false)
-    expect(payload.arkadeOperatorConnections[0].sdkPersistenceJson).toBeUndefined()
+    const payload = parseWalletPayloadJson(storedPayloadJson)
+    expect(
+      readOffchainNextDerivationIndex(payload.arkadeOperatorConnections[0]?.sdkPersistenceJson),
+    ).toBe(2)
   })
 })

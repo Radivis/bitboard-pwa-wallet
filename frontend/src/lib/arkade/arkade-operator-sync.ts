@@ -1,6 +1,6 @@
 import { toast } from 'sonner'
 import { getArkadeWorker } from '@/workers/arkade-factory'
-import { saveLastSuccessfulOperatorSyncAtForConnection } from '@/lib/arkade/arkade-sdk-persistence'
+import { saveLastSuccessfulOperatorSyncAtEncrypted } from '@/lib/arkade/arkade-encrypted-persistence-manager'
 import { refreshArkadeStoreFromLoadedWasm } from '@/lib/arkade/arkade-persistence-store-sync'
 import { isArkadeActiveForNetworkMode } from '@/lib/arkade/arkade-utils'
 import { errorMessage } from '@/lib/shared/utils'
@@ -42,7 +42,7 @@ async function syncArkadeWithOperatorCore(params: {
   await refreshArkadeStoreFromLoadedWasm()
 
   const now = new Date().toISOString()
-  await saveLastSuccessfulOperatorSyncAtForConnection({
+  await saveLastSuccessfulOperatorSyncAtEncrypted({
     password: params.password,
     walletId: params.walletId,
     connectionId: params.connectionId,
