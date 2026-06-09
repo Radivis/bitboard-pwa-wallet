@@ -53,7 +53,6 @@ import {
   isArkadeSupportedNetworkMode,
   type ArkadeSupportedNetworkMode,
 } from '@/lib/arkade/arkade-endpoints'
-import { useSessionStore } from '@/stores/sessionStore'
 import {
   getCommittedNetworkMode,
   selectCommittedNetworkMode,
@@ -68,6 +67,7 @@ import {
   zeroBoardingStatus,
 } from '@/lib/arkade/arkade-boarding-settle-optimistic'
 import { errorMessage } from '@/lib/shared/utils'
+import { isWalletSecretsSessionActive } from '@/lib/wallet/wallet-secrets-session'
 
 const ARKADE_WALLET_UNLOCKED_ERROR = 'Wallet must be unlocked'
 
@@ -77,32 +77,29 @@ function useArkadeQueryBase() {
   const activeArkadeConnectionId = useWalletStore(
     (walletState) => walletState.activeArkadeConnectionId,
   )
-  const password = useSessionStore((sessionState) => sessionState.password)
   const sessionReady =
     activeWalletId != null &&
-    password != null &&
     isArkadeActiveForNetworkMode(networkMode) &&
     isArkadeSupportedNetworkMode(networkMode)
 
-  return { networkMode, activeWalletId, activeArkadeConnectionId, password, sessionReady }
+  return { networkMode, activeWalletId, activeArkadeConnectionId, sessionReady }
 }
 
 function useArkadeDelegateQueryBase() {
-  const { networkMode, activeWalletId, password, sessionReady: arkadeSessionReady } =
+  const { networkMode, activeWalletId, sessionReady: arkadeSessionReady } =
     useArkadeQueryBase()
   const sessionReady =
     arkadeSessionReady &&
     isArkadeSupportedNetworkMode(networkMode) &&
     isArkadeDelegatorConfigured(networkMode)
 
-  return { networkMode, activeWalletId, password, sessionReady }
+  return { networkMode, activeWalletId, sessionReady }
 }
 
 function assertArkadeSessionUnlocked(
   activeWalletId: number | null,
-  password: string | null,
 ): asserts activeWalletId is number {
-  if (activeWalletId == null || password == null) {
+  if (activeWalletId == null) {
     throw new Error(ARKADE_WALLET_UNLOCKED_ERROR)
   }
 }
@@ -110,18 +107,19 @@ function assertArkadeSessionUnlocked(
 async function ensureArkadeSessionOpenForActiveWallet(): Promise<void> {
   const activeWalletId = useWalletStore.getState().activeWalletId
   const networkMode = getCommittedNetworkMode()
-  const password = useSessionStore.getState().password
   if (
     activeWalletId == null ||
-    password == null ||
     !isArkadeActiveForNetworkMode(networkMode) ||
     !isArkadeSupportedNetworkMode(networkMode)
   ) {
     await awaitArkadeSessionReady()
     return
   }
+  if (!(await isWalletSecretsSessionActive())) {
+    await awaitArkadeSessionReady()
+    return
+  }
   await openArkadeSessionForWallet({
-    password,
     walletId: activeWalletId,
     networkMode,
   })
@@ -273,12 +271,12 @@ export function useArkadeAddressQuery() {
 
 export function useArkadeNewAddressMutation() {
   const queryClient = useQueryClient()
-  const { networkMode, activeWalletId, activeArkadeConnectionId, password } =
+  const { networkMode, activeWalletId, activeArkadeConnectionId } =
     useArkadeQueryBase()
 
   return useMutation({
     mutationFn: async () => {
-      assertArkadeSessionUnlocked(activeWalletId, password)
+      assertArkadeSessionUnlocked(activeWalletId)
       const newAddress = await withReadyArkadeWorker(() => getArkadeWorker().getNewAddress())
       await awaitInFlightWalletSecretsWrites()
       return newAddress
@@ -386,12 +384,12 @@ export function useArkadeVtxoExpiryQuery() {
 
 export function useArkadeSendMutation() {
   const queryClient = useQueryClient()
-  const { networkMode, activeWalletId, activeArkadeConnectionId, password } =
+  const { networkMode, activeWalletId, activeArkadeConnectionId } =
     useArkadeQueryBase()
 
   return useMutation({
     mutationFn: async (params: { address: string; amountSats: number }) => {
-      assertArkadeSessionUnlocked(activeWalletId, password)
+      assertArkadeSessionUnlocked(activeWalletId)
       return withReadyArkadeWorkerAndOptionalDelegate(networkMode, () =>
         getArkadeWorker().sendPayment(params),
       )
@@ -420,12 +418,12 @@ export function useArkadeSendMutation() {
 
 export function useArkadeRenewMutation() {
   const queryClient = useQueryClient()
-  const { networkMode, activeWalletId, activeArkadeConnectionId, password } =
+  const { networkMode, activeWalletId, activeArkadeConnectionId } =
     useArkadeQueryBase()
 
   return useMutation({
     mutationFn: async () => {
-      assertArkadeSessionUnlocked(activeWalletId, password)
+      assertArkadeSessionUnlocked(activeWalletId)
       return withReadyArkadeWorker(() => getArkadeWorker().renewVtxosNow())
     },
     onSuccess: async (txid) => {
@@ -455,12 +453,12 @@ export function useArkadeRenewMutation() {
 
 export function useArkadeOnboardMutation() {
   const queryClient = useQueryClient()
-  const { networkMode, activeWalletId, activeArkadeConnectionId, password } =
+  const { networkMode, activeWalletId, activeArkadeConnectionId } =
     useArkadeQueryBase()
 
   return useMutation({
     mutationFn: async () => {
-      assertArkadeSessionUnlocked(activeWalletId, password)
+      assertArkadeSessionUnlocked(activeWalletId)
       return withReadyArkadeWorkerAndOptionalDelegate(networkMode, () =>
         getArkadeWorker().onboardBoardedUtxos(),
       )
@@ -589,7 +587,7 @@ export function useArkadeBumperInfoQuery(enabled: boolean) {
 
 export function useArkadeCollaborativeExitMutation() {
   const queryClient = useQueryClient()
-  const { networkMode, activeWalletId, activeArkadeConnectionId, password } =
+  const { networkMode, activeWalletId, activeArkadeConnectionId } =
     useArkadeQueryBase()
 
   return useMutation({
@@ -597,7 +595,7 @@ export function useArkadeCollaborativeExitMutation() {
       destinationAddress: string
       amountSats?: number
     }) => {
-      assertArkadeSessionUnlocked(activeWalletId, password)
+      assertArkadeSessionUnlocked(activeWalletId)
       return withReadyArkadeWorker(() => getArkadeWorker().collaborativeExit(params))
     },
     onMutate: async (params) => {
@@ -667,7 +665,7 @@ async function reconcileExitBalanceAfterMutation(
 
 export function useArkadeUnilateralUnrollMutation() {
   const queryClient = useQueryClient()
-  const { networkMode, activeWalletId, activeArkadeConnectionId, password } =
+  const { networkMode, activeWalletId, activeArkadeConnectionId } =
     useArkadeQueryBase()
 
   return useMutation({
@@ -677,7 +675,7 @@ export function useArkadeUnilateralUnrollMutation() {
       amountSats: number
       onProgress: (event: ArkadeUnrollProgressEvent) => void
     }) => {
-      assertArkadeSessionUnlocked(activeWalletId, password)
+      assertArkadeSessionUnlocked(activeWalletId)
       await awaitArkadeSessionReady()
       return getArkadeWorker().runUnilateralUnroll(
         { txid: params.txid, vout: params.vout },
@@ -730,12 +728,12 @@ export function useArkadeUnilateralUnrollMutation() {
 
 export function useArkadeCompleteUnilateralExitMutation() {
   const queryClient = useQueryClient()
-  const { networkMode, activeWalletId, activeArkadeConnectionId, password } =
+  const { networkMode, activeWalletId, activeArkadeConnectionId } =
     useArkadeQueryBase()
 
   return useMutation({
     mutationFn: async (params: { vtxoTxids: string[]; destinationAddress: string }) => {
-      assertArkadeSessionUnlocked(activeWalletId, password)
+      assertArkadeSessionUnlocked(activeWalletId)
       return withReadyArkadeWorker(() => getArkadeWorker().completeUnilateralExit(params))
     },
     onSuccess: async (txid) => {

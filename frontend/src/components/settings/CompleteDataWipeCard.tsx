@@ -9,8 +9,8 @@ import {
   listWalletsWithPositiveMainnetOnChainBalance,
 } from '@/lib/esplora/mainnet-onchain-balance-probe'
 import { wipeAllAppDataOpfsAndReload } from '@/db/opfs/wipe-all-app-data-opfs-and-reload'
-import { useSessionStore } from '@/stores/sessionStore'
 import { useWalletStore } from '@/stores/walletStore'
+import { walletIsUnlockedOrSyncing } from '@/lib/wallet/wallet-unlocked-status'
 import { AppModal } from '@/components/AppModal'
 import { Button } from '@/components/ui/button'
 import {
@@ -26,7 +26,6 @@ import { cn, userFacingErrorMessage } from '@/lib/shared/utils'
 
 export function CompleteDataWipeCard() {
   const walletStatus = useWalletStore((walletState) => walletState.walletStatus)
-  const sessionPassword = useSessionStore((sessionState) => sessionState.password)
   const { data: wallets = [] } = useWallets()
 
   const [riskModalOpen, setRiskModalOpen] = useState(false)
@@ -40,8 +39,7 @@ export function CompleteDataWipeCard() {
   const [wipeBusy, setWipeBusy] = useState(false)
 
   const hasWallets = wallets.length > 0
-  const canStartFlow =
-    !hasWallets || (walletStatus === 'unlocked' && sessionPassword != null)
+  const canStartFlow = !hasWallets || walletIsUnlockedOrSyncing(walletStatus)
 
   const resetRiskModalForm = useCallback(() => {
     setRiskUnderstood(false)
@@ -73,7 +71,7 @@ export function CompleteDataWipeCard() {
       return
     }
 
-    if (sessionPassword == null) {
+    if (!walletIsUnlockedOrSyncing(walletStatus)) {
       toast.error('Unlock your wallet to continue.')
       return
     }
@@ -81,7 +79,6 @@ export function CompleteDataWipeCard() {
     setProbing(true)
     try {
       const probeSummary = await listWalletsWithPositiveMainnetOnChainBalance({
-        password: sessionPassword,
         wallets: wallets.map((walletRow) => ({
           walletId: walletRow.walletId,
           name: walletRow.name,
@@ -112,7 +109,7 @@ export function CompleteDataWipeCard() {
     riskUnderstood,
     resetRiskModalForm,
     hasWallets,
-    sessionPassword,
+    walletStatus,
     wallets,
     advanceToNoBackupOrWipe,
   ])

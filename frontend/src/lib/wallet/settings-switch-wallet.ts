@@ -1,7 +1,6 @@
 import { toast } from 'sonner'
 import type { NetworkMode, AddressType } from '@/stores/walletStore'
 import { useWalletStore } from '@/stores/walletStore'
-import { useSessionStore } from '@/stores/sessionStore'
 import { useCryptoStore } from '@/stores/cryptoStore'
 import { toBitcoinNetwork } from '@/lib/wallet/bitcoin-utils'
 import { errorMessage } from '@/lib/shared/utils'
@@ -60,8 +59,7 @@ export async function switchDescriptorWallet(params: {
     phaseContext = 'network',
   } = params
   const { activeWalletId } = useWalletStore.getState()
-  const sessionPassword = useSessionStore.getState().password
-  if (!activeWalletId || !sessionPassword) {
+  if (!activeWalletId) {
     throw new Error(
       'Cannot switch descriptor wallet: no active wallet or session',
     )
@@ -93,7 +91,6 @@ export async function switchDescriptorWallet(params: {
           : savingPreviousNetworkMessage(currentNetworkMode),
       )
       await updateDescriptorWalletChangeset({
-        password: sessionPassword,
         walletId: activeWalletId,
         network: toBitcoinNetwork(currentNetworkMode),
         addressType: currentAddressType,
@@ -120,7 +117,6 @@ export async function switchDescriptorWallet(params: {
 
     const targetNetwork = toBitcoinNetwork(targetNetworkMode)
     const descriptorWallet = await resolveDescriptorWallet({
-      password: sessionPassword,
       walletId: activeWalletId,
       targetNetwork,
       targetAddressType,
@@ -162,7 +158,6 @@ export async function switchDescriptorWallet(params: {
       await syncLoadedDescriptorWalletWithEsplora({
         networkMode: targetNetworkMode,
         activeWalletId,
-        sessionPassword,
         targetNetwork,
         targetAddressType,
         targetAccountId,

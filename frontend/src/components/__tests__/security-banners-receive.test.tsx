@@ -38,12 +38,14 @@ vi.mock('@/stores/nearZeroSecurityStore', () => ({
 
 const walletMocks = vi.hoisted(() => ({
   activeWalletId: 1 as number | null,
+  walletStatus: 'unlocked' as const,
 }))
 vi.mock('@/stores/walletStore', () => ({
   useWalletStore: (selector: (s: typeof walletMocks & { activeWalletId: number | null }) => unknown) =>
     selector({
       ...walletMocks,
       activeWalletId: walletMocks.activeWalletId,
+      walletStatus: walletMocks.walletStatus,
     }),
 }))
 
@@ -57,6 +59,7 @@ describe('security banners: dismiss reset on /wallet/receive', () => {
     routerMocks.pathname = '/wallet'
     nearZeroState.active = true
     walletMocks.activeWalletId = 1
+    walletMocks.walletStatus = 'unlocked'
   })
 
   it('NearZeroSecurityBanner shows again on Receive after session dismiss was set on another route', () => {

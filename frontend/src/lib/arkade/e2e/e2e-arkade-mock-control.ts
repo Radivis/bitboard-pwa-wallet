@@ -94,7 +94,7 @@ export function ensureE2eArkadeMockControl(): void {
         peekAddress: await worker.getAddress(),
       }
     },
-    readPersistedReceiveDebugSnapshot: async (passwordOverride?: string) => {
+    readPersistedReceiveDebugSnapshot: async () => {
       const { getDatabase, getWalletSecretsEncrypted } = await import('@/db')
       const { findActiveArkadeConnectionSummary } = await import(
         '@/lib/arkade/arkade-encrypted-persistence-manager'
@@ -104,7 +104,6 @@ export function ensureE2eArkadeMockControl(): void {
       )
       const { getArkadeWorker } = await import('@/workers/arkade-factory')
       const { useWalletStore } = await import('@/stores/walletStore')
-      const { useSessionStore } = await import('@/stores/sessionStore')
       const { isArkadeSupportedNetworkMode } = await import('@/lib/arkade/arkade-endpoints')
       const { ensureArkadeEncryptedSecretsHost } = await import(
         '@/workers/arkade-persistence-channel'
@@ -114,11 +113,9 @@ export function ensureE2eArkadeMockControl(): void {
       )
 
       const walletId = useWalletStore.getState().activeWalletId
-      const password = passwordOverride ?? useSessionStore.getState().password
       const networkMode = useWalletStore.getState().networkMode
       if (
         walletId == null ||
-        password == null ||
         !isArkadeSupportedNetworkMode(networkMode)
       ) {
         throw new Error('Wallet must be unlocked on an Arkade network to read persisted snapshot')
@@ -131,7 +128,6 @@ export function ensureE2eArkadeMockControl(): void {
 
       const encrypted = await getWalletSecretsEncrypted(getDatabase(), walletId)
       const connection = await findActiveArkadeConnectionSummary({
-        password,
         walletId,
         networkMode,
         encryptedPayload: encrypted.payload,
@@ -141,7 +137,6 @@ export function ensureE2eArkadeMockControl(): void {
       }
 
       const sdkPersistenceJson = await getArkadeWorker().readPersistedSdkPersistenceJsonForE2e({
-        password,
         walletId,
         connectionId: connection.id,
       })

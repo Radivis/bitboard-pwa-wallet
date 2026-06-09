@@ -175,7 +175,6 @@ export interface BuildAndSignLabTransactionResult {
 }
 
 export interface ResolveDescriptorWalletParams {
-  password: string;
   /** Payload ciphertext (WalletSecretsPayload JSON). */
   encryptedPayload: EncryptedBlobForDb;
   encryptedMnemonic: EncryptedBlobForDb;
@@ -185,7 +184,6 @@ export interface ResolveDescriptorWalletParams {
 }
 
 export interface UpdateDescriptorWalletChangesetParams {
-  password: string;
   /** WalletSecretsPayload ciphertext only (after split migration). */
   encryptedPayload: EncryptedBlobForDb;
   network: BitcoinNetwork;
@@ -197,7 +195,6 @@ export interface UpdateDescriptorWalletChangesetParams {
 }
 
 export interface ReadLastSuccessfulEsploraSyncAtParams {
-  password: string;
   /** WalletSecretsPayload ciphertext only (after split migration). */
   encryptedPayload: EncryptedBlobForDb;
   network: BitcoinNetwork;
@@ -206,7 +203,6 @@ export interface ReadLastSuccessfulEsploraSyncAtParams {
 }
 
 export interface CreateWalletAndEncryptSecretsParams {
-  password: string;
   network: BitcoinNetwork;
   addressType: AddressType;
   accountId: number;
@@ -215,7 +211,6 @@ export interface CreateWalletAndEncryptSecretsParams {
 
 export interface ImportWalletAndEncryptSecretsParams {
   mnemonic: string;
-  password: string;
   network: BitcoinNetwork;
   addressType: AddressType;
   accountId: number;

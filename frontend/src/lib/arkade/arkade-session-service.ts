@@ -95,11 +95,10 @@ export async function closeArkadeSession(): Promise<void> {
 }
 
 export async function openArkadeSessionForWallet(params: {
-  password: string
   walletId: number
   networkMode: NetworkMode
 }): Promise<void> {
-  const { password, walletId, networkMode } = params
+  const { walletId, networkMode } = params
   if (!isArkadeActiveForNetworkMode(networkMode)) {
     await closeArkadeSession()
     return
@@ -114,7 +113,6 @@ export async function openArkadeSessionForWallet(params: {
   }
 
   const openWork = runArkadeSessionOpenWork({
-    password,
     walletId,
     networkMode,
   })
@@ -130,11 +128,10 @@ export async function openArkadeSessionForWallet(params: {
 }
 
 function runArkadeSessionOpenWork(params: {
-  password: string
   walletId: number
   networkMode: ArkadeSupportedNetworkMode
 }): Promise<void> {
-  const { password, walletId, networkMode } = params
+  const { walletId, networkMode } = params
 
   return (async () => {
     await ensureSecretsChannel()
@@ -142,7 +139,6 @@ function runArkadeSessionOpenWork(params: {
     const encrypted = await getWalletSecretsEncrypted(getDatabase(), walletId)
 
     let connection = await findActiveArkadeConnectionSummary({
-      password,
       walletId,
       networkMode,
       encryptedPayload: encrypted.payload,
@@ -180,7 +176,6 @@ function runArkadeSessionOpenWork(params: {
     const worker = getArkadeWorker()
     await ensureArkadeWorkerSecretsChannel()
     const openResult = await worker.openSession({
-      password,
       encryptedMnemonic: encrypted.mnemonic,
       encryptedPayload: encrypted.payload,
       walletId,
@@ -192,7 +187,6 @@ function runArkadeSessionOpenWork(params: {
     })
 
     connection = await ensureArkadeOperatorConnection({
-      password,
       walletId,
       networkMode,
       connectionId,
@@ -207,7 +201,6 @@ function runArkadeSessionOpenWork(params: {
     useWalletStore.getState().setLastOperatorSyncTime(null)
 
     const operatorSyncParams = {
-      password,
       walletId,
       networkMode,
       connectionId: connection.id,
@@ -238,14 +231,12 @@ export async function awaitArkadeSessionReady(): Promise<void> {
 }
 
 export async function refreshArkadeSessionAfterNetworkSwitch(params: {
-  password: string | null
   walletId: number | null
   networkMode: NetworkMode
 }): Promise<void> {
   await closeArkadeSession()
-  if (params.password == null || params.walletId == null) return
+  if (params.walletId == null) return
   await openArkadeSessionForWallet({
-    password: params.password,
     walletId: params.walletId,
     networkMode: params.networkMode,
   })

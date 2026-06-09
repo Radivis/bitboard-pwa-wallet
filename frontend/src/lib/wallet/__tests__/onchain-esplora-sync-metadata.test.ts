@@ -83,7 +83,6 @@ describe('onchain-esplora-sync-metadata', () => {
     vi.mocked(updateWalletSecretsPayloadWithRetry).mockResolvedValue(undefined)
 
     await persistLastSuccessfulEsploraSyncAt({
-      password: 'pw',
       walletId: 1,
       network: 'testnet',
       addressType: 'taproot',
@@ -112,7 +111,6 @@ describe('onchain-esplora-sync-metadata', () => {
     )
 
     const result = await loadLastSuccessfulEsploraSyncAtForDescriptorWallet({
-      password: 'pw',
       walletId: 1,
       network: 'testnet',
       addressType: 'taproot',
@@ -121,7 +119,6 @@ describe('onchain-esplora-sync-metadata', () => {
 
     expect(getWalletSecretsEncrypted).toHaveBeenCalledWith({}, 1)
     expect(readLastSuccessfulEsploraSyncAtForDescriptorWallet).toHaveBeenCalledWith({
-      password: 'pw',
       encryptedPayload: encryptedPayloadBlob,
       network: 'testnet',
       addressType: 'taproot',

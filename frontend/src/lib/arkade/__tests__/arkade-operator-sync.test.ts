@@ -55,14 +55,12 @@ describe('syncArkadeWithOperator', () => {
 
   it('opens session then syncs on the worker and refreshes store on the main thread', async () => {
     await syncArkadeWithOperator({
-      password: 'pw',
       walletId: 1,
       networkMode: 'signet',
       connectionId: 'conn-1',
     })
 
     expect(openArkadeSessionForWalletMock).toHaveBeenCalledWith({
-      password: 'pw',
       walletId: 1,
       networkMode: 'signet',
     })
@@ -70,7 +68,6 @@ describe('syncArkadeWithOperator', () => {
     expect(refreshArkadeStoreFromLoadedWasmMock).toHaveBeenCalledTimes(1)
     expect(saveLastSuccessfulOperatorSyncAtEncryptedMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        password: 'pw',
         walletId: 1,
         connectionId: 'conn-1',
       }),

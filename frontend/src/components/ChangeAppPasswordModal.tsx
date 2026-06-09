@@ -19,7 +19,10 @@ import {
   getDatabase,
   reencryptAllWalletSecretsWithNewPassword,
 } from '@/db'
-import { useSessionStore } from '@/stores/sessionStore'
+import {
+  beginWalletSecretsSession,
+  endWalletSecretsSession,
+} from '@/lib/wallet/wallet-secrets-session'
 import { errorMessage } from '@/lib/shared/utils'
 
 const CHANGE_APP_PASSWORD_FIELDS_CONFIG = {
@@ -48,7 +51,6 @@ export function ChangeAppPasswordModal({
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
-  const setSessionPassword = useSessionStore((sessionState) => sessionState.setPassword)
 
   useEffect(() => {
     if (open) {
@@ -68,7 +70,8 @@ export function ChangeAppPasswordModal({
         oldPassword: params.current,
         newPassword: params.next,
       })
-      setSessionPassword(params.next)
+      await endWalletSecretsSession()
+      await beginWalletSecretsSession(params.next)
     },
     onSuccess: () => {
       setPhase('success')

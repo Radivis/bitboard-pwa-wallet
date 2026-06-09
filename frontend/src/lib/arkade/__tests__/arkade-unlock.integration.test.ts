@@ -143,7 +143,6 @@ describe('openArkadeSession after unlock (integration)', () => {
     )
 
     await loadDescriptorWalletWithoutSync({
-      password: 'unlock-password',
       walletId: 3,
       networkMode: 'signet',
       addressType: AddressType.Taproot,
@@ -152,7 +151,6 @@ describe('openArkadeSession after unlock (integration)', () => {
 
     expect(waitForCryptoWorkerHealthyMock).toHaveBeenCalled()
     expect(openArkadeSessionForWalletMock).toHaveBeenCalledWith({
-      password: 'unlock-password',
       walletId: 3,
       networkMode: 'signet',
     })
@@ -170,7 +168,6 @@ describe('openArkadeSession after unlock (integration)', () => {
     )
 
     await loadDescriptorWalletAndSync({
-      password: 'unlock-password',
       walletId: 3,
       networkMode: 'signet',
       addressType: AddressType.Taproot,
@@ -180,7 +177,6 @@ describe('openArkadeSession after unlock (integration)', () => {
 
     expect(waitForCryptoWorkerHealthyMock).toHaveBeenCalled()
     expect(openArkadeSessionForWalletMock).toHaveBeenCalledWith({
-      password: 'unlock-password',
       walletId: 3,
       networkMode: 'signet',
     })
@@ -190,7 +186,6 @@ describe('openArkadeSession after unlock (integration)', () => {
 
   it('UNLOCK-ARK-02 starts Arkade session open during unlock load and still marks wallet unlocked', async () => {
     await loadDescriptorWalletAndSync({
-      password: 'unlock-password',
       walletId: 3,
       networkMode: 'signet',
       addressType: AddressType.Taproot,
@@ -213,7 +208,6 @@ describe('openArkadeSession after unlock (integration)', () => {
 
     await expect(
       loadDescriptorWalletAndSync({
-        password: 'unlock-password',
         walletId: 3,
         networkMode: 'signet',
         addressType: AddressType.Taproot,

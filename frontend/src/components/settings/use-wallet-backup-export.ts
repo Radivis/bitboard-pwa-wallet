@@ -3,7 +3,7 @@ import { toast } from 'sonner'
 import { WALLET_SQLITE_OPFS_BASENAME } from '@/db/opfs/opfs-sqlite-database-names'
 import { ensureMigrated, getDatabase } from '@/db/database'
 import { useWallets } from '@/db'
-import { loadWalletSecrets } from '@/db/wallet-persistence'
+import { loadWalletSecretsWithPassword } from '@/db/wallet-persistence'
 import { resolveArgon2CiParamsOrThrow } from '@/lib/shared/argon2-ci-env'
 import {
   readBlobFromOpfsRootIfExists,
@@ -42,7 +42,11 @@ export function useWalletBackupExport() {
       }
       await ensureMigrated()
       try {
-        await loadWalletSecrets(getDatabase(), password, walletIdForBackupPasswordCompare)
+        await loadWalletSecretsWithPassword(
+          getDatabase(),
+          password,
+          walletIdForBackupPasswordCompare,
+        )
         return { match: true, skipped: false }
       } catch {
         return { match: false, skipped: false }

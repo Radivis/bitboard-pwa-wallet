@@ -32,20 +32,17 @@ export type { ArkadeOperatorConnectionSummary }
 export { findActiveArkadeConnectionSummary } from '@/lib/arkade/arkade-encrypted-persistence-manager'
 
 export async function loadArkadeConnectionsForWallet(params: {
-  password: string
   walletId: number
 }): Promise<ArkadeOperatorConnectionSummary[]> {
   return listArkadeConnectionSummaries(params)
 }
 
 export async function loadActiveArkadeConnectionForNetwork(params: {
-  password: string
   walletId: number
   networkMode: ArkadeSupportedNetworkMode
 }): Promise<ArkadeOperatorConnectionSummary | undefined> {
   const encrypted = await getWalletSecretsEncrypted(getDatabase(), params.walletId)
   return findActiveArkadeConnectionSummary({
-    password: params.password,
     walletId: params.walletId,
     networkMode: params.networkMode,
     encryptedPayload: encrypted.payload,
@@ -53,7 +50,6 @@ export async function loadActiveArkadeConnectionForNetwork(params: {
 }
 
 export async function ensureArkadeOperatorConnection(params: {
-  password: string
   walletId: number
   networkMode: ArkadeSupportedNetworkMode
   operatorSignerPkHex: string

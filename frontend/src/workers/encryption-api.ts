@@ -5,13 +5,20 @@ export type { EncryptedBlob }
 
 export interface EncryptionService {
   setSecretsPort(port: MessagePort): Promise<void>
+  beginSecretsSession(password: string): Promise<void>
+  endSecretsSession(): Promise<void>
+  isSecretsSessionActive(): Promise<boolean>
   deriveKeyBytes(
     password: string,
     salt: Uint8Array,
     kdfPhc: string,
   ): Promise<Uint8Array>
-  encryptData(password: string, plaintext: string): Promise<EncryptedBlob>
-  decryptData(password: string, encrypted: EncryptedBlob): Promise<string>
+  encryptData(plaintext: string): Promise<EncryptedBlob>
+  decryptData(encrypted: EncryptedBlob): Promise<string>
+  /** One-shot encrypt without an active wallet session (near-zero wrapper, tests). */
+  encryptDataWithPassword(password: string, plaintext: string): Promise<EncryptedBlob>
+  /** One-shot decrypt without an active wallet session. */
+  decryptDataWithPassword(password: string, encrypted: EncryptedBlob): Promise<string>
   /** ML-DSA-65 signed manifest JSON (pretty-printed). */
   signWalletBackupManifest(
     sqliteBytes: Uint8Array,

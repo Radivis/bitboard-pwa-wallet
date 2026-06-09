@@ -18,7 +18,6 @@ vi.mock('@/db/wallet-persistence', () => ({
 
 const CONNECTION_ID = 'conn-receive-persist-test'
 const WALLET_ID = 9
-const PASSWORD = 'test-password'
 
 function persistenceJsonWithReceiveIndex(index: number): string {
   return JSON.stringify({
@@ -50,8 +49,8 @@ describe('arkade receive persistence (encrypted worker path)', () => {
   let encryptedRoundTripJson: string
 
   const secretsProxy = {
-    decrypt: async (_password: string, _blob: unknown) => storedPayloadJson,
-    encrypt: async (_password: string, plaintext: string) => {
+    decrypt: async (_blob: unknown) => storedPayloadJson,
+    encrypt: async (plaintext: string) => {
       encryptedRoundTripJson = plaintext
       return {
         ciphertext: new Uint8Array([1]),
@@ -86,7 +85,6 @@ describe('arkade receive persistence (encrypted worker path)', () => {
     await persistSdkJsonToEncryptedPayload(
       { secretsProxy, encryptedHost },
       {
-        password: PASSWORD,
         walletId: WALLET_ID,
         connectionId: CONNECTION_ID,
         sdkPersistenceJson: persistenceJsonWithReceiveIndex(2),
@@ -95,7 +93,6 @@ describe('arkade receive persistence (encrypted worker path)', () => {
     await persistSdkJsonToEncryptedPayload(
       { secretsProxy, encryptedHost },
       {
-        password: PASSWORD,
         walletId: WALLET_ID,
         connectionId: CONNECTION_ID,
         sdkPersistenceJson: persistenceJsonWithReceiveIndex(2),
@@ -113,7 +110,6 @@ describe('arkade receive persistence (encrypted worker path)', () => {
     await persistSdkJsonToEncryptedPayload(
       { secretsProxy, encryptedHost },
       {
-        password: PASSWORD,
         walletId: WALLET_ID,
         connectionId: CONNECTION_ID,
         sdkPersistenceJson: persistenceJsonWithReceiveIndex(2),
@@ -123,7 +119,6 @@ describe('arkade receive persistence (encrypted worker path)', () => {
     await persistSdkJsonToEncryptedPayload(
       { secretsProxy, encryptedHost },
       {
-        password: PASSWORD,
         walletId: WALLET_ID,
         connectionId: CONNECTION_ID,
         sdkPersistenceJson: persistenceJsonWithReceiveIndex(1),

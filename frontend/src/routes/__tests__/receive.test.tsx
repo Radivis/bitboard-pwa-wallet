@@ -13,6 +13,7 @@ vi.mock('@tanstack/react-router', async (importOriginal) => {
       options,
     }),
     useNavigate: () => mockNavigate,
+    useSearch: () => ({}),
   }
 })
 
@@ -47,8 +48,16 @@ const receiveFeatureState = {
 }
 
 vi.mock('@/stores/featureStore', () => ({
-  useFeatureStore: (selector: (s: Record<string, unknown>) => unknown) =>
-    selector(receiveFeatureState),
+  useFeatureStore: Object.assign(
+    (selector: (s: Record<string, unknown>) => unknown) => selector(receiveFeatureState),
+    {
+      getState: () => ({
+        ...receiveFeatureState,
+        isArkadeEnabled: false,
+        isMainnetAccessEnabled: true,
+      }),
+    },
+  ),
 }))
 
 vi.mock('@/stores/sessionStore', () => ({

@@ -35,7 +35,6 @@ export interface ArkadePaymentRow {
 }
 
 export interface OpenArkadeSessionParams {
-  password: string
   encryptedMnemonic: EncryptedBlobForDb
   encryptedPayload: EncryptedBlobForDb
   walletId: number
@@ -134,7 +133,6 @@ export interface ArkadeUnilateralExitFeeEstimateParams {
 }
 
 export interface EnsureArkadeOperatorConnectionEncryptedParams {
-  password: string
   walletId: number
   networkMode: ArkadeSupportedNetworkMode
   connectionId: string
@@ -162,25 +160,21 @@ export interface ArkadeService {
   exportSdkPersistenceJsonForE2e(): Promise<string>
   /** @internal E2E / DevTools only — reads sdkPersistenceJson from encrypted wallet_secrets via secrets channel. */
   readPersistedSdkPersistenceJsonForE2e(params: {
-    password: string
     walletId: number
     connectionId: string
   }): Promise<string | undefined>
   findActiveConnectionSummary(params: {
-    password: string
     walletId: number
     networkMode: ArkadeSupportedNetworkMode
     encryptedPayload: EncryptedBlobForDb
   }): Promise<ArkadeOperatorConnectionSummary | undefined>
   listConnectionSummaries(params: {
-    password: string
     walletId: number
   }): Promise<ArkadeOperatorConnectionSummary[]>
   ensureOperatorConnectionEncrypted(
     params: EnsureArkadeOperatorConnectionEncryptedParams,
   ): Promise<ArkadeOperatorConnectionSummary>
   updateOperatorSyncAtEncrypted(params: {
-    password: string
     walletId: number
     connectionId: string
     lastSuccessfulOperatorSyncAt: string

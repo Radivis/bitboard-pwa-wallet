@@ -186,6 +186,8 @@ describe('DashboardPage', () => {
       currentAddress: 'tb1qtest',
       lastSyncTime: null,
       transactions: [],
+      arkadePayments: [],
+      arkadeReceiveAddress: null,
       setWalletStatus: vi.fn(),
       setBalance: vi.fn(),
       setTransactions: vi.fn(),

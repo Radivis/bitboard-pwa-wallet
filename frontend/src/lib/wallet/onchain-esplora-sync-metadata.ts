@@ -51,20 +51,18 @@ export function applyLastSuccessfulEsploraSyncAtToPayload(
  * after Esplora sync so changeset and timestamp are written together.
  */
 export async function persistLastSuccessfulEsploraSyncAt(params: {
-  password: string
   walletId: number
   network: BitcoinNetwork
   addressType: AddressType
   accountId: number
   syncedAtIso: string
 }): Promise<void> {
-  const { password, walletId, network, addressType, accountId, syncedAtIso } =
+  const { walletId, network, addressType, accountId, syncedAtIso } =
     params
 
   await updateWalletSecretsPayloadWithRetry({
     walletDb: getDatabase(),
     walletId,
-    password,
     transform: async (payload) =>
       applyLastSuccessfulEsploraSyncAtToPayload(payload, {
         network,
@@ -81,20 +79,18 @@ export async function persistLastSuccessfulEsploraSyncAt(params: {
  * only the ISO string (or undefined).
  */
 export async function loadLastSuccessfulEsploraSyncAtForDescriptorWallet(params: {
-  password: string
   walletId: number
   network: BitcoinNetwork
   addressType: AddressType
   accountId: number
 }): Promise<string | undefined> {
-  const { password, walletId, network, addressType, accountId } = params
+  const { walletId, network, addressType, accountId } = params
   await ensureMigrated()
   await ensureSecretsChannel()
   const encryptedBlobs = await getWalletSecretsEncrypted(getDatabase(), walletId)
   const { readLastSuccessfulEsploraSyncAtForDescriptorWallet } =
     useCryptoStore.getState()
   return readLastSuccessfulEsploraSyncAtForDescriptorWallet({
-    password,
     encryptedPayload: encryptedBlobs.payload,
     network,
     addressType,

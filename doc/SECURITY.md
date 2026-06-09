@@ -22,14 +22,14 @@ For **reporting vulnerabilities** in Bitboard Wallet, see the repository root [S
 **Where secrets are created**
 
 - **Mnemonic:** Generated only in the **crypto worker** via WASM (`generate_mnemonic`). It is never sent to the main thread except when intentionally shown to the user (create backup step, seed phrase backup).
-- **Password:** Comes only from user input. It is held in the **session store** (`password: string | null`) and used when unlocking, syncing, or updating wallet state.
+- **Password:** Comes only from user input. During an unlocked wallet session it is held exclusively in the **encryption worker** (`beginSecretsSession` / `endSecretsSession`). The main thread, crypto worker, and arkade worker never store or receive the password over Comlink; they call session-scoped `decrypt` / `encrypt` on the secrets channel. One-shot password parameters remain only for pre-unlock flows (wallet backup manifest, change-password re-encryption, near-zero wrapper).
 - **Derived keys:** Created only inside the **encryption worker**: Argon2id (WASM) then Web Crypto `importKey` for AES-GCM. Used only for encrypt/decrypt; the raw key buffer is zeroed with `fill(0)` after `importKey`. A comment in code notes that Web Crypto may retain internal copies of the key.
 
 **Worker-to-worker secrets channel**
 
 - The main thread never sees decrypted wallet secrets (mnemonic, or the wallet **payload** JSON that holds descriptor wallets, Lightning metadata, and Arkade metadata). A **MessageChannel** connects the encryption worker and the crypto worker; the main thread creates the channel and passes one port to each worker (using Comlink `transfer()` so ports are transferred, not cloned). It never reads from that channel.
 - Decrypt/encrypt for “resolve descriptor wallet” and “update changeset” run via this channel: crypto worker requests decrypt/encrypt from the encryption worker over the port; plaintext secrets stay in the workers. The main thread never sees decrypted wallet secrets: it only passes encrypted blobs between the crypto worker and the app’s DB layer. DB operations are initiated from the main thread via Kysely; the actual SQLite/OPFS access is performed by the WaSqlite worker (Kysely’s `WaSqliteWorkerDialect`), not the main thread.
-- The channel is established by `ensureSecretsChannel()` before any operation that needs it. When the user manually locks the wallet, the crypto worker is terminated and `resetSecretsChannel()` is called so that the next unlock re-establishes the channel for a new worker.
+- The channel is established by `ensureSecretsChannel()` after `beginWalletSecretsSession(password)` on unlock. When the user manually locks the wallet, workers flush pending ciphertext writes, the crypto and arkade workers are terminated, `endWalletSecretsSession()` clears the password from the encryption worker, and `resetSecretsChannel()` is called so the next unlock re-establishes ports for new workers.
 
 **Storage**
 
@@ -88,7 +88,7 @@ The following cannot be fully eliminated in a browser-based wallet:
 
 **Session password**
 
-- JavaScript strings are **immutable**. When the session is cleared, we set the store reference to `null`; we cannot overwrite the previous string’s backing memory. That memory may remain until the engine reclaims it. Documented in `sessionStore.clear()`.
+- JavaScript strings are **immutable**. The app password lives in the encryption worker for the unlock lifetime; `endWalletSecretsSession()` drops the reference on lock but cannot overwrite the previous string’s backing memory. That memory may remain until the engine reclaims it.
 
 **Web Crypto and key material**
 

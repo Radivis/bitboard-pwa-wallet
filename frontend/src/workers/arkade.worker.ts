@@ -50,7 +50,6 @@ let encryptedWalletSecretsHost:
 
 let activeSessionKey: string | null = null
 let activeSessionParams: {
-  password: string
   walletId: number
   networkMode: ArkadeSupportedNetworkMode
   connectionId: string
@@ -127,14 +126,11 @@ async function initWasm() {
 
 initWasm()
 
-function requestDecrypt(
-  password: string,
-  encryptedBlob: EncryptedBlobMessage,
-): Promise<string> {
+function requestDecrypt(encryptedBlob: EncryptedBlobMessage): Promise<string> {
   if (!secretsProxy) {
     return Promise.reject(new Error('Secrets port not set'))
   }
-  return secretsProxy.decrypt(password, encryptedBlob)
+  return secretsProxy.decrypt(encryptedBlob)
 }
 
 function legacyIndexedDbName(
@@ -172,7 +168,6 @@ async function flushSdkPersistenceNowOrThrow(): Promise<void> {
       wasmModule.ark_export_persistence_json(),
     )
     await persistSdkJsonToEncryptedPayload(getEncryptedPayloadDeps(), {
-      password: sessionParams.password,
       walletId: sessionParams.walletId,
       connectionId: sessionParams.connectionId,
       sdkPersistenceJson,
@@ -247,15 +242,13 @@ async function openSessionImpl(
   const sdkPersistenceJson = await extractSdkPersistenceJsonForConnection(
     getEncryptedPayloadDeps(),
     {
-      password: params.password,
       encryptedPayload: encryptedPayloadMessage,
       connectionId: params.connectionId,
     },
   )
 
-  const mnemonic = await requestDecrypt(params.password, params.encryptedMnemonic)
+  const mnemonic = await requestDecrypt(encryptedBlobForDbToMessage(params.encryptedMnemonic))
   activeSessionParams = {
-    password: params.password,
     walletId: params.walletId,
     networkMode: params.networkMode,
     connectionId: params.connectionId,
@@ -341,7 +334,6 @@ const arkadeService: ArkadeService = {
   },
 
   async readPersistedSdkPersistenceJsonForE2e(params: {
-    password: string
     walletId: number
     connectionId: string
   }): Promise<string | undefined> {
@@ -349,7 +341,6 @@ const arkadeService: ArkadeService = {
       params.walletId,
     )
     return extractSdkPersistenceJsonForConnection(getEncryptedPayloadDeps(), {
-      password: params.password,
       encryptedPayload: encryptedBlobForDbToMessage(encryptedPayload),
       connectionId: params.connectionId,
     })
@@ -357,7 +348,6 @@ const arkadeService: ArkadeService = {
 
   async findActiveConnectionSummary(params) {
     return findActiveConnectionSummary(getEncryptedPayloadDeps(), {
-      password: params.password,
       walletId: params.walletId,
       networkMode: params.networkMode,
       encryptedPayload: encryptedBlobForDbToMessage(params.encryptedPayload),

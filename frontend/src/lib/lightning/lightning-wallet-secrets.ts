@@ -39,27 +39,24 @@ export function connectedWalletToStored(
 }
 
 export async function loadLightningConnectionsForWallet(params: {
-  password: string
   walletId: number
 }): Promise<ConnectedLightningWallet[]> {
-  const { password, walletId } = params
-  const payload = await loadWalletSecretsPayload(getDatabase(), password, walletId)
+  const { walletId } = params
+  const payload = await loadWalletSecretsPayload(getDatabase(), walletId)
   return payload.lightningNwcConnections.map((storedConnection) =>
     storedToConnected(walletId, storedConnection),
   )
 }
 
 export async function saveLightningConnectionsForWallet(params: {
-  password: string
   walletId: number
   connections: ConnectedLightningWallet[]
 }): Promise<void> {
-  const { password, walletId, connections } = params
+  const { walletId, connections } = params
   const nwcOnly = connections.filter((connection) => connection.walletId === walletId)
   await updateWalletSecretsPayloadWithRetry({
     walletDb: getDatabase(),
     walletId,
-    password,
     transform: async (payload): Promise<WalletSecretsPayload> => {
       const previousById = new Map(
         payload.lightningNwcConnections.map(

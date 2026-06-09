@@ -16,6 +16,7 @@ const mockZipWalletBackupForLocalExport = vi.hoisted(() => vi.fn())
 const mockLoadWalletSecrets = vi.hoisted(() => vi.fn())
 const mockEnsureMigrated = vi.hoisted(() => vi.fn())
 const mockGetDatabase = vi.hoisted(() => vi.fn())
+const mockLoadWalletSecretsWithPassword = vi.hoisted(() => vi.fn())
 
 const walletStoreState = vi.hoisted(() => ({ activeWalletId: 1 as number | null }))
 const walletsState = vi.hoisted(() => ({
@@ -44,7 +45,7 @@ vi.mock('@/db', () => ({
 }))
 
 vi.mock('@/db/wallet-persistence', () => ({
-  loadWalletSecrets: mockLoadWalletSecrets,
+  loadWalletSecretsWithPassword: mockLoadWalletSecretsWithPassword,
 }))
 
 vi.mock('@/db/database', () => ({
@@ -80,7 +81,7 @@ describe('useWalletBackupExport', () => {
     ]
     mockEnsureMigrated.mockResolvedValue(undefined)
     mockGetDatabase.mockReturnValue({})
-    mockLoadWalletSecrets.mockResolvedValue(undefined)
+    mockLoadWalletSecretsWithPassword.mockResolvedValue(undefined)
     mockSignWalletBackupManifest.mockResolvedValue('{"format_version":1}')
     mockZipWalletBackupForLocalExport.mockResolvedValue(new Blob(['zip']))
   })
@@ -110,7 +111,7 @@ describe('useWalletBackupExport', () => {
     })
 
     expect(compareResult).toEqual({ match: false, skipped: true })
-    expect(mockLoadWalletSecrets).not.toHaveBeenCalled()
+    expect(mockLoadWalletSecretsWithPassword).not.toHaveBeenCalled()
   })
 
   it('checkSigningPasswordMatchesAppPassword returns match when secrets load', async () => {
@@ -125,11 +126,11 @@ describe('useWalletBackupExport', () => {
 
     expect(compareResult).toEqual({ match: true, skipped: false })
     expect(mockEnsureMigrated).toHaveBeenCalled()
-    expect(mockLoadWalletSecrets).toHaveBeenCalledWith({}, 'correct', 1)
+    expect(mockLoadWalletSecretsWithPassword).toHaveBeenCalledWith({}, 'correct', 1)
   })
 
   it('checkSigningPasswordMatchesAppPassword returns mismatch on wrong password', async () => {
-    mockLoadWalletSecrets.mockRejectedValue(new Error('Wrong password'))
+    mockLoadWalletSecretsWithPassword.mockRejectedValue(new Error('Wrong password'))
     const { result } = renderHook(() => useWalletBackupExport())
 
     let compareResult: Awaited<

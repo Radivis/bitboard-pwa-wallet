@@ -14,7 +14,6 @@ async function ensureArkadeEncryptedPersistenceReady(): Promise<void> {
 }
 
 export async function findActiveArkadeConnectionSummary(params: {
-  password: string
   walletId: number
   networkMode: ArkadeSupportedNetworkMode
   encryptedPayload: EncryptedBlobForDb
@@ -24,7 +23,6 @@ export async function findActiveArkadeConnectionSummary(params: {
 }
 
 export async function listArkadeConnectionSummaries(params: {
-  password: string
   walletId: number
 }): Promise<ArkadeOperatorConnectionSummary[]> {
   await ensureArkadeEncryptedPersistenceReady()
@@ -32,7 +30,6 @@ export async function listArkadeConnectionSummaries(params: {
 }
 
 export async function ensureArkadeOperatorConnectionEncrypted(params: {
-  password: string
   walletId: number
   networkMode: ArkadeSupportedNetworkMode
   connectionId: string
@@ -46,7 +43,6 @@ export async function ensureArkadeOperatorConnectionEncrypted(params: {
 }
 
 export async function saveLastSuccessfulOperatorSyncAtEncrypted(params: {
-  password: string
   walletId: number
   connectionId: string
   lastSuccessfulOperatorSyncAt: string

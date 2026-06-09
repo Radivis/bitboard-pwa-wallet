@@ -20,8 +20,8 @@ describe('arkade-worker-encrypted-payload', () => {
   let encryptedRoundTripJson: string
 
   const secretsProxy = {
-    decrypt: async (_password: string, _blob: unknown) => storedPayloadJson,
-    encrypt: async (_password: string, plaintext: string) => {
+    decrypt: async (_blob: unknown) => storedPayloadJson,
+    encrypt: async (plaintext: string) => {
       encryptedRoundTripJson = plaintext
       return {
         ciphertext: new Uint8Array([1]),
@@ -55,7 +55,6 @@ describe('arkade-worker-encrypted-payload', () => {
     const summary = await ensureOperatorConnectionEncrypted(
       deps,
       {
-        password: 'pw',
         walletId: 1,
         networkMode: 'signet',
         connectionId: 'conn-1',
@@ -74,7 +73,6 @@ describe('arkade-worker-encrypted-payload', () => {
 
   it('updates operator sync timestamp without changing sdk blob', async () => {
     await ensureOperatorConnectionEncrypted(deps, {
-      password: 'pw',
       walletId: 1,
       networkMode: 'signet',
       connectionId: 'conn-1',
@@ -85,7 +83,6 @@ describe('arkade-worker-encrypted-payload', () => {
     })
 
     await updateOperatorSyncAtEncrypted(deps, {
-      password: 'pw',
       walletId: 1,
       connectionId: 'conn-1',
       lastSuccessfulOperatorSyncAt: '2020-01-03T00:00:00.000Z',
@@ -102,7 +99,6 @@ describe('arkade-worker-encrypted-payload', () => {
 
   it('persistSdkJsonToEncryptedPayload merges monotonic receive cursor', async () => {
     await ensureOperatorConnectionEncrypted(deps, {
-      password: 'pw',
       walletId: 1,
       networkMode: 'signet',
       connectionId: 'conn-1',
@@ -114,7 +110,6 @@ describe('arkade-worker-encrypted-payload', () => {
     })
 
     await persistSdkJsonToEncryptedPayload(deps, {
-      password: 'pw',
       walletId: 1,
       connectionId: 'conn-1',
       sdkPersistenceJson:

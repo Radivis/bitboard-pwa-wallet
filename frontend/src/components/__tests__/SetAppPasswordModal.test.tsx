@@ -17,10 +17,9 @@ vi.mock('@tanstack/react-router', async (importOriginal) => {
 
 import { SetAppPasswordModal } from '@/components/SetAppPasswordModal'
 
-const mockSetPassword = vi.fn()
-vi.mock('@/stores/sessionStore', () => ({
-  useSessionStore: (selector: (s: { setPassword: typeof mockSetPassword }) => unknown) =>
-    selector({ setPassword: mockSetPassword }),
+const mockBeginWalletSecretsSession = vi.fn().mockResolvedValue(undefined)
+vi.mock('@/lib/wallet/wallet-secrets-session', () => ({
+  beginWalletSecretsSession: (password: string) => mockBeginWalletSecretsSession(password),
 }))
 
 vi.mock('@/components/PasswordStrengthIndicator', () => ({
@@ -35,6 +34,7 @@ describe('SetAppPasswordModal', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockNavigate.mockClear()
+    mockBeginWalletSecretsSession.mockClear()
   })
 
   it('offers near-zero security mode opt-in', () => {
@@ -90,7 +90,7 @@ describe('SetAppPasswordModal', () => {
     expect(mockNavigate).toHaveBeenCalledWith({ to: '/setup' })
   })
 
-  it('submits matching passwords of at least 12 chars and sets session password', async () => {
+  it('submits matching passwords of at least 12 chars and starts wallet secrets session', async () => {
     const user = userEvent.setup()
     renderWithProviders(<SetAppPasswordModal open />)
 
@@ -98,6 +98,6 @@ describe('SetAppPasswordModal', () => {
     await user.type(screen.getByLabelText('Confirm password'), 'validpassword123')
     await user.click(screen.getByRole('button', { name: 'Continue' }))
 
-    expect(mockSetPassword).toHaveBeenCalledWith('validpassword123')
+    expect(mockBeginWalletSecretsSession).toHaveBeenCalledWith('validpassword123')
   })
 })

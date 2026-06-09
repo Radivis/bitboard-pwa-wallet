@@ -12,6 +12,7 @@ import { useLightningStore } from '@/stores/lightningStore';
 import { useSessionStore, clearAutoLockTimer } from '@/stores/sessionStore';
 import { awaitBackgroundArkadeOperatorSync } from '@/lib/arkade/arkade-operator-sync';
 import { closeArkadeSession } from '@/lib/arkade/arkade-session-service';
+import { endWalletSecretsSession } from '@/lib/wallet/wallet-secrets-session';
 import { getArkadeWorkerIfExists } from '@/workers/arkade-factory';
 import { resetSecretsChannel } from '@/workers/secrets-channel';
 import { awaitInFlightWalletSecretsWrites } from '@/db/wallet-secrets-write-tracker';
@@ -287,6 +288,7 @@ export const useCryptoStore = create<CryptoState>((set, get) => {
       removeOnchainDashboardQueries();
       await closeArkadeSession();
       terminateCryptoWorker();
+      await endWalletSecretsSession();
       resetSecretsChannel();
       useSessionStore.getState().clear();
       set({ _worker: null, error: null, workerHealth: 'initializing', workerError: null });

@@ -73,9 +73,8 @@ describe('Settings routes', () => {
       })
     })
 
-    it('network selector prompts to unlock when there is no session password and does not change network yet', async () => {
+    it('network selector prompts to unlock when wallet is locked and does not change network yet', async () => {
       walletStoreState.walletStatus = 'locked'
-      sessionStoreState.password = null
       const user = userEvent.setup()
       renderWithProviders(<SettingsMainPage />)
 
@@ -86,9 +85,8 @@ describe('Settings routes', () => {
       expect(mockSetNetworkMode).not.toHaveBeenCalled()
     })
 
-    it('network selector prompts to unlock when walletStatus is none after reload but session is missing', async () => {
+    it('network selector prompts to unlock when walletStatus is none after reload', async () => {
       walletStoreState.walletStatus = 'none'
-      sessionStoreState.password = null
       const user = userEvent.setup()
       renderWithProviders(<SettingsMainPage />)
 
@@ -175,7 +173,7 @@ describe('Settings routes', () => {
       mockWalletsState.data = [
         { walletId: 1, name: 'Test', createdAt: new Date().toISOString() },
       ]
-      sessionStoreState.password = 'testpass'
+      walletStoreState.walletStatus = 'unlocked'
       renderWithProviders(<SettingsMainPage />)
       expect(screen.getByText('Receiving descriptor')).toBeInTheDocument()
       await waitFor(() => {
@@ -188,11 +186,11 @@ describe('Settings routes', () => {
       expect(mockLoadWalletSecretsPayload).toHaveBeenCalled()
     })
 
-    it('shows unlock hint for receiving descriptor when session has no password', () => {
+    it('shows unlock hint for receiving descriptor when wallet is locked', () => {
       mockWalletsState.data = [
         { walletId: 1, name: 'Test', createdAt: new Date().toISOString() },
       ]
-      sessionStoreState.password = null
+      walletStoreState.walletStatus = 'locked'
       renderWithProviders(<SettingsMainPage />)
       expect(
         screen.getByText('Unlock your wallet to view the receiving descriptor.'),

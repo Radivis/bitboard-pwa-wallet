@@ -185,7 +185,6 @@ describe('openArkadeSessionForWallet (integration)', () => {
     const endpoints = getArkadeEndpoints('signet')
 
     await openArkadeSessionForWallet({
-      password: 'unlock-password',
       walletId: 7,
       networkMode: 'signet',
     })
@@ -195,7 +194,6 @@ describe('openArkadeSessionForWallet (integration)', () => {
     expect(ensureArkadeEncryptedSecretsHostMock).toHaveBeenCalledTimes(1)
     expect(workerMocks.openSession).toHaveBeenCalledWith(
       expect.objectContaining({
-        password: 'unlock-password',
         encryptedMnemonic,
         encryptedPayload,
         walletId: 7,
@@ -245,7 +243,6 @@ describe('openArkadeSessionForWallet (integration)', () => {
     })
 
     await openArkadeSessionForWallet({
-      password: 'unlock-password',
       walletId: 7,
       networkMode: 'signet',
     })
@@ -281,7 +278,6 @@ describe('openArkadeSessionForWallet (integration)', () => {
     featureState.isArkadeEnabled = false
 
     await openArkadeSessionForWallet({
-      password: 'unlock-password',
       walletId: 7,
       networkMode: 'signet',
     })
@@ -327,7 +323,6 @@ describe('openArkadeSessionForWallet (integration)', () => {
     )
 
     const openPromise = openArkadeSessionForWallet({
-      password: 'unlock-password',
       walletId: 7,
       networkMode: 'signet',
     })
@@ -351,7 +346,6 @@ describe('openArkadeSessionForWallet (integration)', () => {
 
     await expect(
       openArkadeSessionForWallet({
-        password: 'unlock-password',
         walletId: 7,
         networkMode: 'signet',
       }),
@@ -362,7 +356,6 @@ describe('openArkadeSessionForWallet (integration)', () => {
 
   it('reopens when session key matches but the worker was terminated', async () => {
     await openArkadeSessionForWallet({
-      password: 'unlock-password',
       walletId: 7,
       networkMode: 'signet',
     })
@@ -370,7 +363,6 @@ describe('openArkadeSessionForWallet (integration)', () => {
 
     getArkadeWorkerIfExistsMock.mockReturnValue(null)
     await openArkadeSessionForWallet({
-      password: 'unlock-password',
       walletId: 7,
       networkMode: 'signet',
     })
@@ -389,7 +381,6 @@ describe('openArkadeSessionForWallet (integration)', () => {
     })
 
     await openArkadeSessionForWallet({
-      password: 'unlock-password',
       walletId: 7,
       networkMode: 'signet',
     })
@@ -397,7 +388,6 @@ describe('openArkadeSessionForWallet (integration)', () => {
 
     workerMocks.hasOpenSession.mockResolvedValueOnce(false)
     await openArkadeSessionForWallet({
-      password: 'unlock-password',
       walletId: 7,
       networkMode: 'signet',
     })
@@ -417,12 +407,10 @@ describe('openArkadeSessionForWallet (integration)', () => {
     findActiveArkadeConnectionSummaryMock.mockResolvedValue(activeConnection)
 
     await openArkadeSessionForWallet({
-      password: 'unlock-password',
       walletId: 7,
       networkMode: 'signet',
     })
     await openArkadeSessionForWallet({
-      password: 'unlock-password',
       walletId: 7,
       networkMode: 'signet',
     })

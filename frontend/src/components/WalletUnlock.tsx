@@ -10,12 +10,15 @@ import { Label } from '@/components/ui/label'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { AppModal } from '@/components/AppModal'
 import { useWalletStore } from '@/stores/walletStore'
-import { useSessionStore } from '@/stores/sessionStore'
 import { useWallets } from '@/db'
 import {
   loadDescriptorWalletAndSync,
   loadDescriptorWalletWithoutSync,
 } from '@/lib/wallet/wallet-utils'
+import {
+  beginWalletSecretsSession,
+  endWalletSecretsSession,
+} from '@/lib/wallet/wallet-secrets-session'
 import { reportWalletSyncError } from '@/lib/wallet/wallet-sync-error-toast'
 import { toUserFriendlyWalletSecretsError } from '@/lib/wallet/wallet-secrets-error-messages'
 
@@ -45,7 +48,6 @@ export function WalletUnlock({
   const networkMode = useWalletStore((walletState) => walletState.networkMode)
   const addressType = useWalletStore((walletState) => walletState.addressType)
   const accountId = useWalletStore((walletState) => walletState.accountId)
-  const setSessionPassword = useSessionStore((sessionState) => sessionState.setPassword)
 
   const handleClose = () => {
     if (onDismiss) {
@@ -73,26 +75,29 @@ export function WalletUnlock({
       const { setManualWalletUnlockInFlight } = useWalletStore.getState()
       setManualWalletUnlockInFlight(true)
       try {
-        setSessionPassword(walletPassword)
-        if (networkMode === 'lab') {
-          await loadDescriptorWalletWithoutSync({
-            password: walletPassword,
-            walletId: activeWalletId,
-            networkMode,
-            addressType,
-            accountId,
-          })
-        } else {
-          await loadDescriptorWalletAndSync({
-            password: walletPassword,
-            walletId: activeWalletId,
-            networkMode,
-            addressType,
-            accountId,
-            awaitSync: false,
-            onSyncError: (err) =>
-              reportWalletSyncError('unlock-background-sync', err),
-          })
+        await beginWalletSecretsSession(walletPassword)
+        try {
+          if (networkMode === 'lab') {
+            await loadDescriptorWalletWithoutSync({
+              walletId: activeWalletId,
+              networkMode,
+              addressType,
+              accountId,
+            })
+          } else {
+            await loadDescriptorWalletAndSync({
+              walletId: activeWalletId,
+              networkMode,
+              addressType,
+              accountId,
+              awaitSync: false,
+              onSyncError: (err) =>
+                reportWalletSyncError('unlock-background-sync', err),
+            })
+          }
+        } catch (err) {
+          await endWalletSecretsSession()
+          throw err
         }
       } finally {
         setManualWalletUnlockInFlight(false)
