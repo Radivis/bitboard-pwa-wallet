@@ -16,6 +16,7 @@ mod persistence_tests;
 mod receive_address_tests;
 
 use std::cell::RefCell;
+use std::future::Future;
 use std::rc::Rc;
 
 use serde::Deserialize;
@@ -59,6 +60,24 @@ where
 {
     let session = active_session_rc()?;
     callback(session.as_ref())
+}
+
+async fn with_session_async<F, Fut, R>(run: F) -> ArkResult<R>
+where
+    F: FnOnce(Rc<ArkSession>) -> Fut,
+    Fut: Future<Output = ArkResult<R>>,
+{
+    let session = active_session_rc()?;
+    run(session).await
+}
+
+async fn export_session_json<T, F, Fut>(run: F) -> ArkResult<JsValue>
+where
+    T: serde::Serialize,
+    F: FnOnce(Rc<ArkSession>) -> Fut,
+    Fut: Future<Output = ArkResult<T>>,
+{
+    to_js_value(with_session_async(run).await?)
 }
 
 fn clear_active_session() -> ArkResult<()> {
@@ -141,8 +160,7 @@ pub fn ark_operator_signer_pk_hex() -> Result<String, JsValue> {
 #[wasm_bindgen]
 pub async fn ark_sync_with_operator() -> Result<(), JsValue> {
     map_js_async(async {
-        active_session_rc()?.sync_with_operator().await?;
-        Ok(())
+        with_session_async(|session| async move { session.sync_with_operator().await }).await
     })
     .await
 }
@@ -169,8 +187,7 @@ fn ark_export_persistence_json_internal() -> ArkResult<String> {
 #[wasm_bindgen]
 pub async fn ark_get_balance() -> Result<JsValue, JsValue> {
     map_js_async(async {
-        let session = active_session_rc()?;
-        to_js_value(session.balance().await?)
+        export_session_json(|session| async move { session.balance().await }).await
     })
     .await
 }
@@ -194,75 +211,107 @@ pub fn ark_get_boarding_address() -> Result<String, JsValue> {
 
 #[wasm_bindgen]
 pub async fn ark_get_boarding_status() -> Result<JsValue, JsValue> {
-    map_js_async(async { to_js_value(active_session_rc()?.boarding_status().await?) }).await
+    map_js_async(async {
+        export_session_json(|session| async move { session.boarding_status().await }).await
+    })
+    .await
 }
 
 #[wasm_bindgen]
 pub async fn ark_send_payment(params: JsValue) -> Result<String, JsValue> {
     map_js_async(async {
         let params: SendPaymentParams = serde_wasm_bindgen::from_value(params)?;
-        active_session_rc()?.send_payment(params).await
+        with_session_async(|session| async move { session.send_payment(params).await }).await
     })
     .await
 }
 
 #[wasm_bindgen]
 pub async fn ark_get_transaction_history() -> Result<JsValue, JsValue> {
-    map_js_async(async { to_js_value(active_session_rc()?.transaction_history().await?) }).await
+    map_js_async(async {
+        export_session_json(|session| async move { session.transaction_history().await }).await
+    })
+    .await
 }
 
 #[wasm_bindgen]
 pub async fn ark_get_delegate_info() -> Result<JsValue, JsValue> {
-    map_js_async(async { to_js_value(active_session_rc()?.delegate_info().await?) }).await
+    map_js_async(async {
+        export_session_json(|session| async move { session.delegate_info().await }).await
+    })
+    .await
 }
 
 #[wasm_bindgen]
 pub async fn ark_get_expiring_vtxo_count() -> Result<u32, JsValue> {
-    map_js_async(async { active_session_rc()?.expiring_vtxo_count().await }).await
+    map_js_async(async {
+        with_session_async(|session| async move { session.expiring_vtxo_count().await }).await
+    })
+    .await
 }
 
 #[wasm_bindgen]
 pub async fn ark_get_vtxo_expiry_status() -> Result<JsValue, JsValue> {
-    map_js_async(async { to_js_value(active_session_rc()?.vtxo_expiry_status().await?) }).await
+    map_js_async(async {
+        export_session_json(|session| async move { session.vtxo_expiry_status().await }).await
+    })
+    .await
 }
 
 #[wasm_bindgen]
 pub async fn ark_renew_vtxos_now() -> Result<Option<String>, JsValue> {
-    map_js_async(async { active_session_rc()?.renew_vtxos_now().await }).await
+    map_js_async(async {
+        with_session_async(|session| async move { session.renew_vtxos_now().await }).await
+    })
+    .await
 }
 
 #[wasm_bindgen]
 pub async fn ark_delegate_spendable_vtxos() -> Result<JsValue, JsValue> {
-    map_js_async(async { to_js_value(active_session_rc()?.delegate_spendable_vtxos().await?) })
-        .await
+    map_js_async(async {
+        export_session_json(|session| async move { session.delegate_spendable_vtxos().await }).await
+    })
+    .await
 }
 
 #[wasm_bindgen]
 pub async fn ark_finalize_pending_transactions() -> Result<JsValue, JsValue> {
-    map_js_async(async { to_js_value(active_session_rc()?.finalize_pending_transactions().await?) })
-        .await
+    map_js_async(async {
+        export_session_json(|session| async move { session.finalize_pending_transactions().await })
+            .await
+    })
+    .await
 }
 
 #[wasm_bindgen]
 pub async fn ark_onboard_boarded_utxos() -> Result<Option<String>, JsValue> {
-    map_js_async(async { active_session_rc()?.onboard_boarded_utxos().await }).await
+    map_js_async(async {
+        with_session_async(|session| async move { session.onboard_boarded_utxos().await }).await
+    })
+    .await
 }
 
 #[wasm_bindgen]
 pub async fn ark_list_exit_candidates() -> Result<JsValue, JsValue> {
-    map_js_async(async { to_js_value(active_session_rc()?.list_exit_candidates().await?) }).await
+    map_js_async(async {
+        export_session_json(|session| async move { session.list_exit_candidates().await }).await
+    })
+    .await
 }
 
 #[wasm_bindgen]
 pub async fn ark_get_onchain_bumper_info() -> Result<JsValue, JsValue> {
-    map_js_async(async { to_js_value(active_session_rc()?.onchain_bumper_info().await?) }).await
+    map_js_async(async {
+        export_session_json(|session| async move { session.onchain_bumper_info().await }).await
+    })
+    .await
 }
 
 #[wasm_bindgen]
 pub async fn ark_collaborative_exit(params: JsValue) -> Result<String, JsValue> {
     map_js_async(async {
         let params: CollaborativeExitParams = serde_wasm_bindgen::from_value(params)?;
-        active_session_rc()?.collaborative_exit(params).await
+        with_session_async(|session| async move { session.collaborative_exit(params).await }).await
     })
     .await
 }
@@ -278,11 +327,12 @@ pub async fn ark_get_collaborative_exit_fee_estimate(params: JsValue) -> Result<
             amount_sats: Option<u64>,
         }
         let params: Params = serde_wasm_bindgen::from_value(params)?;
-        to_js_value(
-            active_session_rc()?
+        export_session_json(|session| async move {
+            session
                 .collaborative_exit_fee_estimate(&params.destination_address, params.amount_sats)
-                .await?,
-        )
+                .await
+        })
+        .await
     })
     .await
 }
@@ -291,11 +341,8 @@ pub async fn ark_get_collaborative_exit_fee_estimate(params: JsValue) -> Result<
 pub async fn ark_estimate_unilateral_exit(params: JsValue) -> Result<JsValue, JsValue> {
     map_js_async(async {
         let params: UnilateralExitFeeParams = serde_wasm_bindgen::from_value(params)?;
-        to_js_value(
-            active_session_rc()?
-                .estimate_unilateral_exit(params)
-                .await?,
-        )
+        export_session_json(|session| async move { session.estimate_unilateral_exit(params).await })
+            .await
     })
     .await
 }
@@ -307,14 +354,16 @@ pub async fn ark_run_unilateral_unroll(
     on_progress: js_sys::Function,
 ) -> Result<JsValue, JsValue> {
     map_js_async(async {
-        let result = active_session_rc()?
-            .run_unilateral_unroll(&txid, vout, |event| {
-                if let Ok(value) = serde_wasm_bindgen::to_value(&event) {
-                    let _ = on_progress.call1(&JsValue::NULL, &value);
-                }
-            })
-            .await?;
-        to_js_value(result)
+        export_session_json(|session| async move {
+            session
+                .run_unilateral_unroll(&txid, vout, |event| {
+                    if let Ok(value) = serde_wasm_bindgen::to_value(&event) {
+                        let _ = on_progress.call1(&JsValue::NULL, &value);
+                    }
+                })
+                .await
+        })
+        .await
     })
     .await
 }
@@ -323,7 +372,8 @@ pub async fn ark_run_unilateral_unroll(
 pub async fn ark_complete_unilateral_exit(params: JsValue) -> Result<String, JsValue> {
     map_js_async(async {
         let params: CompleteUnilateralExitParams = serde_wasm_bindgen::from_value(params)?;
-        active_session_rc()?.complete_unilateral_exit(params).await
+        with_session_async(|session| async move { session.complete_unilateral_exit(params).await })
+            .await
     })
     .await
 }

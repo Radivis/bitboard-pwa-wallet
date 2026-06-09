@@ -232,9 +232,7 @@ impl ArkSession {
             .list_vtxos()
             .await
             .map_err(|error| ArkWasmError::Message(error.to_string()))?;
-        let target_txid = txid
-            .parse()
-            .map_err(|error| ArkWasmError::Message(format!("invalid txid: {error}")))?;
+        let target_txid = parse_outpoint(txid, vout)?.txid;
         let amount = vtxo_list
             .all()
             .find(|vtp| vtp.outpoint.txid == target_txid && vtp.outpoint.vout == vout)
@@ -639,13 +637,7 @@ impl ArkSession {
         &self,
         params: UnilateralExitFeeParams,
     ) -> ArkResult<UnilateralExitFeeEstimateDto> {
-        let outpoint = OutPoint {
-            txid: params
-                .txid
-                .parse()
-                .map_err(|error| ArkWasmError::Message(format!("invalid txid: {error}")))?,
-            vout: params.vout,
-        };
+        let outpoint = parse_outpoint(&params.txid, params.vout)?;
 
         let fee_rate = self.client.blockchain().get_fee_rate().await.unwrap_or(1.0);
         let fee_rate_sat_per_vb = fee_rate.max(1.0).ceil() as u64;
@@ -703,12 +695,7 @@ impl ArkSession {
     where
         F: Fn(UnrollProgressEvent),
     {
-        let target = OutPoint {
-            txid: txid
-                .parse()
-                .map_err(|error| ArkWasmError::Message(format!("invalid txid: {error}")))?,
-            vout,
-        };
+        let target = parse_outpoint(txid, vout)?;
 
         let amount_sats = self.vtxo_amount_sats_for_outpoint(txid, vout).await?;
         let mut pending_unilateral_exit_recorded = false;
@@ -930,6 +917,21 @@ fn parse_onchain_address(value: &str, network: Network) -> ArkResult<Address> {
         .map_err(|error| ArkWasmError::Message(error.to_string()))
 }
 
+fn parse_outpoint(txid: &str, vout: u32) -> ArkResult<OutPoint> {
+    let txid = txid
+        .parse()
+        .map_err(|error| ArkWasmError::Message(format!("invalid txid: {error}")))?;
+    Ok(OutPoint { txid, vout })
+}
+
+fn payment_direction_and_amount_sats(signed_amount_sats: i64) -> (&'static str, u64) {
+    if signed_amount_sats >= 0 {
+        ("incoming", signed_amount_sats as u64)
+    } else {
+        ("outgoing", signed_amount_sats.unsigned_abs())
+    }
+}
+
 fn map_intent_fee_configured(
     intent_fee: &ark_core::server::IntentFeeInfo,
 ) -> IntentFeeConfiguredDto {
@@ -968,14 +970,10 @@ fn map_history_row(transaction: Transaction) -> Option<PaymentRowDto> {
             amount,
             created_at,
         } => {
-            let signed = amount.to_sat();
+            let (direction, amount_sats) = payment_direction_and_amount_sats(amount.to_sat());
             Some(PaymentRowDto {
-                direction: if signed >= 0 {
-                    "incoming".to_string()
-                } else {
-                    "outgoing".to_string()
-                },
-                amount_sats: signed.unsigned_abs(),
+                direction: direction.to_string(),
+                amount_sats,
                 timestamp: created_at,
                 txid: txid.to_string(),
                 memo: None,
@@ -987,14 +985,10 @@ fn map_history_row(transaction: Transaction) -> Option<PaymentRowDto> {
             created_at,
             ..
         } => {
-            let signed = amount.to_sat();
+            let (direction, amount_sats) = payment_direction_and_amount_sats(amount.to_sat());
             Some(PaymentRowDto {
-                direction: if signed >= 0 {
-                    "incoming".to_string()
-                } else {
-                    "outgoing".to_string()
-                },
-                amount_sats: signed.unsigned_abs(),
+                direction: direction.to_string(),
+                amount_sats,
                 timestamp: created_at,
                 txid: txid.to_string(),
                 memo: None,
