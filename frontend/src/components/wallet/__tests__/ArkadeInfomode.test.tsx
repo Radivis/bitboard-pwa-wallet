@@ -39,6 +39,13 @@ vi.mock('@/hooks/useArkadeQueries', () => ({
   useArkadeAddressQuery: () => addressQueryMock(),
   useArkadeDelegateInfoQuery: () => ({ data: { fee: '10' } }),
   useArkadeRenewMutation: () => ({ mutate: vi.fn(), isPending: false }),
+  useArkadeVtxoExpiryQuery: () => ({
+    isLoading: false,
+    data: {
+      earliestExpiresAt: Math.floor(Date.now() / 1000) + 86_400,
+      expiringSoonCount: 0,
+    },
+  }),
   useArkadeNewAddressMutation: () => ({ mutate: vi.fn(), isPending: false }),
   useArkadeExitCandidatesQuery: () => ({ data: [], isLoading: false }),
   useArkadeBumperInfoQuery: () => ({ data: null, isLoading: false }),

@@ -46,6 +46,10 @@ vi.mock('@/hooks/useArkadeQueries', () => ({
   useArkadeAddressQuery: () => ({ data: 'tark1qtest', isLoading: false }),
   useArkadeDelegateInfoQuery: () => ({ data: null }),
   useArkadeRenewMutation: () => ({ mutate: vi.fn(), isPending: false }),
+  useArkadeVtxoExpiryQuery: () => ({
+    isLoading: false,
+    data: { earliestExpiresAt: null, expiringSoonCount: 0 },
+  }),
 }))
 
 vi.mock('@/components/wallet/ArkadeExitSection', () => ({

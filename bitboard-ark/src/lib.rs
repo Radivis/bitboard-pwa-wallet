@@ -222,6 +222,11 @@ pub async fn ark_get_expiring_vtxo_count() -> Result<u32, JsValue> {
 }
 
 #[wasm_bindgen]
+pub async fn ark_get_vtxo_expiry_status() -> Result<JsValue, JsValue> {
+    map_js_async(async { to_js_value(active_session_rc()?.vtxo_expiry_status().await?) }).await
+}
+
+#[wasm_bindgen]
 pub async fn ark_renew_vtxos_now() -> Result<Option<String>, JsValue> {
     map_js_async(async { active_session_rc()?.renew_vtxos_now().await }).await
 }

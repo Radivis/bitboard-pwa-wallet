@@ -25,6 +25,15 @@ pub struct BalanceDto {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct VtxoExpiryStatusDto {
+    /// Unix seconds; earliest `expires_at` among unspent VTXOs still on the offchain path.
+    pub earliest_expires_at: Option<i64>,
+    /// Count of VTXOs in the renewal window (same threshold as manual renew).
+    pub expiring_soon_count: u32,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct DelegateInfoDto {
     pub pubkey: String,
     pub fee: u64,

@@ -14,6 +14,7 @@ import {
   arkadeExitCandidatesQueryKey,
   arkadeHistoryQueryKey,
   arkadeUnilateralExitFeeQueryKey,
+  arkadeVtxoExpiryQueryKey,
 } from '@/lib/arkade/arkade-query-keys'
 import type {
   ArkadeBalanceInfo,
@@ -182,6 +183,9 @@ async function invalidateArkadeWalletDataQueries(
     queryClient.invalidateQueries({
       queryKey: arkadeBumperInfoQueryKey(walletId, networkMode, connectionId),
     }),
+    queryClient.invalidateQueries({
+      queryKey: arkadeVtxoExpiryQueryKey(walletId, networkMode, connectionId),
+    }),
   ])
 }
 
@@ -342,6 +346,28 @@ export function useArkadeDelegateInfoQuery() {
   })
 }
 
+export function useArkadeVtxoExpiryQuery() {
+  const { networkMode, activeWalletId, activeArkadeConnectionId, sessionReady } =
+    useArkadeQueryBase()
+
+  return useQuery({
+    queryKey: walletScopedQueryKey(
+      activeWalletId,
+      networkMode,
+      activeArkadeConnectionId,
+      arkadeVtxoExpiryQueryKey,
+      'vtxo-expiry',
+    ),
+    enabled: sessionReady,
+    queryFn: async () => {
+      await ensureArkadeSessionOpenForActiveWallet()
+      scheduleBackgroundArkadeOperatorSync()
+      return getArkadeWorker().getVtxoExpiryStatus()
+    },
+    ...arkadeDashboardWalletDataQueryOptions,
+  })
+}
+
 export function useArkadeSendMutation() {
   const queryClient = useQueryClient()
   const { networkMode, activeWalletId, activeArkadeConnectionId, password } =
@@ -397,13 +423,22 @@ export function useArkadeRenewMutation() {
         activeArkadeConnectionId != null &&
         isArkadeSupportedNetworkMode(networkMode)
       ) {
-        void queryClient.invalidateQueries({
-          queryKey: arkadeBalanceQueryKey(
-            activeWalletId,
-            networkMode,
-            activeArkadeConnectionId,
-          ),
-        })
+        void Promise.all([
+          queryClient.invalidateQueries({
+            queryKey: arkadeBalanceQueryKey(
+              activeWalletId,
+              networkMode,
+              activeArkadeConnectionId,
+            ),
+          }),
+          queryClient.invalidateQueries({
+            queryKey: arkadeVtxoExpiryQueryKey(
+              activeWalletId,
+              networkMode,
+              activeArkadeConnectionId,
+            ),
+          }),
+        ])
       }
     },
     onError: (err) => {

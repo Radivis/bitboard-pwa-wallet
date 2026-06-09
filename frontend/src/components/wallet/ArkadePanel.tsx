@@ -24,6 +24,7 @@ import {
 import { isArkadeActiveForNetworkMode } from '@/lib/arkade/arkade-utils'
 import { useWalletStore } from '@/stores/walletStore'
 import { ArkadeExitSection } from '@/components/wallet/ArkadeExitSection'
+import { ArkadeVtxoExpiryIndicator } from '@/components/wallet/ArkadeVtxoExpiryIndicator'
 
 export function ArkadePanel() {
   const networkMode = useWalletStore((s) => s.networkMode)
@@ -73,9 +74,10 @@ export function ArkadePanel() {
             Loading Arkade balance…
           </div>
         ) : balance ? (
-          <div>
+          <div className="space-y-1">
             <p className="text-xs text-muted-foreground">Balance</p>
             <ArkadeBalanceBreakdown balance={balance} />
+            <ArkadeVtxoExpiryIndicator />
           </div>
         ) : null}
 

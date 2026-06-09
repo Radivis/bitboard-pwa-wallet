@@ -27,7 +27,7 @@ use crate::api_types::{
     CompleteUnilateralExitParams, DelegateInfoDto, DelegateSpendableResult, ExitCandidateRow,
     FinalizePendingResult, IntentFeeConfiguredDto, OnchainBumperInfoDto, PaymentRowDto,
     SendPaymentParams, UnilateralExitFeeEstimateDto, UnilateralExitFeeParams, UnrollProgressEvent,
-    UnrollResult,
+    UnrollResult, VtxoExpiryStatusDto,
 };
 use crate::balance_display::{ArkadeBalanceInputs, build_arkade_balance_dto};
 use crate::error::{ArkResult, ArkWasmError};
@@ -416,6 +416,21 @@ impl ArkSession {
 
     pub async fn expiring_vtxo_count(&self) -> ArkResult<u32> {
         Ok(self.expiring_outpoints().await?.len() as u32)
+    }
+
+    pub async fn vtxo_expiry_status(&self) -> ArkResult<VtxoExpiryStatusDto> {
+        let (vtxo_list, _) = self.client.list_vtxos().await?;
+        let now = current_unix_timestamp();
+        let earliest_expires_at = vtxo_list
+            .all_unspent()
+            .filter(|vtp| vtp.created_at > 0 && vtp.expires_at > now)
+            .map(|vtp| vtp.expires_at)
+            .min();
+        let expiring_soon_count = self.expiring_vtxo_count().await?;
+        Ok(VtxoExpiryStatusDto {
+            earliest_expires_at,
+            expiring_soon_count,
+        })
     }
 
     pub async fn renew_vtxos_now(&self) -> ArkResult<Option<String>> {

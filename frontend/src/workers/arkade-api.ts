@@ -16,6 +16,12 @@ export interface ArkadeDelegateInfo {
   delegatorAddress: string
 }
 
+export interface ArkadeVtxoExpiryStatus {
+  /** Unix seconds; earliest expiry among active unspent VTXOs. */
+  earliestExpiresAt: number | null
+  expiringSoonCount: number
+}
+
 export interface ArkadePaymentRow {
   direction: 'incoming' | 'outgoing'
   amountSats: number
@@ -148,6 +154,7 @@ export interface ArkadeService {
   getTransactionHistory(): Promise<ArkadePaymentRow[]>
   getDelegateInfo(): Promise<ArkadeDelegateInfo>
   getExpiringVtxoCount(): Promise<number>
+  getVtxoExpiryStatus(): Promise<ArkadeVtxoExpiryStatus>
   renewVtxosNow(): Promise<string | null>
   delegateSpendableVtxos(): Promise<{ delegated: number; failed: number }>
   finalizePendingTransactions(): Promise<{ finalized: number; pending: number }>

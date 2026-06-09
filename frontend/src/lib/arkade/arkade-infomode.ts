@@ -9,6 +9,7 @@ export const ARKADE_INFOMODE_IDS = {
   managementPanel: 'arkade-management-panel',
   delegatorFee: 'arkade-delegator-fee',
   renewVtxos: 'arkade-renew-vtxos',
+  vtxoExpiryIndicator: 'arkade-vtxo-expiry-indicator',
   boardFromOnchain: 'arkade-board-from-onchain',
   boardFlow: 'arkade-board-flow',
   learnAboutExits: 'arkade-learn-about-exits',
@@ -75,6 +76,11 @@ export const ARKADE_DELEGATOR_FEE_INFOMODE = {
 export const ARKADE_RENEW_VTXOS_INFOMODE = {
   title: 'Renew VTXOs now',
   text: 'Each virtual balance unit (VTXO) must be renewed before it expires, or it falls back to a slower on-chain path. Use this while unlocked if you want to renew manually instead of relying on the delegator.',
+} as const
+
+export const ARKADE_VTXO_EXPIRY_INDICATOR_INFOMODE = {
+  title: 'VTXO expiry',
+  text: 'Each offchain virtual balance unit (VTXO) has an expiry time. Renew before then to stay on the fast Arkade path. The date shown is the soonest expiry among your current VTXOs. Amber text means some are already in the renewal window.',
 } as const
 
 export const ARKADE_BOARDING_ADDRESS_INFOMODE = {

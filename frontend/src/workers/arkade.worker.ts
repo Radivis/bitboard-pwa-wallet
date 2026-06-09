@@ -29,6 +29,7 @@ import type {
   ArkadeUnilateralExitFeeEstimate,
   ArkadeUnilateralExitFeeEstimateParams,
   ArkadeUnrollProgressEvent,
+  ArkadeVtxoExpiryStatus,
   OpenArkadeSessionParams,
 } from '@/workers/arkade-api'
 
@@ -360,6 +361,11 @@ const arkadeService: ArkadeService = {
 
   async getExpiringVtxoCount(): Promise<number> {
     return invokeWasmArk((wasmModule) => wasmModule.ark_get_expiring_vtxo_count())
+  },
+
+  async getVtxoExpiryStatus(): Promise<ArkadeVtxoExpiryStatus> {
+    const result = await invokeWasmArk((wasmModule) => wasmModule.ark_get_vtxo_expiry_status())
+    return result as ArkadeVtxoExpiryStatus
   },
 
   async renewVtxosNow(): Promise<string | null> {
