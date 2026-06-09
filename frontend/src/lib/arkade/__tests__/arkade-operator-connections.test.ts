@@ -4,7 +4,7 @@ import {
   buildDefaultArkadeOperatorConnection,
   defaultArkadeOperatorLabel,
   findActiveArkadeOperatorConnection,
-} from '@/lib/arkade/arkade-operator-connections'
+} from '@/lib/arkade/arkade-payload-merge'
 import type { WalletSecretsPayload } from '@/lib/wallet/wallet-domain-types'
 
 const basePayload = (): WalletSecretsPayload => ({

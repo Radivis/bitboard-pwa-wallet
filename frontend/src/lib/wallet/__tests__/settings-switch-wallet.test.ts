@@ -187,7 +187,6 @@ describe('switchDescriptorWallet', () => {
     expect(mockSyncLoadedDescriptorWalletWithEsplora).toHaveBeenCalledWith({
       networkMode: 'testnet',
       activeWalletId: 1,
-      sessionPassword: 'pw',
       targetNetwork: 'testnet',
       targetAddressType: 'taproot',
       targetAccountId: 0,

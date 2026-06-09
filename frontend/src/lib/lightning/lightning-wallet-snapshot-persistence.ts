@@ -83,31 +83,27 @@ export function applyNwcSnapshotPatchesToPayload(
  * Applies snapshot patches in one decrypt + encrypt cycle.
  */
 export async function batchApplyNwcSnapshotPatches(params: {
-  password: string
   walletId: number
   patches: NwcSnapshotPatch[]
 }): Promise<void> {
-  const { password, walletId, patches } = params
+  const { walletId, patches } = params
   if (patches.length === 0) return
 
   await updateWalletSecretsPayloadWithRetry({
     walletDb: getDatabase(),
     walletId,
-    password,
     transform: async (payload) =>
       applyNwcSnapshotPatchesToPayload(payload, patches),
   })
 }
 
 export async function loadNwcSnapshotForConnection(params: {
-  password: string
   walletId: number
   connectionId: string
 }): Promise<NwcConnectionSnapshot | undefined> {
-  const { password, walletId, connectionId } = params
+  const { walletId, connectionId } = params
   const payload = await loadWalletSecretsPayload(
     getDatabase(),
-    password,
     walletId,
   )
   const nwcConnection = payload.lightningNwcConnections.find(

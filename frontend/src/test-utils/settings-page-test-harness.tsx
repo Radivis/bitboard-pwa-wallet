@@ -74,11 +74,8 @@ export const mockSetAddressType = vi.fn()
 export const mockSetCurrentAddress = vi.fn()
 export const mockCommitLoadedDescriptorWallet = vi.fn()
 
-export const mockSetSessionPassword = vi.fn()
 export const sessionStoreState = {
-  password: 'testpass' as string | null,
   clear: mockClearSession,
-  setPassword: mockSetSessionPassword,
 }
 
 export const nearZeroSecurityState = { active: false }
@@ -423,7 +420,6 @@ export function resetSettingsPageTestState(): void {
   featureStoreState.isArkadeEnabled = false
   nearZeroSecurityState.active = false
   mockWalletsState.data = []
-  sessionStoreState.password = 'testpass'
   walletStoreState = createDefaultWalletStoreState()
 }
 

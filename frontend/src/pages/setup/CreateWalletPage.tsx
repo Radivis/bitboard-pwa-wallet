@@ -12,11 +12,12 @@ import { AppModal } from '@/components/AppModal'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { MnemonicGrid } from '@/components/MnemonicGrid'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
+import { ConfirmAppPasswordModal } from '@/components/ConfirmAppPasswordModal'
 import { SetAppPasswordModal } from '@/components/SetAppPasswordModal'
 import { WalletUnlock } from '@/components/WalletUnlock'
 import { useCryptoStore } from '@/stores/cryptoStore'
 import { useWalletStore } from '@/stores/walletStore'
-import { useSessionStore, startAutoLockTimer } from '@/stores/sessionStore'
+import { startAutoLockTimer } from '@/stores/sessionStore'
 import {
   useAddWallet,
   getDatabase,
@@ -29,6 +30,11 @@ import {
 import { ensureSecretsChannel } from '@/workers/secrets-channel'
 import { toBitcoinNetwork } from '@/lib/wallet/bitcoin-utils'
 import { invalidateWalletRelatedQueriesAndNotifyOtherTabs } from '@/lib/wallet/wallet-query-cache-sync'
+import { useSetupAppPasswordGateReady } from '@/hooks/useSetupAppPasswordGateReady'
+import {
+  ensureWalletSecretsSession,
+  isWalletSecretsSessionActive,
+} from '@/lib/wallet/wallet-secrets-session'
 
 type Step = 1 | 2 | 3
 
@@ -48,9 +54,13 @@ export function CreateWalletPage() {
   const [mnemonicForBackup, setMnemonicForBackup] = useState('')
   const [pendingCreate, setPendingCreate] = useState<CreateWalletPending | null>(null)
   const [verificationWords, setVerificationWords] = useState<Record<number, string>>({})
+  const [confirmPasswordOpen, setConfirmPasswordOpen] = useState(false)
+  const [pendingCreateAction, setPendingCreateAction] = useState<
+    'generate' | 'quickCreate' | null
+  >(null)
 
   const { data: wallets, isLoading: walletsLoading } = useWallets()
-  const sessionPassword = useSessionStore((sessionState) => sessionState.password)
+  const walletStatus = useWalletStore((walletState) => walletState.walletStatus)
 
   const createWalletAndEncryptSecrets = useCryptoStore((cryptoState) => cryptoState.createWalletAndEncryptSecrets)
   const networkMode = useWalletStore((walletState) => walletState.networkMode)
@@ -87,6 +97,8 @@ export function CreateWalletPage() {
   }, [verificationIndices, verificationWords, words])
 
   const queryClient = useQueryClient()
+  const { appPasswordReady, walletUnlockedOrSyncing, onAppPasswordSessionStarted } =
+    useSetupAppPasswordGateReady(walletStatus)
 
   const persistAndActivateNewWallet = useCallback(
     async ({
@@ -152,13 +164,11 @@ export function CreateWalletPage() {
     ],
   )
 
-  const runCreateWalletAndEncryptSecrets = useCallback(async () => {
-    const password = useSessionStore.getState().password
-    if (!password) throw new Error('App password required')
+  const runCreateWalletAndEncryptSecrets = useCallback(async (appPassword?: string) => {
+    await ensureWalletSecretsSession(appPassword)
     await ensureSecretsChannel()
     const network = toBitcoinNetwork(networkMode)
     return createWalletAndEncryptSecrets({
-      password,
       network,
       addressType,
       accountId,
@@ -195,8 +205,8 @@ export function CreateWalletPage() {
   const [skipBackupWarningOpen, setSkipBackupWarningOpen] = useState(false)
 
   const quickCreateWalletMutation = useMutation({
-    mutationFn: async () => {
-      const createWalletOutcome = await runCreateWalletAndEncryptSecrets()
+    mutationFn: async (appPassword?: string) => {
+      const createWalletOutcome = await runCreateWalletAndEncryptSecrets(appPassword)
       await persistAndActivateNewWallet({
         encryptedBlobs: {
           payload: createWalletOutcome.encryptedPayload,
@@ -217,6 +227,22 @@ export function CreateWalletPage() {
       )
     },
   })
+
+  const requestAppPasswordForCreate = useCallback(
+    async (action: 'generate' | 'quickCreate') => {
+      if (await isWalletSecretsSessionActive()) {
+        if (action === 'generate') {
+          createWalletMutation.mutate(undefined)
+        } else {
+          quickCreateWalletMutation.mutate(undefined)
+        }
+        return
+      }
+      setPendingCreateAction(action)
+      setConfirmPasswordOpen(true)
+    },
+    [createWalletMutation, quickCreateWalletMutation],
+  )
 
   const finishCreateMutation = useMutation({
     mutationFn: async () => {
@@ -251,12 +277,28 @@ export function CreateWalletPage() {
 
   const hasWallets = (wallets?.length ?? 0) > 0
 
-  if (hasWallets && !sessionPassword) {
+  if (hasWallets && !walletUnlockedOrSyncing) {
     return <WalletUnlock variant="setup" />
   }
 
-  if (!hasWallets && !sessionPassword) {
-    return <SetAppPasswordModal open />
+  if (!hasWallets && !appPasswordReady) {
+    return (
+      <SetAppPasswordModal
+        open
+        onSessionStarted={onAppPasswordSessionStarted}
+      />
+    )
+  }
+
+  const handleConfirmAppPassword = (appPassword: string) => {
+    setConfirmPasswordOpen(false)
+    const action = pendingCreateAction
+    setPendingCreateAction(null)
+    if (action === 'quickCreate') {
+      quickCreateWalletMutation.mutate(appPassword)
+      return
+    }
+    createWalletMutation.mutate(appPassword)
   }
 
   return (
@@ -281,7 +323,7 @@ export function CreateWalletPage() {
             loading={
               createWalletMutation.isPending || quickCreateWalletMutation.isPending
             }
-            onSubmit={() => createWalletMutation.mutate()}
+            onSubmit={() => void requestAppPasswordForCreate('generate')}
             onOpenSkipBackupWarning={() => setSkipBackupWarningOpen(true)}
           />
           <AppModal
@@ -299,7 +341,7 @@ export function CreateWalletPage() {
                   type="button"
                   variant="destructive"
                   disabled={quickCreateWalletMutation.isPending}
-                  onClick={() => quickCreateWalletMutation.mutate()}
+                  onClick={() => void requestAppPasswordForCreate('quickCreate')}
                 >
                   Understood! Proceed!
                 </Button>
@@ -331,6 +373,21 @@ export function CreateWalletPage() {
       {step === 2 && (
         <StepBackup words={words} onContinue={() => setStep(3)} />
       )}
+
+      <ConfirmAppPasswordModal
+        open={confirmPasswordOpen}
+        onOpenChange={setConfirmPasswordOpen}
+        onCancel={() => {
+          setConfirmPasswordOpen(false)
+          setPendingCreateAction(null)
+        }}
+        onConfirm={handleConfirmAppPassword}
+        isBusy={createWalletMutation.isPending || quickCreateWalletMutation.isPending}
+        title="Confirm app password"
+        description="Enter your Bitboard app password to encrypt your new wallet."
+        submitLabel={pendingCreateAction === 'quickCreate' ? 'Create wallet' : 'Generate wallet'}
+        loadingText="Generating wallet..."
+      />
 
       {step === 3 && (
         <StepVerify

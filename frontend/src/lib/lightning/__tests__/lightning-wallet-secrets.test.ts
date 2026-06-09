@@ -3,6 +3,7 @@ import type { Kysely } from 'kysely'
 import type { Database } from '@/db/schema'
 import { createTestDatabase } from '@/db/test-helpers'
 import { saveWalletSecrets, loadWalletSecretsPayload } from '@/db/wallet-persistence'
+import { beginWalletSecretsSession, endWalletSecretsSession } from '@/lib/wallet/wallet-secrets-session'
 import { saveLightningConnectionsForWallet } from '@/lib/lightning/lightning-wallet-secrets'
 import type { WalletSecrets } from '@/db/wallet-persistence'
 import type { ConnectedLightningWallet } from '@/lib/lightning/lightning-backend-service'
@@ -62,6 +63,7 @@ describe('lightning-wallet-secrets persistence', () => {
 
   beforeEach(async () => {
     testDb = await createTestDatabase()
+    await beginWalletSecretsSession(password)
     const result = await testDb
       .insertInto('wallets')
       .values({ name: 'Test Wallet', created_at: new Date().toISOString() })
@@ -69,13 +71,13 @@ describe('lightning-wallet-secrets persistence', () => {
     walletId = Number(result.insertId)
     await saveWalletSecrets({
       walletDb: testDb,
-      password,
       walletId,
       secrets: baseSecrets,
     })
   })
 
   afterEach(async () => {
+    await endWalletSecretsSession()
     await testDb.destroy()
   })
 
@@ -108,12 +110,11 @@ describe('lightning-wallet-secrets persistence', () => {
     ]
 
     await saveLightningConnectionsForWallet({
-      password,
       walletId,
       connections: nextConnections,
     })
 
-    const payload = await loadWalletSecretsPayload(testDb, password, walletId)
+    const payload = await loadWalletSecretsPayload(testDb, walletId)
     expect(payload.descriptorWallets).toEqual(baseSecrets.descriptorWallets)
     expect(payload.lightningNwcConnections).toHaveLength(2)
     const preserved = payload.lightningNwcConnections.find((c) => c.id === 'conn-1')
@@ -122,12 +123,11 @@ describe('lightning-wallet-secrets persistence', () => {
 
   it('removes connections without touching descriptor payload', async () => {
     await saveLightningConnectionsForWallet({
-      password,
       walletId,
       connections: [],
     })
 
-    const payload = await loadWalletSecretsPayload(testDb, password, walletId)
+    const payload = await loadWalletSecretsPayload(testDb, walletId)
     expect(payload.lightningNwcConnections).toEqual([])
     expect(payload.descriptorWallets).toEqual(baseSecrets.descriptorWallets)
   })

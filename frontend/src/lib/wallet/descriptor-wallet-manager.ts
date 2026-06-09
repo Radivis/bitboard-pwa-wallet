@@ -58,21 +58,18 @@ function workerBlobToPersistence(blob: EncryptedBlobForDb): EncryptedWalletSecre
  * before calling this function to persist the active WASM wallet state.
  */
 export async function resolveDescriptorWallet(params: {
-  password: string
   walletId: number
   targetNetwork: BitcoinNetwork
   targetAddressType: AddressType
   targetAccountId: number
 }): Promise<DescriptorWalletData> {
-  const { password, walletId, targetNetwork, targetAddressType, targetAccountId } =
-    params
+  const { walletId, targetNetwork, targetAddressType, targetAccountId } = params
   await ensureMigrated()
   await ensureSecretsChannel()
   const walletDb = getDatabase()
   const { resolveDescriptorWallet: workerResolve } = useCryptoStore.getState()
   const encryptedBlobs = await getWalletSecretsEncrypted(walletDb, walletId)
   const resolveDescriptorWorkerResponse = await workerResolve({
-    password,
     encryptedPayload: encryptedBlobs.payload,
     encryptedMnemonic: encryptedBlobs.mnemonic,
     targetNetwork,
@@ -104,7 +101,6 @@ export async function resolveDescriptorWallet(params: {
  * Decrypt and encrypt run in workers; mnemonic never touches the main thread.
  */
 export async function updateDescriptorWalletChangeset(params: {
-  password: string
   walletId: number
   network: BitcoinNetwork
   addressType: AddressType
@@ -114,7 +110,6 @@ export async function updateDescriptorWalletChangeset(params: {
   lastSuccessfulEsploraSyncAt?: string
 }): Promise<void> {
   const {
-    password,
     walletId,
     network,
     addressType,
@@ -132,7 +127,6 @@ export async function updateDescriptorWalletChangeset(params: {
     walletId,
     transform: async (payload) => {
       const newEncrypted = await workerUpdate({
-        password,
         encryptedPayload: payload,
         network,
         addressType,

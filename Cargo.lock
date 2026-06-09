@@ -506,8 +506,8 @@ dependencies = [
  "ark-client",
  "ark-core",
  "ark-delegator",
- "async-trait",
  "bip39",
+ "bitboard-wasm-sleep",
  "bitcoin",
  "console_error_panic_hook",
  "esplora-client 0.12.3",
@@ -516,7 +516,6 @@ dependencies = [
  "hex",
  "jiff",
  "js-sys",
- "rand 0.8.6",
  "serde",
  "serde-wasm-bindgen",
  "serde_json",
@@ -535,6 +534,7 @@ dependencies = [
  "async-trait",
  "bdk_esplora 0.22.2",
  "bdk_wallet 2.3.0",
+ "bitboard-wasm-sleep",
  "bitcoin",
  "console_error_panic_hook",
  "getrandom 0.2.17",
@@ -581,6 +581,15 @@ dependencies = [
  "lightning",
  "wasm-bindgen",
  "wasm-bindgen-test",
+]
+
+[[package]]
+name = "bitboard-wasm-sleep"
+version = "0.3.0"
+dependencies = [
+ "js-sys",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
 ]
 
 [[package]]

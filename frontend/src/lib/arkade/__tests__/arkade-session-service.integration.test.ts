@@ -8,12 +8,18 @@ const featureState = vi.hoisted(() => ({
 
 const TEST_CONNECTION_ID = 'conn-integration-test'
 
+const encryptedPayload = {
+  ciphertext: new Uint8Array([10]),
+  iv: new Uint8Array([11]),
+  salt: new Uint8Array([12]),
+  kdfPhc: '$argon2id$v=19$m=65536,t=3,p=4$test',
+}
+
 const workerMocks = vi.hoisted(() => ({
   ping: vi.fn(),
   openSession: vi.fn(),
   hasOpenSession: vi.fn(),
   flushSdkPersistence: vi.fn(),
-  exportSdkPersistenceJson: vi.fn(),
   closeSession: vi.fn(),
   finalizePendingTransactions: vi.fn(),
   delegateSpendableVtxos: vi.fn(),
@@ -26,17 +32,16 @@ const workerMocks = vi.hoisted(() => ({
 
 const awaitInFlightWalletSecretsWritesMock = vi.hoisted(() => vi.fn())
 const ensureArkadeOperatorConnectionMock = vi.hoisted(() => vi.fn())
+const findActiveArkadeConnectionSummaryMock = vi.hoisted(() => vi.fn())
 const ensureSecretsChannelMock = vi.hoisted(() => vi.fn())
 const ensureArkadeWorkerSecretsChannelMock = vi.hoisted(() => vi.fn())
 const terminateArkadeWorkerMock = vi.hoisted(() => vi.fn())
 const removeArkadeDashboardQueriesMock = vi.hoisted(() => vi.fn())
 const removeArkadeDashboardSyncQueriesMock = vi.hoisted(() => vi.fn())
 const clearArkadeDashboardStoreMock = vi.hoisted(() => vi.fn())
-const ensureArkadePersistenceChannelMock = vi.hoisted(() => vi.fn())
-const loadActiveArkadeConnectionForNetworkMock = vi.hoisted(() => vi.fn())
+const ensureArkadeEncryptedSecretsHostMock = vi.hoisted(() => vi.fn())
 const runArkadeOperatorSyncAndPersistMock = vi.hoisted(() => vi.fn())
 const refreshArkadeStoreFromLoadedWasmMock = vi.hoisted(() => vi.fn())
-const loadWalletSecretsPayloadMock = vi.hoisted(() => vi.fn())
 const setActiveArkadeConnectionIdMock = vi.hoisted(() => vi.fn())
 const setLastOperatorSyncTimeMock = vi.hoisted(() => vi.fn())
 
@@ -72,14 +77,10 @@ vi.mock('@/db', () => ({
   getDatabase: vi.fn(() => ({})),
   getWalletSecretsEncrypted: vi.fn(async () => ({
     mnemonic: encryptedMnemonic,
-    payload: {},
+    payload: encryptedPayload,
   })),
   awaitInFlightWalletSecretsWrites: (...args: unknown[]) =>
     awaitInFlightWalletSecretsWritesMock(...args),
-}))
-
-vi.mock('@/db/wallet-persistence', () => ({
-  loadWalletSecretsPayload: (...args: unknown[]) => loadWalletSecretsPayloadMock(...args),
 }))
 
 const getArkadeWorkerIfExistsMock = vi.hoisted(() => vi.fn())
@@ -94,10 +95,10 @@ vi.mock('@/lib/arkade/arkade-operator-connections', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/arkade/arkade-operator-connections')>()
   return {
     ...actual,
+    findActiveArkadeConnectionSummary: (...args: unknown[]) =>
+      findActiveArkadeConnectionSummaryMock(...args),
     ensureArkadeOperatorConnection: (...args: unknown[]) =>
       ensureArkadeOperatorConnectionMock(...args),
-    loadActiveArkadeConnectionForNetwork: (...args: unknown[]) =>
-      loadActiveArkadeConnectionForNetworkMock(...args),
   }
 })
 
@@ -125,12 +126,8 @@ vi.mock('@/lib/arkade/arkade-operator-sync', () => ({
 }))
 
 vi.mock('@/workers/arkade-persistence-channel', () => ({
-  ensureArkadePersistenceChannel: (...args: unknown[]) =>
-    ensureArkadePersistenceChannelMock(...args),
-}))
-
-vi.mock('@/lib/arkade/arkade-sdk-persistence', () => ({
-  loadSdkPersistenceJsonForConnection: vi.fn(),
+  ensureArkadeEncryptedSecretsHost: (...args: unknown[]) =>
+    ensureArkadeEncryptedSecretsHostMock(...args),
 }))
 
 import {
@@ -151,7 +148,6 @@ describe('openArkadeSessionForWallet (integration)', () => {
       arkadeAddress: 'tark1qtest',
       operatorSignerPkHex: '02deadbeef',
     })
-    workerMocks.exportSdkPersistenceJson.mockResolvedValue('{"version":3}')
     workerMocks.flushSdkPersistence.mockResolvedValue(undefined)
     getArkadeWorkerIfExistsMock.mockReturnValue(workerMocks)
     awaitInFlightWalletSecretsWritesMock.mockResolvedValue(undefined)
@@ -171,12 +167,8 @@ describe('openArkadeSessionForWallet (integration)', () => {
     workerMocks.getAddress.mockResolvedValue('tark1qtest')
     ensureSecretsChannelMock.mockResolvedValue(undefined)
     ensureArkadeWorkerSecretsChannelMock.mockResolvedValue(undefined)
-    ensureArkadePersistenceChannelMock.mockResolvedValue(undefined)
-    loadActiveArkadeConnectionForNetworkMock.mockResolvedValue(undefined)
-    loadWalletSecretsPayloadMock.mockResolvedValue({
-      arkadeOperatorConnections: [],
-      activeArkadeConnectionIdByNetwork: {},
-    })
+    ensureArkadeEncryptedSecretsHostMock.mockResolvedValue(undefined)
+    findActiveArkadeConnectionSummaryMock.mockResolvedValue(undefined)
     ensureArkadeOperatorConnectionMock.mockResolvedValue({
       id: TEST_CONNECTION_ID,
       label: 'signet',
@@ -193,30 +185,29 @@ describe('openArkadeSessionForWallet (integration)', () => {
     const endpoints = getArkadeEndpoints('signet')
 
     await openArkadeSessionForWallet({
-      password: 'unlock-password',
       walletId: 7,
       networkMode: 'signet',
     })
 
     expect(ensureSecretsChannelMock).toHaveBeenCalledTimes(1)
     expect(ensureArkadeWorkerSecretsChannelMock).toHaveBeenCalledTimes(1)
-    expect(ensureArkadePersistenceChannelMock).toHaveBeenCalledTimes(1)
+    expect(ensureArkadeEncryptedSecretsHostMock).toHaveBeenCalledTimes(1)
     expect(workerMocks.openSession).toHaveBeenCalledWith(
       expect.objectContaining({
-        password: 'unlock-password',
         encryptedMnemonic,
+        encryptedPayload,
         walletId: 7,
         networkMode: 'signet',
         connectionId: expect.any(String),
         arkServerUrl: endpoints.arkServerUrl,
         delegatorUrl: endpoints.delegatorUrl,
         esploraUrl: endpoints.esploraUrl,
-        sdkPersistenceJson: undefined,
       }),
     )
     expect(ensureArkadeOperatorConnectionMock).toHaveBeenCalledWith(
       expect.objectContaining({
         operatorSignerPkHex: '02deadbeef',
+        persistInitialSdkFromWasm: true,
       }),
     )
     expect(runArkadeOperatorSyncAndPersistMock).toHaveBeenCalledWith(
@@ -242,10 +233,7 @@ describe('openArkadeSessionForWallet (integration)', () => {
       createdAt: '2020-01-01T00:00:00.000Z',
       lastSuccessfulOperatorSyncAt: '2020-01-02T00:00:00.000Z',
     }
-    loadWalletSecretsPayloadMock.mockResolvedValue({
-      arkadeOperatorConnections: [persistedConnection],
-      activeArkadeConnectionIdByNetwork: { signet: TEST_CONNECTION_ID },
-    })
+    findActiveArkadeConnectionSummaryMock.mockResolvedValue(persistedConnection)
     ensureArkadeOperatorConnectionMock.mockResolvedValue(persistedConnection)
     refreshArkadeStoreFromLoadedWasmMock.mockImplementation(async () => {
       hydrationOrder.push('refreshArkadeStoreFromLoadedWasm')
@@ -255,7 +243,6 @@ describe('openArkadeSessionForWallet (integration)', () => {
     })
 
     await openArkadeSessionForWallet({
-      password: 'unlock-password',
       walletId: 7,
       networkMode: 'signet',
     })
@@ -280,13 +267,17 @@ describe('openArkadeSessionForWallet (integration)', () => {
         sessionAlreadyOpen: true,
       }),
     )
+    expect(ensureArkadeOperatorConnectionMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        persistInitialSdkFromWasm: false,
+      }),
+    )
   })
 
   it('closes session instead of opening when Arkade feature is disabled', async () => {
     featureState.isArkadeEnabled = false
 
     await openArkadeSessionForWallet({
-      password: 'unlock-password',
       walletId: 7,
       networkMode: 'signet',
     })
@@ -332,7 +323,6 @@ describe('openArkadeSessionForWallet (integration)', () => {
     )
 
     const openPromise = openArkadeSessionForWallet({
-      password: 'unlock-password',
       walletId: 7,
       networkMode: 'signet',
     })
@@ -356,7 +346,6 @@ describe('openArkadeSessionForWallet (integration)', () => {
 
     await expect(
       openArkadeSessionForWallet({
-        password: 'unlock-password',
         walletId: 7,
         networkMode: 'signet',
       }),
@@ -367,7 +356,6 @@ describe('openArkadeSessionForWallet (integration)', () => {
 
   it('reopens when session key matches but the worker was terminated', async () => {
     await openArkadeSessionForWallet({
-      password: 'unlock-password',
       walletId: 7,
       networkMode: 'signet',
     })
@@ -375,7 +363,6 @@ describe('openArkadeSessionForWallet (integration)', () => {
 
     getArkadeWorkerIfExistsMock.mockReturnValue(null)
     await openArkadeSessionForWallet({
-      password: 'unlock-password',
       walletId: 7,
       networkMode: 'signet',
     })
@@ -384,18 +371,16 @@ describe('openArkadeSessionForWallet (integration)', () => {
   })
 
   it('reopens when worker exists but WASM session is not active', async () => {
-    loadActiveArkadeConnectionForNetworkMock.mockResolvedValue({
+    findActiveArkadeConnectionSummaryMock.mockResolvedValue({
       id: TEST_CONNECTION_ID,
       networkMode: 'signet',
       operatorSignerPkHex: '02deadbeef',
-    })
-    loadWalletSecretsPayloadMock.mockResolvedValue({
-      arkadeOperatorConnections: [{ id: TEST_CONNECTION_ID, networkMode: 'signet' }],
-      activeArkadeConnectionIdByNetwork: { signet: TEST_CONNECTION_ID },
+      label: 'signet',
+      operatorUrl: getArkadeEndpoints('signet').arkServerUrl,
+      createdAt: '2020-01-01T00:00:00.000Z',
     })
 
     await openArkadeSessionForWallet({
-      password: 'unlock-password',
       walletId: 7,
       networkMode: 'signet',
     })
@@ -403,7 +388,6 @@ describe('openArkadeSessionForWallet (integration)', () => {
 
     workerMocks.hasOpenSession.mockResolvedValueOnce(false)
     await openArkadeSessionForWallet({
-      password: 'unlock-password',
       walletId: 7,
       networkMode: 'signet',
     })
@@ -420,19 +404,13 @@ describe('openArkadeSessionForWallet (integration)', () => {
       operatorSignerPkHex: '02deadbeef',
       createdAt: '2020-01-01T00:00:00.000Z',
     }
-    loadActiveArkadeConnectionForNetworkMock.mockResolvedValue(activeConnection)
-    loadWalletSecretsPayloadMock.mockResolvedValue({
-      arkadeOperatorConnections: [activeConnection],
-      activeArkadeConnectionIdByNetwork: { signet: TEST_CONNECTION_ID },
-    })
+    findActiveArkadeConnectionSummaryMock.mockResolvedValue(activeConnection)
 
     await openArkadeSessionForWallet({
-      password: 'unlock-password',
       walletId: 7,
       networkMode: 'signet',
     })
     await openArkadeSessionForWallet({
-      password: 'unlock-password',
       walletId: 7,
       networkMode: 'signet',
     })

@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- shared infomode layout constant and presentational components */
 import type { ReactNode } from 'react'
 import { cn } from '@/lib/shared/utils'
 

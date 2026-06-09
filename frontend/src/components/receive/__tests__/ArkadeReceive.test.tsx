@@ -14,10 +14,21 @@ vi.mock('@/hooks/useArkadeQueries', () => ({
   useArkadeNewAddressMutation: () => newAddressMutationMock(),
 }))
 
-vi.mock('@/stores/walletStore', () => ({
-  useWalletStore: (selector: (state: { networkMode: string }) => unknown) =>
-    selector({ networkMode: 'signet' }),
-}))
+vi.mock('@/stores/walletStore', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/stores/walletStore')>()
+  const state = {
+    ...actual.useWalletStore.getState(),
+    networkMode: 'signet' as const,
+    committedNetworkMode: 'signet' as const,
+  }
+  return {
+    ...actual,
+    useWalletStore: Object.assign(
+      (selector: (walletState: typeof state) => unknown) => selector(state),
+      { getState: () => state },
+    ),
+  }
+})
 
 vi.mock('@/lib/arkade/arkade-utils', () => ({
   isArkadeActiveForNetworkMode: () => true,

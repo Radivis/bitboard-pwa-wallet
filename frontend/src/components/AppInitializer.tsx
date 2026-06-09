@@ -2,7 +2,6 @@ import { type ReactNode, useEffect, useLayoutEffect } from 'react'
 import { useNavigate, useLocation } from '@tanstack/react-router'
 import { toast } from 'sonner'
 import { useWalletStore } from '@/stores/walletStore'
-import { useSessionStore } from '@/stores/sessionStore'
 import {
   useWallets,
   getDatabase,
@@ -21,6 +20,7 @@ import { useSecureStorageAvailabilityStore } from '@/stores/secureStorageAvailab
 import { useAutoLockActivityBumps } from '@/hooks/useAutoLockActivityBumps'
 import { useLabCrossTabCacheSync } from '@/hooks/useLabCrossTabCacheSync'
 import { useWalletCrossTabCacheSync } from '@/hooks/useWalletCrossTabCacheSync'
+import { walletIsUnlockedOrSyncing } from '@/lib/wallet/wallet-unlocked-status'
 
 interface AppInitializerProps {
   children: ReactNode
@@ -35,9 +35,9 @@ export function AppInitializer({ children }: AppInitializerProps) {
   const location = useLocation()
   const { data: wallets, isLoading, isFetching } = useWallets()
   const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
+  const walletStatus = useWalletStore((walletState) => walletState.walletStatus)
   const setActiveWallet = useWalletStore((walletState) => walletState.setActiveWallet)
   const networkMode = useWalletStore((walletState) => walletState.networkMode)
-  const sessionPassword = useSessionStore((sessionState) => sessionState.password)
 
   useLayoutEffect(() => {
     useWalletCryptoSessionPathGateStore.getState().setPathname(location.pathname)
@@ -114,11 +114,11 @@ export function AppInitializer({ children }: AppInitializerProps) {
    * wallet crypto — not on Library, so “lock → Library” stays locked until the user opens Wallet.
    */
   useEffect(() => {
-    if (sessionPassword !== null) return
+    if (walletIsUnlockedOrSyncing(walletStatus)) return
     if (!pathnameRequiresWalletCryptoSession(location.pathname)) return
     if (!useSecureStorageAvailabilityStore.getState().isAvailable) return
     void tryLoadNearZeroSessionIntoMemory(getDatabase())
-  }, [sessionPassword, location.pathname])
+  }, [walletStatus, location.pathname])
 
   return (
     <>

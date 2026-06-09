@@ -3,20 +3,14 @@ import { create } from 'zustand'
 const AUTO_LOCK_TIMEOUT_MS = 15 * 60 * 1000
 
 interface SessionState {
-  password: string | null
-  setPassword: (password: string | null) => void
+  /** @deprecated Password lives in encryption worker secrets session only. */
   clear: () => void
 }
 
-export const useSessionStore = create<SessionState>((set) => ({
-  password: null,
-  setPassword: (password) => set({ password }),
-  /**
-   * Clears the session password. Only the reference is set to null; the previous
-   * string may remain in memory until GC (JavaScript strings are immutable, so
-   * we cannot overwrite the backing memory). Call after lock to reduce exposure.
-   */
-  clear: () => set({ password: null }),
+export const useSessionStore = create<SessionState>()(() => ({
+  clear: () => {
+    // Lock path calls endWalletSecretsSession() in cryptoStore.
+  },
 }))
 
 let autoLockTimer: ReturnType<typeof setTimeout> | null = null

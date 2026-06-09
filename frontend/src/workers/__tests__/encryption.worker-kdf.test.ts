@@ -55,6 +55,7 @@ describe('encryption.worker KDF PHC handling', () => {
     exposedEncryptionService = null
     vi.resetModules()
     await import('../encryption.worker')
+    await exposedEncryptionService!.beginSecretsSession('pw')
   })
 
   it('decrypts correctly for CI PHC profile', async () => {
@@ -67,7 +68,7 @@ describe('encryption.worker KDF PHC handling', () => {
       iv,
     )
 
-    const decrypted = await exposedEncryptionService!.decryptData('pw', {
+    const decrypted = await exposedEncryptionService!.decryptData({
       ciphertext,
       iv,
       salt: new Uint8Array(16),
@@ -92,7 +93,7 @@ describe('encryption.worker KDF PHC handling', () => {
       iv,
     )
 
-    const decrypted = await exposedEncryptionService!.decryptData('pw', {
+    const decrypted = await exposedEncryptionService!.decryptData({
       ciphertext,
       iv,
       salt: new Uint8Array(16),
@@ -117,7 +118,7 @@ describe('encryption.worker KDF PHC handling', () => {
     )
 
     await expect(
-      exposedEncryptionService!.decryptData('pw', {
+      exposedEncryptionService!.decryptData({
         ciphertext,
         iv,
         salt: new Uint8Array(16),

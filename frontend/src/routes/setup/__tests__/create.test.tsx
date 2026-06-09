@@ -38,6 +38,7 @@ vi.mock('@/stores/walletStore', () => ({
     (selector: (s: Record<string, unknown>) => unknown) =>
       selector({
         networkMode: 'signet',
+        walletStatus: 'unlocked',
         addressType: 'taproot',
         accountId: 0,
         setActiveWallet: mockSetActiveWallet,
@@ -74,6 +75,13 @@ vi.mock('@/stores/sessionStore', () => ({
     },
   ),
   startAutoLockTimer: vi.fn(),
+}))
+
+const mockEnsureWalletSecretsSession = vi.fn().mockResolvedValue(undefined)
+const mockIsWalletSecretsSessionActive = vi.fn().mockResolvedValue(true)
+vi.mock('@/lib/wallet/wallet-secrets-session', () => ({
+  ensureWalletSecretsSession: (...args: unknown[]) => mockEnsureWalletSecretsSession(...args),
+  isWalletSecretsSessionActive: () => mockIsWalletSecretsSessionActive(),
 }))
 
 const dbMocks = vi.hoisted(() => ({
@@ -143,6 +151,8 @@ describe('CreateWalletPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockSessionPassword.value = 'validpassword123'
+    mockEnsureWalletSecretsSession.mockResolvedValue(undefined)
+    mockIsWalletSecretsSessionActive.mockResolvedValue(true)
     dbMocks.mockMutateAsync.mockResolvedValue(1)
     dbMocks.mockPersistNewWalletWithSecrets.mockResolvedValue(1)
     dbMocks.mockSetWalletNoMnemonicBackupFlag.mockResolvedValue(undefined)
@@ -168,8 +178,8 @@ describe('CreateWalletPage', () => {
 
     await user.click(screen.getByText('24 Words'))
     await user.click(screen.getByText('Generate & Continue'))
+    expect(mockEnsureWalletSecretsSession).toHaveBeenCalledWith(undefined)
     expect(mockCreateWalletAndEncryptSecrets).toHaveBeenCalledWith({
-      password: 'validpassword123',
       network: 'signet',
       addressType: 'taproot',
       accountId: 0,
@@ -177,14 +187,14 @@ describe('CreateWalletPage', () => {
     })
   })
 
-  it('clicking Generate & Continue calls createWalletAndEncryptSecrets with session password', async () => {
+  it('clicking Generate & Continue starts secrets session and creates wallet', async () => {
     const user = userEvent.setup()
     mockCreateWalletAndEncryptSecrets.mockResolvedValueOnce(createWalletCryptoResult())
     renderWithProviders(<CreateWalletPage />)
 
     await user.click(screen.getByText('Generate & Continue'))
+    expect(mockEnsureWalletSecretsSession).toHaveBeenCalledWith(undefined)
     expect(mockCreateWalletAndEncryptSecrets).toHaveBeenCalledWith({
-      password: 'validpassword123',
       network: 'signet',
       addressType: 'taproot',
       accountId: 0,

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { screen } from '@testing-library/react'
+import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { renderWithProviders } from '@/test-utils/test-providers'
 
@@ -17,10 +17,9 @@ vi.mock('@tanstack/react-router', async (importOriginal) => {
 
 import { SetAppPasswordModal } from '@/components/SetAppPasswordModal'
 
-const mockSetPassword = vi.fn()
-vi.mock('@/stores/sessionStore', () => ({
-  useSessionStore: (selector: (s: { setPassword: typeof mockSetPassword }) => unknown) =>
-    selector({ setPassword: mockSetPassword }),
+const mockBeginWalletSecretsSession = vi.fn().mockResolvedValue(undefined)
+vi.mock('@/lib/wallet/wallet-secrets-session', () => ({
+  beginWalletSecretsSession: (password: string) => mockBeginWalletSecretsSession(password),
 }))
 
 vi.mock('@/components/PasswordStrengthIndicator', () => ({
@@ -35,6 +34,7 @@ describe('SetAppPasswordModal', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockNavigate.mockClear()
+    mockBeginWalletSecretsSession.mockClear()
   })
 
   it('offers near-zero security mode opt-in', () => {
@@ -90,7 +90,7 @@ describe('SetAppPasswordModal', () => {
     expect(mockNavigate).toHaveBeenCalledWith({ to: '/setup' })
   })
 
-  it('submits matching passwords of at least 12 chars and sets session password', async () => {
+  it('submits matching passwords of at least 12 chars and starts wallet secrets session', async () => {
     const user = userEvent.setup()
     renderWithProviders(<SetAppPasswordModal open />)
 
@@ -98,6 +98,41 @@ describe('SetAppPasswordModal', () => {
     await user.type(screen.getByLabelText('Confirm password'), 'validpassword123')
     await user.click(screen.getByRole('button', { name: 'Continue' }))
 
-    expect(mockSetPassword).toHaveBeenCalledWith('validpassword123')
+    expect(mockBeginWalletSecretsSession).toHaveBeenCalledWith('validpassword123')
+  })
+
+  it('shows an error when starting wallet secrets session fails', async () => {
+    const user = userEvent.setup()
+    mockBeginWalletSecretsSession.mockRejectedValueOnce(new Error('Wallet secrets session is already active'))
+    renderWithProviders(<SetAppPasswordModal open />)
+
+    await user.type(screen.getByLabelText('Password'), 'validpassword123')
+    await user.type(screen.getByLabelText('Confirm password'), 'validpassword123')
+    await user.click(screen.getByRole('button', { name: 'Continue' }))
+
+    expect(await screen.findByText('Wallet secrets session is already active')).toBeInTheDocument()
+  })
+
+  it('prevents duplicate submit while session start is in flight', async () => {
+    const user = userEvent.setup()
+    let resolveBegin: (() => void) | null = null
+    const pendingBeginPromise = new Promise<void>((resolve) => {
+      resolveBegin = resolve
+    })
+    mockBeginWalletSecretsSession.mockReturnValueOnce(pendingBeginPromise)
+
+    renderWithProviders(<SetAppPasswordModal open />)
+    await user.type(screen.getByLabelText('Password'), 'validpassword123')
+    await user.type(screen.getByLabelText('Confirm password'), 'validpassword123')
+
+    const continueButton = screen.getByRole('button', { name: 'Continue' })
+    await user.click(continueButton)
+    await user.click(continueButton)
+
+    expect(mockBeginWalletSecretsSession).toHaveBeenCalledTimes(1)
+    expect(continueButton).toBeDisabled()
+
+    resolveBegin?.()
+    await waitFor(() => expect(continueButton).toBeEnabled())
   })
 })

@@ -16,7 +16,6 @@ import {
   useWalletStore,
   type NetworkMode,
 } from '@/stores/walletStore'
-import { useSessionStore } from '@/stores/sessionStore'
 import { useCryptoStore } from '@/stores/cryptoStore'
 import { useFeatureStore } from '@/stores/featureStore'
 import { updateWalletChangeset } from '@/lib/wallet/wallet-utils'
@@ -37,7 +36,6 @@ export function ReceivePage() {
   const addressType = useWalletStore((walletState) => walletState.addressType)
   const networkMode = useWalletStore((walletState) => walletState.networkMode)
   const setCurrentAddress = useWalletStore((walletState) => walletState.setCurrentAddress)
-  const password = useSessionStore((sessionState) => sessionState.password)
   const getNewAddress = useCryptoStore((cryptoState) => cryptoState.getNewAddress)
   const exportChangeset = useCryptoStore((cryptoState) => cryptoState.exportChangeset)
   const isLightningEnabled = useFeatureStore((featureState) => featureState.isLightningEnabled)
@@ -91,10 +89,9 @@ export function ReceivePage() {
       const address = await getNewAddress()
       setCurrentAddress(address)
 
-      if (password && activeWalletId) {
+      if (activeWalletId) {
         const changesetJson = await exportChangeset()
         await updateWalletChangeset({
-          password,
           walletId: activeWalletId,
           changesetJson,
         })
@@ -104,7 +101,7 @@ export function ReceivePage() {
     } catch {
       toast.error('Failed to generate new address')
     }
-  }, [getNewAddress, setCurrentAddress, exportChangeset, password, activeWalletId])
+  }, [getNewAddress, setCurrentAddress, exportChangeset, activeWalletId])
 
   const handleCopy = useCallback(async () => {
     if (!currentAddress) return

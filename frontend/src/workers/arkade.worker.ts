@@ -4,14 +4,18 @@ import type {
   SecretsChannelService,
 } from '@/workers/secrets-channel-types'
 import type { ArkadeSupportedNetworkMode } from '@/lib/arkade/arkade-endpoints'
+import { arkadeSessionKey } from '@/lib/arkade/arkade-session-key'
+import { rethrowWasmArkErrorForComlink } from '@/lib/shared/wasm-ark-error'
+import type { EncryptedWalletSecretsHost } from '@/lib/wallet/encrypted-wallet-secrets-host'
 import {
-  clearDebouncedSdkPersistenceFlush,
-  flushSdkPersistenceNowOrThrow,
-  setArkadeSdkPersistenceBridge,
-  setArkadeSdkPersistenceExporter,
-  setArkadeSdkPersistenceFlushContext,
-  type ArkadeSdkPersistenceBridge,
-} from '@/lib/arkade/storage/arkade-sdk-persistence-flush'
+  ensureOperatorConnectionEncrypted,
+  extractSdkPersistenceJsonForConnection,
+  findActiveConnectionSummary,
+  listConnectionSummaries,
+  persistSdkJsonToEncryptedPayload,
+  updateOperatorSyncAtEncrypted,
+  type ArkadeEncryptedPayloadDeps,
+} from '@/workers/arkade-worker-encrypted-payload'
 import type {
   ArkadeBalanceInfo,
   ArkadeCollaborativeExitFeeEstimate,
@@ -28,6 +32,7 @@ import type {
   ArkadeUnilateralExitFeeEstimateParams,
   ArkadeUnrollProgressEvent,
   ArkadeVtxoExpiryStatus,
+  EnsureArkadeOperatorConnectionEncryptedParams,
   OpenArkadeSessionParams,
 } from '@/workers/arkade-api'
 
@@ -38,15 +43,19 @@ type BitboardArkWasm = Awaited<ReturnType<typeof loadBitboardArkWasm>>
 let arkWasmModule: BitboardArkWasm | null = null
 let wasmInitError: string | null = null
 let secretsProxy: Remote<SecretsChannelService> | null = null
+let encryptedWalletSecretsHost:
+  | Remote<EncryptedWalletSecretsHost>
+  | EncryptedWalletSecretsHost
+  | null = null
 
 let activeSessionKey: string | null = null
 let activeSessionParams: {
-  password: string
   walletId: number
   networkMode: ArkadeSupportedNetworkMode
   connectionId: string
 } | null = null
 let unrollInFlight = false
+let inFlightPersist: Promise<void> | null = null
 
 type SendPaymentInFlight = {
   fingerprint: string
@@ -57,6 +66,30 @@ let sendPaymentInFlight: SendPaymentInFlight | null = null
 
 function sendPaymentFingerprint(params: ArkadeSendParams): string {
   return `${params.address}\0${params.amountSats}`
+}
+
+function encryptedBlobForDbToMessage(blob: {
+  ciphertext: Uint8Array
+  iv: Uint8Array
+  salt: Uint8Array
+  kdfPhc: string
+}): EncryptedBlobMessage {
+  return {
+    ciphertext: blob.ciphertext,
+    iv: blob.iv,
+    salt: blob.salt,
+    kdfPhc: blob.kdfPhc,
+  }
+}
+
+function getEncryptedPayloadDeps(): ArkadeEncryptedPayloadDeps {
+  if (secretsProxy == null || encryptedWalletSecretsHost == null) {
+    throw new Error('Arkade encrypted persistence is not configured')
+  }
+  return {
+    secretsProxy,
+    encryptedHost: encryptedWalletSecretsHost,
+  }
 }
 
 async function getArkWasm(): Promise<BitboardArkWasm> {
@@ -77,7 +110,7 @@ async function invokeWasmArk<T>(
     const wasmModule = await getArkWasm()
     return await run(wasmModule)
   } catch (err) {
-    throw err instanceof Error ? err : new Error(String(err))
+    rethrowWasmArkErrorForComlink(err)
   }
 }
 
@@ -93,26 +126,11 @@ async function initWasm() {
 
 initWasm()
 
-setArkadeSdkPersistenceExporter(() =>
-  invokeWasmArk((wasmModule) => wasmModule.ark_export_persistence_json()),
-)
-
-function requestDecrypt(
-  password: string,
-  encryptedBlob: EncryptedBlobMessage,
-): Promise<string> {
+function requestDecrypt(encryptedBlob: EncryptedBlobMessage): Promise<string> {
   if (!secretsProxy) {
     return Promise.reject(new Error('Secrets port not set'))
   }
-  return secretsProxy.decrypt(password, encryptedBlob)
-}
-
-function sessionKey(
-  walletId: number,
-  networkMode: ArkadeSupportedNetworkMode,
-  connectionId: string,
-): string {
-  return `${walletId}:${networkMode}:${connectionId}`
+  return secretsProxy.decrypt(encryptedBlob)
 }
 
 function legacyIndexedDbName(
@@ -131,6 +149,35 @@ function deleteLegacyArkadeIndexedDb(
     indexedDB.deleteDatabase(legacyIndexedDbName(walletId, networkMode))
   } catch {
     // Ignore — database may not exist.
+  }
+}
+
+async function flushSdkPersistenceNowOrThrow(): Promise<void> {
+  if (activeSessionParams == null) {
+    throw new Error('Arkade SDK persistence flush was skipped (no active session)')
+  }
+
+  if (inFlightPersist != null) {
+    await inFlightPersist
+    return flushSdkPersistenceNowOrThrow()
+  }
+
+  const sessionParams = activeSessionParams
+  inFlightPersist = (async () => {
+    const sdkPersistenceJson = await invokeWasmArk((wasmModule) =>
+      wasmModule.ark_export_persistence_json(),
+    )
+    await persistSdkJsonToEncryptedPayload(getEncryptedPayloadDeps(), {
+      walletId: sessionParams.walletId,
+      connectionId: sessionParams.connectionId,
+      sdkPersistenceJson,
+    })
+  })()
+
+  try {
+    await inFlightPersist
+  } finally {
+    inFlightPersist = null
   }
 }
 
@@ -158,8 +205,6 @@ async function closeSessionImpl(): Promise<void> {
   } catch {
     // Best-effort flush before teardown when session was never fully opened.
   }
-  clearDebouncedSdkPersistenceFlush()
-  setArkadeSdkPersistenceFlushContext(null)
 
   try {
     await invokeWasmArk((wasmModule) => wasmModule.ark_close_session())
@@ -176,7 +221,7 @@ async function closeSessionImpl(): Promise<void> {
 async function openSessionImpl(
   params: OpenArkadeSessionParams,
 ): Promise<{ arkadeAddress: string; operatorSignerPkHex: string }> {
-  const key = sessionKey(params.walletId, params.networkMode, params.connectionId)
+  const key = arkadeSessionKey(params.walletId, params.networkMode, params.connectionId)
 
   if (activeSessionKey === key) {
     try {
@@ -193,14 +238,21 @@ async function openSessionImpl(
   await closeSessionImpl()
   deleteLegacyArkadeIndexedDb(params.walletId, params.networkMode)
 
-  const mnemonic = await requestDecrypt(params.password, params.encryptedMnemonic)
+  const encryptedPayloadMessage = encryptedBlobForDbToMessage(params.encryptedPayload)
+  const sdkPersistenceJson = await extractSdkPersistenceJsonForConnection(
+    getEncryptedPayloadDeps(),
+    {
+      encryptedPayload: encryptedPayloadMessage,
+      connectionId: params.connectionId,
+    },
+  )
+
+  const mnemonic = await requestDecrypt(encryptedBlobForDbToMessage(params.encryptedMnemonic))
   activeSessionParams = {
-    password: params.password,
     walletId: params.walletId,
     networkMode: params.networkMode,
     connectionId: params.connectionId,
   }
-  setArkadeSdkPersistenceFlushContext(activeSessionParams)
 
   const openResult = await invokeWasmArk((wasmModule) =>
     wasmModule.ark_open_session({
@@ -209,7 +261,7 @@ async function openSessionImpl(
       arkServerUrl: params.arkServerUrl,
       delegatorUrl: params.delegatorUrl,
       esploraUrl: params.esploraUrl,
-      sdkPersistenceJson: params.sdkPersistenceJson,
+      sdkPersistenceJson,
     }),
   )
 
@@ -225,13 +277,13 @@ const arkadeService: ArkadeService = {
     secretsProxy = wrap<SecretsChannelService>(port)
   },
 
+  async setEncryptedWalletSecretsHost(host: EncryptedWalletSecretsHost): Promise<void> {
+    encryptedWalletSecretsHost = host
+  },
+
   async ping(): Promise<boolean> {
     await getArkWasm()
     return true
-  },
-
-  async setSdkPersistenceBridge(bridge: ArkadeSdkPersistenceBridge | null): Promise<void> {
-    setArkadeSdkPersistenceBridge(bridge)
   },
 
   async openSession(params: OpenArkadeSessionParams) {
@@ -243,7 +295,7 @@ const arkadeService: ArkadeService = {
     networkMode: ArkadeSupportedNetworkMode
     connectionId: string
   }): Promise<boolean> {
-    return activeSessionKey === sessionKey(
+    return activeSessionKey === arkadeSessionKey(
       params.walletId,
       params.networkMode,
       params.connectionId,
@@ -258,17 +310,11 @@ const arkadeService: ArkadeService = {
       ...activeSessionParams,
       connectionId,
     }
-    activeSessionKey = sessionKey(
+    activeSessionKey = arkadeSessionKey(
       activeSessionParams.walletId,
       activeSessionParams.networkMode,
       connectionId,
     )
-    setArkadeSdkPersistenceFlushContext({
-      password: activeSessionParams.password,
-      walletId: activeSessionParams.walletId,
-      networkMode: activeSessionParams.networkMode,
-      connectionId,
-    })
   },
 
   async syncWithOperator(): Promise<void> {
@@ -283,8 +329,51 @@ const arkadeService: ArkadeService = {
     await flushSdkPersistenceNowOrThrow()
   },
 
-  async exportSdkPersistenceJson(): Promise<string> {
+  async exportSdkPersistenceJsonForE2e(): Promise<string> {
     return invokeWasmArk((wasmModule) => wasmModule.ark_export_persistence_json())
+  },
+
+  async readPersistedSdkPersistenceJsonForE2e(params: {
+    walletId: number
+    connectionId: string
+  }): Promise<string | undefined> {
+    const encryptedPayload = await getEncryptedPayloadDeps().encryptedHost.readEncryptedPayload(
+      params.walletId,
+    )
+    return extractSdkPersistenceJsonForConnection(getEncryptedPayloadDeps(), {
+      encryptedPayload: encryptedBlobForDbToMessage(encryptedPayload),
+      connectionId: params.connectionId,
+    })
+  },
+
+  async findActiveConnectionSummary(params) {
+    return findActiveConnectionSummary(getEncryptedPayloadDeps(), {
+      walletId: params.walletId,
+      networkMode: params.networkMode,
+      encryptedPayload: encryptedBlobForDbToMessage(params.encryptedPayload),
+    })
+  },
+
+  async listConnectionSummaries(params) {
+    return listConnectionSummaries(getEncryptedPayloadDeps(), params)
+  },
+
+  async ensureOperatorConnectionEncrypted(params: EnsureArkadeOperatorConnectionEncryptedParams) {
+    const { persistInitialSdkFromWasm, ...connectionParams } = params
+    return ensureOperatorConnectionEncrypted(
+      getEncryptedPayloadDeps(),
+      connectionParams,
+      persistInitialSdkFromWasm
+        ? {
+            exportInitialSdkFromWasm: () =>
+              invokeWasmArk((wasmModule) => wasmModule.ark_export_persistence_json()),
+          }
+        : undefined,
+    )
+  },
+
+  async updateOperatorSyncAtEncrypted(params) {
+    return updateOperatorSyncAtEncrypted(getEncryptedPayloadDeps(), params)
   },
 
   async closeSession(): Promise<void> {
@@ -375,7 +464,11 @@ const arkadeService: ArkadeService = {
     return txid
   },
 
-  async delegateSpendableVtxos(): Promise<{ delegated: number; failed: number }> {
+  async delegateSpendableVtxos(): Promise<{
+    delegated: number
+    failed: number
+    errorMessage?: string
+  }> {
     const result = await invokeWasmArk((wasmModule) => wasmModule.ark_delegate_spendable_vtxos())
     await persistAfterCriticalOperation()
     return result as { delegated: number; failed: number }
@@ -426,7 +519,7 @@ const arkadeService: ArkadeService = {
     onProgress: (event: ArkadeUnrollProgressEvent) => void,
   ): Promise<{ vtxoTxid: string }> {
     if (unrollInFlight) {
-      throw new Error('A unilateral unroll is already in progress')
+      throw new Error('Unilateral unroll is already in progress')
     }
 
     unrollInFlight = true

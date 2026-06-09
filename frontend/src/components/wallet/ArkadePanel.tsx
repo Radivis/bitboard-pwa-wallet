@@ -18,16 +18,17 @@ import {
   useArkadeRenewMutation,
 } from '@/hooks/useArkadeQueries'
 import {
+  getArkadeDelegatorDisplayLabel,
   isArkadeDelegatorConfigured,
   isArkadeSupportedNetworkMode,
 } from '@/lib/arkade/arkade-endpoints'
 import { isArkadeActiveForNetworkMode } from '@/lib/arkade/arkade-utils'
-import { useWalletStore } from '@/stores/walletStore'
+import { selectCommittedNetworkMode, useWalletStore } from '@/stores/walletStore'
 import { ArkadeExitSection } from '@/components/wallet/ArkadeExitSection'
 import { ArkadeVtxoExpiryIndicator } from '@/components/wallet/ArkadeVtxoExpiryIndicator'
 
 export function ArkadePanel() {
-  const networkMode = useWalletStore((s) => s.networkMode)
+  const networkMode = useWalletStore(selectCommittedNetworkMode)
   const storeReceiveAddress = useWalletStore((s) => s.arkadeReceiveAddress)
   const show = isArkadeActiveForNetworkMode(networkMode)
   const delegatorConfigured =
@@ -44,6 +45,10 @@ export function ArkadePanel() {
   const balance = balanceQuery.data
   const delegateFee =
     delegateQuery.data?.fee != null ? Number(delegateQuery.data.fee) : null
+  const delegatorLabel =
+    isArkadeSupportedNetworkMode(networkMode)
+      ? getArkadeDelegatorDisplayLabel(networkMode)
+      : 'configured delegator'
 
   return (
     <Card>
@@ -95,7 +100,7 @@ export function ArkadePanel() {
             as="span"
           >
             <p className="text-xs text-muted-foreground">
-              Delegator service fee: {delegateFee} sats per renewal (Bitboard Fulmine)
+              Delegator service fee: {delegateFee} sats per renewal ({delegatorLabel})
             </p>
           </InfomodeWrapper>
         )}

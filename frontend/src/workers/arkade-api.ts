@@ -1,6 +1,10 @@
 import type { EncryptedBlobForDb } from '@/workers/crypto-api'
 import type { ArkadeSupportedNetworkMode } from '@/lib/arkade/arkade-endpoints'
-import type { ArkadeSdkPersistenceBridge } from '@/lib/arkade/storage/arkade-sdk-persistence-flush'
+import type { ArkadeOperatorConnectionSummary } from '@/lib/arkade/arkade-payload-merge'
+import type { EncryptedWalletSecretsHost } from '@/lib/wallet/encrypted-wallet-secrets-host'
+
+export type { ArkadeOperatorConnectionSummary }
+
 export interface ArkadeBalanceInfo {
   confirmedSats: number
   totalSats: number
@@ -31,16 +35,14 @@ export interface ArkadePaymentRow {
 }
 
 export interface OpenArkadeSessionParams {
-  password: string
   encryptedMnemonic: EncryptedBlobForDb
+  encryptedPayload: EncryptedBlobForDb
   walletId: number
   networkMode: ArkadeSupportedNetworkMode
   connectionId: string
   arkServerUrl: string
   delegatorUrl: string
   esploraUrl: string
-  /** Hydrates SDK repos from encrypted wallet secrets (local-first VTXO state). */
-  sdkPersistenceJson?: string
 }
 
 export interface OpenArkadeSessionResult {
@@ -130,10 +132,21 @@ export interface ArkadeUnilateralExitFeeEstimateParams {
   vout: number
 }
 
+export interface EnsureArkadeOperatorConnectionEncryptedParams {
+  walletId: number
+  networkMode: ArkadeSupportedNetworkMode
+  connectionId: string
+  operatorSignerPkHex: string
+  operatorUrl: string
+  delegatorUrl: string
+  /** When true, export SDK JSON from WASM inside the worker (never on main thread). */
+  persistInitialSdkFromWasm?: boolean
+}
+
 export interface ArkadeService {
   ping(): Promise<boolean>
   setSecretsPort(port: MessagePort): Promise<void>
-  setSdkPersistenceBridge(bridge: ArkadeSdkPersistenceBridge | null): Promise<void>
+  setEncryptedWalletSecretsHost(host: EncryptedWalletSecretsHost): Promise<void>
   openSession(params: OpenArkadeSessionParams): Promise<OpenArkadeSessionResult>
   syncWithOperator(): Promise<void>
   hasOpenSession(params: {
@@ -143,7 +156,29 @@ export interface ArkadeService {
   }): Promise<boolean>
   reconcileActiveConnectionId(connectionId: string): Promise<void>
   flushSdkPersistence(): Promise<void>
-  exportSdkPersistenceJson(): Promise<string>
+  /** @internal E2E / DevTools only — live WASM export; not wallet-secrets persistence. */
+  exportSdkPersistenceJsonForE2e(): Promise<string>
+  /** @internal E2E / DevTools only — reads sdkPersistenceJson from encrypted wallet_secrets via secrets channel. */
+  readPersistedSdkPersistenceJsonForE2e(params: {
+    walletId: number
+    connectionId: string
+  }): Promise<string | undefined>
+  findActiveConnectionSummary(params: {
+    walletId: number
+    networkMode: ArkadeSupportedNetworkMode
+    encryptedPayload: EncryptedBlobForDb
+  }): Promise<ArkadeOperatorConnectionSummary | undefined>
+  listConnectionSummaries(params: {
+    walletId: number
+  }): Promise<ArkadeOperatorConnectionSummary[]>
+  ensureOperatorConnectionEncrypted(
+    params: EnsureArkadeOperatorConnectionEncryptedParams,
+  ): Promise<ArkadeOperatorConnectionSummary>
+  updateOperatorSyncAtEncrypted(params: {
+    walletId: number
+    connectionId: string
+    lastSuccessfulOperatorSyncAt: string
+  }): Promise<void>
   closeSession(): Promise<void>
   getBalance(): Promise<ArkadeBalanceInfo>
   getAddress(): Promise<string>
@@ -156,7 +191,11 @@ export interface ArkadeService {
   getExpiringVtxoCount(): Promise<number>
   getVtxoExpiryStatus(): Promise<ArkadeVtxoExpiryStatus>
   renewVtxosNow(): Promise<string | null>
-  delegateSpendableVtxos(): Promise<{ delegated: number; failed: number }>
+  delegateSpendableVtxos(): Promise<{
+    delegated: number
+    failed: number
+    errorMessage?: string
+  }>
   finalizePendingTransactions(): Promise<{ finalized: number; pending: number }>
   onboardBoardedUtxos(): Promise<string | null>
   listExitCandidates(): Promise<ArkadeExitCandidateRow[]>

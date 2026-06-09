@@ -60,7 +60,6 @@ feature:
         - Arkade address QR and copy (not on-chain bc1)
         - Generate new address control (mirrors on-chain Receive)
       - requirements:
-        - Legacy /wallet/arkade/receive redirects to /wallet/receive?mode=arkade
         - Contracts ARK-RCV-01 through ARK-RCV-05 apply to Arkade receive mode
     - WalletSendArkadeDetection:
       - description: "Arkade send via address format on main Send page"
@@ -71,7 +70,6 @@ feature:
         - Arkade balance shown; on-chain fee section hidden for Arkade sends
       - requirements:
         - Lightning detection takes priority over Arkade; Arkade over on-chain
-        - Legacy /wallet/arkade/send redirects to /wallet/send
     - ArkadeBoard:
       - path: /wallet/arkade/board
       - file: frontend/src/routes/wallet/arkade/board.tsx

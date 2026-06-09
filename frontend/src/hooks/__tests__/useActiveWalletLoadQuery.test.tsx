@@ -7,8 +7,11 @@ import {
   useWalletStore,
   AddressType,
 } from '@/stores/walletStore'
-import { useSessionStore } from '@/stores/sessionStore'
 import { useWalletCryptoSessionPathGateStore } from '@/stores/walletCryptoSessionPathGateStore'
+const walletSecretsSessionState = { active: false }
+vi.mock('@/lib/wallet/wallet-secrets-session', () => ({
+  isWalletSecretsSessionActive: async () => walletSecretsSessionState.active,
+}))
 
 const loadDescriptorWalletAndSync = vi.fn()
 const loadDescriptorWalletWithoutSync = vi.fn()
@@ -43,9 +46,9 @@ function createWrapper() {
 }
 
 describe('useActiveWalletLoadQuery', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks()
-    useSessionStore.setState({ password: null })
+    walletSecretsSessionState.active = false
     useWalletStore.setState({
       networkMode: 'testnet',
       addressType: AddressType.Taproot,
@@ -69,7 +72,7 @@ describe('useActiveWalletLoadQuery', () => {
       walletStatus: 'locked',
       manualWalletUnlockInFlight: true,
     })
-    useSessionStore.setState({ password: 'secret' })
+    walletSecretsSessionState.active = true
 
     renderHook(() => useActiveWalletLoadQuery(), {
       wrapper: createWrapper(),
@@ -86,7 +89,7 @@ describe('useActiveWalletLoadQuery', () => {
       walletStatus: 'locked',
       manualWalletUnlockInFlight: false,
     })
-    useSessionStore.setState({ password: 'secret' })
+    walletSecretsSessionState.active = true
     loadDescriptorWalletAndSync.mockResolvedValue(undefined)
 
     renderHook(() => useActiveWalletLoadQuery(), {

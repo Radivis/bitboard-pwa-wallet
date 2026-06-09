@@ -11,10 +11,10 @@ import {
 import { useArkadeSyncMetadataQuery } from '@/hooks/useArkadeDashboardQueries'
 import { useArkadeBalanceQuery } from '@/hooks/useArkadeQueries'
 import { isArkadeActiveForNetworkMode } from '@/lib/arkade/arkade-utils'
-import { useWalletStore } from '@/stores/walletStore'
+import { selectCommittedNetworkMode, useWalletStore } from '@/stores/walletStore'
 
 export function ArkadeDashboardBalance() {
-  const networkMode = useWalletStore((s) => s.networkMode)
+  const networkMode = useWalletStore(selectCommittedNetworkMode)
   const storeBalance = useWalletStore((s) => s.arkadeBalance)
   const show = isArkadeActiveForNetworkMode(networkMode)
   const balanceQuery = useArkadeBalanceQuery()

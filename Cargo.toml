@@ -2,7 +2,13 @@
 version = "0.3.0"
 
 [workspace]
-members = ["crypto", "bitboard-encryption", "bitboard-lightning", "bitboard-ark"]
+members = [
+    "crypto",
+    "bitboard-encryption",
+    "bitboard-lightning",
+    "bitboard-ark",
+    "bitboard-wasm-sleep",
+]
 resolver = "2"
 
 [profile.release]

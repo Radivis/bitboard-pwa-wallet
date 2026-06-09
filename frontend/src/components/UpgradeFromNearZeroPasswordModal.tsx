@@ -17,8 +17,9 @@ import {
   upgradeNearZeroToUserPassword,
 } from '@/db'
 import { invalidateWalletRelatedQueriesAndNotifyOtherTabs } from '@/lib/wallet/wallet-query-cache-sync'
-import { useSessionStore } from '@/stores/sessionStore'
 import { errorMessage } from '@/lib/shared/utils'
+import { walletIsUnlockedOrSyncing } from '@/lib/wallet/wallet-unlocked-status'
+import { useWalletStore } from '@/stores/walletStore'
 
 const UPGRADE_FIELDS_CONFIG = {
   ids: {
@@ -49,7 +50,8 @@ export function UpgradeFromNearZeroPasswordModal({
   const [phase, setPhase] = useState<Phase>('form')
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
-  const sessionPassword = useSessionStore((sessionState) => sessionState.password)
+  const walletStatus = useWalletStore((walletState) => walletState.walletStatus)
+  const sessionActive = walletIsUnlockedOrSyncing(walletStatus)
 
   useEffect(() => {
     if (open) {
@@ -61,13 +63,13 @@ export function UpgradeFromNearZeroPasswordModal({
 
   const upgradeMutation = useMutation({
     mutationFn: async (next: string) => {
-      const oldPassword = useSessionStore.getState().password
-      if (!oldPassword) throw new Error('Session expired — unlock and try again.')
+      if (!walletIsUnlockedOrSyncing(useWalletStore.getState().walletStatus)) {
+        throw new Error('Session expired — unlock and try again.')
+      }
       await ensureMigrated()
       const walletDb = getDatabase()
       await upgradeNearZeroToUserPassword({
         walletDb,
-        oldPassword,
         newPassword: next,
       })
     },
@@ -84,7 +86,7 @@ export function UpgradeFromNearZeroPasswordModal({
   })
 
   const newValid = isNewAppPasswordValid(newPassword, confirmPassword)
-  const canSubmit = newValid && !upgradeMutation.isPending && sessionPassword != null
+  const canSubmit = newValid && !upgradeMutation.isPending && sessionActive
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()

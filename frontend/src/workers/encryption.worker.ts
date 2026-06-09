@@ -1,6 +1,9 @@
 import { expose } from 'comlink'
 import type { EncryptionService } from './encryption-api'
-import type { EncryptedBlobMessage } from './secrets-channel-types'
+import {
+  createEncryptionServiceSessionApi,
+  createSecretsSessionChannelApi,
+} from './encryption-secrets-session-api'
 import type { EncryptedBlob } from '@/lib/shared/encrypted-blob-types'
 import { resolveArgon2CiParamsOrThrow } from '@/lib/shared/argon2-ci-env'
 import {
@@ -86,26 +89,8 @@ async function doDecrypt(password: string, encrypted: EncryptedBlob): Promise<st
   }
 }
 
-/** API exposed on the secrets port for the crypto worker (Comlink RPC). */
-const secretsChannelService = {
-  async decrypt(password: string, encryptedBlob: EncryptedBlobMessage): Promise<string> {
-    return doDecrypt(password, {
-      ciphertext: encryptedBlob.ciphertext as Uint8Array,
-      iv: encryptedBlob.iv as Uint8Array,
-      salt: encryptedBlob.salt as Uint8Array,
-      kdfPhc: encryptedBlob.kdfPhc,
-    })
-  },
-  async encrypt(password: string, plaintext: string): Promise<EncryptedBlobMessage> {
-    const blob = await doEncrypt(password, plaintext)
-    return {
-      ciphertext: blob.ciphertext,
-      iv: blob.iv,
-      salt: blob.salt,
-      kdfPhc: blob.kdfPhc,
-    }
-  },
-}
+const sessionApi = createEncryptionServiceSessionApi(doEncrypt, doDecrypt)
+const secretsChannelService = createSecretsSessionChannelApi(doEncrypt, doDecrypt)
 
 const encryptionService: EncryptionService = {
   async setSecretsPort(port: MessagePort): Promise<void> {
@@ -113,20 +98,20 @@ const encryptionService: EncryptionService = {
     port.start()
   },
 
+  beginSecretsSession: sessionApi.beginSecretsSession,
+  endSecretsSession: sessionApi.endSecretsSession,
+  isSecretsSessionActive: sessionApi.isSecretsSessionActive,
+  encryptData: sessionApi.encryptData,
+  decryptData: sessionApi.decryptData,
+  encryptDataWithPassword: sessionApi.encryptDataWithPassword,
+  decryptDataWithPassword: sessionApi.decryptDataWithPassword,
+
   async deriveKeyBytes(
     password: string,
     salt: Uint8Array,
     kdfPhc: string,
   ): Promise<Uint8Array> {
     return deriveKeyBytes(password, salt, kdfPhc)
-  },
-
-  async encryptData(password: string, plaintext: string): Promise<EncryptedBlob> {
-    return doEncrypt(password, plaintext)
-  },
-
-  async decryptData(password: string, encrypted: EncryptedBlob): Promise<string> {
-    return doDecrypt(password, encrypted)
   },
 
   async signWalletBackupManifest(

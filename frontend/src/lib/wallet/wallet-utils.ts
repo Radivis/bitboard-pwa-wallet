@@ -3,7 +3,6 @@ import { toast } from 'sonner'
 import { getDatabase, ensureMigrated } from '@/db/database'
 import type { NetworkMode } from '@/stores/walletStore'
 import { useWalletStore } from '@/stores/walletStore'
-import { useSessionStore } from '@/stores/sessionStore'
 import { useCryptoStore } from '@/stores/cryptoStore'
 import { asBadLocalChainStateError } from '@/lib/shared/bad-local-chain-state-error'
 import { withEsploraFullScanRetries } from '@/lib/esplora/esplora-full-scan-retry'
@@ -33,7 +32,6 @@ import { waitForCryptoWorkerHealthy } from '@/workers/crypto-factory'
 const CUSTOM_ESPLORA_URL_KEY_PREFIX = 'custom_esplora_url_'
 
 function beginArkadeSessionOpenAfterUnlockIfActive(params: {
-  password: string
   walletId: number
   networkMode: NetworkMode
 }): Promise<void> | null {
@@ -50,14 +48,12 @@ function beginArkadeSessionOpenAfterUnlockIfActive(params: {
  * Keys by `loadedDescriptorWallet` when set (matches WASM); otherwise persisted triple.
  */
 export async function updateWalletChangeset(params: {
-  password: string
   walletId: number
   changesetJson: string
   markFullScanDone?: boolean
   lastSuccessfulEsploraSyncAt?: string
 }): Promise<void> {
   const {
-    password,
     walletId,
     changesetJson,
     markFullScanDone,
@@ -72,7 +68,6 @@ export async function updateWalletChangeset(params: {
   }
   const network = toBitcoinNetwork(descriptorContext.networkMode)
   await updateDescriptorWalletChangeset({
-    password,
     walletId,
     network,
     addressType: descriptorContext.addressType,
@@ -208,7 +203,6 @@ export async function syncActiveWalletAndUpdateState(
  * `lastSuccessfulEsploraSyncAt` in one write, invalidate dashboard queries.
  */
 export async function persistPostEsploraSyncDescriptorWalletState(options: {
-  password: string | null
   walletId: number | null
   markFullScanDone?: boolean
   /**
@@ -224,7 +218,7 @@ export async function persistPostEsploraSyncDescriptorWalletState(options: {
   const syncedAtIso = new Date().toISOString()
   useWalletStore.getState().setLastSyncTime(new Date(syncedAtIso))
 
-  if (options.password == null || options.walletId == null) {
+  if (options.walletId == null) {
     invalidateDashboardQueriesAfterOnchainUpdate()
     return
   }
@@ -236,7 +230,6 @@ export async function persistPostEsploraSyncDescriptorWalletState(options: {
     const { network, addressType, accountId } =
       options.descriptorWalletCoordinates
     await updateDescriptorWalletChangeset({
-      password: options.password,
       walletId: options.walletId,
       network,
       addressType,
@@ -247,7 +240,6 @@ export async function persistPostEsploraSyncDescriptorWalletState(options: {
     })
   } else {
     await updateWalletChangeset({
-      password: options.password,
       walletId: options.walletId,
       changesetJson,
       lastSuccessfulEsploraSyncAt: syncedAtIso,
@@ -267,7 +259,6 @@ export type DescriptorWalletEsploraSyncResult = 'completed' | 'syncFailed'
 export async function syncLoadedDescriptorWalletWithEsplora(options: {
   networkMode: NetworkMode
   activeWalletId: number
-  sessionPassword: string
   targetNetwork: BitcoinNetwork
   targetAddressType: AddressType
   targetAccountId: number
@@ -278,7 +269,6 @@ export async function syncLoadedDescriptorWalletWithEsplora(options: {
       useFullScan: options.fullScanNeeded,
     })
     await persistPostEsploraSyncDescriptorWalletState({
-      password: options.sessionPassword,
       walletId: options.activeWalletId,
       markFullScanDone: options.fullScanNeeded,
       descriptorWalletCoordinates: {
@@ -310,12 +300,10 @@ export async function syncLoadedDescriptorWalletWithEsplora(options: {
  * last-sync time, and optional persisted changeset.
  */
 async function finishDashboardSyncAfterStateUpdate(options: {
-  password: string | null
   activeWalletId: number | null
   markFullScanDone: boolean
 }): Promise<void> {
   await persistPostEsploraSyncDescriptorWalletState({
-    password: options.password,
     walletId: options.activeWalletId,
     markFullScanDone: options.markFullScanDone,
   })
@@ -331,10 +319,9 @@ async function finishDashboardSyncAfterStateUpdate(options: {
  */
 export async function runIncrementalDashboardWalletSync(options: {
   networkMode: NetworkMode
-  password: string | null
   activeWalletId: number | null
 }): Promise<void> {
-  const { networkMode, password, activeWalletId } = options
+  const { networkMode, activeWalletId } = options
   const customUrl = await loadCustomEsploraUrl(networkMode)
   const esploraUrl = getEsploraUrl(networkMode, customUrl)
   /** Regtest dashboard sync uses full scan inside {@link syncActiveWalletAndUpdateState}, which already replaces the loading toast with this success message when Esplora is configured. */
@@ -345,7 +332,6 @@ export async function runIncrementalDashboardWalletSync(options: {
     useFullScan: networkMode === 'regtest',
   })
   await finishDashboardSyncAfterStateUpdate({
-    password,
     activeWalletId,
     markFullScanDone: false,
   })
@@ -361,16 +347,14 @@ export async function runIncrementalDashboardWalletSync(options: {
  * Used to recover when persisted `local_chain` does not match the Esplora indexer.
  */
 export async function reloadActiveLoadedDescriptorWalletWithEmptyChain(params: {
-  password: string
   walletId: number
   networkMode: NetworkMode
   addressType: AddressType
   accountId: number
 }): Promise<void> {
-  const { password, walletId, networkMode, addressType, accountId } = params
+  const { walletId, networkMode, addressType, accountId } = params
   const network = toBitcoinNetwork(networkMode)
   const descriptorWallet = await resolveDescriptorWallet({
-    password,
     walletId,
     targetNetwork: network,
     targetAddressType: addressType,
@@ -402,15 +386,13 @@ export async function reloadActiveLoadedDescriptorWalletWithEmptyChain(params: {
  */
 export async function runFullScanDashboardWalletSync(options: {
   networkMode: NetworkMode
-  password: string | null
   activeWalletId: number | null
 }): Promise<void> {
-  const { networkMode, password, activeWalletId } = options
+  const { networkMode, activeWalletId } = options
 
   const scanAndPersist = async () => {
     await syncActiveWalletAndUpdateState(networkMode, { useFullScan: true })
     await finishDashboardSyncAfterStateUpdate({
-      password,
       activeWalletId,
       markFullScanDone: true,
     })
@@ -424,7 +406,7 @@ export async function runFullScanDashboardWalletSync(options: {
       throw err
     }
 
-    if (password == null || activeWalletId == null) {
+    if (activeWalletId == null) {
       throw badLocalChainStateError
     }
 
@@ -437,7 +419,6 @@ export async function runFullScanDashboardWalletSync(options: {
     }
 
     await reloadActiveLoadedDescriptorWalletWithEmptyChain({
-      password,
       walletId: activeWalletId,
       networkMode: descriptorWalletCoordinates.networkMode,
       addressType: descriptorWalletCoordinates.addressType,
@@ -455,7 +436,6 @@ export async function runFullScanDashboardWalletSync(options: {
  */
 export async function runImportInitialEsploraSync(): Promise<void> {
   const networkMode = useWalletStore.getState().networkMode
-  const sessionPassword = useSessionStore.getState().password
   const activeWalletId = useWalletStore.getState().activeWalletId
   const { setImportInitialSyncErrorMessage } = useWalletStore.getState()
 
@@ -476,7 +456,6 @@ export async function runImportInitialEsploraSync(): Promise<void> {
   await syncActiveWalletAndUpdateState(networkMode, { useFullScan: true })
 
   await persistPostEsploraSyncDescriptorWalletState({
-    password: sessionPassword,
     walletId: activeWalletId,
     markFullScanDone: true,
   })
@@ -534,23 +513,21 @@ export async function loadWalletHandlingPersistedChainMismatch(
  * auto-lock timer. Does NOT sync. Used for lab mode where there is no Esplora.
  */
 export async function loadDescriptorWalletWithoutSync(params: {
-  password: string
   walletId: number
   networkMode: NetworkMode
   addressType: AddressType
   accountId: number
 }): Promise<void> {
-  const { password, walletId, networkMode, addressType, accountId } = params
+  const { walletId, networkMode, addressType, accountId } = params
   await waitForCryptoWorkerHealthy()
   const network = toBitcoinNetwork(networkMode)
   const descriptorWallet = await resolveDescriptorWallet({
-    password,
     walletId,
     targetNetwork: network,
     targetAddressType: addressType,
     targetAccountId: accountId,
   })
-  void beginArkadeSessionOpenAfterUnlockIfActive({ password, walletId, networkMode })
+  void beginArkadeSessionOpenAfterUnlockIfActive({ walletId, networkMode })
 
   const { loadWallet, getCurrentAddress } = useCryptoStore.getState()
   const {
@@ -597,7 +574,6 @@ export async function loadDescriptorWalletWithoutSync(params: {
  * auto-lock timer, then run Esplora sync (by default in the background after unlock).
  */
 export async function loadDescriptorWalletAndSync(params: {
-  password: string
   walletId: number
   networkMode: NetworkMode
   addressType: AddressType
@@ -611,7 +587,6 @@ export async function loadDescriptorWalletAndSync(params: {
   awaitSync?: boolean
 }): Promise<void> {
   const {
-    password,
     walletId,
     networkMode,
     addressType,
@@ -622,14 +597,12 @@ export async function loadDescriptorWalletAndSync(params: {
   await waitForCryptoWorkerHealthy()
   const network = toBitcoinNetwork(networkMode)
   const descriptorWallet = await resolveDescriptorWallet({
-    password,
     walletId,
     targetNetwork: network,
     targetAddressType: addressType,
     targetAccountId: accountId,
   })
   const arkadeSessionOpenPromise = beginArkadeSessionOpenAfterUnlockIfActive({
-    password,
     walletId,
     networkMode,
   })
@@ -680,7 +653,6 @@ export async function loadDescriptorWalletAndSync(params: {
     try {
       await syncActiveWalletAndUpdateState(networkMode, { useFullScan: true })
       await persistPostEsploraSyncDescriptorWalletState({
-        password,
         walletId,
         markFullScanDone: true,
       })

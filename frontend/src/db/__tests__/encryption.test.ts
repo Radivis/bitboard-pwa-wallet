@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest'
+import { beforeEach, describe, it, expect, vi } from 'vitest'
 
 /**
  * Frontend encryption tests using a mock encryption worker (PBKDF2 + AES-GCM) for fast execution.
@@ -21,7 +21,14 @@ vi.mock('@/workers/encryption-factory', async () => {
 })
 
 import { TEST_MNEMONIC_12 } from '@/test-utils/test-providers'
-import { encryptData, decryptData } from '../encryption'
+import {
+  decryptData,
+  decryptDataWithPassword,
+  encryptData,
+  encryptDataWithPassword,
+} from '../encryption'
+import { beginWalletSecretsSession, endWalletSecretsSession } from '@/lib/wallet/wallet-secrets-session'
+import { resetMockEncryptionWorkerSession } from './mock-encryption-worker'
 
 describe('Encryption with Argon2id + AES-GCM', () => {
   const password = 'super-secret-password-123'
@@ -31,9 +38,15 @@ describe('Encryption with Argon2id + AES-GCM', () => {
     changeSet: '{"network":"signet","last_reveal":{"0":5}}',
   })
 
+  beforeEach(async () => {
+    resetMockEncryptionWorkerSession()
+    await endWalletSecretsSession().catch(() => undefined)
+    await beginWalletSecretsSession(password)
+  })
+
   describe('encryptData', () => {
     it('returns an EncryptedBlob with ciphertext, iv, and salt', async () => {
-      const result = await encryptData(password, plaintext)
+      const result = await encryptData(plaintext)
 
       expect(result).toHaveProperty('ciphertext')
       expect(result.ciphertext).toBeInstanceOf(Uint8Array)
@@ -53,15 +66,15 @@ describe('Encryption with Argon2id + AES-GCM', () => {
     })
 
     it('produces different ciphertext for same plaintext due to random IV', async () => {
-      const result1 = await encryptData(password, plaintext)
-      const result2 = await encryptData(password, plaintext)
+      const result1 = await encryptData(plaintext)
+      const result2 = await encryptData(plaintext)
 
       expect(result1.ciphertext).not.toEqual(result2.ciphertext)
     })
 
     it('produces different salt for each encryption', async () => {
-      const result1 = await encryptData(password, plaintext)
-      const result2 = await encryptData(password, plaintext)
+      const result1 = await encryptData(plaintext)
+      const result2 = await encryptData(plaintext)
 
       expect(result1.salt).not.toEqual(result2.salt)
     })
@@ -69,57 +82,57 @@ describe('Encryption with Argon2id + AES-GCM', () => {
 
   describe('decryptData', () => {
     it('successfully decrypts data encrypted with the same password', async () => {
-      const encrypted = await encryptData(password, plaintext)
-      const decrypted = await decryptData(password, encrypted)
+      const encrypted = await encryptData(plaintext)
+      const decrypted = await decryptData(encrypted)
 
       expect(decrypted).toBe(plaintext)
     })
 
     it('throws error when decrypting with wrong password', async () => {
-      const encrypted = await encryptData(password, plaintext)
+      const encrypted = await encryptDataWithPassword(password, plaintext)
 
-      await expect(decryptData('wrong-password', encrypted))
+      await expect(decryptDataWithPassword('wrong-password', encrypted))
         .rejects.toThrow()
     })
 
     it('throws error when ciphertext is corrupted', async () => {
-      const encrypted = await encryptData(password, plaintext)
+      const encrypted = await encryptData(plaintext)
 
       const corrupted = new Uint8Array(encrypted.ciphertext)
       corrupted[0] ^= 0xFF
       encrypted.ciphertext = corrupted
 
-      await expect(decryptData(password, encrypted))
+      await expect(decryptData(encrypted))
         .rejects.toThrow()
     })
 
     it('throws error when IV is corrupted', async () => {
-      const encrypted = await encryptData(password, plaintext)
+      const encrypted = await encryptData(plaintext)
 
       const corrupted = new Uint8Array(encrypted.iv)
       corrupted[0] ^= 0xFF
       encrypted.iv = corrupted
 
-      await expect(decryptData(password, encrypted))
+      await expect(decryptData(encrypted))
         .rejects.toThrow()
     })
 
     it('throws error when salt is corrupted', async () => {
-      const encrypted = await encryptData(password, plaintext)
+      const encrypted = await encryptData(plaintext)
 
       const corrupted = new Uint8Array(encrypted.salt)
       corrupted[0] ^= 0xFF
       encrypted.salt = corrupted
 
-      await expect(decryptData(password, encrypted))
+      await expect(decryptData(encrypted))
         .rejects.toThrow()
     })
   })
 
   describe('round-trip encryption with various data types', () => {
     it('handles empty string', async () => {
-      const encrypted = await encryptData(password, '')
-      const decrypted = await decryptData(password, encrypted)
+      const encrypted = await encryptData('')
+      const decrypted = await decryptData(encrypted)
       expect(decrypted).toBe('')
     })
 
@@ -129,8 +142,8 @@ describe('Encryption with Argon2id + AES-GCM', () => {
         changeSet: JSON.stringify({ data: 'x'.repeat(10000) }),
       })
 
-      const encrypted = await encryptData(password, largePayload)
-      const decrypted = await decryptData(password, encrypted)
+      const encrypted = await encryptData(largePayload)
+      const decrypted = await decryptData(encrypted)
 
       expect(decrypted).toBe(largePayload)
     })
@@ -138,8 +151,8 @@ describe('Encryption with Argon2id + AES-GCM', () => {
     it('handles unicode characters', async () => {
       const unicodePlaintext = '{"emoji":"🔐","chinese":"测试","arabic":"اختبار"}'
 
-      const encrypted = await encryptData(password, unicodePlaintext)
-      const decrypted = await decryptData(password, encrypted)
+      const encrypted = await encryptData(unicodePlaintext)
+      const decrypted = await decryptData(encrypted)
 
       expect(decrypted).toBe(unicodePlaintext)
     })

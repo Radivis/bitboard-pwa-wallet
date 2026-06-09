@@ -2,7 +2,6 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import { toast } from 'sonner'
 import { useWalletStore } from '@/stores/walletStore'
-import { useSessionStore } from '@/stores/sessionStore'
 import { useCryptoStore } from '@/stores/cryptoStore'
 import { useSendStore } from '@/stores/sendStore'
 import { getEsploraUrl, toBitcoinNetwork } from '@/lib/wallet/bitcoin-utils'
@@ -78,7 +77,6 @@ export function useBroadcastTransactionMutation() {
       } = useCryptoStore.getState()
       const { setWalletStatus, setBalance, setTransactions } =
         useWalletStore.getState()
-      const password = useSessionStore.getState().password
       const activeWalletId = useWalletStore.getState().activeWalletId
 
       const rawTxHex = await signAndExtractTransaction(psbt)
@@ -87,10 +85,9 @@ export function useBroadcastTransactionMutation() {
       const esploraUrl = getEsploraUrl(networkMode, customUrl)
       const txid = await broadcastTransaction(rawTxHex, esploraUrl)
 
-      if (password && activeWalletId) {
+      if (activeWalletId) {
         const changesetJson = await exportChangeset()
         await updateWalletChangeset({
-          password,
           walletId: activeWalletId,
           changesetJson,
         })
@@ -105,7 +102,6 @@ export function useBroadcastTransactionMutation() {
           setBalance(newBalance)
           setTransactions(newTransactionList)
           await persistPostEsploraSyncDescriptorWalletState({
-            password: password ?? null,
             walletId: activeWalletId ?? null,
           })
         } catch {

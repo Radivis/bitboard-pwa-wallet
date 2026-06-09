@@ -5,10 +5,10 @@ import { useWalletStore } from '@/stores/walletStore'
 import {
   getDatabase,
   ensureMigrated,
-  loadWalletSecrets,
   clearWalletNoMnemonicBackupFlag,
   useWalletNoMnemonicBackupFlag,
 } from '@/db'
+import { loadWalletSecretsWithPassword } from '@/db/wallet-persistence'
 import { invalidateWalletRelatedQueriesAndNotifyOtherTabs } from '@/lib/wallet/wallet-query-cache-sync'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { AppModal } from '@/components/AppModal'
@@ -64,7 +64,11 @@ export function SeedPhraseBackup() {
       setError(null)
       await ensureMigrated()
       const walletDb = getDatabase()
-      const secrets = await loadWalletSecrets(walletDb, promptPassword, activeWalletId)
+      const secrets = await loadWalletSecretsWithPassword(
+        walletDb,
+        promptPassword,
+        activeWalletId,
+      )
       setMnemonicWords(secrets.mnemonic.split(' '))
       setShowPasswordPrompt(false)
       setBackupConfirmed(false)

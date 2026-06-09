@@ -12,7 +12,6 @@ import {
   selectCommittedAddressType,
   useWalletStore,
 } from '@/stores/walletStore'
-import { useSessionStore } from '@/stores/sessionStore'
 import type { AddressType } from '@/lib/wallet/wallet-domain-types'
 
 /** React Query key prefix for on-chain Esplora sync metadata (invalidate all with prefix). */
@@ -39,14 +38,11 @@ function activeDescriptorWalletContext():
       addressType: AddressType
       accountId: number
       walletId: number
-      password: string
     }
   | null {
-  const password = useSessionStore.getState().password
   const walletState = useWalletStore.getState()
   const { activeWalletId, walletStatus, networkMode } = walletState
   if (
-    password == null ||
     activeWalletId == null ||
     networkMode === 'lab' ||
     walletStatus === 'locked' ||
@@ -59,7 +55,6 @@ function activeDescriptorWalletContext():
     addressType: selectCommittedAddressType(walletState),
     accountId: selectCommittedAccountId(walletState),
     walletId: activeWalletId,
-    password,
   }
 }
 
@@ -98,7 +93,6 @@ export async function resolveOnchainEsploraSyncMetadata(): Promise<
   await ensureMigrated()
   const lastSuccessfulEsploraSyncAt =
     await loadLastSuccessfulEsploraSyncAtForDescriptorWallet({
-      password: context.password,
       walletId: context.walletId,
       network: toBitcoinNetwork(context.networkMode),
       addressType: context.addressType,

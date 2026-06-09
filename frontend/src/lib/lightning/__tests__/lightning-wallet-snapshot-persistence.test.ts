@@ -15,7 +15,7 @@ vi.mock('@/db/wallet-persistence', () => ({
 }))
 
 vi.mock('@/db/encryption', () => ({
-  encryptData: vi.fn(async (_password: string, plaintext: string) => ({
+  encryptData: vi.fn(async (plaintext: string) => ({
     ciphertext: new TextEncoder().encode(plaintext),
     iv: new Uint8Array(12),
     salt: new Uint8Array(16),
@@ -167,7 +167,6 @@ describe('batchApplyNwcSnapshotPatches', () => {
     vi.mocked(updateWalletSecretsPayloadWithRetry).mockResolvedValue(undefined)
 
     await batchApplyNwcSnapshotPatches({
-      password: 'pw',
       walletId: 1,
       patches: [
         {
@@ -180,7 +179,6 @@ describe('batchApplyNwcSnapshotPatches', () => {
     expect(updateWalletSecretsPayloadWithRetry).toHaveBeenCalledTimes(1)
     const retryArg = vi.mocked(updateWalletSecretsPayloadWithRetry).mock.calls[0][0]
     expect(retryArg.walletId).toBe(1)
-    expect(retryArg.password).toBe('pw')
     expect(typeof retryArg.transform).toBe('function')
   })
 })

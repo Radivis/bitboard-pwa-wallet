@@ -19,7 +19,7 @@ import {
 } from '@/hooks/useArkadeQueries'
 import { isArkadeActiveForNetworkMode } from '@/lib/arkade/arkade-utils'
 import { formatSats } from '@/lib/wallet/bitcoin-utils'
-import { useWalletStore } from '@/stores/walletStore'
+import { selectCommittedNetworkMode, useWalletStore } from '@/stores/walletStore'
 import { toast } from 'sonner'
 
 function boardingExplorerUrl(networkMode: string, address: string): string {
@@ -33,7 +33,7 @@ function boardingExplorerUrl(networkMode: string, address: string): string {
 }
 
 export function ArkadeBoardPage() {
-  const networkMode = useWalletStore((s) => s.networkMode)
+  const networkMode = useWalletStore(selectCommittedNetworkMode)
   const onboardMutation = useArkadeOnboardMutation()
   const boardingQuery = useArkadeBoardingAddressQuery()
   const boardingStatusQuery = useArkadeBoardingStatusQuery()

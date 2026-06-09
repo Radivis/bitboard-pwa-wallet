@@ -1,13 +1,12 @@
 import { toast } from 'sonner'
 import { getArkadeWorker } from '@/workers/arkade-factory'
-import { saveLastSuccessfulOperatorSyncAtForConnection } from '@/lib/arkade/arkade-sdk-persistence'
+import { saveLastSuccessfulOperatorSyncAtEncrypted } from '@/lib/arkade/arkade-encrypted-persistence-manager'
 import { refreshArkadeStoreFromLoadedWasm } from '@/lib/arkade/arkade-persistence-store-sync'
 import { isArkadeActiveForNetworkMode } from '@/lib/arkade/arkade-utils'
 import { errorMessage } from '@/lib/shared/utils'
 import { invalidateArkadeDashboardQueries } from '@/lib/arkade/arkade-dashboard-sync'
 import { isArkadeSupportedNetworkMode } from '@/lib/arkade/arkade-endpoints'
-import { useSessionStore } from '@/stores/sessionStore'
-import { useWalletStore } from '@/stores/walletStore'
+import { getCommittedNetworkMode, useWalletStore } from '@/stores/walletStore'
 import type { NetworkMode } from '@/stores/walletStore'
 
 const BACKGROUND_OPERATOR_SYNC_DEBOUNCE_MS = 400
@@ -27,7 +26,6 @@ export async function awaitBackgroundArkadeOperatorSync(): Promise<void> {
 }
 
 async function syncArkadeWithOperatorCore(params: {
-  password: string
   walletId: number
   networkMode: NetworkMode
   connectionId: string
@@ -42,8 +40,7 @@ async function syncArkadeWithOperatorCore(params: {
   await refreshArkadeStoreFromLoadedWasm()
 
   const now = new Date().toISOString()
-  await saveLastSuccessfulOperatorSyncAtForConnection({
-    password: params.password,
+  await saveLastSuccessfulOperatorSyncAtEncrypted({
     walletId: params.walletId,
     connectionId: params.connectionId,
     lastSuccessfulOperatorSyncAt: now,
@@ -54,14 +51,12 @@ async function syncArkadeWithOperatorCore(params: {
 
 /** Operator sync for dashboard polling — ensures the WASM session is open first. */
 export async function syncArkadeWithOperator(params: {
-  password: string
   walletId: number
   networkMode: NetworkMode
   connectionId: string
 }): Promise<void> {
   const { openArkadeSessionForWallet } = await import('@/lib/arkade/arkade-session-service')
   await openArkadeSessionForWallet({
-    password: params.password,
     walletId: params.walletId,
     networkMode: params.networkMode,
   })
@@ -81,12 +76,11 @@ export function scheduleBackgroundArkadeOperatorSync(): void {
     backgroundOperatorSyncTimer = null
 
     const walletState = useWalletStore.getState()
-    const password = useSessionStore.getState().password
+    const networkMode = getCommittedNetworkMode()
     if (
-      password == null ||
       walletState.activeWalletId == null ||
       walletState.activeArkadeConnectionId == null ||
-      !isArkadeSupportedNetworkMode(walletState.networkMode)
+      !isArkadeSupportedNetworkMode(networkMode)
     ) {
       return
     }
@@ -96,9 +90,8 @@ export function scheduleBackgroundArkadeOperatorSync(): void {
     }
 
     const syncWork = runArkadeOperatorSyncAndPersist({
-      password,
       walletId: walletState.activeWalletId,
-      networkMode: walletState.networkMode,
+      networkMode,
       connectionId: walletState.activeArkadeConnectionId,
     })
     backgroundOperatorSyncInFlight = syncWork
@@ -111,7 +104,6 @@ export function scheduleBackgroundArkadeOperatorSync(): void {
 }
 
 export async function runArkadeOperatorSyncAndPersist(params: {
-  password: string
   walletId: number
   networkMode: NetworkMode
   connectionId: string

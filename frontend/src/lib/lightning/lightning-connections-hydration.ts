@@ -15,7 +15,6 @@ export const LIGHTNING_CONNECTIONS_HYDRATION_QUERY_KEY = [
  * in-memory slice for this wallet.
  */
 export async function hydrateLightningConnectionsForWallet(params: {
-  password: string
   walletId: number
 }): Promise<void> {
   const connections = await loadLightningConnectionsForWallet(params)

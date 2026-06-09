@@ -11,7 +11,6 @@ import {
   selectCommittedAddressType,
   useWalletStore,
 } from '@/stores/walletStore'
-import { useSessionStore } from '@/stores/sessionStore'
 export const ARKADE_DASHBOARD_QUERY_KEY = [
   ...WALLET_DB_QUERY_KEY_ROOT,
   'arkade',
@@ -33,16 +32,13 @@ function activeArkadeDashboardContext():
   | {
       networkMode: ArkadeSupportedNetworkMode
       walletId: number
-      password: string
       connectionId: string
     }
   | null {
-  const password = useSessionStore.getState().password
   const walletState = useWalletStore.getState()
   const { activeWalletId, walletStatus, networkMode, activeArkadeConnectionId } =
     walletState
   if (
-    password == null ||
     activeWalletId == null ||
     activeArkadeConnectionId == null ||
     !isArkadeSupportedNetworkMode(networkMode) ||
@@ -54,7 +50,6 @@ function activeArkadeDashboardContext():
   return {
     networkMode,
     walletId: activeWalletId,
-    password,
     connectionId: activeArkadeConnectionId,
   }
 }
@@ -77,7 +72,6 @@ export async function resolveArkadeOperatorSyncMetadata(): Promise<
 
   await ensureMigrated()
   const connection = await loadActiveArkadeConnectionForNetwork({
-    password: context.password,
     walletId: context.walletId,
     networkMode: context.networkMode,
   })
