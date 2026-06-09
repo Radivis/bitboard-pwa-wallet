@@ -5,6 +5,7 @@ import type {
 } from '@/workers/secrets-channel-types'
 import type { ArkadeSupportedNetworkMode } from '@/lib/arkade/arkade-endpoints'
 import { arkadeSessionKey } from '@/lib/arkade/arkade-session-key'
+import { rethrowWasmArkErrorForComlink } from '@/lib/shared/wasm-ark-error'
 import {
   clearDebouncedSdkPersistenceFlush,
   flushSdkPersistenceNowOrThrow,
@@ -78,7 +79,7 @@ async function invokeWasmArk<T>(
     const wasmModule = await getArkWasm()
     return await run(wasmModule)
   } catch (err) {
-    throw err instanceof Error ? err : new Error(String(err))
+    rethrowWasmArkErrorForComlink(err)
   }
 }
 

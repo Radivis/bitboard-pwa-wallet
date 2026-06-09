@@ -20,7 +20,7 @@ use bip39::Mnemonic;
 use bitcoin::bip32::Xpriv;
 use bitcoin::key::Secp256k1;
 use bitcoin::secp256k1::rand::rngs::OsRng;
-use bitcoin::{Address, Amount, Network, OutPoint, PublicKey, XOnlyPublicKey};
+use bitcoin::{Address, Amount, Network, OutPoint, PublicKey, Txid, XOnlyPublicKey};
 
 use crate::api_types::{
     BalanceDto, BoardingStatusDto, CollaborativeExitFeeEstimateDto, CollaborativeExitParams,
@@ -101,7 +101,7 @@ impl ArkSession {
                 &esplora_url,
                 SharedPersistenceDb(Arc::clone(&wallet_db)),
             )
-            .map_err(|error| ArkWasmError::Message(error.to_string()))?,
+            .map_err(|error| ArkWasmError::Wallet(error.to_string()))?,
         );
 
         // Always Bip32KeyProvider — never StaticKeyProvider/new_with_keypair — so ark-client
@@ -135,7 +135,7 @@ impl ArkSession {
         }
         let server_signer: XOnlyPublicKey = client.server_info.signer_pk.into();
         validate_operator_identity(parsed.operator_identity.as_ref(), server_signer, network)
-            .map_err(ArkWasmError::Message)?;
+            .map_err(ArkWasmError::Persistence)?;
         wallet_db.set_load_context(network, server_signer);
         client.sync_onchain_wallet().await?;
 
@@ -170,11 +170,7 @@ impl ArkSession {
 
     pub async fn sync_with_operator(&self) -> ArkResult<()> {
         self.sync_offchain_keys().await;
-        let (vtxo_list, _) = self
-            .client
-            .list_vtxos()
-            .await
-            .map_err(|error| ArkWasmError::Message(error.to_string()))?;
+        let (vtxo_list, _) = self.client.list_vtxos().await?;
         let all_points: Vec<VirtualTxOutPoint> = vtxo_list.all().cloned().collect();
         let snapshot = snapshot_from_virtual_tx_outpoints(
             self.client.server_info.dust.to_sat(),
@@ -227,18 +223,15 @@ impl ArkSession {
             }
         }
 
-        let (vtxo_list, _) = self
-            .client
-            .list_vtxos()
-            .await
-            .map_err(|error| ArkWasmError::Message(error.to_string()))?;
+        let (vtxo_list, _) = self.client.list_vtxos().await?;
         let target_txid = parse_outpoint(txid, vout)?.txid;
         let amount = vtxo_list
             .all()
             .find(|vtp| vtp.outpoint.txid == target_txid && vtp.outpoint.vout == vout)
             .map(|vtp| vtp.amount.to_sat())
-            .ok_or_else(|| {
-                ArkWasmError::Message(format!("VTXO not found for outpoint {txid}:{vout}"))
+            .ok_or(ArkWasmError::VtxoNotFound {
+                txid: txid.to_string(),
+                vout,
             })?;
         Ok(amount)
     }
@@ -345,8 +338,7 @@ impl ArkSession {
                 .client
                 .blockchain()
                 .find_outpoints(boarding_output.address())
-                .await
-                .map_err(|error| ArkWasmError::Message(error.to_string()))?;
+                .await?;
 
             for utxo in outpoints {
                 accumulate_boarding_utxo_balance(
@@ -370,8 +362,7 @@ impl ArkSession {
     }
 
     pub async fn send_payment(&self, params: SendPaymentParams) -> ArkResult<String> {
-        let address = ArkAddress::decode(&params.address)
-            .map_err(|error| ArkWasmError::Message(error.to_string()))?;
+        let address = ArkAddress::decode(&params.address)?;
         let amount = Amount::from_sat(params.amount_sats);
         let txid = self
             .client
@@ -402,7 +393,7 @@ impl ArkSession {
         let delegator = self
             .delegator
             .as_ref()
-            .ok_or_else(|| ArkWasmError::Message("delegator service is not configured".into()))?;
+            .ok_or(ArkWasmError::DelegatorNotConfigured)?;
         let info = delegator.info().await?;
         let fee = info.fee.parse::<u64>().unwrap_or(0);
         Ok(DelegateInfoDto {
@@ -495,21 +486,21 @@ impl ArkSession {
         let status = self.boarding_status().await?;
         if status.spendable_sats == 0 {
             if status.pending_sats > 0 {
-                return Err(ArkWasmError::Message(
+                return Err(ArkWasmError::Boarding(
                     "Boarding payment is unconfirmed. Wait for at least one block confirmation, then try again.".to_string(),
                 ));
             }
             if status.expired_sats > 0 {
-                return Err(ArkWasmError::Message(
+                return Err(ArkWasmError::Boarding(
                     "Boarding UTXO can only be spent unilaterally now. Use the unilateral exit flow instead of settle.".to_string(),
                 ));
             }
             if status.tracked_addresses.is_empty() {
-                return Err(ArkWasmError::Message(
+                return Err(ArkWasmError::Boarding(
                     "No boarding address is registered for this wallet session.".to_string(),
                 ));
             }
-            return Err(ArkWasmError::Message(format!(
+            return Err(ArkWasmError::Boarding(format!(
                 "No spendable boarding UTXO found at {}. Confirm the payment was sent to that exact address on {}.",
                 status.boarding_address,
                 self.network_mode.label(),
@@ -519,10 +510,10 @@ impl ArkSession {
         let mut rng = OsRng;
         match self.client.settle(&mut rng).await {
             Ok(Some(txid)) => Ok(Some(txid.to_string())),
-            Ok(None) => Err(ArkWasmError::Message(
+            Ok(None) => Err(ArkWasmError::Boarding(
                 "Settle returned no inputs even though boarding UTXOs looked spendable. Try again in a moment.".to_string(),
             )),
-            Err(error) => Err(ArkWasmError::Message(error.to_string())),
+            Err(error) => Err(error.into()),
         }
     }
 
@@ -705,12 +696,7 @@ impl ArkSession {
 
         for parent_tx in branch {
             let parent_txid = parent_tx.compute_txid();
-            let status = self
-                .client
-                .blockchain()
-                .find_tx(&parent_txid)
-                .await
-                .map_err(|error| ArkWasmError::Message(error.to_string()))?;
+            let status = self.client.blockchain().find_tx(&parent_txid).await?;
 
             if status.is_none() {
                 on_progress(UnrollProgressEvent {
@@ -723,8 +709,7 @@ impl ArkSession {
                 let broadcast_txid = self
                     .client
                     .broadcast_next_unilateral_exit_node(std::slice::from_ref(&parent_tx))
-                    .await
-                    .map_err(|error| ArkWasmError::Message(error.to_string()))?;
+                    .await?;
                 if !pending_unilateral_exit_recorded {
                     self.record_pending_unilateral_exit(txid, vout, amount_sats);
                     pending_unilateral_exit_recorded = true;
@@ -769,17 +754,14 @@ impl ArkSession {
         params: CompleteUnilateralExitParams,
     ) -> ArkResult<String> {
         if params.vtxo_txids.is_empty() {
-            return Err(ArkWasmError::Message(
-                "vtxo_txids must not be empty".to_string(),
-            ));
+            return Err(ArkWasmError::EmptyVtxoTxids);
         }
 
         let vtxo_txids: Vec<bitcoin::Txid> = params
             .vtxo_txids
             .iter()
             .map(|txid| {
-                txid.parse()
-                    .map_err(|error| ArkWasmError::Message(format!("invalid txid: {error}")))
+                Txid::from_str(txid).map_err(|error| ArkWasmError::InvalidTxid(error.to_string()))
             })
             .collect::<Result<_, _>>()?;
 
@@ -817,7 +799,7 @@ impl ArkSession {
         self.client
             .build_unilateral_exit_branch(target)
             .await
-            .map_err(|error| ArkWasmError::Message(error.to_string()))
+            .map_err(Into::into)
     }
 
     fn network(&self) -> Network {
@@ -834,16 +816,14 @@ impl ArkSession {
                 .client
                 .blockchain()
                 .find_outpoints(boarding_output.address())
-                .await
-                .map_err(|error| ArkWasmError::Message(error.to_string()))?;
+                .await?;
 
             for ExplorerUtxo { outpoint, .. } in outpoints {
                 let status = self
                     .client
                     .blockchain()
                     .get_output_status(&outpoint.txid, outpoint.vout)
-                    .await
-                    .map_err(|error| ArkWasmError::Message(error.to_string()))?;
+                    .await?;
                 if let Some(spend_txid) = status.spend_txid {
                     boarding_commitment_transactions.push(spend_txid);
                 }
@@ -863,8 +843,7 @@ impl ArkSession {
                 .client
                 .blockchain()
                 .find_outpoints(boarding_output.address())
-                .await
-                .map_err(|error| ArkWasmError::Message(error.to_string()))?;
+                .await?;
 
             for ExplorerUtxo {
                 outpoint,
@@ -907,20 +886,19 @@ fn warn_offchain_key_discovery_failed(error: &ark_client::Error) {
 fn parse_delegator_public_key(value: &str) -> ArkResult<PublicKey> {
     value
         .parse::<PublicKey>()
-        .map_err(|error| ArkWasmError::Message(format!("invalid delegator pubkey: {error}")))
+        .map_err(|error| ArkWasmError::InvalidDelegatorPubkey(error.to_string()))
 }
 
 fn parse_onchain_address(value: &str, network: Network) -> ArkResult<Address> {
     Address::from_str(value)
-        .map_err(|error| ArkWasmError::Message(error.to_string()))?
+        .map_err(|error| ArkWasmError::InvalidOnchainAddress(error.to_string()))?
         .require_network(network)
-        .map_err(|error| ArkWasmError::Message(error.to_string()))
+        .map_err(|error| ArkWasmError::InvalidOnchainAddress(error.to_string()))
 }
 
 fn parse_outpoint(txid: &str, vout: u32) -> ArkResult<OutPoint> {
-    let txid = txid
-        .parse()
-        .map_err(|error| ArkWasmError::Message(format!("invalid txid: {error}")))?;
+    let txid =
+        Txid::from_str(txid).map_err(|error| ArkWasmError::InvalidTxid(error.to_string()))?;
     Ok(OutPoint { txid, vout })
 }
 

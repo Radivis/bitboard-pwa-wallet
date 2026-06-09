@@ -40,8 +40,8 @@ pub fn vtxo_still_spendable_in_snapshot(
     txid: &str,
     vout: u32,
 ) -> crate::error::ArkResult<bool> {
-    let target_txid = Txid::from_str(txid)
-        .map_err(|error| ArkWasmError::Message(format!("invalid txid: {error}")))?;
+    let target_txid =
+        Txid::from_str(txid).map_err(|error| ArkWasmError::InvalidTxid(error.to_string()))?;
     let vtxo_list = vtxo_list_from_snapshot(snapshot)?;
     Ok(vtxo_list.all_unspent().any(|vtp| {
         vtp.outpoint.txid == target_txid
@@ -52,10 +52,7 @@ pub fn vtxo_still_spendable_in_snapshot(
 }
 
 fn is_invalid_pending_vtxo_txid_error(error: &ArkWasmError) -> bool {
-    matches!(
-        error,
-        ArkWasmError::Message(message) if message.starts_with("invalid txid")
-    )
+    matches!(error, ArkWasmError::InvalidTxid(_))
 }
 
 pub fn should_keep_pending_exit_deduction(

@@ -20,9 +20,7 @@ pub struct EsploraBlockchain {
 impl EsploraBlockchain {
     pub fn new(esplora_url: &str) -> ArkResult<Self> {
         if esplora_url.is_empty() {
-            return Err(ArkWasmError::Message(
-                "Esplora URL must not be empty".to_string(),
-            ));
+            return Err(ArkWasmError::EmptyEsploraUrl);
         }
 
         #[cfg(target_arch = "wasm32")]
@@ -31,14 +29,14 @@ impl EsploraBlockchain {
             esplora_client::Builder::new(esplora_url)
                 .timeout(ESPLORA_HTTP_TIMEOUT_SECS)
                 .build_async_with_sleeper::<WasmSleeper>()
-                .map_err(|error| ArkWasmError::Message(error.to_string()))?
+                .map_err(|error| ArkWasmError::Blockchain(error.to_string()))?
         };
 
         #[cfg(not(target_arch = "wasm32"))]
         let client = esplora_client::Builder::new(esplora_url)
             .timeout(ESPLORA_HTTP_TIMEOUT_SECS)
             .build_async_with_sleeper()
-            .map_err(|error| ArkWasmError::Message(error.to_string()))?;
+            .map_err(|error| ArkWasmError::Blockchain(error.to_string()))?;
 
         Ok(Self {
             client: Arc::new(client),

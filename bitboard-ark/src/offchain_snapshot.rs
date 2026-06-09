@@ -139,9 +139,9 @@ fn virtual_tx_outpoint_from_record(
     record: &VirtualTxOutPointRecord,
 ) -> ArkResult<VirtualTxOutPoint> {
     let txid = Txid::from_str(&record.txid)
-        .map_err(|error| ArkWasmError::Message(format!("invalid vtxo txid: {error}")))?;
+        .map_err(|error| ArkWasmError::Snapshot(format!("invalid vtxo txid: {error}")))?;
     let script_bytes = Vec::from_hex(&record.script_hex)
-        .map_err(|error| ArkWasmError::Message(format!("invalid vtxo script: {error}")))?;
+        .map_err(|error| ArkWasmError::Snapshot(format!("invalid vtxo script: {error}")))?;
     let script = ScriptBuf::from_bytes(script_bytes);
 
     Ok(VirtualTxOutPoint {
@@ -162,33 +162,32 @@ fn virtual_tx_outpoint_from_record(
             .as_ref()
             .map(|value| Txid::from_str(value))
             .transpose()
-            .map_err(|error| ArkWasmError::Message(format!("invalid spent_by: {error}")))?,
+            .map_err(|error| ArkWasmError::Snapshot(format!("invalid spent_by: {error}")))?,
         commitment_txids: record
             .commitment_txids
             .iter()
             .map(|value| Txid::from_str(value))
             .collect::<Result<Vec<_>, _>>()
-            .map_err(|error| ArkWasmError::Message(format!("invalid commitment txid: {error}")))?,
+            .map_err(|error| ArkWasmError::Snapshot(format!("invalid commitment txid: {error}")))?,
         settled_by: record
             .settled_by
             .as_ref()
             .map(|value| Txid::from_str(value))
             .transpose()
-            .map_err(|error| ArkWasmError::Message(format!("invalid settled_by: {error}")))?,
+            .map_err(|error| ArkWasmError::Snapshot(format!("invalid settled_by: {error}")))?,
         ark_txid: record
             .ark_txid
             .as_ref()
             .map(|value| Txid::from_str(value))
             .transpose()
-            .map_err(|error| ArkWasmError::Message(format!("invalid ark txid: {error}")))?,
+            .map_err(|error| ArkWasmError::Snapshot(format!("invalid ark txid: {error}")))?,
         assets: record
             .assets
             .iter()
             .map(|asset| {
-                let asset_id = asset
-                    .asset_id_hex
-                    .parse()
-                    .map_err(|error| ArkWasmError::Message(format!("invalid asset id: {error}")))?;
+                let asset_id = asset.asset_id_hex.parse().map_err(|error| {
+                    ArkWasmError::Snapshot(format!("invalid asset id: {error}"))
+                })?;
                 Ok(ark_core::server::Asset {
                     asset_id,
                     amount: asset.amount,
@@ -208,7 +207,7 @@ fn generate_incoming_vtxo_transaction_history(
         unspent_outpoints,
         boarding_commitment_transactions,
     )
-    .map_err(|error| ArkWasmError::Message(error.to_string()))
+    .map_err(ArkWasmError::from)
 }
 
 fn generate_outgoing_vtxo_transaction_history(
@@ -216,6 +215,6 @@ fn generate_outgoing_vtxo_transaction_history(
     unspent_outpoints: &[VirtualTxOutPoint],
 ) -> ArkResult<Vec<OutgoingTransaction>> {
     history::generate_outgoing_vtxo_transaction_history(spent_outpoints, unspent_outpoints)
-        .map_err(|error| ArkWasmError::Message(error.to_string()))
+        .map_err(ArkWasmError::from)
         .map(|iterator| iterator.collect())
 }

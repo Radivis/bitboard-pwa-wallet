@@ -25,13 +25,9 @@ use crate::api_types::{
     CollaborativeExitFeeEstimateParams, CollaborativeExitParams, CompleteUnilateralExitParams,
     OpenSessionParams, SendPaymentParams, UnilateralExitFeeParams,
 };
-use crate::error::{ArkResult, map_js_error};
+use crate::error::{ArkResult, ArkWasmError, map_js_error};
 use crate::network::NetworkMode;
 use crate::session::ArkSession;
-
-const MSG_SESSION_NOT_OPEN: &str = "Arkade session is not open";
-const MSG_SESSION_ALREADY_BORROWED: &str =
-    "Arkade session is already borrowed — likely a previous operation panicked";
 
 thread_local! {
     static ACTIVE_SESSION: RefCell<Option<Rc<ArkSession>>> = const { RefCell::new(None) };
@@ -44,12 +40,10 @@ pub fn init() {
 
 fn active_session_rc() -> ArkResult<Rc<ArkSession>> {
     ACTIVE_SESSION.with(|session_cell| {
-        let session_borrow = session_cell.try_borrow().map_err(|_| {
-            crate::error::ArkWasmError::Message(MSG_SESSION_ALREADY_BORROWED.into())
-        })?;
-        session_borrow
-            .clone()
-            .ok_or_else(|| crate::error::ArkWasmError::Message(MSG_SESSION_NOT_OPEN.into()))
+        let session_borrow = session_cell
+            .try_borrow()
+            .map_err(|_| ArkWasmError::SessionAlreadyBorrowed)?;
+        session_borrow.clone().ok_or(ArkWasmError::SessionNotOpen)
     })
 }
 
@@ -81,9 +75,9 @@ where
 
 fn clear_active_session() -> ArkResult<()> {
     ACTIVE_SESSION.with(|session_cell| {
-        let mut session_borrow_mut = session_cell.try_borrow_mut().map_err(|_| {
-            crate::error::ArkWasmError::Message(MSG_SESSION_ALREADY_BORROWED.into())
-        })?;
+        let mut session_borrow_mut = session_cell
+            .try_borrow_mut()
+            .map_err(|_| ArkWasmError::SessionAlreadyBorrowed)?;
         session_borrow_mut.take();
         Ok(())
     })
@@ -101,12 +95,8 @@ async fn map_js_async<T>(future: impl Future<Output = ArkResult<T>>) -> Result<T
 pub async fn ark_open_session(params: JsValue) -> Result<JsValue, JsValue> {
     map_js_async(async {
         let params: OpenSessionParams = serde_wasm_bindgen::from_value(params)?;
-        let network_mode = NetworkMode::parse(&params.network_mode).ok_or_else(|| {
-            crate::error::ArkWasmError::Message(format!(
-                "unsupported network mode: {}",
-                params.network_mode
-            ))
-        })?;
+        let network_mode = NetworkMode::parse(&params.network_mode)
+            .ok_or_else(|| ArkWasmError::UnsupportedNetworkMode(params.network_mode.clone()))?;
 
         let session = ArkSession::open(
             &params.mnemonic,
@@ -121,9 +111,9 @@ pub async fn ark_open_session(params: JsValue) -> Result<JsValue, JsValue> {
         let arkade_address = session.peek_offchain_address()?;
         let operator_signer_pk_hex = session.operator_signer_pk_hex();
         ACTIVE_SESSION.with(|session_cell| -> ArkResult<()> {
-            let mut session_borrow_mut = session_cell.try_borrow_mut().map_err(|_| {
-                crate::error::ArkWasmError::Message(MSG_SESSION_ALREADY_BORROWED.into())
-            })?;
+            let mut session_borrow_mut = session_cell
+                .try_borrow_mut()
+                .map_err(|_| ArkWasmError::SessionAlreadyBorrowed)?;
             *session_borrow_mut = Some(Rc::new(session));
             Ok(())
         })?;

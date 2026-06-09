@@ -21,6 +21,7 @@ bdk_wallet = { version = "2.3", features = ["keys-bip39"] }
 bdk_esplora = { version = "0.22", default-features = false, features = ["async"] }
 wasm-bindgen-futures = "0.4"
 js-sys = "0.3"
+bitboard-wasm-sleep = { path = "../bitboard-wasm-sleep" }
 bitcoin = { version = "0.32", default-features = false, features = ["secp-lowmemory", "std", "rand"] }
 console_error_panic_hook = "0.1"
 hex = "0.4"
