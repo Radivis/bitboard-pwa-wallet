@@ -1,5 +1,6 @@
 import { Bitcoin, Layers, Zap } from 'lucide-react'
 import { cn } from '@/lib/shared/utils'
+import { ReceiveModeArkadeInfomodeContent } from '@/components/arkade/infomode/ReceiveModeArkadeInfomodeContent'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 
 export type ReceiveMode = 'bitcoin' | 'lightning' | 'arkade'
@@ -20,8 +21,7 @@ export function ReceiveModeToggle({
   return (
     <InfomodeWrapper
       infoId="receive-mode-toggle"
-      infoTitle="Bitcoin, Lightning, and Arkade"
-      infoText="Bitcoin (on-chain) uses your bc1 address on the blockchain. Lightning uses invoices or lightning addresses for fast off-chain payments. Arkade uses ark1 or tark1 addresses for the VTXO offchain layer — separate from both. Choose the mode your sender will use."
+      infoComponent={ReceiveModeArkadeInfomodeContent}
     >
       <div className="flex w-full rounded-lg border bg-muted/50 p-1">
         <button

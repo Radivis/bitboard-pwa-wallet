@@ -1,8 +1,16 @@
 import { useState } from 'react'
 import { Link } from '@tanstack/react-router'
 import { Copy, ExternalLink, Layers } from 'lucide-react'
+import { ArkadeBoardingInfomodeContent } from '@/components/arkade/infomode/ArkadeBoardingInfomodeContent'
+import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { PageHeader } from '@/components/PageHeader'
 import { Button } from '@/components/ui/button'
+import {
+  ARKADE_BOARDING_ADDRESS_INFOMODE,
+  ARKADE_BOARD_STATUS_EXPIRED_INFOMODE,
+  ARKADE_BOARD_STATUS_READY_INFOMODE,
+  ARKADE_INFOMODE_IDS,
+} from '@/lib/arkade/arkade-infomode'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   useArkadeBoardingAddressQuery,
@@ -59,7 +67,15 @@ export function ArkadeBoardPage() {
       <PageHeader title="Board to Arkade" icon={Layers} />
       <Card>
         <CardHeader>
-          <CardTitle>From on-chain to Arkade</CardTitle>
+          <CardTitle>
+            <InfomodeWrapper
+              infoId={ARKADE_INFOMODE_IDS.boardFlow}
+              infoComponent={ArkadeBoardingInfomodeContent}
+              as="span"
+            >
+              From on-chain to Arkade
+            </InfomodeWrapper>
+          </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4 text-sm">
           <ol className="list-decimal space-y-2 pl-5">
@@ -78,9 +94,16 @@ export function ArkadeBoardPage() {
             <p className="text-muted-foreground">Loading boarding address…</p>
           ) : (
             <>
-              <p className="break-all rounded-md border bg-muted/40 p-2 font-mono text-xs">
-                {boardingAddress}
-              </p>
+              <InfomodeWrapper
+                infoId={ARKADE_INFOMODE_IDS.boardingAddress}
+                infoTitle={ARKADE_BOARDING_ADDRESS_INFOMODE.title}
+                infoText={ARKADE_BOARDING_ADDRESS_INFOMODE.text}
+                as="span"
+              >
+                <p className="break-all rounded-md border bg-muted/40 p-2 font-mono text-xs">
+                  {boardingAddress}
+                </p>
+              </InfomodeWrapper>
               <div className="flex flex-wrap gap-2">
                 <Button type="button" variant="outline" onClick={handleCopy} disabled={!boardingAddress}>
                   <Copy className="h-4 w-4" aria-hidden />
@@ -108,9 +131,27 @@ export function ArkadeBoardPage() {
             <div className="rounded-md border bg-muted/20 p-3 text-sm">
               <p className="font-medium">On-chain boarding status</p>
               <ul className="mt-2 space-y-1 text-muted-foreground">
-                <li>Ready to settle: {formatSats(boardingStatus.spendableSats)}</li>
+                <li>
+                  <InfomodeWrapper
+                    infoId={ARKADE_INFOMODE_IDS.boardStatusReady}
+                    infoTitle={ARKADE_BOARD_STATUS_READY_INFOMODE.title}
+                    infoText={ARKADE_BOARD_STATUS_READY_INFOMODE.text}
+                    as="span"
+                  >
+                    Ready to settle: {formatSats(boardingStatus.spendableSats)}
+                  </InfomodeWrapper>
+                </li>
                 <li>Pending confirmation: {formatSats(boardingStatus.pendingSats)}</li>
-                <li>Unilateral exit only: {formatSats(boardingStatus.expiredSats)}</li>
+                <li>
+                  <InfomodeWrapper
+                    infoId={ARKADE_INFOMODE_IDS.boardStatusExpired}
+                    infoTitle={ARKADE_BOARD_STATUS_EXPIRED_INFOMODE.title}
+                    infoText={ARKADE_BOARD_STATUS_EXPIRED_INFOMODE.text}
+                    as="span"
+                  >
+                    Unilateral exit only: {formatSats(boardingStatus.expiredSats)}
+                  </InfomodeWrapper>
+                </li>
               </ul>
               {boardingStatus.spendableSats === 0 &&
               boardingStatus.pendingSats === 0 &&

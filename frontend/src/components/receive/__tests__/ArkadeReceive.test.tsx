@@ -1,7 +1,8 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ArkadeReceive } from '@/components/receive/ArkadeReceive'
+import { renderWithProviders } from '@/test-utils/test-providers'
 
 const balanceQueryMock = vi.hoisted(() => vi.fn())
 const addressQueryMock = vi.hoisted(() => vi.fn())
@@ -41,14 +42,14 @@ describe('ArkadeReceive', () => {
   })
 
   it('DASH-ARK-41 polls Arkade balance while receive UI is shown', () => {
-    render(<ArkadeReceive />)
+    renderWithProviders(<ArkadeReceive />)
     expect(balanceQueryMock).toHaveBeenCalled()
   })
 
   it('shows stable address across two peek calls via address query data', () => {
-    render(<ArkadeReceive />)
+    renderWithProviders(<ArkadeReceive />)
     expect(screen.getAllByText('tark1qqreceive').length).toBeGreaterThan(0)
-    render(<ArkadeReceive />)
+    renderWithProviders(<ArkadeReceive />)
     expect(screen.getAllByText('tark1qqreceive').length).toBeGreaterThan(0)
     expect(addressQueryMock).toHaveBeenCalled()
   })
@@ -60,7 +61,7 @@ describe('ArkadeReceive', () => {
       mutate,
     })
     const user = userEvent.setup()
-    render(<ArkadeReceive />)
+    renderWithProviders(<ArkadeReceive />)
     await user.click(screen.getByRole('button', { name: 'Generate New Address' }))
     expect(mutate).toHaveBeenCalledTimes(1)
   })

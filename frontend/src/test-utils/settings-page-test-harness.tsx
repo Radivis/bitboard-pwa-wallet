@@ -11,10 +11,14 @@ export const featureStoreState = {
   isMainnetAccessEnabled: false,
   isRegtestModeEnabled: false,
   isSegwitAddressesEnabled: false,
+  isUtxoSelectionEnabled: false,
+  isArkadeEnabled: false,
   setIsLightningEnabled: vi.fn(),
   setIsMainnetAccessEnabled: vi.fn(),
   setIsRegtestModeEnabled: vi.fn(),
   setIsSegwitAddressesEnabled: vi.fn(),
+  setIsUtxoSelectionEnabled: vi.fn(),
+  setIsArkadeEnabled: vi.fn(),
 }
 
 export const mockTerminateWorker = vi.fn()
@@ -347,6 +351,12 @@ function wireFeatureStoreMockImplementations(): void {
   featureStoreState.setIsSegwitAddressesEnabled.mockImplementation((enabled: boolean) => {
     featureStoreState.isSegwitAddressesEnabled = enabled
   })
+  featureStoreState.setIsUtxoSelectionEnabled.mockImplementation((enabled: boolean) => {
+    featureStoreState.isUtxoSelectionEnabled = enabled
+  })
+  featureStoreState.setIsArkadeEnabled.mockImplementation((enabled: boolean) => {
+    featureStoreState.isArkadeEnabled = enabled
+  })
 }
 
 wireFeatureStoreMockImplementations()
@@ -409,6 +419,8 @@ export function resetSettingsPageTestState(): void {
   featureStoreState.isMainnetAccessEnabled = false
   featureStoreState.isRegtestModeEnabled = false
   featureStoreState.isSegwitAddressesEnabled = false
+  featureStoreState.isUtxoSelectionEnabled = false
+  featureStoreState.isArkadeEnabled = false
   nearZeroSecurityState.active = false
   mockWalletsState.data = []
   sessionStoreState.password = 'testpass'

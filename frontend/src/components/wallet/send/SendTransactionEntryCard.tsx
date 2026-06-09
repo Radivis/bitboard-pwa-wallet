@@ -2,7 +2,12 @@ import type { ComponentProps } from 'react'
 import { useRef, useState } from 'react'
 import { Link } from '@tanstack/react-router'
 import { AlertTriangle, ArrowUpRight, ScanQrCode } from 'lucide-react'
+import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { PageHeader } from '@/components/PageHeader'
+import {
+  ARKADE_INFOMODE_IDS,
+  ARKADE_SEND_PAYMENT_INFOMODE,
+} from '@/lib/arkade/arkade-infomode'
 import { SendLightningWalletPicker } from '@/components/wallet/send/SendLightningWalletPicker'
 import { SendOnChainFeeSection } from '@/components/wallet/send/SendOnChainFeeSection'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -232,7 +237,18 @@ export function SendTransactionEntryCard({
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <ArrowUpRight className="h-5 w-5" />
-            {cardTitle}
+            {isArkadeSendMode ? (
+              <InfomodeWrapper
+                infoId={ARKADE_INFOMODE_IDS.sendPayment}
+                infoTitle={ARKADE_SEND_PAYMENT_INFOMODE.title}
+                infoText={ARKADE_SEND_PAYMENT_INFOMODE.text}
+                as="span"
+              >
+                {cardTitle}
+              </InfomodeWrapper>
+            ) : (
+              cardTitle
+            )}
           </CardTitle>
         </CardHeader>
         <CardContent>

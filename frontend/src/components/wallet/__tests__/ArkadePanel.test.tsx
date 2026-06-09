@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { renderWithProviders } from '@/test-utils/test-providers'
+import { ARKADE_INFOMODE_IDS } from '@/lib/arkade/arkade-infomode'
 import { ArkadeExitSection } from '@/components/wallet/ArkadeExitSection'
 
 vi.mock('@tanstack/react-router', async (importOriginal) => {
@@ -105,9 +106,18 @@ vi.mock('@/workers/arkade-factory', () => ({
 
 describe('ArkadeExitSection', () => {
   it('shows collaborative and unilateral exit actions', () => {
-    renderWithProviders(<ArkadeExitSection />)
+    const { container } = renderWithProviders(<ArkadeExitSection />)
     expect(screen.getByRole('button', { name: 'Collaborative exit' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Unilateral exit' })).toBeInTheDocument()
+    expect(
+      container.querySelector(`[data-infomode-id="${ARKADE_INFOMODE_IDS.collaborativeExit}"]`),
+    ).not.toBeNull()
+    expect(
+      container.querySelector(`[data-infomode-id="${ARKADE_INFOMODE_IDS.unilateralExit}"]`),
+    ).not.toBeNull()
+    expect(
+      container.querySelector(`[data-infomode-id="${ARKADE_INFOMODE_IDS.learnAboutExits}"]`),
+    ).not.toBeNull()
   })
 
   it('shows collaborative fee estimate in the exit dialog', async () => {

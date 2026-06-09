@@ -9,7 +9,10 @@ import {
 import { executeSettingsNetworkSwitch } from '@/lib/settings/network-mode-switch'
 import { executeSettingsAddressTypeSwitch } from '@/lib/settings/execute-settings-address-type-switch'
 import { runFeatureToggleOffWork } from '@/lib/settings/feature-toggle-async'
+import { ArkadeFeatureInfomodeContent } from '@/components/arkade/infomode/ArkadeFeatureInfomodeContent'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
+import { ARKADE_INFOMODE_IDS } from '@/lib/arkade/arkade-infomode'
+import { ArkadeEnableConfirmModal } from '@/components/settings/ArkadeEnableConfirmModal'
 import { MainnetAccessConfirmModal } from '@/components/settings/MainnetAccessConfirmModal'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
@@ -29,6 +32,7 @@ export function FeatureToggles() {
   const setIsArkadeEnabled = useFeatureStore((featureState) => featureState.setIsArkadeEnabled)
 
   const [mainnetConfirmOpen, setMainnetConfirmOpen] = useState(false)
+  const [arkadeConfirmOpen, setArkadeConfirmOpen] = useState(false)
   const [mainnetAccessSwitchBusy, setMainnetAccessSwitchBusy] = useState(false)
   const [regtestModeSwitchBusy, setRegtestModeSwitchBusy] = useState(false)
   const [segwitAddressesSwitchBusy, setSegwitAddressesSwitchBusy] = useState(false)
@@ -182,9 +186,8 @@ export function FeatureToggles() {
       </InfomodeWrapper>
 
       <InfomodeWrapper
-        infoId="settings-feature-arkade"
-        infoTitle="Arkade (offchain layer)"
-        infoText="Arkade provides instant offchain payments (VTXOs) without a Lightning wallet. Bitboard uses your mnemonic with a separate Arkade address. VTXO renewal is delegated to Bitboard-hosted Fulmine servers (one per network). Available on mainnet, testnet, and signet—not lab or regtest."
+        infoId={ARKADE_INFOMODE_IDS.featureToggle}
+        infoComponent={ArkadeFeatureInfomodeContent}
       >
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -196,7 +199,13 @@ export function FeatureToggles() {
           <Switch
             id="arkade-toggle"
             checked={isArkadeEnabled}
-            onCheckedChange={setIsArkadeEnabled}
+            onCheckedChange={(checked) => {
+              if (checked) {
+                setArkadeConfirmOpen(true)
+              } else {
+                setIsArkadeEnabled(false)
+              }
+            }}
             aria-label="Enable Arkade offchain layer"
           />
         </div>
@@ -227,6 +236,12 @@ export function FeatureToggles() {
         open={mainnetConfirmOpen}
         onOpenChange={setMainnetConfirmOpen}
         onConfirm={() => setIsMainnetAccessEnabled(true)}
+      />
+
+      <ArkadeEnableConfirmModal
+        open={arkadeConfirmOpen}
+        onOpenChange={setArkadeConfirmOpen}
+        onConfirm={() => setIsArkadeEnabled(true)}
       />
     </div>
   )

@@ -1,10 +1,13 @@
-import { useState } from 'react'
 import { Link } from '@tanstack/react-router'
-import { Copy, Loader2, RefreshCw } from 'lucide-react'
+import { Copy, Loader2, QrCode, RefreshCw } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
 import { toast } from 'sonner'
+import { ArkadeAddressInfomodeContent } from '@/components/arkade/infomode/ArkadeAddressInfomodeContent'
+import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
+import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { ARKADE_INFOMODE_IDS } from '@/lib/arkade/arkade-infomode'
 import {
   useArkadeAddressQuery,
   useArkadeBalanceQuery,
@@ -16,7 +19,6 @@ import { useWalletStore } from '@/stores/walletStore'
 export function ArkadeReceive() {
   const networkMode = useWalletStore((walletState) => walletState.networkMode)
   const storeReceiveAddress = useWalletStore((walletState) => walletState.arkadeReceiveAddress)
-  const [copied, setCopied] = useState(false)
   const addressQuery = useArkadeAddressQuery()
   const newAddressMutation = useArkadeNewAddressMutation()
   // Poll balance (and run WASM key discovery) while the user waits on Receive.
@@ -25,8 +27,8 @@ export function ArkadeReceive() {
   if (!isArkadeActiveForNetworkMode(networkMode)) {
     return (
       <p className="text-sm text-muted-foreground">
-        Enable Arkade under Settings → Features and select a supported network (mainnet,
-        testnet, or signet).{' '}
+        Enable Arkade under Settings → Features and select a supported network (mainnet
+        or signet).{' '}
         <Link to="/settings" className="text-primary underline-offset-4 hover:underline">
           Open settings
         </Link>
@@ -43,62 +45,92 @@ export function ArkadeReceive() {
     if (!address) return
     try {
       await navigator.clipboard.writeText(address)
-      setCopied(true)
       toast.success('Arkade address copied')
-      setTimeout(() => setCopied(false), 2000)
     } catch {
       toast.error('Failed to copy address')
     }
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Arkade address</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <p className="text-sm text-muted-foreground">
-          This is not your on-chain <code className="text-xs">bc1</code> address. Send
-          Arkade payments only to this address (<code className="text-xs">ark1</code> /{' '}
-          <code className="text-xs">tark1</code>).
-        </p>
-        {addressLoading ? (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-            Loading address…
+    <>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <QrCode className="h-5 w-5" />
+            QR Code
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-col items-center gap-4">
+            {addressLoading ? (
+              <LoadingSpinner text="Loading address…" />
+            ) : addressQuery.isError ? null : address ? (
+              <div className="rounded-lg bg-white p-4">
+                <QRCodeSVG
+                  value={address}
+                  size={256}
+                  level="M"
+                  imageSettings={{
+                    src: '/bitboard-icon.png',
+                    height: 48,
+                    width: 48,
+                    excavate: true,
+                  }}
+                />
+              </div>
+            ) : null}
           </div>
-        ) : addressQuery.isError ? (
-          <p className="text-sm text-destructive">
-            Could not load Arkade address. Unlock the wallet and check your network.
-          </p>
-        ) : (
-          <>
-            <div className="flex justify-center rounded-lg border bg-white p-4">
-              <QRCodeSVG value={address} size={256} level="M" />
-            </div>
-            <p className="break-all font-mono text-sm">{address}</p>
-            <div className="flex flex-wrap gap-2">
-              <Button type="button" onClick={handleCopy} disabled={!address}>
-                <Copy className="h-4 w-4" aria-hidden />
-                {copied ? 'Copied' : 'Copy address'}
-              </Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>
+            <InfomodeWrapper
+              infoId={ARKADE_INFOMODE_IDS.receiveAddress}
+              infoComponent={ArkadeAddressInfomodeContent}
+              as="span"
+            >
+              Arkade receiving address
+            </InfomodeWrapper>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {addressQuery.isError ? (
+            <p className="text-sm text-destructive">
+              Could not load Arkade address. Unlock the wallet and check your network.
+            </p>
+          ) : (
+            <>
+              <div className="flex items-center gap-2">
+                <div className="flex-1 truncate rounded-md border border-input bg-muted/50 px-3 py-2 font-mono text-sm">
+                  {addressLoading ? 'Loading…' : address || 'Loading…'}
+                </div>
+                <Button
+                  size="icon"
+                  onClick={handleCopy}
+                  disabled={!address}
+                  aria-label="Copy address"
+                >
+                  <Copy className="h-4 w-4" />
+                </Button>
+              </div>
               <Button
-                type="button"
-                variant="outline"
+                className="w-full"
                 disabled={newAddressMutation.isPending || !address}
                 onClick={() => newAddressMutation.mutate()}
               >
                 {newAddressMutation.isPending ? (
-                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
                 ) : (
-                  <RefreshCw className="h-4 w-4" aria-hidden />
+                  <RefreshCw className="mr-2 h-4 w-4" />
                 )}
                 Generate New Address
               </Button>
-            </div>
-          </>
-        )}
-      </CardContent>
-    </Card>
+            </>
+          )}
+        </CardContent>
+      </Card>
+    </>
   )
 }

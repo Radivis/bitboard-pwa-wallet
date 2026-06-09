@@ -1,7 +1,13 @@
 import { Link } from '@tanstack/react-router'
 import { Layers, Loader2 } from 'lucide-react'
+import { ArkadeOverviewInfomodeContent } from '@/components/arkade/infomode/ArkadeOverviewInfomodeContent'
+import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ArkadeBalanceBreakdown } from '@/components/wallet/ArkadeBalanceBreakdown'
+import {
+  ARKADE_INFOMODE_IDS,
+  ARKADE_OPERATOR_STALE_INFOMODE,
+} from '@/lib/arkade/arkade-infomode'
 import { useArkadeSyncMetadataQuery } from '@/hooks/useArkadeDashboardQueries'
 import { useArkadeBalanceQuery } from '@/hooks/useArkadeQueries'
 import { isArkadeActiveForNetworkMode } from '@/lib/arkade/arkade-utils'
@@ -27,7 +33,13 @@ export function ArkadeDashboardBalance() {
       <CardHeader className="pb-2">
         <CardTitle className="flex items-center gap-2 text-base">
           <Layers className="h-4 w-4" aria-hidden />
-          Arkade balance
+          <InfomodeWrapper
+            infoId={ARKADE_INFOMODE_IDS.dashboardBalance}
+            infoComponent={ArkadeOverviewInfomodeContent}
+            as="span"
+          >
+            Arkade balance
+          </InfomodeWrapper>
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-2">
@@ -47,20 +59,27 @@ export function ArkadeDashboardBalance() {
               amountTestId="dashboard-arkade-balance-amount"
             />
             {isStaleArkade ? (
-              <p
-                className="text-xs text-amber-700 dark:text-amber-400"
-                data-testid="arkade-operator-stale-banner"
+              <InfomodeWrapper
+                infoId={ARKADE_INFOMODE_IDS.operatorStale}
+                infoTitle={ARKADE_OPERATOR_STALE_INFOMODE.title}
+                infoText={ARKADE_OPERATOR_STALE_INFOMODE.text}
+                as="span"
               >
-                Showing Arkade data from your wallet&apos;s saved operator state. The operator
-                has not been verified this session.
-                {lastSuccessfulOperatorSyncAt != null && (
-                  <>
-                    {' '}
-                    Last verified with operator:{' '}
-                    {new Date(lastSuccessfulOperatorSyncAt).toLocaleString()}.
-                  </>
-                )}
-              </p>
+                <p
+                  className="text-xs text-amber-700 dark:text-amber-400"
+                  data-testid="arkade-operator-stale-banner"
+                >
+                  Showing Arkade data from your wallet&apos;s saved operator state. The operator
+                  has not been verified this session.
+                  {lastSuccessfulOperatorSyncAt != null && (
+                    <>
+                      {' '}
+                      Last verified with operator:{' '}
+                      {new Date(lastSuccessfulOperatorSyncAt).toLocaleString()}.
+                    </>
+                  )}
+                </p>
+              </InfomodeWrapper>
             ) : null}
           </>
         ) : (

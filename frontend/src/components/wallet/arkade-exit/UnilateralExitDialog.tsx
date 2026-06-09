@@ -1,6 +1,11 @@
 import { Link } from '@tanstack/react-router'
 import { Loader2 } from 'lucide-react'
+import { ArkadeBumperWalletInfomodeContent } from '@/components/arkade/infomode/ArkadeBumperWalletInfomodeContent'
+import { ArkadeUnilateralExitInfomodeContent } from '@/components/arkade/infomode/ArkadeUnilateralExitInfomodeContent'
+import { ArkadeUnrollInfomodeContent } from '@/components/arkade/infomode/ArkadeUnrollInfomodeContent'
+import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { Button } from '@/components/ui/button'
+import { ARKADE_INFOMODE_IDS } from '@/lib/arkade/arkade-infomode'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
@@ -49,7 +54,15 @@ export function UnilateralExitDialog({ exitFlow }: UnilateralExitDialogProps) {
     <Dialog open={unilateralOpen} onOpenChange={setUnilateralOpen}>
       <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Unilateral exit</DialogTitle>
+          <DialogTitle>
+            <InfomodeWrapper
+              infoId={ARKADE_INFOMODE_IDS.unilateralExit}
+              infoComponent={ArkadeUnilateralExitInfomodeContent}
+              as="span"
+            >
+              Unilateral exit
+            </InfomodeWrapper>
+          </DialogTitle>
           <DialogDescription>
             Exit without the operator by unrolling the VTXO chain on-chain, then completing after
             the timelock. Requires on-chain fees on the bumper wallet below.
@@ -98,7 +111,15 @@ export function UnilateralExitDialog({ exitFlow }: UnilateralExitDialogProps) {
             )}
             {bumperInfoQuery.data && (
               <div className="rounded-md border bg-muted/40 p-2 text-xs space-y-1">
-                <p className="font-medium">Bumper wallet (P2A fees)</p>
+                <p className="font-medium">
+                  <InfomodeWrapper
+                    infoId={ARKADE_INFOMODE_IDS.bumperWallet}
+                    infoComponent={ArkadeBumperWalletInfomodeContent}
+                    as="span"
+                  >
+                    Bumper wallet (P2A fees)
+                  </InfomodeWrapper>
+                </p>
                 <p className="break-all font-mono">{bumperInfoQuery.data.address}</p>
                 <p>
                   Balance: <BitcoinAmountDisplay amountSats={bumperBalance} size="sm" />
@@ -178,10 +199,16 @@ export function UnilateralExitDialog({ exitFlow }: UnilateralExitDialogProps) {
 
         {unilateralStep === 'unroll' && (
           <div className="space-y-3">
-            <p className="text-sm text-muted-foreground">
-              Unrolling {selectedCandidate?.txid}:{selectedCandidate?.vout}. Keep this dialog open
-              until finished.
-            </p>
+            <InfomodeWrapper
+              infoId={ARKADE_INFOMODE_IDS.unroll}
+              infoComponent={ArkadeUnrollInfomodeContent}
+              as="span"
+            >
+              <p className="text-sm text-muted-foreground">
+                Unrolling {selectedCandidate?.txid}:{selectedCandidate?.vout}. Keep this dialog open
+                until finished.
+              </p>
+            </InfomodeWrapper>
             {unrollMutation.isPending && (
               <div className="flex items-center gap-2 text-sm">
                 <Loader2 className="h-4 w-4 animate-spin" aria-hidden />

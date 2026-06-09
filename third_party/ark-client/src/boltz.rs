@@ -2788,14 +2788,14 @@ where
     ///
     /// - A [`BoltzFees`] struct containing fee information for both swap types.
     pub async fn get_fees(&self) -> Result<BoltzFees, Error> {
-        let mut client_builder = reqwest::Client::builder();
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            client_builder = client_builder.timeout(self.inner.timeout);
-        }
-        let client = client_builder
-            .build()
-            .map_err(|e| Error::ad_hoc(e.to_string()))?;
+        let client = {
+            let client_builder = reqwest::Client::builder();
+            #[cfg(not(target_arch = "wasm32"))]
+            let client_builder = client_builder.timeout(self.inner.timeout);
+            client_builder
+                .build()
+                .map_err(|e| Error::ad_hoc(e.to_string()))?
+        };
 
         // Fetch submarine swap fees (ARK -> BTC)
         let submarine_url = format!("{}/v2/swap/submarine", &self.inner.boltz_url);
@@ -2874,14 +2874,14 @@ where
     ///
     /// - A [`SwapLimits`] struct containing minimum and maximum swap amounts in satoshis.
     pub async fn get_limits(&self) -> Result<SwapLimits, Error> {
-        let mut client_builder = reqwest::Client::builder();
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            client_builder = client_builder.timeout(self.inner.timeout);
-        }
-        let client = client_builder
-            .build()
-            .map_err(|e| Error::ad_hoc(e.to_string()))?;
+        let client = {
+            let client_builder = reqwest::Client::builder();
+            #[cfg(not(target_arch = "wasm32"))]
+            let client_builder = client_builder.timeout(self.inner.timeout);
+            client_builder
+                .build()
+                .map_err(|e| Error::ad_hoc(e.to_string()))?
+        };
 
         let url = format!("{}/v2/swap/submarine", self.inner.boltz_url);
         let response = client

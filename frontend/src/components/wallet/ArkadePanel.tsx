@@ -1,7 +1,15 @@
 import { Link } from '@tanstack/react-router'
 import { Layers, Loader2 } from 'lucide-react'
+import { ArkadeBoardingInfomodeContent } from '@/components/arkade/infomode/ArkadeBoardingInfomodeContent'
+import { ArkadeOverviewInfomodeContent } from '@/components/arkade/infomode/ArkadeOverviewInfomodeContent'
+import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import {
+  ARKADE_DELEGATOR_FEE_INFOMODE,
+  ARKADE_INFOMODE_IDS,
+  ARKADE_RENEW_VTXOS_INFOMODE,
+} from '@/lib/arkade/arkade-infomode'
 import { ArkadeBalanceBreakdown } from '@/components/wallet/ArkadeBalanceBreakdown'
 import {
   useArkadeAddressQuery,
@@ -41,7 +49,13 @@ export function ArkadePanel() {
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Layers className="h-5 w-5" aria-hidden />
-          Arkade (offchain layer)
+          <InfomodeWrapper
+            infoId={ARKADE_INFOMODE_IDS.managementPanel}
+            infoComponent={ArkadeOverviewInfomodeContent}
+            as="span"
+          >
+            Arkade (offchain layer)
+          </InfomodeWrapper>
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -72,26 +86,46 @@ export function ArkadePanel() {
         )}
 
         {delegateFee != null && (
-          <p className="text-xs text-muted-foreground">
-            Delegator service fee: {delegateFee} sats per renewal (Bitboard Fulmine)
-          </p>
+          <InfomodeWrapper
+            infoId={ARKADE_INFOMODE_IDS.delegatorFee}
+            infoTitle={ARKADE_DELEGATOR_FEE_INFOMODE.title}
+            infoText={ARKADE_DELEGATOR_FEE_INFOMODE.text}
+            as="span"
+          >
+            <p className="text-xs text-muted-foreground">
+              Delegator service fee: {delegateFee} sats per renewal (Bitboard Fulmine)
+            </p>
+          </InfomodeWrapper>
         )}
 
         <ArkadeExitSection />
 
         <div className="flex flex-wrap gap-2">
-          <Button type="button" variant="outline" size="sm" asChild>
-            <Link to="/wallet/arkade/board">Board from on-chain</Link>
-          </Button>
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            disabled={renewMutation.isPending}
-            onClick={() => renewMutation.mutate()}
+          <InfomodeWrapper
+            infoId={ARKADE_INFOMODE_IDS.boardFromOnchain}
+            infoComponent={ArkadeBoardingInfomodeContent}
+            as="span"
           >
-            Renew VTXOs now
-          </Button>
+            <Button type="button" variant="outline" size="sm" asChild>
+              <Link to="/wallet/arkade/board">Board from on-chain</Link>
+            </Button>
+          </InfomodeWrapper>
+          <InfomodeWrapper
+            infoId={ARKADE_INFOMODE_IDS.renewVtxos}
+            infoTitle={ARKADE_RENEW_VTXOS_INFOMODE.title}
+            infoText={ARKADE_RENEW_VTXOS_INFOMODE.text}
+            as="span"
+          >
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              disabled={renewMutation.isPending}
+              onClick={() => renewMutation.mutate()}
+            >
+              Renew VTXOs now
+            </Button>
+          </InfomodeWrapper>
         </div>
       </CardContent>
     </Card>

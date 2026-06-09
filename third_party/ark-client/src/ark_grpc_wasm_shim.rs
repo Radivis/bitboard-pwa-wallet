@@ -1,15 +1,13 @@
 //! WASM-compatible `ark_grpc` surface backed by [`ark_rest::Client`].
 
 use std::fmt;
-use std::str::FromStr;
 use std::sync::Arc;
 
 use ark_core::asset::AssetId;
-use ark_core::history;
 use ark_core::intent;
 use ark_core::server::{
     self, ChainedTxType, FinalizeOffchainTxResponse, GetVtxosRequest, IndexerPage,
-    PendingTx, StreamEvent, SubmitOffchainTxResponse, SubscriptionResponse, VirtualTxOutPoint,
+    PendingTx, StreamEvent, SubmitOffchainTxResponse, SubscriptionResponse,
     VirtualTxsResponse, VtxoChain, VtxoChains,
 };
 use ark_rest::apis::ark_service_api::{
@@ -39,6 +37,7 @@ struct ErrorImpl {
 }
 
 #[derive(Debug)]
+#[allow(dead_code)]
 enum Kind {
     Connect,
     NotConnected,
@@ -63,10 +62,12 @@ impl Error {
         self
     }
 
+    #[allow(dead_code)]
     pub(crate) fn connect(source: impl std::error::Error + Send + Sync + 'static) -> Self {
         Error::new(Kind::Connect).with(source)
     }
 
+    #[allow(dead_code)]
     pub(crate) fn not_connected() -> Self {
         Error::new(Kind::NotConnected)
     }
@@ -79,13 +80,14 @@ impl Error {
         Error::new(Kind::Conversion).with(source)
     }
 
-    fn conversion_message(message: impl std::fmt::Display) -> Self {
+    fn conversion_message(message: impl fmt::Display) -> Self {
         Error::conversion(std::io::Error::new(
             std::io::ErrorKind::InvalidData,
             message.to_string(),
         ))
     }
 
+    #[allow(dead_code)]
     pub(crate) fn event_stream(source: impl std::error::Error + Send + Sync + 'static) -> Self {
         Error::new(Kind::EventStream).with(source)
     }
@@ -139,7 +141,7 @@ fn map_rest_error(error: ark_rest::Error) -> Error {
     Error::request(error)
 }
 
-fn map_apis_error<E: std::fmt::Debug>(error: ark_rest::apis::Error<E>) -> Error {
+fn map_apis_error<E: fmt::Debug>(error: ark_rest::apis::Error<E>) -> Error {
     Error::request(std::io::Error::new(
         std::io::ErrorKind::Other,
         format!("{error:?}"),

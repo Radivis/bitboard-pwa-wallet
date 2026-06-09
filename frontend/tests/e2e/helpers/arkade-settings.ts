@@ -17,6 +17,12 @@ export async function enableArkadeFeature(page: Page): Promise<void> {
   const checked = await arkadeSwitch.getAttribute('aria-checked')
   if (checked !== 'true') {
     await arkadeSwitch.click()
+    await expect(page.getByRole('heading', { name: 'Enable Arkade', level: 2 })).toBeVisible()
+    await page.getByRole('checkbox', {
+      name: /I understand Arkade is new/i,
+    }).click()
+    await page.getByRole('button', { name: 'Enable Arkade' }).click()
+    await expect(page.getByRole('heading', { name: 'Enable Arkade', level: 2 })).not.toBeVisible()
   }
   await openSettingsMainTab(page)
 }

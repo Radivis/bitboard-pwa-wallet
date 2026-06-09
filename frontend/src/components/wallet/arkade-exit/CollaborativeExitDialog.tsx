@@ -1,5 +1,9 @@
 import { Loader2 } from 'lucide-react'
+import { ArkadeCollaborativeExitInfomodeContent } from '@/components/arkade/infomode/ArkadeCollaborativeExitInfomodeContent'
+import { ArkadeExitOperatorFeesInfomodeContent } from '@/components/arkade/infomode/ArkadeExitOperatorFeesInfomodeContent'
+import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { Button } from '@/components/ui/button'
+import { ARKADE_INFOMODE_IDS } from '@/lib/arkade/arkade-infomode'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
@@ -42,7 +46,15 @@ export function CollaborativeExitDialog({ exitFlow }: CollaborativeExitDialogPro
     <Dialog open={collaborativeOpen} onOpenChange={setCollaborativeOpen}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Collaborative exit</DialogTitle>
+          <DialogTitle>
+            <InfomodeWrapper
+              infoId={ARKADE_INFOMODE_IDS.collaborativeExit}
+              infoComponent={ArkadeCollaborativeExitInfomodeContent}
+              as="span"
+            >
+              Collaborative exit
+            </InfomodeWrapper>
+          </DialogTitle>
           <DialogDescription>
             Withdraw VTXOs to an on-chain address with the Arkade operator. Requires operator
             connectivity; faster and cheaper than unilateral exit.
@@ -106,7 +118,15 @@ export function CollaborativeExitDialog({ exitFlow }: CollaborativeExitDialogPro
           )}
           {collaborativeFeeQuery.data && (
             <div className="rounded-md border bg-muted/40 p-2 text-xs space-y-1">
-              <p className="font-medium">Operator fees (estimate)</p>
+              <p className="font-medium">
+                <InfomodeWrapper
+                  infoId={ARKADE_INFOMODE_IDS.exitOperatorFees}
+                  infoComponent={ArkadeExitOperatorFeesInfomodeContent}
+                  as="span"
+                >
+                  Operator fees (estimate)
+                </InfomodeWrapper>
+              </p>
               <p className="text-muted-foreground">
                 Settlement fee rate: {collaborativeFeeQuery.data.txFeeRate} · Intent fees:{' '}
                 {formatIntentFeePrograms(collaborativeFeeQuery.data.intentFeeConfigured)}

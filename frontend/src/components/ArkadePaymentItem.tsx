@@ -1,5 +1,15 @@
 import { useState } from 'react'
 import { ArrowDownLeft, ArrowUpRight } from 'lucide-react'
+import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
+import {
+  ARKADE_ACTIVITY_BOARDING_INFOMODE,
+  ARKADE_ACTIVITY_PAYMENT_INFOMODE,
+  ARKADE_INFOMODE_IDS,
+} from '@/lib/arkade/arkade-infomode'
+import {
+  ARKADE_BOARDING_ACTIVITY_LABEL,
+  ONCHAIN_ARKADE_BOARDING_ACTIVITY_LABEL,
+} from '@/lib/lightning/lightning-dashboard-sync'
 import { formatDistanceToNow, format } from 'date-fns'
 import type { ArkadePaymentRow } from '@/workers/arkade-api'
 import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
@@ -19,6 +29,21 @@ export function ArkadePaymentItem({ payment, activityLabel }: ArkadePaymentItemP
   const Icon = isSent ? ArrowUpRight : ArrowDownLeft
   const timestamp =
     payment.timestamp > 0 ? new Date(payment.timestamp * 1000) : null
+  const resolvedActivityLabel = activityLabel ?? 'Arkade'
+  const isBoardingActivityLabel =
+    resolvedActivityLabel === ARKADE_BOARDING_ACTIVITY_LABEL ||
+    resolvedActivityLabel === ONCHAIN_ARKADE_BOARDING_ACTIVITY_LABEL
+  const activityInfomode = isBoardingActivityLabel
+    ? {
+        infoId: ARKADE_INFOMODE_IDS.activityBoarding,
+        title: ARKADE_ACTIVITY_BOARDING_INFOMODE.title,
+        text: ARKADE_ACTIVITY_BOARDING_INFOMODE.text,
+      }
+    : {
+        infoId: ARKADE_INFOMODE_IDS.activityPayment,
+        title: ARKADE_ACTIVITY_PAYMENT_INFOMODE.title,
+        text: ARKADE_ACTIVITY_PAYMENT_INFOMODE.text,
+      }
 
   return (
     <div
@@ -46,7 +71,14 @@ export function ArkadePaymentItem({ payment, activityLabel }: ArkadePaymentItemP
             <p className="text-sm font-medium capitalize">
               {isSent ? 'Sent' : 'Received'}
             </p>
-            <DashboardActivityRailBadge label={activityLabel ?? 'Arkade'} />
+            <InfomodeWrapper
+              infoId={activityInfomode.infoId}
+              infoTitle={activityInfomode.title}
+              infoText={activityInfomode.text}
+              as="span"
+            >
+              <DashboardActivityRailBadge label={resolvedActivityLabel} />
+            </InfomodeWrapper>
           </div>
           {timestamp != null && (
             <button
