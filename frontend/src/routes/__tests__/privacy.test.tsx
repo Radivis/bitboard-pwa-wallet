@@ -31,12 +31,18 @@ describe('PrivacyPage', () => {
     expect(
       await screen.findByText(/This privacy policy covers both/i),
     ).toBeInTheDocument()
+    expect(
+      screen.getByRole('heading', { name: /6\. Arkade \(offchain VTXO layer\)/i }),
+    ).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: /Deutsch/i }))
     expect(
       await screen.findByText(
         /Diese Datenschutzerklärung gilt für die Marketing-Website/i,
       ),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('heading', { name: /6\. Arkade \(Offchain-VTXO-Schicht\)/i }),
     ).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: /English/i }))

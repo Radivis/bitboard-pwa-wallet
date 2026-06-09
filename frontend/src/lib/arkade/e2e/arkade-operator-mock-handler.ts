@@ -185,7 +185,6 @@ type MockIncomingPayment = {
 }
 
 function buildIndexerVtxo(
-  mockState: E2eArkadeOperatorMockState,
   script: string,
   index: number,
   payment: MockIncomingPayment,
@@ -269,7 +268,7 @@ export function buildMockVtxosForScripts(
   for (const script of scripts) {
     const payment = mockState.paymentsByScript.get(script)
     if (payment != null) {
-      vtxos.push(buildIndexerVtxo(mockState, script, vtxos.length, payment))
+      vtxos.push(buildIndexerVtxo(script, vtxos.length, payment))
     }
   }
   return vtxos

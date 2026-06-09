@@ -99,15 +99,18 @@ export function PrivacyPolicyDe() {
       <p>
         In der <strong>auf Vercel gehosteten Produktionsversion</strong> umfasst das Deployment{' '}
         <strong>minimale serverlose API-Routen</strong> unter <code>/api/esplora</code>,{' '}
-        <code>/api/fiat-rates</code> und <code>/api/faucet</code>, die HTTP-Anfragen aus dem Browser{' '}
-        <strong>nur</strong> an <strong>auf Positivlisten stehende</strong> Drittanbieter{' '}
-        <strong>weiterleiten</strong>: öffentliche Esplora-Dienste und (für Testnetze) Faucet-Websites
-        sowie — für die <strong>optionale Mainnet-Anzeige in Fiat-Nennung</strong> — die öffentlichen
+        <code>/api/fiat-rates</code>, <code>/api/faucet</code> und — sofern Sie{' '}
+        <strong>Arkade</strong> nutzen — <code>/api/arkade/operator</code>, die HTTP-Anfragen aus dem
+        Browser <strong>nur</strong> an <strong>auf Positivlisten stehende</strong> Drittanbieter{' '}
+        <strong>weiterleiten</strong>: öffentliche Esplora-Dienste und (für Testnetze) Faucet-Websites,
+        — für die <strong>optionale Mainnet-Anzeige in Fiat-Nennung</strong> — die öffentlichen
         Ticker-APIs von <strong>Kraken</strong>, <strong>CoinGecko</strong> oder{' '}
         <strong>Blockchain.com</strong> (je nach dem unter <strong>Einstellungen</strong> gewählten{' '}
-        <strong>Wechselkurs-Dienst</strong>). Dies dient dem Erreichen dieser Hosts aus dem Browser ohne
-        Cross-Origin-Probleme. Die Routen leiten Anfragen und Antworten weiter; sie implementieren keine
-        Wallet-Logik und werden nicht genutzt, um Ihre Wiederherstellungsdaten zu speichern.
+        <strong>Wechselkurs-Dienst</strong>) sowie — für <strong>optionales Arkade</strong> — öffentliche
+        Arkade-Betreiber auf <strong>Mainnet</strong> und <strong>Signet</strong>. Dies dient dem
+        Erreichen dieser Hosts aus dem Browser ohne Cross-Origin-Probleme. Die Routen leiten Anfragen
+        und Antworten weiter; sie implementieren keine Wallet-Logik und werden nicht genutzt, um Ihre
+        Wiederherstellungsdaten zu speichern.
       </p>
       <p>
         Wallet-relevante Daten werden in einer <strong>SQLite</strong>-Datenbank im{' '}
@@ -226,7 +229,94 @@ export function PrivacyPolicyDe() {
         Kontrolle, Zugriff über Tor) liegen bei Ihnen.
       </p>
 
-      <h2>6. Nostr Wallet Connect (NWC)</h2>
+      <h2>6. Arkade (Offchain-VTXO-Schicht)</h2>
+      <p>
+        <strong>Arkade</strong> ist eine <strong>optionale</strong> Offchain-Zahlungsschicht, die Sie
+        unter <strong>Einstellungen → Funktionen</strong> auf <strong>Mainnet</strong> und{' '}
+        <strong>Signet</strong> aktivieren können. Sie ermöglicht es, Bitcoin als{' '}
+        <strong>virtuelle Guthabeneinheiten (VTXOs)</strong> über einen{' '}
+        <strong>Arkade-Betreiber</strong> (auch ASP — Ark Service Provider genannt) zu halten und zu
+        bewegen, statt jede Zahlung sofort on-chain zu broadcasten. Bitboard{' '}
+        <strong>verwahrt keine Arkade-Guthaben</strong> und <strong>betreibt kein Arkade-Wallet-Backend</strong>{' '}
+        auf eigenen Servern; die Arkade-Logik läuft wie der übrige Wallet-Teil in Ihrem Browser.
+        Arkade-Empfangskennungen (<code>ark1</code> / <code>tark1</code>) sind von Ihren on-chain{' '}
+        <code>bc1</code>-Adressen <strong>getrennt</strong>.
+      </p>
+      <p>
+        Ist Arkade aktiviert und nutzen Sie es, verbindet sich die App mit dem{' '}
+        <strong>Arkade-Betreiber</strong> des jeweiligen Netzwerks. Sofern für Ihren Build kein anderer
+        Betreiber konfiguriert ist, sind das die öffentlichen Betreiber unter{' '}
+        <strong>arkade.computer</strong> (Mainnet) und <strong>mutinynet.arkade.sh</strong> (Signet).
+        Der Betreiber verarbeitet Anfragen für Kontostand- und VTXO-Synchronisation, Arkade-zu-Arkade-Versendungen,
+        Boarding von Guthaben in Arkade sowie kollaborative Exits zurück auf on-chain Bitcoin. Bitboard{' '}
+        <strong>betreibt den Arkade-Betreiber nicht</strong>.
+      </p>
+      <p>
+        Aus Datenschutzsicht kann der Betreiber <strong>Verbindungsmetadaten</strong> sehen (z. B. Ihre
+        IP-Adresse bei direkter Verbindung oder übliche HTTP-Metadaten bei Proxy-Nutzung — siehe unten)
+        und aus dem Protokollverkehr Ihrer Wallet ein <strong>Ark-Schicht-Aktivitätsprofil</strong>{' '}
+        ableiten: etwa <strong>Beträge</strong>, <strong>Zeitpunkte</strong>, beteiligte{' '}
+        <strong>Ark-Adressen</strong>, Boarding- und Exit-Vorgänge sowie Metadaten zur Batch-Abwicklung.
+        Weil viele solcher Anfragen über die Zeit zur gleichen Ark-Wallet-Sitzung gehören, kann der
+        Betreiber <strong>diese Aktivität demselben Nutzer bzw. derselben Wallet zuordnen</strong>.{' '}
+        <strong>TLS</strong> schützt nur den Transportweg; auf Betreiberseite sieht dieser die
+        entschlüsselten Anfragen, die er verarbeitet. Diese Sichtbarkeit ist <strong>von der</strong>{' '}
+        eines Esplora-Betreibers bei on-chain-Abfragen (Abschnitt 5) <strong>zu unterscheiden</strong>:
+        Arkade-Aktivität bleibt weitgehend in der Offchain-Schicht, bis Sie boarden, exitieren oder ein
+        VTXO abläuft.
+      </p>
+      <p>
+        In der <strong>gehosteten PWA</strong> wird Arkade-Betreiber-Traffic typischerweise über{' '}
+        <strong>same-origin</strong>-URLs unter <code>/api/arkade/operator/…</code> geleitet, und{' '}
+        <strong>Vercel</strong> leitet diese Anfragen an den passenden positiv gelisteten öffentlichen
+        Betreiber weiter (siehe <strong>Hosting</strong> und <strong>Wallet-App</strong>). Dann empfängt{' '}
+        <strong>Vercel</strong> Ihre Browser-Anfrage zuerst — einschließlich Ihrer{' '}
+        <strong>IP-Adresse</strong> und des angeforderten Pfads — und der Arkade-Betreiber sieht die{' '}
+        <strong>Ausgangs-IP-Adresse von Vercel</strong>, <strong>nicht</strong> Ihre, kann aber den
+        weitergeleiteten Anfrageinhalt auf seiner Seite weiterhin sehen. Ist eine{' '}
+        <strong>benutzerdefinierte</strong> Betreiber-URL konfiguriert und wird{' '}
+        <strong>ohne</strong> den gehosteten Proxy erreicht, kontaktiert Ihr Browser diesen Host{' '}
+        <strong>direkt</strong>; der Betreiber kann dann Ihre <strong>IP-Adresse</strong> sehen.
+      </p>
+      <p>
+        Jedes VTXO hat ein <strong>Ablaufdatum</strong>. Vor Ablauf muss es <strong>erneuert</strong>{' '}
+        werden, um offchain ausgebbar zu bleiben; andernfalls folgt ein langsamerer on-chain-Fallback.
+        Solange die App <strong>geöffnet und entsperrt</strong> ist, können Sie manuell über Ihre
+        Verbindung zum Arkade-Betreiber erneuern. Ein separater optionaler Dienst — ein{' '}
+        <strong>VTXO-Delegator</strong>, kompatibel mit der Fulmine-Delegator-API — kann in Ihrem Namen{' '}
+        <strong>vorab signierte Erneuerungsintents</strong> einreichen, während die App{' '}
+        <strong>geschlossen</strong> ist, damit Erneuerungen nicht verpasst werden. Im Arkade-Protokoll
+        können diese vorab signierten Intents <strong>keine Ausgabebeträge ändern und kein Custody
+        übernehmen</strong>; diese Grenze betrifft die <strong>Geldsicherheit</strong>, nicht den
+        Datenschutz. Ein Delegator kann dennoch <strong>erneuerungsbezogene Metadaten</strong> sehen
+        (z. B. Zeitpunkte, Gebühren und welche Erneuerungen eingereicht werden),{' '}
+        <strong>Verbindungsmetadaten</strong> (z. B. IP-Adresse) und{' '}
+        <strong>Nutzungsmuster</strong> ableiten (z. B. wann Ihre Wallet inaktiv ist).
+      </p>
+      <p>
+        Bitboard <strong>betreibt derzeit keinen produktiven Delegator-Dienst</strong>. Standard-Builds
+        der App werden <strong>ohne</strong> Bitboard-Delegator-URL ausgeliefert; erneuern Sie VTXOs bei
+        geöffneter App, geschieht das über Ihre <strong>direkte Verbindung zum Arkade-Betreiber</strong>.
+        Manche Deployments können die App per Build-Konfiguration auf einen{' '}
+        <strong>Drittanbieter-Delegator</strong> verweisen; dessen Datenschutzpraktiken werden von
+        Bitboard <strong>nicht</strong> kontrolliert.
+      </p>
+      <p>
+        Der Arkade-SDK-Zustand — VTXOs, Verträge, Boarding-UTXOs und Arkade-Transaktionshistorie — wird
+        lokal in Ihrer verschlüsselten Wallet-Nutzlast auf dem Gerät gespeichert. Er unterliegt denselben{' '}
+        <strong>App-Passwort-Verschlüsselungsregeln</strong> wie im Verschlüsselungsabschnitt unten
+        beschrieben. Das erneute Öffnen der Wallet erfordert den Betreiber nicht; kooperative Online-Aktionen
+        (Versenden, Boarding, Erneuern, Exit) kontaktieren weiterhin den Betreiber und — sofern
+        konfiguriert — einen Delegator.
+      </p>
+      <p>
+        Arkade bedeutet einen Kompromiss: Sie können <strong>Geschwindigkeit und Komfort</strong> bei
+        Offchain-Zahlungen gewinnen, aber Arkade-Betreiber — und ein optionaler Delegator — werden zu{' '}
+        <strong>vertrauenswürdigen Dritten</strong>, die Metadaten über Ihre Ark-Schicht-Aktivität sehen
+        können, getrennt vom on-chain-Bild, das Esplora liefert.
+      </p>
+
+      <h2>7. Nostr Wallet Connect (NWC)</h2>
       <p>
         Bitboard unterstützt Lightning derzeit <strong>ausschließlich über Nostr Wallet Connect
         (NWC)</strong>. NWC ist ein Protokoll, mit dem Sie eine <strong>bereits bestehende</strong>{' '}
@@ -248,20 +338,22 @@ export function PrivacyPolicyDe() {
         Ausführungen zur Verschlüsselung in dieser Datenschutzerklärung.
       </p>
 
-      <h2>7. Verschlüsselung sensibler App-Daten</h2>
+      <h2>8. Verschlüsselung sensibler App-Daten</h2>
       <p>
         Kurz gesagt: Ohne von Ihnen gesetztes <strong>App-Passwort</strong> liegen sensible Inhalte
-        (z. B. Wiederherstellungsphrase, Schlüssel, Verbindungsdaten zu Lightning) auf Ihrem Gerät{' '}
-        <strong>nicht</strong> mit der beschriebenen starken Verschlüsselung „im Ruhezustand“ geschützt.
-        Der Betreiber <strong>empfiehlt, vor dem Speichern</strong> von Seed, Deskriptoren oder einer
-        NWC-Verbindungszeichenfolge in der App zunächst <strong>ein App-Passwort zu setzen</strong>.
+        (z. B. Wiederherstellungsphrase, Schlüssel, Verbindungsdaten zu Lightning, Arkade-SDK-Persistenz)
+        auf Ihrem Gerät <strong>nicht</strong> mit der beschriebenen starken Verschlüsselung „im
+        Ruhezustand“ geschützt. Der Betreiber <strong>empfiehlt, vor dem Speichern</strong> von Seed,
+        Deskriptoren, einer NWC-Verbindungszeichenfolge oder Arkade-Wallet-Zustand in der App zunächst{' '}
+        <strong>ein App-Passwort zu setzen</strong>.
       </p>
       <p>
         Technisch: Daten wie Wiederherstellungsphrasen (Seeds), kryptographische Schlüssel,
-        Deskriptoren, NWC-Verbindungszeichenfolgen sowie zwischengespeicherte Salden und
-        Transaktionen in der Wallet-Datenbank werden <strong>nur dann im Ruhezustand stark
-        verschlüsselt</strong>, wenn Sie ein <strong>App-Passwort</strong> gesetzt haben. Bis dahin
-        kommt diese starke Verschlüsselung nicht zur Anwendung.
+        Deskriptoren, NWC-Verbindungszeichenfolgen, Arkade-SDK-Persistenz und Betreiber-Sitzungszustand
+        sowie zwischengespeicherte Salden und Transaktionen in der Wallet-Datenbank werden{' '}
+        <strong>nur dann im Ruhezustand stark verschlüsselt</strong>, wenn Sie ein{' '}
+        <strong>App-Passwort</strong> gesetzt haben. Bis dahin kommt diese starke Verschlüsselung nicht
+        zur Anwendung.
       </p>
       <p>
         Bitboard bietet zusätzlich einen <strong>Near-Zero-Security-Modus</strong>, in dem sensible
@@ -273,7 +365,7 @@ export function PrivacyPolicyDe() {
         Upgrade-Weg vom Near-Zero-Modus zu einem echten App-Passwort.
       </p>
 
-      <h2>8. Datensicherungen (Exports)</h2>
+      <h2>9. Datensicherungen (Exports)</h2>
       <p>
         Sie können Daten aus der App herunterladen (Export). <strong>Wallet-Exporte</strong> sind
         mit einer <strong>digitalen Signatur</strong> versehen; diese soll gewährleisten, dass der
@@ -300,7 +392,7 @@ export function PrivacyPolicyDe() {
         nutzen. Lab-Exporte und der Migrations-Fehlerbericht sind davon nicht betroffen.
       </p>
 
-      <h2>9. Rechtsgrundlagen (Art. 6 DSGVO)</h2>
+      <h2>10. Rechtsgrundlagen (Art. 6 DSGVO)</h2>
       <p>
         Soweit personenbezogene Daten verarbeitet werden, stützt sich der Betreiber auf folgende
         Rechtsgrundlagen:
@@ -309,7 +401,8 @@ export function PrivacyPolicyDe() {
         <li>
           <strong>Technische Hosting-Protokolle bei Vercel</strong> (IP-Adressen, Zugriffsdaten u. a.),
           einschließlich der gehosteten Proxy-Routen <code>/api/esplora</code>,{' '}
-          <code>/api/fiat-rates</code> und <code>/api/faucet</code>, wenn diese URLs aufgerufen werden:{' '}
+          <code>/api/fiat-rates</code>, <code>/api/faucet</code> und <code>/api/arkade/operator</code>,
+          wenn diese URLs aufgerufen werden:{' '}
           <strong>Art. 6 Abs. 1 lit. f DSGVO</strong> (berechtigtes Interesse an einem sicheren und
           stabilen Hosting sowie an der für die Browser-App erforderlichen technischen
           Weiterleitung). Die Verarbeitung erfolgt im Auftrag des Betreibers zur Erbringung des
@@ -331,9 +424,11 @@ export function PrivacyPolicyDe() {
         </li>
         <li>
           <strong>Verbindungen zu Esplora, positiv gelisteten Fiat-Spot-Ticker-Diensten (sofern Sie
-          Fiat-Nennung auf dem Mainnet nutzen), positiv gelisteten Test-Faucets und Nostr Wallet Connect</strong>:{' '}
-          <strong>Art. 6 Abs. 1 lit. f DSGVO</strong> (berechtigtes Interesse an der Funktionsfähigkeit
-          der gewünschten Wallet-, Lab- und Lightning-Funktionen).
+          Fiat-Nennung auf dem Mainnet nutzen), positiv gelisteten Test-Faucets, Arkade-Betreibern (sofern
+          Sie Arkade aktivieren und nutzen), optionalen VTXO-Delegatoren (sofern in Ihrem Build
+          konfiguriert) und Nostr Wallet Connect</strong>: <strong>Art. 6 Abs. 1 lit. f DSGVO</strong>{' '}
+          (berechtigtes Interesse an der Funktionsfähigkeit der gewünschten Wallet-, Lab-, optionalen
+          Arkade- und Lightning-Funktionen).
         </li>
         <li>
           <strong>E-Mail-Korrespondenz mit dem Verantwortlichen</strong> (z. B. Datenschutzanfragen):{' '}
@@ -342,7 +437,7 @@ export function PrivacyPolicyDe() {
         </li>
       </ul>
 
-      <h2>10. Empfänger und Empfängerkategorien</h2>
+      <h2>11. Empfänger und Empfängerkategorien</h2>
       <p>
         Über Bitboard als Verantwortlichen hinaus können personenbezogene Daten — abhängig von Ihrer
         Nutzung der Website und der App — von folgenden Kategorien von Empfängern verarbeitet werden:
@@ -352,8 +447,8 @@ export function PrivacyPolicyDe() {
           <strong>Hosting-Anbieter:</strong> <strong>Vercel Inc.</strong> (USA) sowie die dort
           genutzten Infrastrukturanbieter, im Zusammenhang mit der Auslieferung der Website und der
           App — einschließlich der technischen Verarbeitung von HTTP-Anfragen, die durch die oben
-          genannten Proxy-Routen <code>/api/esplora</code>, <code>/api/fiat-rates</code> und{' '}
-          <code>/api/faucet</code> der gehosteten PWA laufen.
+          genannten Proxy-Routen <code>/api/esplora</code>, <code>/api/fiat-rates</code>,{' '}
+          <code>/api/faucet</code> und <code>/api/arkade/operator</code> der gehosteten PWA laufen.
         </li>
         <li>
           <strong>Esplora-Betreiber:</strong> der Betreiber des in den{' '}
@@ -375,6 +470,17 @@ export function PrivacyPolicyDe() {
           gehosteten Proxy <code>/api/faucet</code>).
         </li>
         <li>
+          <strong>Arkade-Betreiber:</strong> der Arkade-Betreiber des von Ihnen genutzten Netzwerks
+          (Standard-öffentliche Betreiber oder konfigurierte Alternative), im Zusammenhang mit von Ihnen
+          ausgelöster Arkade-Synchronisation, -Versendung, -Boarding, -Erneuerung und -Exits (ob Ihr
+          Browser direkt oder über den Same-Origin-Proxy der gehosteten App darauf zugreift).
+        </li>
+        <li>
+          <strong>VTXO-Delegator-Betreiber (optional):</strong> nur wenn in dem von Ihnen genutzten Build
+          eine Delegator-URL konfiguriert ist; in Standard- und aktueller Produktionslage ist dies{' '}
+          <strong>nicht</strong> Bitboard.
+        </li>
+        <li>
           <strong>Nostr-Relays und Lightning-Betreiber (NWC):</strong> die von Ihnen gewählten oder
           von Ihrer angebundenen Lightning-Wallet vorgegebenen Nostr-Relays sowie der Betreiber der
           verbundenen Lightning-Infrastruktur, im Zusammenhang mit NWC-Zahlungen und -Benachrichtigungen.
@@ -390,23 +496,24 @@ export function PrivacyPolicyDe() {
         erfolgt nicht über das hinaus, was zur Erfüllung der oben genannten Zwecke erforderlich ist.
       </p>
 
-      <h2>11. Datenkategorien und Speicherdauer</h2>
+      <h2>12. Datenkategorien und Speicherdauer</h2>
       <p>
         <strong>Kategorien:</strong> können insbesondere umfassen: technische Verbindungs- und
         Zugriffsdaten beim Hosting (Vercel); Sprachpräferenz (lokal im Browser); Wallet-Daten lokal
         (u. a. Schlüsselmaterial, Deskriptoren, Transaktions- und Kontostandsinformationen, sofern
         von Ihnen angelegt oder abgerufen); optional Favoriten und Lese-Historie der Library-Artikel
         (lokal in der Wallet-Datenbank); NWC-Verbindungsdaten und zwischengespeicherte
-        Lightning-Informationen lokal; kurzlebige UI-Präferenzen (z. B. Banner-Ausblendungen) im
-        <code>sessionStorage</code> des Browsers; optional ein lokal in OPFS abgelegter
-        Migrations-Fehlerbericht (nur wenn eine Schema-Migration fehlgeschlagen ist); Daten, die im
-        Rahmen der von Ihnen ausgelösten Anfragen an Esplora (einschließlich{' '}
-        <strong><code>/fee-estimates</code></strong>-Aufrufen bei On-Chain-Versendung), positiv gelistete
-        öffentliche Fiat-Spot-Ticker-APIs, sofern Sie Fiat-Nennung auf dem Mainnet nutzen, öffentliche
-        Test-Faucets sowie
-        NWC-/Lightning-Dritte sichtbar oder verarbeitet werden; HTTP-Metadaten, die Vercel bei Nutzung
-        der Proxy-Pfade <code>/api/esplora</code>, <code>/api/fiat-rates</code> oder <code>/api/faucet</code> der gehosteten App
-        verarbeitet; sowie Kontaktdaten in einer E-Mail-Korrespondenz mit dem Verantwortlichen.
+        Lightning-Informationen lokal; Arkade-SDK-Persistenz und zwischengespeicherte Arkade-Salden/-Transaktionen
+        lokal; kurzlebige UI-Präferenzen (z. B. Banner-Ausblendungen) im <code>sessionStorage</code> des
+        Browsers; optional ein lokal in OPFS abgelegter Migrations-Fehlerbericht (nur wenn eine
+        Schema-Migration fehlgeschlagen ist); Daten, die im Rahmen der von Ihnen ausgelösten Anfragen an
+        Esplora (einschließlich <strong><code>/fee-estimates</code></strong>-Aufrufen bei On-Chain-Versendung),
+        positiv gelistete öffentliche Fiat-Spot-Ticker-APIs, sofern Sie Fiat-Nennung auf dem Mainnet nutzen,
+        öffentliche Test-Faucets, Arkade-Betreiber und optionale VTXO-Delegatoren sowie
+        NWC-/Lightning-Dritte sichtbar oder verarbeitet werden; HTTP-Metadaten, die Vercel bei Nutzung der
+        Proxy-Pfade <code>/api/esplora</code>, <code>/api/fiat-rates</code>, <code>/api/faucet</code> oder{' '}
+        <code>/api/arkade/operator</code> der gehosteten App verarbeitet; sowie Kontaktdaten in einer
+        E-Mail-Korrespondenz mit dem Verantwortlichen.
       </p>
       <p>
         <strong>Speicherdauer:</strong> Hosting- und Sicherheitsprotokolle bei Vercel richten sich
@@ -429,7 +536,7 @@ export function PrivacyPolicyDe() {
         erforderlich sind, vorbehaltlich gesetzlicher Aufbewahrungspflichten.
       </p>
 
-      <h2>12. Drittlandübermittlung (insbesondere USA / Vercel)</h2>
+      <h2>13. Drittlandübermittlung (insbesondere USA / Vercel)</h2>
       <p>
         Die Nutzung von Vercel kann eine <strong>Übermittlung personenbezogener Daten in die USA</strong>{' '}
         beinhalten. Vercel ist nach eigenen Angaben unter dem{' '}
@@ -449,14 +556,14 @@ export function PrivacyPolicyDe() {
         und den Vertragsunterlagen von Vercel.
       </p>
 
-      <h2>13. Keine automatisierte Entscheidungsfindung</h2>
+      <h2>14. Keine automatisierte Entscheidungsfindung</h2>
       <p>
         Eine <strong>automatisierte Entscheidungsfindung</strong> einschließlich Profiling mit
         rechtlicher Wirkung oder ähnlich erheblicher Beeinträchtigung im Sinne von{' '}
         <strong>Art. 22 DSGVO</strong> findet nicht statt.
       </p>
 
-      <h2>14. Beschwerderecht</h2>
+      <h2>15. Beschwerderecht</h2>
       <p>
         Sie haben das Recht, sich bei einer <strong>Aufsichtsbehörde</strong> über die Verarbeitung
         personenbezogener Daten zu beschweren, insbesondere in dem Mitgliedstaat Ihres gewöhnlichen
@@ -464,7 +571,7 @@ export function PrivacyPolicyDe() {
         ist hierfür beispielsweise die für Ihr Bundesland zuständige Datenschutzaufsicht zuständig.
       </p>
 
-      <h2>15. Ihre Rechte</h2>
+      <h2>16. Ihre Rechte</h2>
       <p>
         Soweit personenbezogene Daten verarbeitet werden, stehen Ihnen die in der DSGVO vorgesehenen
         Rechte grundsätzlich zu, insbesondere:
@@ -511,9 +618,9 @@ export function PrivacyPolicyDe() {
         App-Daten oder der gesamten Website-Daten im Browser möglich.
       </p>
 
-      <h2>16. Stand und Änderungen dieser Datenschutzerklärung</h2>
+      <h2>17. Stand und Änderungen dieser Datenschutzerklärung</h2>
       <p>
-        <strong>Stand:</strong> Mai 2026.
+        <strong>Stand:</strong> Juni 2026.
       </p>
       <p>
         Der Betreiber behält sich vor, diese Datenschutzerklärung anzupassen, wenn sich technische oder
@@ -526,7 +633,8 @@ export function PrivacyPolicyDe() {
       <p>
         Da <strong>Schlüssel und die zentrale Wallet-Logik</strong> <strong>nur auf Ihrem Gerät</strong>{' '}
         laufen (die gehostete Infrastruktur beschränkt sich auf statische Auslieferung und die oben
-        beschriebenen schlanken HTTP-Proxys für Esplora, Wechselkurse und Faucets), haben Sie in der Regel die{' '}
+        beschriebenen schlanken HTTP-Proxys für Esplora, Wechselkurse, Faucets und Arkade-Betreiber),
+        haben Sie in der Regel die{' '}
         <strong>maximale Kontrolle über Ihre lokalen Daten</strong>: Sie können jederzeit die lokal
         gespeicherten Daten der App im Browser entfernen und damit die beschriebene lokale
         Verarbeitung beenden. Das Leeren der Website-Daten im Browser ist ein

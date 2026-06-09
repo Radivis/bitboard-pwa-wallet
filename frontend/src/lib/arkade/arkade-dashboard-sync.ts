@@ -1,7 +1,10 @@
 import { ensureMigrated } from '@/db/database'
 import { appQueryClient } from '@/lib/shared/app-query-client'
 import { loadActiveArkadeConnectionForNetwork } from '@/lib/arkade/arkade-operator-connections'
-import { isArkadeSupportedNetworkMode } from '@/lib/arkade/arkade-endpoints'
+import {
+  isArkadeSupportedNetworkMode,
+  type ArkadeSupportedNetworkMode,
+} from '@/lib/arkade/arkade-endpoints'
 import { WALLET_DB_QUERY_KEY_ROOT } from '@/lib/wallet/wallet-query-key-root'
 import {
   selectCommittedAccountId,
@@ -9,8 +12,6 @@ import {
   useWalletStore,
 } from '@/stores/walletStore'
 import { useSessionStore } from '@/stores/sessionStore'
-import type { NetworkMode } from '@/stores/walletStore'
-
 export const ARKADE_DASHBOARD_QUERY_KEY = [
   ...WALLET_DB_QUERY_KEY_ROOT,
   'arkade',
@@ -30,7 +31,7 @@ export interface ArkadeOperatorSyncMetadataResult {
 
 function activeArkadeDashboardContext():
   | {
-      networkMode: NetworkMode
+      networkMode: ArkadeSupportedNetworkMode
       walletId: number
       password: string
       connectionId: string

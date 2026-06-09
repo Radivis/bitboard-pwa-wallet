@@ -46,7 +46,7 @@ export function applyOptimisticExitBalanceDeduction(
     useWalletStore.getState().setArkadeDashboardState({
       balance: optimisticBalance,
       payments: useWalletStore.getState().arkadePayments,
-      receiveAddress: useWalletStore.getState().arkadeReceiveAddress,
+      receiveAddress: useWalletStore.getState().arkadeReceiveAddress ?? '',
     })
   }
 
@@ -67,7 +67,7 @@ export function revertOptimisticExitBalanceDeduction(
     useWalletStore.getState().setArkadeDashboardState({
       balance: context.previousBalance,
       payments: useWalletStore.getState().arkadePayments,
-      receiveAddress: useWalletStore.getState().arkadeReceiveAddress,
+      receiveAddress: useWalletStore.getState().arkadeReceiveAddress ?? '',
     })
   }
 }

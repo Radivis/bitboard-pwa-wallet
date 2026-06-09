@@ -283,11 +283,13 @@ export function useArkadeNewAddressMutation() {
         )
         queryClient.setQueryData(addressQueryKey, newAddress)
         const dashboardState = readArkadeDashboardStateFromStore()
-        useWalletStore.getState().setArkadeDashboardState({
-          balance: dashboardState.balance,
-          payments: dashboardState.payments,
-          receiveAddress: newAddress,
-        })
+        if (dashboardState.balance != null) {
+          useWalletStore.getState().setArkadeDashboardState({
+            balance: dashboardState.balance,
+            payments: dashboardState.payments,
+            receiveAddress: newAddress,
+          })
+        }
       }
     },
     onError: (err) => {
@@ -595,7 +597,11 @@ export function useArkadeCollaborativeExitMutation() {
       return withReadyArkadeWorker(() => getArkadeWorker().collaborativeExit(params))
     },
     onMutate: async (params) => {
-      if (activeWalletId == null || activeArkadeConnectionId == null) {
+      if (
+        activeWalletId == null ||
+        activeArkadeConnectionId == null ||
+        !isArkadeSupportedNetworkMode(networkMode)
+      ) {
         return undefined
       }
       const balanceKey = arkadeBalanceQueryKey(
@@ -680,7 +686,11 @@ export function useArkadeUnilateralUnrollMutation() {
       )
     },
     onMutate: async (params) => {
-      if (activeWalletId == null || activeArkadeConnectionId == null) {
+      if (
+        activeWalletId == null ||
+        activeArkadeConnectionId == null ||
+        !isArkadeSupportedNetworkMode(networkMode)
+      ) {
         return undefined
       }
       return applyOptimisticExitBalanceDeduction(
