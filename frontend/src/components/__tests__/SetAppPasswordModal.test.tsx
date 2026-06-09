@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { screen } from '@testing-library/react'
+import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { renderWithProviders } from '@/test-utils/test-providers'
 
@@ -99,5 +99,40 @@ describe('SetAppPasswordModal', () => {
     await user.click(screen.getByRole('button', { name: 'Continue' }))
 
     expect(mockBeginWalletSecretsSession).toHaveBeenCalledWith('validpassword123')
+  })
+
+  it('shows an error when starting wallet secrets session fails', async () => {
+    const user = userEvent.setup()
+    mockBeginWalletSecretsSession.mockRejectedValueOnce(new Error('Wallet secrets session is already active'))
+    renderWithProviders(<SetAppPasswordModal open />)
+
+    await user.type(screen.getByLabelText('Password'), 'validpassword123')
+    await user.type(screen.getByLabelText('Confirm password'), 'validpassword123')
+    await user.click(screen.getByRole('button', { name: 'Continue' }))
+
+    expect(await screen.findByText('Wallet secrets session is already active')).toBeInTheDocument()
+  })
+
+  it('prevents duplicate submit while session start is in flight', async () => {
+    const user = userEvent.setup()
+    let resolveBegin: (() => void) | null = null
+    const pendingBeginPromise = new Promise<void>((resolve) => {
+      resolveBegin = resolve
+    })
+    mockBeginWalletSecretsSession.mockReturnValueOnce(pendingBeginPromise)
+
+    renderWithProviders(<SetAppPasswordModal open />)
+    await user.type(screen.getByLabelText('Password'), 'validpassword123')
+    await user.type(screen.getByLabelText('Confirm password'), 'validpassword123')
+
+    const continueButton = screen.getByRole('button', { name: 'Continue' })
+    await user.click(continueButton)
+    await user.click(continueButton)
+
+    expect(mockBeginWalletSecretsSession).toHaveBeenCalledTimes(1)
+    expect(continueButton).toBeDisabled()
+
+    resolveBegin?.()
+    await waitFor(() => expect(continueButton).toBeEnabled())
   })
 })

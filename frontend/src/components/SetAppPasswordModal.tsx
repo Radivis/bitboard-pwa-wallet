@@ -37,11 +37,15 @@ export function SetAppPasswordModal({ open, onSessionStarted }: SetAppPasswordMo
   const navigate = useNavigate()
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState<string | null>(null)
 
   useEffect(() => {
     if (open) {
       setPassword('')
       setConfirmPassword('')
+      setIsSubmitting(false)
+      setSubmitError(null)
     }
   }, [open])
 
@@ -49,10 +53,23 @@ export function SetAppPasswordModal({ open, onSessionStarted }: SetAppPasswordMo
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!passwordsValid) return
-    void beginWalletSecretsSession(password).then(() => {
-      onSessionStarted?.()
-    })
+    if (!passwordsValid || isSubmitting) return
+    void (async () => {
+      setIsSubmitting(true)
+      setSubmitError(null)
+      try {
+        await beginWalletSecretsSession(password)
+        onSessionStarted?.()
+      } catch (err) {
+        const message =
+          err instanceof Error && err.message
+            ? err.message
+            : 'Failed to set app password. Please try again.'
+        setSubmitError(message)
+      } finally {
+        setIsSubmitting(false)
+      }
+    })()
   }
 
   const handleBackToSetup = () => {
@@ -96,7 +113,11 @@ export function SetAppPasswordModal({ open, onSessionStarted }: SetAppPasswordMo
             onConfirmPasswordChange={setConfirmPassword}
           />
 
-          <Button type="submit" className="w-full" disabled={!passwordsValid}>
+          {submitError != null && (
+            <p className="text-sm text-destructive">{submitError}</p>
+          )}
+
+          <Button type="submit" className="w-full" disabled={!passwordsValid || isSubmitting}>
             Continue
           </Button>
 
