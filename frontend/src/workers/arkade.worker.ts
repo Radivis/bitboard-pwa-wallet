@@ -424,7 +424,7 @@ const arkadeService: ArkadeService = {
     onProgress: (event: ArkadeUnrollProgressEvent) => void,
   ): Promise<{ vtxoTxid: string }> {
     if (unrollInFlight) {
-      throw new Error('A unilateral unroll is already in progress')
+      throw new Error('Unilateral unroll is already in progress')
     }
 
     unrollInFlight = true

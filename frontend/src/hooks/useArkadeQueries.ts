@@ -9,6 +9,7 @@ import {
   arkadeBoardingStatusQueryKey,
   arkadeBumperInfoQueryKey,
   arkadeCollaborativeExitFeeQueryKey,
+  arkadeDisabledQueryKey,
   arkadeAddressQueryKey,
   arkadeDelegateInfoQueryKey,
   arkadeExitCandidatesQueryKey,
@@ -41,6 +42,7 @@ import {
   type ExitBalanceOptimisticContext,
 } from '@/lib/arkade/arkade-exit-balance-optimistic'
 import {
+  formatArkadeTxidToastSnippet,
   formatUnilateralUnrollSuccessMessage,
   shouldShowUnilateralUnrollProgressToast,
   unilateralUnrollProgressToastId,
@@ -140,10 +142,6 @@ async function withReadyArkadeWorkerAndOptionalDelegate<T>(
   return result
 }
 
-function disabledArkadeQueryKey(scope: string): readonly [string, string, 'disabled'] {
-  return ['arkade', scope, 'disabled']
-}
-
 function walletScopedQueryKey(
   activeWalletId: number | null,
   networkMode: NetworkMode,
@@ -162,7 +160,7 @@ function walletScopedQueryKey(
       connectionId ?? `pending-${networkMode}`,
     )
   }
-  return disabledArkadeQueryKey(disabledScope)
+  return arkadeDisabledQueryKey(disabledScope)
 }
 
 async function invalidateArkadeWalletDataQueries(
@@ -355,7 +353,7 @@ export function useArkadeDelegateInfoQuery() {
   return useQuery({
     queryKey: isArkadeSupportedNetworkMode(networkMode)
       ? arkadeDelegateInfoQueryKey(networkMode)
-      : disabledArkadeQueryKey('delegator'),
+      : arkadeDisabledQueryKey('delegator'),
     enabled: sessionReady,
     queryFn: () => withReadyArkadeWorker(() => getArkadeWorker().getDelegateInfo()),
     staleTime: ARKADE_SLOW_METADATA_STALE_MS,
@@ -398,7 +396,7 @@ export function useArkadeSendMutation() {
     },
     retry: false,
     onSuccess: async (txid) => {
-      toast.success(`Arkade payment sent (${txid.slice(0, 12)}…)`)
+      toast.success(`Arkade payment sent (${formatArkadeTxidToastSnippet(txid)})`)
       if (
         activeWalletId != null &&
         activeArkadeConnectionId != null &&
@@ -627,7 +625,7 @@ export function useArkadeCollaborativeExitMutation() {
       )
     },
     onSuccess: async (txid, _params, context) => {
-      toast.success(`Collaborative exit started (${txid.slice(0, 12)}…)`)
+      toast.success(`Collaborative exit started (${formatArkadeTxidToastSnippet(txid)})`)
       if (activeWalletId != null && activeArkadeConnectionId != null) {
         await invalidateArkadeWalletDataQueries(
           queryClient,
@@ -739,7 +737,7 @@ export function useArkadeCompleteUnilateralExitMutation() {
       return withReadyArkadeWorker(() => getArkadeWorker().completeUnilateralExit(params))
     },
     onSuccess: async (txid) => {
-      toast.success(`Exit completed on-chain (${txid.slice(0, 12)}…)`)
+      toast.success(`Exit completed on-chain (${formatArkadeTxidToastSnippet(txid)})`)
       if (activeWalletId != null && activeArkadeConnectionId != null) {
         await invalidateArkadeWalletDataQueries(
           queryClient,
@@ -778,7 +776,7 @@ export function useArkadeCollaborativeExitFeeQuery(params: {
             destinationTrimmed,
             params.amountSats,
           )
-        : disabledArkadeQueryKey('exit-fee-collaborative'),
+        : arkadeDisabledQueryKey('exit-fee-collaborative'),
     enabled,
     queryFn: () =>
       withReadyArkadeWorker(() =>
@@ -815,7 +813,7 @@ export function useArkadeUnilateralExitFeeQuery(params: {
             params.txid,
             params.vout,
           )
-        : disabledArkadeQueryKey('exit-fee-unilateral'),
+        : arkadeDisabledQueryKey('exit-fee-unilateral'),
     enabled,
     queryFn: async () => {
       const { txid, vout } = params

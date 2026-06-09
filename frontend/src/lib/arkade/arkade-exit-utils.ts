@@ -49,8 +49,15 @@ export function parseCollaborativeExitAmountSats(
   return { ok: true, amountSats }
 }
 
+/** Characters shown before the ellipsis in Arkade txid toast snippets. */
+export const ARKADE_TXID_DISPLAY_PREFIX_LENGTH = 12
+
+export function formatArkadeTxidToastSnippet(txid: string): string {
+  return `${txid.slice(0, ARKADE_TXID_DISPLAY_PREFIX_LENGTH)}…`
+}
+
 export function formatUnilateralUnrollSuccessMessage(vtxoTxid: string): string {
-  return `Unroll complete (${vtxoTxid.slice(0, 12)}…) — complete exit after the timelock`
+  return `Unroll complete (${formatArkadeTxidToastSnippet(vtxoTxid)}) — complete exit after the timelock`
 }
 
 /** Sonner toast id so in-progress unroll updates one notification per on-chain tx. */

@@ -18,6 +18,7 @@ import {
   useArkadeRenewMutation,
 } from '@/hooks/useArkadeQueries'
 import {
+  getArkadeDelegatorDisplayLabel,
   isArkadeDelegatorConfigured,
   isArkadeSupportedNetworkMode,
 } from '@/lib/arkade/arkade-endpoints'
@@ -44,6 +45,10 @@ export function ArkadePanel() {
   const balance = balanceQuery.data
   const delegateFee =
     delegateQuery.data?.fee != null ? Number(delegateQuery.data.fee) : null
+  const delegatorLabel =
+    isArkadeSupportedNetworkMode(networkMode)
+      ? getArkadeDelegatorDisplayLabel(networkMode)
+      : 'configured delegator'
 
   return (
     <Card>
@@ -95,7 +100,7 @@ export function ArkadePanel() {
             as="span"
           >
             <p className="text-xs text-muted-foreground">
-              Delegator service fee: {delegateFee} sats per renewal (Bitboard Fulmine)
+              Delegator service fee: {delegateFee} sats per renewal ({delegatorLabel})
             </p>
           </InfomodeWrapper>
         )}

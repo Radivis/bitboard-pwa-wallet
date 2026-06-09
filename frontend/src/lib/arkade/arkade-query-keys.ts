@@ -2,6 +2,13 @@ import type { ArkadeSupportedNetworkMode } from '@/lib/arkade/arkade-endpoints'
 import { WALLET_DB_QUERY_KEY_ROOT } from '@/lib/wallet/wallet-query-key-root'
 import { appQueryClient } from '@/lib/shared/app-query-client'
 
+/** Sentinel segment for disabled Arkade queries (wallet/network not ready). */
+export const ARKADE_QUERY_DISABLED = 'disabled' as const
+
+export function arkadeDisabledQueryKey(scope: string) {
+  return [...WALLET_DB_QUERY_KEY_ROOT, 'arkade', scope, ARKADE_QUERY_DISABLED] as const
+}
+
 export const arkadeBalanceQueryKey = (
   walletId: number,
   networkMode: ArkadeSupportedNetworkMode,
@@ -72,6 +79,7 @@ export const arkadeBoardingStatusQueryKey = (
     'boarding-status',
   ] as const
 
+/** Delegator URL/fee are network-scoped (env per network), not per wallet connection. */
 export const arkadeDelegateInfoQueryKey = (
   networkMode: ArkadeSupportedNetworkMode,
 ) => [...WALLET_DB_QUERY_KEY_ROOT, 'arkade', 'delegator', networkMode, 'info'] as const
