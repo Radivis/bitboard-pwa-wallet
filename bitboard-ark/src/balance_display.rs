@@ -24,7 +24,9 @@ pub struct ArkadeBalanceInputs {
 /// `boarding_spendable_sats` / `boarding_pending_sats` because they are not VTXOs until
 /// settled. The dashboard adds spendable boarding to the headline total in the UI.
 ///
-/// `total_sats` additionally includes recoverable VTXOs (expired, dust, swept).
+/// `total_sats` additionally includes recoverable VTXOs (expired, dust, swept),
+/// confirmed on-chain bumper sats, and unconfirmed boarding UTXOs (`boarding_pending_sats`).
+/// Unconfirmed bumper-wallet UTXOs are omitted from `total_sats` (only `onchain.confirmed` counts).
 ///
 /// `unilateral_exit_in_progress_sats` and `collaborative_exit_in_progress_sats` are informational
 /// breakdown fields; they are already subtracted from `confirmed_sats`.

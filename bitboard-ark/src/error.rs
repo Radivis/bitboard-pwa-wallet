@@ -46,6 +46,9 @@ pub enum ArkWasmError {
     #[error("invalid delegator pubkey: {0}")]
     InvalidDelegatorPubkey(String),
 
+    #[error("invalid delegator fee: {0}")]
+    InvalidDelegatorFee(String),
+
     #[error("invalid onchain address: {0}")]
     InvalidOnchainAddress(String),
 
@@ -107,7 +110,9 @@ impl ArkWasmError {
             | Self::InvalidOnchainAddress(_)
             | Self::VtxoNotFound { .. }
             | Self::EmptyVtxoTxids => CODE_VALIDATION,
-            Self::DelegatorNotConfigured | Self::Delegator(_) => CODE_DELEGATOR,
+            Self::DelegatorNotConfigured | Self::Delegator(_) | Self::InvalidDelegatorFee(_) => {
+                CODE_DELEGATOR
+            }
             Self::Boarding(_) => CODE_BOARDING,
             Self::Snapshot(_) => CODE_SNAPSHOT,
             Self::Persistence(_) => CODE_PERSISTENCE,

@@ -12,6 +12,10 @@ pub struct OpenSessionResult {
 pub struct BalanceDto {
     /// Net spendable balance (offchain + bumper, minus exits in progress).
     pub confirmed_sats: u64,
+    /// Portfolio-style total: offchain (spendable + recoverable) plus confirmed on-chain bumper
+    /// sats and unconfirmed boarding UTXOs. Excludes unconfirmed bumper-wallet UTXOs
+    /// (`trusted_pending` / `untrusted_pending` from the on-chain wallet); those are not
+    /// spendable for Ark operations until confirmed.
     pub total_sats: u64,
     /// On-chain boarding UTXOs confirmed and ready to settle into VTXOs.
     pub boarding_spendable_sats: u64,

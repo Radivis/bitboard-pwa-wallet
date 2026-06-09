@@ -233,8 +233,11 @@ impl ArkSession {
         let target_txid = parse_outpoint(txid, vout)?.txid;
         let amount = vtxo_list
             .all()
-            .find(|vtp| vtp.outpoint.txid == target_txid && vtp.outpoint.vout == vout)
-            .map(|vtp| vtp.amount.to_sat())
+            .find(|virtual_tx_outpoint| {
+                virtual_tx_outpoint.outpoint.txid == target_txid
+                    && virtual_tx_outpoint.outpoint.vout == vout
+            })
+            .map(|virtual_tx_outpoint| virtual_tx_outpoint.amount.to_sat())
             .ok_or(ArkWasmError::VtxoNotFound {
                 txid: txid.to_string(),
                 vout,
@@ -401,7 +404,10 @@ impl ArkSession {
             .as_ref()
             .ok_or(ArkWasmError::DelegatorNotConfigured)?;
         let info = delegator.info().await?;
-        let fee = info.fee.parse::<u64>().unwrap_or(0);
+        let fee = info
+            .fee
+            .parse::<u64>()
+            .map_err(|error| ArkWasmError::InvalidDelegatorFee(error.to_string()))?;
         Ok(DelegateInfoDto {
             pubkey: info.pubkey,
             fee,
@@ -418,8 +424,10 @@ impl ArkSession {
         let now = current_unix_timestamp();
         let earliest_expires_at = vtxo_list
             .all_unspent()
-            .filter(|vtp| vtp.created_at > 0 && vtp.expires_at > now)
-            .map(|vtp| vtp.expires_at)
+            .filter(|virtual_tx_outpoint| {
+                virtual_tx_outpoint.created_at > 0 && virtual_tx_outpoint.expires_at > now
+            })
+            .map(|virtual_tx_outpoint| virtual_tx_outpoint.expires_at)
             .min();
         let expiring_soon_count = self.expiring_vtxo_count().await?;
         Ok(VtxoExpiryStatusDto {
@@ -535,7 +543,7 @@ impl ArkSession {
         let dust = self.client.server_info.dust;
         let rows = vtxo_list
             .all()
-            .map(|vtp| map_exit_candidate(vtp, dust))
+            .map(|virtual_tx_outpoint| map_exit_candidate(virtual_tx_outpoint, dust))
             .collect();
         Ok(rows)
     }
@@ -797,16 +805,17 @@ impl ArkSession {
         let now = current_unix_timestamp();
         Ok(vtxo_list
             .all_unspent()
-            .filter(|vtp| {
-                if vtp.expires_at <= 0 || vtp.created_at <= 0 {
+            .filter(|virtual_tx_outpoint| {
+                if virtual_tx_outpoint.expires_at <= 0 || virtual_tx_outpoint.created_at <= 0 {
                     return false;
                 }
-                let total_lifetime = vtp.expires_at - vtp.created_at;
-                let remaining = vtp.expires_at - now;
+                let total_lifetime =
+                    virtual_tx_outpoint.expires_at - virtual_tx_outpoint.created_at;
+                let remaining = virtual_tx_outpoint.expires_at - now;
                 remaining > 0
                     && (remaining as f64) < (total_lifetime as f64 * SELF_RENEW_REMAINING_FRACTION)
             })
-            .map(|vtp| vtp.outpoint)
+            .map(|virtual_tx_outpoint| virtual_tx_outpoint.outpoint)
             .collect())
     }
 
@@ -1007,13 +1016,13 @@ fn map_history_row(transaction: Transaction) -> Option<PaymentRowDto> {
     }
 }
 
-fn map_exit_candidate(vtp: &VirtualTxOutPoint, dust: Amount) -> ExitCandidateRow {
-    let recoverable = vtp.is_recoverable(dust);
-    let state = if vtp.is_spent {
+fn map_exit_candidate(virtual_tx_outpoint: &VirtualTxOutPoint, dust: Amount) -> ExitCandidateRow {
+    let recoverable = virtual_tx_outpoint.is_recoverable(dust);
+    let state = if virtual_tx_outpoint.is_spent {
         VTXO_STATUS_SPENT
-    } else if vtp.is_unrolled {
+    } else if virtual_tx_outpoint.is_unrolled {
         VTXO_STATUS_UNROLLED
-    } else if vtp.is_preconfirmed {
+    } else if virtual_tx_outpoint.is_preconfirmed {
         VTXO_STATUS_PRECONFIRMED
     } else if recoverable {
         VTXO_STATUS_RECOVERABLE
@@ -1023,17 +1032,23 @@ fn map_exit_candidate(vtp: &VirtualTxOutPoint, dust: Amount) -> ExitCandidateRow
     .to_string();
 
     ExitCandidateRow {
-        id: format!("{}:{}", vtp.outpoint.txid, vtp.outpoint.vout),
-        txid: vtp.outpoint.txid.to_string(),
-        vout: vtp.outpoint.vout,
-        amount_sats: vtp.amount.to_sat(),
+        id: format!(
+            "{}:{}",
+            virtual_tx_outpoint.outpoint.txid, virtual_tx_outpoint.outpoint.vout
+        ),
+        txid: virtual_tx_outpoint.outpoint.txid.to_string(),
+        vout: virtual_tx_outpoint.outpoint.vout,
+        amount_sats: virtual_tx_outpoint.amount.to_sat(),
         virtual_status_state: state,
         is_recoverable: recoverable,
-        is_unrolled: vtp.is_unrolled,
+        is_unrolled: virtual_tx_outpoint.is_unrolled,
         // Match ark_client::could_exit_unilaterally(): active confirmed/preconfirmed VTXOs, not
         // recoverable (expired/swept/sub-dust) ones that use a different settlement path.
-        can_start_unroll: !recoverable && !vtp.is_unrolled && !vtp.is_spent && !vtp.is_swept,
-        can_complete: vtp.is_unrolled && !vtp.is_spent,
+        can_start_unroll: !recoverable
+            && !virtual_tx_outpoint.is_unrolled
+            && !virtual_tx_outpoint.is_spent
+            && !virtual_tx_outpoint.is_swept,
+        can_complete: virtual_tx_outpoint.is_unrolled && !virtual_tx_outpoint.is_spent,
     }
 }
 
