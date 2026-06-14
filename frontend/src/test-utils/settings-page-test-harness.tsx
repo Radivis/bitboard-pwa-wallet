@@ -74,10 +74,6 @@ export const mockSetAddressType = vi.fn()
 export const mockSetCurrentAddress = vi.fn()
 export const mockCommitLoadedDescriptorWallet = vi.fn()
 
-export const sessionStoreState = {
-  clear: mockClearSession,
-}
-
 export const nearZeroSecurityState = { active: false }
 
 export const mockSetThemeMode = vi.fn()
@@ -210,11 +206,7 @@ vi.mock('@/stores/walletStore', async () => {
 })
 
 vi.mock('@/stores/sessionStore', () => ({
-  useSessionStore: Object.assign(
-    (selector: (s: Record<string, unknown>) => unknown) =>
-      selector(sessionStoreState),
-    { getState: () => sessionStoreState },
-  ),
+  clearLegacySessionState: mockClearSession,
   clearAutoLockTimer: vi.fn(),
 }))
 

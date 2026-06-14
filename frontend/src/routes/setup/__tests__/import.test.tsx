@@ -70,25 +70,7 @@ vi.mock('@/lib/wallet/wallet-secrets-session', () => ({
   isWalletSecretsSessionActive: () => mockIsWalletSecretsSessionActive(),
 }))
 
-const mockSessionPassword = { value: 'validpassword123' as string | null }
 vi.mock('@/stores/sessionStore', () => ({
-  useSessionStore: Object.assign(
-    (selector: (s: { password: string | null }) => unknown) =>
-      selector({
-        password: mockSessionPassword.value,
-        setPassword: (p: string | null) => {
-          mockSessionPassword.value = p
-        },
-      }),
-    {
-      getState: () => ({
-        password: mockSessionPassword.value,
-        setPassword: (p: string | null) => {
-          mockSessionPassword.value = p
-        },
-      }),
-    },
-  ),
   startAutoLockTimer: vi.fn(),
 }))
 
@@ -137,7 +119,6 @@ describe('ImportWalletPage', () => {
     vi.clearAllMocks()
     vi.useFakeTimers({ shouldAdvanceTime: true })
     mockValidateMnemonic.mockResolvedValue(true)
-    mockSessionPassword.value = 'validpassword123'
     mockEnsureWalletSecretsSession.mockResolvedValue(undefined)
     mockIsWalletSecretsSessionActive.mockResolvedValue(true)
   })
@@ -295,7 +276,7 @@ describe('ImportWalletPage', () => {
 
     await user.click(screen.getByRole('button', { name: 'Restore Wallet' }))
 
-    expect(screen.getByRole('heading', { name: 'Confirm app password' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Enter app password' })).toBeInTheDocument()
     await user.type(screen.getByLabelText('Bitboard app password'), 'validpassword123')
     await user.click(screen.getByRole('button', { name: 'Restore wallet' }))
 

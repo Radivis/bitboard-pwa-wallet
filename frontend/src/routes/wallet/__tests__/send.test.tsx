@@ -69,11 +69,6 @@ vi.mock('@/stores/walletStore', async (importOriginal) => {
   }
 })
 
-vi.mock('@/stores/sessionStore', () => ({
-  useSessionStore: (selector: (s: Record<string, unknown>) => unknown) =>
-    selector({ password: 'testpass' }),
-}))
-
 vi.mock('@/stores/featureStore', () => ({
   useFeatureStore: Object.assign(
     (selector: (s: Record<string, unknown>) => unknown) =>

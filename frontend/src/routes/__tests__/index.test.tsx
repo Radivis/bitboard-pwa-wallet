@@ -51,14 +51,6 @@ vi.mock('@/stores/walletStore', async (importOriginal) => {
   }
 })
 
-vi.mock('@/stores/sessionStore', () => ({
-  useSessionStore: Object.assign(
-    (selector: (s: Record<string, unknown>) => unknown) =>
-      selector({ password: 'testpass' }),
-    { getState: () => ({ password: 'testpass' }) },
-  ),
-}))
-
 vi.mock('@/hooks/useOnchainDashboardQueries', () => ({
   useOnchainEsploraSyncMetadataQuery: () => ({
     data: { isStaleOnchain: false },

@@ -28,7 +28,6 @@ vi.mock('@/db/database', () => ({
 }))
 
 import { useWalletStore } from '@/stores/walletStore'
-import { useSessionStore } from '@/stores/sessionStore'
 import {
   ARKADE_DASHBOARD_QUERY_KEY,
   removeArkadeDashboardSyncQueries,
@@ -38,7 +37,6 @@ import {
 describe('resolveArkadeOperatorSyncMetadata', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    useSessionStore.setState({ password: 'pw' })
     useWalletStore.setState({
       networkMode: 'signet',
       activeWalletId: 1,

@@ -81,11 +81,6 @@ vi.mock('@/stores/walletStore', async (importOriginal) => {
   }
 })
 
-vi.mock('@/stores/sessionStore', () => ({
-  useSessionStore: (selector: (state: Record<string, unknown>) => unknown) =>
-    selector({ password: 'test-password' }),
-}))
-
 vi.mock('@/components/wallet/ArkadeExitSection', () => ({
   ArkadeExitSection: () => (
     <div data-infomode-id="arkade-exit-section">Exit to on-chain</div>

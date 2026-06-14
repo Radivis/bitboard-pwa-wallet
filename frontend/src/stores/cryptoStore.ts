@@ -9,7 +9,7 @@ import { removeLightningConnectionsHydrationQueries } from '@/lib/lightning/ligh
 import { removeOnchainDashboardQueries } from '@/lib/wallet/onchain-dashboard-sync';
 import { useWalletStore } from '@/stores/walletStore';
 import { useLightningStore } from '@/stores/lightningStore';
-import { useSessionStore, clearAutoLockTimer } from '@/stores/sessionStore';
+import { clearAutoLockTimer, clearLegacySessionState } from '@/stores/sessionStore';
 import { awaitBackgroundArkadeOperatorSync } from '@/lib/arkade/arkade-operator-sync';
 import { closeArkadeSession } from '@/lib/arkade/arkade-session-service';
 import { endWalletSecretsSessionReliably } from '@/lib/wallet/wallet-secrets-session';
@@ -296,7 +296,7 @@ export const useCryptoStore = create<CryptoState>((set, get) => {
         terminateCryptoWorker();
         await endWalletSecretsSessionReliably();
         resetSecretsChannel();
-        useSessionStore.getState().clear();
+        clearLegacySessionState();
         set({ _worker: null, error: null, workerHealth: 'initializing', workerError: null });
       }
     },

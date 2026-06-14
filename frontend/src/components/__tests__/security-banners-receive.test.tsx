@@ -25,11 +25,6 @@ vi.mock('@tanstack/react-router', () => ({
   useLocation: () => ({ pathname: routerMocks.pathname, search: '', hash: '' }),
 }))
 
-vi.mock('@/stores/sessionStore', () => ({
-  useSessionStore: (selector: (s: { password: string | null }) => unknown) =>
-    selector({ password: 'secret' }),
-}))
-
 const nearZeroState = vi.hoisted(() => ({ active: true }))
 vi.mock('@/stores/nearZeroSecurityStore', () => ({
   useNearZeroSecurityStore: (selector: (s: typeof nearZeroState) => unknown) =>

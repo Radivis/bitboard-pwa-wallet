@@ -34,13 +34,11 @@ vi.mock('@/db/database', () => ({
 }))
 
 import { useWalletStore } from '@/stores/walletStore'
-import { useSessionStore } from '@/stores/sessionStore'
 import { resolveOnchainEsploraSyncMetadata, removeOnchainDashboardQueries, ONCHAIN_DASHBOARD_QUERY_KEY } from '@/lib/wallet/onchain-dashboard-sync'
 
 describe('resolveOnchainEsploraSyncMetadata', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    useSessionStore.setState({ password: 'pw' })
     useWalletStore.setState({
       networkMode: 'testnet',
       addressType: AddressType.Taproot,

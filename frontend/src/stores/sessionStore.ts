@@ -1,17 +1,9 @@
-import { create } from 'zustand'
-
 const AUTO_LOCK_TIMEOUT_MS = 15 * 60 * 1000
 
-interface SessionState {
-  /** @deprecated Password lives in encryption worker secrets session only. */
-  clear: () => void
+/** Legacy compatibility shim; intentionally does nothing. */
+export function clearLegacySessionState(): void {
+  // Worker/session cleanup happens in cryptoStore lock/teardown paths.
 }
-
-export const useSessionStore = create<SessionState>()(() => ({
-  clear: () => {
-    // Lock path calls endWalletSecretsSession() in cryptoStore.
-  },
-}))
 
 let autoLockTimer: ReturnType<typeof setTimeout> | null = null
 let lastAutoLockHandler: (() => void | Promise<void>) | null = null
@@ -32,7 +24,7 @@ export function resetAutoLockTimer(onLock: () => void | Promise<void>) {
       } catch (err) {
         console.error('[session] auto-lock handler failed', err)
       } finally {
-        useSessionStore.getState().clear()
+        clearLegacySessionState()
       }
     })()
   }, AUTO_LOCK_TIMEOUT_MS)

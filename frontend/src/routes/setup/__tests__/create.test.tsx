@@ -55,25 +55,7 @@ vi.mock('@/stores/walletStore', () => ({
   ),
 }))
 
-const mockSessionPassword = { value: 'validpassword123' as string | null }
 vi.mock('@/stores/sessionStore', () => ({
-  useSessionStore: Object.assign(
-    (selector: (s: { password: string | null; setPassword: (p: string | null) => void }) => unknown) =>
-      selector({
-        password: mockSessionPassword.value,
-        setPassword: (p: string | null) => {
-          mockSessionPassword.value = p
-        },
-      }),
-    {
-      getState: () => ({
-        password: mockSessionPassword.value,
-        setPassword: (p: string | null) => {
-          mockSessionPassword.value = p
-        },
-      }),
-    },
-  ),
   startAutoLockTimer: vi.fn(),
 }))
 
@@ -150,7 +132,6 @@ import { CreateWalletPage } from '@/pages/setup/CreateWalletPage'
 describe('CreateWalletPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockSessionPassword.value = 'validpassword123'
     mockEnsureWalletSecretsSession.mockResolvedValue(undefined)
     mockIsWalletSecretsSessionActive.mockResolvedValue(true)
     dbMocks.mockMutateAsync.mockResolvedValue(1)
