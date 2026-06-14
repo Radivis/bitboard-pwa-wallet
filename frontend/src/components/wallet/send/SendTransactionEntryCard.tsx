@@ -267,7 +267,7 @@ export function SendTransactionEntryCard({
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <Label htmlFor="recipient-address">
                   {isLightningSendMode
-                    ? 'Invoice or Lightning address'
+                    ? 'Invoice, Lightning address, or LNURL'
                     : isArkadeSendMode
                       ? 'Arkade address'
                       : 'Recipient Address'}
@@ -292,9 +292,9 @@ export function SendTransactionEntryCard({
                   isArkadeSendMode
                     ? 'ark1… or tark1…'
                     : lightningAvailable && arkadeAvailable
-                      ? 'bc1q…, ark1…, BOLT11, or Lightning address'
+                      ? 'bc1q…, ark1…, BOLT11, Lightning address, or LNURL'
                       : lightningAvailable
-                        ? 'bc1q… or BOLT11 invoice or Lightning address'
+                        ? 'bc1q…, BOLT11, Lightning address, or LNURL'
                         : arkadeAvailable
                           ? 'bc1q… or ark1… / tark1…'
                           : 'bc1q…'
@@ -304,7 +304,7 @@ export function SendTransactionEntryCard({
               {recipient && !recipientFormatValid && (
                 <p className="text-xs text-destructive">
                   {isLightningSendMode
-                    ? 'Invalid Lightning invoice or Lightning address.'
+                    ? 'Invalid Lightning invoice, Lightning address, or LNURL.'
                     : isArkadeSendMode
                       ? 'Invalid Arkade address (ark1 or tark1).'
                       : arkadeAvailable && lightningAvailable

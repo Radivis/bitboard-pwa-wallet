@@ -162,6 +162,9 @@ feature:
         - Wallet must be unlocked
         - Address validation for the current network
         - Insufficient funds must show clear error
+        - When Lightning is enabled, accepted Lightning send recipients include BOLT11 invoices, Lightning addresses (user@domain), and LNURL-pay links (lnurl1…, lightning:LNURL…, lnurlp://…)
+        - LNURL withdraw, auth/login, and channel requests must show an explicit unsupported error and must not pay
+        - LNURL-pay requires a user-entered amount in sats; fixed-amount LNURL (minSendable equals maxSendable) must match that amount on resolve
     - Settings:
       - description: "Wallet configuration and management"
       - path: /settings

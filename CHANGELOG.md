@@ -15,7 +15,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
-## [0.3.0] - 2026-06-07
+## [0.3.1] - 2026-06-12
+### Added
+- Lightning send supports LNURL-pay (`lnurl1…`, `lightning:LNURL…`, and `lnurlp://…`); withdraw, auth, and channel LNURL tags show explicit unsupported errors
+
+### Fixed
+- Made modals scrollable fixing content from being cut off on small screens
+
+### Security
+- Hardened security for the Ark worker by routing secrets reliably through a secrets channel, so that they don't leak to the main thread of the app
+- Confined handling of app password to the encryption worker where possible
+
+## [0.3.0] - 2026-06-09
 ### Added
 - Arkade Support: enable under Settings → Features; separate balance, receive, send, and board-from-on-chain flows on mainnet, and signet (Mutinynet)
 - Network-scoped default Fulmine delegator URLs (env-configurable) for background VTXO renewal

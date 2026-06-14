@@ -30,10 +30,15 @@ vi.mock('@/lib/lightning/lightning-utils', async (importOriginal) => {
 
 const lnInvoice = 'lntbs1testinvoiceplaceholder123456789'
 const amountlessInvoice = 'lntbs1amountlessbolt11stubxxxxxxxx'
+const lnurlRecipient = 'lnurl1dp68gurn8ghj7um9wfm'
 
 describe('isLightningSendMode', () => {
   it('is true when lightning is available and destination is valid', () => {
     expect(isLightningSendMode(true, lnInvoice)).toBe(true)
+  })
+
+  it('is true for LNURL-pay recipient', () => {
+    expect(isLightningSendMode(true, lnurlRecipient)).toBe(true)
   })
 
   it('is false when lightning is unavailable', () => {
@@ -70,6 +75,16 @@ describe('needsUserLightningAmount', () => {
       needsUserLightningAmount({
         isLightningSendMode: true,
         normalizedRecipient: 'user@getalby.com',
+        decodedBolt11: null,
+      }),
+    ).toBe(true)
+  })
+
+  it('is true for LNURL-pay', () => {
+    expect(
+      needsUserLightningAmount({
+        isLightningSendMode: true,
+        normalizedRecipient: lnurlRecipient,
         decodedBolt11: null,
       }),
     ).toBe(true)
@@ -172,6 +187,20 @@ describe('canBuildLightningSend', () => {
     expect(
       canBuildLightningSend({ ...base, bolt11NetworkMismatch: true }),
     ).toBe(false)
+  })
+
+  it('allows LNURL-pay when amount and balance are valid', () => {
+    expect(
+      canBuildLightningSend({
+        ...base,
+        normalizedRecipient: lnurlRecipient,
+        needsUserLightningAmount: true,
+        lightningPayAmountSats: 2_000,
+        decodedBolt11: null,
+        bolt11DecodeOk: true,
+        amountSats: 2_000,
+      }),
+    ).toBe(true)
   })
 
   it('rejects when balance is insufficient', () => {
