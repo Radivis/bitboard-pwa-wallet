@@ -123,4 +123,44 @@ describe('resolveLnurlPayInvoice', () => {
       }),
     ).rejects.toThrow('Could not reach LNURL server')
   })
+
+  it('preserves existing callback query params while setting amount and metadataHash', async () => {
+    const callbackWithQuery = `${LNURL_CALLBACK_URL}?k1=server-token&nonce=123`
+    const callbackRequestUrls: string[] = []
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = input.toString()
+        if (url === LNURL_PAY_HTTPS_URL) {
+          return new Response(
+            JSON.stringify(
+              payRequestJson({
+                callback: callbackWithQuery,
+              }),
+            ),
+            { status: 200 },
+          )
+        }
+        if (url.startsWith(LNURL_CALLBACK_URL)) {
+          callbackRequestUrls.push(url)
+          return new Response(JSON.stringify({ pr: SIGNET_BOLT11 }), {
+            status: 200,
+          })
+        }
+        return new Response('not found', { status: 404 })
+      }),
+    )
+
+    await resolveLnurlPayInvoice({
+      recipient: LNURL_BECH32,
+      amountSats: 5_000,
+    })
+
+    expect(callbackRequestUrls).toHaveLength(1)
+    const callbackUrl = new URL(callbackRequestUrls[0])
+    expect(callbackUrl.searchParams.get('k1')).toBe('server-token')
+    expect(callbackUrl.searchParams.get('nonce')).toBe('123')
+    expect(callbackUrl.searchParams.get('amount')).toBe('5000000')
+    expect(callbackUrl.searchParams.get('metadataHash')).toBeTruthy()
+  })
 })

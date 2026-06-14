@@ -74,6 +74,16 @@ function formatAmountRangeError(minMsats: number, maxMsats: number): string {
   return `Amount must be between ${minSats} and ${maxSats} sats`
 }
 
+function applyLnurlCallbackQueryParams(callbackUrl: URL, params: {
+  amountMsats: number
+  metadataHash: string
+}): void {
+  callbackUrl.searchParams.set('amount', params.amountMsats.toString())
+  if (params.metadataHash.trim() !== '') {
+    callbackUrl.searchParams.set('metadataHash', params.metadataHash)
+  }
+}
+
 export async function resolveLnurlPayInvoice({
   recipient,
   amountSats,
@@ -111,10 +121,10 @@ export async function resolveLnurlPayInvoice({
   }
 
   const callbackUrl = new URL(lnurlpData.callback)
-  callbackUrl.search = new URLSearchParams({
-    amount: amountMsats.toString(),
+  applyLnurlCallbackQueryParams(callbackUrl, {
+    amountMsats,
     metadataHash: lnurlpData.metadataHash,
-  }).toString()
+  })
 
   let invoiceJson: { pr?: string; verify?: string }
   try {
