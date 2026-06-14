@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest'
-import { getLightningConnectionsForActiveWallet } from '@/lib/lightning/lightning-connection-utils'
+import {
+  getLightningConnectionsForActiveWallet,
+  reconcileActiveLightningConnectionIds,
+  resolveActiveLightningConnection,
+} from '@/lib/lightning/lightning-connection-utils'
 import type { ConnectedLightningWallet } from '@/lib/lightning/lightning-backend-service'
 
 function makeConn(
@@ -70,5 +74,73 @@ describe('getLightningConnectionsForActiveWallet', () => {
         isLightningEnabled: true,
       }),
     ).toEqual([wallets[0]])
+  })
+})
+
+describe('reconcileActiveLightningConnectionIds', () => {
+  const mainnetConn = makeConn({
+    id: 'mainnet-1',
+    walletId: 1,
+    networkMode: 'mainnet',
+  })
+
+  it('assigns the first connection when no active id exists for that network', () => {
+    expect(
+      reconcileActiveLightningConnectionIds({
+        walletId: 1,
+        connections: [mainnetConn],
+        activeConnectionIds: {},
+      }),
+    ).toEqual({ 1: { mainnet: 'mainnet-1' } })
+  })
+
+  it('keeps a valid active id after hydration', () => {
+    expect(
+      reconcileActiveLightningConnectionIds({
+        walletId: 1,
+        connections: [mainnetConn],
+        activeConnectionIds: { 1: { mainnet: 'mainnet-1' } },
+      }),
+    ).toEqual({ 1: { mainnet: 'mainnet-1' } })
+  })
+
+  it('replaces a stale active id with the loaded connection', () => {
+    expect(
+      reconcileActiveLightningConnectionIds({
+        walletId: 1,
+        connections: [mainnetConn],
+        activeConnectionIds: { 1: { mainnet: 'old-id-from-sqlite' } },
+      }),
+    ).toEqual({ 1: { mainnet: 'mainnet-1' } })
+  })
+})
+
+describe('resolveActiveLightningConnection', () => {
+  const mainnetConn = makeConn({
+    id: 'mainnet-1',
+    walletId: 1,
+    networkMode: 'mainnet',
+  })
+
+  it('returns the matching connection when active ids are missing', () => {
+    expect(
+      resolveActiveLightningConnection({
+        connectedWallets: [mainnetConn],
+        activeConnectionIds: {},
+        walletId: 1,
+        networkMode: 'mainnet',
+      }),
+    ).toBe(mainnetConn)
+  })
+
+  it('returns null when no connection exists for the network', () => {
+    expect(
+      resolveActiveLightningConnection({
+        connectedWallets: [mainnetConn],
+        activeConnectionIds: {},
+        walletId: 1,
+        networkMode: 'signet',
+      }),
+    ).toBeNull()
   })
 })

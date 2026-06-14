@@ -24,6 +24,11 @@ import {
   isReservedDefaultNwcConnectionLabel,
   resolveDefaultNwcConnectionLabel,
 } from '@/lib/lightning/nwc-default-connection-label'
+import {
+  reconcileActiveLightningConnectionIds,
+  resolveActiveLightningConnection,
+  type ActiveLightningConnectionsByNetwork,
+} from '@/lib/lightning/lightning-connection-utils'
 
 /**
  * Whether the given Bitcoin wallet has at least one Lightning connection for the
@@ -47,10 +52,7 @@ export function hasNetworkConnectedWallet(
 export type { ConnectedLightningWallet, LightningConnectionConfig }
 export type { NwcConnectionConfig, LightningWalletType } from '@/lib/lightning/lightning-backend-service'
 export type { LightningNetworkMode } from '@/lib/lightning/lightning-utils'
-
-export type ActiveLightningConnectionsByNetwork = Partial<
-  Record<LightningNetworkMode, string>
->
+export type { ActiveLightningConnectionsByNetwork } from '@/lib/lightning/lightning-connection-utils'
 
 export interface LightningInvoice {
   bolt11: string
@@ -136,6 +138,11 @@ export const useLightningStore = create<LightningState>()(
             ...state.connectedWallets.filter((connection) => connection.walletId !== walletId),
             ...connections,
           ],
+          activeConnectionIds: reconcileActiveLightningConnectionIds({
+            walletId,
+            connections,
+            activeConnectionIds: state.activeConnectionIds,
+          }),
         }))
       },
 
@@ -325,15 +332,13 @@ export const useLightningStore = create<LightningState>()(
       getConnectionsForWallet: (walletId) =>
         get().connectedWallets.filter((connection) => connection.walletId === walletId),
 
-      getActiveConnection: (walletId, networkMode) => {
-        if (!isLightningSupported(networkMode)) return null
-        const lnMode = networkMode as LightningNetworkMode
-        const activeId = get().activeConnectionIds[walletId]?.[lnMode]
-        if (!activeId) return null
-        const lightningConnection = get().connectedWallets.find((connection) => connection.id === activeId)
-        if (!lightningConnection || lightningConnection.networkMode !== lnMode) return null
-        return lightningConnection
-      },
+      getActiveConnection: (walletId, networkMode) =>
+        resolveActiveLightningConnection({
+          connectedWallets: get().connectedWallets,
+          activeConnectionIds: get().activeConnectionIds,
+          walletId,
+          networkMode,
+        }),
 
       hasNetworkConnectedWallet: (walletId, networkMode) =>
         hasNetworkConnectedWallet(get().connectedWallets, walletId, networkMode),
