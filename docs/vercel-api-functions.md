@@ -4,7 +4,7 @@ This document captures lessons learned when setting up Vercel API functions (Nod
 
 ## Background
 
-The app uses a same-origin proxy (`/api/esplora/*`, `/api/faucet/*`) to avoid CORS issues when the browser-based WASM Bitcoin client calls external Esplora APIs.
+The app uses a same-origin proxy (`/api/esplora/*`, `/api/faucet/*`, `/api/lnurl/*`) to avoid CORS issues when the browser-based WASM Bitcoin client calls external Esplora APIs or when LNURL-pay resolution cannot reach the LNURL host directly.
 
 ## Key Findings
 
@@ -36,6 +36,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   "rewrites": [
     { "source": "/api/esplora/:path*", "destination": "/api/esplora/[...path]" },
     { "source": "/api/faucet/:path*", "destination": "/api/faucet/[...path]" },
+    { "source": "/api/lnurl/:path*", "destination": "/api/lnurl/[...path]" },
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ]
 }
@@ -100,6 +101,10 @@ const body = await upstream.arrayBuffer()
 res.status(upstream.status).send(Buffer.from(body))
 ```
 
+### 7. LNURL proxy (`/api/lnurl/fetch`)
+
+LNURL-pay uses `GET /api/lnurl/fetch?url=<https://…>` when a direct browser fetch to the LNURL host fails (CORS/network). The handler in `frontend/api/lnurl/[...path].ts` inlines SSRF validation (HTTPS-only, block private IPs and localhost) — keep it in sync with `frontend/src/lib/lightning/lnurl-proxy-upstream-url.ts`. Upstream redirects are rejected (`redirect: 'manual'`).
+
 ## Final `vercel.json` Configuration
 
 ```json
@@ -112,6 +117,7 @@ res.status(upstream.status).send(Buffer.from(body))
   "rewrites": [
     { "source": "/api/esplora/:path*", "destination": "/api/esplora/[...path]" },
     { "source": "/api/faucet/:path*", "destination": "/api/faucet/[...path]" },
+    { "source": "/api/lnurl/:path*", "destination": "/api/lnurl/[...path]" },
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ]
 }

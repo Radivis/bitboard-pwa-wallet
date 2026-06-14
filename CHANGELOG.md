@@ -17,7 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.3.1] - 2026-06-14
 ### Added
-- Lightning send supports LNURL-pay (`lnurl1…`, `lightning:LNURL…`, and `lnurlp://…`); withdraw, auth, and channel LNURL tags show explicit unsupported errors
+- Lightning send supports LNURL-pay (`lnurl1…`, `lightning:LNURL…`, and `lnurlp://…`); withdraw, auth, and channel LNURL tags show explicit unsupported errors; LNURL-pay falls back to same-origin `/api/lnurl/fetch` when direct browser fetch to the LNURL host is blocked (e.g. CORS)
 
 ### Changed
 - Toast messages now appear below the app header

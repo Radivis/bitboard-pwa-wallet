@@ -165,6 +165,7 @@ feature:
         - When Lightning is enabled, accepted Lightning send recipients include BOLT11 invoices, Lightning addresses (user@domain), and LNURL-pay links (lnurl1…, lightning:LNURL…, lnurlp://…)
         - LNURL withdraw, auth/login, and channel requests must show an explicit unsupported error and must not pay
         - LNURL-pay requires a user-entered amount in sats; fixed-amount LNURL (minSendable equals maxSendable) must match that amount on resolve
+        - When direct browser fetch to the LNURL host is blocked (e.g. CORS), resolution falls back to the same-origin proxy at `/api/lnurl/fetch`
     - Settings:
       - description: "Wallet configuration and management"
       - path: /settings
