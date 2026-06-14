@@ -124,7 +124,6 @@ describe('Settings routes', () => {
 
       await waitFor(() => {
         expect(mockUpdateDescriptorWalletChangeset).toHaveBeenCalledWith({
-          password: 'testpass',
           walletId: 1,
           network: 'signet',
           addressType: 'taproot',
@@ -133,7 +132,6 @@ describe('Settings routes', () => {
         })
       })
       expect(mockResolveDescriptorWallet).toHaveBeenCalledWith({
-        password: 'testpass',
         walletId: 1,
         targetNetwork: 'testnet',
         targetAddressType: 'taproot',

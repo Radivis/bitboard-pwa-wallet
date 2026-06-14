@@ -112,6 +112,8 @@ export const mockResolveDescriptorWallet = vi.fn().mockResolvedValue({
   fullScanDone: false,
 })
 export const mockUpdateDescriptorWalletChangeset = vi.fn().mockResolvedValue(undefined)
+export const mockCloseArkadeSession = vi.fn().mockResolvedValue(undefined)
+export const mockRefreshArkadeSessionAfterNetworkSwitch = vi.fn().mockResolvedValue(undefined)
 
 /** Mocked sonner toast — import this in settings tests instead of `sonner` directly. */
 export const toast = {
@@ -284,6 +286,11 @@ vi.mock('@/lib/wallet/descriptor-wallet-manager', async (importOriginal) => {
   }
 })
 
+vi.mock('@/lib/arkade/arkade-session-service', () => ({
+  closeArkadeSession: mockCloseArkadeSession,
+  refreshArkadeSessionAfterNetworkSwitch: mockRefreshArkadeSessionAfterNetworkSwitch,
+}))
+
 vi.mock('@/components/MnemonicGrid', () => ({
   MnemonicGrid: ({ words }: { words: string[] }) => (
     <div data-testid="mnemonic-grid">{words.join(' ')}</div>
@@ -402,6 +409,8 @@ export function resetSettingsPageTestState(): void {
     fullScanDone: false,
   })
   mockUpdateDescriptorWalletChangeset.mockResolvedValue(undefined)
+  mockCloseArkadeSession.mockResolvedValue(undefined)
+  mockRefreshArkadeSessionAfterNetworkSwitch.mockResolvedValue(undefined)
   mockLoadDescriptorWalletAndSync.mockResolvedValue(undefined)
   mockLoadDescriptorWalletWithoutSync.mockResolvedValue(undefined)
   featureStoreState.isLightningEnabled = false
