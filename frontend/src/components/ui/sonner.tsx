@@ -10,6 +10,9 @@ import {
 import { useResolvedTheme } from "@/stores/themeStore"
 import { Toaster as Sonner, type ToasterProps } from "sonner"
 
+/** Clears the sticky app header; Sonner uses separate vars on viewports ≤600px. */
+const TOAST_BELOW_HEADER_OFFSET = { top: "var(--toast-top-offset)" } as const
+
 const Toaster = ({ ...props }: ToasterProps) => {
   const resolvedTheme = useResolvedTheme()
 
@@ -33,6 +36,8 @@ const Toaster = ({ ...props }: ToasterProps) => {
         } as React.CSSProperties
       }
       closeButton
+      offset={TOAST_BELOW_HEADER_OFFSET}
+      mobileOffset={TOAST_BELOW_HEADER_OFFSET}
       {...props}
     />
   )

@@ -15,15 +15,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
-## [0.3.1] - 2026-06-12
+## [0.3.1] - 2026-06-14
 ### Added
 - Lightning send supports LNURL-pay (`lnurl1…`, `lightning:LNURL…`, and `lnurlp://…`); withdraw, auth, and channel LNURL tags show explicit unsupported errors
 
+### Changed
+- Toast messages now appear below the app header
+- Increased size of toast close button and moved it to the top right
+
 ### Fixed
-- Made modals scrollable fixing content from being cut off on small screens
+- Made modals scrollable; this fixes content from being cut off on small screens
+- The receive page should no longer show an error that there is no Lightning wallet for the current network, if there actually is one
 
 ### Security
-- Hardened security for the Ark worker by routing secrets reliably through a secrets channel, so that they don't leak to the main thread of the app
+- Hardened security for the Ark worker by routing secrets reliably through a secrets channel (which was already implemented for the onchain crypto worker), so that they don't leak to the main thread of the app
 - Confined handling of app password to the encryption worker where possible
 
 ## [0.3.0] - 2026-06-09
