@@ -8,6 +8,7 @@ import {
   LnurlFetchError,
   LnurlUnsupportedTagError,
 } from '@/lib/lightning/lnurl-pay-errors'
+import { fetchLnurlHttpGet } from '@/lib/lightning/lnurl-proxy-client'
 import {
   isLnurlBech32String,
   isLnurlpSchemeUrl,
@@ -37,12 +38,12 @@ function resolveLnurlPayHttpsUrl(recipient: string): string {
   if (isLnurlBech32String(trimmed)) {
     return decodeLnurlBech32ToUrl(trimmed)
   }
-  throw new Error('Not an LNURL pay destination')
+  throw new Error('Not a LNURL pay destination')
 }
 
 async function fetchLnurlJson(url: string): Promise<LnurlEndpointJson> {
   try {
-    const response = await fetch(url)
+    const response = await fetchLnurlHttpGet(url)
     if (!response.ok) {
       throw new LnurlFetchError()
     }
@@ -128,7 +129,7 @@ export async function resolveLnurlPayInvoice({
 
   let invoiceJson: { pr?: string; verify?: string }
   try {
-    const invoiceResponse = await fetch(callbackUrl.toString())
+    const invoiceResponse = await fetchLnurlHttpGet(callbackUrl.toString())
     if (!invoiceResponse.ok) {
       throw new LnurlFetchError()
     }

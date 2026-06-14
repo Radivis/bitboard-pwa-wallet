@@ -88,6 +88,38 @@ function registerLnurlPayRoutes(
   })
 }
 
+function registerLnurlProxyFallbackRoutes(
+  page: Page,
+  payJson: Record<string, unknown>,
+) {
+  return Promise.all([
+    page.route('https://e2e-lnurl.test/**', (route) =>
+      route.abort('failed'),
+    ),
+    page.route('**/api/lnurl/fetch**', async (route) => {
+      const proxyUrl = new URL(route.request().url())
+      const upstreamUrl = proxyUrl.searchParams.get('url')
+      if (upstreamUrl === LNURL_PAY_HTTPS_URL) {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify(payJson),
+        })
+        return
+      }
+      if (upstreamUrl?.startsWith(LNURL_CALLBACK_URL)) {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ pr: SIGNET_BOLT11_STUB }),
+        })
+        return
+      }
+      await route.fulfill({ status: 404, body: 'not found' })
+    }),
+  ])
+}
+
 const LNURLP_RECIPIENT = `lnurlp://${LNURL_PAY_HTTPS_URL.slice('https://'.length)}`
 
 async function waitForSendLightningPayReady(page: Page) {
@@ -136,6 +168,36 @@ test.describe('LNURL pay send @nwc', () => {
     })
     await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible({
       timeout: 15_000,
+    })
+  })
+
+  test('pays via LNURL-pay when direct fetch is blocked and proxy is used', async ({
+    page,
+  }) => {
+    await registerLnurlProxyFallbackRoutes(page, {
+      tag: 'payRequest',
+      callback: LNURL_CALLBACK_URL,
+      minSendable: 1_000,
+      maxSendable: 1_000_000_000,
+      metadata: '[["text/plain","E2E LNURL proxy"]]',
+    })
+
+    await createWalletViaUI(page)
+    await switchToSignetWithLightning(page)
+    await connectE2eNwcWallet(page)
+
+    await goToWalletTab(page, 'Dashboard')
+    await goToWalletTab(page, 'Send')
+    await page.locator('#recipient-address').fill(LNURLP_RECIPIENT)
+    await page.getByLabel('Unit for amount entry').selectOption('sat')
+    await page.locator('#send-amount').fill('1000')
+    await waitForSendLightningPayReady(page)
+    const payButton = page.getByRole('button', { name: /pay with lightning/i })
+    await expect(payButton).toBeEnabled({ timeout: 15_000 })
+    await payButton.click()
+
+    await expect(page.getByText('Lightning payment sent!')).toBeVisible({
+      timeout: 20_000,
     })
   })
 

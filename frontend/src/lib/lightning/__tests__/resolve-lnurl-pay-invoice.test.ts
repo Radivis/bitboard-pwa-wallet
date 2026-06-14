@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { bech32 } from '@scure/base'
 import { resolveLnurlPayInvoice } from '@/lib/lightning/resolve-lnurl-pay-invoice'
 import { LnurlUnsupportedTagError } from '@/lib/lightning/lnurl-pay-errors'
+import { buildLnurlProxyFetchUrl } from '@/lib/lightning/lnurl-proxy-client'
 
 const LNURL_PAY_HTTPS_URL = 'https://e2e.test/.well-known/lnurlp/user'
 const LNURL_CALLBACK_URL = 'https://e2e.test/lnurl/callback'
@@ -28,6 +29,7 @@ function payRequestJson(overrides: Record<string, unknown> = {}) {
 
 describe('resolveLnurlPayInvoice', () => {
   beforeEach(() => {
+    vi.stubGlobal('location', { origin: 'https://app.example' })
     vi.stubGlobal(
       'fetch',
       vi.fn(async (input: RequestInfo | URL) => {
@@ -162,5 +164,34 @@ describe('resolveLnurlPayInvoice', () => {
     expect(callbackUrl.searchParams.get('nonce')).toBe('123')
     expect(callbackUrl.searchParams.get('amount')).toBe('5000000')
     expect(callbackUrl.searchParams.get('metadataHash')).toBeTruthy()
+  })
+
+  it('uses proxy when direct metadata fetch fails with network error', async () => {
+    const metadataProxyUrl = buildLnurlProxyFetchUrl(LNURL_PAY_HTTPS_URL)
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = input.toString()
+        if (url === LNURL_PAY_HTTPS_URL || url.startsWith(LNURL_CALLBACK_URL)) {
+          throw new TypeError('Failed to fetch')
+        }
+        if (url === metadataProxyUrl) {
+          return new Response(JSON.stringify(payRequestJson()), { status: 200 })
+        }
+        const proxyUpstream = new URL(url).searchParams.get('url')
+        if (proxyUpstream?.startsWith(LNURL_CALLBACK_URL)) {
+          return new Response(JSON.stringify({ pr: SIGNET_BOLT11 }), {
+            status: 200,
+          })
+        }
+        return new Response('not found', { status: 404 })
+      }),
+    )
+
+    const result = await resolveLnurlPayInvoice({
+      recipient: LNURL_BECH32,
+      amountSats: 5_000,
+    })
+    expect(result.bolt11).toBe(SIGNET_BOLT11)
   })
 })
