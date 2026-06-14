@@ -25,7 +25,7 @@ export function ConfirmAppPasswordModal({
   onCancel,
   onConfirm,
   isBusy = false,
-  title = 'Confirm app password',
+  title = 'Enter app password',
   description = 'Enter your Bitboard app password to continue.',
   submitLabel = 'Continue',
   loadingText = 'Working…',
