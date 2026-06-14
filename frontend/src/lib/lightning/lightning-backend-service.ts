@@ -1,6 +1,7 @@
 import { NWCClient } from '@getalby/sdk'
 import { msatsAmountNumberFromSatsExact } from '@/lib/wallet/bitcoin-utils'
 import { MAX_NWC_CONNECTION_STRING_LENGTH } from '@/lib/lightning/lightning-input-limits'
+import { createNwcClient } from '@/lib/lightning/nwc-relay-url'
 import {
   mapWireNwcBalanceToDomain,
   mapWireNwcMakeInvoiceToDomain,
@@ -18,9 +19,7 @@ export async function fetchNwcChainTipBlockHeight(
   if (config.type !== 'nwc') {
     throw new Error('Unsupported Lightning wallet type')
   }
-  const client = new NWCClient({
-    nostrWalletConnectUrl: config.connectionString,
-  })
+  const client = createNwcClient(config.connectionString)
   const info = await client.getInfo()
   return mapWireNwcWalletInfoBlockHeight(info)
 }
@@ -279,9 +278,7 @@ function createE2eNwcMockBackendService(): LightningBackendService {
 function createNwcBackendService(
   config: NwcConnectionConfig,
 ): LightningBackendService {
-  const client = new NWCClient({
-    nostrWalletConnectUrl: config.connectionString,
-  })
+  const client = createNwcClient(config.connectionString)
 
   return {
     async getBalance() {
