@@ -4,8 +4,7 @@ import type { EncryptedBlob } from '@/lib/shared/encrypted-blob-types'
 import { encryptDataWithPassword, decryptDataWithPassword } from './encryption'
 import {
   listWalletIdsWithSecrets,
-  loadWalletSecrets,
-  putSplitWalletSecretsEncrypted,
+  reencryptAllWalletSecretsWithNewPassword,
 } from './wallet-persistence'
 import { useNearZeroSecurityStore } from '@/stores/nearZeroSecurityStore'
 import { beginWalletSecretsSession } from '@/lib/wallet/wallet-secrets-session'
@@ -181,23 +180,24 @@ export async function upgradeNearZeroToUserPassword(params: {
   const { walletDb, newPassword } = params
   const ids = await listWalletIdsWithSecrets(walletDb)
   if (ids.length > 0) {
-    for (const walletId of ids) {
-      const secrets = await loadWalletSecrets(walletDb, walletId)
-      const payloadEnc = await encryptDataWithPassword(
-        newPassword,
-        JSON.stringify({
-          descriptorWallets: secrets.descriptorWallets,
-          lightningNwcConnections: secrets.lightningNwcConnections,
-          arkadeOperatorConnections: secrets.arkadeOperatorConnections ?? [],
-          activeArkadeConnectionIdByNetwork: secrets.activeArkadeConnectionIdByNetwork ?? {},
-        }),
-      )
-      const mnemonicEnc = await encryptDataWithPassword(newPassword, secrets.mnemonic)
-      await putSplitWalletSecretsEncrypted(walletDb, walletId, {
-        payload: payloadEnc,
-        mnemonic: mnemonicEnc,
-      })
+    const wrappedRow = await walletDb
+      .selectFrom('settings')
+      .select('value')
+      .where('key', '=', NEAR_ZERO_SETTINGS_KEY_WRAPPED)
+      .executeTakeFirst()
+    if (!wrappedRow?.value) {
+      throw new Error('Near-zero wrapped session secret is missing')
     }
+    const wrappedBlob = deserializeEncryptedBlobFromSettings(wrappedRow.value)
+    const nearZeroSessionSecret = await decryptDataWithPassword(
+      NEAR_ZERO_WRAPPER_PASSWORD,
+      wrappedBlob,
+    )
+    await reencryptAllWalletSecretsWithNewPassword({
+      walletDb,
+      oldPassword: nearZeroSessionSecret,
+      newPassword,
+    })
   }
   await beginWalletSecretsSession(newPassword)
   await clearNearZeroSecuritySettings(walletDb)
