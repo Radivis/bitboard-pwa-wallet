@@ -12,7 +12,7 @@ import { AppModal } from '@/components/AppModal'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { MnemonicGrid } from '@/components/MnemonicGrid'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
-import { ConfirmAppPasswordModal } from '@/components/EnterAppPasswordModal'
+import { EnterAppPasswordModal } from '@/components/EnterAppPasswordModal'
 import { SetAppPasswordModal } from '@/components/SetAppPasswordModal'
 import { WalletUnlock } from '@/components/WalletUnlock'
 import { useCryptoStore } from '@/stores/cryptoStore'
@@ -54,7 +54,7 @@ export function CreateWalletPage() {
   const [mnemonicForBackup, setMnemonicForBackup] = useState('')
   const [pendingCreate, setPendingCreate] = useState<CreateWalletPending | null>(null)
   const [verificationWords, setVerificationWords] = useState<Record<number, string>>({})
-  const [confirmPasswordOpen, setConfirmPasswordOpen] = useState(false)
+  const [confirmPasswordOpen, setEnterPasswordOpen] = useState(false)
   const [pendingCreateAction, setPendingCreateAction] = useState<
     'generate' | 'quickCreate' | null
   >(null)
@@ -239,7 +239,7 @@ export function CreateWalletPage() {
         return
       }
       setPendingCreateAction(action)
-      setConfirmPasswordOpen(true)
+      setEnterPasswordOpen(true)
     },
     [createWalletMutation, quickCreateWalletMutation],
   )
@@ -290,8 +290,8 @@ export function CreateWalletPage() {
     )
   }
 
-  const handleConfirmAppPassword = (appPassword: string) => {
-    setConfirmPasswordOpen(false)
+  const handleEnterAppPassword = (appPassword: string) => {
+    setEnterPasswordOpen(false)
     const action = pendingCreateAction
     setPendingCreateAction(null)
     if (action === 'quickCreate') {
@@ -374,16 +374,16 @@ export function CreateWalletPage() {
         <StepBackup words={words} onContinue={() => setStep(3)} />
       )}
 
-      <ConfirmAppPasswordModal
+      <EnterAppPasswordModal
         open={confirmPasswordOpen}
-        onOpenChange={setConfirmPasswordOpen}
+        onOpenChange={setEnterPasswordOpen}
         onCancel={() => {
-          setConfirmPasswordOpen(false)
+          setEnterPasswordOpen(false)
           setPendingCreateAction(null)
         }}
-        onConfirm={handleConfirmAppPassword}
+        onConfirm={handleEnterAppPassword}
         isBusy={createWalletMutation.isPending || quickCreateWalletMutation.isPending}
-        title="Confirm app password"
+        title="Enter app password"
         description="Enter your Bitboard app password to encrypt your new wallet."
         submitLabel={pendingCreateAction === 'quickCreate' ? 'Create wallet' : 'Generate wallet'}
         loadingText="Generating wallet..."

@@ -19,7 +19,7 @@ interface ConfirmAppPasswordModalProps {
   loadingText?: string
 }
 
-export function ConfirmAppPasswordModal({
+export function EnterAppPasswordModal({
   open,
   onOpenChange,
   onCancel,

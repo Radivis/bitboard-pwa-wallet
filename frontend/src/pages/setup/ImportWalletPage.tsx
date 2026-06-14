@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
-import { ConfirmAppPasswordModal } from '@/components/EnterAppPasswordModal'
+import { EnterAppPasswordModal } from '@/components/EnterAppPasswordModal'
 import { SetAppPasswordModal } from '@/components/SetAppPasswordModal'
 import { WalletUnlock } from '@/components/WalletUnlock'
 import { useCryptoStore } from '@/stores/cryptoStore'
@@ -293,16 +293,16 @@ export function ImportWalletPage() {
         </CardContent>
       </Card>
 
-      <ConfirmAppPasswordModal
+      <EnterAppPasswordModal
         open={confirmPasswordOpen}
         onOpenChange={setConfirmPasswordOpen}
         onCancel={() => setConfirmPasswordOpen(false)}
-        onConfirm={(appPassword) => {
+        onConfirm={(appPassword: string | undefined) => {
           setConfirmPasswordOpen(false)
           restoreMutation.mutate(appPassword)
         }}
         isBusy={restoreMutation.isPending}
-        title="Confirm app password"
+        title="Enter app password"
         description="Enter your Bitboard app password to encrypt your imported wallet."
         submitLabel="Restore wallet"
         loadingText="Restoring wallet..."
