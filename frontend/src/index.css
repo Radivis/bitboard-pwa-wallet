@@ -239,14 +239,11 @@ body {
   }
 }
 
-/* Sonner toast close control — 2× default size, top-right corner (LTR). */
-[data-sonner-toaster][dir='ltr'] {
-  --toast-close-button-start: unset;
-  --toast-close-button-end: 0;
-  --toast-close-button-transform: translate(35%, -35%);
-}
-
-[data-sonner-toast][data-styled='true'] [data-close-button] {
+/* Sonner toast close control — 2× default size, top-right corner. */
+[data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-close-button] {
+  left: auto !important;
+  right: 0 !important;
+  transform: translate(35%, -35%) !important;
   height: var(--toast-close-button-size);
   width: var(--toast-close-button-size);
 }

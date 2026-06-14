@@ -12,9 +12,9 @@ import { loadWalletSecretsWithPassword } from '@/db/wallet-persistence'
 import { invalidateWalletRelatedQueriesAndNotifyOtherTabs } from '@/lib/wallet/wallet-query-cache-sync'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { AppModal } from '@/components/AppModal'
+import { EnterAppPasswordModal } from '@/components/EnterAppPasswordModal'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { PasswordInput } from '@/components/ui/password-input'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/shared/utils'
 import { DialogDescription } from '@/components/ui/dialog'
@@ -27,7 +27,6 @@ export function SeedPhraseBackup() {
     useWalletNoMnemonicBackupFlag(activeWalletId)
   const [showPasswordPrompt, setShowPasswordPrompt] = useState(false)
   const [showMnemonic, setShowMnemonic] = useState(false)
-  const [promptPassword, setPromptPassword] = useState('')
   const [mnemonicWords, setMnemonicWords] = useState<string[]>([])
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -51,13 +50,7 @@ export function SeedPhraseBackup() {
     [activeWalletId, queryClient],
   )
 
-  const dismissPasswordPrompt = useCallback(() => {
-    setShowPasswordPrompt(false)
-    setPromptPassword('')
-    setError(null)
-  }, [])
-
-  const handleShowSeedPhrase = useCallback(async () => {
+  const handleShowSeedPhrase = useCallback(async (password: string) => {
     if (!activeWalletId) return
     try {
       setLoading(true)
@@ -66,20 +59,19 @@ export function SeedPhraseBackup() {
       const walletDb = getDatabase()
       const secrets = await loadWalletSecretsWithPassword(
         walletDb,
-        promptPassword,
+        password,
         activeWalletId,
       )
       setMnemonicWords(secrets.mnemonic.split(' '))
       setShowPasswordPrompt(false)
       setBackupConfirmed(false)
       setShowMnemonic(true)
-      setPromptPassword('')
     } catch {
       setError('Wrong password')
     } finally {
       setLoading(false)
     }
-  }, [activeWalletId, promptPassword])
+  }, [activeWalletId])
 
   if (!activeWalletId) return null
 
@@ -125,49 +117,23 @@ export function SeedPhraseBackup() {
         </Card>
       </InfomodeWrapper>
 
-      <AppModal
-        isOpen={showPasswordPrompt}
-        onOpenChange={() => {}}
-        onCancel={dismissPasswordPrompt}
-        title="Confirm Bitboard app password"
-        contentClassName="sm:max-w-md"
-      >
-        <>
-          <DialogDescription>
-            Enter your Bitboard app password to view your seed phrase.
-          </DialogDescription>
-          <form
-            className="space-y-4"
-            onSubmit={(e) => {
-              e.preventDefault()
-              handleShowSeedPhrase()
-            }}
-          >
-            <div className="space-y-2">
-              <Label htmlFor="backup-password">Bitboard app password</Label>
-              <PasswordInput
-                id="backup-password"
-                passwordKind="app"
-                value={promptPassword}
-                onChange={(e) => setPromptPassword(e.target.value)}
-                placeholder="Enter your Bitboard app password"
-                disabled={loading}
-                autoFocus
-              />
-              {error && (
-                <p className="text-sm text-destructive">{error}</p>
-              )}
-            </div>
-            <Button
-              type="submit"
-              className="w-full"
-              disabled={!promptPassword || loading}
-            >
-              {loading ? 'Decrypting...' : 'Confirm'}
-            </Button>
-          </form>
-        </>
-      </AppModal>
+      <EnterAppPasswordModal
+        open={showPasswordPrompt}
+        onOpenChange={(open) => {
+          setShowPasswordPrompt(open)
+          if (!open) setError(null)
+        }}
+        onCancel={() => setShowPasswordPrompt(false)}
+        onConfirm={(password) => {
+          void handleShowSeedPhrase(password)
+        }}
+        isBusy={loading}
+        error={error}
+        title="Enter Bitboard app password"
+        description="Enter your Bitboard app password to view your seed phrase."
+        submitLabel="Confirm"
+        loadingText="Decrypting..."
+      />
 
       <AppModal
         isOpen={showMnemonic}

@@ -17,6 +17,7 @@ interface ConfirmAppPasswordModalProps {
   description?: string
   submitLabel?: string
   loadingText?: string
+  error?: string | null
 }
 
 export function EnterAppPasswordModal({
@@ -29,6 +30,7 @@ export function EnterAppPasswordModal({
   description = 'Enter your Bitboard app password to continue.',
   submitLabel = 'Continue',
   loadingText = 'Working…',
+  error = null,
 }: ConfirmAppPasswordModalProps) {
   const [password, setPassword] = useState('')
 
@@ -86,6 +88,9 @@ export function EnterAppPasswordModal({
               disabled={isBusy}
               autoFocus
             />
+            {error ? (
+              <p className="text-sm text-destructive">{error}</p>
+            ) : null}
           </div>
 
           {isBusy ? (
