@@ -173,7 +173,7 @@ List each real handler file individually rather than using a broad glob:
 
 ```json
 "functions": {
-  "api/esplora/[...path].ts": { "maxDuration": 10 },
+  "api/esplora/[...path].ts": { "maxDuration": 30 },
   "api/faucet/[...path].ts":  { "maxDuration": 10 },
   "api/fiat-rates/[...path].ts": { "maxDuration": 10 }
 }

@@ -1,7 +1,7 @@
 import { errorMessage } from '@/lib/shared/utils'
 
-/** Single attempt: full-scan failures are usually persistent; user can retry manually (e.g. full rescan). */
-export const DEFAULT_ESPLORA_FULL_SCAN_MAX_ATTEMPTS = 1
+/** Transient Esplora failures (timeouts, 429) often clear on retry during full scan. */
+export const DEFAULT_ESPLORA_FULL_SCAN_MAX_ATTEMPTS = 3
 
 const DEFAULT_BASE_DELAY_MS = 1000
 const DEFAULT_MAX_DELAY_MS = 8000
@@ -28,6 +28,7 @@ export function isRetryableEsploraFullScanError(detail: string): boolean {
     '408',
     'timeout',
     'timed out',
+    'timedout',
     'rate limit',
     'too many',
     'network',

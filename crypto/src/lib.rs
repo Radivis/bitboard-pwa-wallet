@@ -289,7 +289,7 @@ fn to_js<T: serde::Serialize>(value: &T) -> Result<JsValue, JsValue> {
 /// Returns a `SyncResult` with updated balance and changeset JSON.
 #[wasm_bindgen]
 pub async fn sync_wallet(esplora_url: &str) -> Result<JsValue, JsValue> {
-    let esplora_client = esplora::EsploraClient::new(esplora_url).map_err(JsValue::from)?;
+    let esplora_client = esplora::EsploraClient::for_sync(esplora_url).map_err(JsValue::from)?;
 
     let sync_request =
         with_wallet(|wallet| wallet.start_sync_with_revealed_spks_at(current_unix_time()))?;
@@ -314,7 +314,8 @@ pub async fn sync_wallet(esplora_url: &str) -> Result<JsValue, JsValue> {
 /// Returns a `SyncResult` with updated balance and changeset JSON.
 #[wasm_bindgen]
 pub async fn full_scan_wallet(esplora_url: &str, stop_gap: usize) -> Result<JsValue, JsValue> {
-    let esplora_client = esplora::EsploraClient::new(esplora_url).map_err(JsValue::from)?;
+    let esplora_client =
+        esplora::EsploraClient::for_full_scan(esplora_url).map_err(JsValue::from)?;
 
     let scan_request = with_wallet(|wallet| wallet.start_full_scan_at(current_unix_time()))?;
 
@@ -438,7 +439,7 @@ pub async fn broadcast_transaction(raw_tx_hex: &str, esplora_url: &str) -> Resul
     let tx_bytes = bitcoin::consensus::encode::deserialize_hex::<bitcoin::Transaction>(raw_tx_hex)
         .map_display_err_to_js()?;
 
-    let esplora_client = esplora::EsploraClient::new(esplora_url).map_err(JsValue::from)?;
+    let esplora_client = esplora::EsploraClient::for_sync(esplora_url).map_err(JsValue::from)?;
 
     use crate::blockchain::BlockchainClient;
     let txid = esplora_client

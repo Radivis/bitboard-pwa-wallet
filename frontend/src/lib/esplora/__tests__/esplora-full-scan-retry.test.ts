@@ -10,6 +10,11 @@ describe('isRetryableEsploraFullScanError', () => {
     expect(isRetryableEsploraFullScanError('status 503')).toBe(true)
     expect(isRetryableEsploraFullScanError('Failed to fetch')).toBe(true)
     expect(isRetryableEsploraFullScanError('connection timeout')).toBe(true)
+    expect(
+      isRetryableEsploraFullScanError(
+        'Reqwest(reqwest::Error { kind: Request, source: TimedOut })',
+      ),
+    ).toBe(true)
   })
 
   it('returns false for empty or likely permanent errors', () => {
@@ -55,12 +60,18 @@ describe('withEsploraFullScanRetries', () => {
     expect(fn).toHaveBeenCalledTimes(1)
   })
 
-  it('default maxAttempts is 1: does not retry retryable errors', async () => {
+  it('default maxAttempts is 3: retries retryable errors before failing', async () => {
     const fn = vi
       .fn()
-      .mockRejectedValue(new Error('HTTP status 429'))
-    const retryPromise = withEsploraFullScanRetries(fn)
-    await expect(retryPromise).rejects.toThrow('HTTP status 429')
-    expect(fn).toHaveBeenCalledTimes(1)
+      .mockRejectedValueOnce(
+        new Error('Reqwest(reqwest::Error { kind: Request, source: TimedOut })'),
+      )
+      .mockRejectedValueOnce(new Error('HTTP status 429'))
+      .mockResolvedValueOnce('recovered')
+    const retryPromise = withEsploraFullScanRetries(fn, { baseDelayMs: 100 })
+    const resultPromise = retryPromise.then((result) => result)
+    await vi.advanceTimersByTimeAsync(5000)
+    await expect(resultPromise).resolves.toBe('recovered')
+    expect(fn).toHaveBeenCalledTimes(3)
   })
 })

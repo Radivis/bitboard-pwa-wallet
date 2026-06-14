@@ -7,23 +7,38 @@ use crate::blockchain::BlockchainClient;
 use crate::error::CryptoError;
 use crate::wasm_sleep::WasmSleeper;
 
-/// Upper bound for each Esplora HTTP request (seconds). Keeps failed sync from hanging on stalled fetches (especially on WASM).
-const ESPLORA_HTTP_TIMEOUT_SECS: u64 = 5;
+/// Per-request timeout for incremental sync and broadcast (seconds).
+pub const ESPLORA_SYNC_HTTP_TIMEOUT_SECS: u64 = 5;
+/// Per-request timeout for full scan (seconds). Full scans issue many sequential fetches.
+pub const ESPLORA_FULL_SCAN_HTTP_TIMEOUT_SECS: u64 = 30;
 
 pub struct EsploraClient {
     async_client: bdk_esplora::esplora_client::AsyncClient<WasmSleeper>,
 }
 
 impl EsploraClient {
-    pub fn new(url: &str) -> Result<Self, CryptoError> {
+    fn new_with_timeout(url: &str, timeout_secs: u64) -> Result<Self, CryptoError> {
         if url.is_empty() {
             return Err(CryptoError::Blockchain("URL must not be empty".to_string()));
         }
         let async_client = bdk_esplora::esplora_client::Builder::new(url)
-            .timeout(ESPLORA_HTTP_TIMEOUT_SECS)
+            .timeout(timeout_secs)
             .build_async_with_sleeper::<WasmSleeper>()
             .map_err(|e| CryptoError::Blockchain(e.to_string()))?;
         Ok(Self { async_client })
+    }
+
+    pub fn for_sync(url: &str) -> Result<Self, CryptoError> {
+        Self::new_with_timeout(url, ESPLORA_SYNC_HTTP_TIMEOUT_SECS)
+    }
+
+    pub fn for_full_scan(url: &str) -> Result<Self, CryptoError> {
+        Self::new_with_timeout(url, ESPLORA_FULL_SCAN_HTTP_TIMEOUT_SECS)
+    }
+
+    /// Default client for tests and single-shot calls (sync timeout).
+    pub fn new(url: &str) -> Result<Self, CryptoError> {
+        Self::for_sync(url)
     }
 
     /// Access the underlying esplora async client directly.
