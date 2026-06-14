@@ -48,7 +48,6 @@ export function useActiveWalletLoadQuery() {
   const query = useQuery({
     queryKey: activeWalletLoadQueryKey({
       activeWalletId,
-      sessionPresent: walletIsUnlockedOrSyncing(walletStatus) || activeWalletBootstrapInFlight,
       networkMode,
       addressType,
       accountId,

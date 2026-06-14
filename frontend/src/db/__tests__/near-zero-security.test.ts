@@ -115,8 +115,7 @@ describe('near-zero security', () => {
 
   it('upgradeNearZeroToUserPassword re-encrypts wallet secrets', async () => {
     await generateAndPersistNearZeroSession(walletDb)
-    const sessionPassword = 'near-zero-session'
-    await beginWalletSecretsSession(sessionPassword)
+    expect(await isWalletSecretsSessionActive()).toBe(true)
 
     const insert = await walletDb
       .insertInto('wallets')
