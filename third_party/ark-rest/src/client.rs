@@ -46,6 +46,31 @@ use futures::Stream;
 
 use crate::sse::{poll_next_sse_event, SseDataLineBuffer};
 
+/// arkd build version targeted by this client (sent as `X-Build-Version`).
+///
+/// This is the arkd protocol compatibility target, not the Rust crate version.
+/// Update when intentionally targeting a newer arkd compatibility baseline.
+pub const TARGET_ARKD_VERSION: &str = "0.9.9";
+
+const SDK_VERSION_HEADER: &str = concat!("rust-sdk/", env!("CARGO_PKG_VERSION"));
+
+fn build_reqwest_client() -> Result<reqwest::Client, Error> {
+    let mut default_headers = reqwest::header::HeaderMap::new();
+    default_headers.insert(
+        "X-Build-Version",
+        reqwest::header::HeaderValue::from_static(TARGET_ARKD_VERSION),
+    );
+    default_headers.insert(
+        "X-SDK-Version",
+        reqwest::header::HeaderValue::from_static(SDK_VERSION_HEADER),
+    );
+
+    reqwest::Client::builder()
+        .default_headers(default_headers)
+        .build()
+        .map_err(Error::request)
+}
+
 fn parse_batch_event_line(line: &str) -> Result<StreamEvent, Error> {
     let response: models::GetEventStreamResponse = serde_json::from_str(line)
         .map_err(|e| Error::conversion(format!("Failed to parse JSON: {e}")))?;
@@ -76,19 +101,9 @@ impl Client {
         &self.configuration
     }
     pub fn new(ark_server_url: String) -> Result<Self, Error> {
-        let mut default_headers = reqwest::header::HeaderMap::new();
-        default_headers.insert(
-            "X-Build-Version",
-            reqwest::header::HeaderValue::from_static(env!("CARGO_PKG_VERSION")),
-        );
-        let client = reqwest::Client::builder()
-            .default_headers(default_headers)
-            .build()
-            .map_err(Error::request)?;
-
         let configuration = apis::configuration::Configuration {
             base_path: ark_server_url,
-            client,
+            client: build_reqwest_client()?,
             ..Default::default()
         };
 

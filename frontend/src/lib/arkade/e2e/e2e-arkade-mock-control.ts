@@ -36,7 +36,7 @@ export type E2eArkadeMockControl = {
   reset: () => Promise<void>
   /** @see E2eArkadeReceiveDebugSnapshot — manual DevTools only, not Playwright. */
   readReceiveDebugSnapshot: () => Promise<E2eArkadeReceiveDebugSnapshot>
-  /** Wallet-secrets row (decrypted), independent of live WASM — E2E diagnostics only. */
+  /** Wallet-secrets row via worker secrets channel — E2E diagnostics only. */
   readPersistedReceiveDebugSnapshot: (
     passwordOverride?: string,
   ) => Promise<E2eArkadePersistedReceiveDebugSnapshot>
@@ -85,50 +85,64 @@ export function ensureE2eArkadeMockControl(): void {
     readReceiveDebugSnapshot: async () => {
       const { getArkadeWorker } = await import('@/workers/arkade-factory')
       const { readOffchainNextDerivationIndex } = await import(
-        '@/lib/arkade/arkade-sdk-persistence'
+        '@/lib/arkade/arkade-payload-merge'
       )
       const worker = getArkadeWorker()
-      const sdkPersistenceJson = await worker.exportSdkPersistenceJson()
+      const sdkPersistenceJson = await worker.exportSdkPersistenceJsonForE2e()
       return {
         offchainNextDerivationIndex: readOffchainNextDerivationIndex(sdkPersistenceJson),
         peekAddress: await worker.getAddress(),
       }
     },
-    readPersistedReceiveDebugSnapshot: async (passwordOverride?: string) => {
-      const { getDatabase } = await import('@/db')
-      const { loadWalletSecretsPayload } = await import('@/db/wallet-persistence')
-      const { findActiveArkadeOperatorConnection } = await import(
-        '@/lib/arkade/arkade-operator-connections'
+    readPersistedReceiveDebugSnapshot: async () => {
+      const { getDatabase, getWalletSecretsEncrypted } = await import('@/db')
+      const { findActiveArkadeConnectionSummary } = await import(
+        '@/lib/arkade/arkade-encrypted-persistence-manager'
       )
       const { readOffchainNextDerivationIndex } = await import(
-        '@/lib/arkade/arkade-sdk-persistence'
+        '@/lib/arkade/arkade-payload-merge'
       )
+      const { getArkadeWorker } = await import('@/workers/arkade-factory')
       const { useWalletStore } = await import('@/stores/walletStore')
-      const { useSessionStore } = await import('@/stores/sessionStore')
       const { isArkadeSupportedNetworkMode } = await import('@/lib/arkade/arkade-endpoints')
+      const { ensureArkadeEncryptedSecretsHost } = await import(
+        '@/workers/arkade-persistence-channel'
+      )
+      const { ensureArkadeWorkerSecretsChannel, ensureSecretsChannel } = await import(
+        '@/workers/secrets-channel'
+      )
 
       const walletId = useWalletStore.getState().activeWalletId
-      const password = passwordOverride ?? useSessionStore.getState().password
       const networkMode = useWalletStore.getState().networkMode
       if (
         walletId == null ||
-        password == null ||
         !isArkadeSupportedNetworkMode(networkMode)
       ) {
         throw new Error('Wallet must be unlocked on an Arkade network to read persisted snapshot')
       }
 
-      const payload = await loadWalletSecretsPayload(getDatabase(), password, walletId)
-      const connection = findActiveArkadeOperatorConnection(payload, networkMode)
+      await ensureSecretsChannel()
+      await ensureArkadeEncryptedSecretsHost()
+      await ensureArkadeWorkerSecretsChannel()
+      getArkadeWorker()
+
+      const encrypted = await getWalletSecretsEncrypted(getDatabase(), walletId)
+      const connection = await findActiveArkadeConnectionSummary({
+        walletId,
+        networkMode,
+        encryptedPayload: encrypted.payload,
+      })
       if (connection == null) {
         throw new Error('No active Arkade operator connection in wallet secrets')
       }
 
+      const sdkPersistenceJson = await getArkadeWorker().readPersistedSdkPersistenceJsonForE2e({
+        walletId,
+        connectionId: connection.id,
+      })
       return {
         connectionId: connection.id,
-        offchainNextDerivationIndex: readOffchainNextDerivationIndex(
-          connection.sdkPersistenceJson,
-        ),
+        offchainNextDerivationIndex: readOffchainNextDerivationIndex(sdkPersistenceJson),
       }
     },
   }

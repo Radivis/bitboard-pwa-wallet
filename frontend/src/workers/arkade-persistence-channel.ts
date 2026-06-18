@@ -1,50 +1,36 @@
 import { proxy } from 'comlink'
-import type { ArkadeSdkPersistenceBridge } from '@/lib/arkade/storage/arkade-sdk-persistence-flush'
-import { saveSdkPersistenceJsonForConnection } from '@/lib/arkade/arkade-sdk-persistence'
+import { createEncryptedWalletSecretsHost } from '@/lib/wallet/encrypted-wallet-secrets-host'
 
-let bridgeReady = false
-let bridgePromise: Promise<void> | null = null
-
-const persistenceBridge: ArkadeSdkPersistenceBridge = {
-  async persistSdkPersistence(params) {
-    await saveSdkPersistenceJsonForConnection({
-      password: params.password,
-      walletId: params.walletId,
-      connectionId: params.connectionId,
-      sdkPersistenceJson: params.sdkPersistenceJson,
-      lastSuccessfulOperatorSyncAt: params.lastSuccessfulOperatorSyncAt,
-    })
-  },
-}
+let encryptedSecretsHostReady = false
+let encryptedSecretsHostPromise: Promise<void> | null = null
 
 export function resetArkadePersistenceChannel(): void {
-  bridgeReady = false
-  bridgePromise = null
+  encryptedSecretsHostReady = false
+  encryptedSecretsHostPromise = null
 }
 
 /**
- * Registers the main-thread persistence bridge on the Arkade worker (Comlink).
+ * Registers the main-thread encrypted DB host on the Arkade worker (Comlink).
+ * Ciphertext only — no wallet payload decrypt on the main thread.
  */
-export async function ensureArkadePersistenceChannel(): Promise<void> {
-  if (bridgeReady) return
-  if (bridgePromise) {
-    await bridgePromise
+export async function ensureArkadeEncryptedSecretsHost(): Promise<void> {
+  if (encryptedSecretsHostReady) return
+  if (encryptedSecretsHostPromise) {
+    await encryptedSecretsHostPromise
     return
   }
 
-  bridgePromise = (async () => {
+  encryptedSecretsHostPromise = (async () => {
     const { getArkadeWorker } = await import('@/workers/arkade-factory')
     const worker = getArkadeWorker()
-    await worker.setSdkPersistenceBridge(proxy(persistenceBridge))
-    bridgeReady = true
+    await worker.setEncryptedWalletSecretsHost(proxy(createEncryptedWalletSecretsHost()))
+    encryptedSecretsHostReady = true
   })().finally(() => {
-    bridgePromise = null
+    encryptedSecretsHostPromise = null
   })
 
-  await bridgePromise
+  await encryptedSecretsHostPromise
 }
 
-/** @internal Test hook */
-export function exposeArkadePersistenceBridgeForTests(): ArkadeSdkPersistenceBridge {
-  return persistenceBridge
-}
+/** @deprecated Use ensureArkadeEncryptedSecretsHost */
+export const ensureArkadePersistenceChannel = ensureArkadeEncryptedSecretsHost

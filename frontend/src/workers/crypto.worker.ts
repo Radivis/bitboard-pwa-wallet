@@ -92,14 +92,14 @@ async function initWasm() {
 
 initWasm();
 
-function requestDecrypt(password: string, encryptedBlob: EncryptedBlobMessage): Promise<string> {
+function requestDecrypt(encryptedBlob: EncryptedBlobMessage): Promise<string> {
   if (!secretsProxy) return Promise.reject(new Error('Secrets port not set'));
-  return secretsProxy.decrypt(password, encryptedBlob);
+  return secretsProxy.decrypt(encryptedBlob);
 }
 
-function requestEncrypt(password: string, plaintext: string): Promise<EncryptedBlobMessage> {
+function requestEncrypt(plaintext: string): Promise<EncryptedBlobMessage> {
   if (!secretsProxy) return Promise.reject(new Error('Secrets port not set'));
-  return secretsProxy.encrypt(password, plaintext);
+  return secretsProxy.encrypt(plaintext);
 }
 
 /** Shape stored in DB / returned to main (transferable fields only). */
@@ -122,10 +122,9 @@ function encryptedBlobMessageToStoreFields(
 }
 
 async function encryptPlaintextToStoreFields(
-  password: string,
   plaintext: string
 ): Promise<EncryptedBlobStoreFields> {
-  const encryptedBlob = await requestEncrypt(password, plaintext);
+  const encryptedBlob = await requestEncrypt(plaintext);
   return encryptedBlobMessageToStoreFields(encryptedBlob);
 }
 
@@ -159,25 +158,17 @@ function buildInitialWalletSecretsPayload({
 }
 
 async function encryptWalletSecretsPayloadAndMnemonic({
-  password,
   payload,
   mnemonicPlaintext,
 }: {
-  password: string;
   payload: WalletSecretsPayload;
   mnemonicPlaintext: string;
 }): Promise<{
   encryptedPayload: EncryptedBlobStoreFields;
   encryptedMnemonic: EncryptedBlobStoreFields;
 }> {
-  const encryptedPayload = await encryptPlaintextToStoreFields(
-    password,
-    JSON.stringify(payload)
-  );
-  const encryptedMnemonic = await encryptPlaintextToStoreFields(
-    password,
-    mnemonicPlaintext
-  );
+  const encryptedPayload = await encryptPlaintextToStoreFields(JSON.stringify(payload));
+  const encryptedMnemonic = await encryptPlaintextToStoreFields(mnemonicPlaintext);
   return { encryptedPayload, encryptedMnemonic };
 }
 
@@ -517,7 +508,6 @@ const cryptoService = {
   },
 
   async resolveDescriptorWallet(params: {
-    password: string;
     encryptedPayload: EncryptedBlobMessage;
     encryptedMnemonic: EncryptedBlobMessage;
     targetNetwork: BitcoinNetwork;
@@ -525,14 +515,13 @@ const cryptoService = {
     targetAccountId: number;
   }) {
     const {
-      password,
       encryptedPayload,
       encryptedMnemonic,
       targetNetwork,
       targetAddressType,
       targetAccountId,
     } = params;
-    const payloadPlain = await requestDecrypt(password, encryptedPayload);
+    const payloadPlain = await requestDecrypt(encryptedPayload);
     const payload = parseWalletPayloadJson(payloadPlain);
     const existing = findDescriptorWalletInPayload({
       payload,
@@ -548,7 +537,7 @@ const cryptoService = {
       };
     }
 
-    let mnemonicPlain = await requestDecrypt(password, encryptedMnemonic);
+    let mnemonicPlain = await requestDecrypt(encryptedMnemonic);
     try {
       const walletResultWire = await invokeWasmCrypto((wasmModule) =>
         wasmModule.create_wallet(
@@ -571,10 +560,7 @@ const cryptoService = {
         fullScanDone: false,
       };
       payload.descriptorWallets.push(descriptorWallet);
-      const payloadEnc = await encryptPlaintextToStoreFields(
-        password,
-        JSON.stringify(payload)
-      );
+      const payloadEnc = await encryptPlaintextToStoreFields(JSON.stringify(payload));
       return {
         descriptorWalletData: descriptorWallet,
         encryptedPayloadToStore: payloadEnc,
@@ -587,7 +573,6 @@ const cryptoService = {
   },
 
   async updateDescriptorWalletChangeset(params: {
-    password: string;
     encryptedPayload: EncryptedBlobMessage;
     network: BitcoinNetwork;
     addressType: AddressType;
@@ -597,7 +582,6 @@ const cryptoService = {
     lastSuccessfulEsploraSyncAt?: string;
   }) {
     const {
-      password,
       encryptedPayload,
       network,
       addressType,
@@ -606,7 +590,7 @@ const cryptoService = {
       markFullScanDone,
       lastSuccessfulEsploraSyncAt,
     } = params;
-    const plaintext = await requestDecrypt(password, encryptedPayload);
+    const plaintext = await requestDecrypt(encryptedPayload);
     const payload = parseWalletPayloadJson(plaintext);
     const descriptorWallet = findDescriptorWalletInPayload({
       payload,
@@ -628,19 +612,18 @@ const cryptoService = {
       descriptorWallet.lastSuccessfulEsploraSyncAt = lastSuccessfulEsploraSyncAt;
     }
     const newPlaintext = JSON.stringify(payload);
-    const newBlob = await requestEncrypt(password, newPlaintext);
+    const newBlob = await requestEncrypt(newPlaintext);
     return encryptedBlobMessageToStoreFields(newBlob);
   },
 
   async readLastSuccessfulEsploraSyncAtForDescriptorWallet(params: {
-    password: string;
     encryptedPayload: EncryptedBlobMessage;
     network: BitcoinNetwork;
     addressType: AddressType;
     accountId: number;
   }): Promise<string | undefined> {
-    const { password, encryptedPayload, network, addressType, accountId } = params;
-    const plaintext = await requestDecrypt(password, encryptedPayload);
+    const { encryptedPayload, network, addressType, accountId } = params;
+    const plaintext = await requestDecrypt(encryptedPayload);
     const payload = parseWalletPayloadJson(plaintext);
     const descriptorWallet = findDescriptorWalletInPayload({
       payload,
@@ -652,13 +635,12 @@ const cryptoService = {
   },
 
   async createWalletAndEncryptSecrets(params: {
-    password: string;
     network: BitcoinNetwork;
     addressType: AddressType;
     accountId: number;
     wordCount: 12 | 24;
   }) {
-    const { password, network, addressType, accountId, wordCount } = params;
+    const { network, addressType, accountId, wordCount } = params;
     const { mnemonic, walletResult } = await invokeWasmCrypto(async (wasmModule) => {
       const generatedMnemonic = wasmModule.generate_mnemonic(wordCount);
       const createdWalletWire = wasmModule.create_wallet(
@@ -682,7 +664,6 @@ const cryptoService = {
     });
     const { encryptedPayload, encryptedMnemonic } =
       await encryptWalletSecretsPayloadAndMnemonic({
-        password,
         payload,
         mnemonicPlaintext: mnemonic,
       });
@@ -696,12 +677,11 @@ const cryptoService = {
 
   async importWalletAndEncryptSecrets(params: {
     mnemonic: string;
-    password: string;
     network: BitcoinNetwork;
     addressType: AddressType;
     accountId: number;
   }) {
-    const { mnemonic, password, network, addressType, accountId } = params;
+    const { mnemonic, network, addressType, accountId } = params;
     const walletResultWire = await invokeWasmCrypto((wasmModule) =>
       wasmModule.create_wallet(mnemonic, network, addressType, accountId),
     );
@@ -716,7 +696,6 @@ const cryptoService = {
     });
     const { encryptedPayload, encryptedMnemonic } =
       await encryptWalletSecretsPayloadAndMnemonic({
-        password,
         payload,
         mnemonicPlaintext: mnemonic,
       });

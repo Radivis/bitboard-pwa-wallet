@@ -8,8 +8,11 @@ import type { EncryptedBlob } from '@/lib/shared/encrypted-blob-types'
 /** Same shape as {@link EncryptedBlob}; name kept for channel-specific call sites. */
 export type EncryptedBlobMessage = EncryptedBlob
 
-/** API exposed by the encryption worker on the secrets port for the crypto worker. */
+/** API exposed by the encryption worker on the secrets port for worker peers. */
 export interface SecretsChannelService {
-  decrypt(password: string, encryptedBlob: EncryptedBlobMessage): Promise<string>
-  encrypt(password: string, plaintext: string): Promise<EncryptedBlobMessage>
+  beginSession(password: string): Promise<void>
+  endSession(): Promise<void>
+  isSessionActive(): Promise<boolean>
+  decrypt(encryptedBlob: EncryptedBlobMessage): Promise<string>
+  encrypt(plaintext: string): Promise<EncryptedBlobMessage>
 }

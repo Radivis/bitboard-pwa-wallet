@@ -18,4 +18,14 @@ describe('normalizeSendRecipient', () => {
       normalizeSendRecipient(`bitcoin:${addr}?lightning=${ln}`),
     ).toBe(ln)
   })
+
+  it('strips lightning: prefix from LNURL', () => {
+    const lnurl = 'lnurl1dp68gurn8ghj7um9wfm'
+    expect(normalizeSendRecipient(`lightning:${lnurl}`)).toBe(lnurl)
+  })
+
+  it('preserves lnurlp scheme recipient', () => {
+    const lnurlp = 'lnurlp://pay.example.com/.well-known/lnurlp/user'
+    expect(normalizeSendRecipient(lnurlp)).toBe(lnurlp)
+  })
 })

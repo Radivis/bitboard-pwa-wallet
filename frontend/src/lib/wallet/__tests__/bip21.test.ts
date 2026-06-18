@@ -124,6 +124,17 @@ describe('preferredRecipientFromBitcoinUri', () => {
       }),
     ).toBe(ln)
   })
+
+  it('prefers valid lightning=LNURL when present', () => {
+    const lnurl = 'lnurl1dp68gurn8ghj7um9wfm'
+    expect(
+      preferredRecipientFromBitcoinUri({
+        address: addr,
+        amountBtc: null,
+        lightningParam: lnurl,
+      }),
+    ).toBe(lnurl)
+  })
 })
 
 describe('recipientAndAmountFromScannedPayload', () => {

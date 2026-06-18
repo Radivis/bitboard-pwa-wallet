@@ -41,11 +41,6 @@ vi.mock('@/stores/walletStore', async (importOriginal) => {
   }
 })
 
-vi.mock('@/stores/sessionStore', () => ({
-  useSessionStore: (selector: (state: Record<string, unknown>) => unknown) =>
-    selector({ password: 'test-password' }),
-}))
-
 vi.mock('@/hooks/useArkadeQueries', () => ({
   useArkadeBalanceQuery: () => ({
     isLoading: false,

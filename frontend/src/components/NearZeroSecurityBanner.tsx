@@ -3,8 +3,9 @@ import { useLocation } from '@tanstack/react-router'
 import { AlertTriangle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { UpgradeFromNearZeroPasswordModal } from '@/components/UpgradeFromNearZeroPasswordModal'
-import { useSessionStore } from '@/stores/sessionStore'
+import { useWalletStore } from '@/stores/walletStore'
 import { useNearZeroSecurityStore } from '@/stores/nearZeroSecurityStore'
+import { walletIsUnlockedOrSyncing } from '@/lib/wallet/wallet-unlocked-status'
 
 /** Exported for tests; session dismiss is cleared on each visit to `/wallet/receive`. */
 export const NEAR_ZERO_BANNER_SESSION_DISMISS_KEY = 'bitboard_near_zero_banner_dismissed'
@@ -20,7 +21,7 @@ function readDismissedFromSessionStorage(): boolean {
 export function NearZeroSecurityBanner() {
   const location = useLocation()
   const nearZeroActive = useNearZeroSecurityStore((nearZeroSecurityState) => nearZeroSecurityState.active)
-  const sessionPassword = useSessionStore((sessionState) => sessionState.password)
+  const walletStatus = useWalletStore((walletState) => walletState.walletStatus)
   const [dismissed, setDismissed] = useState(readDismissedFromSessionStorage)
   const [upgradeOpen, setUpgradeOpen] = useState(false)
 
@@ -35,7 +36,7 @@ export function NearZeroSecurityBanner() {
     return null
   }
 
-  if (!nearZeroActive || !sessionPassword) {
+  if (!nearZeroActive || !walletIsUnlockedOrSyncing(walletStatus)) {
     return null
   }
 

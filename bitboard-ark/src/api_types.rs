@@ -12,6 +12,10 @@ pub struct OpenSessionResult {
 pub struct BalanceDto {
     /// Net spendable balance (offchain + bumper, minus exits in progress).
     pub confirmed_sats: u64,
+    /// Portfolio-style total: offchain (spendable + recoverable) plus confirmed on-chain bumper
+    /// sats and unconfirmed boarding UTXOs. Excludes unconfirmed bumper-wallet UTXOs
+    /// (`trusted_pending` / `untrusted_pending` from the on-chain wallet); those are not
+    /// spendable for Ark operations until confirmed.
     pub total_sats: u64,
     /// On-chain boarding UTXOs confirmed and ready to settle into VTXOs.
     pub boarding_spendable_sats: u64,
@@ -56,6 +60,8 @@ pub struct PaymentRowDto {
 pub struct DelegateSpendableResult {
     pub delegated: u32,
     pub failed: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error_message: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -122,7 +128,7 @@ pub struct UnilateralExitFeeEstimateDto {
     pub chain_tx_count: u32,
     pub projected_unroll_steps: u32,
     pub projected_wait_steps: u32,
-    pub fee_rate_sat_per_vb: u64,
+    pub fee_rate_sat_per_vb: f64,
     pub estimated_package_fee_sats: u64,
     pub bumper_balance_sats: u64,
     pub bumper_sufficient: bool,
@@ -146,6 +152,26 @@ pub struct UnrollProgressEvent {
 #[serde(rename_all = "camelCase")]
 pub struct UnrollResult {
     pub vtxo_txid: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OpenSessionParams {
+    pub mnemonic: String,
+    pub network_mode: String,
+    pub ark_server_url: String,
+    pub delegator_url: String,
+    pub esplora_url: String,
+    #[serde(default)]
+    pub sdk_persistence_json: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CollaborativeExitFeeEstimateParams {
+    pub destination_address: String,
+    #[serde(default)]
+    pub amount_sats: Option<u64>,
 }
 
 #[derive(Debug, Deserialize)]

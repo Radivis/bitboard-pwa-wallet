@@ -1,8 +1,12 @@
 import { isValidSendAmountSats } from '@/lib/wallet/send/send-amount-validation'
-import { MAX_BOLT11_PAYMENT_REQUEST_LENGTH } from '@/lib/lightning/lightning-input-limits'
+import {
+  MAX_BOLT11_PAYMENT_REQUEST_LENGTH,
+  MAX_LNURL_BECH32_LENGTH,
+} from '@/lib/lightning/lightning-input-limits'
 import {
   bolt11NetworkModeFromPrefix,
   isLightningAddress,
+  isLnurlPayDestination,
   isValidBolt11Invoice,
   isValidLightningDestination,
   tryDecodeBolt11Invoice,
@@ -48,6 +52,7 @@ export function needsUserLightningAmount({
 }: NeedsUserLightningAmountInput): boolean {
   if (!isLightningSendMode) return false
   if (isLightningAddress(normalizedRecipient)) return true
+  if (isLnurlPayDestination(normalizedRecipient)) return true
   if (!isValidBolt11Invoice(normalizedRecipient)) return false
   return decodedBolt11 == null || decodedBolt11.satoshi === 0
 }
@@ -103,6 +108,9 @@ export function isSendRecipientFormatValid({
 }
 
 export function isLightningPayloadLengthOk(normalizedRecipient: string): boolean {
+  if (isLnurlPayDestination(normalizedRecipient)) {
+    return normalizedRecipient.length <= MAX_LNURL_BECH32_LENGTH
+  }
   return normalizedRecipient.length <= MAX_BOLT11_PAYMENT_REQUEST_LENGTH
 }
 
@@ -221,7 +229,8 @@ export function canBuildLightningSend({
       decodedBolt11,
       amountSats,
     }) &&
-    (isLightningAddress(normalizedRecipient)
+    ((isLightningAddress(normalizedRecipient) ||
+      isLnurlPayDestination(normalizedRecipient))
       ? isValidSendAmountSats(amountSats)
       : true)
   )

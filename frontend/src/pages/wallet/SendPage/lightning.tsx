@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react'
 import { toast } from 'sonner'
-import { LightningAddress } from '@getalby/lightning-tools'
+import { LightningAddress } from '@getalby/lightning-tools/lnurl'
 import { isValidSendAmountSats } from '@/lib/wallet/send/send-amount-validation'
 import { useLightningPayMutation } from '@/hooks/useLightningMutations'
 import { useSendLightningBalances } from '@/hooks/useSendLightningBalances'
@@ -8,8 +8,11 @@ import {
   isLightningSupported,
   isValidBolt11Invoice,
   isLightningAddress,
+  isLnurlPayDestination,
   bolt11NetworkModeFromPrefix,
 } from '@/lib/lightning/lightning-utils'
+import { LnurlUnsupportedTagError } from '@/lib/lightning/lnurl-pay-errors'
+import { resolveLnurlPayInvoice } from '@/lib/lightning/resolve-lnurl-pay-invoice'
 import {
   canBuildLightningSend,
   getDecodedBolt11ForSend,
@@ -40,7 +43,7 @@ export function useSendFlowLightning({
   amountSats: number
 }) {
   const lightningAvailable = isLightningEnabled && isLightningSupported(networkMode)
-  const [isResolvingLightningAddress, setIsResolvingLightningAddress] =
+  const [isResolvingLightningPayee, setIsResolvingLightningPayee] =
     useState(false)
 
   const isLightningSendMode = useMemo(
@@ -134,7 +137,7 @@ export function useSendFlowLightning({
 
   const handleLightningAddressPay = useCallback(async () => {
     if (!selectedLightningWallet || !isValidSendAmountSats(amountSats)) return
-    setIsResolvingLightningAddress(true)
+    setIsResolvingLightningPayee(true)
     try {
       const recipientLightningAddress = new LightningAddress(normalizedRecipient)
       await recipientLightningAddress.fetch()
@@ -158,7 +161,45 @@ export function useSendFlowLightning({
         err instanceof Error ? err.message : 'Could not fetch Lightning invoice',
       )
     } finally {
-      setIsResolvingLightningAddress(false)
+      setIsResolvingLightningPayee(false)
+    }
+  }, [
+    selectedLightningWallet,
+    amountSats,
+    normalizedRecipient,
+    networkMode,
+    lightningPayMutation,
+  ])
+
+  const handleLnurlPay = useCallback(async () => {
+    if (!selectedLightningWallet || !isValidSendAmountSats(amountSats)) return
+    setIsResolvingLightningPayee(true)
+    try {
+      const { bolt11: bolt11PaymentRequest } = await resolveLnurlPayInvoice({
+        recipient: normalizedRecipient,
+        amountSats,
+      })
+      const invoiceNetworkMode = bolt11NetworkModeFromPrefix(bolt11PaymentRequest)
+      if (invoiceNetworkMode !== networkMode) {
+        toast.error(
+          'This invoice is for a different network. Switch network in Settings.',
+        )
+        return
+      }
+      lightningPayMutation.mutate({
+        bolt11: bolt11PaymentRequest,
+        config: selectedLightningWallet.config,
+      })
+    } catch (err) {
+      if (err instanceof LnurlUnsupportedTagError) {
+        toast.error(err.message)
+        return
+      }
+      toast.error(
+        err instanceof Error ? err.message : 'Could not fetch Lightning invoice',
+      )
+    } finally {
+      setIsResolvingLightningPayee(false)
     }
   }, [
     selectedLightningWallet,
@@ -171,6 +212,11 @@ export function useSendFlowLightning({
   const submitLightningPayment = useCallback(() => {
     if (isLightningAddress(normalizedRecipient)) {
       void handleLightningAddressPay()
+      return
+    }
+
+    if (isLnurlPayDestination(normalizedRecipient)) {
+      void handleLnurlPay()
       return
     }
 
@@ -203,12 +249,13 @@ export function useSendFlowLightning({
     amountSats,
     lightningPayMutation,
     handleLightningAddressPay,
+    handleLnurlPay,
   ])
 
   return {
     lightningAvailable,
     isLightningSendMode,
-    isResolvingLightningAddress,
+    isResolvingLightningPayee,
     lightningPayMutation,
     matchingLightningConnections,
     selectedLightningConnectionId,

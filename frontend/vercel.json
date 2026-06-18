@@ -4,7 +4,7 @@
   "buildCommand": "export PATH=\"$HOME/.cargo/bin:$PATH\" && npm run build",
   "functions": {
     "api/esplora/[...path].ts": {
-      "maxDuration": 10
+      "maxDuration": 30
     },
     "api/faucet/[...path].ts": {
       "maxDuration": 10
@@ -14,6 +14,9 @@
     },
     "api/arkade/operator/[...path].ts": {
       "maxDuration": 30
+    },
+    "api/lnurl/[...path].ts": {
+      "maxDuration": 10
     }
   },
   "rewrites": [
@@ -27,6 +30,10 @@
       "source": "/api/fiat-rates/:path*",
       "destination": "/api/fiat-rates/[...path]"
     },
+    {
+      "source": "/api/lnurl/:path*",
+      "destination": "/api/lnurl/[...path]"
+    },
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ],
   "headers": [
@@ -35,7 +42,7 @@
       "headers": [
         {
           "key": "Content-Security-Policy",
-          "value": "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; frame-src 'none'; manifest-src 'self'; upgrade-insecure-requests; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob: https:; connect-src 'self' https: wss: http://127.0.0.1:* http://localhost:*"
+          "value": "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; frame-src 'none'; manifest-src 'self'; upgrade-insecure-requests; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob: data:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob: https:; connect-src 'self' https: wss: http://127.0.0.1:* http://localhost:*"
         },
         {
           "key": "Strict-Transport-Security",

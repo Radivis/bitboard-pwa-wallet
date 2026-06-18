@@ -51,14 +51,6 @@ vi.mock('@/stores/walletStore', async (importOriginal) => {
   }
 })
 
-vi.mock('@/stores/sessionStore', () => ({
-  useSessionStore: Object.assign(
-    (selector: (s: Record<string, unknown>) => unknown) =>
-      selector({ password: 'testpass' }),
-    { getState: () => ({ password: 'testpass' }) },
-  ),
-}))
-
 vi.mock('@/hooks/useOnchainDashboardQueries', () => ({
   useOnchainEsploraSyncMetadataQuery: () => ({
     data: { isStaleOnchain: false },
@@ -186,6 +178,8 @@ describe('DashboardPage', () => {
       currentAddress: 'tb1qtest',
       lastSyncTime: null,
       transactions: [],
+      arkadePayments: [],
+      arkadeReceiveAddress: null,
       setWalletStatus: vi.fn(),
       setBalance: vi.fn(),
       setTransactions: vi.fn(),

@@ -21,7 +21,7 @@ export async function expectNoInitialWalletSyncErrorToast(page: Page) {
   await expect(syncErrorToast).not.toBeVisible({ timeout: 12_000 })
 }
 
-/** First-run blocking dialog on /setup/create and /setup/import when no wallets exist and no session password. */
+/** First-run blocking dialog on /setup/create and /setup/import when no wallets exist yet. */
 export async function dismissSetAppPasswordModalIfPresent(page: Page, password: string) {
   const heading = page.getByRole('heading', { name: 'Set Bitboard app password' })
   try {
@@ -32,6 +32,20 @@ export async function dismissSetAppPasswordModalIfPresent(page: Page, password: 
   await page.locator('#app-password').fill(password)
   await page.locator('#app-confirm-password').fill(password)
   await page.getByRole('button', { name: 'Continue' }).click()
+  await expect(heading).not.toBeVisible({ timeout: 15_000 })
+}
+
+/** Shown when restoring/importing without an active encryption-worker secrets session. */
+export async function confirmConfirmAppPasswordModalIfPresent(page: Page, password: string) {
+  const heading = page.getByRole('heading', { name: 'Confirm app password' })
+  try {
+    await heading.waitFor({ state: 'visible', timeout: 3000 })
+  } catch {
+    return
+  }
+  await page.getByLabel('Bitboard app password').fill(password)
+  await page.getByRole('button', { name: 'Restore wallet' }).click()
+  await expect(heading).not.toBeVisible({ timeout: 15_000 })
 }
 
 /**
@@ -47,6 +61,7 @@ export async function dismissSetupUnlockIfPresent(page: Page, password: string) 
   }
   await page.getByLabel('Bitboard app password').fill(password)
   await page.getByRole('button', { name: 'Unlock' }).click()
+  await expect(heading).not.toBeVisible({ timeout: 60_000 })
 }
 
 export async function createWalletViaUI(page: Page) {
@@ -105,6 +120,7 @@ export async function importWalletViaUI(
   await expect(page.getByText('Valid mnemonic')).toBeVisible({ timeout: 10000 })
 
   await page.getByRole('button', { name: 'Restore Wallet' }).click()
+  await confirmConfirmAppPasswordModalIfPresent(page, password)
 
   await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible({
     timeout: 60000,

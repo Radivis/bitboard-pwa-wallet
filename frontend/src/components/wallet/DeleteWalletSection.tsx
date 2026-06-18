@@ -6,8 +6,8 @@ import { useDeleteWallet, useWallet, useWalletNoMnemonicBackupFlag, useWallets }
 import { finalizeWalletDeletion } from '@/lib/wallet/wallet-delete-finalize'
 import { sumMainnetOnChainSatsForWallet } from '@/lib/esplora/mainnet-onchain-balance-probe'
 import { userFacingErrorMessage } from '@/lib/shared/utils'
-import { useSessionStore } from '@/stores/sessionStore'
 import { useWalletStore } from '@/stores/walletStore'
+import { walletIsUnlockedOrSyncing } from '@/lib/wallet/wallet-unlocked-status'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { AppModal } from '@/components/AppModal'
 import { Button } from '@/components/ui/button'
@@ -41,15 +41,13 @@ export function DeleteWalletSection({
   const [probingMainnet, setProbingMainnet] = useState(false)
 
   const walletName = walletRow?.name?.trim() || 'this wallet'
-  const sessionPassword = useSessionStore((sessionState) => sessionState.password)
-  const canAttemptDelete = walletStatus === 'unlocked' && sessionPassword != null
+  const canAttemptDelete = walletIsUnlockedOrSyncing(walletStatus)
 
   useEffect(() => {
     if (
       autoOpenFirstDialog &&
       activeWalletId != null &&
-      walletStatus === 'unlocked' &&
-      sessionPassword != null
+      walletIsUnlockedOrSyncing(walletStatus)
     ) {
       setFirstDialogOpen(true)
       onAutoOpenConsumed?.()
@@ -58,7 +56,6 @@ export function DeleteWalletSection({
     autoOpenFirstDialog,
     activeWalletId,
     walletStatus,
-    sessionPassword,
     onAutoOpenConsumed,
   ])
 
@@ -69,7 +66,7 @@ export function DeleteWalletSection({
   }, [])
 
   const performDelete = useCallback(async () => {
-    if (activeWalletId == null || sessionPassword == null) return
+    if (activeWalletId == null) return
 
     const deletedWalletId = activeWalletId
     /** This UI only deletes the wallet that is currently active. */
@@ -98,7 +95,6 @@ export function DeleteWalletSection({
     }
   }, [
     activeWalletId,
-    sessionPassword,
     wallets,
     deleteWalletMutation,
     closeAll,
@@ -106,7 +102,7 @@ export function DeleteWalletSection({
   ])
 
   const onFirstDialogConfirm = useCallback(async () => {
-    if (activeWalletId == null || sessionPassword == null) {
+    if (activeWalletId == null || !walletIsUnlockedOrSyncing(walletStatus)) {
       toast.error('Unlock your wallet to delete it.')
       return
     }
@@ -114,7 +110,6 @@ export function DeleteWalletSection({
     setProbingMainnet(true)
     try {
       const total = await sumMainnetOnChainSatsForWallet({
-        password: sessionPassword,
         walletId: activeWalletId,
       })
       if (total > 0 && noMnemonicBackupFlag) {
@@ -134,7 +129,7 @@ export function DeleteWalletSection({
     }
   }, [
     activeWalletId,
-    sessionPassword,
+    walletStatus,
     noMnemonicBackupFlag,
     performDelete,
     setFirstDialogOpen,

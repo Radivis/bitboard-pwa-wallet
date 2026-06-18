@@ -75,8 +75,37 @@ export function isLightningAddress(input: string): boolean {
   return LIGHTNING_ADDRESS_PATTERN.test(input)
 }
 
+const LNURL_BECH32_PATTERN = /^lnurl1[02-9ac-hj-np-z]+$/i
+
+export function isLnurlBech32String(input: string): boolean {
+  return LNURL_BECH32_PATTERN.test(input.trim())
+}
+
+export function isLnurlpSchemeUrl(input: string): boolean {
+  return /^lnurlp:\/\//i.test(input.trim())
+}
+
+/** LNURL-pay recipient: bech32 `lnurl1…` or LUD-17 `lnurlp://…` (after `lightning:` strip). */
+export function isLnurlPayDestination(input: string): boolean {
+  const trimmed = input.trim()
+  return isLnurlBech32String(trimmed) || isLnurlpSchemeUrl(trimmed)
+}
+
 export function isValidLightningDestination(input: string): boolean {
-  return isValidBolt11Invoice(input) || isLightningAddress(input)
+  return (
+    isValidBolt11Invoice(input) ||
+    isLightningAddress(input) ||
+    isLnurlPayDestination(input)
+  )
+}
+
+/** LUD-17: `lnurlp://` replaces `https://` for the cleartext URL. */
+export function normalizeLnurlpSchemeToHttps(input: string): string {
+  const trimmed = input.trim()
+  if (!isLnurlpSchemeUrl(trimmed)) {
+    return trimmed
+  }
+  return `https://${trimmed.slice('lnurlp://'.length)}`
 }
 
 /**

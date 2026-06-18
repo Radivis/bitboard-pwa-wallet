@@ -25,11 +25,6 @@ vi.mock('@tanstack/react-router', () => ({
   useLocation: () => ({ pathname: routerMocks.pathname, search: '', hash: '' }),
 }))
 
-vi.mock('@/stores/sessionStore', () => ({
-  useSessionStore: (selector: (s: { password: string | null }) => unknown) =>
-    selector({ password: 'secret' }),
-}))
-
 const nearZeroState = vi.hoisted(() => ({ active: true }))
 vi.mock('@/stores/nearZeroSecurityStore', () => ({
   useNearZeroSecurityStore: (selector: (s: typeof nearZeroState) => unknown) =>
@@ -38,12 +33,14 @@ vi.mock('@/stores/nearZeroSecurityStore', () => ({
 
 const walletMocks = vi.hoisted(() => ({
   activeWalletId: 1 as number | null,
+  walletStatus: 'unlocked' as const,
 }))
 vi.mock('@/stores/walletStore', () => ({
   useWalletStore: (selector: (s: typeof walletMocks & { activeWalletId: number | null }) => unknown) =>
     selector({
       ...walletMocks,
       activeWalletId: walletMocks.activeWalletId,
+      walletStatus: walletMocks.walletStatus,
     }),
 }))
 
@@ -57,6 +54,7 @@ describe('security banners: dismiss reset on /wallet/receive', () => {
     routerMocks.pathname = '/wallet'
     nearZeroState.active = true
     walletMocks.activeWalletId = 1
+    walletMocks.walletStatus = 'unlocked'
   })
 
   it('NearZeroSecurityBanner shows again on Receive after session dismiss was set on another route', () => {

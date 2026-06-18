@@ -1,13 +1,13 @@
 import type { Kysely } from 'kysely'
 import type { Database } from './schema'
 import type { EncryptedBlob } from '@/lib/shared/encrypted-blob-types'
-import { encryptData, decryptData } from './encryption'
+import { encryptDataWithPassword, decryptDataWithPassword } from './encryption'
 import {
   listWalletIdsWithSecrets,
   reencryptAllWalletSecretsWithNewPassword,
 } from './wallet-persistence'
-import { useSessionStore } from '@/stores/sessionStore'
 import { useNearZeroSecurityStore } from '@/stores/nearZeroSecurityStore'
+import { beginWalletSecretsSession } from '@/lib/wallet/wallet-secrets-session'
 
 /**
  * Public, fixed passphrase used only to wrap the random session secret in SQLite.
@@ -94,13 +94,13 @@ export async function generateAndPersistNearZeroSession(
   walletDb: Kysely<Database>,
 ): Promise<void> {
   const sessionSecret = generateRandomSessionSecret()
-  const wrapped = await encryptData(NEAR_ZERO_WRAPPER_PASSWORD, sessionSecret)
+  const wrapped = await encryptDataWithPassword(NEAR_ZERO_WRAPPER_PASSWORD, sessionSecret)
   const serialized = serializeEncryptedBlobForSettings(wrapped)
 
   await upsertSetting(walletDb, NEAR_ZERO_SETTINGS_KEY_ACTIVE, '1')
   await upsertSetting(walletDb, NEAR_ZERO_SETTINGS_KEY_WRAPPED, serialized)
 
-  useSessionStore.getState().setPassword(sessionSecret)
+  await beginWalletSecretsSession(sessionSecret)
   useNearZeroSecurityStore.getState().setNearZeroSecurityActive(true)
 }
 
@@ -135,8 +135,11 @@ export async function tryLoadNearZeroSessionIntoMemory(
 
   try {
     const blob = deserializeEncryptedBlobFromSettings(wrappedRow.value)
-    const decryptedSessionSecret = await decryptData(NEAR_ZERO_WRAPPER_PASSWORD, blob)
-    useSessionStore.getState().setPassword(decryptedSessionSecret)
+    const decryptedSessionSecret = await decryptDataWithPassword(
+      NEAR_ZERO_WRAPPER_PASSWORD,
+      blob,
+    )
+    await beginWalletSecretsSession(decryptedSessionSecret)
     useNearZeroSecurityStore.getState().setNearZeroSecurityActive(true)
     return true
   } catch {
@@ -172,18 +175,30 @@ export async function isNearZeroSecurityConfiguredInDb(
  */
 export async function upgradeNearZeroToUserPassword(params: {
   walletDb: Kysely<Database>
-  oldPassword: string
   newPassword: string
 }): Promise<void> {
-  const { walletDb, oldPassword, newPassword } = params
+  const { walletDb, newPassword } = params
   const ids = await listWalletIdsWithSecrets(walletDb)
   if (ids.length > 0) {
+    const wrappedRow = await walletDb
+      .selectFrom('settings')
+      .select('value')
+      .where('key', '=', NEAR_ZERO_SETTINGS_KEY_WRAPPED)
+      .executeTakeFirst()
+    if (!wrappedRow?.value) {
+      throw new Error('Near-zero wrapped session secret is missing')
+    }
+    const wrappedBlob = deserializeEncryptedBlobFromSettings(wrappedRow.value)
+    const nearZeroSessionSecret = await decryptDataWithPassword(
+      NEAR_ZERO_WRAPPER_PASSWORD,
+      wrappedBlob,
+    )
     await reencryptAllWalletSecretsWithNewPassword({
       walletDb,
-      oldPassword,
+      oldPassword: nearZeroSessionSecret,
       newPassword,
     })
   }
-  useSessionStore.getState().setPassword(newPassword)
+  await beginWalletSecretsSession(newPassword)
   await clearNearZeroSecuritySettings(walletDb)
 }

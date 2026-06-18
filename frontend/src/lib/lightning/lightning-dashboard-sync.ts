@@ -7,7 +7,6 @@ import {
 import { useWalletStore } from '@/stores/walletStore'
 import { useLightningStore } from '@/stores/lightningStore'
 import { useFeatureStore } from '@/stores/featureStore'
-import { useSessionStore } from '@/stores/sessionStore'
 import {
   createBackendService,
   type ConnectedLightningWallet,
@@ -101,16 +100,11 @@ function maxIsoTimestamp(a: string | undefined, b: string | undefined): string |
 async function readSnapshotMapForActiveWallet(): Promise<
   Map<string, NwcConnectionSnapshot | undefined>
 > {
-  const password = useSessionStore.getState().password
   const walletId = useWalletStore.getState().activeWalletId
-  if (password == null || walletId == null) {
+  if (walletId == null) {
     return new Map()
   }
-  const payload = await loadWalletSecretsPayload(
-    getDatabase(),
-    password,
-    walletId,
-  )
+  const payload = await loadWalletSecretsPayload(getDatabase(), walletId)
   return snapshotMapFromPayload(payload)
 }
 
@@ -190,11 +184,9 @@ export async function fetchLightningPaymentsForActiveWallet(): Promise<
     }
   }
 
-  const password = useSessionStore.getState().password
   const walletId = useWalletStore.getState().activeWalletId
-  if (password != null && walletId != null && paymentPatches.length > 0) {
+  if (walletId != null && paymentPatches.length > 0) {
     await batchApplyNwcSnapshotPatches({
-      password,
       walletId,
       patches: paymentPatches,
     })
@@ -264,11 +256,9 @@ export async function fetchLightningBalancesForDashboard(): Promise<LightningBal
     }
   }
 
-  const password = useSessionStore.getState().password
   const walletId = useWalletStore.getState().activeWalletId
-  if (password != null && walletId != null && balancePatches.length > 0) {
+  if (walletId != null && balancePatches.length > 0) {
     await batchApplyNwcSnapshotPatches({
-      password,
       walletId,
       patches: balancePatches,
     })

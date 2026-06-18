@@ -22,14 +22,14 @@ For **reporting vulnerabilities** in Bitboard Wallet, see the repository root [S
 **Where secrets are created**
 
 - **Mnemonic:** Generated only in the **crypto worker** via WASM (`generate_mnemonic`). It is never sent to the main thread except when intentionally shown to the user (create backup step, seed phrase backup).
-- **Password:** Comes only from user input. It is held in the **session store** (`password: string | null`) and used when unlocking, syncing, or updating wallet state.
+- **Password:** Comes only from user input. During an unlocked wallet session it is held exclusively in the **encryption worker** (`beginSecretsSession` / `endSecretsSession`). The main thread, crypto worker, and arkade worker never store or receive the password over Comlink; they call session-scoped `decrypt` / `encrypt` on the secrets channel. One-shot password parameters remain only for pre-unlock flows (wallet backup manifest, change-password re-encryption, near-zero wrapper).
 - **Derived keys:** Created only inside the **encryption worker**: Argon2id (WASM) then Web Crypto `importKey` for AES-GCM. Used only for encrypt/decrypt; the raw key buffer is zeroed with `fill(0)` after `importKey`. A comment in code notes that Web Crypto may retain internal copies of the key.
 
 **Worker-to-worker secrets channel**
 
 - The main thread never sees decrypted wallet secrets (mnemonic, or the wallet **payload** JSON that holds descriptor wallets, Lightning metadata, and Arkade metadata). A **MessageChannel** connects the encryption worker and the crypto worker; the main thread creates the channel and passes one port to each worker (using Comlink `transfer()` so ports are transferred, not cloned). It never reads from that channel.
 - Decrypt/encrypt for “resolve descriptor wallet” and “update changeset” run via this channel: crypto worker requests decrypt/encrypt from the encryption worker over the port; plaintext secrets stay in the workers. The main thread never sees decrypted wallet secrets: it only passes encrypted blobs between the crypto worker and the app’s DB layer. DB operations are initiated from the main thread via Kysely; the actual SQLite/OPFS access is performed by the WaSqlite worker (Kysely’s `WaSqliteWorkerDialect`), not the main thread.
-- The channel is established by `ensureSecretsChannel()` before any operation that needs it. When the user manually locks the wallet, the crypto worker is terminated and `resetSecretsChannel()` is called so that the next unlock re-establishes the channel for a new worker.
+- The channel is established by `ensureSecretsChannel()` after `beginWalletSecretsSession(password)` on unlock. When the user manually locks the wallet, workers flush pending ciphertext writes, the crypto and arkade workers are terminated, `endWalletSecretsSession()` clears the password from the encryption worker, and `resetSecretsChannel()` is called so the next unlock re-establishes ports for new workers.
 
 **Storage**
 
@@ -61,7 +61,7 @@ For **reporting vulnerabilities** in Bitboard Wallet, see the repository root [S
 ### 2.4 Input and validation
 
 - **Addresses:** Frontend uses `isValidAddress` (prefix check); crypto uses full parsing and network checks.
-- **Amounts:** `parseBTC` converts user input to satoshis; it returns 0 for NaN, negative, or non-finite input and clamps to `Number.MAX_SAFE_INTEGER` to avoid overflow. Send flow enforces positive amount and balance checks; WASM rejects zero amounts.
+- **Amounts:** `parseBTC` converts user input to satoshis; it returns 0 for NaN, negative, or non-finite input and clamps to `Number.MAX_SAFE_INTEGER` to avoid overflow. Send flows enforce positive amounts and balance checks on the frontend; WASM also rejects zero send amounts (e.g. Arkade `send_payment` returns a validation error when `amount_sats` is 0).
 - **Descriptors:** Loaded from encrypted storage or produced by WASM; not user-typed. WASM boundary uses strings/serializable data only; no raw buffer pointers exposed.
 
 ### 2.5 Dependencies and audits
@@ -88,7 +88,7 @@ The following cannot be fully eliminated in a browser-based wallet:
 
 **Session password**
 
-- JavaScript strings are **immutable**. When the session is cleared, we set the store reference to `null`; we cannot overwrite the previous string’s backing memory. That memory may remain until the engine reclaims it. Documented in `sessionStore.clear()`.
+- JavaScript strings are **immutable**. The app password lives in the encryption worker for the unlock lifetime; `endWalletSecretsSession()` drops the reference on lock but cannot overwrite the previous string’s backing memory. That memory may remain until the engine reclaims it.
 
 **Web Crypto and key material**
 
@@ -112,8 +112,9 @@ The following cannot be fully eliminated in a browser-based wallet:
 
 ### 2.2 Arkade (VTXO layer)
 
-- **Mnemonic use:** The Arkade worker decrypts the mnemonic locally (same Argon2/AES stack as the encryption worker) only to build a `MnemonicIdentity`. The mnemonic is not part of the persisted SDK blob.
-- **Local VTXO state:** Full Arkade SDK repository state (VTXOs, contracts, boarding UTXOs, tx history) is stored in `sdkPersistenceJson` inside the encrypted `wallet_secrets` payload. Reopening the wallet does not require the Arkade operator; cooperative operations (send, board, delegate) still use the operator when online.
+- **Mnemonic use:** The Arkade worker decrypts the mnemonic locally (via the encryption worker secrets channel) only to build a `MnemonicIdentity`. The mnemonic is not part of the persisted SDK blob and is not decrypted on the main thread during normal Arkade flows.
+- **Encrypted persistence:** Arkade SDK export, merge, and encrypt run entirely in the Arkade worker using the same MessageChannel secrets API as descriptor-wallet changesets. The main thread only reads and writes ciphertext blobs for `wallet_secrets` CAS updates; it never decrypts the payload JSON or receives plaintext `sdkPersistenceJson` during session open, flush, operator sync, or connection management.
+- **Local VTXO state:** Full Arkade SDK repository state (VTXOs, contracts, boarding UTXOs, tx history) is stored in `sdkPersistenceJson` inside the encrypted `wallet_secrets` payload. Boarding secret keys and other sensitive payload fields therefore stay off the main thread during Arkade persist paths. Reopening the wallet does not require the Arkade operator; cooperative operations (send, board, delegate) still use the operator when online.
 - **Third parties:** Arkade payments rely on the **Arkade operator** (batch settlement) and, when enabled, a **Bitboard Fulmine delegator** per network for VTXO renewal. Delegation uses presigned intents; the delegator cannot change outputs or take custody.
 - **Exits:** Collaborative exit requires the operator. Unilateral exit broadcasts from local VTXO state and an on-chain bumper wallet (same mnemonic); it does not require the operator after unroll but needs sufficient bumper UTXOs for fees.
 - **Trust:** Users should understand preconfirmation vs on-chain finality. See [docs/arkade-bitboard-wallet-model.md](../docs/arkade-bitboard-wallet-model.md) and [Arkade security documentation](https://docs.arkadeos.com/learn/core-concepts/security-and-trust-model.md).

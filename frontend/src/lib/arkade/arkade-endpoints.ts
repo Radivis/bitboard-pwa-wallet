@@ -59,5 +59,23 @@ export function isArkadeDelegatorConfigured(
   return getArkadeEndpoints(mode).delegatorUrl.trim().length > 0
 }
 
+const ARKADE_DELEGATOR_DISPLAY_FALLBACK = 'configured delegator'
+
+function formatDelegatorUrlHostLabel(delegatorUrl: string): string {
+  const trimmed = delegatorUrl.trim()
+  if (!trimmed) return ARKADE_DELEGATOR_DISPLAY_FALLBACK
+  try {
+    const parsed = trimmed.includes('://') ? new URL(trimmed) : new URL(`https://${trimmed}`)
+    return parsed.hostname || ARKADE_DELEGATOR_DISPLAY_FALLBACK
+  } catch {
+    return trimmed
+  }
+}
+
+/** Human-readable delegator label derived from the configured delegator URL. */
+export function getArkadeDelegatorDisplayLabel(mode: ArkadeSupportedNetworkMode): string {
+  return formatDelegatorUrlHostLabel(getArkadeEndpoints(mode).delegatorUrl)
+}
+
 /** Default VTXO renewal threshold: 3 days (seconds), per Arkade docs. */
 export const ARKADE_DEFAULT_VTXO_THRESHOLD_SECONDS = 259_200

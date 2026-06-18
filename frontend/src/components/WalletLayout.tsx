@@ -29,8 +29,8 @@ import { NoMnemonicBackupBanner } from '@/components/NoMnemonicBackupBanner'
 import { SecureStorageUnavailableBanner } from '@/components/SecureStorageUnavailableBanner'
 import { useWallet } from '@/db'
 import { useWalletStore } from '@/stores/walletStore'
-import { useSessionStore } from '@/stores/sessionStore'
 import { cn } from '@/lib/shared/utils'
+import { walletIsUnlockedOrSyncing } from '@/lib/wallet/wallet-unlocked-status'
 
 const APP_TITLE = 'Bitboard Wallet'
 
@@ -442,7 +442,7 @@ export function WalletLayout({ children }: WalletLayoutProps) {
   const showSettingsSubNav = !isSetupRoute && isSettingsSectionPath(location.pathname)
 
   const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
-  const sessionPassword = useSessionStore((sessionState) => sessionState.password)
+  const walletStatus = useWalletStore((walletState) => walletState.walletStatus)
   const { data: activeWalletRow, isSuccess: activeWalletLoaded } = useWallet(activeWalletId)
   const walletDisplayName =
     activeWalletId && activeWalletLoaded && activeWalletRow?.name
@@ -451,7 +451,7 @@ export function WalletLayout({ children }: WalletLayoutProps) {
   const showWalletSuffix = Boolean(walletDisplayName)
   /** Same signal as network unlock: `walletStatus` is not persisted, so use session. */
   const walletSuffixMuted =
-    activeWalletId !== null && sessionPassword === null
+    activeWalletId !== null && !walletIsUnlockedOrSyncing(walletStatus)
 
   useEffect(() => {
     document.title =

@@ -36,7 +36,6 @@ describe('invalidateWalletRelatedQueries', () => {
   it('invalidates wallet_db-prefixed queries and leaves unrelated caches', async () => {
     const walletLoadKey = activeWalletLoadQueryKey({
       activeWalletId: 1,
-      sessionPresent: true,
       networkMode: 'testnet',
       addressType: 'taproot',
       accountId: 0,

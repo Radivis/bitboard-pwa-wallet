@@ -9,9 +9,10 @@ import { removeLightningConnectionsHydrationQueries } from '@/lib/lightning/ligh
 import { removeOnchainDashboardQueries } from '@/lib/wallet/onchain-dashboard-sync';
 import { useWalletStore } from '@/stores/walletStore';
 import { useLightningStore } from '@/stores/lightningStore';
-import { useSessionStore, clearAutoLockTimer } from '@/stores/sessionStore';
+import { clearAutoLockTimer, clearLegacySessionState } from '@/stores/sessionStore';
 import { awaitBackgroundArkadeOperatorSync } from '@/lib/arkade/arkade-operator-sync';
 import { closeArkadeSession } from '@/lib/arkade/arkade-session-service';
+import { endWalletSecretsSessionReliably } from '@/lib/wallet/wallet-secrets-session';
 import { getArkadeWorkerIfExists } from '@/workers/arkade-factory';
 import { resetSecretsChannel } from '@/workers/secrets-channel';
 import { awaitInFlightWalletSecretsWrites } from '@/db/wallet-secrets-write-tracker';
@@ -277,7 +278,11 @@ export const useCryptoStore = create<CryptoState>((set, get) => {
       await awaitBackgroundArkadeOperatorSync();
       const arkadeWorker = getArkadeWorkerIfExists();
       if (arkadeWorker != null) {
-        await arkadeWorker.flushSdkPersistence();
+        try {
+          await arkadeWorker.flushSdkPersistence();
+        } catch {
+          // Best-effort flush; lock/purge must still complete even when no Arkade session is active.
+        }
       }
       await awaitInFlightWalletSecretsWrites();
       navigateToLibraryIfOnWalletRoute();
@@ -285,11 +290,15 @@ export const useCryptoStore = create<CryptoState>((set, get) => {
       useLightningStore.getState().purgeLightningConnectionsFromMemory();
       removeLightningConnectionsHydrationQueries();
       removeOnchainDashboardQueries();
-      await closeArkadeSession();
-      terminateCryptoWorker();
-      resetSecretsChannel();
-      useSessionStore.getState().clear();
-      set({ _worker: null, error: null, workerHealth: 'initializing', workerError: null });
+      try {
+        await closeArkadeSession();
+      } finally {
+        terminateCryptoWorker();
+        await endWalletSecretsSessionReliably();
+        resetSecretsChannel();
+        clearLegacySessionState();
+        set({ _worker: null, error: null, workerHealth: 'initializing', workerError: null });
+      }
     },
 
     terminateWorker: () => {

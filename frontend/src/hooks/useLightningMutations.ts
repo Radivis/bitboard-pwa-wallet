@@ -16,7 +16,6 @@ import {
   type LightningConnectionConfig,
 } from '@/lib/lightning/lightning-backend-service'
 import { ensureMigrated } from '@/db/database'
-import { useSessionStore } from '@/stores/sessionStore'
 import {
   batchApplyNwcSnapshotPatches,
   loadNwcSnapshotForConnection,
@@ -55,6 +54,7 @@ import {
   LN_WALLET_BALANCE_STALE_MS,
   LN_WALLET_NETWORK_PLAUSIBILITY_STALE_MS,
 } from '@/lib/lightning/lightning-query-timings'
+import { isWalletSecretsSessionActive } from '@/lib/wallet/wallet-secrets-session'
 
 function subscribeOnlineStatus(onStoreChange: () => void) {
   window.addEventListener('online', onStoreChange)
@@ -179,10 +179,8 @@ export function useLnWalletBalanceQuery(params: {
         const { balanceSats } = await service.getBalance()
         const balanceUpdatedAt = new Date().toISOString()
         // Re-check session after NWC: user may have locked the wallet while getBalance was in flight.
-        const sessionPasswordIfStillActive = useSessionStore.getState().password
-        if (sessionPasswordIfStillActive != null) {
+        if (await isWalletSecretsSessionActive()) {
           await batchApplyNwcSnapshotPatches({
-            password: sessionPasswordIfStillActive,
             walletId,
             patches: [
               {
@@ -194,10 +192,8 @@ export function useLnWalletBalanceQuery(params: {
         }
         return { balanceSats }
       } catch (err) {
-        const sessionPasswordForStaleSnapshot = useSessionStore.getState().password
-        if (sessionPasswordForStaleSnapshot != null) {
+        if (await isWalletSecretsSessionActive()) {
           const snap = await loadNwcSnapshotForConnection({
-            password: sessionPasswordForStaleSnapshot,
             walletId,
             connectionId,
           })

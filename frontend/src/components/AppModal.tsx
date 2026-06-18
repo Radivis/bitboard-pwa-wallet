@@ -10,6 +10,9 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/shared/utils'
 import { InfomodeModalToggleCapsule } from '@/components/infomode/InfomodeModalToggleCapsule'
 
+/** Tall modals must scroll inside the panel — Radix locks document scroll while open. */
+const APP_MODAL_MAX_HEIGHT_CLASS = 'max-h-[min(90dvh,calc(100vh-2rem))]'
+
 export function AppModalFooter({
   className,
   ...props
@@ -107,7 +110,11 @@ export function AppModal({
     <Dialog open={isOpen} onOpenChange={handleOpenChange} modal={isModal}>
       <DialogContent
         showCloseButton={false}
-        className={cn('gap-0 p-6 sm:max-w-lg', contentClassName)}
+        className={cn(
+          contentClassName,
+          'flex flex-col gap-0 overflow-hidden p-0 sm:max-w-lg',
+          APP_MODAL_MAX_HEIGHT_CLASS,
+        )}
         onInteractOutside={(e) => {
           if (isBlockDismissed) e.preventDefault()
           onInteractOutsideFromProps?.(e)
@@ -118,39 +125,46 @@ export function AppModal({
         }}
         {...restDialogContentProps}
       >
-        <div className="flex w-full min-w-0 flex-col gap-4">
-          <div className="flex w-full min-w-0 flex-row items-start gap-3">
-            <DialogHeader className="min-w-0 flex-1 space-y-0 p-0 text-left">
-              <DialogTitle asChild>
-                <h2 className="flex min-w-0 items-start gap-2 text-left text-lg leading-tight font-semibold">
-                  {title}
-                </h2>
-              </DialogTitle>
-            </DialogHeader>
-            <div className="flex shrink-0 items-center gap-2">
-              <InfomodeModalToggleCapsule />
-              {!isCloseButtonHidden && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="size-9 shrink-0 opacity-70 ring-offset-background hover:opacity-100"
-                  aria-label={closeAriaLabel}
-                  disabled={isBlockDismissed}
-                  onClick={requestClose}
-                >
-                  <X className="size-4" />
-                </Button>
-              )}
-            </div>
+        <div className="flex w-full min-w-0 shrink-0 flex-row items-start gap-3 p-6 pb-4">
+          <DialogHeader className="min-w-0 flex-1 space-y-0 p-0 text-left">
+            <DialogTitle asChild>
+              <h2 className="flex min-w-0 items-start gap-2 text-left text-lg leading-tight font-semibold">
+                {title}
+              </h2>
+            </DialogTitle>
+          </DialogHeader>
+          <div className="flex shrink-0 items-center gap-2">
+            <InfomodeModalToggleCapsule />
+            {!isCloseButtonHidden && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="size-9 shrink-0 opacity-70 ring-offset-background hover:opacity-100"
+                aria-label={closeAriaLabel}
+                disabled={isBlockDismissed}
+                onClick={requestClose}
+              >
+                <X className="size-4" />
+              </Button>
+            )}
           </div>
-
-          <div className="w-full min-w-0">{body}</div>
-
-          {footerNode != null ? (
-            <AppModalFooter className={footerClassName}>{footerNode}</AppModalFooter>
-          ) : null}
         </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 pb-6">
+          <div className="flex w-full min-w-0 flex-col gap-4">{body}</div>
+        </div>
+
+        {footerNode != null ? (
+          <AppModalFooter
+            className={cn(
+              'shrink-0 border-t border-border px-6 py-4',
+              footerClassName,
+            )}
+          >
+            {footerNode}
+          </AppModalFooter>
+        ) : null}
       </DialogContent>
     </Dialog>
   )

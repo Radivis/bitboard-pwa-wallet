@@ -55,11 +55,6 @@ vi.mock('@/stores/walletStore', async (importOriginal) => {
   }
 })
 
-vi.mock('@/stores/sessionStore', () => ({
-  useSessionStore: (selector: (s: Record<string, unknown>) => unknown) =>
-    selector({ password: 'testpass' }),
-}))
-
 vi.mock('@/components/WalletUnlock', () => ({
   WalletUnlock: () => <div data-testid="wallet-unlock">Unlock</div>,
 }))

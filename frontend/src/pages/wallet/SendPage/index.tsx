@@ -239,7 +239,7 @@ export function SendFlow() {
   const {
     lightningAvailable,
     isLightningSendMode,
-    isResolvingLightningAddress,
+    isResolvingLightningPayee,
     lightningPayMutation,
     matchingLightningConnections,
     selectedLightningConnectionId,
@@ -723,7 +723,7 @@ export function SendFlow() {
     labSendMutation.isPending ||
     lightningPayMutation.isPending ||
     arkadeSendMutation.isPending ||
-    isResolvingLightningAddress
+    isResolvingLightningPayee
 
   const labConfirmSendDisabled =
     isPending || (networkMode === 'lab' && deadLabRecipientModalOpen)

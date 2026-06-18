@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 export const config = {
-  maxDuration: 10,
+  maxDuration: 30,
 }
 
 // Inlined from src/lib/esplora/esplora-service-whitelist.ts
@@ -71,7 +71,8 @@ function isProxiedUrlPathWithinAllowlistedBase(
 }
 
 // Constants
-const UPSTREAM_TIMEOUT_MS = 5_000
+// Must be >= WASM full-scan per-request timeout (30s); normal sync requests finish sooner.
+const UPSTREAM_TIMEOUT_MS = 30_000
 const MAX_POST_BODY_BYTES = 512_000
 
 // CORS headers for browser requests

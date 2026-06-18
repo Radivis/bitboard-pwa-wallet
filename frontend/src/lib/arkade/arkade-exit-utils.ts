@@ -15,7 +15,11 @@ export function formatIntentFeePrograms(configured: ArkadeIntentFeeConfigured): 
   return labels.join(', ')
 }
 
-/** Fallback bumper threshold when unilateral fee estimate is unavailable (sats). */
+/**
+ * Fallback bumper low-balance threshold when the unilateral fee estimate is unavailable (sats).
+ * Roughly one child-package fee at minimum fee rate (~0.1 sat/vB × 140 vB); prompts funding the
+ * bumper before unroll when we cannot query Esplora for a tighter estimate.
+ */
 export const ARKADE_BUMPER_LOW_BALANCE_FALLBACK_SATS = 1_000
 
 const COLLABORATIVE_EXIT_AMOUNT_HELP =
@@ -45,8 +49,15 @@ export function parseCollaborativeExitAmountSats(
   return { ok: true, amountSats }
 }
 
+/** Characters shown before the ellipsis in Arkade txid toast snippets. */
+export const ARKADE_TXID_DISPLAY_PREFIX_LENGTH = 12
+
+export function formatArkadeTxidToastSnippet(txid: string): string {
+  return `${txid.slice(0, ARKADE_TXID_DISPLAY_PREFIX_LENGTH)}…`
+}
+
 export function formatUnilateralUnrollSuccessMessage(vtxoTxid: string): string {
-  return `Unroll complete (${vtxoTxid.slice(0, 12)}…) — complete exit after the timelock`
+  return `Unroll complete (${formatArkadeTxidToastSnippet(vtxoTxid)}) — complete exit after the timelock`
 }
 
 /** Sonner toast id so in-progress unroll updates one notification per on-chain tx. */

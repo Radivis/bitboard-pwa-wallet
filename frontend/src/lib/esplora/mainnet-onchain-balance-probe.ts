@@ -81,15 +81,14 @@ function assertActiveWalletLoadedForProbe(): void {
  * Ignores Lightning / NWC entirely.
  */
 export async function sumMainnetOnChainSatsForWallet(params: {
-  password: string
   walletId: number
 }): Promise<number> {
-  const { password, walletId } = params
+  const { walletId } = params
   assertActiveWalletLoadedForProbe()
   await prepareMainnetBalanceProbePreflight()
 
   const walletDb = getDatabase()
-  const payload = await loadWalletSecretsPayload(walletDb, password, walletId)
+  const payload = await loadWalletSecretsPayload(walletDb, walletId)
   const mainnetDescriptors = payload.descriptorWallets.filter(
     (descriptorWallet) => descriptorWallet.network === 'bitcoin',
   )
@@ -115,10 +114,9 @@ export type MainnetBalanceProbeSummary = {
  * Probes each wallet in order using ephemeral sessions only (read-only; no secrets CAS writes).
  */
 export async function listWalletsWithPositiveMainnetOnChainBalance(params: {
-  password: string
   wallets: { walletId: number; name: string }[]
 }): Promise<MainnetBalanceProbeSummary> {
-  const { password, wallets } = params
+  const { wallets } = params
   assertActiveWalletLoadedForProbe()
   await prepareMainnetBalanceProbePreflight()
 
@@ -130,7 +128,6 @@ export async function listWalletsWithPositiveMainnetOnChainBalance(params: {
     try {
       const payload = await loadWalletSecretsPayload(
         walletDb,
-        password,
         walletRow.walletId,
       )
       const mainnetDescriptors = payload.descriptorWallets.filter(

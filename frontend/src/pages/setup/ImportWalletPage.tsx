@@ -8,11 +8,12 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
+import { EnterAppPasswordModal } from '@/components/EnterAppPasswordModal'
 import { SetAppPasswordModal } from '@/components/SetAppPasswordModal'
 import { WalletUnlock } from '@/components/WalletUnlock'
 import { useCryptoStore } from '@/stores/cryptoStore'
 import { useWalletStore } from '@/stores/walletStore'
-import { useSessionStore, startAutoLockTimer } from '@/stores/sessionStore'
+import { startAutoLockTimer } from '@/stores/sessionStore'
 import {
   useAddWallet,
   getDatabase,
@@ -30,15 +31,23 @@ import { showImportInitialSyncFailureToast } from '@/lib/wallet/wallet-sync-erro
 import { sanitizeErrorMessageForUi } from '@/lib/shared/sanitize-error-for-ui'
 import { errorMessage } from '@/lib/shared/utils'
 import { invalidateWalletRelatedQueriesAndNotifyOtherTabs } from '@/lib/wallet/wallet-query-cache-sync'
+import { useSetupAppPasswordGateReady } from '@/hooks/useSetupAppPasswordGateReady'
+import {
+  ensureWalletSecretsSession,
+  isWalletSecretsSessionActive,
+} from '@/lib/wallet/wallet-secrets-session'
 
 export function ImportWalletPage() {
   const navigate = useNavigate()
   const [mnemonicInput, setMnemonicInput] = useState('')
   const [validating, setValidating] = useState(false)
   const [isValid, setIsValid] = useState<boolean | null>(null)
+  const [confirmPasswordOpen, setConfirmPasswordOpen] = useState(false)
 
   const { data: wallets, isLoading: walletsLoading } = useWallets()
-  const sessionPassword = useSessionStore((sessionState) => sessionState.password)
+  const walletStatus = useWalletStore((walletState) => walletState.walletStatus)
+  const { appPasswordReady, walletUnlockedOrSyncing, onAppPasswordSessionStarted } =
+    useSetupAppPasswordGateReady(walletStatus)
 
   const validateMnemonic = useCryptoStore((cryptoState) => cryptoState.validateMnemonic)
   const importWalletAndEncryptSecrets = useCryptoStore((cryptoState) => cryptoState.importWalletAndEncryptSecrets)
@@ -111,18 +120,16 @@ export function ImportWalletPage() {
   }, [setImportInitialSyncErrorMessage, setWalletStatus])
 
   const restoreMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (appPassword?: string) => {
       if (!canRestore) throw new Error('Invalid input')
 
-      const password = useSessionStore.getState().password
-      if (!password) throw new Error('App password required')
+      await ensureWalletSecretsSession(appPassword)
 
       await ensureSecretsChannel()
       const network = toBitcoinNetwork(networkMode)
       const { encryptedPayload, encryptedMnemonic, walletResult } =
         await importWalletAndEncryptSecrets({
           mnemonic,
-          password,
           network,
           addressType,
           accountId,
@@ -187,13 +194,25 @@ export function ImportWalletPage() {
   }
 
   const hasWallets = (wallets?.length ?? 0) > 0
-
-  if (hasWallets && !sessionPassword) {
+  if (hasWallets && !walletUnlockedOrSyncing) {
     return <WalletUnlock variant="setup" />
   }
 
-  if (!hasWallets && !sessionPassword) {
-    return <SetAppPasswordModal open />
+  if (!hasWallets && !appPasswordReady) {
+    return (
+      <SetAppPasswordModal
+        open
+        onSessionStarted={onAppPasswordSessionStarted}
+      />
+    )
+  }
+
+  const startRestore = async () => {
+    if (!(await isWalletSecretsSessionActive())) {
+      setConfirmPasswordOpen(true)
+      return
+    }
+    restoreMutation.mutate(undefined)
   }
 
   return (
@@ -219,7 +238,7 @@ export function ImportWalletPage() {
             className="space-y-4"
             onSubmit={(e) => {
               e.preventDefault()
-              restoreMutation.mutate()
+              void startRestore()
             }}
           >
             <div className="space-y-2">
@@ -273,6 +292,21 @@ export function ImportWalletPage() {
           </form>
         </CardContent>
       </Card>
+
+      <EnterAppPasswordModal
+        open={confirmPasswordOpen}
+        onOpenChange={setConfirmPasswordOpen}
+        onCancel={() => setConfirmPasswordOpen(false)}
+        onConfirm={(appPassword: string | undefined) => {
+          setConfirmPasswordOpen(false)
+          restoreMutation.mutate(appPassword)
+        }}
+        isBusy={restoreMutation.isPending}
+        title="Enter app password"
+        description="Enter your Bitboard app password to encrypt your imported wallet."
+        submitLabel="Restore wallet"
+        loadingText="Restoring wallet..."
+      />
     </div>
   )
 }

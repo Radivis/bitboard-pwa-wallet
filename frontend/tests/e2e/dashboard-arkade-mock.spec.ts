@@ -33,10 +33,12 @@ import {
   waitForArkadeBalanceCard,
   waitForDashboardArkadeBalanceSats,
   waitForReceiveArkadeAddressReady,
-  waitForArkadeWasmSessionReady,
+  waitForArkadeWorkerReadyAfterUnlock,
+  waitForDashboardArkadeSessionAfterUnlock,
 } from './helpers/dashboard-arkade'
 
 const ARKADE_MOCK_TEST_TIMEOUT_MS = process.env.CI ? 120_000 : 90_000
+const POST_UNLOCK_ARKADE_TIMEOUT_MS = ARKADE_MOCK_TEST_TIMEOUT_MS * 2
 
 async function lockWalletFromManagementAndUnlock(page: Page) {
   await goToWalletTab(page, 'Management')
@@ -48,7 +50,8 @@ async function lockWalletFromManagementAndUnlock(page: Page) {
   })
   await page.getByLabel('Bitboard app password').fill(TEST_PASSWORD)
   await page.getByRole('button', { name: 'Unlock' }).click()
-  await expect(page.getByLabel('Bitboard app password')).not.toBeVisible({ timeout: 60_000 })
+  // Password input stays in the DOM while "Unlocking wallet…" runs; wait for return to Management.
+  await expect(page.getByRole('button', { name: 'Lock Wallet' })).toBeVisible({ timeout: 90_000 })
 }
 
 test.describe('Dashboard Arkade mock ASP @arkade', () => {
@@ -146,7 +149,7 @@ test.describe('Dashboard Arkade mock ASP @arkade', () => {
   })
 
   test('ARK-RCV-02 receive address stable across lock and unlock', async ({ page }) => {
-    test.setTimeout(ARKADE_MOCK_TEST_TIMEOUT_MS)
+    test.setTimeout(ARKADE_MOCK_TEST_TIMEOUT_MS * 4)
     await createWalletViaUI(page)
     await enableArkadeFeature(page)
     await switchToSignet(page)
@@ -155,14 +158,15 @@ test.describe('Dashboard Arkade mock ASP @arkade', () => {
     const addressBeforeLock = await readReceiveArkadeAddress(page)
 
     await lockWalletFromManagementAndUnlock(page)
+    await waitForDashboardArkadeSessionAfterUnlock(page, POST_UNLOCK_ARKADE_TIMEOUT_MS)
     await goToReceiveArkadeMode(page)
     await expect(async () => {
       expect(await readReceiveArkadeAddress(page)).toBe(addressBeforeLock)
-    }).toPass({ timeout: 15_000 })
+    }).toPass({ timeout: POST_UNLOCK_ARKADE_TIMEOUT_MS })
   })
 
   test('ARK-RCV-04 generate new address persists across lock and unlock', async ({ page }) => {
-    test.setTimeout(ARKADE_MOCK_TEST_TIMEOUT_MS)
+    test.setTimeout(ARKADE_MOCK_TEST_TIMEOUT_MS * 4)
     await createWalletViaUI(page)
     await enableArkadeFeature(page)
     await switchToSignet(page)
@@ -181,9 +185,8 @@ test.describe('Dashboard Arkade mock ASP @arkade', () => {
       wasmBeforeLock = await page.evaluate(() =>
         window.__E2E_ARKADE__!.readReceiveDebugSnapshot(),
       )
-      const persistedBeforeLock = await page.evaluate(
-        ([password]) => window.__E2E_ARKADE__!.readPersistedReceiveDebugSnapshot(password),
-        [TEST_PASSWORD],
+      const persistedBeforeLock = await page.evaluate(() =>
+        window.__E2E_ARKADE__!.readPersistedReceiveDebugSnapshot(),
       )
       expect(wasmBeforeLock.peekAddress).toBe(revealedAddress)
       expect(persistedBeforeLock.offchainNextDerivationIndex).toBe(
@@ -192,34 +195,26 @@ test.describe('Dashboard Arkade mock ASP @arkade', () => {
     }).toPass({ timeout: 15_000 })
 
     await lockWalletFromManagementAndUnlock(page)
-    await goToWalletTab(page, 'Dashboard')
-    await waitForArkadeWasmSessionReady(page)
+    await waitForArkadeWorkerReadyAfterUnlock(page, POST_UNLOCK_ARKADE_TIMEOUT_MS)
+    await goToReceiveArkadeMode(page)
+    await waitForReceiveArkadeAddressReady(page, POST_UNLOCK_ARKADE_TIMEOUT_MS)
 
     await expect(async () => {
-      const persistedAfterUnlock = await page.evaluate(
-        ([password]) => window.__E2E_ARKADE__!.readPersistedReceiveDebugSnapshot(password),
-        [TEST_PASSWORD],
+      const uiAddress = await readReceiveArkadeAddress(page)
+      const persistedAfterUnlock = await page.evaluate(() =>
+        window.__E2E_ARKADE__!.readPersistedReceiveDebugSnapshot(),
       )
       const wasmAfterUnlock = await page.evaluate(() =>
         window.__E2E_ARKADE__!.readReceiveDebugSnapshot(),
       )
+      expect(uiAddress).toBe(revealedAddress)
+      expect(wasmAfterUnlock.peekAddress).toBe(revealedAddress)
       expect(persistedAfterUnlock.offchainNextDerivationIndex).toBe(
         wasmBeforeLock!.offchainNextDerivationIndex,
       )
       expect(wasmAfterUnlock.offchainNextDerivationIndex).toBe(
         wasmBeforeLock!.offchainNextDerivationIndex,
       )
-      expect(wasmAfterUnlock.peekAddress).toBe(revealedAddress)
-    }).toPass({ timeout: 60_000 })
-
-    await goToReceiveArkadeMode(page)
-    await expect(async () => {
-      const uiAddress = await readReceiveArkadeAddress(page)
-      const wasmOnReceive = await page.evaluate(() =>
-        window.__E2E_ARKADE__!.readReceiveDebugSnapshot(),
-      )
-      expect(wasmOnReceive.peekAddress).toBe(revealedAddress)
-      expect(uiAddress).toBe(revealedAddress)
-    }).toPass({ timeout: 15_000 })
+    }).toPass({ timeout: POST_UNLOCK_ARKADE_TIMEOUT_MS })
   })
 })

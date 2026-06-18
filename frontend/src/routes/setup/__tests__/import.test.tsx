@@ -46,6 +46,7 @@ vi.mock('@/stores/walletStore', () => ({
     (selector: (s: Record<string, unknown>) => unknown) =>
       selector({
         networkMode: 'signet',
+        walletStatus: 'unlocked',
         addressType: 'taproot',
         accountId: 0,
         setActiveWallet: mockSetActiveWallet,
@@ -62,25 +63,14 @@ vi.mock('@/stores/walletStore', () => ({
   ),
 }))
 
-const mockSessionPassword = { value: 'validpassword123' as string | null }
+const mockEnsureWalletSecretsSession = vi.fn().mockResolvedValue(undefined)
+const mockIsWalletSecretsSessionActive = vi.fn().mockResolvedValue(true)
+vi.mock('@/lib/wallet/wallet-secrets-session', () => ({
+  ensureWalletSecretsSession: (...args: unknown[]) => mockEnsureWalletSecretsSession(...args),
+  isWalletSecretsSessionActive: () => mockIsWalletSecretsSessionActive(),
+}))
+
 vi.mock('@/stores/sessionStore', () => ({
-  useSessionStore: Object.assign(
-    (selector: (s: { password: string | null }) => unknown) =>
-      selector({
-        password: mockSessionPassword.value,
-        setPassword: (p: string | null) => {
-          mockSessionPassword.value = p
-        },
-      }),
-    {
-      getState: () => ({
-        password: mockSessionPassword.value,
-        setPassword: (p: string | null) => {
-          mockSessionPassword.value = p
-        },
-      }),
-    },
-  ),
   startAutoLockTimer: vi.fn(),
 }))
 
@@ -129,7 +119,8 @@ describe('ImportWalletPage', () => {
     vi.clearAllMocks()
     vi.useFakeTimers({ shouldAdvanceTime: true })
     mockValidateMnemonic.mockResolvedValue(true)
-    mockSessionPassword.value = 'validpassword123'
+    mockEnsureWalletSecretsSession.mockResolvedValue(undefined)
+    mockIsWalletSecretsSessionActive.mockResolvedValue(true)
   })
 
   afterEach(() => {
@@ -252,11 +243,45 @@ describe('ImportWalletPage', () => {
     await waitFor(() => {
       expect(mockImportWalletAndEncryptSecrets).toHaveBeenCalledWith({
         mnemonic: TEST_MNEMONIC_12,
-        password: 'validpassword123',
         network: 'signet',
         addressType: 'taproot',
         accountId: 0,
       })
+    })
+    expect(mockEnsureWalletSecretsSession).toHaveBeenCalledWith(undefined)
+  })
+
+  it('opens password modal when secrets session is inactive', async () => {
+    vi.useRealTimers()
+    const user = userEvent.setup()
+    mockIsWalletSecretsSessionActive.mockResolvedValue(false)
+    mockValidateMnemonic.mockResolvedValue(true)
+    mockImportWalletAndEncryptSecrets.mockResolvedValue({
+      encryptedPayload: { ciphertext: new Uint8Array(0), iv: new Uint8Array(12), salt: new Uint8Array(16) },
+      encryptedMnemonic: { ciphertext: new Uint8Array(0), iv: new Uint8Array(12), salt: new Uint8Array(16) },
+      walletResult: {
+        externalDescriptor: 'ext',
+        internalDescriptor: 'int',
+        firstAddress: 'tb1test',
+        changesetJson: '{}',
+      },
+    })
+    renderWithProviders(<ImportWalletPage />)
+
+    await user.type(screen.getByLabelText('Seed Phrase'), TEST_MNEMONIC_12)
+    await waitFor(
+      () => expect(screen.getByText('Valid mnemonic')).toBeInTheDocument(),
+      { timeout: 2000 },
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Restore Wallet' }))
+
+    expect(screen.getByRole('heading', { name: 'Enter app password' })).toBeInTheDocument()
+    await user.type(screen.getByLabelText('Bitboard app password'), 'validpassword123')
+    await user.click(screen.getByRole('button', { name: 'Restore wallet' }))
+
+    await waitFor(() => {
+      expect(mockEnsureWalletSecretsSession).toHaveBeenCalledWith('validpassword123')
     })
   })
 

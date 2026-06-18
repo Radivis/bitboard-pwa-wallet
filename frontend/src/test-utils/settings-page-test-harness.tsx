@@ -74,13 +74,6 @@ export const mockSetAddressType = vi.fn()
 export const mockSetCurrentAddress = vi.fn()
 export const mockCommitLoadedDescriptorWallet = vi.fn()
 
-export const mockSetSessionPassword = vi.fn()
-export const sessionStoreState = {
-  password: 'testpass' as string | null,
-  clear: mockClearSession,
-  setPassword: mockSetSessionPassword,
-}
-
 export const nearZeroSecurityState = { active: false }
 
 export const mockSetThemeMode = vi.fn()
@@ -119,6 +112,8 @@ export const mockResolveDescriptorWallet = vi.fn().mockResolvedValue({
   fullScanDone: false,
 })
 export const mockUpdateDescriptorWalletChangeset = vi.fn().mockResolvedValue(undefined)
+export const mockCloseArkadeSession = vi.fn().mockResolvedValue(undefined)
+export const mockRefreshArkadeSessionAfterNetworkSwitch = vi.fn().mockResolvedValue(undefined)
 
 /** Mocked sonner toast — import this in settings tests instead of `sonner` directly. */
 export const toast = {
@@ -213,11 +208,7 @@ vi.mock('@/stores/walletStore', async () => {
 })
 
 vi.mock('@/stores/sessionStore', () => ({
-  useSessionStore: Object.assign(
-    (selector: (s: Record<string, unknown>) => unknown) =>
-      selector(sessionStoreState),
-    { getState: () => sessionStoreState },
-  ),
+  clearLegacySessionState: mockClearSession,
   clearAutoLockTimer: vi.fn(),
 }))
 
@@ -294,6 +285,11 @@ vi.mock('@/lib/wallet/descriptor-wallet-manager', async (importOriginal) => {
     updateDescriptorWalletChangeset: mockUpdateDescriptorWalletChangeset,
   }
 })
+
+vi.mock('@/lib/arkade/arkade-session-service', () => ({
+  closeArkadeSession: mockCloseArkadeSession,
+  refreshArkadeSessionAfterNetworkSwitch: mockRefreshArkadeSessionAfterNetworkSwitch,
+}))
 
 vi.mock('@/components/MnemonicGrid', () => ({
   MnemonicGrid: ({ words }: { words: string[] }) => (
@@ -413,6 +409,8 @@ export function resetSettingsPageTestState(): void {
     fullScanDone: false,
   })
   mockUpdateDescriptorWalletChangeset.mockResolvedValue(undefined)
+  mockCloseArkadeSession.mockResolvedValue(undefined)
+  mockRefreshArkadeSessionAfterNetworkSwitch.mockResolvedValue(undefined)
   mockLoadDescriptorWalletAndSync.mockResolvedValue(undefined)
   mockLoadDescriptorWalletWithoutSync.mockResolvedValue(undefined)
   featureStoreState.isLightningEnabled = false
@@ -423,7 +421,6 @@ export function resetSettingsPageTestState(): void {
   featureStoreState.isArkadeEnabled = false
   nearZeroSecurityState.active = false
   mockWalletsState.data = []
-  sessionStoreState.password = 'testpass'
   walletStoreState = createDefaultWalletStoreState()
 }
 

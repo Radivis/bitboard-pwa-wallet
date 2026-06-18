@@ -4,8 +4,8 @@ import { Link, useLocation } from '@tanstack/react-router'
 import { AlertTriangle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useWalletNoMnemonicBackupFlag } from '@/db'
-import { useSessionStore } from '@/stores/sessionStore'
 import { useWalletStore } from '@/stores/walletStore'
+import { walletIsUnlockedOrSyncing } from '@/lib/wallet/wallet-unlocked-status'
 
 export function noMnemonicBackupBannerSessionDismissKey(walletId: number): string {
   return `bitboard_no_mnemonic_backup_banner_dismissed:${walletId}`
@@ -24,7 +24,7 @@ function readDismissedForWallet(walletId: number | null): boolean {
 export function NoMnemonicBackupBanner() {
   const location = useLocation()
   const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
-  const sessionPassword = useSessionStore((sessionState) => sessionState.password)
+  const walletStatus = useWalletStore((walletState) => walletState.walletStatus)
   const { data: noBackupFlagActive = false } = useWalletNoMnemonicBackupFlag(
     activeWalletId,
   )
@@ -45,7 +45,11 @@ export function NoMnemonicBackupBanner() {
     return null
   }
 
-  if (!noBackupFlagActive || !sessionPassword || activeWalletId === null) {
+  if (
+    !noBackupFlagActive ||
+    !walletIsUnlockedOrSyncing(walletStatus) ||
+    activeWalletId === null
+  ) {
     return null
   }
 

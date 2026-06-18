@@ -69,14 +69,18 @@ vi.mock('@/stores/walletStore', async (importOriginal) => {
   }
 })
 
-vi.mock('@/stores/sessionStore', () => ({
-  useSessionStore: (selector: (s: Record<string, unknown>) => unknown) =>
-    selector({ password: 'testpass' }),
-}))
-
 vi.mock('@/stores/featureStore', () => ({
-  useFeatureStore: (selector: (s: Record<string, unknown>) => unknown) =>
-    selector({ isLightningEnabled: true }),
+  useFeatureStore: Object.assign(
+    (selector: (s: Record<string, unknown>) => unknown) =>
+      selector({ isLightningEnabled: true, isArkadeEnabled: false, isMainnetAccessEnabled: true }),
+    {
+      getState: () => ({
+        isLightningEnabled: true,
+        isArkadeEnabled: false,
+        isMainnetAccessEnabled: true,
+      }),
+    },
+  ),
 }))
 
 const mockConnections = [

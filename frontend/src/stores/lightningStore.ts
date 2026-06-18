@@ -18,13 +18,17 @@ import {
   saveLightningConnectionsForWallet,
 } from '@/lib/lightning/lightning-wallet-secrets'
 import { useWalletStore } from '@/stores/walletStore'
-import { useSessionStore } from '@/stores/sessionStore'
 import type { NetworkMode } from '@/stores/walletStore'
 import { MAX_LIGHTNING_WALLET_LABEL_LENGTH } from '@/lib/lightning/lightning-input-limits'
 import {
   isReservedDefaultNwcConnectionLabel,
   resolveDefaultNwcConnectionLabel,
 } from '@/lib/lightning/nwc-default-connection-label'
+import {
+  reconcileActiveLightningConnectionIds,
+  resolveActiveLightningConnection,
+  type ActiveLightningConnectionsByNetwork,
+} from '@/lib/lightning/lightning-connection-utils'
 
 /**
  * Whether the given Bitcoin wallet has at least one Lightning connection for the
@@ -48,10 +52,7 @@ export function hasNetworkConnectedWallet(
 export type { ConnectedLightningWallet, LightningConnectionConfig }
 export type { NwcConnectionConfig, LightningWalletType } from '@/lib/lightning/lightning-backend-service'
 export type { LightningNetworkMode } from '@/lib/lightning/lightning-utils'
-
-export type ActiveLightningConnectionsByNetwork = Partial<
-  Record<LightningNetworkMode, string>
->
+export type { ActiveLightningConnectionsByNetwork } from '@/lib/lightning/lightning-connection-utils'
 
 export interface LightningInvoice {
   bolt11: string
@@ -137,6 +138,11 @@ export const useLightningStore = create<LightningState>()(
             ...state.connectedWallets.filter((connection) => connection.walletId !== walletId),
             ...connections,
           ],
+          activeConnectionIds: reconcileActiveLightningConnectionIds({
+            walletId,
+            connections,
+            activeConnectionIds: state.activeConnectionIds,
+          }),
         }))
       },
 
@@ -156,10 +162,6 @@ export const useLightningStore = create<LightningState>()(
         }),
 
       addConnection: async ({ walletId, label, networkMode, config }) => {
-        const password = useSessionStore.getState().password
-        if (!password) {
-          throw new Error('Wallet must be unlocked to save a Lightning connection')
-        }
         if (config.type !== 'nwc' || !isValidNwcConnectionString(config.connectionString)) {
           throw new Error('Invalid NWC connection string')
         }
@@ -210,7 +212,6 @@ export const useLightningStore = create<LightningState>()(
         })
 
         await saveLightningConnectionsForWallet({
-          password,
           walletId,
           connections: nextForWallet,
         })
@@ -218,11 +219,6 @@ export const useLightningStore = create<LightningState>()(
       },
 
       removeConnection: async (connectionId) => {
-        const password = useSessionStore.getState().password
-        if (!password) {
-          throw new Error('Wallet must be unlocked to remove a Lightning connection')
-        }
-
         const removed = get().connectedWallets.find((connection) => connection.id === connectionId)
         const wallets = get().connectedWallets.filter((connection) => connection.id !== connectionId)
         const updatedActiveIds = { ...get().activeConnectionIds }
@@ -260,7 +256,6 @@ export const useLightningStore = create<LightningState>()(
         if (removed) {
           const forWallet = wallets.filter((connection) => connection.walletId === removed.walletId)
           await saveLightningConnectionsForWallet({
-            password,
             walletId: removed.walletId,
             connections: forWallet,
           })
@@ -268,11 +263,6 @@ export const useLightningStore = create<LightningState>()(
       },
 
       renameConnection: async ({ connectionId, newLabel }) => {
-        const password = useSessionStore.getState().password
-        if (!password) {
-          throw new Error('Wallet must be unlocked to rename a Lightning connection')
-        }
-
         const trimmed = newLabel.trim()
         if (trimmed.length === 0) {
           throw new Error('Enter a label for this Lightning wallet')
@@ -314,7 +304,6 @@ export const useLightningStore = create<LightningState>()(
 
         const forWallet = nextWallets.filter((connection) => connection.walletId === walletId)
         await saveLightningConnectionsForWallet({
-          password,
           walletId,
           connections: forWallet,
         })
@@ -343,15 +332,13 @@ export const useLightningStore = create<LightningState>()(
       getConnectionsForWallet: (walletId) =>
         get().connectedWallets.filter((connection) => connection.walletId === walletId),
 
-      getActiveConnection: (walletId, networkMode) => {
-        if (!isLightningSupported(networkMode)) return null
-        const lnMode = networkMode as LightningNetworkMode
-        const activeId = get().activeConnectionIds[walletId]?.[lnMode]
-        if (!activeId) return null
-        const lightningConnection = get().connectedWallets.find((connection) => connection.id === activeId)
-        if (!lightningConnection || lightningConnection.networkMode !== lnMode) return null
-        return lightningConnection
-      },
+      getActiveConnection: (walletId, networkMode) =>
+        resolveActiveLightningConnection({
+          connectedWallets: get().connectedWallets,
+          activeConnectionIds: get().activeConnectionIds,
+          walletId,
+          networkMode,
+        }),
 
       hasNetworkConnectedWallet: (walletId, networkMode) =>
         hasNetworkConnectedWallet(get().connectedWallets, walletId, networkMode),

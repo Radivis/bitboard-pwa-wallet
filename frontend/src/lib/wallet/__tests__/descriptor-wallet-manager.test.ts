@@ -6,6 +6,10 @@ import {
   saveWalletSecrets,
   loadWalletSecrets,
 } from '@/db/wallet-persistence'
+import {
+  beginWalletSecretsSession,
+  endWalletSecretsSession,
+} from '@/lib/wallet/wallet-secrets-session'
 import type { WalletSecrets } from '@/db/wallet-persistence'
 import { TEST_MNEMONIC_12 } from '@/test-utils/test-providers'
 import {
@@ -49,7 +53,6 @@ vi.mock('@/db', async (importOriginal) => {
 const mockCreateWallet = vi.fn()
 
 async function mockResolveDescriptorWallet(params: {
-  password: string
   encryptedPayload: EncryptedBlob
   encryptedMnemonic: EncryptedBlob
   targetNetwork: BitcoinNetwork
@@ -57,7 +60,6 @@ async function mockResolveDescriptorWallet(params: {
   targetAccountId: number
 }) {
   const {
-    password,
     encryptedPayload,
     encryptedMnemonic,
     targetNetwork,
@@ -67,7 +69,7 @@ async function mockResolveDescriptorWallet(params: {
   const { getEncryptionWorker } = await import('@/workers/encryption-factory')
   const encryptionWorker = getEncryptionWorker()
 
-  const payloadPlain = await encryptionWorker.decryptData(password, encryptedPayload)
+  const payloadPlain = await encryptionWorker.decryptData(encryptedPayload)
   const walletSecretsPayload = JSON.parse(payloadPlain) as {
     descriptorWallets: WalletSecrets['descriptorWallets']
     lightningNwcConnections: WalletSecrets['lightningNwcConnections']
@@ -90,7 +92,7 @@ async function mockResolveDescriptorWallet(params: {
       encryptedMnemonicToStore: null,
     }
   }
-  const mnemonicPlain = await encryptionWorker.decryptData(password, encryptedMnemonic)
+  const mnemonicPlain = await encryptionWorker.decryptData(encryptedMnemonic)
   const walletResult = await mockCreateWallet(
     mnemonicPlain,
     targetNetwork,
@@ -107,10 +109,7 @@ async function mockResolveDescriptorWallet(params: {
     fullScanDone: false,
   }
   walletSecretsPayload.descriptorWallets.push(newDescriptorWallet)
-  const payloadEnc = await encryptionWorker.encryptData(
-    password,
-    JSON.stringify(walletSecretsPayload),
-  )
+  const payloadEnc = await encryptionWorker.encryptData(JSON.stringify(walletSecretsPayload))
   return {
     descriptorWalletData: newDescriptorWallet,
     encryptedPayloadToStore: payloadEnc,
@@ -119,7 +118,6 @@ async function mockResolveDescriptorWallet(params: {
 }
 
 async function mockUpdateDescriptorWalletChangeset(params: {
-  password: string
   encryptedPayload: EncryptedBlob
   network: BitcoinNetwork
   addressType: AddressType
@@ -127,10 +125,9 @@ async function mockUpdateDescriptorWalletChangeset(params: {
   changesetJson: string
   markFullScanDone?: boolean
 }) {
-  const { password, encryptedPayload, network, addressType, accountId, changesetJson } =
-    params
+  const { encryptedPayload, network, addressType, accountId, changesetJson } = params
   const { getEncryptionWorker } = await import('@/workers/encryption-factory')
-  const plaintext = await getEncryptionWorker().decryptData(password, encryptedPayload)
+  const plaintext = await getEncryptionWorker().decryptData(encryptedPayload)
   const walletSecretsPayload = JSON.parse(plaintext) as {
     descriptorWallets: WalletSecrets['descriptorWallets']
     lightningNwcConnections: WalletSecrets['lightningNwcConnections']
@@ -145,10 +142,7 @@ async function mockUpdateDescriptorWalletChangeset(params: {
     throw new Error(`No descriptor wallet found for ${network}/${addressType}/${accountId}`)
   }
   descriptorWallet.changeSet = changesetJson
-  const newBlob = await getEncryptionWorker().encryptData(
-    password,
-    JSON.stringify(walletSecretsPayload),
-  )
+  const newBlob = await getEncryptionWorker().encryptData(JSON.stringify(walletSecretsPayload))
   return newBlob
 }
 
@@ -268,7 +262,6 @@ describe('findDescriptorWallet', () => {
 
 describe('resolveDescriptorWallet', () => {
   let walletId: number
-  const password = 'test-password'
 
   const existingDescriptorWallet = {
     network: 'signet' as const,
@@ -288,6 +281,7 @@ describe('resolveDescriptorWallet', () => {
 
   beforeEach(async () => {
     testDb = await createTestDatabase()
+    await beginWalletSecretsSession('test-password')
     const result = await testDb
       .insertInto('wallets')
       .values({ name: 'Test Wallet', created_at: new Date().toISOString() })
@@ -297,19 +291,18 @@ describe('resolveDescriptorWallet', () => {
   })
 
   afterEach(async () => {
+    await endWalletSecretsSession()
     await testDb.destroy()
   })
 
   it('returns existing descriptor wallet when found', async () => {
     await saveWalletSecrets({
       walletDb: testDb,
-      password,
       walletId,
       secrets: mockSecrets,
     })
 
     const result = await resolveDescriptorWallet({
-      password,
       walletId,
       targetNetwork: 'signet',
       targetAddressType: 'taproot',
@@ -331,13 +324,11 @@ describe('resolveDescriptorWallet', () => {
 
     await saveWalletSecrets({
       walletDb: testDb,
-      password,
       walletId,
       secrets: mockSecrets,
     })
 
     const result = await resolveDescriptorWallet({
-      password,
       walletId,
       targetNetwork: 'testnet',
       targetAddressType: 'segwit',
@@ -360,7 +351,7 @@ describe('resolveDescriptorWallet', () => {
       0,
     )
 
-    const loaded = await loadWalletSecrets(testDb, password, walletId)
+    const loaded = await loadWalletSecrets(testDb, walletId)
     expect(loaded.descriptorWallets).toHaveLength(2)
     expect(loaded.descriptorWallets[1]).toEqual(result)
   })
@@ -368,7 +359,6 @@ describe('resolveDescriptorWallet', () => {
 
 describe('updateDescriptorWalletChangeset', () => {
   let walletId: number
-  const password = 'test-password'
 
   const sampleSecrets: WalletSecrets = {
     mnemonic: TEST_MNEMONIC_12,
@@ -403,6 +393,7 @@ describe('updateDescriptorWalletChangeset', () => {
 
   beforeEach(async () => {
     testDb = await createTestDatabase()
+    await beginWalletSecretsSession('test-password')
     const result = await testDb
       .insertInto('wallets')
       .values({ name: 'Test Wallet', created_at: new Date().toISOString() })
@@ -411,20 +402,19 @@ describe('updateDescriptorWalletChangeset', () => {
   })
 
   afterEach(async () => {
+    await endWalletSecretsSession()
     await testDb.destroy()
   })
 
   it('updates changeset for existing descriptor wallet', async () => {
     await saveWalletSecrets({
       walletDb: testDb,
-      password,
       walletId,
       secrets: sampleSecrets,
     })
 
     const newChangeset = '{"last_reveal":{"0":10}}'
     await updateDescriptorWalletChangeset({
-      password,
       walletId,
       network: 'signet',
       addressType: 'taproot',
@@ -432,7 +422,7 @@ describe('updateDescriptorWalletChangeset', () => {
       changesetJson: newChangeset,
     })
 
-    const loaded = await loadWalletSecrets(testDb, password, walletId)
+    const loaded = await loadWalletSecrets(testDb, walletId)
     expect(loaded.descriptorWallets[0].changeSet).toBe(newChangeset)
     expect(loaded.lightningNwcConnections).toHaveLength(1)
     expect(loaded.lightningNwcConnections[0].id).toBe('conn-1')
@@ -441,14 +431,12 @@ describe('updateDescriptorWalletChangeset', () => {
   it('throws when descriptor wallet not found', async () => {
     await saveWalletSecrets({
       walletDb: testDb,
-      password,
       walletId,
       secrets: sampleSecrets,
     })
 
     await expect(
       updateDescriptorWalletChangeset({
-        password,
         walletId,
         network: 'mainnet',
         addressType: 'taproot',

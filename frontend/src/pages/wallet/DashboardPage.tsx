@@ -18,7 +18,6 @@ import {
   hasNetworkConnectedWallet,
   useLightningStore,
 } from '@/stores/lightningStore'
-import { useSessionStore } from '@/stores/sessionStore'
 import { PageHeader } from '@/components/PageHeader'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -484,7 +483,6 @@ function SyncButton({
   const networkMode = useWalletStore((walletState) => walletState.networkMode)
   const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
   const setWalletStatus = useWalletStore((walletState) => walletState.setWalletStatus)
-  const password = useSessionStore((sessionState) => sessionState.password)
 
   const handleSync = useCallback(async () => {
     try {
@@ -492,7 +490,6 @@ function SyncButton({
       setWalletStatus('syncing')
       await runIncrementalDashboardWalletSync({
         networkMode,
-        password,
         activeWalletId,
       })
       setWalletStatus('unlocked')
@@ -508,7 +505,7 @@ function SyncButton({
     } finally {
       onThisOp(false)
     }
-  }, [networkMode, activeWalletId, password, onThisOp, setWalletStatus])
+  }, [networkMode, activeWalletId, onThisOp, setWalletStatus])
 
   return (
     <InfomodeWrapper
@@ -544,7 +541,6 @@ function FullRescanButton({
   const networkMode = useWalletStore((walletState) => walletState.networkMode)
   const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
   const setWalletStatus = useWalletStore((walletState) => walletState.setWalletStatus)
-  const password = useSessionStore((sessionState) => sessionState.password)
 
   const handleFullRescan = useCallback(async () => {
     try {
@@ -552,7 +548,6 @@ function FullRescanButton({
       setWalletStatus('syncing')
       await runFullScanDashboardWalletSync({
         networkMode,
-        password,
         activeWalletId,
       })
       setWalletStatus('unlocked')
@@ -564,7 +559,7 @@ function FullRescanButton({
     } finally {
       onThisOp(false)
     }
-  }, [networkMode, activeWalletId, password, onThisOp, setWalletStatus])
+  }, [networkMode, activeWalletId, onThisOp, setWalletStatus])
 
   if (!FULL_RESCAN_NETWORKS.includes(networkMode)) {
     return null

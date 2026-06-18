@@ -14,10 +14,10 @@ import {
   useArkadeNewAddressMutation,
 } from '@/hooks/useArkadeQueries'
 import { isArkadeActiveForNetworkMode } from '@/lib/arkade/arkade-utils'
-import { useWalletStore } from '@/stores/walletStore'
+import { selectCommittedNetworkMode, useWalletStore } from '@/stores/walletStore'
 
 export function ArkadeReceive() {
-  const networkMode = useWalletStore((walletState) => walletState.networkMode)
+  const networkMode = useWalletStore(selectCommittedNetworkMode)
   const storeReceiveAddress = useWalletStore((walletState) => walletState.arkadeReceiveAddress)
   const addressQuery = useArkadeAddressQuery()
   const newAddressMutation = useArkadeNewAddressMutation()
@@ -103,7 +103,10 @@ export function ArkadeReceive() {
           ) : (
             <>
               <div className="flex items-center gap-2">
-                <div className="flex-1 truncate rounded-md border border-input bg-muted/50 px-3 py-2 font-mono text-sm">
+                <div
+                  data-testid="arkade-receive-address"
+                  className="flex-1 truncate rounded-md border border-input bg-muted/50 px-3 py-2 font-mono text-sm"
+                >
                   {addressLoading ? 'Loading…' : address || 'Loading…'}
                 </div>
                 <Button

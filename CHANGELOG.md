@@ -15,7 +15,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
-## [0.3.0] - 2026-06-07
+## [0.3.1] - 2026-06-18
+### Added
+- Lightning send supports LNURL-pay (`lnurl1…`, `lightning:LNURL…`, and `lnurlp://…`); withdraw, auth, and channel LNURL tags show explicit unsupported errors; LNURL-pay falls back to same-origin `/api/lnurl/fetch` when direct browser fetch to the LNURL host is blocked (e.g. CORS)
+
+### Changed
+- Toast messages now appear below the app header
+- Increased size of toast close button and moved it to the top right
+
+### Fixed
+- Made modals scrollable; this fixes content from being cut off on small screens
+- The receive page should no longer show an error that there is no Lightning wallet for the current network, if there actually is one
+- App now sends x-build-version header to satisfy arkd compatibility signaling when communicating to Arkade sever
+
+### Security
+- Hardened security for the Ark worker by routing secrets reliably through a secrets channel (which was already implemented for the onchain crypto worker), so that they don't leak to the main thread of the app
+- Confined handling of app password to the encryption worker where possible
+
+## [0.3.0] - 2026-06-09
 ### Added
 - Arkade Support: enable under Settings → Features; separate balance, receive, send, and board-from-on-chain flows on mainnet, and signet (Mutinynet)
 - Network-scoped default Fulmine delegator URLs (env-configurable) for background VTXO renewal

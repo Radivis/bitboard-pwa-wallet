@@ -126,7 +126,6 @@ describe('syncLoadedDescriptorWalletWithEsplora BDK fallback', () => {
     const result = await syncLoadedDescriptorWalletWithEsplora({
       networkMode: 'testnet',
       activeWalletId: 1,
-      sessionPassword: 'pw',
       targetNetwork: 'testnet',
       targetAddressType: AddressType.Taproot,
       targetAccountId: 0,
@@ -143,7 +142,6 @@ describe('syncLoadedDescriptorWalletWithEsplora BDK fallback', () => {
     const result = await syncLoadedDescriptorWalletWithEsplora({
       networkMode: 'testnet',
       activeWalletId: 1,
-      sessionPassword: 'pw',
       targetNetwork: 'testnet',
       targetAddressType: AddressType.Taproot,
       targetAccountId: 0,
@@ -153,7 +151,6 @@ describe('syncLoadedDescriptorWalletWithEsplora BDK fallback', () => {
     expect(result).toBe('completed')
     expect(updateDescriptorWalletChangeset).toHaveBeenCalledWith(
       expect.objectContaining({
-        password: 'pw',
         walletId: 1,
         network: 'testnet',
         addressType: AddressType.Taproot,

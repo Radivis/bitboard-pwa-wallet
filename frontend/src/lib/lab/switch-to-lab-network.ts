@@ -6,7 +6,6 @@ import {
   type WalletStatus,
 } from '@/stores/walletStore'
 import { walletIsUnlockedOrSyncing } from '@/lib/wallet/wallet-unlocked-status'
-import { useSessionStore } from '@/stores/sessionStore'
 import { useCryptoStore } from '@/stores/cryptoStore'
 import { updateDescriptorWalletChangeset } from '@/lib/wallet/descriptor-wallet-manager'
 import { loadDescriptorWalletWithoutSync } from '@/lib/wallet/wallet-utils'
@@ -38,16 +37,14 @@ async function persistAndLoadLabWalletIfUnlockedOrSyncing(params: {
     params
   if (!walletIsUnlockedOrSyncing(walletStatus)) return
 
-  const sessionPassword = useSessionStore.getState().password
   const activeWalletId = useWalletStore.getState().activeWalletId
-  if (!sessionPassword || !activeWalletId) return
+  if (!activeWalletId) return
 
   const { exportChangeset } = useCryptoStore.getState()
   try {
     const currentChangeset = await exportChangeset()
     onPhase?.(savingPreviousNetworkMessage(previousNetworkMode))
     await updateDescriptorWalletChangeset({
-      password: sessionPassword,
       walletId: activeWalletId,
       network: toBitcoinNetwork(previousNetworkMode),
       addressType,
@@ -61,7 +58,6 @@ async function persistAndLoadLabWalletIfUnlockedOrSyncing(params: {
   onPhase?.(loadingTargetNetworkMessage('lab'))
 
   await loadDescriptorWalletWithoutSync({
-    password: sessionPassword,
     walletId: activeWalletId,
     networkMode: 'lab',
     addressType,

@@ -1,12 +1,13 @@
 import { useQuery } from '@tanstack/react-query'
 import { useWalletStore } from '@/stores/walletStore'
-import { useSessionStore } from '@/stores/sessionStore'
 import { loadDescriptorWalletAndSync, loadDescriptorWalletWithoutSync } from '@/lib/wallet/wallet-utils'
 import { activeWalletLoadQueryKey } from '@/lib/wallet/wallet-load-query-keys'
 import { waitForCryptoWorkerHealthy } from '@/workers/crypto-factory'
 import { pathnameRequiresWalletCryptoSession } from '@/lib/shared/pathname-requires-wallet-crypto-session'
 import { reportWalletSyncError } from '@/lib/wallet/wallet-sync-error-toast'
 import { useWalletCryptoSessionPathGateStore } from '@/stores/walletCryptoSessionPathGateStore'
+import { walletIsUnlockedOrSyncing } from '@/lib/wallet/wallet-unlocked-status'
+import { isWalletSecretsSessionActive } from '@/lib/wallet/wallet-secrets-session'
 
 /**
  * TanStack Query observer for loading the active descriptor wallet when a session exists
@@ -14,7 +15,6 @@ import { useWalletCryptoSessionPathGateStore } from '@/stores/walletCryptoSessio
  * Safe to call from multiple components — they share one cache entry per key.
  */
 export function useActiveWalletLoadQuery() {
-  const sessionPassword = useSessionStore((sessionState) => sessionState.password)
   const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
   const networkMode = useWalletStore((walletState) => walletState.networkMode)
   const addressType = useWalletStore((walletState) => walletState.addressType)
@@ -41,17 +41,13 @@ export function useActiveWalletLoadQuery() {
    */
   const needsBootstrap =
     onWalletCryptoRoute &&
-    sessionPassword != null &&
     activeWalletId != null &&
     !manualWalletUnlockInFlight &&
-    (walletStatus === 'locked' ||
-      walletStatus === 'none' ||
-      activeWalletBootstrapInFlight)
+    (!walletIsUnlockedOrSyncing(walletStatus) || activeWalletBootstrapInFlight)
 
   const query = useQuery({
     queryKey: activeWalletLoadQueryKey({
       activeWalletId,
-      sessionPresent: sessionPassword != null,
       networkMode,
       addressType,
       accountId,
@@ -66,14 +62,15 @@ export function useActiveWalletLoadQuery() {
           addressType: bootstrapAddressType,
           accountId: bootstrapAccountId,
         } = useWalletStore.getState()
-        const sessionPassword = useSessionStore.getState().password
-        if (bootstrapWalletId == null || sessionPassword == null) {
+        if (bootstrapWalletId == null) {
           throw new Error('Bootstrap query ran without wallet or session')
+        }
+        if (!(await isWalletSecretsSessionActive())) {
+          throw new Error('Bootstrap query ran without wallet secrets session')
         }
         await waitForCryptoWorkerHealthy()
         if (bootstrapNetworkMode === 'lab') {
           await loadDescriptorWalletWithoutSync({
-            password: sessionPassword,
             walletId: bootstrapWalletId,
             networkMode: bootstrapNetworkMode,
             addressType: bootstrapAddressType,
@@ -81,7 +78,6 @@ export function useActiveWalletLoadQuery() {
           })
         } else {
           await loadDescriptorWalletAndSync({
-            password: sessionPassword,
             walletId: bootstrapWalletId,
             networkMode: bootstrapNetworkMode,
             addressType: bootstrapAddressType,

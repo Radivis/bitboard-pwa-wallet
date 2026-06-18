@@ -8,6 +8,7 @@ import { e2eArkadeOperatorMockPlugin } from './src/lib/arkade/e2e/vite-e2e-arkad
 import { esploraViteProxyEntries } from './src/lib/esplora/esplora-service-whitelist'
 import { fiatRateViteProxyEntries } from './src/lib/fiat/fiat-rate-service-whitelist'
 import { faucetViteProxyEntries } from './src/lib/faucet/faucet-definitions'
+import { lnurlViteDevProxyPlugin } from './src/lib/lightning/lnurl-vite-dev-proxy-plugin'
 import { tanstackRouter } from '@tanstack/router-plugin/vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
@@ -196,6 +197,7 @@ export default defineConfig({
   },
   plugins: [
     rejectArgon2CiInProductionBuild(),
+    lnurlViteDevProxyPlugin(),
     e2eArkadeOperatorMockPlugin(),
     tanstackRouter({
       target: 'react',

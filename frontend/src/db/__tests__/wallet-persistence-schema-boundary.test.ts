@@ -57,7 +57,7 @@ describe('wallet secrets schema boundary', () => {
       }),
     )
 
-    await expect(loadWalletSecrets(walletDb, 'pw', walletId)).rejects.toThrow(
+    await expect(loadWalletSecrets(walletDb, walletId)).rejects.toThrow(
       'Invalid wallet secrets payload: schema validation failed',
     )
   })

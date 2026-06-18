@@ -1,5 +1,4 @@
 import { awaitInFlightWalletSecretsWrites, getDatabase, getWalletSecretsEncrypted } from '@/db'
-import { loadSdkPersistenceJsonForConnection } from '@/lib/arkade/arkade-sdk-persistence'
 import {
   clearArkadeDashboardStore,
   refreshArkadeStoreFromLoadedWasm,
@@ -10,14 +9,14 @@ import {
 } from '@/lib/arkade/arkade-operator-sync'
 import {
   ensureArkadeOperatorConnection,
-  findActiveArkadeOperatorConnection,
+  findActiveArkadeConnectionSummary,
   resolveArkadeEndpointsForConnection,
 } from '@/lib/arkade/arkade-operator-connections'
 import {
   ensureArkadeWorkerSecretsChannel,
   ensureSecretsChannel,
 } from '@/workers/secrets-channel'
-import { ensureArkadePersistenceChannel } from '@/workers/arkade-persistence-channel'
+import { ensureArkadeEncryptedSecretsHost } from '@/workers/arkade-persistence-channel'
 import {
   getArkadeWorker,
   getArkadeWorkerIfExists,
@@ -29,23 +28,15 @@ import {
   isArkadeSupportedNetworkMode,
   type ArkadeSupportedNetworkMode,
 } from '@/lib/arkade/arkade-endpoints'
+import { arkadeSessionKey } from '@/lib/arkade/arkade-session-key'
 import { isArkadeActiveForNetworkMode } from '@/lib/arkade/arkade-utils'
 import { removeArkadeDashboardQueries } from '@/lib/arkade/arkade-query-keys'
 import { removeArkadeDashboardSyncQueries } from '@/lib/arkade/arkade-dashboard-sync'
-import { loadWalletSecretsPayload } from '@/db/wallet-persistence'
 import { useWalletStore } from '@/stores/walletStore'
 import type { NetworkMode } from '@/stores/walletStore'
 
 let openSessionInFlight: Promise<void> | null = null
 let lastOpenedSessionKey: string | null = null
-
-function sessionKey(
-  walletId: number,
-  networkMode: ArkadeSupportedNetworkMode,
-  connectionId: string,
-): string {
-  return `${walletId}:${networkMode}:${connectionId}`
-}
 
 /** Best-effort maintenance after WASM session open; must not block session registration. */
 async function runPostOpenArkadeMaintenance(
@@ -63,7 +54,13 @@ async function runPostOpenArkadeMaintenance(
   }
 
   try {
-    await worker.delegateSpendableVtxos()
+    const delegateResult = await worker.delegateSpendableVtxos()
+    if (delegateResult.failed > 0 && delegateResult.errorMessage != null) {
+      console.warn(
+        'Arkade delegateSpendableVtxos failed after session open',
+        delegateResult.errorMessage,
+      )
+    }
   } catch (err) {
     console.warn('Arkade delegateSpendableVtxos failed after session open', err)
   }
@@ -98,11 +95,10 @@ export async function closeArkadeSession(): Promise<void> {
 }
 
 export async function openArkadeSessionForWallet(params: {
-  password: string
   walletId: number
   networkMode: NetworkMode
 }): Promise<void> {
-  const { password, walletId, networkMode } = params
+  const { walletId, networkMode } = params
   if (!isArkadeActiveForNetworkMode(networkMode)) {
     await closeArkadeSession()
     return
@@ -117,7 +113,6 @@ export async function openArkadeSessionForWallet(params: {
   }
 
   const openWork = runArkadeSessionOpenWork({
-    password,
     walletId,
     networkMode,
   })
@@ -133,18 +128,24 @@ export async function openArkadeSessionForWallet(params: {
 }
 
 function runArkadeSessionOpenWork(params: {
-  password: string
   walletId: number
   networkMode: ArkadeSupportedNetworkMode
 }): Promise<void> {
-  const { password, walletId, networkMode } = params
+  const { walletId, networkMode } = params
 
   return (async () => {
-    const payload = await loadWalletSecretsPayload(getDatabase(), password, walletId)
-    let connection = findActiveArkadeOperatorConnection(payload, networkMode)
+    await ensureSecretsChannel()
+    await ensureArkadeEncryptedSecretsHost()
+    const encrypted = await getWalletSecretsEncrypted(getDatabase(), walletId)
+
+    let connection = await findActiveArkadeConnectionSummary({
+      walletId,
+      networkMode,
+      encryptedPayload: encrypted.payload,
+    })
     const hadPersistedConnection = connection != null
     const provisionalKey = connection
-      ? sessionKey(walletId, networkMode, connection.id)
+      ? arkadeSessionKey(walletId, networkMode, connection.id)
       : null
 
     if (provisionalKey != null && lastOpenedSessionKey === provisionalKey) {
@@ -166,48 +167,33 @@ function runArkadeSessionOpenWork(params: {
       lastOpenedSessionKey = null
     }
 
-    await ensureSecretsChannel()
-    await ensureArkadePersistenceChannel()
-    const encrypted = await getWalletSecretsEncrypted(getDatabase(), walletId)
-
     const defaultEndpoints = getArkadeEndpoints(networkMode)
     const endpoints = connection
       ? resolveArkadeEndpointsForConnection(connection)
       : defaultEndpoints
     const connectionId = connection?.id ?? crypto.randomUUID()
-    const sdkPersistenceJson =
-      connection != null
-        ? await loadSdkPersistenceJsonForConnection({
-            password,
-            walletId,
-            connectionId: connection.id,
-          })
-        : undefined
 
     const worker = getArkadeWorker()
     await ensureArkadeWorkerSecretsChannel()
     const openResult = await worker.openSession({
-      password,
       encryptedMnemonic: encrypted.mnemonic,
+      encryptedPayload: encrypted.payload,
       walletId,
       networkMode,
       connectionId,
       arkServerUrl: endpoints.arkServerUrl,
       delegatorUrl: endpoints.delegatorUrl,
       esploraUrl: endpoints.esploraUrl,
-      sdkPersistenceJson,
     })
 
     connection = await ensureArkadeOperatorConnection({
-      password,
       walletId,
       networkMode,
+      connectionId,
       operatorSignerPkHex: openResult.operatorSignerPkHex,
       operatorUrl: endpoints.arkServerUrl,
       delegatorUrl: endpoints.delegatorUrl,
-      sdkPersistenceJson: hadPersistedConnection
-        ? undefined
-        : await worker.exportSdkPersistenceJson(),
+      persistInitialSdkFromWasm: !hadPersistedConnection,
     })
 
     await worker.reconcileActiveConnectionId(connection.id)
@@ -215,7 +201,6 @@ function runArkadeSessionOpenWork(params: {
     useWalletStore.getState().setLastOperatorSyncTime(null)
 
     const operatorSyncParams = {
-      password,
       walletId,
       networkMode,
       connectionId: connection.id,
@@ -232,7 +217,7 @@ function runArkadeSessionOpenWork(params: {
     }
     // Expose connection id only after receive address is hydrated from WASM persistence.
     useWalletStore.getState().setActiveArkadeConnectionId(connection.id)
-    lastOpenedSessionKey = sessionKey(walletId, networkMode, connection.id)
+    lastOpenedSessionKey = arkadeSessionKey(walletId, networkMode, connection.id)
 
     void runPostOpenArkadeMaintenance(worker, networkMode)
   })()
@@ -246,14 +231,12 @@ export async function awaitArkadeSessionReady(): Promise<void> {
 }
 
 export async function refreshArkadeSessionAfterNetworkSwitch(params: {
-  password: string | null
   walletId: number | null
   networkMode: NetworkMode
 }): Promise<void> {
   await closeArkadeSession()
-  if (params.password == null || params.walletId == null) return
+  if (params.walletId == null) return
   await openArkadeSessionForWallet({
-    password: params.password,
     walletId: params.walletId,
     networkMode: params.networkMode,
   })

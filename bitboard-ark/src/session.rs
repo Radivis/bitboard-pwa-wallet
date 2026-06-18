@@ -20,7 +20,7 @@ use bip39::Mnemonic;
 use bitcoin::bip32::Xpriv;
 use bitcoin::key::Secp256k1;
 use bitcoin::secp256k1::rand::rngs::OsRng;
-use bitcoin::{Address, Amount, Network, OutPoint, PublicKey, XOnlyPublicKey};
+use bitcoin::{Address, Amount, Network, OutPoint, PublicKey, Txid, XOnlyPublicKey};
 
 use crate::api_types::{
     BalanceDto, BoardingStatusDto, CollaborativeExitFeeEstimateDto, CollaborativeExitParams,
@@ -30,6 +30,12 @@ use crate::api_types::{
     UnrollResult, VtxoExpiryStatusDto,
 };
 use crate::balance_display::{ArkadeBalanceInputs, build_arkade_balance_dto};
+use crate::constants::{
+    DEFAULT_TX_FEE_RATE, MIN_FEE_RATE_SAT_PER_VB, PAYMENT_DIRECTION_INCOMING,
+    PAYMENT_DIRECTION_OUTGOING, UNROLL_EVENT_TYPE_DONE, UNROLL_EVENT_TYPE_UNROLL,
+    UNROLL_EVENT_TYPE_WAIT, VTXO_STATUS_PRECONFIRMED, VTXO_STATUS_RECOVERABLE, VTXO_STATUS_SETTLED,
+    VTXO_STATUS_SPENT, VTXO_STATUS_UNROLLED,
+};
 use crate::error::{ArkResult, ArkWasmError};
 use crate::esplora_blockchain::EsploraBlockchain;
 use crate::exit_balance::{
@@ -101,7 +107,7 @@ impl ArkSession {
                 &esplora_url,
                 SharedPersistenceDb(Arc::clone(&wallet_db)),
             )
-            .map_err(|error| ArkWasmError::Message(error.to_string()))?,
+            .map_err(|error| ArkWasmError::Wallet(error.to_string()))?,
         );
 
         // Always Bip32KeyProvider — never StaticKeyProvider/new_with_keypair — so ark-client
@@ -135,7 +141,7 @@ impl ArkSession {
         }
         let server_signer: XOnlyPublicKey = client.server_info.signer_pk.into();
         validate_operator_identity(parsed.operator_identity.as_ref(), server_signer, network)
-            .map_err(ArkWasmError::Message)?;
+            .map_err(ArkWasmError::Persistence)?;
         wallet_db.set_load_context(network, server_signer);
         client.sync_onchain_wallet().await?;
 
@@ -170,11 +176,7 @@ impl ArkSession {
 
     pub async fn sync_with_operator(&self) -> ArkResult<()> {
         self.sync_offchain_keys().await;
-        let (vtxo_list, _) = self
-            .client
-            .list_vtxos()
-            .await
-            .map_err(|error| ArkWasmError::Message(error.to_string()))?;
+        let (vtxo_list, _) = self.client.list_vtxos().await?;
         let all_points: Vec<VirtualTxOutPoint> = vtxo_list.all().cloned().collect();
         let snapshot = snapshot_from_virtual_tx_outpoints(
             self.client.server_info.dust.to_sat(),
@@ -227,20 +229,18 @@ impl ArkSession {
             }
         }
 
-        let (vtxo_list, _) = self
-            .client
-            .list_vtxos()
-            .await
-            .map_err(|error| ArkWasmError::Message(error.to_string()))?;
-        let target_txid = txid
-            .parse()
-            .map_err(|error| ArkWasmError::Message(format!("invalid txid: {error}")))?;
+        let (vtxo_list, _) = self.client.list_vtxos().await?;
+        let target_txid = parse_outpoint(txid, vout)?.txid;
         let amount = vtxo_list
             .all()
-            .find(|vtp| vtp.outpoint.txid == target_txid && vtp.outpoint.vout == vout)
-            .map(|vtp| vtp.amount.to_sat())
-            .ok_or_else(|| {
-                ArkWasmError::Message(format!("VTXO not found for outpoint {txid}:{vout}"))
+            .find(|virtual_tx_outpoint| {
+                virtual_tx_outpoint.outpoint.txid == target_txid
+                    && virtual_tx_outpoint.outpoint.vout == vout
+            })
+            .map(|virtual_tx_outpoint| virtual_tx_outpoint.amount.to_sat())
+            .ok_or(ArkWasmError::VtxoNotFound {
+                txid: txid.to_string(),
+                vout,
             })?;
         Ok(amount)
     }
@@ -347,8 +347,7 @@ impl ArkSession {
                 .client
                 .blockchain()
                 .find_outpoints(boarding_output.address())
-                .await
-                .map_err(|error| ArkWasmError::Message(error.to_string()))?;
+                .await?;
 
             for utxo in outpoints {
                 accumulate_boarding_utxo_balance(
@@ -372,8 +371,8 @@ impl ArkSession {
     }
 
     pub async fn send_payment(&self, params: SendPaymentParams) -> ArkResult<String> {
-        let address = ArkAddress::decode(&params.address)
-            .map_err(|error| ArkWasmError::Message(error.to_string()))?;
+        validate_send_amount_sats(params.amount_sats)?;
+        let address = ArkAddress::decode(&params.address)?;
         let amount = Amount::from_sat(params.amount_sats);
         let txid = self
             .client
@@ -404,9 +403,12 @@ impl ArkSession {
         let delegator = self
             .delegator
             .as_ref()
-            .ok_or_else(|| ArkWasmError::Message("delegator service is not configured".into()))?;
+            .ok_or(ArkWasmError::DelegatorNotConfigured)?;
         let info = delegator.info().await?;
-        let fee = info.fee.parse::<u64>().unwrap_or(0);
+        let fee = info
+            .fee
+            .parse::<u64>()
+            .map_err(|error| ArkWasmError::InvalidDelegatorFee(error.to_string()))?;
         Ok(DelegateInfoDto {
             pubkey: info.pubkey,
             fee,
@@ -423,8 +425,10 @@ impl ArkSession {
         let now = current_unix_timestamp();
         let earliest_expires_at = vtxo_list
             .all_unspent()
-            .filter(|vtp| vtp.created_at > 0 && vtp.expires_at > now)
-            .map(|vtp| vtp.expires_at)
+            .filter(|virtual_tx_outpoint| {
+                virtual_tx_outpoint.created_at > 0 && virtual_tx_outpoint.expires_at > now
+            })
+            .map(|virtual_tx_outpoint| virtual_tx_outpoint.expires_at)
             .min();
         let expiring_soon_count = self.expiring_vtxo_count().await?;
         Ok(VtxoExpiryStatusDto {
@@ -448,6 +452,7 @@ impl ArkSession {
             return Ok(DelegateSpendableResult {
                 delegated: 0,
                 failed: 0,
+                error_message: None,
             });
         };
 
@@ -455,32 +460,38 @@ impl ArkSession {
         let delegator_pubkey = parse_delegator_public_key(&delegator_info.pubkey)?;
         let mut delegated = 0u32;
         let mut failed = 0u32;
+        let mut error_message = None;
 
         let cosigner_pk = delegator_pubkey.inner;
         match self.client.generate_delegate(cosigner_pk).await {
             Ok(mut delegate) => {
-                if self
+                if let Err(error) = self
                     .client
                     .sign_delegate_psbts(&mut delegate.intent.proof, &mut delegate.forfeit_psbts)
-                    .is_err()
                 {
-                    failed += 1;
-                } else if delegator
+                    failed = 1;
+                    error_message = Some(format!("sign delegate PSBTs: {error}"));
+                } else if let Err(error) = delegator
                     .delegate(&delegate.intent, &delegate.forfeit_psbts, None)
                     .await
-                    .is_ok()
                 {
-                    delegated = delegate.forfeit_psbts.len() as u32;
+                    failed = 1;
+                    error_message = Some(format!("delegator RPC: {error}"));
                 } else {
-                    failed += 1;
+                    delegated = delegate.forfeit_psbts.len() as u32;
                 }
             }
-            Err(_) => {
-                failed += 1;
+            Err(error) => {
+                failed = 1;
+                error_message = Some(format!("generate delegate: {error}"));
             }
         }
 
-        Ok(DelegateSpendableResult { delegated, failed })
+        Ok(DelegateSpendableResult {
+            delegated,
+            failed,
+            error_message,
+        })
     }
 
     pub async fn finalize_pending_transactions(&self) -> ArkResult<FinalizePendingResult> {
@@ -497,21 +508,21 @@ impl ArkSession {
         let status = self.boarding_status().await?;
         if status.spendable_sats == 0 {
             if status.pending_sats > 0 {
-                return Err(ArkWasmError::Message(
+                return Err(ArkWasmError::Boarding(
                     "Boarding payment is unconfirmed. Wait for at least one block confirmation, then try again.".to_string(),
                 ));
             }
             if status.expired_sats > 0 {
-                return Err(ArkWasmError::Message(
+                return Err(ArkWasmError::Boarding(
                     "Boarding UTXO can only be spent unilaterally now. Use the unilateral exit flow instead of settle.".to_string(),
                 ));
             }
             if status.tracked_addresses.is_empty() {
-                return Err(ArkWasmError::Message(
+                return Err(ArkWasmError::Boarding(
                     "No boarding address is registered for this wallet session.".to_string(),
                 ));
             }
-            return Err(ArkWasmError::Message(format!(
+            return Err(ArkWasmError::Boarding(format!(
                 "No spendable boarding UTXO found at {}. Confirm the payment was sent to that exact address on {}.",
                 status.boarding_address,
                 self.network_mode.label(),
@@ -521,10 +532,10 @@ impl ArkSession {
         let mut rng = OsRng;
         match self.client.settle(&mut rng).await {
             Ok(Some(txid)) => Ok(Some(txid.to_string())),
-            Ok(None) => Err(ArkWasmError::Message(
+            Ok(None) => Err(ArkWasmError::Boarding(
                 "Settle returned no inputs even though boarding UTXOs looked spendable. Try again in a moment.".to_string(),
             )),
-            Err(error) => Err(ArkWasmError::Message(error.to_string())),
+            Err(error) => Err(error.into()),
         }
     }
 
@@ -533,7 +544,7 @@ impl ArkSession {
         let dust = self.client.server_info.dust;
         let rows = vtxo_list
             .all()
-            .map(|vtp| map_exit_candidate(vtp, dust))
+            .map(|virtual_tx_outpoint| map_exit_candidate(virtual_tx_outpoint, dust))
             .collect();
         Ok(rows)
     }
@@ -639,16 +650,15 @@ impl ArkSession {
         &self,
         params: UnilateralExitFeeParams,
     ) -> ArkResult<UnilateralExitFeeEstimateDto> {
-        let outpoint = OutPoint {
-            txid: params
-                .txid
-                .parse()
-                .map_err(|error| ArkWasmError::Message(format!("invalid txid: {error}")))?,
-            vout: params.vout,
-        };
+        let outpoint = parse_outpoint(&params.txid, params.vout)?;
 
-        let fee_rate = self.client.blockchain().get_fee_rate().await.unwrap_or(1.0);
-        let fee_rate_sat_per_vb = fee_rate.max(1.0).ceil() as u64;
+        let fee_rate = self
+            .client
+            .blockchain()
+            .get_fee_rate()
+            .await
+            .unwrap_or(MIN_FEE_RATE_SAT_PER_VB);
+        let fee_rate_sat_per_vb = fee_rate.max(MIN_FEE_RATE_SAT_PER_VB);
         let bumper_balance_sats = self.onchain_bumper_info().await?.balance_sats;
 
         let mut chain_tx_count = 0u32;
@@ -677,7 +687,7 @@ impl ArkSession {
 
         let estimated_package_fee_sats = if estimate_error.is_none() {
             let steps = projected_unroll_steps.max(1) as u64;
-            steps * fee_rate_sat_per_vb * UNILATERAL_CHILD_VSIZE
+            (steps as f64 * fee_rate_sat_per_vb * UNILATERAL_CHILD_VSIZE as f64).ceil() as u64
         } else {
             0
         };
@@ -703,12 +713,7 @@ impl ArkSession {
     where
         F: Fn(UnrollProgressEvent),
     {
-        let target = OutPoint {
-            txid: txid
-                .parse()
-                .map_err(|error| ArkWasmError::Message(format!("invalid txid: {error}")))?,
-            vout,
-        };
+        let target = parse_outpoint(txid, vout)?;
 
         let amount_sats = self.vtxo_amount_sats_for_outpoint(txid, vout).await?;
         let mut pending_unilateral_exit_recorded = false;
@@ -718,16 +723,11 @@ impl ArkSession {
 
         for parent_tx in branch {
             let parent_txid = parent_tx.compute_txid();
-            let status = self
-                .client
-                .blockchain()
-                .find_tx(&parent_txid)
-                .await
-                .map_err(|error| ArkWasmError::Message(error.to_string()))?;
+            let status = self.client.blockchain().find_tx(&parent_txid).await?;
 
             if status.is_none() {
                 on_progress(UnrollProgressEvent {
-                    event_type: "unroll".to_string(),
+                    event_type: UNROLL_EVENT_TYPE_UNROLL.to_string(),
                     message: format!("Broadcasting unroll {parent_txid}"),
                     txid: Some(parent_txid.to_string()),
                     vtxo_txid: None,
@@ -736,8 +736,7 @@ impl ArkSession {
                 let broadcast_txid = self
                     .client
                     .broadcast_next_unilateral_exit_node(std::slice::from_ref(&parent_tx))
-                    .await
-                    .map_err(|error| ArkWasmError::Message(error.to_string()))?;
+                    .await?;
                 if !pending_unilateral_exit_recorded {
                     self.record_pending_unilateral_exit(txid, vout, amount_sats);
                     pending_unilateral_exit_recorded = true;
@@ -745,7 +744,7 @@ impl ArkSession {
                 if let Some(broadcast_txid) = broadcast_txid {
                     done_vtxo_txid = broadcast_txid.to_string();
                     on_progress(UnrollProgressEvent {
-                        event_type: "wait".to_string(),
+                        event_type: UNROLL_EVENT_TYPE_WAIT.to_string(),
                         message: format!("Waiting for confirmation of {broadcast_txid}"),
                         txid: Some(broadcast_txid.to_string()),
                         vtxo_txid: None,
@@ -757,7 +756,7 @@ impl ArkSession {
                     pending_unilateral_exit_recorded = true;
                 }
                 on_progress(UnrollProgressEvent {
-                    event_type: "wait".to_string(),
+                    event_type: UNROLL_EVENT_TYPE_WAIT.to_string(),
                     message: format!("Waiting for confirmation of {parent_txid}"),
                     txid: Some(parent_txid.to_string()),
                     vtxo_txid: None,
@@ -766,7 +765,7 @@ impl ArkSession {
         }
 
         on_progress(UnrollProgressEvent {
-            event_type: "done".to_string(),
+            event_type: UNROLL_EVENT_TYPE_DONE.to_string(),
             message: format!("Unroll complete for {done_vtxo_txid}"),
             txid: None,
             vtxo_txid: Some(done_vtxo_txid.clone()),
@@ -782,17 +781,14 @@ impl ArkSession {
         params: CompleteUnilateralExitParams,
     ) -> ArkResult<String> {
         if params.vtxo_txids.is_empty() {
-            return Err(ArkWasmError::Message(
-                "vtxo_txids must not be empty".to_string(),
-            ));
+            return Err(ArkWasmError::EmptyVtxoTxids);
         }
 
         let vtxo_txids: Vec<bitcoin::Txid> = params
             .vtxo_txids
             .iter()
             .map(|txid| {
-                txid.parse()
-                    .map_err(|error| ArkWasmError::Message(format!("invalid txid: {error}")))
+                Txid::from_str(txid).map_err(|error| ArkWasmError::InvalidTxid(error.to_string()))
             })
             .collect::<Result<_, _>>()?;
 
@@ -810,16 +806,17 @@ impl ArkSession {
         let now = current_unix_timestamp();
         Ok(vtxo_list
             .all_unspent()
-            .filter(|vtp| {
-                if vtp.expires_at <= 0 || vtp.created_at <= 0 {
+            .filter(|virtual_tx_outpoint| {
+                if virtual_tx_outpoint.expires_at <= 0 || virtual_tx_outpoint.created_at <= 0 {
                     return false;
                 }
-                let total_lifetime = vtp.expires_at - vtp.created_at;
-                let remaining = vtp.expires_at - now;
+                let total_lifetime =
+                    virtual_tx_outpoint.expires_at - virtual_tx_outpoint.created_at;
+                let remaining = virtual_tx_outpoint.expires_at - now;
                 remaining > 0
                     && (remaining as f64) < (total_lifetime as f64 * SELF_RENEW_REMAINING_FRACTION)
             })
-            .map(|vtp| vtp.outpoint)
+            .map(|virtual_tx_outpoint| virtual_tx_outpoint.outpoint)
             .collect())
     }
 
@@ -830,7 +827,7 @@ impl ArkSession {
         self.client
             .build_unilateral_exit_branch(target)
             .await
-            .map_err(|error| ArkWasmError::Message(error.to_string()))
+            .map_err(Into::into)
     }
 
     fn network(&self) -> Network {
@@ -847,16 +844,14 @@ impl ArkSession {
                 .client
                 .blockchain()
                 .find_outpoints(boarding_output.address())
-                .await
-                .map_err(|error| ArkWasmError::Message(error.to_string()))?;
+                .await?;
 
             for ExplorerUtxo { outpoint, .. } in outpoints {
                 let status = self
                     .client
                     .blockchain()
                     .get_output_status(&outpoint.txid, outpoint.vout)
-                    .await
-                    .map_err(|error| ArkWasmError::Message(error.to_string()))?;
+                    .await?;
                 if let Some(spend_txid) = status.spend_txid {
                     boarding_commitment_transactions.push(spend_txid);
                 }
@@ -876,8 +871,7 @@ impl ArkSession {
                 .client
                 .blockchain()
                 .find_outpoints(boarding_output.address())
-                .await
-                .map_err(|error| ArkWasmError::Message(error.to_string()))?;
+                .await?;
 
             for ExplorerUtxo {
                 outpoint,
@@ -920,14 +914,31 @@ fn warn_offchain_key_discovery_failed(error: &ark_client::Error) {
 fn parse_delegator_public_key(value: &str) -> ArkResult<PublicKey> {
     value
         .parse::<PublicKey>()
-        .map_err(|error| ArkWasmError::Message(format!("invalid delegator pubkey: {error}")))
+        .map_err(|error| ArkWasmError::InvalidDelegatorPubkey(error.to_string()))
 }
 
 fn parse_onchain_address(value: &str, network: Network) -> ArkResult<Address> {
     Address::from_str(value)
-        .map_err(|error| ArkWasmError::Message(error.to_string()))?
+        .map_err(|error| ArkWasmError::InvalidOnchainAddress(error.to_string()))?
         .require_network(network)
-        .map_err(|error| ArkWasmError::Message(error.to_string()))
+        .map_err(|error| ArkWasmError::InvalidOnchainAddress(error.to_string()))
+}
+
+fn parse_outpoint(txid: &str, vout: u32) -> ArkResult<OutPoint> {
+    let txid =
+        Txid::from_str(txid).map_err(|error| ArkWasmError::InvalidTxid(error.to_string()))?;
+    Ok(OutPoint { txid, vout })
+}
+
+fn payment_direction_and_amount_sats(signed_amount_sats: i64) -> (&'static str, u64) {
+    if signed_amount_sats >= 0 {
+        (PAYMENT_DIRECTION_INCOMING, signed_amount_sats as u64)
+    } else {
+        (
+            PAYMENT_DIRECTION_OUTGOING,
+            signed_amount_sats.unsigned_abs(),
+        )
+    }
 }
 
 fn map_intent_fee_configured(
@@ -957,7 +968,7 @@ fn map_history_row(transaction: Transaction) -> Option<PaymentRowDto> {
     let timestamp = transaction.created_at().unwrap_or(0);
     match transaction {
         Transaction::Boarding { txid, amount, .. } => Some(PaymentRowDto {
-            direction: "incoming".to_string(),
+            direction: PAYMENT_DIRECTION_INCOMING.to_string(),
             amount_sats: amount.to_sat(),
             timestamp,
             txid: txid.to_string(),
@@ -968,14 +979,10 @@ fn map_history_row(transaction: Transaction) -> Option<PaymentRowDto> {
             amount,
             created_at,
         } => {
-            let signed = amount.to_sat();
+            let (direction, amount_sats) = payment_direction_and_amount_sats(amount.to_sat());
             Some(PaymentRowDto {
-                direction: if signed >= 0 {
-                    "incoming".to_string()
-                } else {
-                    "outgoing".to_string()
-                },
-                amount_sats: signed.unsigned_abs(),
+                direction: direction.to_string(),
+                amount_sats,
                 timestamp: created_at,
                 txid: txid.to_string(),
                 memo: None,
@@ -987,14 +994,10 @@ fn map_history_row(transaction: Transaction) -> Option<PaymentRowDto> {
             created_at,
             ..
         } => {
-            let signed = amount.to_sat();
+            let (direction, amount_sats) = payment_direction_and_amount_sats(amount.to_sat());
             Some(PaymentRowDto {
-                direction: if signed >= 0 {
-                    "incoming".to_string()
-                } else {
-                    "outgoing".to_string()
-                },
-                amount_sats: signed.unsigned_abs(),
+                direction: direction.to_string(),
+                amount_sats,
                 timestamp: created_at,
                 txid: txid.to_string(),
                 memo: None,
@@ -1005,7 +1008,7 @@ fn map_history_row(transaction: Transaction) -> Option<PaymentRowDto> {
             amount,
             confirmed_at,
         } => Some(PaymentRowDto {
-            direction: "outgoing".to_string(),
+            direction: PAYMENT_DIRECTION_OUTGOING.to_string(),
             amount_sats: amount.to_sat(),
             timestamp: confirmed_at.unwrap_or(0),
             txid: commitment_txid.to_string(),
@@ -1014,40 +1017,46 @@ fn map_history_row(transaction: Transaction) -> Option<PaymentRowDto> {
     }
 }
 
-fn map_exit_candidate(vtp: &VirtualTxOutPoint, dust: Amount) -> ExitCandidateRow {
-    let recoverable = vtp.is_recoverable(dust);
-    let state = if vtp.is_spent {
-        "spent"
-    } else if vtp.is_unrolled {
-        "unrolled"
-    } else if vtp.is_preconfirmed {
-        "preconfirmed"
+fn map_exit_candidate(virtual_tx_outpoint: &VirtualTxOutPoint, dust: Amount) -> ExitCandidateRow {
+    let recoverable = virtual_tx_outpoint.is_recoverable(dust);
+    let state = if virtual_tx_outpoint.is_spent {
+        VTXO_STATUS_SPENT
+    } else if virtual_tx_outpoint.is_unrolled {
+        VTXO_STATUS_UNROLLED
+    } else if virtual_tx_outpoint.is_preconfirmed {
+        VTXO_STATUS_PRECONFIRMED
     } else if recoverable {
-        "recoverable"
+        VTXO_STATUS_RECOVERABLE
     } else {
-        "settled"
+        VTXO_STATUS_SETTLED
     }
     .to_string();
 
     ExitCandidateRow {
-        id: format!("{}:{}", vtp.outpoint.txid, vtp.outpoint.vout),
-        txid: vtp.outpoint.txid.to_string(),
-        vout: vtp.outpoint.vout,
-        amount_sats: vtp.amount.to_sat(),
+        id: format!(
+            "{}:{}",
+            virtual_tx_outpoint.outpoint.txid, virtual_tx_outpoint.outpoint.vout
+        ),
+        txid: virtual_tx_outpoint.outpoint.txid.to_string(),
+        vout: virtual_tx_outpoint.outpoint.vout,
+        amount_sats: virtual_tx_outpoint.amount.to_sat(),
         virtual_status_state: state,
         is_recoverable: recoverable,
-        is_unrolled: vtp.is_unrolled,
+        is_unrolled: virtual_tx_outpoint.is_unrolled,
         // Match ark_client::could_exit_unilaterally(): active confirmed/preconfirmed VTXOs, not
         // recoverable (expired/swept/sub-dust) ones that use a different settlement path.
-        can_start_unroll: !recoverable && !vtp.is_unrolled && !vtp.is_spent && !vtp.is_swept,
-        can_complete: vtp.is_unrolled && !vtp.is_spent,
+        can_start_unroll: !recoverable
+            && !virtual_tx_outpoint.is_unrolled
+            && !virtual_tx_outpoint.is_spent
+            && !virtual_tx_outpoint.is_swept,
+        can_complete: virtual_tx_outpoint.is_unrolled && !virtual_tx_outpoint.is_spent,
     }
 }
 
 fn empty_fee_info() -> ark_core::server::FeeInfo {
     ark_core::server::FeeInfo {
         intent_fee: ark_core::server::IntentFeeInfo::default(),
-        tx_fee_rate: "1".to_string(),
+        tx_fee_rate: DEFAULT_TX_FEE_RATE.to_string(),
     }
 }
 
@@ -1090,6 +1099,13 @@ fn accumulate_boarding_utxo_balance(
     }
 }
 
+fn validate_send_amount_sats(amount_sats: u64) -> ArkResult<()> {
+    if amount_sats == 0 {
+        return Err(ArkWasmError::InvalidSendAmount);
+    }
+    Ok(())
+}
+
 fn current_unix_timestamp() -> i64 {
     #[cfg(target_arch = "wasm32")]
     {
@@ -1105,8 +1121,144 @@ fn current_unix_timestamp() -> i64 {
 }
 
 #[cfg(test)]
+mod send_amount_validation_tests {
+    use super::validate_send_amount_sats;
+    use crate::error::{ArkWasmError, MSG_SEND_AMOUNT_MUST_BE_POSITIVE};
+
+    #[test]
+    fn validate_send_amount_sats_rejects_zero() {
+        let error = validate_send_amount_sats(0).expect_err("zero amount");
+        assert!(matches!(error, ArkWasmError::InvalidSendAmount));
+        assert_eq!(error.to_string(), MSG_SEND_AMOUNT_MUST_BE_POSITIVE);
+    }
+
+    #[test]
+    fn validate_send_amount_sats_accepts_positive() {
+        validate_send_amount_sats(1).expect("one sat");
+        validate_send_amount_sats(21_000_000).expect("large amount");
+    }
+}
+
+#[cfg(test)]
+mod payment_and_history_mapper_tests {
+    use super::{
+        map_history_row, map_intent_fee_configured, parse_outpoint,
+        payment_direction_and_amount_sats,
+    };
+    use crate::constants::{PAYMENT_DIRECTION_INCOMING, PAYMENT_DIRECTION_OUTGOING};
+    use crate::error::ArkWasmError;
+    use ark_core::history::Transaction;
+    use ark_core::server::IntentFeeInfo;
+    use bitcoin::Amount;
+    use bitcoin::SignedAmount;
+    use bitcoin::Txid;
+    use bitcoin::hashes::Hash;
+
+    #[test]
+    fn payment_direction_maps_signed_amounts() {
+        assert_eq!(
+            payment_direction_and_amount_sats(1_500),
+            (PAYMENT_DIRECTION_INCOMING, 1_500)
+        );
+        assert_eq!(
+            payment_direction_and_amount_sats(-2_000),
+            (PAYMENT_DIRECTION_OUTGOING, 2_000)
+        );
+        assert_eq!(
+            payment_direction_and_amount_sats(0),
+            (PAYMENT_DIRECTION_INCOMING, 0)
+        );
+    }
+
+    #[test]
+    fn parse_outpoint_accepts_valid_txid() {
+        let txid_hex = Txid::from_byte_array([0x11; 32]).to_string();
+        let outpoint = parse_outpoint(&txid_hex, 3).expect("valid outpoint");
+        assert_eq!(outpoint.txid.to_string(), txid_hex);
+        assert_eq!(outpoint.vout, 3);
+    }
+
+    #[test]
+    fn parse_outpoint_rejects_invalid_txid() {
+        let error = parse_outpoint("not-a-txid", 0).expect_err("invalid txid");
+        assert!(matches!(error, ArkWasmError::InvalidTxid(_)));
+    }
+
+    #[test]
+    fn map_intent_fee_configured_detects_nonempty_programs() {
+        let configured = map_intent_fee_configured(&IntentFeeInfo {
+            offchain_input: Some("program".to_string()),
+            offchain_output: Some(String::new()),
+            onchain_input: None,
+            onchain_output: Some("rate".to_string()),
+        });
+
+        assert!(configured.offchain_input);
+        assert!(!configured.offchain_output);
+        assert!(!configured.onchain_input);
+        assert!(configured.onchain_output);
+    }
+
+    #[test]
+    fn map_history_row_maps_transaction_variants() {
+        let boarding_txid = Txid::from_byte_array([1; 32]);
+        let boarding = map_history_row(Transaction::Boarding {
+            txid: boarding_txid,
+            amount: Amount::from_sat(42_000),
+            confirmed_at: Some(1_700_000_000),
+        })
+        .expect("boarding row");
+        assert_eq!(boarding.direction, PAYMENT_DIRECTION_INCOMING);
+        assert_eq!(boarding.amount_sats, 42_000);
+        assert_eq!(boarding.timestamp, 1_700_000_000);
+
+        let commitment_txid = Txid::from_byte_array([2; 32]);
+        let incoming_commitment = map_history_row(Transaction::Commitment {
+            txid: commitment_txid,
+            amount: SignedAmount::from_sat(5_000),
+            created_at: 1_700_000_100,
+        })
+        .expect("incoming commitment");
+        assert_eq!(incoming_commitment.direction, PAYMENT_DIRECTION_INCOMING);
+        assert_eq!(incoming_commitment.amount_sats, 5_000);
+
+        let outgoing_commitment = map_history_row(Transaction::Commitment {
+            txid: commitment_txid,
+            amount: SignedAmount::from_sat(-7_500),
+            created_at: 1_700_000_200,
+        })
+        .expect("outgoing commitment");
+        assert_eq!(outgoing_commitment.direction, PAYMENT_DIRECTION_OUTGOING);
+        assert_eq!(outgoing_commitment.amount_sats, 7_500);
+
+        let ark_txid = Txid::from_byte_array([3; 32]);
+        let ark_payment = map_history_row(Transaction::Ark {
+            txid: ark_txid,
+            amount: SignedAmount::from_sat(-1_000),
+            is_settled: false,
+            created_at: 1_700_000_300,
+        })
+        .expect("ark payment");
+        assert_eq!(ark_payment.direction, PAYMENT_DIRECTION_OUTGOING);
+        assert_eq!(ark_payment.amount_sats, 1_000);
+
+        let offboard_txid = Txid::from_byte_array([4; 32]);
+        let offboard = map_history_row(Transaction::Offboard {
+            commitment_txid: offboard_txid,
+            amount: Amount::from_sat(99_000),
+            confirmed_at: Some(1_700_000_400),
+        })
+        .expect("offboard");
+        assert_eq!(offboard.direction, PAYMENT_DIRECTION_OUTGOING);
+        assert_eq!(offboard.amount_sats, 99_000);
+        assert_eq!(offboard.txid, offboard_txid.to_string());
+    }
+}
+
+#[cfg(test)]
 mod exit_candidate_tests {
     use super::{current_unix_timestamp, map_exit_candidate};
+    use crate::constants::{VTXO_STATUS_RECOVERABLE, VTXO_STATUS_SETTLED};
     use ark_core::server::VirtualTxOutPoint;
     use bitcoin::Amount;
     use bitcoin::OutPoint;
@@ -1158,7 +1310,7 @@ mod exit_candidate_tests {
             DUST,
         );
 
-        assert_eq!(row.virtual_status_state, "settled");
+        assert_eq!(row.virtual_status_state, VTXO_STATUS_SETTLED);
         assert!(row.can_start_unroll);
         assert!(!row.can_complete);
     }
@@ -1179,7 +1331,7 @@ mod exit_candidate_tests {
             DUST,
         );
 
-        assert_eq!(row.virtual_status_state, "recoverable");
+        assert_eq!(row.virtual_status_state, VTXO_STATUS_RECOVERABLE);
         assert!(!row.can_start_unroll);
         assert!(!row.can_complete);
     }

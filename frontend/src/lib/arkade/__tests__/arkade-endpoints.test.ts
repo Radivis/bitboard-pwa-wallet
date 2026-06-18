@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  getArkadeDelegatorDisplayLabel,
   getArkadeEndpoints,
   isArkadeDelegatorConfigured,
   isArkadeSupportedNetworkMode,
@@ -43,5 +44,10 @@ describe('arkade-endpoints', () => {
   it('reports delegator as disabled when URL is empty', () => {
     expect(isArkadeDelegatorConfigured('mainnet')).toBe(false)
     expect(isArkadeDelegatorConfigured('signet')).toBe(false)
+  })
+
+  it('returns a generic delegator label when URL is not configured', () => {
+    expect(getArkadeDelegatorDisplayLabel('mainnet')).toBe('configured delegator')
+    expect(getArkadeDelegatorDisplayLabel('signet')).toBe('configured delegator')
   })
 })

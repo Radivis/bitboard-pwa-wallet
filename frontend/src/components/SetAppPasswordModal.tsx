@@ -3,8 +3,8 @@ import { Link, useNavigate } from '@tanstack/react-router'
 import { KeyRound } from 'lucide-react'
 import { DialogDescription } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { useSessionStore } from '@/stores/sessionStore'
 import { AppModal } from '@/components/AppModal'
+import { beginWalletSecretsSession } from '@/lib/wallet/wallet-secrets-session'
 import {
   AppPasswordFields,
   isNewAppPasswordValid,
@@ -25,22 +25,27 @@ const SET_APP_PASSWORD_FIELDS_CONFIG = {
 
 interface SetAppPasswordModalProps {
   open: boolean
+  /** Called after the secrets session has been started successfully. */
+  onSessionStarted?: () => void
 }
 
 /**
  * Blocking first-run dialog: set the Bitboard app password before any wallet exists.
- * On success, stores the password in the session store (same secret used to encrypt all wallets).
+ * On success, starts the encryption-worker secrets session (same secret used to encrypt all wallets).
  */
-export function SetAppPasswordModal({ open }: SetAppPasswordModalProps) {
+export function SetAppPasswordModal({ open, onSessionStarted }: SetAppPasswordModalProps) {
   const navigate = useNavigate()
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
-  const setSessionPassword = useSessionStore((sessionState) => sessionState.setPassword)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState<string | null>(null)
 
   useEffect(() => {
     if (open) {
       setPassword('')
       setConfirmPassword('')
+      setIsSubmitting(false)
+      setSubmitError(null)
     }
   }, [open])
 
@@ -48,8 +53,23 @@ export function SetAppPasswordModal({ open }: SetAppPasswordModalProps) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!passwordsValid) return
-    setSessionPassword(password)
+    if (!passwordsValid || isSubmitting) return
+    void (async () => {
+      setIsSubmitting(true)
+      setSubmitError(null)
+      try {
+        await beginWalletSecretsSession(password)
+        onSessionStarted?.()
+      } catch (err) {
+        const message =
+          err instanceof Error && err.message
+            ? err.message
+            : 'Failed to set app password. Please try again.'
+        setSubmitError(message)
+      } finally {
+        setIsSubmitting(false)
+      }
+    })()
   }
 
   const handleBackToSetup = () => {
@@ -93,7 +113,11 @@ export function SetAppPasswordModal({ open }: SetAppPasswordModalProps) {
             onConfirmPasswordChange={setConfirmPassword}
           />
 
-          <Button type="submit" className="w-full" disabled={!passwordsValid}>
+          {submitError != null && (
+            <p className="text-sm text-destructive">{submitError}</p>
+          )}
+
+          <Button type="submit" className="w-full" disabled={!passwordsValid || isSubmitting}>
             Continue
           </Button>
 

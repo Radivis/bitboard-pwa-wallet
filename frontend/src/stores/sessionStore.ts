@@ -1,23 +1,9 @@
-import { create } from 'zustand'
-
 const AUTO_LOCK_TIMEOUT_MS = 15 * 60 * 1000
 
-interface SessionState {
-  password: string | null
-  setPassword: (password: string | null) => void
-  clear: () => void
+/** Legacy compatibility shim; intentionally does nothing. */
+export function clearLegacySessionState(): void {
+  // Worker/session cleanup happens in cryptoStore lock/teardown paths.
 }
-
-export const useSessionStore = create<SessionState>((set) => ({
-  password: null,
-  setPassword: (password) => set({ password }),
-  /**
-   * Clears the session password. Only the reference is set to null; the previous
-   * string may remain in memory until GC (JavaScript strings are immutable, so
-   * we cannot overwrite the backing memory). Call after lock to reduce exposure.
-   */
-  clear: () => set({ password: null }),
-}))
 
 let autoLockTimer: ReturnType<typeof setTimeout> | null = null
 let lastAutoLockHandler: (() => void | Promise<void>) | null = null
@@ -38,7 +24,7 @@ export function resetAutoLockTimer(onLock: () => void | Promise<void>) {
       } catch (err) {
         console.error('[session] auto-lock handler failed', err)
       } finally {
-        useSessionStore.getState().clear()
+        clearLegacySessionState()
       }
     })()
   }, AUTO_LOCK_TIMEOUT_MS)

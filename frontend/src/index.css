@@ -21,6 +21,12 @@
   -moz-osx-font-smoothing: grayscale;
   --radius: 0.625rem;
 
+  /* WalletLayout sticky header (`h-14`). Toasts sit below it so they do not cover the title bar. */
+  --app-sticky-header-height: 3.5rem;
+  --toast-top-offset: calc(var(--app-sticky-header-height) + 0.5rem);
+  --toast-close-button-size: 2.5rem; /* 2× Sonner default (20px) */
+  --toast-close-icon-size: 1.5rem; /* 2× Sonner default (12px) */
+
   /* Light theme lightness values */
   --background-l: 90%;
   --header-l: 86%;
@@ -231,6 +237,20 @@ body {
   ::placeholder {
     opacity: 0.5;
   }
+}
+
+/* Sonner toast close control — 2× default size, top-right corner. */
+[data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-close-button] {
+  left: auto !important;
+  right: 0 !important;
+  transform: translate(35%, -35%) !important;
+  height: var(--toast-close-button-size);
+  width: var(--toast-close-button-size);
+}
+
+[data-sonner-toast][data-styled='true'] [data-close-button] svg {
+  height: var(--toast-close-icon-size);
+  width: var(--toast-close-icon-size);
 }
 
 /*

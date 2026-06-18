@@ -121,7 +121,6 @@ describe('runFullScanDashboardWalletSync repair path', () => {
   it('reloads wallet with empty chain once when full scan hits header hash mismatch', async () => {
     await runFullScanDashboardWalletSync({
       networkMode: 'mainnet',
-      password: 'pw',
       activeWalletId: 1,
     })
 
@@ -144,7 +143,6 @@ describe('runFullScanDashboardWalletSync repair path', () => {
     })
     await runFullScanDashboardWalletSync({
       networkMode: 'mainnet',
-      password: 'pw',
       activeWalletId: 1,
     })
 
@@ -152,16 +150,15 @@ describe('runFullScanDashboardWalletSync repair path', () => {
     expect(hoisted.loadWalletMock).not.toHaveBeenCalled()
   })
 
-  it('throws when repair is needed but password is missing', async () => {
+  it('repairs without requiring password param', async () => {
     await expect(
       runFullScanDashboardWalletSync({
         networkMode: 'mainnet',
-        password: null,
         activeWalletId: 1,
       }),
-    ).rejects.toThrow()
+    ).resolves.toBeUndefined()
 
-    expect(hoisted.loadWalletMock).not.toHaveBeenCalled()
+    expect(hoisted.loadWalletMock).toHaveBeenCalledTimes(1)
   })
 })
 
@@ -172,7 +169,6 @@ describe('reloadActiveLoadedDescriptorWalletWithEmptyChain', () => {
 
   it('calls loadWallet with useEmptyChain true', async () => {
     await reloadActiveLoadedDescriptorWalletWithEmptyChain({
-      password: 'pw',
       walletId: 2,
       networkMode: 'mainnet',
       addressType: 'wpkh',

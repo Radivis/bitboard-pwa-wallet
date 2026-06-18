@@ -48,13 +48,6 @@ vi.mock('@/stores/walletStore', () => ({
 }))
 
 vi.mock('@/stores/sessionStore', () => ({
-  useSessionStore: Object.assign(
-    (selector: (s: Record<string, unknown>) => unknown) =>
-      selector({ password: 'testpass', clear: mockClearSession }),
-    {
-      getState: () => ({ password: 'testpass', clear: mockClearSession }),
-    },
-  ),
   clearAutoLockTimer: vi.fn(),
 }))
 
@@ -146,7 +139,10 @@ describe('ManagementPage', () => {
 
     await user.click(screen.getByRole('button', { name: 'Show Seed Phrase' }))
     await waitFor(() => {
-      expect(screen.getByText('Confirm Bitboard app password')).toBeInTheDocument()
+      expect(
+        screen.getByRole('heading', { name: 'Enter Bitboard app password' }),
+      ).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Confirm' })).toBeInTheDocument()
     })
   })
 

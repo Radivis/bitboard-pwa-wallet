@@ -4,12 +4,14 @@ import { toast } from 'sonner'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { Button } from '@/components/ui/button'
 import { useCommittedExternalDescriptor } from '@/hooks/useCommittedExternalDescriptor'
-import { useSessionStore } from '@/stores/sessionStore'
+import { useWalletStore } from '@/stores/walletStore'
 import { CommittedDescriptorInfomodeContent } from '@/components/settings/CommittedDescriptorInfomodeContent'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
+import { walletIsUnlockedOrSyncing } from '@/lib/wallet/wallet-unlocked-status'
 
 export function NetworkCardCommittedDescriptor() {
-  const sessionPassword = useSessionStore((sessionState) => sessionState.password)
+  const walletStatus = useWalletStore((walletState) => walletState.walletStatus)
+  const walletUnlocked = walletIsUnlockedOrSyncing(walletStatus)
   const query = useCommittedExternalDescriptor()
   const [descriptorVisible, setDescriptorVisible] = useState(false)
 
@@ -35,7 +37,7 @@ export function NetworkCardCommittedDescriptor() {
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           <p className="text-sm font-medium leading-none text-foreground">Receiving descriptor</p>
-          {sessionPassword && query.data ? (
+          {walletUnlocked && query.data ? (
             <Button
               type="button"
               variant="ghost"
@@ -55,7 +57,7 @@ export function NetworkCardCommittedDescriptor() {
             </Button>
           ) : null}
         </div>
-        {sessionPassword && query.data && descriptorVisible ? (
+        {walletUnlocked && query.data && descriptorVisible ? (
           <Button
             type="button"
             variant="ghost"
@@ -70,7 +72,7 @@ export function NetworkCardCommittedDescriptor() {
         ) : null}
       </div>
 
-      {!sessionPassword ? (
+      {!walletUnlocked ? (
           <p className="text-sm text-muted-foreground">
             Unlock your wallet to view the receiving descriptor.
           </p>

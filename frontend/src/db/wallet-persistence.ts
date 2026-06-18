@@ -1,6 +1,11 @@
 import { sql, type Kysely } from 'kysely'
 import type { Database } from './schema'
-import { encryptData, decryptData } from './encryption'
+import {
+  decryptData,
+  decryptDataWithPassword,
+  encryptData,
+  encryptDataWithPassword,
+} from './encryption'
 import { trackWalletSecretsWrite } from '@/db/wallet-secrets-write-tracker'
 import {
   assembleWalletSecrets,
@@ -37,7 +42,6 @@ export const WALLET_SECRETS_CAS_MAX_RETRIES = 8
 export type UpdateWalletSecretsPayloadWithRetryInput = {
   walletDb: Kysely<Database>
   walletId: number
-  password: string
   transform: (
     payload: WalletSecretsPayload,
   ) => WalletSecretsPayload | Promise<WalletSecretsPayload>
@@ -262,17 +266,16 @@ function walletSecretsConflictError(maxRetries: number): Error {
 async function updateWalletSecretsPayloadWithRetryImpl({
   walletDb,
   walletId,
-  password,
   transform,
   maxRetries = WALLET_SECRETS_CAS_MAX_RETRIES,
 }: UpdateWalletSecretsPayloadWithRetryInput): Promise<void> {
 
   for (let attempt = 1; attempt <= maxRetries; attempt += 1) {
     const current = await getWalletSecretsEncryptedWithRevision(walletDb, walletId)
-    const payloadPlaintext = await decryptData(password, current.payload)
+    const payloadPlaintext = await decryptData(current.payload)
     const payload = parseWalletPayloadJson(payloadPlaintext)
     const nextPayload = await transform(payload)
-    const encryptedPayload = await encryptData(password, JSON.stringify(nextPayload))
+    const encryptedPayload = await encryptData(JSON.stringify(nextPayload))
     const updated = await putSplitWalletSecretsEncryptedIfRevisionMatches(
       walletDb,
       walletId,
@@ -365,11 +368,10 @@ export async function persistNewWalletWithSecrets(params: {
  */
 export async function saveWalletSecrets(params: {
   walletDb: Kysely<Database>
-  password: string
   walletId: number
   secrets: WalletSecrets
 }): Promise<void> {
-  const { walletDb, password, walletId, secrets } = params
+  const { walletDb, walletId, secrets } = params
   await assertWalletExists(walletDb, walletId)
 
   const payload: WalletSecretsPayload = {
@@ -378,8 +380,8 @@ export async function saveWalletSecrets(params: {
     arkadeOperatorConnections: secrets.arkadeOperatorConnections ?? [],
     activeArkadeConnectionIdByNetwork: secrets.activeArkadeConnectionIdByNetwork ?? {},
   }
-  const payloadEnc = await encryptData(password, JSON.stringify(payload))
-  const mnemonicEnc = await encryptData(password, secrets.mnemonic)
+  const payloadEnc = await encryptData(JSON.stringify(payload))
+  const mnemonicEnc = await encryptData(secrets.mnemonic)
 
   await putSplitWalletSecretsEncrypted(walletDb, walletId, {
     payload: {
@@ -402,7 +404,6 @@ export async function saveWalletSecrets(params: {
  */
 export async function loadWalletSecretsPayload(
   walletDb: Kysely<Database>,
-  password: string,
   walletId: number,
 ): Promise<WalletSecretsPayload> {
   const walletSecretsRow = await walletDb
@@ -426,7 +427,7 @@ export async function loadWalletSecretsPayload(
   }
   rowToMnemonicBlob(walletSecretsRow)
 
-  const plaintext = await decryptData(password, {
+  const plaintext = await decryptData({
     ciphertext: walletSecretsRow.encrypted_data,
     iv: walletSecretsRow.iv,
     salt: walletSecretsRow.salt,
@@ -439,6 +440,53 @@ export async function loadWalletSecretsPayload(
  * Loads and decrypts wallet secrets from the `wallet_secrets` table.
  */
 export async function loadWalletSecrets(
+  walletDb: Kysely<Database>,
+  walletId: number,
+): Promise<WalletSecrets> {
+  const walletSecretsRow = await walletDb
+    .selectFrom('wallet_secrets')
+    .select([
+      'encrypted_data',
+      'iv',
+      'salt',
+      'kdf_phc',
+      'mnemonic_encrypted_data',
+      'mnemonic_iv',
+      'mnemonic_salt',
+      'mnemonic_kdf_phc',
+    ])
+    .where('wallet_id', '=', walletId)
+    .executeTakeFirst()
+
+  if (!walletSecretsRow) {
+    throw new Error(`Wallet secrets for wallet ${walletId} not found`)
+  }
+  const mnemonicBlob = rowToMnemonicBlob({
+    wallet_id: walletId,
+    mnemonic_encrypted_data: walletSecretsRow.mnemonic_encrypted_data,
+    mnemonic_iv: walletSecretsRow.mnemonic_iv,
+    mnemonic_salt: walletSecretsRow.mnemonic_salt,
+    mnemonic_kdf_phc: walletSecretsRow.mnemonic_kdf_phc,
+  })
+
+  const payloadPlaintext = await decryptData({
+    ciphertext: walletSecretsRow.encrypted_data,
+    iv: walletSecretsRow.iv,
+    salt: walletSecretsRow.salt,
+    kdfPhc: walletSecretsRow.kdf_phc,
+  })
+  const mnemonicPlaintext = await decryptData({
+    ciphertext: mnemonicBlob.ciphertext,
+    iv: mnemonicBlob.iv,
+    salt: mnemonicBlob.salt,
+    kdfPhc: mnemonicBlob.kdfPhc,
+  })
+  const payload = parseWalletPayloadJson(payloadPlaintext)
+  return assembleWalletSecrets(mnemonicPlaintext, payload)
+}
+
+/** One-shot decrypt for change-password when no active wallet secrets session. */
+export async function loadWalletSecretsWithPassword(
   walletDb: Kysely<Database>,
   password: string,
   walletId: number,
@@ -469,13 +517,13 @@ export async function loadWalletSecrets(
     mnemonic_kdf_phc: walletSecretsRow.mnemonic_kdf_phc,
   })
 
-  const payloadPlaintext = await decryptData(password, {
+  const payloadPlaintext = await decryptDataWithPassword(password, {
     ciphertext: walletSecretsRow.encrypted_data,
     iv: walletSecretsRow.iv,
     salt: walletSecretsRow.salt,
     kdfPhc: walletSecretsRow.kdf_phc,
   })
-  const mnemonicPlaintext = await decryptData(password, {
+  const mnemonicPlaintext = await decryptDataWithPassword(password, {
     ciphertext: mnemonicBlob.ciphertext,
     iv: mnemonicBlob.iv,
     salt: mnemonicBlob.salt,
@@ -531,7 +579,7 @@ export async function reencryptAllWalletSecretsWithNewPassword(params: {
 
   const decrypted: { walletId: number; secrets: WalletSecrets }[] = []
   for (const walletId of walletIds) {
-    const secrets = await loadWalletSecrets(walletDb, oldPassword, walletId)
+    const secrets = await loadWalletSecretsWithPassword(walletDb, oldPassword, walletId)
     decrypted.push({ walletId, secrets })
   }
 
@@ -547,8 +595,8 @@ export async function reencryptAllWalletSecretsWithNewPassword(params: {
       arkadeOperatorConnections: secrets.arkadeOperatorConnections ?? [],
       activeArkadeConnectionIdByNetwork: secrets.activeArkadeConnectionIdByNetwork ?? {},
     }
-    const payloadEnc = await encryptData(newPassword, JSON.stringify(payload))
-    const mnemonicEnc = await encryptData(newPassword, secrets.mnemonic)
+    const payloadEnc = await encryptDataWithPassword(newPassword, JSON.stringify(payload))
+    const mnemonicEnc = await encryptDataWithPassword(newPassword, secrets.mnemonic)
     blobs.push({
       walletId,
       payload: {

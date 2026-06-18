@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { toast } from 'sonner'
 import { useWalletStore } from '@/stores/walletStore'
-import { useSessionStore } from '@/stores/sessionStore'
 import { useCryptoStore } from '@/stores/cryptoStore'
 import {
   resolveDescriptorWallet,
@@ -37,12 +36,6 @@ vi.mock('@/stores/walletStore', () => ({
     segwit: 'SegWit',
   },
   getDescriptorWalletLabel: () => 'Label',
-}))
-
-vi.mock('@/stores/sessionStore', () => ({
-  useSessionStore: {
-    getState: vi.fn(),
-  },
 }))
 
 vi.mock('@/stores/cryptoStore', () => ({
@@ -112,10 +105,6 @@ describe('switchDescriptorWallet', () => {
       setTransactions: mockSetTransactions,
       setLastSyncTime: mockSetLastSyncTime,
     } as ReturnType<typeof useWalletStore.getState>)
-
-    vi.mocked(useSessionStore.getState).mockReturnValue({
-      password: 'pw',
-    } as ReturnType<typeof useSessionStore.getState>)
 
     vi.mocked(useCryptoStore.getState).mockReturnValue({
       exportChangeset: mockExportChangeset,
@@ -187,7 +176,6 @@ describe('switchDescriptorWallet', () => {
     expect(mockSyncLoadedDescriptorWalletWithEsplora).toHaveBeenCalledWith({
       networkMode: 'testnet',
       activeWalletId: 1,
-      sessionPassword: 'pw',
       targetNetwork: 'testnet',
       targetAddressType: 'taproot',
       targetAccountId: 0,
