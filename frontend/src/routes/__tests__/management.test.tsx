@@ -139,7 +139,9 @@ describe('ManagementPage', () => {
 
     await user.click(screen.getByRole('button', { name: 'Show Seed Phrase' }))
     await waitFor(() => {
-      expect(screen.getByText('Enter Bitboard app password')).toBeInTheDocument()
+      expect(
+        screen.getByRole('heading', { name: 'Enter Bitboard app password' }),
+      ).toBeInTheDocument()
       expect(screen.getByRole('button', { name: 'Confirm' })).toBeInTheDocument()
     })
   })

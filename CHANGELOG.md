@@ -26,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Made modals scrollable; this fixes content from being cut off on small screens
 - The receive page should no longer show an error that there is no Lightning wallet for the current network, if there actually is one
+- App now sends x-build-version header to satisfy arkd compatibility signaling when communicating to Arkade sever
 
 ### Security
 - Hardened security for the Ark worker by routing secrets reliably through a secrets channel (which was already implemented for the onchain crypto worker), so that they don't leak to the main thread of the app
