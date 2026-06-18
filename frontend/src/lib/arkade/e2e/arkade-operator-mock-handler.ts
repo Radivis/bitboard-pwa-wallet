@@ -26,6 +26,8 @@ const CORS_ALLOW_HEADERS = [
   'Content-Type',
   'Accept',
   'X-Build-Version',
+  'X-SDK-Version',
+  'X-Digest',
   E2E_ARKADE_MOCK_PARTITION_HEADER,
 ].join(', ')
 

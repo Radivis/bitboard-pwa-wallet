@@ -47,7 +47,10 @@ const MAX_POST_BODY_BYTES = 2_000_000
 function setCorsHeaders(res: VercelResponse): void {
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, POST, OPTIONS')
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Accept, X-Build-Version')
+  res.setHeader(
+    'Access-Control-Allow-Headers',
+    'Content-Type, Accept, X-Build-Version, X-SDK-Version, X-Digest',
+  )
   res.setHeader('Access-Control-Max-Age', '86400')
 }
 
@@ -124,9 +127,11 @@ export default async function handler(
   if (contentType && typeof contentType === 'string') {
     forwardHeaders['content-type'] = contentType
   }
-  const buildVersion = req.headers['x-build-version']
-  if (buildVersion && typeof buildVersion === 'string') {
-    forwardHeaders['x-build-version'] = buildVersion
+  for (const headerName of ['x-build-version', 'x-sdk-version', 'x-digest'] as const) {
+    const value = req.headers[headerName]
+    if (value && typeof value === 'string') {
+      forwardHeaders[headerName] = value
+    }
   }
 
   const init: RequestInit = {
