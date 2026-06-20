@@ -39,6 +39,7 @@ describe('invalidateWalletRelatedQueries', () => {
       networkMode: 'testnet',
       addressType: 'taproot',
       accountId: 0,
+      lockUnlockInProgress: false,
     })
     const lightningHistoryKey = [...LIGHTNING_DASHBOARD_QUERY_KEY, 'history', 'fp1'] as const
     const esploraFeePresetsKey = [...ESPLORA_FEE_PRESETS_QUERY_KEY, 'testnet'] as const

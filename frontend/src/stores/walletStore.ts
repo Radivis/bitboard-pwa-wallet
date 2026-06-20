@@ -69,15 +69,6 @@ export function selectCommittedAccountId(state: {
 
 interface TransientWalletState {
   walletStatus: WalletStatus
-  /**
-   * True while {@link WalletUnlock} runs `loadDescriptorWalletAndSync`. Must suppress the
-   * active-wallet bootstrap query: setting the session password enables `needsBootstrap` while
-   * status is still locked, which would otherwise start a second parallel load + Esplora sync
-   * (duplicate toasts / duplicate sync work).
-   */
-  manualWalletUnlockInFlight: boolean
-  /** True while TanStack active-wallet bootstrap `queryFn` runs; keeps the query enabled after status flips to unlocked mid-load. */
-  activeWalletBootstrapInFlight: boolean
   balance: BalanceInfo | null
   currentAddress: string | null
   lastSyncTime: Date | null
@@ -115,8 +106,6 @@ interface WalletActions {
   }) => void
   clearArkadeDashboardState: () => void
   setLastOperatorSyncTime: (lastOperatorSyncTime: Date | null) => void
-  setActiveWalletBootstrapInFlight: (inFlight: boolean) => void
-  setManualWalletUnlockInFlight: (inFlight: boolean) => void
   setImportInitialSyncErrorMessage: (message: string | null) => void
   lockWallet: () => void
   resetWallet: () => void
@@ -126,8 +115,6 @@ type WalletState = PersistedWalletState & TransientWalletState & WalletActions
 
 const TRANSIENT_DEFAULTS: TransientWalletState = {
   walletStatus: 'none',
-  manualWalletUnlockInFlight: false,
-  activeWalletBootstrapInFlight: false,
   balance: null,
   currentAddress: null,
   lastSyncTime: null,
@@ -184,10 +171,6 @@ export const useWalletStore = create<WalletState>()(
           lastOperatorSyncTime: null,
         }),
       setLastOperatorSyncTime: (lastOperatorSyncTime) => set({ lastOperatorSyncTime }),
-      setActiveWalletBootstrapInFlight: (inFlight) =>
-        set({ activeWalletBootstrapInFlight: inFlight }),
-      setManualWalletUnlockInFlight: (inFlight) =>
-        set({ manualWalletUnlockInFlight: inFlight }),
       setImportInitialSyncErrorMessage: (message) =>
         set({ importInitialSyncErrorMessage: message }),
 

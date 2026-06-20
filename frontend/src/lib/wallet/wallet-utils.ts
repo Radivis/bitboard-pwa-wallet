@@ -27,6 +27,7 @@ import { invalidateOnchainDashboardQueries } from '@/lib/wallet/onchain-dashboar
 import { reportArkadeSessionOpenError } from '@/lib/arkade/arkade-session-open-error-toast'
 import { isArkadeActiveForNetworkMode } from '@/lib/arkade/arkade-utils'
 import { openArkadeSessionForWallet } from '@/lib/arkade/arkade-session-service'
+import { orchestrateLock } from '@/lib/wallet/lifecycle/lock-lifecycle-orchestrator'
 import { waitForCryptoWorkerHealthy } from '@/workers/crypto-factory'
 
 const CUSTOM_ESPLORA_URL_KEY_PREFIX = 'custom_esplora_url_'
@@ -564,9 +565,7 @@ export async function loadDescriptorWalletWithoutSync(params: {
   }
 
   const { startAutoLockTimer } = await import('@/stores/sessionStore')
-  startAutoLockTimer(() =>
-    useCryptoStore.getState().lockAndPurgeSensitiveRuntimeState(),
-  )
+  startAutoLockTimer(() => void orchestrateLock())
 }
 
 /**
@@ -645,9 +644,7 @@ export async function loadDescriptorWalletAndSync(params: {
   }
 
   const { startAutoLockTimer } = await import('@/stores/sessionStore')
-  startAutoLockTimer(() =>
-    useCryptoStore.getState().lockAndPurgeSensitiveRuntimeState(),
-  )
+  startAutoLockTimer(() => void orchestrateLock())
 
   const runEsploraSyncAndPersistChangeset = async () => {
     try {

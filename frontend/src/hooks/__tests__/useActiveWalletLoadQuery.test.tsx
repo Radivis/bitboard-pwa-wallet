@@ -8,28 +8,30 @@ import {
   AddressType,
 } from '@/stores/walletStore'
 import { useWalletCryptoSessionPathGateStore } from '@/stores/walletCryptoSessionPathGateStore'
+import {
+  resetLockLifecycleStateForTests,
+  syncLockLifecycleWithActiveWallet,
+} from '@/lib/wallet/lifecycle/lock-lifecycle-orchestrator'
+
 const walletSecretsSessionState = { active: false }
+const orchestrateBootstrapUnlock = vi.fn()
+const canStartBootstrapUnlock = vi.fn()
+
 vi.mock('@/lib/wallet/wallet-secrets-session', () => ({
   isWalletSecretsSessionActive: async () => walletSecretsSessionState.active,
 }))
 
-const loadDescriptorWalletAndSync = vi.fn()
-const loadDescriptorWalletWithoutSync = vi.fn()
-
-vi.mock('@/lib/wallet/wallet-utils', () => ({
-  loadDescriptorWalletAndSync: (...args: unknown[]) =>
-    loadDescriptorWalletAndSync(...args),
-  loadDescriptorWalletWithoutSync: (...args: unknown[]) =>
-    loadDescriptorWalletWithoutSync(...args),
-}))
-
-vi.mock('@/workers/crypto-factory', () => ({
-  waitForCryptoWorkerHealthy: vi.fn().mockResolvedValue(undefined),
-}))
-
-vi.mock('@/lib/wallet/wallet-sync-error-toast', () => ({
-  reportWalletSyncError: vi.fn(),
-}))
+vi.mock('@/lib/wallet/lifecycle/lock-lifecycle-orchestrator', async (importOriginal) => {
+  const actual = await importOriginal<
+    typeof import('@/lib/wallet/lifecycle/lock-lifecycle-orchestrator')
+  >()
+  return {
+    ...actual,
+    orchestrateBootstrapUnlock: (...args: unknown[]) => orchestrateBootstrapUnlock(...args),
+    canStartBootstrapUnlock: () => canStartBootstrapUnlock(),
+    isLockUnlockInProgress: actual.isLockUnlockInProgress,
+  }
+})
 
 function createWrapper() {
   const queryClient = new QueryClient({
@@ -48,15 +50,16 @@ function createWrapper() {
 describe('useActiveWalletLoadQuery', () => {
   beforeEach(async () => {
     vi.clearAllMocks()
+    resetLockLifecycleStateForTests()
     walletSecretsSessionState.active = false
+    orchestrateBootstrapUnlock.mockResolvedValue(undefined)
+    canStartBootstrapUnlock.mockReturnValue(true)
     useWalletStore.setState({
       networkMode: 'testnet',
       addressType: AddressType.Taproot,
       accountId: 0,
       activeWalletId: null,
       walletStatus: 'none',
-      manualWalletUnlockInFlight: false,
-      activeWalletBootstrapInFlight: false,
       balance: null,
       currentAddress: null,
       lastSyncTime: null,
@@ -70,8 +73,9 @@ describe('useActiveWalletLoadQuery', () => {
     useWalletStore.setState({
       activeWalletId: 1,
       walletStatus: 'locked',
-      manualWalletUnlockInFlight: true,
     })
+    syncLockLifecycleWithActiveWallet(1)
+    canStartBootstrapUnlock.mockReturnValue(false)
     walletSecretsSessionState.active = true
 
     renderHook(() => useActiveWalletLoadQuery(), {
@@ -79,25 +83,23 @@ describe('useActiveWalletLoadQuery', () => {
     })
 
     await new Promise((r) => setTimeout(r, 80))
-    expect(loadDescriptorWalletAndSync).not.toHaveBeenCalled()
-    expect(loadDescriptorWalletWithoutSync).not.toHaveBeenCalled()
+    expect(orchestrateBootstrapUnlock).not.toHaveBeenCalled()
   })
 
   it('runs bootstrap when session exists, wallet locked, and manual unlock is not in flight', async () => {
     useWalletStore.setState({
       activeWalletId: 1,
       walletStatus: 'locked',
-      manualWalletUnlockInFlight: false,
     })
+    syncLockLifecycleWithActiveWallet(1)
     walletSecretsSessionState.active = true
-    loadDescriptorWalletAndSync.mockResolvedValue(undefined)
 
     renderHook(() => useActiveWalletLoadQuery(), {
       wrapper: createWrapper(),
     })
 
     await waitFor(() => {
-      expect(loadDescriptorWalletAndSync).toHaveBeenCalledTimes(1)
+      expect(orchestrateBootstrapUnlock).toHaveBeenCalledTimes(1)
     })
   })
 })

@@ -15,6 +15,7 @@ import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { EnterAppPasswordModal } from '@/components/EnterAppPasswordModal'
 import { SetAppPasswordModal } from '@/components/SetAppPasswordModal'
 import { WalletUnlock } from '@/components/WalletUnlock'
+import { orchestrateLock } from '@/lib/wallet/lifecycle/lock-lifecycle-orchestrator'
 import { useCryptoStore } from '@/stores/cryptoStore'
 import { useWalletStore } from '@/stores/walletStore'
 import { startAutoLockTimer } from '@/stores/sessionStore'
@@ -144,9 +145,7 @@ export function CreateWalletPage() {
         accountId,
       })
       setWalletStatus('unlocked')
-      startAutoLockTimer(() =>
-        useCryptoStore.getState().lockAndPurgeSensitiveRuntimeState(),
-      )
+      startAutoLockTimer(() => void orchestrateLock())
     },
     [
       accountId,

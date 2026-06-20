@@ -20,6 +20,10 @@ import { useSecureStorageAvailabilityStore } from '@/stores/secureStorageAvailab
 import { useAutoLockActivityBumps } from '@/hooks/useAutoLockActivityBumps'
 import { useLabCrossTabCacheSync } from '@/hooks/useLabCrossTabCacheSync'
 import { useWalletCrossTabCacheSync } from '@/hooks/useWalletCrossTabCacheSync'
+import {
+  syncLockLifecycleFromWalletStore,
+  syncLockLifecycleWithActiveWallet,
+} from '@/lib/wallet/lifecycle/lock-lifecycle-orchestrator'
 import { walletIsUnlockedOrSyncing } from '@/lib/wallet/wallet-unlocked-status'
 
 interface AppInitializerProps {
@@ -108,6 +112,11 @@ export function AppInitializer({ children }: AppInitializerProps) {
     navigate,
     location.pathname,
   ])
+
+  useEffect(() => {
+    syncLockLifecycleWithActiveWallet(activeWalletId)
+    syncLockLifecycleFromWalletStore()
+  }, [activeWalletId, walletStatus])
 
   /**
    * After lock, session is cleared. Restore near-zero session only on routes that need

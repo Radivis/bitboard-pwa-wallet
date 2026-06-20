@@ -274,6 +274,7 @@ export const useCryptoStore = create<CryptoState>((set, get) => {
       withErrorHandling((worker) => worker.generateNodeId(seed)),
 
     lockAndPurgeSensitiveRuntimeState: async () => {
+      // Prefer `orchestrateLock()` from lock-lifecycle-orchestrator for user-facing lock paths.
       clearAutoLockTimer();
       await awaitBackgroundArkadeOperatorSync();
       const arkadeWorker = getArkadeWorkerIfExists();

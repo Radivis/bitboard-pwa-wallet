@@ -91,10 +91,16 @@ vi.mock('@/db', () => ({
 }))
 
 import { ManagementPage } from '@/pages/wallet/ManagementPage'
+import {
+  resetLockLifecycleStateForTests,
+  syncLockLifecycleFromWalletStore,
+  syncLockLifecycleWithActiveWallet,
+} from '@/lib/wallet/lifecycle/lock-lifecycle-orchestrator'
 
 describe('ManagementPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    resetLockLifecycleStateForTests()
     managementDbMocks.noMnemonicBackupFlag = false
     mockDeleteWalletMutate.mockResolvedValue(undefined)
     sumMainnetOnChainSatsMock.mockResolvedValue(0)
@@ -102,6 +108,8 @@ describe('ManagementPage', () => {
       activeWalletId: 1,
       walletStatus: 'unlocked',
     }
+    syncLockLifecycleWithActiveWallet(1)
+    syncLockLifecycleFromWalletStore()
   })
 
   it('renders wallet management when a wallet is active', () => {
@@ -112,6 +120,8 @@ describe('ManagementPage', () => {
 
   it('shows guidance when no wallet is active', () => {
     walletStoreState.activeWalletId = null
+    walletStoreState.walletStatus = 'none'
+    syncLockLifecycleWithActiveWallet(null)
     renderWithProviders(<ManagementPage />)
     expect(
       screen.getByText(/Create or import a wallet to manage lock/i),

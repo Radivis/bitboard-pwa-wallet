@@ -6,6 +6,7 @@ export type ActiveWalletLoadQueryKeyInput = {
   networkMode: NetworkMode
   addressType: AddressType
   accountId: number
+  lockUnlockInProgress: boolean
 }
 
 /** Segment after `wallet_db` for active descriptor wallet bootstrap queries. */
@@ -28,5 +29,6 @@ export function activeWalletLoadQueryKey(input: ActiveWalletLoadQueryKeyInput) {
     input.networkMode,
     input.addressType,
     input.accountId,
+    input.lockUnlockInProgress,
   ] as const
 }
