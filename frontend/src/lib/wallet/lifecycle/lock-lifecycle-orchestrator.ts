@@ -17,6 +17,18 @@ import {
   syncArkadeSyncLifecycleWithLockPhase,
 } from '@/lib/wallet/lifecycle/arkade-sync-lifecycle-orchestrator'
 import { syncArkadeLoadLifecycleWithLockPhase } from '@/lib/wallet/lifecycle/arkade-load-lifecycle-orchestrator'
+import { orchestrateLightningLoad } from '@/lib/wallet/lifecycle/lightning-load-lifecycle-orchestrator'
+import {
+  awaitLightningSaveQuiescence,
+  isLightningSaveBlockingLock,
+  LightningSaveBlockingLockError,
+  syncLightningSaveLifecycleWithLockPhase,
+} from '@/lib/wallet/lifecycle/lightning-save-lifecycle-orchestrator'
+import {
+  awaitLightningSyncQuiescence,
+  syncLightningSyncLifecycleWithLockPhase,
+} from '@/lib/wallet/lifecycle/lightning-sync-lifecycle-orchestrator'
+import { syncLightningLoadLifecycleWithLockPhase } from '@/lib/wallet/lifecycle/lightning-load-lifecycle-orchestrator'
 import { isArkadeActiveForNetworkMode } from '@/lib/arkade/arkade-utils'
 import { orchestrateOnchainPostUnlockSync } from '@/lib/wallet/lifecycle/onchain-sync-lifecycle-orchestrator'
 import {
@@ -49,8 +61,8 @@ export type { LockLifecyclePhase, LockLifecycleOperation, LockLifecycleSnapshot 
  * LockLifecycle orchestrator — serializes lock, manual unlock, and bootstrap unlock.
  *
  * Unlock delegates on-chain WASM load to OnchainLoadLifecycle and post-unlock Esplora
- * sync to OnchainSyncLifecycle + OnchainSaveLifecycle. Arkade load/sync/save quiescence
- * on lock is LIFE-LOCK-02 (Arkade portion). Lightning deferred to L4.
+ * sync to OnchainSyncLifecycle + OnchainSaveLifecycle. Arkade and Lightning load/sync/save
+ * quiescence on lock is LIFE-LOCK-02.
  */
 
 type UnlockLoadParams = {
@@ -148,6 +160,12 @@ async function runUnlockLoad(params: UnlockLoadParams): Promise<void> {
       )
     })
   }
+  void orchestrateLightningLoad({
+    walletId: params.walletId,
+    networkMode: params.networkMode,
+  }).catch((err) => {
+    console.error('Lightning load failed after unlock', err)
+  })
   if (params.networkMode !== 'lab') {
     void orchestrateOnchainPostUnlockSync({
       walletId: params.walletId,
@@ -281,11 +299,16 @@ export async function orchestrateLock(): Promise<void> {
     if (isArkadeSaveBlockingLock()) {
       throw new ArkadeSaveBlockingLockError()
     }
+    if (isLightningSaveBlockingLock()) {
+      throw new LightningSaveBlockingLockError()
+    }
 
     await awaitOnchainSyncQuiescence()
     await awaitOnchainSaveQuiescence()
     await awaitArkadeSyncQuiescence()
     await awaitArkadeSaveQuiescence()
+    await awaitLightningSyncQuiescence()
+    await awaitLightningSaveQuiescence()
     await awaitInFlightWalletSecretsWrites()
 
     setPhase('locking')
@@ -298,6 +321,9 @@ export async function orchestrateLock(): Promise<void> {
       syncArkadeLoadLifecycleWithLockPhase('locked')
       syncArkadeSyncLifecycleWithLockPhase('locked')
       syncArkadeSaveLifecycleWithLockPhase('locked')
+      syncLightningLoadLifecycleWithLockPhase('locked')
+      syncLightningSyncLifecycleWithLockPhase('locked')
+      syncLightningSaveLifecycleWithLockPhase('locked')
       setSnapshot({ phase: 'locked', operation: 'none' })
     } catch (error) {
       syncOnchainLoadLifecycleWithLockPhase('locked')
@@ -306,6 +332,9 @@ export async function orchestrateLock(): Promise<void> {
       syncArkadeLoadLifecycleWithLockPhase('locked')
       syncArkadeSyncLifecycleWithLockPhase('locked')
       syncArkadeSaveLifecycleWithLockPhase('locked')
+      syncLightningLoadLifecycleWithLockPhase('locked')
+      syncLightningSyncLifecycleWithLockPhase('locked')
+      syncLightningSaveLifecycleWithLockPhase('locked')
       setSnapshot({ phase: 'locked', operation: 'none' })
       throw error
     }

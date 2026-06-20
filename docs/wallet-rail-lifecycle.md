@@ -1,6 +1,6 @@
 # Wallet rail lifecycle architecture
 
-This document specifies the lifecycle architecture for Bitboard’s three wallet rails: **on-chain**, **Lightning (NWC)**, and **Arkade**. **L1–L3** (on-chain and Arkade load/sync/save) are implemented; Lightning (L4) and dashboard lifecycle UI (L5) are specified here for future work.
+This document specifies the lifecycle architecture for Bitboard’s three wallet rails: **on-chain**, **Lightning (NWC)**, and **Arkade**. **L1–L4** (on-chain, Arkade, and Lightning load/sync/save) are implemented; dashboard lifecycle UI hooks (L5) are specified here for future work.
 
 Related docs:
 
@@ -71,7 +71,7 @@ frontend/src/lib/wallet/lifecycle/
   rail-lifecycle-types.ts      # shared phase enums (implemented)
   onchain-*-lifecycle-*.ts     # L1–L2 implemented
   arkade-*-lifecycle-*.ts        # L3 implemented
-  lightning-*-lifecycle-*.ts     # L4
+  lightning-*-lifecycle-*.ts     # L4 implemented
   *-rail-snapshot.ts             # composite phase views (on-chain, arkade)
 
 frontend/src/hooks/
@@ -355,7 +355,7 @@ Lightning is optional — absence of connections is normal `not-configured`, not
 2. `replaceConnectionsForWallet` in `lightningStore`
 3. Restore active connection ids per network from persisted metadata
 
-**Query mapping:** `useHydrateLightningConnections` → orchestrator drives `enabled` when unlocked + `activeWalletId != null`.
+**Query mapping:** `orchestrateLightningLoad` from unlock (replaces `useHydrateLightningConnections` in `AppInitializer`).
 
 **`load-error`:** secrets decrypt/read failure for Lightning slice.
 
@@ -366,8 +366,8 @@ Lightning is optional — absence of connections is normal `not-configured`, not
 **Aggregation rules (v1):**
 
 - `syncing` if **any** connection has sync in flight
-- `sync-error` if **any** connection’s last attempt failed and none are syncing (optional: only aggregate active connection per network — document in implementation if tightened)
-- `not-syncing` when all connections idle
+- `sync-error` if **any** dashboard-matching connection’s last NWC attempt failed and none are syncing (**any failure** — even when other connections succeeded)
+- `not-syncing` when all connections idle with no failures
 
 **`sync-error`:** serve merged history from store + last persisted snapshots; show stale indicator per existing dashboard patterns.
 
@@ -384,7 +384,7 @@ Lightning is optional — absence of connections is normal `not-configured`, not
 
 | Current | Target owner |
 |---------|----------------|
-| `useHydrateLightningConnections` | LightningLoadLifecycle |
+| `useHydrateLightningConnections` (retired from AppInitializer) | LightningLoadLifecycle via `orchestrateLightningLoad` on unlock |
 | `fetchLightningPaymentsForActiveWallet` | LightningSyncLifecycle |
 | `addConnection` → `saveLightningConnectionsForWallet` | LightningSaveLifecycle |
 
@@ -508,7 +508,7 @@ Future: `data-rail-onchain-load="loaded"` for on-chain dashboard assertions (LIF
 | **L1** | Types + on-chain LoadLifecycle; peel WASM load from `loadDescriptorWalletAndSync`; LockLifecycle delegates load | **Done** |
 | **L2** | On-chain Sync + Save lifecycles; retire bundled post-unlock Esplora in wallet-utils | **Done** |
 | **L3** | Arkade Load/Sync/Save; simplify `arkade-session-service`; E2E hooks for load readiness | **Done** |
-| **L4** | Lightning Load/Sync/Save (aggregated) | Planned |
+| **L4** | Lightning Load/Sync/Save (aggregated) | **Done** |
 | **L5** | Replace `walletStatus: 'syncing'` with rail aggregate; per-rail dashboard sync buttons; **React lifecycle subscription hooks** (`useSyncExternalStore`); refactor query `enabled` gates | Planned |
 
 Each phase should follow TDD per `.cursor/rules/testing-strategy.mdc` and add rows to `doc/features/wallet-lifecycle.yaml`.
@@ -520,11 +520,12 @@ Each phase should follow TDD per `.cursor/rules/testing-strategy.mdc` and add ro
 ### Resolved
 
 1. **Lab load/save orchestration:** under **Onchain\*** namespacing; no separate `LabLoadLifecycle` / `LabSaveLifecycle` modules.
-2. **Save-error on lock:** **hard block** on `save-error` for on-chain and Arkade (L2/L3); Lightning deferred to L4.
+2. **Save-error on lock:** **hard block** on `save-error` for on-chain, Arkade (L2/L3), and Lightning (L4).
 3. **Cross-tab:** full rail snapshot via `useOnchainRailLifecycleCrossTabSync`; apply only when local tab has same `walletId` + descriptor triple loaded (`descriptorScope` gate).
 4. **`walletStatus: 'syncing'`:** temporary mirror of on-chain sync phase only (revert to `unlocked` when sync completes even if save still running); removed in L5.
 5. **React lifecycle hooks:** orchestrator-owned phase; `useSyncExternalStore` hooks in `frontend/src/hooks/`; no lifecycle Zustand store; TanStack Query for async work only (L5).
+6. **Lightning `sync-error` aggregation:** **any failure** among dashboard-matching connections (resolved L4).
 
 ### Still open
 
-1. **Lightning `sync-error` aggregation:** any failure vs active-connection-only failure (resolve in L4).
+_(none)_

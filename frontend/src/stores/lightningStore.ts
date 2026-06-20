@@ -14,9 +14,7 @@ import {
   type ConnectedLightningWallet,
   type LightningConnectionConfig,
 } from '@/lib/lightning/lightning-backend-service'
-import {
-  saveLightningConnectionsForWallet,
-} from '@/lib/lightning/lightning-wallet-secrets'
+import { orchestrateLightningSaveConnections } from '@/lib/wallet/lifecycle/lightning-save-lifecycle-orchestrator'
 import { useWalletStore } from '@/stores/walletStore'
 import type { NetworkMode } from '@/stores/walletStore'
 import { MAX_LIGHTNING_WALLET_LABEL_LENGTH } from '@/lib/lightning/lightning-input-limits'
@@ -211,8 +209,9 @@ export const useLightningStore = create<LightningState>()(
           activeConnectionIds: updatedActiveIds,
         })
 
-        await saveLightningConnectionsForWallet({
+        await orchestrateLightningSaveConnections({
           walletId,
+          networkMode,
           connections: nextForWallet,
         })
         return { id, label: labelToStore }
@@ -255,8 +254,9 @@ export const useLightningStore = create<LightningState>()(
 
         if (removed) {
           const forWallet = wallets.filter((connection) => connection.walletId === removed.walletId)
-          await saveLightningConnectionsForWallet({
+          await orchestrateLightningSaveConnections({
             walletId: removed.walletId,
+            networkMode: removed.networkMode,
             connections: forWallet,
           })
         }
@@ -303,8 +303,9 @@ export const useLightningStore = create<LightningState>()(
         set({ connectedWallets: nextWallets })
 
         const forWallet = nextWallets.filter((connection) => connection.walletId === walletId)
-        await saveLightningConnectionsForWallet({
+        await orchestrateLightningSaveConnections({
           walletId,
+          networkMode: target.networkMode,
           connections: forWallet,
         })
       },

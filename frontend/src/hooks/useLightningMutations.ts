@@ -17,7 +17,6 @@ import {
 } from '@/lib/lightning/lightning-backend-service'
 import { ensureMigrated } from '@/db/database'
 import {
-  batchApplyNwcSnapshotPatches,
   loadNwcSnapshotForConnection,
 } from '@/lib/lightning/lightning-wallet-snapshot-persistence'
 import {
@@ -54,7 +53,28 @@ import {
   LN_WALLET_BALANCE_STALE_MS,
   LN_WALLET_NETWORK_PLAUSIBILITY_STALE_MS,
 } from '@/lib/lightning/lightning-query-timings'
+import { getLightningLoadLifecycleSnapshot } from '@/lib/wallet/lifecycle/lightning-load-lifecycle-orchestrator'
+import {
+  orchestrateLightningSaveSnapshotPatches,
+} from '@/lib/wallet/lifecycle/lightning-save-lifecycle-orchestrator'
+import { runWithLightningConnectionSync } from '@/lib/wallet/lifecycle/lightning-sync-lifecycle-orchestrator'
 import { isWalletSecretsSessionActive } from '@/lib/wallet/wallet-secrets-session'
+import type { NwcSnapshotPatch } from '@/lib/lightning/lightning-wallet-snapshot-persistence'
+
+async function persistLightningSnapshotPatchesIfNeeded(params: {
+  walletId: number
+  networkMode: NetworkMode
+  patches: NwcSnapshotPatch[]
+}): Promise<void> {
+  if (params.patches.length === 0) {
+    return
+  }
+  await orchestrateLightningSaveSnapshotPatches({
+    walletId: params.walletId,
+    networkMode: params.networkMode,
+    patches: params.patches,
+  })
+}
 
 function subscribeOnlineStatus(onStoreChange: () => void) {
   window.addEventListener('online', onStoreChange)
@@ -82,7 +102,6 @@ function useLightningDashboardQueryBase() {
   const isLightningEnabled = useFeatureStore((featureState) => featureState.isLightningEnabled)
   const networkMode = useWalletStore((walletState) => walletState.networkMode)
   const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
-  const walletStatus = useWalletStore((walletState) => walletState.walletStatus)
   const connectedWallets = useLightningStore((lightningState) => lightningState.connectedWallets)
   const isOnline = useNavigatorOnline()
 
@@ -103,7 +122,7 @@ function useLightningDashboardQueryBase() {
     isLightningEnabled &&
     isLightningSupported(networkMode) &&
     activeWalletId != null &&
-    (walletStatus === 'unlocked' || walletStatus === 'syncing') &&
+    getLightningLoadLifecycleSnapshot().loadPhase === 'loaded' &&
     matchingConnections.length > 0 &&
     isOnline
 
@@ -115,10 +134,25 @@ function useLightningDashboardQueryBase() {
  */
 export function useLightningHistoryQuery() {
   const { enabled, fingerprint } = useLightningDashboardQueryBase()
+  const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
+  const networkMode = useWalletStore((walletState) => walletState.networkMode)
 
   return useQuery({
     queryKey: lightningDashboardHistoryQueryKey(fingerprint),
-    queryFn: fetchLightningPaymentsForActiveWallet,
+    queryFn: async () => {
+      const fetchResult = await fetchLightningPaymentsForActiveWallet()
+      if (activeWalletId != null) {
+        await persistLightningSnapshotPatchesIfNeeded({
+          walletId: activeWalletId,
+          networkMode,
+          patches: fetchResult.patches,
+        })
+      }
+      return {
+        payments: fetchResult.payments,
+        stalePaymentsAsOf: fetchResult.stalePaymentsAsOf,
+      }
+    },
     enabled,
     staleTime: LIGHTNING_DASHBOARD_STALE_MS,
     refetchInterval: () =>
@@ -136,10 +170,25 @@ export function useLightningHistoryQuery() {
  */
 export function useLightningBalancesForDashboardQuery() {
   const { enabled, fingerprint } = useLightningDashboardQueryBase()
+  const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
+  const networkMode = useWalletStore((walletState) => walletState.networkMode)
 
   return useQuery({
     queryKey: lightningDashboardBalancesQueryKey(fingerprint),
-    queryFn: fetchLightningBalancesForDashboard,
+    queryFn: async () => {
+      const fetchResult = await fetchLightningBalancesForDashboard()
+      if (activeWalletId != null) {
+        await persistLightningSnapshotPatchesIfNeeded({
+          walletId: activeWalletId,
+          networkMode,
+          patches: fetchResult.patches,
+        })
+      }
+      return {
+        lightningBalanceRows: fetchResult.lightningBalanceRows,
+        totalSats: fetchResult.totalSats,
+      }
+    },
     enabled,
     staleTime: LIGHTNING_DASHBOARD_STALE_MS,
     refetchInterval: () =>
@@ -175,13 +224,15 @@ export function useLnWalletBalanceQuery(params: {
     queryFn: async (): Promise<LnWalletBalanceQueryResult> => {
       await ensureMigrated()
       try {
-        const service = createBackendService(config)
-        const { balanceSats } = await service.getBalance()
+        const { balanceSats } = await runWithLightningConnectionSync(connectionId, async () => {
+          const service = createBackendService(config)
+          return service.getBalance()
+        })
         const balanceUpdatedAt = new Date().toISOString()
-        // Re-check session after NWC: user may have locked the wallet while getBalance was in flight.
         if (await isWalletSecretsSessionActive()) {
-          await batchApplyNwcSnapshotPatches({
+          await orchestrateLightningSaveSnapshotPatches({
             walletId,
+            networkMode,
             patches: [
               {
                 connectionId,

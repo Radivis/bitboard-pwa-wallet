@@ -39,6 +39,26 @@ vi.mock('@/lib/wallet/lifecycle/arkade-save-lifecycle-orchestrator', () => ({
   acknowledgeArkadeSaveErrorForForcedLock: vi.fn(),
 }))
 
+const orchestrateLightningRetrySave = vi.fn()
+const acknowledgeLightningSaveErrorForForcedLock = vi.fn()
+
+vi.mock('@/lib/wallet/lifecycle/lightning-save-lifecycle-orchestrator', () => ({
+  getLightningSaveLifecycleSnapshot: () => ({
+    savePhase: 'not-saving',
+    errorMessage: null,
+    railScope: null,
+  }),
+  subscribeLightningSaveLifecycle: () => () => undefined,
+  orchestrateLightningRetrySave: (...args: unknown[]) => orchestrateLightningRetrySave(...args),
+  acknowledgeLightningSaveErrorForForcedLock: (...args: unknown[]) =>
+    acknowledgeLightningSaveErrorForForcedLock(...args),
+}))
+
+vi.mock('@/stores/featureStore', () => ({
+  useFeatureStore: (selector: (state: { isLightningEnabled: boolean }) => unknown) =>
+    selector({ isLightningEnabled: false }),
+}))
+
 vi.mock('@/lib/arkade/arkade-utils', () => ({
   isArkadeActiveForNetworkMode: () => false,
 }))

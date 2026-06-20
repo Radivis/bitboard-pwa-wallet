@@ -11,6 +11,15 @@ import {
   subscribeArkadeSaveLifecycle,
 } from '@/lib/wallet/lifecycle/arkade-save-lifecycle-orchestrator'
 import type { ArkadeSaveLifecycleSnapshot } from '@/lib/wallet/lifecycle/arkade-save-lifecycle-types'
+import type { LightningSaveLifecycleSnapshot } from '@/lib/wallet/lifecycle/lightning-save-lifecycle-types'
+import {
+  acknowledgeLightningSaveErrorForForcedLock,
+  getLightningSaveLifecycleSnapshot,
+  orchestrateLightningRetrySave,
+  subscribeLightningSaveLifecycle,
+} from '@/lib/wallet/lifecycle/lightning-save-lifecycle-orchestrator'
+import { isLightningSupported } from '@/lib/lightning/lightning-utils'
+import { useFeatureStore } from '@/stores/featureStore'
 import {
   acknowledgeOnchainSaveErrorForForcedLock,
   getOnchainSaveLifecycleSnapshot,
@@ -19,7 +28,7 @@ import {
 } from '@/lib/wallet/lifecycle/onchain-save-lifecycle-orchestrator'
 import type { OnchainSaveLifecycleSnapshot } from '@/lib/wallet/lifecycle/onchain-save-lifecycle-types'
 
-type SaveErrorRail = 'onchain' | 'arkade'
+type SaveErrorRail = 'onchain' | 'arkade' | 'lightning'
 
 function SaveErrorBannerBlock({
   rail,
@@ -98,12 +107,15 @@ function SaveErrorBannerBlock({
 
 export function WalletSaveErrorBanner() {
   const networkMode = useWalletStore((walletState) => walletState.networkMode)
+  const isLightningEnabled = useFeatureStore((featureState) => featureState.isLightningEnabled)
   const [onchainSaveSnapshot, setOnchainSaveSnapshot] = useState<OnchainSaveLifecycleSnapshot>(
     () => getOnchainSaveLifecycleSnapshot(),
   )
   const [arkadeSaveSnapshot, setArkadeSaveSnapshot] = useState<ArkadeSaveLifecycleSnapshot>(
     () => getArkadeSaveLifecycleSnapshot(),
   )
+  const [lightningSaveSnapshot, setLightningSaveSnapshot] =
+    useState<LightningSaveLifecycleSnapshot>(() => getLightningSaveLifecycleSnapshot())
 
   useEffect(() => {
     return subscribeOnchainSaveLifecycle(setOnchainSaveSnapshot)
@@ -113,14 +125,24 @@ export function WalletSaveErrorBanner() {
     return subscribeArkadeSaveLifecycle(setArkadeSaveSnapshot)
   }, [])
 
+  useEffect(() => {
+    return subscribeLightningSaveLifecycle(setLightningSaveSnapshot)
+  }, [])
+
   const showOnchain =
     networkMode !== 'lab' &&
     (onchainSaveSnapshot.savePhase === 'save-error' || onchainSaveSnapshot.savePhase === 'saving')
   const showArkade =
     isArkadeActiveForNetworkMode(networkMode) &&
     (arkadeSaveSnapshot.savePhase === 'save-error' || arkadeSaveSnapshot.savePhase === 'saving')
+  const showLightning =
+    isLightningEnabled &&
+    isLightningSupported(networkMode) &&
+    lightningSaveSnapshot.railScope != null &&
+    (lightningSaveSnapshot.savePhase === 'save-error' ||
+      lightningSaveSnapshot.savePhase === 'saving')
 
-  if (!showOnchain && !showArkade) {
+  if (!showOnchain && !showArkade && !showLightning) {
     return null
   }
 
@@ -150,6 +172,19 @@ export function WalletSaveErrorBanner() {
             void orchestrateArkadeRetrySave()
           }}
           onLockAnywayConfirm={acknowledgeArkadeSaveErrorForForcedLock}
+        />
+      ) : null}
+      {showLightning ? (
+        <SaveErrorBannerBlock
+          rail="lightning"
+          title="Couldn't save Lightning wallet to storage"
+          errorMessage={lightningSaveSnapshot.errorMessage ?? 'Save failed'}
+          isSaving={lightningSaveSnapshot.savePhase === 'saving'}
+          lockAnywayMessage="Recent Lightning connection or NWC snapshot data may not be persisted on this device. You can retry saving from the dashboard before locking if you need the latest state stored."
+          onRetry={() => {
+            void orchestrateLightningRetrySave()
+          }}
+          onLockAnywayConfirm={acknowledgeLightningSaveErrorForForcedLock}
         />
       ) : null}
     </div>

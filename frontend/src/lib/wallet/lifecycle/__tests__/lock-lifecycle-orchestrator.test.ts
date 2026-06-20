@@ -17,6 +17,13 @@ const isArkadeSaveBlockingLock = vi.fn()
 const syncArkadeLoadLifecycleWithLockPhase = vi.fn()
 const syncArkadeSyncLifecycleWithLockPhase = vi.fn()
 const syncArkadeSaveLifecycleWithLockPhase = vi.fn()
+const orchestrateLightningLoad = vi.fn()
+const awaitLightningSyncQuiescence = vi.fn()
+const awaitLightningSaveQuiescence = vi.fn()
+const isLightningSaveBlockingLock = vi.fn()
+const syncLightningLoadLifecycleWithLockPhase = vi.fn()
+const syncLightningSyncLifecycleWithLockPhase = vi.fn()
+const syncLightningSaveLifecycleWithLockPhase = vi.fn()
 const awaitInFlightWalletSecretsWrites = vi.fn()
 const ensureWalletSecretsSession = vi.fn()
 const endWalletSecretsSession = vi.fn()
@@ -78,6 +85,31 @@ vi.mock('@/lib/wallet/lifecycle/onchain-save-lifecycle-orchestrator', () => ({
     constructor() {
       super('On-chain save-error blocks lock until retry or forced lock')
       this.name = 'OnchainSaveBlockingLockError'
+    }
+  },
+}))
+
+vi.mock('@/lib/wallet/lifecycle/lightning-load-lifecycle-orchestrator', () => ({
+  orchestrateLightningLoad: (...args: unknown[]) => orchestrateLightningLoad(...args),
+  syncLightningLoadLifecycleWithLockPhase: (...args: unknown[]) =>
+    syncLightningLoadLifecycleWithLockPhase(...args),
+}))
+
+vi.mock('@/lib/wallet/lifecycle/lightning-sync-lifecycle-orchestrator', () => ({
+  awaitLightningSyncQuiescence: (...args: unknown[]) => awaitLightningSyncQuiescence(...args),
+  syncLightningSyncLifecycleWithLockPhase: (...args: unknown[]) =>
+    syncLightningSyncLifecycleWithLockPhase(...args),
+}))
+
+vi.mock('@/lib/wallet/lifecycle/lightning-save-lifecycle-orchestrator', () => ({
+  awaitLightningSaveQuiescence: (...args: unknown[]) => awaitLightningSaveQuiescence(...args),
+  isLightningSaveBlockingLock: (...args: unknown[]) => isLightningSaveBlockingLock(...args),
+  syncLightningSaveLifecycleWithLockPhase: (...args: unknown[]) =>
+    syncLightningSaveLifecycleWithLockPhase(...args),
+  LightningSaveBlockingLockError: class LightningSaveBlockingLockError extends Error {
+    constructor() {
+      super('Lightning save-error blocks lock until retry or forced lock')
+      this.name = 'LightningSaveBlockingLockError'
     }
   },
 }))
@@ -146,9 +178,13 @@ describe('lock-lifecycle-orchestrator', () => {
     awaitOnchainSaveQuiescence.mockResolvedValue(undefined)
     isOnchainSaveBlockingLock.mockReturnValue(false)
     isArkadeSaveBlockingLock.mockReturnValue(false)
+    isLightningSaveBlockingLock.mockReturnValue(false)
     awaitArkadeSyncQuiescence.mockResolvedValue(undefined)
     awaitArkadeSaveQuiescence.mockResolvedValue(undefined)
+    awaitLightningSyncQuiescence.mockResolvedValue(undefined)
+    awaitLightningSaveQuiescence.mockResolvedValue(undefined)
     orchestrateArkadeLoad.mockResolvedValue(undefined)
+    orchestrateLightningLoad.mockResolvedValue(undefined)
     awaitInFlightWalletSecretsWrites.mockResolvedValue(undefined)
     ensureWalletSecretsSession.mockResolvedValue(undefined)
     endWalletSecretsSession.mockResolvedValue(undefined)
@@ -324,6 +360,34 @@ describe('lock-lifecycle-orchestrator', () => {
       walletId: 1,
       networkMode: 'testnet',
     })
+    expect(orchestrateLightningLoad).toHaveBeenCalledWith({
+      walletId: 1,
+      networkMode: 'testnet',
+    })
+  })
+
+  it('orchestrateLock rejects when Lightning save-error blocks lock', async () => {
+    walletStoreState.activeWalletId = 1
+    syncLockLifecycleWithActiveWallet(1)
+    isLightningSaveBlockingLock.mockReturnValue(true)
+
+    await expect(orchestrateLock()).rejects.toThrow(
+      'Lightning save-error blocks lock until retry or forced lock',
+    )
+    expect(lockAndPurgeSensitiveRuntimeState).not.toHaveBeenCalled()
+  })
+
+  it('orchestrateLock awaits Lightning sync and save quiescence', async () => {
+    walletStoreState.activeWalletId = 1
+    syncLockLifecycleWithActiveWallet(1)
+
+    await orchestrateLock()
+
+    expect(awaitLightningSyncQuiescence).toHaveBeenCalled()
+    expect(awaitLightningSaveQuiescence).toHaveBeenCalled()
+    expect(syncLightningLoadLifecycleWithLockPhase).toHaveBeenCalledWith('locked')
+    expect(syncLightningSyncLifecycleWithLockPhase).toHaveBeenCalledWith('locked')
+    expect(syncLightningSaveLifecycleWithLockPhase).toHaveBeenCalledWith('locked')
   })
 
   it('orchestrateLock rejects when Arkade save-error blocks lock', async () => {

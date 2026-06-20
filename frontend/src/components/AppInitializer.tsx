@@ -9,7 +9,6 @@ import {
 } from '@/db'
 import { appQueryClient } from '@/lib/shared/app-query-client'
 import { prefetchLabChainState } from '@/hooks/useLabChainStateQuery'
-import { useHydrateLightningConnections } from '@/hooks/useHydrateLightningConnections'
 import { ActiveWalletBootstrap } from '@/components/ActiveWalletBootstrap'
 import { pathnameRequiresWalletCryptoSession } from '@/lib/shared/pathname-requires-wallet-crypto-session'
 import { runMainnetStrictMigrationAfterHydration } from '@/lib/settings/mainnet-access-strict-migration'
@@ -36,7 +35,6 @@ export function AppInitializer({ children }: AppInitializerProps) {
   useLabCrossTabCacheSync()
   useWalletCrossTabCacheSync()
   useOnchainRailLifecycleCrossTabSync()
-  useHydrateLightningConnections()
   const navigate = useNavigate()
   const location = useLocation()
   const { data: wallets, isLoading, isFetching } = useWallets()
