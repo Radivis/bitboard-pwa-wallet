@@ -24,25 +24,12 @@ import {
 import { invalidateLightningDashboardQueries } from '@/lib/lightning/lightning-dashboard-sync'
 import { refreshWalletStoreFromLoadedBdk } from '@/lib/wallet/onchain-bdk-store-sync'
 import { invalidateOnchainDashboardQueries } from '@/lib/wallet/onchain-dashboard-sync'
-import { reportArkadeSessionOpenError } from '@/lib/arkade/arkade-session-open-error-toast'
-import { isArkadeActiveForNetworkMode } from '@/lib/arkade/arkade-utils'
-import { openArkadeSessionForWallet } from '@/lib/arkade/arkade-session-service'
-import { orchestrateLock } from '@/lib/wallet/lifecycle/lock-lifecycle-orchestrator'
-import { waitForCryptoWorkerHealthy } from '@/workers/crypto-factory'
+import {
+  getArkadeSessionOpenPromiseFromLastOnchainLoad,
+  orchestrateOnchainLoad,
+} from '@/lib/wallet/lifecycle/onchain-load-lifecycle-orchestrator'
 
 const CUSTOM_ESPLORA_URL_KEY_PREFIX = 'custom_esplora_url_'
-
-function beginArkadeSessionOpenAfterUnlockIfActive(params: {
-  walletId: number
-  networkMode: NetworkMode
-}): Promise<void> | null {
-  if (!isArkadeActiveForNetworkMode(params.networkMode)) {
-    return null
-  }
-  return openArkadeSessionForWallet(params).catch((err) =>
-    reportArkadeSessionOpenError(err),
-  )
-}
 
 /**
  * Update the changeset of the currently active descriptor wallet.
@@ -519,132 +506,36 @@ export async function loadDescriptorWalletWithoutSync(params: {
   addressType: AddressType
   accountId: number
 }): Promise<void> {
-  const { walletId, networkMode, addressType, accountId } = params
-  await waitForCryptoWorkerHealthy()
-  const network = toBitcoinNetwork(networkMode)
-  const descriptorWallet = await resolveDescriptorWallet({
-    walletId,
-    targetNetwork: network,
-    targetAddressType: addressType,
-    targetAccountId: accountId,
+  await orchestrateOnchainLoad({
+    ...params,
+    clearLastSyncTime: false,
   })
-  void beginArkadeSessionOpenAfterUnlockIfActive({ walletId, networkMode })
-
-  const { loadWallet, getCurrentAddress } = useCryptoStore.getState()
-  const {
-    setWalletStatus,
-    setBalance,
-    setTransactions,
-    setCurrentAddress,
-    commitLoadedDescriptorWallet,
-  } = useWalletStore.getState()
-
-  setCurrentAddress(null)
-  setBalance(null)
-  setTransactions([])
-
-  await loadWalletHandlingPersistedChainMismatch(loadWallet, {
-    externalDescriptor: descriptorWallet.externalDescriptor,
-    internalDescriptor: descriptorWallet.internalDescriptor,
-    network,
-    changesetJson: descriptorWallet.changeSet,
-    useEmptyChain: false,
-  })
-
-  const address = await getCurrentAddress()
-  setCurrentAddress(address)
-  commitLoadedDescriptorWallet({
-    networkMode,
-    addressType,
-    accountId,
-  })
-  setWalletStatus('unlocked')
-
-  if (networkMode !== 'lab') {
-    await refreshWalletStoreFromLoadedBdk()
-  }
-
-  const { startAutoLockTimer } = await import('@/stores/sessionStore')
-  startAutoLockTimer(() => void orchestrateLock())
 }
 
-/**
- * Resolve descriptor wallet, load into WASM, set current address, start
- * auto-lock timer, then run Esplora sync (by default in the background after unlock).
- */
-export async function loadDescriptorWalletAndSync(params: {
+export type SchedulePostUnlockEsploraSyncParams = {
   walletId: number
   networkMode: NetworkMode
   addressType: AddressType
   accountId: number
   onSyncError?: (err: unknown) => void
-  /**
-   * When true, this function resolves only after Esplora sync and changeset persistence finish.
-   * When false (default), unlock completes as soon as WASM is ready; sync cannot block or
-   * fail the returned promise (errors go to `onSyncError` only).
-   */
   awaitSync?: boolean
-}): Promise<void> {
+  arkadeSessionOpenPromise?: Promise<void> | null
+}
+
+/**
+ * Post-unlock Esplora sync and changeset persist. L2 will move this to OnchainSyncLifecycle +
+ * OnchainSaveLifecycle; kept in wallet-utils for L1.
+ */
+export async function schedulePostUnlockEsploraSync(
+  params: SchedulePostUnlockEsploraSyncParams,
+): Promise<void> {
   const {
     walletId,
     networkMode,
-    addressType,
-    accountId,
     onSyncError,
     awaitSync = false,
+    arkadeSessionOpenPromise = null,
   } = params
-  await waitForCryptoWorkerHealthy()
-  const network = toBitcoinNetwork(networkMode)
-  const descriptorWallet = await resolveDescriptorWallet({
-    walletId,
-    targetNetwork: network,
-    targetAddressType: addressType,
-    targetAccountId: accountId,
-  })
-  const arkadeSessionOpenPromise = beginArkadeSessionOpenAfterUnlockIfActive({
-    walletId,
-    networkMode,
-  })
-
-  const { loadWallet, getCurrentAddress } = useCryptoStore.getState()
-  const {
-    setWalletStatus,
-    setBalance,
-    setTransactions,
-    setCurrentAddress,
-    setLastSyncTime,
-    commitLoadedDescriptorWallet,
-  } = useWalletStore.getState()
-
-  setCurrentAddress(null)
-  setBalance(null)
-  setTransactions([])
-  setLastSyncTime(null)
-
-  await loadWalletHandlingPersistedChainMismatch(loadWallet, {
-    externalDescriptor: descriptorWallet.externalDescriptor,
-    internalDescriptor: descriptorWallet.internalDescriptor,
-    network,
-    changesetJson: descriptorWallet.changeSet,
-    useEmptyChain: false,
-  })
-
-  const address = await getCurrentAddress()
-  setCurrentAddress(address)
-  commitLoadedDescriptorWallet({
-    networkMode,
-    addressType,
-    accountId,
-  })
-  setWalletStatus('unlocked')
-
-  if (networkMode !== 'lab') {
-    await refreshWalletStoreFromLoadedBdk()
-    invalidateOnchainDashboardQueries()
-  }
-
-  const { startAutoLockTimer } = await import('@/stores/sessionStore')
-  startAutoLockTimer(() => void orchestrateLock())
 
   const runEsploraSyncAndPersistChangeset = async () => {
     try {
@@ -678,4 +569,49 @@ export async function loadDescriptorWalletAndSync(params: {
   } else {
     void runPostUnlockBackgroundWork()
   }
+}
+
+/**
+ * Resolve descriptor wallet, load into WASM, set current address, start
+ * auto-lock timer, then run Esplora sync (by default in the background after unlock).
+ */
+export async function loadDescriptorWalletAndSync(params: {
+  walletId: number
+  networkMode: NetworkMode
+  addressType: AddressType
+  accountId: number
+  onSyncError?: (err: unknown) => void
+  /**
+   * When true, this function resolves only after Esplora sync and changeset persistence finish.
+   * When false (default), unlock completes as soon as WASM is ready; sync cannot block or
+   * fail the returned promise (errors go to `onSyncError` only).
+   */
+  awaitSync?: boolean
+}): Promise<void> {
+  const {
+    walletId,
+    networkMode,
+    addressType,
+    accountId,
+    onSyncError,
+    awaitSync = false,
+  } = params
+
+  await orchestrateOnchainLoad({
+    walletId,
+    networkMode,
+    addressType,
+    accountId,
+    clearLastSyncTime: true,
+  })
+
+  await schedulePostUnlockEsploraSync({
+    walletId,
+    networkMode,
+    addressType,
+    accountId,
+    onSyncError,
+    awaitSync,
+    arkadeSessionOpenPromise: getArkadeSessionOpenPromiseFromLastOnchainLoad(),
+  })
 }

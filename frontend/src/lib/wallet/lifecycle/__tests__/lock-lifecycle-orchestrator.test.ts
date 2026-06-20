@@ -2,8 +2,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { AddressType } from '@/stores/walletStore'
 
 const lockAndPurgeSensitiveRuntimeState = vi.fn()
-const loadDescriptorWalletAndSync = vi.fn()
-const loadDescriptorWalletWithoutSync = vi.fn()
+const orchestrateOnchainLoad = vi.fn()
+const schedulePostUnlockEsploraSync = vi.fn()
+const syncOnchainLoadLifecycleWithLockPhase = vi.fn()
+const getArkadeSessionOpenPromiseFromLastOnchainLoad = vi.fn()
 const ensureWalletSecretsSession = vi.fn()
 const endWalletSecretsSession = vi.fn()
 const isWalletSecretsSessionActive = vi.fn()
@@ -16,10 +18,17 @@ vi.mock('@/stores/cryptoStore', () => ({
   },
 }))
 
+vi.mock('@/lib/wallet/lifecycle/onchain-load-lifecycle-orchestrator', () => ({
+  orchestrateOnchainLoad: (...args: unknown[]) => orchestrateOnchainLoad(...args),
+  getArkadeSessionOpenPromiseFromLastOnchainLoad: () =>
+    getArkadeSessionOpenPromiseFromLastOnchainLoad(),
+  syncOnchainLoadLifecycleWithLockPhase: (...args: unknown[]) =>
+    syncOnchainLoadLifecycleWithLockPhase(...args),
+}))
+
 vi.mock('@/lib/wallet/wallet-utils', () => ({
-  loadDescriptorWalletAndSync: (...args: unknown[]) => loadDescriptorWalletAndSync(...args),
-  loadDescriptorWalletWithoutSync: (...args: unknown[]) =>
-    loadDescriptorWalletWithoutSync(...args),
+  schedulePostUnlockEsploraSync: (...args: unknown[]) =>
+    schedulePostUnlockEsploraSync(...args),
 }))
 
 vi.mock('@/lib/wallet/wallet-secrets-session', () => ({
@@ -71,8 +80,9 @@ describe('lock-lifecycle-orchestrator', () => {
     walletStoreState.walletStatus = 'none'
     vi.clearAllMocks()
     lockAndPurgeSensitiveRuntimeState.mockResolvedValue(undefined)
-    loadDescriptorWalletAndSync.mockResolvedValue(undefined)
-    loadDescriptorWalletWithoutSync.mockResolvedValue(undefined)
+    orchestrateOnchainLoad.mockResolvedValue(undefined)
+    schedulePostUnlockEsploraSync.mockResolvedValue(undefined)
+    getArkadeSessionOpenPromiseFromLastOnchainLoad.mockReturnValue(null)
     ensureWalletSecretsSession.mockResolvedValue(undefined)
     endWalletSecretsSession.mockResolvedValue(undefined)
     isWalletSecretsSessionActive.mockResolvedValue(true)
@@ -105,7 +115,7 @@ describe('lock-lifecycle-orchestrator', () => {
     syncLockLifecycleWithActiveWallet(1)
 
     let releaseLoad: (() => void) | undefined
-    loadDescriptorWalletAndSync.mockImplementation(
+    orchestrateOnchainLoad.mockImplementation(
       () =>
         new Promise<void>((resolve) => {
           releaseLoad = resolve
@@ -135,7 +145,7 @@ describe('lock-lifecycle-orchestrator', () => {
     syncLockLifecycleWithActiveWallet(1)
 
     let resolveLoad: (() => void) | undefined
-    loadDescriptorWalletAndSync.mockImplementation(
+    orchestrateOnchainLoad.mockImplementation(
       () =>
         new Promise<void>((resolve) => {
           resolveLoad = resolve
@@ -146,12 +156,13 @@ describe('lock-lifecycle-orchestrator', () => {
     const second = orchestrateBootstrapUnlock(unlockParams)
 
     await vi.waitFor(() => {
-      expect(loadDescriptorWalletAndSync).toHaveBeenCalledTimes(1)
+      expect(orchestrateOnchainLoad).toHaveBeenCalledTimes(1)
     })
     resolveLoad?.()
     await Promise.all([first, second])
 
-    expect(loadDescriptorWalletAndSync).toHaveBeenCalledTimes(1)
+    expect(orchestrateOnchainLoad).toHaveBeenCalledTimes(1)
+    expect(schedulePostUnlockEsploraSync).toHaveBeenCalledTimes(1)
   })
 
   it('orchestrateLock waits for in-flight unlock', async () => {
@@ -170,7 +181,7 @@ describe('lock-lifecycle-orchestrator', () => {
           }
         }),
     )
-    loadDescriptorWalletAndSync.mockImplementation(async () => {
+    orchestrateOnchainLoad.mockImplementation(async () => {
       callOrder.push('unlock-load')
     })
     lockAndPurgeSensitiveRuntimeState.mockImplementation(async () => {
@@ -191,6 +202,7 @@ describe('lock-lifecycle-orchestrator', () => {
     await lockPromise
 
     expect(callOrder).toEqual(['secrets-released', 'unlock-load', 'lock'])
+    expect(syncOnchainLoadLifecycleWithLockPhase).toHaveBeenCalledWith('locked')
   })
 
   it('orchestrateLock no-op in no-lock phase', async () => {
@@ -202,7 +214,7 @@ describe('lock-lifecycle-orchestrator', () => {
   it('orchestrateManualUnlock failure reverts to locked and ends session', async () => {
     walletStoreState.activeWalletId = 1
     syncLockLifecycleWithActiveWallet(1)
-    loadDescriptorWalletAndSync.mockRejectedValue(new Error('load failed'))
+    orchestrateOnchainLoad.mockRejectedValue(new Error('load failed'))
 
     await expect(
       orchestrateManualUnlock({
@@ -231,5 +243,10 @@ describe('lock-lifecycle-orchestrator', () => {
       phase: 'unlocked',
       operation: 'none',
     })
+    expect(orchestrateOnchainLoad).toHaveBeenCalledWith({
+      ...unlockParams,
+      clearLastSyncTime: true,
+    })
+    expect(schedulePostUnlockEsploraSync).toHaveBeenCalled()
   })
 })

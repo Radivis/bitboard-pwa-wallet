@@ -3,7 +3,7 @@ feature:
   description: >
     Per-rail Load, Sync, and Save lifecycle orchestrators (on-chain, Lightning, Arkade).
     Complements LockLifecycle (lock/unlock). Full architecture: docs/wallet-rail-lifecycle.md.
-    Implementation deferred — this file defines contracts for future tests.
+    L1 (OnchainLoadLifecycle) implemented; remaining rails deferred.
   requirements:
     - LockLifecycle gates all rails; no load/sync/save when phase is no-lock or locking
     - Each rail exposes independent LoadLifecyclePhase, SyncLifecyclePhase, SaveLifecyclePhase
@@ -34,14 +34,17 @@ feature:
   contracts:
     lock_handoff:
       - id: LIFE-LOCK-01
-        description: LockLifecycle unlock delegates on-chain load to OnchainLoadLifecycle (target; not yet implemented)
+        description: LockLifecycle unlock delegates on-chain load to OnchainLoadLifecycle
+        implemented_by: frontend/src/lib/wallet/lifecycle/__tests__/lock-lifecycle-orchestrator.test.ts
       - id: LIFE-LOCK-02
         description: orchestrateLock awaits on-chain, Lightning, and Arkade save quiescence before worker purge
     onchain:
       - id: LIFE-ONC-LOAD-01
         description: OnchainLoadLifecycle loading includes WASM load and refreshWalletStoreFromLoadedBdk
+        implemented_by: frontend/src/lib/wallet/lifecycle/__tests__/onchain-load-lifecycle-orchestrator.test.ts
       - id: LIFE-ONC-LOAD-02
         description: OnchainLoadLifecycle loaded implies crypto worker has active descriptor for committed triple
+        implemented_by: frontend/src/lib/wallet/lifecycle/__tests__/onchain-load-lifecycle-orchestrator.test.ts
       - id: LIFE-ONC-SYNC-01
         description: Esplora sync runs only when OnchainLoadLifecycle is loaded
       - id: LIFE-ONC-SAVE-01

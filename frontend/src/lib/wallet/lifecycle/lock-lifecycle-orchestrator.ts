@@ -2,9 +2,11 @@ import type { AddressType, NetworkMode } from '@/stores/walletStore'
 import { useWalletStore } from '@/stores/walletStore'
 import { useCryptoStore } from '@/stores/cryptoStore'
 import {
-  loadDescriptorWalletAndSync,
-  loadDescriptorWalletWithoutSync,
-} from '@/lib/wallet/wallet-utils'
+  orchestrateOnchainLoad,
+  getArkadeSessionOpenPromiseFromLastOnchainLoad,
+  syncOnchainLoadLifecycleWithLockPhase,
+} from '@/lib/wallet/lifecycle/onchain-load-lifecycle-orchestrator'
+import { schedulePostUnlockEsploraSync } from '@/lib/wallet/wallet-utils'
 import {
   ensureWalletSecretsSession,
   endWalletSecretsSession,
@@ -23,8 +25,8 @@ export type { LockLifecyclePhase, LockLifecycleOperation, LockLifecycleSnapshot 
 /**
  * LockLifecycle orchestrator — serializes lock, manual unlock, and bootstrap unlock.
  *
- * Out of scope (iteration 2+): prepare-active-wallet-switch, wallet-delete-finalize,
- * network-mode-switch; LoadLifecycle (WASM load internals); SyncLifecycle (Esplora/Arkade).
+ * Unlock delegates on-chain WASM load to OnchainLoadLifecycle. Post-unlock Esplora sync remains
+ * in wallet-utils until L2 (OnchainSyncLifecycle). L2 will also hard-block lock on save-error.
  */
 
 type UnlockLoadParams = {
@@ -105,23 +107,24 @@ function revertAfterUnlockFailure(): void {
 
 async function runUnlockLoad(params: UnlockLoadParams): Promise<void> {
   await waitForCryptoWorkerHealthy()
-  if (params.networkMode === 'lab') {
-    await loadDescriptorWalletWithoutSync({
-      walletId: params.walletId,
-      networkMode: params.networkMode,
-      addressType: params.addressType,
-      accountId: params.accountId,
-    })
-    return
-  }
-  await loadDescriptorWalletAndSync({
+  await orchestrateOnchainLoad({
     walletId: params.walletId,
     networkMode: params.networkMode,
     addressType: params.addressType,
     accountId: params.accountId,
-    awaitSync: false,
-    onSyncError: params.onSyncError,
+    clearLastSyncTime: params.networkMode !== 'lab',
   })
+  if (params.networkMode !== 'lab') {
+    schedulePostUnlockEsploraSync({
+      walletId: params.walletId,
+      networkMode: params.networkMode,
+      addressType: params.addressType,
+      accountId: params.accountId,
+      awaitSync: false,
+      onSyncError: params.onSyncError,
+      arkadeSessionOpenPromise: getArkadeSessionOpenPromiseFromLastOnchainLoad(),
+    })
+  }
 }
 
 export function getLockLifecycleSnapshot(): LockLifecycleSnapshot {
@@ -244,8 +247,10 @@ export async function orchestrateLock(): Promise<void> {
     setOperation('locking')
     try {
       await useCryptoStore.getState().lockAndPurgeSensitiveRuntimeState()
+      syncOnchainLoadLifecycleWithLockPhase('locked')
       setSnapshot({ phase: 'locked', operation: 'none' })
     } catch (error) {
+      syncOnchainLoadLifecycleWithLockPhase('locked')
       setSnapshot({ phase: 'locked', operation: 'none' })
       throw error
     }

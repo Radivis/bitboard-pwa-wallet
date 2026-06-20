@@ -1,6 +1,6 @@
 # Wallet rail lifecycle architecture
 
-This document specifies the **desired** lifecycle architecture for Bitboard’s three wallet rails: **on-chain**, **Lightning (NWC)**, and **Arkade**. It is a design spec only — implementation is deferred to future planning phases.
+This document specifies the lifecycle architecture for Bitboard’s three wallet rails: **on-chain**, **Lightning (NWC)**, and **Arkade**. **L1 (OnchainLoadLifecycle)** is implemented; remaining phases are specified here for future work.
 
 Related docs:
 
@@ -68,9 +68,10 @@ flowchart TB
 ```
 frontend/src/lib/wallet/lifecycle/
   lock-lifecycle-*.ts          # implemented
-  onchain-load-lifecycle-*.ts  # future
-  onchain-sync-lifecycle-*.ts
-  onchain-save-lifecycle-*.ts
+  rail-lifecycle-types.ts      # shared phase enums (implemented)
+  onchain-load-lifecycle-*.ts  # L1 implemented
+  onchain-sync-lifecycle-*.ts  # L2
+  onchain-save-lifecycle-*.ts  # L2
   lightning-*-lifecycle-*.ts
   arkade-*-lifecycle-*.ts
 ```
@@ -191,8 +192,9 @@ Lock teardown **must await** in-flight sync (best-effort cancel/debounce) and sa
 
 ### When `not-configured`
 
-- **Lab network:** Esplora-backed **on-chain sync** is inactive — `OnchainSyncLifecycle` remains `not-configured`. Crypto worker load for lab wallet operations and **lab DB load/save** (`labDb`) are separate (see [Rail configured invariant](#rail-configured-invariant) lab exception).
-- Otherwise, when `LockLifecycle` is past `no-lock` and a descriptor wallet exists for the committed triple, the on-chain rail is **configured** (load, sync, and save lifecycles leave `not-configured` together).
+- **Lab network:** Esplora-backed **on-chain sync** is inactive — `OnchainSyncLifecycle` remains `not-configured`. Crypto worker load for lab wallet operations and **lab DB load/save** (`labDb`) are modeled under the on-chain rail (no separate `Lab*` lifecycle modules).
+- `LockLifecycle` not `unlocked` (including `locked`, `locking`, `no-lock`) — all three on-chain lifecycles are `not-configured`.
+- Otherwise, when `LockLifecycle` is `unlocked` and a descriptor wallet exists for the committed triple, the on-chain rail is **configured** (load, sync, and save lifecycles leave `not-configured` together; sync stays `not-configured` on lab per lab exception).
 
 ### LoadLifecycle
 
@@ -388,25 +390,28 @@ Expose subscribe hooks or `data-testid` per rail, e.g.:
 
 ---
 
-## Implementation phases (deferred)
+## Implementation phases
 
-Planning only — no implementation in this spec.
-
-| Phase | Scope |
-|-------|--------|
-| **L1** | Types + on-chain LoadLifecycle; peel WASM load from `loadDescriptorWalletAndSync`; LockLifecycle delegates load |
-| **L2** | On-chain Sync + Save lifecycles; retire bundled post-unlock Esplora in wallet-utils |
-| **L3** | Arkade Load/Sync/Save; simplify `arkade-session-service`; E2E hooks for load readiness |
-| **L4** | Lightning Load/Sync/Save (aggregated) |
-| **L5** | Replace `walletStatus: 'syncing'` with rail aggregate; per-rail dashboard sync buttons; optional `useRailLifecycleSnapshot` hooks |
+| Phase | Scope | Status |
+|-------|--------|--------|
+| **L1** | Types + on-chain LoadLifecycle; peel WASM load from `loadDescriptorWalletAndSync`; LockLifecycle delegates load | **Done** |
+| **L2** | On-chain Sync + Save lifecycles; retire bundled post-unlock Esplora in wallet-utils | Planned |
+| **L3** | Arkade Load/Sync/Save; simplify `arkade-session-service`; E2E hooks for load readiness | Planned |
+| **L4** | Lightning Load/Sync/Save (aggregated) | Planned |
+| **L5** | Replace `walletStatus: 'syncing'` with rail aggregate; per-rail dashboard sync buttons; optional `useRailLifecycleSnapshot` hooks | Planned |
 
 Each phase should follow TDD per `.cursor/rules/testing-strategy.mdc` and add rows to `doc/features/wallet-lifecycle.yaml`.
 
 ---
 
-## Open questions (resolve during implementation planning)
+## Resolved and open questions
 
-1. **Lab load/save orchestration:** whether lab DB lifecycles live under `Onchain*` namespacing or a dedicated `LabLoadLifecycle` / `LabSaveLifecycle` module.
-2. **Lightning `sync-error` aggregation:** any failure vs active-connection-only failure.
-3. **Save-error on lock:** hard block vs best-effort lock with warning (security vs UX — default hard block for save-error).
-4. **Cross-tab:** whether lifecycle snapshots sync via existing `useWalletCrossTabCacheSync` or stay per-tab.
+### Resolved
+
+1. **Lab load/save orchestration:** under **Onchain\*** namespacing; no separate `LabLoadLifecycle` / `LabSaveLifecycle` modules.
+2. **Save-error on lock:** **hard block** (implement in L2 when `OnchainSaveLifecycle` exists).
+3. **Cross-tab:** lifecycle snapshots broadcast via `useOnchainLoadLifecycleCrossTabSync` (BroadcastChannel pattern aligned with `useWalletCrossTabCacheSync`).
+
+### Still open
+
+1. **Lightning `sync-error` aggregation:** any failure vs active-connection-only failure (resolve in L4).
