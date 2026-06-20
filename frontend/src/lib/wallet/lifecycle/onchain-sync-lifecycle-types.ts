@@ -32,7 +32,6 @@ export type OnchainSyncParams = {
   }
   onSyncError?: (err: unknown) => void
   awaitCompletion?: boolean
-  arkadeSessionOpenPromise?: Promise<void> | null
   /** When false, sync/save errors do not throw (background post-unlock). */
   throwOnError?: boolean
 }
@@ -46,7 +45,6 @@ export type OnchainPostUnlockSyncParams = {
   accountId: number
   onSyncError?: (err: unknown) => void
   awaitCompletion?: boolean
-  arkadeSessionOpenPromise?: Promise<void> | null
 }
 
 export type OnchainSaveParamsFromSync = OnchainSaveParams

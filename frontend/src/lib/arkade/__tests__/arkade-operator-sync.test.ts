@@ -44,6 +44,14 @@ vi.mock('sonner', () => ({
   toast: { error: vi.fn() },
 }))
 
+vi.mock('@/lib/arkade/arkade-utils', () => ({
+  isArkadeActiveForNetworkMode: () => true,
+}))
+
+vi.mock('@/lib/wallet/lifecycle/arkade-load-lifecycle-orchestrator', () => ({
+  getArkadeLoadLifecycleSnapshot: () => ({ loadPhase: 'loaded', networkMode: 'signet' }),
+}))
+
 import { syncArkadeWithOperator } from '@/lib/arkade/arkade-operator-sync'
 import { useWalletStore } from '@/stores/walletStore'
 

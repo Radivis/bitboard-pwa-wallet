@@ -25,9 +25,10 @@ import { invalidateLightningDashboardQueries } from '@/lib/lightning/lightning-d
 import { refreshWalletStoreFromLoadedBdk } from '@/lib/wallet/onchain-bdk-store-sync'
 import { invalidateOnchainDashboardQueries } from '@/lib/wallet/onchain-dashboard-sync'
 import {
-  getArkadeSessionOpenPromiseFromLastOnchainLoad,
   orchestrateOnchainLoad,
 } from '@/lib/wallet/lifecycle/onchain-load-lifecycle-orchestrator'
+import { orchestrateArkadeLoad } from '@/lib/wallet/lifecycle/arkade-load-lifecycle-orchestrator'
+import { isArkadeActiveForNetworkMode } from '@/lib/arkade/arkade-utils'
 import type { OnchainSyncThenSaveParams } from '@/lib/wallet/lifecycle/onchain-sync-lifecycle-types'
 
 const CUSTOM_ESPLORA_URL_KEY_PREFIX = 'custom_esplora_url_'
@@ -481,10 +482,21 @@ export async function loadDescriptorWalletWithoutSync(params: {
   addressType: AddressType
   accountId: number
 }): Promise<void> {
+  const { walletId, networkMode, addressType, accountId } = params
   await orchestrateOnchainLoad({
-    ...params,
+    walletId,
+    networkMode,
+    addressType,
+    accountId,
     clearLastSyncTime: false,
   })
+  if (isArkadeActiveForNetworkMode(networkMode)) {
+    void orchestrateArkadeLoad({ walletId, networkMode }).catch((err) => {
+      void import('@/lib/arkade/arkade-session-open-error-toast').then(
+        ({ reportArkadeSessionOpenError }) => reportArkadeSessionOpenError(err),
+      )
+    })
+  }
 }
 
 /**
@@ -521,6 +533,14 @@ export async function loadDescriptorWalletAndSync(params: {
     clearLastSyncTime: true,
   })
 
+  if (isArkadeActiveForNetworkMode(networkMode)) {
+    void orchestrateArkadeLoad({ walletId, networkMode }).catch((err) => {
+      void import('@/lib/arkade/arkade-session-open-error-toast').then(
+        ({ reportArkadeSessionOpenError }) => reportArkadeSessionOpenError(err),
+      )
+    })
+  }
+
   const { orchestrateOnchainPostUnlockSync } = await import(
     '@/lib/wallet/lifecycle/onchain-sync-lifecycle-orchestrator'
   )
@@ -531,6 +551,5 @@ export async function loadDescriptorWalletAndSync(params: {
     accountId,
     onSyncError,
     awaitCompletion: awaitSync,
-    arkadeSessionOpenPromise: getArkadeSessionOpenPromiseFromLastOnchainLoad(),
   })
 }

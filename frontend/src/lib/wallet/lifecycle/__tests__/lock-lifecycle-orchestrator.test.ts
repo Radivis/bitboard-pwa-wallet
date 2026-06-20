@@ -10,7 +10,13 @@ const syncOnchainSaveLifecycleWithLockPhase = vi.fn()
 const awaitOnchainSyncQuiescence = vi.fn()
 const awaitOnchainSaveQuiescence = vi.fn()
 const isOnchainSaveBlockingLock = vi.fn()
-const getArkadeSessionOpenPromiseFromLastOnchainLoad = vi.fn()
+const orchestrateArkadeLoad = vi.fn()
+const awaitArkadeSyncQuiescence = vi.fn()
+const awaitArkadeSaveQuiescence = vi.fn()
+const isArkadeSaveBlockingLock = vi.fn()
+const syncArkadeLoadLifecycleWithLockPhase = vi.fn()
+const syncArkadeSyncLifecycleWithLockPhase = vi.fn()
+const syncArkadeSaveLifecycleWithLockPhase = vi.fn()
 const awaitInFlightWalletSecretsWrites = vi.fn()
 const ensureWalletSecretsSession = vi.fn()
 const endWalletSecretsSession = vi.fn()
@@ -26,10 +32,33 @@ vi.mock('@/stores/cryptoStore', () => ({
 
 vi.mock('@/lib/wallet/lifecycle/onchain-load-lifecycle-orchestrator', () => ({
   orchestrateOnchainLoad: (...args: unknown[]) => orchestrateOnchainLoad(...args),
-  getArkadeSessionOpenPromiseFromLastOnchainLoad: () =>
-    getArkadeSessionOpenPromiseFromLastOnchainLoad(),
   syncOnchainLoadLifecycleWithLockPhase: (...args: unknown[]) =>
     syncOnchainLoadLifecycleWithLockPhase(...args),
+}))
+
+vi.mock('@/lib/wallet/lifecycle/arkade-load-lifecycle-orchestrator', () => ({
+  orchestrateArkadeLoad: (...args: unknown[]) => orchestrateArkadeLoad(...args),
+  syncArkadeLoadLifecycleWithLockPhase: (...args: unknown[]) =>
+    syncArkadeLoadLifecycleWithLockPhase(...args),
+}))
+
+vi.mock('@/lib/wallet/lifecycle/arkade-sync-lifecycle-orchestrator', () => ({
+  awaitArkadeSyncQuiescence: (...args: unknown[]) => awaitArkadeSyncQuiescence(...args),
+  syncArkadeSyncLifecycleWithLockPhase: (...args: unknown[]) =>
+    syncArkadeSyncLifecycleWithLockPhase(...args),
+}))
+
+vi.mock('@/lib/wallet/lifecycle/arkade-save-lifecycle-orchestrator', () => ({
+  awaitArkadeSaveQuiescence: (...args: unknown[]) => awaitArkadeSaveQuiescence(...args),
+  isArkadeSaveBlockingLock: (...args: unknown[]) => isArkadeSaveBlockingLock(...args),
+  syncArkadeSaveLifecycleWithLockPhase: (...args: unknown[]) =>
+    syncArkadeSaveLifecycleWithLockPhase(...args),
+  ArkadeSaveBlockingLockError: class ArkadeSaveBlockingLockError extends Error {
+    constructor() {
+      super('Arkade save-error blocks lock until retry or forced lock')
+      this.name = 'ArkadeSaveBlockingLockError'
+    }
+  },
 }))
 
 vi.mock('@/lib/wallet/lifecycle/onchain-sync-lifecycle-orchestrator', () => ({
@@ -66,6 +95,10 @@ vi.mock('@/lib/wallet/wallet-secrets-session', () => ({
 
 vi.mock('@/workers/crypto-factory', () => ({
   waitForCryptoWorkerHealthy: vi.fn().mockResolvedValue(undefined),
+}))
+
+vi.mock('@/lib/arkade/arkade-utils', () => ({
+  isArkadeActiveForNetworkMode: () => true,
 }))
 
 const walletStoreState = {
@@ -112,8 +145,11 @@ describe('lock-lifecycle-orchestrator', () => {
     awaitOnchainSyncQuiescence.mockResolvedValue(undefined)
     awaitOnchainSaveQuiescence.mockResolvedValue(undefined)
     isOnchainSaveBlockingLock.mockReturnValue(false)
+    isArkadeSaveBlockingLock.mockReturnValue(false)
+    awaitArkadeSyncQuiescence.mockResolvedValue(undefined)
+    awaitArkadeSaveQuiescence.mockResolvedValue(undefined)
+    orchestrateArkadeLoad.mockResolvedValue(undefined)
     awaitInFlightWalletSecretsWrites.mockResolvedValue(undefined)
-    getArkadeSessionOpenPromiseFromLastOnchainLoad.mockReturnValue(null)
     ensureWalletSecretsSession.mockResolvedValue(undefined)
     endWalletSecretsSession.mockResolvedValue(undefined)
     isWalletSecretsSessionActive.mockResolvedValue(true)
@@ -236,6 +272,9 @@ describe('lock-lifecycle-orchestrator', () => {
     expect(syncOnchainLoadLifecycleWithLockPhase).toHaveBeenCalledWith('locked')
     expect(syncOnchainSyncLifecycleWithLockPhase).toHaveBeenCalledWith('locked')
     expect(syncOnchainSaveLifecycleWithLockPhase).toHaveBeenCalledWith('locked')
+    expect(syncArkadeLoadLifecycleWithLockPhase).toHaveBeenCalledWith('locked')
+    expect(syncArkadeSyncLifecycleWithLockPhase).toHaveBeenCalledWith('locked')
+    expect(syncArkadeSaveLifecycleWithLockPhase).toHaveBeenCalledWith('locked')
   })
 
   it('orchestrateLock no-op in no-lock phase', async () => {
@@ -281,6 +320,21 @@ describe('lock-lifecycle-orchestrator', () => {
       clearLastSyncTime: true,
     })
     expect(orchestrateOnchainPostUnlockSync).toHaveBeenCalled()
+    expect(orchestrateArkadeLoad).toHaveBeenCalledWith({
+      walletId: 1,
+      networkMode: 'testnet',
+    })
+  })
+
+  it('orchestrateLock rejects when Arkade save-error blocks lock', async () => {
+    walletStoreState.activeWalletId = 1
+    syncLockLifecycleWithActiveWallet(1)
+    isArkadeSaveBlockingLock.mockReturnValue(true)
+
+    await expect(orchestrateLock()).rejects.toThrow(
+      'Arkade save-error blocks lock until retry or forced lock',
+    )
+    expect(lockAndPurgeSensitiveRuntimeState).not.toHaveBeenCalled()
   })
 
   it('orchestrateLock rejects when on-chain save-error blocks lock', async () => {

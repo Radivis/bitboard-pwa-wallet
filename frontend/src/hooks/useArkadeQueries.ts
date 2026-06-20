@@ -24,7 +24,10 @@ import type {
 } from '@/workers/arkade-api'
 import { isArkadeActiveForNetworkMode } from '@/lib/arkade/arkade-utils'
 import {
-  awaitArkadeSessionReady,
+  awaitArkadeLoadQuiescence,
+  getArkadeLoadLifecycleSnapshot,
+} from '@/lib/wallet/lifecycle/arkade-load-lifecycle-orchestrator'
+import {
   openArkadeSessionForWallet,
 } from '@/lib/arkade/arkade-session-service'
 import { scheduleBackgroundArkadeOperatorSync } from '@/lib/arkade/arkade-operator-sync'
@@ -80,7 +83,8 @@ function useArkadeQueryBase() {
   const sessionReady =
     activeWalletId != null &&
     isArkadeActiveForNetworkMode(networkMode) &&
-    isArkadeSupportedNetworkMode(networkMode)
+    isArkadeSupportedNetworkMode(networkMode) &&
+    getArkadeLoadLifecycleSnapshot().loadPhase === 'loaded'
 
   return { networkMode, activeWalletId, activeArkadeConnectionId, sessionReady }
 }
@@ -112,11 +116,14 @@ async function ensureArkadeSessionOpenForActiveWallet(): Promise<void> {
     !isArkadeActiveForNetworkMode(networkMode) ||
     !isArkadeSupportedNetworkMode(networkMode)
   ) {
-    await awaitArkadeSessionReady()
+    await awaitArkadeLoadQuiescence()
     return
   }
   if (!(await isWalletSecretsSessionActive())) {
-    await awaitArkadeSessionReady()
+    await awaitArkadeLoadQuiescence()
+    return
+  }
+  if (getArkadeLoadLifecycleSnapshot().loadPhase === 'loaded') {
     return
   }
   await openArkadeSessionForWallet({
@@ -134,7 +141,7 @@ async function withReadyArkadeWorkerAndOptionalDelegate<T>(
   networkMode: NetworkMode,
   run: () => Promise<T>,
 ): Promise<T> {
-  await awaitArkadeSessionReady()
+  await awaitArkadeLoadQuiescence()
   const result = await run()
   if (isArkadeSupportedNetworkMode(networkMode) && isArkadeDelegatorConfigured(networkMode)) {
     await getArkadeWorker().delegateSpendableVtxos()
@@ -676,7 +683,7 @@ export function useArkadeUnilateralUnrollMutation() {
       onProgress: (event: ArkadeUnrollProgressEvent) => void
     }) => {
       assertArkadeSessionUnlocked(activeWalletId)
-      await awaitArkadeSessionReady()
+      await awaitArkadeLoadQuiescence()
       return getArkadeWorker().runUnilateralUnroll(
         { txid: params.txid, vout: params.vout },
         proxy((event: ArkadeUnrollProgressEvent) => {

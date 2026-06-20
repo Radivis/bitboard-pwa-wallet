@@ -3,11 +3,12 @@ feature:
   description: >
     Per-rail Load, Sync, and Save lifecycle orchestrators (on-chain, Lightning, Arkade).
     Complements LockLifecycle (lock/unlock). Full architecture: docs/wallet-rail-lifecycle.md.
-    L1 (OnchainLoadLifecycle) and L2 (OnchainSyncLifecycle + OnchainSaveLifecycle) implemented; remaining rails deferred.
+    L1–L3 orchestrators implemented; L5 adds React subscription hooks and dashboard sync UI. Lightning L4.
   requirements:
     - LockLifecycle gates all rails; no load/sync/save when phase is no-lock or locking
     - Each rail exposes independent LoadLifecyclePhase, SyncLifecyclePhase, SaveLifecyclePhase
-    - TanStack Query executes async work; orchestrator drives enabled/queryFn and derives phase
+    - TanStack Query executes async work; orchestrator drives enabled/queryFn; phase is not stored in Query cache or Zustand
+    - React components read lifecycle phase via useSyncExternalStore hooks in frontend/src/hooks (L5); not ad hoc getSnapshot in render
     - not-configured means rail inactive (feature off, unsupported network, or no setup) — not wallet locked
     - When a rail is not-configured, Load, Sync, and Save lifecycles for that rail are all not-configured (no mixed states)
     - Lab network has no on-chain Esplora sync (sync stays not-configured); lab DB load/save is a documented exception
@@ -37,7 +38,7 @@ feature:
         description: LockLifecycle unlock delegates on-chain load to OnchainLoadLifecycle
         implemented_by: frontend/src/lib/wallet/lifecycle/__tests__/lock-lifecycle-orchestrator.test.ts
       - id: LIFE-LOCK-02
-        description: orchestrateLock awaits on-chain sync/save quiescence and wallet-secrets writes before worker purge; hard-blocks on save-error (Lightning/Arkade pending L3/L4)
+        description: orchestrateLock awaits on-chain and Arkade sync/save quiescence and wallet-secrets writes before worker purge; hard-blocks on on-chain or Arkade save-error (Lightning pending L4)
         implemented_by: frontend/src/lib/wallet/lifecycle/__tests__/lock-lifecycle-orchestrator.test.ts
     onchain:
       - id: LIFE-ONC-LOAD-01
@@ -67,23 +68,33 @@ feature:
     arkade:
       - id: LIFE-ARK-LOAD-01
         description: ArkadeLoadLifecycle loading includes session open, WASM hydration, and refreshArkadeStoreFromLoadedWasm
+        implemented_by: frontend/src/lib/wallet/lifecycle/__tests__/arkade-load-lifecycle-orchestrator.test.ts
       - id: LIFE-ARK-LOAD-02
         description: activeArkadeConnectionId is set when ArkadeLoadLifecycle reaches loaded (not after sync)
+        implemented_by: frontend/src/lib/wallet/lifecycle/__tests__/arkade-load-lifecycle-orchestrator.test.ts
       - id: LIFE-ARK-LOAD-03
         description: Receive address is stable when ArkadeLoadLifecycle is loaded (replaces connection-id ordering patch)
+        implemented_by: frontend/src/lib/wallet/lifecycle/__tests__/arkade-load-lifecycle-orchestrator.test.ts
       - id: LIFE-ARK-SYNC-01
         description: ArkadeSyncLifecycle syncing covers operator sync only, not session open
+        implemented_by: frontend/src/lib/wallet/lifecycle/__tests__/arkade-sync-lifecycle-orchestrator.test.ts
       - id: LIFE-ARK-SAVE-01
         description: SDK persistence flush runs in ArkadeSaveLifecycle after operator sync
+        implemented_by: frontend/src/lib/wallet/lifecycle/__tests__/arkade-save-lifecycle-orchestrator.test.ts
       - id: LIFE-ARK-CFG-01
         description: Arkade rail is not-configured when feature disabled or network unsupported
+        implemented_by: frontend/src/lib/wallet/lifecycle/__tests__/arkade-load-lifecycle-orchestrator.test.ts
       - id: LIFE-ARK-ERR-01
         description: Arkade sync-error serves loaded WASM/local dashboard data
+        implemented_by: frontend/src/lib/wallet/lifecycle/__tests__/arkade-sync-lifecycle-orchestrator.test.ts
     e2e_readiness:
       - id: LIFE-E2E-01
-        description: E2E may await ArkadeLoadLifecycle loaded before receive address assertions (future hook)
+        description: E2E may await data-rail-arkade-load=loaded before receive address assertions
+        implemented_by: frontend/tests/e2e/helpers/dashboard-arkade.ts
       - id: LIFE-E2E-02
-        description: E2E may await OnchainLoadLifecycle loaded before dashboard balance assertions (future hook)
+        description: E2E may await data-rail-onchain-load=loaded before on-chain dashboard balance assertions (future hook)
+      - id: LIFE-E2E-03
+        description: Balance fixture tests wait for operator sync or domain balance, not load phase alone (load does not imply synced balance)
     dashboard:
       - id: LIFE-UI-SYNC-01
         description: Dashboard exposes per-rail sync buttons (on-chain, Lightning when configured, Arkade when active)
@@ -91,6 +102,15 @@ feature:
         description: Syncing one rail does not implicitly sync other rails
       - id: LIFE-UI-SYNC-03
         description: Per-rail sync button reflects that rail SyncLifecyclePhase (syncing, sync-error, not-syncing)
+    react_hooks:
+      - id: LIFE-UI-HOOK-01
+        description: Each lifecycle orchestrator has a useSyncExternalStore hook (use*LifecycleSnapshot) in frontend/src/hooks
+      - id: LIFE-UI-HOOK-02
+        description: Per-rail aggregate hooks (useOnchainRailSnapshot, useArkadeRailSnapshot) compose load/sync/save phases
+      - id: LIFE-UI-HOOK-03
+        description: TanStack Query enabled gates use selector hooks (e.g. useIsArkadeSessionReady), not synchronous getSnapshot in render
+      - id: LIFE-UI-HOOK-04
+        description: Manual per-rail sync uses useMutation; syncPhase from subscription hook drives button spinner and disabled state
     invariants:
       - id: LIFE-INV-01
         description: not-configured applies to all three lifecycles on a rail simultaneously

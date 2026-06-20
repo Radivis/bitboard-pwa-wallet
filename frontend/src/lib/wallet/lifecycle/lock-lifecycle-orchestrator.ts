@@ -3,9 +3,21 @@ import { useWalletStore } from '@/stores/walletStore'
 import { useCryptoStore } from '@/stores/cryptoStore'
 import {
   orchestrateOnchainLoad,
-  getArkadeSessionOpenPromiseFromLastOnchainLoad,
   syncOnchainLoadLifecycleWithLockPhase,
 } from '@/lib/wallet/lifecycle/onchain-load-lifecycle-orchestrator'
+import { orchestrateArkadeLoad } from '@/lib/wallet/lifecycle/arkade-load-lifecycle-orchestrator'
+import {
+  awaitArkadeSaveQuiescence,
+  isArkadeSaveBlockingLock,
+  ArkadeSaveBlockingLockError,
+  syncArkadeSaveLifecycleWithLockPhase,
+} from '@/lib/wallet/lifecycle/arkade-save-lifecycle-orchestrator'
+import {
+  awaitArkadeSyncQuiescence,
+  syncArkadeSyncLifecycleWithLockPhase,
+} from '@/lib/wallet/lifecycle/arkade-sync-lifecycle-orchestrator'
+import { syncArkadeLoadLifecycleWithLockPhase } from '@/lib/wallet/lifecycle/arkade-load-lifecycle-orchestrator'
+import { isArkadeActiveForNetworkMode } from '@/lib/arkade/arkade-utils'
 import { orchestrateOnchainPostUnlockSync } from '@/lib/wallet/lifecycle/onchain-sync-lifecycle-orchestrator'
 import {
   awaitOnchainSaveQuiescence,
@@ -37,8 +49,8 @@ export type { LockLifecyclePhase, LockLifecycleOperation, LockLifecycleSnapshot 
  * LockLifecycle orchestrator — serializes lock, manual unlock, and bootstrap unlock.
  *
  * Unlock delegates on-chain WASM load to OnchainLoadLifecycle and post-unlock Esplora
- * sync to OnchainSyncLifecycle + OnchainSaveLifecycle. Lightning/Arkade save quiescence
- * in lock is deferred to L3/L4 (partial LIFE-LOCK-02).
+ * sync to OnchainSyncLifecycle + OnchainSaveLifecycle. Arkade load/sync/save quiescence
+ * on lock is LIFE-LOCK-02 (Arkade portion). Lightning deferred to L4.
  */
 
 type UnlockLoadParams = {
@@ -126,6 +138,16 @@ async function runUnlockLoad(params: UnlockLoadParams): Promise<void> {
     accountId: params.accountId,
     clearLastSyncTime: params.networkMode !== 'lab',
   })
+  if (isArkadeActiveForNetworkMode(params.networkMode)) {
+    void orchestrateArkadeLoad({
+      walletId: params.walletId,
+      networkMode: params.networkMode,
+    }).catch((err) => {
+      void import('@/lib/arkade/arkade-session-open-error-toast').then(
+        ({ reportArkadeSessionOpenError }) => reportArkadeSessionOpenError(err),
+      )
+    })
+  }
   if (params.networkMode !== 'lab') {
     void orchestrateOnchainPostUnlockSync({
       walletId: params.walletId,
@@ -133,7 +155,6 @@ async function runUnlockLoad(params: UnlockLoadParams): Promise<void> {
       addressType: params.addressType,
       accountId: params.accountId,
       onSyncError: params.onSyncError,
-      arkadeSessionOpenPromise: getArkadeSessionOpenPromiseFromLastOnchainLoad(),
     })
   }
 }
@@ -257,9 +278,14 @@ export async function orchestrateLock(): Promise<void> {
     if (isOnchainSaveBlockingLock()) {
       throw new OnchainSaveBlockingLockError()
     }
+    if (isArkadeSaveBlockingLock()) {
+      throw new ArkadeSaveBlockingLockError()
+    }
 
     await awaitOnchainSyncQuiescence()
     await awaitOnchainSaveQuiescence()
+    await awaitArkadeSyncQuiescence()
+    await awaitArkadeSaveQuiescence()
     await awaitInFlightWalletSecretsWrites()
 
     setPhase('locking')
@@ -269,11 +295,17 @@ export async function orchestrateLock(): Promise<void> {
       syncOnchainLoadLifecycleWithLockPhase('locked')
       syncOnchainSyncLifecycleWithLockPhase('locked')
       syncOnchainSaveLifecycleWithLockPhase('locked')
+      syncArkadeLoadLifecycleWithLockPhase('locked')
+      syncArkadeSyncLifecycleWithLockPhase('locked')
+      syncArkadeSaveLifecycleWithLockPhase('locked')
       setSnapshot({ phase: 'locked', operation: 'none' })
     } catch (error) {
       syncOnchainLoadLifecycleWithLockPhase('locked')
       syncOnchainSyncLifecycleWithLockPhase('locked')
       syncOnchainSaveLifecycleWithLockPhase('locked')
+      syncArkadeLoadLifecycleWithLockPhase('locked')
+      syncArkadeSyncLifecycleWithLockPhase('locked')
+      syncArkadeSaveLifecycleWithLockPhase('locked')
       setSnapshot({ phase: 'locked', operation: 'none' })
       throw error
     }

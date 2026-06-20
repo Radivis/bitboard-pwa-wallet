@@ -4,7 +4,7 @@ import { Lock } from 'lucide-react'
 import { toast } from 'sonner'
 import { useWalletStore } from '@/stores/walletStore'
 import { orchestrateLock } from '@/lib/wallet/lifecycle/lock-lifecycle-orchestrator'
-import { reportOnchainSaveBlockingLock } from '@/lib/wallet/wallet-save-error-toast'
+import { reportWalletSaveBlockingLock } from '@/lib/wallet/wallet-save-error-toast'
 import { useUpdateWallet, useWallet, useWallets } from '@/db'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -46,7 +46,7 @@ export function WalletManagement({
       await orchestrateLock()
       toast.success('Wallet locked')
     } catch (error) {
-      if (!reportOnchainSaveBlockingLock(error)) {
+      if (!reportWalletSaveBlockingLock(error)) {
         throw error
       }
     }

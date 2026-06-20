@@ -6,7 +6,7 @@ const featureState = vi.hoisted(() => ({
   isMainnetAccessEnabled: false,
 }))
 
-const openArkadeSessionForWalletMock = vi.hoisted(() =>
+const orchestrateArkadeLoadMock = vi.hoisted(() =>
   vi.fn().mockResolvedValue(undefined),
 )
 
@@ -52,13 +52,15 @@ vi.mock('@/lib/arkade/arkade-session-open-error-toast', () => ({
     reportArkadeSessionOpenErrorMock(...args),
 }))
 
-vi.mock('@/lib/arkade/arkade-session-service', () => ({
-  openArkadeSessionForWallet: (...args: unknown[]) => {
-    unlockCallOrder.push('openArkadeSessionForWallet')
-    return openArkadeSessionForWalletMock(...args)
+vi.mock('@/lib/wallet/lifecycle/arkade-load-lifecycle-orchestrator', () => ({
+  orchestrateArkadeLoad: (...args: unknown[]) => {
+    unlockCallOrder.push('orchestrateArkadeLoad')
+    return orchestrateArkadeLoadMock(...args)
   },
-  closeArkadeSession: vi.fn(),
-  refreshArkadeSessionAfterNetworkSwitch: vi.fn(),
+}))
+
+vi.mock('@/lib/arkade/arkade-utils', () => ({
+  isArkadeActiveForNetworkMode: () => true,
 }))
 
 const waitForCryptoWorkerHealthyMock = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
@@ -140,20 +142,20 @@ import {
   loadDescriptorWalletWithoutSync,
 } from '@/lib/wallet/wallet-utils'
 
-describe('openArkadeSession after unlock (integration)', () => {
+describe('orchestrateArkadeLoad after unlock (integration)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     unlockCallOrder.length = 0
     walletStoreState.walletStatus = 'none'
-    openArkadeSessionForWalletMock.mockResolvedValue(undefined)
+    orchestrateArkadeLoadMock.mockResolvedValue(undefined)
   })
 
-  it('UNLOCK-ARK-01 loadDescriptorWalletWithoutSync starts openArkadeSessionForWallet without blocking when Arkade is active', async () => {
-    let resolveOpen: (() => void) | undefined
-    openArkadeSessionForWalletMock.mockImplementation(
+  it('UNLOCK-ARK-01 loadDescriptorWalletWithoutSync starts orchestrateArkadeLoad without blocking when Arkade is active', async () => {
+    let resolveLoad: (() => void) | undefined
+    orchestrateArkadeLoadMock.mockImplementation(
       () =>
         new Promise<void>((resolve) => {
-          resolveOpen = resolve
+          resolveLoad = resolve
         }),
     )
 
@@ -165,20 +167,20 @@ describe('openArkadeSession after unlock (integration)', () => {
     })
 
     expect(waitForCryptoWorkerHealthyMock).toHaveBeenCalled()
-    expect(openArkadeSessionForWalletMock).toHaveBeenCalledWith({
+    expect(orchestrateArkadeLoadMock).toHaveBeenCalledWith({
       walletId: 3,
       networkMode: 'signet',
     })
-    expect(resolveOpen).toBeDefined()
-    resolveOpen!()
+    expect(resolveLoad).toBeDefined()
+    resolveLoad!()
   })
 
-  it('UNLOCK-ARK-01 loadDescriptorWalletAndSync starts openArkadeSessionForWallet without blocking when Arkade is active', async () => {
-    let resolveOpen: (() => void) | undefined
-    openArkadeSessionForWalletMock.mockImplementation(
+  it('UNLOCK-ARK-01 loadDescriptorWalletAndSync starts orchestrateArkadeLoad without blocking when Arkade is active', async () => {
+    let resolveLoad: (() => void) | undefined
+    orchestrateArkadeLoadMock.mockImplementation(
       () =>
         new Promise<void>((resolve) => {
-          resolveOpen = resolve
+          resolveLoad = resolve
         }),
     )
 
@@ -191,15 +193,15 @@ describe('openArkadeSession after unlock (integration)', () => {
     })
 
     expect(waitForCryptoWorkerHealthyMock).toHaveBeenCalled()
-    expect(openArkadeSessionForWalletMock).toHaveBeenCalledWith({
+    expect(orchestrateArkadeLoadMock).toHaveBeenCalledWith({
       walletId: 3,
       networkMode: 'signet',
     })
-    expect(resolveOpen).toBeDefined()
-    resolveOpen!()
+    expect(resolveLoad).toBeDefined()
+    resolveLoad!()
   })
 
-  it('UNLOCK-ARK-02 starts Arkade session open during unlock load and still marks wallet unlocked', async () => {
+  it('UNLOCK-ARK-02 starts Arkade load in parallel with on-chain load and still marks wallet unlocked', async () => {
     await loadDescriptorWalletAndSync({
       walletId: 3,
       networkMode: 'signet',
@@ -209,17 +211,16 @@ describe('openArkadeSession after unlock (integration)', () => {
     })
 
     const unlockedIndex = unlockCallOrder.indexOf('setWalletStatus:unlocked')
-    const sessionOpenIndex = unlockCallOrder.indexOf('openArkadeSessionForWallet')
+    const arkadeLoadIndex = unlockCallOrder.indexOf('orchestrateArkadeLoad')
     const resolveDescriptorIndex = unlockCallOrder.indexOf('resolveDescriptorWallet')
-    expect(sessionOpenIndex).toBeGreaterThanOrEqual(0)
+    expect(arkadeLoadIndex).toBeGreaterThanOrEqual(0)
     expect(resolveDescriptorIndex).toBeGreaterThanOrEqual(0)
-    expect(sessionOpenIndex).toBeGreaterThan(resolveDescriptorIndex)
-    expect(unlockedIndex).toBeGreaterThan(sessionOpenIndex)
+    expect(unlockedIndex).toBeGreaterThan(resolveDescriptorIndex)
   })
 
-  it('UNLOCK-ARK-04 Arkade session open failure must not reject unlock', async () => {
-    const sessionOpenError = new Error('Mutinynet operator unreachable')
-    openArkadeSessionForWalletMock.mockRejectedValueOnce(sessionOpenError)
+  it('UNLOCK-ARK-04 Arkade load failure must not reject unlock', async () => {
+    const loadError = new Error('Mutinynet operator unreachable')
+    orchestrateArkadeLoadMock.mockRejectedValueOnce(loadError)
 
     await expect(
       loadDescriptorWalletAndSync({
@@ -233,7 +234,7 @@ describe('openArkadeSession after unlock (integration)', () => {
 
     expect(walletStoreState.setWalletStatus).toHaveBeenCalledWith('unlocked')
     await vi.waitFor(() =>
-      expect(reportArkadeSessionOpenErrorMock).toHaveBeenCalledWith(sessionOpenError),
+      expect(reportArkadeSessionOpenErrorMock).toHaveBeenCalledWith(loadError),
     )
   })
 })

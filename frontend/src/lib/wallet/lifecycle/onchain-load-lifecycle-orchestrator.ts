@@ -1,4 +1,3 @@
-import type { NetworkMode } from '@/stores/walletStore'
 import { useWalletStore } from '@/stores/walletStore'
 import { useCryptoStore } from '@/stores/cryptoStore'
 import { toBitcoinNetwork } from '@/lib/wallet/bitcoin-utils'
@@ -6,9 +5,6 @@ import { resolveDescriptorWallet } from '@/lib/wallet/descriptor-wallet-manager'
 import { withPersistedChainMismatchRetry } from '@/lib/wallet/persisted-chain-mismatch'
 import { refreshWalletStoreFromLoadedBdk } from '@/lib/wallet/onchain-bdk-store-sync'
 import { invalidateOnchainDashboardQueries } from '@/lib/wallet/onchain-dashboard-sync'
-import { reportArkadeSessionOpenError } from '@/lib/arkade/arkade-session-open-error-toast'
-import { isArkadeActiveForNetworkMode } from '@/lib/arkade/arkade-utils'
-import { openArkadeSessionForWallet } from '@/lib/arkade/arkade-session-service'
 import { waitForCryptoWorkerHealthy } from '@/workers/crypto-factory'
 import type { LoadWalletParams } from '@/workers/crypto-api'
 import type {
@@ -36,7 +32,6 @@ let snapshot: OnchainLoadLifecycleSnapshot = {
   networkMode: null,
 }
 
-let lastArkadeSessionOpenPromise: Promise<void> | null = null
 let suppressCrossTabNotify = false
 
 const listeners = new Set<(next: OnchainLoadLifecycleSnapshot) => void>()
@@ -94,18 +89,6 @@ function beginInFlightLoad(key: string, run: () => Promise<void>): Promise<void>
   return promise
 }
 
-function beginArkadeSessionOpenAfterUnlockIfActive(params: {
-  walletId: number
-  networkMode: NetworkMode
-}): Promise<void> | null {
-  if (!isArkadeActiveForNetworkMode(params.networkMode)) {
-    return null
-  }
-  return openArkadeSessionForWallet(params).catch((err) =>
-    reportArkadeSessionOpenError(err),
-  )
-}
-
 async function loadWalletHandlingPersistedChainMismatch(
   loadWallet: (params: LoadWalletParams) => Promise<boolean>,
   params: LoadWalletParams,
@@ -124,11 +107,6 @@ async function runWasmLoad(params: OnchainLoadParams): Promise<void> {
     targetNetwork: network,
     targetAddressType: addressType,
     targetAccountId: accountId,
-  })
-
-  lastArkadeSessionOpenPromise = beginArkadeSessionOpenAfterUnlockIfActive({
-    walletId,
-    networkMode,
   })
 
   const { loadWallet, getCurrentAddress } = useCryptoStore.getState()
@@ -175,13 +153,13 @@ async function runWasmLoad(params: OnchainLoadParams): Promise<void> {
     const { orchestrateLock } = await import(
       '@/lib/wallet/lifecycle/lock-lifecycle-orchestrator'
     )
-    const { reportOnchainSaveBlockingLock } = await import(
+    const { reportWalletSaveBlockingLock } = await import(
       '@/lib/wallet/wallet-save-error-toast'
     )
     try {
       await orchestrateLock()
     } catch (error) {
-      reportOnchainSaveBlockingLock(error)
+      reportWalletSaveBlockingLock(error)
     }
   })
 }
@@ -197,10 +175,6 @@ export function subscribeOnchainLoadLifecycle(
   return () => {
     listeners.delete(listener)
   }
-}
-
-export function getArkadeSessionOpenPromiseFromLastOnchainLoad(): Promise<void> | null {
-  return lastArkadeSessionOpenPromise
 }
 
 export function applyOnchainLoadLifecycleSnapshotFromOtherTab(
@@ -238,7 +212,6 @@ export async function orchestrateOnchainLoad(params: OnchainLoadParams): Promise
   }
 
   return beginInFlightLoad(key, async () => {
-    lastArkadeSessionOpenPromise = null
     setSnapshot({ loadPhase: 'loading', networkMode: params.networkMode })
     try {
       await runWasmLoad(params)
@@ -262,6 +235,5 @@ export async function orchestrateOnchainLoad(params: OnchainLoadParams): Promise
 export function resetOnchainLoadLifecycleStateForTests(): void {
   snapshot = { loadPhase: 'not-configured', networkMode: null }
   inFlightLoad = null
-  lastArkadeSessionOpenPromise = null
   listeners.clear()
 }

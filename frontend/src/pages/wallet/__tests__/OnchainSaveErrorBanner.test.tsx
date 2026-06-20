@@ -28,6 +28,21 @@ vi.mock('@/lib/wallet/lifecycle/onchain-save-lifecycle-orchestrator', () => ({
     acknowledgeOnchainSaveErrorForForcedLock(...args),
 }))
 
+vi.mock('@/lib/wallet/lifecycle/arkade-save-lifecycle-orchestrator', () => ({
+  getArkadeSaveLifecycleSnapshot: () => ({
+    savePhase: 'not-saving',
+    errorMessage: null,
+    railScope: null,
+  }),
+  subscribeArkadeSaveLifecycle: () => () => undefined,
+  orchestrateArkadeRetrySave: vi.fn(),
+  acknowledgeArkadeSaveErrorForForcedLock: vi.fn(),
+}))
+
+vi.mock('@/lib/arkade/arkade-utils', () => ({
+  isArkadeActiveForNetworkMode: () => false,
+}))
+
 vi.mock('@/stores/walletStore', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/stores/walletStore')>()
   return {

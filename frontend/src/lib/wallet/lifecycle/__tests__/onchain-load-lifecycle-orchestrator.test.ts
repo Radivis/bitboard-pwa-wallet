@@ -6,8 +6,6 @@ const resolveDescriptorWallet = vi.fn()
 const withPersistedChainMismatchRetry = vi.fn()
 const refreshWalletStoreFromLoadedBdk = vi.fn()
 const invalidateOnchainDashboardQueries = vi.fn()
-const openArkadeSessionForWallet = vi.fn()
-const isArkadeActiveForNetworkMode = vi.fn()
 const startAutoLockTimer = vi.fn()
 
 const loadWallet = vi.fn()
@@ -40,19 +38,6 @@ vi.mock('@/lib/wallet/onchain-bdk-store-sync', () => ({
 vi.mock('@/lib/wallet/onchain-dashboard-sync', () => ({
   invalidateOnchainDashboardQueries: (...args: unknown[]) =>
     invalidateOnchainDashboardQueries(...args),
-}))
-
-vi.mock('@/lib/arkade/arkade-session-service', () => ({
-  openArkadeSessionForWallet: (...args: unknown[]) => openArkadeSessionForWallet(...args),
-}))
-
-vi.mock('@/lib/arkade/arkade-utils', () => ({
-  isArkadeActiveForNetworkMode: (...args: unknown[]) =>
-    isArkadeActiveForNetworkMode(...args),
-}))
-
-vi.mock('@/lib/arkade/arkade-session-open-error-toast', () => ({
-  reportArkadeSessionOpenError: vi.fn(),
 }))
 
 vi.mock('@/stores/sessionStore', () => ({
@@ -139,7 +124,6 @@ describe('onchain-load-lifecycle-orchestrator', () => {
     })
     getCurrentAddress.mockResolvedValue('tb1qtest')
     refreshWalletStoreFromLoadedBdk.mockResolvedValue(undefined)
-    isArkadeActiveForNetworkMode.mockReturnValue(false)
     startAutoLockTimer.mockReturnValue(undefined)
   })
 

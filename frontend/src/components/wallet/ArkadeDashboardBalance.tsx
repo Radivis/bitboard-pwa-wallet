@@ -1,5 +1,6 @@
 import { Link } from '@tanstack/react-router'
 import { Layers, Loader2 } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import { ArkadeOverviewInfomodeContent } from '@/components/arkade/infomode/ArkadeOverviewInfomodeContent'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -9,6 +10,14 @@ import {
   ARKADE_OPERATOR_STALE_INFOMODE,
 } from '@/lib/arkade/arkade-infomode'
 import { useArkadeSyncMetadataQuery } from '@/hooks/useArkadeDashboardQueries'
+import {
+  getArkadeLoadLifecycleSnapshot,
+  subscribeArkadeLoadLifecycle,
+} from '@/lib/wallet/lifecycle/arkade-load-lifecycle-orchestrator'
+import {
+  getArkadeSyncLifecycleSnapshot,
+  subscribeArkadeSyncLifecycle,
+} from '@/lib/wallet/lifecycle/arkade-sync-lifecycle-orchestrator'
 import { useArkadeBalanceQuery } from '@/hooks/useArkadeQueries'
 import { isArkadeActiveForNetworkMode } from '@/lib/arkade/arkade-utils'
 import { selectCommittedNetworkMode, useWalletStore } from '@/stores/walletStore'
@@ -19,6 +28,11 @@ export function ArkadeDashboardBalance() {
   const show = isArkadeActiveForNetworkMode(networkMode)
   const balanceQuery = useArkadeBalanceQuery()
   const arkadeSyncQuery = useArkadeSyncMetadataQuery()
+  const [loadPhase, setLoadPhase] = useState(() => getArkadeLoadLifecycleSnapshot().loadPhase)
+  const [syncPhase, setSyncPhase] = useState(() => getArkadeSyncLifecycleSnapshot().syncPhase)
+
+  useEffect(() => subscribeArkadeLoadLifecycle((next) => setLoadPhase(next.loadPhase)), [])
+  useEffect(() => subscribeArkadeSyncLifecycle((next) => setSyncPhase(next.syncPhase)), [])
 
   const balance = storeBalance ?? balanceQuery.data
   const isLoading = balanceQuery.isLoading && balance == null
@@ -29,7 +43,11 @@ export function ArkadeDashboardBalance() {
   if (!show) return null
 
   return (
-    <Card data-testid="dashboard-arkade-balance-card">
+    <Card
+      data-testid="dashboard-arkade-balance-card"
+      data-rail-arkade-load={loadPhase}
+      data-rail-arkade-sync={syncPhase}
+    >
       <CardHeader className="pb-2">
         <CardTitle className="flex items-center gap-2 text-base">
           <Layers className="h-4 w-4" aria-hidden />

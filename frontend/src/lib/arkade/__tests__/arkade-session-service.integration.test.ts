@@ -107,9 +107,14 @@ vi.mock('@/lib/arkade/arkade-query-keys', () => ({
     removeArkadeDashboardQueriesMock(...args),
 }))
 
+vi.mock('@/lib/arkade/arkade-encrypted-persistence-manager', () => ({
+  saveLastSuccessfulOperatorSyncAtEncrypted: vi.fn().mockResolvedValue(undefined),
+}))
+
 vi.mock('@/lib/arkade/arkade-dashboard-sync', () => ({
   removeArkadeDashboardSyncQueries: (...args: unknown[]) =>
     removeArkadeDashboardSyncQueriesMock(...args),
+  invalidateArkadeDashboardQueries: vi.fn(),
 }))
 
 vi.mock('@/lib/arkade/arkade-persistence-store-sync', () => ({
@@ -178,7 +183,8 @@ describe('openArkadeSessionForWallet (integration)', () => {
       createdAt: '2020-01-01T00:00:00.000Z',
     })
     refreshArkadeStoreFromLoadedWasmMock.mockResolvedValue(undefined)
-    runArkadeOperatorSyncAndPersistMock.mockResolvedValue(undefined)
+    workerMocks.syncWithOperator.mockResolvedValue(undefined)
+    workerMocks.reconcileActiveConnectionId.mockResolvedValue(undefined)
   })
 
   it('opens worker session with network endpoints after unlock prerequisites', async () => {
@@ -210,19 +216,14 @@ describe('openArkadeSessionForWallet (integration)', () => {
         persistInitialSdkFromWasm: true,
       }),
     )
-    expect(runArkadeOperatorSyncAndPersistMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        connectionId: TEST_CONNECTION_ID,
-        sessionAlreadyOpen: true,
-      }),
-    )
     expect(refreshArkadeStoreFromLoadedWasmMock).toHaveBeenCalledWith(TEST_CONNECTION_ID)
     expect(setActiveArkadeConnectionIdMock).toHaveBeenCalledWith(TEST_CONNECTION_ID)
+    await vi.waitFor(() => expect(workerMocks.syncWithOperator).toHaveBeenCalled())
     expect(workerMocks.finalizePendingTransactions).toHaveBeenCalledTimes(1)
     expect(workerMocks.delegateSpendableVtxos).not.toHaveBeenCalled()
   })
 
-  it('ARK-HYDRATE-01 sets active connection id only after WASM dashboard refresh', async () => {
+  it('ARK-HYDRATE-01 sets active connection id at load before operator sync', async () => {
     const hydrationOrder: string[] = []
     const persistedConnection = {
       id: TEST_CONNECTION_ID,
@@ -241,32 +242,22 @@ describe('openArkadeSessionForWallet (integration)', () => {
     setActiveArkadeConnectionIdMock.mockImplementation(() => {
       hydrationOrder.push('setActiveArkadeConnectionId')
     })
+    workerMocks.syncWithOperator.mockImplementation(async () => {
+      hydrationOrder.push('syncWithOperator')
+    })
 
     await openArkadeSessionForWallet({
       walletId: 7,
       networkMode: 'signet',
     })
 
-    expect(hydrationOrder).toEqual([
-      'refreshArkadeStoreFromLoadedWasm',
-      'refreshArkadeStoreFromLoadedWasm',
-      'setActiveArkadeConnectionId',
-    ])
-    expect(refreshArkadeStoreFromLoadedWasmMock).toHaveBeenCalledTimes(2)
-    expect(refreshArkadeStoreFromLoadedWasmMock).toHaveBeenNthCalledWith(
-      1,
-      TEST_CONNECTION_ID,
+    await vi.waitFor(() => expect(workerMocks.syncWithOperator).toHaveBeenCalled())
+
+    expect(hydrationOrder.indexOf('setActiveArkadeConnectionId')).toBeGreaterThanOrEqual(0)
+    expect(hydrationOrder.indexOf('syncWithOperator')).toBeGreaterThan(
+      hydrationOrder.indexOf('setActiveArkadeConnectionId'),
     )
-    expect(refreshArkadeStoreFromLoadedWasmMock).toHaveBeenNthCalledWith(
-      2,
-      TEST_CONNECTION_ID,
-    )
-    expect(runArkadeOperatorSyncAndPersistMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        connectionId: TEST_CONNECTION_ID,
-        sessionAlreadyOpen: true,
-      }),
-    )
+    expect(refreshArkadeStoreFromLoadedWasmMock).toHaveBeenCalledWith(TEST_CONNECTION_ID)
     expect(ensureArkadeOperatorConnectionMock).toHaveBeenCalledWith(
       expect.objectContaining({
         persistInitialSdkFromWasm: false,

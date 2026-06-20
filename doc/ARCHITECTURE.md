@@ -105,7 +105,11 @@ flowchart TB
 
 ### Wallet lifecycle orchestrators
 
-**Lock/unlock** is centralized in `frontend/src/lib/wallet/lifecycle/` (**LockLifecycle**, implemented). **Per-rail load, sync, and save** (on-chain, Lightning, Arkade) are specified in [docs/wallet-rail-lifecycle.md](../docs/wallet-rail-lifecycle.md): orchestrators drive TanStack Query `enabled` / `queryFn` and expose phase snapshots for guards and E2E; they do not replace Query cache or Zustand domain fields. Test contracts: [doc/features/wallet-lifecycle.yaml](features/wallet-lifecycle.yaml). Implementation is phased and not yet started.
+**Lock/unlock** and **per-rail load, sync, and save** (on-chain, Lightning, Arkade) live in `frontend/src/lib/wallet/lifecycle/`. Orchestrators own phase transitions and expose `get*Snapshot` + `subscribe*`; they drive TanStack Query `enabled` / `queryFn` for async work but **do not** store phase in Query cache or Zustand.
+
+**React integration (L5):** thin subscription hooks in `frontend/src/hooks/` wrap orchestrators with `useSyncExternalStore` — one hook per state machine plus per-rail aggregates and selectors (e.g. `useIsArkadeSessionReady()`). See [docs/wallet-rail-lifecycle.md](../docs/wallet-rail-lifecycle.md#react-lifecycle-hooks).
+
+Test contracts: [doc/features/wallet-lifecycle.yaml](features/wallet-lifecycle.yaml). L1–L3 orchestrators implemented; L5 hooks planned.
 
 ---
 

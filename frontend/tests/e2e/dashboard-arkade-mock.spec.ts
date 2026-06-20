@@ -25,12 +25,12 @@ import {
   installArkadeMockIsolation,
 } from './helpers/arkade-mock-isolation'
 import {
-  expectArkadeBalanceNotEmptySession,
   goToReceiveArkadeMode,
   readDashboardArkadeBalanceSats,
   readReceiveArkadeAddress,
   waitForArkadeActivityLoaded,
   waitForArkadeBalanceCard,
+  waitForArkadeMockDashboardBalance,
   waitForDashboardArkadeBalanceSats,
   waitForReceiveArkadeAddressReady,
   waitForArkadeWorkerReadyAfterUnlock,
@@ -79,7 +79,7 @@ test.describe('Dashboard Arkade mock ASP @arkade', () => {
     await goToWalletTab(page, 'Dashboard')
     await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible()
 
-    await expectArkadeBalanceNotEmptySession(page)
+    await waitForArkadeMockDashboardBalance(page)
     const arkadeSats = await readDashboardArkadeBalanceSats(page)
     expect(arkadeSats).toBe(E2E_ARKADE_MOCK_DEFAULT_BALANCE_SATS)
   })
@@ -90,8 +90,7 @@ test.describe('Dashboard Arkade mock ASP @arkade', () => {
     await switchToSignet(page)
     await goToWalletTab(page, 'Dashboard')
 
-    await expectArkadeBalanceNotEmptySession(page)
-    expect(await readDashboardArkadeBalanceSats(page)).toBe(E2E_ARKADE_MOCK_DEFAULT_BALANCE_SATS)
+    await waitForArkadeMockDashboardBalance(page)
     await waitForArkadeActivityLoaded(page)
     await expect(page.getByTestId(`arkade-payment-${E2E_ARKADE_MOCK_INCOMING_TXID}`)).toBeVisible()
   })
@@ -102,7 +101,7 @@ test.describe('Dashboard Arkade mock ASP @arkade', () => {
     await switchToSignet(page)
     await goToWalletTab(page, 'Dashboard')
 
-    await expectArkadeBalanceNotEmptySession(page)
+    await waitForArkadeMockDashboardBalance(page)
     const beforeSats = await readDashboardArkadeBalanceSats(page)
 
     await goToReceiveArkadeMode(page)
@@ -128,8 +127,7 @@ test.describe('Dashboard Arkade mock ASP @arkade', () => {
     await switchToSignet(page)
     await goToWalletTab(page, 'Dashboard')
 
-    await expectArkadeBalanceNotEmptySession(page)
-    expect(await readDashboardArkadeBalanceSats(page)).toBe(E2E_ARKADE_MOCK_DEFAULT_BALANCE_SATS)
+    await waitForArkadeMockDashboardBalance(page)
 
     await goToReceiveArkadeMode(page)
     await waitForReceiveArkadeAddressReady(page)

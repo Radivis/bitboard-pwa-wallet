@@ -1,6 +1,7 @@
 import { type Page, expect } from '@playwright/test'
 import { satsFromFirstFormattedBitcoinDisplayInRoot } from './bitcoin-amount-display'
 import { goToWalletTab } from './wallet-nav'
+import { E2E_ARKADE_MOCK_DEFAULT_BALANCE_SATS } from '@/lib/arkade/e2e/arkade-operator-mock-state'
 
 /** Mock ASP E2E happy path is ~5–15s; allow headroom for CI WASM cold start. */
 const ARKADE_MOCK_UI_TIMEOUT_MS = process.env.CI ? 60_000 : 30_000
@@ -12,13 +13,36 @@ export async function waitForArkadeBalanceCard(
   await expect(page.getByTestId('dashboard-arkade-balance-card')).toBeVisible({ timeout })
 }
 
+/** Wait until Arkade load lifecycle reaches `loaded`. */
+export async function waitForArkadeLoadReady(
+  page: Page,
+  timeout = ARKADE_MOCK_UI_TIMEOUT_MS,
+): Promise<void> {
+  await expect(page.locator('[data-rail-arkade-load="loaded"]')).toBeVisible({ timeout })
+}
+
+/**
+ * Session is open and balance UI is visible. Does not wait for post-load operator sync —
+ * use {@link waitForArkadeMockDashboardBalance} when asserting mock ASP fixture balances.
+ */
 export async function expectArkadeBalanceNotEmptySession(
   page: Page,
   timeout = ARKADE_MOCK_UI_TIMEOUT_MS,
 ): Promise<void> {
+  await waitForArkadeLoadReady(page, timeout)
   await waitForArkadeBalanceCard(page, timeout)
   await expect(page.getByTestId('dashboard-arkade-session-empty')).not.toBeVisible({ timeout })
   await expect(page.getByTestId('dashboard-arkade-balance-amount')).toBeVisible({ timeout })
+}
+
+/** Load + post-load operator sync; balance matches mock ASP fixture (default 42_000 sats). */
+export async function waitForArkadeMockDashboardBalance(
+  page: Page,
+  expectedSats = E2E_ARKADE_MOCK_DEFAULT_BALANCE_SATS,
+  timeout = ARKADE_MOCK_UI_TIMEOUT_MS,
+): Promise<void> {
+  await expectArkadeBalanceNotEmptySession(page, timeout)
+  await waitForDashboardArkadeBalanceSats(page, expectedSats, timeout)
 }
 
 export async function waitForArkadeActivityLoaded(
@@ -65,13 +89,13 @@ export async function waitForReceiveArkadeAddressReady(
   })
 }
 
-/** After lock/unlock, Arkade session open runs in the background — use before Receive assertions. */
+/** Unlock starts Arkade load in the background — wait before Receive assertions. */
 export async function waitForDashboardArkadeSessionAfterUnlock(
   page: Page,
   timeout = ARKADE_MOCK_UI_TIMEOUT_MS,
 ): Promise<void> {
   await goToWalletTab(page, 'Dashboard')
-  await expectArkadeBalanceNotEmptySession(page, timeout)
+  await waitForArkadeLoadReady(page, timeout)
   await waitForArkadeWasmSessionReady(page, timeout)
 }
 
@@ -84,6 +108,7 @@ export async function waitForArkadeWorkerReadyAfterUnlock(
   timeout = ARKADE_MOCK_UI_TIMEOUT_MS,
 ): Promise<void> {
   await goToWalletTab(page, 'Dashboard')
+  await waitForArkadeLoadReady(page, timeout)
   await waitForArkadeBalanceCard(page, timeout)
   await waitForArkadeWasmSessionReady(page, timeout)
 }

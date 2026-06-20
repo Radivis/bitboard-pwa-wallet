@@ -139,9 +139,6 @@ function toSaveParams(params: OnchainSyncParams): OnchainSaveParams {
 }
 
 async function runEsploraSyncBody(params: OnchainSyncParams): Promise<void> {
-  if (params.arkadeSessionOpenPromise != null) {
-    await params.arkadeSessionOpenPromise.catch(() => undefined)
-  }
   await syncActiveWalletAndUpdateState(params.networkMode, {
     useFullScan: params.useFullScan,
   })
@@ -274,7 +271,6 @@ export async function orchestrateOnchainPostUnlockSync(
     onSyncError: params.onSyncError,
     awaitCompletion,
     throwOnError: awaitCompletion,
-    arkadeSessionOpenPromise: params.arkadeSessionOpenPromise ?? null,
   })
   if (awaitCompletion) {
     await work
