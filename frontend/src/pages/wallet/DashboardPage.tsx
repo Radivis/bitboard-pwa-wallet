@@ -844,7 +844,7 @@ export function DashboardPage() {
   return (
     <div className="space-y-6">
       <PageHeader title={walletDashboardTitle(networkMode)} icon={Home}>
-        {lastSyncTime ? (
+        {networkMode !== 'lab' && lastSyncTime ? (
           <p className="text-xs text-muted-foreground">
             Last synced: {lastSyncTime.toLocaleString()}
           </p>

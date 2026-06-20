@@ -254,6 +254,16 @@ describe('DashboardPage', () => {
     ).toBeInTheDocument()
   })
 
+  it('does not show last synced time on lab', () => {
+    const syncTime = new Date('2025-01-15T10:30:00')
+    walletStoreState.networkMode = 'lab'
+    walletStoreState.lastSyncTime = syncTime
+    renderWithProviders(<DashboardPage />)
+    expect(
+      screen.queryByText(`Last synced: ${syncTime.toLocaleString()}`),
+    ).not.toBeInTheDocument()
+  })
+
   it('shows syncing spinner when syncing', () => {
     walletStoreState.walletStatus = 'syncing'
     renderWithProviders(<DashboardPage />)
