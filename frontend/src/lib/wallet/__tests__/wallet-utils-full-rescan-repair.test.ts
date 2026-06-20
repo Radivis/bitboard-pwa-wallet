@@ -85,6 +85,17 @@ vi.mock('@/lib/wallet/descriptor-wallet-manager', () => ({
   updateDescriptorWalletChangeset: vi.fn().mockResolvedValue(undefined),
 }))
 
+const orchestrateOnchainSyncThenSave = vi.fn()
+
+vi.mock('@/lib/wallet/lifecycle/onchain-sync-lifecycle-orchestrator', () => ({
+  orchestrateOnchainSyncThenSave: (...args: unknown[]) =>
+    orchestrateOnchainSyncThenSave(...args),
+}))
+
+vi.mock('@/lib/wallet/onchain-dashboard-sync', () => ({
+  invalidateOnchainDashboardQueries: vi.fn(),
+}))
+
 vi.mock('@/db/database', () => ({
   ensureMigrated: vi.fn().mockResolvedValue(undefined),
   getDatabase: vi.fn(() => ({
@@ -107,14 +118,13 @@ describe('runFullScanDashboardWalletSync repair path', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     hoisted.resetFullScanAttempts()
-    hoisted.fullScanWalletMock.mockImplementation(async () => {
+    orchestrateOnchainSyncThenSave.mockImplementation(async () => {
       hoisted.fullScanAttempt.n += 1
       if (hoisted.fullScanAttempt.n === 1) {
         throw new Error(
           'Blockchain error: HeaderHashNotFound(BlockHash(000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f))',
         )
       }
-      return { changesetJson: '{}', balance: {} }
     })
   })
 
@@ -124,7 +134,7 @@ describe('runFullScanDashboardWalletSync repair path', () => {
       activeWalletId: 1,
     })
 
-    expect(hoisted.fullScanWalletMock).toHaveBeenCalledTimes(2)
+    expect(orchestrateOnchainSyncThenSave).toHaveBeenCalledTimes(2)
     expect(hoisted.loadWalletMock).toHaveBeenCalledTimes(1)
     expect(hoisted.loadWalletMock).toHaveBeenCalledWith({
       externalDescriptor: 'external',
@@ -137,16 +147,13 @@ describe('runFullScanDashboardWalletSync repair path', () => {
   })
 
   it('does not reload when full scan succeeds on first attempt', async () => {
-    hoisted.fullScanWalletMock.mockResolvedValue({
-      changesetJson: '{}',
-      balance: {},
-    })
+    orchestrateOnchainSyncThenSave.mockResolvedValue(undefined)
     await runFullScanDashboardWalletSync({
       networkMode: 'mainnet',
       activeWalletId: 1,
     })
 
-    expect(hoisted.fullScanWalletMock).toHaveBeenCalledTimes(1)
+    expect(orchestrateOnchainSyncThenSave).toHaveBeenCalledTimes(1)
     expect(hoisted.loadWalletMock).not.toHaveBeenCalled()
   })
 

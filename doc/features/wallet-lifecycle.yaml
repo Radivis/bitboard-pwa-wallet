@@ -3,7 +3,7 @@ feature:
   description: >
     Per-rail Load, Sync, and Save lifecycle orchestrators (on-chain, Lightning, Arkade).
     Complements LockLifecycle (lock/unlock). Full architecture: docs/wallet-rail-lifecycle.md.
-    L1 (OnchainLoadLifecycle) implemented; remaining rails deferred.
+    L1 (OnchainLoadLifecycle) and L2 (OnchainSyncLifecycle + OnchainSaveLifecycle) implemented; remaining rails deferred.
   requirements:
     - LockLifecycle gates all rails; no load/sync/save when phase is no-lock or locking
     - Each rail exposes independent LoadLifecyclePhase, SyncLifecyclePhase, SaveLifecyclePhase
@@ -37,7 +37,8 @@ feature:
         description: LockLifecycle unlock delegates on-chain load to OnchainLoadLifecycle
         implemented_by: frontend/src/lib/wallet/lifecycle/__tests__/lock-lifecycle-orchestrator.test.ts
       - id: LIFE-LOCK-02
-        description: orchestrateLock awaits on-chain, Lightning, and Arkade save quiescence before worker purge
+        description: orchestrateLock awaits on-chain sync/save quiescence and wallet-secrets writes before worker purge; hard-blocks on save-error (Lightning/Arkade pending L3/L4)
+        implemented_by: frontend/src/lib/wallet/lifecycle/__tests__/lock-lifecycle-orchestrator.test.ts
     onchain:
       - id: LIFE-ONC-LOAD-01
         description: OnchainLoadLifecycle loading includes WASM load and refreshWalletStoreFromLoadedBdk
@@ -47,10 +48,13 @@ feature:
         implemented_by: frontend/src/lib/wallet/lifecycle/__tests__/onchain-load-lifecycle-orchestrator.test.ts
       - id: LIFE-ONC-SYNC-01
         description: Esplora sync runs only when OnchainLoadLifecycle is loaded
+        implemented_by: frontend/src/lib/wallet/lifecycle/__tests__/onchain-sync-lifecycle-orchestrator.test.ts
       - id: LIFE-ONC-SAVE-01
         description: Changeset persist runs in OnchainSaveLifecycle after successful sync
+        implemented_by: frontend/src/lib/wallet/lifecycle/__tests__/onchain-save-lifecycle-orchestrator.test.ts
       - id: LIFE-ONC-ERR-01
         description: Onchain sync-error still serves BDK-local balance and transactions
+        implemented_by: frontend/src/lib/wallet/lifecycle/__tests__/onchain-sync-lifecycle-orchestrator.test.ts
     lightning:
       - id: LIFE-LN-LOAD-01
         description: LightningLoadLifecycle loads NWC connection list from encrypted secrets into lightningStore

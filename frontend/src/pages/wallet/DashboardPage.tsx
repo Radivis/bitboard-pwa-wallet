@@ -30,6 +30,7 @@ import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
 import { BitcoinFiatDenominationSwitch } from '@/components/BitcoinFiatDenominationSwitch'
 import { FiatAmountDisplay } from '@/components/FiatAmountDisplay'
+import { OnchainSaveErrorBanner } from '@/pages/wallet/OnchainSaveErrorBanner'
 import { balanceInfoToOnChainDisplay } from '@/lib/wallet/onchain-balance-display'
 import {
   runIncrementalDashboardWalletSync,
@@ -852,6 +853,7 @@ export function DashboardPage() {
       </PageHeader>
 
       <ImportInitialSyncErrorBanner />
+      <OnchainSaveErrorBanner />
 
       {walletStatus === 'syncing' && (
         <LoadingSpinner text="Syncing wallet..." />

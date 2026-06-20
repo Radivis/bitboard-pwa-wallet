@@ -16,10 +16,9 @@ import type {
   OnchainLoadParams,
 } from '@/lib/wallet/lifecycle/onchain-load-lifecycle-types'
 import type { LockLifecyclePhase } from '@/lib/wallet/lifecycle/lock-lifecycle-types'
-import type { OnchainRailSnapshot } from '@/lib/wallet/lifecycle/rail-lifecycle-types'
+import { configureOnchainSyncForLoadedRail } from '@/lib/wallet/lifecycle/onchain-sync-lifecycle-orchestrator'
 
 export type { OnchainLoadLifecycleSnapshot, OnchainLoadParams } from '@/lib/wallet/lifecycle/onchain-load-lifecycle-types'
-export type { OnchainRailSnapshot } from '@/lib/wallet/lifecycle/rail-lifecycle-types'
 
 /**
  * OnchainLoadLifecycle — WASM descriptor load into crypto worker and wallet store hydration.
@@ -54,9 +53,9 @@ function notifyListeners(): void {
     listener(current)
   }
   if (!suppressCrossTabNotify) {
-    void import('@/lib/wallet/lifecycle/onchain-load-lifecycle-cross-tab-sync').then(
-      ({ notifyOnchainLoadLifecycleChangedFromThisTab }) => {
-        notifyOnchainLoadLifecycleChangedFromThisTab(current)
+    void import('@/lib/wallet/lifecycle/onchain-rail-lifecycle-cross-tab-sync').then(
+      ({ notifyOnchainRailLifecycleChangedFromThisTab }) => {
+        notifyOnchainRailLifecycleChangedFromThisTab()
       },
     )
   }
@@ -176,36 +175,19 @@ async function runWasmLoad(params: OnchainLoadParams): Promise<void> {
     const { orchestrateLock } = await import(
       '@/lib/wallet/lifecycle/lock-lifecycle-orchestrator'
     )
-    void orchestrateLock()
+    const { reportOnchainSaveBlockingLock } = await import(
+      '@/lib/wallet/wallet-save-error-toast'
+    )
+    try {
+      await orchestrateLock()
+    } catch (error) {
+      reportOnchainSaveBlockingLock(error)
+    }
   })
 }
 
 export function getOnchainLoadLifecycleSnapshot(): OnchainLoadLifecycleSnapshot {
   return { ...snapshot }
-}
-
-export function getOnchainRailSnapshot(): OnchainRailSnapshot {
-  const { loadPhase, networkMode } = getOnchainLoadLifecycleSnapshot()
-  if (loadPhase === 'not-configured') {
-    return {
-      loadPhase: 'not-configured',
-      syncPhase: 'not-configured',
-      savePhase: 'not-configured',
-    }
-  }
-  if (loadPhase === 'load-error') {
-    return {
-      loadPhase: 'load-error',
-      syncPhase: 'not-configured',
-      savePhase: 'not-configured',
-    }
-  }
-  const syncPhase = networkMode === 'lab' ? 'not-configured' : 'not-syncing'
-  return {
-    loadPhase,
-    syncPhase,
-    savePhase: 'not-saving',
-  }
 }
 
 export function subscribeOnchainLoadLifecycle(
@@ -261,6 +243,14 @@ export async function orchestrateOnchainLoad(params: OnchainLoadParams): Promise
     try {
       await runWasmLoad(params)
       setSnapshot({ loadPhase: 'loaded', networkMode: params.networkMode })
+      if (params.networkMode !== 'lab') {
+        configureOnchainSyncForLoadedRail({
+          walletId: params.walletId,
+          networkMode: params.networkMode,
+          addressType: params.addressType,
+          accountId: params.accountId,
+        })
+      }
     } catch (error) {
       setSnapshot({ loadPhase: 'load-error', networkMode: params.networkMode })
       throw error

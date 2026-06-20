@@ -85,19 +85,35 @@ vi.mock('@/stores/walletStore', async (importOriginal) => {
   }
 })
 
-vi.mock('@/lib/wallet/lifecycle/onchain-load-lifecycle-cross-tab-sync', () => ({
-  notifyOnchainLoadLifecycleChangedFromThisTab: vi.fn(),
+vi.mock('@/lib/wallet/lifecycle/onchain-rail-lifecycle-cross-tab-sync', () => ({
+  notifyOnchainRailLifecycleChangedFromThisTab: vi.fn(),
+}))
+
+vi.mock('@/lib/wallet/lifecycle/onchain-sync-lifecycle-orchestrator', () => ({
+  configureOnchainSyncForLoadedRail: vi.fn(),
+  getOnchainSyncLifecycleSnapshot: () => ({
+    syncPhase: 'not-configured',
+    descriptorScope: null,
+  }),
+}))
+
+vi.mock('@/lib/wallet/lifecycle/onchain-save-lifecycle-orchestrator', () => ({
+  getOnchainSaveLifecycleSnapshot: () => ({
+    savePhase: 'not-configured',
+    errorMessage: null,
+    descriptorScope: null,
+  }),
 }))
 
 import {
   applyOnchainLoadLifecycleSnapshotFromOtherTab,
   getOnchainLoadLifecycleSnapshot,
-  getOnchainRailSnapshot,
   orchestrateOnchainLoad,
   resetOnchainLoadLifecycleStateForTests,
   subscribeOnchainLoadLifecycle,
   syncOnchainLoadLifecycleWithLockPhase,
 } from '@/lib/wallet/lifecycle/onchain-load-lifecycle-orchestrator'
+import { getOnchainRailSnapshot } from '@/lib/wallet/lifecycle/onchain-rail-snapshot'
 
 const loadParams = {
   walletId: 1,

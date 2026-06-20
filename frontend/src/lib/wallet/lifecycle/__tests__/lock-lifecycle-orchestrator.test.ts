@@ -3,9 +3,15 @@ import { AddressType } from '@/stores/walletStore'
 
 const lockAndPurgeSensitiveRuntimeState = vi.fn()
 const orchestrateOnchainLoad = vi.fn()
-const schedulePostUnlockEsploraSync = vi.fn()
+const orchestrateOnchainPostUnlockSync = vi.fn()
 const syncOnchainLoadLifecycleWithLockPhase = vi.fn()
+const syncOnchainSyncLifecycleWithLockPhase = vi.fn()
+const syncOnchainSaveLifecycleWithLockPhase = vi.fn()
+const awaitOnchainSyncQuiescence = vi.fn()
+const awaitOnchainSaveQuiescence = vi.fn()
+const isOnchainSaveBlockingLock = vi.fn()
 const getArkadeSessionOpenPromiseFromLastOnchainLoad = vi.fn()
+const awaitInFlightWalletSecretsWrites = vi.fn()
 const ensureWalletSecretsSession = vi.fn()
 const endWalletSecretsSession = vi.fn()
 const isWalletSecretsSessionActive = vi.fn()
@@ -26,9 +32,30 @@ vi.mock('@/lib/wallet/lifecycle/onchain-load-lifecycle-orchestrator', () => ({
     syncOnchainLoadLifecycleWithLockPhase(...args),
 }))
 
-vi.mock('@/lib/wallet/wallet-utils', () => ({
-  schedulePostUnlockEsploraSync: (...args: unknown[]) =>
-    schedulePostUnlockEsploraSync(...args),
+vi.mock('@/lib/wallet/lifecycle/onchain-sync-lifecycle-orchestrator', () => ({
+  orchestrateOnchainPostUnlockSync: (...args: unknown[]) =>
+    orchestrateOnchainPostUnlockSync(...args),
+  awaitOnchainSyncQuiescence: (...args: unknown[]) => awaitOnchainSyncQuiescence(...args),
+  syncOnchainSyncLifecycleWithLockPhase: (...args: unknown[]) =>
+    syncOnchainSyncLifecycleWithLockPhase(...args),
+}))
+
+vi.mock('@/lib/wallet/lifecycle/onchain-save-lifecycle-orchestrator', () => ({
+  awaitOnchainSaveQuiescence: (...args: unknown[]) => awaitOnchainSaveQuiescence(...args),
+  isOnchainSaveBlockingLock: (...args: unknown[]) => isOnchainSaveBlockingLock(...args),
+  syncOnchainSaveLifecycleWithLockPhase: (...args: unknown[]) =>
+    syncOnchainSaveLifecycleWithLockPhase(...args),
+  OnchainSaveBlockingLockError: class OnchainSaveBlockingLockError extends Error {
+    constructor() {
+      super('On-chain save-error blocks lock until retry or forced lock')
+      this.name = 'OnchainSaveBlockingLockError'
+    }
+  },
+}))
+
+vi.mock('@/db/wallet-secrets-write-tracker', () => ({
+  awaitInFlightWalletSecretsWrites: (...args: unknown[]) =>
+    awaitInFlightWalletSecretsWrites(...args),
 }))
 
 vi.mock('@/lib/wallet/wallet-secrets-session', () => ({
@@ -81,7 +108,11 @@ describe('lock-lifecycle-orchestrator', () => {
     vi.clearAllMocks()
     lockAndPurgeSensitiveRuntimeState.mockResolvedValue(undefined)
     orchestrateOnchainLoad.mockResolvedValue(undefined)
-    schedulePostUnlockEsploraSync.mockResolvedValue(undefined)
+    orchestrateOnchainPostUnlockSync.mockResolvedValue(undefined)
+    awaitOnchainSyncQuiescence.mockResolvedValue(undefined)
+    awaitOnchainSaveQuiescence.mockResolvedValue(undefined)
+    isOnchainSaveBlockingLock.mockReturnValue(false)
+    awaitInFlightWalletSecretsWrites.mockResolvedValue(undefined)
     getArkadeSessionOpenPromiseFromLastOnchainLoad.mockReturnValue(null)
     ensureWalletSecretsSession.mockResolvedValue(undefined)
     endWalletSecretsSession.mockResolvedValue(undefined)
@@ -162,7 +193,7 @@ describe('lock-lifecycle-orchestrator', () => {
     await Promise.all([first, second])
 
     expect(orchestrateOnchainLoad).toHaveBeenCalledTimes(1)
-    expect(schedulePostUnlockEsploraSync).toHaveBeenCalledTimes(1)
+    expect(orchestrateOnchainPostUnlockSync).toHaveBeenCalledTimes(1)
   })
 
   it('orchestrateLock waits for in-flight unlock', async () => {
@@ -203,6 +234,8 @@ describe('lock-lifecycle-orchestrator', () => {
 
     expect(callOrder).toEqual(['secrets-released', 'unlock-load', 'lock'])
     expect(syncOnchainLoadLifecycleWithLockPhase).toHaveBeenCalledWith('locked')
+    expect(syncOnchainSyncLifecycleWithLockPhase).toHaveBeenCalledWith('locked')
+    expect(syncOnchainSaveLifecycleWithLockPhase).toHaveBeenCalledWith('locked')
   })
 
   it('orchestrateLock no-op in no-lock phase', async () => {
@@ -247,6 +280,17 @@ describe('lock-lifecycle-orchestrator', () => {
       ...unlockParams,
       clearLastSyncTime: true,
     })
-    expect(schedulePostUnlockEsploraSync).toHaveBeenCalled()
+    expect(orchestrateOnchainPostUnlockSync).toHaveBeenCalled()
+  })
+
+  it('orchestrateLock rejects when on-chain save-error blocks lock', async () => {
+    walletStoreState.activeWalletId = 1
+    syncLockLifecycleWithActiveWallet(1)
+    isOnchainSaveBlockingLock.mockReturnValue(true)
+
+    await expect(orchestrateLock()).rejects.toThrow(
+      'On-chain save-error blocks lock until retry or forced lock',
+    )
+    expect(lockAndPurgeSensitiveRuntimeState).not.toHaveBeenCalled()
   })
 })

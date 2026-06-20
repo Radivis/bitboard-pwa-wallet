@@ -228,15 +228,15 @@ Lock teardown **must await** in-flight sync (best-effort cancel/debounce) and sa
 - `exportChangeset` + `updateDescriptorWalletChangeset` to encrypted payload
 - `lastSuccessfulEsploraSyncAt` metadata update when applicable
 
-**`save-error`:** SQLite / secrets write failure — block lock until resolved or user dismisses with explicit risk.
+**`save-error`:** SQLite / secrets write failure — dashboard `OnchainSaveErrorBanner` with Retry (`orchestrateOnchainRetrySave`) and Lock anyway (`acknowledgeOnchainSaveErrorForForcedLock`). Lock/auto-lock blocked with toast until retry or forced ack.
 
 ### Legacy mapping
 
 | Current | Target owner |
 |---------|----------------|
 | `loadDescriptorWalletAndSync` (WASM part) | OnchainLoadLifecycle |
-| `runEsploraSyncAndPersistChangeset` | OnchainSyncLifecycle + OnchainSaveLifecycle |
-| `walletStatus: 'syncing'` | OnchainSyncLifecycle aggregate (global mirror deprecated) |
+| `runEsploraSyncAndPersistChangeset` | ~~OnchainSyncLifecycle + OnchainSaveLifecycle~~ (L2 done) |
+| `walletStatus: 'syncing'` | OnchainSyncLifecycle aggregate (global mirror temporary until L5) |
 | `useOnchainDashboardQueries` | Derive enabled from `loaded` + sync metadata |
 
 ---
@@ -386,7 +386,7 @@ Expose subscribe hooks or `data-testid` per rail, e.g.:
 |-------|-------------------|-------|
 | `load-error` | Do not show rail data | User: lock/unlock, reload; fix secrets |
 | `sync-error` | Show last `loaded` data + stale/error UI | Automatic on focus/refetch; manual sync button |
-| `save-error` | Show data but warn persistence may be stale | Retry save; block lock until resolved or forced |
+| `save-error` | Show data but warn persistence may be stale | Dashboard banner Retry; lock toast points to banner; forced lock via Lock anyway |
 
 ---
 
@@ -395,7 +395,7 @@ Expose subscribe hooks or `data-testid` per rail, e.g.:
 | Phase | Scope | Status |
 |-------|--------|--------|
 | **L1** | Types + on-chain LoadLifecycle; peel WASM load from `loadDescriptorWalletAndSync`; LockLifecycle delegates load | **Done** |
-| **L2** | On-chain Sync + Save lifecycles; retire bundled post-unlock Esplora in wallet-utils | Planned |
+| **L2** | On-chain Sync + Save lifecycles; retire bundled post-unlock Esplora in wallet-utils | **Done** |
 | **L3** | Arkade Load/Sync/Save; simplify `arkade-session-service`; E2E hooks for load readiness | Planned |
 | **L4** | Lightning Load/Sync/Save (aggregated) | Planned |
 | **L5** | Replace `walletStatus: 'syncing'` with rail aggregate; per-rail dashboard sync buttons; optional `useRailLifecycleSnapshot` hooks | Planned |
@@ -409,8 +409,9 @@ Each phase should follow TDD per `.cursor/rules/testing-strategy.mdc` and add ro
 ### Resolved
 
 1. **Lab load/save orchestration:** under **Onchain\*** namespacing; no separate `LabLoadLifecycle` / `LabSaveLifecycle` modules.
-2. **Save-error on lock:** **hard block** (implement in L2 when `OnchainSaveLifecycle` exists).
-3. **Cross-tab:** lifecycle snapshots broadcast via `useOnchainLoadLifecycleCrossTabSync` (BroadcastChannel pattern aligned with `useWalletCrossTabCacheSync`).
+2. **Save-error on lock:** **hard block** on `save-error` (L2); Lightning/Arkade deferral in L3/L4.
+3. **Cross-tab:** full rail snapshot via `useOnchainRailLifecycleCrossTabSync`; apply only when local tab has same `walletId` + descriptor triple loaded (`descriptorScope` gate).
+4. **`walletStatus: 'syncing'`:** temporary mirror of on-chain sync phase only (revert to `unlocked` when sync completes even if save still running); removed in L5.
 
 ### Still open
 

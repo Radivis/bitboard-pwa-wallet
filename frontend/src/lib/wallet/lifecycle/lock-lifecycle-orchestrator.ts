@@ -6,7 +6,18 @@ import {
   getArkadeSessionOpenPromiseFromLastOnchainLoad,
   syncOnchainLoadLifecycleWithLockPhase,
 } from '@/lib/wallet/lifecycle/onchain-load-lifecycle-orchestrator'
-import { schedulePostUnlockEsploraSync } from '@/lib/wallet/wallet-utils'
+import { orchestrateOnchainPostUnlockSync } from '@/lib/wallet/lifecycle/onchain-sync-lifecycle-orchestrator'
+import {
+  awaitOnchainSaveQuiescence,
+  isOnchainSaveBlockingLock,
+  OnchainSaveBlockingLockError,
+  syncOnchainSaveLifecycleWithLockPhase,
+} from '@/lib/wallet/lifecycle/onchain-save-lifecycle-orchestrator'
+import {
+  awaitOnchainSyncQuiescence,
+  syncOnchainSyncLifecycleWithLockPhase,
+} from '@/lib/wallet/lifecycle/onchain-sync-lifecycle-orchestrator'
+import { awaitInFlightWalletSecretsWrites } from '@/db/wallet-secrets-write-tracker'
 import {
   ensureWalletSecretsSession,
   endWalletSecretsSession,
@@ -25,8 +36,9 @@ export type { LockLifecyclePhase, LockLifecycleOperation, LockLifecycleSnapshot 
 /**
  * LockLifecycle orchestrator — serializes lock, manual unlock, and bootstrap unlock.
  *
- * Unlock delegates on-chain WASM load to OnchainLoadLifecycle. Post-unlock Esplora sync remains
- * in wallet-utils until L2 (OnchainSyncLifecycle). L2 will also hard-block lock on save-error.
+ * Unlock delegates on-chain WASM load to OnchainLoadLifecycle and post-unlock Esplora
+ * sync to OnchainSyncLifecycle + OnchainSaveLifecycle. Lightning/Arkade save quiescence
+ * in lock is deferred to L3/L4 (partial LIFE-LOCK-02).
  */
 
 type UnlockLoadParams = {
@@ -115,12 +127,11 @@ async function runUnlockLoad(params: UnlockLoadParams): Promise<void> {
     clearLastSyncTime: params.networkMode !== 'lab',
   })
   if (params.networkMode !== 'lab') {
-    schedulePostUnlockEsploraSync({
+    void orchestrateOnchainPostUnlockSync({
       walletId: params.walletId,
       networkMode: params.networkMode,
       addressType: params.addressType,
       accountId: params.accountId,
-      awaitSync: false,
       onSyncError: params.onSyncError,
       arkadeSessionOpenPromise: getArkadeSessionOpenPromiseFromLastOnchainLoad(),
     })
@@ -243,14 +254,26 @@ export async function orchestrateLock(): Promise<void> {
   }
 
   return beginInFlightWork('locking', 'lock', async () => {
+    if (isOnchainSaveBlockingLock()) {
+      throw new OnchainSaveBlockingLockError()
+    }
+
+    await awaitOnchainSyncQuiescence()
+    await awaitOnchainSaveQuiescence()
+    await awaitInFlightWalletSecretsWrites()
+
     setPhase('locking')
     setOperation('locking')
     try {
       await useCryptoStore.getState().lockAndPurgeSensitiveRuntimeState()
       syncOnchainLoadLifecycleWithLockPhase('locked')
+      syncOnchainSyncLifecycleWithLockPhase('locked')
+      syncOnchainSaveLifecycleWithLockPhase('locked')
       setSnapshot({ phase: 'locked', operation: 'none' })
     } catch (error) {
       syncOnchainLoadLifecycleWithLockPhase('locked')
+      syncOnchainSyncLifecycleWithLockPhase('locked')
+      syncOnchainSaveLifecycleWithLockPhase('locked')
       setSnapshot({ phase: 'locked', operation: 'none' })
       throw error
     }
