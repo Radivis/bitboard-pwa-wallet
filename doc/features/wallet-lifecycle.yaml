@@ -1,0 +1,91 @@
+feature:
+  name: Wallet rail lifecycle
+  description: >
+    Per-rail Load, Sync, and Save lifecycle orchestrators (on-chain, Lightning, Arkade).
+    Complements LockLifecycle (lock/unlock). Full architecture: docs/wallet-rail-lifecycle.md.
+    Implementation deferred — this file defines contracts for future tests.
+  requirements:
+    - LockLifecycle gates all rails; no load/sync/save when phase is no-lock or locking
+    - Each rail exposes independent LoadLifecyclePhase, SyncLifecyclePhase, SaveLifecyclePhase
+    - TanStack Query executes async work; orchestrator drives enabled/queryFn and derives phase
+    - not-configured means rail inactive (feature off, unsupported network, or no setup) — not wallet locked
+    - When a rail is not-configured, Load, Sync, and Save lifecycles for that rail are all not-configured (no mixed states)
+    - Lab network has no on-chain Esplora sync (sync stays not-configured); lab DB load/save is a documented exception
+    - load-error is rare persistence/decrypt failure; rail data must not be shown
+    - sync-error serves last loaded local data with stale/error indication
+    - save-error must block or explicitly warn on lock until persist quiesces
+    - Global walletStatus syncing is eventually replaced by per-rail sync aggregation (migration deferred)
+  phase_types:
+    LoadLifecyclePhase:
+      - not-configured
+      - loading
+      - loaded
+      - load-error
+    SyncLifecyclePhase:
+      - not-configured
+      - not-syncing
+      - syncing
+      - sync-error
+    SaveLifecyclePhase:
+      - not-configured
+      - not-saving
+      - saving
+      - save-error
+  contracts:
+    lock_handoff:
+      - id: LIFE-LOCK-01
+        description: LockLifecycle unlock delegates on-chain load to OnchainLoadLifecycle (target; not yet implemented)
+      - id: LIFE-LOCK-02
+        description: orchestrateLock awaits on-chain, Lightning, and Arkade save quiescence before worker purge
+    onchain:
+      - id: LIFE-ONC-LOAD-01
+        description: OnchainLoadLifecycle loading includes WASM load and refreshWalletStoreFromLoadedBdk
+      - id: LIFE-ONC-LOAD-02
+        description: OnchainLoadLifecycle loaded implies crypto worker has active descriptor for committed triple
+      - id: LIFE-ONC-SYNC-01
+        description: Esplora sync runs only when OnchainLoadLifecycle is loaded
+      - id: LIFE-ONC-SAVE-01
+        description: Changeset persist runs in OnchainSaveLifecycle after successful sync
+      - id: LIFE-ONC-ERR-01
+        description: Onchain sync-error still serves BDK-local balance and transactions
+    lightning:
+      - id: LIFE-LN-LOAD-01
+        description: LightningLoadLifecycle loads NWC connection list from encrypted secrets into lightningStore
+      - id: LIFE-LN-CFG-01
+        description: Lightning rail is not-configured when active wallet has zero NWC connections
+      - id: LIFE-LN-SYNC-01
+        description: LightningSyncLifecycle syncing when any connection fetch is in flight (aggregated v1)
+      - id: LIFE-LN-SAVE-01
+        description: addConnection persists via LightningSaveLifecycle
+    arkade:
+      - id: LIFE-ARK-LOAD-01
+        description: ArkadeLoadLifecycle loading includes session open, WASM hydration, and refreshArkadeStoreFromLoadedWasm
+      - id: LIFE-ARK-LOAD-02
+        description: activeArkadeConnectionId is set when ArkadeLoadLifecycle reaches loaded (not after sync)
+      - id: LIFE-ARK-LOAD-03
+        description: Receive address is stable when ArkadeLoadLifecycle is loaded (replaces connection-id ordering patch)
+      - id: LIFE-ARK-SYNC-01
+        description: ArkadeSyncLifecycle syncing covers operator sync only, not session open
+      - id: LIFE-ARK-SAVE-01
+        description: SDK persistence flush runs in ArkadeSaveLifecycle after operator sync
+      - id: LIFE-ARK-CFG-01
+        description: Arkade rail is not-configured when feature disabled or network unsupported
+      - id: LIFE-ARK-ERR-01
+        description: Arkade sync-error serves loaded WASM/local dashboard data
+    e2e_readiness:
+      - id: LIFE-E2E-01
+        description: E2E may await ArkadeLoadLifecycle loaded before receive address assertions (future hook)
+      - id: LIFE-E2E-02
+        description: E2E may await OnchainLoadLifecycle loaded before dashboard balance assertions (future hook)
+    dashboard:
+      - id: LIFE-UI-SYNC-01
+        description: Dashboard exposes per-rail sync buttons (on-chain, Lightning when configured, Arkade when active)
+      - id: LIFE-UI-SYNC-02
+        description: Syncing one rail does not implicitly sync other rails
+      - id: LIFE-UI-SYNC-03
+        description: Per-rail sync button reflects that rail SyncLifecyclePhase (syncing, sync-error, not-syncing)
+    invariants:
+      - id: LIFE-INV-01
+        description: not-configured applies to all three lifecycles on a rail simultaneously
+      - id: LIFE-INV-02
+        description: v1 loading and syncing do not overlap on the same rail (parallel load+sync is future out-of-scope work)

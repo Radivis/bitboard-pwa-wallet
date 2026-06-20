@@ -103,6 +103,10 @@ flowchart TB
 
 **Component `useState`:** Fine for strictly local UI (e.g. which accordion is open). Avoid mirroring server/worker/DB entities in component state when those entities are also in Query or Zustand—pick one source of truth per entity.
 
+### Wallet lifecycle orchestrators
+
+**Lock/unlock** is centralized in `frontend/src/lib/wallet/lifecycle/` (**LockLifecycle**, implemented). **Per-rail load, sync, and save** (on-chain, Lightning, Arkade) are specified in [docs/wallet-rail-lifecycle.md](../docs/wallet-rail-lifecycle.md): orchestrators drive TanStack Query `enabled` / `queryFn` and expose phase snapshots for guards and E2E; they do not replace Query cache or Zustand domain fields. Test contracts: [doc/features/wallet-lifecycle.yaml](features/wallet-lifecycle.yaml). Implementation is phased and not yet started.
+
 ---
 
 ## Boundaries and responsibilities
