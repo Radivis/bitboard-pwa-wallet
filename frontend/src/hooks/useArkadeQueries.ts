@@ -27,6 +27,7 @@ import { isArkadeActiveForNetworkMode } from '@/lib/arkade/arkade-utils'
 import {
   awaitArkadeLoadQuiescence,
   getArkadeLoadLifecycleSnapshot,
+  isArkadeLoadFailedForNetwork,
 } from '@/lib/wallet/lifecycle/arkade-load-lifecycle-orchestrator'
 import { useIsArkadeSessionReady } from '@/hooks/useArkadeLifecycleSnapshots'
 import {
@@ -127,6 +128,9 @@ async function ensureArkadeSessionOpenForActiveWallet(): Promise<void> {
     return
   }
   if (getArkadeLoadLifecycleSnapshot().loadPhase === 'loaded') {
+    return
+  }
+  if (isArkadeLoadFailedForNetwork(networkMode)) {
     return
   }
   await openArkadeSessionForWallet({

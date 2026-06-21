@@ -150,8 +150,21 @@ export async function awaitArkadeSyncQuiescence(): Promise<void> {
     dashboardPollTimer = null
   }
   if (inFlightSync != null) {
-    await inFlightSync.promise
+    await inFlightSync.promise.catch(() => undefined)
   }
+}
+
+/** Clears sync lifecycle after session teardown (see {@link closeArkadeSession}). */
+export function forceResetArkadeSyncLifecycleForTeardown(): void {
+  if (dashboardPollTimer != null) {
+    clearTimeout(dashboardPollTimer)
+    dashboardPollTimer = null
+  }
+  inFlightSync = null
+  setSnapshot({
+    syncPhase: 'not-configured',
+    railScope: null,
+  })
 }
 
 export function configureArkadeSyncForLoadedRail(scope: ArkadeRailScope): void {

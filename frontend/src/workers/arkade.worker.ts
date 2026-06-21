@@ -254,21 +254,27 @@ async function openSessionImpl(
     connectionId: params.connectionId,
   }
 
-  const openResult = await invokeWasmArk((wasmModule) =>
-    wasmModule.ark_open_session({
-      mnemonic,
-      networkMode: params.networkMode,
-      arkServerUrl: params.arkServerUrl,
-      delegatorUrl: params.delegatorUrl,
-      esploraUrl: params.esploraUrl,
-      sdkPersistenceJson,
-    }),
-  )
+  try {
+    const openResult = await invokeWasmArk((wasmModule) =>
+      wasmModule.ark_open_session({
+        mnemonic,
+        networkMode: params.networkMode,
+        arkServerUrl: params.arkServerUrl,
+        delegatorUrl: params.delegatorUrl,
+        esploraUrl: params.esploraUrl,
+        sdkPersistenceJson,
+      }),
+    )
 
-  activeSessionKey = key
-  return {
-    arkadeAddress: openResult.arkadeAddress as string,
-    operatorSignerPkHex: openResult.operatorSignerPkHex as string,
+    activeSessionKey = key
+    return {
+      arkadeAddress: openResult.arkadeAddress as string,
+      operatorSignerPkHex: openResult.operatorSignerPkHex as string,
+    }
+  } catch (error) {
+    activeSessionKey = null
+    activeSessionParams = null
+    throw error
   }
 }
 

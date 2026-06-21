@@ -4,16 +4,17 @@ import { removeArkadeDashboardQueries } from '@/lib/arkade/arkade-query-keys'
 import { removeArkadeDashboardSyncQueries } from '@/lib/arkade/arkade-dashboard-sync'
 import {
   awaitArkadeLoadQuiescence,
+  forceResetArkadeLoadLifecycleForTeardown,
+  getArkadeLoadLifecycleSnapshot,
   orchestrateArkadeLoad,
-  syncArkadeLoadLifecycleWithLockPhase,
 } from '@/lib/wallet/lifecycle/arkade-load-lifecycle-orchestrator'
 import {
   awaitArkadeSaveQuiescence,
-  syncArkadeSaveLifecycleWithLockPhase,
+  forceResetArkadeSaveLifecycleForTeardown,
 } from '@/lib/wallet/lifecycle/arkade-save-lifecycle-orchestrator'
 import {
   awaitArkadeSyncQuiescence,
-  syncArkadeSyncLifecycleWithLockPhase,
+  forceResetArkadeSyncLifecycleForTeardown,
 } from '@/lib/wallet/lifecycle/arkade-sync-lifecycle-orchestrator'
 import { getArkadeWorkerIfExists, terminateArkadeWorker } from '@/workers/arkade-factory'
 import { isArkadeActiveForNetworkMode } from '@/lib/arkade/arkade-utils'
@@ -26,7 +27,10 @@ export async function closeArkadeSession(): Promise<void> {
   await awaitArkadeSaveQuiescence()
 
   const arkadeWorker = getArkadeWorkerIfExists()
-  if (arkadeWorker != null) {
+  const sessionWasSuccessfullyLoaded =
+    getArkadeLoadLifecycleSnapshot().loadPhase === 'loaded'
+
+  if (sessionWasSuccessfullyLoaded && arkadeWorker != null) {
     await arkadeWorker.flushSdkPersistence()
     await awaitInFlightWalletSecretsWrites()
     try {
@@ -39,9 +43,9 @@ export async function closeArkadeSession(): Promise<void> {
   clearArkadeDashboardStore()
   removeArkadeDashboardQueries()
   removeArkadeDashboardSyncQueries()
-  syncArkadeLoadLifecycleWithLockPhase('locked')
-  syncArkadeSyncLifecycleWithLockPhase('locked')
-  syncArkadeSaveLifecycleWithLockPhase('locked')
+  forceResetArkadeLoadLifecycleForTeardown()
+  forceResetArkadeSyncLifecycleForTeardown()
+  forceResetArkadeSaveLifecycleForTeardown()
 }
 
 export async function openArkadeSessionForWallet(params: {

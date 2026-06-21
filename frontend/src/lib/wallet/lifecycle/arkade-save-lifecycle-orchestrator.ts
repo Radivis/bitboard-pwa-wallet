@@ -130,8 +130,20 @@ export function acknowledgeArkadeSaveErrorForForcedLock(): void {
 
 export async function awaitArkadeSaveQuiescence(): Promise<void> {
   if (inFlightSave != null) {
-    await inFlightSave.promise
+    await inFlightSave.promise.catch(() => undefined)
   }
+}
+
+/** Clears save lifecycle after session teardown (see {@link closeArkadeSession}). */
+export function forceResetArkadeSaveLifecycleForTeardown(): void {
+  inFlightSave = null
+  forcedLockAcknowledged = false
+  lastSaveParams = null
+  setSnapshot({
+    savePhase: 'not-configured',
+    errorMessage: null,
+    railScope: null,
+  })
 }
 
 export function configureArkadeSaveForLoadedRail(scope: ArkadeRailScope): void {

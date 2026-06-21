@@ -10,6 +10,7 @@ const TEST_CONNECTION_ID = 'conn-load-test'
 const workerMocks = vi.hoisted(() => ({
   openSession: vi.fn(),
   hasOpenSession: vi.fn(),
+  closeSession: vi.fn(),
   reconcileActiveConnectionId: vi.fn(),
   finalizePendingTransactions: vi.fn(),
   delegateSpendableVtxos: vi.fn(),
@@ -23,6 +24,8 @@ const ensureArkadeOperatorConnectionMock = vi.hoisted(() => vi.fn())
 const orchestrateArkadePostLoadSyncMock = vi.hoisted(() => vi.fn())
 const closeArkadeSessionMock = vi.hoisted(() => vi.fn())
 const getArkadeWorkerIfExistsMock = vi.hoisted(() => vi.fn())
+const terminateArkadeWorkerMock = vi.hoisted(() => vi.fn())
+const clearArkadeDashboardStoreMock = vi.hoisted(() => vi.fn())
 
 vi.mock('@/stores/featureStore', () => ({
   useFeatureStore: {
@@ -42,6 +45,7 @@ vi.mock('@/stores/walletStore', () => ({
 vi.mock('@/workers/arkade-factory', () => ({
   getArkadeWorker: () => workerMocks,
   getArkadeWorkerIfExists: (...args: unknown[]) => getArkadeWorkerIfExistsMock(...args),
+  terminateArkadeWorker: (...args: unknown[]) => terminateArkadeWorkerMock(...args),
 }))
 
 vi.mock('@/db', () => ({
@@ -75,6 +79,8 @@ vi.mock('@/lib/arkade/arkade-operator-connections', async (importOriginal) => {
 vi.mock('@/lib/arkade/arkade-persistence-store-sync', () => ({
   refreshArkadeStoreFromLoadedWasm: (...args: unknown[]) =>
     refreshArkadeStoreFromLoadedWasmMock(...args),
+  clearArkadeDashboardStore: (...args: unknown[]) =>
+    clearArkadeDashboardStoreMock(...args),
 }))
 
 vi.mock('@/lib/wallet/lifecycle/arkade-sync-lifecycle-orchestrator', async (importOriginal) => {
@@ -95,6 +101,7 @@ vi.mock('@/lib/arkade/arkade-session-service', () => ({
 
 import {
   getArkadeLoadLifecycleSnapshot,
+  isArkadeLoadFailedForNetwork,
   orchestrateArkadeLoad,
   resetArkadeLoadLifecycleStateForTests,
 } from '@/lib/wallet/lifecycle/arkade-load-lifecycle-orchestrator'
@@ -109,6 +116,7 @@ describe('arkade-load-lifecycle-orchestrator', () => {
       operatorSignerPkHex: '02deadbeef',
     })
     workerMocks.hasOpenSession.mockResolvedValue(false)
+    workerMocks.closeSession.mockResolvedValue(undefined)
     workerMocks.reconcileActiveConnectionId.mockResolvedValue(undefined)
     workerMocks.finalizePendingTransactions.mockResolvedValue({ finalized: 0, pending: 0 })
     workerMocks.delegateSpendableVtxos.mockResolvedValue({ delegated: 0, failed: 0 })
@@ -170,5 +178,26 @@ describe('arkade-load-lifecycle-orchestrator', () => {
     await orchestrateArkadeLoad({ walletId: 1, networkMode: 'signet' })
 
     expect(order.indexOf('setActive')).toBeLessThan(order.indexOf('postLoadSync'))
+  })
+
+  it('load failure sets load-error and tears down worker without leaving loading', async () => {
+    getArkadeWorkerIfExistsMock.mockReturnValue(workerMocks)
+    workerMocks.openSession.mockRejectedValueOnce(
+      new Error('sdkPersistenceJson operator signer mismatch'),
+    )
+
+    await expect(
+      orchestrateArkadeLoad({ walletId: 1, networkMode: 'signet' }),
+    ).rejects.toThrow('sdkPersistenceJson operator signer mismatch')
+
+    expect(getArkadeLoadLifecycleSnapshot()).toEqual({
+      loadPhase: 'load-error',
+      networkMode: 'signet',
+    })
+    expect(workerMocks.closeSession).not.toHaveBeenCalled()
+    expect(terminateArkadeWorkerMock).toHaveBeenCalled()
+    expect(clearArkadeDashboardStoreMock).toHaveBeenCalled()
+    expect(isArkadeLoadFailedForNetwork('signet')).toBe(true)
+    expect(isArkadeLoadFailedForNetwork('testnet')).toBe(false)
   })
 })

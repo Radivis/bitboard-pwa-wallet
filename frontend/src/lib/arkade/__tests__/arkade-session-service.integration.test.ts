@@ -139,6 +139,10 @@ import {
   closeArkadeSession,
   openArkadeSessionForWallet,
 } from '@/lib/arkade/arkade-session-service'
+import {
+  getArkadeLoadLifecycleSnapshot,
+  orchestrateArkadeLoad,
+} from '@/lib/wallet/lifecycle/arkade-load-lifecycle-orchestrator'
 
 describe('openArkadeSessionForWallet (integration)', () => {
   beforeEach(async () => {
@@ -274,7 +278,8 @@ describe('openArkadeSessionForWallet (integration)', () => {
     })
 
     expect(workerMocks.openSession).not.toHaveBeenCalled()
-    expect(workerMocks.closeSession).toHaveBeenCalledTimes(1)
+    expect(workerMocks.flushSdkPersistence).not.toHaveBeenCalled()
+    expect(workerMocks.closeSession).not.toHaveBeenCalled()
     expect(terminateArkadeWorkerMock).toHaveBeenCalledTimes(1)
     expect(removeArkadeDashboardQueriesMock).toHaveBeenCalledTimes(1)
     expect(removeArkadeDashboardSyncQueriesMock).toHaveBeenCalledTimes(1)
@@ -293,6 +298,10 @@ describe('openArkadeSessionForWallet (integration)', () => {
       callOrder.push('awaitInFlightWalletSecretsWrites')
     })
 
+    await openArkadeSessionForWallet({
+      walletId: 7,
+      networkMode: 'signet',
+    })
     await closeArkadeSession()
 
     expect(callOrder).toEqual([
@@ -411,6 +420,40 @@ describe('openArkadeSessionForWallet (integration)', () => {
       walletId: 7,
       networkMode: 'signet',
       connectionId: TEST_CONNECTION_ID,
+    })
+  })
+
+  it('closeArkadeSession rejects when flushSdkPersistence fails for a loaded session', async () => {
+    await openArkadeSessionForWallet({
+      walletId: 7,
+      networkMode: 'signet',
+    })
+    workerMocks.flushSdkPersistence.mockRejectedValueOnce(new Error('flush failed'))
+
+    await expect(closeArkadeSession()).rejects.toThrow('flush failed')
+
+    expect(workerMocks.closeSession).not.toHaveBeenCalled()
+  })
+
+  it('closeArkadeSession skips flush when session never reached loaded', async () => {
+    workerMocks.openSession.mockRejectedValueOnce(new Error('persistence mismatch'))
+
+    await expect(
+      openArkadeSessionForWallet({
+        walletId: 7,
+        networkMode: 'signet',
+      }),
+    ).rejects.toThrow('persistence mismatch')
+
+    expect(getArkadeLoadLifecycleSnapshot().loadPhase).toBe('load-error')
+
+    await closeArkadeSession()
+
+    expect(workerMocks.flushSdkPersistence).not.toHaveBeenCalled()
+    expect(workerMocks.closeSession).not.toHaveBeenCalled()
+    expect(getArkadeLoadLifecycleSnapshot()).toEqual({
+      loadPhase: 'not-configured',
+      networkMode: null,
     })
   })
 })

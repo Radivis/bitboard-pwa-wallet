@@ -1,5 +1,5 @@
 import { getDatabase, getWalletSecretsEncrypted } from '@/db'
-import { refreshArkadeStoreFromLoadedWasm } from '@/lib/arkade/arkade-persistence-store-sync'
+import { refreshArkadeStoreFromLoadedWasm, clearArkadeDashboardStore } from '@/lib/arkade/arkade-persistence-store-sync'
 import {
   ensureArkadeOperatorConnection,
   findActiveArkadeConnectionSummary,
@@ -10,7 +10,7 @@ import {
   ensureSecretsChannel,
 } from '@/workers/secrets-channel'
 import { ensureArkadeEncryptedSecretsHost } from '@/workers/arkade-persistence-channel'
-import { getArkadeWorker, getArkadeWorkerIfExists } from '@/workers/arkade-factory'
+import { getArkadeWorker, getArkadeWorkerIfExists, terminateArkadeWorker } from '@/workers/arkade-factory'
 import {
   getArkadeEndpoints,
   isArkadeDelegatorConfigured,
@@ -228,6 +228,23 @@ export async function awaitArkadeLoadQuiescence(): Promise<void> {
   }
 }
 
+/** True when this network's Arkade rail failed to load and should be ignored until network change or retry. */
+export function isArkadeLoadFailedForNetwork(networkMode: NetworkMode): boolean {
+  const current = getArkadeLoadLifecycleSnapshot()
+  return current.loadPhase === 'load-error' && current.networkMode === networkMode
+}
+
+/**
+ * Clears Arkade load lifecycle after session teardown. Used by {@link closeArkadeSession}
+ * so a failed rail does not keep `load-error` / in-flight state from blocking other work.
+ */
+export function forceResetArkadeLoadLifecycleForTeardown(): void {
+  lastOpenedSessionKey = null
+  lastLoadedConnectionId = null
+  inFlightLoad = null
+  setSnapshot({ loadPhase: 'not-configured', networkMode: null })
+}
+
 export function syncArkadeLoadLifecycleWithLockPhase(lockPhase: LockLifecyclePhase): void {
   if (lockPhase === 'unlocking' || lockPhase === 'unlocked') {
     return
@@ -288,6 +305,8 @@ export async function orchestrateArkadeLoad(params: ArkadeLoadParams): Promise<v
         onSyncError: reportArkadeSessionOpenError,
       })
     } catch (error) {
+      terminateArkadeWorker()
+      clearArkadeDashboardStore()
       setSnapshot({ loadPhase: 'load-error', networkMode })
       throw error
     }
