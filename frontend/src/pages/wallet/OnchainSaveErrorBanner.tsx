@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import type { SaveLifecyclePhase } from '@/lib/wallet/lifecycle/rail-lifecycle-types'
 import { AlertTriangle } from 'lucide-react'
 import { useWalletStore } from '@/stores/walletStore'
 import { Button } from '@/components/ui/button'
@@ -29,6 +30,25 @@ import {
 import type { OnchainSaveLifecycleSnapshot } from '@/lib/wallet/lifecycle/onchain-save-lifecycle-types'
 
 type SaveErrorRail = 'onchain' | 'arkade' | 'lightning'
+
+/**
+ * Show save-error banners only for real failures. Normal post-sync `saving` during
+ * hydration must not flash the error UI (see wallet-rail-lifecycle.md save-error policy).
+ * Keep the banner visible through `saving` only while retrying after `save-error`.
+ */
+function useSaveErrorBannerVisible(savePhase: SaveLifecyclePhase): boolean {
+  const hadSaveErrorRef = useRef(false)
+
+  if (savePhase === 'save-error') {
+    hadSaveErrorRef.current = true
+  } else if (savePhase === 'not-saving' || savePhase === 'not-configured') {
+    hadSaveErrorRef.current = false
+  }
+
+  return (
+    savePhase === 'save-error' || (savePhase === 'saving' && hadSaveErrorRef.current)
+  )
+}
 
 function SaveErrorBannerBlock({
   rail,
@@ -129,18 +149,17 @@ export function WalletSaveErrorBanner() {
     return subscribeLightningSaveLifecycle(setLightningSaveSnapshot)
   }, [])
 
-  const showOnchain =
-    networkMode !== 'lab' &&
-    (onchainSaveSnapshot.savePhase === 'save-error' || onchainSaveSnapshot.savePhase === 'saving')
-  const showArkade =
-    isArkadeActiveForNetworkMode(networkMode) &&
-    (arkadeSaveSnapshot.savePhase === 'save-error' || arkadeSaveSnapshot.savePhase === 'saving')
+  const showOnchainSaveError = useSaveErrorBannerVisible(onchainSaveSnapshot.savePhase)
+  const showArkadeSaveError = useSaveErrorBannerVisible(arkadeSaveSnapshot.savePhase)
+  const showLightningSaveError = useSaveErrorBannerVisible(lightningSaveSnapshot.savePhase)
+
+  const showOnchain = networkMode !== 'lab' && showOnchainSaveError
+  const showArkade = isArkadeActiveForNetworkMode(networkMode) && showArkadeSaveError
   const showLightning =
     isLightningEnabled &&
     isLightningSupported(networkMode) &&
     lightningSaveSnapshot.railScope != null &&
-    (lightningSaveSnapshot.savePhase === 'save-error' ||
-      lightningSaveSnapshot.savePhase === 'saving')
+    showLightningSaveError
 
   if (!showOnchain && !showArkade && !showLightning) {
     return null

@@ -1,27 +1,50 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { AddressType } from '@/stores/walletStore'
 
 const orchestrateOnchainRetrySave = vi.fn()
 const acknowledgeOnchainSaveErrorForForcedLock = vi.fn()
 
-let saveSnapshot = {
-  savePhase: 'save-error' as const,
+type SaveSnapshot = {
+  savePhase: 'not-saving' | 'saving' | 'save-error' | 'not-configured'
+  errorMessage: string | null
+  descriptorScope: {
+    walletId: number
+    networkMode: 'testnet'
+    addressType: typeof AddressType.Taproot
+    accountId: number
+  } | null
+}
+
+let saveSnapshot: SaveSnapshot = {
+  savePhase: 'save-error',
   errorMessage: 'disk full',
   descriptorScope: {
     walletId: 1,
-    networkMode: 'testnet' as const,
+    networkMode: 'testnet',
     addressType: AddressType.Taproot,
     accountId: 0,
   },
 }
 
+const onchainSaveListeners = new Set<(next: SaveSnapshot) => void>()
+
+function publishOnchainSaveSnapshot(next: SaveSnapshot): void {
+  saveSnapshot = next
+  for (const listener of onchainSaveListeners) {
+    listener(next)
+  }
+}
+
 vi.mock('@/lib/wallet/lifecycle/onchain-save-lifecycle-orchestrator', () => ({
   getOnchainSaveLifecycleSnapshot: () => saveSnapshot,
-  subscribeOnchainSaveLifecycle: (listener: (next: typeof saveSnapshot) => void) => {
+  subscribeOnchainSaveLifecycle: (listener: (next: SaveSnapshot) => void) => {
+    onchainSaveListeners.add(listener)
     listener(saveSnapshot)
-    return () => undefined
+    return () => {
+      onchainSaveListeners.delete(listener)
+    }
   },
   orchestrateOnchainRetrySave: (...args: unknown[]) => orchestrateOnchainRetrySave(...args),
   acknowledgeOnchainSaveErrorForForcedLock: (...args: unknown[]) =>
@@ -77,6 +100,7 @@ import { OnchainSaveErrorBanner } from '@/pages/wallet/OnchainSaveErrorBanner'
 describe('OnchainSaveErrorBanner', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    onchainSaveListeners.clear()
     saveSnapshot = {
       savePhase: 'save-error',
       errorMessage: 'disk full',
@@ -88,6 +112,48 @@ describe('OnchainSaveErrorBanner', () => {
       },
     }
     orchestrateOnchainRetrySave.mockResolvedValue(undefined)
+  })
+
+  it('does not show during normal post-sync saving without a prior save-error', () => {
+    saveSnapshot = {
+      savePhase: 'saving',
+      errorMessage: null,
+      descriptorScope: {
+        walletId: 1,
+        networkMode: 'testnet',
+        addressType: AddressType.Taproot,
+        accountId: 0,
+      },
+    }
+
+    render(<OnchainSaveErrorBanner />)
+
+    expect(screen.queryByTestId('wallet-save-error-banner-onchain')).not.toBeInTheDocument()
+  })
+
+  it('stays visible with Saving label while retrying after save-error', () => {
+    render(<OnchainSaveErrorBanner />)
+
+    act(() => {
+      publishOnchainSaveSnapshot({
+        ...saveSnapshot,
+        savePhase: 'saving',
+        errorMessage: null,
+      })
+    })
+
+    expect(screen.getByTestId('wallet-save-error-banner-onchain')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Saving...' })).toBeDisabled()
+
+    act(() => {
+      publishOnchainSaveSnapshot({
+        ...saveSnapshot,
+        savePhase: 'not-saving',
+        errorMessage: null,
+      })
+    })
+
+    expect(screen.queryByTestId('wallet-save-error-banner-onchain')).not.toBeInTheDocument()
   })
 
   it('Retry calls orchestrateOnchainRetrySave', async () => {
