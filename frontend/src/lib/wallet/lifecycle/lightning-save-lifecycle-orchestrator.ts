@@ -1,6 +1,6 @@
 import { saveLightningConnectionsForWallet } from '@/lib/lightning/lightning-wallet-secrets'
 import { batchApplyNwcSnapshotPatches } from '@/lib/lightning/lightning-wallet-snapshot-persistence'
-import { invalidateLightningDashboardQueries } from '@/lib/lightning/lightning-dashboard-sync'
+import { invalidateLightningDashboardQueries, invalidateLightningSyncMetadataQueries } from '@/lib/lightning/lightning-dashboard-sync'
 import { sanitizeErrorMessageForUi } from '@/lib/shared/sanitize-error-for-ui'
 import { errorMessage } from '@/lib/shared/utils'
 import type {
@@ -115,7 +115,11 @@ async function runSaveBody(params: LightningSaveParams): Promise<void> {
     walletId: params.walletId,
     patches: params.patches,
   })
-  invalidateLightningDashboardQueries()
+  if (params.refreshDashboardQueriesAfterSave) {
+    invalidateLightningDashboardQueries()
+  } else {
+    invalidateLightningSyncMetadataQueries()
+  }
 }
 
 export function getLightningSaveLifecycleSnapshot(): LightningSaveLifecycleSnapshot {

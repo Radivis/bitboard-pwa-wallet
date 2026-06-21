@@ -128,6 +128,7 @@ describe('lightning-sync-lifecycle-orchestrator', () => {
       walletId: 1,
       networkMode: 'signet',
       patches: [{ connectionId: 'conn-1', balance: { balanceSats: 1, balanceUpdatedAt: 't' } }],
+      refreshDashboardQueriesAfterSave: true,
     })
     expect(getLightningSyncLifecycleSnapshot().syncPhase).toBe('not-syncing')
   })

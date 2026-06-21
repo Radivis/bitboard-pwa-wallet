@@ -22,6 +22,12 @@ export type LightningSaveSnapshotPatchesParams = {
   walletId: number
   networkMode: NetworkMode
   patches: NwcSnapshotPatch[]
+  /**
+   * When true, invalidates dashboard history/balance React Query caches after persist.
+   * Use for orchestrator-driven sync (manual/postLoad) that does not update those caches.
+   * Query-driven fetches should leave this false to avoid save → invalidate → refetch loops.
+   */
+  refreshDashboardQueriesAfterSave?: boolean
 }
 
 export type LightningSaveParams =

@@ -198,6 +198,13 @@ export function invalidateLightningDashboardQueries(): void {
   void appQueryClient.invalidateQueries({ queryKey: [...LIGHTNING_DASHBOARD_QUERY_KEY] })
 }
 
+/** Refresh last-synced metadata without refetching NWC history/balance queries. */
+export function invalidateLightningSyncMetadataQueries(): void {
+  void appQueryClient.invalidateQueries({
+    queryKey: [...LIGHTNING_DASHBOARD_QUERY_KEY, 'sync-metadata'],
+  })
+}
+
 /**
  * Fetches `getBalance` for each matching connection. Uses `allSettled` so one
  * failing wallet does not drop the rest. Persists successful reads into encrypted

@@ -292,6 +292,7 @@ export async function orchestrateLightningSyncThenSave(
             walletId: params.walletId,
             networkMode: params.networkMode,
             patches,
+            refreshDashboardQueriesAfterSave: true,
           })
         } catch (saveError) {
           if (throwOnError) {

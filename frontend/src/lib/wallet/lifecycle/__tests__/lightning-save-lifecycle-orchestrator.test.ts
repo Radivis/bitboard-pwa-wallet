@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const saveLightningConnectionsForWallet = vi.fn()
 const batchApplyNwcSnapshotPatches = vi.fn()
 const invalidateLightningDashboardQueries = vi.fn()
+const invalidateLightningSyncMetadataQueries = vi.fn()
 
 vi.mock('@/lib/lightning/lightning-wallet-secrets', () => ({
   saveLightningConnectionsForWallet: (...args: unknown[]) =>
@@ -17,6 +18,8 @@ vi.mock('@/lib/lightning/lightning-wallet-snapshot-persistence', () => ({
 vi.mock('@/lib/lightning/lightning-dashboard-sync', () => ({
   invalidateLightningDashboardQueries: (...args: unknown[]) =>
     invalidateLightningDashboardQueries(...args),
+  invalidateLightningSyncMetadataQueries: (...args: unknown[]) =>
+    invalidateLightningSyncMetadataQueries(...args),
 }))
 
 import {
@@ -50,7 +53,19 @@ describe('lightning-save-lifecycle-orchestrator', () => {
 
     expect(getLightningSaveLifecycleSnapshot().savePhase).toBe('not-saving')
     expect(batchApplyNwcSnapshotPatches).toHaveBeenCalled()
+    expect(invalidateLightningSyncMetadataQueries).toHaveBeenCalled()
+    expect(invalidateLightningDashboardQueries).not.toHaveBeenCalled()
+  })
+
+  it('save snapshot patches can refresh full dashboard queries when requested', async () => {
+    await orchestrateLightningSaveSnapshotPatches({
+      ...railScope,
+      patches: [{ connectionId: 'conn-1', balance: { balanceSats: 1000, balanceUpdatedAt: '2020-01-01T00:00:00.000Z' } }],
+      refreshDashboardQueriesAfterSave: true,
+    })
+
     expect(invalidateLightningDashboardQueries).toHaveBeenCalled()
+    expect(invalidateLightningSyncMetadataQueries).not.toHaveBeenCalled()
   })
 
   it('save connections list success', async () => {
