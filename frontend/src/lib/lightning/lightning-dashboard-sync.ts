@@ -317,6 +317,43 @@ export async function collectLightningDashboardSyncPatches(): Promise<NwcSnapsho
   ])
 }
 
+export type LightningSyncMetadataResult = {
+  lastSyncedAt: string | null
+}
+
+export function lightningSyncMetadataQueryKey(
+  connectionFingerprint: string,
+): readonly ['wallet_db', 'lightning', 'dashboard', 'sync-metadata', string] {
+  return [...LIGHTNING_DASHBOARD_QUERY_KEY, 'sync-metadata', connectionFingerprint]
+}
+
+export async function resolveLightningSyncMetadata(): Promise<LightningSyncMetadataResult> {
+  const { getLightningSyncLifecycleSnapshot } = await import(
+    '@/lib/wallet/lifecycle/lightning-sync-lifecycle-orchestrator'
+  )
+  if (getLightningSyncLifecycleSnapshot().syncPhase === 'syncing') {
+    return { lastSyncedAt: null }
+  }
+
+  const matches = getMatchingLightningConnectionsForDashboard()
+  if (matches.length === 0) {
+    return { lastSyncedAt: null }
+  }
+
+  const snapshotMap = await readSnapshotMapForActiveWallet()
+  let lastSyncedAt: string | undefined
+  for (const connection of matches) {
+    const connectionSnapshot = snapshotMap.get(connection.id)
+    if (connectionSnapshot == null) {
+      continue
+    }
+    lastSyncedAt = maxIsoTimestamp(lastSyncedAt, connectionSnapshot.balanceUpdatedAt)
+    lastSyncedAt = maxIsoTimestamp(lastSyncedAt, connectionSnapshot.paymentsUpdatedAt)
+  }
+
+  return { lastSyncedAt: lastSyncedAt ?? null }
+}
+
 export const ARKADE_BOARDING_ACTIVITY_LABEL = 'Arkade boarding' as const
 export const ONCHAIN_ARKADE_BOARDING_ACTIVITY_LABEL =
   'Onchain Arkade boarding' as const

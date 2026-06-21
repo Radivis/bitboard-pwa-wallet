@@ -109,7 +109,7 @@ flowchart TB
 
 **React integration (L5):** thin subscription hooks in `frontend/src/hooks/` wrap orchestrators with `useSyncExternalStore` — one hook per state machine plus per-rail aggregates and selectors (e.g. `useIsArkadeSessionReady()`). See [docs/wallet-rail-lifecycle.md](../docs/wallet-rail-lifecycle.md#react-lifecycle-hooks).
 
-Test contracts: [doc/features/wallet-lifecycle.yaml](features/wallet-lifecycle.yaml). L1–L4 orchestrators implemented; L5 hooks planned.
+Test contracts: [doc/features/wallet-lifecycle.yaml](features/wallet-lifecycle.yaml). L1–L5 complete.
 
 ---
 

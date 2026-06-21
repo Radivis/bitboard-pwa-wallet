@@ -167,7 +167,8 @@ export function ImportWalletPage() {
         addressType,
         accountId,
       })
-      setWalletStatus('syncing')
+      // Sync phase is tracked by on-chain lifecycle orchestrator.
+      setWalletStatus('unlocked')
 
       startAutoLockTimer(() => void orchestrateLock())
     },

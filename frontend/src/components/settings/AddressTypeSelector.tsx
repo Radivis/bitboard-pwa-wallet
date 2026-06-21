@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react'
 import { AddressType, useWalletStore } from '@/stores/walletStore'
+import { walletIsUnlockedOrSyncing } from '@/lib/wallet/wallet-unlocked-status'
 import { useDescriptorWalletSwitchMutation } from '@/hooks/useDescriptorWalletSwitchMutation'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { Button } from '@/components/ui/button'
@@ -32,7 +33,7 @@ export function AddressTypeSelector() {
 
   const applyAddressTypeChange = useCallback(
     async (type: AddressType) => {
-      if (walletStatus === 'unlocked' || walletStatus === 'syncing') {
+      if (walletIsUnlockedOrSyncing(walletStatus)) {
         await mutateAsync(type)
         setAddressType(type)
       } else {

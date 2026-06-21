@@ -10,6 +10,7 @@ import {
   arkadeBumperInfoQueryKey,
   arkadeCollaborativeExitFeeQueryKey,
   arkadeDisabledQueryKey,
+  ARKADE_QUERY_DISABLED,
   arkadeAddressQueryKey,
   arkadeDelegateInfoQueryKey,
   arkadeExitCandidatesQueryKey,
@@ -27,6 +28,7 @@ import {
   awaitArkadeLoadQuiescence,
   getArkadeLoadLifecycleSnapshot,
 } from '@/lib/wallet/lifecycle/arkade-load-lifecycle-orchestrator'
+import { useIsArkadeSessionReady } from '@/hooks/useArkadeLifecycleSnapshots'
 import {
   openArkadeSessionForWallet,
 } from '@/lib/arkade/arkade-session-service'
@@ -80,11 +82,12 @@ function useArkadeQueryBase() {
   const activeArkadeConnectionId = useWalletStore(
     (walletState) => walletState.activeArkadeConnectionId,
   )
+  const arkadeSessionReady = useIsArkadeSessionReady()
   const sessionReady =
     activeWalletId != null &&
     isArkadeActiveForNetworkMode(networkMode) &&
     isArkadeSupportedNetworkMode(networkMode) &&
-    getArkadeLoadLifecycleSnapshot().loadPhase === 'loaded'
+    arkadeSessionReady
 
   return { networkMode, activeWalletId, activeArkadeConnectionId, sessionReady }
 }
@@ -288,27 +291,33 @@ export function useArkadeNewAddressMutation() {
       await awaitInFlightWalletSecretsWrites()
       return newAddress
     },
-    onSuccess: async (newAddress) => {
+    onSuccess: async () => {
       toast.success('New Arkade address generated')
-      if (
-        activeWalletId != null &&
-        activeArkadeConnectionId != null &&
-        isArkadeSupportedNetworkMode(networkMode)
-      ) {
-        const addressQueryKey = arkadeAddressQueryKey(
-          activeWalletId,
-          networkMode,
-          activeArkadeConnectionId,
-        )
-        queryClient.setQueryData(addressQueryKey, newAddress)
-        const dashboardState = readArkadeDashboardStateFromStore()
-        if (dashboardState.balance != null) {
-          useWalletStore.getState().setArkadeDashboardState({
-            balance: dashboardState.balance,
-            payments: dashboardState.payments,
-            receiveAddress: newAddress,
-          })
-        }
+      if (activeWalletId == null || !isArkadeSupportedNetworkMode(networkMode)) {
+        return
+      }
+      const displayAddress = await withReadyArkadeWorker(() =>
+        getArkadeWorker().getAddress(),
+      )
+      const addressQueryKey = walletScopedQueryKey(
+        activeWalletId,
+        networkMode,
+        activeArkadeConnectionId,
+        arkadeAddressQueryKey,
+        'address',
+      )
+      if (!addressQueryKey.includes(ARKADE_QUERY_DISABLED)) {
+        queryClient.setQueryData(addressQueryKey, displayAddress)
+      }
+      const dashboardState = readArkadeDashboardStateFromStore()
+      if (dashboardState.balance != null) {
+        useWalletStore.getState().setArkadeDashboardState({
+          balance: dashboardState.balance,
+          payments: dashboardState.payments,
+          receiveAddress: displayAddress,
+        })
+      } else {
+        useWalletStore.setState({ arkadeReceiveAddress: displayAddress })
       }
     },
     onError: (err) => {

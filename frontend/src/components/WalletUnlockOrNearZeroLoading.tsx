@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { useNearZeroSecurityStore } from '@/stores/nearZeroSecurityStore'
 import { useWalletStore } from '@/stores/walletStore'
 import { useActiveWalletLoadQuery } from '@/hooks/useActiveWalletLoadQuery'
+import { walletIsUnlockedOrSyncing } from '@/lib/wallet/wallet-unlocked-status'
 
 type WalletUnlockOrNearZeroLoadingProps = {
   walletName?: string
@@ -24,8 +25,7 @@ export function WalletUnlockOrNearZeroLoading(
   const walletStatus = useWalletStore((walletState) => walletState.walletStatus)
   const { isError, isFetching, isPending, refetch } = useActiveWalletLoadQuery()
 
-  const walletStillGated =
-    walletStatus !== 'unlocked' && walletStatus !== 'syncing'
+  const walletStillGated = !walletIsUnlockedOrSyncing(walletStatus)
 
   /**
    * Near-zero mode uses an auto-restored session, not a user-typed password. Never show

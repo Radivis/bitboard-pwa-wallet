@@ -2,6 +2,7 @@ import { useWalletStore } from '@/stores/walletStore'
 import { refreshWalletStoreFromLoadedBdk } from '@/lib/wallet/onchain-bdk-store-sync'
 import { invalidateOnchainDashboardQueries } from '@/lib/wallet/onchain-dashboard-sync'
 import { syncActiveWalletAndUpdateState } from '@/lib/wallet/wallet-utils'
+import { walletIsUnlockedOrSyncing } from '@/lib/wallet/wallet-unlocked-status'
 import { getOnchainLoadLifecycleSnapshot } from '@/lib/wallet/lifecycle/onchain-load-lifecycle-orchestrator'
 import {
   configureOnchainSaveForLoadedRail,
@@ -101,19 +102,6 @@ function beginInFlightSync(key: string, run: () => Promise<void>): Promise<void>
   return promise
 }
 
-function mirrorWalletStatusForSyncPhase(syncPhase: OnchainSyncLifecycleSnapshot['syncPhase']): void {
-  const { walletStatus, setWalletStatus } = useWalletStore.getState()
-  if (syncPhase === 'syncing') {
-    if (walletStatus === 'unlocked') {
-      setWalletStatus('syncing')
-    }
-    return
-  }
-  if (walletStatus === 'syncing') {
-    setWalletStatus('unlocked')
-  }
-}
-
 function assertCanStartOnchainSync(params: OnchainSyncParams): void {
   if (params.networkMode === 'lab') {
     throw new Error('On-chain sync is not configured on lab network')
@@ -122,7 +110,7 @@ function assertCanStartOnchainSync(params: OnchainSyncParams): void {
     throw new Error('On-chain sync requires loaded WASM wallet')
   }
   const walletStatus = useWalletStore.getState().walletStatus
-  if (walletStatus !== 'unlocked' && walletStatus !== 'syncing') {
+  if (!walletIsUnlockedOrSyncing(walletStatus)) {
     throw new Error('On-chain sync requires unlocked wallet')
   }
 }
@@ -224,12 +212,10 @@ export async function orchestrateOnchainSyncThenSave(
     configureOnchainSyncForLoadedRail(scope)
 
     setSnapshot({ syncPhase: 'syncing', descriptorScope: scope })
-    mirrorWalletStatusForSyncPhase('syncing')
 
     try {
       await runEsploraSyncBody(params)
       setSnapshot({ syncPhase: 'not-syncing', descriptorScope: scope })
-      mirrorWalletStatusForSyncPhase('not-syncing')
       try {
         await orchestrateOnchainSave(toSaveParams(params))
       } catch (saveError) {
@@ -239,7 +225,6 @@ export async function orchestrateOnchainSyncThenSave(
       }
     } catch (error) {
       setSnapshot({ syncPhase: 'sync-error', descriptorScope: scope })
-      mirrorWalletStatusForSyncPhase('sync-error')
       if (params.networkMode !== 'lab') {
         try {
           await refreshWalletStoreFromLoadedBdk()

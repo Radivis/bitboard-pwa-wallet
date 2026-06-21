@@ -1,38 +1,33 @@
 import { Link } from '@tanstack/react-router'
 import { Layers, Loader2 } from 'lucide-react'
-import { useEffect, useState } from 'react'
 import { ArkadeOverviewInfomodeContent } from '@/components/arkade/infomode/ArkadeOverviewInfomodeContent'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ArkadeBalanceBreakdown } from '@/components/wallet/ArkadeBalanceBreakdown'
+import { RailSyncControl } from '@/components/wallet/RailSyncControl'
 import {
   ARKADE_INFOMODE_IDS,
   ARKADE_OPERATOR_STALE_INFOMODE,
 } from '@/lib/arkade/arkade-infomode'
 import { useArkadeSyncMetadataQuery } from '@/hooks/useArkadeDashboardQueries'
 import {
-  getArkadeLoadLifecycleSnapshot,
-  subscribeArkadeLoadLifecycle,
-} from '@/lib/wallet/lifecycle/arkade-load-lifecycle-orchestrator'
-import {
-  getArkadeSyncLifecycleSnapshot,
-  subscribeArkadeSyncLifecycle,
-} from '@/lib/wallet/lifecycle/arkade-sync-lifecycle-orchestrator'
+  useArkadeRailSnapshot,
+  useArkadeSyncLifecycleSnapshot,
+} from '@/hooks/useArkadeLifecycleSnapshots'
+import { useArkadeManualSyncMutation } from '@/hooks/useRailManualSyncMutations'
 import { useArkadeBalanceQuery } from '@/hooks/useArkadeQueries'
 import { isArkadeActiveForNetworkMode } from '@/lib/arkade/arkade-utils'
 import { selectCommittedNetworkMode, useWalletStore } from '@/stores/walletStore'
 
 export function ArkadeDashboardBalance() {
   const networkMode = useWalletStore(selectCommittedNetworkMode)
-  const storeBalance = useWalletStore((s) => s.arkadeBalance)
+  const storeBalance = useWalletStore((walletState) => walletState.arkadeBalance)
   const show = isArkadeActiveForNetworkMode(networkMode)
   const balanceQuery = useArkadeBalanceQuery()
   const arkadeSyncQuery = useArkadeSyncMetadataQuery()
-  const [loadPhase, setLoadPhase] = useState(() => getArkadeLoadLifecycleSnapshot().loadPhase)
-  const [syncPhase, setSyncPhase] = useState(() => getArkadeSyncLifecycleSnapshot().syncPhase)
-
-  useEffect(() => subscribeArkadeLoadLifecycle((next) => setLoadPhase(next.loadPhase)), [])
-  useEffect(() => subscribeArkadeSyncLifecycle((next) => setSyncPhase(next.syncPhase)), [])
+  const arkadeRail = useArkadeRailSnapshot()
+  const arkadeSyncSnapshot = useArkadeSyncLifecycleSnapshot()
+  const arkadeManualSync = useArkadeManualSyncMutation()
 
   const balance = storeBalance ?? balanceQuery.data
   const isLoading = balanceQuery.isLoading && balance == null
@@ -45,20 +40,31 @@ export function ArkadeDashboardBalance() {
   return (
     <Card
       data-testid="dashboard-arkade-balance-card"
-      data-rail-arkade-load={loadPhase}
-      data-rail-arkade-sync={syncPhase}
+      data-rail-arkade-load={arkadeRail.loadPhase}
+      data-rail-arkade-sync={arkadeRail.syncPhase}
     >
       <CardHeader className="pb-2">
-        <CardTitle className="flex items-center gap-2 text-base">
-          <Layers className="h-4 w-4" aria-hidden />
-          <InfomodeWrapper
-            infoId={ARKADE_INFOMODE_IDS.dashboardBalance}
-            infoComponent={ArkadeOverviewInfomodeContent}
-            as="span"
-          >
-            Arkade balance
-          </InfomodeWrapper>
-        </CardTitle>
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Layers className="h-4 w-4" aria-hidden />
+            <InfomodeWrapper
+              infoId={ARKADE_INFOMODE_IDS.dashboardBalance}
+              infoComponent={ArkadeOverviewInfomodeContent}
+              as="span"
+            >
+              Arkade balance
+            </InfomodeWrapper>
+          </CardTitle>
+          <RailSyncControl
+            rail="arkade"
+            syncLabel="Sync Arkade"
+            syncPhase={arkadeSyncSnapshot.syncPhase}
+            lastSyncedAt={lastSuccessfulOperatorSyncAt ?? null}
+            onSync={() => arkadeManualSync.mutate()}
+            isSyncPending={arkadeManualSync.isPending}
+            railConfigured={arkadeRail.loadPhase !== 'not-configured'}
+          />
+        </div>
       </CardHeader>
       <CardContent className="space-y-2">
         {isLoading ? (

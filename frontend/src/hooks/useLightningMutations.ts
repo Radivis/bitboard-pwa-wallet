@@ -53,7 +53,7 @@ import {
   LN_WALLET_BALANCE_STALE_MS,
   LN_WALLET_NETWORK_PLAUSIBILITY_STALE_MS,
 } from '@/lib/lightning/lightning-query-timings'
-import { getLightningLoadLifecycleSnapshot } from '@/lib/wallet/lifecycle/lightning-load-lifecycle-orchestrator'
+import { useIsLightningRailLoaded } from '@/hooks/useLightningLifecycleSnapshots'
 import {
   orchestrateLightningSaveSnapshotPatches,
 } from '@/lib/wallet/lifecycle/lightning-save-lifecycle-orchestrator'
@@ -117,12 +117,13 @@ function useLightningDashboardQueryBase() {
   )
 
   const fingerprint = lightningConnectionsFingerprint(matchingConnections)
+  const lightningRailLoaded = useIsLightningRailLoaded()
 
   const enabled =
     isLightningEnabled &&
     isLightningSupported(networkMode) &&
     activeWalletId != null &&
-    getLightningLoadLifecycleSnapshot().loadPhase === 'loaded' &&
+    lightningRailLoaded &&
     matchingConnections.length > 0 &&
     isOnline
 

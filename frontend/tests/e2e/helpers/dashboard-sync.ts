@@ -10,38 +10,42 @@ function syncControlTimeoutMs(override?: number): number {
   return SYNC_FINISH_TIMEOUT_MS
 }
 
+const ONCHAIN_SYNC_BUTTON = 'Sync on-chain'
+
 /**
- * The dashboard Sync control is visible whenever the dashboard is shown, but it is
- * disabled while `walletStatus === 'syncing'` (e.g. after a network switch).
- * Call this before clicking Sync so the test does not spin until timeout.
+ * The on-chain rail sync control is visible on the dashboard balance card but disabled
+ * while that rail's `syncPhase === 'syncing'` (e.g. after a network switch).
+ * Lightning and Arkade have separate controls (`Sync Lightning`, `Sync Arkade`).
  */
-export async function waitForDashboardSyncButtonEnabled(
+export async function waitForOnchainRailSyncButtonEnabled(
   page: Page,
   /** Defaults to CI-aware syncControlTimeoutMs (same as post-Sync idle on CI) unless overridden. */
   timeout = syncControlTimeoutMs(),
 ): Promise<void> {
-  // Use exact: true to avoid matching "Syncing..." (which contains "Sync")
-  const syncButton = page.getByRole('button', { name: 'Sync', exact: true })
+  const syncButton = page.getByTestId('rail-sync-onchain')
   await expect(syncButton).toBeVisible({ timeout })
   await expect(syncButton).toBeEnabled({ timeout })
 }
 
+/** @deprecated Use waitForOnchainRailSyncButtonEnabled */
+export async function waitForDashboardSyncButtonEnabled(
+  page: Page,
+  timeout = syncControlTimeoutMs(),
+): Promise<void> {
+  await waitForOnchainRailSyncButtonEnabled(page, timeout)
+}
+
 /**
- * Runs one full manual sync: enabled Sync → Syncing… → Sync again, then ensures
- * the button is enabled (idle) before returning.
+ * Runs one full manual on-chain sync: enabled Sync on-chain → Syncing… → idle again.
+ * Does not trigger Lightning or Arkade sync controls.
  */
 export async function runDashboardSyncUntilIdle(page: Page): Promise<void> {
-  // Use exact: true to avoid matching "Syncing..." (which contains "Sync")
-  const syncButton = page.getByRole('button', { name: 'Sync', exact: true })
-  await waitForDashboardSyncButtonEnabled(page)
+  const syncButton = page.getByTestId('rail-sync-onchain')
+  await waitForOnchainRailSyncButtonEnabled(page)
   await syncButton.click()
-  // Use .first() to handle case where ImportInitialSyncErrorBanner's Retry
-  // button also shows "Syncing..." simultaneously with the main Sync button.
-  await expect(
-    page.getByRole('button', { name: 'Syncing...' }).first(),
-  ).toBeVisible({
-    timeout: 10_000,
+  await expect(syncButton).toHaveText(/Syncing/i, { timeout: 10_000 })
+  await expect(syncButton).toHaveText(ONCHAIN_SYNC_BUTTON, {
+    timeout: SYNC_FINISH_TIMEOUT_MS,
   })
-  await expect(syncButton).toBeVisible({ timeout: SYNC_FINISH_TIMEOUT_MS })
   await expect(syncButton).toBeEnabled({ timeout: SYNC_FINISH_TIMEOUT_MS })
 }

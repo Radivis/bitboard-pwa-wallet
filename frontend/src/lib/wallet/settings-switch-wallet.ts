@@ -150,7 +150,6 @@ export async function switchDescriptorWallet(params: {
 
     if (targetNetworkMode !== 'lab') {
       onPhase?.(syncingTargetNetworkMessage(targetNetworkMode))
-      setWalletStatus('syncing')
       const fullScanNeeded =
         isLiveNetworkSwitch ||
         !descriptorWallet.fullScanDone ||
@@ -165,7 +164,6 @@ export async function switchDescriptorWallet(params: {
       })
       // Always return to `unlocked` so dashboard Sync/UX is usable. On `syncFailed`,
       // an error toast was shown; chain data in WASM may still be stale.
-      setWalletStatus('unlocked')
     } else {
       setWalletStatus('unlocked')
     }

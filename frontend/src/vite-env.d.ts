@@ -33,6 +33,8 @@ interface Window {
   ) => Promise<import('@/workers/lab-api').LabTxDetails | null>
   /** DEV E2E: SPA navigate to lab tx viewer (avoids reload before OPFS persists mempool). */
   __e2eNavigateToLabTx?: (txid: string) => Promise<void>
+  /** DEV E2E: SPA navigate to Arkade receive (avoids full reload that locks the wallet). */
+  __e2eNavigateToReceiveArkade?: () => Promise<void>
   __E2E_NWC__?: {
     setFailing: (value: boolean) => void
     setBalanceSats: (value: number) => void

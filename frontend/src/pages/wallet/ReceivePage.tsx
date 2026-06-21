@@ -16,6 +16,7 @@ import {
   useWalletStore,
   type NetworkMode,
 } from '@/stores/walletStore'
+import { walletIsUnlockedOrSyncing } from '@/lib/wallet/wallet-unlocked-status'
 import { useCryptoStore } from '@/stores/cryptoStore'
 import { useFeatureStore } from '@/stores/featureStore'
 import { updateWalletChangeset } from '@/lib/wallet/wallet-utils'
@@ -70,7 +71,7 @@ export function ReceivePage() {
   }, [committedNetworkMode])
 
   useEffect(() => {
-    if (!currentAddress && (walletStatus === 'unlocked' || walletStatus === 'syncing')) {
+    if (!currentAddress && walletIsUnlockedOrSyncing(walletStatus)) {
       loadAddress()
     }
 
@@ -118,7 +119,7 @@ export function ReceivePage() {
     return null
   }
 
-  if (walletStatus !== 'unlocked' && walletStatus !== 'syncing') {
+  if (!walletIsUnlockedOrSyncing(walletStatus)) {
     return <WalletUnlockOrNearZeroLoading />
   }
 

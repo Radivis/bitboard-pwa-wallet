@@ -186,8 +186,6 @@ describe('switchDescriptorWallet', () => {
       addressType: 'taproot',
       accountId: 0,
     })
-    expect(mockSetWalletStatus).toHaveBeenCalledWith('syncing')
-    expect(mockSetWalletStatus).toHaveBeenCalledWith('unlocked')
     expect(toast.success).not.toHaveBeenCalled()
   })
 
@@ -215,8 +213,6 @@ describe('switchDescriptorWallet', () => {
     expect(successCalls.some((m) => String(m).includes('descriptor wallet loaded'))).toBe(
       false,
     )
-    expect(mockSetWalletStatus).toHaveBeenCalledWith('syncing')
-    expect(mockSetWalletStatus).toHaveBeenCalledWith('unlocked')
   })
 
   it('forces full scan when switching between live networks even if fullScanDone is set', async () => {

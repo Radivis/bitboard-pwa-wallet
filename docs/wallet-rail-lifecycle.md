@@ -1,6 +1,6 @@
 # Wallet rail lifecycle architecture
 
-This document specifies the lifecycle architecture for Bitboard’s three wallet rails: **on-chain**, **Lightning (NWC)**, and **Arkade**. **L1–L4** (on-chain, Arkade, and Lightning load/sync/save) are implemented; dashboard lifecycle UI hooks (L5) are specified here for future work.
+This document specifies the lifecycle architecture for Bitboard’s three wallet rails: **on-chain**, **Lightning (NWC)**, and **Arkade**. **L1–L5** are implemented: per-rail orchestrators, React subscription hooks, per-rail dashboard sync controls, and per-rail “last synced” captions.
 
 Related docs:
 
@@ -226,12 +226,13 @@ export function useArkadeLoadLifecycleSnapshot(): ArkadeLoadLifecycleSnapshot {
 | `useIsArkadeSessionReady()` | `loadPhase === 'loaded'` — gate `useArkadeQueries` |
 | `useIsOnchainRailLoaded()` | on-chain dashboard / Esplora queries |
 | `useIsArkadeSaveBlockingLock()` | lock UI (wraps orchestrator helper) |
-| `useAnyRailSyncing()` | replace global `walletStatus: 'syncing'` (L5) |
+| `useAnyRailSyncing()` | `isAnyRailSyncing()` aggregate — replaces global `walletStatus: 'syncing'` |
 
 ### TanStack Query integration
 
 - **Readiness gates:** `enabled: useIsArkadeSessionReady()` (or equivalent), never a one-shot `getSnapshot()` in a hook body.
-- **Manual sync (L5):** `useMutation` → `orchestrateArkadeSyncThenSave`; button disabled/spinner from `useArkadeSyncLifecycleSnapshot().syncPhase`.
+- **Manual sync:** `useRailManualSyncMutations` → per-rail orchestrators only; `RailSyncControl` disabled/spinner from `use*SyncLifecycleSnapshot().syncPhase`.
+- **Per-rail last synced:** `RailSyncControl` caption reads persisted metadata queries (`useOnchainEsploraSyncMetadataQuery`, `useLightningSyncMetadataQuery`, `useArkadeSyncMetadataQuery`) — not a global dashboard header timestamp.
 - **Domain queries unchanged:** balance/history still use Query for fetch/cache; orchestrator invalidates after save (existing pattern).
 
 Load completion and operator sync are **different readiness levels**. UI that needs post-sync data (e.g. mock ASP fixture balance) must wait for sync completion or domain query success — not only `loadPhase === 'loaded'`. E2E helpers document this split (see [E2E readiness](#e2e-readiness)).
@@ -240,20 +241,22 @@ Load completion and operator sync are **different readiness levels**. UI that ne
 
 Dashboard rail blocks expose lifecycle phase on the DOM for tests:
 
-- `data-rail-arkade-load={loadPhase}` — session / receive readiness (`loaded`)
-- `data-rail-arkade-sync={syncPhase}` — operator sync spinner / error
-- Same pattern for on-chain and Lightning when L5 lands
+- `data-rail-onchain-load` / `data-rail-onchain-sync` — on-chain balance block
+- `data-rail-lightning-load` / `data-rail-lightning-sync` — Lightning balance block
+- `data-rail-arkade-load` / `data-rail-arkade-sync` — Arkade balance card
+- `data-testid="rail-sync-{onchain|lightning|arkade}"` — per-rail sync button
+- Optional `data-rail-last-synced-at` ISO string on sync caption
 
 Values come from rail or machine hooks, not imperative snapshot reads at render time.
 
-### Migration (L5)
+### Migration (L5) — Done
 
-1. Add hook modules under `frontend/src/hooks/`.
-2. Refactor `useArkadeQueries`, `ArkadeDashboardBalance`, save-error banner, and future per-rail sync buttons to use hooks.
-3. Remove inline `useState` + `subscribe` from components.
-4. Add component tests that mount hooks with orchestrator test resets.
+1. Hook modules under `frontend/src/hooks/` (`use*LifecycleSnapshot`, `useWalletRailSyncAggregate`, `useRailManualSyncMutations`).
+2. `useArkadeQueries`, `useLightningMutations`, `useOnchainDashboardQueries` use selector hooks for `enabled`.
+3. `ArkadeDashboardBalance` and dashboard balance card use shared hooks; inline `useState` + `subscribe` removed.
+4. Component and hook tests with orchestrator test resets; E2E helpers target `rail-sync-onchain`.
 
-**Interim (L3):** some components still subscribe inline or call `getSnapshot()` synchronously; treat as technical debt until L5 hook pass.
+**Interim debt cleared in L5:** components no longer subscribe inline or call `getSnapshot()` synchronously for query gates or dashboard rail attributes.
 
 ## LockLifecycle handoff (current + target)
 
@@ -333,8 +336,8 @@ Lock teardown **must await** in-flight sync (best-effort cancel/debounce) and sa
 |---------|----------------|
 | `loadDescriptorWalletAndSync` (WASM part) | OnchainLoadLifecycle |
 | `runEsploraSyncAndPersistChangeset` | ~~OnchainSyncLifecycle + OnchainSaveLifecycle~~ (L2 done) |
-| `walletStatus: 'syncing'` | OnchainSyncLifecycle aggregate (global mirror temporary until L5) |
-| `useOnchainDashboardQueries` | `enabled` from `useIsOnchainRailLoaded()` (L5 hook) |
+| ~~`walletStatus: 'syncing'`~~ | ~~OnchainSyncLifecycle aggregate~~ — **removed**; `useAnyRailSyncing()` / `isAnyRailSyncing()` |
+| `useOnchainDashboardQueries` | `enabled` from `useIsOnchainRailLoaded()` |
 
 ---
 
@@ -509,7 +512,7 @@ Future: `data-rail-onchain-load="loaded"` for on-chain dashboard assertions (LIF
 | **L2** | On-chain Sync + Save lifecycles; retire bundled post-unlock Esplora in wallet-utils | **Done** |
 | **L3** | Arkade Load/Sync/Save; simplify `arkade-session-service`; E2E hooks for load readiness | **Done** |
 | **L4** | Lightning Load/Sync/Save (aggregated) | **Done** |
-| **L5** | Replace `walletStatus: 'syncing'` with rail aggregate; per-rail dashboard sync buttons; **React lifecycle subscription hooks** (`useSyncExternalStore`); refactor query `enabled` gates | Planned |
+| **L5** | Replace `walletStatus: 'syncing'` with rail aggregate; per-rail dashboard sync buttons + last-synced captions; **React lifecycle subscription hooks** (`useSyncExternalStore`); refactor query `enabled` gates | **Done** |
 
 Each phase should follow TDD per `.cursor/rules/testing-strategy.mdc` and add rows to `doc/features/wallet-lifecycle.yaml`.
 
@@ -522,8 +525,8 @@ Each phase should follow TDD per `.cursor/rules/testing-strategy.mdc` and add ro
 1. **Lab load/save orchestration:** under **Onchain\*** namespacing; no separate `LabLoadLifecycle` / `LabSaveLifecycle` modules.
 2. **Save-error on lock:** **hard block** on `save-error` for on-chain, Arkade (L2/L3), and Lightning (L4).
 3. **Cross-tab:** full rail snapshot via `useOnchainRailLifecycleCrossTabSync`; apply only when local tab has same `walletId` + descriptor triple loaded (`descriptorScope` gate).
-4. **`walletStatus: 'syncing'`:** temporary mirror of on-chain sync phase only (revert to `unlocked` when sync completes even if save still running); removed in L5.
-5. **React lifecycle hooks:** orchestrator-owned phase; `useSyncExternalStore` hooks in `frontend/src/hooks/`; no lifecycle Zustand store; TanStack Query for async work only (L5).
+4. **`walletStatus: 'syncing'`:** removed in L5; per-rail `syncPhase` and `useAnyRailSyncing()` / `walletIsUnlockedOrSyncing()` replace it.
+5. **React lifecycle hooks:** orchestrator-owned phase; `useSyncExternalStore` hooks in `frontend/src/hooks/`; stable snapshot getters for referential equality; TanStack Query for async work only (**Done** L5).
 6. **Lightning `sync-error` aggregation:** **any failure** among dashboard-matching connections (resolved L4).
 
 ### Still open

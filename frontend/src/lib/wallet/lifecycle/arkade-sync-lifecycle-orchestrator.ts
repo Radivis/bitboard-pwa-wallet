@@ -266,6 +266,7 @@ export function scheduleBackgroundArkadeOperatorSync(): void {
     }
 
     if (inFlightSync != null) {
+      scheduleBackgroundArkadeOperatorSync()
       return
     }
 

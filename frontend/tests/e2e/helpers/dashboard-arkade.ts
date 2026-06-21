@@ -62,14 +62,82 @@ export async function readDashboardArkadeBalanceSats(page: Page): Promise<number
   return sats
 }
 
+export async function waitForArkadeSyncIdle(
+  page: Page,
+  timeout = ARKADE_MOCK_UI_TIMEOUT_MS,
+): Promise<void> {
+  await expect(page.locator('[data-rail-arkade-sync="not-syncing"]')).toBeVisible({
+    timeout,
+  })
+}
+
+/** Clicks per-rail Sync Arkade and waits until operator sync finishes. */
+export async function triggerArkadeRailSync(
+  page: Page,
+  timeout = ARKADE_MOCK_UI_TIMEOUT_MS,
+): Promise<void> {
+  const syncButton = page.getByTestId('rail-sync-arkade')
+  await expect(syncButton).toBeVisible({ timeout })
+  await expect(syncButton).toBeEnabled({ timeout })
+  await syncButton.click()
+  await expect(async () => {
+    const syncPhase = await page
+      .getByTestId('dashboard-arkade-balance-card')
+      .getAttribute('data-rail-arkade-sync')
+    if (syncPhase !== 'not-syncing') {
+      throw new Error(`Arkade sync still in progress: ${syncPhase ?? 'unknown'}`)
+    }
+  }).toPass({ timeout })
+}
+
+/** Receive route search param — avoids flaky mode-toggle clicks in E2E. */
+async function navigateToReceiveArkadeMode(page: Page): Promise<void> {
+  await page.evaluate(async () => {
+    const navigate = (
+      window as unknown as { __e2eNavigateToReceiveArkade?: () => Promise<void> }
+    ).__e2eNavigateToReceiveArkade
+    if (!navigate) {
+      throw new Error(
+        '__e2eNavigateToReceiveArkade not available (DEV only — Playwright E2E must run against Vite dev)',
+      )
+    }
+    await navigate()
+  })
+}
+
 export async function goToReceiveArkadeMode(page: Page): Promise<void> {
-  await goToWalletTab(page, 'Receive')
-  const arkadeToggle = page.getByRole('button', { name: 'Arkade' })
-  await expect(arkadeToggle).toBeVisible({ timeout: 15_000 })
-  await arkadeToggle.click()
+  await navigateToReceiveArkadeMode(page)
   await expect(page.getByRole('heading', { name: 'Receive on Arkade' })).toBeVisible({
     timeout: 15_000,
   })
+  await waitForArkadeWasmSessionReady(page)
+}
+
+export async function clickArkadeGenerateNewAddress(page: Page): Promise<void> {
+  await expect(page.getByRole('heading', { name: 'Receive on Arkade' })).toBeVisible({
+    timeout: 15_000,
+  })
+  await waitForReceiveArkadeAddressReady(page)
+  const generateButton = page.getByTestId('arkade-generate-new-address')
+  await expect(generateButton).toBeEnabled({ timeout: 15_000 })
+  await generateButton.click()
+}
+
+/** Wait until `offchain_next_derivation_index` advances after Generate New Address. */
+export async function clickArkadeGenerateNewAddressAndWaitForIndexAdvance(
+  page: Page,
+  previousIndex: number,
+  timeout = ARKADE_MOCK_UI_TIMEOUT_MS,
+): Promise<number> {
+  await clickArkadeGenerateNewAddress(page)
+  let nextIndex = previousIndex
+  await expect(async () => {
+    nextIndex = (
+      await page.evaluate(() => window.__E2E_ARKADE__!.readReceiveDebugSnapshot())
+    ).offchainNextDerivationIndex
+    expect(nextIndex).toBeGreaterThan(previousIndex)
+  }).toPass({ timeout })
+  return nextIndex
 }
 
 export async function waitForReceiveArkadeAddressReady(

@@ -9,6 +9,7 @@ import {
   selectCommittedNetworkMode,
   type WalletStatus,
 } from '@/stores/walletStore'
+import { walletIsUnlockedOrSyncing } from '@/lib/wallet/wallet-unlocked-status'
 
 export type ThemeMode = 'light' | 'dark' | 'system'
 export type ResolvedTheme = 'light' | 'dark'
@@ -65,7 +66,7 @@ export function isWalletThemePaletteActive(
   if (activeWalletId == null) {
     return false
   }
-  return walletStatus === 'unlocked' || walletStatus === 'syncing'
+  return walletIsUnlockedOrSyncing(walletStatus)
 }
 
 /**

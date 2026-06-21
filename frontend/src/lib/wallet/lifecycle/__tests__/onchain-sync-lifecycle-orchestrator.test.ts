@@ -37,7 +37,7 @@ vi.mock('@/lib/wallet/lifecycle/onchain-rail-lifecycle-cross-tab-sync', () => ({
 }))
 
 const walletStoreState = {
-  walletStatus: 'unlocked' as 'unlocked' | 'syncing' | 'locked',
+  walletStatus: 'unlocked' as 'unlocked' | 'locked',
   setWalletStatus: vi.fn(),
 }
 
@@ -127,6 +127,12 @@ describe('onchain-sync-lifecycle-orchestrator', () => {
     await Promise.all([first, second])
 
     expect(syncActiveWalletAndUpdateState).toHaveBeenCalledTimes(1)
+  })
+
+  it('sync success does not mutate walletStatus', async () => {
+    await orchestrateOnchainSyncThenSave(syncParams)
+
+    expect(walletStoreState.setWalletStatus).not.toHaveBeenCalled()
   })
 
   it('lab network rejects sync', async () => {

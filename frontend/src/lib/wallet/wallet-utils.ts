@@ -427,20 +427,16 @@ export async function runImportInitialEsploraSync(): Promise<void> {
 }
 
 /**
- * Retry handler for import initial sync (toast action, dashboard banner): sets syncing,
- * runs {@link runImportInitialEsploraSync}, shows toasts, repopulates error state on failure.
+ * Retry handler for import initial sync (toast action, dashboard banner): runs
+ * {@link runImportInitialEsploraSync}, shows toasts, repopulates error state on failure.
  */
 export async function retryImportInitialEsploraSyncWithWalletStatus(): Promise<void> {
-  const { setWalletStatus, setImportInitialSyncErrorMessage } =
-    useWalletStore.getState()
+  const { setImportInitialSyncErrorMessage } = useWalletStore.getState()
   try {
-    setWalletStatus('syncing')
     setImportInitialSyncErrorMessage(null)
     await runImportInitialEsploraSync()
-    setWalletStatus('unlocked')
     toast.success('Initial sync complete')
   } catch (err) {
-    setWalletStatus('unlocked')
     const userFacingErrorMessage =
       sanitizeErrorMessageForUi(errorMessage(err) ?? String(err)) ||
       'Initial sync failed'

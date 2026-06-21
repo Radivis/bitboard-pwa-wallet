@@ -6,7 +6,6 @@ describe('isWalletThemePaletteActive', () => {
     expect(isWalletThemePaletteActive(null, 'none')).toBe(false)
     expect(isWalletThemePaletteActive(null, 'locked')).toBe(false)
     expect(isWalletThemePaletteActive(null, 'unlocked')).toBe(false)
-    expect(isWalletThemePaletteActive(null, 'syncing')).toBe(false)
   })
 
   it('returns false when wallet is locked or none despite an active id', () => {
@@ -14,8 +13,8 @@ describe('isWalletThemePaletteActive', () => {
     expect(isWalletThemePaletteActive(1, 'none')).toBe(false)
   })
 
-  it('returns true when unlocked or syncing with an active wallet', () => {
+  it('returns true when unlocked with an active wallet', () => {
     expect(isWalletThemePaletteActive(1, 'unlocked')).toBe(true)
-    expect(isWalletThemePaletteActive(42, 'syncing')).toBe(true)
+    expect(isWalletThemePaletteActive(42, 'unlocked')).toBe(true)
   })
 })

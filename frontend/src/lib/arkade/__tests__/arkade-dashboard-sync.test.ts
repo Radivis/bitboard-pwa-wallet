@@ -50,10 +50,16 @@ describe('resolveArkadeOperatorSyncMetadata', () => {
   })
 
   it('returns not stale when lastOperatorSyncTime is set this session', async () => {
+    const isoTimestamp = '2020-01-02T00:00:00.000Z'
+    loadActiveArkadeConnectionForNetworkMock.mockResolvedValue({
+      id: 'conn-1',
+      lastSuccessfulOperatorSyncAt: isoTimestamp,
+    })
     useWalletStore.setState({ lastOperatorSyncTime: new Date() })
     const result = await resolveArkadeOperatorSyncMetadata()
     expect(result.isStaleArkade).toBe(false)
-    expect(loadActiveArkadeConnectionForNetworkMock).not.toHaveBeenCalled()
+    expect(result.lastSuccessfulOperatorSyncAt).toBe(isoTimestamp)
+    expect(loadActiveArkadeConnectionForNetworkMock).toHaveBeenCalled()
   })
 
   it('returns stale when persisted operator sync timestamp exists on connection', async () => {

@@ -19,6 +19,8 @@ import { formatLabEntityMineOptionLabel } from '@/lib/lab/lab-entity-keys'
 import { LabOwnerType } from '@/lib/lab/lab-owner-type'
 import { cn } from '@/lib/shared/utils'
 import { useFeatureStore } from '@/stores/featureStore'
+import type { WalletStatus } from '@/stores/walletStore'
+import { walletIsUnlockedOrSyncing } from '@/lib/wallet/wallet-unlocked-status'
 
 export function LabBlocksCard({
   blockCount,
@@ -45,7 +47,7 @@ export function LabBlocksCard({
   setSelectedLabEntityId: (id: number | null) => void
   mining: boolean
   onMine: () => void
-  walletStatus: string
+  walletStatus: WalletStatus
   currentAddress: string | null
   activeWallet: { name: string } | undefined
 }) {
@@ -142,7 +144,7 @@ export function LabBlocksCard({
             {ownerType === LabOwnerType.Wallet ? (
               <div className="space-y-2">
                 <Label htmlFor="target-address">Target address (active wallet)</Label>
-                {walletStatus === 'unlocked' || walletStatus === 'syncing' ? (
+                {walletIsUnlockedOrSyncing(walletStatus) ? (
                   <Input
                     id="target-address"
                     type="text"
@@ -212,8 +214,7 @@ export function LabBlocksCard({
                   mining ||
                   noLivingEntities ||
                   (ownerType === LabOwnerType.Wallet &&
-                    walletStatus !== 'unlocked' &&
-                    walletStatus !== 'syncing') ||
+                    !walletIsUnlockedOrSyncing(walletStatus)) ||
                   (ownerType === LabOwnerType.Wallet &&
                     (!currentAddress || !activeWallet))
                 }

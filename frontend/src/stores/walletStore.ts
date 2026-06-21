@@ -7,7 +7,7 @@ import type { ArkadeBalanceInfo, ArkadePaymentRow } from '@/workers/arkade-api'
 
 export type NetworkMode = 'lab' | 'regtest' | 'signet' | 'testnet' | 'mainnet'
 
-export type WalletStatus = 'none' | 'locked' | 'unlocked' | 'syncing'
+export type WalletStatus = 'none' | 'locked' | 'unlocked'
 
 export { AddressType }
 

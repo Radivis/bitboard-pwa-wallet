@@ -36,6 +36,22 @@ vi.mock('@/hooks/useArkadeDashboardQueries', () => ({
   useArkadeSyncMetadataQuery: () => ({ data: { isStaleArkade: false } }),
 }))
 
+vi.mock('@/hooks/useArkadeLifecycleSnapshots', () => ({
+  useArkadeRailSnapshot: () => ({
+    loadPhase: 'loaded',
+    syncPhase: 'not-syncing',
+    savePhase: 'not-saving',
+  }),
+  useArkadeSyncLifecycleSnapshot: () => ({ syncPhase: 'not-syncing' }),
+}))
+
+vi.mock('@/hooks/useRailManualSyncMutations', () => ({
+  useArkadeManualSyncMutation: () => ({
+    mutate: vi.fn(),
+    isPending: false,
+  }),
+}))
+
 vi.mock('@/stores/featureStore', () => ({
   useFeatureStore: Object.assign(
     (selector: (state: Record<string, unknown>) => unknown) =>
