@@ -93,11 +93,13 @@ vi.mock('@/lib/wallet/lifecycle/onchain-save-lifecycle-orchestrator', () => ({
 import {
   applyOnchainLoadLifecycleSnapshotFromOtherTab,
   getOnchainLoadLifecycleSnapshot,
+  markOnchainRailLoadedAfterExternalHydration,
   orchestrateOnchainLoad,
   resetOnchainLoadLifecycleStateForTests,
   subscribeOnchainLoadLifecycle,
   syncOnchainLoadLifecycleWithLockPhase,
 } from '@/lib/wallet/lifecycle/onchain-load-lifecycle-orchestrator'
+import { configureOnchainSyncForLoadedRail } from '@/lib/wallet/lifecycle/onchain-sync-lifecycle-orchestrator'
 import { getOnchainRailSnapshot } from '@/lib/wallet/lifecycle/onchain-rail-snapshot'
 
 const loadParams = {
@@ -229,5 +231,44 @@ describe('onchain-load-lifecycle-orchestrator', () => {
     })
     expect(waitForCryptoWorkerHealthy).not.toHaveBeenCalled()
     expect(resolveDescriptorWallet).not.toHaveBeenCalled()
+  })
+
+  it('markOnchainRailLoadedAfterExternalHydration marks loaded and configures sync', () => {
+    markOnchainRailLoadedAfterExternalHydration(loadParams)
+
+    expect(getOnchainLoadLifecycleSnapshot()).toEqual({
+      loadPhase: 'loaded',
+      networkMode: 'testnet',
+    })
+    expect(configureOnchainSyncForLoadedRail).toHaveBeenCalledWith({
+      walletId: loadParams.walletId,
+      networkMode: loadParams.networkMode,
+      addressType: loadParams.addressType,
+      accountId: loadParams.accountId,
+    })
+    expect(waitForCryptoWorkerHealthy).not.toHaveBeenCalled()
+    expect(resolveDescriptorWallet).not.toHaveBeenCalled()
+  })
+
+  it('markOnchainRailLoadedAfterExternalHydration is idempotent when already loaded', () => {
+    markOnchainRailLoadedAfterExternalHydration(loadParams)
+    vi.clearAllMocks()
+
+    markOnchainRailLoadedAfterExternalHydration(loadParams)
+
+    expect(configureOnchainSyncForLoadedRail).not.toHaveBeenCalled()
+  })
+
+  it('markOnchainRailLoadedAfterExternalHydration skips sync configuration on lab', () => {
+    markOnchainRailLoadedAfterExternalHydration({
+      ...loadParams,
+      networkMode: 'lab',
+    })
+
+    expect(getOnchainLoadLifecycleSnapshot()).toEqual({
+      loadPhase: 'loaded',
+      networkMode: 'lab',
+    })
+    expect(configureOnchainSyncForLoadedRail).not.toHaveBeenCalled()
   })
 })

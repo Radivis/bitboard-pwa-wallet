@@ -198,6 +198,34 @@ export function syncOnchainLoadLifecycleWithLockPhase(lockPhase: LockLifecyclePh
   setSnapshot({ loadPhase: 'not-configured', networkMode: null })
 }
 
+/**
+ * Import/create paths hydrate WASM outside orchestrateOnchainLoad. Mark the rail loaded and
+ * configure sync/save so dashboard controls (e.g. rail-sync-onchain) appear without a second load.
+ */
+export function markOnchainRailLoadedAfterExternalHydration(params: OnchainLoadParams): void {
+  const current = getOnchainLoadLifecycleSnapshot()
+  if (
+    current.loadPhase === 'loaded' &&
+    current.networkMode === params.networkMode &&
+    inFlightLoad == null
+  ) {
+    return
+  }
+  if (inFlightLoad != null) {
+    return
+  }
+
+  setSnapshot({ loadPhase: 'loaded', networkMode: params.networkMode })
+  if (params.networkMode !== 'lab') {
+    configureOnchainSyncForLoadedRail({
+      walletId: params.walletId,
+      networkMode: params.networkMode,
+      addressType: params.addressType,
+      accountId: params.accountId,
+    })
+  }
+}
+
 export async function orchestrateOnchainLoad(params: OnchainLoadParams): Promise<void> {
   const key = loadKey(params)
   if (inFlightLoad?.key === key) {

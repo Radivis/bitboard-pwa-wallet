@@ -37,6 +37,7 @@ import {
   ensureWalletSecretsSession,
   isWalletSecretsSessionActive,
 } from '@/lib/wallet/wallet-secrets-session'
+import { markOnchainRailLoadedAfterExternalHydration } from '@/lib/wallet/lifecycle/onchain-load-lifecycle-orchestrator'
 
 export function ImportWalletPage() {
   const navigate = useNavigate()
@@ -173,6 +174,15 @@ export function ImportWalletPage() {
       startAutoLockTimer(() => void orchestrateLock())
     },
     onSuccess: () => {
+      const { activeWalletId, networkMode, addressType, accountId } = useWalletStore.getState()
+      if (activeWalletId != null) {
+        markOnchainRailLoadedAfterExternalHydration({
+          walletId: activeWalletId,
+          networkMode,
+          addressType,
+          accountId,
+        })
+      }
       setMnemonicInput('')
       toast.success('Wallet imported successfully!')
       navigate({ to: '/wallet' })

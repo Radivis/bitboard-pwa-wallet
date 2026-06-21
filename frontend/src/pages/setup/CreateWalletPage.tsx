@@ -36,6 +36,7 @@ import {
   ensureWalletSecretsSession,
   isWalletSecretsSessionActive,
 } from '@/lib/wallet/wallet-secrets-session'
+import { markOnchainRailLoadedAfterExternalHydration } from '@/lib/wallet/lifecycle/onchain-load-lifecycle-orchestrator'
 
 type Step = 1 | 2 | 3
 
@@ -145,6 +146,12 @@ export function CreateWalletPage() {
         accountId,
       })
       setWalletStatus('unlocked')
+      markOnchainRailLoadedAfterExternalHydration({
+        walletId,
+        networkMode,
+        addressType,
+        accountId,
+      })
       startAutoLockTimer(() => void orchestrateLock())
     },
     [
