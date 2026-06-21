@@ -152,6 +152,64 @@ When a rail becomes configured (gates satisfied — see per-rail sections), load
 7. **One Lightning machine per rail** (v1). Sync and save aggregate across all NWC connections for the active Bitboard wallet.
 8. **One Arkade operator** per `(walletId, networkMode)` — no multi-connection aggregation on the Arkade rail.
 
+## Route independence and wallet hydration
+
+Wallet **rail lifecycles** (load, sync, save on on-chain, Lightning, and Arkade) must be **independent of the current URL**. Navigation must not cancel, pause, restart, or gate in-flight lifecycle work. Sync and save started on the dashboard must be allowed to finish after the user opens Settings, Library, or any other section.
+
+The **only** deliberate coupling between routing and wallet crypto is **when to start hydration** (bringing persisted secrets and WASM session state into memory after lock, reload, or near-zero session restore):
+
+| Concept | Meaning |
+|---------|---------|
+| **Hydration** | Near-zero session restore (`tryLoadNearZeroSessionIntoMemory`) plus bootstrap unlock (`orchestrateBootstrapUnlock` → per-rail **load**). Distinct from background **sync** and **save**, which follow load and are not route-gated. |
+| **Wallet route** | Any path under `/wallet` (dashboard, send, receive, management, wallets picker, etc.). Legacy `/` redirects to `/wallet`. |
+| **Non-wallet route** | Settings, setup, lab, library, privacy, and any other path that is not a wallet route. |
+
+### Rules
+
+1. **Start hydration on wallet entry only.** When the user **visits a wallet route** and prerequisites are met (active wallet, secrets session or restorable near-zero session, wallet not already loaded), the app may start hydration. Visiting Settings, Lab, Library, or setup must **not** start hydration by itself.
+2. **Lifecycle is route-agnostic.** In-flight load, sync, and save continue regardless of navigation. Do not cancel debounced sync timers, disable bootstrap queries mid-flight, or skip save because the user left `/wallet`.
+3. **Lock and explicit user actions are exceptions.** Lock teardown, manual unlock, and network switch are intentional lifecycle drivers — not “navigation interference” in the sense above.
+4. **Privacy redirect after lock** (wallet route → Library via `navigateToLibraryIfOnWalletRoute`) stays in place. It is privacy-enhancing: the user leaves wallet UI after locking. It does not tear down in-flight lifecycle work; it only defers **the next** hydration until the user opens a wallet route again.
+5. **No route-based “special cases” for crypto needs.** Lab and Settings are **not** hydration entry points just because some screens eventually need wallet access. Do not add `/lab` or `/settings` to hydration gates to “pre-unlock” for those flows.
+
+### Action-gated unlock (`requireUnlockedWallet`)
+
+Some non-wallet screens **display** wallet-related information or **offer actions** that need an unlocked descriptor wallet (WASM loaded, secrets session active). These must **not** widen hydration to the whole route. Instead, guard the **action** (or the sensitive reveal) with a shared helper:
+
+```ts
+/**
+ * If the wallet is already unlocked (or a rail sync is in flight), run `action` immediately.
+ * Otherwise prompt for unlock (or near-zero auto-restore) and run `action` only after success.
+ * Does not start hydration merely because the user opened Settings or Lab.
+ */
+async function requireUnlockedWallet(action: () => void | Promise<void>): Promise<void>
+```
+
+**Target location:** `frontend/src/lib/wallet/require-unlocked-wallet.ts` (or equivalent) — UI may wrap this in a hook that shows `WalletUnlock` / `WalletUnlockOrNearZeroLoading`.
+
+| Area | Route stays passive | Unlock at action time |
+|------|---------------------|------------------------|
+| **Settings — receiving descriptor** | Settings main page renders without hydrating WASM. Show copy such as “Unlock your wallet to view the receiving descriptor” when locked (`NetworkCardCommittedDescriptor` today). | Reveal, copy, or export descriptor → `requireUnlockedWallet` then load descriptor from encrypted secrets / WASM as needed. |
+| **Settings — network / address type switch** | Network cards render; locked state is visible. | Applying a switch that loads a different descriptor → `requireUnlockedWallet` (today partially inlined via `WalletUnlock` on network selector). |
+| **Lab** | Lab has **its own** chain DB, entities, and simulated wallets. Browsing blocks, lab entities, and lab-only mining do not require Bitboard wallet hydration. | Operations that credit **your** Bitboard wallet (e.g. mine block reward to “Wallet”, lab sends that use the live receive address) → `requireUnlockedWallet` before proceeding. Lab may still switch **network mode** to `lab` on entry (`runLabRouteBeforeLoad`); that is network UX, not a substitute for unlock on wallet-backed actions. |
+| **Setup** | Create/import flows manage their own password/session steps. | Steps that persist or load descriptor secrets → existing setup unlock/create flows, not route-wide hydration from `pathnameRequiresWalletCryptoSession`. |
+
+**Anti-pattern:** Treating `/settings` or `/lab` like `/wallet` in `pathnameRequiresWalletCryptoSession` so hydration runs on navigation. That couples lifecycle to routes and caused spurious bootstrap/sync when opening Settings after a synced dashboard.
+
+**Preferred pattern:** Route renders safely while locked; `walletIsUnlockedOrSyncing` gates **display** of secrets; `requireUnlockedWallet` gates **mutations** and **secret reveal**.
+
+### Implementation target
+
+- Replace `pathnameRequiresWalletCryptoSession` (which today includes `/settings`, `/setup`, and `/lab`) with a narrow **`pathnameIsWalletRoute`** helper used **only** for hydration entry.
+- Introduce **`requireUnlockedWallet`** for action-gated unlock on Settings, Lab, and similar — not pathname checks in lifecycle orchestrators.
+- Keep lifecycle orchestrators free of `useLocation`, `walletCryptoSessionPathGateStore`, and pathname checks — except where a dedicated hydration coordinator reads “entered wallet route” once.
+- TanStack Query `enabled` for bootstrap load may react to wallet-route entry, but must not flip off in a way that aborts an in-flight bootstrap when the user navigates away (LockLifecycle `bootstrap_unlock` already extends the enabled window during unlock; the same “finish what you started” rule applies when leaving the route).
+- **Keep** post-lock redirect to Library; do not remove or route-gate it as part of lifecycle refactors.
+
+### Known violations (audit)
+
+See [Known route–lifecycle violations](#known-route-lifecycle-violations) at the end of this document.
+
 ### Dashboard UI (post-refactor)
 
 Replace the single global sync affordance with **per-rail sync buttons** on the dashboard (or per-rail blocks already on the dashboard):
@@ -528,7 +586,66 @@ Each phase should follow TDD per `.cursor/rules/testing-strategy.mdc` and add ro
 4. **`walletStatus: 'syncing'`:** removed in L5; per-rail `syncPhase` and `useAnyRailSyncing()` / `walletIsUnlockedOrSyncing()` replace it.
 5. **React lifecycle hooks:** orchestrator-owned phase; `useSyncExternalStore` hooks in `frontend/src/hooks/`; stable snapshot getters for referential equality; TanStack Query for async work only (**Done** L5).
 6. **Lightning `sync-error` aggregation:** **any failure** among dashboard-matching connections (resolved L4).
+7. **Route vs unlock:** Hydration starts on wallet routes only; Lab/Settings needs use `requireUnlockedWallet` at action time, not route-wide hydration (see [Action-gated unlock](#action-gated-unlock-requireunlockedwallet)).
+8. **Post-lock Library redirect:** retained for privacy (`navigateToLibraryIfOnWalletRoute`).
 
 ### Still open
 
-_(none)_
+- Implement `requireUnlockedWallet` and migrate Settings/Lab call sites off route-based hydration.
+- Narrow hydration entry to `pathnameIsWalletRoute`; retire broad `pathnameRequiresWalletCryptoSession` for load/bootstrap.
+
+---
+
+## Known route–lifecycle violations
+
+Audit of the codebase against [Route independence and wallet hydration](#route-independence-and-wallet-hydration). Fix work should:
+
+1. Narrow **hydration entry** to wallet routes (`pathnameIsWalletRoute`).
+2. Add **`requireUnlockedWallet`** for Settings/Lab (and similar) **actions** that need WASM/secrets.
+3. Avoid re-introducing route checks into sync/save orchestrators or cancelling lifecycle on navigation.
+
+### Hydration started on non-wallet routes (replace with wallet-route-only + action gates)
+
+| Location | What happens | Why it violates | Target fix |
+|----------|----------------|-----------------|------------|
+| [`pathname-requires-wallet-crypto-session.ts`](../frontend/src/lib/shared/pathname-requires-wallet-crypto-session.ts) | `pathnameRequiresWalletCryptoSession` returns true for `/settings`, `/setup`, and `/lab` as well as `/wallet`. | Route-wide “crypto session” conflates hydration entry with “might need unlock later”. | `pathnameIsWalletRoute` for hydration only; remove settings/lab from session-restore gate. |
+| [`useActiveWalletLoadQuery.ts`](../frontend/src/hooks/useActiveWalletLoadQuery.ts) | `needsBootstrap` requires `pathnameRequiresWalletCryptoSession(pathname)`. | Opening Settings/Lab with locked wallet + session runs bootstrap without visiting `/wallet`. | Gate bootstrap on wallet route entry only. |
+| [`AppInitializer.tsx`](../frontend/src/components/AppInitializer.tsx) | `useEffect` on `[walletStatus, location.pathname]` calls `tryLoadNearZeroSessionIntoMemory` when `pathnameRequiresWalletCryptoSession` is true. | Navigating to Settings/Lab after lock restores session / triggers hydration path. | Near-zero restore tied to wallet-route entry (or post-unlock), not settings/lab pathname. |
+| [`DatabaseReadyGate.tsx`](../frontend/src/components/DatabaseReadyGate.tsx) | On cold start, restores near-zero session when initial URL matches broad helper (e.g. `/settings`). | Cold start on non-wallet URL should not hydrate. | Cold-start session restore only on wallet-route URLs (or defer until first wallet visit). |
+
+### Navigation interferes with in-flight hydration
+
+| Location | What happens | Why it violates |
+|----------|----------------|-----------------|
+| [`useActiveWalletLoadQuery.ts`](../frontend/src/hooks/useActiveWalletLoadQuery.ts) | `enabled: needsBootstrap` becomes false when pathname leaves the broad crypto-route set (e.g. wallet → Library mid-bootstrap). | TanStack Query may disable/cancel the bootstrap observer while load is still running — navigation must not stop hydration. |
+| [`useActiveWalletDescriptorWalletBootstrap.ts`](../frontend/src/hooks/useActiveWalletDescriptorWalletBootstrap.ts) | When `needsBootstrap` becomes false and secrets session is inactive, removes bootstrap queries from the cache. | Tied to the same pathname gate; leaving a route can clear hydration state. |
+
+### Action-gated unlock gaps (not route violations — missing helper)
+
+| Location | What happens | Target |
+|----------|----------------|--------|
+| [`NetworkCardCommittedDescriptor.tsx`](../frontend/src/components/settings/NetworkCardCommittedDescriptor.tsx) | Descriptor query `enabled` only when `walletIsUnlockedOrSyncing`; passive message when locked. | Keep passive UI; reveal/copy should call `requireUnlockedWallet` once implemented (today reveal is disabled until already unlocked). |
+| [`NetworkSelector.tsx`](../frontend/src/components/settings/NetworkSelector.tsx) | Embeds `WalletUnlock` for network switch when locked. | Consolidate on `requireUnlockedWallet` for switch actions. |
+| Lab mine-to-wallet / wallet-backed lab ops | Need unlocked Bitboard wallet for receive address and signing paths. | `requireUnlockedWallet` at mine/send confirmation, not hydration on `/lab` entry. |
+| _(planned)_ `requireUnlockedWallet` | Not implemented yet. | Shared helper per [Action-gated unlock](#action-gated-unlock-requireunlockedwallet). |
+
+### Route-coupled behavior (review separately from hydration)
+
+| Location | What happens | Notes |
+|----------|----------------|-------|
+| [`lab-route-before-load.ts`](../frontend/src/lib/lab/lab-route-before-load.ts) via [`routes/lab.tsx`](../frontend/src/routes/lab.tsx) | `beforeLoad` runs `switchToLabNetwork` (persist, `loadDescriptorWalletWithoutSync`, network mode → lab). | **Network/lab UX**, not a substitute for `requireUnlockedWallet`. Wallet-backed lab actions still need action-time unlock. Refactor may narrow what runs on entry vs on first wallet-backed action. |
+| [`AppInitializer.tsx`](../frontend/src/components/AppInitializer.tsx) | Wallet-list effects redirect to `/setup`, `/wallet/wallets`, etc. based on pathname. | Navigation policy, not rail lifecycle — OK. |
+
+### Intentional / aligned behavior (not violations)
+
+| Location | Behavior |
+|----------|----------|
+| [`app-router.ts`](../frontend/src/lib/shared/app-router.ts) `navigateToLibraryIfOnWalletRoute` | After lock, redirect off `/wallet` to Library for privacy. **Keep.** Does not cancel in-flight sync/save. |
+| Lock → Library + hydration on next wallet visit | Matches rules 1 and 4. |
+| Settings/Lab browsable while locked | Correct once route-wide hydration is removed; sensitive ops use `requireUnlockedWallet`. |
+| Dashboard Arkade queries → `scheduleBackgroundArkadeOperatorSync` | Sync scheduled from query execution; timer may complete after navigation. **Correct** under route-independent lifecycle — do not cancel on route change. |
+| Per-rail sync/save orchestrators under `frontend/src/lib/wallet/lifecycle/` | No pathname imports today — aligned with target. |
+
+### Related symptom (dashboard → Settings)
+
+Observed “wallet syncs again” when opening Settings after a synced dashboard is often a **deferred dashboard poll sync** (400ms debounce from balance/history queries) completing after navigation, not Settings starting new work. Under this policy that completion is acceptable. **Unacceptable:** route-wide bootstrap/hydration triggered by opening Settings — fixed by wallet-route-only hydration, not by cancelling sync on navigation.

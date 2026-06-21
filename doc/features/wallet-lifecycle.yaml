@@ -6,6 +6,11 @@ feature:
     L1–L5 orchestrators and dashboard lifecycle hooks implemented.
   requirements:
     - LockLifecycle gates all rails; no load/sync/save when phase is no-lock or locking
+    - Per-rail load, sync, and save proceed independently of the current URL; navigation must not cancel in-flight lifecycle work
+    - Wallet hydration (near-zero session restore and bootstrap unlock load) may start only when the user visits a wallet route (/wallet/*); non-wallet routes must not start hydration
+    - Features on Settings, Lab, or other non-wallet routes that need an unlocked wallet must use requireUnlockedWallet at action time, not pathname-based hydration
+    - Post-lock redirect from wallet routes to Library is retained for privacy
+    - Sync and save orchestrators must not read pathname or route stores
     - Each rail exposes independent LoadLifecyclePhase, SyncLifecyclePhase, SaveLifecyclePhase
     - TanStack Query executes async work; orchestrator drives enabled/queryFn; phase is not stored in Query cache or Zustand
     - React components read lifecycle phase via useSyncExternalStore hooks in frontend/src/hooks (L5); not ad hoc getSnapshot in render
@@ -147,6 +152,16 @@ feature:
         implemented_by:
           - frontend/src/hooks/useRailManualSyncMutations.ts
           - frontend/src/components/wallet/RailSyncControl.tsx
+    route_hydration:
+      - id: LIFE-ROUTE-01
+        description: Wallet hydration starts only on wallet route entry (/wallet/*), not on Settings or Lab navigation
+        implemented_by: pending — docs/wallet-rail-lifecycle.md
+      - id: LIFE-ROUTE-02
+        description: requireUnlockedWallet gates actions that need WASM/secrets on non-wallet routes; does not hydrate on route entry
+        implemented_by: pending — frontend/src/lib/wallet/require-unlocked-wallet.ts
+      - id: LIFE-ROUTE-03
+        description: Post-lock redirect from wallet routes to Library remains for privacy
+        implemented_by: frontend/src/lib/shared/app-router.ts
     invariants:
       - id: LIFE-INV-01
         description: not-configured applies to all three lifecycles on a rail simultaneously

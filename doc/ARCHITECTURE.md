@@ -107,6 +107,8 @@ flowchart TB
 
 **Lock/unlock** and **per-rail load, sync, and save** (on-chain, Lightning, Arkade) live in `frontend/src/lib/wallet/lifecycle/`. Orchestrators own phase transitions and expose `get*Snapshot` + `subscribe*`; they drive TanStack Query `enabled` / `queryFn` for async work but **do not** store phase in Query cache or Zustand.
 
+**Routing:** Rail lifecycles are route-independent. Only **visiting a wallet route** (`/wallet/*`) may **start** wallet hydration (session restore + bootstrap load). Settings, Lab, and other sections stay passive while locked; actions that need WASM or secrets (descriptor reveal, mine-to-wallet, network switch) must use **`requireUnlockedWallet`** at action time — not route-wide hydration. Post-lock redirect to Library is kept for privacy. See [Route independence and wallet hydration](../docs/wallet-rail-lifecycle.md#route-independence-and-wallet-hydration).
+
 **React integration (L5):** thin subscription hooks in `frontend/src/hooks/` wrap orchestrators with `useSyncExternalStore` — one hook per state machine plus per-rail aggregates and selectors (e.g. `useIsArkadeSessionReady()`). See [docs/wallet-rail-lifecycle.md](../docs/wallet-rail-lifecycle.md#react-lifecycle-hooks).
 
 Test contracts: [doc/features/wallet-lifecycle.yaml](features/wallet-lifecycle.yaml). L1–L5 complete.

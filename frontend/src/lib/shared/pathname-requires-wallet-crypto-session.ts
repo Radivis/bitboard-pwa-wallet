@@ -1,7 +1,15 @@
 /**
- * Routes where we load the near-zero session into memory and bootstrap WASM.
- * Library (and similar) stays session-cleared after lock until the user opens wallet,
- * setup, settings, or lab — matching “lock then Library” privacy expectations.
+ * @deprecated For hydration gating, use `pathnameIsWalletRoute` (wallet routes only) — see
+ * docs/wallet-rail-lifecycle.md § "Route independence and wallet hydration".
+ *
+ * Legacy helper: treated several non-wallet routes as hydration entry points.
+ * Lab and Settings must not use this for unlock — use `requireUnlockedWallet` at
+ * action time instead (descriptor reveal, mine-to-wallet, network switch, etc.).
+ *
+ * Library stays session-cleared after lock until the user opens a wallet route;
+ * post-lock redirect to Library is intentional for privacy.
+ *
+ * Slated to be split: wallet-route hydration entry vs removed broad session gate.
  */
 export function pathnameRequiresWalletCryptoSession(pathname: string): boolean {
   return (
