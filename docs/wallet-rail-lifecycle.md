@@ -132,7 +132,7 @@ When a rail becomes configured (gates satisfied — see per-rail sections), load
 | `not-configured` | `not-configured` | `not-configured` | Rail inactive (feature off, no NWC, Arkade disabled, etc.) |
 | `loading` | `not-syncing` | `not-saving` | Arkade session open, on-chain WASM load, Lightning hydration |
 | `loaded` | `not-syncing` | `not-saving` | Idle dashboard |
-| `loaded` | `syncing` | `not-saving` | Background Esplora / operator poll |
+| `loaded` | `syncing` | `not-saving` | Manual sync, hydration, or **opt-in** periodic poll (Settings → Features → Periodic sync) |
 | `loaded` | `not-syncing` | `saving` | Post-sync changeset / SDK flush |
 | `loaded` | `sync-error` | `not-saving` | Stale banner; data still shown |
 | `load-error` | `not-syncing` | `not-saving` | Load failed on a configured rail; do not start sync/save |
@@ -641,9 +641,13 @@ Audit of the codebase against [Route independence and wallet hydration](#route-i
 | [`app-router.ts`](../frontend/src/lib/shared/app-router.ts) `navigateToLibraryIfOnWalletRoute` | After lock, redirect off `/wallet` to Library for privacy. **Keep.** Does not cancel in-flight sync/save. |
 | Lock → Library + hydration on next wallet visit | Matches rules 1 and 4. |
 | Settings/Lab browsable while locked | Correct once route-wide hydration is removed; sensitive ops use `requireUnlockedWallet`. |
-| Dashboard Arkade queries → `scheduleBackgroundArkadeOperatorSync` | Sync scheduled from query execution; timer may complete after navigation. **Correct** under route-independent lifecycle — do not cancel on route change. |
+| Dashboard Arkade queries → `scheduleBackgroundArkadeOperatorSync` | Operator sync debounced from query fetches when balance/history/VTxO queries run (hydration, manual invalidation, or opt-in periodic `refetchInterval`). Timer may complete after navigation. **Correct** under route-independent lifecycle — do not cancel on route change. |
+| Lightning dashboard NWC fetch | Periodic background polling is **React Query `refetchInterval` only** (gated by `isPeriodicSyncEnabled` and per-rail settings). No orchestrator scheduler. |
+| On-chain Esplora incremental sync | Default: hydration (`postUnlock`) and manual dashboard sync only. Opt-in periodic sync uses `useOnchainPeriodicSyncQuery` when the feature and per-rail switch are on. |
 | Per-rail sync/save orchestrators under `frontend/src/lib/wallet/lifecycle/` | No pathname imports today — aligned with target. |
 
 ### Related symptom (dashboard → Settings)
 
-Observed “wallet syncs again” when opening Settings after a synced dashboard is often a **deferred dashboard poll sync** (400ms debounce from balance/history queries) completing after navigation, not Settings starting new work. Under this policy that completion is acceptable. **Unacceptable:** route-wide bootstrap/hydration triggered by opening Settings — fixed by wallet-route-only hydration, not by cancelling sync on navigation.
+Observed “wallet syncs again” when opening Settings after a synced dashboard may be a **deferred Arkade operator sync** (400ms debounce from balance/history queries) completing after navigation, or an in-flight periodic poll tick when periodic sync is enabled — not Settings starting new hydration. Under this policy that completion is acceptable. **Unacceptable:** route-wide bootstrap/hydration triggered by opening Settings — fixed by wallet-route-only hydration, not by cancelling sync on navigation.
+
+**Periodic sync default:** Off. Users enable **Periodic sync** under Settings → Features, then configure per-rail intervals on Settings → Main (default 300s, visible tab only).

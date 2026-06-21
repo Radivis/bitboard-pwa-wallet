@@ -36,11 +36,11 @@ import {
 import { scheduleBackgroundArkadeOperatorSync } from '@/lib/arkade/arkade-operator-sync'
 import { readArkadeDashboardStateFromStore } from '@/lib/arkade/arkade-persistence-store-sync'
 import {
-  ARKADE_BOARDING_STATUS_REFETCH_MS,
   ARKADE_FEE_ESTIMATE_STALE_MS,
   ARKADE_SESSION_POLL_STALE_MS,
   ARKADE_SLOW_METADATA_STALE_MS,
 } from '@/lib/arkade/arkade-query-timings'
+import { usePeriodicSyncRefetchInterval } from '@/lib/wallet/periodic-sync/usePeriodicSyncRefetchInterval'
 import {
   applyOptimisticExitBalanceDeduction,
   reconcileBalanceAfterExitOperation,
@@ -91,6 +91,14 @@ function useArkadeQueryBase() {
     arkadeSessionReady
 
   return { networkMode, activeWalletId, activeArkadeConnectionId, sessionReady }
+}
+
+function useArkadeDashboardPeriodicQueryOptions() {
+  const refetchInterval = usePeriodicSyncRefetchInterval('arkade')
+  return {
+    ...arkadeDashboardWalletDataQueryOptions,
+    refetchInterval,
+  }
 }
 
 function useArkadeDelegateQueryBase() {
@@ -219,6 +227,7 @@ export function useArkadeBalanceQuery() {
   const { networkMode, activeWalletId, activeArkadeConnectionId, sessionReady } =
     useArkadeQueryBase()
   const storeBalance = useWalletStore((walletState) => walletState.arkadeBalance)
+  const arkadeDashboardPeriodicQueryOptions = useArkadeDashboardPeriodicQueryOptions()
 
   return useQuery({
     queryKey: walletScopedQueryKey(
@@ -235,7 +244,7 @@ export function useArkadeBalanceQuery() {
       scheduleBackgroundArkadeOperatorSync()
       return getArkadeWorker().getBalance()
     },
-    ...arkadeDashboardWalletDataQueryOptions,
+    ...arkadeDashboardPeriodicQueryOptions,
   })
 }
 
@@ -243,6 +252,7 @@ export function useArkadeHistoryQuery() {
   const { networkMode, activeWalletId, activeArkadeConnectionId, sessionReady } =
     useArkadeQueryBase()
   const storePayments = useWalletStore((walletState) => walletState.arkadePayments)
+  const arkadeDashboardPeriodicQueryOptions = useArkadeDashboardPeriodicQueryOptions()
 
   return useQuery({
     queryKey: walletScopedQueryKey(
@@ -259,7 +269,7 @@ export function useArkadeHistoryQuery() {
       scheduleBackgroundArkadeOperatorSync()
       return getArkadeWorker().getTransactionHistory()
     },
-    ...arkadeDashboardWalletDataQueryOptions,
+    ...arkadeDashboardPeriodicQueryOptions,
   })
 }
 
@@ -351,6 +361,7 @@ export function useArkadeBoardingAddressQuery() {
 export function useArkadeBoardingStatusQuery() {
   const { networkMode, activeWalletId, activeArkadeConnectionId, sessionReady } =
     useArkadeQueryBase()
+  const refetchInterval = usePeriodicSyncRefetchInterval('arkade')
 
   return useQuery({
     queryKey: walletScopedQueryKey(
@@ -362,7 +373,7 @@ export function useArkadeBoardingStatusQuery() {
     ),
     enabled: sessionReady,
     queryFn: () => withReadyArkadeWorker(() => getArkadeWorker().getBoardingStatus()),
-    refetchInterval: ARKADE_BOARDING_STATUS_REFETCH_MS,
+    refetchInterval,
     staleTime: ARKADE_SESSION_POLL_STALE_MS,
   })
 }
@@ -383,6 +394,7 @@ export function useArkadeDelegateInfoQuery() {
 export function useArkadeVtxoExpiryQuery() {
   const { networkMode, activeWalletId, activeArkadeConnectionId, sessionReady } =
     useArkadeQueryBase()
+  const arkadeDashboardPeriodicQueryOptions = useArkadeDashboardPeriodicQueryOptions()
 
   return useQuery({
     queryKey: walletScopedQueryKey(
@@ -398,7 +410,7 @@ export function useArkadeVtxoExpiryQuery() {
       scheduleBackgroundArkadeOperatorSync()
       return getArkadeWorker().getVtxoExpiryStatus()
     },
-    ...arkadeDashboardWalletDataQueryOptions,
+    ...arkadeDashboardPeriodicQueryOptions,
   })
 }
 

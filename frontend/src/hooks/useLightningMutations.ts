@@ -48,11 +48,11 @@ import {
   lnWalletBalanceQueryKey,
 } from '@/lib/lightning/lightning-query-keys'
 import {
-  LIGHTNING_DASHBOARD_REFETCH_MS,
   LIGHTNING_DASHBOARD_STALE_MS,
   LN_WALLET_BALANCE_STALE_MS,
   LN_WALLET_NETWORK_PLAUSIBILITY_STALE_MS,
 } from '@/lib/lightning/lightning-query-timings'
+import { usePeriodicSyncRefetchInterval } from '@/lib/wallet/periodic-sync/usePeriodicSyncRefetchInterval'
 import { useIsLightningRailLoaded } from '@/hooks/useLightningLifecycleSnapshots'
 import {
   orchestrateLightningSaveSnapshotPatches,
@@ -137,6 +137,7 @@ export function useLightningHistoryQuery() {
   const { enabled, fingerprint } = useLightningDashboardQueryBase()
   const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
   const networkMode = useWalletStore((walletState) => walletState.networkMode)
+  const refetchInterval = usePeriodicSyncRefetchInterval('lightning')
 
   return useQuery({
     queryKey: lightningDashboardHistoryQueryKey(fingerprint),
@@ -156,11 +157,7 @@ export function useLightningHistoryQuery() {
     },
     enabled,
     staleTime: LIGHTNING_DASHBOARD_STALE_MS,
-    refetchInterval: () =>
-      typeof document !== 'undefined' &&
-      document.visibilityState === 'visible'
-        ? LIGHTNING_DASHBOARD_REFETCH_MS
-        : false,
+    refetchInterval,
     refetchOnWindowFocus: true,
     retry: 1,
   })
@@ -173,6 +170,7 @@ export function useLightningBalancesForDashboardQuery() {
   const { enabled, fingerprint } = useLightningDashboardQueryBase()
   const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
   const networkMode = useWalletStore((walletState) => walletState.networkMode)
+  const refetchInterval = usePeriodicSyncRefetchInterval('lightning')
 
   return useQuery({
     queryKey: lightningDashboardBalancesQueryKey(fingerprint),
@@ -192,11 +190,7 @@ export function useLightningBalancesForDashboardQuery() {
     },
     enabled,
     staleTime: LIGHTNING_DASHBOARD_STALE_MS,
-    refetchInterval: () =>
-      typeof document !== 'undefined' &&
-      document.visibilityState === 'visible'
-        ? LIGHTNING_DASHBOARD_REFETCH_MS
-        : false,
+    refetchInterval,
     refetchOnWindowFocus: true,
     retry: 1,
   })

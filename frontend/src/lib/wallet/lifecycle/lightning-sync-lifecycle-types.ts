@@ -3,7 +3,7 @@ import type { NetworkMode } from '@/stores/walletStore'
 import type { SyncLifecyclePhase } from '@/lib/wallet/lifecycle/rail-lifecycle-types'
 import type { LightningRailScope } from '@/lib/wallet/lifecycle/lightning-rail-types'
 
-export type LightningSyncKind = 'postLoad' | 'dashboardPoll' | 'manual'
+export type LightningSyncKind = 'postLoad' | 'manual'
 
 export type ConnectionSyncTrackerStatus = 'idle' | 'syncing' | 'ok' | 'error'
 

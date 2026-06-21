@@ -14,6 +14,7 @@ import { NetworkSelector } from '@/components/settings/NetworkSelector'
 import { NetworkCardCommittedDescriptor } from '@/components/settings/NetworkCardCommittedDescriptor'
 import { AddressTypeSelector } from '@/components/settings/AddressTypeSelector'
 import { EsploraUrlSettings } from '@/components/settings/EsploraUrlSettings'
+import { PeriodicSyncSettings } from '@/components/settings/PeriodicSyncSettings'
 import { BitcoinUnitSelect } from '@/components/BitcoinUnitSelect'
 import { useWallets } from '@/db'
 import { useFeatureStore } from '@/stores/featureStore'
@@ -29,6 +30,7 @@ import {
 
 export function SettingsMainPage() {
   const isSegwitAddressesEnabled = useFeatureStore((featureState) => featureState.isSegwitAddressesEnabled)
+  const isPeriodicSyncEnabled = useFeatureStore((featureState) => featureState.isPeriodicSyncEnabled)
   const { data: wallets } = useWallets()
   const hasWallets = (wallets?.length ?? 0) > 0
   const defaultBitcoinUnit = useBitcoinDisplayUnitStore((bitcoinDisplayUnitState) => bitcoinDisplayUnitState.defaultBitcoinUnit)
@@ -96,6 +98,8 @@ export function SettingsMainPage() {
           </Card>
         </InfomodeWrapper>
       ) : null}
+
+      {isPeriodicSyncEnabled ? <PeriodicSyncSettings /> : null}
 
       <Card>
         <CardHeader>

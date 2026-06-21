@@ -26,8 +26,6 @@ export type {
   ConnectionSyncTrackerStatus,
 } from '@/lib/wallet/lifecycle/lightning-sync-lifecycle-types'
 
-const BACKGROUND_LIGHTNING_SYNC_DEBOUNCE_MS = 400
-
 type ConnectionSyncTracker = {
   inFlightCount: number
   lastStatus: 'idle' | 'ok' | 'error'
@@ -44,7 +42,6 @@ let snapshot: LightningSyncLifecycleSnapshot = {
 }
 
 const connectionSyncTrackers = new Map<string, ConnectionSyncTracker>()
-let dashboardPollTimer: ReturnType<typeof setTimeout> | null = null
 
 const listeners = new Set<(next: LightningSyncLifecycleSnapshot) => void>()
 let inFlightSync: InFlightSync | null = null
@@ -201,10 +198,6 @@ export function subscribeLightningSyncLifecycle(
 }
 
 export async function awaitLightningSyncQuiescence(): Promise<void> {
-  if (dashboardPollTimer != null) {
-    clearTimeout(dashboardPollTimer)
-    dashboardPollTimer = null
-  }
   if (inFlightSync != null) {
     await inFlightSync.promise
   }
@@ -228,10 +221,6 @@ export function syncLightningSyncLifecycleWithLockPhase(lockPhase: LockLifecycle
   }
   if (inFlightSync != null) {
     return
-  }
-  if (dashboardPollTimer != null) {
-    clearTimeout(dashboardPollTimer)
-    dashboardPollTimer = null
   }
   connectionSyncTrackers.clear()
   setSnapshot({
@@ -348,39 +337,6 @@ export async function orchestrateLightningPostLoadSync(
   }
 }
 
-export function scheduleBackgroundLightningDashboardSync(): void {
-  if (dashboardPollTimer != null) {
-    clearTimeout(dashboardPollTimer)
-  }
-
-  dashboardPollTimer = setTimeout(() => {
-    dashboardPollTimer = null
-
-    const scope = snapshot.railScope
-    if (scope == null || !isLightningSyncRailConfigured(scope.walletId, scope.networkMode)) {
-      return
-    }
-
-    if (inFlightSync != null) {
-      return
-    }
-
-    void orchestrateLightningSyncThenSave({
-      walletId: scope.walletId,
-      networkMode: scope.networkMode,
-      syncKind: 'dashboardPoll',
-      syncWork: async () => {
-        const { collectLightningDashboardSyncPatches } = await import(
-          '@/lib/lightning/lightning-dashboard-sync'
-        )
-        return collectLightningDashboardSyncPatches()
-      },
-      awaitCompletion: false,
-      throwOnError: false,
-    })
-  }, BACKGROUND_LIGHTNING_SYNC_DEBOUNCE_MS)
-}
-
 /** @internal Test-only reset */
 export function resetLightningSyncLifecycleStateForTests(): void {
   snapshot = {
@@ -389,10 +345,6 @@ export function resetLightningSyncLifecycleStateForTests(): void {
   }
   inFlightSync = null
   connectionSyncTrackers.clear()
-  if (dashboardPollTimer != null) {
-    clearTimeout(dashboardPollTimer)
-    dashboardPollTimer = null
-  }
   listeners.clear()
 }
 

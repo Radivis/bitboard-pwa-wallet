@@ -56,6 +56,29 @@ describe('Settings routes', () => {
       ).toBeInTheDocument()
     })
 
+    it('hides Periodic sync card when periodic sync feature is disabled', () => {
+      renderWithProviders(<SettingsMainPage />)
+      expect(screen.queryByText('Periodic sync')).not.toBeInTheDocument()
+    })
+
+    it('shows Periodic sync card with on-chain row when feature is enabled', () => {
+      featureStoreState.isPeriodicSyncEnabled = true
+      renderWithProviders(<SettingsMainPage />)
+      expect(screen.getByTestId('periodic-sync-row-onchain')).toBeInTheDocument()
+      expect(screen.queryByTestId('periodic-sync-row-lightning')).not.toBeInTheDocument()
+      expect(screen.queryByTestId('periodic-sync-row-arkade')).not.toBeInTheDocument()
+    })
+
+    it('shows Lightning and Arkade periodic sync rows when those features are enabled', () => {
+      featureStoreState.isPeriodicSyncEnabled = true
+      featureStoreState.isLightningEnabled = true
+      featureStoreState.isArkadeEnabled = true
+      renderWithProviders(<SettingsMainPage />)
+      expect(screen.getByTestId('periodic-sync-row-onchain')).toBeInTheDocument()
+      expect(screen.getByTestId('periodic-sync-row-lightning')).toBeInTheDocument()
+      expect(screen.getByTestId('periodic-sync-row-arkade')).toBeInTheDocument()
+    })
+
     it('network selector commits loaded descriptor wallet after switch completes', async () => {
       mockExportChangeset.mockResolvedValueOnce('{}')
       const user = userEvent.setup()
@@ -313,6 +336,15 @@ describe('Settings routes', () => {
       expect(screen.getByText(/Signet is strongly advised/i)).toBeInTheDocument()
       expect(screen.getByRole('button', { name: 'Enable Arkade' })).toBeDisabled()
       expect(featureStoreState.setIsArkadeEnabled).not.toHaveBeenCalled()
+    })
+
+    it('enables periodic sync when the feature toggle is switched on', async () => {
+      const user = userEvent.setup()
+      renderWithProviders(<SettingsFeaturesPage />)
+
+      await user.click(screen.getByRole('switch', { name: 'Enable periodic sync' }))
+
+      expect(featureStoreState.setIsPeriodicSyncEnabled).toHaveBeenCalledWith(true)
     })
 
     it('enables Arkade after acknowledging the new-feature warning', async () => {
