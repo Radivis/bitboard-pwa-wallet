@@ -8,8 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Sync can now be triggered for each rail (onchain / Lightning / Arkade) separately with the respective last sync time displayed close to the sync button
 
 ### Changed
+- Strict wallet unlock requirement is limited to proper /wallet routes; special actions requiring wallet data will request wallet unlock otherwise
+- Reworked wallet data hydration lifecycle with state machines handling loading, syncing, and saving for each rail (onchain / Lightning / Arkade) separately; that should make hydration much more reliable and easier to reason about
 
 ### Fixed
 

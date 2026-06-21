@@ -155,10 +155,16 @@ feature:
     route_hydration:
       - id: LIFE-ROUTE-01
         description: Wallet hydration starts only on wallet route entry (/wallet/*), not on Settings or Lab navigation
-        implemented_by: pending — docs/wallet-rail-lifecycle.md
+        implemented_by:
+          - frontend/src/lib/shared/pathname-is-wallet-route.ts
+          - frontend/src/hooks/useActiveWalletLoadQuery.ts
+          - frontend/src/components/AppInitializer.tsx
+          - frontend/src/components/DatabaseReadyGate.tsx
       - id: LIFE-ROUTE-02
         description: requireUnlockedWallet gates actions that need WASM/secrets on non-wallet routes; does not hydrate on route entry
-        implemented_by: pending — frontend/src/lib/wallet/require-unlocked-wallet.ts
+        implemented_by:
+          - frontend/src/lib/wallet/require-unlocked-wallet.ts
+          - frontend/src/hooks/useRequireUnlockedWallet.tsx
       - id: LIFE-ROUTE-03
         description: Post-lock redirect from wallet routes to Library remains for privacy
         implemented_by: frontend/src/lib/shared/app-router.ts

@@ -19,6 +19,7 @@ import { formatLabEntityMineOptionLabel } from '@/lib/lab/lab-entity-keys'
 import { LabOwnerType } from '@/lib/lab/lab-owner-type'
 import { cn } from '@/lib/shared/utils'
 import { useFeatureStore } from '@/stores/featureStore'
+import { useRequireUnlockedWallet } from '@/hooks/useRequireUnlockedWallet'
 import type { WalletStatus } from '@/stores/walletStore'
 import { walletIsUnlockedOrSyncing } from '@/lib/wallet/wallet-unlocked-status'
 
@@ -52,9 +53,19 @@ export function LabBlocksCard({
   activeWallet: { name: string } | undefined
 }) {
   const isSegwitAddressesEnabled = useFeatureStore((featureState) => featureState.isSegwitAddressesEnabled)
+  const { runWhenUnlocked, unlockDialog } = useRequireUnlockedWallet()
   const livingEntities = entities.filter((entity) => !entity.isDead)
   const noLivingEntities =
     ownerType === LabOwnerType.LabEntity && livingEntities.length === 0
+  const walletUnlocked = walletIsUnlockedOrSyncing(walletStatus)
+
+  const handleMineClick = () => {
+    if (ownerType === LabOwnerType.Wallet) {
+      runWhenUnlocked(onMine)
+      return
+    }
+    onMine()
+  }
 
   return (
     <InfomodeWrapper
@@ -144,7 +155,7 @@ export function LabBlocksCard({
             {ownerType === LabOwnerType.Wallet ? (
               <div className="space-y-2">
                 <Label htmlFor="target-address">Target address (active wallet)</Label>
-                {walletIsUnlockedOrSyncing(walletStatus) ? (
+                {walletUnlocked ? (
                   <Input
                     id="target-address"
                     type="text"
@@ -209,13 +220,12 @@ export function LabBlocksCard({
               infoText="Runs the lab miner for the number of blocks you entered. Each block can pay coinbase to your chosen target, creating spendable test coins instantly—no electricity, no real network, just a teaching sandbox."
             >
               <Button
-                onClick={onMine}
+                onClick={handleMineClick}
                 disabled={
                   mining ||
                   noLivingEntities ||
                   (ownerType === LabOwnerType.Wallet &&
-                    !walletIsUnlockedOrSyncing(walletStatus)) ||
-                  (ownerType === LabOwnerType.Wallet &&
+                    walletUnlocked &&
                     (!currentAddress || !activeWallet))
                 }
               >
@@ -223,6 +233,7 @@ export function LabBlocksCard({
               </Button>
             </InfomodeWrapper>
           </div>
+          {unlockDialog}
         </CardContent>
       </Card>
     </InfomodeWrapper>

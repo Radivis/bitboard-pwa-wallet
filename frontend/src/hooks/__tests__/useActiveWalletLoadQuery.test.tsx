@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { useLayoutEffect, type ReactNode } from 'react'
+import { useLayoutEffect, useState, type ReactNode } from 'react'
 import { useActiveWalletLoadQuery } from '@/hooks/useActiveWalletLoadQuery'
 import {
   useWalletStore,
@@ -16,6 +16,7 @@ import {
 const walletSecretsSessionState = { active: false }
 const orchestrateBootstrapUnlock = vi.fn()
 const canStartBootstrapUnlock = vi.fn()
+const isLockUnlockInProgress = vi.fn()
 
 vi.mock('@/lib/wallet/wallet-secrets-session', () => ({
   isWalletSecretsSessionActive: async () => walletSecretsSessionState.active,
@@ -29,17 +30,18 @@ vi.mock('@/lib/wallet/lifecycle/lock-lifecycle-orchestrator', async (importOrigi
     ...actual,
     orchestrateBootstrapUnlock: (...args: unknown[]) => orchestrateBootstrapUnlock(...args),
     canStartBootstrapUnlock: () => canStartBootstrapUnlock(),
-    isLockUnlockInProgress: actual.isLockUnlockInProgress,
+    isLockUnlockInProgress: () => isLockUnlockInProgress(),
   }
 })
 
-function createWrapper() {
+function createWrapper(pathname = '/wallet') {
+  useWalletCryptoSessionPathGateStore.getState().setPathname(pathname)
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   })
   return function Wrapper({ children }: { children: ReactNode }) {
     useLayoutEffect(() => {
-      useWalletCryptoSessionPathGateStore.getState().setPathname('/wallet')
+      useWalletCryptoSessionPathGateStore.getState().setPathname(pathname)
     }, [])
     return (
       <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
@@ -51,9 +53,11 @@ describe('useActiveWalletLoadQuery', () => {
   beforeEach(async () => {
     vi.clearAllMocks()
     resetLockLifecycleStateForTests()
+    useWalletCryptoSessionPathGateStore.getState().setPathname('/wallet')
     walletSecretsSessionState.active = false
     orchestrateBootstrapUnlock.mockResolvedValue(undefined)
     canStartBootstrapUnlock.mockReturnValue(true)
+    isLockUnlockInProgress.mockReturnValue(false)
     useWalletStore.setState({
       networkMode: 'testnet',
       addressType: AddressType.Taproot,
@@ -95,8 +99,58 @@ describe('useActiveWalletLoadQuery', () => {
     walletSecretsSessionState.active = true
 
     renderHook(() => useActiveWalletLoadQuery(), {
-      wrapper: createWrapper(),
+      wrapper: createWrapper('/wallet'),
     })
+
+    await waitFor(() => {
+      expect(orchestrateBootstrapUnlock).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  it('does not bootstrap on settings when wallet is locked and session exists', async () => {
+    useWalletStore.setState({
+      activeWalletId: 1,
+      walletStatus: 'locked',
+    })
+    syncLockLifecycleWithActiveWallet(1)
+    walletSecretsSessionState.active = true
+
+    renderHook(() => useActiveWalletLoadQuery(), {
+      wrapper: createWrapper('/settings'),
+    })
+
+    await new Promise((r) => setTimeout(r, 80))
+    expect(orchestrateBootstrapUnlock).not.toHaveBeenCalled()
+  })
+
+  it('keeps bootstrap enabled when leaving wallet route during lockUnlockInProgress', async () => {
+    useWalletStore.setState({
+      activeWalletId: 1,
+      walletStatus: 'locked',
+    })
+    syncLockLifecycleWithActiveWallet(1)
+    walletSecretsSessionState.active = true
+    isLockUnlockInProgress.mockReturnValue(true)
+
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+
+    function Wrapper({ children }: { children: ReactNode }) {
+      const [pathname, setPathname] = useState('/wallet')
+      useLayoutEffect(() => {
+        useWalletCryptoSessionPathGateStore.getState().setPathname(pathname)
+      }, [pathname])
+      useLayoutEffect(() => {
+        const timer = window.setTimeout(() => setPathname('/library'), 20)
+        return () => window.clearTimeout(timer)
+      }, [])
+      return (
+        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+      )
+    }
+
+    renderHook(() => useActiveWalletLoadQuery(), { wrapper: Wrapper })
 
     await waitFor(() => {
       expect(orchestrateBootstrapUnlock).toHaveBeenCalledTimes(1)

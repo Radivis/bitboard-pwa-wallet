@@ -11,15 +11,17 @@ import { isWalletSecretsSessionActive } from '@/lib/wallet/wallet-secrets-sessio
  * the previous imperative auto-unlock effect in AppInitializer.
  */
 export function useActiveWalletDescriptorWalletBootstrap(): void {
+  const walletStatus = useWalletStore((walletState) => walletState.walletStatus)
   const setWalletStatus = useWalletStore((walletState) => walletState.setWalletStatus)
   const query = useActiveWalletLoadQuery()
 
   useEffect(() => {
+    if (walletStatus !== 'locked') return
     void (async () => {
       if (await isWalletSecretsSessionActive()) return
       appQueryClient.removeQueries({ queryKey: [...activeWalletLoadQueryKeyPrefix] })
     })()
-  }, [query.needsBootstrap])
+  }, [walletStatus])
 
   useEffect(() => {
     if (!query.isError) return

@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { useWalletStore } from '@/stores/walletStore'
 import { activeWalletLoadQueryKey } from '@/lib/wallet/wallet-load-query-keys'
-import { pathnameRequiresWalletCryptoSession } from '@/lib/shared/pathname-requires-wallet-crypto-session'
+import { pathnameIsWalletRoute } from '@/lib/shared/pathname-is-wallet-route'
 import { useWalletCryptoSessionPathGateStore } from '@/stores/walletCryptoSessionPathGateStore'
 import { walletIsUnlockedOrSyncing } from '@/lib/wallet/wallet-unlocked-status'
 import { isWalletSecretsSessionActive } from '@/lib/wallet/wallet-secrets-session'
@@ -24,7 +24,7 @@ export function useActiveWalletLoadQuery() {
   const accountId = useWalletStore((walletState) => walletState.accountId)
   const walletStatus = useWalletStore((walletState) => walletState.walletStatus)
   const pathname = useWalletCryptoSessionPathGateStore((walletCryptoSessionPathGateState) => walletCryptoSessionPathGateState.pathname)
-  const onWalletCryptoRoute = pathnameRequiresWalletCryptoSession(pathname)
+  const onWalletRoute = pathnameIsWalletRoute(pathname)
   const lockUnlockInProgress = isLockUnlockInProgress()
 
   /**
@@ -34,13 +34,15 @@ export function useActiveWalletLoadQuery() {
    * TanStack Query does not cancel mid-flight when status flips to unlocked mid-load.
    * Manual unlock must suppress bootstrap — otherwise unlock and bootstrap run
    * `loadDescriptorWalletAndSync` in parallel (duplicate sync toasts and work).
-   * Bootstrap is off on Library (etc.) so locking → Library does not immediately reload keys.
+   * Bootstrap starts only on wallet-route entry; `lockUnlockInProgress` keeps it enabled
+   * if the user navigates away mid-bootstrap (route-independent lifecycle).
    */
-  const needsBootstrap =
-    onWalletCryptoRoute &&
+  const wantsBootstrap =
     activeWalletId != null &&
     canStartBootstrapUnlock() &&
     (!walletIsUnlockedOrSyncing(walletStatus) || lockUnlockInProgress)
+
+  const needsBootstrap = wantsBootstrap && (onWalletRoute || lockUnlockInProgress)
 
   const query = useQuery({
     queryKey: activeWalletLoadQueryKey({

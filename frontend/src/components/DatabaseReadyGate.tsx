@@ -5,7 +5,7 @@ import { WALLET_MIGRATION_FAILURE_OPFS_FILENAME } from '@/db/migrations/wallet-m
 import { readTextFileFromOpfsRootIfExists } from '@/db/opfs/opfs-root-file'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { MigrationFailureReportModal } from '@/components/MigrationFailureReportModal'
-import { pathnameRequiresWalletCryptoSession } from '@/lib/shared/pathname-requires-wallet-crypto-session'
+import { pathnameIsWalletRoute } from '@/lib/shared/pathname-is-wallet-route'
 import { assessOpfsLikelyUnsupported } from '@/db/opfs/opfs-capability'
 import { useSecureStorageAvailabilityStore } from '@/stores/secureStorageAvailabilityStore'
 
@@ -46,7 +46,7 @@ export function DatabaseReadyGate({ children }: DatabaseReadyGateProps) {
           setMigrationFailureReportText(reportText)
           setMigrationFailureReportOpen(true)
         }
-      } else if (pathnameRequiresWalletCryptoSession(pathOnColdStart)) {
+      } else if (pathnameIsWalletRoute(pathOnColdStart)) {
         try {
           await tryLoadNearZeroSessionIntoMemory(getDatabase())
         } catch (err) {
