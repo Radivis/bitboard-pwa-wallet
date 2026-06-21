@@ -39,6 +39,24 @@ describe('RailSyncControl', () => {
     )
   })
 
+  it('keeps last synced caption while sync is pending', () => {
+    render(
+      <RailSyncControl
+        rail="arkade"
+        syncLabel="Sync Arkade"
+        syncPhase="not-syncing"
+        lastSyncedAt="2025-01-15T10:30:00.000Z"
+        onSync={vi.fn()}
+        isSyncPending
+      />,
+    )
+
+    expect(screen.getByTestId('rail-sync-arkade')).toHaveTextContent('Syncing…')
+    expect(screen.getByTestId('rail-sync-arkade-caption')).toHaveTextContent(
+      'Last synced:',
+    )
+  })
+
   it('hides control when rail is not configured', () => {
     const { container } = render(
       <RailSyncControl

@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query'
+import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { isArkadeActiveForNetworkMode } from '@/lib/arkade/arkade-utils'
 import { isArkadeSupportedNetworkMode } from '@/lib/arkade/arkade-endpoints'
 import {
@@ -33,6 +33,7 @@ export function useArkadeSyncMetadataQuery() {
       isArkadeSupportedNetworkMode(networkMode) &&
       activeArkadeConnectionId != null,
     staleTime: 0,
+    placeholderData: keepPreviousData,
     refetchOnWindowFocus: false,
   })
 }

@@ -22,6 +22,9 @@ import { selectCommittedNetworkMode, useWalletStore } from '@/stores/walletStore
 export function ArkadeDashboardBalance() {
   const networkMode = useWalletStore(selectCommittedNetworkMode)
   const storeBalance = useWalletStore((walletState) => walletState.arkadeBalance)
+  const lastOperatorSyncTime = useWalletStore(
+    (walletState) => walletState.lastOperatorSyncTime,
+  )
   const show = isArkadeActiveForNetworkMode(networkMode)
   const balanceQuery = useArkadeBalanceQuery()
   const arkadeSyncQuery = useArkadeSyncMetadataQuery()
@@ -33,7 +36,7 @@ export function ArkadeDashboardBalance() {
   const isLoading = balanceQuery.isLoading && balance == null
   const isStaleArkade = arkadeSyncQuery.data?.isStaleArkade ?? false
   const lastSuccessfulOperatorSyncAt =
-    arkadeSyncQuery.data?.lastSuccessfulOperatorSyncAt
+    arkadeSyncQuery.data?.lastSuccessfulOperatorSyncAt ?? lastOperatorSyncTime ?? undefined
 
   if (!show) return null
 
