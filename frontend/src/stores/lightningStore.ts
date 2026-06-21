@@ -15,6 +15,7 @@ import {
   type LightningConnectionConfig,
 } from '@/lib/lightning/lightning-backend-service'
 import { orchestrateLightningSaveConnections } from '@/lib/wallet/lifecycle/lightning-save-lifecycle-orchestrator'
+import { reloadLightningRailAfterConnectionsChanged } from '@/lib/wallet/lifecycle/lightning-load-lifecycle-orchestrator'
 import { useWalletStore } from '@/stores/walletStore'
 import type { NetworkMode } from '@/stores/walletStore'
 import { MAX_LIGHTNING_WALLET_LABEL_LENGTH } from '@/lib/lightning/lightning-input-limits'
@@ -214,6 +215,7 @@ export const useLightningStore = create<LightningState>()(
           networkMode,
           connections: nextForWallet,
         })
+        await reloadLightningRailAfterConnectionsChanged(walletId)
         return { id, label: labelToStore }
       },
 
@@ -259,6 +261,7 @@ export const useLightningStore = create<LightningState>()(
             networkMode: removed.networkMode,
             connections: forWallet,
           })
+          await reloadLightningRailAfterConnectionsChanged(removed.walletId)
         }
       },
 

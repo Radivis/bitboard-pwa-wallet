@@ -190,6 +190,11 @@ function BalanceCard() {
 
   const showLightningBalances = hasMatchingLightningConnection
 
+  const isLightningBalancesSectionLoading =
+    showLightningBalances &&
+    lightningRail.loadPhase !== 'load-error' &&
+    (lightningRail.loadPhase !== 'loaded' || lightningBalancesQuery.isLoading)
+
   const lightningTotalSats = lightningBalancesQuery.data?.totalSats ?? 0
   const lightningBalanceRows = useMemo(
     () => lightningBalancesQuery.data?.lightningBalanceRows ?? [],
@@ -434,7 +439,7 @@ function BalanceCard() {
 
           <ArkadeDashboardBalance />
 
-          {showLightningBalances && lightningBalancesQuery.isPending && (
+          {isLightningBalancesSectionLoading && (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" />
               Loading Lightning balances…

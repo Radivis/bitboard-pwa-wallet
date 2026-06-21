@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const featureEnabledRef = vi.hoisted(() => ({ enabled: true }))
+const walletNetworkModeRef = vi.hoisted(() => ({ networkMode: 'signet' as const }))
 const loadLightningConnectionsForWallet = vi.fn()
 const replaceConnectionsForWallet = vi.fn()
 const orchestrateLightningPostLoadSync = vi.fn()
@@ -24,6 +25,12 @@ vi.mock('@/stores/featureStore', () => ({
   },
 }))
 
+vi.mock('@/stores/walletStore', () => ({
+  useWalletStore: {
+    getState: () => ({ networkMode: walletNetworkModeRef.networkMode }),
+  },
+}))
+
 vi.mock('@/lib/lightning/lightning-utils', () => ({
   isLightningSupported: (networkMode: string) => networkMode === 'signet',
 }))
@@ -41,6 +48,7 @@ vi.mock('@/lib/wallet/lifecycle/lightning-sync-lifecycle-orchestrator', () => ({
 import {
   getLightningLoadLifecycleSnapshot,
   orchestrateLightningLoad,
+  reloadLightningRailAfterConnectionsChanged,
   resetLightningLoadLifecycleStateForTests,
 } from '@/lib/wallet/lifecycle/lightning-load-lifecycle-orchestrator'
 
@@ -53,6 +61,7 @@ describe('lightning-load-lifecycle-orchestrator', () => {
   beforeEach(() => {
     resetLightningLoadLifecycleStateForTests()
     featureEnabledRef.enabled = true
+    walletNetworkModeRef.networkMode = 'signet'
     vi.clearAllMocks()
     orchestrateLightningPostLoadSync.mockResolvedValue(undefined)
   })
@@ -106,5 +115,22 @@ describe('lightning-load-lifecycle-orchestrator', () => {
       walletId: 1,
       networkMode: 'signet',
     })
+  })
+
+  it('reloadLightningRailAfterConnectionsChanged loads rail after first connect', async () => {
+    loadLightningConnectionsForWallet.mockResolvedValueOnce([])
+    await orchestrateLightningLoad(loadParams)
+    expect(getLightningLoadLifecycleSnapshot().loadPhase).toBe('not-configured')
+
+    loadLightningConnectionsForWallet.mockResolvedValueOnce([
+      { id: 'conn-1', walletId: 1, label: 'Hub', networkMode: 'signet' },
+    ])
+    await reloadLightningRailAfterConnectionsChanged(1)
+
+    expect(getLightningLoadLifecycleSnapshot()).toEqual({
+      loadPhase: 'loaded',
+      networkMode: 'signet',
+    })
+    expect(loadLightningConnectionsForWallet).toHaveBeenLastCalledWith({ walletId: 1 })
   })
 })

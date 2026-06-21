@@ -1,5 +1,6 @@
 import { loadLightningConnectionsForWallet } from '@/lib/lightning/lightning-wallet-secrets'
 import { useFeatureStore } from '@/stores/featureStore'
+import { useWalletStore } from '@/stores/walletStore'
 import { isLightningSupported } from '@/lib/lightning/lightning-utils'
 import { useLightningStore } from '@/stores/lightningStore'
 import { getMatchingLightningConnectionsForDashboard } from '@/lib/lightning/lightning-connection-utils'
@@ -154,6 +155,17 @@ export async function orchestrateLightningLoad(params: LightningLoadParams): Pro
       throw error
     }
   })
+}
+
+/**
+ * Re-runs Lightning load after connections were added or removed in memory and persisted.
+ * Unlock may have left the rail `not-configured` when no connections existed yet.
+ */
+export async function reloadLightningRailAfterConnectionsChanged(
+  walletId: number,
+): Promise<void> {
+  const networkMode = useWalletStore.getState().networkMode
+  await orchestrateLightningLoad({ walletId, networkMode })
 }
 
 /** @internal Test-only reset */
