@@ -1,3 +1,5 @@
+import fs from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -5,6 +7,34 @@ import { defineConfig, devices } from '@playwright/test'
 import dotenv from 'dotenv'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
+
+/**
+ * Cursor's agent shell may set PLAYWRIGHT_BROWSERS_PATH to an empty sandbox cache.
+ * Fall back to the user's normal Playwright install when that path has no browsers.
+ */
+function ensurePlaywrightBrowsersPath(): void {
+  const configuredPath = process.env.PLAYWRIGHT_BROWSERS_PATH
+  if (configuredPath == null || configuredPath === '') {
+    return
+  }
+  let hasBrowserInstall = false
+  try {
+    hasBrowserInstall = fs
+      .readdirSync(configuredPath)
+      .some((entry) => entry.startsWith('chromium'))
+  } catch {
+    hasBrowserInstall = false
+  }
+  if (hasBrowserInstall) {
+    return
+  }
+  const userCachePath = path.join(os.homedir(), '.cache', 'ms-playwright')
+  if (fs.existsSync(userCachePath)) {
+    process.env.PLAYWRIGHT_BROWSERS_PATH = userCachePath
+  }
+}
+
+ensurePlaywrightBrowsersPath()
 /** Prefer `frontend/.env.testnet`; fall back to repo-root `.env.testnet` (common when editing from workspace root). */
 for (const envPath of [
   path.join(__dirname, '.env.testnet'),
