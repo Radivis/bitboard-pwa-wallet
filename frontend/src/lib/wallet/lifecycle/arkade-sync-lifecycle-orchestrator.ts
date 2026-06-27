@@ -13,6 +13,11 @@ import {
 import type { ArkadeRailScope } from '@/lib/wallet/lifecycle/arkade-rail-types'
 import { arkadeRailScopeKey } from '@/lib/wallet/lifecycle/arkade-rail-types'
 import type { LockLifecyclePhase } from '@/lib/wallet/lifecycle/lock-lifecycle-types'
+import {
+  awaitDifferentInFlightWork,
+  createInFlightLifecycleTracker,
+  getCoalescedInFlightPromise,
+} from '@/lib/wallet/lifecycle/lifecycle-in-flight-tracker'
 import type {
   ArkadePostLoadSyncParams,
   ArkadeSyncLifecycleSnapshot,
@@ -31,11 +36,6 @@ export type {
 
 const BACKGROUND_OPERATOR_SYNC_DEBOUNCE_MS = 400
 
-type InFlightSync = {
-  key: string
-  promise: Promise<void>
-}
-
 let snapshot: ArkadeSyncLifecycleSnapshot = {
   syncPhase: 'not-configured',
   railScope: null,
@@ -44,7 +44,7 @@ let snapshot: ArkadeSyncLifecycleSnapshot = {
 let dashboardPollTimer: ReturnType<typeof setTimeout> | null = null
 
 const listeners = new Set<(next: ArkadeSyncLifecycleSnapshot) => void>()
-let inFlightSync: InFlightSync | null = null
+const inFlightSyncTracker = createInFlightLifecycleTracker()
 
 function syncKey(
   params: Pick<ArkadeSyncParams, 'walletId' | 'networkMode' | 'connectionId' | 'syncKind'>,
@@ -74,34 +74,6 @@ function setSnapshot(next: ArkadeSyncLifecycleSnapshot): void {
   notifyListeners()
 }
 
-function clearInFlightSync(work: InFlightSync): void {
-  if (inFlightSync === work) {
-    inFlightSync = null
-  }
-}
-
-function beginInFlightSync(key: string, run: () => Promise<void>): Promise<void> {
-  let resolveWork!: () => void
-  let rejectWork!: (error: unknown) => void
-  const promise = new Promise<void>((resolve, reject) => {
-    resolveWork = resolve
-    rejectWork = reject
-  })
-  const work: InFlightSync = { key, promise }
-  inFlightSync = work
-  void (async () => {
-    try {
-      await run()
-      resolveWork()
-    } catch (error) {
-      rejectWork(error)
-    } finally {
-      clearInFlightSync(work)
-    }
-  })()
-  return promise
-}
-
 function assertCanStartArkadeSync(params: ArkadeSyncParams): void {
   if (!isArkadeActiveForNetworkMode(params.networkMode)) {
     throw new Error('Arkade sync is not configured for this network')
@@ -123,6 +95,11 @@ function toSaveParams(params: ArkadeSyncParams): ArkadeSaveParams {
     networkMode: params.networkMode,
     connectionId: params.connectionId,
   }
+}
+
+async function runArkadeSignerMigrationBody(): Promise<void> {
+  const worker = getArkadeWorker()
+  await worker.migrateDeprecatedSignerVtxos()
 }
 
 async function runArkadeOperatorSyncBody(connectionId: string): Promise<void> {
@@ -149,9 +126,7 @@ export async function awaitArkadeSyncQuiescence(): Promise<void> {
     clearTimeout(dashboardPollTimer)
     dashboardPollTimer = null
   }
-  if (inFlightSync != null) {
-    await inFlightSync.promise.catch(() => undefined)
-  }
+  await inFlightSyncTracker.awaitQuiescence({ swallowError: true })
 }
 
 /** Clears sync lifecycle after session teardown (see {@link closeArkadeSession}). */
@@ -160,7 +135,7 @@ export function forceResetArkadeSyncLifecycleForTeardown(): void {
     clearTimeout(dashboardPollTimer)
     dashboardPollTimer = null
   }
-  inFlightSync = null
+  inFlightSyncTracker.clearCurrent()
   setSnapshot({
     syncPhase: 'not-configured',
     railScope: null,
@@ -182,7 +157,7 @@ export function syncArkadeSyncLifecycleWithLockPhase(lockPhase: LockLifecyclePha
   if (lockPhase === 'unlocking' || lockPhase === 'unlocked') {
     return
   }
-  if (inFlightSync != null) {
+  if (inFlightSyncTracker.getCurrent() != null) {
     return
   }
   if (dashboardPollTimer != null) {
@@ -201,18 +176,16 @@ export async function orchestrateArkadeSyncThenSave(
   const throwOnError = params.throwOnError ?? params.awaitCompletion !== false
   const key = syncKey(params)
 
-  if (inFlightSync?.key === key) {
-    return inFlightSync.promise
+  const coalesced = getCoalescedInFlightPromise(inFlightSyncTracker, key)
+  if (coalesced != null) {
+    return coalesced
+  }
+  const afterDifferentWork = await awaitDifferentInFlightWork(inFlightSyncTracker, key)
+  if (afterDifferentWork != null) {
+    return afterDifferentWork
   }
 
-  if (inFlightSync != null) {
-    await inFlightSync.promise
-    if (inFlightSync?.key === key) {
-      return inFlightSync.promise
-    }
-  }
-
-  return beginInFlightSync(key, async () => {
+  return inFlightSyncTracker.begin(key, async () => {
     assertCanStartArkadeSync(params)
     const scope = railScopeFromParams(params)
     configureArkadeSyncForLoadedRail(scope)
@@ -220,6 +193,9 @@ export async function orchestrateArkadeSyncThenSave(
     setSnapshot({ syncPhase: 'syncing', railScope: scope })
 
     try {
+      if (params.syncKind === 'signerMigration') {
+        await runArkadeSignerMigrationBody()
+      }
       await runArkadeOperatorSyncBody(params.connectionId)
       setSnapshot({ syncPhase: 'not-syncing', railScope: scope })
       try {
@@ -278,7 +254,7 @@ export function scheduleBackgroundArkadeOperatorSync(): void {
       return
     }
 
-    if (inFlightSync != null) {
+    if (inFlightSyncTracker.getCurrent() != null) {
       scheduleBackgroundArkadeOperatorSync()
       return
     }
@@ -300,7 +276,7 @@ export function resetArkadeSyncLifecycleStateForTests(): void {
     syncPhase: 'not-configured',
     railScope: null,
   }
-  inFlightSync = null
+  inFlightSyncTracker.clearCurrent()
   if (dashboardPollTimer != null) {
     clearTimeout(dashboardPollTimer)
     dashboardPollTimer = null

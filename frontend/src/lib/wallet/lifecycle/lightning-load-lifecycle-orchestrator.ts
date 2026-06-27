@@ -13,14 +13,14 @@ import type {
   LightningLoadParams,
 } from '@/lib/wallet/lifecycle/lightning-load-lifecycle-types'
 import type { LockLifecyclePhase } from '@/lib/wallet/lifecycle/lock-lifecycle-types'
+import {
+  awaitDifferentInFlightWork,
+  createInFlightLifecycleTracker,
+  getCoalescedInFlightPromise,
+} from '@/lib/wallet/lifecycle/lifecycle-in-flight-tracker'
 import { lightningRailScopeKey } from '@/lib/wallet/lifecycle/lightning-rail-types'
 
 export type { LightningLoadLifecycleSnapshot, LightningLoadParams } from '@/lib/wallet/lifecycle/lightning-load-lifecycle-types'
-
-type InFlightLoad = {
-  key: string
-  promise: Promise<void>
-}
 
 let snapshot: LightningLoadLifecycleSnapshot = {
   loadPhase: 'not-configured',
@@ -28,7 +28,7 @@ let snapshot: LightningLoadLifecycleSnapshot = {
 }
 
 const listeners = new Set<(next: LightningLoadLifecycleSnapshot) => void>()
-let inFlightLoad: InFlightLoad | null = null
+const inFlightLoadTracker = createInFlightLifecycleTracker()
 
 function loadKey(params: LightningLoadParams): string {
   return lightningRailScopeKey(params)
@@ -44,34 +44,6 @@ function notifyListeners(): void {
 function setSnapshot(next: LightningLoadLifecycleSnapshot): void {
   snapshot = next
   notifyListeners()
-}
-
-function clearInFlightLoad(work: InFlightLoad): void {
-  if (inFlightLoad === work) {
-    inFlightLoad = null
-  }
-}
-
-function beginInFlightLoad(key: string, run: () => Promise<void>): Promise<void> {
-  let resolveWork!: () => void
-  let rejectWork!: (error: unknown) => void
-  const promise = new Promise<void>((resolve, reject) => {
-    resolveWork = resolve
-    rejectWork = reject
-  })
-  const work: InFlightLoad = { key, promise }
-  inFlightLoad = work
-  void (async () => {
-    try {
-      await run()
-      resolveWork()
-    } catch (error) {
-      rejectWork(error)
-    } finally {
-      clearInFlightLoad(work)
-    }
-  })()
-  return promise
 }
 
 function isLightningLoadConfigured(params: LightningLoadParams): boolean {
@@ -93,16 +65,14 @@ export function subscribeLightningLoadLifecycle(
 }
 
 export async function awaitLightningLoadQuiescence(): Promise<void> {
-  if (inFlightLoad != null) {
-    await inFlightLoad.promise.catch(() => undefined)
-  }
+  await inFlightLoadTracker.awaitQuiescence({ swallowError: true })
 }
 
 export function syncLightningLoadLifecycleWithLockPhase(lockPhase: LockLifecyclePhase): void {
   if (lockPhase === 'unlocking' || lockPhase === 'unlocked') {
     return
   }
-  if (inFlightLoad != null) {
+  if (inFlightLoadTracker.getCurrent() != null) {
     return
   }
   setSnapshot({ loadPhase: 'not-configured', networkMode: null })
@@ -117,18 +87,18 @@ export async function orchestrateLightningLoad(params: LightningLoadParams): Pro
   }
 
   const key = loadKey(params)
-  if (inFlightLoad?.key === key) {
-    return inFlightLoad.promise
+  const coalesced = getCoalescedInFlightPromise(inFlightLoadTracker, key)
+  if (coalesced != null) {
+    return coalesced
+  }
+  const afterDifferentWork = await awaitDifferentInFlightWork(inFlightLoadTracker, key, {
+    swallowError: true,
+  })
+  if (afterDifferentWork != null) {
+    return afterDifferentWork
   }
 
-  if (inFlightLoad != null) {
-    await inFlightLoad.promise.catch(() => undefined)
-    if (inFlightLoad?.key === key) {
-      return inFlightLoad.promise
-    }
-  }
-
-  return beginInFlightLoad(key, async () => {
+  return inFlightLoadTracker.begin(key, async () => {
     setSnapshot({ loadPhase: 'loading', networkMode })
     try {
       const connections = await loadLightningConnectionsForWallet({ walletId })
@@ -171,6 +141,6 @@ export async function reloadLightningRailAfterConnectionsChanged(
 /** @internal Test-only reset */
 export function resetLightningLoadLifecycleStateForTests(): void {
   snapshot = { loadPhase: 'not-configured', networkMode: null }
-  inFlightLoad = null
+  inFlightLoadTracker.clearCurrent()
   listeners.clear()
 }

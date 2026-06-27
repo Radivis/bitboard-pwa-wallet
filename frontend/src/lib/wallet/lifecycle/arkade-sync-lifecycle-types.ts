@@ -2,7 +2,7 @@ import type { NetworkMode } from '@/stores/walletStore'
 import type { SyncLifecyclePhase } from '@/lib/wallet/lifecycle/rail-lifecycle-types'
 import type { ArkadeRailScope } from '@/lib/wallet/lifecycle/arkade-rail-types'
 
-export type ArkadeSyncKind = 'postLoad' | 'dashboardPoll' | 'manual'
+export type ArkadeSyncKind = 'postLoad' | 'dashboardPoll' | 'manual' | 'signerMigration'
 
 export type ArkadeSyncLifecycleSnapshot = {
   syncPhase: SyncLifecyclePhase

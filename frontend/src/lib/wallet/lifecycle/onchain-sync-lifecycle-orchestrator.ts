@@ -10,6 +10,11 @@ import {
 } from '@/lib/wallet/lifecycle/onchain-save-lifecycle-orchestrator'
 import type { OnchainRailDescriptorScope } from '@/lib/wallet/lifecycle/onchain-rail-types'
 import type { LockLifecyclePhase } from '@/lib/wallet/lifecycle/lock-lifecycle-types'
+import {
+  awaitDifferentInFlightWork,
+  createInFlightLifecycleTracker,
+  getCoalescedInFlightPromise,
+} from '@/lib/wallet/lifecycle/lifecycle-in-flight-tracker'
 import type {
   OnchainPostUnlockSyncParams,
   OnchainSyncLifecycleSnapshot,
@@ -26,11 +31,6 @@ export type {
   OnchainPostUnlockSyncParams,
 } from '@/lib/wallet/lifecycle/onchain-sync-lifecycle-types'
 
-type InFlightSync = {
-  key: string
-  promise: Promise<void>
-}
-
 let snapshot: OnchainSyncLifecycleSnapshot = {
   syncPhase: 'not-configured',
   descriptorScope: null,
@@ -38,7 +38,7 @@ let snapshot: OnchainSyncLifecycleSnapshot = {
 
 let suppressCrossTabNotify = false
 const listeners = new Set<(next: OnchainSyncLifecycleSnapshot) => void>()
-let inFlightSync: InFlightSync | null = null
+const inFlightSyncTracker = createInFlightLifecycleTracker()
 
 function syncKey(params: Pick<OnchainSyncParams, 'walletId' | 'networkMode' | 'addressType' | 'accountId' | 'syncKind'>): string {
   return `${params.walletId}:${params.networkMode}:${params.addressType}:${params.accountId}:${params.syncKind}`
@@ -72,34 +72,6 @@ function notifyListeners(): void {
 function setSnapshot(next: OnchainSyncLifecycleSnapshot): void {
   snapshot = next
   notifyListeners()
-}
-
-function clearInFlightSync(work: InFlightSync): void {
-  if (inFlightSync === work) {
-    inFlightSync = null
-  }
-}
-
-function beginInFlightSync(key: string, run: () => Promise<void>): Promise<void> {
-  let resolveWork!: () => void
-  let rejectWork!: (error: unknown) => void
-  const promise = new Promise<void>((resolve, reject) => {
-    resolveWork = resolve
-    rejectWork = reject
-  })
-  const work: InFlightSync = { key, promise }
-  inFlightSync = work
-  void (async () => {
-    try {
-      await run()
-      resolveWork()
-    } catch (error) {
-      rejectWork(error)
-    } finally {
-      clearInFlightSync(work)
-    }
-  })()
-  return promise
 }
 
 function assertCanStartOnchainSync(params: OnchainSyncParams): void {
@@ -146,9 +118,7 @@ export function subscribeOnchainSyncLifecycle(
 }
 
 export async function awaitOnchainSyncQuiescence(): Promise<void> {
-  if (inFlightSync != null) {
-    await inFlightSync.promise
-  }
+  await inFlightSyncTracker.awaitQuiescence()
 }
 
 export function configureOnchainSyncForLoadedRail(scope: OnchainRailDescriptorScope): void {
@@ -180,7 +150,7 @@ export function syncOnchainSyncLifecycleWithLockPhase(lockPhase: LockLifecyclePh
   if (lockPhase === 'unlocking' || lockPhase === 'unlocked') {
     return
   }
-  if (inFlightSync != null) {
+  if (inFlightSyncTracker.getCurrent() != null) {
     return
   }
   setSnapshot({
@@ -195,18 +165,16 @@ export async function orchestrateOnchainSyncThenSave(
   const throwOnError = params.throwOnError ?? params.awaitCompletion !== false
   const key = syncKey(params)
 
-  if (inFlightSync?.key === key) {
-    return inFlightSync.promise
+  const coalesced = getCoalescedInFlightPromise(inFlightSyncTracker, key)
+  if (coalesced != null) {
+    return coalesced
+  }
+  const afterDifferentWork = await awaitDifferentInFlightWork(inFlightSyncTracker, key)
+  if (afterDifferentWork != null) {
+    return afterDifferentWork
   }
 
-  if (inFlightSync != null) {
-    await inFlightSync.promise
-    if (inFlightSync?.key === key) {
-      return inFlightSync.promise
-    }
-  }
-
-  return beginInFlightSync(key, async () => {
+  return inFlightSyncTracker.begin(key, async () => {
     assertCanStartOnchainSync(params)
     const scope = descriptorScopeFromParams(params)
     configureOnchainSyncForLoadedRail(scope)
@@ -270,6 +238,6 @@ export function resetOnchainSyncLifecycleStateForTests(): void {
     syncPhase: 'not-configured',
     descriptorScope: null,
   }
-  inFlightSync = null
+  inFlightSyncTracker.clearCurrent()
   listeners.clear()
 }

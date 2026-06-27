@@ -31,8 +31,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - An Arkade signer key rotation won't completely block the Arkade rail now; key rotation should be handled gracefully now
 
-### Security
-
 ## [0.3.1] - 2026-06-18
 ### Added
 - Lightning send supports LNURL-pay (`lnurl1…`, `lightning:LNURL…`, and `lnurlp://…`); withdraw, auth, and channel LNURL tags show explicit unsupported errors; LNURL-pay falls back to same-origin `/api/lnurl/fetch` when direct browser fetch to the LNURL host is blocked (e.g. CORS)

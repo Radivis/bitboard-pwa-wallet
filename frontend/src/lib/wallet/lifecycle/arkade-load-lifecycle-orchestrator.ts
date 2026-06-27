@@ -31,13 +31,13 @@ import type {
   ArkadeLoadParams,
 } from '@/lib/wallet/lifecycle/arkade-load-lifecycle-types'
 import type { LockLifecyclePhase } from '@/lib/wallet/lifecycle/lock-lifecycle-types'
+import {
+  awaitDifferentInFlightWork,
+  createInFlightLifecycleTracker,
+  getCoalescedInFlightPromise,
+} from '@/lib/wallet/lifecycle/lifecycle-in-flight-tracker'
 
 export type { ArkadeLoadLifecycleSnapshot, ArkadeLoadParams } from '@/lib/wallet/lifecycle/arkade-load-lifecycle-types'
-
-type InFlightLoad = {
-  key: string
-  promise: Promise<void>
-}
 
 let snapshot: ArkadeLoadLifecycleSnapshot = {
   loadPhase: 'not-configured',
@@ -48,7 +48,7 @@ let lastOpenedSessionKey: string | null = null
 let lastLoadedConnectionId: string | null = null
 
 const listeners = new Set<(next: ArkadeLoadLifecycleSnapshot) => void>()
-let inFlightLoad: InFlightLoad | null = null
+const inFlightLoadTracker = createInFlightLifecycleTracker()
 
 function loadKey(params: ArkadeLoadParams): string {
   return `${params.walletId}:${params.networkMode}`
@@ -64,34 +64,6 @@ function notifyListeners(): void {
 function setSnapshot(next: ArkadeLoadLifecycleSnapshot): void {
   snapshot = next
   notifyListeners()
-}
-
-function clearInFlightLoad(work: InFlightLoad): void {
-  if (inFlightLoad === work) {
-    inFlightLoad = null
-  }
-}
-
-function beginInFlightLoad(key: string, run: () => Promise<void>): Promise<void> {
-  let resolveWork!: () => void
-  let rejectWork!: (error: unknown) => void
-  const promise = new Promise<void>((resolve, reject) => {
-    resolveWork = resolve
-    rejectWork = reject
-  })
-  const work: InFlightLoad = { key, promise }
-  inFlightLoad = work
-  void (async () => {
-    try {
-      await run()
-      resolveWork()
-    } catch (error) {
-      rejectWork(error)
-    } finally {
-      clearInFlightLoad(work)
-    }
-  })()
-  return promise
 }
 
 async function runPostOpenArkadeMaintenance(
@@ -230,9 +202,7 @@ export function applyArkadeLoadLifecycleSnapshotFromOtherTab(
 }
 
 export async function awaitArkadeLoadQuiescence(): Promise<void> {
-  if (inFlightLoad != null) {
-    await inFlightLoad.promise.catch(() => undefined)
-  }
+  await inFlightLoadTracker.awaitQuiescence({ swallowError: true })
 }
 
 /** True when this network's Arkade rail failed to load and should be ignored until network change or retry. */
@@ -248,7 +218,7 @@ export function isArkadeLoadFailedForNetwork(networkMode: NetworkMode): boolean 
 export function forceResetArkadeLoadLifecycleForTeardown(): void {
   lastOpenedSessionKey = null
   lastLoadedConnectionId = null
-  inFlightLoad = null
+  inFlightLoadTracker.clearCurrent()
   setSnapshot({ loadPhase: 'not-configured', networkMode: null })
 }
 
@@ -256,7 +226,7 @@ export function syncArkadeLoadLifecycleWithLockPhase(lockPhase: LockLifecyclePha
   if (lockPhase === 'unlocking' || lockPhase === 'unlocked') {
     return
   }
-  if (inFlightLoad != null) {
+  if (inFlightLoadTracker.getCurrent() != null) {
     return
   }
   lastOpenedSessionKey = null
@@ -280,18 +250,18 @@ export async function orchestrateArkadeLoad(params: ArkadeLoadParams): Promise<v
   }
 
   const key = loadKey(params)
-  if (inFlightLoad?.key === key) {
-    return inFlightLoad.promise
+  const coalesced = getCoalescedInFlightPromise(inFlightLoadTracker, key)
+  if (coalesced != null) {
+    return coalesced
+  }
+  const afterDifferentWork = await awaitDifferentInFlightWork(inFlightLoadTracker, key, {
+    swallowError: true,
+  })
+  if (afterDifferentWork != null) {
+    return afterDifferentWork
   }
 
-  if (inFlightLoad != null) {
-    await inFlightLoad.promise.catch(() => undefined)
-    if (inFlightLoad?.key === key) {
-      return inFlightLoad.promise
-    }
-  }
-
-  return beginInFlightLoad(key, async () => {
+  return inFlightLoadTracker.begin(key, async () => {
     setSnapshot({ loadPhase: 'loading', networkMode })
     try {
       const connectionId = await runArkadeSessionOpenBody({
@@ -323,7 +293,7 @@ export async function orchestrateArkadeLoad(params: ArkadeLoadParams): Promise<v
 /** @internal Test-only reset */
 export function resetArkadeLoadLifecycleStateForTests(): void {
   snapshot = { loadPhase: 'not-configured', networkMode: null }
-  inFlightLoad = null
+  inFlightLoadTracker.clearCurrent()
   lastOpenedSessionKey = null
   lastLoadedConnectionId = null
   listeners.clear()

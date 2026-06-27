@@ -11,6 +11,11 @@ import {
 import type { LightningRailScope } from '@/lib/wallet/lifecycle/lightning-rail-types'
 import { lightningRailScopeKey } from '@/lib/wallet/lifecycle/lightning-rail-types'
 import type { LockLifecyclePhase } from '@/lib/wallet/lifecycle/lock-lifecycle-types'
+import {
+  awaitDifferentInFlightWork,
+  createInFlightLifecycleTracker,
+  getCoalescedInFlightPromise,
+} from '@/lib/wallet/lifecycle/lifecycle-in-flight-tracker'
 import type { SyncLifecyclePhase } from '@/lib/wallet/lifecycle/rail-lifecycle-types'
 import type {
   LightningPostLoadSyncParams,
@@ -31,11 +36,6 @@ type ConnectionSyncTracker = {
   lastStatus: 'idle' | 'ok' | 'error'
 }
 
-type InFlightSync = {
-  key: string
-  promise: Promise<void>
-}
-
 let snapshot: LightningSyncLifecycleSnapshot = {
   syncPhase: 'not-configured',
   railScope: null,
@@ -44,7 +44,7 @@ let snapshot: LightningSyncLifecycleSnapshot = {
 const connectionSyncTrackers = new Map<string, ConnectionSyncTracker>()
 
 const listeners = new Set<(next: LightningSyncLifecycleSnapshot) => void>()
-let inFlightSync: InFlightSync | null = null
+const inFlightSyncTracker = createInFlightLifecycleTracker()
 
 function syncKey(
   params: Pick<LightningSyncThenSaveParams, 'walletId' | 'networkMode' | 'syncKind'>,
@@ -71,34 +71,6 @@ function notifyListeners(): void {
 function setSnapshot(next: LightningSyncLifecycleSnapshot): void {
   snapshot = next
   notifyListeners()
-}
-
-function clearInFlightSync(work: InFlightSync): void {
-  if (inFlightSync === work) {
-    inFlightSync = null
-  }
-}
-
-function beginInFlightSync(key: string, run: () => Promise<void>): Promise<void> {
-  let resolveWork!: () => void
-  let rejectWork!: (error: unknown) => void
-  const promise = new Promise<void>((resolve, reject) => {
-    resolveWork = resolve
-    rejectWork = reject
-  })
-  const work: InFlightSync = { key, promise }
-  inFlightSync = work
-  void (async () => {
-    try {
-      await run()
-      resolveWork()
-    } catch (error) {
-      rejectWork(error)
-    } finally {
-      clearInFlightSync(work)
-    }
-  })()
-  return promise
 }
 
 function isLightningSyncRailConfigured(
@@ -198,9 +170,7 @@ export function subscribeLightningSyncLifecycle(
 }
 
 export async function awaitLightningSyncQuiescence(): Promise<void> {
-  if (inFlightSync != null) {
-    await inFlightSync.promise
-  }
+  await inFlightSyncTracker.awaitQuiescence()
 }
 
 export function configureLightningSyncForLoadedRail(scope: LightningRailScope): void {
@@ -219,7 +189,7 @@ export function syncLightningSyncLifecycleWithLockPhase(lockPhase: LockLifecycle
   if (lockPhase === 'unlocking' || lockPhase === 'unlocked') {
     return
   }
-  if (inFlightSync != null) {
+  if (inFlightSyncTracker.getCurrent() != null) {
     return
   }
   connectionSyncTrackers.clear()
@@ -262,18 +232,16 @@ export async function orchestrateLightningSyncThenSave(
   const throwOnError = params.throwOnError ?? params.awaitCompletion !== false
   const key = syncKey(params)
 
-  if (inFlightSync?.key === key) {
-    return inFlightSync.promise
+  const coalesced = getCoalescedInFlightPromise(inFlightSyncTracker, key)
+  if (coalesced != null) {
+    return coalesced
+  }
+  const afterDifferentWork = await awaitDifferentInFlightWork(inFlightSyncTracker, key)
+  if (afterDifferentWork != null) {
+    return afterDifferentWork
   }
 
-  if (inFlightSync != null) {
-    await inFlightSync.promise
-    if (inFlightSync?.key === key) {
-      return inFlightSync.promise
-    }
-  }
-
-  return beginInFlightSync(key, async () => {
+  return inFlightSyncTracker.begin(key, async () => {
     assertCanStartLightningSync(params)
     const scope = railScopeFromParams(params)
     configureLightningSyncForLoadedRail(scope)
@@ -344,7 +312,7 @@ export function resetLightningSyncLifecycleStateForTests(): void {
     syncPhase: 'not-configured',
     railScope: null,
   }
-  inFlightSync = null
+  inFlightSyncTracker.clearCurrent()
   connectionSyncTrackers.clear()
   listeners.clear()
 }

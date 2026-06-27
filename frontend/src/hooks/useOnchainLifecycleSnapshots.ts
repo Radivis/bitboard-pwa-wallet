@@ -1,4 +1,5 @@
 import { useMemo, useSyncExternalStore } from 'react'
+import { createRailLifecycleSnapshotHooks } from '@/hooks/create-rail-lifecycle-snapshot-hooks'
 import { getOnchainRailSnapshot } from '@/lib/wallet/lifecycle/onchain-rail-snapshot'
 import {
   getOnchainLoadLifecycleSnapshot,
@@ -16,64 +17,27 @@ import type { OnchainLoadLifecycleSnapshot } from '@/lib/wallet/lifecycle/onchai
 import type { OnchainSaveLifecycleSnapshot } from '@/lib/wallet/lifecycle/onchain-save-lifecycle-types'
 import type { OnchainSyncLifecycleSnapshot } from '@/lib/wallet/lifecycle/onchain-sync-lifecycle-types'
 import type { OnchainRailSnapshot } from '@/lib/wallet/lifecycle/rail-lifecycle-types'
-import {
-  createStableSnapshotGetter,
-  shallowRecordEqual,
-} from '@/hooks/lifecycle-snapshot-subscription'
 
-const getStableOnchainLoadLifecycleSnapshot = createStableSnapshotGetter(
-  getOnchainLoadLifecycleSnapshot,
-  shallowRecordEqual,
-)
-const getStableOnchainSyncLifecycleSnapshot = createStableSnapshotGetter(
-  getOnchainSyncLifecycleSnapshot,
-  shallowRecordEqual,
-)
-const getStableOnchainSaveLifecycleSnapshot = createStableSnapshotGetter(
-  getOnchainSaveLifecycleSnapshot,
-  shallowRecordEqual,
-)
+const onchainLifecycleSnapshotHooks = createRailLifecycleSnapshotHooks<
+  OnchainLoadLifecycleSnapshot,
+  OnchainSyncLifecycleSnapshot,
+  OnchainSaveLifecycleSnapshot,
+  OnchainRailSnapshot
+>({
+  getLoadLifecycleSnapshot: getOnchainLoadLifecycleSnapshot,
+  subscribeLoadLifecycle: subscribeOnchainLoadLifecycle,
+  getSyncLifecycleSnapshot: getOnchainSyncLifecycleSnapshot,
+  subscribeSyncLifecycle: subscribeOnchainSyncLifecycle,
+  getSaveLifecycleSnapshot: getOnchainSaveLifecycleSnapshot,
+  subscribeSaveLifecycle: subscribeOnchainSaveLifecycle,
+  getRailSnapshot: getOnchainRailSnapshot,
+})
 
-export function useOnchainLoadLifecycleSnapshot(): OnchainLoadLifecycleSnapshot {
-  return useSyncExternalStore(
-    subscribeOnchainLoadLifecycle,
-    getStableOnchainLoadLifecycleSnapshot,
-    getStableOnchainLoadLifecycleSnapshot,
-  )
-}
-
-export function useOnchainSyncLifecycleSnapshot(): OnchainSyncLifecycleSnapshot {
-  return useSyncExternalStore(
-    subscribeOnchainSyncLifecycle,
-    getStableOnchainSyncLifecycleSnapshot,
-    getStableOnchainSyncLifecycleSnapshot,
-  )
-}
-
-export function useOnchainSaveLifecycleSnapshot(): OnchainSaveLifecycleSnapshot {
-  return useSyncExternalStore(
-    subscribeOnchainSaveLifecycle,
-    getStableOnchainSaveLifecycleSnapshot,
-    getStableOnchainSaveLifecycleSnapshot,
-  )
-}
-
-export function useOnchainRailSnapshot(): OnchainRailSnapshot {
-  const loadSnapshot = useOnchainLoadLifecycleSnapshot()
-  const syncSnapshot = useOnchainSyncLifecycleSnapshot()
-  const saveSnapshot = useOnchainSaveLifecycleSnapshot()
-  return useMemo(
-    () => getOnchainRailSnapshot(),
-    [
-      loadSnapshot.loadPhase,
-      loadSnapshot.networkMode,
-      syncSnapshot.syncPhase,
-      saveSnapshot.savePhase,
-    ],
-  )
-}
-
-export function useIsOnchainRailLoaded(): boolean {
-  const { loadPhase } = useOnchainLoadLifecycleSnapshot()
-  return loadPhase === 'loaded'
-}
+export const useOnchainLoadLifecycleSnapshot =
+  onchainLifecycleSnapshotHooks.useLoadLifecycleSnapshot
+export const useOnchainSyncLifecycleSnapshot =
+  onchainLifecycleSnapshotHooks.useSyncLifecycleSnapshot
+export const useOnchainSaveLifecycleSnapshot =
+  onchainLifecycleSnapshotHooks.useSaveLifecycleSnapshot
+export const useOnchainRailSnapshot = onchainLifecycleSnapshotHooks.useRailSnapshot
+export const useIsOnchainRailLoaded = onchainLifecycleSnapshotHooks.useIsRailLoaded

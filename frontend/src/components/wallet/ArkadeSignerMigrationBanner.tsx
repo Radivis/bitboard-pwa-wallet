@@ -1,8 +1,8 @@
 import { AlertTriangle, Loader2 } from 'lucide-react'
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { getArkadeWorker } from '@/workers/arkade-factory'
 import type { ArkadeSignerMigrationHint } from '@/workers/arkade-api'
+import { orchestrateArkadeSyncThenSave } from '@/lib/wallet/lifecycle/arkade-sync-lifecycle-orchestrator'
 import { useWalletStore } from '@/stores/walletStore'
 
 function formatCutoffDate(cutoffUnix: number): string | null {
@@ -51,6 +51,9 @@ function migrationBannerCopy(hint: ArkadeSignerMigrationHint): {
 export function ArkadeSignerMigrationBanner() {
   const hint = useWalletStore((state) => state.arkadeSignerMigrationHint)
   const setHint = useWalletStore((state) => state.setArkadeSignerMigrationHint)
+  const networkMode = useWalletStore((state) => state.networkMode)
+  const activeWalletId = useWalletStore((state) => state.activeWalletId)
+  const activeArkadeConnectionId = useWalletStore((state) => state.activeArkadeConnectionId)
   const [isMigrating, setIsMigrating] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
@@ -61,12 +64,22 @@ export function ArkadeSignerMigrationBanner() {
   const copy = migrationBannerCopy(hint)
 
   async function handleMigrateFunds(): Promise<void> {
+    if (activeWalletId == null || activeArkadeConnectionId == null) {
+      setErrorMessage('Arkade session is not ready')
+      return
+    }
+
     setIsMigrating(true)
     setErrorMessage(null)
     try {
-      const worker = getArkadeWorker()
-      await worker.migrateDeprecatedSignerVtxos()
-      await worker.syncWithOperator()
+      await orchestrateArkadeSyncThenSave({
+        walletId: activeWalletId,
+        networkMode,
+        connectionId: activeArkadeConnectionId,
+        syncKind: 'signerMigration',
+        awaitCompletion: true,
+        throwOnError: true,
+      })
       setHint(null)
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Migration failed')

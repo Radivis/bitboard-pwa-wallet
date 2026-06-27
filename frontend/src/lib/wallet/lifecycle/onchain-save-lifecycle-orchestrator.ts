@@ -3,45 +3,24 @@ import { useWalletStore } from '@/stores/walletStore'
 import { invalidateOnchainDashboardQueries } from '@/lib/wallet/onchain-dashboard-sync'
 import { toBitcoinNetwork } from '@/lib/wallet/bitcoin-utils'
 import { updateDescriptorWalletChangeset } from '@/lib/wallet/descriptor-wallet-manager'
-import { sanitizeErrorMessageForUi } from '@/lib/shared/sanitize-error-for-ui'
-import { errorMessage } from '@/lib/shared/utils'
 import type {
   OnchainSaveLifecycleSnapshot,
   OnchainSaveParams,
 } from '@/lib/wallet/lifecycle/onchain-save-lifecycle-types'
 import type { OnchainRailDescriptorScope } from '@/lib/wallet/lifecycle/onchain-rail-types'
-import type { LockLifecyclePhase } from '@/lib/wallet/lifecycle/lock-lifecycle-types'
+import {
+  createSaveBlockingLockErrorClass,
+  createSaveLifecycleOrchestrator,
+} from '@/lib/wallet/lifecycle/save-lifecycle-orchestrator-factory'
 
 export type { OnchainSaveLifecycleSnapshot, OnchainSaveParams } from '@/lib/wallet/lifecycle/onchain-save-lifecycle-types'
 
-export class OnchainSaveBlockingLockError extends Error {
-  constructor() {
-    super('On-chain save-error blocks lock until retry or forced lock')
-    this.name = 'OnchainSaveBlockingLockError'
-  }
-}
+export const OnchainSaveBlockingLockError = createSaveBlockingLockErrorClass(
+  'OnchainSaveBlockingLockError',
+  'On-chain save-error blocks lock until retry or forced lock',
+)
 
-type InFlightSave = {
-  key: string
-  promise: Promise<void>
-}
-
-let snapshot: OnchainSaveLifecycleSnapshot = {
-  savePhase: 'not-configured',
-  errorMessage: null,
-  descriptorScope: null,
-}
-
-let lastSaveParams: OnchainSaveParams | null = null
-let forcedLockAcknowledged = false
 let suppressCrossTabNotify = false
-
-const listeners = new Set<(next: OnchainSaveLifecycleSnapshot) => void>()
-let inFlightSave: InFlightSave | null = null
-
-function saveKey(params: OnchainSaveParams): string {
-  return `${params.walletId}:${params.networkMode}:${params.addressType}:${params.accountId}`
-}
 
 function descriptorScopeFromParams(params: OnchainSaveParams): OnchainRailDescriptorScope {
   return {
@@ -50,57 +29,6 @@ function descriptorScopeFromParams(params: OnchainSaveParams): OnchainRailDescri
     addressType: params.addressType,
     accountId: params.accountId,
   }
-}
-
-function notifyListeners(): void {
-  const current = getOnchainSaveLifecycleSnapshot()
-  for (const listener of listeners) {
-    listener(current)
-  }
-  if (!suppressCrossTabNotify) {
-    void import('@/lib/wallet/lifecycle/onchain-rail-lifecycle-cross-tab-sync').then(
-      ({ notifyOnchainRailLifecycleChangedFromThisTab }) => {
-        notifyOnchainRailLifecycleChangedFromThisTab()
-      },
-    )
-  }
-}
-
-function setSnapshot(next: OnchainSaveLifecycleSnapshot): void {
-  snapshot = next
-  notifyListeners()
-}
-
-function clearInFlightSave(work: InFlightSave): void {
-  if (inFlightSave === work) {
-    inFlightSave = null
-  }
-}
-
-function beginInFlightSave(key: string, run: () => Promise<void>): Promise<void> {
-  let resolveWork!: () => void
-  let rejectWork!: (error: unknown) => void
-  const promise = new Promise<void>((resolve, reject) => {
-    resolveWork = resolve
-    rejectWork = reject
-  })
-  const work: InFlightSave = { key, promise }
-  inFlightSave = work
-  void (async () => {
-    try {
-      await run()
-      resolveWork()
-    } catch (error) {
-      rejectWork(error)
-    } finally {
-      clearInFlightSave(work)
-    }
-  })()
-  return promise
-}
-
-function invalidateDashboardQueriesAfterOnchainUpdate(): void {
-  invalidateOnchainDashboardQueries()
 }
 
 async function runPersistPostEsploraSync(params: OnchainSaveParams): Promise<void> {
@@ -139,138 +67,76 @@ async function runPersistPostEsploraSync(params: OnchainSaveParams): Promise<voi
       lastSuccessfulEsploraSyncAt: syncedAtIso,
     })
   }
-  invalidateDashboardQueriesAfterOnchainUpdate()
+  invalidateOnchainDashboardQueries()
 }
 
-export function getOnchainSaveLifecycleSnapshot(): OnchainSaveLifecycleSnapshot {
-  return { ...snapshot }
-}
-
-export function subscribeOnchainSaveLifecycle(
-  listener: (next: OnchainSaveLifecycleSnapshot) => void,
-): () => void {
-  listeners.add(listener)
-  return () => {
-    listeners.delete(listener)
-  }
-}
-
-export function isOnchainSaveBlockingLock(): boolean {
-  return snapshot.savePhase === 'save-error' && !forcedLockAcknowledged
-}
-
-export function acknowledgeOnchainSaveErrorForForcedLock(): void {
-  forcedLockAcknowledged = true
-  if (snapshot.savePhase === 'save-error') {
-    setSnapshot({
-      savePhase: 'not-saving',
-      errorMessage: null,
-      descriptorScope: snapshot.descriptorScope,
-    })
-  }
-}
-
-export async function awaitOnchainSaveQuiescence(): Promise<void> {
-  if (inFlightSave != null) {
-    await inFlightSave.promise
-  }
-}
-
-export function configureOnchainSaveForLoadedRail(scope: OnchainRailDescriptorScope): void {
-  if (snapshot.savePhase !== 'not-configured') {
-    return
-  }
-  if (scope.networkMode === 'lab') {
-    return
-  }
-  setSnapshot({
+const onchainSaveLifecycle = createSaveLifecycleOrchestrator<
+  OnchainSaveParams,
+  OnchainSaveLifecycleSnapshot,
+  OnchainRailDescriptorScope
+>({
+  blockingLockErrorClass: OnchainSaveBlockingLockError,
+  saveKey: (params) =>
+    `${params.walletId}:${params.networkMode}:${params.addressType}:${params.accountId}`,
+  scopeFromParams: descriptorScopeFromParams,
+  runSaveBody: runPersistPostEsploraSync,
+  notConfiguredSnapshot: {
+    savePhase: 'not-configured',
+    errorMessage: null,
+    descriptorScope: null,
+  },
+  notSavingSnapshot: (descriptorScope) => ({
     savePhase: 'not-saving',
     errorMessage: null,
-    descriptorScope: scope,
-  })
-}
+    descriptorScope,
+  }),
+  savingSnapshot: (descriptorScope) => ({
+    savePhase: 'saving',
+    errorMessage: null,
+    descriptorScope,
+  }),
+  saveErrorSnapshot: (descriptorScope, userFacingErrorMessage) => ({
+    savePhase: 'save-error',
+    errorMessage: userFacingErrorMessage,
+    descriptorScope,
+  }),
+  scopeFromSnapshot: (saveSnapshot) => saveSnapshot.descriptorScope,
+  skipConfigureForLoadedRail: (descriptorScope) => descriptorScope.networkMode === 'lab',
+  onNotifyListeners: () => {
+    if (suppressCrossTabNotify) {
+      return
+    }
+    void import('@/lib/wallet/lifecycle/onchain-rail-lifecycle-cross-tab-sync').then(
+      ({ notifyOnchainRailLifecycleChangedFromThisTab }) => {
+        notifyOnchainRailLifecycleChangedFromThisTab()
+      },
+    )
+  },
+  saveFailureLogLabel: 'Onchain save failed',
+  retrySaveErrorMessage: 'No on-chain save to retry',
+})
+
+export const getOnchainSaveLifecycleSnapshot = onchainSaveLifecycle.getSaveLifecycleSnapshot
+export const subscribeOnchainSaveLifecycle = onchainSaveLifecycle.subscribeSaveLifecycle
+export const isOnchainSaveBlockingLock = onchainSaveLifecycle.isSaveBlockingLock
+export const acknowledgeOnchainSaveErrorForForcedLock =
+  onchainSaveLifecycle.acknowledgeSaveErrorForForcedLock
+export const awaitOnchainSaveQuiescence = onchainSaveLifecycle.awaitSaveQuiescence
+export const configureOnchainSaveForLoadedRail = onchainSaveLifecycle.configureSaveForLoadedRail
+export const syncOnchainSaveLifecycleWithLockPhase =
+  onchainSaveLifecycle.syncSaveLifecycleWithLockPhase
+export const orchestrateOnchainSave = onchainSaveLifecycle.orchestrateSave
+export const orchestrateOnchainRetrySave = onchainSaveLifecycle.orchestrateRetrySave
+export const resetOnchainSaveLifecycleStateForTests =
+  onchainSaveLifecycle.resetSaveLifecycleStateForTests
 
 export function applyOnchainSaveLifecycleSnapshotFromRemote(
   remoteSnapshot: OnchainSaveLifecycleSnapshot,
 ): void {
   suppressCrossTabNotify = true
   try {
-    setSnapshot({ ...remoteSnapshot })
+    onchainSaveLifecycle.applySaveLifecycleSnapshot({ ...remoteSnapshot })
   } finally {
     suppressCrossTabNotify = false
   }
-}
-
-export function syncOnchainSaveLifecycleWithLockPhase(lockPhase: LockLifecyclePhase): void {
-  if (lockPhase === 'unlocking' || lockPhase === 'unlocked') {
-    return
-  }
-  if (inFlightSave != null) {
-    return
-  }
-  forcedLockAcknowledged = false
-  lastSaveParams = null
-  setSnapshot({
-    savePhase: 'not-configured',
-    errorMessage: null,
-    descriptorScope: null,
-  })
-}
-
-export async function orchestrateOnchainSave(params: OnchainSaveParams): Promise<void> {
-  const key = saveKey(params)
-  if (inFlightSave?.key === key) {
-    return inFlightSave.promise
-  }
-
-  lastSaveParams = params
-  forcedLockAcknowledged = false
-  const scope = descriptorScopeFromParams(params)
-
-  return beginInFlightSave(key, async () => {
-    setSnapshot({
-      savePhase: 'saving',
-      errorMessage: null,
-      descriptorScope: scope,
-    })
-    try {
-      await runPersistPostEsploraSync(params)
-      setSnapshot({
-        savePhase: 'not-saving',
-        errorMessage: null,
-        descriptorScope: scope,
-      })
-    } catch (error) {
-      console.error('Onchain save failed', error)
-      const userFacingErrorMessage =
-        sanitizeErrorMessageForUi(errorMessage(error) ?? String(error)) ||
-        'Save failed'
-      setSnapshot({
-        savePhase: 'save-error',
-        errorMessage: userFacingErrorMessage,
-        descriptorScope: scope,
-      })
-      throw error
-    }
-  })
-}
-
-export async function orchestrateOnchainRetrySave(): Promise<void> {
-  if (lastSaveParams == null) {
-    throw new Error('No on-chain save to retry')
-  }
-  return orchestrateOnchainSave(lastSaveParams)
-}
-
-/** @internal Test-only reset */
-export function resetOnchainSaveLifecycleStateForTests(): void {
-  snapshot = {
-    savePhase: 'not-configured',
-    errorMessage: null,
-    descriptorScope: null,
-  }
-  inFlightSave = null
-  lastSaveParams = null
-  forcedLockAcknowledged = false
-  listeners.clear()
 }

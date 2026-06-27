@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const syncWithOperator = vi.fn()
+const migrateDeprecatedSignerVtxos = vi.fn()
 const refreshArkadeStoreFromLoadedWasm = vi.fn()
 const orchestrateArkadeSave = vi.fn()
 const loadPhaseRef = vi.hoisted(() => ({ phase: 'loaded' as string }))
@@ -8,6 +9,7 @@ const loadPhaseRef = vi.hoisted(() => ({ phase: 'loaded' as string }))
 vi.mock('@/workers/arkade-factory', () => ({
   getArkadeWorker: () => ({
     syncWithOperator,
+    migrateDeprecatedSignerVtxos,
   }),
 }))
 
@@ -67,6 +69,7 @@ describe('arkade-sync-lifecycle-orchestrator', () => {
     vi.clearAllMocks()
     loadPhaseRef.phase = 'loaded'
     syncWithOperator.mockResolvedValue(undefined)
+    migrateDeprecatedSignerVtxos.mockResolvedValue(undefined)
     refreshArkadeStoreFromLoadedWasm.mockResolvedValue(undefined)
     orchestrateArkadeSave.mockResolvedValue(undefined)
     configureArkadeSyncForLoadedRail({
@@ -121,5 +124,26 @@ describe('arkade-sync-lifecycle-orchestrator', () => {
     await Promise.all([first, second])
 
     expect(syncWithOperator).toHaveBeenCalledTimes(1)
+  })
+
+  it('signerMigration runs migrate before operator sync and save', async () => {
+    const callOrder: string[] = []
+    migrateDeprecatedSignerVtxos.mockImplementation(async () => {
+      callOrder.push('migrate')
+    })
+    syncWithOperator.mockImplementation(async () => {
+      callOrder.push('sync')
+    })
+    orchestrateArkadeSave.mockImplementation(async () => {
+      callOrder.push('save')
+    })
+
+    await orchestrateArkadeSyncThenSave({
+      ...syncParams,
+      syncKind: 'signerMigration',
+    })
+
+    expect(callOrder).toEqual(['migrate', 'sync', 'save'])
+    expect(refreshArkadeStoreFromLoadedWasm).toHaveBeenCalledWith('conn-1')
   })
 })
