@@ -1,17 +1,17 @@
-import type { SVGProps } from 'react'
+import type { ImgHTMLAttributes } from 'react'
+import { cn } from '@/lib/shared/utils'
 
-/** Arkade brand mark (https://arkadeos.com). Uses currentColor for theme compatibility. */
-export function ArkadeIcon({ className, ...props }: SVGProps<SVGSVGElement>) {
+/** Official Arkade brand mark (`frontend/public/arkade-mark.svg`, from docs.arkadeos.com). */
+const ARKADE_MARK_SRC = '/arkade-mark.svg'
+
+export function ArkadeIcon({ className, ...props }: ImgHTMLAttributes<HTMLImageElement>) {
   return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 44 36"
-      fill="currentColor"
-      className={className}
+    <img
+      src={ARKADE_MARK_SRC}
+      alt=""
       aria-hidden
+      className={cn('inline-block shrink-0', className)}
       {...props}
-    >
-      <path d="M30.69 5.74 21.727 0l-8.963 5.74 8.963 5.742 8.965-5.742ZM12.763 30.258 21.726 36l8.965-5.742-8.965-5.74zM8.965 16.346 0 22.086l8.965 5.74 8.962-5.74zm25.525 0-8.963 5.74 8.962 5.74 8.965-5.74-8.965-5.74Z" />
-    </svg>
+    />
   )
 }

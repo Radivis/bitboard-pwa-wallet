@@ -451,6 +451,7 @@ function BalanceCard() {
                   isSyncPending={onchainIncrementalSync.isPending}
                   railConfigured={onchainRail.loadPhase !== 'not-configured'}
                   syncErrorMessage={onchainSyncSnapshot.errorMessage}
+                  syncErrorDetailInBanner={onchainLoadSnapshot.loadPhase === 'loaded'}
                   secondaryAction={
                   FULL_RESCAN_NETWORKS.includes(networkMode) ? (
                     <InfomodeWrapper
@@ -601,6 +602,7 @@ function BalanceCard() {
                   isSyncPending={lightningManualSync.isPending}
                   railConfigured={lightningRail.loadPhase !== 'not-configured'}
                   syncErrorMessage={lightningSyncSnapshot.errorMessage}
+                  syncErrorDetailInBanner={lightningLoadSnapshot.loadPhase === 'loaded'}
                 />
                   </>
                 )}

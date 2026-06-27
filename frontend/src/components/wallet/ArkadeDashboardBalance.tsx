@@ -74,6 +74,7 @@ export function ArkadeDashboardBalance() {
             isSyncPending={arkadeManualSync.isPending}
             railConfigured={arkadeRail.loadPhase !== 'not-configured'}
             syncErrorMessage={arkadeSyncSnapshot.errorMessage}
+            syncErrorDetailInBanner={arkadeLoadSnapshot.loadPhase === 'loaded'}
           />
         </div>
       </CardHeader>

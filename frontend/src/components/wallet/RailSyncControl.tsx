@@ -5,6 +5,8 @@ import type { SyncLifecyclePhase } from '@/lib/wallet/lifecycle/rail-lifecycle-t
 
 export type DashboardRailId = 'onchain' | 'lightning' | 'arkade'
 
+const RAIL_SYNC_ERROR_CAPTION_DEFERRED = 'Sync failed — see details below'
+
 function formatLastSyncedCaption(lastSyncedAt: Date | string): string {
   const date =
     lastSyncedAt instanceof Date ? lastSyncedAt : new Date(lastSyncedAt)
@@ -20,8 +22,10 @@ export type RailSyncControlProps = {
   isSyncPending?: boolean
   /** When false, sync control and caption are hidden (rail not configured). */
   railConfigured?: boolean
-  /** Shown in caption when syncPhase is sync-error (banner may show full message above). */
+  /** Shown in caption when syncPhase is sync-error (unless detail is deferred to a banner). */
   syncErrorMessage?: string | null
+  /** When true, caption stays short; full `syncErrorMessage` belongs in `RailSyncErrorBanner`. */
+  syncErrorDetailInBanner?: boolean
   secondaryAction?: ReactNode
 }
 
@@ -34,6 +38,7 @@ export function RailSyncControl({
   isSyncPending = false,
   railConfigured = true,
   syncErrorMessage = null,
+  syncErrorDetailInBanner = false,
   secondaryAction,
 }: RailSyncControlProps) {
   if (!railConfigured) {
@@ -76,7 +81,9 @@ export function RailSyncControl({
           : {})}
       >
         {isSyncError
-          ? syncErrorMessage ?? 'Sync failed — use Sync to retry'
+          ? syncErrorDetailInBanner
+            ? RAIL_SYNC_ERROR_CAPTION_DEFERRED
+            : syncErrorMessage ?? 'Sync failed — use Sync to retry'
           : lastSyncedAt != null
             ? formatLastSyncedCaption(lastSyncedAt)
             : 'Not synced yet'}

@@ -72,6 +72,27 @@ describe('RailSyncControl', () => {
     expect(container).toBeEmptyDOMElement()
   })
 
+  it('shows short sync-error caption when detail is in banner', () => {
+    render(
+      <RailSyncControl
+        rail="arkade"
+        syncLabel="Sync Arkade"
+        syncPhase="sync-error"
+        lastSyncedAt={null}
+        onSync={vi.fn()}
+        syncErrorMessage="Ark client error: failed to get VTXOs"
+        syncErrorDetailInBanner
+      />,
+    )
+
+    expect(screen.getByTestId('rail-sync-arkade-caption')).toHaveTextContent(
+      'Sync failed — see details below',
+    )
+    expect(screen.getByTestId('rail-sync-arkade-caption')).not.toHaveTextContent(
+      'VTXOs',
+    )
+  })
+
   it('calls onSync when clicked', async () => {
     const onSync = vi.fn()
     const user = userEvent.setup()

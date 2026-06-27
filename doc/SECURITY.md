@@ -54,6 +54,23 @@ For **reporting vulnerabilities** in Bitboard Wallet, see the repository root [S
 - **Backend:** SQLite via WaSqlite with OPFS; **two separate database files**: `bitboard-wallet` (wallet persistence: `wallets`, `settings`, `wallet_secrets`) and `bitboard-lab` (lab state: blocks, utxos, lab_addresses, etc.). See [ARCHITECTURE.md](ARCHITECTURE.md).
 - **Encryption algorithm:** Argon2id (production: 64 MB, 3 iter, 4 par; CI: 64 MB, 2 iter, 1 par) + AES-256-GCM; 16-byte random salt, 12-byte random IV per encryption. Implemented in the encryption worker and `bitboard_encryption` WASM. Set `VITE_ARGON2_CI=1` when building for CI to use the lighter CI params for new encryption and keep test runs fast.
 
+**Multiple browser tabs**
+
+Bitboard may be open in more than one tab at once. Each tab runs its own workers and WASM session; lifecycle phase state is **not** shared across tabs. What is shared is the underlying OPFS SQLite files.
+
+- **Writer serialization (Web Locks):** Mutating paths acquire an exclusive Web Lock before touching OPFS:
+  - `bitboard-wallet-writer` — wallet secrets CAS updates, rail lifecycle save/sync orchestrators that persist ciphertext.
+  - `bitboard-lab-writer` — lab state writes (`persistLabState`, `runLabWriteOp`).
+  Implementation: `frontend/src/lib/shared/opfs-writer-lock.ts`. Within one tab, a FIFO queue plus re-entrant hold depth prevents deadlocks when nested writes occur (e.g. save orchestrator calling persistence that also takes the lock).
+- **When `navigator.locks` is available:** Only one tab at a time holds the exclusive lock for a given database; other tabs block until the writer finishes. This is the intended production behavior in current Chromium, Firefox, and Safari.
+- **When `navigator.locks` is absent:** The app still serializes writes **within the same tab**, but **does not** block concurrent writers in other tabs. Two tabs can then interleave OPFS writes to the same file. Mitigations that remain in place:
+  - SQLite **WAL** mode tolerates concurrent readers with a single writer; brief read-during-write is acceptable for UI refresh.
+  - `wallet_secrets` updates use **optimistic concurrency** (`revision` column, CAS retries in `updateWalletSecretsPayloadWithRetry`) so a stale write fails and retries instead of silently overwriting a peer tab’s ciphertext.
+- **Cross-tab cache sync:** After a successful commit, a tab may broadcast a lightweight invalidation message (`wallet-cross-tab-sync`, `lab-cross-tab-sync`) so peers refetch TanStack Query data. Malformed BroadcastChannel payloads are rejected before invalidation. This does **not** replicate unlock state, passwords, or lifecycle phases — peers still enforce their own unlock and load gates.
+- **Operational guidance:** For strongest persistence guarantees, avoid editing the **same wallet** from two tabs simultaneously. Using one tab for the wallet and another only for read-only or unrelated pages is lower risk; two tabs both syncing/saving the same unlocked wallet increases the chance of CAS retries or, without Web Locks, rare write ordering issues.
+
+See also [docs/wallet-rail-lifecycle.md](../docs/wallet-rail-lifecycle.md) (cross-tab section) and [frontend/docs/FRONTEND_STRUCTURE.md](../frontend/docs/FRONTEND_STRUCTURE.md) (OPFS writer locks).
+
 ### 2.3 External communication
 
 - **Esplora:** Used only for chain data and transaction broadcast. Default and custom Esplora URLs are validated with `validateEsploraUrl`; non-regtest/non-lab require HTTPS. No secrets are sent to Esplora; no logging of URLs that could carry sensitive query parameters.

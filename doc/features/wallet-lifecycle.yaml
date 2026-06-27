@@ -43,7 +43,7 @@ feature:
         description: LockLifecycle unlock delegates on-chain load to OnchainLoadLifecycle
         implemented_by: frontend/src/lib/wallet/lifecycle/__tests__/lock-lifecycle-orchestrator.test.ts
       - id: LIFE-LOCK-02
-        description: orchestrateLock awaits on-chain, Arkade, and Lightning sync/save quiescence and wallet-secrets writes before worker purge; hard-blocks on on-chain, Arkade, or Lightning save-error
+        description: orchestrateLock awaits on-chain, Arkade, and Lightning load/sync/save quiescence and wallet-secrets writes before worker purge; hard-blocks on on-chain, Arkade, or Lightning save-error (re-checked after save quiescence)
         implemented_by: frontend/src/lib/wallet/lifecycle/__tests__/lock-lifecycle-orchestrator.test.ts
     onchain:
       - id: LIFE-ONC-LOAD-01
@@ -61,6 +61,17 @@ feature:
       - id: LIFE-ONC-ERR-01
         description: Onchain sync-error still serves BDK-local balance and transactions
         implemented_by: frontend/src/lib/wallet/lifecycle/__tests__/onchain-sync-lifecycle-orchestrator.test.ts
+      - id: LIFE-ONC-ERR-02
+        description: Onchain load-error shows dashboard banner and hides on-chain balance breakdown
+        implemented_by:
+          - frontend/src/components/wallet/RailLoadErrorBanner.tsx
+          - frontend/src/pages/wallet/DashboardPage.tsx
+          - frontend/src/components/wallet/__tests__/RailLifecycleErrorBanners.test.tsx
+      - id: LIFE-ONC-ERR-03
+        description: Onchain sync-error banner driven by syncPhase with persisted errorMessage, not timestamp stale alone
+        implemented_by:
+          - frontend/src/components/wallet/RailSyncErrorBanner.tsx
+          - frontend/src/pages/wallet/DashboardPage.tsx
     lightning:
       - id: LIFE-LN-LOAD-01
         description: LightningLoadLifecycle loading includes loadLightningConnectionsForWallet and replaceConnectionsForWallet
@@ -74,6 +85,16 @@ feature:
       - id: LIFE-LN-SAVE-01
         description: addConnection and NWC snapshot patches persist via LightningSaveLifecycle
         implemented_by: frontend/src/lib/wallet/lifecycle/__tests__/lightning-save-lifecycle-orchestrator.test.ts
+      - id: LIFE-LN-ERR-02
+        description: Lightning load-error shows dashboard banner even when balance queries are disabled
+        implemented_by:
+          - frontend/src/components/wallet/RailLoadErrorBanner.tsx
+          - frontend/src/pages/wallet/DashboardPage.tsx
+      - id: LIFE-LN-ERR-03
+        description: Lightning sync-error banner driven by syncPhase with persisted errorMessage
+        implemented_by:
+          - frontend/src/components/wallet/RailSyncErrorBanner.tsx
+          - frontend/src/pages/wallet/DashboardPage.tsx
     arkade:
       - id: LIFE-ARK-LOAD-01
         description: ArkadeLoadLifecycle loading includes session open, WASM hydration, and refreshArkadeStoreFromLoadedWasm
@@ -96,6 +117,16 @@ feature:
       - id: LIFE-ARK-ERR-01
         description: Arkade sync-error serves loaded WASM/local dashboard data
         implemented_by: frontend/src/lib/wallet/lifecycle/__tests__/arkade-sync-lifecycle-orchestrator.test.ts
+      - id: LIFE-ARK-ERR-02
+        description: Arkade load-error replaces balance card body with retry banner
+        implemented_by:
+          - frontend/src/components/wallet/RailLoadErrorBanner.tsx
+          - frontend/src/components/wallet/ArkadeDashboardBalance.tsx
+      - id: LIFE-ARK-ERR-03
+        description: Arkade sync-error banner driven by syncPhase; operator-stale copy hidden when sync-error
+        implemented_by:
+          - frontend/src/components/wallet/RailSyncErrorBanner.tsx
+          - frontend/src/components/wallet/ArkadeDashboardBalance.tsx
     e2e_readiness:
       - id: LIFE-E2E-01
         description: E2E may await data-rail-arkade-load=loaded before receive address assertions

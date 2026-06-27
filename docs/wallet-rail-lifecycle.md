@@ -554,11 +554,39 @@ Future: `data-rail-onchain-load="loaded"` for on-chain dashboard assertions (LIF
 
 ## Error and retry policy
 
-| Error | User-visible data | Retry |
-|-------|-------------------|-------|
-| `load-error` | Do not show rail data | User: lock/unlock, reload; fix secrets |
-| `sync-error` | Show last `loaded` data + stale/error UI | Automatic on focus/refetch; manual sync button |
-| `save-error` | Show data but warn persistence may be stale | Dashboard banner Retry; lock toast points to banner; forced lock via Lock anyway |
+| Error | User-visible data | Retry | Dashboard UI |
+|-------|-------------------|-------|----------------|
+| `load-error` | Do not show rail data | `orchestrate*RetryLoad` via `RailLoadErrorBanner` | `wallet-load-error-banner-{rail}` |
+| `sync-error` | Show last `loaded` data + error UI | Manual sync / `RailSyncErrorBanner` “Sync again” | `wallet-sync-error-banner-{rail}`; see [Stale vs sync-error banners](#stale-vs-sync-error-banners) |
+| `save-error` | Show data but warn persistence may be stale | Dashboard banner Retry; lock toast points to banner; forced lock via Lock anyway | `wallet-save-error-banner-{rail}` |
+
+### Stale vs sync-error banners
+
+These answer different questions:
+
+| Banner kind | Question it answers | Driven by |
+|-------------|---------------------|-----------|
+| **Stale** (session-not-verified) | “Is this rail’s remote source unverified *this unlock session*, even though we have older persisted sync metadata?” | Timestamp heuristics (`lastSyncTime` / `lastOperatorSyncTime` vs encrypted `lastSuccessful*SyncAt`), or Lightning per-connection cached snapshots |
+| **Sync-error** (`RailSyncErrorBanner`) | “Did a sync attempt *fail* while the rail was loaded?” | `syncPhase === 'sync-error'` + `errorMessage` on the sync lifecycle snapshot |
+
+**When stale banners show (on-chain / Arkade)**
+
+All of the following must hold:
+
+1. Rail `loadPhase === 'loaded'` (data is shown).
+2. `syncPhase !== 'sync-error'` (no failed sync this session — sync-error banner wins).
+3. `syncPhase !== 'syncing'` and (Arkade) save not in progress — avoids flashing stale during active work.
+4. **Session** last-sync timestamp is still `null` (`lastSyncTime` / `lastOperatorSyncTime` in the wallet store).
+5. **Persisted** metadata records a prior successful sync (`lastSuccessfulEsploraSyncAt` / `lastSuccessfulOperatorSyncAt` from encrypted storage).
+
+Typical case: user unlocks, WASM/local state hydrates from persistence, post-unlock sync has not finished yet and has not failed — “showing saved chain/operator state, not verified with Esplora/operator this session.” After a successful sync, the session timestamp is set and the stale banner disappears. If sync fails instead, `sync-error` replaces the stale copy.
+
+**When stale banners show (Lightning)**
+
+- **Balance** (`lightning-balance-stale-banner`): a connection’s balance row is `isStaleBalance` (NWC unreachable, cached snapshot used) and `syncPhase !== 'sync-error'`.
+- **History** (`lightning-history-stale-banner`): merged history includes payments from a prior successful sync while NWC was unreachable (`stalePaymentsAsOf`); not gated on `sync-error` today.
+
+Stale banners are **informational** (amber, no Retry). Sync-error banners are **actionable** (message from the failed attempt + “Sync again”).
 
 ---
 
