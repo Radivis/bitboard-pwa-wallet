@@ -1,10 +1,8 @@
-import { toast } from 'sonner'
 import { getArkadeWorker } from '@/workers/arkade-factory'
 import { refreshArkadeStoreFromLoadedWasm } from '@/lib/arkade/arkade-persistence-store-sync'
 import { isArkadeActiveForNetworkMode } from '@/lib/arkade/arkade-utils'
 import { isArkadeSupportedNetworkMode } from '@/lib/arkade/arkade-endpoints'
 import { getCommittedNetworkMode, useWalletStore } from '@/stores/walletStore'
-import { errorMessage } from '@/lib/shared/utils'
 import { getArkadeLoadLifecycleSnapshot } from '@/lib/wallet/lifecycle/arkade-load-lifecycle-orchestrator'
 import {
   configureArkadeSaveForLoadedRail,
@@ -211,7 +209,6 @@ export async function orchestrateArkadeSyncThenSave(
     } catch (error) {
       setSnapshot({ syncPhase: 'sync-error', railScope: scope })
       params.onSyncError?.(error)
-      toast.error(`Arkade operator sync failed: ${errorMessage(error)}`)
       if (throwOnError) {
         throw error
       }

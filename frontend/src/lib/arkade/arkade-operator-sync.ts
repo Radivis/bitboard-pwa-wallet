@@ -1,11 +1,10 @@
-import { toast } from 'sonner'
 import { isArkadeActiveForNetworkMode } from '@/lib/arkade/arkade-utils'
-import { errorMessage } from '@/lib/shared/utils'
 import {
   awaitArkadeSyncQuiescence,
   orchestrateArkadeSyncThenSave,
   scheduleBackgroundArkadeOperatorSync as scheduleBackgroundArkadeOperatorSyncFromLifecycle,
 } from '@/lib/wallet/lifecycle/arkade-sync-lifecycle-orchestrator'
+import { reportArkadeOperatorSyncError } from '@/lib/wallet/rail-sync-error-toast'
 import type { NetworkMode } from '@/stores/walletStore'
 
 /** Serialize critical persistence with dashboard background operator sync. */
@@ -36,6 +35,7 @@ export async function syncArkadeWithOperator(params: {
     syncKind: 'manual',
     awaitCompletion: true,
     throwOnError: true,
+    onSyncError: reportArkadeOperatorSyncError,
   })
 }
 
@@ -54,23 +54,21 @@ export async function runArkadeOperatorSyncAndPersist(params: {
   onError?: (err: unknown) => void
 }): Promise<void> {
   const { sessionAlreadyOpen, onError, ...syncParams } = params
-  try {
-    if (!sessionAlreadyOpen) {
-      const { openArkadeSessionForWallet } = await import('@/lib/arkade/arkade-session-service')
-      await openArkadeSessionForWallet({
-        walletId: syncParams.walletId,
-        networkMode: syncParams.networkMode,
-      })
-    }
-    await orchestrateArkadeSyncThenSave({
-      ...syncParams,
-      syncKind: 'manual',
-      onSyncError: onError,
-      awaitCompletion: true,
-      throwOnError: false,
+  if (!sessionAlreadyOpen) {
+    const { openArkadeSessionForWallet } = await import('@/lib/arkade/arkade-session-service')
+    await openArkadeSessionForWallet({
+      walletId: syncParams.walletId,
+      networkMode: syncParams.networkMode,
     })
-  } catch (err) {
-    onError?.(err)
-    toast.error(`Arkade operator sync failed: ${errorMessage(err)}`)
   }
+  await orchestrateArkadeSyncThenSave({
+    ...syncParams,
+    syncKind: 'manual',
+    onSyncError: (err) => {
+      onError?.(err)
+      reportArkadeOperatorSyncError(err)
+    },
+    awaitCompletion: true,
+    throwOnError: false,
+  })
 }

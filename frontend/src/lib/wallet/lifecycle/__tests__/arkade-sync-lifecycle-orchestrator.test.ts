@@ -45,10 +45,6 @@ vi.mock('@/lib/wallet/lifecycle/arkade-save-lifecycle-orchestrator', async (impo
   }
 })
 
-vi.mock('sonner', () => ({
-  toast: { error: vi.fn() },
-}))
-
 import {
   configureArkadeSyncForLoadedRail,
   getArkadeSyncLifecycleSnapshot,

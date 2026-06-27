@@ -1,6 +1,4 @@
-import { toast } from 'sonner'
 import { getMatchingLightningConnectionsForDashboard } from '@/lib/lightning/lightning-connection-utils'
-import { errorMessage } from '@/lib/shared/utils'
 import { useFeatureStore } from '@/stores/featureStore'
 import { isLightningSupported } from '@/lib/lightning/lightning-utils'
 import { getLightningLoadLifecycleSnapshot } from '@/lib/wallet/lifecycle/lightning-load-lifecycle-orchestrator'
@@ -274,9 +272,6 @@ export async function orchestrateLightningSyncThenSave(
     } catch (error) {
       applyAggregatePhase(scope)
       params.onSyncError?.(error)
-      if (getLightningSyncLifecycleSnapshot().syncPhase === 'sync-error') {
-        toast.error(`Lightning sync failed: ${errorMessage(error)}`)
-      }
       if (throwOnError) {
         throw error
       }

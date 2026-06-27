@@ -8,6 +8,7 @@ import {
   configureLightningSyncForLoadedRail,
   orchestrateLightningPostLoadSync,
 } from '@/lib/wallet/lifecycle/lightning-sync-lifecycle-orchestrator'
+import { reportLightningSyncError } from '@/lib/wallet/rail-sync-error-toast'
 import type {
   LightningLoadLifecycleSnapshot,
   LightningLoadParams,
@@ -121,6 +122,7 @@ export async function orchestrateLightningLoad(params: LightningLoadParams): Pro
         void orchestrateLightningPostLoadSync({
           walletId,
           networkMode,
+          onSyncError: reportLightningSyncError,
         })
       }
     } catch (error) {

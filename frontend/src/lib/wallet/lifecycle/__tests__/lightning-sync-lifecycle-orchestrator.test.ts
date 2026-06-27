@@ -43,10 +43,6 @@ vi.mock('@/lib/wallet/lifecycle/lightning-save-lifecycle-orchestrator', async (i
   }
 })
 
-vi.mock('sonner', () => ({
-  toast: { error: vi.fn() },
-}))
-
 import {
   configureLightningSyncForLoadedRailForTests,
   getLightningSyncLifecycleSnapshot,

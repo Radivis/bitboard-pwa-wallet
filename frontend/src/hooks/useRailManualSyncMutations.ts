@@ -3,13 +3,16 @@ import { toast } from 'sonner'
 import { orchestrateArkadeSyncThenSave } from '@/lib/wallet/lifecycle/arkade-sync-lifecycle-orchestrator'
 import { orchestrateLightningSyncThenSave } from '@/lib/wallet/lifecycle/lightning-sync-lifecycle-orchestrator'
 import { collectLightningDashboardSyncPatches } from '@/lib/lightning/lightning-dashboard-sync'
-import { syncArkadeWithOperator } from '@/lib/arkade/arkade-operator-sync'
 import {
   runFullScanDashboardWalletSync,
   runIncrementalDashboardWalletSync,
 } from '@/lib/wallet/wallet-utils'
 import { BadLocalChainStateError } from '@/lib/shared/bad-local-chain-state-error'
 import { sanitizeErrorMessageForUi } from '@/lib/shared/sanitize-error-for-ui'
+import {
+  reportArkadeOperatorSyncError,
+  reportLightningSyncError,
+} from '@/lib/wallet/rail-sync-error-toast'
 import { errorMessage } from '@/lib/shared/utils'
 import { useWalletStore, type NetworkMode } from '@/stores/walletStore'
 
@@ -63,12 +66,16 @@ export function useArkadeManualSyncMutation() {
       if (activeWalletId == null || activeArkadeConnectionId == null) {
         throw new Error('Arkade session is not ready')
       }
-      await syncArkadeWithOperator({
+      await orchestrateArkadeSyncThenSave({
         walletId: activeWalletId,
         networkMode,
         connectionId: activeArkadeConnectionId,
+        syncKind: 'manual',
+        awaitCompletion: true,
+        throwOnError: true,
       })
     },
+    onError: reportArkadeOperatorSyncError,
   })
 }
 
@@ -90,9 +97,7 @@ export function useLightningManualSyncMutation() {
         syncWork: collectLightningDashboardSyncPatches,
       })
     },
-    onError: (err) => {
-      toast.error(sanitizeErrorMessageForUi(errorMessage(err)) || 'Lightning sync failed')
-    },
+    onError: reportLightningSyncError,
   })
 }
 

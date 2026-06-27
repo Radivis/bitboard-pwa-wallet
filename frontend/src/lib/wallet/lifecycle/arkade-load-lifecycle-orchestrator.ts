@@ -19,7 +19,7 @@ import {
 } from '@/lib/arkade/arkade-endpoints'
 import { arkadeSessionKey } from '@/lib/arkade/arkade-session-key'
 import { isArkadeActiveForNetworkMode } from '@/lib/arkade/arkade-utils'
-import { reportArkadeSessionOpenError } from '@/lib/arkade/arkade-session-open-error-toast'
+import { reportArkadeOperatorSyncError } from '@/lib/wallet/rail-sync-error-toast'
 import { useWalletStore } from '@/stores/walletStore'
 import type { NetworkMode } from '@/stores/walletStore'
 import {
@@ -282,7 +282,7 @@ export async function orchestrateArkadeLoad(params: ArkadeLoadParams): Promise<v
         walletId,
         networkMode,
         connectionId,
-        onSyncError: reportArkadeSessionOpenError,
+        onSyncError: reportArkadeOperatorSyncError,
       })
     } catch (error) {
       terminateArkadeWorker()
