@@ -22,10 +22,6 @@ vi.mock('@/lib/lightning/lightning-dashboard-sync', () => ({
     invalidateLightningDashboardQueries(...args),
 }))
 
-vi.mock('@/lib/wallet/lifecycle/onchain-rail-lifecycle-cross-tab-sync', () => ({
-  notifyOnchainRailLifecycleChangedFromThisTab: vi.fn(),
-}))
-
 const walletStoreState = {
   loadedDescriptorWallet: null as {
     networkMode: 'testnet'

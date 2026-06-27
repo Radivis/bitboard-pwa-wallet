@@ -15,6 +15,7 @@ import {
   getCoalescedInFlightPromise,
 } from '@/lib/wallet/lifecycle/lifecycle-in-flight-tracker'
 import { shouldSkipRailLifecycleResetForLockPhase } from '@/lib/wallet/lifecycle/rail-lifecycle-lock-phase'
+import { withWalletWriterLock } from '@/lib/shared/opfs-writer-lock'
 import type { SyncLifecyclePhase } from '@/lib/wallet/lifecycle/rail-lifecycle-types'
 import type {
   LightningPostLoadSyncParams,
@@ -243,39 +244,41 @@ export async function orchestrateLightningSyncThenSave(
   }
 
   return inFlightSyncTracker.begin(key, async () => {
-    assertCanStartLightningSync(params)
-    const scope = railScopeFromParams(params)
-    configureLightningSyncForLoadedRail(scope)
+    await withWalletWriterLock(async () => {
+      assertCanStartLightningSync(params)
+      const scope = railScopeFromParams(params)
+      configureLightningSyncForLoadedRail(scope)
 
-    const previousPhase = getLightningSyncLifecycleSnapshot().syncPhase
-    if (previousPhase !== 'syncing') {
-      applyAggregatePhase(scope)
-    }
+      const previousPhase = getLightningSyncLifecycleSnapshot().syncPhase
+      if (previousPhase !== 'syncing') {
+        applyAggregatePhase(scope)
+      }
 
-    try {
-      const patches = await params.syncWork()
-      applyAggregatePhase(scope)
-      if (patches.length > 0) {
-        try {
-          await orchestrateLightningSaveSnapshotPatches({
-            walletId: params.walletId,
-            networkMode: params.networkMode,
-            patches,
-            refreshDashboardQueriesAfterSave: true,
-          })
-        } catch (saveError) {
-          if (throwOnError) {
-            throw saveError
+      try {
+        const patches = await params.syncWork()
+        applyAggregatePhase(scope)
+        if (patches.length > 0) {
+          try {
+            await orchestrateLightningSaveSnapshotPatches({
+              walletId: params.walletId,
+              networkMode: params.networkMode,
+              patches,
+              refreshDashboardQueriesAfterSave: true,
+            })
+          } catch (saveError) {
+            if (throwOnError) {
+              throw saveError
+            }
           }
         }
+      } catch (error) {
+        applyAggregatePhase(scope)
+        params.onSyncError?.(error)
+        if (throwOnError) {
+          throw error
+        }
       }
-    } catch (error) {
-      applyAggregatePhase(scope)
-      params.onSyncError?.(error)
-      if (throwOnError) {
-        throw error
-      }
-    }
+    })
   })
 }
 

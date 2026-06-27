@@ -1,4 +1,4 @@
-import { runLabOp } from '@/lib/lab/lab-coordinator'
+import { runLabOp, runLabWriteOp } from '@/lib/lab/lab-coordinator'
 import {
   getLabWorker,
   initLabWorkerWithState,
@@ -59,7 +59,7 @@ export async function labOpMineBlocks(
     labNetwork?: string
   },
 ): Promise<LabMineBlocksResult> {
-  return runLabOp(async () => {
+  return runLabWriteOp(async () => {
     labPipelineDebugLog('mineBlocks:start', {
       count,
       targetLen: targetAddress.length,
@@ -225,7 +225,7 @@ export async function labOpCreateLabEntityTransaction(params: {
     throw new Error('labOpCreateLabEntityTransaction: receiver is required before finalize')
   }
 
-  return runLabOp(async () => {
+  return runLabWriteOp(async () => {
     labPipelineDebugLog('createLabEntityTransaction:finalize', {})
     await initLabWorkerWithState()
     const labWorker = getLabWorker()
@@ -256,7 +256,7 @@ export async function labOpCreateRandomLabEntityTransactions(
   state: LabState
   createdCount: number
 }> {
-  return runLabOp(async () => {
+  return runLabWriteOp(async () => {
     labPipelineDebugLog('createRandomLabEntityTransactions:start', { count })
     const requestedCount = Math.max(1, Math.trunc(count))
     if (requestedCount > LAB_MAX_RANDOM_ENTITY_TRANSACTIONS) {
@@ -360,7 +360,7 @@ export async function labOpAddSignedTransaction(
   if (mempoolMetadata.receiver == null) {
     throw new Error('labOpAddSignedTransaction: receiver is required')
   }
-  return runLabOp(async () => {
+  return runLabWriteOp(async () => {
     labPipelineDebugLog('addSignedTransaction:start', {})
     await initLabWorkerWithState()
     const labWorker = getLabWorker()
@@ -375,7 +375,7 @@ export async function labOpAddSignedTransaction(
 }
 
 export async function labOpReset(): Promise<LabState> {
-  return runLabOp(async () => {
+  return runLabWriteOp(async () => {
     labPipelineDebugLog('reset:start', {})
     await resetLabFactory()
     const state = await loadLabStateFromDatabase()
@@ -407,7 +407,7 @@ export async function labOpCreateLabEntity(options?: {
   labAddressType?: AddressType
   labNetwork?: string
 }): Promise<LabState> {
-  return runLabOp(async () => {
+  return runLabWriteOp(async () => {
     await initLabWorkerWithState()
     const labWorker = getLabWorker()
     const state = await labWorker.createLabEntity(options)
@@ -417,7 +417,7 @@ export async function labOpCreateLabEntity(options?: {
 }
 
 export async function labOpRenameLabEntity(labEntityId: number, newName: string): Promise<LabState> {
-  return runLabOp(async () => {
+  return runLabWriteOp(async () => {
     await initLabWorkerWithState()
     const labWorker = getLabWorker()
     const state = await labWorker.renameLabEntity(labEntityId, newName)
@@ -427,7 +427,7 @@ export async function labOpRenameLabEntity(labEntityId: number, newName: string)
 }
 
 export async function labOpDeleteLabEntity(labEntityId: number): Promise<LabState> {
-  return runLabOp(async () => {
+  return runLabWriteOp(async () => {
     await initLabWorkerWithState()
     const labWorker = getLabWorker()
     const state = await labWorker.deleteLabEntity(labEntityId)
@@ -437,7 +437,7 @@ export async function labOpDeleteLabEntity(labEntityId: number): Promise<LabStat
 }
 
 export async function labOpSetLabEntityDead(labEntityId: number, dead: boolean): Promise<LabState> {
-  return runLabOp(async () => {
+  return runLabWriteOp(async () => {
     await initLabWorkerWithState()
     const labWorker = getLabWorker()
     const state = await labWorker.setLabEntityDead(labEntityId, dead)
@@ -447,7 +447,7 @@ export async function labOpSetLabEntityDead(labEntityId: number, dead: boolean):
 }
 
 export async function labOpSetBlockWeightLimit(blockWeightLimit: number): Promise<LabState> {
-  return runLabOp(async () => {
+  return runLabWriteOp(async () => {
     labPipelineDebugLog('setBlockWeightLimit:start', { blockWeightLimit })
     await initLabWorkerWithState()
     const labWorker = getLabWorker()
@@ -459,7 +459,7 @@ export async function labOpSetBlockWeightLimit(blockWeightLimit: number): Promis
 }
 
 export async function labOpSetMinerSubsidySats(minerSubsidySats: number): Promise<LabState> {
-  return runLabOp(async () => {
+  return runLabWriteOp(async () => {
     labPipelineDebugLog('setMinerSubsidySats:start', { minerSubsidySats })
     await initLabWorkerWithState()
     const labWorker = getLabWorker()

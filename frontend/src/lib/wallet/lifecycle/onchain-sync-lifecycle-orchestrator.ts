@@ -16,6 +16,7 @@ import {
   getCoalescedInFlightPromise,
 } from '@/lib/wallet/lifecycle/lifecycle-in-flight-tracker'
 import { shouldSkipRailLifecycleResetForLockPhase } from '@/lib/wallet/lifecycle/rail-lifecycle-lock-phase'
+import { withWalletWriterLock } from '@/lib/shared/opfs-writer-lock'
 import type {
   OnchainPostUnlockSyncParams,
   OnchainSyncLifecycleSnapshot,
@@ -37,7 +38,6 @@ let snapshot: OnchainSyncLifecycleSnapshot = {
   descriptorScope: null,
 }
 
-let suppressCrossTabNotify = false
 const listeners = new Set<(next: OnchainSyncLifecycleSnapshot) => void>()
 const inFlightSyncTracker = createInFlightLifecycleTracker()
 
@@ -60,13 +60,6 @@ function notifyListeners(): void {
   const current = getOnchainSyncLifecycleSnapshot()
   for (const listener of listeners) {
     listener(current)
-  }
-  if (!suppressCrossTabNotify) {
-    void import('@/lib/wallet/lifecycle/onchain-rail-lifecycle-cross-tab-sync').then(
-      ({ notifyOnchainRailLifecycleChangedFromThisTab }) => {
-        notifyOnchainRailLifecycleChangedFromThisTab()
-      },
-    )
   }
 }
 
@@ -136,17 +129,6 @@ export function configureOnchainSyncForLoadedRail(scope: OnchainRailDescriptorSc
   configureOnchainSaveForLoadedRail(scope)
 }
 
-export function applyOnchainSyncLifecycleSnapshotFromRemote(
-  remoteSnapshot: OnchainSyncLifecycleSnapshot,
-): void {
-  suppressCrossTabNotify = true
-  try {
-    setSnapshot({ ...remoteSnapshot })
-  } finally {
-    suppressCrossTabNotify = false
-  }
-}
-
 export function syncOnchainSyncLifecycleWithLockPhase(lockPhase: LockLifecyclePhase): void {
   if (
     shouldSkipRailLifecycleResetForLockPhase(
@@ -178,37 +160,39 @@ export async function orchestrateOnchainSyncThenSave(
   }
 
   return inFlightSyncTracker.begin(key, async () => {
-    assertCanStartOnchainSync(params)
-    const scope = descriptorScopeFromParams(params)
-    configureOnchainSyncForLoadedRail(scope)
+    await withWalletWriterLock(async () => {
+      assertCanStartOnchainSync(params)
+      const scope = descriptorScopeFromParams(params)
+      configureOnchainSyncForLoadedRail(scope)
 
-    setSnapshot({ syncPhase: 'syncing', descriptorScope: scope })
+      setSnapshot({ syncPhase: 'syncing', descriptorScope: scope })
 
-    try {
-      await runEsploraSyncBody(params)
-      setSnapshot({ syncPhase: 'not-syncing', descriptorScope: scope })
       try {
-        await orchestrateOnchainSave(toSaveParams(params))
-      } catch (saveError) {
-        if (throwOnError) {
-          throw saveError
-        }
-      }
-    } catch (error) {
-      setSnapshot({ syncPhase: 'sync-error', descriptorScope: scope })
-      if (params.networkMode !== 'lab') {
+        await runEsploraSyncBody(params)
+        setSnapshot({ syncPhase: 'not-syncing', descriptorScope: scope })
         try {
-          await refreshWalletStoreFromLoadedBdk()
-          invalidateOnchainDashboardQueries()
-        } catch {
-          // Keep prior BDK-local store state when refresh fails.
+          await orchestrateOnchainSave(toSaveParams(params))
+        } catch (saveError) {
+          if (throwOnError) {
+            throw saveError
+          }
+        }
+      } catch (error) {
+        setSnapshot({ syncPhase: 'sync-error', descriptorScope: scope })
+        if (params.networkMode !== 'lab') {
+          try {
+            await refreshWalletStoreFromLoadedBdk()
+            invalidateOnchainDashboardQueries()
+          } catch {
+            // Keep prior BDK-local store state when refresh fails.
+          }
+        }
+        params.onSyncError?.(error)
+        if (throwOnError) {
+          throw error
         }
       }
-      params.onSyncError?.(error)
-      if (throwOnError) {
-        throw error
-      }
-    }
+    })
   })
 }
 

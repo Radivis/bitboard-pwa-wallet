@@ -2,6 +2,7 @@ import { sanitizeErrorMessageForUi } from '@/lib/shared/sanitize-error-for-ui'
 import { errorMessage } from '@/lib/shared/utils'
 import type { LockLifecyclePhase } from '@/lib/wallet/lifecycle/lock-lifecycle-types'
 import { shouldSkipRailLifecycleResetForLockPhase } from '@/lib/wallet/lifecycle/rail-lifecycle-lock-phase'
+import { withWalletWriterLock } from '@/lib/shared/opfs-writer-lock'
 import {
   createInFlightLifecycleTracker,
   getCoalescedInFlightPromise,
@@ -152,7 +153,7 @@ export function createSaveLifecycleOrchestrator<
     return inFlightSaveTracker.begin(key, async () => {
       setSnapshot(config.savingSnapshot(scope))
       try {
-        await config.runSaveBody(params)
+        await withWalletWriterLock(() => config.runSaveBody(params))
         setSnapshot(config.notSavingSnapshot(scope))
       } catch (saveError) {
         console.error(config.saveFailureLogLabel, saveError)

@@ -32,10 +32,6 @@ vi.mock('@/lib/wallet/onchain-dashboard-sync', () => ({
     invalidateOnchainDashboardQueries(...args),
 }))
 
-vi.mock('@/lib/wallet/lifecycle/onchain-rail-lifecycle-cross-tab-sync', () => ({
-  notifyOnchainRailLifecycleChangedFromThisTab: vi.fn(),
-}))
-
 const walletStoreState = {
   walletStatus: 'unlocked' as 'unlocked' | 'locked',
   setWalletStatus: vi.fn(),

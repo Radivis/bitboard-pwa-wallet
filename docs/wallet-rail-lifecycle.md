@@ -582,7 +582,7 @@ Each phase should follow TDD per `.cursor/rules/testing-strategy.mdc` and add ro
 
 1. **Lab load/save orchestration:** under **Onchain\*** namespacing; no separate `LabLoadLifecycle` / `LabSaveLifecycle` modules.
 2. **Save-error on lock:** **hard block** on `save-error` for on-chain, Arkade (L2/L3), and Lightning (L4).
-3. **Cross-tab:** full rail snapshot via `useOnchainRailLifecycleCrossTabSync`; apply only when local tab has same `walletId` + descriptor triple loaded (`descriptorScope` gate).
+3. **Cross-tab:** OPFS SQLite writers use Web Locks (`bitboard-wallet-writer`, `bitboard-lab-writer` in `opfs-writer-lock.ts`) so only one tab mutates a given OPFS database at a time. After commits, peers refresh via `wallet-cross-tab-sync` / `lab-cross-tab-sync` (TanStack Query invalidation only). Each tab owns its own WASM/worker hydration; lifecycle phase snapshots are **not** mirrored across tabs.
 4. **`walletStatus: 'syncing'`:** removed in L5; per-rail `syncPhase` and `useAnyRailSyncing()` / `walletIsUnlockedOrSyncing()` replace it.
 5. **React lifecycle hooks:** orchestrator-owned phase; `useSyncExternalStore` hooks in `frontend/src/hooks/`; stable snapshot getters for referential equality; TanStack Query for async work only (**Done** L5).
 6. **Lightning `sync-error` aggregation:** **any failure** among dashboard-matching connections (resolved L4).

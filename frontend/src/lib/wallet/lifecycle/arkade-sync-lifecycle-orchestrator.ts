@@ -17,6 +17,7 @@ import {
   getCoalescedInFlightPromise,
 } from '@/lib/wallet/lifecycle/lifecycle-in-flight-tracker'
 import { shouldSkipRailLifecycleResetForLockPhase } from '@/lib/wallet/lifecycle/rail-lifecycle-lock-phase'
+import { withWalletWriterLock } from '@/lib/shared/opfs-writer-lock'
 import type {
   ArkadePostLoadSyncParams,
   ArkadeSyncLifecycleSnapshot,
@@ -187,32 +188,34 @@ export async function orchestrateArkadeSyncThenSave(
   }
 
   return inFlightSyncTracker.begin(key, async () => {
-    assertCanStartArkadeSync(params)
-    const scope = railScopeFromParams(params)
-    configureArkadeSyncForLoadedRail(scope)
+    await withWalletWriterLock(async () => {
+      assertCanStartArkadeSync(params)
+      const scope = railScopeFromParams(params)
+      configureArkadeSyncForLoadedRail(scope)
 
-    setSnapshot({ syncPhase: 'syncing', railScope: scope })
+      setSnapshot({ syncPhase: 'syncing', railScope: scope })
 
-    try {
-      if (params.syncKind === 'signerMigration') {
-        await runArkadeSignerMigrationBody()
-      }
-      await runArkadeOperatorSyncBody(params.connectionId)
-      setSnapshot({ syncPhase: 'not-syncing', railScope: scope })
       try {
-        await orchestrateArkadeSave(toSaveParams(params))
-      } catch (saveError) {
+        if (params.syncKind === 'signerMigration') {
+          await runArkadeSignerMigrationBody()
+        }
+        await runArkadeOperatorSyncBody(params.connectionId)
+        setSnapshot({ syncPhase: 'not-syncing', railScope: scope })
+        try {
+          await orchestrateArkadeSave(toSaveParams(params))
+        } catch (saveError) {
+          if (throwOnError) {
+            throw saveError
+          }
+        }
+      } catch (error) {
+        setSnapshot({ syncPhase: 'sync-error', railScope: scope })
+        params.onSyncError?.(error)
         if (throwOnError) {
-          throw saveError
+          throw error
         }
       }
-    } catch (error) {
-      setSnapshot({ syncPhase: 'sync-error', railScope: scope })
-      params.onSyncError?.(error)
-      if (throwOnError) {
-        throw error
-      }
-    }
+    })
   })
 }
 

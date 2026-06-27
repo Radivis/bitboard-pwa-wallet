@@ -19,7 +19,6 @@ import { useSecureStorageAvailabilityStore } from '@/stores/secureStorageAvailab
 import { useAutoLockActivityBumps } from '@/hooks/useAutoLockActivityBumps'
 import { useLabCrossTabCacheSync } from '@/hooks/useLabCrossTabCacheSync'
 import { useWalletCrossTabCacheSync } from '@/hooks/useWalletCrossTabCacheSync'
-import { useOnchainRailLifecycleCrossTabSync } from '@/hooks/useOnchainRailLifecycleCrossTabSync'
 import {
   syncLockLifecycleFromWalletStore,
   syncLockLifecycleWithActiveWallet,
@@ -34,7 +33,6 @@ export function AppInitializer({ children }: AppInitializerProps) {
   useAutoLockActivityBumps()
   useLabCrossTabCacheSync()
   useWalletCrossTabCacheSync()
-  useOnchainRailLifecycleCrossTabSync()
   const navigate = useNavigate()
   const location = useLocation()
   const { data: wallets, isLoading, isFetching } = useWallets()

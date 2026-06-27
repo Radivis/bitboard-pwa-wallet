@@ -33,8 +33,6 @@ let snapshot: OnchainLoadLifecycleSnapshot = {
   networkMode: null,
 }
 
-let suppressCrossTabNotify = false
-
 const listeners = new Set<(next: OnchainLoadLifecycleSnapshot) => void>()
 
 const inFlightLoadTracker = createInFlightLifecycleTracker()
@@ -47,13 +45,6 @@ function notifyListeners(): void {
   const current = getOnchainLoadLifecycleSnapshot()
   for (const listener of listeners) {
     listener(current)
-  }
-  if (!suppressCrossTabNotify) {
-    void import('@/lib/wallet/lifecycle/onchain-rail-lifecycle-cross-tab-sync').then(
-      ({ notifyOnchainRailLifecycleChangedFromThisTab }) => {
-        notifyOnchainRailLifecycleChangedFromThisTab()
-      },
-    )
   }
 }
 
@@ -147,17 +138,6 @@ export function subscribeOnchainLoadLifecycle(
   listeners.add(listener)
   return () => {
     listeners.delete(listener)
-  }
-}
-
-export function applyOnchainLoadLifecycleSnapshotFromOtherTab(
-  remoteSnapshot: OnchainLoadLifecycleSnapshot,
-): void {
-  suppressCrossTabNotify = true
-  try {
-    setSnapshot({ ...remoteSnapshot })
-  } finally {
-    suppressCrossTabNotify = false
   }
 }
 

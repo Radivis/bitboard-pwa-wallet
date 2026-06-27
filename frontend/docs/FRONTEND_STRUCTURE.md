@@ -98,7 +98,9 @@ When adding code, use the domain folder directly—do not reintroduce flat root 
 
 ### `lib/shared/` policy
 
-`lib/shared/` holds modules with **no natural domain owner** that are consumed by **two or more** domain areas (e.g. app shell wiring, encryption primitives, generic error helpers, cross-tab sync).
+`lib/shared/` holds modules with **no natural domain owner** that are consumed by **two or more** domain areas (e.g. app shell wiring, encryption primitives, generic error helpers, cross-tab query invalidation, OPFS writer locks).
+
+**OPFS multi-tab writes:** [`lib/shared/opfs-writer-lock.ts`](../src/lib/shared/opfs-writer-lock.ts) exposes `withWalletWriterLock` and `withLabWriterLock` (Web Locks `bitboard-wallet-writer` / `bitboard-lab-writer`). Wallet secrets persistence, lifecycle save/sync orchestrators, and lab `persistLabState` / `runLabWriteOp` acquire these locks before mutating OPFS SQLite. Peers still invalidate TanStack Query caches via `wallet-cross-tab-sync` and `lab-cross-tab-sync` after commits; reads during another tab's write are acceptable under WAL.
 
 **Placement rule:** put new logic in the most specific `lib/<domain>/` folder first. Promote to `lib/shared/` only when a second unrelated consumer appears—or when the module is clearly app-wide infrastructure from the start (router, query client, session metadata).
 

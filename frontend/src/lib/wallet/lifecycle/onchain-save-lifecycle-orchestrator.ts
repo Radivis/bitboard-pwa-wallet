@@ -20,8 +20,6 @@ export const OnchainSaveBlockingLockError = createSaveBlockingLockErrorClass(
   'On-chain save-error blocks lock until retry or forced lock',
 )
 
-let suppressCrossTabNotify = false
-
 function descriptorScopeFromParams(params: OnchainSaveParams): OnchainRailDescriptorScope {
   return {
     walletId: params.walletId,
@@ -102,16 +100,6 @@ const onchainSaveLifecycle = createSaveLifecycleOrchestrator<
   }),
   scopeFromSnapshot: (saveSnapshot) => saveSnapshot.descriptorScope,
   skipConfigureForLoadedRail: (descriptorScope) => descriptorScope.networkMode === 'lab',
-  onNotifyListeners: () => {
-    if (suppressCrossTabNotify) {
-      return
-    }
-    void import('@/lib/wallet/lifecycle/onchain-rail-lifecycle-cross-tab-sync').then(
-      ({ notifyOnchainRailLifecycleChangedFromThisTab }) => {
-        notifyOnchainRailLifecycleChangedFromThisTab()
-      },
-    )
-  },
   saveFailureLogLabel: 'Onchain save failed',
   retrySaveErrorMessage: 'No on-chain save to retry',
 })
@@ -129,14 +117,3 @@ export const orchestrateOnchainSave = onchainSaveLifecycle.orchestrateSave
 export const orchestrateOnchainRetrySave = onchainSaveLifecycle.orchestrateRetrySave
 export const resetOnchainSaveLifecycleStateForTests =
   onchainSaveLifecycle.resetSaveLifecycleStateForTests
-
-export function applyOnchainSaveLifecycleSnapshotFromRemote(
-  remoteSnapshot: OnchainSaveLifecycleSnapshot,
-): void {
-  suppressCrossTabNotify = true
-  try {
-    onchainSaveLifecycle.applySaveLifecycleSnapshot({ ...remoteSnapshot })
-  } finally {
-    suppressCrossTabNotify = false
-  }
-}

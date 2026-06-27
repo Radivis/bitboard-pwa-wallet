@@ -167,12 +167,6 @@ export function subscribeArkadeLoadLifecycle(
   }
 }
 
-export function applyArkadeLoadLifecycleSnapshotFromOtherTab(
-  remoteSnapshot: ArkadeLoadLifecycleSnapshot,
-): void {
-  setSnapshot({ ...remoteSnapshot })
-}
-
 export async function awaitArkadeLoadQuiescence(): Promise<void> {
   await inFlightLoadTracker.awaitQuiescence({ swallowError: true })
 }

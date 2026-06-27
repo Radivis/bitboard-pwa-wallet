@@ -70,10 +70,6 @@ vi.mock('@/stores/walletStore', async (importOriginal) => {
   }
 })
 
-vi.mock('@/lib/wallet/lifecycle/onchain-rail-lifecycle-cross-tab-sync', () => ({
-  notifyOnchainRailLifecycleChangedFromThisTab: vi.fn(),
-}))
-
 vi.mock('@/lib/wallet/lifecycle/onchain-sync-lifecycle-orchestrator', () => ({
   configureOnchainSyncForLoadedRail: vi.fn(),
   getOnchainSyncLifecycleSnapshot: () => ({
@@ -91,7 +87,6 @@ vi.mock('@/lib/wallet/lifecycle/onchain-save-lifecycle-orchestrator', () => ({
 }))
 
 import {
-  applyOnchainLoadLifecycleSnapshotFromOtherTab,
   getOnchainLoadLifecycleSnapshot,
   markOnchainRailLoadedAfterExternalHydration,
   orchestrateOnchainLoad,
@@ -219,20 +214,6 @@ describe('onchain-load-lifecycle-orchestrator', () => {
     })
     expect(refreshWalletStoreFromLoadedBdk).not.toHaveBeenCalled()
     expect(setLastSyncTime).not.toHaveBeenCalled()
-  })
-
-  it('cross-tab apply updates snapshot without calling load', () => {
-    applyOnchainLoadLifecycleSnapshotFromOtherTab({
-      loadPhase: 'loaded',
-      networkMode: 'mainnet',
-    })
-
-    expect(getOnchainLoadLifecycleSnapshot()).toEqual({
-      loadPhase: 'loaded',
-      networkMode: 'mainnet',
-    })
-    expect(waitForCryptoWorkerHealthy).not.toHaveBeenCalled()
-    expect(resolveDescriptorWallet).not.toHaveBeenCalled()
   })
 
   it('markOnchainRailLoadedAfterExternalHydration marks loaded and configures sync', () => {

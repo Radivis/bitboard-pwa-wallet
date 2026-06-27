@@ -21,6 +21,10 @@ import {
   getLabDatabase,
 } from '@/db'
 import { notifyLabStatePersistedAfterCommit } from '@/lib/lab/lab-cross-tab-sync'
+import {
+  isLabWriterLockHeld,
+  withLabWriterLock,
+} from '@/lib/shared/opfs-writer-lock'
 import type { LabDatabase } from '@/db/lab-schema'
 import { SQLITE_FALSE, SQLITE_TRUE } from '@/db/schema'
 import { labOwnerFromDbPair, labOwnerFromTxRow, labOwnerToDbPair } from '@/lib/lab/lab-db-owner'
@@ -498,11 +502,20 @@ async function clearAndInsertLabState(
 }
 
 export async function persistLabState(state: LabState): Promise<void> {
-  await ensureLabMigrated()
-  const labDb = getLabDatabase()
-  await labDb.transaction().execute(async (labDbTransaction) => {
-    await clearAndInsertLabState(labDbTransaction, state)
-  })
+  const persistTransaction = async () => {
+    await ensureLabMigrated()
+    const labDb = getLabDatabase()
+    await labDb.transaction().execute(async (labDbTransaction) => {
+      await clearAndInsertLabState(labDbTransaction, state)
+    })
+  }
+
+  if (isLabWriterLockHeld()) {
+    await persistTransaction()
+  } else {
+    await withLabWriterLock(persistTransaction)
+  }
+
   notifyLabStatePersistedAfterCommit()
 }
 

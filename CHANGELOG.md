@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Sync can now be triggered for each rail (onchain / Lightning / Arkade) separately with the respective last sync time displayed close to the sync button
 - **Periodic sync** feature (Settings → Features): opt-in background polling per rail with configurable intervals on Settings → Main (default 300s, 30s–24h range)
+- Write locks for wallet and lab databases now prevent concurrent writes in different browser tabs
 
 ### Changed
 - Bumped Arkade Rust SDK from 0.9.2 to 0.9.3
