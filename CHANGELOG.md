@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+
+### Changed
+
+### Fixed
+
+### Security
+
+## [0.3.2] - 2026-06-28
+
+### Added
 - Sync can now be triggered for each rail (onchain / Lightning / Arkade) separately with the respective last sync time displayed close to the sync button
 - **Periodic sync** feature (Settings → Features): opt-in background polling per rail with configurable intervals on Settings → Main (default 300s, 30s–24h range)
 

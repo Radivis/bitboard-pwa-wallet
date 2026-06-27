@@ -502,7 +502,7 @@ checksum = "5e764a1d40d510daf35e07be9eb06e75770908c27d411ee6c92109c9840eaaf7"
 
 [[package]]
 name = "bitboard-ark"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "ark-bdk-wallet",
  "ark-client",
@@ -530,7 +530,7 @@ dependencies = [
 
 [[package]]
 name = "bitboard-crypto"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "assert_matches",
  "async-trait",
@@ -557,7 +557,7 @@ dependencies = [
 
 [[package]]
 name = "bitboard-encryption"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "argon2",
  "base64 0.22.1",
@@ -573,7 +573,7 @@ dependencies = [
 
 [[package]]
 name = "bitboard-lightning"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "bitcoin",
  "console_error_panic_hook",
@@ -587,7 +587,7 @@ dependencies = [
 
 [[package]]
 name = "bitboard-wasm-sleep"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "js-sys",
  "wasm-bindgen",
