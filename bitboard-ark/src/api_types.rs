@@ -2,9 +2,19 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct OperatorSignerMigrationHintDto {
+    pub previous_signer_pk_hex: String,
+    pub deprecated_status: String,
+    pub cutoff_unix: i64,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct OpenSessionResult {
     pub arkade_address: String,
     pub operator_signer_pk_hex: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub signer_migration_hint: Option<OperatorSignerMigrationHintDto>,
 }
 
 #[derive(Debug, Serialize)]
@@ -25,6 +35,8 @@ pub struct BalanceDto {
     pub unilateral_exit_in_progress_sats: u64,
     /// VTXOs submitted for collaborative exit but still spendable in the last snapshot.
     pub collaborative_exit_in_progress_sats: u64,
+    /// Funds locked under a deprecated operator signer past cooperative migration cutoff.
+    pub pending_recovery_sats: u64,
 }
 
 #[derive(Debug, Serialize)]

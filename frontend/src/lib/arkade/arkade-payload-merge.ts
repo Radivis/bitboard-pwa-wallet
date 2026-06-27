@@ -1,9 +1,15 @@
 import { ARKADE_SDK_PERSISTENCE_JSON_MAX_BYTES } from '@/lib/arkade/arkade-sdk-persistence-types'
 import type { ArkadeSupportedNetworkMode } from '@/lib/arkade/arkade-endpoints'
 import type {
+  ArkadeSignerMigrationHint,
+  ArkadeSignerMigrationDeprecatedStatus,
+} from '@/workers/arkade-api'
+import type {
   StoredArkadeOperatorConnection,
   WalletSecretsPayload,
 } from '@/lib/wallet/wallet-domain-types'
+
+export type { ArkadeSignerMigrationHint, ArkadeSignerMigrationDeprecatedStatus }
 
 /** Connection metadata safe to expose on the main thread (no SDK blob). */
 export type ArkadeOperatorConnectionSummary = Omit<
@@ -44,6 +50,23 @@ export function assertOperatorSignerMatches(
       'Arkade persistence belongs to a different operator (signer public key mismatch)',
     )
   }
+}
+
+export function assertOperatorSignerMatchesOrMigration(
+  connection: StoredArkadeOperatorConnection,
+  operatorSignerPkHex: string,
+  signerMigrationHint?: ArkadeSignerMigrationHint | null,
+): void {
+  if (connection.operatorSignerPkHex === operatorSignerPkHex) {
+    return
+  }
+  if (
+    signerMigrationHint != null &&
+    connection.operatorSignerPkHex === signerMigrationHint.previousSignerPkHex
+  ) {
+    return
+  }
+  assertOperatorSignerMatches(connection, operatorSignerPkHex)
 }
 
 export function readOffchainNextDerivationIndex(sdkPersistenceJson: string | undefined): number {
@@ -143,15 +166,21 @@ export function ensureArkadeOperatorConnectionInPayload(
     delegatorUrl: string
     sdkPersistenceJson?: string
     connectionId?: string
+    signerMigrationHint?: ArkadeSignerMigrationHint | null
   },
 ): { payload: WalletSecretsPayload; connection: StoredArkadeOperatorConnection } {
   const existingActive = findActiveArkadeOperatorConnection(payload, params.networkMode)
   if (existingActive != null) {
-    assertOperatorSignerMatches(existingActive, params.operatorSignerPkHex)
+    assertOperatorSignerMatchesOrMigration(
+      existingActive,
+      params.operatorSignerPkHex,
+      params.signerMigrationHint,
+    )
     const connection: StoredArkadeOperatorConnection = {
       ...existingActive,
       operatorUrl: params.operatorUrl,
       delegatorUrl: params.delegatorUrl || undefined,
+      operatorSignerPkHex: params.operatorSignerPkHex,
       sdkPersistenceJson: existingActive.sdkPersistenceJson ?? params.sdkPersistenceJson,
       lastSessionOpenedAt: new Date().toISOString(),
     }
@@ -161,14 +190,22 @@ export function ensureArkadeOperatorConnectionInPayload(
     }
   }
 
-  const matchingConnection = payload.arkadeOperatorConnections.find(
-    (row) =>
-      row.networkMode === params.networkMode &&
-      row.operatorSignerPkHex === params.operatorSignerPkHex,
-  )
+  const matchingConnection = payload.arkadeOperatorConnections.find((row) => {
+    if (row.networkMode !== params.networkMode) {
+      return false
+    }
+    if (row.operatorSignerPkHex === params.operatorSignerPkHex) {
+      return true
+    }
+    return (
+      params.signerMigrationHint != null &&
+      row.operatorSignerPkHex === params.signerMigrationHint.previousSignerPkHex
+    )
+  })
   if (matchingConnection != null) {
     const connection: StoredArkadeOperatorConnection = {
       ...matchingConnection,
+      operatorSignerPkHex: params.operatorSignerPkHex,
       sdkPersistenceJson: matchingConnection.sdkPersistenceJson ?? params.sdkPersistenceJson,
       lastSessionOpenedAt: new Date().toISOString(),
     }

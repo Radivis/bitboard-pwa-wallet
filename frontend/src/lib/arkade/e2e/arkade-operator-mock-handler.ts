@@ -33,7 +33,10 @@ const CORS_ALLOW_HEADERS = [
 
 let cachedServerInfoJson: string | null = null
 
-function loadServerInfoJson(): string {
+function loadServerInfoJson(mockState?: E2eArkadeOperatorMockState): string {
+  if (mockState?.serverInfoJson != null) {
+    return mockState.serverInfoJson
+  }
   if (cachedServerInfoJson == null) {
     cachedServerInfoJson = readFileSync(serverInfoFixturePath, 'utf8')
   }
@@ -119,6 +122,31 @@ function applyE2eArkadeMockControlAction(
     }
     case 'reset': {
       resetE2eArkadeOperatorMockState(partitionId)
+      return null
+    }
+    case 'rotateSigner': {
+      if (typeof payload.newSignerPubkey !== 'string' || payload.newSignerPubkey.trim() === '') {
+        return 'rotateSigner requires newSignerPubkey string'
+      }
+      const currentInfo = JSON.parse(loadServerInfoJson(mockState)) as {
+        signerPubkey?: string
+        deprecatedSigners?: Array<{ pubkey: string; cutoffDate: string }>
+      }
+      const previousSigner = currentInfo.signerPubkey
+      if (previousSigner == null || previousSigner === '') {
+        return 'rotateSigner requires current signerPubkey in server info fixture'
+      }
+      const cutoffDate =
+        typeof payload.cutoffDate === 'string' || typeof payload.cutoffDate === 'number'
+          ? String(payload.cutoffDate)
+          : '0'
+      const deprecatedSigners = Array.isArray(currentInfo.deprecatedSigners)
+        ? [...currentInfo.deprecatedSigners]
+        : []
+      deprecatedSigners.push({ pubkey: previousSigner, cutoffDate })
+      currentInfo.signerPubkey = payload.newSignerPubkey
+      currentInfo.deprecatedSigners = deprecatedSigners
+      mockState.serverInfoJson = JSON.stringify(currentInfo)
       return null
     }
     default:
@@ -344,7 +372,7 @@ export function handleE2eArkadeOperatorMockRequest(
     res.statusCode = 200
     res.setHeader('Content-Type', 'application/json')
     res.setHeader('Access-Control-Allow-Origin', '*')
-    res.end(loadServerInfoJson())
+    res.end(loadServerInfoJson(mockState))
     return true
   }
 

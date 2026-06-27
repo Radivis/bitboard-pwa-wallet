@@ -36,6 +36,8 @@ export function ArkadeBalanceBreakdown({
   const unilateralExitSats = arkadeUnilateralExitInProgressSats(balance)
   const collaborativeExitSats = arkadeCollaborativeExitInProgressSats(balance)
   const showExitBreakdown = arkadeHasExitInProgress(balance)
+  const pendingRecoverySats = balance.pendingRecoverySats ?? 0
+  const showPendingRecovery = pendingRecoverySats > 0
   const showRecoverableTotal =
     balance.totalSats > dashboardSpendableSats + boardingPendingSats
 
@@ -125,6 +127,12 @@ export function ArkadeBalanceBreakdown({
             </InfomodeWrapper>
           )}
         </div>
+      )}
+      {showPendingRecovery && (
+        <p className="text-xs text-muted-foreground" data-testid="arkade-balance-pending-recovery">
+          Pending recovery (deprecated signer):{' '}
+          <BitcoinAmountDisplay amountSats={pendingRecoverySats} size="sm" />
+        </p>
       )}
       {showRecoverableTotal && (
         <InfomodeWrapper

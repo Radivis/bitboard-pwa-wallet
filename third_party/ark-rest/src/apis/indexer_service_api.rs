@@ -731,23 +731,43 @@ pub async fn indexer_service_get_vtxos(
     let uri_str = format!("{}/v1/indexer/vtxos", configuration.base_path);
     let mut req_builder = configuration.client.request(reqwest::Method::GET, &uri_str);
 
-    // Mutinynet / arkade.computer indexers expect repeated query keys (`scripts=a&scripts=b`),
-    // not comma-joined CSV (`scripts=a,b`). CSV returns 400 for two or more values.
     if let Some(ref param_value) = p_scripts {
-        req_builder = req_builder.query(
-            &param_value
-                .iter()
-                .map(|script_hex| ("scripts", script_hex.as_str()))
-                .collect::<Vec<_>>(),
-        );
+        req_builder = match "csv" {
+            "multi" => req_builder.query(
+                &param_value
+                    .into_iter()
+                    .map(|p| ("scripts".to_owned(), p.to_string()))
+                    .collect::<Vec<(std::string::String, std::string::String)>>(),
+            ),
+            _ => req_builder.query(&[(
+                "scripts",
+                &param_value
+                    .into_iter()
+                    .map(|p| p.to_string())
+                    .collect::<Vec<String>>()
+                    .join(",")
+                    .to_string(),
+            )]),
+        };
     }
     if let Some(ref param_value) = p_outpoints {
-        req_builder = req_builder.query(
-            &param_value
-                .iter()
-                .map(|outpoint| ("outpoints", outpoint.as_str()))
-                .collect::<Vec<_>>(),
-        );
+        req_builder = match "csv" {
+            "multi" => req_builder.query(
+                &param_value
+                    .into_iter()
+                    .map(|p| ("outpoints".to_owned(), p.to_string()))
+                    .collect::<Vec<(std::string::String, std::string::String)>>(),
+            ),
+            _ => req_builder.query(&[(
+                "outpoints",
+                &param_value
+                    .into_iter()
+                    .map(|p| p.to_string())
+                    .collect::<Vec<String>>()
+                    .join(",")
+                    .to_string(),
+            )]),
+        };
     }
     if let Some(ref param_value) = p_spendable_only {
         req_builder = req_builder.query(&[("spendableOnly", &param_value.to_string())]);

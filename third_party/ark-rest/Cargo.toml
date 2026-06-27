@@ -13,7 +13,7 @@
 edition = "2021"
 rust-version = "1.86"
 name = "ark-rest"
-version = "0.9.2"
+version = "0.9.3"
 build = false
 autolib = false
 autobins = false
@@ -41,7 +41,7 @@ name = "wasm"
 path = "tests/wasm.rs"
 
 [dependencies.ark-core]
-version = "0.9.2"
+version = "0.9.3"
 
 [dependencies.base64]
 version = "0.22.1"

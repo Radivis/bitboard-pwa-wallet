@@ -11,6 +11,7 @@ import {
   ARKADE_RENEW_VTXOS_INFOMODE,
 } from '@/lib/arkade/arkade-infomode'
 import { ArkadeBalanceBreakdown } from '@/components/wallet/ArkadeBalanceBreakdown'
+import { ArkadeSignerMigrationBanner } from '@/components/wallet/ArkadeSignerMigrationBanner'
 import {
   useArkadeAddressQuery,
   useArkadeBalanceQuery,
@@ -65,6 +66,7 @@ export function ArkadePanel() {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
+        <ArkadeSignerMigrationBanner />
         <p className="text-sm text-muted-foreground">
           Instant payments on Arkade use separate addresses from your on-chain{' '}
           <code className="text-xs">bc1</code> receive address.

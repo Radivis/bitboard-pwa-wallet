@@ -42,9 +42,9 @@ where
     secp: Secp256k1<All>,
     inner: Arc<RwLock<BdkWallet>>,
     #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
-    client: bdk_esplora::esplora_client::AsyncClient,
+    client: esplora_client::AsyncClient,
     #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
-    client: bdk_esplora::esplora_client::AsyncClient<WebSleeper>,
+    client: esplora_client::AsyncClient<WebSleeper>,
     db: DB,
 }
 
@@ -84,12 +84,11 @@ where
             .create_wallet_no_persist()?;
 
         #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
-        let client =
-            bdk_esplora::esplora_client::Builder::new(esplora_url).build_async_with_sleeper()?;
+        let client = esplora_client::Builder::new(esplora_url).build_async_with_sleeper()?;
 
         #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
-        let client = bdk_esplora::esplora_client::Builder::new(esplora_url)
-            .build_async_with_sleeper::<WebSleeper>()?;
+        let client =
+            esplora_client::Builder::new(esplora_url).build_async_with_sleeper::<WebSleeper>()?;
 
         Ok(Self {
             kp,
@@ -300,7 +299,7 @@ where
 struct WebSleeper;
 
 #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
-impl bdk_esplora::esplora_client::Sleeper for WebSleeper {
+impl esplora_client::Sleeper for WebSleeper {
     type Sleep = utils::SendWrapper<gloo_timers::future::TimeoutFuture>;
 
     fn sleep(dur: std::time::Duration) -> Self::Sleep {

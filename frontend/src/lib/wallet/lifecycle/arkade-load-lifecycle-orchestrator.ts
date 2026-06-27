@@ -190,7 +190,14 @@ async function runArkadeSessionOpenBody(params: {
     operatorUrl: endpoints.arkServerUrl,
     delegatorUrl: endpoints.delegatorUrl,
     persistInitialSdkFromWasm: !hadPersistedConnection,
+    signerMigrationHint: openResult.signerMigrationHint,
   })
+
+  if (openResult.signerMigrationHint != null) {
+    useWalletStore.getState().setArkadeSignerMigrationHint(openResult.signerMigrationHint)
+  } else {
+    useWalletStore.getState().setArkadeSignerMigrationHint(null)
+  }
 
   await worker.reconcileActiveConnectionId(connection.id)
   useWalletStore.getState().setLastOperatorSyncTime(null)

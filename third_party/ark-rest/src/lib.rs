@@ -13,7 +13,6 @@ pub mod models;
 mod client;
 mod conversions;
 mod error;
-mod sse;
 
 pub use client::Client;
 pub use client::ListVtxosResponse;

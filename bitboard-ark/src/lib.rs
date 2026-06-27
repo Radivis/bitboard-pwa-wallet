@@ -99,7 +99,7 @@ pub async fn ark_open_session(params: JsValue) -> Result<JsValue, JsValue> {
         let network_mode = NetworkMode::parse(&params.network_mode)
             .ok_or_else(|| ArkWasmError::UnsupportedNetworkMode(params.network_mode.clone()))?;
 
-        let session = ArkSession::open(
+        let (session, migration_hint) = ArkSession::open(
             &params.mnemonic,
             network_mode,
             params.ark_server_url,
@@ -111,6 +111,12 @@ pub async fn ark_open_session(params: JsValue) -> Result<JsValue, JsValue> {
 
         let arkade_address = session.peek_offchain_address()?;
         let operator_signer_pk_hex = session.operator_signer_pk_hex();
+        let signer_migration_hint =
+            migration_hint.map(|hint| crate::api_types::OperatorSignerMigrationHintDto {
+                previous_signer_pk_hex: hint.previous_signer_pk_hex,
+                deprecated_status: hint.deprecated_status,
+                cutoff_unix: hint.cutoff_unix,
+            });
         ACTIVE_SESSION.with(|session_cell| -> ArkResult<()> {
             let mut session_borrow_mut = session_cell
                 .try_borrow_mut()
@@ -122,6 +128,7 @@ pub async fn ark_open_session(params: JsValue) -> Result<JsValue, JsValue> {
         to_js_value(crate::api_types::OpenSessionResult {
             arkade_address,
             operator_signer_pk_hex,
+            signer_migration_hint,
         })
     })
     .await
@@ -136,6 +143,15 @@ pub fn ark_operator_signer_pk_hex() -> Result<String, JsValue> {
 pub async fn ark_sync_with_operator() -> Result<(), JsValue> {
     map_js_async(async {
         with_session_async(|session| async move { session.sync_with_operator().await }).await
+    })
+    .await
+}
+
+#[wasm_bindgen]
+pub async fn ark_migrate_deprecated_signer_vtxos() -> Result<(), JsValue> {
+    map_js_async(async {
+        with_session_async(|session| async move { session.migrate_deprecated_signer_vtxos().await })
+            .await
     })
     .await
 }

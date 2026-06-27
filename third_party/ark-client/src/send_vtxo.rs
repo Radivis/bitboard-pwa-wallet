@@ -18,6 +18,7 @@ use ark_core::send::sign_checkpoint_transaction;
 use ark_core::send::OffchainTransactions;
 use ark_core::send::SendReceiver;
 use ark_core::send::VtxoInput;
+use ark_core::server;
 use ark_core::server::PendingTx;
 use bitcoin::key::Secp256k1;
 use bitcoin::psbt;
@@ -111,6 +112,33 @@ where
 
     // Pending transactions
 
+    /// Finalize a specific pending offchain transaction.
+    ///
+    /// Fetches the pending transaction identified by `ark_txid` from the server, signs the
+    /// checkpoint transactions, and finalizes it.
+    ///
+    /// This is useful when you need fine-grained control over which pending transaction to
+    /// finalize (e.g. when a database tracks individual pending funding attempts).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if no pending transaction with the given `ark_txid` is found, or if
+    /// signing / finalization fails.
+    pub async fn finalize_pending_offchain_tx(&self, ark_txid: Txid) -> Result<(), Error> {
+        let pending_txs = self.fetch_pending_offchain_txs().await?;
+
+        let pending_tx = pending_txs
+            .into_iter()
+            .find(|tx| tx.ark_txid == ark_txid)
+            .ok_or_else(|| {
+                Error::ad_hoc(format!(
+                    "no pending transaction found for ark txid {ark_txid}"
+                ))
+            })?;
+
+        self.sign_and_finalize_pending_tx(pending_tx).await
+    }
+
     /// Resume and finalize any pending (submitted but not finalized) offchain transactions.
     ///
     /// This handles the case where `send_vtxo` successfully submitted the transaction to the
@@ -152,8 +180,6 @@ where
         self.fetch_pending_offchain_txs().await
     }
 
-    // Test-only function
-
     /// Build, sign and submit an offchain transaction to the server without finalizing.
     ///
     /// This is primarily useful for testing pending transaction recovery flows.
@@ -161,19 +187,21 @@ where
     /// Returns the Ark TXID. The transaction will remain in a pending state on the server until
     /// [`Self::finalize_pending_offchain_tx`] or [`Self::continue_pending_offchain_txs`] completes
     /// it.
-    #[cfg(feature = "test-utils")]
     pub async fn submit_offchain_tx(
         &self,
         vtxo_inputs: Vec<VtxoInput>,
         address: ark_core::ArkAddress,
         amount: Amount,
     ) -> Result<Txid, Error> {
+        let server_info = self.server_info()?;
         let receivers = vec![SendReceiver {
             address,
             amount,
             assets: Vec::new(),
         }];
-        let pending_tx = self.build_and_submit(vtxo_inputs, receivers).await?;
+        let pending_tx = self
+            .build_and_submit(vtxo_inputs, receivers, &server_info)
+            .await?;
         Ok(pending_tx.ark_txid)
     }
 
@@ -214,8 +242,14 @@ where
             .await
             .context("failed to get spendable VTXOs")?;
 
+        let now = crate::utils::unix_now()?;
+        let server_info = self.server_info()?;
         let spendable = vtxo_list
-            .spendable_offchain()
+            .spendable_offchain_at(&server_info, now, |script| {
+                script_pubkey_to_vtxo_map
+                    .get(script)
+                    .map(|vtxo| vtxo.server_pk())
+            })
             .map(|vtxo| VirtualTxOutPoint {
                 outpoint: vtxo.outpoint,
                 script_pubkey: vtxo.script.clone(),
@@ -282,7 +316,7 @@ where
         }
 
         if !asset_changes.is_empty() {
-            btc_needed += self.server_info.dust;
+            btc_needed += server_info.dust;
         }
 
         let btc_shortfall = btc_needed.checked_sub(btc_provided).unwrap_or(Amount::ZERO);
@@ -294,7 +328,7 @@ where
                 .cloned()
                 .collect();
 
-            let btc_coins = select_vtxos(available, btc_shortfall, self.server_info.dust, true)
+            let btc_coins = select_vtxos(available, btc_shortfall, server_info.dust, true)
                 .map_err(Error::from)
                 .context("failed to select BTC coins for asset transfer")?;
 
@@ -325,8 +359,14 @@ where
             .await
             .context("failed to get VTXO list")?;
 
+        let now = crate::utils::unix_now()?;
+        let server_info = self.server_info()?;
         let selected: Vec<_> = vtxo_list
-            .spendable_offchain()
+            .spendable_offchain_at(&server_info, now, |script| {
+                script_pubkey_to_vtxo_map
+                    .get(script)
+                    .map(|vtxo| vtxo.server_pk())
+            })
             .filter(|vtxo| requested_outpoints.contains(&vtxo.outpoint))
             .map(|vtxo| VirtualTxOutPoint {
                 outpoint: vtxo.outpoint,
@@ -477,13 +517,12 @@ where
         vtxo_inputs: Vec<VtxoInput>,
         receivers: Vec<SendReceiver>,
     ) -> Result<Txid, Error> {
-        Self::validate_selected_inputs_cover_receivers(
-            &vtxo_inputs,
-            &receivers,
-            self.server_info.dust,
-        )?;
+        let server_info = self.server_info()?;
+        Self::validate_selected_inputs_cover_receivers(&vtxo_inputs, &receivers, server_info.dust)?;
 
-        let pending_tx = self.build_and_submit(vtxo_inputs, receivers).await?;
+        let pending_tx = self
+            .build_and_submit(vtxo_inputs, receivers, &server_info)
+            .await?;
         let ark_txid = pending_tx.ark_txid;
 
         self.sign_and_finalize_pending_tx(pending_tx).await?;
@@ -533,13 +572,14 @@ where
         &self,
         inputs: Vec<VtxoInput>,
         receivers: Vec<SendReceiver>,
+        server_info: &server::Info,
     ) -> Result<PendingTx, Error> {
         let (change_address, change_address_vtxo) = self.get_offchain_address()?;
 
         let OffchainTransactions {
             ark_tx,
             checkpoint_txs,
-        } = build_asset_send_transactions(&receivers, &change_address, &inputs, &self.server_info)
+        } = build_asset_send_transactions(&receivers, &change_address, &inputs, server_info)
             .map_err(Error::from)
             .context("failed to build offchain asset-send transactions")?;
 
@@ -607,7 +647,7 @@ where
     /// After submit succeeds but before finalize completes, a transient error would leave the
     /// transaction in a pending state. Retrying here attempts to resolve that, without needing full
     /// recovery via [`Self::continue_pending_offchain_txs`].
-    pub(crate) async fn finalize_offchain_tx(
+    pub async fn finalize_offchain_tx(
         &self,
         ark_txid: Txid,
         signed_checkpoint_txs: Vec<bitcoin::Psbt>,
@@ -665,7 +705,7 @@ where
         // finalized. This is much cheaper than fetching all VTXOs when there
         // are no pending transactions (common case).
         let addresses = ark_addresses.iter().map(|(a, _)| *a);
-        let request = ark_core::server::GetVtxosRequest::new_for_addresses(addresses)
+        let request = server::GetVtxosRequest::new_for_addresses(addresses)
             .pending_only()
             .map_err(Error::from)?;
 

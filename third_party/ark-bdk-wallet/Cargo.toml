@@ -13,7 +13,7 @@
 edition = "2021"
 rust-version = "1.86"
 name = "ark-bdk-wallet"
-version = "0.9.2"
+version = "0.9.3"
 build = false
 autolib = false
 autobins = false
@@ -40,11 +40,11 @@ path = "src/lib.rs"
 version = "1"
 
 [dependencies.ark-client]
-version = "0.9.2"
+version = "0.9.3"
 default-features = false
 
 [dependencies.ark-core]
-version = "0.9.2"
+version = "0.9.3"
 
 [dependencies.async-stream]
 version = "0.3"
@@ -70,6 +70,10 @@ features = [
 ]
 default-features = false
 
+[target.'cfg(all(target_arch = "wasm32", target_os = "unknown"))'.dependencies.esplora-client]
+version = "0.11.0"
+default-features = false
+
 [target.'cfg(all(target_arch = "wasm32", target_os = "unknown"))'.dependencies.getrandom]
 version = "0.2"
 
@@ -85,6 +89,15 @@ features = [
     "tokio",
 ]
 default-features = false
+
+[target.'cfg(not(all(target_arch = "wasm32", target_os = "unknown")))'.dependencies.esplora-client]
+version = "0.11.0"
+default-features = false
+features = [
+    "async",
+    "async-https",
+    "tokio",
+]
 
 [lints.clippy]
 dbg_macro = "warn"

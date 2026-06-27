@@ -13,7 +13,7 @@
 edition = "2021"
 rust-version = "1.86"
 name = "ark-client"
-version = "0.9.2"
+version = "0.9.3"
 build = false
 autolib = false
 autobins = false
@@ -50,13 +50,13 @@ name = "ark_client"
 path = "src/lib.rs"
 
 [dependencies.ark-core]
-version = "0.9.2"
+version = "0.9.3"
 
 [dependencies.ark-delegator]
-version = "0.9.2"
+version = "0.9.3"
 
 [dependencies.ark-fees]
-version = "0.9.2"
+version = "0.9.3"
 
 [dependencies.async-stream]
 version = "0.3"
@@ -154,6 +154,9 @@ features = [
     "rt",
 ]
 
+[target.'cfg(all(target_arch = "wasm32", target_os = "unknown"))'.dependencies.js-sys]
+version = "0.3"
+
 [target.'cfg(all(target_arch = "wasm32", target_os = "unknown"))'.dependencies.backon]
 version = "1"
 features = ["gloo-timers-sleep"]
@@ -171,7 +174,7 @@ features = [
 ]
 
 [target.'cfg(all(target_arch = "wasm32", target_os = "unknown"))'.dependencies.ark-rest]
-version = "0.9.2"
+version = "0.9.3"
 path = "../ark-rest"
 
 [target.'cfg(all(target_arch = "wasm32", target_os = "unknown"))'.dependencies.gloo-timers]
@@ -189,7 +192,7 @@ version = "0.4"
 version = "0.14"
 
 [target.'cfg(not(all(target_arch = "wasm32", target_os = "unknown")))'.dependencies.ark-grpc]
-version = "0.9.2"
+version = "0.9.3"
 default-features = false
 
 [target.'cfg(not(all(target_arch = "wasm32", target_os = "unknown")))'.dependencies.backon]

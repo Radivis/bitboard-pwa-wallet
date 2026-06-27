@@ -34,6 +34,7 @@ import type {
   ArkadeVtxoExpiryStatus,
   EnsureArkadeOperatorConnectionEncryptedParams,
   OpenArkadeSessionParams,
+  OpenArkadeSessionResult,
 } from '@/workers/arkade-api'
 
 import { loadBitboardArkWasm } from '@/lib/arkade/load-bitboard-ark-wasm'
@@ -220,7 +221,7 @@ async function closeSessionImpl(): Promise<void> {
 
 async function openSessionImpl(
   params: OpenArkadeSessionParams,
-): Promise<{ arkadeAddress: string; operatorSignerPkHex: string }> {
+): Promise<OpenArkadeSessionResult> {
   const key = arkadeSessionKey(params.walletId, params.networkMode, params.connectionId)
 
   if (activeSessionKey === key) {
@@ -270,6 +271,9 @@ async function openSessionImpl(
     return {
       arkadeAddress: openResult.arkadeAddress as string,
       operatorSignerPkHex: openResult.operatorSignerPkHex as string,
+      signerMigrationHint: openResult.signerMigrationHint as
+        | OpenArkadeSessionResult['signerMigrationHint']
+        | undefined,
     }
   } catch (error) {
     activeSessionKey = null
@@ -329,6 +333,10 @@ const arkadeService: ArkadeService = {
     )
     await awaitBackgroundArkadeOperatorSync()
     await syncWithOperatorCore()
+  },
+
+  async migrateDeprecatedSignerVtxos(): Promise<void> {
+    await invokeWasmArk((wasmModule) => wasmModule.ark_migrate_deprecated_signer_vtxos())
   },
 
   async flushSdkPersistence(): Promise<void> {

@@ -2,7 +2,6 @@ use crate::error::ErrorContext as _;
 use crate::swap_storage::SwapStorage;
 use crate::utils::sleep;
 use crate::utils::timeout_op;
-use crate::utils::unix_timestamp_secs;
 use crate::wallet::BoardingWallet;
 use crate::wallet::OnchainWallet;
 use crate::Blockchain;
@@ -49,6 +48,7 @@ use futures::StreamExt;
 use rand::CryptoRng;
 use rand::Rng;
 use std::collections::HashMap;
+use std::collections::HashSet;
 
 impl<B, W, S, K> Client<B, W, S, K>
 where
@@ -59,7 +59,17 @@ where
 {
     /// Settle _all_ prior VTXOs and boarding outputs into the next batch, generating new confirmed
     /// VTXOs.
-    pub async fn settle<R>(&self, rng: &mut R) -> Result<Option<Txid>, Error>
+    ///
+    /// Most callers should prefer [`Self::settle`], which only renews VTXOs that have actually
+    /// expired. Settling unexpired VTXOs is rarely necessary.
+    pub async fn settle_all<R>(&self, rng: &mut R) -> Result<Option<Txid>, Error>
+    where
+        R: Rng + CryptoRng + Clone,
+    {
+        self.settle_at(crate::utils::unix_now()?, rng).await
+    }
+
+    pub(crate) async fn settle_at<R>(&self, now: i64, rng: &mut R) -> Result<Option<Txid>, Error>
     where
         R: Rng + CryptoRng + Clone,
     {
@@ -67,7 +77,7 @@ where
         let (to_address, _) = self.get_offchain_address()?;
 
         let (boarding_inputs, vtxo_inputs, total_amount) =
-            self.fetch_commitment_transaction_inputs().await?;
+            self.fetch_commitment_transaction_inputs(now).await?;
 
         tracing::debug!(
             offchain_adress = %to_address.encode(),
@@ -110,6 +120,47 @@ where
         Ok(Some(commitment_txid))
     }
 
+    /// Settle prior VTXOs that have expired or are recoverable, together with all available
+    /// boarding outputs, into the next batch, generating new confirmed VTXOs.
+    ///
+    /// Healthy (unexpired) VTXOs are left untouched. This is the path callers typically want when
+    /// periodically renewing their wallet: healthy VTXOs do not need to be touched, and including
+    /// them would only inflate batch fees. Boarding outputs are always included because callers
+    /// generally want freshly funded coins to enter the Ark.
+    ///
+    /// NOTE: sub-dust recoverable VTXOs can only be rescued when their combined value exceeds the
+    /// server's dust threshold; otherwise the batch protocol rejects the settlement with a
+    /// `cannot settle into sub-dust VTXO` error. When the wallet holds isolated sub-dust amounts,
+    /// fall back to [`Self::settle_all`], which can roll them in alongside healthy VTXOs that
+    /// act as carrier value.
+    pub async fn settle<R>(&self, rng: &mut R) -> Result<Option<Txid>, Error>
+    where
+        R: Rng + CryptoRng + Clone,
+    {
+        let (vtxo_list, _) = self.list_vtxos().await?;
+        let vtxo_outpoints: Vec<OutPoint> = vtxo_list.recoverable().map(|v| v.outpoint).collect();
+
+        let (boarding_inputs, _, _) = self
+            .fetch_commitment_transaction_inputs(crate::utils::unix_now()?)
+            .await?;
+        let boarding_outpoints: Vec<OutPoint> =
+            boarding_inputs.iter().map(|i| i.outpoint()).collect();
+
+        if vtxo_outpoints.is_empty() && boarding_outpoints.is_empty() {
+            tracing::debug!("No expired/recoverable VTXOs or boarding outputs to settle");
+            return Ok(None);
+        }
+
+        tracing::debug!(
+            num_vtxos = vtxo_outpoints.len(),
+            num_boarding = boarding_outpoints.len(),
+            "Attempting to settle expired/recoverable VTXOs and boarding outputs"
+        );
+
+        self.settle_vtxos(rng, &vtxo_outpoints, &boarding_outpoints)
+            .await
+    }
+
     /// Settle _all_ prior VTXOs, boarding outputs, and the provided ArkNotes into the next batch.
     ///
     /// ArkNotes are bearer tokens that can be redeemed by revealing their preimage.
@@ -125,8 +176,9 @@ where
     {
         let (to_address, _) = self.get_offchain_address()?;
 
-        let (boarding_inputs, vtxo_inputs, mut total_amount) =
-            self.fetch_commitment_transaction_inputs().await?;
+        let (boarding_inputs, vtxo_inputs, mut total_amount) = self
+            .fetch_commitment_transaction_inputs(crate::utils::unix_now()?)
+            .await?;
 
         // Convert arknotes to intent inputs and add their value to total
         let note_inputs: Vec<intent::Input> = notes
@@ -199,8 +251,9 @@ where
         // Get off-chain address and send all funds to this address, no change output.
         let (to_address, _) = self.get_offchain_address()?;
 
-        let (all_boarding_inputs, all_vtxo_inputs, _) =
-            self.fetch_commitment_transaction_inputs().await?;
+        let (all_boarding_inputs, all_vtxo_inputs, _) = self
+            .fetch_commitment_transaction_inputs(crate::utils::unix_now()?)
+            .await?;
 
         // Filter boarding inputs to only those specified.
         let boarding_inputs: Vec<_> = all_boarding_inputs
@@ -275,17 +328,14 @@ where
     {
         let (change_address, _) = self.get_offchain_address()?;
 
-        let (boarding_inputs, vtxo_inputs, total_amount) =
-            self.fetch_commitment_transaction_inputs().await?;
+        let (boarding_inputs, vtxo_inputs, total_amount) = self
+            .fetch_commitment_transaction_inputs(crate::utils::unix_now()?)
+            .await?;
 
-        let onchain_fee = self
-            .fee_estimator
-            .eval_onchain_output(ark_fees::Output {
-                amount: to_amount.to_sat(),
-                script: to_address.script_pubkey().to_string(),
-            })
-            .map_err(Error::ad_hoc)?;
-        let onchain_fee = Amount::from_sat(onchain_fee.to_satoshis());
+        let onchain_fee = self.eval_onchain_output_fee(ark_fees::Output {
+            amount: to_amount.to_sat(),
+            script: to_address.script_pubkey().to_string(),
+        })?;
 
         // Fee comes out of change, not the send amount.
         let change_amount = total_amount
@@ -352,35 +402,9 @@ where
     {
         let (change_address, _) = self.get_offchain_address()?;
 
-        let (vtxo_list, script_pubkey_to_vtxo_map) =
-            self.list_vtxos().await.context("failed to get VTXO list")?;
-
-        let vtxo_inputs = vtxo_list
-            .all_unspent()
-            .filter(|v| input_vtxos.clone().any(|outpoint| outpoint == v.outpoint))
-            .map(|v| {
-                let vtxo = script_pubkey_to_vtxo_map.get(&v.script).ok_or_else(|| {
-                    ark_core::Error::ad_hoc(format!("missing VTXO for script pubkey: {}", v.script))
-                })?;
-                let spend_info = vtxo.forfeit_spend_info()?;
-
-                Ok(intent::Input::new(
-                    v.outpoint,
-                    vtxo.exit_delay(),
-                    // NOTE: This only works with default VTXOs (single-sig).
-                    None,
-                    TxOut {
-                        value: v.amount,
-                        script_pubkey: vtxo.script_pubkey(),
-                    },
-                    vtxo.tapscripts(),
-                    spend_info,
-                    false,
-                    v.is_swept,
-                    v.assets.clone(),
-                ))
-            })
-            .collect::<Result<Vec<_>, Error>>()?;
+        let vtxo_inputs = self
+            .selected_batch_settleable_vtxo_inputs(input_vtxos)
+            .await?;
 
         if vtxo_inputs.is_empty() {
             return Err(Error::ad_hoc("no matching VTXO outpoints found"));
@@ -391,14 +415,10 @@ where
             .iter()
             .fold(Amount::ZERO, |acc, vtxo| acc + vtxo.amount());
 
-        let onchain_fee = self
-            .fee_estimator
-            .eval_onchain_output(ark_fees::Output {
-                amount: to_amount.to_sat(),
-                script: to_address.script_pubkey().to_string(),
-            })
-            .map_err(Error::ad_hoc)?;
-        let onchain_fee = Amount::from_sat(onchain_fee.to_satoshis());
+        let onchain_fee = self.eval_onchain_output_fee(ark_fees::Output {
+            amount: to_amount.to_sat(),
+            script: to_address.script_pubkey().to_string(),
+        })?;
 
         // Fee comes out of change, not the send amount.
         let change_amount = total_input_amount
@@ -450,6 +470,72 @@ where
         Ok(commitment_txid)
     }
 
+    pub(crate) async fn selected_batch_settleable_vtxo_inputs(
+        &self,
+        input_vtxos: impl IntoIterator<Item = OutPoint>,
+    ) -> Result<Vec<intent::Input>, Error> {
+        let requested: HashSet<OutPoint> = input_vtxos.into_iter().collect();
+
+        let (vtxo_list, script_pubkey_to_vtxo_map) =
+            self.list_vtxos().await.context("failed to get VTXO list")?;
+        let server_info = self.server_info()?;
+        let now = crate::utils::unix_now()?;
+
+        let matching_unspent = vtxo_list
+            .all_unspent()
+            .filter(|v| requested.contains(&v.outpoint))
+            .collect::<Vec<_>>();
+
+        let settleable_outpoints = vtxo_list
+            .batch_settleable_at(&server_info, now, |script| {
+                script_pubkey_to_vtxo_map
+                    .get(script)
+                    .map(|vtxo| vtxo.server_pk())
+            })
+            .filter(|v| requested.contains(&v.outpoint))
+            .map(|v| v.outpoint)
+            .collect::<HashSet<_>>();
+
+        let blocked = matching_unspent
+            .iter()
+            .filter(|v| !settleable_outpoints.contains(&v.outpoint))
+            .map(|v| v.outpoint.to_string())
+            .collect::<Vec<_>>();
+        if !blocked.is_empty() {
+            return Err(Error::ad_hoc(format!(
+                "selected VTXO outpoints are not batch-settleable because their signer cutoff has passed: {}",
+                blocked.join(", ")
+            )));
+        }
+
+        matching_unspent
+            .into_iter()
+            .filter(|v| settleable_outpoints.contains(&v.outpoint))
+            .map(|v| {
+                let vtxo = script_pubkey_to_vtxo_map.get(&v.script).ok_or_else(|| {
+                    ark_core::Error::ad_hoc(format!("missing VTXO for script pubkey: {}", v.script))
+                })?;
+                let spend_info = vtxo.forfeit_spend_info()?;
+
+                Ok(intent::Input::new(
+                    v.outpoint,
+                    vtxo.exit_delay(),
+                    // NOTE: This only works with default VTXOs (single-sig).
+                    None,
+                    TxOut {
+                        value: v.amount,
+                        script_pubkey: vtxo.script_pubkey(),
+                    },
+                    vtxo.tapscripts(),
+                    spend_info,
+                    false,
+                    v.is_swept,
+                    v.assets.clone(),
+                ))
+            })
+            .collect::<Result<Vec<_>, Error>>()
+    }
+
     /// Generate a delegate for settling VTXOs on behalf of the owner.
     ///
     /// The owner pre-signs the intent and forfeit transactions, allowing another party to complete
@@ -471,7 +557,9 @@ where
         let (to_address, _) = self.get_offchain_address()?;
 
         // Simply collect all VTXOs that can be settled.
-        let (_, vtxo_inputs, _) = self.fetch_commitment_transaction_inputs().await?;
+        let (_, vtxo_inputs, _) = self
+            .fetch_commitment_transaction_inputs(crate::utils::unix_now()?)
+            .await?;
 
         let total_amount = vtxo_inputs
             .iter()
@@ -481,7 +569,7 @@ where
             return Err(Error::ad_hoc("no inputs to settle via delegate"));
         }
 
-        let server_info = &self.server_info;
+        let server_info = &self.server_info()?;
 
         let mut outputs = vec![intent::Output::Offchain(TxOut {
             value: total_amount,
@@ -579,7 +667,7 @@ where
         tracing::debug!(intent_id, "Registered delegated intent");
 
         let network_client = self.network_client();
-        let server_info = &self.server_info;
+        let server_info = &self.server_info()?;
 
         #[derive(Debug, PartialEq, Eq)]
         enum Step {
@@ -1001,7 +1089,10 @@ where
     /// upcoming batch.
     pub(crate) async fn fetch_commitment_transaction_inputs(
         &self,
+        now: i64,
     ) -> Result<(Vec<batch::OnChainInput>, Vec<intent::Input>, Amount), Error> {
+        let now = u64::try_from(now).map_err(|_| Error::ad_hoc("negative timestamp"))?;
+
         // Get all known boarding outputs.
         let boarding_outputs = self.inner.wallet.get_boarding_outputs()?;
 
@@ -1009,9 +1100,11 @@ where
         let mut total_amount = Amount::ZERO;
 
         // To track unique outpoints and prevent duplicates
-        let mut seen_outpoints = std::collections::HashSet::new();
+        let mut seen_outpoints = HashSet::new();
 
-        let now = std::time::Duration::from_secs(unix_timestamp_secs().map_err(Error::ad_hoc)?);
+        // Snapshot once; reused for the boarding cutoff filter and the VTXO dust/cutoff logic
+        // below.
+        let server_info = self.server_info()?;
 
         // Find outpoints for each boarding output.
         for boarding_output in boarding_outputs {
@@ -1036,9 +1129,18 @@ where
                         continue;
                     }
 
+                    // Skip boarding outputs whose server key is past its cooperative-sign
+                    // cutoff — the operator won't co-sign the old key's forfeit path.
+                    // These must be recovered via unilateral exit (send_on_chain).
+                    if server_info
+                        .signer_requires_recovery_at(boarding_output.server_pk(), now as i64)
+                    {
+                        continue;
+                    }
+
                     // Only include confirmed boarding outputs with an _inactive_ exit path.
                     if !boarding_output.can_be_claimed_unilaterally_by_owner(
-                        now,
+                        std::time::Duration::from_secs(now),
                         std::time::Duration::from_secs(*confirmation_blocktime),
                         *confirmations,
                     ) {
@@ -1057,13 +1159,23 @@ where
         }
 
         let (vtxo_list, script_pubkey_to_vtxo_map) = self.list_vtxos().await?;
+        // Reuse the caller-supplied timestamp (not a fresh wall-clock) so the VTXO cutoff filter
+        // below is evaluated against the same instant as the boarding filter above, and so a
+        // test-injected `now` deterministically controls both.
+        let settleable_vtxos: Vec<_> = vtxo_list
+            .batch_settleable_at(&server_info, now as i64, |script| {
+                script_pubkey_to_vtxo_map
+                    .get(script)
+                    .map(|vtxo| vtxo.server_pk())
+            })
+            .collect();
 
-        total_amount += vtxo_list
-            .all_unspent()
+        total_amount += settleable_vtxos
+            .iter()
             .fold(Amount::ZERO, |acc, vtxo| acc + vtxo.amount);
 
-        let vtxo_inputs = vtxo_list
-            .all_unspent()
+        let vtxo_inputs = settleable_vtxos
+            .into_iter()
             .map(|virtual_tx_outpoint| {
                 let vtxo = script_pubkey_to_vtxo_map
                     .get(&virtual_tx_outpoint.script)
@@ -1142,7 +1254,7 @@ where
                 .collect::<Vec<_>>()
         };
 
-        let dust = self.server_info.dust;
+        let dust = self.server_info()?.dust;
 
         let mut outputs = vec![];
 
@@ -1151,7 +1263,7 @@ where
                 to_address,
                 to_amount,
             } => {
-                if to_amount < self.server_info.dust {
+                if to_amount < dust {
                     return Err(Error::ad_hoc(format!(
                         "cannot settle into sub-dust VTXO: {to_amount} < {dust}"
                     )));
@@ -1249,7 +1361,11 @@ where
                 Ok((sig, owner_pk))
             };
 
-        let now = unix_timestamp_secs().context("failed to compute now timestamp")?;
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_err(|e| Error::ad_hoc(e.to_string()))
+            .context("failed to compute now timestamp")?;
+        let now = now.as_secs();
         let expire_at = now + (2 * 60);
 
         if let Some(packet) = create_asset_preservation_packet(&inputs, &outputs)? {
@@ -1328,7 +1444,7 @@ where
             .map(|i| i.outpoint())
             .collect::<Vec<_>>();
 
-        let server_info = &self.server_info;
+        let server_info = &self.server_info()?;
 
         let own_cosigner_kps = [cosigner_keypair];
         let own_cosigner_pks = own_cosigner_kps

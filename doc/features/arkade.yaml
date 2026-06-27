@@ -13,6 +13,7 @@ feature:
     - As a user, I want to understand VTXO expiry and optionally renew manually for learning
     - As a user, I want to exit Arkade to an on-chain address collaboratively when the operator is available
     - As a user, I want to exit a specific VTXO unilaterally without operator cooperation when needed
+    - As a user, I want the app to keep working when the Arkade operator rotates its signing key, with clear guidance on migrating or exiting funds
   requirements:
     - Arkade is gated by isArkadeEnabled (default off) and isMainnetAccessEnabled for mainnet
     - Arkade is available only on mainnet, testnet, and signet; not on lab or regtest in v1
@@ -36,6 +37,17 @@ feature:
         description: Generate new address reveals the next index and persists offchain_next_derivation_index
       - id: ARK-RCV-05
         description: Read paths (getAddress, balance, history) never await wallet-secrets re-encrypt
+    signer_rotation:
+      - id: ARK-ROT-01
+        description: Session open succeeds when stored operator_identity.signer_pk_hex equals current getInfo signer
+      - id: ARK-ROT-02
+        description: Session open succeeds when stored signer matches a deprecatedSigners pubkey for the same operator URL, including after cooperative cutoff
+      - id: ARK-ROT-03
+        description: After migration open, next persistence export writes current signer into operator_identity and connection operatorSignerPkHex
+      - id: ARK-ROT-04
+        description: Signer mismatch with neither current nor deprecated keys yields load-error with operator-change vs wrong-ASP messaging
+      - id: ARK-ROT-05
+        description: Signer migration surfaces a non-blocking banner on Management Arkade with regime-appropriate actions (migrate, sync, unilateral exit)
   pages:
     - ArkadeManagement:
       - description: "Arkade status on Management page"
@@ -47,6 +59,7 @@ feature:
         - expiring VTXO count when session open
         - collaborative exit (on-chain destination, optional partial amount) with operator fee estimate from getInfo().fees
         - unilateral exit per VTXO (select, unroll, complete after timelock) with unroll step count and bumper fee estimate
+        - signer migration banner when operator signing key rotated (migratable, due now, or expired regimes)
       - requirements:
         - Shown only when isArkadeEnabled and current network supports Arkade
         - Collaborative exit and fee estimates via bitboard-ark WASM in arkade.worker

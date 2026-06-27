@@ -99,6 +99,15 @@ impl Error {
         }
         false
     }
+
+    pub fn is_server_info_changed(&self) -> bool {
+        if let Some(source) = &self.inner.source {
+            if let Some(rest_error) = source.downcast_ref::<ark_rest::Error>() {
+                return rest_error.is_server_info_changed();
+            }
+        }
+        false
+    }
 }
 
 impl fmt::Debug for Error {
@@ -221,6 +230,18 @@ impl Client {
             .map_err(map_rest_error)
     }
 
+    pub fn set_info_refresh_hook(
+        &mut self,
+        hook: impl Fn(server::Info) -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>>
+            + Send
+            + Sync
+            + 'static,
+    ) {
+        if let Some(inner) = Arc::get_mut(&mut self.inner) {
+            inner.set_info_refresh_hook(hook);
+        }
+    }
+
     pub async fn get_pending_tx(
         &self,
         intent_value: intent::Intent,
@@ -229,9 +250,9 @@ impl Client {
             .serialize_message()
             .map_err(Error::conversion_message)?;
         let proof = intent_value.serialize_proof();
-        let configuration = self.inner.configuration();
+        let configuration = self.inner.configuration().map_err(map_rest_error)?;
         let response = ark_service_get_pending_tx(
-            configuration,
+            &configuration,
             GetPendingTxRequest {
                 intent: Some(ark_rest::models::Intent {
                     message: Some(message_json),
@@ -333,8 +354,9 @@ impl Client {
         let (page_size, page_index) = size_and_index
             .map(|(size, index)| (Some(size), Some(index)))
             .unwrap_or((None, None));
+        let configuration = self.inner.configuration().map_err(map_rest_error)?;
         let response = indexer_service_get_vtxo_chain(
-            self.inner.configuration(),
+            &configuration,
             &outpoint.txid.to_string(),
             outpoint.vout as i32,
             page_size,
@@ -398,8 +420,9 @@ impl Client {
             .serialize_message()
             .map_err(Error::conversion_message)?;
         let proof = intent.serialize_proof();
+        let configuration = self.inner.configuration().map_err(map_rest_error)?;
         let response = ark_service_estimate_intent_fee(
-            self.inner.configuration(),
+            &configuration,
             EstimateIntentFeeRequest {
                 intent: Some(ark_rest::models::Intent {
                     message: Some(message_json),
@@ -419,8 +442,9 @@ impl Client {
     }
 
     pub async fn get_asset(&self, asset_id: AssetId) -> Result<server::AssetInfo, Error> {
+        let configuration = self.inner.configuration().map_err(map_rest_error)?;
         let response = indexer_service_get_asset(
-            self.inner.configuration(),
+            &configuration,
             &asset_id.to_string(),
         )
         .await

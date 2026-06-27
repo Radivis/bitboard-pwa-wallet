@@ -38,8 +38,6 @@ where
     K: crate::KeyProvider,
 {
     /// Build the finalized on-chain unroll branch for one VTXO.
-    ///
-    /// The returned transactions are ordered from the commitment side toward the VTXO leaf.
     pub async fn build_unilateral_exit_branch(
         &self,
         target: OutPoint,
@@ -90,15 +88,82 @@ where
             .await
             .context("failed to get spendable VTXOs")?;
 
-        let mut branches: Vec<Vec<Transaction>> = Vec::new();
+        let mut unilateral_exit_trees = Vec::new();
+
+        // For each spendable VTXO, generate its unilateral exit tree.
         for virtual_tx_outpoint in vtxo_list.could_exit_unilaterally() {
-            let unilateral_exit_tree = self
-                .unilateral_exit_tree_for_outpoint(virtual_tx_outpoint)
-                .await?;
-            branches.extend(
-                self.finalize_unilateral_exit_tree_on_chain(&unilateral_exit_tree)
-                    .await?,
-            );
+            let vtxo_chain_response = timeout_op(
+                self.inner.timeout,
+                self.network_client()
+                    .get_vtxo_chain(Some(virtual_tx_outpoint.outpoint), None),
+            )
+            .await
+            .context(format!(
+                "failed to get VTXO chain for outpoint {}",
+                virtual_tx_outpoint.outpoint
+            ))??;
+
+            let paths = build_unilateral_exit_tree_txids(
+                &vtxo_chain_response.chains,
+                virtual_tx_outpoint.outpoint.txid,
+            )?;
+
+            // We don't want to fetch transactions more than once.
+            let txs = HashSet::<Txid>::from_iter(paths.concat());
+
+            let virtual_txs_response = timeout_op(
+                self.inner.timeout,
+                self.network_client()
+                    .get_virtual_txs(txs.iter().map(|tx| tx.to_string()).collect(), None),
+            )
+            .await
+            .context("failed to get virtual TXs")??;
+
+            let paths = paths
+                .into_iter()
+                .map(|path| {
+                    path.into_iter()
+                        .map(|txid| {
+                            virtual_txs_response
+                                .txs
+                                .iter()
+                                .find(|t| t.unsigned_tx.compute_txid() == txid)
+                                .cloned()
+                                .ok_or_else(|| {
+                                    Error::ad_hoc(format!("no PSBT found for virtual TX {txid}"))
+                                })
+                        })
+                        .collect::<Result<Vec<_>, _>>()
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+
+            let unilateral_exit_tree =
+                UnilateralExitTree::new(virtual_tx_outpoint.commitment_txids.clone(), paths);
+
+            unilateral_exit_trees.push(unilateral_exit_tree);
+        }
+
+        let mut branches: Vec<Vec<Transaction>> = Vec::new();
+        for unilateral_exit_tree in unilateral_exit_trees {
+            let commitment_txids = unilateral_exit_tree.commitment_txids();
+
+            let mut commitment_txs = Vec::new();
+            for commitment_txid in commitment_txids.iter() {
+                let commitment_tx = timeout_op(
+                    self.inner.timeout,
+                    self.blockchain().find_tx(commitment_txid),
+                )
+                .await??
+                .ok_or_else(|| {
+                    Error::ad_hoc(format!("could not find commitment TX {commitment_txid}"))
+                })?;
+
+                commitment_txs.push(commitment_tx);
+            }
+
+            let finalized_unilateral_exit_tree =
+                finalize_unilateral_exit_tree(&unilateral_exit_tree, commitment_txs.as_slice())?;
+            branches.extend(finalized_unilateral_exit_tree);
         }
 
         Ok(branches)
@@ -284,9 +349,6 @@ where
     }
 
     /// Spend selected unrolled VTXOs to an on-chain address.
-    ///
-    /// Only VTXOs whose virtual or on-chain txid appears in `vtxo_txids` are included. Boarding
-    /// outputs are never selected.
     pub async fn send_on_chain_for_vtxo_txids(
         &self,
         to_address: Address,
@@ -304,10 +366,10 @@ where
         }
 
         let to_amount = selected_amount - fee;
-        if to_amount < self.server_info.dust {
+        let dust = self.server_info()?.dust;
+        if to_amount < dust {
             return Err(Error::ad_hoc(format!(
-                "invalid amount {to_amount}, must be greater than dust: {}",
-                self.server_info.dust,
+                "invalid amount {to_amount}, must be greater than dust: {dust}",
             )));
         }
 
@@ -351,10 +413,11 @@ where
         to_address: Address,
         to_amount: Amount,
     ) -> Result<(Transaction, Vec<TxOut>), Error> {
-        if to_amount < self.server_info.dust {
+        let dust = self.server_info()?.dust;
+        if to_amount < dust {
             return Err(Error::ad_hoc(format!(
                 "invalid amount {to_amount}, must be greater than dust: {}",
-                self.server_info.dust,
+                dust,
             )));
         }
 

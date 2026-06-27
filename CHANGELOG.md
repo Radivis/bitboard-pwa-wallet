@@ -12,12 +12,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Periodic sync** feature (Settings → Features): opt-in background polling per rail with configurable intervals on Settings → Main (default 300s, 30s–24h range)
 
 ### Changed
+- Bumped Arkade Rust SDK from 0.9.2 to 0.9.3
 - Strict wallet unlock requirement is limited to proper /wallet routes; special actions requiring wallet data will request wallet unlock otherwise
 - Reworked wallet data hydration lifecycle with state machines handling loading, syncing, and saving for each rail (onchain / Lightning / Arkade) separately; that should make hydration much more reliable and easier to reason about
 - Background rail polling is off by default; Lightning and Arkade no longer poll every 15–60s unless periodic sync is enabled
 - Fixed Lightning dashboard save invalidating its own React Query caches, which caused repeated NWC sync every few seconds even with periodic sync disabled
 
 ### Fixed
+- An Arkade signer key rotation won't completely block the Arkade rail now; key rotation should be handled gracefully now
 
 ### Security
 

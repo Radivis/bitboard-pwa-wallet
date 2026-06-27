@@ -12,6 +12,15 @@ export interface ArkadeBalanceInfo {
   boardingPendingSats?: number
   unilateralExitInProgressSats?: number
   collaborativeExitInProgressSats?: number
+  pendingRecoverySats?: number
+}
+
+export type ArkadeSignerMigrationDeprecatedStatus = 'migratable' | 'due_now' | 'expired'
+
+export interface ArkadeSignerMigrationHint {
+  previousSignerPkHex: string
+  deprecatedStatus: ArkadeSignerMigrationDeprecatedStatus
+  cutoffUnix: number
 }
 
 export interface ArkadeDelegateInfo {
@@ -48,6 +57,7 @@ export interface OpenArkadeSessionParams {
 export interface OpenArkadeSessionResult {
   arkadeAddress: string
   operatorSignerPkHex: string
+  signerMigrationHint?: ArkadeSignerMigrationHint
 }
 
 export interface ArkadeSendParams {
@@ -139,6 +149,7 @@ export interface EnsureArkadeOperatorConnectionEncryptedParams {
   operatorSignerPkHex: string
   operatorUrl: string
   delegatorUrl: string
+  signerMigrationHint?: ArkadeSignerMigrationHint
   /** When true, export SDK JSON from WASM inside the worker (never on main thread). */
   persistInitialSdkFromWasm?: boolean
 }
@@ -180,6 +191,7 @@ export interface ArkadeService {
     lastSuccessfulOperatorSyncAt: string
   }): Promise<void>
   closeSession(): Promise<void>
+  migrateDeprecatedSignerVtxos(): Promise<void>
   getBalance(): Promise<ArkadeBalanceInfo>
   getAddress(): Promise<string>
   getNewAddress(): Promise<string>

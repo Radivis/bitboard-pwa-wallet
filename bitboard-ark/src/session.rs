@@ -48,8 +48,9 @@ use crate::offchain_snapshot::{
     snapshot_from_virtual_tx_outpoints,
 };
 use crate::persistence::{
-    BitboardArkPersistence, JsonPersistenceDb, OperatorIdentity, PendingExitDeductionRecord,
-    PendingExitKind, SharedPersistenceDb, network_label, validate_operator_identity,
+    BitboardArkPersistence, JsonPersistenceDb, OperatorIdentity, OperatorSignerMigrationHint,
+    PendingExitDeductionRecord, PendingExitKind, SharedPersistenceDb, network_label,
+    validate_operator_identity,
 };
 
 const CLIENT_NAME: &str = "bitboard-pwa-wallet";
@@ -77,7 +78,7 @@ impl ArkSession {
         delegator_url: String,
         esplora_url: String,
         sdk_persistence_json: Option<&str>,
-    ) -> ArkResult<Self> {
+    ) -> ArkResult<(Self, Option<OperatorSignerMigrationHint>)> {
         let parsed = BitboardArkPersistence::parse_import(sdk_persistence_json);
         let offchain_next_derivation_index = parsed.wallet_db.offchain_next_derivation_index;
         let network = network_mode.to_bitcoin_network();
@@ -139,9 +140,15 @@ impl ArkSession {
                 display_receive_derivation_index(offchain_next_derivation_index).saturating_add(1);
             client.warm_offchain_receive_key_cache(warm_through)?;
         }
-        let server_signer: XOnlyPublicKey = client.server_info.signer_pk.into();
-        validate_operator_identity(parsed.operator_identity.as_ref(), server_signer, network)
-            .map_err(ArkWasmError::Persistence)?;
+        let server_info = client.server_info()?;
+        let migration_hint = validate_operator_identity(
+            parsed.operator_identity.as_ref(),
+            &server_info,
+            network,
+            current_unix_timestamp(),
+        )
+        .map_err(ArkWasmError::Persistence)?;
+        let server_signer: XOnlyPublicKey = server_info.signer_pk.into();
         wallet_db.set_load_context(network, server_signer);
         client.sync_onchain_wallet().await?;
 
@@ -150,13 +157,24 @@ impl ArkSession {
             network: network_label(network),
         };
 
-        Ok(Self {
-            client,
-            wallet_db,
-            delegator,
-            network_mode,
-            operator_identity,
-        })
+        Ok((
+            Self {
+                client,
+                wallet_db,
+                delegator,
+                network_mode,
+                operator_identity,
+            },
+            migration_hint,
+        ))
+    }
+
+    pub async fn migrate_deprecated_signer_vtxos(&self) -> ArkResult<()> {
+        let mut rng = OsRng;
+        self.client
+            .migrate_deprecated_signer_vtxos(&mut rng)
+            .await?;
+        Ok(())
     }
 
     pub fn export_persistence(&self) -> ArkResult<String> {
@@ -179,7 +197,7 @@ impl ArkSession {
         let (vtxo_list, _) = self.client.list_vtxos().await?;
         let all_points: Vec<VirtualTxOutPoint> = vtxo_list.all().cloned().collect();
         let snapshot = snapshot_from_virtual_tx_outpoints(
-            self.client.server_info.dust.to_sat(),
+            self.client.server_info()?.dust.to_sat(),
             current_unix_timestamp(),
             all_points,
         );
@@ -307,6 +325,12 @@ impl ArkSession {
             };
         let (unilateral_exit_in_progress_sats, collaborative_exit_in_progress_sats) =
             self.exit_balance_components()?;
+        let pending_recovery_sats = self
+            .client
+            .offchain_balance()
+            .await
+            .map(|balance| balance.pending_recovery().to_sat())
+            .unwrap_or(0);
         let onchain = self.client.onchain_wallet_balance()?;
         let boarding = self.boarding_status().await?;
         Ok(build_arkade_balance_dto(ArkadeBalanceInputs {
@@ -318,6 +342,7 @@ impl ArkSession {
             boarding_pending_sats: boarding.pending_sats,
             unilateral_exit_in_progress_sats,
             collaborative_exit_in_progress_sats,
+            pending_recovery_sats,
         }))
     }
 
@@ -541,7 +566,7 @@ impl ArkSession {
 
     pub async fn list_exit_candidates(&self) -> ArkResult<Vec<ExitCandidateRow>> {
         let (vtxo_list, _) = self.client.list_vtxos().await?;
-        let dust = self.client.server_info.dust;
+        let dust = self.client.server_info()?.dust;
         let rows = vtxo_list
             .all()
             .map(|virtual_tx_outpoint| map_exit_candidate(virtual_tx_outpoint, dust))
@@ -595,7 +620,7 @@ impl ArkSession {
     ) -> ArkResult<CollaborativeExitFeeEstimateDto> {
         let fees = self
             .client
-            .server_info
+            .server_info()?
             .fees
             .clone()
             .unwrap_or_else(empty_fee_info);
@@ -666,7 +691,7 @@ impl ArkSession {
         let mut projected_wait_steps = 0u32;
         let mut estimate_error = None;
 
-        match self.client.get_vtxo_chain(outpoint, None).await {
+        match self.client.get_vtxo_chain(outpoint, 0, 0).await {
             Ok(Some(chain)) => {
                 chain_tx_count = chain.chains.inner.len() as u32;
                 projected_unroll_steps = chain_tx_count.saturating_sub(1);

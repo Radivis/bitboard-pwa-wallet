@@ -3,7 +3,7 @@ import { createJSONStorage, persist } from 'zustand/middleware'
 import { sqliteStorage } from '@/db/storage-adapter'
 import { AddressType } from '@/lib/wallet/wallet-domain-types'
 import type { BalanceInfo, TransactionDetails } from '@/workers/crypto-types'
-import type { ArkadeBalanceInfo, ArkadePaymentRow } from '@/workers/arkade-api'
+import type { ArkadeBalanceInfo, ArkadePaymentRow, ArkadeSignerMigrationHint } from '@/workers/arkade-api'
 
 export type NetworkMode = 'lab' | 'regtest' | 'signet' | 'testnet' | 'mainnet'
 
@@ -77,6 +77,7 @@ interface TransientWalletState {
   arkadeBalance: ArkadeBalanceInfo | null
   arkadePayments: ArkadePaymentRow[]
   arkadeReceiveAddress: string | null
+  arkadeSignerMigrationHint: ArkadeSignerMigrationHint | null
   lastOperatorSyncTime: Date | null
   loadedDescriptorWallet: LoadedDescriptorWallet | null
   /**
@@ -105,6 +106,7 @@ interface WalletActions {
     receiveAddress: string
   }) => void
   clearArkadeDashboardState: () => void
+  setArkadeSignerMigrationHint: (hint: ArkadeSignerMigrationHint | null) => void
   setLastOperatorSyncTime: (lastOperatorSyncTime: Date | null) => void
   setImportInitialSyncErrorMessage: (message: string | null) => void
   lockWallet: () => void
@@ -123,6 +125,7 @@ const TRANSIENT_DEFAULTS: TransientWalletState = {
   arkadeBalance: null,
   arkadePayments: [],
   arkadeReceiveAddress: null,
+  arkadeSignerMigrationHint: null,
   lastOperatorSyncTime: null,
   loadedDescriptorWallet: null,
   importInitialSyncErrorMessage: null,
@@ -168,8 +171,11 @@ export const useWalletStore = create<WalletState>()(
           arkadeBalance: null,
           arkadePayments: [],
           arkadeReceiveAddress: null,
+          arkadeSignerMigrationHint: null,
           lastOperatorSyncTime: null,
         }),
+      setArkadeSignerMigrationHint: (arkadeSignerMigrationHint) =>
+        set({ arkadeSignerMigrationHint }),
       setLastOperatorSyncTime: (lastOperatorSyncTime) => set({ lastOperatorSyncTime }),
       setImportInitialSyncErrorMessage: (message) =>
         set({ importInitialSyncErrorMessage: message }),

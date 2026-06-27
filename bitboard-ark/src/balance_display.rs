@@ -11,6 +11,7 @@ pub struct ArkadeBalanceInputs {
     pub boarding_pending_sats: u64,
     pub unilateral_exit_in_progress_sats: u64,
     pub collaborative_exit_in_progress_sats: u64,
+    pub pending_recovery_sats: u64,
 }
 
 /// Maps ark-client offchain buckets to dashboard/send balance fields.
@@ -34,7 +35,9 @@ pub fn build_arkade_balance_dto(inputs: ArkadeBalanceInputs) -> BalanceDto {
     let spendable_offchain_sats = inputs
         .pre_confirmed_sats
         .saturating_add(inputs.confirmed_offchain_sats);
-    let total_offchain_sats = spendable_offchain_sats.saturating_add(inputs.recoverable_sats);
+    let total_offchain_sats = spendable_offchain_sats
+        .saturating_add(inputs.recoverable_sats)
+        .saturating_add(inputs.pending_recovery_sats);
     let gross_confirmed_sats =
         spendable_offchain_sats.saturating_add(inputs.onchain_confirmed_sats);
     let exit_in_progress_sats = inputs
@@ -51,6 +54,7 @@ pub fn build_arkade_balance_dto(inputs: ArkadeBalanceInputs) -> BalanceDto {
         boarding_pending_sats: inputs.boarding_pending_sats,
         unilateral_exit_in_progress_sats: inputs.unilateral_exit_in_progress_sats,
         collaborative_exit_in_progress_sats: inputs.collaborative_exit_in_progress_sats,
+        pending_recovery_sats: inputs.pending_recovery_sats,
     }
 }
 

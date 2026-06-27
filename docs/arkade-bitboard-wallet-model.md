@@ -64,3 +64,17 @@ Collaborative exit and unilateral unroll are implemented in `bitboard-ark` (`col
 ## Lightning
 
 - Arkade is an alternative L2 path for education, not a replacement for optional NWC Lightning connections.
+
+## Operator signer rotation
+
+When an Arkade operator rotates its signing key, `getInfo` advertises the new `signerPubkey` and lists the previous key under `deprecatedSigners` with a cooperative cutoff timestamp. Bitboard uses **rust-sdk** rotation support (`Info::signer_status_at`, `migrate_deprecated_signer_vtxos`, deprecated-aware `discover_keys`).
+
+| Regime | Condition | Bitboard behavior |
+|--------|-----------|-------------------|
+| **Current** | Stored signer matches live signer | Normal session |
+| **Migratable / Due now** | Stored signer is deprecated, cooperative window open | Session opens; banner may offer cooperative migration to current signer |
+| **Expired** | Deprecated signer past cutoff | Session opens for recovery; cooperative send/migrate unavailable; unilateral exit or recoverable settle |
+
+Contracts `ARK-ROT-01` through `ARK-ROT-05` in `doc/features/arkade.yaml` define session open, persistence re-stamp, error messaging, and Management banner behavior.
+
+Cooperative fund migration uses `migrate_deprecated_signer_vtxos()` (ark-client 0.9.3+). Post-cutoff funds appear in `pending_recovery` until unilateral exit or recoverable settlement. This is **not** the admin `WalletInitializerService_Restore` API (operator on-chain wallet setup only).

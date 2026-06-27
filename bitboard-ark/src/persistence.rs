@@ -4,10 +4,12 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use ark_client::Error;
 use ark_client::wallet::Persistence;
 use ark_core::BoardingOutput;
+use ark_core::server::{DeprecatedSignerStatus, Info, ServerSignerStatus};
 use bitcoin::secp256k1::Secp256k1;
 use bitcoin::secp256k1::SecretKey;
 use bitcoin::{Network, XOnlyPublicKey};
 use serde::{Deserialize, Serialize};
+use std::str::FromStr;
 
 pub const BITBOARD_ARK_PERSISTENCE_VERSION: u32 = 3;
 const PERSISTENCE_LOCK_POISONED: &str = "persistence lock poisoned";
@@ -25,7 +27,7 @@ fn lock_persistence_result<T>(mutex: &Mutex<T>) -> Result<MutexGuard<'_, T>, Err
         .map_err(|_| Error::wallet(PERSISTENCE_LOCK_POISONED))
 }
 pub const ARK_RS_ENGINE: &str = "ark-rs";
-pub const ARK_RS_SDK_VERSION: &str = "0.9.2";
+pub const ARK_RS_SDK_VERSION: &str = "0.9.3";
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct OperatorIdentity {
@@ -358,21 +360,41 @@ pub fn network_label(network: Network) -> String {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct OperatorSignerMigrationHint {
+    pub previous_signer_pk_hex: String,
+    pub deprecated_status: String,
+    pub cutoff_unix: i64,
+}
+
+fn deprecated_status_label(status: DeprecatedSignerStatus) -> &'static str {
+    match status {
+        DeprecatedSignerStatus::Migratable => "migratable",
+        DeprecatedSignerStatus::DueNow => "due_now",
+        DeprecatedSignerStatus::Expired => "expired",
+    }
+}
+
+fn cutoff_unix_for_deprecated_signer(server_info: &Info, stored_signer: XOnlyPublicKey) -> i64 {
+    server_info
+        .deprecated_signers
+        .iter()
+        .find(|deprecated| deprecated.pk.x_only_public_key().0 == stored_signer)
+        .map(|deprecated| deprecated.cutoff_date)
+        .unwrap_or(0)
+}
+
 pub fn validate_operator_identity(
     stored: Option<&OperatorIdentity>,
-    connected_signer: XOnlyPublicKey,
+    connected_server_info: &Info,
     network: Network,
-) -> Result<(), String> {
+    now_unix_secs: i64,
+) -> Result<Option<OperatorSignerMigrationHint>, String> {
     let Some(stored) = stored else {
-        return Ok(());
+        return Ok(None);
     };
-    let connected_hex = connected_signer.to_string();
-    if stored.signer_pk_hex != connected_hex {
-        return Err(format!(
-            "sdkPersistenceJson operator signer {} does not match connected operator {connected_hex}",
-            stored.signer_pk_hex
-        ));
-    }
+
     if stored.network != network_label(network) {
         return Err(format!(
             "sdkPersistenceJson network {} does not match session network {}",
@@ -380,5 +402,25 @@ pub fn validate_operator_identity(
             network_label(network)
         ));
     }
-    Ok(())
+
+    let stored_signer = XOnlyPublicKey::from_str(&stored.signer_pk_hex).map_err(|error| {
+        format!("sdkPersistenceJson operator signer is not a valid x-only public key: {error}")
+    })?;
+
+    let connected_signer = connected_server_info.signer_pk.x_only_public_key().0;
+    let connected_hex = connected_signer.to_string();
+
+    match connected_server_info.signer_status_at(stored_signer, now_unix_secs) {
+        ServerSignerStatus::Current => Ok(None),
+        ServerSignerStatus::Deprecated(status) => Ok(Some(OperatorSignerMigrationHint {
+            previous_signer_pk_hex: stored.signer_pk_hex.clone(),
+            deprecated_status: deprecated_status_label(status).to_string(),
+            cutoff_unix: cutoff_unix_for_deprecated_signer(connected_server_info, stored_signer),
+        })),
+        ServerSignerStatus::Unknown => Err(format!(
+            "sdkPersistenceJson operator signer {} is not recognized by the connected operator (current signer {connected_hex}). \
+             This usually means a different Arkade service provider, not a routine operator key rotation.",
+            stored.signer_pk_hex
+        )),
+    }
 }

@@ -36,6 +36,8 @@ export type E2eArkadeOperatorMockState = {
   paymentsByScript: Map<string, E2eArkadeMockIncomingPayment>
   /** Queued by `addIncomingPayment` control action; applied on next unfunded script in a vtxos query. */
   pendingIncomingPayment: E2eArkadeMockIncomingPayment | null
+  /** When set, returned from `/v1/info` instead of the static fixture (E2E signer rotation). */
+  serverInfoJson: string | null
 }
 
 function createDefaultMockState(): E2eArkadeOperatorMockState {
@@ -44,6 +46,7 @@ function createDefaultMockState(): E2eArkadeOperatorMockState {
     balanceSats: E2E_ARKADE_MOCK_DEFAULT_BALANCE_SATS,
     paymentsByScript: new Map(),
     pendingIncomingPayment: null,
+    serverInfoJson: null,
   }
 }
 
