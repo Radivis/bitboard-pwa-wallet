@@ -15,6 +15,12 @@ mod wasm_sleep;
 mod persistence_tests;
 #[cfg(test)]
 mod receive_address_tests;
+#[cfg(test)]
+mod session_boarding_utxo_tests;
+#[cfg(test)]
+mod session_exit_candidate_tests;
+#[cfg(test)]
+mod session_mapper_tests;
 
 use std::cell::RefCell;
 use std::future::Future;
