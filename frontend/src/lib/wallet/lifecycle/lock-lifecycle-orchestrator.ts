@@ -3,44 +3,36 @@ import { useWalletStore } from '@/stores/walletStore'
 import { useCryptoStore } from '@/stores/cryptoStore'
 import {
   orchestrateOnchainLoad,
-  syncOnchainLoadLifecycleWithLockPhase,
 } from '@/lib/wallet/lifecycle/onchain-load-lifecycle-orchestrator'
 import { orchestrateArkadeLoad } from '@/lib/wallet/lifecycle/arkade-load-lifecycle-orchestrator'
 import {
   awaitArkadeSaveQuiescence,
   isArkadeSaveBlockingLock,
   ArkadeSaveBlockingLockError,
-  syncArkadeSaveLifecycleWithLockPhase,
 } from '@/lib/wallet/lifecycle/arkade-save-lifecycle-orchestrator'
 import {
   awaitArkadeSyncQuiescence,
-  syncArkadeSyncLifecycleWithLockPhase,
 } from '@/lib/wallet/lifecycle/arkade-sync-lifecycle-orchestrator'
-import { syncArkadeLoadLifecycleWithLockPhase } from '@/lib/wallet/lifecycle/arkade-load-lifecycle-orchestrator'
 import { orchestrateLightningLoad } from '@/lib/wallet/lifecycle/lightning-load-lifecycle-orchestrator'
 import {
   awaitLightningSaveQuiescence,
   isLightningSaveBlockingLock,
   LightningSaveBlockingLockError,
-  syncLightningSaveLifecycleWithLockPhase,
 } from '@/lib/wallet/lifecycle/lightning-save-lifecycle-orchestrator'
 import {
   awaitLightningSyncQuiescence,
-  syncLightningSyncLifecycleWithLockPhase,
 } from '@/lib/wallet/lifecycle/lightning-sync-lifecycle-orchestrator'
-import { syncLightningLoadLifecycleWithLockPhase } from '@/lib/wallet/lifecycle/lightning-load-lifecycle-orchestrator'
 import { isArkadeActiveForNetworkMode } from '@/lib/arkade/arkade-utils'
 import { orchestrateOnchainPostUnlockSync } from '@/lib/wallet/lifecycle/onchain-sync-lifecycle-orchestrator'
 import {
   awaitOnchainSaveQuiescence,
   isOnchainSaveBlockingLock,
   OnchainSaveBlockingLockError,
-  syncOnchainSaveLifecycleWithLockPhase,
 } from '@/lib/wallet/lifecycle/onchain-save-lifecycle-orchestrator'
 import {
   awaitOnchainSyncQuiescence,
-  syncOnchainSyncLifecycleWithLockPhase,
 } from '@/lib/wallet/lifecycle/onchain-sync-lifecycle-orchestrator'
+import { syncAllRailLifecyclesWithLockPhase } from '@/lib/wallet/lifecycle/rail-lifecycle-lock-handoff'
 import { awaitInFlightWalletSecretsWrites } from '@/db/wallet-secrets-write-tracker'
 import {
   ensureWalletSecretsSession,
@@ -313,30 +305,17 @@ export async function orchestrateLock(): Promise<void> {
 
     setPhase('locking')
     setOperation('locking')
+    let lockPurgeError: unknown
     try {
       await useCryptoStore.getState().lockAndPurgeSensitiveRuntimeState()
-      syncOnchainLoadLifecycleWithLockPhase('locked')
-      syncOnchainSyncLifecycleWithLockPhase('locked')
-      syncOnchainSaveLifecycleWithLockPhase('locked')
-      syncArkadeLoadLifecycleWithLockPhase('locked')
-      syncArkadeSyncLifecycleWithLockPhase('locked')
-      syncArkadeSaveLifecycleWithLockPhase('locked')
-      syncLightningLoadLifecycleWithLockPhase('locked')
-      syncLightningSyncLifecycleWithLockPhase('locked')
-      syncLightningSaveLifecycleWithLockPhase('locked')
-      setSnapshot({ phase: 'locked', operation: 'none' })
     } catch (error) {
-      syncOnchainLoadLifecycleWithLockPhase('locked')
-      syncOnchainSyncLifecycleWithLockPhase('locked')
-      syncOnchainSaveLifecycleWithLockPhase('locked')
-      syncArkadeLoadLifecycleWithLockPhase('locked')
-      syncArkadeSyncLifecycleWithLockPhase('locked')
-      syncArkadeSaveLifecycleWithLockPhase('locked')
-      syncLightningLoadLifecycleWithLockPhase('locked')
-      syncLightningSyncLifecycleWithLockPhase('locked')
-      syncLightningSaveLifecycleWithLockPhase('locked')
+      lockPurgeError = error
+    } finally {
+      syncAllRailLifecyclesWithLockPhase('locked')
       setSnapshot({ phase: 'locked', operation: 'none' })
-      throw error
+    }
+    if (lockPurgeError != null) {
+      throw lockPurgeError
     }
   })
 }

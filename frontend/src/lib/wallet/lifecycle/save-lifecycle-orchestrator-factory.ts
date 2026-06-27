@@ -1,6 +1,7 @@
 import { sanitizeErrorMessageForUi } from '@/lib/shared/sanitize-error-for-ui'
 import { errorMessage } from '@/lib/shared/utils'
 import type { LockLifecyclePhase } from '@/lib/wallet/lifecycle/lock-lifecycle-types'
+import { shouldSkipRailLifecycleResetForLockPhase } from '@/lib/wallet/lifecycle/rail-lifecycle-lock-phase'
 import {
   createInFlightLifecycleTracker,
   getCoalescedInFlightPromise,
@@ -124,10 +125,12 @@ export function createSaveLifecycleOrchestrator<
   }
 
   function syncSaveLifecycleWithLockPhase(lockPhase: LockLifecyclePhase): void {
-    if (lockPhase === 'unlocking' || lockPhase === 'unlocked') {
-      return
-    }
-    if (inFlightSaveTracker.getCurrent() != null) {
+    if (
+      shouldSkipRailLifecycleResetForLockPhase(
+        lockPhase,
+        inFlightSaveTracker.getCurrent() != null,
+      )
+    ) {
       return
     }
     forcedLockAcknowledged = false

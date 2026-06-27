@@ -36,6 +36,7 @@ import {
   createInFlightLifecycleTracker,
   getCoalescedInFlightPromise,
 } from '@/lib/wallet/lifecycle/lifecycle-in-flight-tracker'
+import { shouldSkipRailLifecycleResetForLockPhase } from '@/lib/wallet/lifecycle/rail-lifecycle-lock-phase'
 
 export type { ArkadeLoadLifecycleSnapshot, ArkadeLoadParams } from '@/lib/wallet/lifecycle/arkade-load-lifecycle-types'
 
@@ -223,10 +224,12 @@ export function forceResetArkadeLoadLifecycleForTeardown(): void {
 }
 
 export function syncArkadeLoadLifecycleWithLockPhase(lockPhase: LockLifecyclePhase): void {
-  if (lockPhase === 'unlocking' || lockPhase === 'unlocked') {
-    return
-  }
-  if (inFlightLoadTracker.getCurrent() != null) {
+  if (
+    shouldSkipRailLifecycleResetForLockPhase(
+      lockPhase,
+      inFlightLoadTracker.getCurrent() != null,
+    )
+  ) {
     return
   }
   lastOpenedSessionKey = null

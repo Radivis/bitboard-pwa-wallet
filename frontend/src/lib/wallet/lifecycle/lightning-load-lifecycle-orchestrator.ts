@@ -18,6 +18,7 @@ import {
   createInFlightLifecycleTracker,
   getCoalescedInFlightPromise,
 } from '@/lib/wallet/lifecycle/lifecycle-in-flight-tracker'
+import { shouldSkipRailLifecycleResetForLockPhase } from '@/lib/wallet/lifecycle/rail-lifecycle-lock-phase'
 import { lightningRailScopeKey } from '@/lib/wallet/lifecycle/lightning-rail-types'
 
 export type { LightningLoadLifecycleSnapshot, LightningLoadParams } from '@/lib/wallet/lifecycle/lightning-load-lifecycle-types'
@@ -69,10 +70,12 @@ export async function awaitLightningLoadQuiescence(): Promise<void> {
 }
 
 export function syncLightningLoadLifecycleWithLockPhase(lockPhase: LockLifecyclePhase): void {
-  if (lockPhase === 'unlocking' || lockPhase === 'unlocked') {
-    return
-  }
-  if (inFlightLoadTracker.getCurrent() != null) {
+  if (
+    shouldSkipRailLifecycleResetForLockPhase(
+      lockPhase,
+      inFlightLoadTracker.getCurrent() != null,
+    )
+  ) {
     return
   }
   setSnapshot({ loadPhase: 'not-configured', networkMode: null })

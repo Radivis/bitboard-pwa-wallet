@@ -15,6 +15,7 @@ import {
   createInFlightLifecycleTracker,
   getCoalescedInFlightPromise,
 } from '@/lib/wallet/lifecycle/lifecycle-in-flight-tracker'
+import { shouldSkipRailLifecycleResetForLockPhase } from '@/lib/wallet/lifecycle/rail-lifecycle-lock-phase'
 import type {
   OnchainPostUnlockSyncParams,
   OnchainSyncLifecycleSnapshot,
@@ -147,10 +148,12 @@ export function applyOnchainSyncLifecycleSnapshotFromRemote(
 }
 
 export function syncOnchainSyncLifecycleWithLockPhase(lockPhase: LockLifecyclePhase): void {
-  if (lockPhase === 'unlocking' || lockPhase === 'unlocked') {
-    return
-  }
-  if (inFlightSyncTracker.getCurrent() != null) {
+  if (
+    shouldSkipRailLifecycleResetForLockPhase(
+      lockPhase,
+      inFlightSyncTracker.getCurrent() != null,
+    )
+  ) {
     return
   }
   setSnapshot({

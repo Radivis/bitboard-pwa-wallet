@@ -16,6 +16,7 @@ import {
   createInFlightLifecycleTracker,
   getCoalescedInFlightPromise,
 } from '@/lib/wallet/lifecycle/lifecycle-in-flight-tracker'
+import { shouldSkipRailLifecycleResetForLockPhase } from '@/lib/wallet/lifecycle/rail-lifecycle-lock-phase'
 import type { SyncLifecyclePhase } from '@/lib/wallet/lifecycle/rail-lifecycle-types'
 import type {
   LightningPostLoadSyncParams,
@@ -186,10 +187,12 @@ export function configureLightningSyncForLoadedRail(scope: LightningRailScope): 
 }
 
 export function syncLightningSyncLifecycleWithLockPhase(lockPhase: LockLifecyclePhase): void {
-  if (lockPhase === 'unlocking' || lockPhase === 'unlocked') {
-    return
-  }
-  if (inFlightSyncTracker.getCurrent() != null) {
+  if (
+    shouldSkipRailLifecycleResetForLockPhase(
+      lockPhase,
+      inFlightSyncTracker.getCurrent() != null,
+    )
+  ) {
     return
   }
   connectionSyncTrackers.clear()
