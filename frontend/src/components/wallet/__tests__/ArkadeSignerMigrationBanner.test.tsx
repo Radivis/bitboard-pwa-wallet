@@ -84,6 +84,33 @@ describe('ArkadeSignerMigrationBanner', () => {
     })
     expect(walletStoreState.setArkadeSignerMigrationHint).toHaveBeenCalledWith(null)
   })
+
+  it('shows parsed Ark client message when migration fails', async () => {
+    const user = userEvent.setup()
+    orchestrateArkadeSyncThenSave.mockRejectedValueOnce(
+      new Error(
+        JSON.stringify({
+          code: 'client',
+          message:
+            'Ark client error: failed to get VTXOs for addresses: request failed: request failed',
+        }),
+      ),
+    )
+    renderBanner(migrationHint('migratable'))
+
+    await user.click(screen.getByRole('button', { name: 'Migrate funds' }))
+
+    expect(
+      screen.getByText(
+        'Ark client error: failed to get VTXOs for addresses: request failed',
+      ),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByText(
+        '{"code":"client","message":"Ark client error: failed to get VTXOs for addresses: request failed: request failed"}',
+      ),
+    ).not.toBeInTheDocument()
+  })
 })
 
 function migrationHint(

@@ -47,7 +47,7 @@ feature:
       - id: ARK-ROT-04
         description: Signer mismatch with neither current nor deprecated keys yields load-error with operator-change vs wrong-ASP messaging
       - id: ARK-ROT-05
-        description: Signer migration surfaces a non-blocking banner on Management Arkade with regime-appropriate actions (migrate, sync, unilateral exit)
+        description: Signer migration surfaces a non-blocking banner on Dashboard and Management Arkade with regime-appropriate actions (migrate, sync, unilateral exit)
   pages:
     - ArkadeManagement:
       - description: "Arkade status on Management page"

@@ -15,14 +15,20 @@ describe('userFacingErrorMessage', () => {
     )
   })
 
-  it('parses structured WASM payload then sanitizes', () => {
+  it('parses structured Ark WASM payload and collapses redundant request-failed chain', () => {
     const err = new Error(
       JSON.stringify({
-        code: 'blockchain',
-        message: 'Blockchain error: GET https://esplora.example.com/tx',
+        code: 'client',
+        message:
+          'Ark client error: failed to get VTXOs for addresses: request failed: request failed',
       }),
     )
-    expect(userFacingErrorMessage(err)).toBe('Blockchain error: GET [url]')
+    expect(errorMessage(err)).toBe(
+      'Ark client error: failed to get VTXOs for addresses: request failed: request failed',
+    )
+    expect(userFacingErrorMessage(err)).toBe(
+      'Ark client error: failed to get VTXOs for addresses: request failed',
+    )
   })
 })
 

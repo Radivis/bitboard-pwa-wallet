@@ -121,6 +121,7 @@ impl ArkSession {
     }
 
     pub async fn migrate_deprecated_signer_vtxos(&self) -> ArkResult<()> {
+        self.sync_offchain_keys().await;
         let mut rng = OsRng;
         self.client
             .migrate_deprecated_signer_vtxos(&mut rng)

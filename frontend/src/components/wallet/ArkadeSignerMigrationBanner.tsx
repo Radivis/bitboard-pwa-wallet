@@ -3,6 +3,10 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import type { ArkadeSignerMigrationHint } from '@/workers/arkade-api'
 import { orchestrateArkadeSyncThenSave } from '@/lib/wallet/lifecycle/arkade-sync-lifecycle-orchestrator'
+import {
+  LIFECYCLE_SYNC_ERROR_FALLBACK,
+  userFacingLifecycleErrorMessage,
+} from '@/lib/shared/utils'
 import { useWalletStore } from '@/stores/walletStore'
 
 function formatCutoffDate(cutoffUnix: number): string | null {
@@ -82,7 +86,9 @@ export function ArkadeSignerMigrationBanner() {
       })
       setHint(null)
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : 'Migration failed')
+      setErrorMessage(
+        userFacingLifecycleErrorMessage(error, LIFECYCLE_SYNC_ERROR_FALLBACK),
+      )
     } finally {
       setIsMigrating(false)
     }

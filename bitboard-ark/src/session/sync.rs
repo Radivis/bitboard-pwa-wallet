@@ -33,7 +33,7 @@ impl ArkSession {
         Ok(())
     }
 
-    async fn sync_offchain_keys(&self) {
+    pub(crate) async fn sync_offchain_keys(&self) {
         if let Err(error) = self.client.discover_keys(DEFAULT_GAP_LIMIT).await {
             warn_offchain_key_discovery_failed(&error);
         }

@@ -1,6 +1,7 @@
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
 import { sanitizeErrorMessageForUi } from '@/lib/shared/sanitize-error-for-ui'
+import { wasmArkErrorMessage } from '@/lib/shared/wasm-ark-error'
 import { wasmCryptoErrorMessage } from '@/lib/shared/wasm-crypto-error'
 
 export function cn(...inputs: ClassValue[]) {
@@ -11,6 +12,8 @@ export function cn(...inputs: ClassValue[]) {
 export function errorMessage(err: unknown): string {
   const wasmMessage = wasmCryptoErrorMessage(err)
   if (wasmMessage != null) return wasmMessage
+  const arkMessage = wasmArkErrorMessage(err)
+  if (arkMessage != null) return arkMessage
   return err instanceof Error ? err.message : String(err)
 }
 

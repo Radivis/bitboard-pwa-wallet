@@ -7,6 +7,9 @@ import { usePeriodicSyncRefetchInterval } from '@/lib/wallet/periodic-sync/usePe
 
 const onchainPeriodicSyncQueryKeyRoot = ['onchain', 'periodic-sync'] as const
 
+/** Sentinel — React Query requires query data to be non-undefined. */
+type OnchainPeriodicSyncQueryData = 'completed'
+
 export function onchainPeriodicSyncQueryKey(
   descriptorWalletKey: string,
   networkMode: string,
@@ -33,8 +36,10 @@ export function useOnchainPeriodicSyncQuery(): void {
       descriptorWalletKey != null
         ? onchainPeriodicSyncQueryKey(descriptorWalletKey, networkMode, activeWalletId)
         : [...onchainPeriodicSyncQueryKeyRoot, 'inactive'],
-    queryFn: () =>
-      runIncrementalDashboardWalletSync({ networkMode, activeWalletId }),
+    queryFn: async (): Promise<OnchainPeriodicSyncQueryData> => {
+      await runIncrementalDashboardWalletSync({ networkMode, activeWalletId })
+      return 'completed'
+    },
     enabled,
     refetchInterval,
     refetchOnWindowFocus: false,

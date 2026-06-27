@@ -171,7 +171,46 @@ describe('arkade-sync-lifecycle-orchestrator', () => {
       syncKind: 'signerMigration',
     })
 
-    expect(callOrder).toEqual(['migrate', 'sync', 'save'])
+    expect(callOrder).toEqual(['migrate', 'save', 'sync'])
     expect(refreshArkadeStoreFromLoadedWasm).toHaveBeenCalledWith('conn-1')
+  })
+
+  it('signerMigration persists after migrate even when post-migration operator sync fails', async () => {
+    syncWithOperator.mockRejectedValueOnce(new Error('operator vtxos down'))
+
+    await orchestrateArkadeSyncThenSave({
+      ...syncParams,
+      syncKind: 'signerMigration',
+    })
+
+    expect(migrateDeprecatedSignerVtxos).toHaveBeenCalled()
+    expect(orchestrateArkadeSave).toHaveBeenCalled()
+    expect(syncWithOperator).toHaveBeenCalled()
+    expect(getArkadeSyncLifecycleSnapshot()).toEqual({
+      syncPhase: 'sync-error',
+      railScope: {
+        walletId: 1,
+        networkMode: 'signet',
+        connectionId: 'conn-1',
+      },
+      errorMessage: 'operator vtxos down',
+    })
+  })
+
+  it('signerMigration still throws when cooperative migration fails', async () => {
+    migrateDeprecatedSignerVtxos.mockRejectedValueOnce(
+      new Error('Ark client error: failed to get VTXOs for addresses: request failed'),
+    )
+
+    await expect(
+      orchestrateArkadeSyncThenSave({
+        ...syncParams,
+        syncKind: 'signerMigration',
+        throwOnError: true,
+      }),
+    ).rejects.toThrow(/failed to get VTXOs for addresses/)
+
+    expect(orchestrateArkadeSave).not.toHaveBeenCalled()
+    expect(syncWithOperator).not.toHaveBeenCalled()
   })
 })

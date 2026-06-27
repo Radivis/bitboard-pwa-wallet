@@ -5,6 +5,7 @@ import { ArkadeOverviewInfomodeContent } from '@/components/arkade/infomode/Arka
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ArkadeBalanceBreakdown } from '@/components/wallet/ArkadeBalanceBreakdown'
+import { ArkadeSignerMigrationBanner } from '@/components/wallet/ArkadeSignerMigrationBanner'
 import { RailLoadErrorBanner } from '@/components/wallet/RailLoadErrorBanner'
 import { RailSyncControl } from '@/components/wallet/RailSyncControl'
 import { RailSyncErrorBanner } from '@/components/wallet/RailSyncErrorBanner'
@@ -79,6 +80,7 @@ export function ArkadeDashboardBalance() {
         </div>
       </CardHeader>
       <CardContent className="space-y-2">
+        <ArkadeSignerMigrationBanner />
         {arkadeLoadSnapshot.loadPhase === 'load-error' ? (
           <RailLoadErrorBanner
             rail="arkade"
@@ -88,16 +90,7 @@ export function ArkadeDashboardBalance() {
               void orchestrateArkadeRetryLoad()
             }}
           />
-        ) : isLoading ? (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-            Loading…
-          </div>
-        ) : balanceQuery.isError && balance == null ? (
-          <p className="text-sm text-destructive" data-testid="dashboard-arkade-balance-error">
-            Could not load Arkade balance. Check your network and try again.
-          </p>
-        ) : balance ? (
+        ) : (
           <>
             <RailSyncErrorBanner
               rail="arkade"
@@ -109,41 +102,54 @@ export function ArkadeDashboardBalance() {
                 arkadeRail.syncPhase === 'syncing' || arkadeManualSync.isPending
               }
             />
-            <ArkadeBalanceBreakdown
-              balance={balance}
-              amountTestId="dashboard-arkade-balance-amount"
-            />
-            {isStaleArkade ? (
-              <InfomodeWrapper
-                infoId={ARKADE_INFOMODE_IDS.operatorStale}
-                infoTitle={ARKADE_OPERATOR_STALE_INFOMODE.title}
-                infoText={ARKADE_OPERATOR_STALE_INFOMODE.text}
-                as="span"
+            {isLoading ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                Loading…
+              </div>
+            ) : balanceQuery.isError && balance == null ? (
+              <p className="text-sm text-destructive" data-testid="dashboard-arkade-balance-error">
+                Could not load Arkade balance. Check your network and try again.
+              </p>
+            ) : balance ? (
+              <>
+                <ArkadeBalanceBreakdown
+                  balance={balance}
+                  amountTestId="dashboard-arkade-balance-amount"
+                />
+                {isStaleArkade ? (
+                  <InfomodeWrapper
+                    infoId={ARKADE_INFOMODE_IDS.operatorStale}
+                    infoTitle={ARKADE_OPERATOR_STALE_INFOMODE.title}
+                    infoText={ARKADE_OPERATOR_STALE_INFOMODE.text}
+                    as="span"
+                  >
+                    <p
+                      className="text-xs text-amber-700 dark:text-amber-400"
+                      data-testid="arkade-operator-stale-banner"
+                    >
+                      Showing Arkade data from your wallet&apos;s saved operator state. The operator
+                      has not been verified this session.
+                      {lastSuccessfulOperatorSyncAt != null && (
+                        <>
+                          {' '}
+                          Last verified with operator:{' '}
+                          {new Date(lastSuccessfulOperatorSyncAt).toLocaleString()}.
+                        </>
+                      )}
+                    </p>
+                  </InfomodeWrapper>
+                ) : null}
+              </>
+            ) : (
+              <p
+                className="text-sm text-muted-foreground"
+                data-testid="dashboard-arkade-session-empty"
               >
-                <p
-                  className="text-xs text-amber-700 dark:text-amber-400"
-                  data-testid="arkade-operator-stale-banner"
-                >
-                  Showing Arkade data from your wallet&apos;s saved operator state. The operator
-                  has not been verified this session.
-                  {lastSuccessfulOperatorSyncAt != null && (
-                    <>
-                      {' '}
-                      Last verified with operator:{' '}
-                      {new Date(lastSuccessfulOperatorSyncAt).toLocaleString()}.
-                    </>
-                  )}
-                </p>
-              </InfomodeWrapper>
-            ) : null}
+                No Arkade session yet
+              </p>
+            )}
           </>
-        ) : (
-          <p
-            className="text-sm text-muted-foreground"
-            data-testid="dashboard-arkade-session-empty"
-          >
-            No Arkade session yet
-          </p>
         )}
         <Link
           to="/wallet/management"

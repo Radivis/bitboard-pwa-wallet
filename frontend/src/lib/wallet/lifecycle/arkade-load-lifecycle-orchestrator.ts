@@ -14,7 +14,6 @@ import {
   type ArkadeSupportedNetworkMode,
 } from '@/lib/arkade/arkade-endpoints'
 import { isArkadeActiveForNetworkMode } from '@/lib/arkade/arkade-utils'
-import { reportArkadeOperatorSyncError } from '@/lib/wallet/rail-sync-error-toast'
 import {
   hydrateArkadeDashboardAfterSessionOpen,
   openFreshArkadeWorkerSession,
@@ -258,7 +257,6 @@ export async function orchestrateArkadeLoad(params: ArkadeLoadParams): Promise<v
         walletId,
         networkMode,
         connectionId,
-        onSyncError: reportArkadeOperatorSyncError,
       })
     } catch (error) {
       terminateArkadeWorker()

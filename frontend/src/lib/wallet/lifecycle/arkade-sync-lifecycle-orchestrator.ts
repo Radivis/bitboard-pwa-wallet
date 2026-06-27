@@ -205,7 +205,24 @@ export async function orchestrateArkadeSyncThenSave(
       try {
         if (params.syncKind === 'signerMigration') {
           await runArkadeSignerMigrationBody()
+          await orchestrateArkadeSave(toSaveParams(params))
+          try {
+            await runArkadeOperatorSyncBody(params.connectionId)
+            setSnapshot({ syncPhase: 'not-syncing', railScope: scope, errorMessage: null })
+          } catch (syncError) {
+            setSnapshot({
+              syncPhase: 'sync-error',
+              railScope: scope,
+              errorMessage: userFacingLifecycleErrorMessage(
+                syncError,
+                LIFECYCLE_SYNC_ERROR_FALLBACK,
+              ),
+            })
+            params.onSyncError?.(syncError)
+          }
+          return
         }
+
         await runArkadeOperatorSyncBody(params.connectionId)
         setSnapshot({ syncPhase: 'not-syncing', railScope: scope, errorMessage: null })
         try {

@@ -115,7 +115,6 @@ describe('lightning-load-lifecycle-orchestrator', () => {
       expect.objectContaining({
         walletId: 1,
         networkMode: 'signet',
-        onSyncError: expect.any(Function),
       }),
     )
   })

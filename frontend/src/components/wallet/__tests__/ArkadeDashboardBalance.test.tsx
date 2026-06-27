@@ -7,6 +7,26 @@ import type { NetworkMode } from '@/stores/walletStore'
 const balanceQueryMock = vi.hoisted(() => vi.fn())
 const walletStoreState = vi.hoisted(() => ({
   networkMode: 'signet' as NetworkMode,
+  arkadeSignerMigrationHint: null as {
+    previousSignerPkHex: string
+    deprecatedStatus: 'migratable'
+    cutoffUnix: number
+  } | null,
+}))
+const arkadeLifecycleState = vi.hoisted(() => ({
+  rail: {
+    loadPhase: 'loaded' as const,
+    syncPhase: 'not-syncing' as const,
+    savePhase: 'not-saving' as const,
+  },
+  load: {
+    loadPhase: 'loaded' as const,
+    errorMessage: null as string | null,
+  },
+  sync: {
+    syncPhase: 'not-syncing' as const,
+    errorMessage: null as string | null,
+  },
 }))
 
 vi.mock('@tanstack/react-router', async (importOriginal) => {
@@ -37,19 +57,9 @@ vi.mock('@/hooks/useArkadeDashboardQueries', () => ({
 }))
 
 vi.mock('@/hooks/useArkadeLifecycleSnapshots', () => ({
-  useArkadeRailSnapshot: () => ({
-    loadPhase: 'loaded',
-    syncPhase: 'not-syncing',
-    savePhase: 'not-saving',
-  }),
-  useArkadeLoadLifecycleSnapshot: () => ({
-    loadPhase: 'loaded',
-    errorMessage: null,
-  }),
-  useArkadeSyncLifecycleSnapshot: () => ({
-    syncPhase: 'not-syncing',
-    errorMessage: null,
-  }),
+  useArkadeRailSnapshot: () => arkadeLifecycleState.rail,
+  useArkadeLoadLifecycleSnapshot: () => arkadeLifecycleState.load,
+  useArkadeSyncLifecycleSnapshot: () => arkadeLifecycleState.sync,
 }))
 
 vi.mock('@/hooks/useRailManualSyncMutations', () => ({
@@ -84,6 +94,20 @@ describe('ArkadeDashboardBalance', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     walletStoreState.networkMode = 'signet'
+    walletStoreState.arkadeSignerMigrationHint = null
+    arkadeLifecycleState.rail = {
+      loadPhase: 'loaded',
+      syncPhase: 'not-syncing',
+      savePhase: 'not-saving',
+    }
+    arkadeLifecycleState.load = {
+      loadPhase: 'loaded',
+      errorMessage: null,
+    }
+    arkadeLifecycleState.sync = {
+      syncPhase: 'not-syncing',
+      errorMessage: null,
+    }
     balanceQueryMock.mockReturnValue({
       isLoading: false,
       data: { confirmedSats: 42_000, totalSats: 42_000 },
@@ -169,5 +193,29 @@ describe('ArkadeDashboardBalance', () => {
     renderWithProviders(<ArkadeDashboardBalance />)
     expect(screen.queryByTestId('dashboard-arkade-session-empty')).not.toBeInTheDocument()
     expect(screen.getByTestId('dashboard-arkade-balance-amount')).toBeInTheDocument()
+  })
+
+  it('DASH-ARK-15 shows signer migration banner when operator key rotation is pending', () => {
+    walletStoreState.arkadeSignerMigrationHint = {
+      previousSignerPkHex: '02abc',
+      deprecatedStatus: 'migratable',
+      cutoffUnix: 1_785_312_000,
+    }
+    renderWithProviders(<ArkadeDashboardBalance />)
+    expect(screen.getByTestId('arkade-signer-migration-banner')).toBeInTheDocument()
+    expect(screen.getByText('Arkade operator signer rotation')).toBeInTheDocument()
+  })
+
+  it('DASH-ARK-16 shows sync error banner when sync fails without balance data', () => {
+    balanceQueryMock.mockReturnValue({ isLoading: false, isError: false, data: undefined })
+    arkadeLifecycleState.rail.syncPhase = 'sync-error'
+    arkadeLifecycleState.sync = {
+      syncPhase: 'sync-error',
+      errorMessage: 'failed to get VTXOs for addresses',
+    }
+    renderWithProviders(<ArkadeDashboardBalance />)
+    expect(screen.getByTestId('wallet-sync-error-banner-arkade')).toBeInTheDocument()
+    expect(screen.getByText('failed to get VTXOs for addresses')).toBeInTheDocument()
+    expect(screen.getByTestId('dashboard-arkade-session-empty')).toBeInTheDocument()
   })
 })
