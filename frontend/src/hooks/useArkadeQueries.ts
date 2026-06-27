@@ -33,7 +33,7 @@ import { useIsArkadeSessionReady } from '@/hooks/useArkadeLifecycleSnapshots'
 import {
   openArkadeSessionForWallet,
 } from '@/lib/arkade/arkade-session-service'
-import { scheduleBackgroundArkadeOperatorSync } from '@/lib/arkade/arkade-operator-sync'
+import { scheduleBackgroundArkadeOperatorSync } from '@/lib/wallet/lifecycle/arkade-sync-lifecycle-orchestrator'
 import { readArkadeDashboardStateFromStore } from '@/lib/arkade/arkade-persistence-store-sync'
 import {
   ARKADE_FEE_ESTIMATE_STALE_MS,

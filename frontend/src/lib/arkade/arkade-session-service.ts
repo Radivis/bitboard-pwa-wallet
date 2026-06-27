@@ -17,8 +17,6 @@ import {
   forceResetArkadeSyncLifecycleForTeardown,
 } from '@/lib/wallet/lifecycle/arkade-sync-lifecycle-orchestrator'
 import { getArkadeWorkerIfExists, terminateArkadeWorker } from '@/workers/arkade-factory'
-import { isArkadeActiveForNetworkMode } from '@/lib/arkade/arkade-utils'
-import { isArkadeSupportedNetworkMode } from '@/lib/arkade/arkade-endpoints'
 import type { NetworkMode } from '@/stores/walletStore'
 
 export async function closeArkadeSession(): Promise<void> {

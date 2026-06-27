@@ -189,10 +189,10 @@ async function syncWithOperatorCore(): Promise<void> {
 }
 
 async function persistAfterCriticalOperation(): Promise<void> {
-  const { awaitBackgroundArkadeOperatorSync } = await import(
-    '@/lib/arkade/arkade-operator-sync'
+  const { awaitArkadeSyncQuiescence } = await import(
+    '@/lib/wallet/lifecycle/arkade-sync-lifecycle-orchestrator'
   )
-  await awaitBackgroundArkadeOperatorSync()
+  await awaitArkadeSyncQuiescence()
   if (activeSessionParams != null) {
     await syncWithOperatorCore()
     return
@@ -328,10 +328,10 @@ const arkadeService: ArkadeService = {
   },
 
   async syncWithOperator(): Promise<void> {
-    const { awaitBackgroundArkadeOperatorSync } = await import(
-      '@/lib/arkade/arkade-operator-sync'
+    const { awaitArkadeSyncQuiescence } = await import(
+      '@/lib/wallet/lifecycle/arkade-sync-lifecycle-orchestrator'
     )
-    await awaitBackgroundArkadeOperatorSync()
+    await awaitArkadeSyncQuiescence()
     await syncWithOperatorCore()
   },
 

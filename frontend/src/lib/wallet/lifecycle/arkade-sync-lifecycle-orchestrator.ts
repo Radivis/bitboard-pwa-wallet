@@ -18,6 +18,7 @@ import {
 } from '@/lib/wallet/lifecycle/lifecycle-in-flight-tracker'
 import { shouldSkipRailLifecycleResetForLockPhase } from '@/lib/wallet/lifecycle/rail-lifecycle-lock-phase'
 import { withWalletWriterLock } from '@/lib/shared/opfs-writer-lock'
+import { ARKADE_BACKGROUND_OPERATOR_SYNC_DEBOUNCE_MS } from '@/lib/arkade/arkade-sync-timings'
 import type {
   ArkadePostLoadSyncParams,
   ArkadeSyncLifecycleSnapshot,
@@ -33,8 +34,6 @@ export type {
   ArkadeSyncThenSaveParams,
   ArkadePostLoadSyncParams,
 } from '@/lib/wallet/lifecycle/arkade-sync-lifecycle-types'
-
-const BACKGROUND_OPERATOR_SYNC_DEBOUNCE_MS = 400
 
 let snapshot: ArkadeSyncLifecycleSnapshot = {
   syncPhase: 'not-configured',
@@ -270,7 +269,7 @@ export function scheduleBackgroundArkadeOperatorSync(): void {
       awaitCompletion: false,
       throwOnError: false,
     })
-  }, BACKGROUND_OPERATOR_SYNC_DEBOUNCE_MS)
+  }, ARKADE_BACKGROUND_OPERATOR_SYNC_DEBOUNCE_MS)
 }
 
 /** @internal Test-only reset */

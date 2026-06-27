@@ -39,10 +39,6 @@ vi.mock('@/lib/wallet/wallet-secrets-session', () => ({
   isWalletSecretsSessionActive: vi.fn().mockResolvedValue(true),
 }))
 
-vi.mock('@/lib/arkade/arkade-operator-sync', () => ({
-  awaitBackgroundArkadeOperatorSync: vi.fn().mockResolvedValue(undefined),
-}))
-
 vi.mock('@/lib/arkade/arkade-session-service', () => ({
   closeArkadeSession: vi.fn().mockResolvedValue(undefined),
 }))

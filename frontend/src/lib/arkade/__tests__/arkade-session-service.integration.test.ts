@@ -125,10 +125,6 @@ vi.mock('@/lib/arkade/arkade-persistence-store-sync', () => ({
     clearArkadeDashboardStoreMock(...args),
 }))
 
-vi.mock('@/lib/arkade/arkade-operator-sync', () => ({
-  awaitBackgroundArkadeOperatorSync: vi.fn().mockResolvedValue(undefined),
-}))
-
 vi.mock('@/workers/arkade-persistence-channel', () => ({
   ensureArkadeEncryptedSecretsHost: (...args: unknown[]) =>
     ensureArkadeEncryptedSecretsHostMock(...args),

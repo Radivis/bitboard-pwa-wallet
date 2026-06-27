@@ -32,9 +32,10 @@ use crate::api_types::{
 use crate::balance_display::{ArkadeBalanceInputs, build_arkade_balance_dto};
 use crate::constants::{
     DEFAULT_TX_FEE_RATE, MIN_FEE_RATE_SAT_PER_VB, PAYMENT_DIRECTION_INCOMING,
-    PAYMENT_DIRECTION_OUTGOING, UNROLL_EVENT_TYPE_DONE, UNROLL_EVENT_TYPE_UNROLL,
-    UNROLL_EVENT_TYPE_WAIT, VTXO_STATUS_PRECONFIRMED, VTXO_STATUS_RECOVERABLE, VTXO_STATUS_SETTLED,
-    VTXO_STATUS_SPENT, VTXO_STATUS_UNROLLED,
+    PAYMENT_DIRECTION_OUTGOING, UNILATERAL_EXIT_CHILD_VSIZE_VB, UNROLL_EVENT_TYPE_DONE,
+    UNROLL_EVENT_TYPE_UNROLL, UNROLL_EVENT_TYPE_WAIT, VTXO_SELF_RENEW_REMAINING_FRACTION,
+    VTXO_STATUS_PRECONFIRMED, VTXO_STATUS_RECOVERABLE, VTXO_STATUS_SETTLED, VTXO_STATUS_SPENT,
+    VTXO_STATUS_UNROLLED,
 };
 use crate::error::{ArkResult, ArkWasmError};
 use crate::esplora_blockchain::EsploraBlockchain;
@@ -56,8 +57,6 @@ use crate::persistence::{
 const CLIENT_NAME: &str = "bitboard-pwa-wallet";
 const BOLTZ_URL: &str = "https://api.boltz.exchange";
 const CLIENT_TIMEOUT: Duration = Duration::from_secs(30);
-const SELF_RENEW_REMAINING_FRACTION: f64 = 0.10;
-const UNILATERAL_CHILD_VSIZE: u64 = 140;
 
 pub type ArkWallet = ArkBdkWallet<SharedPersistenceDb>;
 pub type ArkClient = Client<EsploraBlockchain, ArkWallet, InMemorySwapStorage, Bip32KeyProvider>;
@@ -712,7 +711,8 @@ impl ArkSession {
 
         let estimated_package_fee_sats = if estimate_error.is_none() {
             let steps = projected_unroll_steps.max(1) as u64;
-            (steps as f64 * fee_rate_sat_per_vb * UNILATERAL_CHILD_VSIZE as f64).ceil() as u64
+            (steps as f64 * fee_rate_sat_per_vb * UNILATERAL_EXIT_CHILD_VSIZE_VB as f64).ceil()
+                as u64
         } else {
             0
         };
@@ -839,7 +839,8 @@ impl ArkSession {
                     virtual_tx_outpoint.expires_at - virtual_tx_outpoint.created_at;
                 let remaining = virtual_tx_outpoint.expires_at - now;
                 remaining > 0
-                    && (remaining as f64) < (total_lifetime as f64 * SELF_RENEW_REMAINING_FRACTION)
+                    && (remaining as f64)
+                        < (total_lifetime as f64 * VTXO_SELF_RENEW_REMAINING_FRACTION)
             })
             .map(|virtual_tx_outpoint| virtual_tx_outpoint.outpoint)
             .collect())

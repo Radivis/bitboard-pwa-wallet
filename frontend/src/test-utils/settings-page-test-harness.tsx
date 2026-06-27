@@ -4,6 +4,18 @@
  */
 import type { ReactNode } from 'react'
 import { vi } from 'vitest'
+import {
+  DEFAULT_PERIODIC_SYNC_INTERVAL_SECONDS,
+  MAX_PERIODIC_SYNC_INTERVAL_SECONDS,
+  MIN_PERIODIC_SYNC_INTERVAL_SECONDS,
+} from '@/lib/wallet/periodic-sync/periodic-sync-constants'
+
+function clampIntervalSecondsForTests(seconds: number): number {
+  return Math.min(
+    MAX_PERIODIC_SYNC_INTERVAL_SECONDS,
+    Math.max(MIN_PERIODIC_SYNC_INTERVAL_SECONDS, Math.round(seconds)),
+  )
+}
 
 /** Mutable feature flags for settings page tests. */
 export const featureStoreState = {
@@ -24,9 +36,9 @@ export const featureStoreState = {
 }
 
 const defaultPeriodicSyncRails = {
-  onchain: { isEnabled: true, intervalSeconds: 300 },
-  lightning: { isEnabled: true, intervalSeconds: 300 },
-  arkade: { isEnabled: true, intervalSeconds: 300 },
+  onchain: { isEnabled: true, intervalSeconds: DEFAULT_PERIODIC_SYNC_INTERVAL_SECONDS },
+  lightning: { isEnabled: true, intervalSeconds: DEFAULT_PERIODIC_SYNC_INTERVAL_SECONDS },
+  arkade: { isEnabled: true, intervalSeconds: DEFAULT_PERIODIC_SYNC_INTERVAL_SECONDS },
 }
 
 /** Mutable periodic sync settings for settings page tests. */
@@ -156,8 +168,7 @@ vi.mock('@/stores/periodicSyncStore', () => ({
       selector(periodicSyncStoreState),
     { getState: () => periodicSyncStoreState },
   ),
-  clampIntervalSeconds: (seconds: number) =>
-    Math.min(86_400, Math.max(30, Math.round(seconds))),
+  clampIntervalSeconds: clampIntervalSecondsForTests,
 }))
 
 vi.mock('@tanstack/react-router', async (importOriginal) => {
@@ -389,10 +400,8 @@ function wireFeatureStoreMockImplementations(): void {
   )
   periodicSyncStoreState.setRailPeriodicSyncIntervalSeconds.mockImplementation(
     (rail: keyof typeof defaultPeriodicSyncRails, intervalSeconds: number) => {
-      periodicSyncStoreState.rails[rail].intervalSeconds = Math.min(
-        86_400,
-        Math.max(30, Math.round(intervalSeconds)),
-      )
+      periodicSyncStoreState.rails[rail].intervalSeconds =
+        clampIntervalSecondsForTests(intervalSeconds)
     },
   )
 }
@@ -463,9 +472,9 @@ export function resetSettingsPageTestState(): void {
   featureStoreState.isArkadeEnabled = false
   featureStoreState.isPeriodicSyncEnabled = false
   periodicSyncStoreState.rails = {
-    onchain: { isEnabled: true, intervalSeconds: 300 },
-    lightning: { isEnabled: true, intervalSeconds: 300 },
-    arkade: { isEnabled: true, intervalSeconds: 300 },
+    onchain: { isEnabled: true, intervalSeconds: DEFAULT_PERIODIC_SYNC_INTERVAL_SECONDS },
+    lightning: { isEnabled: true, intervalSeconds: DEFAULT_PERIODIC_SYNC_INTERVAL_SECONDS },
+    arkade: { isEnabled: true, intervalSeconds: DEFAULT_PERIODIC_SYNC_INTERVAL_SECONDS },
   }
   nearZeroSecurityState.active = false
   mockWalletsState.data = []
