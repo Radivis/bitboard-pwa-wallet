@@ -1,4 +1,7 @@
-import { ARKADE_SDK_PERSISTENCE_JSON_MAX_BYTES } from '@/lib/arkade/arkade-sdk-persistence-types'
+import {
+  ARKADE_SDK_PERSISTENCE_JSON_MAX_BYTES,
+  parseArkadeSdkPersistenceJson,
+} from '@/lib/arkade/arkade-sdk-persistence-types'
 import type { ArkadeSupportedNetworkMode } from '@/lib/arkade/arkade-endpoints'
 import type {
   ArkadeSignerMigrationHint,
@@ -73,14 +76,8 @@ export function readOffchainNextDerivationIndex(sdkPersistenceJson: string | und
   if (sdkPersistenceJson == null) {
     return 0
   }
-  try {
-    const parsed = JSON.parse(sdkPersistenceJson) as {
-      wallet_db?: { offchain_next_derivation_index?: number }
-    }
-    return parsed.wallet_db?.offchain_next_derivation_index ?? 0
-  } catch {
-    return 0
-  }
+  const parsed = parseArkadeSdkPersistenceJson(sdkPersistenceJson)
+  return parsed.wallet_db?.offchain_next_derivation_index ?? 0
 }
 
 /** Keep the blob with the higher receive cursor when concurrent writes race. */

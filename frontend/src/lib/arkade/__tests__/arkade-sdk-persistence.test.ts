@@ -6,6 +6,7 @@ import {
   readOffchainNextDerivationIndex,
   updateOperatorSyncAtInPayload,
 } from '@/lib/arkade/arkade-payload-merge'
+import { parseArkadeSdkPersistenceJson } from '@/lib/arkade/arkade-sdk-persistence-types'
 import { ARKADE_SDK_PERSISTENCE_JSON_MAX_BYTES } from '@/lib/arkade/arkade-sdk-persistence-types'
 import type { WalletSecretsPayload } from '@/lib/wallet/wallet-domain-types'
 
@@ -43,6 +44,19 @@ describe('arkade-payload-merge', () => {
   it('readOffchainNextDerivationIndex reads wallet_db scalar', () => {
     expect(readOffchainNextDerivationIndex(persistenceJsonWithReceiveIndex(2))).toBe(2)
     expect(readOffchainNextDerivationIndex(undefined)).toBe(0)
+  })
+
+  it('parseArkadeSdkPersistenceJson rejects malformed receive index types', () => {
+    expect(() =>
+      parseArkadeSdkPersistenceJson(
+        JSON.stringify({ version: 3, wallet_db: { offchain_next_derivation_index: '2' } }),
+      ),
+    ).toThrow(/offchain_next_derivation_index/)
+    expect(() => readOffchainNextDerivationIndex('{not json')).toThrow(/valid JSON/)
+  })
+
+  it('parseArkadeSdkPersistenceJson accepts envelope without wallet_db', () => {
+    expect(parseArkadeSdkPersistenceJson('{"version":3}')).toEqual({ version: 3, wallet_db: undefined })
   })
 
   it('mergeSdkPersistenceJsonMonotonic keeps the higher receive cursor', () => {

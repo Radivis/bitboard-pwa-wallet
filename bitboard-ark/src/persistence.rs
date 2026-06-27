@@ -11,6 +11,11 @@ use bitcoin::{Network, XOnlyPublicKey};
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 
+/// Current on-disk Arkade persistence format (v3).
+///
+/// Versions 1 and 2 were pre-production prototypes only; no production wallets shipped those
+/// blobs. Unknown versions are rejected in [`BitboardArkPersistence::parse_import`] and import
+/// starts from an empty `wallet_db`.
 pub const BITBOARD_ARK_PERSISTENCE_VERSION: u32 = 3;
 const PERSISTENCE_LOCK_POISONED: &str = "persistence lock poisoned";
 
@@ -137,7 +142,7 @@ fn default_parsed_ark_persistence() -> ParsedArkPersistence {
 
 fn warn_unknown_persistence_version(version: Option<u64>) {
     let message = format!(
-        "Ignoring unsupported Arkade persistence version {:?}; starting from empty wallet_db",
+        "Ignoring unsupported Arkade persistence version {:?} (v1/v2 were pre-production prototypes only); starting from empty wallet_db",
         version
     );
     #[cfg(target_arch = "wasm32")]

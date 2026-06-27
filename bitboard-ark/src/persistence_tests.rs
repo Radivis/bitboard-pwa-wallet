@@ -183,6 +183,7 @@ fn persistence_export_version_is_current() {
 
 #[test]
 fn persistence_unknown_version_defaults_empty_wallet_db() {
+    // v2 was a pre-production prototype format; production wallets only use v3.
     let legacy_v2_json = r#"{"version":2,"engine":"ark-rs","ark_sdk_version":"0.9.2","wallet_db":{"boarding_outputs":[],"secret_keys_by_owner_pk_hex":{}},"swap_storage":{}}"#;
     let parsed = BitboardArkPersistence::parse_import(Some(legacy_v2_json));
     assert!(parsed.operator_identity.is_none());
@@ -192,6 +193,7 @@ fn persistence_unknown_version_defaults_empty_wallet_db() {
 
 #[test]
 fn persistence_v1_json_defaults_empty_wallet_db() {
+    // v1 was a pre-production prototype envelope; reject and start empty.
     let v1 = r#"{"version":1,"wallet":{},"contract":{}}"#;
     let parsed = BitboardArkPersistence::parse_import(Some(v1));
     assert!(parsed.operator_identity.is_none());
