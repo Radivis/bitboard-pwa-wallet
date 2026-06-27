@@ -133,6 +133,7 @@ describe('lightning-load-lifecycle-orchestrator', () => {
     expect(getLightningLoadLifecycleSnapshot()).toEqual({
       loadPhase: 'loaded',
       networkMode: 'signet',
+      errorMessage: null,
     })
     expect(loadLightningConnectionsForWallet).toHaveBeenLastCalledWith({ walletId: 1 })
   })

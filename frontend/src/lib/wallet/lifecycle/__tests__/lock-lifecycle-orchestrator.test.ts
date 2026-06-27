@@ -3,6 +3,7 @@ import { AddressType } from '@/stores/walletStore'
 
 const lockAndPurgeSensitiveRuntimeState = vi.fn()
 const orchestrateOnchainLoad = vi.fn()
+const awaitOnchainLoadQuiescence = vi.fn()
 const orchestrateOnchainPostUnlockSync = vi.fn()
 const syncOnchainLoadLifecycleWithLockPhase = vi.fn()
 const syncOnchainSyncLifecycleWithLockPhase = vi.fn()
@@ -11,6 +12,7 @@ const awaitOnchainSyncQuiescence = vi.fn()
 const awaitOnchainSaveQuiescence = vi.fn()
 const isOnchainSaveBlockingLock = vi.fn()
 const orchestrateArkadeLoad = vi.fn()
+const awaitArkadeLoadQuiescence = vi.fn()
 const awaitArkadeSyncQuiescence = vi.fn()
 const awaitArkadeSaveQuiescence = vi.fn()
 const isArkadeSaveBlockingLock = vi.fn()
@@ -18,6 +20,7 @@ const syncArkadeLoadLifecycleWithLockPhase = vi.fn()
 const syncArkadeSyncLifecycleWithLockPhase = vi.fn()
 const syncArkadeSaveLifecycleWithLockPhase = vi.fn()
 const orchestrateLightningLoad = vi.fn()
+const awaitLightningLoadQuiescence = vi.fn()
 const awaitLightningSyncQuiescence = vi.fn()
 const awaitLightningSaveQuiescence = vi.fn()
 const isLightningSaveBlockingLock = vi.fn()
@@ -39,12 +42,14 @@ vi.mock('@/stores/cryptoStore', () => ({
 
 vi.mock('@/lib/wallet/lifecycle/onchain-load-lifecycle-orchestrator', () => ({
   orchestrateOnchainLoad: (...args: unknown[]) => orchestrateOnchainLoad(...args),
+  awaitOnchainLoadQuiescence: (...args: unknown[]) => awaitOnchainLoadQuiescence(...args),
   syncOnchainLoadLifecycleWithLockPhase: (...args: unknown[]) =>
     syncOnchainLoadLifecycleWithLockPhase(...args),
 }))
 
 vi.mock('@/lib/wallet/lifecycle/arkade-load-lifecycle-orchestrator', () => ({
   orchestrateArkadeLoad: (...args: unknown[]) => orchestrateArkadeLoad(...args),
+  awaitArkadeLoadQuiescence: (...args: unknown[]) => awaitArkadeLoadQuiescence(...args),
   syncArkadeLoadLifecycleWithLockPhase: (...args: unknown[]) =>
     syncArkadeLoadLifecycleWithLockPhase(...args),
 }))
@@ -91,6 +96,7 @@ vi.mock('@/lib/wallet/lifecycle/onchain-save-lifecycle-orchestrator', () => ({
 
 vi.mock('@/lib/wallet/lifecycle/lightning-load-lifecycle-orchestrator', () => ({
   orchestrateLightningLoad: (...args: unknown[]) => orchestrateLightningLoad(...args),
+  awaitLightningLoadQuiescence: (...args: unknown[]) => awaitLightningLoadQuiescence(...args),
   syncLightningLoadLifecycleWithLockPhase: (...args: unknown[]) =>
     syncLightningLoadLifecycleWithLockPhase(...args),
 }))
@@ -174,6 +180,9 @@ describe('lock-lifecycle-orchestrator', () => {
     lockAndPurgeSensitiveRuntimeState.mockResolvedValue(undefined)
     orchestrateOnchainLoad.mockResolvedValue(undefined)
     orchestrateOnchainPostUnlockSync.mockResolvedValue(undefined)
+    awaitOnchainLoadQuiescence.mockResolvedValue(undefined)
+    awaitArkadeLoadQuiescence.mockResolvedValue(undefined)
+    awaitLightningLoadQuiescence.mockResolvedValue(undefined)
     awaitOnchainSyncQuiescence.mockResolvedValue(undefined)
     awaitOnchainSaveQuiescence.mockResolvedValue(undefined)
     isOnchainSaveBlockingLock.mockReturnValue(false)
@@ -359,10 +368,12 @@ describe('lock-lifecycle-orchestrator', () => {
     expect(orchestrateArkadeLoad).toHaveBeenCalledWith({
       walletId: 1,
       networkMode: 'testnet',
+      allowRetryFromError: true,
     })
     expect(orchestrateLightningLoad).toHaveBeenCalledWith({
       walletId: 1,
       networkMode: 'testnet',
+      allowRetryFromError: true,
     })
   })
 
@@ -398,6 +409,52 @@ describe('lock-lifecycle-orchestrator', () => {
     await expect(orchestrateLock()).rejects.toThrow(
       'Arkade save-error blocks lock until retry or forced lock',
     )
+    expect(lockAndPurgeSensitiveRuntimeState).not.toHaveBeenCalled()
+  })
+
+  it('orchestrateLock awaits load quiescence before sync quiescence', async () => {
+    walletStoreState.activeWalletId = 1
+    syncLockLifecycleWithActiveWallet(1)
+
+    const callOrder: string[] = []
+    awaitOnchainLoadQuiescence.mockImplementation(async () => {
+      callOrder.push('onchain-load')
+    })
+    awaitArkadeLoadQuiescence.mockImplementation(async () => {
+      callOrder.push('arkade-load')
+    })
+    awaitLightningLoadQuiescence.mockImplementation(async () => {
+      callOrder.push('lightning-load')
+    })
+    awaitOnchainSyncQuiescence.mockImplementation(async () => {
+      callOrder.push('onchain-sync')
+    })
+
+    await orchestrateLock()
+
+    expect(callOrder.indexOf('onchain-load')).toBeLessThan(callOrder.indexOf('onchain-sync'))
+    expect(callOrder).toEqual([
+      'onchain-load',
+      'arkade-load',
+      'lightning-load',
+      'onchain-sync',
+    ])
+  })
+
+  it('orchestrateLock re-checks save blocking after quiescence', async () => {
+    walletStoreState.activeWalletId = 1
+    syncLockLifecycleWithActiveWallet(1)
+
+    let arkadeSaveCheckCount = 0
+    isArkadeSaveBlockingLock.mockImplementation(() => {
+      arkadeSaveCheckCount += 1
+      return arkadeSaveCheckCount > 1
+    })
+
+    await expect(orchestrateLock()).rejects.toThrow(
+      'Arkade save-error blocks lock until retry or forced lock',
+    )
+    expect(isArkadeSaveBlockingLock).toHaveBeenCalledTimes(2)
     expect(lockAndPurgeSensitiveRuntimeState).not.toHaveBeenCalled()
   })
 

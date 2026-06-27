@@ -1,4 +1,4 @@
-import { Layers } from 'lucide-react'
+import { ArkadeIcon } from '@/components/icons/ArkadeIcon'
 
 interface DashboardActivityRailBadgeProps {
   label: string
@@ -7,7 +7,7 @@ interface DashboardActivityRailBadgeProps {
 export function DashboardActivityRailBadge({ label }: DashboardActivityRailBadgeProps) {
   return (
     <span className="inline-flex items-center gap-0.5 rounded border border-border px-1.5 py-0.5 text-[10px] font-medium uppercase text-muted-foreground">
-      <Layers className="h-3 w-3" aria-hidden />
+      <ArkadeIcon className="h-3 w-3" />
       {label}
     </span>
   )

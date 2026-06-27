@@ -1,5 +1,6 @@
 import { Link } from '@tanstack/react-router'
-import { Layers, Loader2 } from 'lucide-react'
+import { Loader2 } from 'lucide-react'
+import { ArkadeIcon } from '@/components/icons/ArkadeIcon'
 import { ArkadeBoardingInfomodeContent } from '@/components/arkade/infomode/ArkadeBoardingInfomodeContent'
 import { ArkadeOverviewInfomodeContent } from '@/components/arkade/infomode/ArkadeOverviewInfomodeContent'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
@@ -55,7 +56,7 @@ export function ArkadePanel() {
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <Layers className="h-5 w-5" aria-hidden />
+          <ArkadeIcon className="h-5 w-5" />
           <InfomodeWrapper
             infoId={ARKADE_INFOMODE_IDS.managementPanel}
             infoComponent={ArkadeOverviewInfomodeContent}

@@ -7,6 +7,7 @@ export type ArkadeSyncKind = 'postLoad' | 'dashboardPoll' | 'manual' | 'signerMi
 export type ArkadeSyncLifecycleSnapshot = {
   syncPhase: SyncLifecyclePhase
   railScope: ArkadeRailScope | null
+  errorMessage: string | null
 }
 
 export type ArkadeSyncParams = {

@@ -46,9 +46,21 @@ import { useDashboardActivityPageSize } from '@/hooks/useDashboardActivityPageSi
 import { LightningPaymentItem } from '@/components/LightningPaymentItem'
 import { ArkadePaymentItem } from '@/components/ArkadePaymentItem'
 import { ArkadeDashboardBalance } from '@/components/wallet/ArkadeDashboardBalance'
+import { RailLoadErrorBanner } from '@/components/wallet/RailLoadErrorBanner'
 import { RailSyncControl } from '@/components/wallet/RailSyncControl'
+import { RailSyncErrorBanner } from '@/components/wallet/RailSyncErrorBanner'
 import { useOnchainRailSnapshot } from '@/hooks/useOnchainLifecycleSnapshots'
 import { useLightningRailSnapshot } from '@/hooks/useLightningLifecycleSnapshots'
+import {
+  useOnchainLoadLifecycleSnapshot,
+  useOnchainSyncLifecycleSnapshot,
+} from '@/hooks/useOnchainLifecycleSnapshots'
+import {
+  useLightningLoadLifecycleSnapshot,
+  useLightningSyncLifecycleSnapshot,
+} from '@/hooks/useLightningLifecycleSnapshots'
+import { orchestrateOnchainRetryLoad } from '@/lib/wallet/lifecycle/onchain-load-lifecycle-orchestrator'
+import { orchestrateLightningRetryLoad } from '@/lib/wallet/lifecycle/lightning-load-lifecycle-orchestrator'
 import {
   useOnchainIncrementalSyncMutation,
   useOnchainFullRescanSyncMutation,
@@ -59,7 +71,6 @@ import { useArkadeHistoryQuery } from '@/hooks/useArkadeQueries'
 import { isArkadeActiveForNetworkMode } from '@/lib/arkade/arkade-utils'
 import { useFiatDenominationStore } from '@/stores/fiatDenominationStore'
 import { useMainnetFiatRatesQuery } from '@/hooks/useMainnetFiatRatesQuery'
-import { useOnchainSyncLifecycleSnapshot } from '@/hooks/useOnchainLifecycleSnapshots'
 import { walletIsUnlockedOrSyncing } from '@/lib/wallet/wallet-unlocked-status'
 import {
   LAB_WALLET_BALANCE_DISCLAIMER,
@@ -139,7 +150,11 @@ function BalanceCard() {
   const lightningBalancesQuery = useLightningBalancesForDashboardQuery()
   const onchainEsploraSyncQuery = useOnchainEsploraSyncMetadataQuery()
   const onchainRail = useOnchainRailSnapshot()
+  const onchainLoadSnapshot = useOnchainLoadLifecycleSnapshot()
+  const onchainSyncSnapshot = useOnchainSyncLifecycleSnapshot()
   const lightningRail = useLightningRailSnapshot()
+  const lightningLoadSnapshot = useLightningLoadLifecycleSnapshot()
+  const lightningSyncSnapshot = useLightningSyncLifecycleSnapshot()
   const lightningSyncMetadataQuery = useLightningSyncMetadataQuery()
   const onchainIncrementalSync = useOnchainIncrementalSyncMutation()
   const onchainFullRescanSync = useOnchainFullRescanSyncMutation()
@@ -167,7 +182,9 @@ function BalanceCard() {
       : balanceInfoToOnChainDisplay(balance)
 
   const primarySats = onChainDisplay.totalSats
-  const isStaleOnchain = onchainEsploraSyncQuery.data?.isStaleOnchain ?? false
+  const isStaleOnchain =
+    (onchainEsploraSyncQuery.data?.isStaleOnchain ?? false) &&
+    onchainRail.syncPhase !== 'sync-error'
   const lastSuccessfulEsploraSyncAt =
     onchainEsploraSyncQuery.data?.lastSuccessfulEsploraSyncAt
 
@@ -200,9 +217,15 @@ function BalanceCard() {
     () => lightningBalancesQuery.data?.lightningBalanceRows ?? [],
     [lightningBalancesQuery.data?.lightningBalanceRows],
   )
-  const hasStaleLightningBalance = lightningBalanceRows.some(
-    (balanceRow) => balanceRow.isStaleBalance,
-  )
+  const hasStaleLightningBalance =
+    lightningRail.syncPhase !== 'sync-error' &&
+    lightningBalanceRows.some((balanceRow) => balanceRow.isStaleBalance)
+  const showLightningLoadError = lightningLoadSnapshot.loadPhase === 'load-error'
+  const showLightningBalancesSection =
+    showLightningLoadError ||
+    (showLightningBalances &&
+      lightningBalancesQuery.isSuccess &&
+      lightningBalanceRows.length > 0)
   const newestStaleBalanceIso = useMemo(() => {
     const times = lightningBalanceRows
       .filter(
@@ -327,8 +350,19 @@ function BalanceCard() {
             <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
               {walletOnChainSectionLabel(networkMode)}
             </p>
-            {renderOnChainHeadline()}
-            {networkMode !== 'lab' && isStaleOnchain ? (
+            {onchainLoadSnapshot.loadPhase === 'load-error' ? (
+              <RailLoadErrorBanner
+                rail="onchain"
+                loadPhase={onchainLoadSnapshot.loadPhase}
+                errorMessage={onchainLoadSnapshot.errorMessage}
+                onRetry={() => {
+                  void orchestrateOnchainRetryLoad()
+                }}
+              />
+            ) : (
+              <>
+                {renderOnChainHeadline()}
+                {networkMode !== 'lab' && isStaleOnchain ? (
               <p
                 className="mt-2 text-xs text-amber-700 dark:text-amber-400"
                 data-testid="onchain-esplora-stale-banner"
@@ -397,15 +431,27 @@ function BalanceCard() {
               </ul>
             )}
             {networkMode !== 'lab' && (
-              <RailSyncControl
-                rail="onchain"
-                syncLabel="Sync on-chain"
-                syncPhase={onchainRail.syncPhase}
-                lastSyncedAt={lastSuccessfulEsploraSyncAt ?? null}
-                onSync={() => onchainIncrementalSync.mutate()}
-                isSyncPending={onchainIncrementalSync.isPending}
-                railConfigured={onchainRail.loadPhase !== 'not-configured'}
-                secondaryAction={
+              <>
+                <RailSyncErrorBanner
+                  rail="onchain"
+                  syncPhase={onchainSyncSnapshot.syncPhase}
+                  loadPhase={onchainLoadSnapshot.loadPhase}
+                  errorMessage={onchainSyncSnapshot.errorMessage}
+                  onRetry={() => onchainIncrementalSync.mutate()}
+                  isRetrying={
+                    onchainRail.syncPhase === 'syncing' || onchainIncrementalSync.isPending
+                  }
+                />
+                <RailSyncControl
+                  rail="onchain"
+                  syncLabel="Sync on-chain"
+                  syncPhase={onchainRail.syncPhase}
+                  lastSyncedAt={lastSuccessfulEsploraSyncAt ?? null}
+                  onSync={() => onchainIncrementalSync.mutate()}
+                  isSyncPending={onchainIncrementalSync.isPending}
+                  railConfigured={onchainRail.loadPhase !== 'not-configured'}
+                  syncErrorMessage={onchainSyncSnapshot.errorMessage}
+                  secondaryAction={
                   FULL_RESCAN_NETWORKS.includes(networkMode) ? (
                     <InfomodeWrapper
                       infoId="dashboard-full-rescan-button"
@@ -433,7 +479,10 @@ function BalanceCard() {
                     </InfomodeWrapper>
                   ) : null
                 }
-              />
+                />
+              </>
+            )}
+              </>
             )}
           </div>
 
@@ -446,9 +495,7 @@ function BalanceCard() {
             </div>
           )}
 
-          {showLightningBalances &&
-            lightningBalancesQuery.isSuccess &&
-            lightningBalanceRows.length > 0 && (
+          {showLightningBalancesSection && (
               <div
                 data-rail-lightning-load={lightningRail.loadPhase}
                 data-rail-lightning-sync={lightningRail.syncPhase}
@@ -456,6 +503,17 @@ function BalanceCard() {
                 <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
                   Lightning (NWC)
                 </p>
+                {showLightningLoadError ? (
+                  <RailLoadErrorBanner
+                    rail="lightning"
+                    loadPhase={lightningLoadSnapshot.loadPhase}
+                    errorMessage={lightningLoadSnapshot.errorMessage}
+                    onRetry={() => {
+                      void orchestrateLightningRetryLoad()
+                    }}
+                  />
+                ) : (
+                  <>
                 {lightningBalanceRows.length === 1 ? (
                   <p className="mb-3 text-sm font-semibold text-foreground">
                     {lightningBalanceRows[0].label}
@@ -524,6 +582,16 @@ function BalanceCard() {
                     total.
                   </p>
                 )}
+                <RailSyncErrorBanner
+                  rail="lightning"
+                  syncPhase={lightningSyncSnapshot.syncPhase}
+                  loadPhase={lightningLoadSnapshot.loadPhase}
+                  errorMessage={lightningSyncSnapshot.errorMessage}
+                  onRetry={() => lightningManualSync.mutate()}
+                  isRetrying={
+                    lightningRail.syncPhase === 'syncing' || lightningManualSync.isPending
+                  }
+                />
                 <RailSyncControl
                   rail="lightning"
                   syncLabel="Sync Lightning"
@@ -532,7 +600,10 @@ function BalanceCard() {
                   onSync={() => lightningManualSync.mutate()}
                   isSyncPending={lightningManualSync.isPending}
                   railConfigured={lightningRail.loadPhase !== 'not-configured'}
+                  syncErrorMessage={lightningSyncSnapshot.errorMessage}
                 />
+                  </>
+                )}
               </div>
             )}
         </CardContent>

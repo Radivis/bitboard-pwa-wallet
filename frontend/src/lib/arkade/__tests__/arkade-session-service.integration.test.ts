@@ -449,6 +449,7 @@ describe('openArkadeSessionForWallet (integration)', () => {
     expect(getArkadeLoadLifecycleSnapshot()).toEqual({
       loadPhase: 'not-configured',
       networkMode: null,
+      errorMessage: null,
     })
   })
 })

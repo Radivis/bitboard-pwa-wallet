@@ -1,5 +1,4 @@
 import { useMutation } from '@tanstack/react-query'
-import { toast } from 'sonner'
 import { orchestrateArkadeSyncThenSave } from '@/lib/wallet/lifecycle/arkade-sync-lifecycle-orchestrator'
 import { orchestrateLightningSyncThenSave } from '@/lib/wallet/lifecycle/lightning-sync-lifecycle-orchestrator'
 import { collectLightningDashboardSyncPatches } from '@/lib/lightning/lightning-dashboard-sync'
@@ -7,29 +6,22 @@ import {
   runFullScanDashboardWalletSync,
   runIncrementalDashboardWalletSync,
 } from '@/lib/wallet/wallet-utils'
-import { BadLocalChainStateError } from '@/lib/shared/bad-local-chain-state-error'
-import { sanitizeErrorMessageForUi } from '@/lib/shared/sanitize-error-for-ui'
-import {
-  reportArkadeOperatorSyncError,
-  reportLightningSyncError,
-} from '@/lib/wallet/rail-sync-error-toast'
-import { errorMessage } from '@/lib/shared/utils'
 import { useWalletStore } from '@/stores/walletStore'
 
-function reportOnchainSyncError(err: unknown): void {
+function logOnchainManualSyncError(err: unknown): void {
   console.error('On-chain dashboard sync failed', err)
-  if (err instanceof BadLocalChainStateError) {
-    toast.error('Sync failed', { description: err.message })
-    return
-  }
-  const detail = sanitizeErrorMessageForUi(errorMessage(err))
-  toast.error(detail || 'Sync failed')
 }
 
-function reportOnchainFullRescanError(err: unknown): void {
+function logOnchainFullRescanError(err: unknown): void {
   console.error('Full rescan failed', err)
-  const detail = sanitizeErrorMessageForUi(errorMessage(err))
-  toast.error(detail || 'Full rescan failed')
+}
+
+function logArkadeManualSyncError(err: unknown): void {
+  console.error('Arkade manual sync failed', err)
+}
+
+function logLightningManualSyncError(err: unknown): void {
+  console.error('Lightning manual sync failed', err)
 }
 
 export function useOnchainIncrementalSyncMutation() {
@@ -39,7 +31,7 @@ export function useOnchainIncrementalSyncMutation() {
   return useMutation({
     mutationFn: () =>
       runIncrementalDashboardWalletSync({ networkMode, activeWalletId }),
-    onError: reportOnchainSyncError,
+    onError: logOnchainManualSyncError,
   })
 }
 
@@ -50,7 +42,7 @@ export function useOnchainFullRescanSyncMutation() {
   return useMutation({
     mutationFn: () =>
       runFullScanDashboardWalletSync({ networkMode, activeWalletId }),
-    onError: reportOnchainFullRescanError,
+    onError: logOnchainFullRescanError,
   })
 }
 
@@ -75,7 +67,7 @@ export function useArkadeManualSyncMutation() {
         throwOnError: true,
       })
     },
-    onError: reportArkadeOperatorSyncError,
+    onError: logArkadeManualSyncError,
   })
 }
 
@@ -97,6 +89,6 @@ export function useLightningManualSyncMutation() {
         syncWork: collectLightningDashboardSyncPatches,
       })
     },
-    onError: reportLightningSyncError,
+    onError: logLightningManualSyncError,
   })
 }

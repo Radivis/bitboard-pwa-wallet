@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react'
-import { AlertTriangle, CircleDot, Coins, FlaskConical, Layers, RefreshCw, Zap } from 'lucide-react'
+import { AlertTriangle, Coins, FlaskConical, Layers, RefreshCw, Zap } from 'lucide-react'
+import { ArkadeIcon } from '@/components/icons/ArkadeIcon'
 import { useFeatureStore } from '@/stores/featureStore'
 import {
   AddressType,
@@ -214,7 +215,7 @@ export function FeatureToggles() {
       >
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <CircleDot className="h-4 w-4" />
+            <ArkadeIcon className="h-4 w-4" />
             <Label htmlFor="arkade-toggle" className="cursor-pointer">
               Arkade
             </Label>

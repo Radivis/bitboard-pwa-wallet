@@ -20,6 +20,8 @@ export type RailSyncControlProps = {
   isSyncPending?: boolean
   /** When false, sync control and caption are hidden (rail not configured). */
   railConfigured?: boolean
+  /** Shown in caption when syncPhase is sync-error (banner may show full message above). */
+  syncErrorMessage?: string | null
   secondaryAction?: ReactNode
 }
 
@@ -31,6 +33,7 @@ export function RailSyncControl({
   onSync,
   isSyncPending = false,
   railConfigured = true,
+  syncErrorMessage = null,
   secondaryAction,
 }: RailSyncControlProps) {
   if (!railConfigured) {
@@ -38,6 +41,7 @@ export function RailSyncControl({
   }
 
   const isSyncing = syncPhase === 'syncing' || isSyncPending
+  const isSyncError = syncPhase === 'sync-error'
   const lastSyncedIso =
     lastSyncedAt != null
       ? lastSyncedAt instanceof Date
@@ -65,15 +69,17 @@ export function RailSyncControl({
         {secondaryAction}
       </div>
       <p
-        className="text-xs text-muted-foreground"
+        className={`text-xs ${isSyncError ? 'text-amber-700 dark:text-amber-400' : 'text-muted-foreground'}`}
         data-testid={`rail-sync-${rail}-caption`}
         {...(lastSyncedIso != null
           ? { 'data-rail-last-synced-at': lastSyncedIso }
           : {})}
       >
-        {lastSyncedAt != null
-          ? formatLastSyncedCaption(lastSyncedAt)
-          : 'Not synced yet'}
+        {isSyncError
+          ? syncErrorMessage ?? 'Sync failed — use Sync to retry'
+          : lastSyncedAt != null
+            ? formatLastSyncedCaption(lastSyncedAt)
+            : 'Not synced yet'}
       </p>
     </div>
   )

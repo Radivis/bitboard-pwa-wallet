@@ -37,12 +37,17 @@ import {
   getCoalescedInFlightPromise,
 } from '@/lib/wallet/lifecycle/lifecycle-in-flight-tracker'
 import { shouldSkipRailLifecycleResetForLockPhase } from '@/lib/wallet/lifecycle/rail-lifecycle-lock-phase'
+import {
+  LIFECYCLE_LOAD_ERROR_FALLBACK,
+  userFacingLifecycleErrorMessage,
+} from '@/lib/shared/utils'
 
 export type { ArkadeLoadLifecycleSnapshot, ArkadeLoadParams } from '@/lib/wallet/lifecycle/arkade-load-lifecycle-types'
 
 let snapshot: ArkadeLoadLifecycleSnapshot = {
   loadPhase: 'not-configured',
   networkMode: null,
+  errorMessage: null,
 }
 
 let lastOpenedSessionKey: string | null = null
@@ -59,6 +64,7 @@ const arkadeSessionReuseState: ArkadeSessionReuseState = {
 
 const listeners = new Set<(next: ArkadeLoadLifecycleSnapshot) => void>()
 const inFlightLoadTracker = createInFlightLifecycleTracker()
+let lastLoadParams: ArkadeLoadParams | null = null
 
 function loadKey(params: ArkadeLoadParams): string {
   return `${params.walletId}:${params.networkMode}`
@@ -168,7 +174,7 @@ export function subscribeArkadeLoadLifecycle(
 }
 
 export async function awaitArkadeLoadQuiescence(): Promise<void> {
-  await inFlightLoadTracker.awaitQuiescence({ swallowError: true })
+  await inFlightLoadTracker.awaitQuiescence()
 }
 
 /** True when this network's Arkade rail failed to load and should be ignored until network change or retry. */
@@ -185,7 +191,7 @@ export function forceResetArkadeLoadLifecycleForTeardown(): void {
   lastOpenedSessionKey = null
   lastLoadedConnectionId = null
   inFlightLoadTracker.clearCurrent()
-  setSnapshot({ loadPhase: 'not-configured', networkMode: null })
+  setSnapshot({ loadPhase: 'not-configured', networkMode: null, errorMessage: null })
 }
 
 export function syncArkadeLoadLifecycleWithLockPhase(lockPhase: LockLifecyclePhase): void {
@@ -199,7 +205,7 @@ export function syncArkadeLoadLifecycleWithLockPhase(lockPhase: LockLifecyclePha
   }
   lastOpenedSessionKey = null
   lastLoadedConnectionId = null
-  setSnapshot({ loadPhase: 'not-configured', networkMode: null })
+  setSnapshot({ loadPhase: 'not-configured', networkMode: null, errorMessage: null })
 }
 
 export async function orchestrateArkadeLoad(params: ArkadeLoadParams): Promise<void> {
@@ -208,36 +214,41 @@ export async function orchestrateArkadeLoad(params: ArkadeLoadParams): Promise<v
   if (!isArkadeActiveForNetworkMode(networkMode)) {
     const { closeArkadeSession } = await import('@/lib/arkade/arkade-session-service')
     await closeArkadeSession()
-    setSnapshot({ loadPhase: 'not-configured', networkMode: null })
+    setSnapshot({ loadPhase: 'not-configured', networkMode: null, errorMessage: null })
     return
   }
 
   if (!isArkadeSupportedNetworkMode(networkMode)) {
-    setSnapshot({ loadPhase: 'not-configured', networkMode: null })
+    setSnapshot({ loadPhase: 'not-configured', networkMode: null, errorMessage: null })
     return
   }
+
+  if (isArkadeLoadFailedForNetwork(networkMode) && !params.allowRetryFromError) {
+    return
+  }
+
+  const { allowRetryFromError: _allowRetryFromError, ...persistedParams } = params
+  lastLoadParams = persistedParams
 
   const key = loadKey(params)
   const coalesced = getCoalescedInFlightPromise(inFlightLoadTracker, key)
   if (coalesced != null) {
     return coalesced
   }
-  const afterDifferentWork = await awaitDifferentInFlightWork(inFlightLoadTracker, key, {
-    swallowError: true,
-  })
+  const afterDifferentWork = await awaitDifferentInFlightWork(inFlightLoadTracker, key)
   if (afterDifferentWork != null) {
     return afterDifferentWork
   }
 
   return inFlightLoadTracker.begin(key, async () => {
-    setSnapshot({ loadPhase: 'loading', networkMode })
+    setSnapshot({ loadPhase: 'loading', networkMode, errorMessage: null })
     try {
       const connectionId = await runArkadeSessionOpenBody({
         walletId,
         networkMode,
       })
       lastLoadedConnectionId = connectionId
-      setSnapshot({ loadPhase: 'loaded', networkMode })
+      setSnapshot({ loadPhase: 'loaded', networkMode, errorMessage: null })
       configureArkadeSyncForLoadedRail({
         walletId,
         networkMode,
@@ -252,16 +263,28 @@ export async function orchestrateArkadeLoad(params: ArkadeLoadParams): Promise<v
     } catch (error) {
       terminateArkadeWorker()
       clearArkadeDashboardStore()
-      setSnapshot({ loadPhase: 'load-error', networkMode })
+      setSnapshot({
+        loadPhase: 'load-error',
+        networkMode,
+        errorMessage: userFacingLifecycleErrorMessage(error, LIFECYCLE_LOAD_ERROR_FALLBACK),
+      })
       throw error
     }
   })
 }
 
+export async function orchestrateArkadeRetryLoad(): Promise<void> {
+  if (lastLoadParams == null) {
+    throw new Error('No Arkade load to retry')
+  }
+  return orchestrateArkadeLoad({ ...lastLoadParams, allowRetryFromError: true })
+}
+
 /** @internal Test-only reset */
 export function resetArkadeLoadLifecycleStateForTests(): void {
-  snapshot = { loadPhase: 'not-configured', networkMode: null }
+  snapshot = { loadPhase: 'not-configured', networkMode: null, errorMessage: null }
   inFlightLoadTracker.clearCurrent()
+  lastLoadParams = null
   lastOpenedSessionKey = null
   lastLoadedConnectionId = null
   listeners.clear()

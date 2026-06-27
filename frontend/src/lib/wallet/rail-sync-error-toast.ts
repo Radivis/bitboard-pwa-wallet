@@ -2,6 +2,12 @@ import { toast } from 'sonner'
 import { sanitizeErrorMessageForUi } from '@/lib/shared/sanitize-error-for-ui'
 import { errorMessage } from '@/lib/shared/utils'
 
+export function reportLightningLoadError(err: unknown): void {
+  console.error('Lightning load failed', err)
+  const detail = sanitizeErrorMessageForUi(errorMessage(err))
+  toast.error(detail || 'Lightning load failed')
+}
+
 export function reportLightningSyncError(err: unknown): void {
   console.error('Lightning sync failed', err)
   const detail = sanitizeErrorMessageForUi(errorMessage(err))

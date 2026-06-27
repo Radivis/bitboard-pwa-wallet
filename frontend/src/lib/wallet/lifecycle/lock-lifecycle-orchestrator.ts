@@ -3,8 +3,12 @@ import { useWalletStore } from '@/stores/walletStore'
 import { useCryptoStore } from '@/stores/cryptoStore'
 import {
   orchestrateOnchainLoad,
+  awaitOnchainLoadQuiescence,
 } from '@/lib/wallet/lifecycle/onchain-load-lifecycle-orchestrator'
-import { orchestrateArkadeLoad } from '@/lib/wallet/lifecycle/arkade-load-lifecycle-orchestrator'
+import {
+  orchestrateArkadeLoad,
+  awaitArkadeLoadQuiescence,
+} from '@/lib/wallet/lifecycle/arkade-load-lifecycle-orchestrator'
 import {
   awaitArkadeSaveQuiescence,
   isArkadeSaveBlockingLock,
@@ -13,7 +17,10 @@ import {
 import {
   awaitArkadeSyncQuiescence,
 } from '@/lib/wallet/lifecycle/arkade-sync-lifecycle-orchestrator'
-import { orchestrateLightningLoad } from '@/lib/wallet/lifecycle/lightning-load-lifecycle-orchestrator'
+import {
+  orchestrateLightningLoad,
+  awaitLightningLoadQuiescence,
+} from '@/lib/wallet/lifecycle/lightning-load-lifecycle-orchestrator'
 import {
   awaitLightningSaveQuiescence,
   isLightningSaveBlockingLock,
@@ -146,6 +153,7 @@ async function runUnlockLoad(params: UnlockLoadParams): Promise<void> {
     void orchestrateArkadeLoad({
       walletId: params.walletId,
       networkMode: params.networkMode,
+      allowRetryFromError: true,
     }).catch((err) => {
       void import('@/lib/arkade/arkade-session-open-error-toast').then(
         ({ reportArkadeSessionOpenError }) => reportArkadeSessionOpenError(err),
@@ -155,8 +163,11 @@ async function runUnlockLoad(params: UnlockLoadParams): Promise<void> {
   void orchestrateLightningLoad({
     walletId: params.walletId,
     networkMode: params.networkMode,
+    allowRetryFromError: true,
   }).catch((err) => {
-    console.error('Lightning load failed after unlock', err)
+    void import('@/lib/wallet/rail-sync-error-toast').then(({ reportLightningLoadError }) =>
+      reportLightningLoadError(err),
+    )
   })
   if (params.networkMode !== 'lab') {
     void orchestrateOnchainPostUnlockSync({
@@ -295,12 +306,26 @@ export async function orchestrateLock(): Promise<void> {
       throw new LightningSaveBlockingLockError()
     }
 
+    await awaitOnchainLoadQuiescence()
+    await awaitArkadeLoadQuiescence()
+    await awaitLightningLoadQuiescence()
     await awaitOnchainSyncQuiescence()
     await awaitOnchainSaveQuiescence()
     await awaitArkadeSyncQuiescence()
     await awaitArkadeSaveQuiescence()
     await awaitLightningSyncQuiescence()
     await awaitLightningSaveQuiescence()
+
+    if (isOnchainSaveBlockingLock()) {
+      throw new OnchainSaveBlockingLockError()
+    }
+    if (isArkadeSaveBlockingLock()) {
+      throw new ArkadeSaveBlockingLockError()
+    }
+    if (isLightningSaveBlockingLock()) {
+      throw new LightningSaveBlockingLockError()
+    }
+
     await awaitInFlightWalletSecretsWrites()
 
     setPhase('locking')

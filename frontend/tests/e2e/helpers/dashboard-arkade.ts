@@ -21,6 +21,22 @@ export async function waitForArkadeLoadReady(
   await expect(page.locator('[data-rail-arkade-load="loaded"]')).toBeVisible({ timeout })
 }
 
+/** Assert Arkade load-error banner is visible (session open failure). */
+export async function expectArkadeLoadErrorBanner(
+  page: Page,
+  timeout = ARKADE_MOCK_UI_TIMEOUT_MS,
+): Promise<void> {
+  await expect(page.getByTestId('wallet-load-error-banner-arkade')).toBeVisible({ timeout })
+}
+
+/** Assert Arkade sync-error banner is visible (operator sync failure with loaded session). */
+export async function expectArkadeSyncErrorBanner(
+  page: Page,
+  timeout = ARKADE_MOCK_UI_TIMEOUT_MS,
+): Promise<void> {
+  await expect(page.getByTestId('wallet-sync-error-banner-arkade')).toBeVisible({ timeout })
+}
+
 /**
  * Session is open and balance UI is visible. Does not wait for post-load operator sync —
  * use {@link waitForArkadeMockDashboardBalance} when asserting mock ASP fixture balances.

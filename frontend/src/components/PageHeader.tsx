@@ -1,6 +1,8 @@
 import type { LucideIcon } from 'lucide-react'
-import type { ReactNode } from 'react'
+import type { ComponentType, ReactNode, SVGProps } from 'react'
 import { cn } from '@/lib/shared/utils'
+
+type PageHeaderIcon = LucideIcon | ComponentType<SVGProps<SVGSVGElement>>
 
 /** Shared typography for top-of-page titles (see `PageHeader`). */
 export const PAGE_HEADER_TITLE_CLASS = 'text-2xl font-bold tracking-tight'
@@ -11,7 +13,7 @@ function isDefined<T>(value: T | null | undefined): value is T {
 
 interface PageHeaderProps {
   title: string
-  icon?: LucideIcon
+  icon?: PageHeaderIcon
   children?: ReactNode
   className?: string
 }

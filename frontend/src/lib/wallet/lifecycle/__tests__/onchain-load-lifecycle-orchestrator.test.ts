@@ -128,6 +128,7 @@ describe('onchain-load-lifecycle-orchestrator', () => {
     expect(getOnchainLoadLifecycleSnapshot()).toEqual({
       loadPhase: 'not-configured',
       networkMode: null,
+      errorMessage: null,
     })
     expect(getOnchainRailSnapshot()).toEqual({
       loadPhase: 'not-configured',
@@ -146,6 +147,7 @@ describe('onchain-load-lifecycle-orchestrator', () => {
     expect(getOnchainLoadLifecycleSnapshot()).toEqual({
       loadPhase: 'loaded',
       networkMode: 'testnet',
+      errorMessage: null,
     })
   })
 
@@ -197,6 +199,7 @@ describe('onchain-load-lifecycle-orchestrator', () => {
     expect(getOnchainLoadLifecycleSnapshot()).toEqual({
       loadPhase: 'not-configured',
       networkMode: null,
+      errorMessage: null,
     })
   })
 
@@ -222,6 +225,7 @@ describe('onchain-load-lifecycle-orchestrator', () => {
     expect(getOnchainLoadLifecycleSnapshot()).toEqual({
       loadPhase: 'loaded',
       networkMode: 'testnet',
+      errorMessage: null,
     })
     expect(configureOnchainSyncForLoadedRail).toHaveBeenCalledWith({
       walletId: loadParams.walletId,
@@ -251,6 +255,7 @@ describe('onchain-load-lifecycle-orchestrator', () => {
     expect(getOnchainLoadLifecycleSnapshot()).toEqual({
       loadPhase: 'loaded',
       networkMode: 'lab',
+      errorMessage: null,
     })
     expect(configureOnchainSyncForLoadedRail).not.toHaveBeenCalled()
   })

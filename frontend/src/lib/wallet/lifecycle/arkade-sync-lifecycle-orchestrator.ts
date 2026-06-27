@@ -26,6 +26,10 @@ import type {
   ArkadeSyncThenSaveParams,
 } from '@/lib/wallet/lifecycle/arkade-sync-lifecycle-types'
 import type { ArkadeSaveParams } from '@/lib/wallet/lifecycle/arkade-save-lifecycle-types'
+import {
+  LIFECYCLE_SYNC_ERROR_FALLBACK,
+  userFacingLifecycleErrorMessage,
+} from '@/lib/shared/utils'
 
 export type {
   ArkadeSyncKind,
@@ -38,6 +42,7 @@ export type {
 let snapshot: ArkadeSyncLifecycleSnapshot = {
   syncPhase: 'not-configured',
   railScope: null,
+  errorMessage: null,
 }
 
 let dashboardPollTimer: ReturnType<typeof setTimeout> | null = null
@@ -125,7 +130,7 @@ export async function awaitArkadeSyncQuiescence(): Promise<void> {
     clearTimeout(dashboardPollTimer)
     dashboardPollTimer = null
   }
-  await inFlightSyncTracker.awaitQuiescence({ swallowError: true })
+  await inFlightSyncTracker.awaitQuiescence()
 }
 
 /** Clears sync lifecycle after session teardown (see {@link closeArkadeSession}). */
@@ -138,6 +143,7 @@ export function forceResetArkadeSyncLifecycleForTeardown(): void {
   setSnapshot({
     syncPhase: 'not-configured',
     railScope: null,
+    errorMessage: null,
   })
 }
 
@@ -148,6 +154,7 @@ export function configureArkadeSyncForLoadedRail(scope: ArkadeRailScope): void {
   setSnapshot({
     syncPhase: 'not-syncing',
     railScope: scope,
+    errorMessage: null,
   })
   configureArkadeSaveForLoadedRail(scope)
 }
@@ -168,6 +175,7 @@ export function syncArkadeSyncLifecycleWithLockPhase(lockPhase: LockLifecyclePha
   setSnapshot({
     syncPhase: 'not-configured',
     railScope: null,
+    errorMessage: null,
   })
 }
 
@@ -192,14 +200,14 @@ export async function orchestrateArkadeSyncThenSave(
       const scope = railScopeFromParams(params)
       configureArkadeSyncForLoadedRail(scope)
 
-      setSnapshot({ syncPhase: 'syncing', railScope: scope })
+      setSnapshot({ syncPhase: 'syncing', railScope: scope, errorMessage: null })
 
       try {
         if (params.syncKind === 'signerMigration') {
           await runArkadeSignerMigrationBody()
         }
         await runArkadeOperatorSyncBody(params.connectionId)
-        setSnapshot({ syncPhase: 'not-syncing', railScope: scope })
+        setSnapshot({ syncPhase: 'not-syncing', railScope: scope, errorMessage: null })
         try {
           await orchestrateArkadeSave(toSaveParams(params))
         } catch (saveError) {
@@ -208,7 +216,11 @@ export async function orchestrateArkadeSyncThenSave(
           }
         }
       } catch (error) {
-        setSnapshot({ syncPhase: 'sync-error', railScope: scope })
+        setSnapshot({
+          syncPhase: 'sync-error',
+          railScope: scope,
+          errorMessage: userFacingLifecycleErrorMessage(error, LIFECYCLE_SYNC_ERROR_FALLBACK),
+        })
         params.onSyncError?.(error)
         if (throwOnError) {
           throw error
@@ -277,6 +289,7 @@ export function resetArkadeSyncLifecycleStateForTests(): void {
   snapshot = {
     syncPhase: 'not-configured',
     railScope: null,
+    errorMessage: null,
   }
   inFlightSyncTracker.clearCurrent()
   if (dashboardPollTimer != null) {

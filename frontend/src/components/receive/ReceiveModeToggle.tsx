@@ -1,4 +1,5 @@
-import { Bitcoin, Layers, Zap } from 'lucide-react'
+import { Bitcoin, Zap } from 'lucide-react'
+import { ArkadeIcon } from '@/components/icons/ArkadeIcon'
 import { cn } from '@/lib/shared/utils'
 import { ReceiveModeArkadeInfomodeContent } from '@/components/arkade/infomode/ReceiveModeArkadeInfomodeContent'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
@@ -63,7 +64,7 @@ export function ReceiveModeToggle({
                 : 'text-muted-foreground hover:text-foreground',
             )}
           >
-            <Layers className="h-5 w-5" aria-hidden />
+            <ArkadeIcon className="h-5 w-5" />
             Arkade
           </button>
         ) : null}

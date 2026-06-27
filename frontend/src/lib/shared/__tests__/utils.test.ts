@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { errorMessage, userFacingErrorMessage } from '@/lib/shared/utils'
+import {
+  LIFECYCLE_SYNC_ERROR_FALLBACK,
+  errorMessage,
+  userFacingErrorMessage,
+  userFacingLifecycleErrorMessage,
+} from '@/lib/shared/utils'
 
 describe('userFacingErrorMessage', () => {
   it('strips URLs from messages shown in toasts', () => {
@@ -18,5 +23,20 @@ describe('userFacingErrorMessage', () => {
       }),
     )
     expect(userFacingErrorMessage(err)).toBe('Blockchain error: GET [url]')
+  })
+})
+
+describe('userFacingLifecycleErrorMessage', () => {
+  it('uses fallback when sanitization yields empty', () => {
+    expect(userFacingLifecycleErrorMessage('', LIFECYCLE_SYNC_ERROR_FALLBACK)).toBe(
+      LIFECYCLE_SYNC_ERROR_FALLBACK,
+    )
+  })
+
+  it('sanitizes error detail like userFacingErrorMessage', () => {
+    const err = new Error('Sync failed: https://esplora.example.com')
+    expect(userFacingLifecycleErrorMessage(err, LIFECYCLE_SYNC_ERROR_FALLBACK)).toBe(
+      'Sync failed: [url]',
+    )
   })
 })

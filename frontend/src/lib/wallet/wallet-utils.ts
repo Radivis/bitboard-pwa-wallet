@@ -13,7 +13,7 @@ import {
   toBitcoinNetwork,
   validateEsploraUrl,
 } from '@/lib/wallet/bitcoin-utils'
-import { errorMessage } from '@/lib/shared/utils'
+import { errorMessage, userFacingLifecycleErrorMessage } from '@/lib/shared/utils'
 import { withPersistedChainMismatchRetry } from '@/lib/wallet/persisted-chain-mismatch'
 import type { LoadWalletParams } from '@/workers/crypto-api'
 import type { AddressType, BitcoinNetwork } from '@/workers/crypto-types'
@@ -437,10 +437,9 @@ export async function retryImportInitialEsploraSyncWithWalletStatus(): Promise<v
     await runImportInitialEsploraSync()
     toast.success('Initial sync complete')
   } catch (err) {
-    const userFacingErrorMessage =
-      sanitizeErrorMessageForUi(errorMessage(err) ?? String(err)) ||
-      'Initial sync failed'
-    setImportInitialSyncErrorMessage(userFacingErrorMessage)
+    setImportInitialSyncErrorMessage(
+      userFacingLifecycleErrorMessage(err, 'Initial sync failed'),
+    )
     showImportInitialSyncFailureToast(err, () => {
       void retryImportInitialEsploraSyncWithWalletStatus()
     })

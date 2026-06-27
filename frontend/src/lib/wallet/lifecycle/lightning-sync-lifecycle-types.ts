@@ -10,6 +10,7 @@ export type ConnectionSyncTrackerStatus = 'idle' | 'syncing' | 'ok' | 'error'
 export type LightningSyncLifecycleSnapshot = {
   syncPhase: SyncLifecyclePhase
   railScope: LightningRailScope | null
+  errorMessage: string | null
 }
 
 export type LightningSyncThenSaveParams = {

@@ -21,16 +21,22 @@ import {
 } from '@/lib/wallet/lifecycle/lifecycle-in-flight-tracker'
 import { shouldSkipRailLifecycleResetForLockPhase } from '@/lib/wallet/lifecycle/rail-lifecycle-lock-phase'
 import { lightningRailScopeKey } from '@/lib/wallet/lifecycle/lightning-rail-types'
+import {
+  LIFECYCLE_LOAD_ERROR_FALLBACK,
+  userFacingLifecycleErrorMessage,
+} from '@/lib/shared/utils'
 
 export type { LightningLoadLifecycleSnapshot, LightningLoadParams } from '@/lib/wallet/lifecycle/lightning-load-lifecycle-types'
 
 let snapshot: LightningLoadLifecycleSnapshot = {
   loadPhase: 'not-configured',
   networkMode: null,
+  errorMessage: null,
 }
 
 const listeners = new Set<(next: LightningLoadLifecycleSnapshot) => void>()
 const inFlightLoadTracker = createInFlightLifecycleTracker()
+let lastLoadParams: LightningLoadParams | null = null
 
 function loadKey(params: LightningLoadParams): string {
   return lightningRailScopeKey(params)
@@ -67,7 +73,13 @@ export function subscribeLightningLoadLifecycle(
 }
 
 export async function awaitLightningLoadQuiescence(): Promise<void> {
-  await inFlightLoadTracker.awaitQuiescence({ swallowError: true })
+  await inFlightLoadTracker.awaitQuiescence()
+}
+
+/** True when this network's Lightning rail failed to load and should be ignored until network change or retry. */
+export function isLightningLoadFailedForNetwork(networkMode: LightningLoadParams['networkMode']): boolean {
+  const current = getLightningLoadLifecycleSnapshot()
+  return current.loadPhase === 'load-error' && current.networkMode === networkMode
 }
 
 export function syncLightningLoadLifecycleWithLockPhase(lockPhase: LockLifecyclePhase): void {
@@ -79,41 +91,46 @@ export function syncLightningLoadLifecycleWithLockPhase(lockPhase: LockLifecycle
   ) {
     return
   }
-  setSnapshot({ loadPhase: 'not-configured', networkMode: null })
+  setSnapshot({ loadPhase: 'not-configured', networkMode: null, errorMessage: null })
 }
 
 export async function orchestrateLightningLoad(params: LightningLoadParams): Promise<void> {
   const { walletId, networkMode } = params
 
   if (!isLightningLoadConfigured(params)) {
-    setSnapshot({ loadPhase: 'not-configured', networkMode: null })
+    setSnapshot({ loadPhase: 'not-configured', networkMode: null, errorMessage: null })
     return
   }
+
+  if (isLightningLoadFailedForNetwork(networkMode) && !params.allowRetryFromError) {
+    return
+  }
+
+  const { allowRetryFromError: _allowRetryFromError, ...persistedParams } = params
+  lastLoadParams = persistedParams
 
   const key = loadKey(params)
   const coalesced = getCoalescedInFlightPromise(inFlightLoadTracker, key)
   if (coalesced != null) {
     return coalesced
   }
-  const afterDifferentWork = await awaitDifferentInFlightWork(inFlightLoadTracker, key, {
-    swallowError: true,
-  })
+  const afterDifferentWork = await awaitDifferentInFlightWork(inFlightLoadTracker, key)
   if (afterDifferentWork != null) {
     return afterDifferentWork
   }
 
   return inFlightLoadTracker.begin(key, async () => {
-    setSnapshot({ loadPhase: 'loading', networkMode })
+    setSnapshot({ loadPhase: 'loading', networkMode, errorMessage: null })
     try {
       const connections = await loadLightningConnectionsForWallet({ walletId })
       useLightningStore.getState().replaceConnectionsForWallet(walletId, connections)
 
       if (connections.length === 0) {
-        setSnapshot({ loadPhase: 'not-configured', networkMode: null })
+        setSnapshot({ loadPhase: 'not-configured', networkMode: null, errorMessage: null })
         return
       }
 
-      setSnapshot({ loadPhase: 'loaded', networkMode })
+      setSnapshot({ loadPhase: 'loaded', networkMode, errorMessage: null })
 
       const railScope = { walletId, networkMode }
       configureLightningSyncForLoadedRail(railScope)
@@ -126,10 +143,21 @@ export async function orchestrateLightningLoad(params: LightningLoadParams): Pro
         })
       }
     } catch (error) {
-      setSnapshot({ loadPhase: 'load-error', networkMode })
+      setSnapshot({
+        loadPhase: 'load-error',
+        networkMode,
+        errorMessage: userFacingLifecycleErrorMessage(error, LIFECYCLE_LOAD_ERROR_FALLBACK),
+      })
       throw error
     }
   })
+}
+
+export async function orchestrateLightningRetryLoad(): Promise<void> {
+  if (lastLoadParams == null) {
+    throw new Error('No Lightning load to retry')
+  }
+  return orchestrateLightningLoad({ ...lastLoadParams, allowRetryFromError: true })
 }
 
 /**
@@ -145,7 +173,8 @@ export async function reloadLightningRailAfterConnectionsChanged(
 
 /** @internal Test-only reset */
 export function resetLightningLoadLifecycleStateForTests(): void {
-  snapshot = { loadPhase: 'not-configured', networkMode: null }
+  snapshot = { loadPhase: 'not-configured', networkMode: null, errorMessage: null }
   inFlightLoadTracker.clearCurrent()
+  lastLoadParams = null
   listeners.clear()
 }

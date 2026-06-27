@@ -1,5 +1,7 @@
-import { sanitizeErrorMessageForUi } from '@/lib/shared/sanitize-error-for-ui'
-import { errorMessage } from '@/lib/shared/utils'
+import {
+  LIFECYCLE_SAVE_ERROR_FALLBACK,
+  userFacingLifecycleErrorMessage,
+} from '@/lib/shared/utils'
 import type { LockLifecyclePhase } from '@/lib/wallet/lifecycle/lock-lifecycle-types'
 import { shouldSkipRailLifecycleResetForLockPhase } from '@/lib/wallet/lifecycle/rail-lifecycle-lock-phase'
 import { withWalletWriterLock } from '@/lib/shared/opfs-writer-lock'
@@ -43,7 +45,6 @@ export type SaveLifecycleOrchestratorConfig<
   scopeFromSnapshot: (snapshot: TSnapshot) => TScope | null
   skipConfigureForLoadedRail?: (scope: TScope) => boolean
   onNotifyListeners?: () => void
-  quiescenceSwallowError?: boolean
   saveFailureLogLabel: string
   retrySaveErrorMessage: string
 }
@@ -110,9 +111,7 @@ export function createSaveLifecycleOrchestrator<
   }
 
   async function awaitSaveQuiescence(): Promise<void> {
-    await inFlightSaveTracker.awaitQuiescence({
-      swallowError: config.quiescenceSwallowError,
-    })
+    await inFlightSaveTracker.awaitQuiescence()
   }
 
   function configureSaveForLoadedRail(scope: TScope): void {
@@ -157,9 +156,10 @@ export function createSaveLifecycleOrchestrator<
         setSnapshot(config.notSavingSnapshot(scope))
       } catch (saveError) {
         console.error(config.saveFailureLogLabel, saveError)
-        const userFacingErrorMessage =
-          sanitizeErrorMessageForUi(errorMessage(saveError) ?? String(saveError)) ||
-          'Save failed'
+        const userFacingErrorMessage = userFacingLifecycleErrorMessage(
+          saveError,
+          LIFECYCLE_SAVE_ERROR_FALLBACK,
+        )
         setSnapshot(config.saveErrorSnapshot(scope, userFacingErrorMessage))
         throw saveError
       }

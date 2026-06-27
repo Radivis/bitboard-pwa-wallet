@@ -19,6 +19,10 @@ import {
 } from '@/lib/wallet/lifecycle/lifecycle-in-flight-tracker'
 import { shouldSkipRailLifecycleResetForLockPhase } from '@/lib/wallet/lifecycle/rail-lifecycle-lock-phase'
 import { configureOnchainSyncForLoadedRail } from '@/lib/wallet/lifecycle/onchain-sync-lifecycle-orchestrator'
+import {
+  LIFECYCLE_LOAD_ERROR_FALLBACK,
+  userFacingLifecycleErrorMessage,
+} from '@/lib/shared/utils'
 
 export type { OnchainLoadLifecycleSnapshot, OnchainLoadParams } from '@/lib/wallet/lifecycle/onchain-load-lifecycle-types'
 
@@ -31,11 +35,18 @@ export type { OnchainLoadLifecycleSnapshot, OnchainLoadParams } from '@/lib/wall
 let snapshot: OnchainLoadLifecycleSnapshot = {
   loadPhase: 'not-configured',
   networkMode: null,
+  errorMessage: null,
 }
 
 const listeners = new Set<(next: OnchainLoadLifecycleSnapshot) => void>()
 
 const inFlightLoadTracker = createInFlightLifecycleTracker()
+let lastLoadParams: OnchainLoadParams | null = null
+
+function isOnchainLoadFailedForNetwork(networkMode: OnchainLoadParams['networkMode']): boolean {
+  const current = getOnchainLoadLifecycleSnapshot()
+  return current.loadPhase === 'load-error' && current.networkMode === networkMode
+}
 
 function loadKey(params: OnchainLoadParams): string {
   return `${params.walletId}:${params.networkMode}:${params.addressType}:${params.accountId}`
@@ -150,7 +161,11 @@ export function syncOnchainLoadLifecycleWithLockPhase(lockPhase: LockLifecyclePh
   ) {
     return
   }
-  setSnapshot({ loadPhase: 'not-configured', networkMode: null })
+  setSnapshot({ loadPhase: 'not-configured', networkMode: null, errorMessage: null })
+}
+
+export async function awaitOnchainLoadQuiescence(): Promise<void> {
+  await inFlightLoadTracker.awaitQuiescence()
 }
 
 /**
@@ -170,7 +185,7 @@ export function markOnchainRailLoadedAfterExternalHydration(params: OnchainLoadP
     return
   }
 
-  setSnapshot({ loadPhase: 'loaded', networkMode: params.networkMode })
+  setSnapshot({ loadPhase: 'loaded', networkMode: params.networkMode, errorMessage: null })
   if (params.networkMode !== 'lab') {
     configureOnchainSyncForLoadedRail({
       walletId: params.walletId,
@@ -182,6 +197,13 @@ export function markOnchainRailLoadedAfterExternalHydration(params: OnchainLoadP
 }
 
 export async function orchestrateOnchainLoad(params: OnchainLoadParams): Promise<void> {
+  if (isOnchainLoadFailedForNetwork(params.networkMode) && !params.allowRetryFromError) {
+    return
+  }
+
+  const { allowRetryFromError: _allowRetryFromError, ...persistedParams } = params
+  lastLoadParams = persistedParams
+
   const key = loadKey(params)
   const coalesced = getCoalescedInFlightPromise(inFlightLoadTracker, key)
   if (coalesced != null) {
@@ -193,10 +215,18 @@ export async function orchestrateOnchainLoad(params: OnchainLoadParams): Promise
   }
 
   return inFlightLoadTracker.begin(key, async () => {
-    setSnapshot({ loadPhase: 'loading', networkMode: params.networkMode })
+    setSnapshot({
+      loadPhase: 'loading',
+      networkMode: params.networkMode,
+      errorMessage: null,
+    })
     try {
       await runWasmLoad(params)
-      setSnapshot({ loadPhase: 'loaded', networkMode: params.networkMode })
+      setSnapshot({
+        loadPhase: 'loaded',
+        networkMode: params.networkMode,
+        errorMessage: null,
+      })
       if (params.networkMode !== 'lab') {
         configureOnchainSyncForLoadedRail({
           walletId: params.walletId,
@@ -206,15 +236,27 @@ export async function orchestrateOnchainLoad(params: OnchainLoadParams): Promise
         })
       }
     } catch (error) {
-      setSnapshot({ loadPhase: 'load-error', networkMode: params.networkMode })
+      setSnapshot({
+        loadPhase: 'load-error',
+        networkMode: params.networkMode,
+        errorMessage: userFacingLifecycleErrorMessage(error, LIFECYCLE_LOAD_ERROR_FALLBACK),
+      })
       throw error
     }
   })
 }
 
+export async function orchestrateOnchainRetryLoad(): Promise<void> {
+  if (lastLoadParams == null) {
+    throw new Error('No on-chain load to retry')
+  }
+  return orchestrateOnchainLoad({ ...lastLoadParams, allowRetryFromError: true })
+}
+
 /** @internal Test-only reset */
 export function resetOnchainLoadLifecycleStateForTests(): void {
-  snapshot = { loadPhase: 'not-configured', networkMode: null }
+  snapshot = { loadPhase: 'not-configured', networkMode: null, errorMessage: null }
   inFlightLoadTracker.clearCurrent()
+  lastLoadParams = null
   listeners.clear()
 }

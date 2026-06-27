@@ -68,7 +68,6 @@ const arkadeSaveLifecycle = createSaveLifecycleOrchestrator<
     railScope,
   }),
   scopeFromSnapshot: (saveSnapshot) => saveSnapshot.railScope,
-  quiescenceSwallowError: true,
   saveFailureLogLabel: 'Arkade save failed',
   retrySaveErrorMessage: 'No Arkade save to retry',
 })

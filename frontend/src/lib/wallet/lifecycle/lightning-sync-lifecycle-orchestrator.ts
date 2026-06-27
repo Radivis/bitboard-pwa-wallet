@@ -22,6 +22,10 @@ import type {
   LightningSyncLifecycleSnapshot,
   LightningSyncThenSaveParams,
 } from '@/lib/wallet/lifecycle/lightning-sync-lifecycle-types'
+import {
+  LIFECYCLE_SYNC_ERROR_FALLBACK,
+  userFacingLifecycleErrorMessage,
+} from '@/lib/shared/utils'
 
 export type {
   LightningSyncKind,
@@ -39,6 +43,7 @@ type ConnectionSyncTracker = {
 let snapshot: LightningSyncLifecycleSnapshot = {
   syncPhase: 'not-configured',
   railScope: null,
+  errorMessage: null,
 }
 
 const connectionSyncTrackers = new Map<string, ConnectionSyncTracker>()
@@ -126,9 +131,15 @@ function recomputeAggregateSyncPhase(scope: LightningRailScope | null): SyncLife
   return 'not-syncing'
 }
 
-function applyAggregatePhase(scope: LightningRailScope | null): void {
+function applyAggregatePhase(scope: LightningRailScope | null, errorMessageOverride?: string | null): void {
   const syncPhase = recomputeAggregateSyncPhase(scope)
-  setSnapshot({ syncPhase, railScope: scope })
+  const resolvedErrorMessage =
+    errorMessageOverride !== undefined
+      ? errorMessageOverride
+      : syncPhase === 'sync-error'
+        ? snapshot.errorMessage
+        : null
+  setSnapshot({ syncPhase, railScope: scope, errorMessage: resolvedErrorMessage })
 }
 
 function trackerForConnection(connectionId: string): ConnectionSyncTracker {
@@ -181,6 +192,7 @@ export function configureLightningSyncForLoadedRail(scope: LightningRailScope): 
   setSnapshot({
     syncPhase: 'not-syncing',
     railScope: scope,
+    errorMessage: null,
   })
   configureLightningSaveForLoadedRail(scope)
 }
@@ -198,6 +210,7 @@ export function syncLightningSyncLifecycleWithLockPhase(lockPhase: LockLifecycle
   setSnapshot({
     syncPhase: 'not-configured',
     railScope: null,
+    errorMessage: null,
   })
 }
 
@@ -272,7 +285,7 @@ export async function orchestrateLightningSyncThenSave(
           }
         }
       } catch (error) {
-        applyAggregatePhase(scope)
+        applyAggregatePhase(scope, userFacingLifecycleErrorMessage(error, LIFECYCLE_SYNC_ERROR_FALLBACK))
         params.onSyncError?.(error)
         if (throwOnError) {
           throw error
@@ -312,6 +325,7 @@ export function resetLightningSyncLifecycleStateForTests(): void {
   snapshot = {
     syncPhase: 'not-configured',
     railScope: null,
+    errorMessage: null,
   }
   inFlightSyncTracker.clearCurrent()
   connectionSyncTrackers.clear()

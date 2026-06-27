@@ -195,6 +195,7 @@ describe('arkade-load-lifecycle-orchestrator', () => {
     expect(getArkadeLoadLifecycleSnapshot()).toEqual({
       loadPhase: 'load-error',
       networkMode: 'signet',
+      errorMessage: 'sdkPersistenceJson operator signer mismatch',
     })
     expect(workerMocks.closeSession).not.toHaveBeenCalled()
     expect(terminateArkadeWorkerMock).toHaveBeenCalled()

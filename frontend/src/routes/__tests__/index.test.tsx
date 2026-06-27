@@ -67,7 +67,14 @@ vi.mock('@/hooks/useOnchainLifecycleSnapshots', () => ({
     syncPhase: 'not-syncing',
     savePhase: 'not-saving',
   }),
-  useOnchainSyncLifecycleSnapshot: () => ({ syncPhase: 'not-syncing' }),
+  useOnchainLoadLifecycleSnapshot: () => ({
+    loadPhase: 'loaded',
+    errorMessage: null,
+  }),
+  useOnchainSyncLifecycleSnapshot: () => ({
+    syncPhase: 'not-syncing',
+    errorMessage: null,
+  }),
 }))
 
 vi.mock('@/hooks/useLightningLifecycleSnapshots', () => ({
@@ -75,6 +82,14 @@ vi.mock('@/hooks/useLightningLifecycleSnapshots', () => ({
     loadPhase: 'loaded',
     syncPhase: 'not-syncing',
     savePhase: 'not-saving',
+  }),
+  useLightningLoadLifecycleSnapshot: () => ({
+    loadPhase: 'loaded',
+    errorMessage: null,
+  }),
+  useLightningSyncLifecycleSnapshot: () => ({
+    syncPhase: 'not-syncing',
+    errorMessage: null,
   }),
 }))
 
@@ -340,7 +355,7 @@ describe('DashboardPage', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 
-  it('Sync shows Full rescan hint when sync fails with BadLocalChainStateError', async () => {
+  it('manual on-chain sync failure does not toast (sync-error banner handles UI)', async () => {
     mockRunIncrementalDashboardWalletSync.mockRejectedValueOnce(
       new BadLocalChainStateError(),
     )
@@ -349,13 +364,9 @@ describe('DashboardPage', () => {
     renderWithProviders(<DashboardPage />)
     await user.click(screen.getByRole('button', { name: 'Sync on-chain' }))
     await waitFor(() => {
-      expect(dashboardToastMocks.error).toHaveBeenCalledWith(
-        'Sync failed',
-        expect.objectContaining({
-          description: expect.stringContaining('Full rescan'),
-        }),
-      )
+      expect(mockRunIncrementalDashboardWalletSync).toHaveBeenCalled()
     })
+    expect(dashboardToastMocks.error).not.toHaveBeenCalled()
   })
 
   it('renders transaction list', () => {

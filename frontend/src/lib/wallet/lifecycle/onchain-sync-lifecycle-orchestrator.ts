@@ -24,6 +24,10 @@ import type {
   OnchainSyncThenSaveParams,
 } from '@/lib/wallet/lifecycle/onchain-sync-lifecycle-types'
 import type { OnchainSaveParams } from '@/lib/wallet/lifecycle/onchain-save-lifecycle-types'
+import {
+  LIFECYCLE_SYNC_ERROR_FALLBACK,
+  userFacingLifecycleErrorMessage,
+} from '@/lib/shared/utils'
 
 export type {
   OnchainSyncKind,
@@ -36,6 +40,7 @@ export type {
 let snapshot: OnchainSyncLifecycleSnapshot = {
   syncPhase: 'not-configured',
   descriptorScope: null,
+  errorMessage: null,
 }
 
 const listeners = new Set<(next: OnchainSyncLifecycleSnapshot) => void>()
@@ -125,6 +130,7 @@ export function configureOnchainSyncForLoadedRail(scope: OnchainRailDescriptorSc
   setSnapshot({
     syncPhase: 'not-syncing',
     descriptorScope: scope,
+    errorMessage: null,
   })
   configureOnchainSaveForLoadedRail(scope)
 }
@@ -141,6 +147,7 @@ export function syncOnchainSyncLifecycleWithLockPhase(lockPhase: LockLifecyclePh
   setSnapshot({
     syncPhase: 'not-configured',
     descriptorScope: null,
+    errorMessage: null,
   })
 }
 
@@ -165,11 +172,11 @@ export async function orchestrateOnchainSyncThenSave(
       const scope = descriptorScopeFromParams(params)
       configureOnchainSyncForLoadedRail(scope)
 
-      setSnapshot({ syncPhase: 'syncing', descriptorScope: scope })
+      setSnapshot({ syncPhase: 'syncing', descriptorScope: scope, errorMessage: null })
 
       try {
         await runEsploraSyncBody(params)
-        setSnapshot({ syncPhase: 'not-syncing', descriptorScope: scope })
+        setSnapshot({ syncPhase: 'not-syncing', descriptorScope: scope, errorMessage: null })
         try {
           await orchestrateOnchainSave(toSaveParams(params))
         } catch (saveError) {
@@ -178,7 +185,11 @@ export async function orchestrateOnchainSyncThenSave(
           }
         }
       } catch (error) {
-        setSnapshot({ syncPhase: 'sync-error', descriptorScope: scope })
+        setSnapshot({
+          syncPhase: 'sync-error',
+          descriptorScope: scope,
+          errorMessage: userFacingLifecycleErrorMessage(error, LIFECYCLE_SYNC_ERROR_FALLBACK),
+        })
         if (params.networkMode !== 'lab') {
           try {
             await refreshWalletStoreFromLoadedBdk()
@@ -224,6 +235,7 @@ export function resetOnchainSyncLifecycleStateForTests(): void {
   snapshot = {
     syncPhase: 'not-configured',
     descriptorScope: null,
+    errorMessage: null,
   }
   inFlightSyncTracker.clearCurrent()
   listeners.clear()

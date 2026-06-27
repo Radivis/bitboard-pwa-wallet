@@ -6,7 +6,7 @@ export type InFlightLifecycleWork = {
 export type InFlightLifecycleTracker = {
   getCurrent: () => InFlightLifecycleWork | null
   begin: (key: string, run: () => Promise<void>) => Promise<void>
-  awaitQuiescence: (options?: { swallowError?: boolean }) => Promise<void>
+  awaitQuiescence: () => Promise<void>
   clearCurrent: () => void
 }
 
@@ -49,12 +49,8 @@ export function createInFlightLifecycleTracker(): InFlightLifecycleTracker {
       return promise
     },
 
-    async awaitQuiescence(options) {
+    async awaitQuiescence() {
       if (inFlight == null) {
-        return
-      }
-      if (options?.swallowError) {
-        await inFlight.promise.catch(() => undefined)
         return
       }
       await inFlight.promise
@@ -85,16 +81,11 @@ export function getCoalescedInFlightPromise(
 export async function awaitDifferentInFlightWork(
   tracker: InFlightLifecycleTracker,
   key: string,
-  options?: { swallowError?: boolean },
 ): Promise<Promise<void> | null> {
   const current = tracker.getCurrent()
   if (current == null || current.key === key) {
     return null
   }
-  if (options?.swallowError) {
-    await current.promise.catch(() => undefined)
-  } else {
-    await current.promise
-  }
+  await current.promise
   return getCoalescedInFlightPromise(tracker, key)
 }

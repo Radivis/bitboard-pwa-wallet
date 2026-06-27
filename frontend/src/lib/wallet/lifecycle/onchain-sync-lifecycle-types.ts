@@ -15,6 +15,7 @@ export type OnchainSyncKind =
 export type OnchainSyncLifecycleSnapshot = {
   syncPhase: SyncLifecyclePhase
   descriptorScope: OnchainRailDescriptorScope | null
+  errorMessage: string | null
 }
 
 export type OnchainSyncParams = {

@@ -42,7 +42,14 @@ vi.mock('@/hooks/useArkadeLifecycleSnapshots', () => ({
     syncPhase: 'not-syncing',
     savePhase: 'not-saving',
   }),
-  useArkadeSyncLifecycleSnapshot: () => ({ syncPhase: 'not-syncing' }),
+  useArkadeLoadLifecycleSnapshot: () => ({
+    loadPhase: 'loaded',
+    errorMessage: null,
+  }),
+  useArkadeSyncLifecycleSnapshot: () => ({
+    syncPhase: 'not-syncing',
+    errorMessage: null,
+  }),
 }))
 
 vi.mock('@/hooks/useRailManualSyncMutations', () => ({

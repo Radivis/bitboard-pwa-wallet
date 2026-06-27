@@ -18,3 +18,15 @@ export function errorMessage(err: unknown): string {
 export function userFacingErrorMessage(err: unknown): string {
   return sanitizeErrorMessageForUi(errorMessage(err))
 }
+
+/** Like {@link userFacingErrorMessage} but supplies a default when sanitization yields empty. */
+export function userFacingLifecycleErrorMessage(
+  err: unknown,
+  fallback: string,
+): string {
+  return userFacingErrorMessage(err) || fallback
+}
+
+export const LIFECYCLE_LOAD_ERROR_FALLBACK = 'Load failed'
+export const LIFECYCLE_SYNC_ERROR_FALLBACK = 'Sync failed'
+export const LIFECYCLE_SAVE_ERROR_FALLBACK = 'Save failed'

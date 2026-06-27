@@ -31,7 +31,7 @@ vi.mock('@/lib/arkade/arkade-endpoints', async (importOriginal) => {
 })
 
 vi.mock('@/lib/wallet/lifecycle/arkade-load-lifecycle-orchestrator', () => ({
-  getArkadeLoadLifecycleSnapshot: () => ({ loadPhase: loadPhaseRef.phase, networkMode: 'signet' }),
+  getArkadeLoadLifecycleSnapshot: () => ({ loadPhase: loadPhaseRef.phase, networkMode: 'signet', errorMessage: null }),
 }))
 
 vi.mock('@/lib/wallet/lifecycle/arkade-save-lifecycle-orchestrator', async (importOriginal) => {
@@ -46,6 +46,7 @@ vi.mock('@/lib/wallet/lifecycle/arkade-save-lifecycle-orchestrator', async (impo
 })
 
 import {
+  awaitArkadeSyncQuiescence,
   configureArkadeSyncForLoadedRail,
   getArkadeSyncLifecycleSnapshot,
   orchestrateArkadeSyncThenSave,
@@ -122,6 +123,35 @@ describe('arkade-sync-lifecycle-orchestrator', () => {
     await Promise.all([first, second])
 
     expect(syncWithOperator).toHaveBeenCalledTimes(1)
+  })
+
+  it('awaitArkadeSyncQuiescence propagates sync errors', async () => {
+    let rejectSync!: (error: Error) => void
+    syncWithOperator.mockImplementationOnce(
+      () =>
+        new Promise((_resolve, reject) => {
+          rejectSync = reject
+        }),
+    )
+
+    const syncPromise = orchestrateArkadeSyncThenSave(syncParams)
+    await vi.waitFor(() =>
+      expect(getArkadeSyncLifecycleSnapshot().syncPhase).toBe('syncing'),
+    )
+    const quiescencePromise = awaitArkadeSyncQuiescence()
+    rejectSync(new Error('operator down'))
+
+    await expect(syncPromise).rejects.toThrow('operator down')
+    await expect(quiescencePromise).rejects.toThrow('operator down')
+    expect(getArkadeSyncLifecycleSnapshot()).toEqual({
+      syncPhase: 'sync-error',
+      railScope: {
+        walletId: 1,
+        networkMode: 'signet',
+        connectionId: 'conn-1',
+      },
+      errorMessage: 'operator down',
+    })
   })
 
   it('signerMigration runs migrate before operator sync and save', async () => {

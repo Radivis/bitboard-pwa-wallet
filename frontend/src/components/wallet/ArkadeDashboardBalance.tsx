@@ -1,10 +1,13 @@
 import { Link } from '@tanstack/react-router'
-import { Layers, Loader2 } from 'lucide-react'
+import { Loader2 } from 'lucide-react'
+import { ArkadeIcon } from '@/components/icons/ArkadeIcon'
 import { ArkadeOverviewInfomodeContent } from '@/components/arkade/infomode/ArkadeOverviewInfomodeContent'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ArkadeBalanceBreakdown } from '@/components/wallet/ArkadeBalanceBreakdown'
+import { RailLoadErrorBanner } from '@/components/wallet/RailLoadErrorBanner'
 import { RailSyncControl } from '@/components/wallet/RailSyncControl'
+import { RailSyncErrorBanner } from '@/components/wallet/RailSyncErrorBanner'
 import {
   ARKADE_INFOMODE_IDS,
   ARKADE_OPERATOR_STALE_INFOMODE,
@@ -12,11 +15,13 @@ import {
 import { useArkadeSyncMetadataQuery } from '@/hooks/useArkadeDashboardQueries'
 import {
   useArkadeRailSnapshot,
+  useArkadeLoadLifecycleSnapshot,
   useArkadeSyncLifecycleSnapshot,
 } from '@/hooks/useArkadeLifecycleSnapshots'
 import { useArkadeManualSyncMutation } from '@/hooks/useRailManualSyncMutations'
 import { useArkadeBalanceQuery } from '@/hooks/useArkadeQueries'
 import { isArkadeActiveForNetworkMode } from '@/lib/arkade/arkade-utils'
+import { orchestrateArkadeRetryLoad } from '@/lib/wallet/lifecycle/arkade-load-lifecycle-orchestrator'
 import { selectCommittedNetworkMode, useWalletStore } from '@/stores/walletStore'
 
 export function ArkadeDashboardBalance() {
@@ -29,12 +34,14 @@ export function ArkadeDashboardBalance() {
   const balanceQuery = useArkadeBalanceQuery()
   const arkadeSyncQuery = useArkadeSyncMetadataQuery()
   const arkadeRail = useArkadeRailSnapshot()
+  const arkadeLoadSnapshot = useArkadeLoadLifecycleSnapshot()
   const arkadeSyncSnapshot = useArkadeSyncLifecycleSnapshot()
   const arkadeManualSync = useArkadeManualSyncMutation()
 
   const balance = storeBalance ?? balanceQuery.data
   const isLoading = balanceQuery.isLoading && balance == null
-  const isStaleArkade = arkadeSyncQuery.data?.isStaleArkade ?? false
+  const isStaleArkade =
+    (arkadeSyncQuery.data?.isStaleArkade ?? false) && arkadeRail.syncPhase !== 'sync-error'
   const lastSuccessfulOperatorSyncAt =
     arkadeSyncQuery.data?.lastSuccessfulOperatorSyncAt ?? lastOperatorSyncTime ?? undefined
 
@@ -49,7 +56,7 @@ export function ArkadeDashboardBalance() {
       <CardHeader className="pb-2">
         <div className="flex flex-wrap items-start justify-between gap-2">
           <CardTitle className="flex items-center gap-2 text-base">
-            <Layers className="h-4 w-4" aria-hidden />
+            <ArkadeIcon className="h-4 w-4" />
             <InfomodeWrapper
               infoId={ARKADE_INFOMODE_IDS.dashboardBalance}
               infoComponent={ArkadeOverviewInfomodeContent}
@@ -66,11 +73,21 @@ export function ArkadeDashboardBalance() {
             onSync={() => arkadeManualSync.mutate()}
             isSyncPending={arkadeManualSync.isPending}
             railConfigured={arkadeRail.loadPhase !== 'not-configured'}
+            syncErrorMessage={arkadeSyncSnapshot.errorMessage}
           />
         </div>
       </CardHeader>
       <CardContent className="space-y-2">
-        {isLoading ? (
+        {arkadeLoadSnapshot.loadPhase === 'load-error' ? (
+          <RailLoadErrorBanner
+            rail="arkade"
+            loadPhase={arkadeLoadSnapshot.loadPhase}
+            errorMessage={arkadeLoadSnapshot.errorMessage}
+            onRetry={() => {
+              void orchestrateArkadeRetryLoad()
+            }}
+          />
+        ) : isLoading ? (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
             Loading…
@@ -81,6 +98,16 @@ export function ArkadeDashboardBalance() {
           </p>
         ) : balance ? (
           <>
+            <RailSyncErrorBanner
+              rail="arkade"
+              syncPhase={arkadeSyncSnapshot.syncPhase}
+              loadPhase={arkadeLoadSnapshot.loadPhase}
+              errorMessage={arkadeSyncSnapshot.errorMessage}
+              onRetry={() => arkadeManualSync.mutate()}
+              isRetrying={
+                arkadeRail.syncPhase === 'syncing' || arkadeManualSync.isPending
+              }
+            />
             <ArkadeBalanceBreakdown
               balance={balance}
               amountTestId="dashboard-arkade-balance-amount"
