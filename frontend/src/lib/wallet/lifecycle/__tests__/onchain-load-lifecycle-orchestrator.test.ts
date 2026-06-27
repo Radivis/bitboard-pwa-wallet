@@ -186,7 +186,9 @@ describe('onchain-load-lifecycle-orchestrator', () => {
     const first = orchestrateOnchainLoad(loadParams)
     const second = orchestrateOnchainLoad(loadParams)
 
-    expect(getOnchainLoadLifecycleSnapshot().loadPhase).toBe('loading')
+    await vi.waitFor(() =>
+      expect(getOnchainLoadLifecycleSnapshot().loadPhase).toBe('loading'),
+    )
     resolveLoad()
     await Promise.all([first, second])
 

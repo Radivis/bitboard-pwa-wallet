@@ -1,26 +1,26 @@
 import { getDatabase, getWalletSecretsEncrypted } from '@/db'
-import { refreshArkadeStoreFromLoadedWasm, clearArkadeDashboardStore } from '@/lib/arkade/arkade-persistence-store-sync'
+import { clearArkadeDashboardStore } from '@/lib/arkade/arkade-persistence-store-sync'
 import {
-  ensureArkadeOperatorConnection,
   findActiveArkadeConnectionSummary,
-  resolveArkadeEndpointsForConnection,
 } from '@/lib/arkade/arkade-operator-connections'
 import {
-  ensureArkadeWorkerSecretsChannel,
   ensureSecretsChannel,
 } from '@/workers/secrets-channel'
 import { ensureArkadeEncryptedSecretsHost } from '@/workers/arkade-persistence-channel'
-import { getArkadeWorker, getArkadeWorkerIfExists, terminateArkadeWorker } from '@/workers/arkade-factory'
+import { getArkadeWorker, terminateArkadeWorker } from '@/workers/arkade-factory'
 import {
-  getArkadeEndpoints,
   isArkadeDelegatorConfigured,
   isArkadeSupportedNetworkMode,
   type ArkadeSupportedNetworkMode,
 } from '@/lib/arkade/arkade-endpoints'
-import { arkadeSessionKey } from '@/lib/arkade/arkade-session-key'
 import { isArkadeActiveForNetworkMode } from '@/lib/arkade/arkade-utils'
 import { reportArkadeOperatorSyncError } from '@/lib/wallet/rail-sync-error-toast'
-import { useWalletStore } from '@/stores/walletStore'
+import {
+  hydrateArkadeDashboardAfterSessionOpen,
+  openFreshArkadeWorkerSession,
+  tryReuseExistingArkadeSession,
+  type ArkadeSessionReuseState,
+} from '@/lib/wallet/lifecycle/arkade-session-open-helpers'
 import type { NetworkMode } from '@/stores/walletStore'
 import {
   configureArkadeSyncForLoadedRail,
@@ -47,6 +47,15 @@ let snapshot: ArkadeLoadLifecycleSnapshot = {
 
 let lastOpenedSessionKey: string | null = null
 let lastLoadedConnectionId: string | null = null
+
+const arkadeSessionReuseState: ArkadeSessionReuseState = {
+  get lastOpenedSessionKey() {
+    return lastOpenedSessionKey
+  },
+  setLastOpenedSessionKey(key) {
+    lastOpenedSessionKey = key
+  },
+}
 
 const listeners = new Set<(next: ArkadeLoadLifecycleSnapshot) => void>()
 const inFlightLoadTracker = createInFlightLifecycleTracker()
@@ -104,83 +113,45 @@ async function runArkadeSessionOpenBody(params: {
   await ensureArkadeEncryptedSecretsHost()
   const encrypted = await getWalletSecretsEncrypted(getDatabase(), walletId)
 
-  let connection = await findActiveArkadeConnectionSummary({
+  const connection = await findActiveArkadeConnectionSummary({
     walletId,
     networkMode,
     encryptedPayload: encrypted.payload,
   })
   const hadPersistedConnection = connection != null
-  const provisionalKey = connection
-    ? arkadeSessionKey(walletId, networkMode, connection.id)
-    : null
 
-  if (provisionalKey != null && lastOpenedSessionKey === provisionalKey) {
-    const worker = getArkadeWorkerIfExists()
-    if (worker != null && connection != null) {
-      try {
-        const sessionOpen = await worker.hasOpenSession({
-          walletId,
-          networkMode,
-          connectionId: connection.id,
-        })
-        if (sessionOpen) {
-          await refreshArkadeStoreFromLoadedWasm(connection.id)
-          useWalletStore.getState().setActiveArkadeConnectionId(connection.id)
-          useWalletStore.getState().setLastOperatorSyncTime(null)
-          return connection.id
-        }
-      } catch {
-        // Worker unhealthy — fall through and reopen.
-      }
+  if (connection != null) {
+    const reusedConnectionId = await tryReuseExistingArkadeSession({
+      walletId,
+      networkMode,
+      connection,
+      sessionReuseState: arkadeSessionReuseState,
+    })
+    if (reusedConnectionId != null) {
+      return reusedConnectionId
     }
-    lastOpenedSessionKey = null
   }
 
-  const defaultEndpoints = getArkadeEndpoints(networkMode)
-  const endpoints = connection
-    ? resolveArkadeEndpointsForConnection(connection)
-    : defaultEndpoints
-  const connectionId = connection?.id ?? crypto.randomUUID()
+  const { worker, connection: activeConnection, openResult } =
+    await openFreshArkadeWorkerSession({
+      walletId,
+      networkMode,
+      encrypted,
+      connection,
+      hadPersistedConnection,
+    })
 
-  const worker = getArkadeWorker()
-  await ensureArkadeWorkerSecretsChannel()
-  const openResult = await worker.openSession({
-    encryptedMnemonic: encrypted.mnemonic,
-    encryptedPayload: encrypted.payload,
+  await hydrateArkadeDashboardAfterSessionOpen({
+    worker,
     walletId,
     networkMode,
-    connectionId,
-    arkServerUrl: endpoints.arkServerUrl,
-    delegatorUrl: endpoints.delegatorUrl,
-    esploraUrl: endpoints.esploraUrl,
-  })
-
-  connection = await ensureArkadeOperatorConnection({
-    walletId,
-    networkMode,
-    connectionId,
-    operatorSignerPkHex: openResult.operatorSignerPkHex,
-    operatorUrl: endpoints.arkServerUrl,
-    delegatorUrl: endpoints.delegatorUrl,
-    persistInitialSdkFromWasm: !hadPersistedConnection,
+    connectionId: activeConnection.id,
     signerMigrationHint: openResult.signerMigrationHint,
+    sessionReuseState: arkadeSessionReuseState,
+    runPostOpenMaintenance: runPostOpenArkadeMaintenance,
   })
 
-  if (openResult.signerMigrationHint != null) {
-    useWalletStore.getState().setArkadeSignerMigrationHint(openResult.signerMigrationHint)
-  } else {
-    useWalletStore.getState().setArkadeSignerMigrationHint(null)
-  }
-
-  await worker.reconcileActiveConnectionId(connection.id)
-  useWalletStore.getState().setLastOperatorSyncTime(null)
-  await refreshArkadeStoreFromLoadedWasm(connection.id)
-  useWalletStore.getState().setActiveArkadeConnectionId(connection.id)
-  lastOpenedSessionKey = arkadeSessionKey(walletId, networkMode, connection.id)
-
-  void runPostOpenArkadeMaintenance(worker, networkMode)
-
-  return connection.id
+  return activeConnection.id
 }
 
 export function getArkadeLoadLifecycleSnapshot(): ArkadeLoadLifecycleSnapshot {

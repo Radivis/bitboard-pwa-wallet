@@ -111,10 +111,13 @@ describe('lightning-load-lifecycle-orchestrator', () => {
 
     await orchestrateLightningLoad(loadParams)
 
-    expect(orchestrateLightningPostLoadSync).toHaveBeenCalledWith({
-      walletId: 1,
-      networkMode: 'signet',
-    })
+    expect(orchestrateLightningPostLoadSync).toHaveBeenCalledWith(
+      expect.objectContaining({
+        walletId: 1,
+        networkMode: 'signet',
+        onSyncError: expect.any(Function),
+      }),
+    )
   })
 
   it('reloadLightningRailAfterConnectionsChanged loads rail after first connect', async () => {

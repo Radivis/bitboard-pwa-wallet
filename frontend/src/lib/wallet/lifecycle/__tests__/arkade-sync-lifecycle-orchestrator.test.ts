@@ -107,15 +107,17 @@ describe('arkade-sync-lifecycle-orchestrator', () => {
 
   it('duplicate sync coalesces', async () => {
     let resolveSync!: () => void
-    syncWithOperator.mockImplementation(
-      () =>
-        new Promise<void>((resolve) => {
-          resolveSync = resolve
-        }),
-    )
+    const syncGate = new Promise<void>((resolve) => {
+      resolveSync = resolve
+    })
+    syncWithOperator.mockImplementation(() => syncGate)
 
     const first = orchestrateArkadeSyncThenSave(syncParams)
     const second = orchestrateArkadeSyncThenSave(syncParams)
+
+    await vi.waitFor(() =>
+      expect(getArkadeSyncLifecycleSnapshot().syncPhase).toBe('syncing'),
+    )
     resolveSync!()
     await Promise.all([first, second])
 

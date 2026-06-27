@@ -18,6 +18,7 @@ const workerMocks = vi.hoisted(() => ({
 
 const setActiveArkadeConnectionIdMock = vi.hoisted(() => vi.fn())
 const setLastOperatorSyncTimeMock = vi.hoisted(() => vi.fn())
+const setArkadeSignerMigrationHintMock = vi.hoisted(() => vi.fn())
 const refreshArkadeStoreFromLoadedWasmMock = vi.hoisted(() => vi.fn())
 const findActiveArkadeConnectionSummaryMock = vi.hoisted(() => vi.fn())
 const ensureArkadeOperatorConnectionMock = vi.hoisted(() => vi.fn())
@@ -38,6 +39,7 @@ vi.mock('@/stores/walletStore', () => ({
     getState: () => ({
       setActiveArkadeConnectionId: setActiveArkadeConnectionIdMock,
       setLastOperatorSyncTime: setLastOperatorSyncTimeMock,
+      setArkadeSignerMigrationHint: setArkadeSignerMigrationHintMock,
     }),
   },
 }))

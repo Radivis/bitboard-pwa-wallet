@@ -122,7 +122,9 @@ describe('onchain-sync-lifecycle-orchestrator', () => {
     const first = orchestrateOnchainSyncThenSave(syncParams)
     const second = orchestrateOnchainSyncThenSave(syncParams)
 
-    expect(getOnchainSyncLifecycleSnapshot().syncPhase).toBe('syncing')
+    await vi.waitFor(() =>
+      expect(getOnchainSyncLifecycleSnapshot().syncPhase).toBe('syncing'),
+    )
     resolveSync()
     await Promise.all([first, second])
 

@@ -23,6 +23,11 @@ export function createInFlightLifecycleTracker(): InFlightLifecycleTracker {
     getCurrent: () => inFlight,
 
     begin(key, run) {
+      const existing = inFlight
+      if (existing?.key === key) {
+        return existing.promise
+      }
+
       let resolveWork!: () => void
       let rejectWork!: (error: unknown) => void
       const promise = new Promise<void>((resolve, reject) => {

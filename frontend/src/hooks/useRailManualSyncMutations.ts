@@ -14,7 +14,7 @@ import {
   reportLightningSyncError,
 } from '@/lib/wallet/rail-sync-error-toast'
 import { errorMessage } from '@/lib/shared/utils'
-import { useWalletStore, type NetworkMode } from '@/stores/walletStore'
+import { useWalletStore } from '@/stores/walletStore'
 
 function reportOnchainSyncError(err: unknown): void {
   console.error('On-chain dashboard sync failed', err)
@@ -98,19 +98,5 @@ export function useLightningManualSyncMutation() {
       })
     },
     onError: reportLightningSyncError,
-  })
-}
-
-/** @internal Exported for tests that assert per-rail isolation. */
-export async function runArkadeManualSyncForWallet(params: {
-  walletId: number
-  networkMode: NetworkMode
-  connectionId: string
-}): Promise<void> {
-  await orchestrateArkadeSyncThenSave({
-    ...params,
-    syncKind: 'manual',
-    awaitCompletion: true,
-    throwOnError: true,
   })
 }

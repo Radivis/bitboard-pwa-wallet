@@ -106,6 +106,7 @@ vi.mock('@/stores/walletStore', () => ({
     getState: () => ({
       setActiveArkadeConnectionId: vi.fn(),
       setLastOperatorSyncTime: vi.fn(),
+      setArkadeSignerMigrationHint: vi.fn(),
     }),
   },
 }))
@@ -148,6 +149,8 @@ describe('awaitArkadeLoadQuiescence (UNLOCK-ARK-03)', () => {
       walletId: 1,
       networkMode: 'signet',
     })
+
+    await vi.waitFor(() => expect(workerMocks.openSession).toHaveBeenCalled())
 
     let readyResolvedEarly = false
     const readyPromise = awaitArkadeLoadQuiescence().then(() => {

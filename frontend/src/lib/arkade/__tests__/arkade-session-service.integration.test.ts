@@ -40,10 +40,10 @@ const removeArkadeDashboardQueriesMock = vi.hoisted(() => vi.fn())
 const removeArkadeDashboardSyncQueriesMock = vi.hoisted(() => vi.fn())
 const clearArkadeDashboardStoreMock = vi.hoisted(() => vi.fn())
 const ensureArkadeEncryptedSecretsHostMock = vi.hoisted(() => vi.fn())
-const runArkadeOperatorSyncAndPersistMock = vi.hoisted(() => vi.fn())
 const refreshArkadeStoreFromLoadedWasmMock = vi.hoisted(() => vi.fn())
 const setActiveArkadeConnectionIdMock = vi.hoisted(() => vi.fn())
 const setLastOperatorSyncTimeMock = vi.hoisted(() => vi.fn())
+const setArkadeSignerMigrationHintMock = vi.hoisted(() => vi.fn())
 
 const encryptedMnemonic = {
   ciphertext: new Uint8Array([1, 2, 3]),
@@ -63,6 +63,7 @@ vi.mock('@/stores/walletStore', () => ({
     getState: () => ({
       setActiveArkadeConnectionId: setActiveArkadeConnectionIdMock,
       setLastOperatorSyncTime: setLastOperatorSyncTimeMock,
+      setArkadeSignerMigrationHint: setArkadeSignerMigrationHintMock,
     }),
   },
 }))
@@ -126,8 +127,6 @@ vi.mock('@/lib/arkade/arkade-persistence-store-sync', () => ({
 
 vi.mock('@/lib/arkade/arkade-operator-sync', () => ({
   awaitBackgroundArkadeOperatorSync: vi.fn().mockResolvedValue(undefined),
-  runArkadeOperatorSyncAndPersist: (...args: unknown[]) =>
-    runArkadeOperatorSyncAndPersistMock(...args),
 }))
 
 vi.mock('@/workers/arkade-persistence-channel', () => ({
