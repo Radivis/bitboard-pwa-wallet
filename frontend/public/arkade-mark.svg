@@ -1,7 +1,7 @@
 <!-- Arkade brand mark from https://docs.arkadeos.com (official Mintlify logo assets). -->
 <svg width="145" height="146" viewBox="0 0 145 146" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Arkade">
-  <path d="M0 36.5579L36.2249 0.333008H108.675L144.9 36.5579V72.7828H108.675V36.5579H36.2249V72.7828H1.01608e-06L0 36.5579Z" fill="#351791"/>
-  <path d="M36.2249 109.008V72.7828H108.675V109.008H36.2249Z" fill="#351791"/>
-  <path d="M36.2249 109.008H1.01608e-06V145.233H36.2249V109.008Z" fill="#351791"/>
-  <path d="M108.675 109.008V145.233H144.9V109.008H108.675Z" fill="#351791"/>
+  <path d="M0 36.5579L36.2249 0.333008H108.675L144.9 36.5579V72.7828H108.675V36.5579H36.2249V72.7828H1.01608e-06L0 36.5579Z" fill="black"/>
+  <path d="M36.2249 109.008V72.7828H108.675V109.008H36.2249Z" fill="black"/>
+  <path d="M36.2249 109.008H1.01608e-06V145.233H36.2249V109.008Z" fill="black"/>
+  <path d="M108.675 109.008V145.233H144.9V109.008H108.675Z" fill="black"/>
 </svg>

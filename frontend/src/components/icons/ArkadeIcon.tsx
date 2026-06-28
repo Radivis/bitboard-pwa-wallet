@@ -1,16 +1,23 @@
-import type { ImgHTMLAttributes } from 'react'
+import type { HTMLAttributes } from 'react'
 import { cn } from '@/lib/shared/utils'
 
 /** Official Arkade brand mark (`frontend/public/arkade-mark.svg`, from docs.arkadeos.com). */
 const ARKADE_MARK_SRC = '/arkade-mark.svg'
 
-export function ArkadeIcon({ className, ...props }: ImgHTMLAttributes<HTMLImageElement>) {
+const arkadeMarkMaskStyle = {
+  maskImage: `url(${ARKADE_MARK_SRC})`,
+  WebkitMaskImage: `url(${ARKADE_MARK_SRC})`,
+  maskRepeat: 'no-repeat',
+  maskPosition: 'center',
+  maskSize: 'contain',
+} as const
+
+export function ArkadeIcon({ className, style, ...props }: HTMLAttributes<HTMLSpanElement>) {
   return (
-    <img
-      src={ARKADE_MARK_SRC}
-      alt=""
+    <span
       aria-hidden
-      className={cn('inline-block shrink-0', className)}
+      className={cn('inline-block shrink-0 bg-current', className)}
+      style={{ ...arkadeMarkMaskStyle, ...style }}
       {...props}
     />
   )
