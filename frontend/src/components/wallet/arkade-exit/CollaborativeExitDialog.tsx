@@ -10,6 +10,11 @@ import { Label } from '@/components/ui/label'
 import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
 import { ARKADE_INFOMODE_IDS } from '@/lib/arkade/arkade-infomode'
 import { formatIntentFeePrograms } from '@/lib/arkade/arkade-exit-utils'
+import {
+  arkadeHasPendingRecoveryBalance,
+  formatCollaborativeExitEstimateError,
+} from '@/lib/arkade/arkade-cooperative-exit'
+import { arkadeOffchainSpendableSats } from '@/lib/arkade/arkade-balance-display'
 import type { useArkadeExitFlow } from '@/hooks/useArkadeExitFlow'
 
 type ExitFlow = ReturnType<typeof useArkadeExitFlow>
@@ -33,6 +38,7 @@ export function CollaborativeExitDialog({ exitFlow }: CollaborativeExitDialogPro
     collaborativeFeeQuery,
     collaborativeExitMutation,
     canCollaborativeExit,
+    collaborativeExitBlockedByRotation,
     handleCollaborativeExit,
   } = exitFlow
 
@@ -72,6 +78,15 @@ export function CollaborativeExitDialog({ exitFlow }: CollaborativeExitDialogPro
           Withdraw VTXOs to an on-chain address with the Arkade operator. Requires operator
           connectivity; faster and cheaper than unilateral exit.
         </DialogDescription>
+        {collaborativeExitBlockedByRotation && (
+          <p
+            className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs text-amber-900 dark:text-amber-100"
+            data-testid="arkade-collab-exit-rotation-blocked"
+          >
+            Operator signer rotation cutoff has passed. Cooperative exit is no longer available for
+            affected VTXOs — use unilateral exit instead.
+          </p>
+        )}
         {networkMode === 'mainnet' && (
           <p className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs text-amber-900 dark:text-amber-100">
             You are on mainnet. Confirm the destination address before exiting.
@@ -107,10 +122,24 @@ export function CollaborativeExitDialog({ exitFlow }: CollaborativeExitDialogPro
             placeholder="Leave empty for full balance"
           />
           {balanceQuery.data && (
-            <p className="text-xs text-muted-foreground">
-              Arkade balance:{' '}
-              <BitcoinAmountDisplay amountSats={balanceQuery.data.confirmedSats} size="sm" />
-            </p>
+            <div className="space-y-0.5 text-xs text-muted-foreground">
+              <p>
+                Cooperatively exit spendable:{' '}
+                <BitcoinAmountDisplay
+                  amountSats={arkadeOffchainSpendableSats(balanceQuery.data)}
+                  size="sm"
+                />
+              </p>
+              {arkadeHasPendingRecoveryBalance(balanceQuery.data) && (
+                <p data-testid="arkade-collab-exit-pending-recovery">
+                  Pending recovery (unilateral exit only):{' '}
+                  <BitcoinAmountDisplay
+                    amountSats={balanceQuery.data.pendingRecoverySats ?? 0}
+                    size="sm"
+                  />
+                </p>
+              )}
+            </div>
           )}
           {collabAmountError && (
             <p className="text-xs text-destructive">{collabAmountError}</p>
@@ -162,7 +191,7 @@ export function CollaborativeExitDialog({ exitFlow }: CollaborativeExitDialogPro
             )}
             {collaborativeFeeQuery.data.estimateError && (
               <p className="text-amber-700 dark:text-amber-300">
-                {collaborativeFeeQuery.data.estimateError}
+                {formatCollaborativeExitEstimateError(collaborativeFeeQuery.data)}
               </p>
             )}
             <p className="text-muted-foreground">

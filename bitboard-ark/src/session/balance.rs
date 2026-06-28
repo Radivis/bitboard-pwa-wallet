@@ -11,20 +11,24 @@ impl ArkSession {
             self.reconcile_pending_exit_deductions_with_snapshot(&snapshot)?;
         }
 
-        let (pre_confirmed_sats, confirmed_sats, recoverable_sats) =
-            if let Some(snapshot) = self.wallet_db.snapshot().offchain_vtxo_snapshot.as_ref() {
-                offchain_balance_sats_from_snapshot(snapshot)?
+        let (pre_confirmed_sats, confirmed_sats, recoverable_sats, pending_recovery_sats) =
+            if let Ok(live) = self.client.offchain_balance().await {
+                (
+                    live.pre_confirmed().to_sat(),
+                    live.confirmed().to_sat(),
+                    live.recoverable().to_sat(),
+                    live.pending_recovery().to_sat(),
+                )
+            } else if let Some(snapshot) = self.wallet_db.snapshot().offchain_vtxo_snapshot.as_ref()
+            {
+                let (pre_confirmed, confirmed, recoverable) =
+                    offchain_balance_sats_from_snapshot(snapshot)?;
+                (pre_confirmed, confirmed, recoverable, 0)
             } else {
-                (0, 0, 0)
+                (0, 0, 0, 0)
             };
         let (unilateral_exit_in_progress_sats, collaborative_exit_in_progress_sats) =
             self.exit_balance_components()?;
-        let pending_recovery_sats = self
-            .client
-            .offchain_balance()
-            .await
-            .map(|balance| balance.pending_recovery().to_sat())
-            .unwrap_or(0);
         let onchain = self.client.onchain_wallet_balance()?;
         let boarding = self.boarding_status().await?;
         Ok(build_arkade_balance_dto(ArkadeBalanceInputs {

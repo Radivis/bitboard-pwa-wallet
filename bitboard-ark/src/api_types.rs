@@ -132,7 +132,14 @@ pub struct CollaborativeExitFeeEstimateDto {
     pub estimated_receive_sats: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub estimate_error: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub estimate_error_code: Option<&'static str>,
 }
+
+/// [`CollaborativeExitFeeEstimateDto::estimate_error_code`] when cooperative inputs are empty
+/// or otherwise insufficient for the requested exit amount.
+pub const COLLABORATIVE_EXIT_ESTIMATE_ERROR_INSUFFICIENT_COOPERATIVE_INPUTS: &str =
+    "insufficient_cooperative_inputs";
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]

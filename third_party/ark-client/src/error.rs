@@ -134,6 +134,21 @@ impl Error {
             };
         }
     }
+
+    /// Returns `true` if this error chain contains a coin-selection failure (e.g. insufficient
+    /// batch-settleable inputs for a cooperative exit).
+    pub fn is_coin_select(&self) -> bool {
+        let mut err = self;
+        loop {
+            if matches!(err.inner.kind, Kind::CoinSelect(_)) {
+                return true;
+            }
+            err = match err.inner.cause.as_ref() {
+                Some(err) => err,
+                None => return false,
+            };
+        }
+    }
 }
 
 impl Kind {
@@ -376,5 +391,22 @@ impl StdError for Error {
             .cause
             .as_ref()
             .map(|e| e as &(dyn StdError + 'static))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Error;
+
+    #[test]
+    fn is_coin_select_detects_coin_select_errors() {
+        let err = Error::coin_select("cannot afford to send 50_000 sats, only have 0 sats");
+        assert!(err.is_coin_select());
+    }
+
+    #[test]
+    fn is_coin_select_is_false_for_ad_hoc_errors() {
+        let err = Error::ad_hoc("no matching VTXO outpoints found");
+        assert!(!err.is_coin_select());
     }
 }

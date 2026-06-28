@@ -46,7 +46,7 @@ describe('CollaborativeExitDialog', () => {
     expect(screen.getByRole('button', { name: 'Turn on infomode' })).toBeInTheDocument()
   })
 
-  it('enables Confirm exit when fee estimate returns estimateError', () => {
+  it('enables Confirm exit when fee estimate returns non-funds estimateError', () => {
     const exitFlow = buildExitFlow({
       collaborativeFeeQuery: {
         isLoading: false,
@@ -67,6 +67,53 @@ describe('CollaborativeExitDialog', () => {
     renderWithProviders(<CollaborativeExitDialog exitFlow={exitFlow} />)
 
     expect(screen.getByRole('button', { name: 'Confirm exit' })).toBeEnabled()
+  })
+
+  it('disables Confirm exit when fee estimate reports zero cooperative balance', () => {
+    const exitFlow = buildExitFlow({
+      collaborativeFeeQuery: {
+        isLoading: false,
+        isError: false,
+        data: {
+          txFeeRate: '0',
+          intentFeeConfigured: {
+            offchainInput: false,
+            onchainInput: false,
+            offchainOutput: false,
+            onchainOutput: false,
+          },
+          estimateError: 'cannot afford to send 0.00050000 BTC, only have 0 BTC',
+          estimateErrorCode: 'insufficient_cooperative_inputs',
+        },
+      },
+      canCollaborativeExit: false,
+      collaborativeExitBlockedByFunds: true,
+    })
+
+    renderWithProviders(<CollaborativeExitDialog exitFlow={exitFlow} />)
+
+    expect(screen.getByRole('button', { name: 'Confirm exit' })).toBeDisabled()
+    expect(screen.getByText(/unilateral exit/i)).toBeInTheDocument()
+  })
+
+  it('shows rotation cutoff warning and pending recovery balance', () => {
+    const exitFlow = buildExitFlow({
+      collaborativeExitBlockedByRotation: true,
+      balanceQuery: {
+        data: {
+          confirmedSats: 0,
+          totalSats: 50_000,
+          pendingRecoverySats: 50_000,
+        },
+      },
+      canCollaborativeExit: false,
+    })
+
+    renderWithProviders(<CollaborativeExitDialog exitFlow={exitFlow} />)
+
+    expect(screen.getByTestId('arkade-collab-exit-rotation-blocked')).toBeInTheDocument()
+    expect(screen.getByTestId('arkade-collab-exit-pending-recovery')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Confirm exit' })).toBeDisabled()
   })
 
   it('disables Confirm exit when amount input is invalid', () => {

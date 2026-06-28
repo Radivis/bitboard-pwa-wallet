@@ -4,6 +4,7 @@ use ark_client::Blockchain;
 use bitcoin::{Amount, OutPoint, Txid, secp256k1::rand::rngs::OsRng};
 
 use crate::api_types::{
+    COLLABORATIVE_EXIT_ESTIMATE_ERROR_INSUFFICIENT_COOPERATIVE_INPUTS,
     CollaborativeExitFeeEstimateDto, CollaborativeExitParams, CompleteUnilateralExitParams,
     ExitCandidateRow, OnchainBumperInfoDto, UnilateralExitFeeEstimateDto, UnilateralExitFeeParams,
     UnrollProgressEvent, UnrollResult,
@@ -20,6 +21,21 @@ use super::mappers::{
     empty_fee_info, map_exit_candidate, map_intent_fee_configured, parse_onchain_address,
     parse_outpoint,
 };
+
+fn collaborative_exit_estimate_error_code(is_coin_select: bool) -> Option<&'static str> {
+    if is_coin_select {
+        Some(COLLABORATIVE_EXIT_ESTIMATE_ERROR_INSUFFICIENT_COOPERATIVE_INPUTS)
+    } else {
+        None
+    }
+}
+
+fn collaborative_exit_estimate_error_fields(
+    error: ark_client::Error,
+) -> (String, Option<&'static str>) {
+    let estimate_error_code = collaborative_exit_estimate_error_code(error.is_coin_select());
+    (error.to_string(), estimate_error_code)
+}
 
 impl ArkSession {
     pub async fn list_exit_candidates(&self) -> ArkResult<Vec<ExitCandidateRow>> {
@@ -92,6 +108,7 @@ impl ArkSession {
                     estimated_total_fee_sats: None,
                     estimated_receive_sats: None,
                     estimate_error: Some(error.to_string()),
+                    estimate_error_code: None,
                 });
             }
         };
@@ -117,15 +134,21 @@ impl ArkSession {
                     estimated_total_fee_sats: Some(fee_sats),
                     estimated_receive_sats: Some(receive),
                     estimate_error: None,
+                    estimate_error_code: None,
                 })
             }
-            Err(error) => Ok(CollaborativeExitFeeEstimateDto {
-                tx_fee_rate: fees.tx_fee_rate,
-                intent_fee_configured,
-                estimated_total_fee_sats: None,
-                estimated_receive_sats: None,
-                estimate_error: Some(error.to_string()),
-            }),
+            Err(error) => {
+                let (estimate_error, estimate_error_code) =
+                    collaborative_exit_estimate_error_fields(error);
+                Ok(CollaborativeExitFeeEstimateDto {
+                    tx_fee_rate: fees.tx_fee_rate,
+                    intent_fee_configured,
+                    estimated_total_fee_sats: None,
+                    estimated_receive_sats: None,
+                    estimate_error: Some(estimate_error),
+                    estimate_error_code,
+                })
+            }
         }
     }
 
@@ -293,5 +316,24 @@ impl ArkSession {
             .build_unilateral_exit_branch(target)
             .await
             .map_err(Into::into)
+    }
+}
+
+#[cfg(test)]
+mod collaborative_exit_estimate_tests {
+    use super::collaborative_exit_estimate_error_code;
+    use crate::api_types::COLLABORATIVE_EXIT_ESTIMATE_ERROR_INSUFFICIENT_COOPERATIVE_INPUTS;
+
+    #[test]
+    fn maps_coin_select_to_insufficient_cooperative_inputs_code() {
+        assert_eq!(
+            collaborative_exit_estimate_error_code(true),
+            Some(COLLABORATIVE_EXIT_ESTIMATE_ERROR_INSUFFICIENT_COOPERATIVE_INPUTS)
+        );
+    }
+
+    #[test]
+    fn leaves_non_coin_select_without_code() {
+        assert_eq!(collaborative_exit_estimate_error_code(false), None);
     }
 }

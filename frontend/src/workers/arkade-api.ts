@@ -108,6 +108,8 @@ export interface ArkadeCompleteUnilateralExitParams {
   destinationAddress: string
 }
 
+export type ArkadeCollaborativeExitEstimateErrorCode = 'insufficient_cooperative_inputs'
+
 export interface ArkadeCollaborativeExitFeeEstimate {
   txFeeRate: string
   intentFeeConfigured: {
@@ -119,6 +121,7 @@ export interface ArkadeCollaborativeExitFeeEstimate {
   estimatedTotalFeeSats: number | null
   estimatedReceiveSats: number | null
   estimateError?: string
+  estimateErrorCode?: ArkadeCollaborativeExitEstimateErrorCode
 }
 
 export interface ArkadeUnilateralExitFeeEstimate {
