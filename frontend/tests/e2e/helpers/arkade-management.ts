@@ -120,6 +120,14 @@ export async function settleBoardingUtxo(page: Page): Promise<void> {
       return
     }
 
+    // The success toast auto-dismisses, so also accept the deterministic board-page state: once
+    // the boarding UTXO has been settled it is no longer counted as ready to settle.
+    const readyLine = page.locator('li').filter({ hasText: 'Ready to settle:' })
+    const readyText = (await readyLine.textContent()) ?? ''
+    if (/Ready to settle:\s*0(\s|$)/.test(readyText)) {
+      return
+    }
+
     const expiredLine = page.locator('li').filter({ hasText: 'Unilateral exit only:' })
     const expiredText = (await expiredLine.textContent()) ?? ''
     const expiredMatch = expiredText.match(/Unilateral exit only:\s*([\d,]+)/)

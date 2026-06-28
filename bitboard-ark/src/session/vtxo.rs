@@ -1,4 +1,5 @@
-use bitcoin::{Amount, OutPoint, secp256k1::rand::rngs::OsRng};
+use ark_client::Blockchain;
+use bitcoin::{Amount, OutPoint, Txid, secp256k1::rand::rngs::OsRng};
 
 use crate::api_types::{
     DelegateSpendableResult, FinalizePendingResult, RecoverableVtxoFeeEstimateDto,
@@ -18,6 +19,35 @@ pub(crate) struct RecoverableVtxoSummary {
     pub outpoints: Vec<OutPoint>,
     pub total_sats: u64,
     pub count: u32,
+}
+
+/// How many times to re-run the boarding settle when the operator finalizes a round without
+/// actually spending the boarding UTXO (its chain scanner lagged behind the deposit confirmation).
+const BOARDING_SETTLE_MAX_ATTEMPTS: u8 = 3;
+
+/// Recovery settles every currently-recoverable VTXO in one round, but the operator's rolling sweep
+/// can mark *additional* VTXOs recoverable just after we snapshot the set (e.g. a VTXO whose tree
+/// expiry the chain only just passed). We therefore re-snapshot and re-settle until nothing remains
+/// recoverable, bounded so a VTXO the operator refuses to settle cannot spin us forever.
+const RECOVER_RECOVERABLE_MAX_ROUNDS: u8 = 5;
+
+/// arkd broadcasts the commitment TX before emitting its TXID over the event stream, but our own
+/// blockchain backend can lag a moment behind. We poll for the TX this many times (with a short
+/// delay) before concluding the boarding input was skipped, so propagation lag is not mistaken for
+/// an operator skip.
+const COMMITMENT_TX_VISIBILITY_MAX_POLLS: u8 = 10;
+const COMMITMENT_TX_VISIBILITY_POLL_DELAY: std::time::Duration =
+    std::time::Duration::from_millis(500);
+
+#[cfg(target_arch = "wasm32")]
+async fn sleep(duration: std::time::Duration) {
+    bitboard_wasm_sleep::sleep_for(duration).await;
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+async fn sleep(_duration: std::time::Duration) {
+    // The crate ships as WASM; native builds exist only for type-checking and have no browser
+    // timer to await, so the delay is a no-op there.
 }
 
 impl ArkSession {
@@ -97,19 +127,33 @@ impl ArkSession {
     }
 
     pub async fn recover_recoverable_vtxos(&self) -> ArkResult<Option<String>> {
-        let summary = self.recoverable_vtxo_summary().await?;
-        if summary.outpoints.is_empty() {
-            return Ok(None);
-        }
-        let mut rng = OsRng;
-        let txid = self
-            .client
-            .settle_vtxos(&mut rng, &summary.outpoints, &[])
-            .await?;
-        if txid.is_some() {
+        let mut last_commitment_txid: Option<Txid> = None;
+
+        for _ in 0..RECOVER_RECOVERABLE_MAX_ROUNDS {
+            let summary = self.recoverable_vtxo_summary().await?;
+            if summary.outpoints.is_empty() {
+                break;
+            }
+
+            let mut rng = OsRng;
+            let commitment_txid = self
+                .client
+                .settle_vtxos(&mut rng, &summary.outpoints, &[])
+                .await?;
+
+            // The operator declined to settle (e.g. the cooperative window closed); stop rather
+            // than re-submitting the same unchanged set on every remaining round.
+            let Some(commitment_txid) = commitment_txid else {
+                break;
+            };
+
+            last_commitment_txid = Some(commitment_txid);
+            // Refresh local state so the next iteration's snapshot reflects both the VTXOs we just
+            // settled and any that the rolling sweep has since marked recoverable.
             self.sync_with_operator().await?;
         }
-        Ok(txid.map(|id| id.to_string()))
+
+        Ok(last_commitment_txid.map(|id| id.to_string()))
     }
 
     pub async fn expiring_vtxo_count(&self) -> ArkResult<u32> {
@@ -226,28 +270,86 @@ impl ArkSession {
         }
 
         let mut rng = OsRng;
-        let boarding_outpoint = self
-            .newest_cooperative_boarding_outpoint()
-            .await?
-            .ok_or_else(|| {
-                ArkWasmError::Boarding(
-                    "No boarding UTXO is inside the operator cooperative settle window. \
-                     Fund the boarding address and settle within ~30 seconds of confirmation."
-                        .to_string(),
-                )
-            })?;
 
-        match self
-            .client
-            .settle_vtxos(&mut rng, &[], &[boarding_outpoint])
-            .await
-        {
-            Ok(Some(txid)) => Ok(Some(txid.to_string())),
-            Ok(None) => Err(ArkWasmError::Boarding(
-                "Settle returned no inputs even though boarding UTXOs looked spendable. Try again in a moment.".to_string(),
-            )),
-            Err(error) => Err(error.into()),
+        // Boarding settle races arkd's chain scanner: if the operator builds the round before its
+        // own view registers the freshly confirmed boarding deposit, it silently skips the input
+        // (arkd logs `vtxo <outpoint> not found, skipping`) and finalizes a round that does not
+        // spend the boarding UTXO. Verify the finalized round actually consumed the input and retry
+        // a bounded number of times so a single missed scan does not surface to the user as a hang.
+        let mut skipped_outpoint: Option<OutPoint> = None;
+        for _ in 0..BOARDING_SETTLE_MAX_ATTEMPTS {
+            let boarding_outpoint = self
+                .newest_cooperative_boarding_outpoint()
+                .await?
+                .ok_or_else(|| {
+                    ArkWasmError::Boarding(
+                        "No boarding UTXO is inside the operator cooperative settle window. \
+                         Fund the boarding address and settle within ~30 seconds of confirmation."
+                            .to_string(),
+                    )
+                })?;
+
+            match self
+                .client
+                .settle_vtxos(&mut rng, &[], &[boarding_outpoint])
+                .await
+            {
+                Ok(Some(commitment_txid)) => {
+                    if self
+                        .round_consumed_boarding_outpoint(commitment_txid, boarding_outpoint)
+                        .await?
+                    {
+                        return Ok(Some(commitment_txid.to_string()));
+                    }
+                    skipped_outpoint = Some(boarding_outpoint);
+                }
+                Ok(None) => {
+                    return Err(ArkWasmError::Boarding(
+                        "Settle returned no inputs even though boarding UTXOs looked spendable. Try again in a moment.".to_string(),
+                    ));
+                }
+                Err(error) => return Err(error.into()),
+            }
         }
+
+        Err(ArkWasmError::Boarding(format!(
+            "The operator finalized {BOARDING_SETTLE_MAX_ATTEMPTS} round(s) without spending the \
+             boarding UTXO{}. Its chain view had likely not registered the boarding deposit yet — \
+             wait for another confirmation and retry.",
+            skipped_outpoint
+                .map(|outpoint| format!(" {outpoint}"))
+                .unwrap_or_default(),
+        )))
+    }
+
+    /// Confirm the finalized batch actually spent `boarding_outpoint`.
+    ///
+    /// arkd reports the commitment TXID only after broadcasting the round, so we inspect that TX's
+    /// inputs directly — authoritative and free of mempool-index lag on the boarding address. The
+    /// TX can take a moment to reach our backend, so we poll for it before concluding the input was
+    /// skipped; only if it never becomes visible do we fall back to the boarding UTXO spend status.
+    async fn round_consumed_boarding_outpoint(
+        &self,
+        commitment_txid: Txid,
+        boarding_outpoint: OutPoint,
+    ) -> ArkResult<bool> {
+        for _ in 0..COMMITMENT_TX_VISIBILITY_MAX_POLLS {
+            if let Some(commitment_tx) = self.client.blockchain().find_tx(&commitment_txid).await? {
+                return Ok(commitment_tx
+                    .input
+                    .iter()
+                    .any(|tx_in| tx_in.previous_output == boarding_outpoint));
+            }
+            sleep(COMMITMENT_TX_VISIBILITY_POLL_DELAY).await;
+        }
+
+        // The commitment TX never became visible; fall back to the boarding UTXO's spend status.
+        let spend_status = self
+            .client
+            .blockchain()
+            .get_output_status(&boarding_outpoint.txid, boarding_outpoint.vout)
+            .await?;
+        Ok(spend_status.spend_txid.is_some())
     }
     async fn expiring_outpoints(&self) -> ArkResult<Vec<OutPoint>> {
         let (vtxo_list, _) = self.client.list_vtxos().await?;

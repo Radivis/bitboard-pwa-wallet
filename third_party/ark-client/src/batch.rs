@@ -345,9 +345,10 @@ where
             .await
         };
 
-        // Joining a batch can fail depending on the timing, so we try a few times.
+        // Joining a batch can fail depending on the timing (e.g. the previous batch window closed
+        // before our intent landed), so we retry a bounded number of times.
         let commitment_txid = join_next_batch
-            .retry(ExponentialBuilder::default().with_max_times(0))
+            .retry(ExponentialBuilder::default().with_max_times(2))
             .sleep(sleep)
             .notify(|err: &Error, dur: std::time::Duration| {
                 tracing::warn!("Retrying joining next batch after {dur:?}. Error: {err}",);
