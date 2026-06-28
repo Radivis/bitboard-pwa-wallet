@@ -22,6 +22,8 @@ pub struct OpenSessionResult {
 pub struct BalanceDto {
     /// Net spendable balance (offchain + bumper, minus exits in progress).
     pub confirmed_sats: u64,
+    /// Net spendable offchain VTXO balance only (excludes on-chain bumper and boarding).
+    pub offchain_spendable_sats: u64,
     /// Portfolio-style total: offchain (spendable + recoverable) plus confirmed on-chain bumper
     /// sats and unconfirmed boarding UTXOs. Excludes unconfirmed bumper-wallet UTXOs
     /// (`trusted_pending` / `untrusted_pending` from the on-chain wallet); those are not

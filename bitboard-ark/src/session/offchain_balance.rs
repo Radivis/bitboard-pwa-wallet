@@ -17,15 +17,15 @@ impl ArkSession {
             return Ok(OffchainBalanceBuckets::from_live(&live));
         }
 
-        if let Some(snapshot) = self.wallet_db.snapshot().offchain_vtxo_snapshot.as_ref() {
-            if let Ok(server_info) = self.client.server_info() {
-                return offchain_balance_buckets_from_snapshot(
-                    snapshot,
-                    &server_info,
-                    current_unix_timestamp(),
-                    legacy_signer_pk_fallback(&self.operator_identity),
-                );
-            }
+        if let Some(snapshot) = self.wallet_db.snapshot().offchain_vtxo_snapshot.as_ref()
+            && let Ok(server_info) = self.client.server_info()
+        {
+            return offchain_balance_buckets_from_snapshot(
+                snapshot,
+                &server_info,
+                current_unix_timestamp(),
+                legacy_signer_pk_fallback(&self.operator_identity),
+            );
         }
 
         Ok(OffchainBalanceBuckets::zero())

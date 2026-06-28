@@ -4,6 +4,7 @@ import type {
   ArkadeCollaborativeExitEstimateErrorCode,
   ArkadeSignerMigrationHint,
 } from '@/workers/arkade-api'
+import { arkadeOffchainSpendableSats } from '@/lib/arkade/arkade-balance-display'
 
 export const ARKADE_COLLABORATIVE_EXIT_ESTIMATE_ERROR_INSUFFICIENT_COOPERATIVE_INPUTS =
   'insufficient_cooperative_inputs' satisfies ArkadeCollaborativeExitEstimateErrorCode
@@ -36,4 +37,15 @@ export function formatCollaborativeExitEstimateError(
 
 export function arkadeHasPendingRecoveryBalance(balance: ArkadeBalanceInfo): boolean {
   return (balance.pendingRecoverySats ?? 0) > 0
+}
+
+/** Batch-settleable amount available for cooperative exit (aligned with fee estimator when loaded). */
+export function arkadeCooperativeExitSpendableSats(
+  balance: ArkadeBalanceInfo,
+  feeEstimate?: Pick<ArkadeCollaborativeExitFeeEstimate, 'estimateErrorCode'> | null,
+): number {
+  if (feeEstimate != null && isCollaborativeExitInsufficientFundsError(feeEstimate)) {
+    return 0
+  }
+  return arkadeOffchainSpendableSats(balance)
 }

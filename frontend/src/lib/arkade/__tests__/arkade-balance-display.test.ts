@@ -36,4 +36,13 @@ describe('arkade-balance-display', () => {
     expect(arkadePendingRecoverySats(balance)).toBe(50_000)
     expect(arkadeDashboardSpendableSats(balance)).toBe(0)
   })
+
+  it('offchain spendable excludes bumper included in confirmedSats', () => {
+    const balance = {
+      confirmedSats: 50_000,
+      offchainSpendableSats: 0,
+      totalSats: 50_000,
+    }
+    expect(arkadeOffchainSpendableSats(balance)).toBe(0)
+  })
 })

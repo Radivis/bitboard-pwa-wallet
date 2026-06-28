@@ -1,8 +1,13 @@
 import type { ArkadeBalanceInfo } from '@/workers/arkade-api'
 
-/** Net offchain spendable plus bumper (exits in progress already deducted in confirmedSats). */
+/** Net offchain VTXO spendable (excludes bumper/boarding; exits in progress deducted). */
 export function arkadeOffchainSpendableSats(balance: ArkadeBalanceInfo): number {
-  return balance.confirmedSats
+  if (balance.offchainSpendableSats != null) {
+    return balance.offchainSpendableSats
+  }
+  // Legacy WASM: confirmedSats mixed bumper with offchain — prefer net when pending recovery is split out.
+  const pendingRecoverySats = balance.pendingRecoverySats ?? 0
+  return Math.max(0, balance.confirmedSats - pendingRecoverySats)
 }
 
 /** Dashboard total: net confirmed plus boarding UTXOs ready to settle. */

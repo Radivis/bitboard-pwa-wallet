@@ -71,6 +71,13 @@ describe('CollaborativeExitDialog', () => {
 
   it('disables Confirm exit when fee estimate reports zero cooperative balance', () => {
     const exitFlow = buildExitFlow({
+      balanceQuery: {
+        data: {
+          confirmedSats: 50_000,
+          offchainSpendableSats: 0,
+          totalSats: 50_000,
+        },
+      },
       collaborativeFeeQuery: {
         isLoading: false,
         isError: false,
@@ -94,6 +101,8 @@ describe('CollaborativeExitDialog', () => {
 
     expect(screen.getByRole('button', { name: 'Confirm exit' })).toBeDisabled()
     expect(screen.getByText(/unilateral exit/i)).toBeInTheDocument()
+    expect(screen.getByText(/Cooperatively exit spendable:/i)).toBeInTheDocument()
+    expect(screen.getByText('0.00050000')).not.toBeInTheDocument()
   })
 
   it('shows rotation cutoff warning and pending recovery balance', () => {

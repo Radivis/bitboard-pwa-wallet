@@ -7,6 +7,8 @@ export type { ArkadeOperatorConnectionSummary }
 
 export interface ArkadeBalanceInfo {
   confirmedSats: number
+  /** Offchain VTXO spendable balance (excludes bumper/boarding). */
+  offchainSpendableSats?: number
   totalSats: number
   boardingSpendableSats?: number
   boardingPendingSats?: number

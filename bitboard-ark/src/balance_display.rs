@@ -44,8 +44,11 @@ pub fn build_arkade_balance_dto(inputs: ArkadeBalanceInputs) -> BalanceDto {
         .unilateral_exit_in_progress_sats
         .saturating_add(inputs.collaborative_exit_in_progress_sats);
     let confirmed_sats = gross_confirmed_sats.saturating_sub(exit_in_progress_sats);
+    let offchain_spendable_sats =
+        spendable_offchain_sats.saturating_sub(exit_in_progress_sats.min(spendable_offchain_sats));
     BalanceDto {
         confirmed_sats,
+        offchain_spendable_sats,
         total_sats: total_offchain_sats
             .saturating_add(inputs.onchain_confirmed_sats)
             .saturating_add(inputs.boarding_pending_sats)
@@ -94,6 +97,7 @@ mod tests {
             ..Default::default()
         });
         assert_eq!(balance.confirmed_sats, 17_000);
+        assert_eq!(balance.offchain_spendable_sats, 15_000);
         assert_eq!(balance.total_sats, 18_000);
     }
 
@@ -140,6 +144,7 @@ mod tests {
             ..Default::default()
         });
         assert_eq!(balance.confirmed_sats, 0);
+        assert_eq!(balance.offchain_spendable_sats, 0);
         assert_eq!(balance.pending_recovery_sats, 50_000);
         assert_eq!(balance.total_sats, 50_000);
     }

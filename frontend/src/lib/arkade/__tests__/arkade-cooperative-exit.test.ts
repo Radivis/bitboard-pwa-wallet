@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   ARKADE_COLLABORATIVE_EXIT_ESTIMATE_ERROR_INSUFFICIENT_COOPERATIVE_INPUTS,
+  arkadeCooperativeExitSpendableSats,
   formatCollaborativeExitEstimateError,
   isCollaborativeExitInsufficientFundsError,
   isSignerRotationCooperativeExitBlocked,
@@ -39,5 +40,24 @@ describe('arkade-cooperative-exit', () => {
     }
     expect(isCollaborativeExitInsufficientFundsError(estimate)).toBe(false)
     expect(formatCollaborativeExitEstimateError(estimate)).toBe(estimate.estimateError)
+  })
+
+  it('cooperative exit spendable is zero when fee estimate reports insufficient inputs', () => {
+    const balance = { confirmedSats: 50_000, offchainSpendableSats: 0, totalSats: 50_000 }
+    expect(
+      arkadeCooperativeExitSpendableSats(balance, {
+        estimateErrorCode: ARKADE_COLLABORATIVE_EXIT_ESTIMATE_ERROR_INSUFFICIENT_COOPERATIVE_INPUTS,
+      }),
+    ).toBe(0)
+  })
+
+  it('cooperative exit spendable uses offchain bucket not bumper-inclusive confirmed', () => {
+    const balance = {
+      confirmedSats: 50_000,
+      offchainSpendableSats: 0,
+      totalSats: 50_000,
+      pendingRecoverySats: 50_000,
+    }
+    expect(arkadeCooperativeExitSpendableSats(balance, null)).toBe(0)
   })
 })

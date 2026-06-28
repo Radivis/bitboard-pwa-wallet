@@ -11,10 +11,10 @@ import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
 import { ARKADE_INFOMODE_IDS } from '@/lib/arkade/arkade-infomode'
 import { formatIntentFeePrograms } from '@/lib/arkade/arkade-exit-utils'
 import {
+  arkadeCooperativeExitSpendableSats,
   arkadeHasPendingRecoveryBalance,
   formatCollaborativeExitEstimateError,
 } from '@/lib/arkade/arkade-cooperative-exit'
-import { arkadeOffchainSpendableSats } from '@/lib/arkade/arkade-balance-display'
 import type { useArkadeExitFlow } from '@/hooks/useArkadeExitFlow'
 
 type ExitFlow = ReturnType<typeof useArkadeExitFlow>
@@ -126,7 +126,10 @@ export function CollaborativeExitDialog({ exitFlow }: CollaborativeExitDialogPro
               <p>
                 Cooperatively exit spendable:{' '}
                 <BitcoinAmountDisplay
-                  amountSats={arkadeOffchainSpendableSats(balanceQuery.data)}
+                  amountSats={arkadeCooperativeExitSpendableSats(
+                    balanceQuery.data,
+                    collaborativeFeeQuery.data,
+                  )}
                   size="sm"
                 />
               </p>
