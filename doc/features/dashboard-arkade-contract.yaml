@@ -37,6 +37,10 @@ feature:
         description: When Arkade load succeeded but operator sync failed, sync error banner shows even if balance query has no data yet
       - id: DASH-ARK-17
         description: When pendingRecoverySats is greater than zero, balance breakdown shows pending recovery (deprecated signer) line
+      - id: DASH-ARK-18
+        description: When only on-chain bumper remains, headline offchain balance is zero and bumper line is shown separately
+      - id: DASH-ARK-19
+        description: When recoverableVtxoCount is greater than zero, dashboard Arkade card shows recoverable VTXO banner with Recover now
     activity_feed:
       - id: DASH-ARK-20
         description: When Arkade history returns rows, merged dashboard activity includes ArkadePaymentItem rows
@@ -86,11 +90,13 @@ feature:
         - Pending recovery line when pendingRecoverySats is greater than zero
         - Empty-session copy when no balance data
         - Signer migration banner when operator signing key rotated (same as Management Arkade panel)
+        - Recoverable VTXO banner when recoverableVtxoCount is greater than zero
         - Arkade operator sync error banner when post-load sync fails (including when balance data is absent)
       test_ids:
         - dashboard-arkade-balance-card
         - dashboard-arkade-balance-amount
         - arkade-balance-pending-recovery
+        - arkade-recoverable-vtxo-banner
         - dashboard-arkade-session-empty
     - DashboardActivity:
       path: /wallet

@@ -7,6 +7,7 @@ import type { NetworkMode } from '@/stores/walletStore'
 const balanceQueryMock = vi.hoisted(() => vi.fn())
 const walletStoreState = vi.hoisted(() => ({
   networkMode: 'signet' as NetworkMode,
+  arkadeBalance: null as { confirmedSats: number; totalSats: number } | null,
   arkadeSignerMigrationHint: null as {
     previousSignerPkHex: string
     deprecatedStatus: 'migratable'
@@ -50,7 +51,35 @@ vi.mock('@tanstack/react-router', async (importOriginal) => {
 
 vi.mock('@/hooks/useArkadeQueries', () => ({
   useArkadeBalanceQuery: () => balanceQueryMock(),
+  useArkadeRecoverableVtxoFeeQuery: () => recoverableFeeQueryMock(),
+  useArkadeRecoverRecoverableVtxosMutation: () => recoverMutationMock(),
 }))
+
+const recoverableFeeQueryMock = vi.hoisted(() =>
+  vi.fn(() => ({
+    isLoading: false,
+    data: {
+      recoverableVtxoCount: 2,
+      recoverableTotalSats: 50_000,
+      txFeeRate: '2',
+      intentFeeConfigured: {
+        offchainInput: true,
+        onchainInput: false,
+        offchainOutput: false,
+        onchainOutput: true,
+      },
+      estimatedTotalFeeSats: 1_000,
+      estimatedReceiveSats: 49_000,
+    },
+  })),
+)
+
+const recoverMutationMock = vi.hoisted(() =>
+  vi.fn(() => ({
+    mutate: vi.fn(),
+    isPending: false,
+  })),
+)
 
 vi.mock('@/hooks/useArkadeDashboardQueries', () => ({
   useArkadeSyncMetadataQuery: () => ({ data: { isStaleArkade: false } }),
@@ -94,6 +123,7 @@ describe('ArkadeDashboardBalance', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     walletStoreState.networkMode = 'signet'
+    walletStoreState.arkadeBalance = null
     walletStoreState.arkadeSignerMigrationHint = null
     arkadeLifecycleState.rail = {
       loadPhase: 'loaded',
@@ -236,7 +266,23 @@ describe('ArkadeDashboardBalance', () => {
     expect(screen.getByTestId('arkade-balance-bumper')).toHaveTextContent('Bumper wallet (exit fees)')
   })
 
+  it('DASH-ARK-19 shows recoverable VTXO banner when recoverable count is greater than zero', () => {
+    balanceQueryMock.mockReturnValue({
+      isLoading: false,
+      data: {
+        confirmedSats: 0,
+        totalSats: 50_000,
+        recoverableSats: 50_000,
+        recoverableVtxoCount: 2,
+      },
+    })
+    renderWithProviders(<ArkadeDashboardBalance />)
+    expect(screen.getByTestId('arkade-recoverable-vtxo-banner')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Recover now' })).toBeInTheDocument()
+  })
+
   it('DASH-ARK-16 shows sync error banner when sync fails without balance data', () => {
+    walletStoreState.arkadeBalance = { confirmedSats: 1_000, totalSats: 1_000 }
     balanceQueryMock.mockReturnValue({ isLoading: false, isError: false, data: undefined })
     arkadeLifecycleState.rail.syncPhase = 'sync-error'
     arkadeLifecycleState.sync = {
@@ -246,6 +292,7 @@ describe('ArkadeDashboardBalance', () => {
     renderWithProviders(<ArkadeDashboardBalance />)
     expect(screen.getByTestId('wallet-sync-error-banner-arkade')).toBeInTheDocument()
     expect(screen.getByText('failed to get VTXOs for addresses')).toBeInTheDocument()
-    expect(screen.getByTestId('dashboard-arkade-session-empty')).toBeInTheDocument()
+    expect(screen.queryByTestId('dashboard-arkade-session-empty')).not.toBeInTheDocument()
+    expect(screen.getByTestId('dashboard-arkade-balance-amount')).toBeInTheDocument()
   })
 })

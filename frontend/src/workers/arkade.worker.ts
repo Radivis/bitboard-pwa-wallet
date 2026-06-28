@@ -26,6 +26,7 @@ import type {
   ArkadeExitCandidateRow,
   ArkadeOnchainBumperInfo,
   ArkadePaymentRow,
+  ArkadeRecoverableVtxoFeeEstimate,
   ArkadeSendParams,
   ArkadeService,
   ArkadeUnilateralExitFeeEstimate,
@@ -502,6 +503,23 @@ const arkadeService: ArkadeService = {
     await this.getBoardingAddress()
     const txid =
       (await invokeWasmArk((wasmModule) => wasmModule.ark_onboard_boarded_utxos())) ?? null
+    if (txid != null) {
+      await persistAfterCriticalOperation()
+    }
+    return txid
+  },
+
+  async getRecoverableVtxoFeeEstimate(): Promise<ArkadeRecoverableVtxoFeeEstimate> {
+    return invokeWasmArk(
+      (wasmModule) =>
+        wasmModule.ark_get_recoverable_vtxo_fee_estimate() as Promise<ArkadeRecoverableVtxoFeeEstimate>,
+    )
+  },
+
+  async recoverRecoverableVtxos(): Promise<string | null> {
+    const txid =
+      (await invokeWasmArk((wasmModule) => wasmModule.ark_recover_recoverable_vtxos())) ??
+      null
     if (txid != null) {
       await persistAfterCriticalOperation()
     }

@@ -289,6 +289,23 @@ pub async fn ark_onboard_boarded_utxos() -> Result<Option<String>, JsValue> {
 }
 
 #[wasm_bindgen]
+pub async fn ark_get_recoverable_vtxo_fee_estimate() -> Result<JsValue, JsValue> {
+    map_js_async(async {
+        export_session_json(|session| async move { session.recoverable_vtxo_fee_estimate().await })
+            .await
+    })
+    .await
+}
+
+#[wasm_bindgen]
+pub async fn ark_recover_recoverable_vtxos() -> Result<Option<String>, JsValue> {
+    map_js_async(async {
+        with_session_async(|session| async move { session.recover_recoverable_vtxos().await }).await
+    })
+    .await
+}
+
+#[wasm_bindgen]
 pub async fn ark_list_exit_candidates() -> Result<JsValue, JsValue> {
     map_js_async(async {
         export_session_json(|session| async move { session.list_exit_candidates().await }).await

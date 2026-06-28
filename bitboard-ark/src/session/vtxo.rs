@@ -1,13 +1,117 @@
-use bitcoin::{OutPoint, secp256k1::rand::rngs::OsRng};
+use bitcoin::{Amount, OutPoint, secp256k1::rand::rngs::OsRng};
 
-use crate::api_types::{DelegateSpendableResult, FinalizePendingResult, VtxoExpiryStatusDto};
+use crate::api_types::{
+    DelegateSpendableResult, FinalizePendingResult, RecoverableVtxoFeeEstimateDto,
+    VtxoExpiryStatusDto,
+};
 use crate::constants::VTXO_SELF_RENEW_REMAINING_FRACTION;
 use crate::error::{ArkResult, ArkWasmError};
+use crate::offchain_snapshot::vtxo_list_from_snapshot;
 
 use super::ArkSession;
-use super::mappers::{current_unix_timestamp, parse_delegator_public_key};
+use super::mappers::{
+    current_unix_timestamp, empty_fee_info, map_intent_fee_configured, parse_delegator_public_key,
+};
+
+/// Recoverable VTXO outpoints and aggregate amount (expired / swept / sub-dust).
+pub(crate) struct RecoverableVtxoSummary {
+    pub outpoints: Vec<OutPoint>,
+    pub total_sats: u64,
+    pub count: u32,
+}
 
 impl ArkSession {
+    pub(crate) async fn recoverable_vtxo_summary(&self) -> ArkResult<RecoverableVtxoSummary> {
+        if let Ok((vtxo_list, _)) = self.client.list_vtxos().await {
+            return Ok(recoverable_vtxo_summary_from_list(&vtxo_list));
+        }
+
+        if let Some(snapshot) = self.wallet_db.snapshot().offchain_vtxo_snapshot.as_ref() {
+            let vtxo_list = vtxo_list_from_snapshot(snapshot)?;
+            return Ok(recoverable_vtxo_summary_from_list(&vtxo_list));
+        }
+
+        Ok(RecoverableVtxoSummary {
+            outpoints: Vec::new(),
+            total_sats: 0,
+            count: 0,
+        })
+    }
+
+    pub async fn recoverable_vtxo_fee_estimate(&self) -> ArkResult<RecoverableVtxoFeeEstimateDto> {
+        let fees = self
+            .client
+            .server_info()?
+            .fees
+            .clone()
+            .unwrap_or_else(empty_fee_info);
+        let intent_fee_configured = map_intent_fee_configured(&fees.intent_fee);
+        let summary = self.recoverable_vtxo_summary().await?;
+
+        if summary.count == 0 {
+            return Ok(RecoverableVtxoFeeEstimateDto {
+                recoverable_vtxo_count: 0,
+                recoverable_total_sats: 0,
+                tx_fee_rate: fees.tx_fee_rate,
+                intent_fee_configured,
+                estimated_total_fee_sats: None,
+                estimated_receive_sats: None,
+                estimate_error: None,
+            });
+        }
+
+        let (to_address, _) = self.client.get_offchain_address()?;
+        let mut rng = OsRng;
+        match self
+            .client
+            .estimate_batch_fees_vtxo_selection(
+                &mut rng,
+                summary.outpoints.iter().copied(),
+                to_address,
+            )
+            .await
+        {
+            Ok(estimate) => {
+                let fee_sats = estimate.abs().to_sat() as u64;
+                let receive = summary.total_sats.saturating_sub(fee_sats);
+                Ok(RecoverableVtxoFeeEstimateDto {
+                    recoverable_vtxo_count: summary.count,
+                    recoverable_total_sats: summary.total_sats,
+                    tx_fee_rate: fees.tx_fee_rate,
+                    intent_fee_configured,
+                    estimated_total_fee_sats: Some(fee_sats),
+                    estimated_receive_sats: Some(receive),
+                    estimate_error: None,
+                })
+            }
+            Err(error) => Ok(RecoverableVtxoFeeEstimateDto {
+                recoverable_vtxo_count: summary.count,
+                recoverable_total_sats: summary.total_sats,
+                tx_fee_rate: fees.tx_fee_rate,
+                intent_fee_configured,
+                estimated_total_fee_sats: None,
+                estimated_receive_sats: None,
+                estimate_error: Some(error.to_string()),
+            }),
+        }
+    }
+
+    pub async fn recover_recoverable_vtxos(&self) -> ArkResult<Option<String>> {
+        let summary = self.recoverable_vtxo_summary().await?;
+        if summary.outpoints.is_empty() {
+            return Ok(None);
+        }
+        let mut rng = OsRng;
+        let txid = self
+            .client
+            .settle_vtxos(&mut rng, &summary.outpoints, &[])
+            .await?;
+        if txid.is_some() {
+            self.sync_with_operator().await?;
+        }
+        Ok(txid.map(|id| id.to_string()))
+    }
+
     pub async fn expiring_vtxo_count(&self) -> ArkResult<u32> {
         Ok(self.expiring_outpoints().await?.len() as u32)
     }
@@ -148,5 +252,78 @@ impl ArkSession {
             })
             .map(|virtual_tx_outpoint| virtual_tx_outpoint.outpoint)
             .collect())
+    }
+}
+
+pub(crate) fn recoverable_vtxo_summary_from_list(
+    vtxo_list: &ark_core::VtxoList,
+) -> RecoverableVtxoSummary {
+    let recoverable: Vec<_> = vtxo_list.recoverable().collect();
+    let total_sats = recoverable
+        .iter()
+        .fold(Amount::ZERO, |acc, vtxo| acc + vtxo.amount)
+        .to_sat();
+    let outpoints: Vec<OutPoint> = recoverable.into_iter().map(|vtxo| vtxo.outpoint).collect();
+    RecoverableVtxoSummary {
+        count: outpoints.len() as u32,
+        total_sats,
+        outpoints,
+    }
+}
+
+#[cfg(test)]
+mod recoverable_vtxo_tests {
+    use ark_core::server::VirtualTxOutPoint;
+    use bitcoin::hashes::Hash;
+    use bitcoin::{Amount, OutPoint, ScriptBuf, Txid};
+
+    use super::recoverable_vtxo_summary_from_list;
+    use crate::session::mappers::current_unix_timestamp;
+
+    fn sample_vtp(amount_sats: u64, expires_at: i64) -> VirtualTxOutPoint {
+        VirtualTxOutPoint {
+            outpoint: OutPoint::new(Txid::all_zeros(), amount_sats as u32 % 10),
+            created_at: expires_at - 86_400,
+            expires_at,
+            amount: Amount::from_sat(amount_sats),
+            script: ScriptBuf::new(),
+            is_preconfirmed: false,
+            is_swept: false,
+            is_unrolled: false,
+            is_spent: false,
+            spent_by: None,
+            commitment_txids: vec![],
+            settled_by: None,
+            ark_txid: None,
+            assets: vec![],
+        }
+    }
+
+    #[test]
+    fn recoverable_vtxo_summary_counts_expired_vtxos() {
+        let now = current_unix_timestamp();
+        let dust = Amount::from_sat(330);
+        let vtxo_list = ark_core::VtxoList::new(
+            dust,
+            vec![
+                sample_vtp(25_000, now - 1),
+                sample_vtp(25_000, now - 1),
+                sample_vtp(10_000, now + 86_400),
+            ],
+        );
+        let summary = recoverable_vtxo_summary_from_list(&vtxo_list);
+        assert_eq!(summary.count, 2);
+        assert_eq!(summary.total_sats, 50_000);
+        assert_eq!(summary.outpoints.len(), 2);
+    }
+
+    #[test]
+    fn recoverable_vtxo_summary_empty_when_none_recoverable() {
+        let now = current_unix_timestamp();
+        let dust = Amount::from_sat(330);
+        let vtxo_list = ark_core::VtxoList::new(dust, vec![sample_vtp(10_000, now + 86_400)]);
+        let summary = recoverable_vtxo_summary_from_list(&vtxo_list);
+        assert_eq!(summary.count, 0);
+        assert_eq!(summary.total_sats, 0);
     }
 }

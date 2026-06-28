@@ -13,6 +13,7 @@ import {
 } from '@/lib/arkade/arkade-infomode'
 import { ArkadeBalanceBreakdown } from '@/components/wallet/ArkadeBalanceBreakdown'
 import { ArkadeSignerMigrationBanner } from '@/components/wallet/ArkadeSignerMigrationBanner'
+import { ArkadeRecoverableVtxoBanner } from '@/components/wallet/ArkadeRecoverableVtxoBanner'
 import {
   useArkadeAddressQuery,
   useArkadeBalanceQuery,
@@ -68,6 +69,7 @@ export function ArkadePanel() {
       </CardHeader>
       <CardContent className="space-y-4">
         <ArkadeSignerMigrationBanner />
+        <ArkadeRecoverableVtxoBanner />
         <p className="text-sm text-muted-foreground">
           Instant payments on Arkade use separate addresses from your on-chain{' '}
           <code className="text-xs">bc1</code> receive address.

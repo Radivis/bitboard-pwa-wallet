@@ -6,6 +6,7 @@ export const ARKADE_INFOMODE_IDS = {
   balanceVtxos: 'arkade-balance-vtxos',
   balanceExitProgress: 'arkade-balance-exit-progress',
   balanceRecoverable: 'arkade-balance-recoverable',
+  recoverableVtxoBanner: 'arkade-recoverable-vtxo-banner',
   managementPanel: 'arkade-management-panel',
   delegatorFee: 'arkade-delegator-fee',
   renewVtxos: 'arkade-renew-vtxos',
@@ -66,6 +67,11 @@ export const ARKADE_BALANCE_EXIT_PROGRESS_INFOMODE = {
 export const ARKADE_BALANCE_RECOVERABLE_INFOMODE = {
   title: 'Recoverable total',
   text: 'Your full Arkade balance including funds in boarding, exits, or other states not counted in the spendable headline. Nothing is lost—you may need an extra step (settle, renew, or exit) to spend some of it.',
+} as const
+
+export const ARKADE_RECOVERABLE_VTXO_BANNER_INFOMODE = {
+  title: 'Recover swept or expired VTXOs',
+  text: 'These virtual outputs expired, were swept by the operator, or fell below the dust threshold. Batch recovery settles them back into spendable Arkade balance. This is separate from pending recovery after a signer rotation—you still need unilateral exit for those until they become recoverable.',
 } as const
 
 export const ARKADE_BALANCE_BUMPER_INFOMODE = {

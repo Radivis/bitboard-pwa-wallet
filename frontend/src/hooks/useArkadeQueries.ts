@@ -15,6 +15,7 @@ import {
   arkadeDelegateInfoQueryKey,
   arkadeExitCandidatesQueryKey,
   arkadeHistoryQueryKey,
+  arkadeRecoverableVtxoFeeQueryKey,
   arkadeUnilateralExitFeeQueryKey,
   arkadeVtxoExpiryQueryKey,
 } from '@/lib/arkade/arkade-query-keys'
@@ -209,6 +210,9 @@ async function invalidateArkadeWalletDataQueries(
     }),
     queryClient.invalidateQueries({
       queryKey: arkadeVtxoExpiryQueryKey(walletId, networkMode, connectionId),
+    }),
+    queryClient.invalidateQueries({
+      queryKey: arkadeRecoverableVtxoFeeQueryKey(walletId, networkMode, connectionId),
     }),
   ]
 
@@ -463,6 +467,41 @@ export function useArkadeRenewMutation() {
         toast.success('VTXOs renewed')
       } else {
         toast.message('No expiring VTXOs to renew right now')
+      }
+      if (
+        activeWalletId != null &&
+        activeArkadeConnectionId != null &&
+        isArkadeSupportedNetworkMode(networkMode)
+      ) {
+        await invalidateArkadeWalletDataQueries(
+          queryClient,
+          activeWalletId,
+          networkMode,
+          activeArkadeConnectionId,
+        )
+      }
+    },
+    onError: (err) => {
+      toast.error(errorMessage(err))
+    },
+  })
+}
+
+export function useArkadeRecoverRecoverableVtxosMutation() {
+  const queryClient = useQueryClient()
+  const { networkMode, activeWalletId, activeArkadeConnectionId } =
+    useArkadeQueryBase()
+
+  return useMutation({
+    mutationFn: async () => {
+      assertArkadeSessionUnlocked(activeWalletId)
+      return withReadyArkadeWorker(() => getArkadeWorker().recoverRecoverableVtxos())
+    },
+    onSuccess: async (txid) => {
+      if (txid) {
+        toast.success('Recoverable VTXOs settled')
+      } else {
+        toast.message('No recoverable VTXOs to settle right now')
       }
       if (
         activeWalletId != null &&
@@ -782,6 +821,29 @@ export function useArkadeCompleteUnilateralExitMutation() {
     onError: (err) => {
       toast.error(errorMessage(err))
     },
+  })
+}
+
+export function useArkadeRecoverableVtxoFeeQuery(params: { enabled: boolean }) {
+  const { networkMode, activeWalletId, activeArkadeConnectionId, sessionReady } =
+    useArkadeQueryBase()
+  const enabled = params.enabled && sessionReady
+
+  return useQuery({
+    queryKey:
+      activeWalletId != null &&
+      activeArkadeConnectionId != null &&
+      isArkadeSupportedNetworkMode(networkMode)
+        ? arkadeRecoverableVtxoFeeQueryKey(
+            activeWalletId,
+            networkMode,
+            activeArkadeConnectionId,
+          )
+        : arkadeDisabledQueryKey('recoverable-vtxo-fee'),
+    enabled,
+    queryFn: () =>
+      withReadyArkadeWorker(() => getArkadeWorker().getRecoverableVtxoFeeEstimate()),
+    staleTime: ARKADE_FEE_ESTIMATE_STALE_MS,
   })
 }
 

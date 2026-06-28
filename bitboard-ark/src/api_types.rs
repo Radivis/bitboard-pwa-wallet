@@ -41,6 +41,10 @@ pub struct BalanceDto {
     pub collaborative_exit_in_progress_sats: u64,
     /// Funds locked under a deprecated operator signer past cooperative migration cutoff.
     pub pending_recovery_sats: u64,
+    /// Expired, swept, or sub-dust VTXOs recoverable via batch settlement (regime 3).
+    pub recoverable_sats: u64,
+    /// Count of recoverable VTXOs in [`BalanceDto::recoverable_sats`].
+    pub recoverable_vtxo_count: u32,
 }
 
 #[derive(Debug, Serialize)]
@@ -144,6 +148,19 @@ pub struct CollaborativeExitFeeEstimateDto {
 /// or otherwise insufficient for the requested exit amount.
 pub const COLLABORATIVE_EXIT_ESTIMATE_ERROR_INSUFFICIENT_COOPERATIVE_INPUTS: &str =
     "insufficient_cooperative_inputs";
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RecoverableVtxoFeeEstimateDto {
+    pub recoverable_vtxo_count: u32,
+    pub recoverable_total_sats: u64,
+    pub tx_fee_rate: String,
+    pub intent_fee_configured: IntentFeeConfiguredDto,
+    pub estimated_total_fee_sats: Option<u64>,
+    pub estimated_receive_sats: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub estimate_error: Option<String>,
+}
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]

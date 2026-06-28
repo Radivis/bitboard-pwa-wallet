@@ -48,6 +48,15 @@ feature:
         description: Signer mismatch with neither current nor deprecated keys yields load-error with operator-change vs wrong-ASP messaging
       - id: ARK-ROT-05
         description: Signer migration surfaces a non-blocking banner on Dashboard and Management Arkade with regime-appropriate actions (migrate, sync, unilateral exit)
+    recoverable_vtxo_recovery:
+      - id: ARK-REC-01
+        description: When recoverableVtxoCount is greater than zero after balance sync, Dashboard and Management show a recoverable VTXO banner with count and total sats
+      - id: ARK-REC-02
+        description: Banner is hidden when recoverableVtxoCount is zero
+      - id: ARK-REC-03
+        description: Recover now triggers batch settle of recoverable VTXOs only (settle_vtxos with empty boarding) and refreshes balance
+      - id: ARK-REC-04
+        description: Fee estimate failure still shows banner and enables Recover now; operator fee and net receive shown when estimate succeeds
   pages:
     - ArkadeManagement:
       - description: "Arkade status on Management page"
@@ -60,6 +69,7 @@ feature:
         - collaborative exit (on-chain destination, optional partial amount) with operator fee estimate from getInfo().fees
         - unilateral exit per VTXO (select, unroll, complete after timelock) with unroll step count and bumper fee estimate
         - signer migration banner when operator signing key rotated (migratable, due now, or expired regimes)
+        - recoverable VTXO banner when operator reports swept/expired/sub-dust VTXOs with Recover now action
       - requirements:
         - Shown only when isArkadeEnabled and current network supports Arkade
         - Collaborative exit and fee estimates via bitboard-ark WASM in arkade.worker

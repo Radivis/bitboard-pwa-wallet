@@ -17,6 +17,8 @@ export interface ArkadeBalanceInfo {
   unilateralExitInProgressSats?: number
   collaborativeExitInProgressSats?: number
   pendingRecoverySats?: number
+  recoverableSats?: number
+  recoverableVtxoCount?: number
 }
 
 export type ArkadeSignerMigrationDeprecatedStatus = 'migratable' | 'due_now' | 'expired'
@@ -139,6 +141,21 @@ export interface ArkadeUnilateralExitFeeEstimate {
   estimateError?: string
 }
 
+export interface ArkadeRecoverableVtxoFeeEstimate {
+  recoverableVtxoCount: number
+  recoverableTotalSats: number
+  txFeeRate: string
+  intentFeeConfigured: {
+    offchainInput: boolean
+    onchainInput: boolean
+    offchainOutput: boolean
+    onchainOutput: boolean
+  }
+  estimatedTotalFeeSats: number | null
+  estimatedReceiveSats: number | null
+  estimateError?: string
+}
+
 export interface ArkadeCollaborativeExitFeeEstimateParams {
   destinationAddress: string
   amountSats?: number
@@ -217,6 +234,8 @@ export interface ArkadeService {
   }>
   finalizePendingTransactions(): Promise<{ finalized: number; pending: number }>
   onboardBoardedUtxos(): Promise<string | null>
+  getRecoverableVtxoFeeEstimate(): Promise<ArkadeRecoverableVtxoFeeEstimate>
+  recoverRecoverableVtxos(): Promise<string | null>
   listExitCandidates(): Promise<ArkadeExitCandidateRow[]>
   getOnchainBumperInfo(): Promise<ArkadeOnchainBumperInfo>
   collaborativeExit(params: ArkadeCollaborativeExitParams): Promise<string>

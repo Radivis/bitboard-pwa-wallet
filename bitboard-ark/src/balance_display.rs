@@ -6,6 +6,7 @@ pub struct ArkadeBalanceInputs {
     pub pre_confirmed_sats: u64,
     pub confirmed_offchain_sats: u64,
     pub recoverable_sats: u64,
+    pub recoverable_vtxo_count: u32,
     pub onchain_confirmed_sats: u64,
     pub boarding_spendable_sats: u64,
     pub boarding_pending_sats: u64,
@@ -59,6 +60,8 @@ pub fn build_arkade_balance_dto(inputs: ArkadeBalanceInputs) -> BalanceDto {
         unilateral_exit_in_progress_sats: inputs.unilateral_exit_in_progress_sats,
         collaborative_exit_in_progress_sats: inputs.collaborative_exit_in_progress_sats,
         pending_recovery_sats: inputs.pending_recovery_sats,
+        recoverable_sats: inputs.recoverable_sats,
+        recoverable_vtxo_count: inputs.recoverable_vtxo_count,
     }
 }
 
@@ -82,10 +85,13 @@ mod tests {
         let balance = build_arkade_balance_dto(ArkadeBalanceInputs {
             pre_confirmed_sats: 40_000,
             recoverable_sats: 5_000,
+            recoverable_vtxo_count: 2,
             ..Default::default()
         });
         assert_eq!(balance.confirmed_sats, 40_000);
         assert_eq!(balance.total_sats, 45_000);
+        assert_eq!(balance.recoverable_sats, 5_000);
+        assert_eq!(balance.recoverable_vtxo_count, 2);
     }
 
     #[test]

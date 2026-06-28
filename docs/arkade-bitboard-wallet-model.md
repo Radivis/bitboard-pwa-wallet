@@ -84,3 +84,12 @@ When an Arkade operator rotates its signing key, `getInfo` advertises the new `s
 Contracts `ARK-ROT-01` through `ARK-ROT-05` in `doc/features/arkade.yaml` define session open, persistence re-stamp, error messaging, and Management banner behavior.
 
 Cooperative fund migration uses `migrate_deprecated_signer_vtxos()` (ark-client 0.9.3+). Post-cutoff funds appear in `pending_recovery` until unilateral exit or recoverable settlement. This is **not** the admin `WalletInitializerService_Restore` API (operator on-chain wallet setup only).
+
+### Recoverable vs pending recovery (manual batch recover)
+
+| Bucket | Typical cause | User action in Bitboard |
+|--------|---------------|-------------------------|
+| **pending_recovery** | Deprecated operator signer past cooperative cutoff; VTXO not yet expired/swept | Unilateral exit path; shown in balance breakdown, not the recoverable banner |
+| **recoverable** | Expired, operator-swept, or sub-dust VTXOs | Non-blocking banner on Dashboard and Management with count, total, optional fee estimate, and **Recover now** (`settle_vtxos` on recoverable outpoints only—no boarding, no auto-recover on sync) |
+
+Contracts `ARK-REC-01` through `ARK-REC-04` in `doc/features/arkade.yaml` define banner visibility, fee display, and the user-initiated recover action.
