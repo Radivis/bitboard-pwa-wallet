@@ -64,13 +64,16 @@ The app is served at `http://localhost:3000` (see `vite.config.ts`).
 - `npm run test:e2e:debug` — Playwright debug mode
 - `npm run test:e2e:nwc` — Grep NWC-tagged tests with in-memory NWC mock
 - `npm run test:e2e:lab` — Lab-tagged E2E subset
-- `npm run test:e2e:regtest` — Starts regtest docker helper then regtest-tagged tests
-- `npm run test:regtest:start` / `npm run test:regtest:stop` — Regtest environment helpers
+- `npm run test:e2e:regtest` — Starts arkade-regtest then `@regtest` on-chain tests
+- `npm run test:e2e:arkade-regtest` — Live arkd core flows (`@arkade-regtest`)
+- `npm run regtest:start` / `npm run regtest:stop` — arkade-regtest Docker stack (infra only, not tests)
 - `npm run sync-version` / `npm run verify-version` — Version sync with repo root (see `../scripts`)
 
 ## E2E Testing
 
 ### Running E2E Tests
+
+Playwright starts Vite on **port 3100** (`E2E_DEV_SERVER_PORT`) so it does not collide with `npm run dev` on **3000**. Regtest Esplora uses **7030** (see `.env.regtest`).
 
 From `frontend/`, prefer npm scripts so the same config as CI is used:
 

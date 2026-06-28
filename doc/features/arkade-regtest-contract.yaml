@@ -1,0 +1,28 @@
+# Arkade regtest E2E contracts (live arkd via arkade-regtest)
+#
+# Run: npm run test:e2e:arkade-regtest (from frontend/)
+# Requires: Docker, Node 24+, arkade-regtest submodule (regtest/)
+
+contracts:
+  - id: E2E-ARK-REG-01
+    description: Recoverable VTXO banner appears after tree expiry; Recover now batch-settles back into Arkade balance
+    tags: ["@arkade-regtest"]
+  - id: E2E-ARK-REG-02
+    description: Renew VTXOs now succeeds when VTXOs are near block-denominated expiry
+    tags: ["@arkade-regtest"]
+  - id: E2E-ARK-REG-03
+    description: Collaborative exit withdraws part of Arkade balance to on-chain receive address
+    tags: ["@arkade-regtest"]
+  - id: E2E-ARK-REG-04
+    description: Full unilateral unroll — select VTXO, unroll, mine timelock blocks, complete exit on-chain
+    tags: ["@arkade-regtest"]
+
+infrastructure:
+  stack: arkade-regtest
+  profile: ark
+  esplora: "http://localhost:7030/api"
+  arkd: "http://localhost:7070"
+  health_gate:
+    - scripts/start-arkade-regtest.sh blocks until Esplora + arkd ready
+    - Playwright globalSetup when REQUIRE_ARKADE_REGTEST=1
+  env_file: ../.env.regtest

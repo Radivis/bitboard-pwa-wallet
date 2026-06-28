@@ -11,6 +11,10 @@ interface ImportMetaEnv {
   readonly VITE_E2E_NWC_MOCK?: string
   /** E2E-only switch to serve mocked Ark operator responses via Vite middleware. */
   readonly VITE_E2E_ARKADE_MOCK?: string
+  /** E2E-only: real local arkd via arkade-regtest (no operator mock). */
+  readonly VITE_E2E_ARKADE_REGTEST?: string
+  /** Local arkd operator URL for regtest (dev / E2E). */
+  readonly VITE_ARKADE_OPERATOR_REGTEST?: string
   /** Set to `1` or `true` to hide TanStack Router devtools in dev (e.g. for screenshots). */
   readonly VITE_HIDE_ROUTER_DEVTOOLS?: string
   /**

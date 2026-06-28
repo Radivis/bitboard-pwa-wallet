@@ -26,3 +26,4 @@ pub const UNILATERAL_EXIT_CHILD_VSIZE_VB: u64 = 140;
 pub const NETWORK_MODE_MAINNET: &str = "mainnet";
 pub const NETWORK_MODE_TESTNET: &str = "testnet";
 pub const NETWORK_MODE_SIGNET: &str = "signet";
+pub const NETWORK_MODE_REGTEST: &str = "regtest";

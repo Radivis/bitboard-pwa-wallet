@@ -16,7 +16,7 @@ feature:
     - As a user, I want the app to keep working when the Arkade operator rotates its signing key, with clear guidance on migrating or exiting funds
   requirements:
     - Arkade is gated by isArkadeEnabled (default off) and isMainnetAccessEnabled for mainnet
-    - Arkade is available only on mainnet, testnet, and signet; not on lab or regtest in v1
+    - Arkade is available on mainnet, signet, and regtest (local arkd via arkade-regtest for dev/E2E); not on lab in v1
     - delegatorProvider must be configured at first Wallet.create per (wallet_id, networkMode)
     - Mnemonic decryption runs only in workers (secrets channel); never on the main thread
     - Default delegator and operator URLs come from arkade-endpoints.ts (env overrides supported)

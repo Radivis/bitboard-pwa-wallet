@@ -89,7 +89,7 @@ describe('getEsploraUrl', () => {
   })
 
   it('returns direct URL for regtest default', () => {
-    expect(getEsploraUrl('regtest', null)).toBe('http://localhost:3002')
+    expect(getEsploraUrl('regtest', null)).toBe('http://localhost:7030/api')
   })
 
   it('maps whitelisted custom mempool mainnet to proxy', () => {
@@ -144,13 +144,13 @@ describe('validateEsploraUrl', () => {
 
   it('accepts http URL for regtest', () => {
     expect(() =>
-      validateEsploraUrl('http://localhost:3002', 'regtest'),
+      validateEsploraUrl('http://localhost:7030/api', 'regtest'),
     ).not.toThrow()
   })
 
   it('accepts https URL for regtest', () => {
     expect(() =>
-      validateEsploraUrl('https://localhost:3002', 'regtest'),
+      validateEsploraUrl('https://localhost:7030/api', 'regtest'),
     ).not.toThrow()
   })
 

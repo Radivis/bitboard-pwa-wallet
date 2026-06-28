@@ -1,3 +1,4 @@
+import { E2E_DEV_SERVER_ORIGIN } from '../e2e-dev-server'
 import { type Page, expect } from '@playwright/test'
 import {
   E2E_ARKADE_MOCK_CONTROL_PATH,
@@ -11,7 +12,7 @@ export async function postArkadeMockControl(
   partitionId: string,
   body: Record<string, unknown>,
 ): Promise<void> {
-  const baseUrl = process.env.PLAYWRIGHT_BASE_URL ?? 'http://localhost:3000'
+  const baseUrl = process.env.PLAYWRIGHT_BASE_URL ?? E2E_DEV_SERVER_ORIGIN
   const response = await page.request.post(`${baseUrl}${E2E_ARKADE_MOCK_CONTROL_PATH}`, {
     headers: {
       'Content-Type': 'application/json',

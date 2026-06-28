@@ -18,7 +18,24 @@ export async function waitForArkadeLoadReady(
   page: Page,
   timeout = ARKADE_MOCK_UI_TIMEOUT_MS,
 ): Promise<void> {
-  await expect(page.locator('[data-rail-arkade-load="loaded"]')).toBeVisible({ timeout })
+  const card = page.getByTestId('dashboard-arkade-balance-card')
+  await expect(card).toBeVisible({ timeout })
+
+  await expect
+    .poll(
+      async () => {
+        const loadPhase = await card.getAttribute('data-rail-arkade-load')
+        if (loadPhase === 'loaded') return 'loaded'
+        if (loadPhase === 'load-error') {
+          const banner = page.getByTestId('wallet-load-error-banner-arkade')
+          const message = ((await banner.textContent()) ?? 'unknown').trim()
+          throw new Error(`Arkade session failed to open: ${message}`)
+        }
+        return loadPhase
+      },
+      { timeout, intervals: [250, 500, 1000, 2000] },
+    )
+    .toBe('loaded')
 }
 
 /** Assert Arkade load-error banner is visible (session open failure). */
@@ -226,5 +243,16 @@ export async function waitForDashboardArkadeBalanceSats(
 ): Promise<void> {
   await expect(async () => {
     expect(await readDashboardArkadeBalanceSats(page)).toBe(expectedSats)
+  }).toPass({ timeout })
+}
+
+/** Live regtest: balance varies with boarded amount; assert a positive floor only. */
+export async function waitForDashboardArkadeBalanceAtLeast(
+  page: Page,
+  minSats: number,
+  timeout = ARKADE_MOCK_UI_TIMEOUT_MS,
+): Promise<void> {
+  await expect(async () => {
+    expect(await readDashboardArkadeBalanceSats(page)).toBeGreaterThanOrEqual(minSats)
   }).toPass({ timeout })
 }

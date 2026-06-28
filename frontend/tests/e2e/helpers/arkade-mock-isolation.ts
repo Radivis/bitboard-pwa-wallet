@@ -1,3 +1,4 @@
+import { E2E_DEV_SERVER_ORIGIN } from '../e2e-dev-server'
 import { type BrowserContext, type Page, type TestInfo } from '@playwright/test'
 import {
   E2E_ARKADE_MOCK_PARTITION_COOKIE,
@@ -20,7 +21,7 @@ export async function installArkadeMockIsolation(
   page: Page,
   partitionId: string,
 ): Promise<void> {
-  const baseUrl = process.env.PLAYWRIGHT_BASE_URL ?? 'http://localhost:3000'
+  const baseUrl = process.env.PLAYWRIGHT_BASE_URL ?? E2E_DEV_SERVER_ORIGIN
   const cookieDomain = new URL(baseUrl).hostname
 
   await context.addCookies([

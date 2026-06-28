@@ -52,6 +52,11 @@ describe('isArkadeActiveForNetworkMode', () => {
     expect(isArkadeActiveForNetworkMode('mainnet')).toBe(true)
   })
 
+  it('returns true on regtest when feature is on', () => {
+    featureState.isArkadeEnabled = true
+    expect(isArkadeActiveForNetworkMode('regtest')).toBe(true)
+  })
+
   it('returns false on lab', () => {
     featureState.isArkadeEnabled = true
     expect(isArkadeActiveForNetworkMode('lab')).toBe(false)

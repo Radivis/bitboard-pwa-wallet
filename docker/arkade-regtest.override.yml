@@ -1,0 +1,48 @@
+# Parent-repo compose override for arkade-regtest.
+# Avoids clashing with common local dev container names (postgres, bitcoin, lnd, …).
+# Service names on the compose network stay unchanged (e.g. host=postgres in env vars).
+name: arkade-regtest
+
+services:
+  bitcoin:
+    container_name: bitboard-regtest-bitcoin
+  bitcoin-miner:
+    container_name: bitboard-regtest-bitcoin-miner
+  postgres:
+    container_name: bitboard-regtest-postgres
+  nbxplorer:
+    container_name: bitboard-regtest-nbxplorer
+  fulcrum:
+    container_name: bitboard-regtest-fulcrum
+  mempool_mariadb:
+    container_name: bitboard-regtest-mempool-mariadb
+  mempool_api:
+    container_name: bitboard-regtest-mempool-api
+  mempool_web:
+    container_name: bitboard-regtest-mempool-web
+  lnd:
+    container_name: bitboard-regtest-lnd
+  arkd-wallet:
+    container_name: bitboard-regtest-arkd-wallet
+  arkd:
+    container_name: bitboard-regtest-arkd
+  arkade-wallet:
+    container_name: bitboard-regtest-arkade-wallet
+  arkade-explorer:
+    container_name: bitboard-regtest-arkade-explorer
+  boltz-lnd:
+    container_name: bitboard-regtest-boltz-lnd
+  boltz-fulmine:
+    container_name: bitboard-regtest-boltz-fulmine
+  fulmine-delegator:
+    container_name: bitboard-regtest-fulmine-delegator
+  boltz:
+    container_name: bitboard-regtest-boltz
+  nginx-boltz:
+    container_name: bitboard-regtest-nginx-boltz
+  lnurl-server:
+    container_name: bitboard-regtest-lnurl-server
+  emulator:
+    container_name: bitboard-regtest-emulator
+  solver:
+    container_name: bitboard-regtest-solver

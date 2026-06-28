@@ -29,7 +29,7 @@ Crypto primitives: BDK (Bitcoin) + LDK (Lightning) via WASM bindings
 Key generation: Web Crypto API (crypto.getRandomValues)
 Blockchain API: Esplora (light client sync for on-chain)
 Lightning node: raw `lightning` crate (rust-lightning) compiled to WASM via `bitboard-lightning` crate
-Regtest library: bitcoinerlab/tester
+Regtest E2E: [arkade-regtest](https://github.com/ArkLabsHQ/arkade-regtest) submodule (`regtest/`), Esplora `http://localhost:7030/api`, arkd `http://localhost:7070`
 Regtest / Signet / Testnet mode: Built-in via BDK configs
 
 ---

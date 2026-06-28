@@ -8,7 +8,7 @@ import type { BitcoinNetwork, TransactionDetails } from '@/workers/crypto-types'
 
 export const DEFAULT_ESPLORA_URLS: Record<NetworkMode, string> = {
   lab: '', // In-app chain; no Esplora
-  regtest: 'http://localhost:3002',
+  regtest: 'http://localhost:7030/api',
   /** Mutinynet — preferred for Lightning testing (fast blocks, shared infra). */
   signet: 'https://mutinynet.com/api',
   testnet: 'https://mempool.space/testnet4/api',

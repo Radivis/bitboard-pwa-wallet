@@ -3,10 +3,9 @@ import type { NetworkMode } from '@/stores/walletStore'
 import { getArkOperatorUrl } from '@/lib/arkade/arkade-operator-proxy'
 
 /**
- * Live networks with a public Arkade operator in v1.
- * Bitcoin testnet4 is excluded — Arkade docs list mainnet, Mutinynet, and Signet only.
+ * Networks with an Arkade operator in v1 (live mainnet/signet, local regtest for dev/E2E).
  */
-export type ArkadeSupportedNetworkMode = 'mainnet' | 'signet'
+export type ArkadeSupportedNetworkMode = 'mainnet' | 'signet' | 'regtest'
 
 export interface ArkadeEndpoints {
   arkServerUrl: string
@@ -14,27 +13,25 @@ export interface ArkadeEndpoints {
   esploraUrl: string
 }
 
+const REGTEST_OPERATOR_DEFAULT = 'http://localhost:7070'
+
 const OPERATOR_ENV_OVERRIDES: Record<ArkadeSupportedNetworkMode, string | undefined> = {
   mainnet: import.meta.env.VITE_ARKADE_OPERATOR_MAINNET,
   signet: import.meta.env.VITE_ARKADE_OPERATOR_SIGNET,
+  regtest: import.meta.env.VITE_ARKADE_OPERATOR_REGTEST,
 }
 
 /** Empty unless set via VITE_ARKADE_DELEGATOR_* (Bitboard Fulmine delegator is opt-in). */
 const DEFAULT_DELEGATORS: Record<ArkadeSupportedNetworkMode, string> = {
   mainnet: import.meta.env.VITE_ARKADE_DELEGATOR_MAINNET ?? '',
   signet: import.meta.env.VITE_ARKADE_DELEGATOR_SIGNET ?? '',
+  regtest: import.meta.env.VITE_ARKADE_DELEGATOR_REGTEST ?? '',
 }
-
-/** Reserved for regtest Fulmine (v2); not used in UI yet. */
-export const ARKADE_REGTEST_ENDPOINTS_RESERVED = {
-  arkServerUrl: import.meta.env.VITE_ARKADE_OPERATOR_REGTEST ?? '',
-  delegatorUrl: import.meta.env.VITE_ARKADE_DELEGATOR_REGTEST ?? '',
-} as const
 
 export function isArkadeSupportedNetworkMode(
   mode: NetworkMode,
 ): mode is ArkadeSupportedNetworkMode {
-  return mode === 'mainnet' || mode === 'signet'
+  return mode === 'mainnet' || mode === 'signet' || mode === 'regtest'
 }
 
 export function networkModeToArkadeIsMainnet(
@@ -46,8 +43,13 @@ export function networkModeToArkadeIsMainnet(
 export function getArkadeEndpoints(
   mode: ArkadeSupportedNetworkMode,
 ): ArkadeEndpoints {
+  const regtestOperator =
+    OPERATOR_ENV_OVERRIDES.regtest?.trim() || REGTEST_OPERATOR_DEFAULT
+  const operatorOverride =
+    mode === 'regtest' ? regtestOperator : OPERATOR_ENV_OVERRIDES[mode]
+
   return {
-    arkServerUrl: getArkOperatorUrl(mode, OPERATOR_ENV_OVERRIDES[mode]),
+    arkServerUrl: getArkOperatorUrl(mode, operatorOverride),
     delegatorUrl: DEFAULT_DELEGATORS[mode],
     esploraUrl: getEsploraUrl(mode, null),
   }
