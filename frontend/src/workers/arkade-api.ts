@@ -9,6 +9,8 @@ export interface ArkadeBalanceInfo {
   confirmedSats: number
   /** Offchain VTXO spendable balance (excludes bumper/boarding). */
   offchainSpendableSats?: number
+  /** On-chain bumper wallet (P2A fees for unilateral exit only). */
+  onchainBumperSats?: number
   totalSats: number
   boardingSpendableSats?: number
   boardingPendingSats?: number

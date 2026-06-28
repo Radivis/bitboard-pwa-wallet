@@ -24,6 +24,8 @@ pub struct BalanceDto {
     pub confirmed_sats: u64,
     /// Net spendable offchain VTXO balance only (excludes on-chain bumper and boarding).
     pub offchain_spendable_sats: u64,
+    /// Confirmed on-chain bumper wallet balance (P2A fees for unilateral exit only).
+    pub onchain_bumper_sats: u64,
     /// Portfolio-style total: offchain (spendable + recoverable) plus confirmed on-chain bumper
     /// sats and unconfirmed boarding UTXOs. Excludes unconfirmed bumper-wallet UTXOs
     /// (`trusted_pending` / `untrusted_pending` from the on-chain wallet); those are not

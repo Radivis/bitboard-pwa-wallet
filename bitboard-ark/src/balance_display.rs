@@ -49,6 +49,7 @@ pub fn build_arkade_balance_dto(inputs: ArkadeBalanceInputs) -> BalanceDto {
     BalanceDto {
         confirmed_sats,
         offchain_spendable_sats,
+        onchain_bumper_sats: inputs.onchain_confirmed_sats,
         total_sats: total_offchain_sats
             .saturating_add(inputs.onchain_confirmed_sats)
             .saturating_add(inputs.boarding_pending_sats)
@@ -98,7 +99,20 @@ mod tests {
         });
         assert_eq!(balance.confirmed_sats, 17_000);
         assert_eq!(balance.offchain_spendable_sats, 15_000);
+        assert_eq!(balance.onchain_bumper_sats, 2_000);
         assert_eq!(balance.total_sats, 18_000);
+    }
+
+    #[test]
+    fn onchain_bumper_exposed_separately_from_offchain_headline_fields() {
+        let balance = build_arkade_balance_dto(ArkadeBalanceInputs {
+            confirmed_offchain_sats: 0,
+            onchain_confirmed_sats: 50_000,
+            ..Default::default()
+        });
+        assert_eq!(balance.confirmed_sats, 50_000);
+        assert_eq!(balance.offchain_spendable_sats, 0);
+        assert_eq!(balance.onchain_bumper_sats, 50_000);
     }
 
     #[test]

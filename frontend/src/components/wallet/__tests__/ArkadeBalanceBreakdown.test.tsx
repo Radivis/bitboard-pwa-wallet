@@ -4,6 +4,24 @@ import { ArkadeBalanceBreakdown } from '@/components/wallet/ArkadeBalanceBreakdo
 import { renderWithProviders } from '@/test-utils/test-providers'
 
 describe('ArkadeBalanceBreakdown', () => {
+  it('shows bumper wallet separately from headline balance', () => {
+    renderWithProviders(
+      <ArkadeBalanceBreakdown
+        balance={{
+          confirmedSats: 50_000,
+          offchainSpendableSats: 0,
+          onchainBumperSats: 50_000,
+          totalSats: 50_000,
+        }}
+        amountTestId="arkade-balance-amount"
+      />,
+    )
+
+    expect(screen.getByTestId('arkade-balance-amount')).toHaveTextContent('0.00000000')
+    expect(screen.getByTestId('arkade-balance-bumper')).toHaveTextContent('Bumper wallet (exit fees)')
+    expect(screen.queryByText('Total (incl. recoverable):')).not.toBeInTheDocument()
+  })
+
   it('shows negative exit in progress lines', () => {
     renderWithProviders(
       <ArkadeBalanceBreakdown

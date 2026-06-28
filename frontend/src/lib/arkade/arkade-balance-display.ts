@@ -10,9 +10,17 @@ export function arkadeOffchainSpendableSats(balance: ArkadeBalanceInfo): number 
   return Math.max(0, balance.confirmedSats - pendingRecoverySats)
 }
 
-/** Dashboard total: net confirmed plus boarding UTXOs ready to settle. */
+/** On-chain bumper wallet balance (P2A fees for unilateral exit; not Ark spendable balance). */
+export function arkadeOnchainBumperSats(balance: ArkadeBalanceInfo): number {
+  if (balance.onchainBumperSats != null) {
+    return balance.onchainBumperSats
+  }
+  return Math.max(0, balance.confirmedSats - arkadeOffchainSpendableSats(balance))
+}
+
+/** Dashboard headline: offchain VTXOs plus boarding ready to settle (excludes bumper). */
 export function arkadeDashboardSpendableSats(balance: ArkadeBalanceInfo): number {
-  return balance.confirmedSats + (balance.boardingSpendableSats ?? 0)
+  return arkadeOffchainSpendableSats(balance) + (balance.boardingSpendableSats ?? 0)
 }
 
 export function arkadeUnilateralExitInProgressSats(balance: ArkadeBalanceInfo): number {

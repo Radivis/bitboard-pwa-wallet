@@ -4,11 +4,13 @@ import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
 import {
   ARKADE_BALANCE_BOARDING_INFOMODE,
   ARKADE_BALANCE_BOARDING_PENDING_INFOMODE,
+  ARKADE_BALANCE_BUMPER_INFOMODE,
   ARKADE_BALANCE_EXIT_PROGRESS_INFOMODE,
   ARKADE_BALANCE_RECOVERABLE_INFOMODE,
   ARKADE_BALANCE_VTXOS_INFOMODE,
   ARKADE_INFOMODE_IDS,
 } from '@/lib/arkade/arkade-infomode'
+import { ArkadeBumperWalletInfomodeContent } from '@/components/arkade/infomode/ArkadeBumperWalletInfomodeContent'
 import type { ArkadeBalanceInfo } from '@/workers/arkade-api'
 import {
   arkadeCollaborativeExitInProgressSats,
@@ -16,6 +18,7 @@ import {
   arkadeHasBoardingBalance,
   arkadeHasExitInProgress,
   arkadeOffchainSpendableSats,
+  arkadeOnchainBumperSats,
   arkadeUnilateralExitInProgressSats,
 } from '@/lib/arkade/arkade-balance-display'
 
@@ -38,8 +41,10 @@ export function ArkadeBalanceBreakdown({
   const showExitBreakdown = arkadeHasExitInProgress(balance)
   const pendingRecoverySats = balance.pendingRecoverySats ?? 0
   const showPendingRecovery = pendingRecoverySats > 0
+  const onchainBumperSats = arkadeOnchainBumperSats(balance)
+  const showBumperBreakdown = onchainBumperSats > 0
   const showRecoverableTotal =
-    balance.totalSats > dashboardSpendableSats + boardingPendingSats
+    balance.totalSats > dashboardSpendableSats + boardingPendingSats + onchainBumperSats
 
   return (
     <div className="space-y-1">
@@ -133,6 +138,20 @@ export function ArkadeBalanceBreakdown({
           Pending recovery (deprecated signer):{' '}
           <BitcoinAmountDisplay amountSats={pendingRecoverySats} size="sm" />
         </p>
+      )}
+      {showBumperBreakdown && (
+        <InfomodeWrapper
+          infoId={ARKADE_INFOMODE_IDS.bumperWallet}
+          infoTitle={ARKADE_BALANCE_BUMPER_INFOMODE.title}
+          infoText={ARKADE_BALANCE_BUMPER_INFOMODE.text}
+          infoComponent={ArkadeBumperWalletInfomodeContent}
+          as="span"
+        >
+          <p className="text-xs text-muted-foreground" data-testid="arkade-balance-bumper">
+            Bumper wallet (exit fees):{' '}
+            <BitcoinAmountDisplay amountSats={onchainBumperSats} size="sm" />
+          </p>
+        </InfomodeWrapper>
       )}
       {showRecoverableTotal && (
         <InfomodeWrapper

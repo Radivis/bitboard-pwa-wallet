@@ -68,6 +68,11 @@ export const ARKADE_BALANCE_RECOVERABLE_INFOMODE = {
   text: 'Your full Arkade balance including funds in boarding, exits, or other states not counted in the spendable headline. Nothing is lost—you may need an extra step (settle, renew, or exit) to spend some of it.',
 } as const
 
+export const ARKADE_BALANCE_BUMPER_INFOMODE = {
+  title: 'Bumper wallet (exit fees)',
+  text: 'On-chain Bitcoin reserved to pay miner fees during unilateral exit. This is not spendable Arkade balance — fund it from on-chain send if unroll fees are too low.',
+} as const
+
 export const ARKADE_DELEGATOR_FEE_INFOMODE = {
   title: 'Delegator renewal fee',
   text: 'A Fulmine delegator submits presigned VTXO renewals while the app is closed. This small per-renewal fee pays for that service. The delegator cannot redirect your funds—it only broadcasts renewals you already signed.',

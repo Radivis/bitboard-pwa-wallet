@@ -126,8 +126,10 @@ export function UnilateralExitDialog({ exitFlow }: UnilateralExitDialogProps) {
                 Loading VTXOs…
               </div>
             ) : exitCandidatesQuery.data?.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                No recoverable VTXOs found for unilateral exit.
+              <p className="text-sm text-muted-foreground" data-testid="arkade-unilateral-exit-empty">
+                No VTXOs reported by the operator for unilateral exit. Sync Arkade to refresh your
+                VTXO list. After signer rotation, affected VTXOs may have been swept — any balance
+                on the dashboard may be only your bumper wallet (on-chain exit fees).
               </p>
             ) : (
               <ul className="max-h-48 space-y-2 overflow-y-auto rounded-md border p-2">

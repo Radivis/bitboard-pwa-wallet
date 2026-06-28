@@ -221,6 +221,21 @@ describe('ArkadeDashboardBalance', () => {
     )
   })
 
+  it('DASH-ARK-18 shows zero headline and bumper breakdown when only bumper remains', () => {
+    balanceQueryMock.mockReturnValue({
+      isLoading: false,
+      data: {
+        confirmedSats: 50_000,
+        offchainSpendableSats: 0,
+        onchainBumperSats: 50_000,
+        totalSats: 50_000,
+      },
+    })
+    renderWithProviders(<ArkadeDashboardBalance />)
+    expect(screen.getByTestId('dashboard-arkade-balance-amount')).toHaveTextContent('0.00000000')
+    expect(screen.getByTestId('arkade-balance-bumper')).toHaveTextContent('Bumper wallet (exit fees)')
+  })
+
   it('DASH-ARK-16 shows sync error banner when sync fails without balance data', () => {
     balanceQueryMock.mockReturnValue({ isLoading: false, isError: false, data: undefined })
     arkadeLifecycleState.rail.syncPhase = 'sync-error'

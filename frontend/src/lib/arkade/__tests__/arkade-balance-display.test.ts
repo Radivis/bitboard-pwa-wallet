@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   arkadeDashboardSpendableSats,
   arkadeOffchainSpendableSats,
+  arkadeOnchainBumperSats,
   arkadePendingRecoverySats,
 } from '@/lib/arkade/arkade-balance-display'
 
@@ -35,6 +36,26 @@ describe('arkade-balance-display', () => {
     }
     expect(arkadePendingRecoverySats(balance)).toBe(50_000)
     expect(arkadeDashboardSpendableSats(balance)).toBe(0)
+  })
+
+  it('dashboard headline excludes bumper when offchain is zero', () => {
+    const balance = {
+      confirmedSats: 50_000,
+      offchainSpendableSats: 0,
+      onchainBumperSats: 50_000,
+      totalSats: 50_000,
+    }
+    expect(arkadeDashboardSpendableSats(balance)).toBe(0)
+    expect(arkadeOnchainBumperSats(balance)).toBe(50_000)
+  })
+
+  it('arkadeOnchainBumperSats derives from confirmed minus offchain on legacy wasm', () => {
+    const balance = {
+      confirmedSats: 52_000,
+      offchainSpendableSats: 2_000,
+      totalSats: 52_000,
+    }
+    expect(arkadeOnchainBumperSats(balance)).toBe(50_000)
   })
 
   it('offchain spendable excludes bumper included in confirmedSats', () => {
