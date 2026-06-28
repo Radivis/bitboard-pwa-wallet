@@ -13,6 +13,7 @@ pub mod models;
 mod client;
 mod conversions;
 mod error;
+pub(crate) mod openapi_query_arrays;
 
 pub use client::Client;
 pub use client::ListVtxosResponse;

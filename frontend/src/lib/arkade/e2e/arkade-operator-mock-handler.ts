@@ -193,8 +193,8 @@ export async function handleE2eArkadeOperatorMockControlRequest(
   return true
 }
 
-/** Operator sends `scripts` as a comma-separated query value (see ark-rest client). */
-function parseScriptsFromRequestUrl(requestUrl: string): string[] {
+/** Operator accepts repeated `scripts` query params (see ark-rest indexer client). */
+export function parseScriptsFromRequestUrl(requestUrl: string): string[] {
   const url = new URL(requestUrl, 'http://localhost')
   const scripts: string[] = []
   for (const value of url.searchParams.getAll('scripts')) {

@@ -447,14 +447,17 @@ impl Client {
     ) -> Result<impl Stream<Item = Result<StreamEvent, Error>> + Unpin, Error> {
         let configuration = self.configuration()?;
 
-        // Build the URL with query parameters
+        // Build the URL with query parameters (repeated `topics`, not CSV — see openapi_query_arrays).
         let mut url = format!("{}/v1/batch/events", configuration.base_path);
         if !topics.is_empty() {
-            let query_params: Vec<String> = topics
+            let query_pairs =
+                crate::openapi_query_arrays::repeated_simple_query_pairs("topics", &topics);
+            let query_string = query_pairs
                 .iter()
-                .map(|topic| format!("topics={}", urlencoding::encode(topic)))
-                .collect();
-            url = format!("{}?{}", url, query_params.join("&"));
+                .map(|(name, value)| format!("{name}={}", urlencoding::encode(value)))
+                .collect::<Vec<_>>()
+                .join("&");
+            url = format!("{url}?{query_string}");
         }
 
         // Create the request for SSE
