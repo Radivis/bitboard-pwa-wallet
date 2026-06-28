@@ -31,6 +31,12 @@ For network switching and Esplora, see [`descriptor-wallet-switching.md`](descri
 
 Do **not** persist arrays of derivation indices or per-index metadata in `sdkPersistenceJson`; that pattern bloated encrypted secrets and caused failed writes. Session open restores the scalar, warms the key cache locally for `0..index`, and read paths (`getAddress`, balance, history) never block on wallet-secrets re-encrypt.
 
+### Offchain VTXO snapshot and signer-aware balance
+
+`wallet_db.offchain_vtxo_snapshot` stores the last operator-synced VTXO list plus `server_pk_hex` on each `VirtualTxOutPointRecord`. That per-VTXO operator signer key lets the wallet **recompute** balance buckets offline using cached `getInfo` and the current wall clock—same rules as live `offchain_balance()` in ark-client.
+
+Balance buckets (`pre_confirmed`, cooperatively spendable `confirmed`, `recoverable`, `pending_recovery`) are **not** stored as separate persisted totals. After operator signer rotation cutoff, funds on a deprecated key appear in `pending_recovery_sats` until unilateral exit or recoverable settlement. Re-sync refreshes vtxo rows and `server_pk_hex` values.
+
 Operator access from the browser uses **REST** (`ark-rest` + grpc API shim), not grpc-web.
 
 ## Exiting to on-chain

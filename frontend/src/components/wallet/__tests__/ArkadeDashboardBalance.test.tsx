@@ -206,6 +206,21 @@ describe('ArkadeDashboardBalance', () => {
     expect(screen.getByText('Arkade operator signer rotation')).toBeInTheDocument()
   })
 
+  it('DASH-ARK-17 shows pending recovery breakdown when deprecated signer funds are locked', () => {
+    balanceQueryMock.mockReturnValue({
+      isLoading: false,
+      data: {
+        confirmedSats: 0,
+        totalSats: 50_000,
+        pendingRecoverySats: 50_000,
+      },
+    })
+    renderWithProviders(<ArkadeDashboardBalance />)
+    expect(screen.getByTestId('arkade-balance-pending-recovery')).toHaveTextContent(
+      'Pending recovery (deprecated signer)',
+    )
+  })
+
   it('DASH-ARK-16 shows sync error banner when sync fails without balance data', () => {
     balanceQueryMock.mockReturnValue({ isLoading: false, isError: false, data: undefined })
     arkadeLifecycleState.rail.syncPhase = 'sync-error'

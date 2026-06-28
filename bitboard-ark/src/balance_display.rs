@@ -145,6 +145,18 @@ mod tests {
     }
 
     #[test]
+    fn deprecated_signer_vtxo_excluded_from_confirmed_sats() {
+        let balance = build_arkade_balance_dto(ArkadeBalanceInputs {
+            confirmed_offchain_sats: 0,
+            recoverable_sats: 0,
+            pending_recovery_sats: 50_000,
+            ..Default::default()
+        });
+        assert_eq!(balance.confirmed_sats, 0);
+        assert_eq!(balance.total_sats, 50_000);
+    }
+
+    #[test]
     fn pending_unilateral_and_collaborative_exit_reduce_net_confirmed() {
         let balance = build_arkade_balance_dto(ArkadeBalanceInputs {
             pre_confirmed_sats: 300_000,

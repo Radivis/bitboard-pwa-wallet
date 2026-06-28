@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   arkadeDashboardSpendableSats,
   arkadeOffchainSpendableSats,
+  arkadePendingRecoverySats,
 } from '@/lib/arkade/arkade-balance-display'
 
 describe('arkade-balance-display', () => {
@@ -24,5 +25,15 @@ describe('arkade-balance-display', () => {
       collaborativeExitInProgressSats: 0,
     }
     expect(arkadeDashboardSpendableSats(balance)).toBe(19_397)
+  })
+
+  it('exposes pending recovery sats from wasm balance payload', () => {
+    const balance = {
+      confirmedSats: 0,
+      totalSats: 50_000,
+      pendingRecoverySats: 50_000,
+    }
+    expect(arkadePendingRecoverySats(balance)).toBe(50_000)
+    expect(arkadeDashboardSpendableSats(balance)).toBe(0)
   })
 })

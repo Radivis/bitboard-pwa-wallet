@@ -74,6 +74,10 @@ pub struct VirtualTxOutPointRecord {
     pub ark_txid: Option<String>,
     #[serde(default)]
     pub assets: Vec<VirtualTxOutPointAssetRecord>,
+    /// Operator signer public key for this VTXO's tapscript (x-only hex). Used to replay signer-aware
+    /// balance buckets from a local snapshot without calling the operator.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub server_pk_hex: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

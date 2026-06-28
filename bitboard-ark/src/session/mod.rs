@@ -2,6 +2,7 @@ mod balance;
 mod boarding;
 mod exit;
 pub(crate) mod mappers;
+mod offchain_balance;
 mod open;
 mod payments;
 mod pending_exit;

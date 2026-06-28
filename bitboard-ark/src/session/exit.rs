@@ -14,7 +14,6 @@ use crate::constants::{
     UNROLL_EVENT_TYPE_UNROLL, UNROLL_EVENT_TYPE_WAIT,
 };
 use crate::error::{ArkResult, ArkWasmError};
-use crate::exit_balance::gross_offchain_spendable_sats_from_snapshot;
 
 use super::ArkSession;
 use super::mappers::{
@@ -60,13 +59,9 @@ impl ArkSession {
     pub async fn collaborative_exit(&self, params: CollaborativeExitParams) -> ArkResult<String> {
         let destination = parse_onchain_address(&params.destination_address, self.network())?;
         let baseline_offchain_spendable_sats = self
-            .wallet_db
-            .snapshot()
-            .offchain_vtxo_snapshot
-            .as_ref()
-            .map(gross_offchain_spendable_sats_from_snapshot)
-            .transpose()?
-            .unwrap_or(0);
+            .resolve_offchain_balance_buckets()
+            .await?
+            .gross_spendable_sats();
         let mut rng = OsRng;
         let (txid, exit_amount_sats) = if let Some(amount_sats) = params.amount_sats {
             let txid = self

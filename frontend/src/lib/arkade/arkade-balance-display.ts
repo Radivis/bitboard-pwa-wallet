@@ -28,3 +28,7 @@ export function arkadeHasExitInProgress(balance: ArkadeBalanceInfo): boolean {
     arkadeCollaborativeExitInProgressSats(balance) > 0
   )
 }
+
+export function arkadePendingRecoverySats(balance: ArkadeBalanceInfo): number {
+  return balance.pendingRecoverySats ?? 0
+}

@@ -397,6 +397,63 @@ impl OffChainBalance {
     }
 }
 
+/// Classify offchain balance buckets from a VTXO list, server info, and a script→server-pk lookup.
+///
+/// Used by [`Client::offchain_balance`] and by wallets that replay classification from a local
+/// snapshot without calling the operator.
+pub fn compute_offchain_balance(
+    vtxo_list: &VtxoList,
+    script_to_server_pk: impl Fn(&ScriptBuf) -> Option<XOnlyPublicKey>,
+    server_info: &server::Info,
+    now: i64,
+) -> Result<OffChainBalance, Error> {
+    use std::collections::HashSet;
+
+    let spendable_outpoints: HashSet<OutPoint> = vtxo_list
+        .spendable_offchain_at(server_info, now, &script_to_server_pk)
+        .map(|vtxo| vtxo.outpoint)
+        .collect();
+
+    let pre_confirmed = vtxo_list
+        .pre_confirmed()
+        .filter(|v| spendable_outpoints.contains(&v.outpoint))
+        .fold(Amount::ZERO, |acc, x| acc + x.amount);
+
+    let confirmed = vtxo_list
+        .confirmed()
+        .filter(|v| spendable_outpoints.contains(&v.outpoint))
+        .fold(Amount::ZERO, |acc, x| acc + x.amount);
+
+    let recoverable = vtxo_list
+        .recoverable()
+        .fold(Amount::ZERO, |acc, x| acc + x.amount);
+
+    let pending_recovery = vtxo_list
+        .pending_recovery_due_to_signer_at(server_info, now, &script_to_server_pk)
+        .fold(Amount::ZERO, |acc, x| acc + x.amount);
+
+    let mut asset_balances: HashMap<AssetId, u64> = HashMap::new();
+    for vtxo in vtxo_list.spendable_offchain_at(server_info, now, &script_to_server_pk) {
+        for asset in &vtxo.assets {
+            let total = asset_balances
+                .get(&asset.asset_id)
+                .copied()
+                .unwrap_or(0)
+                .checked_add(asset.amount)
+                .ok_or_else(|| Error::ad_hoc("asset balance overflow"))?;
+            asset_balances.insert(asset.asset_id, total);
+        }
+    }
+
+    Ok(OffChainBalance {
+        pre_confirmed,
+        confirmed,
+        recoverable,
+        pending_recovery,
+        asset_balances,
+    })
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 pub trait Blockchain {
     fn find_outpoints(
@@ -1302,56 +1359,12 @@ where
         let now = unix_now()?;
         let server_info = self.server_info()?;
 
-        let spendable_outpoints: HashSet<OutPoint> = vtxo_list
-            .spendable_offchain_at(&server_info, now, |script| {
-                script_map.get(script).map(|vtxo| vtxo.server_pk())
-            })
-            .map(|vtxo| vtxo.outpoint)
-            .collect();
-
-        let pre_confirmed = vtxo_list
-            .pre_confirmed()
-            .filter(|v| spendable_outpoints.contains(&v.outpoint))
-            .fold(Amount::ZERO, |acc, x| acc + x.amount);
-
-        let confirmed = vtxo_list
-            .confirmed()
-            .filter(|v| spendable_outpoints.contains(&v.outpoint))
-            .fold(Amount::ZERO, |acc, x| acc + x.amount);
-
-        let recoverable = vtxo_list
-            .recoverable()
-            .fold(Amount::ZERO, |acc, x| acc + x.amount);
-
-        let pending_recovery = vtxo_list
-            .pending_recovery_due_to_signer_at(&server_info, now, |script| {
-                script_map.get(script).map(|vtxo| vtxo.server_pk())
-            })
-            .fold(Amount::ZERO, |acc, x| acc + x.amount);
-
-        // Aggregate asset balances from currently offchain-spendable VTXOs only.
-        let mut asset_balances: HashMap<AssetId, u64> = HashMap::new();
-        for vtxo in vtxo_list.spendable_offchain_at(&server_info, now, |script| {
-            script_map.get(script).map(|vtxo| vtxo.server_pk())
-        }) {
-            for asset in &vtxo.assets {
-                let total = asset_balances
-                    .get(&asset.asset_id)
-                    .copied()
-                    .unwrap_or(0)
-                    .checked_add(asset.amount)
-                    .ok_or_else(|| Error::ad_hoc("asset balance overflow"))?;
-                asset_balances.insert(asset.asset_id, total);
-            }
-        }
-
-        Ok(OffChainBalance {
-            pre_confirmed,
-            confirmed,
-            recoverable,
-            pending_recovery,
-            asset_balances,
-        })
+        compute_offchain_balance(
+            &vtxo_list,
+            |script| script_map.get(script).map(|vtxo| vtxo.server_pk()),
+            &server_info,
+            now,
+        )
     }
 
     /// Get information about an asset by its ID.

@@ -4,7 +4,7 @@ use bitcoin::Amount;
 use bitcoin::Txid;
 
 use crate::error::ArkWasmError;
-use crate::offchain_snapshot::{offchain_balance_sats_from_snapshot, vtxo_list_from_snapshot};
+use crate::offchain_snapshot::vtxo_list_from_snapshot;
 use crate::persistence::{OffchainVtxoSnapshot, PendingExitDeductionRecord, PendingExitKind};
 
 pub fn unilateral_exit_in_progress_sats_from_snapshot(
@@ -26,13 +26,6 @@ pub fn sum_pending_exit_sats_by_kind(
         .iter()
         .filter(|record| record.kind == kind)
         .fold(0u64, |acc, record| acc.saturating_add(record.amount_sats))
-}
-
-pub fn gross_offchain_spendable_sats_from_snapshot(
-    snapshot: &OffchainVtxoSnapshot,
-) -> crate::error::ArkResult<u64> {
-    let (pre_confirmed, confirmed, _) = offchain_balance_sats_from_snapshot(snapshot)?;
-    Ok(pre_confirmed.saturating_add(confirmed))
 }
 
 pub fn vtxo_still_spendable_in_snapshot(
@@ -84,8 +77,8 @@ pub fn should_keep_pending_exit_deduction(
 pub fn reconcile_pending_exit_deductions(
     records: &mut Vec<PendingExitDeductionRecord>,
     snapshot: &OffchainVtxoSnapshot,
+    gross_offchain_spendable_sats: u64,
 ) -> crate::error::ArkResult<()> {
-    let gross_offchain_spendable_sats = gross_offchain_spendable_sats_from_snapshot(snapshot)?;
     let mut retained = Vec::with_capacity(records.len());
     for record in records.drain(..) {
         if should_keep_pending_exit_deduction(&record, snapshot, gross_offchain_spendable_sats)? {
@@ -125,6 +118,7 @@ mod tests {
             settled_by: None,
             ark_txid: None,
             assets: vec![],
+            server_pk_hex: None,
         }
     }
 
@@ -168,6 +162,7 @@ mod tests {
             settled_by: None,
             ark_txid: None,
             assets: vec![],
+            server_pk_hex: None,
         }]);
 
         let mut records = vec![PendingExitDeductionRecord {
@@ -179,7 +174,7 @@ mod tests {
             baseline_offchain_spendable_sats: None,
         }];
 
-        reconcile_pending_exit_deductions(&mut records, &snapshot).expect("reconcile");
+        reconcile_pending_exit_deductions(&mut records, &snapshot, 0).expect("reconcile");
         assert!(records.is_empty());
     }
 
@@ -196,7 +191,7 @@ mod tests {
             baseline_offchain_spendable_sats: Some(130_000),
         }];
 
-        reconcile_pending_exit_deductions(&mut records, &snapshot).expect("reconcile");
+        reconcile_pending_exit_deductions(&mut records, &snapshot, 30_000).expect("reconcile");
         assert!(records.is_empty());
     }
 
@@ -252,7 +247,7 @@ mod tests {
             baseline_offchain_spendable_sats: None,
         }];
 
-        reconcile_pending_exit_deductions(&mut records, &snapshot).expect("reconcile");
+        reconcile_pending_exit_deductions(&mut records, &snapshot, 0).expect("reconcile");
         assert!(records.is_empty());
     }
 }
