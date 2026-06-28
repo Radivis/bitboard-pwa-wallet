@@ -530,9 +530,13 @@ export function useArkadeOnboardMutation() {
   return useMutation({
     mutationFn: async () => {
       assertArkadeSessionUnlocked(activeWalletId)
-      return withReadyArkadeWorkerAndOptionalDelegate(networkMode, () =>
+      const txid = await withReadyArkadeWorkerAndOptionalDelegate(networkMode, () =>
         getArkadeWorker().onboardBoardedUtxos(),
       )
+      if (!txid) {
+        throw new Error('Boarding settlement did not return a commitment transaction')
+      }
+      return txid
     },
     onMutate: async () => {
       if (

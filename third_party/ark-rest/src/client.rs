@@ -41,7 +41,6 @@ use bitcoin::base64::Engine;
 use bitcoin::secp256k1::PublicKey;
 use bitcoin::Psbt;
 use bitcoin::Txid;
-use futures::stream;
 use futures::Future;
 use futures::Stream;
 use futures::StreamExt;
@@ -483,50 +482,29 @@ impl Client {
         // Convert the response into a byte stream using async chunks
         let byte_stream = request.bytes_stream();
 
-        // Create the SSE event stream
-        let stream = stream::unfold(byte_stream, |mut byte_stream| async move {
-            loop {
-                match byte_stream.next().await {
-                    Some(chunk_result) => {
-                        let result = match chunk_result {
-                            Ok(bytes) => {
-                                let event = String::from_utf8(bytes.to_vec());
-                                match event {
-                                    Ok(event) => {
-                                        let event = event.trim();
-                                        // Skip empty lines and SSE comments
-                                        if event.is_empty() || event.starts_with(':') {
-                                            continue;
-                                        }
-                                        // Strip SSE `data: ` prefix
-                                        let event = event.strip_prefix("data: ").unwrap_or(event);
-                                        if let Ok(response) =
-                                            serde_json::from_str::<models::GetEventStreamResponse>(
-                                                event,
-                                            )
-                                        {
-                                            match StreamEvent::try_from(response) {
-                                                Ok(stream_event) => Ok(stream_event),
-                                                Err(e) => Err(Error::conversion(e)),
-                                            }
-                                        } else {
-                                            // Handle parse error
-                                            Err(Error::conversion("Failed to parse JSON"))
-                                        }
-                                    }
-                                    Err(error) => Err(Error::conversion(error)),
-                                }
+        let stream = crate::sse_stream::sse_json_payload_stream(byte_stream).filter_map(
+            |payload_result| async move {
+                match payload_result {
+                    Ok(payload) => match serde_json::from_str::<models::GetEventStreamResponse>(&payload)
+                    {
+                        Ok(response) => match StreamEvent::try_from(response) {
+                            Ok(stream_event) => Some(Ok(stream_event)),
+                            Err(error) => {
+                                tracing::debug!(%payload, %error, "Skipping unmapped SSE event");
+                                None
                             }
-                            Err(e) => Err(Error::request(e)),
-                        };
-                        return Some((result, byte_stream));
-                    }
-                    None => return None,
+                        },
+                        Err(error) => {
+                            tracing::debug!(%payload, %error, "Skipping malformed SSE JSON");
+                            None
+                        }
+                    },
+                    Err(error) => Some(Err(error)),
                 }
-            }
-        });
+            },
+        );
 
-        Ok(Box::pin(stream))
+        Ok(stream.boxed_local())
     }
     pub async fn confirm_registration(&self, intent_id: String) -> Result<(), Error> {
         let configuration = self.configuration()?;
@@ -738,52 +716,30 @@ impl Client {
         // Convert the response into a byte stream using async chunks
         let byte_stream = request.bytes_stream();
 
-        // Create the SSE event stream
-        let stream = stream::unfold(byte_stream, |mut byte_stream| async move {
-            loop {
-                match byte_stream.next().await {
-                    Some(chunk_result) => {
-                        let result = match chunk_result {
-                            Ok(bytes) => {
-                                let event = String::from_utf8(bytes.to_vec());
-                                match event {
-                                    Ok(event) => {
-                                        let event = event.trim();
-                                        // Skip empty lines and SSE comments
-                                        if event.is_empty() || event.starts_with(':') {
-                                            continue;
-                                        }
-                                        // Strip SSE `data: ` prefix
-                                        let event = event.strip_prefix("data: ").unwrap_or(event);
-                                        if let Ok(response) =
-                                            serde_json::from_str::<models::GetSubscriptionResponse>(
-                                                event,
-                                            )
-                                        {
-                                            match SubscriptionResponse::try_from(response) {
-                                                Ok(subscription_response) => {
-                                                    Ok(subscription_response)
-                                                }
-                                                Err(e) => Err(Error::conversion(e)),
-                                            }
-                                        } else {
-                                            // Handle parse error
-                                            Err(Error::conversion("Failed to parse JSON"))
-                                        }
-                                    }
-                                    Err(error) => Err(Error::conversion(error)),
+        let stream = crate::sse_stream::sse_json_payload_stream(byte_stream).filter_map(
+            |payload_result| async move {
+                match payload_result {
+                    Ok(payload) => {
+                        match serde_json::from_str::<models::GetSubscriptionResponse>(&payload) {
+                            Ok(response) => match SubscriptionResponse::try_from(response) {
+                                Ok(subscription_response) => Some(Ok(subscription_response)),
+                                Err(error) => {
+                                    tracing::debug!(%payload, %error, "Skipping unmapped subscription SSE event");
+                                    None
                                 }
+                            },
+                            Err(error) => {
+                                tracing::debug!(%payload, %error, "Skipping malformed subscription SSE JSON");
+                                None
                             }
-                            Err(e) => Err(Error::request(e)),
-                        };
-                        return Some((result, byte_stream));
+                        }
                     }
-                    None => return None,
+                    Err(error) => Some(Err(error)),
                 }
-            }
-        });
+            },
+        );
 
-        Ok(Box::pin(stream))
+        Ok(stream.boxed_local())
     }
 
     pub async fn get_virtual_txs(

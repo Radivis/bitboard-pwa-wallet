@@ -226,7 +226,22 @@ impl ArkSession {
         }
 
         let mut rng = OsRng;
-        match self.client.settle(&mut rng).await {
+        let boarding_outpoint = self
+            .newest_cooperative_boarding_outpoint()
+            .await?
+            .ok_or_else(|| {
+                ArkWasmError::Boarding(
+                    "No boarding UTXO is inside the operator cooperative settle window. \
+                     Fund the boarding address and settle within ~30 seconds of confirmation."
+                        .to_string(),
+                )
+            })?;
+
+        match self
+            .client
+            .settle_vtxos(&mut rng, &[], &[boarding_outpoint])
+            .await
+        {
             Ok(Some(txid)) => Ok(Some(txid.to_string())),
             Ok(None) => Err(ArkWasmError::Boarding(
                 "Settle returned no inputs even though boarding UTXOs looked spendable. Try again in a moment.".to_string(),

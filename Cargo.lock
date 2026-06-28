@@ -199,6 +199,7 @@ dependencies = [
  "ark-core",
  "base64 0.22.1",
  "bitcoin",
+ "bytes",
  "futures",
  "getrandom 0.2.17",
  "reqwest 0.12.28",

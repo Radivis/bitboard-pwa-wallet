@@ -178,6 +178,27 @@ pub(crate) fn wasm_safe_now() -> Duration {
     Duration::from_secs(current_unix_timestamp().max(0) as u64)
 }
 
+/// BIP68 encodes time-based relative `nSequence` locks in 512-second intervals.
+const BIP68_TIME_GRANULARITY: u64 = 512;
+
+/// arkd `validateBoardingInput` adds `exitDelay.Seconds()` as wall-clock seconds to the
+/// confirmation timestamp, even for block-based boarding exit delays.
+pub(crate) fn is_past_arkd_cooperative_boarding_window(
+    boarding_output: &BoardingOutput,
+    confirmation_blocktime: u64,
+    now_secs: u64,
+) -> bool {
+    let sequence = boarding_output.exit_delay();
+    let Some(relative) = sequence.to_relative_lock_time() else {
+        return false;
+    };
+    let cooperative_window_secs = match relative {
+        bitcoin::relative::LockTime::Blocks(blocks) => blocks.value() as u64,
+        bitcoin::relative::LockTime::Time(time) => time.value() as u64 * BIP68_TIME_GRANULARITY,
+    };
+    now_secs > confirmation_blocktime.saturating_add(cooperative_window_secs)
+}
+
 pub(crate) fn accumulate_boarding_utxo_balance(
     utxo: &ExplorerUtxo,
     boarding_output: &BoardingOutput,
@@ -198,6 +219,12 @@ pub(crate) fn accumulate_boarding_utxo_balance(
                 now,
                 Duration::from_secs(confirmation_blocktime),
                 confirmations,
+            ) {
+                *expired_sats += amount_sats;
+            } else if is_past_arkd_cooperative_boarding_window(
+                boarding_output,
+                confirmation_blocktime,
+                now.as_secs(),
             ) {
                 *expired_sats += amount_sats;
             } else {

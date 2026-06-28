@@ -14,6 +14,7 @@ mod client;
 mod conversions;
 mod error;
 pub(crate) mod openapi_query_arrays;
+pub(crate) mod sse_stream;
 
 pub use client::Client;
 pub use client::ListVtxosResponse;

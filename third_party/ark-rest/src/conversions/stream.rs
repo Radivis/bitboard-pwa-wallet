@@ -203,13 +203,12 @@ impl TryFrom<models::TreeNoncesAggregatedEvent> for TreeNoncesAggregatedEvent {
             .id
             .ok_or_else(|| ConversionError("Missing batch id".to_string()))?;
 
-        let tree_nonces_str = event
-            .tree_nonces
-            .ok_or_else(|| ConversionError("Missing tree_nonces".to_string()))?;
-
-        // Parse the tree_nonces JSON string into NoncePks
-        let tree_nonces = NoncePks::decode(tree_nonces_str)
-            .map_err(|e| ConversionError(format!("Invalid tree_nonces: {e}")))?;
+        let tree_nonces = NoncePks::decode(
+            event
+                .tree_nonces
+                .ok_or_else(|| ConversionError("Missing tree_nonces".to_string()))?,
+        )
+        .map_err(|e| ConversionError(format!("Invalid tree_nonces: {e}")))?;
 
         Ok(TreeNoncesAggregatedEvent { id, tree_nonces })
     }

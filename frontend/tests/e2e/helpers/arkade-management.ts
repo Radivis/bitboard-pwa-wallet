@@ -11,6 +11,7 @@ import { goToWalletTab } from './wallet-nav'
 import { runDashboardSyncUntilIdle } from './dashboard-sync'
 import {
   fundRegtestAddress,
+  waitForConfirmedBalance,
   waitForDashboardShowsFundedOnChainBalance,
 } from './regtest'
 import {
@@ -98,13 +99,49 @@ export async function readBoardingAddress(page: Page): Promise<string> {
   return address
 }
 
+/**
+ * arkd `validateBoardingInput` treats block-based `boardingExitDelay` as wall-clock seconds
+ * (30 blocks → ~30s cooperative settle window). Fund and settle within this budget.
+ */
+const BOARDING_COOPERATIVE_SETTLE_BUDGET_MS = 25_000
+
 export async function settleBoardingUtxo(page: Page): Promise<void> {
   await page.getByRole('button', { name: 'Settle boarding UTXO' }).click()
   await expect(page.getByRole('button', { name: 'Settling…' })).toBeVisible({
     timeout: 10_000,
   })
+  await expect(async () => {
+    const isSettling = await page.getByRole('button', { name: 'Settling…' }).isVisible()
+    if (isSettling) {
+      throw new Error('Boarding settle still in progress')
+    }
+
+    if (await page.getByText('Boarding settlement submitted to operator').isVisible()) {
+      return
+    }
+
+    const expiredLine = page.locator('li').filter({ hasText: 'Unilateral exit only:' })
+    const expiredText = (await expiredLine.textContent()) ?? ''
+    const expiredMatch = expiredText.match(/Unilateral exit only:\s*([\d,]+)/)
+    const expiredSats = expiredMatch
+      ? Number(expiredMatch[1].replace(/,/g, ''))
+      : 0
+    if (expiredSats > 0) {
+      throw new Error(`Boarding UTXO left cooperative settle window: ${expiredText.trim()}`)
+    }
+
+    const errorToast = page.locator('[data-sonner-toast]').filter({
+      hasText: /boarding|settle|intent|register|expired|fee|failed|error|timed out|batch/i,
+    })
+    if (await errorToast.first().isVisible()) {
+      const message = ((await errorToast.first().textContent()) ?? 'unknown').trim()
+      throw new Error(`Boarding settle failed: ${message}`)
+    }
+
+    throw new Error('Waiting for boarding settle success or error')
+  }).toPass({ timeout: 180_000 })
   await expect(page.getByRole('button', { name: 'Settle boarding UTXO' })).toBeEnabled({
-    timeout: 120_000,
+    timeout: 10_000,
   })
 }
 
@@ -113,7 +150,9 @@ export async function fundAndBoardToArkade(
   boardSats: number,
 ): Promise<void> {
   const boardingAddress = await readBoardingAddress(page)
+  const fundStartedAt = Date.now()
   await fundRegtestAddress(boardingAddress, boardSats)
+  await waitForConfirmedBalance(boardingAddress, boardSats, 20_000)
   // Stay on the board page — avoid dashboard on-chain sync racing the Arkade worker.
   await expect
     .poll(
@@ -122,13 +161,31 @@ export async function fundAndBoardToArkade(
         const text = (await readyLine.textContent()) ?? ''
         return /Ready to settle:\s*(?!0\s)/.test(text)
       },
-      { timeout: 90_000, intervals: [500, 1000, 2000] },
+      { timeout: 15_000, intervals: [200, 500, 1000] },
     )
     .toBe(true)
+  const elapsedMs = Date.now() - fundStartedAt
+  if (elapsedMs > BOARDING_COOPERATIVE_SETTLE_BUDGET_MS) {
+    throw new Error(
+      `Boarding UTXO cooperative settle window likely expired before settle (${elapsedMs}ms since fund; budget ${BOARDING_COOPERATIVE_SETTLE_BUDGET_MS}ms)`,
+    )
+  }
   await settleBoardingUtxo(page)
   await goToWalletTab(page, 'Dashboard')
   await triggerArkadeRailSync(page)
-  await waitForDashboardArkadeBalanceAtLeast(page, 1, 120_000)
+  // Headline balance includes boarding ready-to-settle; require settled offchain VTXOs.
+  await waitForDashboardArkadeBalanceAtLeast(page, boardSats - Math.ceil(boardSats * 0.02), 120_000)
+  await goToArkadeBoardPage(page)
+  await expect
+    .poll(
+      async () => {
+        const readyLine = page.locator('li').filter({ hasText: 'Ready to settle:' })
+        const text = (await readyLine.textContent()) ?? ''
+        return /Ready to settle:\s*0(\s|$)/.test(text)
+      },
+      { timeout: 60_000, intervals: [500, 1000, 2000] },
+    )
+    .toBe(true)
 }
 
 export async function ensureOnChainBumperFunds(page: Page, sats: number): Promise<void> {
