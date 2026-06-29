@@ -11,9 +11,19 @@ import {
 } from './arkade-management'
 import { triggerArkadeRailSync } from './dashboard-arkade'
 import { goToWalletTab } from './wallet-nav'
-import { TEST_MNEMONIC } from './wallet-setup'
+import { generateMnemonic } from '@scure/bip39'
+import { wordlist as englishWordlist } from '@scure/bip39/wordlists/english.js'
 
 const DEFAULT_BOARD_SATS = 200_000
+
+/**
+ * Each serial @arkade-regtest test gets its OWN freshly generated wallet so VTXOs, boarding outputs
+ * and cumulative block mining from earlier tests cannot bleed into later ones. Combined with the
+ * per-test arkd restart, this gives every test the clean state in which it passes in isolation.
+ */
+function freshRegtestWalletMnemonic(): string {
+  return generateMnemonic(englishWordlist, 128)
+}
 
 const RECOVERABLE_BANNER_POLL_TIMEOUT_MS = 300_000
 
@@ -32,7 +42,7 @@ export async function prepareFundedArkadeBalance(
   page: Page,
   boardSats: number = DEFAULT_BOARD_SATS,
 ): Promise<void> {
-  await setupRegtestArkadeWallet(page, TEST_MNEMONIC)
+  await setupRegtestArkadeWallet(page, freshRegtestWalletMnemonic())
   await fundAndBoardToArkade(page, boardSats)
 }
 

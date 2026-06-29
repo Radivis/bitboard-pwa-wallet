@@ -14,7 +14,12 @@ use super::mappers::{
     current_unix_timestamp, empty_fee_info, map_intent_fee_configured, parse_delegator_public_key,
 };
 
-/// Recoverable VTXO outpoints and aggregate amount (expired / swept / sub-dust).
+/// Recoverable VTXO outpoints and aggregate amount.
+///
+/// Only VTXOs the *operator* agrees need no forfeit are included: ones it has already swept (it
+/// controls them) or sub-dust ones (which cannot be forfeited). VTXOs that look recoverable only
+/// because the client clock considers them expired are deliberately excluded — see
+/// [`recoverable_vtxo_summary_from_list`].
 pub(crate) struct RecoverableVtxoSummary {
     pub outpoints: Vec<OutPoint>,
     pub total_sats: u64,
@@ -52,13 +57,15 @@ async fn sleep(_duration: std::time::Duration) {
 
 impl ArkSession {
     pub(crate) async fn recoverable_vtxo_summary(&self) -> ArkResult<RecoverableVtxoSummary> {
+        let dust = self.client.server_info()?.dust;
+
         if let Ok((vtxo_list, _)) = self.client.list_vtxos().await {
-            return Ok(recoverable_vtxo_summary_from_list(&vtxo_list));
+            return Ok(recoverable_vtxo_summary_from_list(&vtxo_list, dust));
         }
 
         if let Some(snapshot) = self.wallet_db.snapshot().offchain_vtxo_snapshot.as_ref() {
             let vtxo_list = vtxo_list_from_snapshot(snapshot)?;
-            return Ok(recoverable_vtxo_summary_from_list(&vtxo_list));
+            return Ok(recoverable_vtxo_summary_from_list(&vtxo_list, dust));
         }
 
         Ok(RecoverableVtxoSummary {
@@ -372,10 +379,24 @@ impl ArkSession {
     }
 }
 
+/// Build the recoverable-VTXO summary the banner and the recovery action both consume.
+///
+/// `ark_core`'s `recoverable()` bucket also contains VTXOs that are recoverable *only* because the
+/// client clock has passed their `expires_at` (`is_expired()`), even though the operator has not yet
+/// swept them. Settling such a VTXO goes through the no-forfeit recovery path, but the operator's
+/// own clock/sweep state can still expect a forfeit for it — it then fails the round with
+/// `missing forfeit tx`, leaves the intent stuck, and wedges every subsequent round. We therefore
+/// keep only VTXOs the operator authoritatively agrees need no forfeit: ones it has already swept
+/// (`is_swept`) or sub-dust ones (`amount < dust`, which cannot be forfeited). Client-expired VTXOs
+/// re-enter the set automatically once the operator actually sweeps them.
 pub(crate) fn recoverable_vtxo_summary_from_list(
     vtxo_list: &ark_core::VtxoList,
+    dust: Amount,
 ) -> RecoverableVtxoSummary {
-    let recoverable: Vec<_> = vtxo_list.recoverable().collect();
+    let recoverable: Vec<_> = vtxo_list
+        .recoverable()
+        .filter(|vtxo| vtxo.is_swept || vtxo.amount < dust)
+        .collect();
     let total_sats = recoverable
         .iter()
         .fold(Amount::ZERO, |acc, vtxo| acc + vtxo.amount)
@@ -397,15 +418,22 @@ mod recoverable_vtxo_tests {
     use super::recoverable_vtxo_summary_from_list;
     use crate::session::mappers::current_unix_timestamp;
 
-    fn sample_vtp(amount_sats: u64, expires_at: i64) -> VirtualTxOutPoint {
+    const DUST: Amount = Amount::from_sat(330);
+
+    fn sample_vtp(
+        vout: u32,
+        amount_sats: u64,
+        expires_at: i64,
+        is_swept: bool,
+    ) -> VirtualTxOutPoint {
         VirtualTxOutPoint {
-            outpoint: OutPoint::new(Txid::all_zeros(), amount_sats as u32 % 10),
+            outpoint: OutPoint::new(Txid::all_zeros(), vout),
             created_at: expires_at - 86_400,
             expires_at,
             amount: Amount::from_sat(amount_sats),
             script: ScriptBuf::new(),
             is_preconfirmed: false,
-            is_swept: false,
+            is_swept,
             is_unrolled: false,
             is_spent: false,
             spent_by: None,
@@ -417,29 +445,58 @@ mod recoverable_vtxo_tests {
     }
 
     #[test]
-    fn recoverable_vtxo_summary_counts_expired_vtxos() {
+    fn recoverable_summary_counts_operator_swept_vtxos() {
         let now = current_unix_timestamp();
-        let dust = Amount::from_sat(330);
         let vtxo_list = ark_core::VtxoList::new(
-            dust,
+            DUST,
             vec![
-                sample_vtp(25_000, now - 1),
-                sample_vtp(25_000, now - 1),
-                sample_vtp(10_000, now + 86_400),
+                sample_vtp(0, 25_000, now - 1, true),
+                sample_vtp(1, 25_000, now - 1, true),
+                sample_vtp(2, 10_000, now + 86_400, false),
             ],
         );
-        let summary = recoverable_vtxo_summary_from_list(&vtxo_list);
+        let summary = recoverable_vtxo_summary_from_list(&vtxo_list, DUST);
         assert_eq!(summary.count, 2);
         assert_eq!(summary.total_sats, 50_000);
         assert_eq!(summary.outpoints.len(), 2);
     }
 
     #[test]
-    fn recoverable_vtxo_summary_empty_when_none_recoverable() {
+    fn recoverable_summary_counts_sub_dust_vtxos() {
         let now = current_unix_timestamp();
-        let dust = Amount::from_sat(330);
-        let vtxo_list = ark_core::VtxoList::new(dust, vec![sample_vtp(10_000, now + 86_400)]);
-        let summary = recoverable_vtxo_summary_from_list(&vtxo_list);
+        let vtxo_list = ark_core::VtxoList::new(
+            DUST,
+            vec![sample_vtp(0, DUST.to_sat() - 1, now + 86_400, false)],
+        );
+        let summary = recoverable_vtxo_summary_from_list(&vtxo_list, DUST);
+        assert_eq!(summary.count, 1);
+        assert_eq!(summary.total_sats, DUST.to_sat() - 1);
+    }
+
+    #[test]
+    fn recoverable_summary_excludes_client_expired_but_unswept_vtxos() {
+        // Expired by the client clock but not yet swept by the operator: settling these with no
+        // forfeit wedges the operator (`missing forfeit tx`), so they must stay out of the set
+        // until the operator actually sweeps them.
+        let now = current_unix_timestamp();
+        let vtxo_list = ark_core::VtxoList::new(
+            DUST,
+            vec![
+                sample_vtp(0, 25_000, now - 1, false),
+                sample_vtp(1, 25_000, now - 1, false),
+            ],
+        );
+        let summary = recoverable_vtxo_summary_from_list(&vtxo_list, DUST);
+        assert_eq!(summary.count, 0);
+        assert_eq!(summary.total_sats, 0);
+    }
+
+    #[test]
+    fn recoverable_summary_empty_when_none_recoverable() {
+        let now = current_unix_timestamp();
+        let vtxo_list =
+            ark_core::VtxoList::new(DUST, vec![sample_vtp(0, 10_000, now + 86_400, false)]);
+        let summary = recoverable_vtxo_summary_from_list(&vtxo_list, DUST);
         assert_eq!(summary.count, 0);
         assert_eq!(summary.total_sats, 0);
     }

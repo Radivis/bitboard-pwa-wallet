@@ -105,6 +105,33 @@ export async function mineRegtestBlocks(count: number = 1): Promise<void> {
   )
 }
 
+/**
+ * arkd container name (compose project `bitboard-regtest`). Overridable for non-default setups.
+ */
+const ARKD_REGTEST_CONTAINER =
+  process.env.ARKD_REGTEST_CONTAINER ?? 'bitboard-regtest-arkd'
+
+const ARKD_RESTART_HEALTH_TIMEOUT_MS = isCi ? 180_000 : 120_000
+
+/**
+ * Restart the arkd operator and wait until it is healthy again.
+ *
+ * The serial @arkade-regtest suite shares one operator. arkd keeps its live intent/round queue in
+ * memory (`LiveStoreType: inmemory`), so a single interrupted settle round can leave a stuck intent
+ * that fails every subsequent round (`missing forfeit tx` → `not enough intent confirmations`) and
+ * cascades into later tests. Restarting the container clears that in-memory queue while preserving
+ * the persisted server wallet and configured intent fees, giving each test a clean operator.
+ */
+export async function restartArkadeOperator(): Promise<void> {
+  await execFileAsync('docker', ['restart', ARKD_REGTEST_CONTAINER], {
+    maxBuffer: 10 * 1024 * 1024,
+  })
+  const { waitForArkadeRegtestHealthy } = await import(
+    '../../../../scripts/arkade-regtest-health.mjs'
+  )
+  await waitForArkadeRegtestHealthy({ timeoutMs: ARKD_RESTART_HEALTH_TIMEOUT_MS })
+}
+
 interface EsploraUtxo {
   txid: string
   vout: number

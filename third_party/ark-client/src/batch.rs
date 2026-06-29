@@ -345,14 +345,13 @@ where
             .await
         };
 
-        // Joining a batch can fail depending on the timing (e.g. the previous batch window closed
-        // before our intent landed), so we retry a bounded number of times.
-        let commitment_txid = join_next_batch
-            .retry(ExponentialBuilder::default().with_max_times(2))
-            .sleep(sleep)
-            .notify(|err: &Error, dur: std::time::Duration| {
-                tracing::warn!("Retrying joining next batch after {dur:?}. Error: {err}",);
-            })
+        // Do NOT retry `join_next_batch` here: it registers the intent before participating in the
+        // round, so re-running it after a mid-round failure re-registers the same inputs (arkd:
+        // `duplicated input ... already registered`) and abandons the first intent without its
+        // forfeit tx, wedging the operator into an endless failing-round loop. Callers that need
+        // resilience retry at a higher level with a fresh settle (boarding's settle-attempt loop and
+        // the recoverable-VTXO recovery loop), where each attempt is a clean, fully-completed round.
+        let commitment_txid = join_next_batch()
             .await
             .context("Failed to join batch")?;
 
@@ -378,25 +377,31 @@ where
             .fetch_commitment_transaction_inputs(crate::utils::unix_now()?)
             .await?;
 
-        let onchain_fee = self.eval_onchain_output_fee(ark_fees::Output {
-            amount: to_amount.to_sat(),
-            script: to_address.script_pubkey().to_string(),
+        // The intent fee depends on the input/output set rather than on amounts, so estimate it
+        // against the gross (pre-fee) change and then deduct it to obtain the real change amount.
+        let gross_change = total_amount.checked_sub(to_amount).ok_or_else(|| {
+            Error::coin_select(format!("insufficient balance: {total_amount} < {to_amount} (send)"))
         })?;
+        let intent_fee = self.eval_offboard_intent_fee(
+            &boarding_inputs,
+            &vtxo_inputs,
+            &to_address,
+            to_amount,
+            &change_address,
+            gross_change,
+        )?;
 
         // Fee comes out of change, not the send amount.
-        let change_amount = total_amount
-            .checked_sub(to_amount)
-            .and_then(|a| a.checked_sub(onchain_fee))
-            .ok_or_else(|| {
-                Error::coin_select(format!(
-                    "insufficient balance: {total_amount} < {to_amount} (send) + {onchain_fee} (fee)"
-                ))
-            })?;
+        let change_amount = gross_change.checked_sub(intent_fee).ok_or_else(|| {
+            Error::coin_select(format!(
+                "insufficient balance: {total_amount} < {to_amount} (send) + {intent_fee} (fee)"
+            ))
+        })?;
 
         tracing::info!(
             %to_address,
             send_amount = %to_amount,
-            fee = %onchain_fee,
+            fee = %intent_fee,
             change_address = %change_address.encode(),
             %change_amount,
             ?boarding_inputs,
@@ -461,25 +466,33 @@ where
             .iter()
             .fold(Amount::ZERO, |acc, vtxo| acc + vtxo.amount());
 
-        let onchain_fee = self.eval_onchain_output_fee(ark_fees::Output {
-            amount: to_amount.to_sat(),
-            script: to_address.script_pubkey().to_string(),
+        // The intent fee depends on the input/output set rather than on amounts, so estimate it
+        // against the gross (pre-fee) change and then deduct it to obtain the real change amount.
+        let gross_change = total_input_amount.checked_sub(to_amount).ok_or_else(|| {
+            Error::coin_select(format!(
+                "insufficient VTXO amount: {total_input_amount} < {to_amount} (send)"
+            ))
         })?;
+        let intent_fee = self.eval_offboard_intent_fee(
+            &[],
+            &vtxo_inputs,
+            &to_address,
+            to_amount,
+            &change_address,
+            gross_change,
+        )?;
 
         // Fee comes out of change, not the send amount.
-        let change_amount = total_input_amount
-            .checked_sub(to_amount)
-            .and_then(|a| a.checked_sub(onchain_fee))
-            .ok_or_else(|| {
-                Error::coin_select(format!(
-                    "insufficient VTXO amount: {total_input_amount} < {to_amount} (send) + {onchain_fee} (fee)"
-                ))
-            })?;
+        let change_amount = gross_change.checked_sub(intent_fee).ok_or_else(|| {
+            Error::coin_select(format!(
+                "insufficient VTXO amount: {total_input_amount} < {to_amount} (send) + {intent_fee} (fee)"
+            ))
+        })?;
 
         tracing::info!(
             %to_address,
             send_amount = %to_amount,
-            fee = %onchain_fee,
+            fee = %intent_fee,
             change_address = %change_address.encode(),
             %change_amount,
             "Attempting to collaboratively redeem outputs"
@@ -2241,6 +2254,61 @@ where
                     &onchain_inputs,
                     &offchain_outputs,
                     &[],
+                )
+            })?
+            .map_err(|error| Error::ad_hoc(error.to_string()))?;
+
+        Ok(Amount::from_sat(fee.to_satoshis()))
+    }
+
+    /// Off-board (collaborative exit) intents must reserve the operator intent fee, just like
+    /// boarding settles do. The fee covers every input plus *both* the on-chain destination output
+    /// and the off-chain change output, so the single-output estimate used for a plain on-chain send
+    /// is far too low and arkd rejects the `RegisterIntent` with `INTENT_INSUFFICIENT_FEE`.
+    fn eval_offboard_intent_fee(
+        &self,
+        boarding_inputs: &[batch::OnChainInput],
+        vtxo_inputs: &[intent::Input],
+        to_address: &Address,
+        to_amount: Amount,
+        change_address: &ArkAddress,
+        change_amount: Amount,
+    ) -> Result<Amount, Error> {
+        let onchain_inputs: Vec<ark_fees::OnchainInput> = boarding_inputs
+            .iter()
+            .map(|input| ark_fees::OnchainInput {
+                amount: input.amount().to_sat(),
+            })
+            .collect();
+
+        let offchain_inputs: Vec<ark_fees::OffchainInput> = vtxo_inputs
+            .iter()
+            .map(|input| ark_fees::OffchainInput {
+                amount: input.amount().to_sat(),
+                expiry: None,
+                birth: None,
+                input_type: ark_fees::VtxoType::Vtxo,
+                weight: 1.0,
+            })
+            .collect();
+
+        let onchain_outputs = vec![ark_fees::Output {
+            amount: to_amount.to_sat(),
+            script: to_address.script_pubkey().to_string(),
+        }];
+
+        let offchain_outputs = vec![ark_fees::Output {
+            amount: change_amount.to_sat(),
+            script: change_address.to_p2tr_script_pubkey().to_string(),
+        }];
+
+        let fee = self
+            .with_server_state(|state| {
+                state.fee_estimator.eval(
+                    &offchain_inputs,
+                    &onchain_inputs,
+                    &offchain_outputs,
+                    &onchain_outputs,
                 )
             })?
             .map_err(|error| Error::ad_hoc(error.to_string()))?;

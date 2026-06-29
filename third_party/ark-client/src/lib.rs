@@ -885,6 +885,10 @@ where
             .map_err(|_| Error::ad_hoc("client server state lock poisoned"))
     }
 
+    // Retained for parity with the upstream SDK: the off-board paths now reserve the full operator
+    // intent fee via `eval_offboard_intent_fee`, so this single-output estimate has no caller, but
+    // we keep it rather than diverge further from upstream.
+    #[allow(dead_code)]
     fn eval_onchain_output_fee(&self, output: ark_fees::Output) -> Result<Amount, Error> {
         self.with_server_state(|state| state.fee_estimator.eval_onchain_output(output))?
             .map(|fee| Amount::from_sat(fee.to_satoshis()))

@@ -9,6 +9,7 @@ import {
   ARKADE_REGTEST_UNILATERAL_EXIT_DELAY_BLOCKS,
   mineRegtestBlocks,
 } from './helpers/arkade-regtest'
+import { restartArkadeOperator } from './helpers/regtest'
 import {
   ensureOnChainBumperFunds,
   goToArkadeManagementPanel,
@@ -33,6 +34,9 @@ test.describe('Arkade core flows regtest @arkade-regtest', () => {
       process.env.VITE_E2E_ARKADE_REGTEST !== 'true',
       'Run with VITE_E2E_ARKADE_REGTEST=true (npm run test:e2e:arkade-regtest).',
     )
+    // Each test (and each retry) uses a fresh wallet; restart the shared operator so no stuck
+    // intent or accumulated round state from a previous test can poison this one.
+    await restartArkadeOperator()
   })
 
   test('E2E-ARK-REG-01 recoverable VTXO recovery', async ({ page }) => {
