@@ -1,0 +1,110 @@
+diff --git a/lib/compose.mjs b/lib/compose.mjs
+index dc00adf..4320d7b 100644
+--- a/lib/compose.mjs
++++ b/lib/compose.mjs
+@@ -3,18 +3,27 @@
+ // and compose.ark.yml share one network and resolve each other by service name.
+ import { fileURLToPath } from 'node:url';
+ import { dirname, join } from 'node:path';
++import { existsSync } from 'node:fs';
+ import { docker } from './proc.mjs';
+ 
+ const here = dirname(fileURLToPath(import.meta.url));
+ export const ROOT = join(here, '..');
+ const BASE = join(ROOT, 'docker', 'compose.base.yml');
+ const ARK = join(ROOT, 'docker', 'compose.ark.yml');
++// Bitboard parent repo (typical submodule layout): ../docker/arkade-regtest.override.yml
++const PARENT_OVERRIDE = join(ROOT, '..', 'docker', 'arkade-regtest.override.yml');
+ 
+ function baseArgs(profiles = []) {
+-  return [
++  const args = [
+     'compose',
+     '-f', BASE,
+     '-f', ARK,
++  ];
++  if (existsSync(PARENT_OVERRIDE)) {
++    args.push('-f', PARENT_OVERRIDE);
++  }
++  return [
++    ...args,
+     ...profiles.flatMap((p) => ['--profile', p]),
+   ];
+ }
+diff --git a/lib/proc.mjs b/lib/proc.mjs
+index 687eaad..623a533 100644
+--- a/lib/proc.mjs
++++ b/lib/proc.mjs
+@@ -21,7 +21,14 @@ export function docker(args, { capture = false } = {}) {
+   };
+ }
+ 
+-// Run a command inside a container by name: `docker exec <container> <argv...>`.
+-export function dockerExec(container, argv, opts = {}) {
+-  return docker(['exec', container, ...argv], opts);
++// Run a command inside a container by logical name: `docker exec <container> <argv...>`.
++// When ARKADE_REGTEST_CONTAINER_PREFIX is set (Bitboard .env.regtest), matches
++// docker/arkade-regtest.override.yml container_name values.
++export function resolveContainerName(logicalName) {
++  const prefix = process.env.ARKADE_REGTEST_CONTAINER_PREFIX || '';
++  return `${prefix}${logicalName}`;
++}
++
++export function dockerExec(logicalContainer, argv, opts = {}) {
++  return docker(['exec', resolveContainerName(logicalContainer), ...argv], opts);
+ }
+diff --git a/lib/setup/signer.mjs b/lib/setup/signer.mjs
+index 06bd4f5..13cd16e 100644
+--- a/lib/setup/signer.mjs
++++ b/lib/setup/signer.mjs
+@@ -21,7 +21,7 @@ import { env } from '../env.mjs';
+ import { log, fail } from '../log.mjs';
+ import { sleep, waitFor, fetchJson, fetchText } from '../wait.mjs';
+ import { compose, ROOT } from '../compose.mjs';
+-import { docker } from '../proc.mjs';
++import { docker, resolveContainerName } from '../proc.mjs';
+ 
+ // Wiped by `clean` (which also wipes arkd-wallet's volume, resetting the signer).
+ const STATE_FILE = join(ROOT, '.signer-state.json');
+@@ -161,8 +161,8 @@ async function applyAndRestart(active, deprecated) {
+   await unlockArkdUntilSynced('arkd to re-sync to the recreated wallet');
+   // `docker stop` blocks until arkd is down, so no settle is needed before
+   // starting it again; the post-restart readiness poll covers arkd's boot.
+-  docker(['container', 'stop', 'arkd']);
+-  docker(['container', 'start', 'arkd']);
++  docker(['container', 'stop', resolveContainerName('arkd')]);
++  docker(['container', 'start', resolveContainerName('arkd')]);
+   await unlockArkdUntilSynced('arkd to restart and re-sync');
+ }
+ 
+diff --git a/regtest.mjs b/regtest.mjs
+index 3a9717e..c68d759 100644
+--- a/regtest.mjs
++++ b/regtest.mjs
+@@ -21,7 +21,7 @@
+ import { loadEnv, env } from './lib/env.mjs';
+ import { log, warn, fail } from './lib/log.mjs';
+ import { ROOT, composeUp, composeStop, composeDown, ALL_PROFILES } from './lib/compose.mjs';
+-import { docker } from './lib/proc.mjs';
++import { docker, dockerExec, resolveContainerName } from './lib/proc.mjs';
+ import { sleep, waitForOrFail, httpOk, fetchJson } from './lib/wait.mjs';
+ import { bitcoinCli, bootstrapChain, mine, faucet, reorg } from './lib/chain.mjs';
+ import { setupArkd, applyArkdFees } from './lib/setup/arkd.mjs';
+@@ -238,7 +238,7 @@ async function main() {
+   // `ark` / `arkd` are raw passthroughs into the arkd container, so forward
+   // every following token verbatim (flags included) without our own parsing.
+   if (argv[0] === 'ark' || argv[0] === 'arkd') {
+-    const res = docker(['exec', 'arkd', ...argv]); // argv[0] is the binary name in the container
++    const res = dockerExec('arkd', argv);
+     process.exitCode = res.code;
+     return;
+   }
+@@ -248,7 +248,7 @@ async function main() {
+   // `bitcoin-cli -regtest … getblockcount`, keeping downstream migrations a
+   // find-replace (`nigiri rpc …` → `node regtest.mjs rpc …`, same arg shape).
+   if (argv[0] === 'rpc') {
+-    const res = docker(['exec', 'bitcoin', 'bitcoin-cli', '-regtest', '-rpcuser=admin1', '-rpcpassword=123', ...argv.slice(1)]);
++    const res = dockerExec('bitcoin', ['bitcoin-cli', '-regtest', '-rpcuser=admin1', '-rpcpassword=123', ...argv.slice(1)]);
+     process.exitCode = res.code;
+     return;
+   }
