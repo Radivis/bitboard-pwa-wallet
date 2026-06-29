@@ -8,15 +8,14 @@ import {
 import { enableArkadeFeature } from './arkade-settings'
 import { importWalletViaUI, TEST_PASSWORD } from './wallet-setup'
 import { goToWalletTab } from './wallet-nav'
-import { runDashboardSyncUntilIdle } from './dashboard-sync'
 import {
   fundRegtestAddress,
   waitForConfirmedBalance,
-  waitForDashboardShowsFundedOnChainBalance,
 } from './regtest'
 import {
   waitForArkadeLoadReady,
   waitForDashboardArkadeBalanceAtLeast,
+  readDashboardArkadeBalanceSats,
   triggerArkadeRailSync,
 } from './dashboard-arkade'
 
@@ -105,23 +104,36 @@ export async function readBoardingAddress(page: Page): Promise<string> {
  */
 const BOARDING_COOPERATIVE_SETTLE_BUDGET_MS = 25_000
 
-export async function settleBoardingUtxo(page: Page): Promise<void> {
-  await page.getByRole('button', { name: 'Settle boarding UTXO' }).click()
-  await expect(page.getByRole('button', { name: 'Settling…' })).toBeVisible({
-    timeout: 10_000,
-  })
+export async function settleBoardingUtxo(page: Page, boardSats: number): Promise<void> {
+  const minSettledSats = boardSats - Math.ceil(boardSats * 0.02)
+  let settleClicked = false
+
   await expect(async () => {
     const isSettling = await page.getByRole('button', { name: 'Settling…' }).isVisible()
+    const settleButton = page.getByRole('button', { name: 'Settle boarding UTXO' })
+
+    if (!settleClicked && !isSettling && (await settleButton.isEnabled())) {
+      await settleButton.click()
+      settleClicked = true
+      throw new Error('Boarding settle started')
+    }
+
     if (isSettling) {
       throw new Error('Boarding settle still in progress')
     }
 
     if (await page.getByText('Boarding settlement submitted to operator').isVisible()) {
-      return
+      await goToWalletTab(page, 'Dashboard')
+      await triggerArkadeRailSync(page, 60_000)
+      const balanceSats = await readDashboardArkadeBalanceSats(page)
+      if (balanceSats >= minSettledSats) {
+        return
+      }
+      throw new Error(
+        `Boarding settle toast seen but Arkade balance is ${balanceSats} sats (need ≥${minSettledSats})`,
+      )
     }
 
-    // The success toast auto-dismisses, so also accept the deterministic board-page state: once
-    // the boarding UTXO has been settled it is no longer counted as ready to settle.
     const readyLine = page.locator('li').filter({ hasText: 'Ready to settle:' })
     const readyText = (await readyLine.textContent()) ?? ''
     if (/Ready to settle:\s*0(\s|$)/.test(readyText)) {
@@ -139,18 +151,20 @@ export async function settleBoardingUtxo(page: Page): Promise<void> {
     }
 
     const errorToast = page.locator('[data-sonner-toast]').filter({
-      hasText: /boarding|settle|intent|register|expired|fee|failed|error|timed out|batch/i,
+      hasText: /boarding|settle|intent|register|expired|fee|failed|error|timed out|batch|operator/i,
     })
     if (await errorToast.first().isVisible()) {
       const message = ((await errorToast.first().textContent()) ?? 'unknown').trim()
       throw new Error(`Boarding settle failed: ${message}`)
     }
 
-    throw new Error('Waiting for boarding settle success or error')
-  }).toPass({ timeout: 180_000 })
-  await expect(page.getByRole('button', { name: 'Settle boarding UTXO' })).toBeEnabled({
-    timeout: 10_000,
-  })
+    if (settleClicked && (await settleButton.isEnabled())) {
+      settleClicked = false
+      throw new Error(`Retrying boarding settle (${readyText.trim()})`)
+    }
+
+    throw new Error(`Waiting for boarding settle (${readyText.trim()})`)
+  }).toPass({ timeout: 300_000 })
 }
 
 export async function fundAndBoardToArkade(
@@ -178,34 +192,30 @@ export async function fundAndBoardToArkade(
       `Boarding UTXO cooperative settle window likely expired before settle (${elapsedMs}ms since fund; budget ${BOARDING_COOPERATIVE_SETTLE_BUDGET_MS}ms)`,
     )
   }
-  await settleBoardingUtxo(page)
+  await settleBoardingUtxo(page, boardSats)
   await goToWalletTab(page, 'Dashboard')
-  await triggerArkadeRailSync(page)
-  // Headline balance includes boarding ready-to-settle; require settled offchain VTXOs.
+  await triggerArkadeRailSync(page, 120_000)
   await waitForDashboardArkadeBalanceAtLeast(page, boardSats - Math.ceil(boardSats * 0.02), 120_000)
-  await goToArkadeBoardPage(page)
-  await expect
-    .poll(
-      async () => {
-        const readyLine = page.locator('li').filter({ hasText: 'Ready to settle:' })
-        const text = (await readyLine.textContent()) ?? ''
-        return /Ready to settle:\s*0(\s|$)/.test(text)
-      },
-      { timeout: 60_000, intervals: [500, 1000, 2000] },
-    )
-    .toBe(true)
 }
 
+/**
+ * Fund the unilateral-exit bumper wallet by sending on-chain BTC to the address the open Unilateral
+ * exit dialog displays.
+ *
+ * The bumper is the Arkade client's own BIP84 on-chain wallet, which is a different descriptor from
+ * the app's main (Taproot) receive wallet — funding the receive address never reaches it. The fee
+ * estimate re-syncs this wallet on read, so once the funding confirms the "Start unroll" gate clears
+ * the next time a candidate's estimate runs.
+ *
+ * Requires the Unilateral exit dialog to already be open.
+ */
 export async function ensureOnChainBumperFunds(page: Page, sats: number): Promise<void> {
-  await goToWalletTab(page, 'Receive')
-  const addressEl = page
-    .locator('[data-infomode-id="receive-receiving-address-card"]')
-    .locator('.font-mono')
-  await expect(addressEl).toBeVisible({ timeout: 15_000 })
-  const address = (await addressEl.textContent())?.trim()
-  if (!address) throw new Error('Missing on-chain receive address')
+  const bumperAddressEl = page.getByTestId('arkade-bumper-address')
+  await expect(bumperAddressEl).toBeVisible({ timeout: 60_000 })
+  const address = (await bumperAddressEl.textContent())?.trim()
+  if (!address?.startsWith('bcrt1')) {
+    throw new Error(`Expected regtest bumper address, got: ${address}`)
+  }
   await fundRegtestAddress(address, sats)
-  await goToWalletTab(page, 'Dashboard')
-  await runDashboardSyncUntilIdle(page)
-  await waitForDashboardShowsFundedOnChainBalance(page)
+  await waitForConfirmedBalance(address, sats)
 }

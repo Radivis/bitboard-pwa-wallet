@@ -19,6 +19,12 @@ interface UnilateralExitDialogProps {
   exitFlow: ExitFlow
 }
 
+function errorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message
+  if (typeof error === 'string') return error
+  return 'Unknown error'
+}
+
 export function UnilateralExitDialog({ exitFlow }: UnilateralExitDialogProps) {
   const {
     unilateralOpen,
@@ -69,6 +75,13 @@ export function UnilateralExitDialog({ exitFlow }: UnilateralExitDialogProps) {
     </>
   )
 
+  const unrollStepFooter = () =>
+    unrollMutation.isError ? (
+      <Button type="button" variant="outline" onClick={() => setUnilateralStep('select')}>
+        Back
+      </Button>
+    ) : null
+
   const completeStepFooter = () => (
     <>
       <Button type="button" variant="outline" onClick={() => setUnilateralStep('select')}>
@@ -108,7 +121,9 @@ export function UnilateralExitDialog({ exitFlow }: UnilateralExitDialogProps) {
           ? selectStepFooter
           : unilateralStep === 'complete'
             ? completeStepFooter
-            : undefined
+            : unilateralStep === 'unroll' && unrollMutation.isError
+              ? unrollStepFooter
+              : undefined
       }
       footerClassName="justify-end gap-2"
     >
@@ -171,7 +186,9 @@ export function UnilateralExitDialog({ exitFlow }: UnilateralExitDialogProps) {
                     Bumper wallet (P2A fees)
                   </InfomodeWrapper>
                 </p>
-                <p className="break-all font-mono">{bumperInfoQuery.data.address}</p>
+                <p className="break-all font-mono" data-testid="arkade-bumper-address">
+                  {bumperInfoQuery.data.address}
+                </p>
                 <p>
                   Balance: <BitcoinAmountDisplay amountSats={bumperBalance} size="sm" />
                 </p>
@@ -244,6 +261,11 @@ export function UnilateralExitDialog({ exitFlow }: UnilateralExitDialogProps) {
                 Working…
               </div>
             )}
+            {unrollMutation.isError && (
+              <p className="text-sm text-destructive" data-testid="arkade-unroll-error">
+                Unroll failed: {errorMessage(unrollMutation.error)}
+              </p>
+            )}
             <ul className="max-h-40 space-y-1 overflow-y-auto text-xs">
               {unrollProgress.map((entry, index) => (
                 <li key={`${entry.type}-${entry.txid ?? index}`} className="text-muted-foreground">
@@ -269,6 +291,11 @@ export function UnilateralExitDialog({ exitFlow }: UnilateralExitDialogProps) {
                 autoComplete="off"
               />
             </div>
+            {completeExitMutation.isError && (
+              <p className="text-sm text-destructive" data-testid="arkade-complete-error">
+                Complete exit failed: {errorMessage(completeExitMutation.error)}
+              </p>
+            )}
           </>
         )}
       </div>

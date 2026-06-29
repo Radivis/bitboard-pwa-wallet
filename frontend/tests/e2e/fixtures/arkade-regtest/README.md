@@ -20,10 +20,34 @@ bash scripts/start-arkade-regtest.sh   # compose up + health wait
 bash scripts/stop-arkade-regtest.sh
 
 # From frontend/
-npm run regtest:start
+npm run regtest:clean-start   # wipe volumes + compose up + health wait
 npm run test:e2e:regtest
-npm run test:e2e:arkade-regtest
+npm run test:e2e:arkade-regtest             # REG-01/02 (recovery, renewal) — short expiry
+npm run test:e2e:arkade-regtest-longexpiry  # REG-03/04 (collaborative exit, unilateral unroll) — long expiry
+npm run test:e2e:arkade-regtest-reg04       # REG-04 only — clean stack + long expiry (isolated debugging)
 ```
+
+## Two stacks: short vs long VTXO expiry
+
+The Arkade regtest flows split into two suites that need **opposite** VTXO lifetimes, so each boots the
+same stack with a different (block-denominated) `ARKD_VTXO_TREE_EXPIRY`:
+
+| Suite | Spec | Tag (`--grep`) | Expiry | Tests |
+|-------|------|----------------|--------|-------|
+| Short | `arkade-core-flows-regtest.spec.ts` | `@arkade-regtest` | `.env.regtest` default (`40` blocks) | REG-01 recoverable recovery, REG-02 renewal |
+| Long  | `arkade-exit-flows-regtest.spec.ts` | `@arkade-exit-regtest` | `ARKD_VTXO_TREE_EXPIRY=200` blocks (set by the npm script) | REG-03 collaborative exit, REG-04 unilateral unroll |
+
+Recovery/renewal need VTXOs to expire/become recoverable quickly; collaborative exit and unilateral
+unroll need a VTXO that stays live through a multi-step on-chain flow (these mine only ~20 blocks, well
+under 200). Running the long-expiry script re-creates the `arkd` container with the larger expiry
+(Docker Compose recreates on env change); running the short script again restores the `.env.regtest`
+value.
+
+> **arkd locktime-type constraint:** arkd rejects a config where the delays straddle 512 — *all* of
+> `ARKD_VTXO_TREE_EXPIRY`, `ARKD_UNILATERAL_EXIT_DELAY`, `ARKD_CHECKPOINT_EXIT_DELAY`, etc. must be on
+> the same side (`<512` block-type, or `≥512` seconds-type). The long-expiry value therefore stays a
+> block count `<512` rather than a large seconds value, so the other (small) delays stay valid and
+> REG-04's complete-step still satisfies its `ARKD_UNILATERAL_EXIT_DELAY` by mining 20 blocks.
 
 ## Block-denominated VTXO timing
 

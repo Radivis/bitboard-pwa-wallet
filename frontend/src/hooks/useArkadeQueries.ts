@@ -37,6 +37,8 @@ import {
 import { scheduleBackgroundArkadeOperatorSync } from '@/lib/wallet/lifecycle/arkade-sync-lifecycle-orchestrator'
 import { readArkadeDashboardStateFromStore } from '@/lib/arkade/arkade-persistence-store-sync'
 import {
+  ARKADE_BUMPER_FUNDING_POLL_MS,
+  ARKADE_EXIT_CANDIDATES_POLL_MS,
   ARKADE_FEE_ESTIMATE_STALE_MS,
   ARKADE_SESSION_POLL_STALE_MS,
   ARKADE_SLOW_METADATA_STALE_MS,
@@ -70,8 +72,8 @@ import { arkadeDashboardWalletDataQueryOptions } from '@/lib/arkade/arkade-dashb
 import {
   beginOptimisticBoardingSettle,
   reconcileBalanceAfterBoardingSettle,
+  reconcileBoardingStatusAfterSettle,
   revertOptimisticBoardingSettle,
-  zeroBoardingStatus,
 } from '@/lib/arkade/arkade-boarding-settle-optimistic'
 import { errorMessage } from '@/lib/shared/utils'
 import { isWalletSecretsSessionActive } from '@/lib/wallet/wallet-secrets-session'
@@ -191,16 +193,13 @@ async function invalidateArkadeWalletDataQueries(
   walletId: number,
   networkMode: NetworkMode,
   connectionId: string,
-  options?: { skipBalance?: boolean },
+  options?: { skipBalance?: boolean; skipBoardingStatus?: boolean },
 ): Promise<void> {
   if (!isArkadeSupportedNetworkMode(networkMode)) return
 
   const invalidations = [
     queryClient.invalidateQueries({
       queryKey: arkadeHistoryQueryKey(walletId, networkMode, connectionId),
-    }),
-    queryClient.invalidateQueries({
-      queryKey: arkadeBoardingStatusQueryKey(walletId, networkMode, connectionId),
     }),
     queryClient.invalidateQueries({
       queryKey: arkadeExitCandidatesQueryKey(walletId, networkMode, connectionId),
@@ -220,6 +219,14 @@ async function invalidateArkadeWalletDataQueries(
     invalidations.unshift(
       queryClient.invalidateQueries({
         queryKey: arkadeBalanceQueryKey(walletId, networkMode, connectionId),
+      }),
+    )
+  }
+
+  if (!options?.skipBoardingStatus) {
+    invalidations.push(
+      queryClient.invalidateQueries({
+        queryKey: arkadeBoardingStatusQueryKey(walletId, networkMode, connectionId),
       }),
     )
   }
@@ -591,13 +598,6 @@ export function useArkadeOnboardMutation() {
         activeArkadeConnectionId,
       )
 
-      if (txid && settledSats > 0) {
-        const cachedStatus = queryClient.getQueryData<ArkadeBoardingStatus>(boardingStatusKey)
-        if (cachedStatus != null) {
-          queryClient.setQueryData(boardingStatusKey, zeroBoardingStatus(cachedStatus))
-        }
-      }
-
       await queryClient.refetchQueries({ queryKey: balanceKey })
       const fetchedBalance = queryClient.getQueryData<ArkadeBalanceInfo>(balanceKey)
       if (fetchedBalance != null && settledSats > 0) {
@@ -607,12 +607,21 @@ export function useArkadeOnboardMutation() {
         )
       }
 
+      await queryClient.refetchQueries({ queryKey: boardingStatusKey })
+      const fetchedStatus = queryClient.getQueryData<ArkadeBoardingStatus>(boardingStatusKey)
+      if (fetchedStatus != null && settledSats > 0) {
+        queryClient.setQueryData(
+          boardingStatusKey,
+          reconcileBoardingStatusAfterSettle(fetchedStatus, settledSats),
+        )
+      }
+
       await invalidateArkadeWalletDataQueries(
         queryClient,
         activeWalletId,
         networkMode,
         activeArkadeConnectionId,
-        { skipBalance: true },
+        { skipBalance: true, skipBoardingStatus: true },
       )
     },
     onError: (err, _variables, context) => {
@@ -638,6 +647,9 @@ export function useArkadeExitCandidatesQuery(enabled: boolean) {
     ),
     enabled: enabled && sessionReady,
     queryFn: () => withReadyArkadeWorker(() => getArkadeWorker().listExitCandidates()),
+    // Keep the candidate list fresh while the dialog is open so swept/expired VTXOs drop out
+    // instead of lingering as startable rows.
+    refetchInterval: enabled ? ARKADE_EXIT_CANDIDATES_POLL_MS : false,
     staleTime: ARKADE_SESSION_POLL_STALE_MS,
   })
 }
@@ -922,6 +934,10 @@ export function useArkadeUnilateralExitFeeQuery(params: {
         getArkadeWorker().estimateUnilateralExit({ txid, vout }),
       )
     },
+    // Re-estimate while the bumper is underfunded so the "Start unroll" gate clears automatically
+    // once an on-chain top-up confirms; stop polling once the bumper can cover the estimated fees.
+    refetchInterval: (query) =>
+      query.state.data?.bumperSufficient ? false : ARKADE_BUMPER_FUNDING_POLL_MS,
     staleTime: ARKADE_FEE_ESTIMATE_STALE_MS,
   })
 }

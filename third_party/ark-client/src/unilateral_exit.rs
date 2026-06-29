@@ -20,13 +20,26 @@ use backon::Retryable;
 use bitcoin::key::Secp256k1;
 use bitcoin::psbt;
 use ark_core::server::VirtualTxOutPoint;
+use ark_core::server::VtxoChains;
 use bitcoin::Address;
 use bitcoin::Amount;
 use bitcoin::OutPoint;
+use bitcoin::Psbt;
 use bitcoin::Transaction;
 use bitcoin::TxOut;
 use bitcoin::Txid;
 use std::collections::HashSet;
+
+/// arkd's indexer rejects any request that does not carry an explicit, positive `page.size`
+/// (`InvalidArgument: invalid page size`), so every chain / virtual-tx query must send a real page
+/// size and then follow the page cursor to collect all results. 100 mirrors the page size
+/// `list_vtxos` already uses.
+const INDEXER_PAGE_SIZE: i32 = 100;
+
+/// arkd broadcasts the round commitment before the Esplora index lists `/tx/{txid}`; poll briefly
+/// so a freshly confirmed settlement is not mistaken for a missing commitment during unroll.
+const COMMITMENT_TX_VISIBILITY_MAX_POLLS: u8 = 20;
+const COMMITMENT_TX_VISIBILITY_POLL_DELAY_MS: u64 = 500;
 
 // TODO: We should not _need_ to connect to the Ark server to perform unilateral exit. Currently we
 // do talk to the Ark server for simplicity.
@@ -92,54 +105,9 @@ where
 
         // For each spendable VTXO, generate its unilateral exit tree.
         for virtual_tx_outpoint in vtxo_list.could_exit_unilaterally() {
-            let vtxo_chain_response = timeout_op(
-                self.inner.timeout,
-                self.network_client()
-                    .get_vtxo_chain(Some(virtual_tx_outpoint.outpoint), None),
-            )
-            .await
-            .context(format!(
-                "failed to get VTXO chain for outpoint {}",
-                virtual_tx_outpoint.outpoint
-            ))??;
-
-            let paths = build_unilateral_exit_tree_txids(
-                &vtxo_chain_response.chains,
-                virtual_tx_outpoint.outpoint.txid,
-            )?;
-
-            // We don't want to fetch transactions more than once.
-            let txs = HashSet::<Txid>::from_iter(paths.concat());
-
-            let virtual_txs_response = timeout_op(
-                self.inner.timeout,
-                self.network_client()
-                    .get_virtual_txs(txs.iter().map(|tx| tx.to_string()).collect(), None),
-            )
-            .await
-            .context("failed to get virtual TXs")??;
-
-            let paths = paths
-                .into_iter()
-                .map(|path| {
-                    path.into_iter()
-                        .map(|txid| {
-                            virtual_txs_response
-                                .txs
-                                .iter()
-                                .find(|t| t.unsigned_tx.compute_txid() == txid)
-                                .cloned()
-                                .ok_or_else(|| {
-                                    Error::ad_hoc(format!("no PSBT found for virtual TX {txid}"))
-                                })
-                        })
-                        .collect::<Result<Vec<_>, _>>()
-                })
-                .collect::<Result<Vec<_>, _>>()?;
-
-            let unilateral_exit_tree =
-                UnilateralExitTree::new(virtual_tx_outpoint.commitment_txids.clone(), paths);
-
+            let unilateral_exit_tree = self
+                .unilateral_exit_tree_for_outpoint(virtual_tx_outpoint)
+                .await?;
             unilateral_exit_trees.push(unilateral_exit_tree);
         }
 
@@ -149,16 +117,7 @@ where
 
             let mut commitment_txs = Vec::new();
             for commitment_txid in commitment_txids.iter() {
-                let commitment_tx = timeout_op(
-                    self.inner.timeout,
-                    self.blockchain().find_tx(commitment_txid),
-                )
-                .await??
-                .ok_or_else(|| {
-                    Error::ad_hoc(format!("could not find commitment TX {commitment_txid}"))
-                })?;
-
-                commitment_txs.push(commitment_tx);
+                commitment_txs.push(self.find_commitment_tx_on_chain(commitment_txid).await?);
             }
 
             let finalized_unilateral_exit_tree =
@@ -173,39 +132,26 @@ where
         &self,
         virtual_tx_outpoint: &VirtualTxOutPoint,
     ) -> Result<UnilateralExitTree, Error> {
-        let vtxo_chain_response = timeout_op(
-            self.inner.timeout,
-            self.network_client()
-                .get_vtxo_chain(Some(virtual_tx_outpoint.outpoint), None),
-        )
-        .await
-        .context(format!(
-            "failed to get VTXO chain for outpoint {}",
-            virtual_tx_outpoint.outpoint
-        ))??;
+        let vtxo_chains = self
+            .fetch_full_vtxo_chain(virtual_tx_outpoint.outpoint)
+            .await?;
 
-        let paths = build_unilateral_exit_tree_txids(
-            &vtxo_chain_response.chains,
-            virtual_tx_outpoint.outpoint.txid,
-        )?;
+        let paths =
+            build_unilateral_exit_tree_txids(&vtxo_chains, virtual_tx_outpoint.outpoint.txid)?;
 
-        let txs = HashSet::<Txid>::from_iter(paths.concat());
+        // We don't want to fetch transactions more than once.
+        let txids = HashSet::<Txid>::from_iter(paths.concat());
 
-        let virtual_txs_response = timeout_op(
-            self.inner.timeout,
-            self.network_client()
-                .get_virtual_txs(txs.iter().map(|tx| tx.to_string()).collect(), None),
-        )
-        .await
-        .context("failed to get virtual TXs")??;
+        let virtual_txs = self
+            .fetch_all_virtual_txs(txids.iter().map(|txid| txid.to_string()).collect())
+            .await?;
 
         let paths = paths
             .into_iter()
             .map(|path| {
                 path.into_iter()
                     .map(|txid| {
-                        virtual_txs_response
-                            .txs
+                        virtual_txs
                             .iter()
                             .find(|t| t.unsigned_tx.compute_txid() == txid)
                             .cloned()
@@ -223,6 +169,65 @@ where
         ))
     }
 
+    /// Fetch the complete VTXO chain for `outpoint` (paginated by [`Client::get_vtxo_chain`]).
+    async fn fetch_full_vtxo_chain(&self, outpoint: OutPoint) -> Result<VtxoChains, Error> {
+        Ok(self
+            .get_vtxo_chain(outpoint)
+            .await?
+            .map(|response| response.chains)
+            .unwrap_or(VtxoChains { inner: Vec::new() }))
+    }
+
+    /// Fetch every virtual TX in `txids`, following arkd's page cursor across pages.
+    async fn fetch_all_virtual_txs(&self, txids: Vec<String>) -> Result<Vec<Psbt>, Error> {
+        let mut virtual_txs = Vec::new();
+        let mut page_index = 0;
+
+        loop {
+            let response = timeout_op(
+                self.inner.timeout,
+                self.network_client()
+                    .get_virtual_txs(txids.clone(), Some((INDEXER_PAGE_SIZE, page_index))),
+            )
+            .await
+            .context("failed to get virtual TXs")??;
+
+            virtual_txs.extend(response.txs);
+
+            match response.page {
+                Some(page) if page.next < page.total => page_index = page.next,
+                _ => break,
+            }
+        }
+
+        Ok(virtual_txs)
+    }
+
+    async fn find_commitment_tx_on_chain(
+        &self,
+        commitment_txid: &Txid,
+    ) -> Result<Transaction, Error> {
+        for attempt in 0..COMMITMENT_TX_VISIBILITY_MAX_POLLS {
+            if let Some(commitment_tx) = timeout_op(
+                self.inner.timeout,
+                self.blockchain().find_tx(commitment_txid),
+            )
+            .await??
+            {
+                return Ok(commitment_tx);
+            }
+            if attempt + 1 < COMMITMENT_TX_VISIBILITY_MAX_POLLS {
+                sleep(std::time::Duration::from_millis(
+                    COMMITMENT_TX_VISIBILITY_POLL_DELAY_MS,
+                ))
+                .await;
+            }
+        }
+        Err(Error::ad_hoc(format!(
+            "could not find commitment TX {commitment_txid}"
+        )))
+    }
+
     async fn finalize_unilateral_exit_tree_on_chain(
         &self,
         unilateral_exit_tree: &UnilateralExitTree,
@@ -231,16 +236,7 @@ where
 
         let mut commitment_txs = Vec::new();
         for commitment_txid in commitment_txids.iter() {
-            let commitment_tx = timeout_op(
-                self.inner.timeout,
-                self.blockchain().find_tx(commitment_txid),
-            )
-            .await??
-            .ok_or_else(|| {
-                Error::ad_hoc(format!("could not find commitment TX {commitment_txid}"))
-            })?;
-
-            commitment_txs.push(commitment_tx);
+            commitment_txs.push(self.find_commitment_tx_on_chain(commitment_txid).await?);
         }
 
         Ok(finalize_unilateral_exit_tree(

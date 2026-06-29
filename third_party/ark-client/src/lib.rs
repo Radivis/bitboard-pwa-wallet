@@ -1341,21 +1341,46 @@ where
         Ok((vtxo_list, script_pubkey_to_vtxo_map))
     }
 
+    /// Fetch the complete VTXO chain for `out_point`, following arkd's page cursor across pages.
+    ///
+    /// arkd's indexer rejects a request without an explicit, positive `page.size`
+    /// (`InvalidArgument: invalid page size`), so we always send a real page size and walk the
+    /// cursor until every page is collected.
     pub async fn get_vtxo_chain(
         &self,
         out_point: OutPoint,
-        size: i32,
-        index: i32,
     ) -> Result<Option<VtxoChainResponse>, Error> {
-        let vtxo_chain = timeout_op(
-            self.inner.timeout,
-            self.network_client()
-                .get_vtxo_chain(Some(out_point), Some((size, index))),
-        )
-        .await
-        .context("Failed to fetch VTXO chain")??;
+        const VTXO_CHAIN_PAGE_SIZE: i32 = 100;
 
-        Ok(Some(vtxo_chain))
+        let mut accumulated: Option<VtxoChainResponse> = None;
+        let mut page_index = 0;
+
+        loop {
+            let response = timeout_op(
+                self.inner.timeout,
+                self.network_client()
+                    .get_vtxo_chain(Some(out_point), Some((VTXO_CHAIN_PAGE_SIZE, page_index))),
+            )
+            .await
+            .context("Failed to fetch VTXO chain")??;
+
+            let next_page_index = match &response.page {
+                Some(page) if page.next < page.total => Some(page.next),
+                _ => None,
+            };
+
+            match accumulated.as_mut() {
+                Some(acc) => acc.chains.inner.extend(response.chains.inner),
+                None => accumulated = Some(response),
+            }
+
+            match next_page_index {
+                Some(index) => page_index = index,
+                None => break,
+            }
+        }
+
+        Ok(accumulated)
     }
 
     pub async fn offchain_balance(&self) -> Result<OffChainBalance, Error> {

@@ -59,10 +59,22 @@ impl EsploraBlockchain {
         client: &EsploraAsyncClient,
         txid: &Txid,
     ) -> Result<Option<Transaction>, ark_client::Error> {
-        client
+        if let Some(tx) = client
             .get_tx(txid)
             .await
-            .map_err(EsploraBlockchain::map_esplora_error)
+            .map_err(EsploraBlockchain::map_esplora_error)?
+        {
+            return Ok(Some(tx));
+        }
+
+        // arkade-regtest's mempool Esplora serves `/tx/{txid}` JSON but not `/tx/{txid}/raw`
+        // (404). Fall back to the JSON endpoint so commitment txs remain loadable for unilateral
+        // exit on regtest.
+        Ok(client
+            .get_tx_info(txid)
+            .await
+            .map_err(EsploraBlockchain::map_esplora_error)?
+            .map(|tx_info| tx_info.to_tx()))
     }
 
     async fn get_tx_status_at(
@@ -280,10 +292,13 @@ async fn map_output_status(
 }
 
 async fn map_fee_rate(client: &EsploraAsyncClient) -> Result<f64, ark_client::Error> {
-    let estimates = client
-        .get_fee_estimates()
-        .await
-        .map_err(EsploraBlockchain::map_esplora_error)?;
+    let estimates = match client.get_fee_estimates().await {
+        Ok(estimates) => estimates,
+        Err(_) => {
+            // arkade-regtest's mempool Esplora does not implement `/fee-estimates` (404).
+            return Ok(MIN_FEE_RATE_SAT_PER_VB);
+        }
+    };
     let fee_rate = estimates
         .get(&ESPLORA_FEE_ESTIMATE_BLOCK_TARGET)
         .copied()

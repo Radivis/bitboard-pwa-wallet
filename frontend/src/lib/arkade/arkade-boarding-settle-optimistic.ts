@@ -76,6 +76,25 @@ export function revertOptimisticBoardingSettle(
 
 /**
  * Esplora can still list the boarding UTXO for several seconds after a successful settle.
+ * Keep boarding at zero once the operator round consumed the input.
+ */
+export function reconcileBoardingStatusAfterSettle(
+  fetched: ArkadeBoardingStatus,
+  settledSats: number,
+): ArkadeBoardingStatus {
+  if (settledSats <= 0) {
+    return fetched
+  }
+
+  if (fetched.spendableSats === settledSats) {
+    return zeroBoardingStatus(fetched)
+  }
+
+  return fetched
+}
+
+/**
+ * Esplora can still list the boarding UTXO for several seconds after a successful settle.
  * Keep boarding at zero and avoid double-counting once offchain balance already reflects VTXOs.
  */
 export function reconcileBalanceAfterBoardingSettle(

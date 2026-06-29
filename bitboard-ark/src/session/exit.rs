@@ -21,6 +21,25 @@ use super::mappers::{
     parse_outpoint,
 };
 
+/// arkd's indexer can lag behind confirmed unroll broadcasts when marking `is_unrolled`.
+const COMPLETION_UNROLLED_INDEXER_POLL_MAX: u8 = 60;
+const COMPLETION_UNROLLED_INDEXER_POLL_DELAY: std::time::Duration =
+    std::time::Duration::from_millis(1_000);
+
+fn completion_awaits_unrolled_indexer(error: &ark_client::Error) -> bool {
+    error
+        .to_string()
+        .contains("no matching unrolled VTXOs found for completion")
+}
+
+#[cfg(target_arch = "wasm32")]
+async fn sleep(duration: std::time::Duration) {
+    bitboard_wasm_sleep::sleep_for(duration).await;
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+async fn sleep(_duration: std::time::Duration) {}
+
 fn collaborative_exit_estimate_error_code(is_coin_select: bool) -> Option<&'static str> {
     if is_coin_select {
         Some(COLLABORATIVE_EXIT_ESTIMATE_ERROR_INSUFFICIENT_COOPERATIVE_INPUTS)
@@ -48,6 +67,11 @@ impl ArkSession {
     }
 
     pub async fn onchain_bumper_info(&self) -> ArkResult<OnchainBumperInfoDto> {
+        // The on-chain (bumper) wallet is only synced once at session open, so without a refresh
+        // here the unilateral-exit dialog would report a stale session-open balance and ignore any
+        // funds the user added afterwards. Re-sync before reading so both the displayed balance and
+        // the `bumper_sufficient` gate (which goes through this) reflect current on-chain funds.
+        self.client.sync_onchain_wallet().await?;
         let address = self.client.onchain_wallet_address()?;
         let balance = self.client.onchain_wallet_balance()?;
         Ok(OnchainBumperInfoDto {
@@ -167,7 +191,7 @@ impl ArkSession {
         let mut projected_wait_steps = 0u32;
         let mut estimate_error = None;
 
-        match self.client.get_vtxo_chain(outpoint, 0, 0).await {
+        match self.client.get_vtxo_chain(outpoint).await {
             Ok(Some(chain)) => {
                 chain_tx_count = chain.chains.inner.len() as u32;
                 projected_unroll_steps = chain_tx_count.saturating_sub(1);
@@ -273,9 +297,25 @@ impl ArkSession {
             vtxo_txid: Some(done_vtxo_txid.clone()),
         });
 
+        self.mark_vtxo_unrolled_in_snapshot(txid, vout)?;
+        let _ = self.sync_with_operator().await;
+
         Ok(UnrollResult {
             vtxo_txid: done_vtxo_txid,
         })
+    }
+
+    fn mark_vtxo_unrolled_in_snapshot(&self, txid: &str, vout: u32) -> ArkResult<()> {
+        let Some(mut snapshot) = self.wallet_db.snapshot().offchain_vtxo_snapshot.clone() else {
+            return Ok(());
+        };
+        for record in &mut snapshot.virtual_tx_outpoints {
+            if record.txid == txid && record.vout == vout {
+                record.is_unrolled = true;
+            }
+        }
+        self.wallet_db.set_offchain_vtxo_snapshot(snapshot);
+        Ok(())
     }
 
     pub async fn complete_unilateral_exit(
@@ -295,12 +335,32 @@ impl ArkSession {
             .collect::<Result<_, _>>()?;
 
         let destination = parse_onchain_address(&params.destination_address, self.network())?;
-        let txid = self
-            .client
-            .send_on_chain_for_vtxo_txids(destination, &vtxo_txids)
-            .await?;
-        self.clear_pending_unilateral_exits_for_txids(&vtxo_txids);
-        Ok(txid.to_string())
+        let mut last_error: Option<ark_client::Error> = None;
+        for _ in 0..COMPLETION_UNROLLED_INDEXER_POLL_MAX {
+            self.sync_with_operator().await?;
+            match self
+                .client
+                .send_on_chain_for_vtxo_txids(destination.clone(), &vtxo_txids)
+                .await
+            {
+                Ok(txid) => {
+                    self.clear_pending_unilateral_exits_for_txids(&vtxo_txids);
+                    return Ok(txid.to_string());
+                }
+                Err(error) if completion_awaits_unrolled_indexer(&error) => {
+                    last_error = Some(error);
+                    sleep(COMPLETION_UNROLLED_INDEXER_POLL_DELAY).await;
+                }
+                Err(error) => return Err(error.into()),
+            }
+        }
+
+        Err(last_error.map(Into::into).unwrap_or_else(|| {
+            ArkWasmError::Boarding(
+                "Timed out waiting for the operator indexer to mark the VTXO as unrolled"
+                    .to_string(),
+            )
+        }))
     }
 
     async fn build_unilateral_branch(

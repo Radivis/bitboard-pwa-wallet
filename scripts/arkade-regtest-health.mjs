@@ -55,6 +55,23 @@ export async function checkArkdHealthy() {
   }
 }
 
+const ARKD_ADMIN_REGTEST_URL =
+  process.env.ARKD_ADMIN_REGTEST_URL ?? 'http://localhost:7071'
+
+/** arkd can serve /v1/info before its wallet has finished syncing to arkd-wallet after a clean start. */
+export async function checkArkdWalletSynced() {
+  const { ok, text } = await fetchText(
+    `${ARKD_ADMIN_REGTEST_URL.replace(/\/$/, '')}/v1/admin/wallet/status`,
+  )
+  if (!ok) return false
+  try {
+    const json = JSON.parse(text)
+    return Boolean(json?.synced)
+  } catch {
+    return false
+  }
+}
+
 export async function waitForArkadeRegtestHealthy(options = {}) {
   const timeoutMs = options.timeoutMs ?? defaultTimeoutMs()
   const pollMs = options.pollMs ?? DEFAULT_POLL_MS
@@ -65,7 +82,8 @@ export async function waitForArkadeRegtestHealthy(options = {}) {
   while (Date.now() < deadline) {
     const esploraOk = await checkEsploraHealthy()
     const arkdOk = await checkArkdHealthy()
-    if (esploraOk && arkdOk) {
+    const arkdWalletSynced = await checkArkdWalletSynced()
+    if (esploraOk && arkdOk && arkdWalletSynced) {
       return
     }
     const now = Date.now()
@@ -73,6 +91,7 @@ export async function waitForArkadeRegtestHealthy(options = {}) {
       const waiting = []
       if (!esploraOk) waiting.push('Esplora')
       if (!arkdOk) waiting.push('arkd')
+      if (!arkdWalletSynced) waiting.push('arkd wallet sync')
       console.log(
         `[arkade-regtest health] still waiting for ${waiting.join(' + ')} (${Math.round(
           (deadline - now) / 1000,
@@ -85,9 +104,11 @@ export async function waitForArkadeRegtestHealthy(options = {}) {
 
   const esploraOk = await checkEsploraHealthy()
   const arkdOk = await checkArkdHealthy()
+  const arkdWalletSynced = await checkArkdWalletSynced()
   const still = []
   if (!esploraOk) still.push(`Esplora (${ESPLORA_REGTEST_API_URL})`)
   if (!arkdOk) still.push(`arkd (${ARKD_REGTEST_URL}/v1/info)`)
+  if (!arkdWalletSynced) still.push(`arkd wallet sync (${ARKD_ADMIN_REGTEST_URL}/v1/admin/wallet/status)`)
   throw new Error(
     `arkade-regtest not healthy within ${timeoutMs}ms — pending: ${still.join(', ')}`,
   )

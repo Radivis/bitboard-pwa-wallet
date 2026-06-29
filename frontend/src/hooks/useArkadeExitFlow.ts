@@ -147,7 +147,8 @@ export function useArkadeExitFlow() {
   }
 
   const handleCompleteExit = () => {
-    const vtxoTxid = unrolledVtxoTxid ?? selectedCandidate?.txid
+    // Completion coin-selects by the offchain VTXO virtual txid, not the last on-chain unroll broadcast txid.
+    const vtxoTxid = selectedCandidate?.txid
     if (vtxoTxid == null || completeDestination.trim().length === 0) return
     completeExitMutation.mutate(
       {
