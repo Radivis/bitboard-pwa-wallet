@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use ark_bdk_wallet::Wallet as ArkBdkWallet;
 use ark_client::key_provider::display_receive_derivation_index;
@@ -14,8 +14,9 @@ use crate::error::{ArkResult, ArkWasmError};
 use crate::esplora_blockchain::EsploraBlockchain;
 use crate::network::NetworkMode;
 use crate::persistence::{
-    BitboardArkPersistence, JsonPersistenceDb, OperatorIdentity, OperatorSignerMigrationHint,
-    SharedPersistenceDb, network_label, validate_operator_identity,
+    BitboardArkPersistence, JsonPersistenceDb, OperatorSignerMigrationHint, SharedPersistenceDb,
+    operator_identity_for_connected_signer, persisted_operator_identity_for_open,
+    validate_operator_identity,
 };
 
 use super::mappers::{current_unix_timestamp, parse_delegator_public_key};
@@ -103,10 +104,11 @@ impl ArkSession {
         wallet_db.set_load_context(network, server_signer);
         client.sync_onchain_wallet().await?;
 
-        let operator_identity = OperatorIdentity {
-            signer_pk_hex: server_signer.to_string(),
-            network: network_label(network),
-        };
+        let operator_identity = Mutex::new(persisted_operator_identity_for_open(
+            &migration_hint,
+            server_signer,
+            network,
+        ));
 
         Ok((
             Self {
@@ -126,6 +128,11 @@ impl ArkSession {
         self.client
             .migrate_deprecated_signer_vtxos(&mut rng)
             .await?;
+        let server_signer: XOnlyPublicKey = self.client.server_info()?.signer_pk.into();
+        self.set_persisted_operator_identity(operator_identity_for_connected_signer(
+            server_signer,
+            self.network(),
+        ));
         Ok(())
     }
 
@@ -135,12 +142,17 @@ impl ArkSession {
             .set_offchain_next_derivation_index(next_index);
         let mut wallet_db = self.wallet_db.snapshot();
         wallet_db.offchain_next_derivation_index = next_index;
-        let mut envelope = BitboardArkPersistence::empty(self.operator_identity.clone());
+        let mut envelope = BitboardArkPersistence::empty(self.persisted_operator_identity());
         envelope.wallet_db = wallet_db;
         Ok(serde_json::to_string(&envelope)?)
     }
 
     pub fn operator_signer_pk_hex(&self) -> String {
-        self.operator_identity.signer_pk_hex.clone()
+        self.client
+            .server_info()
+            .map(|server_info| {
+                XOnlyPublicKey::from(server_info.signer_pk.x_only_public_key().0).to_string()
+            })
+            .unwrap_or_else(|_| self.persisted_operator_identity().signer_pk_hex)
     }
 }

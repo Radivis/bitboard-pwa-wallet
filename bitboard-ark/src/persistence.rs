@@ -394,6 +394,35 @@ fn cutoff_unix_for_deprecated_signer(server_info: &Info, stored_signer: XOnlyPub
         .unwrap_or(0)
 }
 
+pub fn operator_identity_for_connected_signer(
+    connected_signer: XOnlyPublicKey,
+    network: Network,
+) -> OperatorIdentity {
+    OperatorIdentity {
+        signer_pk_hex: connected_signer.to_string(),
+        network: network_label(network),
+    }
+}
+
+/// Operator identity written into SDK persistence on export.
+///
+/// While a signer rotation migration is pending, keep the deprecated stored signer so later opens
+/// still surface a migration hint until cooperative migration completes.
+pub fn persisted_operator_identity_for_open(
+    migration_hint: &Option<OperatorSignerMigrationHint>,
+    connected_signer: XOnlyPublicKey,
+    network: Network,
+) -> OperatorIdentity {
+    if let Some(hint) = migration_hint {
+        return OperatorIdentity {
+            signer_pk_hex: hint.previous_signer_pk_hex.clone(),
+            network: network_label(network),
+        };
+    }
+
+    operator_identity_for_connected_signer(connected_signer, network)
+}
+
 pub fn validate_operator_identity(
     stored: Option<&OperatorIdentity>,
     connected_server_info: &Info,

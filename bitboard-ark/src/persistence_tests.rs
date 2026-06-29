@@ -1,6 +1,7 @@
 use crate::persistence::{
     BITBOARD_ARK_PERSISTENCE_VERSION, BitboardArkPersistence, JsonPersistenceDb, OperatorIdentity,
     OperatorSignerMigrationHint, PendingExitDeductionRecord, PendingExitKind, network_label,
+    operator_identity_for_connected_signer, persisted_operator_identity_for_open,
     validate_operator_identity,
 };
 use ark_core::server::{DeprecatedSigner, Info};
@@ -62,6 +63,33 @@ fn test_server_info(current_hex: &str, deprecated: Vec<(&str, i64)>) -> Info {
 fn network_label_maps_bitcoin_networks() {
     assert_eq!(network_label(Network::Bitcoin), "bitcoin");
     assert_eq!(network_label(Network::Signet), "signet");
+}
+
+#[test]
+fn persisted_operator_identity_for_open_keeps_deprecated_signer_while_migration_pending() {
+    let connected = xonly(PK_CURRENT);
+    let hint = OperatorSignerMigrationHint {
+        previous_signer_pk_hex: xonly(PK_DEPRECATED).to_string(),
+        deprecated_status: "migratable".to_string(),
+        cutoff_unix: 2_000_000,
+    };
+
+    let identity = persisted_operator_identity_for_open(&Some(hint), connected, Network::Signet);
+
+    assert_eq!(identity.signer_pk_hex, xonly(PK_DEPRECATED).to_string());
+    assert_eq!(identity.network, network_label(Network::Signet));
+}
+
+#[test]
+fn persisted_operator_identity_for_open_uses_connected_signer_when_no_migration_hint() {
+    let connected = xonly(PK_CURRENT);
+
+    let identity = persisted_operator_identity_for_open(&None, connected, Network::Signet);
+
+    assert_eq!(
+        identity,
+        operator_identity_for_connected_signer(connected, Network::Signet)
+    );
 }
 
 #[test]

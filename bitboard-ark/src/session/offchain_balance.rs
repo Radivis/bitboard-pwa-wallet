@@ -24,7 +24,7 @@ impl ArkSession {
                 snapshot,
                 &server_info,
                 current_unix_timestamp(),
-                legacy_signer_pk_fallback(&self.operator_identity),
+                legacy_signer_pk_fallback(&self.persisted_operator_identity()),
             );
         }
 
@@ -43,7 +43,7 @@ impl ArkSession {
             snapshot,
             &server_info,
             current_unix_timestamp(),
-            legacy_signer_pk_fallback(&self.operator_identity),
+            legacy_signer_pk_fallback(&self.persisted_operator_identity()),
         )?;
         Ok(buckets.gross_spendable_sats())
     }

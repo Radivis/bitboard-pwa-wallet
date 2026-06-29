@@ -10,7 +10,7 @@ mod receive;
 mod sync;
 mod vtxo;
 
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use ark_bdk_wallet::Wallet as ArkBdkWallet;
@@ -34,11 +34,25 @@ pub struct ArkSession {
     wallet_db: Arc<JsonPersistenceDb>,
     delegator: Option<DelegatorClient>,
     network_mode: NetworkMode,
-    operator_identity: OperatorIdentity,
+    operator_identity: Mutex<OperatorIdentity>,
 }
 
 impl ArkSession {
     pub(crate) fn network(&self) -> Network {
         self.network_mode.to_bitcoin_network()
+    }
+
+    pub(crate) fn persisted_operator_identity(&self) -> OperatorIdentity {
+        self.operator_identity
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .clone()
+    }
+
+    pub(crate) fn set_persisted_operator_identity(&self, identity: OperatorIdentity) {
+        *self
+            .operator_identity
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = identity;
     }
 }
