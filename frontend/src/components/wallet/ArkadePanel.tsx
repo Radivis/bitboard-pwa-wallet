@@ -14,12 +14,19 @@ import {
 import { ArkadeBalanceBreakdown } from '@/components/wallet/ArkadeBalanceBreakdown'
 import { ArkadeSignerMigrationBanner } from '@/components/wallet/ArkadeSignerMigrationBanner'
 import { ArkadeRecoverableVtxoBanner } from '@/components/wallet/ArkadeRecoverableVtxoBanner'
+import { RailSyncWarningBanner } from '@/components/wallet/RailSyncWarningBanner'
 import {
   useArkadeAddressQuery,
   useArkadeBalanceQuery,
   useArkadeDelegateInfoQuery,
   useArkadeRenewMutation,
 } from '@/hooks/useArkadeQueries'
+import {
+  useArkadeLoadLifecycleSnapshot,
+  useArkadeRailSnapshot,
+  useArkadeSyncLifecycleSnapshot,
+} from '@/hooks/useArkadeLifecycleSnapshots'
+import { useArkadeManualSyncMutation } from '@/hooks/useRailManualSyncMutations'
 import {
   getArkadeDelegatorDisplayLabel,
   isArkadeDelegatorConfigured,
@@ -42,6 +49,10 @@ export function ArkadePanel() {
   const delegateQuery = useArkadeDelegateInfoQuery()
   const renewMutation = useArkadeRenewMutation()
   const addressQuery = useArkadeAddressQuery()
+  const arkadeRail = useArkadeRailSnapshot()
+  const arkadeLoadSnapshot = useArkadeLoadLifecycleSnapshot()
+  const arkadeSyncSnapshot = useArkadeSyncLifecycleSnapshot()
+  const arkadeManualSync = useArkadeManualSyncMutation()
 
   if (!show) return null
 
@@ -70,6 +81,14 @@ export function ArkadePanel() {
       <CardContent className="space-y-4">
         <ArkadeSignerMigrationBanner />
         <ArkadeRecoverableVtxoBanner />
+        <RailSyncWarningBanner
+          rail="arkade"
+          syncPhase={arkadeSyncSnapshot.syncPhase}
+          loadPhase={arkadeLoadSnapshot.loadPhase}
+          warningMessage={arkadeSyncSnapshot.warningMessage}
+          onRetry={() => arkadeManualSync.mutate()}
+          isRetrying={arkadeRail.syncPhase === 'syncing' || arkadeManualSync.isPending}
+        />
         <p className="text-sm text-muted-foreground">
           Instant payments on Arkade use separate addresses from your on-chain{' '}
           <code className="text-xs">bc1</code> receive address.

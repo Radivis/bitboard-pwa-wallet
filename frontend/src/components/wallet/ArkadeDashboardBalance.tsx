@@ -10,6 +10,7 @@ import { ArkadeRecoverableVtxoBanner } from '@/components/wallet/ArkadeRecoverab
 import { RailLoadErrorBanner } from '@/components/wallet/RailLoadErrorBanner'
 import { RailSyncControl } from '@/components/wallet/RailSyncControl'
 import { RailSyncErrorBanner } from '@/components/wallet/RailSyncErrorBanner'
+import { RailSyncWarningBanner } from '@/components/wallet/RailSyncWarningBanner'
 import {
   ARKADE_INFOMODE_IDS,
   ARKADE_OPERATOR_STALE_INFOMODE,
@@ -77,6 +78,8 @@ export function ArkadeDashboardBalance() {
             railConfigured={arkadeRail.loadPhase !== 'not-configured'}
             syncErrorMessage={arkadeSyncSnapshot.errorMessage}
             syncErrorDetailInBanner={arkadeLoadSnapshot.loadPhase === 'loaded'}
+            syncWarningMessage={arkadeSyncSnapshot.warningMessage}
+            syncWarningDetailInBanner={arkadeLoadSnapshot.loadPhase === 'loaded'}
           />
         </div>
       </CardHeader>
@@ -103,6 +106,16 @@ export function ArkadeDashboardBalance() {
           </p>
         ) : balance ? (
           <>
+            <RailSyncWarningBanner
+              rail="arkade"
+              syncPhase={arkadeSyncSnapshot.syncPhase}
+              loadPhase={arkadeLoadSnapshot.loadPhase}
+              warningMessage={arkadeSyncSnapshot.warningMessage}
+              onRetry={() => arkadeManualSync.mutate()}
+              isRetrying={
+                arkadeRail.syncPhase === 'syncing' || arkadeManualSync.isPending
+              }
+            />
             <RailSyncErrorBanner
               rail="arkade"
               syncPhase={arkadeSyncSnapshot.syncPhase}

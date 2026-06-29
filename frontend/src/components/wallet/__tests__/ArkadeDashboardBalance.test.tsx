@@ -272,8 +272,8 @@ describe('ArkadeDashboardBalance', () => {
       data: {
         confirmedSats: 0,
         totalSats: 50_000,
-        recoverableSats: 50_000,
-        recoverableVtxoCount: 2,
+        recoverableSettleableSats: 50_000,
+        recoverableSettleableVtxoCount: 2,
       },
     })
     renderWithProviders(<ArkadeDashboardBalance />)

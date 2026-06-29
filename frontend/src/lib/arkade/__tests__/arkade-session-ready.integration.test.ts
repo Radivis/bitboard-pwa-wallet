@@ -20,7 +20,7 @@ const workerMocks = vi.hoisted(() => ({
   getTransactionHistory: vi.fn().mockResolvedValue([]),
   getAddress: vi.fn().mockResolvedValue('tark1qtest'),
   reconcileActiveConnectionId: vi.fn().mockResolvedValue(undefined),
-  syncWithOperator: vi.fn().mockResolvedValue(undefined),
+  syncWithOperator: vi.fn().mockResolvedValue({}),
 }))
 
 const ensureArkadeOperatorConnectionMock = vi.hoisted(() => vi.fn())

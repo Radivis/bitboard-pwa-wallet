@@ -55,6 +55,13 @@ fn collaborative_exit_estimate_error_fields(
     (error.to_string(), estimate_error_code)
 }
 
+/// Explicit exit amount, or cooperatively spendable offchain balance for a full exit.
+fn resolve_cooperative_exit_amount(amount_sats: Option<u64>, gross_spendable_sats: u64) -> Amount {
+    amount_sats
+        .map(Amount::from_sat)
+        .unwrap_or_else(|| Amount::from_sat(gross_spendable_sats))
+}
+
 impl ArkSession {
     pub async fn list_exit_candidates(&self) -> ArkResult<Vec<ExitCandidateRow>> {
         let (vtxo_list, _) = self.client.list_vtxos().await?;
@@ -82,27 +89,19 @@ impl ArkSession {
 
     pub async fn collaborative_exit(&self, params: CollaborativeExitParams) -> ArkResult<String> {
         let destination = parse_onchain_address(&params.destination_address, self.network())?;
-        let baseline_offchain_spendable_sats = self
-            .resolve_offchain_balance_buckets()
-            .await?
-            .gross_spendable_sats();
+        let buckets = self.resolve_offchain_balance_buckets().await?;
+        let baseline_offchain_spendable_sats = buckets.gross_spendable_sats();
+        let exit_amount =
+            resolve_cooperative_exit_amount(params.amount_sats, baseline_offchain_spendable_sats);
         let mut rng = OsRng;
-        let (txid, exit_amount_sats) = if let Some(amount_sats) = params.amount_sats {
-            let txid = self
-                .client
-                .collaborative_redeem(&mut rng, destination, Amount::from_sat(amount_sats))
-                .await?;
-            (txid, amount_sats)
-        } else {
-            let offchain = self.client.offchain_balance().await?;
-            let exit_total = offchain.total();
-            let txid = self
-                .client
-                .collaborative_redeem(&mut rng, destination, exit_total)
-                .await?;
-            (txid, exit_total.to_sat())
-        };
-        self.record_pending_collaborative_exit(exit_amount_sats, baseline_offchain_spendable_sats);
+        let txid = self
+            .client
+            .collaborative_redeem(&mut rng, destination, exit_amount)
+            .await?;
+        self.record_pending_collaborative_exit(
+            exit_amount.to_sat(),
+            baseline_offchain_spendable_sats,
+        );
         Ok(txid.to_string())
     }
 
@@ -132,11 +131,11 @@ impl ArkSession {
             }
         };
 
-        let to_amount = if let Some(amount_sats) = amount_sats {
-            Amount::from_sat(amount_sats)
-        } else {
-            self.client.offchain_balance().await?.total()
-        };
+        let gross_spendable_sats = self
+            .resolve_offchain_balance_buckets()
+            .await?
+            .gross_spendable_sats();
+        let to_amount = resolve_cooperative_exit_amount(amount_sats, gross_spendable_sats);
 
         let mut rng = OsRng;
         match self
@@ -376,8 +375,9 @@ impl ArkSession {
 
 #[cfg(test)]
 mod collaborative_exit_estimate_tests {
-    use super::collaborative_exit_estimate_error_code;
+    use super::{collaborative_exit_estimate_error_code, resolve_cooperative_exit_amount};
     use crate::api_types::COLLABORATIVE_EXIT_ESTIMATE_ERROR_INSUFFICIENT_COOPERATIVE_INPUTS;
+    use bitcoin::Amount;
 
     #[test]
     fn maps_coin_select_to_insufficient_cooperative_inputs_code() {
@@ -390,5 +390,22 @@ mod collaborative_exit_estimate_tests {
     #[test]
     fn leaves_non_coin_select_without_code() {
         assert_eq!(collaborative_exit_estimate_error_code(false), None);
+    }
+
+    #[test]
+    fn resolve_cooperative_exit_amount_uses_explicit_sats_when_provided() {
+        assert_eq!(
+            resolve_cooperative_exit_amount(Some(25_000), 100_000).to_sat(),
+            25_000
+        );
+    }
+
+    #[test]
+    fn resolve_cooperative_exit_amount_defaults_to_gross_spendable_for_full_exit() {
+        assert_eq!(
+            resolve_cooperative_exit_amount(None, 42_000).to_sat(),
+            42_000
+        );
+        assert_eq!(resolve_cooperative_exit_amount(None, 0), Amount::ZERO);
     }
 }

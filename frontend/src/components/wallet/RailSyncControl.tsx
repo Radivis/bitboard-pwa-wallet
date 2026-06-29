@@ -6,6 +6,7 @@ import type { SyncLifecyclePhase } from '@/lib/wallet/lifecycle/rail-lifecycle-t
 export type DashboardRailId = 'onchain' | 'lightning' | 'arkade'
 
 const RAIL_SYNC_ERROR_CAPTION_DEFERRED = 'Sync failed — see details below'
+const RAIL_SYNC_WARNING_CAPTION_DEFERRED = 'Synced with warnings — see details below'
 
 function formatLastSyncedCaption(lastSyncedAt: Date | string): string {
   const date =
@@ -26,6 +27,10 @@ export type RailSyncControlProps = {
   syncErrorMessage?: string | null
   /** When true, caption stays short; full `syncErrorMessage` belongs in `RailSyncErrorBanner`. */
   syncErrorDetailInBanner?: boolean
+  /** Shown in caption when operator sync succeeded but left a non-blocking warning. */
+  syncWarningMessage?: string | null
+  /** When true, caption stays short; full `syncWarningMessage` belongs in `RailSyncWarningBanner`. */
+  syncWarningDetailInBanner?: boolean
   secondaryAction?: ReactNode
 }
 
@@ -39,6 +44,8 @@ export function RailSyncControl({
   railConfigured = true,
   syncErrorMessage = null,
   syncErrorDetailInBanner = false,
+  syncWarningMessage = null,
+  syncWarningDetailInBanner = false,
   secondaryAction,
 }: RailSyncControlProps) {
   if (!railConfigured) {
@@ -47,6 +54,7 @@ export function RailSyncControl({
 
   const isSyncing = syncPhase === 'syncing' || isSyncPending
   const isSyncError = syncPhase === 'sync-error'
+  const hasSyncWarning = syncWarningMessage != null && !isSyncError && !isSyncing
   const lastSyncedIso =
     lastSyncedAt != null
       ? lastSyncedAt instanceof Date
@@ -74,7 +82,7 @@ export function RailSyncControl({
         {secondaryAction}
       </div>
       <p
-        className={`text-xs ${isSyncError ? 'text-amber-700 dark:text-amber-400' : 'text-muted-foreground'}`}
+        className={`text-xs ${isSyncError || hasSyncWarning ? 'text-amber-700 dark:text-amber-400' : 'text-muted-foreground'}`}
         data-testid={`rail-sync-${rail}-caption`}
         {...(lastSyncedIso != null
           ? { 'data-rail-last-synced-at': lastSyncedIso }
@@ -84,9 +92,13 @@ export function RailSyncControl({
           ? syncErrorDetailInBanner
             ? RAIL_SYNC_ERROR_CAPTION_DEFERRED
             : syncErrorMessage ?? 'Sync failed — use Sync to retry'
-          : lastSyncedAt != null
-            ? formatLastSyncedCaption(lastSyncedAt)
-            : 'Not synced yet'}
+          : hasSyncWarning
+            ? syncWarningDetailInBanner
+              ? RAIL_SYNC_WARNING_CAPTION_DEFERRED
+              : syncWarningMessage
+            : lastSyncedAt != null
+              ? formatLastSyncedCaption(lastSyncedAt)
+              : 'Not synced yet'}
       </p>
     </div>
   )

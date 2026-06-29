@@ -65,7 +65,7 @@ describe('arkade-sync-lifecycle-orchestrator', () => {
     resetArkadeSyncLifecycleStateForTests()
     vi.clearAllMocks()
     loadPhaseRef.phase = 'loaded'
-    syncWithOperator.mockResolvedValue(undefined)
+    syncWithOperator.mockResolvedValue({})
     migrateDeprecatedSignerVtxos.mockResolvedValue(undefined)
     refreshArkadeStoreFromLoadedWasm.mockResolvedValue(undefined)
     orchestrateArkadeSave.mockResolvedValue(undefined)
@@ -151,7 +151,41 @@ describe('arkade-sync-lifecycle-orchestrator', () => {
         connectionId: 'conn-1',
       },
       errorMessage: 'operator down',
+      warningMessage: null,
     })
+  })
+
+  it('key discovery failure sets warning without sync-error', async () => {
+    syncWithOperator.mockResolvedValue({
+      keyDiscoveryWarning:
+        'Offchain receive keys could not be refreshed: indexer timeout. Balance may be incomplete until the next successful sync.',
+    })
+
+    await orchestrateArkadeSyncThenSave(syncParams)
+
+    expect(getArkadeSyncLifecycleSnapshot()).toEqual({
+      syncPhase: 'not-syncing',
+      railScope: {
+        walletId: 1,
+        networkMode: 'signet',
+        connectionId: 'conn-1',
+      },
+      errorMessage: null,
+      warningMessage:
+        'Offchain receive keys could not be refreshed: indexer timeout. Balance may be incomplete until the next successful sync.',
+    })
+    expect(orchestrateArkadeSave).toHaveBeenCalled()
+  })
+
+  it('successful sync clears previous warning', async () => {
+    syncWithOperator.mockResolvedValueOnce({
+      keyDiscoveryWarning: 'stale warning',
+    })
+    await orchestrateArkadeSyncThenSave(syncParams)
+    syncWithOperator.mockResolvedValueOnce({})
+    await orchestrateArkadeSyncThenSave(syncParams)
+
+    expect(getArkadeSyncLifecycleSnapshot().warningMessage).toBeNull()
   })
 
   it('signerMigration runs migrate before operator sync and save', async () => {
@@ -194,6 +228,7 @@ describe('arkade-sync-lifecycle-orchestrator', () => {
         connectionId: 'conn-1',
       },
       errorMessage: 'operator vtxos down',
+      warningMessage: null,
     })
   })
 

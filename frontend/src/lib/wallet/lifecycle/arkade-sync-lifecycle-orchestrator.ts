@@ -26,6 +26,7 @@ import type {
   ArkadeSyncThenSaveParams,
 } from '@/lib/wallet/lifecycle/arkade-sync-lifecycle-types'
 import type { ArkadeSaveParams } from '@/lib/wallet/lifecycle/arkade-save-lifecycle-types'
+import type { ArkadeOperatorSyncResult } from '@/workers/arkade-api'
 import {
   LIFECYCLE_SYNC_ERROR_FALLBACK,
   userFacingLifecycleErrorMessage,
@@ -43,6 +44,7 @@ let snapshot: ArkadeSyncLifecycleSnapshot = {
   syncPhase: 'not-configured',
   railScope: null,
   errorMessage: null,
+  warningMessage: null,
 }
 
 let dashboardPollTimer: ReturnType<typeof setTimeout> | null = null
@@ -106,10 +108,25 @@ async function runArkadeSignerMigrationBody(): Promise<void> {
   await worker.migrateDeprecatedSignerVtxos()
 }
 
-async function runArkadeOperatorSyncBody(connectionId: string): Promise<void> {
+function applySuccessfulArkadeSyncSnapshot(
+  scope: ArkadeRailScope,
+  syncResult: ArkadeOperatorSyncResult,
+): void {
+  setSnapshot({
+    syncPhase: 'not-syncing',
+    railScope: scope,
+    errorMessage: null,
+    warningMessage: syncResult.keyDiscoveryWarning ?? null,
+  })
+}
+
+async function runArkadeOperatorSyncBody(
+  connectionId: string,
+): Promise<ArkadeOperatorSyncResult> {
   const worker = getArkadeWorker()
-  await worker.syncWithOperator()
+  const syncResult = await worker.syncWithOperator()
   await refreshArkadeStoreFromLoadedWasm(connectionId)
+  return syncResult
 }
 
 export function getArkadeSyncLifecycleSnapshot(): ArkadeSyncLifecycleSnapshot {
@@ -144,6 +161,7 @@ export function forceResetArkadeSyncLifecycleForTeardown(): void {
     syncPhase: 'not-configured',
     railScope: null,
     errorMessage: null,
+    warningMessage: null,
   })
 }
 
@@ -155,6 +173,7 @@ export function configureArkadeSyncForLoadedRail(scope: ArkadeRailScope): void {
     syncPhase: 'not-syncing',
     railScope: scope,
     errorMessage: null,
+    warningMessage: null,
   })
   configureArkadeSaveForLoadedRail(scope)
 }
@@ -176,6 +195,7 @@ export function syncArkadeSyncLifecycleWithLockPhase(lockPhase: LockLifecyclePha
     syncPhase: 'not-configured',
     railScope: null,
     errorMessage: null,
+    warningMessage: null,
   })
 }
 
@@ -200,15 +220,20 @@ export async function orchestrateArkadeSyncThenSave(
       const scope = railScopeFromParams(params)
       configureArkadeSyncForLoadedRail(scope)
 
-      setSnapshot({ syncPhase: 'syncing', railScope: scope, errorMessage: null })
+      setSnapshot({
+        syncPhase: 'syncing',
+        railScope: scope,
+        errorMessage: null,
+        warningMessage: null,
+      })
 
       try {
         if (params.syncKind === 'signerMigration') {
           await runArkadeSignerMigrationBody()
           await orchestrateArkadeSave(toSaveParams(params))
           try {
-            await runArkadeOperatorSyncBody(params.connectionId)
-            setSnapshot({ syncPhase: 'not-syncing', railScope: scope, errorMessage: null })
+            const syncResult = await runArkadeOperatorSyncBody(params.connectionId)
+            applySuccessfulArkadeSyncSnapshot(scope, syncResult)
           } catch (syncError) {
             setSnapshot({
               syncPhase: 'sync-error',
@@ -217,14 +242,15 @@ export async function orchestrateArkadeSyncThenSave(
                 syncError,
                 LIFECYCLE_SYNC_ERROR_FALLBACK,
               ),
+              warningMessage: null,
             })
             params.onSyncError?.(syncError)
           }
           return
         }
 
-        await runArkadeOperatorSyncBody(params.connectionId)
-        setSnapshot({ syncPhase: 'not-syncing', railScope: scope, errorMessage: null })
+        const syncResult = await runArkadeOperatorSyncBody(params.connectionId)
+        applySuccessfulArkadeSyncSnapshot(scope, syncResult)
         try {
           await orchestrateArkadeSave(toSaveParams(params))
         } catch (saveError) {
@@ -237,6 +263,7 @@ export async function orchestrateArkadeSyncThenSave(
           syncPhase: 'sync-error',
           railScope: scope,
           errorMessage: userFacingLifecycleErrorMessage(error, LIFECYCLE_SYNC_ERROR_FALLBACK),
+          warningMessage: null,
         })
         params.onSyncError?.(error)
         if (throwOnError) {
@@ -307,6 +334,7 @@ export function resetArkadeSyncLifecycleStateForTests(): void {
     syncPhase: 'not-configured',
     railScope: null,
     errorMessage: null,
+    warningMessage: null,
   }
   inFlightSyncTracker.clearCurrent()
   if (dashboardPollTimer != null) {

@@ -146,9 +146,11 @@ pub fn ark_operator_signer_pk_hex() -> Result<String, JsValue> {
 }
 
 #[wasm_bindgen]
-pub async fn ark_sync_with_operator() -> Result<(), JsValue> {
+pub async fn ark_sync_with_operator() -> Result<JsValue, JsValue> {
     map_js_async(async {
-        with_session_async(|session| async move { session.sync_with_operator().await }).await
+        let result =
+            with_session_async(|session| async move { session.sync_with_operator().await }).await?;
+        to_js_value(result)
     })
     .await
 }

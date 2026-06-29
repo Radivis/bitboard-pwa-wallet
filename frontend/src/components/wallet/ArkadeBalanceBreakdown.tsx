@@ -7,6 +7,7 @@ import {
   ARKADE_BALANCE_BUMPER_INFOMODE,
   ARKADE_BALANCE_EXIT_PROGRESS_INFOMODE,
   ARKADE_BALANCE_RECOVERABLE_INFOMODE,
+  ARKADE_BALANCE_RECOVERABLE_PENDING_OPERATOR_SWEEP_INFOMODE,
   ARKADE_BALANCE_VTXOS_INFOMODE,
   ARKADE_INFOMODE_IDS,
 } from '@/lib/arkade/arkade-infomode'
@@ -19,6 +20,8 @@ import {
   arkadeHasExitInProgress,
   arkadeOffchainSpendableSats,
   arkadeOnchainBumperSats,
+  arkadeRecoverablePendingOperatorSweepSats,
+  arkadeRecoverablePendingOperatorSweepVtxoCount,
   arkadeUnilateralExitInProgressSats,
 } from '@/lib/arkade/arkade-balance-display'
 
@@ -41,6 +44,9 @@ export function ArkadeBalanceBreakdown({
   const showExitBreakdown = arkadeHasExitInProgress(balance)
   const pendingRecoverySats = balance.pendingRecoverySats ?? 0
   const showPendingRecovery = pendingRecoverySats > 0
+  const pendingOperatorSweepSats = arkadeRecoverablePendingOperatorSweepSats(balance)
+  const pendingOperatorSweepCount = arkadeRecoverablePendingOperatorSweepVtxoCount(balance)
+  const showPendingOperatorSweep = pendingOperatorSweepSats > 0
   const onchainBumperSats = arkadeOnchainBumperSats(balance)
   const showBumperBreakdown = onchainBumperSats > 0
   const showRecoverableTotal =
@@ -138,6 +144,23 @@ export function ArkadeBalanceBreakdown({
           Pending recovery (deprecated signer):{' '}
           <BitcoinAmountDisplay amountSats={pendingRecoverySats} size="sm" />
         </p>
+      )}
+      {showPendingOperatorSweep && (
+        <InfomodeWrapper
+          infoId={ARKADE_INFOMODE_IDS.balanceRecoverablePendingOperatorSweep}
+          infoTitle={ARKADE_BALANCE_RECOVERABLE_PENDING_OPERATOR_SWEEP_INFOMODE.title}
+          infoText={ARKADE_BALANCE_RECOVERABLE_PENDING_OPERATOR_SWEEP_INFOMODE.text}
+          as="span"
+        >
+          <p
+            className="text-xs text-muted-foreground"
+            data-testid="arkade-balance-recoverable-pending-operator-sweep"
+          >
+            Expired — waiting for operator sweep ({pendingOperatorSweepCount} VTXO
+            {pendingOperatorSweepCount === 1 ? '' : 's'}):{' '}
+            <BitcoinAmountDisplay amountSats={pendingOperatorSweepSats} size="sm" />
+          </p>
+        </InfomodeWrapper>
       )}
       {showBumperBreakdown && (
         <InfomodeWrapper

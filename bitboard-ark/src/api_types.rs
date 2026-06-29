@@ -26,8 +26,9 @@ pub struct BalanceDto {
     pub offchain_spendable_sats: u64,
     /// Confirmed on-chain bumper wallet balance (P2A fees for unilateral exit only).
     pub onchain_bumper_sats: u64,
-    /// Portfolio-style total: offchain (spendable + recoverable) plus confirmed on-chain bumper
-    /// sats and unconfirmed boarding UTXOs. Excludes unconfirmed bumper-wallet UTXOs
+    /// Portfolio-style total: offchain (spendable + recoverable settleable + recoverable pending
+    /// operator sweep + pending recovery) plus confirmed on-chain bumper sats and unconfirmed
+    /// boarding UTXOs. Excludes unconfirmed bumper-wallet UTXOs
     /// (`trusted_pending` / `untrusted_pending` from the on-chain wallet); those are not
     /// spendable for Ark operations until confirmed.
     pub total_sats: u64,
@@ -41,10 +42,21 @@ pub struct BalanceDto {
     pub collaborative_exit_in_progress_sats: u64,
     /// Funds locked under a deprecated operator signer past cooperative migration cutoff.
     pub pending_recovery_sats: u64,
-    /// Expired, swept, or sub-dust VTXOs recoverable via batch settlement (regime 3).
-    pub recoverable_sats: u64,
-    /// Count of recoverable VTXOs in [`BalanceDto::recoverable_sats`].
-    pub recoverable_vtxo_count: u32,
+    /// Swept or sub-dust VTXOs the user can batch-settle now.
+    pub recoverable_settleable_sats: u64,
+    /// Count of VTXOs in [`BalanceDto::recoverable_settleable_sats`].
+    pub recoverable_settleable_vtxo_count: u32,
+    /// Client-expired VTXOs awaiting operator sweep before batch settlement is safe.
+    pub recoverable_pending_operator_sweep_sats: u64,
+    /// Count of VTXOs in [`BalanceDto::recoverable_pending_operator_sweep_sats`].
+    pub recoverable_pending_operator_sweep_vtxo_count: u32,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OperatorSyncResultDto {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub key_discovery_warning: Option<String>,
 }
 
 #[derive(Debug, Serialize)]

@@ -5,7 +5,12 @@ vi.mock('@/lib/wallet/lifecycle/arkade-load-lifecycle-orchestrator', () => ({
 }))
 
 vi.mock('@/lib/wallet/lifecycle/arkade-sync-lifecycle-orchestrator', () => ({
-  getArkadeSyncLifecycleSnapshot: vi.fn(() => ({ syncPhase: 'not-syncing', railScope: null })),
+  getArkadeSyncLifecycleSnapshot: vi.fn(() => ({
+    syncPhase: 'not-syncing',
+    railScope: null,
+    errorMessage: null,
+    warningMessage: null,
+  })),
 }))
 
 vi.mock('@/lib/wallet/lifecycle/arkade-save-lifecycle-orchestrator', () => ({
@@ -26,6 +31,8 @@ describe('arkade-rail-snapshot', () => {
     vi.mocked(getArkadeSyncLifecycleSnapshot).mockReturnValue({
       syncPhase: 'syncing',
       railScope: { walletId: 1, networkMode: 'signet', connectionId: 'c1' },
+      errorMessage: null,
+      warningMessage: null,
     })
     vi.mocked(getArkadeSaveLifecycleSnapshot).mockReturnValue({
       savePhase: 'not-saving',

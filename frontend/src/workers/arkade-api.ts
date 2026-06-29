@@ -5,6 +5,10 @@ import type { EncryptedWalletSecretsHost } from '@/lib/wallet/encrypted-wallet-s
 
 export type { ArkadeOperatorConnectionSummary }
 
+export interface ArkadeOperatorSyncResult {
+  keyDiscoveryWarning?: string
+}
+
 export interface ArkadeBalanceInfo {
   confirmedSats: number
   /** Offchain VTXO spendable balance (excludes bumper/boarding). */
@@ -17,8 +21,12 @@ export interface ArkadeBalanceInfo {
   unilateralExitInProgressSats?: number
   collaborativeExitInProgressSats?: number
   pendingRecoverySats?: number
-  recoverableSats?: number
-  recoverableVtxoCount?: number
+  /** Swept or sub-dust VTXOs the user can batch-settle now. */
+  recoverableSettleableSats?: number
+  recoverableSettleableVtxoCount?: number
+  /** Client-expired VTXOs awaiting operator sweep before batch settlement is safe. */
+  recoverablePendingOperatorSweepSats?: number
+  recoverablePendingOperatorSweepVtxoCount?: number
 }
 
 export type ArkadeSignerMigrationDeprecatedStatus = 'migratable' | 'due_now' | 'expired'
@@ -183,7 +191,7 @@ export interface ArkadeService {
   setSecretsPort(port: MessagePort): Promise<void>
   setEncryptedWalletSecretsHost(host: EncryptedWalletSecretsHost): Promise<void>
   openSession(params: OpenArkadeSessionParams): Promise<OpenArkadeSessionResult>
-  syncWithOperator(): Promise<void>
+  syncWithOperator(): Promise<ArkadeOperatorSyncResult>
   hasOpenSession(params: {
     walletId: number
     networkMode: ArkadeSupportedNetworkMode

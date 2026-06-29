@@ -4,7 +4,7 @@ import type { DashboardRailId } from '@/components/wallet/RailSyncControl'
 
 export type RailLifecycleErrorBannerBlockProps = {
   rail: DashboardRailId
-  variant: 'load' | 'sync'
+  variant: 'load' | 'sync' | 'sync-warning'
   title: string
   errorMessage: string
   onRetry: () => void

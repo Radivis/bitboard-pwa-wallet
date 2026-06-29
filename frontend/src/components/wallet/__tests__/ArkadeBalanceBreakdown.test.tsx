@@ -41,4 +41,21 @@ describe('ArkadeBalanceBreakdown', () => {
       /Collaborative exit in progress/,
     )
   })
+
+  it('shows pending operator sweep line when recoverable VTXOs await operator sweep', () => {
+    renderWithProviders(
+      <ArkadeBalanceBreakdown
+        balance={{
+          confirmedSats: 10_000,
+          totalSats: 35_000,
+          recoverablePendingOperatorSweepSats: 25_000,
+          recoverablePendingOperatorSweepVtxoCount: 2,
+        }}
+      />,
+    )
+
+    expect(screen.getByTestId('arkade-balance-recoverable-pending-operator-sweep')).toHaveTextContent(
+      /Expired — waiting for operator sweep \(2 VTXOs\)/,
+    )
+  })
 })

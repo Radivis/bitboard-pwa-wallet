@@ -93,6 +93,24 @@ describe('RailSyncControl', () => {
     )
   })
 
+  it('shows short sync-warning caption when detail is in banner', () => {
+    render(
+      <RailSyncControl
+        rail="arkade"
+        syncLabel="Sync Arkade"
+        syncPhase="not-syncing"
+        lastSyncedAt="2025-01-15T10:30:00.000Z"
+        onSync={vi.fn()}
+        syncWarningMessage="Offchain receive keys could not be refreshed."
+        syncWarningDetailInBanner
+      />,
+    )
+
+    expect(screen.getByTestId('rail-sync-arkade-caption')).toHaveTextContent(
+      'Synced with warnings — see details below',
+    )
+  })
+
   it('calls onSync when clicked', async () => {
     const onSync = vi.fn()
     const user = userEvent.setup()

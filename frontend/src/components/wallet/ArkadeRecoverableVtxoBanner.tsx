@@ -14,8 +14,9 @@ import {
 
 export function ArkadeRecoverableVtxoBanner() {
   const balanceQuery = useArkadeBalanceQuery()
-  const recoverableVtxoCount = balanceQuery.data?.recoverableVtxoCount ?? 0
-  const recoverableSats = balanceQuery.data?.recoverableSats ?? 0
+  const recoverableVtxoCount =
+    balanceQuery.data?.recoverableSettleableVtxoCount ?? 0
+  const recoverableSats = balanceQuery.data?.recoverableSettleableSats ?? 0
   const feeQuery = useArkadeRecoverableVtxoFeeQuery({
     enabled: recoverableVtxoCount > 0,
   })
@@ -44,7 +45,7 @@ export function ArkadeRecoverableVtxoBanner() {
             infoText={ARKADE_RECOVERABLE_VTXO_BANNER_INFOMODE.text}
             as="span"
           >
-            <p className="font-medium">Recoverable VTXOs</p>
+            <p className="font-medium">Recoverable now</p>
           </InfomodeWrapper>
           <p className="text-muted-foreground">
             {recoverableVtxoCount} VTXO{recoverableVtxoCount === 1 ? '' : 's'} totaling{' '}

@@ -45,3 +45,21 @@ export function arkadeHasExitInProgress(balance: ArkadeBalanceInfo): boolean {
 export function arkadePendingRecoverySats(balance: ArkadeBalanceInfo): number {
   return balance.pendingRecoverySats ?? 0
 }
+
+export function arkadeRecoverableSettleableSats(balance: ArkadeBalanceInfo): number {
+  return balance.recoverableSettleableSats ?? 0
+}
+
+export function arkadeRecoverableSettleableVtxoCount(balance: ArkadeBalanceInfo): number {
+  return balance.recoverableSettleableVtxoCount ?? 0
+}
+
+export function arkadeRecoverablePendingOperatorSweepSats(balance: ArkadeBalanceInfo): number {
+  return balance.recoverablePendingOperatorSweepSats ?? 0
+}
+
+export function arkadeRecoverablePendingOperatorSweepVtxoCount(
+  balance: ArkadeBalanceInfo,
+): number {
+  return balance.recoverablePendingOperatorSweepVtxoCount ?? 0
+}

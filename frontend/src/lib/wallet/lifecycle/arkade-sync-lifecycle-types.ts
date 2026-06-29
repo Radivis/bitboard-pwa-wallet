@@ -8,6 +8,8 @@ export type ArkadeSyncLifecycleSnapshot = {
   syncPhase: SyncLifecyclePhase
   railScope: ArkadeRailScope | null
   errorMessage: string | null
+  /** Operator sync finished but offchain key discovery failed; balance may be incomplete. */
+  warningMessage: string | null
 }
 
 export type ArkadeSyncParams = {

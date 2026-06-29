@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { RailLoadErrorBanner } from '@/components/wallet/RailLoadErrorBanner'
 import { RailSyncErrorBanner } from '@/components/wallet/RailSyncErrorBanner'
+import { RailSyncWarningBanner } from '@/components/wallet/RailSyncWarningBanner'
 
 describe('RailLoadErrorBanner', () => {
   it('renders when loadPhase is load-error', () => {
@@ -80,5 +81,37 @@ describe('RailSyncErrorBanner', () => {
     )
 
     expect(screen.queryByTestId('wallet-sync-error-banner-arkade')).not.toBeInTheDocument()
+  })
+})
+
+describe('RailSyncWarningBanner', () => {
+  it('renders when warning is set and load is loaded', () => {
+    render(
+      <RailSyncWarningBanner
+        rail="arkade"
+        syncPhase="not-syncing"
+        loadPhase="loaded"
+        warningMessage="Offchain receive keys could not be refreshed."
+        onRetry={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByTestId('wallet-sync-warning-banner-arkade')).toBeInTheDocument()
+    expect(screen.getByText('Arkade sync completed with warnings')).toBeInTheDocument()
+    expect(screen.getByText('Offchain receive keys could not be refreshed.')).toBeInTheDocument()
+  })
+
+  it('hides when sync-error takes precedence', () => {
+    render(
+      <RailSyncWarningBanner
+        rail="arkade"
+        syncPhase="sync-error"
+        loadPhase="loaded"
+        warningMessage="stale warning"
+        onRetry={vi.fn()}
+      />,
+    )
+
+    expect(screen.queryByTestId('wallet-sync-warning-banner-arkade')).not.toBeInTheDocument()
   })
 })

@@ -11,7 +11,7 @@ impl ArkSession {
         }
 
         let offchain_buckets = self.resolve_offchain_balance_buckets().await?;
-        let recoverable_summary = self.recoverable_vtxo_summary().await?;
+        let recoverable_buckets = self.recoverable_vtxo_buckets().await?;
         let (unilateral_exit_in_progress_sats, collaborative_exit_in_progress_sats) =
             self.exit_balance_components()?;
         let onchain = self.client.onchain_wallet_balance()?;
@@ -19,8 +19,14 @@ impl ArkSession {
         Ok(build_arkade_balance_dto(ArkadeBalanceInputs {
             pre_confirmed_sats: offchain_buckets.pre_confirmed_sats,
             confirmed_offchain_sats: offchain_buckets.confirmed_sats,
-            recoverable_sats: offchain_buckets.recoverable_sats,
-            recoverable_vtxo_count: recoverable_summary.count,
+            recoverable_settleable_sats: recoverable_buckets.settleable.total_sats,
+            recoverable_settleable_vtxo_count: recoverable_buckets.settleable.count,
+            recoverable_pending_operator_sweep_sats: recoverable_buckets
+                .pending_operator_sweep
+                .total_sats,
+            recoverable_pending_operator_sweep_vtxo_count: recoverable_buckets
+                .pending_operator_sweep
+                .count,
             onchain_confirmed_sats: onchain.confirmed.to_sat(),
             boarding_spendable_sats: boarding.spendable_sats,
             boarding_pending_sats: boarding.pending_sats,

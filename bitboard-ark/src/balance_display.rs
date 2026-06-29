@@ -5,8 +5,10 @@ use crate::api_types::BalanceDto;
 pub struct ArkadeBalanceInputs {
     pub pre_confirmed_sats: u64,
     pub confirmed_offchain_sats: u64,
-    pub recoverable_sats: u64,
-    pub recoverable_vtxo_count: u32,
+    pub recoverable_settleable_sats: u64,
+    pub recoverable_settleable_vtxo_count: u32,
+    pub recoverable_pending_operator_sweep_sats: u64,
+    pub recoverable_pending_operator_sweep_vtxo_count: u32,
     pub onchain_confirmed_sats: u64,
     pub boarding_spendable_sats: u64,
     pub boarding_pending_sats: u64,
@@ -26,8 +28,8 @@ pub struct ArkadeBalanceInputs {
 /// `boarding_spendable_sats` / `boarding_pending_sats` because they are not VTXOs until
 /// settled. The dashboard adds spendable boarding to the headline total in the UI.
 ///
-/// `total_sats` additionally includes recoverable VTXOs (expired, dust, swept),
-/// confirmed on-chain bumper sats, and unconfirmed boarding UTXOs (`boarding_pending_sats`).
+/// `total_sats` additionally includes settleable recoverable VTXOs, VTXOs awaiting operator
+/// sweep, confirmed on-chain bumper sats, and unconfirmed boarding UTXOs (`boarding_pending_sats`).
 /// Unconfirmed bumper-wallet UTXOs are omitted from `total_sats` (only `onchain.confirmed` counts).
 ///
 /// `unilateral_exit_in_progress_sats` and `collaborative_exit_in_progress_sats` are informational
@@ -37,7 +39,8 @@ pub fn build_arkade_balance_dto(inputs: ArkadeBalanceInputs) -> BalanceDto {
         .pre_confirmed_sats
         .saturating_add(inputs.confirmed_offchain_sats);
     let total_offchain_sats = spendable_offchain_sats
-        .saturating_add(inputs.recoverable_sats)
+        .saturating_add(inputs.recoverable_settleable_sats)
+        .saturating_add(inputs.recoverable_pending_operator_sweep_sats)
         .saturating_add(inputs.pending_recovery_sats);
     let gross_confirmed_sats =
         spendable_offchain_sats.saturating_add(inputs.onchain_confirmed_sats);
@@ -60,8 +63,11 @@ pub fn build_arkade_balance_dto(inputs: ArkadeBalanceInputs) -> BalanceDto {
         unilateral_exit_in_progress_sats: inputs.unilateral_exit_in_progress_sats,
         collaborative_exit_in_progress_sats: inputs.collaborative_exit_in_progress_sats,
         pending_recovery_sats: inputs.pending_recovery_sats,
-        recoverable_sats: inputs.recoverable_sats,
-        recoverable_vtxo_count: inputs.recoverable_vtxo_count,
+        recoverable_settleable_sats: inputs.recoverable_settleable_sats,
+        recoverable_settleable_vtxo_count: inputs.recoverable_settleable_vtxo_count,
+        recoverable_pending_operator_sweep_sats: inputs.recoverable_pending_operator_sweep_sats,
+        recoverable_pending_operator_sweep_vtxo_count: inputs
+            .recoverable_pending_operator_sweep_vtxo_count,
     }
 }
 
@@ -81,17 +87,31 @@ mod tests {
     }
 
     #[test]
-    fn recoverable_sats_increase_total_not_confirmed() {
+    fn recoverable_settleable_sats_increase_total_not_confirmed() {
         let balance = build_arkade_balance_dto(ArkadeBalanceInputs {
             pre_confirmed_sats: 40_000,
-            recoverable_sats: 5_000,
-            recoverable_vtxo_count: 2,
+            recoverable_settleable_sats: 5_000,
+            recoverable_settleable_vtxo_count: 2,
             ..Default::default()
         });
         assert_eq!(balance.confirmed_sats, 40_000);
         assert_eq!(balance.total_sats, 45_000);
-        assert_eq!(balance.recoverable_sats, 5_000);
-        assert_eq!(balance.recoverable_vtxo_count, 2);
+        assert_eq!(balance.recoverable_settleable_sats, 5_000);
+        assert_eq!(balance.recoverable_settleable_vtxo_count, 2);
+    }
+
+    #[test]
+    fn recoverable_pending_operator_sweep_increases_total_not_confirmed() {
+        let balance = build_arkade_balance_dto(ArkadeBalanceInputs {
+            pre_confirmed_sats: 40_000,
+            recoverable_pending_operator_sweep_sats: 12_000,
+            recoverable_pending_operator_sweep_vtxo_count: 1,
+            ..Default::default()
+        });
+        assert_eq!(balance.confirmed_sats, 40_000);
+        assert_eq!(balance.total_sats, 52_000);
+        assert_eq!(balance.recoverable_pending_operator_sweep_sats, 12_000);
+        assert_eq!(balance.recoverable_settleable_vtxo_count, 0);
     }
 
     #[test]
@@ -99,7 +119,7 @@ mod tests {
         let balance = build_arkade_balance_dto(ArkadeBalanceInputs {
             pre_confirmed_sats: 10_000,
             confirmed_offchain_sats: 5_000,
-            recoverable_sats: 1_000,
+            recoverable_settleable_sats: 1_000,
             onchain_confirmed_sats: 2_000,
             ..Default::default()
         });
@@ -173,7 +193,7 @@ mod tests {
     fn deprecated_signer_vtxo_excluded_from_confirmed_sats() {
         let balance = build_arkade_balance_dto(ArkadeBalanceInputs {
             confirmed_offchain_sats: 0,
-            recoverable_sats: 0,
+            recoverable_settleable_sats: 0,
             pending_recovery_sats: 50_000,
             ..Default::default()
         });

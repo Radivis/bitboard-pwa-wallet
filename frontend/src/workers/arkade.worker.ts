@@ -25,6 +25,7 @@ import type {
   ArkadeDelegateInfo,
   ArkadeExitCandidateRow,
   ArkadeOnchainBumperInfo,
+  ArkadeOperatorSyncResult,
   ArkadePaymentRow,
   ArkadeRecoverableVtxoFeeEstimate,
   ArkadeSendParams,
@@ -184,9 +185,10 @@ async function flushSdkPersistenceNowOrThrow(): Promise<void> {
 }
 
 /** WASM operator sync + SDK flush only — store refresh runs on the main thread. */
-async function syncWithOperatorCore(): Promise<void> {
-  await invokeWasmArk((wasmModule) => wasmModule.ark_sync_with_operator())
+async function syncWithOperatorCore(): Promise<ArkadeOperatorSyncResult> {
+  const result = await invokeWasmArk((wasmModule) => wasmModule.ark_sync_with_operator())
   await flushSdkPersistenceNowOrThrow()
+  return (result ?? {}) as ArkadeOperatorSyncResult
 }
 
 async function persistAfterCriticalOperation(): Promise<void> {
@@ -328,12 +330,12 @@ const arkadeService: ArkadeService = {
     )
   },
 
-  async syncWithOperator(): Promise<void> {
+  async syncWithOperator(): Promise<ArkadeOperatorSyncResult> {
     const { awaitArkadeSyncQuiescence } = await import(
       '@/lib/wallet/lifecycle/arkade-sync-lifecycle-orchestrator'
     )
     await awaitArkadeSyncQuiescence()
-    await syncWithOperatorCore()
+    return syncWithOperatorCore()
   },
 
   async migrateDeprecatedSignerVtxos(): Promise<void> {

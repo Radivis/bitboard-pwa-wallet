@@ -14,16 +14,19 @@ use super::mappers::{
     current_unix_timestamp, empty_fee_info, map_intent_fee_configured, parse_delegator_public_key,
 };
 
-/// Recoverable VTXO outpoints and aggregate amount.
-///
-/// Only VTXOs the *operator* agrees need no forfeit are included: ones it has already swept (it
-/// controls them) or sub-dust ones (which cannot be forfeited). VTXOs that look recoverable only
-/// because the client clock considers them expired are deliberately excluded — see
-/// [`recoverable_vtxo_summary_from_list`].
+/// Recoverable VTXO outpoints and aggregate amount for one balance bucket.
 pub(crate) struct RecoverableVtxoSummary {
     pub outpoints: Vec<OutPoint>,
     pub total_sats: u64,
     pub count: u32,
+}
+
+/// Settleable recoverable VTXOs vs client-expired VTXOs still awaiting operator sweep.
+pub(crate) struct RecoverableVtxoBuckets {
+    /// Swept or sub-dust VTXOs the user can batch-settle now (`is_swept || amount < dust`).
+    pub settleable: RecoverableVtxoSummary,
+    /// Client-expired VTXOs not yet swept by the operator (`is_expired && !is_swept && amount >= dust`).
+    pub pending_operator_sweep: RecoverableVtxoSummary,
 }
 
 /// How many times to re-run the boarding settle when the operator finalizes a round without
@@ -56,23 +59,19 @@ async fn sleep(_duration: std::time::Duration) {
 }
 
 impl ArkSession {
-    pub(crate) async fn recoverable_vtxo_summary(&self) -> ArkResult<RecoverableVtxoSummary> {
+    pub(crate) async fn recoverable_vtxo_buckets(&self) -> ArkResult<RecoverableVtxoBuckets> {
         let dust = self.client.server_info()?.dust;
 
         if let Ok((vtxo_list, _)) = self.client.list_vtxos().await {
-            return Ok(recoverable_vtxo_summary_from_list(&vtxo_list, dust));
+            return Ok(recoverable_vtxo_buckets_from_list(&vtxo_list, dust));
         }
 
         if let Some(snapshot) = self.wallet_db.snapshot().offchain_vtxo_snapshot.as_ref() {
             let vtxo_list = vtxo_list_from_snapshot(snapshot)?;
-            return Ok(recoverable_vtxo_summary_from_list(&vtxo_list, dust));
+            return Ok(recoverable_vtxo_buckets_from_list(&vtxo_list, dust));
         }
 
-        Ok(RecoverableVtxoSummary {
-            outpoints: Vec::new(),
-            total_sats: 0,
-            count: 0,
-        })
+        Ok(empty_recoverable_vtxo_buckets())
     }
 
     pub async fn recoverable_vtxo_fee_estimate(&self) -> ArkResult<RecoverableVtxoFeeEstimateDto> {
@@ -83,7 +82,7 @@ impl ArkSession {
             .clone()
             .unwrap_or_else(empty_fee_info);
         let intent_fee_configured = map_intent_fee_configured(&fees.intent_fee);
-        let summary = self.recoverable_vtxo_summary().await?;
+        let summary = self.recoverable_vtxo_buckets().await?.settleable;
 
         if summary.count == 0 {
             return Ok(RecoverableVtxoFeeEstimateDto {
@@ -137,7 +136,7 @@ impl ArkSession {
         let mut last_commitment_txid: Option<Txid> = None;
 
         for _ in 0..RECOVER_RECOVERABLE_MAX_ROUNDS {
-            let summary = self.recoverable_vtxo_summary().await?;
+            let summary = self.recoverable_vtxo_buckets().await?.settleable;
             if summary.outpoints.is_empty() {
                 break;
             }
@@ -379,24 +378,42 @@ impl ArkSession {
     }
 }
 
-/// Build the recoverable-VTXO summary the banner and the recovery action both consume.
-///
-/// `ark_core`'s `recoverable()` bucket also contains VTXOs that are recoverable *only* because the
-/// client clock has passed their `expires_at` (`is_expired()`), even though the operator has not yet
-/// swept them. Settling such a VTXO goes through the no-forfeit recovery path, but the operator's
-/// own clock/sweep state can still expect a forfeit for it — it then fails the round with
-/// `missing forfeit tx`, leaves the intent stuck, and wedges every subsequent round. We therefore
-/// keep only VTXOs the operator authoritatively agrees need no forfeit: ones it has already swept
-/// (`is_swept`) or sub-dust ones (`amount < dust`, which cannot be forfeited). Client-expired VTXOs
-/// re-enter the set automatically once the operator actually sweeps them.
-pub(crate) fn recoverable_vtxo_summary_from_list(
-    vtxo_list: &ark_core::VtxoList,
+fn empty_recoverable_vtxo_summary() -> RecoverableVtxoSummary {
+    RecoverableVtxoSummary {
+        outpoints: Vec::new(),
+        total_sats: 0,
+        count: 0,
+    }
+}
+
+fn empty_recoverable_vtxo_buckets() -> RecoverableVtxoBuckets {
+    RecoverableVtxoBuckets {
+        settleable: empty_recoverable_vtxo_summary(),
+        pending_operator_sweep: empty_recoverable_vtxo_summary(),
+    }
+}
+
+/// VTXOs the operator agrees need no forfeit: swept or sub-dust.
+pub(crate) fn is_settleable_recoverable_vtxo(
+    virtual_tx_outpoint: &ark_core::server::VirtualTxOutPoint,
     dust: Amount,
+) -> bool {
+    virtual_tx_outpoint.is_swept || virtual_tx_outpoint.amount < dust
+}
+
+/// Client-expired VTXOs still awaiting operator sweep before batch settlement is safe.
+pub(crate) fn is_pending_operator_sweep_recoverable_vtxo(
+    virtual_tx_outpoint: &ark_core::server::VirtualTxOutPoint,
+    dust: Amount,
+) -> bool {
+    virtual_tx_outpoint.is_recoverable(dust)
+        && !is_settleable_recoverable_vtxo(virtual_tx_outpoint, dust)
+}
+
+fn recoverable_vtxo_summary_from_filtered<'a>(
+    recoverable: impl Iterator<Item = &'a ark_core::server::VirtualTxOutPoint>,
 ) -> RecoverableVtxoSummary {
-    let recoverable: Vec<_> = vtxo_list
-        .recoverable()
-        .filter(|vtxo| vtxo.is_swept || vtxo.amount < dust)
-        .collect();
+    let recoverable: Vec<_> = recoverable.collect();
     let total_sats = recoverable
         .iter()
         .fold(Amount::ZERO, |acc, vtxo| acc + vtxo.amount)
@@ -409,13 +426,42 @@ pub(crate) fn recoverable_vtxo_summary_from_list(
     }
 }
 
+/// Split recoverable VTXOs into settleable-now vs awaiting operator sweep buckets.
+///
+/// Settling client-expired unswept VTXOs goes through the no-forfeit recovery path, but the
+/// operator's own clock/sweep state can still expect a forfeit — it then fails the round with
+/// `missing forfeit tx` and wedges subsequent rounds. Only swept or sub-dust VTXOs are actionable.
+pub(crate) fn recoverable_vtxo_buckets_from_list(
+    vtxo_list: &ark_core::VtxoList,
+    dust: Amount,
+) -> RecoverableVtxoBuckets {
+    let all_recoverable: Vec<_> = vtxo_list.recoverable().collect();
+    RecoverableVtxoBuckets {
+        settleable: recoverable_vtxo_summary_from_filtered(
+            all_recoverable
+                .iter()
+                .filter(|vtxo| is_settleable_recoverable_vtxo(vtxo, dust))
+                .copied(),
+        ),
+        pending_operator_sweep: recoverable_vtxo_summary_from_filtered(
+            all_recoverable
+                .iter()
+                .filter(|vtxo| is_pending_operator_sweep_recoverable_vtxo(vtxo, dust))
+                .copied(),
+        ),
+    }
+}
+
 #[cfg(test)]
 mod recoverable_vtxo_tests {
     use ark_core::server::VirtualTxOutPoint;
     use bitcoin::hashes::Hash;
     use bitcoin::{Amount, OutPoint, ScriptBuf, Txid};
 
-    use super::recoverable_vtxo_summary_from_list;
+    use super::{
+        is_pending_operator_sweep_recoverable_vtxo, is_settleable_recoverable_vtxo,
+        recoverable_vtxo_buckets_from_list,
+    };
     use crate::session::mappers::current_unix_timestamp;
 
     const DUST: Amount = Amount::from_sat(330);
@@ -445,7 +491,7 @@ mod recoverable_vtxo_tests {
     }
 
     #[test]
-    fn recoverable_summary_counts_operator_swept_vtxos() {
+    fn settleable_recoverable_includes_operator_swept_vtxos() {
         let now = current_unix_timestamp();
         let vtxo_list = ark_core::VtxoList::new(
             DUST,
@@ -455,29 +501,27 @@ mod recoverable_vtxo_tests {
                 sample_vtp(2, 10_000, now + 86_400, false),
             ],
         );
-        let summary = recoverable_vtxo_summary_from_list(&vtxo_list, DUST);
-        assert_eq!(summary.count, 2);
-        assert_eq!(summary.total_sats, 50_000);
-        assert_eq!(summary.outpoints.len(), 2);
+        let buckets = recoverable_vtxo_buckets_from_list(&vtxo_list, DUST);
+        assert_eq!(buckets.settleable.count, 2);
+        assert_eq!(buckets.settleable.total_sats, 50_000);
+        assert_eq!(buckets.pending_operator_sweep.count, 0);
     }
 
     #[test]
-    fn recoverable_summary_counts_sub_dust_vtxos() {
+    fn settleable_recoverable_includes_sub_dust_vtxos() {
         let now = current_unix_timestamp();
         let vtxo_list = ark_core::VtxoList::new(
             DUST,
             vec![sample_vtp(0, DUST.to_sat() - 1, now + 86_400, false)],
         );
-        let summary = recoverable_vtxo_summary_from_list(&vtxo_list, DUST);
-        assert_eq!(summary.count, 1);
-        assert_eq!(summary.total_sats, DUST.to_sat() - 1);
+        let buckets = recoverable_vtxo_buckets_from_list(&vtxo_list, DUST);
+        assert_eq!(buckets.settleable.count, 1);
+        assert_eq!(buckets.settleable.total_sats, DUST.to_sat() - 1);
+        assert_eq!(buckets.pending_operator_sweep.count, 0);
     }
 
     #[test]
-    fn recoverable_summary_excludes_client_expired_but_unswept_vtxos() {
-        // Expired by the client clock but not yet swept by the operator: settling these with no
-        // forfeit wedges the operator (`missing forfeit tx`), so they must stay out of the set
-        // until the operator actually sweeps them.
+    fn pending_operator_sweep_counts_client_expired_unswept_vtxos() {
         let now = current_unix_timestamp();
         let vtxo_list = ark_core::VtxoList::new(
             DUST,
@@ -486,18 +530,31 @@ mod recoverable_vtxo_tests {
                 sample_vtp(1, 25_000, now - 1, false),
             ],
         );
-        let summary = recoverable_vtxo_summary_from_list(&vtxo_list, DUST);
-        assert_eq!(summary.count, 0);
-        assert_eq!(summary.total_sats, 0);
+        let buckets = recoverable_vtxo_buckets_from_list(&vtxo_list, DUST);
+        assert_eq!(buckets.settleable.count, 0);
+        assert_eq!(buckets.pending_operator_sweep.count, 2);
+        assert_eq!(buckets.pending_operator_sweep.total_sats, 50_000);
     }
 
     #[test]
-    fn recoverable_summary_empty_when_none_recoverable() {
+    fn recoverable_buckets_empty_when_none_recoverable() {
         let now = current_unix_timestamp();
         let vtxo_list =
             ark_core::VtxoList::new(DUST, vec![sample_vtp(0, 10_000, now + 86_400, false)]);
-        let summary = recoverable_vtxo_summary_from_list(&vtxo_list, DUST);
-        assert_eq!(summary.count, 0);
-        assert_eq!(summary.total_sats, 0);
+        let buckets = recoverable_vtxo_buckets_from_list(&vtxo_list, DUST);
+        assert_eq!(buckets.settleable.count, 0);
+        assert_eq!(buckets.pending_operator_sweep.count, 0);
+    }
+
+    #[test]
+    fn settleable_and_pending_operator_sweep_classifiers_are_disjoint() {
+        let now = current_unix_timestamp();
+        let vtxo = sample_vtp(0, 25_000, now - 1, false);
+        assert!(is_pending_operator_sweep_recoverable_vtxo(&vtxo, DUST));
+        assert!(!is_settleable_recoverable_vtxo(&vtxo, DUST));
+
+        let swept = sample_vtp(1, 25_000, now - 1, true);
+        assert!(is_settleable_recoverable_vtxo(&swept, DUST));
+        assert!(!is_pending_operator_sweep_recoverable_vtxo(&swept, DUST));
     }
 }

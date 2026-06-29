@@ -22,8 +22,8 @@ describe('ArkadeRecoverableVtxoBanner', () => {
     vi.clearAllMocks()
     balanceQueryMock.mockReturnValue({
       data: {
-        recoverableVtxoCount: 2,
-        recoverableSats: 50_000,
+        recoverableSettleableVtxoCount: 2,
+        recoverableSettleableSats: 50_000,
       },
     })
     feeQueryMock.mockReturnValue({
@@ -53,7 +53,7 @@ describe('ArkadeRecoverableVtxoBanner', () => {
 
   it('ARK-REC-02 hides banner when recoverable count is zero', () => {
     balanceQueryMock.mockReturnValue({
-      data: { recoverableVtxoCount: 0, recoverableSats: 0 },
+      data: { recoverableSettleableVtxoCount: 0, recoverableSettleableSats: 0 },
     })
     renderWithProviders(<ArkadeRecoverableVtxoBanner />)
     expect(screen.queryByTestId('arkade-recoverable-vtxo-banner')).not.toBeInTheDocument()

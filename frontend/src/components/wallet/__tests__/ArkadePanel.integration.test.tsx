@@ -36,6 +36,29 @@ vi.mock('@/stores/walletStore', async (importOriginal) => {
   }
 })
 
+vi.mock('@/hooks/useArkadeLifecycleSnapshots', () => ({
+  useArkadeLoadLifecycleSnapshot: () => ({
+    loadPhase: 'loaded',
+    networkMode: 'signet',
+    errorMessage: null,
+  }),
+  useArkadeSyncLifecycleSnapshot: () => ({
+    syncPhase: 'not-syncing',
+    railScope: null,
+    errorMessage: null,
+    warningMessage: null,
+  }),
+  useArkadeRailSnapshot: () => ({
+    loadPhase: 'loaded',
+    syncPhase: 'not-syncing',
+    savePhase: 'not-saving',
+  }),
+}))
+
+vi.mock('@/hooks/useRailManualSyncMutations', () => ({
+  useArkadeManualSyncMutation: () => ({ mutate: vi.fn(), isPending: false }),
+}))
+
 vi.mock('@/hooks/useArkadeQueries', () => ({
   useArkadeBalanceQuery: () => ({ isLoading: false, data: { confirmedSats: 1, totalSats: 1 } }),
   useArkadeAddressQuery: () => ({ data: 'tark1qtest', isLoading: false }),

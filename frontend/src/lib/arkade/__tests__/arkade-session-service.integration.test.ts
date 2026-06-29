@@ -182,7 +182,7 @@ describe('openArkadeSessionForWallet (integration)', () => {
       createdAt: '2020-01-01T00:00:00.000Z',
     })
     refreshArkadeStoreFromLoadedWasmMock.mockResolvedValue(undefined)
-    workerMocks.syncWithOperator.mockResolvedValue(undefined)
+    workerMocks.syncWithOperator.mockResolvedValue({})
     workerMocks.reconcileActiveConnectionId.mockResolvedValue(undefined)
   })
 
