@@ -3,12 +3,12 @@ export const ARKADE_SDK_PERSISTENCE_JSON_MAX_BYTES = 10 * 1024 * 1024
 
 /** Subset of the Bitboard Ark persistence envelope read on the main thread. */
 export type ArkadeSdkPersistenceWalletDb = {
-  offchain_next_derivation_index?: number
+  offchainNextDerivationIndex?: number
 }
 
 export type ArkadeSdkPersistenceEnvelope = {
   version?: number
-  wallet_db?: ArkadeSdkPersistenceWalletDb
+  walletDb?: ArkadeSdkPersistenceWalletDb
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -50,7 +50,7 @@ export function parseArkadeSdkPersistenceJson(
 
   const walletDbRaw = root.wallet_db
   if (walletDbRaw === undefined) {
-    return { version, wallet_db: undefined }
+    return { version, walletDb: undefined }
   }
 
   if (!isPlainObject(walletDbRaw)) {
@@ -62,10 +62,10 @@ export function parseArkadeSdkPersistenceJson(
     'Arkade SDK persistence wallet_db.offchain_next_derivation_index',
   )
 
-  const wallet_db =
+  const walletDb =
     offchainNextDerivationIndex === undefined
       ? {}
-      : { offchain_next_derivation_index: offchainNextDerivationIndex }
+      : { offchainNextDerivationIndex }
 
-  return { version, wallet_db }
+  return { version, walletDb }
 }

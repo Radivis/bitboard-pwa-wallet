@@ -77,7 +77,7 @@ export function readOffchainNextDerivationIndex(sdkPersistenceJson: string | und
     return 0
   }
   const parsed = parseArkadeSdkPersistenceJson(sdkPersistenceJson)
-  return parsed.wallet_db?.offchain_next_derivation_index ?? 0
+  return parsed.walletDb?.offchainNextDerivationIndex ?? 0
 }
 
 /** Keep the blob with the higher receive cursor when concurrent writes race. */

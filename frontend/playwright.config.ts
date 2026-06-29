@@ -22,7 +22,7 @@ function ensurePlaywrightBrowsersPath(): void {
   if (configuredPath == null || configuredPath === '') {
     return
   }
-  let hasBrowserInstall = false
+  let hasBrowserInstall: boolean
   try {
     hasBrowserInstall = fs
       .readdirSync(configuredPath)

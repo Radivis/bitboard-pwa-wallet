@@ -1,4 +1,3 @@
-import { useMemo, useSyncExternalStore } from 'react'
 import { createRailLifecycleSnapshotHooks } from '@/hooks/create-rail-lifecycle-snapshot-hooks'
 import { getOnchainRailSnapshot } from '@/lib/wallet/lifecycle/onchain-rail-snapshot'
 import {

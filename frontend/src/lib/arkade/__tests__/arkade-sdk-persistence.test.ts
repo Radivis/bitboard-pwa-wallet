@@ -56,7 +56,7 @@ describe('arkade-payload-merge', () => {
   })
 
   it('parseArkadeSdkPersistenceJson accepts envelope without wallet_db', () => {
-    expect(parseArkadeSdkPersistenceJson('{"version":3}')).toEqual({ version: 3, wallet_db: undefined })
+    expect(parseArkadeSdkPersistenceJson('{"version":3}')).toEqual({ version: 3, walletDb: undefined })
   })
 
   it('mergeSdkPersistenceJsonMonotonic keeps the higher receive cursor', () => {

@@ -1,4 +1,4 @@
-import { useMemo, useSyncExternalStore } from 'react'
+import { useSyncExternalStore } from 'react'
 import {
   createStableSnapshotGetter,
   shallowRecordEqual,
@@ -84,18 +84,10 @@ export function createRailLifecycleSnapshotHooks<
   }
 
   function useRailSnapshot(): TRail {
-    const loadSnapshot = useLoadLifecycleSnapshot()
-    const syncSnapshot = useSyncLifecycleSnapshot()
-    const saveSnapshot = useSaveLifecycleSnapshot()
-    return useMemo(
-      () => bindings.getRailSnapshot(),
-      [
-        loadSnapshot.loadPhase,
-        loadSnapshot.networkMode,
-        syncSnapshot.syncPhase,
-        saveSnapshot.savePhase,
-      ],
-    )
+    useLoadLifecycleSnapshot()
+    useSyncLifecycleSnapshot()
+    useSaveLifecycleSnapshot()
+    return bindings.getRailSnapshot()
   }
 
   function useIsRailLoaded(): boolean {

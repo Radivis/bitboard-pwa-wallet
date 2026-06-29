@@ -105,7 +105,8 @@ export async function orchestrateLightningLoad(params: LightningLoadParams): Pro
     return
   }
 
-  const { allowRetryFromError: _allowRetryFromError, ...persistedParams } = params
+  const { allowRetryFromError, ...persistedParams } = params
+  void allowRetryFromError
   lastLoadParams = persistedParams
 
   const key = loadKey(params)

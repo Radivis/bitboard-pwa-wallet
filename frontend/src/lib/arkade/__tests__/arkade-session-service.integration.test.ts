@@ -134,10 +134,7 @@ import {
   closeArkadeSession,
   openArkadeSessionForWallet,
 } from '@/lib/arkade/arkade-session-service'
-import {
-  getArkadeLoadLifecycleSnapshot,
-  orchestrateArkadeLoad,
-} from '@/lib/wallet/lifecycle/arkade-load-lifecycle-orchestrator'
+import { getArkadeLoadLifecycleSnapshot } from '@/lib/wallet/lifecycle/arkade-load-lifecycle-orchestrator'
 
 describe('openArkadeSessionForWallet (integration)', () => {
   beforeEach(async () => {

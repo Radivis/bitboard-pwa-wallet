@@ -201,7 +201,8 @@ export async function orchestrateOnchainLoad(params: OnchainLoadParams): Promise
     return
   }
 
-  const { allowRetryFromError: _allowRetryFromError, ...persistedParams } = params
+  const { allowRetryFromError, ...persistedParams } = params
+  void allowRetryFromError
   lastLoadParams = persistedParams
 
   const key = loadKey(params)

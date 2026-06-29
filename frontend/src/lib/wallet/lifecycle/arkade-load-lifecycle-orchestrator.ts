@@ -226,7 +226,8 @@ export async function orchestrateArkadeLoad(params: ArkadeLoadParams): Promise<v
     return
   }
 
-  const { allowRetryFromError: _allowRetryFromError, ...persistedParams } = params
+  const { allowRetryFromError, ...persistedParams } = params
+  void allowRetryFromError
   lastLoadParams = persistedParams
 
   const key = loadKey(params)
