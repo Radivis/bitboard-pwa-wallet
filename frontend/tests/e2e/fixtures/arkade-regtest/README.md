@@ -23,8 +23,8 @@ bash scripts/stop-arkade-regtest.sh
 npm run regtest:clean-start   # wipe volumes + compose up + health wait
 npm run test:e2e:regtest
 npm run test:e2e:arkade-regtest             # REG-01/02 (recovery, renewal) — short expiry
-npm run test:e2e:arkade-regtest-longexpiry  # REG-03/04 (collaborative exit, unilateral unroll) — long expiry
-npm run test:e2e:arkade-regtest-reg04       # REG-04 only — clean stack + long expiry (isolated debugging)
+npm run test:e2e:arkade-regtest-longexpiry  # REG-03 (collaborative exit) — long expiry
+npm run test:e2e:arkade-regtest-reg04       # REG-04 only (known incomplete) — clean stack + long expiry
 ```
 
 ## Two stacks: short vs long VTXO expiry
@@ -35,7 +35,8 @@ same stack with a different (block-denominated) `ARKD_VTXO_TREE_EXPIRY`:
 | Suite | Spec | Tag (`--grep`) | Expiry | Tests |
 |-------|------|----------------|--------|-------|
 | Short | `arkade-core-flows-regtest.spec.ts` | `@arkade-regtest` | `.env.regtest` default (`40` blocks) | REG-01 recoverable recovery, REG-02 renewal |
-| Long  | `arkade-exit-flows-regtest.spec.ts` | `@arkade-exit-regtest` | `ARKD_VTXO_TREE_EXPIRY=200` blocks (set by the npm script) | REG-03 collaborative exit, REG-04 unilateral unroll |
+| Long  | `arkade-exit-flows-regtest.spec.ts` | `@arkade-exit-regtest` | `ARKD_VTXO_TREE_EXPIRY=200` blocks (set by the npm script) | REG-03 collaborative exit |
+| REG-04 (isolated) | `arkade-reg04-unilateral-unroll-regtest.spec.ts` | `@arkade-reg04` | same long expiry via npm script | REG-04 unilateral unroll — complete step still failing |
 
 Recovery/renewal need VTXOs to expire/become recoverable quickly; collaborative exit and unilateral
 unroll need a VTXO that stays live through a multi-step on-chain flow (these mine only ~20 blocks, well
