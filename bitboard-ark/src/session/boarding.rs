@@ -137,7 +137,7 @@ impl ArkSession {
                 continue;
             }
 
-            let outpoints = self.client.blockchain().find_outpoints(&address).await?;
+            let outpoints = self.client.blockchain().find_outpoints(address).await?;
 
             for utxo in outpoints {
                 let ExplorerUtxo {

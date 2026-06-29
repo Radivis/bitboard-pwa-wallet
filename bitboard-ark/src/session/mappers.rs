@@ -219,9 +219,7 @@ pub(crate) fn accumulate_boarding_utxo_balance(
                 now,
                 Duration::from_secs(confirmation_blocktime),
                 confirmations,
-            ) {
-                *expired_sats += amount_sats;
-            } else if is_past_arkd_cooperative_boarding_window(
+            ) || is_past_arkd_cooperative_boarding_window(
                 boarding_output,
                 confirmation_blocktime,
                 now.as_secs(),

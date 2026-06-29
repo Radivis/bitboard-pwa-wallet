@@ -150,9 +150,7 @@ impl ArkSession {
     pub fn operator_signer_pk_hex(&self) -> String {
         self.client
             .server_info()
-            .map(|server_info| {
-                XOnlyPublicKey::from(server_info.signer_pk.x_only_public_key().0).to_string()
-            })
+            .map(|server_info| server_info.signer_pk.x_only_public_key().0.to_string())
             .unwrap_or_else(|_| self.persisted_operator_identity().signer_pk_hex)
     }
 }
