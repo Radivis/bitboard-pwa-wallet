@@ -79,7 +79,6 @@ function setSnapshot(next: LightningSyncLifecycleSnapshot): void {
 }
 
 function isLightningSyncRailConfigured(
-  walletId: number,
   networkMode: LightningRailScope['networkMode'],
 ): boolean {
   const { isLightningEnabled } = useFeatureStore.getState()
@@ -94,7 +93,7 @@ function isLightningSyncRailConfigured(
 }
 
 function recomputeAggregateSyncPhase(scope: LightningRailScope | null): SyncLifecyclePhase {
-  if (scope == null || !isLightningSyncRailConfigured(scope.walletId, scope.networkMode)) {
+  if (scope == null || !isLightningSyncRailConfigured(scope.networkMode)) {
     return 'not-configured'
   }
 

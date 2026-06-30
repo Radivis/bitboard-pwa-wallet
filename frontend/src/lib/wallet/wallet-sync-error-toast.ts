@@ -12,6 +12,7 @@ type WalletSyncErrorContext =
   | 'initial-import'
   | 'bootstrap-load'
   | 'unlock-background-sync'
+  | 'require-unlocked-wallet'
 
 /**
  * Surfaces Esplora / WASM sync failures with a short, sanitized detail line (no paths/URLs leaked).
@@ -24,7 +25,7 @@ export function reportWalletSyncError(
   const logLabel =
     context === 'initial-import'
       ? 'Post-import initial sync failed'
-      : context === 'unlock-background-sync'
+      : context === 'unlock-background-sync' || context === 'require-unlocked-wallet'
         ? 'Background sync failed after unlock'
         : 'Wallet bootstrap sync failed'
   console.error(logLabel, err)

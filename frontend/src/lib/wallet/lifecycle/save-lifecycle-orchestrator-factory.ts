@@ -49,7 +49,11 @@ export type SaveLifecycleOrchestratorConfig<
   retrySaveErrorMessage: string
 }
 
-export type SaveLifecycleOrchestrator<TParams, TSnapshot extends SaveLifecycleSnapshotBase> = {
+export type SaveLifecycleOrchestrator<
+  TParams,
+  TSnapshot extends SaveLifecycleSnapshotBase,
+  TScope,
+> = {
   SaveBlockingLockError: new () => Error
   getSaveLifecycleSnapshot: () => TSnapshot
   subscribeSaveLifecycle: (listener: (next: TSnapshot) => void) => () => void
@@ -72,7 +76,7 @@ export function createSaveLifecycleOrchestrator<
   TScope,
 >(
   config: SaveLifecycleOrchestratorConfig<TParams, TSnapshot, TScope>,
-): SaveLifecycleOrchestrator<TParams, TSnapshot> {
+): SaveLifecycleOrchestrator<TParams, TSnapshot, TScope> {
   const inFlightSaveTracker = createInFlightLifecycleTracker()
   let snapshot: TSnapshot = config.notConfiguredSnapshot
   let lastSaveParams: TParams | null = null

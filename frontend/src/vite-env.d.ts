@@ -45,22 +45,5 @@ interface Window {
     addPayment: (payment: import('@/lib/lightning/lightning-backend-service').LightningPayment) => void
     reset: () => void
   }
-  __E2E_ARKADE__?: {
-    setFailing: (value: boolean) => Promise<void>
-    setBalanceSats: (value: number) => Promise<void>
-    addIncomingPayment: (
-      payment: import('@/lib/arkade/e2e/arkade-operator-mock-state').E2eArkadeMockIncomingPayment,
-    ) => Promise<void>
-    reset: () => Promise<void>
-    /** Manual DevTools only — inspect WASM receive cursor vs peek address; not for E2E tests. */
-    readReceiveDebugSnapshot: () => Promise<{
-      offchainNextDerivationIndex: number
-      peekAddress: string
-    }>
-    /** E2E diagnostics — decrypted wallet-secrets receive cursor (independent of live WASM). */
-    readPersistedReceiveDebugSnapshot: () => Promise<{
-      connectionId: string
-      offchainNextDerivationIndex: number
-    }>
-  }
+  __E2E_ARKADE__?: import('@/lib/arkade/e2e/e2e-arkade-mock-control').E2eArkadeMockControl
 }
