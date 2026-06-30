@@ -7,12 +7,15 @@ import {
 } from './helpers/wallet-setup'
 import {
   E2E_IS_CI,
-  fundRegtestAddress,
-  mineRegtestBlocks,
-  waitForConfirmedBalance,
+  fundRegtestWalletReceiveAddress,
+  getRegtestNodeReceiveAddress,
   waitForDashboardShowsFundedOnChainBalance,
 } from './helpers/regtest'
 import { runDashboardSyncUntilIdle } from './helpers/dashboard-sync'
+import {
+  waitForSendPageSpendableOnChainBalance,
+  waitForSendReviewTransactionButtonEnabled,
+} from './helpers/send-page'
 import { goToWalletTab } from './helpers/wallet-nav'
 import {
   waitForSettingsAddressTypeSwitchComplete,
@@ -23,11 +26,8 @@ import {
 } from './helpers/settings-waits'
 import { ensureSegwitAddressesFeatureOn } from './helpers/segwit-addresses-feature'
 
-/** After funding, dashboard balance poll + one full sync should give the store enough headroom for `canBuild`. */
-const REVIEW_BUTTON_ENABLE_TIMEOUT_MS = 20_000
-
 /** Redirect follows broadcast + persistence; post-broadcast sync runs in the background (see useBroadcastTransactionMutation). */
-const POST_BROADCAST_URL_TIMEOUT_MS = 20_000
+const POST_BROADCAST_URL_TIMEOUT_MS = E2E_IS_CI ? 45_000 : 20_000
 
 test.describe('Send Page', () => {
   test.beforeEach(async ({ page }) => {
@@ -77,105 +77,111 @@ test.describe('Send Page', () => {
     await expect(page.getByPlaceholder('sat/vB')).toBeVisible()
   })
 
-  test('sends bitcoin on regtest @regtest', async ({ page }) => {
-    test.setTimeout(E2E_IS_CI ? 300_000 : 60_000)
+  test.describe('regtest on-chain', () => {
+    // Chain funding + BDK sync are not idempotent across Playwright retries; a failed broadcast
+    // attempt can leave the wallet and Esplora views diverged (RPC -25 missing inputs).
+    test.describe.configure({ retries: 0 })
 
-    await importWalletViaUI(page, TEST_MNEMONIC, TEST_PASSWORD)
+    test('sends bitcoin on regtest @regtest', async ({ page }) => {
+      test.setTimeout(E2E_IS_CI ? 360_000 : 90_000)
 
-    await page.getByRole('link', { name: /settings/i }).click()
-    await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
-    await openSettingsFeaturesTab(page)
-    const regtestModeSwitch = page.getByRole('switch', {
-      name: 'Enable Regtest mode for developers',
-    })
-    await regtestModeSwitch.scrollIntoViewIfNeeded()
-    await regtestModeSwitch.click()
-    await openSettingsMainTab(page)
+      await importWalletViaUI(page, TEST_MNEMONIC, TEST_PASSWORD)
 
-    await page.getByRole('button', { name: 'Regtest' }).click()
-    await waitForSettingsNetworkSwitchComplete(page)
-    await waitForSettingsNetworkModeButtonSelected(page, 'Regtest')
+      await page.getByRole('link', { name: /settings/i }).click()
+      await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
+      await openSettingsFeaturesTab(page)
+      const regtestModeSwitch = page.getByRole('switch', {
+        name: 'Enable Regtest mode for developers',
+      })
+      await regtestModeSwitch.scrollIntoViewIfNeeded()
+      await regtestModeSwitch.click()
+      await openSettingsMainTab(page)
 
-    await ensureSegwitAddressesFeatureOn(page)
+      await page.getByRole('button', { name: 'Regtest' }).click()
+      await waitForSettingsNetworkSwitchComplete(page)
+      await waitForSettingsNetworkModeButtonSelected(page, 'Regtest')
 
-    await page.getByRole('button', { name: 'SegWit (BIP84)' }).click()
-    await page.getByRole('button', { name: 'Change' }).click()
-    await waitForSettingsAddressTypeSwitchComplete(page)
+      await ensureSegwitAddressesFeatureOn(page)
 
-    await goToWalletTab(page, 'Receive')
-    await expect(page.getByText('Receive Bitcoin')).toBeVisible()
-    const addressEl = page
-      .locator('[data-infomode-id="receive-receiving-address-card"]')
-      .locator('.font-mono')
-    await expect(addressEl).toBeVisible({ timeout: 10000 })
-    await expect(addressEl).toHaveText(/bcrt1/, { timeout: 45000 })
-    const receiveAddress = (await addressEl.textContent())?.trim()
-    if (!receiveAddress || !receiveAddress.startsWith('bcrt1')) {
-      throw new Error(`Expected regtest address, got: ${receiveAddress}`)
-    }
+      await page.getByRole('button', { name: 'SegWit (BIP84)' }).click()
+      await page.getByRole('button', { name: 'Change' }).click()
+      await waitForSettingsAddressTypeSwitchComplete(page)
 
-    await fundRegtestAddress(receiveAddress, 100_000)
-    await mineRegtestBlocks(1)
-    await waitForConfirmedBalance(receiveAddress, 100_000)
+      await goToWalletTab(page, 'Receive')
+      await expect(page.getByText('Receive Bitcoin')).toBeVisible()
+      const addressEl = page
+        .locator('[data-infomode-id="receive-receiving-address-card"]')
+        .locator('.font-mono')
+      await expect(addressEl).toBeVisible({ timeout: 10_000 })
+      await expect(addressEl).toHaveText(/bcrt1/, { timeout: 45_000 })
+      const receiveAddress = (await addressEl.textContent())?.trim()
+      if (!receiveAddress || !receiveAddress.startsWith('bcrt1')) {
+        throw new Error(`Expected regtest address, got: ${receiveAddress}`)
+      }
 
-    await goToWalletTab(page, 'Dashboard')
-    await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible()
+      const sendRecipientAddress = await getRegtestNodeReceiveAddress()
 
-    // One full manual sync, then wait until the balance card reflects funds (polls; no fixed sleep).
-    await runDashboardSyncUntilIdle(page)
-    await waitForDashboardShowsFundedOnChainBalance(page)
+      await fundRegtestWalletReceiveAddress(receiveAddress, 100_000)
 
-    await goToWalletTab(page, 'Send')
-    await expect(page.getByText('Send Bitcoin')).toBeVisible()
-    await page.getByLabel('Recipient Address').fill(receiveAddress)
-    await page.getByLabel('Unit for amount entry').selectOption('sat')
-    const amountInput = page.getByLabel(/Amount/)
-    await amountInput.fill('1000')
-    await expect(amountInput).toHaveValue('1000')
-    await expect(
-      page.getByRole('button', { name: 'Review Transaction' }),
-    ).toBeEnabled({ timeout: REVIEW_BUTTON_ENABLE_TIMEOUT_MS })
-    const reviewButton = page.getByRole('button', { name: 'Review Transaction' })
-    await reviewButton.click()
+      await goToWalletTab(page, 'Dashboard')
+      await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible()
 
-    const result = await Promise.race([
-      page
-        .getByText('Transaction Details')
-        .waitFor({ state: 'visible', timeout: 60000 })
-        .then(() => 'success' as const),
-      page
-        .getByText(/Failed to build|Insufficient funds|base58 error/i)
-        .waitFor({ state: 'visible', timeout: 60000 })
-        .then(() => 'error' as const),
-    ]).catch(() => 'timeout' as const)
+      await runDashboardSyncUntilIdle(page)
+      await waitForDashboardShowsFundedOnChainBalance(page)
+      // Second sync after balance appears: BDK should ingest the same UTXOs Esplora will accept at broadcast.
+      await runDashboardSyncUntilIdle(page)
 
-    if (result === 'error') {
-      const errorEl = page
-        .getByText(/Failed to build|Insufficient funds|base58 error/i)
-        .first()
-      throw new Error(`Transaction build failed: ${await errorEl.textContent()}`)
-    }
-    if (result === 'timeout') {
-      throw new Error(
-        'Transaction build timed out. Build may be hanging - try running with --headed to inspect.',
-      )
-    }
+      await goToWalletTab(page, 'Send')
+      await expect(page.getByText('Send Bitcoin')).toBeVisible()
+      await waitForSendPageSpendableOnChainBalance(page, 1_000)
+      await page.locator('#recipient-address').fill(sendRecipientAddress)
+      await page.getByLabel('Unit for amount entry').selectOption('sat')
+      const amountInput = page.locator('#send-amount')
+      await amountInput.fill('1000')
+      await expect(amountInput).toHaveValue('1000')
+      await waitForSendReviewTransactionButtonEnabled(page)
+      const reviewButton = page.getByRole('button', { name: 'Review Transaction' })
+      await reviewButton.click()
 
-    await page.getByRole('button', { name: 'Confirm and Send' }).click()
+      const result = await Promise.race([
+        page
+          .getByText('Transaction Details')
+          .waitFor({ state: 'visible', timeout: 60_000 })
+          .then(() => 'success' as const),
+        page
+          .getByText(/Failed to build|Insufficient funds|base58 error/i)
+          .waitFor({ state: 'visible', timeout: 60_000 })
+          .then(() => 'error' as const),
+      ]).catch(() => 'timeout' as const)
 
-    await Promise.race([
-      page.waitForURL(/.*\/wallet\/?$/, { timeout: POST_BROADCAST_URL_TIMEOUT_MS }),
-      page
-        .getByText(/Broadcast failed/i)
-        .first()
-        .waitFor({ state: 'visible', timeout: POST_BROADCAST_URL_TIMEOUT_MS })
-        .then(async () => {
-          const failureText = await page.getByText(/Broadcast failed/i).first().textContent()
-          throw new Error(failureText ?? 'Broadcast failed')
-        }),
-    ])
-    await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible({
-      timeout: 15_000,
+      if (result === 'error') {
+        const errorEl = page
+          .getByText(/Failed to build|Insufficient funds|base58 error/i)
+          .first()
+        throw new Error(`Transaction build failed: ${await errorEl.textContent()}`)
+      }
+      if (result === 'timeout') {
+        throw new Error(
+          'Transaction build timed out. Build may be hanging - try running with --headed to inspect.',
+        )
+      }
+
+      await page.getByRole('button', { name: 'Confirm and Send' }).click()
+
+      await Promise.race([
+        page.waitForURL(/.*\/wallet\/?$/, { timeout: POST_BROADCAST_URL_TIMEOUT_MS }),
+        page
+          .getByText(/Broadcast failed/i)
+          .first()
+          .waitFor({ state: 'visible', timeout: POST_BROADCAST_URL_TIMEOUT_MS })
+          .then(async () => {
+            const failureText = await page.getByText(/Broadcast failed/i).first().textContent()
+            throw new Error(failureText ?? 'Broadcast failed')
+          }),
+      ])
+      await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible({
+        timeout: 15_000,
+      })
     })
   })
 })

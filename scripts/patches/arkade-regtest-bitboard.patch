@@ -1,3 +1,73 @@
+diff --git a/lib/chain.mjs b/lib/chain.mjs
+index 2575622..935ed14 100644
+--- a/lib/chain.mjs
++++ b/lib/chain.mjs
+@@ -8,7 +8,7 @@
+ // flow mines at each funding point; tests that broadcast a tx and await a
+ // confirmation must mine themselves via `node regtest.mjs mine`.
+ import { dockerExec } from './proc.mjs';
+-import { log, warn } from './log.mjs';
++import { log, warn, fail } from './log.mjs';
+ import { waitFor, waitForOrFail } from './wait.mjs';
+ 
+ const CLI = ['bitcoin-cli', '-regtest', '-rpcuser=admin1', '-rpcpassword=123'];
+@@ -24,6 +24,29 @@ function loadedWalletCount() {
+   }
+ }
+ 
++function walletAlreadyExistsError(result) {
++  const detail = `${result.stderr || ''} ${result.stdout || ''}`.toLowerCase();
++  return detail.includes('already exists') || detail.includes('database already exists');
++}
++
++/** Load the node wallet after restart when wallet files exist on disk but are not loaded. */
++function ensureBitcoinWalletLoaded() {
++  if (loadedWalletCount() > 0) return true;
++
++  const createResult = bitcoinCli(['createwallet', WALLET], { capture: true });
++  if (loadedWalletCount() > 0) return true;
++
++  if (walletAlreadyExistsError(createResult)) {
++    const loadResult = bitcoinCli(['loadwallet', WALLET], { capture: true });
++    if (loadResult.code === 0 && loadedWalletCount() > 0) return true;
++    warn(`loadwallet ${WALLET} failed: ${loadResult.stderr || loadResult.stdout}`);
++  } else if (createResult.code !== 0) {
++    warn(`createwallet ${WALLET} failed: ${createResult.stderr || createResult.stdout}`);
++  }
++
++  return loadedWalletCount() > 0;
++}
++
+ export function bitcoinCli(args, opts = {}) {
+   return dockerExec('bitcoin', [...CLI, ...args], opts);
+ }
+@@ -51,20 +74,15 @@ export async function bootstrapChain() {
+   // Ensure EXACTLY ONE wallet is loaded, so bitcoin-cli (and Boltz) can route
+   // wallet RPCs without an explicit -rpcwallet. The wrinkle: btcpay/Core images
+   // differ — Core 30's image auto-creates the empty-named "" wallet on startup,
+-  // while Core 31 creates none and rejects empty names. So we first wait for the
+-  // image's own wallet, and only create our own (named) wallet if none appears —
+-  // creating a second one would make every wallet RPC ambiguous.
+-  const auto = await waitFor('Bitcoin Core wallet', () => loadedWalletCount() > 0, {
++  // while Core 31 creates none and rejects empty names. After a container restart
++  // the wallet directory may already exist on disk without being loaded, so
++  // createwallet fails with "Database already exists" until loadwallet runs.
++  const ready = await waitFor('Bitcoin Core wallet', () => ensureBitcoinWalletLoaded(), {
+     attempts: 15,
+     intervalMs: 2000,
+   });
+-  if (!auto) {
+-    await waitForOrFail('Bitcoin Core wallet (created)', () => {
+-      if(loadedWalletCount() === 0) {
+-        bitcoinCli(['createwallet', WALLET], {capture: true})
+-      }
+-      return loadedWalletCount() > 0;
+-    }, { attempts: 10, intervalMs: 2000 });
++  if (!ready) {
++    fail('Bitcoin Core wallet did not become ready in time');
+   }
+ 
+   if (getBalance() >= 1) return;
 diff --git a/lib/compose.mjs b/lib/compose.mjs
 index dc00adf..4320d7b 100644
 --- a/lib/compose.mjs
@@ -31,6 +101,24 @@ index dc00adf..4320d7b 100644
      ...profiles.flatMap((p) => ['--profile', p]),
    ];
  }
+diff --git a/lib/log.mjs b/lib/log.mjs
+index 5e2a31e..fbb5aab 100644
+--- a/lib/log.mjs
++++ b/lib/log.mjs
+@@ -10,11 +10,11 @@ function stamp() {
+ }
+ 
+ export function log(msg) {
+-  console.log(`${GREEN}[${stamp()}] ${msg}${RESET}`);
++  console.error(`${GREEN}[${stamp()}] ${msg}${RESET}`);
+ }
+ 
+ export function warn(msg) {
+-  console.log(`${YELLOW}[${stamp()}] WARNING: ${msg}${RESET}`);
++  console.error(`${YELLOW}[${stamp()}] WARNING: ${msg}${RESET}`);
+ }
+ 
+ // Aborts the current run. Throws a marked error rather than calling
 diff --git a/lib/proc.mjs b/lib/proc.mjs
 index 687eaad..623a533 100644
 --- a/lib/proc.mjs
@@ -78,7 +166,7 @@ index 06bd4f5..13cd16e 100644
  }
  
 diff --git a/regtest.mjs b/regtest.mjs
-index 3a9717e..c68d759 100644
+index 3a9717e..f40f17d 100644
 --- a/regtest.mjs
 +++ b/regtest.mjs
 @@ -21,7 +21,7 @@
@@ -90,20 +178,22 @@ index 3a9717e..c68d759 100644
  import { sleep, waitForOrFail, httpOk, fetchJson } from './lib/wait.mjs';
  import { bitcoinCli, bootstrapChain, mine, faucet, reorg } from './lib/chain.mjs';
  import { setupArkd, applyArkdFees } from './lib/setup/arkd.mjs';
-@@ -238,7 +238,7 @@ async function main() {
+@@ -238,7 +238,8 @@ async function main() {
    // `ark` / `arkd` are raw passthroughs into the arkd container, so forward
    // every following token verbatim (flags included) without our own parsing.
    if (argv[0] === 'ark' || argv[0] === 'arkd') {
 -    const res = docker(['exec', 'arkd', ...argv]); // argv[0] is the binary name in the container
++    loadEnv(ROOT, '');
 +    const res = dockerExec('arkd', argv);
      process.exitCode = res.code;
      return;
    }
-@@ -248,7 +248,7 @@ async function main() {
+@@ -248,7 +249,8 @@ async function main() {
    // `bitcoin-cli -regtest … getblockcount`, keeping downstream migrations a
    // find-replace (`nigiri rpc …` → `node regtest.mjs rpc …`, same arg shape).
    if (argv[0] === 'rpc') {
 -    const res = docker(['exec', 'bitcoin', 'bitcoin-cli', '-regtest', '-rpcuser=admin1', '-rpcpassword=123', ...argv.slice(1)]);
++    loadEnv(ROOT, '');
 +    const res = dockerExec('bitcoin', ['bitcoin-cli', '-regtest', '-rpcuser=admin1', '-rpcpassword=123', ...argv.slice(1)]);
      process.exitCode = res.code;
      return;

@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
 
 import { expect, type Page } from '@playwright/test'
-import { maxSatsInTextFromFormattedBitcoinAmountDisplays } from '@/lib/wallet/bitcoin-amount-text-parse'
+import { onChainSpendableSatsFromDashboardBalanceCardText } from './onchain-spendable-balance-text'
 
 /**
  * Helpers for E2E tests that use the arkade-regtest environment.
@@ -31,26 +31,31 @@ const isCi = !!process.env.CI
 /** Re-export for specs that need CI branching but should not depend on `process` typing. */
 export const E2E_IS_CI = isCi
 
-/** Esplora can lag more on GitHub Actions than on a warm local Docker setup. */
-const ESPLORA_INDEX_WAIT_MS = isCi ? 60_000 : 15_000
+/** Esplora can lag more on GitHub Actions than on a warm local arkade-regtest stack. */
+const ESPLORA_INDEX_WAIT_MS = isCi ? 90_000 : 15_000
 
-const CONFIRMED_UTXO_WAIT_MS = isCi ? 60_000 : 15_000
+const CONFIRMED_UTXO_WAIT_MS = isCi ? 90_000 : 15_000
+
+const ONCHAIN_SYNC_BUTTON = 'Sync on-chain'
+const ONCHAIN_SYNC_FINISH_TIMEOUT_MS = isCi ? 90_000 : 60_000
 
 /** Same window as Esplora UTXO polling — use when UI must reflect post-sync wallet state. */
 export const E2E_CI_AWARE_LONG_WAIT_MS = CONFIRMED_UTXO_WAIT_MS
 
-async function runRegtestCli(args: string[]): Promise<void> {
+async function runRegtestCli(args: string[], { capture = false } = {}): Promise<string> {
   try {
     const { stdout, stderr } = await execFileAsync('node', [REGTEST_CLI, ...args], {
       cwd: REPO_ROOT,
       maxBuffer: 10 * 1024 * 1024,
     })
-    if (stdout.trim()) {
-      console.log(stdout.trim())
+    const trimmedStdout = stdout.trim()
+    if (trimmedStdout && !capture) {
+      console.log(trimmedStdout)
     }
     if (stderr.trim()) {
       console.warn(stderr.trim())
     }
+    return trimmedStdout
   } catch (error) {
     const detail =
       error instanceof Error
@@ -74,6 +79,38 @@ export async function fundRegtestAddress(
   sats: number = DEFAULT_FAUCET_SATS,
 ): Promise<void> {
   await runRegtestCli(['faucet', address, satsToBtcString(sats), '--confirm'])
+}
+
+/** Strip regtest.mjs log lines and ANSI color codes; return the last substantive stdout line. */
+function parseCapturedRegtestCliOutput(output: string): string {
+  const lines = output
+    .replace(/\x1b\[[0-9;]*m/g, '')
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0 && !/^\[\d{2}:\d{2}:\d{2}\]/.test(line))
+  return lines.at(-1) ?? output.trim()
+}
+
+/** Fresh bcrt1 address from the regtest node's wallet (for send recipients). */
+export async function getRegtestNodeReceiveAddress(): Promise<string> {
+  const output = await runRegtestCli(['rpc', 'getnewaddress'], { capture: true })
+  const address = parseCapturedRegtestCliOutput(output)
+  if (!address.startsWith('bcrt1')) {
+    throw new Error(`Expected bcrt1 node address, got: ${output}`)
+  }
+  return address
+}
+
+/**
+ * Fund a wallet receive address on-chain and wait until Esplora reports confirmed UTXOs.
+ */
+export async function fundRegtestWalletReceiveAddress(
+  receiveAddress: string,
+  sats: number = DEFAULT_FAUCET_SATS,
+): Promise<void> {
+  await fundRegtestAddress(receiveAddress, sats)
+  await mineRegtestBlocks(1)
+  await waitForConfirmedBalance(receiveAddress, sats)
 }
 
 /** Get the current block height as seen by the Esplora indexer. */
@@ -148,24 +185,51 @@ const REGTEST_DASHBOARD_MIN_VISIBLE_SATS = 1_000
  */
 export async function waitForDashboardShowsFundedOnChainBalance(page: Page): Promise<void> {
   const card = page.locator('[data-infomode-id="dashboard-balance-card"]')
+  const syncButton = page.getByTestId('rail-sync-onchain')
   const timeoutMs = isCi
-    ? Math.max(120_000, E2E_CI_AWARE_LONG_WAIT_MS)
+    ? Math.max(180_000, E2E_CI_AWARE_LONG_WAIT_MS)
     : Math.max(60_000, E2E_CI_AWARE_LONG_WAIT_MS)
+  let manualSyncAttempts = 0
+  const maxManualSyncAttempts = isCi ? 5 : 3
+
   await expect(card).toBeVisible({ timeout: 10_000 })
   await expect
     .poll(
       async () => {
         const text = (await card.innerText()) ?? ''
-        return (
-          maxSatsInTextFromFormattedBitcoinAmountDisplays(text) >=
+        if (
+          onChainSpendableSatsFromDashboardBalanceCardText(text) >=
           REGTEST_DASHBOARD_MIN_VISIBLE_SATS
-        )
+        ) {
+          return true
+        }
+
+        if (manualSyncAttempts >= maxManualSyncAttempts) {
+          return false
+        }
+
+        const syncEnabled = await syncButton.isEnabled().catch(() => false)
+        if (!syncEnabled) {
+          return false
+        }
+
+        manualSyncAttempts += 1
+        await syncButton.click()
+        try {
+          await expect(syncButton).toHaveText(/Syncing/i, { timeout: 10_000 })
+          await expect(syncButton).toHaveText(ONCHAIN_SYNC_BUTTON, {
+            timeout: ONCHAIN_SYNC_FINISH_TIMEOUT_MS,
+          })
+        } catch {
+          // Esplora/BDK may still be catching up; keep polling.
+        }
+        return false
       },
       {
         timeout: timeoutMs,
         intervals: [200, 400, 800, 1500],
         message:
-          'Dashboard on-chain balance still looks empty (BDK may not have caught Esplora yet)',
+          'Dashboard on-chain spendable balance still looks empty (pending incoming does not count; BDK may not have caught Esplora yet)',
       },
     )
     .toBe(true)
