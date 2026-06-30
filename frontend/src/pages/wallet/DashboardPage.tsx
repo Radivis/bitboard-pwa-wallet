@@ -217,9 +217,9 @@ function BalanceCard() {
     () => lightningBalancesQuery.data?.lightningBalanceRows ?? [],
     [lightningBalancesQuery.data?.lightningBalanceRows],
   )
-  const hasStaleLightningBalance =
-    lightningRail.syncPhase !== 'sync-error' &&
-    lightningBalanceRows.some((balanceRow) => balanceRow.isStaleBalance)
+  const hasStaleLightningBalance = lightningBalanceRows.some(
+    (balanceRow) => balanceRow.isStaleBalance,
+  )
   const showLightningLoadError = lightningLoadSnapshot.loadPhase === 'load-error'
   const showLightningBalancesSection =
     showLightningLoadError ||
