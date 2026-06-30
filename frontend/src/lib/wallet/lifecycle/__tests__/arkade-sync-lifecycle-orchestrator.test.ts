@@ -111,7 +111,10 @@ describe('arkade-sync-lifecycle-orchestrator', () => {
     const syncGate = new Promise<void>((resolve) => {
       resolveSync = resolve
     })
-    syncWithOperator.mockImplementation(() => syncGate)
+    syncWithOperator.mockImplementation(async () => {
+      await syncGate
+      return {}
+    })
 
     const first = orchestrateArkadeSyncThenSave(syncParams)
     const second = orchestrateArkadeSyncThenSave(syncParams)

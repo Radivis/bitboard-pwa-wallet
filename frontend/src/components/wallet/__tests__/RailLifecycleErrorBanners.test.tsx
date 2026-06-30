@@ -96,7 +96,7 @@ describe('RailSyncWarningBanner', () => {
       />,
     )
 
-    expect(screen.getByTestId('wallet-sync-warning-banner-arkade')).toBeInTheDocument()
+    expect(screen.getByTestId('wallet-sync-warning-error-banner-arkade')).toBeInTheDocument()
     expect(screen.getByText('Arkade sync completed with warnings')).toBeInTheDocument()
     expect(screen.getByText('Offchain receive keys could not be refreshed.')).toBeInTheDocument()
   })
@@ -112,6 +112,6 @@ describe('RailSyncWarningBanner', () => {
       />,
     )
 
-    expect(screen.queryByTestId('wallet-sync-warning-banner-arkade')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('wallet-sync-warning-error-banner-arkade')).not.toBeInTheDocument()
   })
 })

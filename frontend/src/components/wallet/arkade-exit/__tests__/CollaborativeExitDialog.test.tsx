@@ -100,9 +100,11 @@ describe('CollaborativeExitDialog', () => {
     renderWithProviders(<CollaborativeExitDialog exitFlow={exitFlow} />)
 
     expect(screen.getByRole('button', { name: 'Confirm exit' })).toBeDisabled()
-    expect(screen.getByText(/unilateral exit/i)).toBeInTheDocument()
+    expect(
+      screen.getByText(/No cooperatively spendable Arkade balance is available/i),
+    ).toBeInTheDocument()
     expect(screen.getByText(/Cooperatively exit spendable:/i)).toBeInTheDocument()
-    expect(screen.getByText('0.00050000')).not.toBeInTheDocument()
+    expect(screen.queryByText('0.00050000')).not.toBeInTheDocument()
   })
 
   it('shows rotation cutoff warning and pending recovery balance', () => {

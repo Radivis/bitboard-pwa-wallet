@@ -129,6 +129,8 @@ vi.mock('@/hooks/useLightningMutations', () => ({
 vi.mock('@/hooks/useArkadeQueries', () => ({
   useArkadeBalanceQuery: () => arkadeBalanceMock(),
   useArkadeHistoryQuery: () => arkadeHistoryMock(),
+  useArkadeRecoverableVtxoFeeQuery: () => ({ isLoading: false, data: null }),
+  useArkadeRecoverRecoverableVtxosMutation: () => ({ mutate: vi.fn(), isPending: false }),
 }))
 
 vi.mock('@/hooks/useArkadeDashboardQueries', () => ({
