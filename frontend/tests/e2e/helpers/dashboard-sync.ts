@@ -11,6 +11,7 @@ function syncControlTimeoutMs(override?: number): number {
 }
 
 const ONCHAIN_SYNC_BUTTON = 'Sync on-chain'
+const LIGHTNING_SYNC_BUTTON = 'Sync Lightning'
 
 /**
  * The on-chain rail sync control is visible on the dashboard balance card but disabled
@@ -45,6 +46,19 @@ export async function runDashboardSyncUntilIdle(page: Page): Promise<void> {
   await syncButton.click()
   await expect(syncButton).toHaveText(/Syncing/i, { timeout: 10_000 })
   await expect(syncButton).toHaveText(ONCHAIN_SYNC_BUTTON, {
+    timeout: SYNC_FINISH_TIMEOUT_MS,
+  })
+  await expect(syncButton).toBeEnabled({ timeout: SYNC_FINISH_TIMEOUT_MS })
+}
+
+/** Runs manual Lightning sync on the dashboard (NWC history + balances). */
+export async function runLightningRailSyncUntilIdle(page: Page): Promise<void> {
+  const syncButton = page.getByTestId('rail-sync-lightning')
+  await expect(syncButton).toBeVisible({ timeout: syncControlTimeoutMs() })
+  await expect(syncButton).toBeEnabled({ timeout: syncControlTimeoutMs() })
+  await syncButton.click()
+  await expect(syncButton).toHaveText(/Syncing/i, { timeout: 10_000 })
+  await expect(syncButton).toHaveText(LIGHTNING_SYNC_BUTTON, {
     timeout: SYNC_FINISH_TIMEOUT_MS,
   })
   await expect(syncButton).toBeEnabled({ timeout: SYNC_FINISH_TIMEOUT_MS })

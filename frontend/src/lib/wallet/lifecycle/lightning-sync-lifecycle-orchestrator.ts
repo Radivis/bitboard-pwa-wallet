@@ -6,6 +6,7 @@ import {
   configureLightningSaveForLoadedRail,
   orchestrateLightningSaveSnapshotPatches,
 } from '@/lib/wallet/lifecycle/lightning-save-lifecycle-orchestrator'
+import { invalidateLightningDashboardQueries } from '@/lib/lightning/lightning-dashboard-sync'
 import type { LightningRailScope } from '@/lib/wallet/lifecycle/lightning-rail-types'
 import { lightningRailScopeKey } from '@/lib/wallet/lifecycle/lightning-rail-types'
 import type { LockLifecyclePhase } from '@/lib/wallet/lifecycle/lock-lifecycle-types'
@@ -282,6 +283,8 @@ export async function orchestrateLightningSyncThenSave(
               throw saveError
             }
           }
+        } else {
+          invalidateLightningDashboardQueries()
         }
       } catch (error) {
         applyAggregatePhase(scope, userFacingLifecycleErrorMessage(error, LIFECYCLE_SYNC_ERROR_FALLBACK))
