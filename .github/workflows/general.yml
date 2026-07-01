@@ -184,6 +184,7 @@ jobs:
           REQUIRE_ARKADE_REGTEST: "1"
 
       - name: Run Playwright Arkade regtest core flows
+        if: success() || failure()
         working-directory: frontend
         run: npx playwright test --grep @arkade-regtest
         env:
