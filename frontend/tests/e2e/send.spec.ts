@@ -11,7 +11,10 @@ import {
   getRegtestNodeReceiveAddress,
   waitForDashboardShowsFundedOnChainBalance,
 } from './helpers/regtest'
-import { runDashboardSyncUntilIdle } from './helpers/dashboard-sync'
+import {
+  runDashboardSyncUntilIdle,
+  runOnchainFullRescanUntilIdle,
+} from './helpers/dashboard-sync'
 import {
   waitForSendPageSpendableOnChainBalance,
   waitForSendReviewTransactionButtonEnabled,
@@ -30,7 +33,9 @@ import { ensureSegwitAddressesFeatureOn } from './helpers/segwit-addresses-featu
 const POST_BROADCAST_URL_TIMEOUT_MS = E2E_IS_CI ? 45_000 : 20_000
 
 test.describe('Send Page', () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page }, testInfo) => {
+    // Regtest send imports a deterministic wallet; creating one first only adds testnet noise.
+    if (testInfo.title.includes('@regtest')) return
     await createWalletViaUI(page)
   })
 
@@ -107,6 +112,11 @@ test.describe('Send Page', () => {
       await page.getByRole('button', { name: 'Change' }).click()
       await waitForSettingsAddressTypeSwitchComplete(page)
 
+      // Network/address switches can leave BDK local_chain out of sync with Esplora (repair before fund).
+      await goToWalletTab(page, 'Dashboard')
+      await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible()
+      await runOnchainFullRescanUntilIdle(page)
+
       await goToWalletTab(page, 'Receive')
       await expect(page.getByText('Receive Bitcoin')).toBeVisible()
       const addressEl = page
@@ -128,8 +138,8 @@ test.describe('Send Page', () => {
 
       await runDashboardSyncUntilIdle(page)
       await waitForDashboardShowsFundedOnChainBalance(page)
-      // Second sync after balance appears: BDK should ingest the same UTXOs Esplora will accept at broadcast.
-      await runDashboardSyncUntilIdle(page)
+      // Full rescan (empty-chain retry) aligns spendable UTXOs with Esplora before broadcast.
+      await runOnchainFullRescanUntilIdle(page)
 
       await goToWalletTab(page, 'Send')
       await expect(page.getByText('Send Bitcoin')).toBeVisible()

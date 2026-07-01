@@ -138,8 +138,8 @@ function ImportInitialSyncErrorBanner() {
   )
 }
 
-/** Public networks only: regtest already runs a full-scan path on dashboard Sync. */
-const FULL_RESCAN_NETWORKS: NetworkMode[] = ['mainnet', 'testnet', 'signet']
+/** Live Esplora networks; regtest included so developers can repair after bad local chain. */
+const FULL_RESCAN_NETWORKS: NetworkMode[] = ['mainnet', 'testnet', 'signet', 'regtest']
 
 function BalanceCard() {
   const networkMode = useWalletStore((walletState) => walletState.networkMode)

@@ -81,10 +81,13 @@ export async function fundRegtestAddress(
   await runRegtestCli(['faucet', address, satsToBtcString(sats), '--confirm'])
 }
 
+/** Matches ANSI SGR color sequences (ESC [ … m). Built via RegExp to satisfy no-control-regex. */
+const ANSI_SGR_ESCAPE_PATTERN = new RegExp(`${String.fromCharCode(0x1b)}\\[[0-9;]*m`, 'g')
+
 /** Strip regtest.mjs log lines and ANSI color codes; return the last substantive stdout line. */
 function parseCapturedRegtestCliOutput(output: string): string {
   const lines = output
-    .replace(/\x1b\[[0-9;]*m/g, '')
+    .replace(ANSI_SGR_ESCAPE_PATTERN, '')
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter((line) => line.length > 0 && !/^\[\d{2}:\d{2}:\d{2}\]/.test(line))

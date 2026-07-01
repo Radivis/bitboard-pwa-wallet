@@ -51,6 +51,24 @@ export async function runDashboardSyncUntilIdle(page: Page): Promise<void> {
   await expect(syncButton).toBeEnabled({ timeout: SYNC_FINISH_TIMEOUT_MS })
 }
 
+const ONCHAIN_FULL_RESCAN_BUTTON = 'Full rescan'
+
+/**
+ * Runs dashboard full rescan (regtest/testnet/signet/mainnet when exposed).
+ * Use after regtest funding so BDK chain state matches Esplora before spend.
+ */
+export async function runOnchainFullRescanUntilIdle(page: Page): Promise<void> {
+  const rescanButton = page.getByTestId('rail-sync-onchain-full-rescan')
+  await expect(rescanButton).toBeVisible({ timeout: syncControlTimeoutMs() })
+  await expect(rescanButton).toBeEnabled({ timeout: syncControlTimeoutMs() })
+  await rescanButton.click()
+  await expect(rescanButton).toHaveText(/Scanning/i, { timeout: 10_000 })
+  await expect(rescanButton).toHaveText(ONCHAIN_FULL_RESCAN_BUTTON, {
+    timeout: SYNC_FINISH_TIMEOUT_MS,
+  })
+  await expect(rescanButton).toBeEnabled({ timeout: SYNC_FINISH_TIMEOUT_MS })
+}
+
 /** Runs manual Lightning sync on the dashboard (NWC history + balances). */
 export async function runLightningRailSyncUntilIdle(page: Page): Promise<void> {
   const syncButton = page.getByTestId('rail-sync-lightning')
