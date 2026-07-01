@@ -26,6 +26,15 @@ function baseSnapshot(
     ],
     esploraConfirmedSats: 100_000,
     esploraUnconfirmedSats: 0,
+    esploraFundingTxStatuses: [
+      {
+        txid: 'abc',
+        confirmed: true,
+        blockHeight: 119,
+        blockHash: '00'.repeat(32),
+        blockTime: 1_700_000_000,
+      },
+    ],
     dashboardCardText: 'Spendable (settled)\n0 sats\nPending incoming\n100,000 sats',
     onchainLoadPhase: 'loaded',
     onchainSyncPhase: 'not-syncing',
@@ -65,6 +74,7 @@ describe('formatRegtestOnchainBalanceDiagnosticReport', () => {
     const report = formatRegtestOnchainBalanceDiagnosticReport(baseSnapshot())
     expect(report).toContain('Failure kind: pending_incoming_only')
     expect(report).toContain('txid=abc')
+    expect(report).toContain('bdk_anchor_ready=true')
     expect(report).toContain('Confirmed sats at receive address: 100000')
     expect(report).toContain('indicates a product bug')
   })

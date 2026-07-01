@@ -5,6 +5,10 @@ import {
   type RegtestEsploraUtxoSnapshot,
   type RegtestOnchainBalanceDiagnosticSnapshot,
 } from '@/lib/wallet/regtest-onchain-balance-diagnostics'
+import {
+  parseEsploraTxStatusFromTxEndpointBody,
+  type EsploraTxStatusSnapshot,
+} from '@/lib/wallet/esplora-tx-anchor-metadata'
 import { onChainSpendableSatsFromDashboardBalanceCardText } from './onchain-spendable-balance-text'
 import { runDashboardSyncUntilIdle } from './dashboard-sync'
 import { ESPLORA_URL } from './regtest'
@@ -45,6 +49,38 @@ function mapEsploraUtxos(utxos: EsploraUtxoResponse[]): RegtestEsploraUtxoSnapsh
     confirmed: utxo.status.confirmed,
     blockHeight: utxo.status.block_height ?? null,
   }))
+}
+
+async function fetchEsploraFundingTxStatuses(
+  utxos: EsploraUtxoResponse[],
+): Promise<EsploraTxStatusSnapshot[]> {
+  const confirmedTxids = [...new Set(utxos.filter((utxo) => utxo.status.confirmed).map((u) => u.txid))]
+  const statuses: EsploraTxStatusSnapshot[] = []
+  for (const txid of confirmedTxids) {
+    try {
+      const res = await fetch(`${ESPLORA_URL}/tx/${txid}`)
+      if (!res.ok) {
+        statuses.push({
+          txid,
+          confirmed: false,
+          blockHeight: null,
+          blockHash: null,
+          blockTime: null,
+        })
+        continue
+      }
+      statuses.push(parseEsploraTxStatusFromTxEndpointBody(txid, await res.json()))
+    } catch {
+      statuses.push({
+        txid,
+        confirmed: false,
+        blockHeight: null,
+        blockHash: null,
+        blockTime: null,
+      })
+    }
+  }
+  return statuses
 }
 
 async function readOptionalVisibleText(page: Page, testId: string): Promise<string | null> {
@@ -90,6 +126,7 @@ export async function collectRegtestOnchainBalanceDiagnosticSnapshot(
     esploraUtxos: mappedUtxos,
     esploraConfirmedSats,
     esploraUnconfirmedSats,
+    esploraFundingTxStatuses: await fetchEsploraFundingTxStatuses(utxos),
     dashboardCardText: (await card.innerText().catch(() => '')) ?? '',
     onchainLoadPhase: await onchainRail.getAttribute('data-rail-onchain-load'),
     onchainSyncPhase: await onchainRail.getAttribute('data-rail-onchain-sync'),

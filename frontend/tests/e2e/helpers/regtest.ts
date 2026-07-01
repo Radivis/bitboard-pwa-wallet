@@ -3,6 +3,13 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
 
+import {
+  formatEsploraTxStatusForDiagnostic,
+  isEsploraTxStatusReadyForBdkAnchor,
+  parseEsploraTxStatusFromTxEndpointBody,
+  type EsploraTxStatusSnapshot,
+} from '@/lib/wallet/esplora-tx-anchor-metadata'
+
 /**
  * Helpers for E2E tests that use the arkade-regtest environment.
  * Requires the stack to be running: npm run regtest:start (or use test:e2e:regtest / test:e2e:arkade-regtest).
@@ -107,7 +114,70 @@ export async function fundRegtestWalletReceiveAddress(
 ): Promise<void> {
   await fundRegtestAddress(receiveAddress, sats)
   await mineRegtestBlocks(1)
-  await waitForConfirmedBalance(receiveAddress, sats)
+  await waitForEsploraFundingReadyForBdkSync(receiveAddress, sats)
+}
+
+async function fetchEsploraTxStatus(txid: string): Promise<EsploraTxStatusSnapshot> {
+  try {
+    const res = await fetch(`${ESPLORA_URL}/tx/${txid}`)
+    if (!res.ok) {
+      return {
+        txid,
+        confirmed: false,
+        blockHeight: null,
+        blockHash: null,
+        blockTime: null,
+      }
+    }
+    return parseEsploraTxStatusFromTxEndpointBody(txid, await res.json())
+  } catch {
+    return {
+      txid,
+      confirmed: false,
+      blockHeight: null,
+      blockHash: null,
+      blockTime: null,
+    }
+  }
+}
+
+/**
+ * Esplora's /address/.../utxo can show confirmed before /tx exposes block_hash + block_time.
+ * BDK Esplora sync needs all three fields to anchor; otherwise the receive stays pending incoming.
+ */
+export async function waitForEsploraFundingReadyForBdkSync(
+  address: string,
+  minConfirmedSats: number,
+  timeoutMs: number = CONFIRMED_UTXO_WAIT_MS,
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs
+  let lastTxStatuses: EsploraTxStatusSnapshot[] = []
+
+  while (Date.now() < deadline) {
+    const res = await fetch(`${ESPLORA_URL}/address/${address}/utxo`)
+    if (res.ok) {
+      const utxos: EsploraUtxo[] = await res.json()
+      const confirmedUtxos = utxos.filter((utxo) => utxo.status.confirmed)
+      const confirmedTotal = confirmedUtxos.reduce((sum, utxo) => sum + utxo.value, 0)
+      if (confirmedTotal >= minConfirmedSats && confirmedUtxos.length > 0) {
+        lastTxStatuses = await Promise.all(
+          confirmedUtxos.map((utxo) => fetchEsploraTxStatus(utxo.txid)),
+        )
+        if (lastTxStatuses.every(isEsploraTxStatusReadyForBdkAnchor)) {
+          return
+        }
+      }
+    }
+    await sleep(250)
+  }
+
+  const statusLines =
+    lastTxStatuses.length > 0
+      ? lastTxStatuses.map(formatEsploraTxStatusForDiagnostic).join('\n')
+      : '(no confirmed UTXOs observed)'
+  throw new Error(
+    `Esplora funding not ready for BDK sync within ${timeoutMs}ms (need /tx status with block_height + block_hash + block_time).\n${statusLines}`,
+  )
 }
 
 /** Get the current block height as seen by the Esplora indexer. */

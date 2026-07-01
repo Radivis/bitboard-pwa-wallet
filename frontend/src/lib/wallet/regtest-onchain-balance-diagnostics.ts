@@ -3,6 +3,11 @@
  * Keep logic here (not in Playwright helpers) so classification/formatting is unit-testable.
  */
 
+import {
+  formatEsploraTxStatusForDiagnostic,
+  type EsploraTxStatusSnapshot,
+} from '@/lib/wallet/esplora-tx-anchor-metadata'
+
 export type RegtestEsploraUtxoSnapshot = {
   txid: string
   vout: number
@@ -20,6 +25,7 @@ export type RegtestOnchainBalanceDiagnosticSnapshot = {
   esploraUtxos: RegtestEsploraUtxoSnapshot[]
   esploraConfirmedSats: number
   esploraUnconfirmedSats: number
+  esploraFundingTxStatuses: EsploraTxStatusSnapshot[]
   dashboardCardText: string
   onchainLoadPhase: string | null
   onchainSyncPhase: string | null
@@ -86,8 +92,9 @@ export function interpretRegtestOnchainBalanceFailure(
       return (
         'Esplora shows confirmed UTXOs at the receive address, but the dashboard spendable balance is still zero ' +
         'with pending breakdown lines. BDK ingested the funding as non-spendable (untrusted pending). ' +
-        'Typical causes: local chain tip lag after Sync on-chain, or using full scan where incremental sync was required ' +
-        'to confirm already-revealed receives. A manual Full rescan might repair persisted state; for this test that indicates a product bug.'
+        'Check Esplora /tx status below: BDK needs block_height, block_hash, and block_time to anchor; missing fields ' +
+        'at sync time cause seen_at → pending incoming. If anchor metadata was ready before Sync on-chain, investigate ' +
+        'local chain tip lag or persisted wallet state — a manual Full rescan might repair it; for this test that indicates a product bug.'
       )
     case 'spendable_below_threshold':
       return (
@@ -97,6 +104,13 @@ export function interpretRegtestOnchainBalanceFailure(
     case 'unknown':
       return 'Could not classify automatically; use the raw sections below.'
   }
+}
+
+function formatEsploraFundingTxStatusLines(statuses: EsploraTxStatusSnapshot[]): string {
+  if (statuses.length === 0) {
+    return '  (no /tx statuses fetched)'
+  }
+  return statuses.map((status) => `  - ${formatEsploraTxStatusForDiagnostic(status)}`).join('\n')
 }
 
 function formatEsploraUtxoLines(utxos: RegtestEsploraUtxoSnapshot[]): string {
@@ -133,6 +147,8 @@ export function formatRegtestOnchainBalanceDiagnosticReport(
     `Unconfirmed sats at receive address: ${snapshot.esploraUnconfirmedSats}`,
     'UTXOs:',
     formatEsploraUtxoLines(snapshot.esploraUtxos),
+    'Funding tx /tx status (BDK anchor fields):',
+    formatEsploraFundingTxStatusLines(snapshot.esploraFundingTxStatuses),
     '',
     '--- Dashboard on-chain rail ---',
     `data-rail-onchain-load: ${snapshot.onchainLoadPhase ?? '(missing)'}`,
