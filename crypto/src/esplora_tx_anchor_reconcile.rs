@@ -49,6 +49,29 @@ pub fn list_unconfirmed_canonical_txids(wallet: &Wallet) -> Vec<Txid> {
         .collect()
 }
 
+/// Txids that still need `/tx` anchor refetch and local chain extension before spendable balance.
+///
+/// Uses canonical relevant txs first, then unconfirmed UTXOs from [`Wallet::list_unspent`], so
+/// reconcile still runs when canonicalization filters differ from balance indexing.
+pub fn list_txids_for_anchor_reconcile(wallet: &Wallet) -> BTreeSet<Txid> {
+    let mut txids: BTreeSet<Txid> = list_unconfirmed_canonical_txids(wallet)
+        .into_iter()
+        .collect();
+
+    for local_output in wallet.list_unspent() {
+        if matches!(
+            local_output.chain_position,
+            ChainPosition::Unconfirmed { .. }
+        ) {
+            txids.insert(local_output.outpoint.txid);
+        }
+    }
+
+    txids
+}
+
+const LATEST_BLOCKS_FETCH_ATTEMPTS: usize = 3;
+
 async fn fetch_latest_block_hashes<S>(
     esplora_async_client: &AsyncClient<S>,
 ) -> Result<BTreeMap<u32, BlockHash>, CryptoError>
@@ -56,13 +79,60 @@ where
     S: Sleeper + Clone + Send + Sync,
     S::Sleep: Send,
 {
-    Ok(esplora_async_client
-        .get_block_infos(None)
+    let mut last_error: Option<CryptoError> = None;
+
+    for attempt in 0..LATEST_BLOCKS_FETCH_ATTEMPTS {
+        match esplora_async_client.get_block_infos(None).await {
+            Ok(block_infos) if !block_infos.is_empty() => {
+                return Ok(block_infos
+                    .into_iter()
+                    .map(|block_info| (block_info.height, block_info.id))
+                    .collect());
+            }
+            Ok(_) => {
+                last_error = Some(CryptoError::Blockchain(
+                    "Esplora /blocks returned an empty list".to_string(),
+                ));
+            }
+            Err(error) => {
+                last_error = Some(CryptoError::Blockchain(error.to_string()));
+            }
+        }
+
+        let _attempt = attempt;
+    }
+
+    fetch_tip_block_hash_fallback(esplora_async_client)
         .await
-        .map_err(|error| CryptoError::Blockchain(error.to_string()))?
-        .into_iter()
-        .map(|block_info| (block_info.height, block_info.id))
-        .collect())
+        .or_else(|_| {
+            last_error.map_or(
+                Err(CryptoError::Blockchain(
+                    "Esplora returned no blocks for chain extension".to_string(),
+                )),
+                Err,
+            )
+        })
+}
+
+async fn fetch_tip_block_hash_fallback<S>(
+    esplora_async_client: &AsyncClient<S>,
+) -> Result<BTreeMap<u32, BlockHash>, CryptoError>
+where
+    S: Sleeper + Clone + Send + Sync,
+    S::Sleep: Send,
+{
+    let tip_height = esplora_async_client
+        .get_height()
+        .await
+        .map_err(|error| CryptoError::Blockchain(error.to_string()))?;
+    let tip_hash = esplora_async_client
+        .get_block_hash(tip_height)
+        .await
+        .map_err(|error| CryptoError::Blockchain(error.to_string()))?;
+
+    let mut latest_blocks = BTreeMap::new();
+    latest_blocks.insert(tip_height, tip_hash);
+    Ok(latest_blocks)
 }
 
 async fn fetch_block_hash_at_height<S>(
@@ -107,13 +177,15 @@ async fn build_local_chain_extension<S>(
     latest_blocks: &BTreeMap<u32, BlockHash>,
     local_tip: &CheckPoint,
     anchors: &BTreeSet<(ConfirmationBlockTime, Txid)>,
-) -> Result<Option<CheckPoint>, CryptoError>
+) -> Result<CheckPoint, CryptoError>
 where
     S: Sleeper + Clone + Send + Sync,
     S::Sleep: Send,
 {
     if latest_blocks.is_empty() {
-        return Ok(None);
+        return Err(CryptoError::Blockchain(
+            "Esplora returned no blocks for chain extension".to_string(),
+        ));
     }
 
     if local_tip.height() == 0 {
@@ -140,7 +212,7 @@ where
                 hash: block_hash,
             });
         }
-        return Ok(Some(tip));
+        return Ok(tip);
     }
 
     let mut point_of_agreement = None;
@@ -175,7 +247,12 @@ where
                 .expect("conflict heights are ascending");
             connected
         }
-        None => bootstrap_checkpoints_from_esplora(esplora_async_client, latest_blocks).await?,
+        None => {
+            return Err(CryptoError::Blockchain(format!(
+                "Esplora chain cannot connect to local tip hash {}",
+                local_tip.hash()
+            )));
+        }
     };
 
     for (anchor, _txid) in anchors {
@@ -201,7 +278,7 @@ where
         });
     }
 
-    Ok(Some(tip))
+    Ok(tip)
 }
 
 fn bootstrap_checkpoints_from_latest_blocks_only(
@@ -359,7 +436,7 @@ where
 
     Ok(Some(Update {
         tx_update,
-        chain,
+        chain: Some(chain),
         ..Default::default()
     }))
 }
