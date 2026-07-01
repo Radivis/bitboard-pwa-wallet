@@ -93,8 +93,8 @@ export function interpretRegtestOnchainBalanceFailure(
         'Esplora shows confirmed UTXOs at the receive address, but the dashboard spendable balance is still zero ' +
         'with pending breakdown lines. BDK ingested the funding as non-spendable (untrusted pending). ' +
         'If `/tx` shows bdk_anchor_ready=true below, Esplora scripthash history likely returned incomplete status ' +
-        'during sync while `/tx` was complete — incremental sync does not refetch `/tx` for txids already seen via scripthash. ' +
-        'If anchor metadata was missing on both endpoints at sync time, investigate local chain tip lag or persisted wallet state.'
+        'during sync while `/tx` was complete, and/or the wallet local chain was not extended to the anchor ' +
+        'block height. Incremental sync alone does not repair that; sync should run anchor+chain reconcile in WASM.'
       )
     case 'spendable_below_threshold':
       return (
