@@ -75,7 +75,7 @@ flowchart TB
 ### Step-by-step
 
 1. **Save outgoing descriptor wallet**  
-   Export the active WASM changeset and persist it under the **current** `(network, addressType, accountId)` via `updateDescriptorWalletChangeset`. Skipped safely if WASM has no wallet yet (`isBenignNoActiveWalletError`).
+   Awaits on-chain load/sync/save quiescence, then exports via `exportChangesetForPersistence` (blocked during in-flight lifecycle and while `syncPhase === 'sync-error'`) and persists under the **current** `(network, addressType, accountId)` via `updateDescriptorWalletChangeset`. **Skipped** when `sync-error` — last good persisted outgoing state is preserved. Skipped safely if WASM has no wallet yet (`isBenignNoActiveWalletError`). Load runs under `withWalletWriterLock`.
 
 2. **Clear dashboard UI state**  
    Set `currentAddress`, `balance`, `transactions`, and `lastSyncTime` to empty/null so the UI never shows the previous network’s totals during load.

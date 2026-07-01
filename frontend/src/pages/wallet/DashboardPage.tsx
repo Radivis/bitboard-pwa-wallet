@@ -139,7 +139,7 @@ function ImportInitialSyncErrorBanner() {
 }
 
 /** Live Esplora networks; regtest included so developers can repair after bad local chain. */
-const FULL_RESCAN_NETWORKS: NetworkMode[] = ['mainnet', 'testnet', 'signet', 'regtest']
+const FULL_RESCAN_NETWORKS: NetworkMode[] = ['mainnet', 'testnet', 'signet']
 
 function BalanceCard() {
   const networkMode = useWalletStore((walletState) => walletState.networkMode)

@@ -1,4 +1,4 @@
-import { useCryptoStore } from '@/stores/cryptoStore'
+import { exportChangesetForPersistenceBypass } from '@/lib/wallet/lifecycle/onchain-descriptor-mutation-guard'
 import { useWalletStore } from '@/stores/walletStore'
 import { invalidateOnchainDashboardQueries } from '@/lib/wallet/onchain-dashboard-sync'
 import { toBitcoinNetwork } from '@/lib/wallet/bitcoin-utils'
@@ -33,8 +33,7 @@ async function runPersistPostEsploraSync(params: OnchainSaveParams): Promise<voi
   const syncedAtIso = new Date().toISOString()
   useWalletStore.getState().setLastSyncTime(new Date(syncedAtIso))
 
-  const { exportChangeset } = useCryptoStore.getState()
-  const changesetJson = await exportChangeset()
+  const changesetJson = await exportChangesetForPersistenceBypass()
 
   if (params.descriptorWalletCoordinates != null) {
     const { network, addressType, accountId } = params.descriptorWalletCoordinates

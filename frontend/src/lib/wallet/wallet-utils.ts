@@ -382,14 +382,18 @@ export async function runFullScanDashboardWalletSync(options: {
 }
 
 /**
- * Post-import initial Esplora flow: full scan (with retries via
- * {@link syncActiveWalletAndUpdateState}), refresh store, persist `fullScanDone`,
- * clear any import error banner. Does not set `walletStatus`.
+ * Retry handler for setup initial sync (toast action, dashboard banner): re-runs
+ * orchestrated full scan + save for the active wallet.
  */
 export async function runImportInitialEsploraSync(): Promise<void> {
-  const networkMode = useWalletStore.getState().networkMode
-  const activeWalletId = useWalletStore.getState().activeWalletId
+  const { networkMode, activeWalletId, addressType, accountId } =
+    useWalletStore.getState()
   const { setImportInitialSyncErrorMessage } = useWalletStore.getState()
+
+  if (activeWalletId == null) {
+    setImportInitialSyncErrorMessage(null)
+    return
+  }
 
   const customUrl = await loadCustomEsploraUrl(networkMode)
   const esploraUrl = getEsploraUrl(networkMode, customUrl)
@@ -405,23 +409,16 @@ export async function runImportInitialEsploraSync(): Promise<void> {
     return
   }
 
-  await syncActiveWalletAndUpdateState(networkMode, { useFullScan: true })
-
-  if (activeWalletId == null) {
-    invalidateDashboardQueriesAfterOnchainUpdate()
-    setImportInitialSyncErrorMessage(null)
-    return
-  }
-
-  const { addressType, accountId } = useWalletStore.getState()
   await orchestrateOnchainSyncThenSaveFromWalletUtils({
     walletId: activeWalletId,
     networkMode,
     addressType,
     accountId,
-    syncKind: 'importInitial',
+    syncKind: 'setupInitial',
     useFullScan: true,
     markFullScanDone: true,
+    awaitCompletion: true,
+    throwOnError: true,
   })
   setImportInitialSyncErrorMessage(null)
 }

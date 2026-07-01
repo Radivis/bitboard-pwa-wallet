@@ -92,15 +92,18 @@ vi.mock('@/lib/wallet/bitcoin-utils', () => ({
   toBitcoinNetwork: (mode: string) => mode,
 }))
 
-const { mockRunImportInitialEsploraSync, mockRetryImportInitialSync } = vi.hoisted(
+const { mockOrchestrateOnchainSetupAfterPersist, mockRetryImportInitialSync } = vi.hoisted(
   () => ({
-    mockRunImportInitialEsploraSync: vi.fn().mockResolvedValue(undefined),
+    mockOrchestrateOnchainSetupAfterPersist: vi.fn().mockResolvedValue(undefined),
     mockRetryImportInitialSync: vi.fn().mockResolvedValue(undefined),
   }),
 )
 
+vi.mock('@/lib/wallet/lifecycle/onchain-setup-lifecycle', () => ({
+  orchestrateOnchainSetupAfterPersist: mockOrchestrateOnchainSetupAfterPersist,
+}))
+
 vi.mock('@/lib/wallet/wallet-utils', () => ({
-  runImportInitialEsploraSync: mockRunImportInitialEsploraSync,
   retryImportInitialEsploraSyncWithWalletStatus: mockRetryImportInitialSync,
 }))
 

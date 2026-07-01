@@ -52,7 +52,7 @@ Before making statements about the functionality of the code, make sure they are
 When it comes to matters of technologies, architecture, or algorithms question the rationale behind those choices, if the justifications for using them seem insufficient. Provide critical pushback and feel free to research and propose superior alternatives.
 
 ## Requires explicit permission by human user:
-- Deletion of pre-existing files, functions, or constants
+- Deletion of pre-existing files, functions, comments, or constants
 - Installing new libraries
 - Performing git commits
 - Changing script files (.sh and similar)

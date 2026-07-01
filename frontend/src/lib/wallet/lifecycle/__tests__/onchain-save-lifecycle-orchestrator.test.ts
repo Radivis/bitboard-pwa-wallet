@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { AddressType } from '@/stores/walletStore'
 
 const updateDescriptorWalletChangeset = vi.fn()
-const exportChangeset = vi.fn()
+const exportChangesetForPersistenceBypass = vi.fn()
 const setLastSyncTime = vi.fn()
 const invalidateOnchainDashboardQueries = vi.fn()
 const invalidateLightningDashboardQueries = vi.fn()
@@ -46,12 +46,9 @@ vi.mock('@/stores/walletStore', async (importOriginal) => {
   }
 })
 
-vi.mock('@/stores/cryptoStore', () => ({
-  useCryptoStore: {
-    getState: () => ({
-      exportChangeset,
-    }),
-  },
+vi.mock('@/lib/wallet/lifecycle/onchain-descriptor-mutation-guard', () => ({
+  exportChangesetForPersistenceBypass: (...args: unknown[]) =>
+    exportChangesetForPersistenceBypass(...args),
 }))
 
 import {
@@ -75,7 +72,7 @@ describe('onchain-save-lifecycle-orchestrator', () => {
   beforeEach(() => {
     resetOnchainSaveLifecycleStateForTests()
     vi.clearAllMocks()
-    exportChangeset.mockResolvedValue('{}')
+    exportChangesetForPersistenceBypass.mockResolvedValue('{}')
     updateDescriptorWalletChangeset.mockResolvedValue(undefined)
     walletStoreState.loadedDescriptorWallet = null
   })

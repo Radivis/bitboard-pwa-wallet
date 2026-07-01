@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useNavigate, Link } from '@tanstack/react-router'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, CheckCircle2, XCircle, Loader2 } from 'lucide-react'
@@ -25,9 +25,9 @@ import {
 import { ensureSecretsChannel } from '@/workers/secrets-channel'
 import { toBitcoinNetwork } from '@/lib/wallet/bitcoin-utils'
 import {
-  runImportInitialEsploraSync,
   retryImportInitialEsploraSyncWithWalletStatus,
 } from '@/lib/wallet/wallet-utils'
+import { orchestrateOnchainSetupAfterPersist } from '@/lib/wallet/lifecycle/onchain-setup-lifecycle'
 import { showImportInitialSyncFailureToast } from '@/lib/wallet/wallet-sync-error-toast'
 import { sanitizeErrorMessageForUi } from '@/lib/shared/sanitize-error-for-ui'
 import { errorMessage } from '@/lib/shared/utils'
@@ -37,7 +37,6 @@ import {
   ensureWalletSecretsSession,
   isWalletSecretsSessionActive,
 } from '@/lib/wallet/wallet-secrets-session'
-import { markOnchainRailLoadedAfterExternalHydration } from '@/lib/wallet/lifecycle/onchain-load-lifecycle-orchestrator'
 
 export function ImportWalletPage() {
   const navigate = useNavigate()
@@ -101,26 +100,6 @@ export function ImportWalletPage() {
 
   const canRestore = isValid === true
 
-  /**
-   * First Esplora full scan after import (long-running); runs after navigation.
-   * Lab / no Esplora URL: refresh WASM balance/tx only (see {@link runImportInitialEsploraSync}).
-   */
-  const runPostImportInitialSync = useCallback(async () => {
-    try {
-      await runImportInitialEsploraSync()
-      setWalletStatus('unlocked')
-    } catch (err: unknown) {
-      setWalletStatus('unlocked')
-      const syncErrorMessage =
-        sanitizeErrorMessageForUi(errorMessage(err) ?? String(err)) ||
-        'Initial sync failed'
-      setImportInitialSyncErrorMessage(syncErrorMessage)
-      showImportInitialSyncFailureToast(err, () => {
-        void retryImportInitialEsploraSyncWithWalletStatus()
-      })
-    }
-  }, [setImportInitialSyncErrorMessage, setWalletStatus])
-
   const restoreMutation = useMutation({
     mutationFn: async (appPassword?: string) => {
       if (!canRestore) throw new Error('Invalid input')
@@ -172,21 +151,29 @@ export function ImportWalletPage() {
       setWalletStatus('unlocked')
 
       startAutoLockTimer(() => void orchestrateLock())
-    },
-    onSuccess: () => {
-      const { activeWalletId, networkMode, addressType, accountId } = useWalletStore.getState()
-      if (activeWalletId != null) {
-        markOnchainRailLoadedAfterExternalHydration({
-          walletId: activeWalletId,
+
+      try {
+        await orchestrateOnchainSetupAfterPersist({
+          walletId,
           networkMode,
           addressType,
           accountId,
         })
+        setImportInitialSyncErrorMessage(null)
+      } catch (err: unknown) {
+        const syncErrorMessage =
+          sanitizeErrorMessageForUi(errorMessage(err) ?? String(err)) ||
+          'Initial sync failed'
+        setImportInitialSyncErrorMessage(syncErrorMessage)
+        showImportInitialSyncFailureToast(err, () => {
+          void retryImportInitialEsploraSyncWithWalletStatus()
+        })
       }
+    },
+    onSuccess: () => {
       setMnemonicInput('')
       toast.success('Wallet imported successfully!')
       navigate({ to: '/wallet' })
-      void runPostImportInitialSync()
     },
     onError: (err) => {
       toast.error(

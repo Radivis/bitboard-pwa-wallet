@@ -28,6 +28,22 @@ export async function waitForOnchainRailSyncButtonEnabled(
   await expect(syncButton).toBeEnabled({ timeout })
 }
 
+/**
+ * Waits until the on-chain rail is idle: sync control not showing "Syncing…" and no
+ * on-chain sync-error banner. Use after import/create and after network/address switches.
+ */
+export async function waitForOnchainRailNotSyncing(
+  page: Page,
+  timeout = syncControlTimeoutMs(),
+): Promise<void> {
+  const syncButton = page.getByTestId('rail-sync-onchain')
+  await expect(syncButton).toBeVisible({ timeout })
+  await expect(syncButton).not.toHaveText(/Syncing/i, { timeout })
+  await expect(page.getByTestId('wallet-sync-error-banner-onchain')).not.toBeVisible({
+    timeout,
+  })
+}
+
 /** @deprecated Use waitForOnchainRailSyncButtonEnabled */
 export async function waitForDashboardSyncButtonEnabled(
   page: Page,

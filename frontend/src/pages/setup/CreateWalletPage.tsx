@@ -30,13 +30,19 @@ import {
 } from '@/db'
 import { ensureSecretsChannel } from '@/workers/secrets-channel'
 import { toBitcoinNetwork } from '@/lib/wallet/bitcoin-utils'
+import { orchestrateOnchainSetupAfterPersist } from '@/lib/wallet/lifecycle/onchain-setup-lifecycle'
+import {
+  retryImportInitialEsploraSyncWithWalletStatus,
+} from '@/lib/wallet/wallet-utils'
+import { showImportInitialSyncFailureToast } from '@/lib/wallet/wallet-sync-error-toast'
+import { sanitizeErrorMessageForUi } from '@/lib/shared/sanitize-error-for-ui'
+import { errorMessage } from '@/lib/shared/utils'
 import { invalidateWalletRelatedQueriesAndNotifyOtherTabs } from '@/lib/wallet/wallet-query-cache-sync'
 import { useSetupAppPasswordGateReady } from '@/hooks/useSetupAppPasswordGateReady'
 import {
   ensureWalletSecretsSession,
   isWalletSecretsSessionActive,
 } from '@/lib/wallet/wallet-secrets-session'
-import { markOnchainRailLoadedAfterExternalHydration } from '@/lib/wallet/lifecycle/onchain-load-lifecycle-orchestrator'
 
 type Step = 1 | 2 | 3
 
@@ -75,6 +81,9 @@ export function CreateWalletPage() {
   const setTransactions = useWalletStore((walletState) => walletState.setTransactions)
   const setLastSyncTime = useWalletStore((walletState) => walletState.setLastSyncTime)
   const commitLoadedDescriptorWallet = useWalletStore((walletState) => walletState.commitLoadedDescriptorWallet)
+  const setImportInitialSyncErrorMessage = useWalletStore(
+    (walletState) => walletState.setImportInitialSyncErrorMessage,
+  )
   const addWallet = useAddWallet()
 
   const words = useMemo(() => (mnemonicForBackup ? mnemonicForBackup.split(' ') : []), [mnemonicForBackup])
@@ -146,13 +155,27 @@ export function CreateWalletPage() {
         accountId,
       })
       setWalletStatus('unlocked')
-      markOnchainRailLoadedAfterExternalHydration({
-        walletId,
-        networkMode,
-        addressType,
-        accountId,
-      })
       startAutoLockTimer(() => void orchestrateLock())
+
+      try {
+        await orchestrateOnchainSetupAfterPersist({
+          walletId,
+          networkMode,
+          addressType,
+          accountId,
+        })
+        setImportInitialSyncErrorMessage(null)
+      } catch (err: unknown) {
+        const syncErrorMessage =
+          sanitizeErrorMessageForUi(errorMessage(err) ?? String(err)) ||
+          'Initial sync failed'
+        setImportInitialSyncErrorMessage(syncErrorMessage)
+        showImportInitialSyncFailureToast(err, () => {
+          void retryImportInitialEsploraSyncWithWalletStatus()
+        })
+      }
+
+      return walletId
     },
     [
       accountId,
@@ -164,6 +187,7 @@ export function CreateWalletPage() {
       setActiveWallet,
       setBalance,
       setCurrentAddress,
+      setImportInitialSyncErrorMessage,
       setLastSyncTime,
       setTransactions,
       setWalletStatus,

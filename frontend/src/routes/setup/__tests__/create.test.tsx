@@ -33,6 +33,7 @@ const mockSetBalance = vi.fn()
 const mockSetTransactions = vi.fn()
 const mockSetLastSyncTime = vi.fn()
 const mockCommitLoadedDescriptorWallet = vi.fn()
+const mockSetImportInitialSyncErrorMessage = vi.fn()
 vi.mock('@/stores/walletStore', () => ({
   useWalletStore: Object.assign(
     (selector: (s: Record<string, unknown>) => unknown) =>
@@ -48,6 +49,7 @@ vi.mock('@/stores/walletStore', () => ({
         setTransactions: mockSetTransactions,
         setLastSyncTime: mockSetLastSyncTime,
         commitLoadedDescriptorWallet: mockCommitLoadedDescriptorWallet,
+        setImportInitialSyncErrorMessage: mockSetImportInitialSyncErrorMessage,
       }),
     {
       getState: () => ({ lockWallet: vi.fn() }),
@@ -96,6 +98,12 @@ vi.mock('@/lib/wallet/bitcoin-utils', () => ({
 
 vi.mock('@/lib/wallet/wallet-query-cache-sync', () => ({
   invalidateWalletRelatedQueriesAndNotifyOtherTabs: vi.fn(),
+}))
+
+const mockOrchestrateOnchainSetupAfterPersist = vi.fn().mockResolvedValue(undefined)
+vi.mock('@/lib/wallet/lifecycle/onchain-setup-lifecycle', () => ({
+  orchestrateOnchainSetupAfterPersist: (...args: unknown[]) =>
+    mockOrchestrateOnchainSetupAfterPersist(...args),
 }))
 
 vi.mock('@/components/MnemonicGrid', () => ({

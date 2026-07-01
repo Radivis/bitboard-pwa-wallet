@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { AddressType } from '@/stores/walletStore'
+import { BadLocalChainStateError } from '@/lib/shared/bad-local-chain-state-error'
 
 const syncActiveWalletAndUpdateState = vi.fn()
 const orchestrateOnchainSave = vi.fn()
@@ -140,5 +141,19 @@ describe('onchain-sync-lifecycle-orchestrator', () => {
         networkMode: 'lab',
       }),
     ).rejects.toThrow('On-chain sync is not configured on lab network')
+  })
+
+  describe('LIFE-ONC-GUARD-03 BadLocalChainStateError', () => {
+    it('sets sync-error with repair-oriented errorMessage', async () => {
+      syncActiveWalletAndUpdateState.mockRejectedValue(new BadLocalChainStateError())
+
+      await expect(orchestrateOnchainSyncThenSave(syncParams)).rejects.toBeInstanceOf(
+        BadLocalChainStateError,
+      )
+
+      const snapshot = getOnchainSyncLifecycleSnapshot()
+      expect(snapshot.syncPhase).toBe('sync-error')
+      expect(snapshot.errorMessage).toMatch(/Full rescan/i)
+    })
   })
 })

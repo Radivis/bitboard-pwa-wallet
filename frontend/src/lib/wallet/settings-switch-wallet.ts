@@ -16,6 +16,12 @@ import {
 } from '@/lib/wallet/wallet-utils'
 import { refreshWalletStoreFromLoadedBdk } from '@/lib/wallet/onchain-bdk-store-sync'
 import { invalidateOnchainDashboardQueries } from '@/lib/wallet/onchain-dashboard-sync'
+import { withWalletWriterLock } from '@/lib/shared/opfs-writer-lock'
+import {
+  awaitOnchainQuiescenceBeforeDescriptorMutation,
+  exportChangesetForPersistence,
+  shouldSkipOutgoingDescriptorSaveOnSyncError,
+} from '@/lib/wallet/lifecycle/onchain-descriptor-mutation-guard'
 import {
   loadingTargetAddressTypeMessage,
   loadingTargetNetworkMessage,
@@ -65,8 +71,7 @@ export async function switchDescriptorWallet(params: {
     )
   }
 
-  const { exportChangeset, loadWallet, getCurrentAddress } =
-    useCryptoStore.getState()
+  const { loadWallet, getCurrentAddress } = useCryptoStore.getState()
   const {
     setWalletStatus,
     setCurrentAddress,
@@ -83,62 +88,69 @@ export async function switchDescriptorWallet(params: {
     targetNetworkMode !== 'lab'
 
   try {
-    try {
-      const currentChangeset = await exportChangeset()
+    await awaitOnchainQuiescenceBeforeDescriptorMutation()
+
+    await withWalletWriterLock(async () => {
+      const skipOutgoingSave = shouldSkipOutgoingDescriptorSaveOnSyncError()
+
+      if (!skipOutgoingSave) {
+        try {
+          const currentChangeset = await exportChangesetForPersistence()
+          onPhase?.(
+            phaseContext === 'addressType'
+              ? savingPreviousAddressTypeMessage(currentAddressType)
+              : savingPreviousNetworkMessage(currentNetworkMode),
+          )
+          await updateDescriptorWalletChangeset({
+            walletId: activeWalletId,
+            network: toBitcoinNetwork(currentNetworkMode),
+            addressType: currentAddressType,
+            accountId: currentAccountId,
+            changesetJson: currentChangeset,
+          })
+        } catch (err) {
+          if (!isBenignNoActiveWalletError(err)) {
+            throw err
+          }
+        }
+      }
+
       onPhase?.(
         phaseContext === 'addressType'
-          ? savingPreviousAddressTypeMessage(currentAddressType)
-          : savingPreviousNetworkMessage(currentNetworkMode),
+          ? loadingTargetAddressTypeMessage(targetAddressType)
+          : loadingTargetNetworkMessage(targetNetworkMode),
       )
-      await updateDescriptorWalletChangeset({
+
+      // Drop previous descriptor wallet balance/tx UI so the dashboard never shows another network's totals.
+      setCurrentAddress(null)
+      setBalance(null)
+      setTransactions([])
+      setLastSyncTime(null)
+
+      const targetNetwork = toBitcoinNetwork(targetNetworkMode)
+      const descriptorWallet = await resolveDescriptorWallet({
         walletId: activeWalletId,
-        network: toBitcoinNetwork(currentNetworkMode),
-        addressType: currentAddressType,
-        accountId: currentAccountId,
-        changesetJson: currentChangeset,
-      })
-    } catch (err) {
-      if (!isBenignNoActiveWalletError(err)) {
-        throw err
-      }
-    }
-
-    onPhase?.(
-      phaseContext === 'addressType'
-        ? loadingTargetAddressTypeMessage(targetAddressType)
-        : loadingTargetNetworkMessage(targetNetworkMode),
-    )
-
-    // Drop previous descriptor wallet balance/tx UI so the dashboard never shows another network's totals.
-    setCurrentAddress(null)
-    setBalance(null)
-    setTransactions([])
-    setLastSyncTime(null)
-
-    const targetNetwork = toBitcoinNetwork(targetNetworkMode)
-    const descriptorWallet = await resolveDescriptorWallet({
-      walletId: activeWalletId,
-      targetNetwork,
-      targetAddressType,
-      targetAccountId,
-    })
-
-    const { usedEmptyChainFallback } =
-      await loadWalletHandlingPersistedChainMismatch(loadWallet, {
-        externalDescriptor: descriptorWallet.externalDescriptor,
-        internalDescriptor: descriptorWallet.internalDescriptor,
-        network: targetNetwork,
-        changesetJson: descriptorWallet.changeSet,
-        useEmptyChain: false,
+        targetNetwork,
+        targetAddressType,
+        targetAccountId,
       })
 
-    const address = await getCurrentAddress()
-    setCurrentAddress(address)
-    commitLoadedDescriptorWallet({
-      networkMode: targetNetworkMode,
-      addressType: targetAddressType,
-      accountId: targetAccountId,
-    })
+      const { usedEmptyChainFallback } =
+        await loadWalletHandlingPersistedChainMismatch(loadWallet, {
+          externalDescriptor: descriptorWallet.externalDescriptor,
+          internalDescriptor: descriptorWallet.internalDescriptor,
+          network: targetNetwork,
+          changesetJson: descriptorWallet.changeSet,
+          useEmptyChain: false,
+        })
+
+      const address = await getCurrentAddress()
+      setCurrentAddress(address)
+      commitLoadedDescriptorWallet({
+        networkMode: targetNetworkMode,
+        addressType: targetAddressType,
+        accountId: targetAccountId,
+      })
 
     if (targetNetworkMode !== 'lab') {
       await refreshWalletStoreFromLoadedBdk()
@@ -167,7 +179,7 @@ export async function switchDescriptorWallet(params: {
     } else {
       setWalletStatus('unlocked')
     }
-  } catch (err) {
+  })} catch (err) {
     const message = toUserFriendlySwitchError(err)
     const detail = errorMessage(err)
     toast.error(

@@ -192,7 +192,7 @@ async function requireUnlockedWallet(action: () => void | Promise<void>): Promis
 | **Settings — receiving descriptor** | Settings main page renders without hydrating WASM. Show copy such as “Unlock your wallet to view the receiving descriptor” when locked (`NetworkCardCommittedDescriptor` today). | Reveal, copy, or export descriptor → `requireUnlockedWallet` then load descriptor from encrypted secrets / WASM as needed. |
 | **Settings — network / address type switch** | Network cards render; locked state is visible. | Applying a switch that loads a different descriptor → `requireUnlockedWallet` (today partially inlined via `WalletUnlock` on network selector). |
 | **Lab** | Lab has **its own** chain DB, entities, and simulated wallets. Browsing blocks, lab entities, and lab-only mining do not require Bitboard wallet hydration. | Operations that credit **your** Bitboard wallet (e.g. mine block reward to “Wallet”, lab sends that use the live receive address) → `requireUnlockedWallet` before proceeding. Lab may still switch **network mode** to `lab` on entry (`runLabRouteBeforeLoad`); that is network UX, not a substitute for unlock on wallet-backed actions. |
-| **Setup** | Create/import flows manage their own password/session steps. | Steps that persist or load descriptor secrets → existing setup unlock/create flows, not route-wide hydration. |
+| **Setup** | Create/import flows manage their own password/session steps. | After persist, **await** `orchestrateOnchainSetupAfterPersist` (load from secrets + `setupInitial` full scan) before navigating to dashboard — not background post-nav sync. |
 
 **Anti-pattern:** Treating `/settings` or `/lab` like `/wallet` for route-wide hydration so bootstrap runs on navigation.
 
@@ -377,7 +377,7 @@ Lock teardown **must await** in-flight sync (best-effort cancel/debounce) and sa
 
 **Does not persist** — on success triggers SaveLifecycle.
 
-**`sync-error`:** Esplora unreachable, scan failure — keep BDK-local `loaded` data; surface toast/banner.
+**`sync-error`:** Esplora unreachable, scan failure, `BadLocalChainStateError` — keep BDK-local `loaded` data; surface toast/banner. **Persistence policy while `sync-error`:** dashboard Sync / Full rescan and network/address switch are allowed; switch **skips outgoing changeset save**. `exportChangesetForPersistence()` is blocked (send broadcast, new receive address, switch outgoing save) until repair succeeds. Post-successful-sync save uses `exportChangesetForPersistenceBypass()` inside the save orchestrator only.
 
 ### SaveLifecycle
 

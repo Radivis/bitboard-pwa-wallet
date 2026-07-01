@@ -13,7 +13,7 @@ import {
 } from './helpers/regtest'
 import {
   runDashboardSyncUntilIdle,
-  runOnchainFullRescanUntilIdle,
+  waitForOnchainRailNotSyncing,
 } from './helpers/dashboard-sync'
 import {
   waitForSendPageSpendableOnChainBalance,
@@ -91,6 +91,8 @@ test.describe('Send Page', () => {
       test.setTimeout(E2E_IS_CI ? 360_000 : 90_000)
 
       await importWalletViaUI(page, TEST_MNEMONIC, TEST_PASSWORD)
+      await goToWalletTab(page, 'Dashboard')
+      await waitForOnchainRailNotSyncing(page)
 
       await page.getByRole('link', { name: /settings/i }).click()
       await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
@@ -105,17 +107,17 @@ test.describe('Send Page', () => {
       await page.getByRole('button', { name: 'Regtest' }).click()
       await waitForSettingsNetworkSwitchComplete(page)
       await waitForSettingsNetworkModeButtonSelected(page, 'Regtest')
-
       await ensureSegwitAddressesFeatureOn(page)
+      await goToWalletTab(page, 'Dashboard')
+      await waitForOnchainRailNotSyncing(page)
 
+      await page.getByRole('link', { name: /settings/i }).click()
+      await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
       await page.getByRole('button', { name: 'SegWit (BIP84)' }).click()
       await page.getByRole('button', { name: 'Change' }).click()
       await waitForSettingsAddressTypeSwitchComplete(page)
-
-      // Network/address switches can leave BDK local_chain out of sync with Esplora (repair before fund).
       await goToWalletTab(page, 'Dashboard')
-      await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible()
-      await runOnchainFullRescanUntilIdle(page)
+      await waitForOnchainRailNotSyncing(page)
 
       await goToWalletTab(page, 'Receive')
       await expect(page.getByText('Receive Bitcoin')).toBeVisible()
@@ -138,8 +140,6 @@ test.describe('Send Page', () => {
 
       await runDashboardSyncUntilIdle(page)
       await waitForDashboardShowsFundedOnChainBalance(page)
-      // Full rescan (empty-chain retry) aligns spendable UTXOs with Esplora before broadcast.
-      await runOnchainFullRescanUntilIdle(page)
 
       await goToWalletTab(page, 'Send')
       await expect(page.getByText('Send Bitcoin')).toBeVisible()

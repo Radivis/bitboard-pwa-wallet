@@ -19,6 +19,8 @@ feature:
     - Lab network has no on-chain Esplora sync (sync stays not-configured); lab DB load/save is a documented exception
     - load-error is rare persistence/decrypt failure; rail data must not be shown
     - sync-error serves last loaded local data with stale/error indication
+    - While on-chain syncPhase is sync-error, exportChangesetForPersistence is blocked; network/address switch may proceed but skips outgoing changeset save
+    - Create/import setup awaits orchestrateOnchainSetupAfterPersist (load + setupInitial full scan) before navigating to dashboard
     - save-error must block or explicitly warn on lock until persist quiesces
     - walletStatus syncing removed; per-rail sync aggregation via isAnyRailSyncing / useAnyRailSyncing (L5)
   phase_types:
@@ -72,6 +74,20 @@ feature:
         implemented_by:
           - frontend/src/components/wallet/RailSyncErrorBanner.tsx
           - frontend/src/pages/wallet/DashboardPage.tsx
+      - id: LIFE-ONC-SETUP-01
+        description: Setup orchestrator runs load + single orchestrated setupInitial full scan before dashboard navigation
+        implemented_by: frontend/src/lib/wallet/lifecycle/__tests__/onchain-setup-lifecycle.test.ts
+      - id: LIFE-ONC-GUARD-01
+        description: exportChangesetForPersistence blocked while on-chain load/sync/save in flight
+        implemented_by: frontend/src/lib/wallet/lifecycle/__tests__/onchain-descriptor-mutation-guard.test.ts
+      - id: LIFE-ONC-GUARD-02
+        description: exportChangesetForPersistence blocked on sync-error; switch skips outgoing descriptor save
+        implemented_by:
+          - frontend/src/lib/wallet/lifecycle/__tests__/onchain-descriptor-mutation-guard.test.ts
+          - frontend/src/lib/wallet/__tests__/settings-switch-wallet.test.ts
+      - id: LIFE-ONC-GUARD-03
+        description: BadLocalChainStateError lands in sync-error with repair-oriented errorMessage
+        implemented_by: frontend/src/lib/wallet/lifecycle/__tests__/onchain-sync-lifecycle-orchestrator.test.ts
     lightning:
       - id: LIFE-LN-LOAD-01
         description: LightningLoadLifecycle loading includes loadLightningConnectionsForWallet and replaceConnectionsForWallet

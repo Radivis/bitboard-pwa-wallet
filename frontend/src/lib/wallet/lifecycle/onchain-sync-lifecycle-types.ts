@@ -9,7 +9,7 @@ export type OnchainSyncKind =
   | 'incrementalDashboard'
   | 'fullRescanDashboard'
   | 'descriptorSwitch'
-  | 'importInitial'
+  | 'setupInitial'
   | 'postBroadcast'
 
 export type OnchainSyncLifecycleSnapshot = {

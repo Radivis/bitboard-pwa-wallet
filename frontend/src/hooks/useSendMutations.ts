@@ -17,6 +17,7 @@ import { errorMessage } from '@/lib/shared/utils'
 import { formatAmountInputFromSats } from '@/lib/wallet/bitcoin-dust'
 import { onchainDustPrepareWarningLines } from '@/lib/wallet/send/onchain-dust-prepare-messages'
 import { reviewUtxoToOutpoint } from '@/lib/wallet/manual-utxo-selection'
+import { exportChangesetForPersistence } from '@/lib/wallet/lifecycle/onchain-descriptor-mutation-guard'
 
 /**
  * Mutation to prepare a PSBT (mainnet/testnet/signet/regtest).
@@ -67,11 +68,7 @@ export function useBroadcastTransactionMutation() {
     mutationFn: async () => {
       if (!psbt) throw new Error('No PSBT to broadcast')
 
-      const {
-        signAndExtractTransaction,
-        broadcastTransaction,
-        exportChangeset,
-      } = useCryptoStore.getState()
+      const { signAndExtractTransaction, broadcastTransaction } = useCryptoStore.getState()
       const activeWalletId = useWalletStore.getState().activeWalletId
 
       const rawTxHex = await signAndExtractTransaction(psbt)
@@ -81,7 +78,7 @@ export function useBroadcastTransactionMutation() {
       const txid = await broadcastTransaction(rawTxHex, esploraUrl)
 
       if (activeWalletId) {
-        const changesetJson = await exportChangeset()
+        const changesetJson = await exportChangesetForPersistence()
         await updateWalletChangeset({
           walletId: activeWalletId,
           changesetJson,

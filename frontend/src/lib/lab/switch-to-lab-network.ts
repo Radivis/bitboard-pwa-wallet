@@ -6,8 +6,13 @@ import {
   type WalletStatus,
 } from '@/stores/walletStore'
 import { walletIsUnlockedOrSyncing } from '@/lib/wallet/wallet-unlocked-status'
-import { useCryptoStore } from '@/stores/cryptoStore'
 import { updateDescriptorWalletChangeset } from '@/lib/wallet/descriptor-wallet-manager'
+import { withWalletWriterLock } from '@/lib/shared/opfs-writer-lock'
+import {
+  awaitOnchainQuiescenceBeforeDescriptorMutation,
+  exportChangesetForPersistence,
+  shouldSkipOutgoingDescriptorSaveOnSyncError,
+} from '@/lib/wallet/lifecycle/onchain-descriptor-mutation-guard'
 import { loadDescriptorWalletWithoutSync } from '@/lib/wallet/wallet-utils'
 import { toBitcoinNetwork } from '@/lib/wallet/bitcoin-utils'
 import { terminateLabWorker } from '@/workers/lab-factory'
@@ -40,29 +45,38 @@ async function persistAndLoadLabWalletIfUnlockedOrSyncing(params: {
   const activeWalletId = useWalletStore.getState().activeWalletId
   if (!activeWalletId) return
 
-  const { exportChangeset } = useCryptoStore.getState()
   try {
-    const currentChangeset = await exportChangeset()
-    onPhase?.(savingPreviousNetworkMessage(previousNetworkMode))
-    await updateDescriptorWalletChangeset({
-      walletId: activeWalletId,
-      network: toBitcoinNetwork(previousNetworkMode),
-      addressType,
-      accountId,
-      changesetJson: currentChangeset,
+    await awaitOnchainQuiescenceBeforeDescriptorMutation()
+
+    await withWalletWriterLock(async () => {
+      if (!shouldSkipOutgoingDescriptorSaveOnSyncError()) {
+        try {
+          const currentChangeset = await exportChangesetForPersistence()
+          onPhase?.(savingPreviousNetworkMessage(previousNetworkMode))
+          await updateDescriptorWalletChangeset({
+            walletId: activeWalletId,
+            network: toBitcoinNetwork(previousNetworkMode),
+            addressType,
+            accountId,
+            changesetJson: currentChangeset,
+          })
+        } catch {
+          // No active WASM wallet yet (e.g., first load) -- safe to skip
+        }
+      }
+
+      onPhase?.(loadingTargetNetworkMessage('lab'))
+
+      await loadDescriptorWalletWithoutSync({
+        walletId: activeWalletId,
+        networkMode: 'lab',
+        addressType,
+        accountId,
+      })
     })
   } catch {
-    // No active WASM wallet yet (e.g., first load) -- safe to skip
+    // Quiescence or load failed without active WASM wallet — safe to skip persist
   }
-
-  onPhase?.(loadingTargetNetworkMessage('lab'))
-
-  await loadDescriptorWalletWithoutSync({
-    walletId: activeWalletId,
-    networkMode: 'lab',
-    addressType,
-    accountId,
-  })
 }
 
 export type SwitchToLabNetworkParams = {
