@@ -54,7 +54,7 @@ export async function waitForDashboardSyncButtonEnabled(
 
 /**
  * Runs one full manual on-chain sync: enabled Sync on-chain → Syncing… → idle again.
- * Does not trigger Lightning or Arkade sync controls.
+ * Fails when the on-chain sync-error banner is visible (idle button alone is not success).
  */
 export async function runDashboardSyncUntilIdle(page: Page): Promise<void> {
   const syncButton = page.getByTestId('rail-sync-onchain')
@@ -65,13 +65,15 @@ export async function runDashboardSyncUntilIdle(page: Page): Promise<void> {
     timeout: SYNC_FINISH_TIMEOUT_MS,
   })
   await expect(syncButton).toBeEnabled({ timeout: SYNC_FINISH_TIMEOUT_MS })
+  await expect(page.getByTestId('wallet-sync-error-banner-onchain')).not.toBeVisible({
+    timeout: 5_000,
+  })
 }
 
 const ONCHAIN_FULL_RESCAN_BUTTON = 'Full rescan'
 
 /**
- * Runs dashboard full rescan (regtest/testnet/signet/mainnet when exposed).
- * Use after regtest funding so BDK chain state matches Esplora before spend.
+ * Runs dashboard full rescan (testnet/signet/mainnet when exposed).
  */
 export async function runOnchainFullRescanUntilIdle(page: Page): Promise<void> {
   const rescanButton = page.getByTestId('rail-sync-onchain-full-rescan')

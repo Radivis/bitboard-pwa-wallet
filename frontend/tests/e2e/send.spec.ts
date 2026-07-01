@@ -10,11 +10,11 @@ import {
   fundRegtestWalletReceiveAddress,
   getRegtestNodeReceiveAddress,
   REGTEST_DASHBOARD_MIN_VISIBLE_SATS,
-  waitForDashboardShowsFundedOnChainBalance,
 } from './helpers/regtest'
+import { runRegtestPostFundDashboardCheck } from './helpers/regtest-onchain-balance-diagnostics'
 import { waitForOnchainRailNotSyncing } from './helpers/dashboard-sync'
 import {
-  waitForSendPageSpendableOnChainBalance,
+  assertSendPageSpendableOnChainBalance,
   waitForSendReviewTransactionButtonEnabled,
 } from './helpers/send-page'
 import { goToWalletTab } from './helpers/wallet-nav'
@@ -86,7 +86,7 @@ test.describe('Send Page', () => {
     test.describe.configure({ retries: 0 })
 
     test('sends bitcoin on regtest @regtest', async ({ page }) => {
-      test.setTimeout(E2E_IS_CI ? 600_000 : 90_000)
+      test.setTimeout(E2E_IS_CI ? 360_000 : 90_000)
 
       await importWalletViaUI(page, TEST_MNEMONIC, TEST_PASSWORD)
       await goToWalletTab(page, 'Dashboard')
@@ -136,14 +136,14 @@ test.describe('Send Page', () => {
       await goToWalletTab(page, 'Dashboard')
       await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible()
 
-      await waitForDashboardShowsFundedOnChainBalance(page, {
+      await runRegtestPostFundDashboardCheck(page, {
         receiveAddress,
         minConfirmedSats: REGTEST_DASHBOARD_MIN_VISIBLE_SATS,
       })
 
       await goToWalletTab(page, 'Send')
       await expect(page.getByText('Send Bitcoin')).toBeVisible()
-      await waitForSendPageSpendableOnChainBalance(page, 1_000)
+      await assertSendPageSpendableOnChainBalance(page, 1_000)
       await page.locator('#recipient-address').fill(sendRecipientAddress)
       await page.getByLabel('Unit for amount entry').selectOption('sat')
       const amountInput = page.locator('#send-amount')

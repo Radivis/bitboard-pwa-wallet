@@ -3,13 +3,6 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
 
-import { expect, type Page } from '@playwright/test'
-import {
-  runDashboardSyncUntilIdle,
-  waitForOnchainRailNotSyncing,
-} from './dashboard-sync'
-import { onChainSpendableSatsFromDashboardBalanceCardText } from './onchain-spendable-balance-text'
-
 /**
  * Helpers for E2E tests that use the arkade-regtest environment.
  * Requires the stack to be running: npm run regtest:start (or use test:e2e:regtest / test:e2e:arkade-regtest).
@@ -39,8 +32,6 @@ export const E2E_IS_CI = isCi
 const ESPLORA_INDEX_WAIT_MS = isCi ? 90_000 : 15_000
 
 const CONFIRMED_UTXO_WAIT_MS = isCi ? 90_000 : 15_000
-
-const ONCHAIN_SYNC_FINISH_TIMEOUT_MS = isCi ? 90_000 : 60_000
 
 /** Same window as Esplora UTXO polling — use when UI must reflect post-sync wallet state. */
 export const E2E_CI_AWARE_LONG_WAIT_MS = CONFIRMED_UTXO_WAIT_MS
@@ -184,93 +175,6 @@ interface EsploraUtxo {
 
 /** Send flow needs a non-dust on-chain view; 1000 sats matches typical regtest headroom. */
 export const REGTEST_DASHBOARD_MIN_VISIBLE_SATS = 1_000
-
-/** Each regtest dashboard sync is a full Esplora scan and can take most of ONCHAIN_SYNC_FINISH_TIMEOUT_MS on CI. */
-const DASHBOARD_FUNDED_BALANCE_POLL_TIMEOUT_MS = isCi
-  ? Math.max(480_000, ONCHAIN_SYNC_FINISH_TIMEOUT_MS * 5 + 60_000)
-  : Math.max(60_000, E2E_CI_AWARE_LONG_WAIT_MS)
-
-const DASHBOARD_FUNDED_BALANCE_MAX_MANUAL_SYNCS = isCi ? 6 : 3
-
-async function esploraConfirmedSatsForAddress(address: string): Promise<number> {
-  const res = await fetch(`${ESPLORA_URL}/address/${address}/utxo`)
-  if (!res.ok) {
-    return 0
-  }
-  const utxos: EsploraUtxo[] = await res.json()
-  return utxos
-    .filter((utxo) => utxo.status.confirmed)
-    .reduce((sum, utxo) => sum + utxo.value, 0)
-}
-
-export type WaitForDashboardFundedOnChainBalanceOptions = {
-  /** When set, poll Esplora before each manual sync so BDK is not blamed for indexer lag. */
-  receiveAddress?: string
-  minConfirmedSats?: number
-}
-
-/**
- * After regtest fund + mine + Esplora polling, the dashboard can still show 0 until BDK
- * finishes ingesting the sync.
- */
-export async function waitForDashboardShowsFundedOnChainBalance(
-  page: Page,
-  options: WaitForDashboardFundedOnChainBalanceOptions = {},
-): Promise<void> {
-  const minVisibleSats = options.minConfirmedSats ?? REGTEST_DASHBOARD_MIN_VISIBLE_SATS
-  const receiveAddress = options.receiveAddress
-  const card = page.locator('[data-infomode-id="dashboard-balance-card"]')
-  const syncButton = page.getByTestId('rail-sync-onchain')
-  let manualSyncAttempts = 0
-
-  await expect(card).toBeVisible({ timeout: 10_000 })
-  await expect
-    .poll(
-      async () => {
-        const text = (await card.innerText()) ?? ''
-        if (onChainSpendableSatsFromDashboardBalanceCardText(text) >= minVisibleSats) {
-          return true
-        }
-
-        if (receiveAddress != null) {
-          const esploraConfirmedSats = await esploraConfirmedSatsForAddress(receiveAddress)
-          if (esploraConfirmedSats < minVisibleSats) {
-            return false
-          }
-        }
-
-        const syncButtonText = (await syncButton.innerText().catch(() => '')) ?? ''
-        if (/Syncing/i.test(syncButtonText)) {
-          return false
-        }
-
-        if (manualSyncAttempts >= DASHBOARD_FUNDED_BALANCE_MAX_MANUAL_SYNCS) {
-          return false
-        }
-
-        const syncEnabled = await syncButton.isEnabled().catch(() => false)
-        if (!syncEnabled) {
-          await waitForOnchainRailNotSyncing(page, 15_000).catch(() => {})
-          return false
-        }
-
-        manualSyncAttempts += 1
-        try {
-          await runDashboardSyncUntilIdle(page)
-        } catch {
-          // Esplora/BDK may still be catching up; keep polling.
-        }
-        return false
-      },
-      {
-        timeout: DASHBOARD_FUNDED_BALANCE_POLL_TIMEOUT_MS,
-        intervals: [300, 600, 1200, 2000],
-        message:
-          'Dashboard on-chain spendable balance still looks empty (pending incoming does not count; BDK may not have caught Esplora yet)',
-      },
-    )
-    .toBe(true)
-}
 
 /**
  * Poll the Esplora API until the given address has at least `minConfirmedSats`
