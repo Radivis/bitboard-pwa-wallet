@@ -66,6 +66,6 @@ describe('formatRegtestOnchainBalanceDiagnosticReport', () => {
     expect(report).toContain('Failure kind: pending_incoming_only')
     expect(report).toContain('txid=abc')
     expect(report).toContain('Confirmed sats at receive address: 100000')
-    expect(report).toContain('do not retry with Full rescan')
+    expect(report).toContain('indicates a product bug')
   })
 })

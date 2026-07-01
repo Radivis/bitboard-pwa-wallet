@@ -85,8 +85,9 @@ export function interpretRegtestOnchainBalanceFailure(
     case 'pending_incoming_only':
       return (
         'Esplora shows confirmed UTXOs at the receive address, but the dashboard spendable balance is still zero ' +
-        'with pending breakdown lines. BDK ingested the funding as non-spendable (likely local chain / confirmation trust mismatch). ' +
-        'A manual Full rescan might repair this in the app; for this test that is a product bug, not a retry path.'
+        'with pending breakdown lines. BDK ingested the funding as non-spendable (untrusted pending). ' +
+        'Typical causes: local chain tip lag after Sync on-chain, or using full scan where incremental sync was required ' +
+        'to confirm already-revealed receives. A manual Full rescan might repair persisted state; for this test that indicates a product bug.'
       )
     case 'spendable_below_threshold':
       return (

@@ -250,20 +250,17 @@ export async function runIncrementalDashboardWalletSync(options: {
   activeWalletId: number | null
 }): Promise<void> {
   const { networkMode, activeWalletId } = options
-  const customUrl = await loadCustomEsploraUrl(networkMode)
-  const esploraUrl = getEsploraUrl(networkMode, customUrl)
-  /** Regtest dashboard sync uses full scan inside {@link syncActiveWalletAndUpdateState}, which already replaces the loading toast with this success message when Esplora is configured. */
-  const fullScanSuccessToastAlreadyShown =
-    networkMode === 'regtest' && esploraUrl != null
 
+  /**
+   * Dashboard "Sync on-chain" is always incremental: it updates chain tip + revealed script
+   * pubkeys so newly confirmed UTXOs become spendable. Full scan is for import, network/
+   * address switch, and Full rescan — re-running it here (regtest included) can leave
+   * Esplora-confirmed receives stuck as untrusted pending in BDK.
+   */
   if (activeWalletId == null) {
-    await syncActiveWalletAndUpdateState(networkMode, {
-      useFullScan: networkMode === 'regtest',
-    })
+    await syncActiveWalletAndUpdateState(networkMode, { useFullScan: false })
     invalidateDashboardQueriesAfterOnchainUpdate()
-    if (!fullScanSuccessToastAlreadyShown) {
-      toast.success('Wallet synced')
-    }
+    toast.success('Wallet synced')
     return
   }
 
@@ -274,12 +271,10 @@ export async function runIncrementalDashboardWalletSync(options: {
     addressType,
     accountId,
     syncKind: 'incrementalDashboard',
-    useFullScan: networkMode === 'regtest',
+    useFullScan: false,
     markFullScanDone: false,
   })
-  if (!fullScanSuccessToastAlreadyShown) {
-    toast.success('Wallet synced')
-  }
+  toast.success('Wallet synced')
 }
 
 /**
