@@ -28,6 +28,7 @@ use crate::error::{
     MapDisplayErrToJs, MapErrToJs, wasm_crypto_error,
 };
 pub mod esplora;
+pub mod esplora_tx_anchor_reconcile;
 pub mod lab;
 pub mod lab_entity_wallet;
 pub mod lab_psbt;
@@ -303,6 +304,23 @@ pub async fn sync_wallet(esplora_url: &str) -> Result<JsValue, JsValue> {
         .into();
 
     with_wallet_mut(|wallet| sync::apply_update(wallet, update).map_err(JsValue::from))??;
+
+    let unconfirmed_txids =
+        with_wallet(esplora_tx_anchor_reconcile::list_unconfirmed_canonical_txids)
+            .map_err(JsValue::from)?;
+
+    if let Some(reconcile_update) =
+        esplora_tx_anchor_reconcile::build_anchor_reconcile_update_for_txids(
+            esplora_client.inner(),
+            &unconfirmed_txids,
+        )
+        .await
+        .map_err(JsValue::from)?
+    {
+        with_wallet_mut(|wallet| {
+            sync::apply_update(wallet, reconcile_update).map_err(JsValue::from)
+        })??;
+    }
 
     accumulate_staged_changes();
     build_sync_result()

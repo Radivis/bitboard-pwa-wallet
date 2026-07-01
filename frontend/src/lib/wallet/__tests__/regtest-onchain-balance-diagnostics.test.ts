@@ -76,6 +76,6 @@ describe('formatRegtestOnchainBalanceDiagnosticReport', () => {
     expect(report).toContain('txid=abc')
     expect(report).toContain('bdk_anchor_ready=true')
     expect(report).toContain('Confirmed sats at receive address: 100000')
-    expect(report).toContain('indicates a product bug')
+    expect(report).toContain('scripthash history likely returned incomplete status')
   })
 })
