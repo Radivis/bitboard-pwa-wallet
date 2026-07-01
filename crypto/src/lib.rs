@@ -306,10 +306,8 @@ pub async fn sync_wallet(esplora_url: &str) -> Result<JsValue, JsValue> {
     with_wallet_mut(|wallet| sync::apply_update(wallet, update).map_err(JsValue::from))??;
 
     let unconfirmed_txids =
-        with_wallet(esplora_tx_anchor_reconcile::list_unconfirmed_canonical_txids)
-            .map_err(JsValue::from)?;
-    let local_chain_tip =
-        with_wallet(|wallet| wallet.local_chain().tip().clone()).map_err(JsValue::from)?;
+        with_wallet(esplora_tx_anchor_reconcile::list_unconfirmed_canonical_txids)?;
+    let local_chain_tip = with_wallet(|wallet| wallet.local_chain().tip().clone())?;
 
     if let Some(reconcile_update) =
         esplora_tx_anchor_reconcile::build_anchor_and_chain_reconcile_update(
