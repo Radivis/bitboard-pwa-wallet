@@ -189,7 +189,7 @@ export async function syncActiveWalletAndUpdateState(
     }
   } else {
     await syncWallet(esploraUrl)
-    let balance = await getBalance()
+    const balance = await getBalance()
     // Esplora can expose a confirmed UTXO before /tx (and scripthash) status includes
     // block_hash + block_time; BDK then records seen_at → untrusted pending. A single
     // immediate follow-up sync picks up anchor metadata once the indexer catches up.
