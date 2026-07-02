@@ -33,6 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - An Arkade signer key rotation won't completely block the Arkade rail now; key rotation should be handled gracefully now
+- Bitboard now runs an automatic post-sync anchor+chain reconcile, if Esplora declares any transaction as confirmed, but BDK still classifies it as unconfirmed
 
 ## [0.3.1] - 2026-06-18
 ### Added

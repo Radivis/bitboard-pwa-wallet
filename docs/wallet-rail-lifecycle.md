@@ -373,6 +373,7 @@ Lock teardown **must await** in-flight sync (best-effort cancel/debounce) and sa
 **Work in `syncing`:**
 
 - Esplora incremental or full scan via crypto worker
+- Incremental sync includes WASM **anchor+chain reconcile** after `bdk_esplora` (see [`esplora-bdk-anchor-reconcile.md`](esplora-bdk-anchor-reconcile.md))
 - Network switch full scan (`switchDescriptorWallet` path)
 
 **Does not persist** — on success triggers SaveLifecycle.

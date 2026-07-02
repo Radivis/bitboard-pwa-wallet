@@ -1,13 +1,27 @@
-//! Esplora exposes transaction confirmation metadata inconsistently across HTTP endpoints.
+//! Post-sync repair for Esplora incremental sync + BDK confirmation gaps.
 //!
-//! Incremental sync (`bdk_esplora`) learns txs from `scripthash_txs` first. When that payload
-//! lacks `block_hash` or `block_time`, the tx is recorded as `seen_at` (untrusted pending).
-//! The same tx's `/tx/{txid}` response may already include full anchor fields, but sync skips
-//! `/tx` refetch when the txid was inserted in the scripthash pass (`inserted_txs` guard).
+//! # Problem
 //!
-//! Even when anchors are applied later, BDK only promotes receives to spendable confirmed balance
-//! when the anchor block exists in the wallet's local chain. Incremental sync can skip chain
-//! extension when the wallet had no chain tip at sync start; this module repairs both gaps.
+//! Esplora can show a **confirmed UTXO** while BDK still reports the receive as
+//! **untrusted pending** (`confirmed` = 0, dashboard: “Pending incoming”). Sync
+//! succeeds; only spendable balance is wrong.
+//!
+//! BDK requires **both** (1) full anchor metadata on the tx and (2) the anchor
+//! block in the wallet's **local chain** before external receives become confirmed.
+//! `bdk_esplora` incremental sync often learns txs from scripthash history first;
+//! partial status → `seen_at`; `/tx` refetch is skipped when the txid was already
+//! inserted. Chain extension can also leave wrong or missing checkpoints at anchor
+//! heights.
+//!
+//! # Fix
+//!
+//! After each incremental sync, check for Esplora/BDK confirmation mismatch on
+//! unconfirmed receives. Only when `/tx` reports a full confirmed anchor while BDK
+//! still has the tx unconfirmed: re-fetch anchors, repair local chain through
+//! Esplora, and `apply_update` with anchors **and** chain together. Mempool-only
+//! receives (both agree unconfirmed) skip repair.
+//!
+//! Full design, shortcuts, and diagrams: `docs/esplora-bdk-anchor-reconcile.md`
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
@@ -510,6 +524,65 @@ where
 pub fn wallet_has_untrusted_incoming_pending(wallet: &Wallet) -> bool {
     let balance = wallet.balance();
     balance.confirmed.to_sat() == 0 && balance.untrusted_pending.to_sat() > 0
+}
+
+/// Txids of unconfirmed UTXOs still in the wallet (candidates for reconcile / stuck checks).
+pub fn unconfirmed_unspent_txids(wallet: &Wallet) -> BTreeSet<Txid> {
+    wallet
+        .list_unspent()
+        .filter(|local_output| {
+            matches!(
+                local_output.chain_position,
+                ChainPosition::Unconfirmed { .. }
+            )
+        })
+        .map(|local_output| local_output.outpoint.txid)
+        .collect()
+}
+
+/// Subset of `txids` whose Esplora `/tx` response includes a full confirmed anchor.
+pub async fn filter_esplora_confirmed_txids<S>(
+    esplora_async_client: &AsyncClient<S>,
+    txids: &[Txid],
+) -> Result<Vec<Txid>, CryptoError>
+where
+    S: Sleeper + Clone + Send + Sync,
+    S::Sleep: Send,
+{
+    let mut confirmed_txids = BTreeSet::new();
+
+    for txid in txids {
+        let Some(tx_info) = esplora_async_client
+            .get_tx_info(txid)
+            .await
+            .map_err(|error| CryptoError::Blockchain(error.to_string()))?
+        else {
+            continue;
+        };
+
+        if tx_status_has_full_esplora_anchor(&tx_info.status) {
+            confirmed_txids.insert(*txid);
+        }
+    }
+
+    Ok(confirmed_txids.into_iter().collect())
+}
+
+/// Unconfirmed wallet UTXOs whose `/tx` status already has a full Esplora anchor.
+///
+/// These should be spendable confirmed balance after reconcile; if they remain
+/// unconfirmed in BDK, sync should fail rather than report success. Genuine
+/// mempool-only receives (Esplora not confirmed) are excluded.
+pub async fn list_esplora_confirmed_txids_still_untrusted_pending<S>(
+    wallet: &Wallet,
+    esplora_async_client: &AsyncClient<S>,
+) -> Result<Vec<Txid>, CryptoError>
+where
+    S: Sleeper + Clone + Send + Sync,
+    S::Sleep: Send,
+{
+    let unconfirmed_txids: Vec<Txid> = unconfirmed_unspent_txids(wallet).into_iter().collect();
+    filter_esplora_confirmed_txids(esplora_async_client, &unconfirmed_txids).await
 }
 
 #[cfg(test)]

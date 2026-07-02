@@ -6,6 +6,8 @@ Switching network or address type in Settings means: persist the outgoing descri
 
 For how on-chain balance/history and stale indicators work after a switch, see [`onchain-bitboard-wallet-model.md`](onchain-bitboard-wallet-model.md).
 
+For post-sync anchor+chain reconcile (why dashboard sync is not “just call `bdk_esplora::sync`”), see [`esplora-bdk-anchor-reconcile.md`](esplora-bdk-anchor-reconcile.md).
+
 ## Terminology
 
 | Term | Meaning |

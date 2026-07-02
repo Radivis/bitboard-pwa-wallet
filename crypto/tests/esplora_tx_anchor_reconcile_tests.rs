@@ -10,7 +10,8 @@ use bdk_wallet::{KeychainKind, Update, Wallet};
 use bitboard_crypto::esplora::EsploraClient;
 use bitboard_crypto::esplora_tx_anchor_reconcile::{
     build_anchor_and_chain_reconcile_update, build_anchor_reconcile_update_for_txids,
-    list_txids_for_anchor_reconcile, list_unconfirmed_canonical_txids,
+    filter_esplora_confirmed_txids, list_esplora_confirmed_txids_still_untrusted_pending,
+    list_txids_for_anchor_reconcile, list_unconfirmed_canonical_txids, unconfirmed_unspent_txids,
 };
 use bitboard_crypto::sync;
 use bitboard_crypto::types::{AddressType, BitcoinNetwork};
@@ -661,6 +662,59 @@ async fn anchor_reconcile_without_chain_blocks_stays_pending() {
         .expect("expected reconcile update");
 
     sync::apply_update(&mut wallet, reconcile_update).expect("reconcile apply");
+
+    assert_eq!(wallet.balance().confirmed.to_sat(), 0);
+    assert_eq!(wallet.balance().untrusted_pending.to_sat(), FUNDING_SATS);
+}
+
+#[tokio::test]
+async fn mempool_only_unconfirmed_esplora_tx_is_not_stuck_untrusted_pending() {
+    let mut wallet = regtest_segwit_wallet_with_revealed_receive();
+    let txid = apply_seen_at_funding_with_chain(&mut wallet, FUNDING_BLOCK_TIME);
+
+    let server = MockServer::start().await;
+    let txid_hex = txid.to_string();
+    Mock::given(method("GET"))
+        .and(path(format!("/tx/{txid_hex}")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "txid": txid_hex,
+            "version": 2,
+            "locktime": 0,
+            "vin": [],
+            "vout": [],
+            "size": 100,
+            "weight": 400,
+            "fee": 0,
+            "status": {
+                "confirmed": false
+            }
+        })))
+        .mount(&server)
+        .await;
+
+    let esplora_client = EsploraClient::new(&server.uri()).expect("mock esplora client");
+
+    assert!(
+        unconfirmed_unspent_txids(&wallet).contains(&txid),
+        "wallet must still have unconfirmed unspent before stuck check"
+    );
+
+    let esplora_confirmed = filter_esplora_confirmed_txids(esplora_client.inner(), &[txid])
+        .await
+        .expect("filter esplora confirmed");
+    assert!(
+        esplora_confirmed.is_empty(),
+        "mempool-only /tx must not count as Esplora-confirmed stuck, got {esplora_confirmed:?}",
+    );
+
+    let stuck_txids =
+        list_esplora_confirmed_txids_still_untrusted_pending(&wallet, esplora_client.inner())
+            .await
+            .expect("stuck txid list");
+    assert!(
+        stuck_txids.is_empty(),
+        "mempool receive must not trigger sync failure path, got {stuck_txids:?}",
+    );
 
     assert_eq!(wallet.balance().confirmed.to_sat(), 0);
     assert_eq!(wallet.balance().untrusted_pending.to_sat(), FUNDING_SATS);

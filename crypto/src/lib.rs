@@ -2,6 +2,7 @@ use std::cell::RefCell;
 
 use bdk_wallet::chain::Merge;
 use bdk_wallet::{ChangeSet, KeychainKind, Wallet as BdkWallet};
+use bitcoin::Txid;
 use wasm_bindgen::prelude::*;
 
 /// Current Unix time in seconds. Used for sync/full_scan request building so production and tests use the same `_at(now)` API.
@@ -311,6 +312,10 @@ pub async fn sync_wallet(esplora_url: &str) -> Result<JsValue, JsValue> {
     build_sync_result()
 }
 
+/// Post-sync reconcile after incremental `bdk_esplora` sync; runs the repair job
+/// only when Esplora reports confirmed anchors for txs BDK still has unconfirmed.
+///
+/// See `docs/esplora-bdk-anchor-reconcile.md`.
 const ANCHOR_RECONCILE_MAX_PASSES: usize = 2;
 
 async fn apply_esplora_anchor_reconcile_passes(
@@ -342,19 +347,42 @@ async fn apply_esplora_anchor_reconcile_passes(
             sync::apply_update(wallet, reconcile_update).map_err(JsValue::from)
         })??;
 
-        if !with_wallet(esplora_tx_anchor_reconcile::wallet_has_untrusted_incoming_pending)? {
+        if stuck_esplora_confirmed_untrusted_receives(esplora_client)
+            .await?
+            .is_empty()
+        {
             return Ok(());
         }
     }
 
-    if with_wallet(esplora_tx_anchor_reconcile::wallet_has_untrusted_incoming_pending)? {
+    let stuck_txids = stuck_esplora_confirmed_untrusted_receives(esplora_client).await?;
+    if !stuck_txids.is_empty() {
         let pending_sats = with_wallet(|wallet| wallet.balance().untrusted_pending.to_sat())?;
         return Err(JsValue::from(CryptoError::Blockchain(format!(
-            "Esplora-confirmed receives remain untrusted pending ({pending_sats} sats) after anchor+chain reconcile"
+            "Esplora-confirmed receives remain untrusted pending ({pending_sats} sats; txids: {}) after anchor+chain reconcile",
+            stuck_txids
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join(", "),
         ))));
     }
 
     Ok(())
+}
+
+async fn stuck_esplora_confirmed_untrusted_receives(
+    esplora_client: &esplora::EsploraClient,
+) -> Result<Vec<Txid>, JsValue> {
+    let unconfirmed_unspent_txids =
+        with_wallet(esplora_tx_anchor_reconcile::unconfirmed_unspent_txids)?;
+    let unconfirmed_unspent_txids: Vec<_> = unconfirmed_unspent_txids.into_iter().collect();
+    esplora_tx_anchor_reconcile::filter_esplora_confirmed_txids(
+        esplora_client.inner(),
+        &unconfirmed_unspent_txids,
+    )
+    .await
+    .map_err(JsValue::from)
 }
 
 /// Full scan the active wallet against an Esplora server.
