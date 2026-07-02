@@ -520,12 +520,6 @@ where
     }))
 }
 
-/// Returns true when confirmed balance is still zero but untrusted incoming remains.
-pub fn wallet_has_untrusted_incoming_pending(wallet: &Wallet) -> bool {
-    let balance = wallet.balance();
-    balance.confirmed.to_sat() == 0 && balance.untrusted_pending.to_sat() > 0
-}
-
 /// Txids of unconfirmed UTXOs still in the wallet (candidates for reconcile / stuck checks).
 pub fn unconfirmed_unspent_txids(wallet: &Wallet) -> BTreeSet<Txid> {
     wallet
@@ -566,23 +560,6 @@ where
     }
 
     Ok(confirmed_txids.into_iter().collect())
-}
-
-/// Unconfirmed wallet UTXOs whose `/tx` status already has a full Esplora anchor.
-///
-/// These should be spendable confirmed balance after reconcile; if they remain
-/// unconfirmed in BDK, sync should fail rather than report success. Genuine
-/// mempool-only receives (Esplora not confirmed) are excluded.
-pub async fn list_esplora_confirmed_txids_still_untrusted_pending<S>(
-    wallet: &Wallet,
-    esplora_async_client: &AsyncClient<S>,
-) -> Result<Vec<Txid>, CryptoError>
-where
-    S: Sleeper + Clone + Send + Sync,
-    S::Sleep: Send,
-{
-    let unconfirmed_txids: Vec<Txid> = unconfirmed_unspent_txids(wallet).into_iter().collect();
-    filter_esplora_confirmed_txids(esplora_async_client, &unconfirmed_txids).await
 }
 
 #[cfg(test)]

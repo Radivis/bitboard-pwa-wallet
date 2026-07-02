@@ -10,8 +10,8 @@ use bdk_wallet::{KeychainKind, Update, Wallet};
 use bitboard_crypto::esplora::EsploraClient;
 use bitboard_crypto::esplora_tx_anchor_reconcile::{
     build_anchor_and_chain_reconcile_update, build_anchor_reconcile_update_for_txids,
-    filter_esplora_confirmed_txids, list_esplora_confirmed_txids_still_untrusted_pending,
-    list_txids_for_anchor_reconcile, list_unconfirmed_canonical_txids, unconfirmed_unspent_txids,
+    filter_esplora_confirmed_txids, list_txids_for_anchor_reconcile,
+    list_unconfirmed_canonical_txids, unconfirmed_unspent_txids,
 };
 use bitboard_crypto::sync;
 use bitboard_crypto::types::{AddressType, BitcoinNetwork};
@@ -705,15 +705,6 @@ async fn mempool_only_unconfirmed_esplora_tx_is_not_stuck_untrusted_pending() {
     assert!(
         esplora_confirmed.is_empty(),
         "mempool-only /tx must not count as Esplora-confirmed stuck, got {esplora_confirmed:?}",
-    );
-
-    let stuck_txids =
-        list_esplora_confirmed_txids_still_untrusted_pending(&wallet, esplora_client.inner())
-            .await
-            .expect("stuck txid list");
-    assert!(
-        stuck_txids.is_empty(),
-        "mempool receive must not trigger sync failure path, got {stuck_txids:?}",
     );
 
     assert_eq!(wallet.balance().confirmed.to_sat(), 0);
