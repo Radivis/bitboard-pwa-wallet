@@ -24,7 +24,7 @@ pub mod descriptors;
 pub mod error;
 use crate::error::{
     CODE_NO_ACTIVE_WALLET, CODE_WALLET_ALREADY_BORROWED, CODE_WALLET_NOT_LOADED_FOR_LAB,
-    MSG_NO_ACTIVE_WALLET, MSG_WALLET_ALREADY_BORROWED, MSG_WALLET_NOT_LOADED_FOR_LAB,
+    CryptoError, MSG_NO_ACTIVE_WALLET, MSG_WALLET_ALREADY_BORROWED, MSG_WALLET_NOT_LOADED_FOR_LAB,
     MapDisplayErrToJs, MapErrToJs, wasm_crypto_error,
 };
 pub mod esplora;
@@ -305,27 +305,56 @@ pub async fn sync_wallet(esplora_url: &str) -> Result<JsValue, JsValue> {
 
     with_wallet_mut(|wallet| sync::apply_update(wallet, update).map_err(JsValue::from))??;
 
-    let unconfirmed_txids =
-        with_wallet(esplora_tx_anchor_reconcile::list_txids_for_anchor_reconcile)?;
-    let unconfirmed_txids: Vec<_> = unconfirmed_txids.into_iter().collect();
-    let local_chain_tip = with_wallet(|wallet| wallet.local_chain().tip().clone())?;
-
-    if let Some(reconcile_update) =
-        esplora_tx_anchor_reconcile::build_anchor_and_chain_reconcile_update(
-            &local_chain_tip,
-            esplora_client.inner(),
-            &unconfirmed_txids,
-        )
-        .await
-        .map_err(JsValue::from)?
-    {
-        with_wallet_mut(|wallet| {
-            sync::apply_update(wallet, reconcile_update).map_err(JsValue::from)
-        })??;
-    }
+    apply_esplora_anchor_reconcile_passes(&esplora_client).await?;
 
     accumulate_staged_changes();
     build_sync_result()
+}
+
+const ANCHOR_RECONCILE_MAX_PASSES: usize = 2;
+
+async fn apply_esplora_anchor_reconcile_passes(
+    esplora_client: &esplora::EsploraClient,
+) -> Result<(), JsValue> {
+    for _ in 0..ANCHOR_RECONCILE_MAX_PASSES {
+        let unconfirmed_txids: Vec<_> =
+            with_wallet(esplora_tx_anchor_reconcile::list_txids_for_anchor_reconcile)?
+                .into_iter()
+                .collect();
+        if unconfirmed_txids.is_empty() {
+            break;
+        }
+
+        let local_chain_tip = with_wallet(|wallet| wallet.local_chain().tip().clone())?;
+        let Some(reconcile_update) =
+            esplora_tx_anchor_reconcile::build_anchor_and_chain_reconcile_update(
+                &local_chain_tip,
+                esplora_client.inner(),
+                &unconfirmed_txids,
+            )
+            .await
+            .map_err(JsValue::from)?
+        else {
+            break;
+        };
+
+        with_wallet_mut(|wallet| {
+            sync::apply_update(wallet, reconcile_update).map_err(JsValue::from)
+        })??;
+
+        if !with_wallet(esplora_tx_anchor_reconcile::wallet_has_untrusted_incoming_pending)? {
+            return Ok(());
+        }
+    }
+
+    if with_wallet(esplora_tx_anchor_reconcile::wallet_has_untrusted_incoming_pending)? {
+        let pending_sats = with_wallet(|wallet| wallet.balance().untrusted_pending.to_sat())?;
+        return Err(JsValue::from(CryptoError::Blockchain(format!(
+            "Esplora-confirmed receives remain untrusted pending ({pending_sats} sats) after anchor+chain reconcile"
+        ))));
+    }
+
+    Ok(())
 }
 
 /// Full scan the active wallet against an Esplora server.

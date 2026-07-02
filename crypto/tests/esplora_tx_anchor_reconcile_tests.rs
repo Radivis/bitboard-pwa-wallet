@@ -502,6 +502,119 @@ async fn anchor_and_chain_reconcile_uses_tip_fallback_when_blocks_list_empty() {
 }
 
 #[tokio::test]
+async fn anchor_and_chain_reconcile_fixes_wrong_hash_at_anchor_height_when_tip_agrees() {
+    let mut wallet = regtest_segwit_wallet_with_revealed_receive();
+    let correct_block_hash = BlockHash::from_byte_array([0x3c; 32]);
+    let wrong_block_hash = BlockHash::from_byte_array([0xab; 32]);
+    let (funding_tx, txid) = funding_tx_and_id(&wallet);
+
+    let genesis = BlockId {
+        height: 0,
+        hash: BlockHash::from_byte_array([0u8; 32]),
+    };
+    let mut chain_tip = CheckPoint::new(genesis);
+    for height in 1..FUNDING_BLOCK_HEIGHT {
+        chain_tip = chain_tip.insert(BlockId {
+            height,
+            hash: BlockHash::from_byte_array([0u8; 32]),
+        });
+    }
+    chain_tip = chain_tip.insert(BlockId {
+        height: FUNDING_BLOCK_HEIGHT,
+        hash: wrong_block_hash,
+    });
+    chain_tip = chain_tip.insert(BlockId {
+        height: 178,
+        hash: correct_block_hash,
+    });
+
+    let mut tx_update = TxUpdate::<ConfirmationBlockTime>::default();
+    tx_update.txs.push(Arc::new(funding_tx));
+    tx_update.seen_ats.insert((txid, FUNDING_BLOCK_TIME));
+    wallet
+        .apply_update(Update {
+            tx_update,
+            chain: Some(chain_tip),
+            ..Default::default()
+        })
+        .expect("seen_at with wrong anchor-height hash");
+
+    assert_eq!(wallet.balance().confirmed.to_sat(), 0);
+    assert_eq!(wallet.balance().untrusted_pending.to_sat(), FUNDING_SATS);
+
+    let server = MockServer::start().await;
+    let txid_hex = txid.to_string();
+    Mock::given(method("GET"))
+        .and(path(format!("/tx/{txid_hex}")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "txid": txid_hex,
+            "version": 2,
+            "locktime": 0,
+            "vin": [],
+            "vout": [],
+            "size": 100,
+            "weight": 400,
+            "fee": 0,
+            "status": {
+                "confirmed": true,
+                "block_height": FUNDING_BLOCK_HEIGHT,
+                "block_hash": correct_block_hash.to_string(),
+                "block_time": FUNDING_BLOCK_TIME
+            }
+        })))
+        .mount(&server)
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path("/blocks"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(vec![serde_json::json!({
+                "id": correct_block_hash.to_string(),
+                "height": 178,
+                "version": 536870912,
+                "timestamp": FUNDING_BLOCK_TIME,
+                "tx_count": 1,
+                "size": 1000,
+                "weight": 4000,
+                "merkle_root": "0000000000000000000000000000000000000000000000000000000000000000",
+                "previousblockhash": correct_block_hash.to_string(),
+                "mediantime": FUNDING_BLOCK_TIME,
+                "nonce": 0,
+                "bits": 545259519,
+                "difficulty": 1.0
+            })]),
+        )
+        .mount(&server)
+        .await;
+
+    for height in 0..=178u32 {
+        let hash = if height >= FUNDING_BLOCK_HEIGHT {
+            correct_block_hash
+        } else {
+            BlockHash::from_byte_array([0u8; 32])
+        };
+        Mock::given(method("GET"))
+            .and(path(format!("/block-height/{height}")))
+            .respond_with(ResponseTemplate::new(200).set_body_string(hash.to_string()))
+            .mount(&server)
+            .await;
+    }
+
+    let esplora_client = EsploraClient::new(&server.uri()).expect("mock esplora client");
+    let local_chain_tip = wallet.local_chain().tip().clone();
+    let reconcile_update =
+        build_anchor_and_chain_reconcile_update(&local_chain_tip, esplora_client.inner(), &[txid])
+            .await
+            .expect("reconcile update build")
+            .expect("expected reconcile update");
+
+    sync::apply_update(&mut wallet, reconcile_update).expect("reconcile apply");
+
+    assert_eq!(wallet.balance().confirmed.to_sat(), FUNDING_SATS);
+    assert_eq!(wallet.balance().untrusted_pending.to_sat(), 0);
+}
+
+#[tokio::test]
 async fn anchor_reconcile_without_chain_blocks_stays_pending() {
     let mut wallet = regtest_segwit_wallet_with_revealed_receive();
     let (funding_tx, txid) = funding_tx_and_id(&wallet);

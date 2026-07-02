@@ -17,7 +17,7 @@ use bdk_wallet::chain::ChainPosition;
 use bdk_wallet::chain::local_chain::CheckPoint;
 use bdk_wallet::chain::{BlockId, ConfirmationBlockTime, TxUpdate};
 use bdk_wallet::{Update, Wallet};
-use bitcoin::{BlockHash, Txid};
+use bitcoin::{BlockHash, Transaction, Txid};
 
 use crate::error::CryptoError;
 
@@ -67,7 +67,123 @@ pub fn list_txids_for_anchor_reconcile(wallet: &Wallet) -> BTreeSet<Txid> {
         }
     }
 
+    if wallet.balance().untrusted_pending.to_sat() > 0 {
+        for local_output in wallet.list_output() {
+            if matches!(
+                local_output.chain_position,
+                ChainPosition::Unconfirmed { .. }
+            ) {
+                txids.insert(local_output.outpoint.txid);
+            }
+        }
+    }
+
     txids
+}
+
+const TX_INFO_FETCH_ATTEMPTS: usize = 3;
+
+async fn fetch_confirmed_tx_anchor_from_esplora<S>(
+    esplora_async_client: &AsyncClient<S>,
+    txid: &Txid,
+) -> Result<Option<(Arc<Transaction>, ConfirmationBlockTime)>, CryptoError>
+where
+    S: Sleeper + Clone + Send + Sync,
+    S::Sleep: Send,
+{
+    let mut last_status: Option<TxStatus> = None;
+
+    for _ in 0..TX_INFO_FETCH_ATTEMPTS {
+        let Some(tx_info) = esplora_async_client
+            .get_tx_info(txid)
+            .await
+            .map_err(|error| CryptoError::Blockchain(error.to_string()))?
+        else {
+            return Ok(None);
+        };
+
+        last_status = Some(tx_info.status.clone());
+        if let Some(anchor) = anchor_from_confirmed_tx_status(&tx_info.status) {
+            return Ok(Some((Arc::new(tx_info.to_tx()), anchor)));
+        }
+    }
+
+    if let Some(status) = last_status {
+        return Err(CryptoError::Blockchain(format!(
+            "Esplora /tx/{txid} lacks full anchor metadata after {TX_INFO_FETCH_ATTEMPTS} attempts (confirmed={}, block_height={:?}, block_hash={:?}, block_time={:?})",
+            status.confirmed, status.block_height, status.block_hash, status.block_time,
+        )));
+    }
+
+    Ok(None)
+}
+
+fn checkpoint_hash_at_height(tip: &CheckPoint, height: u32) -> Option<BlockHash> {
+    tip.get(height).map(|checkpoint| checkpoint.hash())
+}
+
+fn insert_anchor_blocks_into_chain(
+    mut tip: CheckPoint,
+    anchors: &BTreeSet<(ConfirmationBlockTime, Txid)>,
+) -> CheckPoint {
+    for (anchor, _txid) in anchors {
+        let block_id = anchor.block_id;
+        if checkpoint_hash_at_height(&tip, block_id.height) != Some(block_id.hash) {
+            tip = tip.insert(block_id);
+        }
+    }
+    tip
+}
+
+async fn ensure_esplora_blocks_covering_anchors<S>(
+    esplora_async_client: &AsyncClient<S>,
+    latest_blocks: &BTreeMap<u32, BlockHash>,
+    mut tip: CheckPoint,
+    anchors: &BTreeSet<(ConfirmationBlockTime, Txid)>,
+) -> Result<CheckPoint, CryptoError>
+where
+    S: Sleeper + Clone + Send + Sync,
+    S::Sleep: Send,
+{
+    tip = insert_anchor_blocks_into_chain(tip, anchors);
+
+    let min_anchor_height = anchors
+        .iter()
+        .map(|(anchor, _txid)| anchor.block_id.height)
+        .min()
+        .unwrap_or(0);
+    let max_height = latest_blocks
+        .keys()
+        .max()
+        .copied()
+        .unwrap_or(tip.height())
+        .max(tip.height());
+
+    for height in min_anchor_height..=max_height {
+        let Some(esplora_hash) =
+            fetch_block_hash_at_height(esplora_async_client, latest_blocks, height).await?
+        else {
+            continue;
+        };
+
+        if checkpoint_hash_at_height(&tip, height) != Some(esplora_hash) {
+            tip = tip.insert(BlockId {
+                height,
+                hash: esplora_hash,
+            });
+        }
+    }
+
+    for (&height, &block_hash) in latest_blocks.iter() {
+        if checkpoint_hash_at_height(&tip, height) != Some(block_hash) {
+            tip = tip.insert(BlockId {
+                height,
+                hash: block_hash,
+            });
+        }
+    }
+
+    Ok(tip)
 }
 
 const LATEST_BLOCKS_FETCH_ATTEMPTS: usize = 3;
@@ -189,30 +305,14 @@ where
     }
 
     if local_tip.height() == 0 {
-        let mut tip =
-            bootstrap_checkpoints_from_esplora(esplora_async_client, latest_blocks).await?;
-        for (anchor, _txid) in anchors {
-            let anchor_height = anchor.block_id.height;
-            if tip.get(anchor_height).is_none() {
-                let Some(block_hash) =
-                    fetch_block_hash_at_height(esplora_async_client, latest_blocks, anchor_height)
-                        .await?
-                else {
-                    continue;
-                };
-                tip = tip.insert(BlockId {
-                    height: anchor_height,
-                    hash: block_hash,
-                });
-            }
-        }
-        for (&height, &block_hash) in latest_blocks.iter() {
-            tip = tip.insert(BlockId {
-                height,
-                hash: block_hash,
-            });
-        }
-        return Ok(tip);
+        let tip = bootstrap_checkpoints_from_esplora(esplora_async_client, latest_blocks).await?;
+        return ensure_esplora_blocks_covering_anchors(
+            esplora_async_client,
+            latest_blocks,
+            tip,
+            anchors,
+        )
+        .await;
     }
 
     let mut point_of_agreement = None;
@@ -239,7 +339,7 @@ where
         });
     }
 
-    let mut tip = match point_of_agreement {
+    let tip = match point_of_agreement {
         Some(checkpoint) => {
             let mut connected = checkpoint;
             connected = connected
@@ -255,30 +355,7 @@ where
         }
     };
 
-    for (anchor, _txid) in anchors {
-        let anchor_height = anchor.block_id.height;
-        if tip.get(anchor_height).is_none() {
-            let Some(block_hash) =
-                fetch_block_hash_at_height(esplora_async_client, latest_blocks, anchor_height)
-                    .await?
-            else {
-                continue;
-            };
-            tip = tip.insert(BlockId {
-                height: anchor_height,
-                hash: block_hash,
-            });
-        }
-    }
-
-    for (&height, &block_hash) in latest_blocks.iter() {
-        tip = tip.insert(BlockId {
-            height,
-            hash: block_hash,
-        });
-    }
-
-    Ok(tip)
+    ensure_esplora_blocks_covering_anchors(esplora_async_client, latest_blocks, tip, anchors).await
 }
 
 fn bootstrap_checkpoints_from_latest_blocks_only(
@@ -338,6 +415,36 @@ where
     bootstrap_checkpoints_from_latest_blocks_only(latest_blocks)
 }
 
+async fn build_tx_update_from_esplora_anchors<S>(
+    esplora_async_client: &AsyncClient<S>,
+    txids: &[Txid],
+) -> Result<TxUpdate<ConfirmationBlockTime>, CryptoError>
+where
+    S: Sleeper + Clone + Send + Sync,
+    S::Sleep: Send,
+{
+    let mut tx_update = TxUpdate::<ConfirmationBlockTime>::default();
+
+    for txid in txids {
+        let Some((transaction, anchor)) =
+            fetch_confirmed_tx_anchor_from_esplora(esplora_async_client, txid).await?
+        else {
+            continue;
+        };
+
+        tx_update.anchors.insert((anchor, *txid));
+        if !tx_update
+            .txs
+            .iter()
+            .any(|existing_tx| existing_tx.compute_txid() == *txid)
+        {
+            tx_update.txs.push(transaction);
+        }
+    }
+
+    Ok(tx_update)
+}
+
 /// Returns a wallet update when `/tx` reports confirmed anchors for still-unconfirmed txs.
 pub async fn build_anchor_reconcile_update_for_txids<S>(
     esplora_async_client: &AsyncClient<S>,
@@ -351,30 +458,7 @@ where
         return Ok(None);
     }
 
-    let mut tx_update = TxUpdate::<ConfirmationBlockTime>::default();
-
-    for txid in txids {
-        let Some(tx_info) = esplora_async_client
-            .get_tx_info(txid)
-            .await
-            .map_err(|error| CryptoError::Blockchain(error.to_string()))?
-        else {
-            continue;
-        };
-
-        let Some(anchor) = anchor_from_confirmed_tx_status(&tx_info.status) else {
-            continue;
-        };
-
-        tx_update.anchors.insert((anchor, *txid));
-        if !tx_update
-            .txs
-            .iter()
-            .any(|transaction| transaction.compute_txid() == *txid)
-        {
-            tx_update.txs.push(Arc::new(tx_info.to_tx()));
-        }
-    }
+    let tx_update = build_tx_update_from_esplora_anchors(esplora_async_client, txids).await?;
 
     if tx_update.anchors.is_empty() {
         return Ok(None);
@@ -396,30 +480,11 @@ where
     S: Sleeper + Clone + Send + Sync,
     S::Sleep: Send,
 {
-    let mut tx_update = TxUpdate::<ConfirmationBlockTime>::default();
-
-    for txid in txids {
-        let Some(tx_info) = esplora_async_client
-            .get_tx_info(txid)
-            .await
-            .map_err(|error| CryptoError::Blockchain(error.to_string()))?
-        else {
-            continue;
-        };
-
-        let Some(anchor) = anchor_from_confirmed_tx_status(&tx_info.status) else {
-            continue;
-        };
-
-        tx_update.anchors.insert((anchor, *txid));
-        if !tx_update
-            .txs
-            .iter()
-            .any(|transaction| transaction.compute_txid() == *txid)
-        {
-            tx_update.txs.push(Arc::new(tx_info.to_tx()));
-        }
+    if txids.is_empty() {
+        return Ok(None);
     }
+
+    let tx_update = build_tx_update_from_esplora_anchors(esplora_async_client, txids).await?;
 
     if tx_update.anchors.is_empty() {
         return Ok(None);
@@ -439,6 +504,12 @@ where
         chain: Some(chain),
         ..Default::default()
     }))
+}
+
+/// Returns true when confirmed balance is still zero but untrusted incoming remains.
+pub fn wallet_has_untrusted_incoming_pending(wallet: &Wallet) -> bool {
+    let balance = wallet.balance();
+    balance.confirmed.to_sat() == 0 && balance.untrusted_pending.to_sat() > 0
 }
 
 #[cfg(test)]
