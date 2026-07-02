@@ -1,10 +1,10 @@
 # Wallet rail lifecycle architecture
 
-This document specifies the lifecycle architecture for Bitboard’s three wallet rails: **on-chain**, **Lightning (NWC)**, and **Arkade**. **L1–L5** are implemented: per-rail orchestrators, React subscription hooks, per-rail dashboard sync controls, and per-rail “last synced” captions.
+This document specifies the lifecycle architecture for Bitboard’s three wallet rails: **on-chain**, **Lightning (NWC)**, and **Arkade** — per-rail load/sync/save orchestrators, React subscription hooks, per-rail dashboard sync controls, and per-rail “last synced” captions.
 
 Related docs:
 
-- [Lock lifecycle (implemented)](../frontend/src/lib/wallet/lifecycle/lock-lifecycle-orchestrator.ts) — iteration 1 complete
+- [Lock lifecycle](../frontend/src/lib/wallet/lifecycle/lock-lifecycle-orchestrator.ts)
 - [Application architecture](../doc/ARCHITECTURE.md) — TanStack Query vs Zustand
 - [Descriptor wallet switching](descriptor-wallet-switching.md)
 - [On-chain wallet model](onchain-bitboard-wallet-model.md)
@@ -20,7 +20,7 @@ Lock/unlock coordination is centralized in **LockLifecycle** (see `frontend/src/
 2. **Sync** with remote services (Esplora, NWC, Ark operator)
 3. **Save** merged state back to persistence
 
-Today these concerns are implicit: boolean flags, module-level promises, TanStack Query `enabled` heuristics, and global `walletStatus: 'syncing'`. The rail lifecycle model makes readiness explicit for UI, tests, and lock teardown.
+The rail lifecycle model makes readiness explicit for UI, tests, and lock teardown instead of scattering it across boolean flags, module-level promises, and ad hoc TanStack Query `enabled` heuristics.
 
 ## Orchestrator family
 
@@ -58,27 +58,27 @@ flowchart TB
 
 | Orchestrator | Owns | Does **not** own |
 |--------------|------|------------------|
-| **LockLifecycle** (done) | Lock teardown; secrets session; mutex between manual vs bootstrap unlock; phases `no-lock` / `locked` / `unlocking` / `unlocked` | Per-rail load/sync/save |
+| **LockLifecycle** | Lock teardown; secrets session; mutex between manual vs bootstrap unlock; phases `no-lock` / `locked` / `unlocking` / `unlocked` | Per-rail load/sync/save |
 | **LoadLifecycle** (per rail) | Read persistence → populate worker + in-memory store; expose `loaded` readiness | Remote sync, lock teardown |
 | **SyncLifecycle** (per rail) | Remote fetch / operator sync; merge into runtime state | Initial persistence read, lock mutex |
 | **SaveLifecycle** (per rail) | Persist runtime state after sync or user mutation | Remote network I/O (except flush triggered by sync completion) |
 
-**File layout (target):**
+**File layout:**
 
 ```
 frontend/src/lib/wallet/lifecycle/
-  lock-lifecycle-*.ts          # implemented
-  rail-lifecycle-types.ts      # shared phase enums (implemented)
-  onchain-*-lifecycle-*.ts     # L1–L2 implemented
-  arkade-*-lifecycle-*.ts        # L3 implemented
-  lightning-*-lifecycle-*.ts     # L4 implemented
+  lock-lifecycle-*.ts
+  rail-lifecycle-types.ts
+  onchain-*-lifecycle-*.ts
+  arkade-*-lifecycle-*.ts
+  lightning-*-lifecycle-*.ts
   *-rail-snapshot.ts             # composite phase views (on-chain, arkade)
 
 frontend/src/hooks/
   useLockLifecycleSnapshot.ts
   useOnchainLifecycleSnapshots.ts
   useArkadeLifecycleSnapshots.ts
-  useLightningLifecycleSnapshots.ts   # L4
+  useLightningLifecycleSnapshots.ts
 ```
 
 ## Shared phase types
@@ -147,8 +147,8 @@ When a rail becomes configured (gates satisfied — see per-rail sections), load
 2. **Zustand holds domain snapshots** (balance, txs, connections) — not lifecycle phase. Phase lives in orchestrator module snapshots (`get*Snapshot` + `subscribe*`).
 3. **React reads phase via subscription hooks** — thin `useSyncExternalStore` wrappers in `frontend/src/hooks/` (see [React lifecycle hooks](#react-lifecycle-hooks)). Components must not call `get*LifecycleSnapshot()` during render without subscribing; ad hoc `useState` + `useEffect` per component is discouraged.
 4. **LockLifecycle gates all rails.** No load/sync/save when `no-lock` or during `locking`. Unlock delegates to per-rail load entry points.
-5. **SaveLifecycle is internal-first for status text**, but sync is user-targetable: after this refactoring, the **dashboard exposes a sync control per configured rail** (on-chain, Lightning when connected, Arkade when active) so users can trigger targeted sync without syncing everything. Save phases remain primarily for lock handoff and debugging; save UI is not required in v1.
-6. **Replace global `walletStatus: 'syncing'`** with an aggregate of per-rail `syncPhase === 'syncing'` (migration deferred). Until then, document which rail owns each legacy `setWalletStatus('syncing')` call site.
+5. **SaveLifecycle is internal-first for status text**, but sync is user-targetable: the **dashboard exposes a sync control per configured rail** (on-chain, Lightning when connected, Arkade when active) so users can trigger targeted sync without syncing everything. Save phases remain primarily for lock handoff and debugging; save UI is not required in v1.
+6. **Per-rail sync state** is aggregated via `useAnyRailSyncing()` / `isAnyRailSyncing()` — not a global `walletStatus: 'syncing'`.
 7. **One Lightning machine per rail** (v1). Sync and save aggregate across all NWC connections for the active Bitboard wallet.
 8. **One Arkade operator** per `(walletId, networkMode)` — no multi-connection aggregation on the Arkade rail.
 
@@ -185,7 +185,7 @@ Some non-wallet screens **display** wallet-related information or **offer action
 async function requireUnlockedWallet(action: () => void | Promise<void>): Promise<void>
 ```
 
-**Target location:** `frontend/src/lib/wallet/require-unlocked-wallet.ts` (or equivalent) — UI may wrap this in a hook that shows `WalletUnlock` / `WalletUnlockOrNearZeroLoading`.
+**Location:** [`require-unlocked-wallet.ts`](../frontend/src/lib/wallet/require-unlocked-wallet.ts) — UI wraps this in [`useRequireUnlockedWallet.tsx`](../frontend/src/hooks/useRequireUnlockedWallet.tsx) (`WalletUnlock` / `WalletUnlockOrNearZeroLoading`).
 
 | Area | Route stays passive | Unlock at action time |
 |------|---------------------|------------------------|
@@ -198,21 +198,21 @@ async function requireUnlockedWallet(action: () => void | Promise<void>): Promis
 
 **Preferred pattern:** Route renders safely while locked; `walletIsUnlockedOrSyncing` gates **display** of secrets; `useRequireUnlockedWallet` / `ensureWalletUnlockedForAction` gates **mutations** and **secret reveal**.
 
-### Implementation target
+### Implementation
 
-- Replace broad route hydration gates with **`pathnameIsWalletRoute`** ([`pathname-is-wallet-route.ts`](../frontend/src/lib/shared/pathname-is-wallet-route.ts)) used **only** for hydration entry.
-- Introduce **`requireUnlockedWallet`** for action-gated unlock on Settings, Lab, and similar — not pathname checks in lifecycle orchestrators.
-- Keep lifecycle orchestrators free of `useLocation`, `walletCryptoSessionPathGateStore`, and pathname checks — except where a dedicated hydration coordinator reads “entered wallet route” once.
-- TanStack Query `enabled` for bootstrap load may react to wallet-route entry, but must not flip off in a way that aborts an in-flight bootstrap when the user navigates away (LockLifecycle `bootstrap_unlock` already extends the enabled window during unlock; the same “finish what you started” rule applies when leaving the route).
-- **Keep** post-lock redirect to Library; do not remove or route-gate it as part of lifecycle refactors.
+- Hydration entry uses **`pathnameIsWalletRoute`** ([`pathname-is-wallet-route.ts`](../frontend/src/lib/shared/pathname-is-wallet-route.ts)) only — not broad “any route that might need crypto” gates.
+- **`requireUnlockedWallet`** handles action-gated unlock on Settings, Lab, and similar — lifecycle orchestrators do not branch on pathname.
+- Lifecycle orchestrators stay free of `useLocation` and pathname checks; a dedicated hydration coordinator reads “entered wallet route” once.
+- TanStack Query `enabled` for bootstrap load may react to wallet-route entry, but must not flip off in a way that aborts an in-flight bootstrap when the user navigates away (LockLifecycle `bootstrap_unlock` extends the enabled window during unlock; the same “finish what you started” rule applies when leaving the route).
+- Post-lock redirect to Library remains in place.
 
 ### Known violations (audit)
 
 See [Known route–lifecycle violations](#known-route-lifecycle-violations) at the end of this document.
 
-### Dashboard UI (post-refactor)
+### Dashboard UI
 
-Replace the single global sync affordance with **per-rail sync buttons** on the dashboard (or per-rail blocks already on the dashboard):
+The dashboard exposes **per-rail sync buttons** on each rail block:
 
 | Rail | Control | Enabled when |
 |------|---------|--------------|
@@ -243,7 +243,7 @@ Orchestrator modules remain the **source of truth** for phase. React components 
 - `useQuery` whose only job is polling lifecycle phase (use orchestrator subscribe).
 - Duplicating phase in Zustand or `queryClient.setQueryData` on every transition.
 
-### Hook tiers (L5)
+### Hook tiers
 
 **Per machine** — one hook per state machine, wrapping the orchestrator’s existing API:
 
@@ -267,7 +267,7 @@ export function useArkadeLoadLifecycleSnapshot(): ArkadeLoadLifecycleSnapshot {
 | `useArkadeLoadLifecycleSnapshot()` | ArkadeLoadLifecycle |
 | `useArkadeSyncLifecycleSnapshot()` | ArkadeSyncLifecycle |
 | `useArkadeSaveLifecycleSnapshot()` | ArkadeSaveLifecycle |
-| `useLightning*LifecycleSnapshot()` | Lightning (L4) |
+| `useLightning*LifecycleSnapshot()` | Lightning |
 
 **Per rail (dashboard)** — composite view for status chips, sync buttons, E2E attributes:
 
@@ -275,7 +275,7 @@ export function useArkadeLoadLifecycleSnapshot(): ArkadeLoadLifecycleSnapshot {
 |------|---------|
 | `useOnchainRailSnapshot()` | `{ loadPhase, syncPhase, savePhase }` from `getOnchainRailSnapshot()` |
 | `useArkadeRailSnapshot()` | `{ loadPhase, syncPhase, savePhase }` from `getArkadeRailSnapshot()` |
-| `useLightningRailSnapshot()` | same shape (L4) |
+| `useLightningRailSnapshot()` | same shape |
 
 **Selectors** — thin helpers over machine or rail hooks (not separate state machines):
 
@@ -284,7 +284,7 @@ export function useArkadeLoadLifecycleSnapshot(): ArkadeLoadLifecycleSnapshot {
 | `useIsArkadeSessionReady()` | `loadPhase === 'loaded'` — gate `useArkadeQueries` |
 | `useIsOnchainRailLoaded()` | on-chain dashboard / Esplora queries |
 | `useIsArkadeSaveBlockingLock()` | lock UI (wraps orchestrator helper) |
-| `useAnyRailSyncing()` | `isAnyRailSyncing()` aggregate — replaces global `walletStatus: 'syncing'` |
+| `useAnyRailSyncing()` | `isAnyRailSyncing()` aggregate across rails |
 
 ### TanStack Query integration
 
@@ -307,20 +307,9 @@ Dashboard rail blocks expose lifecycle phase on the DOM for tests:
 
 Values come from rail or machine hooks, not imperative snapshot reads at render time.
 
-### Migration (L5) — Done
+## LockLifecycle handoff
 
-1. Hook modules under `frontend/src/hooks/` (`use*LifecycleSnapshot`, `useWalletRailSyncAggregate`, `useRailManualSyncMutations`).
-2. `useArkadeQueries`, `useLightningMutations`, `useOnchainDashboardQueries` use selector hooks for `enabled`.
-3. `ArkadeDashboardBalance` and dashboard balance card use shared hooks; inline `useState` + `subscribe` removed.
-4. Component and hook tests with orchestrator test resets; E2E helpers target `rail-sync-onchain`.
-
-**Interim debt cleared in L5:** components no longer subscribe inline or call `getSnapshot()` synchronously for query gates or dashboard rail attributes.
-
-## LockLifecycle handoff (current + target)
-
-**Today:** `orchestrateManualUnlock` / `orchestrateBootstrapUnlock` call `loadDescriptorWalletAndSync`, which bundles on-chain load, store hydration, and background Esplora sync.
-
-**Target:**
+`orchestrateManualUnlock` / `orchestrateBootstrapUnlock` delegate per-rail work after the secrets session is ready:
 
 ```mermaid
 sequenceDiagram
@@ -342,7 +331,9 @@ sequenceDiagram
   OSync->>OSync: not-syncing
 ```
 
-Lock teardown **must await** in-flight sync (best-effort cancel/debounce) and save quiescence per rail before purging workers — formalizing today’s `awaitBackgroundArkadeOperatorSync` and `awaitInFlightWalletSecretsWrites`.
+Lock teardown **awaits** in-flight sync (best-effort cancel/debounce) and save quiescence per rail before purging workers — via `await*SyncQuiescence`, `await*SaveQuiescence`, and `awaitInFlightWalletSecretsWrites`.
+
+`loadDescriptorWalletAndSync` remains a convenience facade for bootstrap paths: it calls `orchestrateOnchainLoad`, optionally starts `orchestrateArkadeLoad`, then `orchestrateOnchainPostUnlockSync`.
 
 ---
 
@@ -361,10 +352,10 @@ Lock teardown **must await** in-flight sync (best-effort cancel/debounce) and sa
 1. `waitForCryptoWorkerHealthy`
 2. Resolve descriptor wallet from encrypted `wallet_secrets`
 3. `loadWallet` into crypto WASM (changeset from persistence)
-4. `commitLoadedDescriptorWallet` + `setWalletStatus('unlocked')` (until global status is retired)
+4. `commitLoadedDescriptorWallet` + `setWalletStatus('unlocked')`
 5. `refreshWalletStoreFromLoadedBdk` (balance, txs from WASM → `walletStore`)
 
-**Query mapping (target):** extends / replaces `useActiveWalletLoadQuery` orchestration — keyed by `(activeWalletId, networkMode, addressType, accountId)`.
+**Query mapping:** `useActiveWalletLoadQuery` orchestration — keyed by `(activeWalletId, networkMode, addressType, accountId)`.
 
 **`load-error`:** decrypt failure, missing descriptor row, WASM load failure, worker unhealthy after retries.
 
@@ -389,14 +380,14 @@ Lock teardown **must await** in-flight sync (best-effort cancel/debounce) and sa
 
 **`save-error`:** SQLite / secrets write failure — dashboard `OnchainSaveErrorBanner` with Retry (`orchestrateOnchainRetrySave`) and Lock anyway (`acknowledgeOnchainSaveErrorForForcedLock`). Lock/auto-lock blocked with toast until retry or forced ack.
 
-### Legacy mapping
+### Entry points
 
-| Current | Target owner |
+| API | Owner |
 |---------|----------------|
-| `loadDescriptorWalletAndSync` (WASM part) | OnchainLoadLifecycle |
-| `runEsploraSyncAndPersistChangeset` | ~~OnchainSyncLifecycle + OnchainSaveLifecycle~~ (L2 done) |
-| ~~`walletStatus: 'syncing'`~~ | ~~OnchainSyncLifecycle aggregate~~ — **removed**; `useAnyRailSyncing()` / `isAnyRailSyncing()` |
-| `useOnchainDashboardQueries` | `enabled` from `useIsOnchainRailLoaded()` |
+| `orchestrateOnchainLoad` | OnchainLoadLifecycle |
+| `orchestrateOnchainPostUnlockSync`, dashboard manual sync | OnchainSyncLifecycle → OnchainSaveLifecycle |
+| `useIsOnchainRailLoaded()` | Gates `useOnchainDashboardQueries` |
+| `useAnyRailSyncing()` / `isAnyRailSyncing()` | Aggregate per-rail sync state |
 
 ---
 
@@ -417,7 +408,7 @@ Lightning is optional — absence of connections is normal `not-configured`, not
 2. `replaceConnectionsForWallet` in `lightningStore`
 3. Restore active connection ids per network from persisted metadata
 
-**Query mapping:** `orchestrateLightningLoad` from unlock (replaces `useHydrateLightningConnections` in `AppInitializer`).
+**Query mapping:** `orchestrateLightningLoad` on unlock.
 
 **`load-error`:** secrets decrypt/read failure for Lightning slice.
 
@@ -442,13 +433,13 @@ Lightning is optional — absence of connections is normal `not-configured`, not
 
 **Aggregation:** `saving` if **any** persist in flight.
 
-### Legacy mapping
+### Entry points
 
-| Current | Target owner |
+| API | Owner |
 |---------|----------------|
-| `useHydrateLightningConnections` (retired from AppInitializer) | LightningLoadLifecycle via `orchestrateLightningLoad` on unlock |
+| `orchestrateLightningLoad` | LightningLoadLifecycle (on unlock) |
 | `fetchLightningPaymentsForActiveWallet` | LightningSyncLifecycle |
-| `addConnection` → `saveLightningConnectionsForWallet` | LightningSaveLifecycle |
+| `saveLightningConnectionsForWallet` | LightningSaveLifecycle |
 
 ---
 
@@ -471,7 +462,7 @@ Lightning is optional — absence of connections is normal `not-configured`, not
 5. `refreshArkadeStoreFromLoadedWasm` — balance, payments, **receive address stable**
 6. Set `activeArkadeConnectionId` when **load completes** (not when sync completes)
 
-**Readiness contract (replaces UNLOCK-ARK connection-id delay):**
+**Readiness contract:**
 
 - UI queries and Receive page gate on `ArkadeLoadLifecycle === 'loaded'`
 - `activeArkadeConnectionId` is set at load completion, not as a separate sync gate
@@ -496,22 +487,14 @@ Does **not** include session open or initial WASM hydration (those are load).
 
 **Lock** awaits `not-saving` via `awaitArkadeSyncQuiescence` + `awaitArkadeSaveQuiescence` + flush on close.
 
-### Legacy mapping (L3)
+### Entry points
 
-| Current | Target owner | L3 status |
-|---------|----------------|-----------|
-| ~~`openArkadeSessionForWallet` / `runArkadeSessionOpenWork`~~ | ArkadeLoadLifecycle (+ post-load sync) | **Done** — thin facade on `orchestrateArkadeLoad` |
-| ~~`runArkadeOperatorSyncAndPersist`~~ | ArkadeSyncLifecycle + ArkadeSaveLifecycle | **Done** — `orchestrateArkadeSyncThenSave` |
-| ~~`awaitArkadeSessionReady`~~ | `awaitArkadeLoadQuiescence` / load phase `loaded` | **Done** — deprecated shim |
-| ~~`setActiveArkadeConnectionId` after hydration~~ | End of ArkadeLoadLifecycle `loaded` | **Done** |
-| ~~`useArkadeQueries` `withReadyArkadeWorker`~~ | Gate on load phase via `useIsArkadeSessionReady()` (L5 hook) | **Done** — interim `getSnapshot()` in query base |
-
-### React hooks (target, L5)
-
-| Interim (L3) | Target |
-|--------------|--------|
-| `getArkadeLoadLifecycleSnapshot()` in `useArkadeQueryBase` | `useIsArkadeSessionReady()` |
-| `useState` + `subscribeArkadeLoadLifecycle` in `ArkadeDashboardBalance` | `useArkadeRailSnapshot()` or machine hooks |
+| API | Owner |
+|---------|----------------|
+| `orchestrateArkadeLoad` | ArkadeLoadLifecycle (+ post-load sync scheduling) |
+| `orchestrateArkadeSyncThenSave` | ArkadeSyncLifecycle + ArkadeSaveLifecycle |
+| `awaitArkadeLoadQuiescence` | Load phase `loaded` |
+| `useIsArkadeSessionReady()` | Gates `useArkadeQueries` |
 
 ---
 
@@ -547,7 +530,7 @@ Expose lifecycle phase on the DOM and in Playwright helpers:
 | `waitForArkadeLoadReady` | Waits on `data-rail-arkade-load="loaded"` |
 | `waitForArkadeMockDashboardBalance` | Load **plus** operator-synced balance (mock ASP) |
 
-**Load ≠ synced:** after L3, `loaded` does not imply operator balance matches remote truth. Tests asserting fixture balances must wait for sync or use `waitForDashboardArkadeBalanceSats`, not only load phase.
+**Load ≠ synced:** `loaded` does not imply operator balance matches remote truth. Tests asserting fixture balances must wait for sync or use `waitForDashboardArkadeBalanceSats`, not only load phase.
 
 Future: `data-rail-onchain-load="loaded"` for on-chain dashboard assertions (LIFE-E2E-02).
 
@@ -591,30 +574,16 @@ Stale banners are **informational** (amber, no Retry). Sync-error banners are **
 
 ---
 
-## Implementation phases
-
-| Phase | Scope | Status |
-|-------|--------|--------|
-| **L1** | Types + on-chain LoadLifecycle; peel WASM load from `loadDescriptorWalletAndSync`; LockLifecycle delegates load | **Done** |
-| **L2** | On-chain Sync + Save lifecycles; retire bundled post-unlock Esplora in wallet-utils | **Done** |
-| **L3** | Arkade Load/Sync/Save; simplify `arkade-session-service`; E2E hooks for load readiness | **Done** |
-| **L4** | Lightning Load/Sync/Save (aggregated) | **Done** |
-| **L5** | Replace `walletStatus: 'syncing'` with rail aggregate; per-rail dashboard sync buttons + last-synced captions; **React lifecycle subscription hooks** (`useSyncExternalStore`); refactor query `enabled` gates | **Done** |
-
-Each phase should follow TDD per `.cursor/rules/testing-strategy.mdc` and add rows to `doc/features/wallet-lifecycle.yaml`.
-
----
-
 ## Resolved and open questions
 
 ### Resolved
 
 1. **Lab load/save orchestration:** under **Onchain\*** namespacing; no separate `LabLoadLifecycle` / `LabSaveLifecycle` modules.
-2. **Save-error on lock:** **hard block** on `save-error` for on-chain, Arkade (L2/L3), and Lightning (L4).
+2. **Save-error on lock:** **hard block** on `save-error` for on-chain, Arkade, and Lightning.
 3. **Cross-tab:** OPFS SQLite writers use Web Locks (`bitboard-wallet-writer`, `bitboard-lab-writer` in `opfs-writer-lock.ts`) so only one tab mutates a given OPFS database at a time. After commits, peers refresh via `wallet-cross-tab-sync` / `lab-cross-tab-sync` (TanStack Query invalidation only). Each tab owns its own WASM/worker hydration; lifecycle phase snapshots are **not** mirrored across tabs.
-4. **`walletStatus: 'syncing'`:** removed in L5; per-rail `syncPhase` and `useAnyRailSyncing()` / `walletIsUnlockedOrSyncing()` replace it.
-5. **React lifecycle hooks:** orchestrator-owned phase; `useSyncExternalStore` hooks in `frontend/src/hooks/`; stable snapshot getters for referential equality; TanStack Query for async work only (**Done** L5).
-6. **Lightning `sync-error` aggregation:** **any failure** among dashboard-matching connections (resolved L4).
+4. **`walletStatus: 'syncing'`:** removed; per-rail `syncPhase` and `useAnyRailSyncing()` / `walletIsUnlockedOrSyncing()` replace it.
+5. **React lifecycle hooks:** orchestrator-owned phase; `useSyncExternalStore` hooks in `frontend/src/hooks/`; stable snapshot getters for referential equality; TanStack Query for async work only.
+6. **Lightning `sync-error` aggregation:** **any failure** among dashboard-matching connections.
 7. **Route vs unlock:** Hydration starts on wallet routes only; Lab/Settings needs use `requireUnlockedWallet` at action time, not route-wide hydration (see [Action-gated unlock](#action-gated-unlock-requireunlockedwallet)).
 8. **Post-lock Library redirect:** retained for privacy (`navigateToLibraryIfOnWalletRoute`).
 
@@ -626,9 +595,9 @@ _(none — route/hydration alignment implemented; see `pathname-is-wallet-route.
 
 ## Known route–lifecycle violations
 
-**Status:** Resolved in route/hydration alignment (2026). Retained as historical audit; do not reintroduce these patterns.
+**Status:** Resolved in route/hydration alignment (v0.3.2). Retained as historical audit; do not reintroduce these patterns.
 
-Audit of the codebase against [Route independence and wallet hydration](#route-independence-and-wallet-hydration). Fix work should:
+Audit of the codebase against [Route independence and wallet hydration](#route-independence-and-wallet-hydration). Guardrails — do not reintroduce:
 
 1. Narrow **hydration entry** to wallet routes (`pathnameIsWalletRoute`).
 2. Add **`requireUnlockedWallet`** for Settings/Lab (and similar) **actions** that need WASM/secrets.
@@ -669,11 +638,11 @@ Audit of the codebase against [Route independence and wallet hydration](#route-i
 |----------|----------|
 | [`app-router.ts`](../frontend/src/lib/shared/app-router.ts) `navigateToLibraryIfOnWalletRoute` | After lock, redirect off `/wallet` to Library for privacy. **Keep.** Does not cancel in-flight sync/save. |
 | Lock → Library + hydration on next wallet visit | Matches rules 1 and 4. |
-| Settings/Lab browsable while locked | Correct once route-wide hydration is removed; sensitive ops use `requireUnlockedWallet`. |
+| Settings/Lab browsable while locked | Sensitive ops use `requireUnlockedWallet`; route-wide hydration is not required. |
 | Dashboard Arkade queries → `scheduleBackgroundArkadeOperatorSync` | Operator sync debounced from query fetches when balance/history/VTxO queries run (hydration, manual invalidation, or opt-in periodic `refetchInterval`). Timer may complete after navigation. **Correct** under route-independent lifecycle — do not cancel on route change. |
 | Lightning dashboard NWC fetch | Periodic background polling is **React Query `refetchInterval` only** (gated by `isPeriodicSyncEnabled` and per-rail settings). No orchestrator scheduler. |
 | On-chain Esplora incremental sync | Default: hydration (`postUnlock`) and manual dashboard sync only. Opt-in periodic sync uses `useOnchainPeriodicSyncQuery` when the feature and per-rail switch are on. |
-| Per-rail sync/save orchestrators under `frontend/src/lib/wallet/lifecycle/` | No pathname imports today — aligned with target. |
+| Per-rail sync/save orchestrators under `frontend/src/lib/wallet/lifecycle/` | No pathname imports — aligned with route-independent lifecycle. |
 
 ### Related symptom (dashboard → Settings)
 
