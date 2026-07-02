@@ -1,14 +1,12 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import {
   Wallet,
-  RefreshCw,
   Home,
   Loader2,
   ScanSearch,
   AlertTriangle,
 } from 'lucide-react'
-import { toast } from 'sonner'
 import {
   useWalletStore,
   NETWORK_LABELS,
@@ -26,19 +24,12 @@ import { Button } from '@/components/ui/button'
 import { WalletUnlockOrNearZeroLoading } from '@/components/WalletUnlockOrNearZeroLoading'
 import { CardPagination } from '@/components/CardPagination'
 import { TransactionItem } from '@/components/TransactionItem'
-import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
 import { BitcoinFiatDenominationSwitch } from '@/components/BitcoinFiatDenominationSwitch'
 import { FiatAmountDisplay } from '@/components/FiatAmountDisplay'
+import { OnchainSaveErrorBanner } from '@/pages/wallet/OnchainSaveErrorBanner'
 import { balanceInfoToOnChainDisplay } from '@/lib/wallet/onchain-balance-display'
-import {
-  runIncrementalDashboardWalletSync,
-  runFullScanDashboardWalletSync,
-  retryImportInitialEsploraSyncWithWalletStatus,
-} from '@/lib/wallet/wallet-utils'
-import { BadLocalChainStateError } from '@/lib/shared/bad-local-chain-state-error'
-import { sanitizeErrorMessageForUi } from '@/lib/shared/sanitize-error-for-ui'
-import { errorMessage } from '@/lib/shared/utils'
+import { retryImportInitialEsploraSyncWithWalletStatus } from '@/lib/wallet/wallet-utils'
 import { labTransactionsForWallet, sumLabWalletUtxoSats } from '@/lib/lab/lab-utils'
 import { useLabChainStateQuery } from '@/hooks/useLabChainStateQuery'
 import {
@@ -55,10 +46,32 @@ import { useDashboardActivityPageSize } from '@/hooks/useDashboardActivityPageSi
 import { LightningPaymentItem } from '@/components/LightningPaymentItem'
 import { ArkadePaymentItem } from '@/components/ArkadePaymentItem'
 import { ArkadeDashboardBalance } from '@/components/wallet/ArkadeDashboardBalance'
+import { RailLoadErrorBanner } from '@/components/wallet/RailLoadErrorBanner'
+import { RailSyncControl } from '@/components/wallet/RailSyncControl'
+import { RailSyncErrorBanner } from '@/components/wallet/RailSyncErrorBanner'
+import { useOnchainRailSnapshot } from '@/hooks/useOnchainLifecycleSnapshots'
+import { useLightningRailSnapshot } from '@/hooks/useLightningLifecycleSnapshots'
+import {
+  useOnchainLoadLifecycleSnapshot,
+  useOnchainSyncLifecycleSnapshot,
+} from '@/hooks/useOnchainLifecycleSnapshots'
+import {
+  useLightningLoadLifecycleSnapshot,
+  useLightningSyncLifecycleSnapshot,
+} from '@/hooks/useLightningLifecycleSnapshots'
+import { orchestrateOnchainRetryLoad } from '@/lib/wallet/lifecycle/onchain-load-lifecycle-orchestrator'
+import { orchestrateLightningRetryLoad } from '@/lib/wallet/lifecycle/lightning-load-lifecycle-orchestrator'
+import {
+  useOnchainIncrementalSyncMutation,
+  useOnchainFullRescanSyncMutation,
+  useLightningManualSyncMutation,
+} from '@/hooks/useRailManualSyncMutations'
+import { useLightningSyncMetadataQuery } from '@/hooks/useLightningDashboardQueries'
 import { useArkadeHistoryQuery } from '@/hooks/useArkadeQueries'
 import { isArkadeActiveForNetworkMode } from '@/lib/arkade/arkade-utils'
 import { useFiatDenominationStore } from '@/stores/fiatDenominationStore'
 import { useMainnetFiatRatesQuery } from '@/hooks/useMainnetFiatRatesQuery'
+import { walletIsUnlockedOrSyncing } from '@/lib/wallet/wallet-unlocked-status'
 import {
   LAB_WALLET_BALANCE_DISCLAIMER,
   walletBalanceCardTitle,
@@ -72,8 +85,8 @@ function ImportInitialSyncErrorBanner() {
   const setImportInitialSyncErrorMessage = useWalletStore(
     (walletState) => walletState.setImportInitialSyncErrorMessage,
   )
-  const walletStatus = useWalletStore((walletState) => walletState.walletStatus)
-  const isSyncing = walletStatus === 'syncing'
+  const onchainSyncPhase = useOnchainSyncLifecycleSnapshot().syncPhase
+  const isOnchainSyncing = onchainSyncPhase === 'syncing'
 
   if (networkMode === 'lab' || message == null || message === '') {
     return null
@@ -103,19 +116,19 @@ function ImportInitialSyncErrorBanner() {
           type="button"
           variant="outline"
           size="sm"
-          disabled={isSyncing}
+          disabled={isOnchainSyncing}
           onClick={() => {
             void retryImportInitialEsploraSyncWithWalletStatus()
           }}
         >
-          {isSyncing ? 'Syncing...' : 'Retry'}
+          {isOnchainSyncing ? 'Syncing...' : 'Retry'}
         </Button>
         <Button
           type="button"
           variant="ghost"
           size="sm"
           className="text-muted-foreground"
-          disabled={isSyncing}
+          disabled={isOnchainSyncing}
           onClick={() => setImportInitialSyncErrorMessage(null)}
         >
           Dismiss
@@ -125,6 +138,9 @@ function ImportInitialSyncErrorBanner() {
   )
 }
 
+/** Live Esplora networks; regtest included so developers can repair after bad local chain. */
+const FULL_RESCAN_NETWORKS: NetworkMode[] = ['mainnet', 'testnet', 'signet']
+
 function BalanceCard() {
   const networkMode = useWalletStore((walletState) => walletState.networkMode)
   const balance = useWalletStore((walletState) => walletState.balance)
@@ -133,6 +149,16 @@ function BalanceCard() {
   const connectedLightningWallets = useLightningStore((lightningState) => lightningState.connectedWallets)
   const lightningBalancesQuery = useLightningBalancesForDashboardQuery()
   const onchainEsploraSyncQuery = useOnchainEsploraSyncMetadataQuery()
+  const onchainRail = useOnchainRailSnapshot()
+  const onchainLoadSnapshot = useOnchainLoadLifecycleSnapshot()
+  const onchainSyncSnapshot = useOnchainSyncLifecycleSnapshot()
+  const lightningRail = useLightningRailSnapshot()
+  const lightningLoadSnapshot = useLightningLoadLifecycleSnapshot()
+  const lightningSyncSnapshot = useLightningSyncLifecycleSnapshot()
+  const lightningSyncMetadataQuery = useLightningSyncMetadataQuery()
+  const onchainIncrementalSync = useOnchainIncrementalSyncMutation()
+  const onchainFullRescanSync = useOnchainFullRescanSyncMutation()
+  const lightningManualSync = useLightningManualSyncMutation()
   const { data: labState, isPending: labChainPending } = useLabChainStateQuery()
   const utxos = labState?.utxos ?? []
   const addressToOwner = labState?.addressToOwner ?? {}
@@ -156,7 +182,9 @@ function BalanceCard() {
       : balanceInfoToOnChainDisplay(balance)
 
   const primarySats = onChainDisplay.totalSats
-  const isStaleOnchain = onchainEsploraSyncQuery.data?.isStaleOnchain ?? false
+  const isStaleOnchain =
+    (onchainEsploraSyncQuery.data?.isStaleOnchain ?? false) &&
+    onchainRail.syncPhase !== 'sync-error'
   const lastSuccessfulEsploraSyncAt =
     onchainEsploraSyncQuery.data?.lastSuccessfulEsploraSyncAt
 
@@ -179,6 +207,11 @@ function BalanceCard() {
 
   const showLightningBalances = hasMatchingLightningConnection
 
+  const isLightningBalancesSectionLoading =
+    showLightningBalances &&
+    lightningRail.loadPhase !== 'load-error' &&
+    (lightningRail.loadPhase !== 'loaded' || lightningBalancesQuery.isLoading)
+
   const lightningTotalSats = lightningBalancesQuery.data?.totalSats ?? 0
   const lightningBalanceRows = useMemo(
     () => lightningBalancesQuery.data?.lightningBalanceRows ?? [],
@@ -187,6 +220,12 @@ function BalanceCard() {
   const hasStaleLightningBalance = lightningBalanceRows.some(
     (balanceRow) => balanceRow.isStaleBalance,
   )
+  const showLightningLoadError = lightningLoadSnapshot.loadPhase === 'load-error'
+  const showLightningBalancesSection =
+    showLightningLoadError ||
+    (showLightningBalances &&
+      lightningBalancesQuery.isSuccess &&
+      lightningBalanceRows.length > 0)
   const newestStaleBalanceIso = useMemo(() => {
     const times = lightningBalanceRows
       .filter(
@@ -304,12 +343,26 @@ function BalanceCard() {
           ) : null}
         </CardHeader>
         <CardContent className="space-y-6">
-          <div>
+          <div
+            data-rail-onchain-load={onchainRail.loadPhase}
+            data-rail-onchain-sync={onchainRail.syncPhase}
+          >
             <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
               {walletOnChainSectionLabel(networkMode)}
             </p>
-            {renderOnChainHeadline()}
-            {networkMode !== 'lab' && isStaleOnchain ? (
+            {onchainLoadSnapshot.loadPhase === 'load-error' ? (
+              <RailLoadErrorBanner
+                rail="onchain"
+                loadPhase={onchainLoadSnapshot.loadPhase}
+                errorMessage={onchainLoadSnapshot.errorMessage}
+                onRetry={() => {
+                  void orchestrateOnchainRetryLoad()
+                }}
+              />
+            ) : (
+              <>
+                {renderOnChainHeadline()}
+                {networkMode !== 'lab' && isStaleOnchain ? (
               <p
                 className="mt-2 text-xs text-amber-700 dark:text-amber-400"
                 data-testid="onchain-esplora-stale-banner"
@@ -377,24 +430,91 @@ function BalanceCard() {
                 )}
               </ul>
             )}
+            {networkMode !== 'lab' && (
+              <>
+                <RailSyncErrorBanner
+                  rail="onchain"
+                  syncPhase={onchainSyncSnapshot.syncPhase}
+                  loadPhase={onchainLoadSnapshot.loadPhase}
+                  errorMessage={onchainSyncSnapshot.errorMessage}
+                  onRetry={() => onchainIncrementalSync.mutate()}
+                  isRetrying={
+                    onchainRail.syncPhase === 'syncing' || onchainIncrementalSync.isPending
+                  }
+                />
+                <RailSyncControl
+                  rail="onchain"
+                  syncLabel="Sync on-chain"
+                  syncPhase={onchainRail.syncPhase}
+                  lastSyncedAt={lastSuccessfulEsploraSyncAt ?? null}
+                  onSync={() => onchainIncrementalSync.mutate()}
+                  isSyncPending={onchainIncrementalSync.isPending}
+                  railConfigured={onchainRail.loadPhase !== 'not-configured'}
+                  syncErrorMessage={onchainSyncSnapshot.errorMessage}
+                  syncErrorDetailInBanner={onchainLoadSnapshot.loadPhase === 'loaded'}
+                  secondaryAction={
+                  FULL_RESCAN_NETWORKS.includes(networkMode) ? (
+                    <InfomodeWrapper
+                      infoId="dashboard-full-rescan-button"
+                      infoTitle="Full rescan"
+                      infoText="Re-scans a window of your addresses against Esplora (slower than Sync). Use if your balance or transaction list still looks wrong after a normal sync—for example a poor connection during restore."
+                    >
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => onchainFullRescanSync.mutate()}
+                        disabled={
+                          onchainRail.syncPhase === 'syncing' ||
+                          onchainFullRescanSync.isPending
+                        }
+                        className="text-muted-foreground"
+                        data-testid="rail-sync-onchain-full-rescan"
+                      >
+                        <ScanSearch
+                          className={`mr-2 h-4 w-4 ${onchainFullRescanSync.isPending ? 'animate-pulse' : ''}`}
+                          aria-hidden
+                        />
+                        {onchainFullRescanSync.isPending ? 'Scanning…' : 'Full rescan'}
+                      </Button>
+                    </InfomodeWrapper>
+                  ) : null
+                }
+                />
+              </>
+            )}
+              </>
+            )}
           </div>
 
           <ArkadeDashboardBalance />
 
-          {showLightningBalances && lightningBalancesQuery.isPending && (
+          {isLightningBalancesSectionLoading && (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" />
               Loading Lightning balances…
             </div>
           )}
 
-          {showLightningBalances &&
-            lightningBalancesQuery.isSuccess &&
-            lightningBalanceRows.length > 0 && (
-              <div>
+          {showLightningBalancesSection && (
+              <div
+                data-rail-lightning-load={lightningRail.loadPhase}
+                data-rail-lightning-sync={lightningRail.syncPhase}
+              >
                 <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
                   Lightning (NWC)
                 </p>
+                {showLightningLoadError ? (
+                  <RailLoadErrorBanner
+                    rail="lightning"
+                    loadPhase={lightningLoadSnapshot.loadPhase}
+                    errorMessage={lightningLoadSnapshot.errorMessage}
+                    onRetry={() => {
+                      void orchestrateLightningRetryLoad()
+                    }}
+                  />
+                ) : (
+                  <>
                 {lightningBalanceRows.length === 1 ? (
                   <p className="mb-3 text-sm font-semibold text-foreground">
                     {lightningBalanceRows[0].label}
@@ -463,146 +583,34 @@ function BalanceCard() {
                     total.
                   </p>
                 )}
+                <RailSyncErrorBanner
+                  rail="lightning"
+                  syncPhase={lightningSyncSnapshot.syncPhase}
+                  loadPhase={lightningLoadSnapshot.loadPhase}
+                  errorMessage={lightningSyncSnapshot.errorMessage}
+                  onRetry={() => lightningManualSync.mutate()}
+                  isRetrying={
+                    lightningRail.syncPhase === 'syncing' || lightningManualSync.isPending
+                  }
+                />
+                <RailSyncControl
+                  rail="lightning"
+                  syncLabel="Sync Lightning"
+                  syncPhase={lightningRail.syncPhase}
+                  lastSyncedAt={lightningSyncMetadataQuery.data?.lastSyncedAt ?? null}
+                  onSync={() => lightningManualSync.mutate()}
+                  isSyncPending={lightningManualSync.isPending}
+                  railConfigured={lightningRail.loadPhase !== 'not-configured'}
+                  syncErrorMessage={lightningSyncSnapshot.errorMessage}
+                  syncErrorDetailInBanner={lightningLoadSnapshot.loadPhase === 'loaded'}
+                />
+                  </>
+                )}
               </div>
             )}
         </CardContent>
       </Card>
     </InfomodeWrapper>
-  )
-}
-
-function SyncButton({
-  isBusy,
-  isThisOp,
-  onThisOp,
-}: {
-  isBusy: boolean
-  isThisOp: boolean
-  onThisOp: (running: boolean) => void
-}) {
-  const networkMode = useWalletStore((walletState) => walletState.networkMode)
-  const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
-  const setWalletStatus = useWalletStore((walletState) => walletState.setWalletStatus)
-
-  const handleSync = useCallback(async () => {
-    try {
-      onThisOp(true)
-      setWalletStatus('syncing')
-      await runIncrementalDashboardWalletSync({
-        networkMode,
-        activeWalletId,
-      })
-      setWalletStatus('unlocked')
-    } catch (err) {
-      setWalletStatus('unlocked')
-      console.error('Dashboard sync failed', err)
-      if (err instanceof BadLocalChainStateError) {
-        toast.error('Sync failed', { description: err.message })
-      } else {
-        const detail = sanitizeErrorMessageForUi(errorMessage(err))
-        toast.error(detail || 'Sync failed')
-      }
-    } finally {
-      onThisOp(false)
-    }
-  }, [networkMode, activeWalletId, onThisOp, setWalletStatus])
-
-  return (
-    <InfomodeWrapper
-      infoId="dashboard-sync-button"
-      infoTitle="Sync"
-      infoText="Fetches the latest data for your wallet from the configured Esplora server: new transactions, updated balances, and anything your addresses have done on-chain since the last refresh. Tap when you are expecting a payment or your activity looks out of date. On Lab network this button is hidden—the playground chain updates inside the lab instead of via this network sync."
-    >
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={handleSync}
-        disabled={isBusy}
-      >
-        <RefreshCw className={`mr-2 h-4 w-4 ${isThisOp ? 'animate-spin' : ''}`} />
-        {isThisOp ? 'Syncing...' : 'Sync'}
-      </Button>
-    </InfomodeWrapper>
-  )
-}
-
-/** Public networks only: regtest already runs a full-scan path on dashboard Sync (see `runIncrementalDashboardWalletSync`). */
-const FULL_RESCAN_NETWORKS: NetworkMode[] = ['mainnet', 'testnet', 'signet']
-
-function FullRescanButton({
-  isBusy,
-  isThisOp,
-  onThisOp,
-}: {
-  isBusy: boolean
-  isThisOp: boolean
-  onThisOp: (running: boolean) => void
-}) {
-  const networkMode = useWalletStore((walletState) => walletState.networkMode)
-  const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
-  const setWalletStatus = useWalletStore((walletState) => walletState.setWalletStatus)
-
-  const handleFullRescan = useCallback(async () => {
-    try {
-      onThisOp(true)
-      setWalletStatus('syncing')
-      await runFullScanDashboardWalletSync({
-        networkMode,
-        activeWalletId,
-      })
-      setWalletStatus('unlocked')
-    } catch (err) {
-      setWalletStatus('unlocked')
-      console.error('Full rescan failed', err)
-      const detail = sanitizeErrorMessageForUi(errorMessage(err))
-      toast.error(detail || 'Full rescan failed')
-    } finally {
-      onThisOp(false)
-    }
-  }, [networkMode, activeWalletId, onThisOp, setWalletStatus])
-
-  if (!FULL_RESCAN_NETWORKS.includes(networkMode)) {
-    return null
-  }
-
-  return (
-    <InfomodeWrapper
-      infoId="dashboard-full-rescan-button"
-      infoTitle="Full rescan"
-      infoText="Re-scans a window of your addresses against Esplora (slower than Sync). Use if your balance or transaction list still looks wrong after a normal sync—for example a poor connection during restore."
-    >
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={handleFullRescan}
-        disabled={isBusy}
-        className="text-muted-foreground"
-      >
-        <ScanSearch className={`mr-2 h-4 w-4 ${isThisOp ? 'animate-pulse' : ''}`} />
-        {isThisOp ? 'Scanning...' : 'Full rescan'}
-      </Button>
-    </InfomodeWrapper>
-  )
-}
-
-function DashboardOnChainSyncControls() {
-  const [activeOp, setActiveOp] = useState<'sync' | 'full' | null>(null)
-  const walletStatus = useWalletStore((walletState) => walletState.walletStatus)
-  const isBusy = walletStatus === 'syncing'
-
-  return (
-    <div className="flex flex-col items-end gap-2">
-      <SyncButton
-        isBusy={isBusy}
-        isThisOp={activeOp === 'sync'}
-        onThisOp={(running) => setActiveOp(running ? 'sync' : null)}
-      />
-      <FullRescanButton
-        isBusy={isBusy}
-        isThisOp={activeOp === 'full'}
-        onThisOp={(running) => setActiveOp(running ? 'full' : null)}
-      />
-    </div>
   )
 }
 
@@ -723,10 +731,7 @@ function RecentTransactions() {
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle>Recent Transactions</CardTitle>
-          {networkMode !== 'lab' && <DashboardOnChainSyncControls />}
-        </div>
+        <CardTitle>Recent Transactions</CardTitle>
       </CardHeader>
       <CardContent>
         {networkMode !== 'lab' &&
@@ -829,7 +834,6 @@ export function DashboardPage() {
   const navigate = useNavigate()
   const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
   const walletStatus = useWalletStore((walletState) => walletState.walletStatus)
-  const lastSyncTime = useWalletStore((walletState) => walletState.lastSyncTime)
   const networkMode = useWalletStore((walletState) => walletState.networkMode)
 
   if (!activeWalletId) {
@@ -837,25 +841,16 @@ export function DashboardPage() {
     return null
   }
 
-  if (walletStatus !== 'unlocked' && walletStatus !== 'syncing') {
+  if (!walletIsUnlockedOrSyncing(walletStatus)) {
     return <WalletUnlockOrNearZeroLoading />
   }
 
   return (
     <div className="space-y-6">
-      <PageHeader title={walletDashboardTitle(networkMode)} icon={Home}>
-        {lastSyncTime ? (
-          <p className="text-xs text-muted-foreground">
-            Last synced: {lastSyncTime.toLocaleString()}
-          </p>
-        ) : null}
-      </PageHeader>
+      <PageHeader title={walletDashboardTitle(networkMode)} icon={Home} />
 
       <ImportInitialSyncErrorBanner />
-
-      {walletStatus === 'syncing' && (
-        <LoadingSpinner text="Syncing wallet..." />
-      )}
+      <OnchainSaveErrorBanner />
 
       <BalanceCard />
       <RecentTransactions />

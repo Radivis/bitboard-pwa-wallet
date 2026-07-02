@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from 'react'
+import { useCallback } from 'react'
 import { toast } from 'sonner'
 import {
   useWalletStore,
@@ -10,11 +10,9 @@ import { useFeatureStore } from '@/stores/featureStore'
 import { useDescriptorWalletSwitchMutation } from '@/hooks/useDescriptorWalletSwitchMutation'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { Button } from '@/components/ui/button'
-import { WalletUnlock } from '@/components/WalletUnlock'
-import { useNearZeroSecurityStore } from '@/stores/nearZeroSecurityStore'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { cn } from '@/lib/shared/utils'
-import { walletIsUnlockedOrSyncing } from '@/lib/wallet/wallet-unlocked-status'
+import { useRequireUnlockedWallet } from '@/hooks/useRequireUnlockedWallet'
 
 const NETWORK_OPTIONS: NetworkMode[] = [
   'mainnet',
@@ -52,9 +50,7 @@ export function NetworkSelector() {
   const isMainnetAccessEnabled = useFeatureStore((featureState) => featureState.isMainnetAccessEnabled)
   const isRegtestModeEnabled = useFeatureStore((featureState) => featureState.isRegtestModeEnabled)
   const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
-  const walletStatus = useWalletStore((walletState) => walletState.walletStatus)
-  const walletUnlocked = walletIsUnlockedOrSyncing(walletStatus)
-  const nearZeroActive = useNearZeroSecurityStore((nearZeroSecurityState) => nearZeroSecurityState.active)
+  const { runWhenUnlocked, unlockDialog } = useRequireUnlockedWallet()
 
   const mainnetSelectionBlocked =
     !isMainnetAccessEnabled && displayNetworkMode !== 'mainnet'
@@ -62,53 +58,22 @@ export function NetworkSelector() {
   const networkOptionsVisible: NetworkMode[] = isRegtestModeEnabled
     ? NETWORK_OPTIONS
     : NETWORK_OPTIONS.filter((n) => n !== 'regtest')
-  const [showUnlockForNetworkChange, setShowUnlockForNetworkChange] =
-    useState(false)
-  const pendingNetworkAfterUnlockRef = useRef<NetworkMode | null>(null)
-  const pendingNearZeroNetworkRef = useRef<NetworkMode | null>(null)
 
   const { mutate: switchMutate, isSwitching, statusLine } =
     useDescriptorWalletSwitchMutation('network')
-
-  useEffect(() => {
-    const pending = pendingNearZeroNetworkRef.current
-    if (pending === null || !walletUnlocked) return
-    pendingNearZeroNetworkRef.current = null
-    switchMutate(pending)
-  }, [walletUnlocked, switchMutate])
-
-  useEffect(() => {
-    if (nearZeroActive || walletUnlocked) return
-    const pending = pendingNearZeroNetworkRef.current
-    if (pending === null) return
-    pendingNearZeroNetworkRef.current = null
-    pendingNetworkAfterUnlockRef.current = pending
-    setShowUnlockForNetworkChange(true)
-  }, [nearZeroActive, walletUnlocked])
 
   const handleNetworkChange = useCallback(
     (network: NetworkMode) => {
       if (network === displayNetworkMode) return
 
-      if (activeWalletId !== null && !walletUnlocked) {
-        if (nearZeroActive) {
-          pendingNearZeroNetworkRef.current = network
-          return
-        }
-        pendingNetworkAfterUnlockRef.current = network
-        setShowUnlockForNetworkChange(true)
+      if (activeWalletId !== null) {
+        runWhenUnlocked(() => switchMutate(network))
         return
       }
 
       switchMutate(network)
     },
-    [
-      displayNetworkMode,
-      activeWalletId,
-      walletUnlocked,
-      switchMutate,
-      nearZeroActive,
-    ],
+    [displayNetworkMode, activeWalletId, switchMutate, runWhenUnlocked],
   )
 
   return (
@@ -156,20 +121,7 @@ export function NetworkSelector() {
         />
       )}
 
-      {showUnlockForNetworkChange && (
-        <WalletUnlock
-          onDismiss={() => {
-            pendingNetworkAfterUnlockRef.current = null
-            setShowUnlockForNetworkChange(false)
-          }}
-          onUnlockSuccess={() => {
-            const target = pendingNetworkAfterUnlockRef.current
-            pendingNetworkAfterUnlockRef.current = null
-            setShowUnlockForNetworkChange(false)
-            if (target) switchMutate(target)
-          }}
-        />
-      )}
+      {unlockDialog}
     </div>
   )
 }

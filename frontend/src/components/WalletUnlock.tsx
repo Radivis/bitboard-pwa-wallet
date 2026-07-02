@@ -11,14 +11,7 @@ import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { AppModal } from '@/components/AppModal'
 import { useWalletStore } from '@/stores/walletStore'
 import { useWallets } from '@/db'
-import {
-  loadDescriptorWalletAndSync,
-  loadDescriptorWalletWithoutSync,
-} from '@/lib/wallet/wallet-utils'
-import {
-  ensureWalletSecretsSession,
-  endWalletSecretsSession,
-} from '@/lib/wallet/wallet-secrets-session'
+import { orchestrateManualUnlock } from '@/lib/wallet/lifecycle/lock-lifecycle-orchestrator'
 import { reportWalletSyncError } from '@/lib/wallet/wallet-sync-error-toast'
 import { toUserFriendlyWalletSecretsError } from '@/lib/wallet/wallet-secrets-error-messages'
 
@@ -72,36 +65,14 @@ export function WalletUnlock({
       setUnlockErrorMessage(null)
       if (!activeWalletId) throw new Error('No active wallet')
 
-      const { setManualWalletUnlockInFlight } = useWalletStore.getState()
-      setManualWalletUnlockInFlight(true)
-      try {
-        await ensureWalletSecretsSession(walletPassword)
-        try {
-          if (networkMode === 'lab') {
-            await loadDescriptorWalletWithoutSync({
-              walletId: activeWalletId,
-              networkMode,
-              addressType,
-              accountId,
-            })
-          } else {
-            await loadDescriptorWalletAndSync({
-              walletId: activeWalletId,
-              networkMode,
-              addressType,
-              accountId,
-              awaitSync: false,
-              onSyncError: (err) =>
-                reportWalletSyncError('unlock-background-sync', err),
-            })
-          }
-        } catch (err) {
-          await endWalletSecretsSession()
-          throw err
-        }
-      } finally {
-        setManualWalletUnlockInFlight(false)
-      }
+      await orchestrateManualUnlock({
+        walletId: activeWalletId,
+        networkMode,
+        addressType,
+        accountId,
+        password: walletPassword,
+        onSyncError: (err) => reportWalletSyncError('unlock-background-sync', err),
+      })
     },
     onSuccess: () => {
       onUnlockSuccess?.()

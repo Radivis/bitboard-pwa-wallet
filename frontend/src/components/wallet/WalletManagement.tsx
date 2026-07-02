@@ -3,7 +3,8 @@ import { useNavigate } from '@tanstack/react-router'
 import { Lock } from 'lucide-react'
 import { toast } from 'sonner'
 import { useWalletStore } from '@/stores/walletStore'
-import { useCryptoStore } from '@/stores/cryptoStore'
+import { orchestrateLock } from '@/lib/wallet/lifecycle/lock-lifecycle-orchestrator'
+import { reportWalletSaveBlockingLock } from '@/lib/wallet/wallet-save-error-toast'
 import { useUpdateWallet, useWallet, useWallets } from '@/db'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -26,9 +27,6 @@ export function WalletManagement({
   const navigate = useNavigate()
   const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
   const walletStatus = useWalletStore((walletState) => walletState.walletStatus)
-  const lockAndPurgeSensitiveRuntimeState = useCryptoStore(
-    (cryptoState) => cryptoState.lockAndPurgeSensitiveRuntimeState,
-  )
   const { data: wallets } = useWallets()
   const { data: walletRow, isSuccess: walletRowLoaded } = useWallet(activeWalletId)
   const updateWallet = useUpdateWallet()
@@ -44,8 +42,14 @@ export function WalletManagement({
   if (!activeWalletId) return null
 
   const handleLockWallet = async () => {
-    await lockAndPurgeSensitiveRuntimeState()
-    toast.success('Wallet locked')
+    try {
+      await orchestrateLock()
+      toast.success('Wallet locked')
+    } catch (error) {
+      if (!reportWalletSaveBlockingLock(error)) {
+        throw error
+      }
+    }
   }
 
   const trimmedDraft = draftName.trim()

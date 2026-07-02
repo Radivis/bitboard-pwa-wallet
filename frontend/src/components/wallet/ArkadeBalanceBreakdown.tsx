@@ -4,11 +4,14 @@ import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
 import {
   ARKADE_BALANCE_BOARDING_INFOMODE,
   ARKADE_BALANCE_BOARDING_PENDING_INFOMODE,
+  ARKADE_BALANCE_BUMPER_INFOMODE,
   ARKADE_BALANCE_EXIT_PROGRESS_INFOMODE,
   ARKADE_BALANCE_RECOVERABLE_INFOMODE,
+  ARKADE_BALANCE_RECOVERABLE_PENDING_OPERATOR_SWEEP_INFOMODE,
   ARKADE_BALANCE_VTXOS_INFOMODE,
   ARKADE_INFOMODE_IDS,
 } from '@/lib/arkade/arkade-infomode'
+import { ArkadeBumperWalletInfomodeContent } from '@/components/arkade/infomode/ArkadeBumperWalletInfomodeContent'
 import type { ArkadeBalanceInfo } from '@/workers/arkade-api'
 import {
   arkadeCollaborativeExitInProgressSats,
@@ -16,6 +19,9 @@ import {
   arkadeHasBoardingBalance,
   arkadeHasExitInProgress,
   arkadeOffchainSpendableSats,
+  arkadeOnchainBumperSats,
+  arkadeRecoverablePendingOperatorSweepSats,
+  arkadeRecoverablePendingOperatorSweepVtxoCount,
   arkadeUnilateralExitInProgressSats,
 } from '@/lib/arkade/arkade-balance-display'
 
@@ -36,8 +42,15 @@ export function ArkadeBalanceBreakdown({
   const unilateralExitSats = arkadeUnilateralExitInProgressSats(balance)
   const collaborativeExitSats = arkadeCollaborativeExitInProgressSats(balance)
   const showExitBreakdown = arkadeHasExitInProgress(balance)
+  const pendingRecoverySats = balance.pendingRecoverySats ?? 0
+  const showPendingRecovery = pendingRecoverySats > 0
+  const pendingOperatorSweepSats = arkadeRecoverablePendingOperatorSweepSats(balance)
+  const pendingOperatorSweepCount = arkadeRecoverablePendingOperatorSweepVtxoCount(balance)
+  const showPendingOperatorSweep = pendingOperatorSweepSats > 0
+  const onchainBumperSats = arkadeOnchainBumperSats(balance)
+  const showBumperBreakdown = onchainBumperSats > 0
   const showRecoverableTotal =
-    balance.totalSats > dashboardSpendableSats + boardingPendingSats
+    balance.totalSats > dashboardSpendableSats + boardingPendingSats + onchainBumperSats
 
   return (
     <div className="space-y-1">
@@ -125,6 +138,43 @@ export function ArkadeBalanceBreakdown({
             </InfomodeWrapper>
           )}
         </div>
+      )}
+      {showPendingRecovery && (
+        <p className="text-xs text-muted-foreground" data-testid="arkade-balance-pending-recovery">
+          Pending recovery (deprecated signer):{' '}
+          <BitcoinAmountDisplay amountSats={pendingRecoverySats} size="sm" />
+        </p>
+      )}
+      {showPendingOperatorSweep && (
+        <InfomodeWrapper
+          infoId={ARKADE_INFOMODE_IDS.balanceRecoverablePendingOperatorSweep}
+          infoTitle={ARKADE_BALANCE_RECOVERABLE_PENDING_OPERATOR_SWEEP_INFOMODE.title}
+          infoText={ARKADE_BALANCE_RECOVERABLE_PENDING_OPERATOR_SWEEP_INFOMODE.text}
+          as="span"
+        >
+          <p
+            className="text-xs text-muted-foreground"
+            data-testid="arkade-balance-recoverable-pending-operator-sweep"
+          >
+            Expired — waiting for operator sweep ({pendingOperatorSweepCount} VTXO
+            {pendingOperatorSweepCount === 1 ? '' : 's'}):{' '}
+            <BitcoinAmountDisplay amountSats={pendingOperatorSweepSats} size="sm" />
+          </p>
+        </InfomodeWrapper>
+      )}
+      {showBumperBreakdown && (
+        <InfomodeWrapper
+          infoId={ARKADE_INFOMODE_IDS.bumperWallet}
+          infoTitle={ARKADE_BALANCE_BUMPER_INFOMODE.title}
+          infoText={ARKADE_BALANCE_BUMPER_INFOMODE.text}
+          infoComponent={ArkadeBumperWalletInfomodeContent}
+          as="span"
+        >
+          <p className="text-xs text-muted-foreground" data-testid="arkade-balance-bumper">
+            Bumper wallet (exit fees):{' '}
+            <BitcoinAmountDisplay amountSats={onchainBumperSats} size="sm" />
+          </p>
+        </InfomodeWrapper>
       )}
       {showRecoverableTotal && (
         <InfomodeWrapper

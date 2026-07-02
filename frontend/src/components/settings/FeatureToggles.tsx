@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react'
-import { AlertTriangle, CircleDot, Coins, FlaskConical, Layers, Zap } from 'lucide-react'
+import { AlertTriangle, Coins, FlaskConical, Layers, RefreshCw, Zap } from 'lucide-react'
+import { ArkadeIcon } from '@/components/icons/ArkadeIcon'
 import { useFeatureStore } from '@/stores/featureStore'
 import {
   AddressType,
@@ -30,6 +31,8 @@ export function FeatureToggles() {
   const setIsUtxoSelectionEnabled = useFeatureStore((featureState) => featureState.setIsUtxoSelectionEnabled)
   const isArkadeEnabled = useFeatureStore((featureState) => featureState.isArkadeEnabled)
   const setIsArkadeEnabled = useFeatureStore((featureState) => featureState.setIsArkadeEnabled)
+  const isPeriodicSyncEnabled = useFeatureStore((featureState) => featureState.isPeriodicSyncEnabled)
+  const setIsPeriodicSyncEnabled = useFeatureStore((featureState) => featureState.setIsPeriodicSyncEnabled)
 
   const [mainnetConfirmOpen, setMainnetConfirmOpen] = useState(false)
   const [arkadeConfirmOpen, setArkadeConfirmOpen] = useState(false)
@@ -186,12 +189,33 @@ export function FeatureToggles() {
       </InfomodeWrapper>
 
       <InfomodeWrapper
+        infoId="settings-feature-periodic-sync"
+        infoTitle="Periodic sync"
+        infoText="When enabled, loaded rails can poll Esplora, NWC, or the Arkade operator on a timer you configure under Settings → Main. Off by default: the wallet syncs on unlock and when you tap Sync on the dashboard. Polling runs only while this tab is visible."
+      >
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <RefreshCw className="h-4 w-4" />
+            <Label htmlFor="periodic-sync-toggle" className="cursor-pointer">
+              Periodic sync
+            </Label>
+          </div>
+          <Switch
+            id="periodic-sync-toggle"
+            checked={isPeriodicSyncEnabled}
+            onCheckedChange={setIsPeriodicSyncEnabled}
+            aria-label="Enable periodic sync"
+          />
+        </div>
+      </InfomodeWrapper>
+
+      <InfomodeWrapper
         infoId={ARKADE_INFOMODE_IDS.featureToggle}
         infoComponent={ArkadeFeatureInfomodeContent}
       >
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <CircleDot className="h-4 w-4" />
+            <ArkadeIcon className="h-4 w-4" />
             <Label htmlFor="arkade-toggle" className="cursor-pointer">
               Arkade
             </Label>

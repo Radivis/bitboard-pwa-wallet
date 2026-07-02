@@ -1,13 +1,16 @@
 import { useQuery } from '@tanstack/react-query'
 import { useWalletStore } from '@/stores/walletStore'
-import { loadDescriptorWalletAndSync, loadDescriptorWalletWithoutSync } from '@/lib/wallet/wallet-utils'
 import { activeWalletLoadQueryKey } from '@/lib/wallet/wallet-load-query-keys'
-import { waitForCryptoWorkerHealthy } from '@/workers/crypto-factory'
-import { pathnameRequiresWalletCryptoSession } from '@/lib/shared/pathname-requires-wallet-crypto-session'
-import { reportWalletSyncError } from '@/lib/wallet/wallet-sync-error-toast'
+import { pathnameIsWalletRoute } from '@/lib/shared/pathname-is-wallet-route'
 import { useWalletCryptoSessionPathGateStore } from '@/stores/walletCryptoSessionPathGateStore'
 import { walletIsUnlockedOrSyncing } from '@/lib/wallet/wallet-unlocked-status'
 import { isWalletSecretsSessionActive } from '@/lib/wallet/wallet-secrets-session'
+import { reportWalletSyncError } from '@/lib/wallet/wallet-sync-error-toast'
+import {
+  canStartBootstrapUnlock,
+  isLockUnlockInProgress,
+  orchestrateBootstrapUnlock,
+} from '@/lib/wallet/lifecycle/lock-lifecycle-orchestrator'
 
 /**
  * TanStack Query observer for loading the active descriptor wallet when a session exists
@@ -20,30 +23,26 @@ export function useActiveWalletLoadQuery() {
   const addressType = useWalletStore((walletState) => walletState.addressType)
   const accountId = useWalletStore((walletState) => walletState.accountId)
   const walletStatus = useWalletStore((walletState) => walletState.walletStatus)
-  const activeWalletBootstrapInFlight = useWalletStore(
-    (walletState) => walletState.activeWalletBootstrapInFlight,
-  )
-  const manualWalletUnlockInFlight = useWalletStore(
-    (walletState) => walletState.manualWalletUnlockInFlight,
-  )
   const pathname = useWalletCryptoSessionPathGateStore((walletCryptoSessionPathGateState) => walletCryptoSessionPathGateState.pathname)
-  const onWalletCryptoRoute = pathnameRequiresWalletCryptoSession(pathname)
+  const onWalletRoute = pathnameIsWalletRoute(pathname)
+  const lockUnlockInProgress = isLockUnlockInProgress()
 
   /**
    * `loadDescriptorWalletAndSync` marks the wallet unlocked before Esplora sync; bootstrap
    * uses background sync (`awaitSync: false`) so the query finishes right after WASM load.
-   * `activeWalletBootstrapInFlight` keeps the query enabled until `queryFn` returns so
+   * LockLifecycle `bootstrap_unlock` keeps the query enabled until `queryFn` returns so
    * TanStack Query does not cancel mid-flight when status flips to unlocked mid-load.
-   * `manualWalletUnlockInFlight` must suppress bootstrap while {@link WalletUnlock} holds
-   * the session password but has not finished loading — otherwise unlock and bootstrap run
+   * Manual unlock must suppress bootstrap — otherwise unlock and bootstrap run
    * `loadDescriptorWalletAndSync` in parallel (duplicate sync toasts and work).
-   * Bootstrap is off on Library (etc.) so locking → Library does not immediately reload keys.
+   * Bootstrap starts only on wallet-route entry; `lockUnlockInProgress` keeps it enabled
+   * if the user navigates away mid-bootstrap (route-independent lifecycle).
    */
-  const needsBootstrap =
-    onWalletCryptoRoute &&
+  const wantsBootstrap =
     activeWalletId != null &&
-    !manualWalletUnlockInFlight &&
-    (!walletIsUnlockedOrSyncing(walletStatus) || activeWalletBootstrapInFlight)
+    canStartBootstrapUnlock() &&
+    (!walletIsUnlockedOrSyncing(walletStatus) || lockUnlockInProgress)
+
+  const needsBootstrap = wantsBootstrap && (onWalletRoute || lockUnlockInProgress)
 
   const query = useQuery({
     queryKey: activeWalletLoadQueryKey({
@@ -51,47 +50,31 @@ export function useActiveWalletLoadQuery() {
       networkMode,
       addressType,
       accountId,
+      lockUnlockInProgress,
     }),
     queryFn: async () => {
-      const { setActiveWalletBootstrapInFlight } = useWalletStore.getState()
-      setActiveWalletBootstrapInFlight(true)
-      try {
-        const {
-          activeWalletId: bootstrapWalletId,
-          networkMode: bootstrapNetworkMode,
-          addressType: bootstrapAddressType,
-          accountId: bootstrapAccountId,
-        } = useWalletStore.getState()
-        if (bootstrapWalletId == null) {
-          throw new Error('Bootstrap query ran without wallet or session')
-        }
-        if (!(await isWalletSecretsSessionActive())) {
-          throw new Error('Bootstrap query ran without wallet secrets session')
-        }
-        await waitForCryptoWorkerHealthy()
-        if (bootstrapNetworkMode === 'lab') {
-          await loadDescriptorWalletWithoutSync({
-            walletId: bootstrapWalletId,
-            networkMode: bootstrapNetworkMode,
-            addressType: bootstrapAddressType,
-            accountId: bootstrapAccountId,
-          })
-        } else {
-          await loadDescriptorWalletAndSync({
-            walletId: bootstrapWalletId,
-            networkMode: bootstrapNetworkMode,
-            addressType: bootstrapAddressType,
-            accountId: bootstrapAccountId,
-            awaitSync: false,
-            onSyncError: (err) => {
-              reportWalletSyncError('bootstrap-load', err)
-            },
-          })
-        }
-        return true
-      } finally {
-        useWalletStore.getState().setActiveWalletBootstrapInFlight(false)
+      const {
+        activeWalletId: bootstrapWalletId,
+        networkMode: bootstrapNetworkMode,
+        addressType: bootstrapAddressType,
+        accountId: bootstrapAccountId,
+      } = useWalletStore.getState()
+      if (bootstrapWalletId == null) {
+        throw new Error('Bootstrap query ran without wallet or session')
       }
+      if (!(await isWalletSecretsSessionActive())) {
+        throw new Error('Bootstrap query ran without wallet secrets session')
+      }
+      await orchestrateBootstrapUnlock({
+        walletId: bootstrapWalletId,
+        networkMode: bootstrapNetworkMode,
+        addressType: bootstrapAddressType,
+        accountId: bootstrapAccountId,
+        onSyncError: (err) => {
+          reportWalletSyncError('bootstrap-load', err)
+        },
+      })
+      return true
     },
     enabled: needsBootstrap,
     staleTime: Number.POSITIVE_INFINITY,

@@ -1,3 +1,4 @@
+import type { ArkadeSignerMigrationHint } from '@/workers/arkade-api'
 import type { EncryptedWalletSecretsHost } from '@/lib/wallet/encrypted-wallet-secrets-host'
 import {
   ensureArkadeOperatorConnectionInPayload,
@@ -158,6 +159,7 @@ export async function ensureOperatorConnectionEncrypted(
     operatorUrl: string
     delegatorUrl: string
     sdkPersistenceJson?: string
+    signerMigrationHint?: ArkadeSignerMigrationHint
   },
   options?: {
     exportInitialSdkFromWasm?: () => Promise<string>
@@ -179,6 +181,7 @@ export async function ensureOperatorConnectionEncrypted(
       delegatorUrl: params.delegatorUrl,
       sdkPersistenceJson,
       connectionId: params.connectionId,
+      signerMigrationHint: params.signerMigrationHint,
     },
   )
   const newEncrypted = await encryptPayload(deps, mergedPayload)

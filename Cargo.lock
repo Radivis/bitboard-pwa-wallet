@@ -57,9 +57,9 @@ dependencies = [
 
 [[package]]
 name = "anyhow"
-version = "1.0.102"
+version = "1.0.103"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7f202df86484c868dbad7eaa557ef785d5c66295e41b460ef922eca0723b842c"
+checksum = "2a4385e2e34eb35d6b3efe798b9eb88096925d87726c0798709bf56d9ed84af3"
 
 [[package]]
 name = "argon2"
@@ -75,7 +75,7 @@ dependencies = [
 
 [[package]]
 name = "ark-bdk-wallet"
-version = "0.9.2"
+version = "0.9.3"
 dependencies = [
  "anyhow",
  "ark-client",
@@ -84,6 +84,7 @@ dependencies = [
  "bdk_esplora 0.20.1",
  "bdk_wallet 1.2.0",
  "bitcoin",
+ "esplora-client 0.11.0",
  "getrandom 0.2.17",
  "gloo-timers",
  "jiff",
@@ -92,7 +93,7 @@ dependencies = [
 
 [[package]]
 name = "ark-client"
-version = "0.9.2"
+version = "0.9.3"
 dependencies = [
  "ark-core",
  "ark-delegator",
@@ -110,6 +111,7 @@ dependencies = [
  "getrandom 0.2.17",
  "gloo-timers",
  "jiff",
+ "js-sys",
  "lightning-invoice 0.33.2",
  "prost 0.13.5",
  "prost-types 0.13.5",
@@ -128,9 +130,9 @@ dependencies = [
 
 [[package]]
 name = "ark-core"
-version = "0.9.2"
+version = "0.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "16bcb207d1273c766941abf3316e7dc2f14675dd1f007981cf938f8070f8d7b7"
+checksum = "4c2608b6ea565ce14dd445a806f65a48cc12049ca62a63971c8251779dff00d0"
 dependencies = [
  "bech32",
  "bitcoin",
@@ -150,9 +152,9 @@ dependencies = [
 
 [[package]]
 name = "ark-delegator"
-version = "0.9.2"
+version = "0.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "96fc4ae8598b8cc90a1afff8819a4b227ccc3e29ff25305079098df13dc1670f"
+checksum = "5bec906eb2b8cdc9e77e3e03643a04084e3c2118230dadf26e6ee1ebdb599839"
 dependencies = [
  "ark-core",
  "bitcoin",
@@ -164,18 +166,18 @@ dependencies = [
 
 [[package]]
 name = "ark-fees"
-version = "0.9.2"
+version = "0.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f3deebd83941967877d8b26e56f8e9947c9e5ab87b928a68d7ec1a90cec6b442"
+checksum = "d992b425826e89ff4ce5d4d28eefa77893090bd12aedd0fcae14db1c46a1c819"
 dependencies = [
  "cel",
 ]
 
 [[package]]
 name = "ark-grpc"
-version = "0.9.2"
+version = "0.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "feeb9b2d02b73b782585e301c1150677e3db0df37ea9adaa1464109ee211f5cb"
+checksum = "e21b651b5b353b42536e4cc98a686459aaa6acb8d6868e8b6141a43c751f3702"
 dependencies = [
  "ark-core",
  "async-stream",
@@ -192,11 +194,12 @@ dependencies = [
 
 [[package]]
 name = "ark-rest"
-version = "0.9.2"
+version = "0.9.3"
 dependencies = [
  "ark-core",
  "base64 0.22.1",
  "bitcoin",
+ "bytes",
  "futures",
  "getrandom 0.2.17",
  "reqwest 0.12.28",
@@ -500,7 +503,7 @@ checksum = "5e764a1d40d510daf35e07be9eb06e75770908c27d411ee6c92109c9840eaaf7"
 
 [[package]]
 name = "bitboard-ark"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "ark-bdk-wallet",
  "ark-client",
@@ -528,7 +531,7 @@ dependencies = [
 
 [[package]]
 name = "bitboard-crypto"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "assert_matches",
  "async-trait",
@@ -555,7 +558,7 @@ dependencies = [
 
 [[package]]
 name = "bitboard-encryption"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "argon2",
  "base64 0.22.1",
@@ -571,7 +574,7 @@ dependencies = [
 
 [[package]]
 name = "bitboard-lightning"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "bitcoin",
  "console_error_panic_hook",
@@ -585,7 +588,7 @@ dependencies = [
 
 [[package]]
 name = "bitboard-wasm-sleep"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "js-sys",
  "wasm-bindgen",

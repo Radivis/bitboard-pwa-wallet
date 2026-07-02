@@ -5,7 +5,7 @@ import { useWalletStore } from '@/stores/walletStore'
 import { useCryptoStore } from '@/stores/cryptoStore'
 import { useSendStore } from '@/stores/sendStore'
 import { getEsploraUrl, toBitcoinNetwork } from '@/lib/wallet/bitcoin-utils'
-import { updateWalletChangeset, loadCustomEsploraUrl, persistPostEsploraSyncDescriptorWalletState } from '@/lib/wallet/wallet-utils'
+import { updateWalletChangeset, loadCustomEsploraUrl } from '@/lib/wallet/wallet-utils'
 import { walletLabOwner } from '@/lib/lab/lab-owner'
 import { labBitcoinAddressesEqual } from '@/lib/lab/lab-utils'
 import { getLabWorker, initLabWorkerWithState } from '@/workers/lab-factory'
@@ -17,6 +17,7 @@ import { errorMessage } from '@/lib/shared/utils'
 import { formatAmountInputFromSats } from '@/lib/wallet/bitcoin-dust'
 import { onchainDustPrepareWarningLines } from '@/lib/wallet/send/onchain-dust-prepare-messages'
 import { reviewUtxoToOutpoint } from '@/lib/wallet/manual-utxo-selection'
+import { exportChangesetForPersistence } from '@/lib/wallet/lifecycle/onchain-descriptor-mutation-guard'
 
 /**
  * Mutation to prepare a PSBT (mainnet/testnet/signet/regtest).
@@ -67,16 +68,7 @@ export function useBroadcastTransactionMutation() {
     mutationFn: async () => {
       if (!psbt) throw new Error('No PSBT to broadcast')
 
-      const {
-        signAndExtractTransaction,
-        broadcastTransaction,
-        exportChangeset,
-        syncWallet,
-        getBalance,
-        getTransactionList,
-      } = useCryptoStore.getState()
-      const { setWalletStatus, setBalance, setTransactions } =
-        useWalletStore.getState()
+      const { signAndExtractTransaction, broadcastTransaction } = useCryptoStore.getState()
       const activeWalletId = useWalletStore.getState().activeWalletId
 
       const rawTxHex = await signAndExtractTransaction(psbt)
@@ -86,29 +78,30 @@ export function useBroadcastTransactionMutation() {
       const txid = await broadcastTransaction(rawTxHex, esploraUrl)
 
       if (activeWalletId) {
-        const changesetJson = await exportChangeset()
+        const changesetJson = await exportChangesetForPersistence()
         await updateWalletChangeset({
           walletId: activeWalletId,
           changesetJson,
         })
       }
 
-      void (async () => {
-        setWalletStatus('syncing')
-        try {
-          await syncWallet(esploraUrl)
-          const newBalance = await getBalance()
-          const newTransactionList = await getTransactionList()
-          setBalance(newBalance)
-          setTransactions(newTransactionList)
-          await persistPostEsploraSyncDescriptorWalletState({
-            walletId: activeWalletId ?? null,
-          })
-        } catch {
-          // keep unlocked on sync failure
-        }
-        setWalletStatus('unlocked')
-      })()
+      if (activeWalletId != null && networkMode !== 'lab') {
+        const { addressType, accountId } = useWalletStore.getState()
+        void import('@/lib/wallet/lifecycle/onchain-sync-lifecycle-orchestrator').then(
+          ({ orchestrateOnchainSyncThenSave }) =>
+            orchestrateOnchainSyncThenSave({
+              walletId: activeWalletId,
+              networkMode,
+              addressType,
+              accountId,
+              syncKind: 'postBroadcast',
+              useFullScan: false,
+              markFullScanDone: false,
+              awaitCompletion: false,
+              throwOnError: false,
+            }),
+        )
+      }
 
       return { txid }
     },

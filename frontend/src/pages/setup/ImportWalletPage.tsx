@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useNavigate, Link } from '@tanstack/react-router'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, CheckCircle2, XCircle, Loader2 } from 'lucide-react'
@@ -11,6 +11,7 @@ import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { EnterAppPasswordModal } from '@/components/EnterAppPasswordModal'
 import { SetAppPasswordModal } from '@/components/SetAppPasswordModal'
 import { WalletUnlock } from '@/components/WalletUnlock'
+import { orchestrateLock } from '@/lib/wallet/lifecycle/lock-lifecycle-orchestrator'
 import { useCryptoStore } from '@/stores/cryptoStore'
 import { useWalletStore } from '@/stores/walletStore'
 import { startAutoLockTimer } from '@/stores/sessionStore'
@@ -24,9 +25,9 @@ import {
 import { ensureSecretsChannel } from '@/workers/secrets-channel'
 import { toBitcoinNetwork } from '@/lib/wallet/bitcoin-utils'
 import {
-  runImportInitialEsploraSync,
   retryImportInitialEsploraSyncWithWalletStatus,
 } from '@/lib/wallet/wallet-utils'
+import { orchestrateOnchainSetupAfterPersist } from '@/lib/wallet/lifecycle/onchain-setup-lifecycle'
 import { showImportInitialSyncFailureToast } from '@/lib/wallet/wallet-sync-error-toast'
 import { sanitizeErrorMessageForUi } from '@/lib/shared/sanitize-error-for-ui'
 import { errorMessage } from '@/lib/shared/utils'
@@ -99,26 +100,6 @@ export function ImportWalletPage() {
 
   const canRestore = isValid === true
 
-  /**
-   * First Esplora full scan after import (long-running); runs after navigation.
-   * Lab / no Esplora URL: refresh WASM balance/tx only (see {@link runImportInitialEsploraSync}).
-   */
-  const runPostImportInitialSync = useCallback(async () => {
-    try {
-      await runImportInitialEsploraSync()
-      setWalletStatus('unlocked')
-    } catch (err: unknown) {
-      setWalletStatus('unlocked')
-      const syncErrorMessage =
-        sanitizeErrorMessageForUi(errorMessage(err) ?? String(err)) ||
-        'Initial sync failed'
-      setImportInitialSyncErrorMessage(syncErrorMessage)
-      showImportInitialSyncFailureToast(err, () => {
-        void retryImportInitialEsploraSyncWithWalletStatus()
-      })
-    }
-  }, [setImportInitialSyncErrorMessage, setWalletStatus])
-
   const restoreMutation = useMutation({
     mutationFn: async (appPassword?: string) => {
       if (!canRestore) throw new Error('Invalid input')
@@ -166,17 +147,33 @@ export function ImportWalletPage() {
         addressType,
         accountId,
       })
-      setWalletStatus('syncing')
+      // Sync phase is tracked by on-chain lifecycle orchestrator.
+      setWalletStatus('unlocked')
 
-      startAutoLockTimer(() =>
-        useCryptoStore.getState().lockAndPurgeSensitiveRuntimeState(),
-      )
+      startAutoLockTimer(() => void orchestrateLock())
+
+      try {
+        await orchestrateOnchainSetupAfterPersist({
+          walletId,
+          networkMode,
+          addressType,
+          accountId,
+        })
+        setImportInitialSyncErrorMessage(null)
+      } catch (err: unknown) {
+        const syncErrorMessage =
+          sanitizeErrorMessageForUi(errorMessage(err) ?? String(err)) ||
+          'Initial sync failed'
+        setImportInitialSyncErrorMessage(syncErrorMessage)
+        showImportInitialSyncFailureToast(err, () => {
+          void retryImportInitialEsploraSyncWithWalletStatus()
+        })
+      }
     },
     onSuccess: () => {
       setMnemonicInput('')
       toast.success('Wallet imported successfully!')
       navigate({ to: '/wallet' })
-      void runPostImportInitialSync()
     },
     onError: (err) => {
       toast.error(

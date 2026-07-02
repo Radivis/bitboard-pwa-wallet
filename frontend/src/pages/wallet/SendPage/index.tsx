@@ -6,6 +6,7 @@ import { WalletUnlockOrNearZeroLoading } from '@/components/WalletUnlockOrNearZe
 import { SendTransactionEntryCard } from '@/components/wallet/send/SendTransactionEntryCard'
 import { SendTransactionReviewStep } from '@/components/wallet/send/SendTransactionReviewStep'
 import { useWalletStore } from '@/stores/walletStore'
+import { walletIsUnlockedOrSyncing } from '@/lib/wallet/wallet-unlocked-status'
 import { useSendStore } from '@/stores/sendStore'
 import { useFeatureStore } from '@/stores/featureStore'
 import { useLabChainStateQuery } from '@/hooks/useLabChainStateQuery'
@@ -71,7 +72,7 @@ export function SendPage() {
     return null
   }
 
-  if (walletStatus !== 'unlocked' && walletStatus !== 'syncing') {
+  if (!walletIsUnlockedOrSyncing(walletStatus)) {
     return <WalletUnlockOrNearZeroLoading />
   }
 

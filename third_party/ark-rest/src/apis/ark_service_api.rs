@@ -360,23 +360,10 @@ pub async fn ark_service_get_event_stream(
     let mut req_builder = configuration.client.request(reqwest::Method::GET, &uri_str);
 
     if let Some(ref param_value) = p_topics {
-        req_builder = match "csv" {
-            "multi" => req_builder.query(
-                &param_value
-                    .into_iter()
-                    .map(|p| ("topics".to_owned(), p.to_string()))
-                    .collect::<Vec<(std::string::String, std::string::String)>>(),
-            ),
-            _ => req_builder.query(&[(
-                "topics",
-                &param_value
-                    .into_iter()
-                    .map(|p| p.to_string())
-                    .collect::<Vec<String>>()
-                    .join(",")
-                    .to_string(),
-            )]),
-        };
+        req_builder = req_builder.query(&crate::openapi_query_arrays::repeated_simple_query_pairs(
+            "topics",
+            param_value,
+        ));
     }
     if let Some(ref user_agent) = configuration.user_agent {
         req_builder = req_builder.header(reqwest::header::USER_AGENT, user_agent.clone());

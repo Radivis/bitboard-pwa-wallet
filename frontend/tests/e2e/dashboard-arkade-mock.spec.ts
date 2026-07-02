@@ -25,16 +25,20 @@ import {
   installArkadeMockIsolation,
 } from './helpers/arkade-mock-isolation'
 import {
-  expectArkadeBalanceNotEmptySession,
+  clickArkadeGenerateNewAddressAndWaitForIndexAdvance,
   goToReceiveArkadeMode,
   readDashboardArkadeBalanceSats,
   readReceiveArkadeAddress,
   waitForArkadeActivityLoaded,
   waitForArkadeBalanceCard,
+  waitForArkadeMockDashboardBalance,
   waitForDashboardArkadeBalanceSats,
   waitForReceiveArkadeAddressReady,
   waitForArkadeWorkerReadyAfterUnlock,
   waitForDashboardArkadeSessionAfterUnlock,
+  waitForArkadeLoadReady,
+  waitForArkadeWasmSessionReady,
+  triggerArkadeRailSync,
 } from './helpers/dashboard-arkade'
 
 const ARKADE_MOCK_TEST_TIMEOUT_MS = process.env.CI ? 120_000 : 90_000
@@ -79,7 +83,7 @@ test.describe('Dashboard Arkade mock ASP @arkade', () => {
     await goToWalletTab(page, 'Dashboard')
     await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible()
 
-    await expectArkadeBalanceNotEmptySession(page)
+    await waitForArkadeMockDashboardBalance(page)
     const arkadeSats = await readDashboardArkadeBalanceSats(page)
     expect(arkadeSats).toBe(E2E_ARKADE_MOCK_DEFAULT_BALANCE_SATS)
   })
@@ -90,8 +94,7 @@ test.describe('Dashboard Arkade mock ASP @arkade', () => {
     await switchToSignet(page)
     await goToWalletTab(page, 'Dashboard')
 
-    await expectArkadeBalanceNotEmptySession(page)
-    expect(await readDashboardArkadeBalanceSats(page)).toBe(E2E_ARKADE_MOCK_DEFAULT_BALANCE_SATS)
+    await waitForArkadeMockDashboardBalance(page)
     await waitForArkadeActivityLoaded(page)
     await expect(page.getByTestId(`arkade-payment-${E2E_ARKADE_MOCK_INCOMING_TXID}`)).toBeVisible()
   })
@@ -102,7 +105,7 @@ test.describe('Dashboard Arkade mock ASP @arkade', () => {
     await switchToSignet(page)
     await goToWalletTab(page, 'Dashboard')
 
-    await expectArkadeBalanceNotEmptySession(page)
+    await waitForArkadeMockDashboardBalance(page)
     const beforeSats = await readDashboardArkadeBalanceSats(page)
 
     await goToReceiveArkadeMode(page)
@@ -128,8 +131,7 @@ test.describe('Dashboard Arkade mock ASP @arkade', () => {
     await switchToSignet(page)
     await goToWalletTab(page, 'Dashboard')
 
-    await expectArkadeBalanceNotEmptySession(page)
-    expect(await readDashboardArkadeBalanceSats(page)).toBe(E2E_ARKADE_MOCK_DEFAULT_BALANCE_SATS)
+    await waitForArkadeMockDashboardBalance(page)
 
     await goToReceiveArkadeMode(page)
     await waitForReceiveArkadeAddressReady(page)
@@ -141,6 +143,8 @@ test.describe('Dashboard Arkade mock ASP @arkade', () => {
     })
 
     await goToWalletTab(page, 'Dashboard')
+    await waitForArkadeBalanceCard(page)
+    await triggerArkadeRailSync(page)
     await waitForDashboardArkadeBalanceSats(page, expectedTotalSats)
     await waitForArkadeActivityLoaded(page)
     await expect(
@@ -153,6 +157,10 @@ test.describe('Dashboard Arkade mock ASP @arkade', () => {
     await createWalletViaUI(page)
     await enableArkadeFeature(page)
     await switchToSignet(page)
+
+    await goToWalletTab(page, 'Dashboard')
+    await waitForArkadeLoadReady(page)
+    await waitForArkadeWasmSessionReady(page)
 
     await goToReceiveArkadeMode(page)
     const addressBeforeLock = await readReceiveArkadeAddress(page)
@@ -171,15 +179,21 @@ test.describe('Dashboard Arkade mock ASP @arkade', () => {
     await enableArkadeFeature(page)
     await switchToSignet(page)
 
-    await goToReceiveArkadeMode(page)
-    const initialAddress = await readReceiveArkadeAddress(page)
+    await goToWalletTab(page, 'Dashboard')
+    await waitForArkadeLoadReady(page)
+    await waitForArkadeWasmSessionReady(page)
 
-    await page.getByRole('button', { name: 'Generate New Address' }).click()
-    await expect(async () => {
-      const nextAddress = await readReceiveArkadeAddress(page)
-      expect(nextAddress).not.toBe(initialAddress)
-    }).toPass({ timeout: 15_000 })
-    const revealedAddress = await readReceiveArkadeAddress(page)
+    await goToReceiveArkadeMode(page)
+    await waitForReceiveArkadeAddressReady(page)
+
+    const initialWasm = await page.evaluate(() =>
+      window.__E2E_ARKADE__!.readReceiveDebugSnapshot(),
+    )
+    await clickArkadeGenerateNewAddressAndWaitForIndexAdvance(
+      page,
+      initialWasm.offchainNextDerivationIndex,
+    )
+
     let wasmBeforeLock: { offchainNextDerivationIndex: number; peekAddress: string }
     await expect(async () => {
       wasmBeforeLock = await page.evaluate(() =>
@@ -188,11 +202,11 @@ test.describe('Dashboard Arkade mock ASP @arkade', () => {
       const persistedBeforeLock = await page.evaluate(() =>
         window.__E2E_ARKADE__!.readPersistedReceiveDebugSnapshot(),
       )
-      expect(wasmBeforeLock.peekAddress).toBe(revealedAddress)
       expect(persistedBeforeLock.offchainNextDerivationIndex).toBe(
         wasmBeforeLock.offchainNextDerivationIndex,
       )
     }).toPass({ timeout: 15_000 })
+    const revealedAddress = wasmBeforeLock!.peekAddress
 
     await lockWalletFromManagementAndUnlock(page)
     await waitForArkadeWorkerReadyAfterUnlock(page, POST_UNLOCK_ARKADE_TIMEOUT_MS)

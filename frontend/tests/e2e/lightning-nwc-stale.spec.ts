@@ -6,7 +6,7 @@ import {
   waitForSettingsNetworkModeButtonSelected,
   waitForSettingsNetworkSwitchComplete,
 } from './helpers/settings-waits'
-import { runDashboardSyncUntilIdle } from './helpers/dashboard-sync'
+import { runLightningRailSyncUntilIdle } from './helpers/dashboard-sync'
 
 const E2E_NWC_CONNECTION_STRING = 'nostr+walletconnect://e2e-mock'
 const E2E_NWC_LABEL = 'E2E Mock Wallet'
@@ -90,7 +90,7 @@ test.describe('Lightning NWC stale cache @nwc', () => {
     await switchToNetworkInSettings(page, 'Testnet')
     await switchToNetworkInSettings(page, 'Signet')
     await goToWalletTab(page, 'Dashboard')
-    await runDashboardSyncUntilIdle(page)
+    await runLightningRailSyncUntilIdle(page)
     await expect(page.getByTestId('lightning-balance-stale-banner')).toBeVisible({
       timeout: 15_000,
     })
@@ -102,7 +102,7 @@ test.describe('Lightning NWC stale cache @nwc', () => {
     await switchToNetworkInSettings(page, 'Testnet')
     await switchToNetworkInSettings(page, 'Signet')
     await goToWalletTab(page, 'Dashboard')
-    await runDashboardSyncUntilIdle(page)
+    await runLightningRailSyncUntilIdle(page)
     await expect(
       page.getByTestId(new RegExp(`ln-payment-.*-${RECOVERY_PAYMENT_HASH}`)),
     ).toBeVisible({ timeout: 20_000 })

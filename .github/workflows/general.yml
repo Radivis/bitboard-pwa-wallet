@@ -132,6 +132,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - name: Install the Rust toolchain
         uses: actions-rust-lang/setup-rust-toolchain@v1
@@ -164,15 +166,35 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Start regtest environment
-        run: bash scripts/start-regtest.sh
+        run: bash scripts/start-arkade-regtest.sh
 
-      - name: Run Playwright tests
+      - name: Run Playwright tests (mock / default)
         working-directory: frontend
-        run: npx playwright test
+        run: npx playwright test --grep-invert "@regtest|@arkade-regtest"
         env:
           CI: true
           VITE_E2E_NWC_MOCK: "true"
           VITE_E2E_ARKADE_MOCK: "true"
+
+      - name: Run Playwright regtest on-chain tests
+        working-directory: frontend
+        run: npx playwright test --grep @regtest
+        env:
+          CI: true
+          REQUIRE_ARKADE_REGTEST: "1"
+
+      - name: Run Playwright Arkade regtest core flows
+        if: success() || failure()
+        working-directory: frontend
+        run: npx playwright test --grep @arkade-regtest
+        env:
+          CI: true
+          REQUIRE_ARKADE_REGTEST: "1"
+          VITE_E2E_ARKADE_REGTEST: "true"
+
+      - name: Stop regtest environment
+        if: always()
+        run: bash scripts/stop-arkade-regtest.sh
 
       - name: Upload Playwright report (on failure)
         if: failure()

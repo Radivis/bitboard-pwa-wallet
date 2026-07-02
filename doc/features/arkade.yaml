@@ -13,9 +13,10 @@ feature:
     - As a user, I want to understand VTXO expiry and optionally renew manually for learning
     - As a user, I want to exit Arkade to an on-chain address collaboratively when the operator is available
     - As a user, I want to exit a specific VTXO unilaterally without operator cooperation when needed
+    - As a user, I want the app to keep working when the Arkade operator rotates its signing key, with clear guidance on migrating or exiting funds
   requirements:
     - Arkade is gated by isArkadeEnabled (default off) and isMainnetAccessEnabled for mainnet
-    - Arkade is available only on mainnet, testnet, and signet; not on lab or regtest in v1
+    - Arkade is available on mainnet, signet, and regtest (local arkd via arkade-regtest for dev/E2E); not on lab in v1
     - delegatorProvider must be configured at first Wallet.create per (wallet_id, networkMode)
     - Mnemonic decryption runs only in workers (secrets channel); never on the main thread
     - Default delegator and operator URLs come from arkade-endpoints.ts (env overrides supported)
@@ -36,6 +37,33 @@ feature:
         description: Generate new address reveals the next index and persists offchain_next_derivation_index
       - id: ARK-RCV-05
         description: Read paths (getAddress, balance, history) never await wallet-secrets re-encrypt
+    signer_rotation:
+      - id: ARK-ROT-01
+        description: Session open succeeds when stored operator_identity.signer_pk_hex equals current getInfo signer
+      - id: ARK-ROT-02
+        description: Session open succeeds when stored signer matches a deprecatedSigners pubkey for the same operator URL, including after cooperative cutoff
+      - id: ARK-ROT-03
+        description: After migration open, next persistence export writes current signer into operator_identity and connection operatorSignerPkHex
+      - id: ARK-ROT-04
+        description: Signer mismatch with neither current nor deprecated keys yields load-error with operator-change vs wrong-ASP messaging
+      - id: ARK-ROT-05
+        description: Signer migration surfaces a non-blocking banner on Dashboard and Management Arkade with regime-appropriate actions (migrate, sync, unilateral exit)
+    recoverable_vtxo_recovery:
+      - id: ARK-REC-01
+        description: When recoverableSettleableVtxoCount is greater than zero after balance sync, Dashboard and Management show a recoverable VTXO banner with count and settleable sats
+      - id: ARK-REC-02
+        description: Banner is hidden when recoverableSettleableVtxoCount is zero
+      - id: ARK-REC-03
+        description: Recover now triggers batch settle of settleable recoverable VTXOs only (settle_vtxos with empty boarding) and refreshes balance
+      - id: ARK-REC-04
+        description: Fee estimate failure still shows banner and enables Recover now; operator fee and net receive shown when estimate succeeds
+      - id: ARK-REC-05
+        description: When recoverablePendingOperatorSweepVtxoCount is greater than zero, balance breakdown shows expired waiting for operator sweep line without Recover now
+    operator_sync:
+      - id: ARK-SYNC-01
+        description: When discover_keys fails during operator sync but list_vtxos succeeds, sync lifecycle records a warningMessage and dashboard/management show a non-blocking sync warning banner
+      - id: ARK-SYNC-02
+        description: A later successful sync without key-discovery failure clears warningMessage
   pages:
     - ArkadeManagement:
       - description: "Arkade status on Management page"
@@ -47,6 +75,8 @@ feature:
         - expiring VTXO count when session open
         - collaborative exit (on-chain destination, optional partial amount) with operator fee estimate from getInfo().fees
         - unilateral exit per VTXO (select, unroll, complete after timelock) with unroll step count and bumper fee estimate
+        - signer migration banner when operator signing key rotated (migratable, due now, or expired regimes)
+        - recoverable VTXO banner when operator reports swept/expired/sub-dust VTXOs with Recover now action
       - requirements:
         - Shown only when isArkadeEnabled and current network supports Arkade
         - Collaborative exit and fee estimates via bitboard-ark WASM in arkade.worker

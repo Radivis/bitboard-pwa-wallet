@@ -7,6 +7,27 @@ import type { NetworkMode } from '@/stores/walletStore'
 const balanceQueryMock = vi.hoisted(() => vi.fn())
 const walletStoreState = vi.hoisted(() => ({
   networkMode: 'signet' as NetworkMode,
+  arkadeBalance: null as { confirmedSats: number; totalSats: number } | null,
+  arkadeSignerMigrationHint: null as {
+    previousSignerPkHex: string
+    deprecatedStatus: 'migratable'
+    cutoffUnix: number
+  } | null,
+}))
+const arkadeLifecycleState = vi.hoisted(() => ({
+  rail: {
+    loadPhase: 'loaded' as const,
+    syncPhase: 'not-syncing' as const,
+    savePhase: 'not-saving' as const,
+  },
+  load: {
+    loadPhase: 'loaded' as const,
+    errorMessage: null as string | null,
+  },
+  sync: {
+    syncPhase: 'not-syncing' as const,
+    errorMessage: null as string | null,
+  },
 }))
 
 vi.mock('@tanstack/react-router', async (importOriginal) => {
@@ -30,10 +51,51 @@ vi.mock('@tanstack/react-router', async (importOriginal) => {
 
 vi.mock('@/hooks/useArkadeQueries', () => ({
   useArkadeBalanceQuery: () => balanceQueryMock(),
+  useArkadeRecoverableVtxoFeeQuery: () => recoverableFeeQueryMock(),
+  useArkadeRecoverRecoverableVtxosMutation: () => recoverMutationMock(),
 }))
+
+const recoverableFeeQueryMock = vi.hoisted(() =>
+  vi.fn(() => ({
+    isLoading: false,
+    data: {
+      recoverableVtxoCount: 2,
+      recoverableTotalSats: 50_000,
+      txFeeRate: '2',
+      intentFeeConfigured: {
+        offchainInput: true,
+        onchainInput: false,
+        offchainOutput: false,
+        onchainOutput: true,
+      },
+      estimatedTotalFeeSats: 1_000,
+      estimatedReceiveSats: 49_000,
+    },
+  })),
+)
+
+const recoverMutationMock = vi.hoisted(() =>
+  vi.fn(() => ({
+    mutate: vi.fn(),
+    isPending: false,
+  })),
+)
 
 vi.mock('@/hooks/useArkadeDashboardQueries', () => ({
   useArkadeSyncMetadataQuery: () => ({ data: { isStaleArkade: false } }),
+}))
+
+vi.mock('@/hooks/useArkadeLifecycleSnapshots', () => ({
+  useArkadeRailSnapshot: () => arkadeLifecycleState.rail,
+  useArkadeLoadLifecycleSnapshot: () => arkadeLifecycleState.load,
+  useArkadeSyncLifecycleSnapshot: () => arkadeLifecycleState.sync,
+}))
+
+vi.mock('@/hooks/useRailManualSyncMutations', () => ({
+  useArkadeManualSyncMutation: () => ({
+    mutate: vi.fn(),
+    isPending: false,
+  }),
 }))
 
 vi.mock('@/stores/featureStore', () => ({
@@ -61,6 +123,21 @@ describe('ArkadeDashboardBalance', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     walletStoreState.networkMode = 'signet'
+    walletStoreState.arkadeBalance = null
+    walletStoreState.arkadeSignerMigrationHint = null
+    arkadeLifecycleState.rail = {
+      loadPhase: 'loaded',
+      syncPhase: 'not-syncing',
+      savePhase: 'not-saving',
+    }
+    arkadeLifecycleState.load = {
+      loadPhase: 'loaded',
+      errorMessage: null,
+    }
+    arkadeLifecycleState.sync = {
+      syncPhase: 'not-syncing',
+      errorMessage: null,
+    }
     balanceQueryMock.mockReturnValue({
       isLoading: false,
       data: { confirmedSats: 42_000, totalSats: 42_000 },
@@ -144,6 +221,77 @@ describe('ArkadeDashboardBalance', () => {
       data: { confirmedSats: 42_000, totalSats: 42_000 },
     })
     renderWithProviders(<ArkadeDashboardBalance />)
+    expect(screen.queryByTestId('dashboard-arkade-session-empty')).not.toBeInTheDocument()
+    expect(screen.getByTestId('dashboard-arkade-balance-amount')).toBeInTheDocument()
+  })
+
+  it('DASH-ARK-15 shows signer migration banner when operator key rotation is pending', () => {
+    walletStoreState.arkadeSignerMigrationHint = {
+      previousSignerPkHex: '02abc',
+      deprecatedStatus: 'migratable',
+      cutoffUnix: 1_785_312_000,
+    }
+    renderWithProviders(<ArkadeDashboardBalance />)
+    expect(screen.getByTestId('arkade-signer-migration-banner')).toBeInTheDocument()
+    expect(screen.getByText('Arkade operator signer rotation')).toBeInTheDocument()
+  })
+
+  it('DASH-ARK-17 shows pending recovery breakdown when deprecated signer funds are locked', () => {
+    balanceQueryMock.mockReturnValue({
+      isLoading: false,
+      data: {
+        confirmedSats: 0,
+        totalSats: 50_000,
+        pendingRecoverySats: 50_000,
+      },
+    })
+    renderWithProviders(<ArkadeDashboardBalance />)
+    expect(screen.getByTestId('arkade-balance-pending-recovery')).toHaveTextContent(
+      'Pending recovery (deprecated signer)',
+    )
+  })
+
+  it('DASH-ARK-18 shows zero headline and bumper breakdown when only bumper remains', () => {
+    balanceQueryMock.mockReturnValue({
+      isLoading: false,
+      data: {
+        confirmedSats: 50_000,
+        offchainSpendableSats: 0,
+        onchainBumperSats: 50_000,
+        totalSats: 50_000,
+      },
+    })
+    renderWithProviders(<ArkadeDashboardBalance />)
+    expect(screen.getByTestId('dashboard-arkade-balance-amount')).toHaveTextContent('0.00000000')
+    expect(screen.getByTestId('arkade-balance-bumper')).toHaveTextContent('Bumper wallet (exit fees)')
+  })
+
+  it('DASH-ARK-19 shows recoverable VTXO banner when recoverable count is greater than zero', () => {
+    balanceQueryMock.mockReturnValue({
+      isLoading: false,
+      data: {
+        confirmedSats: 0,
+        totalSats: 50_000,
+        recoverableSettleableSats: 50_000,
+        recoverableSettleableVtxoCount: 2,
+      },
+    })
+    renderWithProviders(<ArkadeDashboardBalance />)
+    expect(screen.getByTestId('arkade-recoverable-vtxo-banner')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Recover now' })).toBeInTheDocument()
+  })
+
+  it('DASH-ARK-16 shows sync error banner when sync fails without balance data', () => {
+    walletStoreState.arkadeBalance = { confirmedSats: 1_000, totalSats: 1_000 }
+    balanceQueryMock.mockReturnValue({ isLoading: false, isError: false, data: undefined })
+    arkadeLifecycleState.rail.syncPhase = 'sync-error'
+    arkadeLifecycleState.sync = {
+      syncPhase: 'sync-error',
+      errorMessage: 'failed to get VTXOs for addresses',
+    }
+    renderWithProviders(<ArkadeDashboardBalance />)
+    expect(screen.getByTestId('wallet-sync-error-banner-arkade')).toBeInTheDocument()
+    expect(screen.getByText('failed to get VTXOs for addresses')).toBeInTheDocument()
     expect(screen.queryByTestId('dashboard-arkade-session-empty')).not.toBeInTheDocument()
     expect(screen.getByTestId('dashboard-arkade-balance-amount')).toBeInTheDocument()
   })

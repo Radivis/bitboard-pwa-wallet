@@ -176,7 +176,11 @@ where
 
     for virtual_tx_outpoint in vtxo_list
         .all_unspent()
-        .filter(|vtp| vtp.is_unrolled && !vtp.is_spent)
+        .filter(|vtp| {
+            !vtp.is_spent
+                && (vtp.is_unrolled
+                    || vtxo_txid_filter.contains(&vtp.outpoint.txid))
+        })
     {
         let Some(vtxo) = script_pubkey_to_vtxo.get(&virtual_tx_outpoint.script) else {
             continue;

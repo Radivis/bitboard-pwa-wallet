@@ -1,12 +1,15 @@
 use bitcoin::Network;
 
-use crate::constants::{NETWORK_MODE_MAINNET, NETWORK_MODE_SIGNET, NETWORK_MODE_TESTNET};
+use crate::constants::{
+    NETWORK_MODE_MAINNET, NETWORK_MODE_REGTEST, NETWORK_MODE_SIGNET, NETWORK_MODE_TESTNET,
+};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum NetworkMode {
     Mainnet,
     Testnet,
     Signet,
+    Regtest,
 }
 
 impl NetworkMode {
@@ -15,6 +18,7 @@ impl NetworkMode {
             NETWORK_MODE_MAINNET => Some(Self::Mainnet),
             NETWORK_MODE_TESTNET => Some(Self::Testnet),
             NETWORK_MODE_SIGNET => Some(Self::Signet),
+            NETWORK_MODE_REGTEST => Some(Self::Regtest),
             _ => None,
         }
     }
@@ -24,6 +28,7 @@ impl NetworkMode {
             Self::Mainnet => Network::Bitcoin,
             Self::Testnet => Network::Testnet,
             Self::Signet => Network::Signet,
+            Self::Regtest => Network::Regtest,
         }
     }
 
@@ -32,6 +37,7 @@ impl NetworkMode {
             Self::Mainnet => NETWORK_MODE_MAINNET,
             Self::Testnet => NETWORK_MODE_TESTNET,
             Self::Signet => "signet (Mutinynet)",
+            Self::Regtest => NETWORK_MODE_REGTEST,
         }
     }
 }
@@ -46,9 +52,11 @@ mod tests {
         assert_eq!(NetworkMode::parse("mainnet"), Some(NetworkMode::Mainnet));
         assert_eq!(NetworkMode::parse("signet"), Some(NetworkMode::Signet));
         assert_eq!(NetworkMode::parse("testnet"), Some(NetworkMode::Testnet));
-        assert_eq!(NetworkMode::parse("regtest"), None);
+        assert_eq!(NetworkMode::parse("regtest"), Some(NetworkMode::Regtest));
 
         assert_eq!(NetworkMode::Signet.to_bitcoin_network(), Network::Signet);
+        assert_eq!(NetworkMode::Regtest.to_bitcoin_network(), Network::Regtest);
         assert_eq!(NetworkMode::Signet.label(), "signet (Mutinynet)");
+        assert_eq!(NetworkMode::Regtest.label(), "regtest");
     }
 }

@@ -4,6 +4,7 @@ import { toast } from 'sonner'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { Button } from '@/components/ui/button'
 import { useCommittedExternalDescriptor } from '@/hooks/useCommittedExternalDescriptor'
+import { useRequireUnlockedWallet } from '@/hooks/useRequireUnlockedWallet'
 import { useWalletStore } from '@/stores/walletStore'
 import { CommittedDescriptorInfomodeContent } from '@/components/settings/CommittedDescriptorInfomodeContent'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
@@ -12,12 +13,21 @@ import { walletIsUnlockedOrSyncing } from '@/lib/wallet/wallet-unlocked-status'
 export function NetworkCardCommittedDescriptor() {
   const walletStatus = useWalletStore((walletState) => walletState.walletStatus)
   const walletUnlocked = walletIsUnlockedOrSyncing(walletStatus)
+  const { runWhenUnlocked, unlockDialog } = useRequireUnlockedWallet()
   const query = useCommittedExternalDescriptor()
   const [descriptorVisible, setDescriptorVisible] = useState(false)
 
   useEffect(() => {
     setDescriptorVisible(false)
   }, [query.data])
+
+  const handleRevealToggle = useCallback(() => {
+    if (walletUnlocked) {
+      setDescriptorVisible((visible) => !visible)
+      return
+    }
+    runWhenUnlocked(() => setDescriptorVisible(true))
+  }, [walletUnlocked, runWhenUnlocked])
 
   const handleCopy = useCallback(async (text: string) => {
     try {
@@ -27,6 +37,16 @@ export function NetworkCardCommittedDescriptor() {
       toast.error('Failed to copy descriptor')
     }
   }, [])
+
+  const handleCopyDescriptor = useCallback(() => {
+    const descriptorText = query.data ?? ''
+    if (descriptorText === '') return
+    if (walletUnlocked) {
+      void handleCopy(descriptorText)
+      return
+    }
+    runWhenUnlocked(() => handleCopy(descriptorText))
+  }, [query.data, walletUnlocked, handleCopy, runWhenUnlocked])
 
   return (
     <InfomodeWrapper
@@ -43,7 +63,7 @@ export function NetworkCardCommittedDescriptor() {
               variant="ghost"
               size="icon"
               className="h-8 w-8 shrink-0 text-muted-foreground"
-              onClick={() => setDescriptorVisible((v) => !v)}
+              onClick={handleRevealToggle}
               aria-label={
                 descriptorVisible ? 'Hide receiving descriptor' : 'Show receiving descriptor'
               }
@@ -55,6 +75,17 @@ export function NetworkCardCommittedDescriptor() {
                 <Eye className="h-4 w-4" aria-hidden />
               )}
             </Button>
+          ) : !walletUnlocked ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 shrink-0 text-muted-foreground"
+              onClick={handleRevealToggle}
+              aria-label="Unlock to show receiving descriptor"
+            >
+              <Eye className="h-4 w-4" aria-hidden />
+            </Button>
           ) : null}
         </div>
         {walletUnlocked && query.data && descriptorVisible ? (
@@ -63,7 +94,7 @@ export function NetworkCardCommittedDescriptor() {
             variant="ghost"
             size="sm"
             className="h-8 shrink-0 self-start px-2 sm:self-auto"
-            onClick={() => handleCopy(query.data ?? '')}
+            onClick={handleCopyDescriptor}
             aria-label="Copy receiving descriptor"
           >
             <Copy className="mr-1 h-4 w-4" aria-hidden />
@@ -101,6 +132,7 @@ export function NetworkCardCommittedDescriptor() {
             </span>
           </p>
         )}
+      {unlockDialog}
     </InfomodeWrapper>
   )
 }

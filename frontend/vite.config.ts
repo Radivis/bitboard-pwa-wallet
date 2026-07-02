@@ -298,7 +298,9 @@ export default defineConfig({
     ],
   },
   server: {
-    port: 3000,
+    host: process.env.E2E_DEV_SERVER_PORT ? '127.0.0.1' : undefined,
+    port: Number(process.env.E2E_DEV_SERVER_PORT) || 3000,
+    strictPort: process.env.E2E_DEV_SERVER_PORT != null && process.env.E2E_DEV_SERVER_PORT !== '',
     proxy: {
       ...arkOperatorDevProxy,
       ...esploraDevProxy,

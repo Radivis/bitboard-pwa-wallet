@@ -51,10 +51,50 @@ vi.mock('@/stores/walletStore', async (importOriginal) => {
   }
 })
 
+let onchainEsploraMetadataState = {
+  data: { isStaleOnchain: false } as {
+    isStaleOnchain: boolean
+    lastSuccessfulEsploraSyncAt?: string
+  },
+}
 vi.mock('@/hooks/useOnchainDashboardQueries', () => ({
-  useOnchainEsploraSyncMetadataQuery: () => ({
-    data: { isStaleOnchain: false },
+  useOnchainEsploraSyncMetadataQuery: () => onchainEsploraMetadataState,
+}))
+
+vi.mock('@/hooks/useOnchainLifecycleSnapshots', () => ({
+  useOnchainRailSnapshot: () => ({
+    loadPhase: 'loaded',
+    syncPhase: 'not-syncing',
+    savePhase: 'not-saving',
   }),
+  useOnchainLoadLifecycleSnapshot: () => ({
+    loadPhase: 'loaded',
+    errorMessage: null,
+  }),
+  useOnchainSyncLifecycleSnapshot: () => ({
+    syncPhase: 'not-syncing',
+    errorMessage: null,
+  }),
+}))
+
+vi.mock('@/hooks/useLightningLifecycleSnapshots', () => ({
+  useLightningRailSnapshot: () => ({
+    loadPhase: 'loaded',
+    syncPhase: 'not-syncing',
+    savePhase: 'not-saving',
+  }),
+  useLightningLoadLifecycleSnapshot: () => ({
+    loadPhase: 'loaded',
+    errorMessage: null,
+  }),
+  useLightningSyncLifecycleSnapshot: () => ({
+    syncPhase: 'not-syncing',
+    errorMessage: null,
+  }),
+}))
+
+vi.mock('@/hooks/useLightningDashboardQueries', () => ({
+  useLightningSyncMetadataQuery: () => ({ data: { lastSyncedAt: null } }),
 }))
 
 vi.mock('@/components/WalletUnlock', () => ({
@@ -156,6 +196,7 @@ import {
 
 describe('DashboardPage', () => {
   beforeEach(() => {
+    onchainEsploraMetadataState = { data: { isStaleOnchain: false } }
     vi.clearAllMocks()
     walletStoreState = {
       activeWalletId: 1,
@@ -245,19 +286,24 @@ describe('DashboardPage', () => {
     expect(screen.getByText('Signet')).toBeInTheDocument()
   })
 
-  it('shows last synced time', () => {
-    const syncTime = new Date('2025-01-15T10:30:00')
-    walletStoreState.lastSyncTime = syncTime
+  it('shows per-rail on-chain last synced caption', () => {
+    const syncTime = '2025-01-15T10:30:00.000Z'
+    onchainEsploraMetadataState = {
+      data: {
+        isStaleOnchain: false,
+        lastSuccessfulEsploraSyncAt: syncTime,
+      },
+    }
     renderWithProviders(<DashboardPage />)
-    expect(
-      screen.getByText(`Last synced: ${syncTime.toLocaleString()}`),
-    ).toBeInTheDocument()
+    expect(screen.getByTestId('rail-sync-onchain-caption')).toHaveTextContent(
+      `Last synced: ${new Date(syncTime).toLocaleString()}`,
+    )
   })
 
-  it('shows syncing spinner when syncing', () => {
-    walletStoreState.walletStatus = 'syncing'
+  it('does not show on-chain sync controls on lab', () => {
+    walletStoreState.networkMode = 'lab'
     renderWithProviders(<DashboardPage />)
-    expect(screen.getByText('Syncing wallet...')).toBeInTheDocument()
+    expect(screen.queryByTestId('rail-sync-onchain')).not.toBeInTheDocument()
   })
 
   it('shows empty activity message when there is no history', () => {
@@ -309,22 +355,18 @@ describe('DashboardPage', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 
-  it('Sync shows Full rescan hint when sync fails with BadLocalChainStateError', async () => {
+  it('manual on-chain sync failure does not toast (sync-error banner handles UI)', async () => {
     mockRunIncrementalDashboardWalletSync.mockRejectedValueOnce(
       new BadLocalChainStateError(),
     )
     walletStoreState.networkMode = 'mainnet'
     const user = userEvent.setup()
     renderWithProviders(<DashboardPage />)
-    await user.click(screen.getByRole('button', { name: 'Sync' }))
+    await user.click(screen.getByRole('button', { name: 'Sync on-chain' }))
     await waitFor(() => {
-      expect(dashboardToastMocks.error).toHaveBeenCalledWith(
-        'Sync failed',
-        expect.objectContaining({
-          description: expect.stringContaining('Full rescan'),
-        }),
-      )
+      expect(mockRunIncrementalDashboardWalletSync).toHaveBeenCalled()
     })
+    expect(dashboardToastMocks.error).not.toHaveBeenCalled()
   })
 
   it('renders transaction list', () => {

@@ -63,10 +63,13 @@ describe('resolveOnchainEsploraSyncMetadata', () => {
   })
 
   it('returns not stale when lastSyncTime is set this session', async () => {
+    const isoTimestamp = '2020-01-02T00:00:00.000Z'
+    loadLastSuccessfulEsploraSyncAtForDescriptorWallet.mockResolvedValue(isoTimestamp)
     useWalletStore.setState({ lastSyncTime: new Date() })
     const result = await resolveOnchainEsploraSyncMetadata()
     expect(result.isStaleOnchain).toBe(false)
-    expect(loadLastSuccessfulEsploraSyncAtForDescriptorWallet).not.toHaveBeenCalled()
+    expect(result.lastSuccessfulEsploraSyncAt).toBe(isoTimestamp)
+    expect(loadLastSuccessfulEsploraSyncAtForDescriptorWallet).toHaveBeenCalled()
   })
 
   it('returns stale when BDK data exists and persisted Esplora sync timestamp exists', async () => {

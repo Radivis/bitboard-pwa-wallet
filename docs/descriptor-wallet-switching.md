@@ -6,6 +6,8 @@ Switching network or address type in Settings means: persist the outgoing descri
 
 For how on-chain balance/history and stale indicators work after a switch, see [`onchain-bitboard-wallet-model.md`](onchain-bitboard-wallet-model.md).
 
+For post-sync anchor+chain reconcile (why dashboard sync is not “just call `bdk_esplora::sync`”), see [`esplora-bdk-anchor-reconcile.md`](esplora-bdk-anchor-reconcile.md).
+
 ## Terminology
 
 | Term | Meaning |
@@ -75,7 +77,7 @@ flowchart TB
 ### Step-by-step
 
 1. **Save outgoing descriptor wallet**  
-   Export the active WASM changeset and persist it under the **current** `(network, addressType, accountId)` via `updateDescriptorWalletChangeset`. Skipped safely if WASM has no wallet yet (`isBenignNoActiveWalletError`).
+   Awaits on-chain load/sync/save quiescence, then exports via `exportChangesetForPersistence` (blocked during in-flight lifecycle and while `syncPhase === 'sync-error'`) and persists under the **current** `(network, addressType, accountId)` via `updateDescriptorWalletChangeset`. **Skipped** when `sync-error` — last good persisted outgoing state is preserved. Skipped safely if WASM has no wallet yet (`isBenignNoActiveWalletError`). Load runs under `withWalletWriterLock`.
 
 2. **Clear dashboard UI state**  
    Set `currentAddress`, `balance`, `transactions`, and `lastSyncTime` to empty/null so the UI never shows the previous network’s totals during load.

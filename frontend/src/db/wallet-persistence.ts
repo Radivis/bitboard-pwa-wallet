@@ -8,6 +8,10 @@ import {
 } from './encryption'
 import { trackWalletSecretsWrite } from '@/db/wallet-secrets-write-tracker'
 import {
+  isWalletWriterLockHeld,
+  withWalletWriterLock,
+} from '@/lib/shared/opfs-writer-lock'
+import {
   assembleWalletSecrets,
   parseWalletPayloadJson,
   type DescriptorWalletData,
@@ -16,6 +20,13 @@ import {
 } from '@/lib/wallet/wallet-domain-types'
 export type { DescriptorWalletData, WalletSecrets }
 export type { WalletSecretsPayload } from '@/lib/wallet/wallet-domain-types'
+
+async function withWalletSecretsWriterLock<T>(work: () => Promise<T>): Promise<T> {
+  if (isWalletWriterLockHeld()) {
+    return work()
+  }
+  return withWalletWriterLock(work)
+}
 
 /** Encrypted blob shape for reading/writing without decryption (used by descriptor-wallet-manager with crypto worker). */
 export interface EncryptedWalletSecretsBlob {
@@ -145,7 +156,8 @@ export async function putSplitWalletSecretsEncrypted(
   walletId: number,
   blobs: PutSplitWalletSecretsEncryptedInput,
 ): Promise<void> {
-  await assertWalletExists(walletDb, walletId)
+  return withWalletSecretsWriterLock(async () => {
+    await assertWalletExists(walletDb, walletId)
 
   const now = new Date().toISOString()
   const kdfPhc = blobs.payload.kdfPhc
@@ -206,6 +218,7 @@ export async function putSplitWalletSecretsEncrypted(
       })
       .execute()
   }
+  })
 }
 
 /**
@@ -298,7 +311,9 @@ async function updateWalletSecretsPayloadWithRetryImpl({
 export function updateWalletSecretsPayloadWithRetry(
   input: UpdateWalletSecretsPayloadWithRetryInput,
 ): Promise<void> {
-  return trackWalletSecretsWrite(updateWalletSecretsPayloadWithRetryImpl(input))
+  return withWalletSecretsWriterLock(() =>
+    trackWalletSecretsWrite(updateWalletSecretsPayloadWithRetryImpl(input)),
+  )
 }
 
 async function updateWalletSecretsEncryptedPayloadWithRetryImpl({
@@ -326,8 +341,8 @@ async function updateWalletSecretsEncryptedPayloadWithRetryImpl({
 export function updateWalletSecretsEncryptedPayloadWithRetry(
   input: UpdateWalletSecretsEncryptedPayloadWithRetryInput,
 ): Promise<void> {
-  return trackWalletSecretsWrite(
-    updateWalletSecretsEncryptedPayloadWithRetryImpl(input),
+  return withWalletSecretsWriterLock(() =>
+    trackWalletSecretsWrite(updateWalletSecretsEncryptedPayloadWithRetryImpl(input)),
   )
 }
 
@@ -371,31 +386,33 @@ export async function saveWalletSecrets(params: {
   walletId: number
   secrets: WalletSecrets
 }): Promise<void> {
-  const { walletDb, walletId, secrets } = params
-  await assertWalletExists(walletDb, walletId)
+  return withWalletSecretsWriterLock(async () => {
+    const { walletDb, walletId, secrets } = params
+    await assertWalletExists(walletDb, walletId)
 
-  const payload: WalletSecretsPayload = {
-    descriptorWallets: secrets.descriptorWallets,
-    lightningNwcConnections: secrets.lightningNwcConnections,
-    arkadeOperatorConnections: secrets.arkadeOperatorConnections ?? [],
-    activeArkadeConnectionIdByNetwork: secrets.activeArkadeConnectionIdByNetwork ?? {},
-  }
-  const payloadEnc = await encryptData(JSON.stringify(payload))
-  const mnemonicEnc = await encryptData(secrets.mnemonic)
+    const payload: WalletSecretsPayload = {
+      descriptorWallets: secrets.descriptorWallets,
+      lightningNwcConnections: secrets.lightningNwcConnections,
+      arkadeOperatorConnections: secrets.arkadeOperatorConnections ?? [],
+      activeArkadeConnectionIdByNetwork: secrets.activeArkadeConnectionIdByNetwork ?? {},
+    }
+    const payloadEnc = await encryptData(JSON.stringify(payload))
+    const mnemonicEnc = await encryptData(secrets.mnemonic)
 
-  await putSplitWalletSecretsEncrypted(walletDb, walletId, {
-    payload: {
-      ciphertext: payloadEnc.ciphertext,
-      iv: payloadEnc.iv,
-      salt: payloadEnc.salt,
-      kdfPhc: payloadEnc.kdfPhc,
-    },
-    mnemonic: {
-      ciphertext: mnemonicEnc.ciphertext,
-      iv: mnemonicEnc.iv,
-      salt: mnemonicEnc.salt,
-      kdfPhc: mnemonicEnc.kdfPhc,
-    },
+    await putSplitWalletSecretsEncrypted(walletDb, walletId, {
+      payload: {
+        ciphertext: payloadEnc.ciphertext,
+        iv: payloadEnc.iv,
+        salt: payloadEnc.salt,
+        kdfPhc: payloadEnc.kdfPhc,
+      },
+      mnemonic: {
+        ciphertext: mnemonicEnc.ciphertext,
+        iv: mnemonicEnc.iv,
+        salt: mnemonicEnc.salt,
+        kdfPhc: mnemonicEnc.kdfPhc,
+      },
+    })
   })
 }
 

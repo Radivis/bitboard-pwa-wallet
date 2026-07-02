@@ -29,7 +29,7 @@ Crypto primitives: BDK (Bitcoin) + LDK (Lightning) via WASM bindings
 Key generation: Web Crypto API (crypto.getRandomValues)
 Blockchain API: Esplora (light client sync for on-chain)
 Lightning node: raw `lightning` crate (rust-lightning) compiled to WASM via `bitboard-lightning` crate
-Regtest library: bitcoinerlab/tester
+Regtest E2E: [arkade-regtest](https://github.com/ArkLabsHQ/arkade-regtest) submodule (`regtest/`), Esplora `http://localhost:7030/api`, arkd `http://localhost:7070`
 Regtest / Signet / Testnet mode: Built-in via BDK configs
 
 ---
@@ -102,6 +102,16 @@ flowchart TB
 **Why:** Mixing Zustand (or ad hoc React state) with TanStack Query for the **same** logical data creates sync bugs: the UI may read a stale cache or store while a mutation has already persisted to SQLite, or two writers may race. Lab chain state is the reference pattern: **`runLabOp`** + worker + **`persistLabState`**, then **`setQueryData`**; never push a React/Zustand snapshot into the worker as authority.
 
 **Component `useState`:** Fine for strictly local UI (e.g. which accordion is open). Avoid mirroring server/worker/DB entities in component state when those entities are also in Query or Zustand—pick one source of truth per entity.
+
+### Wallet lifecycle orchestrators
+
+**Lock/unlock** and **per-rail load, sync, and save** (on-chain, Lightning, Arkade) live in `frontend/src/lib/wallet/lifecycle/`. Orchestrators own phase transitions and expose `get*Snapshot` + `subscribe*`; they drive TanStack Query `enabled` / `queryFn` for async work but **do not** store phase in Query cache or Zustand.
+
+**Routing:** Rail lifecycles are route-independent. Only **visiting a wallet route** (`/wallet/*`) may **start** wallet hydration (session restore + bootstrap load). Settings, Lab, and other sections stay passive while locked; actions that need WASM or secrets (descriptor reveal, mine-to-wallet, network switch) must use **`requireUnlockedWallet`** at action time — not route-wide hydration. Post-lock redirect to Library is kept for privacy. See [Route independence and wallet hydration](../docs/wallet-rail-lifecycle.md#route-independence-and-wallet-hydration).
+
+**React integration (L5):** thin subscription hooks in `frontend/src/hooks/` wrap orchestrators with `useSyncExternalStore` — one hook per state machine plus per-rail aggregates and selectors (e.g. `useIsArkadeSessionReady()`). See [docs/wallet-rail-lifecycle.md](../docs/wallet-rail-lifecycle.md#react-lifecycle-hooks).
+
+Test contracts: [doc/features/wallet-lifecycle.yaml](features/wallet-lifecycle.yaml). L1–L5 complete.
 
 ---
 

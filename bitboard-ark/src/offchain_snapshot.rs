@@ -1,19 +1,49 @@
+use std::collections::HashMap;
 use std::str::FromStr;
 
+use ark_client::compute_offchain_balance;
 use ark_core::VtxoList;
 use ark_core::history;
 use ark_core::history::OutgoingTransaction;
 use ark_core::history::Transaction;
 use ark_core::history::sort_transactions_by_created_at;
-use ark_core::server::VirtualTxOutPoint;
+use ark_core::server::{Info, VirtualTxOutPoint};
 use bitcoin::hex::DisplayHex;
 use bitcoin::hex::FromHex;
-use bitcoin::{Amount, OutPoint, ScriptBuf, Txid};
+use bitcoin::{Amount, OutPoint, ScriptBuf, Txid, XOnlyPublicKey};
 
 use crate::error::{ArkResult, ArkWasmError};
 use crate::persistence::{
     OffchainVtxoSnapshot, VirtualTxOutPointAssetRecord, VirtualTxOutPointRecord,
 };
+
+/// Signer-aware offchain balance buckets in satoshis.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct OffchainBalanceBuckets {
+    pub pre_confirmed_sats: u64,
+    pub confirmed_sats: u64,
+    pub recoverable_sats: u64,
+    pub pending_recovery_sats: u64,
+}
+
+impl OffchainBalanceBuckets {
+    pub fn zero() -> Self {
+        Self::default()
+    }
+
+    pub fn from_live(balance: &ark_client::OffChainBalance) -> Self {
+        Self {
+            pre_confirmed_sats: balance.pre_confirmed().to_sat(),
+            confirmed_sats: balance.confirmed().to_sat(),
+            recoverable_sats: balance.recoverable().to_sat(),
+            pending_recovery_sats: balance.pending_recovery().to_sat(),
+        }
+    }
+
+    pub fn gross_spendable_sats(&self) -> u64 {
+        self.pre_confirmed_sats.saturating_add(self.confirmed_sats)
+    }
+}
 
 pub fn vtxo_list_from_snapshot(snapshot: &OffchainVtxoSnapshot) -> ArkResult<VtxoList> {
     let dust = Amount::from_sat(snapshot.dust_sats);
@@ -25,23 +55,83 @@ pub fn vtxo_list_from_snapshot(snapshot: &OffchainVtxoSnapshot) -> ArkResult<Vtx
     Ok(VtxoList::new(dust, points))
 }
 
+pub fn offchain_balance_buckets_from_snapshot(
+    snapshot: &OffchainVtxoSnapshot,
+    server_info: &Info,
+    now: i64,
+    legacy_signer_pk_fallback: Option<XOnlyPublicKey>,
+) -> ArkResult<OffchainBalanceBuckets> {
+    let vtxo_list = vtxo_list_from_snapshot(snapshot)?;
+    let balance = compute_offchain_balance(
+        &vtxo_list,
+        script_to_server_pk_lookup(snapshot, legacy_signer_pk_fallback)?,
+        server_info,
+        now,
+    )
+    .map_err(ArkWasmError::from)?;
+    Ok(OffchainBalanceBuckets::from_live(&balance))
+}
+
+/// Naive bucket sums without signer-aware filtering. Prefer [`offchain_balance_buckets_from_snapshot`].
+#[allow(dead_code)]
 pub fn offchain_balance_sats_from_snapshot(
     snapshot: &OffchainVtxoSnapshot,
 ) -> ArkResult<(u64, u64, u64)> {
-    let vtxo_list = vtxo_list_from_snapshot(snapshot)?;
-    let pre_confirmed = vtxo_list
-        .pre_confirmed()
-        .fold(Amount::ZERO, |acc, x| acc + x.amount)
-        .to_sat();
-    let confirmed = vtxo_list
-        .confirmed()
-        .fold(Amount::ZERO, |acc, x| acc + x.amount)
-        .to_sat();
-    let recoverable = vtxo_list
-        .recoverable()
-        .fold(Amount::ZERO, |acc, x| acc + x.amount)
-        .to_sat();
-    Ok((pre_confirmed, confirmed, recoverable))
+    let buckets = {
+        let vtxo_list = vtxo_list_from_snapshot(snapshot)?;
+        let pre_confirmed = vtxo_list
+            .pre_confirmed()
+            .fold(Amount::ZERO, |acc, x| acc + x.amount)
+            .to_sat();
+        let confirmed = vtxo_list
+            .confirmed()
+            .fold(Amount::ZERO, |acc, x| acc + x.amount)
+            .to_sat();
+        let recoverable = vtxo_list
+            .recoverable()
+            .fold(Amount::ZERO, |acc, x| acc + x.amount)
+            .to_sat();
+        (pre_confirmed, confirmed, recoverable)
+    };
+    Ok(buckets)
+}
+
+fn script_to_server_pk_lookup(
+    snapshot: &OffchainVtxoSnapshot,
+    legacy_signer_pk_fallback: Option<XOnlyPublicKey>,
+) -> ArkResult<impl Fn(&ScriptBuf) -> Option<XOnlyPublicKey> + '_> {
+    let mut by_script: HashMap<ScriptBuf, XOnlyPublicKey> = HashMap::new();
+    for record in &snapshot.virtual_tx_outpoints {
+        let Some(hex) = record.server_pk_hex.as_deref() else {
+            continue;
+        };
+        let script_bytes = Vec::from_hex(&record.script_hex)
+            .map_err(|error| ArkWasmError::Snapshot(format!("invalid vtxo script: {error}")))?;
+        let script = ScriptBuf::from_bytes(script_bytes);
+        let server_pk = XOnlyPublicKey::from_str(hex)
+            .map_err(|error| ArkWasmError::Snapshot(format!("invalid server_pk_hex: {error}")))?;
+        by_script.insert(script, server_pk);
+    }
+
+    let any_record_has_server_pk = snapshot
+        .virtual_tx_outpoints
+        .iter()
+        .any(|record| record.server_pk_hex.is_some());
+    let all_records_have_server_pk = snapshot
+        .virtual_tx_outpoints
+        .iter()
+        .all(|record| record.server_pk_hex.is_some());
+
+    Ok(move |script: &ScriptBuf| {
+        if let Some(server_pk) = by_script.get(script) {
+            return Some(*server_pk);
+        }
+        if any_record_has_server_pk && !all_records_have_server_pk {
+            // Mixed legacy/modern snapshot: missing per-vtxo keys are not spendable for signer-aware paths.
+            return None;
+        }
+        legacy_signer_pk_fallback
+    })
 }
 
 pub fn offchain_history_from_snapshot(
@@ -89,22 +179,43 @@ pub fn offchain_history_from_snapshot(
     Ok(transactions)
 }
 
+#[allow(dead_code)]
 pub fn snapshot_from_virtual_tx_outpoints(
     dust_sats: u64,
     synced_at: i64,
     virtual_tx_outpoints: Vec<VirtualTxOutPoint>,
+) -> OffchainVtxoSnapshot {
+    snapshot_from_virtual_tx_outpoints_with_script_lookup(
+        dust_sats,
+        synced_at,
+        virtual_tx_outpoints,
+        |_| None,
+    )
+}
+
+pub fn snapshot_from_virtual_tx_outpoints_with_script_lookup(
+    dust_sats: u64,
+    synced_at: i64,
+    virtual_tx_outpoints: Vec<VirtualTxOutPoint>,
+    script_to_server_pk: impl Fn(&ScriptBuf) -> Option<XOnlyPublicKey>,
 ) -> OffchainVtxoSnapshot {
     OffchainVtxoSnapshot {
         synced_at,
         dust_sats,
         virtual_tx_outpoints: virtual_tx_outpoints
             .into_iter()
-            .map(virtual_tx_outpoint_to_record)
+            .map(|point| {
+                let server_pk = script_to_server_pk(&point.script);
+                virtual_tx_outpoint_to_record(point, server_pk)
+            })
             .collect(),
     }
 }
 
-fn virtual_tx_outpoint_to_record(point: VirtualTxOutPoint) -> VirtualTxOutPointRecord {
+fn virtual_tx_outpoint_to_record(
+    point: VirtualTxOutPoint,
+    server_pk: Option<XOnlyPublicKey>,
+) -> VirtualTxOutPointRecord {
     VirtualTxOutPointRecord {
         txid: point.outpoint.txid.to_string(),
         vout: point.outpoint.vout,
@@ -132,6 +243,7 @@ fn virtual_tx_outpoint_to_record(point: VirtualTxOutPoint) -> VirtualTxOutPointR
                 amount: asset.amount,
             })
             .collect(),
+        server_pk_hex: server_pk.map(|pk| pk.to_string()),
     }
 }
 
@@ -222,17 +334,23 @@ fn generate_outgoing_vtxo_transaction_history(
 #[cfg(test)]
 mod tests {
     use super::{
-        offchain_balance_sats_from_snapshot, snapshot_from_virtual_tx_outpoints,
+        offchain_balance_buckets_from_snapshot, offchain_balance_sats_from_snapshot,
+        snapshot_from_virtual_tx_outpoints, snapshot_from_virtual_tx_outpoints_with_script_lookup,
         vtxo_list_from_snapshot,
     };
     use crate::error::ArkWasmError;
     use crate::persistence::{OffchainVtxoSnapshot, VirtualTxOutPointRecord};
     use ark_core::server::VirtualTxOutPoint;
+    use ark_core::server::{DeprecatedSigner, Info};
     use bitcoin::Amount;
+    use bitcoin::Network;
     use bitcoin::OutPoint;
     use bitcoin::ScriptBuf;
     use bitcoin::Txid;
     use bitcoin::hashes::Hash;
+    use bitcoin::secp256k1::PublicKey;
+    use std::collections::HashMap;
+    use std::str::FromStr;
 
     fn sample_vtp(
         txid_byte: u8,
@@ -297,6 +415,140 @@ mod tests {
     }
 
     #[test]
+    fn snapshot_round_trip_preserves_server_pk_hex() {
+        let script = ScriptBuf::from_bytes(vec![0x51]);
+        let future_expiry = 2_000_000_000_i64;
+        let original = VirtualTxOutPoint {
+            outpoint: OutPoint::new(Txid::from_byte_array([9; 32]), 0),
+            created_at: future_expiry - 86_400,
+            expires_at: future_expiry,
+            amount: Amount::from_sat(50_000),
+            script: script.clone(),
+            is_preconfirmed: false,
+            is_swept: false,
+            is_unrolled: false,
+            is_spent: false,
+            spent_by: None,
+            commitment_txids: vec![],
+            settled_by: None,
+            ark_txid: None,
+            assets: vec![],
+        };
+        let deprecated_pk = PublicKey::from_str(
+            "02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5",
+        )
+        .expect("valid key")
+        .x_only_public_key()
+        .0;
+        let snapshot = snapshot_from_virtual_tx_outpoints_with_script_lookup(
+            330,
+            1_700_000_000,
+            vec![original],
+            |lookup_script| {
+                if lookup_script == &script {
+                    Some(deprecated_pk)
+                } else {
+                    None
+                }
+            },
+        );
+
+        assert_eq!(
+            snapshot.virtual_tx_outpoints[0].server_pk_hex.as_deref(),
+            Some(deprecated_pk.to_string().as_str())
+        );
+    }
+
+    #[test]
+    fn offchain_balance_buckets_from_snapshot_matches_signer_aware_buckets() {
+        let script = ScriptBuf::from_bytes(vec![0x51]);
+        let future_expiry = 2_000_000_000_i64;
+        let vtxo = VirtualTxOutPoint {
+            outpoint: OutPoint::new(Txid::from_byte_array([7; 32]), 0),
+            created_at: future_expiry - 86_400,
+            expires_at: future_expiry,
+            amount: Amount::from_sat(50_000),
+            script: script.clone(),
+            is_preconfirmed: false,
+            is_swept: false,
+            is_unrolled: false,
+            is_spent: false,
+            spent_by: None,
+            commitment_txids: vec![],
+            settled_by: None,
+            ark_txid: None,
+            assets: vec![],
+        };
+        let deprecated_pk = PublicKey::from_str(
+            "02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5",
+        )
+        .expect("valid key")
+        .x_only_public_key()
+        .0;
+        let snapshot = snapshot_from_virtual_tx_outpoints_with_script_lookup(
+            330,
+            1_000_000,
+            vec![vtxo],
+            |lookup_script| {
+                if lookup_script == &script {
+                    Some(deprecated_pk)
+                } else {
+                    None
+                }
+            },
+        );
+        let server_info = test_server_info_for_snapshot(
+            "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+            vec![(
+                "02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5",
+                500_000,
+            )],
+        );
+        let buckets =
+            offchain_balance_buckets_from_snapshot(&snapshot, &server_info, 1_000_000, None)
+                .expect("snapshot buckets");
+
+        assert_eq!(buckets.confirmed_sats, 0);
+        assert_eq!(buckets.pending_recovery_sats, 50_000);
+    }
+
+    fn test_server_info_for_snapshot(current_hex: &str, deprecated: Vec<(&str, i64)>) -> Info {
+        let dummy_address: bitcoin::Address<bitcoin::address::NetworkUnchecked> =
+            "tb1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx"
+                .parse()
+                .unwrap();
+        Info {
+            version: "1".into(),
+            signer_pk: PublicKey::from_str(current_hex).expect("valid key"),
+            forfeit_pk: PublicKey::from_str(current_hex).expect("valid key"),
+            forfeit_address: dummy_address.assume_checked(),
+            checkpoint_tapscript: ScriptBuf::new(),
+            network: Network::Signet,
+            session_duration: 0,
+            unilateral_exit_delay: bitcoin::Sequence::ZERO,
+            boarding_exit_delay: bitcoin::Sequence::ZERO,
+            utxo_min_amount: None,
+            utxo_max_amount: None,
+            vtxo_min_amount: None,
+            vtxo_max_amount: None,
+            dust: Amount::ZERO,
+            fees: None,
+            scheduled_session: None,
+            deprecated_signers: deprecated
+                .into_iter()
+                .map(|(key, cutoff)| DeprecatedSigner {
+                    pk: PublicKey::from_str(key).expect("valid key"),
+                    cutoff_date: cutoff,
+                })
+                .collect(),
+            service_status: HashMap::new(),
+            digest: String::new(),
+            max_tx_weight: 0,
+            max_op_return_outputs: 0,
+        }
+    }
+
+    #[test]
     fn vtxo_list_from_snapshot_rejects_invalid_txid() {
         let snapshot = OffchainVtxoSnapshot {
             synced_at: 1_700_000_000,
@@ -317,6 +569,7 @@ mod tests {
                 settled_by: None,
                 ark_txid: None,
                 assets: vec![],
+                server_pk_hex: None,
             }],
         };
 

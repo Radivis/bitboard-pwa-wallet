@@ -8,10 +8,15 @@ import { ARKADE_INFOMODE_IDS } from '@/lib/arkade/arkade-infomode'
 import { CollaborativeExitDialog } from '@/components/wallet/arkade-exit/CollaborativeExitDialog'
 import { UnilateralExitDialog } from '@/components/wallet/arkade-exit/UnilateralExitDialog'
 import { useArkadeExitFlow } from '@/hooks/useArkadeExitFlow'
+import { isSignerRotationCooperativeExitBlocked } from '@/lib/arkade/arkade-cooperative-exit'
+import { useWalletStore } from '@/stores/walletStore'
 
 export function ArkadeExitSection() {
   const exitFlow = useArkadeExitFlow()
   const { setCollaborativeOpen, setUnilateralOpen } = exitFlow
+  const signerMigrationHint = useWalletStore((state) => state.arkadeSignerMigrationHint)
+  const collaborativeExitBlockedByRotation =
+    isSignerRotationCooperativeExitBlocked(signerMigrationHint)
 
   return (
     <div className="space-y-2 border-t pt-4">
@@ -50,6 +55,7 @@ export function ArkadeExitSection() {
             type="button"
             variant="outline"
             size="sm"
+            disabled={collaborativeExitBlockedByRotation}
             onClick={() => setCollaborativeOpen(true)}
           >
             Collaborative exit
@@ -70,6 +76,11 @@ export function ArkadeExitSection() {
           </Button>
         </InfomodeWrapper>
       </div>
+      {collaborativeExitBlockedByRotation && (
+        <p className="text-xs text-muted-foreground" data-testid="arkade-exit-collab-unavailable">
+          Cooperative exit is unavailable after signer rotation cutoff. Use unilateral exit.
+        </p>
+      )}
 
       <CollaborativeExitDialog exitFlow={exitFlow} />
       <UnilateralExitDialog exitFlow={exitFlow} />

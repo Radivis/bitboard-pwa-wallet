@@ -2,6 +2,10 @@
  * Single FIFO queue for all lab worker + SQLite operations.
  * Prevents overlapping persist/hydrate/mine and keeps worker memory aligned with DB.
  */
+import {
+  withLabWriterLock,
+} from '@/lib/shared/opfs-writer-lock'
+
 let labOperationChain: Promise<unknown> = Promise.resolve()
 
 async function runAfterPreviousTail<T>(
@@ -19,6 +23,11 @@ export async function runLabOp<T>(operation: () => Promise<T>): Promise<T> {
     .then(() => undefined)
     .catch(() => undefined)
   return workPromise
+}
+
+/** Mutating lab ops that read-modify-write chain state before {@link persistLabState}. */
+export async function runLabWriteOp<T>(operation: () => Promise<T>): Promise<T> {
+  return runLabOp(() => withLabWriterLock(operation))
 }
 
 /**

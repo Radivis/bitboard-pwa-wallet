@@ -1,10 +1,63 @@
 use crate::persistence::{
     BITBOARD_ARK_PERSISTENCE_VERSION, BitboardArkPersistence, JsonPersistenceDb, OperatorIdentity,
-    PendingExitDeductionRecord, PendingExitKind, network_label, validate_operator_identity,
+    OperatorSignerMigrationHint, PendingExitDeductionRecord, PendingExitKind, network_label,
+    operator_identity_for_connected_signer, persisted_operator_identity_for_open,
+    validate_operator_identity,
 };
-use bitcoin::Network;
-use bitcoin::XOnlyPublicKey;
+use ark_core::server::{DeprecatedSigner, Info};
+use bitcoin::address::NetworkUnchecked;
+use bitcoin::secp256k1::PublicKey;
+use bitcoin::{Amount, Network, ScriptBuf, XOnlyPublicKey};
+use std::collections::HashMap;
 use std::str::FromStr;
+
+const PK_CURRENT: &str = "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798";
+const PK_DEPRECATED: &str = "02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5";
+const PK_UNKNOWN: &str = "030192e796452d6df9697c280542e1560557bcf79a347d925895043136225c7cb4";
+
+fn public_key(hex: &str) -> PublicKey {
+    PublicKey::from_str(hex).expect("valid key")
+}
+
+fn xonly(hex: &str) -> XOnlyPublicKey {
+    public_key(hex).x_only_public_key().0
+}
+
+fn test_server_info(current_hex: &str, deprecated: Vec<(&str, i64)>) -> Info {
+    let dummy_address: bitcoin::Address<NetworkUnchecked> =
+        "tb1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx"
+            .parse()
+            .unwrap();
+    Info {
+        version: "1".into(),
+        signer_pk: public_key(current_hex),
+        forfeit_pk: public_key(current_hex),
+        forfeit_address: dummy_address.assume_checked(),
+        checkpoint_tapscript: ScriptBuf::new(),
+        network: Network::Signet,
+        session_duration: 0,
+        unilateral_exit_delay: bitcoin::Sequence::ZERO,
+        boarding_exit_delay: bitcoin::Sequence::ZERO,
+        utxo_min_amount: None,
+        utxo_max_amount: None,
+        vtxo_min_amount: None,
+        vtxo_max_amount: None,
+        dust: Amount::ZERO,
+        fees: None,
+        scheduled_session: None,
+        deprecated_signers: deprecated
+            .into_iter()
+            .map(|(key, cutoff)| DeprecatedSigner {
+                pk: public_key(key),
+                cutoff_date: cutoff,
+            })
+            .collect(),
+        service_status: HashMap::new(),
+        digest: String::new(),
+        max_tx_weight: 0,
+        max_op_return_outputs: 0,
+    }
+}
 
 #[test]
 fn network_label_maps_bitcoin_networks() {
@@ -13,52 +66,117 @@ fn network_label_maps_bitcoin_networks() {
 }
 
 #[test]
+fn persisted_operator_identity_for_open_keeps_deprecated_signer_while_migration_pending() {
+    let connected = xonly(PK_CURRENT);
+    let hint = OperatorSignerMigrationHint {
+        previous_signer_pk_hex: xonly(PK_DEPRECATED).to_string(),
+        deprecated_status: "migratable".to_string(),
+        cutoff_unix: 2_000_000,
+    };
+
+    let identity = persisted_operator_identity_for_open(&Some(hint), connected, Network::Signet);
+
+    assert_eq!(identity.signer_pk_hex, xonly(PK_DEPRECATED).to_string());
+    assert_eq!(identity.network, network_label(Network::Signet));
+}
+
+#[test]
+fn persisted_operator_identity_for_open_uses_connected_signer_when_no_migration_hint() {
+    let connected = xonly(PK_CURRENT);
+
+    let identity = persisted_operator_identity_for_open(&None, connected, Network::Signet);
+
+    assert_eq!(
+        identity,
+        operator_identity_for_connected_signer(connected, Network::Signet)
+    );
+}
+
+#[test]
 fn validate_operator_identity_accepts_matching_identity() {
-    let signer = XOnlyPublicKey::from_str(
-        "18845781f631c48f1c9709e23092067d06837f30aa0cd0544ac887fe91ddd166",
-    )
-    .expect("valid key");
+    let signer = xonly(PK_CURRENT);
     let stored = OperatorIdentity {
         signer_pk_hex: signer.to_string(),
         network: network_label(Network::Signet),
     };
+    let info = test_server_info(PK_CURRENT, vec![]);
+    let now = 1_000_000i64;
 
-    assert!(validate_operator_identity(Some(&stored), signer, Network::Signet).is_ok());
-    assert!(validate_operator_identity(None, signer, Network::Signet).is_ok());
+    assert_eq!(
+        validate_operator_identity(Some(&stored), &info, Network::Signet, now),
+        Ok(None)
+    );
+    assert_eq!(
+        validate_operator_identity(None, &info, Network::Signet, now),
+        Ok(None)
+    );
 }
 
 #[test]
-fn validate_operator_identity_rejects_signer_mismatch() {
-    let stored_signer = XOnlyPublicKey::from_str(
-        "18845781f631c48f1c9709e23092067d06837f30aa0cd0544ac887fe91ddd166",
-    )
-    .expect("valid stored key");
-    let connected_signer = XOnlyPublicKey::from_str(
-        "28845781f631c48f1c9709e23092067d06837f30aa0cd0544ac887fe91ddd166",
-    )
-    .expect("valid connected key");
+fn validate_operator_identity_accepts_deprecated_stored_signer() {
     let stored = OperatorIdentity {
-        signer_pk_hex: stored_signer.to_string(),
+        signer_pk_hex: xonly(PK_DEPRECATED).to_string(),
         network: network_label(Network::Signet),
     };
+    let info = test_server_info(PK_CURRENT, vec![(PK_DEPRECATED, 2_000_000)]);
+    let now = 1_000_000i64;
 
-    let error = validate_operator_identity(Some(&stored), connected_signer, Network::Signet)
-        .expect_err("mismatched signer");
-    assert!(error.contains("does not match connected operator"));
+    let hint = validate_operator_identity(Some(&stored), &info, Network::Signet, now)
+        .expect("deprecated signer should open for migration");
+
+    assert_eq!(
+        hint,
+        Some(OperatorSignerMigrationHint {
+            previous_signer_pk_hex: stored.signer_pk_hex.clone(),
+            deprecated_status: "migratable".to_string(),
+            cutoff_unix: 2_000_000,
+        })
+    );
+}
+
+#[test]
+fn validate_operator_identity_accepts_expired_deprecated_signer_for_recovery() {
+    let stored = OperatorIdentity {
+        signer_pk_hex: xonly(PK_DEPRECATED).to_string(),
+        network: network_label(Network::Signet),
+    };
+    let info = test_server_info(PK_CURRENT, vec![(PK_DEPRECATED, 500_000)]);
+    let now = 1_000_000i64;
+
+    let hint = validate_operator_identity(Some(&stored), &info, Network::Signet, now)
+        .expect("post-cutoff deprecated signer should still open");
+
+    assert_eq!(
+        hint.as_ref().map(|h| h.deprecated_status.as_str()),
+        Some("expired")
+    );
+}
+
+#[test]
+fn validate_operator_identity_rejects_unknown_signer() {
+    let stored = OperatorIdentity {
+        signer_pk_hex: xonly(PK_UNKNOWN).to_string(),
+        network: network_label(Network::Signet),
+    };
+    let info = test_server_info(PK_CURRENT, vec![(PK_DEPRECATED, 2_000_000)]);
+    let now = 1_000_000i64;
+
+    let error = validate_operator_identity(Some(&stored), &info, Network::Signet, now)
+        .expect_err("unknown signer");
+    assert!(error.contains("not recognized by the connected operator"));
+    assert!(error.contains("different Arkade service provider"));
 }
 
 #[test]
 fn validate_operator_identity_rejects_network_mismatch() {
-    let signer = XOnlyPublicKey::from_str(
-        "18845781f631c48f1c9709e23092067d06837f30aa0cd0544ac887fe91ddd166",
-    )
-    .expect("valid key");
+    let signer = xonly(PK_CURRENT);
     let stored = OperatorIdentity {
         signer_pk_hex: signer.to_string(),
         network: network_label(Network::Bitcoin),
     };
+    let info = test_server_info(PK_CURRENT, vec![]);
 
-    let error = validate_operator_identity(Some(&stored), signer, Network::Signet)
+    let error = validate_operator_identity(Some(&stored), &info, Network::Signet, 0)
         .expect_err("mismatched network");
     assert!(error.contains("does not match session network"));
 }
@@ -93,6 +211,7 @@ fn persistence_export_version_is_current() {
 
 #[test]
 fn persistence_unknown_version_defaults_empty_wallet_db() {
+    // v2 was a pre-production prototype format; production wallets only use v3.
     let legacy_v2_json = r#"{"version":2,"engine":"ark-rs","ark_sdk_version":"0.9.2","wallet_db":{"boarding_outputs":[],"secret_keys_by_owner_pk_hex":{}},"swap_storage":{}}"#;
     let parsed = BitboardArkPersistence::parse_import(Some(legacy_v2_json));
     assert!(parsed.operator_identity.is_none());
@@ -102,6 +221,7 @@ fn persistence_unknown_version_defaults_empty_wallet_db() {
 
 #[test]
 fn persistence_v1_json_defaults_empty_wallet_db() {
+    // v1 was a pre-production prototype envelope; reject and start empty.
     let v1 = r#"{"version":1,"wallet":{},"contract":{}}"#;
     let parsed = BitboardArkPersistence::parse_import(Some(v1));
     assert!(parsed.operator_identity.is_none());

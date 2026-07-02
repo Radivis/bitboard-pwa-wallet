@@ -4,3 +4,4 @@ export {
   mergeSdkPersistenceJsonMonotonic,
   readOffchainNextDerivationIndex,
 } from '@/lib/arkade/arkade-payload-merge'
+export { parseArkadeSdkPersistenceJson } from '@/lib/arkade/arkade-sdk-persistence-types'

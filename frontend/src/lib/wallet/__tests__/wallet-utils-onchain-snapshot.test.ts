@@ -24,13 +24,21 @@ vi.mock('@/db/database', () => ({
 
 const syncWallet = vi.fn()
 const refreshWalletStoreFromLoadedBdk = vi.fn()
+const orchestrateOnchainSyncThenSave = vi.fn()
 
 vi.mock('@/lib/wallet/onchain-bdk-store-sync', () => ({
   refreshWalletStoreFromLoadedBdk: (...args: unknown[]) =>
     refreshWalletStoreFromLoadedBdk(...args),
 }))
 
-vi.mock('@/lib/wallet/onchain-esplora-sync-metadata', () => ({}))
+vi.mock('@/lib/wallet/lifecycle/onchain-sync-lifecycle-orchestrator', () => ({
+  orchestrateOnchainSyncThenSave: (...args: unknown[]) =>
+    orchestrateOnchainSyncThenSave(...args),
+}))
+
+vi.mock('@/lib/wallet/lifecycle/onchain-load-lifecycle-orchestrator', () => ({
+  getOnchainLoadLifecycleSnapshot: () => ({ loadPhase: 'loaded', networkMode: 'testnet' }),
+}))
 
 vi.mock('@/lib/lightning/lightning-dashboard-sync', () => ({
   invalidateLightningDashboardQueries: vi.fn(),
@@ -120,6 +128,7 @@ describe('syncLoadedDescriptorWalletWithEsplora BDK fallback', () => {
       },
     })
     syncWallet.mockRejectedValue(new Error('Esplora down'))
+    orchestrateOnchainSyncThenSave.mockRejectedValue(new Error('Esplora down'))
   })
 
   it('refreshes BDK store data when Esplora sync fails', async () => {
@@ -137,7 +146,20 @@ describe('syncLoadedDescriptorWalletWithEsplora BDK fallback', () => {
   })
 
   it('persists changeset and timestamp on incremental sync success', async () => {
-    syncWallet.mockResolvedValue(undefined)
+    orchestrateOnchainSyncThenSave.mockImplementation(async () => {
+      const { updateDescriptorWalletChangeset: persist } = await import(
+        '@/lib/wallet/descriptor-wallet-manager'
+      )
+      await persist({
+        walletId: 1,
+        network: 'testnet',
+        addressType: AddressType.Taproot,
+        accountId: 0,
+        changesetJson: '{}',
+        markFullScanDone: false,
+        lastSuccessfulEsploraSyncAt: new Date().toISOString(),
+      })
+    })
 
     const result = await syncLoadedDescriptorWalletWithEsplora({
       networkMode: 'testnet',

@@ -62,6 +62,57 @@ vi.mock('@/hooks/useOnchainDashboardQueries', () => ({
   useOnchainEsploraSyncMetadataQuery: () => ({ data: { isStaleOnchain: false } }),
 }))
 
+vi.mock('@/hooks/useOnchainLifecycleSnapshots', () => ({
+  useOnchainRailSnapshot: () => ({
+    loadPhase: 'loaded',
+    syncPhase: 'not-syncing',
+    savePhase: 'not-saving',
+  }),
+  useOnchainLoadLifecycleSnapshot: () => ({
+    loadPhase: 'loaded',
+    errorMessage: null,
+  }),
+  useOnchainSyncLifecycleSnapshot: () => ({
+    syncPhase: 'not-syncing',
+    errorMessage: null,
+  }),
+}))
+
+vi.mock('@/hooks/useLightningLifecycleSnapshots', () => ({
+  useLightningRailSnapshot: () => ({
+    loadPhase: 'not-configured',
+    syncPhase: 'not-configured',
+    savePhase: 'not-configured',
+  }),
+  useLightningLoadLifecycleSnapshot: () => ({
+    loadPhase: 'not-configured',
+    errorMessage: null,
+  }),
+  useLightningSyncLifecycleSnapshot: () => ({
+    syncPhase: 'not-configured',
+    errorMessage: null,
+  }),
+}))
+
+vi.mock('@/hooks/useLightningDashboardQueries', () => ({
+  useLightningSyncMetadataQuery: () => ({ data: { lastSyncedAt: null } }),
+}))
+
+vi.mock('@/hooks/useRailManualSyncMutations', () => ({
+  useOnchainIncrementalSyncMutation: () => ({ mutate: vi.fn(), isPending: false }),
+  useOnchainFullRescanSyncMutation: () => ({ mutate: vi.fn(), isPending: false }),
+  useLightningManualSyncMutation: () => ({ mutate: vi.fn(), isPending: false }),
+  useArkadeManualSyncMutation: () => ({ mutate: vi.fn(), isPending: false }),
+}))
+
+vi.mock('@/lib/wallet/lifecycle/onchain-load-lifecycle-orchestrator', () => ({
+  orchestrateOnchainRetryLoad: vi.fn(),
+}))
+
+vi.mock('@/lib/wallet/lifecycle/lightning-load-lifecycle-orchestrator', () => ({
+  orchestrateLightningRetryLoad: vi.fn(),
+}))
+
 vi.mock('@/hooks/useLightningMutations', () => ({
   useLightningHistoryQuery: () => ({
     data: { payments: [], stalePaymentsAsOf: undefined },
@@ -78,6 +129,32 @@ vi.mock('@/hooks/useLightningMutations', () => ({
 vi.mock('@/hooks/useArkadeQueries', () => ({
   useArkadeBalanceQuery: () => arkadeBalanceMock(),
   useArkadeHistoryQuery: () => arkadeHistoryMock(),
+  useArkadeRecoverableVtxoFeeQuery: () => ({ isLoading: false, data: null }),
+  useArkadeRecoverRecoverableVtxosMutation: () => ({ mutate: vi.fn(), isPending: false }),
+}))
+
+vi.mock('@/hooks/useArkadeDashboardQueries', () => ({
+  useArkadeSyncMetadataQuery: () => ({ data: { isStaleArkade: false } }),
+}))
+
+vi.mock('@/hooks/useArkadeLifecycleSnapshots', () => ({
+  useArkadeRailSnapshot: () => ({
+    loadPhase: 'loaded',
+    syncPhase: 'not-syncing',
+    savePhase: 'not-saving',
+  }),
+  useArkadeLoadLifecycleSnapshot: () => ({
+    loadPhase: 'loaded',
+    errorMessage: null,
+  }),
+  useArkadeSyncLifecycleSnapshot: () => ({
+    syncPhase: 'not-syncing',
+    errorMessage: null,
+  }),
+}))
+
+vi.mock('@/lib/wallet/lifecycle/arkade-load-lifecycle-orchestrator', () => ({
+  orchestrateArkadeRetryLoad: vi.fn(),
 }))
 
 vi.mock('@/hooks/useLabChainStateQuery', () => ({

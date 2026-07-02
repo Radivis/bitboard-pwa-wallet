@@ -6,6 +6,8 @@ export const ARKADE_INFOMODE_IDS = {
   balanceVtxos: 'arkade-balance-vtxos',
   balanceExitProgress: 'arkade-balance-exit-progress',
   balanceRecoverable: 'arkade-balance-recoverable',
+  balanceRecoverablePendingOperatorSweep: 'arkade-balance-recoverable-pending-operator-sweep',
+  recoverableVtxoBanner: 'arkade-recoverable-vtxo-banner',
   managementPanel: 'arkade-management-panel',
   delegatorFee: 'arkade-delegator-fee',
   renewVtxos: 'arkade-renew-vtxos',
@@ -64,8 +66,23 @@ export const ARKADE_BALANCE_EXIT_PROGRESS_INFOMODE = {
 } as const
 
 export const ARKADE_BALANCE_RECOVERABLE_INFOMODE = {
-  title: 'Recoverable total',
-  text: 'Your full Arkade balance including funds in boarding, exits, or other states not counted in the spendable headline. Nothing is lost—you may need an extra step (settle, renew, or exit) to spend some of it.',
+  title: 'Total Arkade balance',
+  text: 'Your full Arkade balance including funds in boarding, exits, recoverable VTXOs awaiting operator sweep, or other states not counted in the spendable headline. Nothing is lost—you may need an extra step (settle, recover, renew, or exit) to spend some of it.',
+} as const
+
+export const ARKADE_BALANCE_RECOVERABLE_PENDING_OPERATOR_SWEEP_INFOMODE = {
+  title: 'Expired — waiting for operator sweep',
+  text: 'These VTXOs expired on your device clock, but the operator has not swept them yet. Batch recovery is not available until the operator marks them swept. They are still part of your balance and should become recoverable automatically after the operator sweep.',
+} as const
+
+export const ARKADE_RECOVERABLE_VTXO_BANNER_INFOMODE = {
+  title: 'Recoverable now',
+  text: 'These virtual outputs were swept by the operator or fell below the dust threshold. Batch recovery settles them back into spendable Arkade balance. This is separate from VTXOs still waiting for operator sweep after expiry, and from pending recovery after a signer rotation.',
+} as const
+
+export const ARKADE_BALANCE_BUMPER_INFOMODE = {
+  title: 'Bumper wallet (exit fees)',
+  text: 'On-chain Bitcoin reserved to pay miner fees during unilateral exit. This is not spendable Arkade balance — fund it from on-chain send if unroll fees are too low.',
 } as const
 
 export const ARKADE_DELEGATOR_FEE_INFOMODE = {

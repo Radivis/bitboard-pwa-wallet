@@ -1,0 +1,28 @@
+feature:
+  name: Periodic sync
+  description: >
+    Opt-in background polling per wallet rail (on-chain Esplora, Lightning NWC, Arkade operator).
+    Default behavior remains hydration sync on unlock/load and manual dashboard sync.
+  requirements:
+    - Periodic sync is gated by isPeriodicSyncEnabled (default off) under Settings → Features
+    - When enabled, Settings → Main shows a Periodic sync card with per-rail controls
+    - Per-rail rows appear for on-chain always; Lightning when isLightningEnabled; Arkade when isArkadeEnabled
+    - Each row has an interval field (30–86400 seconds, default 300) and a "periodic sync enabled" switch (default on)
+    - Polling uses React Query refetchInterval while the tab is visible and the rail is loaded
+    - On-chain lab network never periodic-syncs Esplora
+    - Hydration (postUnlock/postLoad) and manual sync are unchanged
+  contracts:
+  settings:
+    - id: PER-SYNC-01
+      description: Periodic sync card hidden when master feature is off
+      implemented_by: frontend/src/routes/__tests__/settings.test.tsx
+    - id: PER-SYNC-02
+      description: Periodic sync card visible with on-chain row when feature is on
+      implemented_by: frontend/src/routes/__tests__/settings.test.tsx
+  resolver:
+    - id: PER-SYNC-10
+      description: resolvePeriodicSyncRefetchIntervalMs returns false when feature or rail disabled
+      implemented_by: frontend/src/lib/wallet/periodic-sync/__tests__/resolve-periodic-sync-refetch-interval.test.ts
+    - id: PER-SYNC-11
+      description: resolvePeriodicSyncRefetchIntervalMs returns interval ms when active and visible
+      implemented_by: frontend/src/lib/wallet/periodic-sync/__tests__/resolve-periodic-sync-refetch-interval.test.ts

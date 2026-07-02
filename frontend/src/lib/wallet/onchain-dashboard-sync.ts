@@ -1,4 +1,5 @@
 import { ensureMigrated } from '@/db/database'
+import { getOnchainSyncLifecycleSnapshot } from '@/lib/wallet/lifecycle/onchain-sync-lifecycle-orchestrator'
 import { appQueryClient } from '@/lib/shared/app-query-client'
 import { toBitcoinNetwork } from '@/lib/wallet/bitcoin-utils'
 import {
@@ -78,10 +79,7 @@ export async function resolveOnchainEsploraSyncMetadata(): Promise<
   if (walletState.networkMode === 'lab') {
     return { isStaleOnchain: false }
   }
-  if (walletState.walletStatus === 'syncing') {
-    return { isStaleOnchain: false }
-  }
-  if (walletState.lastSyncTime != null) {
+  if (getOnchainSyncLifecycleSnapshot().syncPhase === 'syncing') {
     return { isStaleOnchain: false }
   }
 
@@ -98,12 +96,15 @@ export async function resolveOnchainEsploraSyncMetadata(): Promise<
       addressType: context.addressType,
       accountId: context.accountId,
     })
-  if (lastSuccessfulEsploraSyncAt == null) {
-    return { isStaleOnchain: false }
-  }
+
+  const isStaleOnchain =
+    walletState.lastSyncTime == null && lastSuccessfulEsploraSyncAt != null
+
   return {
-    isStaleOnchain: true,
-    lastSuccessfulEsploraSyncAt,
+    isStaleOnchain,
+    ...(lastSuccessfulEsploraSyncAt != null
+      ? { lastSuccessfulEsploraSyncAt }
+      : {}),
   }
 }
 

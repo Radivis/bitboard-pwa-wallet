@@ -36,6 +36,8 @@ vi.mock('@tanstack/react-router', async (importOriginal) => {
 
 vi.mock('@/hooks/useArkadeQueries', () => ({
   useArkadeBalanceQuery: () => balanceQueryMock(),
+  useArkadeRecoverableVtxoFeeQuery: () => ({ isLoading: false, data: null }),
+  useArkadeRecoverRecoverableVtxosMutation: () => ({ mutate: vi.fn(), isPending: false }),
   useArkadeAddressQuery: () => addressQueryMock(),
   useArkadeDelegateInfoQuery: () => ({ data: { fee: '10' } }),
   useArkadeRenewMutation: () => ({ mutate: vi.fn(), isPending: false }),

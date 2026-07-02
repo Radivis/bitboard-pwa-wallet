@@ -69,6 +69,21 @@ vi.mock('@/lib/wallet/onchain-dashboard-sync', () => ({
   invalidateOnchainDashboardQueries: vi.fn(),
 }))
 
+const mockShouldSkipOutgoingDescriptorSaveOnSyncError = vi.hoisted(() =>
+  vi.fn().mockReturnValue(false),
+)
+
+vi.mock('@/lib/wallet/lifecycle/onchain-descriptor-mutation-guard', () => ({
+  awaitOnchainQuiescenceBeforeDescriptorMutation: vi.fn().mockResolvedValue(undefined),
+  exportChangesetForPersistence: (...args: unknown[]) => mockExportChangeset(...args),
+  shouldSkipOutgoingDescriptorSaveOnSyncError: (...args: unknown[]) =>
+    mockShouldSkipOutgoingDescriptorSaveOnSyncError(...args),
+}))
+
+vi.mock('@/lib/shared/opfs-writer-lock', () => ({
+  withWalletWriterLock: (work: () => Promise<unknown>) => work(),
+}))
+
 const mockSetWalletStatus = vi.fn()
 const mockSetCurrentAddress = vi.fn()
 const mockCommitLoadedDescriptorWallet = vi.fn()
@@ -92,6 +107,7 @@ const descriptorWallet = {
 describe('switchDescriptorWallet', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockShouldSkipOutgoingDescriptorSaveOnSyncError.mockReturnValue(false)
     mockExportChangeset.mockResolvedValue('{}')
     mockLoadWallet.mockResolvedValue(undefined)
     mockGetCurrentAddress.mockResolvedValue('bc1qtest')
@@ -186,8 +202,6 @@ describe('switchDescriptorWallet', () => {
       addressType: 'taproot',
       accountId: 0,
     })
-    expect(mockSetWalletStatus).toHaveBeenCalledWith('syncing')
-    expect(mockSetWalletStatus).toHaveBeenCalledWith('unlocked')
     expect(toast.success).not.toHaveBeenCalled()
   })
 
@@ -215,8 +229,6 @@ describe('switchDescriptorWallet', () => {
     expect(successCalls.some((m) => String(m).includes('descriptor wallet loaded'))).toBe(
       false,
     )
-    expect(mockSetWalletStatus).toHaveBeenCalledWith('syncing')
-    expect(mockSetWalletStatus).toHaveBeenCalledWith('unlocked')
   })
 
   it('forces full scan when switching between live networks even if fullScanDone is set', async () => {
@@ -310,6 +322,38 @@ describe('switchDescriptorWallet', () => {
     })
     expect(mockSetWalletStatus).toHaveBeenCalledWith('unlocked')
     expect(toast.success).not.toHaveBeenCalled()
+  })
+
+  it('persists outgoing changeset when not in sync-error', async () => {
+    await switchDescriptorWallet({
+      targetNetworkMode: 'testnet',
+      targetAddressType: 'taproot',
+      targetAccountId: 0,
+      currentNetworkMode: 'signet',
+      currentAddressType: 'taproot',
+      currentAccountId: 0,
+    })
+
+    expect(mockExportChangeset).toHaveBeenCalled()
+    expect(updateDescriptorWalletChangeset).toHaveBeenCalled()
+  })
+
+  it('skips outgoing changeset save when sync-error (preserves last good persisted state)', async () => {
+    mockShouldSkipOutgoingDescriptorSaveOnSyncError.mockReturnValue(true)
+
+    await switchDescriptorWallet({
+      targetNetworkMode: 'testnet',
+      targetAddressType: 'taproot',
+      targetAccountId: 0,
+      currentNetworkMode: 'signet',
+      currentAddressType: 'taproot',
+      currentAccountId: 0,
+    })
+
+    expect(mockExportChangeset).not.toHaveBeenCalled()
+    expect(updateDescriptorWalletChangeset).not.toHaveBeenCalled()
+    expect(mockLoadWallet).toHaveBeenCalled()
+    expect(mockSyncLoadedDescriptorWalletWithEsplora).toHaveBeenCalled()
   })
 
   it('emits address-type phase labels when phaseContext is addressType', async () => {

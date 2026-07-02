@@ -11,9 +11,7 @@ use ark_core::server::NoncePks;
 use ark_core::server::StreamEvent;
 use ark_core::server::StreamStartedEvent;
 use ark_core::server::TreeNoncesAggregatedEvent;
-use ark_core::server::TreeNoncesEvent;
 use ark_core::server::TreeSignatureEvent;
-use ark_core::server::TreeTxNoncePks;
 use ark_core::server::TreeSigningStartedEvent;
 use ark_core::server::TreeTxEvent;
 use bitcoin::base64;
@@ -53,8 +51,6 @@ impl TryFrom<models::GetEventStreamResponse> for StreamEvent {
             return Ok(StreamEvent::TreeNoncesAggregated(
                 tree_nonces_aggregated.try_into()?,
             ));
-        } else if let Some(tree_nonces) = response.tree_nonces {
-            return Ok(StreamEvent::TreeNonces(tree_nonces.try_into()?));
         } else if let Some(tree_tx) = response.tree_tx {
             return Ok(StreamEvent::TreeTx(tree_tx.try_into()?));
         } else if let Some(tree_signature) = response.tree_signature {
@@ -199,34 +195,6 @@ impl TryFrom<models::TreeSigningStartedEvent> for TreeSigningStartedEvent {
     }
 }
 
-impl TryFrom<models::TreeNoncesEvent> for TreeNoncesEvent {
-    type Error = ConversionError;
-
-    fn try_from(event: models::TreeNoncesEvent) -> Result<Self, Self::Error> {
-        let id = event
-            .id
-            .ok_or_else(|| ConversionError("Missing batch id".to_string()))?;
-        let topic = event.topic.unwrap_or_default();
-        let txid_str = event
-            .txid
-            .ok_or_else(|| ConversionError("Missing txid".to_string()))?;
-        let txid = Txid::from_str(&txid_str)
-            .map_err(|e| ConversionError(format!("Invalid txid: {e}")))?;
-        let nonces_map = event
-            .nonces
-            .ok_or_else(|| ConversionError("Missing nonces".to_string()))?;
-        let nonces = TreeTxNoncePks::decode(nonces_map)
-            .map_err(|e| ConversionError(format!("Invalid nonces: {e}")))?;
-
-        Ok(TreeNoncesEvent {
-            id,
-            topic,
-            txid,
-            nonces,
-        })
-    }
-}
-
 impl TryFrom<models::TreeNoncesAggregatedEvent> for TreeNoncesAggregatedEvent {
     type Error = ConversionError;
 
@@ -235,13 +203,12 @@ impl TryFrom<models::TreeNoncesAggregatedEvent> for TreeNoncesAggregatedEvent {
             .id
             .ok_or_else(|| ConversionError("Missing batch id".to_string()))?;
 
-        let tree_nonces_str = event
-            .tree_nonces
-            .ok_or_else(|| ConversionError("Missing tree_nonces".to_string()))?;
-
-        // Parse the tree_nonces JSON string into NoncePks
-        let tree_nonces = NoncePks::decode(tree_nonces_str)
-            .map_err(|e| ConversionError(format!("Invalid tree_nonces: {e}")))?;
+        let tree_nonces = NoncePks::decode(
+            event
+                .tree_nonces
+                .ok_or_else(|| ConversionError("Missing tree_nonces".to_string()))?,
+        )
+        .map_err(|e| ConversionError(format!("Invalid tree_nonces: {e}")))?;
 
         Ok(TreeNoncesAggregatedEvent { id, tree_nonces })
     }
@@ -354,25 +321,5 @@ impl TryFrom<models::TreeSignatureEvent> for TreeSignatureEvent {
             txid,
             signature,
         })
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn parses_tree_nonces_event() {
-        let json = r#"{"treeNonces":{"id":"batch-1","txid":"7cf9c9169fada59390472110ba2c1d8b7af2ec6a868d6dcc61d25ceb81603db1","topic":[],"nonces":{}}}"#;
-        let response: models::GetEventStreamResponse = serde_json::from_str(json).unwrap();
-        let event = StreamEvent::try_from(response).unwrap();
-        assert!(matches!(event, StreamEvent::TreeNonces(_)));
-    }
-
-    #[test]
-    fn empty_object_has_no_event() {
-        let response: models::GetEventStreamResponse = serde_json::from_str("{}").unwrap();
-        let error = StreamEvent::try_from(response).unwrap_err();
-        assert_eq!(error.0, "No event found in response");
     }
 }

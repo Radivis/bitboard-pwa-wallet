@@ -5,20 +5,19 @@ import {
   getTxListDisplayAmountSats,
 } from '@/lib/wallet/bitcoin-utils'
 import { useWalletStore } from '@/stores/walletStore'
-import { useLightningStore } from '@/stores/lightningStore'
-import { useFeatureStore } from '@/stores/featureStore'
 import {
   createBackendService,
   type ConnectedLightningWallet,
   type LightningPayment,
 } from '@/lib/lightning/lightning-backend-service'
-import { getLightningConnectionsForActiveWallet } from '@/lib/lightning/lightning-connection-utils'
+import { getMatchingLightningConnectionsForDashboard } from '@/lib/lightning/lightning-connection-utils'
+import { runWithLightningConnectionSync } from '@/lib/wallet/lifecycle/lightning-sync-lifecycle-orchestrator'
 import { appQueryClient } from '@/lib/shared/app-query-client'
 import { ensureMigrated, getDatabase } from '@/db/database'
 import { loadWalletSecretsPayload } from '@/db/wallet-persistence'
 import {
-  batchApplyNwcSnapshotPatches,
   snapshotMapFromPayload,
+  type NwcSnapshotPatch,
 } from '@/lib/lightning/lightning-wallet-snapshot-persistence'
 import type { NwcConnectionSnapshot } from '@/lib/wallet/wallet-domain-types'
 import { WALLET_DB_QUERY_KEY_ROOT } from '@/lib/wallet/wallet-query-key-root'
@@ -47,19 +46,6 @@ export function lightningConnectionsFingerprint(
   connections: ConnectedLightningWallet[],
 ): string {
   return [...connections.map((connection) => connection.id)].sort().join(',')
-}
-
-export function getMatchingLightningConnectionsForDashboard(): ConnectedLightningWallet[] {
-  const { activeWalletId, networkMode } = useWalletStore.getState()
-  const { isLightningEnabled } = useFeatureStore.getState()
-  const { connectedWallets } = useLightningStore.getState()
-
-  return getLightningConnectionsForActiveWallet({
-    connectedLightningWallets: connectedWallets,
-    activeWalletId,
-    networkMode,
-    isLightningEnabled: isLightningEnabled,
-  })
 }
 
 export interface LightningBalanceRow {
@@ -91,6 +77,14 @@ export interface LightningHistoryQueryResult {
   stalePaymentsAsOf?: string
 }
 
+export type LightningHistoryFetchResult = LightningHistoryQueryResult & {
+  patches: NwcSnapshotPatch[]
+}
+
+export type LightningBalancesFetchResult = LightningBalancesResult & {
+  patches: NwcSnapshotPatch[]
+}
+
 function maxIsoTimestamp(a: string | undefined, b: string | undefined): string | undefined {
   if (a == null) return b
   if (b == null) return a
@@ -114,15 +108,15 @@ async function readSnapshotMapForActiveWallet(): Promise<
  * wins). On failure, merges stored payments from encrypted wallet secrets when available.
  */
 export async function fetchLightningPaymentsForActiveWallet(): Promise<
-  LightningHistoryQueryResult
+  LightningHistoryFetchResult
 > {
   if (typeof navigator !== 'undefined' && !navigator.onLine) {
-    return { payments: [] }
+    return { payments: [], patches: [] }
   }
 
   const matches = getMatchingLightningConnectionsForDashboard()
   if (matches.length === 0) {
-    return { payments: [] }
+    return { payments: [], patches: [] }
   }
 
   await ensureMigrated()
@@ -133,15 +127,17 @@ export async function fetchLightningPaymentsForActiveWallet(): Promise<
   let listPaymentsFailureCount = 0
   let stalePaymentsAsOf: string | undefined
 
-  const paymentPatches: {
-    connectionId: string
-    payments: { payments: LightningPayment[]; paymentsUpdatedAt: string }
-  }[] = []
+  const paymentPatches: NwcSnapshotPatch[] = []
 
   for (const lightningConnection of matches) {
     try {
-      const service = createBackendService(lightningConnection.config)
-      const payments = await service.listPayments()
+      const payments = await runWithLightningConnectionSync(
+        lightningConnection.id,
+        async () => {
+          const service = createBackendService(lightningConnection.config)
+          return service.listPayments()
+        },
+      )
       const nowIso = new Date().toISOString()
       paymentPatches.push({
         connectionId: lightningConnection.id,
@@ -184,14 +180,6 @@ export async function fetchLightningPaymentsForActiveWallet(): Promise<
     }
   }
 
-  const walletId = useWalletStore.getState().activeWalletId
-  if (walletId != null && paymentPatches.length > 0) {
-    await batchApplyNwcSnapshotPatches({
-      walletId,
-      patches: paymentPatches,
-    })
-  }
-
   if (listPaymentsFailureCount === matches.length && matches.length > 0) {
     console.warn(
       '[lightning-dashboard] All Lightning connections failed to list payments',
@@ -200,6 +188,7 @@ export async function fetchLightningPaymentsForActiveWallet(): Promise<
 
   return {
     payments: [...byHash.values()],
+    patches: paymentPatches,
     ...(stalePaymentsAsOf != null ? { stalePaymentsAsOf } : {}),
   }
 }
@@ -209,15 +198,22 @@ export function invalidateLightningDashboardQueries(): void {
   void appQueryClient.invalidateQueries({ queryKey: [...LIGHTNING_DASHBOARD_QUERY_KEY] })
 }
 
+/** Refresh last-synced metadata without refetching NWC history/balance queries. */
+export function invalidateLightningSyncMetadataQueries(): void {
+  void appQueryClient.invalidateQueries({
+    queryKey: [...LIGHTNING_DASHBOARD_QUERY_KEY, 'sync-metadata'],
+  })
+}
+
 /**
  * Fetches `getBalance` for each matching connection. Uses `allSettled` so one
  * failing wallet does not drop the rest. Persists successful reads into encrypted
  * wallet secrets and falls back to snapshots when NWC fails.
  */
-export async function fetchLightningBalancesForDashboard(): Promise<LightningBalancesResult> {
+export async function fetchLightningBalancesForDashboard(): Promise<LightningBalancesFetchResult> {
   const matches = getMatchingLightningConnectionsForDashboard()
   if (matches.length === 0) {
-    return { lightningBalanceRows: [], totalSats: 0 }
+    return { lightningBalanceRows: [], totalSats: 0, patches: [] }
   }
 
   await ensureMigrated()
@@ -226,21 +222,20 @@ export async function fetchLightningBalancesForDashboard(): Promise<LightningBal
 
   const settled = await Promise.allSettled(
     matches.map(async (lightningConnection) => {
-      const service = createBackendService(lightningConnection.config)
-      const { balanceSats } = await service.getBalance()
-      return {
-        connectionId: lightningConnection.id,
-        label: lightningConnection.label,
-        balanceSats,
-        balanceUpdatedAt: new Date().toISOString(),
-      }
+      return runWithLightningConnectionSync(lightningConnection.id, async () => {
+        const service = createBackendService(lightningConnection.config)
+        const { balanceSats } = await service.getBalance()
+        return {
+          connectionId: lightningConnection.id,
+          label: lightningConnection.label,
+          balanceSats,
+          balanceUpdatedAt: new Date().toISOString(),
+        }
+      })
     }),
   )
 
-  const balancePatches: {
-    connectionId: string
-    balance: { balanceSats: number; balanceUpdatedAt: string }
-  }[] = []
+  const balancePatches: NwcSnapshotPatch[] = []
 
   for (let index = 0; index < settled.length; index += 1) {
     const settledOutcome = settled[index]
@@ -254,14 +249,6 @@ export async function fetchLightningBalancesForDashboard(): Promise<LightningBal
         },
       })
     }
-  }
-
-  const walletId = useWalletStore.getState().activeWalletId
-  if (walletId != null && balancePatches.length > 0) {
-    await batchApplyNwcSnapshotPatches({
-      walletId,
-      patches: balancePatches,
-    })
   }
 
   const lightningBalanceRows: LightningBalanceRow[] = []
@@ -305,7 +292,73 @@ export async function fetchLightningBalancesForDashboard(): Promise<LightningBal
     })
   }
 
-  return { lightningBalanceRows, totalSats }
+  return { lightningBalanceRows, totalSats, patches: balancePatches }
+}
+
+function mergeNwcSnapshotPatches(patches: NwcSnapshotPatch[]): NwcSnapshotPatch[] {
+  const byConnectionId = new Map<string, NwcSnapshotPatch>()
+  for (const patch of patches) {
+    const existing = byConnectionId.get(patch.connectionId)
+    if (existing == null) {
+      byConnectionId.set(patch.connectionId, { ...patch })
+      continue
+    }
+    byConnectionId.set(patch.connectionId, {
+      connectionId: patch.connectionId,
+      balance: patch.balance ?? existing.balance,
+      payments: patch.payments ?? existing.payments,
+    })
+  }
+  return [...byConnectionId.values()]
+}
+
+/** Runs dashboard history + balance NWC fetches and returns merged snapshot patches (no persist). */
+export async function collectLightningDashboardSyncPatches(): Promise<NwcSnapshotPatch[]> {
+  const [historyResult, balancesResult] = await Promise.all([
+    fetchLightningPaymentsForActiveWallet(),
+    fetchLightningBalancesForDashboard(),
+  ])
+  return mergeNwcSnapshotPatches([
+    ...historyResult.patches,
+    ...balancesResult.patches,
+  ])
+}
+
+export type LightningSyncMetadataResult = {
+  lastSyncedAt: string | null
+}
+
+export function lightningSyncMetadataQueryKey(
+  connectionFingerprint: string,
+): readonly ['wallet_db', 'lightning', 'dashboard', 'sync-metadata', string] {
+  return [...LIGHTNING_DASHBOARD_QUERY_KEY, 'sync-metadata', connectionFingerprint]
+}
+
+export async function resolveLightningSyncMetadata(): Promise<LightningSyncMetadataResult> {
+  const { getLightningSyncLifecycleSnapshot } = await import(
+    '@/lib/wallet/lifecycle/lightning-sync-lifecycle-orchestrator'
+  )
+  if (getLightningSyncLifecycleSnapshot().syncPhase === 'syncing') {
+    return { lastSyncedAt: null }
+  }
+
+  const matches = getMatchingLightningConnectionsForDashboard()
+  if (matches.length === 0) {
+    return { lastSyncedAt: null }
+  }
+
+  const snapshotMap = await readSnapshotMapForActiveWallet()
+  let lastSyncedAt: string | undefined
+  for (const connection of matches) {
+    const connectionSnapshot = snapshotMap.get(connection.id)
+    if (connectionSnapshot == null) {
+      continue
+    }
+    lastSyncedAt = maxIsoTimestamp(lastSyncedAt, connectionSnapshot.balanceUpdatedAt)
+    lastSyncedAt = maxIsoTimestamp(lastSyncedAt, connectionSnapshot.paymentsUpdatedAt)
+  }
+
+  return { lastSyncedAt: lastSyncedAt ?? null }
 }
 
 export const ARKADE_BOARDING_ACTIVITY_LABEL = 'Arkade boarding' as const

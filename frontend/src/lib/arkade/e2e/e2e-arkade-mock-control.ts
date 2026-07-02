@@ -40,6 +40,8 @@ export type E2eArkadeMockControl = {
   readPersistedReceiveDebugSnapshot: (
     passwordOverride?: string,
   ) => Promise<E2eArkadePersistedReceiveDebugSnapshot>
+  /** E2E: call WASM reveal directly (bypasses React mutation). */
+  revealNextReceiveAddress: () => Promise<string>
 }
 
 export function isE2eArkadeMockEnabled(): boolean {
@@ -144,6 +146,10 @@ export function ensureE2eArkadeMockControl(): void {
         connectionId: connection.id,
         offchainNextDerivationIndex: readOffchainNextDerivationIndex(sdkPersistenceJson),
       }
+    },
+    revealNextReceiveAddress: async () => {
+      const { getArkadeWorker } = await import('@/workers/arkade-factory')
+      return getArkadeWorker().getNewAddress()
     },
   }
 }

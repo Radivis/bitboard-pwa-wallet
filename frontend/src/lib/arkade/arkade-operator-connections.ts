@@ -14,6 +14,7 @@ import {
   findArkadeOperatorConnection,
   findActiveArkadeOperatorConnection,
 } from '@/lib/arkade/arkade-payload-merge'
+import type { ArkadeSignerMigrationHint } from '@/workers/arkade-api'
 import type {
   StoredArkadeOperatorConnection,
   WalletSecretsPayload,
@@ -57,6 +58,7 @@ export async function ensureArkadeOperatorConnection(params: {
   delegatorUrl: string
   connectionId: string
   persistInitialSdkFromWasm?: boolean
+  signerMigrationHint?: ArkadeSignerMigrationHint
 }): Promise<ArkadeOperatorConnectionSummary> {
   return ensureArkadeOperatorConnectionEncrypted(params)
 }

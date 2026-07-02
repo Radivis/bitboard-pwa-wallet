@@ -5,13 +5,36 @@ import type { EncryptedWalletSecretsHost } from '@/lib/wallet/encrypted-wallet-s
 
 export type { ArkadeOperatorConnectionSummary }
 
+export interface ArkadeOperatorSyncResult {
+  keyDiscoveryWarning?: string
+}
+
 export interface ArkadeBalanceInfo {
   confirmedSats: number
+  /** Offchain VTXO spendable balance (excludes bumper/boarding). */
+  offchainSpendableSats?: number
+  /** On-chain bumper wallet (P2A fees for unilateral exit only). */
+  onchainBumperSats?: number
   totalSats: number
   boardingSpendableSats?: number
   boardingPendingSats?: number
   unilateralExitInProgressSats?: number
   collaborativeExitInProgressSats?: number
+  pendingRecoverySats?: number
+  /** Swept or sub-dust VTXOs the user can batch-settle now. */
+  recoverableSettleableSats?: number
+  recoverableSettleableVtxoCount?: number
+  /** Client-expired VTXOs awaiting operator sweep before batch settlement is safe. */
+  recoverablePendingOperatorSweepSats?: number
+  recoverablePendingOperatorSweepVtxoCount?: number
+}
+
+export type ArkadeSignerMigrationDeprecatedStatus = 'migratable' | 'due_now' | 'expired'
+
+export interface ArkadeSignerMigrationHint {
+  previousSignerPkHex: string
+  deprecatedStatus: ArkadeSignerMigrationDeprecatedStatus
+  cutoffUnix: number
 }
 
 export interface ArkadeDelegateInfo {
@@ -48,6 +71,7 @@ export interface OpenArkadeSessionParams {
 export interface OpenArkadeSessionResult {
   arkadeAddress: string
   operatorSignerPkHex: string
+  signerMigrationHint?: ArkadeSignerMigrationHint
 }
 
 export interface ArkadeSendParams {
@@ -98,6 +122,8 @@ export interface ArkadeCompleteUnilateralExitParams {
   destinationAddress: string
 }
 
+export type ArkadeCollaborativeExitEstimateErrorCode = 'insufficient_cooperative_inputs'
+
 export interface ArkadeCollaborativeExitFeeEstimate {
   txFeeRate: string
   intentFeeConfigured: {
@@ -109,6 +135,7 @@ export interface ArkadeCollaborativeExitFeeEstimate {
   estimatedTotalFeeSats: number | null
   estimatedReceiveSats: number | null
   estimateError?: string
+  estimateErrorCode?: ArkadeCollaborativeExitEstimateErrorCode
 }
 
 export interface ArkadeUnilateralExitFeeEstimate {
@@ -119,6 +146,21 @@ export interface ArkadeUnilateralExitFeeEstimate {
   estimatedPackageFeeSats: number
   bumperBalanceSats: number
   bumperSufficient: boolean
+  estimateError?: string
+}
+
+export interface ArkadeRecoverableVtxoFeeEstimate {
+  recoverableVtxoCount: number
+  recoverableTotalSats: number
+  txFeeRate: string
+  intentFeeConfigured: {
+    offchainInput: boolean
+    onchainInput: boolean
+    offchainOutput: boolean
+    onchainOutput: boolean
+  }
+  estimatedTotalFeeSats: number | null
+  estimatedReceiveSats: number | null
   estimateError?: string
 }
 
@@ -139,6 +181,7 @@ export interface EnsureArkadeOperatorConnectionEncryptedParams {
   operatorSignerPkHex: string
   operatorUrl: string
   delegatorUrl: string
+  signerMigrationHint?: ArkadeSignerMigrationHint
   /** When true, export SDK JSON from WASM inside the worker (never on main thread). */
   persistInitialSdkFromWasm?: boolean
 }
@@ -148,7 +191,7 @@ export interface ArkadeService {
   setSecretsPort(port: MessagePort): Promise<void>
   setEncryptedWalletSecretsHost(host: EncryptedWalletSecretsHost): Promise<void>
   openSession(params: OpenArkadeSessionParams): Promise<OpenArkadeSessionResult>
-  syncWithOperator(): Promise<void>
+  syncWithOperator(): Promise<ArkadeOperatorSyncResult>
   hasOpenSession(params: {
     walletId: number
     networkMode: ArkadeSupportedNetworkMode
@@ -180,6 +223,7 @@ export interface ArkadeService {
     lastSuccessfulOperatorSyncAt: string
   }): Promise<void>
   closeSession(): Promise<void>
+  migrateDeprecatedSignerVtxos(): Promise<void>
   getBalance(): Promise<ArkadeBalanceInfo>
   getAddress(): Promise<string>
   getNewAddress(): Promise<string>
@@ -198,6 +242,8 @@ export interface ArkadeService {
   }>
   finalizePendingTransactions(): Promise<{ finalized: number; pending: number }>
   onboardBoardedUtxos(): Promise<string | null>
+  getRecoverableVtxoFeeEstimate(): Promise<ArkadeRecoverableVtxoFeeEstimate>
+  recoverRecoverableVtxos(): Promise<string | null>
   listExitCandidates(): Promise<ArkadeExitCandidateRow[]>
   getOnchainBumperInfo(): Promise<ArkadeOnchainBumperInfo>
   collaborativeExit(params: ArkadeCollaborativeExitParams): Promise<string>

@@ -1,4 +1,7 @@
 import type { ConnectedLightningWallet } from '@/lib/lightning/lightning-backend-service'
+import { useFeatureStore } from '@/stores/featureStore'
+import { useLightningStore } from '@/stores/lightningStore'
+import { useWalletStore } from '@/stores/walletStore'
 import type { NetworkMode } from '@/stores/walletStore'
 import {
   isLightningSupported,
@@ -131,4 +134,18 @@ export function resolveActiveLightningConnection(params: {
   }
 
   return matchingConnections[0]
+}
+
+/** Dashboard-scoped NWC connections for the active wallet and current network. */
+export function getMatchingLightningConnectionsForDashboard(): ConnectedLightningWallet[] {
+  const { activeWalletId, networkMode } = useWalletStore.getState()
+  const { isLightningEnabled } = useFeatureStore.getState()
+  const { connectedWallets } = useLightningStore.getState()
+
+  return getLightningConnectionsForActiveWallet({
+    connectedLightningWallets: connectedWallets,
+    activeWalletId,
+    networkMode,
+    isLightningEnabled,
+  })
 }

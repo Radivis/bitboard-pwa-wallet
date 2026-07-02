@@ -25,7 +25,9 @@ import type {
   ArkadeDelegateInfo,
   ArkadeExitCandidateRow,
   ArkadeOnchainBumperInfo,
+  ArkadeOperatorSyncResult,
   ArkadePaymentRow,
+  ArkadeRecoverableVtxoFeeEstimate,
   ArkadeSendParams,
   ArkadeService,
   ArkadeUnilateralExitFeeEstimate,
@@ -34,6 +36,7 @@ import type {
   ArkadeVtxoExpiryStatus,
   EnsureArkadeOperatorConnectionEncryptedParams,
   OpenArkadeSessionParams,
+  OpenArkadeSessionResult,
 } from '@/workers/arkade-api'
 
 import { loadBitboardArkWasm } from '@/lib/arkade/load-bitboard-ark-wasm'
@@ -182,16 +185,17 @@ async function flushSdkPersistenceNowOrThrow(): Promise<void> {
 }
 
 /** WASM operator sync + SDK flush only — store refresh runs on the main thread. */
-async function syncWithOperatorCore(): Promise<void> {
-  await invokeWasmArk((wasmModule) => wasmModule.ark_sync_with_operator())
+async function syncWithOperatorCore(): Promise<ArkadeOperatorSyncResult> {
+  const result = await invokeWasmArk((wasmModule) => wasmModule.ark_sync_with_operator())
   await flushSdkPersistenceNowOrThrow()
+  return (result ?? {}) as ArkadeOperatorSyncResult
 }
 
 async function persistAfterCriticalOperation(): Promise<void> {
-  const { awaitBackgroundArkadeOperatorSync } = await import(
-    '@/lib/arkade/arkade-operator-sync'
+  const { awaitArkadeSyncQuiescence } = await import(
+    '@/lib/wallet/lifecycle/arkade-sync-lifecycle-orchestrator'
   )
-  await awaitBackgroundArkadeOperatorSync()
+  await awaitArkadeSyncQuiescence()
   if (activeSessionParams != null) {
     await syncWithOperatorCore()
     return
@@ -220,7 +224,7 @@ async function closeSessionImpl(): Promise<void> {
 
 async function openSessionImpl(
   params: OpenArkadeSessionParams,
-): Promise<{ arkadeAddress: string; operatorSignerPkHex: string }> {
+): Promise<OpenArkadeSessionResult> {
   const key = arkadeSessionKey(params.walletId, params.networkMode, params.connectionId)
 
   if (activeSessionKey === key) {
@@ -254,21 +258,30 @@ async function openSessionImpl(
     connectionId: params.connectionId,
   }
 
-  const openResult = await invokeWasmArk((wasmModule) =>
-    wasmModule.ark_open_session({
-      mnemonic,
-      networkMode: params.networkMode,
-      arkServerUrl: params.arkServerUrl,
-      delegatorUrl: params.delegatorUrl,
-      esploraUrl: params.esploraUrl,
-      sdkPersistenceJson,
-    }),
-  )
+  try {
+    const openResult = await invokeWasmArk((wasmModule) =>
+      wasmModule.ark_open_session({
+        mnemonic,
+        networkMode: params.networkMode,
+        arkServerUrl: params.arkServerUrl,
+        delegatorUrl: params.delegatorUrl,
+        esploraUrl: params.esploraUrl,
+        sdkPersistenceJson,
+      }),
+    )
 
-  activeSessionKey = key
-  return {
-    arkadeAddress: openResult.arkadeAddress as string,
-    operatorSignerPkHex: openResult.operatorSignerPkHex as string,
+    activeSessionKey = key
+    return {
+      arkadeAddress: openResult.arkadeAddress as string,
+      operatorSignerPkHex: openResult.operatorSignerPkHex as string,
+      signerMigrationHint: openResult.signerMigrationHint as
+        | OpenArkadeSessionResult['signerMigrationHint']
+        | undefined,
+    }
+  } catch (error) {
+    activeSessionKey = null
+    activeSessionParams = null
+    throw error
   }
 }
 
@@ -317,12 +330,16 @@ const arkadeService: ArkadeService = {
     )
   },
 
-  async syncWithOperator(): Promise<void> {
-    const { awaitBackgroundArkadeOperatorSync } = await import(
-      '@/lib/arkade/arkade-operator-sync'
+  async syncWithOperator(): Promise<ArkadeOperatorSyncResult> {
+    const { awaitArkadeSyncQuiescence } = await import(
+      '@/lib/wallet/lifecycle/arkade-sync-lifecycle-orchestrator'
     )
-    await awaitBackgroundArkadeOperatorSync()
-    await syncWithOperatorCore()
+    await awaitArkadeSyncQuiescence()
+    return syncWithOperatorCore()
+  },
+
+  async migrateDeprecatedSignerVtxos(): Promise<void> {
+    await invokeWasmArk((wasmModule) => wasmModule.ark_migrate_deprecated_signer_vtxos())
   },
 
   async flushSdkPersistence(): Promise<void> {
@@ -488,6 +505,23 @@ const arkadeService: ArkadeService = {
     await this.getBoardingAddress()
     const txid =
       (await invokeWasmArk((wasmModule) => wasmModule.ark_onboard_boarded_utxos())) ?? null
+    if (txid != null) {
+      await persistAfterCriticalOperation()
+    }
+    return txid
+  },
+
+  async getRecoverableVtxoFeeEstimate(): Promise<ArkadeRecoverableVtxoFeeEstimate> {
+    return invokeWasmArk(
+      (wasmModule) =>
+        wasmModule.ark_get_recoverable_vtxo_fee_estimate() as Promise<ArkadeRecoverableVtxoFeeEstimate>,
+    )
+  },
+
+  async recoverRecoverableVtxos(): Promise<string | null> {
+    const txid =
+      (await invokeWasmArk((wasmModule) => wasmModule.ark_recover_recoverable_vtxos())) ??
+      null
     if (txid != null) {
       await persistAfterCriticalOperation()
     }

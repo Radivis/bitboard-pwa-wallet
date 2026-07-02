@@ -1,0 +1,221 @@
+feature:
+  name: Wallet rail lifecycle
+  description: >
+    Per-rail Load, Sync, and Save lifecycle orchestrators (on-chain, Lightning, Arkade).
+    Complements LockLifecycle (lock/unlock). Full architecture: docs/wallet-rail-lifecycle.md.
+  requirements:
+    - LockLifecycle gates all rails; no load/sync/save when phase is no-lock or locking
+    - Per-rail load, sync, and save proceed independently of the current URL; navigation must not cancel in-flight lifecycle work
+    - Wallet hydration (near-zero session restore and bootstrap unlock load) may start only when the user visits a wallet route (/wallet/*); non-wallet routes must not start hydration
+    - Features on Settings, Lab, or other non-wallet routes that need an unlocked wallet must use requireUnlockedWallet at action time, not pathname-based hydration
+    - Post-lock redirect from wallet routes to Library is retained for privacy
+    - Sync and save orchestrators must not read pathname or route stores
+    - Each rail exposes independent LoadLifecyclePhase, SyncLifecyclePhase, SaveLifecyclePhase
+    - TanStack Query executes async work; orchestrator drives enabled/queryFn; phase is not stored in Query cache or Zustand
+    - React components read lifecycle phase via useSyncExternalStore hooks in frontend/src/hooks (L5); not ad hoc getSnapshot in render
+    - not-configured means rail inactive (feature off, unsupported network, or no setup) — not wallet locked
+    - When a rail is not-configured, Load, Sync, and Save lifecycles for that rail are all not-configured (no mixed states)
+    - Lab network has no on-chain Esplora sync (sync stays not-configured); lab DB load/save is a documented exception
+    - load-error is rare persistence/decrypt failure; rail data must not be shown
+    - sync-error serves last loaded local data with stale/error indication
+    - While on-chain syncPhase is sync-error, exportChangesetForPersistence is blocked; network/address switch may proceed but skips outgoing changeset save
+    - Create/import setup awaits orchestrateOnchainSetupAfterPersist (load + setupInitial full scan) before navigating to dashboard
+    - save-error must block or explicitly warn on lock until persist quiesces
+    - walletStatus syncing removed; per-rail sync aggregation via isAnyRailSyncing / useAnyRailSyncing (L5)
+  phase_types:
+    LoadLifecyclePhase:
+      - not-configured
+      - loading
+      - loaded
+      - load-error
+    SyncLifecyclePhase:
+      - not-configured
+      - not-syncing
+      - syncing
+      - sync-error
+    SaveLifecyclePhase:
+      - not-configured
+      - not-saving
+      - saving
+      - save-error
+  contracts:
+    lock_handoff:
+      - id: LIFE-LOCK-01
+        description: LockLifecycle unlock delegates on-chain load to OnchainLoadLifecycle
+        implemented_by: frontend/src/lib/wallet/lifecycle/__tests__/lock-lifecycle-orchestrator.test.ts
+      - id: LIFE-LOCK-02
+        description: orchestrateLock awaits on-chain, Arkade, and Lightning load/sync/save quiescence and wallet-secrets writes before worker purge; hard-blocks on on-chain, Arkade, or Lightning save-error (re-checked after save quiescence)
+        implemented_by: frontend/src/lib/wallet/lifecycle/__tests__/lock-lifecycle-orchestrator.test.ts
+    onchain:
+      - id: LIFE-ONC-LOAD-01
+        description: OnchainLoadLifecycle loading includes WASM load and refreshWalletStoreFromLoadedBdk
+        implemented_by: frontend/src/lib/wallet/lifecycle/__tests__/onchain-load-lifecycle-orchestrator.test.ts
+      - id: LIFE-ONC-LOAD-02
+        description: OnchainLoadLifecycle loaded implies crypto worker has active descriptor for committed triple
+        implemented_by: frontend/src/lib/wallet/lifecycle/__tests__/onchain-load-lifecycle-orchestrator.test.ts
+      - id: LIFE-ONC-SYNC-01
+        description: Esplora sync runs only when OnchainLoadLifecycle is loaded
+        implemented_by: frontend/src/lib/wallet/lifecycle/__tests__/onchain-sync-lifecycle-orchestrator.test.ts
+      - id: LIFE-ONC-SAVE-01
+        description: Changeset persist runs in OnchainSaveLifecycle after successful sync
+        implemented_by: frontend/src/lib/wallet/lifecycle/__tests__/onchain-save-lifecycle-orchestrator.test.ts
+      - id: LIFE-ONC-ERR-01
+        description: Onchain sync-error still serves BDK-local balance and transactions
+        implemented_by: frontend/src/lib/wallet/lifecycle/__tests__/onchain-sync-lifecycle-orchestrator.test.ts
+      - id: LIFE-ONC-ERR-02
+        description: Onchain load-error shows dashboard banner and hides on-chain balance breakdown
+        implemented_by:
+          - frontend/src/components/wallet/RailLoadErrorBanner.tsx
+          - frontend/src/pages/wallet/DashboardPage.tsx
+          - frontend/src/components/wallet/__tests__/RailLifecycleErrorBanners.test.tsx
+      - id: LIFE-ONC-ERR-03
+        description: Onchain sync-error banner driven by syncPhase with persisted errorMessage, not timestamp stale alone
+        implemented_by:
+          - frontend/src/components/wallet/RailSyncErrorBanner.tsx
+          - frontend/src/pages/wallet/DashboardPage.tsx
+      - id: LIFE-ONC-SETUP-01
+        description: Setup orchestrator runs load + single orchestrated setupInitial full scan before dashboard navigation
+        implemented_by: frontend/src/lib/wallet/lifecycle/__tests__/onchain-setup-lifecycle.test.ts
+      - id: LIFE-ONC-GUARD-01
+        description: exportChangesetForPersistence blocked while on-chain load/sync/save in flight
+        implemented_by: frontend/src/lib/wallet/lifecycle/__tests__/onchain-descriptor-mutation-guard.test.ts
+      - id: LIFE-ONC-GUARD-02
+        description: exportChangesetForPersistence blocked on sync-error; switch skips outgoing descriptor save
+        implemented_by:
+          - frontend/src/lib/wallet/lifecycle/__tests__/onchain-descriptor-mutation-guard.test.ts
+          - frontend/src/lib/wallet/__tests__/settings-switch-wallet.test.ts
+      - id: LIFE-ONC-GUARD-03
+        description: BadLocalChainStateError lands in sync-error with repair-oriented errorMessage
+        implemented_by: frontend/src/lib/wallet/lifecycle/__tests__/onchain-sync-lifecycle-orchestrator.test.ts
+    lightning:
+      - id: LIFE-LN-LOAD-01
+        description: LightningLoadLifecycle loading includes loadLightningConnectionsForWallet and replaceConnectionsForWallet
+        implemented_by: frontend/src/lib/wallet/lifecycle/__tests__/lightning-load-lifecycle-orchestrator.test.ts
+      - id: LIFE-LN-CFG-01
+        description: Lightning rail is not-configured when active wallet has zero NWC connections
+        implemented_by: frontend/src/lib/wallet/lifecycle/__tests__/lightning-load-lifecycle-orchestrator.test.ts
+      - id: LIFE-LN-SYNC-01
+        description: LightningSyncLifecycle syncing when any connection fetch is in flight (aggregated v1); sync-error when any connection failed
+        implemented_by: frontend/src/lib/wallet/lifecycle/__tests__/lightning-sync-lifecycle-orchestrator.test.ts
+      - id: LIFE-LN-SAVE-01
+        description: addConnection and NWC snapshot patches persist via LightningSaveLifecycle
+        implemented_by: frontend/src/lib/wallet/lifecycle/__tests__/lightning-save-lifecycle-orchestrator.test.ts
+      - id: LIFE-LN-ERR-02
+        description: Lightning load-error shows dashboard banner even when balance queries are disabled
+        implemented_by:
+          - frontend/src/components/wallet/RailLoadErrorBanner.tsx
+          - frontend/src/pages/wallet/DashboardPage.tsx
+      - id: LIFE-LN-ERR-03
+        description: Lightning sync-error banner driven by syncPhase with persisted errorMessage
+        implemented_by:
+          - frontend/src/components/wallet/RailSyncErrorBanner.tsx
+          - frontend/src/pages/wallet/DashboardPage.tsx
+    arkade:
+      - id: LIFE-ARK-LOAD-01
+        description: ArkadeLoadLifecycle loading includes session open, WASM hydration, and refreshArkadeStoreFromLoadedWasm
+        implemented_by: frontend/src/lib/wallet/lifecycle/__tests__/arkade-load-lifecycle-orchestrator.test.ts
+      - id: LIFE-ARK-LOAD-02
+        description: activeArkadeConnectionId is set when ArkadeLoadLifecycle reaches loaded (not after sync)
+        implemented_by: frontend/src/lib/wallet/lifecycle/__tests__/arkade-load-lifecycle-orchestrator.test.ts
+      - id: LIFE-ARK-LOAD-03
+        description: Receive address is stable when ArkadeLoadLifecycle is loaded (replaces connection-id ordering patch)
+        implemented_by: frontend/src/lib/wallet/lifecycle/__tests__/arkade-load-lifecycle-orchestrator.test.ts
+      - id: LIFE-ARK-SYNC-01
+        description: ArkadeSyncLifecycle syncing covers operator sync only, not session open
+        implemented_by: frontend/src/lib/wallet/lifecycle/__tests__/arkade-sync-lifecycle-orchestrator.test.ts
+      - id: LIFE-ARK-SAVE-01
+        description: SDK persistence flush runs in ArkadeSaveLifecycle after operator sync
+        implemented_by: frontend/src/lib/wallet/lifecycle/__tests__/arkade-save-lifecycle-orchestrator.test.ts
+      - id: LIFE-ARK-CFG-01
+        description: Arkade rail is not-configured when feature disabled or network unsupported
+        implemented_by: frontend/src/lib/wallet/lifecycle/__tests__/arkade-load-lifecycle-orchestrator.test.ts
+      - id: LIFE-ARK-ERR-01
+        description: Arkade sync-error serves loaded WASM/local dashboard data
+        implemented_by: frontend/src/lib/wallet/lifecycle/__tests__/arkade-sync-lifecycle-orchestrator.test.ts
+      - id: LIFE-ARK-ERR-02
+        description: Arkade load-error replaces balance card body with retry banner
+        implemented_by:
+          - frontend/src/components/wallet/RailLoadErrorBanner.tsx
+          - frontend/src/components/wallet/ArkadeDashboardBalance.tsx
+      - id: LIFE-ARK-ERR-03
+        description: Arkade sync-error banner driven by syncPhase; operator-stale copy hidden when sync-error
+        implemented_by:
+          - frontend/src/components/wallet/RailSyncErrorBanner.tsx
+          - frontend/src/components/wallet/ArkadeDashboardBalance.tsx
+    e2e_readiness:
+      - id: LIFE-E2E-01
+        description: E2E may await data-rail-arkade-load=loaded before receive address assertions
+        implemented_by: frontend/tests/e2e/helpers/dashboard-arkade.ts
+      - id: LIFE-E2E-02
+        description: E2E may await data-rail-onchain-load=loaded before on-chain dashboard balance assertions
+        implemented_by: frontend/tests/e2e/helpers/dashboard-sync.ts
+      - id: LIFE-E2E-03
+        description: Balance fixture tests wait for operator sync or domain balance, not load phase alone (load does not imply synced balance)
+    dashboard:
+      - id: LIFE-UI-SYNC-01
+        description: Dashboard exposes per-rail sync buttons (on-chain, Lightning when configured, Arkade when active)
+        implemented_by:
+          - frontend/src/components/wallet/RailSyncControl.tsx
+          - frontend/src/pages/wallet/DashboardPage.tsx
+          - frontend/src/components/wallet/ArkadeDashboardBalance.tsx
+      - id: LIFE-UI-SYNC-02
+        description: Syncing one rail does not implicitly sync other rails
+        implemented_by: frontend/src/hooks/useRailManualSyncMutations.ts
+      - id: LIFE-UI-SYNC-03
+        description: Per-rail sync button reflects that rail SyncLifecyclePhase (syncing, sync-error, not-syncing)
+        implemented_by:
+          - frontend/src/components/wallet/RailSyncControl.tsx
+          - frontend/src/components/wallet/__tests__/RailSyncControl.test.tsx
+      - id: LIFE-UI-SYNC-04
+        description: Each configured rail shows last-synced caption adjacent to its sync control; no global dashboard header timestamp
+        implemented_by:
+          - frontend/src/components/wallet/RailSyncControl.tsx
+          - frontend/src/hooks/useOnchainDashboardQueries.ts
+          - frontend/src/hooks/useLightningDashboardQueries.ts
+          - frontend/src/hooks/useArkadeDashboardQueries.ts
+    react_hooks:
+      - id: LIFE-UI-HOOK-01
+        description: Each lifecycle orchestrator has a useSyncExternalStore hook (use*LifecycleSnapshot) in frontend/src/hooks
+        implemented_by:
+          - frontend/src/hooks/useLockLifecycleSnapshot.ts
+          - frontend/src/hooks/useOnchainLifecycleSnapshots.ts
+          - frontend/src/hooks/useArkadeLifecycleSnapshots.ts
+          - frontend/src/hooks/useLightningLifecycleSnapshots.ts
+      - id: LIFE-UI-HOOK-02
+        description: Per-rail aggregate hooks (useOnchainRailSnapshot, useArkadeRailSnapshot) compose load/sync/save phases
+        implemented_by:
+          - frontend/src/hooks/useOnchainLifecycleSnapshots.ts
+          - frontend/src/hooks/useArkadeLifecycleSnapshots.ts
+          - frontend/src/hooks/useLightningLifecycleSnapshots.ts
+      - id: LIFE-UI-HOOK-03
+        description: TanStack Query enabled gates use selector hooks (e.g. useIsArkadeSessionReady), not synchronous getSnapshot in render
+        implemented_by:
+          - frontend/src/hooks/useArkadeQueries.ts
+          - frontend/src/hooks/useLightningMutations.ts
+          - frontend/src/hooks/useOnchainDashboardQueries.ts
+      - id: LIFE-UI-HOOK-04
+        description: Manual per-rail sync uses useMutation; syncPhase from subscription hook drives button spinner and disabled state
+        implemented_by:
+          - frontend/src/hooks/useRailManualSyncMutations.ts
+          - frontend/src/components/wallet/RailSyncControl.tsx
+    route_hydration:
+      - id: LIFE-ROUTE-01
+        description: Wallet hydration starts only on wallet route entry (/wallet/*), not on Settings or Lab navigation
+        implemented_by:
+          - frontend/src/lib/shared/pathname-is-wallet-route.ts
+          - frontend/src/hooks/useActiveWalletLoadQuery.ts
+          - frontend/src/components/AppInitializer.tsx
+          - frontend/src/components/DatabaseReadyGate.tsx
+      - id: LIFE-ROUTE-02
+        description: requireUnlockedWallet gates actions that need WASM/secrets on non-wallet routes; does not hydrate on route entry
+        implemented_by:
+          - frontend/src/lib/wallet/require-unlocked-wallet.ts
+          - frontend/src/hooks/useRequireUnlockedWallet.tsx
+      - id: LIFE-ROUTE-03
+        description: Post-lock redirect from wallet routes to Library remains for privacy
+        implemented_by: frontend/src/lib/shared/app-router.ts
+    invariants:
+      - id: LIFE-INV-01
+        description: not-configured applies to all three lifecycles on a rail simultaneously
+      - id: LIFE-INV-02
+        description: v1 loading and syncing do not overlap on the same rail (parallel load+sync is future out-of-scope work)

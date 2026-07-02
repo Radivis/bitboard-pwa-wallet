@@ -119,7 +119,9 @@ export function ArkadeReceive() {
                 </Button>
               </div>
               <Button
+                type="button"
                 className="w-full"
+                data-testid="arkade-generate-new-address"
                 disabled={newAddressMutation.isPending || !address}
                 onClick={() => newAddressMutation.mutate()}
               >

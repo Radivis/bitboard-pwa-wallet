@@ -31,6 +31,12 @@ For network switching and Esplora, see [`descriptor-wallet-switching.md`](descri
 
 Do **not** persist arrays of derivation indices or per-index metadata in `sdkPersistenceJson`; that pattern bloated encrypted secrets and caused failed writes. Session open restores the scalar, warms the key cache locally for `0..index`, and read paths (`getAddress`, balance, history) never block on wallet-secrets re-encrypt.
 
+### Offchain VTXO snapshot and signer-aware balance
+
+`wallet_db.offchain_vtxo_snapshot` stores the last operator-synced VTXO list plus `server_pk_hex` on each `VirtualTxOutPointRecord`. That per-VTXO operator signer key lets the wallet **recompute** balance buckets offline using cached `getInfo` and the current wall clock—same rules as live `offchain_balance()` in ark-client.
+
+Balance buckets (`pre_confirmed`, cooperatively spendable `confirmed`, `recoverable`, `pending_recovery`) are **not** stored as separate persisted totals. After operator signer rotation cutoff, funds on a deprecated key appear in `pending_recovery_sats` until unilateral exit or recoverable settlement. Re-sync refreshes vtxo rows and `server_pk_hex` values.
+
 Operator access from the browser uses **REST** (`ark-rest` + grpc API shim), not grpc-web.
 
 ## Exiting to on-chain
@@ -64,3 +70,26 @@ Collaborative exit and unilateral unroll are implemented in `bitboard-ark` (`col
 ## Lightning
 
 - Arkade is an alternative L2 path for education, not a replacement for optional NWC Lightning connections.
+
+## Operator signer rotation
+
+When an Arkade operator rotates its signing key, `getInfo` advertises the new `signerPubkey` and lists the previous key under `deprecatedSigners` with a cooperative cutoff timestamp. Bitboard uses **rust-sdk** rotation support (`Info::signer_status_at`, `migrate_deprecated_signer_vtxos`, deprecated-aware `discover_keys`).
+
+| Regime | Condition | Bitboard behavior |
+|--------|-----------|-------------------|
+| **Current** | Stored signer matches live signer | Normal session |
+| **Migratable / Due now** | Stored signer is deprecated, cooperative window open | Session opens; banner may offer cooperative migration to current signer |
+| **Expired** | Deprecated signer past cutoff | Session opens for recovery; cooperative send/migrate unavailable; unilateral exit or recoverable settle |
+
+Contracts `ARK-ROT-01` through `ARK-ROT-05` in `doc/features/arkade.yaml` define session open, persistence re-stamp, error messaging, and Management banner behavior.
+
+Cooperative fund migration uses `migrate_deprecated_signer_vtxos()` (ark-client 0.9.3+). Post-cutoff funds appear in `pending_recovery` until unilateral exit or recoverable settlement. This is **not** the admin `WalletInitializerService_Restore` API (operator on-chain wallet setup only).
+
+### Recoverable vs pending recovery (manual batch recover)
+
+| Bucket | Typical cause | User action in Bitboard |
+|--------|---------------|-------------------------|
+| **pending_recovery** | Deprecated operator signer past cooperative cutoff; VTXO not yet expired/swept | Unilateral exit path; shown in balance breakdown, not the recoverable banner |
+| **recoverable** | Expired, operator-swept, or sub-dust VTXOs | Non-blocking banner on Dashboard and Management with count, total, optional fee estimate, and **Recover now** (`settle_vtxos` on recoverable outpoints only—no boarding, no auto-recover on sync) |
+
+Contracts `ARK-REC-01` through `ARK-REC-04` in `doc/features/arkade.yaml` define banner visibility, fee display, and the user-initiated recover action.

@@ -468,6 +468,7 @@ pub async fn indexer_service_get_virtual_txs(
     let uri_str = format!(
         "{}/v1/indexer/virtualTx/{txids}",
         configuration.base_path,
+        // Path-segment array (`style: simple`): comma-separated txids in the URL path is correct here.
         txids = p_txids.join(",")
     );
     let mut req_builder = configuration.client.request(reqwest::Method::GET, &uri_str);
@@ -731,23 +732,17 @@ pub async fn indexer_service_get_vtxos(
     let uri_str = format!("{}/v1/indexer/vtxos", configuration.base_path);
     let mut req_builder = configuration.client.request(reqwest::Method::GET, &uri_str);
 
-    // Mutinynet / arkade.computer indexers expect repeated query keys (`scripts=a&scripts=b`),
-    // not comma-joined CSV (`scripts=a,b`). CSV returns 400 for two or more values.
     if let Some(ref param_value) = p_scripts {
-        req_builder = req_builder.query(
-            &param_value
-                .iter()
-                .map(|script_hex| ("scripts", script_hex.as_str()))
-                .collect::<Vec<_>>(),
-        );
+        req_builder = req_builder.query(&crate::openapi_query_arrays::repeated_simple_query_pairs(
+            "scripts",
+            param_value,
+        ));
     }
     if let Some(ref param_value) = p_outpoints {
-        req_builder = req_builder.query(
-            &param_value
-                .iter()
-                .map(|outpoint| ("outpoints", outpoint.as_str()))
-                .collect::<Vec<_>>(),
-        );
+        req_builder = req_builder.query(&crate::openapi_query_arrays::repeated_simple_query_pairs(
+            "outpoints",
+            param_value,
+        ));
     }
     if let Some(ref param_value) = p_spendable_only {
         req_builder = req_builder.query(&[("spendableOnly", &param_value.to_string())]);

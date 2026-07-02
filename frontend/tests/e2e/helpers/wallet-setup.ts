@@ -128,14 +128,30 @@ export async function importWalletViaUI(
   await expectNoInitialWalletSyncErrorToast(page)
 }
 
+export async function expectWalletUnlockDialog(page: Page): Promise<void> {
+  await expect(page.getByRole('dialog', { name: 'Unlock Wallet' })).toBeVisible({
+    timeout: 15_000,
+  })
+}
+
+export async function fillWalletUnlockDialog(
+  page: Page,
+  password: string,
+): Promise<void> {
+  const unlockDialog = page.getByRole('dialog', { name: 'Unlock Wallet' })
+  await unlockDialog.locator('#unlock-password').fill(password)
+  const unlockButton = unlockDialog.getByRole('button', { name: 'Unlock' })
+  await expect(unlockButton).toBeEnabled({ timeout: 10_000 })
+  await unlockButton.click()
+}
+
 export async function unlockWalletViaUI(
   page: Page,
   password: string = TEST_PASSWORD,
 ) {
-  await expect(page.getByText('Unlock Wallet')).toBeVisible({ timeout: 10000 })
-  await page.getByLabel('Bitboard app password').fill(password)
-  await page.getByRole('button', { name: 'Unlock' }).click()
+  await expectWalletUnlockDialog(page)
+  await fillWalletUnlockDialog(page, password)
   await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible({
-    timeout: 60000,
+    timeout: 60_000,
   })
 }

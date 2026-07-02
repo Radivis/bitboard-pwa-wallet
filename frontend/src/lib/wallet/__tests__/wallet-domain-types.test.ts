@@ -131,6 +131,28 @@ describe('parseWalletPayloadJson', () => {
     expect(parsed.activeArkadeConnectionIdByNetwork.signet).toBe('conn-1')
   })
 
+  it('accepts regtest arkadeOperatorConnections for arkade-regtest E2E', () => {
+    const json = JSON.stringify({
+      descriptorWallets: [],
+      lightningNwcConnections: [],
+      arkadeOperatorConnections: [
+        {
+          id: 'conn-regtest',
+          label: 'regtest',
+          networkMode: 'regtest',
+          operatorUrl: 'http://127.0.0.1:3100/api/arkade/operator/regtest',
+          operatorSignerPkHex: 'e35799157be4b37565bb5afe4d04e6a0fa0a4b6a4f4e48b0d904685d253cdbdb',
+          createdAt: '2020-01-01T00:00:00.000Z',
+        },
+      ],
+      activeArkadeConnectionIdByNetwork: { regtest: 'conn-regtest' },
+    })
+    const parsed = parseWalletPayloadJson(json)
+    expect(parsed.arkadeOperatorConnections).toHaveLength(1)
+    expect(parsed.arkadeOperatorConnections[0].networkMode).toBe('regtest')
+    expect(parsed.activeArkadeConnectionIdByNetwork.regtest).toBe('conn-regtest')
+  })
+
   it('accepts descriptor wallet with lastSuccessfulEsploraSyncAt', () => {
     const isoTimestamp = '2025-01-01T12:00:00.000Z'
     const json = JSON.stringify({

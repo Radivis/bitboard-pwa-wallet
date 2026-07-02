@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useLayoutEffect } from 'react'
+import { type ReactNode, useEffect, useLayoutEffect, useRef } from 'react'
 import { useNavigate, useLocation } from '@tanstack/react-router'
 import { toast } from 'sonner'
 import { useWalletStore } from '@/stores/walletStore'
@@ -9,9 +9,8 @@ import {
 } from '@/db'
 import { appQueryClient } from '@/lib/shared/app-query-client'
 import { prefetchLabChainState } from '@/hooks/useLabChainStateQuery'
-import { useHydrateLightningConnections } from '@/hooks/useHydrateLightningConnections'
 import { ActiveWalletBootstrap } from '@/components/ActiveWalletBootstrap'
-import { pathnameRequiresWalletCryptoSession } from '@/lib/shared/pathname-requires-wallet-crypto-session'
+import { pathnameIsWalletRoute } from '@/lib/shared/pathname-is-wallet-route'
 import { runMainnetStrictMigrationAfterHydration } from '@/lib/settings/mainnet-access-strict-migration'
 import { runRegtestStrictMigrationAfterHydration } from '@/lib/settings/regtest-mode-strict-migration'
 import { runSegwitAddressesStrictMigrationAfterHydration } from '@/lib/settings/segwit-addresses-strict-migration'
@@ -20,6 +19,10 @@ import { useSecureStorageAvailabilityStore } from '@/stores/secureStorageAvailab
 import { useAutoLockActivityBumps } from '@/hooks/useAutoLockActivityBumps'
 import { useLabCrossTabCacheSync } from '@/hooks/useLabCrossTabCacheSync'
 import { useWalletCrossTabCacheSync } from '@/hooks/useWalletCrossTabCacheSync'
+import {
+  syncLockLifecycleFromWalletStore,
+  syncLockLifecycleWithActiveWallet,
+} from '@/lib/wallet/lifecycle/lock-lifecycle-orchestrator'
 import { walletIsUnlockedOrSyncing } from '@/lib/wallet/wallet-unlocked-status'
 
 interface AppInitializerProps {
@@ -30,7 +33,6 @@ export function AppInitializer({ children }: AppInitializerProps) {
   useAutoLockActivityBumps()
   useLabCrossTabCacheSync()
   useWalletCrossTabCacheSync()
-  useHydrateLightningConnections()
   const navigate = useNavigate()
   const location = useLocation()
   const { data: wallets, isLoading, isFetching } = useWallets()
@@ -38,6 +40,7 @@ export function AppInitializer({ children }: AppInitializerProps) {
   const walletStatus = useWalletStore((walletState) => walletState.walletStatus)
   const setActiveWallet = useWalletStore((walletState) => walletState.setActiveWallet)
   const networkMode = useWalletStore((walletState) => walletState.networkMode)
+  const previousPathnameRef = useRef('')
 
   useLayoutEffect(() => {
     useWalletCryptoSessionPathGateStore.getState().setPathname(location.pathname)
@@ -109,13 +112,25 @@ export function AppInitializer({ children }: AppInitializerProps) {
     location.pathname,
   ])
 
+  useEffect(() => {
+    syncLockLifecycleWithActiveWallet(activeWalletId)
+    syncLockLifecycleFromWalletStore()
+  }, [activeWalletId, walletStatus])
+
   /**
-   * After lock, session is cleared. Restore near-zero session only on routes that need
-   * wallet crypto — not on Library, so “lock → Library” stays locked until the user opens Wallet.
+   * After lock, session is cleared. Restore near-zero session only when the user
+   * enters a wallet route — not on Settings/Lab/Library, so “lock → Library” stays
+   * locked until the user opens Wallet.
    */
   useEffect(() => {
+    const nextPathname = location.pathname
+    const previousPathname = previousPathnameRef.current
+    previousPathnameRef.current = nextPathname
+
+    const enteredWalletRoute =
+      pathnameIsWalletRoute(nextPathname) && !pathnameIsWalletRoute(previousPathname)
+    if (!enteredWalletRoute) return
     if (walletIsUnlockedOrSyncing(walletStatus)) return
-    if (!pathnameRequiresWalletCryptoSession(location.pathname)) return
     if (!useSecureStorageAvailabilityStore.getState().isAvailable) return
     void tryLoadNearZeroSessionIntoMemory(getDatabase())
   }, [walletStatus, location.pathname])

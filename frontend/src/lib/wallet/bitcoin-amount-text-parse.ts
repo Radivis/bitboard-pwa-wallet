@@ -22,6 +22,16 @@ type FormattedUnitLabelPattern = {
  * start at the same index (e.g. `mBTC` over a trailing `BTC` inside it).
  */
 const FORMATTED_UNIT_LABEL_PATTERNS: FormattedUnitLabelPattern[] = [
+  { labelInDomText: ' Lab BTC', displayUnit: 'BTC' },
+  { labelInDomText: 'Lab BTC', displayUnit: 'BTC' },
+  { labelInDomText: ' Lab mBTC', displayUnit: 'mBTC' },
+  { labelInDomText: 'Lab mBTC', displayUnit: 'mBTC' },
+  { labelInDomText: ` Lab ${BITCOIN_DISPLAY_UNIT_LABEL.uBTC}`, displayUnit: 'uBTC' },
+  { labelInDomText: `Lab ${BITCOIN_DISPLAY_UNIT_LABEL.uBTC}`, displayUnit: 'uBTC' },
+  { labelInDomText: ' Lab ksat', displayUnit: 'ksat' },
+  { labelInDomText: 'Lab ksat', displayUnit: 'ksat' },
+  { labelInDomText: ' Lab sat', displayUnit: 'sat' },
+  { labelInDomText: 'Lab sat', displayUnit: 'sat' },
   { labelInDomText: ' tmBTC', displayUnit: 'mBTC' },
   { labelInDomText: 'tmBTC', displayUnit: 'mBTC' },
   { labelInDomText: ` t${BITCOIN_DISPLAY_UNIT_LABEL.uBTC}`, displayUnit: 'uBTC' },
@@ -68,8 +78,9 @@ const FORMATTED_UNIT_LABEL_PATTERNS: FormattedUnitLabelPattern[] = [
     labelInDomText: 'BTC',
     displayUnit: 'BTC',
     isEmbeddedSuffixAt: (labelStartIndex, fullText) =>
-      labelStartIndex > 0 &&
-      (fullText[labelStartIndex - 1] === 'm' || fullText[labelStartIndex - 1] === 'M'),
+      (labelStartIndex > 0 &&
+        (fullText[labelStartIndex - 1] === 'm' || fullText[labelStartIndex - 1] === 'M')) ||
+      (labelStartIndex >= 4 && fullText.slice(labelStartIndex - 4, labelStartIndex) === 'Lab '),
   },
 ]
 

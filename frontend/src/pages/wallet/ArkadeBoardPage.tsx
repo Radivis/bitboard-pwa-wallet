@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link } from '@tanstack/react-router'
-import { Copy, ExternalLink, Layers } from 'lucide-react'
+import { Copy, ExternalLink } from 'lucide-react'
+import { ArkadeIcon } from '@/components/icons/ArkadeIcon'
 import { ArkadeBoardingInfomodeContent } from '@/components/arkade/infomode/ArkadeBoardingInfomodeContent'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { PageHeader } from '@/components/PageHeader'
@@ -42,7 +43,7 @@ export function ArkadeBoardPage() {
   if (!isArkadeActiveForNetworkMode(networkMode)) {
     return (
       <div className="space-y-4">
-        <PageHeader title="Board to Arkade" icon={Layers} />
+        <PageHeader title="Board to Arkade" icon={ArkadeIcon} />
         <p className="text-muted-foreground">Arkade is not enabled for this network.</p>
         <Button type="button" variant="outline" asChild>
           <Link to="/wallet">Back</Link>
@@ -64,7 +65,7 @@ export function ArkadeBoardPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Board to Arkade" icon={Layers} />
+      <PageHeader title="Board to Arkade" icon={ArkadeIcon} />
       <Card>
         <CardHeader>
           <CardTitle>

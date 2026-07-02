@@ -16,9 +16,11 @@ import {
   useWalletStore,
   type NetworkMode,
 } from '@/stores/walletStore'
+import { walletIsUnlockedOrSyncing } from '@/lib/wallet/wallet-unlocked-status'
 import { useCryptoStore } from '@/stores/cryptoStore'
 import { useFeatureStore } from '@/stores/featureStore'
 import { updateWalletChangeset } from '@/lib/wallet/wallet-utils'
+import { exportChangesetForPersistence } from '@/lib/wallet/lifecycle/onchain-descriptor-mutation-guard'
 import { isLightningSupported } from '@/lib/lightning/lightning-utils'
 import { ReceiveModeToggle, type ReceiveMode } from '@/components/receive/ReceiveModeToggle'
 import { LightningReceive } from '@/components/receive/LightningReceive'
@@ -37,7 +39,6 @@ export function ReceivePage() {
   const networkMode = useWalletStore((walletState) => walletState.networkMode)
   const setCurrentAddress = useWalletStore((walletState) => walletState.setCurrentAddress)
   const getNewAddress = useCryptoStore((cryptoState) => cryptoState.getNewAddress)
-  const exportChangeset = useCryptoStore((cryptoState) => cryptoState.exportChangeset)
   const isLightningEnabled = useFeatureStore((featureState) => featureState.isLightningEnabled)
   const isSegwitAddressesEnabled = useFeatureStore((featureState) => featureState.isSegwitAddressesEnabled)
   const committedNetworkMode = useWalletStore(selectCommittedNetworkMode)
@@ -70,7 +71,7 @@ export function ReceivePage() {
   }, [committedNetworkMode])
 
   useEffect(() => {
-    if (!currentAddress && (walletStatus === 'unlocked' || walletStatus === 'syncing')) {
+    if (!currentAddress && walletIsUnlockedOrSyncing(walletStatus)) {
       loadAddress()
     }
 
@@ -90,7 +91,7 @@ export function ReceivePage() {
       setCurrentAddress(address)
 
       if (activeWalletId) {
-        const changesetJson = await exportChangeset()
+        const changesetJson = await exportChangesetForPersistence()
         await updateWalletChangeset({
           walletId: activeWalletId,
           changesetJson,
@@ -101,7 +102,7 @@ export function ReceivePage() {
     } catch {
       toast.error('Failed to generate new address')
     }
-  }, [getNewAddress, setCurrentAddress, exportChangeset, activeWalletId])
+  }, [getNewAddress, setCurrentAddress, activeWalletId])
 
   const handleCopy = useCallback(async () => {
     if (!currentAddress) return
@@ -118,7 +119,7 @@ export function ReceivePage() {
     return null
   }
 
-  if (walletStatus !== 'unlocked' && walletStatus !== 'syncing') {
+  if (!walletIsUnlockedOrSyncing(walletStatus)) {
     return <WalletUnlockOrNearZeroLoading />
   }
 

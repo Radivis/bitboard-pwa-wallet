@@ -4,6 +4,18 @@
  */
 import type { ReactNode } from 'react'
 import { vi } from 'vitest'
+import {
+  DEFAULT_PERIODIC_SYNC_INTERVAL_SECONDS,
+  MAX_PERIODIC_SYNC_INTERVAL_SECONDS,
+  MIN_PERIODIC_SYNC_INTERVAL_SECONDS,
+} from '@/lib/wallet/periodic-sync/periodic-sync-constants'
+
+function clampIntervalSecondsForTests(seconds: number): number {
+  return Math.min(
+    MAX_PERIODIC_SYNC_INTERVAL_SECONDS,
+    Math.max(MIN_PERIODIC_SYNC_INTERVAL_SECONDS, Math.round(seconds)),
+  )
+}
 
 /** Mutable feature flags for settings page tests. */
 export const featureStoreState = {
@@ -13,12 +25,27 @@ export const featureStoreState = {
   isSegwitAddressesEnabled: false,
   isUtxoSelectionEnabled: false,
   isArkadeEnabled: false,
+  isPeriodicSyncEnabled: false,
   setIsLightningEnabled: vi.fn(),
   setIsMainnetAccessEnabled: vi.fn(),
   setIsRegtestModeEnabled: vi.fn(),
   setIsSegwitAddressesEnabled: vi.fn(),
   setIsUtxoSelectionEnabled: vi.fn(),
   setIsArkadeEnabled: vi.fn(),
+  setIsPeriodicSyncEnabled: vi.fn(),
+}
+
+const defaultPeriodicSyncRails = {
+  onchain: { isEnabled: true, intervalSeconds: DEFAULT_PERIODIC_SYNC_INTERVAL_SECONDS },
+  lightning: { isEnabled: true, intervalSeconds: DEFAULT_PERIODIC_SYNC_INTERVAL_SECONDS },
+  arkade: { isEnabled: true, intervalSeconds: DEFAULT_PERIODIC_SYNC_INTERVAL_SECONDS },
+}
+
+/** Mutable periodic sync settings for settings page tests. */
+export const periodicSyncStoreState = {
+  rails: { ...defaultPeriodicSyncRails },
+  setRailPeriodicSyncEnabled: vi.fn(),
+  setRailPeriodicSyncIntervalSeconds: vi.fn(),
 }
 
 export const mockTerminateWorker = vi.fn()
@@ -120,6 +147,7 @@ export const toast = {
   info: vi.fn(),
   error: vi.fn(),
   success: vi.fn(),
+  message: vi.fn(),
 }
 
 vi.mock('sonner', () => ({
@@ -132,6 +160,15 @@ vi.mock('@/stores/featureStore', () => ({
       selector(featureStoreState),
     { getState: () => featureStoreState },
   ),
+}))
+
+vi.mock('@/stores/periodicSyncStore', () => ({
+  usePeriodicSyncStore: Object.assign(
+    (selector: (s: typeof periodicSyncStoreState) => unknown) =>
+      selector(periodicSyncStoreState),
+    { getState: () => periodicSyncStoreState },
+  ),
+  clampIntervalSeconds: clampIntervalSecondsForTests,
 }))
 
 vi.mock('@tanstack/react-router', async (importOriginal) => {
@@ -353,6 +390,20 @@ function wireFeatureStoreMockImplementations(): void {
   featureStoreState.setIsArkadeEnabled.mockImplementation((enabled: boolean) => {
     featureStoreState.isArkadeEnabled = enabled
   })
+  featureStoreState.setIsPeriodicSyncEnabled.mockImplementation((enabled: boolean) => {
+    featureStoreState.isPeriodicSyncEnabled = enabled
+  })
+  periodicSyncStoreState.setRailPeriodicSyncEnabled.mockImplementation(
+    (rail: keyof typeof defaultPeriodicSyncRails, enabled: boolean) => {
+      periodicSyncStoreState.rails[rail].isEnabled = enabled
+    },
+  )
+  periodicSyncStoreState.setRailPeriodicSyncIntervalSeconds.mockImplementation(
+    (rail: keyof typeof defaultPeriodicSyncRails, intervalSeconds: number) => {
+      periodicSyncStoreState.rails[rail].intervalSeconds =
+        clampIntervalSecondsForTests(intervalSeconds)
+    },
+  )
 }
 
 wireFeatureStoreMockImplementations()
@@ -419,6 +470,12 @@ export function resetSettingsPageTestState(): void {
   featureStoreState.isSegwitAddressesEnabled = false
   featureStoreState.isUtxoSelectionEnabled = false
   featureStoreState.isArkadeEnabled = false
+  featureStoreState.isPeriodicSyncEnabled = false
+  periodicSyncStoreState.rails = {
+    onchain: { isEnabled: true, intervalSeconds: DEFAULT_PERIODIC_SYNC_INTERVAL_SECONDS },
+    lightning: { isEnabled: true, intervalSeconds: DEFAULT_PERIODIC_SYNC_INTERVAL_SECONDS },
+    arkade: { isEnabled: true, intervalSeconds: DEFAULT_PERIODIC_SYNC_INTERVAL_SECONDS },
+  }
   nearZeroSecurityState.active = false
   mockWalletsState.data = []
   walletStoreState = createDefaultWalletStoreState()

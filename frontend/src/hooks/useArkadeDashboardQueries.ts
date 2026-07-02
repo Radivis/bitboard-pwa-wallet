@@ -1,10 +1,11 @@
-import { useQuery } from '@tanstack/react-query'
+import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { isArkadeActiveForNetworkMode } from '@/lib/arkade/arkade-utils'
 import { isArkadeSupportedNetworkMode } from '@/lib/arkade/arkade-endpoints'
 import {
   arkadeOperatorSyncMetadataQueryKey,
   resolveArkadeOperatorSyncMetadata,
 } from '@/lib/arkade/arkade-dashboard-sync'
+import { useIsArkadeSessionReady } from '@/hooks/useArkadeLifecycleSnapshots'
 import { useWalletStore } from '@/stores/walletStore'
 
 export function useArkadeSyncMetadataQuery() {
@@ -12,10 +13,10 @@ export function useArkadeSyncMetadataQuery() {
   const lastOperatorSyncTime = useWalletStore(
     (walletState) => walletState.lastOperatorSyncTime,
   )
-  const walletStatus = useWalletStore((walletState) => walletState.walletStatus)
   const activeArkadeConnectionId = useWalletStore(
     (walletState) => walletState.activeArkadeConnectionId,
   )
+  const arkadeSessionReady = useIsArkadeSessionReady()
 
   return useQuery({
     queryKey:
@@ -23,15 +24,16 @@ export function useArkadeSyncMetadataQuery() {
         ? [
             ...arkadeOperatorSyncMetadataQueryKey(activeArkadeConnectionId),
             lastOperatorSyncTime?.toISOString() ?? null,
-            walletStatus,
           ]
         : ['arkade', 'dashboard', 'operator', 'inactive'],
     queryFn: resolveArkadeOperatorSyncMetadata,
     enabled:
+      arkadeSessionReady &&
       isArkadeActiveForNetworkMode(networkMode) &&
       isArkadeSupportedNetworkMode(networkMode) &&
       activeArkadeConnectionId != null,
     staleTime: 0,
+    placeholderData: keepPreviousData,
     refetchOnWindowFocus: false,
   })
 }

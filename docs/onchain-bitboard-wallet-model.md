@@ -4,6 +4,8 @@ This document records how Bitboard handles **on-chain balance and transaction di
 
 For network/address switching, Esplora timing, and lab vs live paths, see [`descriptor-wallet-switching.md`](descriptor-wallet-switching.md).
 
+For why incremental Esplora sync needs a post-sync **anchor+chain reconcile** pass (BDK “Pending incoming” vs Esplora confirmed UTXOs), see [`esplora-bdk-anchor-reconcile.md`](esplora-bdk-anchor-reconcile.md).
+
 ## BDK changeset is the single source of truth
 
 - **Balance and transaction history** come from the BDK wallet loaded in WASM from `DescriptorWalletData.changeSet` (encrypted inside `wallet_secrets`).

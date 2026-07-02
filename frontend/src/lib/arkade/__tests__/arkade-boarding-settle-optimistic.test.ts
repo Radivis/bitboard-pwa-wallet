@@ -3,6 +3,7 @@ import { QueryClient } from '@tanstack/react-query'
 import {
   applyOptimisticBoardingSettle,
   reconcileBalanceAfterBoardingSettle,
+  reconcileBoardingStatusAfterSettle,
   revertOptimisticBoardingSettle,
 } from '@/lib/arkade/arkade-boarding-settle-optimistic'
 import {
@@ -79,6 +80,23 @@ describe('arkade-boarding-settle-optimistic', () => {
 
     expect(queryClient.getQueryData(boardingStatusKey)).toEqual(previousStatus)
     expect(queryClient.getQueryData(balanceKey)).toEqual(previousBalance)
+  })
+
+  it('clears stale boarding status when Esplora still lists the settled UTXO', () => {
+    const reconciled = reconcileBoardingStatusAfterSettle(
+      {
+        boardingAddress: 'tb1boarding',
+        trackedAddresses: ['tb1boarding'],
+        spendableSats: 200_000,
+        pendingSats: 0,
+        expiredSats: 0,
+      },
+      200_000,
+    )
+
+    expect(reconciled.spendableSats).toBe(0)
+    expect(reconciled.pendingSats).toBe(0)
+    expect(reconciled.expiredSats).toBe(0)
   })
 
   it('clears stale boarding from a post-settle balance fetch without double-counting', () => {

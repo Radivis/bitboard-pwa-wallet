@@ -23,6 +23,9 @@ interface FeatureState {
   /** When true, Arkade (VTXO) layer is available on mainnet, testnet, and signet. */
   isArkadeEnabled: boolean
   setIsArkadeEnabled: (enabled: boolean) => void
+  /** When true, rails may poll providers on a configurable interval (Settings → Main). */
+  isPeriodicSyncEnabled: boolean
+  setIsPeriodicSyncEnabled: (enabled: boolean) => void
 }
 
 type LegacyFeaturePersistedState = {
@@ -42,6 +45,7 @@ function migrateLegacyFeatureState(persistedState: unknown): Partial<FeatureStat
       ...legacy,
       isUtxoSelectionEnabled: legacy.isUtxoSelectionEnabled ?? false,
       isArkadeEnabled: legacy.isArkadeEnabled ?? false,
+      isPeriodicSyncEnabled: legacy.isPeriodicSyncEnabled ?? false,
     }
   }
   return {
@@ -51,6 +55,7 @@ function migrateLegacyFeatureState(persistedState: unknown): Partial<FeatureStat
     isSegwitAddressesEnabled: legacy.segwitAddressesEnabled ?? false,
     isUtxoSelectionEnabled: false,
     isArkadeEnabled: false,
+    isPeriodicSyncEnabled: false,
   }
 }
 
@@ -69,15 +74,24 @@ export const useFeatureStore = create<FeatureState>()(
       setIsUtxoSelectionEnabled: (enabled) => set({ isUtxoSelectionEnabled: enabled }),
       isArkadeEnabled: false,
       setIsArkadeEnabled: (enabled) => set({ isArkadeEnabled: enabled }),
+      isPeriodicSyncEnabled: false,
+      setIsPeriodicSyncEnabled: (enabled) => set({ isPeriodicSyncEnabled: enabled }),
     }),
     {
       name: 'feature-storage',
       storage: createJSONStorage(() => sqliteStorage),
-      version: 3,
+      version: 4,
       migrate: (persistedState, version) => {
         const base = migrateLegacyFeatureState(persistedState) ?? persistedState
-        if (version < 3 && base != null && typeof base === 'object') {
-          return { ...base, isArkadeEnabled: (base as FeatureState).isArkadeEnabled ?? false }
+        if (base != null && typeof base === 'object') {
+          const merged = { ...base } as FeatureState
+          if (version < 3) {
+            merged.isArkadeEnabled = merged.isArkadeEnabled ?? false
+          }
+          if (version < 4) {
+            merged.isPeriodicSyncEnabled = merged.isPeriodicSyncEnabled ?? false
+          }
+          return merged
         }
         return base
       },
@@ -88,6 +102,7 @@ export const useFeatureStore = create<FeatureState>()(
         isSegwitAddressesEnabled: state.isSegwitAddressesEnabled,
         isUtxoSelectionEnabled: state.isUtxoSelectionEnabled,
         isArkadeEnabled: state.isArkadeEnabled,
+        isPeriodicSyncEnabled: state.isPeriodicSyncEnabled,
       }),
     },
   ),

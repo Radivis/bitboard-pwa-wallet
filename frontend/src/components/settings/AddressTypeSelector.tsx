@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react'
 import { AddressType, useWalletStore } from '@/stores/walletStore'
 import { useDescriptorWalletSwitchMutation } from '@/hooks/useDescriptorWalletSwitchMutation'
+import { useRequireUnlockedWallet } from '@/hooks/useRequireUnlockedWallet'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { Button } from '@/components/ui/button'
 import { ConfirmationDialog } from '@/components/ConfirmationDialog'
@@ -13,7 +14,7 @@ export function AddressTypeSelector() {
   const addressType = useWalletStore((walletState) => walletState.addressType)
   const setAddressType = useWalletStore((walletState) => walletState.setAddressType)
   const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
-  const walletStatus = useWalletStore((walletState) => walletState.walletStatus)
+  const { runWhenUnlocked, unlockDialog } = useRequireUnlockedWallet()
   const [showWarning, setShowWarning] = useState(false)
   const [pendingType, setPendingType] = useState<AddressType | null>(null)
 
@@ -31,15 +32,13 @@ export function AddressTypeSelector() {
   }
 
   const applyAddressTypeChange = useCallback(
-    async (type: AddressType) => {
-      if (walletStatus === 'unlocked' || walletStatus === 'syncing') {
+    (type: AddressType) => {
+      runWhenUnlocked(async () => {
         await mutateAsync(type)
         setAddressType(type)
-      } else {
-        setAddressType(type)
-      }
+      })
     },
-    [walletStatus, mutateAsync, setAddressType],
+    [runWhenUnlocked, mutateAsync, setAddressType],
   )
 
   return (
@@ -96,6 +95,7 @@ export function AddressTypeSelector() {
           setPendingType(null)
         }}
       />
+      {unlockDialog}
     </>
   )
 }

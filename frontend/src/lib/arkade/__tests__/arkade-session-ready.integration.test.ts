@@ -20,12 +20,12 @@ const workerMocks = vi.hoisted(() => ({
   getTransactionHistory: vi.fn().mockResolvedValue([]),
   getAddress: vi.fn().mockResolvedValue('tark1qtest'),
   reconcileActiveConnectionId: vi.fn().mockResolvedValue(undefined),
+  syncWithOperator: vi.fn().mockResolvedValue({}),
 }))
 
 const ensureArkadeOperatorConnectionMock = vi.hoisted(() => vi.fn())
 const findActiveArkadeConnectionSummaryMock = vi.hoisted(() => vi.fn())
 const refreshArkadeStoreFromLoadedWasmMock = vi.hoisted(() => vi.fn())
-const runArkadeOperatorSyncAndPersistMock = vi.hoisted(() => vi.fn())
 const encryptedMnemonic = vi.hoisted(() => ({
   ciphertext: new Uint8Array([1, 2, 3]),
   iv: new Uint8Array([4, 5, 6]),
@@ -74,10 +74,8 @@ vi.mock('@/lib/arkade/arkade-persistence-store-sync', () => ({
   clearArkadeDashboardStore: vi.fn(),
 }))
 
-vi.mock('@/lib/arkade/arkade-operator-sync', () => ({
-  awaitBackgroundArkadeOperatorSync: vi.fn().mockResolvedValue(undefined),
-  runArkadeOperatorSyncAndPersist: (...args: unknown[]) =>
-    runArkadeOperatorSyncAndPersistMock(...args),
+vi.mock('@/lib/arkade/arkade-encrypted-persistence-manager', () => ({
+  saveLastSuccessfulOperatorSyncAtEncrypted: vi.fn().mockResolvedValue(undefined),
 }))
 
 vi.mock('@/lib/arkade/arkade-query-keys', () => ({
@@ -86,6 +84,7 @@ vi.mock('@/lib/arkade/arkade-query-keys', () => ({
 
 vi.mock('@/lib/arkade/arkade-dashboard-sync', () => ({
   removeArkadeDashboardSyncQueries: vi.fn(),
+  invalidateArkadeDashboardQueries: vi.fn(),
 }))
 
 vi.mock('@/lib/arkade/arkade-endpoints', () => ({
@@ -107,17 +106,18 @@ vi.mock('@/stores/walletStore', () => ({
     getState: () => ({
       setActiveArkadeConnectionId: vi.fn(),
       setLastOperatorSyncTime: vi.fn(),
+      setArkadeSignerMigrationHint: vi.fn(),
     }),
   },
 }))
 
 import {
-  awaitArkadeSessionReady,
+  awaitArkadeLoadQuiescence,
   closeArkadeSession,
   openArkadeSessionForWallet,
 } from '@/lib/arkade/arkade-session-service'
 
-describe('awaitArkadeSessionReady (UNLOCK-ARK-03)', () => {
+describe('awaitArkadeLoadQuiescence (UNLOCK-ARK-03)', () => {
   beforeEach(async () => {
     await closeArkadeSession()
     vi.clearAllMocks()
@@ -128,14 +128,13 @@ describe('awaitArkadeSessionReady (UNLOCK-ARK-03)', () => {
       operatorSignerPkHex: '02deadbeef',
     })
     refreshArkadeStoreFromLoadedWasmMock.mockResolvedValue(undefined)
-    runArkadeOperatorSyncAndPersistMock.mockResolvedValue(undefined)
     workerMocks.openSession.mockResolvedValue({
       arkadeAddress: 'tark1qtest',
       operatorSignerPkHex: '02deadbeef',
     })
   })
 
-  it('waits for in-flight session open before resolving', async () => {
+  it('waits for in-flight load before resolving', async () => {
     let resolveOpen:
       | ((value: { arkadeAddress: string; operatorSignerPkHex: string }) => void)
       | undefined
@@ -147,13 +146,14 @@ describe('awaitArkadeSessionReady (UNLOCK-ARK-03)', () => {
     )
 
     const openPromise = openArkadeSessionForWallet({
-      password: 'pw',
       walletId: 1,
       networkMode: 'signet',
     })
 
+    await vi.waitFor(() => expect(workerMocks.openSession).toHaveBeenCalled())
+
     let readyResolvedEarly = false
-    const readyPromise = awaitArkadeSessionReady().then(() => {
+    const readyPromise = awaitArkadeLoadQuiescence().then(() => {
       readyResolvedEarly = true
     })
 

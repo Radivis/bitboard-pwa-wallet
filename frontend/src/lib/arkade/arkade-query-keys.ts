@@ -126,6 +126,20 @@ export const arkadeBumperInfoQueryKey = (
     'bumper',
   ] as const
 
+export const arkadeRecoverableVtxoFeeQueryKey = (
+  walletId: number,
+  networkMode: ArkadeSupportedNetworkMode,
+  connectionId: string,
+) =>
+  [
+    ...WALLET_DB_QUERY_KEY_ROOT,
+    'arkade',
+    walletId,
+    networkMode,
+    connectionId,
+    'recoverable-vtxo-fee',
+  ] as const
+
 export const arkadeCollaborativeExitFeeQueryKey = (
   walletId: number,
   networkMode: ArkadeSupportedNetworkMode,

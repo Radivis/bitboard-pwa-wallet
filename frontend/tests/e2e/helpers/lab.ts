@@ -630,15 +630,25 @@ export async function expectLabCase1MinDustClampUi(page: Page): Promise<void> {
   await expect
     .poll(
       async () => {
+        const amountValueFromDom = await page
+          .evaluate(() => {
+            const input = document.getElementById('send-amount') as HTMLInputElement | null
+            return input?.value ?? ''
+          })
+          .catch(() => '')
+        if (amountValueFromDom === String(UX_DUST_FLOOR_SATS)) {
+          return true
+        }
+
         const mainText = (await page.getByRole('main').textContent()) ?? ''
 
-        const detailVisible = await page
+        const transactionDetailsVisible = await page
           .getByText('Transaction Details')
           .first()
           .isVisible()
           .catch(() => false)
         if (
-          detailVisible &&
+          transactionDetailsVisible &&
           textReflectsSatsInFormattedDisplaysOrLiteral(
             mainText,
             UX_DUST_FLOOR_SATS,
@@ -647,13 +657,16 @@ export async function expectLabCase1MinDustClampUi(page: Page): Promise<void> {
           return true
         }
 
-        const changeFeesHeading = page.getByRole('heading', { name: 'Change and fees' })
+        const changeFeesHeading = page.getByRole('heading', {
+          name: 'Change and fees',
+          level: 2,
+        })
         if (await changeFeesHeading.isVisible().catch(() => false)) {
-          const dialog = page
-            .getByRole('dialog')
-            .filter({ has: changeFeesHeading })
-            .first()
-          const dialogText = (await dialog.textContent().catch(() => null)) ?? ''
+          const dialog = page.getByRole('dialog').filter({ has: changeFeesHeading })
+          const dialogText =
+            (await dialog.innerText().catch(() => '')) ||
+            (await dialog.textContent().catch(() => '')) ||
+            ''
           if (
             textReflectsSatsInFormattedDisplaysOrLiteral(
               dialogText,
@@ -662,11 +675,6 @@ export async function expectLabCase1MinDustClampUi(page: Page): Promise<void> {
           ) {
             return true
           }
-        }
-
-        const input = page.locator('#send-amount')
-        if (await input.isVisible().catch(() => false)) {
-          if ((await input.inputValue()) === String(UX_DUST_FLOOR_SATS)) return true
         }
 
         return false

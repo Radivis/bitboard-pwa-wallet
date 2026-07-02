@@ -79,6 +79,13 @@ ${mockDisplay(50_000, 'mBTC')}`
     )
   })
 
+  it('parses Lab-prefixed unit labels from BitcoinAmountDisplay', () => {
+    const fixtureText = `exactly 0.00000546 Lab BTC would`
+    expect(
+      textReflectsSatsInFormattedDisplaysOrLiteral(fixtureText, UX_DUST_FLOOR_SATS),
+    ).toBe(true)
+  })
+
   it('resolves dust floor sats in every unit or literal sats in prose (dust case)', () => {
     for (const unit of ['BTC', 'mBTC', 'uBTC', 'ksat', 'sat'] as const) {
       const fixtureText = mockDisplay(UX_DUST_FLOOR_SATS, unit)

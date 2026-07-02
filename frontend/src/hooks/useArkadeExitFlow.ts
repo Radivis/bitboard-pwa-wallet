@@ -13,6 +13,10 @@ import {
   ARKADE_BUMPER_LOW_BALANCE_FALLBACK_SATS,
   parseCollaborativeExitAmountSats,
 } from '@/lib/arkade/arkade-exit-utils'
+import {
+  isCollaborativeExitInsufficientFundsError,
+  isSignerRotationCooperativeExitBlocked,
+} from '@/lib/arkade/arkade-cooperative-exit'
 import type { ArkadeExitCandidateRow, ArkadeUnrollProgressEvent } from '@/workers/arkade-api'
 import { useWalletStore } from '@/stores/walletStore'
 
@@ -21,6 +25,7 @@ export type UnilateralExitStep = 'select' | 'unroll' | 'complete'
 export function useArkadeExitFlow() {
   const networkMode = useWalletStore((walletState) => walletState.networkMode)
   const currentAddress = useWalletStore((walletState) => walletState.currentAddress)
+  const signerMigrationHint = useWalletStore((walletState) => walletState.arkadeSignerMigrationHint)
   const balanceQuery = useArkadeBalanceQuery()
 
   const [collaborativeOpen, setCollaborativeOpen] = useState(false)
@@ -78,10 +83,19 @@ export function useArkadeExitFlow() {
     }
   }, [unilateralOpen, currentAddress])
 
+  const collaborativeExitBlockedByRotation =
+    isSignerRotationCooperativeExitBlocked(signerMigrationHint)
+  const collaborativeFeeEstimate = collaborativeFeeQuery.data
+  const collaborativeExitBlockedByFunds =
+    collaborativeFeeEstimate != null &&
+    isCollaborativeExitInsufficientFundsError(collaborativeFeeEstimate)
+
   const canCollaborativeExit =
     collabDestination.trim().length > 0 &&
     collabAmountValid &&
-    !collaborativeExitMutation.isPending
+    !collaborativeExitMutation.isPending &&
+    !collaborativeExitBlockedByRotation &&
+    !collaborativeExitBlockedByFunds
 
   const bumperBalance =
     unilateralFeeQuery.data?.bumperBalanceSats ?? bumperInfoQuery.data?.balanceSats ?? 0
@@ -133,7 +147,8 @@ export function useArkadeExitFlow() {
   }
 
   const handleCompleteExit = () => {
-    const vtxoTxid = unrolledVtxoTxid ?? selectedCandidate?.txid
+    // Completion coin-selects by the offchain VTXO virtual txid, not the last on-chain unroll broadcast txid.
+    const vtxoTxid = selectedCandidate?.txid
     if (vtxoTxid == null || completeDestination.trim().length === 0) return
     completeExitMutation.mutate(
       {
@@ -162,6 +177,7 @@ export function useArkadeExitFlow() {
   return {
     networkMode,
     currentAddress,
+    signerMigrationHint,
     balanceQuery,
     collaborativeOpen,
     setCollaborativeOpen,
@@ -188,6 +204,8 @@ export function useArkadeExitFlow() {
     unrollMutation,
     completeExitMutation,
     canCollaborativeExit,
+    collaborativeExitBlockedByRotation,
+    collaborativeExitBlockedByFunds,
     bumperBalance,
     unilateralFeeEstimate,
     bumperLow,

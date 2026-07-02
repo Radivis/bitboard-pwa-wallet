@@ -1,7 +1,7 @@
 {
   "name": "bitboard-pwa-wallet",
   "private": true,
-  "version": "0.3.1",
+  "version": "0.3.2",
   "type": "module",
   "license": "MIT",
   "engines": {
@@ -26,11 +26,16 @@
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:debug": "playwright test --debug",
     "test:e2e:nwc": "VITE_E2E_NWC_MOCK=true playwright test --grep @nwc",
-    "test:regtest:start": "../scripts/start-regtest.sh",
-    "test:regtest:stop": "docker rm -f bitboard-regtest",
-    "test:e2e:regtest": "npm run test:regtest:start && playwright test --grep @regtest",
+    "regtest:clean": "../scripts/clean-arkade-regtest.sh",
+    "regtest:clean-start": "npm run regtest:clean && npm run regtest:start",
+    "regtest:start": "../scripts/start-arkade-regtest.sh",
+    "regtest:stop": "../scripts/stop-arkade-regtest.sh",
+    "test:e2e:regtest": "REQUIRE_ARKADE_REGTEST=1 npm run regtest:clean-start && REQUIRE_ARKADE_REGTEST=1 playwright test --grep @regtest",
     "test:e2e:lab": "playwright test --grep @lab",
     "test:e2e:arkade": "VITE_E2E_ARKADE_MOCK=true playwright test --grep @arkade",
+    "test:e2e:arkade-regtest": "REQUIRE_ARKADE_REGTEST=1 npm run regtest:clean-start && REQUIRE_ARKADE_REGTEST=1 VITE_E2E_ARKADE_REGTEST=true playwright test --grep @arkade-regtest",
+    "test:e2e:arkade-regtest-longexpiry": "ARKD_VTXO_TREE_EXPIRY=200 REQUIRE_ARKADE_REGTEST=1 npm run regtest:clean-start && REQUIRE_ARKADE_REGTEST=1 VITE_E2E_ARKADE_REGTEST=true playwright test --grep @arkade-exit-regtest",
+    "test:e2e:arkade-regtest-reg04": "ARKD_VTXO_TREE_EXPIRY=200 REQUIRE_ARKADE_REGTEST=1 npm run regtest:clean-start && REQUIRE_ARKADE_REGTEST=1 VITE_E2E_ARKADE_REGTEST=true playwright test --grep @arkade-reg04",
     "sync-version": "node ../scripts/sync-version.mjs",
     "verify-version": "node ../scripts/verify-version.mjs"
   },

@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { buildMockVtxosForScripts } from '@/lib/arkade/e2e/arkade-operator-mock-handler'
+import {
+  buildMockVtxosForScripts,
+  parseScriptsFromRequestUrl,
+} from '@/lib/arkade/e2e/arkade-operator-mock-handler'
 import {
   E2E_ARKADE_MOCK_DEFAULT_BALANCE_SATS,
   E2E_ARKADE_MOCK_INCOMING_TXID,
@@ -12,6 +15,20 @@ import {
 const PARTITION = 'mock-handler-unit-test'
 
 describe('arkade operator mock vtxo builder', () => {
+  it('parseScriptsFromRequestUrl reads repeated scripts query params', () => {
+    const scripts = parseScriptsFromRequestUrl(
+      'http://localhost/api/arkade/operator/signet/v1/indexer/vtxos?scripts=5120abc&scripts=5120def',
+    )
+    expect(scripts).toEqual(['5120abc', '5120def'])
+  })
+
+  it('parseScriptsFromRequestUrl still accepts legacy comma-separated scripts value', () => {
+    const scripts = parseScriptsFromRequestUrl(
+      'http://localhost/v1/indexer/vtxos?scripts=5120abc,5120def',
+    )
+    expect(scripts).toEqual(['5120abc', '5120def'])
+  })
+
   it('E2E-ARK-MOCK-04 funds the default fixture on the first script', () => {
     resetE2eArkadeOperatorMockState(PARTITION)
     const mockState = getE2eArkadeOperatorMockState(PARTITION)

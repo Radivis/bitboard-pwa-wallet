@@ -2,6 +2,7 @@ use std::cell::RefCell;
 
 use bdk_wallet::chain::Merge;
 use bdk_wallet::{ChangeSet, KeychainKind, Wallet as BdkWallet};
+use bitcoin::Txid;
 use wasm_bindgen::prelude::*;
 
 /// Current Unix time in seconds. Used for sync/full_scan request building so production and tests use the same `_at(now)` API.
@@ -24,10 +25,11 @@ pub mod descriptors;
 pub mod error;
 use crate::error::{
     CODE_NO_ACTIVE_WALLET, CODE_WALLET_ALREADY_BORROWED, CODE_WALLET_NOT_LOADED_FOR_LAB,
-    MSG_NO_ACTIVE_WALLET, MSG_WALLET_ALREADY_BORROWED, MSG_WALLET_NOT_LOADED_FOR_LAB,
+    CryptoError, MSG_NO_ACTIVE_WALLET, MSG_WALLET_ALREADY_BORROWED, MSG_WALLET_NOT_LOADED_FOR_LAB,
     MapDisplayErrToJs, MapErrToJs, wasm_crypto_error,
 };
 pub mod esplora;
+pub mod esplora_tx_anchor_reconcile;
 pub mod lab;
 pub mod lab_entity_wallet;
 pub mod lab_psbt;
@@ -304,8 +306,83 @@ pub async fn sync_wallet(esplora_url: &str) -> Result<JsValue, JsValue> {
 
     with_wallet_mut(|wallet| sync::apply_update(wallet, update).map_err(JsValue::from))??;
 
+    apply_esplora_anchor_reconcile_passes(&esplora_client).await?;
+
     accumulate_staged_changes();
     build_sync_result()
+}
+
+/// Post-sync reconcile after incremental `bdk_esplora` sync; runs the repair job
+/// only when Esplora reports confirmed anchors for txs BDK still has unconfirmed.
+///
+/// See `docs/esplora-bdk-anchor-reconcile.md`.
+const ANCHOR_RECONCILE_MAX_PASSES: usize = 2;
+
+async fn apply_esplora_anchor_reconcile_passes(
+    esplora_client: &esplora::EsploraClient,
+) -> Result<(), JsValue> {
+    for _ in 0..ANCHOR_RECONCILE_MAX_PASSES {
+        let unconfirmed_txids: Vec<_> =
+            with_wallet(esplora_tx_anchor_reconcile::list_txids_for_anchor_reconcile)?
+                .into_iter()
+                .collect();
+        if unconfirmed_txids.is_empty() {
+            break;
+        }
+
+        let local_chain_tip = with_wallet(|wallet| wallet.local_chain().tip().clone())?;
+        let Some(reconcile_update) =
+            esplora_tx_anchor_reconcile::build_anchor_and_chain_reconcile_update(
+                &local_chain_tip,
+                esplora_client.inner(),
+                &unconfirmed_txids,
+            )
+            .await
+            .map_err(JsValue::from)?
+        else {
+            break;
+        };
+
+        with_wallet_mut(|wallet| {
+            sync::apply_update(wallet, reconcile_update).map_err(JsValue::from)
+        })??;
+
+        if stuck_esplora_confirmed_untrusted_receives(esplora_client)
+            .await?
+            .is_empty()
+        {
+            return Ok(());
+        }
+    }
+
+    let stuck_txids = stuck_esplora_confirmed_untrusted_receives(esplora_client).await?;
+    if !stuck_txids.is_empty() {
+        let pending_sats = with_wallet(|wallet| wallet.balance().untrusted_pending.to_sat())?;
+        return Err(JsValue::from(CryptoError::Blockchain(format!(
+            "Esplora-confirmed receives remain untrusted pending ({pending_sats} sats; txids: {}) after anchor+chain reconcile",
+            stuck_txids
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join(", "),
+        ))));
+    }
+
+    Ok(())
+}
+
+async fn stuck_esplora_confirmed_untrusted_receives(
+    esplora_client: &esplora::EsploraClient,
+) -> Result<Vec<Txid>, JsValue> {
+    let unconfirmed_unspent_txids =
+        with_wallet(esplora_tx_anchor_reconcile::unconfirmed_unspent_txids)?;
+    let unconfirmed_unspent_txids: Vec<_> = unconfirmed_unspent_txids.into_iter().collect();
+    esplora_tx_anchor_reconcile::filter_esplora_confirmed_txids(
+        esplora_client.inner(),
+        &unconfirmed_unspent_txids,
+    )
+    .await
+    .map_err(JsValue::from)
 }
 
 /// Full scan the active wallet against an Esplora server.

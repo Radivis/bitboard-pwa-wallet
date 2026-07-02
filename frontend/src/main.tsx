@@ -26,6 +26,12 @@ if (import.meta.env.DEV) {
       const id = txid.trim().toLowerCase()
       await router.navigate({ to: '/lab/tx/$txid', params: { txid: id } })
     }
+
+  ;(
+    window as unknown as { __e2eNavigateToReceiveArkade?: () => Promise<void> }
+  ).__e2eNavigateToReceiveArkade = async () => {
+    await router.navigate({ to: '/wallet/receive', search: { mode: 'arkade' } })
+  }
 }
 
 declare module '@tanstack/react-router' {

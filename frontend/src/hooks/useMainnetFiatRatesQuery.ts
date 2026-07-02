@@ -1,5 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useWalletStore } from '@/stores/walletStore'
+import { walletIsUnlockedOrSyncing } from '@/lib/wallet/wallet-unlocked-status'
 import { useFiatDenominationStore } from '@/stores/fiatDenominationStore'
 import { useLightningBalancesForDashboardQuery } from '@/hooks/useLightningMutations'
 import type { FiatRateProviderId } from '@/lib/fiat/fiat-rate-service-whitelist'
@@ -53,7 +54,7 @@ export function useMainnetFiatRatesQuery(options?: {
   const shouldFetchMainnetFiatRate =
     networkMode === 'mainnet' &&
     fiatDenominationMode &&
-    (walletStatus === 'unlocked' || walletStatus === 'syncing') &&
+    walletIsUnlockedOrSyncing(walletStatus) &&
     balance != null &&
     (allowFetchWhenPortfolioZeroForReceivePage || portfolioHasPositiveBalance)
 

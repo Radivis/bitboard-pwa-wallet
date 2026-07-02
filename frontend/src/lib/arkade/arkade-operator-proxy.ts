@@ -4,13 +4,26 @@ import { normalizeEsploraBaseUrl } from '../esplora/esplora-service-whitelist'
 /** Same-origin path prefix for the Arkade operator proxy (no trailing slash). */
 export const ARKADE_OPERATOR_PROXY_PREFIX = '/api/arkade/operator'
 
+const REGTEST_OPERATOR_UPSTREAM_DEFAULT = 'http://localhost:7070'
+
+function regtestOperatorUpstreamBase(): string {
+  const fromEnv = import.meta.env?.VITE_ARKADE_OPERATOR_REGTEST?.trim()
+  return fromEnv && fromEnv.length > 0 ? fromEnv : REGTEST_OPERATOR_UPSTREAM_DEFAULT
+}
+
 /**
  * Official public Arkade operators (see Arkade developer resources).
- * Bitcoin testnet4 has no public operator — only mainnet and signet/Mutinynet are supported in the UI.
+ * Regtest uses local arkd from arkade-regtest (dev / E2E only).
  */
-export const ARKADE_OPERATOR_UPSTREAM_BASES: Record<ArkadeSupportedNetworkMode, string> = {
+export const ARKADE_OPERATOR_UPSTREAM_BASES: Record<
+  ArkadeSupportedNetworkMode,
+  string
+> = {
   mainnet: 'https://arkade.computer',
   signet: 'https://mutinynet.arkade.sh',
+  get regtest() {
+    return regtestOperatorUpstreamBase()
+  },
 }
 
 export type ArkadeOperatorViteProxyEntry = {
@@ -49,6 +62,10 @@ export function getArkOperatorUrl(
     return upstream
   }
 
+  if (networkMode === 'regtest') {
+    return sameOriginArkOperatorProxyBase('regtest')
+  }
+
   if (envOverride && !customArkOperatorMatchesWhitelistedBase(upstream, networkMode)) {
     return upstream
   }
@@ -76,6 +93,8 @@ export function arkOperatorViteProxyEntries(): ArkadeOperatorViteProxyEntry[] {
 export function getUpstreamArkOperatorBase(
   network: string,
 ): string | null {
-  if (network !== 'mainnet' && network !== 'signet') return null
+  if (network !== 'mainnet' && network !== 'signet' && network !== 'regtest') {
+    return null
+  }
   return ARKADE_OPERATOR_UPSTREAM_BASES[network]
 }

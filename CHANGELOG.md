@@ -15,6 +15,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+## [0.3.2] - 2026-06-28
+
+### Added
+- Sync can now be triggered for each rail (onchain / Lightning / Arkade) separately with the respective last sync time displayed close to the sync button
+- Added banner for recovering recoverable Arkade VTXOs
+- **Periodic sync** feature (Settings → Features): opt-in background polling per rail with configurable intervals on Settings → Main (default 300s, 30s–24h range)
+- Write locks for wallet and lab databases now prevent concurrent writes in different browser tabs
+
+### Changed
+- Bumped Arkade Rust SDK from 0.9.2 to 0.9.3
+- Strict wallet unlock requirement is limited to proper /wallet routes; special actions requiring wallet data will request wallet unlock otherwise
+- Reworked wallet data hydration lifecycle with state machines handling loading, syncing, and saving for each rail (onchain / Lightning / Arkade) separately; that should make hydration much more reliable and easier to reason about
+- Background rail polling is off by default; Lightning and Arkade no longer poll every 15–60s unless periodic sync is enabled
+- Onchain sync error now blocks most operations except sync retry and switching to a different network (skipping saving a possibly broken state)
+- Fixed Lightning dashboard save invalidating its own React Query caches, which caused repeated NWC sync every few seconds even with periodic sync disabled
+
+### Fixed
+- An Arkade signer key rotation won't completely block the Arkade rail now; key rotation should be handled gracefully now
+- Bitboard now runs an automatic post-sync anchor+chain reconcile, if Esplora declares any transaction as confirmed, but BDK still classifies it as unconfirmed
+
 ## [0.3.1] - 2026-06-18
 ### Added
 - Lightning send supports LNURL-pay (`lnurl1…`, `lightning:LNURL…`, and `lnurlp://…`); withdraw, auth, and channel LNURL tags show explicit unsupported errors; LNURL-pay falls back to same-origin `/api/lnurl/fetch` when direct browser fetch to the LNURL host is blocked (e.g. CORS)

@@ -1,4 +1,6 @@
 import { ensureMigrated } from '@/db/database'
+import { getArkadeSaveLifecycleSnapshot } from '@/lib/wallet/lifecycle/arkade-save-lifecycle-orchestrator'
+import { getArkadeSyncLifecycleSnapshot } from '@/lib/wallet/lifecycle/arkade-sync-lifecycle-orchestrator'
 import { appQueryClient } from '@/lib/shared/app-query-client'
 import { loadActiveArkadeConnectionForNetwork } from '@/lib/arkade/arkade-operator-connections'
 import {
@@ -58,12 +60,9 @@ export async function resolveArkadeOperatorSyncMetadata(): Promise<
   ArkadeOperatorSyncMetadataResult
 > {
   const walletState = useWalletStore.getState()
-  if (walletState.walletStatus === 'syncing') {
-    return { isStaleArkade: false }
-  }
-  if (walletState.lastOperatorSyncTime != null) {
-    return { isStaleArkade: false }
-  }
+  const syncPhase = getArkadeSyncLifecycleSnapshot().syncPhase
+  const savePhase = getArkadeSaveLifecycleSnapshot().savePhase
+  const operatorWorkInProgress = syncPhase === 'syncing' || savePhase === 'saving'
 
   const context = activeArkadeDashboardContext()
   if (context == null) {
@@ -75,13 +74,18 @@ export async function resolveArkadeOperatorSyncMetadata(): Promise<
     walletId: context.walletId,
     networkMode: context.networkMode,
   })
-  if (connection?.lastSuccessfulOperatorSyncAt == null) {
-    return { isStaleArkade: false }
-  }
+  const lastSuccessfulOperatorSyncAt = connection?.lastSuccessfulOperatorSyncAt
+
+  const isStaleArkade =
+    !operatorWorkInProgress &&
+    walletState.lastOperatorSyncTime == null &&
+    lastSuccessfulOperatorSyncAt != null
 
   return {
-    isStaleArkade: true,
-    lastSuccessfulOperatorSyncAt: connection.lastSuccessfulOperatorSyncAt,
+    isStaleArkade,
+    ...(lastSuccessfulOperatorSyncAt != null
+      ? { lastSuccessfulOperatorSyncAt }
+      : {}),
   }
 }
 

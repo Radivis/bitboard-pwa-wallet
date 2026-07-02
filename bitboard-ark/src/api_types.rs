@@ -2,9 +2,19 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct OperatorSignerMigrationHintDto {
+    pub previous_signer_pk_hex: String,
+    pub deprecated_status: String,
+    pub cutoff_unix: i64,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct OpenSessionResult {
     pub arkade_address: String,
     pub operator_signer_pk_hex: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub signer_migration_hint: Option<OperatorSignerMigrationHintDto>,
 }
 
 #[derive(Debug, Serialize)]
@@ -12,8 +22,13 @@ pub struct OpenSessionResult {
 pub struct BalanceDto {
     /// Net spendable balance (offchain + bumper, minus exits in progress).
     pub confirmed_sats: u64,
-    /// Portfolio-style total: offchain (spendable + recoverable) plus confirmed on-chain bumper
-    /// sats and unconfirmed boarding UTXOs. Excludes unconfirmed bumper-wallet UTXOs
+    /// Net spendable offchain VTXO balance only (excludes on-chain bumper and boarding).
+    pub offchain_spendable_sats: u64,
+    /// Confirmed on-chain bumper wallet balance (P2A fees for unilateral exit only).
+    pub onchain_bumper_sats: u64,
+    /// Portfolio-style total: offchain (spendable + recoverable settleable + recoverable pending
+    /// operator sweep + pending recovery) plus confirmed on-chain bumper sats and unconfirmed
+    /// boarding UTXOs. Excludes unconfirmed bumper-wallet UTXOs
     /// (`trusted_pending` / `untrusted_pending` from the on-chain wallet); those are not
     /// spendable for Ark operations until confirmed.
     pub total_sats: u64,
@@ -25,6 +40,23 @@ pub struct BalanceDto {
     pub unilateral_exit_in_progress_sats: u64,
     /// VTXOs submitted for collaborative exit but still spendable in the last snapshot.
     pub collaborative_exit_in_progress_sats: u64,
+    /// Funds locked under a deprecated operator signer past cooperative migration cutoff.
+    pub pending_recovery_sats: u64,
+    /// Swept or sub-dust VTXOs the user can batch-settle now.
+    pub recoverable_settleable_sats: u64,
+    /// Count of VTXOs in [`BalanceDto::recoverable_settleable_sats`].
+    pub recoverable_settleable_vtxo_count: u32,
+    /// Client-expired VTXOs awaiting operator sweep before batch settlement is safe.
+    pub recoverable_pending_operator_sweep_sats: u64,
+    /// Count of VTXOs in [`BalanceDto::recoverable_pending_operator_sweep_sats`].
+    pub recoverable_pending_operator_sweep_vtxo_count: u32,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OperatorSyncResultDto {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub key_discovery_warning: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -114,6 +146,26 @@ pub struct IntentFeeConfiguredDto {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CollaborativeExitFeeEstimateDto {
+    pub tx_fee_rate: String,
+    pub intent_fee_configured: IntentFeeConfiguredDto,
+    pub estimated_total_fee_sats: Option<u64>,
+    pub estimated_receive_sats: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub estimate_error: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub estimate_error_code: Option<&'static str>,
+}
+
+/// [`CollaborativeExitFeeEstimateDto::estimate_error_code`] when cooperative inputs are empty
+/// or otherwise insufficient for the requested exit amount.
+pub const COLLABORATIVE_EXIT_ESTIMATE_ERROR_INSUFFICIENT_COOPERATIVE_INPUTS: &str =
+    "insufficient_cooperative_inputs";
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RecoverableVtxoFeeEstimateDto {
+    pub recoverable_vtxo_count: u32,
+    pub recoverable_total_sats: u64,
     pub tx_fee_rate: String,
     pub intent_fee_configured: IntentFeeConfiguredDto,
     pub estimated_total_fee_sats: Option<u64>,

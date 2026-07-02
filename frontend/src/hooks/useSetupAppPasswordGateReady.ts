@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { WalletStatus } from '@/stores/walletStore'
 import { isWalletSecretsSessionActive } from '@/lib/wallet/wallet-secrets-session'
+import { walletIsUnlockedOrSyncing } from '@/lib/wallet/wallet-unlocked-status'
 
 /**
  * Setup create/import pages need the app password before wallet encrypt flows.
@@ -10,8 +11,7 @@ export function useSetupAppPasswordGateReady(walletStatus: WalletStatus) {
   const [secretsSessionActive, setSecretsSessionActive] = useState(false)
   const sessionCheckGenerationRef = useRef(0)
 
-  const walletUnlockedOrSyncing =
-    walletStatus === 'unlocked' || walletStatus === 'syncing'
+  const walletUnlockedOrSyncing = walletIsUnlockedOrSyncing(walletStatus)
 
   useEffect(() => {
     const generation = ++sessionCheckGenerationRef.current

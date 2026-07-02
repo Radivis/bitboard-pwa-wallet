@@ -17,6 +17,19 @@ export function reportArkadeSessionOpenError(err: unknown): void {
     return
   }
   const detail = sanitizeErrorMessageForUi(errorMessage(err))
+  if (detail.includes('not recognized by the connected operator')) {
+    toast.error('Arkade operator mismatch', {
+      description:
+        'Saved Arkade data does not match this operator URL. If the operator rotated keys, update the app; otherwise check that you are on the intended Arkade service.',
+    })
+    return
+  }
+  if (detail.includes('does not match session network')) {
+    toast.error('Arkade network mismatch', {
+      description: 'Saved Arkade data was created on a different network than the current wallet mode.',
+    })
+    return
+  }
   if (detail) {
     toast.error('Arkade could not start', { description: detail })
     return
