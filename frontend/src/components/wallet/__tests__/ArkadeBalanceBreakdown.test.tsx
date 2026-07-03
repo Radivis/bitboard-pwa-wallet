@@ -1,9 +1,47 @@
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { screen } from '@testing-library/react'
 import { ArkadeBalanceBreakdown } from '@/components/wallet/ArkadeBalanceBreakdown'
 import { renderWithProviders } from '@/test-utils/test-providers'
+import { useFiatDenominationStore } from '@/stores/fiatDenominationStore'
+
+const fiatRatesQueryMock = vi.hoisted(() =>
+  vi.fn(() => ({
+    data: undefined as { btcPriceInFiat: number } | undefined,
+    isPending: false,
+  })),
+)
+
+const walletStoreState = vi.hoisted(() => ({
+  networkMode: 'signet' as 'signet' | 'mainnet',
+  loadedDescriptorWallet: null as { networkMode: 'signet' | 'mainnet' } | null,
+}))
+
+vi.mock('@/hooks/useMainnetFiatRatesQuery', () => ({
+  useMainnetFiatRatesQuery: () => fiatRatesQueryMock(),
+}))
+
+vi.mock('@/stores/walletStore', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/stores/walletStore')>()
+  const useWalletStoreMock = (selector: (s: typeof walletStoreState) => unknown) =>
+    selector(walletStoreState)
+  Object.assign(useWalletStoreMock, {
+    getState: () => walletStoreState,
+  })
+  return {
+    ...actual,
+    useWalletStore: useWalletStoreMock,
+    selectCommittedNetworkMode: actual.selectCommittedNetworkMode,
+  }
+})
 
 describe('ArkadeBalanceBreakdown', () => {
+  beforeEach(() => {
+    walletStoreState.networkMode = 'signet'
+    walletStoreState.loadedDescriptorWallet = null
+    useFiatDenominationStore.setState({ fiatDenominationMode: false })
+    fiatRatesQueryMock.mockReturnValue({ data: undefined, isPending: false })
+  })
+
   it('shows bumper wallet separately from headline balance', () => {
     renderWithProviders(
       <ArkadeBalanceBreakdown
@@ -57,5 +95,27 @@ describe('ArkadeBalanceBreakdown', () => {
     expect(screen.getByTestId('arkade-balance-recoverable-pending-operator-sweep')).toHaveTextContent(
       /Expired — waiting for operator sweep \(2 VTXOs\)/,
     )
+  })
+
+  it('renders fiat primary and muted BTC secondary on mainnet with fiat mode', () => {
+    walletStoreState.networkMode = 'mainnet'
+    useFiatDenominationStore.setState({ fiatDenominationMode: true })
+    fiatRatesQueryMock.mockReturnValue({
+      data: { btcPriceInFiat: 100_000 },
+      isPending: false,
+    })
+
+    renderWithProviders(
+      <ArkadeBalanceBreakdown
+        balance={{
+          confirmedSats: 100_000,
+          totalSats: 100_000,
+        }}
+        amountTestId="arkade-balance-amount"
+      />,
+    )
+
+    expect(screen.getByTestId('arkade-balance-amount')).toHaveTextContent(/\$100/)
+    expect(screen.getByText('0.00100000')).toBeInTheDocument()
   })
 })

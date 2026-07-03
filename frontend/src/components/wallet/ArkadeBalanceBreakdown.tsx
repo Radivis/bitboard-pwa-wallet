@@ -1,6 +1,10 @@
 import { Link } from '@tanstack/react-router'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
+import { FiatAmountDisplay } from '@/components/FiatAmountDisplay'
+import { useMainnetFiatRatesQuery } from '@/hooks/useMainnetFiatRatesQuery'
+import { useFiatDenominationStore } from '@/stores/fiatDenominationStore'
+import { selectCommittedNetworkMode, useWalletStore } from '@/stores/walletStore'
 import {
   ARKADE_BALANCE_BOARDING_INFOMODE,
   ARKADE_BALANCE_BOARDING_PENDING_INFOMODE,
@@ -34,6 +38,17 @@ export function ArkadeBalanceBreakdown({
   balance,
   amountTestId,
 }: ArkadeBalanceBreakdownProps) {
+  const networkMode = useWalletStore(selectCommittedNetworkMode)
+  const fiatDenominationMode = useFiatDenominationStore(
+    (fiatDenominationState) => fiatDenominationState.fiatDenominationMode,
+  )
+  const defaultFiatCurrency = useFiatDenominationStore(
+    (fiatDenominationState) => fiatDenominationState.defaultFiatCurrency,
+  )
+  const mainnetFiatLayout = networkMode === 'mainnet' && fiatDenominationMode
+  const fiatRatesQuery = useMainnetFiatRatesQuery()
+  const btcPriceInFiat = fiatRatesQuery.data?.btcPriceInFiat
+
   const boardingSpendableSats = balance.boardingSpendableSats ?? 0
   const boardingPendingSats = balance.boardingPendingSats ?? 0
   const offchainSpendableSats = arkadeOffchainSpendableSats(balance)
@@ -52,12 +67,42 @@ export function ArkadeBalanceBreakdown({
   const showRecoverableTotal =
     balance.totalSats > dashboardSpendableSats + boardingPendingSats + onchainBumperSats
 
-  return (
-    <div className="space-y-1">
+  function renderHeadline() {
+    if (mainnetFiatLayout) {
+      return (
+        <>
+          <div className="space-y-1">
+            <FiatAmountDisplay
+              amountSats={dashboardSpendableSats}
+              btcPriceInFiat={btcPriceInFiat}
+              currency={defaultFiatCurrency}
+              size="lg"
+              data-testid={amountTestId}
+              rateLoading={fiatRatesQuery.isPending}
+            />
+          </div>
+          <div className="space-y-1">
+            <BitcoinAmountDisplay
+              amountSats={dashboardSpendableSats}
+              size="md"
+              allowUnitToggle={false}
+              className="text-muted-foreground"
+            />
+          </div>
+        </>
+      )
+    }
+    return (
       <BitcoinAmountDisplay
         amountSats={dashboardSpendableSats}
         data-testid={amountTestId}
       />
+    )
+  }
+
+  return (
+    <div className="space-y-1">
+      {renderHeadline()}
       {showBoardingBreakdown && (
         <div className="space-y-0.5 text-xs text-muted-foreground">
           {boardingSpendableSats > 0 && (

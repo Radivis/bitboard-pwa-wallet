@@ -187,7 +187,7 @@ export function SendTransactionEntryCard({
   const useFiatAmountField =
     mainnetFiatMode &&
     !hideEditableAmountForZeroMainnet &&
-    (needsUserLightningAmount || (!isLightningSendMode && !isArkadeSendMode))
+    (needsUserLightningAmount || !isLightningSendMode)
 
   function spendableAmountRows(balanceSats: number) {
     if (mainnetFiatMode && hasUsableFiatSpot) {
