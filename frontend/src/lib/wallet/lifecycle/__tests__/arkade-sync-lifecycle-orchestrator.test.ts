@@ -52,6 +52,34 @@ import {
   orchestrateArkadeSyncThenSave,
   resetArkadeSyncLifecycleStateForTests,
 } from '@/lib/wallet/lifecycle/arkade-sync-lifecycle-orchestrator'
+import type { ArkadeSignerMigrationResult } from '@/workers/arkade-api'
+
+function completeMigrationResult(): ArkadeSignerMigrationResult {
+  return {
+    vtxoLeg: {
+      migratedCount: 1,
+      migratedSats: 1_000,
+      deferredCount: 0,
+      deferredSats: 0,
+      oversizedCount: 0,
+      oversizedSats: 0,
+    },
+    boardingLeg: {
+      migratedCount: 0,
+      migratedSats: 0,
+      deferredCount: 0,
+      deferredSats: 0,
+      oversizedCount: 0,
+      oversizedSats: 0,
+    },
+    passCount: 1,
+    migrationComplete: true,
+    remainingPreCutoffVtxoCount: 0,
+    remainingPreCutoffSats: 0,
+    remainingPreCutoffBoardingCount: 0,
+    settleTxids: ['abc'],
+  }
+}
 
 const syncParams = {
   walletId: 1,
@@ -66,7 +94,7 @@ describe('arkade-sync-lifecycle-orchestrator', () => {
     vi.clearAllMocks()
     loadPhaseRef.phase = 'loaded'
     syncWithOperator.mockResolvedValue({})
-    migrateDeprecatedSignerVtxos.mockResolvedValue(undefined)
+    migrateDeprecatedSignerVtxos.mockResolvedValue(completeMigrationResult())
     refreshArkadeStoreFromLoadedWasm.mockResolvedValue(undefined)
     orchestrateArkadeSave.mockResolvedValue(undefined)
     configureArkadeSyncForLoadedRail({
@@ -191,10 +219,11 @@ describe('arkade-sync-lifecycle-orchestrator', () => {
     expect(getArkadeSyncLifecycleSnapshot().warningMessage).toBeNull()
   })
 
-  it('signerMigration runs migrate before operator sync and save', async () => {
+  it('signerMigration runs migrate before save and sync when complete', async () => {
     const callOrder: string[] = []
     migrateDeprecatedSignerVtxos.mockImplementation(async () => {
       callOrder.push('migrate')
+      return completeMigrationResult()
     })
     syncWithOperator.mockImplementation(async () => {
       callOrder.push('sync')
@@ -212,7 +241,25 @@ describe('arkade-sync-lifecycle-orchestrator', () => {
     expect(refreshArkadeStoreFromLoadedWasm).toHaveBeenCalledWith('conn-1')
   })
 
-  it('signerMigration persists after migrate even when post-migration operator sync fails', async () => {
+  it('signerMigration skips save when migration is incomplete', async () => {
+    migrateDeprecatedSignerVtxos.mockResolvedValueOnce({
+      ...completeMigrationResult(),
+      migrationComplete: false,
+      remainingPreCutoffVtxoCount: 1,
+      remainingPreCutoffSats: 5_000,
+    })
+
+    const result = await orchestrateArkadeSyncThenSave({
+      ...syncParams,
+      syncKind: 'signerMigration',
+    })
+
+    expect(result).toMatchObject({ migrationComplete: false })
+    expect(orchestrateArkadeSave).not.toHaveBeenCalled()
+    expect(syncWithOperator).toHaveBeenCalled()
+  })
+
+  it('signerMigration saves after complete migrate even when post-migration operator sync fails', async () => {
     syncWithOperator.mockRejectedValueOnce(new Error('operator vtxos down'))
 
     await orchestrateArkadeSyncThenSave({

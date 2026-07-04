@@ -33,6 +33,8 @@ feature:
         description: When cached balance data exists, background refetch must not flash empty-session copy
       - id: DASH-ARK-15
         description: When arkadeSignerMigrationHint is set after session open, dashboard Arkade card shows the signer migration banner
+      - id: DASH-ARK-15a
+        description: Partial cooperative migration keeps the signer migration banner visible with remaining counts and Migrate again (see ArkadeSignerMigrationBanner component tests)
       - id: DASH-ARK-16
         description: When Arkade load succeeded but operator sync failed, sync error banner shows even if balance query has no data yet
       - id: DASH-ARK-17
@@ -41,6 +43,8 @@ feature:
         description: When only on-chain bumper remains, headline offchain balance is zero and bumper line is shown separately
       - id: DASH-ARK-19
         description: When recoverableSettleableVtxoCount is greater than zero, dashboard Arkade card shows recoverable VTXO banner with Recover now
+      - id: DASH-ARK-19b
+        description: When pendingRecoverySats is greater than zero, dashboard Arkade card shows pending-recovery banner with link to Management unilateral exit
       - id: DASH-ARK-19a
         description: When recoverablePendingOperatorSweepVtxoCount is greater than zero, balance breakdown shows expired waiting for operator sweep line
     activity_feed:
@@ -92,6 +96,7 @@ feature:
         - Pending recovery line when pendingRecoverySats is greater than zero
         - Empty-session copy when no balance data
         - Signer migration banner when operator signing key rotated (same as Management Arkade panel)
+        - Pending recovery banner when pendingRecoverySats is greater than zero
         - Recoverable VTXO banner when recoverableSettleableVtxoCount is greater than zero
         - Expired waiting for operator sweep line when recoverablePendingOperatorSweepVtxoCount is greater than zero
         - Arkade operator sync error banner when post-load sync fails (including when balance data is absent)
@@ -99,6 +104,7 @@ feature:
         - dashboard-arkade-balance-card
         - dashboard-arkade-balance-amount
         - arkade-balance-pending-recovery
+        - arkade-pending-recovery-banner
         - arkade-balance-recoverable-pending-operator-sweep
         - arkade-recoverable-vtxo-banner
         - dashboard-arkade-session-empty

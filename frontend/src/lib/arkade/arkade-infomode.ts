@@ -8,6 +8,7 @@ export const ARKADE_INFOMODE_IDS = {
   balanceRecoverable: 'arkade-balance-recoverable',
   balanceRecoverablePendingOperatorSweep: 'arkade-balance-recoverable-pending-operator-sweep',
   recoverableVtxoBanner: 'arkade-recoverable-vtxo-banner',
+  pendingRecoveryBanner: 'arkade-pending-recovery-banner',
   managementPanel: 'arkade-management-panel',
   delegatorFee: 'arkade-delegator-fee',
   renewVtxos: 'arkade-renew-vtxos',
@@ -78,6 +79,11 @@ export const ARKADE_BALANCE_RECOVERABLE_PENDING_OPERATOR_SWEEP_INFOMODE = {
 export const ARKADE_RECOVERABLE_VTXO_BANNER_INFOMODE = {
   title: 'Recoverable now',
   text: 'These virtual outputs were swept by the operator or fell below the dust threshold. Batch recovery settles them back into spendable Arkade balance. This is separate from VTXOs still waiting for operator sweep after expiry, and from pending recovery after a signer rotation.',
+} as const
+
+export const ARKADE_PENDING_RECOVERY_BANNER_INFOMODE = {
+  title: 'Pending recovery after signer rotation',
+  text: 'These funds sit on VTXOs signed by a deprecated operator key after the cooperative migration cutoff passed. They are not lost, but cooperative send and migrate no longer work — recover them with unilateral exit in Management.',
 } as const
 
 export const ARKADE_BALANCE_BUMPER_INFOMODE = {

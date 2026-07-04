@@ -30,6 +30,7 @@ import type {
   ArkadeRecoverableVtxoFeeEstimate,
   ArkadeSendParams,
   ArkadeService,
+  ArkadeSignerMigrationResult,
   ArkadeUnilateralExitFeeEstimate,
   ArkadeUnilateralExitFeeEstimateParams,
   ArkadeUnrollProgressEvent,
@@ -338,8 +339,11 @@ const arkadeService: ArkadeService = {
     return syncWithOperatorCore()
   },
 
-  async migrateDeprecatedSignerVtxos(): Promise<void> {
-    await invokeWasmArk((wasmModule) => wasmModule.ark_migrate_deprecated_signer_vtxos())
+  async migrateDeprecatedSignerVtxos(): Promise<ArkadeSignerMigrationResult> {
+    const result = await invokeWasmArk((wasmModule) =>
+      wasmModule.ark_migrate_deprecated_signer_vtxos(),
+    )
+    return result as ArkadeSignerMigrationResult
   },
 
   async flushSdkPersistence(): Promise<void> {

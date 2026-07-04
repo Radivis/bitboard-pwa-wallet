@@ -83,7 +83,7 @@ When an Arkade operator rotates its signing key, `getInfo` advertises the new `s
 
 Contracts `ARK-ROT-01` through `ARK-ROT-05` in `doc/features/arkade.yaml` define session open, persistence re-stamp, error messaging, and Management banner behavior.
 
-Cooperative fund migration uses `migrate_deprecated_signer_vtxos()` (ark-client 0.9.3+). Post-cutoff funds appear in `pending_recovery` until unilateral exit or recoverable settlement. This is **not** the admin `WalletInitializerService_Restore` API (operator on-chain wallet setup only).
+Cooperative fund migration uses `migrate_deprecated_signer_vtxos()` (ark-client 0.9.3+). Bitboard loops migrate passes internally until cooperative work is complete (or a pass cap), and **only then** re-stamps `operator_identity` with the current operator signer. Partial passes keep the migration banner and deprecated signer in persistence; the UI prompts **Migrate again** until complete. Post-cutoff funds appear in `pending_recovery` until unilateral exit or recoverable settlement; a **pending-recovery banner** on Dashboard and Management links to unilateral exit when `pendingRecoverySats > 0`. This is **not** the admin `WalletInitializerService_Restore` API (operator on-chain wallet setup only).
 
 ### Recoverable vs pending recovery (manual batch recover)
 
@@ -92,4 +92,4 @@ Cooperative fund migration uses `migrate_deprecated_signer_vtxos()` (ark-client 
 | **pending_recovery** | Deprecated operator signer past cooperative cutoff; VTXO not yet expired/swept | Unilateral exit path; shown in balance breakdown, not the recoverable banner |
 | **recoverable** | Expired, operator-swept, or sub-dust VTXOs | Non-blocking banner on Dashboard and Management with count, total, optional fee estimate, and **Recover now** (`settle_vtxos` on recoverable outpoints only—no boarding, no auto-recover on sync) |
 
-Contracts `ARK-REC-01` through `ARK-REC-04` in `doc/features/arkade.yaml` define banner visibility, fee display, and the user-initiated recover action.
+Contracts `ARK-REC-01` through `ARK-REC-06` in `doc/features/arkade.yaml` define banner visibility, fee display, and the user-initiated recover action.

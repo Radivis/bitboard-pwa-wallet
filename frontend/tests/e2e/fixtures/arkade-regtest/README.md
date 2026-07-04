@@ -25,6 +25,7 @@ npm run test:e2e:regtest
 npm run test:e2e:arkade-regtest             # REG-01/02 (recovery, renewal) — short expiry
 npm run test:e2e:arkade-regtest-longexpiry  # REG-03 (collaborative exit) — long expiry
 npm run test:e2e:arkade-regtest-reg04       # REG-04 only (known incomplete) — clean stack + long expiry
+npm run test:e2e:arkade-regtest-signer      # REG-05 signer migration — clean stack + long expiry
 ```
 
 ## Two stacks: short vs long VTXO expiry
@@ -37,10 +38,12 @@ same stack with a different (block-denominated) `ARKD_VTXO_TREE_EXPIRY`:
 | Short | `arkade-core-flows-regtest.spec.ts` | `@arkade-regtest` | `.env.regtest` default (`40` blocks) | REG-01 recoverable recovery, REG-02 renewal |
 | Long  | `arkade-exit-flows-regtest.spec.ts` | `@arkade-exit-regtest` | `ARKD_VTXO_TREE_EXPIRY=200` blocks (set by the npm script) | REG-03 collaborative exit |
 | REG-04 (isolated) | `arkade-reg04-unilateral-unroll-regtest.spec.ts` | `@arkade-reg04` | same long expiry via npm script | REG-04 unilateral unroll — complete step still failing |
+| Signer migration | `arkade-signer-migration-regtest.spec.ts` | `@arkade-signer-regtest` | `ARKD_VTXO_TREE_EXPIRY=200` via npm script | REG-05 cooperative migrate after `rotate-signer` |
 
 Recovery/renewal need VTXOs to expire/become recoverable quickly; collaborative exit and unilateral
 unroll need a VTXO that stays live through a multi-step on-chain flow (these mine only ~20 blocks, well
-under 200). Running the long-expiry script re-creates the `arkd` container with the larger expiry
+under 200). Signer migration also uses the long-expiry profile so VTXOs stay live while cooperative
+batch settlement runs. Running the long-expiry script re-creates the `arkd` container with the larger expiry
 (Docker Compose recreates on env change); running the short script again restores the `.env.regtest`
 value.
 
@@ -73,6 +76,7 @@ E2E uses `TEST_MNEMONIC` from [`helpers/wallet-setup.ts`](../helpers/wallet-setu
 - **Recoverable banner never appears / boarding settle fails**: repeated E2E runs on the same deterministic wallet leave many boarding UTXOs at the same address. After ~30 regtest blocks (`ARKD_BOARDING_EXIT_DELAY=30`), cooperative settle is rejected (`INVALID_PSBT_INPUT … expired`). Reset the stack before a clean run: `node regtest/regtest.mjs clean && node regtest/regtest.mjs start --profile ark` (or restart from repo root via `scripts/start-arkade-regtest.sh` after `clean`).
 - **Boarding settle must be fast**: with block-denominated `ARKD_BOARDING_EXIT_DELAY=30`, arkd still applies a **~30 second** wall-clock cooperative window (`validateBoardingInput` uses `exitDelay.Seconds()` as seconds). Fund → settle within ~25s; the E2E helper enforces this.
 - **`Timed out waiting … from config.webServer`**: Playwright waits for Vite on **`http://127.0.0.1:3100`** (not port 3000). E2E Vite binds to `127.0.0.1` explicitly so IPv6-only `localhost` does not cause a silent hang. The `scripts/e2e-dev-server.mjs` wrapper logs probe progress every 5s. `globalSetup` only checks Docker (Esplora + arkd), not Vite.
+- **Signer rotation invalidates in-flight operator state**: the `@arkade-signer-regtest` suite uses a **fresh wallet per test** and calls `restartArkadeOperator` after `rotate-signer` (same isolation pattern as other serial regtest suites). Do not reuse a wallet that boarded before rotation without reloading the session.
 
   ```bash
   # Terminal 1

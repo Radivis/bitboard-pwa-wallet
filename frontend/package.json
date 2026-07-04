@@ -36,6 +36,7 @@
     "test:e2e:arkade-regtest": "REQUIRE_ARKADE_REGTEST=1 npm run regtest:clean-start && REQUIRE_ARKADE_REGTEST=1 VITE_E2E_ARKADE_REGTEST=true playwright test --grep @arkade-regtest",
     "test:e2e:arkade-regtest-longexpiry": "ARKD_VTXO_TREE_EXPIRY=200 REQUIRE_ARKADE_REGTEST=1 npm run regtest:clean-start && REQUIRE_ARKADE_REGTEST=1 VITE_E2E_ARKADE_REGTEST=true playwright test --grep @arkade-exit-regtest",
     "test:e2e:arkade-regtest-reg04": "ARKD_VTXO_TREE_EXPIRY=200 REQUIRE_ARKADE_REGTEST=1 npm run regtest:clean-start && REQUIRE_ARKADE_REGTEST=1 VITE_E2E_ARKADE_REGTEST=true playwright test --grep @arkade-reg04",
+    "test:e2e:arkade-regtest-signer": "ARKD_VTXO_TREE_EXPIRY=200 REQUIRE_ARKADE_REGTEST=1 npm run regtest:clean-start && REQUIRE_ARKADE_REGTEST=1 VITE_E2E_ARKADE_REGTEST=true playwright test --grep @arkade-signer-regtest",
     "sync-version": "node ../scripts/sync-version.mjs",
     "verify-version": "node ../scripts/verify-version.mjs"
   },

@@ -1,7 +1,8 @@
 import { AlertTriangle, Loader2 } from 'lucide-react'
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
-import type { ArkadeSignerMigrationHint } from '@/workers/arkade-api'
+import type { ArkadeSignerMigrationHint, ArkadeSignerMigrationResult } from '@/workers/arkade-api'
+import { formatSignerMigrationPartialStatus } from '@/lib/arkade/arkade-signer-migration-display'
 import { orchestrateArkadeSyncThenSave } from '@/lib/wallet/lifecycle/arkade-sync-lifecycle-orchestrator'
 import {
   LIFECYCLE_SYNC_ERROR_FALLBACK,
@@ -52,6 +53,19 @@ function migrationBannerCopy(hint: ArkadeSignerMigrationHint): {
   }
 }
 
+function showMigrateAction(
+  hint: ArkadeSignerMigrationHint,
+  migrationResult: ArkadeSignerMigrationResult | null,
+): boolean {
+  if (hint.deprecatedStatus === 'expired') {
+    return false
+  }
+  if (migrationResult != null && migrationResult.migrationComplete) {
+    return false
+  }
+  return hint.deprecatedStatus === 'migratable' || hint.deprecatedStatus === 'due_now'
+}
+
 export function ArkadeSignerMigrationBanner() {
   const hint = useWalletStore((state) => state.arkadeSignerMigrationHint)
   const setHint = useWalletStore((state) => state.setArkadeSignerMigrationHint)
@@ -60,12 +74,15 @@ export function ArkadeSignerMigrationBanner() {
   const activeArkadeConnectionId = useWalletStore((state) => state.activeArkadeConnectionId)
   const [isMigrating, setIsMigrating] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [partialMigrationResult, setPartialMigrationResult] =
+    useState<ArkadeSignerMigrationResult | null>(null)
 
   if (hint == null) {
     return null
   }
 
   const copy = migrationBannerCopy(hint)
+  const migrateActionVisible = showMigrateAction(hint, partialMigrationResult)
 
   async function handleMigrateFunds(): Promise<void> {
     if (activeWalletId == null || activeArkadeConnectionId == null) {
@@ -76,7 +93,7 @@ export function ArkadeSignerMigrationBanner() {
     setIsMigrating(true)
     setErrorMessage(null)
     try {
-      await orchestrateArkadeSyncThenSave({
+      const migrationResult = await orchestrateArkadeSyncThenSave({
         walletId: activeWalletId,
         networkMode,
         connectionId: activeArkadeConnectionId,
@@ -84,7 +101,14 @@ export function ArkadeSignerMigrationBanner() {
         awaitCompletion: true,
         throwOnError: true,
       })
-      setHint(null)
+      if (migrationResult != null && migrationResult.migrationComplete) {
+        setPartialMigrationResult(null)
+        setHint(null)
+        return
+      }
+      if (migrationResult != null) {
+        setPartialMigrationResult(migrationResult)
+      }
     } catch (error) {
       setErrorMessage(
         userFacingLifecycleErrorMessage(error, LIFECYCLE_SYNC_ERROR_FALLBACK),
@@ -105,7 +129,12 @@ export function ArkadeSignerMigrationBanner() {
         <div className="space-y-2">
           <p className="font-medium">{copy.title}</p>
           <p className="text-muted-foreground">{copy.body}</p>
-          {copy.actionLabel != null ? (
+          {partialMigrationResult != null && !partialMigrationResult.migrationComplete ? (
+            <p className="text-muted-foreground" data-testid="arkade-signer-migration-partial">
+              {formatSignerMigrationPartialStatus(partialMigrationResult)}
+            </p>
+          ) : null}
+          {migrateActionVisible ? (
             <Button
               type="button"
               size="sm"
@@ -118,6 +147,8 @@ export function ArkadeSignerMigrationBanner() {
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
                   Migrating…
                 </>
+              ) : partialMigrationResult != null ? (
+                'Migrate again'
               ) : (
                 copy.actionLabel
               )}

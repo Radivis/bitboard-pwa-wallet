@@ -6,6 +6,7 @@ import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ArkadeBalanceBreakdown } from '@/components/wallet/ArkadeBalanceBreakdown'
 import { ArkadeSignerMigrationBanner } from '@/components/wallet/ArkadeSignerMigrationBanner'
+import { ArkadePendingRecoveryBanner } from '@/components/wallet/ArkadePendingRecoveryBanner'
 import { ArkadeRecoverableVtxoBanner } from '@/components/wallet/ArkadeRecoverableVtxoBanner'
 import { RailLoadErrorBanner } from '@/components/wallet/RailLoadErrorBanner'
 import { RailSyncControl } from '@/components/wallet/RailSyncControl'
@@ -85,6 +86,7 @@ export function ArkadeDashboardBalance() {
       </CardHeader>
       <CardContent className="space-y-2">
         <ArkadeSignerMigrationBanner />
+        <ArkadePendingRecoveryBanner />
         <ArkadeRecoverableVtxoBanner />
         {arkadeLoadSnapshot.loadPhase === 'load-error' ? (
           <RailLoadErrorBanner

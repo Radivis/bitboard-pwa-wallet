@@ -37,6 +37,28 @@ export interface ArkadeSignerMigrationHint {
   cutoffUnix: number
 }
 
+export interface ArkadeSignerMigrationLegResult {
+  migratedCount: number
+  migratedSats: number
+  deferredCount: number
+  deferredSats: number
+  oversizedCount: number
+  oversizedSats: number
+  settleTxid?: string
+  error?: string
+}
+
+export interface ArkadeSignerMigrationResult {
+  vtxoLeg: ArkadeSignerMigrationLegResult
+  boardingLeg: ArkadeSignerMigrationLegResult
+  passCount: number
+  migrationComplete: boolean
+  remainingPreCutoffVtxoCount: number
+  remainingPreCutoffSats: number
+  remainingPreCutoffBoardingCount: number
+  settleTxids: string[]
+}
+
 export interface ArkadeDelegateInfo {
   pubkey: string
   fee: number
@@ -223,7 +245,7 @@ export interface ArkadeService {
     lastSuccessfulOperatorSyncAt: string
   }): Promise<void>
   closeSession(): Promise<void>
-  migrateDeprecatedSignerVtxos(): Promise<void>
+  migrateDeprecatedSignerVtxos(): Promise<ArkadeSignerMigrationResult>
   getBalance(): Promise<ArkadeBalanceInfo>
   getAddress(): Promise<string>
   getNewAddress(): Promise<string>

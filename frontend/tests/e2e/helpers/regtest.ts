@@ -218,6 +218,14 @@ const ARKD_REGTEST_CONTAINER =
 const ARKD_RESTART_HEALTH_TIMEOUT_MS = isCi ? 180_000 : 120_000
 
 /**
+ * Rotate the regtest arkd operator signer, deprecating the previous key.
+ * `cutoff` is passed to `regtest.mjs rotate-signer --cutoff` (unix seconds or +N/-N from now).
+ */
+export async function rotateRegtestSigner(cutoff: string = `+${7 * 86_400}`): Promise<void> {
+  await runRegtestCli(['rotate-signer', '--cutoff', cutoff])
+}
+
+/**
  * Restart the arkd operator and wait until it is healthy again.
  *
  * The serial @arkade-regtest suite shares one operator. arkd keeps its live intent/round queue in
