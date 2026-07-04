@@ -8,15 +8,13 @@ use bip39::Mnemonic;
 use bitcoin::XOnlyPublicKey;
 use bitcoin::bip32::Xpriv;
 use bitcoin::key::Secp256k1;
-use bitcoin::secp256k1::rand::rngs::OsRng;
 
 use crate::error::{ArkResult, ArkWasmError};
 use crate::esplora_blockchain::EsploraBlockchain;
 use crate::network::NetworkMode;
 use crate::persistence::{
     BitboardArkPersistence, JsonPersistenceDb, OperatorSignerMigrationHint, SharedPersistenceDb,
-    operator_identity_for_connected_signer, persisted_operator_identity_for_open,
-    validate_operator_identity,
+    persisted_operator_identity_for_open, validate_operator_identity,
 };
 
 use super::mappers::{current_unix_timestamp, parse_delegator_public_key};
@@ -120,20 +118,6 @@ impl ArkSession {
             },
             migration_hint,
         ))
-    }
-
-    pub async fn migrate_deprecated_signer_vtxos(&self) -> ArkResult<()> {
-        self.sync_offchain_keys().await;
-        let mut rng = OsRng;
-        self.client
-            .migrate_deprecated_signer_vtxos(&mut rng)
-            .await?;
-        let server_signer: XOnlyPublicKey = self.client.server_info()?.signer_pk.into();
-        self.set_persisted_operator_identity(operator_identity_for_connected_signer(
-            server_signer,
-            self.network(),
-        ));
-        Ok(())
     }
 
     pub fn export_persistence(&self) -> ArkResult<String> {

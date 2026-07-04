@@ -8,6 +8,7 @@ mod network;
 mod offchain_snapshot;
 mod persistence;
 mod session;
+mod signer_migration;
 #[cfg(target_arch = "wasm32")]
 mod wasm_sleep;
 
@@ -22,6 +23,16 @@ mod session_exit_candidate_tests;
 #[cfg(test)]
 mod session_mapper_tests;
 
+#[cfg(not(target_arch = "wasm32"))]
+pub use network::NetworkMode;
+#[cfg(not(target_arch = "wasm32"))]
+pub use session::ArkSession;
+
+#[cfg(target_arch = "wasm32")]
+use crate::network::NetworkMode;
+#[cfg(target_arch = "wasm32")]
+use crate::session::ArkSession;
+
 use std::cell::RefCell;
 use std::future::Future;
 use std::rc::Rc;
@@ -33,8 +44,6 @@ use crate::api_types::{
     OpenSessionParams, SendPaymentParams, UnilateralExitFeeParams,
 };
 use crate::error::{ArkResult, ArkWasmError, map_js_error};
-use crate::network::NetworkMode;
-use crate::session::ArkSession;
 
 thread_local! {
     static ACTIVE_SESSION: RefCell<Option<Rc<ArkSession>>> = const { RefCell::new(None) };
@@ -156,10 +165,14 @@ pub async fn ark_sync_with_operator() -> Result<JsValue, JsValue> {
 }
 
 #[wasm_bindgen]
-pub async fn ark_migrate_deprecated_signer_vtxos() -> Result<(), JsValue> {
+pub async fn ark_migrate_deprecated_signer_vtxos() -> Result<JsValue, JsValue> {
     map_js_async(async {
-        with_session_async(|session| async move { session.migrate_deprecated_signer_vtxos().await })
-            .await
+        let result =
+            with_session_async(
+                |session| async move { session.migrate_deprecated_signer_vtxos().await },
+            )
+            .await?;
+        to_js_value(result)
     })
     .await
 }

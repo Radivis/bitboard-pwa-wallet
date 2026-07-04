@@ -19,6 +19,34 @@ pub struct OpenSessionResult {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct SignerMigrationLegResultDto {
+    pub migrated_count: u32,
+    pub migrated_sats: u64,
+    pub deferred_count: u32,
+    pub deferred_sats: u64,
+    pub oversized_count: u32,
+    pub oversized_sats: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub settle_txid: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SignerMigrationResultDto {
+    pub vtxo_leg: SignerMigrationLegResultDto,
+    pub boarding_leg: SignerMigrationLegResultDto,
+    pub pass_count: u32,
+    pub migration_complete: bool,
+    pub remaining_pre_cutoff_vtxo_count: u32,
+    pub remaining_pre_cutoff_sats: u64,
+    pub remaining_pre_cutoff_boarding_count: u32,
+    pub settle_txids: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct BalanceDto {
     /// Net spendable balance (offchain + bumper, minus exits in progress).
     pub confirmed_sats: u64,

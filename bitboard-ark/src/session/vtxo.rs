@@ -53,9 +53,8 @@ async fn sleep(duration: std::time::Duration) {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-async fn sleep(_duration: std::time::Duration) {
-    // The crate ships as WASM; native builds exist only for type-checking and have no browser
-    // timer to await, so the delay is a no-op there.
+async fn sleep(duration: std::time::Duration) {
+    tokio::time::sleep(duration).await;
 }
 
 impl ArkSession {
