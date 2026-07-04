@@ -45,7 +45,7 @@ function ReviewAmountValue({
       showFiatLayout={mainnetFiatMode && hasUsableFiatSpot}
       btcPriceInFiat={btcPriceInFiat}
       currency={defaultFiatCurrency}
-      isDetail={false}
+      isDetail
       size="sm"
       rateLoading={fiatRatesLoading}
     />

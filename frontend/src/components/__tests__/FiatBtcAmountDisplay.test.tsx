@@ -36,14 +36,14 @@ describe('FiatBtcAmountDisplay', () => {
     expect(screen.getByTestId('amount-wrapper')).toHaveClass('items-center')
   })
 
-  it('uses sm sizing for both parts when isDetail is false', () => {
+  it('uses sm sizing for both parts when isDetail is true', () => {
     const { container } = renderWithProviders(
       <FiatBtcAmountDisplay
         amountSats={100_000}
         showFiatLayout
         btcPriceInFiat={100_000}
         currency="USD"
-        isDetail={false}
+        isDetail
         data-testid="detail-amount"
       />,
     )
@@ -67,6 +67,28 @@ describe('FiatBtcAmountDisplay', () => {
     expect(screen.getByTestId('amount-btc-segment')).toHaveTextContent('0.00050000')
   })
 
+  it('applies fiatClassName and btcClassName to child displays', () => {
+    renderWithProviders(
+      <FiatBtcAmountDisplay
+        amountSats={100_000}
+        showFiatLayout
+        btcPriceInFiat={100_000}
+        currency="USD"
+        fiatClassName="text-2xl"
+        btcClassName="text-xl"
+        data-testid="headline-amount"
+      />,
+    )
+
+    expect(screen.getByTestId('headline-amount')).toHaveClass('text-2xl')
+    expect(screen.getByTestId('headline-amount-btc-segment')).toHaveTextContent(
+      '0.00100000',
+    )
+    expect(
+      screen.getByTestId('headline-amount-btc-segment').querySelector('.text-xl'),
+    ).toBeInTheDocument()
+  })
+
   it('inherits row color from className instead of forcing muted BTC', () => {
     renderWithProviders(
       <FiatBtcAmountDisplay
@@ -74,7 +96,7 @@ describe('FiatBtcAmountDisplay', () => {
         showFiatLayout
         btcPriceInFiat={100_000}
         currency="USD"
-        isDetail={false}
+        isDetail
         className="text-yellow-600"
         data-testid="pending-amount"
       />,

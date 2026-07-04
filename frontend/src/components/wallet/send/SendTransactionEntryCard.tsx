@@ -196,7 +196,7 @@ export function SendTransactionEntryCard({
         showFiatLayout={mainnetFiatMode}
         btcPriceInFiat={btcPriceInFiat}
         currency={defaultFiatCurrency}
-        isDetail={false}
+        isDetail
         rateLoading={fiatRatesLoading}
         className="inline text-muted-foreground"
       />
@@ -416,7 +416,7 @@ export function SendTransactionEntryCard({
                     showFiatLayout={mainnetFiatMode}
                     btcPriceInFiat={btcPriceInFiat}
                     currency={defaultFiatCurrency}
-                    isDetail={false}
+                    isDetail
                     size="sm"
                     rateLoading={fiatRatesLoading}
                   />

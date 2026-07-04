@@ -102,7 +102,7 @@ export function ArkadeBalanceBreakdown({
                 <FiatBtcAmountDisplay
                   amountSats={boardingSpendableSats}
                   {...fiatAmountProps}
-                  isDetail={false}
+                  isDetail
                 />
               </p>
             </InfomodeWrapper>
@@ -119,7 +119,7 @@ export function ArkadeBalanceBreakdown({
                 <FiatBtcAmountDisplay
                   amountSats={boardingPendingSats}
                   {...fiatAmountProps}
-                  isDetail={false}
+                  isDetail
                 />
               </p>
             </InfomodeWrapper>
@@ -136,7 +136,7 @@ export function ArkadeBalanceBreakdown({
                 <FiatBtcAmountDisplay
                   amountSats={offchainSpendableSats}
                   {...fiatAmountProps}
-                  isDetail={false}
+                  isDetail
                 />
               </p>
             </InfomodeWrapper>
@@ -157,7 +157,7 @@ export function ArkadeBalanceBreakdown({
                 <FiatBtcAmountDisplay
                   amountSats={unilateralExitSats}
                   {...fiatAmountProps}
-                  isDetail={false}
+                  isDetail
                 />
               </p>
             </InfomodeWrapper>
@@ -174,7 +174,7 @@ export function ArkadeBalanceBreakdown({
                 <FiatBtcAmountDisplay
                   amountSats={collaborativeExitSats}
                   {...fiatAmountProps}
-                  isDetail={false}
+                  isDetail
                 />
               </p>
             </InfomodeWrapper>
@@ -187,7 +187,7 @@ export function ArkadeBalanceBreakdown({
           <FiatBtcAmountDisplay
             amountSats={pendingRecoverySats}
             {...fiatAmountProps}
-            isDetail={false}
+            isDetail
           />
         </p>
       )}
@@ -207,7 +207,7 @@ export function ArkadeBalanceBreakdown({
             <FiatBtcAmountDisplay
               amountSats={pendingOperatorSweepSats}
               {...fiatAmountProps}
-              isDetail={false}
+              isDetail
             />
           </p>
         </InfomodeWrapper>
@@ -225,7 +225,7 @@ export function ArkadeBalanceBreakdown({
             <FiatBtcAmountDisplay
               amountSats={onchainBumperSats}
               {...fiatAmountProps}
-              isDetail={false}
+              isDetail
             />
           </p>
         </InfomodeWrapper>
@@ -242,7 +242,7 @@ export function ArkadeBalanceBreakdown({
             <FiatBtcAmountDisplay
               amountSats={balance.totalSats}
               {...fiatAmountProps}
-              isDetail={false}
+              isDetail
             />
           </p>
         </InfomodeWrapper>

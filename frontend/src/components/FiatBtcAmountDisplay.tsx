@@ -15,6 +15,8 @@ type FiatBtcAmountDisplayProps = {
   size?: BitcoinAmountDisplaySize
   rateLoading?: boolean
   className?: string
+  fiatClassName?: string
+  btcClassName?: string
   'data-testid'?: string
 }
 
@@ -26,9 +28,9 @@ function resolveFiatAndBtcSizes(
     return { fiatSize: sizeOverride, btcSize: sizeOverride }
   }
   if (isDetail) {
-    return { fiatSize: 'lg', btcSize: 'md' }
+    return { fiatSize: 'sm', btcSize: 'sm' }
   }
-  return { fiatSize: 'sm', btcSize: 'sm' }
+  return { fiatSize: 'lg', btcSize: 'md' }
 }
 
 export function FiatBtcAmountDisplay({
@@ -36,15 +38,19 @@ export function FiatBtcAmountDisplay({
   showFiatLayout,
   btcPriceInFiat,
   currency,
-  isDetail = true,
+  isDetail = false,
   size,
   rateLoading = false,
   className,
+  fiatClassName,
+  btcClassName,
   'data-testid': dataTestId,
 }: FiatBtcAmountDisplayProps) {
   const { fiatSize, btcSize } = resolveFiatAndBtcSizes(isDetail, size)
-  const btcOnlySize = size ?? (isDetail ? 'lg' : 'sm')
-  const useInheritedRowColor = className != null && className.length > 0
+  const btcOnlySize = size ?? (isDetail ? 'sm' : 'lg')
+  const useInheritedRowColor =
+    (className != null && className.length > 0) ||
+    (btcClassName != null && btcClassName.length > 0)
 
   if (!showFiatLayout) {
     return (
@@ -67,6 +73,7 @@ export function FiatBtcAmountDisplay({
         btcPriceInFiat={btcPriceInFiat}
         currency={currency}
         size={fiatSize}
+        className={fiatClassName}
         rateLoading={rateLoading}
         data-testid={dataTestId}
       />
@@ -83,6 +90,7 @@ export function FiatBtcAmountDisplay({
         <BitcoinAmountDisplay
           amountSats={amountSats}
           size={btcSize}
+          className={btcClassName}
         />
       </span>
     </span>

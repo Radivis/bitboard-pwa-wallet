@@ -330,7 +330,7 @@ function BalanceCard() {
                       <FiatBtcAmountDisplay
                         amountSats={onChainDisplay.confirmedSats}
                         {...fiatAmountProps}
-                        isDetail={false}
+                        isDetail
                         className="text-muted-foreground"
                       />
                     </span>
@@ -343,7 +343,7 @@ function BalanceCard() {
                       <FiatBtcAmountDisplay
                         amountSats={onChainDisplay.trustedPendingSats}
                         {...fiatAmountProps}
-                        isDetail={false}
+                        isDetail
                         className="text-yellow-600 dark:text-yellow-400"
                       />
                     </span>
@@ -356,7 +356,7 @@ function BalanceCard() {
                       <FiatBtcAmountDisplay
                         amountSats={onChainDisplay.untrustedPendingSats}
                         {...fiatAmountProps}
-                        isDetail={false}
+                        isDetail
                         className="text-yellow-600 dark:text-yellow-400"
                       />
                     </span>
@@ -369,7 +369,7 @@ function BalanceCard() {
                       <FiatBtcAmountDisplay
                         amountSats={onChainDisplay.immatureSats}
                         {...fiatAmountProps}
-                        isDetail={false}
+                        isDetail
                         className="text-muted-foreground"
                       />
                     </span>
@@ -474,7 +474,8 @@ function BalanceCard() {
                 <FiatBtcAmountDisplay
                   amountSats={lightningTotalSats}
                   {...fiatAmountProps}
-                  className="text-2xl"
+                  fiatClassName="text-2xl"
+                  btcClassName="text-xl"
                 />
                 <ul className="mt-3 space-y-1.5 border-t border-border pt-3 text-sm">
                   {lightningBalanceRows.map((row) => (
