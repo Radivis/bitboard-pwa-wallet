@@ -249,8 +249,12 @@ export function canStartBootstrapUnlock(): boolean {
   return true
 }
 
+export function isLockUnlockOperation(operation: LockLifecycleOperation): boolean {
+  return operation === 'manual_unlock' || operation === 'bootstrap_unlock'
+}
+
 export function isLockUnlockInProgress(): boolean {
-  return snapshot.operation === 'manual_unlock' || snapshot.operation === 'bootstrap_unlock'
+  return isLockUnlockOperation(snapshot.operation)
 }
 
 function beginInFlightWork(

@@ -18,7 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.3.3] - 2026-07-04
 
 ### Added
-- Arkade balance can now also be displaced in fiat currency denomination
+- Arkade balance can now also be displayed in fiat currency denomination
 
 ### Changed
 - When fiat amounts are shown, breakdown detail amounts are now also displayed in fiat

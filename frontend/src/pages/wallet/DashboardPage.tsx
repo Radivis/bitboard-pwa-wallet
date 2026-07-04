@@ -24,7 +24,6 @@ import { Button } from '@/components/ui/button'
 import { WalletUnlockOrNearZeroLoading } from '@/components/WalletUnlockOrNearZeroLoading'
 import { CardPagination } from '@/components/CardPagination'
 import { TransactionItem } from '@/components/TransactionItem'
-import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
 import { BitcoinFiatDenominationSwitch } from '@/components/BitcoinFiatDenominationSwitch'
 import { FiatBtcAmountDisplay } from '@/components/FiatBtcAmountDisplay'
 import { OnchainSaveErrorBanner } from '@/pages/wallet/OnchainSaveErrorBanner'
@@ -493,9 +492,10 @@ function BalanceCard() {
                           </span>
                         ) : (
                           <>
-                            <BitcoinAmountDisplay
+                            <FiatBtcAmountDisplay
                               amountSats={row.balanceSats}
-                              size="sm"
+                              {...fiatAmountProps}
+                              isDetail
                               className="inline text-muted-foreground"
                             />
                             {row.isStaleBalance ? (
