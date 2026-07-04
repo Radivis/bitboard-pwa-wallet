@@ -26,12 +26,10 @@ const BOARD_SATS: u64 = 200_000;
 const BOARDING_COOPERATIVE_SETTLE_BUDGET: Duration = Duration::from_secs(25);
 const BOARDING_ESPLORA_CONFIRM_TIMEOUT: Duration = Duration::from_secs(20);
 
-static REGTEST_INTEGRATION_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+static REGTEST_INTEGRATION_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
-fn lock_regtest_suite() -> std::sync::MutexGuard<'static, ()> {
-    REGTEST_INTEGRATION_LOCK
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
+async fn lock_regtest_suite() -> tokio::sync::MutexGuard<'static, ()> {
+    REGTEST_INTEGRATION_LOCK.lock().await
 }
 
 struct RegtestEndpoints {
@@ -219,18 +217,17 @@ async fn wait_for_confirmed_esplora_sats(esplora_url: &str, address: &str, min_s
     let deadline = std::time::Instant::now() + BOARDING_ESPLORA_CONFIRM_TIMEOUT;
     while std::time::Instant::now() < deadline {
         let url = format!("{base}/address/{address}/utxo");
-        if let Ok(response) = client.get(&url).send().await {
-            if response.status().is_success() {
-                if let Ok(utxos) = response.json::<Vec<EsploraUtxo>>().await {
-                    let confirmed_total = utxos
-                        .iter()
-                        .filter(|utxo| utxo.status.confirmed)
-                        .map(|utxo| utxo.value)
-                        .sum::<u64>();
-                    if confirmed_total >= min_sats {
-                        return;
-                    }
-                }
+        if let Ok(response) = client.get(&url).send().await
+            && response.status().is_success()
+            && let Ok(utxos) = response.json::<Vec<EsploraUtxo>>().await
+        {
+            let confirmed_total = utxos
+                .iter()
+                .filter(|utxo| utxo.status.confirmed)
+                .map(|utxo| utxo.value)
+                .sum::<u64>();
+            if confirmed_total >= min_sats {
+                return;
             }
         }
         tokio::time::sleep(Duration::from_millis(250)).await;
@@ -409,7 +406,7 @@ async fn cooperative_signer_migration_stamps_current_signer_after_complete() {
     if !regtest_enabled() {
         return;
     }
-    let _regtest_lock = lock_regtest_suite();
+    let _regtest_lock = lock_regtest_suite().await;
 
     let endpoints = regtest_endpoints();
     // No boarded funds: cooperative migration is already complete (nothing on deprecated signer).
@@ -463,7 +460,7 @@ async fn cooperative_signer_migration_clears_pending_recovery_with_boarded_fixtu
         panic!("ARKADE_REGTEST_BOARDED_FIXTURE file not found: {fixture_path}");
     }
 
-    let _regtest_lock = lock_regtest_suite();
+    let _regtest_lock = lock_regtest_suite().await;
     let endpoints = regtest_endpoints();
     let fixture = prepare_deprecated_signer_fixture(&endpoints).await;
 
@@ -503,7 +500,7 @@ async fn migrate_fails_fast_when_discover_keys_cannot_run() {
     if !regtest_enabled() {
         return;
     }
-    let _regtest_lock = lock_regtest_suite();
+    let _regtest_lock = lock_regtest_suite().await;
 
     let endpoints = regtest_endpoints();
     let fixture = prepare_deprecated_signer_session_without_boarding(&endpoints).await;
@@ -547,7 +544,7 @@ async fn export_boarded_wallet_fixture() {
         );
         return;
     }
-    let _regtest_lock = lock_regtest_suite();
+    let _regtest_lock = lock_regtest_suite().await;
     let endpoints = regtest_endpoints();
     let (session, mnemonic) = board_fresh_wallet(&endpoints).await;
     let persistence_before_rotate = session.export_persistence().expect("export");
