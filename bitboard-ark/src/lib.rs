@@ -22,6 +22,8 @@ mod session_boarding_utxo_tests;
 mod session_exit_candidate_tests;
 #[cfg(test)]
 mod session_mapper_tests;
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod session_unilateral_exit_regtest_tests;
 
 #[cfg(not(target_arch = "wasm32"))]
 pub use network::NetworkMode;

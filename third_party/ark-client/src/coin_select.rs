@@ -174,15 +174,18 @@ where
     let mut selected_vtxo_outputs = HashSet::new();
     let mut selected_amount = Amount::ZERO;
 
+    // Completion targets explicit virtual txids. After unroll, arkd's indexer often marks those
+    // VTXOs `is_spent` and/or `is_unrolled`, which moves them into `VtxoList::spent()` — they are
+    // no longer returned by `all_unspent()`. Search the full list for filter matches instead.
     for virtual_tx_outpoint in vtxo_list
-        .all_unspent()
-        .filter(|vtp| {
-            !vtp.is_spent
-                && (vtp.is_unrolled
-                    || vtxo_txid_filter.contains(&vtp.outpoint.txid))
-        })
+        .all()
+        .filter(|vtp| vtxo_txid_filter.contains(&vtp.outpoint.txid) && !vtp.is_swept)
     {
         let Some(vtxo) = script_pubkey_to_vtxo.get(&virtual_tx_outpoint.script) else {
+            tracing::debug!(
+                txid = %virtual_tx_outpoint.outpoint.txid,
+                "completion coin-select: missing spend info for VTXO script"
+            );
             continue;
         };
 
@@ -195,6 +198,17 @@ where
             )
         });
 
+        tracing::debug!(
+            txid = %virtual_tx_outpoint.outpoint.txid,
+            vout = virtual_tx_outpoint.outpoint.vout,
+            is_unrolled = virtual_tx_outpoint.is_unrolled,
+            is_spent = virtual_tx_outpoint.is_spent,
+            outpoint_count = outpoints.len(),
+            matches_virtual_txid,
+            matches_onchain_txid,
+            "completion coin-select: candidate VTXO"
+        );
+
         if !matches_virtual_txid && !matches_onchain_txid {
             continue;
         }
@@ -203,7 +217,7 @@ where
             if let ExplorerUtxo {
                 outpoint,
                 amount,
-                confirmation_blocktime: Some(confirmation_blocktime),
+                confirmation_blocktime,
                 confirmations,
                 is_spent: false,
             } = explorer_utxo
@@ -214,9 +228,13 @@ where
                     continue;
                 }
 
+                let confirmation_blocktime = confirmation_blocktime
+                    .map(Duration::from_secs)
+                    .unwrap_or(Duration::ZERO);
+
                 if vtxo.can_be_claimed_unilaterally_by_owner(
                     now.as_duration().try_into().map_err(Error::ad_hoc)?,
-                    Duration::from_secs(*confirmation_blocktime),
+                    confirmation_blocktime,
                     *confirmations,
                 ) && selected_vtxo_outputs.insert(unilateral_exit::VtxoInput::new(
                     *outpoint,
@@ -228,6 +246,14 @@ where
                     vtxo.exit_spend_info()?,
                 )) {
                     selected_amount += *amount;
+                } else {
+                    tracing::debug!(
+                        ?outpoint,
+                        confirmations,
+                        ?confirmation_blocktime,
+                        exit_delay = ?vtxo.exit_delay(),
+                        "completion coin-select: outpoint not yet claimable"
+                    );
                 }
             }
         }
@@ -244,4 +270,43 @@ where
         selected_vtxo_outputs.into_iter().collect(),
         selected_amount,
     ))
+}
+
+#[cfg(test)]
+mod completion_vtxo_list_tests {
+    use ark_core::VtxoList;
+    use ark_core::server::VirtualTxOutPoint;
+    use bitcoin::{Amount, OutPoint, ScriptBuf, Txid};
+
+    fn virtual_vtxo(txid_byte: u8, is_spent: bool, is_unrolled: bool) -> VirtualTxOutPoint {
+        VirtualTxOutPoint {
+            outpoint: OutPoint {
+                txid: Txid::from_byte_array([txid_byte; 32]),
+                vout: 0,
+            },
+            created_at: 0,
+            expires_at: i64::MAX,
+            amount: Amount::from_sat(100_000),
+            script: ScriptBuf::new(),
+            is_preconfirmed: false,
+            is_swept: false,
+            is_unrolled,
+            is_spent,
+            spent_by: None,
+            commitment_txids: Vec::new(),
+            settled_by: None,
+            ark_txid: None,
+            assets: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn spent_or_unrolled_vtxos_are_excluded_from_all_unspent_but_in_all() {
+        let vtxo = virtual_vtxo(0xab, true, false);
+        let list = VtxoList::new(Amount::from_sat(546), vec![vtxo.clone()]);
+
+        assert_eq!(list.all_unspent().count(), 0);
+        assert_eq!(list.all().count(), 1);
+        assert_eq!(list.all().next().unwrap().outpoint, vtxo.outpoint);
+    }
 }
