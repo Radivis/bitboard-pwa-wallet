@@ -137,7 +137,7 @@ describe('SendTransactionReviewStep', () => {
     expect(screen.queryByText('0.00150000')).not.toBeInTheDocument()
   })
 
-  it('renders fiat primary and muted BTC secondary in mainnet fiat mode', () => {
+  it('renders inline fiat and BTC amounts in mainnet fiat mode', () => {
     renderWithProviders(
       <SendTransactionReviewStep
         {...defaultProps}

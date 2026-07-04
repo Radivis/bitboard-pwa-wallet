@@ -26,7 +26,7 @@ import { CardPagination } from '@/components/CardPagination'
 import { TransactionItem } from '@/components/TransactionItem'
 import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
 import { BitcoinFiatDenominationSwitch } from '@/components/BitcoinFiatDenominationSwitch'
-import { FiatAmountDisplay } from '@/components/FiatAmountDisplay'
+import { FiatBtcAmountDisplay } from '@/components/FiatBtcAmountDisplay'
 import { OnchainSaveErrorBanner } from '@/pages/wallet/OnchainSaveErrorBanner'
 import { balanceInfoToOnChainDisplay } from '@/lib/wallet/onchain-balance-display'
 import { retryImportInitialEsploraSyncWithWalletStatus } from '@/lib/wallet/wallet-utils'
@@ -247,72 +247,11 @@ function BalanceCard() {
   const mainnetFiatLayout =
     networkMode === 'mainnet' && fiatDenominationMode
 
-  function renderOnChainHeadline() {
-    if (mainnetFiatLayout) {
-      return (
-        <>
-          <div className="space-y-1">
-            <FiatAmountDisplay
-              amountSats={primarySats}
-              btcPriceInFiat={btcPriceInFiat}
-              currency={defaultFiatCurrency}
-              size="lg"
-              data-testid="dashboard-onchain-balance-amount"
-              rateLoading={fiatRatesQuery.isPending}
-            />
-          </div>
-          <div className="space-y-1">
-            <BitcoinAmountDisplay
-              amountSats={primarySats}
-              size="md"
-              allowUnitToggle={false}
-              className="text-muted-foreground"
-            />
-          </div>
-        </>
-      )
-    }
-    return (
-      <BitcoinAmountDisplay
-        amountSats={primarySats}
-        size="lg"
-        data-testid="dashboard-onchain-balance-amount"
-      />
-    )
-  }
-
-  function renderLightningTotalHeadline() {
-    if (mainnetFiatLayout) {
-      return (
-        <>
-          <div className="space-y-1">
-            <FiatAmountDisplay
-              amountSats={lightningTotalSats}
-              btcPriceInFiat={btcPriceInFiat}
-              currency={defaultFiatCurrency}
-              size="lg"
-              className="text-2xl"
-              rateLoading={fiatRatesQuery.isPending}
-            />
-          </div>
-          <div className="space-y-1">
-            <BitcoinAmountDisplay
-              amountSats={lightningTotalSats}
-              size="md"
-              allowUnitToggle={false}
-              className="text-xl text-muted-foreground"
-            />
-          </div>
-        </>
-      )
-    }
-    return (
-      <BitcoinAmountDisplay
-        amountSats={lightningTotalSats}
-        size="lg"
-        className="text-2xl"
-      />
-    )
+  const fiatAmountProps = {
+    showFiatLayout: mainnetFiatLayout,
+    btcPriceInFiat,
+    currency: defaultFiatCurrency,
+    rateLoading: fiatRatesQuery.isPending,
   }
 
   return (
@@ -361,7 +300,11 @@ function BalanceCard() {
               />
             ) : (
               <>
-                {renderOnChainHeadline()}
+                <FiatBtcAmountDisplay
+                  amountSats={primarySats}
+                  {...fiatAmountProps}
+                  data-testid="dashboard-onchain-balance-amount"
+                />
                 {networkMode !== 'lab' && isStaleOnchain ? (
               <p
                 className="mt-2 text-xs text-amber-700 dark:text-amber-400"
@@ -384,9 +327,10 @@ function BalanceCard() {
                   <li className="flex justify-between gap-2 text-muted-foreground">
                     <span>Spendable (settled)</span>
                     <span className="text-right">
-                      <BitcoinAmountDisplay
+                      <FiatBtcAmountDisplay
                         amountSats={onChainDisplay.confirmedSats}
-                        size="sm"
+                        {...fiatAmountProps}
+                        isDetail={false}
                         className="text-muted-foreground"
                       />
                     </span>
@@ -396,9 +340,10 @@ function BalanceCard() {
                   <li className="flex justify-between gap-2 text-yellow-600 dark:text-yellow-400">
                     <span>Pending change</span>
                     <span className="text-right">
-                      <BitcoinAmountDisplay
+                      <FiatBtcAmountDisplay
                         amountSats={onChainDisplay.trustedPendingSats}
-                        size="sm"
+                        {...fiatAmountProps}
+                        isDetail={false}
                         className="text-yellow-600 dark:text-yellow-400"
                       />
                     </span>
@@ -408,9 +353,10 @@ function BalanceCard() {
                   <li className="flex justify-between gap-2 text-yellow-600 dark:text-yellow-400">
                     <span>Pending incoming</span>
                     <span className="text-right">
-                      <BitcoinAmountDisplay
+                      <FiatBtcAmountDisplay
                         amountSats={onChainDisplay.untrustedPendingSats}
-                        size="sm"
+                        {...fiatAmountProps}
+                        isDetail={false}
                         className="text-yellow-600 dark:text-yellow-400"
                       />
                     </span>
@@ -420,9 +366,10 @@ function BalanceCard() {
                   <li className="flex justify-between gap-2 text-muted-foreground">
                     <span>Immature</span>
                     <span className="text-right">
-                      <BitcoinAmountDisplay
+                      <FiatBtcAmountDisplay
                         amountSats={onChainDisplay.immatureSats}
-                        size="sm"
+                        {...fiatAmountProps}
+                        isDetail={false}
                         className="text-muted-foreground"
                       />
                     </span>
@@ -524,7 +471,11 @@ function BalanceCard() {
                     Total across {lightningBalanceRows.length} connected wallets
                   </p>
                 )}
-                {renderLightningTotalHeadline()}
+                <FiatBtcAmountDisplay
+                  amountSats={lightningTotalSats}
+                  {...fiatAmountProps}
+                  className="text-2xl"
+                />
                 <ul className="mt-3 space-y-1.5 border-t border-border pt-3 text-sm">
                   {lightningBalanceRows.map((row) => (
                     <li

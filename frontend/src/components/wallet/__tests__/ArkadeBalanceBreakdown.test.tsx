@@ -116,6 +116,8 @@ describe('ArkadeBalanceBreakdown', () => {
     )
 
     expect(screen.getByTestId('arkade-balance-amount')).toHaveTextContent(/\$100/)
-    expect(screen.getByText('0.00100000')).toBeInTheDocument()
+    expect(screen.getByTestId('arkade-balance-amount-btc-segment')).toHaveTextContent(
+      '0.00100000',
+    )
   })
 })

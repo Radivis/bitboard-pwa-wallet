@@ -25,7 +25,7 @@ import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
 import { BitcoinUnitSelect } from '@/components/BitcoinUnitSelect'
 import { RecipientQrScanModal } from '@/components/wallet/send/RecipientQrScanModal'
 import { BitcoinFiatDenominationSwitch } from '@/components/BitcoinFiatDenominationSwitch'
-import { FiatAmountDisplay } from '@/components/FiatAmountDisplay'
+import { FiatBtcAmountDisplay } from '@/components/FiatBtcAmountDisplay'
 import type { FiatCurrencyCode } from '@/lib/fiat/supported-fiat-currencies'
 import { fiatAmountInputPlaceholder } from '@/lib/fiat/format-fiat-display'
 import { isUsableBtcSpotPriceInFiat } from '@/lib/fiat/is-usable-btc-spot-price-in-fiat'
@@ -190,33 +190,14 @@ export function SendTransactionEntryCard({
     (needsUserLightningAmount || !isLightningSendMode)
 
   function spendableAmountRows(balanceSats: number) {
-    if (mainnetFiatMode && hasUsableFiatSpot) {
-      return (
-        <div className="space-y-1">
-          <div>
-            <FiatAmountDisplay
-              amountSats={balanceSats}
-              btcPriceInFiat={btcPriceInFiat}
-              currency={defaultFiatCurrency}
-              size="sm"
-              className="inline text-muted-foreground"
-            />
-          </div>
-          <div>
-            <BitcoinAmountDisplay
-              amountSats={balanceSats}
-              size="sm"
-              className="inline text-muted-foreground"
-              allowUnitToggle={false}
-            />
-          </div>
-        </div>
-      )
-    }
     return (
-      <BitcoinAmountDisplay
+      <FiatBtcAmountDisplay
         amountSats={balanceSats}
-        size="sm"
+        showFiatLayout={mainnetFiatMode}
+        btcPriceInFiat={btcPriceInFiat}
+        currency={defaultFiatCurrency}
+        isDetail={false}
+        rateLoading={fiatRatesLoading}
         className="inline text-muted-foreground"
       />
     )
@@ -430,28 +411,15 @@ export function SendTransactionEntryCard({
                 </div>
               ) : isLightningSendMode && !needsUserLightningAmount ? (
                 <div className="space-y-2 rounded-md border border-border bg-muted/30 px-3 py-2 text-sm tabular-nums">
-                  {mainnetFiatMode && hasUsableFiatSpot ? (
-                    <>
-                      <FiatAmountDisplay
-                        amountSats={lightningPayAmountSats}
-                        btcPriceInFiat={btcPriceInFiat}
-                        currency={defaultFiatCurrency}
-                        size="sm"
-                      />
-                      <div className="text-muted-foreground">
-                        <BitcoinAmountDisplay
-                          amountSats={lightningPayAmountSats}
-                          size="sm"
-                          allowUnitToggle={false}
-                        />
-                      </div>
-                    </>
-                  ) : (
-                    <BitcoinAmountDisplay
-                      amountSats={lightningPayAmountSats}
-                      size="sm"
-                    />
-                  )}
+                  <FiatBtcAmountDisplay
+                    amountSats={lightningPayAmountSats}
+                    showFiatLayout={mainnetFiatMode}
+                    btcPriceInFiat={btcPriceInFiat}
+                    currency={defaultFiatCurrency}
+                    isDetail={false}
+                    size="sm"
+                    rateLoading={fiatRatesLoading}
+                  />
                   {showBip11WithZeroBalance ? (
                     <div
                       role="alert"
