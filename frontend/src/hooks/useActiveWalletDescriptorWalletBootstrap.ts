@@ -4,6 +4,7 @@ import { activeWalletLoadQueryKeyPrefix } from '@/lib/wallet/wallet-load-query-k
 import { appQueryClient } from '@/lib/shared/app-query-client'
 import { useActiveWalletLoadQuery } from '@/hooks/useActiveWalletLoadQuery'
 import { isWalletSecretsSessionActive } from '@/lib/wallet/wallet-secrets-session'
+import { walletIsUnlockedOrSyncing } from '@/lib/wallet/wallet-unlocked-status'
 
 /**
  * Loads the active descriptor wallet into WASM when a session exists but the wallet is
@@ -25,6 +26,8 @@ export function useActiveWalletDescriptorWalletBootstrap(): void {
 
   useEffect(() => {
     if (!query.isError) return
+    // Stale bootstrap failures must not re-lock after a successful password unlock.
+    if (walletIsUnlockedOrSyncing(useWalletStore.getState().walletStatus)) return
     setWalletStatus('locked')
   }, [query.isError, setWalletStatus])
 }

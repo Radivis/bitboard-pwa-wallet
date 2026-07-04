@@ -15,6 +15,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+## [0.3.3] - 2026-07-TBD
+
+### Added
+- Arkade balance can now also be displaced in fiat currency denomination
+
+### Fixed
+- Fixed an issue with the unlock modal appearing after autolock timeout reloading immediately, even if the password was correct
+
 ## [0.3.2] - 2026-07-02
 
 ### Added

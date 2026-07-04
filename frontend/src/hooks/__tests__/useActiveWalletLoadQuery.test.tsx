@@ -16,7 +16,6 @@ import {
 const walletSecretsSessionState = { active: false }
 const orchestrateBootstrapUnlock = vi.fn()
 const canStartBootstrapUnlock = vi.fn()
-const isLockUnlockInProgress = vi.fn()
 
 vi.mock('@/lib/wallet/wallet-secrets-session', () => ({
   isWalletSecretsSessionActive: async () => walletSecretsSessionState.active,
@@ -30,7 +29,6 @@ vi.mock('@/lib/wallet/lifecycle/lock-lifecycle-orchestrator', async (importOrigi
     ...actual,
     orchestrateBootstrapUnlock: (...args: unknown[]) => orchestrateBootstrapUnlock(...args),
     canStartBootstrapUnlock: () => canStartBootstrapUnlock(),
-    isLockUnlockInProgress: () => isLockUnlockInProgress(),
   }
 })
 
@@ -57,7 +55,6 @@ describe('useActiveWalletLoadQuery', () => {
     walletSecretsSessionState.active = false
     orchestrateBootstrapUnlock.mockResolvedValue(undefined)
     canStartBootstrapUnlock.mockReturnValue(true)
-    isLockUnlockInProgress.mockReturnValue(false)
     useWalletStore.setState({
       networkMode: 'testnet',
       addressType: AddressType.Taproot,
@@ -130,7 +127,14 @@ describe('useActiveWalletLoadQuery', () => {
     })
     syncLockLifecycleWithActiveWallet(1)
     walletSecretsSessionState.active = true
-    isLockUnlockInProgress.mockReturnValue(true)
+
+    let resolveBootstrap: (() => void) | undefined
+    orchestrateBootstrapUnlock.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveBootstrap = resolve
+        }),
+    )
 
     const queryClient = new QueryClient({
       defaultOptions: { queries: { retry: false } },
@@ -155,5 +159,7 @@ describe('useActiveWalletLoadQuery', () => {
     await waitFor(() => {
       expect(orchestrateBootstrapUnlock).toHaveBeenCalledTimes(1)
     })
+
+    resolveBootstrap?.()
   })
 })

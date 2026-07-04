@@ -6,11 +6,16 @@ import { useWalletCryptoSessionPathGateStore } from '@/stores/walletCryptoSessio
 import { walletIsUnlockedOrSyncing } from '@/lib/wallet/wallet-unlocked-status'
 import { isWalletSecretsSessionActive } from '@/lib/wallet/wallet-secrets-session'
 import { reportWalletSyncError } from '@/lib/wallet/wallet-sync-error-toast'
+import { useLockLifecycleSnapshot } from '@/hooks/useLockLifecycleSnapshot'
 import {
   canStartBootstrapUnlock,
-  isLockUnlockInProgress,
   orchestrateBootstrapUnlock,
 } from '@/lib/wallet/lifecycle/lock-lifecycle-orchestrator'
+import type { LockLifecycleOperation } from '@/lib/wallet/lifecycle/lock-lifecycle-types'
+
+function lockUnlockOperationInProgress(operation: LockLifecycleOperation): boolean {
+  return operation === 'manual_unlock' || operation === 'bootstrap_unlock'
+}
 
 /**
  * TanStack Query observer for loading the active descriptor wallet when a session exists
@@ -25,7 +30,8 @@ export function useActiveWalletLoadQuery() {
   const walletStatus = useWalletStore((walletState) => walletState.walletStatus)
   const pathname = useWalletCryptoSessionPathGateStore((walletCryptoSessionPathGateState) => walletCryptoSessionPathGateState.pathname)
   const onWalletRoute = pathnameIsWalletRoute(pathname)
-  const lockUnlockInProgress = isLockUnlockInProgress()
+  const lockLifecycle = useLockLifecycleSnapshot()
+  const lockUnlockInProgress = lockUnlockOperationInProgress(lockLifecycle.operation)
 
   /**
    * `loadDescriptorWalletAndSync` marks the wallet unlocked before Esplora sync; bootstrap
