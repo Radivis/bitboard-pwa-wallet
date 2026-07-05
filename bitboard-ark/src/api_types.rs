@@ -151,6 +151,10 @@ pub struct ExitCandidateRow {
 pub struct OnchainBumperInfoDto {
     pub address: String,
     pub balance_sats: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub unilateral_exit_timelock_blocks: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub unilateral_exit_timelock_seconds: Option<u64>,
 }
 
 #[derive(Debug, Serialize)]

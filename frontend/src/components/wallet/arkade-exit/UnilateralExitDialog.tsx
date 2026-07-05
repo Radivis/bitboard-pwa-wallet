@@ -1,5 +1,5 @@
 import { Link } from '@tanstack/react-router'
-import { Loader2 } from 'lucide-react'
+import { Copy, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { ArkadeBumperWalletInfomodeContent } from '@/components/arkade/infomode/ArkadeBumperWalletInfomodeContent'
 import { ArkadeUnilateralExitInfomodeContent } from '@/components/arkade/infomode/ArkadeUnilateralExitInfomodeContent'
@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
 import { ARKADE_INFOMODE_IDS } from '@/lib/arkade/arkade-infomode'
+import { unilateralExitCompleteTimelockMessage } from '@/lib/arkade/arkade-exit-utils'
 import type { useArkadeExitFlow } from '@/hooks/useArkadeExitFlow'
 
 type ExitFlow = ReturnType<typeof useArkadeExitFlow>
@@ -26,12 +27,17 @@ function errorMessage(error: unknown): string {
   return 'Unknown error'
 }
 
-async function copyBumperAddress(address: string): Promise<void> {
+async function copyClipboardText(
+  text: string,
+  successMessage: string,
+  errorMessage: string,
+): Promise<void> {
+  if (text.trim().length === 0) return
   try {
-    await navigator.clipboard.writeText(address)
-    toast.success('Bumper wallet address copied')
+    await navigator.clipboard.writeText(text)
+    toast.success(successMessage)
   } catch {
-    toast.error('Failed to copy bumper wallet address')
+    toast.error(errorMessage)
   }
 }
 
@@ -202,7 +208,13 @@ export function UnilateralExitDialog({ exitFlow }: UnilateralExitDialogProps) {
                   data-testid="arkade-bumper-address"
                   aria-label="Copy bumper wallet address"
                   title="Click to copy bumper wallet address"
-                  onClick={() => void copyBumperAddress(bumperInfoQuery.data.address)}
+                  onClick={() =>
+                    void copyClipboardText(
+                      bumperInfoQuery.data.address,
+                      'Bumper wallet address copied',
+                      'Failed to copy bumper wallet address',
+                    )
+                  }
                 >
                   {bumperInfoQuery.data.address}
                 </button>
@@ -295,18 +307,47 @@ export function UnilateralExitDialog({ exitFlow }: UnilateralExitDialogProps) {
 
         {unilateralStep === 'complete' && (
           <>
-            <p className="text-sm text-muted-foreground">
-              After the CSV timelock expires, complete the exit to receive funds on-chain. A
-              separate on-chain transaction fee applies when completing.
+            <p
+              className="text-sm text-muted-foreground"
+              data-testid="arkade-unilateral-complete-timelock"
+            >
+              {unilateralExitCompleteTimelockMessage(
+                {
+                  timelockBlocks: bumperInfoQuery.data?.unilateralExitTimelockBlocks,
+                  timelockSeconds: bumperInfoQuery.data?.unilateralExitTimelockSeconds,
+                },
+                selectedCandidate?.canComplete === true,
+              )}{' '}
+              A separate on-chain transaction fee applies when completing.
             </p>
             <div className="space-y-2">
               <Label htmlFor="arkade-complete-destination">Destination address</Label>
-              <Input
-                id="arkade-complete-destination"
-                value={completeDestination}
-                onChange={(event) => setCompleteDestination(event.target.value)}
-                autoComplete="off"
-              />
+              <div className="flex items-center gap-2">
+                <Input
+                  id="arkade-complete-destination"
+                  className="font-mono"
+                  value={completeDestination}
+                  onChange={(event) => setCompleteDestination(event.target.value)}
+                  autoComplete="off"
+                />
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="outline"
+                  data-testid="arkade-complete-destination-copy"
+                  aria-label="Copy destination address"
+                  disabled={completeDestination.trim().length === 0}
+                  onClick={() =>
+                    void copyClipboardText(
+                      completeDestination,
+                      'Destination address copied',
+                      'Failed to copy destination address',
+                    )
+                  }
+                >
+                  <Copy className="h-4 w-4" aria-hidden />
+                </Button>
+              </div>
             </div>
             {completeExitMutation.isError && (
               <p className="text-sm text-destructive" data-testid="arkade-complete-error">

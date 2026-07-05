@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
   formatIntentFeePrograms,
+  formatUnilateralExitTimelock,
   formatUnilateralUnrollSuccessMessage,
   parseCollaborativeExitAmountSats,
   shouldShowUnilateralUnrollProgressToast,
+  unilateralExitCompleteTimelockMessage,
   unilateralUnrollProgressToastId,
 } from '@/lib/arkade/arkade-exit-utils'
 
@@ -72,5 +74,27 @@ describe('unilateral unroll toast helpers', () => {
         txid: '587b597602803187e73cb30ca7791254a146755ee6435244d048c8d4072c72a5',
       }),
     ).toBe('arkade-unroll-587b597602803187e73cb30ca7791254a146755ee6435244d048c8d4072c72a5')
+  })
+})
+
+describe('unilateral exit timelock display', () => {
+  it('formats block-based operator delay', () => {
+    expect(formatUnilateralExitTimelock({ timelockBlocks: 20 })).toBe('20 block confirmations')
+  })
+
+  it('formats time-based operator delay', () => {
+    expect(formatUnilateralExitTimelock({ timelockSeconds: 172_544 })).toBe('2 days')
+  })
+
+  it('describes waiting period on complete step', () => {
+    expect(
+      unilateralExitCompleteTimelockMessage({ timelockBlocks: 144 }, false),
+    ).toContain('144 block confirmations')
+  })
+
+  it('notes when timelock is already satisfied', () => {
+    expect(unilateralExitCompleteTimelockMessage({ timelockBlocks: 144 }, true)).toContain(
+      'satisfied',
+    )
   })
 })

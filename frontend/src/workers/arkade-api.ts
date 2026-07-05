@@ -125,6 +125,8 @@ export interface ArkadeExitCandidateRow {
 export interface ArkadeOnchainBumperInfo {
   address: string
   balanceSats: number
+  unilateralExitTimelockBlocks?: number
+  unilateralExitTimelockSeconds?: number
 }
 
 export interface ArkadeCollaborativeExitParams {

@@ -84,4 +84,60 @@ describe('UnilateralExitDialog', () => {
     await user.click(screen.getByTestId('arkade-bumper-address'))
     expect(writeTextMock).toHaveBeenCalledWith(bumperAddress)
   })
+
+  it('shows operator timelock duration on complete step', () => {
+    renderWithProviders(
+      <UnilateralExitDialog
+        exitFlow={buildExitFlow({
+          unilateralStep: 'complete',
+          completeDestination: 'bc1pexample',
+          selectedCandidate: {
+            id: 'vtxo-1',
+            txid: 'aa'.repeat(32),
+            vout: 0,
+            amountSats: 100_000,
+            canStartUnroll: false,
+            canComplete: false,
+            virtualStatusState: 'unrolled',
+            isUnrolled: true,
+            isRecoverable: false,
+          },
+          bumperInfoQuery: {
+            data: {
+              address: 'tb1qh6gfz5tdgdcx6jlwy99kj6a3k0mmzssgx4dleh',
+              balanceSats: 50_000,
+              unilateralExitTimelockBlocks: 144,
+            },
+          },
+        })}
+      />,
+    )
+
+    expect(screen.getByTestId('arkade-unilateral-complete-timelock')).toHaveTextContent(
+      /144 block confirmations/i,
+    )
+  })
+
+  it('copies destination address from complete step', async () => {
+    const user = userEvent.setup()
+    const destination = 'bc1p5pk0cgwwumwarqpdcdqczfjrhjkmnyhgf9ac6m5au4k7u7cqk9q0ss8c8q'
+    const writeTextMock = vi.fn().mockResolvedValue(undefined)
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText: writeTextMock },
+      writable: true,
+      configurable: true,
+    })
+
+    renderWithProviders(
+      <UnilateralExitDialog
+        exitFlow={buildExitFlow({
+          unilateralStep: 'complete',
+          completeDestination: destination,
+        })}
+      />,
+    )
+
+    await user.click(screen.getByTestId('arkade-complete-destination-copy'))
+    expect(writeTextMock).toHaveBeenCalledWith(destination)
+  })
 })

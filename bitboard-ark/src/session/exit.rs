@@ -81,9 +81,14 @@ impl ArkSession {
         self.client.sync_onchain_wallet().await?;
         let address = self.client.onchain_wallet_address()?;
         let balance = self.client.onchain_wallet_balance()?;
+        let server_info = self.client.server_info()?;
+        let (unilateral_exit_timelock_blocks, unilateral_exit_timelock_seconds) =
+            super::mappers::unilateral_exit_timelock_parts(server_info.unilateral_exit_delay);
         Ok(OnchainBumperInfoDto {
             address: address.to_string(),
             balance_sats: balance.confirmed.to_sat(),
+            unilateral_exit_timelock_blocks,
+            unilateral_exit_timelock_seconds,
         })
     }
 
