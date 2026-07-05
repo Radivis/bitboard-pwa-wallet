@@ -128,6 +128,7 @@ pub fn build_signer_migration_result_dto(
         boarding_leg: leg_accum_to_dto(&boarding_leg),
         pass_count,
         migration_complete,
+        pass_cap_reached: pass_count == MAX_SIGNER_MIGRATION_PASSES && !migration_complete,
         remaining_pre_cutoff_vtxo_count: remaining.vtxo_count as u32,
         remaining_pre_cutoff_sats: remaining.vtxo_sats,
         remaining_pre_cutoff_boarding_count: remaining.boarding_count as u32,
@@ -286,5 +287,44 @@ mod tests {
         assert_eq!(total.migrated_sats, 30_000);
         assert_eq!(total.deferred_count, 1);
         assert_eq!(total.deferred_sats, 3_000);
+    }
+
+    #[test]
+    fn build_signer_migration_result_dto_sets_pass_cap_reached() {
+        let remaining = PreCutoffCooperativeRemaining {
+            vtxo_count: 5,
+            vtxo_sats: 10_000,
+            boarding_count: 0,
+            boarding_sats: 0,
+        };
+        let at_cap = build_signer_migration_result_dto(
+            SignerMigrationLegAccum::default(),
+            SignerMigrationLegAccum::default(),
+            MAX_SIGNER_MIGRATION_PASSES,
+            remaining,
+            Vec::new(),
+            false,
+        );
+        assert!(at_cap.pass_cap_reached);
+
+        let below_cap = build_signer_migration_result_dto(
+            SignerMigrationLegAccum::default(),
+            SignerMigrationLegAccum::default(),
+            MAX_SIGNER_MIGRATION_PASSES - 1,
+            remaining,
+            Vec::new(),
+            false,
+        );
+        assert!(!below_cap.pass_cap_reached);
+
+        let complete_at_cap = build_signer_migration_result_dto(
+            SignerMigrationLegAccum::default(),
+            SignerMigrationLegAccum::default(),
+            MAX_SIGNER_MIGRATION_PASSES,
+            PreCutoffCooperativeRemaining::default(),
+            Vec::new(),
+            true,
+        );
+        assert!(!complete_at_cap.pass_cap_reached);
     }
 }

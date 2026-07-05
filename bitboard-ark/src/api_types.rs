@@ -39,6 +39,7 @@ pub struct SignerMigrationResultDto {
     pub boarding_leg: SignerMigrationLegResultDto,
     pub pass_count: u32,
     pub migration_complete: bool,
+    pub pass_cap_reached: bool,
     pub remaining_pre_cutoff_vtxo_count: u32,
     pub remaining_pre_cutoff_sats: u64,
     pub remaining_pre_cutoff_boarding_count: u32,

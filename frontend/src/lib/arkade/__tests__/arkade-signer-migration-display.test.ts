@@ -26,6 +26,7 @@ function migrationResult(
     },
     passCount: 0,
     migrationComplete: false,
+    passCapReached: false,
     remainingPreCutoffVtxoCount: 0,
     remainingPreCutoffSats: 0,
     remainingPreCutoffBoardingCount: 0,
@@ -52,6 +53,19 @@ describe('formatSignerMigrationPartialStatus', () => {
     )
     expect(message).toContain('Migrated 2 outputs (75000 sats)')
     expect(message).toContain('1 VTXO (25000 sats)')
+    expect(message).toContain('Migrate again')
+  })
+
+  it('notes when per-click pass cap was reached', () => {
+    const message = formatSignerMigrationPartialStatus(
+      migrationResult({
+        passCount: 20,
+        passCapReached: true,
+        remainingPreCutoffVtxoCount: 3,
+        remainingPreCutoffSats: 30_000,
+      }),
+    )
+    expect(message).toContain('per-click pass limit')
     expect(message).toContain('Migrate again')
   })
 })

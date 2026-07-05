@@ -74,6 +74,7 @@ function completeMigrationResult(): ArkadeSignerMigrationResult {
     },
     passCount: 1,
     migrationComplete: true,
+    passCapReached: false,
     remainingPreCutoffVtxoCount: 0,
     remainingPreCutoffSats: 0,
     remainingPreCutoffBoardingCount: 0,

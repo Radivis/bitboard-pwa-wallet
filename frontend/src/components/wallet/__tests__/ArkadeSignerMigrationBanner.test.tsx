@@ -161,6 +161,7 @@ function completeMigrationResult(
     boardingLeg: overrides.boardingLeg ?? emptyLeg(),
     passCount: overrides.passCount ?? 1,
     migrationComplete: overrides.migrationComplete ?? true,
+    passCapReached: overrides.passCapReached ?? false,
     remainingPreCutoffVtxoCount: overrides.remainingPreCutoffVtxoCount ?? 0,
     remainingPreCutoffSats: overrides.remainingPreCutoffSats ?? 0,
     remainingPreCutoffBoardingCount: overrides.remainingPreCutoffBoardingCount ?? 0,

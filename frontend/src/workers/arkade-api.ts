@@ -53,6 +53,7 @@ export interface ArkadeSignerMigrationResult {
   boardingLeg: ArkadeSignerMigrationLegResult
   passCount: number
   migrationComplete: boolean
+  passCapReached: boolean
   remainingPreCutoffVtxoCount: number
   remainingPreCutoffSats: number
   remainingPreCutoffBoardingCount: number

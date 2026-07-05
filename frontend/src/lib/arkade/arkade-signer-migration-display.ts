@@ -42,9 +42,13 @@ export function formatSignerMigrationPartialStatus(
       ? ` ${oversizedCount} VTXO${oversizedCount === 1 ? '' : 's'} exceed the operator batch limit and require unilateral exit in Management.`
       : ''
 
+  const passCapNote = result.passCapReached
+    ? ' This Migrate action reached the per-click pass limit — tap Migrate again to continue.'
+    : ''
+
   if (migratedCount > 0) {
-    return `Migrated ${migratedCount} output${migratedCount === 1 ? '' : 's'} (${migratedSats} sats). ${remainingParts.join(' and ')} still need migration — tap Migrate again.${oversizedNote}`
+    return `Migrated ${migratedCount} output${migratedCount === 1 ? '' : 's'} (${migratedSats} sats). ${remainingParts.join(' and ')} still need migration — tap Migrate again.${passCapNote}${oversizedNote}`
   }
 
-  return `${remainingParts.join(' and ')} still need migration — tap Migrate again.${oversizedNote}`
+  return `${remainingParts.join(' and ')} still need migration — tap Migrate again.${passCapNote}${oversizedNote}`
 }
