@@ -241,6 +241,40 @@ describe('arkade-sync-lifecycle-orchestrator', () => {
     expect(refreshArkadeStoreFromLoadedWasm).toHaveBeenCalledWith('conn-1')
   })
 
+  it('coalesced signerMigration returns migration result to all callers', async () => {
+    let resolveMigrate!: () => void
+    const migrateGate = new Promise<void>((resolve) => {
+      resolveMigrate = resolve
+    })
+    const incompleteResult = {
+      ...completeMigrationResult(),
+      migrationComplete: false,
+      remainingPreCutoffVtxoCount: 2,
+      remainingPreCutoffSats: 40_000,
+    }
+    migrateDeprecatedSignerVtxos.mockImplementation(async () => {
+      await migrateGate
+      return incompleteResult
+    })
+
+    const signerMigrationParams = {
+      ...syncParams,
+      syncKind: 'signerMigration' as const,
+    }
+    const first = orchestrateArkadeSyncThenSave(signerMigrationParams)
+    const second = orchestrateArkadeSyncThenSave(signerMigrationParams)
+
+    await vi.waitFor(() =>
+      expect(getArkadeSyncLifecycleSnapshot().syncPhase).toBe('syncing'),
+    )
+    resolveMigrate!()
+    const [firstResult, secondResult] = await Promise.all([first, second])
+
+    expect(migrateDeprecatedSignerVtxos).toHaveBeenCalledTimes(1)
+    expect(firstResult).toMatchObject({ migrationComplete: false })
+    expect(secondResult).toMatchObject({ migrationComplete: false })
+  })
+
   it('signerMigration skips save when migration is incomplete', async () => {
     migrateDeprecatedSignerVtxos.mockResolvedValueOnce({
       ...completeMigrationResult(),
