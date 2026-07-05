@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::str::FromStr;
 
 use ark_client::compute_offchain_balance;
@@ -13,8 +14,13 @@ use bitcoin::hex::FromHex;
 use bitcoin::{Amount, OutPoint, ScriptBuf, Txid, XOnlyPublicKey};
 
 use crate::error::{ArkResult, ArkWasmError};
+use crate::exit_balance::{
+    UnilateralExitOutpointKey, is_unilateral_exit_in_progress_outpoint,
+    unilateral_exit_in_progress_outpoints,
+};
 use crate::persistence::{
-    OffchainVtxoSnapshot, VirtualTxOutPointAssetRecord, VirtualTxOutPointRecord,
+    OffchainVtxoSnapshot, PendingExitDeductionRecord, VirtualTxOutPointAssetRecord,
+    VirtualTxOutPointRecord,
 };
 
 /// Signer-aware offchain balance buckets in satoshis.
@@ -55,21 +61,50 @@ pub fn vtxo_list_from_snapshot(snapshot: &OffchainVtxoSnapshot) -> ArkResult<Vtx
     Ok(VtxoList::new(dust, points))
 }
 
+pub fn pending_recovery_sats_excluding_unilateral_exit(
+    vtxo_list: &VtxoList,
+    server_info: &Info,
+    now: i64,
+    script_to_server_pk: impl Fn(&ScriptBuf) -> Option<XOnlyPublicKey>,
+    exclude_outpoints: &HashSet<UnilateralExitOutpointKey>,
+) -> u64 {
+    vtxo_list
+        .pending_recovery_due_to_signer_at(server_info, now, &script_to_server_pk)
+        .filter(|virtual_tx_outpoint| {
+            !is_unilateral_exit_in_progress_outpoint(
+                exclude_outpoints,
+                &virtual_tx_outpoint.outpoint.txid.to_string(),
+                virtual_tx_outpoint.outpoint.vout,
+            )
+        })
+        .fold(Amount::ZERO, |accumulator, virtual_tx_outpoint| {
+            accumulator + virtual_tx_outpoint.amount
+        })
+        .to_sat()
+}
+
 pub fn offchain_balance_buckets_from_snapshot(
     snapshot: &OffchainVtxoSnapshot,
     server_info: &Info,
     now: i64,
     legacy_signer_pk_fallback: Option<XOnlyPublicKey>,
+    pending_exit_deductions: &[PendingExitDeductionRecord],
 ) -> ArkResult<OffchainBalanceBuckets> {
     let vtxo_list = vtxo_list_from_snapshot(snapshot)?;
-    let balance = compute_offchain_balance(
+    let script_lookup = script_to_server_pk_lookup(snapshot, legacy_signer_pk_fallback)?;
+    let balance = compute_offchain_balance(&vtxo_list, &script_lookup, server_info, now)
+        .map_err(ArkWasmError::from)?;
+    let mut buckets = OffchainBalanceBuckets::from_live(&balance);
+    let in_progress =
+        unilateral_exit_in_progress_outpoints(Some(snapshot), pending_exit_deductions)?;
+    buckets.pending_recovery_sats = pending_recovery_sats_excluding_unilateral_exit(
         &vtxo_list,
-        script_to_server_pk_lookup(snapshot, legacy_signer_pk_fallback)?,
         server_info,
         now,
-    )
-    .map_err(ArkWasmError::from)?;
-    Ok(OffchainBalanceBuckets::from_live(&balance))
+        &script_lookup,
+        &in_progress,
+    );
+    Ok(buckets)
 }
 
 /// Naive bucket sums without signer-aware filtering. Prefer [`offchain_balance_buckets_from_snapshot`].
@@ -505,11 +540,79 @@ mod tests {
             )],
         );
         let buckets =
-            offchain_balance_buckets_from_snapshot(&snapshot, &server_info, 1_000_000, None)
+            offchain_balance_buckets_from_snapshot(&snapshot, &server_info, 1_000_000, None, &[])
                 .expect("snapshot buckets");
 
         assert_eq!(buckets.confirmed_sats, 0);
         assert_eq!(buckets.pending_recovery_sats, 50_000);
+    }
+
+    #[test]
+    fn pending_recovery_excludes_unilateral_exit_in_progress_outpoint() {
+        use crate::persistence::{PendingExitDeductionRecord, PendingExitKind};
+
+        let script = ScriptBuf::from_bytes(vec![0x51]);
+        let future_expiry = 2_000_000_000_i64;
+        let txid = Txid::from_byte_array([7; 32]).to_string();
+        let vtxo = VirtualTxOutPoint {
+            outpoint: OutPoint::new(Txid::from_byte_array([7; 32]), 0),
+            created_at: future_expiry - 86_400,
+            expires_at: future_expiry,
+            amount: Amount::from_sat(50_000),
+            script: script.clone(),
+            is_preconfirmed: false,
+            is_swept: false,
+            is_unrolled: false,
+            is_spent: false,
+            spent_by: None,
+            commitment_txids: vec![],
+            settled_by: None,
+            ark_txid: None,
+            assets: vec![],
+        };
+        let deprecated_pk = PublicKey::from_str(
+            "02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5",
+        )
+        .expect("valid key")
+        .x_only_public_key()
+        .0;
+        let snapshot = snapshot_from_virtual_tx_outpoints_with_script_lookup(
+            330,
+            1_000_000,
+            vec![vtxo],
+            |lookup_script| {
+                if lookup_script == &script {
+                    Some(deprecated_pk)
+                } else {
+                    None
+                }
+            },
+        );
+        let server_info = test_server_info_for_snapshot(
+            "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+            vec![(
+                "02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5",
+                500_000,
+            )],
+        );
+        let pending = vec![PendingExitDeductionRecord {
+            kind: PendingExitKind::Unilateral,
+            vtxo_txid: Some(txid),
+            vout: Some(0),
+            amount_sats: 50_000,
+            started_at: 1_000_000,
+            baseline_offchain_spendable_sats: None,
+        }];
+        let buckets = offchain_balance_buckets_from_snapshot(
+            &snapshot,
+            &server_info,
+            1_000_000,
+            None,
+            &pending,
+        )
+        .expect("snapshot buckets");
+
+        assert_eq!(buckets.pending_recovery_sats, 0);
     }
 
     fn test_server_info_for_snapshot(current_hex: &str, deprecated: Vec<(&str, i64)>) -> Info {

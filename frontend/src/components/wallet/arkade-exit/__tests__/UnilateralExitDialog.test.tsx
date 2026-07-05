@@ -15,22 +15,18 @@ function buildExitFlow(overrides: Partial<ExitFlow>): ExitFlow {
     setUnilateralStep: vi.fn(),
     selectedCandidate: null,
     unrollProgress: [],
-    unrolledVtxoTxid: null,
-    completeDestination: '',
-    setCompleteDestination: vi.fn(),
     exitCandidatesQuery: { isLoading: false, data: [] },
+    inProgressQuery: { isLoading: false, data: [] },
     bumperInfoQuery: {
       data: { address: 'tb1qh6gfz5tdgdcx6jlwy99kj6a3k0mmzssgx4dleh', balanceSats: 50_000 },
     },
     unilateralFeeQuery: { isLoading: false, isError: false, data: undefined },
-    unrollMutation: { mutate: vi.fn(), isPending: false },
-    completeExitMutation: { mutate: vi.fn(), isPending: false },
+    unrollMutation: { mutate: vi.fn(), isPending: false, isError: false },
     bumperBalance: 50_000,
     unilateralFeeEstimate: undefined,
     bumperLow: false,
+    unilateralExitInProgressSats: 0,
     handleStartUnroll: vi.fn(),
-    handleCompleteExit: vi.fn(),
-    skipToComplete: vi.fn(),
     selectCandidate: vi.fn(),
     ...overrides,
   } as unknown as ExitFlow
@@ -44,6 +40,21 @@ describe('UnilateralExitDialog', () => {
     expect(emptyMessage).toHaveTextContent(/No VTXOs reported by the operator/i)
     expect(emptyMessage).toHaveTextContent(/bumper wallet/i)
     expect(emptyMessage).not.toHaveTextContent(/No recoverable VTXOs found/i)
+  })
+
+  it('points to complete flow when funds are already exiting', () => {
+    renderWithProviders(
+      <UnilateralExitDialog
+        exitFlow={buildExitFlow({
+          unilateralExitInProgressSats: 180_603,
+          inProgressQuery: { isLoading: false, data: [{ id: '1', txid: 'aa', vout: 0, amountSats: 180_603, virtualStatusState: 'unrolled', canComplete: false }] },
+        })}
+      />,
+    )
+
+    expect(screen.getByTestId('arkade-unilateral-exit-empty')).toHaveTextContent(
+      /Complete unilateral exit/i,
+    )
   })
 
   it('copies bumper wallet address on click', async () => {
@@ -71,6 +82,7 @@ describe('UnilateralExitDialog', () => {
                 canComplete: false,
                 virtualStatusState: 'settled',
                 isUnrolled: false,
+                isRecoverable: false,
               },
             ],
           },
@@ -83,61 +95,5 @@ describe('UnilateralExitDialog', () => {
 
     await user.click(screen.getByTestId('arkade-bumper-address'))
     expect(writeTextMock).toHaveBeenCalledWith(bumperAddress)
-  })
-
-  it('shows operator timelock duration on complete step', () => {
-    renderWithProviders(
-      <UnilateralExitDialog
-        exitFlow={buildExitFlow({
-          unilateralStep: 'complete',
-          completeDestination: 'bc1pexample',
-          selectedCandidate: {
-            id: 'vtxo-1',
-            txid: 'aa'.repeat(32),
-            vout: 0,
-            amountSats: 100_000,
-            canStartUnroll: false,
-            canComplete: false,
-            virtualStatusState: 'unrolled',
-            isUnrolled: true,
-            isRecoverable: false,
-          },
-          bumperInfoQuery: {
-            data: {
-              address: 'tb1qh6gfz5tdgdcx6jlwy99kj6a3k0mmzssgx4dleh',
-              balanceSats: 50_000,
-              unilateralExitTimelockBlocks: 144,
-            },
-          },
-        })}
-      />,
-    )
-
-    expect(screen.getByTestId('arkade-unilateral-complete-timelock')).toHaveTextContent(
-      /144 block confirmations/i,
-    )
-  })
-
-  it('copies destination address from complete step', async () => {
-    const user = userEvent.setup()
-    const destination = 'bc1p5pk0cgwwumwarqpdcdqczfjrhjkmnyhgf9ac6m5au4k7u7cqk9q0ss8c8q'
-    const writeTextMock = vi.fn().mockResolvedValue(undefined)
-    Object.defineProperty(navigator, 'clipboard', {
-      value: { writeText: writeTextMock },
-      writable: true,
-      configurable: true,
-    })
-
-    renderWithProviders(
-      <UnilateralExitDialog
-        exitFlow={buildExitFlow({
-          unilateralStep: 'complete',
-          completeDestination: destination,
-        })}
-      />,
-    )
-
-    await user.click(screen.getByTestId('arkade-complete-destination-copy'))
-    expect(writeTextMock).toHaveBeenCalledWith(destination)
   })
 })

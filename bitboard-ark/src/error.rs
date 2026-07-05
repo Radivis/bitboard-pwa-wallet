@@ -66,6 +66,12 @@ pub enum ArkWasmError {
     #[error("vtxo_txids must not be empty")]
     EmptyVtxoTxids,
 
+    #[error("VTXO {txid} is not in unilateral exit")]
+    VtxoNotInUnilateralExit { txid: String },
+
+    #[error("VTXO {txid} timelock has not elapsed yet — complete is not available")]
+    VtxoUnilateralExitNotReady { txid: String },
+
     #[error("{0}")]
     Boarding(String),
 
@@ -115,7 +121,9 @@ impl ArkWasmError {
             | Self::InvalidOnchainAddress(_)
             | Self::InvalidSendAmount
             | Self::VtxoNotFound { .. }
-            | Self::EmptyVtxoTxids => CODE_VALIDATION,
+            | Self::EmptyVtxoTxids
+            | Self::VtxoNotInUnilateralExit { .. }
+            | Self::VtxoUnilateralExitNotReady { .. } => CODE_VALIDATION,
             Self::DelegatorNotConfigured | Self::Delegator(_) | Self::InvalidDelegatorFee(_) => {
                 CODE_DELEGATOR
             }

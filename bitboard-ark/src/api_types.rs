@@ -148,6 +148,30 @@ pub struct ExitCandidateRow {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct UnilateralExitInProgressRow {
+    pub id: String,
+    pub txid: String,
+    pub vout: u32,
+    pub amount_sats: u64,
+    pub virtual_status_state: String,
+    pub can_complete: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub started_at: Option<i64>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UnilateralExitCompletionFeeEstimateDto {
+    pub selected_total_sats: u64,
+    pub estimated_fee_sats: u64,
+    pub estimated_receive_sats: u64,
+    pub fee_rate_sat_per_vb: f64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub estimate_error: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct OnchainBumperInfoDto {
     pub address: String,
     pub balance_sats: u64,
@@ -276,6 +300,13 @@ pub struct CollaborativeExitParams {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CompleteUnilateralExitParams {
+    pub vtxo_txids: Vec<String>,
+    pub destination_address: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UnilateralExitCompletionFeeEstimateParams {
     pub vtxo_txids: Vec<String>,
     pub destination_address: String,
 }

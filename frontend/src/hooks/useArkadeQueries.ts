@@ -17,7 +17,9 @@ import {
   arkadeHistoryQueryKey,
   arkadeRecoverableVtxoFeeQueryKey,
   arkadeSignerMigrationPartialResultQueryKey,
+  arkadeUnilateralExitCompletionFeeQueryKey,
   arkadeUnilateralExitFeeQueryKey,
+  arkadeUnilateralExitsInProgressQueryKey,
   arkadeVtxoExpiryQueryKey,
 } from '@/lib/arkade/arkade-query-keys'
 import type {
@@ -208,6 +210,9 @@ async function invalidateArkadeWalletDataQueries(
     }),
     queryClient.invalidateQueries({
       queryKey: arkadeExitCandidatesQueryKey(walletId, networkMode, connectionId),
+    }),
+    queryClient.invalidateQueries({
+      queryKey: arkadeUnilateralExitsInProgressQueryKey(walletId, networkMode, connectionId),
     }),
     queryClient.invalidateQueries({
       queryKey: arkadeBumperInfoQueryKey(walletId, networkMode, connectionId),
@@ -773,6 +778,66 @@ export function useArkadeBumperInfoQuery(enabled: boolean) {
     enabled: enabled && sessionReady,
     queryFn: () => withReadyArkadeWorker(() => getArkadeWorker().getOnchainBumperInfo()),
     staleTime: ARKADE_SESSION_POLL_STALE_MS,
+  })
+}
+
+export function useArkadeUnilateralExitsInProgressQuery(enabled: boolean) {
+  const { networkMode, activeWalletId, activeArkadeConnectionId, sessionReady } =
+    useArkadeQueryBase()
+
+  return useQuery({
+    queryKey: walletScopedQueryKey(
+      activeWalletId,
+      networkMode,
+      activeArkadeConnectionId,
+      arkadeUnilateralExitsInProgressQueryKey,
+      'unilateral-exits-in-progress',
+    ),
+    enabled: enabled && sessionReady,
+    queryFn: () =>
+      withReadyArkadeWorker(() => getArkadeWorker().listUnilateralExitsInProgress()),
+    refetchInterval: enabled ? ARKADE_EXIT_CANDIDATES_POLL_MS : false,
+    staleTime: ARKADE_SESSION_POLL_STALE_MS,
+  })
+}
+
+export function useArkadeUnilateralExitCompletionFeeQuery(params: {
+  enabled: boolean
+  vtxoTxids: string[]
+  destinationAddress: string
+}) {
+  const { networkMode, activeWalletId, activeArkadeConnectionId, sessionReady } =
+    useArkadeQueryBase()
+  const destinationTrimmed = params.destinationAddress.trim()
+  const sortedVtxoTxids = [...params.vtxoTxids].sort()
+  const enabled =
+    params.enabled &&
+    sessionReady &&
+    sortedVtxoTxids.length > 0 &&
+    destinationTrimmed.length > 0
+
+  return useQuery({
+    queryKey:
+      activeWalletId != null &&
+      activeArkadeConnectionId != null &&
+      isArkadeSupportedNetworkMode(networkMode)
+        ? arkadeUnilateralExitCompletionFeeQueryKey(
+            activeWalletId,
+            networkMode,
+            activeArkadeConnectionId,
+            sortedVtxoTxids,
+            destinationTrimmed,
+          )
+        : arkadeDisabledQueryKey('unilateral-completion-fee'),
+    enabled,
+    queryFn: () =>
+      withReadyArkadeWorker(() =>
+        getArkadeWorker().estimateUnilateralExitCompletion({
+          vtxoTxids: sortedVtxoTxids,
+          destinationAddress: destinationTrimmed,
+        }),
+      ),
+    staleTime: ARKADE_FEE_ESTIMATE_STALE_MS,
   })
 }
 

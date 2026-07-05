@@ -68,7 +68,16 @@ feature:
       - id: ARK-REC-05
         description: When recoverablePendingOperatorSweepVtxoCount is greater than zero, balance breakdown shows expired waiting for operator sweep line without Recover now
       - id: ARK-REC-06
-        description: When pendingRecoverySats is greater than zero, Dashboard and Management show a pending-recovery banner linking to unilateral exit in Management
+        description: When pendingRecoverySats is greater than zero, Dashboard and Management show a pending-recovery banner linking to Start unilateral exit in Management
+      - id: ARK-REC-07
+        description: VTXOs in unilateral exit do not contribute to pendingRecoverySats even when they would otherwise qualify for pending recovery
+    unilateral_exit:
+      - id: ARK-EXIT-01
+        description: Start unilateral exit lists only VTXOs that can start unroll; in-progress and ready-to-complete VTXOs are excluded
+      - id: ARK-EXIT-02
+        description: Complete unilateral exit lists in-progress VTXOs from local snapshot and pending deductions when operator indexing lags
+      - id: ARK-EXIT-03
+        description: Complete unilateral exit supports multi-select batch completion with fee estimate scaled to selected inputs
     operator_sync:
       - id: ARK-SYNC-01
         description: When discover_keys fails during operator sync but list_vtxos succeeds, sync lifecycle records a warningMessage and dashboard/management show a non-blocking sync warning banner
@@ -84,7 +93,9 @@ feature:
         - delegator fee from getDelegateInfo when reachable
         - expiring VTXO count when session open
         - collaborative exit (on-chain destination, optional partial amount) with operator fee estimate from getInfo().fees
-        - unilateral exit per VTXO (select, unroll, complete after timelock) with unroll step count and bumper fee estimate
+        - Start unilateral exit (select VTXO, unroll) with bumper fee estimate; separate Complete unilateral exit for in-progress VTXOs after timelock
+        - batch complete multiple ready in-progress VTXOs in one on-chain transaction with dynamic completion fee estimate
+        - pending_recovery_sats excludes VTXOs already in unilateral exit (no double-count with unilateral_exit_in_progress_sats)
         - signer migration banner when operator signing key rotated (migratable, due now, or expired regimes)
         - pending recovery banner when funds are locked past cooperative migration cutoff
         - recoverable VTXO banner when operator reports swept/expired/sub-dust VTXOs with Recover now action

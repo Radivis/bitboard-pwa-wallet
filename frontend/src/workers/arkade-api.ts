@@ -122,6 +122,29 @@ export interface ArkadeExitCandidateRow {
   canComplete: boolean
 }
 
+export interface ArkadeUnilateralExitInProgressRow {
+  id: string
+  txid: string
+  vout: number
+  amountSats: number
+  virtualStatusState: string
+  canComplete: boolean
+  startedAt?: number
+}
+
+export interface ArkadeUnilateralExitCompletionFeeEstimate {
+  selectedTotalSats: number
+  estimatedFeeSats: number
+  estimatedReceiveSats: number
+  feeRateSatPerVb: number
+  estimateError?: string
+}
+
+export interface ArkadeUnilateralExitCompletionFeeEstimateParams {
+  vtxoTxids: string[]
+  destinationAddress: string
+}
+
 export interface ArkadeOnchainBumperInfo {
   address: string
   balanceSats: number
@@ -270,6 +293,7 @@ export interface ArkadeService {
   getRecoverableVtxoFeeEstimate(): Promise<ArkadeRecoverableVtxoFeeEstimate>
   recoverRecoverableVtxos(): Promise<string | null>
   listExitCandidates(): Promise<ArkadeExitCandidateRow[]>
+  listUnilateralExitsInProgress(): Promise<ArkadeUnilateralExitInProgressRow[]>
   getOnchainBumperInfo(): Promise<ArkadeOnchainBumperInfo>
   collaborativeExit(params: ArkadeCollaborativeExitParams): Promise<string>
   runUnilateralUnroll(
@@ -283,4 +307,7 @@ export interface ArkadeService {
   estimateUnilateralExit(
     params: ArkadeUnilateralExitFeeEstimateParams,
   ): Promise<ArkadeUnilateralExitFeeEstimate>
+  estimateUnilateralExitCompletion(
+    params: ArkadeUnilateralExitCompletionFeeEstimateParams,
+  ): Promise<ArkadeUnilateralExitCompletionFeeEstimate>
 }

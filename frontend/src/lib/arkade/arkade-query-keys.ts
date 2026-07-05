@@ -175,6 +175,39 @@ export const arkadeCollaborativeExitFeeQueryKey = (
     amountSats ?? 'full',
   ] as const
 
+export const arkadeUnilateralExitsInProgressQueryKey = (
+  walletId: number,
+  networkMode: ArkadeSupportedNetworkMode,
+  connectionId: string,
+) =>
+  [
+    ...WALLET_DB_QUERY_KEY_ROOT,
+    'arkade',
+    walletId,
+    networkMode,
+    connectionId,
+    'unilateral-exits-in-progress',
+  ] as const
+
+export const arkadeUnilateralExitCompletionFeeQueryKey = (
+  walletId: number,
+  networkMode: ArkadeSupportedNetworkMode,
+  connectionId: string,
+  vtxoTxids: string[],
+  destinationAddress: string,
+) =>
+  [
+    ...WALLET_DB_QUERY_KEY_ROOT,
+    'arkade',
+    walletId,
+    networkMode,
+    connectionId,
+    'exit-fee',
+    'unilateral-completion',
+    [...vtxoTxids].sort().join(','),
+    destinationAddress,
+  ] as const
+
 export const arkadeUnilateralExitFeeQueryKey = (
   walletId: number,
   networkMode: ArkadeSupportedNetworkMode,

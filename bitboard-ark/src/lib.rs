@@ -45,7 +45,7 @@ use wasm_bindgen::prelude::*;
 
 use crate::api_types::{
     CollaborativeExitFeeEstimateParams, CollaborativeExitParams, OpenSessionParams,
-    SendPaymentParams, UnilateralExitFeeParams,
+    SendPaymentParams, UnilateralExitCompletionFeeEstimateParams, UnilateralExitFeeParams,
 };
 use crate::error::{ArkResult, ArkWasmError, map_js_error};
 
@@ -333,6 +333,17 @@ pub async fn ark_list_exit_candidates() -> Result<JsValue, JsValue> {
 }
 
 #[wasm_bindgen]
+pub async fn ark_list_unilateral_exits_in_progress() -> Result<JsValue, JsValue> {
+    map_js_async(async {
+        export_session_json(
+            |session| async move { session.list_unilateral_exits_in_progress().await },
+        )
+        .await
+    })
+    .await
+}
+
+#[wasm_bindgen]
 pub async fn ark_get_onchain_bumper_info() -> Result<JsValue, JsValue> {
     map_js_async(async {
         export_session_json(|session| async move { session.onchain_bumper_info().await }).await
@@ -400,6 +411,19 @@ pub async fn ark_complete_unilateral_exit(params: JsValue) -> Result<String, JsV
         let params: CompleteUnilateralExitParams = serde_wasm_bindgen::from_value(params)?;
         with_session_async(|session| async move { session.complete_unilateral_exit(params).await })
             .await
+    })
+    .await
+}
+
+#[wasm_bindgen]
+pub async fn ark_estimate_unilateral_exit_completion(params: JsValue) -> Result<JsValue, JsValue> {
+    map_js_async(async {
+        let params: UnilateralExitCompletionFeeEstimateParams =
+            serde_wasm_bindgen::from_value(params)?;
+        export_session_json(|session| async move {
+            session.estimate_unilateral_exit_completion(params).await
+        })
+        .await
     })
     .await
 }

@@ -57,7 +57,7 @@ describe('unilateral unroll toast helpers', () => {
         '587b597602803187e73cb30ca7791254a146755ee6435244d048c8d4072c72a5',
       ),
     ).toBe(
-      'Unroll complete (587b59760280…) — complete exit after the timelock',
+      'Unroll complete (587b59760280…). Use Complete unilateral exit when the timelock elapses.',
     )
   })
 

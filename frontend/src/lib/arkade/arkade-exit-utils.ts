@@ -57,7 +57,7 @@ export function formatArkadeTxidToastSnippet(txid: string): string {
 }
 
 export function formatUnilateralUnrollSuccessMessage(vtxoTxid: string): string {
-  return `Unroll complete (${formatArkadeTxidToastSnippet(vtxoTxid)}) — complete exit after the timelock`
+  return `Unroll complete (${formatArkadeTxidToastSnippet(vtxoTxid)}). Use Complete unilateral exit when the timelock elapses.`
 }
 
 /** Sonner toast id so in-progress unroll updates one notification per on-chain tx. */
