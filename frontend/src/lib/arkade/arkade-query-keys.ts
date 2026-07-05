@@ -140,6 +140,22 @@ export const arkadeRecoverableVtxoFeeQueryKey = (
     'recoverable-vtxo-fee',
   ] as const
 
+export const arkadeSignerMigrationPartialResultQueryKey = (
+  walletId: number,
+  networkMode: ArkadeSupportedNetworkMode,
+  connectionId: string,
+  previousSignerPkHex: string,
+) =>
+  [
+    ...WALLET_DB_QUERY_KEY_ROOT,
+    'arkade',
+    walletId,
+    networkMode,
+    connectionId,
+    'signer-migration-partial',
+    previousSignerPkHex,
+  ] as const
+
 export const arkadeCollaborativeExitFeeQueryKey = (
   walletId: number,
   networkMode: ArkadeSupportedNetworkMode,

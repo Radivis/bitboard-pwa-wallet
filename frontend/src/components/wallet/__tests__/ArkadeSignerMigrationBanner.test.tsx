@@ -5,10 +5,24 @@ import { ArkadeSignerMigrationBanner } from '@/components/wallet/ArkadeSignerMig
 import type { ArkadeSignerMigrationHint, ArkadeSignerMigrationResult } from '@/workers/arkade-api'
 import type { NetworkMode } from '@/stores/walletStore'
 
-const orchestrateArkadeSyncThenSave = vi.fn()
+const signerMigrationMutate = vi.fn()
+const partialResultRef = vi.hoisted(() => ({
+  data: null as ArkadeSignerMigrationResult | null,
+}))
+const signerMigrationMutationRef = vi.hoisted(() => ({
+  isPending: false,
+  error: null as Error | null,
+}))
 
-vi.mock('@/lib/wallet/lifecycle/arkade-sync-lifecycle-orchestrator', () => ({
-  orchestrateArkadeSyncThenSave: (...args: unknown[]) => orchestrateArkadeSyncThenSave(...args),
+vi.mock('@/hooks/useArkadeQueries', () => ({
+  useArkadeSignerMigrationMutation: () => ({
+    mutate: signerMigrationMutate,
+    isPending: signerMigrationMutationRef.isPending,
+    error: signerMigrationMutationRef.error,
+  }),
+  useArkadeSignerMigrationPartialResultQuery: () => ({
+    data: partialResultRef.data,
+  }),
 }))
 
 const walletStoreState = vi.hoisted(() => ({
@@ -38,10 +52,12 @@ function renderBanner(hint: ArkadeSignerMigrationHint | null) {
 describe('ArkadeSignerMigrationBanner', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    partialResultRef.data = null
+    signerMigrationMutationRef.isPending = false
+    signerMigrationMutationRef.error = null
     walletStoreState.arkadeSignerMigrationHint = null
     walletStoreState.activeWalletId = 1
     walletStoreState.activeArkadeConnectionId = 'conn-1'
-    orchestrateArkadeSyncThenSave.mockResolvedValue(completeMigrationResult())
   })
 
   it('renders nothing when migration hint is absent', () => {
@@ -68,64 +84,61 @@ describe('ArkadeSignerMigrationBanner', () => {
     expect(screen.queryByRole('button', { name: /Migrate funds/ })).not.toBeInTheDocument()
   })
 
-  it('keeps hint and shows partial status when migration is incomplete', async () => {
-    const user = userEvent.setup()
-    orchestrateArkadeSyncThenSave.mockResolvedValueOnce(
-      completeMigrationResult({
-        migrationComplete: false,
-        remainingPreCutoffVtxoCount: 2,
-        remainingPreCutoffSats: 40_000,
-        vtxoLeg: {
-          migratedCount: 1,
-          migratedSats: 20_000,
-          deferredCount: 2,
-          deferredSats: 40_000,
-          oversizedCount: 0,
-          oversizedSats: 0,
-        },
-        boardingLeg: emptyLeg(),
-      }),
-    )
+  it('shows partial status from query cache and migrate again action', () => {
+    partialResultRef.data = completeMigrationResult({
+      migrationComplete: false,
+      remainingPreCutoffVtxoCount: 2,
+      remainingPreCutoffSats: 40_000,
+      vtxoLeg: {
+        migratedCount: 1,
+        migratedSats: 20_000,
+        deferredCount: 2,
+        deferredSats: 40_000,
+        oversizedCount: 0,
+        oversizedSats: 0,
+      },
+      boardingLeg: emptyLeg(),
+    })
     renderBanner(migrationHint('migratable'))
 
-    await user.click(screen.getByRole('button', { name: 'Migrate funds' }))
-
-    expect(walletStoreState.setArkadeSignerMigrationHint).not.toHaveBeenCalled()
     expect(screen.getByTestId('arkade-signer-migration-partial')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Migrate again' })).toBeInTheDocument()
   })
 
-  it('runs signer migration sync and clears hint on complete success', async () => {
-    const user = userEvent.setup()
-    renderBanner(migrationHint('migratable'))
-
-    await user.click(screen.getByRole('button', { name: 'Migrate funds' }))
-
-    expect(orchestrateArkadeSyncThenSave).toHaveBeenCalledWith({
-      walletId: 1,
-      networkMode: 'signet',
-      connectionId: 'conn-1',
-      syncKind: 'signerMigration',
-      awaitCompletion: true,
-      throwOnError: true,
+  it('keeps partial status visible after remount when query cache has data', () => {
+    partialResultRef.data = completeMigrationResult({
+      migrationComplete: false,
+      remainingPreCutoffVtxoCount: 1,
+      remainingPreCutoffSats: 25_000,
     })
-    expect(walletStoreState.setArkadeSignerMigrationHint).toHaveBeenCalledWith(null)
+    const hint = migrationHint('migratable')
+    const { unmount } = renderBanner(hint)
+    expect(screen.getByTestId('arkade-signer-migration-partial')).toBeInTheDocument()
+    unmount()
+
+    renderBanner(hint)
+    expect(screen.getByTestId('arkade-signer-migration-partial')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Migrate again' })).toBeInTheDocument()
   })
 
-  it('shows parsed Ark client message when migration fails', async () => {
+  it('calls signer migration mutation when migrate is clicked', async () => {
     const user = userEvent.setup()
-    orchestrateArkadeSyncThenSave.mockRejectedValueOnce(
-      new Error(
-        JSON.stringify({
-          code: 'client',
-          message:
-            'Ark client error: failed to get VTXOs for addresses: request failed: request failed',
-        }),
-      ),
-    )
     renderBanner(migrationHint('migratable'))
 
     await user.click(screen.getByRole('button', { name: 'Migrate funds' }))
+
+    expect(signerMigrationMutate).toHaveBeenCalledTimes(1)
+  })
+
+  it('shows parsed Ark client message when migration fails', () => {
+    signerMigrationMutationRef.error = new Error(
+      JSON.stringify({
+        code: 'client',
+        message:
+          'Ark client error: failed to get VTXOs for addresses: request failed: request failed',
+      }),
+    )
+    renderBanner(migrationHint('migratable'))
 
     expect(
       screen.getByText(

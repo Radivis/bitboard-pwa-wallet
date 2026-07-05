@@ -1,9 +1,11 @@
 import { AlertTriangle, Loader2 } from 'lucide-react'
-import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import type { ArkadeSignerMigrationHint, ArkadeSignerMigrationResult } from '@/workers/arkade-api'
 import { formatSignerMigrationPartialStatus } from '@/lib/arkade/arkade-signer-migration-display'
-import { orchestrateArkadeSyncThenSave } from '@/lib/wallet/lifecycle/arkade-sync-lifecycle-orchestrator'
+import {
+  useArkadeSignerMigrationMutation,
+  useArkadeSignerMigrationPartialResultQuery,
+} from '@/hooks/useArkadeQueries'
 import {
   LIFECYCLE_SYNC_ERROR_FALLBACK,
   userFacingLifecycleErrorMessage,
@@ -55,7 +57,7 @@ function migrationBannerCopy(hint: ArkadeSignerMigrationHint): {
 
 function showMigrateAction(
   hint: ArkadeSignerMigrationHint,
-  migrationResult: ArkadeSignerMigrationResult | null,
+  migrationResult: ArkadeSignerMigrationResult | null | undefined,
 ): boolean {
   if (hint.deprecatedStatus === 'expired') {
     return false
@@ -68,55 +70,23 @@ function showMigrateAction(
 
 export function ArkadeSignerMigrationBanner() {
   const hint = useWalletStore((state) => state.arkadeSignerMigrationHint)
-  const setHint = useWalletStore((state) => state.setArkadeSignerMigrationHint)
-  const networkMode = useWalletStore((state) => state.networkMode)
-  const activeWalletId = useWalletStore((state) => state.activeWalletId)
-  const activeArkadeConnectionId = useWalletStore((state) => state.activeArkadeConnectionId)
-  const [isMigrating, setIsMigrating] = useState(false)
-  const [errorMessage, setErrorMessage] = useState<string | null>(null)
-  const [partialMigrationResult, setPartialMigrationResult] =
-    useState<ArkadeSignerMigrationResult | null>(null)
+  const partialMigrationResultQuery = useArkadeSignerMigrationPartialResultQuery()
+  const signerMigrationMutation = useArkadeSignerMigrationMutation()
 
   if (hint == null) {
     return null
   }
 
+  const partialMigrationResult = partialMigrationResultQuery.data ?? null
   const copy = migrationBannerCopy(hint)
   const migrateActionVisible = showMigrateAction(hint, partialMigrationResult)
-
-  async function handleMigrateFunds(): Promise<void> {
-    if (activeWalletId == null || activeArkadeConnectionId == null) {
-      setErrorMessage('Arkade session is not ready')
-      return
-    }
-
-    setIsMigrating(true)
-    setErrorMessage(null)
-    try {
-      const migrationResult = await orchestrateArkadeSyncThenSave({
-        walletId: activeWalletId,
-        networkMode,
-        connectionId: activeArkadeConnectionId,
-        syncKind: 'signerMigration',
-        awaitCompletion: true,
-        throwOnError: true,
-      })
-      if (migrationResult != null && migrationResult.migrationComplete) {
-        setPartialMigrationResult(null)
-        setHint(null)
-        return
-      }
-      if (migrationResult != null) {
-        setPartialMigrationResult(migrationResult)
-      }
-    } catch (error) {
-      setErrorMessage(
-        userFacingLifecycleErrorMessage(error, LIFECYCLE_SYNC_ERROR_FALLBACK),
-      )
-    } finally {
-      setIsMigrating(false)
-    }
-  }
+  const migrationErrorMessage =
+    signerMigrationMutation.error != null
+      ? userFacingLifecycleErrorMessage(
+          signerMigrationMutation.error,
+          LIFECYCLE_SYNC_ERROR_FALLBACK,
+        )
+      : null
 
   return (
     <div
@@ -139,10 +109,10 @@ export function ArkadeSignerMigrationBanner() {
               type="button"
               size="sm"
               variant="secondary"
-              disabled={isMigrating}
-              onClick={() => void handleMigrateFunds()}
+              disabled={signerMigrationMutation.isPending}
+              onClick={() => signerMigrationMutation.mutate()}
             >
-              {isMigrating ? (
+              {signerMigrationMutation.isPending ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
                   Migrating…
@@ -154,8 +124,8 @@ export function ArkadeSignerMigrationBanner() {
               )}
             </Button>
           ) : null}
-          {errorMessage != null ? (
-            <p className="text-destructive">{errorMessage}</p>
+          {migrationErrorMessage != null ? (
+            <p className="text-destructive">{migrationErrorMessage}</p>
           ) : null}
         </div>
       </div>

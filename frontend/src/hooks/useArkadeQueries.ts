@@ -16,12 +16,14 @@ import {
   arkadeExitCandidatesQueryKey,
   arkadeHistoryQueryKey,
   arkadeRecoverableVtxoFeeQueryKey,
+  arkadeSignerMigrationPartialResultQueryKey,
   arkadeUnilateralExitFeeQueryKey,
   arkadeVtxoExpiryQueryKey,
 } from '@/lib/arkade/arkade-query-keys'
 import type {
   ArkadeBalanceInfo,
   ArkadeBoardingStatus,
+  ArkadeSignerMigrationResult,
   ArkadeUnrollProgressEvent,
 } from '@/workers/arkade-api'
 import { isArkadeActiveForNetworkMode } from '@/lib/arkade/arkade-utils'
@@ -34,7 +36,10 @@ import { useIsArkadeSessionReady } from '@/hooks/useArkadeLifecycleSnapshots'
 import {
   openArkadeSessionForWallet,
 } from '@/lib/arkade/arkade-session-service'
-import { scheduleBackgroundArkadeOperatorSync } from '@/lib/wallet/lifecycle/arkade-sync-lifecycle-orchestrator'
+import {
+  orchestrateArkadeSyncThenSave,
+  scheduleBackgroundArkadeOperatorSync,
+} from '@/lib/wallet/lifecycle/arkade-sync-lifecycle-orchestrator'
 import { readArkadeDashboardStateFromStore } from '@/lib/arkade/arkade-persistence-store-sync'
 import {
   ARKADE_BUMPER_FUNDING_POLL_MS,
@@ -525,6 +530,105 @@ export function useArkadeRecoverRecoverableVtxosMutation() {
     },
     onError: (err) => {
       toast.error(errorMessage(err))
+    },
+  })
+}
+
+export function useArkadeSignerMigrationPartialResultQuery() {
+  const queryClient = useQueryClient()
+  const migrationHint = useWalletStore(
+    (walletState) => walletState.arkadeSignerMigrationHint,
+  )
+  const { networkMode, activeWalletId, activeArkadeConnectionId, sessionReady } =
+    useArkadeQueryBase()
+
+  const queryKey = walletScopedQueryKey(
+    activeWalletId,
+    networkMode,
+    activeArkadeConnectionId,
+    (walletId, scopedNetworkMode, connectionId) =>
+      arkadeSignerMigrationPartialResultQueryKey(
+        walletId,
+        scopedNetworkMode,
+        connectionId,
+        migrationHint?.previousSignerPkHex ?? '',
+      ),
+    'signer-migration-partial',
+  )
+
+  return useQuery({
+    queryKey,
+    enabled:
+      migrationHint != null &&
+      sessionReady &&
+      activeWalletId != null &&
+      activeArkadeConnectionId != null &&
+      isArkadeSupportedNetworkMode(networkMode),
+    queryFn: async () =>
+      queryClient.getQueryData<ArkadeSignerMigrationResult>(queryKey) ?? null,
+    staleTime: Number.POSITIVE_INFINITY,
+    gcTime: 1000 * 60 * 30,
+  })
+}
+
+export function useArkadeSignerMigrationMutation() {
+  const queryClient = useQueryClient()
+  const { networkMode, activeWalletId, activeArkadeConnectionId } =
+    useArkadeQueryBase()
+
+  return useMutation({
+    mutationFn: async () => {
+      if (activeWalletId == null || activeArkadeConnectionId == null) {
+        throw new Error('Arkade session is not ready')
+      }
+      const migrationResult = await orchestrateArkadeSyncThenSave({
+        walletId: activeWalletId,
+        networkMode,
+        connectionId: activeArkadeConnectionId,
+        syncKind: 'signerMigration',
+        awaitCompletion: true,
+        throwOnError: true,
+      })
+      if (migrationResult == null) {
+        throw new Error('Signer migration did not return a result')
+      }
+      return migrationResult
+    },
+    onSuccess: async (migrationResult) => {
+      if (
+        activeWalletId == null ||
+        activeArkadeConnectionId == null ||
+        !isArkadeSupportedNetworkMode(networkMode)
+      ) {
+        return
+      }
+
+      const migrationHint = useWalletStore.getState().arkadeSignerMigrationHint
+      const partialResultQueryKey =
+        migrationHint != null
+          ? arkadeSignerMigrationPartialResultQueryKey(
+              activeWalletId,
+              networkMode,
+              activeArkadeConnectionId,
+              migrationHint.previousSignerPkHex,
+            )
+          : null
+
+      if (migrationResult.migrationComplete) {
+        if (partialResultQueryKey != null) {
+          queryClient.removeQueries({ queryKey: partialResultQueryKey })
+        }
+        useWalletStore.getState().setArkadeSignerMigrationHint(null)
+      } else if (partialResultQueryKey != null) {
+        queryClient.setQueryData(partialResultQueryKey, migrationResult)
+      }
+
+      await invalidateArkadeWalletDataQueries(
+        queryClient,
+        activeWalletId,
+        networkMode,
+        activeArkadeConnectionId,
+      )
     },
   })
 }

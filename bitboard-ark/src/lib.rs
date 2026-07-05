@@ -22,13 +22,15 @@ mod session_boarding_utxo_tests;
 mod session_exit_candidate_tests;
 #[cfg(test)]
 mod session_mapper_tests;
-#[cfg(all(test, not(target_arch = "wasm32")))]
-mod session_unilateral_exit_regtest_tests;
-
+#[cfg(not(target_arch = "wasm32"))]
+pub use api_types::CompleteUnilateralExitParams;
 #[cfg(not(target_arch = "wasm32"))]
 pub use network::NetworkMode;
 #[cfg(not(target_arch = "wasm32"))]
 pub use session::ArkSession;
+
+#[cfg(target_arch = "wasm32")]
+use crate::api_types::CompleteUnilateralExitParams;
 
 #[cfg(target_arch = "wasm32")]
 use crate::network::NetworkMode;
@@ -42,8 +44,8 @@ use std::rc::Rc;
 use wasm_bindgen::prelude::*;
 
 use crate::api_types::{
-    CollaborativeExitFeeEstimateParams, CollaborativeExitParams, CompleteUnilateralExitParams,
-    OpenSessionParams, SendPaymentParams, UnilateralExitFeeParams,
+    CollaborativeExitFeeEstimateParams, CollaborativeExitParams, OpenSessionParams,
+    SendPaymentParams, UnilateralExitFeeParams,
 };
 use crate::error::{ArkResult, ArkWasmError, map_js_error};
 

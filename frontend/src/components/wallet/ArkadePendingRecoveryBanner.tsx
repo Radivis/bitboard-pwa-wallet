@@ -13,7 +13,6 @@ import { selectCommittedNetworkMode, useWalletStore } from '@/stores/walletStore
 
 export function ArkadePendingRecoveryBanner() {
   const networkMode = useWalletStore(selectCommittedNetworkMode)
-  const storeBalance = useWalletStore((walletState) => walletState.arkadeBalance)
   const fiatDenominationMode = useFiatDenominationStore(
     (fiatDenominationState) => fiatDenominationState.fiatDenominationMode,
   )
@@ -23,8 +22,7 @@ export function ArkadePendingRecoveryBanner() {
   const balanceQuery = useArkadeBalanceQuery()
   const fiatRatesQuery = useMainnetFiatRatesQuery()
 
-  const balance = storeBalance ?? balanceQuery.data
-  const pendingRecoverySats = balance?.pendingRecoverySats ?? 0
+  const pendingRecoverySats = balanceQuery.data?.pendingRecoverySats ?? 0
   const mainnetFiatLayout = networkMode === 'mainnet' && fiatDenominationMode
 
   if (pendingRecoverySats <= 0) {
