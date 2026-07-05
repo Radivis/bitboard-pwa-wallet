@@ -20,6 +20,16 @@ function buildExitFlow(overrides: Partial<ExitFlow>): ExitFlow {
       },
     },
     completionFeeQuery: { isLoading: false, data: undefined },
+    completionFeeRateUi: {
+      feePresetSelection: 'Medium' as const,
+      presetSatPerVbByLabel: { Low: 0.5, Medium: 2, High: 10 },
+      feeEstimatesRefreshing: false,
+      handleSelectFeePreset: vi.fn(),
+      handleSelectCustomMode: vi.fn(),
+      customFeeRate: '',
+      setCustomFeeRate: vi.fn(),
+      useCustomFee: false,
+    },
     completeExitMutation: { mutate: vi.fn(), isPending: false, isError: false },
     selectedInProgressTxids: [],
     selectedInProgressRows: [],
@@ -117,6 +127,7 @@ describe('CompleteUnilateralExitDialog', () => {
     )
 
     const feePanel = screen.getByTestId('arkade-unilateral-completion-fee')
+    expect(feePanel).toHaveTextContent(/2(\.00)? sat\/vB/)
     expect(feePanel).toHaveTextContent(/0\.00001500/)
     expect(feePanel).toHaveTextContent(/0\.00198500/)
   })

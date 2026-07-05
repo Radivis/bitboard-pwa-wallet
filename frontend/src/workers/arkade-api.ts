@@ -143,6 +143,7 @@ export interface ArkadeUnilateralExitCompletionFeeEstimate {
 export interface ArkadeUnilateralExitCompletionFeeEstimateParams {
   vtxoTxids: string[]
   destinationAddress: string
+  feeRateSatPerVb?: number
 }
 
 export interface ArkadeOnchainBumperInfo {
@@ -168,6 +169,7 @@ export interface ArkadeUnrollProgressEvent {
 export interface ArkadeCompleteUnilateralExitParams {
   vtxoTxids: string[]
   destinationAddress: string
+  feeRateSatPerVb?: number
 }
 
 export type ArkadeCollaborativeExitEstimateErrorCode = 'insufficient_cooperative_inputs'

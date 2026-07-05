@@ -520,12 +520,18 @@ impl ArkSession {
             .collect::<Result<_, _>>()?;
 
         let destination = parse_onchain_address(&params.destination_address, self.network())?;
+        let fee_rate_sat_per_vb =
+            resolve_completion_fee_rate_sat_per_vb(params.fee_rate_sat_per_vb);
         let mut last_error: Option<ark_client::Error> = None;
         for _ in 0..COMPLETION_UNROLLED_INDEXER_POLL_MAX {
             self.sync_with_operator().await?;
             match self
                 .client
-                .send_on_chain_for_vtxo_txids(destination.clone(), &vtxo_txids)
+                .send_on_chain_for_vtxo_txids(
+                    destination.clone(),
+                    &vtxo_txids,
+                    Some(fee_rate_sat_per_vb),
+                )
                 .await
             {
                 Ok(txid) => {
@@ -596,17 +602,16 @@ impl ArkSession {
             }
         };
 
-        let fee_rate_sat_per_vb = self
-            .client
-            .blockchain()
-            .get_fee_rate()
-            .await
-            .unwrap_or(MIN_FEE_RATE_SAT_PER_VB)
-            .max(MIN_FEE_RATE_SAT_PER_VB);
+        let fee_rate_sat_per_vb =
+            resolve_completion_fee_rate_sat_per_vb(params.fee_rate_sat_per_vb);
 
         match self
             .client
-            .estimate_send_on_chain_for_vtxo_txids(destination, &vtxo_txids)
+            .estimate_send_on_chain_for_vtxo_txids(
+                destination,
+                &vtxo_txids,
+                Some(fee_rate_sat_per_vb),
+            )
             .await
         {
             Ok((fee, to_amount, selected_amount)) => Ok(UnilateralExitCompletionFeeEstimateDto {
@@ -637,9 +642,18 @@ impl ArkSession {
     }
 }
 
+fn resolve_completion_fee_rate_sat_per_vb(override_rate_sat_per_vb: Option<f64>) -> f64 {
+    override_rate_sat_per_vb
+        .unwrap_or(MIN_FEE_RATE_SAT_PER_VB)
+        .max(MIN_FEE_RATE_SAT_PER_VB)
+}
+
 #[cfg(test)]
 mod collaborative_exit_estimate_tests {
-    use super::{collaborative_exit_estimate_error_code, resolve_cooperative_exit_amount};
+    use super::{
+        collaborative_exit_estimate_error_code, resolve_completion_fee_rate_sat_per_vb,
+        resolve_cooperative_exit_amount,
+    };
     use crate::api_types::COLLABORATIVE_EXIT_ESTIMATE_ERROR_INSUFFICIENT_COOPERATIVE_INPUTS;
     use bitcoin::Amount;
 
@@ -671,5 +685,12 @@ mod collaborative_exit_estimate_tests {
             42_000
         );
         assert_eq!(resolve_cooperative_exit_amount(None, 0), Amount::ZERO);
+    }
+
+    #[test]
+    fn completion_fee_rate_prefers_override_and_enforces_minimum() {
+        assert_eq!(resolve_completion_fee_rate_sat_per_vb(Some(5.0)), 5.0);
+        assert_eq!(resolve_completion_fee_rate_sat_per_vb(Some(0.05)), 0.1);
+        assert_eq!(resolve_completion_fee_rate_sat_per_vb(None), 0.1);
     }
 }

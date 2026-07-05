@@ -195,6 +195,7 @@ export const arkadeUnilateralExitCompletionFeeQueryKey = (
   connectionId: string,
   vtxoTxids: string[],
   destinationAddress: string,
+  feeRateSatPerVb: number,
 ) =>
   [
     ...WALLET_DB_QUERY_KEY_ROOT,
@@ -206,6 +207,7 @@ export const arkadeUnilateralExitCompletionFeeQueryKey = (
     'unilateral-completion',
     [...vtxoTxids].sort().join(','),
     destinationAddress,
+    feeRateSatPerVb,
   ] as const
 
 export const arkadeUnilateralExitFeeQueryKey = (

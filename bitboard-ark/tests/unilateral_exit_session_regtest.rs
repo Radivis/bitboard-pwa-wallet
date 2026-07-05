@@ -97,6 +97,7 @@ async fn unilateral_unroll_and_complete_on_regtest() {
         .complete_unilateral_exit(CompleteUnilateralExitParams {
             vtxo_txids: vec![candidate.txid.clone()],
             destination_address: destination,
+            fee_rate_sat_per_vb: None,
         })
         .await
         .expect("complete unilateral exit");

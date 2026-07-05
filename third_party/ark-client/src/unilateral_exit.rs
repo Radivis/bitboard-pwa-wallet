@@ -361,6 +361,7 @@ where
         &self,
         to_address: Address,
         vtxo_txids: &[Txid],
+        fee_rate_sat_per_vb: Option<f64>,
     ) -> Result<Txid, Error> {
         let vtxo_txid_filter: HashSet<Txid> = vtxo_txids.iter().copied().collect();
         let (_, vtxo_inputs, selected_amount) =
@@ -372,6 +373,7 @@ where
                 Vec::new(),
                 vtxo_inputs.clone(),
                 selected_amount,
+                fee_rate_sat_per_vb,
             )
             .await?;
 
@@ -403,6 +405,7 @@ where
         &self,
         to_address: Address,
         vtxo_txids: &[Txid],
+        fee_rate_sat_per_vb: Option<f64>,
     ) -> Result<(Amount, Amount, Amount), Error> {
         let vtxo_txid_filter: HashSet<Txid> = vtxo_txids.iter().copied().collect();
         let (_, vtxo_inputs, selected_amount) =
@@ -413,6 +416,7 @@ where
                 Vec::new(),
                 vtxo_inputs,
                 selected_amount,
+                fee_rate_sat_per_vb,
             )
             .await?;
         Ok((fee, to_amount, selected_amount))
@@ -464,6 +468,7 @@ where
                     onchain_inputs.clone(),
                     vtxo_inputs.clone(),
                     selected_amount,
+                    None,
                 )
                 .await?;
 
@@ -492,10 +497,15 @@ where
         onchain_inputs: Vec<unilateral_exit::OnChainInput>,
         vtxo_inputs: Vec<unilateral_exit::VtxoInput>,
         selected_amount: Amount,
+        fee_rate_sat_per_vb: Option<f64>,
     ) -> Result<(Amount, Amount), Error> {
-        let fee_rate = timeout_op(self.inner.timeout, self.blockchain().get_fee_rate())
-            .await
-            .context("Failed to retrieve fee rate")??;
+        let fee_rate = if let Some(rate) = fee_rate_sat_per_vb {
+            rate
+        } else {
+            timeout_op(self.inner.timeout, self.blockchain().get_fee_rate())
+                .await
+                .context("Failed to retrieve fee rate")??
+        };
 
         let dust = self.server_info()?.dust;
         let mut fee = Amount::from_sat(UNILATERAL_COMPLETION_FEE_INITIAL_SAT);

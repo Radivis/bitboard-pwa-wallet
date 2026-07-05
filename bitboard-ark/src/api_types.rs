@@ -302,6 +302,8 @@ pub struct CollaborativeExitParams {
 pub struct CompleteUnilateralExitParams {
     pub vtxo_txids: Vec<String>,
     pub destination_address: String,
+    #[serde(default)]
+    pub fee_rate_sat_per_vb: Option<f64>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -309,6 +311,8 @@ pub struct CompleteUnilateralExitParams {
 pub struct UnilateralExitCompletionFeeEstimateParams {
     pub vtxo_txids: Vec<String>,
     pub destination_address: String,
+    #[serde(default)]
+    pub fee_rate_sat_per_vb: Option<f64>,
 }
 
 #[derive(Debug, Deserialize)]

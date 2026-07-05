@@ -8,6 +8,8 @@ import { DialogDescription } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
+import { SendOnChainFeeSection } from '@/components/wallet/send/SendOnChainFeeSection'
+import { formatSatPerVbTwoDecimals } from '@/lib/esplora/esplora-fee-estimates'
 import { ARKADE_INFOMODE_IDS } from '@/lib/arkade/arkade-infomode'
 import { unilateralExitCompleteTimelockMessage } from '@/lib/arkade/arkade-exit-utils'
 import type { useArkadeExitFlow } from '@/hooks/useArkadeExitFlow'
@@ -45,6 +47,7 @@ export function CompleteUnilateralExitDialog({ exitFlow }: CompleteUnilateralExi
     inProgressQuery,
     bumperInfoQuery,
     completionFeeQuery,
+    completionFeeRateUi,
     completeExitMutation,
     selectedInProgressTxids,
     selectedInProgressRows,
@@ -205,6 +208,20 @@ export function CompleteUnilateralExitDialog({ exitFlow }: CompleteUnilateralExi
           </div>
         </div>
 
+        {selectedInProgressTxids.length > 0 && (
+          <SendOnChainFeeSection
+            feePresetSelection={completionFeeRateUi.feePresetSelection}
+            presetSatPerVbByLabel={completionFeeRateUi.presetSatPerVbByLabel}
+            feeEstimatesRefreshing={completionFeeRateUi.feeEstimatesRefreshing}
+            customFeeRate={completionFeeRateUi.customFeeRate}
+            useCustomFee={completionFeeRateUi.useCustomFee}
+            isPending={completeExitMutation.isPending}
+            onSelectPreset={completionFeeRateUi.handleSelectFeePreset}
+            setCustomFeeRate={completionFeeRateUi.setCustomFeeRate}
+            onSelectCustomMode={completionFeeRateUi.handleSelectCustomMode}
+          />
+        )}
+
         {selectedInProgressTxids.length > 0 && completionFeeQuery.isLoading && (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
@@ -221,7 +238,8 @@ export function CompleteUnilateralExitDialog({ exitFlow }: CompleteUnilateralExi
               <BitcoinAmountDisplay amountSats={completionFeeEstimate.selectedTotalSats} size="sm" />
             </p>
             <p>
-              Estimated miner fee ({completionFeeEstimate.feeRateSatPerVb} sat/vB):{' '}
+              Estimated miner fee (
+              {formatSatPerVbTwoDecimals(completionFeeEstimate.feeRateSatPerVb)} sat/vB):{' '}
               <BitcoinAmountDisplay amountSats={completionFeeEstimate.estimatedFeeSats} size="sm" />
             </p>
             <p>

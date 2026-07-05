@@ -11,6 +11,7 @@ import {
   useArkadeUnilateralExitsInProgressQuery,
   useArkadeUnilateralUnrollMutation,
 } from '@/hooks/useArkadeQueries'
+import { useOnchainFeeRateSelection } from '@/hooks/useOnchainFeeRateSelection'
 import {
   ARKADE_BUMPER_LOW_BALANCE_FALLBACK_SATS,
   parseCollaborativeExitAmountSats,
@@ -49,6 +50,13 @@ export function useArkadeExitFlow() {
   const [selectedInProgressTxids, setSelectedInProgressTxids] = useState<string[]>([])
   const [completeDestination, setCompleteDestination] = useState('')
 
+  const completionFeeSelection = useOnchainFeeRateSelection(networkMode)
+  const {
+    effectiveFeeRate: completionFeeRateSatPerVb,
+    resetFeeSelection: resetCompletionFeeSelection,
+    ...completionFeeRateUi
+  } = completionFeeSelection
+
   const collabAmountParse = parseCollaborativeExitAmountSats(collabAmountSats)
   const collabAmountValid = collabAmountParse.ok
   const collabAmount = collabAmountParse.ok ? collabAmountParse.amountSats : undefined
@@ -73,6 +81,7 @@ export function useArkadeExitFlow() {
     enabled: completeUnilateralOpen,
     vtxoTxids: selectedInProgressTxids,
     destinationAddress: completeDestination,
+    feeRateSatPerVb: completionFeeRateSatPerVb,
   })
   const collaborativeExitMutation = useArkadeCollaborativeExitMutation()
   const unrollMutation = useArkadeUnilateralUnrollMutation()
@@ -122,12 +131,13 @@ export function useArkadeExitFlow() {
     if (!completeUnilateralOpen) {
       setSelectedInProgressTxids([])
       setCompleteDestination('')
+      resetCompletionFeeSelection()
       return
     }
     if (currentAddress) {
       setCompleteDestination(currentAddress)
     }
-  }, [completeUnilateralOpen, currentAddress])
+  }, [completeUnilateralOpen, currentAddress, resetCompletionFeeSelection])
 
   const collaborativeExitBlockedByRotation =
     isSignerRotationCooperativeExitBlocked(signerMigrationHint)
@@ -211,6 +221,7 @@ export function useArkadeExitFlow() {
       .mutateAsync({
         vtxoTxids: selectedInProgressTxids,
         destinationAddress: completeDestination.trim(),
+        feeRateSatPerVb: completionFeeRateSatPerVb,
       })
       .then(() => {
         setCompleteUnilateralOpen(false)
@@ -257,6 +268,8 @@ export function useArkadeExitFlow() {
     collaborativeFeeQuery,
     unilateralFeeQuery,
     completionFeeQuery,
+    completionFeeRateUi,
+    completionFeeRateSatPerVb,
     collaborativeExitMutation,
     unrollMutation,
     completeExitMutation,

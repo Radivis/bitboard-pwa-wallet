@@ -805,6 +805,7 @@ export function useArkadeUnilateralExitCompletionFeeQuery(params: {
   enabled: boolean
   vtxoTxids: string[]
   destinationAddress: string
+  feeRateSatPerVb: number
 }) {
   const { networkMode, activeWalletId, activeArkadeConnectionId, sessionReady } =
     useArkadeQueryBase()
@@ -814,7 +815,9 @@ export function useArkadeUnilateralExitCompletionFeeQuery(params: {
     params.enabled &&
     sessionReady &&
     sortedVtxoTxids.length > 0 &&
-    destinationTrimmed.length > 0
+    destinationTrimmed.length > 0 &&
+    Number.isFinite(params.feeRateSatPerVb) &&
+    params.feeRateSatPerVb > 0
 
   return useQuery({
     queryKey:
@@ -827,6 +830,7 @@ export function useArkadeUnilateralExitCompletionFeeQuery(params: {
             activeArkadeConnectionId,
             sortedVtxoTxids,
             destinationTrimmed,
+            params.feeRateSatPerVb,
           )
         : arkadeDisabledQueryKey('unilateral-completion-fee'),
     enabled,
@@ -835,6 +839,7 @@ export function useArkadeUnilateralExitCompletionFeeQuery(params: {
         getArkadeWorker().estimateUnilateralExitCompletion({
           vtxoTxids: sortedVtxoTxids,
           destinationAddress: destinationTrimmed,
+          feeRateSatPerVb: params.feeRateSatPerVb,
         }),
       ),
     staleTime: ARKADE_FEE_ESTIMATE_STALE_MS,
@@ -988,7 +993,11 @@ export function useArkadeCompleteUnilateralExitMutation() {
     useArkadeQueryBase()
 
   return useMutation({
-    mutationFn: async (params: { vtxoTxids: string[]; destinationAddress: string }) => {
+    mutationFn: async (params: {
+      vtxoTxids: string[]
+      destinationAddress: string
+      feeRateSatPerVb: number
+    }) => {
       assertArkadeSessionUnlocked(activeWalletId)
       return withReadyArkadeWorker(() => getArkadeWorker().completeUnilateralExit(params))
     },
