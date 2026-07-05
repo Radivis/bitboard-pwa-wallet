@@ -60,7 +60,7 @@ test.describe('Arkade REG-04 unilateral unroll @arkade-reg04', () => {
     await expect(page.getByRole('heading', { name: 'Complete unilateral exit' })).toBeVisible()
     await page.locator('input[type="checkbox"]').first().check()
     await mineRegtestBlocks(ARKADE_REGTEST_UNILATERAL_EXIT_DELAY_BLOCKS + 5)
-    await page.getByLabel('Destination address').fill(onChainReceiveAddress)
+    await page.getByRole('textbox', { name: 'Destination address' }).fill(onChainReceiveAddress)
     await page.getByRole('button', { name: 'Complete exit' }).click()
     await expect(page.getByRole('button', { name: 'Completing…' })).toBeVisible({
       timeout: 15_000,

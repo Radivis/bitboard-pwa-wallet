@@ -9,6 +9,12 @@ use crate::error::{ArkResult, ArkWasmError};
 
 const ESPLORA_HTTP_TIMEOUT_SECS: u64 = 5;
 
+/// Mempool's `/txs/package` handler calls `parseFloat(req.query.maxfeerate)` and forwards the
+/// value to bitcoind. When query params are omitted that becomes `NaN`, which makes
+/// `submitpackage` fail with a generic RPC error. Always send explicit limits (0 = accept any).
+const SUBMIT_PACKAGE_MAX_FEE_RATE_BTC_PER_KVB: f64 = 0.0;
+const SUBMIT_PACKAGE_MAX_BURN_AMOUNT_BTC: f64 = 0.0;
+
 #[cfg(target_arch = "wasm32")]
 type EsploraAsyncClient = esplora_client::AsyncClient<crate::wasm_sleep::WasmSleeper>;
 #[cfg(not(target_arch = "wasm32"))]
@@ -112,7 +118,14 @@ impl EsploraBlockchain {
         txs: &[&Transaction],
     ) -> Result<(), ark_client::Error> {
         let owned_transactions: Vec<Transaction> = txs.iter().map(|tx| (*tx).clone()).collect();
-        let package_result = match client.submit_package(&owned_transactions, None, None).await {
+        let package_result = match client
+            .submit_package(
+                &owned_transactions,
+                Some(SUBMIT_PACKAGE_MAX_FEE_RATE_BTC_PER_KVB),
+                Some(SUBMIT_PACKAGE_MAX_BURN_AMOUNT_BTC),
+            )
+            .await
+        {
             Ok(result) => result,
             Err(esplora_client::Error::HttpResponse { status: 404, .. }) => {
                 return Err(ark_client::Error::wallet(
@@ -122,9 +135,30 @@ impl EsploraBlockchain {
                         .to_string(),
                 ));
             }
+            Err(esplora_client::Error::HttpResponse {
+                status: 400,
+                ref message,
+            }) if is_mempool_submitpackage_rpc_error(message) => {
+                return Self::broadcast_transactions_sequentially(client, txs).await;
+            }
             Err(error) => return Err(EsploraBlockchain::map_esplora_error(error)),
         };
         validate_submit_package_result(&package_result)
+    }
+
+    async fn broadcast_transactions_sequentially(
+        client: &EsploraAsyncClient,
+        txs: &[&Transaction],
+    ) -> Result<(), ark_client::Error> {
+        for tx in txs {
+            if let Err(error) = client.broadcast(tx).await {
+                if is_transaction_already_relayed_error(&error) {
+                    continue;
+                }
+                return Err(EsploraBlockchain::map_esplora_error(error));
+            }
+        }
+        Ok(())
     }
 }
 
@@ -314,6 +348,23 @@ async fn map_fee_rate(client: &EsploraAsyncClient) -> Result<f64, ark_client::Er
     Ok(fee_rate.max(MIN_FEE_RATE_SAT_PER_VB))
 }
 
+fn is_mempool_submitpackage_rpc_error(message: &str) -> bool {
+    message.contains("submitpackage RPC error")
+}
+
+fn is_transaction_already_relayed_error(error: &esplora_client::Error) -> bool {
+    match error {
+        esplora_client::Error::HttpResponse { message, .. } => {
+            let lowered = message.to_ascii_lowercase();
+            lowered.contains("already in mempool")
+                || lowered.contains("txn-already-in-mempool")
+                || lowered.contains("txn-already-known")
+                || lowered.contains("already known")
+        }
+        _ => false,
+    }
+}
+
 fn validate_submit_package_result(
     package_result: &esplora_client::SubmitPackageResult,
 ) -> Result<(), ark_client::Error> {
@@ -352,8 +403,27 @@ mod tests {
     use esplora_client::{SubmitPackageResult, TxResult};
     use std::collections::HashMap;
 
+    use super::is_mempool_submitpackage_rpc_error;
+    use super::is_transaction_already_relayed_error;
     use super::utxo_confirmations;
     use super::validate_submit_package_result;
+
+    #[test]
+    fn mempool_submitpackage_rpc_error_is_detected() {
+        assert!(is_mempool_submitpackage_rpc_error(
+            r#"{"error":"submitpackage RPC error: {\"code\":-1}"}"#
+        ));
+        assert!(!is_mempool_submitpackage_rpc_error("min relay fee not met"));
+    }
+
+    #[test]
+    fn already_relayed_broadcast_errors_are_treated_as_success() {
+        let error = esplora_client::Error::HttpResponse {
+            status: 400,
+            message: "sendrawtransaction RPC error: txn-already-in-mempool".to_string(),
+        };
+        assert!(is_transaction_already_relayed_error(&error));
+    }
 
     #[test]
     fn submit_package_result_accepts_success_without_tx_errors() {

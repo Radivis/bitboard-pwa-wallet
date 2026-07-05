@@ -279,8 +279,15 @@ impl<S: Sleeper> AsyncClient<S> {
             request = request.timeout(d);
         }
 
-        for param in query_params.unwrap_or_default() {
-            request = request.query(&param);
+        if let Some(query_params) = query_params {
+            if !query_params.is_empty() {
+                // reqwest rejects a single (&str, String) pair; pass a slice of (&str, &str).
+                let query: Vec<(&str, &str)> = query_params
+                    .iter()
+                    .map(|(key, value)| (*key, value.as_str()))
+                    .collect();
+                request = request.query(&query);
+            }
         }
 
         let response = request.send().await?;
