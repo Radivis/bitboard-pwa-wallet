@@ -1,5 +1,6 @@
 import { Link } from '@tanstack/react-router'
 import { Loader2 } from 'lucide-react'
+import { toast } from 'sonner'
 import { ArkadeBumperWalletInfomodeContent } from '@/components/arkade/infomode/ArkadeBumperWalletInfomodeContent'
 import { ArkadeUnilateralExitInfomodeContent } from '@/components/arkade/infomode/ArkadeUnilateralExitInfomodeContent'
 import { ArkadeUnrollInfomodeContent } from '@/components/arkade/infomode/ArkadeUnrollInfomodeContent'
@@ -23,6 +24,15 @@ function errorMessage(error: unknown): string {
   if (error instanceof Error) return error.message
   if (typeof error === 'string') return error
   return 'Unknown error'
+}
+
+async function copyBumperAddress(address: string): Promise<void> {
+  try {
+    await navigator.clipboard.writeText(address)
+    toast.success('Bumper wallet address copied')
+  } catch {
+    toast.error('Failed to copy bumper wallet address')
+  }
 }
 
 export function UnilateralExitDialog({ exitFlow }: UnilateralExitDialogProps) {
@@ -186,9 +196,16 @@ export function UnilateralExitDialog({ exitFlow }: UnilateralExitDialogProps) {
                     Bumper wallet (P2A fees)
                   </InfomodeWrapper>
                 </p>
-                <p className="break-all font-mono" data-testid="arkade-bumper-address">
+                <button
+                  type="button"
+                  className="break-all rounded-sm font-mono text-left hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  data-testid="arkade-bumper-address"
+                  aria-label="Copy bumper wallet address"
+                  title="Click to copy bumper wallet address"
+                  onClick={() => void copyBumperAddress(bumperInfoQuery.data.address)}
+                >
                   {bumperInfoQuery.data.address}
-                </p>
+                </button>
                 <p>
                   Balance: <BitcoinAmountDisplay amountSats={bumperBalance} size="sm" />
                 </p>
