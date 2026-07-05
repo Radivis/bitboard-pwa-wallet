@@ -11,10 +11,9 @@ use bitboard_ark::{ArkSession, NetworkMode};
 use serde::Deserialize;
 
 pub const DEFAULT_ARKD_URL: &str = "http://localhost:7070";
+pub const DEFAULT_ARKD_ADMIN_URL: &str = "http://localhost:7071";
 pub const DEFAULT_ESPLORA_URL: &str = "http://localhost:7030/api";
 pub const DEFAULT_ARKD_CONTAINER: &str = "bitboard-regtest-arkd";
-pub const DEFAULT_ARKD_ADMIN_WALLET_STATUS_URL: &str =
-    "http://localhost:7071/v1/admin/wallet/status";
 
 pub const DEFAULT_BOARD_SATS: u64 = 200_000;
 /// Matches E2E `BOARDING_COOPERATIVE_SETTLE_BUDGET_MS` — fund → settle must finish inside arkd's ~30s window.
@@ -23,8 +22,17 @@ pub const BOARDING_ESPLORA_CONFIRM_TIMEOUT: Duration = Duration::from_secs(20);
 
 pub struct RegtestEndpoints {
     pub arkd_url: String,
+    pub arkd_admin_url: String,
     pub esplora_url: String,
     pub arkd_container: String,
+}
+
+/// Matches `scripts/arkade-regtest-health.mjs` (`ARKD_ADMIN_REGTEST_URL` + `/v1/admin/wallet/status`).
+pub fn arkd_admin_wallet_status_url(arkd_admin_url: &str) -> String {
+    format!(
+        "{}/v1/admin/wallet/status",
+        arkd_admin_url.trim_end_matches('/')
+    )
 }
 
 pub fn regtest_enabled() -> bool {
@@ -37,6 +45,8 @@ pub fn regtest_endpoints() -> RegtestEndpoints {
     RegtestEndpoints {
         arkd_url: std::env::var("ARKADE_REGTEST_ARKD_URL")
             .unwrap_or_else(|_| DEFAULT_ARKD_URL.to_string()),
+        arkd_admin_url: std::env::var("ARKD_ADMIN_REGTEST_URL")
+            .unwrap_or_else(|_| DEFAULT_ARKD_ADMIN_URL.to_string()),
         esplora_url: std::env::var("ARKADE_REGTEST_ESPLORA_URL")
             .unwrap_or_else(|_| DEFAULT_ESPLORA_URL.to_string()),
         arkd_container: std::env::var("ARKD_REGTEST_CONTAINER")
@@ -165,17 +175,20 @@ pub async fn wait_for_regtest_healthy(endpoints: &RegtestEndpoints) {
         endpoints.esplora_url.trim_end_matches('/')
     );
     let arkd_info_url = format!("{}/v1/info", endpoints.arkd_url.trim_end_matches('/'));
+    let arkd_wallet_status_url = arkd_admin_wallet_status_url(&endpoints.arkd_admin_url);
 
     for _ in 0..90 {
         let esplora_ok = http_get_ok(&esplora_tip_url).await;
         let arkd_ok = http_get_ok(&arkd_info_url).await;
-        let wallet_synced = http_get_ok(DEFAULT_ARKD_ADMIN_WALLET_STATUS_URL).await;
+        let wallet_synced = http_get_ok(&arkd_wallet_status_url).await;
         if esplora_ok && arkd_ok && wallet_synced {
             return;
         }
         tokio::time::sleep(Duration::from_secs(2)).await;
     }
-    panic!("arkade-regtest stack did not become healthy in time");
+    panic!(
+        "arkade-regtest stack did not become healthy in time (arkd admin wallet status: {arkd_wallet_status_url})"
+    );
 }
 
 pub async fn restart_arkd_operator(endpoints: &RegtestEndpoints) {

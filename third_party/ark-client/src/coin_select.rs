@@ -148,6 +148,21 @@ where
 /// Select claimable on-chain VTXO inputs whose virtual or on-chain txid appears in `vtxo_txid_filter`.
 ///
 /// Boarding outputs are excluded so completion only spends the requested unrolled VTXOs.
+///
+/// # Bitboard vendor patch (fork drift)
+///
+/// Vendored from [ark-client 0.9.3](https://github.com/arkade-os/rust-sdk/tree/master/crates/ark-client).
+/// This function diverges from upstream `coin_select.rs`; track changes here and contribute back when possible:
+///
+/// - **VTXO iteration:** upstream uses `vtxo_list.all_unspent()`; Bitboard uses `vtxo_list.all()`
+///   filtered by `vtxo_txid_filter` (see inline comment below). After unilateral unroll, arkd marks
+///   VTXOs `is_spent`/`is_unrolled`, so `all_unspent()` drops them even though they still fund the exit PSBT.
+/// - **`confirmation_blocktime`:** upstream requires a known blocktime; Bitboard only skips VTXOs when
+///   blocktime is present and stale (`unwrap_or(Duration::ZERO)`).
+/// - **Diagnostics:** Bitboard adds `tracing::debug!` logging per candidate VTXO.
+///
+/// Upstream contribution target: <https://github.com/arkade-os/rust-sdk> (`ark-client/src/coin_select.rs`).
+/// Bitboard context: <https://github.com/Radivis/bitboard-pwa-wallet/pull/50> (signer rotation / REG-04).
 pub async fn coin_select_vtxo_txids_for_onchain<B, W, S, K>(
     client: &Client<B, W, S, K>,
     vtxo_txid_filter: &HashSet<Txid>,
