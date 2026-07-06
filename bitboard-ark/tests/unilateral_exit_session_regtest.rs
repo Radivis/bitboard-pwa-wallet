@@ -11,34 +11,18 @@ use bitboard_ark::CompleteUnilateralExitParams;
 mod support;
 
 use support::regtest_integration::{
-    DEFAULT_BOARD_SATS, fresh_test_mnemonic, fund_and_board_wallet, fund_regtest_address,
-    mine_blocks, open_session, regtest_enabled, regtest_endpoints, wait_for_confirmed_esplora_sats,
-    wait_for_regtest_healthy,
+    DEFAULT_BOARD_SATS, fund_regtest_address, mine_blocks, prepare_boarded_session,
+    regtest_enabled, regtest_endpoints, wait_for_confirmed_esplora_sats,
 };
 
 const BUMPER_SATS: u64 = 100_000;
 const UNILATERAL_EXIT_DELAY_BLOCKS: u32 = 20;
-const COMMITMENT_CONFIRM_BLOCKS: u32 = 1;
 
 async fn prepare_funded_session() -> bitboard_ark::ArkSession {
-    // Do not restart arkd here — same as the isolated REG-04 E2E spec. Restarting mid-stack
-    // after other regtest tests can leave poisoned batch state; boot a clean stack first
-    // (`npm run regtest:clean-start` with ARKD_VTXO_TREE_EXPIRY=200).
     let endpoints = regtest_endpoints();
-    wait_for_regtest_healthy(&endpoints).await;
-
-    let mnemonic = fresh_test_mnemonic();
-    let session = open_session(&endpoints, &mnemonic, None).await;
-    session
-        .sync_with_operator()
+    prepare_boarded_session(&endpoints, DEFAULT_BOARD_SATS)
         .await
-        .expect("initial operator sync");
-
-    fund_and_board_wallet(&endpoints, &session, DEFAULT_BOARD_SATS).await;
-
-    mine_blocks(COMMITMENT_CONFIRM_BLOCKS);
-    session.sync_with_operator().await.expect("post-board sync");
-    session
+        .0
 }
 
 #[tokio::test]

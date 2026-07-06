@@ -132,12 +132,20 @@ export interface ArkadeUnilateralExitInProgressRow {
   startedAt?: number
 }
 
+export interface ArkadeMissingBlocktimeCompletionInput {
+  virtualTxid: string
+  onChainTxid: string
+  onChainVout: number
+  amountSats: number
+}
+
 export interface ArkadeUnilateralExitCompletionFeeEstimate {
   selectedTotalSats: number
   estimatedFeeSats: number
   estimatedReceiveSats: number
   feeRateSatPerVb: number
   estimateError?: string
+  missingBlocktimeInputs?: ArkadeMissingBlocktimeCompletionInput[]
 }
 
 export interface ArkadeUnilateralExitCompletionFeeEstimateParams {

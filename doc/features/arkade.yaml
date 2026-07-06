@@ -78,6 +78,10 @@ feature:
         description: Complete unilateral exit lists in-progress VTXOs from local snapshot and pending deductions when operator indexing lags
       - id: ARK-EXIT-03
         description: Complete unilateral exit supports multi-select batch completion with fee estimate scaled to selected inputs
+      - id: ARK-EXIT-04
+        description: Completion fee estimate includes missingBlocktimeInputs (virtual txid and on-chain outpoint per affected VTXO) when Esplora omits confirmation blocktime; UI shows a non-blocking list in Complete unilateral exit. Permissive completion coin-select (Duration::ZERO fallback) is intentional for regtest/thin Esplora in CI and local debugging; uncommon on production Esplora.
+      - id: ARK-EXIT-05
+        description: When complete exit times out waiting for operator indexer after unroll, UI shows a non-destructive indexer-catching-up state instead of a generic failure
     operator_sync:
       - id: ARK-SYNC-01
         description: When discover_keys fails during operator sync but list_vtxos succeeds, sync lifecycle records a warningMessage and dashboard/management show a non-blocking sync warning banner

@@ -64,6 +64,28 @@ pub fn repo_root() -> PathBuf {
         .to_path_buf()
 }
 
+/// Default E2E export path (`ARKADE_REGTEST_EXPORT_BOARDED_FIXTURE=1` from `frontend/`).
+pub const DEFAULT_BOARDED_FIXTURE_RELATIVE: &str =
+    "frontend/test-results/arkade-boarded-fixture.json";
+
+/// Resolve a fixture path from `ARKADE_REGTEST_BOARDED_FIXTURE`.
+///
+/// `cargo test -p bitboard-ark` runs with cwd `bitboard-ark/`, so repo-relative paths like
+/// `frontend/test-results/arkade-boarded-fixture.json` must be anchored at the repo root.
+pub fn resolve_regtest_fixture_path(path: &str) -> PathBuf {
+    let path_buf = PathBuf::from(path);
+    if path_buf.is_absolute() {
+        return path_buf;
+    }
+    if let Ok(cwd) = std::env::current_dir() {
+        let from_cwd = cwd.join(&path_buf);
+        if from_cwd.is_file() {
+            return from_cwd;
+        }
+    }
+    repo_root().join(&path_buf)
+}
+
 pub fn run_regtest_cli(args: &[&str]) {
     let regtest_cli = repo_root().join("regtest/regtest.mjs");
     let output = Command::new("node")
@@ -238,6 +260,13 @@ pub async fn open_session(
     .0
 }
 
+fn boarding_settle_error_must_not_retry(error_message: &str) -> bool {
+    // `settle_vtxos` / `join_next_batch` registers an intent before the round completes.
+    // Retrying after a mid-round client or operator failure re-registers inputs and wedges arkd
+    // (`duplicated input`, `not a wallet script`, `not enough intent confirmations`).
+    error_message.contains("Failed to join batch") || error_message.contains("batch failed")
+}
+
 pub async fn board_wallet_to_arkade(
     session: &ArkSession,
     fund_started_at: std::time::Instant,
@@ -260,7 +289,18 @@ pub async fn board_wallet_to_arkade(
         match session.onboard_boarded_utxos().await {
             Ok(Some(_commitment_txid)) => return,
             Ok(None) => last_error = "onboard returned None".to_string(),
-            Err(error) => last_error = error.to_string(),
+            Err(error) => {
+                let error_message = error.to_string();
+                if boarding_settle_error_must_not_retry(&error_message) {
+                    panic!(
+                        "boarding cooperative settle failed with non-retryable batch error: \
+                         {error_message}. Do not retry `join_next_batch` after this — run \
+                         `ARKD_VTXO_TREE_EXPIRY=200 npm run regtest:clean-start` from frontend/ \
+                         and rerun with --test-threads=1"
+                    );
+                }
+                last_error = error_message;
+            }
         }
         eprintln!("onboard retry ({last_error})");
         tokio::time::sleep(Duration::from_millis(800)).await;
@@ -282,4 +322,37 @@ pub async fn fund_and_board_wallet(
     fund_regtest_address(&boarding_address, board_sats);
     wait_for_confirmed_esplora_sats(&endpoints.esplora_url, &boarding_address, board_sats).await;
     board_wallet_to_arkade(session, fund_started_at, board_sats).await;
+}
+
+/// Open a fresh wallet, fund the boarding address, and cooperatively settle on the **current**
+/// regtest stack.
+///
+/// Restarts `arkd` first (same isolation as serial E2E `@arkade-regtest` `beforeEach`). Call after
+/// a clean stack boot (`ARKD_VTXO_TREE_EXPIRY=200 npm run regtest:clean-start` from `frontend/`
+/// for boarding-heavy flows).
+pub async fn prepare_boarded_session(
+    endpoints: &RegtestEndpoints,
+    board_sats: u64,
+) -> (ArkSession, String) {
+    restart_arkd_operator(endpoints).await;
+    wait_for_regtest_healthy(endpoints).await;
+
+    let mnemonic = fresh_test_mnemonic();
+    let session = open_session(endpoints, &mnemonic, None).await;
+    session
+        .sync_with_operator()
+        .await
+        .expect("initial operator sync");
+
+    fund_and_board_wallet(endpoints, &session, board_sats).await;
+
+    mine_blocks(1);
+    session.sync_with_operator().await.expect("post-board sync");
+    let balance_after_board = session.balance().await.expect("balance after board");
+    assert!(
+        balance_after_board.offchain_spendable_sats > 0 || balance_after_board.confirmed_sats > 0,
+        "expected Arkade balance after boarding"
+    );
+
+    (session, mnemonic)
 }

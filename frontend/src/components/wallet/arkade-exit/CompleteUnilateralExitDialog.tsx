@@ -11,7 +11,12 @@ import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
 import { SendOnChainFeeSection } from '@/components/wallet/send/SendOnChainFeeSection'
 import { formatSatPerVbTwoDecimals } from '@/lib/esplora/esplora-fee-estimates'
 import { ARKADE_INFOMODE_IDS } from '@/lib/arkade/arkade-infomode'
-import { unilateralExitCompleteTimelockMessage } from '@/lib/arkade/arkade-exit-utils'
+import {
+  formatMissingBlocktimeCompletionWarning,
+  formatMissingBlocktimeCompletionWarningLine,
+  isOperatorIndexerCatchingUpError,
+  unilateralExitCompleteTimelockMessage,
+} from '@/lib/arkade/arkade-exit-utils'
 import type { useArkadeExitFlow } from '@/hooks/useArkadeExitFlow'
 
 type ExitFlow = ReturnType<typeof useArkadeExitFlow>
@@ -63,6 +68,14 @@ export function CompleteUnilateralExitDialog({ exitFlow }: CompleteUnilateralExi
   const readyCount = (inProgressQuery.data ?? []).filter((row) => row.canComplete).length
   const waitingRows = selectedInProgressRows.filter((row) => !row.canComplete)
   const completionFeeEstimate = completionFeeQuery.data
+  const missingBlocktimeWarning =
+    completionFeeEstimate?.missingBlocktimeInputs != null &&
+    completionFeeEstimate.missingBlocktimeInputs.length > 0
+      ? formatMissingBlocktimeCompletionWarning(completionFeeEstimate.missingBlocktimeInputs)
+      : null
+  const indexerCatchingUp =
+    completeExitMutation.isError &&
+    isOperatorIndexerCatchingUpError(completeExitMutation.error)
 
   const footer = () => (
     <>
@@ -257,7 +270,33 @@ export function CompleteUnilateralExitDialog({ exitFlow }: CompleteUnilateralExi
           </div>
         )}
 
-        {completeExitMutation.isError && (
+        {missingBlocktimeWarning != null && selectedInProgressTxids.length > 0 && (
+          <div
+            className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs text-amber-800 dark:text-amber-200"
+            data-testid="arkade-complete-blocktime-warning"
+          >
+            <p>{missingBlocktimeWarning.summary}</p>
+            <ul className="mt-1 list-inside list-disc space-y-0.5">
+              {missingBlocktimeWarning.lines.map((line) => (
+                <li key={`${line.virtualTxid}:${line.onChainTxid}:${line.onChainVout}`}>
+                  {formatMissingBlocktimeCompletionWarningLine(line)}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {indexerCatchingUp && (
+          <p
+            className="text-sm text-amber-700 dark:text-amber-300"
+            data-testid="arkade-complete-indexer-catching-up"
+          >
+            Operator indexer is still catching up after your unroll. Wait a moment and try
+            Complete exit again.
+          </p>
+        )}
+
+        {completeExitMutation.isError && !indexerCatchingUp && (
           <p className="text-sm text-destructive" data-testid="arkade-complete-error">
             Complete exit failed: {errorMessage(completeExitMutation.error)}
           </p>

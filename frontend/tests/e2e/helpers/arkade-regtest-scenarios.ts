@@ -1,7 +1,9 @@
 import { type Page, expect } from '@playwright/test'
 import * as fs from 'node:fs/promises'
+import * as path from 'node:path'
 import { restartArkadeOperator, rotateRegtestSigner } from './regtest'
 import {
+  ARKADE_REGTEST_BOARDED_FIXTURE_DEFAULT,
   ARKADE_REGTEST_COMMITMENT_CONFIRM_BLOCKS,
   ARKADE_REGTEST_RECOVERABLE_MINE_BLOCKS,
   ARKADE_REGTEST_RENEWAL_SOON_MINE_BLOCKS,
@@ -16,6 +18,7 @@ import {
   readDashboardArkadeBalanceSats,
   triggerArkadeRailSync,
   waitForArkadeLoadReady,
+  exportBoardedWalletSdkPersistenceJson,
 } from './dashboard-arkade'
 import { goToWalletTab } from './wallet-nav'
 import { unlockWalletViaUI } from './wallet-setup'
@@ -23,6 +26,17 @@ import { generateMnemonic } from '@scure/bip39'
 import { wordlist as englishWordlist } from '@scure/bip39/wordlists/english.js'
 
 const DEFAULT_BOARD_SATS = 200_000
+
+function resolveBoardedFixtureExportPath(): string | undefined {
+  const raw = process.env.ARKADE_REGTEST_EXPORT_BOARDED_FIXTURE
+  if (raw == null || raw === '') {
+    return undefined
+  }
+  if (raw === '1' || raw === 'true') {
+    return path.resolve(process.cwd(), ARKADE_REGTEST_BOARDED_FIXTURE_DEFAULT)
+  }
+  return path.isAbsolute(raw) ? raw : path.resolve(process.cwd(), raw)
+}
 
 /**
  * Each serial @arkade-regtest test gets its OWN freshly generated wallet so VTXOs, boarding outputs
@@ -110,13 +124,11 @@ export async function prepareSignerMigrationScenario(page: Page): Promise<number
   await fundAndBoardToArkade(page, boardSats)
   const balanceBeforeRotate = await readDashboardArkadeBalanceSats(page)
 
-  const fixtureExportPath = process.env.ARKADE_REGTEST_EXPORT_BOARDED_FIXTURE
+  const fixtureExportPath = resolveBoardedFixtureExportPath()
   if (fixtureExportPath) {
-    const persistenceBeforeRotate = await page.evaluate(async () => {
-      const { getArkadeWorker } = await import('@/workers/arkade-factory')
-      const worker = getArkadeWorker()
-      return worker.exportSdkPersistenceJsonForE2e()
-    })
+    await triggerArkadeRailSync(page, 120_000)
+    const persistenceBeforeRotate = await exportBoardedWalletSdkPersistenceJson(page)
+    await fs.mkdir(path.dirname(fixtureExportPath), { recursive: true })
     await fs.writeFile(
       fixtureExportPath,
       JSON.stringify({ mnemonic, persistence_before_rotate: persistenceBeforeRotate }, null, 2),

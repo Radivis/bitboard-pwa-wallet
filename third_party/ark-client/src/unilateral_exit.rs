@@ -364,8 +364,10 @@ where
         fee_rate_sat_per_vb: Option<f64>,
     ) -> Result<Txid, Error> {
         let vtxo_txid_filter: HashSet<Txid> = vtxo_txids.iter().copied().collect();
-        let (_, vtxo_inputs, selected_amount) =
+        let selection =
             coin_select_vtxo_txids_for_onchain(self, &vtxo_txid_filter).await?;
+        let vtxo_inputs = selection.vtxo_inputs;
+        let selected_amount = selection.selected_amount;
 
         let (fee, to_amount) = self
             .resolve_unilateral_completion_fee_and_amount_from_inputs(
@@ -406,10 +408,13 @@ where
         to_address: Address,
         vtxo_txids: &[Txid],
         fee_rate_sat_per_vb: Option<f64>,
-    ) -> Result<(Amount, Amount, Amount), Error> {
+    ) -> Result<(Amount, Amount, Amount, Vec<crate::coin_select::MissingBlocktimeCompletionInput>), Error> {
         let vtxo_txid_filter: HashSet<Txid> = vtxo_txids.iter().copied().collect();
-        let (_, vtxo_inputs, selected_amount) =
+        let selection =
             coin_select_vtxo_txids_for_onchain(self, &vtxo_txid_filter).await?;
+        let vtxo_inputs = selection.vtxo_inputs;
+        let selected_amount = selection.selected_amount;
+        let missing_blocktime_inputs = selection.missing_blocktime_inputs;
         let (fee, to_amount) = self
             .resolve_unilateral_completion_fee_and_amount_from_inputs(
                 to_address,
@@ -419,7 +424,7 @@ where
                 fee_rate_sat_per_vb,
             )
             .await?;
-        Ok((fee, to_amount, selected_amount))
+        Ok((fee, to_amount, selected_amount, missing_blocktime_inputs))
     }
 
     /// Build the on-chain send transaction without broadcasting.

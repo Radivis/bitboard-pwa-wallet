@@ -50,6 +50,14 @@ Management → Arkade offers two paths:
 
 Collaborative exit and unilateral unroll are implemented in `bitboard-ark` (`collaborative_redeem`, `broadcast_next_unilateral_exit_node`, etc.). The on-chain bumper wallet shares the same BIP32-derived BDK wallet as boarding. Select one VTXO at a time in the UI.
 
+### Unilateral exit completion coin-select (vendor fork)
+
+After unroll, completing the exit spends on-chain UTXOs that fund the exit PSBT. Upstream `ark-client` coin-select requires Esplora `confirmation_blocktime` and skips inputs without it. Bitboard vendors a permissive fork in `third_party/ark-client/src/coin_select.rs` (`coin_select_vtxo_txids_for_onchain`):
+
+- **Why:** arkade-regtest and other minimal Esplora backends often omit `block_time` even for confirmed txs. Requiring blocktime blocked REG-04 completion tests and local unilateral-exit debugging. Production paths usually get blocktime from Esplora; `bitboard-ark` also backfills from `/tx/{txid}/status` when the address UTXO listing omits it.
+- **Behavior:** Missing blocktime is treated as epoch zero for timelock checks; inputs are still selectable. The completion fee estimate includes `missingBlocktimeInputs` (virtual txid + on-chain outpoint) and the UI shows a non-blocking warning (contract `ARK-EXIT-04`).
+- **Not a mainnet trust relaxation by design:** The fork exists for regtest convenience and indexer-gap tolerance; missing blocktime should be rare on well-behaved Esplora.
+
 ## Mnemonic alignment
 
 - Same BIP39 mnemonic as the Bitboard wallet; Arkade uses `MnemonicIdentity` (BIP86 account 0).

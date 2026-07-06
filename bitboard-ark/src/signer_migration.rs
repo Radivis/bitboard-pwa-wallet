@@ -87,6 +87,7 @@ fn sum_migration_refs(refs: &[ark_client::MigrationVtxoRef]) -> (usize, u64) {
 pub fn merge_leg_accum(total: &mut SignerMigrationLegAccum, pass: &SignerMigrationLegAccum) {
     total.migrated_count += pass.migrated_count;
     total.migrated_sats = total.migrated_sats.saturating_add(pass.migrated_sats);
+    // Deferred/oversized reflect the latest pass only; migrated totals accumulate across passes.
     total.deferred_count = pass.deferred_count;
     total.deferred_sats = pass.deferred_sats;
     total.oversized_count = pass.oversized_count;

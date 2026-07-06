@@ -1,3 +1,5 @@
+import { wasmArkErrorCode } from '@/lib/shared/wasm-ark-error'
+
 export interface ArkadeIntentFeeConfigured {
   offchainInput: boolean
   onchainInput: boolean
@@ -109,4 +111,54 @@ export function unilateralExitCompleteTimelockMessage(
   }
   const duration = formatUnilateralExitTimelock(timelock)
   return `After unroll confirms on-chain, wait for ${duration} (operator CSV timelock) before completing.`
+}
+
+export const OPERATOR_INDEXER_CATCHING_UP_CODE = 'operator_indexer_catching_up'
+
+/** Shown when completion coin-select used a permissive blocktime fallback (see wallet model doc). */
+export const MISSING_BLOCKTIME_COMPLETION_WARNING_SUMMARY =
+  'Esplora did not report a confirmation time for the VTXO(s) below. Timelock eligibility is estimated conservatively.'
+
+export type MissingBlocktimeCompletionWarningLine = {
+  virtualTxid: string
+  amountSats: number
+  onChainTxid: string
+  onChainVout: number
+  onChainDiffersFromVirtual: boolean
+}
+
+export function formatMissingBlocktimeCompletionWarning(
+  inputs: ReadonlyArray<{
+    virtualTxid: string
+    onChainTxid: string
+    onChainVout: number
+    amountSats: number
+  }>,
+): { summary: string; lines: MissingBlocktimeCompletionWarningLine[] } {
+  const lines = inputs.map((input) => ({
+    virtualTxid: input.virtualTxid,
+    amountSats: input.amountSats,
+    onChainTxid: input.onChainTxid,
+    onChainVout: input.onChainVout,
+    onChainDiffersFromVirtual: input.onChainTxid !== input.virtualTxid,
+  }))
+  return {
+    summary: MISSING_BLOCKTIME_COMPLETION_WARNING_SUMMARY,
+    lines,
+  }
+}
+
+export function formatMissingBlocktimeCompletionWarningLine(
+  line: MissingBlocktimeCompletionWarningLine,
+): string {
+  const virtualSnippet = `${line.virtualTxid.slice(0, 12)}…`
+  if (!line.onChainDiffersFromVirtual) {
+    return `${virtualSnippet} (${line.amountSats} sats)`
+  }
+  const onChainSnippet = `${line.onChainTxid.slice(0, 12)}…:${line.onChainVout}`
+  return `${virtualSnippet} (${line.amountSats} sats, on-chain ${onChainSnippet})`
+}
+
+export function isOperatorIndexerCatchingUpError(error: unknown): boolean {
+  return wasmArkErrorCode(error) === OPERATOR_INDEXER_CATCHING_UP_CODE
 }

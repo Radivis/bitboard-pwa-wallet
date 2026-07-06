@@ -40,6 +40,24 @@ same stack with a different (block-denominated) `ARKD_VTXO_TREE_EXPIRY`:
 | REG-04 (isolated) | `arkade-reg04-unilateral-unroll-regtest.spec.ts` | `@arkade-reg04` | same long expiry via npm script | REG-04 only (faster iteration; same flow) |
 | Signer migration | `arkade-signer-migration-regtest.spec.ts` | `@arkade-signer-regtest` | `ARKD_VTXO_TREE_EXPIRY=200` via npm script | REG-05 cooperative migrate after `rotate-signer` |
 
+### REG-05 → Rust fixture (optional)
+
+Export a boarded wallet JSON for `bitboard-ark` `cooperative_signer_migration_clears_pending_recovery_with_boarded_fixture`:
+
+```bash
+# from frontend/ — long-expiry stack + E2E (writes test-results/arkade-boarded-fixture.json)
+ARKD_VTXO_TREE_EXPIRY=200 REQUIRE_ARKADE_REGTEST=1 VITE_E2E_ARKADE_REGTEST=true \
+  ARKADE_REGTEST_EXPORT_BOARDED_FIXTURE=1 \
+  npx playwright test tests/e2e/arkade-signer-migration-regtest.spec.ts
+
+# from repo root — consume the same file
+ARKADE_REGTEST_BOARDED_FIXTURE=frontend/test-results/arkade-boarded-fixture.json ARKADE_REGTEST_RUN=1 \
+  cargo test -p bitboard-ark --test signer_migration_session_regtest \
+  cooperative_signer_migration_clears_pending_recovery_with_boarded_fixture -- --ignored --test-threads=1
+```
+
+Use a repo path (not `/tmp`) so E2E and `cargo test` see the same file. Look for `wrote boarded wallet fixture for Rust regtest to …` in the Playwright output.
+
 Recovery/renewal need VTXOs to expire/become recoverable quickly; collaborative exit and unilateral
 unroll need a VTXO that stays live through a multi-step on-chain flow (these mine only ~20 blocks, well
 under 200). Signer migration also uses the long-expiry profile so VTXOs stay live while cooperative

@@ -85,6 +85,9 @@ pub use boltz::SwapStatus;
 pub use boltz::SwapStatusInfo;
 pub use boltz::SwapType;
 pub use boltz::TimeoutBlockHeights;
+pub use coin_select::{
+    MissingBlocktimeCompletionInput, VtxoCompletionSelection,
+};
 pub use error::Error;
 pub use key_provider::Bip32KeyProvider;
 pub use key_provider::KeyProvider;

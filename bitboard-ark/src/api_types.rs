@@ -161,6 +161,15 @@ pub struct UnilateralExitInProgressRow {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct MissingBlocktimeCompletionInputDto {
+    pub virtual_txid: String,
+    pub on_chain_txid: String,
+    pub on_chain_vout: u32,
+    pub amount_sats: u64,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct UnilateralExitCompletionFeeEstimateDto {
     pub selected_total_sats: u64,
     pub estimated_fee_sats: u64,
@@ -168,6 +177,8 @@ pub struct UnilateralExitCompletionFeeEstimateDto {
     pub fee_rate_sat_per_vb: f64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub estimate_error: Option<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub missing_blocktime_inputs: Vec<MissingBlocktimeCompletionInputDto>,
 }
 
 #[derive(Debug, Serialize)]

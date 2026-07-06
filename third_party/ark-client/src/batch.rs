@@ -22,6 +22,7 @@ use ark_core::script::extract_checksig_pubkeys;
 use ark_core::server::BatchTreeEventType;
 use ark_core::server::PartialSigTree;
 use ark_core::server::StreamEvent;
+use ark_core::server::TreeSigningStartedEvent;
 use ark_core::ArkAddress;
 use ark_core::ArkNote;
 use ark_core::ExplorerUtxo;
@@ -780,6 +781,9 @@ where
         let mut agg_nonce_pks = HashMap::new();
 
         let mut our_nonce_trees: Option<HashMap<Keypair, NonceKps>> = None;
+        let mut pending_vtxo_tree_signing_started: Option<TreeSigningStartedEvent> = None;
+        let mut submitted_vtxo_batch_tree_txids: Option<HashSet<Txid>> = None;
+        let mut vtxo_batch_tree_signatures_submitted = false;
 
         loop {
             match timeout_op(self.inner.timeout, stream.next())
@@ -830,7 +834,7 @@ where
                                     Some(vtxo_batch_tree_graph_chunks) => {
                                         tracing::debug!("Got new VTXO batch-tree graph chunk");
 
-                                        vtxo_batch_tree_graph_chunks.push(e.tx_graph_chunk)
+                                        vtxo_batch_tree_graph_chunks.push(e.tx_graph_chunk);
                                     }
                                     None => {
                                         return Err(Error::ark_server(
@@ -838,6 +842,63 @@ where
                                         ));
                                     }
                                 };
+
+                                match step {
+                                    Step::BatchStarted => {
+                                        if self
+                                            .try_flush_pending_vtxo_tree_signing_started(
+                                                rng,
+                                                &mut pending_vtxo_tree_signing_started,
+                                                &vtxo_batch_tree_graph_chunks,
+                                                &mut vtxo_batch_tree_graph,
+                                                &mut our_nonce_trees,
+                                &mut unsigned_commitment_tx,
+                                &mut submitted_vtxo_batch_tree_txids,
+                                &own_cosigner_kps,
+                                &own_cosigner_pks,
+                                            )
+                                            .await?
+                                        {
+                                            step = step.next();
+                                        }
+                                    }
+                                    Step::BatchSigningStarted => {
+                                        let chunks = vtxo_batch_tree_graph_chunks
+                                            .as_ref()
+                                            .ok_or_else(|| {
+                                                Error::ark_server(
+                                                    "missing VTXO batch-tree graph chunks during late chunk handling",
+                                                )
+                                            })?;
+                                        let commitment = unsigned_commitment_tx.as_ref().ok_or(
+                                            Error::ark_server(
+                                                "missing commitment TX during late chunk handling",
+                                            ),
+                                        )?;
+                                        let batch_id = batch_id.as_deref().ok_or_else(|| {
+                                            Error::ark_server(
+                                                "missing batch ID during late chunk handling",
+                                            )
+                                        })?;
+                                        if self.reconcile_vtxo_batch_tree_nonces(
+                                            rng,
+                                            chunks,
+                                            &mut vtxo_batch_tree_graph,
+                                            &mut our_nonce_trees,
+                                            commitment,
+                                            batch_id,
+                                            &own_cosigner_kps,
+                                            &mut agg_nonce_pks,
+                                            &mut submitted_vtxo_batch_tree_txids,
+                                            &mut vtxo_batch_tree_signatures_submitted,
+                                        )
+                                        .await?
+                                        {
+                                            // Wait for a new nonce aggregation round.
+                                        }
+                                    }
+                                    _ => {}
+                                }
                             }
                             BatchTreeEventType::Connector => {
                                 match connectors_graph_chunks {
@@ -893,62 +954,48 @@ where
                             continue;
                         }
 
-                        let chunks = vtxo_batch_tree_graph_chunks.take().ok_or(Error::ark_server(
-                            "received batch-tree signing started event without VTXO batch-tree graph chunks",
-                        ))?;
-                        vtxo_batch_tree_graph =
-                            Some(TxGraph::new(chunks).map_err(Error::from).context(
-                                "failed to build VTXO batch-tree graph before generating nonces",
-                            )?);
+                        pending_vtxo_tree_signing_started = Some(e);
 
-                        tracing::info!(batch_id = e.id, "Batch signing started");
-
-                        for own_cosigner_pk in own_cosigner_pks.iter() {
-                            if !&e.cosigners_pubkeys.iter().any(|p| p == own_cosigner_pk) {
-                                return Err(Error::ark_server(format!(
-                                    "own cosigner PK is not present in cosigner PKs: {own_cosigner_pk}"
-                                )));
+                        // Flush when TreeTx chunks already arrived (WASM ordering). If tonic
+                        // delivers this before the final TreeTx, a later chunk triggers another
+                        // flush or a nonce refresh in BatchSigningStarted.
+                        if self
+                            .try_flush_pending_vtxo_tree_signing_started(
+                                rng,
+                                &mut pending_vtxo_tree_signing_started,
+                                &vtxo_batch_tree_graph_chunks,
+                                &mut vtxo_batch_tree_graph,
+                                &mut our_nonce_trees,
+                                &mut unsigned_commitment_tx,
+                                &mut submitted_vtxo_batch_tree_txids,
+                                &own_cosigner_kps,
+                                &own_cosigner_pks,
+                            )
+                            .await?
+                        {
+                            step = step.next();
+                        }
+                    }
+                    StreamEvent::TreeNonces(e) => {
+                        if step == Step::BatchStarted {
+                            if self
+                                .try_flush_pending_vtxo_tree_signing_started(
+                                    rng,
+                                    &mut pending_vtxo_tree_signing_started,
+                                    &vtxo_batch_tree_graph_chunks,
+                                    &mut vtxo_batch_tree_graph,
+                                    &mut our_nonce_trees,
+                                &mut unsigned_commitment_tx,
+                                &mut submitted_vtxo_batch_tree_txids,
+                                &own_cosigner_kps,
+                                &own_cosigner_pks,
+                                )
+                                .await?
+                            {
+                                step = Step::BatchSigningStarted;
                             }
                         }
 
-                        let mut our_nonce_tree_map = HashMap::new();
-                        for own_cosigner_kp in own_cosigner_kps {
-                            let own_cosigner_pk = own_cosigner_kp.public_key();
-                            let nonce_tree = generate_nonce_tree(
-                                rng,
-                                vtxo_batch_tree_graph
-                                    .as_ref()
-                                    .expect("VTXO batch-tree graph"),
-                                own_cosigner_pk,
-                                &e.unsigned_commitment_tx,
-                            )
-                            .map_err(Error::from)
-                            .context("failed to generate VTXO nonce tree")?;
-
-                            tracing::info!(
-                                cosigner_pk = %own_cosigner_pk,
-                                "Submitting nonce tree for cosigner PK"
-                            );
-
-                            network_client
-                                .submit_tree_nonces(
-                                    &e.id,
-                                    own_cosigner_pk,
-                                    nonce_tree.to_nonce_pks(),
-                                )
-                                .await
-                                .map_err(Error::ark_server)
-                                .context("failed to submit VTXO nonce tree")?;
-
-                            our_nonce_tree_map.insert(own_cosigner_kp, nonce_tree);
-                        }
-
-                        unsigned_commitment_tx = Some(e.unsigned_commitment_tx);
-                        our_nonce_trees = Some(our_nonce_tree_map);
-
-                        step = step.next();
-                    }
-                    StreamEvent::TreeNonces(e) => {
                         if step != Step::BatchSigningStarted {
                             continue;
                         }
@@ -983,20 +1030,37 @@ where
 
                         agg_nonce_pks.insert(e.txid, agg_nonce_pk);
 
-                        if vtxo_batch_tree_graph.is_none() {
-                            let chunks = vtxo_batch_tree_graph_chunks.take().ok_or(Error::ark_server(
-                                "received batch-tree nonces event without VTXO batch-tree graph chunks",
-                            ))?;
-                            vtxo_batch_tree_graph = Some(
-                                TxGraph::new(chunks)
-                                    .map_err(Error::from)
-                                    .context("failed to build VTXO batch-tree graph before batch-tree signing")?,
-                            );
+                        if let (Some(commitment), Some(batch_id_str)) =
+                            (unsigned_commitment_tx.as_ref(), batch_id.as_deref())
+                        {
+                            let chunks = vtxo_batch_tree_graph_chunks.as_ref().ok_or_else(|| {
+                                Error::ark_server(
+                                    "received batch-tree nonces event without VTXO batch-tree graph chunks",
+                                )
+                            })?;
+                            if self.reconcile_vtxo_batch_tree_nonces(
+                                rng,
+                                chunks,
+                                &mut vtxo_batch_tree_graph,
+                                &mut our_nonce_trees,
+                                commitment,
+                                batch_id_str,
+                                &own_cosigner_kps,
+                                &mut agg_nonce_pks,
+                                &mut submitted_vtxo_batch_tree_txids,
+                                &mut vtxo_batch_tree_signatures_submitted,
+                            )
+                            .await?
+                            {
+                                continue;
+                            }
                         }
                         let vtxo_batch_tree_graph_ref =
                             vtxo_batch_tree_graph.as_ref().expect("just populated");
 
-                        if agg_nonce_pks.len() == vtxo_batch_tree_graph_ref.nb_of_nodes() {
+                        if !vtxo_batch_tree_signatures_submitted
+                            && agg_nonce_pks.len() == vtxo_batch_tree_graph_ref.nb_of_nodes()
+                        {
                             let cosigner_kp = own_cosigner_kps
                                 .iter()
                                 .find(|kp| kp.public_key().x_only_public_key().0 == cosigner_pk)
@@ -1055,9 +1119,29 @@ where
                                 .await
                                 .map_err(Error::ark_server)
                                 .context("failed to submit VTXO batch-tree signatures")?;
+                            vtxo_batch_tree_signatures_submitted = true;
                         }
                     }
                     StreamEvent::TreeNoncesAggregated(e) => {
+                        if step == Step::BatchStarted {
+                            if self
+                                .try_flush_pending_vtxo_tree_signing_started(
+                                    rng,
+                                    &mut pending_vtxo_tree_signing_started,
+                                    &vtxo_batch_tree_graph_chunks,
+                                    &mut vtxo_batch_tree_graph,
+                                    &mut our_nonce_trees,
+                                &mut unsigned_commitment_tx,
+                                &mut submitted_vtxo_batch_tree_txids,
+                                &own_cosigner_kps,
+                                &own_cosigner_pks,
+                                )
+                                .await?
+                            {
+                                step = Step::BatchSigningStarted;
+                            }
+                        }
+
                         if step != Step::BatchSigningStarted {
                             continue;
                         }
@@ -1076,20 +1160,38 @@ where
                             agg_nonce_pks.insert(txid, agg_nonce_pk);
                         }
 
-                        if vtxo_batch_tree_graph.is_none() {
-                            let chunks = vtxo_batch_tree_graph_chunks.take().ok_or(Error::ark_server(
-                                "received batch-tree aggregated nonces without VTXO batch-tree graph chunks",
-                            ))?;
-                            vtxo_batch_tree_graph = Some(
-                                TxGraph::new(chunks)
-                                    .map_err(Error::from)
-                                    .context("failed to build VTXO batch-tree graph before batch-tree signing")?,
-                            );
+                        if let (Some(commitment), Some(batch_id_str)) =
+                            (unsigned_commitment_tx.as_ref(), batch_id.as_deref())
+                        {
+                            let chunks = vtxo_batch_tree_graph_chunks.as_ref().ok_or_else(|| {
+                                Error::ark_server(
+                                    "received batch-tree aggregated nonces without VTXO batch-tree graph chunks",
+                                )
+                            })?;
+                            if self.reconcile_vtxo_batch_tree_nonces(
+                                rng,
+                                chunks,
+                                &mut vtxo_batch_tree_graph,
+                                &mut our_nonce_trees,
+                                commitment,
+                                batch_id_str,
+                                &own_cosigner_kps,
+                                &mut agg_nonce_pks,
+                                &mut submitted_vtxo_batch_tree_txids,
+                                &mut vtxo_batch_tree_signatures_submitted,
+                            )
+                            .await?
+                            {
+                                continue;
+                            }
                         }
+
                         let vtxo_batch_tree_graph_ref =
                             vtxo_batch_tree_graph.as_ref().expect("just populated");
 
-                        if agg_nonce_pks.len() == vtxo_batch_tree_graph_ref.nb_of_nodes() {
+                        if !vtxo_batch_tree_signatures_submitted
+                            && agg_nonce_pks.len() == vtxo_batch_tree_graph_ref.nb_of_nodes()
+                        {
                             let cosigner_kp = own_cosigner_kps.first().ok_or_else(|| {
                                 Error::ad_hoc("no cosigner keypair to sign for own PK")
                             })?;
@@ -1142,6 +1244,7 @@ where
                                 .await
                                 .map_err(Error::ark_server)
                                 .context("failed to submit VTXO batch-tree signatures")?;
+                            vtxo_batch_tree_signatures_submitted = true;
                         }
                     }
                     StreamEvent::BatchFinalization(e) => {
@@ -1583,6 +1686,214 @@ where
         }
     }
 
+    fn vtxo_batch_tree_txids(graph: &TxGraph) -> HashSet<Txid> {
+        graph.as_map().keys().copied().collect()
+    }
+
+    async fn submit_vtxo_batch_tree_nonces_for_graph<R>(
+        &self,
+        rng: &mut R,
+        batch_id: &str,
+        vtxo_batch_tree_graph: &TxGraph,
+        unsigned_commitment_tx: &Psbt,
+        own_cosigner_kps: &[Keypair],
+    ) -> Result<HashMap<Keypair, NonceKps>, Error>
+    where
+        R: Rng + CryptoRng,
+    {
+        let network_client = self.network_client();
+        let mut our_nonce_tree_map = HashMap::new();
+        for own_cosigner_kp in own_cosigner_kps {
+            let own_cosigner_pk = own_cosigner_kp.public_key();
+            let nonce_tree = generate_nonce_tree(
+                rng,
+                vtxo_batch_tree_graph,
+                own_cosigner_pk,
+                unsigned_commitment_tx,
+            )
+            .map_err(Error::from)
+            .context("failed to generate VTXO nonce tree")?;
+
+            tracing::info!(
+                cosigner_pk = %own_cosigner_pk,
+                "Submitting nonce tree for cosigner PK"
+            );
+
+            network_client
+                .submit_tree_nonces(
+                    batch_id,
+                    own_cosigner_pk,
+                    nonce_tree.to_nonce_pks(),
+                )
+                .await
+                .map_err(Error::ark_server)
+                .context("failed to submit VTXO nonce tree")?;
+
+            our_nonce_tree_map.insert(*own_cosigner_kp, nonce_tree);
+        }
+
+        Ok(our_nonce_tree_map)
+    }
+
+    async fn begin_vtxo_batch_tree_signing<R>(
+        &self,
+        rng: &mut R,
+        signing: TreeSigningStartedEvent,
+        vtxo_batch_tree_graph_chunks: &[ark_core::TxGraphChunk],
+        own_cosigner_kps: &[Keypair],
+        own_cosigner_pks: &[PublicKey],
+    ) -> Result<(TxGraph, HashMap<Keypair, NonceKps>, Psbt), Error>
+    where
+        R: Rng + CryptoRng,
+    {
+        if vtxo_batch_tree_graph_chunks.is_empty() {
+            return Err(Error::ark_server(
+                "cannot begin VTXO batch-tree signing without graph chunks",
+            ));
+        }
+
+        let vtxo_batch_tree_graph = TxGraph::new(vtxo_batch_tree_graph_chunks.to_vec())
+            .map_err(Error::from)
+            .context("failed to build VTXO batch-tree graph before generating nonces")?;
+
+        tracing::info!(batch_id = signing.id, "Batch signing started");
+
+        for own_cosigner_pk in own_cosigner_pks.iter() {
+            if !signing
+                .cosigners_pubkeys
+                .iter()
+                .any(|p| p == own_cosigner_pk)
+            {
+                return Err(Error::ark_server(format!(
+                    "own cosigner PK is not present in cosigner PKs: {own_cosigner_pk}"
+                )));
+            }
+        }
+
+        let our_nonce_tree_map = self
+            .submit_vtxo_batch_tree_nonces_for_graph(
+                rng,
+                &signing.id,
+                &vtxo_batch_tree_graph,
+                &signing.unsigned_commitment_tx,
+                own_cosigner_kps,
+            )
+            .await?;
+
+        Ok((
+            vtxo_batch_tree_graph,
+            our_nonce_tree_map,
+            signing.unsigned_commitment_tx,
+        ))
+    }
+
+    async fn try_flush_pending_vtxo_tree_signing_started<R>(
+        &self,
+        rng: &mut R,
+        pending_vtxo_tree_signing_started: &mut Option<TreeSigningStartedEvent>,
+        vtxo_batch_tree_graph_chunks: &Option<Vec<ark_core::TxGraphChunk>>,
+        vtxo_batch_tree_graph: &mut Option<TxGraph>,
+        our_nonce_trees: &mut Option<HashMap<Keypair, NonceKps>>,
+        unsigned_commitment_tx: &mut Option<Psbt>,
+        submitted_vtxo_batch_tree_txids: &mut Option<HashSet<Txid>>,
+        own_cosigner_kps: &[Keypair],
+        own_cosigner_pks: &[PublicKey],
+    ) -> Result<bool, Error>
+    where
+        R: Rng + CryptoRng,
+    {
+        let Some(signing) = pending_vtxo_tree_signing_started.take() else {
+            return Ok(false);
+        };
+
+        let Some(chunks) = vtxo_batch_tree_graph_chunks.as_ref() else {
+            *pending_vtxo_tree_signing_started = Some(signing);
+            return Ok(false);
+        };
+
+        if chunks.is_empty() {
+            *pending_vtxo_tree_signing_started = Some(signing);
+            return Ok(false);
+        }
+
+        let (graph, nonce_map, commitment) = self
+            .begin_vtxo_batch_tree_signing(
+                rng,
+                signing,
+                chunks,
+                own_cosigner_kps,
+                own_cosigner_pks,
+            )
+            .await?;
+
+        *submitted_vtxo_batch_tree_txids = Some(Self::vtxo_batch_tree_txids(&graph));
+        *vtxo_batch_tree_graph = Some(graph);
+        *our_nonce_trees = Some(nonce_map);
+        *unsigned_commitment_tx = Some(commitment);
+
+        Ok(true)
+    }
+
+    /// Rebuild the VTXO batch-tree from buffered chunks and resubmit nonces when the graph no
+    /// longer matches what we last submitted. Returns `true` when nonces were refreshed (caller
+    /// should wait for a new aggregation round before signing).
+    async fn reconcile_vtxo_batch_tree_nonces<R>(
+        &self,
+        rng: &mut R,
+        vtxo_batch_tree_graph_chunks: &[ark_core::TxGraphChunk],
+        vtxo_batch_tree_graph: &mut Option<TxGraph>,
+        our_nonce_trees: &mut Option<HashMap<Keypair, NonceKps>>,
+        unsigned_commitment_tx: &Psbt,
+        batch_id: &str,
+        own_cosigner_kps: &[Keypair],
+        agg_nonce_pks: &mut HashMap<Txid, AggregatedNonce>,
+        submitted_vtxo_batch_tree_txids: &mut Option<HashSet<Txid>>,
+        vtxo_batch_tree_signatures_submitted: &mut bool,
+    ) -> Result<bool, Error>
+    where
+        R: Rng + CryptoRng,
+    {
+        let rebuilt = TxGraph::new(vtxo_batch_tree_graph_chunks.to_vec())
+            .map_err(Error::from)
+            .context("failed to rebuild VTXO batch-tree graph from buffered chunks")?;
+        let rebuilt_txids = Self::vtxo_batch_tree_txids(&rebuilt);
+        *vtxo_batch_tree_graph = Some(rebuilt);
+
+        if submitted_vtxo_batch_tree_txids.as_ref() == Some(&rebuilt_txids) {
+            return Ok(false);
+        }
+
+        tracing::warn!(
+            batch_id,
+            previous_nodes = submitted_vtxo_batch_tree_txids
+                .as_ref()
+                .map(|txids| txids.len())
+                .unwrap_or(0),
+            new_nodes = rebuilt_txids.len(),
+            "VTXO batch-tree graph changed; refreshing submitted nonces"
+        );
+
+        let vtxo_batch_tree_graph_ref = vtxo_batch_tree_graph
+            .as_ref()
+            .expect("rebuilt graph stored above");
+        let nonce_map = self
+            .submit_vtxo_batch_tree_nonces_for_graph(
+                rng,
+                batch_id,
+                vtxo_batch_tree_graph_ref,
+                unsigned_commitment_tx,
+                own_cosigner_kps,
+            )
+            .await?;
+
+        *our_nonce_trees = Some(nonce_map);
+        *submitted_vtxo_batch_tree_txids = Some(rebuilt_txids);
+        agg_nonce_pks.clear();
+        *vtxo_batch_tree_signatures_submitted = false;
+
+        Ok(true)
+    }
+
     pub(crate) async fn join_next_batch<R>(
         &self,
         rng: &mut R,
@@ -1668,6 +1979,9 @@ where
         let mut agg_nonce_pks = HashMap::new();
 
         let mut our_nonce_trees: Option<HashMap<Keypair, NonceKps>> = None;
+        let mut pending_vtxo_tree_signing_started: Option<TreeSigningStartedEvent> = None;
+        let mut submitted_vtxo_batch_tree_txids: Option<HashSet<Txid>> = None;
+        let mut vtxo_batch_tree_signatures_submitted = false;
         loop {
             match timeout_op(self.inner.timeout, stream.next())
                 .await
@@ -1725,7 +2039,7 @@ where
                                     Some(vtxo_batch_tree_graph_chunks) => {
                                         tracing::debug!("Got new VTXO batch-tree graph chunk");
 
-                                        vtxo_batch_tree_graph_chunks.push(e.tx_graph_chunk)
+                                        vtxo_batch_tree_graph_chunks.push(e.tx_graph_chunk);
                                     }
                                     None => {
                                         return Err(Error::ark_server(
@@ -1733,6 +2047,63 @@ where
                                         ));
                                     }
                                 };
+
+                                match step {
+                                    Step::BatchStarted => {
+                                        if self
+                                            .try_flush_pending_vtxo_tree_signing_started(
+                                                rng,
+                                                &mut pending_vtxo_tree_signing_started,
+                                                &vtxo_batch_tree_graph_chunks,
+                                                &mut vtxo_batch_tree_graph,
+                                                &mut our_nonce_trees,
+                                &mut unsigned_commitment_tx,
+                                &mut submitted_vtxo_batch_tree_txids,
+                                &own_cosigner_kps,
+                                &own_cosigner_pks,
+                                            )
+                                            .await?
+                                        {
+                                            step = step.next();
+                                        }
+                                    }
+                                    Step::BatchSigningStarted => {
+                                        let chunks = vtxo_batch_tree_graph_chunks
+                                            .as_ref()
+                                            .ok_or_else(|| {
+                                                Error::ark_server(
+                                                    "missing VTXO batch-tree graph chunks during late chunk handling",
+                                                )
+                                            })?;
+                                        let commitment = unsigned_commitment_tx.as_ref().ok_or(
+                                            Error::ark_server(
+                                                "missing commitment TX during late chunk handling",
+                                            ),
+                                        )?;
+                                        let batch_id = batch_id.as_deref().ok_or_else(|| {
+                                            Error::ark_server(
+                                                "missing batch ID during late chunk handling",
+                                            )
+                                        })?;
+                                        if self.reconcile_vtxo_batch_tree_nonces(
+                                            rng,
+                                            chunks,
+                                            &mut vtxo_batch_tree_graph,
+                                            &mut our_nonce_trees,
+                                            commitment,
+                                            batch_id,
+                                            &own_cosigner_kps,
+                                            &mut agg_nonce_pks,
+                                            &mut submitted_vtxo_batch_tree_txids,
+                                            &mut vtxo_batch_tree_signatures_submitted,
+                                        )
+                                        .await?
+                                        {
+                                            // Wait for a new nonce aggregation round.
+                                        }
+                                    }
+                                    _ => {}
+                                }
                             }
                             BatchTreeEventType::Connector => {
                                 match connectors_graph_chunks {
@@ -1788,63 +2159,48 @@ where
                             continue;
                         }
 
-                        let chunks = vtxo_batch_tree_graph_chunks.take().ok_or(Error::ark_server(
-                            "received batch-tree signing started event without VTXO batch-tree graph chunks",
-                        ))?;
-                        vtxo_batch_tree_graph =
-                            Some(TxGraph::new(chunks).map_err(Error::from).context(
-                                "failed to build VTXO batch-tree graph before generating nonces",
-                            )?);
+                        pending_vtxo_tree_signing_started = Some(e);
 
-                        tracing::info!(batch_id = e.id, "Batch signing started");
-
-                        for own_cosigner_pk in own_cosigner_pks.iter() {
-                            if !&e.cosigners_pubkeys.iter().any(|p| p == own_cosigner_pk) {
-                                return Err(Error::ark_server(format!(
-                                    "own cosigner PK is not present in cosigner PKs: {own_cosigner_pk}"
-                                )));
+                        // Flush when TreeTx chunks already arrived (WASM ordering). If tonic
+                        // delivers this before the final TreeTx, a later chunk triggers another
+                        // flush or a nonce refresh in BatchSigningStarted.
+                        if self
+                            .try_flush_pending_vtxo_tree_signing_started(
+                                rng,
+                                &mut pending_vtxo_tree_signing_started,
+                                &vtxo_batch_tree_graph_chunks,
+                                &mut vtxo_batch_tree_graph,
+                                &mut our_nonce_trees,
+                                &mut unsigned_commitment_tx,
+                                &mut submitted_vtxo_batch_tree_txids,
+                                &own_cosigner_kps,
+                                &own_cosigner_pks,
+                            )
+                            .await?
+                        {
+                            step = step.next();
+                        }
+                    }
+                    StreamEvent::TreeNonces(e) => {
+                        if step == Step::BatchStarted {
+                            if self
+                                .try_flush_pending_vtxo_tree_signing_started(
+                                    rng,
+                                    &mut pending_vtxo_tree_signing_started,
+                                    &vtxo_batch_tree_graph_chunks,
+                                    &mut vtxo_batch_tree_graph,
+                                    &mut our_nonce_trees,
+                                &mut unsigned_commitment_tx,
+                                &mut submitted_vtxo_batch_tree_txids,
+                                &own_cosigner_kps,
+                                &own_cosigner_pks,
+                                )
+                                .await?
+                            {
+                                step = Step::BatchSigningStarted;
                             }
                         }
 
-                        // We generate and submit a nonce tree for every cosigner key we provide.
-                        let mut our_nonce_tree_map = HashMap::new();
-                        for own_cosigner_kp in own_cosigner_kps {
-                            let own_cosigner_pk = own_cosigner_kp.public_key();
-                            let nonce_tree = generate_nonce_tree(
-                                rng,
-                                vtxo_batch_tree_graph
-                                    .as_ref()
-                                    .expect("VTXO batch-tree graph"),
-                                own_cosigner_pk,
-                                &e.unsigned_commitment_tx,
-                            )
-                            .map_err(Error::from)
-                            .context("failed to generate VTXO nonce tree")?;
-
-                            tracing::info!(
-                                cosigner_pk = %own_cosigner_pk,
-                                "Submitting nonce tree for cosigner PK"
-                            );
-
-                            network_client
-                                .submit_tree_nonces(
-                                    &e.id,
-                                    own_cosigner_pk,
-                                    nonce_tree.to_nonce_pks(),
-                                )
-                                .await
-                                .map_err(Error::ark_server)
-                                .context("failed to submit VTXO nonce tree")?;
-
-                            our_nonce_tree_map.insert(own_cosigner_kp, nonce_tree);
-                        }
-
-                        unsigned_commitment_tx = Some(e.unsigned_commitment_tx);
-                        our_nonce_trees = Some(our_nonce_tree_map);
-
-                        step = step.next();
-                    }
-                    StreamEvent::TreeNonces(e) => {
                         if step != Step::BatchSigningStarted {
                             continue;
                         }
@@ -1879,22 +2235,39 @@ where
 
                         agg_nonce_pks.insert(e.txid, agg_nonce_pk);
 
-                        if vtxo_batch_tree_graph.is_none() {
-                            let chunks = vtxo_batch_tree_graph_chunks.take().ok_or(Error::ark_server(
-                                "received batch-tree nonces event without VTXO batch-tree graph chunks",
-                            ))?;
-                            vtxo_batch_tree_graph = Some(
-                                TxGraph::new(chunks)
-                                    .map_err(Error::from)
-                                    .context("failed to build VTXO batch-tree graph before batch-tree signing")?,
-                            );
+                        if let (Some(commitment), Some(batch_id_str)) =
+                            (unsigned_commitment_tx.as_ref(), batch_id.as_deref())
+                        {
+                            let chunks = vtxo_batch_tree_graph_chunks.as_ref().ok_or_else(|| {
+                                Error::ark_server(
+                                    "received batch-tree nonces event without VTXO batch-tree graph chunks",
+                                )
+                            })?;
+                            if self.reconcile_vtxo_batch_tree_nonces(
+                                rng,
+                                chunks,
+                                &mut vtxo_batch_tree_graph,
+                                &mut our_nonce_trees,
+                                commitment,
+                                batch_id_str,
+                                &own_cosigner_kps,
+                                &mut agg_nonce_pks,
+                                &mut submitted_vtxo_batch_tree_txids,
+                                &mut vtxo_batch_tree_signatures_submitted,
+                            )
+                            .await?
+                            {
+                                continue;
+                            }
                         }
                         let vtxo_batch_tree_graph_ref =
                             vtxo_batch_tree_graph.as_ref().expect("just populated");
 
                         // Once we collect an aggregated nonce per transaction in our VTXO
                         // batch-tree graph, we can sign and submit our partial signatures.
-                        if agg_nonce_pks.len() == vtxo_batch_tree_graph_ref.nb_of_nodes() {
+                        if !vtxo_batch_tree_signatures_submitted
+                            && agg_nonce_pks.len() == vtxo_batch_tree_graph_ref.nb_of_nodes()
+                        {
                             let cosigner_kp = own_cosigner_kps
                                 .iter()
                                 .find(|kp| kp.public_key().x_only_public_key().0 == cosigner_pk)
@@ -1953,9 +2326,29 @@ where
                                 .await
                                 .map_err(Error::ark_server)
                                 .context("failed to submit VTXO batch-tree signatures")?;
+                            vtxo_batch_tree_signatures_submitted = true;
                         }
                     }
                     StreamEvent::TreeNoncesAggregated(e) => {
+                        if step == Step::BatchStarted {
+                            if self
+                                .try_flush_pending_vtxo_tree_signing_started(
+                                    rng,
+                                    &mut pending_vtxo_tree_signing_started,
+                                    &vtxo_batch_tree_graph_chunks,
+                                    &mut vtxo_batch_tree_graph,
+                                    &mut our_nonce_trees,
+                                &mut unsigned_commitment_tx,
+                                &mut submitted_vtxo_batch_tree_txids,
+                                &own_cosigner_kps,
+                                &own_cosigner_pks,
+                                )
+                                .await?
+                            {
+                                step = Step::BatchSigningStarted;
+                            }
+                        }
+
                         if step != Step::BatchSigningStarted {
                             continue;
                         }
@@ -1974,20 +2367,38 @@ where
                             agg_nonce_pks.insert(txid, agg_nonce_pk);
                         }
 
-                        if vtxo_batch_tree_graph.is_none() {
-                            let chunks = vtxo_batch_tree_graph_chunks.take().ok_or(Error::ark_server(
-                                "received batch-tree aggregated nonces without VTXO batch-tree graph chunks",
-                            ))?;
-                            vtxo_batch_tree_graph = Some(
-                                TxGraph::new(chunks)
-                                    .map_err(Error::from)
-                                    .context("failed to build VTXO batch-tree graph before batch-tree signing")?,
-                            );
+                        if let (Some(commitment), Some(batch_id_str)) =
+                            (unsigned_commitment_tx.as_ref(), batch_id.as_deref())
+                        {
+                            let chunks = vtxo_batch_tree_graph_chunks.as_ref().ok_or_else(|| {
+                                Error::ark_server(
+                                    "received batch-tree aggregated nonces without VTXO batch-tree graph chunks",
+                                )
+                            })?;
+                            if self.reconcile_vtxo_batch_tree_nonces(
+                                rng,
+                                chunks,
+                                &mut vtxo_batch_tree_graph,
+                                &mut our_nonce_trees,
+                                commitment,
+                                batch_id_str,
+                                &own_cosigner_kps,
+                                &mut agg_nonce_pks,
+                                &mut submitted_vtxo_batch_tree_txids,
+                                &mut vtxo_batch_tree_signatures_submitted,
+                            )
+                            .await?
+                            {
+                                continue;
+                            }
                         }
+
                         let vtxo_batch_tree_graph_ref =
                             vtxo_batch_tree_graph.as_ref().expect("just populated");
 
-                        if agg_nonce_pks.len() == vtxo_batch_tree_graph_ref.nb_of_nodes() {
+                        if !vtxo_batch_tree_signatures_submitted
+                            && agg_nonce_pks.len() == vtxo_batch_tree_graph_ref.nb_of_nodes()
+                        {
                             let cosigner_kp = own_cosigner_kps.first().ok_or_else(|| {
                                 Error::ad_hoc("no cosigner keypair to sign for own PK")
                             })?;
@@ -2040,6 +2451,7 @@ where
                                 .await
                                 .map_err(Error::ark_server)
                                 .context("failed to submit VTXO batch-tree signatures")?;
+                            vtxo_batch_tree_signatures_submitted = true;
                         }
                     }
                     StreamEvent::BatchFinalization(e) => {

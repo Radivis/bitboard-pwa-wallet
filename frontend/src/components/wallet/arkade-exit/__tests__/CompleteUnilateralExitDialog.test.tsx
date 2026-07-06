@@ -131,4 +131,59 @@ describe('CompleteUnilateralExitDialog', () => {
     expect(feePanel).toHaveTextContent(/0\.00001500/)
     expect(feePanel).toHaveTextContent(/0\.00198500/)
   })
+
+  it('shows blocktime warning list when estimate includes missingBlocktimeInputs', () => {
+    const virtualTxid = 'dd'.repeat(32)
+    renderWithProviders(
+      <CompleteUnilateralExitDialog
+        exitFlow={buildExitFlow({
+          selectedInProgressTxids: [virtualTxid],
+          completionFeeQuery: {
+            isLoading: false,
+            data: {
+              selectedTotalSats: 200_000,
+              estimatedFeeSats: 1_500,
+              estimatedReceiveSats: 198_500,
+              feeRateSatPerVb: 2,
+              missingBlocktimeInputs: [
+                {
+                  virtualTxid,
+                  onChainTxid: virtualTxid,
+                  onChainVout: 0,
+                  amountSats: 200_000,
+                },
+              ],
+            },
+          },
+        })}
+      />,
+    )
+
+    const warning = screen.getByTestId('arkade-complete-blocktime-warning')
+    expect(warning).toHaveTextContent(/Esplora did not report a confirmation time/)
+    expect(warning).toHaveTextContent(virtualTxid.slice(0, 12))
+  })
+
+  it('shows indexer-catching-up state instead of destructive error', () => {
+    renderWithProviders(
+      <CompleteUnilateralExitDialog
+        exitFlow={buildExitFlow({
+          completeExitMutation: {
+            mutate: vi.fn(),
+            isPending: false,
+            isError: true,
+            error: new Error(
+              JSON.stringify({
+                code: 'operator_indexer_catching_up',
+                message: 'Operator indexer is still catching up after unilateral unroll.',
+              }),
+            ),
+          },
+        })}
+      />,
+    )
+
+    expect(screen.getByTestId('arkade-complete-indexer-catching-up')).toBeInTheDocument()
+    expect(screen.queryByTestId('arkade-complete-error')).not.toBeInTheDocument()
+  })
 })

@@ -60,6 +60,7 @@ import {
 import {
   formatArkadeTxidToastSnippet,
   formatUnilateralUnrollSuccessMessage,
+  isOperatorIndexerCatchingUpError,
   shouldShowUnilateralUnrollProgressToast,
   unilateralUnrollProgressToastId,
 } from '@/lib/arkade/arkade-exit-utils'
@@ -1013,6 +1014,9 @@ export function useArkadeCompleteUnilateralExitMutation() {
       }
     },
     onError: (err) => {
+      if (isOperatorIndexerCatchingUpError(err)) {
+        return
+      }
       toast.error(errorMessage(err))
     },
   })

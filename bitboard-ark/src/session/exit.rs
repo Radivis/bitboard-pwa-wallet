@@ -8,9 +8,10 @@ use bitcoin::{Amount, OutPoint, Txid, secp256k1::rand::rngs::OsRng};
 use crate::api_types::{
     COLLABORATIVE_EXIT_ESTIMATE_ERROR_INSUFFICIENT_COOPERATIVE_INPUTS,
     CollaborativeExitFeeEstimateDto, CollaborativeExitParams, CompleteUnilateralExitParams,
-    ExitCandidateRow, OnchainBumperInfoDto, UnilateralExitCompletionFeeEstimateDto,
-    UnilateralExitCompletionFeeEstimateParams, UnilateralExitFeeEstimateDto,
-    UnilateralExitFeeParams, UnilateralExitInProgressRow, UnrollProgressEvent, UnrollResult,
+    ExitCandidateRow, MissingBlocktimeCompletionInputDto, OnchainBumperInfoDto,
+    UnilateralExitCompletionFeeEstimateDto, UnilateralExitCompletionFeeEstimateParams,
+    UnilateralExitFeeEstimateDto, UnilateralExitFeeParams, UnilateralExitInProgressRow,
+    UnrollProgressEvent, UnrollResult,
 };
 use crate::constants::{
     MIN_FEE_RATE_SAT_PER_VB, UNILATERAL_EXIT_CHILD_VSIZE_VB, UNROLL_EVENT_TYPE_DONE,
@@ -546,12 +547,9 @@ impl ArkSession {
             }
         }
 
-        Err(last_error.map(Into::into).unwrap_or_else(|| {
-            ArkWasmError::Boarding(
-                "Timed out waiting for the operator indexer to mark the VTXO as unrolled"
-                    .to_string(),
-            )
-        }))
+        Err(last_error
+            .map(Into::into)
+            .unwrap_or(ArkWasmError::OperatorIndexerCatchingUp))
     }
 
     pub async fn estimate_unilateral_exit_completion(
@@ -571,6 +569,7 @@ impl ArkSession {
                     estimated_receive_sats: 0,
                     fee_rate_sat_per_vb: MIN_FEE_RATE_SAT_PER_VB,
                     estimate_error: Some(error.to_string()),
+                    missing_blocktime_inputs: Vec::new(),
                 });
             }
         };
@@ -598,6 +597,7 @@ impl ArkSession {
                     estimated_receive_sats: 0,
                     fee_rate_sat_per_vb: MIN_FEE_RATE_SAT_PER_VB,
                     estimate_error: Some(error.to_string()),
+                    missing_blocktime_inputs: Vec::new(),
                 });
             }
         };
@@ -614,19 +614,25 @@ impl ArkSession {
             )
             .await
         {
-            Ok((fee, to_amount, selected_amount)) => Ok(UnilateralExitCompletionFeeEstimateDto {
-                selected_total_sats: selected_amount.to_sat(),
-                estimated_fee_sats: fee.to_sat(),
-                estimated_receive_sats: to_amount.to_sat(),
-                fee_rate_sat_per_vb,
-                estimate_error: None,
-            }),
+            Ok((fee, to_amount, selected_amount, missing_blocktime_inputs)) => {
+                Ok(UnilateralExitCompletionFeeEstimateDto {
+                    selected_total_sats: selected_amount.to_sat(),
+                    estimated_fee_sats: fee.to_sat(),
+                    estimated_receive_sats: to_amount.to_sat(),
+                    fee_rate_sat_per_vb,
+                    estimate_error: None,
+                    missing_blocktime_inputs: map_missing_blocktime_completion_inputs(
+                        &missing_blocktime_inputs,
+                    ),
+                })
+            }
             Err(error) => Ok(UnilateralExitCompletionFeeEstimateDto {
                 selected_total_sats: 0,
                 estimated_fee_sats: 0,
                 estimated_receive_sats: 0,
                 fee_rate_sat_per_vb,
                 estimate_error: Some(error.to_string()),
+                missing_blocktime_inputs: Vec::new(),
             }),
         }
     }
@@ -648,14 +654,31 @@ fn resolve_completion_fee_rate_sat_per_vb(override_rate_sat_per_vb: Option<f64>)
         .max(MIN_FEE_RATE_SAT_PER_VB)
 }
 
+fn map_missing_blocktime_completion_inputs(
+    inputs: &[ark_client::MissingBlocktimeCompletionInput],
+) -> Vec<MissingBlocktimeCompletionInputDto> {
+    inputs
+        .iter()
+        .map(|input| MissingBlocktimeCompletionInputDto {
+            virtual_txid: input.virtual_txid.to_string(),
+            on_chain_txid: input.on_chain_outpoint.txid.to_string(),
+            on_chain_vout: input.on_chain_outpoint.vout,
+            amount_sats: input.amount_sats,
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod collaborative_exit_estimate_tests {
     use super::{
-        collaborative_exit_estimate_error_code, resolve_completion_fee_rate_sat_per_vb,
+        collaborative_exit_estimate_error_code, completion_awaits_unrolled_indexer,
+        map_missing_blocktime_completion_inputs, resolve_completion_fee_rate_sat_per_vb,
         resolve_cooperative_exit_amount,
     };
     use crate::api_types::COLLABORATIVE_EXIT_ESTIMATE_ERROR_INSUFFICIENT_COOPERATIVE_INPUTS;
-    use bitcoin::Amount;
+    use ark_client::MissingBlocktimeCompletionInput;
+    use bitcoin::hashes::Hash;
+    use bitcoin::{Amount, OutPoint, Txid};
 
     #[test]
     fn maps_coin_select_to_insufficient_cooperative_inputs_code() {
@@ -692,5 +715,30 @@ mod collaborative_exit_estimate_tests {
         assert_eq!(resolve_completion_fee_rate_sat_per_vb(Some(5.0)), 5.0);
         assert_eq!(resolve_completion_fee_rate_sat_per_vb(Some(0.05)), 0.1);
         assert_eq!(resolve_completion_fee_rate_sat_per_vb(None), 0.1);
+    }
+
+    #[test]
+    fn completion_awaits_unrolled_indexer_matches_coin_select_message() {
+        let error = ark_client::Error::wallet("no matching unrolled VTXOs found for completion");
+        assert!(completion_awaits_unrolled_indexer(&error));
+    }
+
+    #[test]
+    fn map_missing_blocktime_completion_inputs_maps_virtual_and_on_chain_fields() {
+        let virtual_txid = Txid::from_byte_array([0xab; 32]);
+        let on_chain_txid = Txid::from_byte_array([0xcd; 32]);
+        let mapped = map_missing_blocktime_completion_inputs(&[MissingBlocktimeCompletionInput {
+            virtual_txid,
+            on_chain_outpoint: OutPoint {
+                txid: on_chain_txid,
+                vout: 2,
+            },
+            amount_sats: 150_000,
+        }]);
+        assert_eq!(mapped.len(), 1);
+        assert_eq!(mapped[0].virtual_txid, virtual_txid.to_string());
+        assert_eq!(mapped[0].on_chain_txid, on_chain_txid.to_string());
+        assert_eq!(mapped[0].on_chain_vout, 2);
+        assert_eq!(mapped[0].amount_sats, 150_000);
     }
 }
