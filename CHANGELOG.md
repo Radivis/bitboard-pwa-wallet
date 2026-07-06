@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - When fiat amounts are shown, breakdown detail amounts are now also displayed in fiat
 - Split monolithic unilateral exit button in Arkde into "Start unilateral exit" and "Complete unilateral exit"
+- Made unlock failure message friendlier
 
 ### Fixed
 - Addressed the possibility of false success of Arkade signer migration

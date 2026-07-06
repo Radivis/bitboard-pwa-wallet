@@ -10,7 +10,7 @@ describe('wallet-secrets-error-messages', () => {
       tryMapWalletSecretsError(
         new Error('Decryption failed: incorrect password or corrupted data'),
       ),
-    ).toBe('Wrong password or corrupted wallet data')
+    ).toBe('Unlock failed. Password typo?')
   })
 
   it('maps schema validation failures to password copy', () => {
@@ -18,7 +18,7 @@ describe('wallet-secrets-error-messages', () => {
       tryMapWalletSecretsError(
         new Error('Invalid wallet secrets payload: schema validation failed'),
       ),
-    ).toBe('Wrong password or corrupted wallet data')
+    ).toBe('Unlock failed. Password typo?')
   })
 
   it('returns null for unrelated errors', () => {

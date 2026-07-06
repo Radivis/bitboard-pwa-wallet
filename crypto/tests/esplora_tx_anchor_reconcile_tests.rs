@@ -707,6 +707,16 @@ async fn mempool_only_unconfirmed_esplora_tx_is_not_stuck_untrusted_pending() {
         "mempool-only /tx must not count as Esplora-confirmed stuck, got {esplora_confirmed:?}",
     );
 
+    let local_chain_tip = wallet.local_chain().tip().clone();
+    let reconcile_update =
+        build_anchor_and_chain_reconcile_update(&local_chain_tip, esplora_client.inner(), &[txid])
+            .await
+            .expect("mempool reconcile must not fail sync");
+    assert!(
+        reconcile_update.is_none(),
+        "mempool-only /tx must skip anchor reconcile, got {reconcile_update:?}",
+    );
+
     assert_eq!(wallet.balance().confirmed.to_sat(), 0);
     assert_eq!(wallet.balance().untrusted_pending.to_sat(), FUNDING_SATS);
 }
