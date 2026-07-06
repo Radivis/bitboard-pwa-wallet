@@ -1,0 +1,58 @@
+---
+description: Rebuild frontend WASM when Rust WASM crates change; verify before task summary
+alwaysApply: true
+---
+
+# WASM rebuild workflow
+
+On-chain sync, encryption, Lightning, and Ark logic run in **WebAssembly** loaded by the frontend worker. `npm run dev` does **not** rebuild WASM — only `npm run build` runs `build:wasm` automatically. Edits under the Rust crates below do not reach the browser until WASM is rebuilt.
+
+## WASM source crates
+
+| Crate | Output under `frontend/src/wasm-pkg/` |
+|-------|--------------------------------------|
+| `crypto/` | `bitboard_crypto_bg.wasm` (root pkg) |
+| `bitboard-encryption/` | `bitboard_encryption/` |
+| `bitboard-lightning/` | `bitboard_lightning/` |
+| `bitboard-ark/` | `bitboard_ark/` |
+
+Also treat changes as WASM-affecting when you touch **path dependencies** those crates use (e.g. `bitboard-wasm-sleep/`, `third_party/ark-bdk-wallet/`, `third_party/esplora-client/` when pulled in by a WASM crate).
+
+## When agents must rebuild
+
+1. **After implementing or fixing behavior in any WASM crate or its path deps** — before telling the user to verify in the browser.
+2. **Before the final task summary** — if this session modified WASM-affecting files, rebuild first (or explicitly state why rebuild was skipped, e.g. tests-only with no browser verification).
+3. **When the user reports stale browser behavior** after a Rust fix — check artifact age vs source (`stat` on `*_bg.wasm` vs edited `.rs`).
+
+Skip rebuild when the session was read-only or only touched frontend TypeScript with no Rust changes.
+
+## Commands
+
+Full rebuild (safe default):
+
+```bash
+cd frontend && npm run build:wasm
+```
+
+Single crate (faster when only one package changed):
+
+```bash
+cd crypto && wasm-pack build --target bundler --out-dir ../frontend/src/wasm-pkg
+# encryption / lightning / ark: same pattern, out-dir as in frontend/package.json "build:wasm"
+```
+
+Requires Rust + `wasm-pack` on PATH (`source "$HOME/.cargo/env"` if needed).
+
+## After rebuild
+
+- Mention in the summary that WASM was rebuilt and the user should **hard-refresh** or **restart the dev server** (the crypto worker caches `.wasm`).
+- `frontend/src/wasm-pkg/` is gitignored — CI and other machines need their own `build:wasm`.
+
+## Quick staleness check
+
+```bash
+test -f frontend/src/wasm-pkg/bitboard_crypto_bg.wasm && \
+  find crypto/src -name '*.rs' -newer frontend/src/wasm-pkg/bitboard_crypto_bg.wasm -print -quit
+```
+
+Non-empty output ⇒ crypto WASM is stale. Repeat per crate or run full `build:wasm`.
