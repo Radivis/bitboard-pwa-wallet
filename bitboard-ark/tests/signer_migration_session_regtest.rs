@@ -3,11 +3,13 @@
 //! Run when the regtest stack is up (serial — tests share rotate-signer + Docker):
 //! `ARKADE_REGTEST_RUN=1 cargo test -p bitboard-ark --test signer_migration_session_regtest -- --ignored --nocapture --test-threads=1`
 //!
-//! Full migration with boarded funds:
-//! - **Reliable:** `ARKADE_REGTEST_BOARDED_FIXTURE` from E2E (`ARKADE_REGTEST_EXPORT_BOARDED_FIXTURE`)
-//!   → `cooperative_signer_migration_clears_pending_recovery_with_boarded_fixture`
-//! - **Experimental:** `cooperative_signer_migration_clears_pending_recovery_with_native_boarding`
-//!   boards via native Rust/tonic (batch nonce ordering differs from WASM; often fails on regtest).
+//! Full migration with boarded funds (pick one):
+//! - **Native:** `cooperative_signer_migration_clears_pending_recovery_with_native_boarding`
+//!   — boards via Rust/tonic (`prepare_boarded_session`). Needs a healthy regtest stack
+//!   (`ARKD_VTXO_TREE_EXPIRY=200 npm run regtest:clean-start` from `frontend/` if boarding fails).
+//! - **Fixture:** `cooperative_signer_migration_clears_pending_recovery_with_boarded_fixture`
+//!   — loads E2E-exported persistence (`ARKADE_REGTEST_EXPORT_BOARDED_FIXTURE`); useful when you
+//!   already have `frontend/test-results/arkade-boarded-fixture.json` and want to skip boarding.
 
 #![cfg(not(target_arch = "wasm32"))]
 
@@ -190,7 +192,7 @@ async fn cooperative_signer_migration_stamps_current_signer_after_complete() {
 }
 
 #[tokio::test]
-#[ignore = "experimental native tonic boarding — requires ARKD_VTXO_TREE_EXPIRY=200 npm run regtest:clean-start; on failure use boarded_fixture + E2E export. ARKADE_REGTEST_RUN=1 cargo test cooperative_signer_migration_clears_pending_recovery_with_native_boarding --test signer_migration_session_regtest -- --ignored --nocapture --test-threads=1"]
+#[ignore = "requires arkade-regtest stack (clean start recommended): ARKADE_REGTEST_RUN=1 cargo test cooperative_signer_migration_clears_pending_recovery_with_native_boarding --test signer_migration_session_regtest -- --ignored --test-threads=1"]
 async fn cooperative_signer_migration_clears_pending_recovery_with_native_boarding() {
     if !regtest_enabled() {
         return;

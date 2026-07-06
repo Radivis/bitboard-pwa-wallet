@@ -2,6 +2,8 @@
 
 Local [arkade-regtest](https://github.com/ArkLabsHQ/arkade-regtest) stack for `@regtest` on-chain tests and `@arkade-regtest` Arkade core flows.
 
+Testing strategy and commands: [TESTING.md](../../../../../TESTING.md) at repo root.
+
 ## Ports (host)
 
 | Service | URL |
