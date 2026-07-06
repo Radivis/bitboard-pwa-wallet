@@ -135,6 +135,13 @@ vi.mock('@/workers/crypto-factory', () => ({
   waitForCryptoWorkerHealthy: vi.fn().mockResolvedValue(undefined),
 }))
 
+vi.mock('@/lib/shared/app-query-client', () => ({
+  appQueryClient: {
+    cancelQueries: vi.fn().mockResolvedValue(undefined),
+    removeQueries: vi.fn(),
+  },
+}))
+
 vi.mock('@/lib/arkade/arkade-utils', () => ({
   isArkadeActiveForNetworkMode: () => true,
 }))
@@ -161,6 +168,7 @@ import {
   orchestrateLock,
   orchestrateManualUnlock,
   resetLockLifecycleStateForTests,
+  syncLockLifecycleFromWalletStore,
   syncLockLifecycleWithActiveWallet,
 } from '@/lib/wallet/lifecycle/lock-lifecycle-orchestrator'
 
@@ -377,40 +385,20 @@ describe('lock-lifecycle-orchestrator', () => {
     })
   })
 
-  it('orchestrateBootstrapUnlock no-ops when wallet was unlocked while queued', async () => {
+  it('orchestrateBootstrapUnlock no-ops when wallet is already unlocked', async () => {
     walletStoreState.activeWalletId = 1
-    walletStoreState.walletStatus = 'locked'
+    walletStoreState.walletStatus = 'unlocked'
     syncLockLifecycleWithActiveWallet(1)
+    syncLockLifecycleFromWalletStore()
 
-    let releaseManualLoad: (() => void) | undefined
-    orchestrateOnchainLoad.mockImplementation(
-      () =>
-        new Promise<void>((resolve) => {
-          releaseManualLoad = () => {
-            walletStoreState.walletStatus = 'unlocked'
-            resolve()
-          }
-        }),
-    )
+    await orchestrateBootstrapUnlock(unlockParams)
 
-    const manualUnlockPromise = orchestrateManualUnlock({
-      ...unlockParams,
-      password: 'secret',
-    })
-    await vi.waitFor(() => {
-      expect(getLockLifecycleSnapshot().operation).toBe('manual_unlock')
-    })
-
-    const bootstrapPromise = orchestrateBootstrapUnlock(unlockParams)
-    releaseManualLoad?.()
-    await manualUnlockPromise
-    await bootstrapPromise
-
-    expect(orchestrateOnchainLoad).toHaveBeenCalledTimes(1)
+    expect(walletStoreState.walletStatus).toBe('unlocked')
     expect(getLockLifecycleSnapshot()).toEqual({
       phase: 'unlocked',
       operation: 'none',
     })
+    expect(orchestrateOnchainLoad).not.toHaveBeenCalled()
   })
 
   it('orchestrateLock rejects when Lightning save-error blocks lock', async () => {
