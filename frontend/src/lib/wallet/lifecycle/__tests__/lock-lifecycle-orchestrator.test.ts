@@ -377,6 +377,42 @@ describe('lock-lifecycle-orchestrator', () => {
     })
   })
 
+  it('orchestrateBootstrapUnlock no-ops when wallet was unlocked while queued', async () => {
+    walletStoreState.activeWalletId = 1
+    walletStoreState.walletStatus = 'locked'
+    syncLockLifecycleWithActiveWallet(1)
+
+    let releaseManualLoad: (() => void) | undefined
+    orchestrateOnchainLoad.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          releaseManualLoad = () => {
+            walletStoreState.walletStatus = 'unlocked'
+            resolve()
+          }
+        }),
+    )
+
+    const manualUnlockPromise = orchestrateManualUnlock({
+      ...unlockParams,
+      password: 'secret',
+    })
+    await vi.waitFor(() => {
+      expect(getLockLifecycleSnapshot().operation).toBe('manual_unlock')
+    })
+
+    const bootstrapPromise = orchestrateBootstrapUnlock(unlockParams)
+    releaseManualLoad?.()
+    await manualUnlockPromise
+    await bootstrapPromise
+
+    expect(orchestrateOnchainLoad).toHaveBeenCalledTimes(1)
+    expect(getLockLifecycleSnapshot()).toEqual({
+      phase: 'unlocked',
+      operation: 'none',
+    })
+  })
+
   it('orchestrateLock rejects when Lightning save-error blocks lock', async () => {
     walletStoreState.activeWalletId = 1
     syncLockLifecycleWithActiveWallet(1)
