@@ -28,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Addressed the possibility of false success of Arkade signer migration
 - Fixed an issue with the unlock modal appearing after autolock timeout reloading immediately, even if the password was correct
+- Fixed a double substraction bug for unilateral exit amounts affecting displayed Arkade balances
 
 ## [0.3.2] - 2026-07-02
 
