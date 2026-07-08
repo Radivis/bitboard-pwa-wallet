@@ -5,8 +5,10 @@ import { registerAppRouter } from '@/lib/shared/app-router'
 import { routeTree } from './routeTree.gen'
 import './index.css'
 import { ensureE2eArkadeMockControl } from '@/lib/arkade/e2e/e2e-arkade-mock-control'
+import { ensureE2eArkadeRegtestControl } from '@/lib/arkade/e2e/e2e-arkade-regtest-control'
 
 ensureE2eArkadeMockControl()
+ensureE2eArkadeRegtestControl()
 
 const router = createRouter({
   routeTree,

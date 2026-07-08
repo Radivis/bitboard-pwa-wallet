@@ -1,5 +1,9 @@
 import { type Page, expect } from '@playwright/test'
+import * as fs from 'node:fs/promises'
+import * as path from 'node:path'
+import { restartArkadeOperator, rotateRegtestSigner } from './regtest'
 import {
+  ARKADE_REGTEST_BOARDED_FIXTURE_DEFAULT,
   ARKADE_REGTEST_COMMITMENT_CONFIRM_BLOCKS,
   ARKADE_REGTEST_RECOVERABLE_MINE_BLOCKS,
   ARKADE_REGTEST_RENEWAL_SOON_MINE_BLOCKS,
@@ -10,12 +14,29 @@ import {
   goToArkadeManagementPanel,
   setupRegtestArkadeWallet,
 } from './arkade-management'
-import { triggerArkadeRailSync } from './dashboard-arkade'
+import {
+  readDashboardArkadeBalanceSats,
+  triggerArkadeRailSync,
+  waitForArkadeLoadReady,
+  exportBoardedWalletSdkPersistenceJson,
+} from './dashboard-arkade'
 import { goToWalletTab } from './wallet-nav'
+import { unlockWalletViaUI } from './wallet-setup'
 import { generateMnemonic } from '@scure/bip39'
 import { wordlist as englishWordlist } from '@scure/bip39/wordlists/english.js'
 
 const DEFAULT_BOARD_SATS = 200_000
+
+function resolveBoardedFixtureExportPath(): string | undefined {
+  const raw = process.env.ARKADE_REGTEST_EXPORT_BOARDED_FIXTURE
+  if (raw == null || raw === '') {
+    return undefined
+  }
+  if (raw === '1' || raw === 'true') {
+    return path.resolve(process.cwd(), ARKADE_REGTEST_BOARDED_FIXTURE_DEFAULT)
+  }
+  return path.isAbsolute(raw) ? raw : path.resolve(process.cwd(), raw)
+}
 
 /**
  * Each serial @arkade-regtest test gets its OWN freshly generated wallet so VTXOs, boarding outputs
@@ -87,4 +108,43 @@ export async function prepareUnilateralUnrollScenario(page: Page): Promise<void>
   await prepareFundedArkadeBalance(page)
   await confirmSettledVtxoAndSync(page)
   await goToArkadeManagementPanel(page)
+}
+
+/**
+ * Fund and board on the pre-rotation signer, rotate the operator with a future cooperative cutoff,
+ * restart arkd, and reload so the wallet reopens with a signer migration hint.
+ *
+ * When `ARKADE_REGTEST_EXPORT_BOARDED_FIXTURE` is set, writes `{ mnemonic, persistence_before_rotate }`
+ * JSON for `bitboard-ark` `cooperative_signer_migration_clears_pending_recovery_with_boarded_fixture`.
+ */
+export async function prepareSignerMigrationScenario(page: Page): Promise<number> {
+  const boardSats = DEFAULT_BOARD_SATS
+  const mnemonic = freshRegtestWalletMnemonic()
+  await setupRegtestArkadeWallet(page, mnemonic)
+  await fundAndBoardToArkade(page, boardSats)
+  const balanceBeforeRotate = await readDashboardArkadeBalanceSats(page)
+
+  const fixtureExportPath = resolveBoardedFixtureExportPath()
+  if (fixtureExportPath) {
+    await triggerArkadeRailSync(page, 120_000)
+    const persistenceBeforeRotate = await exportBoardedWalletSdkPersistenceJson(page)
+    await fs.mkdir(path.dirname(fixtureExportPath), { recursive: true })
+    await fs.writeFile(
+      fixtureExportPath,
+      JSON.stringify({ mnemonic, persistence_before_rotate: persistenceBeforeRotate }, null, 2),
+      'utf8',
+    )
+    console.info(`wrote boarded wallet fixture for Rust regtest to ${fixtureExportPath}`)
+  }
+
+  await rotateRegtestSigner()
+  await restartArkadeOperator()
+  await page.reload()
+  await page.goto('/wallet')
+  await unlockWalletViaUI(page)
+  await waitForArkadeLoadReady(page, 120_000)
+  await expect(page.getByTestId('arkade-signer-migration-banner')).toBeVisible({
+    timeout: 60_000,
+  })
+  return balanceBeforeRotate
 }

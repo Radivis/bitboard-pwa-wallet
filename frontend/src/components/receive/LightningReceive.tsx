@@ -59,7 +59,7 @@ function LightningInvoiceAmountBlock({
     allowFetchWhenPortfolioZeroForReceivePage: true,
   })
   const btcPriceInFiat = fiatRatesQuery.data?.btcPriceInFiat
-  const showFiatLayout = networkMode === 'mainnet' && fiatDenominationMode
+  const showFiatLayout = networkMode === 'mainnet' && fiatDenominationMode && isUsableBtcSpotPriceInFiat(btcPriceInFiat)
 
   return (
     <FiatBtcAmountDisplay

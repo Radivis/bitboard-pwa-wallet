@@ -84,7 +84,7 @@ export function FiatBtcAmountDisplay({
         )}
         data-testid={dataTestId != null ? `${dataTestId}-btc-segment` : undefined}
       >
-        <span aria-hidden className="mx-[1em]">
+        <span aria-hidden className="mx-[0.7em]">
           ·
         </span>
         <BitcoinAmountDisplay

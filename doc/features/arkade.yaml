@@ -43,11 +43,19 @@ feature:
       - id: ARK-ROT-02
         description: Session open succeeds when stored signer matches a deprecatedSigners pubkey for the same operator URL, including after cooperative cutoff
       - id: ARK-ROT-03
-        description: After migration open, next persistence export writes current signer into operator_identity and connection operatorSignerPkHex
+        description: After cooperative migration completes (no pre-cutoff deprecated VTXO/boarding remaining), persistence export writes current signer into operator_identity and connection operatorSignerPkHex
       - id: ARK-ROT-04
         description: Signer mismatch with neither current nor deprecated keys yields load-error with operator-change vs wrong-ASP messaging
       - id: ARK-ROT-05
         description: Signer migration surfaces a non-blocking banner on Dashboard and Management Arkade with regime-appropriate actions (migrate, sync, unilateral exit)
+      - id: ARK-ROT-06
+        description: migrate_deprecated_signer_vtxos aborts without stamping persistence when discover_keys fails
+      - id: ARK-ROT-07
+        description: Partial migration (deferred batches) keeps migration banner and deprecated signer in persistence until cooperatively complete
+      - id: ARK-ROT-08
+        description: Migrate loops internally until clean or pass cap; UI prompts Migrate again when incomplete
+      - id: ARK-ROT-09
+        description: NothingMigratable with remaining pre-cutoff funds returns error, not success
     recoverable_vtxo_recovery:
       - id: ARK-REC-01
         description: When recoverableSettleableVtxoCount is greater than zero after balance sync, Dashboard and Management show a recoverable VTXO banner with count and settleable sats
@@ -59,6 +67,21 @@ feature:
         description: Fee estimate failure still shows banner and enables Recover now; operator fee and net receive shown when estimate succeeds
       - id: ARK-REC-05
         description: When recoverablePendingOperatorSweepVtxoCount is greater than zero, balance breakdown shows expired waiting for operator sweep line without Recover now
+      - id: ARK-REC-06
+        description: When pendingRecoverySats is greater than zero, Dashboard and Management show a pending-recovery banner linking to Start unilateral exit in Management
+      - id: ARK-REC-07
+        description: VTXOs in unilateral exit do not contribute to pendingRecoverySats even when they would otherwise qualify for pending recovery
+    unilateral_exit:
+      - id: ARK-EXIT-01
+        description: Start unilateral exit lists only VTXOs that can start unroll; in-progress and ready-to-complete VTXOs are excluded
+      - id: ARK-EXIT-02
+        description: Complete unilateral exit lists in-progress VTXOs from local snapshot and pending deductions when operator indexing lags
+      - id: ARK-EXIT-03
+        description: Complete unilateral exit supports multi-select batch completion with fee estimate scaled to selected inputs
+      - id: ARK-EXIT-04
+        description: Completion fee estimate includes missingBlocktimeInputs (virtual txid and on-chain outpoint per affected VTXO) when Esplora omits confirmation blocktime; UI shows a non-blocking list in Complete unilateral exit. Permissive completion coin-select (Duration::ZERO fallback) is intentional for regtest/thin Esplora in CI and local debugging; uncommon on production Esplora.
+      - id: ARK-EXIT-05
+        description: When complete exit times out waiting for operator indexer after unroll, UI shows a non-destructive indexer-catching-up state instead of a generic failure
     operator_sync:
       - id: ARK-SYNC-01
         description: When discover_keys fails during operator sync but list_vtxos succeeds, sync lifecycle records a warningMessage and dashboard/management show a non-blocking sync warning banner
@@ -74,8 +97,11 @@ feature:
         - delegator fee from getDelegateInfo when reachable
         - expiring VTXO count when session open
         - collaborative exit (on-chain destination, optional partial amount) with operator fee estimate from getInfo().fees
-        - unilateral exit per VTXO (select, unroll, complete after timelock) with unroll step count and bumper fee estimate
+        - Start unilateral exit (select VTXO, unroll) with bumper fee estimate; separate Complete unilateral exit for in-progress VTXOs after timelock
+        - batch complete multiple ready in-progress VTXOs in one on-chain transaction with dynamic completion fee estimate
+        - pending_recovery_sats excludes VTXOs already in unilateral exit (no double-count with unilateral_exit_in_progress_sats)
         - signer migration banner when operator signing key rotated (migratable, due now, or expired regimes)
+        - pending recovery banner when funds are locked past cooperative migration cutoff
         - recoverable VTXO banner when operator reports swept/expired/sub-dust VTXOs with Recover now action
       - requirements:
         - Shown only when isArkadeEnabled and current network supports Arkade

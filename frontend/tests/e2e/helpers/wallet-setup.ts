@@ -100,7 +100,7 @@ export async function createWalletViaUI(page: Page) {
   await page.getByRole('button', { name: 'Confirm & Finish' }).click()
 
   await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible({
-    timeout: 30000,
+    timeout: 60_000,
   })
   await expectNoInitialWalletSyncErrorToast(page)
 }

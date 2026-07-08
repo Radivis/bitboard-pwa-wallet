@@ -30,8 +30,12 @@ import type {
   ArkadeRecoverableVtxoFeeEstimate,
   ArkadeSendParams,
   ArkadeService,
+  ArkadeSignerMigrationResult,
   ArkadeUnilateralExitFeeEstimate,
   ArkadeUnilateralExitFeeEstimateParams,
+  ArkadeUnilateralExitCompletionFeeEstimate,
+  ArkadeUnilateralExitCompletionFeeEstimateParams,
+  ArkadeUnilateralExitInProgressRow,
   ArkadeUnrollProgressEvent,
   ArkadeVtxoExpiryStatus,
   EnsureArkadeOperatorConnectionEncryptedParams,
@@ -338,8 +342,11 @@ const arkadeService: ArkadeService = {
     return syncWithOperatorCore()
   },
 
-  async migrateDeprecatedSignerVtxos(): Promise<void> {
-    await invokeWasmArk((wasmModule) => wasmModule.ark_migrate_deprecated_signer_vtxos())
+  async migrateDeprecatedSignerVtxos(): Promise<ArkadeSignerMigrationResult> {
+    const result = await invokeWasmArk((wasmModule) =>
+      wasmModule.ark_migrate_deprecated_signer_vtxos(),
+    )
+    return result as ArkadeSignerMigrationResult
   },
 
   async flushSdkPersistence(): Promise<void> {
@@ -535,6 +542,15 @@ const arkadeService: ArkadeService = {
     )
   },
 
+  async listUnilateralExitsInProgress(): Promise<ArkadeUnilateralExitInProgressRow[]> {
+    return invokeWasmArk(
+      (wasmModule) =>
+        wasmModule.ark_list_unilateral_exits_in_progress() as Promise<
+          ArkadeUnilateralExitInProgressRow[]
+        >,
+    )
+  },
+
   async getOnchainBumperInfo(): Promise<ArkadeOnchainBumperInfo> {
     return invokeWasmArk(
       (wasmModule) =>
@@ -601,6 +617,17 @@ const arkadeService: ArkadeService = {
     return invokeWasmArk(
       (wasmModule) =>
         wasmModule.ark_estimate_unilateral_exit(params) as Promise<ArkadeUnilateralExitFeeEstimate>,
+    )
+  },
+
+  async estimateUnilateralExitCompletion(
+    params: ArkadeUnilateralExitCompletionFeeEstimateParams,
+  ): Promise<ArkadeUnilateralExitCompletionFeeEstimate> {
+    return invokeWasmArk(
+      (wasmModule) =>
+        wasmModule.ark_estimate_unilateral_exit_completion(
+          params,
+        ) as Promise<ArkadeUnilateralExitCompletionFeeEstimate>,
     )
   },
 }

@@ -37,6 +37,29 @@ export interface ArkadeSignerMigrationHint {
   cutoffUnix: number
 }
 
+export interface ArkadeSignerMigrationLegResult {
+  migratedCount: number
+  migratedSats: number
+  deferredCount: number
+  deferredSats: number
+  oversizedCount: number
+  oversizedSats: number
+  settleTxid?: string
+  error?: string
+}
+
+export interface ArkadeSignerMigrationResult {
+  vtxoLeg: ArkadeSignerMigrationLegResult
+  boardingLeg: ArkadeSignerMigrationLegResult
+  passCount: number
+  migrationComplete: boolean
+  passCapReached: boolean
+  remainingPreCutoffVtxoCount: number
+  remainingPreCutoffSats: number
+  remainingPreCutoffBoardingCount: number
+  settleTxids: string[]
+}
+
 export interface ArkadeDelegateInfo {
   pubkey: string
   fee: number
@@ -99,9 +122,43 @@ export interface ArkadeExitCandidateRow {
   canComplete: boolean
 }
 
+export interface ArkadeUnilateralExitInProgressRow {
+  id: string
+  txid: string
+  vout: number
+  amountSats: number
+  virtualStatusState: string
+  canComplete: boolean
+  startedAt?: number
+}
+
+export interface ArkadeMissingBlocktimeCompletionInput {
+  virtualTxid: string
+  onChainTxid: string
+  onChainVout: number
+  amountSats: number
+}
+
+export interface ArkadeUnilateralExitCompletionFeeEstimate {
+  selectedTotalSats: number
+  estimatedFeeSats: number
+  estimatedReceiveSats: number
+  feeRateSatPerVb: number
+  estimateError?: string
+  missingBlocktimeInputs?: ArkadeMissingBlocktimeCompletionInput[]
+}
+
+export interface ArkadeUnilateralExitCompletionFeeEstimateParams {
+  vtxoTxids: string[]
+  destinationAddress: string
+  feeRateSatPerVb?: number
+}
+
 export interface ArkadeOnchainBumperInfo {
   address: string
   balanceSats: number
+  unilateralExitTimelockBlocks?: number
+  unilateralExitTimelockSeconds?: number
 }
 
 export interface ArkadeCollaborativeExitParams {
@@ -120,6 +177,7 @@ export interface ArkadeUnrollProgressEvent {
 export interface ArkadeCompleteUnilateralExitParams {
   vtxoTxids: string[]
   destinationAddress: string
+  feeRateSatPerVb?: number
 }
 
 export type ArkadeCollaborativeExitEstimateErrorCode = 'insufficient_cooperative_inputs'
@@ -223,7 +281,7 @@ export interface ArkadeService {
     lastSuccessfulOperatorSyncAt: string
   }): Promise<void>
   closeSession(): Promise<void>
-  migrateDeprecatedSignerVtxos(): Promise<void>
+  migrateDeprecatedSignerVtxos(): Promise<ArkadeSignerMigrationResult>
   getBalance(): Promise<ArkadeBalanceInfo>
   getAddress(): Promise<string>
   getNewAddress(): Promise<string>
@@ -245,6 +303,7 @@ export interface ArkadeService {
   getRecoverableVtxoFeeEstimate(): Promise<ArkadeRecoverableVtxoFeeEstimate>
   recoverRecoverableVtxos(): Promise<string | null>
   listExitCandidates(): Promise<ArkadeExitCandidateRow[]>
+  listUnilateralExitsInProgress(): Promise<ArkadeUnilateralExitInProgressRow[]>
   getOnchainBumperInfo(): Promise<ArkadeOnchainBumperInfo>
   collaborativeExit(params: ArkadeCollaborativeExitParams): Promise<string>
   runUnilateralUnroll(
@@ -258,4 +317,7 @@ export interface ArkadeService {
   estimateUnilateralExit(
     params: ArkadeUnilateralExitFeeEstimateParams,
   ): Promise<ArkadeUnilateralExitFeeEstimate>
+  estimateUnilateralExitCompletion(
+    params: ArkadeUnilateralExitCompletionFeeEstimateParams,
+  ): Promise<ArkadeUnilateralExitCompletionFeeEstimate>
 }

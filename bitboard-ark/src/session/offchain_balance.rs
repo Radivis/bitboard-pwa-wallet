@@ -3,7 +3,10 @@ use std::str::FromStr;
 use bitcoin::XOnlyPublicKey;
 
 use crate::error::ArkResult;
-use crate::offchain_snapshot::{OffchainBalanceBuckets, offchain_balance_buckets_from_snapshot};
+use crate::offchain_snapshot::{
+    OffchainBalanceBuckets, offchain_balance_buckets_from_snapshot,
+    pending_recovery_sats_excluding_unilateral_exit,
+};
 use crate::persistence::OperatorIdentity;
 
 use super::ArkSession;
@@ -14,17 +17,33 @@ impl ArkSession {
         &self,
     ) -> ArkResult<OffchainBalanceBuckets> {
         if let Ok(live) = self.client.offchain_balance().await {
-            return Ok(OffchainBalanceBuckets::from_live(&live));
+            let mut buckets = OffchainBalanceBuckets::from_live(&live);
+            let in_progress = self.unilateral_exit_in_progress_outpoints()?;
+            if !in_progress.is_empty()
+                && let Ok((vtxo_list, script_map)) = self.client.list_vtxos().await
+                && let Ok(server_info) = self.client.server_info()
+            {
+                buckets.pending_recovery_sats = pending_recovery_sats_excluding_unilateral_exit(
+                    &vtxo_list,
+                    &server_info,
+                    current_unix_timestamp(),
+                    |script| script_map.get(script).map(|vtxo| vtxo.server_pk()),
+                    &in_progress,
+                );
+            }
+            return Ok(buckets);
         }
 
         if let Some(snapshot) = self.wallet_db.snapshot().offchain_vtxo_snapshot.as_ref()
             && let Ok(server_info) = self.client.server_info()
         {
+            let pending = self.wallet_db.pending_exit_deductions();
             return offchain_balance_buckets_from_snapshot(
                 snapshot,
                 &server_info,
                 current_unix_timestamp(),
                 legacy_signer_pk_fallback(&self.persisted_operator_identity()),
+                &pending,
             );
         }
 
@@ -39,11 +58,13 @@ impl ArkSession {
             .client
             .server_info()
             .map_err(crate::error::ArkWasmError::from)?;
+        let pending = self.wallet_db.pending_exit_deductions();
         let buckets = offchain_balance_buckets_from_snapshot(
             snapshot,
             &server_info,
             current_unix_timestamp(),
             legacy_signer_pk_fallback(&self.persisted_operator_identity()),
+            &pending,
         )?;
         Ok(buckets.gross_spendable_sats())
     }

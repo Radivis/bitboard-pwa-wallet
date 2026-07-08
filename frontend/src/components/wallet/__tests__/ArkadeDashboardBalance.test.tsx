@@ -236,6 +236,17 @@ describe('ArkadeDashboardBalance', () => {
     expect(screen.getByText('Arkade operator signer rotation')).toBeInTheDocument()
   })
 
+  it('DASH-ARK-15a keeps signer migration banner with migrate action while hint is set', () => {
+    walletStoreState.arkadeSignerMigrationHint = {
+      previousSignerPkHex: '02abc',
+      deprecatedStatus: 'migratable',
+      cutoffUnix: 1_785_312_000,
+    }
+    renderWithProviders(<ArkadeDashboardBalance />)
+    expect(screen.getByTestId('arkade-signer-migration-banner')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Migrate funds' })).toBeInTheDocument()
+  })
+
   it('DASH-ARK-17 shows pending recovery breakdown when deprecated signer funds are locked', () => {
     balanceQueryMock.mockReturnValue({
       isLoading: false,
@@ -264,6 +275,20 @@ describe('ArkadeDashboardBalance', () => {
     renderWithProviders(<ArkadeDashboardBalance />)
     expect(screen.getByTestId('dashboard-arkade-balance-amount')).toHaveTextContent('0.00000000')
     expect(screen.getByTestId('arkade-balance-bumper')).toHaveTextContent('Bumper wallet (exit fees)')
+  })
+
+  it('DASH-ARK-19b shows pending recovery banner when pendingRecoverySats is greater than zero', () => {
+    balanceQueryMock.mockReturnValue({
+      isLoading: false,
+      data: {
+        confirmedSats: 0,
+        totalSats: 50_000,
+        pendingRecoverySats: 50_000,
+      },
+    })
+    renderWithProviders(<ArkadeDashboardBalance />)
+    expect(screen.getByTestId('arkade-pending-recovery-banner')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /unilateral exit in Management/i })).toBeInTheDocument()
   })
 
   it('DASH-ARK-19 shows recoverable VTXO banner when recoverable count is greater than zero', () => {

@@ -172,28 +172,25 @@ When you perform a commit, it is suggested to do so in a console in which you ca
 Both humans and agents should adhere to `.cursor/rules`. The file `.cursor/rules/coding-codex.mdc` is the canonical starting point.
 
 ### Testing
-#### Backend
-Testing works with the default
 
-`cargo test`
+See **[TESTING.md](TESTING.md)** for the full strategy, command reference, and Arkade regtest notes.
 
-but using nextest is preferred:
+Quick start:
 
-`cargo nextest run`
+```bash
+# Rust (all workspace crates; nextest is preferred when installed)
+cargo test
+# cargo nextest run
 
-#### React
+# Frontend component tests (from frontend/)
+cd frontend && npm run test:unit
 
-There is a convenient script that can run all e2e tests conveniently in the background and issues a notification (currently only tested on Linux) on test success / failure:
-`./scripts/run-e2e-background.sh`
+# E2E (from frontend/; requires browsers via playwright install)
+npm run test:e2e
 
-Otherwise change to frontend directory first:
-`cd frontend`
-
-Component tests:
-`npm run test`
-
-e2e tests:
-`npm run test:e2e`
+# E2E in the background with a desktop notification on finish (Linux)
+./scripts/run-e2e-background.sh
+```
 
 ## Deployment (Vercel)
 

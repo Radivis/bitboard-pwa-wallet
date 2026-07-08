@@ -26,7 +26,7 @@ import type {
   ArkadeSyncThenSaveParams,
 } from '@/lib/wallet/lifecycle/arkade-sync-lifecycle-types'
 import type { ArkadeSaveParams } from '@/lib/wallet/lifecycle/arkade-save-lifecycle-types'
-import type { ArkadeOperatorSyncResult } from '@/workers/arkade-api'
+import type { ArkadeOperatorSyncResult, ArkadeSignerMigrationResult } from '@/workers/arkade-api'
 import {
   LIFECYCLE_SYNC_ERROR_FALLBACK,
   userFacingLifecycleErrorMessage,
@@ -51,6 +51,11 @@ let dashboardPollTimer: ReturnType<typeof setTimeout> | null = null
 
 const listeners = new Set<(next: ArkadeSyncLifecycleSnapshot) => void>()
 const inFlightSyncTracker = createInFlightLifecycleTracker()
+/** Coalesced signer-migration callers share one in-flight promise; attach result to that promise. */
+const signerMigrationResultByInFlightPromise = new WeakMap<
+  Promise<void>,
+  ArkadeSignerMigrationResult
+>()
 
 function syncKey(
   params: Pick<ArkadeSyncParams, 'walletId' | 'networkMode' | 'connectionId' | 'syncKind'>,
@@ -103,9 +108,9 @@ function toSaveParams(params: ArkadeSyncParams): ArkadeSaveParams {
   }
 }
 
-async function runArkadeSignerMigrationBody(): Promise<void> {
+async function runArkadeSignerMigrationBody(): Promise<ArkadeSignerMigrationResult> {
   const worker = getArkadeWorker()
-  await worker.migrateDeprecatedSignerVtxos()
+  return worker.migrateDeprecatedSignerVtxos()
 }
 
 function applySuccessfulArkadeSyncSnapshot(
@@ -199,22 +204,34 @@ export function syncArkadeSyncLifecycleWithLockPhase(lockPhase: LockLifecyclePha
   })
 }
 
+async function awaitInFlightSyncWork(
+  workPromise: Promise<void>,
+  syncKind: ArkadeSyncParams['syncKind'],
+): Promise<ArkadeSignerMigrationResult | void> {
+  await workPromise
+  if (syncKind === 'signerMigration') {
+    return signerMigrationResultByInFlightPromise.get(workPromise)
+  }
+  return undefined
+}
+
 export async function orchestrateArkadeSyncThenSave(
   params: ArkadeSyncThenSaveParams,
-): Promise<void> {
+): Promise<ArkadeSignerMigrationResult | void> {
   const throwOnError = params.throwOnError ?? params.awaitCompletion !== false
   const key = syncKey(params)
 
   const coalesced = getCoalescedInFlightPromise(inFlightSyncTracker, key)
   if (coalesced != null) {
-    return coalesced
+    return awaitInFlightSyncWork(coalesced, params.syncKind)
   }
   const afterDifferentWork = await awaitDifferentInFlightWork(inFlightSyncTracker, key)
   if (afterDifferentWork != null) {
-    return afterDifferentWork
+    return awaitInFlightSyncWork(afterDifferentWork, params.syncKind)
   }
 
-  return inFlightSyncTracker.begin(key, async () => {
+  let workPromise!: Promise<void>
+  workPromise = inFlightSyncTracker.begin(key, async () => {
     await withWalletWriterLock(async () => {
       assertCanStartArkadeSync(params)
       const scope = railScopeFromParams(params)
@@ -229,8 +246,11 @@ export async function orchestrateArkadeSyncThenSave(
 
       try {
         if (params.syncKind === 'signerMigration') {
-          await runArkadeSignerMigrationBody()
-          await orchestrateArkadeSave(toSaveParams(params))
+          const migrationResult = await runArkadeSignerMigrationBody()
+          signerMigrationResultByInFlightPromise.set(workPromise, migrationResult)
+          if (migrationResult.migrationComplete) {
+            await orchestrateArkadeSave(toSaveParams(params))
+          }
           try {
             const syncResult = await runArkadeOperatorSyncBody(params.connectionId)
             applySuccessfulArkadeSyncSnapshot(scope, syncResult)
@@ -272,6 +292,8 @@ export async function orchestrateArkadeSyncThenSave(
       }
     })
   })
+
+  return awaitInFlightSyncWork(workPromise, params.syncKind)
 }
 
 export async function orchestrateArkadePostLoadSync(

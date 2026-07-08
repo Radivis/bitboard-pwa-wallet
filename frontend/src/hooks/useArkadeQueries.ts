@@ -16,12 +16,16 @@ import {
   arkadeExitCandidatesQueryKey,
   arkadeHistoryQueryKey,
   arkadeRecoverableVtxoFeeQueryKey,
+  arkadeSignerMigrationPartialResultQueryKey,
+  arkadeUnilateralExitCompletionFeeQueryKey,
   arkadeUnilateralExitFeeQueryKey,
+  arkadeUnilateralExitsInProgressQueryKey,
   arkadeVtxoExpiryQueryKey,
 } from '@/lib/arkade/arkade-query-keys'
 import type {
   ArkadeBalanceInfo,
   ArkadeBoardingStatus,
+  ArkadeSignerMigrationResult,
   ArkadeUnrollProgressEvent,
 } from '@/workers/arkade-api'
 import { isArkadeActiveForNetworkMode } from '@/lib/arkade/arkade-utils'
@@ -34,7 +38,10 @@ import { useIsArkadeSessionReady } from '@/hooks/useArkadeLifecycleSnapshots'
 import {
   openArkadeSessionForWallet,
 } from '@/lib/arkade/arkade-session-service'
-import { scheduleBackgroundArkadeOperatorSync } from '@/lib/wallet/lifecycle/arkade-sync-lifecycle-orchestrator'
+import {
+  orchestrateArkadeSyncThenSave,
+  scheduleBackgroundArkadeOperatorSync,
+} from '@/lib/wallet/lifecycle/arkade-sync-lifecycle-orchestrator'
 import { readArkadeDashboardStateFromStore } from '@/lib/arkade/arkade-persistence-store-sync'
 import {
   ARKADE_BUMPER_FUNDING_POLL_MS,
@@ -53,6 +60,7 @@ import {
 import {
   formatArkadeTxidToastSnippet,
   formatUnilateralUnrollSuccessMessage,
+  isOperatorIndexerCatchingUpError,
   shouldShowUnilateralUnrollProgressToast,
   unilateralUnrollProgressToastId,
 } from '@/lib/arkade/arkade-exit-utils'
@@ -203,6 +211,9 @@ async function invalidateArkadeWalletDataQueries(
     }),
     queryClient.invalidateQueries({
       queryKey: arkadeExitCandidatesQueryKey(walletId, networkMode, connectionId),
+    }),
+    queryClient.invalidateQueries({
+      queryKey: arkadeUnilateralExitsInProgressQueryKey(walletId, networkMode, connectionId),
     }),
     queryClient.invalidateQueries({
       queryKey: arkadeBumperInfoQueryKey(walletId, networkMode, connectionId),
@@ -529,6 +540,105 @@ export function useArkadeRecoverRecoverableVtxosMutation() {
   })
 }
 
+export function useArkadeSignerMigrationPartialResultQuery() {
+  const queryClient = useQueryClient()
+  const migrationHint = useWalletStore(
+    (walletState) => walletState.arkadeSignerMigrationHint,
+  )
+  const { networkMode, activeWalletId, activeArkadeConnectionId, sessionReady } =
+    useArkadeQueryBase()
+
+  const queryKey = walletScopedQueryKey(
+    activeWalletId,
+    networkMode,
+    activeArkadeConnectionId,
+    (walletId, scopedNetworkMode, connectionId) =>
+      arkadeSignerMigrationPartialResultQueryKey(
+        walletId,
+        scopedNetworkMode,
+        connectionId,
+        migrationHint?.previousSignerPkHex ?? '',
+      ),
+    'signer-migration-partial',
+  )
+
+  return useQuery({
+    queryKey,
+    enabled:
+      migrationHint != null &&
+      sessionReady &&
+      activeWalletId != null &&
+      activeArkadeConnectionId != null &&
+      isArkadeSupportedNetworkMode(networkMode),
+    queryFn: async () =>
+      queryClient.getQueryData<ArkadeSignerMigrationResult>(queryKey) ?? null,
+    staleTime: Number.POSITIVE_INFINITY,
+    gcTime: 1000 * 60 * 30,
+  })
+}
+
+export function useArkadeSignerMigrationMutation() {
+  const queryClient = useQueryClient()
+  const { networkMode, activeWalletId, activeArkadeConnectionId } =
+    useArkadeQueryBase()
+
+  return useMutation({
+    mutationFn: async () => {
+      if (activeWalletId == null || activeArkadeConnectionId == null) {
+        throw new Error('Arkade session is not ready')
+      }
+      const migrationResult = await orchestrateArkadeSyncThenSave({
+        walletId: activeWalletId,
+        networkMode,
+        connectionId: activeArkadeConnectionId,
+        syncKind: 'signerMigration',
+        awaitCompletion: true,
+        throwOnError: true,
+      })
+      if (migrationResult == null) {
+        throw new Error('Signer migration did not return a result')
+      }
+      return migrationResult
+    },
+    onSuccess: async (migrationResult) => {
+      if (
+        activeWalletId == null ||
+        activeArkadeConnectionId == null ||
+        !isArkadeSupportedNetworkMode(networkMode)
+      ) {
+        return
+      }
+
+      const migrationHint = useWalletStore.getState().arkadeSignerMigrationHint
+      const partialResultQueryKey =
+        migrationHint != null
+          ? arkadeSignerMigrationPartialResultQueryKey(
+              activeWalletId,
+              networkMode,
+              activeArkadeConnectionId,
+              migrationHint.previousSignerPkHex,
+            )
+          : null
+
+      if (migrationResult.migrationComplete) {
+        if (partialResultQueryKey != null) {
+          queryClient.removeQueries({ queryKey: partialResultQueryKey })
+        }
+        useWalletStore.getState().setArkadeSignerMigrationHint(null)
+      } else if (partialResultQueryKey != null) {
+        queryClient.setQueryData(partialResultQueryKey, migrationResult)
+      }
+
+      await invalidateArkadeWalletDataQueries(
+        queryClient,
+        activeWalletId,
+        networkMode,
+        activeArkadeConnectionId,
+      )
+    },
+  })
+}
+
 export function useArkadeOnboardMutation() {
   const queryClient = useQueryClient()
   const { networkMode, activeWalletId, activeArkadeConnectionId } =
@@ -669,6 +779,71 @@ export function useArkadeBumperInfoQuery(enabled: boolean) {
     enabled: enabled && sessionReady,
     queryFn: () => withReadyArkadeWorker(() => getArkadeWorker().getOnchainBumperInfo()),
     staleTime: ARKADE_SESSION_POLL_STALE_MS,
+  })
+}
+
+export function useArkadeUnilateralExitsInProgressQuery(enabled: boolean) {
+  const { networkMode, activeWalletId, activeArkadeConnectionId, sessionReady } =
+    useArkadeQueryBase()
+
+  return useQuery({
+    queryKey: walletScopedQueryKey(
+      activeWalletId,
+      networkMode,
+      activeArkadeConnectionId,
+      arkadeUnilateralExitsInProgressQueryKey,
+      'unilateral-exits-in-progress',
+    ),
+    enabled: enabled && sessionReady,
+    queryFn: () =>
+      withReadyArkadeWorker(() => getArkadeWorker().listUnilateralExitsInProgress()),
+    refetchInterval: enabled ? ARKADE_EXIT_CANDIDATES_POLL_MS : false,
+    staleTime: ARKADE_SESSION_POLL_STALE_MS,
+  })
+}
+
+export function useArkadeUnilateralExitCompletionFeeQuery(params: {
+  enabled: boolean
+  vtxoTxids: string[]
+  destinationAddress: string
+  feeRateSatPerVb: number
+}) {
+  const { networkMode, activeWalletId, activeArkadeConnectionId, sessionReady } =
+    useArkadeQueryBase()
+  const destinationTrimmed = params.destinationAddress.trim()
+  const sortedVtxoTxids = [...params.vtxoTxids].sort()
+  const enabled =
+    params.enabled &&
+    sessionReady &&
+    sortedVtxoTxids.length > 0 &&
+    destinationTrimmed.length > 0 &&
+    Number.isFinite(params.feeRateSatPerVb) &&
+    params.feeRateSatPerVb > 0
+
+  return useQuery({
+    queryKey:
+      activeWalletId != null &&
+      activeArkadeConnectionId != null &&
+      isArkadeSupportedNetworkMode(networkMode)
+        ? arkadeUnilateralExitCompletionFeeQueryKey(
+            activeWalletId,
+            networkMode,
+            activeArkadeConnectionId,
+            sortedVtxoTxids,
+            destinationTrimmed,
+            params.feeRateSatPerVb,
+          )
+        : arkadeDisabledQueryKey('unilateral-completion-fee'),
+    enabled,
+    queryFn: () =>
+      withReadyArkadeWorker(() =>
+        getArkadeWorker().estimateUnilateralExitCompletion({
+          vtxoTxids: sortedVtxoTxids,
+          destinationAddress: destinationTrimmed,
+          feeRateSatPerVb: params.feeRateSatPerVb,
+        }),
+      ),
+    staleTime: ARKADE_FEE_ESTIMATE_STALE_MS,
   })
 }
 
@@ -819,7 +994,11 @@ export function useArkadeCompleteUnilateralExitMutation() {
     useArkadeQueryBase()
 
   return useMutation({
-    mutationFn: async (params: { vtxoTxids: string[]; destinationAddress: string }) => {
+    mutationFn: async (params: {
+      vtxoTxids: string[]
+      destinationAddress: string
+      feeRateSatPerVb: number
+    }) => {
       assertArkadeSessionUnlocked(activeWalletId)
       return withReadyArkadeWorker(() => getArkadeWorker().completeUnilateralExit(params))
     },
@@ -835,6 +1014,9 @@ export function useArkadeCompleteUnilateralExitMutation() {
       }
     },
     onError: (err) => {
+      if (isOperatorIndexerCatchingUpError(err)) {
+        return
+      }
       toast.error(errorMessage(err))
     },
   })

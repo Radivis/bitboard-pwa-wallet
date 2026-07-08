@@ -50,6 +50,14 @@ Management → Arkade offers two paths:
 
 Collaborative exit and unilateral unroll are implemented in `bitboard-ark` (`collaborative_redeem`, `broadcast_next_unilateral_exit_node`, etc.). The on-chain bumper wallet shares the same BIP32-derived BDK wallet as boarding. Select one VTXO at a time in the UI.
 
+### Unilateral exit completion coin-select (vendor fork)
+
+After unroll, completing the exit spends on-chain UTXOs that fund the exit PSBT. Upstream `ark-client` coin-select requires Esplora `confirmation_blocktime` and skips inputs without it. Bitboard vendors a permissive fork in `third_party/ark-client/src/coin_select.rs` (`coin_select_vtxo_txids_for_onchain`):
+
+- **Why:** arkade-regtest and other minimal Esplora backends often omit `block_time` even for confirmed txs. Requiring blocktime blocked REG-04 completion tests and local unilateral-exit debugging. Production paths usually get blocktime from Esplora; `bitboard-ark` also backfills from `/tx/{txid}/status` when the address UTXO listing omits it.
+- **Behavior:** Missing blocktime is treated as epoch zero for timelock checks; inputs are still selectable. The completion fee estimate includes `missingBlocktimeInputs` (virtual txid + on-chain outpoint) and the UI shows a non-blocking warning (contract `ARK-EXIT-04`).
+- **Not a mainnet trust relaxation by design:** The fork exists for regtest convenience and indexer-gap tolerance; missing blocktime should be rare on well-behaved Esplora.
+
 ## Mnemonic alignment
 
 - Same BIP39 mnemonic as the Bitboard wallet; Arkade uses `MnemonicIdentity` (BIP86 account 0).
@@ -83,7 +91,7 @@ When an Arkade operator rotates its signing key, `getInfo` advertises the new `s
 
 Contracts `ARK-ROT-01` through `ARK-ROT-05` in `doc/features/arkade.yaml` define session open, persistence re-stamp, error messaging, and Management banner behavior.
 
-Cooperative fund migration uses `migrate_deprecated_signer_vtxos()` (ark-client 0.9.3+). Post-cutoff funds appear in `pending_recovery` until unilateral exit or recoverable settlement. This is **not** the admin `WalletInitializerService_Restore` API (operator on-chain wallet setup only).
+Cooperative fund migration uses `migrate_deprecated_signer_vtxos()` (ark-client 0.9.3+). Bitboard loops migrate passes internally until cooperative work is complete (or a pass cap), and **only then** re-stamps `operator_identity` with the current operator signer. Partial passes keep the migration banner and deprecated signer in persistence; the UI prompts **Migrate again** until complete. Post-cutoff funds appear in `pending_recovery` until unilateral exit or recoverable settlement; a **pending-recovery banner** on Dashboard and Management links to unilateral exit when `pendingRecoverySats > 0`. This is **not** the admin `WalletInitializerService_Restore` API (operator on-chain wallet setup only).
 
 ### Recoverable vs pending recovery (manual batch recover)
 
@@ -92,4 +100,4 @@ Cooperative fund migration uses `migrate_deprecated_signer_vtxos()` (ark-client 
 | **pending_recovery** | Deprecated operator signer past cooperative cutoff; VTXO not yet expired/swept | Unilateral exit path; shown in balance breakdown, not the recoverable banner |
 | **recoverable** | Expired, operator-swept, or sub-dust VTXOs | Non-blocking banner on Dashboard and Management with count, total, optional fee estimate, and **Recover now** (`settle_vtxos` on recoverable outpoints only—no boarding, no auto-recover on sync) |
 
-Contracts `ARK-REC-01` through `ARK-REC-04` in `doc/features/arkade.yaml` define banner visibility, fee display, and the user-initiated recover action.
+Contracts `ARK-REC-01` through `ARK-REC-06` in `doc/features/arkade.yaml` define banner visibility, fee display, and the user-initiated recover action.

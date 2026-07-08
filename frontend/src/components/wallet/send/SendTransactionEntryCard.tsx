@@ -186,14 +186,17 @@ export function SendTransactionEntryCard({
 
   const useFiatAmountField =
     mainnetFiatMode &&
+    hasUsableFiatSpot &&
     !hideEditableAmountForZeroMainnet &&
     (needsUserLightningAmount || !isLightningSendMode)
+
+  const showFiatLayout = mainnetFiatMode && hasUsableFiatSpot
 
   function spendableAmountRows(balanceSats: number) {
     return (
       <FiatBtcAmountDisplay
         amountSats={balanceSats}
-        showFiatLayout={mainnetFiatMode}
+        showFiatLayout={showFiatLayout}
         btcPriceInFiat={btcPriceInFiat}
         currency={defaultFiatCurrency}
         isDetail
@@ -413,7 +416,7 @@ export function SendTransactionEntryCard({
                 <div className="space-y-2 rounded-md border border-border bg-muted/30 px-3 py-2 text-sm tabular-nums">
                   <FiatBtcAmountDisplay
                     amountSats={lightningPayAmountSats}
-                    showFiatLayout={mainnetFiatMode}
+                    showFiatLayout={showFiatLayout}
                     btcPriceInFiat={btcPriceInFiat}
                     currency={defaultFiatCurrency}
                     isDetail

@@ -473,8 +473,6 @@ function BalanceCard() {
                 <FiatBtcAmountDisplay
                   amountSats={lightningTotalSats}
                   {...fiatAmountProps}
-                  fiatClassName="text-2xl"
-                  btcClassName="text-xl"
                 />
                 <ul className="mt-3 space-y-1.5 border-t border-border pt-3 text-sm">
                   {lightningBalanceRows.map((row) => (

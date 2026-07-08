@@ -96,3 +96,26 @@ Frontend development is often more experimental than backend development, becaus
 The core functionality (in particular the happy paths) of frontend behavior needs to be covered by end-to-end tests. We use Playwright for that.
 
 Basic component functionality should be covered by component tests using Vitest instead.
+
+Human-oriented commands and suite layout: [TESTING.md](../../TESTING.md) at the repo root.
+
+## Ark / wallet testing (de-duplicated layers)
+
+Do not prove the same scenario twice across E2E and Rust regtest. Split by **what** is under test:
+
+| Layer | Proves | Tool |
+|-------|--------|------|
+| **E2E** | Critical **happy paths** in the browser (WASM worker + UI wiring) | Playwright (`@arkade-regtest`, REG-xx in `doc/features/arkade-regtest-contract.yaml`) |
+| **Rust integration (regtest)** | Frequently expected **failure modes** and **wallet safety invariants** (fail fast, no false success, persistence unchanged on abort) | `bitboard-ark/tests/*_regtest.rs` with `ARKADE_REGTEST_RUN=1` |
+| **Rust unit / in-crate** | DTO mapping, error codes, balance classification, persistence round-trips without Docker | `#[cfg(test)]` modules in `bitboard-ark/`, `crypto/tests/` |
+| **Vitest component** | Error **classification** and **UX** (banners, dialogs, no spurious toasts) | `frontend/src/**/__tests__/` |
+
+**Rules when adding Ark coverage:**
+
+1. **Happy path once** — usually E2E. Do not add a parallel Rust regtest unless E2E cannot reach the behavior cheaply.
+2. **Error path in Rust** — prefer `expect_err` + persistence/state assertions over Playwright fault injection. Name the **invariant** (e.g. “migrate aborts without stamping operator_identity when discover_keys cannot run”).
+3. **Error UX in Vitest** — when the contract is how an error is shown, not whether `ArkSession` returned `Err`.
+4. **Regtest Rust tests** — `#[ignore]` by default; run with `--ignored --test-threads=1`. Prefer **E2E-exported fixtures** over native boarding in CI when boarding is expensive.
+5. **Stable assertions** — prefer error codes / enum variants over user-facing message substrings when both exist.
+
+Example error-path Rust test: `migrate_fails_fast_when_discover_keys_cannot_run` in `bitboard-ark/tests/signer_migration_session_regtest.rs`.

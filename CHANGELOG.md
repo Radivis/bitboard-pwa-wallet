@@ -15,15 +15,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
-## [0.3.3] - 2026-07-04
+## [0.3.3] - 2026-07-05
 
 ### Added
 - Arkade balance can now also be displayed in fiat currency denomination
 
 ### Changed
 - When fiat amounts are shown, breakdown detail amounts are now also displayed in fiat
+- Split monolithic unilateral exit button in Arkde into "Start unilateral exit" and "Complete unilateral exit"
 
 ### Fixed
+- Addressed the possibility of false success of Arkade signer migration
 - Fixed an issue with the unlock modal appearing after autolock timeout reloading immediately, even if the password was correct
 
 ## [0.3.2] - 2026-07-02

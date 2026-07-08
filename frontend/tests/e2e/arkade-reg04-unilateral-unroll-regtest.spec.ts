@@ -32,8 +32,8 @@ test.describe('Arkade REG-04 unilateral unroll @arkade-reg04', () => {
     await prepareUnilateralUnrollScenario(page)
     const onChainReceiveAddress = await readOnChainReceiveAddress(page)
     await goToArkadeManagementPanel(page)
-    await page.getByRole('button', { name: 'Unilateral exit' }).click()
-    await expect(page.getByRole('heading', { name: 'Unilateral exit' })).toBeVisible()
+    await page.getByRole('button', { name: 'Start unilateral exit' }).click()
+    await expect(page.getByRole('heading', { name: 'Start unilateral exit' })).toBeVisible()
     await ensureOnChainBumperFunds(page, 100_000)
     const firstCandidate = page.locator('input[name="arkade-exit-vtxo"]').first()
     await expect(firstCandidate).toBeVisible({ timeout: 120_000 })
@@ -42,10 +42,9 @@ test.describe('Arkade REG-04 unilateral unroll @arkade-reg04', () => {
       timeout: 60_000,
     })
     await page.getByRole('button', { name: 'Start unroll' }).click()
-    const completeExitButton = page.getByRole('button', { name: 'Complete exit' })
     const unrollError = page.getByTestId('arkade-unroll-error')
     await expect(async () => {
-      if (await completeExitButton.isVisible()) {
+      if (!(await page.getByRole('heading', { name: 'Start unilateral exit' }).isVisible())) {
         return
       }
       if (await unrollError.isVisible()) {
@@ -53,16 +52,22 @@ test.describe('Arkade REG-04 unilateral unroll @arkade-reg04', () => {
       }
       throw new Error('Unroll still in progress')
     }).toPass({ timeout: 300_000 })
-    // Mine past the CSV delay plus a small confirmation margin so Esplora/indexer see spendable outputs.
+    await expect(page.getByText(/Unroll complete/i)).toBeVisible({ timeout: 30_000 })
+    await expect(page.getByTestId('arkade-complete-unilateral-exit')).toBeVisible({
+      timeout: 120_000,
+    })
+    await page.getByTestId('arkade-complete-unilateral-exit').click()
+    await expect(page.getByRole('heading', { name: 'Complete unilateral exit' })).toBeVisible()
+    await page.locator('input[type="checkbox"]').first().check()
     await mineRegtestBlocks(ARKADE_REGTEST_UNILATERAL_EXIT_DELAY_BLOCKS + 5)
-    await page.getByLabel('Destination address').fill(onChainReceiveAddress)
+    await page.getByRole('textbox', { name: 'Destination address' }).fill(onChainReceiveAddress)
     await page.getByRole('button', { name: 'Complete exit' }).click()
     await expect(page.getByRole('button', { name: 'Completing…' })).toBeVisible({
       timeout: 15_000,
     })
     const completeError = page.getByTestId('arkade-complete-error')
     await expect(async () => {
-      if (!(await page.getByRole('heading', { name: 'Unilateral exit' }).isVisible())) {
+      if (!(await page.getByRole('heading', { name: 'Complete unilateral exit' }).isVisible())) {
         return
       }
       if (await completeError.isVisible()) {

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   useArkadeBalanceQuery,
   useArkadeBumperInfoQuery,
@@ -6,9 +6,12 @@ import {
   useArkadeCollaborativeExitMutation,
   useArkadeCompleteUnilateralExitMutation,
   useArkadeExitCandidatesQuery,
+  useArkadeUnilateralExitCompletionFeeQuery,
   useArkadeUnilateralExitFeeQuery,
+  useArkadeUnilateralExitsInProgressQuery,
   useArkadeUnilateralUnrollMutation,
 } from '@/hooks/useArkadeQueries'
+import { useOnchainFeeRateSelection } from '@/hooks/useOnchainFeeRateSelection'
 import {
   ARKADE_BUMPER_LOW_BALANCE_FALLBACK_SATS,
   parseCollaborativeExitAmountSats,
@@ -17,10 +20,14 @@ import {
   isCollaborativeExitInsufficientFundsError,
   isSignerRotationCooperativeExitBlocked,
 } from '@/lib/arkade/arkade-cooperative-exit'
-import type { ArkadeExitCandidateRow, ArkadeUnrollProgressEvent } from '@/workers/arkade-api'
+import type {
+  ArkadeExitCandidateRow,
+  ArkadeUnilateralExitInProgressRow,
+  ArkadeUnrollProgressEvent,
+} from '@/workers/arkade-api'
 import { useWalletStore } from '@/stores/walletStore'
 
-export type UnilateralExitStep = 'select' | 'unroll' | 'complete'
+export type UnilateralExitStep = 'select' | 'unroll'
 
 export function useArkadeExitFlow() {
   const networkMode = useWalletStore((walletState) => walletState.networkMode)
@@ -30,6 +37,7 @@ export function useArkadeExitFlow() {
 
   const [collaborativeOpen, setCollaborativeOpen] = useState(false)
   const [unilateralOpen, setUnilateralOpen] = useState(false)
+  const [completeUnilateralOpen, setCompleteUnilateralOpen] = useState(false)
 
   const [collabDestination, setCollabDestination] = useState('')
   const [collabAmountSats, setCollabAmountSats] = useState('')
@@ -39,8 +47,15 @@ export function useArkadeExitFlow() {
     null,
   )
   const [unrollProgress, setUnrollProgress] = useState<ArkadeUnrollProgressEvent[]>([])
-  const [unrolledVtxoTxid, setUnrolledVtxoTxid] = useState<string | null>(null)
+  const [selectedInProgressTxids, setSelectedInProgressTxids] = useState<string[]>([])
   const [completeDestination, setCompleteDestination] = useState('')
+
+  const completionFeeSelection = useOnchainFeeRateSelection(networkMode)
+  const {
+    effectiveFeeRate: completionFeeRateSatPerVb,
+    resetFeeSelection: resetCompletionFeeSelection,
+    ...completionFeeRateUi
+  } = completionFeeSelection
 
   const collabAmountParse = parseCollaborativeExitAmountSats(collabAmountSats)
   const collabAmountValid = collabAmountParse.ok
@@ -48,7 +63,10 @@ export function useArkadeExitFlow() {
   const collabAmountError = collabAmountParse.ok ? null : collabAmountParse.message
 
   const exitCandidatesQuery = useArkadeExitCandidatesQuery(unilateralOpen)
-  const bumperInfoQuery = useArkadeBumperInfoQuery(unilateralOpen)
+  const inProgressQuery = useArkadeUnilateralExitsInProgressQuery(
+    completeUnilateralOpen || (balanceQuery.data?.unilateralExitInProgressSats ?? 0) > 0,
+  )
+  const bumperInfoQuery = useArkadeBumperInfoQuery(unilateralOpen || completeUnilateralOpen)
   const collaborativeFeeQuery = useArkadeCollaborativeExitFeeQuery({
     enabled: collaborativeOpen,
     destinationAddress: collabDestination,
@@ -59,9 +77,40 @@ export function useArkadeExitFlow() {
     txid: selectedCandidate?.txid,
     vout: selectedCandidate?.vout,
   })
+  const completionFeeQuery = useArkadeUnilateralExitCompletionFeeQuery({
+    enabled: completeUnilateralOpen,
+    vtxoTxids: selectedInProgressTxids,
+    destinationAddress: completeDestination,
+    feeRateSatPerVb: completionFeeRateSatPerVb,
+  })
   const collaborativeExitMutation = useArkadeCollaborativeExitMutation()
   const unrollMutation = useArkadeUnilateralUnrollMutation()
   const completeExitMutation = useArkadeCompleteUnilateralExitMutation()
+
+  const inProgressByTxid = useMemo(() => {
+    const map = new Map<string, ArkadeUnilateralExitInProgressRow>()
+    for (const row of inProgressQuery.data ?? []) {
+      map.set(row.txid, row)
+    }
+    return map
+  }, [inProgressQuery.data])
+
+  const selectedInProgressRows = useMemo(
+    () =>
+      selectedInProgressTxids
+        .map((txid) => inProgressByTxid.get(txid))
+        .filter((row): row is ArkadeUnilateralExitInProgressRow => row != null),
+    [inProgressByTxid, selectedInProgressTxids],
+  )
+
+  const selectedInProgressTotalSats = useMemo(
+    () => selectedInProgressRows.reduce((total, row) => total + row.amountSats, 0),
+    [selectedInProgressRows],
+  )
+
+  const allSelectedCanComplete =
+    selectedInProgressRows.length > 0 &&
+    selectedInProgressRows.every((row) => row.canComplete)
 
   useEffect(() => {
     if (collaborativeOpen && currentAddress) {
@@ -74,14 +123,21 @@ export function useArkadeExitFlow() {
       setUnilateralStep('select')
       setSelectedCandidate(null)
       setUnrollProgress([])
-      setUnrolledVtxoTxid(null)
+      return
+    }
+  }, [unilateralOpen])
+
+  useEffect(() => {
+    if (!completeUnilateralOpen) {
+      setSelectedInProgressTxids([])
       setCompleteDestination('')
+      resetCompletionFeeSelection()
       return
     }
     if (currentAddress) {
       setCompleteDestination(currentAddress)
     }
-  }, [unilateralOpen, currentAddress])
+  }, [completeUnilateralOpen, currentAddress, resetCompletionFeeSelection])
 
   const collaborativeExitBlockedByRotation =
     isSignerRotationCooperativeExitBlocked(signerMigrationHint)
@@ -108,6 +164,8 @@ export function useArkadeExitFlow() {
       bumperInfoQuery.isSuccess &&
       bumperBalance < ARKADE_BUMPER_LOW_BALANCE_FALLBACK_SATS)
 
+  const unilateralExitInProgressSats = balanceQuery.data?.unilateralExitInProgressSats ?? 0
+
   const handleCollaborativeExit = () => {
     if (!canCollaborativeExit) return
     collaborativeExitMutation.mutate(
@@ -125,53 +183,56 @@ export function useArkadeExitFlow() {
     if (selectedCandidate == null) return
     setUnilateralStep('unroll')
     setUnrollProgress([])
-    unrollMutation.mutate(
-      {
+    void unrollMutation
+      .mutateAsync({
         txid: selectedCandidate.txid,
         vout: selectedCandidate.vout,
         amountSats: selectedCandidate.amountSats,
         onProgress: (event) => {
           setUnrollProgress((previous) => [...previous, event])
-          if (event.type === 'done' && event.vtxoTxid) {
-            setUnrolledVtxoTxid(event.vtxoTxid)
-          }
         },
-      },
-      {
-        onSuccess: (result) => {
-          setUnrolledVtxoTxid(result.vtxoTxid)
-          setUnilateralStep('complete')
-        },
-      },
+      })
+      .then(() => {
+        setUnilateralOpen(false)
+      })
+      .catch(() => {
+        // Toast and optimistic revert are handled by useArkadeUnilateralUnrollMutation.
+      })
+  }
+
+  const toggleInProgressSelection = (row: ArkadeUnilateralExitInProgressRow) => {
+    setSelectedInProgressTxids((previous) =>
+      previous.includes(row.txid)
+        ? previous.filter((txid) => txid !== row.txid)
+        : [...previous, row.txid],
     )
+  }
+
+  const selectAllReadyInProgress = () => {
+    const readyTxids = (inProgressQuery.data ?? [])
+      .filter((row) => row.canComplete)
+      .map((row) => row.txid)
+    setSelectedInProgressTxids(readyTxids)
   }
 
   const handleCompleteExit = () => {
-    // Completion coin-selects by the offchain VTXO virtual txid, not the last on-chain unroll broadcast txid.
-    const vtxoTxid = selectedCandidate?.txid
-    if (vtxoTxid == null || completeDestination.trim().length === 0) return
-    completeExitMutation.mutate(
-      {
-        vtxoTxids: [vtxoTxid],
+    if (!allSelectedCanComplete || completeDestination.trim().length === 0) return
+    void completeExitMutation
+      .mutateAsync({
+        vtxoTxids: selectedInProgressTxids,
         destinationAddress: completeDestination.trim(),
-      },
-      {
-        onSuccess: () => setUnilateralOpen(false),
-      },
-    )
-  }
-
-  const skipToComplete = () => {
-    if (selectedCandidate == null) return
-    setUnrolledVtxoTxid(selectedCandidate.txid)
-    setUnilateralStep('complete')
+        feeRateSatPerVb: completionFeeRateSatPerVb,
+      })
+      .then(() => {
+        setCompleteUnilateralOpen(false)
+      })
+      .catch(() => {
+        // Toast is handled by useArkadeCompleteUnilateralExitMutation.
+      })
   }
 
   const selectCandidate = (row: ArkadeExitCandidateRow) => {
     setSelectedCandidate(row)
-    if (row.canComplete) {
-      setUnrolledVtxoTxid(row.txid)
-    }
   }
 
   return {
@@ -183,6 +244,8 @@ export function useArkadeExitFlow() {
     setCollaborativeOpen,
     unilateralOpen,
     setUnilateralOpen,
+    completeUnilateralOpen,
+    setCompleteUnilateralOpen,
     collabDestination,
     setCollabDestination,
     collabAmountSats,
@@ -193,13 +256,20 @@ export function useArkadeExitFlow() {
     setUnilateralStep,
     selectedCandidate,
     unrollProgress,
-    unrolledVtxoTxid,
+    selectedInProgressTxids,
+    selectedInProgressRows,
+    selectedInProgressTotalSats,
+    allSelectedCanComplete,
     completeDestination,
     setCompleteDestination,
     exitCandidatesQuery,
+    inProgressQuery,
     bumperInfoQuery,
     collaborativeFeeQuery,
     unilateralFeeQuery,
+    completionFeeQuery,
+    completionFeeRateUi,
+    completionFeeRateSatPerVb,
     collaborativeExitMutation,
     unrollMutation,
     completeExitMutation,
@@ -209,10 +279,12 @@ export function useArkadeExitFlow() {
     bumperBalance,
     unilateralFeeEstimate,
     bumperLow,
+    unilateralExitInProgressSats,
     handleCollaborativeExit,
     handleStartUnroll,
     handleCompleteExit,
-    skipToComplete,
+    toggleInProgressSelection,
+    selectAllReadyInProgress,
     selectCandidate,
   }
 }

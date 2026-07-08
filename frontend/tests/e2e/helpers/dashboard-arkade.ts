@@ -123,6 +123,24 @@ export async function triggerArkadeRailSync(
   }).toPass({ timeout })
 }
 
+/** Live WASM SDK persistence JSON (e.g. Rust regtest boarded-wallet fixture export). */
+export async function exportBoardedWalletSdkPersistenceJson(page: Page): Promise<string> {
+  await page.waitForFunction(
+    () => typeof window.__e2eExportBoardedWalletSdkPersistenceJson === 'function',
+    undefined,
+    { timeout: 15_000 },
+  )
+  return page.evaluate(async () => {
+    const exportFn = window.__e2eExportBoardedWalletSdkPersistenceJson
+    if (exportFn == null) {
+      throw new Error(
+        '__e2eExportBoardedWalletSdkPersistenceJson not available (DEV + VITE_E2E_ARKADE_REGTEST required)',
+      )
+    }
+    return exportFn()
+  })
+}
+
 /** Receive route search param — avoids flaky mode-toggle clicks in E2E. */
 async function navigateToReceiveArkadeMode(page: Page): Promise<void> {
   await page.evaluate(async () => {
