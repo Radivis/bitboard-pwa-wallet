@@ -36,9 +36,6 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::str::FromStr;
 
-#[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
-use crate::ark_grpc_wasm_shim as ark_grpc;
-
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub(super) enum BatchProtocolStep {
     Start,
