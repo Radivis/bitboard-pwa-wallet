@@ -15,7 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
-## [0.3.3] - 2026-07-05
+## [0.3.3] - 2026-07-08
 
 ### Added
 - Arkade balance can now also be displayed in fiat currency denomination

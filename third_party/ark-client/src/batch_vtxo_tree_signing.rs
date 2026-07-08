@@ -9,6 +9,10 @@ use crate::Blockchain;
 use crate::Client;
 use crate::Error;
 use crate::SwapStorage;
+#[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
+use ark_grpc::Client as NetworkClient;
+#[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
+use crate::ark_grpc_wasm_shim::Client as NetworkClient;
 use ark_core::batch::aggregate_nonces;
 use ark_core::batch::generate_nonce_tree;
 use ark_core::batch::sign_batch_tree_tx;
@@ -232,7 +236,7 @@ where
         step: &mut BatchProtocolStep,
         state: &mut VtxoBatchTreeSigningState,
         batch_id: &Option<String>,
-        network_client: &ark_grpc::Client,
+        network_client: &NetworkClient,
         ark_forfeit_pk: XOnlyPublicKey,
         batch_expiry: Option<Sequence>,
         own_cosigner_kps: &[Keypair],
@@ -330,7 +334,7 @@ where
         step: &mut BatchProtocolStep,
         state: &mut VtxoBatchTreeSigningState,
         batch_id: &Option<String>,
-        network_client: &ark_grpc::Client,
+        network_client: &NetworkClient,
         ark_forfeit_pk: XOnlyPublicKey,
         batch_expiry: Option<Sequence>,
         own_cosigner_kps: &[Keypair],
@@ -444,7 +448,7 @@ where
     async fn submit_vtxo_tree_signatures_if_ready(
         &self,
         state: &mut VtxoBatchTreeSigningState,
-        network_client: &ark_grpc::Client,
+        network_client: &NetworkClient,
         batch_id: &str,
         ark_forfeit_pk: XOnlyPublicKey,
         batch_expiry: Option<Sequence>,
