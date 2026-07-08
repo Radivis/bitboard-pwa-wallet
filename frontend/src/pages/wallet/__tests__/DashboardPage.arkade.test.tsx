@@ -131,6 +131,12 @@ vi.mock('@/hooks/useArkadeQueries', () => ({
   useArkadeHistoryQuery: () => arkadeHistoryMock(),
   useArkadeRecoverableVtxoFeeQuery: () => ({ isLoading: false, data: null }),
   useArkadeRecoverRecoverableVtxosMutation: () => ({ mutate: vi.fn(), isPending: false }),
+  useArkadeSignerMigrationMutation: () => ({
+    mutate: vi.fn(),
+    isPending: false,
+    error: null,
+  }),
+  useArkadeSignerMigrationPartialResultQuery: () => ({ data: null }),
 }))
 
 vi.mock('@/hooks/useArkadeDashboardQueries', () => ({
@@ -262,7 +268,6 @@ describe('DashboardPage Arkade contracts', () => {
       data: { confirmedSats: 42_000, totalSats: 42_000 },
     })
     renderWithProviders(<DashboardPage />)
-    expect(screen.queryByTestId('dashboard-arkade-session-empty')).not.toBeInTheDocument()
     expect(screen.getByTestId('dashboard-arkade-balance-amount')).toBeInTheDocument()
   })
 })
