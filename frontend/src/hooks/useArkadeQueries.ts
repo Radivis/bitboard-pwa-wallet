@@ -152,10 +152,14 @@ async function ensureArkadeSessionOpenForActiveWallet(): Promise<void> {
   if (isArkadeLoadFailedForNetwork(networkMode)) {
     return
   }
-  await openArkadeSessionForWallet({
-    walletId: activeWalletId,
-    networkMode,
-  })
+  try {
+    await openArkadeSessionForWallet({
+      walletId: activeWalletId,
+      networkMode,
+    })
+  } catch {
+    // load-error snapshot + retry banner handle UX; queries stay disabled until retry.
+  }
 }
 
 async function withReadyArkadeWorker<T>(run: () => Promise<T>): Promise<T> {

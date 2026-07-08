@@ -1,23 +1,41 @@
 import { awaitInFlightWalletSecretsWrites } from '@/db'
-import { clearArkadeDashboardStore } from '@/lib/arkade/arkade-persistence-store-sync'
-import { removeArkadeDashboardQueries } from '@/lib/arkade/arkade-query-keys'
-import { removeArkadeDashboardSyncQueries } from '@/lib/arkade/arkade-dashboard-sync'
+import { reportArkadeSessionOpenError } from '@/lib/arkade/arkade-session-open-error-toast'
+import { tearDownArkadeWorkerAndClientState } from '@/lib/arkade/arkade-session-teardown'
+import { isArkadeSupportedNetworkMode } from '@/lib/arkade/arkade-endpoints'
+import { isArkadeActiveForNetworkMode } from '@/lib/arkade/arkade-utils'
 import {
   awaitArkadeLoadQuiescence,
-  forceResetArkadeLoadLifecycleForTeardown,
   getArkadeLoadLifecycleSnapshot,
   orchestrateArkadeLoad,
 } from '@/lib/wallet/lifecycle/arkade-load-lifecycle-orchestrator'
 import {
   awaitArkadeSaveQuiescence,
-  forceResetArkadeSaveLifecycleForTeardown,
 } from '@/lib/wallet/lifecycle/arkade-save-lifecycle-orchestrator'
 import {
   awaitArkadeSyncQuiescence,
-  forceResetArkadeSyncLifecycleForTeardown,
 } from '@/lib/wallet/lifecycle/arkade-sync-lifecycle-orchestrator'
-import { getArkadeWorkerIfExists, terminateArkadeWorker } from '@/workers/arkade-factory'
+import { getArkadeWorkerIfExists } from '@/workers/arkade-factory'
 import type { NetworkMode } from '@/stores/walletStore'
+
+/**
+ * Force-teardown Arkade during network switch. Does not wait for in-flight load/sync/save
+ * (a stuck Esplora scan must not block leaving Mainnet or other networks).
+ */
+export async function abortArkadeSessionForNetworkSwitch(): Promise<void> {
+  const arkadeWorker = getArkadeWorkerIfExists()
+  const loadPhase = getArkadeLoadLifecycleSnapshot().loadPhase
+
+  if (loadPhase === 'loaded' && arkadeWorker != null) {
+    try {
+      await arkadeWorker.flushSdkPersistence()
+      await awaitInFlightWalletSecretsWrites()
+    } catch {
+      // Best-effort flush before worker termination.
+    }
+  }
+
+  tearDownArkadeWorkerAndClientState()
+}
 
 export async function closeArkadeSession(): Promise<void> {
   await awaitArkadeLoadQuiescence()
@@ -37,13 +55,7 @@ export async function closeArkadeSession(): Promise<void> {
       // closeSession is best-effort during teardown.
     }
   }
-  terminateArkadeWorker()
-  clearArkadeDashboardStore()
-  removeArkadeDashboardQueries()
-  removeArkadeDashboardSyncQueries()
-  forceResetArkadeLoadLifecycleForTeardown()
-  forceResetArkadeSyncLifecycleForTeardown()
-  forceResetArkadeSaveLifecycleForTeardown()
+  tearDownArkadeWorkerAndClientState()
 }
 
 export async function openArkadeSessionForWallet(params: {
@@ -62,12 +74,21 @@ export async function refreshArkadeSessionAfterNetworkSwitch(params: {
   walletId: number | null
   networkMode: NetworkMode
 }): Promise<void> {
-  await closeArkadeSession()
   if (params.walletId == null) return
-  await openArkadeSessionForWallet({
-    walletId: params.walletId,
-    networkMode: params.networkMode,
-  })
+  if (
+    !isArkadeActiveForNetworkMode(params.networkMode) ||
+    !isArkadeSupportedNetworkMode(params.networkMode)
+  ) {
+    return
+  }
+  try {
+    await openArkadeSessionForWallet({
+      walletId: params.walletId,
+      networkMode: params.networkMode,
+    })
+  } catch (error) {
+    reportArkadeSessionOpenError(error)
+  }
 }
 
 export { awaitArkadeLoadQuiescence } from '@/lib/wallet/lifecycle/arkade-load-lifecycle-orchestrator'

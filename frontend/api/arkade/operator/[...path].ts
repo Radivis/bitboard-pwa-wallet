@@ -41,7 +41,8 @@ function isProxiedUrlPathWithinAllowlistedBase(
   return resPath.startsWith(`${basePath}/`)
 }
 
-const UPSTREAM_TIMEOUT_MS = 30_000
+// Stay below Vercel Hobby's ~10s function cap (see esplora proxy).
+const UPSTREAM_TIMEOUT_MS = 9_000
 const MAX_POST_BODY_BYTES = 2_000_000
 
 function setCorsHeaders(res: VercelResponse): void {

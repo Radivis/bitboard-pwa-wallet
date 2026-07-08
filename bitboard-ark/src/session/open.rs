@@ -18,7 +18,76 @@ use crate::persistence::{
 };
 
 use super::mappers::{current_unix_timestamp, parse_delegator_public_key};
-use super::{ArkSession, ArkWallet, BOLTZ_URL, CLIENT_NAME, CLIENT_TIMEOUT};
+use super::{ArkClient, ArkSession, ArkWallet, BOLTZ_URL, CLIENT_NAME, CLIENT_TIMEOUT};
+
+const ONCHAIN_SYNC_MAX_ATTEMPTS: u32 = 3;
+const ONCHAIN_SYNC_BASE_BACKOFF_MS: u64 = 1_000;
+
+#[cfg(target_arch = "wasm32")]
+async fn sleep_for_backoff(duration: std::time::Duration) {
+    bitboard_wasm_sleep::sleep_for(duration).await;
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+async fn sleep_for_backoff(duration: std::time::Duration) {
+    tokio::time::sleep(duration).await;
+}
+
+fn is_retryable_onchain_sync_error(error: &ark_client::Error) -> bool {
+    let message = error.to_string().to_lowercase();
+    const RETRYABLE_PATTERNS: &[&str] = &[
+        "429",
+        "502",
+        "503",
+        "504",
+        "408",
+        "timeout",
+        "timed out",
+        "rate limit",
+        "failed to fetch",
+        "gateway timeout",
+        "service unavailable",
+        "bad gateway",
+        "function_invocation_timeout",
+    ];
+    RETRYABLE_PATTERNS
+        .iter()
+        .any(|pattern| message.contains(pattern))
+}
+
+fn warn_onchain_sync_during_open(message: &str) {
+    #[cfg(target_arch = "wasm32")]
+    web_sys::console::warn_1(&message.into());
+    #[cfg(not(target_arch = "wasm32"))]
+    eprintln!("{message}");
+}
+
+/// Esplora full scan during open can fail transiently on hosted proxies; retry, then continue
+/// with a stale on-chain view so session open and network switching are not blocked.
+async fn sync_onchain_wallet_for_session_open(client: &ArkClient) {
+    for attempt in 0..ONCHAIN_SYNC_MAX_ATTEMPTS {
+        match client.sync_onchain_wallet().await {
+            Ok(()) => return,
+            Err(error)
+                if attempt + 1 < ONCHAIN_SYNC_MAX_ATTEMPTS
+                    && is_retryable_onchain_sync_error(&error) =>
+            {
+                warn_onchain_sync_during_open(&format!(
+                    "On-chain wallet sync failed during session open (attempt {}); retrying: {error}",
+                    attempt + 1
+                ));
+                let backoff_ms = ONCHAIN_SYNC_BASE_BACKOFF_MS.saturating_mul(1 << attempt);
+                sleep_for_backoff(std::time::Duration::from_millis(backoff_ms)).await;
+            }
+            Err(error) => {
+                warn_onchain_sync_during_open(&format!(
+                    "On-chain wallet sync failed during session open; continuing with stale on-chain view: {error}"
+                ));
+                return;
+            }
+        }
+    }
+}
 
 impl ArkSession {
     pub async fn open(
@@ -100,7 +169,7 @@ impl ArkSession {
         .map_err(ArkWasmError::Persistence)?;
         let server_signer: XOnlyPublicKey = server_info.signer_pk.into();
         wallet_db.set_load_context(network, server_signer);
-        client.sync_onchain_wallet().await?;
+        sync_onchain_wallet_for_session_open(&client).await;
 
         let operator_identity = Mutex::new(persisted_operator_identity_for_open(
             &migration_hint,
@@ -136,5 +205,24 @@ impl ArkSession {
             .server_info()
             .map(|server_info| server_info.signer_pk.x_only_public_key().0.to_string())
             .unwrap_or_else(|_| self.persisted_operator_identity().signer_pk_hex)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_retryable_onchain_sync_error;
+
+    #[test]
+    fn retryable_onchain_sync_error_detects_proxy_timeouts() {
+        let error = ark_client::Error::wallet(
+            "HttpResponse { status: 504, message: \"FUNCTION_INVOCATION_TIMEOUT\" }",
+        );
+        assert!(is_retryable_onchain_sync_error(&error));
+    }
+
+    #[test]
+    fn retryable_onchain_sync_error_ignores_permanent_wallet_errors() {
+        let error = ark_client::Error::wallet("Insufficient funds: need 1000 sats, have 0 sats");
+        assert!(!is_retryable_onchain_sync_error(&error));
     }
 }
