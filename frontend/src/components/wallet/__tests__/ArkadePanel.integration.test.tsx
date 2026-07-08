@@ -70,6 +70,12 @@ vi.mock('@/hooks/useArkadeQueries', () => ({
     isLoading: false,
     data: { earliestExpiresAt: null, expiringSoonCount: 0 },
   }),
+  useArkadeSignerMigrationMutation: () => ({
+    mutate: vi.fn(),
+    isPending: false,
+    error: null,
+  }),
+  useArkadeSignerMigrationPartialResultQuery: () => ({ data: null }),
 }))
 
 vi.mock('@/components/wallet/ArkadeExitSection', () => ({

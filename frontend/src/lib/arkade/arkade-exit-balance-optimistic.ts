@@ -1,3 +1,14 @@
+/**
+ * Optimistic Arkade balance updates while exit RPCs run.
+ *
+ * Unilateral vs collaborative paths differ — see `docs/arkade-bitboard-wallet-model.md`
+ * (Unilateral vs collaborative exit balance timing).
+ *
+ * - **Unilateral:** only bump `unilateralExitInProgressSats`. After unroll, WASM excludes the
+ *   VTXO from gross spendable via the spent bucket; subtracting here would double-count.
+ * - **Collaborative:** also reduce net spendable fields; snapshot still lists exiting VTXOs as
+ *   spendable until operator sync.
+ */
 import type { QueryClient } from '@tanstack/react-query'
 import type { ArkadeSupportedNetworkMode } from '@/lib/arkade/arkade-endpoints'
 import { arkadeBalanceQueryKey } from '@/lib/arkade/arkade-query-keys'
@@ -17,12 +28,25 @@ function applyExitDeductionToBalance(
   exitField: ExitBalanceOptimisticContext['exitField'],
 ): ArkadeBalanceInfo {
   const previousExitSats = balance[exitField] ?? 0
-  return {
+  const nextBalance: ArkadeBalanceInfo = {
     ...balance,
-    confirmedSats: Math.max(0, balance.confirmedSats - deductedSats),
-    totalSats: Math.max(0, balance.totalSats - deductedSats),
     [exitField]: previousExitSats + deductedSats,
   }
+
+  if (exitField === 'collaborativeExitInProgressSats') {
+    return {
+      ...nextBalance,
+      confirmedSats: Math.max(0, balance.confirmedSats - deductedSats),
+      totalSats: Math.max(0, balance.totalSats - deductedSats),
+      offchainSpendableSats:
+        balance.offchainSpendableSats != null
+          ? Math.max(0, balance.offchainSpendableSats - deductedSats)
+          : undefined,
+    }
+  }
+
+  // Unilateral: exit line only — spendable totals unchanged (matches post-unroll WASM).
+  return nextBalance
 }
 
 export function applyOptimisticExitBalanceDeduction(
@@ -72,7 +96,10 @@ export function revertOptimisticExitBalanceDeduction(
   }
 }
 
-/** Prefer WASM balance after operator sync; keep optimistic exit lines if server lags. */
+/**
+ * Prefer WASM balance after operator sync; patch only the exit-in-progress field if WASM lags.
+ * For unilateral paths, never reduces spendable totals — see module doc above.
+ */
 export function reconcileBalanceAfterExitOperation(
   fetched: ArkadeBalanceInfo,
   context: ExitBalanceOptimisticContext,

@@ -64,7 +64,6 @@ export async function expectArkadeBalanceNotEmptySession(
 ): Promise<void> {
   await waitForArkadeLoadReady(page, timeout)
   await waitForArkadeBalanceCard(page, timeout)
-  await expect(page.getByTestId('dashboard-arkade-session-empty')).not.toBeVisible({ timeout })
   await expect(page.getByTestId('dashboard-arkade-balance-amount')).toBeVisible({ timeout })
 }
 

@@ -135,6 +135,13 @@ vi.mock('@/workers/crypto-factory', () => ({
   waitForCryptoWorkerHealthy: vi.fn().mockResolvedValue(undefined),
 }))
 
+vi.mock('@/lib/shared/app-query-client', () => ({
+  appQueryClient: {
+    cancelQueries: vi.fn().mockResolvedValue(undefined),
+    removeQueries: vi.fn(),
+  },
+}))
+
 vi.mock('@/lib/arkade/arkade-utils', () => ({
   isArkadeActiveForNetworkMode: () => true,
 }))
@@ -161,6 +168,7 @@ import {
   orchestrateLock,
   orchestrateManualUnlock,
   resetLockLifecycleStateForTests,
+  syncLockLifecycleFromWalletStore,
   syncLockLifecycleWithActiveWallet,
 } from '@/lib/wallet/lifecycle/lock-lifecycle-orchestrator'
 
@@ -375,6 +383,22 @@ describe('lock-lifecycle-orchestrator', () => {
       networkMode: 'testnet',
       allowRetryFromError: true,
     })
+  })
+
+  it('orchestrateBootstrapUnlock no-ops when wallet is already unlocked', async () => {
+    walletStoreState.activeWalletId = 1
+    walletStoreState.walletStatus = 'unlocked'
+    syncLockLifecycleWithActiveWallet(1)
+    syncLockLifecycleFromWalletStore()
+
+    await orchestrateBootstrapUnlock(unlockParams)
+
+    expect(walletStoreState.walletStatus).toBe('unlocked')
+    expect(getLockLifecycleSnapshot()).toEqual({
+      phase: 'unlocked',
+      operation: 'none',
+    })
+    expect(orchestrateOnchainLoad).not.toHaveBeenCalled()
   })
 
   it('orchestrateLock rejects when Lightning save-error blocks lock', async () => {

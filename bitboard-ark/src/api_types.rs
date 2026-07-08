@@ -49,7 +49,7 @@ pub struct SignerMigrationResultDto {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BalanceDto {
-    /// Net spendable balance (offchain + bumper, minus exits in progress).
+    /// Net spendable balance (offchain + bumper, minus collaborative exits still listed as spendable).
     pub confirmed_sats: u64,
     /// Net spendable offchain VTXO balance only (excludes on-chain bumper and boarding).
     pub offchain_spendable_sats: u64,
@@ -65,9 +65,11 @@ pub struct BalanceDto {
     pub boarding_spendable_sats: u64,
     /// On-chain boarding UTXOs awaiting confirmation.
     pub boarding_pending_sats: u64,
-    /// VTXOs unrolled on-chain awaiting timelock completion (unilateral exit).
+    /// VTXOs unrolled on-chain awaiting timelock completion (unilateral exit). Informational in the
+    /// UI — not subtracted from net spendable after unroll (see wallet model doc).
     pub unilateral_exit_in_progress_sats: u64,
-    /// VTXOs submitted for collaborative exit but still spendable in the last snapshot.
+    /// VTXOs submitted for collaborative exit but still spendable in the last snapshot. Subtracted
+    /// from net spendable until operator sync clears the pending deduction.
     pub collaborative_exit_in_progress_sats: u64,
     /// Funds locked under a deprecated operator signer past cooperative migration cutoff.
     pub pending_recovery_sats: u64,

@@ -257,6 +257,10 @@ export function isLockUnlockInProgress(): boolean {
   return isLockUnlockOperation(snapshot.operation)
 }
 
+function isWalletStoreUnlocked(): boolean {
+  return useWalletStore.getState().walletStatus === 'unlocked'
+}
+
 function beginInFlightWork(
   kind: InFlightWork['kind'],
   key: string,
@@ -350,6 +354,13 @@ export async function orchestrateLock(): Promise<void> {
 }
 
 async function runManualUnlockWork(params: ManualUnlockParams): Promise<void> {
+  const { appQueryClient } = await import('@/lib/shared/app-query-client')
+  const { activeWalletLoadQueryKeyPrefix } = await import(
+    '@/lib/wallet/wallet-load-query-keys'
+  )
+  await appQueryClient.cancelQueries({ queryKey: [...activeWalletLoadQueryKeyPrefix] })
+  appQueryClient.removeQueries({ queryKey: [...activeWalletLoadQueryKeyPrefix] })
+
   setPhase('unlocking')
   setOperation('manual_unlock')
   try {
@@ -392,6 +403,9 @@ async function runBootstrapUnlockWork(params: BootstrapUnlockParams): Promise<vo
   if (!(await isWalletSecretsSessionActive())) {
     throw new Error('Bootstrap unlock ran without wallet secrets session')
   }
+  if (isWalletStoreUnlocked()) {
+    return
+  }
   setPhase('unlocking')
   setOperation('bootstrap_unlock')
   try {
@@ -410,6 +424,14 @@ export async function orchestrateBootstrapUnlock(params: BootstrapUnlockParams):
   }
 
   await awaitInFlightWork()
+
+  if (isWalletStoreUnlocked()) {
+    return
+  }
+
+  if (isLockUnlockInProgress()) {
+    return
+  }
 
   if (inFlightWork?.kind === 'bootstrap_unlock' && inFlightWork.key === key) {
     return inFlightWork.promise

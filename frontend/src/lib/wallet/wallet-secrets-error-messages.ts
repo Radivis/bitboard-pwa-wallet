@@ -14,7 +14,7 @@ export function tryMapWalletSecretsError(err: unknown): string | null {
     errorMessageLowercase.includes('corrupted') ||
     errorMessageLowercase.includes('schema validation failed')
   ) {
-    return 'Wrong password or corrupted wallet data'
+    return 'Unlock failed. Password typo?'
   }
   if (
     errorMessageLowercase.includes('secrets') &&

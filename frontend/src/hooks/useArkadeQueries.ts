@@ -881,6 +881,7 @@ export function useArkadeCollaborativeExitMutation() {
       const deductedSats =
         params.amountSats ??
         (previousBalance != null ? arkadeOffchainSpendableSats(previousBalance) : 0)
+      // Collaborative: snapshot still lists exiting VTXOs as spendable — deduct optimistically.
       return applyOptimisticExitBalanceDeduction(
         queryClient,
         activeWalletId,
@@ -961,6 +962,7 @@ export function useArkadeUnilateralUnrollMutation() {
       ) {
         return undefined
       }
+      // Unilateral: exit line only — post-unroll WASM excludes VTXO from spendable via spent bucket.
       return applyOptimisticExitBalanceDeduction(
         queryClient,
         activeWalletId,

@@ -53,6 +53,12 @@ vi.mock('@/hooks/useArkadeQueries', () => ({
   useArkadeBalanceQuery: () => balanceQueryMock(),
   useArkadeRecoverableVtxoFeeQuery: () => recoverableFeeQueryMock(),
   useArkadeRecoverRecoverableVtxosMutation: () => recoverMutationMock(),
+  useArkadeSignerMigrationMutation: () => ({
+    mutate: vi.fn(),
+    isPending: false,
+    error: null,
+  }),
+  useArkadeSignerMigrationPartialResultQuery: () => ({ data: null }),
 }))
 
 const recoverableFeeQueryMock = vi.hoisted(() =>
@@ -193,11 +199,20 @@ describe('ArkadeDashboardBalance', () => {
     )
   })
 
-  it('DASH-ARK-12 shows empty session copy when no data', () => {
+  it('DASH-ARK-09 shows establishing session spinner while load lifecycle is loading', () => {
+    arkadeLifecycleState.load = {
+      loadPhase: 'loading',
+      errorMessage: null,
+    }
+    arkadeLifecycleState.rail = {
+      loadPhase: 'loading',
+      syncPhase: 'not-syncing',
+      savePhase: 'not-saving',
+    }
     balanceQueryMock.mockReturnValue({ isLoading: false, isError: false, data: undefined })
     renderWithProviders(<ArkadeDashboardBalance />)
-    expect(screen.getByTestId('dashboard-arkade-session-empty')).toHaveTextContent(
-      'No Arkade session yet',
+    expect(screen.getByTestId('dashboard-arkade-session-loading')).toHaveTextContent(
+      'Establishing Arkade session…',
     )
   })
 
@@ -211,7 +226,6 @@ describe('ArkadeDashboardBalance', () => {
     expect(screen.getByTestId('dashboard-arkade-balance-error')).toHaveTextContent(
       'Could not load Arkade balance',
     )
-    expect(screen.queryByTestId('dashboard-arkade-session-empty')).not.toBeInTheDocument()
   })
 
   it('DASH-ARK-13 shows balance not empty copy when cached data exists during refetch', () => {
@@ -221,7 +235,6 @@ describe('ArkadeDashboardBalance', () => {
       data: { confirmedSats: 42_000, totalSats: 42_000 },
     })
     renderWithProviders(<ArkadeDashboardBalance />)
-    expect(screen.queryByTestId('dashboard-arkade-session-empty')).not.toBeInTheDocument()
     expect(screen.getByTestId('dashboard-arkade-balance-amount')).toBeInTheDocument()
   })
 
@@ -317,7 +330,6 @@ describe('ArkadeDashboardBalance', () => {
     renderWithProviders(<ArkadeDashboardBalance />)
     expect(screen.getByTestId('wallet-sync-error-banner-arkade')).toBeInTheDocument()
     expect(screen.getByText('failed to get VTXOs for addresses')).toBeInTheDocument()
-    expect(screen.queryByTestId('dashboard-arkade-session-empty')).not.toBeInTheDocument()
     expect(screen.getByTestId('dashboard-arkade-balance-amount')).toBeInTheDocument()
   })
 })

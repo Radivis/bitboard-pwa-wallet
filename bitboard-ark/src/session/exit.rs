@@ -455,6 +455,9 @@ impl ArkSession {
     }
 
     fn mark_vtxo_unrolled_in_snapshot(&self, txid: &str, vout: u32) -> ArkResult<()> {
+        // Local reclassification: VTXO leaves gross spendable (spent/is_unrolled bucket).
+        // unilateral_exit_in_progress then counts it from spent — must not subtract again in
+        // build_arkade_balance_dto. See docs/arkade-bitboard-wallet-model.md.
         let Some(mut snapshot) = self.wallet_db.snapshot().offchain_vtxo_snapshot.clone() else {
             return Ok(());
         };
