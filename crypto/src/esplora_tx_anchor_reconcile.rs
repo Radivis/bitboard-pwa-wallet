@@ -123,6 +123,9 @@ where
     }
 
     if let Some(status) = last_status {
+        if !status.confirmed {
+            return Ok(None);
+        }
         return Err(CryptoError::Blockchain(format!(
             "Esplora /tx/{txid} lacks full anchor metadata after {TX_INFO_FETCH_ATTEMPTS} attempts (confirmed={}, block_height={:?}, block_hash={:?}, block_time={:?})",
             status.confirmed, status.block_height, status.block_hash, status.block_time,

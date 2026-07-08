@@ -87,7 +87,9 @@ describe('useActiveWalletLoadQuery lock lifecycle reactivity', () => {
     syncLockLifecycleWithActiveWallet(1)
   })
 
-  it('disables bootstrap as soon as manual unlock starts, without a wallet store update', async () => {
+  it('keeps bootstrap disabled during manual unlock when no session existed before', async () => {
+    walletSecretsSessionState.active = false
+
     const queryClient = new QueryClient({
       defaultOptions: { queries: { retry: false } },
     })
@@ -97,7 +99,7 @@ describe('useActiveWalletLoadQuery lock lifecycle reactivity', () => {
     })
 
     await waitFor(() => {
-      expect(result.current.needsBootstrap).toBe(true)
+      expect(result.current.needsBootstrap).toBe(false)
     })
 
     void orchestrateManualUnlock({

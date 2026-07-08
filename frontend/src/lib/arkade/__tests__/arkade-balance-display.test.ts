@@ -18,14 +18,16 @@ describe('arkade-balance-display', () => {
     expect(arkadeDashboardSpendableSats(balance)).toBe(230_603)
   })
 
-  it('uses net confirmedSats from wasm for dashboard headline', () => {
+  it('uses offchain spendable from wasm for dashboard headline when unilateral exit is in progress', () => {
+    // unilateral_exit_in_progress is informational; must not reduce headline spendable.
     const balance = {
-      confirmedSats: 19_397,
-      totalSats: 19_397,
+      confirmedSats: 200_000,
+      offchainSpendableSats: 200_000,
+      totalSats: 200_000,
       unilateralExitInProgressSats: 180_603,
       collaborativeExitInProgressSats: 0,
     }
-    expect(arkadeDashboardSpendableSats(balance)).toBe(19_397)
+    expect(arkadeDashboardSpendableSats(balance)).toBe(200_000)
   })
 
   it('exposes pending recovery sats from wasm balance payload', () => {

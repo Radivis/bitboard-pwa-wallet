@@ -23,6 +23,8 @@ pub fn exit_outpoint_key_from_str(txid: &str, vout: u32) -> Option<UnilateralExi
 pub fn unilateral_exit_in_progress_outpoints_from_snapshot(
     snapshot: &OffchainVtxoSnapshot,
 ) -> crate::error::ArkResult<HashSet<UnilateralExitOutpointKey>> {
+    // Post-unroll VTXOs: excluded from gross spendable via the spent bucket; counted here for the
+    // informational unilateral_exit_in_progress balance field (see wallet model doc).
     let vtxo_list = vtxo_list_from_snapshot(snapshot)?;
     Ok(vtxo_list
         .spent()
@@ -115,6 +117,9 @@ pub fn should_keep_pending_exit_deduction(
 ) -> crate::error::ArkResult<bool> {
     match record.kind {
         PendingExitKind::Unilateral => {
+            // During unroll, before is_unrolled is set locally: keep pending record while the VTXO
+            // is still spendable. After mark_vtxo_unrolled_in_snapshot, this returns false and the
+            // same sats are tracked from the spent bucket instead.
             let Some(txid) = record.vtxo_txid.as_deref() else {
                 return Ok(false);
             };

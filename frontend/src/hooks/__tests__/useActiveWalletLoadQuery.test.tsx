@@ -87,6 +87,22 @@ describe('useActiveWalletLoadQuery', () => {
     expect(orchestrateBootstrapUnlock).not.toHaveBeenCalled()
   })
 
+  it('does not bootstrap when locked without a secrets session', async () => {
+    useWalletStore.setState({
+      activeWalletId: 1,
+      walletStatus: 'locked',
+    })
+    syncLockLifecycleWithActiveWallet(1)
+    walletSecretsSessionState.active = false
+
+    renderHook(() => useActiveWalletLoadQuery(), {
+      wrapper: createWrapper('/wallet'),
+    })
+
+    await new Promise((r) => setTimeout(r, 120))
+    expect(orchestrateBootstrapUnlock).not.toHaveBeenCalled()
+  })
+
   it('runs bootstrap when session exists, wallet locked, and manual unlock is not in flight', async () => {
     useWalletStore.setState({
       activeWalletId: 1,

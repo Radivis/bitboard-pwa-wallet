@@ -56,6 +56,12 @@ vi.mock('@/hooks/useArkadeQueries', () => ({
   useArkadeUnilateralExitFeeQuery: () => ({ isLoading: false, isError: false, data: null }),
   useArkadeUnrollMutation: () => ({ mutate: vi.fn(), isPending: false }),
   useArkadeCompleteExitMutation: () => ({ mutate: vi.fn(), isPending: false }),
+  useArkadeSignerMigrationMutation: () => ({
+    mutate: vi.fn(),
+    isPending: false,
+    error: null,
+  }),
+  useArkadeSignerMigrationPartialResultQuery: () => ({ data: null }),
 }))
 
 vi.mock('@/hooks/useArkadeDashboardQueries', () => ({
