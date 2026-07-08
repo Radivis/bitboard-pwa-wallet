@@ -230,8 +230,7 @@ export async function orchestrateArkadeSyncThenSave(
     return awaitInFlightSyncWork(afterDifferentWork, params.syncKind)
   }
 
-  let workPromise!: Promise<void>
-  workPromise = inFlightSyncTracker.begin(key, async () => {
+  const workPromise = inFlightSyncTracker.begin(key, async () => {
     await withWalletWriterLock(async () => {
       assertCanStartArkadeSync(params)
       const scope = railScopeFromParams(params)
