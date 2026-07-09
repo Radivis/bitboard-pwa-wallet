@@ -15,7 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
-## [0.3.3] - 2026-07-08
+## [0.3.3] - 2026-07-09
 
 ### Added
 - Arkade balance can now also be displayed in fiat currency denomination
@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Split monolithic unilateral exit button in Arkde into "Start unilateral exit" and "Complete unilateral exit"
 - Made unlock failure message friendlier
 - Dismissing the unlock modal now redirects to the last visited non-wallet page, if one was visited during the current session, or the Library index otherwise
+- VTXOs undergoing unilateral exit are excluded from recoverable bucket as to not trigger any recovery banner or misclassification, if they expire
 
 ### Fixed
 - Addressed the possibility of false success of Arkade signer migration
