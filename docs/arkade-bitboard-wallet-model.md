@@ -76,7 +76,7 @@ Replayed from the snapshot (same rules as live `ark-client::offchain_balance`):
 | **boarding_spendable** | Confirmed on-chain UTXOs on the boarding address, ready to settle into VTXOs |
 | **boarding_pending** | Unconfirmed boarding UTXOs |
 | **onchain_bumper** | Confirmed sats in the P2A bumper wallet (exit fees only — not Ark spendable balance) |
-| **unilateral_exit_in_progress** | Sum of `spent` VTXOs with `is_unrolled && !is_spent` (informational; already excluded from gross spendable) |
+| **unilateral_exit_in_progress** | Sum of `spent` VTXOs with `is_unrolled && !is_spent` (informational; already excluded from gross spendable). May overlap ark-core **recoverable** when expired/swept — excluded from recoverable UX via `ARK-REC-08`. |
 | **collaborative_exit_in_progress** | Pending exit deduction while the operator snapshot still lists exiting VTXOs as cooperatively spendable |
 
 #### Layer 4 — Dashboard fields
@@ -129,6 +129,22 @@ Unilateral exit is more subtle: the **same sats** are tracked in different snaps
 Bitboard keeps the **exit line amount stable** across steps 1→4. Net spendable must not subtract `unilateral_exit_in_progress_sats` after step 2 — doing so double-counted the exit against unrelated VTXOs (e.g. a fresh boarding credit). Collaborative exit has no equivalent handoff: the field clears when operator sync removes the VTXOs from spendable entirely.
 
 Implementation touchpoints: `build_arkade_balance_dto` (WASM), `exit_balance_components` / `reconcile_pending_exit_deductions` (persistence), `arkade-exit-balance-optimistic.ts` (React Query cache).
+
+### Unilateral exit vs recoverable and expiry UX
+
+`ark-core` `VtxoList::new` checks `is_recoverable` (expired, operator-swept, or sub-dust) **before** `is_unrolled`. A VTXO in unilateral exit can therefore move into the **recoverable** bucket when it expires or is operator-swept, even while `unilateral_exit_in_progress_sats` still tracks the same outpoint.
+
+Without a Bitboard-side filter this produced a confusing dashboard: **Recoverable now** for the same sats already shown under **Unilateral exit in progress**.
+
+Bitboard excludes outpoints in `unilateral_exit_in_progress_outpoints()` from:
+
+| Surface | Implementation |
+|---------|----------------|
+| Recoverable settleable / pending-operator-sweep counts and **Recover now** | `recoverable_vtxo_buckets_from_list` in `bitboard-ark/src/session/vtxo.rs` |
+| Expiring-soon count and **Renew VTXOs now** | `expiring_outpoints` |
+| Earliest expiry indicator | `vtxo_expiry_status` (`earliest_expires_at` scan) |
+
+This mirrors the existing `pending_recovery_sats_excluding_unilateral_exit` pattern: do not fork ark-core classification; filter at the wallet layer. Contract `ARK-REC-08`.
 
 ### Unilateral exit completion coin-select (vendor fork)
 
