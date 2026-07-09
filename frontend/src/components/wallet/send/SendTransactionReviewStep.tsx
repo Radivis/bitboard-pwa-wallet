@@ -7,8 +7,7 @@ import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { DeadLabEntityRecipientModal } from '@/components/lab/DeadLabEntityRecipientModal'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { truncateAddress } from '@/lib/wallet/bitcoin-utils'
-import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
-import { FiatAmountDisplay } from '@/components/FiatAmountDisplay'
+import { FiatBtcAmountDisplay } from '@/components/FiatBtcAmountDisplay'
 import { OnchainDustWarningReviewBanner } from '@/components/wallet/send/OnchainDustWarningReviewBanner'
 import { ManualUtxoSelectionSection } from '@/components/wallet/send/ManualUtxoSelectionSection'
 import { ReviewInputUtxoList } from '@/components/wallet/send/ReviewInputUtxoList'
@@ -40,26 +39,17 @@ function ReviewAmountValue({
   defaultFiatCurrency: FiatCurrencyCode
   fiatRatesLoading: boolean
 }) {
-  if (mainnetFiatMode && hasUsableFiatSpot) {
-    return (
-      <div className="flex flex-col items-end gap-1">
-        <FiatAmountDisplay
-          amountSats={amountSats}
-          btcPriceInFiat={btcPriceInFiat}
-          currency={defaultFiatCurrency}
-          size="sm"
-          rateLoading={fiatRatesLoading}
-        />
-        <BitcoinAmountDisplay
-          amountSats={amountSats}
-          size="sm"
-          className="text-muted-foreground"
-        />
-      </div>
-    )
-  }
-
-  return <BitcoinAmountDisplay amountSats={amountSats} size="sm" />
+  return (
+    <FiatBtcAmountDisplay
+      amountSats={amountSats}
+      showFiatLayout={mainnetFiatMode && hasUsableFiatSpot}
+      btcPriceInFiat={btcPriceInFiat}
+      currency={defaultFiatCurrency}
+      isDetail
+      size="sm"
+      rateLoading={fiatRatesLoading}
+    />
+  )
 }
 
 function ReviewInfomodeLabel({

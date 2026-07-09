@@ -19,8 +19,37 @@ pub struct OpenSessionResult {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct SignerMigrationLegResultDto {
+    pub migrated_count: u32,
+    pub migrated_sats: u64,
+    pub deferred_count: u32,
+    pub deferred_sats: u64,
+    pub oversized_count: u32,
+    pub oversized_sats: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub settle_txid: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SignerMigrationResultDto {
+    pub vtxo_leg: SignerMigrationLegResultDto,
+    pub boarding_leg: SignerMigrationLegResultDto,
+    pub pass_count: u32,
+    pub migration_complete: bool,
+    pub pass_cap_reached: bool,
+    pub remaining_pre_cutoff_vtxo_count: u32,
+    pub remaining_pre_cutoff_sats: u64,
+    pub remaining_pre_cutoff_boarding_count: u32,
+    pub settle_txids: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct BalanceDto {
-    /// Net spendable balance (offchain + bumper, minus exits in progress).
+    /// Net spendable balance (offchain + bumper, minus collaborative exits still listed as spendable).
     pub confirmed_sats: u64,
     /// Net spendable offchain VTXO balance only (excludes on-chain bumper and boarding).
     pub offchain_spendable_sats: u64,
@@ -36,9 +65,11 @@ pub struct BalanceDto {
     pub boarding_spendable_sats: u64,
     /// On-chain boarding UTXOs awaiting confirmation.
     pub boarding_pending_sats: u64,
-    /// VTXOs unrolled on-chain awaiting timelock completion (unilateral exit).
+    /// VTXOs unrolled on-chain awaiting timelock completion (unilateral exit). Informational in the
+    /// UI — not subtracted from net spendable after unroll (see wallet model doc).
     pub unilateral_exit_in_progress_sats: u64,
-    /// VTXOs submitted for collaborative exit but still spendable in the last snapshot.
+    /// VTXOs submitted for collaborative exit but still spendable in the last snapshot. Subtracted
+    /// from net spendable until operator sync clears the pending deduction.
     pub collaborative_exit_in_progress_sats: u64,
     /// Funds locked under a deprecated operator signer past cooperative migration cutoff.
     pub pending_recovery_sats: u64,
@@ -119,9 +150,48 @@ pub struct ExitCandidateRow {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct UnilateralExitInProgressRow {
+    pub id: String,
+    pub txid: String,
+    pub vout: u32,
+    pub amount_sats: u64,
+    pub virtual_status_state: String,
+    pub can_complete: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub started_at: Option<i64>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MissingBlocktimeCompletionInputDto {
+    pub virtual_txid: String,
+    pub on_chain_txid: String,
+    pub on_chain_vout: u32,
+    pub amount_sats: u64,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UnilateralExitCompletionFeeEstimateDto {
+    pub selected_total_sats: u64,
+    pub estimated_fee_sats: u64,
+    pub estimated_receive_sats: u64,
+    pub fee_rate_sat_per_vb: f64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub estimate_error: Option<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub missing_blocktime_inputs: Vec<MissingBlocktimeCompletionInputDto>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct OnchainBumperInfoDto {
     pub address: String,
     pub balance_sats: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub unilateral_exit_timelock_blocks: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub unilateral_exit_timelock_seconds: Option<u64>,
 }
 
 #[derive(Debug, Serialize)]
@@ -245,6 +315,17 @@ pub struct CollaborativeExitParams {
 pub struct CompleteUnilateralExitParams {
     pub vtxo_txids: Vec<String>,
     pub destination_address: String,
+    #[serde(default)]
+    pub fee_rate_sat_per_vb: Option<f64>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UnilateralExitCompletionFeeEstimateParams {
+    pub vtxo_txids: Vec<String>,
+    pub destination_address: String,
+    #[serde(default)]
+    pub fee_rate_sat_per_vb: Option<f64>,
 }
 
 #[derive(Debug, Deserialize)]

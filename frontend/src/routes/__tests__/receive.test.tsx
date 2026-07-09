@@ -103,12 +103,6 @@ describe('ReceivePage', () => {
     expect(mockNavigate).toHaveBeenCalledWith({ to: '/setup' })
   })
 
-  it('shows WalletUnlock when locked', () => {
-    walletStoreState.walletStatus = 'locked'
-    renderWithProviders(<ReceivePage />)
-    expect(screen.getByTestId('wallet-unlock')).toBeInTheDocument()
-  })
-
   it('calls getNewAddress on mount when unlocked and no address', async () => {
     walletStoreState.currentAddress = null
     mockGetNewAddress.mockResolvedValue('tb1qnewaddress')

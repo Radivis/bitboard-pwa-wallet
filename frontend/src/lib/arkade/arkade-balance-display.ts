@@ -1,6 +1,6 @@
 import type { ArkadeBalanceInfo } from '@/workers/arkade-api'
 
-/** Net offchain VTXO spendable (excludes bumper/boarding; exits in progress deducted). */
+/** Net offchain VTXO spendable (excludes bumper/boarding; collaborative exits in progress deducted). */
 export function arkadeOffchainSpendableSats(balance: ArkadeBalanceInfo): number {
   if (balance.offchainSpendableSats != null) {
     return balance.offchainSpendableSats

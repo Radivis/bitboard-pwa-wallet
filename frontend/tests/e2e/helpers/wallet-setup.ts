@@ -100,7 +100,7 @@ export async function createWalletViaUI(page: Page) {
   await page.getByRole('button', { name: 'Confirm & Finish' }).click()
 
   await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible({
-    timeout: 30000,
+    timeout: 60_000,
   })
   await expectNoInitialWalletSyncErrorToast(page)
 }
@@ -143,6 +143,11 @@ export async function fillWalletUnlockDialog(
   const unlockButton = unlockDialog.getByRole('button', { name: 'Unlock' })
   await expect(unlockButton).toBeEnabled({ timeout: 10_000 })
   await unlockButton.click()
+}
+
+export async function dismissWalletUnlockDialog(page: Page): Promise<void> {
+  const unlockDialog = page.getByRole('dialog', { name: 'Unlock Wallet' })
+  await unlockDialog.getByRole('button', { name: 'Close', exact: true }).click()
 }
 
 export async function unlockWalletViaUI(

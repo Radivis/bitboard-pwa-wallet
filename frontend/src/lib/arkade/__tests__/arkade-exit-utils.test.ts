@@ -1,9 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import {
   formatIntentFeePrograms,
+  formatMissingBlocktimeCompletionWarning,
+  formatMissingBlocktimeCompletionWarningLine,
+  formatUnilateralExitTimelock,
   formatUnilateralUnrollSuccessMessage,
+  isOperatorIndexerCatchingUpError,
   parseCollaborativeExitAmountSats,
   shouldShowUnilateralUnrollProgressToast,
+  unilateralExitCompleteTimelockMessage,
   unilateralUnrollProgressToastId,
 } from '@/lib/arkade/arkade-exit-utils'
 
@@ -55,7 +60,7 @@ describe('unilateral unroll toast helpers', () => {
         '587b597602803187e73cb30ca7791254a146755ee6435244d048c8d4072c72a5',
       ),
     ).toBe(
-      'Unroll complete (587b59760280…) — complete exit after the timelock',
+      'Unroll complete (587b59760280…). Use Complete unilateral exit when the timelock elapses.',
     )
   })
 
@@ -72,5 +77,70 @@ describe('unilateral unroll toast helpers', () => {
         txid: '587b597602803187e73cb30ca7791254a146755ee6435244d048c8d4072c72a5',
       }),
     ).toBe('arkade-unroll-587b597602803187e73cb30ca7791254a146755ee6435244d048c8d4072c72a5')
+  })
+})
+
+describe('unilateral exit timelock display', () => {
+  it('formats block-based operator delay', () => {
+    expect(formatUnilateralExitTimelock({ timelockBlocks: 20 })).toBe('20 block confirmations')
+  })
+
+  it('formats time-based operator delay', () => {
+    expect(formatUnilateralExitTimelock({ timelockSeconds: 172_544 })).toBe('2 days')
+  })
+
+  it('describes waiting period on complete step', () => {
+    expect(
+      unilateralExitCompleteTimelockMessage({ timelockBlocks: 144 }, false),
+    ).toContain('144 block confirmations')
+  })
+
+  it('notes when timelock is already satisfied', () => {
+    expect(unilateralExitCompleteTimelockMessage({ timelockBlocks: 144 }, true)).toContain(
+      'satisfied',
+    )
+  })
+})
+
+describe('missing blocktime completion warning', () => {
+  const virtualTxid = 'aa'.repeat(32)
+  const onChainTxid = 'bb'.repeat(32)
+
+  it('lists each affected VTXO with virtual txid snippet', () => {
+    const warning = formatMissingBlocktimeCompletionWarning([
+      {
+        virtualTxid,
+        onChainTxid: virtualTxid,
+        onChainVout: 0,
+        amountSats: 100_000,
+      },
+      {
+        virtualTxid: 'cc'.repeat(32),
+        onChainTxid: onChainTxid,
+        onChainVout: 1,
+        amountSats: 50_000,
+      },
+    ])
+    expect(warning.summary).toContain('Esplora did not report a confirmation time')
+    expect(warning.lines).toHaveLength(2)
+    expect(
+      formatMissingBlocktimeCompletionWarningLine(warning.lines[0]),
+    ).toContain(virtualTxid.slice(0, 12))
+    expect(
+      formatMissingBlocktimeCompletionWarningLine(warning.lines[1]),
+    ).toContain('on-chain')
+  })
+})
+
+describe('isOperatorIndexerCatchingUpError', () => {
+  it('detects structured wasm error code', () => {
+    const error = new Error(
+      JSON.stringify({
+        code: 'operator_indexer_catching_up',
+        message: 'Operator indexer is still catching up after unilateral unroll.',
+      }),
+    )
+    expect(isOperatorIndexerCatchingUpError(error)).toBe(true)
+    expect(isOperatorIndexerCatchingUpError(new Error('other'))).toBe(false)
   })
 })

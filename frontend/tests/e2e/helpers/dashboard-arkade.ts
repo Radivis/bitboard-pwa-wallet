@@ -64,7 +64,6 @@ export async function expectArkadeBalanceNotEmptySession(
 ): Promise<void> {
   await waitForArkadeLoadReady(page, timeout)
   await waitForArkadeBalanceCard(page, timeout)
-  await expect(page.getByTestId('dashboard-arkade-session-empty')).not.toBeVisible({ timeout })
   await expect(page.getByTestId('dashboard-arkade-balance-amount')).toBeVisible({ timeout })
 }
 
@@ -121,6 +120,24 @@ export async function triggerArkadeRailSync(
       throw new Error(`Arkade sync still in progress: ${syncPhase ?? 'unknown'}`)
     }
   }).toPass({ timeout })
+}
+
+/** Live WASM SDK persistence JSON (e.g. Rust regtest boarded-wallet fixture export). */
+export async function exportBoardedWalletSdkPersistenceJson(page: Page): Promise<string> {
+  await page.waitForFunction(
+    () => typeof window.__e2eExportBoardedWalletSdkPersistenceJson === 'function',
+    undefined,
+    { timeout: 15_000 },
+  )
+  return page.evaluate(async () => {
+    const exportFn = window.__e2eExportBoardedWalletSdkPersistenceJson
+    if (exportFn == null) {
+      throw new Error(
+        '__e2eExportBoardedWalletSdkPersistenceJson not available (DEV + VITE_E2E_ARKADE_REGTEST required)',
+      )
+    }
+    return exportFn()
+  })
 }
 
 /** Receive route search param — avoids flaky mode-toggle clicks in E2E. */

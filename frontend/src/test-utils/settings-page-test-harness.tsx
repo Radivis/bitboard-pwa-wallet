@@ -324,6 +324,7 @@ vi.mock('@/lib/wallet/descriptor-wallet-manager', async (importOriginal) => {
 })
 
 vi.mock('@/lib/arkade/arkade-session-service', () => ({
+  abortArkadeSessionForNetworkSwitch: mockCloseArkadeSession,
   closeArkadeSession: mockCloseArkadeSession,
   refreshArkadeSessionAfterNetworkSwitch: mockRefreshArkadeSessionAfterNetworkSwitch,
 }))

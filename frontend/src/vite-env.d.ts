@@ -46,4 +46,6 @@ interface Window {
     reset: () => void
   }
   __E2E_ARKADE__?: import('@/lib/arkade/e2e/e2e-arkade-mock-control').E2eArkadeMockControl
+  /** DEV + `VITE_E2E_ARKADE_REGTEST`: export boarded-wallet fixture for Rust regtest. */
+  __e2eExportBoardedWalletSdkPersistenceJson?: () => Promise<string>
 }

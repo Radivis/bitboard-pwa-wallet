@@ -24,6 +24,12 @@ export const ARKADE_REGTEST_COMMITMENT_CONFIRM_BLOCKS = 1
 
 export { mineRegtestBlocks, fundRegtestAddress, ESPLORA_URL } from './regtest'
 
+/**
+ * Default path for WASM-exported boarded wallet JSON (under `frontend/` when E2E runs from there).
+ * Set `ARKADE_REGTEST_EXPORT_BOARDED_FIXTURE=1` or this path for E2E export; point Rust at the same file.
+ */
+export const ARKADE_REGTEST_BOARDED_FIXTURE_DEFAULT = 'test-results/arkade-boarded-fixture.json'
+
 export async function waitForEsploraReady(): Promise<void> {
   const { checkEsploraHealthy } = await import(
     '../../../../scripts/arkade-regtest-health.mjs'

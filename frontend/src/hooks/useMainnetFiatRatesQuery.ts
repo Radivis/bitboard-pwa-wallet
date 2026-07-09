@@ -26,10 +26,12 @@ export function mainnetFiatRatesQueryKey(
 
 function usePortfolioPositiveForFiatRatesFetch(): boolean {
   const balance = useWalletStore((walletState) => walletState.balance)
+  const arkadeBalance = useWalletStore((walletState) => walletState.arkadeBalance)
   const lightningBalancesQuery = useLightningBalancesForDashboardQuery()
   const onChainTotalSats = balance?.totalSats ?? 0
   const lightningTotalSats = lightningBalancesQuery.data?.totalSats ?? 0
-  return onChainTotalSats > 0 || lightningTotalSats > 0
+  const arkadeTotalSats = arkadeBalance?.totalSats ?? 0
+  return onChainTotalSats > 0 || lightningTotalSats > 0 || arkadeTotalSats > 0
 }
 
 /**

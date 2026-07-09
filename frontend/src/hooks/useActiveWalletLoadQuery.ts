@@ -6,9 +6,11 @@ import { useWalletCryptoSessionPathGateStore } from '@/stores/walletCryptoSessio
 import { walletIsUnlockedOrSyncing } from '@/lib/wallet/wallet-unlocked-status'
 import { isWalletSecretsSessionActive } from '@/lib/wallet/wallet-secrets-session'
 import { reportWalletSyncError } from '@/lib/wallet/wallet-sync-error-toast'
+import { WALLET_DB_QUERY_KEY_ROOT } from '@/lib/wallet/wallet-query-key-root'
+import { useLockLifecycleSnapshot } from '@/hooks/useLockLifecycleSnapshot'
 import {
   canStartBootstrapUnlock,
-  isLockUnlockInProgress,
+  isLockUnlockOperation,
   orchestrateBootstrapUnlock,
 } from '@/lib/wallet/lifecycle/lock-lifecycle-orchestrator'
 
@@ -25,7 +27,30 @@ export function useActiveWalletLoadQuery() {
   const walletStatus = useWalletStore((walletState) => walletState.walletStatus)
   const pathname = useWalletCryptoSessionPathGateStore((walletCryptoSessionPathGateState) => walletCryptoSessionPathGateState.pathname)
   const onWalletRoute = pathnameIsWalletRoute(pathname)
-  const lockUnlockInProgress = isLockUnlockInProgress()
+  const lockLifecycle = useLockLifecycleSnapshot()
+  const lockUnlockInProgress = isLockUnlockOperation(lockLifecycle.operation)
+  const manualUnlockInProgress = lockLifecycle.operation === 'manual_unlock'
+
+  const secretsSessionProbeEnabled =
+    activeWalletId != null &&
+    !walletIsUnlockedOrSyncing(walletStatus) &&
+    !manualUnlockInProgress
+
+  const secretsSessionQuery = useQuery({
+    queryKey: [
+      ...WALLET_DB_QUERY_KEY_ROOT,
+      'wallet-secrets-session-active-probe',
+      activeWalletId,
+      walletStatus,
+      manualUnlockInProgress,
+    ] as const,
+    queryFn: isWalletSecretsSessionActive,
+    enabled: secretsSessionProbeEnabled,
+    staleTime: 0,
+    gcTime: 0,
+    retry: false,
+  })
+  const secretsSessionActive = secretsSessionQuery.data === true
 
   /**
    * `loadDescriptorWalletAndSync` marks the wallet unlocked before Esplora sync; bootstrap
@@ -34,11 +59,15 @@ export function useActiveWalletLoadQuery() {
    * TanStack Query does not cancel mid-flight when status flips to unlocked mid-load.
    * Manual unlock must suppress bootstrap — otherwise unlock and bootstrap run
    * `loadDescriptorWalletAndSync` in parallel (duplicate sync toasts and work).
+   * Bootstrap requires an existing secrets session (near-zero / reload). After password
+   * lock there is no session until the user unlocks manually — do not enable bootstrap
+   * retries in that window (they race with password unlock and re-trigger rail sync).
    * Bootstrap starts only on wallet-route entry; `lockUnlockInProgress` keeps it enabled
    * if the user navigates away mid-bootstrap (route-independent lifecycle).
    */
   const wantsBootstrap =
     activeWalletId != null &&
+    secretsSessionActive &&
     canStartBootstrapUnlock() &&
     (!walletIsUnlockedOrSyncing(walletStatus) || lockUnlockInProgress)
 
@@ -58,9 +87,13 @@ export function useActiveWalletLoadQuery() {
         networkMode: bootstrapNetworkMode,
         addressType: bootstrapAddressType,
         accountId: bootstrapAccountId,
+        walletStatus: bootstrapWalletStatus,
       } = useWalletStore.getState()
       if (bootstrapWalletId == null) {
         throw new Error('Bootstrap query ran without wallet or session')
+      }
+      if (walletIsUnlockedOrSyncing(bootstrapWalletStatus)) {
+        return true
       }
       if (!(await isWalletSecretsSessionActive())) {
         throw new Error('Bootstrap query ran without wallet secrets session')

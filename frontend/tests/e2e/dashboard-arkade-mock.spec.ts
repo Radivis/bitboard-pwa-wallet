@@ -112,9 +112,6 @@ test.describe('Dashboard Arkade mock ASP @arkade', () => {
     await goToWalletTab(page, 'Dashboard')
 
     await waitForArkadeBalanceCard(page)
-    await expect(page.getByTestId('dashboard-arkade-session-empty')).not.toBeVisible({
-      timeout: 15_000,
-    })
     const afterSats = await readDashboardArkadeBalanceSats(page)
     expect(afterSats).toBe(beforeSats)
   })

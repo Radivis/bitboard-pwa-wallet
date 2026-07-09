@@ -30,6 +30,18 @@ use bitcoin::TxOut;
 use bitcoin::Txid;
 use std::collections::HashSet;
 
+/// Max iterations when targeting completion tx fee from measured vsize.
+const UNILATERAL_COMPLETION_FEE_MAX_ITERATIONS: u8 = 20;
+
+/// Minimum relay fee used as the initial guess before measuring vsize.
+const UNILATERAL_COMPLETION_FEE_INITIAL_SAT: u64 = 1_000;
+
+// # Bitboard vendor patch (fork drift)
+//
+// `resolve_unilateral_completion_fee_and_amount_from_inputs`, `estimate_send_on_chain_for_vtxo_txids`,
+// and dynamic fee targeting in `send_on_chain_for_vtxo_txids` / `create_send_on_chain_transaction_inner`
+// replace the upstream hardcoded 1_000 sat completion fee with build-and-measure targeting via Esplora fee rate.
+
 /// arkd's indexer rejects any request that does not carry an explicit, positive `page.size`
 /// (`InvalidArgument: invalid page size`), so every chain / virtual-tx query must send a real page
 /// size and then follow the page cursor to collect all results. 100 mirrors the page size
@@ -349,25 +361,23 @@ where
         &self,
         to_address: Address,
         vtxo_txids: &[Txid],
+        fee_rate_sat_per_vb: Option<f64>,
     ) -> Result<Txid, Error> {
         let vtxo_txid_filter: HashSet<Txid> = vtxo_txids.iter().copied().collect();
-        let (_, vtxo_inputs, selected_amount) =
+        let selection =
             coin_select_vtxo_txids_for_onchain(self, &vtxo_txid_filter).await?;
+        let vtxo_inputs = selection.vtxo_inputs;
+        let selected_amount = selection.selected_amount;
 
-        let fee = Amount::from_sat(1_000);
-        if selected_amount <= fee {
-            return Err(Error::ad_hoc(format!(
-                "selected amount {selected_amount} does not cover fee {fee}"
-            )));
-        }
-
-        let to_amount = selected_amount - fee;
-        let dust = self.server_info()?.dust;
-        if to_amount < dust {
-            return Err(Error::ad_hoc(format!(
-                "invalid amount {to_amount}, must be greater than dust: {dust}",
-            )));
-        }
+        let (fee, to_amount) = self
+            .resolve_unilateral_completion_fee_and_amount_from_inputs(
+                to_address.clone(),
+                Vec::new(),
+                vtxo_inputs.clone(),
+                selected_amount,
+                fee_rate_sat_per_vb,
+            )
+            .await?;
 
         let (tx, _) = self
             .create_send_on_chain_transaction_from_inputs(
@@ -381,6 +391,7 @@ where
         let txid = tx.compute_txid();
         tracing::info!(
             %txid,
+            fee = %fee,
             "Broadcasting selective unilateral exit completion transaction"
         );
 
@@ -389,6 +400,31 @@ where
             .with_context(|| format!("failed to broadcast transaction {txid}"))??;
 
         Ok(txid)
+    }
+
+    /// Estimate miner fee and receive amount for completing unilateral exit without broadcasting.
+    pub async fn estimate_send_on_chain_for_vtxo_txids(
+        &self,
+        to_address: Address,
+        vtxo_txids: &[Txid],
+        fee_rate_sat_per_vb: Option<f64>,
+    ) -> Result<(Amount, Amount, Amount, Vec<crate::coin_select::MissingBlocktimeCompletionInput>), Error> {
+        let vtxo_txid_filter: HashSet<Txid> = vtxo_txids.iter().copied().collect();
+        let selection =
+            coin_select_vtxo_txids_for_onchain(self, &vtxo_txid_filter).await?;
+        let vtxo_inputs = selection.vtxo_inputs;
+        let selected_amount = selection.selected_amount;
+        let missing_blocktime_inputs = selection.missing_blocktime_inputs;
+        let (fee, to_amount) = self
+            .resolve_unilateral_completion_fee_and_amount_from_inputs(
+                to_address,
+                Vec::new(),
+                vtxo_inputs,
+                selected_amount,
+                fee_rate_sat_per_vb,
+            )
+            .await?;
+        Ok((fee, to_amount, selected_amount, missing_blocktime_inputs))
     }
 
     /// Build the on-chain send transaction without broadcasting.
@@ -417,18 +453,109 @@ where
             )));
         }
 
-        // TODO: Do not use an arbitrary fee.
-        let fee = Amount::from_sat(1_000);
+        let mut fee = Amount::from_sat(UNILATERAL_COMPLETION_FEE_INITIAL_SAT);
+        for _ in 0..UNILATERAL_COMPLETION_FEE_MAX_ITERATIONS {
+            let (onchain_inputs, vtxo_inputs) =
+                coin_select_for_onchain(self, to_amount + fee).await?;
+            let selected_amount = onchain_inputs
+                .iter()
+                .map(|input| input.previous_output().value)
+                .chain(
+                    vtxo_inputs
+                        .iter()
+                        .map(|input| input.previous_output().value),
+                )
+                .fold(Amount::ZERO, |accumulator, amount| accumulator + amount);
 
-        let (onchain_inputs, vtxo_inputs) = coin_select_for_onchain(self, to_amount + fee).await?;
+            let (resolved_fee, resolved_to_amount) = self
+                .resolve_unilateral_completion_fee_and_amount_from_inputs(
+                    to_address.clone(),
+                    onchain_inputs.clone(),
+                    vtxo_inputs.clone(),
+                    selected_amount,
+                    None,
+                )
+                .await?;
 
-        self.create_send_on_chain_transaction_from_inputs(
-            to_address,
-            to_amount,
-            onchain_inputs,
-            vtxo_inputs,
-        )
-        .await
+            if resolved_fee == fee && resolved_to_amount == to_amount {
+                return self
+                    .create_send_on_chain_transaction_from_inputs(
+                        to_address,
+                        to_amount,
+                        onchain_inputs,
+                        vtxo_inputs,
+                    )
+                    .await;
+            }
+
+            fee = resolved_fee;
+        }
+
+        Err(Error::ad_hoc(
+            "failed to converge unilateral completion fee after maximum iterations",
+        ))
+    }
+
+    async fn resolve_unilateral_completion_fee_and_amount_from_inputs(
+        &self,
+        to_address: Address,
+        onchain_inputs: Vec<unilateral_exit::OnChainInput>,
+        vtxo_inputs: Vec<unilateral_exit::VtxoInput>,
+        selected_amount: Amount,
+        fee_rate_sat_per_vb: Option<f64>,
+    ) -> Result<(Amount, Amount), Error> {
+        let fee_rate = if let Some(rate) = fee_rate_sat_per_vb {
+            rate
+        } else {
+            timeout_op(self.inner.timeout, self.blockchain().get_fee_rate())
+                .await
+                .context("Failed to retrieve fee rate")??
+        };
+
+        let dust = self.server_info()?.dust;
+        let mut fee = Amount::from_sat(UNILATERAL_COMPLETION_FEE_INITIAL_SAT);
+        let mut to_amount = selected_amount
+            .checked_sub(fee)
+            .unwrap_or(Amount::ZERO);
+
+        for _ in 0..UNILATERAL_COMPLETION_FEE_MAX_ITERATIONS {
+            if selected_amount <= fee {
+                return Err(Error::ad_hoc(format!(
+                    "selected amount {selected_amount} does not cover fee {fee}"
+                )));
+            }
+            if to_amount < dust {
+                return Err(Error::ad_hoc(format!(
+                    "invalid amount {to_amount}, must be greater than dust: {dust}",
+                )));
+            }
+
+            let (tx, _) = self
+                .create_send_on_chain_transaction_from_inputs(
+                    to_address.clone(),
+                    to_amount,
+                    onchain_inputs.clone(),
+                    vtxo_inputs.clone(),
+                )
+                .await?;
+
+            let vsize = tx.weight().to_wu().div_ceil(4);
+            let next_fee =
+                Amount::from_sat((vsize as f64 * fee_rate).ceil() as u64).max(Amount::from_sat(1));
+
+            if next_fee == fee {
+                return Ok((fee, to_amount));
+            }
+
+            fee = next_fee;
+            to_amount = selected_amount
+                .checked_sub(fee)
+                .unwrap_or(Amount::ZERO);
+        }
+
+        Err(Error::ad_hoc(
+            "failed to converge unilateral completion fee after maximum iterations",
+        ))
     }
 
     async fn create_send_on_chain_transaction_from_inputs(

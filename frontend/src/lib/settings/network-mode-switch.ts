@@ -9,7 +9,7 @@ import { walletIsUnlockedOrSyncing } from '@/lib/wallet/wallet-unlocked-status'
 import { switchDescriptorWallet } from '@/lib/wallet/settings-switch-wallet'
 import { terminateLabWorker } from '@/workers/lab-factory'
 import {
-  closeArkadeSession,
+  abortArkadeSessionForNetworkSwitch,
   refreshArkadeSessionAfterNetworkSwitch,
 } from '@/lib/arkade/arkade-session-service'
 import { reportArkadeSessionOpenError } from '@/lib/arkade/arkade-session-open-error-toast'
@@ -130,9 +130,9 @@ export async function executeSettingsNetworkSwitch(
 
   const previousNetworkMode = currentMode
 
-  // Close before descriptor switch commits networkMode — otherwise Arkade queries race open/close.
+  // Tear down before descriptor switch commits networkMode — do not await stuck Esplora scans.
   if (targetNetwork !== 'lab' || previousNetworkMode !== 'lab') {
-    await closeArkadeSession()
+    await abortArkadeSessionForNetworkSwitch()
   }
 
   if (targetNetwork === 'lab') {

@@ -1,11 +1,73 @@
+use std::collections::HashSet;
 use std::str::FromStr;
 
-use bitcoin::Amount;
-use bitcoin::Txid;
+use bitcoin::{Amount, OutPoint, Txid};
 
 use crate::error::ArkWasmError;
 use crate::offchain_snapshot::vtxo_list_from_snapshot;
 use crate::persistence::{OffchainVtxoSnapshot, PendingExitDeductionRecord, PendingExitKind};
+
+/// Outpoint identifying a VTXO in unilateral exit (local snapshot or pending deduction).
+pub type UnilateralExitOutpointKey = OutPoint;
+
+pub fn exit_outpoint_key(txid: Txid, vout: u32) -> UnilateralExitOutpointKey {
+    OutPoint { txid, vout }
+}
+
+/// Parses wire/persistence txid text; returns `None` for invalid hex.
+pub fn exit_outpoint_key_from_str(txid: &str, vout: u32) -> Option<UnilateralExitOutpointKey> {
+    let txid = Txid::from_str(txid).ok()?;
+    Some(exit_outpoint_key(txid, vout))
+}
+
+pub fn unilateral_exit_in_progress_outpoints_from_snapshot(
+    snapshot: &OffchainVtxoSnapshot,
+) -> crate::error::ArkResult<HashSet<UnilateralExitOutpointKey>> {
+    // Post-unroll VTXOs: excluded from gross spendable via the spent bucket; counted here for the
+    // informational unilateral_exit_in_progress balance field (see wallet model doc).
+    let vtxo_list = vtxo_list_from_snapshot(snapshot)?;
+    Ok(vtxo_list
+        .spent()
+        .filter(|vtp| vtp.is_unrolled && !vtp.is_spent)
+        .map(|vtp| exit_outpoint_key(vtp.outpoint.txid, vtp.outpoint.vout))
+        .collect())
+}
+
+pub fn unilateral_exit_in_progress_outpoints_from_pending(
+    records: &[PendingExitDeductionRecord],
+) -> HashSet<UnilateralExitOutpointKey> {
+    records
+        .iter()
+        .filter(|record| record.kind == PendingExitKind::Unilateral)
+        .filter_map(|record| {
+            let txid = record.vtxo_txid.as_deref()?;
+            let vout = record.vout?;
+            exit_outpoint_key_from_str(txid, vout)
+        })
+        .collect()
+}
+
+pub fn unilateral_exit_in_progress_outpoints(
+    snapshot: Option<&OffchainVtxoSnapshot>,
+    pending: &[PendingExitDeductionRecord],
+) -> crate::error::ArkResult<HashSet<UnilateralExitOutpointKey>> {
+    let mut keys = HashSet::new();
+    if let Some(snapshot) = snapshot {
+        keys.extend(unilateral_exit_in_progress_outpoints_from_snapshot(
+            snapshot,
+        )?);
+    }
+    keys.extend(unilateral_exit_in_progress_outpoints_from_pending(pending));
+    Ok(keys)
+}
+
+pub fn is_unilateral_exit_in_progress_outpoint(
+    keys: &HashSet<UnilateralExitOutpointKey>,
+    txid: &str,
+    vout: u32,
+) -> bool {
+    exit_outpoint_key_from_str(txid, vout).is_some_and(|outpoint| keys.contains(&outpoint))
+}
 
 pub fn unilateral_exit_in_progress_sats_from_snapshot(
     snapshot: &OffchainVtxoSnapshot,
@@ -55,6 +117,9 @@ pub fn should_keep_pending_exit_deduction(
 ) -> crate::error::ArkResult<bool> {
     match record.kind {
         PendingExitKind::Unilateral => {
+            // During unroll, before is_unrolled is set locally: keep pending record while the VTXO
+            // is still spendable. After mark_vtxo_unrolled_in_snapshot, this returns false and the
+            // same sats are tracked from the spent bucket instead.
             let Some(txid) = record.vtxo_txid.as_deref() else {
                 return Ok(false);
             };
@@ -249,5 +314,58 @@ mod tests {
 
         reconcile_pending_exit_deductions(&mut records, &snapshot, 0).expect("reconcile");
         assert!(records.is_empty());
+    }
+
+    #[test]
+    fn in_progress_outpoints_from_snapshot_only() {
+        let snapshot = snapshot_with(vec![
+            sample_vtp_record(1, 0, 180_603, true, false),
+            sample_vtp_record(2, 1, 50_000, false, false),
+        ]);
+        let keys = unilateral_exit_in_progress_outpoints_from_snapshot(&snapshot).expect("keys");
+        assert_eq!(keys.len(), 1);
+        assert!(keys.contains(&exit_outpoint_key(Txid::from_byte_array([1; 32]), 0)));
+    }
+
+    #[test]
+    fn in_progress_outpoints_from_pending_only() {
+        let txid = "bb".repeat(32);
+        let records = vec![PendingExitDeductionRecord {
+            kind: PendingExitKind::Unilateral,
+            vtxo_txid: Some(txid.clone()),
+            vout: Some(2),
+            amount_sats: 25_000,
+            started_at: 1,
+            baseline_offchain_spendable_sats: None,
+        }];
+        let keys = unilateral_exit_in_progress_outpoints_from_pending(&records);
+        assert_eq!(keys.len(), 1);
+        assert!(keys.contains(&exit_outpoint_key_from_str(&txid, 2).expect("valid pending txid")));
+    }
+
+    #[test]
+    fn in_progress_outpoints_merge_snapshot_and_pending() {
+        let snapshot = snapshot_with(vec![sample_vtp_record(1, 0, 180_603, true, false)]);
+        let pending_txid = "cc".repeat(32);
+        let pending = vec![PendingExitDeductionRecord {
+            kind: PendingExitKind::Unilateral,
+            vtxo_txid: Some(pending_txid.clone()),
+            vout: Some(0),
+            amount_sats: 10_000,
+            started_at: 1,
+            baseline_offchain_spendable_sats: None,
+        }];
+        let keys = unilateral_exit_in_progress_outpoints(Some(&snapshot), &pending).expect("keys");
+        assert_eq!(keys.len(), 2);
+        assert!(is_unilateral_exit_in_progress_outpoint(
+            &keys,
+            &Txid::from_byte_array([1; 32]).to_string(),
+            0
+        ));
+        assert!(is_unilateral_exit_in_progress_outpoint(
+            &keys,
+            &pending_txid,
+            0
+        ));
     }
 }

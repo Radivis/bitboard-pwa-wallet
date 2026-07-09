@@ -135,6 +135,13 @@ vi.mock('@/workers/crypto-factory', () => ({
   waitForCryptoWorkerHealthy: vi.fn().mockResolvedValue(undefined),
 }))
 
+vi.mock('@/lib/shared/app-query-client', () => ({
+  appQueryClient: {
+    cancelQueries: vi.fn().mockResolvedValue(undefined),
+    removeQueries: vi.fn(),
+  },
+}))
+
 vi.mock('@/lib/arkade/arkade-utils', () => ({
   isArkadeActiveForNetworkMode: () => true,
 }))
@@ -161,6 +168,7 @@ import {
   orchestrateLock,
   orchestrateManualUnlock,
   resetLockLifecycleStateForTests,
+  syncLockLifecycleFromWalletStore,
   syncLockLifecycleWithActiveWallet,
 } from '@/lib/wallet/lifecycle/lock-lifecycle-orchestrator'
 
@@ -178,7 +186,9 @@ describe('lock-lifecycle-orchestrator', () => {
     walletStoreState.walletStatus = 'none'
     vi.clearAllMocks()
     lockAndPurgeSensitiveRuntimeState.mockResolvedValue(undefined)
-    orchestrateOnchainLoad.mockResolvedValue(undefined)
+    orchestrateOnchainLoad.mockImplementation(async () => {
+      walletStoreState.walletStatus = 'unlocked'
+    })
     orchestrateOnchainPostUnlockSync.mockResolvedValue(undefined)
     awaitOnchainLoadQuiescence.mockResolvedValue(undefined)
     awaitArkadeLoadQuiescence.mockResolvedValue(undefined)
@@ -230,7 +240,10 @@ describe('lock-lifecycle-orchestrator', () => {
     orchestrateOnchainLoad.mockImplementation(
       () =>
         new Promise<void>((resolve) => {
-          releaseLoad = resolve
+          releaseLoad = () => {
+            walletStoreState.walletStatus = 'unlocked'
+            resolve()
+          }
         }),
     )
 
@@ -295,6 +308,7 @@ describe('lock-lifecycle-orchestrator', () => {
     )
     orchestrateOnchainLoad.mockImplementation(async () => {
       callOrder.push('unlock-load')
+      walletStoreState.walletStatus = 'unlocked'
     })
     lockAndPurgeSensitiveRuntimeState.mockImplementation(async () => {
       callOrder.push('lock')
@@ -347,6 +361,27 @@ describe('lock-lifecycle-orchestrator', () => {
     })
   })
 
+  it('orchestrateManualUnlock fails when on-chain load completes without unlocking wallet', async () => {
+    walletStoreState.activeWalletId = 1
+    walletStoreState.walletStatus = 'locked'
+    syncLockLifecycleWithActiveWallet(1)
+    orchestrateOnchainLoad.mockResolvedValue(undefined)
+
+    await expect(
+      orchestrateManualUnlock({
+        ...unlockParams,
+        password: 'secret',
+      }),
+    ).rejects.toThrow('Wallet unlock did not complete')
+
+    expect(endWalletSecretsSession).toHaveBeenCalledTimes(1)
+    expect(walletStoreState.walletStatus).toBe('locked')
+    expect(getLockLifecycleSnapshot()).toEqual({
+      phase: 'locked',
+      operation: 'none',
+    })
+  })
+
   it('orchestrateManualUnlock success sets unlocked', async () => {
     walletStoreState.activeWalletId = 1
     syncLockLifecycleWithActiveWallet(1)
@@ -363,6 +398,7 @@ describe('lock-lifecycle-orchestrator', () => {
     expect(orchestrateOnchainLoad).toHaveBeenCalledWith({
       ...unlockParams,
       clearLastSyncTime: true,
+      allowRetryFromError: true,
     })
     expect(orchestrateOnchainPostUnlockSync).toHaveBeenCalled()
     expect(orchestrateArkadeLoad).toHaveBeenCalledWith({
@@ -375,6 +411,22 @@ describe('lock-lifecycle-orchestrator', () => {
       networkMode: 'testnet',
       allowRetryFromError: true,
     })
+  })
+
+  it('orchestrateBootstrapUnlock no-ops when wallet is already unlocked', async () => {
+    walletStoreState.activeWalletId = 1
+    walletStoreState.walletStatus = 'unlocked'
+    syncLockLifecycleWithActiveWallet(1)
+    syncLockLifecycleFromWalletStore()
+
+    await orchestrateBootstrapUnlock(unlockParams)
+
+    expect(walletStoreState.walletStatus).toBe('unlocked')
+    expect(getLockLifecycleSnapshot()).toEqual({
+      phase: 'unlocked',
+      operation: 'none',
+    })
+    expect(orchestrateOnchainLoad).not.toHaveBeenCalled()
   })
 
   it('orchestrateLock rejects when Lightning save-error blocks lock', async () => {

@@ -8,11 +8,32 @@ use crate::Error;
 use ark_core::unilateral_exit;
 use ark_core::ExplorerUtxo;
 use bitcoin::Amount;
+use bitcoin::OutPoint;
 use bitcoin::TxOut;
 use bitcoin::Txid;
 use jiff::Timestamp;
 use std::collections::HashSet;
 use std::time::Duration;
+
+/// Completion input selected without Esplora `confirmation_blocktime` (timelock estimated with zero).
+///
+/// Populated only on the completion coin-select path when Esplora omits blocktime — see
+/// `coin_select_vtxo_txids_for_onchain` vendor-patch docs (regtest / thin indexers).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MissingBlocktimeCompletionInput {
+    pub virtual_txid: Txid,
+    pub on_chain_outpoint: OutPoint,
+    pub amount_sats: u64,
+}
+
+/// Result of [`coin_select_vtxo_txids_for_onchain`].
+#[derive(Debug, Clone)]
+pub struct VtxoCompletionSelection {
+    pub onchain_inputs: Vec<unilateral_exit::OnChainInput>,
+    pub vtxo_inputs: Vec<unilateral_exit::VtxoInput>,
+    pub selected_amount: Amount,
+    pub missing_blocktime_inputs: Vec<MissingBlocktimeCompletionInput>,
+}
 
 /// Select boarding outputs and VTXOs to be used as inputs in on-chain transactions, exiting the Ark
 /// ecosystem.
@@ -148,17 +169,32 @@ where
 /// Select claimable on-chain VTXO inputs whose virtual or on-chain txid appears in `vtxo_txid_filter`.
 ///
 /// Boarding outputs are excluded so completion only spends the requested unrolled VTXOs.
+///
+/// # Bitboard vendor patch (fork drift)
+///
+/// Vendored from [ark-client 0.9.3](https://github.com/arkade-os/rust-sdk/tree/master/crates/ark-client).
+/// This function diverges from upstream `coin_select.rs`; track changes here and contribute back when possible:
+///
+/// - **VTXO iteration:** upstream uses `vtxo_list.all_unspent()`; Bitboard uses `vtxo_list.all()`
+///   filtered by `vtxo_txid_filter` (see inline comment below). After unilateral unroll, arkd marks
+///   VTXOs `is_spent`/`is_unrolled`, so `all_unspent()` drops them even though they still fund the exit PSBT.
+/// - **`confirmation_blocktime`:** upstream requires a known blocktime and skips the UTXO when
+///   Esplora omits it. Bitboard completion coin-select is **intentionally permissive**: it uses
+///   `unwrap_or(Duration::ZERO)` so regtest and other thin Esplora stacks (arkade-regtest mempool
+///   Esplora often lacks `block_time` on address/tx status) can still exercise unilateral-exit
+///   completion in CI and local debugging without failing coin-select. Production Esplora usually
+///   supplies blocktime (and `bitboard-ark` backfills from `/tx/status` when the address listing
+///   omits it); missing blocktime is uncommon on mainnet-class networks. Affected inputs are
+///   recorded in [`VtxoCompletionSelection::missing_blocktime_inputs`] and surfaced in the UI so
+///   timelock eligibility is known to be estimated conservatively, not proven.
+/// - **Diagnostics:** Bitboard adds `tracing::debug!` logging per candidate VTXO.
+///
+/// Upstream contribution target: <https://github.com/arkade-os/rust-sdk> (`ark-client/src/coin_select.rs`).
+/// Bitboard context: <https://github.com/Radivis/bitboard-pwa-wallet/pull/50> (signer rotation / REG-04).
 pub async fn coin_select_vtxo_txids_for_onchain<B, W, S, K>(
     client: &Client<B, W, S, K>,
     vtxo_txid_filter: &HashSet<Txid>,
-) -> Result<
-    (
-        Vec<unilateral_exit::OnChainInput>,
-        Vec<unilateral_exit::VtxoInput>,
-        Amount,
-    ),
-    Error,
->
+) -> Result<VtxoCompletionSelection, Error>
 where
     B: Blockchain,
     W: BoardingWallet + OnchainWallet,
@@ -173,16 +209,21 @@ where
     let now = Timestamp::now();
     let mut selected_vtxo_outputs = HashSet::new();
     let mut selected_amount = Amount::ZERO;
+    let mut missing_blocktime_inputs = Vec::new();
+    let mut missing_blocktime_outpoints = HashSet::new();
 
+    // Completion targets explicit virtual txids. After unroll, arkd's indexer often marks those
+    // VTXOs `is_spent` and/or `is_unrolled`, which moves them into `VtxoList::spent()` — they are
+    // no longer returned by `all_unspent()`. Search the full list for filter matches instead.
     for virtual_tx_outpoint in vtxo_list
-        .all_unspent()
-        .filter(|vtp| {
-            !vtp.is_spent
-                && (vtp.is_unrolled
-                    || vtxo_txid_filter.contains(&vtp.outpoint.txid))
-        })
+        .all()
+        .filter(|vtp| vtxo_txid_filter.contains(&vtp.outpoint.txid) && !vtp.is_swept)
     {
         let Some(vtxo) = script_pubkey_to_vtxo.get(&virtual_tx_outpoint.script) else {
+            tracing::debug!(
+                txid = %virtual_tx_outpoint.outpoint.txid,
+                "completion coin-select: missing spend info for VTXO script"
+            );
             continue;
         };
 
@@ -195,6 +236,17 @@ where
             )
         });
 
+        tracing::debug!(
+            txid = %virtual_tx_outpoint.outpoint.txid,
+            vout = virtual_tx_outpoint.outpoint.vout,
+            is_unrolled = virtual_tx_outpoint.is_unrolled,
+            is_spent = virtual_tx_outpoint.is_spent,
+            outpoint_count = outpoints.len(),
+            matches_virtual_txid,
+            matches_onchain_txid,
+            "completion coin-select: candidate VTXO"
+        );
+
         if !matches_virtual_txid && !matches_onchain_txid {
             continue;
         }
@@ -203,7 +255,7 @@ where
             if let ExplorerUtxo {
                 outpoint,
                 amount,
-                confirmation_blocktime: Some(confirmation_blocktime),
+                confirmation_blocktime,
                 confirmations,
                 is_spent: false,
             } = explorer_utxo
@@ -214,9 +266,15 @@ where
                     continue;
                 }
 
+                // Permissive vs upstream: allow missing blocktime for regtest/thin Esplora (see module docs).
+                let blocktime_missing = confirmation_blocktime.is_none();
+                let confirmation_blocktime = confirmation_blocktime
+                    .map(Duration::from_secs)
+                    .unwrap_or(Duration::ZERO);
+
                 if vtxo.can_be_claimed_unilaterally_by_owner(
                     now.as_duration().try_into().map_err(Error::ad_hoc)?,
-                    Duration::from_secs(*confirmation_blocktime),
+                    confirmation_blocktime,
                     *confirmations,
                 ) && selected_vtxo_outputs.insert(unilateral_exit::VtxoInput::new(
                     *outpoint,
@@ -228,6 +286,23 @@ where
                     vtxo.exit_spend_info()?,
                 )) {
                     selected_amount += *amount;
+                    if blocktime_missing
+                        && missing_blocktime_outpoints.insert(*outpoint)
+                    {
+                        missing_blocktime_inputs.push(MissingBlocktimeCompletionInput {
+                            virtual_txid: virtual_tx_outpoint.outpoint.txid,
+                            on_chain_outpoint: *outpoint,
+                            amount_sats: amount.to_sat(),
+                        });
+                    }
+                } else {
+                    tracing::debug!(
+                        ?outpoint,
+                        confirmations,
+                        ?confirmation_blocktime,
+                        exit_delay = ?vtxo.exit_delay(),
+                        "completion coin-select: outpoint not yet claimable"
+                    );
                 }
             }
         }
@@ -239,9 +314,49 @@ where
         ));
     }
 
-    Ok((
-        Vec::new(),
-        selected_vtxo_outputs.into_iter().collect(),
+    Ok(VtxoCompletionSelection {
+        onchain_inputs: Vec::new(),
+        vtxo_inputs: selected_vtxo_outputs.into_iter().collect(),
         selected_amount,
-    ))
+        missing_blocktime_inputs,
+    })
+}
+
+#[cfg(test)]
+mod completion_vtxo_list_tests {
+    use ark_core::VtxoList;
+    use ark_core::server::VirtualTxOutPoint;
+    use bitcoin::{Amount, OutPoint, ScriptBuf, Txid};
+
+    fn virtual_vtxo(txid_byte: u8, is_spent: bool, is_unrolled: bool) -> VirtualTxOutPoint {
+        VirtualTxOutPoint {
+            outpoint: OutPoint {
+                txid: Txid::from_byte_array([txid_byte; 32]),
+                vout: 0,
+            },
+            created_at: 0,
+            expires_at: i64::MAX,
+            amount: Amount::from_sat(100_000),
+            script: ScriptBuf::new(),
+            is_preconfirmed: false,
+            is_swept: false,
+            is_unrolled,
+            is_spent,
+            spent_by: None,
+            commitment_txids: Vec::new(),
+            settled_by: None,
+            ark_txid: None,
+            assets: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn spent_or_unrolled_vtxos_are_excluded_from_all_unspent_but_in_all() {
+        let vtxo = virtual_vtxo(0xab, true, false);
+        let list = VtxoList::new(Amount::from_sat(546), vec![vtxo.clone()]);
+
+        assert_eq!(list.all_unspent().count(), 0);
+        assert_eq!(list.all().count(), 1);
+        assert_eq!(list.all().next().unwrap().outpoint, vtxo.outpoint);
+    }
 }

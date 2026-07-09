@@ -131,8 +131,10 @@ vi.mock('@/workers/arkade-persistence-channel', () => ({
 }))
 
 import {
+  abortArkadeSessionForNetworkSwitch,
   closeArkadeSession,
   openArkadeSessionForWallet,
+  refreshArkadeSessionAfterNetworkSwitch,
 } from '@/lib/arkade/arkade-session-service'
 import { getArkadeLoadLifecycleSnapshot } from '@/lib/wallet/lifecycle/arkade-load-lifecycle-orchestrator'
 
@@ -448,5 +450,44 @@ describe('openArkadeSessionForWallet (integration)', () => {
       networkMode: null,
       errorMessage: null,
     })
+  })
+
+  it('abortArkadeSessionForNetworkSwitch terminates without awaiting stuck session open', async () => {
+    workerMocks.openSession.mockImplementation(() => new Promise(() => {}))
+    getArkadeWorkerIfExistsMock.mockReturnValue(workerMocks)
+
+    void openArkadeSessionForWallet({
+      walletId: 7,
+      networkMode: 'signet',
+    })
+
+    await vi.waitFor(() =>
+      expect(getArkadeLoadLifecycleSnapshot().loadPhase).toBe('loading'),
+    )
+
+    await abortArkadeSessionForNetworkSwitch()
+
+    expect(terminateArkadeWorkerMock).toHaveBeenCalled()
+    expect(getArkadeLoadLifecycleSnapshot()).toEqual({
+      loadPhase: 'not-configured',
+      networkMode: null,
+      errorMessage: null,
+    })
+  })
+
+  it('refreshArkadeSessionAfterNetworkSwitch reports open errors without rethrowing', async () => {
+    const reportSpy = vi.spyOn(
+      await import('@/lib/arkade/arkade-session-open-error-toast'),
+      'reportArkadeSessionOpenError',
+    )
+    workerMocks.openSession.mockRejectedValueOnce(new Error('operator down'))
+
+    await refreshArkadeSessionAfterNetworkSwitch({
+      walletId: 7,
+      networkMode: 'signet',
+    })
+
+    expect(reportSpy).toHaveBeenCalled()
+    reportSpy.mockRestore()
   })
 })

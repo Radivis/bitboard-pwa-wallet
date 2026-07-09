@@ -208,12 +208,6 @@ describe('SendPage', () => {
     expect(mockNavigate).toHaveBeenCalledWith({ to: '/setup' })
   })
 
-  it('shows WalletUnlock when locked', () => {
-    walletStoreState.walletStatus = 'locked'
-    renderWithProviders(<SendPage />)
-    expect(screen.getByTestId('wallet-unlock')).toBeInTheDocument()
-  })
-
   it('shows Send Lab Bitcoin heading when network is lab', () => {
     walletStoreState.networkMode = 'lab'
     renderWithProviders(<SendPage />)

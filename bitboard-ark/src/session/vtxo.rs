@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use ark_client::Blockchain;
 use bitcoin::{Amount, OutPoint, Txid, secp256k1::rand::rngs::OsRng};
 
@@ -7,6 +9,7 @@ use crate::api_types::{
 };
 use crate::constants::VTXO_SELF_RENEW_REMAINING_FRACTION;
 use crate::error::{ArkResult, ArkWasmError};
+use crate::exit_balance::UnilateralExitOutpointKey;
 use crate::offchain_snapshot::vtxo_list_from_snapshot;
 
 use super::ArkSession;
@@ -53,22 +56,34 @@ async fn sleep(duration: std::time::Duration) {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-async fn sleep(_duration: std::time::Duration) {
-    // The crate ships as WASM; native builds exist only for type-checking and have no browser
-    // timer to await, so the delay is a no-op there.
+async fn sleep(duration: std::time::Duration) {
+    tokio::time::sleep(duration).await;
 }
 
 impl ArkSession {
+    /// Recoverable sub-buckets for balance, fee estimate, and batch recover.
+    ///
+    /// Excludes VTXOs in unilateral exit — ark-core may classify expired/swept unrolled VTXOs as
+    /// recoverable before spent; see `docs/arkade-bitboard-wallet-model.md`.
     pub(crate) async fn recoverable_vtxo_buckets(&self) -> ArkResult<RecoverableVtxoBuckets> {
         let dust = self.client.server_info()?.dust;
+        let exclude_unilateral_exit_outpoints = self.unilateral_exit_in_progress_outpoints()?;
 
         if let Ok((vtxo_list, _)) = self.client.list_vtxos().await {
-            return Ok(recoverable_vtxo_buckets_from_list(&vtxo_list, dust));
+            return Ok(recoverable_vtxo_buckets_from_list(
+                &vtxo_list,
+                dust,
+                &exclude_unilateral_exit_outpoints,
+            ));
         }
 
         if let Some(snapshot) = self.wallet_db.snapshot().offchain_vtxo_snapshot.as_ref() {
             let vtxo_list = vtxo_list_from_snapshot(snapshot)?;
-            return Ok(recoverable_vtxo_buckets_from_list(&vtxo_list, dust));
+            return Ok(recoverable_vtxo_buckets_from_list(
+                &vtxo_list,
+                dust,
+                &exclude_unilateral_exit_outpoints,
+            ));
         }
 
         Ok(empty_recoverable_vtxo_buckets())
@@ -168,11 +183,14 @@ impl ArkSession {
 
     pub async fn vtxo_expiry_status(&self) -> ArkResult<VtxoExpiryStatusDto> {
         let (vtxo_list, _) = self.client.list_vtxos().await?;
+        let exclude_unilateral_exit_outpoints = self.unilateral_exit_in_progress_outpoints()?;
         let now = current_unix_timestamp();
         let earliest_expires_at = vtxo_list
             .all_unspent()
             .filter(|virtual_tx_outpoint| {
-                virtual_tx_outpoint.created_at > 0 && virtual_tx_outpoint.expires_at > now
+                !exclude_unilateral_exit_outpoints.contains(&virtual_tx_outpoint.outpoint)
+                    && virtual_tx_outpoint.created_at > 0
+                    && virtual_tx_outpoint.expires_at > now
             })
             .map(|virtual_tx_outpoint| virtual_tx_outpoint.expires_at)
             .min();
@@ -357,12 +375,17 @@ impl ArkSession {
             .await?;
         Ok(spend_status.spend_txid.is_some())
     }
+    /// VTXOs in the renewal window for manual renew — excludes unilateral exit in progress.
     async fn expiring_outpoints(&self) -> ArkResult<Vec<OutPoint>> {
         let (vtxo_list, _) = self.client.list_vtxos().await?;
+        let exclude_unilateral_exit_outpoints = self.unilateral_exit_in_progress_outpoints()?;
         let now = current_unix_timestamp();
         Ok(vtxo_list
             .all_unspent()
             .filter(|virtual_tx_outpoint| {
+                if exclude_unilateral_exit_outpoints.contains(&virtual_tx_outpoint.outpoint) {
+                    return false;
+                }
                 if virtual_tx_outpoint.expires_at <= 0 || virtual_tx_outpoint.created_at <= 0 {
                     return false;
                 }
@@ -431,11 +454,18 @@ fn recoverable_vtxo_summary_from_filtered<'a>(
 /// Settling client-expired unswept VTXOs goes through the no-forfeit recovery path, but the
 /// operator's own clock/sweep state can still expect a forfeit — it then fails the round with
 /// `missing forfeit tx` and wedges subsequent rounds. Only swept or sub-dust VTXOs are actionable.
+///
+/// `exclude_unilateral_exit_outpoints` drops VTXOs already on the unilateral exit path (they may
+/// still appear in ark-core's recoverable bucket when expired or operator-swept).
 pub(crate) fn recoverable_vtxo_buckets_from_list(
     vtxo_list: &ark_core::VtxoList,
     dust: Amount,
+    exclude_unilateral_exit_outpoints: &HashSet<UnilateralExitOutpointKey>,
 ) -> RecoverableVtxoBuckets {
-    let all_recoverable: Vec<_> = vtxo_list.recoverable().collect();
+    let all_recoverable: Vec<_> = vtxo_list
+        .recoverable()
+        .filter(|vtxo| !exclude_unilateral_exit_outpoints.contains(&vtxo.outpoint))
+        .collect();
     RecoverableVtxoBuckets {
         settleable: recoverable_vtxo_summary_from_filtered(
             all_recoverable
@@ -454,6 +484,8 @@ pub(crate) fn recoverable_vtxo_buckets_from_list(
 
 #[cfg(test)]
 mod recoverable_vtxo_tests {
+    use std::collections::HashSet;
+
     use ark_core::server::VirtualTxOutPoint;
     use bitcoin::hashes::Hash;
     use bitcoin::{Amount, OutPoint, ScriptBuf, Txid};
@@ -466,21 +498,35 @@ mod recoverable_vtxo_tests {
 
     const DUST: Amount = Amount::from_sat(330);
 
+    fn no_unilateral_exit_outpoints() -> HashSet<OutPoint> {
+        HashSet::new()
+    }
+
     fn sample_vtp(
         vout: u32,
         amount_sats: u64,
         expires_at: i64,
         is_swept: bool,
     ) -> VirtualTxOutPoint {
+        sample_vtp_with_flags(vout, amount_sats, expires_at, is_swept, false)
+    }
+
+    fn sample_vtp_with_flags(
+        vout: u32,
+        amount_sats: u64,
+        expires_at: i64,
+        is_swept: bool,
+        is_unrolled: bool,
+    ) -> VirtualTxOutPoint {
         VirtualTxOutPoint {
-            outpoint: OutPoint::new(Txid::all_zeros(), vout),
+            outpoint: OutPoint::new(Txid::from_byte_array([vout as u8; 32]), vout),
             created_at: expires_at - 86_400,
             expires_at,
             amount: Amount::from_sat(amount_sats),
             script: ScriptBuf::new(),
             is_preconfirmed: false,
             is_swept,
-            is_unrolled: false,
+            is_unrolled,
             is_spent: false,
             spent_by: None,
             commitment_txids: vec![],
@@ -501,7 +547,8 @@ mod recoverable_vtxo_tests {
                 sample_vtp(2, 10_000, now + 86_400, false),
             ],
         );
-        let buckets = recoverable_vtxo_buckets_from_list(&vtxo_list, DUST);
+        let buckets =
+            recoverable_vtxo_buckets_from_list(&vtxo_list, DUST, &no_unilateral_exit_outpoints());
         assert_eq!(buckets.settleable.count, 2);
         assert_eq!(buckets.settleable.total_sats, 50_000);
         assert_eq!(buckets.pending_operator_sweep.count, 0);
@@ -514,7 +561,8 @@ mod recoverable_vtxo_tests {
             DUST,
             vec![sample_vtp(0, DUST.to_sat() - 1, now + 86_400, false)],
         );
-        let buckets = recoverable_vtxo_buckets_from_list(&vtxo_list, DUST);
+        let buckets =
+            recoverable_vtxo_buckets_from_list(&vtxo_list, DUST, &no_unilateral_exit_outpoints());
         assert_eq!(buckets.settleable.count, 1);
         assert_eq!(buckets.settleable.total_sats, DUST.to_sat() - 1);
         assert_eq!(buckets.pending_operator_sweep.count, 0);
@@ -530,7 +578,8 @@ mod recoverable_vtxo_tests {
                 sample_vtp(1, 25_000, now - 1, false),
             ],
         );
-        let buckets = recoverable_vtxo_buckets_from_list(&vtxo_list, DUST);
+        let buckets =
+            recoverable_vtxo_buckets_from_list(&vtxo_list, DUST, &no_unilateral_exit_outpoints());
         assert_eq!(buckets.settleable.count, 0);
         assert_eq!(buckets.pending_operator_sweep.count, 2);
         assert_eq!(buckets.pending_operator_sweep.total_sats, 50_000);
@@ -541,9 +590,45 @@ mod recoverable_vtxo_tests {
         let now = current_unix_timestamp();
         let vtxo_list =
             ark_core::VtxoList::new(DUST, vec![sample_vtp(0, 10_000, now + 86_400, false)]);
-        let buckets = recoverable_vtxo_buckets_from_list(&vtxo_list, DUST);
+        let buckets =
+            recoverable_vtxo_buckets_from_list(&vtxo_list, DUST, &no_unilateral_exit_outpoints());
         assert_eq!(buckets.settleable.count, 0);
         assert_eq!(buckets.pending_operator_sweep.count, 0);
+    }
+
+    #[test]
+    // Expired + operator-swept + unrolled VTXOs land in recoverable (ark-core ordering), not spent.
+    fn recoverable_excludes_unilateral_exit_in_progress_outpoint() {
+        let now = current_unix_timestamp();
+        let exiting = sample_vtp_with_flags(0, 25_000, now - 1, true, true);
+        let vtxo_list = ark_core::VtxoList::new(DUST, vec![exiting.clone()]);
+        let exclude = HashSet::from([exiting.outpoint]);
+        let buckets = recoverable_vtxo_buckets_from_list(&vtxo_list, DUST, &exclude);
+        assert_eq!(buckets.settleable.count, 0);
+        assert_eq!(buckets.pending_operator_sweep.count, 0);
+    }
+
+    #[test]
+    fn recoverable_excludes_pending_operator_sweep_when_exiting() {
+        let now = current_unix_timestamp();
+        let exiting = sample_vtp_with_flags(1, 25_000, now - 1, false, true);
+        let vtxo_list = ark_core::VtxoList::new(DUST, vec![exiting.clone()]);
+        let exclude = HashSet::from([exiting.outpoint]);
+        let buckets = recoverable_vtxo_buckets_from_list(&vtxo_list, DUST, &exclude);
+        assert_eq!(buckets.settleable.count, 0);
+        assert_eq!(buckets.pending_operator_sweep.count, 0);
+    }
+
+    #[test]
+    fn recoverable_still_includes_non_exiting_swept_vtxo() {
+        let now = current_unix_timestamp();
+        let exiting = sample_vtp_with_flags(0, 25_000, now - 1, true, true);
+        let other = sample_vtp(1, 30_000, now - 1, true);
+        let vtxo_list = ark_core::VtxoList::new(DUST, vec![exiting, other]);
+        let exclude = HashSet::from([OutPoint::new(Txid::from_byte_array([0; 32]), 0)]);
+        let buckets = recoverable_vtxo_buckets_from_list(&vtxo_list, DUST, &exclude);
+        assert_eq!(buckets.settleable.count, 1);
+        assert_eq!(buckets.settleable.total_sats, 30_000);
     }
 
     #[test]

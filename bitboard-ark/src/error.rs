@@ -16,6 +16,7 @@ pub const CODE_SNAPSHOT: &str = "snapshot";
 pub const CODE_PERSISTENCE: &str = "persistence";
 pub const CODE_WALLET: &str = "wallet";
 pub const CODE_CLIENT: &str = "client";
+pub const CODE_OPERATOR_INDEXER_CATCHING_UP: &str = "operator_indexer_catching_up";
 pub const CODE_BLOCKCHAIN: &str = "blockchain";
 pub const CODE_MNEMONIC: &str = "mnemonic";
 pub const CODE_SERIALIZATION: &str = "serialization";
@@ -66,6 +67,17 @@ pub enum ArkWasmError {
     #[error("vtxo_txids must not be empty")]
     EmptyVtxoTxids,
 
+    #[error("VTXO {txid} is not in unilateral exit")]
+    VtxoNotInUnilateralExit { txid: String },
+
+    #[error("VTXO {txid} timelock has not elapsed yet — complete is not available")]
+    VtxoUnilateralExitNotReady { txid: String },
+
+    #[error(
+        "Operator indexer is still catching up after unilateral unroll. Wait a moment and try Complete exit again."
+    )]
+    OperatorIndexerCatchingUp,
+
     #[error("{0}")]
     Boarding(String),
 
@@ -115,7 +127,10 @@ impl ArkWasmError {
             | Self::InvalidOnchainAddress(_)
             | Self::InvalidSendAmount
             | Self::VtxoNotFound { .. }
-            | Self::EmptyVtxoTxids => CODE_VALIDATION,
+            | Self::EmptyVtxoTxids
+            | Self::VtxoNotInUnilateralExit { .. }
+            | Self::VtxoUnilateralExitNotReady { .. } => CODE_VALIDATION,
+            Self::OperatorIndexerCatchingUp => CODE_OPERATOR_INDEXER_CATCHING_UP,
             Self::DelegatorNotConfigured | Self::Delegator(_) | Self::InvalidDelegatorFee(_) => {
                 CODE_DELEGATOR
             }
@@ -172,6 +187,17 @@ mod tests {
         let error = ArkWasmError::InvalidSendAmount;
         assert_eq!(error.code(), CODE_VALIDATION);
         assert_eq!(error.to_string(), MSG_SEND_AMOUNT_MUST_BE_POSITIVE);
+    }
+
+    #[test]
+    fn operator_indexer_catching_up_has_stable_code() {
+        let error = ArkWasmError::OperatorIndexerCatchingUp;
+        assert_eq!(error.code(), CODE_OPERATOR_INDEXER_CATCHING_UP);
+        assert!(
+            error
+                .to_string()
+                .contains("Operator indexer is still catching up")
+        );
     }
 
     #[test]

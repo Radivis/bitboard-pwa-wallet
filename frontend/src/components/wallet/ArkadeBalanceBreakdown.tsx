@@ -1,6 +1,9 @@
 import { Link } from '@tanstack/react-router'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
-import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
+import { FiatBtcAmountDisplay } from '@/components/FiatBtcAmountDisplay'
+import { useMainnetFiatRatesQuery } from '@/hooks/useMainnetFiatRatesQuery'
+import { useFiatDenominationStore } from '@/stores/fiatDenominationStore'
+import { selectCommittedNetworkMode, useWalletStore } from '@/stores/walletStore'
 import {
   ARKADE_BALANCE_BOARDING_INFOMODE,
   ARKADE_BALANCE_BOARDING_PENDING_INFOMODE,
@@ -34,6 +37,24 @@ export function ArkadeBalanceBreakdown({
   balance,
   amountTestId,
 }: ArkadeBalanceBreakdownProps) {
+  const networkMode = useWalletStore(selectCommittedNetworkMode)
+  const fiatDenominationMode = useFiatDenominationStore(
+    (fiatDenominationState) => fiatDenominationState.fiatDenominationMode,
+  )
+  const defaultFiatCurrency = useFiatDenominationStore(
+    (fiatDenominationState) => fiatDenominationState.defaultFiatCurrency,
+  )
+  const mainnetFiatLayout = networkMode === 'mainnet' && fiatDenominationMode
+  const fiatRatesQuery = useMainnetFiatRatesQuery()
+  const btcPriceInFiat = fiatRatesQuery.data?.btcPriceInFiat
+
+  const fiatAmountProps = {
+    showFiatLayout: mainnetFiatLayout,
+    btcPriceInFiat,
+    currency: defaultFiatCurrency,
+    rateLoading: fiatRatesQuery.isPending,
+  }
+
   const boardingSpendableSats = balance.boardingSpendableSats ?? 0
   const boardingPendingSats = balance.boardingPendingSats ?? 0
   const offchainSpendableSats = arkadeOffchainSpendableSats(balance)
@@ -54,8 +75,9 @@ export function ArkadeBalanceBreakdown({
 
   return (
     <div className="space-y-1">
-      <BitcoinAmountDisplay
+      <FiatBtcAmountDisplay
         amountSats={dashboardSpendableSats}
+        {...fiatAmountProps}
         data-testid={amountTestId}
       />
       {showBoardingBreakdown && (
@@ -77,7 +99,11 @@ export function ArkadeBalanceBreakdown({
                   settle in management
                 </Link>
                 ):{' '}
-                <BitcoinAmountDisplay amountSats={boardingSpendableSats} size="sm" />
+                <FiatBtcAmountDisplay
+                  amountSats={boardingSpendableSats}
+                  {...fiatAmountProps}
+                  isDetail
+                />
               </p>
             </InfomodeWrapper>
           )}
@@ -90,7 +116,11 @@ export function ArkadeBalanceBreakdown({
             >
               <p data-testid="arkade-balance-boarding-pending">
                 Pending boarding confirmation:{' '}
-                <BitcoinAmountDisplay amountSats={boardingPendingSats} size="sm" />
+                <FiatBtcAmountDisplay
+                  amountSats={boardingPendingSats}
+                  {...fiatAmountProps}
+                  isDetail
+                />
               </p>
             </InfomodeWrapper>
           )}
@@ -103,7 +133,11 @@ export function ArkadeBalanceBreakdown({
             >
               <p>
                 Offchain VTXOs:{' '}
-                <BitcoinAmountDisplay amountSats={offchainSpendableSats} size="sm" />
+                <FiatBtcAmountDisplay
+                  amountSats={offchainSpendableSats}
+                  {...fiatAmountProps}
+                  isDetail
+                />
               </p>
             </InfomodeWrapper>
           )}
@@ -120,7 +154,11 @@ export function ArkadeBalanceBreakdown({
             >
               <p data-testid="arkade-balance-unilateral-exit">
                 Unilateral exit in progress: −{' '}
-                <BitcoinAmountDisplay amountSats={unilateralExitSats} size="sm" />
+                <FiatBtcAmountDisplay
+                  amountSats={unilateralExitSats}
+                  {...fiatAmountProps}
+                  isDetail
+                />
               </p>
             </InfomodeWrapper>
           )}
@@ -133,7 +171,11 @@ export function ArkadeBalanceBreakdown({
             >
               <p data-testid="arkade-balance-collaborative-exit">
                 Collaborative exit in progress: −{' '}
-                <BitcoinAmountDisplay amountSats={collaborativeExitSats} size="sm" />
+                <FiatBtcAmountDisplay
+                  amountSats={collaborativeExitSats}
+                  {...fiatAmountProps}
+                  isDetail
+                />
               </p>
             </InfomodeWrapper>
           )}
@@ -142,7 +184,11 @@ export function ArkadeBalanceBreakdown({
       {showPendingRecovery && (
         <p className="text-xs text-muted-foreground" data-testid="arkade-balance-pending-recovery">
           Pending recovery (deprecated signer):{' '}
-          <BitcoinAmountDisplay amountSats={pendingRecoverySats} size="sm" />
+          <FiatBtcAmountDisplay
+            amountSats={pendingRecoverySats}
+            {...fiatAmountProps}
+            isDetail
+          />
         </p>
       )}
       {showPendingOperatorSweep && (
@@ -158,7 +204,11 @@ export function ArkadeBalanceBreakdown({
           >
             Expired — waiting for operator sweep ({pendingOperatorSweepCount} VTXO
             {pendingOperatorSweepCount === 1 ? '' : 's'}):{' '}
-            <BitcoinAmountDisplay amountSats={pendingOperatorSweepSats} size="sm" />
+            <FiatBtcAmountDisplay
+              amountSats={pendingOperatorSweepSats}
+              {...fiatAmountProps}
+              isDetail
+            />
           </p>
         </InfomodeWrapper>
       )}
@@ -172,7 +222,11 @@ export function ArkadeBalanceBreakdown({
         >
           <p className="text-xs text-muted-foreground" data-testid="arkade-balance-bumper">
             Bumper wallet (exit fees):{' '}
-            <BitcoinAmountDisplay amountSats={onchainBumperSats} size="sm" />
+            <FiatBtcAmountDisplay
+              amountSats={onchainBumperSats}
+              {...fiatAmountProps}
+              isDetail
+            />
           </p>
         </InfomodeWrapper>
       )}
@@ -185,7 +239,11 @@ export function ArkadeBalanceBreakdown({
         >
           <p className="text-xs text-muted-foreground">
             Total (incl. recoverable):{' '}
-            <BitcoinAmountDisplay amountSats={balance.totalSats} size="sm" />
+            <FiatBtcAmountDisplay
+              amountSats={balance.totalSats}
+              {...fiatAmountProps}
+              isDetail
+            />
           </p>
         </InfomodeWrapper>
       )}

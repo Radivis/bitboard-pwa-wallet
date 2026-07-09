@@ -173,6 +173,21 @@ describe('onchain-load-lifecycle-orchestrator', () => {
     expect(getOnchainLoadLifecycleSnapshot().loadPhase).toBe('load-error')
   })
 
+  it('does not retry from load-error unless allowRetryFromError is set', async () => {
+    withPersistedChainMismatchRetry.mockRejectedValueOnce(new Error('wasm load failed'))
+    await expect(orchestrateOnchainLoad(loadParams)).rejects.toThrow('wasm load failed')
+
+    withPersistedChainMismatchRetry.mockResolvedValue(undefined)
+    await orchestrateOnchainLoad(loadParams)
+    expect(withPersistedChainMismatchRetry).toHaveBeenCalledTimes(1)
+
+    withPersistedChainMismatchRetry.mockClear()
+    withPersistedChainMismatchRetry.mockResolvedValue(undefined)
+    await orchestrateOnchainLoad({ ...loadParams, allowRetryFromError: true })
+    expect(withPersistedChainMismatchRetry).toHaveBeenCalledTimes(1)
+    expect(getOnchainLoadLifecycleSnapshot().loadPhase).toBe('loaded')
+  })
+
   it('duplicate orchestrateOnchainLoad coalesces to one in-flight promise', async () => {
     let resolveLoad!: () => void
     const loadGate = new Promise<void>((resolve) => {

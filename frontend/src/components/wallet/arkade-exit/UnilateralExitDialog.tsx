@@ -1,5 +1,6 @@
 import { Link } from '@tanstack/react-router'
 import { Loader2 } from 'lucide-react'
+import { toast } from 'sonner'
 import { ArkadeBumperWalletInfomodeContent } from '@/components/arkade/infomode/ArkadeBumperWalletInfomodeContent'
 import { ArkadeUnilateralExitInfomodeContent } from '@/components/arkade/infomode/ArkadeUnilateralExitInfomodeContent'
 import { ArkadeUnrollInfomodeContent } from '@/components/arkade/infomode/ArkadeUnrollInfomodeContent'
@@ -7,8 +8,6 @@ import { AppModal } from '@/components/AppModal'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { Button } from '@/components/ui/button'
 import { DialogDescription } from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
 import { ARKADE_INFOMODE_IDS } from '@/lib/arkade/arkade-infomode'
 import type { useArkadeExitFlow } from '@/hooks/useArkadeExitFlow'
@@ -25,6 +24,20 @@ function errorMessage(error: unknown): string {
   return 'Unknown error'
 }
 
+async function copyClipboardText(
+  text: string,
+  successMessage: string,
+  failureMessage: string,
+): Promise<void> {
+  if (text.trim().length === 0) return
+  try {
+    await navigator.clipboard.writeText(text)
+    toast.success(successMessage)
+  } catch {
+    toast.error(failureMessage)
+  }
+}
+
 export function UnilateralExitDialog({ exitFlow }: UnilateralExitDialogProps) {
   const {
     unilateralOpen,
@@ -33,45 +46,38 @@ export function UnilateralExitDialog({ exitFlow }: UnilateralExitDialogProps) {
     setUnilateralStep,
     selectedCandidate,
     unrollProgress,
-    unrolledVtxoTxid,
-    completeDestination,
-    setCompleteDestination,
     exitCandidatesQuery,
+    inProgressQuery,
     bumperInfoQuery,
     unilateralFeeQuery,
     unrollMutation,
-    completeExitMutation,
     bumperBalance,
     unilateralFeeEstimate,
     bumperLow,
+    unilateralExitInProgressSats,
     handleStartUnroll,
-    handleCompleteExit,
-    skipToComplete,
     selectCandidate,
   } = exitFlow
+
+  const hasInProgressExits =
+    unilateralExitInProgressSats > 0 || (inProgressQuery.data?.length ?? 0) > 0
 
   const selectStepFooter = (requestClose: () => void) => (
     <>
       <Button type="button" variant="outline" onClick={requestClose}>
         Cancel
       </Button>
-      {selectedCandidate?.canComplete ? (
-        <Button type="button" onClick={skipToComplete}>
-          Skip to complete
-        </Button>
-      ) : (
-        <Button
-          type="button"
-          disabled={
-            selectedCandidate == null ||
-            !selectedCandidate.canStartUnroll ||
-            bumperLow
-          }
-          onClick={handleStartUnroll}
-        >
-          Start unroll
-        </Button>
-      )}
+      <Button
+        type="button"
+        disabled={
+          selectedCandidate == null ||
+          !selectedCandidate.canStartUnroll ||
+          bumperLow
+        }
+        onClick={handleStartUnroll}
+      >
+        Start unroll
+      </Button>
     </>
   )
 
@@ -81,25 +87,6 @@ export function UnilateralExitDialog({ exitFlow }: UnilateralExitDialogProps) {
         Back
       </Button>
     ) : null
-
-  const completeStepFooter = () => (
-    <>
-      <Button type="button" variant="outline" onClick={() => setUnilateralStep('select')}>
-        Back
-      </Button>
-      <Button
-        type="button"
-        disabled={
-          completeExitMutation.isPending ||
-          completeDestination.trim().length === 0 ||
-          (unrolledVtxoTxid == null && selectedCandidate == null)
-        }
-        onClick={handleCompleteExit}
-      >
-        {completeExitMutation.isPending ? 'Completing…' : 'Complete exit'}
-      </Button>
-    </>
-  )
 
   return (
     <AppModal
@@ -112,25 +99,24 @@ export function UnilateralExitDialog({ exitFlow }: UnilateralExitDialogProps) {
           infoComponent={ArkadeUnilateralExitInfomodeContent}
           as="span"
         >
-          Unilateral exit
+          Start unilateral exit
         </InfomodeWrapper>
       }
       contentClassName="sm:max-w-lg max-h-[90vh] overflow-y-auto"
       footer={
         unilateralStep === 'select'
           ? selectStepFooter
-          : unilateralStep === 'complete'
-            ? completeStepFooter
-            : unilateralStep === 'unroll' && unrollMutation.isError
-              ? unrollStepFooter
-              : undefined
+          : unilateralStep === 'unroll' && unrollMutation.isError
+            ? unrollStepFooter
+            : undefined
       }
       footerClassName="justify-end gap-2"
     >
       <div className="space-y-3">
         <DialogDescription>
-          Exit without the operator by unrolling the VTXO chain on-chain, then completing after
-          the timelock. Requires on-chain fees on the bumper wallet below.
+          Exit without the operator by unrolling the VTXO chain on-chain. Requires on-chain fees on
+          the bumper wallet below. After unroll, use Complete unilateral exit when the timelock
+          elapses.
         </DialogDescription>
 
         {unilateralStep === 'select' && (
@@ -142,9 +128,9 @@ export function UnilateralExitDialog({ exitFlow }: UnilateralExitDialogProps) {
               </div>
             ) : exitCandidatesQuery.data?.length === 0 ? (
               <p className="text-sm text-muted-foreground" data-testid="arkade-unilateral-exit-empty">
-                No VTXOs reported by the operator for unilateral exit. Sync Arkade to refresh your
-                VTXO list. After signer rotation, affected VTXOs may have been swept — any balance
-                on the dashboard may be only your bumper wallet (on-chain exit fees).
+                {hasInProgressExits
+                  ? 'No additional VTXOs are available to start. Funds already exiting can be completed via Complete unilateral exit.'
+                  : 'No VTXOs reported by the operator for unilateral exit. Sync Arkade to refresh your VTXO list. After signer rotation, affected VTXOs may have been swept — any balance on the dashboard may be only your bumper wallet (on-chain exit fees).'}
               </p>
             ) : (
               <ul className="max-h-48 space-y-2 overflow-y-auto rounded-md border p-2">
@@ -156,7 +142,7 @@ export function UnilateralExitDialog({ exitFlow }: UnilateralExitDialogProps) {
                         name="arkade-exit-vtxo"
                         className="mt-1"
                         checked={selectedCandidate?.id === row.id}
-                        disabled={!row.canStartUnroll && !row.canComplete}
+                        disabled={!row.canStartUnroll}
                         onChange={() => selectCandidate(row)}
                       />
                       <span className="flex-1 break-all">
@@ -166,8 +152,6 @@ export function UnilateralExitDialog({ exitFlow }: UnilateralExitDialogProps) {
                         </span>
                         <span className="text-xs text-muted-foreground">
                           {row.virtualStatusState}
-                          {row.isUnrolled ? ' · unrolled' : ''}
-                          {row.canComplete ? ' · ready to complete' : ''}
                         </span>
                       </span>
                     </label>
@@ -186,9 +170,22 @@ export function UnilateralExitDialog({ exitFlow }: UnilateralExitDialogProps) {
                     Bumper wallet (P2A fees)
                   </InfomodeWrapper>
                 </p>
-                <p className="break-all font-mono" data-testid="arkade-bumper-address">
+                <button
+                  type="button"
+                  className="break-all rounded-sm font-mono text-left hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  data-testid="arkade-bumper-address"
+                  aria-label="Copy bumper wallet address"
+                  title="Click to copy bumper wallet address"
+                  onClick={() =>
+                    void copyClipboardText(
+                      bumperInfoQuery.data.address,
+                      'Bumper wallet address copied',
+                      'Failed to copy bumper wallet address',
+                    )
+                  }
+                >
                   {bumperInfoQuery.data.address}
-                </p>
+                </button>
                 <p>
                   Balance: <BitcoinAmountDisplay amountSats={bumperBalance} size="sm" />
                 </p>
@@ -273,29 +270,6 @@ export function UnilateralExitDialog({ exitFlow }: UnilateralExitDialogProps) {
                 </li>
               ))}
             </ul>
-          </>
-        )}
-
-        {unilateralStep === 'complete' && (
-          <>
-            <p className="text-sm text-muted-foreground">
-              After the CSV timelock expires, complete the exit to receive funds on-chain. A
-              separate on-chain transaction fee applies when completing.
-            </p>
-            <div className="space-y-2">
-              <Label htmlFor="arkade-complete-destination">Destination address</Label>
-              <Input
-                id="arkade-complete-destination"
-                value={completeDestination}
-                onChange={(event) => setCompleteDestination(event.target.value)}
-                autoComplete="off"
-              />
-            </div>
-            {completeExitMutation.isError && (
-              <p className="text-sm text-destructive" data-testid="arkade-complete-error">
-                Complete exit failed: {errorMessage(completeExitMutation.error)}
-              </p>
-            )}
           </>
         )}
       </div>

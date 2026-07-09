@@ -1,5 +1,6 @@
 import type { AddressType, NetworkMode } from '@/stores/walletStore'
 import { useWalletStore } from '@/stores/walletStore'
+import { walletIsUnlockedOrSyncing } from '@/lib/wallet/wallet-unlocked-status'
 import { useCryptoStore } from '@/stores/cryptoStore'
 import {
   orchestrateOnchainLoad,
@@ -46,7 +47,6 @@ import {
   endWalletSecretsSession,
   isWalletSecretsSessionActive,
 } from '@/lib/wallet/wallet-secrets-session'
-import { walletIsUnlockedOrSyncing } from '@/lib/wallet/wallet-unlocked-status'
 import { waitForCryptoWorkerHealthy } from '@/workers/crypto-factory'
 import type {
   LockLifecycleOperation,
@@ -148,6 +148,7 @@ async function runUnlockLoad(params: UnlockLoadParams): Promise<void> {
     addressType: params.addressType,
     accountId: params.accountId,
     clearLastSyncTime: params.networkMode !== 'lab',
+    allowRetryFromError: true,
   })
   if (isArkadeActiveForNetworkMode(params.networkMode)) {
     void orchestrateArkadeLoad({
@@ -249,8 +250,16 @@ export function canStartBootstrapUnlock(): boolean {
   return true
 }
 
+export function isLockUnlockOperation(operation: LockLifecycleOperation): boolean {
+  return operation === 'manual_unlock' || operation === 'bootstrap_unlock'
+}
+
 export function isLockUnlockInProgress(): boolean {
-  return snapshot.operation === 'manual_unlock' || snapshot.operation === 'bootstrap_unlock'
+  return isLockUnlockOperation(snapshot.operation)
+}
+
+function isWalletStoreUnlocked(): boolean {
+  return useWalletStore.getState().walletStatus === 'unlocked'
 }
 
 function beginInFlightWork(
@@ -346,6 +355,13 @@ export async function orchestrateLock(): Promise<void> {
 }
 
 async function runManualUnlockWork(params: ManualUnlockParams): Promise<void> {
+  const { appQueryClient } = await import('@/lib/shared/app-query-client')
+  const { activeWalletLoadQueryKeyPrefix } = await import(
+    '@/lib/wallet/wallet-load-query-keys'
+  )
+  await appQueryClient.cancelQueries({ queryKey: [...activeWalletLoadQueryKeyPrefix] })
+  appQueryClient.removeQueries({ queryKey: [...activeWalletLoadQueryKeyPrefix] })
+
   setPhase('unlocking')
   setOperation('manual_unlock')
   try {
@@ -355,6 +371,10 @@ async function runManualUnlockWork(params: ManualUnlockParams): Promise<void> {
     } catch (error) {
       await endWalletSecretsSession()
       throw error
+    }
+    if (!isWalletStoreUnlocked()) {
+      await endWalletSecretsSession()
+      throw new Error('Wallet unlock did not complete')
     }
     setSnapshot({ phase: 'unlocked', operation: 'none' })
   } catch (error) {
@@ -388,6 +408,9 @@ async function runBootstrapUnlockWork(params: BootstrapUnlockParams): Promise<vo
   if (!(await isWalletSecretsSessionActive())) {
     throw new Error('Bootstrap unlock ran without wallet secrets session')
   }
+  if (isWalletStoreUnlocked()) {
+    return
+  }
   setPhase('unlocking')
   setOperation('bootstrap_unlock')
   try {
@@ -406,6 +429,14 @@ export async function orchestrateBootstrapUnlock(params: BootstrapUnlockParams):
   }
 
   await awaitInFlightWork()
+
+  if (isWalletStoreUnlocked()) {
+    return
+  }
+
+  if (isLockUnlockInProgress()) {
+    return
+  }
 
   if (inFlightWork?.kind === 'bootstrap_unlock' && inFlightWork.key === key) {
     return inFlightWork.promise

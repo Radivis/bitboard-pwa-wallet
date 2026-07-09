@@ -1,4 +1,5 @@
 import { usePostLockPrivacyRedirectStore } from '@/stores/postLockPrivacyRedirectStore'
+import { getLatestNonWalletPath } from '@/lib/navigation/non-wallet-navigation-history'
 
 /** Registered from `main.tsx` so imperative code (e.g. lock) can navigate without hooks. */
 type AppRouter = {
@@ -7,6 +8,8 @@ type AppRouter = {
 }
 
 let appRouter: AppRouter | null = null
+
+export const LIBRARY_INDEX_PATH = '/library/'
 
 export function registerAppRouter(router: AppRouter): void {
   appRouter = router
@@ -22,6 +25,18 @@ export function navigateToLibraryIfOnWalletRoute(): void {
     usePostLockPrivacyRedirectStore
       .getState()
       .setPrivacyRedirectFromLock(pathname)
-    void appRouter.navigate({ to: '/library/', replace: true })
+    void appRouter.navigate({ to: LIBRARY_INDEX_PATH, replace: true })
   }
+}
+
+/**
+ * Leave the wallet unlock gate: return to the latest visited non-wallet route, or Library.
+ */
+export function navigateAwayFromWalletUnlockPrompt(): void {
+  if (!appRouter) return
+  const latestNonWalletPath = getLatestNonWalletPath()
+  void appRouter.navigate({
+    to: latestNonWalletPath ?? LIBRARY_INDEX_PATH,
+    replace: true,
+  })
 }

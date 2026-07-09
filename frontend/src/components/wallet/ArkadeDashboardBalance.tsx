@@ -6,6 +6,7 @@ import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ArkadeBalanceBreakdown } from '@/components/wallet/ArkadeBalanceBreakdown'
 import { ArkadeSignerMigrationBanner } from '@/components/wallet/ArkadeSignerMigrationBanner'
+import { ArkadePendingRecoveryBanner } from '@/components/wallet/ArkadePendingRecoveryBanner'
 import { ArkadeRecoverableVtxoBanner } from '@/components/wallet/ArkadeRecoverableVtxoBanner'
 import { RailLoadErrorBanner } from '@/components/wallet/RailLoadErrorBanner'
 import { RailSyncControl } from '@/components/wallet/RailSyncControl'
@@ -85,6 +86,7 @@ export function ArkadeDashboardBalance() {
       </CardHeader>
       <CardContent className="space-y-2">
         <ArkadeSignerMigrationBanner />
+        <ArkadePendingRecoveryBanner />
         <ArkadeRecoverableVtxoBanner />
         {arkadeLoadSnapshot.loadPhase === 'load-error' ? (
           <RailLoadErrorBanner
@@ -95,6 +97,14 @@ export function ArkadeDashboardBalance() {
               void orchestrateArkadeRetryLoad()
             }}
           />
+        ) : arkadeLoadSnapshot.loadPhase === 'loading' && balance == null ? (
+          <div
+            className="flex items-center gap-2 text-sm text-muted-foreground"
+            data-testid="dashboard-arkade-session-loading"
+          >
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+            Establishing Arkade session…
+          </div>
         ) : isLoading ? (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
@@ -154,14 +164,7 @@ export function ArkadeDashboardBalance() {
               </InfomodeWrapper>
             ) : null}
           </>
-        ) : (
-          <p
-            className="text-sm text-muted-foreground"
-            data-testid="dashboard-arkade-session-empty"
-          >
-            No Arkade session yet
-          </p>
-        )}
+        ) : null}
         <Link
           to="/wallet/management"
           className="text-sm text-primary underline-offset-4 hover:underline"

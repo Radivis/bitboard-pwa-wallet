@@ -8,6 +8,7 @@ mod network;
 mod offchain_snapshot;
 mod persistence;
 mod session;
+mod signer_migration;
 #[cfg(target_arch = "wasm32")]
 mod wasm_sleep;
 
@@ -21,6 +22,20 @@ mod session_boarding_utxo_tests;
 mod session_exit_candidate_tests;
 #[cfg(test)]
 mod session_mapper_tests;
+#[cfg(not(target_arch = "wasm32"))]
+pub use api_types::CompleteUnilateralExitParams;
+#[cfg(not(target_arch = "wasm32"))]
+pub use network::NetworkMode;
+#[cfg(not(target_arch = "wasm32"))]
+pub use session::ArkSession;
+
+#[cfg(target_arch = "wasm32")]
+use crate::api_types::CompleteUnilateralExitParams;
+
+#[cfg(target_arch = "wasm32")]
+use crate::network::NetworkMode;
+#[cfg(target_arch = "wasm32")]
+use crate::session::ArkSession;
 
 use std::cell::RefCell;
 use std::future::Future;
@@ -29,12 +44,10 @@ use std::rc::Rc;
 use wasm_bindgen::prelude::*;
 
 use crate::api_types::{
-    CollaborativeExitFeeEstimateParams, CollaborativeExitParams, CompleteUnilateralExitParams,
-    OpenSessionParams, SendPaymentParams, UnilateralExitFeeParams,
+    CollaborativeExitFeeEstimateParams, CollaborativeExitParams, OpenSessionParams,
+    SendPaymentParams, UnilateralExitCompletionFeeEstimateParams, UnilateralExitFeeParams,
 };
 use crate::error::{ArkResult, ArkWasmError, map_js_error};
-use crate::network::NetworkMode;
-use crate::session::ArkSession;
 
 thread_local! {
     static ACTIVE_SESSION: RefCell<Option<Rc<ArkSession>>> = const { RefCell::new(None) };
@@ -156,10 +169,14 @@ pub async fn ark_sync_with_operator() -> Result<JsValue, JsValue> {
 }
 
 #[wasm_bindgen]
-pub async fn ark_migrate_deprecated_signer_vtxos() -> Result<(), JsValue> {
+pub async fn ark_migrate_deprecated_signer_vtxos() -> Result<JsValue, JsValue> {
     map_js_async(async {
-        with_session_async(|session| async move { session.migrate_deprecated_signer_vtxos().await })
-            .await
+        let result =
+            with_session_async(
+                |session| async move { session.migrate_deprecated_signer_vtxos().await },
+            )
+            .await?;
+        to_js_value(result)
     })
     .await
 }
@@ -316,6 +333,17 @@ pub async fn ark_list_exit_candidates() -> Result<JsValue, JsValue> {
 }
 
 #[wasm_bindgen]
+pub async fn ark_list_unilateral_exits_in_progress() -> Result<JsValue, JsValue> {
+    map_js_async(async {
+        export_session_json(
+            |session| async move { session.list_unilateral_exits_in_progress().await },
+        )
+        .await
+    })
+    .await
+}
+
+#[wasm_bindgen]
 pub async fn ark_get_onchain_bumper_info() -> Result<JsValue, JsValue> {
     map_js_async(async {
         export_session_json(|session| async move { session.onchain_bumper_info().await }).await
@@ -383,6 +411,19 @@ pub async fn ark_complete_unilateral_exit(params: JsValue) -> Result<String, JsV
         let params: CompleteUnilateralExitParams = serde_wasm_bindgen::from_value(params)?;
         with_session_async(|session| async move { session.complete_unilateral_exit(params).await })
             .await
+    })
+    .await
+}
+
+#[wasm_bindgen]
+pub async fn ark_estimate_unilateral_exit_completion(params: JsValue) -> Result<JsValue, JsValue> {
+    map_js_async(async {
+        let params: UnilateralExitCompletionFeeEstimateParams =
+            serde_wasm_bindgen::from_value(params)?;
+        export_session_json(|session| async move {
+            session.estimate_unilateral_exit_completion(params).await
+        })
+        .await
     })
     .await
 }

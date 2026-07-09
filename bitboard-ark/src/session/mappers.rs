@@ -181,6 +181,21 @@ pub(crate) fn wasm_safe_now() -> Duration {
 /// BIP68 encodes time-based relative `nSequence` locks in 512-second intervals.
 const BIP68_TIME_GRANULARITY: u64 = 512;
 
+/// Operator CSV timelock for unilateral exit completion, as block count or wall-clock seconds.
+pub(crate) fn unilateral_exit_timelock_parts(
+    sequence: bitcoin::Sequence,
+) -> (Option<u32>, Option<u64>) {
+    let Some(relative) = sequence.to_relative_lock_time() else {
+        return (None, None);
+    };
+    match relative {
+        bitcoin::relative::LockTime::Blocks(blocks) => (Some(blocks.value().into()), None),
+        bitcoin::relative::LockTime::Time(time) => {
+            (None, Some(time.value() as u64 * BIP68_TIME_GRANULARITY))
+        }
+    }
+}
+
 /// arkd `validateBoardingInput` adds `exitDelay.Seconds()` as wall-clock seconds to the
 /// confirmation timestamp, even for block-based boarding exit delays.
 pub(crate) fn is_past_arkd_cooperative_boarding_window(
@@ -256,5 +271,27 @@ pub(crate) fn current_unix_timestamp() -> i64 {
             .duration_since(std::time::UNIX_EPOCH)
             .expect("system clock before UNIX epoch")
             .as_secs() as i64
+    }
+}
+
+#[cfg(test)]
+mod timelock_parts_tests {
+    use bitcoin::Sequence;
+
+    use super::unilateral_exit_timelock_parts;
+
+    #[test]
+    fn block_based_unilateral_exit_delay() {
+        let (blocks, seconds) = unilateral_exit_timelock_parts(Sequence::from_height(20));
+        assert_eq!(blocks, Some(20));
+        assert_eq!(seconds, None);
+    }
+
+    #[test]
+    fn time_based_unilateral_exit_delay() {
+        let (blocks, seconds) =
+            unilateral_exit_timelock_parts(Sequence::from_seconds_ceil(172_544).unwrap());
+        assert_eq!(blocks, None);
+        assert_eq!(seconds, Some(172_544));
     }
 }

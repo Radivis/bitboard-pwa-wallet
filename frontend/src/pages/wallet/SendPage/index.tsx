@@ -2,11 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { toast } from 'sonner'
 import { amountSatsFromForm, amountSatsFromSendForm } from '@/components/wallet/send/amount-sats-from-form'
-import { WalletUnlockOrNearZeroLoading } from '@/components/WalletUnlockOrNearZeroLoading'
 import { SendTransactionEntryCard } from '@/components/wallet/send/SendTransactionEntryCard'
 import { SendTransactionReviewStep } from '@/components/wallet/send/SendTransactionReviewStep'
 import { useWalletStore } from '@/stores/walletStore'
-import { walletIsUnlockedOrSyncing } from '@/lib/wallet/wallet-unlocked-status'
 import { useSendStore } from '@/stores/sendStore'
 import { useFeatureStore } from '@/stores/featureStore'
 import { useLabChainStateQuery } from '@/hooks/useLabChainStateQuery'
@@ -65,15 +63,10 @@ import { SendFlowDustModals } from './modals'
 export function SendPage() {
   const navigate = useNavigate()
   const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
-  const walletStatus = useWalletStore((walletState) => walletState.walletStatus)
 
   if (!activeWalletId) {
     navigate({ to: '/setup' })
     return null
-  }
-
-  if (!walletIsUnlockedOrSyncing(walletStatus)) {
-    return <WalletUnlockOrNearZeroLoading />
   }
 
   return <SendFlow />

@@ -71,8 +71,9 @@ function isProxiedUrlPathWithinAllowlistedBase(
 }
 
 // Constants
-// Must be >= WASM full-scan per-request timeout (30s); normal sync requests finish sooner.
-const UPSTREAM_TIMEOUT_MS = 30_000
+// Stay below Vercel Hobby's ~10s function cap so the proxy fails fast (502) instead of
+// FUNCTION_INVOCATION_TIMEOUT (504). WASM retries transient failures at higher layers.
+const UPSTREAM_TIMEOUT_MS = 9_000
 const MAX_POST_BODY_BYTES = 512_000
 
 // CORS headers for browser requests

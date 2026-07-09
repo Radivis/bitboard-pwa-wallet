@@ -12,8 +12,7 @@ import { isWalletSecretsSessionActive } from '@/lib/wallet/wallet-secrets-sessio
  */
 export function useActiveWalletDescriptorWalletBootstrap(): void {
   const walletStatus = useWalletStore((walletState) => walletState.walletStatus)
-  const setWalletStatus = useWalletStore((walletState) => walletState.setWalletStatus)
-  const query = useActiveWalletLoadQuery()
+  useActiveWalletLoadQuery()
 
   useEffect(() => {
     if (walletStatus !== 'locked') return
@@ -22,9 +21,4 @@ export function useActiveWalletDescriptorWalletBootstrap(): void {
       appQueryClient.removeQueries({ queryKey: [...activeWalletLoadQueryKeyPrefix] })
     })()
   }, [walletStatus])
-
-  useEffect(() => {
-    if (!query.isError) return
-    setWalletStatus('locked')
-  }, [query.isError, setWalletStatus])
 }

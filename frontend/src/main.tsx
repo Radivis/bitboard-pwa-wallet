@@ -2,11 +2,14 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { RouterProvider, createRouter } from '@tanstack/react-router'
 import { registerAppRouter } from '@/lib/shared/app-router'
+import { registerNonWalletNavigationHistory } from '@/lib/navigation/register-non-wallet-navigation-history'
 import { routeTree } from './routeTree.gen'
 import './index.css'
 import { ensureE2eArkadeMockControl } from '@/lib/arkade/e2e/e2e-arkade-mock-control'
+import { ensureE2eArkadeRegtestControl } from '@/lib/arkade/e2e/e2e-arkade-regtest-control'
 
 ensureE2eArkadeMockControl()
+ensureE2eArkadeRegtestControl()
 
 const router = createRouter({
   routeTree,
@@ -14,6 +17,7 @@ const router = createRouter({
   scrollRestoration: true,
 })
 registerAppRouter(router)
+registerNonWalletNavigationHistory(router)
 
 /**
  * E2E (DEV): client-side navigation to `/lab/tx/:txid` without `location.reload`.

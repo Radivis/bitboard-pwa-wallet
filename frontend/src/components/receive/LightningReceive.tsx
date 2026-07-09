@@ -20,7 +20,7 @@ import {
 } from '@/lib/lightning/lightning-utils'
 import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
 import { BitcoinFiatDenominationSwitch } from '@/components/BitcoinFiatDenominationSwitch'
-import { FiatAmountDisplay } from '@/components/FiatAmountDisplay'
+import { FiatBtcAmountDisplay } from '@/components/FiatBtcAmountDisplay'
 import { MAX_LIGHTNING_INVOICE_DESCRIPTION_LENGTH } from '@/lib/lightning/lightning-input-limits'
 import { useFiatDenominationStore } from '@/stores/fiatDenominationStore'
 import { useMainnetFiatRatesQuery } from '@/hooks/useMainnetFiatRatesQuery'
@@ -59,38 +59,18 @@ function LightningInvoiceAmountBlock({
     allowFetchWhenPortfolioZeroForReceivePage: true,
   })
   const btcPriceInFiat = fiatRatesQuery.data?.btcPriceInFiat
-  const showFiat =
-    networkMode === 'mainnet' &&
-    fiatDenominationMode &&
-    isUsableBtcSpotPriceInFiat(btcPriceInFiat)
+  const showFiatLayout = networkMode === 'mainnet' && fiatDenominationMode && isUsableBtcSpotPriceInFiat(btcPriceInFiat)
 
-  if (showFiat) {
-    return (
-      <span className={className}>
-        <span className="inline-flex flex-col items-start gap-0.5">
-          <FiatAmountDisplay
-            amountSats={amountSats}
-            btcPriceInFiat={btcPriceInFiat}
-            currency={defaultFiatCurrency}
-            size={size}
-            rateLoading={fiatRatesQuery.isPending}
-          />
-          <BitcoinAmountDisplay
-            amountSats={amountSats}
-            size={size}
-            allowUnitToggle={false}
-            className="text-muted-foreground"
-          />
-        </span>
-      </span>
-    )
-  }
   return (
-    <BitcoinAmountDisplay
+    <FiatBtcAmountDisplay
       amountSats={amountSats}
+      showFiatLayout={showFiatLayout}
+      btcPriceInFiat={btcPriceInFiat}
+      currency={defaultFiatCurrency}
       size={size}
+      isDetail={size !== 'lg'}
+      rateLoading={fiatRatesQuery.isPending}
       className={className}
-      allowUnitToggle={false}
     />
   )
 }

@@ -2,6 +2,22 @@
 
 Bitcoin Esplora API client library. Supports plaintext, TLS and Onion servers. Blocking or async.
 
+## Bitboard fork
+
+Vendored from [bitcoindevkit/rust-esplora-client](https://github.com/bitcoindevkit/rust-esplora-client) (`release/0.12.x` lineage), applied via `[patch.crates-io]` in the workspace root `Cargo.toml`. Rationale is noted in the workspace `Cargo.toml` comment.
+
+### Patches
+
+| Area | Problem | Fix | Primary files |
+|------|---------|-----|---------------|
+| **WASM request timeout** | Upstream `AsyncClient::Builder::timeout` applies only on native (`reqwest::Client::timeout`). On `wasm32`, reqwest has no client-level timeout, so long-hanging Esplora calls could block the PWA worker indefinitely. | Store `request_timeout` from the builder on WASM and apply `.timeout(d)` on each individual request. | `src/async.rs` |
+
+Consumers: `ark-bdk-wallet` (on-chain sync), `bitboard-ark` (unilateral exit fee rate, UTXO blocktime backfill). See also [`../ark-bdk-wallet/README.md`](../ark-bdk-wallet/README.md).
+
+When syncing with upstream BDK releases, re-apply the WASM timeout hunk and verify Esplora sync in the browser.
+
+---
+
 <p>
     <a href="https://crates.io/crates/esplora-client"><img alt="Crate Info" src="https://img.shields.io/crates/v/esplora-client.svg"/></a>
     <a href="https://github.com/bitcoindevkit/rust-esplora-client/blob/master/LICENSE"><img alt="MIT Licensed" src="https://img.shields.io/badge/license-MIT-blue.svg"/></a>

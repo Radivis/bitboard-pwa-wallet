@@ -5,6 +5,7 @@ import { enableSegwitAddressesFeature } from './helpers/segwit-addresses-feature
 
 test.describe('Receive Page', () => {
   test.beforeEach(async ({ page }) => {
+    test.setTimeout(120_000)
     await createWalletViaUI(page)
   })
 

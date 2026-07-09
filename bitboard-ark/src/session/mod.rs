@@ -7,6 +7,7 @@ mod open;
 mod payments;
 mod pending_exit;
 mod receive;
+mod signer_migration;
 mod sync;
 mod vtxo;
 
