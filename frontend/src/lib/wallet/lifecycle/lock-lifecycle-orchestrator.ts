@@ -1,5 +1,6 @@
 import type { AddressType, NetworkMode } from '@/stores/walletStore'
 import { useWalletStore } from '@/stores/walletStore'
+import { walletIsUnlockedOrSyncing } from '@/lib/wallet/wallet-unlocked-status'
 import { useCryptoStore } from '@/stores/cryptoStore'
 import {
   orchestrateOnchainLoad,
@@ -46,7 +47,6 @@ import {
   endWalletSecretsSession,
   isWalletSecretsSessionActive,
 } from '@/lib/wallet/wallet-secrets-session'
-import { walletIsUnlockedOrSyncing } from '@/lib/wallet/wallet-unlocked-status'
 import { waitForCryptoWorkerHealthy } from '@/workers/crypto-factory'
 import type {
   LockLifecycleOperation,
@@ -148,6 +148,7 @@ async function runUnlockLoad(params: UnlockLoadParams): Promise<void> {
     addressType: params.addressType,
     accountId: params.accountId,
     clearLastSyncTime: params.networkMode !== 'lab',
+    allowRetryFromError: true,
   })
   if (isArkadeActiveForNetworkMode(params.networkMode)) {
     void orchestrateArkadeLoad({
@@ -370,6 +371,10 @@ async function runManualUnlockWork(params: ManualUnlockParams): Promise<void> {
     } catch (error) {
       await endWalletSecretsSession()
       throw error
+    }
+    if (!isWalletStoreUnlocked()) {
+      await endWalletSecretsSession()
+      throw new Error('Wallet unlock did not complete')
     }
     setSnapshot({ phase: 'unlocked', operation: 'none' })
   } catch (error) {

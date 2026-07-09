@@ -21,7 +21,6 @@ import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { WalletUnlockOrNearZeroLoading } from '@/components/WalletUnlockOrNearZeroLoading'
 import { CardPagination } from '@/components/CardPagination'
 import { TransactionItem } from '@/components/TransactionItem'
 import { BitcoinFiatDenominationSwitch } from '@/components/BitcoinFiatDenominationSwitch'
@@ -70,7 +69,6 @@ import { useArkadeHistoryQuery } from '@/hooks/useArkadeQueries'
 import { isArkadeActiveForNetworkMode } from '@/lib/arkade/arkade-utils'
 import { useFiatDenominationStore } from '@/stores/fiatDenominationStore'
 import { useMainnetFiatRatesQuery } from '@/hooks/useMainnetFiatRatesQuery'
-import { walletIsUnlockedOrSyncing } from '@/lib/wallet/wallet-unlocked-status'
 import {
   LAB_WALLET_BALANCE_DISCLAIMER,
   walletBalanceCardTitle,
@@ -783,16 +781,11 @@ function RecentTransactions() {
 export function DashboardPage() {
   const navigate = useNavigate()
   const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
-  const walletStatus = useWalletStore((walletState) => walletState.walletStatus)
   const networkMode = useWalletStore((walletState) => walletState.networkMode)
 
   if (!activeWalletId) {
     navigate({ to: '/setup' })
     return null
-  }
-
-  if (!walletIsUnlockedOrSyncing(walletStatus)) {
-    return <WalletUnlockOrNearZeroLoading />
   }
 
   return (

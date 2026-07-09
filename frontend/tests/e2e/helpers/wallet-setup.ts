@@ -145,6 +145,11 @@ export async function fillWalletUnlockDialog(
   await unlockButton.click()
 }
 
+export async function dismissWalletUnlockDialog(page: Page): Promise<void> {
+  const unlockDialog = page.getByRole('dialog', { name: 'Unlock Wallet' })
+  await unlockDialog.getByRole('button', { name: 'Close', exact: true }).click()
+}
+
 export async function unlockWalletViaUI(
   page: Page,
   password: string = TEST_PASSWORD,

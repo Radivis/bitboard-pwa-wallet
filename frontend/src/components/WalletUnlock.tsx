@@ -10,8 +10,8 @@ import { Label } from '@/components/ui/label'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { AppModal } from '@/components/AppModal'
 import { useWalletStore } from '@/stores/walletStore'
-import { useWallets } from '@/db'
 import { orchestrateManualUnlock } from '@/lib/wallet/lifecycle/lock-lifecycle-orchestrator'
+import { navigateAwayFromWalletUnlockPrompt } from '@/lib/shared/app-router'
 import { reportWalletSyncError } from '@/lib/wallet/wallet-sync-error-toast'
 import { toUserFriendlyWalletSecretsError } from '@/lib/wallet/wallet-secrets-error-messages'
 
@@ -35,7 +35,6 @@ export function WalletUnlock({
 }: WalletUnlockProps) {
   const [password, setPassword] = useState('')
   const navigate = useNavigate()
-  const { data: wallets } = useWallets()
 
   const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
   const networkMode = useWalletStore((walletState) => walletState.networkMode)
@@ -51,11 +50,7 @@ export function WalletUnlock({
       navigate({ to: '/setup' })
       return
     }
-    if (wallets && wallets.length > 1) {
-      navigate({ to: '/wallet/wallets' })
-    } else {
-      navigate({ to: '/setup' })
-    }
+    navigateAwayFromWalletUnlockPrompt()
   }
 
   const [unlockErrorMessage, setUnlockErrorMessage] = useState<string | null>(null)

@@ -24,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - When fiat amounts are shown, breakdown detail amounts are now also displayed in fiat
 - Split monolithic unilateral exit button in Arkde into "Start unilateral exit" and "Complete unilateral exit"
 - Made unlock failure message friendlier
+- Dismissing the unlock modal now redirects to the last visited non-wallet page, if one was visited during the current session, or the Library index otherwise
 
 ### Fixed
 - Addressed the possibility of false success of Arkade signer migration

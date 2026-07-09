@@ -186,7 +186,9 @@ describe('lock-lifecycle-orchestrator', () => {
     walletStoreState.walletStatus = 'none'
     vi.clearAllMocks()
     lockAndPurgeSensitiveRuntimeState.mockResolvedValue(undefined)
-    orchestrateOnchainLoad.mockResolvedValue(undefined)
+    orchestrateOnchainLoad.mockImplementation(async () => {
+      walletStoreState.walletStatus = 'unlocked'
+    })
     orchestrateOnchainPostUnlockSync.mockResolvedValue(undefined)
     awaitOnchainLoadQuiescence.mockResolvedValue(undefined)
     awaitArkadeLoadQuiescence.mockResolvedValue(undefined)
@@ -238,7 +240,10 @@ describe('lock-lifecycle-orchestrator', () => {
     orchestrateOnchainLoad.mockImplementation(
       () =>
         new Promise<void>((resolve) => {
-          releaseLoad = resolve
+          releaseLoad = () => {
+            walletStoreState.walletStatus = 'unlocked'
+            resolve()
+          }
         }),
     )
 
@@ -303,6 +308,7 @@ describe('lock-lifecycle-orchestrator', () => {
     )
     orchestrateOnchainLoad.mockImplementation(async () => {
       callOrder.push('unlock-load')
+      walletStoreState.walletStatus = 'unlocked'
     })
     lockAndPurgeSensitiveRuntimeState.mockImplementation(async () => {
       callOrder.push('lock')
@@ -355,6 +361,27 @@ describe('lock-lifecycle-orchestrator', () => {
     })
   })
 
+  it('orchestrateManualUnlock fails when on-chain load completes without unlocking wallet', async () => {
+    walletStoreState.activeWalletId = 1
+    walletStoreState.walletStatus = 'locked'
+    syncLockLifecycleWithActiveWallet(1)
+    orchestrateOnchainLoad.mockResolvedValue(undefined)
+
+    await expect(
+      orchestrateManualUnlock({
+        ...unlockParams,
+        password: 'secret',
+      }),
+    ).rejects.toThrow('Wallet unlock did not complete')
+
+    expect(endWalletSecretsSession).toHaveBeenCalledTimes(1)
+    expect(walletStoreState.walletStatus).toBe('locked')
+    expect(getLockLifecycleSnapshot()).toEqual({
+      phase: 'locked',
+      operation: 'none',
+    })
+  })
+
   it('orchestrateManualUnlock success sets unlocked', async () => {
     walletStoreState.activeWalletId = 1
     syncLockLifecycleWithActiveWallet(1)
@@ -371,6 +398,7 @@ describe('lock-lifecycle-orchestrator', () => {
     expect(orchestrateOnchainLoad).toHaveBeenCalledWith({
       ...unlockParams,
       clearLastSyncTime: true,
+      allowRetryFromError: true,
     })
     expect(orchestrateOnchainPostUnlockSync).toHaveBeenCalled()
     expect(orchestrateArkadeLoad).toHaveBeenCalledWith({

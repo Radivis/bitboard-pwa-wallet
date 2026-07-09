@@ -8,7 +8,6 @@ import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { WalletUnlockOrNearZeroLoading } from '@/components/WalletUnlockOrNearZeroLoading'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import {
   AddressType,
@@ -117,10 +116,6 @@ export function ReceivePage() {
   if (!activeWalletId) {
     navigate({ to: '/setup' })
     return null
-  }
-
-  if (!walletIsUnlockedOrSyncing(walletStatus)) {
-    return <WalletUnlockOrNearZeroLoading />
   }
 
   const showMainnetDemoModal =

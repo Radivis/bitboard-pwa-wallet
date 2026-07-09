@@ -236,12 +236,6 @@ describe('DashboardPage', () => {
     expect(mockNavigate).toHaveBeenCalledWith({ to: '/setup' })
   })
 
-  it('shows WalletUnlock when locked', () => {
-    walletStoreState.walletStatus = 'locked'
-    renderWithProviders(<DashboardPage />)
-    expect(screen.getByTestId('wallet-unlock')).toBeInTheDocument()
-  })
-
   it('displays balance with BitcoinAmountDisplay', () => {
     renderWithProviders(<DashboardPage />)
     expect(
