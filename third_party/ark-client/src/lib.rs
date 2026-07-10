@@ -1454,17 +1454,19 @@ where
 
         let (vtxo_list, _) = self.list_vtxos().await?;
 
-        let spent_outpoints = vtxo_list.spent().cloned().collect::<Vec<_>>();
+        let unspendable_outpoints = vtxo_list.unspendable().cloned().collect::<Vec<_>>();
         let unspent_outpoints = vtxo_list.all_unspent().cloned().collect::<Vec<_>>();
 
         let incoming_transactions = generate_incoming_vtxo_transaction_history(
-            &spent_outpoints,
+            &unspendable_outpoints,
             &unspent_outpoints,
             &boarding_commitment_transactions,
         )?;
 
-        let outgoing_txs =
-            generate_outgoing_vtxo_transaction_history(&spent_outpoints, &unspent_outpoints)?;
+        let outgoing_txs = generate_outgoing_vtxo_transaction_history(
+            &unspendable_outpoints,
+            &unspent_outpoints,
+        )?;
 
         let mut outgoing_transactions = vec![];
         for tx in outgoing_txs {

@@ -49,7 +49,7 @@ pub fn build_arkade_balance_dto(inputs: ArkadeBalanceInputs) -> BalanceDto {
     let gross_confirmed_sats =
         spendable_offchain_sats.saturating_add(inputs.onchain_confirmed_sats);
     // Only collaborative exit is subtracted here; unilateral amounts are already out of gross
-    // spendable via the spent/is_unrolled bucket (see wallet model doc).
+    // spendable via the exiting sub-bucket (see wallet model doc).
     let collaborative_exit_in_progress_sats = inputs.collaborative_exit_in_progress_sats;
     let confirmed_sats = gross_confirmed_sats.saturating_sub(collaborative_exit_in_progress_sats);
     let offchain_spendable_sats = spendable_offchain_sats
@@ -170,7 +170,7 @@ mod tests {
 
     #[test]
     // Post-unroll: unilateral_exit_in_progress is informational; gross spendable already excludes
-    // the unrolled VTXO via the spent bucket — must not subtract again.
+    // the unrolled VTXO via the exiting sub-bucket — must not subtract again.
     fn unilateral_exit_in_progress_does_not_reduce_spendable_totals() {
         let balance = build_arkade_balance_dto(ArkadeBalanceInputs {
             pre_confirmed_sats: 200_000,

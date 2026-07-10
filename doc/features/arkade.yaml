@@ -72,7 +72,7 @@ feature:
       - id: ARK-REC-07
         description: VTXOs in unilateral exit do not contribute to pendingRecoverySats even when they would otherwise qualify for pending recovery
       - id: ARK-REC-08
-        description: VTXOs in unilateral exit do not contribute to recoverableSettleableVtxoCount, recoverablePendingOperatorSweepVtxoCount, expiring-soon count, or earliest-expiry indicator — Recoverable now banner hidden when only exiting VTXOs would qualify
+        description: Pre-unroll pending unilateral outpoints do not contribute to recoverableSettleableVtxoCount, recoverablePendingOperatorSweepVtxoCount, expiring-soon count, or earliest-expiry indicator; post-unroll exiting VTXOs are excluded by vendored ark-core bucketing
     unilateral_exit:
       - id: ARK-EXIT-01
         description: Start unilateral exit lists only VTXOs that can start unroll; in-progress and ready-to-complete VTXOs are excluded

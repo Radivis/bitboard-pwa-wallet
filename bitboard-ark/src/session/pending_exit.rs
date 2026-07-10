@@ -12,7 +12,7 @@ use super::mappers::{current_unix_timestamp, parse_outpoint};
 impl ArkSession {
     /// Stable exit-pipeline totals for the balance DTO.
     ///
-    /// Unilateral: sums `spent` VTXOs (`is_unrolled && !is_spent`) plus any in-flight pending
+    /// Unilateral: sums [`ark_core::VtxoList::exiting`] VTXOs plus any in-flight pending
     /// unilateral records during unroll. This amount is informational in
     /// [`build_arkade_balance_dto`] — do not subtract it from gross spendable after unroll.
     /// Collaborative: pending records only; those VTXOs are still in gross spendable until sync.

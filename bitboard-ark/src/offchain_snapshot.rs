@@ -174,24 +174,24 @@ pub fn offchain_history_from_snapshot(
     boarding_commitment_transactions: &[Txid],
 ) -> ArkResult<Vec<Transaction>> {
     let vtxo_list = vtxo_list_from_snapshot(snapshot)?;
-    let spent_outpoints = vtxo_list.spent().cloned().collect::<Vec<_>>();
+    let unspendable_outpoints = vtxo_list.unspendable().cloned().collect::<Vec<_>>();
     let unspent_outpoints = vtxo_list.all_unspent().cloned().collect::<Vec<_>>();
 
     let mut transactions = generate_incoming_vtxo_transaction_history(
-        &spent_outpoints,
+        &unspendable_outpoints,
         &unspent_outpoints,
         boarding_commitment_transactions,
     )?;
 
     let outgoing_txs =
-        generate_outgoing_vtxo_transaction_history(&spent_outpoints, &unspent_outpoints)?;
+        generate_outgoing_vtxo_transaction_history(&unspendable_outpoints, &unspent_outpoints)?;
 
     for tx in outgoing_txs {
         let tx = match tx {
             OutgoingTransaction::Complete(tx) => tx,
             OutgoingTransaction::Incomplete(incomplete_tx) => {
                 let first_outpoint = incomplete_tx.first_outpoint();
-                let Some(virtual_tx_outpoint) = spent_outpoints
+                let Some(virtual_tx_outpoint) = unspendable_outpoints
                     .iter()
                     .chain(unspent_outpoints.iter())
                     .find(|vtp| vtp.outpoint == first_outpoint)
@@ -345,12 +345,12 @@ fn virtual_tx_outpoint_from_record(
 }
 
 fn generate_incoming_vtxo_transaction_history(
-    spent_outpoints: &[VirtualTxOutPoint],
+    unspendable_outpoints: &[VirtualTxOutPoint],
     unspent_outpoints: &[VirtualTxOutPoint],
     boarding_commitment_transactions: &[Txid],
 ) -> ArkResult<Vec<Transaction>> {
     history::generate_incoming_vtxo_transaction_history(
-        spent_outpoints,
+        unspendable_outpoints,
         unspent_outpoints,
         boarding_commitment_transactions,
     )
@@ -358,10 +358,10 @@ fn generate_incoming_vtxo_transaction_history(
 }
 
 fn generate_outgoing_vtxo_transaction_history(
-    spent_outpoints: &[VirtualTxOutPoint],
+    unspendable_outpoints: &[VirtualTxOutPoint],
     unspent_outpoints: &[VirtualTxOutPoint],
 ) -> ArkResult<Vec<OutgoingTransaction>> {
-    history::generate_outgoing_vtxo_transaction_history(spent_outpoints, unspent_outpoints)
+    history::generate_outgoing_vtxo_transaction_history(unspendable_outpoints, unspent_outpoints)
         .map_err(ArkWasmError::from)
         .map(|iterator| iterator.collect())
 }
