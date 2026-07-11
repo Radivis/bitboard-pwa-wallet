@@ -10,8 +10,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 ### Changed
+- Renamed "spent" bucket internally to "unspendable" for more clarity
+
 
 ### Fixed
+- Expired VTXOs undergoing unilateral exit are not classified as recoverable, but unspendable
 
 ### Security
 
@@ -22,7 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - When fiat amounts are shown, breakdown detail amounts are now also displayed in fiat
-- Split monolithic unilateral exit button in Arkde into "Start unilateral exit" and "Complete unilateral exit"
+- Split monolithic unilateral exit button in Arkade into "Start unilateral exit" and "Complete unilateral exit"
 - Made unlock failure message friendlier
 - Dismissing the unlock modal now redirects to the last visited non-wallet page, if one was visited during the current session, or the Library index otherwise
 - VTXOs undergoing unilateral exit are excluded from recoverable bucket as to not trigger any recovery banner or misclassification, if they expire
