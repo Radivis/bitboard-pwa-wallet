@@ -207,4 +207,32 @@ mod tests {
         assert_eq!(payload.code, CODE_DELEGATOR);
         assert_eq!(payload.message, error.to_string());
     }
+
+    #[test]
+    fn client_join_batch_event_stream_error_surfaces_status_in_wasm_payload() {
+        use ark_client::error::{ErrorContext, IntoError};
+
+        let event_stream_detail = "Event stream request failed with status 500 Internal Server Error: FUNCTION_INVOCATION_FAILED";
+        let enriched_chain = format!("batch event stream: request failed: {event_stream_detail}");
+
+        #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
+        let server_error = ark_client::Error::from(ark_client::ark_grpc_wasm_shim::Error::request(
+            std::io::Error::new(std::io::ErrorKind::Other, enriched_chain.clone()),
+        ));
+        #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
+        let server_error = enriched_chain.clone().into_error();
+
+        let client_error = server_error.context("Failed to join batch");
+        let wasm_error = ArkWasmError::Client(client_error);
+        let payload = wasm_error.to_wasm_payload();
+
+        assert_eq!(payload.code, CODE_CLIENT);
+        assert!(payload.message.contains("500"));
+        assert!(payload.message.contains("FUNCTION_INVOCATION"));
+        assert!(
+            !payload.message.ends_with("request failed"),
+            "unexpected bare chain: {}",
+            payload.message
+        );
+    }
 }

@@ -121,19 +121,33 @@ impl fmt::Debug for Error {
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let description = match &self.inner.kind {
-            Kind::Connect => "failed to connect to Ark server",
-            Kind::NotConnected => "no connection to Ark server",
-            Kind::Request => "request failed",
-            Kind::Conversion => "failed to convert between types",
-            Kind::EventStreamDisconnect => "got disconnected from event stream",
-            Kind::EventStream => "error via event stream",
-        };
-        write!(f, "{description}")?;
-        if let Some(source) = &self.inner.source {
-            write!(f, ": {source}")?;
+        match &self.inner.kind {
+            Kind::Request => {
+                if let Some(source) = &self.inner.source {
+                    if let Some(rest_error) = source.downcast_ref::<ark_rest::Error>() {
+                        return f.write_str(&format_rest_request_error(rest_error));
+                    }
+                    write!(f, "request failed: {source}")
+                } else {
+                    f.write_str("request failed")
+                }
+            }
+            kind => {
+                let description = match kind {
+                    Kind::Connect => "failed to connect to Ark server",
+                    Kind::NotConnected => "no connection to Ark server",
+                    Kind::Conversion => "failed to convert between types",
+                    Kind::EventStreamDisconnect => "got disconnected from event stream",
+                    Kind::EventStream => "error via event stream",
+                    Kind::Request => unreachable!("handled above"),
+                };
+                write!(f, "{description}")?;
+                if let Some(source) = &self.inner.source {
+                    write!(f, ": {source}")?;
+                }
+                Ok(())
+            }
         }
-        Ok(())
     }
 }
 
@@ -146,6 +160,15 @@ impl std::error::Error for Error {
     }
 }
 
+fn format_rest_request_error(rest_error: &ark_rest::Error) -> String {
+    let chain = rest_error.display_chain();
+    if chain.contains("Event stream") || chain.contains("batch/events") {
+        format!("batch event stream: {chain}")
+    } else {
+        chain
+    }
+}
+
 fn map_rest_error(error: ark_rest::Error) -> Error {
     Error::request(error)
 }
@@ -153,7 +176,7 @@ fn map_rest_error(error: ark_rest::Error) -> Error {
 fn map_apis_error<E: fmt::Debug>(error: ark_rest::apis::Error<E>) -> Error {
     Error::request(std::io::Error::new(
         std::io::ErrorKind::Other,
-        format!("{error:?}"),
+        error.to_string(),
     ))
 }
 

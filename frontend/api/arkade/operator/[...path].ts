@@ -157,9 +157,17 @@ export default async function handler(
   try {
     upstream = await fetch(upstreamUrl, init)
   } catch {
-    res.status(502).send('Upstream unreachable')
+    // Plain-text prefix so WASM clients can classify proxy failures without JSON parsing.
+    res
+      .status(502)
+      .send(
+        'proxy_error upstream_unreachable: could not reach Ark operator upstream',
+      )
     return
   }
+
+  // Platform FUNCTION_INVOCATION_FAILED on /v1/batch/events (SSE) is expected on preview
+  // until Labyrinth Step 2; enriched upstream/proxy body text is what Step 1 delivers.
 
   const outHeaders: Record<string, string> = {}
   upstream.headers.forEach((value, key) => {

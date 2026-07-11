@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Expired VTXOs undergoing unilateral exit are not classified as recoverable, but unspendable
+- Ark operator and preview-proxy failures now surface HTTP status and response body snippets in WASM error messages
 
 ### Security
 
