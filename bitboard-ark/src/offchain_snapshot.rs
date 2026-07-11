@@ -131,7 +131,7 @@ pub fn offchain_balance_sats_from_snapshot(
     Ok(buckets)
 }
 
-fn script_to_server_pk_lookup(
+pub(crate) fn script_to_server_pk_lookup(
     snapshot: &OffchainVtxoSnapshot,
     legacy_signer_pk_fallback: Option<XOnlyPublicKey>,
 ) -> ArkResult<impl Fn(&ScriptBuf) -> Option<XOnlyPublicKey> + '_> {

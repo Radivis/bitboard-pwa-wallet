@@ -21,6 +21,7 @@ import {
   arkadeUnilateralExitFeeQueryKey,
   arkadeUnilateralExitsInProgressQueryKey,
   arkadeVtxoExpiryQueryKey,
+  arkadeVtxoListQueryKey,
 } from '@/lib/arkade/arkade-query-keys'
 import type {
   ArkadeBalanceInfo,
@@ -224,6 +225,9 @@ async function invalidateArkadeWalletDataQueries(
     }),
     queryClient.invalidateQueries({
       queryKey: arkadeVtxoExpiryQueryKey(walletId, networkMode, connectionId),
+    }),
+    queryClient.invalidateQueries({
+      queryKey: arkadeVtxoListQueryKey(walletId, networkMode, connectionId),
     }),
     queryClient.invalidateQueries({
       queryKey: arkadeRecoverableVtxoFeeQueryKey(walletId, networkMode, connectionId),
@@ -435,6 +439,29 @@ export function useArkadeVtxoExpiryQuery() {
       await ensureArkadeSessionOpenForActiveWallet()
       scheduleBackgroundArkadeOperatorSync()
       return getArkadeWorker().getVtxoExpiryStatus()
+    },
+    ...arkadeDashboardPeriodicQueryOptions,
+  })
+}
+
+export function useArkadeVtxoListQuery() {
+  const { networkMode, activeWalletId, activeArkadeConnectionId, sessionReady } =
+    useArkadeQueryBase()
+  const arkadeDashboardPeriodicQueryOptions = useArkadeDashboardPeriodicQueryOptions()
+
+  return useQuery({
+    queryKey: walletScopedQueryKey(
+      activeWalletId,
+      networkMode,
+      activeArkadeConnectionId,
+      arkadeVtxoListQueryKey,
+      'vtxo-list',
+    ),
+    enabled: sessionReady,
+    queryFn: async () => {
+      await ensureArkadeSessionOpenForActiveWallet()
+      scheduleBackgroundArkadeOperatorSync()
+      return getArkadeWorker().listVtxos()
     },
     ...arkadeDashboardPeriodicQueryOptions,
   })

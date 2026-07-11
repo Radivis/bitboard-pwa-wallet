@@ -36,6 +36,7 @@ import type {
   ArkadeUnilateralExitCompletionFeeEstimate,
   ArkadeUnilateralExitCompletionFeeEstimateParams,
   ArkadeUnilateralExitInProgressRow,
+  ArkadeVtxoListResult,
   ArkadeUnrollProgressEvent,
   ArkadeVtxoExpiryStatus,
   EnsureArkadeOperatorConnectionEncryptedParams,
@@ -539,6 +540,12 @@ const arkadeService: ArkadeService = {
     return invokeWasmArk(
       (wasmModule) =>
         wasmModule.ark_list_exit_candidates() as Promise<ArkadeExitCandidateRow[]>,
+    )
+  },
+
+  async listVtxos(): Promise<ArkadeVtxoListResult> {
+    return invokeWasmArk(
+      (wasmModule) => wasmModule.ark_list_vtxos() as Promise<ArkadeVtxoListResult>,
     )
   },
 

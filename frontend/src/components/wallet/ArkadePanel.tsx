@@ -134,6 +134,9 @@ export function ArkadePanel() {
         <ArkadeExitSection />
 
         <div className="flex flex-wrap gap-2">
+          <Button type="button" variant="outline" size="sm" asChild>
+            <Link to="/wallet/arkade/vtxos">View VTXOs</Link>
+          </Button>
           <InfomodeWrapper
             infoId={ARKADE_INFOMODE_IDS.boardFromOnchain}
             infoComponent={ArkadeBoardingInfomodeContent}

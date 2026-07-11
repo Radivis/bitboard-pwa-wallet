@@ -14,6 +14,7 @@ feature:
     - As a user, I want to exit Arkade to an on-chain address collaboratively when the operator is available
     - As a user, I want to exit a specific VTXO unilaterally without operator cooperation when needed
     - As a user, I want the app to keep working when the Arkade operator rotates its signing key, with clear guidance on migrating or exiting funds
+    - As a user, I want to view individual VTXOs and their state (classification, flags, expiry) in a compact inventory
   requirements:
     - Arkade is gated by isArkadeEnabled (default off) and isMainnetAccessEnabled for mainnet
     - Arkade is available on mainnet, signet, and regtest (local arkd via arkade-regtest for dev/E2E); not on lab in v1
@@ -89,6 +90,21 @@ feature:
         description: When discover_keys fails during operator sync but list_vtxos succeeds, sync lifecycle records a warningMessage and dashboard/management show a non-blocking sync warning banner
       - id: ARK-SYNC-02
         description: A later successful sync without key-discovery failure clears warningMessage
+    vtxo_viewer:
+      - id: ARK-VTX-01
+        description: VTXO viewer page lists VTXO cards when session open and Arkade active
+      - id: ARK-VTX-02
+        description: Each card shows id, amount, classification, true-only flag chips, created and expiry timestamps
+      - id: ARK-VTX-03
+        description: Hide finalized defaults on; toggle shows finalized cards
+      - id: ARK-VTX-04
+        description: Search filters by partial id or sats amount
+      - id: ARK-VTX-05
+        description: Classification chips filter grid; counts reflect full list
+      - id: ARK-VTX-06
+        description: Pagination at 20 cards when filtered count exceeds page size
+      - id: ARK-VTX-07
+        description: Management panel links to VTXO viewer
   pages:
     - ArkadeManagement:
       - description: "Arkade status on Management page"
@@ -105,6 +121,7 @@ feature:
         - signer migration banner when operator signing key rotated (migratable, due now, or expired regimes)
         - pending recovery banner when funds are locked past cooperative migration cutoff
         - recoverable VTXO banner when operator reports swept/expired/sub-dust VTXOs with Recover now action
+        - View VTXOs link to /wallet/arkade/vtxos
       - requirements:
         - Shown only when isArkadeEnabled and current network supports Arkade
         - Collaborative exit and fee estimates via bitboard-ark WASM in arkade.worker
@@ -135,6 +152,20 @@ feature:
         - boarding address from SDK
         - amount to send from on-chain wallet
         - steps for confirm on-chain then onboard via Ramps
+    - ArkadeVtxoViewer:
+      - path: /wallet/arkade/vtxos
+      - file: frontend/src/routes/wallet/arkade/vtxos.tsx
+      - visible_elements:
+        - VTXO card grid (id, amount, classification, flag chips, created/expiry)
+        - search by id or sats amount
+        - classification filter chips with counts
+        - sort by amount, expiry, or created
+        - hide finalized toggle (default on)
+        - pagination at 20 cards per page
+        - fromSnapshotSyncedAt subtitle when list served from local snapshot
+      - requirements:
+        - Contracts ARK-VTX-01 through ARK-VTX-07
+        - Shown only when isArkadeEnabled and current network supports Arkade
     - DashboardArkadeBlock:
       - description: "Separate Arkade balance on dashboard"
       - file: frontend/src/components/wallet/ArkadeDashboardBalance.tsx

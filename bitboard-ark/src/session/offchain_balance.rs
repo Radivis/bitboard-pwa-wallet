@@ -70,6 +70,8 @@ impl ArkSession {
     }
 }
 
-fn legacy_signer_pk_fallback(operator_identity: &OperatorIdentity) -> Option<XOnlyPublicKey> {
+pub(crate) fn legacy_signer_pk_fallback(
+    operator_identity: &OperatorIdentity,
+) -> Option<XOnlyPublicKey> {
     XOnlyPublicKey::from_str(&operator_identity.signer_pk_hex).ok()
 }

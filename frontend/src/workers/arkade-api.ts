@@ -72,6 +72,34 @@ export interface ArkadeVtxoExpiryStatus {
   expiringSoonCount: number
 }
 
+export type ArkadeVtxoClassification =
+  | 'pre_confirmed'
+  | 'confirmed'
+  | 'recoverable_settleable'
+  | 'recoverable_pending_operator_sweep'
+  | 'pending_recovery'
+  | 'exiting'
+  | 'finalized'
+
+export interface ArkadeVtxoRowBase {
+  id: string
+  amountSats: number
+  createdAt: number
+  expiresAt: number
+  classification: ArkadeVtxoClassification
+  isPreconfirmed: boolean
+  isRecoverable: boolean
+  isUnrolled: boolean
+  isSwept: boolean
+  isSpent: boolean
+}
+
+export interface ArkadeVtxoListResult {
+  rows: ArkadeVtxoRowBase[]
+  /** Unix seconds from offchain_vtxo_snapshot.synced_at when served from local fallback. */
+  fromSnapshotSyncedAt: number | null
+}
+
 export interface ArkadePaymentRow {
   direction: 'incoming' | 'outgoing'
   amountSats: number
@@ -303,6 +331,7 @@ export interface ArkadeService {
   getRecoverableVtxoFeeEstimate(): Promise<ArkadeRecoverableVtxoFeeEstimate>
   recoverRecoverableVtxos(): Promise<string | null>
   listExitCandidates(): Promise<ArkadeExitCandidateRow[]>
+  listVtxos(): Promise<ArkadeVtxoListResult>
   listUnilateralExitsInProgress(): Promise<ArkadeUnilateralExitInProgressRow[]>
   getOnchainBumperInfo(): Promise<ArkadeOnchainBumperInfo>
   collaborativeExit(params: ArkadeCollaborativeExitParams): Promise<string>

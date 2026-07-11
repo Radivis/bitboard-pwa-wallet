@@ -99,6 +99,40 @@ pub struct VtxoExpiryStatusDto {
     pub expiring_soon_count: u32,
 }
 
+#[derive(Debug, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum VtxoClassificationDto {
+    PreConfirmed,
+    Confirmed,
+    RecoverableSettleable,
+    RecoverablePendingOperatorSweep,
+    PendingRecovery,
+    Exiting,
+    Finalized,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VtxoRowDto {
+    pub id: String,
+    pub amount_sats: u64,
+    pub created_at: i64,
+    pub expires_at: i64,
+    pub classification: VtxoClassificationDto,
+    pub is_preconfirmed: bool,
+    pub is_recoverable: bool,
+    pub is_unrolled: bool,
+    pub is_swept: bool,
+    pub is_spent: bool,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VtxoListResultDto {
+    pub rows: Vec<VtxoRowDto>,
+    pub from_snapshot_synced_at: Option<i64>,
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DelegateInfoDto {
