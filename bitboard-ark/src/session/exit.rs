@@ -99,10 +99,10 @@ async fn unroll_branch_confirmed_on_chain<B: Blockchain>(
     branch_txids: &[Txid],
     published_vtxo_txid: &str,
 ) -> ArkResult<bool> {
-    if let Ok(target_txid) = Txid::from_str(published_vtxo_txid) {
-        if blockchain.find_tx(&target_txid).await?.is_some() {
-            return Ok(true);
-        }
+    if let Ok(target_txid) = Txid::from_str(published_vtxo_txid)
+        && blockchain.find_tx(&target_txid).await?.is_some()
+    {
+        return Ok(true);
     }
     for branch_txid in branch_txids {
         if blockchain.find_tx(branch_txid).await?.is_some() {
