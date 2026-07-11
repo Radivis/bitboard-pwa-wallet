@@ -962,7 +962,7 @@ export function useArkadeUnilateralUnrollMutation() {
       ) {
         return undefined
       }
-      // Unilateral: exit line only — post-unroll WASM excludes VTXO from spendable via spent bucket.
+      // Unilateral: exit line only — post-unroll WASM excludes VTXO from spendable via exiting sub-bucket.
       return applyOptimisticExitBalanceDeduction(
         queryClient,
         activeWalletId,

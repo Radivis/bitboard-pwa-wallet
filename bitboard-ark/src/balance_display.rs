@@ -33,7 +33,8 @@ pub struct ArkadeBalanceInputs {
 /// Unconfirmed bumper-wallet UTXOs are omitted from `total_sats` (only `onchain.confirmed` counts).
 ///
 /// `unilateral_exit_in_progress_sats` is informational only: after unroll, unrolled VTXOs live in
-/// the `spent` bucket and are already excluded from spendable offchain totals. Do not subtract this
+/// the **exiting** sub-bucket (under `unspendable`) and are already excluded from spendable offchain
+/// totals. Do not subtract this
 /// field from net spendable — see `docs/arkade-bitboard-wallet-model.md` (unilateral exit timing).
 ///
 /// `collaborative_exit_in_progress_sats` is subtracted from net fields while the operator snapshot
