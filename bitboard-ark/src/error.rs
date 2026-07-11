@@ -17,6 +17,8 @@ pub const CODE_PERSISTENCE: &str = "persistence";
 pub const CODE_WALLET: &str = "wallet";
 pub const CODE_CLIENT: &str = "client";
 pub const CODE_OPERATOR_INDEXER_CATCHING_UP: &str = "operator_indexer_catching_up";
+pub const CODE_UNILATERAL_UNROLL_NOT_CONFIRMED_ON_CHAIN: &str =
+    "unilateral_unroll_not_confirmed_on_chain";
 pub const CODE_BLOCKCHAIN: &str = "blockchain";
 pub const CODE_MNEMONIC: &str = "mnemonic";
 pub const CODE_SERIALIZATION: &str = "serialization";
@@ -78,6 +80,9 @@ pub enum ArkWasmError {
     )]
     OperatorIndexerCatchingUp,
 
+    #[error("Unilateral unroll could not be confirmed on-chain ({txid})")]
+    UnilateralUnrollNotConfirmedOnChain { txid: String },
+
     #[error("{0}")]
     Boarding(String),
 
@@ -131,6 +136,9 @@ impl ArkWasmError {
             | Self::VtxoNotInUnilateralExit { .. }
             | Self::VtxoUnilateralExitNotReady { .. } => CODE_VALIDATION,
             Self::OperatorIndexerCatchingUp => CODE_OPERATOR_INDEXER_CATCHING_UP,
+            Self::UnilateralUnrollNotConfirmedOnChain { .. } => {
+                CODE_UNILATERAL_UNROLL_NOT_CONFIRMED_ON_CHAIN
+            }
             Self::DelegatorNotConfigured | Self::Delegator(_) | Self::InvalidDelegatorFee(_) => {
                 CODE_DELEGATOR
             }
@@ -198,6 +206,13 @@ mod tests {
                 .to_string()
                 .contains("Operator indexer is still catching up")
         );
+    }
+
+    #[test]
+    fn unilateral_unroll_not_confirmed_on_chain_has_stable_code() {
+        let error = ArkWasmError::UnilateralUnrollNotConfirmedOnChain { txid: "abc".into() };
+        assert_eq!(error.code(), CODE_UNILATERAL_UNROLL_NOT_CONFIRMED_ON_CHAIN);
+        assert!(error.to_string().contains("abc"));
     }
 
     #[test]

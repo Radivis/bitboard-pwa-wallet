@@ -308,6 +308,9 @@ pub struct UnrollProgressEvent {
 #[serde(rename_all = "camelCase")]
 pub struct UnrollResult {
     pub vtxo_txid: String,
+    pub operator_indexer_confirmed: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub indexer_warning: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]

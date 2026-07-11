@@ -131,6 +131,16 @@ Bitboard keeps the **exit line amount stable** across steps 1→4. Net spendable
 
 Implementation touchpoints: `build_arkade_balance_dto` (WASM), `exit_balance_components` / `reconcile_pending_exit_deductions` (persistence), `arkade-exit-balance-optimistic.ts` (React Query cache).
 
+### Post-unroll operator contract (ARK-EXIT-11)
+
+After on-chain unroll broadcasts, `run_unilateral_unroll` sets local `is_unrolled` immediately, then polls operator `list_vtxos` (with `sync_with_operator` between attempts) until the ASP marks the VTXO `is_unrolled && !is_spent`, or the poll window expires.
+
+- **Sticky merge:** `merge_sticky_unrolled_flags` preserves local `is_unrolled` across operator sync while ASP lags; sticky clears when the operator reports `is_spent` or drops the VTXO.
+- **Graceful timeout:** If on-chain unroll is visible via Esplora but ASP never sets `is_unrolled` within the poll window, unroll still succeeds with `indexerWarning` — complete exit may retry indexer lag separately (`ARK-EXIT-05`).
+- **Hard failure:** If neither ASP nor Esplora confirms the unroll after the poll window, WASM returns `unilateral_unroll_not_confirmed_on_chain`.
+
+Residual edge cases where ASP reports `is_swept` without `is_unrolled` during an abandoned unilateral exit (cooperative recover override) remain documented in deferred Operation Labyrinth Step 3 work; recover + SSE fixes addressed the common stuck-wallet path.
+
 ### Unilateral exit vs recoverable and expiry UX
 
 Vendored **ark-core** classifies `is_unrolled && !is_spent` VTXOs into the **exiting** sub-bucket before recoverable (aligned with arkd `recoverable_only`, which excludes `Unrolled`). `is_recoverable()` also returns false when `is_unrolled`.

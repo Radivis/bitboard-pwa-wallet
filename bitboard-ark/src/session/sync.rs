@@ -4,7 +4,9 @@ use ark_core::server::VirtualTxOutPoint;
 use crate::api_types::OperatorSyncResultDto;
 use crate::error::ArkResult;
 use crate::exit_balance::reconcile_pending_exit_deductions;
-use crate::offchain_snapshot::snapshot_from_virtual_tx_outpoints_with_script_lookup;
+use crate::offchain_snapshot::{
+    merge_sticky_unrolled_flags, snapshot_from_virtual_tx_outpoints_with_script_lookup,
+};
 
 use super::ArkSession;
 use super::mappers::{current_unix_timestamp, warn_offchain_key_discovery_failed};
@@ -20,13 +22,15 @@ impl ArkSession {
     pub async fn sync_with_operator(&self) -> ArkResult<OperatorSyncResultDto> {
         let key_discovery_warning = self.sync_offchain_keys().await;
         let (vtxo_list, script_map) = self.client.list_vtxos().await?;
+        let prior_snapshot = self.wallet_db.snapshot().offchain_vtxo_snapshot.clone();
         let all_points: Vec<VirtualTxOutPoint> = vtxo_list.all().cloned().collect();
-        let snapshot = snapshot_from_virtual_tx_outpoints_with_script_lookup(
+        let mut snapshot = snapshot_from_virtual_tx_outpoints_with_script_lookup(
             self.client.server_info()?.dust.to_sat(),
             current_unix_timestamp(),
             all_points,
             |script| script_map.get(script).map(|vtxo| vtxo.server_pk()),
         );
+        merge_sticky_unrolled_flags(prior_snapshot.as_ref(), &mut snapshot);
         self.wallet_db.set_offchain_vtxo_snapshot(snapshot.clone());
         self.reconcile_pending_exit_deductions_with_snapshot(&snapshot)?;
         Ok(OperatorSyncResultDto {

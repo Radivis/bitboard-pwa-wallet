@@ -247,6 +247,33 @@ pub fn snapshot_from_virtual_tx_outpoints_with_script_lookup(
     }
 }
 
+/// Preserve local `is_unrolled` when ASP indexer lags after unilateral unroll.
+///
+/// Clears sticky state when the operator reports `is_spent` or removes the VTXO from the list.
+pub fn merge_sticky_unrolled_flags(
+    prior: Option<&OffchainVtxoSnapshot>,
+    incoming: &mut OffchainVtxoSnapshot,
+) {
+    let Some(prior) = prior else {
+        return;
+    };
+    let prior_sticky: HashMap<(String, u32), ()> = prior
+        .virtual_tx_outpoints
+        .iter()
+        .filter(|record| record.is_unrolled && !record.is_spent)
+        .map(|record| ((record.txid.clone(), record.vout), ()))
+        .collect();
+
+    for record in &mut incoming.virtual_tx_outpoints {
+        if record.is_spent {
+            continue;
+        }
+        if prior_sticky.contains_key(&(record.txid.clone(), record.vout)) {
+            record.is_unrolled = true;
+        }
+    }
+}
+
 fn virtual_tx_outpoint_to_record(
     point: VirtualTxOutPoint,
     server_pk: Option<XOnlyPublicKey>,
@@ -369,9 +396,9 @@ fn generate_outgoing_vtxo_transaction_history(
 #[cfg(test)]
 mod tests {
     use super::{
-        offchain_balance_buckets_from_snapshot, offchain_balance_sats_from_snapshot,
-        snapshot_from_virtual_tx_outpoints, snapshot_from_virtual_tx_outpoints_with_script_lookup,
-        vtxo_list_from_snapshot,
+        merge_sticky_unrolled_flags, offchain_balance_buckets_from_snapshot,
+        offchain_balance_sats_from_snapshot, snapshot_from_virtual_tx_outpoints,
+        snapshot_from_virtual_tx_outpoints_with_script_lookup, vtxo_list_from_snapshot,
     };
     use crate::error::ArkWasmError;
     use crate::persistence::{OffchainVtxoSnapshot, VirtualTxOutPointRecord};
@@ -409,6 +436,106 @@ mod tests {
             ark_txid: None,
             assets: vec![],
         }
+    }
+
+    #[test]
+    fn merge_sticky_unrolled_preserves_flag_when_asp_lags() {
+        let txid = Txid::from_byte_array([0x42; 32]).to_string();
+        let prior = OffchainVtxoSnapshot {
+            synced_at: 1,
+            dust_sats: 330,
+            virtual_tx_outpoints: vec![VirtualTxOutPointRecord {
+                txid: txid.clone(),
+                vout: 0,
+                created_at: 0,
+                expires_at: 9_999_999_999,
+                amount_sats: 50_000,
+                script_hex: String::new(),
+                is_preconfirmed: false,
+                is_swept: false,
+                is_unrolled: true,
+                is_spent: false,
+                spent_by: None,
+                commitment_txids: vec![],
+                settled_by: None,
+                ark_txid: None,
+                assets: vec![],
+                server_pk_hex: None,
+            }],
+        };
+        let mut incoming = snapshot_from_virtual_tx_outpoints(
+            330,
+            2,
+            vec![VirtualTxOutPoint {
+                outpoint: OutPoint::new(Txid::from_str(&txid).expect("txid"), 0),
+                created_at: 0,
+                expires_at: 9_999_999_999,
+                amount: Amount::from_sat(50_000),
+                script: ScriptBuf::new(),
+                is_preconfirmed: false,
+                is_swept: false,
+                is_unrolled: false,
+                is_spent: false,
+                spent_by: None,
+                commitment_txids: vec![],
+                settled_by: None,
+                ark_txid: None,
+                assets: vec![],
+            }],
+        );
+
+        merge_sticky_unrolled_flags(Some(&prior), &mut incoming);
+        assert!(incoming.virtual_tx_outpoints[0].is_unrolled);
+    }
+
+    #[test]
+    fn merge_sticky_unrolled_clears_when_operator_reports_spent() {
+        let txid = Txid::from_byte_array([0x43; 32]).to_string();
+        let prior = OffchainVtxoSnapshot {
+            synced_at: 1,
+            dust_sats: 330,
+            virtual_tx_outpoints: vec![VirtualTxOutPointRecord {
+                txid: txid.clone(),
+                vout: 0,
+                created_at: 0,
+                expires_at: 9_999_999_999,
+                amount_sats: 50_000,
+                script_hex: String::new(),
+                is_preconfirmed: false,
+                is_swept: false,
+                is_unrolled: true,
+                is_spent: false,
+                spent_by: None,
+                commitment_txids: vec![],
+                settled_by: None,
+                ark_txid: None,
+                assets: vec![],
+                server_pk_hex: None,
+            }],
+        };
+        let mut incoming = snapshot_from_virtual_tx_outpoints(
+            330,
+            2,
+            vec![VirtualTxOutPoint {
+                outpoint: OutPoint::new(Txid::from_str(&txid).expect("txid"), 0),
+                created_at: 0,
+                expires_at: 9_999_999_999,
+                amount: Amount::from_sat(50_000),
+                script: ScriptBuf::new(),
+                is_preconfirmed: false,
+                is_swept: false,
+                is_unrolled: false,
+                is_spent: true,
+                spent_by: None,
+                commitment_txids: vec![],
+                settled_by: None,
+                ark_txid: None,
+                assets: vec![],
+            }],
+        );
+
+        merge_sticky_unrolled_flags(Some(&prior), &mut incoming);
+        assert!(!incoming.virtual_tx_outpoints[0].is_unrolled);
     }
 
     #[test]

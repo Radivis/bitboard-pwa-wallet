@@ -64,9 +64,18 @@ describe('unilateral unroll toast helpers', () => {
     )
   })
 
-  it('shows info toasts for unroll and wait, not done', () => {
+  it('notes indexer lag in success message when warning present', () => {
+    expect(
+      formatUnilateralUnrollSuccessMessage('587b597602803187e73cb30ca7791254a146755ee6435244d048c8d4072c72a5', {
+        indexerWarning: 'Operator indexer has not caught up.',
+      }),
+    ).toContain('Operator indexer is still catching up')
+  })
+
+  it('shows info toasts for unroll, wait, and indexer progress', () => {
     expect(shouldShowUnilateralUnrollProgressToast({ type: 'unroll' })).toBe(true)
     expect(shouldShowUnilateralUnrollProgressToast({ type: 'wait' })).toBe(true)
+    expect(shouldShowUnilateralUnrollProgressToast({ type: 'indexer' })).toBe(true)
     expect(shouldShowUnilateralUnrollProgressToast({ type: 'done' })).toBe(false)
   })
 
