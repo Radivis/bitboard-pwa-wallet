@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Renamed "spent" bucket internally to "unspendable" for more clarity
+- Vercel Ark operator proxy streams Server-Sent Events (batch events, script subscriptions) instead of buffering long-lived responses; `maxDuration` raised to 300s
 
 
 ### Fixed
