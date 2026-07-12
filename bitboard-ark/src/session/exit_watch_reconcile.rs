@@ -198,13 +198,12 @@ async fn reconcile_missing_watch(
         .client
         .list_vtxos_for_outpoints(vec![outpoint])
         .await
-    {
-        if let Some(virtual_tx_outpoint) = vtxo_list.all().find(|virtual_tx_outpoint| {
+        && let Some(virtual_tx_outpoint) = vtxo_list.all().find(|virtual_tx_outpoint| {
             virtual_tx_outpoint.outpoint.txid == outpoint.txid
                 && virtual_tx_outpoint.outpoint.vout == outpoint.vout
-        }) {
-            return Ok(classify_operator_vtxo(virtual_tx_outpoint));
-        }
+        })
+    {
+        return Ok(classify_operator_vtxo(virtual_tx_outpoint));
     }
 
     let blockchain = session.client.blockchain();
