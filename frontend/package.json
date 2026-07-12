@@ -57,7 +57,7 @@
     "katex": "0.16.45",
     "kysely": "0.29.0",
     "kysely-wasqlite-worker": "1.2.1",
-    "lucide-react": "1.8.0",
+    "lucide-react": "^1.24.0",
     "qr-scanner": "1.4.2",
     "qrcode.react": "4.2.0",
     "radix-ui": "1.4.3",

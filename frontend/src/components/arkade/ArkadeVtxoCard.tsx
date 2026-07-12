@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
+import { ArkadeVtxoClassificationIcon } from '@/components/arkade/ArkadeVtxoClassificationIcon'
 import {
   formatArkadeVtxoDateTime,
   getArkadeVtxoClassificationLabel,
@@ -46,7 +47,11 @@ export function ArkadeVtxoCard({ row }: ArkadeVtxoCardProps) {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-sm font-semibold">
+          <span className="flex items-center gap-1.5 text-sm font-semibold">
+            <ArkadeVtxoClassificationIcon
+              classification={row.classification}
+              className="h-4 w-4"
+            />
             {getArkadeVtxoClassificationLabel(row.classification)}
           </span>
           {flagChips.map((chip) => (

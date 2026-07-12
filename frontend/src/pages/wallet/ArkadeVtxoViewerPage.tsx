@@ -4,6 +4,7 @@ import { Loader2 } from 'lucide-react'
 import { format } from 'date-fns'
 import { ArkadeIcon } from '@/components/icons/ArkadeIcon'
 import { ArkadeVtxoCard } from '@/components/arkade/ArkadeVtxoCard'
+import { ArkadeVtxoClassificationIcon } from '@/components/arkade/ArkadeVtxoClassificationIcon'
 import { CardPagination } from '@/components/CardPagination'
 import { PageHeader } from '@/components/PageHeader'
 import { Button } from '@/components/ui/button'
@@ -162,12 +163,14 @@ export function ArkadeVtxoViewerPage() {
               type="button"
               size="sm"
               variant={classificationFilter === classification ? 'default' : 'outline'}
+              className="gap-1.5"
               onClick={() =>
                 setClassificationFilter((current) =>
                   current === classification ? null : classification,
                 )
               }
             >
+              <ArkadeVtxoClassificationIcon classification={classification} className="h-4 w-4" />
               {getArkadeVtxoClassificationLabel(classification)} (
               {classificationCounts[classification]})
             </Button>
