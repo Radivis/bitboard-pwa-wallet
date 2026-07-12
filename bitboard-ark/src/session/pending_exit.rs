@@ -4,10 +4,26 @@ use crate::error::{ArkResult, ArkWasmError};
 use crate::exit_balance::{
     sum_pending_exit_sats_by_kind, unilateral_exit_in_progress_sats_from_snapshot,
 };
-use crate::persistence::{PendingExitDeductionRecord, PendingExitKind};
+use crate::persistence::{JsonPersistenceDb, PendingExitDeductionRecord, PendingExitKind};
 
 use super::ArkSession;
 use super::mappers::{current_unix_timestamp, parse_outpoint};
+
+pub(crate) fn clear_pending_unilateral_exit_for_outpoint_in_wallet_db(
+    wallet_db: &JsonPersistenceDb,
+    txid: &str,
+    vout: u32,
+) {
+    let mut pending = wallet_db.pending_exit_deductions();
+    pending.retain(|record| {
+        if record.kind != PendingExitKind::Unilateral {
+            return true;
+        }
+        let record_vout = record.vout.unwrap_or(0);
+        !(record.vtxo_txid.as_deref() == Some(txid) && record_vout == vout)
+    });
+    wallet_db.set_pending_exit_deductions(pending);
+}
 
 impl ArkSession {
     /// Stable exit-pipeline totals for the balance DTO.
