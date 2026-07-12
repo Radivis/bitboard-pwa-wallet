@@ -89,14 +89,18 @@ pub fn offchain_balance_buckets_from_snapshot(
     now: i64,
     legacy_signer_pk_fallback: Option<XOnlyPublicKey>,
     pending_exit_deductions: &[PendingExitDeductionRecord],
+    unilateral_exit_watches: &[crate::persistence::UnilateralExitWatchRecord],
 ) -> ArkResult<OffchainBalanceBuckets> {
     let vtxo_list = vtxo_list_from_snapshot(snapshot)?;
     let script_lookup = script_to_server_pk_lookup(snapshot, legacy_signer_pk_fallback)?;
     let balance = compute_offchain_balance(&vtxo_list, &script_lookup, server_info, now)
         .map_err(ArkWasmError::from)?;
     let mut buckets = OffchainBalanceBuckets::from_live(&balance);
-    let in_progress =
-        unilateral_exit_in_progress_outpoints(Some(snapshot), pending_exit_deductions)?;
+    let in_progress = unilateral_exit_in_progress_outpoints(
+        Some(snapshot),
+        pending_exit_deductions,
+        unilateral_exit_watches,
+    )?;
     buckets.pending_recovery_sats = pending_recovery_sats_excluding_unilateral_exit(
         &vtxo_list,
         server_info,
@@ -249,7 +253,8 @@ pub fn snapshot_from_virtual_tx_outpoints_with_script_lookup(
 
 /// Preserve local `is_unrolled` when ASP indexer lags after unilateral unroll.
 ///
-/// Clears sticky state when the operator reports `is_spent` or removes the VTXO from the list.
+/// Only applies to VTXOs still present in the incoming operator list. Missing watches are
+/// handled by [`crate::session::exit_watch_reconcile::reconcile_exiting_vtxo_watches`].
 pub fn merge_sticky_unrolled_flags(
     prior: Option<&OffchainVtxoSnapshot>,
     incoming: &mut OffchainVtxoSnapshot,
@@ -666,9 +671,15 @@ mod tests {
                 500_000,
             )],
         );
-        let buckets =
-            offchain_balance_buckets_from_snapshot(&snapshot, &server_info, 1_000_000, None, &[])
-                .expect("snapshot buckets");
+        let buckets = offchain_balance_buckets_from_snapshot(
+            &snapshot,
+            &server_info,
+            1_000_000,
+            None,
+            &[],
+            &[],
+        )
+        .expect("snapshot buckets");
 
         assert_eq!(buckets.confirmed_sats, 0);
         assert_eq!(buckets.pending_recovery_sats, 50_000);
@@ -736,6 +747,7 @@ mod tests {
             1_000_000,
             None,
             &pending,
+            &[],
         )
         .expect("snapshot buckets");
 

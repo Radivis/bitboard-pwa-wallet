@@ -88,6 +88,8 @@ pub struct BalanceDto {
 pub struct OperatorSyncResultDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub key_discovery_warning: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub exiting_vtxo_warning: Option<String>,
 }
 
 #[derive(Debug, Serialize)]

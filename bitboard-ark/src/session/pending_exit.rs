@@ -7,6 +7,9 @@ use crate::exit_balance::{
 use crate::persistence::{JsonPersistenceDb, PendingExitDeductionRecord, PendingExitKind};
 
 use super::ArkSession;
+use super::exit_watch::{
+    register_unilateral_exit_watch, remove_unilateral_exit_watches_for_txids_in_wallet_db,
+};
 use super::mappers::{current_unix_timestamp, parse_outpoint};
 
 pub(crate) fn clear_pending_unilateral_exit_for_outpoint_in_wallet_db(
@@ -93,6 +96,7 @@ impl ArkSession {
                 started_at: current_unix_timestamp(),
                 baseline_offchain_spendable_sats: None,
             });
+        register_unilateral_exit_watch(&self.wallet_db, txid, vout, amount_sats);
     }
 
     pub(crate) fn record_pending_collaborative_exit(&self, amount_sats: u64, baseline_sats: u64) {
@@ -120,5 +124,6 @@ impl ArkSession {
                 .is_none_or(|txid| !txid_set.contains(txid))
         });
         self.wallet_db.set_pending_exit_deductions(pending);
+        remove_unilateral_exit_watches_for_txids_in_wallet_db(&self.wallet_db, vtxo_txids);
     }
 }

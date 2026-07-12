@@ -8,7 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- Post-unroll operator indexer poll (ARK-EXIT-11) with graceful timeout warning when on-chain unroll is confirmed but ASP `is_unrolled` lags; sticky `is_unrolled` merge during operator sync
+- Post-unroll operator indexer poll (ARK-EXIT-11) with graceful timeout warning when on-chain unroll is confirmed but ASP `is_unrolled` lags; sticky `is_unrolled` merge during operator sync for in-list rows
+- Explicit `unilateral_exit_watches` registry with post-sync reconcile (ARK-EXIT-12, ARK-SYNC-03); targeted operator lookups and Esplora probes per truth table; non-blocking `exitingVtxoWarning` on sync
 
 ### Changed
 - Renamed "spent" bucket internally to "unspendable" for more clarity

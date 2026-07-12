@@ -7,6 +7,7 @@ export type { ArkadeOperatorConnectionSummary }
 
 export interface ArkadeOperatorSyncResult {
   keyDiscoveryWarning?: string
+  exitingVtxoWarning?: string
 }
 
 export interface ArkadeBalanceInfo {

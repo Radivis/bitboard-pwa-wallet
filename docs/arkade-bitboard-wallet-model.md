@@ -135,7 +135,8 @@ Implementation touchpoints: `build_arkade_balance_dto` (WASM), `exit_balance_com
 
 After on-chain unroll broadcasts, `run_unilateral_unroll` sets local `is_unrolled` immediately, then polls operator `list_vtxos` (with `sync_with_operator` between attempts) until the ASP marks the VTXO `is_unrolled && !is_spent`, or the poll window expires.
 
-- **Sticky merge:** `merge_sticky_unrolled_flags` preserves local `is_unrolled` across operator sync while ASP lags; sticky clears when the operator reports `is_spent` or drops the VTXO.
+- **Sticky merge:** `merge_sticky_unrolled_flags` preserves local `is_unrolled` for VTXOs still returned by the operator while ASP lags on the `is_unrolled` flag; missing or divergent watches are reconciled via `unilateral_exit_watches` (ARK-EXIT-12).
+- **Watch reconcile:** After each operator sync, `reconcile_exiting_vtxo_watches` runs targeted `list_vtxos_for_outpoints` and narrow Esplora probes per the truth table — never clears exiting state on full-list absence alone (ARK-SYNC-03).
 - **Graceful timeout:** If on-chain unroll is visible via Esplora but ASP never sets `is_unrolled` within the poll window, unroll still succeeds with `indexerWarning` — complete exit may retry indexer lag separately (`ARK-EXIT-05`).
 - **Hard failure:** If neither ASP nor Esplora confirms the unroll after the poll window, WASM returns `unilateral_unroll_not_confirmed_on_chain`.
 
