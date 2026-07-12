@@ -113,6 +113,19 @@ async function runArkadeSignerMigrationBody(): Promise<ArkadeSignerMigrationResu
   return worker.migrateDeprecatedSignerVtxos()
 }
 
+function mergeArkadeSyncWarningMessages(
+  syncResult: ArkadeOperatorSyncResult,
+): string | null {
+  const parts = [
+    syncResult.keyDiscoveryWarning,
+    syncResult.exitingVtxoWarning,
+  ].filter((part): part is string => part != null && part !== '')
+  if (parts.length === 0) {
+    return null
+  }
+  return parts.join('\n')
+}
+
 function applySuccessfulArkadeSyncSnapshot(
   scope: ArkadeRailScope,
   syncResult: ArkadeOperatorSyncResult,
@@ -121,7 +134,7 @@ function applySuccessfulArkadeSyncSnapshot(
     syncPhase: 'not-syncing',
     railScope: scope,
     errorMessage: null,
-    warningMessage: syncResult.keyDiscoveryWarning ?? null,
+    warningMessage: mergeArkadeSyncWarningMessages(syncResult),
   })
 }
 

@@ -114,7 +114,7 @@ describe('CollaborativeExitDialog', () => {
         data: {
           confirmedSats: 0,
           totalSats: 50_000,
-          pendingRecoverySats: 50_000,
+          pendingRecoveryDueToExpiredSignerSats: 50_000,
         },
       },
       canCollaborativeExit: false,
@@ -123,7 +123,7 @@ describe('CollaborativeExitDialog', () => {
     renderWithProviders(<CollaborativeExitDialog exitFlow={exitFlow} />)
 
     expect(screen.getByTestId('arkade-collab-exit-rotation-blocked')).toBeInTheDocument()
-    expect(screen.getByTestId('arkade-collab-exit-pending-recovery')).toBeInTheDocument()
+    expect(screen.getByTestId('arkade-collab-exit-pending-recovery-due-to-expired-signer')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Confirm exit' })).toBeDisabled()
   })
 

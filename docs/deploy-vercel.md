@@ -147,15 +147,16 @@ If a fetch against the alias still shows old behavior immediately after a deploy
 
 ## Serverless API handlers (`frontend/api/`)
 
-The wallet ships three same-origin proxies under [`frontend/api/`](../frontend/api/):
+The wallet ships same-origin proxies under [`frontend/api/`](../frontend/api/):
 
 - [`api/esplora/[...path].ts`](../frontend/api/esplora/[...path].ts) — Esplora endpoints (provider + network allowlist).
 - [`api/faucet/[...path].ts`](../frontend/api/faucet/[...path].ts) — Testnet faucets (id allowlist).
 - [`api/fiat-rates/[...path].ts`](../frontend/api/fiat-rates/[...path].ts) — Kraken / CoinGecko / blockchain.info ticker endpoints.
+- [`api/arkade/operator/[...path].ts`](../frontend/api/arkade/operator/[...path].ts) — Arkade operator (mainnet/signet); unary calls are buffered, **SSE** paths (`v1/batch/events`, script subscription streams, `v1/txs` with `Accept: text/event-stream`) stream through with `maxDuration` **300s**.
 
 ### Rule: handlers must be fully self-contained
 
-API handlers in this project must **import nothing outside the entry file itself** beyond `@vercel/node` types — **no `src/`, no `api/_lib/`, no sibling `vercel-proxy-shared/` folder**. On this project, `@vercel/node`'s NFT bundling / `includeFiles` has repeatedly produced `FUNCTION_INVOCATION_FAILED` at runtime when handlers imported shared files, even with `includeFiles` set. The three handlers inline their constants and helpers on purpose; see each file's header comment for which `src/lib` module is shadowed and must be kept in sync.
+API handlers in this project must **import nothing outside the entry file itself** beyond `@vercel/node` types — **no `src/`, no `api/_lib/`, no sibling `vercel-proxy-shared/` folder**. On this project, `@vercel/node`'s NFT bundling / `includeFiles` has repeatedly produced `FUNCTION_INVOCATION_FAILED` at runtime when handlers imported shared files, even with `includeFiles` set. Handlers inline their constants and helpers on purpose; see each file's header comment for which `src/lib` module is shadowed and must be kept in sync.
 
 ### Rule: explicit rewrite per proxy in `vercel.json`
 
@@ -175,7 +176,8 @@ List each real handler file individually rather than using a broad glob:
 "functions": {
   "api/esplora/[...path].ts": { "maxDuration": 30 },
   "api/faucet/[...path].ts":  { "maxDuration": 10 },
-  "api/fiat-rates/[...path].ts": { "maxDuration": 10 }
+  "api/fiat-rates/[...path].ts": { "maxDuration": 10 },
+  "api/arkade/operator/[...path].ts": { "maxDuration": 300 }
 }
 ```
 

@@ -44,7 +44,7 @@ same stack with a different (block-denominated) `ARKD_VTXO_TREE_EXPIRY`:
 
 ### REG-05 → Rust fixture (optional)
 
-Export a boarded wallet JSON for `bitboard-ark` `cooperative_signer_migration_clears_pending_recovery_with_boarded_fixture`:
+Export a boarded wallet JSON for `bitboard-ark` `cooperative_signer_migration_clears_pending_recovery_due_to_expired_signer_with_boarded_fixture`:
 
 ```bash
 # from frontend/ — long-expiry stack + E2E (writes test-results/arkade-boarded-fixture.json)
@@ -55,7 +55,7 @@ ARKD_VTXO_TREE_EXPIRY=200 REQUIRE_ARKADE_REGTEST=1 VITE_E2E_ARKADE_REGTEST=true 
 # from repo root — consume the same file
 ARKADE_REGTEST_BOARDED_FIXTURE=frontend/test-results/arkade-boarded-fixture.json ARKADE_REGTEST_RUN=1 \
   cargo test -p bitboard-ark --test signer_migration_session_regtest \
-  cooperative_signer_migration_clears_pending_recovery_with_boarded_fixture -- --ignored --test-threads=1
+  cooperative_signer_migration_clears_pending_recovery_due_to_expired_signer_with_boarded_fixture -- --ignored --test-threads=1
 ```
 
 Use a repo path (not `/tmp`) so E2E and `cargo test` see the same file. Look for `wrote boarded wallet fixture for Rust regtest to …` in the Playwright output.

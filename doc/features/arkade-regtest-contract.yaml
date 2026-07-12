@@ -17,7 +17,7 @@ contracts:
     description: Full unilateral unroll — select VTXO, unroll, mine timelock blocks, complete exit on-chain
     tags: ["@arkade-regtest"]
   - id: E2E-ARK-REG-05
-    description: Fund on pre-rotation signer, rotate-signer with future cutoff, cooperative migrate via banner, assert no pendingRecoverySats or pending-recovery breakdown
+    description: Fund on pre-rotation signer, rotate-signer with future cutoff, cooperative migrate via banner, assert no pendingRecoveryDueToExpiredSignerSats or pending-recovery-due-to-expired-signer breakdown
     tags: ["@arkade-signer-regtest"]
 
 infrastructure:

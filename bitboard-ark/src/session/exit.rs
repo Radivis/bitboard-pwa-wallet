@@ -3,6 +3,7 @@ use std::collections::HashSet;
 use std::str::FromStr;
 
 use ark_client::Blockchain;
+use ark_core::VtxoList;
 use bitcoin::{Amount, OutPoint, Txid, secp256k1::rand::rngs::OsRng};
 
 use crate::api_types::{
@@ -15,25 +16,41 @@ use crate::api_types::{
 };
 use crate::constants::{
     MIN_FEE_RATE_SAT_PER_VB, UNILATERAL_EXIT_CHILD_VSIZE_VB, UNROLL_EVENT_TYPE_DONE,
-    UNROLL_EVENT_TYPE_UNROLL, UNROLL_EVENT_TYPE_WAIT,
+    UNROLL_EVENT_TYPE_INDEXER, UNROLL_EVENT_TYPE_UNROLL, UNROLL_EVENT_TYPE_WAIT,
 };
 use crate::error::{ArkResult, ArkWasmError};
 use crate::exit_balance::{
     UnilateralExitOutpointKey, exit_outpoint_key, exit_outpoint_key_from_str,
     is_unilateral_exit_in_progress_outpoint, unilateral_exit_in_progress_outpoints,
 };
-use crate::persistence::{PendingExitDeductionRecord, PendingExitKind};
+use crate::persistence::{
+    JsonPersistenceDb, OffchainVtxoSnapshot, PendingExitDeductionRecord, PendingExitKind,
+};
 
 use super::ArkSession;
+use super::exit_watch::{
+    enrich_unilateral_exit_watch_after_unroll, remove_unilateral_exit_watch_in_wallet_db,
+};
 use super::mappers::{
     empty_fee_info, map_exit_candidate, map_intent_fee_configured, parse_onchain_address,
     parse_outpoint,
 };
+use super::pending_exit::clear_pending_unilateral_exit_for_outpoint_in_wallet_db;
 
 /// arkd's indexer can lag behind confirmed unroll broadcasts when marking `is_unrolled`.
-const COMPLETION_UNROLLED_INDEXER_POLL_MAX: u8 = 60;
-const COMPLETION_UNROLLED_INDEXER_POLL_DELAY: std::time::Duration =
-    std::time::Duration::from_millis(1_000);
+/// Unroll post-broadcast poll and completion retry share the same window (~60s).
+const OPERATOR_INDEXER_POLL_MAX: u8 = 60;
+const OPERATOR_INDEXER_POLL_DELAY: std::time::Duration = std::time::Duration::from_millis(1_000);
+
+const UNROLL_INDEXER_PROGRESS_MESSAGE: &str = "Waiting for operator to index unilateral unroll…";
+
+pub(crate) const UNROLL_INDEXER_WARNING: &str = "Unroll confirmed on-chain, but the operator indexer has not marked this VTXO as unrolled yet. You can continue; Complete unilateral exit may take longer until the operator catches up.";
+
+#[derive(Debug)]
+struct UnrollPollOutcome {
+    operator_indexer_confirmed: bool,
+    indexer_warning: Option<String>,
+}
 
 fn completion_awaits_unrolled_indexer(error: &ark_client::Error) -> bool {
     error
@@ -47,7 +64,91 @@ async fn sleep(duration: std::time::Duration) {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-async fn sleep(_duration: std::time::Duration) {}
+async fn sleep(duration: std::time::Duration) {
+    tokio::time::sleep(duration).await;
+}
+
+pub(crate) fn operator_vtxo_is_unrolled(vtxo_list: &VtxoList, txid: &str, vout: u32) -> bool {
+    let Ok(target_txid) = Txid::from_str(txid) else {
+        return false;
+    };
+    vtxo_list.all().any(|virtual_tx_outpoint| {
+        virtual_tx_outpoint.outpoint.txid == target_txid
+            && virtual_tx_outpoint.outpoint.vout == vout
+            && virtual_tx_outpoint.is_unrolled
+            && !virtual_tx_outpoint.is_spent
+    })
+}
+
+fn resolve_unroll_indexer_poll_timeout(
+    on_chain_confirmed: bool,
+    vtxo_txid: &str,
+) -> ArkResult<UnrollPollOutcome> {
+    if on_chain_confirmed {
+        Ok(UnrollPollOutcome {
+            operator_indexer_confirmed: false,
+            indexer_warning: Some(UNROLL_INDEXER_WARNING.to_string()),
+        })
+    } else {
+        Err(ArkWasmError::UnilateralUnrollNotConfirmedOnChain {
+            txid: vtxo_txid.to_string(),
+        })
+    }
+}
+
+async fn unroll_branch_confirmed_on_chain<B: Blockchain>(
+    blockchain: &B,
+    branch_txids: &[Txid],
+    published_vtxo_txid: &str,
+) -> ArkResult<bool> {
+    if let Ok(target_txid) = Txid::from_str(published_vtxo_txid)
+        && blockchain.find_tx(&target_txid).await?.is_some()
+    {
+        return Ok(true);
+    }
+    for branch_txid in branch_txids {
+        if blockchain.find_tx(branch_txid).await?.is_some() {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+fn set_vtxo_unrolled_flag_in_snapshot(
+    snapshot: &mut OffchainVtxoSnapshot,
+    txid: &str,
+    vout: u32,
+    is_unrolled: bool,
+) {
+    for record in &mut snapshot.virtual_tx_outpoints {
+        if record.txid == txid && record.vout == vout {
+            record.is_unrolled = is_unrolled;
+        }
+    }
+}
+
+fn set_vtxo_unrolled_flag_in_wallet_db(
+    wallet_db: &JsonPersistenceDb,
+    txid: &str,
+    vout: u32,
+    is_unrolled: bool,
+) {
+    let Some(mut snapshot) = wallet_db.snapshot().offchain_vtxo_snapshot.clone() else {
+        return;
+    };
+    set_vtxo_unrolled_flag_in_snapshot(&mut snapshot, txid, vout, is_unrolled);
+    wallet_db.set_offchain_vtxo_snapshot(snapshot);
+}
+
+fn revert_unilateral_unroll_local_state_in_wallet_db(
+    wallet_db: &JsonPersistenceDb,
+    txid: &str,
+    vout: u32,
+) {
+    set_vtxo_unrolled_flag_in_wallet_db(wallet_db, txid, vout, false);
+    clear_pending_unilateral_exit_for_outpoint_in_wallet_db(wallet_db, txid, vout);
+    remove_unilateral_exit_watch_in_wallet_db(wallet_db, txid, vout);
+}
 
 fn collaborative_exit_estimate_error_code(is_coin_select: bool) -> Option<&'static str> {
     if is_coin_select {
@@ -78,7 +179,8 @@ impl ArkSession {
         let wallet_snapshot = self.wallet_db.snapshot();
         let snapshot = wallet_snapshot.offchain_vtxo_snapshot.as_ref();
         let pending = self.wallet_db.pending_exit_deductions();
-        unilateral_exit_in_progress_outpoints(snapshot, &pending)
+        let watches = self.wallet_db.unilateral_exit_watches();
+        unilateral_exit_in_progress_outpoints(snapshot, &pending, &watches)
     }
 
     fn pending_unilateral_started_at_by_outpoint(
@@ -161,6 +263,7 @@ impl ArkSession {
             .as_ref()
             .map(|snapshot| snapshot.virtual_tx_outpoints.as_slice())
             .unwrap_or(&[]);
+        let watches = wallet_snapshot.unilateral_exit_watches;
 
         let mut rows = Vec::with_capacity(in_progress.len());
         for outpoint in in_progress {
@@ -205,10 +308,14 @@ impl ArkSession {
 
             rows.push(UnilateralExitInProgressRow {
                 id: format!("{txid}:{vout}"),
-                txid,
+                txid: txid.clone(),
                 vout,
-                amount_sats: Self::pending_unilateral_amount_sats(&pending, &outpoint),
-                virtual_status_state: "settled".to_string(),
+                amount_sats: watches
+                    .iter()
+                    .find(|watch| watch.vtxo_txid == txid && watch.vout == vout)
+                    .map(|watch| watch.amount_sats)
+                    .unwrap_or_else(|| Self::pending_unilateral_amount_sats(&pending, &outpoint)),
+                virtual_status_state: "unrolled".to_string(),
                 can_complete: false,
                 started_at: started_at_by_outpoint.get(&outpoint).copied(),
             });
@@ -395,9 +502,11 @@ impl ArkSession {
 
         let branch = self.build_unilateral_branch(target).await?;
         let mut done_vtxo_txid = txid.to_string();
+        let mut branch_txids = Vec::new();
 
         for parent_tx in branch {
             let parent_txid = parent_tx.compute_txid();
+            branch_txids.push(parent_txid);
             let status = self.client.blockchain().find_tx(&parent_txid).await?;
 
             if status.is_none() {
@@ -439,6 +548,27 @@ impl ArkSession {
             }
         }
 
+        self.mark_vtxo_unrolled_in_snapshot(txid, vout)?;
+        let poll_outcome = self
+            .poll_operator_unrolled_indexed(
+                txid,
+                vout,
+                &branch_txids,
+                &done_vtxo_txid,
+                &on_progress,
+            )
+            .await
+            .inspect_err(|error| {
+                if matches!(
+                    error,
+                    ArkWasmError::UnilateralUnrollNotConfirmedOnChain { .. }
+                ) {
+                    self.revert_unilateral_unroll_local_state(txid, vout);
+                }
+            })?;
+
+        self.persist_unilateral_exit_watch_after_unroll(txid, vout, &done_vtxo_txid, &branch_txids);
+
         on_progress(UnrollProgressEvent {
             event_type: UNROLL_EVENT_TYPE_DONE.to_string(),
             message: format!("Unroll complete for {done_vtxo_txid}"),
@@ -446,28 +576,82 @@ impl ArkSession {
             vtxo_txid: Some(done_vtxo_txid.clone()),
         });
 
-        self.mark_vtxo_unrolled_in_snapshot(txid, vout)?;
-        let _ = self.sync_with_operator().await;
-
         Ok(UnrollResult {
-            vtxo_txid: done_vtxo_txid,
+            vtxo_txid: done_vtxo_txid.clone(),
+            operator_indexer_confirmed: poll_outcome.operator_indexer_confirmed,
+            indexer_warning: poll_outcome.indexer_warning,
         })
+    }
+
+    fn persist_unilateral_exit_watch_after_unroll(
+        &self,
+        txid: &str,
+        vout: u32,
+        published_vtxo_txid: &str,
+        branch_txids: &[Txid],
+    ) {
+        enrich_unilateral_exit_watch_after_unroll(
+            &self.wallet_db,
+            txid,
+            vout,
+            published_vtxo_txid,
+            branch_txids,
+        );
+    }
+
+    async fn poll_operator_unrolled_indexed<F>(
+        &self,
+        txid: &str,
+        vout: u32,
+        branch_txids: &[Txid],
+        published_vtxo_txid: &str,
+        on_progress: &F,
+    ) -> ArkResult<UnrollPollOutcome>
+    where
+        F: Fn(UnrollProgressEvent),
+    {
+        for attempt in 0..OPERATOR_INDEXER_POLL_MAX {
+            if attempt > 0 {
+                sleep(OPERATOR_INDEXER_POLL_DELAY).await;
+            }
+            on_progress(UnrollProgressEvent {
+                event_type: UNROLL_EVENT_TYPE_INDEXER.to_string(),
+                message: UNROLL_INDEXER_PROGRESS_MESSAGE.to_string(),
+                txid: None,
+                vtxo_txid: None,
+            });
+            let vtxo_list = match self.sync_with_operator_and_vtxo_list().await {
+                Ok((vtxo_list, _sync_result)) => vtxo_list,
+                Err(_) => self.client.list_vtxos().await?.0,
+            };
+            if operator_vtxo_is_unrolled(&vtxo_list, txid, vout) {
+                return Ok(UnrollPollOutcome {
+                    operator_indexer_confirmed: true,
+                    indexer_warning: None,
+                });
+            }
+        }
+
+        let on_chain_confirmed = unroll_branch_confirmed_on_chain(
+            self.client.blockchain(),
+            branch_txids,
+            published_vtxo_txid,
+        )
+        .await?;
+        resolve_unroll_indexer_poll_timeout(on_chain_confirmed, published_vtxo_txid)
     }
 
     fn mark_vtxo_unrolled_in_snapshot(&self, txid: &str, vout: u32) -> ArkResult<()> {
         // Local reclassification: VTXO leaves gross spendable (exiting sub-bucket).
         // unilateral_exit_in_progress then counts it from exiting — must not subtract again in
         // build_arkade_balance_dto. See docs/arkade-bitboard-wallet-model.md.
-        let Some(mut snapshot) = self.wallet_db.snapshot().offchain_vtxo_snapshot.clone() else {
-            return Ok(());
-        };
-        for record in &mut snapshot.virtual_tx_outpoints {
-            if record.txid == txid && record.vout == vout {
-                record.is_unrolled = true;
-            }
-        }
-        self.wallet_db.set_offchain_vtxo_snapshot(snapshot);
+        set_vtxo_unrolled_flag_in_wallet_db(&self.wallet_db, txid, vout, true);
         Ok(())
+    }
+
+    /// Undo optimistic unroll state when neither ASP nor Esplora confirms the broadcast.
+    pub(crate) fn revert_unilateral_unroll_local_state(&self, txid: &str, vout: u32) {
+        revert_unilateral_unroll_local_state_in_wallet_db(&self.wallet_db, txid, vout);
     }
 
     pub async fn complete_unilateral_exit(
@@ -527,7 +711,7 @@ impl ArkSession {
         let fee_rate_sat_per_vb =
             resolve_completion_fee_rate_sat_per_vb(params.fee_rate_sat_per_vb);
         let mut last_error: Option<ark_client::Error> = None;
-        for _ in 0..COMPLETION_UNROLLED_INDEXER_POLL_MAX {
+        for _ in 0..OPERATOR_INDEXER_POLL_MAX {
             self.sync_with_operator().await?;
             match self
                 .client
@@ -544,7 +728,7 @@ impl ArkSession {
                 }
                 Err(error) if completion_awaits_unrolled_indexer(&error) => {
                     last_error = Some(error);
-                    sleep(COMPLETION_UNROLLED_INDEXER_POLL_DELAY).await;
+                    sleep(OPERATOR_INDEXER_POLL_DELAY).await;
                 }
                 Err(error) => return Err(error.into()),
             }
@@ -743,5 +927,158 @@ mod collaborative_exit_estimate_tests {
         assert_eq!(mapped[0].on_chain_txid, on_chain_txid.to_string());
         assert_eq!(mapped[0].on_chain_vout, 2);
         assert_eq!(mapped[0].amount_sats, 150_000);
+    }
+}
+
+#[cfg(test)]
+mod unroll_indexer_poll_tests {
+    use super::{
+        UNROLL_INDEXER_WARNING, operator_vtxo_is_unrolled, resolve_unroll_indexer_poll_timeout,
+    };
+    use ark_core::server::VirtualTxOutPoint;
+    use bitcoin::hashes::Hash;
+    use bitcoin::{Amount, OutPoint, ScriptBuf, Txid};
+
+    fn sample_vtp(txid_byte: u8, is_unrolled: bool, is_spent: bool) -> VirtualTxOutPoint {
+        VirtualTxOutPoint {
+            outpoint: OutPoint::new(Txid::from_byte_array([txid_byte; 32]), 0),
+            created_at: 0,
+            expires_at: 9_999_999_999,
+            amount: Amount::from_sat(10_000),
+            script: ScriptBuf::new(),
+            is_preconfirmed: false,
+            is_swept: false,
+            is_unrolled,
+            is_spent,
+            spent_by: None,
+            commitment_txids: vec![],
+            settled_by: None,
+            ark_txid: None,
+            assets: vec![],
+        }
+    }
+
+    #[test]
+    fn operator_vtxo_is_unrolled_detects_flag() {
+        let txid = Txid::from_byte_array([0x11; 32]);
+        let vtxo_list = ark_core::VtxoList::new(
+            Amount::from_sat(330),
+            vec![
+                sample_vtp(0x11, true, false),
+                sample_vtp(0x22, false, false),
+            ],
+        );
+        assert!(operator_vtxo_is_unrolled(&vtxo_list, &txid.to_string(), 0));
+        assert!(!operator_vtxo_is_unrolled(
+            &vtxo_list,
+            &Txid::from_byte_array([0x22; 32]).to_string(),
+            0
+        ));
+    }
+
+    #[test]
+    fn operator_vtxo_is_unrolled_ignores_spent() {
+        let txid = Txid::from_byte_array([0x33; 32]);
+        let vtxo_list =
+            ark_core::VtxoList::new(Amount::from_sat(330), vec![sample_vtp(0x33, true, true)]);
+        assert!(!operator_vtxo_is_unrolled(&vtxo_list, &txid.to_string(), 0));
+    }
+
+    #[test]
+    fn timeout_graceful_when_on_chain_confirmed() {
+        let outcome =
+            resolve_unroll_indexer_poll_timeout(true, "deadbeef").expect("graceful timeout");
+        assert!(!outcome.operator_indexer_confirmed);
+        assert_eq!(
+            outcome.indexer_warning.as_deref(),
+            Some(UNROLL_INDEXER_WARNING)
+        );
+    }
+
+    #[test]
+    fn timeout_errors_when_chain_missing() {
+        let error = resolve_unroll_indexer_poll_timeout(false, "deadbeef").unwrap_err();
+        assert!(matches!(
+            error,
+            crate::error::ArkWasmError::UnilateralUnrollNotConfirmedOnChain { txid } if txid == "deadbeef"
+        ));
+    }
+}
+
+#[cfg(test)]
+mod unroll_hard_failure_rollback_tests {
+    use super::{
+        revert_unilateral_unroll_local_state_in_wallet_db, set_vtxo_unrolled_flag_in_wallet_db,
+    };
+    use crate::persistence::{
+        JsonPersistenceDb, OffchainVtxoSnapshot, PendingExitDeductionRecord, PendingExitKind,
+        VirtualTxOutPointRecord,
+    };
+    use crate::session::exit_watch::register_unilateral_exit_watch;
+    use bitcoin::Txid;
+    use bitcoin::hashes::Hash;
+
+    fn sample_snapshot(txid_byte: u8, is_unrolled: bool) -> OffchainVtxoSnapshot {
+        let txid = Txid::from_byte_array([txid_byte; 32]).to_string();
+        OffchainVtxoSnapshot {
+            synced_at: 1,
+            dust_sats: 330,
+            virtual_tx_outpoints: vec![VirtualTxOutPointRecord {
+                txid,
+                vout: 0,
+                created_at: 0,
+                expires_at: 9_999_999_999,
+                amount_sats: 50_000,
+                script_hex: String::new(),
+                is_preconfirmed: false,
+                is_swept: false,
+                is_unrolled,
+                is_spent: false,
+                spent_by: None,
+                commitment_txids: vec![],
+                settled_by: None,
+                ark_txid: None,
+                assets: vec![],
+                server_pk_hex: None,
+            }],
+        }
+    }
+
+    #[test]
+    fn hard_failure_rollback_restores_snapshot_and_pending_exit_state() {
+        let wallet_db = JsonPersistenceDb::default();
+        let txid = Txid::from_byte_array([0x77; 32]).to_string();
+        wallet_db.set_offchain_vtxo_snapshot(sample_snapshot(0x77, false));
+        wallet_db.upsert_pending_exit_deduction(PendingExitDeductionRecord {
+            kind: PendingExitKind::Unilateral,
+            vtxo_txid: Some(txid.clone()),
+            vout: Some(0),
+            amount_sats: 50_000,
+            started_at: 1,
+            baseline_offchain_spendable_sats: None,
+        });
+        register_unilateral_exit_watch(&wallet_db, &txid, 0, 50_000);
+
+        set_vtxo_unrolled_flag_in_wallet_db(&wallet_db, &txid, 0, true);
+        assert!(
+            wallet_db
+                .snapshot()
+                .offchain_vtxo_snapshot
+                .as_ref()
+                .expect("snapshot")
+                .virtual_tx_outpoints[0]
+                .is_unrolled
+        );
+        assert_eq!(wallet_db.pending_exit_deductions().len(), 1);
+
+        revert_unilateral_unroll_local_state_in_wallet_db(&wallet_db, &txid, 0);
+
+        let snapshot = wallet_db
+            .snapshot()
+            .offchain_vtxo_snapshot
+            .expect("snapshot after rollback");
+        assert!(!snapshot.virtual_tx_outpoints[0].is_unrolled);
+        assert!(wallet_db.pending_exit_deductions().is_empty());
+        assert!(wallet_db.unilateral_exit_watches().is_empty());
     }
 }

@@ -115,7 +115,7 @@ export async function prepareUnilateralUnrollScenario(page: Page): Promise<void>
  * restart arkd, and reload so the wallet reopens with a signer migration hint.
  *
  * When `ARKADE_REGTEST_EXPORT_BOARDED_FIXTURE` is set, writes `{ mnemonic, persistence_before_rotate }`
- * JSON for `bitboard-ark` `cooperative_signer_migration_clears_pending_recovery_with_boarded_fixture`.
+ * JSON for `bitboard-ark` `cooperative_signer_migration_clears_pending_recovery_due_to_expired_signer_with_boarded_fixture`.
  */
 export async function prepareSignerMigrationScenario(page: Page): Promise<number> {
   const boardSats = DEFAULT_BOARD_SATS

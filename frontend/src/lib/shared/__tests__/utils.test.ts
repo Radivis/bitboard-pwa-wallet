@@ -15,16 +15,30 @@ describe('userFacingErrorMessage', () => {
     )
   })
 
-  it('parses structured Ark WASM payload and collapses redundant request-failed chain', () => {
+  it('parses structured Ark WASM payload and preserves operator HTTP detail', () => {
+    const err = new Error(
+      JSON.stringify({
+        code: 'client',
+        message:
+          'Ark client error: Failed to join batch: batch event stream: request failed: Event stream request failed with status 500: FUNCTION_INVOCATION_FAILED',
+      }),
+    )
+    expect(errorMessage(err)).toContain('500')
+    expect(errorMessage(err)).toContain('FUNCTION_INVOCATION_FAILED')
+    const facing = userFacingErrorMessage(err)
+    expect(facing).toContain('500')
+    expect(facing).toContain('FUNCTION_INVOCATION_FAILED')
+    expect(facing).toContain('Preview proxy failed during batch event stream')
+    expect(facing).not.toBe('Ark client error: Failed to join batch: request failed')
+  })
+
+  it('collapses redundant request-failed chain when no other detail is present', () => {
     const err = new Error(
       JSON.stringify({
         code: 'client',
         message:
           'Ark client error: failed to get VTXOs for addresses: request failed: request failed',
       }),
-    )
-    expect(errorMessage(err)).toBe(
-      'Ark client error: failed to get VTXOs for addresses: request failed: request failed',
     )
     expect(userFacingErrorMessage(err)).toBe(
       'Ark client error: failed to get VTXOs for addresses: request failed',

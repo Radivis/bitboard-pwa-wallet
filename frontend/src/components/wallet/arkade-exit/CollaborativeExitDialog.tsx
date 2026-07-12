@@ -12,7 +12,7 @@ import { ARKADE_INFOMODE_IDS } from '@/lib/arkade/arkade-infomode'
 import { formatIntentFeePrograms } from '@/lib/arkade/arkade-exit-utils'
 import {
   arkadeCooperativeExitSpendableSats,
-  arkadeHasPendingRecoveryBalance,
+  arkadeHasPendingRecoveryDueToExpiredSignerBalance,
   formatCollaborativeExitEstimateError,
 } from '@/lib/arkade/arkade-cooperative-exit'
 import type { useArkadeExitFlow } from '@/hooks/useArkadeExitFlow'
@@ -133,11 +133,11 @@ export function CollaborativeExitDialog({ exitFlow }: CollaborativeExitDialogPro
                   size="sm"
                 />
               </p>
-              {arkadeHasPendingRecoveryBalance(balanceQuery.data) && (
-                <p data-testid="arkade-collab-exit-pending-recovery">
+              {arkadeHasPendingRecoveryDueToExpiredSignerBalance(balanceQuery.data) && (
+                <p data-testid="arkade-collab-exit-pending-recovery-due-to-expired-signer">
                   Pending recovery (unilateral exit only):{' '}
                   <BitcoinAmountDisplay
-                    amountSats={balanceQuery.data.pendingRecoverySats ?? 0}
+                    amountSats={balanceQuery.data.pendingRecoveryDueToExpiredSignerSats ?? 0}
                     size="sm"
                   />
                 </p>

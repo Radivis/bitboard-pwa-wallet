@@ -1,6 +1,9 @@
 mod balance;
 mod boarding;
 mod exit;
+mod exit_onchain;
+mod exit_watch;
+mod exit_watch_reconcile;
 pub(crate) mod mappers;
 mod offchain_balance;
 mod open;

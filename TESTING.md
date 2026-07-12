@@ -42,7 +42,7 @@ Arkade wallet session (`ArkSession`), persistence, signer migration, exits. Most
 |------|--------|
 | `tests/signer_migration_session_regtest.rs` | Signer rotation + cooperative migration (happy + error paths) |
 | `tests/unilateral_exit_session_regtest.rs` | Unilateral unroll / complete on regtest |
-| `tests/pending_recovery_balance_regression.rs` | Signer-aware balance classification (unit-style, no Docker) |
+| `tests/pending_recovery_due_to_expired_signer_balance_regression.rs` | Signer-aware balance classification (unit-style, no Docker) |
 | `tests/ark_rest_query_encoding_regression.rs` | REST query encoding |
 
 Run ignored regtest tests (serial — shared `rotate-signer` / Docker):
@@ -54,14 +54,14 @@ ARKADE_REGTEST_RUN=1 cargo test -p bitboard-ark --test signer_migration_session_
 # Signer migration with E2E-exported fixture (skip native boarding)
 ARKADE_REGTEST_BOARDED_FIXTURE=frontend/test-results/arkade-boarded-fixture.json ARKADE_REGTEST_RUN=1 \
   cargo test -p bitboard-ark --test signer_migration_session_regtest \
-  cooperative_signer_migration_clears_pending_recovery_with_boarded_fixture -- --ignored --test-threads=1
+  cooperative_signer_migration_clears_pending_recovery_due_to_expired_signer_with_boarded_fixture -- --ignored --test-threads=1
 ```
 
 **Error-path example** (operator down, persistence unchanged):
 
 `migrate_fails_fast_when_discover_keys_cannot_run` in `signer_migration_session_regtest.rs`.
 
-**Happy-path examples:** `cooperative_signer_migration_clears_pending_recovery_with_boarded_fixture` (fixture) or `…_with_native_boarding` (boards via Rust/tonic).
+**Happy-path examples:** `cooperative_signer_migration_clears_pending_recovery_due_to_expired_signer_with_boarded_fixture` (fixture) or `…_with_native_boarding` (boards via Rust/tonic).
 
 ### Vendored Ark crates
 

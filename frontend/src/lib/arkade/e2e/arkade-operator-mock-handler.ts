@@ -404,9 +404,18 @@ export function handleE2eArkadeOperatorMockRequest(
   if (upstreamPath.startsWith('/v1/batch/events')) {
     res.statusCode = 200
     res.setHeader('Content-Type', 'text/event-stream')
-    res.setHeader('Cache-Control', 'no-cache')
+    res.setHeader('Cache-Control', 'no-cache, no-transform')
     res.setHeader('Access-Control-Allow-Origin', '*')
     res.end('')
+    return true
+  }
+
+  if (/^\/v1\/script\/subscription\/[^/]+$/.test(upstreamPath)) {
+    res.statusCode = 200
+    res.setHeader('Content-Type', 'text/event-stream')
+    res.setHeader('Cache-Control', 'no-cache, no-transform')
+    res.setHeader('Access-Control-Allow-Origin', '*')
+    res.end('data: {}\n\n')
     return true
   }
 

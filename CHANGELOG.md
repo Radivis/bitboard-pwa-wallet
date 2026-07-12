@@ -8,13 +8,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- VTXO viewer for Arkade in wallet management
+- Actually check Arkade operator view when unolloing via post-unroll operator indexer poll with graceful timeout warning when on-chain unroll is confirmed but ASP `is_unrolled` lags; sticky `is_unrolled` merge during operator sync for in-list rows
+- Explicit `unilateral_exit_watches` registry with post-sync reconcile; targeted operator lookups and Esplora probes per truth table; non-blocking `exitingVtxoWarning` on sync
 
 ### Changed
 - Renamed "spent" bucket internally to "unspendable" for more clarity
-
+- Vercel Ark operator proxy streams Server-Sent Events (batch events, script subscriptions) instead of buffering long-lived responses; `maxDuration` raised to 300s
+- Renamed "pending_recovery" to "pending_recovery_due_to_expired_signer" for maximum clarity
 
 ### Fixed
-- Expired VTXOs undergoing unilateral exit are not classified as recoverable, but unspendable
+- Expired VTXOs undergoing unilateral exit are now classified as unspendable instead of recoverable,
+- Ark operator and preview-proxy failures now surface HTTP status and response body snippets in WASM error messages
 
 ### Security
 

@@ -333,6 +333,14 @@ pub async fn ark_list_exit_candidates() -> Result<JsValue, JsValue> {
 }
 
 #[wasm_bindgen]
+pub async fn ark_list_vtxos() -> Result<JsValue, JsValue> {
+    map_js_async(async {
+        export_session_json(|session| async move { session.list_vtxos().await }).await
+    })
+    .await
+}
+
+#[wasm_bindgen]
 pub async fn ark_list_unilateral_exits_in_progress() -> Result<JsValue, JsValue> {
     map_js_async(async {
         export_session_json(

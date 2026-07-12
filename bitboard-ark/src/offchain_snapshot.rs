@@ -29,7 +29,7 @@ pub struct OffchainBalanceBuckets {
     pub pre_confirmed_sats: u64,
     pub confirmed_sats: u64,
     pub recoverable_sats: u64,
-    pub pending_recovery_sats: u64,
+    pub pending_recovery_due_to_expired_signer_sats: u64,
 }
 
 impl OffchainBalanceBuckets {
@@ -42,7 +42,7 @@ impl OffchainBalanceBuckets {
             pre_confirmed_sats: balance.pre_confirmed().to_sat(),
             confirmed_sats: balance.confirmed().to_sat(),
             recoverable_sats: balance.recoverable().to_sat(),
-            pending_recovery_sats: balance.pending_recovery().to_sat(),
+            pending_recovery_due_to_expired_signer_sats: balance.pending_recovery().to_sat(),
         }
     }
 
@@ -61,7 +61,7 @@ pub fn vtxo_list_from_snapshot(snapshot: &OffchainVtxoSnapshot) -> ArkResult<Vtx
     Ok(VtxoList::new(dust, points))
 }
 
-pub fn pending_recovery_sats_excluding_unilateral_exit(
+pub fn pending_recovery_due_to_expired_signer_sats_excluding_unilateral_exit(
     vtxo_list: &VtxoList,
     server_info: &Info,
     now: i64,
@@ -89,21 +89,26 @@ pub fn offchain_balance_buckets_from_snapshot(
     now: i64,
     legacy_signer_pk_fallback: Option<XOnlyPublicKey>,
     pending_exit_deductions: &[PendingExitDeductionRecord],
+    unilateral_exit_watches: &[crate::persistence::UnilateralExitWatchRecord],
 ) -> ArkResult<OffchainBalanceBuckets> {
     let vtxo_list = vtxo_list_from_snapshot(snapshot)?;
     let script_lookup = script_to_server_pk_lookup(snapshot, legacy_signer_pk_fallback)?;
     let balance = compute_offchain_balance(&vtxo_list, &script_lookup, server_info, now)
         .map_err(ArkWasmError::from)?;
     let mut buckets = OffchainBalanceBuckets::from_live(&balance);
-    let in_progress =
-        unilateral_exit_in_progress_outpoints(Some(snapshot), pending_exit_deductions)?;
-    buckets.pending_recovery_sats = pending_recovery_sats_excluding_unilateral_exit(
-        &vtxo_list,
-        server_info,
-        now,
-        &script_lookup,
-        &in_progress,
-    );
+    let in_progress = unilateral_exit_in_progress_outpoints(
+        Some(snapshot),
+        pending_exit_deductions,
+        unilateral_exit_watches,
+    )?;
+    buckets.pending_recovery_due_to_expired_signer_sats =
+        pending_recovery_due_to_expired_signer_sats_excluding_unilateral_exit(
+            &vtxo_list,
+            server_info,
+            now,
+            &script_lookup,
+            &in_progress,
+        );
     Ok(buckets)
 }
 
@@ -131,7 +136,7 @@ pub fn offchain_balance_sats_from_snapshot(
     Ok(buckets)
 }
 
-fn script_to_server_pk_lookup(
+pub(crate) fn script_to_server_pk_lookup(
     snapshot: &OffchainVtxoSnapshot,
     legacy_signer_pk_fallback: Option<XOnlyPublicKey>,
 ) -> ArkResult<impl Fn(&ScriptBuf) -> Option<XOnlyPublicKey> + '_> {
@@ -244,6 +249,34 @@ pub fn snapshot_from_virtual_tx_outpoints_with_script_lookup(
                 virtual_tx_outpoint_to_record(point, server_pk)
             })
             .collect(),
+    }
+}
+
+/// Preserve local `is_unrolled` when ASP indexer lags after unilateral unroll.
+///
+/// Only applies to VTXOs still present in the incoming operator list. Missing watches are
+/// handled by [`crate::session::exit_watch_reconcile::reconcile_exiting_vtxo_watches`].
+pub fn merge_sticky_unrolled_flags(
+    prior: Option<&OffchainVtxoSnapshot>,
+    incoming: &mut OffchainVtxoSnapshot,
+) {
+    let Some(prior) = prior else {
+        return;
+    };
+    let prior_sticky: HashMap<(String, u32), ()> = prior
+        .virtual_tx_outpoints
+        .iter()
+        .filter(|record| record.is_unrolled && !record.is_spent)
+        .map(|record| ((record.txid.clone(), record.vout), ()))
+        .collect();
+
+    for record in &mut incoming.virtual_tx_outpoints {
+        if record.is_spent {
+            continue;
+        }
+        if prior_sticky.contains_key(&(record.txid.clone(), record.vout)) {
+            record.is_unrolled = true;
+        }
     }
 }
 
@@ -369,9 +402,9 @@ fn generate_outgoing_vtxo_transaction_history(
 #[cfg(test)]
 mod tests {
     use super::{
-        offchain_balance_buckets_from_snapshot, offchain_balance_sats_from_snapshot,
-        snapshot_from_virtual_tx_outpoints, snapshot_from_virtual_tx_outpoints_with_script_lookup,
-        vtxo_list_from_snapshot,
+        merge_sticky_unrolled_flags, offchain_balance_buckets_from_snapshot,
+        offchain_balance_sats_from_snapshot, snapshot_from_virtual_tx_outpoints,
+        snapshot_from_virtual_tx_outpoints_with_script_lookup, vtxo_list_from_snapshot,
     };
     use crate::error::ArkWasmError;
     use crate::persistence::{OffchainVtxoSnapshot, VirtualTxOutPointRecord};
@@ -409,6 +442,106 @@ mod tests {
             ark_txid: None,
             assets: vec![],
         }
+    }
+
+    #[test]
+    fn merge_sticky_unrolled_preserves_flag_when_asp_lags() {
+        let txid = Txid::from_byte_array([0x42; 32]).to_string();
+        let prior = OffchainVtxoSnapshot {
+            synced_at: 1,
+            dust_sats: 330,
+            virtual_tx_outpoints: vec![VirtualTxOutPointRecord {
+                txid: txid.clone(),
+                vout: 0,
+                created_at: 0,
+                expires_at: 9_999_999_999,
+                amount_sats: 50_000,
+                script_hex: String::new(),
+                is_preconfirmed: false,
+                is_swept: false,
+                is_unrolled: true,
+                is_spent: false,
+                spent_by: None,
+                commitment_txids: vec![],
+                settled_by: None,
+                ark_txid: None,
+                assets: vec![],
+                server_pk_hex: None,
+            }],
+        };
+        let mut incoming = snapshot_from_virtual_tx_outpoints(
+            330,
+            2,
+            vec![VirtualTxOutPoint {
+                outpoint: OutPoint::new(Txid::from_str(&txid).expect("txid"), 0),
+                created_at: 0,
+                expires_at: 9_999_999_999,
+                amount: Amount::from_sat(50_000),
+                script: ScriptBuf::new(),
+                is_preconfirmed: false,
+                is_swept: false,
+                is_unrolled: false,
+                is_spent: false,
+                spent_by: None,
+                commitment_txids: vec![],
+                settled_by: None,
+                ark_txid: None,
+                assets: vec![],
+            }],
+        );
+
+        merge_sticky_unrolled_flags(Some(&prior), &mut incoming);
+        assert!(incoming.virtual_tx_outpoints[0].is_unrolled);
+    }
+
+    #[test]
+    fn merge_sticky_unrolled_clears_when_operator_reports_spent() {
+        let txid = Txid::from_byte_array([0x43; 32]).to_string();
+        let prior = OffchainVtxoSnapshot {
+            synced_at: 1,
+            dust_sats: 330,
+            virtual_tx_outpoints: vec![VirtualTxOutPointRecord {
+                txid: txid.clone(),
+                vout: 0,
+                created_at: 0,
+                expires_at: 9_999_999_999,
+                amount_sats: 50_000,
+                script_hex: String::new(),
+                is_preconfirmed: false,
+                is_swept: false,
+                is_unrolled: true,
+                is_spent: false,
+                spent_by: None,
+                commitment_txids: vec![],
+                settled_by: None,
+                ark_txid: None,
+                assets: vec![],
+                server_pk_hex: None,
+            }],
+        };
+        let mut incoming = snapshot_from_virtual_tx_outpoints(
+            330,
+            2,
+            vec![VirtualTxOutPoint {
+                outpoint: OutPoint::new(Txid::from_str(&txid).expect("txid"), 0),
+                created_at: 0,
+                expires_at: 9_999_999_999,
+                amount: Amount::from_sat(50_000),
+                script: ScriptBuf::new(),
+                is_preconfirmed: false,
+                is_swept: false,
+                is_unrolled: false,
+                is_spent: true,
+                spent_by: None,
+                commitment_txids: vec![],
+                settled_by: None,
+                ark_txid: None,
+                assets: vec![],
+            }],
+        );
+
+        merge_sticky_unrolled_flags(Some(&prior), &mut incoming);
+        assert!(!incoming.virtual_tx_outpoints[0].is_unrolled);
     }
 
     #[test]
@@ -539,16 +672,22 @@ mod tests {
                 500_000,
             )],
         );
-        let buckets =
-            offchain_balance_buckets_from_snapshot(&snapshot, &server_info, 1_000_000, None, &[])
-                .expect("snapshot buckets");
+        let buckets = offchain_balance_buckets_from_snapshot(
+            &snapshot,
+            &server_info,
+            1_000_000,
+            None,
+            &[],
+            &[],
+        )
+        .expect("snapshot buckets");
 
         assert_eq!(buckets.confirmed_sats, 0);
-        assert_eq!(buckets.pending_recovery_sats, 50_000);
+        assert_eq!(buckets.pending_recovery_due_to_expired_signer_sats, 50_000);
     }
 
     #[test]
-    fn pending_recovery_excludes_unilateral_exit_in_progress_outpoint() {
+    fn pending_recovery_due_to_expired_signer_excludes_unilateral_exit_in_progress_outpoint() {
         use crate::persistence::{PendingExitDeductionRecord, PendingExitKind};
 
         let script = ScriptBuf::from_bytes(vec![0x51]);
@@ -609,10 +748,11 @@ mod tests {
             1_000_000,
             None,
             &pending,
+            &[],
         )
         .expect("snapshot buckets");
 
-        assert_eq!(buckets.pending_recovery_sats, 0);
+        assert_eq!(buckets.pending_recovery_due_to_expired_signer_sats, 0);
     }
 
     fn test_server_info_for_snapshot(current_hex: &str, deprecated: Vec<(&str, i64)>) -> Info {
