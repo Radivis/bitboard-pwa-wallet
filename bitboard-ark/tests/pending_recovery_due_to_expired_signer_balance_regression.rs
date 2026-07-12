@@ -79,7 +79,7 @@ fn sample_confirmed_vtxo(amount_sats: u64, script: ScriptBuf) -> VirtualTxOutPoi
 }
 
 #[test]
-fn compute_offchain_balance_pending_recovery_for_expired_signer() {
+fn compute_offchain_balance_pending_recovery_due_to_expired_signer_for_expired_signer() {
     let script = ScriptBuf::from_bytes(vec![0x51]);
     let vtxo = sample_confirmed_vtxo(50_000, script.clone());
     let vtxo_list = VtxoList::new(Amount::from_sat(330), vec![vtxo]);

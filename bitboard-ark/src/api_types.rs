@@ -56,7 +56,7 @@ pub struct BalanceDto {
     /// Confirmed on-chain bumper wallet balance (P2A fees for unilateral exit only).
     pub onchain_bumper_sats: u64,
     /// Portfolio-style total: offchain (spendable + recoverable settleable + recoverable pending
-    /// operator sweep + pending recovery) plus confirmed on-chain bumper sats and unconfirmed
+    /// operator sweep + pending recovery due to expired signer) plus confirmed on-chain bumper sats and unconfirmed
     /// boarding UTXOs. Excludes unconfirmed bumper-wallet UTXOs
     /// (`trusted_pending` / `untrusted_pending` from the on-chain wallet); those are not
     /// spendable for Ark operations until confirmed.
@@ -72,7 +72,7 @@ pub struct BalanceDto {
     /// from net spendable until operator sync clears the pending deduction.
     pub collaborative_exit_in_progress_sats: u64,
     /// Funds locked under a deprecated operator signer past cooperative migration cutoff.
-    pub pending_recovery_sats: u64,
+    pub pending_recovery_due_to_expired_signer_sats: u64,
     /// Swept or sub-dust VTXOs the user can batch-settle now.
     pub recoverable_settleable_sats: u64,
     /// Count of VTXOs in [`BalanceDto::recoverable_settleable_sats`].
@@ -88,6 +88,8 @@ pub struct BalanceDto {
 pub struct OperatorSyncResultDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub key_discovery_warning: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub exiting_vtxo_warning: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -97,6 +99,40 @@ pub struct VtxoExpiryStatusDto {
     pub earliest_expires_at: Option<i64>,
     /// Count of VTXOs in the renewal window (same threshold as manual renew).
     pub expiring_soon_count: u32,
+}
+
+#[derive(Debug, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum VtxoClassificationDto {
+    PreConfirmed,
+    Confirmed,
+    RecoverableSettleable,
+    RecoverablePendingOperatorSweep,
+    PendingRecoveryDueToExpiredSigner,
+    Exiting,
+    Finalized,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VtxoRowDto {
+    pub id: String,
+    pub amount_sats: u64,
+    pub created_at: i64,
+    pub expires_at: i64,
+    pub classification: VtxoClassificationDto,
+    pub is_preconfirmed: bool,
+    pub is_recoverable: bool,
+    pub is_unrolled: bool,
+    pub is_swept: bool,
+    pub is_spent: bool,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VtxoListResultDto {
+    pub rows: Vec<VtxoRowDto>,
+    pub from_snapshot_synced_at: Option<i64>,
 }
 
 #[derive(Debug, Serialize)]
@@ -274,6 +310,9 @@ pub struct UnrollProgressEvent {
 #[serde(rename_all = "camelCase")]
 pub struct UnrollResult {
     pub vtxo_txid: String,
+    pub operator_indexer_confirmed: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub indexer_warning: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]

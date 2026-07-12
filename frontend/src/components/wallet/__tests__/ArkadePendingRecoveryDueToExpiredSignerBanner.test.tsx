@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { screen } from '@testing-library/react'
 import { renderWithProviders } from '@/test-utils/test-providers'
-import { ArkadePendingRecoveryBanner } from '@/components/wallet/ArkadePendingRecoveryBanner'
+import { ArkadePendingRecoveryDueToExpiredSignerBanner } from '@/components/wallet/ArkadePendingRecoveryDueToExpiredSignerBanner'
 
 const balanceQueryMock = vi.fn()
 const walletStoreState = vi.hoisted(() => ({
-  arkadeBalance: null as { pendingRecoverySats?: number } | null,
+  arkadeBalance: null as { pendingRecoveryDueToExpiredSignerSats?: number } | null,
   networkMode: 'signet' as const,
 }))
 
@@ -51,19 +51,21 @@ vi.mock('@tanstack/react-router', async (importOriginal) => {
   }
 })
 
-describe('ArkadePendingRecoveryBanner', () => {
+describe('ArkadePendingRecoveryDueToExpiredSignerBanner', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     walletStoreState.arkadeBalance = null
     balanceQueryMock.mockReturnValue({ data: undefined })
   })
 
-  it('DASH-ARK-19b shows banner when pendingRecoverySats is greater than zero', () => {
+  it('DASH-ARK-19b shows banner when pendingRecoveryDueToExpiredSignerSats is greater than zero', () => {
     balanceQueryMock.mockReturnValue({
-      data: { pendingRecoverySats: 50_000 },
+      data: { pendingRecoveryDueToExpiredSignerSats: 50_000 },
     })
-    renderWithProviders(<ArkadePendingRecoveryBanner />)
-    expect(screen.getByTestId('arkade-pending-recovery-banner')).toBeInTheDocument()
+    renderWithProviders(<ArkadePendingRecoveryDueToExpiredSignerBanner />)
+    expect(
+      screen.getByTestId('arkade-pending-recovery-due-to-expired-signer-banner'),
+    ).toBeInTheDocument()
     expect(screen.getByText('Pending recovery after signer rotation')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /unilateral exit in Management/i })).toHaveAttribute(
       'href',
@@ -71,11 +73,13 @@ describe('ArkadePendingRecoveryBanner', () => {
     )
   })
 
-  it('is hidden when pendingRecoverySats is zero', () => {
+  it('is hidden when pendingRecoveryDueToExpiredSignerSats is zero', () => {
     balanceQueryMock.mockReturnValue({
-      data: { pendingRecoverySats: 0 },
+      data: { pendingRecoveryDueToExpiredSignerSats: 0 },
     })
-    const { container } = renderWithProviders(<ArkadePendingRecoveryBanner />)
+    const { container } = renderWithProviders(
+      <ArkadePendingRecoveryDueToExpiredSignerBanner />,
+    )
     expect(container.textContent).toBe('')
   })
 })

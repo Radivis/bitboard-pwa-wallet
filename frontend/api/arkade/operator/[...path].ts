@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 export const config = {
-  maxDuration: 30,
+  maxDuration: 300,
 }
 
 // Inlined from src/lib/arkade/arkade-operator-proxy.ts
@@ -41,8 +41,52 @@ function isProxiedUrlPathWithinAllowlistedBase(
   return resPath.startsWith(`${basePath}/`)
 }
 
-// Stay below Vercel Hobby's ~10s function cap (see esplora proxy).
-const UPSTREAM_TIMEOUT_MS = 9_000
+// Inlined from src/lib/arkade/arkade-operator-sse-proxy.ts — keep in sync.
+const OPERATOR_SSE_UPSTREAM_PATHS = ['v1/batch/events', 'v1/txs'] as const
+const OPERATOR_SSE_SUBSCRIPTION_PATH_PREFIX = 'v1/script/subscription/'
+
+function normalizeOperatorSubpath(operatorSubpath: string): string {
+  return operatorSubpath.replace(/^\/+/, '').replace(/\/+$/, '')
+}
+
+function acceptsEventStream(acceptHeader: string | undefined): boolean {
+  if (acceptHeader == null || acceptHeader === '') {
+    return false
+  }
+  return acceptHeader.toLowerCase().includes('text/event-stream')
+}
+
+function isOperatorSseUpstreamPath(normalizedSubpath: string): boolean {
+  if (
+    OPERATOR_SSE_UPSTREAM_PATHS.some(
+      (ssePath) =>
+        normalizedSubpath === ssePath ||
+        normalizedSubpath.startsWith(`${ssePath}/`),
+    )
+  ) {
+    return true
+  }
+  return normalizedSubpath.startsWith(OPERATOR_SSE_SUBSCRIPTION_PATH_PREFIX)
+}
+
+function isOperatorServerSentEventsRequest(
+  method: string,
+  operatorSubpath: string,
+  acceptHeader: string | undefined,
+): boolean {
+  if (method.toUpperCase() !== 'GET') {
+    return false
+  }
+  if (!acceptsEventStream(acceptHeader)) {
+    return false
+  }
+  return isOperatorSseUpstreamPath(normalizeOperatorSubpath(operatorSubpath))
+}
+
+// Stay below Vercel Hobby's ~10s function cap for unary operator calls (see esplora proxy).
+const UNARY_UPSTREAM_TIMEOUT_MS = 9_000
+/** Slightly below handler maxDuration so long-lived SSE connections fail cleanly. */
+const SSE_UPSTREAM_TIMEOUT_MS = 295_000
 const MAX_POST_BODY_BYTES = 2_000_000
 
 function setCorsHeaders(res: VercelResponse): void {
@@ -69,6 +113,113 @@ const HOP_BY_HOP_RESPONSE_HEADERS = new Set([
 ])
 
 const DROP_FOR_SAME_ORIGIN_CLIENT = new Set(['set-cookie', 'set-cookie2'])
+
+type ResponseWithSocket = VercelResponse & {
+  socket?: { setNoDelay?: (value: boolean) => void }
+  flushHeaders?: () => void
+}
+
+function copySafeUpstreamHeaders(upstream: Response): Record<string, string> {
+  const outHeaders: Record<string, string> = {}
+  upstream.headers.forEach((value, key) => {
+    const lower = key.toLowerCase()
+    if (HOP_BY_HOP_RESPONSE_HEADERS.has(lower)) return
+    if (DROP_FOR_SAME_ORIGIN_CLIENT.has(lower)) return
+    outHeaders[key] = value
+  })
+  return outHeaders
+}
+
+async function proxyOperatorServerSentEvents(
+  req: VercelRequest,
+  res: VercelResponse,
+  upstreamUrl: string,
+  forwardHeaders: Record<string, string>,
+): Promise<void> {
+  const abortController = new AbortController()
+  const abortUpstream = () => {
+    abortController.abort()
+  }
+  req.on('close', abortUpstream)
+  req.on('aborted', abortUpstream)
+
+  let upstream: Response
+  try {
+    upstream = await fetch(upstreamUrl, {
+      method: 'GET',
+      headers: forwardHeaders,
+      signal: AbortSignal.any([
+        abortController.signal,
+        AbortSignal.timeout(SSE_UPSTREAM_TIMEOUT_MS),
+      ]),
+    })
+  } catch {
+    res
+      .status(502)
+      .send(
+        'proxy_error upstream_unreachable: could not reach Ark operator upstream',
+      )
+    return
+  } finally {
+    req.off('close', abortUpstream)
+    req.off('aborted', abortUpstream)
+  }
+
+  if (!upstream.ok) {
+    const errorBody = await upstream.text()
+    res.status(upstream.status).send(errorBody)
+    return
+  }
+
+  const upstreamContentType = upstream.headers.get('content-type')
+  res.status(200)
+  res.setHeader('Content-Type', upstreamContentType ?? 'text/event-stream')
+  res.setHeader('Cache-Control', 'no-cache, no-transform')
+  res.setHeader('Connection', 'keep-alive')
+  res.setHeader('X-Accel-Buffering', 'no')
+
+  const responseWithSocket = res as ResponseWithSocket
+  responseWithSocket.socket?.setNoDelay?.(true)
+  responseWithSocket.flushHeaders?.()
+
+  const reader = upstream.body?.getReader()
+  if (reader == null) {
+    res.end()
+    return
+  }
+
+  const clientAbortController = new AbortController()
+  const onClientDisconnect = () => {
+    clientAbortController.abort()
+    void reader.cancel()
+  }
+  req.on('close', onClientDisconnect)
+  req.on('aborted', onClientDisconnect)
+
+  try {
+    while (!clientAbortController.signal.aborted && !res.writableEnded) {
+      const { done, value } = await reader.read()
+      if (done) {
+        break
+      }
+      if (value == null || value.byteLength === 0) {
+        continue
+      }
+      const canContinue = res.write(Buffer.from(value))
+      if (!canContinue) {
+        await new Promise<void>((resolve) => res.once('drain', resolve))
+      }
+    }
+  } catch {
+    // Client disconnect or upstream close — end quietly.
+  } finally {
+    req.off('close', onClientDisconnect)
+    req.off('aborted', onClientDisconnect)
+    if (!res.writableEnded) {
+      res.end()
+    }
+  }
+}
 
 export default async function handler(
   req: VercelRequest,
@@ -122,8 +273,11 @@ export default async function handler(
   }
 
   const forwardHeaders: Record<string, string> = {}
-  const accept = req.headers['accept']
-  if (accept && typeof accept === 'string') forwardHeaders['accept'] = accept
+  const accept =
+    typeof req.headers['accept'] === 'string' ? req.headers['accept'] : undefined
+  if (accept != null) {
+    forwardHeaders['accept'] = accept
+  }
   const contentType = req.headers['content-type']
   if (contentType && typeof contentType === 'string') {
     forwardHeaders['content-type'] = contentType
@@ -135,10 +289,15 @@ export default async function handler(
     }
   }
 
+  if (isOperatorServerSentEventsRequest(method, operatorSubpath, accept)) {
+    await proxyOperatorServerSentEvents(req, res, upstreamUrl, forwardHeaders)
+    return
+  }
+
   const init: RequestInit = {
     method,
     headers: forwardHeaders,
-    signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+    signal: AbortSignal.timeout(UNARY_UPSTREAM_TIMEOUT_MS),
   }
   if (method === 'POST') {
     const chunks: Buffer[] = []
@@ -157,18 +316,15 @@ export default async function handler(
   try {
     upstream = await fetch(upstreamUrl, init)
   } catch {
-    res.status(502).send('Upstream unreachable')
+    res
+      .status(502)
+      .send(
+        'proxy_error upstream_unreachable: could not reach Ark operator upstream',
+      )
     return
   }
 
-  const outHeaders: Record<string, string> = {}
-  upstream.headers.forEach((value, key) => {
-    const lower = key.toLowerCase()
-    if (HOP_BY_HOP_RESPONSE_HEADERS.has(lower)) return
-    if (DROP_FOR_SAME_ORIGIN_CLIENT.has(lower)) return
-    outHeaders[key] = value
-  })
-
+  const outHeaders = copySafeUpstreamHeaders(upstream)
   Object.entries(outHeaders).forEach(([k, v]) => res.setHeader(k, v))
 
   const body = await upstream.arrayBuffer()

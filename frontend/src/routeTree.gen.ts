@@ -37,6 +37,7 @@ import { Route as LabTransactionsRouteImport } from './routes/lab/transactions'
 import { Route as LabLayer2RouteImport } from './routes/lab/layer-2'
 import { Route as LabControlRouteImport } from './routes/lab/control'
 import { Route as LabBlocksRouteImport } from './routes/lab/blocks'
+import { Route as WalletArkadeVtxosRouteImport } from './routes/wallet/arkade/vtxos'
 import { Route as WalletArkadeBoardRouteImport } from './routes/wallet/arkade/board'
 import { Route as LibraryArticlesSlugRouteImport } from './routes/library/articles.$slug'
 import { Route as LabTxTxidRouteImport } from './routes/lab/tx.$txid'
@@ -183,6 +184,11 @@ const LabBlocksRoute = LabBlocksRouteImport.update({
   path: '/blocks',
   getParentRoute: () => LabRoute,
 } as any)
+const WalletArkadeVtxosRoute = WalletArkadeVtxosRouteImport.update({
+  id: '/arkade/vtxos',
+  path: '/arkade/vtxos',
+  getParentRoute: () => WalletRoute,
+} as any)
 const WalletArkadeBoardRoute = WalletArkadeBoardRouteImport.update({
   id: '/arkade/board',
   path: '/arkade/board',
@@ -243,6 +249,7 @@ export interface FileRoutesByFullPath {
   '/lab/tx/$txid': typeof LabTxTxidRoute
   '/library/articles/$slug': typeof LibraryArticlesSlugRoute
   '/wallet/arkade/board': typeof WalletArkadeBoardRoute
+  '/wallet/arkade/vtxos': typeof WalletArkadeVtxosRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -273,6 +280,7 @@ export interface FileRoutesByTo {
   '/lab/tx/$txid': typeof LabTxTxidRoute
   '/library/articles/$slug': typeof LibraryArticlesSlugRoute
   '/wallet/arkade/board': typeof WalletArkadeBoardRoute
+  '/wallet/arkade/vtxos': typeof WalletArkadeVtxosRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -309,6 +317,7 @@ export interface FileRoutesById {
   '/lab/tx/$txid': typeof LabTxTxidRoute
   '/library/articles/$slug': typeof LibraryArticlesSlugRoute
   '/wallet/arkade/board': typeof WalletArkadeBoardRoute
+  '/wallet/arkade/vtxos': typeof WalletArkadeVtxosRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -346,6 +355,7 @@ export interface FileRouteTypes {
     | '/lab/tx/$txid'
     | '/library/articles/$slug'
     | '/wallet/arkade/board'
+    | '/wallet/arkade/vtxos'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -376,6 +386,7 @@ export interface FileRouteTypes {
     | '/lab/tx/$txid'
     | '/library/articles/$slug'
     | '/wallet/arkade/board'
+    | '/wallet/arkade/vtxos'
   id:
     | '__root__'
     | '/'
@@ -411,6 +422,7 @@ export interface FileRouteTypes {
     | '/lab/tx/$txid'
     | '/library/articles/$slug'
     | '/wallet/arkade/board'
+    | '/wallet/arkade/vtxos'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -621,6 +633,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LabBlocksRouteImport
       parentRoute: typeof LabRoute
     }
+    '/wallet/arkade/vtxos': {
+      id: '/wallet/arkade/vtxos'
+      path: '/arkade/vtxos'
+      fullPath: '/wallet/arkade/vtxos'
+      preLoaderRoute: typeof WalletArkadeVtxosRouteImport
+      parentRoute: typeof WalletRoute
+    }
     '/wallet/arkade/board': {
       id: '/wallet/arkade/board'
       path: '/arkade/board'
@@ -741,6 +760,7 @@ interface WalletRouteChildren {
   WalletWalletsRoute: typeof WalletWalletsRoute
   WalletIndexRoute: typeof WalletIndexRoute
   WalletArkadeBoardRoute: typeof WalletArkadeBoardRoute
+  WalletArkadeVtxosRoute: typeof WalletArkadeVtxosRoute
 }
 
 const WalletRouteChildren: WalletRouteChildren = {
@@ -750,6 +770,7 @@ const WalletRouteChildren: WalletRouteChildren = {
   WalletWalletsRoute: WalletWalletsRoute,
   WalletIndexRoute: WalletIndexRoute,
   WalletArkadeBoardRoute: WalletArkadeBoardRoute,
+  WalletArkadeVtxosRoute: WalletArkadeVtxosRoute,
 }
 
 const WalletRouteWithChildren =

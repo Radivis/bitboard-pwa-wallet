@@ -1,21 +1,26 @@
 use std::collections::HashSet;
 
 use ark_client::Blockchain;
-use bitcoin::{Amount, OutPoint, Txid, secp256k1::rand::rngs::OsRng};
+use ark_core::VtxoList;
+use ark_core::server::VirtualTxOutPoint;
+use bitcoin::{Amount, OutPoint, ScriptBuf, Txid, XOnlyPublicKey, secp256k1::rand::rngs::OsRng};
 
 use crate::api_types::{
     DelegateSpendableResult, FinalizePendingResult, RecoverableVtxoFeeEstimateDto,
-    VtxoExpiryStatusDto,
+    VtxoClassificationDto, VtxoExpiryStatusDto, VtxoListResultDto, VtxoRowDto,
 };
 use crate::constants::VTXO_SELF_RENEW_REMAINING_FRACTION;
 use crate::error::{ArkResult, ArkWasmError};
-use crate::exit_balance::UnilateralExitOutpointKey;
-use crate::offchain_snapshot::vtxo_list_from_snapshot;
+use crate::exit_balance::{
+    UnilateralExitOutpointKey, unilateral_exit_in_progress_outpoints_from_pending,
+};
+use crate::offchain_snapshot::{script_to_server_pk_lookup, vtxo_list_from_snapshot};
 
 use super::ArkSession;
 use super::mappers::{
     current_unix_timestamp, empty_fee_info, map_intent_fee_configured, parse_delegator_public_key,
 };
+use super::offchain_balance::legacy_signer_pk_fallback;
 
 /// Recoverable VTXO outpoints and aggregate amount for one balance bucket.
 pub(crate) struct RecoverableVtxoSummary {
@@ -63,17 +68,19 @@ async fn sleep(duration: std::time::Duration) {
 impl ArkSession {
     /// Recoverable sub-buckets for balance, fee estimate, and batch recover.
     ///
-    /// Excludes VTXOs in unilateral exit — ark-core may classify expired/swept unrolled VTXOs as
-    /// recoverable before spent; see `docs/arkade-bitboard-wallet-model.md`.
+    /// Excludes pre-unroll unilateral pending outpoints only — post-unroll exiting VTXOs are kept
+    /// out of recoverable by vendored ark-core bucketing. See `docs/arkade-bitboard-wallet-model.md`.
     pub(crate) async fn recoverable_vtxo_buckets(&self) -> ArkResult<RecoverableVtxoBuckets> {
         let dust = self.client.server_info()?.dust;
-        let exclude_unilateral_exit_outpoints = self.unilateral_exit_in_progress_outpoints()?;
+        let exclude_pre_unroll_unilateral_exit = unilateral_exit_in_progress_outpoints_from_pending(
+            &self.wallet_db.pending_exit_deductions(),
+        );
 
         if let Ok((vtxo_list, _)) = self.client.list_vtxos().await {
             return Ok(recoverable_vtxo_buckets_from_list(
                 &vtxo_list,
                 dust,
-                &exclude_unilateral_exit_outpoints,
+                &exclude_pre_unroll_unilateral_exit,
             ));
         }
 
@@ -82,7 +89,7 @@ impl ArkSession {
             return Ok(recoverable_vtxo_buckets_from_list(
                 &vtxo_list,
                 dust,
-                &exclude_unilateral_exit_outpoints,
+                &exclude_pre_unroll_unilateral_exit,
             ));
         }
 
@@ -181,14 +188,52 @@ impl ArkSession {
         Ok(self.expiring_outpoints().await?.len() as u32)
     }
 
+    pub async fn list_vtxos(&self) -> ArkResult<VtxoListResultDto> {
+        let dust = self.client.server_info()?.dust;
+        let server_info = self.client.server_info()?;
+        let now = current_unix_timestamp();
+
+        if let Ok((vtxo_list, script_map)) = self.client.list_vtxos().await {
+            let rows = map_vtxo_rows_from_list(&vtxo_list, dust, &server_info, now, |script| {
+                script_map.get(script).map(|vtxo| vtxo.server_pk())
+            });
+            return Ok(VtxoListResultDto {
+                rows,
+                from_snapshot_synced_at: None,
+            });
+        }
+
+        if let Some(snapshot) = self.wallet_db.snapshot().offchain_vtxo_snapshot.as_ref() {
+            let vtxo_list = vtxo_list_from_snapshot(snapshot)?;
+            let script_lookup = script_to_server_pk_lookup(
+                snapshot,
+                legacy_signer_pk_fallback(&self.persisted_operator_identity()),
+            )?;
+            let rows = map_vtxo_rows_from_list(&vtxo_list, dust, &server_info, now, |script| {
+                script_lookup(script)
+            });
+            return Ok(VtxoListResultDto {
+                rows,
+                from_snapshot_synced_at: Some(snapshot.synced_at),
+            });
+        }
+
+        Ok(VtxoListResultDto {
+            rows: Vec::new(),
+            from_snapshot_synced_at: None,
+        })
+    }
+
     pub async fn vtxo_expiry_status(&self) -> ArkResult<VtxoExpiryStatusDto> {
         let (vtxo_list, _) = self.client.list_vtxos().await?;
-        let exclude_unilateral_exit_outpoints = self.unilateral_exit_in_progress_outpoints()?;
+        let exclude_pre_unroll_unilateral_exit = unilateral_exit_in_progress_outpoints_from_pending(
+            &self.wallet_db.pending_exit_deductions(),
+        );
         let now = current_unix_timestamp();
         let earliest_expires_at = vtxo_list
             .all_unspent()
             .filter(|virtual_tx_outpoint| {
-                !exclude_unilateral_exit_outpoints.contains(&virtual_tx_outpoint.outpoint)
+                !exclude_pre_unroll_unilateral_exit.contains(&virtual_tx_outpoint.outpoint)
                     && virtual_tx_outpoint.created_at > 0
                     && virtual_tx_outpoint.expires_at > now
             })
@@ -378,12 +423,14 @@ impl ArkSession {
     /// VTXOs in the renewal window for manual renew — excludes unilateral exit in progress.
     async fn expiring_outpoints(&self) -> ArkResult<Vec<OutPoint>> {
         let (vtxo_list, _) = self.client.list_vtxos().await?;
-        let exclude_unilateral_exit_outpoints = self.unilateral_exit_in_progress_outpoints()?;
+        let exclude_pre_unroll_unilateral_exit = unilateral_exit_in_progress_outpoints_from_pending(
+            &self.wallet_db.pending_exit_deductions(),
+        );
         let now = current_unix_timestamp();
         Ok(vtxo_list
             .all_unspent()
             .filter(|virtual_tx_outpoint| {
-                if exclude_unilateral_exit_outpoints.contains(&virtual_tx_outpoint.outpoint) {
+                if exclude_pre_unroll_unilateral_exit.contains(&virtual_tx_outpoint.outpoint) {
                     return false;
                 }
                 if virtual_tx_outpoint.expires_at <= 0 || virtual_tx_outpoint.created_at <= 0 {
@@ -399,6 +446,100 @@ impl ArkSession {
             .map(|virtual_tx_outpoint| virtual_tx_outpoint.outpoint)
             .collect())
     }
+}
+
+pub(crate) fn classify_vtxo<F>(
+    virtual_tx_outpoint: &VirtualTxOutPoint,
+    dust: Amount,
+    server_info: &ark_core::server::Info,
+    now_unix_secs: i64,
+    server_pk_for_script: F,
+) -> VtxoClassificationDto
+where
+    F: Fn(&ScriptBuf) -> Option<XOnlyPublicKey>,
+{
+    if virtual_tx_outpoint.is_unrolled && !virtual_tx_outpoint.is_spent {
+        return VtxoClassificationDto::Exiting;
+    }
+    if virtual_tx_outpoint.is_recoverable(dust) {
+        if is_settleable_recoverable_vtxo(virtual_tx_outpoint, dust) {
+            return VtxoClassificationDto::RecoverableSettleable;
+        }
+        return VtxoClassificationDto::RecoverablePendingOperatorSweep;
+    }
+    if virtual_tx_outpoint.is_spent || virtual_tx_outpoint.is_swept {
+        return VtxoClassificationDto::Finalized;
+    }
+    if server_pk_for_script(&virtual_tx_outpoint.script)
+        .map(|server_pk| server_info.signer_requires_recovery_at(server_pk, now_unix_secs))
+        .unwrap_or(false)
+    {
+        return VtxoClassificationDto::PendingRecoveryDueToExpiredSigner;
+    }
+    if virtual_tx_outpoint.is_preconfirmed {
+        return VtxoClassificationDto::PreConfirmed;
+    }
+    VtxoClassificationDto::Confirmed
+}
+
+pub(crate) fn map_vtxo_row<F>(
+    virtual_tx_outpoint: &VirtualTxOutPoint,
+    dust: Amount,
+    server_info: &ark_core::server::Info,
+    now_unix_secs: i64,
+    server_pk_for_script: F,
+) -> VtxoRowDto
+where
+    F: Fn(&ScriptBuf) -> Option<XOnlyPublicKey>,
+{
+    let recoverable = virtual_tx_outpoint.is_recoverable(dust);
+    VtxoRowDto {
+        id: format!(
+            "{}:{}",
+            virtual_tx_outpoint.outpoint.txid, virtual_tx_outpoint.outpoint.vout
+        ),
+        amount_sats: virtual_tx_outpoint.amount.to_sat(),
+        created_at: virtual_tx_outpoint.created_at,
+        expires_at: virtual_tx_outpoint.expires_at,
+        classification: classify_vtxo(
+            virtual_tx_outpoint,
+            dust,
+            server_info,
+            now_unix_secs,
+            server_pk_for_script,
+        ),
+        is_preconfirmed: virtual_tx_outpoint.is_preconfirmed,
+        is_recoverable: recoverable,
+        is_unrolled: virtual_tx_outpoint.is_unrolled,
+        is_swept: virtual_tx_outpoint.is_swept,
+        is_spent: virtual_tx_outpoint.is_spent,
+    }
+}
+
+fn map_vtxo_rows_from_list<F>(
+    vtxo_list: &VtxoList,
+    dust: Amount,
+    server_info: &ark_core::server::Info,
+    now_unix_secs: i64,
+    server_pk_for_script: F,
+) -> Vec<VtxoRowDto>
+where
+    F: Fn(&ScriptBuf) -> Option<XOnlyPublicKey>,
+{
+    let mut rows: Vec<VtxoRowDto> = vtxo_list
+        .all()
+        .map(|virtual_tx_outpoint| {
+            map_vtxo_row(
+                virtual_tx_outpoint,
+                dust,
+                server_info,
+                now_unix_secs,
+                &server_pk_for_script,
+            )
+        })
+        .collect();
+    rows.sort_by_key(|row| row.expires_at);
+    rows
 }
 
 fn empty_recoverable_vtxo_summary() -> RecoverableVtxoSummary {
@@ -455,16 +596,16 @@ fn recoverable_vtxo_summary_from_filtered<'a>(
 /// operator's own clock/sweep state can still expect a forfeit — it then fails the round with
 /// `missing forfeit tx` and wedges subsequent rounds. Only swept or sub-dust VTXOs are actionable.
 ///
-/// `exclude_unilateral_exit_outpoints` drops VTXOs already on the unilateral exit path (they may
-/// still appear in ark-core's recoverable bucket when expired or operator-swept).
+/// `exclude_pre_unroll_unilateral_exit` drops VTXOs with a pending unilateral record before
+/// `is_unrolled` is indexed locally (brief pre-unroll window).
 pub(crate) fn recoverable_vtxo_buckets_from_list(
     vtxo_list: &ark_core::VtxoList,
     dust: Amount,
-    exclude_unilateral_exit_outpoints: &HashSet<UnilateralExitOutpointKey>,
+    exclude_pre_unroll_unilateral_exit: &HashSet<UnilateralExitOutpointKey>,
 ) -> RecoverableVtxoBuckets {
     let all_recoverable: Vec<_> = vtxo_list
         .recoverable()
-        .filter(|vtxo| !exclude_unilateral_exit_outpoints.contains(&vtxo.outpoint))
+        .filter(|vtxo| !exclude_pre_unroll_unilateral_exit.contains(&vtxo.outpoint))
         .collect();
     RecoverableVtxoBuckets {
         settleable: recoverable_vtxo_summary_from_filtered(
@@ -597,13 +738,13 @@ mod recoverable_vtxo_tests {
     }
 
     #[test]
-    // Expired + operator-swept + unrolled VTXOs land in recoverable (ark-core ordering), not spent.
+    // Unrolled + expired VTXOs land in exiting, not recoverable (vendored ark-core bucketing).
     fn recoverable_excludes_unilateral_exit_in_progress_outpoint() {
         let now = current_unix_timestamp();
         let exiting = sample_vtp_with_flags(0, 25_000, now - 1, true, true);
-        let vtxo_list = ark_core::VtxoList::new(DUST, vec![exiting.clone()]);
-        let exclude = HashSet::from([exiting.outpoint]);
-        let buckets = recoverable_vtxo_buckets_from_list(&vtxo_list, DUST, &exclude);
+        let vtxo_list = ark_core::VtxoList::new(DUST, vec![exiting]);
+        let buckets =
+            recoverable_vtxo_buckets_from_list(&vtxo_list, DUST, &no_unilateral_exit_outpoints());
         assert_eq!(buckets.settleable.count, 0);
         assert_eq!(buckets.pending_operator_sweep.count, 0);
     }
@@ -612,8 +753,19 @@ mod recoverable_vtxo_tests {
     fn recoverable_excludes_pending_operator_sweep_when_exiting() {
         let now = current_unix_timestamp();
         let exiting = sample_vtp_with_flags(1, 25_000, now - 1, false, true);
-        let vtxo_list = ark_core::VtxoList::new(DUST, vec![exiting.clone()]);
-        let exclude = HashSet::from([exiting.outpoint]);
+        let vtxo_list = ark_core::VtxoList::new(DUST, vec![exiting]);
+        let buckets =
+            recoverable_vtxo_buckets_from_list(&vtxo_list, DUST, &no_unilateral_exit_outpoints());
+        assert_eq!(buckets.settleable.count, 0);
+        assert_eq!(buckets.pending_operator_sweep.count, 0);
+    }
+
+    #[test]
+    fn recoverable_excludes_pre_unroll_pending_outpoint() {
+        let now = current_unix_timestamp();
+        let expired_before_unroll = sample_vtp_with_flags(2, 25_000, now - 1, false, false);
+        let vtxo_list = ark_core::VtxoList::new(DUST, vec![expired_before_unroll.clone()]);
+        let exclude = HashSet::from([expired_before_unroll.outpoint]);
         let buckets = recoverable_vtxo_buckets_from_list(&vtxo_list, DUST, &exclude);
         assert_eq!(buckets.settleable.count, 0);
         assert_eq!(buckets.pending_operator_sweep.count, 0);
@@ -622,11 +774,10 @@ mod recoverable_vtxo_tests {
     #[test]
     fn recoverable_still_includes_non_exiting_swept_vtxo() {
         let now = current_unix_timestamp();
-        let exiting = sample_vtp_with_flags(0, 25_000, now - 1, true, true);
         let other = sample_vtp(1, 30_000, now - 1, true);
-        let vtxo_list = ark_core::VtxoList::new(DUST, vec![exiting, other]);
-        let exclude = HashSet::from([OutPoint::new(Txid::from_byte_array([0; 32]), 0)]);
-        let buckets = recoverable_vtxo_buckets_from_list(&vtxo_list, DUST, &exclude);
+        let vtxo_list = ark_core::VtxoList::new(DUST, vec![other]);
+        let buckets =
+            recoverable_vtxo_buckets_from_list(&vtxo_list, DUST, &no_unilateral_exit_outpoints());
         assert_eq!(buckets.settleable.count, 1);
         assert_eq!(buckets.settleable.total_sats, 30_000);
     }
@@ -641,5 +792,330 @@ mod recoverable_vtxo_tests {
         let swept = sample_vtp(1, 25_000, now - 1, true);
         assert!(is_settleable_recoverable_vtxo(&swept, DUST));
         assert!(!is_pending_operator_sweep_recoverable_vtxo(&swept, DUST));
+    }
+}
+
+#[cfg(test)]
+mod vtxo_row_classification_tests {
+    use std::collections::HashMap;
+    use std::str::FromStr;
+
+    use ark_core::server::{DeprecatedSigner, Info, VirtualTxOutPoint};
+    use bitcoin::address::NetworkUnchecked;
+    use bitcoin::hashes::Hash;
+    use bitcoin::secp256k1::PublicKey;
+    use bitcoin::{Amount, Network, OutPoint, ScriptBuf, Txid, XOnlyPublicKey};
+
+    use crate::api_types::VtxoClassificationDto;
+
+    use super::{classify_vtxo, current_unix_timestamp, map_vtxo_row};
+
+    const DUST: Amount = Amount::from_sat(330);
+
+    struct VtpFlags {
+        is_preconfirmed: bool,
+        is_swept: bool,
+        is_unrolled: bool,
+        is_spent: bool,
+    }
+
+    fn sample_vtp(
+        vout: u8,
+        amount_sats: u64,
+        expires_at: i64,
+        flags: VtpFlags,
+    ) -> VirtualTxOutPoint {
+        VirtualTxOutPoint {
+            outpoint: OutPoint::new(Txid::from_byte_array([vout; 32]), u32::from(vout)),
+            created_at: expires_at - 86_400,
+            expires_at,
+            amount: Amount::from_sat(amount_sats),
+            script: ScriptBuf::new(),
+            is_preconfirmed: flags.is_preconfirmed,
+            is_swept: flags.is_swept,
+            is_unrolled: flags.is_unrolled,
+            is_spent: flags.is_spent,
+            spent_by: None,
+            commitment_txids: vec![],
+            settled_by: None,
+            ark_txid: None,
+            assets: vec![],
+        }
+    }
+
+    fn default_flags() -> VtpFlags {
+        VtpFlags {
+            is_preconfirmed: false,
+            is_swept: false,
+            is_unrolled: false,
+            is_spent: false,
+        }
+    }
+
+    fn test_server_info(current_hex: &str, deprecated: Vec<(&str, i64)>) -> Info {
+        let dummy_address: bitcoin::Address<NetworkUnchecked> =
+            "tb1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx"
+                .parse()
+                .unwrap();
+        Info {
+            version: "1".into(),
+            signer_pk: PublicKey::from_str(current_hex).expect("valid key"),
+            forfeit_pk: PublicKey::from_str(current_hex).expect("valid key"),
+            forfeit_address: dummy_address.assume_checked(),
+            checkpoint_tapscript: ScriptBuf::new(),
+            network: Network::Signet,
+            session_duration: 0,
+            unilateral_exit_delay: bitcoin::Sequence::ZERO,
+            boarding_exit_delay: bitcoin::Sequence::ZERO,
+            utxo_min_amount: None,
+            utxo_max_amount: None,
+            vtxo_min_amount: None,
+            vtxo_max_amount: None,
+            dust: DUST,
+            fees: None,
+            scheduled_session: None,
+            deprecated_signers: deprecated
+                .into_iter()
+                .map(|(key, cutoff)| DeprecatedSigner {
+                    pk: PublicKey::from_str(key).expect("valid key"),
+                    cutoff_date: cutoff,
+                })
+                .collect(),
+            service_status: HashMap::new(),
+            digest: String::new(),
+            max_tx_weight: 0,
+            max_op_return_outputs: 0,
+        }
+    }
+
+    fn no_server_pk(_script: &ScriptBuf) -> Option<XOnlyPublicKey> {
+        None
+    }
+
+    #[test]
+    fn classify_vtxo_pre_confirmed() {
+        let now = current_unix_timestamp();
+        let vtxo = sample_vtp(
+            0,
+            25_000,
+            now + 86_400,
+            VtpFlags {
+                is_preconfirmed: true,
+                ..default_flags()
+            },
+        );
+        let server_info = test_server_info(
+            "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+            vec![],
+        );
+        assert_eq!(
+            classify_vtxo(&vtxo, DUST, &server_info, now, no_server_pk),
+            VtxoClassificationDto::PreConfirmed
+        );
+    }
+
+    #[test]
+    fn classify_vtxo_confirmed() {
+        let now = current_unix_timestamp();
+        let vtxo = sample_vtp(0, 25_000, now + 86_400, default_flags());
+        let server_info = test_server_info(
+            "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+            vec![],
+        );
+        assert_eq!(
+            classify_vtxo(&vtxo, DUST, &server_info, now, no_server_pk),
+            VtxoClassificationDto::Confirmed
+        );
+    }
+
+    #[test]
+    fn classify_vtxo_recoverable_settleable_swept() {
+        let now = current_unix_timestamp();
+        let vtxo = sample_vtp(
+            0,
+            25_000,
+            now + 86_400,
+            VtpFlags {
+                is_swept: true,
+                ..default_flags()
+            },
+        );
+        let server_info = test_server_info(
+            "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+            vec![],
+        );
+        assert_eq!(
+            classify_vtxo(&vtxo, DUST, &server_info, now, no_server_pk),
+            VtxoClassificationDto::RecoverableSettleable
+        );
+    }
+
+    #[test]
+    fn classify_vtxo_recoverable_settleable_sub_dust() {
+        let now = current_unix_timestamp();
+        let vtxo = sample_vtp(0, DUST.to_sat() - 1, now + 86_400, default_flags());
+        let server_info = test_server_info(
+            "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+            vec![],
+        );
+        assert_eq!(
+            classify_vtxo(&vtxo, DUST, &server_info, now, no_server_pk),
+            VtxoClassificationDto::RecoverableSettleable
+        );
+    }
+
+    #[test]
+    fn classify_vtxo_recoverable_pending_operator_sweep() {
+        let now = current_unix_timestamp();
+        let vtxo = sample_vtp(0, 25_000, now - 1, default_flags());
+        let server_info = test_server_info(
+            "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+            vec![],
+        );
+        assert_eq!(
+            classify_vtxo(&vtxo, DUST, &server_info, now, no_server_pk),
+            VtxoClassificationDto::RecoverablePendingOperatorSweep
+        );
+    }
+
+    #[test]
+    fn classify_vtxo_pending_recovery_due_to_expired_signer() {
+        let script = ScriptBuf::from_bytes(vec![0x51]);
+        let future_expiry = 2_000_000_000_i64;
+        let vtxo = VirtualTxOutPoint {
+            outpoint: OutPoint::new(Txid::from_byte_array([7; 32]), 0),
+            created_at: future_expiry - 86_400,
+            expires_at: future_expiry,
+            amount: Amount::from_sat(50_000),
+            script: script.clone(),
+            is_preconfirmed: false,
+            is_swept: false,
+            is_unrolled: false,
+            is_spent: false,
+            spent_by: None,
+            commitment_txids: vec![],
+            settled_by: None,
+            ark_txid: None,
+            assets: vec![],
+        };
+        let deprecated_pk = PublicKey::from_str(
+            "02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5",
+        )
+        .expect("valid key")
+        .x_only_public_key()
+        .0;
+        let server_info = test_server_info(
+            "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+            vec![(
+                "02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5",
+                500_000,
+            )],
+        );
+        let now = 1_000_000_i64;
+        assert_eq!(
+            classify_vtxo(&vtxo, DUST, &server_info, now, |lookup_script| {
+                if lookup_script == &script {
+                    Some(deprecated_pk)
+                } else {
+                    None
+                }
+            },),
+            VtxoClassificationDto::PendingRecoveryDueToExpiredSigner
+        );
+    }
+
+    #[test]
+    fn classify_vtxo_exiting() {
+        let now = current_unix_timestamp();
+        let vtxo = sample_vtp(
+            0,
+            25_000,
+            now + 86_400,
+            VtpFlags {
+                is_unrolled: true,
+                ..default_flags()
+            },
+        );
+        let server_info = test_server_info(
+            "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+            vec![],
+        );
+        assert_eq!(
+            classify_vtxo(&vtxo, DUST, &server_info, now, no_server_pk),
+            VtxoClassificationDto::Exiting
+        );
+    }
+
+    #[test]
+    fn classify_vtxo_finalized_spent() {
+        let now = current_unix_timestamp();
+        let vtxo = sample_vtp(
+            0,
+            25_000,
+            now + 86_400,
+            VtpFlags {
+                is_spent: true,
+                ..default_flags()
+            },
+        );
+        let server_info = test_server_info(
+            "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+            vec![],
+        );
+        assert_eq!(
+            classify_vtxo(&vtxo, DUST, &server_info, now, no_server_pk),
+            VtxoClassificationDto::Finalized
+        );
+    }
+
+    #[test]
+    fn classify_vtxo_exiting_beats_recoverable() {
+        let now = current_unix_timestamp();
+        let vtxo = sample_vtp(
+            0,
+            25_000,
+            now - 1,
+            VtpFlags {
+                is_unrolled: true,
+                ..default_flags()
+            },
+        );
+        let server_info = test_server_info(
+            "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+            vec![],
+        );
+        assert_eq!(
+            classify_vtxo(&vtxo, DUST, &server_info, now, no_server_pk),
+            VtxoClassificationDto::Exiting
+        );
+    }
+
+    #[test]
+    fn map_vtxo_row_sets_id_and_flags() {
+        let now = current_unix_timestamp();
+        let vtxo = sample_vtp(
+            3,
+            42_000,
+            now + 86_400,
+            VtpFlags {
+                is_preconfirmed: true,
+                ..default_flags()
+            },
+        );
+        let server_info = test_server_info(
+            "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+            vec![],
+        );
+        let row = map_vtxo_row(&vtxo, DUST, &server_info, now, no_server_pk);
+        assert_eq!(row.id, format!("{}:3", vtxo.outpoint.txid));
+        assert_eq!(row.amount_sats, 42_000);
+        assert_eq!(row.created_at, vtxo.created_at);
+        assert_eq!(row.expires_at, vtxo.expires_at);
+        assert_eq!(row.classification, VtxoClassificationDto::PreConfirmed);
+        assert!(row.is_preconfirmed);
+        assert!(!row.is_recoverable);
+        assert!(!row.is_unrolled);
+        assert!(!row.is_swept);
+        assert!(!row.is_spent);
     }
 }

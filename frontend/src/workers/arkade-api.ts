@@ -7,6 +7,7 @@ export type { ArkadeOperatorConnectionSummary }
 
 export interface ArkadeOperatorSyncResult {
   keyDiscoveryWarning?: string
+  exitingVtxoWarning?: string
 }
 
 export interface ArkadeBalanceInfo {
@@ -20,7 +21,7 @@ export interface ArkadeBalanceInfo {
   boardingPendingSats?: number
   unilateralExitInProgressSats?: number
   collaborativeExitInProgressSats?: number
-  pendingRecoverySats?: number
+  pendingRecoveryDueToExpiredSignerSats?: number
   /** Swept or sub-dust VTXOs the user can batch-settle now. */
   recoverableSettleableSats?: number
   recoverableSettleableVtxoCount?: number
@@ -70,6 +71,34 @@ export interface ArkadeVtxoExpiryStatus {
   /** Unix seconds; earliest expiry among active unspent VTXOs. */
   earliestExpiresAt: number | null
   expiringSoonCount: number
+}
+
+export type ArkadeVtxoClassification =
+  | 'pre_confirmed'
+  | 'confirmed'
+  | 'recoverable_settleable'
+  | 'recoverable_pending_operator_sweep'
+  | 'pending_recovery_due_to_expired_signer'
+  | 'exiting'
+  | 'finalized'
+
+export interface ArkadeVtxoRowBase {
+  id: string
+  amountSats: number
+  createdAt: number
+  expiresAt: number
+  classification: ArkadeVtxoClassification
+  isPreconfirmed: boolean
+  isRecoverable: boolean
+  isUnrolled: boolean
+  isSwept: boolean
+  isSpent: boolean
+}
+
+export interface ArkadeVtxoListResult {
+  rows: ArkadeVtxoRowBase[]
+  /** Unix seconds from offchain_vtxo_snapshot.synced_at when served from local fallback. */
+  fromSnapshotSyncedAt: number | null
 }
 
 export interface ArkadePaymentRow {
@@ -168,10 +197,16 @@ export interface ArkadeCollaborativeExitParams {
 }
 
 export interface ArkadeUnrollProgressEvent {
-  type: 'wait' | 'unroll' | 'done'
+  type: 'wait' | 'unroll' | 'indexer' | 'done'
   message: string
   txid?: string
   vtxoTxid?: string
+}
+
+export interface ArkadeUnrollResult {
+  vtxoTxid: string
+  operatorIndexerConfirmed: boolean
+  indexerWarning?: string
 }
 
 export interface ArkadeCompleteUnilateralExitParams {
@@ -303,6 +338,7 @@ export interface ArkadeService {
   getRecoverableVtxoFeeEstimate(): Promise<ArkadeRecoverableVtxoFeeEstimate>
   recoverRecoverableVtxos(): Promise<string | null>
   listExitCandidates(): Promise<ArkadeExitCandidateRow[]>
+  listVtxos(): Promise<ArkadeVtxoListResult>
   listUnilateralExitsInProgress(): Promise<ArkadeUnilateralExitInProgressRow[]>
   getOnchainBumperInfo(): Promise<ArkadeOnchainBumperInfo>
   collaborativeExit(params: ArkadeCollaborativeExitParams): Promise<string>

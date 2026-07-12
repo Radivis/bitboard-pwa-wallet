@@ -70,7 +70,7 @@ export function unilateralUnrollProgressToastId(
 }
 
 export function shouldShowUnilateralUnrollProgressToast(event: { type: string }): boolean {
-  return event.type === 'unroll' || event.type === 'wait'
+  return event.type === 'unroll' || event.type === 'wait' || event.type === 'indexer'
 }
 
 export type UnilateralExitTimelock = {

@@ -21,6 +21,7 @@ import {
   arkadeUnilateralExitFeeQueryKey,
   arkadeUnilateralExitsInProgressQueryKey,
   arkadeVtxoExpiryQueryKey,
+  arkadeVtxoListQueryKey,
 } from '@/lib/arkade/arkade-query-keys'
 import type {
   ArkadeBalanceInfo,
@@ -224,6 +225,9 @@ async function invalidateArkadeWalletDataQueries(
     }),
     queryClient.invalidateQueries({
       queryKey: arkadeVtxoExpiryQueryKey(walletId, networkMode, connectionId),
+    }),
+    queryClient.invalidateQueries({
+      queryKey: arkadeVtxoListQueryKey(walletId, networkMode, connectionId),
     }),
     queryClient.invalidateQueries({
       queryKey: arkadeRecoverableVtxoFeeQueryKey(walletId, networkMode, connectionId),
@@ -435,6 +439,29 @@ export function useArkadeVtxoExpiryQuery() {
       await ensureArkadeSessionOpenForActiveWallet()
       scheduleBackgroundArkadeOperatorSync()
       return getArkadeWorker().getVtxoExpiryStatus()
+    },
+    ...arkadeDashboardPeriodicQueryOptions,
+  })
+}
+
+export function useArkadeVtxoListQuery() {
+  const { networkMode, activeWalletId, activeArkadeConnectionId, sessionReady } =
+    useArkadeQueryBase()
+  const arkadeDashboardPeriodicQueryOptions = useArkadeDashboardPeriodicQueryOptions()
+
+  return useQuery({
+    queryKey: walletScopedQueryKey(
+      activeWalletId,
+      networkMode,
+      activeArkadeConnectionId,
+      arkadeVtxoListQueryKey,
+      'vtxo-list',
+    ),
+    enabled: sessionReady,
+    queryFn: async () => {
+      await ensureArkadeSessionOpenForActiveWallet()
+      scheduleBackgroundArkadeOperatorSync()
+      return getArkadeWorker().listVtxos()
     },
     ...arkadeDashboardPeriodicQueryOptions,
   })
@@ -962,7 +989,7 @@ export function useArkadeUnilateralUnrollMutation() {
       ) {
         return undefined
       }
-      // Unilateral: exit line only — post-unroll WASM excludes VTXO from spendable via spent bucket.
+      // Unilateral: exit line only — post-unroll WASM excludes VTXO from spendable via exiting sub-bucket.
       return applyOptimisticExitBalanceDeduction(
         queryClient,
         activeWalletId,
@@ -975,6 +1002,9 @@ export function useArkadeUnilateralUnrollMutation() {
     onSuccess: async (result, _params, context) => {
       toast.dismiss(unilateralUnrollProgressToastId({ type: 'done', txid: result.vtxoTxid }))
       toast.success(formatUnilateralUnrollSuccessMessage(result.vtxoTxid))
+      if (result.indexerWarning) {
+        toast.warning(result.indexerWarning, { id: 'arkade-unroll-indexer-warning' })
+      }
       if (activeWalletId != null && activeArkadeConnectionId != null) {
         await invalidateArkadeWalletDataQueries(
           queryClient,

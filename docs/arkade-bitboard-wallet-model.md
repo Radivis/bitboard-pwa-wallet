@@ -35,7 +35,7 @@ Do **not** persist arrays of derivation indices or per-index metadata in `sdkPer
 
 `wallet_db.offchain_vtxo_snapshot` stores the last operator-synced VTXO list plus `server_pk_hex` on each `VirtualTxOutPointRecord`. That per-VTXO operator signer key lets the wallet **recompute** balance buckets offline using cached `getInfo` and the current wall clock—same rules as live `offchain_balance()` in ark-client.
 
-Balance buckets (`pre_confirmed`, cooperatively spendable `confirmed`, `recoverable`, `pending_recovery`) are **not** stored as separate persisted totals. After operator signer rotation cutoff, funds on a deprecated key appear in `pending_recovery_sats` until unilateral exit or recoverable settlement. Re-sync refreshes vtxo rows and `server_pk_hex` values.
+Balance buckets (`pre_confirmed`, cooperatively spendable `confirmed`, `recoverable`, `pending_recovery` in ark-client) are **not** stored as separate persisted totals. After operator signer rotation cutoff, funds on a deprecated key appear in `pending_recovery_due_to_expired_signer_sats` until unilateral exit or recoverable settlement. Re-sync refreshes vtxo rows and `server_pk_hex` values.
 
 ### Balance buckets and how they combine
 
@@ -50,9 +50,10 @@ Each VTXO in `wallet_db.offchain_vtxo_snapshot` lands in exactly one state bucke
 | **pre_confirmed** | Incoming Ark payment, not yet batch-settled (`is_preconfirmed`) |
 | **confirmed** | Batch-settled, normally cooperatively spendable offchain |
 | **recoverable** | Expired, operator-swept, or sub-dust — not sendable offchain, but recoverable via batch settle |
-| **spent** | `is_spent`, `is_swept`, or **`is_unrolled`** (unilateral exit started) |
+| **unspendable** | Not offchain-spendable: finalized outputs (`is_spent` / `is_swept`) plus the **exiting** sub-bucket below. Upstream ark-core named this `spent()` — misleading because it is not the `is_spent` flag alone. |
+| **exiting** (sub-bucket of unspendable) | `is_unrolled && !is_spent` — unilateral exit awaiting on-chain completion |
 
-Unilateral exits move VTXOs into **spent** with `is_unrolled = true` until completion.
+Unilateral exits move VTXOs into **exiting** after unroll until completion sets `is_spent`.
 
 #### Layer 2 — Signer-aware offchain totals (`compute_offchain_balance`)
 
@@ -63,9 +64,9 @@ Replayed from the snapshot (same rules as live `ark-client::offchain_balance`):
 | **pre_confirmed_sats** | `pre_confirmed` ∩ signer-spendable |
 | **confirmed_sats** | `confirmed` ∩ signer-spendable |
 | **recoverable_sats** | all `recoverable` |
-| **pending_recovery_sats** | `pre_confirmed`/`confirmed` locked under a **deprecated operator signer** past cooperative cutoff |
+| **pending_recovery_due_to_expired_signer_sats** | `pre_confirmed`/`confirmed` locked under a **deprecated operator signer** past cooperative cutoff (maps from ark-client `pending_recovery()`) |
 
-**Gross spendable offchain** = `pre_confirmed_sats + confirmed_sats`. VTXOs in **spent** (including unrolled exits) are excluded.
+**Gross spendable offchain** = `pre_confirmed_sats + confirmed_sats`. VTXOs in **unspendable** (including **exiting**) are excluded.
 
 #### Layer 3 — Bitboard sub-buckets
 
@@ -76,7 +77,7 @@ Replayed from the snapshot (same rules as live `ark-client::offchain_balance`):
 | **boarding_spendable** | Confirmed on-chain UTXOs on the boarding address, ready to settle into VTXOs |
 | **boarding_pending** | Unconfirmed boarding UTXOs |
 | **onchain_bumper** | Confirmed sats in the P2A bumper wallet (exit fees only — not Ark spendable balance) |
-| **unilateral_exit_in_progress** | Sum of `spent` VTXOs with `is_unrolled && !is_spent` (informational; already excluded from gross spendable). May overlap ark-core **recoverable** when expired/swept — excluded from recoverable UX via `ARK-REC-08`. |
+| **unilateral_exit_in_progress** | Sum of **exiting** VTXOs (`is_unrolled && !is_spent`) plus pending unilateral records during unroll (informational; already excluded from gross spendable) |
 | **collaborative_exit_in_progress** | Pending exit deduction while the operator snapshot still lists exiting VTXOs as cooperatively spendable |
 
 #### Layer 4 — Dashboard fields
@@ -88,7 +89,7 @@ Replayed from the snapshot (same rules as live `ark-client::offchain_balance`):
 | **total_sats** | Gross offchain + recoverable sub-buckets + pending recovery + bumper + boarding pending, minus collaborative exit in progress |
 | **Dashboard headline** (UI) | `offchain_spendable_sats + boarding_spendable_sats` |
 
-**Unilateral exit in progress** is shown as an informational “−” line but is **not** subtracted again from spendable totals — those VTXOs are already out of gross spendable via the **spent** bucket once unroll completes. See [Unilateral vs collaborative exit balance timing](#unilateral-vs-collaborative-exit-balance-timing) for the phase handoff.
+**Unilateral exit in progress** is shown as an informational “−” line but is **not** subtracted again from spendable totals — those VTXOs are already out of gross spendable via the **exiting** sub-bucket once unroll completes. See [Unilateral vs collaborative exit balance timing](#unilateral-vs-collaborative-exit-balance-timing) for the phase handoff.
 
 **Collaborative exit in progress** is still subtracted while the snapshot lists the exiting VTXOs as spendable; pending exit deduction records track that gap until operator sync updates the snapshot.
 
@@ -115,36 +116,45 @@ Unilateral exit is more subtle: the **same sats** are tracked in different snaps
 |-------|----------------|---------------------|--------------------------------------|------------------------------|
 | Before unroll | `confirmed` | Yes | 0 | No |
 | During unroll (broadcast in flight) | still `confirmed` | Yes | `pending_exit_deductions` (unilateral) | No in WASM/UI steady-state rules* |
-| After unroll | `spent` (`is_unrolled = true`) | No — excluded by `VtxoList` | sum of `spent` with `is_unrolled && !is_spent` | No — already excluded from gross |
+| After unroll | **exiting** (`is_unrolled = true`, `is_spent = false`) | No — excluded by `VtxoList` | sum of **exiting** VTXOs | No — already excluded from gross |
 
-\*The brief “during unroll” window rarely affects the dashboard because the user stays on the unroll modal until WASM returns. Optimistic UI (`arkade-exit-balance-optimistic.ts`) only bumps `unilateralExitInProgressSats` for unilateral paths; it does **not** reduce `confirmedSats` / `offchainSpendableSats`, matching post-unroll WASM behaviour and avoiding double-subtraction once the VTXO moves to `spent`.
+\*The brief “during unroll” window rarely affects the dashboard because the user stays on the unroll modal until WASM returns. Optimistic UI (`arkade-exit-balance-optimistic.ts`) only bumps `unilateralExitInProgressSats` for unilateral paths; it does **not** reduce `confirmedSats` / `offchainSpendableSats`, matching post-unroll WASM behaviour and avoiding double-subtraction once the VTXO moves to **exiting**.
 
-**Handoff between pending record and spent bucket**
+**Handoff between pending record and exiting sub-bucket**
 
 1. First unroll broadcast → `record_pending_unilateral_exit` writes a pending deduction; the VTXO is still spendable in the snapshot.
 2. Unroll completes → `mark_vtxo_unrolled_in_snapshot` sets `is_unrolled = true` locally (gross spendable drops **before** operator sync realigns the snapshot).
 3. `reconcile_pending_exit_deductions` drops the pending unilateral record once the VTXO is no longer spendable.
-4. `exit_balance_components` counts the same amount from the `spent` bucket until on-chain completion (`is_spent`).
+4. `exit_balance_components` counts the same amount from the **exiting** sub-bucket until on-chain completion (`is_spent`).
 
 Bitboard keeps the **exit line amount stable** across steps 1→4. Net spendable must not subtract `unilateral_exit_in_progress_sats` after step 2 — doing so double-counted the exit against unrelated VTXOs (e.g. a fresh boarding credit). Collaborative exit has no equivalent handoff: the field clears when operator sync removes the VTXOs from spendable entirely.
 
 Implementation touchpoints: `build_arkade_balance_dto` (WASM), `exit_balance_components` / `reconcile_pending_exit_deductions` (persistence), `arkade-exit-balance-optimistic.ts` (React Query cache).
 
+### Post-unroll operator contract (ARK-EXIT-11)
+
+After on-chain unroll broadcasts, `run_unilateral_unroll` sets local `is_unrolled` immediately, then polls operator `list_vtxos` (with `sync_with_operator` between attempts) until the ASP marks the VTXO `is_unrolled && !is_spent`, or the poll window expires.
+
+- **Sticky merge:** `merge_sticky_unrolled_flags` preserves local `is_unrolled` for VTXOs still returned by the operator while ASP lags on the `is_unrolled` flag; missing or divergent watches are reconciled via `unilateral_exit_watches` (ARK-EXIT-12).
+- **Watch reconcile:** After each operator sync, `reconcile_exiting_vtxo_watches` runs targeted `list_vtxos_for_outpoints` and narrow Esplora probes per the truth table — never clears exiting state on full-list absence alone (ARK-SYNC-03).
+- **Graceful timeout:** If on-chain unroll is visible via Esplora but ASP never sets `is_unrolled` within the poll window, unroll still succeeds with `indexerWarning` — complete exit may retry indexer lag separately (`ARK-EXIT-05`).
+- **Hard failure:** If neither ASP nor Esplora confirms the unroll after the poll window, WASM returns `unilateral_unroll_not_confirmed_on_chain`.
+
+Residual edge cases where ASP reports `is_swept` without `is_unrolled` during an abandoned unilateral exit (cooperative recover override) remain documented in deferred Operation Labyrinth Step 3 work; recover + SSE fixes addressed the common stuck-wallet path.
+
 ### Unilateral exit vs recoverable and expiry UX
 
-`ark-core` `VtxoList::new` checks `is_recoverable` (expired, operator-swept, or sub-dust) **before** `is_unrolled`. A VTXO in unilateral exit can therefore move into the **recoverable** bucket when it expires or is operator-swept, even while `unilateral_exit_in_progress_sats` still tracks the same outpoint.
+Vendored **ark-core** classifies `is_unrolled && !is_spent` VTXOs into the **exiting** sub-bucket before recoverable (aligned with arkd `recoverable_only`, which excludes `Unrolled`). `is_recoverable()` also returns false when `is_unrolled`.
 
-Without a Bitboard-side filter this produced a confusing dashboard: **Recoverable now** for the same sats already shown under **Unilateral exit in progress**.
-
-Bitboard excludes outpoints in `unilateral_exit_in_progress_outpoints()` from:
+During the brief **pre-unroll** window, a pending unilateral record may exist while the VTXO is still in `confirmed`. Bitboard excludes those pending outpoints from recoverable and expiry UX via `ARK-REC-08`.
 
 | Surface | Implementation |
 |---------|----------------|
-| Recoverable settleable / pending-operator-sweep counts and **Recover now** | `recoverable_vtxo_buckets_from_list` in `bitboard-ark/src/session/vtxo.rs` |
+| Recoverable settleable / pending-operator-sweep counts and **Recover now** | `recoverable_vtxo_buckets_from_list` — pending outpoints only |
 | Expiring-soon count and **Renew VTXOs now** | `expiring_outpoints` |
 | Earliest expiry indicator | `vtxo_expiry_status` (`earliest_expires_at` scan) |
 
-This mirrors the existing `pending_recovery_sats_excluding_unilateral_exit` pattern: do not fork ark-core classification; filter at the wallet layer. Contract `ARK-REC-08`.
+Contract `ARK-REC-08`.
 
 ### Unilateral exit completion coin-select (vendor fork)
 
@@ -187,13 +197,13 @@ When an Arkade operator rotates its signing key, `getInfo` advertises the new `s
 
 Contracts `ARK-ROT-01` through `ARK-ROT-05` in `doc/features/arkade.yaml` define session open, persistence re-stamp, error messaging, and Management banner behavior.
 
-Cooperative fund migration uses `migrate_deprecated_signer_vtxos()` (ark-client 0.9.3+). Bitboard loops migrate passes internally until cooperative work is complete (or a pass cap), and **only then** re-stamps `operator_identity` with the current operator signer. Partial passes keep the migration banner and deprecated signer in persistence; the UI prompts **Migrate again** until complete. Post-cutoff funds appear in `pending_recovery` until unilateral exit or recoverable settlement; a **pending-recovery banner** on Dashboard and Management links to unilateral exit when `pendingRecoverySats > 0`. This is **not** the admin `WalletInitializerService_Restore` API (operator on-chain wallet setup only).
+Cooperative fund migration uses `migrate_deprecated_signer_vtxos()` (ark-client 0.9.3+). Bitboard loops migrate passes internally until cooperative work is complete (or a pass cap), and **only then** re-stamps `operator_identity` with the current operator signer. Partial passes keep the migration banner and deprecated signer in persistence; the UI prompts **Migrate again** until complete. Post-cutoff funds appear in `pending_recovery_due_to_expired_signer` until unilateral exit or recoverable settlement; a **pending-recovery-due-to-expired-signer banner** on Dashboard and Management links to unilateral exit when `pendingRecoveryDueToExpiredSignerSats > 0`. This is **not** the admin `WalletInitializerService_Restore` API (operator on-chain wallet setup only).
 
-### Recoverable vs pending recovery (manual batch recover)
+### Recoverable vs pending recovery due to expired signer (manual batch recover)
 
 | Bucket | Typical cause | User action in Bitboard |
 |--------|---------------|-------------------------|
-| **pending_recovery** | Deprecated operator signer past cooperative cutoff; VTXO not yet expired/swept | Unilateral exit path; shown in balance breakdown, not the recoverable banner |
+| **pending_recovery_due_to_expired_signer** | Deprecated operator signer past cooperative cutoff; VTXO not yet expired/swept | Unilateral exit path; shown in balance breakdown, not the recoverable banner |
 | **recoverable** | Expired, operator-swept, or sub-dust VTXOs | Non-blocking banner on Dashboard and Management with count, total, optional fee estimate, and **Recover now** (`settle_vtxos` on recoverable outpoints only—no boarding, no auto-recover on sync) |
 
 Contracts `ARK-REC-01` through `ARK-REC-06` in `doc/features/arkade.yaml` define banner visibility, fee display, and the user-initiated recover action.
