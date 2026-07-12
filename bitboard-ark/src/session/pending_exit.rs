@@ -4,15 +4,34 @@ use crate::error::{ArkResult, ArkWasmError};
 use crate::exit_balance::{
     sum_pending_exit_sats_by_kind, unilateral_exit_in_progress_sats_from_snapshot,
 };
-use crate::persistence::{PendingExitDeductionRecord, PendingExitKind};
+use crate::persistence::{JsonPersistenceDb, PendingExitDeductionRecord, PendingExitKind};
 
 use super::ArkSession;
+use super::exit_watch::{
+    register_unilateral_exit_watch, remove_unilateral_exit_watches_for_txids_in_wallet_db,
+};
 use super::mappers::{current_unix_timestamp, parse_outpoint};
+
+pub(crate) fn clear_pending_unilateral_exit_for_outpoint_in_wallet_db(
+    wallet_db: &JsonPersistenceDb,
+    txid: &str,
+    vout: u32,
+) {
+    let mut pending = wallet_db.pending_exit_deductions();
+    pending.retain(|record| {
+        if record.kind != PendingExitKind::Unilateral {
+            return true;
+        }
+        let record_vout = record.vout.unwrap_or(0);
+        !(record.vtxo_txid.as_deref() == Some(txid) && record_vout == vout)
+    });
+    wallet_db.set_pending_exit_deductions(pending);
+}
 
 impl ArkSession {
     /// Stable exit-pipeline totals for the balance DTO.
     ///
-    /// Unilateral: sums `spent` VTXOs (`is_unrolled && !is_spent`) plus any in-flight pending
+    /// Unilateral: sums [`ark_core::VtxoList::exiting`] VTXOs plus any in-flight pending
     /// unilateral records during unroll. This amount is informational in
     /// [`build_arkade_balance_dto`] — do not subtract it from gross spendable after unroll.
     /// Collaborative: pending records only; those VTXOs are still in gross spendable until sync.
@@ -77,6 +96,7 @@ impl ArkSession {
                 started_at: current_unix_timestamp(),
                 baseline_offchain_spendable_sats: None,
             });
+        register_unilateral_exit_watch(&self.wallet_db, txid, vout, amount_sats);
     }
 
     pub(crate) fn record_pending_collaborative_exit(&self, amount_sats: u64, baseline_sats: u64) {
@@ -104,5 +124,6 @@ impl ArkSession {
                 .is_none_or(|txid| !txid_set.contains(txid))
         });
         self.wallet_db.set_pending_exit_deductions(pending);
+        remove_unilateral_exit_watches_for_txids_in_wallet_db(&self.wallet_db, vtxo_txids);
     }
 }

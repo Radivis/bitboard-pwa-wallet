@@ -213,8 +213,8 @@ where
     let mut missing_blocktime_outpoints = HashSet::new();
 
     // Completion targets explicit virtual txids. After unroll, arkd's indexer often marks those
-    // VTXOs `is_spent` and/or `is_unrolled`, which moves them into `VtxoList::spent()` — they are
-    // no longer returned by `all_unspent()`. Search the full list for filter matches instead.
+    // VTXOs `is_spent` and/or `is_unrolled`, which moves them into the exiting / unspendable
+    // buckets — they are no longer returned by `all_unspent()`. Search the full list for filter matches instead.
     for virtual_tx_outpoint in vtxo_list
         .all()
         .filter(|vtp| vtxo_txid_filter.contains(&vtp.outpoint.txid) && !vtp.is_swept)

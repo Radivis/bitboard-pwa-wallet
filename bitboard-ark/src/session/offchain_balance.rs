@@ -5,7 +5,7 @@ use bitcoin::XOnlyPublicKey;
 use crate::error::ArkResult;
 use crate::offchain_snapshot::{
     OffchainBalanceBuckets, offchain_balance_buckets_from_snapshot,
-    pending_recovery_sats_excluding_unilateral_exit,
+    pending_recovery_due_to_expired_signer_sats_excluding_unilateral_exit,
 };
 use crate::persistence::OperatorIdentity;
 
@@ -23,13 +23,14 @@ impl ArkSession {
                 && let Ok((vtxo_list, script_map)) = self.client.list_vtxos().await
                 && let Ok(server_info) = self.client.server_info()
             {
-                buckets.pending_recovery_sats = pending_recovery_sats_excluding_unilateral_exit(
-                    &vtxo_list,
-                    &server_info,
-                    current_unix_timestamp(),
-                    |script| script_map.get(script).map(|vtxo| vtxo.server_pk()),
-                    &in_progress,
-                );
+                buckets.pending_recovery_due_to_expired_signer_sats =
+                    pending_recovery_due_to_expired_signer_sats_excluding_unilateral_exit(
+                        &vtxo_list,
+                        &server_info,
+                        current_unix_timestamp(),
+                        |script| script_map.get(script).map(|vtxo| vtxo.server_pk()),
+                        &in_progress,
+                    );
             }
             return Ok(buckets);
         }
@@ -38,12 +39,14 @@ impl ArkSession {
             && let Ok(server_info) = self.client.server_info()
         {
             let pending = self.wallet_db.pending_exit_deductions();
+            let watches = self.wallet_db.unilateral_exit_watches();
             return offchain_balance_buckets_from_snapshot(
                 snapshot,
                 &server_info,
                 current_unix_timestamp(),
                 legacy_signer_pk_fallback(&self.persisted_operator_identity()),
                 &pending,
+                &watches,
             );
         }
 
@@ -59,17 +62,21 @@ impl ArkSession {
             .server_info()
             .map_err(crate::error::ArkWasmError::from)?;
         let pending = self.wallet_db.pending_exit_deductions();
+        let watches = self.wallet_db.unilateral_exit_watches();
         let buckets = offchain_balance_buckets_from_snapshot(
             snapshot,
             &server_info,
             current_unix_timestamp(),
             legacy_signer_pk_fallback(&self.persisted_operator_identity()),
             &pending,
+            &watches,
         )?;
         Ok(buckets.gross_spendable_sats())
     }
 }
 
-fn legacy_signer_pk_fallback(operator_identity: &OperatorIdentity) -> Option<XOnlyPublicKey> {
+pub(crate) fn legacy_signer_pk_fallback(
+    operator_identity: &OperatorIdentity,
+) -> Option<XOnlyPublicKey> {
     XOnlyPublicKey::from_str(&operator_identity.signer_pk_hex).ok()
 }

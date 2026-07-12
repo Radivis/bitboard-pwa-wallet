@@ -5,6 +5,7 @@ pub const PAYMENT_DIRECTION_OUTGOING: &str = "outgoing";
 
 pub const UNROLL_EVENT_TYPE_UNROLL: &str = "unroll";
 pub const UNROLL_EVENT_TYPE_WAIT: &str = "wait";
+pub const UNROLL_EVENT_TYPE_INDEXER: &str = "indexer";
 pub const UNROLL_EVENT_TYPE_DONE: &str = "done";
 
 pub const VTXO_STATUS_SPENT: &str = "spent";
