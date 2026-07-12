@@ -258,6 +258,12 @@ export function UnilateralExitDialog({ exitFlow }: UnilateralExitDialogProps) {
                 Working…
               </div>
             )}
+            {unrollProgress.some((entry) => entry.type === 'indexer') && (
+              <p className="text-xs text-amber-700 dark:text-amber-300">
+                Waiting for the operator indexer to reflect your unroll. This can take up to a
+                minute after on-chain confirmation.
+              </p>
+            )}
             {unrollMutation.isError && (
               <p className="text-sm text-destructive" data-testid="arkade-unroll-error">
                 Unroll failed: {errorMessage(unrollMutation.error)}

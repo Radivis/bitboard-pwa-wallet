@@ -266,12 +266,12 @@ describe('ArkadeDashboardBalance', () => {
       data: {
         confirmedSats: 0,
         totalSats: 50_000,
-        pendingRecoverySats: 50_000,
+        pendingRecoveryDueToExpiredSignerSats: 50_000,
       },
     })
     renderWithProviders(<ArkadeDashboardBalance />)
-    expect(screen.getByTestId('arkade-balance-pending-recovery')).toHaveTextContent(
-      'Pending recovery (deprecated signer)',
+    expect(screen.getByTestId('arkade-balance-pending-recovery-due-to-expired-signer')).toHaveTextContent(
+      'Pending recovery (expired signer)',
     )
   })
 
@@ -290,17 +290,17 @@ describe('ArkadeDashboardBalance', () => {
     expect(screen.getByTestId('arkade-balance-bumper')).toHaveTextContent('Bumper wallet (exit fees)')
   })
 
-  it('DASH-ARK-19b shows pending recovery banner when pendingRecoverySats is greater than zero', () => {
+  it('DASH-ARK-19b shows pending recovery banner when pendingRecoveryDueToExpiredSignerSats is greater than zero', () => {
     balanceQueryMock.mockReturnValue({
       isLoading: false,
       data: {
         confirmedSats: 0,
         totalSats: 50_000,
-        pendingRecoverySats: 50_000,
+        pendingRecoveryDueToExpiredSignerSats: 50_000,
       },
     })
     renderWithProviders(<ArkadeDashboardBalance />)
-    expect(screen.getByTestId('arkade-pending-recovery-banner')).toBeInTheDocument()
+    expect(screen.getByTestId('arkade-pending-recovery-due-to-expired-signer-banner')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /unilateral exit in Management/i })).toBeInTheDocument()
   })
 

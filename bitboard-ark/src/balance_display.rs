@@ -14,7 +14,7 @@ pub struct ArkadeBalanceInputs {
     pub boarding_pending_sats: u64,
     pub unilateral_exit_in_progress_sats: u64,
     pub collaborative_exit_in_progress_sats: u64,
-    pub pending_recovery_sats: u64,
+    pub pending_recovery_due_to_expired_signer_sats: u64,
 }
 
 /// Maps ark-client offchain buckets to dashboard/send balance fields.
@@ -33,7 +33,8 @@ pub struct ArkadeBalanceInputs {
 /// Unconfirmed bumper-wallet UTXOs are omitted from `total_sats` (only `onchain.confirmed` counts).
 ///
 /// `unilateral_exit_in_progress_sats` is informational only: after unroll, unrolled VTXOs live in
-/// the `spent` bucket and are already excluded from spendable offchain totals. Do not subtract this
+/// the **exiting** sub-bucket (under `unspendable`) and are already excluded from spendable offchain
+/// totals. Do not subtract this
 /// field from net spendable — see `docs/arkade-bitboard-wallet-model.md` (unilateral exit timing).
 ///
 /// `collaborative_exit_in_progress_sats` is subtracted from net fields while the operator snapshot
@@ -45,11 +46,11 @@ pub fn build_arkade_balance_dto(inputs: ArkadeBalanceInputs) -> BalanceDto {
     let total_offchain_sats = spendable_offchain_sats
         .saturating_add(inputs.recoverable_settleable_sats)
         .saturating_add(inputs.recoverable_pending_operator_sweep_sats)
-        .saturating_add(inputs.pending_recovery_sats);
+        .saturating_add(inputs.pending_recovery_due_to_expired_signer_sats);
     let gross_confirmed_sats =
         spendable_offchain_sats.saturating_add(inputs.onchain_confirmed_sats);
     // Only collaborative exit is subtracted here; unilateral amounts are already out of gross
-    // spendable via the spent/is_unrolled bucket (see wallet model doc).
+    // spendable via the exiting sub-bucket (see wallet model doc).
     let collaborative_exit_in_progress_sats = inputs.collaborative_exit_in_progress_sats;
     let confirmed_sats = gross_confirmed_sats.saturating_sub(collaborative_exit_in_progress_sats);
     let offchain_spendable_sats = spendable_offchain_sats
@@ -66,7 +67,8 @@ pub fn build_arkade_balance_dto(inputs: ArkadeBalanceInputs) -> BalanceDto {
         boarding_pending_sats: inputs.boarding_pending_sats,
         unilateral_exit_in_progress_sats: inputs.unilateral_exit_in_progress_sats,
         collaborative_exit_in_progress_sats: inputs.collaborative_exit_in_progress_sats,
-        pending_recovery_sats: inputs.pending_recovery_sats,
+        pending_recovery_due_to_expired_signer_sats: inputs
+            .pending_recovery_due_to_expired_signer_sats,
         recoverable_settleable_sats: inputs.recoverable_settleable_sats,
         recoverable_settleable_vtxo_count: inputs.recoverable_settleable_vtxo_count,
         recoverable_pending_operator_sweep_sats: inputs.recoverable_pending_operator_sweep_sats,
@@ -170,7 +172,7 @@ mod tests {
 
     #[test]
     // Post-unroll: unilateral_exit_in_progress is informational; gross spendable already excludes
-    // the unrolled VTXO via the spent bucket — must not subtract again.
+    // the unrolled VTXO via the exiting sub-bucket — must not subtract again.
     fn unilateral_exit_in_progress_does_not_reduce_spendable_totals() {
         let balance = build_arkade_balance_dto(ArkadeBalanceInputs {
             pre_confirmed_sats: 200_000,
@@ -199,15 +201,15 @@ mod tests {
     }
 
     #[test]
-    fn pending_recovery_increases_total_not_confirmed() {
+    fn pending_recovery_due_to_expired_signer_increases_total_not_confirmed() {
         let balance = build_arkade_balance_dto(ArkadeBalanceInputs {
             confirmed_offchain_sats: 0,
-            pending_recovery_sats: 50_000,
+            pending_recovery_due_to_expired_signer_sats: 50_000,
             ..Default::default()
         });
         assert_eq!(balance.confirmed_sats, 0);
         assert_eq!(balance.offchain_spendable_sats, 0);
-        assert_eq!(balance.pending_recovery_sats, 50_000);
+        assert_eq!(balance.pending_recovery_due_to_expired_signer_sats, 50_000);
         assert_eq!(balance.total_sats, 50_000);
     }
 
@@ -216,7 +218,7 @@ mod tests {
         let balance = build_arkade_balance_dto(ArkadeBalanceInputs {
             confirmed_offchain_sats: 0,
             recoverable_settleable_sats: 0,
-            pending_recovery_sats: 50_000,
+            pending_recovery_due_to_expired_signer_sats: 50_000,
             ..Default::default()
         });
         assert_eq!(balance.confirmed_sats, 0);

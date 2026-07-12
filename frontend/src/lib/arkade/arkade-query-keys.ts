@@ -98,6 +98,20 @@ export const arkadeVtxoExpiryQueryKey = (
     'vtxo-expiry',
   ] as const
 
+export const arkadeVtxoListQueryKey = (
+  walletId: number,
+  networkMode: ArkadeSupportedNetworkMode,
+  connectionId: string,
+) =>
+  [
+    ...WALLET_DB_QUERY_KEY_ROOT,
+    'arkade',
+    walletId,
+    networkMode,
+    connectionId,
+    'vtxo-list',
+  ] as const
+
 export const arkadeExitCandidatesQueryKey = (
   walletId: number,
   networkMode: ArkadeSupportedNetworkMode,

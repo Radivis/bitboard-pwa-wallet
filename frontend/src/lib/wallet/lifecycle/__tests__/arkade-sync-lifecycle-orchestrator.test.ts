@@ -220,6 +220,19 @@ describe('arkade-sync-lifecycle-orchestrator', () => {
     expect(getArkadeSyncLifecycleSnapshot().warningMessage).toBeNull()
   })
 
+  it('merges exiting VTXO warning with key discovery warning', async () => {
+    syncWithOperator.mockResolvedValue({
+      keyDiscoveryWarning: 'key warning',
+      exitingVtxoWarning: 'exit warning',
+    })
+
+    await orchestrateArkadeSyncThenSave(syncParams)
+
+    expect(getArkadeSyncLifecycleSnapshot().warningMessage).toBe(
+      'key warning\nexit warning',
+    )
+  })
+
   it('signerMigration runs migrate before save and sync when complete', async () => {
     const callOrder: string[] = []
     migrateDeprecatedSignerVtxos.mockImplementation(async () => {
