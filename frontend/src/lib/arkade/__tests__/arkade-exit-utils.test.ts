@@ -64,12 +64,12 @@ describe('unilateral unroll toast helpers', () => {
     )
   })
 
-  it('notes indexer lag in success message when warning present', () => {
+  it('uses the same success message when indexer warning is present', () => {
     expect(
-      formatUnilateralUnrollSuccessMessage('587b597602803187e73cb30ca7791254a146755ee6435244d048c8d4072c72a5', {
-        indexerWarning: 'Operator indexer has not caught up.',
-      }),
-    ).toContain('Operator indexer is still catching up')
+      formatUnilateralUnrollSuccessMessage('587b597602803187e73cb30ca7791254a146755ee6435244d048c8d4072c72a5'),
+    ).toBe(
+      'Unroll complete (587b59760280…). Use Complete unilateral exit when the timelock elapses.',
+    )
   })
 
   it('shows info toasts for unroll, wait, and indexer progress', () => {

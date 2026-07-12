@@ -38,13 +38,9 @@ use super::mappers::{
 use super::pending_exit::clear_pending_unilateral_exit_for_outpoint_in_wallet_db;
 
 /// arkd's indexer can lag behind confirmed unroll broadcasts when marking `is_unrolled`.
-const COMPLETION_UNROLLED_INDEXER_POLL_MAX: u8 = 60;
-const COMPLETION_UNROLLED_INDEXER_POLL_DELAY: std::time::Duration =
-    std::time::Duration::from_millis(1_000);
-
-const UNROLL_OPERATOR_INDEXER_POLL_MAX: u8 = 60;
-const UNROLL_OPERATOR_INDEXER_POLL_DELAY: std::time::Duration =
-    std::time::Duration::from_millis(1_000);
+/// Unroll post-broadcast poll and completion retry share the same window (~60s).
+const OPERATOR_INDEXER_POLL_MAX: u8 = 60;
+const OPERATOR_INDEXER_POLL_DELAY: std::time::Duration = std::time::Duration::from_millis(1_000);
 
 const UNROLL_INDEXER_PROGRESS_MESSAGE: &str = "Waiting for operator to index unilateral unroll…";
 
@@ -614,9 +610,9 @@ impl ArkSession {
     where
         F: Fn(UnrollProgressEvent),
     {
-        for attempt in 0..UNROLL_OPERATOR_INDEXER_POLL_MAX {
+        for attempt in 0..OPERATOR_INDEXER_POLL_MAX {
             if attempt > 0 {
-                sleep(UNROLL_OPERATOR_INDEXER_POLL_DELAY).await;
+                sleep(OPERATOR_INDEXER_POLL_DELAY).await;
             }
             on_progress(UnrollProgressEvent {
                 event_type: UNROLL_EVENT_TYPE_INDEXER.to_string(),
@@ -624,8 +620,10 @@ impl ArkSession {
                 txid: None,
                 vtxo_txid: None,
             });
-            let _ = self.sync_with_operator().await;
-            let (vtxo_list, _) = self.client.list_vtxos().await?;
+            let vtxo_list = match self.sync_with_operator_and_vtxo_list().await {
+                Ok((vtxo_list, _sync_result)) => vtxo_list,
+                Err(_) => self.client.list_vtxos().await?.0,
+            };
             if operator_vtxo_is_unrolled(&vtxo_list, txid, vout) {
                 return Ok(UnrollPollOutcome {
                     operator_indexer_confirmed: true,
@@ -713,7 +711,7 @@ impl ArkSession {
         let fee_rate_sat_per_vb =
             resolve_completion_fee_rate_sat_per_vb(params.fee_rate_sat_per_vb);
         let mut last_error: Option<ark_client::Error> = None;
-        for _ in 0..COMPLETION_UNROLLED_INDEXER_POLL_MAX {
+        for _ in 0..OPERATOR_INDEXER_POLL_MAX {
             self.sync_with_operator().await?;
             match self
                 .client
@@ -730,7 +728,7 @@ impl ArkSession {
                 }
                 Err(error) if completion_awaits_unrolled_indexer(&error) => {
                     last_error = Some(error);
-                    sleep(COMPLETION_UNROLLED_INDEXER_POLL_DELAY).await;
+                    sleep(OPERATOR_INDEXER_POLL_DELAY).await;
                 }
                 Err(error) => return Err(error.into()),
             }

@@ -1,4 +1,5 @@
 use ark_client::DEFAULT_GAP_LIMIT;
+use ark_core::VtxoList;
 use ark_core::server::VirtualTxOutPoint;
 
 use crate::api_types::OperatorSyncResultDto;
@@ -43,6 +44,15 @@ pub(crate) fn combine_operator_sync_warning_messages(
 
 impl ArkSession {
     pub async fn sync_with_operator(&self) -> ArkResult<OperatorSyncResultDto> {
+        let (_, sync_result) = self.sync_with_operator_and_vtxo_list().await?;
+        Ok(sync_result)
+    }
+
+    /// Like [`sync_with_operator`], but also returns the operator `list_vtxos` result from the
+    /// same fetch (avoids a duplicate round-trip when callers need raw operator flags).
+    pub(crate) async fn sync_with_operator_and_vtxo_list(
+        &self,
+    ) -> ArkResult<(VtxoList, OperatorSyncResultDto)> {
         let key_discovery_warning = self.sync_offchain_keys().await;
         let (vtxo_list, script_map) = self.client.list_vtxos().await?;
         let prior_snapshot = self.wallet_db.snapshot().offchain_vtxo_snapshot.clone();
@@ -61,10 +71,11 @@ impl ArkSession {
         self.wallet_db
             .set_unilateral_exit_watches(reconcile.watches.clone());
         self.reconcile_pending_exit_deductions_with_snapshot(&snapshot)?;
-        Ok(OperatorSyncResultDto {
+        let sync_result = OperatorSyncResultDto {
             key_discovery_warning,
             exiting_vtxo_warning: merge_exiting_vtxo_sync_warnings(reconcile.warnings),
-        })
+        };
+        Ok((vtxo_list, sync_result))
     }
 
     pub(crate) fn reconcile_pending_exit_deductions_with_snapshot(

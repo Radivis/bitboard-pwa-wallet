@@ -58,15 +58,8 @@ export function formatArkadeTxidToastSnippet(txid: string): string {
   return `${txid.slice(0, ARKADE_TXID_DISPLAY_PREFIX_LENGTH)}…`
 }
 
-export function formatUnilateralUnrollSuccessMessage(
-  vtxoTxid: string,
-  options?: { indexerWarning?: string | null },
-): string {
-  const base = `Unroll complete (${formatArkadeTxidToastSnippet(vtxoTxid)}). Use Complete unilateral exit when the timelock elapses.`
-  if (options?.indexerWarning) {
-    return `${base} Operator indexer is still catching up — complete exit may take longer.`
-  }
-  return base
+export function formatUnilateralUnrollSuccessMessage(vtxoTxid: string): string {
+  return `Unroll complete (${formatArkadeTxidToastSnippet(vtxoTxid)}). Use Complete unilateral exit when the timelock elapses.`
 }
 
 /** Sonner toast id so in-progress unroll updates one notification per on-chain tx. */
