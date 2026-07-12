@@ -115,11 +115,16 @@ where
     }
 
     async fn sync(&self) -> Result<(), Error> {
+        let now: std::time::Duration = Timestamp::now()
+            .as_duration()
+            .try_into()
+            .map_err(Error::wallet)?;
+
         let request = self
             .inner
             .read()
             .map_err(|e| Error::consumer(format!("failed to get read lock: {e}")))?
-            .start_full_scan()
+            .start_full_scan_at(now.as_secs())
             .inspect({
                 let mut stdout = std::io::stdout();
                 let mut once = BTreeSet::<KeychainKind>::new();
@@ -132,11 +137,6 @@ where
                 }
             });
 
-        let now: std::time::Duration = Timestamp::now()
-            .as_duration()
-            .try_into()
-            .map_err(Error::wallet)?;
-
         // TODO: Use smarter constants or make it configurable.
         let update = self
             .client
@@ -148,7 +148,7 @@ where
         self.inner
             .write()
             .expect("write lock")
-            .apply_update_at(update, now.as_secs())
+            .apply_update(update)
             .map_err(Error::wallet)?;
 
         Ok(())
@@ -189,6 +189,7 @@ where
         Ok(psbt)
     }
 
+    #[allow(deprecated)] // SignOptions deprecated in BDK 2.x; required until bitcoin::psbt migration.
     fn sign(&self, psbt: &mut Psbt) -> Result<bool, Error> {
         let options = SignOptions {
             trust_witness_utxo: true,
