@@ -69,9 +69,9 @@ feature:
       - id: ARK-REC-05
         description: When recoverablePendingOperatorSweepVtxoCount is greater than zero, balance breakdown shows expired waiting for operator sweep line without Recover now
       - id: ARK-REC-06
-        description: When pendingRecoverySats is greater than zero, Dashboard and Management show a pending-recovery banner linking to Start unilateral exit in Management
+        description: When pendingRecoveryDueToExpiredSignerSats is greater than zero, Dashboard and Management show a pending-recovery-due-to-expired-signer banner linking to Start unilateral exit in Management
       - id: ARK-REC-07
-        description: VTXOs in unilateral exit do not contribute to pendingRecoverySats even when they would otherwise qualify for pending recovery
+        description: VTXOs in unilateral exit do not contribute to pendingRecoveryDueToExpiredSignerSats even when they would otherwise qualify for pending recovery due to expired signer
       - id: ARK-REC-08
         description: Pre-unroll pending unilateral outpoints do not contribute to recoverableSettleableVtxoCount, recoverablePendingOperatorSweepVtxoCount, expiring-soon count, or earliest-expiry indicator; post-unroll exiting VTXOs are excluded by vendored ark-core bucketing
     unilateral_exit:
@@ -123,7 +123,7 @@ feature:
         - collaborative exit (on-chain destination, optional partial amount) with operator fee estimate from getInfo().fees
         - Start unilateral exit (select VTXO, unroll) with bumper fee estimate; separate Complete unilateral exit for in-progress VTXOs after timelock
         - batch complete multiple ready in-progress VTXOs in one on-chain transaction with dynamic completion fee estimate
-        - pending_recovery_sats excludes VTXOs already in unilateral exit (no double-count with unilateral_exit_in_progress_sats)
+        - pending_recovery_due_to_expired_signer_sats excludes VTXOs already in unilateral exit (no double-count with unilateral_exit_in_progress_sats)
         - signer migration banner when operator signing key rotated (migratable, due now, or expired regimes)
         - pending recovery banner when funds are locked past cooperative migration cutoff
         - recoverable VTXO banner when operator reports swept/expired/sub-dust VTXOs with Recover now action

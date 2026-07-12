@@ -474,7 +474,7 @@ where
         .map(|server_pk| server_info.signer_requires_recovery_at(server_pk, now_unix_secs))
         .unwrap_or(false)
     {
-        return VtxoClassificationDto::PendingRecovery;
+        return VtxoClassificationDto::PendingRecoveryDueToExpiredSigner;
     }
     if virtual_tx_outpoint.is_preconfirmed {
         return VtxoClassificationDto::PreConfirmed;
@@ -979,7 +979,7 @@ mod vtxo_row_classification_tests {
     }
 
     #[test]
-    fn classify_vtxo_pending_recovery() {
+    fn classify_vtxo_pending_recovery_due_to_expired_signer() {
         let script = ScriptBuf::from_bytes(vec![0x51]);
         let future_expiry = 2_000_000_000_i64;
         let vtxo = VirtualTxOutPoint {
@@ -1020,7 +1020,7 @@ mod vtxo_row_classification_tests {
                     None
                 }
             },),
-            VtxoClassificationDto::PendingRecovery
+            VtxoClassificationDto::PendingRecoveryDueToExpiredSigner
         );
     }
 

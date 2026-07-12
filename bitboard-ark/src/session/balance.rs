@@ -32,7 +32,8 @@ impl ArkSession {
             boarding_pending_sats: boarding.pending_sats,
             unilateral_exit_in_progress_sats,
             collaborative_exit_in_progress_sats,
-            pending_recovery_sats: offchain_buckets.pending_recovery_sats,
+            pending_recovery_due_to_expired_signer_sats: offchain_buckets
+                .pending_recovery_due_to_expired_signer_sats,
         }))
     }
 }

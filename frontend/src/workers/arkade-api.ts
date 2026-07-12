@@ -21,7 +21,7 @@ export interface ArkadeBalanceInfo {
   boardingPendingSats?: number
   unilateralExitInProgressSats?: number
   collaborativeExitInProgressSats?: number
-  pendingRecoverySats?: number
+  pendingRecoveryDueToExpiredSignerSats?: number
   /** Swept or sub-dust VTXOs the user can batch-settle now. */
   recoverableSettleableSats?: number
   recoverableSettleableVtxoCount?: number
@@ -78,7 +78,7 @@ export type ArkadeVtxoClassification =
   | 'confirmed'
   | 'recoverable_settleable'
   | 'recoverable_pending_operator_sweep'
-  | 'pending_recovery'
+  | 'pending_recovery_due_to_expired_signer'
   | 'exiting'
   | 'finalized'
 

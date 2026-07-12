@@ -3,7 +3,7 @@ import {
   arkadeDashboardSpendableSats,
   arkadeOffchainSpendableSats,
   arkadeOnchainBumperSats,
-  arkadePendingRecoverySats,
+  arkadePendingRecoveryDueToExpiredSignerSats,
 } from '@/lib/arkade/arkade-balance-display'
 
 describe('arkade-balance-display', () => {
@@ -30,13 +30,13 @@ describe('arkade-balance-display', () => {
     expect(arkadeDashboardSpendableSats(balance)).toBe(200_000)
   })
 
-  it('exposes pending recovery sats from wasm balance payload', () => {
+  it('exposes pending recovery due to expired signer sats from wasm balance payload', () => {
     const balance = {
       confirmedSats: 0,
       totalSats: 50_000,
-      pendingRecoverySats: 50_000,
+      pendingRecoveryDueToExpiredSignerSats: 50_000,
     }
-    expect(arkadePendingRecoverySats(balance)).toBe(50_000)
+    expect(arkadePendingRecoveryDueToExpiredSignerSats(balance)).toBe(50_000)
     expect(arkadeDashboardSpendableSats(balance)).toBe(0)
   })
 

@@ -13,7 +13,7 @@ import {
 } from '@/lib/arkade/arkade-infomode'
 import { ArkadeBalanceBreakdown } from '@/components/wallet/ArkadeBalanceBreakdown'
 import { ArkadeSignerMigrationBanner } from '@/components/wallet/ArkadeSignerMigrationBanner'
-import { ArkadePendingRecoveryBanner } from '@/components/wallet/ArkadePendingRecoveryBanner'
+import { ArkadePendingRecoveryDueToExpiredSignerBanner } from '@/components/wallet/ArkadePendingRecoveryDueToExpiredSignerBanner'
 import { ArkadeRecoverableVtxoBanner } from '@/components/wallet/ArkadeRecoverableVtxoBanner'
 import { RailSyncWarningBanner } from '@/components/wallet/RailSyncWarningBanner'
 import {
@@ -81,7 +81,7 @@ export function ArkadePanel() {
       </CardHeader>
       <CardContent className="space-y-4">
         <ArkadeSignerMigrationBanner />
-        <ArkadePendingRecoveryBanner />
+        <ArkadePendingRecoveryDueToExpiredSignerBanner />
         <ArkadeRecoverableVtxoBanner />
         <RailSyncWarningBanner
           rail="arkade"

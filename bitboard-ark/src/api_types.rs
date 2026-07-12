@@ -56,7 +56,7 @@ pub struct BalanceDto {
     /// Confirmed on-chain bumper wallet balance (P2A fees for unilateral exit only).
     pub onchain_bumper_sats: u64,
     /// Portfolio-style total: offchain (spendable + recoverable settleable + recoverable pending
-    /// operator sweep + pending recovery) plus confirmed on-chain bumper sats and unconfirmed
+    /// operator sweep + pending recovery due to expired signer) plus confirmed on-chain bumper sats and unconfirmed
     /// boarding UTXOs. Excludes unconfirmed bumper-wallet UTXOs
     /// (`trusted_pending` / `untrusted_pending` from the on-chain wallet); those are not
     /// spendable for Ark operations until confirmed.
@@ -72,7 +72,7 @@ pub struct BalanceDto {
     /// from net spendable until operator sync clears the pending deduction.
     pub collaborative_exit_in_progress_sats: u64,
     /// Funds locked under a deprecated operator signer past cooperative migration cutoff.
-    pub pending_recovery_sats: u64,
+    pub pending_recovery_due_to_expired_signer_sats: u64,
     /// Swept or sub-dust VTXOs the user can batch-settle now.
     pub recoverable_settleable_sats: u64,
     /// Count of VTXOs in [`BalanceDto::recoverable_settleable_sats`].
@@ -108,7 +108,7 @@ pub enum VtxoClassificationDto {
     Confirmed,
     RecoverableSettleable,
     RecoverablePendingOperatorSweep,
-    PendingRecovery,
+    PendingRecoveryDueToExpiredSigner,
     Exiting,
     Finalized,
 }

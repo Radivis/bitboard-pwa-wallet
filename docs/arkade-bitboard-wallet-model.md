@@ -35,7 +35,7 @@ Do **not** persist arrays of derivation indices or per-index metadata in `sdkPer
 
 `wallet_db.offchain_vtxo_snapshot` stores the last operator-synced VTXO list plus `server_pk_hex` on each `VirtualTxOutPointRecord`. That per-VTXO operator signer key lets the wallet **recompute** balance buckets offline using cached `getInfo` and the current wall clock—same rules as live `offchain_balance()` in ark-client.
 
-Balance buckets (`pre_confirmed`, cooperatively spendable `confirmed`, `recoverable`, `pending_recovery`) are **not** stored as separate persisted totals. After operator signer rotation cutoff, funds on a deprecated key appear in `pending_recovery_sats` until unilateral exit or recoverable settlement. Re-sync refreshes vtxo rows and `server_pk_hex` values.
+Balance buckets (`pre_confirmed`, cooperatively spendable `confirmed`, `recoverable`, `pending_recovery` in ark-client) are **not** stored as separate persisted totals. After operator signer rotation cutoff, funds on a deprecated key appear in `pending_recovery_due_to_expired_signer_sats` until unilateral exit or recoverable settlement. Re-sync refreshes vtxo rows and `server_pk_hex` values.
 
 ### Balance buckets and how they combine
 
@@ -64,7 +64,7 @@ Replayed from the snapshot (same rules as live `ark-client::offchain_balance`):
 | **pre_confirmed_sats** | `pre_confirmed` ∩ signer-spendable |
 | **confirmed_sats** | `confirmed` ∩ signer-spendable |
 | **recoverable_sats** | all `recoverable` |
-| **pending_recovery_sats** | `pre_confirmed`/`confirmed` locked under a **deprecated operator signer** past cooperative cutoff |
+| **pending_recovery_due_to_expired_signer_sats** | `pre_confirmed`/`confirmed` locked under a **deprecated operator signer** past cooperative cutoff (maps from ark-client `pending_recovery()`) |
 
 **Gross spendable offchain** = `pre_confirmed_sats + confirmed_sats`. VTXOs in **unspendable** (including **exiting**) are excluded.
 
@@ -197,13 +197,13 @@ When an Arkade operator rotates its signing key, `getInfo` advertises the new `s
 
 Contracts `ARK-ROT-01` through `ARK-ROT-05` in `doc/features/arkade.yaml` define session open, persistence re-stamp, error messaging, and Management banner behavior.
 
-Cooperative fund migration uses `migrate_deprecated_signer_vtxos()` (ark-client 0.9.3+). Bitboard loops migrate passes internally until cooperative work is complete (or a pass cap), and **only then** re-stamps `operator_identity` with the current operator signer. Partial passes keep the migration banner and deprecated signer in persistence; the UI prompts **Migrate again** until complete. Post-cutoff funds appear in `pending_recovery` until unilateral exit or recoverable settlement; a **pending-recovery banner** on Dashboard and Management links to unilateral exit when `pendingRecoverySats > 0`. This is **not** the admin `WalletInitializerService_Restore` API (operator on-chain wallet setup only).
+Cooperative fund migration uses `migrate_deprecated_signer_vtxos()` (ark-client 0.9.3+). Bitboard loops migrate passes internally until cooperative work is complete (or a pass cap), and **only then** re-stamps `operator_identity` with the current operator signer. Partial passes keep the migration banner and deprecated signer in persistence; the UI prompts **Migrate again** until complete. Post-cutoff funds appear in `pending_recovery_due_to_expired_signer` until unilateral exit or recoverable settlement; a **pending-recovery-due-to-expired-signer banner** on Dashboard and Management links to unilateral exit when `pendingRecoveryDueToExpiredSignerSats > 0`. This is **not** the admin `WalletInitializerService_Restore` API (operator on-chain wallet setup only).
 
-### Recoverable vs pending recovery (manual batch recover)
+### Recoverable vs pending recovery due to expired signer (manual batch recover)
 
 | Bucket | Typical cause | User action in Bitboard |
 |--------|---------------|-------------------------|
-| **pending_recovery** | Deprecated operator signer past cooperative cutoff; VTXO not yet expired/swept | Unilateral exit path; shown in balance breakdown, not the recoverable banner |
+| **pending_recovery_due_to_expired_signer** | Deprecated operator signer past cooperative cutoff; VTXO not yet expired/swept | Unilateral exit path; shown in balance breakdown, not the recoverable banner |
 | **recoverable** | Expired, operator-swept, or sub-dust VTXOs | Non-blocking banner on Dashboard and Management with count, total, optional fee estimate, and **Recover now** (`settle_vtxos` on recoverable outpoints only—no boarding, no auto-recover on sync) |
 
 Contracts `ARK-REC-01` through `ARK-REC-06` in `doc/features/arkade.yaml` define banner visibility, fee display, and the user-initiated recover action.

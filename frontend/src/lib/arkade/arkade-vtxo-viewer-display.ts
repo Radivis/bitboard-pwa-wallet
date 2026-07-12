@@ -19,7 +19,7 @@ export const ARKADE_VTXO_CLASSIFICATIONS: ArkadeVtxoClassification[] = [
   'confirmed',
   'recoverable_settleable',
   'recoverable_pending_operator_sweep',
-  'pending_recovery',
+  'pending_recovery_due_to_expired_signer',
   'exiting',
   'finalized',
 ]
@@ -29,7 +29,7 @@ const CLASSIFICATION_LABELS: Record<ArkadeVtxoClassification, string> = {
   confirmed: 'Confirmed',
   recoverable_settleable: 'Recoverable (ready)',
   recoverable_pending_operator_sweep: 'Recoverable (awaiting sweep)',
-  pending_recovery: 'Pending recovery',
+  pending_recovery_due_to_expired_signer: 'Pending recovery (expired signer)',
   exiting: 'Unilateral exit',
   finalized: 'Finalized',
 }
